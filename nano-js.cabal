@@ -14,8 +14,8 @@ cabal-version:       >=1.8
 
 executable nano-js
   build-depends:       base ==4.5.*, pretty, hashable, unordered-containers, 
-                       filepath, ansi-terminal, process, HUnit, syb, cmdargs,
-                       liquid-fixpoint, language-ecmascript 
+                       filepath, ansi-terminal, process, mtl, syb, cmdargs,
+                       liquid-fixpoint, parsec, language-ecmascript 
 
   extensions:          ExistentialQuantification, 
                        FlexibleInstances, 

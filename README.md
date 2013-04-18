@@ -7,6 +7,14 @@ nano-js is the basis for the programming assignments in
 
     http://goto.ucsd.edu/~rjhala/classes/sp13/cse291
 
+Dependencies
+------------
+
+* git clone git@github.com:ucsd-progsys/liquid-fixpoint.git 
+* git clone git@github.com:UCSD-PL/language-ecmascript.git
+* nano-js
+
+
 TODO
 ----
 

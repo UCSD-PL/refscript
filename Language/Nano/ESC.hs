@@ -1,21 +1,23 @@
 {-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
 
 -- | Extended Static Checker - Nano
 
 module Language.Nano.ESC (verifyFile) where
 
+
 import           Control.Monad.State
 import           Control.Applicative          ((<$>))
+import qualified Control.Exception as Ex
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser  (parseJavaScriptFromFile)
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface  (checkValid)
+import           Language.Fixpoint.Misc       (errorstar)
 import           Language.Nano.Types
-import           Control.Exception            (try)
 import           Data.Monoid
-import           Data.Maybe                   (fromMaybe, maybe)
-import qualified Data.HashMap.Strict as M
+-- import           Data.Maybe                   (fromMaybe, maybe)
 
 ------------------------------------------------------------------
 -- | Top-level Verifier ------------------------------------------
@@ -33,29 +35,13 @@ verifyNano = fmap mconcat . mapM checkVC . genVC
 
 
 genVC :: Nano -> [(SourcePos, F.Pred)] 
-genVC p = undefined 
+genVC _ = undefined 
   -- runState (generateVC mempty p)
 
 
 checkVC :: (a, F.Pred) -> IO (F.FixResult a)
-checkVC (x, p) = catch (checkValid x undefined p) $ \e ->
-                   return (F.Crash [x] "VC crashes fixpoint")
-
-------------------------------------------------------------------
--- | Verification Conditions -------------------------------------
-------------------------------------------------------------------
-
--- | `VC` are formulas indexed by source-position from which the 
---   obligation arises.
-
-type VCond = M.HashMap SourcePos F.Pred
-
-instance Monoid VCond where 
-  mempty  = M.empty
-  mappend = M.unionWith pAnd 
-
-vcond l p = M.singleton l p
-
+checkVC (x, p) = Ex.catch (checkValid x undefined p) $ \(e :: Ex.IOException) ->
+                   return $ F.Crash [x] ("VC crashes fixpoint: " ++ show e )
 ------------------------------------------------------------------
 -- | We will use the State monad to log all the individual "side" 
 --   queries that arise due to checking of loop invariants.
@@ -63,32 +49,29 @@ vcond l p = M.singleton l p
 
 type VCM = State VCond  
 
--- | `validAt l p` adds `p` to the list of side-conditions that 
---   must be checked.
+-- | `sideCond vc` adds the goal `vc` to the side-conditions to be checked.
 
 ------------------------------------------------------------------
-validAt       :: SourcePos -> F.Pred -> VCM ()
+sideCond     :: VCond -> VCM ()
 ------------------------------------------------------------------
-validAt loc p 
-  = do vc    <- get 
-       let p' = fromMaybe p (pAnd p <$> M.lookup loc vc)
-       put    $ M.insert loc p' vc 
+
+sideCond vc' = modify $ mappend vc' 
 
 ------------------------------------------------------------------
 -- | Verification Condition Generator ----------------------------
 ------------------------------------------------------------------
 
 ------------------------------------------------------------------
-generateVC            :: VCond -> Nano -> VCM VCond 
+generateVC :: Statement SourcePos -> VCond -> VCM VCond 
 ------------------------------------------------------------------
 
 generateVC (EmptyStmt _) vc 
   = return vc
 
 generateVC (ExprStmt _ (AssignExpr _ OpAssign x e)) vc  
-  = return $ (`F.subst` (F.symbol x, F.expr e)) <$> vc
+  = return $ (`F.subst1` (F.symbol x, F.expr e)) <$> vc
 
-generateVC (BlockStmt ss) vc
+generateVC (BlockStmt _ ss) vc
   = foldM (\vc s -> generateVC s vc) vc (reverse ss)
 
 generateVC (IfStmt _ b s1 s2) vc 
@@ -100,16 +83,20 @@ generateVC (IfStmt _ b s1 s2) vc
        bp'      = F.PNot bp
 
 generateVC (IfSingleStmt l b s) vc
-  = generateVC (IfStmt l b s (EmptyStmt l))
+  = generateVC (IfStmt l b s (EmptyStmt l)) vc
 
 generateVC w@(WhileStmt l _ _) vc 
   = do vci'     <- generateVC s vci 
-       validAt l $ ((i `pAnd` b)      `F.PImp`) <$> vci' -- require i is inductive 
-       validAt l $ ((i `pAnd` F.PNot b) `F.PImp`) <$> vc   -- establish vc at exit 
-       return vci                                        -- require i holds on entry
+       sideCond $ ((i `pAnd` b)        `F.PImp`) <$> vci' -- require i is inductive 
+       sideCond $ ((i `pAnd` F.PNot b) `F.PImp`) <$> vc   -- establish vc at exit 
+       return vci                                          -- require i holds on entry
     where 
-       (b, i, s) = splitWhileBody
-       vci       = vcond l i
+       (b, i, s) = splitWhileStmt w
+       vci       = newVCond l i
+
+generateVC w _ 
+  = convertError "generateVC" w
+
 
 ----------------------------------------------------------------
 -- Helpers for extracting specification from Statements --------
@@ -129,11 +116,13 @@ splitWhileStmt (WhileStmt _ b s) = (cond, invariant, body)
     cond                         = F.prop b
     (invariant, body)            = splitWhileBody s
 
+splitWhileStmt _                 = errorstar "Unexpected call to splitWhileStmt"
+
 splitWhileBody :: Statement a   -> (F.Pred, Statement a)
-splitWhileBody (BlockStmt _ (si : ss)) 
+splitWhileBody s@(BlockStmt l (si : ss)) 
   = case getInvariant si of 
-      Just i  -> (F.prop i,  ss)
-      Nothing -> (F.PTrue, si : ss)
+      Just i  -> (F.prop i, BlockStmt l ss)
+      Nothing -> (F.PTrue , s             )
 
 splitWhileBody s
   = (F.PTrue, s)
@@ -143,7 +132,7 @@ getAssert    = getStatementPred "assert"
 getInvariant = getStatementPred "invariant"
 
 getStatementPred :: String -> Statement a -> Maybe F.Pred 
-getStatementPred name (ExprStmt _ (CallExpr (VarRef _ (Id _ f)) [p]))
+getStatementPred name (ExprStmt _ (CallExpr _ (VarRef _ (Id _ f)) [p]))
   | name == f 
   = Just $ F.prop p
 getStatementPred _ _ 

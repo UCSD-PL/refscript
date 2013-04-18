@@ -10,7 +10,7 @@ nano-js is the basis for the programming assignments in
 TODO
 ----
 
-HW 1            <------------------------- HEREHEREHEREHERE
+HW 1            
 
 0. Wrap parser
 
@@ -19,17 +19,20 @@ HW 1            <------------------------- HEREHEREHEREHERE
     - if-max
     - if-abs
     
-2. Parse small functions : FilePath -> Com
+2. Parse small functions : FilePath -> Statement
 
-3. VCGen :: Com -> Pred
+3. vcgen :: Statement -> [Pred]                     <------------------------- HEREHEREHEREHERE
 
-4. valid :: Pred -> Bool [liquid-fixpoint wrapper for Pred]
+4. valid :: Pred -> IO Bool     -- liquid-fixpoint wrapper for Pred
 
 5. Port big tests
 
     - while-array
     - while-binsearch
     - adpcmini.c
+
+6. Add functions
+
 
 Homework Plan
 -------------

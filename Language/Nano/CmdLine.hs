@@ -1,11 +1,12 @@
-{-# LANGUAGE TupleSections, DeriveDataTypeable #-}
+{-# LANGUAGE TupleSections      #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
-module Language.Nano.JS.CmdLine (getOpts) where
+module Language.Nano.CmdLine (getOpts) where
 
 import Control.Applicative                      ((<$>))
 import System.FilePath                          (dropFileName)
 import Language.Fixpoint.Misc                   (single, sortNub) 
-import Language.Nano.JS.Types                   (Config (..))
+import Language.Nano.Types                      (Config (..))
 import System.Console.CmdArgs                  
 
 ---------------------------------------------------------------------------------

@@ -1,9 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable     #-}
-{- LANGUAGE MultiParamTypeClasses  #-}
-{- LANGUAGE TypeSynonymInstances   #-}
-{- LANGUAGE FlexibleInstances      #-}
-{- LANGUAGE FlexibleContexts       #-} 
-{- LANGUAGE OverlappingInstances   #-}
+{-# LANGUAGE FlexibleInstances      #-}
 
 module Language.Nano.Types (
   -- * Configuration Options
@@ -14,12 +10,20 @@ module Language.Nano.Types (
 
   -- * Type synonym for Nano Programs
   , Nano 
+
+  -- * Some simple helpers
+  , pAnd
+  , pOr
   ) where
 
-import           Data.Typeable                (Typeable)
-import           Data.Generics                (Data)   
+import           Data.Typeable                      (Typeable)
+import           Data.Generics                      (Data)   
 import           Language.ECMAScript3.Syntax 
+import           Language.ECMAScript3.PrettyPrint   (pp)
+
 import qualified Language.Fixpoint.Types as F
+import           Language.Fixpoint.Misc
+import           Text.PrettyPrint.HughesPJ
 
 ---------------------------------------------------------------------------
 -- | Command Line Configuration Options
@@ -47,13 +51,15 @@ instance IsNano InfixOp where
   isNano OpGEq  = True -- ^ @>=@
   isNano OpEq   = True -- ^ @==@
   isNano OpNEq  = True -- ^ @!=@
+  
   isNano OpLAnd = True -- ^ @&&@
   isNano OpLOr  = True -- ^ @||@
+
+  isNano OpSub  = True -- ^ @-@
+  isNano OpAdd  = True -- ^ @+@
   isNano OpMul  = True -- ^ @*@
   isNano OpDiv  = True -- ^ @/@
   isNano OpMod  = True -- ^ @%@
-  isNano OpSub  = True -- ^ @-@
-  isNano OpAdd  = True -- ^ @+@
   isNano _      = False
 
 instance IsNano (Expression a) where 
@@ -61,11 +67,17 @@ instance IsNano (Expression a) where
   isNano (IntLit _ _)          = True
   isNano (VarRef _ _)          = True
   isNano (InfixExpr _ o e1 e2) = isNano o && isNano e1 && isNano e2
+  isNano (PrefixExpr _ o e)    = isNano o && isNano e
   isNano _                     = False
 
 instance IsNano AssignOp where
   isNano OpAssign = True
   isNano _        = False
+
+instance IsNano PrefixOp where
+  isNano PrefixLNot  = True
+  isNano PrefixMinus = True 
+  isNano _           = False
 
 instance IsNano (Statement a) where
   isNano (EmptyStmt _)         = True                   -- ^ skip
@@ -101,22 +113,57 @@ type Nano = [Statement SourcePos]
 instance F.Symbolic   (Id a) where
   symbol (Id _ x)   = F.symbol x 
 
-instance F.Symbolic (LVar a) where
+instance F.Symbolic (LValue a) where
   symbol (LVar _ x) = F.symbol x
+  symbol lv         = errortext $ text "Cannot convert to F.Symbol:" <+> pp lv
 
 instance F.Expression (Id a) where
   expr = F.eVar
 
-instance F.Expression (LVar a) where
+instance F.Expression (LValue a) where
   expr = F.eVar
 
 instance F.Expression (Expression a) where
-  expr (IntLit _ i) = expr i
-  expr (VarRef _ x) = expr x
-  expr (InfixExpr _ o e1 e2) = infixExpr o (F.expr e1) (F.expr e2)
+  expr (IntLit _ i)                 = F.expr i
+  expr (VarRef _ x)                 = F.expr x
+  expr (InfixExpr _ o e1 e2)        = F.EBin (bop o) (F.expr e1) (F.expr e2)
+  expr (PrefixExpr _ PrefixMinus e) = F.EBin F.Minus (F.expr (0 :: Int)) (F.expr e)  
+  expr e                            = errortext msg
+    where msg                       = text "Cannot convert to F.Expression:" <+> pp e
 
 
-infixExpr 
+
 instance F.Predicate  (Expression a) where 
-  prop e   = undefined
+  prop (BoolLit _ True)            = F.PTrue
+  prop (BoolLit _ False)           = F.PFalse
+  prop (PrefixExpr _ PrefixLNot e) = F.PNot (F.prop e)
+  prop (InfixExpr _ o e1 e2)       = eProp o e1 e2
+
+------------------------------------------------------------------
+eProp :: InfixOp -> Expression a -> Expression a -> F.Pred
+------------------------------------------------------------------
+
+eProp OpLT  e1 e2  = F.PAtom F.Lt (F.expr e1) (F.expr e2) 
+eProp OpLEq e1 e2  = F.PAtom F.Le (F.expr e1) (F.expr e2) 
+eProp OpGT  e1 e2  = F.PAtom F.Gt (F.expr e1) (F.expr e2)  
+eProp OpGEq e1 e2  = F.PAtom F.Ge (F.expr e1) (F.expr e2)  
+eProp OpEq  e1 e2  = F.PAtom F.Eq (F.expr e1) (F.expr e2) 
+eProp OpNEq e1 e2  = F.PAtom F.Ne (F.expr e1) (F.expr e2) 
+ 
+eProp OpLAnd e1 e2 = pAnd (F.prop e1) (F.prop e2) 
+eProp OpLOr e1 e2  = pOr  (F.prop e1) (F.prop e2)
+
+------------------------------------------------------------------
+bop       :: InfixOp -> F.Bop
+------------------------------------------------------------------
+
+bop OpSub = F.Minus 
+bop OpAdd = F.Plus
+bop OpMul = F.Times
+bop OpDiv = F.Div
+bop OpMod = F.Mod
+
+---------------------------------------------------------------------
+pAnd p q  = F.pAnd [p, q] 
+pOr  p q  = F.pOr  [p, q]
 

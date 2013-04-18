@@ -17,7 +17,7 @@ import           Language.Fixpoint.Interface  (checkValid)
 import           Language.Fixpoint.Misc       (errorstar)
 import           Language.Nano.Types
 import           Data.Monoid
--- import           Data.Maybe                   (fromMaybe, maybe)
+import           Data.Maybe                   (isJust) -- fromMaybe, maybe)
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
@@ -66,7 +66,6 @@ generateBlockVC :: [Statement SourcePos] -> VCond -> VCM VCond
 generateBlockVC ss vc
   = foldM (\vc s -> generateVC s vc) vc (reverse ss)
 
-
 -----------------------------------------------------------------------------------
 generateVC :: Statement SourcePos -> VCond -> VCM VCond 
 -----------------------------------------------------------------------------------
@@ -83,7 +82,7 @@ generateVC (BlockStmt _ ss) vc
 generateVC (IfStmt _ b s1 s2) vc 
   = do vc1     <- generateVC s1 vc 
        vc2     <- generateVC s2 vc
-       return   $ (pAnd bp <$> vc1) <> (pAnd bp' <$> vc2)
+       return   $ ((bp `F.PImp`) <$> vc1) <> ((bp' `F.PImp`) <$> vc2)
     where 
        bp       = F.prop b
        bp'      = F.PNot bp
@@ -99,6 +98,16 @@ generateVC w@(WhileStmt l _ _) vc
     where 
        (b, i, s) = splitWhileStmt w
        vci       = newVCond l i
+
+generateVC e@(ExprStmt l (CallExpr _ _ _)) vc
+  | isJust $ getAssume e
+  = return $ (p `F.PImp`) <$> vc
+    where Just p = getAssume e
+  
+generateVC e@(ExprStmt l (CallExpr _ _ _)) vc
+  | isJust $ getAssert e
+  = return $ newVCond l p <> vc
+    where Just p = getAssume e
 
 generateVC w _ 
   = convertError "generateVC" w

@@ -19,11 +19,12 @@ import           Language.Nano.Types
 import           Data.Monoid
 -- import           Data.Maybe                   (fromMaybe, maybe)
 
-------------------------------------------------------------------
--- | Top-level Verifier ------------------------------------------
-------------------------------------------------------------------
-
+--------------------------------------------------------------------------------
+-- | Top-level Verifier 
+--------------------------------------------------------------------------------
 verifyFile :: FilePath -> IO (F.FixResult SourcePos)
+--------------------------------------------------------------------------------
+
 verifyFile f 
   = do s <- parseJavaScriptFromFile f
        if isNano s 
@@ -33,37 +34,42 @@ verifyFile f
 verifyNano :: Nano -> IO (F.FixResult SourcePos)
 verifyNano = fmap mconcat . mapM checkVC . genVC
 
-
+--------------------------------------------------------------------------------
+-- | Top-level VC Generator 
+--------------------------------------------------------------------------------
 genVC :: Nano -> [(SourcePos, F.Pred)] 
-genVC _ = undefined 
-  -- runState (generateVC mempty p)
+--------------------------------------------------------------------------------
 
+genVC ss            = obligationsVCond $ vcTop <> vcSide 
+  where 
+    (vcTop, vcSide) = runState (generateBlockVC ss vc0) vc0 
+    vc0             = mempty 
 
+-----------------------------------------------------------------------------------
+-- | Top-level SMT Interface 
+-----------------------------------------------------------------------------------
 checkVC :: (a, F.Pred) -> IO (F.FixResult a)
-checkVC (x, p) = Ex.catch (checkValid x undefined p) $ \(e :: Ex.IOException) ->
-                   return $ F.Crash [x] ("VC crashes fixpoint: " ++ show e )
-------------------------------------------------------------------
--- | We will use the State monad to log all the individual "side" 
---   queries that arise due to checking of loop invariants.
-------------------------------------------------------------------
+-----------------------------------------------------------------------------------
 
-type VCM = State VCond  
+checkVC (loc, p) 
+  = Ex.catch (checkValid loc xts p) $ \(e :: Ex.IOException) ->
+      return $ F.Crash [loc] ("VC crashes fixpoint: " ++ show e )
+    where 
+      xts = [ (x, F.FInt) | x <- F.syms p ] 
 
--- | `sideCond vc` adds the goal `vc` to the side-conditions to be checked.
+-----------------------------------------------------------------------------------
+-- | Verification Condition Generator 
+-----------------------------------------------------------------------------------
+generateBlockVC :: [Statement SourcePos] -> VCond -> VCM VCond 
+-----------------------------------------------------------------------------------
 
-------------------------------------------------------------------
-sideCond     :: VCond -> VCM ()
-------------------------------------------------------------------
+generateBlockVC ss vc
+  = foldM (\vc s -> generateVC s vc) vc (reverse ss)
 
-sideCond vc' = modify $ mappend vc' 
 
-------------------------------------------------------------------
--- | Verification Condition Generator ----------------------------
-------------------------------------------------------------------
-
-------------------------------------------------------------------
+-----------------------------------------------------------------------------------
 generateVC :: Statement SourcePos -> VCond -> VCM VCond 
-------------------------------------------------------------------
+-----------------------------------------------------------------------------------
 
 generateVC (EmptyStmt _) vc 
   = return vc
@@ -72,7 +78,7 @@ generateVC (ExprStmt _ (AssignExpr _ OpAssign x e)) vc
   = return $ (`F.subst1` (F.symbol x, F.expr e)) <$> vc
 
 generateVC (BlockStmt _ ss) vc
-  = foldM (\vc s -> generateVC s vc) vc (reverse ss)
+  = generateBlockVC ss vc
 
 generateVC (IfStmt _ b s1 s2) vc 
   = do vc1     <- generateVC s1 vc 
@@ -89,7 +95,7 @@ generateVC w@(WhileStmt l _ _) vc
   = do vci'     <- generateVC s vci 
        sideCond $ ((i `pAnd` b)        `F.PImp`) <$> vci' -- require i is inductive 
        sideCond $ ((i `pAnd` F.PNot b) `F.PImp`) <$> vc   -- establish vc at exit 
-       return vci                                          -- require i holds on entry
+       return vci                                         -- require i holds on entry
     where 
        (b, i, s) = splitWhileStmt w
        vci       = newVCond l i
@@ -97,18 +103,17 @@ generateVC w@(WhileStmt l _ _) vc
 generateVC w _ 
   = convertError "generateVC" w
 
+-----------------------------------------------------------------------------------
+-- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 
+-----------------------------------------------------------------------------------
 
-----------------------------------------------------------------
--- Helpers for extracting specification from Statements --------
-----------------------------------------------------------------
-
--- Ideally, we'd modify the parser to take in annotations for 
+-- Ideally, a la JML, we'd modify the parser to take in annotations for 
 -- 
---   - assert(p)
---   - assume(p)
---   - invariant(p) 
+--   * assert(p)
+--   * assume(p)
+--   * invariant(p) 
 --
--- a la JML, but for now, we hack them with function calls.
+-- For now, we hack them with function calls.
 
 splitWhileStmt :: (Statement a) -> (F.Pred, F.Pred, Statement a)
 splitWhileStmt (WhileStmt _ b s) = (cond, invariant, body)
@@ -138,5 +143,19 @@ getStatementPred name (ExprStmt _ (CallExpr _ (VarRef _ (Id _ f)) [p]))
 getStatementPred _ _ 
   = Nothing 
 
+
+-----------------------------------------------------------------------------------
+-- | `VCM` is a VCGen monad that logs the loop-inv "side conditions" 
+-----------------------------------------------------------------------------------
+
+type VCM = State VCond  
+
+-----------------------------------------------------------------------------------
+-- | `sideCond vc` adds the goal `vc` to the side-conditions to be checked.
+-----------------------------------------------------------------------------------
+sideCond     :: VCond -> VCM ()
+-----------------------------------------------------------------------------------
+
+sideCond vc' = modify $ mappend vc' 
 
 

@@ -12,7 +12,7 @@ category:            Language
 build-type:          Simple
 cabal-version:       >=1.8
 
-executable nano-js
+executable nanojs
   build-depends:       base ==4.5.*, pretty, hashable, unordered-containers, 
                        filepath, ansi-terminal, process, mtl, syb, cmdargs,
                        liquid-fixpoint, parsec, language-ecmascript 

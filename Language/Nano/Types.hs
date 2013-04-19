@@ -11,14 +11,13 @@ module Language.Nano.Types (
   -- * Type synonym for Nano Programs
   , Nano 
 
-  -- * Some simple helpers
+  -- * Some helpers
   , pAnd
   , pOr
 
   -- * Verification Conditions
   , VCond
   , newVCond
-  -- , strengthenVCond
   , obligationsVCond 
 
   -- * Error message
@@ -26,7 +25,7 @@ module Language.Nano.Types (
 
   ) where
 
-import           Control.Applicative          ((<$>))
+-- import           Control.Applicative          ((<$>))
 import qualified Data.HashMap.Strict as M
 import           Data.Hashable
 import           Data.Typeable                      (Typeable)
@@ -41,13 +40,13 @@ import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Text.PrettyPrint.HughesPJ
 
----------------------------------------------------------------------------
+---------------------------------------------------------------------
 -- | Command Line Configuration Options
----------------------------------------------------------------------------
+---------------------------------------------------------------------
 
 data Config = Config { 
     files   :: [FilePath]     -- ^ source files to check
-  , incdirs :: [FilePath]     -- ^ path to directory for including specs
+  , incdirs :: [FilePath]     -- ^ path to directory for include specs
   } deriving (Data, Typeable, Show, Eq)
 
 ---------------------------------------------------------------------
@@ -88,15 +87,18 @@ instance IsNano (Expression a) where
   isNano (VarRef _ _)          = True
   isNano (InfixExpr _ o e1 e2) = isNano o && isNano e1 && isNano e2
   isNano (PrefixExpr _ o e)    = isNano o && isNano e
+  isNano e                     = errortext (text "Not Nano Expression!" <+> pp e) 
   isNano _                     = False
 
 instance IsNano AssignOp where
   isNano OpAssign = True
+  isNano x        = errortext (text "Not Nano AssignOp!" <+> pp x) 
   isNano _        = False
 
 instance IsNano PrefixOp where
   isNano PrefixLNot  = True
   isNano PrefixMinus = True 
+  isNano e           = errortext (text "Not Nano PrefixOp!" <+> pp e) 
   isNano _           = False
 
 instance IsNano (Statement a) where
@@ -106,6 +108,7 @@ instance IsNano (Statement a) where
   isNano (IfSingleStmt _ b s)  = isNano b && isNano s   
   isNano (IfStmt _ b s1 s2)    = isNano b && isNano s1 && isNano s2
   isNano (WhileStmt _ b s)     = isNano b && isNano s
+  isNano e                     = errortext (text "Not Nano Statement!" <+> pp e) 
   isNano _                     = False
 
 instance IsNano [(Statement a)] where 
@@ -116,21 +119,23 @@ instance IsNano [(Statement a)] where
 
 isNanoExprStatement :: Expression a -> Bool
 isNanoExprStatement (AssignExpr _ o lv e) = isNano o && isNano lv && isNano e 
+isNanoExprStatement (CallExpr _ e es)     = all isNano (e:es)
+isNanoExprStatement e                     = errortext (text "Not Nano ExprStmt!" <+> pp e) 
 isNanoExprStatement _                     = False
 
 
----------------------------------------------------------------
--- | Top-level Nano Program -----------------------------------
----------------------------------------------------------------
+------------------------------------------------------------------
+-- | Top-level Nano Program --------------------------------------
+------------------------------------------------------------------
 
 {-@ type Nano = {v: [(Statement SourcePos)] | (isNano v)} @-}
 
 type Nano = [Statement SourcePos] 
 
---------------------------------------------------------------------------------------
+------------------------------------------------------------------
 -- | Converting `ECMAScript3` values into `Fixpoint` values, 
 --   i.e. *language* level entities into *logic* level entities.
---------------------------------------------------------------------------------------
+------------------------------------------------------------------
 
 instance F.Symbolic   (Id a) where
   symbol (Id _ x)   = F.symbol x 
@@ -189,7 +194,7 @@ bop OpDiv = F.Div
 bop OpMod = F.Mod
 bop o     = convertError "F.Bop" o
 
----------------------------------------------------------------------
+------------------------------------------------------------------
 pAnd p q  = F.pAnd [p, q] 
 pOr  p q  = F.pOr  [p, q]
 ------------------------------------------------------------------
@@ -205,13 +210,9 @@ instance PP SourcePos where
 instance F.Fixpoint SourcePos where
   toFix = pp 
 
-instance (Ord a, PP a) => PP (F.FixResult a) where
-  pp F.Safe           = text "Safe"
-  pp F.UnknownError   = text "Unknown Error!"
-  pp (F.Crash xs msg) = vcat $ (text ("Crash!: " ++ msg)) : (((text "CRASH:" <+>) . pp) <$> xs)
-  pp (F.Unsafe xs)    = vcat $ (text "Unsafe:")           : (((text "WARNING:" <+>) . pp) <$> xs)
-
-
+instance (Ord a, F.Fixpoint a) => PP (F.FixResult a) where
+  pp = F.resultDoc
+ 
 sourcePosElts s = (src, line, col)
   where 
     src         = sourceName   s 
@@ -262,13 +263,20 @@ newVCond     :: SourcePos -> F.Pred -> VCond
 
 newVCond l p = VC $ M.singleton l p
 
--- ------------------------------------------------------------------
--- strengthenVCond :: SourcePos -> F.Pred -> VCond -> VCond
--- ------------------------------------------------------------------
--- 
--- strengthenVCond l p (VC vc) = VC $ M.insert l p' vc 
---   where 
---     p'                 = fromMaybe p (pAnd p <$> M.lookup l vc)
+------------------------------------------------------------------------
+------ strengthenVCond :: SourcePos -> F.Pred -> VCond -> VCond
+------------------------------------------------------------------------
+------ 
+------ strengthenVCond l p (VC vc) = VC $ M.insert l p' vc 
+------   where 
+------     p'                 = fromMaybe p (pAnd p <$> M.lookup l vc)
+---- 
+------   pp F.Safe           = text "Safe"
+------   pp F.UnknownError   = text "Unknown Error!"
+------   pp (F.Crash xs msg) = vcat $ (text ("Crash!: " ++ msg)) : (((text "CRASH:" <+>) . pp) <$> xs)
+------   pp (F.Unsafe xs)    = vcat $ (text "Unsafe:")           : (((text "WARNING:" <+>) . pp) <$> xs)
+
+
 
 
 

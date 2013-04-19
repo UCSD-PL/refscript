@@ -8,7 +8,7 @@ import Text.PrettyPrint.HughesPJ        (render)
 import Language.Nano.Types          
 import Language.Nano.ESC                (verifyFile)
 import Data.Monoid                      (mconcat)
-import Control.Applicative              ((<$>))
+-- import Control.Applicative              ((<$>))
 import System.Exit                      (exitWith)
 
 main = do cfg <-  getOpts  

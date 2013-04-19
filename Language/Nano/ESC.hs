@@ -6,15 +6,18 @@
 
 module Language.Nano.ESC (verifyFile) where
 
-
+import           Text.PrettyPrint.HughesPJ    (text, render, (<+>))
+import           System.FilePath              (addExtension)
 import           Control.Monad.State
 import           Control.Applicative          ((<$>))
 import qualified Control.Exception as Ex
+
+import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser  (parseJavaScriptFromFile)
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface  (checkValid)
-import           Language.Fixpoint.Misc       (errorstar)
+import           Language.Fixpoint.Misc       (sortNub, errorstar)
 import           Language.Nano.Types
 import           Data.Monoid
 import           Data.Maybe                   (isJust) -- fromMaybe, maybe)
@@ -26,21 +29,24 @@ verifyFile :: FilePath -> IO (F.FixResult SourcePos)
 --------------------------------------------------------------------------------
 
 verifyFile f 
-  = do s <- parseJavaScriptFromFile f
-       if isNano s 
-         then verifyNano s
-         else return $ F.Crash [] ("Invalid Input File: " ++ f) 
+  = do s      <- parseJavaScriptFromFile f
+       when (not (isNano s)) $ errorstar ("Invalid Input File: " ++ f)
+       let vc  = genVC s
+       writeFile (f `addExtension` ".vc") (render $ pp vc)
+       rs     <- mapM checkVC $ obligationsVCond vc
+       forM rs  $ (putStrLn . render . pp)  
+       return   $ mconcat rs
 
-verifyNano :: Nano -> IO (F.FixResult SourcePos)
-verifyNano = fmap mconcat . mapM checkVC . genVC
+-- verifyNano :: FilePath -> Nano -> IO (F.FixResult SourcePos)
+-- verifyNano f = fmap mconcat . mapM checkVC . obligationsVCond . genVC 
 
 --------------------------------------------------------------------------------
 -- | Top-level VC Generator 
 --------------------------------------------------------------------------------
-genVC :: Nano -> [(SourcePos, F.Pred)] 
+genVC :: Nano -> VCond
 --------------------------------------------------------------------------------
 
-genVC ss            = obligationsVCond $ vcTop <> vcSide 
+genVC ss            = vcTop <> vcSide 
   where 
     (vcTop, vcSide) = runState (generateBlockVC ss vc0) vc0 
     vc0             = mempty 
@@ -48,14 +54,18 @@ genVC ss            = obligationsVCond $ vcTop <> vcSide
 -----------------------------------------------------------------------------------
 -- | Top-level SMT Interface 
 -----------------------------------------------------------------------------------
-checkVC :: (a, F.Pred) -> IO (F.FixResult a)
+checkVC :: (SourcePos, F.Pred) -> IO (F.FixResult SourcePos)
 -----------------------------------------------------------------------------------
+checkVC z@(loc, _) 
+  = do r <- checkVC' z
+       putStrLn $ render $ text "checkVC" <+> pp loc <+> pp r
+       return r
 
-checkVC (loc, p) 
+checkVC' (loc, p) 
   = Ex.catch (checkValid loc xts p) $ \(e :: Ex.IOException) ->
       return $ F.Crash [loc] ("VC crashes fixpoint: " ++ show e )
     where 
-      xts = [ (x, F.FInt) | x <- F.syms p ] 
+      xts = [ (x, F.FInt) | x <- sortNub $ F.syms p ] 
 
 -----------------------------------------------------------------------------------
 -- | Verification Condition Generator 
@@ -99,7 +109,7 @@ generateVC w@(WhileStmt l _ _) vc
        (b, i, s) = splitWhileStmt w
        vci       = newVCond l i
 
-generateVC e@(ExprStmt l (CallExpr _ _ _)) vc
+generateVC e@(ExprStmt _ (CallExpr _ _ _)) vc
   | isJust $ getAssume e
   = return $ (p `F.PImp`) <$> vc
     where Just p = getAssume e
@@ -107,7 +117,7 @@ generateVC e@(ExprStmt l (CallExpr _ _ _)) vc
 generateVC e@(ExprStmt l (CallExpr _ _ _)) vc
   | isJust $ getAssert e
   = return $ newVCond l p <> vc
-    where Just p = getAssume e
+    where Just p = getAssert e
 
 generateVC w _ 
   = convertError "generateVC" w

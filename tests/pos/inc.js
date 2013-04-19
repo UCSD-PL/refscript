@@ -1,4 +1,3 @@
-
 function inc(x){
   var res = x + 1;
   return res;

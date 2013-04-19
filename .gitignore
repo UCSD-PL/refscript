@@ -16,6 +16,7 @@ cabal-dev
 *.fqout
 *.out
 *.fq
+*.vc
 *.annot
 *.cgi
 *.log

@@ -21,26 +21,18 @@ TODO
 HW 1            
 
 0. Wrap parser
-
-1. Port small tests 
-    - int-incr
-    - if-max
-    - if-abs
-    
+1. Port small tests [int-incr, if-abs]
 2. Parse small functions : FilePath -> Statement
-
-3. vcgen :: Statement -> [Pred]                     <------------------------- HEREHEREHEREHERE
-
+3. vcgen :: Statement -> [Pred]                     
 4. valid :: Pred -> IO Bool     -- liquid-fixpoint wrapper for Pred
 
 5. Port big tests
-
+    - if-max            <------------------------- HEREHEREHEREHERE
     - while-array
     - while-binsearch
     - adpcmini.c
 
 6. Add functions
-
 
 Homework Plan
 -------------

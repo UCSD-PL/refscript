@@ -5,14 +5,16 @@ module Language.Nano.Types (
   -- * Configuration Options
     Config (..)
 
-  -- * De/Constructing Nano Programs
-  , Nano
-  , Fun (..) 
+  -- * Nano Programs
+  , Nano 
+  , Fun  (..) 
   , parseNanoFromFile 
-  , functions
+  
+  -- * Accessing Spec Annotations
   , getAssume
   , getAssert
-  , getInvariant  
+  , getInvariant
+  , isSpecification
 
   -- * Some Operators on Pred
   , pAnd
@@ -28,7 +30,7 @@ module Language.Nano.Types (
 
   ) where
 
--- import           Control.Applicative          ((<$>))
+import           Control.Applicative          ((<$>))
 import qualified Data.HashMap.Strict as M
 import           Data.Hashable
 import           Data.Typeable                      (Typeable)
@@ -40,6 +42,8 @@ import           Language.ECMAScript3.PrettyPrint   (PP (..))
 import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
 
 import qualified Language.Fixpoint.Types as F
+
+import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Misc
 import           Text.PrettyPrint.HughesPJ
 import           Text.Parsec                        
@@ -150,7 +154,7 @@ isNanoExprStatement e                     = errortext (text "Not Nano ExprStmt!"
 -- | Nano Programs : Wrapper around EcmaScript -------------------
 ------------------------------------------------------------------
 
-{-@ type Fun a   = {v : (Statement a) | (isFunctionStmt v) && (isNano v) }  @-}
+type Nano        = [Fun SourcePos] 
 
 data Fun a       = Fun { floc  :: a             -- ^ sourceloc 
                        , fname :: Id a          -- ^ name
@@ -160,9 +164,7 @@ data Fun a       = Fun { floc  :: a             -- ^ sourceloc
                        , fpost :: F.Pred        -- ^ postcondition
                        }
 
-type Nano     = [Fun SourcePos] 
-
-functions fns = fns
+-- functions fns = fns
 
 mkNano :: [Statement SourcePos] -> Maybe Nano
 mkNano =  sequence . map mkFun 
@@ -172,15 +174,36 @@ mkFun (FunctionStmt l f xs body)
   | all isNano body = Just $ Fun l f xs body pre post
   | otherwise       = Nothing
   where 
-    pre             = contract getRequires body 
-    post            = contract getEnsures  body
-    contract g      = mconcat . catMaybes . map g
+    pre             = getSpec getRequires body 
+    post            = getSpec getEnsures  body
 
 mkFun s             = convertError "mkFun" s 
 
-isFunctionStmt :: Statement a -> Bool 
-isFunctionStmt (FunctionStmt _ _ _ _) = True
-isFunctionStmt _                      = False
+-----------------------------------------------------------------------------------
+-- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 
+-----------------------------------------------------------------------------------
+
+-- Ideally, a la JML, we'd modify the parser to take in annotations for 
+-- 
+--   * assert(p)
+--   * assume(p)
+--   * invariant(p) 
+--
+-- For now, we hack them with function calls.
+
+
+isSpecification :: Statement a -> Bool
+isSpecification s  = not $ null $ catMaybes $ ($ s) <$> specs 
+  where 
+    specs          = [getAssert, getAssume, getInv, getRequires, getEnsures]
+
+getInvariant :: Statement a -> F.Pred 
+
+getInvariant = getSpec getInv . flattenStmt
+
+flattenStmt (BlockStmt _ ss) = concatMap flattenStmt ss
+flattenStmt s                = [s]
+
 
 getAssume    :: Statement a -> Maybe F.Pred 
 getAssume    = getStatementPred "assume"
@@ -188,13 +211,9 @@ getAssume    = getStatementPred "assume"
 getAssert    :: Statement a -> Maybe F.Pred 
 getAssert    = getStatementPred "assert"
 
-getInvariant :: Statement a -> Maybe F.Pred 
-getInvariant = getStatementPred "invariant"
-
 getRequires  = getStatementPred "requires"
 getEnsures   = getStatementPred "ensures"
-
-
+getInv       = getStatementPred "invariant"
 
 getStatementPred :: String -> Statement a -> Maybe F.Pred 
 getStatementPred name (ExprStmt _ (CallExpr _ (VarRef _ (Id _ f)) [p]))
@@ -203,7 +222,8 @@ getStatementPred name (ExprStmt _ (CallExpr _ (VarRef _ (Id _ f)) [p]))
 getStatementPred _ _ 
   = Nothing 
 
-
+getSpec   :: (Statement a -> Maybe F.Pred) -> [Statement a] -> F.Pred 
+getSpec g = mconcat . catMaybes . map g
 
 
 
@@ -322,10 +342,13 @@ instance Monoid VCond where
 instance PP VCond where 
   pp = ppObligations . obligationsVCond 
 
+instance PP F.Pred where 
+  pp = pprint
+
 ppObligations lps   =   text "Verification Condition" 
                     $+$ vcat (map ppObligation lps)
 
-ppObligation (l, p) = text "for" <+> pp l <+> dcolon <+> F.toFix p
+ppObligation (l, p) = text "for" <+> pp l <+> dcolon <+> pp p
 
 ------------------------------------------------------------------
 obligationsVCond :: VCond_ a -> [(SourcePos, a)] 

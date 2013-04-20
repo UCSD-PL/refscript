@@ -40,7 +40,7 @@ verifyFile f
 --------------------------------------------------------------------------------
 genVC :: Nano -> VCond
 --------------------------------------------------------------------------------
-genVC = mconcat . map generateFunVC . functions 
+genVC = mconcat . map generateFunVC 
 
 
 -----------------------------------------------------------------------------------
@@ -114,14 +114,18 @@ generateStmtVC (IfStmt _ b s1 s2) vc
 generateStmtVC (IfSingleStmt l b s) vc
   = generateVC (IfStmt l b s (EmptyStmt l)) vc
 
-generateStmtVC w@(WhileStmt l _ _) vc 
-  = do vci'     <- generateVC s vci 
+generateStmtVC w@(WhileStmt l cond s) vc 
+  = do vci'    <- generateVC s vci 
        sideCond $ ((i `pAnd` b)        `F.PImp`) <$> vci' -- require i is inductive 
        sideCond $ ((i `pAnd` F.PNot b) `F.PImp`) <$> vc   -- establish vc at exit 
        return vci                                         -- require i holds on entry
     where 
-       (b, i, s) = splitWhileStmt w
-       vci       = newVCond l i
+       b        = F.prop cond
+       i        = getInvariant s
+       vci      = newVCond l i
+
+generateStmtVC e@(VarDeclStmt l ds) vc
+  = generateVC ds vc
 
 generateStmtVC e@(ExprStmt _ (CallExpr _ _ _)) vc
   | isJust $ getAssume e
@@ -133,41 +137,12 @@ generateStmtVC e@(ExprStmt l (CallExpr _ _ _)) vc
   = return $ newVCond l p <> vc
     where Just p = getAssert e
 
-generateStmtVC e@(VarDeclStmt l ds) vc
-  = generateVC ds vc
+generateStmtVC e@(ExprStmt l (CallExpr _ _ _)) vc
+  | isSpecification e -- Ignore 
+  = return vc
 
 generateStmtVC w _ 
   = convertError "generateStmtVC" w
-
------------------------------------------------------------------------------------
--- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 
------------------------------------------------------------------------------------
-
--- Ideally, a la JML, we'd modify the parser to take in annotations for 
--- 
---   * assert(p)
---   * assume(p)
---   * invariant(p) 
---
--- For now, we hack them with function calls.
-
-splitWhileStmt :: (Statement a) -> (F.Pred, F.Pred, Statement a)
-splitWhileStmt (WhileStmt _ b s) = (cond, invariant, body)
-  where 
-    cond                         = F.prop b
-    (invariant, body)            = splitWhileBody s
-
-splitWhileStmt _                 = errorstar "Unexpected call to splitWhileStmt"
-
-splitWhileBody :: Statement a   -> (F.Pred, Statement a)
-splitWhileBody s@(BlockStmt l (si : ss)) 
-  = case getInvariant si of 
-      Just i  -> (F.prop i, BlockStmt l ss)
-      Nothing -> (F.PTrue , s             )
-
-splitWhileBody s
-  = (F.PTrue, s)
-
 
 -----------------------------------------------------------------------------------
 -- | `VCM` is a VCGen monad that logs the loop-inv "side conditions" 

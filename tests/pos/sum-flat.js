@@ -1,11 +1,15 @@
 function sum(n){
-  assume(0 < n);
-  var r = 1;
+  assume(n > 0);
+  var r = 0;
   var i = n;
-  while (0 < i) { 
+  while (0 < i) {
+    invariant(i >= 0);
+    invariant((i + r) == n);
+    invariant(n > 0);
     r = r + 1;
     i = i - 1;
   }
-  assert (0 <  r);
+  assert (i == 0);
   assert (n == r);
+  assert (0 <  r);
 }

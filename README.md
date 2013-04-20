@@ -26,17 +26,46 @@ HW 1
 3. vcgen :: Statement -> [Pred]                     
 4. valid :: Pred -> IO Bool     -- liquid-fixpoint wrapper for Pred
 
-5. Port big tests
-    
-    - if-max            
-    - while-5
-    - adpcmini.c
-    - while-binsearch <------------ HEREHEREHEREHERE
-    - while-array
+5. Port big tests [tests/flat/pos/] <------------ HEREHEREHERE JUST GET THESE TO PARSE
 
 6. Add functions
+   
+    - Nano = [Function a]
 
-7. Add arrays
+    - function foo(args){
+        requires(p);
+        ensures(p);
+        BODY;
+      }
+
+    - Output value called: "$result" named resultVar in (Types.hs)
+
+    - type FunName = String
+
+    - data FunSpec = FSpec { fname :: FunName 
+                           , fargs :: [String] (or var?)
+                           , fpre  :: Pred
+                           , fpost :: Pred
+                           }
+
+    - type Env     = M.Map FunName FunSpec
+
+    - makeEnv      :: Nano -> FunSpec
+    - vcgen        :: FunSpec -> Nano -> [(a, Pred)]
+
+    - OLD vcgen 
+    + FunSpec in the VCMonad so you have access to spec
+    + CALL   = assert (f-pre); assume (f-post)
+    + ENTRY  = assume (f-pre)
+    + RETURN = assert (f-post) ; assume (false)
+
+7. Release
+    - mkdir assignment
+    - delete all lines "invariant"
+    - delete vcgen-statement implementation
+    - write  README.md
+
+8. Add arrays
 
 Homework Plan
 -------------

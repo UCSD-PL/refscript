@@ -14,7 +14,6 @@ import qualified Control.Exception as Ex
 
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Parser  (parseJavaScriptFromFile)
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface  (checkValid)
 import           Language.Fixpoint.Misc       (sortNub, errorstar)
@@ -29,27 +28,20 @@ verifyFile :: FilePath -> IO (F.FixResult SourcePos)
 --------------------------------------------------------------------------------
 
 verifyFile f 
-  = do s      <- parseJavaScriptFromFile f
-       when (not (isNano s)) $ errorstar ("Invalid Input File: " ++ f)
-       let vc  = genVC s
+  = do nano   <- parseNanoFromFile f
+       let vc  = genVC nano 
        writeFile (f `addExtension` ".vc") (render $ pp vc)
        rs     <- mapM checkVC $ obligationsVCond vc
-       forM rs  $ (putStrLn . render . pp)  
-       return   $ mconcat rs
-
--- verifyNano :: FilePath -> Nano -> IO (F.FixResult SourcePos)
--- verifyNano f = fmap mconcat . mapM checkVC . obligationsVCond . genVC 
+       forM rs $ (putStrLn . render . pp)  
+       return  $ mconcat rs
 
 --------------------------------------------------------------------------------
 -- | Top-level VC Generator 
 --------------------------------------------------------------------------------
 genVC :: Nano -> VCond
 --------------------------------------------------------------------------------
+genVC = mconcat . map generateFunVC . functions 
 
-genVC ss            = vcTop <> vcSide 
-  where 
-    (vcTop, vcSide) = runState (generateBlockVC ss vc0) vc0 
-    vc0             = mempty 
 
 -----------------------------------------------------------------------------------
 -- | Top-level SMT Interface 
@@ -69,6 +61,16 @@ checkVC' (loc, p)
 
 -----------------------------------------------------------------------------------
 -- | Verification Condition Generator 
+-----------------------------------------------------------------------------------
+generateFunVC :: Fun SourcePos -> VCond 
+-----------------------------------------------------------------------------------
+
+generateFunVC fn    = vcTop <> vcSide 
+  where 
+    (vcTop, vcSide) = runState (generateBlockVC ss vc0) vc0 
+    vc0             = mempty
+    ss              = fbody fn
+
 -----------------------------------------------------------------------------------
 generateBlockVC :: [Statement SourcePos] -> VCond -> VCM VCond 
 -----------------------------------------------------------------------------------

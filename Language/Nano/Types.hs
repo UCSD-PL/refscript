@@ -5,11 +5,11 @@ module Language.Nano.Types (
   -- * Configuration Options
     Config (..)
 
-  -- * Valid Nano Entitities
-  , IsNano (..)
-
-  -- * Type synonym for Nano Programs
-  , Nano 
+  -- * Constructing Nano Programs
+  , Nano
+  , Fun (..) 
+  , parseNanoFromFile 
+  , functions
 
   -- * Some helpers
   , pAnd
@@ -31,14 +31,15 @@ import           Data.Hashable
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.Monoid                        (Monoid (..))
--- import           Data.Maybe                         (fromMaybe)
+import           Data.Maybe                         (fromMaybe)
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
-import           Text.Parsec                        
+import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
 
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Text.PrettyPrint.HughesPJ
+import           Text.Parsec                        
 
 ---------------------------------------------------------------------
 -- | Command Line Configuration Options
@@ -48,6 +49,18 @@ data Config = Config {
     files   :: [FilePath]     -- ^ source files to check
   , incdirs :: [FilePath]     -- ^ path to directory for include specs
   } deriving (Data, Typeable, Show, Eq)
+
+
+---------------------------------------------------------------------
+-- | Top-level Parser 
+---------------------------------------------------------------------
+
+parseNanoFromFile f 
+  = do s     <- parseJavaScriptFromFile f
+       return $ fromMaybe err (mkNano s)
+    where
+       err    = errorstar $ "Invalid Input File: " ++ f
+
 
 ---------------------------------------------------------------------
 -- | Wrappers around `Language.ECMAScript3.Syntax` ------------------
@@ -88,18 +101,18 @@ instance IsNano (Expression a) where
   isNano (InfixExpr _ o e1 e2) = isNano o && isNano e1 && isNano e2
   isNano (PrefixExpr _ o e)    = isNano o && isNano e
   isNano e                     = errortext (text "Not Nano Expression!" <+> pp e) 
-  isNano _                     = False
+  -- isNano _                     = False
 
 instance IsNano AssignOp where
   isNano OpAssign = True
   isNano x        = errortext (text "Not Nano AssignOp!" <+> pp x) 
-  isNano _        = False
+  -- isNano _        = False
 
 instance IsNano PrefixOp where
   isNano PrefixLNot  = True
   isNano PrefixMinus = True 
   isNano e           = errortext (text "Not Nano PrefixOp!" <+> pp e) 
-  isNano _           = False
+  -- isNano _           = False
 
 instance IsNano (Statement a) where
   isNano (EmptyStmt _)         = True                   -- ^ skip
@@ -109,7 +122,7 @@ instance IsNano (Statement a) where
   isNano (IfStmt _ b s1 s2)    = isNano b && isNano s1 && isNano s2
   isNano (WhileStmt _ b s)     = isNano b && isNano s
   isNano e                     = errortext (text "Not Nano Statement!" <+> pp e) 
-  isNano _                     = False
+  -- isNano _                     = False
 
 instance IsNano [(Statement a)] where 
   isNano = all isNano 
@@ -121,16 +134,40 @@ isNanoExprStatement :: Expression a -> Bool
 isNanoExprStatement (AssignExpr _ o lv e) = isNano o && isNano lv && isNano e 
 isNanoExprStatement (CallExpr _ e es)     = all isNano (e:es)
 isNanoExprStatement e                     = errortext (text "Not Nano ExprStmt!" <+> pp e) 
-isNanoExprStatement _                     = False
+-- isNanoExprStatement _                     = False
 
 
 ------------------------------------------------------------------
--- | Top-level Nano Program --------------------------------------
+-- | Nano Programs : Wrapper around EcmaScript -------------------
 ------------------------------------------------------------------
 
-{-@ type Nano = {v: [(Statement SourcePos)] | (isNano v)} @-}
+{-@ type Fun a   = {v : (Statement a) | (isFunctionStmt v) && (isNano v) }  @-}
 
-type Nano = [Statement SourcePos] 
+data Fun a       = Fun { fname :: Id a          -- ^ name
+                       , fargs :: [Id a]        -- ^ parameters
+                       , fbody :: [Statement a] -- ^ body
+                       , fpre  :: F.Pred        -- ^ precondition
+                       , fpost :: F.Pred        -- ^ postcondition
+                       }
+
+type Nano     = [Fun SourcePos] 
+
+functions fns = fns
+
+mkNano :: [Statement SourcePos] -> Maybe Nano
+mkNano =  sequence . map mkFun 
+
+mkFun :: Statement a -> Maybe (Fun a)
+mkFun = undefined
+-- valid s      = isNano s && isFunctionStmt s
+
+isFunctionStmt :: Statement a -> Bool 
+isFunctionStmt (FunctionStmt _ _ _ _) = True
+isFunctionStmt _                      = False
+
+
+
+
 
 ------------------------------------------------------------------
 -- | Converting `ECMAScript3` values into `Fixpoint` values, 

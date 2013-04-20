@@ -5,13 +5,16 @@ module Language.Nano.Types (
   -- * Configuration Options
     Config (..)
 
-  -- * Constructing Nano Programs
+  -- * De/Constructing Nano Programs
   , Nano
   , Fun (..) 
   , parseNanoFromFile 
   , functions
+  , getAssume
+  , getAssert
+  , getInvariant  
 
-  -- * Some helpers
+  -- * Some Operators on Pred
   , pAnd
   , pOr
 
@@ -31,7 +34,7 @@ import           Data.Hashable
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.Monoid                        (Monoid (..))
-import           Data.Maybe                         (fromMaybe)
+import           Data.Maybe                         (catMaybes, fromMaybe)
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
 import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
@@ -72,6 +75,7 @@ parseNanoFromFile f
 class IsNano a where 
   isNano :: a -> Bool
 
+
 instance IsNano InfixOp where
   isNano OpLT   = True -- ^ @<@
   isNano OpLEq  = True -- ^ @<=@
@@ -93,6 +97,10 @@ instance IsNano InfixOp where
 instance IsNano (LValue a) where 
   isNano (LVar _ _) = True
   isNano _          = False
+
+instance IsNano (VarDecl a) where
+  isNano (VarDecl _ _ (Just e)) = isNano e
+  isNano (VarDecl _ _ Nothing)  = True
 
 instance IsNano (Expression a) where 
   isNano (BoolLit _ _)         = True
@@ -121,6 +129,7 @@ instance IsNano (Statement a) where
   isNano (IfSingleStmt _ b s)  = isNano b && isNano s   
   isNano (IfStmt _ b s1 s2)    = isNano b && isNano s1 && isNano s2
   isNano (WhileStmt _ b s)     = isNano b && isNano s
+  isNano (VarDeclStmt _ ds)    = all isNano ds 
   isNano e                     = errortext (text "Not Nano Statement!" <+> pp e) 
   -- isNano _                     = False
 
@@ -143,7 +152,8 @@ isNanoExprStatement e                     = errortext (text "Not Nano ExprStmt!"
 
 {-@ type Fun a   = {v : (Statement a) | (isFunctionStmt v) && (isNano v) }  @-}
 
-data Fun a       = Fun { fname :: Id a          -- ^ name
+data Fun a       = Fun { floc  :: a             -- ^ sourceloc 
+                       , fname :: Id a          -- ^ name
                        , fargs :: [Id a]        -- ^ parameters
                        , fbody :: [Statement a] -- ^ body
                        , fpre  :: F.Pred        -- ^ precondition
@@ -158,12 +168,41 @@ mkNano :: [Statement SourcePos] -> Maybe Nano
 mkNano =  sequence . map mkFun 
 
 mkFun :: Statement a -> Maybe (Fun a)
-mkFun = undefined
--- valid s      = isNano s && isFunctionStmt s
+mkFun (FunctionStmt l f xs body) 
+  | all isNano body = Just $ Fun l f xs body pre post
+  | otherwise       = Nothing
+  where 
+    pre             = contract getRequires body 
+    post            = contract getEnsures  body
+    contract g      = mconcat . catMaybes . map g
+
+mkFun s             = convertError "mkFun" s 
 
 isFunctionStmt :: Statement a -> Bool 
 isFunctionStmt (FunctionStmt _ _ _ _) = True
 isFunctionStmt _                      = False
+
+getAssume    :: Statement a -> Maybe F.Pred 
+getAssume    = getStatementPred "assume"
+
+getAssert    :: Statement a -> Maybe F.Pred 
+getAssert    = getStatementPred "assert"
+
+getInvariant :: Statement a -> Maybe F.Pred 
+getInvariant = getStatementPred "invariant"
+
+getRequires  = getStatementPred "requires"
+getEnsures   = getStatementPred "ensures"
+
+
+
+getStatementPred :: String -> Statement a -> Maybe F.Pred 
+getStatementPred name (ExprStmt _ (CallExpr _ (VarRef _ (Id _ f)) [p]))
+  | name == f 
+  = Just $ F.prop p
+getStatementPred _ _ 
+  = Nothing 
+
 
 
 

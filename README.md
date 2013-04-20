@@ -54,6 +54,9 @@ HW 1
     - vcgen        :: FunSpec -> Nano -> [(a, Pred)]
 
     - OLD vcgen 
+   
+    HEREHEREHEREHERE
+
     + FunSpec in the VCMonad so you have access to spec
     + CALL   = assert (f-pre); assume (f-post)
     + ENTRY  = assume (f-pre)

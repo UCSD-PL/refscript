@@ -79,8 +79,8 @@ class Config (rtest.TestConfig):
 #####################################################################################
 
 #DEFAULT
-testdirs  = [ ("pos", 0)
-            , ("neg", 1)
+testdirs  = [ ("flat/pos", 0)
+            , ("flat/neg", 1)
             ]
 
 parser = optparse.OptionParser()

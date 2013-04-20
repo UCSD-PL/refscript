@@ -27,9 +27,10 @@ HW 1
 4. valid :: Pred -> IO Bool     -- liquid-fixpoint wrapper for Pred
 
 5. Port big tests
-    - if-max            <------------------------- HEREHEREHEREHERE
+    - if-max            
+    - while-5
+    - while-binsearch <------------------------- HEREHEREHEREHERE
     - while-array
-    - while-binsearch
     - adpcmini.c
 
 6. Add functions

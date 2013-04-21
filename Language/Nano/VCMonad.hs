@@ -36,8 +36,8 @@ import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc 
 import           Language.Nano.Types
 import           Data.Monoid
-import           Data.Maybe                   (isJust, fromJust, fromMaybe, maybe)
-import           Text.Parsec                  (SourcePos)
+import           Data.Maybe                   (fromMaybe)
+-- import           Text.Parsec                  (SourcePos)
 
 --------------------------------------------------------------------
 -- | `VCM` is a VCGen monad that logs the loop-inv "side conditions" 

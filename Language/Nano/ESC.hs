@@ -6,7 +6,6 @@
 
 module Language.Nano.ESC (verifyFile) where
 
-import qualified Data.HashMap.Strict as M
 import           Text.PrettyPrint.HughesPJ    (text, render, (<+>))
 import           System.FilePath              (addExtension)
 import           Control.Monad.State
@@ -17,7 +16,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface  (checkValid)
-import           Language.Fixpoint.Misc       (safeZip, sortNub, errorstar)
+import           Language.Fixpoint.Misc       (safeZip, sortNub)
 import           Language.Nano.Types
 import           Language.Nano.VCMonad
 import           Data.Monoid
@@ -125,7 +124,7 @@ generateStmtVC (IfSingleStmt l b s) vc
   = generateVC (IfStmt l b s (EmptyStmt l)) vc
 
 -- while (cond) { s }
-generateStmtVC w@(WhileStmt l cond s) vc 
+generateStmtVC (WhileStmt l cond s) vc 
   = do vci'       <- generateVC s vci 
        addSideCond $ ((i `pAnd` b)        `F.PImp`) <$> vci' -- require i is inductive 
        addSideCond $ ((i `pAnd` F.PNot b) `F.PImp`) <$> vc   -- establish vc at exit 
@@ -136,7 +135,7 @@ generateStmtVC w@(WhileStmt l cond s) vc
        vci         = newVCond l i
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
-generateStmtVC e@(VarDeclStmt l ds) vc
+generateStmtVC (VarDeclStmt _ ds) vc
   = generateVC ds vc
 
 -- assume(e)
@@ -152,7 +151,7 @@ generateStmtVC e@(ExprStmt l (CallExpr _ _ _)) vc
     ep        = getAssert e
 
 -- ignore other specification statements
-generateStmtVC e@(ExprStmt l (CallExpr _ _ _)) vc
+generateStmtVC e@(ExprStmt _ (CallExpr _ _ _)) vc
   | isSpecification e
   = return vc
 
@@ -172,7 +171,7 @@ generateAsgnVC :: F.Symbolic x => SourcePos -> x -> Expression a -> VCond -> VCM
 generateAsgnVC l x (CallExpr _ (VarRef _ (Id _ f)) es) vc
   = generateFunAsgnVC l x f es vc
 
-generateAsgnVC l x e  vc
+generateAsgnVC _ x e  vc
   = generateExprAsgnVC x e vc
 
 -----------------------------------------------------------------------------------

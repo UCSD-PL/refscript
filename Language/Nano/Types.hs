@@ -137,7 +137,7 @@ instance IsNano (Statement a) where
   isNano (IfStmt _ b s1 s2)    = isNano b && isNano s1 && isNano s2
   isNano (WhileStmt _ b s)     = isNano b && isNano s
   isNano (VarDeclStmt _ ds)    = all isNano ds 
-  isNano (ReturnStmt l e)      = isNano e 
+  isNano (ReturnStmt _ e)      = isNano e 
   isNano e                     = errortext (text "Not Nano Statement!" <+> pp e) 
   -- isNano _                     = False
 
@@ -358,6 +358,7 @@ instance PP (Id a) where
 
 instance PP (Fun SourcePos) where 
   pp (Fun l n xs _ pre post) =   pp n <+> text "defined at" <+> pp l
+                             $+$ text "formals: "  <+> intersperse comma (pp <$> xs)
                              $+$ text "requires: " <+> pp pre
                              $+$ text "ensures: "  <+> pp post
 

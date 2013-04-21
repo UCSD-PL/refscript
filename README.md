@@ -20,51 +20,17 @@ TODO
 
 HW 1            
 
-0. Wrap parser
-1. Port small tests [int-incr, if-abs]
-2. Parse small functions : FilePath -> Statement
-3. vcgen :: Statement -> [Pred]                     
-4. valid :: Pred -> IO Bool     -- liquid-fixpoint wrapper for Pred
 
-5. Port big tests [tests/flat/pos/] <------------ HEREHEREHERE JUST GET THESE TO PARSE
-
-6. Add functions
-   
-    - Nano = [Function a]
-
-    - function foo(args){
-        requires(p);
-        ensures(p);
-        BODY;
-      }
-
-    - Output value called: "$result" named resultVar in (Types.hs)
-
-    - type FunName = String
-
-    - data FunSpec = FSpec { fname :: FunName 
-                           , fargs :: [String] (or var?)
-                           , fpre  :: Pred
-                           , fpost :: Pred
-                           }
-
-    - type Env     = M.Map FunName FunSpec
-
-    - makeEnv      :: Nano -> FunSpec
-    - vcgen        :: FunSpec -> Nano -> [(a, Pred)]
-
-    - OLD vcgen 
-   
-    HEREHEREHEREHERE
-
-    + FunSpec in the VCMonad so you have access to spec
-    + CALL   = assert (f-pre); assume (f-post)
-    + ENTRY  = assume (f-pre)
-    + RETURN = assert (f-post) ; assume (false)
-
+        Failed 5 tests: <------------ HEREHEREHERE 
+        pos/driver-fun.js, 
+        pos/driver-rec.js, 
+        pos/locks-fun.js, 
+        pos/locks-loop-fun.js, 
+        pos/sum-fun.js
+ 
 7. Release
-    - mkdir assignment
-    - delete all lines "invariant"
+    - mkdir assignment in algo-software-verif/homeworks?
+    - delete all lines "invariant", "requires", "ensures"
     - delete vcgen-statement implementation
     - write  README.md
 

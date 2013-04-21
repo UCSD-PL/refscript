@@ -114,6 +114,7 @@ instance IsNano (Expression a) where
   isNano (VarRef _ _)          = True
   isNano (InfixExpr _ o e1 e2) = isNano o && isNano e1 && isNano e2
   isNano (PrefixExpr _ o e)    = isNano o && isNano e
+  isNano (CallExpr _ e es)     = all isNano (e:es)
   isNano e                     = errortext (text "Not Nano Expression!" <+> pp e) 
   -- isNano _                     = False
 
@@ -136,8 +137,13 @@ instance IsNano (Statement a) where
   isNano (IfStmt _ b s1 s2)    = isNano b && isNano s1 && isNano s2
   isNano (WhileStmt _ b s)     = isNano b && isNano s
   isNano (VarDeclStmt _ ds)    = all isNano ds 
+  isNano (ReturnStmt l e)      = isNano e 
   isNano e                     = errortext (text "Not Nano Statement!" <+> pp e) 
   -- isNano _                     = False
+
+instance IsNano a => IsNano (Maybe a) where 
+  isNano (Just x) = isNano x
+  isNano Nothing  = True
 
 instance IsNano [(Statement a)] where 
   isNano = all isNano 

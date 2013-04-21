@@ -194,7 +194,7 @@ mkFun s             = convertError "mkFun" s
 -- For now, we hack them with function calls.
 
 returnSymbol :: F.Symbol
-returnSymbol = F.stringSymbol "$return" 
+returnSymbol = F.stringSymbol "$result" 
 
 isSpecification :: Statement a -> Bool
 isSpecification s  = not $ null $ catMaybes $ ($ s) <$> specs 

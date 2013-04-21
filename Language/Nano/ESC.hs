@@ -81,7 +81,7 @@ instance IsVerifiable (Statement SourcePos) where
   generateVC        = generateStmtVC
 
 instance IsVerifiable (VarDecl SourcePos) where 
-  generateVC (VarDecl _ x (Just e)) vc = generateAsgnVC x e vc
+  generateVC (VarDecl l x (Just e)) vc = generateAsgnVC l x e vc
   generateVC (VarDecl _ _ Nothing)  vc = return vc
 
 
@@ -102,19 +102,9 @@ generateStmtVC :: Statement SourcePos -> VCond -> VCM VCond
 generateStmtVC (EmptyStmt _) vc 
   = return vc
 
--- x = f(e1,...,en)
-generateStmtVC (ExprStmt _ (AssignExpr l OpAssign x (CallExpr _ (VarRef _ (Id _ f)) es))) vc
-  = do z       <- freshId l
-       sp      <- getCalleeSpec f
-       let su   = F.mkSubst $ safeZip "funCall" (F.symbol <$> fargs sp) (F.expr <$> es)
-       let su'  = F.mkSubst [(returnSymbol, F.eVar z)]
-       let pre  = F.subst su         (fpre sp) 
-       let post = F.subst (su <> su) (fpost sp)
-       (generateAssertVC l pre <=< generateAssumeVC post <=< generateAsgnVC x z) vc 
-
 -- x = e
-generateStmtVC (ExprStmt _ (AssignExpr _ OpAssign x e)) vc  
-  = generateAsgnVC x e vc 
+generateStmtVC (ExprStmt _ (AssignExpr l OpAssign x e)) vc  
+  = generateAsgnVC l x e vc 
 
 -- s1;s2;...;sn
 generateStmtVC (BlockStmt _ ss) vc
@@ -165,17 +155,49 @@ generateStmtVC e@(ExprStmt l (CallExpr _ _ _)) vc
   | isSpecification e
   = return vc
 
+-- return e 
+generateStmtVC (ReturnStmt l (Just e)) vc
+  = do p <- getFunctionPostcond
+       (generateAsgnVC l returnSymbol e <=<  generateAssertVC l p <=< generateAssumeVC F.PFalse) $ vc
+
+
 generateStmtVC w _ 
   = convertError "generateStmtVC" w
 
--- HIDE
-generateAsgnVC :: (F.Symbolic x, F.Expression e) => x -> e -> VCond -> VCM VCond 
-generateAsgnVC x e vc = return   $ (`F.subst1` (F.symbol x, F.expr e)) <$> vc
+-----------------------------------------------------------------------------------
+generateAsgnVC :: F.Symbolic x => SourcePos -> x -> Expression a -> VCond -> VCM VCond
+-----------------------------------------------------------------------------------
 
+generateAsgnVC l x (CallExpr _ (VarRef _ (Id _ f)) es) vc
+  = generateFunAsgnVC l x f es vc
+
+generateAsgnVC l x e  vc
+  = generateExprAsgnVC x e vc
+
+-----------------------------------------------------------------------------------
+--
+-- HIDE
 generateAssumeVC :: F.Pred -> VCond -> VCM VCond 
 generateAssumeVC   p vc = return $ (p `F.PImp`) <$> vc
 
 generateAssertVC :: SourcePos -> F.Pred -> VCond -> VCM VCond 
 generateAssertVC l p vc = return $ newVCond l p <> vc
+
+-- x = e; // where e is not a function call
+generateExprAsgnVC :: (F.Symbolic x, F.Expression e) => x -> e -> VCond -> VCM VCond 
+generateExprAsgnVC x e vc = return   $ (`F.subst1` (F.symbol x, F.expr e)) <$> vc
+
+-- x = f(e1,...,en)
+generateFunAsgnVC :: (F.Symbolic x, F.Expression e) 
+                  => SourcePos -> x -> String -> [e] -> VCond -> VCM VCond 
+generateFunAsgnVC l x f es vc
+  = do z       <- freshId l
+       sp      <- getCalleeSpec f
+       let su   = F.mkSubst $ safeZip "funCall" (F.symbol <$> fargs sp) (F.expr <$> es)
+       let su'  = F.mkSubst [(returnSymbol, F.eVar z)]
+       let pre  = F.subst su         (fpre sp) 
+       let post = F.subst (su <> su) (fpost sp)
+       (generateAssertVC l pre <=< generateAssumeVC post <=< generateExprAsgnVC x z) vc 
+
 
 

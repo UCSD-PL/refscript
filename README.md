@@ -71,15 +71,50 @@ HW 1
 8. Add arrays
 
 
-HINT: Make sure you understand
-------------------------------
+HINTS 
+-----
 
--- 1. `Language.Fixpoint.Types.Subable`
--- http://goto.ucsd.edu/~rjhala/llvm-haskell/doc/html/liquidtypes/Language-Haskell-Liquid-Fixpoint.html#t:Subable 
--- You will need to implement substitutions, as needed for x := e, etc.
--- 2. Language.Fixpoint.Types.Symbolic
--- 3. Language.Fixpoint.Types.Expression
--- 4. Language.Fixpoint.Types.Predicate 
+Since the VCGen happens using a monad to log "side-conditions",
+you may find the `<=<` operator quite handy.
+
+For example, 
+
+to generate the VC for a sequence of commands 
+
+    c1;c2;c3
+
+that is to compute
+
+    generateVC (c1; c2; c3) vc 
+
+you can do something like
+
+    (generateVC c1 <=< generateVC c2 <=< generateVC c3) vc
+
+
+Make sure you understand:
+
+    `Language.Fixpoint.Types.Subable`
+
+You will need to implement substitutions, as needed for x := e, etc.
+
+    `Language.Fixpoint.Types.Symbolic`
+
+    http://goto.ucsd.edu/~rjhala/llvm-haskell/doc/html/liquidtypes/Language-Haskell-Liquid-Fixpoint.html#t:Subable
+
+You may need this to convert program variables `Id a` to logical symbols `F.Symbol`
+
+    `Language.Fixpoint.Types.Expression`
+
+You may need this to convert program expressions `Expression a` to logical expressions `F.Expr`
+
+    `Language.Fixpoint.Types.Predicate`
+
+You may need this to convert program expressions `Expression a` to logical predicates `F.Pred`
+
+(For the last three, the relevant class instances are in `Language.Nano.Types`)
+
+
 
 
 Homework Plan

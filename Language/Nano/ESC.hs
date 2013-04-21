@@ -31,6 +31,7 @@ verifyFile :: FilePath -> IO (F.FixResult SourcePos)
 
 verifyFile f 
   = do nano   <- parseNanoFromFile f
+       forM_ nano (putStrLn . render . pp)  
        let vc  = genVC nano 
        writeFile (f `addExtension` ".vc") (render $ pp vc)
        rs     <- mapM checkVC $ obligationsVCond vc
@@ -195,8 +196,8 @@ generateFunAsgnVC l x f es vc
        sp      <- getCalleeSpec f
        let su   = F.mkSubst $ safeZip "funCall" (F.symbol <$> fargs sp) (F.expr <$> es)
        let su'  = F.mkSubst [(returnSymbol, F.eVar z)]
-       let pre  = F.subst su         (fpre sp) 
-       let post = F.subst (su <> su) (fpost sp)
+       let pre  = F.subst su          (fpre sp) 
+       let post = F.subst (su <> su') (fpost sp)
        (generateAssertVC l pre <=< generateAssumeVC post <=< generateExprAsgnVC x z) vc 
 
 

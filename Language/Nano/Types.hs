@@ -353,6 +353,14 @@ instance PP VCond where
 instance PP F.Pred where 
   pp = pprint
 
+instance PP (Id a) where
+  pp (Id _ x) = text x
+
+instance PP (Fun SourcePos) where 
+  pp (Fun l n xs _ pre post) =   pp n <+> text "defined at" <+> pp l
+                             $+$ text "requires: " <+> pp pre
+                             $+$ text "ensures: "  <+> pp post
+
 ppObligations lps   =   text "Verification Condition" 
                     $+$ vcat (map ppObligation lps)
 

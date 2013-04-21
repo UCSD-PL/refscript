@@ -27,32 +27,35 @@ function release(l){
   return 0;
 }
 
-function driver(l0, newValue0, oldValue0){
-  var l;
-  var newValue;
-  var oldValue;
-  if (newValue0 != oldValue0){
-    l        = lock(l0);
-    oldValue = newValue0;
-    if (0 < newValue0){
-      l = unlock(l);
-      newValue = newValue0 - 1;
+function driver(l0, newCount0, oldCount0){
+  requires(((newCount0 != oldCount0) && (l0 == 0)) || ((newCount0 == oldCount0) && (l0 == 1)));
+  ensures($result == 1);
+  var l        = l0;
+  var newCount = newCount0;
+  var oldCount = oldCount0;
+  
+  if (newCount != oldCount){
+    l        = acquire(l0);
+    oldCount = newCount0;
+    if (0 < newCount){
+      l = release(l);
+      newCount = newCount - 1;
     } else {
-      newValue = newValue0;
+      newCount = newCount;
     }
-    l = driver(l, newValue, oldValue);
+    l = driver(l, newCount, oldCount);
   };
   return l;
 
 }
 
 function main() {
-  var newValue = pos();
-  var oldValue = pos(); 
+  var newCount = pos();
+  var oldCount = pos(); 
   var l        = create();
-  if (newValue < oldValue) {
-    l = driver(l, newValue, oldValue); 
-    l = unlock(l);
+  if (newCount < oldCount) {
+    l = driver(l, newCount, oldCount); 
+    l = release(l);
   }
 }
 

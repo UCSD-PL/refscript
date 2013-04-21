@@ -18,12 +18,14 @@ function create(){
 function acquire(l){
   requires(l == 0);
   ensures($result == 1);
+  assert(l==0);
   return 1;
 }
 
 function release(l){
   requires(l == 1);
   ensures($result == 0);
+  assert(l==1);
   return 0;
 }
 
@@ -33,15 +35,15 @@ function main(){
   var l    = create();
 
   while (0 < n){
+    invariant(l == 0);
     if (0 < flag){ 
-      l = lock(l) 
+      l = acquire(l); 
     }
     if (0 < flag){ 
-      l = unlock(l) 
+      l = release(l);
     }
     n = n - 1;
   }
   assert(l == 0);
-
 }
 

@@ -1,3 +1,8 @@
+function random(){
+  var x;
+  return x;
+}
+
 function pos(){
   ensures(0 < $result);
   var x = random();
@@ -13,29 +18,32 @@ function create(){
 function acquire(l){
   requires(l == 0);
   ensures($result == 1);
+  assert(l==0);
   return 1;
 }
 
 function release(l){
   requires(l == 1);
   ensures($result == 0);
+  assert(l==1);
   return 0;
 }
 
 function driver() {
-  var newValue = pos();
-  var oldValue = pos(); 
+  var newCount = pos();
+  var oldCount = pos(); 
   var l        = create();
-  if (newValue < oldValue){
-    while (newValue != oldValue){
-      l        = lock(l);
-      oldValue = newValue;
-      if (0 < newValue){
-        l = unlock(l);
-        newValue = newValue - 1;
+  if (newCount < oldCount){
+    while (newCount != oldCount){
+    invariant(((newCount != oldCount) && (l == 0)) || ((newCount == oldCount) && (l == 1)));
+      l        = acquire(l);
+      oldCount = newCount;
+      if (0 < newCount){
+        l = release(l);
+        newCount = newCount - 1;
       }
     }
-    l = unlock(l);
+    l = release(l);
   }
 }
 

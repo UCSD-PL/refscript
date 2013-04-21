@@ -1,3 +1,8 @@
+function random(){
+  var x;
+  return x;
+}
+
 function pos(){
   ensures(0 < $result);
   var x = random();

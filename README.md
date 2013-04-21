@@ -22,11 +22,7 @@ HW 1
 
 
         Failed 5 tests: <------------ HEREHEREHERE 
-        pos/driver-fun.js, 
         pos/driver-rec.js, 
-        pos/locks-fun.js, 
-        pos/locks-loop-fun.js, 
-        pos/sum-fun.js
  
 7. Release
     - mkdir assignment in algo-software-verif/homeworks?

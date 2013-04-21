@@ -6,6 +6,7 @@
 
 module Language.Nano.ESC (verifyFile) where
 
+import qualified Data.HashMap.Strict as M
 import           Text.PrettyPrint.HughesPJ    (text, render, (<+>))
 import           System.FilePath              (addExtension)
 import           Control.Monad.State
@@ -16,10 +17,11 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface  (checkValid)
-import           Language.Fixpoint.Misc       (sortNub, errorstar)
+import           Language.Fixpoint.Misc       (safeZip, sortNub, errorstar)
 import           Language.Nano.Types
+import           Language.Nano.VCMonad
 import           Data.Monoid
-import           Data.Maybe                   (isJust) -- fromMaybe, maybe)
+import           Data.Maybe                   (isJust, fromJust) -- fromMaybe, maybe)
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
@@ -38,9 +40,12 @@ verifyFile f
 --------------------------------------------------------------------------------
 -- | Top-level VC Generator 
 --------------------------------------------------------------------------------
-genVC :: Nano -> VCond
+genVC     :: Nano -> VCond
 --------------------------------------------------------------------------------
-genVC = mconcat . map generateFunVC 
+genVC pgm = execute pgm act 
+  where 
+    act   = mconcat <$> forM pgm (`generateVC` mempty)
+
 
 
 -----------------------------------------------------------------------------------
@@ -67,7 +72,7 @@ class IsVerifiable a where
   generateVC :: a -> VCond -> VCM VCond 
 
 instance IsVerifiable (Fun SourcePos) where 
-  generateVC fn _   = return $ generateFunVC fn
+  generateVC fn _   = generateFunVC fn
 
 instance IsVerifiable a => IsVerifiable [a] where 
   generateVC xs vc  = foldM (\vc s -> generateVC s vc) vc (reverse xs)
@@ -76,33 +81,46 @@ instance IsVerifiable (Statement SourcePos) where
   generateVC        = generateStmtVC
 
 instance IsVerifiable (VarDecl SourcePos) where 
-  generateVC (VarDecl _ x (Just e)) vc = return $ generateAsgnVC x e vc
+  generateVC (VarDecl _ x (Just e)) vc = generateAsgnVC x e vc
   generateVC (VarDecl _ _ Nothing)  vc = return vc
 
 
 -----------------------------------------------------------------------------------
-generateFunVC :: Fun SourcePos -> VCond 
+generateFunVC    :: Fun SourcePos -> VCM VCond 
 -----------------------------------------------------------------------------------
-generateFunVC fn    = vcTop <> vcSide 
-  where 
-    (vcTop, vcSide) = runState (generateVC ss vc0) vc0 
-    vc0             = mempty
-    ss              = fbody fn
+generateFunVC fn 
+  = do _     <- setFunction fn
+       vc    <- (generateAssumeVC (fpre fn) <=< generateVC (fbody fn)) mempty
+       vc'   <- getSideCond 
+       return $ vc <> vc'
 
 -----------------------------------------------------------------------------------
 generateStmtVC :: Statement SourcePos -> VCond -> VCM VCond 
 -----------------------------------------------------------------------------------
 
-
+-- skip
 generateStmtVC (EmptyStmt _) vc 
   = return vc
 
-generateStmtVC (ExprStmt _ (AssignExpr _ OpAssign x e)) vc  
-  = return $ generateAsgnVC x e vc 
+-- x = f(e1,...,en)
+generateStmtVC (ExprStmt _ (AssignExpr l OpAssign x (CallExpr _ (VarRef _ (Id _ f)) es))) vc
+  = do z       <- freshId l
+       sp      <- getCalleeSpec f
+       let su   = F.mkSubst $ safeZip "funCall" (F.symbol <$> fargs sp) (F.expr <$> es)
+       let su'  = F.mkSubst [(returnSymbol, F.eVar z)]
+       let pre  = F.subst su         (fpre sp) 
+       let post = F.subst (su <> su) (fpost sp)
+       (generateAssertVC l pre <=< generateAssumeVC post <=< generateAsgnVC x z) vc 
 
+-- x = e
+generateStmtVC (ExprStmt _ (AssignExpr _ OpAssign x e)) vc  
+  = generateAsgnVC x e vc 
+
+-- s1;s2;...;sn
 generateStmtVC (BlockStmt _ ss) vc
   = generateVC ss vc
 
+-- if b { s1 } else { s2 }
 generateStmtVC (IfStmt _ b s1 s2) vc 
   = do vc1     <- generateVC s1 vc 
        vc2     <- generateVC s2 vc
@@ -111,54 +129,53 @@ generateStmtVC (IfStmt _ b s1 s2) vc
        bp       = F.prop b
        bp'      = F.PNot bp
 
+-- if b { s1 }
 generateStmtVC (IfSingleStmt l b s) vc
   = generateVC (IfStmt l b s (EmptyStmt l)) vc
 
+-- while (cond) { s }
 generateStmtVC w@(WhileStmt l cond s) vc 
-  = do vci'    <- generateVC s vci 
-       sideCond $ ((i `pAnd` b)        `F.PImp`) <$> vci' -- require i is inductive 
-       sideCond $ ((i `pAnd` F.PNot b) `F.PImp`) <$> vc   -- establish vc at exit 
-       return vci                                         -- require i holds on entry
+  = do vci'       <- generateVC s vci 
+       addSideCond $ ((i `pAnd` b)        `F.PImp`) <$> vci' -- require i is inductive 
+       addSideCond $ ((i `pAnd` F.PNot b) `F.PImp`) <$> vc   -- establish vc at exit 
+       return vci                                            -- require i holds on entry
     where 
-       b        = F.prop cond
-       i        = getInvariant s
-       vci      = newVCond l i
+       b           = F.prop cond
+       i           = getInvariant s
+       vci         = newVCond l i
 
+-- var x1 [ = e1 ]; ... ; var xn [= en];
 generateStmtVC e@(VarDeclStmt l ds) vc
   = generateVC ds vc
 
+-- assume(e)
 generateStmtVC e@(ExprStmt _ (CallExpr _ _ _)) vc
-  | isJust $ getAssume e
-  = return $ (p `F.PImp`) <$> vc
-    where Just p = getAssume e
-  
-generateStmtVC e@(ExprStmt l (CallExpr _ _ _)) vc
-  | isJust $ getAssert e
-  = return $ newVCond l p <> vc
-    where Just p = getAssert e
+  | isJust ep = generateAssumeVC (fromJust ep) vc
+  where 
+    ep        = getAssume e
 
+-- assert(e)
 generateStmtVC e@(ExprStmt l (CallExpr _ _ _)) vc
-  | isSpecification e -- Ignore 
+  | isJust ep = generateAssertVC l (fromJust ep) vc
+  where 
+    ep        = getAssert e
+
+-- ignore other specification statements
+generateStmtVC e@(ExprStmt l (CallExpr _ _ _)) vc
+  | isSpecification e
   = return vc
 
 generateStmtVC w _ 
   = convertError "generateStmtVC" w
 
------------------------------------------------------------------------------------
--- | `VCM` is a VCGen monad that logs the loop-inv "side conditions" 
------------------------------------------------------------------------------------
+-- HIDE
+generateAsgnVC :: (F.Symbolic x, F.Expression e) => x -> e -> VCond -> VCM VCond 
+generateAsgnVC x e vc = return   $ (`F.subst1` (F.symbol x, F.expr e)) <$> vc
 
-type VCM = State VCond  
+generateAssumeVC :: F.Pred -> VCond -> VCM VCond 
+generateAssumeVC   p vc = return $ (p `F.PImp`) <$> vc
 
------------------------------------------------------------------------------------
--- | `sideCond vc` adds the goal `vc` to the side-conditions to be checked.
--------------------------------------------------------------------
-sideCond     :: VCond -> VCM ()
--------------------------------------------------------------------
+generateAssertVC :: SourcePos -> F.Pred -> VCond -> VCM VCond 
+generateAssertVC l p vc = return $ newVCond l p <> vc
 
-sideCond vc' = modify $ mappend vc' 
 
--------------------------------------------------------------------
-
-generateAsgnVC :: (F.Symbolic x, F.Expression e) => x -> e -> VCond -> VCond 
-generateAsgnVC x e vc = (`F.subst1` (F.symbol x, F.expr e)) <$> vc

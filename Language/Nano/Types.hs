@@ -9,12 +9,14 @@ module Language.Nano.Types (
   , Nano 
   , Fun  (..) 
   , parseNanoFromFile 
-  
+
   -- * Accessing Spec Annotations
   , getAssume
   , getAssert
   , getInvariant
   , isSpecification
+  , returnSymbol
+
 
   -- * Some Operators on Pred
   , pAnd
@@ -191,6 +193,8 @@ mkFun s             = convertError "mkFun" s
 --
 -- For now, we hack them with function calls.
 
+returnSymbol :: F.Symbol
+returnSymbol = F.stringSymbol "$return" 
 
 isSpecification :: Statement a -> Bool
 isSpecification s  = not $ null $ catMaybes $ ($ s) <$> specs 
@@ -225,13 +229,11 @@ getStatementPred _ _
 getSpec   :: (Statement a -> Maybe F.Pred) -> [Statement a] -> F.Pred 
 getSpec g = mconcat . catMaybes . map g
 
-
-
-
 ------------------------------------------------------------------
 -- | Converting `ECMAScript3` values into `Fixpoint` values, 
 --   i.e. *language* level entities into *logic* level entities.
 ------------------------------------------------------------------
+
 
 instance F.Symbolic   (Id a) where
   symbol (Id _ x)   = F.symbol x 
@@ -361,20 +363,6 @@ newVCond     :: SourcePos -> F.Pred -> VCond
 ------------------------------------------------------------------
 
 newVCond l p = VC $ M.singleton l p
-
-------------------------------------------------------------------------
------- strengthenVCond :: SourcePos -> F.Pred -> VCond -> VCond
-------------------------------------------------------------------------
------- 
------- strengthenVCond l p (VC vc) = VC $ M.insert l p' vc 
-------   where 
-------     p'                 = fromMaybe p (pAnd p <$> M.lookup l vc)
----- 
-------   pp F.Safe           = text "Safe"
-------   pp F.UnknownError   = text "Unknown Error!"
-------   pp (F.Crash xs msg) = vcat $ (text ("Crash!: " ++ msg)) : (((text "CRASH:" <+>) . pp) <$> xs)
-------   pp (F.Unsafe xs)    = vcat $ (text "Unsafe:")           : (((text "WARNING:" <+>) . pp) <$> xs)
-
 
 
 

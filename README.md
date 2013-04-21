@@ -70,6 +70,18 @@ HW 1
 
 8. Add arrays
 
+
+HINT: Make sure you understand
+------------------------------
+
+-- 1. `Language.Fixpoint.Types.Subable`
+-- http://goto.ucsd.edu/~rjhala/llvm-haskell/doc/html/liquidtypes/Language-Haskell-Liquid-Fixpoint.html#t:Subable 
+-- You will need to implement substitutions, as needed for x := e, etc.
+-- 2. Language.Fixpoint.Types.Symbolic
+-- 3. Language.Fixpoint.Types.Expression
+-- 4. Language.Fixpoint.Types.Predicate 
+
+
 Homework Plan
 -------------
 

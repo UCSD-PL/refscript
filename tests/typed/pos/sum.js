@@ -1,15 +1,5 @@
-function random(){
-  var x;
-  return x;
-}
 
-function pos(){
-  ensures(0 < $result);
-  var x = random();
-  assume(x > 0);
-  return x;
-}
-
+/*@ sumLoop :: (int, int) => int @*/
 function sumLoop(acc, i){
   requires(0 <= i);
   ensures($result == acc + i);
@@ -22,7 +12,8 @@ function sumLoop(acc, i){
   return r;
 }
 
-function sum(){
+/*@ main :: () => void @*/
+function main(){
   var n = pos();
   var m = sumLoop(0, n);
   assert(m == n);

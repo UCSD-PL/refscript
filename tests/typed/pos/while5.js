@@ -1,4 +1,4 @@
-/*@ loop :: (int) -> int @*/
+/*@ loop :: (int) => int @*/
 function loop(x){
   if (x <= 5) {
     var r = loop(x+1);
@@ -7,7 +7,7 @@ function loop(x){
   return x;
 }
 
-/*@ main :: () -> void @*/
+/*@ main :: () => void @*/
 function main(){
   var x = loop(0);
   assert(x == 6);

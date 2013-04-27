@@ -7,7 +7,7 @@ function inc(x){
   return res;
 }
 
-/*@ main () -> Void @*/
+/*@ main () -> void @*/
 function main(){
   var a = pos();
   var b = inc(a);

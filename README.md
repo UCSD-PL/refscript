@@ -55,10 +55,7 @@ HW 3
 5. Refinement Type Checker      [HW]
 6. Liquid Constraint Generation [HW]
 
-tests/typed/pos/
-    abs.js
-    max.js
-    inc.js
+tests/typed/pos/*.js
 
     higher-order
         twice.js

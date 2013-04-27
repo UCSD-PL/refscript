@@ -1,32 +1,21 @@
-function random(){
-  var x;
-  return x;
-}
-
-function pos(){
-  ensures(0 < $result);
-  var x = random();
-  assume(x > 0);
-  return x;
-}
-
+/*@ create :: () -> int @*/
 function create(){
-  ensures($result == 0);
   return 0;
 }
 
+/*@ acquire :: (int) -> int @*/
 function acquire(l){
-  requires(l == 0);
-  ensures($result == 1);
+  assert(l == 0);
   return 1;
 }
 
+/*@ release :: (int) -> int @*/
 function release(l){
-  requires(l == 1);
-  ensures($result == 0);
+  assert(l == 1);
   return 0;
 }
 
+/*@ driver :: (int, int, int) -> int @*/ 
 function driver(l0, newCount0, oldCount0){
   requires(((newCount0 != oldCount0) && (l0 == 0)) || ((newCount0 == oldCount0) && (l0 == 1)));
   ensures($result == 1);
@@ -46,9 +35,9 @@ function driver(l0, newCount0, oldCount0){
     l = driver(l, newCount, oldCount);
   };
   return l;
-
 }
 
+/*@ main :: () -> void @*/
 function main() {
   var newCount = pos();
   var oldCount = pos(); 

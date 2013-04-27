@@ -13,7 +13,7 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 executable nanojs
-  build-depends:       base ==4.5.*, pretty, hashable, unordered-containers, 
+  build-depends:       base, pretty, hashable, unordered-containers, 
                        filepath, ansi-terminal, process, mtl, syb, cmdargs,
                        liquid-fixpoint, parsec, language-ecmascript 
 
@@ -30,8 +30,8 @@ executable nanojs
   Main-is:             Nano.hs
 
 Library
-  build-depends:       base ==4.5.*, pretty, hashable, unordered-containers, 
-                       filepath, ansi-terminal, process, HUnit 
+  build-depends:       base, pretty, hashable, unordered-containers, 
+                       filepath, ansi-terminal, process
 
   extensions:          ExistentialQuantification, 
                        FlexibleInstances, 

@@ -157,8 +157,7 @@ generateStmtVC e@(ExprStmt _ (CallExpr _ _ _)) vc
 
 -- return e 
 generateStmtVC (ReturnStmt l (Just e)) vc
-  = do p <- getFunctionPostcond
-       (generateAsgnVC l returnSymbol e <=<  generateAssertVC l p <=< generateAssumeVC F.PFalse) $ vc
+  = generateReturnVC l e vc
 
 
 generateStmtVC w _ 
@@ -198,6 +197,12 @@ generateFunAsgnVC l x f es vc
        let pre  = F.subst su          (fpre sp) 
        let post = F.subst (su <> su') (fpost sp)
        (generateAssertVC l pre <=< generateAssumeVC post <=< generateExprAsgnVC x z) vc 
+
+-- return e
+generateReturnVC :: SourcePos-> Expression SourcePos -> VCond-> VCM VCond
+generateReturnVC l e vc 
+  = do p <- getFunctionPostcond
+       (generateAsgnVC l returnSymbol e <=<  generateAssertVC l p <=< generateAssumeVC F.PFalse) $ vc
 
 
 

@@ -17,68 +17,7 @@ Dependencies
 
 TODO
 ----
-
-HW 1            
-
-
-        Failed 5 tests: <------------ HEREHEREHERE 
-        pos/driver-rec.js, 
  
-7. Release
-    - mkdir assignment in algo-software-verif/homeworks?
-    - delete all lines "invariant", "requires", "ensures"
-    - delete vcgen-statement implementation
-    - write  README.md
-
-8. Add arrays
-
-
-HINTS 
------
-
-Since the VCGen happens using a monad to log "side-conditions",
-you may find the `<=<` operator quite handy.
-
-For example, 
-
-to generate the VC for a sequence of commands 
-
-    c1;c2;c3
-
-that is to compute
-
-    generateVC (c1; c2; c3) vc 
-
-you can do something like
-
-    (generateVC c1 <=< generateVC c2 <=< generateVC c3) vc
-
-
-Make sure you understand:
-
-    `Language.Fixpoint.Types.Subable`
-
-You will need to implement substitutions, as needed for x := e, etc.
-
-    `Language.Fixpoint.Types.Symbolic`
-
-    http://goto.ucsd.edu/~rjhala/llvm-haskell/doc/html/liquidtypes/Language-Haskell-Liquid-Fixpoint.html#t:Subable
-
-You may need this to convert program variables `Id a` to logical symbols `F.Symbol`
-
-    `Language.Fixpoint.Types.Expression`
-
-You may need this to convert program expressions `Expression a` to logical expressions `F.Expr`
-
-    `Language.Fixpoint.Types.Predicate`
-
-You may need this to convert program expressions `Expression a` to logical predicates `F.Pred`
-
-(For the last three, the relevant class instances are in `Language.Nano.Types`)
-
-
-
-
 Homework Plan
 -------------
 
@@ -87,9 +26,196 @@ HW 1
 1b. Use ESC/J
 
 HW 2
-2a. ConsGen = VCG+K for LoopInv via FIXPOINT
-2b. Implement FIXPOINT (over liquid-fixpoint)
+2a. ConsGen = VCG+K for LoopInv via FIXPOINT    [Easy]
+    -> Hmm...
+2b. Implement FIXPOINT (over liquid-fixpoint)   [Hard]
+    -> Hmm...
+    
 
 HW 3
-3a. VCG for Refinement Type Checking
-3b. Consgen = VCG+K for Liquid Type Inference via FIXPOINT
+3a. VCG for Refinement Type Checking            [Hard]
+3b. Consgen = VCG+K for Liquid Inference via FIXPOINT
+
+
+Types for Nano-JS
+-----------------
+
+Base Types
+----------
+
+B := Int
+
+Records
+-------
+
+N := \[a] -> { x:T.. }
+
+Types
+-----
+
+S := \[A..].T
+
+T := B
+   | a
+   | (Ti..) -> T
+   | N [T..]
+
+
+
+    TyVars(T) \subseteq \cup_i TyVars(Ti)
+    -------------------------------------
+              |- (xi:Ti..) -> T
+
+
+
+Expressions
+-----------
+
+e := x                          -- var
+   | c                          -- int const
+   | e `o` e                    -- int op
+   | e `r` e                    -- int rel
+   | e `b` e                    -- bool op 
+   | e (e..)                    -- Function Call 
+   | {x:e..}                    -- Object Literal
+   | x.f                        -- Field Read
+   | function f(xi..){c} :: S
+
+Commands
+--------
+
+c := x = e          -- assignment
+   | c; c           -- sequence
+   | if e c1 c2     -- if-then-else
+   | while e c      -- while-loop
+   | return e       -- return
+   | x.f = e        -- x := {x with f = e}
+
+
+Programs
+--------
+
+p := (f::S)..
+
+
+Typing Environments
+-------------------
+
+G := 0 | G, x:T 
+
+
+Typing Rules 
+------------
+
+**Expressions** [G |- e => t]
+
+---------------
+G |- x => (G x)
+
+-------------
+G |- c => Int
+
+
+G |- e1 => Int G |- e2 => Int
+-----------------------------
+G |- e1 `o` e2 => Int
+
+G |- e1 => Int G |- e2 => Int
+-----------------------------
+G |- e1 `r` e2 => Bool
+
+G |- e1 => Bool G |- e2 => Bool 
+-------------------------------
+G |- e1 `b` e2 => Bool
+
+N = \[A..] -> {fi:Ti...}    
+G |- ei => Ti'  
+unify(Ti.., Ti'..) = θ 
+--------------------------------
+G |- {fi:ei} => N [0 A]
+
+G(x) = N [T..]   F(N) = \[A..] -> {f:Tf}
+----------------------------------------
+G |- x.f => Tf[T../A..]
+
+
+S  = forall a...(Ti..) -> T
+G' = G, a.., xi:Ti..
+G' |- c => EXIT(T)
+-----------------------------------
+G |- function f(xi..){c} :: S => S 
+
+G |- e => \[A].(Ti) -> T    
+G |- ei => Ti'  
+unify(Ti.., Ti'..) = θ 
+-----------------------------------
+G |- e (ei..) => θ T 
+
+
+**Commands** [G |- c => G' + EXIT(T)]
+
+G |- e => T
+--------------------
+G |- x = e => G, x:T
+
+G |- c1 => EXIT T 
+-----------------------
+G |- c1; c2 => EXIT T 
+
+G |- c1 => G1       G1 not EXIT      G1 |- c2 => G2
+---------------------------------------------------
+G |- c1; c2 => G2
+
+G |- e  => Bool     G |- c1 => G1   G |- c2 => G2
+--------------------------------------------------
+G |- if e c1 c2 => G1 `join` G2
+
+
+G |- e => Bool      G |- c => G'
+---------------------------------
+G |- while e c => G `join` G'
+
+
+G |- e => T
+-----------------------
+G |- return e => EXIT T
+
+
+G(x) = N [T..]      F(N) = \[A..] -> {f:Tf}     G |- e => Tf[T../A..]
+----------------------------------------------------------------------
+G |- (x.f = e) => G 
+
+**Programs** [ |- (f::S).. ]
+
+G = (fi::Si)..    foreach i. G |- fi::Si : Si 
+----------------------------------------------
+|- (fi::Si)..
+
+where 
+
+join G1 G2             = [x:T | x:T in G1 and x:T in G2] 
+join EXIT(_) G         = G
+join G EXIT(_)         = G
+join (EXIT T) (EXIT T) = Bot T
+
+---------------------------------------------------------------------
+
+How to modify for Refinement Types?
+
+0. [SKIP WHILE]
+
+1. Explicit JOIN for types (uses MEET for CONTRA)
+
+2. CHECK Subtyping at function call? [CHECK]
+
+3. CHECK Subtyping at return? [CHECK]
+
+
+
+
+1. [NO] Mark certain assignments as SSA
+   Induce Subtyping Constraints there
+
+2. LOOP CHECK? [NO WHILE?]
+
+

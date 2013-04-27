@@ -37,8 +37,28 @@ HW 3
 3b. Consgen = VCG+K for Liquid Inference via FIXPOINT
 
 
-Types for Nano-JS
------------------
+(Refinement) Types for Nano-JS
+------------------------------
+
+HW 2
+
+0. K-Constraint Generation for Pre/Post/Loops
+
+HW 3
+
+1. Parse Types
+2. Build "Passifier" [SSA-Transformation]
+3. Vanilla Type Checker
+4. Parse Refinement Types
+5. Refinement Type Checker      [HW]
+6. Liquid Constraint Generation [HW]
+
+
+
+
+
+
+
 
 Base Types
 ----------
@@ -60,12 +80,9 @@ T := B
    | (Ti..) -> T
    | N [T..]
 
-
-
     TyVars(T) \subseteq \cup_i TyVars(Ti)
     -------------------------------------
               |- (xi:Ti..) -> T
-
 
 
 Expressions

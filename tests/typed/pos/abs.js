@@ -1,5 +1,4 @@
-
-/*@ abs :: (Int) -> Int*/ 
+/*@ abs :: (int) -> int*/ 
 function abs(x){
   var res = 0;
   if (x > 0) {

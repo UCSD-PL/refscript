@@ -1,8 +1,14 @@
-function foo(){
-  var x = 0;
-  while (x <= 5){
-    invariant(x <= 6);
-    x = x + 1;
+/*@ loop :: (int) -> int @*/
+function loop(x){
+  if (x <= 5) {
+    var r = loop(x+1);
+    return r;
   }
+  return x;
+}
+
+/*@ main :: () -> void @*/
+function main(){
+  var x = loop(0);
   assert(x == 6);
 }

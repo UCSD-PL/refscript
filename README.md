@@ -55,25 +55,26 @@ HW 3
 5. Refinement Type Checker      [HW]
 6. Liquid Constraint Generation [HW]
 
-tests/typed/
-
-    base-types
-        abs.js
-        max.js
-        tests/pos/*
-        tests/neg/*
+tests/typed/pos/
+    abs.js
+    max.js
+    inc.js
 
     higher-order
+        twice.js
         while.js
         loop.js
-    
+        foldn.js
+
     lists
         map.js
         fold.js
         listsum.js
+
+    measure
         kmeans.js
 
-    measures ::
+    measures: 
 
         cons :: forall A. (x:A, xs:List A) -> {v: List A | (len v) = 1 + (len xs)}
         nil  :: forall A. () -> {v: List A | (len v) = 0}

@@ -1,3 +1,4 @@
+/*@ max :: (x:int, y:int) -> int @*/ 
 function max(x, y){ 
   var r = 0;
   if (x > y) {
@@ -7,5 +8,5 @@ function max(x, y){
   }
   assert(r >= x);
   assert(r >= y);
-  // return r;
+  return r;
 }

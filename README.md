@@ -46,11 +46,13 @@ HW 2
 
 HW 3
 
-1. Parse Types HEREHEREHEREHERE
-    - 
-
-2. Build "Passifier" [SSA-Transformation]
+0. Type Types < ------------------------ HEREHEREHEREHERE
+1. Parse Types 
+2. Passifier [SSA-Transformation]
 3. Vanilla Type Checker
+
+
+
 4. Parse Refinement Types
 5. Refinement Type Checker      [HW]
 6. Liquid Constraint Generation [HW]

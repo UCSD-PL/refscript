@@ -5,7 +5,7 @@
 -- | This module has the code for the VC-Generation Monad. 
 --   You /need not/ modify the code here, just use the exported API.
 
-module Language.Nano.VCMonad (
+module Language.Nano.ESC.VCMonad (
   -- * VC Monad
     VCM
  
@@ -35,6 +35,7 @@ import           Language.ECMAScript3.Syntax
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc 
 import           Language.Nano.Types
+import           Language.Nano.ESC.Types
 import           Data.Monoid
 import           Data.Maybe                   (fromMaybe)
 -- import           Text.Parsec                  (SourcePos)

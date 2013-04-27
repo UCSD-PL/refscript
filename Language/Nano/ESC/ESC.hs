@@ -4,7 +4,7 @@
 
 -- | Extended Static Checker - Nano
 
-module Language.Nano.ESC (verifyFile) where
+module Language.Nano.ESC.ESC (verifyFile) where
 
 import           Text.PrettyPrint.HughesPJ    (text, render, (<+>))
 import           System.FilePath              (addExtension)
@@ -18,7 +18,8 @@ import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface  (checkValid)
 import           Language.Fixpoint.Misc       (safeZip, sortNub)
 import           Language.Nano.Types
-import           Language.Nano.VCMonad
+import           Language.Nano.ESC.Types
+import           Language.Nano.ESC.VCMonad
 import           Data.Monoid
 import           Data.Maybe                   (isJust, fromJust) -- fromMaybe, maybe)
 

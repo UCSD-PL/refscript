@@ -5,27 +5,22 @@ module Language.Nano.Types (
   -- * Configuration Options
     Config (..)
 
-  -- * Nano Programs
-  , Nano 
-  , Fun  (..) 
-  , parseNanoFromFile 
+  -- * Some Operators on Pred
+  , pAnd
+  , pOr
+
+  -- * Nano Definition
+  , IsNano (..)
 
   -- * Accessing Spec Annotations
+  , getSpec
+  , getRequires
+  , getEnsures
   , getAssume
   , getAssert
   , getInvariant
   , isSpecification
   , returnSymbol
-
-
-  -- * Some Operators on Pred
-  , pAnd
-  , pOr
-
-  -- * Verification Conditions
-  , VCond
-  , newVCond
-  , obligationsVCond 
 
   -- * Error message
   , convertError
@@ -58,17 +53,6 @@ data Config = Config {
     files   :: [FilePath]     -- ^ source files to check
   , incdirs :: [FilePath]     -- ^ path to directory for include specs
   } deriving (Data, Typeable, Show, Eq)
-
-
----------------------------------------------------------------------
--- | Top-level Parser 
----------------------------------------------------------------------
-
-parseNanoFromFile f 
-  = do s     <- parseJavaScriptFromFile f
-       return $ fromMaybe err (mkNano s)
-    where
-       err    = errorstar $ "Invalid Input File: " ++ f
 
 
 ---------------------------------------------------------------------
@@ -157,36 +141,6 @@ isNanoExprStatement (CallExpr _ e es)     = all isNano (e:es)
 isNanoExprStatement e                     = errortext (text "Not Nano ExprStmt!" <+> pp e) 
 -- isNanoExprStatement _                     = False
 
-
-------------------------------------------------------------------
--- | Nano Programs : Wrapper around EcmaScript -------------------
-------------------------------------------------------------------
-
-type Nano        = [Fun SourcePos] 
-
-data Fun a       = Fun { floc  :: a             -- ^ sourceloc 
-                       , fname :: Id a          -- ^ name
-                       , fargs :: [Id a]        -- ^ parameters
-                       , fbody :: [Statement a] -- ^ body
-                       , fpre  :: F.Pred        -- ^ precondition
-                       , fpost :: F.Pred        -- ^ postcondition
-                       }
-
--- functions fns = fns
-
-mkNano :: [Statement SourcePos] -> Maybe Nano
-mkNano =  sequence . map mkFun 
-
-mkFun :: Statement a -> Maybe (Fun a)
-mkFun (FunctionStmt l f xs body) 
-  | all isNano body = Just $ Fun l f xs body pre post
-  | otherwise       = Nothing
-  where 
-    pre             = getSpec getRequires body 
-    post            = getSpec getEnsures  body
-
-mkFun s             = convertError "mkFun" s 
-
 -----------------------------------------------------------------------------------
 -- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 
 -----------------------------------------------------------------------------------
@@ -239,7 +193,6 @@ getSpec g = mconcat . catMaybes . map g
 -- | Converting `ECMAScript3` values into `Fixpoint` values, 
 --   i.e. *language* level entities into *logic* level entities.
 ------------------------------------------------------------------
-
 
 instance F.Symbolic   (Id a) where
   symbol (Id _ x)   = F.symbol x 
@@ -328,57 +281,10 @@ ppSourcePos src = parens
   where 
     (f,l,c)     = sourcePosElts src 
 
-
-------------------------------------------------------------------
--- | Verification Conditions -------------------------------------
-------------------------------------------------------------------
-
--- | `VCond` are formulas indexed by `SourcePos` from which 
---   the obligation arises.
-
-newtype VCond_ a = VC (M.HashMap SourcePos a)
-
-type VCond       = VCond_ F.Pred
-
-instance Functor VCond_ where 
-  fmap f (VC m) = VC (fmap f m)
-
-instance Monoid VCond where 
-  mempty                = VC M.empty
-  mappend (VC x) (VC y) = VC (M.unionWith pAnd x y)
-
-instance PP VCond where 
-  pp = ppObligations . obligationsVCond 
-
 instance PP F.Pred where 
   pp = pprint
 
 instance PP (Id a) where
   pp (Id _ x) = text x
-
-instance PP (Fun SourcePos) where 
-  pp (Fun l n xs _ pre post) =   pp n <+> text "defined at" <+> pp l
-                             $+$ text "formals: "  <+> intersperse comma (pp <$> xs)
-                             $+$ text "requires: " <+> pp pre
-                             $+$ text "ensures: "  <+> pp post
-
-ppObligations lps   =   text "Verification Condition" 
-                    $+$ vcat (map ppObligation lps)
-
-ppObligation (l, p) = text "for" <+> pp l <+> dcolon <+> pp p
-
-------------------------------------------------------------------
-obligationsVCond :: VCond_ a -> [(SourcePos, a)] 
-------------------------------------------------------------------
-
-obligationsVCond (VC x) = M.toList x
-
-------------------------------------------------------------------
-newVCond     :: SourcePos -> F.Pred -> VCond
-------------------------------------------------------------------
-
-newVCond l p = VC $ M.singleton l p
-
-
 
 

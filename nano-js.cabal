@@ -31,7 +31,8 @@ executable nanojs
 
 Library
   build-depends:       base, pretty, hashable, unordered-containers, 
-                       filepath, ansi-terminal, process
+                       filepath, ansi-terminal, process, mtl, syb, cmdargs,
+                       liquid-fixpoint, parsec, language-ecmascript 
 
   extensions:          ExistentialQuantification, 
                        FlexibleInstances, 
@@ -45,4 +46,8 @@ Library
   ghc-options:         -W -O2  
  
    
-  Exposed-Modules:     
+  Exposed-Modules:     Language.Nano.Types,
+                       Language.Nano.CmdLine,
+                       Language.Nano.ESC.Types,
+                       Language.Nano.ESC.VCMonad, 
+                       Language.Nano.ESC.ESC

@@ -46,18 +46,45 @@ HW 2
 
 HW 3
 
-1. Parse Types
+1. Parse Types HEREHEREHEREHERE
+    - 
+
 2. Build "Passifier" [SSA-Transformation]
 3. Vanilla Type Checker
 4. Parse Refinement Types
 5. Refinement Type Checker      [HW]
 6. Liquid Constraint Generation [HW]
 
+tests/typed/
+
+    base-types
+        abs.js
+        max.js
+        tests/pos/*
+        tests/neg/*
+
+    higher-order
+        while.js
+        loop.js
+    
+    lists
+        map.js
+        fold.js
+        listsum.js
+        kmeans.js
+
+    measures ::
+
+        cons :: forall A. (x:A, xs:List A) -> {v: List A | (len v) = 1 + (len xs)}
+        nil  :: forall A. () -> {v: List A | (len v) = 0}
+        head :: forall A. (xs:{v: List A | 0 < (len v)}) -> A 
+        tail :: forall A. (xs:{v: List A | 0 < (len v)}) -> {v: List A | (len v) = (len xs) - 1 }
+        null :: forall A. (xs:List A) -> {v: Bool | (Prop v) <=> ((len v) = 0) }
 
 
 
 
-
+---------------------------------------------------------------------------------------
 
 
 Base Types

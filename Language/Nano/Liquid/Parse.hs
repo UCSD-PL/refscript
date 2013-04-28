@@ -4,28 +4,49 @@
 {-# LANGUAGE TypeSynonymInstances      #-} 
 {-# LANGUAGE TupleSections             #-}
 
-module Language.Haskell.Liquid.Parse () where
+module Language.Nano.Liquid.Parse (parseSpecFromFile) where
 
-import Control.Monad
-import Text.Parsec
-import Text.Parsec.String
+import           Control.Monad
+import           Text.Parsec
+import           Text.Parsec.String hiding (parseFromFile)
 import qualified Text.Parsec.Token as Token
 import qualified Data.HashMap.Strict as M
 
-import Control.Applicative ((<$>), (<*), (<*>))
-import Data.Char (toLower, isLower, isSpace, isAlpha)
-import Data.List (partition)
-import Data.Monoid (mempty)
+import           Control.Applicative ((<$>), (<*), (<*>))
+import           Data.Char (toLower, isLower, isSpace, isAlpha)
+import           Data.List (partition)
+import           Data.Monoid (mempty)
 
-import Language.Fixpoint.Types
-import Language.Fixpoint.Parse 
+import           Language.Fixpoint.Misc (mapSnd)
+import           Language.Fixpoint.Types
+import           Language.Fixpoint.Parse 
 
-import Language.Nano.Types
-import Language.Nano.Liquid.Types
+import           Language.Nano.Types
+import           Language.Nano.Liquid.Types
+import qualified Language.ECMAScript3.Lexer as Lexer
+import           Language.ECMAScript3.Syntax
 
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer
 angles     = Token.angles     lexer
+
+----------------------------------------------------------------------------------
+-- | Type Binders ----------------------------------------------------------------
+----------------------------------------------------------------------------------
+ 
+specP = mkSpec <$> specWraps idBindP 
+  where 
+    mkSpec = Spec . envFromList . map (mapSnd toType) 
+
+idBindP :: Parser (Id SourcePos, RefType)
+idBindP = xyP identifierP dcolon bareTypeP
+
+identifierP :: Parser (Id SourcePos)
+identifierP = Id <$> getPosition <*> lowerIdP -- Lexer.identifier
+
+xyP lP sepP rP
+  = (\x _ y -> (x, y)) <$> lP <*> (spaces >> sepP) <*> rP
+
 
 ----------------------------------------------------------------------------------
 -- | RefTypes -------------------------------------------------------------------
@@ -102,11 +123,6 @@ refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi))
 --   where pathCharP = choice $ char <$> pathChars 
 --         pathChars = ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ ['.', '/']
 -- 
--- xyP lP sepP rP
---   = liftM3 (\x _ y -> (x, y)) lP (spaces >> sepP) rP
--- 
--- tyBindP    :: Parser (LocSymbol, RefType)
--- tyBindP    = xyP (locParserP binderP) dcolon bareTypeP
 -- 
 -- embedP     = xyP upperIdP (reserved "as") fTyConP
 -- 
@@ -136,6 +152,7 @@ betweenMany leftP rightP p
          Just _  -> liftM2 (:) (between leftP rightP p) (betweenMany leftP rightP p)
          Nothing -> return []
 
+specWraps :: Parser a -> Parser [a] 
 specWraps = betweenMany (string "/*@" >> spaces) (spaces >> string "@*/")
 
 ---------------------------------------------------------------------------------
@@ -146,3 +163,8 @@ instance Inputable RefType where
 instance Inputable Type where 
   rr' = doParse' (fmap (const ()) <$> bareTypeP)
 
+instance Inputable Spec where 
+  rr' = doParse' specP
+
+parseSpecFromFile :: FilePath -> IO Spec
+parseSpecFromFile = parseFromFile specP  

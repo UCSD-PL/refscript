@@ -4,7 +4,7 @@
 
 -- | Extended Static Checker - Nano
 
-module Language.Nano.ESC.ESC (verifyFile) where
+module Language.Nano.ESC.ESC (main) where
 
 import           Text.PrettyPrint.HughesPJ    (text, render, (<+>))
 import           System.FilePath              (addExtension)

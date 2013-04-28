@@ -2,15 +2,29 @@
 
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE TupleSections #-}
 
 module Language.Nano.Liquid.Types (
 
-  -- * Annotated Program
-    Nano (..)
+  -- * Programs
+    Nano   
+  , Spec   (..)
+  , Source (..)
+  , mkNano
+
+  -- * Environments 
+  , Env    (..)
+  , envFromList 
+  , envToList
+
+  -- * Accessors
+  , code
+  , env
 
   -- * Refinement Types
   , RType (..)
   , RefType
+  , toType
 
   -- * Regular Types
   , Type (..)
@@ -19,12 +33,26 @@ module Language.Nano.Liquid.Types (
 
   ) where 
 
+import           Data.Ord                       (comparing) 
+import qualified Data.List               as L
+import           Data.Generics.Aliases
+import           Data.Generics.Schemes
+import qualified Data.HashMap.Strict     as M
+import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Types
 import qualified Language.Fixpoint.Types as F
+import           Language.Fixpoint.Misc
 import           Text.Parsec
+import           Text.PrettyPrint.HughesPJ
+import           Control.Applicative 
+import           Control.Monad
 
 -- | Type Variables
 newtype TVar = TV (Located F.Symbol)
+              
+instance Show TVar where 
+  show (TV a) = show (val a)
 
 -- | Constructed Type Bodies
 data TBody r 
@@ -32,7 +60,7 @@ data TBody r
        , td_args :: ![TVar]
        , td_body :: !(RType r)
        , td_pos  :: !SourcePos
-       } deriving (Functor)
+       } deriving (Show, Functor)
 
 -- | Type Constructors
 data TCon 
@@ -40,7 +68,7 @@ data TCon
   | TBool                
   | TVoid              
   | TDef  F.Symbol
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 -- | (Raw) Refined Types 
 data RType r  
@@ -48,7 +76,7 @@ data RType r
   | TVar TVar r 
   | TFun [RType r] (RType r)
   | TAll TVar (RType r)
-    deriving (Functor)
+    deriving (Show, Functor)
 
 -- | Standard Types
 type Type    = RType ()
@@ -56,20 +84,112 @@ type Type    = RType ()
 -- | (Real) Refined Types
 type RefType = RType F.Reft 
 
+instance Show r => PP (RType r) where 
+  pp = text . show
+
+-- | Stripping out Refinements 
+toType :: RType a -> Type
+toType = fmap (const ())
+
+---------------------------------------------------------------------------------
+-- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-type Nano        = [Fun SourcePos] 
+data Nano = Nano { code :: !Source 
+                 , env  :: !(Env Type)
+                 }
 
-data Fun a       = Fun { floc  :: a             -- ^ sourceloc 
-                       , fname :: Id a          -- ^ name
-                       , fargs :: [Id a]        -- ^ parameters
-                       , fbody :: [Statement a] -- ^ body
-                       , ftyp  :: !Type         -- ^ precondition
-                       }
+-- | Type Specification for function binders
+data Spec = Spec { sigs :: !(Env Type) }
 
--- functions fns = fns
+newtype Source = Src [(Statement SourcePos)]
 
-mkNano :: [Statement SourcePos] -> Maybe Nano
-mkNano =  sequence . map mkFun 
+instance PP Nano where
+  pp (Nano (Src s) env) 
+    =   text "********************** CODE **********************"
+    $+$ pp s
+    $+$ text "********************** SPEC **********************"
+    $+$ pp env
+
+
+--------------------------------------------------------------------------
+-- | Environments
+--------------------------------------------------------------------------
+
+newtype Env t  = TE (M.HashMap (Id SourcePos) t)
+
+envToList (TE m) = M.toList m
+
+envFromList = TE . M.fromList 
+
+instance PP t => PP (Env t) where 
+  pp = vcat . (ppBind <$>) . envToList
+
+ppBind (x, t) = pp x <+> dcolon <+> pp t
+
+--------------------------------------------------------------------------
+-- | Combining Source and Spec into Nano ---------------------------------
+--------------------------------------------------------------------------
+
+mkNano  :: [Statement SourcePos] -> Spec -> Either Doc Nano 
+mkNano stmts spec 
+  = do src   <- Src <$> mapM checkFun stmts
+       env   <- mkEnv (getFunctionIds stmts) (sigs spec)
+       return $ Nano src env
+
+-- | Trivial Syntax Checking 
+
+checkFun :: Statement SourcePos -> Either Doc (Statement SourcePos) 
+checkFun f@(FunctionStmt _ _ _ b) 
+  | checkBody b = Right f
+checkFun s      = Left (text "Invalid top-level statement" <+> pp s) 
+
+checkBody :: [Statement SourcePos] -> Bool
+checkBody stmts = all isNano stmts && null (getWhiles stmts) 
+    
+getWhiles :: [Statement SourcePos] -> [Statement SourcePos]
+getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
+  where 
+    fromWhile s@(WhileStmt {}) = [s]
+    fromWhile _                = [] 
+
+getFunctionIds :: [Statement SourcePos] -> [Id SourcePos]
+getFunctionIds stmts = everything (++) ([] `mkQ` fromFunction) stmts
+  where 
+    fromFunction (FunctionStmt _ x _ _) = [x] 
+    fromFunction _                      = []
+
+-- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
+
+-----------------------------------------------------------------------
+-- | Building Type Environments ---------------------------------------
+-----------------------------------------------------------------------
+
+mkEnv         :: [Id SourcePos] -> Env Type -> Either Doc (Env Type) 
+mkEnv ids env = envFromList <$> zipWithM joinName ids' its'
+  where
+    ids' = orderIds idName (comparing idLoc) ids
+    its' = orderIds (idName . fst) (comparing (idLoc . fst)) its 
+    its  = envToList env
+
+joinName (name, i) (name', (_,t)) 
+  | name == name' = Right (i, t)
+  | otherwise     = Left (text "Missing Type Specification: " <+> pp i) 
+
+-- orderIds :: (Ord t, Hashable t) =>(a -> t) -> (a -> a -> Ordering) -> [a] -> [(t, a)]
+orderIds fn fl = concatMap (\(x,ys) -> (x,) <$> ys) 
+               . hashMapToAscList 
+               . (L.sortBy fl <$>) 
+               . groupMap fn 
+
+
+-- ids ==> [(String, [Id a])] ==> [(String, Id a)]
+-- env ==> [(String, [Type])] ==> [(String, Type)] 
+-- 
+-- safeZipWith 
+-- (name, id) .... 
+-- (name, t ) ....
+
+
 
 

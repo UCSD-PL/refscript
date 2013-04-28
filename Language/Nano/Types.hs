@@ -28,6 +28,9 @@ module Language.Nano.Types (
   -- * Error message
   , convertError
 
+  -- * Deconstructing Id
+  , idName
+  , idLoc 
   ) where
 
 import           Control.Applicative          ((<$>))
@@ -66,6 +69,7 @@ data Located a
   = Loc { loc :: !SourcePos
         , val :: a
         }
+  
 
 
 ---------------------------------------------------------------------
@@ -273,6 +277,12 @@ pOr  p q  = F.pOr  [p, q]
 
 instance Hashable SourcePos where 
   hashWithSalt i = hashWithSalt i . sourcePosElts
+
+instance Hashable a => Hashable (Id a) where 
+  hashWithSalt i x = hashWithSalt i (idLoc x, idName x)
+
+idName (Id _ x) = x
+idLoc  (Id l _) = l
 
 instance PP SourcePos where 
   pp = ppSourcePos 

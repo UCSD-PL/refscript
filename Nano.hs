@@ -1,20 +1,11 @@
-import Control.Monad                    (mapM)
-import Language.Fixpoint.Types
-import Language.Fixpoint.Misc
-import Language.Fixpoint.Interface      (resultExit)
-import Language.ECMAScript3.PrettyPrint (pp)
-import Text.PrettyPrint.HughesPJ        (render)
 
-import Language.Nano.CmdLine            (getOpts)
-import Language.Nano.Types          
-import Language.Nano.ESC.ESC            (verifyFile)
+import qualified Language.Nano.ESC.ESC       as E
+import qualified Language.Nano.Liquid.Liquid as L
+import           Language.Nano.CmdLine            (getOpts)
+import           Language.Nano.Types
 
-import Data.Monoid                      (mconcat)
--- import Control.Applicative              ((<$>))
-import System.Exit                      (exitWith)
+main = do cfg <-  getOpts
+          case cfg of 
+            Esc {}    -> E.main cfg
+            Liquid {} -> L.main cfg
 
-main = do cfg <-  getOpts  
-          rs   <- mapM verifyFile $ files cfg
-          let r = mconcat rs
-          donePhase (colorResult r) (render $ pp r) 
-          exitWith (resultExit r)

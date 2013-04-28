@@ -12,6 +12,9 @@ module Language.Nano.Types (
   -- * Nano Definition
   , IsNano (..)
 
+  -- * Located Values
+  , Located (..) 
+  
   -- * Accessing Spec Annotations
   , getSpec
   , getRequires
@@ -49,10 +52,20 @@ import           Text.Parsec
 -- | Command Line Configuration Options
 ---------------------------------------------------------------------
 
-data Config = Config { 
-    files   :: [FilePath]     -- ^ source files to check
-  , incdirs :: [FilePath]     -- ^ path to directory for include specs
-  } deriving (Data, Typeable, Show, Eq)
+data Config 
+  = Esc    { files   :: [FilePath]     -- ^ source files to check
+           , incdirs :: [FilePath]     -- ^ path to directory for include specs
+           } 
+  | Liquid { files   :: [FilePath]     -- ^ source files to check
+           , incdirs :: [FilePath]     -- ^ path to directory for include specs
+           }
+  deriving (Data, Typeable, Show, Eq)
+
+
+data Located a 
+  = Loc { loc :: !SourcePos
+        , val :: a
+        }
 
 
 ---------------------------------------------------------------------

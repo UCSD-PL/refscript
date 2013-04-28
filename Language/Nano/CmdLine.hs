@@ -3,9 +3,6 @@
 
 module Language.Nano.CmdLine (getOpts) where
 
--- import Control.Applicative                      ((<$>))
--- import System.FilePath                          (dropFileName)
--- import Language.Fixpoint.Misc                   (single, sortNub) 
 import Language.Nano.Types                      (Config (..))
 import System.Console.CmdArgs                  
 
@@ -13,7 +10,7 @@ import System.Console.CmdArgs
 -- | Parsing Command Line -------------------------------------------------------
 ---------------------------------------------------------------------------------
 
-config = Config { 
+esc = Esc { 
    files   = def &= typ "TARGET" 
                  &= args 
                  &= typFile 
@@ -22,14 +19,24 @@ config = Config {
                  &= help "Paths to Spec Include Directory " 
    
  } &= verbosity
-   &= program "nano-js" 
-   &= help    "The Nano Software Verification System" 
-   &= summary "nano-js © Copyright 2013 Regents of the University of California." 
-   &= details [ "nano-js is suite of toy program verifiers"
-              , ""
-              , "To check a file foo.js, type:"
-              , "  nano-js foo.hs "
-              ]
+   &= help    "Extended Static Checker for Nano" 
+
+liquid = Liquid { 
+   files   = def &= typ "TARGET" 
+                 &= args 
+                 &= typFile 
+ 
+ , incdirs = def &= typDir 
+                 &= help "Paths to Spec Include Directory " 
+   
+ } &= verbosity
+   &= help    "Liquid Type based Verifier for Nano" 
+
+config = modes [esc, liquid] 
+            &= help "Create and compare differences" 
+            &= program "nano-js" 
+            &= summary "nano-js © Copyright 2013 Regents of the University of California." 
+            &= details [ "nano-js is suite of toy program verifiers"]
 
 getOpts :: IO Config 
 getOpts = do md <- cmdArgs config 

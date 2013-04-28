@@ -10,18 +10,30 @@ import           Text.PrettyPrint.HughesPJ    (text, render, (<+>))
 import           System.FilePath              (addExtension)
 import           Control.Monad.State
 import           Control.Applicative          ((<$>))
+import           Control.Monad                (mapM)
 import qualified Control.Exception as Ex
+import           Data.Monoid
+import           Data.Maybe                   (isJust, fromJust) -- fromMaybe, maybe)
+import           System.Exit                  (exitWith)
 
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
+
 import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.Interface  (checkValid)
-import           Language.Fixpoint.Misc       (safeZip, sortNub)
+import           Language.Fixpoint.Interface  (checkValid, resultExit)
+import           Language.Fixpoint.Misc       (safeZip, sortNub, donePhase)
+
 import           Language.Nano.Types
 import           Language.Nano.ESC.Types
 import           Language.Nano.ESC.VCMonad
-import           Data.Monoid
-import           Data.Maybe                   (isJust, fromJust) -- fromMaybe, maybe)
+
+--------------------------------------------------------------------------------
+
+main cfg 
+  = do rs   <- mapM verifyFile $ files cfg
+       let r = mconcat rs
+       donePhase (F.colorResult r) (render $ pp r) 
+       exitWith (resultExit r)
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 

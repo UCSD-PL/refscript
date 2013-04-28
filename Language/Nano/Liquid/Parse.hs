@@ -4,9 +4,7 @@
 {-# LANGUAGE TypeSynonymInstances      #-} 
 {-# LANGUAGE TupleSections             #-}
 
-module Language.Haskell.Liquid.Parse (
-  hsSpecificationP
-) where
+module Language.Haskell.Liquid.Parse () where
 
 import Control.Monad
 import Text.Parsec
@@ -22,6 +20,7 @@ import Data.Monoid (mempty)
 import Language.Fixpoint.Types
 import Language.Fixpoint.Parse 
 
+import Language.Nano.Types
 import Language.Nano.Liquid.Types
 
 dot        = Token.dot        lexer
@@ -29,16 +28,16 @@ braces     = Token.braces     lexer
 angles     = Token.angles     lexer
 
 ----------------------------------------------------------------------------------
--- | BareTypes -------------------------------------------------------------------
+-- | RefTypes -------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 
 -- Top-level parser for "bare" types. If refinements not supplied, then "top" refinement is used.
 
-bareTypeP :: Parser BareType 
+bareTypeP :: Parser RefType 
 
 bareTypeP   
   =  try bareFunP
- <|> bareAllP
+ <|> try bareAllP
  <|> bareAtomP 
 
 bareFunP  
@@ -51,61 +50,31 @@ bareAtomP
   =  refP bbaseP 
  <|> try (dummyP (bbaseP <* spaces))
 
-bbaseP :: Parser (Reft -> BareType)
+bbaseP :: Parser (Reft -> RefType)
 bbaseP 
-  =  try (liftM2 bAppTy lowerIdP bareTyArgP)
- <|> try (liftM2 bRVar lowerIdP monoPredicateP)
- <|> liftM3 bCon upperIdP predicatesP (sepBy bareTyArgP blanks)
+  =  try (TVar <$> tvarP)
+ <|> TApp <$> tconP <*> (brackets $ sepBy bareTypeP comma)
 
-bbaseNoAppP :: Parser (Reft -> BareType)
-bbaseNoAppP
-  =  liftM2 bLst (brackets bareTypeP) predicatesP
- <|> liftM2 bTup (parens $ sepBy bareTypeP comma) predicatesP
- <|> try (liftM3 bCon upperIdP predicatesP (return []))
- <|> liftM2 bRVar lowerIdP monoPredicateP 
+tvarP :: Parser TVar
+tvarP = TV <$> locParserP (stringSymbol <$> upperIdP) 
 
-bareTyArgP 
-  =  try (braces $ liftM RExprArg exprP)
- <|> try bareAtomNoAppP
- <|> try (parens bareTypeP)
-
-bareAtomNoAppP 
-  =  refP bbaseNoAppP 
- <|> try (dummyP (bbaseNoAppP <* spaces))
+tconP :: Parser TCon
+tconP =  try (reserved "int"  >> return TInt)
+     <|> try (reserved "bool" >> return TBool)
+     <|> try (reserved "void" >> return TVoid)
+     <|> (TDef . stringSymbol) <$> lowerIdP
 
 bareAllP 
   = do reserved "forall"
-       as <- many tyVarIdP
-       ps <- predVarDefsP
+       as <- many tvarP
        dot
        t  <- bareTypeP
-       return $ foldr RAllT (foldr RAllP t ps) as
+       return $ foldr TAll t as
 
-tyVarIdP :: Parser String
-tyVarIdP = condIdP alphanums (isLower . head) 
-           where alphanums = ['a'..'z'] ++ ['0'..'9']
 
-xyP lP sepP rP
-  = liftM3 (\x _ y -> (x, y)) lP (spaces >> sepP) rP
-
-data ArrowSym = ArrowFun | ArrowPred
-
-positionNameP = dummyNamePos <$> getPosition
+locParserP :: Parser a -> Parser (Located a)
+locParserP p = liftM2 Loc getPosition p
   
-dummyNamePos pos  = "dummy." ++ name ++ ['.'] ++ line ++ ['.'] ++ col
-    where name    = san <$> sourceName pos
-          line    = show $ sourceLine pos  
-          col     = show $ sourceColumn pos  
-          san '/' = '.'
-          san c   = toLower c
-
-dummyBindP 
-  = stringSymbol <$> positionNameP
-
-bbindP = lowerIdP <* dcolon 
-
-bindP  = liftM stringSymbol (lowerIdP <* colon)
-
 dummyP ::  Monad m => m (Reft -> b) -> m b
 dummyP fm 
   = fm `ap` return top 
@@ -128,31 +97,29 @@ refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi))
 ----------------------- Wrapped Constructors ---------------------------
 ------------------------------------------------------------------------
 
-
-filePathP :: Parser FilePath
-filePathP = angles $ many1 pathCharP
-  where pathCharP = choice $ char <$> pathChars 
-        pathChars = ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ ['.', '/']
-
-tyBindP    :: Parser (LocSymbol, BareType)
-tyBindP    = xyP (locParserP binderP) dcolon bareTypeP
-
-locParserP :: Parser a -> Parser (Located a)
-locParserP p = liftM2 Loc getPosition p
-
-embedP 
-  = xyP upperIdP (reserved "as") fTyConP
-
-binderP :: Parser Symbol
-binderP =  try $ liftM stringSymbol (idP badc)
-       <|> liftM pwr (parens (idP bad))
-       where idP p  = many1 (satisfy (not . p))
-             badc c = (c == ':') ||  bad c
-             bad c  = isSpace c || c `elem` "()"
-             pwr s  = stringSymbol $ "(" ++ s ++ ")" 
-             
-grabs p = try (liftM2 (:) p (grabs p)) 
-       <|> return []
+-- filePathP :: Parser FilePath
+-- filePathP = angles $ many1 pathCharP
+--   where pathCharP = choice $ char <$> pathChars 
+--         pathChars = ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ ['.', '/']
+-- 
+-- xyP lP sepP rP
+--   = liftM3 (\x _ y -> (x, y)) lP (spaces >> sepP) rP
+-- 
+-- tyBindP    :: Parser (LocSymbol, RefType)
+-- tyBindP    = xyP (locParserP binderP) dcolon bareTypeP
+-- 
+-- embedP     = xyP upperIdP (reserved "as") fTyConP
+-- 
+-- binderP :: Parser Symbol
+-- binderP =  try $ liftM stringSymbol (idP badc)
+--        <|> liftM pwr (parens (idP bad))
+--        where idP p  = many1 (satisfy (not . p))
+--              badc c = (c == ':') ||  bad c
+--              bad c  = isSpace c || c `elem` "()"
+--              pwr s  = stringSymbol $ "(" ++ s ++ ")" 
+--              
+-- grabs p = try (liftM2 (:) p (grabs p)) 
+--        <|> return []
 
 ---------------------------------------------------------------------
 ------------ Interacting with Fixpoint ------------------------------
@@ -169,6 +136,13 @@ betweenMany leftP rightP p
          Just _  -> liftM2 (:) (between leftP rightP p) (betweenMany leftP rightP p)
          Nothing -> return []
 
--- specWrap  = between     (string "{-@" >> spaces) (spaces >> string "@-}")
-specWraps = betweenMany (string "{-@" >> spaces) (spaces >> string "@-}")
+specWraps = betweenMany (string "/*@" >> spaces) (spaces >> string "@*/")
+
+---------------------------------------------------------------------------------
+
+instance Inputable RefType where 
+  rr' = doParse' bareTypeP
+
+instance Inputable Type where 
+  rr' = doParse' (fmap (const ()) <$> bareTypeP)
 

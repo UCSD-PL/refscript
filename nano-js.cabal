@@ -50,4 +50,7 @@ Library
                        Language.Nano.CmdLine,
                        Language.Nano.ESC.Types,
                        Language.Nano.ESC.VCMonad, 
-                       Language.Nano.ESC.ESC
+                       Language.Nano.ESC.ESC,
+                       Language.Nano.Liquid.Types,
+                       Language.Nano.Liquid.Parse,
+                       Language.Nano.Liquid.Liquid

@@ -1,4 +1,4 @@
-/*@ inc :: (int) => int @*/
+/*@ inc :: (int) => int */
 function inc(x){
   requires(x > 0);
   ensures($result > 0);
@@ -7,7 +7,7 @@ function inc(x){
   return res;
 }
 
-/*@ main () => void @*/
+/*@ main () => void */
 function main(){
   var a = pos();
   var b = inc(a);

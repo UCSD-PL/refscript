@@ -1,5 +1,5 @@
 
-/*@ loop :: (int, int) => int @*/
+/*@ loop :: (int, int) => int */
 function loop(n, l) {
   
   var flag = random();
@@ -17,7 +17,7 @@ function loop(n, l) {
   return l;
 }
 
-/*@ main :: () => void @*/
+/*@ main :: () => void */
 function main(){
   var n    = pos();
   var flag = random();

@@ -18,8 +18,7 @@ esc = Esc {
  , incdirs = def &= typDir 
                  &= help "Paths to Spec Include Directory " 
    
- } &= verbosity
-   &= help    "Extended Static Checker for Nano" 
+ } &= help    "Extended Static Checker for Nano" 
 
 liquid = Liquid { 
    files   = def &= typ "TARGET" 
@@ -29,15 +28,15 @@ liquid = Liquid {
  , incdirs = def &= typDir 
                  &= help "Paths to Spec Include Directory " 
    
- } &= verbosity
-   &= help    "Liquid Type based Verifier for Nano" 
+ } &= help    "Refinement Type Checker for Nano" 
 
 config = modes [esc, liquid] 
-            &= help "Create and compare differences" 
+            &= help    "nano-js is a suite of toy program verifiers"
             &= program "nano-js" 
             &= summary "nano-js © Copyright 2013 Regents of the University of California." 
-            &= details [ "nano-js is suite of toy program verifiers"]
-
+            &= verbosity
+            &= verbosity
+   
 getOpts :: IO Config 
 getOpts = do md <- cmdArgs config 
              putStrLn $ banner md

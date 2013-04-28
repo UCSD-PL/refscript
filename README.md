@@ -46,12 +46,13 @@ HW 2
 
 HW 3
 
-0. Type Types < ------------------------ HEREHEREHEREHERE
+run: make test to see what to do next.
+
+0. Type Types 
 1. Parse Types 
-2. Passifier [SSA-Transformation]
+
+2. Passifier [SSA-Transformation] {------------------------ HEREHEREHEREHERE
 3. Vanilla Type Checker
-
-
 
 4. Parse Refinement Types
 5. Refinement Type Checker      [HW]

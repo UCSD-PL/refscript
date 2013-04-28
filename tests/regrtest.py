@@ -23,7 +23,8 @@ import time, subprocess, optparse, sys, socket, os
 sys.path.append("../")
 import rtest as rtest
 
-solve      = "nanojs".split()
+# solve      = "nanojs".split()
+
 null       = open("/dev/null", "w")
 now	       = (time.asctime(time.localtime(time.time()))).replace(" ","_")
 logfile    = "../tests/logs/regrtest_results_%s_%s" % (socket.gethostname (), now)
@@ -33,7 +34,7 @@ def logged_sys_call(args, out=None, err=None):
   print "exec: " + " ".join(args)
   return subprocess.call(args, stdout=out, stderr=err)
 
-def solve_quals(file,bare,time,quiet,flags,dargs):
+def solve_quals(solve, file, bare, time, quiet, flags, dargs):
   if quiet: out = null
   else: out = None
   if time: time = ["time"]
@@ -42,7 +43,7 @@ def solve_quals(file,bare,time,quiet,flags,dargs):
   else: dargs = []
   hygiene_flags = []
   out = open(file + ".log", "w")
-  rv  = logged_sys_call(time + solve + flags + dargs + hygiene_flags + [file], out)
+  rv  = logged_sys_call(time + solve.split() + flags + dargs + hygiene_flags + [file], out)
   out.close()
   return rv
 
@@ -61,15 +62,16 @@ def getfileargs(file):
     return []
 
 class Config (rtest.TestConfig):
-  def __init__ (self, dargs, testdirs, logfile, threadcount):
+  def __init__ (self, solver, dargs, testdirs, logfile, threadcount):
     rtest.TestConfig.__init__ (self, testdirs, logfile, threadcount)
-    self.dargs = dargs
+    self.dargs  = dargs
+    self.solver = solver
 
   def run_test (self, file):
     os.environ['LCCFLAGS'] = self.dargs
     if file.endswith(".js"):
       fargs = getfileargs(file)
-      return solve_quals(file, True, False, True, fargs, self.dargs)
+      return solve_quals(self.solver, file, True, False, True, fargs, self.dargs)
     elif file.endswith(".sh"):
       return run_script(file, True)
 
@@ -78,17 +80,22 @@ class Config (rtest.TestConfig):
 
 #####################################################################################
 
-#DEFAULT
-testdirs  = [ ("pos", 0)
-            , ("neg", 1)
-            ]
-
 parser = optparse.OptionParser()
 parser.add_option("-t", "--threads", dest="threadcount", default=1, type=int, help="spawn n threads")
 parser.add_option("-o", "--opts", dest="opts", default="", type=str, help="additional arguments to nanojs")
 parser.disable_interspersed_args()
 options, args = parser.parse_args()
 
-# [os.system(("cd %s; ../../cleanup; cd ../" % d)) for (d,_) in testdirs]  
-runner = rtest.TestRunner (Config (options.opts, testdirs, logfile, options.threadcount))
+
+# ESC Tests
+testdirs  = [ ("pos", 0), ("neg", 1)]
+runner    = rtest.TestRunner (Config ("nanojs esc", options.opts, testdirs, logfile, options.threadcount))
 runner.run ()
+
+# Liquid Tests
+testdirs  = [ ("typed/pos", 0) ]
+runner    = rtest.TestRunner (Config ("nanojs liquid", options.opts, testdirs, logfile, options.threadcount))
+runner.run ()
+
+
+# [os.system(("cd %s; ../../cleanup; cd ../" % d)) for (d,_) in testdirs]  

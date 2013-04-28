@@ -1,4 +1,4 @@
-/*@ main :: () => int @*/
+/*@ main :: () => int */
 function main() {
   var y = 0;
   var x = pos();

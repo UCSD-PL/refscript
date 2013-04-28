@@ -1,5 +1,5 @@
 
-/*@ sumLoop :: (int, int) => int @*/
+/*@ sumLoop :: (int, int) => int */
 function sumLoop(acc, i){
   requires(0 <= i);
   ensures($result == acc + i);
@@ -12,7 +12,7 @@ function sumLoop(acc, i){
   return r;
 }
 
-/*@ main :: () => void @*/
+/*@ main :: () => void */
 function main(){
   var n = pos();
   var m = sumLoop(0, n);

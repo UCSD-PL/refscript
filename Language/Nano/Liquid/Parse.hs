@@ -74,7 +74,8 @@ bareAtomP
 bbaseP :: Parser (Reft -> RefType)
 bbaseP 
   =  try (TVar <$> tvarP)
- <|> TApp <$> tconP <*> (brackets $ sepBy bareTypeP comma)
+ <|> try (TApp <$> tconP <*> (brackets $ sepBy bareTypeP comma))
+ <|> try ((`TApp` []) <$> tconP)
 
 tvarP :: Parser TVar
 tvarP = TV <$> locParserP (stringSymbol <$> upperIdP) 
@@ -153,7 +154,10 @@ betweenMany leftP rightP p
          Nothing -> return []
 
 specWraps :: Parser a -> Parser [a] 
-specWraps = betweenMany (string "/*@" >> spaces) (spaces >> string "@*/")
+specWraps = betweenMany start stop
+  where 
+    start = string "/*@" >> spaces
+    stop  = spaces >> string "*/"
 
 ---------------------------------------------------------------------------------
 

@@ -1,4 +1,4 @@
-/*@ twice :: forall A. ((A) => A, A) => A @*/
+/*@ twice :: forall A. ((A) => A, A) => A */
 function twice(f, x0){
   var x1 = f(x0);
   var x1 = f(x1);

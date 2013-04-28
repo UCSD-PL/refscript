@@ -1,21 +1,21 @@
-/*@ create :: () => int @*/
+/*@ create :: () => int */
 function create(){
   return 0;
 }
 
-/*@ acquire :: (int) => int @*/
+/*@ acquire :: (int) => int */
 function acquire(l){
   assert(l == 0);
   return 1;
 }
 
-/*@ release :: (int) => int @*/
+/*@ release :: (int) => int */
 function release(l){
   assert(l == 1);
   return 0;
 }
 
-/*@ driver :: (int, int, int) => int @*/ 
+/*@ driver :: (int, int, int) => int */ 
 function driver(l0, newCount0, oldCount0){
   requires(((newCount0 != oldCount0) && (l0 == 0)) || ((newCount0 == oldCount0) && (l0 == 1)));
   ensures($result == 1);
@@ -37,7 +37,7 @@ function driver(l0, newCount0, oldCount0){
   return l;
 }
 
-/*@ main :: () => void @*/
+/*@ main :: () => void */
 function main() {
   var newCount = pos();
   var oldCount = pos(); 

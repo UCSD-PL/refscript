@@ -101,6 +101,7 @@ data Nano = Nano { code :: !Source
 
 -- | Type Specification for function binders
 data Spec = Spec { sigs :: !(Env Type) }
+            deriving (Show)
 
 newtype Source = Src [(Statement SourcePos)]
 
@@ -117,6 +118,7 @@ instance PP Nano where
 --------------------------------------------------------------------------
 
 newtype Env t  = TE (M.HashMap (Id SourcePos) t)
+                 deriving (Show)
 
 envToList (TE m) = M.toList m
 

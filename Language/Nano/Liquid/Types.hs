@@ -157,6 +157,9 @@ instance PP Nano where
     $+$ text "********************** SPEC **********************"
     $+$ pp env
 
+instance PP a => PP (Maybe a) where 
+  pp = maybe (text "Nothing") pp 
+
 instance PP F.Symbol where 
   pp = pprint
 

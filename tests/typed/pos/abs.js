@@ -1,6 +1,12 @@
+/*@ assert :: (bool) => void */ 
+function assert(p){
+  return;
+}
+
 /*@ abs :: (int) => int */ 
 function abs(x){
   var res = 0;
+
   if (x > 0) {
     res = x;
   } else {

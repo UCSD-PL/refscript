@@ -128,6 +128,10 @@ tcStmt γ (EmptyStmt _)
 tcStmt γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))   
   = tcAsgn γ l (Id lx x) e
 
+-- e
+tcStmt γ (ExprStmt _ e)   
+  = tcExpr γ e >> return (Just γ) 
+
 -- s1;s2;...;sn
 tcStmt γ (BlockStmt _ stmts) 
   = tcStmts γ stmts 
@@ -149,11 +153,19 @@ tcStmt γ (VarDeclStmt _ ds)
   = tcSeq tcVarDecl γ ds
 
 -- return e 
-tcStmt γ (ReturnStmt l (Just e)) 
-  = do t  <- tcExpr γ e 
+tcStmt γ (ReturnStmt l eo) 
+  = do t  <- maybe (return tVoid) (tcExpr γ) eo 
        t' <- getReturn 
-       assertTy l e t t' 
+       assertTy l eo t t' 
        return Nothing
+
+-- return e 
+-- tcStmt γ (ReturnStmt l (Just e)) 
+--   = do t  <- tcExpr γ e 
+--        t' <- getReturn 
+--        assertTy l e t t' 
+--        return Nothing
+
 
 -- OTHER (Not handled)
 tcStmt γ s 
@@ -192,15 +204,13 @@ tcExpr γ (VarRef l x)
       Nothing -> logError tErr l $ errorUnboundId x
 
 tcExpr γ (PrefixExpr l o e)
-  = tcCall γ l o (prefixOpTy o) [e]
+  = tcCall γ l o [e] (prefixOpTy o)
 
 tcExpr γ (InfixExpr l o e1 e2)        
-  = tcCall γ l o (infixOpTy o) [e1, e2] 
+  = tcCall γ l o  [e1, e2] (infixOpTy o)
 
-tcExpr γ (CallExpr l (VarRef _ f@(Id _ _)) es)
-  = case envFind f γ of 
-      Just t  -> tcCall γ l f t es
-      Nothing -> logError tErr l $ errorUnboundId f
+tcExpr γ (CallExpr l e es)
+  = tcCall γ l e es =<< tcExpr γ e 
 
 tcExpr γ e 
   = convertError "tcExpr" e
@@ -209,7 +219,7 @@ tcExpr γ e
 -- tcCall :: F.SEnv Type -> SourcePos -> Type -> [Expression SourcePos] -> TCM Type
 ----------------------------------------------------------------------------------
 
-tcCall γ l z ft es 
+tcCall γ l z es ft 
   = case bkFun ft of
      Nothing           -> logError tErr l $ errorNonFunction z 
      Just (αs, ts, t') -> maybe tErr (\_ -> t') <$> unifyArgs γ l () es ts
@@ -222,7 +232,7 @@ unifyArgs γ l          = go
     go θ (e:es) (t:ts) = do te <- tcExpr γ e
                             if t == te 
                               then go θ es ts 
-                              else logError Nothing l $ errorWrongType e t te
+                              else logError Nothing l $ errorWrongType e te t
 
 ----------------------------------------------------------------------------------
 envJoin :: SourcePos -> TCEnv -> TCEnv -> TCM TCEnv 

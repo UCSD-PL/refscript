@@ -50,9 +50,9 @@ run: make test to see what to do next.
 
 0. Type Types 
 1. Parse Types 
-
 2. Passifier [SSA-Transformation] {------------------------ HEREHEREHEREHERE
 3. Vanilla Type Checker
+
 
 4. Parse Refinement Types
 5. Refinement Type Checker      [HW]
@@ -132,7 +132,7 @@ Commands
 c := x = e          -- assignment
    | c; c           -- sequence
    | if e c1 c2     -- if-then-else
-   | while e c      -- while-loop
+   | while e c      -- while-loop [NUKE]
    | return e       -- return
    | x.f = e        -- x := {x with f = e}
 
@@ -160,7 +160,6 @@ G |- x => (G x)
 -------------
 G |- c => Int
 
-
 G |- e1 => Int G |- e2 => Int
 -----------------------------
 G |- e1 `o` e2 => Int
@@ -173,39 +172,33 @@ G |- e1 => Bool G |- e2 => Bool
 -------------------------------
 G |- e1 `b` e2 => Bool
 
+
 N = \[A..] -> {fi:Ti...}    
 G |- ei => Ti'  
 unify(Ti.., Ti'..) = θ 
 --------------------------------
 G |- {fi:ei} => N [0 A]
 
+
 G(x) = N [T..]   F(N) = \[A..] -> {f:Tf}
 ----------------------------------------
 G |- x.f => Tf[T../A..]
 
-
-S  = forall a...(Ti..) -> T
-G' = G, a.., xi:Ti..
-G' |- c => EXIT(T)
------------------------------------
-G |- function f(xi..){c} :: S => S 
-
-G |- e => \[A].(Ti) -> T    
+G |- e  => \[A].(Ti) -> T    
 G |- ei => Ti'  
 unify(Ti.., Ti'..) = θ 
 -----------------------------------
 G |- e (ei..) => θ T 
 
-
-**Commands** [G |- c => G' + EXIT(T)]
+**Commands** [G |- c => G' + EXIT]
 
 G |- e => T
 --------------------
 G |- x = e => G, x:T
 
-G |- c1 => EXIT T 
+G |- c1 => EXIT
 -----------------------
-G |- c1; c2 => EXIT T 
+G |- c1; c2 => EXIT 
 
 G |- c1 => G1       G1 not EXIT      G1 |- c2 => G2
 ---------------------------------------------------
@@ -215,20 +208,25 @@ G |- e  => Bool     G |- c1 => G1   G |- c2 => G2
 --------------------------------------------------
 G |- if e c1 c2 => G1 `join` G2
 
-
 G |- e => Bool      G |- c => G'
 ---------------------------------
 G |- while e c => G `join` G'
 
-
-G |- e => T
------------------------
-G |- return e => EXIT T
-
+G |- e => T   T = G($result) 
+----------------------------
+G |- return e => EXIT
 
 G(x) = N [T..]      F(N) = \[A..] -> {f:Tf}     G |- e => Tf[T../A..]
 ----------------------------------------------------------------------
 G |- (x.f = e) => G 
+
+**Functions** [G |- function f...]
+
+S  = forall a...(Ti..) -> T
+G' = G, a.., xi:Ti.., $result:T
+G' |- c => EXIT
+-----------------------------------
+G |- function f(xi..){c} :: S => S 
 
 **Programs** [ |- (f::S).. ]
 
@@ -255,12 +253,8 @@ How to modify for Refinement Types?
 
 3. CHECK Subtyping at return? [CHECK]
 
-
-
-
 1. [NO] Mark certain assignments as SSA
    Induce Subtyping Constraints there
 
 2. LOOP CHECK? [NO WHILE?]
-
 

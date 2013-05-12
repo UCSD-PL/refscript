@@ -102,11 +102,13 @@ instance IsVerifiable (VarDecl SourcePos) where
 generateFunVC    :: Fun SourcePos -> VCM VCond 
 -----------------------------------------------------------------------------------
 generateFunVC fn 
-  = do _     <- setFunction fn
-       vc    <- (generateAssumeVC (fpre fn) <=< generateVC (fbody fn)) mempty
-       vc'   <- getSideCond 
-       return $ vc <> vc'
-
+  = do _        <- setFunction fn
+       let sts   = fbody fn ++ [retStmt (floc fn)] 
+       vc       <- (generateAssumeVC (fpre fn) <=< generateVC sts) mempty
+       vc'      <- getSideCond 
+       return    $ vc <> vc'
+      
+retStmt l = ReturnStmt l (Just $ IntLit l 0)
 -----------------------------------------------------------------------------------
 generateStmtVC :: Statement SourcePos -> VCond -> VCM VCond 
 -----------------------------------------------------------------------------------

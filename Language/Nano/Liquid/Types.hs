@@ -16,6 +16,9 @@ module Language.Nano.Liquid.Types (
   , Env    (..)
   , envFromList 
   , envToList
+  , envEmpty 
+  , envAdd 
+  , envAdds
 
   -- * Accessors
   , code
@@ -25,6 +28,9 @@ module Language.Nano.Liquid.Types (
   , RType (..)
   , RefType
   , toType
+  
+  -- * Deconstructing Types
+  , bkFun
 
   -- * Regular Types
   , Type (..)
@@ -91,6 +97,21 @@ instance Show r => PP (RType r) where
 toType :: RType a -> Type
 toType = fmap (const ())
 
+
+bkFun :: RType a -> Maybe ([TVar], [RType a], RType a)
+bkFun t = do (αs, t')   <- bkAll t
+             (xts, t'') <- bkArr t'
+             return        (αs, xts, t'')
+         
+bkArr (TFun xts t) = Just (xts, t)
+bkArr _            = Nothing
+
+bkAll                :: RType a -> ([RVar], RType a)
+bkAll t              = go [] t
+  where 
+    go αs (TAll α t) = go (α : αs) t
+    go αs t          = (reverse αs, t)
+
 ---------------------------------------------------------------------------------
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
@@ -103,7 +124,16 @@ data Nano = Nano { code :: !Source
 data Spec = Spec { sigs :: !(Env Type) }
             deriving (Show)
 
-newtype Source = Src [(Statement SourcePos)]
+{-@ measure isFunctionStatement :: (Statement SourcePos) -> Prop 
+    isFunctionStatement (FunctionStmt {}) = true
+    isFunctionStatement (_)               = false
+  @-}
+
+{-@ type FunctionStatement = {v:(Statement SourcePos) | (isFunctionStatement v)} @-}
+type FunctionStatement = Statement SourcePos
+
+{-@ newtype Source = Src [FunctionStatement] @-}
+newtype Source = Src [FunctionStatement]
 
 instance PP Nano where
   pp (Nano (Src s) env) 
@@ -117,12 +147,18 @@ instance PP Nano where
 -- | Environments
 --------------------------------------------------------------------------
 
-newtype Env t  = TE (M.HashMap (Id SourcePos) t)
-                 deriving (Show)
+newtype Env t       = TE (M.HashMap (Id SourcePos) t)
+                      deriving (Show)
 
-envToList (TE m) = M.toList m
+envToList (TE m)    = M.toList m
+envFromList         = TE . M.fromList 
+envEmpty            = envFromList []
 
-envFromList = TE . M.fromList 
+envAdd (TE m) (x,t) = TE (M.insert x t m)
+envAdds Γ xts       = foldl' envAdd Γ xts
+
+
+envFind x (TE m)    = M.lookup x m
 
 instance PP t => PP (Env t) where 
   pp = vcat . (ppBind <$>) . envToList

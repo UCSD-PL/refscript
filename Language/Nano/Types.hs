@@ -24,6 +24,7 @@ module Language.Nano.Types (
   , getInvariant
   , isSpecification
   , returnSymbol
+  , returnId
 
   -- * Error message
   , convertError
@@ -31,6 +32,7 @@ module Language.Nano.Types (
   -- * Deconstructing Id
   , idName
   , idLoc 
+  
   ) where
 
 import           Control.Applicative          ((<$>))
@@ -170,8 +172,14 @@ isNanoExprStatement e                     = errortext (text "Not Nano ExprStmt!"
 --
 -- For now, we hack them with function calls.
 
+returnName :: String
+returnName = "$result"
+
+returnId   :: a -> Id a
+returnId x = Id x returnName 
+
 returnSymbol :: F.Symbol
-returnSymbol = F.stringSymbol "$result" 
+returnSymbol = F.stringSymbol resultName 
 
 isSpecification :: Statement a -> Bool
 isSpecification s  = not $ null $ catMaybes $ ($ s) <$> specs 
@@ -309,5 +317,8 @@ instance PP F.Pred where
 
 instance PP (Id a) where
   pp (Id _ x) = text x
+
+
+--------------------------------------------------------------------------------
 
 

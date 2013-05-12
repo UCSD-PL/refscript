@@ -84,7 +84,8 @@ tcNano pgm = sequence_ (tcFun Γ0) fs
 tcFun    :: Env Type -> FunctionStatement -> TCM ()
 tcFun Γ (FunctionStmt l f xs body) 
   = case getFunTy Γ f of 
-      Just (_,xts,t) -> do let Γ' = envAdds Γ ((returnId l, t) : xts)
+      Just (_,xts,t) -> do let Γ' = envAdds Γ xts
+                           _     <- tcSetReturn t
                            z     <- tcStmts Γ' body
                            when (isJust z) $ tcError (errorNoReturn f l)
       Nothing        -> tcError $ errorNonFunction f l 
@@ -141,10 +142,10 @@ tcStmt Γ (VarDeclStmt _ ds)
 
 -- return e 
 tcStmt Γ (ReturnStmt l (Just e)) 
-  = do t     <- tcExpr Γ e 
-       let t' = envFindReturn Γ 
-       assertTy
-  error "TODO: tcReturn"
+  = do t  <- tcExpr Γ e 
+       t' <- tcGetReturn 
+       assertTy l e t t' 
+       return Nothing
 
 -- OTHER (Not handled)
 tcStmt Γ s 
@@ -250,6 +251,12 @@ prefixOpTy o           = convertError "prefixOpTy" o
 
 data TCM a
 
+tcSetReturn :: Type -> TCM ()
+tcSetReturn = error "TODO: tcSetReturn"
+
+tcGetReturn :: TCM Type 
+tcSetReturn = error "TODO: tcGetReturn"
+
 tcError :: Doc -> TCM ()
 tcError = error "TODO: tcError" 
 
@@ -260,7 +267,7 @@ tcExecute = error "TODO: tcExecute"
 -- | Error Messages -------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-assertTy l e t t'       = when (t /= t') tcError $ errorWrongType l e t t'
+assertTy l e t t'       = when (t /= t') $ tcError $ errorWrongType l e t t'
 
 errorNonFunction f l    = text $ printf "Bad function type for %s defined at %s" 
                                    (showpp f) (showpp l)  

@@ -52,6 +52,9 @@ run: make test to see what to do next.
 1. Parse Types 
 2. Vanilla Type Checker     
     - Basic Int/Bool/Expr {------------------------ HEREHEREHEREHERE
+            >> HOW TO GET RETURNVAR? Parameterized by env YUCK. Put into TCM?
+
+            
     - First-order Funs
     - Higher-Order Funs 
     - Polymorphism

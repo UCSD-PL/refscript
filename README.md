@@ -50,8 +50,14 @@ run: make test to see what to do next.
 
 0. Type Types 
 1. Parse Types 
-2. Passifier [SSA-Transformation] {------------------------ HEREHEREHEREHERE
-3. Vanilla Type Checker
+2. Vanilla Type Checker     
+    - Basic Int/Bool/Expr {------------------------ HEREHEREHEREHERE
+    - First-order Funs
+    - Higher-Order Funs 
+    - Polymorphism
+    - Records
+
+3. Passifier [SSA-Transformation] 
 
 
 4. Parse Refinement Types

@@ -19,6 +19,10 @@ module Language.Nano.Liquid.Types (
   , envEmpty 
   , envAdd 
   , envAdds
+  , envFind
+  , envMem
+  , envAddReturn
+  , envFindReturn
 
   -- * Accessors
   , code
@@ -147,18 +151,20 @@ instance PP Nano where
 -- | Environments
 --------------------------------------------------------------------------
 
-newtype Env t       = TE (M.HashMap (Id SourcePos) t)
+data Env t          = TE { eBinds  :: M.HashMap (Id SourcePos) t
+                         , eReturn :: Maybe t 
+                         }
                       deriving (Show)
 
 envToList (TE m)    = M.toList m
-envFromList         = TE . M.fromList 
+envFromList xts     = TE . M.fromList 
 envEmpty            = envFromList []
-
 envAdd (TE m) (x,t) = TE (M.insert x t m)
 envAdds Γ xts       = foldl' envAdd Γ xts
-
-
 envFind x (TE m)    = M.lookup x m
+envMem x (TE m)     = M.member x m
+
+envAddReturn x (
 
 instance PP t => PP (Env t) where 
   pp = vcat . (ppBind <$>) . envToList

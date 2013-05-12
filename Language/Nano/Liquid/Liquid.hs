@@ -113,7 +113,7 @@ tcStmt :: Env Type -> Statement SourcePos  -> TCM TCEnv
 
 -- skip
 tcStmt Γ (EmptyStmt _) 
-  = return Γ
+  = return $ Just Γ
 
 -- x = e
 tcStmt Γ (ExprStmt _ (AssignExpr l OpAssign x e))   
@@ -123,13 +123,17 @@ tcStmt Γ (ExprStmt _ (AssignExpr l OpAssign x e))
 tcStmt Γ (BlockStmt _ stmts) 
   = tcStmts Γ stmts 
 
--- if b { s1 } else { s2 }
-tcStmt Γ (IfStmt _ b s1 s2)
-  = error "TODO tcStmt IfStmt"
- 
 -- if b { s1 }
 tcStmt Γ (IfSingleStmt l b s)
   = tcStmt Γ (IfStmt l b s (EmptyStmt l))
+
+-- if b { s1 } else { s2 }
+tcStmt Γ (IfStmt l e s1 s2)
+  = do t     <- tcExpr Γ e
+       assertTy l e t tBool
+       Γ1    <- tcStmt Γ s1
+       Γ2    <- tcStmt Γ s2
+       return $ envJoin l Γ1 Γ2
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt Γ (VarDeclStmt _ ds)
@@ -137,7 +141,10 @@ tcStmt Γ (VarDeclStmt _ ds)
 
 -- return e 
 tcStmt Γ (ReturnStmt l (Just e)) 
-  = tcReturn l e vc
+  = do t     <- tcExpr Γ e 
+       let t' = envFindReturn Γ 
+       assertTy
+  error "TODO: tcReturn"
 
 -- OTHER (Not handled)
 tcStmt Γ s 
@@ -150,63 +157,96 @@ tcVarDecl :: Env Type -> VarDecl SourcePos -> TCM TCEnv
 tcVarDecl Γ (VarDecl l x (Just e)) 
   = tcAsgn Γ l x e  
 tcVarDecl Γ (VarDecl l x Nothing)  
-  = return Γ
+  = return $ Just Γ
 
 ------------------------------------------------------------------------------------
 tcAsgn :: Env Type -> SourcePos -> Id SourcePos -> Expression SourcePos -> TCM TCEnv
 ------------------------------------------------------------------------------------
 
-tcAsgn Γ l x e = error "TODO: tcAsgn"
+tcAsgn Γ l x e 
+  = do t <- tcExpr Γ e
+       return $ Just $ envAdd Γ (x, t) 
 
 -------------------------------------------------------------------------------
 tcExpr :: Env Type -> Expression SourcePos -> TCM Type
 -------------------------------------------------------------------------------
 
-tcExpr = error "TODO: tcExpr"
+tcExpr _ (IntLit _ _)               
+  = return tInt 
 
-instance F.Symbolic   (Id a) where
-  symbol (Id _ x)   = F.symbol x 
+tcExpr _ (BoolLit _ _)
+  = return tBool
 
-instance F.Symbolic (LValue a) where
-  symbol (LVar _ x) = F.symbol x
-  symbol lv         = convertError "F.Symbol" lv
+tcExpr Γ (VarRef l x)               
+  = case envFind x Γ of 
+      Just t  -> return t
+      Nothing -> tcError $ errorUnboundId x l
 
-instance F.Expression (Id a) where
-  expr = F.eVar
+tcExpr Γ (PrefixExpr l o e)
+  = tcCall Γ l (prefixOpTy o) [e]
 
-instance F.Expression (LValue a) where
-  expr = F.eVar
+tcExpr Γ (InfixExpr l o e1 e2)        
+  = tcCall Γ l (infixOpTy o) [e1, e2] 
 
-instance F.Expression (Expression a) where
-  expr (IntLit _ i)                 = F.expr i
-  expr (VarRef _ x)                 = F.expr x
-  expr (InfixExpr _ o e1 e2)        = F.EBin (bop o) (F.expr e1) (F.expr e2)
-  expr (PrefixExpr _ PrefixMinus e) = F.EBin F.Minus (F.expr (0 :: Int)) (F.expr e)  
-  expr e                            = convertError "F.Expr" e
+tcExpr Γ (CallExpr l (VarRef _ (Id _ f)) es)
+  = case envFind f Γ of 
+      Just t -> ... 
+      Nothing -> tcError $ errorUnboundId f l  
+      tcCall Γ l (
 
-instance F.Predicate  (Expression a) where 
-  prop (BoolLit _ True)            = F.PTrue
-  prop (BoolLit _ False)           = F.PFalse
-  prop (PrefixExpr _ PrefixLNot e) = F.PNot (F.prop e)
-  prop e@(InfixExpr _ _ _ _ )      = eProp e
-  prop e                           = convertError "F.Pred" e  
+tcExpr Γ e 
+  = convertError "tcExpr" e
 
+----------------------------------------------------------------------------------
+tcCall :: Env Type -> SourcePos -> Type -> [Expression SourcePos] -> TCM Type
+----------------------------------------------------------------------------------
 
-OpLT   
-OpLEq  
-OpGT   
-OpGEq  
-OpEq   
-OpNEq  
-       
-OpLAnd 
-OpLOr  
-       
-OpSub  
-OpAdd  
-OpMul  -------------------------------------------------------------------------------
-OpDiv  -- | Typechecking monad -------------------------------------------------------
-OpMod  -------------------------------------------------------------------------------
+tcCall Γ l ft args 
+  = error "TBD: tcCall"
+
+----------------------------------------------------------------------------------
+-- envJoin :: (Eq a) => Env a -> Env a -> TCM (Env a) 
+----------------------------------------------------------------------------------
+
+envJoin l Γ1 Γ2  = forM_ ytts err >> return (envFromList zts)  
+  where 
+    zts          = [(x,t)    | (x,t,t') <- xtts, t == t']
+    ytts         = [(y,t,t') | (y,t,t') <- xtts, t /= t']
+    xtts         = [(x,t,t') | (x,t)    <- envToList Γ1, t' <- maybeToList (envFind x Γ2)]
+    err (y,t,t') = tcError $ errorJoin l y t t'
+
+----------------------------------------------------------------------------------
+-- | Base Types ------------------------------------------------------------------
+----------------------------------------------------------------------------------
+
+tInt  = TApp TInt  [] ()
+tBool = TApp TBool [] ()
+tVoid = TApp TVoid [] ()
+
+infixOpTy              :: InfixOp -> Type
+infixOpTy OpLT         = TFun [tInt, tInt]   tBool  
+infixOpTy OpLEq        = TFun [tInt, tInt]   tBool
+infixOpTy OpGT         = TFun [tInt, tInt]   tBool
+infixOpTy OpGEq        = TFun [tInt, tInt]   tBool
+infixOpTy OpEq         = TFun [tInt, tInt]   tBool
+infixOpTy OpNEq        = TFun [tInt, tInt]   tBool
+infixOpTy OpLAnd       = TFun [tBool, tBool] tBool 
+infixOpTy OpLOr        = TFun [tBool, tBool] tBool
+infixOpTy OpSub        = TFun [tInt, tInt]   tInt 
+infixOpTy OpAdd        = TFun [tInt, tInt]   tInt 
+infixOpTy OpMul        = TFun [tInt, tInt]   tInt 
+infixOpTy OpDiv        = TFun [tInt, tInt]   tInt 
+infixOpTy OpMod        = TFun [tInt, tInt]   tInt  
+infixOpTy o            = convertError "infixOpTy" o
+
+prefixOpTy             :: PrefixOp -> Type
+prefixOpTy PrefixMinus = TFun [tInt] tInt
+prefixOpTy PrefixLNot  = TFun [tBool] tBool
+prefixOpTy o           = convertError "prefixOpTy" o
+
+-------------------------------------------------------------------------------
+-- | Typechecking monad -------------------------------------------------------
+-------------------------------------------------------------------------------
 
 data TCM a
 
@@ -220,7 +260,19 @@ tcExecute = error "TODO: tcExecute"
 -- | Error Messages -------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-errorNonFunction f l = text "Bad function type for" <+> pp f <+> text "defined at" <+> pp l  
-errorNoReturn f l    = text "Function" <+> pp f <+> text "defined at" <+> pp l <+> text "does not return"
+assertTy l e t t'       = when (t /= t') tcError $ errorWrongType l e t t'
+
+errorNonFunction f l    = text $ printf "Bad function type for %s defined at %s" 
+                                   (showpp f) (showpp l)  
+errorNoReturn f l       = text $ printf "Function %s defined at %s does not return" 
+                                   (showpp f) (showpp l) 
+errorUnboundId x l      = text $ printf "Identifier %s unbound at %s" 
+                                   (showpp x) (showpp l)
+errorWrongType l e t t' = text $ printf "Unexpected type for %s :: %s expected %s at %s" 
+                                   (showpp e) (showpp t) (showpp t') (showpp l)
+errorJoin l x t t'      = text $ printf "Cannot join %s :: %s expected %s at %s" 
+                                   (showpp x) (showpp t) (showpp t') (showpp l)
+
+
 
 

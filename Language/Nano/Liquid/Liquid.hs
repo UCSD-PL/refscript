@@ -1,16 +1,21 @@
 module Language.Nano.Liquid.Liquid (main) where 
 
-import           Control.Applicative          ((<$>))
+import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
+import qualified Data.List as L
 import           Data.Monoid
+import           Data.Maybe                         (isJust, maybeToList)
 import           Language.Nano.Types
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Parse 
+import           Language.Nano.Liquid.TCMonad
 import           Language.ECMAScript3.Syntax
 import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.Interface        (checkValid, resultExit)
-import           Language.Fixpoint.Misc             -- (safeZip, sortNub, donePhase)
+import           Language.Fixpoint.Interface        ({- checkValid,-} resultExit)
+-- import           Language.Fixpoint.PrettyPrint      (showpp)
+import           Language.Fixpoint.Misc             
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
+import           Text.Printf                        (printf)
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
 import           System.Exit                        (exitWith)
@@ -49,12 +54,12 @@ parseNanoFromFile f
 -------------------------------------------------------------------------------
 
 verifyNano  :: Nano -> IO (F.FixResult SourcePos)
-verifyNano  = either unsafe safe . tcExecute . tcNano 
+verifyNano  = either unsafe safe . execute . tcNano 
     
-unsafe errs = do forM_ errs $ \(loc, err) -> putDocLn $ text "Error at" <+> pp loc <+> err
+unsafe errs = do forM_ errs $ \(loc, err) -> putStrLn $ printf "Error at %s : %s" (ppshow loc) err
                  return $ F.Unsafe (fst <$> errs)
     
-safe _      = return Safe 
+safe _      = return F.Safe 
 
 -------------------------------------------------------------------------------
 -- | Type Check Environment ---------------------------------------------------
@@ -63,113 +68,116 @@ safe _      = return Safe
 --   We define this alias as the "output" type for typechecking any entity
 --   that can create or affect binders (e.g. @VarDecl@ or @Statement@)
 --   @Nothing@ means if we definitely hits a "return" 
---   @Just Γ'@ means environment extended with statement binders
+--   @Just γ'@ means environment extended with statement binders
 
-type TCEnv = Maybe (Env Type)
+type TCEnv = Maybe (F.SEnv Type)
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
 
 tcNano     :: Nano -> TCM () 
-tcNano pgm = sequence_ (tcFun Γ0) fs
+tcNano pgm = forM_ fs $ tcFun γ0
   where
-    Γ0     = env pgm
+    γ0     = env pgm
     Src fs = code pgm
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-tcFun    :: Env Type -> FunctionStatement -> TCM ()
-tcFun Γ (FunctionStmt l f xs body) 
-  = case getFunTy Γ f of 
-      Just (_,xts,t) -> do let Γ' = envAdds Γ xts
-                           _     <- tcSetReturn t
-                           z     <- tcStmts Γ' body
-                           when (isJust z) $ tcError (errorNoReturn f l)
-      Nothing        -> tcError $ errorNonFunction f l 
+tcFun    :: F.SEnv Type -> FunctionStatement -> TCM ()
+tcFun γ (FunctionStmt l f xs body) 
+  = do z <- funEnv l γ f xs
+       forM_ (maybeToList z) $ \(t, γ') ->
+         do _  <- setReturn t
+            ex <- tcStmts γ' body
+            maybe (return ()) (\_ -> assertTy l f t tVoid) ex 
 
-getFunTy Γ f = bkFun =<< envFind f Γ
-
+funEnv l γ f xs
+  = case bkFun =<< envFind f γ of
+      Nothing       -> logError Nothing l $ errorNonFunction f
+      Just (_,ts,t) -> if length xs /= length ts 
+                         then logError Nothing l $ errorArgMismatch  
+                         else return $ Just (t, L.foldl' (\γ (x,t) -> envAdd x t γ) γ $ zip xs ts)
 
 --------------------------------------------------------------------------------
-tcSeq               :: (a -> TCM TCEnv) -> Env Type -> [a] -> TCM TCEnv
+tcSeq :: (F.SEnv Type -> a -> TCM TCEnv) -> F.SEnv Type -> [a] -> TCM TCEnv
 --------------------------------------------------------------------------------
 
 tcSeq tc            = foldM step . Just 
   where 
     step Nothing _  = return Nothing
-    step (Just Γ) x = tc Γ x
+    step (Just γ) x = tc γ x
 
 --------------------------------------------------------------------------------
-tcStmts :: Env Type -> [Statement SourcePos]  -> TCM TCEnv
+tcStmts :: F.SEnv Type -> [Statement SourcePos]  -> TCM TCEnv
 --------------------------------------------------------------------------------
 
 tcStmts = tcSeq tcStmt
 
 -------------------------------------------------------------------------------
-tcStmt :: Env Type -> Statement SourcePos  -> TCM TCEnv  
+tcStmt :: F.SEnv Type -> Statement SourcePos  -> TCM TCEnv  
 -------------------------------------------------------------------------------
 
 -- skip
-tcStmt Γ (EmptyStmt _) 
-  = return $ Just Γ
+tcStmt γ (EmptyStmt _) 
+  = return $ Just γ
 
 -- x = e
-tcStmt Γ (ExprStmt _ (AssignExpr l OpAssign x e))   
-  = tcAsgn Γ l x e
+tcStmt γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))   
+  = tcAsgn γ l (Id lx x) e
 
 -- s1;s2;...;sn
-tcStmt Γ (BlockStmt _ stmts) 
-  = tcStmts Γ stmts 
+tcStmt γ (BlockStmt _ stmts) 
+  = tcStmts γ stmts 
 
 -- if b { s1 }
-tcStmt Γ (IfSingleStmt l b s)
-  = tcStmt Γ (IfStmt l b s (EmptyStmt l))
+tcStmt γ (IfSingleStmt l b s)
+  = tcStmt γ (IfStmt l b s (EmptyStmt l))
 
 -- if b { s1 } else { s2 }
-tcStmt Γ (IfStmt l e s1 s2)
-  = do t     <- tcExpr Γ e
+tcStmt γ (IfStmt l e s1 s2)
+  = do t     <- tcExpr γ e
        assertTy l e t tBool
-       Γ1    <- tcStmt Γ s1
-       Γ2    <- tcStmt Γ s2
-       return $ envJoin l Γ1 Γ2
+       γ1    <- tcStmt γ s1
+       γ2    <- tcStmt γ s2
+       envJoin l γ1 γ2
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
-tcStmt Γ (VarDeclStmt _ ds)
-  = tcSeq tcVarDecl Γ ds
+tcStmt γ (VarDeclStmt _ ds)
+  = tcSeq tcVarDecl γ ds
 
 -- return e 
-tcStmt Γ (ReturnStmt l (Just e)) 
-  = do t  <- tcExpr Γ e 
-       t' <- tcGetReturn 
+tcStmt γ (ReturnStmt l (Just e)) 
+  = do t  <- tcExpr γ e 
+       t' <- getReturn 
        assertTy l e t t' 
        return Nothing
 
 -- OTHER (Not handled)
-tcStmt Γ s 
+tcStmt γ s 
   = convertError "tcStmt" s
 
 -------------------------------------------------------------------------------
-tcVarDecl :: Env Type -> VarDecl SourcePos -> TCM TCEnv  
+tcVarDecl :: F.SEnv Type -> VarDecl SourcePos -> TCM TCEnv  
 -------------------------------------------------------------------------------
 
-tcVarDecl Γ (VarDecl l x (Just e)) 
-  = tcAsgn Γ l x e  
-tcVarDecl Γ (VarDecl l x Nothing)  
-  = return $ Just Γ
+tcVarDecl γ (VarDecl l x (Just e)) 
+  = tcAsgn γ l x e  
+tcVarDecl γ (VarDecl l x Nothing)  
+  = return $ Just γ
 
 ------------------------------------------------------------------------------------
-tcAsgn :: Env Type -> SourcePos -> Id SourcePos -> Expression SourcePos -> TCM TCEnv
+tcAsgn :: F.SEnv Type -> SourcePos -> Id SourcePos -> Expression SourcePos -> TCM TCEnv
 ------------------------------------------------------------------------------------
 
-tcAsgn Γ l x e 
-  = do t <- tcExpr Γ e
-       return $ Just $ envAdd Γ (x, t) 
+tcAsgn γ l x e 
+  = do t <- tcExpr γ e
+       return $ Just $ envAdd x t γ
 
 -------------------------------------------------------------------------------
-tcExpr :: Env Type -> Expression SourcePos -> TCM Type
+tcExpr :: F.SEnv Type -> Expression SourcePos -> TCM Type
 -------------------------------------------------------------------------------
 
 tcExpr _ (IntLit _ _)               
@@ -178,108 +186,73 @@ tcExpr _ (IntLit _ _)
 tcExpr _ (BoolLit _ _)
   = return tBool
 
-tcExpr Γ (VarRef l x)               
-  = case envFind x Γ of 
+tcExpr γ (VarRef l x)               
+  = case envFind x γ of 
       Just t  -> return t
-      Nothing -> tcError $ errorUnboundId x l
+      Nothing -> logError tErr l $ errorUnboundId x
 
-tcExpr Γ (PrefixExpr l o e)
-  = tcCall Γ l (prefixOpTy o) [e]
+tcExpr γ (PrefixExpr l o e)
+  = tcCall γ l o (prefixOpTy o) [e]
 
-tcExpr Γ (InfixExpr l o e1 e2)        
-  = tcCall Γ l (infixOpTy o) [e1, e2] 
+tcExpr γ (InfixExpr l o e1 e2)        
+  = tcCall γ l o (infixOpTy o) [e1, e2] 
 
-tcExpr Γ (CallExpr l (VarRef _ (Id _ f)) es)
-  = case envFind f Γ of 
-      Just t -> ... 
-      Nothing -> tcError $ errorUnboundId f l  
-      tcCall Γ l (
+tcExpr γ (CallExpr l (VarRef _ f@(Id _ _)) es)
+  = case envFind f γ of 
+      Just t  -> tcCall γ l f t es
+      Nothing -> logError tErr l $ errorUnboundId f
 
-tcExpr Γ e 
+tcExpr γ e 
   = convertError "tcExpr" e
 
 ----------------------------------------------------------------------------------
-tcCall :: Env Type -> SourcePos -> Type -> [Expression SourcePos] -> TCM Type
+-- tcCall :: F.SEnv Type -> SourcePos -> Type -> [Expression SourcePos] -> TCM Type
 ----------------------------------------------------------------------------------
 
-tcCall Γ l ft args 
-  = error "TBD: tcCall"
+tcCall γ l z ft es 
+  = case bkFun ft of
+     Nothing           -> logError tErr l $ errorNonFunction z 
+     Just (αs, ts, t') -> maybe tErr (\_ -> t') <$> unifyArgs γ l () es ts
+
+unifyArgs γ l          = go 
+  where 
+    go θ [] []         = return $ Just θ
+    go θ _  []         = logError Nothing l errorArgMismatch 
+    go θ [] _          = logError Nothing l errorArgMismatch 
+    go θ (e:es) (t:ts) = do te <- tcExpr γ e
+                            if t == te 
+                              then go θ es ts 
+                              else logError Nothing l $ errorWrongType e t te
 
 ----------------------------------------------------------------------------------
--- envJoin :: (Eq a) => Env a -> Env a -> TCM (Env a) 
+envJoin :: SourcePos -> TCEnv -> TCEnv -> TCM TCEnv 
 ----------------------------------------------------------------------------------
 
-envJoin l Γ1 Γ2  = forM_ ytts err >> return (envFromList zts)  
+envJoin _ Nothing x           = return x
+envJoin _ x Nothing           = return x
+envJoin l (Just γ1) (Just γ2) = envJoin' l γ1 γ2 
+
+envJoin' l γ1 γ2  = forM_ ytts err >> return (Just (F.fromListSEnv zts))  
   where 
     zts          = [(x,t)    | (x,t,t') <- xtts, t == t']
     ytts         = [(y,t,t') | (y,t,t') <- xtts, t /= t']
-    xtts         = [(x,t,t') | (x,t)    <- envToList Γ1, t' <- maybeToList (envFind x Γ2)]
-    err (y,t,t') = tcError $ errorJoin l y t t'
-
-----------------------------------------------------------------------------------
--- | Base Types ------------------------------------------------------------------
-----------------------------------------------------------------------------------
-
-tInt  = TApp TInt  [] ()
-tBool = TApp TBool [] ()
-tVoid = TApp TVoid [] ()
-
-infixOpTy              :: InfixOp -> Type
-infixOpTy OpLT         = TFun [tInt, tInt]   tBool  
-infixOpTy OpLEq        = TFun [tInt, tInt]   tBool
-infixOpTy OpGT         = TFun [tInt, tInt]   tBool
-infixOpTy OpGEq        = TFun [tInt, tInt]   tBool
-infixOpTy OpEq         = TFun [tInt, tInt]   tBool
-infixOpTy OpNEq        = TFun [tInt, tInt]   tBool
-infixOpTy OpLAnd       = TFun [tBool, tBool] tBool 
-infixOpTy OpLOr        = TFun [tBool, tBool] tBool
-infixOpTy OpSub        = TFun [tInt, tInt]   tInt 
-infixOpTy OpAdd        = TFun [tInt, tInt]   tInt 
-infixOpTy OpMul        = TFun [tInt, tInt]   tInt 
-infixOpTy OpDiv        = TFun [tInt, tInt]   tInt 
-infixOpTy OpMod        = TFun [tInt, tInt]   tInt  
-infixOpTy o            = convertError "infixOpTy" o
-
-prefixOpTy             :: PrefixOp -> Type
-prefixOpTy PrefixMinus = TFun [tInt] tInt
-prefixOpTy PrefixLNot  = TFun [tBool] tBool
-prefixOpTy o           = convertError "prefixOpTy" o
-
--------------------------------------------------------------------------------
--- | Typechecking monad -------------------------------------------------------
--------------------------------------------------------------------------------
-
-data TCM a
-
-tcSetReturn :: Type -> TCM ()
-tcSetReturn = error "TODO: tcSetReturn"
-
-tcGetReturn :: TCM Type 
-tcSetReturn = error "TODO: tcGetReturn"
-
-tcError :: Doc -> TCM ()
-tcError = error "TODO: tcError" 
-
-tcExecute :: TCM a -> Either [(SourcePos, Doc)] a
-tcExecute = error "TODO: tcExecute" 
+    xtts         = [(x,t,t') | (x,t)    <- F.toListSEnv γ1, t' <- maybeToList (F.lookupSEnv x γ2)]
+    err (y,t,t') = logError () l $ errorJoin y t t'
 
 ---------------------------------------------------------------------------------------
 -- | Error Messages -------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-assertTy l e t t'       = when (t /= t') $ tcError $ errorWrongType l e t t'
+assertTy l e t t'     = when (t /= t') $ logError () l $ errorWrongType e t t'
 
-errorNonFunction f l    = text $ printf "Bad function type for %s defined at %s" 
-                                   (showpp f) (showpp l)  
-errorNoReturn f l       = text $ printf "Function %s defined at %s does not return" 
-                                   (showpp f) (showpp l) 
-errorUnboundId x l      = text $ printf "Identifier %s unbound at %s" 
-                                   (showpp x) (showpp l)
-errorWrongType l e t t' = text $ printf "Unexpected type for %s :: %s expected %s at %s" 
-                                   (showpp e) (showpp t) (showpp t') (showpp l)
-errorJoin l x t t'      = text $ printf "Cannot join %s :: %s expected %s at %s" 
-                                   (showpp x) (showpp t) (showpp t') (showpp l)
+errorArgMismatch      = printf "Mismatch in Number of Args in Call" 
+errorNonFunction f    = printf "Non-function type for %s" (ppshow f)  
+errorUnboundId x      = printf "Identifier %s unbound" (ppshow x) 
+errorWrongType e t t' = printf "Unexpected type for %s :: %s expected %s" (ppshow e) (ppshow t) (ppshow t')
+errorJoin x t t'      = printf "Cannot join %s :: %s expected %s" (ppshow x) (ppshow t) (ppshow t') 
+
+ppshow = render . pp
 
 
-
-
+envFind = F.lookupSEnv . F.symbol
+envAdd  = F.insertSEnv . F.symbol

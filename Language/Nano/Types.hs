@@ -36,15 +36,15 @@ module Language.Nano.Types (
   ) where
 
 import           Control.Applicative          ((<$>))
-import qualified Data.HashMap.Strict as M
+-- import qualified Data.HashMap.Strict as M
 import           Data.Hashable
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.Monoid                        (Monoid (..))
-import           Data.Maybe                         (catMaybes, fromMaybe)
+import           Data.Maybe                         (catMaybes)
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
-import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
+-- import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
 
 import qualified Language.Fixpoint.Types as F
 
@@ -179,7 +179,7 @@ returnId   :: a -> Id a
 returnId x = Id x returnName 
 
 returnSymbol :: F.Symbol
-returnSymbol = F.stringSymbol resultName 
+returnSymbol = F.stringSymbol returnName
 
 isSpecification :: Statement a -> Bool
 isSpecification s  = not $ null $ catMaybes $ ($ s) <$> specs 

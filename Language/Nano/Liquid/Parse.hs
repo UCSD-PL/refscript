@@ -10,12 +10,12 @@ import           Control.Monad
 import           Text.Parsec
 import           Text.Parsec.String hiding (parseFromFile)
 import qualified Text.Parsec.Token as Token
-import qualified Data.HashMap.Strict as M
+-- import qualified Data.HashMap.Strict as M
 
 import           Control.Applicative ((<$>), (<*), (<*>))
-import           Data.Char (toLower, isLower, isSpace, isAlpha)
-import           Data.List (partition)
-import           Data.Monoid (mempty)
+-- import           Data.Char (toLower, isLower, isSpace, isAlpha)
+-- import           Data.List (partition)
+-- import           Data.Monoid (mempty)
 
 import           Language.Fixpoint.Misc (mapSnd)
 import           Language.Fixpoint.Types
@@ -23,12 +23,12 @@ import           Language.Fixpoint.Parse
 
 import           Language.Nano.Types
 import           Language.Nano.Liquid.Types
-import qualified Language.ECMAScript3.Lexer as Lexer
+-- import qualified Language.ECMAScript3.Lexer as Lexer
 import           Language.ECMAScript3.Syntax
 
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer
-angles     = Token.angles     lexer
+-- angles     = Token.angles     lexer
 
 ----------------------------------------------------------------------------------
 -- | Type Binders ----------------------------------------------------------------
@@ -36,7 +36,7 @@ angles     = Token.angles     lexer
  
 specP = mkSpec <$> specWraps idBindP 
   where 
-    mkSpec = Spec . envFromList . map (mapSnd toType) 
+    mkSpec = Spec . map (mapSnd toType) 
 
 idBindP :: Parser (Id SourcePos, RefType)
 idBindP = xyP identifierP dcolon bareTypeP

@@ -52,5 +52,6 @@ Library
                        Language.Nano.ESC.VCMonad, 
                        Language.Nano.ESC.ESC,
                        Language.Nano.Liquid.Types,
+                       Language.Nano.Liquid.TCMonad,
                        Language.Nano.Liquid.Parse,
                        Language.Nano.Liquid.Liquid

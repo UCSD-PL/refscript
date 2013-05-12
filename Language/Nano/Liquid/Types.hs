@@ -10,16 +10,17 @@ module Language.Nano.Liquid.Types (
     Nano   
   , Spec   (..)
   , Source (..)
+  , FunctionStatement
   , mkNano
 
   -- * Environments 
-  , Env    (..)
-  , envFromList 
-  , envToList
-  , envEmpty 
-  , envAdd 
-  , envAdds
-  , envFind
+  -- , Env    (..)
+  -- , envFromList 
+  -- , envToList
+  -- , envEmpty 
+  -- , envAdd 
+  -- , envAdds
+  -- , envFind
 
   -- * Accessors
   , code
@@ -34,10 +35,20 @@ module Language.Nano.Liquid.Types (
   , bkFun
 
   -- * Regular Types
-  , Type (..)
+  , Type
   , TVar (..)
   , TCon (..)
+  , TBody (..)
 
+  -- * Primitive Types
+  , tInt
+  , tBool
+  , tVoid
+  , tErr
+
+  -- * Operator Types
+  , infixOpTy
+  , prefixOpTy 
   ) where 
 
 import           Data.Ord                       (comparing) 
@@ -50,14 +61,18 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Types
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
-import           Text.Parsec
+import           Language.Fixpoint.PrettyPrint
+-- import           Text.Parsec
 import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative 
 import           Control.Monad
 
 -- | Type Variables
 newtype TVar = TV (Located F.Symbol)
-              
+
+instance Eq TVar where
+  (TV a) == (TV b) = val a == val b
+
 instance Show TVar where 
   show (TV a) = show (val a)
 
@@ -83,7 +98,7 @@ data RType r
   | TVar TVar r 
   | TFun [RType r] (RType r)
   | TAll TVar (RType r)
-    deriving (Show, Functor)
+    deriving (Eq, Show, Functor)
 
 -- | Standard Types
 type Type    = RType ()
@@ -100,14 +115,14 @@ toType = fmap (const ())
 
 
 bkFun :: RType a -> Maybe ([TVar], [RType a], RType a)
-bkFun t = do (αs, t')   <- bkAll t
-             (xts, t'') <- bkArr t'
+bkFun t = do let (αs, t') = bkAll t
+             (xts, t'')  <- bkArr t'
              return        (αs, xts, t'')
          
 bkArr (TFun xts t) = Just (xts, t)
 bkArr _            = Nothing
 
-bkAll                :: RType a -> ([RVar], RType a)
+bkAll                :: RType a -> ([TVar], RType a)
 bkAll t              = go [] t
   where 
     go αs (TAll α t) = go (α : αs) t
@@ -118,12 +133,11 @@ bkAll t              = go [] t
 ---------------------------------------------------------------------------------
 
 data Nano = Nano { code :: !Source 
-                 , env  :: !(Env Type)
+                 , env  :: !(F.SEnv Type)
                  }
 
 -- | Type Specification for function binders
-data Spec = Spec { sigs :: !(Env Type) }
-            deriving (Show)
+data Spec = Spec { sigs :: [(Id SourcePos, Type)] }
 
 {-@ measure isFunctionStatement :: (Statement SourcePos) -> Prop 
     isFunctionStatement (FunctionStmt {}) = true
@@ -143,26 +157,28 @@ instance PP Nano where
     $+$ text "********************** SPEC **********************"
     $+$ pp env
 
+instance PP F.Symbol where 
+  pp = pprint
+
+instance PP t => PP (F.SEnv t) where
+  pp = vcat . (ppBind <$>) . F.toListSEnv
+
+ppBind (x, t) = pprint x <+> dcolon <+> pp t
+
 
 --------------------------------------------------------------------------
 -- | Environments
 --------------------------------------------------------------------------
 
-newtype Env t       = TE (M.HashMap (Id SourcePos) t)
-                      deriving (Show)
-
-envToList (TE m)    = M.toList m
-envFromList         = TE . M.fromList 
-envEmpty            = envFromList []
-envAdd (TE m) (x,t) = TE (M.insert x t m)
-envAdds Γ xts       = foldl' envAdd Γ xts
-envFind x (TE m)    = M.lookup x m
-envMem x (TE m)     = M.member x m
-
-instance PP t => PP (Env t) where 
-  pp = vcat . (ppBind <$>) . envToList
-
-ppBind (x, t) = pp x <+> dcolon <+> pp t
+-- newtype Env t       = TE (M.HashMap (Id SourcePos) t)
+--                       deriving (Show)
+-- envToList (TE m)    = M.toList m
+-- envFromList         = TE . M.fromList 
+-- envEmpty            = envFromList []
+-- envAdd (TE m) (x,t) = TE (M.insert x t m)
+-- envAdds γ xts       = L.foldl' envAdd γ xts
+-- envFind x (TE m)    = M.lookup x m
+-- envMem x (TE m)     = M.member x m
 
 --------------------------------------------------------------------------
 -- | Combining Source and Spec into Nano ---------------------------------
@@ -202,12 +218,13 @@ getFunctionIds stmts = everything (++) ([] `mkQ` fromFunction) stmts
 -- | Building Type Environments ---------------------------------------
 -----------------------------------------------------------------------
 
-mkEnv         :: [Id SourcePos] -> Env Type -> Either Doc (Env Type) 
-mkEnv ids env = envFromList <$> zipWithM joinName ids' its'
+mkEnv         :: [Id SourcePos] -> [(Id SourcePos, Type)] -> Either Doc (F.SEnv Type) 
+mkEnv ids its = mkE <$> zipWithM joinName ids' its'
   where
     ids' = orderIds idName (comparing idLoc) ids
     its' = orderIds (idName . fst) (comparing (idLoc . fst)) its 
-    its  = envToList env
+    mkE  = F.fromListSEnv . fmap (mapFst F.symbol)
+
 
 joinName (name, i) (name', (_,t)) 
   | name == name' = Right (i, t)
@@ -219,13 +236,47 @@ orderIds fn fl = concatMap (\(x,ys) -> (x,) <$> ys)
                . (L.sortBy fl <$>) 
                . groupMap fn 
 
+-----------------------------------------------------------------------
+-- | Primitive / Base Types -------------------------------------------
+-----------------------------------------------------------------------
 
--- ids ==> [(String, [Id a])] ==> [(String, Id a)]
--- env ==> [(String, [Type])] ==> [(String, Type)] 
--- 
--- safeZipWith 
--- (name, id) .... 
--- (name, t ) ....
+tInt   = TApp TInt  [] ()
+tBool  = TApp TBool [] ()
+tVoid  = TApp TVoid [] ()
+tErr   = tVoid
+
+-----------------------------------------------------------------------
+-- | Operator Types Types ---------------------------------------------
+-----------------------------------------------------------------------
+
+-----------------------------------------------------------------------
+infixOpTy              :: InfixOp -> Type
+-----------------------------------------------------------------------
+
+infixOpTy OpLT         = TFun [tInt, tInt]   tBool  
+infixOpTy OpLEq        = TFun [tInt, tInt]   tBool
+infixOpTy OpGT         = TFun [tInt, tInt]   tBool
+infixOpTy OpGEq        = TFun [tInt, tInt]   tBool
+infixOpTy OpEq         = TFun [tInt, tInt]   tBool
+infixOpTy OpNEq        = TFun [tInt, tInt]   tBool
+infixOpTy OpLAnd       = TFun [tBool, tBool] tBool 
+infixOpTy OpLOr        = TFun [tBool, tBool] tBool
+infixOpTy OpSub        = TFun [tInt, tInt]   tInt 
+infixOpTy OpAdd        = TFun [tInt, tInt]   tInt 
+infixOpTy OpMul        = TFun [tInt, tInt]   tInt 
+infixOpTy OpDiv        = TFun [tInt, tInt]   tInt 
+infixOpTy OpMod        = TFun [tInt, tInt]   tInt  
+infixOpTy o            = convertError "infixOpTy" o
+
+-----------------------------------------------------------------------
+prefixOpTy             :: PrefixOp -> Type
+-----------------------------------------------------------------------
+
+prefixOpTy PrefixMinus = TFun [tInt] tInt
+prefixOpTy PrefixLNot  = TFun [tBool] tBool
+prefixOpTy o           = convertError "prefixOpTy" o
+
+
 
 
 

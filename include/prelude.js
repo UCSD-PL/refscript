@@ -1,4 +1,9 @@
 /*@ assert :: (bool) => void */ 
+function assume(p){
+  return;
+}
+
+/*@ assert :: (bool) => void */ 
 function assert(p){
   return;
 }

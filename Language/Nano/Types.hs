@@ -14,7 +14,8 @@ module Language.Nano.Types (
 
   -- * Located Values
   , Located (..) 
-  
+  , IsLocated (..)
+
   -- * Accessing Spec Annotations
   , getSpec
   , getRequires
@@ -72,13 +73,26 @@ data Located a
         , val :: a
         }
   
+-- | `IsLocated` is a predicate that describes values for which we have 
+--    a SourcePos
 
+class IsLocated a where 
+  srcPos :: a -> SourcePos 
+
+instance IsLocated (Id SourcePos) where 
+  srcPos (Id l _) = l
+
+instance IsLocated (Located a) where 
+  srcPos = loc
+
+instance Eq a => Eq (Located a) where 
+  x == y = val x == val y
 
 ---------------------------------------------------------------------
 -- | Wrappers around `Language.ECMAScript3.Syntax` ------------------
 ---------------------------------------------------------------------
 
--- | `isNano` is a predicate that describes the **syntactic subset** 
+-- | `IsNano` is a predicate that describes the **syntactic subset** 
 --   of ECMAScript3 that comprises `Nano`.
 
 class IsNano a where 
@@ -318,7 +332,8 @@ instance PP F.Pred where
 instance PP (Id a) where
   pp (Id _ x) = text x
 
-
+instance PP a => PP (Located a) where
+  pp x = pp (val x) <+> text "at:" <+> pp (loc x)
 --------------------------------------------------------------------------------
 
 

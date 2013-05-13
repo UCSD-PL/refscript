@@ -5,7 +5,10 @@ import           Control.Monad
 import qualified Data.List as L
 import           Data.Monoid
 import           Data.Maybe                         (isJust, maybeToList)
+import           Language.Nano.Files
+import           Language.Nano.Errors
 import           Language.Nano.Types
+
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Parse 
 import           Language.Nano.Liquid.TCMonad
@@ -45,7 +48,8 @@ parseNanoFromFile :: FilePath -> IO Nano
 parseNanoFromFile f 
   = do src   <- parseJavaScriptFromFile f
        spec  <- parseSpecFromFile f
-       return $ either err id (mkNano src spec)
+       ispec <- parseSpecFromFile =<< getPreludePath
+       return $ either err id (mkNano src (spec `mappend` ispec))
     where 
        err m  = errortext $ text ("Invalid Input file: " ++ f) $+$ m
 
@@ -70,7 +74,7 @@ safe _      = return F.Safe
 --   @Nothing@ means if we definitely hits a "return" 
 --   @Just γ'@ means environment extended with statement binders
 
-type TCEnv = Maybe (F.SEnv Type)
+type TCEnv = Maybe (Env Type)
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------
@@ -86,7 +90,7 @@ tcNano pgm = forM_ fs $ tcFun γ0
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-tcFun    :: F.SEnv Type -> FunctionStatement -> TCM ()
+tcFun    :: Env Type -> FunctionStatement -> TCM ()
 tcFun γ (FunctionStmt l f xs body) 
   = do z <- funEnv l γ f xs
        forM_ (maybeToList z) $ \(t, γ') ->
@@ -95,14 +99,14 @@ tcFun γ (FunctionStmt l f xs body)
             maybe (return ()) (\_ -> assertTy l f t tVoid) ex 
 
 funEnv l γ f xs
-  = case bkFun =<< envFind f γ of
+  = case bkFun =<< envFindTy f γ of
       Nothing       -> logError Nothing l $ errorNonFunction f
       Just (_,ts,t) -> if length xs /= length ts 
                          then logError Nothing l $ errorArgMismatch  
                          else return $ Just (t, L.foldl' (\γ (x,t) -> envAdd x t γ) γ $ zip xs ts)
 
 --------------------------------------------------------------------------------
-tcSeq :: (F.SEnv Type -> a -> TCM TCEnv) -> F.SEnv Type -> [a] -> TCM TCEnv
+tcSeq :: (Env Type -> a -> TCM TCEnv) -> Env Type -> [a] -> TCM TCEnv
 --------------------------------------------------------------------------------
 
 tcSeq tc            = foldM step . Just 
@@ -111,13 +115,13 @@ tcSeq tc            = foldM step . Just
     step (Just γ) x = tc γ x
 
 --------------------------------------------------------------------------------
-tcStmts :: F.SEnv Type -> [Statement SourcePos]  -> TCM TCEnv
+tcStmts :: Env Type -> [Statement SourcePos]  -> TCM TCEnv
 --------------------------------------------------------------------------------
 
 tcStmts = tcSeq tcStmt
 
 -------------------------------------------------------------------------------
-tcStmt :: F.SEnv Type -> Statement SourcePos  -> TCM TCEnv  
+tcStmt :: Env Type -> Statement SourcePos  -> TCM TCEnv  
 -------------------------------------------------------------------------------
 
 -- skip
@@ -172,7 +176,7 @@ tcStmt γ s
   = convertError "tcStmt" s
 
 -------------------------------------------------------------------------------
-tcVarDecl :: F.SEnv Type -> VarDecl SourcePos -> TCM TCEnv  
+tcVarDecl :: Env Type -> VarDecl SourcePos -> TCM TCEnv  
 -------------------------------------------------------------------------------
 
 tcVarDecl γ (VarDecl l x (Just e)) 
@@ -181,7 +185,7 @@ tcVarDecl γ (VarDecl l x Nothing)
   = return $ Just γ
 
 ------------------------------------------------------------------------------------
-tcAsgn :: F.SEnv Type -> SourcePos -> Id SourcePos -> Expression SourcePos -> TCM TCEnv
+tcAsgn :: Env Type -> SourcePos -> Id SourcePos -> Expression SourcePos -> TCM TCEnv
 ------------------------------------------------------------------------------------
 
 tcAsgn γ l x e 
@@ -189,7 +193,7 @@ tcAsgn γ l x e
        return $ Just $ envAdd x t γ
 
 -------------------------------------------------------------------------------
-tcExpr :: F.SEnv Type -> Expression SourcePos -> TCM Type
+tcExpr :: Env Type -> Expression SourcePos -> TCM Type
 -------------------------------------------------------------------------------
 
 tcExpr _ (IntLit _ _)               
@@ -199,7 +203,7 @@ tcExpr _ (BoolLit _ _)
   = return tBool
 
 tcExpr γ (VarRef l x)               
-  = case envFind x γ of 
+  = case envFindTy x γ of 
       Just t  -> return t
       Nothing -> logError tErr l $ errorUnboundId x
 
@@ -216,7 +220,7 @@ tcExpr γ e
   = convertError "tcExpr" e
 
 ----------------------------------------------------------------------------------
--- tcCall :: F.SEnv Type -> SourcePos -> Type -> [Expression SourcePos] -> TCM Type
+-- tcCall :: Env Type -> SourcePos -> Type -> [Expression SourcePos] -> TCM Type
 ----------------------------------------------------------------------------------
 
 tcCall γ l z es ft 
@@ -242,11 +246,11 @@ envJoin _ Nothing x           = return x
 envJoin _ x Nothing           = return x
 envJoin l (Just γ1) (Just γ2) = envJoin' l γ1 γ2 
 
-envJoin' l γ1 γ2  = forM_ ytts err >> return (Just (F.fromListSEnv zts))  
+envJoin' l γ1 γ2  = forM_ ytts err >> return (Just (envFromList zts))  
   where 
     zts          = [(x,t)    | (x,t,t') <- xtts, t == t']
     ytts         = [(y,t,t') | (y,t,t') <- xtts, t /= t']
-    xtts         = [(x,t,t') | (x,t)    <- F.toListSEnv γ1, t' <- maybeToList (F.lookupSEnv x γ2)]
+    xtts         = [(x,t,t') | (x,t)    <- envToList γ1, t' <- maybeToList (F.lookupSEnv x γ2)]
     err (y,t,t') = logError () l $ errorJoin y t t'
 
 ---------------------------------------------------------------------------------------
@@ -255,14 +259,5 @@ envJoin' l γ1 γ2  = forM_ ytts err >> return (Just (F.fromListSEnv zts))
 
 assertTy l e t t'     = when (t /= t') $ logError () l $ errorWrongType e t t'
 
-errorArgMismatch      = printf "Mismatch in Number of Args in Call" 
-errorNonFunction f    = printf "Non-function type for %s" (ppshow f)  
-errorUnboundId x      = printf "Identifier %s unbound" (ppshow x) 
-errorWrongType e t t' = printf "Unexpected type for %s :: %s expected %s" (ppshow e) (ppshow t) (ppshow t')
-errorJoin x t t'      = printf "Cannot join %s :: %s expected %s" (ppshow x) (ppshow t) (ppshow t') 
-
-ppshow = render . pp
 
 
-envFind = F.lookupSEnv . F.symbol
-envAdd  = F.insertSEnv . F.symbol

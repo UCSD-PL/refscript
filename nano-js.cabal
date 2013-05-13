@@ -1,13 +1,11 @@
 name:                nano-js
 version:             0.1.0.0
 synopsis:            Small Language for Implementing Verification Algorithms
--- description:         
 homepage:            https://github.com/UCSD-PL/nano-js
 license:             BSD3
 license-file:        LICENSE
 author:              Ranjit Jhala
 maintainer:          jhala@cs.ucsd.edu
--- copyright:           
 category:            Language
 build-type:          Simple
 cabal-version:       >=1.8
@@ -25,6 +23,8 @@ executable nanojs
                        NoMonomorphismRestriction,
                        ScopedTypeVariables,
                        BangPatterns
+
+  data-files:          include/prelude.js
 
   ghc-options:         -W -O2  
   Main-is:             Nano.hs
@@ -44,9 +44,11 @@ Library
                        BangPatterns
 
   ghc-options:         -W -O2  
- 
    
-  Exposed-Modules:     Language.Nano.Types,
+  Data-Files:          include/prelude.js
+  
+  Exposed-Modules:     Language.Nano.Errors,
+                       Language.Nano.Types,
                        Language.Nano.CmdLine,
                        Language.Nano.ESC.Types,
                        Language.Nano.ESC.VCMonad, 
@@ -54,4 +56,5 @@ Library
                        Language.Nano.Liquid.Types,
                        Language.Nano.Liquid.TCMonad,
                        Language.Nano.Liquid.Parse,
-                       Language.Nano.Liquid.Liquid
+                       Language.Nano.Liquid.Liquid,
+                       Language.Nano.Files

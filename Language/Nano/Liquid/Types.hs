@@ -14,13 +14,11 @@ module Language.Nano.Liquid.Types (
   , mkNano
 
   -- * Environments 
-  -- , Env    (..)
-  -- , envFromList 
-  -- , envToList
-  -- , envEmpty 
-  -- , envAdd 
-  -- , envAdds
-  -- , envFind
+  , Env    
+  , envFromList 
+  , envToList
+  , envAdd 
+  , envFindTy
 
   -- * Accessors
   , code
@@ -51,6 +49,7 @@ module Language.Nano.Liquid.Types (
   , prefixOpTy 
   ) where 
 
+import           Data.Monoid
 import           Data.Ord                       (comparing) 
 import qualified Data.List               as L
 import           Data.Generics.Aliases
@@ -59,13 +58,14 @@ import qualified Data.HashMap.Strict     as M
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Types
+import           Language.Nano.Errors
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
--- import           Text.Parsec
 import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative 
 import           Control.Monad
+import           Control.Monad.Error
 
 -- | Type Variables
 newtype TVar = TV (Located F.Symbol)
@@ -133,7 +133,7 @@ bkAll t              = go [] t
 ---------------------------------------------------------------------------------
 
 data Nano = Nano { code :: !Source 
-                 , env  :: !(F.SEnv Type)
+                 , env  :: !(Env Type)
                  }
 
 -- | Type Specification for function binders
@@ -168,12 +168,15 @@ instance PP t => PP (F.SEnv t) where
 
 ppBind (x, t) = pprint x <+> dcolon <+> pp t
 
+instance Monoid Spec where 
+  mappend x y = Spec $ sigs x ++ sigs y
 
 --------------------------------------------------------------------------
 -- | Environments
 --------------------------------------------------------------------------
 
--- newtype Env t       = TE (M.HashMap (Id SourcePos) t)
+type Env t  = F.SEnv (Located t) 
+
 --                       deriving (Show)
 -- envToList (TE m)    = M.toList m
 -- envFromList         = TE . M.fromList 
@@ -183,6 +186,14 @@ ppBind (x, t) = pprint x <+> dcolon <+> pp t
 -- envFind x (TE m)    = M.lookup x m
 -- envMem x (TE m)     = M.member x m
 
+envFind    i γ = F.lookupSEnv (F.symbol i) γ
+envFindLoc i γ = fmap loc $ envFind i γ 
+envFindTy  i γ = fmap val $ envFind i γ
+envAdd   i t γ = F.insertSEnv (F.symbol i) (Loc (srcPos i) t) γ
+envFromList    = F.fromListSEnv
+envToList      = F.toListSEnv
+
+
 --------------------------------------------------------------------------
 -- | Combining Source and Spec into Nano ---------------------------------
 --------------------------------------------------------------------------
@@ -190,7 +201,7 @@ ppBind (x, t) = pprint x <+> dcolon <+> pp t
 mkNano  :: [Statement SourcePos] -> Spec -> Either Doc Nano 
 mkNano stmts spec 
   = do src   <- Src <$> mapM checkFun stmts
-       env   <- mkEnv (getFunctionIds stmts) (sigs spec)
+       env   <- mkEnv {-(getFunctionIds stmts) -} (sigs spec)
        return $ Nano src env
 
 -- | Trivial Syntax Checking 
@@ -221,23 +232,35 @@ getFunctionIds stmts = everything (++) ([] `mkQ` fromFunction) stmts
 -- | Building Type Environments ---------------------------------------
 -----------------------------------------------------------------------
 
-mkEnv         :: [Id SourcePos] -> [(Id SourcePos, Type)] -> Either Doc (F.SEnv Type) 
-mkEnv ids its = mkE <$> zipWithM joinName ids' its'
-  where
-    ids' = orderIds idName (comparing idLoc) ids
-    its' = orderIds (idName . fst) (comparing (idLoc . fst)) its 
-    mkE  = F.fromListSEnv . fmap (mapFst F.symbol)
+mkEnv :: [(Id SourcePos, Type)] -> Either Doc (Env Type)
+mkEnv = foldM step F.emptySEnv 
+  where 
+    step γ (i, t) = case envFindLoc i γ of
+                      Nothing -> Right $ envAdd i t γ 
+                      Just l' -> Left  $ text $ errorDuplicate i (srcPos i) l'
 
 
-joinName (name, i) (name', (_,t)) 
-  | name == name' = Right (i, t)
-  | otherwise     = Left (text "Missing Type Specification: " <+> pp i) 
-
--- orderIds :: (Ord t, Hashable t) =>(a -> t) -> (a -> a -> Ordering) -> [a] -> [(t, a)]
-orderIds fn fl = concatMap (\(x,ys) -> (x,) <$> ys) 
-               . hashMapToAscList 
-               . (L.sortBy fl <$>) 
-               . groupMap fn 
+-- mkEnv         :: [Id SourcePos] -> [(Id SourcePos, Type)] -> Either Doc (F.SEnv Type) 
+-- mkEnv is its 
+--   | nI < nT   = mkE <$> zipWithM joinName is' its'
+--   | otherwise = Left (text "Missing Type Specifications!")  
+--   where
+--     is'       = orderIds idName (comparing idLoc) is
+--     its'      = orderIds (idName . fst) (comparing (idLoc . fst)) its 
+--     (fts,sts) = splitAt nI its 
+--     mkE       = F.fromListSEnv . fmap (mapFst F.symbol)
+--     nI        = length is
+--     nT        = length its 
+-- 
+-- joinName (name, i) (name', (_,t)) 
+--   | name == name' = Right (i, t)
+--   | otherwise     = Left (text "Missing Type Specification: " <+> pp i) 
+-- 
+-- -- orderIds :: (Ord t, Hashable t) =>(a -> t) -> (a -> a -> Ordering) -> [a] -> [(t, a)]
+-- orderIds fn fl = concatMap (\(x,ys) -> (x,) <$> ys) 
+--                . hashMapToAscList 
+--                . (L.sortBy fl <$>) 
+--                . groupMap fn 
 
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------

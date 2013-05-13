@@ -51,11 +51,10 @@ run: make test to see what to do next.
 0. Type Types 
 1. Parse Types 
 2. Vanilla Type Checker     
-    - Basic Int/Bool/Expr {------------------------ HEREHEREHEREHERE
-            >> grep "error " in Liquid.hs
+    - Basic Int/Bool/Expr 
+    - First-order Funs      {------------------------ HEREHEREHEREHERE
+        >> tests/typed/pos/abs.js
 
-            
-    - First-order Funs
     - Higher-Order Funs 
     - Polymorphism
     - Records
@@ -91,6 +90,27 @@ tests/typed/pos/*.js
         tail :: forall A. (xs:{v: List A | 0 < (len v)}) -> {v: List A | (len v) = (len xs) - 1 }
         null :: forall A. (xs:List A) -> {v: Bool | (Prop v) <=> ((len v) = 0) }
 
+Include
+-------
+
+Hack:
+    
+    - create file: include/prelude.js
+    - update parser
+    - update spec
+
+Proper:
+
+/*@ include "path/to/foo.js" @*/
+  
+  >> add to "Spec"
+  >> update parser
+  >> recursively traverse all files
+          
+          traverseFiles :: (FilePath -> IO [FilePath]) -> FilePath -> IO [FilePath]
+
+  >> read and CAT all files ?
+  >> run on unified file?
 
 
 

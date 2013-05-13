@@ -60,7 +60,8 @@ parseNanoFromFile f
 verifyNano  :: Nano -> IO (F.FixResult SourcePos)
 verifyNano  = either unsafe safe . execute . tcNano 
     
-unsafe errs = do forM_ errs $ \(loc, err) -> putStrLn $ printf "Error at %s : %s" (ppshow loc) err
+unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
+                 forM_ errs $ \(loc, err) -> putStrLn $ printf "Error at %s\n  %s\n" (ppshow loc) err
                  return $ F.Unsafe (fst <$> errs)
     
 safe _      = return F.Safe 
@@ -92,18 +93,22 @@ tcNano pgm = forM_ fs $ tcFun γ0
 
 tcFun    :: Env Type -> FunctionStatement -> TCM ()
 tcFun γ (FunctionStmt l f xs body) 
-  = do z <- funEnv l γ f xs
-       forM_ (maybeToList z) $ \(t, γ') ->
-         do _  <- setReturn t
-            ex <- tcStmts γ' body
-            maybe (return ()) (\_ -> assertTy l f t tVoid) ex 
+  = do p <- funEnv l γ f xs
+       case p of 
+         Nothing -> return ()
+         Just γ' -> do q <- tcStmts γ' body
+                       case q of
+                         Just _ -> assertTy l "Missing return" f tVoid (envFindReturn γ') 
+                         _      -> return ()
 
 funEnv l γ f xs
   = case bkFun =<< envFindTy f γ of
       Nothing       -> logError Nothing l $ errorNonFunction f
       Just (_,ts,t) -> if length xs /= length ts 
                          then logError Nothing l $ errorArgMismatch  
-                         else return $ Just (t, L.foldl' (\γ (x,t) -> envAdd x t γ) γ $ zip xs ts)
+                         else return $ Just $ L.foldl' (\γ (x,t) -> envAdd x t γ) γ' $ zip xs ts
+                       where 
+                         γ' = envAddReturn f t γ
 
 --------------------------------------------------------------------------------
 tcSeq :: (Env Type -> a -> TCM TCEnv) -> Env Type -> [a] -> TCM TCEnv
@@ -147,7 +152,7 @@ tcStmt γ (IfSingleStmt l b s)
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
   = do t     <- tcExpr γ e
-       assertTy l e t tBool
+       assertTy l "If condition" e t tBool
        γ1    <- tcStmt γ s1
        γ2    <- tcStmt γ s2
        envJoin l γ1 γ2
@@ -159,8 +164,7 @@ tcStmt γ (VarDeclStmt _ ds)
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
   = do t  <- maybe (return tVoid) (tcExpr γ) eo 
-       t' <- getReturn 
-       assertTy l eo t t' 
+       assertTy l "Return" eo t (envFindReturn γ) 
        return Nothing
 
 -- return e 
@@ -236,7 +240,7 @@ unifyArgs γ l          = go
     go θ (e:es) (t:ts) = do te <- tcExpr γ e
                             if t == te 
                               then go θ es ts 
-                              else logError Nothing l $ errorWrongType e te t
+                              else logError Nothing l $ errorWrongType "Function Argument" e te t
 
 ----------------------------------------------------------------------------------
 envJoin :: SourcePos -> TCEnv -> TCEnv -> TCM TCEnv 
@@ -257,7 +261,7 @@ envJoin' l γ1 γ2  = forM_ ytts err >> return (Just (envFromList zts))
 -- | Error Messages -------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-assertTy l e t t'     = when (t /= t') $ logError () l $ errorWrongType e t t'
+assertTy l m e t t'     = when (t /= t') $ logError () l $ errorWrongType m e t t'
 
 
 

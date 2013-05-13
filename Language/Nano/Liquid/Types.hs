@@ -19,6 +19,8 @@ module Language.Nano.Liquid.Types (
   , envToList
   , envAdd 
   , envFindTy
+  , envAddReturn
+  , envFindReturn
 
   -- * Accessors
   , code
@@ -189,7 +191,10 @@ envFindTy  i γ = fmap val $ envFind i γ
 envAdd   i t γ = F.insertSEnv (F.symbol i) (Loc (srcPos i) t) γ
 envFromList    = F.fromListSEnv
 envToList      = F.toListSEnv
-
+envAddReturn f = envAdd (returnId (srcPos f))
+envFindReturn  = maybe msg val . F.lookupSEnv returnSymbol  
+  where 
+    msg = errorstar "bad call to envFindReturn"
 
 --------------------------------------------------------------------------
 -- | Combining Source and Spec into Nano ---------------------------------

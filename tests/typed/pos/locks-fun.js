@@ -1,3 +1,21 @@
+/*@ create :: () => int */
+function create(){
+  return 0;
+}
+
+
+/*@ acquire :: (int) => int */
+function acquire(l){
+  assert(l == 0);
+  return 1;
+}
+
+/*@ release :: (int) => int */
+function release(l){
+  assert(l == 1);
+  return 0;
+}
+
 
 /*@ loop :: (int, int) => int */
 function loop(n, l) {

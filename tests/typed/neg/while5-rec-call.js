@@ -1,7 +1,7 @@
 /*@ loop :: (int) => int */
 function loop(x){
   if (x <= 5) {
-    var r = loop(x + 1);
+    var r = loop(x > 1);
     return r;
   }
   return x;

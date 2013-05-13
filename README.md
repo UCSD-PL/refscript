@@ -93,6 +93,10 @@ tests/typed/pos/*.js
 Include
 -------
 
+tests/typed/pos/twice.js
+
+
+
 Hack:
     
     - create file: include/prelude.js

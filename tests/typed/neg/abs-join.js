@@ -4,7 +4,7 @@ function abs(x){
   if (x > 0) {
     res = x;
   } else {
-    res = -x;
+    res = (x > 99);
   };
   assert(res >= 0);
   return res;

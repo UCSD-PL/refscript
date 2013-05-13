@@ -8,6 +8,19 @@ function assert(p){
   return;
 }
 
+/*@ requires :: (bool) => void */ 
+function requires(p){
+  return;
+}
+
+/*@ ensures :: (bool) => void */ 
+function ensures(p){
+  return;
+}
+
+
+
+
 /*@ random :: () => int */
 function random(){
   var r = Math.random();

@@ -1,4 +1,4 @@
-/*@ assert :: (bool) => void */ 
+/*@ assume :: (bool) => void */ 
 function assume(p){
   return;
 }

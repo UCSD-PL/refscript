@@ -1,8 +1,10 @@
 -- | Global type definitions for Refinement Type Checker
 
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE TupleSections        #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances    #-}
 
 module Language.Nano.Liquid.Types (
 

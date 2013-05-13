@@ -1,3 +1,5 @@
+{-# LANGUAGE NoMonomorphismRestriction #-}
+
 module Language.Nano.Errors where
 
 import Text.Printf 

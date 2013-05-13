@@ -53,7 +53,7 @@ run: make test to see what to do next.
 2. Vanilla Type Checker     
     - Basic Int/Bool/Expr 
     - First-order Funs      
-    - Polymorphism  {------------------------ HEREHEREHEREHERE
+    - Polymorphism  
     - Higher-Order Funs 
     - Records
 
@@ -66,7 +66,8 @@ run: make test to see what to do next.
 tests/typed/pos/*.js
 
     higher-order
-        id.js
+        id.js   {------------------------ HEREHEREHEREHERE
+        
         twice.js
         forloop.js
         whileloop.js

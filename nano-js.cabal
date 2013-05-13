@@ -9,6 +9,12 @@ maintainer:          jhala@cs.ucsd.edu
 category:            Language
 build-type:          Simple
 cabal-version:       >=1.8
+extra-source-files:  README.md, 
+                     include/prelude.js
+
+data-files:          README.md, 
+                     include/prelude.js
+
 
 executable nanojs
   build-depends:       base, pretty, hashable, unordered-containers, 
@@ -23,12 +29,6 @@ executable nanojs
                        NoMonomorphismRestriction,
                        ScopedTypeVariables,
                        BangPatterns
-
-  extra-source-files:  README.md, 
-                       include/prelude.js
-
-  data-files:          README.md, 
-                       include/prelude.js
 
   ghc-options:         -W -O2  
   Main-is:             Nano.hs
@@ -49,12 +49,6 @@ Library
 
   ghc-options:         -W -O2  
  
-  extra-source-files:  README.md, 
-                       include/prelude.js
-
-  data-files:          README.md, 
-                       include/prelude.js
-
  
   Exposed-Modules:     Language.Nano.Errors,
                        Language.Nano.Types,

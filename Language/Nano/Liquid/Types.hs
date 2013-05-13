@@ -170,6 +170,7 @@ instance PP t => PP (Env t) where
 ppBind (x, t) = pprint x <+> dcolon <+> pp t
 
 instance Monoid Spec where 
+  mempty      = Spec []
   mappend x y = Spec $ sigs x ++ sigs y
 
 --------------------------------------------------------------------------

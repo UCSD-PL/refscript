@@ -10,12 +10,9 @@ import           Control.Monad
 import           Text.Parsec
 import           Text.Parsec.String hiding (parseFromFile)
 import qualified Text.Parsec.Token as Token
--- import qualified Data.HashMap.Strict as M
 
 import           Control.Applicative ((<$>), (<*), (<*>))
--- import           Data.Char (toLower, isLower, isSpace, isAlpha)
--- import           Data.List (partition)
--- import           Data.Monoid (mempty)
+import           Data.Char (isLower) 
 
 import           Language.Fixpoint.Misc (mapSnd)
 import           Language.Fixpoint.Types
@@ -57,8 +54,8 @@ xyP lP sepP rP
 bareTypeP :: Parser RefType 
 
 bareTypeP   
-  =  try bareFunP
- <|> try bareAllP
+  =  try bareAllP
+ <|> try bareFunP
  <|> bareAtomP 
 
 bareFunP  
@@ -78,7 +75,12 @@ bbaseP
  <|> try ((`TApp` []) <$> tconP)
 
 tvarP :: Parser TVar
-tvarP = TV <$> locParserP (stringSymbol <$> upperIdP) 
+tvarP = TV <$> locParserP (stringSymbol <$> upperWordP) 
+
+upperWordP :: Parser String
+upperWordP = condIdP nice (not . isLower . head)
+  where 
+    nice   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
 tconP :: Parser TCon
 tconP =  try (reserved "int"  >> return TInt)
@@ -88,7 +90,7 @@ tconP =  try (reserved "int"  >> return TInt)
 
 bareAllP 
   = do reserved "forall"
-       as <- many tvarP
+       as <- many1 tvarP
        dot
        t  <- bareTypeP
        return $ foldr TAll t as

@@ -12,5 +12,5 @@ module Language.Nano.Files (
 
 import Paths_nano_js 
 
--- getPreludePath = getDataFileName "include/prelude.js" 
-getPreludePath = return "/home/rjhala/teaching/nano-js/include/prelude.js"
+getPreludePath = getDataFileName "include/prelude.js" 
+-- getPreludePath = return "/home/rjhala/teaching/nano-js/include/prelude.js"

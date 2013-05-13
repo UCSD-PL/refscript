@@ -49,8 +49,8 @@ module Language.Nano.Liquid.Types (
   , prefixOpTy 
   ) where 
 
-import           Data.Monoid
-import           Data.Ord                       (comparing) 
+import           Data.Monoid            hiding ((<>))            
+import           Data.Ord               (comparing) 
 import qualified Data.List               as L
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
@@ -106,9 +106,6 @@ type Type    = RType ()
 -- | (Real) Refined Types
 type RefType = RType F.Reft 
 
-instance Show r => PP (RType r) where 
-  pp = text . show
-
 -- | Stripping out Refinements 
 toType :: RType a -> Type
 toType = fmap (const ())
@@ -163,8 +160,8 @@ instance PP a => PP (Maybe a) where
 instance PP F.Symbol where 
   pp = pprint
 
-instance PP t => PP (F.SEnv t) where
-  pp = vcat . (ppBind <$>) . F.toListSEnv
+instance PP t => PP (Env t) where
+  pp = vcat . (ppBind <$>) . F.toListSEnv . fmap val 
 
 ppBind (x, t) = pprint x <+> dcolon <+> pp t
 
@@ -303,7 +300,25 @@ prefixOpTy PrefixLNot  = TFun [tBool] tBool
 prefixOpTy o           = convertError "prefixOpTy" o
 
 
+-- instance Show r => PP (RType r) where 
+--   pp = text . show
 
+instance PP Type where 
+  pp = ppType
 
+instance PP TVar where 
+  pp (TV x) = pprint (val x)
 
+ppType (TVar α _)     = pp α 
+ppType (TFun ts t)    = ppArgs parens comma ts <+> text "=>" <+> ppType t 
+ppType t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." <+> ppType t' where (αs, t') = bkAll t
+ppType (TApp c [] _)  = ppTC c 
+ppType (TApp c ts _)  = parens $ ppTC c <+> ppArgs id space ts  
+
+ppArgs p sep          = p . intersperse sep . map pp
+
+ppTC TInt             = text "int"
+ppTC TBool            = text "bool"
+ppTC TVoid            = text "void"
+ppTC (TDef x)         = pprint x
 

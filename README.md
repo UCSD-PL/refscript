@@ -52,15 +52,12 @@ run: make test to see what to do next.
 1. Parse Types 
 2. Vanilla Type Checker     
     - Basic Int/Bool/Expr 
-    - First-order Funs      {------------------------ HEREHEREHEREHERE
-        >> tests/typed/pos/abs.js
-
+    - First-order Funs      
+    - Polymorphism  {------------------------ HEREHEREHEREHERE
     - Higher-Order Funs 
-    - Polymorphism
     - Records
 
 3. Passifier [SSA-Transformation] 
-
 
 4. Parse Refinement Types
 5. Refinement Type Checker      [HW]
@@ -69,15 +66,16 @@ run: make test to see what to do next.
 tests/typed/pos/*.js
 
     higher-order
+        id.js
         twice.js
-        while.js
-        loop.js
-        foldn.js
+        forloop.js
+        whileloop.js
 
     lists
+        listsum.js
+        range.js
         map.js
         fold.js
-        listsum.js
 
     measure
         kmeans.js
@@ -95,26 +93,15 @@ Include
 
 tests/typed/pos/twice.js
 
-
-
-Hack:
-    
-    - create file: include/prelude.js
-    - update parser
-    - update spec
-
 Proper:
 
-/*@ include "path/to/foo.js" @*/
+/*@ include "path/to/foo.js" */
   
   >> add to "Spec"
   >> update parser
   >> recursively traverse all files
-          
           traverseFiles :: (FilePath -> IO [FilePath]) -> FilePath -> IO [FilePath]
 
-  >> read and CAT all files ?
-  >> run on unified file?
 
 
 

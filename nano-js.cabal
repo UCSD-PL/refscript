@@ -24,7 +24,11 @@ executable nanojs
                        ScopedTypeVariables,
                        BangPatterns
 
-  data-files:          include/prelude.js
+  extra-source-files:  README.md, 
+                       include/prelude.js
+
+  data-files:          README.md, 
+                       include/prelude.js
 
   ghc-options:         -W -O2  
   Main-is:             Nano.hs
@@ -44,9 +48,14 @@ Library
                        BangPatterns
 
   ghc-options:         -W -O2  
-   
-  Data-Files:          include/prelude.js
-  
+ 
+  extra-source-files:  README.md, 
+                       include/prelude.js
+
+  data-files:          README.md, 
+                       include/prelude.js
+
+ 
   Exposed-Modules:     Language.Nano.Errors,
                        Language.Nano.Types,
                        Language.Nano.CmdLine,

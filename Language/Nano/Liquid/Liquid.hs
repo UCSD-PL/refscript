@@ -95,20 +95,16 @@ tcNano pgm = forM_ fs $ tcFun γ0
 
 tcFun    :: Env Type -> FunctionStatement -> TCM ()
 tcFun γ (FunctionStmt l f xs body) 
-  = do p <- funEnv l γ f xs
-       case p of 
-         Nothing -> return ()
-         Just γ' -> do q <- tcStmts γ' body
-                       case q of
-                         Just _ -> assertTy l "Missing return" f tVoid (envFindReturn γ') 
-                         _      -> return ()
+  = do γ' <- funEnv l γ f xs
+       q  <- tcStmts γ' body
+       maybe (return ()) (\_ -> assertTy l "Missing return" f tVoid (envFindReturn γ')) q
 
 funEnv l γ f xs
   = case bkFun =<< envFindTy f γ of
-      Nothing        -> logError Nothing l $ errorNonFunction f
+      Nothing        -> tcError l $ errorNonFunction f
       Just (αs,ts,t) -> if length xs /= length ts 
-                         then logError Nothing l $ errorArgMismatch  
-                         else return $ Just $ envAddFun l f αs xs ts t γ
+                         then tcError l $ errorArgMismatch  
+                         else return    $ envAddFun l f αs xs ts t γ
 
 envAddFun l f αs xs ts t = envAdds tyBinds . envAdds varBinds . envAddReturn f t 
   where  
@@ -172,14 +168,6 @@ tcStmt γ (ReturnStmt l eo)
        assertTy l "Return" eo t (envFindReturn γ) 
        return Nothing
 
--- return e 
--- tcStmt γ (ReturnStmt l (Just e)) 
---   = do t  <- tcExpr γ e 
---        t' <- getReturn 
---        assertTy l e t t' 
---        return Nothing
-
-
 -- OTHER (Not handled)
 tcStmt γ s 
   = convertError "tcStmt" s
@@ -211,10 +199,8 @@ tcExpr _ (IntLit _ _)
 tcExpr _ (BoolLit _ _)
   = return tBool
 
-tcExpr γ (VarRef l x)               
-  = case envFindTy x γ of 
-      Just t  -> return t
-      Nothing -> logError tErr l $ errorUnboundId x
+tcExpr γ (VarRef l x)
+  = maybe (tcError l $ errorUnboundId x) return $ envFindTy x γ
 
 tcExpr γ (PrefixExpr l o e)
   = tcCall γ l o [e] (prefixOpTy o)
@@ -241,15 +227,10 @@ tcCall γ l z es ft
                                  Nothing -> return tErr
                                  Just θ' -> return $ apply θ' ot
 
-
-
 instantiate (αs, t) = do θ  <- fromList . zip αs . fmap tVar <$> fresh αs
                          return $ tracePP msg $ apply (tracePP "theta" θ) t
                       where 
                         msg = printf "instantiate [αs = %s] [t = %s] " (ppshow αs) (ppshow t)
-
-
-
 
 unifyArgs l γ es ts 
   = if length es /= length ts 
@@ -270,16 +251,6 @@ validTyBind l γ (α, t)
   where
     bad1      = envMem α γ                                  -- dom θ        \cap γ = empty 
     bad2      = not $ all (`envMem` γ) $ S.toList $ free t  -- free (rng θ) \subset γ
-
--- unifyArgs γ l          = go 
---   where 
---     go θ [] []         = return $ Just θ
---     go θ _  []         = logError Nothing l errorArgMismatch 
---     go θ [] _          = logError Nothing l errorArgMismatch 
---     go θ (e:es) (t:ts) = do te <- tcExpr γ e
---                             if t == te 
---                               then go θ es ts 
---                               else logError Nothing l $ errorWrongType "Function Argument" e te t
 
 ----------------------------------------------------------------------------------
 envJoin :: SourcePos -> TCEnv -> TCEnv -> TCM TCEnv 

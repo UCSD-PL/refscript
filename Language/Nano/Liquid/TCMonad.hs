@@ -14,6 +14,9 @@ module Language.Nano.Liquid.TCMonad (
   -- * Execute 
   , execute
 
+  -- * Throw Errors
+  , tcError
+
   -- * Log Errors
   , logError
 
@@ -21,14 +24,17 @@ module Language.Nano.Liquid.TCMonad (
   , Freshable (..)
   )  where 
 
+import           Text.Printf
 import           Control.Applicative          ((<$>))
 import           Control.Monad.State
+import           Control.Monad.Error
 import           Language.Fixpoint.Misc 
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Types
 import           Language.Nano.Liquid.Types
+import           Language.Nano.Errors
 import           Data.Maybe                   (fromMaybe)
-import           Language.ECMAScript3.Syntax  (SourcePos)
+import           Text.Parsec.Pos              
 
 -- import           Text.PrettyPrint.HughesPJ
 -- import           Language.Nano.Types
@@ -38,36 +44,42 @@ import           Language.ECMAScript3.Syntax  (SourcePos)
 -------------------------------------------------------------------------------
 
 data TCState = TCS { tc_errs :: ![(SourcePos, String)]
-                   , tc_ret  :: !(Maybe Type) 
                    , tc_cnt  :: !Int
                    }
 
-type TCM     = State TCState 
+type TCM     = ErrorT String (State TCState)
 
--- -------------------------------------------------------------------------------
--- setReturn :: Type -> TCM ()
--- -------------------------------------------------------------------------------
--- setReturn t = modify $ \st -> st { tc_ret = Just t }
--- 
--- -------------------------------------------------------------------------------
--- getReturn :: TCM Type 
--- -------------------------------------------------------------------------------
--- getReturn = fromMaybe tErr . tc_ret <$> get  
+-------------------------------------------------------------------------------
+tcError :: SourcePos -> String -> TCM a
+-------------------------------------------------------------------------------
+tcError l msg = throwError $ printf "ERROR at %s : %s" (ppshow l) msg
 
 -------------------------------------------------------------------------------
 logError   :: a -> SourcePos -> String -> TCM a
 -------------------------------------------------------------------------------
-logError x l msg 
-  = do modify $ \st -> st { tc_errs = (l, msg) : (tc_errs st) } 
-       return x
+logError x l msg = (modify $ \st -> st { tc_errs = (l,msg):(tc_errs st)}) >> return x
 
 -------------------------------------------------------------------------------
 execute     :: TCM a -> Either [(SourcePos, String)] a
 -------------------------------------------------------------------------------
-execute act = applyNonNull (Right x) Left (reverse $ tc_errs st)
-  where 
-    st0     = TCS [] Nothing 0
-    (x, st) = runState act st0
+execute act = case runState (runErrorT act) (TCS [] 0)of 
+                (Left err, _) -> Left [(initialPos "" ,  err)]
+                (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errs st)
+ 
+-- execute act = applyNonNull (Right x) Left (reverse $ tc_errs st)
+--   where 
+--     st0     = TCS [] 0
+--     (x, st) = runState act st0
+
+-- instance Show a => Show (ESW a) where 
+--   show m = "Log:\n"  ++ log ++ "\n" ++ 
+--            "Count: " ++ show cnt ++ "\n" ++
+--            result
+--     where ((res, cnt), log) = runWriter (runStateT (runErrorT m) 0)
+--           result   = case res of 
+--                        Left s -> "Error: " ++ s
+--                        Right v -> "Value: " ++ show v
+
 
 
 (>>>=) :: TCM (Maybe a) -> (a -> TCM ()) -> TCM ()

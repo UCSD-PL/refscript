@@ -5,7 +5,7 @@ import           Control.Monad
 import qualified Data.HashSet as S 
 import qualified Data.List as L
 import           Data.Monoid
-import           Data.Maybe                         (isJust, maybeToList)
+import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
 import           Language.Nano.Files
 import           Language.Nano.Errors
 import           Language.Nano.Types
@@ -219,34 +219,30 @@ tcExpr γ e
 ----------------------------------------------------------------------------------
 
 tcCall γ l z es ft 
-  = do t' <- instantiate $ bkAll ft 
-       case bkFun t' of
-         Nothing         -> logError tErr l $ errorNonFunction z
-         Just (_,its,ot) -> do ua <- unifyArgs l γ es its 
-                               case ua of 
-                                 Nothing -> return tErr
-                                 Just θ' -> return $ apply θ' ot
+  = do (_,its,ot) <- instantiate l ft
+       θ          <- unifyArgs l γ es its 
+       return      $ apply θ ot
 
-instantiate (αs, t) = do θ  <- fromList . zip αs . fmap tVar <$> fresh αs
-                         return $ tracePP msg $ apply (tracePP "theta" θ) t
-                      where 
-                        msg = printf "instantiate [αs = %s] [t = %s] " (ppshow αs) (ppshow t)
+instantiate l ft 
+  = do let (αs, t) = bkAll ft 
+       θ          <- fromList . zip αs . fmap tVar <$> fresh αs
+       maybe err return $ bkFun $ apply θ t
+    where
+       err         = tcError l $ errorNonFunction ft
 
-unifyArgs l γ es ts 
-  = if length es /= length ts 
-      then logError Nothing l errorArgMismatch 
-      else do tes <- mapM (tcExpr γ) es
-              case unifys mempty ts tes of
-                Left msg -> logError Nothing l msg
-                Right θ  -> validSubst l γ $ tracePP "unifyArgs" θ
+unifyArgs l γ es ts
+  | length es /= length ts = tcError l errorArgMismatch 
+  | otherwise              = do tes <- mapM (tcExpr γ) es
+                                case unifys mempty ts tes of
+                                  Left msg -> tcError l msg
+                                  Right θ  -> validSubst l γ θ
 
-validSubst       :: SourcePos -> Env Type -> Subst -> TCM (Maybe Subst)
-validSubst l γ θ = do oks   <- mapM (validTyBind l γ) (toList θ)
-                      return $ if and oks then Just θ else Nothing
+validSubst       :: SourcePos -> Env Type -> Subst -> TCM Subst
+validSubst l γ θ = mapM_ (validTyBind l γ) (toList θ) >> return θ
 
 validTyBind l γ (α, t) 
-  | bad1      = logError False l $ errorBoundTyVar α t 
-  | bad2      = logError False l $ errorFreeTyVar t
+  | bad1      = tcError l $ errorBoundTyVar α t 
+  | bad2      = tcError l $ errorFreeTyVar t
   | otherwise = return True 
   where
     bad1      = envMem α γ                                  -- dom θ        \cap γ = empty 
@@ -265,11 +261,11 @@ envJoin' l γ1 γ2  = forM_ ytts err >> return (Just (envFromList zts))
     zts          = [(x,t)    | (x,t,t') <- xtts, t == t']
     ytts         = [(y,t,t') | (y,t,t') <- xtts, t /= t']
     xtts         = [(x,t,t') | (x,t)    <- envToList γ1, t' <- maybeToList (F.lookupSEnv x γ2)]
-    err (y,t,t') = logError () l $ errorJoin y t t'
+    err (y,t,t') = tcError l $ errorJoin y t t'
 
 ---------------------------------------------------------------------------------------
 -- | Error Messages -------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-assertTy l m e t t'     = when (t /= t') $ logError () l $ errorWrongType m e t t'
+assertTy l m e t t'     = when (t /= t') $ tcError l $ errorWrongType m e t t'
 

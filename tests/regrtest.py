@@ -88,14 +88,13 @@ options, args = parser.parse_args()
 
 
 # ESC Tests
-# testdirs  = [ ("pos", 0), ("neg", 1)]
-# runner    = rtest.TestRunner (Config ("nanojs esc", options.opts, testdirs, logfile, options.threadcount))
-# runner.run ()
+testdirs  = [ ("pos", 0), ("neg", 1)]
+runner    = rtest.TestRunner (Config ("nanojs esc", options.opts, testdirs, logfile, options.threadcount))
+runner.run ()
 
 # Liquid Tests
 testdirs  = [ ("typed/pos", 0), ("typed/neg", 1) ]
 runner    = rtest.TestRunner (Config ("nanojs liquid", options.opts, testdirs, logfile, options.threadcount))
 runner.run ()
-
 
 # [os.system(("cd %s; ../../cleanup; cd ../" % d)) for (d,_) in testdirs]  

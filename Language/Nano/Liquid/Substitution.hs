@@ -3,6 +3,7 @@ module Language.Nano.Liquid.Substitution (
   -- * Substitutions
     Subst
   , toList
+  , fromList
 
   -- * Type-class with operations
   , Substitutable (..)
@@ -13,6 +14,8 @@ module Language.Nano.Liquid.Substitution (
 
   ) where 
 
+import           Text.PrettyPrint.HughesPJ
+import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Misc
 import           Language.Nano.Errors 
 import           Language.Nano.Liquid.Types
@@ -34,11 +37,20 @@ newtype Subst = Su (M.HashMap TVar Type)
 toList :: Subst -> [(TVar, Type)]
 toList (Su m) =  M.toList m 
 
+fromList :: [(TVar, Type)] -> Subst
+fromList = Su . M.fromList 
+
 -- | Substitutions form a monoid; not commutative
 
 instance Monoid Subst where 
-  mempty                      = Su M.empty
-  mappend θ@(Su m) θ'@(Su m') = Su $ (apply θ' <$> m) `M.union` m'
+  mempty                    = Su M.empty
+  mappend (Su m) θ'@(Su m') = Su $ (apply θ' <$> m) `M.union` m'
+
+instance PP Subst where 
+  pp (Su m) = if M.null m then text "empty" else vcat $ (ppBind <$>) $ M.toList m 
+
+ppBind (x, t) = pp x <+> text ":=" <+> pp t
+
 
 ---------------------------------------------------------------------------
 -- | Substitutions --------------------------------------------------------
@@ -53,42 +65,49 @@ instance Substitutable a => Substitutable [a] where
   free  = S.unions . map free 
 
 instance Substitutable Type where 
-  apply θ (TApp c ts z)      = TApp c (apply θ ts) z 
-  apply (Su m) t@(TVar α _)  = M.lookupDefault t α m  
-  apply θ (TFun ts t)        = TFun  (apply θ ts) (apply θ t)
-  apply (Su m) (TAll α t)    = apply (Su $ M.delete α m) t 
+  apply θ t = tracePP msg $ appTy θ t
+    where 
+      msg   = printf "apply [θ = %s] [t = %s]" (ppshow θ) (ppshow t)
 
   free (TApp _ ts _)    = S.unions   $ free <$> ts
   free (TVar α _)       = S.singleton α 
   free (TFun ts t)      = S.unions   $ free <$> t:ts
   free (TAll α t)       = S.delete α $ free t 
 
+appTy θ (TApp c ts z)      = TApp c (apply θ ts) z 
+appTy (Su m) t@(TVar α _)  = M.lookupDefault t α m  
+appTy θ (TFun ts t)        = TFun  (apply θ ts) (apply θ t)
+appTy (Su m) (TAll α t)    = apply (Su $ M.delete α m) t 
+
 
 -----------------------------------------------------------------------------
-unify :: Type -> Type -> Either String Subst
+unify :: Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
 
-unify (TFun ts t) (TFun ts' t')     = unifys (t:ts) (t':ts')
-unify (TVar α _) t                  = varAsgn α t 
-unify t (TVar α _)                  = varAsgn α t
-unify (TApp c ts _) (TApp c' ts' _) 
-  | c == c'                         = unifys ts ts'
-unify t t' 
-  | t == t'                         = return mempty 
-  | otherwise                       = Left $ errorUnification t t'             
+unify θ (TFun ts t) (TFun ts' t')     = unifys  θ (t:ts) (t':ts')
+unify θ (TVar α _) t                  = varAsgn θ α t 
+unify θ t (TVar α _)                  = varAsgn θ α t
+unify θ (TApp c ts _) (TApp c' ts' _) 
+  | c == c'                           = unifys  θ ts ts'
+unify θ t t' 
+  | t == t'                           = return θ
+  | otherwise                         = Left $ errorUnification t t'             
 
-unifys ts ts' 
-  | nTs == nTs' = go (ts, ts') 
+unifys θ xs ys = tracePP msg $ unifys' θ xs ys 
+  where 
+    msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
+
+unifys' θ ts ts' 
+  | nTs == nTs' = go θ (ts, ts') 
   | otherwise   = Left $ errorUnification ts ts'
   where 
-    nTs                = length ts
-    nTs'               = length ts'
-    go (t:ts , t':ts') = unify t t' >>= \θ -> go (mapPair (apply θ) (ts, ts'))
-    go ([]   , []    ) = return mempty
+    nTs                  = length ts
+    nTs'                 = length ts'
+    go θ (t:ts , t':ts') = unify θ t t' >>= \θ' -> go θ' (mapPair (apply θ') (ts, ts'))
+    go θ ([]   , []    ) = return θ 
 
-
-varAsgn α t 
-  -- | t == TVar a      =  return empSubst
-  | α `S.member` free t =  Left  $ printf "Occur check fails: %s in %s" (ppshow α) (ppshow t)
-  | otherwise           =  Right $ Su $ M.singleton α t
+varAsgn θ α t 
+  | t == tVar α         = Right $ θ 
+  | α `S.member` free t = Left  $ printf "Occur check fails: %s in %s" (ppshow α) (ppshow t)
+  | otherwise           = Right $ θ `mappend` (Su $ M.singleton α t)
 

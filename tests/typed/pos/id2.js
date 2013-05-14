@@ -1,4 +1,4 @@
-/*@ id :: forall A. (A, B) => A */
+/*@ id2 :: forall A. (A, B) => A */
 function id2(x, y) { return x;}
 
 /*@ main :: (int, bool) => int */

@@ -5,6 +5,7 @@
 {-# LANGUAGE TupleSections        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverlappingInstances #-}
 
 module Language.Nano.Liquid.Types (
 
@@ -20,6 +21,7 @@ module Language.Nano.Liquid.Types (
   , envFromList 
   , envToList
   , envAdd 
+  , envAdds 
   , envFindTy
   , envAddReturn
   , envFindReturn
@@ -36,6 +38,7 @@ module Language.Nano.Liquid.Types (
   
   -- * Deconstructing Types
   , bkFun
+  , bkAll
 
   -- * Regular Types
   , Type
@@ -76,24 +79,19 @@ import           Control.Monad
 import           Control.Monad.Error
 
 -- | Type Variables
-newtype TVar = TV (Located F.Symbol)
-
-instance Eq TVar where
-  (TV a) == (TV b) = val a == val b
-
-instance Show TVar where 
-  show (TV a) = show (val a)
+newtype TVar = TV F.Symbol deriving (Eq, Show, Ord)
 
 instance Hashable TVar where 
-  hashWithSalt i (TV a) = hashWithSalt i (loc a, val a)
+  hashWithSalt i (TV a) = hashWithSalt i a
 
 instance PP TVar where 
-  pp (TV x) = pprint (val x)
+  pp (TV x) = pprint x
 
 instance F.Symbolic TVar where
-  symbol (TV α) = val α  
+  symbol (TV α) = α  
 
-
+instance F.Symbolic a => F.Symbolic (Located a) where 
+  symbol = F.symbol . val
 
 -- | Constructed Type Bodies
 data TBody r 
@@ -207,14 +205,20 @@ envMem i γ     = isJust $ envFind i γ
 envFind    i γ = F.lookupSEnv (F.symbol i) γ
 envFindLoc i γ = fmap loc $ envFind i γ 
 envFindTy  i γ = fmap val $ envFind i γ
+
 envAdd   i t γ = F.insertSEnv (F.symbol i) (Loc (srcPos i) t) γ
+
+envAdds  xts γ = L.foldl' (\γ (x,t) -> envAdd x t γ) γ xts
+
 envFromList    = F.fromListSEnv
+
 envToList      = F.toListSEnv
+
 envAddReturn f = envAdd (returnId (srcPos f))
+
 envFindReturn  = maybe msg val . F.lookupSEnv returnSymbol  
   where 
     msg = errorstar "bad call to envFindReturn"
-
 --------------------------------------------------------------------------
 -- | Combining Source and Spec into Nano ---------------------------------
 --------------------------------------------------------------------------
@@ -301,19 +305,25 @@ tErr   = tVoid
 infixOpTy              :: InfixOp -> Type
 -----------------------------------------------------------------------
 
-infixOpTy OpLT         = TFun [tInt, tInt]   tBool  
-infixOpTy OpLEq        = TFun [tInt, tInt]   tBool
-infixOpTy OpGT         = TFun [tInt, tInt]   tBool
-infixOpTy OpGEq        = TFun [tInt, tInt]   tBool
-infixOpTy OpEq         = TFun [tInt, tInt]   tBool
-infixOpTy OpNEq        = TFun [tInt, tInt]   tBool
+tvA                    = TV (F.symbol "Z")
+tA                     = tVar tvA
+
+infixOpTy OpLT         = TAll tvA $ TFun [tA, tA] tBool  
+infixOpTy OpLEq        = TAll tvA $ TFun [tA, tA] tBool
+infixOpTy OpGT         = TAll tvA $ TFun [tA, tA] tBool
+infixOpTy OpGEq        = TAll tvA $ TFun [tA, tA] tBool
+infixOpTy OpEq         = TAll tvA $ TFun [tA, tA] tBool
+infixOpTy OpNEq        = TAll tvA $ TFun [tA, tA] tBool
+
 infixOpTy OpLAnd       = TFun [tBool, tBool] tBool 
 infixOpTy OpLOr        = TFun [tBool, tBool] tBool
+
 infixOpTy OpSub        = TFun [tInt, tInt]   tInt 
 infixOpTy OpAdd        = TFun [tInt, tInt]   tInt 
 infixOpTy OpMul        = TFun [tInt, tInt]   tInt 
 infixOpTy OpDiv        = TFun [tInt, tInt]   tInt 
 infixOpTy OpMod        = TFun [tInt, tInt]   tInt  
+
 infixOpTy o            = convertError "infixOpTy" o
 
 -----------------------------------------------------------------------
@@ -331,8 +341,8 @@ prefixOpTy o           = convertError "prefixOpTy" o
 instance PP Type where 
   pp = ppType
 
-instance PP [Type] where 
-  pp = hcat . map pp 
+instance PP a => PP [a] where 
+  pp = ppArgs brackets comma 
 
 ppType (TVar α _)     = pp α 
 ppType (TFun ts t)    = ppArgs parens comma ts <+> text "=>" <+> ppType t 

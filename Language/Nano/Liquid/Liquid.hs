@@ -105,12 +105,15 @@ tcFun γ (FunctionStmt l f xs body)
 
 funEnv l γ f xs
   = case bkFun =<< envFindTy f γ of
-      Nothing       -> logError Nothing l $ errorNonFunction f
-      Just (_,ts,t) -> if length xs /= length ts 
+      Nothing        -> logError Nothing l $ errorNonFunction f
+      Just (αs,ts,t) -> if length xs /= length ts 
                          then logError Nothing l $ errorArgMismatch  
-                         else return $ Just $ L.foldl' (\γ (x,t) -> envAdd x t γ) γ' $ zip xs ts
-                       where 
-                         γ' = envAddReturn f t γ
+                         else return $ Just $ envAddFun l f αs xs ts t γ
+
+envAddFun l f αs xs ts t = envAdds tyBinds . envAdds varBinds . envAddReturn f t 
+  where  
+    tyBinds              = [(Loc l α, tVar α) | α <- αs]
+    varBinds             = zip xs ts
 
 --------------------------------------------------------------------------------
 tcSeq :: (Env Type -> a -> TCM TCEnv) -> Env Type -> [a] -> TCM TCEnv
@@ -230,23 +233,38 @@ tcExpr γ e
 ----------------------------------------------------------------------------------
 
 tcCall γ l z es ft 
-  = case bkFun ft of
-     Nothing           -> logError tErr l $ errorNonFunction z 
-     Just (αs, ts, t') -> maybe tErr (\θ -> apply θ t') <$> unifyArgs l γ es ts
+  = do t' <- instantiate $ bkAll ft 
+       case bkFun t' of
+         Nothing         -> logError tErr l $ errorNonFunction z
+         Just (_,its,ot) -> do ua <- unifyArgs l γ es its 
+                               case ua of 
+                                 Nothing -> return tErr
+                                 Just θ' -> return $ apply θ' ot
+
+
+
+instantiate (αs, t) = do θ  <- fromList . zip αs . fmap tVar <$> fresh αs
+                         return $ tracePP msg $ apply (tracePP "theta" θ) t
+                      where 
+                        msg = printf "instantiate [αs = %s] [t = %s] " (ppshow αs) (ppshow t)
+
+
+
 
 unifyArgs l γ es ts 
-  | length es /= length ts = logError Nothing l errorArgMismatch 
-  | otherwise              = do tes <- mapM (tcExpr γ) es
-                                case unifys tes ts of
-                                  Left msg -> logError Nothing l msg
-                                  Right θ  -> validSubst l γ θ
+  = if length es /= length ts 
+      then logError Nothing l errorArgMismatch 
+      else do tes <- mapM (tcExpr γ) es
+              case unifys mempty ts tes of
+                Left msg -> logError Nothing l msg
+                Right θ  -> validSubst l γ $ tracePP "unifyArgs" θ
 
 validSubst       :: SourcePos -> Env Type -> Subst -> TCM (Maybe Subst)
 validSubst l γ θ = do oks   <- mapM (validTyBind l γ) (toList θ)
                       return $ if and oks then Just θ else Nothing
 
 validTyBind l γ (α, t) 
-  | bad1      = logError False l $ errorBoundTyVar α 
+  | bad1      = logError False l $ errorBoundTyVar α t 
   | bad2      = logError False l $ errorFreeTyVar t
   | otherwise = return True 
   where

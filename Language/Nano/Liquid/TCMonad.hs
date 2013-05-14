@@ -21,6 +21,8 @@ module Language.Nano.Liquid.TCMonad (
   -- * Log Errors
   , logError
 
+  -- * Freshness
+  , Freshable (..)
   )  where 
 
 import           Control.Applicative          ((<$>))
@@ -90,5 +92,7 @@ class Freshable a where
   fresh :: a -> TCM a 
 
 instance Freshable TVar where 
-  fresh (TV (Loc l _)) = TV . Loc l . F.intSymbol "T" <$> tick
+  fresh _ = TV . F.intSymbol "T" <$> tick
 
+instance Freshable a => Freshable [a] where 
+  fresh = mapM fresh

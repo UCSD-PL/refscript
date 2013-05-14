@@ -1,6 +1,10 @@
 /*@ id :: forall A. (A) => A */
 function id(x) { return x;}
 
+
+/*@ idbool :: (bool) => bool */
+function idbool(x) { return id(x); }
+
 /*@ main :: (int, bool) => int */
 function main(x, y){
   var yr = id(y);
@@ -11,4 +15,5 @@ function main(x, y){
   }
   return xr + z;
 }
-  
+ 
+

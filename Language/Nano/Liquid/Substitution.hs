@@ -65,7 +65,7 @@ instance Substitutable a => Substitutable [a] where
   free  = S.unions . map free 
 
 instance Substitutable Type where 
-  apply θ t = tracePP msg $ appTy θ t
+  apply θ t = {- tracePP msg $ -} appTy θ t
     where 
       msg   = printf "apply [θ = %s] [t = %s]" (ppshow θ) (ppshow t)
 
@@ -93,7 +93,7 @@ unify θ t t'
   | t == t'                           = return θ
   | otherwise                         = Left $ errorUnification t t'             
 
-unifys θ xs ys = tracePP msg $ unifys' θ xs ys 
+unifys θ xs ys = {- tracePP msg $ -} unifys' θ xs ys 
   where 
     msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 

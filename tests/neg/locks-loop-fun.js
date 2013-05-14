@@ -36,10 +36,10 @@ function main(){
 
   while (0 < n){
     if (0 < flag){ 
-      l = lock(l) 
+      l = acquire(l) 
     }
     if (0 <= flag){ 
-      l = unlock(l) 
+      l = release(l) 
     }
     n = n - 1;
   }

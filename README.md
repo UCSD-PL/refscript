@@ -55,7 +55,8 @@ run: make test to see what to do next.
     - First-order Funs      
     - Polymorphism  
     - Higher-Order Funs 
-    - Records
+    - Lists
+    * Records
 
 3. Passifier [SSA-Transformation] 
 

@@ -9,7 +9,6 @@ import           Data.Maybe                         (isJust, fromMaybe, maybeToL
 import           Language.Nano.Files
 import           Language.Nano.Errors
 import           Language.Nano.Types
-
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Parse 
 import           Language.Nano.Liquid.TCMonad
@@ -63,7 +62,7 @@ verifyNano  :: Nano -> IO (F.FixResult SourcePos)
 verifyNano  = either unsafe safe . execute . tcNano 
     
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
-                 forM_ errs $ \(loc, err) -> putStrLn $ printf "Error at %s\n  %s\n" (ppshow loc) err
+                 forM_ errs $ \(l,e) -> putStrLn $ printf "Error at %s\n  %s\n" (ppshow l) e
                  return $ F.Unsafe (fst <$> errs)
     
 safe _      = return F.Safe 
@@ -95,16 +94,16 @@ tcNano pgm = forM_ fs $ tcFun γ0
 
 tcFun    :: Env Type -> FunctionStatement -> TCM ()
 tcFun γ (FunctionStmt l f xs body) 
-  = do γ' <- funEnv l γ f xs
-       q  <- tcStmts γ' body
-       maybe (return ()) (\_ -> assertTy l "Missing return" f tVoid (envFindReturn γ')) q
+  = do (αs, ts, t)    <- funTy l γ f xs
+       let γ'          = envAddFun l f αs xs ts t γ 
+       q              <- tcStmts γ' body
+       when (isJust q) $ assertVoid l f t
 
-funEnv l γ f xs
+funTy l γ f xs 
   = case bkFun =<< envFindTy f γ of
       Nothing        -> tcError l $ errorNonFunction f
-      Just (αs,ts,t) -> if length xs /= length ts 
-                         then tcError l $ errorArgMismatch  
-                         else return    $ envAddFun l f αs xs ts t γ
+      Just (αs,ts,t) -> do when (length xs /= length ts) $ tcError l $ errorArgMismatch
+                           return (αs,ts,t)
 
 envAddFun l f αs xs ts t = envAdds tyBinds . envAdds varBinds . envAddReturn f t 
   where  
@@ -267,5 +266,5 @@ envJoin' l γ1 γ2  = forM_ ytts err >> return (Just (envFromList zts))
 -- | Error Messages -------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-assertTy l m e t t'     = when (t /= t') $ tcError l $ errorWrongType m e t t'
-
+assertTy l m e t t' = when (t /= t') $ tcError l $ errorWrongType m e t t'
+assertVoid l f t    = assertTy l "Missing return" f tVoid t

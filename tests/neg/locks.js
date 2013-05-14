@@ -24,8 +24,8 @@ function release(l){
 function main(){
   var l = create();
   var x = random();
-  if (0 <  x){ l = lock(l); }
-  if (0 <= x){ l = unlock(l); }
+  if (0 <  x){ l = acquire(l); }
+  if (0 <= x){ l = release(l); }
   assert(l == 0);
 }
 

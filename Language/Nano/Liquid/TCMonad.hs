@@ -14,10 +14,6 @@ module Language.Nano.Liquid.TCMonad (
   -- * Execute 
   , execute
 
-  -- * Access return type
-  -- , setReturn
-  -- , getReturn
-
   -- * Log Errors
   , logError
 

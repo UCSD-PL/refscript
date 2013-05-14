@@ -23,6 +23,7 @@ module Language.Nano.Liquid.Types (
   , envFindTy
   , envAddReturn
   , envFindReturn
+  , envMem
 
   -- * Accessors
   , code
@@ -47,12 +48,15 @@ module Language.Nano.Liquid.Types (
   , tBool
   , tVoid
   , tErr
+  , tVar
 
   -- * Operator Types
   , infixOpTy
   , prefixOpTy 
   ) where 
 
+import           Data.Maybe             (isJust)
+import           Data.Hashable
 import           Data.Monoid            hiding ((<>))            
 import           Data.Ord               (comparing) 
 import qualified Data.List               as L
@@ -79,6 +83,17 @@ instance Eq TVar where
 
 instance Show TVar where 
   show (TV a) = show (val a)
+
+instance Hashable TVar where 
+  hashWithSalt i (TV a) = hashWithSalt i (loc a, val a)
+
+instance PP TVar where 
+  pp (TV x) = pprint (val x)
+
+instance F.Symbolic TVar where
+  symbol (TV α) = val α  
+
+
 
 -- | Constructed Type Bodies
 data TBody r 
@@ -188,6 +203,7 @@ type Env t  = F.SEnv (Located t)
 -- envFind x (TE m)    = M.lookup x m
 -- envMem x (TE m)     = M.member x m
 
+envMem i γ     = isJust $ envFind i γ
 envFind    i γ = F.lookupSEnv (F.symbol i) γ
 envFindLoc i γ = fmap loc $ envFind i γ 
 envFindTy  i γ = fmap val $ envFind i γ
@@ -271,6 +287,7 @@ mkEnv = foldM step F.emptySEnv
 -- | Primitive / Base Types -------------------------------------------
 -----------------------------------------------------------------------
 
+tVar   = (`TVar` ()) 
 tInt   = TApp TInt  [] ()
 tBool  = TApp TBool [] ()
 tVoid  = TApp TVoid [] ()
@@ -314,8 +331,8 @@ prefixOpTy o           = convertError "prefixOpTy" o
 instance PP Type where 
   pp = ppType
 
-instance PP TVar where 
-  pp (TV x) = pprint (val x)
+instance PP [Type] where 
+  pp = hcat . map pp 
 
 ppType (TVar α _)     = pp α 
 ppType (TFun ts t)    = ppArgs parens comma ts <+> text "=>" <+> ppType t 

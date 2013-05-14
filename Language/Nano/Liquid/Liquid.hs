@@ -2,6 +2,7 @@ module Language.Nano.Liquid.Liquid (main) where
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
+import qualified Data.HashSet as S 
 import qualified Data.List as L
 import           Data.Monoid
 import           Data.Maybe                         (isJust, maybeToList)
@@ -12,10 +13,11 @@ import           Language.Nano.Types
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Parse 
 import           Language.Nano.Liquid.TCMonad
+import           Language.Nano.Liquid.Substitution
+
 import           Language.ECMAScript3.Syntax
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface        ({- checkValid,-} resultExit)
--- import           Language.Fixpoint.PrettyPrint      (showpp)
 import           Language.Fixpoint.Misc             
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Text.Printf                        (printf)
@@ -230,17 +232,36 @@ tcExpr γ e
 tcCall γ l z es ft 
   = case bkFun ft of
      Nothing           -> logError tErr l $ errorNonFunction z 
-     Just (αs, ts, t') -> maybe tErr (\_ -> t') <$> unifyArgs γ l () es ts
+     Just (αs, ts, t') -> maybe tErr (\θ -> apply θ t') <$> unifyArgs l γ es ts
 
-unifyArgs γ l          = go 
-  where 
-    go θ [] []         = return $ Just θ
-    go θ _  []         = logError Nothing l errorArgMismatch 
-    go θ [] _          = logError Nothing l errorArgMismatch 
-    go θ (e:es) (t:ts) = do te <- tcExpr γ e
-                            if t == te 
-                              then go θ es ts 
-                              else logError Nothing l $ errorWrongType "Function Argument" e te t
+unifyArgs l γ es ts 
+  | length es /= length ts = logError Nothing l errorArgMismatch 
+  | otherwise              = do tes <- mapM (tcExpr γ) es
+                                case unifys tes ts of
+                                  Left msg -> logError Nothing l msg
+                                  Right θ  -> validSubst l γ θ
+
+validSubst       :: SourcePos -> Env Type -> Subst -> TCM (Maybe Subst)
+validSubst l γ θ = do oks   <- mapM (validTyBind l γ) (toList θ)
+                      return $ if and oks then Just θ else Nothing
+
+validTyBind l γ (α, t) 
+  | bad1      = logError False l $ errorBoundTyVar α 
+  | bad2      = logError False l $ errorFreeTyVar t
+  | otherwise = return True 
+  where
+    bad1      = envMem α γ                                  -- dom θ        \cap γ = empty 
+    bad2      = not $ all (`envMem` γ) $ S.toList $ free t  -- free (rng θ) \subset γ
+
+-- unifyArgs γ l          = go 
+--   where 
+--     go θ [] []         = return $ Just θ
+--     go θ _  []         = logError Nothing l errorArgMismatch 
+--     go θ [] _          = logError Nothing l errorArgMismatch 
+--     go θ (e:es) (t:ts) = do te <- tcExpr γ e
+--                             if t == te 
+--                               then go θ es ts 
+--                               else logError Nothing l $ errorWrongType "Function Argument" e te t
 
 ----------------------------------------------------------------------------------
 envJoin :: SourcePos -> TCEnv -> TCEnv -> TCM TCEnv 
@@ -262,6 +283,4 @@ envJoin' l γ1 γ2  = forM_ ytts err >> return (Just (envFromList zts))
 ---------------------------------------------------------------------------------------
 
 assertTy l m e t t'     = when (t /= t') $ logError () l $ errorWrongType m e t t'
-
-
 

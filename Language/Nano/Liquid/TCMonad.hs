@@ -26,11 +26,14 @@ module Language.Nano.Liquid.TCMonad (
 import           Control.Applicative          ((<$>))
 import           Control.Monad.State
 import           Language.Fixpoint.Misc 
--- import           Language.Nano.Types
+import qualified Language.Fixpoint.Types as F
+import           Language.Nano.Types
 import           Language.Nano.Liquid.Types
 import           Data.Maybe                   (fromMaybe)
--- import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.Syntax  (SourcePos)
+
+-- import           Text.PrettyPrint.HughesPJ
+-- import           Language.Nano.Types
 
 -------------------------------------------------------------------------------
 -- | Typechecking monad -------------------------------------------------------
@@ -38,6 +41,7 @@ import           Language.ECMAScript3.Syntax  (SourcePos)
 
 data TCState = TCS { tc_errs :: ![(SourcePos, String)]
                    , tc_ret  :: !(Maybe Type) 
+                   , tc_cnt  :: !Int
                    }
 
 type TCM     = State TCState 
@@ -64,10 +68,27 @@ execute     :: TCM a -> Either [(SourcePos, String)] a
 -------------------------------------------------------------------------------
 execute act = applyNonNull (Right x) Left (reverse $ tc_errs st)
   where 
-    st0     = TCS [] Nothing
+    st0     = TCS [] Nothing 0
     (x, st) = runState act st0
 
 
 (>>>=) :: TCM (Maybe a) -> (a -> TCM ()) -> TCM ()
 z >>>= f = z >>= maybe (return ()) f
+
+
+--------------------------------------------------------------------------
+-- | Generating Fresh Values ---------------------------------------------
+--------------------------------------------------------------------------
+
+tick :: TCM Int
+tick = do st    <- get 
+          let n  = tc_cnt st
+          put    $ st { tc_cnt = n + 1 }
+          return n 
+
+class Freshable a where 
+  fresh :: a -> TCM a 
+
+instance Freshable TVar where 
+  fresh (TV (Loc l _)) = TV . Loc l . F.intSymbol "T" <$> tick
 

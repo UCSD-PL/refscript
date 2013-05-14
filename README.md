@@ -66,17 +66,21 @@ run: make test to see what to do next.
 tests/typed/pos/*.js
 
     higher-order
-        id.js   {------------------------ HEREHEREHEREHERE
-        
+        id.js   
         twice.js
         forloop.js
-        whileloop.js
 
     lists
-        listsum.js
-        range.js
+        listsum.js {------------------------ HEREHEREHEREHERE
+        range.js   
         map.js
         fold.js
+
+        (List A -- ADT)
+            single :: forall A. (A) => (List A)
+            head   :: forall A. (List A) => A
+            tail   :: forall A. (List a) => (List A)
+
 
     measure
         kmeans.js

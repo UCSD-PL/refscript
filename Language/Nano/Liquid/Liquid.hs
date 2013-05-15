@@ -45,7 +45,7 @@ verifyFile f
 -- | Parse File and Type Signatures -------------------------------------------
 -------------------------------------------------------------------------------
 
-parseNanoFromFile :: FilePath -> IO Nano
+parseNanoFromFile :: FilePath -> IO (Nano SourcePos ())
 parseNanoFromFile f 
   = do src   <- parseJavaScriptFromFile f
        spec  <- parseSpecFromFile f
@@ -58,7 +58,7 @@ parseNanoFromFile f
 -- | Execute Type Checker -----------------------------------------------------
 -------------------------------------------------------------------------------
 
-verifyNano  :: Nano -> IO (F.FixResult SourcePos)
+verifyNano  :: Nano SourcePos () -> IO (F.FixResult SourcePos)
 verifyNano  = either unsafe safe . execute . tcNano 
     
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
@@ -82,7 +82,7 @@ type TCEnv = Maybe (Env Type)
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
 
-tcNano     :: Nano -> TCM () 
+tcNano     :: NanoBare -> TCM () 
 tcNano pgm = forM_ fs $ tcFun γ0
   where
     γ0     = env pgm
@@ -92,7 +92,7 @@ tcNano pgm = forM_ fs $ tcFun γ0
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-tcFun    :: Env Type -> FunctionStatement -> TCM ()
+tcFun    :: Env Type -> FunctionStatement SourcePos -> TCM ()
 tcFun γ (FunctionStmt l f xs body) 
   = do (αs, ts, t)    <- funTy l γ f xs
        let γ'          = envAddFun l f αs xs ts t γ 
@@ -114,10 +114,10 @@ envAddFun l f αs xs ts t = envAdds tyBinds . envAdds varBinds . envAddReturn f 
 tcSeq :: (Env Type -> a -> TCM TCEnv) -> Env Type -> [a] -> TCM TCEnv
 --------------------------------------------------------------------------------
 
-tcSeq tc            = foldM step . Just 
+tcSeq f             = foldM step . Just 
   where 
     step Nothing _  = return Nothing
-    step (Just γ) x = tc γ x
+    step (Just γ) x = f γ x
 
 --------------------------------------------------------------------------------
 tcStmts :: Env Type -> [Statement SourcePos]  -> TCM TCEnv

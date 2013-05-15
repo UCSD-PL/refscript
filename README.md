@@ -51,17 +51,17 @@ run: make test to see what to do next.
 0. Type Types 
 1. Parse Types 
 2. Vanilla Type Checker     
-    - Basic Int/Bool/Expr 
-    - First-order Funs      
-    - Polymorphism  
-    - Higher-Order Funs 
-    - Lists
-    * Records
+    + Basic Int/Bool/Expr 
+    + First-order Funs      
+    + Polymorphism  
+    + Higher-Order Funs 
+    + Lists
+    - Records
 
-3. Passifier [SSA-Transformation] 
+- Passifier [SSA-Transformation] 
 
 4. Parse Refinement Types
-5. Refinement Type Checker      [HW]
+5. Refinement Type Checker      [HW] Join is only other source of KVars 
 6. Liquid Constraint Generation [HW]
 
 tests/typed/pos/*.js

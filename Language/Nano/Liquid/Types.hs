@@ -10,7 +10,10 @@
 module Language.Nano.Liquid.Types (
 
   -- * Programs
-    Nano   
+    Nano
+  , NanoBare
+  , NanoSSA
+  , NanoType
   , Spec   (..)
   , Source (..)
   , FunctionStatement
@@ -56,6 +59,10 @@ module Language.Nano.Liquid.Types (
   -- * Operator Types
   , infixOpTy
   , prefixOpTy 
+  
+  -- * Annotations
+  , Annot (..)
+
   ) where 
 
 import           Data.Maybe             (isJust)
@@ -146,9 +153,14 @@ bkAll t              = go [] t
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-data Nano = Nano { code :: !Source 
-                 , env  :: !(Env Type)
-                 }
+data Nano a r = Nano { code :: !(Source a) 
+                     , env  :: !(Env (RType r))
+                     }
+
+type NanoBare = Nano SourcePos ()
+type NanoSSA  = Nano (SourcePos, AnnSSA)  ()
+type NanoType = Nano (SourcePos, AnnType) ()
+
 
 -- | Type Specification for function binders
 data Spec = Spec { sigs :: [(Id SourcePos, Type)] }
@@ -159,12 +171,12 @@ data Spec = Spec { sigs :: [(Id SourcePos, Type)] }
   @-}
 
 {-@ type FunctionStatement = {v:(Statement SourcePos) | (isFunctionStatement v)} @-}
-type FunctionStatement = Statement SourcePos
+type FunctionStatement a = Statement a 
 
-{-@ newtype Source = Src [FunctionStatement] @-}
-newtype Source = Src [FunctionStatement]
+{-@ newtype Source a = Src [FunctionStatement a] @-}
+newtype Source a = Src [FunctionStatement a]
 
-instance PP Nano where
+instance PP (RType r) => PP (Nano a r) where
   pp (Nano (Src s) env) 
     =   text "********************** CODE **********************"
     $+$ pp s
@@ -223,7 +235,7 @@ envFindReturn  = maybe msg val . F.lookupSEnv returnSymbol
 -- | Combining Source and Spec into Nano ---------------------------------
 --------------------------------------------------------------------------
 
-mkNano  :: [Statement SourcePos] -> Spec -> Either Doc Nano 
+mkNano  :: [Statement SourcePos] -> Spec -> Either Doc NanoBare 
 mkNano stmts spec 
   = do src   <- Src <$> mapM checkFun stmts
        env   <- mkEnv {-(getFunctionIds stmts) -} (sigs spec)
@@ -356,4 +368,23 @@ ppTC TInt             = text "int"
 ppTC TBool            = text "bool"
 ppTC TVoid            = text "void"
 ppTC (TDef x)         = pprint x
+
+-----------------------------------------------------------------------------
+-- | Annotations ------------------------------------------------------------
+-----------------------------------------------------------------------------
+
+-- | Annotations: Extra-code decorations needed for Refinement Type Checking
+--   Ideally, we'd have "room" for these inside the @Statement@ and
+--   @Expression@ type, but are tucking them in using the @a@ parameter.
+
+data Annot  
+  = Phi { ann_vars :: [(Id SourcePos)] -- phi-vars
+        , ann_then :: [(Id SourcePos)] -- then-branch-sources
+        , ann_else :: [(Id SourcePos)] -- else-branch-sources
+        }
+  | Typ { ann_typs :: [Type] }
+    deriving (Eq, Show)
+
+type AnnSSA  = Maybe Annot
+type AnnType = Maybe Annot
 

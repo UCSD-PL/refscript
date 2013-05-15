@@ -74,6 +74,7 @@ import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import qualified Data.HashMap.Strict     as M
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Types
 import           Language.Nano.Errors
@@ -158,8 +159,8 @@ data Nano a r = Nano { code :: !(Source a)
                      }
 
 type NanoBare = Nano SourcePos ()
-type NanoSSA  = Nano (SourcePos, AnnSSA)  ()
-type NanoType = Nano (SourcePos, AnnType) ()
+type NanoSSA  = Nano AnnSSA    ()
+type NanoType = Nano AnnType   ()
 
 
 -- | Type Specification for function binders
@@ -377,7 +378,7 @@ ppTC (TDef x)         = pprint x
 --   Ideally, we'd have "room" for these inside the @Statement@ and
 --   @Expression@ type, but are tucking them in using the @a@ parameter.
 
-data Annot  
+data Fact 
   = Phi { ann_vars :: [(Id SourcePos)] -- phi-vars
         , ann_then :: [(Id SourcePos)] -- then-branch-sources
         , ann_else :: [(Id SourcePos)] -- else-branch-sources
@@ -385,6 +386,10 @@ data Annot
   | Typ { ann_typs :: [Type] }
     deriving (Eq, Show)
 
-type AnnSSA  = Maybe Annot
-type AnnType = Maybe Annot
+data Annot b a = Ann { ann :: a, ann_fact :: Maybe b } deriving (Show)
+type AnnSSA    = Annot SourcePos Fact -- Only Phi       facts
+type AnnType   = Annot SourcePos Fact -- Only Phi + Typ facts
 
+
+instance HasAnnotation (Annot b) where 
+  getAnnotation = ann 

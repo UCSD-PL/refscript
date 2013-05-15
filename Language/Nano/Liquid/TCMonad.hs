@@ -9,7 +9,6 @@
 module Language.Nano.Liquid.TCMonad (
   -- * TC Monad
     TCM
-  , (>>>=)
  
   -- * Execute 
   , execute
@@ -65,26 +64,6 @@ execute     :: TCM a -> Either [(SourcePos, String)] a
 execute act = case runState (runErrorT act) (TCS [] 0)of 
                 (Left err, _) -> Left [(initialPos "" ,  err)]
                 (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errs st)
- 
--- execute act = applyNonNull (Right x) Left (reverse $ tc_errs st)
---   where 
---     st0     = TCS [] 0
---     (x, st) = runState act st0
-
--- instance Show a => Show (ESW a) where 
---   show m = "Log:\n"  ++ log ++ "\n" ++ 
---            "Count: " ++ show cnt ++ "\n" ++
---            result
---     where ((res, cnt), log) = runWriter (runStateT (runErrorT m) 0)
---           result   = case res of 
---                        Left s -> "Error: " ++ s
---                        Right v -> "Value: " ++ show v
-
-
-
-(>>>=) :: TCM (Maybe a) -> (a -> TCM ()) -> TCM ()
-z >>>= f = z >>= maybe (return ()) f
-
 
 --------------------------------------------------------------------------
 -- | Generating Fresh Values ---------------------------------------------

@@ -72,7 +72,10 @@ data Located a
   = Loc { loc :: !SourcePos
         , val :: a
         }
-  
+ 
+instance Functor Located where 
+  fmap f (Loc l x) = Loc l (f x)
+
 -- | `IsLocated` is a predicate that describes values for which we have 
 --    a SourcePos
 

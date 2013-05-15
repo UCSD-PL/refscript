@@ -29,6 +29,10 @@ module Language.Nano.Liquid.Types (
   , envAddReturn
   , envFindReturn
   , envMem
+  , envMap
+  , envLefts
+  , envRights
+  , envIntersectWith
 
   -- * Accessors
   , code
@@ -62,7 +66,7 @@ module Language.Nano.Liquid.Types (
   
   -- * Annotations
   , Annot (..)
-
+  , Fact (..)
   ) where 
 
 import           Data.Maybe             (isJust)
@@ -208,33 +212,36 @@ instance Monoid Spec where
 
 type Env t  = F.SEnv (Located t) 
 
---                       deriving (Show)
--- envToList (TE m)    = M.toList m
--- envFromList         = TE . M.fromList 
--- envEmpty            = envFromList []
--- envAdd (TE m) (x,t) = TE (M.insert x t m)
--- envAdds γ xts       = L.foldl' envAdd γ xts
--- envFind x (TE m)    = M.lookup x m
--- envMem x (TE m)     = M.member x m
-
-envMem i γ     = isJust $ envFind i γ
-envFind    i γ = F.lookupSEnv (F.symbol i) γ
-envFindLoc i γ = fmap loc $ envFind i γ 
-envFindTy  i γ = fmap val $ envFind i γ
-
-envAdd   i t γ = F.insertSEnv (F.symbol i) (Loc (srcPos i) t) γ
-
-envAdds  xts γ = L.foldl' (\γ (x,t) -> envAdd x t γ) γ xts
-
-envFromList    = F.fromListSEnv
-
-envToList      = F.toListSEnv
-
-envAddReturn f = envAdd (returnId (srcPos f))
-
-envFindReturn  = maybe msg val . F.lookupSEnv returnSymbol  
+envMap    f     = F.mapSEnv (fmap f) 
+envFilter f     = F.filterSEnv (f . val) 
+envMem i γ      = isJust $ envFind i γ
+envFind    i γ  = F.lookupSEnv (F.symbol i) γ
+envFindLoc i γ  = fmap loc $ envFind i γ 
+envFindTy  i γ  = fmap val $ envFind i γ
+envAdd   i t γ  = F.insertSEnv (F.symbol i) (Loc (srcPos i) t) γ
+envAdds  xts γ  = L.foldl' (\γ (x,t) -> envAdd x t γ) γ xts
+envFromList xts = F.fromListSEnv [(F.symbol x, (Loc (srcPos x) t)) | (x, t) <- xts]
+envToList  γ    = [ (Id l (F.symbolString x), t) | (x, Loc l t) <- F.toListSEnv γ]
+envAddReturn f  = envAdd (returnId (srcPos f))
+envFindReturn   = maybe msg val . F.lookupSEnv returnSymbol  
   where 
     msg = errorstar "bad call to envFindReturn"
+
+envIntersectWith :: (a -> b -> c) -> Env a -> Env b -> Env c
+envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))
+
+
+envRights :: Env (Either a b) -> Env b
+envRights = envMap (\(Right z) -> z) . envFilter isRight
+
+envLefts :: Env (Either a b) -> Env a
+envLefts = envMap (\(Left z) -> z) . envFilter isLeft
+
+isRight (Right _) = True
+isRight (_)       = False
+isLeft            = not . isRight
+
+
 --------------------------------------------------------------------------
 -- | Combining Source and Spec into Nano ---------------------------------
 --------------------------------------------------------------------------
@@ -384,11 +391,8 @@ ppTC (TDef x)         = pprint x
 --   @Expression@ type, but are tucking them in using the @a@ parameter.
 
 data Fact 
-  = Phi { ann_vars :: [(Id SourcePos)] -- phi-vars
-        , ann_then :: [(Id SourcePos)] -- then-branch-sources
-        , ann_else :: [(Id SourcePos)] -- else-branch-sources
-        }
-  | Typ { ann_typs :: [Type] }
+  = PhiVar  !(Id SourcePos) 
+  | TypInst ![Type]
     deriving (Eq, Show)
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show)

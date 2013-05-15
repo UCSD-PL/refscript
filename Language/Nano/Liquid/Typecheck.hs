@@ -224,12 +224,20 @@ envJoin _ Nothing x           = return x
 envJoin _ x Nothing           = return x
 envJoin l (Just γ1) (Just γ2) = envJoin' l γ1 γ2 
 
-envJoin' l γ1 γ2  = forM_ ytts err >> return (Just (envFromList zts))  
-  where 
-    zts          = [(x,t)    | (x,t,t') <- xtts, t == t']
-    ytts         = [(y,t,t') | (y,t,t') <- xtts, t /= t']
-    xtts         = [(x,t,t') | (x,t)    <- envToList γ1, t' <- maybeToList (F.lookupSEnv x γ2)]
-    err (y,t,t') = tcError l $ errorJoin y t t'
+envJoin' l γ1 γ2 
+  = do forM_ (envToList $ envLefts γall) err 
+       return (Just $ envRights γall)
+    where 
+      γall = envIntersectWith meet γ1 γ2
+      meet = \t1 t2 -> if t1 == t2 then Right t1 else Left (t1,t2)
+      err  = \(y, (t, t')) -> tcError l $ errorJoin y t t'
+
+-- envJoin' l γ1 γ2  = forM_ ytts err >> return (Just (envFromList zts))  
+--   where 
+--     zts          = [(x,t)    | (x,t,t') <- xtts, t == t']
+--     ytts         = [(y,t,t') | (y,t,t') <- xtts, t /= t']
+--     xtts         = [(x,t,t') | (x,t)    <- envToList γ1, t' <- maybeToList (F.lookupSEnv x γ2)]
+--     err (y,t,t') = tcError l $ errorJoin y t t'
 
 ---------------------------------------------------------------------------------------
 -- | Error Messages -------------------------------------------------------------------

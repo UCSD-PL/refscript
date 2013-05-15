@@ -17,8 +17,12 @@ errorUnification t t'   = printf "Cannot unify types: %s and %s" (ppshow t) (pps
 errorBoundTyVar a t     = printf "Cannot unify bound type parameter %s with %s" (ppshow a) (ppshow t)
 errorFreeTyVar t        = printf "Type not fully instantiated: %s" (ppshow t)
 
-ppshow                  = render . pp
 
+errorWriteImmutable x   = printf "Cannot write immutable: %s" (ppshow x)
+
+
+
+ppshow                  = render . pp
 
 tracePP     ::  (PP a) => String -> a -> a
 tracePP s x = trace (printf "\nTrace: [%s]: %s" s (ppshow x)) x

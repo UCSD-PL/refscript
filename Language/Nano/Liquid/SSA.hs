@@ -3,6 +3,23 @@ module Language.Nano.Liquid.SSA (
   ssaTransform
   ) where 
 
+import           Control.Applicative                ((<$>), (<*>))
+import           Control.Monad                
+import           Control.Monad.State                
+import qualified Data.HashSet as S 
+import qualified Data.List as L
+import           Data.Monoid
+import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
+
+import           Language.Nano.Types
+import           Language.Nano.Liquid.Types
+import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.Syntax.Annotations
+import           Language.Fixpoint.Misc             
+import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
+import           Text.Printf                        (printf)
+
+
 ssaTransform :: NanoBare -> NanoSSA
 ssaTransform pgm = error "TBD" -- execute $ ssaNano pgm
 -- 1. builds TABLE inside SSAM
@@ -11,14 +28,14 @@ ssaTransform pgm = error "TBD" -- execute $ ssaNano pgm
 -- 4. use Functor instance/table to decorate :: SourcePos -> (SourcePos, Maybe Annot) 
 
 -------------------------------------------------------------------------------------
-ssaNano :: NanoBare -> SSAM NanoBare
+ssaNano :: Nano SourcePos () -> SSAM (Nano SourcePos ())
 -------------------------------------------------------------------------------------
 ssaNano p@(Nano {code = Src fs}) 
-  = do fs'   <- mapM ssaNano fs 
-       return $ p {code = Src $ ssaNano <$> fs}
+  = do fs'   <- mapM ssaFun fs 
+       return $ p {code = Src fs'}
 
 -------------------------------------------------------------------------------------
-ssaFun :: FunctionStmt SourcePos -> SSAM (FunctionStmt SourcePos)
+ssaFun :: FunctionStatement SourcePos -> SSAM (FunctionStatement SourcePos)
 -------------------------------------------------------------------------------------
 ssaFun (FunctionStmt l f xs body) 
   = do setSsaEnv   $ initSsaEnv xs 
@@ -51,10 +68,8 @@ ssaStmt s@(EmptyStmt _)
 
 -- x = e
 ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LVar l3 x) e))   
-  = do (x', e') <- ssaAsgn l2 x e
+  = do (x', e') <- ssaAsgn l2 (Id l3 x) e
        return (True, VarDeclStmt l1 [VarDecl l2 x' (Just e')])
-       
-       -- return  (True, ExprStmt l1 (AssignExpr l2 OpAssign (LVar l3 x') e'))
 
 -- e
 ssaStmt (ExprStmt l e)   
@@ -72,21 +87,21 @@ ssaStmt (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 ssaStmt (IfStmt l e s1 s2)
-  = do e'           <- ssaStmt e
+  = do e'           <- ssaExpr e
        θ            <- getSsaEnv
-       (θ1, s1')    <- ssaStmtWith θ s1
-       (θ2, s2')    <- ssaStmtWith θ s2
+       (θ1, s1')    <- ssaWith θ ssaStmt s1
+       (θ2, s2')    <- ssaWith θ ssaStmt s2
        (b', φ1, φ2) <- joinSsaEnv l θ1 θ2        -- MERGE & RECORD SIDE CONDITIONS!!!!
        return        $ (b', IfStmt l e' (splice s1' φ1) (splice s2' φ2))
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 ssaStmt (VarDeclStmt l ds)
-  = do ds' <- tcSeq ssaVarDecl ds
+  = do (_, ds') <- ssaSeq ssaVarDecl ds
        return (True, VarDeclStmt l ds')
 
 -- return e 
 ssaStmt s@(ReturnStmt l Nothing) 
-  = (False, s)
+  = return (False, s)
 
 -- return e 
 ssaStmt (ReturnStmt l (Just e)) 
@@ -105,19 +120,21 @@ splice s (Just s') = BlockStmt (getAnnotation s) [s, s']
 
 
 -------------------------------------------------------------------------------------
-ssaStmtWith :: SsaEnv -> Statement SourcePos -> (Maybe SsaEnv, Statement SourcePos)
+ssaWith :: SsaEnv -> (a -> SSAM (Bool, a)) -> a -> SSAM (Maybe SsaEnv, a)
 -------------------------------------------------------------------------------------
-ssaStmtWith = error "TBD: ssaStmtWith"
-
+ssaWith θ f x 
+  = do setSsaEnv θ
+       (b, x') <- f x
+       (, x')  <$> (if b then Just <$> getSsaEnv else return Nothing)
 
 -------------------------------------------------------------------------------------
-ssaExpr    :: Expression SourcePos -> SSAM Expression SourcePos 
+ssaExpr    :: Expression SourcePos -> SSAM (Expression SourcePos) 
 -------------------------------------------------------------------------------------
 
-ssaExpr _ e@(IntLit _ _)               
+ssaExpr e@(IntLit _ _)               
   = return e 
 
-ssaExpr _ e@(BoolLit _ _)
+ssaExpr e@(BoolLit _ _)
   = return e 
 
 ssaExpr (VarRef l x)
@@ -139,32 +156,53 @@ ssaExpr e
 ssaVarDecl :: VarDecl SourcePos -> SSAM (Bool, VarDecl SourcePos)
 -------------------------------------------------------------------------------------
 
-ssaVarDecl θ (VarDecl l x (Just e)) 
+ssaVarDecl (VarDecl l x (Just e)) 
   = do (x', e') <- ssaAsgn l x e
-       (True, VarDecl l x' (Just e'))
+       return    (True, VarDecl l x' (Just e'))
 
-ssaVarDecl θ z@(VarDecl l x Nothing)  
-  = convertError "ssaVarDECL" z
+ssaVarDecl z@(VarDecl l x Nothing)  
+  = convertError "ssaVarDECL x" x 
 
 ------------------------------------------------------------------------------------
-ssaAsgn :: SourcePos -> Id SourcePos -> Expression SourcePos -> (Id SourcePos, Expression SourcePos) 
+ssaAsgn :: SourcePos -> Id SourcePos -> Expression SourcePos -> SSAM (Id SourcePos, Expression SourcePos) 
 ------------------------------------------------------------------------------------
-ssaAsgn x e 
+ssaAsgn l x e 
   = do e' <- ssaExpr e 
-       x' <- updSsaEnv x θ
+       x' <- updSsaEnv l x
        return (x', e')
 
 -------------------------------------------------------------------------------------
 -- | SSA Monad ----------------------------------------------------------------------
 -------------------------------------------------------------------------------------
 
-type Annm   = M.HashMap SourcePos Annot
+type SSAM = State SsaState
+
+type SsaState = ()
+
+-------------------------------------------------------------------------------------
+-- | SSA Environment ----------------------------------------------------------------
+-------------------------------------------------------------------------------------
+
+
+-- type Annm   = M.HashMap SourcePos Annot
 type SsaEnv = Env (Id SourcePos) 
 
+-------------------------------------------------------------------------------------
 initSsaEnv  = error "TBD"
 
 -------------------------------------------------------------------------------------
-updSsaEnv   :: Id SourcePos -> SSAM (Id SourcePos) 
+getSsaEnv   :: SSAM SsaEnv 
+-------------------------------------------------------------------------------------
+getSsaEnv   = error "TBD"
+
+
+-------------------------------------------------------------------------------------
+setSsaEnv   :: SsaEnv -> SSAM () 
+-------------------------------------------------------------------------------------
+setSsaEnv   = error "TBD"
+
+-------------------------------------------------------------------------------------
+updSsaEnv   :: SourcePos -> Id SourcePos -> SSAM (Id SourcePos) 
 -------------------------------------------------------------------------------------
 updSsaEnv   = error "TBD"
 
@@ -177,7 +215,8 @@ findSsaEnv  = error "TBD"
         -- MARK THOSE AS UNASSIGNABLE?
 
 -------------------------------------------------------------------------------------
-joinSsaEnv :: SourcePos -> Maybe SsaEnv -> Maybe SsaEnv -> SSAM (Bool, Statement SourcePos, Statement SourcePos)
+joinSsaEnv :: SourcePos -> Maybe SsaEnv -> Maybe SsaEnv 
+           -> SSAM (Bool, Maybe (Statement SourcePos), Maybe (Statement SourcePos))
 -------------------------------------------------------------------------------------
 joinSsaEnv = error "TBD"
 

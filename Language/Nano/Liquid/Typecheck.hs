@@ -55,7 +55,7 @@ tcNano     :: NanoBare -> TCM ()
 tcNano pgm = forM_ fs $ tcFun γ0
   where
     γ0     = env pgm
-    Src fs = code pgm
+    Src fs = fmap ann $ code pgm -- error "FIX THIS"
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Function -------------------------------------------------------

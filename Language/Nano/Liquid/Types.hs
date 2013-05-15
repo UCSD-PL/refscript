@@ -10,7 +10,7 @@
 module Language.Nano.Liquid.Types (
 
   -- * Programs
-    Nano
+    Nano (..)
   , NanoBare
   , NanoSSA
   , NanoType
@@ -158,7 +158,7 @@ data Nano a r = Nano { code :: !(Source a)
                      , env  :: !(Env (RType r))
                      }
 
-type NanoBare = Nano SourcePos ()
+type NanoBare = Nano AnnBare   ()
 type NanoSSA  = Nano AnnSSA    ()
 type NanoType = Nano AnnType   ()
 
@@ -176,6 +176,9 @@ type FunctionStatement a = Statement a
 
 {-@ newtype Source a = Src [FunctionStatement a] @-}
 newtype Source a = Src [FunctionStatement a]
+
+instance Functor Source where 
+  fmap f (Src zs) = Src (map (fmap f) zs)
 
 instance PP (RType r) => PP (Nano a r) where
   pp (Nano (Src s) env) 
@@ -240,7 +243,9 @@ mkNano  :: [Statement SourcePos] -> Spec -> Either Doc NanoBare
 mkNano stmts spec 
   = do src   <- Src <$> mapM checkFun stmts
        env   <- mkEnv {-(getFunctionIds stmts) -} (sigs spec)
-       return $ Nano src env
+       return $ Nano (fmap (\src -> Ann src []) src) env
+
+-- padSrc :: [Statement SourcePos] -> [Statement AnnBare]
 
 -- | Trivial Syntax Checking 
 
@@ -386,9 +391,10 @@ data Fact
   | Typ { ann_typs :: [Type] }
     deriving (Eq, Show)
 
-data Annot b a = Ann { ann :: a, ann_fact :: Maybe b } deriving (Show)
-type AnnSSA    = Annot SourcePos Fact -- Only Phi       facts
-type AnnType   = Annot SourcePos Fact -- Only Phi + Typ facts
+data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show)
+type AnnBare   = Annot Fact SourcePos -- NO facts
+type AnnSSA    = Annot Fact SourcePos -- Only Phi       facts
+type AnnType   = Annot Fact SourcePos -- Only Phi + Typ facts
 
 
 instance HasAnnotation (Annot b) where 

@@ -43,7 +43,7 @@ verifyFile f
 -- | Parse File and Type Signatures -------------------------------------------
 -------------------------------------------------------------------------------
 
-parseNanoFromFile :: FilePath -> IO (Nano SourcePos ())
+parseNanoFromFile :: FilePath -> IO NanoBare
 parseNanoFromFile f 
   = do src   <- parseJavaScriptFromFile f
        spec  <- parseSpecFromFile f

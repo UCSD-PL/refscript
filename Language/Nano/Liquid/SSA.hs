@@ -260,6 +260,7 @@ envJoin' l θ1 θ2
       phis         = envToList $ envLefts θ 
       meet         = \x1 x2 -> if x1 == x2 then Right x1 else Left (x1, x2)
 
+-- phiAsgn :: SourcePos -> (Id SourcePos, (Id SourcePos, Id SourcePos)) -> SSAM (Statement SourcePos, Statement SourcePos)   
 phiAsgn l (x, (SI x1, SI x2))
   = do x' <- updSsaEnv l x                                  -- Generate FRESH phi name
        modify $ \st -> st { phis = addPhi l x' (phis st) }  -- RECORD x' as PHI-Var at l 

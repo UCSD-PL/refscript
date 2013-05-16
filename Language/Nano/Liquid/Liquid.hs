@@ -9,6 +9,7 @@ import           Language.Nano.Files
 import           Language.Nano.Types
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Parse 
+import           Language.Nano.Liquid.SSA
 import           Language.Nano.Liquid.Typecheck
 
 import           Language.ECMAScript3.Syntax
@@ -35,8 +36,13 @@ verifyFile :: FilePath -> IO (F.FixResult SourcePos)
 --------------------------------------------------------------------------------
 verifyFile f 
   = do nano <- parseNanoFromFile f 
+       donePhase Loud "Parse"
        putStrLn . render . pp $ nano
-       r    <- typeCheck nano
+       let nanoSsa = ssaTransform nano
+       donePhase Loud "SSA Transform"
+       putStrLn . render . pp $ nanoSsa
+       r    <- typeCheck nanoSsa
+       donePhase Loud "Typechecking"
        return r
 
 -------------------------------------------------------------------------------

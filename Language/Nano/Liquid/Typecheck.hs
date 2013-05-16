@@ -21,7 +21,6 @@ import           Language.Fixpoint.Misc
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Text.Printf                        (printf)
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
 import           System.Exit                        (exitWith)
 
 -------------------------------------------------------------------------------

@@ -1,7 +1,4 @@
-module Language.Nano.Liquid.SSA (
-  -- * SSA Transform
-  ssaTransform
-  ) where 
+module Language.Nano.Liquid.SSA (ssaTransform) where 
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
@@ -25,7 +22,9 @@ import           Text.Printf                        (printf)
 import qualified Data.Traversable as T
 import           Text.Parsec.Pos              
 
+----------------------------------------------------------------------------------
 ssaTransform :: NanoBare -> NanoSSA
+----------------------------------------------------------------------------------
 ssaTransform = either (errorstar . snd) id . execute . ssaNano 
 
 
@@ -152,8 +151,9 @@ ssaExpr e@(IntLit _ _)
 ssaExpr e@(BoolLit _ _)
   = return e 
 
-ssaExpr (VarRef l x)
-  = VarRef l <$> findSsaEnv x
+ssaExpr e@(VarRef l x)
+  = do imm <- isImmutable x
+       if imm then return e else (VarRef l <$> findSsaEnv x)
 
 ssaExpr (PrefixExpr l o e)
   = PrefixExpr l o <$> ssaExpr e
@@ -264,21 +264,26 @@ setSsaEnv θ = modify $ \st -> st { names = θ }
 updSsaEnv   :: SourcePos -> Id SourcePos -> SSAM (Id SourcePos) 
 -------------------------------------------------------------------------------------
 updSsaEnv l x 
-  = do imm   <- envMem x . immutables <$> get
+  = do imm   <- isImmutable x 
        when imm $ ssaError l $ errorWriteImmutable x
        n     <- count <$> get
        let x' = newId l x n
        modify $ \st -> st {names = envAdd x (SI x') (names st)} {count = 1 + n}
        return x'
 
+---------------------------------------------------------------------------------
+isImmutable   :: Id SourcePos -> SSAM Bool 
+---------------------------------------------------------------------------------
+isImmutable x = envMem x . immutables <$> get
+
 newId :: SourcePos -> Id SourcePos -> Int -> Id SourcePos 
 newId l (Id _ x) n = Id l (x ++ "_" ++ show n)  
 
--------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 findSsaEnv   :: Id SourcePos -> SSAM (Id SourcePos) 
--------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 findSsaEnv x 
-  = do θ <- names <$> get 
+  = do θ   <- names <$> get 
        case envFindTy x θ of 
          Just (SI i) -> return i 
          Nothing     -> ssaError (srcPos x) $ errorUnboundId x

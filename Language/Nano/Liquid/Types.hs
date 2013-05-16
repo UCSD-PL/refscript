@@ -254,7 +254,7 @@ isLeft            = not . isRight
 mkNano  :: [Statement SourcePos] -> Spec -> Either Doc NanoBare 
 mkNano stmts spec 
   = do src   <- Src <$> mapM checkFun stmts
-       env   <- mkEnv {-(getFunctionIds stmts) -} (sigs spec)
+       env   <- mkEnv $ sigs spec
        return $ Nano (fmap (\src -> Ann src []) src) env
 
 -- padSrc :: [Statement SourcePos] -> [Statement AnnBare]

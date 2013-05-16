@@ -33,6 +33,7 @@ module Language.Nano.Liquid.Types (
   , envLefts
   , envRights
   , envIntersectWith
+  , envEmpty
 
   -- * Accessors
   , code
@@ -67,6 +68,9 @@ module Language.Nano.Liquid.Types (
   -- * Annotations
   , Annot (..)
   , Fact (..)
+  , AnnBare
+  , AnnSSA
+  , AnnType
   ) where 
 
 import           Data.Maybe             (isJust)
@@ -212,6 +216,7 @@ instance Monoid Spec where
 
 type Env t  = F.SEnv (Located t) 
 
+envEmpty        = F.emptySEnv
 envMap    f     = F.mapSEnv (fmap f) 
 envFilter f     = F.filterSEnv (f . val) 
 envMem i γ      = isJust $ envFind i γ

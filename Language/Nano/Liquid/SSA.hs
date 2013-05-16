@@ -22,21 +22,28 @@ import           Language.ECMAScript3.Syntax.Annotations
 import           Language.Fixpoint.Misc             
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Text.Printf                        (printf)
-
+import qualified Data.Traversable as T
+import           Text.Parsec.Pos              
 
 ssaTransform :: NanoBare -> NanoSSA
-ssaTransform pgm = error "TBD" -- execute $ ssaNano pgm
--- 1. builds TABLE inside SSAM
--- 2. execute
--- 3. extract table
--- 4. use Functor instance/table to decorate :: SourcePos -> (SourcePos, Maybe Annot) 
+ssaTransform = either (errorstar . snd) id . execute . ssaNano 
 
--------------------------------------------------------------------------------------
-ssaNano :: Nano SourcePos () -> SSAM (Nano SourcePos ())
--------------------------------------------------------------------------------------
-ssaNano p@(Nano {code = Src fs}) 
-  = do fs'   <- mapM ssaFun fs 
-       return $ p {code = Src fs'}
+
+----------------------------------------------------------------------------------
+ssaNano :: NanoBare -> SSAM NanoSSA
+----------------------------------------------------------------------------------
+ssaNano p@(Nano (Src fs) env) 
+  = do fs'    <- forM fs $ \f -> T.mapM stripAnn f
+       setImmutables $ envMap (\_ -> ()) env 
+       fs''   <- mapM ssaFun fs'
+       anns   <- getAnns
+       return $ p {code = Src $ (patchAnn anns <$>) <$> fs''}
+
+stripAnn :: AnnBare -> SSAM SourcePos
+stripAnn (Ann l fs) = forM_ fs (addAnn l) >> return l   
+
+patchAnn     :: AnnInfo -> SourcePos -> AnnSSA
+patchAnn m l = Ann l $ M.lookupDefault [] l m
 
 -------------------------------------------------------------------------------------
 ssaFun :: FunctionStatement SourcePos -> SSAM (FunctionStatement SourcePos)
@@ -179,6 +186,41 @@ ssaAsgn l x e
        x' <- updSsaEnv l x
        return (x', e')
 
+
+-------------------------------------------------------------------------------------
+envJoin :: SourcePos -> Maybe SsaEnv -> Maybe SsaEnv 
+           -> SSAM ( Maybe SsaEnv
+                   , Maybe (Statement SourcePos)
+                   , Maybe (Statement SourcePos) )
+-------------------------------------------------------------------------------------
+envJoin _ Nothing Nothing     = return (Nothing, Nothing, Nothing)
+envJoin l Nothing (Just θ)    = return (Just θ , Nothing, Nothing) 
+envJoin l (Just θ) Nothing    = return (Just θ , Nothing, Nothing) 
+envJoin l (Just θ1) (Just θ2) = envJoin' l θ1 θ2
+
+-- MERGE & RECORD SIDE CONDITIONS!!!!
+envJoin' l θ1 θ2
+  = do setSsaEnv θ'                          -- Keep Common binders 
+       stmts      <- forM phis $ phiAsgn l   -- Adds Phi-Binders, Phi Annots, Return Stmts
+       θ''        <- getSsaEnv 
+       let (s1,s2) = unzip stmts
+       return (Just θ'', Just $ BlockStmt l s1, Just $ BlockStmt l s2) 
+    where 
+      θ            = envIntersectWith meet θ1 θ2
+      θ'           = envRights θ
+      phis         = envToList $ envLefts θ 
+      meet         = \x1 x2 -> if x1 == x2 then Right x1 else Left (x1, x2)
+
+phiAsgn l (x, (SI x1, SI x2))
+  = do x' <- updSsaEnv l x          -- Generate FRESH phi name
+       addAnn l (PhiVar x')         -- RECORD x' as PHI-Var at l 
+       let s1 = mkPhiAsgn l x' x1   -- Create Phi-Assignments
+       let s2 = mkPhiAsgn l x' x2   -- for both branches
+       return $ (s1, s2) 
+  where 
+       mkPhiAsgn l x y = VarDeclStmt l [VarDecl l x (Just $ VarRef l y)]
+
+
 -------------------------------------------------------------------------------------
 -- | SSA Monad ----------------------------------------------------------------------
 -------------------------------------------------------------------------------------
@@ -187,12 +229,12 @@ type SSAM     = ErrorT String (State SsaState)
 
 data SsaState = SsaST { immutables :: Env ()   -- ^ globals
                       , names      :: SsaEnv   -- ^ current SSA names 
-                      , phis       :: !PhiInfo -- ^ built up map of annots 
                       , count      :: !Int     -- ^ fresh index
+                      , anns       :: !AnnInfo -- ^ built up map of annots 
                       }
 
 type SsaEnv     = Env SsaInfo 
-type PhiInfo    = M.HashMap SourcePos [Fact] 
+type AnnInfo    = M.HashMap SourcePos [Fact] 
 newtype SsaInfo = SI (Id SourcePos) deriving (Eq)
 
 -------------------------------------------------------------------------------------
@@ -205,6 +247,11 @@ initSsaEnv xs = envFromList [(x, SI x) | x <- xs]
 getSsaEnv   :: SSAM SsaEnv 
 -------------------------------------------------------------------------------------
 getSsaEnv   = names <$> get 
+
+-------------------------------------------------------------------------------------
+setImmutables :: Env () -> SSAM () 
+-------------------------------------------------------------------------------------
+setImmutables z = modify $ \st -> st { immutables = z } 
 
 
 -------------------------------------------------------------------------------------
@@ -236,43 +283,35 @@ findSsaEnv x
          Just (SI i) -> return i 
          Nothing     -> ssaError (srcPos x) $ errorUnboundId x
 
--------------------------------------------------------------------------------------
-envJoin :: SourcePos -> Maybe SsaEnv -> Maybe SsaEnv 
-           -> SSAM ( Maybe SsaEnv
-                   , Maybe (Statement SourcePos)
-                   , Maybe (Statement SourcePos) )
--------------------------------------------------------------------------------------
-envJoin _ Nothing Nothing     = return (Nothing, Nothing, Nothing)
-envJoin l Nothing (Just θ)    = return (Just θ , Nothing, Nothing) 
-envJoin l (Just θ) Nothing    = return (Just θ , Nothing, Nothing) 
-envJoin l (Just θ1) (Just θ2) = envJoin' l θ1 θ2
+-------------------------------------------------------------------------------
+addAnn     :: SourcePos -> Fact -> SSAM ()
+-------------------------------------------------------------------------------
+addAnn l f = modify $ \st -> st { anns = inserts l f (anns st) }
 
--- MERGE & RECORD SIDE CONDITIONS!!!!
-envJoin' l θ1 θ2
-  = do setSsaEnv θ'                          -- Keep Common binders 
-       stmts      <- forM phis $ phiAsgn l   -- Adds Phi-Binders, Phi Annots, Return Stmts
-       θ''        <- getSsaEnv 
-       let (s1,s2) = unzip stmts
-       return (Just θ'', Just $ BlockStmt l s1, Just $ BlockStmt l s2) 
-    where 
-      θ            = envIntersectWith meet θ1 θ2
-      θ'           = envRights θ
-      phis         = envToList $ envLefts θ 
-      meet         = \x1 x2 -> if x1 == x2 then Right x1 else Left (x1, x2)
 
--- phiAsgn :: SourcePos -> (Id SourcePos, (Id SourcePos, Id SourcePos)) -> SSAM (Statement SourcePos, Statement SourcePos)   
-phiAsgn l (x, (SI x1, SI x2))
-  = do x' <- updSsaEnv l x                                  -- Generate FRESH phi name
-       modify $ \st -> st { phis = addPhi l x' (phis st) }  -- RECORD x' as PHI-Var at l 
-       let s1 = mkPhiAsgn l x' x1                           -- Create Phi-Assignments
-       let s2 = mkPhiAsgn l x' x2
-       return $ (s1, s2) 
-  where 
-    mkPhiAsgn l x y = VarDeclStmt l [VarDecl l x (Just $ VarRef l y)]
-    addPhi l x m    = M.insert l  ((PhiVar x) : (M.lookupDefault [] l m)) m 
+-------------------------------------------------------------------------------
+getAnns    :: SSAM AnnInfo 
+-------------------------------------------------------------------------------
+getAnns    = anns <$> get
+
 
 -------------------------------------------------------------------------------
 ssaError       :: SourcePos -> String -> SSAM a
 -------------------------------------------------------------------------------
 ssaError l msg = throwError $ printf "ERROR at %s : %s" (ppshow l) msg
+
+
+-- inserts l xs m = M.insert l (xs ++ M.lookupDefault [] l m) m
+
+-------------------------------------------------------------------------------
+execute         :: SSAM a -> Either (SourcePos, String) a 
+-------------------------------------------------------------------------------
+execute act 
+  = case runState (runErrorT act) initState of 
+      (Left err, _) -> Left  (initialPos "" ,  err)
+      (Right x, st) -> Right x
+
+initState :: SsaState
+initState = SsaST envEmpty envEmpty  0 M.empty
+
 

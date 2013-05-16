@@ -1,8 +1,3 @@
-function random(){
-  var x;
-  return x;
-}
-
 function main(){
   var y = 0;
   var x = random();

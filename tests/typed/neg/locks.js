@@ -1,7 +1,3 @@
-function random(){
-  var x;
-  return x;
-}
 
 function create(){
   ensures($result == 0);
@@ -22,8 +18,8 @@ function release(l){
 
 
 function main(){
-  var l = create();
   var x = random();
+  var l = create();
   if (0 <  x){ l = lock(l); }
   if (0 <= x){ l = unlock(l); }
   assert(l == 0);

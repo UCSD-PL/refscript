@@ -48,7 +48,7 @@ patchAnn m l = Ann l $ M.lookupDefault [] l m
 ssaFun :: FunctionStatement SourcePos -> SSAM (FunctionStatement SourcePos)
 -------------------------------------------------------------------------------------
 ssaFun (FunctionStmt l f xs body) 
-  = do setSsaEnv   $ initSsaEnv xs 
+  = do setSsaEnv   $ initSsaEnv $ (returnId l) : xs 
        (_, body') <- ssaStmts body 
        return      $ FunctionStmt l f xs body'
 
@@ -198,7 +198,6 @@ envJoin l Nothing (Just θ)    = return (Just θ , Nothing, Nothing)
 envJoin l (Just θ) Nothing    = return (Just θ , Nothing, Nothing) 
 envJoin l (Just θ1) (Just θ2) = envJoin' l θ1 θ2
 
--- MERGE & RECORD SIDE CONDITIONS!!!!
 envJoin' l θ1 θ2
   = do setSsaEnv θ'                          -- Keep Common binders 
        stmts      <- forM phis $ phiAsgn l   -- Adds Phi-Binders, Phi Annots, Return Stmts

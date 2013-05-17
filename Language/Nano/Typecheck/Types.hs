@@ -41,9 +41,9 @@ module Language.Nano.Typecheck.Types (
 
   -- * Refinement Types
   , RType (..)
-  , RefType
   , toType
-  
+  , ofType
+
   -- * Deconstructing Types
   , bkFun
   , bkAll
@@ -73,6 +73,8 @@ module Language.Nano.Typecheck.Types (
   , AnnType
   , AnnInfo
 
+  -- * Refinement Types
+  , RefType 
   ) where 
 
 import           Data.Maybe             (isJust)
@@ -138,12 +140,13 @@ data RType r
 -- | Standard Types
 type Type    = RType ()
 
--- | (Real) Refined Types
-type RefType = RType F.Reft 
-
 -- | Stripping out Refinements 
 toType :: RType a -> Type
 toType = fmap (const ())
+  
+-- | Adding in Refinements
+ofType :: (Reftable r) => Type -> RType r
+ofType = fmap (const top)
 
 
 bkFun :: RType a -> Maybe ([TVar], [RType a], RType a)
@@ -248,7 +251,6 @@ isRight (Right _) = True
 isRight (_)       = False
 isLeft            = not . isRight
 
-
 --------------------------------------------------------------------------
 -- | Combining Source and Spec into Nano ---------------------------------
 --------------------------------------------------------------------------
@@ -296,53 +298,9 @@ mkEnv = foldM step F.emptySEnv
                       Nothing -> Right $ envAdd i t γ 
                       Just l' -> Left  $ text $ errorDuplicate i (srcPos i) l'
 
------------------------------------------------------------------------
--- | Primitive / Base Types -------------------------------------------
------------------------------------------------------------------------
-
-tVar   = (`TVar` ()) 
-tInt   = TApp TInt  [] ()
-tBool  = TApp TBool [] ()
-tVoid  = TApp TVoid [] ()
-tErr   = tVoid
-
------------------------------------------------------------------------
--- | Operator Types Types ---------------------------------------------
------------------------------------------------------------------------
-
------------------------------------------------------------------------
-infixOpTy              :: InfixOp -> Type
------------------------------------------------------------------------
-
-tvA                    = TV (F.symbol "Z")
-tA                     = tVar tvA
-
-infixOpTy OpLT         = TAll tvA $ TFun [tA, tA] tBool  
-infixOpTy OpLEq        = TAll tvA $ TFun [tA, tA] tBool
-infixOpTy OpGT         = TAll tvA $ TFun [tA, tA] tBool
-infixOpTy OpGEq        = TAll tvA $ TFun [tA, tA] tBool
-infixOpTy OpEq         = TAll tvA $ TFun [tA, tA] tBool
-infixOpTy OpNEq        = TAll tvA $ TFun [tA, tA] tBool
-
-infixOpTy OpLAnd       = TFun [tBool, tBool] tBool 
-infixOpTy OpLOr        = TFun [tBool, tBool] tBool
-
-infixOpTy OpSub        = TFun [tInt, tInt]   tInt 
-infixOpTy OpAdd        = TFun [tInt, tInt]   tInt 
-infixOpTy OpMul        = TFun [tInt, tInt]   tInt 
-infixOpTy OpDiv        = TFun [tInt, tInt]   tInt 
-infixOpTy OpMod        = TFun [tInt, tInt]   tInt  
-
-infixOpTy o            = convertError "infixOpTy" o
-
------------------------------------------------------------------------
-prefixOpTy             :: PrefixOp -> Type
------------------------------------------------------------------------
-
-prefixOpTy PrefixMinus = TFun [tInt] tInt
-prefixOpTy PrefixLNot  = TFun [tBool] tBool
-prefixOpTy o           = convertError "prefixOpTy" o
-
+---------------------------------------------------------------------------
+-- | Pretty Printer Instances ---------------------------------------------
+---------------------------------------------------------------------------
 
 -- instance Show r => PP (RType r) where 
 --   pp = text . show
@@ -353,11 +311,18 @@ instance PP Type where
 instance PP a => PP [a] where 
   pp = ppArgs brackets comma 
 
-ppType (TVar α _)     = pp α 
-ppType (TFun ts t)    = ppArgs parens comma ts <+> text "=>" <+> ppType t 
-ppType t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." <+> ppType t' where (αs, t') = bkAll t
-ppType (TApp c [] _)  = ppTC c 
-ppType (TApp c ts _)  = parens $ ppTC c <+> ppArgs id space ts  
+instance Reftable r => PP (RType r) where
+  pp (TVar α r)     = ppTy r $ pp α 
+  pp (TFun ts t)    = ppArgs parens comma ts <+> text "=>" <+> pp t 
+  pp t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
+  pp (TApp c [] r)  = ppTy r $ ppTC c 
+  pp (TApp c ts r)  = ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
+
+-- ppType (TVar α _)     = pp α 
+-- ppType (TFun ts t)    = ppArgs parens comma ts <+> text "=>" <+> ppType t 
+-- ppType t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." <+> ppType t' where (αs, t') = bkAll t
+-- ppType (TApp c [] _)  = ppTC c 
+-- ppType (TApp c ts _)  = parens $ ppTC c <+> ppArgs id space ts  
 
 ppArgs p sep          = p . intersperse sep . map pp
 
@@ -399,3 +364,52 @@ instance (PP a, PP b) => PP (Annot b a) where
 
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 
+
+-----------------------------------------------------------------------
+-- | Primitive / Base Types -------------------------------------------
+-----------------------------------------------------------------------
+
+tVar   = (`TVar` ()) 
+tInt   = TApp TInt  [] ()
+tBool  = TApp TBool [] ()
+tVoid  = TApp TVoid [] ()
+tErr   = tVoid
+
+-----------------------------------------------------------------------
+-- | Operator Types ---------------------------------------------------
+-----------------------------------------------------------------------
+
+-----------------------------------------------------------------------
+infixOpTy              :: InfixOp -> Type
+-----------------------------------------------------------------------
+
+tvA                    = TV (F.symbol "Z")
+tA                     = tVar tvA
+
+infixOpTy OpLT         = TAll tvA $ TFun [tA, tA] tBool  
+infixOpTy OpLEq        = TAll tvA $ TFun [tA, tA] tBool
+infixOpTy OpGT         = TAll tvA $ TFun [tA, tA] tBool
+infixOpTy OpGEq        = TAll tvA $ TFun [tA, tA] tBool
+infixOpTy OpEq         = TAll tvA $ TFun [tA, tA] tBool
+infixOpTy OpNEq        = TAll tvA $ TFun [tA, tA] tBool
+
+infixOpTy OpLAnd       = TFun [tBool, tBool] tBool 
+infixOpTy OpLOr        = TFun [tBool, tBool] tBool
+
+infixOpTy OpSub        = TFun [tInt, tInt]   tInt 
+infixOpTy OpAdd        = TFun [tInt, tInt]   tInt 
+infixOpTy OpMul        = TFun [tInt, tInt]   tInt 
+infixOpTy OpDiv        = TFun [tInt, tInt]   tInt 
+infixOpTy OpMod        = TFun [tInt, tInt]   tInt  
+
+infixOpTy o            = convertError "infixOpTy" o
+
+-----------------------------------------------------------------------
+prefixOpTy             :: PrefixOp -> Type
+-----------------------------------------------------------------------
+
+prefixOpTy PrefixMinus = TFun [tInt] tInt
+prefixOpTy PrefixLNot  = TFun [tBool] tBool
+prefixOpTy o           = convertError "prefixOpTy" o
+
+

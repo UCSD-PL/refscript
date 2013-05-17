@@ -408,5 +408,15 @@ type AnnSSA    = Annot Fact SourcePos -- Only Phi       facts
 type AnnType   = Annot Fact SourcePos -- Only Phi + Typ facts
 type AnnInfo   = M.HashMap SourcePos [Fact] 
 
+instance PP Fact where
+  pp (PhiVar x)   = text "phi"  <+> pp x
+  pp (TypInst ts) = text "inst" <+> pp ts 
+
+instance PP AnnInfo where
+  pp             = vcat . (ppBind <$>) . M.toList 
+    where 
+      ppB (x, t) = pp x <+> dcolon <+> pp t
+
+
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 

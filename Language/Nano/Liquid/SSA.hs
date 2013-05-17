@@ -32,7 +32,7 @@ ssaTransform = either (errorstar . snd) id . execute . ssaNano
 ssaNano :: NanoBare -> SSAM NanoSSA
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano (Src fs) env) 
-  = do fs'    <- forM fs $ \f -> T.mapM stripAnn f
+  = do fs'    <- forM fs $ T.mapM stripAnn
        setImmutables $ envMap (\_ -> ()) env 
        fs''   <- mapM ssaFun fs'
        anns   <- getAnns

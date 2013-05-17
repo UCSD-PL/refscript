@@ -2,9 +2,10 @@ module Language.Nano.Liquid.Typecheck (typeCheck) where
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
-import qualified Data.HashSet as S 
+import qualified Data.HashSet        as S 
 import qualified Data.HashMap.Strict as M 
-import qualified Data.List as L
+import qualified Data.List           as L
+import qualified Data.Traversable    as T
 import           Data.Monoid
 import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
 import           Language.Nano.Files
@@ -14,7 +15,6 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Parse 
 import           Language.Nano.Liquid.TCMonad
 import           Language.Nano.Liquid.Subst
-
 import           Language.ECMAScript3.Syntax
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface        (resultExit)
@@ -34,7 +34,16 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
                  forM_ errs $ \(l,e) -> putStrLn $ printf "Error at %s\n  %s\n" (ppshow l) e
                  return $ F.Unsafe (fst <$> errs)
     
-safe _      = return F.Safe 
+safe pgm@(Nano (Src fs) env)
+  -- = return F.Safe
+  = do forM fs $ T.mapM printAnn
+       return F.Safe 
+
+printAnn :: AnnBare -> IO () 
+printAnn (Ann l fs) = forM_ fs $ \f -> putStrLn $ printf "At %s: %s" (ppshow l) (ppshow f)
+
+
+
 
 -------------------------------------------------------------------------------
 -- | Type Check Environment ---------------------------------------------------
@@ -51,17 +60,29 @@ type TCEnv = Maybe (Env Type)
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
 
-tcNano     :: NanoBare -> TCM (M.HashMap SourcePos [Type]) 
-tcNano pgm = M.unions <$> (forM fs $ tcFun γ0)
+tcNano :: NanoSSA -> TCM NanoType
+tcNano p@(Nano (Src fs) env)
+  = do fs' <- forM fs $ T.mapM stripAnn
+       m   <- tracePP "ANNOT MAP" <$> (tcNano' $ Nano (Src fs') env)
+       return $ p {code = Src $ (patchAnn m <$>) <$> fs'}
+
+tcNano'     :: Nano SourcePos () -> TCM AnnInfo  
+tcNano' pgm = M.unions <$> (forM fs $ tcFun γ0)
   where
     γ0     = env pgm
-    Src fs = fmap ann $ code pgm -- error "FIX THIS"
+    Src fs = code pgm
+
+stripAnn :: AnnBare -> TCM SourcePos
+stripAnn (Ann l fs) = forM_ fs (addAnn l) >> return l   
+
+patchAnn     :: AnnInfo -> SourcePos -> AnnType
+patchAnn m l = Ann l $ M.lookupDefault [] l m
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-tcFun    :: Env Type -> FunctionStatement SourcePos -> TCM (M.HashMap SourcePos [Type])
+tcFun    :: Env Type -> FunctionStatement SourcePos -> TCM AnnInfo  
 tcFun γ (FunctionStmt l f xs body) 
   = do (αs, ts, t)    <- funTy l γ f xs
        let γ'          = envAddFun l f αs xs ts t γ 
@@ -144,7 +165,7 @@ tcStmt γ (VarDeclStmt _ ds)
 
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
-  = do t  <- maybe (return tVoid) (tcExpr γ) eo 
+  = do t <- maybe (return tVoid) (tcExpr γ) eo 
        assertTy l "Return" eo t (envFindReturn γ) 
        return Nothing
 

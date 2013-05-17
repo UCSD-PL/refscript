@@ -73,6 +73,14 @@ instance Substitutable Type where
   free (TFun ts t)      = S.unions   $ free <$> t:ts
   free (TAll α t)       = S.delete α $ free t 
 
+instance Substitutable Fact where
+  apply θ x@(PhiVar _)  = x
+  apply θ (TypInst ts)  = TypInst $ apply θ ts
+
+  free (PhiVar _)       = S.empty
+  free (TypInst ts)     = free ts
+
+
 appTy θ (TApp c ts z)      = TApp c (apply θ ts) z 
 appTy (Su m) t@(TVar α _)  = M.lookupDefault t α m  
 appTy θ (TFun ts t)        = TFun  (apply θ ts) (apply θ t)

@@ -26,6 +26,7 @@ module Language.Nano.Liquid.TCMonad (
   , getSubst, setSubst
 
   -- * Annotations
+  , addAnn
   , getAnns
 
   )  where 
@@ -56,7 +57,7 @@ import           Text.Parsec.Pos
 data TCState = TCS { tc_errs  :: ![(SourcePos, String)]
                    , tc_subst :: !Subst
                    , tc_cnt   :: !Int
-                   , tc_anns  :: M.HashMap SourcePos [Type] --AnnInfo
+                   , tc_anns  :: AnnInfo
                    }
 
 type TCM     = ErrorT String (State TCState)
@@ -101,19 +102,22 @@ freshTyArgs l (αs, t)
        return $ (`apply` t) $ fromList $ zip αs (tVar <$> βs)
 
 setTyArgs l βs 
-  = do st   <- get 
-       let m = tc_anns st
+  = do m <- tc_anns <$> get 
        when (M.member l m) $ tcError l "Multiple Type Args"
-       put   $ st { tc_anns = M.insert l (tVar <$> βs) m }
+       addAnn l $ TypInst (tVar <$> βs)
 
 
 -------------------------------------------------------------------------------
-getAnns :: TCM (M.HashMap SourcePos [Type])
+getAnns :: TCM AnnInfo  
 -------------------------------------------------------------------------------
 getAnns = do m <- tc_anns  <$> get
              θ <- tc_subst <$> get
              return $ fmap (apply θ) m 
 
+-------------------------------------------------------------------------------
+addAnn :: SourcePos -> Fact -> TCM () 
+-------------------------------------------------------------------------------
+addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
 
 -------------------------------------------------------------------------------
 execute     :: TCM a -> Either [(SourcePos, String)] a

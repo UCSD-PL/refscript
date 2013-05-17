@@ -71,6 +71,8 @@ module Language.Nano.Liquid.Types (
   , AnnBare
   , AnnSSA
   , AnnType
+  , AnnInfo
+
   ) where 
 
 import           Data.Maybe             (isJust)
@@ -404,7 +406,7 @@ data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show)
 type AnnBare   = Annot Fact SourcePos -- NO facts
 type AnnSSA    = Annot Fact SourcePos -- Only Phi       facts
 type AnnType   = Annot Fact SourcePos -- Only Phi + Typ facts
-
+type AnnInfo   = M.HashMap SourcePos [Fact] 
 
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 

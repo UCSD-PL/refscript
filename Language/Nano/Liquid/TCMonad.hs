@@ -20,7 +20,11 @@ module Language.Nano.Liquid.TCMonad (
   , logError
 
   -- * Freshness
-  , Freshable (..)
+  , freshTyArgs
+
+  -- * Substitutions
+  , getSubst, setSubst
+
   )  where 
 
 import           Text.Printf
@@ -31,9 +35,13 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Types
 import           Language.Nano.Liquid.Types
+import           Language.Nano.Liquid.Substitution
 import           Language.Nano.Errors
 import           Data.Maybe                   (fromMaybe)
+import           Data.Monoid                  
+import qualified Data.HashMap.Strict     as M
 import           Text.Parsec.Pos              
+
 
 -- import           Text.PrettyPrint.HughesPJ
 -- import           Language.Nano.Types
@@ -42,26 +50,64 @@ import           Text.Parsec.Pos
 -- | Typechecking monad -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-data TCState = TCS { tc_errs :: ![(SourcePos, String)]
-                   , tc_cnt  :: !Int
+data TCState = TCS { tc_errs  :: ![(SourcePos, String)]
+                   , tc_subst :: !Subst
+                   , tc_cnt   :: !Int
+                   , tc_anns  :: M.Map SourcePos [Type] --AnnInfo
                    }
 
 type TCM     = ErrorT String (State TCState)
+
+-------------------------------------------------------------------------------
+getSubst :: TCM Subst
+-------------------------------------------------------------------------------
+getSubst = tc_subst <$> get 
+
+-------------------------------------------------------------------------------
+setSubst   :: Subst -> TCM () 
+-------------------------------------------------------------------------------
+setSubst θ = modify $ \st -> st { tc_subst = θ }
+
+-------------------------------------------------------------------------------
+extSubst :: [TVar] -> TCM ()
+-------------------------------------------------------------------------------
+extSubst βs = getSubst >>= setSubst . (`mappend` θ')
+  where 
+    θ'      = fromList $ zip βs (tVar <$> βs)
+
 
 -------------------------------------------------------------------------------
 tcError :: SourcePos -> String -> TCM a
 -------------------------------------------------------------------------------
 tcError l msg = throwError $ printf "ERROR at %s : %s" (ppshow l) msg
 
+
 -------------------------------------------------------------------------------
 logError   :: a -> SourcePos -> String -> TCM a
 -------------------------------------------------------------------------------
 logError x l msg = (modify $ \st -> st { tc_errs = (l,msg):(tc_errs st)}) >> return x
 
+
+-------------------------------------------------------------------------------
+freshTyArgs :: SourcePos -> ([TVar], Type) -> TCM Type 
+-------------------------------------------------------------------------------
+freshTyArgs l αs 
+  = do βs <- fresh αs
+       setTyArgs l βs
+       extSubst βs 
+       return $ (`apply` t) $ fromList $ zip αs (tVar <$> βs)
+
+setTyArgs l βs 
+  = do st <- get 
+       m   = tc_anns st
+       when (M.member l m) $ tcError l "Multiple Type Args"
+       put $ st { tc_anns = M.insert l (tVar <$> βs) m }
+
+
 -------------------------------------------------------------------------------
 execute     :: TCM a -> Either [(SourcePos, String)] a
 -------------------------------------------------------------------------------
-execute act = case runState (runErrorT act) (TCS [] 0)of 
+execute act = case runState (runErrorT act) (TCS [] mempty 0) of 
                 (Left err, _) -> Left [(initialPos "" ,  err)]
                 (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errs st)
 

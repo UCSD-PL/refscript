@@ -233,7 +233,6 @@ data SsaState = SsaST { immutables :: Env ()   -- ^ globals
                       }
 
 type SsaEnv     = Env SsaInfo 
-type AnnInfo    = M.HashMap SourcePos [Fact] 
 newtype SsaInfo = SI (Id SourcePos) deriving (Eq)
 
 -------------------------------------------------------------------------------------

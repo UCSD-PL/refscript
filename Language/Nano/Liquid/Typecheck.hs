@@ -187,33 +187,52 @@ tcExpr γ e
 
 tcCall γ l z es ft 
   = do (_,its,ot) <- instantiate l ft
-       θ          <- unifyArgs l γ es its 
-       return      $ apply θ ot
+       ets        <- mapM (tcExpr γ) es
+       θ'         <- unifyTypes l "" its ets
+       return      $ apply θ' ot
 
 instantiate l ft 
-  = do let (αs, t) = bkAll ft 
-       θ          <- fromList . zip αs . fmap tVar <$> fresh αs
-       maybe err return $ bkFun $ apply θ t
+  = do t' <- freshTyArgs l $ bkAll ft 
+       maybe err return   $ bkFun t'
     where
-       err         = tcError l $ errorNonFunction ft
+       err = tcError l $ errorNonFunction ft
 
-unifyArgs l γ es ts
-  | length es /= length ts = tcError l errorArgMismatch 
-  | otherwise              = do tes <- mapM (tcExpr γ) es
-                                case unifys mempty ts tes of
-                                  Left msg -> tcError l msg
-                                  Right θ  -> validSubst l γ θ
+      
+--        βs          <- freshTyArgs l αs
+--        _           <- setTyArgs l βs
+--        let t'      <- `apply` t fromList $ zip αs (tVar <$> βs)
+--        extendSubst βs
+-- 
+--        θ           <- getSubst 
+--        _           <- putSubst $ θ `mappend` θ'
 
-validSubst       :: SourcePos -> Env Type -> Subst -> TCM Subst
-validSubst l γ θ = mapM_ (validTyBind l γ) (toList θ) >> return θ
+-- unifyArgs l γ θ es ts
+--   | length es /= length ts = tcError l errorArgMismatch 
+--   | otherwise              = do tes <- mapM (tcExpr γ) es
+--                                 case unifys θ ts tes of
+--                                   Left msg -> tcError l msg
+--                                   Right θ  -> validSubst l γ θ
+-- validSubst       :: SourcePos -> Env Type -> Subst -> TCM Subst
+-- validSubst l γ θ = mapM_ (validTyBind l γ) (toList θ) >> return θ
+-- 
+-- validTyBind l γ (α, t) 
+--   | bad1      = tcError l $ errorBoundTyVar α t 
+--   -- | bad2      = tcError l $ errorFreeTyVar t
+--   | otherwise = return True 
+--   where
+--     bad1      = envMem α γ                                  -- dom θ        \cap γ = empty 
+--   --  bad2      = not $ all (`envMem` γ) $ S.toList $ free t  -- free (rng θ) \subset γ
 
-validTyBind l γ (α, t) 
-  | bad1      = tcError l $ errorBoundTyVar α t 
-  | bad2      = tcError l $ errorFreeTyVar t
-  | otherwise = return True 
-  where
-    bad1      = envMem α γ                                  -- dom θ        \cap γ = empty 
-    bad2      = not $ all (`envMem` γ) $ S.toList $ free t  -- free (rng θ) \subset γ
+
+unifyTypes l msg t1s t2s
+  | length t1s /= length t2s = tcError l errorArgMismatch 
+  | otherwise                = do θ <- getSubst 
+                                  case unifys θ t1s t2s of
+                                    Left msg' -> tcError l $ msg ++ msg'
+                                    Right θ'  -> setSubst θ' >> return θ' 
+
+assertTy l m e t t' = unifyTypes l (errorWrongType m e t t') [t] [t'] >> return ()
+assertVoid l f t    = assertTy l "Missing return" f tVoid t
 
 ----------------------------------------------------------------------------------
 envJoin :: SourcePos -> TCEnv -> TCEnv -> TCM TCEnv 
@@ -230,20 +249,6 @@ envJoin' l γ1 γ2
       γall = envIntersectWith meet γ1 γ2
       meet = \t1 t2 -> if t1 == t2 then Right t1 else Left (t1,t2)
       err  = \(y, (t, t')) -> tcError l $ errorJoin y t t'
-
--- envJoin' l γ1 γ2  = forM_ ytts err >> return (Just (envFromList zts))  
---   where 
---     zts          = [(x,t)    | (x,t,t') <- xtts, t == t']
---     ytts         = [(y,t,t') | (y,t,t') <- xtts, t /= t']
---     xtts         = [(x,t,t') | (x,t)    <- envToList γ1, t' <- maybeToList (F.lookupSEnv x γ2)]
---     err (y,t,t') = tcError l $ errorJoin y t t'
-
----------------------------------------------------------------------------------------
--- | Error Messages -------------------------------------------------------------------
----------------------------------------------------------------------------------------
-
-assertTy l m e t t' = when (t /= t') $ tcError l $ errorWrongType m e t t'
-assertVoid l f t    = assertTy l "Missing return" f tVoid t
 
 
 

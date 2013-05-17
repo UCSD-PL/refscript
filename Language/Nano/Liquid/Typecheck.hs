@@ -3,6 +3,7 @@ module Language.Nano.Liquid.Typecheck (typeCheck) where
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
 import qualified Data.HashSet as S 
+import qualified Data.HashMap.Strict as M 
 import qualified Data.List as L
 import           Data.Monoid
 import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
@@ -12,7 +13,7 @@ import           Language.Nano.Types
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Parse 
 import           Language.Nano.Liquid.TCMonad
-import           Language.Nano.Liquid.Substitution
+import           Language.Nano.Liquid.Subst
 
 import           Language.ECMAScript3.Syntax
 import qualified Language.Fixpoint.Types as F
@@ -50,8 +51,8 @@ type TCEnv = Maybe (Env Type)
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
 
-tcNano     :: NanoBare -> TCM () 
-tcNano pgm = forM_ fs $ tcFun γ0
+tcNano     :: NanoBare -> TCM (M.HashMap SourcePos [Type]) 
+tcNano pgm = M.unions <$> (forM fs $ tcFun γ0)
   where
     γ0     = env pgm
     Src fs = fmap ann $ code pgm -- error "FIX THIS"
@@ -60,12 +61,15 @@ tcNano pgm = forM_ fs $ tcFun γ0
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-tcFun    :: Env Type -> FunctionStatement SourcePos -> TCM ()
+tcFun    :: Env Type -> FunctionStatement SourcePos -> TCM (M.HashMap SourcePos [Type])
 tcFun γ (FunctionStmt l f xs body) 
   = do (αs, ts, t)    <- funTy l γ f xs
        let γ'          = envAddFun l f αs xs ts t γ 
        q              <- tcStmts γ' body
        when (isJust q) $ assertVoid l f t
+       annm           <- getAnns
+       mapM_ (validInst αs) (M.toList annm)
+       return          $ annm
 
 funTy l γ f xs 
   = case bkFun =<< envFindTy f γ of
@@ -77,6 +81,15 @@ envAddFun l f αs xs ts t = envAdds tyBinds . envAdds varBinds . envAddReturn f 
   where  
     tyBinds              = [(Loc l α, tVar α) | α <- αs]
     varBinds             = zip xs ts
+
+validInst αs (l, ts)
+  = case S.toList (βS `S.difference` αS) of 
+      [] -> return ()
+      βs -> tcError l $ errorFreeTyVar βs 
+    where 
+      βS = free ts
+      αS = S.fromList αs
+
 
 --------------------------------------------------------------------------------
 tcSeq :: (Env Type -> a -> TCM TCEnv) -> Env Type -> [a] -> TCM TCEnv
@@ -197,33 +210,10 @@ instantiate l ft
     where
        err = tcError l $ errorNonFunction ft
 
-      
---        βs          <- freshTyArgs l αs
---        _           <- setTyArgs l βs
---        let t'      <- `apply` t fromList $ zip αs (tVar <$> βs)
---        extendSubst βs
--- 
---        θ           <- getSubst 
---        _           <- putSubst $ θ `mappend` θ'
 
--- unifyArgs l γ θ es ts
---   | length es /= length ts = tcError l errorArgMismatch 
---   | otherwise              = do tes <- mapM (tcExpr γ) es
---                                 case unifys θ ts tes of
---                                   Left msg -> tcError l msg
---                                   Right θ  -> validSubst l γ θ
--- validSubst       :: SourcePos -> Env Type -> Subst -> TCM Subst
--- validSubst l γ θ = mapM_ (validTyBind l γ) (toList θ) >> return θ
--- 
--- validTyBind l γ (α, t) 
---   | bad1      = tcError l $ errorBoundTyVar α t 
---   -- | bad2      = tcError l $ errorFreeTyVar t
---   | otherwise = return True 
---   where
---     bad1      = envMem α γ                                  -- dom θ        \cap γ = empty 
---   --  bad2      = not $ all (`envMem` γ) $ S.toList $ free t  -- free (rng θ) \subset γ
-
-
+----------------------------------------------------------------------------------
+unifyTypes :: SourcePos -> String -> [Type] -> [Type] -> TCM Subst
+----------------------------------------------------------------------------------
 unifyTypes l msg t1s t2s
   | length t1s /= length t2s = tcError l errorArgMismatch 
   | otherwise                = do θ <- getSubst 
@@ -249,6 +239,4 @@ envJoin' l γ1 γ2
       γall = envIntersectWith meet γ1 γ2
       meet = \t1 t2 -> if t1 == t2 then Right t1 else Left (t1,t2)
       err  = \(y, (t, t')) -> tcError l $ errorJoin y t t'
-
-
 

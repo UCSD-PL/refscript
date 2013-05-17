@@ -1,4 +1,4 @@
-module Language.Nano.Liquid.Substitution ( 
+module Language.Nano.Liquid.Subst ( 
   
   -- * Substitutions
     Subst
@@ -9,7 +9,6 @@ module Language.Nano.Liquid.Substitution (
   , Substitutable (..)
 
   -- * Unification
-  , unify
   , unifys
 
   ) where 
@@ -109,5 +108,10 @@ unifys' θ ts ts'
 varAsgn θ α t 
   | t == tVar α         = Right $ θ 
   | α `S.member` free t = Left  $ printf "Occur check fails: %s in %s" (ppshow α) (ppshow t)
-  | otherwise           = Right $ θ `mappend` (Su $ M.singleton α t)
+  | unassigned α θ      = Right $ θ `mappend` (Su $ M.singleton α t) 
+  | otherwise           = Left  $ printf "Cannot unify rigid variable %s with %s" (ppshow α) (ppshow t) 
+  
+unassigned α (Su m) = M.lookup α m == Just (tVar α)
+
+
 

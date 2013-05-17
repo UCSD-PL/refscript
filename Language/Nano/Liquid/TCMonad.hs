@@ -25,6 +25,9 @@ module Language.Nano.Liquid.TCMonad (
   -- * Substitutions
   , getSubst, setSubst
 
+  -- * Annotations
+  , getAnns
+
   )  where 
 
 import           Text.Printf
@@ -35,7 +38,7 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Types
 import           Language.Nano.Liquid.Types
-import           Language.Nano.Liquid.Substitution
+import           Language.Nano.Liquid.Subst
 import           Language.Nano.Errors
 import           Data.Maybe                   (fromMaybe)
 import           Data.Monoid                  
@@ -53,7 +56,7 @@ import           Text.Parsec.Pos
 data TCState = TCS { tc_errs  :: ![(SourcePos, String)]
                    , tc_subst :: !Subst
                    , tc_cnt   :: !Int
-                   , tc_anns  :: M.Map SourcePos [Type] --AnnInfo
+                   , tc_anns  :: M.HashMap SourcePos [Type] --AnnInfo
                    }
 
 type TCM     = ErrorT String (State TCState)
@@ -91,23 +94,31 @@ logError x l msg = (modify $ \st -> st { tc_errs = (l,msg):(tc_errs st)}) >> ret
 -------------------------------------------------------------------------------
 freshTyArgs :: SourcePos -> ([TVar], Type) -> TCM Type 
 -------------------------------------------------------------------------------
-freshTyArgs l αs 
+freshTyArgs l (αs, t) 
   = do βs <- fresh αs
        setTyArgs l βs
        extSubst βs 
        return $ (`apply` t) $ fromList $ zip αs (tVar <$> βs)
 
 setTyArgs l βs 
-  = do st <- get 
-       m   = tc_anns st
+  = do st   <- get 
+       let m = tc_anns st
        when (M.member l m) $ tcError l "Multiple Type Args"
-       put $ st { tc_anns = M.insert l (tVar <$> βs) m }
+       put   $ st { tc_anns = M.insert l (tVar <$> βs) m }
+
+
+-------------------------------------------------------------------------------
+getAnns :: TCM (M.HashMap SourcePos [Type])
+-------------------------------------------------------------------------------
+getAnns = do m <- tc_anns  <$> get
+             θ <- tc_subst <$> get
+             return $ fmap (apply θ) m 
 
 
 -------------------------------------------------------------------------------
 execute     :: TCM a -> Either [(SourcePos, String)] a
 -------------------------------------------------------------------------------
-execute act = case runState (runErrorT act) (TCS [] mempty 0) of 
+execute act = case runState (runErrorT act) (TCS [] mempty 0 M.empty) of 
                 (Left err, _) -> Left [(initialPos "" ,  err)]
                 (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errs st)
 

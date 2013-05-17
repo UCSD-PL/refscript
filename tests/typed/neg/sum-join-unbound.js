@@ -7,9 +7,6 @@ function sumLoop(acc, i){
   if (0 < i){
     r = sumLoop(acc + 1, i - 1);
   } 
-  // else {
-  //   r = acc;
-  // }
   return r;
 }
 

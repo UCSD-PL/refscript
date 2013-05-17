@@ -1,3 +1,9 @@
+/*@ crash :: forall A.() => A */
+function crash(){
+  return crash();
+}
+
+
 /*@ assume :: (bool) => void */ 
 function assume(p){
   return;

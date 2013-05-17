@@ -17,7 +17,16 @@ Dependencies
 
 TODO
 ----
- 
+
+* Types
+
+* Liquid  
+
+* Lists
+
+* Arrays
+
+
 Homework Plan
 -------------
 
@@ -27,42 +36,48 @@ HW 1
 
 HW 2
 2a. ConsGen = VCG+K for LoopInv via FIXPOINT    [Easy]
-    -> Hmm...
 2b. Implement FIXPOINT (over liquid-fixpoint)   [Hard]
-    -> Hmm...
-    
 
 HW 3
 3a. VCG for Refinement Type Checking            [Hard]
 3b. Consgen = VCG+K for Liquid Inference via FIXPOINT
 
 
-(Refinement) Types for Nano-JS
-------------------------------
+Liquid Nano-JS
+--------------
 
-HW 2
-
-0. K-Constraint Generation for Pre/Post/Loops
-
-HW 3
-
-run: make test to see what to do next.
-
-0. Type Types 
-1. Parse Types 
-2. Vanilla Type Checker     
+* Parse Types 
+* Vanilla Type Checker     
     + Basic Int/Bool/Expr 
     + First-order Funs      
     + Polymorphism  
     + Higher-Order Funs 
-    + Lists
+* SSA
+
+* Test Files
+    + tests/liquid/pos/abs.js
+
+* Parse 
+    + RefTypes
+    + Qualifiers
+    - Scrape Qualifiers
+
+* Liquid Constraint Generation [HW]
+
+* Subtyping
+
+* Fixpoint-Solver 
+
+* Bells and whistles
+    + Scrape Qualifiers
+    + list
+    + array
     - Records
 
-- Passifier [SSA-Transformation] 
 
-4. Parse Refinement Types
-5. Refinement Type Checker      [HW] Join is only other source of KVars 
-6. Liquid Constraint Generation [HW]
+
+Tests
+-----
 
 tests/typed/pos/*.js
 
@@ -71,6 +86,7 @@ tests/typed/pos/*.js
         twice.js
         forloop.js
 
+    ------------ STOPPED 
     lists
         listsum.js {------------------------ HEREHEREHEREHERE
         range.js   
@@ -87,7 +103,6 @@ tests/typed/pos/*.js
         kmeans.js
 
     measures: 
-
         cons :: forall A. (x:A, xs:List A) -> {v: List A | (len v) = 1 + (len xs)}
         nil  :: forall A. () -> {v: List A | (len v) = 0}
         head :: forall A. (xs:{v: List A | 0 < (len v)}) -> A 
@@ -97,19 +112,12 @@ tests/typed/pos/*.js
 Include
 -------
 
-tests/typed/pos/twice.js
-
-Proper:
-
 /*@ include "path/to/foo.js" */
   
   >> add to "Spec"
   >> update parser
   >> recursively traverse all files
           traverseFiles :: (FilePath -> IO [FilePath]) -> FilePath -> IO [FilePath]
-
-
-
 
 ---------------------------------------------------------------------------------------
 

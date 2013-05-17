@@ -1,4 +1,4 @@
-module Language.Nano.Liquid.Typecheck (typeCheck) where 
+module Language.Nano.Typecheck.Typecheck (typeCheck) where 
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
@@ -11,10 +11,10 @@ import           Data.Maybe                         (isJust, fromMaybe, maybeToL
 import           Language.Nano.Files
 import           Language.Nano.Errors
 import           Language.Nano.Types
-import           Language.Nano.Liquid.Types
-import           Language.Nano.Liquid.Parse 
-import           Language.Nano.Liquid.TCMonad
-import           Language.Nano.Liquid.Subst
+import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Parse 
+import           Language.Nano.Typecheck.TCMonad
+import           Language.Nano.Typecheck.Subst
 import           Language.ECMAScript3.Syntax
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface        (resultExit)

@@ -1,4 +1,4 @@
-module Language.Nano.Liquid.Subst ( 
+module Language.Nano.Typecheck.Subst ( 
   
   -- * Substitutions
     Subst
@@ -17,7 +17,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Misc
 import           Language.Nano.Errors 
-import           Language.Nano.Liquid.Types
+import           Language.Nano.Typecheck.Types
 
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S

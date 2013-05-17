@@ -4,23 +4,19 @@
 {-# LANGUAGE TypeSynonymInstances      #-} 
 {-# LANGUAGE TupleSections             #-}
 
-module Language.Nano.Liquid.Parse (parseSpecFromFile) where
+module Language.Nano.Typecheck.Parse (parseSpecFromFile) where
 
 import           Control.Monad
 import           Text.Parsec
 import           Text.Parsec.String hiding (parseFromFile)
 import qualified Text.Parsec.Token as Token
-
 import           Control.Applicative ((<$>), (<*), (<*>))
 import           Data.Char (isLower) 
-
 import           Language.Fixpoint.Misc (mapSnd)
 import           Language.Fixpoint.Types
 import           Language.Fixpoint.Parse 
-
 import           Language.Nano.Types
-import           Language.Nano.Liquid.Types
--- import qualified Language.ECMAScript3.Lexer as Lexer
+import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
 
 dot        = Token.dot        lexer

@@ -7,7 +7,7 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
 
-module Language.Nano.Liquid.Types (
+module Language.Nano.Typecheck.Types (
 
   -- * Programs
     Nano (..)
@@ -295,29 +295,6 @@ mkEnv = foldM step F.emptySEnv
     step γ (i, t) = case envFindLoc i γ of
                       Nothing -> Right $ envAdd i t γ 
                       Just l' -> Left  $ text $ errorDuplicate i (srcPos i) l'
-
-
--- mkEnv         :: [Id SourcePos] -> [(Id SourcePos, Type)] -> Either Doc (F.SEnv Type) 
--- mkEnv is its 
---   | nI < nT   = mkE <$> zipWithM joinName is' its'
---   | otherwise = Left (text "Missing Type Specifications!")  
---   where
---     is'       = orderIds idName (comparing idLoc) is
---     its'      = orderIds (idName . fst) (comparing (idLoc . fst)) its 
---     (fts,sts) = splitAt nI its 
---     mkE       = F.fromListSEnv . fmap (mapFst F.symbol)
---     nI        = length is
---     nT        = length its 
--- 
--- joinName (name, i) (name', (_,t)) 
---   | name == name' = Right (i, t)
---   | otherwise     = Left (text "Missing Type Specification: " <+> pp i) 
--- 
--- -- orderIds :: (Ord t, Hashable t) =>(a -> t) -> (a -> a -> Ordering) -> [a] -> [(t, a)]
--- orderIds fn fl = concatMap (\(x,ys) -> (x,) <$> ys) 
---                . hashMapToAscList 
---                . (L.sortBy fl <$>) 
---                . groupMap fn 
 
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------

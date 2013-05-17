@@ -6,7 +6,7 @@
 -- | This module has the code for the Type-Checker Monad. 
 --   You /need not/ modify the code here, just use the exported API.
 
-module Language.Nano.Liquid.TCMonad (
+module Language.Nano.Typecheck.TCMonad (
   -- * TC Monad
     TCM
  
@@ -38,8 +38,8 @@ import           Control.Monad.Error
 import           Language.Fixpoint.Misc 
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Types
-import           Language.Nano.Liquid.Types
-import           Language.Nano.Liquid.Subst
+import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
 import           Data.Maybe                   (fromMaybe)
 import           Data.Monoid                  

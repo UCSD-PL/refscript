@@ -1,23 +1,18 @@
-module Language.Nano.Liquid.Liquid (main) where 
+module Language.Nano.Typecheck.Main (main) where 
 
--- import           Control.Applicative                ((<$>))
--- import           Control.Monad                
--- import qualified Data.HashSet as S 
--- import qualified Data.List as L
 import           Data.Monoid
 import           Language.Nano.Files
 import           Language.Nano.Types
-import           Language.Nano.Liquid.Types
-import           Language.Nano.Liquid.Parse 
-import           Language.Nano.Liquid.SSA
-import           Language.Nano.Liquid.Typecheck
+import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Parse 
+import           Language.Nano.Typecheck.SSA
+import           Language.Nano.Typecheck.Typecheck
 
 import           Language.ECMAScript3.Syntax
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface        (resultExit)
 import           Language.Fixpoint.Misc             
 import           Text.PrettyPrint.HughesPJ          (text, render, ($+$) {- , Doc, (<+>) -})
--- import           Text.Printf                        (printf)
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
 import           System.Exit                        (exitWith)

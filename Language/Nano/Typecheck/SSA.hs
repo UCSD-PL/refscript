@@ -1,4 +1,4 @@
-module Language.Nano.Liquid.SSA (ssaTransform) where 
+module Language.Nano.Typecheck.SSA (ssaTransform) where 
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
@@ -12,7 +12,7 @@ import           Data.Monoid
 import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
 
 import           Language.Nano.Types
-import           Language.Nano.Liquid.Types
+import           Language.Nano.Typecheck.Types
 import           Language.Nano.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations

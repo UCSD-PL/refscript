@@ -62,6 +62,9 @@ data Config
   = Esc    { files   :: [FilePath]     -- ^ source files to check
            , incdirs :: [FilePath]     -- ^ path to directory for include specs
            } 
+  | TC     { files   :: [FilePath]     -- ^ source files to check
+           , incdirs :: [FilePath]     -- ^ path to directory for include specs
+           }
   | Liquid { files   :: [FilePath]     -- ^ source files to check
            , incdirs :: [FilePath]     -- ^ path to directory for include specs
            }

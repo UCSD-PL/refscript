@@ -1,4 +1,4 @@
-module Language.Nano.Typecheck.Typecheck (typeCheck) where 
+module Language.Nano.Typecheck.Typecheck (main, typeCheck) where 
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
@@ -8,6 +8,11 @@ import qualified Data.List           as L
 import qualified Data.Traversable    as T
 import           Data.Monoid
 import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
+import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
+import           Text.Printf                        (printf)
+import           System.Exit                        (exitWith)
+
+
 import           Language.Nano.Files
 import           Language.Nano.Errors
 import           Language.Nano.Types
@@ -15,14 +20,51 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
-import           Language.ECMAScript3.Syntax
+import           Language.Nano.Typecheck.SSA
+
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface        (resultExit)
 import           Language.Fixpoint.Misc             
-import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
-import           Text.Printf                        (printf)
+import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
-import           System.Exit                        (exitWith)
+import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
+
+
+main cfg 
+  = do rs   <- mapM verifyFile $ files cfg
+       let r = mconcat rs
+       donePhase (F.colorResult r) (render $ pp r) 
+       exitWith (resultExit r)
+
+--------------------------------------------------------------------------------
+-- | Top-level Verifier 
+--------------------------------------------------------------------------------
+verifyFile :: FilePath -> IO (F.FixResult SourcePos)
+--------------------------------------------------------------------------------
+verifyFile f 
+  = do nano <- parseNanoFromFile f 
+       donePhase Loud "Parse"
+       putStrLn . render . pp $ nano
+       let nanoSsa = ssaTransform nano
+       donePhase Loud "SSA Transform"
+       putStrLn . render . pp $ nanoSsa
+       r    <- typeCheck nanoSsa
+       donePhase Loud "Typechecking"
+       return r
+
+-------------------------------------------------------------------------------
+-- | Parse File and Type Signatures -------------------------------------------
+-------------------------------------------------------------------------------
+
+parseNanoFromFile :: FilePath -> IO NanoBare
+parseNanoFromFile f 
+  = do src   <- parseJavaScriptFromFile f
+       spec  <- parseSpecFromFile f
+       ispec <- parseSpecFromFile =<< getPreludePath
+       return $ either err id (mkNano src (spec `mappend` ispec))
+    where 
+       err m  = errortext $ text ("Invalid Input file: " ++ f) $+$ m
 
 -------------------------------------------------------------------------------
 typeCheck   :: NanoBare -> IO (F.FixResult SourcePos)

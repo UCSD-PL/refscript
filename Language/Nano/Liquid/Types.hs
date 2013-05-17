@@ -20,8 +20,6 @@ module Language.Nano.Liquid.Types (
 
   -- * Conversions
   , RefTypable (..)
-  -- , ofType                      -- ofType :: Type    -> RefType
-  -- , toType                      -- toType :: RType a -> Type
 
   -- * Manipulating RefType
   , rTypeReft
@@ -50,7 +48,6 @@ import           Language.ECMAScript3.PrettyPrint
 
 type RefType = RType F.SortedReft
 type REnv    = Env RefType
-
 
 -------------------------------------------------------------------------------------
 -- | Constraint Generation Environment  ---------------------------------------------
@@ -124,39 +121,117 @@ instance RefTypable Type where
 instance RefTypable RefType where
   rType = ofType . toType           -- removes all refinements
 
-
 ------------------------------------------------------------------------------
 -- | Converting RType to Fixpoint --------------------------------------------
 ------------------------------------------------------------------------------
 
-rTypeSortedReft   ::  (Reftable r) => RType r -> SortedReft
+rTypeSortedReft   ::  (F.Reftable r) => RType r -> SortedReft
 rTypeSortedReft t = RR (rTypeSort t) (rTypeReft t)
 
-rTypeReft :: (Reftable r) => RType r -> Reft
-rTypeReft = fromMaybe top . fmap toReft . stripRTypeBase 
+rTypeReft         :: (F.Reftable r) => RType r -> F.Reft
+rTypeReft         = fromMaybe top . fmap toReft . stripRTypeBase 
 
-
-rTypeValueVar :: (Reftable r) => RType r -> Symbol
-rTypeValueVar t = vv where Reft (vv,_) =  rTypeReft t 
-
-------------------------------------------------------------------------------------------
-rTypeSort :: (Reftable r) => RType r -> Sort
-------------------------------------------------------------------------------------------
-
-rTypeSort = error "TOBD"
--- rTypeSort (TypeInteger _)   = FInt
--- rTypeSort (TypeInteger _)   = FInt
--- rTypeSort (TypePointer t _) = FApp ptrFTycon [typeSort t]
--- ptrFTycon = stringFTycon "ptr"
+rTypeValueVar     :: (F.Reftable r) => RType r -> F.Symbol
+rTypeValueVar t   = vv where Reft (vv,_) =  rTypeReft t 
 
 ------------------------------------------------------------------------------------------
-stripRTypeBase :: RType r -> r 
+rTypeSort :: (F.Reftable r) => RType r -> Sort
 ------------------------------------------------------------------------------------------
 
-stripRTypeBase = error "TOBD"
--- stripRTypeBase (RTypeInteger _ r) = Just r
--- stripRTypeBase t                  = errorstar msg
---   where msg                       = "stripRTypeBase: cannot handle" ++ showFix t
+rTypeSort (TApp TInt [] _) = F.FInt
+rTypeSort (TVar α _)       = F.FObj $ F.symbol α 
+rTypeSort t@(TAll _)       = rTypeSortForAll t 
+rTypeSort (TFun ts t)      = F.FFunc 0 $ rTypeSort <$> ts ++ [t]
+rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
 
+
+rTypeSortApp TInt [] = F.FInt
+rTypeSortApp c ts    = F.FApp (tconFTycon c) (rTypeSort <$> ts) 
+
+tconFTycon TInt      = F.intFTyCon
+tconFTycon TBool     = F.stringFTycon "boolean"
+tconFTycon TVoid     = F.stringFTycon "void"
+tconFTycon (TDef s)  = F.stringFTycon $ $ symbolString s
+
+
+rTypeSortForAll t    = genSort n θ $ rTypeSort tbody
+  where 
+    (αs, tbody)      = bkAll t
+    n                = length αs
+    θ                = M.fromList $ zip (F.symbol <$> αs) (F.FVar <$> [0..])
+    
+genSort n θ (F.FFunc _ t)  = F.FFunc n (F.sortSubst θ <$> t)
+genSort n θ t              = F.FFunc n [F.sortSubst θ t]
+
+------------------------------------------------------------------------------------------
+stripRTypeBase :: RType r -> Maybe r 
+------------------------------------------------------------------------------------------
+stripRTypeBase (TApp _ _ r) = Just r
+stripRTypeBase (TVar _ r)   = Just r
+stripRTypeBase _            = Nothing
  
+------------------------------------------------------------------------------------------
+strengthen                   :: F.Reftable r => RType r -> r -> RType r
+------------------------------------------------------------------------------------------
+strengthen (TApp c ts r) r'  = TApp c ts $ r `meet` r' 
+strengthen (TVar α r)    r'  = TVar α    $ r `meet` r'
+strengthen t _               = t 
+
+------------------------------------------------------------------------------------------
+-- | Substitutions -----------------------------------------------------------------------
+------------------------------------------------------------------------------------------
+
+instance (F.Reftable r, F.Subable r) => F.Subable (RType r) where
+  syms        = foldReft (\r acc -> F.syms r ++ acc) [] 
+  substa      = fmap . F.substa 
+  substf f    = emapReft (F.substf . F.substfExcept f) [] 
+  subst su    = emapReft (F.subst  . F.substExcept su) []
+  subst1 t su = emapReft (\xs r -> F.subst1Except xs r su) [] t
+
+------------------------------------------------------------------------------------------
+-- | Traversals over @RType@ -------------------------------------------------------------
+------------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------------------
+emapReft                   :: ([F.Symbol] -> a -> b) -> [F.Symbol] -> RType a -> RType b
+------------------------------------------------------------------------------------------
+emapReft f γ (TVar α r)    = TVar α (f γ r)
+emapReft f γ (TApp c ts r) = TApp c (emapReft f γ <$> ts) (f γ r)
+emapReft f γ (TAll α t)    = TAll α (emapReft f γ t)
+emapReft f γ (TFun ts t)   = TFun (emapReft f γ' <$> ts) (emapReft f γ' t) where γ' = (rTypeValueVar <$> ts) ++ γ 
+
+------------------------------------------------------------------------------------------
+mapReftM                   :: (Monad m) => (a -> m b) -> RType a -> m (RType b)
+------------------------------------------------------------------------------------------
+mapReftM f (TVar α r)      = TVar α <$> f r
+mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> mapReftM f t <*> f r
+mapReftM f (TFun ts t)     = TApp   <$> mapM (mapReftM f) ts <*> mapReftM f t
+mapReftM f (TAll α t)      = TAll   <$> mapReftM f t
+
+------------------------------------------------------------------------------------------
+-- | fold over @RType@ -------------------------------------------------------------------
+------------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------------------
+foldReft  :: (Reftable r) => (r -> a -> a) -> a -> RType r -> a
+------------------------------------------------------------------------------------------
+foldReft  f = efoldReft (\_ -> ()) (\_ -> f) emptySEnv 
+
+------------------------------------------------------------------------------------------
+efoldReft :: (Reftable r) => (RType r -> b) -> (F.SEnv b -> r -> a -> a) -> F.SEnv b -> a -> RType r -> a
+------------------------------------------------------------------------------------------
+efoldReft g f γ z (TVar r)         = f γ r z
+efoldReft g f γ z t@(TApp _ ts r)  = f γ r $ efoldRefts g f (efoldExt g t γ) z ts
+efoldReft g f γ z (TFun ts t)      = efoldReft g f γ' (efoldRefts g f γ' z ts) t  where γ' = foldr (efoldExt g) γ ts
+efoldReft g f γ z (TAll α t)       = efoldReft g f γ z t
+efoldRefts g f γ z ts              = foldl' (efoldReft g f γ) z ts
+efoldExt g t γ                     = F.insertSEnv (rTypeValueVar t) (g t) γ
+
+------------------------------------------------------------------------------------------
+isBaseRType :: RType r -> Bool
+------------------------------------------------------------------------------------------
+isBaseRType (TApp c [] _) = True
+isBaseRType (TVar _ _)    = True
+isBaseRType _             = False
+
 

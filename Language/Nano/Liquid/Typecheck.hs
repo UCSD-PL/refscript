@@ -40,7 +40,7 @@ safe pgm@(Nano (Src fs) env)
        return F.Safe 
 
 printAnn :: AnnBare -> IO () 
-printAnn (Ann l fs) = forM_ fs $ \f -> putStrLn $ printf "At %s: %s" (ppshow l) (ppshow f)
+printAnn (Ann l fs) = when (not $ null fs) $ putStrLn $ printf "At %s: %s" (ppshow l) (ppshow fs)
 
 
 
@@ -63,7 +63,7 @@ type TCEnv = Maybe (Env Type)
 tcNano :: NanoSSA -> TCM NanoType
 tcNano p@(Nano (Src fs) env)
   = do fs' <- forM fs $ T.mapM stripAnn
-       m   <- tracePP "ANNOT MAP" <$> (tcNano' $ Nano (Src fs') env)
+       m   <- tcNano' $ Nano (Src fs') env
        return $ p {code = Src $ (patchAnn m <$>) <$> fs'}
 
 tcNano'     :: Nano SourcePos () -> TCM AnnInfo  
@@ -73,7 +73,7 @@ tcNano' pgm = M.unions <$> (forM fs $ tcFun γ0)
     Src fs = code pgm
 
 stripAnn :: AnnBare -> TCM SourcePos
-stripAnn (Ann l fs) = forM_ fs (addAnn l) >> return l   
+stripAnn z@(Ann l fs) = forM_ fs (addAnn l) >> return l
 
 patchAnn     :: AnnInfo -> SourcePos -> AnnType
 patchAnn m l = Ann l $ M.lookupDefault [] l m

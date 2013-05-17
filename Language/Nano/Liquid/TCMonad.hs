@@ -46,10 +46,6 @@ import           Data.Monoid
 import qualified Data.HashMap.Strict     as M
 import           Text.Parsec.Pos              
 
-
--- import           Text.PrettyPrint.HughesPJ
--- import           Language.Nano.Types
-
 -------------------------------------------------------------------------------
 -- | Typechecking monad -------------------------------------------------------
 -------------------------------------------------------------------------------
@@ -110,9 +106,11 @@ setTyArgs l βs
 -------------------------------------------------------------------------------
 getAnns :: TCM AnnInfo  
 -------------------------------------------------------------------------------
-getAnns = do m <- tc_anns  <$> get
-             θ <- tc_subst <$> get
-             return $ fmap (apply θ) m 
+getAnns = do θ     <- tc_subst <$> get
+             m     <- tc_anns  <$> get
+             let m' = fmap (apply θ . sortNub) m
+             _     <- modify $ \st -> st { tc_anns = m' }
+             return m' 
 
 -------------------------------------------------------------------------------
 addAnn :: SourcePos -> Fact -> TCM () 

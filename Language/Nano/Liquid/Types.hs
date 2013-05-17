@@ -133,7 +133,7 @@ data RType r
   | TVar TVar r 
   | TFun [RType r] (RType r)
   | TAll TVar (RType r)
-    deriving (Eq, Show, Functor)
+    deriving (Eq, Ord, Show, Functor)
 
 -- | Standard Types
 type Type    = RType ()
@@ -400,7 +400,7 @@ ppTC (TDef x)         = pprint x
 data Fact 
   = PhiVar  !(Id SourcePos) 
   | TypInst ![Type]
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show)
 type AnnBare   = Annot Fact SourcePos -- NO facts
@@ -417,6 +417,8 @@ instance PP AnnInfo where
     where 
       ppB (x, t) = pp x <+> dcolon <+> pp t
 
+instance (PP a, PP b) => PP (Annot b a) where
+  pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
 
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 

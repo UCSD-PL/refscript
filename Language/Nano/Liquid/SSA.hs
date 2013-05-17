@@ -130,8 +130,10 @@ ssaStmt s
 splice :: Statement SourcePos -> Maybe (Statement SourcePos) -> Statement SourcePos
 -------------------------------------------------------------------------------------
 splice s Nothing   = s
-splice s (Just s') = BlockStmt (getAnnotation s) [s, s'] 
+splice s (Just s') = seqStmt (getAnnotation s) s s' 
 
+seqStmt _ (BlockStmt l s) (BlockStmt _ s') = BlockStmt l (s ++ s')
+seqStmt l s s'                             = BlockStmt l [s, s']
 
 -------------------------------------------------------------------------------------
 ssaWith :: SsaEnv -> (a -> SSAM (Bool, a)) -> a -> SSAM (Maybe SsaEnv, a)

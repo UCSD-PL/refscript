@@ -1,4 +1,4 @@
-module Language.Nano.Typecheck.Typecheck (main, typeCheck) where 
+module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
@@ -27,31 +27,33 @@ import           Language.Fixpoint.Interface        (resultExit)
 import           Language.Fixpoint.Misc             
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
 
 
-main cfg 
-  = do rs   <- mapM verifyFile $ files cfg
-       let r = mconcat rs
-       donePhase (F.colorResult r) (render $ pp r) 
-       exitWith (resultExit r)
+-- main cfg 
+--   = do rs   <- mapM verifyFile $ files cfg
+--        let r = mconcat rs
+--        donePhase (F.colorResult r) (render $ pp r) 
+--        exitWith (resultExit r)
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
 verifyFile :: FilePath -> IO (F.FixResult SourcePos)
 --------------------------------------------------------------------------------
-verifyFile f 
-  = do nano <- parseNanoFromFile f 
-       donePhase Loud "Parse"
-       putStrLn . render . pp $ nano
-       let nanoSsa = ssaTransform nano
-       donePhase Loud "SSA Transform"
-       putStrLn . render . pp $ nanoSsa
-       r    <- typeCheck nanoSsa
-       donePhase Loud "Typechecking"
-       return r
+verifyFile f = (either unsafe safe . execute . tcNano . ssaTransform) =<< parseNanoFromFile f
+
+-- DEBUG MODE
+-- verifyFile f 
+--   = do nano <- parseNanoFromFile f 
+--        donePhase Loud "Parse"
+--        putStrLn . render . pp $ nano
+--        let nanoSsa = ssaTransform nano
+--        donePhase Loud "SSA Transform"
+--        putStrLn . render . pp $ nanoSsa
+--        r    <- either unsafe safe . execute . tcNano $ nanoSsa
+--        donePhase Loud "Typechecking"
+--        return r
 
 -------------------------------------------------------------------------------
 -- | Parse File and Type Signatures -------------------------------------------

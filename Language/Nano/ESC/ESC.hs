@@ -4,7 +4,7 @@
 
 -- | Extended Static Checker - Nano
 
-module Language.Nano.ESC.ESC (main) where
+module Language.Nano.ESC.ESC (verifyFile) where
 
 import           Text.PrettyPrint.HughesPJ    (text, render, (<+>))
 import           System.FilePath              (addExtension)
@@ -29,11 +29,11 @@ import           Language.Nano.ESC.VCMonad
 
 --------------------------------------------------------------------------------
 
-main cfg 
-  = do rs   <- mapM verifyFile $ files cfg
-       let r = mconcat rs
-       donePhase (F.colorResult r) (render $ pp r) 
-       exitWith (resultExit r)
+-- main cfg 
+--   = do rs   <- mapM verifyFile $ files cfg
+--        let r = mconcat rs
+--        donePhase (F.colorResult r) (render $ pp r) 
+--        exitWith (resultExit r)
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 

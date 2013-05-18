@@ -23,7 +23,7 @@ module Language.Nano.Typecheck.Types (
   , Env    
   , envFromList 
   , envToList
-  , envAdd 
+  -- , envAdd 
   , envAdds 
   , envFindTy
   , envAddReturn
@@ -244,7 +244,7 @@ envFindTy  i γ  = fmap val $ envFind i γ
 envAdd   i t γ  = F.insertSEnv (F.symbol i) (Loc (srcPos i) t) γ
 envAdds  xts γ  = L.foldl' (\γ (x,t) -> envAdd x t γ) γ xts
 envToList  γ    = [ (Id l (F.symbolString x), t) | (x, Loc l t) <- F.toListSEnv γ]
-envAddReturn f  = envAdd (returnId (srcPos f))
+envAddReturn    = envAdd . returnId . srcPos
 envFindReturn   = maybe msg val . F.lookupSEnv returnSymbol  
   where 
     msg = errorstar "bad call to envFindReturn"
@@ -352,6 +352,8 @@ instance (PP a, PP b) => PP (Annot b a) where
 
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 
+
+
 
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------

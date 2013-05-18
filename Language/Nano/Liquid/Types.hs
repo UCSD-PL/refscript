@@ -21,6 +21,8 @@ module Language.Nano.Liquid.Types (
 
   -- * Conversions
   , RefTypable (..)
+  , eSingleton
+  , pSingleton
 
   -- * Manipulating RefType
   , rTypeReft
@@ -33,6 +35,10 @@ module Language.Nano.Liquid.Types (
 
   -- * Monadic map (TODO: Applicative/Traversable)
   , mapReftM
+
+  -- * Primitive Types
+  , prefixOpRTy
+  , infixOpRTy 
   ) where
 
 import           Control.Applicative ((<$>), (<*>))
@@ -144,6 +150,17 @@ instance RefTypable Type where
 
 instance RefTypable RefType where
   rType = ofType . toType           -- removes all refinements
+
+eSingleton      :: (F.Expression e, RefTypable t) => e -> t -> RefType 
+eSingleton e t  = (rType t) `strengthen` (F.exprReft e)
+
+pSingleton      :: (F.Predicate p, RefTypable t) => p -> t -> RefType 
+pSingleton p t  = (rType t) `strengthen` (F.propReft p)
+
+-- t ~| r      = strengthen t $ RR (rTypeSort t) r
+
+
+
 
 ------------------------------------------------------------------------------
 -- | Converting RType to Fixpoint --------------------------------------------
@@ -257,6 +274,19 @@ isBaseRType :: RType r -> Bool
 isBaseRType (TApp c [] _) = True
 isBaseRType (TVar _ _)    = True
 isBaseRType _             = False
+
+
+------------------------------------------------------------------------------------------
+prefixOpRTy :: PrefixOp -> CGEnv -> RefType
+------------------------------------------------------------------------------------------
+prefixOpRTy = error "TOBD"
+
+------------------------------------------------------------------------------------------
+infixOpRTy :: InfixOp -> CGEnv -> RefType
+------------------------------------------------------------------------------------------
+infixOpRTy = error "TOBD"
+
+
 
 
 

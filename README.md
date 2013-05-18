@@ -77,7 +77,7 @@ HEREHEREHEREHERE  -- see "TOBD" in Language/Nano/Liquid/Liquid.hs
     + array
     - Records
 
-
+* Cleanup envJoin in TypeCheck to use SSA information
 
 Tests
 -----

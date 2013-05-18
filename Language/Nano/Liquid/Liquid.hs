@@ -3,28 +3,24 @@
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
 
-import           Text.Parsec.Pos    (initialPos)
+import           Text.Parsec.Pos                    (initialPos)
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
-
 import           Control.Monad
-import           Control.Applicative ((<$>), (<*>))
-import           Data.Maybe             (fromMaybe, isJust)
-import           Data.Monoid            hiding ((<>))            
-import           Data.Ord               (comparing) 
-import qualified Data.List               as L
-import qualified Data.HashMap.Strict     as M
+import           Control.Applicative                ((<$>), (<*>))
+import           Data.Maybe                         (fromMaybe, isJust)
+import           Data.Monoid                 hiding ((<>))            
+import           Data.Ord                           (comparing) 
+import qualified Data.List                   as L
+import qualified Data.HashMap.Strict         as M
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
-
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
-
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Interface        (resultExit, solve)
-
 import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
@@ -64,29 +60,31 @@ consNano pgm@(Nano {code = Src fs})
   = initCGEnv pgm >>= (forM_ fs . consFun)
 
 initCGEnv    :: NanoRefType -> CGM CGEnv
-initEnv pgm  = error "TOBD" -- (\renv -> CGE renv F.emptyIBindEnv [] Nothing) <$> globalEnv info
-
+initCGEnv pgm  = error "TOBD" -- (\renv -> CGE renv F.emptyIBindEnv [] Nothing) <$> globalEnv info
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> FunctionStatement AnnType -> CGM ()
 --------------------------------------------------------------------------------
-consFun γ (FunctionStmt l f xs body) 
-  = do (αs, ts, t)    <- funTy l γ f xs
-       let γ'          = envAddFun l f αs xs ts t γ 
-       γo             <- consStmts γ' body
-       case γo of 
-         Just γ'      -> subType l "Missing return" γ' rVoid t
+consFun g (FunctionStmt l f xs body) 
+  = do let (αs, ts, t) = bkFun $ envFindTy f g
+       g'             <- envAddFun l f αs xs ts t g 
+       gm             <- consStmts g' body
+       case gm of 
+         Just g'      -> subType l "Missing return" g' rVoid t
          Nothing      -> return ()
 
---------------------------------------------------------------------------------
-consExpr :: CGEnv -> Expression AnnType -> CGM (CGEnv, Id AnnType) 
---------------------------------------------------------------------------------
+envAddFun l g f αs xs ts t = envAdds tyBinds =<< envAdds (varBinds xs ts) =<< envAddReturn f t g 
+  where  
+    tyBinds                = [(Loc l α, rVar α) | α <- αs]
+    varBinds               = safeZipWith "envAddFun" checkFormal 
 
--- | @consExpr γ e@ returns a pair (γ', x') where
---   x' is a fresh, temporary (A-Normalized) holding the value of `e`,
---   γ' is γ extended with a binding for x' (and other temps required for `e`)
-
-consExpr γ e = error "TOBD"
+checkFormal :: [Id a] -> [RefType] -> [(Id a, RefType)]
+checkFormal x t 
+  | xsym == tsym = (x, t)
+  | otherwise    = errorstar $ errorArgNameMismatch l x1 x2
+  where 
+    xsym         = F.symbol x
+    tsym         = rTypeValueVar t
 
 --------------------------------------------------------------------------------
 consStmts :: CGEnv -> [Statement AnnType]  -> CGM (Maybe CGEnv) 
@@ -97,111 +95,152 @@ consStmts = consSeq consStmt
 consStmt :: CGEnv -> Statement AnnType -> CGM (Maybe CGEnv) 
 --------------------------------------------------------------------------------
 
--- | @consStmt γ s@ returns the environment extended with binders that are
+-- | @consStmt g s@ returns the environment extended with binders that are
 -- due to the execution of statement s. @Nothing@ is returned if the
 -- statement has (definitely) hit a `return` along the way.
 
-consStmt γ s = error "TOBD"
-
 -- skip
-tcStmt γ (EmptyStmt _) 
-  = return $ Just γ
+consStmt g (EmptyStmt _) 
+  = return $ Just g
 
 -- x = e
-tcStmt γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))   
-  = tcAsgn γ l (Id lx x) e
+consStmt g (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))   
+  = consAsgn g l (Id lx x) e
 
 -- e
-tcStmt γ (ExprStmt _ e)   
-  = tcExpr γ e >> return (Just γ) 
+consStmt g (ExprStmt _ e)   
+  = consExpr g e >> return (Just g) 
 
 -- s1;s2;...;sn
-tcStmt γ (BlockStmt _ stmts) 
-  = tcStmts γ stmts 
+consStmt g (BlockStmt _ stmts) 
+  = consStmts g stmts 
 
 -- if b { s1 }
-tcStmt γ (IfSingleStmt l b s)
-  = tcStmt γ (IfStmt l b s (EmptyStmt l))
+consStmt g (IfSingleStmt l b s)
+  = consStmt g (IfStmt l b s (EmptyStmt l))
 
--- if b { s1 } else { s2 }
-tcStmt γ (IfStmt l e s1 s2)
-  = do t     <- tcExpr γ e
-       unifyType l "If condition" e t tBool
-       γ1    <- tcStmt γ s1
-       γ2    <- tcStmt γ s2
-       envJoin l γ1 γ2
+-- HINT: use @guard@ to convert binder from @e@ into @F.Pred@, 
+--       add to @CGEnv@ with @envAddGuard@. Recursively constrain
+--       @s1@ and @s2@ under suitable environments, and combine the 
+--       resulting environments with @envJoin@ 
+
+-- if e { s1 } else { s2 }
+consStmt g (IfStmt l e s1 s2)
+  = do (xe, ge) <- consExpr g e
+       g1'      <- (`consStmt` s1) =<< envAddGuard (guard xe True)  =<< ge 
+       g2'      <- (`consStmt` s2) =<< envAddGuard (guard xe False) =<< ge 
+       envJoin l g g1' g2'
+    where 
+      guard True  = F.eProp 
+      guard False = F.PNot . F.eProp
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
-tcStmt γ (VarDeclStmt _ ds)
-  = tcSeq tcVarDecl γ ds
+consStmt g (VarDeclStmt _ ds)
+  = consSeq consVarDecl g ds
 
 -- return e 
-tcStmt γ (ReturnStmt l eo) 
-  = do t <- maybe (return tVoid) (tcExpr γ) eo 
-       unifyType l "Return" eo t $ envFindReturn γ 
+consStmt g (ReturnStmt l eo)
+  = do t <- maybe (return rVoid) (consExpr' g) eo 
+       subTypes l [t] [envFindReturn g] 
        return Nothing
 
 -- OTHER (Not handled)
-tcStmt γ s 
-  = convertError "tcStmt" s
-
--------------------------------------------------------------------------------
-tcVarDecl :: Env Type -> VarDecl SourcePos -> TCM TCEnv  
--------------------------------------------------------------------------------
-
-tcVarDecl γ (VarDecl l x (Just e)) 
-  = tcAsgn γ l x e  
-tcVarDecl γ (VarDecl l x Nothing)  
-  = return $ Just γ
-
-------------------------------------------------------------------------------------
-tcAsgn :: Env Type -> SourcePos -> Id SourcePos -> Expression SourcePos -> TCM TCEnv
-------------------------------------------------------------------------------------
-
-tcAsgn γ l x e 
-  = do t <- tcExpr γ e
-       return $ Just $ envAdd x t γ
-
--------------------------------------------------------------------------------
-tcExpr :: Env Type -> Expression SourcePos -> TCM Type
--------------------------------------------------------------------------------
-
-tcExpr _ (IntLit _ _)               
-  = return tInt 
-
-tcExpr _ (BoolLit _ _)
-  = return tBool
-
-tcExpr γ (VarRef l x)
-  = maybe (tcError l $ errorUnboundId x) return $ envFindTy x γ
-
-tcExpr γ (PrefixExpr l o e)
-  = tcCall γ l o [e] (prefixOpTy o)
-
-tcExpr γ (InfixExpr l o e1 e2)        
-  = tcCall γ l o  [e1, e2] (infixOpTy o)
-
-tcExpr γ (CallExpr l e es)
-  = tcCall γ l e es =<< tcExpr γ e 
-
-tcExpr γ e 
-  = convertError "tcExpr" e
+consStmt g s 
+  = errorstar $ "consStmt: not handled " ++ ppshow s
 
 ----------------------------------------------------------------------------------
--- tcCall :: Env Type -> SourcePos -> Type -> [Expression SourcePos] -> TCM Type
+envJoin :: AnnType -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)
+----------------------------------------------------------------------------------
+envJoin _ _ Nothing x           = return x
+envJoin _ _ x Nothing           = return x
+envJoin l g (Just g1) (Just g2) = envJoin' l g g1 g2 
+
+----------------------------------------------------------------------------------
+envJoin' :: AnnType -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 ----------------------------------------------------------------------------------
 
-tcCall γ l z es ft 
+-- HINT: 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
+--       2. use @freshTy@ to generate fresh types (and an extended environment with 
+--          the fresh-type bindings) for all the phi-vars using the un-refined types from step 1.
+--       3. generate subtyping constraints between the types from step 1 and the fresh types
+--       4. return the extended environment.
+
+envJoin' l g g1 g2
+  = do let xs   = [PhiVar x <- ann_fact l] 
+       let t1s  = (`envFindTy` g1) <$> xs 
+       let t2s  = (`envFindTy` g2) <$> xs
+       (g',ts) <- freshTy l g $ zip xs $ toType <$> t1s -- SHOULD BE SAME as t2s 
+       subTypes l g1 t1s ts
+       subTypes l g2 t2s ts
+       return g'
+
+
+
+-------------------------------------------------------------------------------
+consVarDecl :: CGEnv -> VarDecl AnnType -> CGM (Maybe CGEnv) 
+-------------------------------------------------------------------------------
+
+consVarDecl g (VarDecl l x (Just e)) 
+  = consAsgn g l x e  
+consVarDecl g (VarDecl l x Nothing)  
+  = return $ Just g
+
+------------------------------------------------------------------------------------
+consAsgn :: CGEnv -> Id AnnType -> Expression AnnType -> CGM (Maybe CGEnv) 
+------------------------------------------------------------------------------------
+consAsgn g x e 
+  = do t <- consExpr' g e
+       return $ Just $ envAdds [(x, t)] g
+
+------------------------------------------------------------------------------------
+consExpr :: CGEnv -> Expression AnnType -> CGM (Id AnnType, CGEnv) 
+------------------------------------------------------------------------------------
+
+-- | @consExpr g e@ returns a pair (g', x') where
+--   x' is a fresh, temporary (A-Normalized) holding the value of `e`,
+--   g' is g extended with a binding for x' (and other temps required for `e`)
+
+consExpr g (IntLit l i)               
+  = envAddFresh l (eSingleton i tInt) g
+
+consExpr g (BoolLit _ _)
+  = envAddFresh l (pSingleton b tBool) g 
+
+consExpr g (VarRef l x)
+  = return (x, g) 
+
+consExpr g (PrefixExpr l o e)
+  = consCall g l o [e] (prefixOpRTy o g)
+
+consExpr g (InfixExpr l o e1 e2)        
+  = consCall g l o [e1, e2] (infixOpRTy o g)
+
+consExpr g (CallExpr l e es)
+  = consCall g l e es =<< consExpr' g e 
+
+consExpr g e 
+  = errorstar "consExpr: not handled" (pp e)
+
+
+-------------------------------------------------------------------------------------------
+consExpr' :: CGEnv -> Expression AnnType -> CGM RefType
+-------------------------------------------------------------------------------------------
+-- | A helper that returns the actual @RefType@ of the expression by
+--   looking up the environment with the new temporary (ANF binder) name.
+consExpr' g e  = uncurry envFindTy <$> consExpr g e 
+
+----------------------------------------------------------------------------------
+-- consCall :: Env Type -> SourcePos -> Type -> [Expression SourcePos] -> TCM Type
+----------------------------------------------------------------------------------
+
+consCall g l z es ft 
   = do (_,its,ot) <- instantiate l ft
-       ets        <- mapM (tcExpr γ) es
-       θ'         <- unifyTypes l "" its ets
-       return      $ apply θ' ot
+       ets        <- mapM (consExpr' g) es
+       θ          <- subTypes l ets its 
+       envAddFresh l (F.subst θ ot) g
 
-instantiate l ft 
-  = do t' <- freshTyArgs l $ bkAll ft 
-       maybe err return   $ bkFun t'
-    where
-       err = tcError l $ errorNonFunction ft
+instantiate l g t
+  = freshTyArgs l g $ bkAll t
 
 --------------------------------------------------------------------------------
 consSeq :: (CGEnv -> a -> Maybe CGEnv) -> CGEnv -> [a] -> CGEnv (Maybe CGEnv) 
@@ -209,15 +248,14 @@ consSeq :: (CGEnv -> a -> Maybe CGEnv) -> CGEnv -> [a] -> CGEnv (Maybe CGEnv)
 consSeq f             = foldM step . Just 
   where 
     step Nothing _  = return Nothing
-    step (Just γ) x = f γ x
+    step (Just g) x = f g x
 
 ------------------------------------------------------------------------------------
 -- | This is where subtyping constraints get added ---------------------------------
 ------------------------------------------------------------------------------------
 
-subTypes :: SourcePos -> String -> CGEnv -> [RefType] -> [RefType] -> CGM () 
-subTypes = error "TOBD"
+subTypes       :: (IsLocated l) => l -> CGEnv -> [RefType] -> [RefType] -> CGM () 
+subTypes       = error "TOBD"
 
-subType  :: SourcePos -> String -> CGEnv -> RefType -> RefType -> CGM ()
-subType  = error "TOBD" -- unifyTypes l (errorWrongType m e t t') [t] [t'] >> return ()
-
+subType        :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
+subType        = error "TOBD" -- unifyTypes l (errorWrongType m e t t') [t] [t'] >> return ()

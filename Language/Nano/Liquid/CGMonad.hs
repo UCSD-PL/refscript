@@ -9,10 +9,21 @@ module Language.Nano.Liquid.CGMonad (
   , getFInfo 
 
   -- * Throw Errors
-  , cgError    -- :: SrcPos -> String -> CGM a 
+  , cgError       -- :: (IsLocated l) => l -> String -> CGM a 
 
-  -- * Fresh Id
-  , getFreshId -- :: SrcPos -> CGM (Id AnnType) 
+  -- * Instantiate Fresh Type Args (at Call-Site)
+  , freshTyArgs   -- :: (IsLocated l) => l -> CGEnv -> ([TVar], RefType) -> CGM RefType 
+  
+  -- * Instantiate Fresh Type (at Phi-site) 
+  , freshTy       -- :: (IsLocated l) => l -> CGEnv -> [(Id l, Type)] -> CGM (CGEnv, [RefType])  
+
+  -- * Environment API
+  , envAddFresh   -- :: (IsLocated l) => l -> RefType -> CGEnv -> CGM (Id AnnType, CGEnv) 
+  , envAdds       -- :: (F.Symbolic x, IsLocated x) => [(x, RefType)] -> CGEnv -> CGM CGEnv
+  , envAddReturn  -- :: (IsLocated f)  => f -> RefType -> CGEnv -> CGM CGEnv 
+  , envAddGuard   -- :: (F.Symbolic x, IsLocated x) => [(x, Bool)] -> CGEnv -> CGM CGEnv  
+  , envFindTy     -- :: (F.Symbolic x) => x -> CGEnv -> RefType 
+  , envFindReturn -- :: CGEnv -> RefType 
   ) where
 
 
@@ -67,5 +78,14 @@ getFInfo = error "TOBD"
 --          , F.lits  = []
 --          , F.kuts  = F.ksEmpty
 --          , F.quals = [] }
+
+freshTy :: AnnType -> 
+freshTyArgs = error "TOBD"
+
+getTypInst :: AnnType -> [Type] 
+getTypInst (Ann l fs) 
+  = case [ts | TypInst ts <- fs] of 
+      [ts] -> return ts
+      _    -> cgError l $ errorMissingTypeArgs
 
 

@@ -165,10 +165,10 @@ funTy l γ f xs
       Just (αs,ts,t) -> do when (length xs /= length ts) $ tcError l $ errorArgMismatch
                            return (αs,ts,t)
 
-envAddFun l f αs xs ts t = envAdds tyBinds . envAdds varBinds . envAddReturn f t 
+envAddFun l f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
   where  
     tyBinds              = [(Loc l α, tVar α) | α <- αs]
-    varBinds             = zip xs ts
+    varBinds             = zip
 
 validInst αs (l, ts)
   = case S.toList (βS `S.difference` αS) of 
@@ -224,7 +224,7 @@ tcStmt γ (IfStmt l e s1 s2)
        unifyType l "If condition" e t tBool
        γ1    <- tcStmt γ s1
        γ2    <- tcStmt γ s2
-       envJoin l γ1 γ2
+       envJoin l γ γ1 γ2
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt _ ds)
@@ -255,7 +255,7 @@ tcAsgn :: Env Type -> SourcePos -> Id SourcePos -> Expression SourcePos -> TCM T
 
 tcAsgn γ l x e 
   = do t <- tcExpr γ e
-       return $ Just $ envAdd x t γ
+       return $ Just $ envAdds [(x, t)] γ
 
 -------------------------------------------------------------------------------
 tcExpr :: Env Type -> Expression SourcePos -> TCM Type
@@ -314,18 +314,32 @@ unifyType l m e t t' = unifyTypes l msg [t] [t'] -- >> return ()
     msg              = errorWrongType m e t t'
 
 ----------------------------------------------------------------------------------
-envJoin :: SourcePos -> TCEnv -> TCEnv -> TCM TCEnv 
+envJoin :: SourcePos -> Env Type -> TCEnv -> TCEnv -> TCM TCEnv 
 ----------------------------------------------------------------------------------
 
-envJoin _ Nothing x           = return x
-envJoin _ x Nothing           = return x
-envJoin l (Just γ1) (Just γ2) = envJoin' l γ1 γ2 
+envJoin _ _ Nothing x           = return x
+envJoin _ _ x Nothing           = return x
+envJoin l γ (Just γ1) (Just γ2) = envJoin' l γ γ1 γ2 
 
-envJoin' l γ1 γ2 
+-- OLD
+envJoin' l _ γ1 γ2 
   = do forM_ (envToList $ envLefts γall) err 
        return (Just $ envRights γall)
     where 
       γall = envIntersectWith meet γ1 γ2
       meet = \t1 t2 -> if t1 == t2 then Right t1 else Left (t1,t2)
       err  = \(y, (t, t')) -> tcError l $ errorJoin y t t'
+
+-- NEW update to use the SSA-Vars. Much simpler.
+-- envJoin' l γ γ1 γ2
+--   = do let xs = [PhiVar x <- ann_fact l]
+--        ts    <- mapM (getPhiType l γ1 γ2) xs
+--        envAdds (zip xs ts) γ 
+--   
+-- getPhiType l γ1 γ2 x
+--   = case (envFindTy x γ1, envFindTy x γ2) of
+--       (Just t1, Just t2) -> if (t1 == t2) 
+--                               then return t1 
+--                               else tcError (srcPos l) $ errorJoin x t1 t2
+--       (_      , _      ) -> tcError (srcPos l) $ errorMissingPhiAsgn x
 

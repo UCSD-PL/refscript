@@ -107,7 +107,6 @@ ssaStmt (IfStmt l e s1 s2)
          Just θ''   -> setSsaEnv θ'' >> return (True,  stmt') 
          Nothing    ->                  return (False, stmt')
 
-
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 ssaStmt (VarDeclStmt l ds)
   = do (_, ds') <- ssaSeq ssaVarDecl ds
@@ -207,10 +206,10 @@ envJoin' l θ1 θ2
        let (s1,s2) = unzip stmts
        return (Just θ'', Just $ BlockStmt l s1, Just $ BlockStmt l s2) 
     where 
-      θ            = envIntersectWith meet θ1 θ2
-      θ'           = envRights θ
-      phis         = envToList $ envLefts θ 
-      meet         = \x1 x2 -> if x1 == x2 then Right x1 else Left (x1, x2)
+       θ           = envIntersectWith meet θ1 θ2
+       θ'          = envRights θ
+       phis        = envToList $ envLefts θ 
+       meet        = \x1 x2 -> if x1 == x2 then Right x1 else Left (x1, x2)
 
 phiAsgn l (x, (SI x1, SI x2))
   = do x' <- updSsaEnv l x          -- Generate FRESH phi name

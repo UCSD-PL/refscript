@@ -57,10 +57,13 @@ Liquid Nano-JS
 * Test Files
     + tests/liquid/pos/abs.js
 
+
+HEREHEREHEREHERE  -- see "TOBD" in Language/Nano/Liquid/Liquid.hs
+
+
 * Parse 
     + RefTypes
     + Qualifiers
-    - Scrape Qualifiers
 
 * Liquid Constraint Generation [HW]
 
@@ -87,8 +90,9 @@ tests/typed/pos/*.js
         forloop.js
 
     ------------ STOPPED 
+
     lists
-        listsum.js {------------------------ HEREHEREHEREHERE
+        listsum.js
         range.js   
         map.js
         fold.js
@@ -109,6 +113,7 @@ tests/typed/pos/*.js
         tail :: forall A. (xs:{v: List A | 0 < (len v)}) -> {v: List A | (len v) = (len xs) - 1 }
         null :: forall A. (xs:List A) -> {v: Bool | (Prop v) <=> ((len v) = 0) }
 
+
 Include
 -------
 
@@ -120,6 +125,7 @@ Include
           traverseFiles :: (FilePath -> IO [FilePath]) -> FilePath -> IO [FilePath]
 
 ---------------------------------------------------------------------------------------
+
 
 
 Base Types

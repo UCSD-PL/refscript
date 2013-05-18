@@ -154,7 +154,7 @@ tcFun γ (FunctionStmt l f xs body)
   = do (αs, ts, t)    <- funTy l γ f xs
        let γ'          = envAddFun l f αs xs ts t γ 
        q              <- tcStmts γ' body
-       when (isJust q) $ assertVoid l f t
+       when (isJust q) $ unifyType l "Missing return" f tVoid t
        annm           <- getAnns
        mapM_ (validInst αs) (M.toList annm)
        return          $ annm
@@ -221,7 +221,7 @@ tcStmt γ (IfSingleStmt l b s)
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
   = do t     <- tcExpr γ e
-       assertTy l "If condition" e t tBool
+       unifyType l "If condition" e t tBool
        γ1    <- tcStmt γ s1
        γ2    <- tcStmt γ s2
        envJoin l γ1 γ2
@@ -233,7 +233,7 @@ tcStmt γ (VarDeclStmt _ ds)
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
   = do t <- maybe (return tVoid) (tcExpr γ) eo 
-       assertTy l "Return" eo t (envFindReturn γ) 
+       unifyType l "Return" eo t $ envFindReturn γ 
        return Nothing
 
 -- OTHER (Not handled)
@@ -309,8 +309,9 @@ unifyTypes l msg t1s t2s
                                     Left msg' -> tcError l $ msg ++ msg'
                                     Right θ'  -> setSubst θ' >> return θ' 
 
-assertTy l m e t t' = unifyTypes l (errorWrongType m e t t') [t] [t'] >> return ()
-assertVoid l f t    = assertTy l "Missing return" f tVoid t
+unifyType l m e t t' = unifyTypes l msg [t] [t'] -- >> return ()
+  where 
+    msg              = errorWrongType m e t t'
 
 ----------------------------------------------------------------------------------
 envJoin :: SourcePos -> TCEnv -> TCEnv -> TCM TCEnv 

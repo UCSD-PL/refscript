@@ -13,9 +13,6 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Execute 
   , execute
 
-  -- * Throw Errors
-  , tcError
-
   -- * Log Errors
   , logError
 

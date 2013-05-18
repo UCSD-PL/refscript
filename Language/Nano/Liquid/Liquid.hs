@@ -70,7 +70,7 @@ consFun g (FunctionStmt l f xs body)
        g'             <- envAddFun l f αs xs ts t g 
        gm             <- consStmts g' body
        case gm of 
-         Just g'      -> subType l "Missing return" g' rVoid t
+         Just g'      -> subTypes l g' [rVoid] [t]
          Nothing      -> return ()
 
 envAddFun l g f αs xs ts t = envAdds tyBinds =<< envAdds (varBinds xs ts) =<< envAddReturn f t g 
@@ -250,12 +250,3 @@ consSeq f             = foldM step . Just
     step Nothing _  = return Nothing
     step (Just g) x = f g x
 
-------------------------------------------------------------------------------------
--- | This is where subtyping constraints get added ---------------------------------
-------------------------------------------------------------------------------------
-
-subTypes       :: (IsLocated l) => l -> CGEnv -> [RefType] -> [RefType] -> CGM () 
-subTypes       = error "TOBD"
-
-subType        :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
-subType        = error "TOBD" -- unifyTypes l (errorWrongType m e t t') [t] [t'] >> return ()

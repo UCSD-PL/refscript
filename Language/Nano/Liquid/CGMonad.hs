@@ -24,9 +24,13 @@ module Language.Nano.Liquid.CGMonad (
   , envAddGuard   -- :: (F.Symbolic x, IsLocated x) => [(x, Bool)] -> CGEnv -> CGM CGEnv  
   , envFindTy     -- :: (F.Symbolic x) => x -> CGEnv -> RefType 
   , envFindReturn -- :: CGEnv -> RefType 
+
+  -- * Add Subtyping Constraints
+  , subTypes       :: (IsLocated l) => l -> CGEnv -> [RefType] -> [RefType] -> CGM () 
   ) where
 
 
+subTypes       = error "TOBD"
 
 -------------------------------------------------------------------------------
 getFInfo :: NanoRefType -> TCM a -> F.FInfo Cinfo  

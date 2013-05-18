@@ -14,10 +14,12 @@ module Language.Nano.Typecheck.Types (
   , NanoBare
   , NanoSSA
   , NanoType
-  , Spec   (..)
+  
   , Source (..)
   , FunctionStatement
   , mkNano
+  , sourceNano
+  , sigsNano
 
   -- * Environments 
   , Env    
@@ -34,10 +36,6 @@ module Language.Nano.Typecheck.Types (
   , envRights
   , envIntersectWith
   , envEmpty
-
-  -- * Accessors
-  , code
-  , env
 
   -- * Refinement Types
   , RType (..)
@@ -72,15 +70,12 @@ module Language.Nano.Typecheck.Types (
   , AnnSSA
   , AnnType
   , AnnInfo
-
-  -- * Refinement Types
-  , RefType 
   ) where 
 
 import           Data.Maybe             (isJust)
 import           Data.Hashable
 import           Data.Monoid            hiding ((<>))            
-import           Data.Ord               (comparing) 
+-- import           Data.Ord               (comparing) 
 import qualified Data.List               as L
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
@@ -95,8 +90,8 @@ import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative 
-import           Control.Monad
-import           Control.Monad.Error
+-- import           Control.Monad
+import           Control.Monad.Error ()
 
 -- | Type Variables
 newtype TVar = TV F.Symbol deriving (Eq, Show, Ord)
@@ -145,9 +140,8 @@ toType :: RType a -> Type
 toType = fmap (const ())
   
 -- | Adding in Refinements
-ofType :: (Reftable r) => Type -> RType r
-ofType = fmap (const top)
-
+ofType :: (F.Reftable r) => Type -> RType r
+ofType = fmap (const F.top)
 
 bkFun :: RType a -> Maybe ([TVar], [RType a], RType a)
 bkFun t = do let (αs, t') = bkAll t
@@ -167,17 +161,24 @@ bkAll t              = go [] t
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-data Nano a r = Nano { code :: !(Source a) 
-                     , env  :: !(Env (RType r))
+data Nano a t = Nano { code   :: !(Source a) 
+                     , env    :: !(Env t)
+                     , consts :: !(Env t) 
+                     , quals  :: ![F.Qualifier] 
                      }
 
-type NanoBare = Nano AnnBare   ()
-type NanoSSA  = Nano AnnSSA    ()
-type NanoType = Nano AnnType   ()
+type NanoBare    = Nano AnnBare Type 
+type NanoSSA     = Nano AnnSSA  Type 
+type NanoType    = Nano AnnType Type 
 
+sourceNano z     = Nano z envEmpty envEmpty []
+sigsNano xts     = Nano (Src []) (envFromList xts) envEmpty []
 
--- | Type Specification for function binders
-data Spec = Spec { sigs :: [(Id SourcePos, Type)] }
+-- -- | Type Specification for function binders
+-- data Spec t = Spec { sigs :: [(Id SourcePos, t)] 
+-- 
+--                    , qs   :: [F.Qualifier]
+--                    }
 
 {-@ measure isFunctionStatement :: (Statement SourcePos) -> Prop 
     isFunctionStatement (FunctionStmt {}) = true
@@ -193,12 +194,19 @@ newtype Source a = Src [FunctionStatement a]
 instance Functor Source where 
   fmap f (Src zs) = Src (map (fmap f) zs)
 
-instance PP (RType r) => PP (Nano a r) where
-  pp (Nano (Src s) env) 
+instance PP t => PP (Nano a t) where
+  pp pgm@(Nano {code = (Src s) }) 
     =   text "********************** CODE **********************"
     $+$ pp s
-    $+$ text "********************** SPEC **********************"
-    $+$ pp env
+    $+$ text "********************** ENV ***********************"
+    $+$ pp (env    pgm)
+    $+$ text "********************** CONSTS ********************"
+    $+$ pp (consts pgm) 
+    $+$ text "********************** QUALS *********************"
+    $+$ F.toFix (quals  pgm) 
+    $+$ text "**************************************************"
+
+
 
 instance PP a => PP (Maybe a) where 
   pp = maybe (text "Nothing") pp 
@@ -211,9 +219,16 @@ instance PP t => PP (Env t) where
 
 ppBind (x, t) = pprint x <+> dcolon <+> pp t
 
-instance Monoid Spec where 
-  mempty      = Spec []
-  mappend x y = Spec $ sigs x ++ sigs y
+instance Monoid (Nano a t) where 
+  mempty        = Nano (Src []) envEmpty envEmpty []
+  mappend p1 p2 = Nano ss e cs qs 
+    where 
+      ss        = Src $ s1 ++ s2
+      Src s1    = code p1
+      Src s2    = code p2
+      e         = envFromList ((envToList $ env p1) ++ (envToList $ env p2))
+      cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
+      qs        = quals p1 ++ quals p2 
 
 --------------------------------------------------------------------------
 -- | Environments
@@ -230,12 +245,22 @@ envFindLoc i γ  = fmap loc $ envFind i γ
 envFindTy  i γ  = fmap val $ envFind i γ
 envAdd   i t γ  = F.insertSEnv (F.symbol i) (Loc (srcPos i) t) γ
 envAdds  xts γ  = L.foldl' (\γ (x,t) -> envAdd x t γ) γ xts
-envFromList xts = F.fromListSEnv [(F.symbol x, (Loc (srcPos x) t)) | (x, t) <- xts]
 envToList  γ    = [ (Id l (F.symbolString x), t) | (x, Loc l t) <- F.toListSEnv γ]
 envAddReturn f  = envAdd (returnId (srcPos f))
 envFindReturn   = maybe msg val . F.lookupSEnv returnSymbol  
   where 
     msg = errorstar "bad call to envFindReturn"
+
+-- envFromList xts   = F.fromListSEnv [(F.symbol x, (Loc (srcPos x) t)) | (x, t) <- xts]
+
+-- envFromList       :: [(Id SourcePos, t)] -> Env t
+envFromList       = L.foldl' step envEmpty
+  where 
+    step γ (i, t) = case envFindLoc i γ of
+                      Nothing -> envAdd i t γ 
+                      Just l' -> errorstar $ errorDuplicate i (srcPos i) l'
+
+
 
 envIntersectWith :: (a -> b -> c) -> Env a -> Env b -> Env c
 envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))
@@ -255,11 +280,11 @@ isLeft            = not . isRight
 -- | Combining Source and Spec into Nano ---------------------------------
 --------------------------------------------------------------------------
 
-mkNano  :: [Statement SourcePos] -> Spec -> Either Doc NanoBare 
-mkNano stmts spec 
-  = do src   <- Src <$> mapM checkFun stmts
-       env   <- mkEnv $ sigs spec
-       return $ Nano (fmap (\src -> Ann src []) src) env
+mkNano  :: [Statement SourcePos] -> NanoBare -> Either Doc NanoBare 
+mkNano stmts spec = (mappend spec . sourceNano . fmap (`Ann` []) . Src) <$> mapM checkFun stmts
+
+
+
 
 -- padSrc :: [Statement SourcePos] -> [Statement AnnBare]
 
@@ -291,13 +316,6 @@ getFunctionIds stmts = everything (++) ([] `mkQ` fromFunction) stmts
 -- | Building Type Environments ---------------------------------------
 -----------------------------------------------------------------------
 
-mkEnv :: [(Id SourcePos, Type)] -> Either Doc (Env Type)
-mkEnv = foldM step F.emptySEnv 
-  where 
-    step γ (i, t) = case envFindLoc i γ of
-                      Nothing -> Right $ envAdd i t γ 
-                      Just l' -> Left  $ text $ errorDuplicate i (srcPos i) l'
-
 ---------------------------------------------------------------------------
 -- | Pretty Printer Instances ---------------------------------------------
 ---------------------------------------------------------------------------
@@ -305,18 +323,18 @@ mkEnv = foldM step F.emptySEnv
 -- instance Show r => PP (RType r) where 
 --   pp = text . show
 
-instance PP Type where 
-  pp = ppType
+-- instance PP Type where 
+--   pp = ppType
 
 instance PP a => PP [a] where 
   pp = ppArgs brackets comma 
 
-instance Reftable r => PP (RType r) where
-  pp (TVar α r)     = ppTy r $ pp α 
+instance F.Reftable r => PP (RType r) where
+  pp (TVar α r)     = F.ppTy r $ pp α 
   pp (TFun ts t)    = ppArgs parens comma ts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
-  pp (TApp c [] r)  = ppTy r $ ppTC c 
-  pp (TApp c ts r)  = ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
+  pp (TApp c [] r)  = F.ppTy r $ ppTC c 
+  pp (TApp c ts r)  = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
 
 -- ppType (TVar α _)     = pp α 
 -- ppType (TFun ts t)    = ppArgs parens comma ts <+> text "=>" <+> ppType t 
@@ -355,7 +373,7 @@ instance PP Fact where
   pp (TypInst ts) = text "inst" <+> pp ts 
 
 instance PP AnnInfo where
-  pp             = vcat . (ppBind <$>) . M.toList 
+  pp             = vcat . (ppB <$>) . M.toList 
     where 
       ppB (x, t) = pp x <+> dcolon <+> pp t
 

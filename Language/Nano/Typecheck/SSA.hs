@@ -31,9 +31,9 @@ ssaTransform = either (errorstar . snd) id . execute . ssaNano
 ----------------------------------------------------------------------------------
 ssaNano :: NanoBare -> SSAM NanoSSA
 ----------------------------------------------------------------------------------
-ssaNano p@(Nano (Src fs) env) 
+ssaNano p@(Nano {code = Src fs}) 
   = do fs'    <- forM fs $ T.mapM stripAnn
-       setImmutables $ envMap (\_ -> ()) env 
+       setImmutables $ envMap (\_ -> ()) (env p) 
        fs''   <- mapM ssaFun fs'
        anns   <- getAnns
        return $ p {code = Src $ (patchAnn anns <$>) <$> fs''}

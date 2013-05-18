@@ -15,8 +15,11 @@ import           Data.Char (isLower)
 import           Language.Fixpoint.Misc (mapSnd)
 import           Language.Fixpoint.Types
 import           Language.Fixpoint.Parse 
+
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
+import           Language.Nano.Liquid.Types
+
 import           Language.ECMAScript3.Syntax
 
 dot        = Token.dot        lexer
@@ -29,7 +32,7 @@ braces     = Token.braces     lexer
  
 specP = mkSpec <$> specWraps idBindP 
   where 
-    mkSpec = Spec . map (mapSnd toType) 
+    mkSpec = sigsNano . map (mapSnd toType) 
 
 idBindP :: Parser (Id SourcePos, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
@@ -165,8 +168,8 @@ instance Inputable RefType where
 instance Inputable Type where 
   rr' = doParse' (fmap (const ()) <$> bareTypeP)
 
-instance Inputable Spec where 
-  rr' = doParse' specP
+-- instance Inputable Spec where 
+--   rr' = doParse' specP
 
-parseSpecFromFile :: FilePath -> IO Spec
+parseSpecFromFile :: FilePath -> IO NanoBare 
 parseSpecFromFile = parseFromFile specP  

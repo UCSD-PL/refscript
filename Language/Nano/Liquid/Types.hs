@@ -63,7 +63,7 @@ import           Control.Applicative
 ----- | Refinement Types and Environments -------------------------------------------
 -------------------------------------------------------------------------------------
 
-type RefType     = RType F.SortedReft
+type RefType     = RType F.Reft
 type REnv        = Env RefType
 type NanoRefType = Nano AnnType RefType 
 
@@ -238,7 +238,7 @@ foldReft  f = efoldReft (\_ -> ()) (\_ -> f) F.emptySEnv
 ------------------------------------------------------------------------------------------
 efoldReft :: (F.Reftable r) => (RType r -> b) -> (F.SEnv b -> r -> a -> a) -> F.SEnv b -> a -> RType r -> a
 ------------------------------------------------------------------------------------------
-efoldReft g f γ z (TVar _ r)       = f γ r z
+efoldReft _ f γ z (TVar _ r)       = f γ r z
 efoldReft g f γ z t@(TApp _ ts r)  = f γ r $ efoldRefts g f (efoldExt g t γ) z ts
 efoldReft g f γ z (TFun ts t)      = efoldReft g f γ' (efoldRefts g f γ' z ts) t  where γ' = foldr (efoldExt g) γ ts
 efoldReft g f γ z (TAll α t)       = efoldReft g f γ z t

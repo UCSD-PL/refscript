@@ -14,10 +14,8 @@ module Language.Nano.Typecheck.Types (
   , NanoBare
   , NanoSSA
   , NanoType
-  
   , Source (..)
   , FunctionStatement
-  , mkNano
   , sourceNano
   , sigsNano
 
@@ -37,7 +35,7 @@ module Language.Nano.Typecheck.Types (
   , envIntersectWith
   , envEmpty
 
-  -- * Refinement Types
+  -- * (Refinement) Types
   , RType (..)
   , toType
   , ofType
@@ -276,39 +274,11 @@ isRight (Right _) = True
 isRight (_)       = False
 isLeft            = not . isRight
 
---------------------------------------------------------------------------
--- | Combining Source and Spec into Nano ---------------------------------
---------------------------------------------------------------------------
-
-mkNano  :: [Statement SourcePos] -> NanoBare -> Either Doc NanoBare 
-mkNano stmts spec = (mappend spec . sourceNano . fmap (`Ann` []) . Src) <$> mapM checkFun stmts
-
-
-
-
--- padSrc :: [Statement SourcePos] -> [Statement AnnBare]
-
--- | Trivial Syntax Checking 
-
-checkFun :: Statement SourcePos -> Either Doc (Statement SourcePos) 
-checkFun f@(FunctionStmt _ _ _ b) 
-  | checkBody b = Right f
-checkFun s      = Left (text "Invalid top-level statement" <+> pp s) 
-
-checkBody :: [Statement SourcePos] -> Bool
-checkBody stmts = all isNano stmts && null (getWhiles stmts) 
-    
-getWhiles :: [Statement SourcePos] -> [Statement SourcePos]
-getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
-  where 
-    fromWhile s@(WhileStmt {}) = [s]
-    fromWhile _                = [] 
-
-getFunctionIds :: [Statement SourcePos] -> [Id SourcePos]
-getFunctionIds stmts = everything (++) ([] `mkQ` fromFunction) stmts
-  where 
-    fromFunction (FunctionStmt _ x _ _) = [x] 
-    fromFunction _                      = []
+-- getFunctionIds :: [Statement SourcePos] -> [Id SourcePos]
+-- getFunctionIds stmts = everything (++) ([] `mkQ` fromFunction) stmts
+--   where 
+--     fromFunction (FunctionStmt _ x _ _) = [x] 
+--     fromFunction _                      = []
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
 

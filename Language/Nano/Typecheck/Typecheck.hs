@@ -8,6 +8,8 @@ import qualified Data.List           as L
 import qualified Data.Traversable    as T
 import           Data.Monoid
 import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
+import           Data.Generics.Aliases
+import           Data.Generics.Schemes
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Text.Printf                        (printf)
 import           System.Exit                        (exitWith)
@@ -64,9 +66,30 @@ parseNanoFromFile f
   = do src   <- parseJavaScriptFromFile f
        spec  <- parseSpecFromFile f
        ispec <- parseSpecFromFile =<< getPreludePath
-       return $ either err id (mkNano src (spec `mappend` ispec))
+       return $ mkNano (spec `mappend` ispec) src
     where 
        err m  = errortext $ text ("Invalid Input file: " ++ f) $+$ m
+
+-- | Combining Source and Spec into Nano with Trivial Syntax Checking ----
+
+mkNano  :: NanoBare -> [Statement SourcePos] -> NanoBare 
+mkNano spec = mappend spec . sourceNano . fmap (`Ann` []) . Src . map checkFun 
+
+-- | Trivial Syntax Checking 
+
+checkFun :: Statement SourcePos -> Statement SourcePos 
+checkFun f@(FunctionStmt _ _ _ b) 
+  | checkBody b = f
+checkFun s      = errorstar $ "Invalid top-level statement: " ++ ppshow s 
+
+checkBody :: [Statement SourcePos] -> Bool
+checkBody stmts = all isNano stmts && null (getWhiles stmts) 
+    
+getWhiles :: [Statement SourcePos] -> [Statement SourcePos]
+getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
+  where 
+    fromWhile s@(WhileStmt {}) = [s]
+    fromWhile _                = [] 
 
 -------------------------------------------------------------------------------
 typeCheck   :: NanoBare -> IO (F.FixResult SourcePos)
@@ -78,7 +101,7 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
                  forM_ errs $ \(l,e) -> putStrLn $ printf "Error at %s\n  %s\n" (ppshow l) e
                  return $ F.Unsafe (fst <$> errs)
     
-safe pgm@(Nano (Src fs) env)
+safe pgm@(Nano {code = Src fs})
   -- = return F.Safe
   = do forM fs $ T.mapM printAnn
        return F.Safe 
@@ -105,12 +128,12 @@ type TCEnv = Maybe (Env Type)
 -------------------------------------------------------------------------------
 
 tcNano :: NanoSSA -> TCM NanoType
-tcNano p@(Nano (Src fs) env)
+tcNano p@(Nano {code = Src fs})
   = do fs' <- forM fs $ T.mapM stripAnn
-       m   <- tcNano' $ Nano (Src fs') env
+       m   <- tcNano' $ p { code = Src fs' }
        return $ p {code = Src $ (patchAnn m <$>) <$> fs'}
 
-tcNano'     :: Nano SourcePos () -> TCM AnnInfo  
+tcNano'     :: Nano SourcePos Type -> TCM AnnInfo  
 tcNano' pgm = M.unions <$> (forM fs $ tcFun γ0)
   where
     γ0     = env pgm

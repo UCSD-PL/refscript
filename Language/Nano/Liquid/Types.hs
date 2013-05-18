@@ -94,6 +94,12 @@ emptyCinfo    = Ci $ initialPos ""
 instance PP Cinfo where
   pp (Ci l)   = text "CInfo:" <+> pp l 
 
+instance IsLocated Cinfo where
+  srcPos (Ci x) = x
+
+instance F.Fixpoint Cinfo where 
+  toFix = pp
+
 -------------------------------------------------------------------------------------
 -- | Constraints --------------------------------------------------------------------
 -------------------------------------------------------------------------------------

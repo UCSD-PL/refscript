@@ -23,7 +23,7 @@ import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
-import           Language.Fixpoint.Interface        (resultExit)
+import           Language.Fixpoint.Interface        (resultExit, solve)
 
 import           Language.Nano.Errors
 import           Language.Nano.Types
@@ -34,7 +34,7 @@ import           Language.Nano.Liquid.Types
 --------------------------------------------------------------------------------
 verifyFile :: FilePath -> IO (F.FixResult SourcePos)
 --------------------------------------------------------------------------------
-verifyFile f = solveConstraints . generateConstraints =<< mkNano f
+verifyFile f = solveConstraints f . generateConstraints =<< mkNano f
 
 
 --------------------------------------------------------------------------------
@@ -43,10 +43,16 @@ mkNano :: FilePath -> IO NanoRefType
 mkNano = error "TOBD"
 
 
+
 --------------------------------------------------------------------------------
-solveConstraints :: F.FInfo Cinfo -> IO (F.FixResult SourcePos) 
+solveConstraints :: FilePath -> F.FInfo Cinfo -> IO (F.FixResult SourcePos) 
 --------------------------------------------------------------------------------
-solveConstraints = error "TOBD"    -- run Fixpoint and get an answer
+solveConstraints f ci 
+  = do (r, sol) <- solve f [] ci
+       let r'    = fmap (srcPos . F.sinfo) r
+       donePhase (F.colorResult r) (F.showFix r) 
+       return r'
+
 
 --------------------------------------------------------------------------------
 generateConstraints :: NanoRefType -> F.FInfo Cinfo 

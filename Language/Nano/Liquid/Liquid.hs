@@ -139,7 +139,7 @@ consStmt g (VarDeclStmt _ ds)
 -- return e 
 consStmt g (ReturnStmt l eo)
   = do t <- maybe (return tVoid) (consExpr' g) eo 
-       subTypes l g t envFindReturn g 
+       subType l g t (envFindReturn g) 
        return Nothing
 
 -- OTHER (Not handled)

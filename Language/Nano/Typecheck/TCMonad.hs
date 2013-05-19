@@ -30,7 +30,7 @@ module Language.Nano.Typecheck.TCMonad (
   , getAnns
 
   -- * Unification
-  , unifyTypes
+  , unifyType
   , unifyTypes
   )  where 
 

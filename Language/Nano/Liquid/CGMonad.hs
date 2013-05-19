@@ -25,6 +25,7 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Add Subtyping Constraints
   , subTypes
+  , subType 
   ) where
 
 import           Data.Maybe             (isJust)

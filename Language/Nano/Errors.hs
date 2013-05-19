@@ -7,6 +7,9 @@ import Text.Printf
 import Text.PrettyPrint.HughesPJ
 import Language.ECMAScript3.PrettyPrint
 
+bugMissingTypeArgs l    = printf "BUG: Missing Type Arguments at %s" (ppshow l)
+
+errorArgName l x y      = printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 errorDuplicate i l l'   = printf "Duplicate Specification for %s:\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
 errorArgMismatch        = printf "Mismatch in Number of Args in Call" 
 errorNonFunction f      = printf "Non-function type for %s" (ppshow f)  

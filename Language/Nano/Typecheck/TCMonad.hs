@@ -15,6 +15,9 @@ module Language.Nano.Typecheck.TCMonad (
 
   -- * Log Errors
   , logError
+  
+  -- * Error Action
+  , tcError
 
   -- * Freshness
   , freshTyArgs
@@ -26,6 +29,9 @@ module Language.Nano.Typecheck.TCMonad (
   , addAnn
   , getAnns
 
+  -- * Unification
+  , unifyTypes
+  , unifyTypes
   )  where 
 
 import           Text.Printf
@@ -76,7 +82,7 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ')
 -------------------------------------------------------------------------------
 tcError :: SourcePos -> String -> TCM a
 -------------------------------------------------------------------------------
-tcError l msg = throwError $ printf "ERROR at %s : %s" (ppshow l) msg
+tcError l msg = throwError $ printf "TC-ERROR at %s : %s" (ppshow l) msg
 
 
 -------------------------------------------------------------------------------
@@ -89,10 +95,16 @@ logError x l msg = (modify $ \st -> st { tc_errs = (l,msg):(tc_errs st)}) >> ret
 freshTyArgs :: SourcePos -> ([TVar], Type) -> TCM Type 
 -------------------------------------------------------------------------------
 freshTyArgs l (αs, t) 
+  = (`apply` t) <$> freshSubst l αs
+
+freshSubst :: SourcePos -> [TVar] -> TCM Subst
+freshSubst l αs
   = do βs <- fresh αs
        setTyArgs l βs
        extSubst βs 
-       return $ (`apply` t) $ fromList $ zip αs (tVar <$> βs)
+       return $ fromList $ zip αs (tVar <$> βs)
+ 
+
 
 setTyArgs l βs 
   = do m <- tc_anns <$> get 
@@ -139,3 +151,19 @@ instance Freshable TVar where
 
 instance Freshable a => Freshable [a] where 
   fresh = mapM fresh
+
+----------------------------------------------------------------------------------
+unifyTypes :: SourcePos -> String -> [Type] -> [Type] -> TCM Subst
+----------------------------------------------------------------------------------
+unifyTypes l msg t1s t2s
+  | length t1s /= length t2s = tcError l errorArgMismatch 
+  | otherwise                = do θ <- getSubst 
+                                  case unifys θ t1s t2s of
+                                    Left msg' -> tcError l $ msg ++ msg'
+                                    Right θ'  -> setSubst θ' >> return θ' 
+
+unifyType l m e t t' = unifyTypes l msg [t] [t'] >> return ()
+  where 
+    msg              = errorWrongType m e t t'
+
+

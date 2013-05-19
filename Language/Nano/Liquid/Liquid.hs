@@ -7,7 +7,7 @@ import           Text.Parsec.Pos                    (initialPos)
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
 import           Control.Applicative                ((<$>), (<*>))
-import           Data.Maybe                         (fromMaybe, isJust)
+import           Data.Maybe                         (fromMaybe, fromJust, isJust)
 import           Data.Monoid                 hiding ((<>))            
 import           Data.Ord                           (comparing) 
 import qualified Data.List                   as L
@@ -25,7 +25,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
-
+import           Language.Nano.Liquid.CGMonad
 
 --------------------------------------------------------------------------------
 verifyFile :: FilePath -> IO (F.FixResult SourcePos)
@@ -49,9 +49,9 @@ solveConstraints f ci
        return r'
 
 --------------------------------------------------------------------------------
-generateConstraints :: NanoRefType -> F.FInfo Cinfo 
+generateConstraints     :: NanoRefType -> F.FInfo Cinfo 
 --------------------------------------------------------------------------------
-generateConstraints = getFInfo pgm $ consNano pgm
+generateConstraints pgm = getFInfo pgm $ consNano pgm
 
 --------------------------------------------------------------------------------
 consNano     :: NanoRefType -> CGM ()
@@ -66,22 +66,22 @@ initCGEnv pgm  = error "TOBD" -- (\renv -> CGE renv F.emptyIBindEnv [] Nothing) 
 consFun :: CGEnv -> FunctionStatement AnnType -> CGM ()
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = do let (αs, ts, t) = bkFun $ envFindTy f g
-       g'             <- envAddFun l f αs xs ts t g 
+  = do let (αs, ts, t) = fromJust $ bkFun $ envFindTy f g
+       g'             <- envAddFun l g f αs xs ts t
        gm             <- consStmts g' body
        case gm of 
-         Just g'      -> subTypes l g' [rVoid] [t]
+         Just g'      -> subType l g' tVoid t
          Nothing      -> return ()
 
 envAddFun l g f αs xs ts t = envAdds tyBinds =<< envAdds (varBinds xs ts) =<< envAddReturn f t g 
   where  
-    tyBinds                = [(Loc l α, rVar α) | α <- αs]
+    tyBinds                = [(Loc (srcPos l) α, tVar α) | α <- αs]
     varBinds               = safeZipWith "envAddFun" checkFormal 
 
-checkFormal :: [Id a] -> [RefType] -> [(Id a, RefType)]
+-- checkFormal :: (IsLocated l) => [Id l] -> [RefType] -> [(Id a, RefType)]
 checkFormal x t 
   | xsym == tsym = (x, t)
-  | otherwise    = errorstar $ errorArgNameMismatch l x1 x2
+  | otherwise    = errorstar $ errorArgName (srcPos x) xsym tsym
   where 
     xsym         = F.symbol x
     tsym         = rTypeValueVar t
@@ -105,7 +105,7 @@ consStmt g (EmptyStmt _)
 
 -- x = e
 consStmt g (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))   
-  = consAsgn g l (Id lx x) e
+  = consAsgn g (Id lx x) e
 
 -- e
 consStmt g (ExprStmt _ e)   
@@ -119,20 +119,18 @@ consStmt g (BlockStmt _ stmts)
 consStmt g (IfSingleStmt l b s)
   = consStmt g (IfStmt l b s (EmptyStmt l))
 
--- HINT: use @guard@ to convert binder from @e@ into @F.Pred@, 
---       add to @CGEnv@ with @envAddGuard@. Recursively constrain
---       @s1@ and @s2@ under suitable environments, and combine the 
---       resulting environments with @envJoin@ 
+-- HINT: 1. Use @envAddGuard True@ and @envAddGuard False@ to add the binder 
+--          from the condition expression @e@ into @g@ to obtain the @CGEnv@ 
+--          for the "then" and "else" statements @s1@ and @s2 respectively. 
+--       2. Recursively constrain @s1@ and @s2@ under the respective environments.
+--       3. Combine the resulting environments with @envJoin@ 
 
 -- if e { s1 } else { s2 }
 consStmt g (IfStmt l e s1 s2)
   = do (xe, ge) <- consExpr g e
-       g1'      <- (`consStmt` s1) =<< envAddGuard (guard xe True)  =<< ge 
-       g2'      <- (`consStmt` s2) =<< envAddGuard (guard xe False) =<< ge 
+       g1'      <- (`consStmt` s1) =<< envAddGuard xe True  ge 
+       g2'      <- (`consStmt` s2) =<< envAddGuard xe False ge 
        envJoin l g g1' g2'
-    where 
-      guard True  = F.eProp 
-      guard False = F.PNot . F.eProp
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 consStmt g (VarDeclStmt _ ds)
@@ -140,8 +138,8 @@ consStmt g (VarDeclStmt _ ds)
 
 -- return e 
 consStmt g (ReturnStmt l eo)
-  = do t <- maybe (return rVoid) (consExpr' g) eo 
-       subTypes l [t] [envFindReturn g] 
+  = do t <- maybe (return tVoid) (consExpr' g) eo 
+       subTypes l g t envFindReturn g 
        return Nothing
 
 -- OTHER (Not handled)
@@ -153,7 +151,7 @@ envJoin :: AnnType -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)
 ----------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
-envJoin l g (Just g1) (Just g2) = envJoin' l g g1 g2 
+envJoin l g (Just g1) (Just g2) = Just <$> envJoin' l g g1 g2 
 
 ----------------------------------------------------------------------------------
 envJoin' :: AnnType -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
@@ -166,10 +164,10 @@ envJoin' :: AnnType -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 --       4. return the extended environment.
 
 envJoin' l g g1 g2
-  = do let xs   = [PhiVar x <- ann_fact l] 
+  = do let xs   = [x | PhiVar x <- ann_fact l] 
        let t1s  = (`envFindTy` g1) <$> xs 
        let t2s  = (`envFindTy` g2) <$> xs
-       (g',ts) <- freshTy l g $ zip xs $ toType <$> t1s -- SHOULD BE SAME as t2s 
+       (g',ts) <- freshTyPhis g $ zip xs $ toType <$> t1s -- SHOULD BE SAME as t2s 
        subTypes l g1 t1s ts
        subTypes l g2 t2s ts
        return g'
@@ -181,7 +179,7 @@ consVarDecl :: CGEnv -> VarDecl AnnType -> CGM (Maybe CGEnv)
 -------------------------------------------------------------------------------
 
 consVarDecl g (VarDecl l x (Just e)) 
-  = consAsgn g l x e  
+  = consAsgn g x e  
 consVarDecl g (VarDecl l x Nothing)  
   = return $ Just g
 
@@ -190,7 +188,7 @@ consAsgn :: CGEnv -> Id AnnType -> Expression AnnType -> CGM (Maybe CGEnv)
 ------------------------------------------------------------------------------------
 consAsgn g x e 
   = do t <- consExpr' g e
-       return $ Just $ envAdds [(x, t)] g
+       Just <$> envAdds [(x, t)] g
 
 ------------------------------------------------------------------------------------
 consExpr :: CGEnv -> Expression AnnType -> CGM (Id AnnType, CGEnv) 
@@ -203,7 +201,7 @@ consExpr :: CGEnv -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 consExpr g (IntLit l i)               
   = envAddFresh l (eSingleton i tInt) g
 
-consExpr g (BoolLit _ _)
+consExpr g (BoolLit l b)
   = envAddFresh l (pSingleton b tBool) g 
 
 consExpr g (VarRef l x)
@@ -233,19 +231,37 @@ consExpr' g e  = uncurry envFindTy <$> consExpr g e
 -- consCall :: Env Type -> SourcePos -> Type -> [Expression SourcePos] -> TCM Type
 ----------------------------------------------------------------------------------
 
+-- HINT: This code is almost isomorphic to the version in 
+--   @Liquid.Nano.Typecheck.Typecheck@ except we use subtyping
+--   instead of unification.
+--
+--   1. Fill in @instantiate@ to get a monomorphic instance of @ft@ 
+--      i.e. the callee's RefType, at this call-site
+--   2. Use @consExpr'@ to determine types for arguments @es@
+--   3. Use @subTypes@ to add constraints between the types from (step 2) and (step 1)
+--   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in output type of callee.
+
 consCall g l z es ft 
-  = do (_,its,ot) <- instantiate l ft
+  = do (_,its,ot) <- instantiate l g ft
        ets        <- mapM (consExpr' g) es
-       θ          <- subTypes l ets its 
+       θ          <- subTypes l g ets its 
        envAddFresh l (F.subst θ ot) g
 
-instantiate l g t
-  = freshTyArgs l g $ bkAll t
+instantiate l g t = fromJust . bkFun <$> freshTyInst g αs τs tbody 
+  where 
+    (αs, tbody)   = bkAll t
+    τs            = getTypArgs l αs 
 
---------------------------------------------------------------------------------
-consSeq :: (CGEnv -> a -> Maybe CGEnv) -> CGEnv -> [a] -> CGEnv (Maybe CGEnv) 
---------------------------------------------------------------------------------
-consSeq f             = foldM step . Just 
+getTypArgs :: AnnType -> [TVar] -> [Type] 
+getTypArgs l αs
+  = case [i | TypInst i <- ann_fact l] of 
+      [i] | length i == length αs -> i 
+      _                           -> errorstar $ bugMissingTypeArgs $ srcPos l
+
+---------------------------------------------------------------------------------
+consSeq :: (CGEnv -> a -> CGM (Maybe CGEnv)) -> CGEnv -> [a] -> CGM (Maybe CGEnv) 
+---------------------------------------------------------------------------------
+consSeq f           = foldM step . Just 
   where 
     step Nothing _  = return Nothing
     step (Just g) x = f g x

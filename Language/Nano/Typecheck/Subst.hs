@@ -1,10 +1,15 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 module Language.Nano.Typecheck.Subst ( 
   
   -- * Substitutions
-    RSubst ()
+    RSubst (..)
   , Subst 
   , toList
   , fromList
+
+  -- * Free Type Variables
+  , Free (..)
 
   -- * Type-class with operations
   , Substitutable (..)
@@ -17,6 +22,7 @@ module Language.Nano.Typecheck.Subst (
 import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Misc
+import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Errors 
 import           Language.Nano.Typecheck.Types
 
@@ -43,11 +49,11 @@ fromList      = Su . M.fromList
 
 -- | Substitutions form a monoid; not commutative
 
-instance (F.Reftable r) => Monoid (RSubst r) where 
+instance (F.Reftable r, Substitutable r (RType r)) => Monoid (RSubst r) where 
   mempty                    = Su M.empty
   mappend (Su m) θ'@(Su m') = Su $ (apply θ' <$> m) `M.union` m'
 
-instance PP r => PP (Subst r) where 
+instance (F.Reftable r, PP r) => PP (RSubst r) where 
   pp (Su m) = if M.null m then text "empty" else vcat $ (ppBind <$>) $ M.toList m 
 
 ppBind (x, t) = pp x <+> text ":=" <+> pp t
@@ -56,19 +62,24 @@ ppBind (x, t) = pp x <+> text ":=" <+> pp t
 -- | Substitutions --------------------------------------------------------
 ---------------------------------------------------------------------------
 
+class Free a where 
+  free  :: a -> S.HashSet TVar
+
 class Substitutable r a where 
   apply :: (RSubst r) -> a -> a 
-  free  :: a -> S.HashSet TVar
+
+instance Free a => Free [a] where 
+  free = S.unions . map free
 
 instance Substitutable r a => Substitutable r [a] where 
   apply = map . apply 
-  free  = S.unions . map free 
 
 instance Substitutable () Type where 
   apply θ t = appTy θ t
     where 
       msg   = printf "apply [θ = %s] [t = %s]" (ppshow θ) (ppshow t)
 
+instance Free (RType r) where
   free (TApp _ ts _)    = S.unions   $ free <$> ts
   free (TVar α _)       = S.singleton α 
   free (TFun ts t)      = S.unions   $ free <$> t:ts
@@ -78,6 +89,7 @@ instance Substitutable () Fact where
   apply θ x@(PhiVar _)  = x
   apply θ (TypInst ts)  = TypInst $ apply θ ts
 
+instance Free Fact where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
 
@@ -85,18 +97,17 @@ instance Substitutable () Fact where
 -- appTy :: Subst -> GType r -> GType r
 
 ------------------------------------------------------------------------
-appTy :: RSubst r -> RType r -> RType r
+-- appTy :: RSubst r -> RType r -> RType r
 ------------------------------------------------------------------------
 appTy θ (TApp c ts z)      = TApp c (apply θ ts) z 
-appTy (Su m) t@(TVar α r)  = (M.lookupDefault t α m) `meet` r
+appTy (Su m) t@(TVar α r)  = (M.lookupDefault t α m) `strengthen` r
 appTy θ (TFun ts t)        = TFun  (apply θ ts) (apply θ t)
 appTy (Su m) (TAll α t)    = apply (Su $ M.delete α m) t 
 
 
 -----------------------------------------------------------------------------
-unify :: Subst () -> Type -> Type -> Either String Subst
+unify :: Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
-
 unify θ (TFun ts t) (TFun ts' t')     = unifys  θ (t:ts) (t':ts')
 unify θ (TVar α _) t                  = varAsgn θ α t 
 unify θ t (TVar α _)                  = varAsgn θ α t

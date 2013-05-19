@@ -18,6 +18,7 @@ import           System.Exit                        (exitWith)
 import           Language.Nano.Files
 import           Language.Nano.Errors
 import           Language.Nano.Types
+import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad
@@ -298,20 +299,6 @@ instantiate l ft
     where
        err = tcError l $ errorNonFunction ft
 
-
-----------------------------------------------------------------------------------
-unifyTypes :: SourcePos -> String -> [Type] -> [Type] -> TCM Subst
-----------------------------------------------------------------------------------
-unifyTypes l msg t1s t2s
-  | length t1s /= length t2s = tcError l errorArgMismatch 
-  | otherwise                = do θ <- getSubst 
-                                  case unifys θ t1s t2s of
-                                    Left msg' -> tcError l $ msg ++ msg'
-                                    Right θ'  -> setSubst θ' >> return θ' 
-
-unifyType l m e t t' = unifyTypes l msg [t] [t'] -- >> return ()
-  where 
-    msg              = errorWrongType m e t t'
 
 ----------------------------------------------------------------------------------
 envJoin :: SourcePos -> Env Type -> TCEnv -> TCEnv -> TCM TCEnv 

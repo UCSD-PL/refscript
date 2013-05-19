@@ -19,26 +19,11 @@ module Language.Nano.Typecheck.Types (
   , sourceNano
   , sigsNano
 
-  -- * Environments 
-  , Env    
-  , envFromList 
-  , envToList
-  -- , envAdd 
-  , envAdds 
-  , envFindTy
-  , envAddReturn
-  , envFindReturn
-  , envMem
-  , envMap
-  , envLefts
-  , envRights
-  , envIntersectWith
-  , envEmpty
-
   -- * (Refinement) Types
   , RType (..)
   , toType
   , ofType
+  , strengthen 
 
   -- * Deconstructing Types
   , bkFun
@@ -70,25 +55,26 @@ module Language.Nano.Typecheck.Types (
   , AnnInfo
   ) where 
 
-import           Data.Maybe             (isJust)
-import           Data.Hashable
-import           Data.Monoid            hiding ((<>))            
--- import           Data.Ord               (comparing) 
-import qualified Data.List               as L
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
+import           Data.Hashable
+import           Data.Maybe             (isJust)
+import           Data.Monoid            hiding ((<>))            
+import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
+
 import           Language.Nano.Types
 import           Language.Nano.Errors
+import           Language.Nano.Env
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
+
 import           Control.Applicative 
--- import           Control.Monad
 import           Control.Monad.Error ()
 
 -- | Type Variables
@@ -155,6 +141,14 @@ bkAll t              = go [] t
     go αs (TAll α t) = go (α : αs) t
     go αs t          = (reverse αs, t)
 
+------------------------------------------------------------------------------------------
+strengthen                   :: F.Reftable r => RType r -> r -> RType r
+------------------------------------------------------------------------------------------
+strengthen (TApp c ts r) r'  = TApp c ts $ r `F.meet` r' 
+strengthen (TVar α r)    r'  = TVar α    $ r `F.meet` r'
+strengthen t _               = t 
+
+
 ---------------------------------------------------------------------------------
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
@@ -171,12 +165,6 @@ type NanoType    = Nano AnnType Type
 
 sourceNano z     = Nano z envEmpty envEmpty []
 sigsNano xts     = Nano (Src []) (envFromList xts) envEmpty []
-
--- -- | Type Specification for function binders
--- data Spec t = Spec { sigs :: [(Id SourcePos, t)] 
--- 
---                    , qs   :: [F.Qualifier]
---                    }
 
 {-@ measure isFunctionStatement :: (Statement SourcePos) -> Prop 
     isFunctionStatement (FunctionStmt {}) = true
@@ -204,19 +192,6 @@ instance PP t => PP (Nano a t) where
     $+$ F.toFix (quals  pgm) 
     $+$ text "**************************************************"
 
-
-
-instance PP a => PP (Maybe a) where 
-  pp = maybe (text "Nothing") pp 
-
-instance PP F.Symbol where 
-  pp = pprint
-
-instance PP t => PP (Env t) where
-  pp = vcat . (ppBind <$>) . F.toListSEnv . fmap val 
-
-ppBind (x, t) = pprint x <+> dcolon <+> pp t
-
 instance Monoid (Nano a t) where 
   mempty        = Nano (Src []) envEmpty envEmpty []
   mappend p1 p2 = Nano ss e cs qs 
@@ -228,52 +203,6 @@ instance Monoid (Nano a t) where
       cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
       qs        = quals p1 ++ quals p2 
 
---------------------------------------------------------------------------
--- | Environments
---------------------------------------------------------------------------
-
-type Env t  = F.SEnv (Located t) 
-
-envEmpty        = F.emptySEnv
-envMap    f     = F.mapSEnv (fmap f) 
-envFilter f     = F.filterSEnv (f . val) 
-envMem i γ      = isJust $ envFind i γ
-envFind    i γ  = F.lookupSEnv (F.symbol i) γ
-envFindLoc i γ  = fmap loc $ envFind i γ 
-envFindTy  i γ  = fmap val $ envFind i γ
-envAdd   i t γ  = F.insertSEnv (F.symbol i) (Loc (srcPos i) t) γ
-envAdds  xts γ  = L.foldl' (\γ (x,t) -> envAdd x t γ) γ xts
-envToList  γ    = [ (Id l (F.symbolString x), t) | (x, Loc l t) <- F.toListSEnv γ]
-envAddReturn    = envAdd . returnId . srcPos
-envFindReturn   = maybe msg val . F.lookupSEnv returnSymbol  
-  where 
-    msg = errorstar "bad call to envFindReturn"
-
--- envFromList xts   = F.fromListSEnv [(F.symbol x, (Loc (srcPos x) t)) | (x, t) <- xts]
-
--- envFromList       :: [(Id SourcePos, t)] -> Env t
-envFromList       = L.foldl' step envEmpty
-  where 
-    step γ (i, t) = case envFindLoc i γ of
-                      Nothing -> envAdd i t γ 
-                      Just l' -> errorstar $ errorDuplicate i (srcPos i) l'
-
-
-
-envIntersectWith :: (a -> b -> c) -> Env a -> Env b -> Env c
-envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))
-
-
-envRights :: Env (Either a b) -> Env b
-envRights = envMap (\(Right z) -> z) . envFilter isRight
-
-envLefts :: Env (Either a b) -> Env a
-envLefts = envMap (\(Left z) -> z) . envFilter isLeft
-
-isRight (Right _) = True
-isRight (_)       = False
-isLeft            = not . isRight
-
 -- getFunctionIds :: [Statement SourcePos] -> [Id SourcePos]
 -- getFunctionIds stmts = everything (++) ([] `mkQ` fromFunction) stmts
 --   where 
@@ -282,22 +211,18 @@ isLeft            = not . isRight
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
 
------------------------------------------------------------------------
--- | Building Type Environments ---------------------------------------
------------------------------------------------------------------------
-
 ---------------------------------------------------------------------------
 -- | Pretty Printer Instances ---------------------------------------------
 ---------------------------------------------------------------------------
 
--- instance Show r => PP (RType r) where 
---   pp = text . show
-
--- instance PP Type where 
---   pp = ppType
+instance PP () where 
+  pp _ = text ""
 
 instance PP a => PP [a] where 
   pp = ppArgs brackets comma 
+
+instance PP a => PP (Maybe a) where 
+  pp = maybe (text "Nothing") pp 
 
 instance F.Reftable r => PP (RType r) where
   pp (TVar α r)     = F.ppTy r $ pp α 
@@ -305,12 +230,6 @@ instance F.Reftable r => PP (RType r) where
   pp t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
   pp (TApp c [] r)  = F.ppTy r $ ppTC c 
   pp (TApp c ts r)  = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
-
--- ppType (TVar α _)     = pp α 
--- ppType (TFun ts t)    = ppArgs parens comma ts <+> text "=>" <+> ppType t 
--- ppType t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." <+> ppType t' where (αs, t') = bkAll t
--- ppType (TApp c [] _)  = ppTC c 
--- ppType (TApp c ts _)  = parens $ ppTC c <+> ppArgs id space ts  
 
 ppArgs p sep          = p . intersperse sep . map pp
 
@@ -338,6 +257,12 @@ type AnnSSA    = Annot Fact SourcePos -- Only Phi       facts
 type AnnType   = Annot Fact SourcePos -- Only Phi + Typ facts
 type AnnInfo   = M.HashMap SourcePos [Fact] 
 
+instance IsLocated (SourcePos) where 
+  srcPos x = x 
+
+instance IsLocated (Annot a SourcePos) where 
+  srcPos = ann
+
 instance PP Fact where
   pp (PhiVar x)   = text "phi"  <+> pp x
   pp (TypInst ts) = text "inst" <+> pp ts 
@@ -353,16 +278,23 @@ instance (PP a, PP b) => PP (Annot b a) where
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 
 
+instance (IsLocated a, HasAnnotation t) => IsLocated (t a) where 
+  srcPos = srcPos . getAnnotation
 
+instance HasAnnotation Id where 
+  getAnnotation (Id x _) = x
 
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------
 -----------------------------------------------------------------------
 
-tVar   = (`TVar` ()) 
-tInt   = TApp TInt  [] ()
-tBool  = TApp TBool [] ()
-tVoid  = TApp TVoid [] ()
+tVar   :: (F.Reftable r) => TVar -> RType r
+tVar   = (`TVar` F.top) 
+
+tInt, tBool, tVoid, tErr :: (F.Reftable r) => RType r
+tInt   = TApp TInt  [] F.top 
+tBool  = TApp TBool [] F.top
+tVoid  = TApp TVoid [] F.top
 tErr   = tVoid
 
 -----------------------------------------------------------------------
@@ -372,10 +304,6 @@ tErr   = tVoid
 -----------------------------------------------------------------------
 infixOpTy              :: InfixOp -> Type
 -----------------------------------------------------------------------
-
-tvA                    = TV (F.symbol "Z")
-tA                     = tVar tvA
-
 infixOpTy OpLT         = TAll tvA $ TFun [tA, tA] tBool  
 infixOpTy OpLEq        = TAll tvA $ TFun [tA, tA] tBool
 infixOpTy OpGT         = TAll tvA $ TFun [tA, tA] tBool
@@ -391,13 +319,15 @@ infixOpTy OpAdd        = TFun [tInt, tInt]   tInt
 infixOpTy OpMul        = TFun [tInt, tInt]   tInt 
 infixOpTy OpDiv        = TFun [tInt, tInt]   tInt 
 infixOpTy OpMod        = TFun [tInt, tInt]   tInt  
-
 infixOpTy o            = convertError "infixOpTy" o
+
+tvA                    = TV (F.symbol "Z")
+tA                     = tVar tvA
+
 
 -----------------------------------------------------------------------
 prefixOpTy             :: PrefixOp -> Type
 -----------------------------------------------------------------------
-
 prefixOpTy PrefixMinus = TFun [tInt] tInt
 prefixOpTy PrefixLNot  = TFun [tBool] tBool
 prefixOpTy o           = convertError "prefixOpTy" o

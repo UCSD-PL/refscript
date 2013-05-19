@@ -9,33 +9,58 @@ module Language.Nano.Liquid.CGMonad (
   , getFInfo 
 
   -- * Throw Errors
-  , cgError       -- :: (IsLocated l) => l -> String -> CGM a 
+  , cgError      
 
-  -- * Instantiate Fresh Type Args (at Call-Site)
-  , freshTyArgs   -- :: (IsLocated l) => l -> CGEnv -> ([TVar], RefType) -> CGM RefType 
-  
-  -- * Instantiate Fresh Type (at Phi-site) 
-  , freshTy       -- :: (IsLocated l) => l -> CGEnv -> [(Id l, Type)] -> CGM (CGEnv, [RefType])  
+  -- * Fresh Templates for Unknown Refinement Types 
+  , freshTyInst
+  , freshTyPhis
 
   -- * Environment API
-  , envAddFresh   -- :: (IsLocated l) => l -> RefType -> CGEnv -> CGM (Id AnnType, CGEnv) 
-  , envAdds       -- :: (F.Symbolic x, IsLocated x) => [(x, RefType)] -> CGEnv -> CGM CGEnv
-  , envAddReturn  -- :: (IsLocated f)  => f -> RefType -> CGEnv -> CGM CGEnv 
-  , envAddGuard   -- :: (F.Symbolic x, IsLocated x) => [(x, Bool)] -> CGEnv -> CGM CGEnv  
-  , envFindTy     -- :: (F.Symbolic x) => x -> CGEnv -> RefType 
-  , envFindReturn -- :: CGEnv -> RefType 
+  , envAddFresh
+  , envAdds
+  , envAddReturn
+  , envAddGuard
+  , envFindTy
+  , envFindReturn
 
   -- * Add Subtyping Constraints
-  , subTypes       :: (IsLocated l) => l -> CGEnv -> [RefType] -> [RefType] -> CGM () 
+  , subTypes
   ) where
 
+import           Data.Maybe             (isJust)
+import           Data.Monoid            hiding ((<>))            
 
-subTypes       = error "TOBD"
+import qualified Data.List               as L
+import qualified Data.HashMap.Strict     as M
+
+import qualified Language.Fixpoint.Types as F
+import           Language.Fixpoint.Misc
+import           Language.Fixpoint.PrettyPrint
+import           Text.PrettyPrint.HughesPJ
+
+import           Language.Nano.Types
+import           Language.Nano.Errors
+import           Language.Nano.Typecheck.Types 
+import           Language.Nano.Liquid.Types
+
+import qualified Language.Fixpoint.Types as F
+import           Language.Fixpoint.Misc
+import           Language.Fixpoint.PrettyPrint
+import           Control.Applicative 
+
+import           Control.Monad
+import           Control.Monad.State
+import           Control.Monad.Error
+import           Text.Printf 
+
+import           Language.ECMAScript3.Syntax
+
 
 -------------------------------------------------------------------------------
-getFInfo :: NanoRefType -> TCM a -> F.FInfo Cinfo  
+getFInfo :: NanoRefType -> CGM a -> F.FInfo Cinfo  
 -------------------------------------------------------------------------------
 getFInfo = error "TOBD"
+
 
 -- getFInfo pgm act 
 --   = case runState (runErrorT act) (initState pgm) of 
@@ -83,13 +108,65 @@ getFInfo = error "TOBD"
 --          , F.kuts  = F.ksEmpty
 --          , F.quals = [] }
 
-freshTy :: AnnType -> 
-freshTyArgs = error "TOBD"
-
-getTypInst :: AnnType -> [Type] 
-getTypInst (Ann l fs) 
-  = case [ts | TypInst ts <- fs] of 
-      [ts] -> return ts
-      _    -> cgError l $ errorMissingTypeArgs
 
 
+---------------------------------------------------------------------------------------
+-- | Constraint Generation Monad ------------------------------------------------------
+---------------------------------------------------------------------------------------
+
+data CGState = CGS { cg_index :: !Int } 
+
+type CGM     = ErrorT String (State CGState)
+
+---------------------------------------------------------------------------------------
+cgError :: (IsLocated l) => l -> String -> CGM a 
+---------------------------------------------------------------------------------------
+cgError l msg = throwError $ printf "CG-ERROR at %s : %s" (ppshow $ srcPos l) msg
+
+
+---------------------------------------------------------------------------------------
+-- | Environment API ------------------------------------------------------------------
+---------------------------------------------------------------------------------------
+
+envAddFresh  :: (IsLocated l) => l -> RefType -> CGEnv -> CGM (Id AnnType, CGEnv) 
+envAddFresh  = error "TOBD" 
+
+envAdds      :: (F.Symbolic x, IsLocated x) => [(x, RefType)] -> CGEnv -> CGM CGEnv
+envAdds      = error "TOBD"
+envAddReturn :: (IsLocated f)  => f -> RefType -> CGEnv -> CGM CGEnv 
+envAddReturn = error "TOBD"
+
+envAddGuard     :: (F.Symbolic x, IsLocated x) => x -> Bool -> CGEnv -> CGM CGEnv  
+envAddGuard     = error "TOBD"
+  where 
+    guard True  = F.eProp 
+    guard False = F.PNot . F.eProp
+
+
+
+envFindTy     :: (F.Symbolic x) => x -> CGEnv -> RefType 
+envFindTy     = error "TOBD"
+envFindReturn :: CGEnv -> RefType 
+envFindReturn = error "TOBD"
+
+---------------------------------------------------------------------------------------
+-- | Fresh Templates ------------------------------------------------------------------
+---------------------------------------------------------------------------------------
+
+-- | Instantiate Fresh Type (at Call-site)
+freshTyInst :: CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
+freshTyInst = error "TOBD"
+
+-- | Instantiate Fresh Type (at Phi-site) 
+freshTyPhis :: (IsLocated l) => CGEnv -> [(Id l, Type)] -> CGM (CGEnv, [RefType])  
+freshTyPhis = error "TOBD"
+
+---------------------------------------------------------------------------------------
+-- | Subtyping Constraints ------------------------------------------------------------
+---------------------------------------------------------------------------------------
+
+subTypes :: (IsLocated l) => l -> CGEnv -> [RefType] -> [RefType] -> CGM F.Subst 
+subTypes = error "TOBD"  
+
+subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
+subType l g t1 t2 = subTypes l g [t1] [t2] >> return ()

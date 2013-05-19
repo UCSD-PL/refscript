@@ -12,8 +12,9 @@ import           Data.Monoid
 import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
 
 import           Language.Nano.Types
-import           Language.Nano.Typecheck.Types
 import           Language.Nano.Errors
+import           Language.Nano.Env
+import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.Fixpoint.Misc             
@@ -267,7 +268,7 @@ updSsaEnv l x
        when imm $ ssaError l $ errorWriteImmutable x
        n     <- count <$> get
        let x' = newId l x n
-       modify $ \st -> st {names = envAdd x (SI x') (names st)} {count = 1 + n}
+       modify $ \st -> st {names = envAdds [(x, SI x')] (names st)} {count = 1 + n}
        return x'
 
 ---------------------------------------------------------------------------------

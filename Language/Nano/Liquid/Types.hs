@@ -28,7 +28,7 @@ module Language.Nano.Liquid.Types (
   , rTypeReft
   , rTypeSort
   , rTypeSortedReft
-  , strengthen 
+  , rTypeValueVar
 
   -- * Predicates On RefType 
   , isBaseRType
@@ -56,6 +56,7 @@ import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Nano.Errors
 import           Language.Nano.Types
+import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
@@ -151,10 +152,10 @@ instance RefTypable Type where
 instance RefTypable RefType where
   rType = ofType . toType           -- removes all refinements
 
-eSingleton      :: (F.Expression e, RefTypable t) => e -> t -> RefType 
+eSingleton      :: (F.Expression e) => e -> Type -> RefType 
 eSingleton e t  = (rType t) `strengthen` (F.exprReft e)
 
-pSingleton      :: (F.Predicate p, RefTypable t) => p -> t -> RefType 
+pSingleton      :: (F.Predicate p) => p -> Type -> RefType 
 pSingleton p t  = (rType t) `strengthen` (F.propReft p)
 
 -- t ~| r      = strengthen t $ RR (rTypeSort t) r
@@ -211,13 +212,6 @@ stripRTypeBase (TApp _ _ r) = Just r
 stripRTypeBase (TVar _ r)   = Just r
 stripRTypeBase _            = Nothing
  
-------------------------------------------------------------------------------------------
-strengthen                   :: F.Reftable r => RType r -> r -> RType r
-------------------------------------------------------------------------------------------
-strengthen (TApp c ts r) r'  = TApp c ts $ r `F.meet` r' 
-strengthen (TVar α r)    r'  = TVar α    $ r `F.meet` r'
-strengthen t _               = t 
-
 ------------------------------------------------------------------------------------------
 -- | Substitutions -----------------------------------------------------------------------
 ------------------------------------------------------------------------------------------

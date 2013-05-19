@@ -1,3 +1,5 @@
+{-# LANGUAGE OverlappingInstances #-}
+
 -- | Top Level for Refinement Type checker
 
 module Language.Nano.Liquid.Liquid (verifyFile) where
@@ -73,12 +75,18 @@ consFun g (FunctionStmt l f xs body)
          Just g'      -> subType l g' tVoid t
          Nothing      -> return ()
 
-envAddFun l g f αs xs ts t = envAdds tyBinds =<< envAdds (varBinds xs ts) =<< envAddReturn f t g 
+envAddFun l g f αs xs ts t = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
   where  
     tyBinds                = [(Loc (srcPos l) α, tVar α) | α <- αs]
     varBinds               = safeZipWith "envAddFun" checkFormal 
+    (ts', t')              = renameArgs xs ts t 
 
--- checkFormal :: (IsLocated l) => [Id l] -> [RefType] -> [(Id a, RefType)]
+renameArgs xs ts t = F.substa f (ts, t)
+  where 
+     f y           = M.lookupDefault y y m
+     m             = M.fromList $ safeZipWith "renameArgs" g ts xs
+     g t x         = (rTypeValueVar t, F.symbol x)
+
 checkFormal x t 
   | xsym == tsym = (x, t)
   | otherwise    = errorstar $ errorArgName (srcPos x) xsym tsym
@@ -128,8 +136,8 @@ consStmt g (IfSingleStmt l b s)
 -- if e { s1 } else { s2 }
 consStmt g (IfStmt l e s1 s2)
   = do (xe, ge) <- consExpr g e
-       g1'      <- (`consStmt` s1) =<< envAddGuard xe True  ge 
-       g2'      <- (`consStmt` s2) =<< envAddGuard xe False ge 
+       g1'      <- (`consStmt` s1) $ envAddGuard xe True  ge 
+       g2'      <- (`consStmt` s2) $ envAddGuard xe False ge 
        envJoin l g g1' g2'
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];

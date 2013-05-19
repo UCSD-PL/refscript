@@ -257,8 +257,10 @@ type AnnSSA    = Annot Fact SourcePos -- Only Phi       facts
 type AnnType   = Annot Fact SourcePos -- Only Phi + Typ facts
 type AnnInfo   = M.HashMap SourcePos [Fact] 
 
-instance IsLocated (SourcePos) where 
-  srcPos x = x 
+
+instance HasAnnotation (Annot b) where 
+  getAnnotation = ann 
+
 
 instance IsLocated (Annot a SourcePos) where 
   srcPos = ann
@@ -274,15 +276,6 @@ instance PP AnnInfo where
 
 instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
-
-instance HasAnnotation (Annot b) where 
-  getAnnotation = ann 
-
-instance (IsLocated a, HasAnnotation t) => IsLocated (t a) where 
-  srcPos = srcPos . getAnnotation
-
-instance HasAnnotation Id where 
-  getAnnotation (Id x _) = x
 
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------

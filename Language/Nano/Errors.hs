@@ -7,6 +7,7 @@ import Text.Printf
 import Text.PrettyPrint.HughesPJ
 import Language.ECMAScript3.PrettyPrint
 
+bugUnboundVariable l x  = printf "BUG: Variable %s is unbound in environment at %s" (ppshow x) (ppshow l)
 bugMissingTypeArgs l    = printf "BUG: Missing Type Arguments at %s" (ppshow l)
 
 errorArgName l x y      = printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  

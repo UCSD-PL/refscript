@@ -44,6 +44,7 @@ import           Data.Generics                      (Data)
 import           Data.Monoid                        (Monoid (..))
 import           Data.Maybe                         (catMaybes)
 import           Language.ECMAScript3.Syntax 
+import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
 -- import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
 
@@ -85,11 +86,22 @@ instance Functor Located where
 class IsLocated a where 
   srcPos :: a -> SourcePos 
 
-instance IsLocated (Id SourcePos) where 
-  srcPos (Id l _) = l
+instance IsLocated (SourcePos) where 
+  srcPos x = x 
 
 instance IsLocated (Located a) where 
   srcPos = loc
+
+-- instance (IsLocated a, HasAnnotation t) => IsLocated (t a) where 
+--   srcPos = srcPos . getAnnotation
+
+instance IsLocated a => IsLocated (Id a) where 
+  srcPos (Id x _) = srcPos x
+
+
+instance HasAnnotation Id where 
+  getAnnotation (Id x _) = x
+
 
 instance Eq a => Eq (Located a) where 
   x == y = val x == val y

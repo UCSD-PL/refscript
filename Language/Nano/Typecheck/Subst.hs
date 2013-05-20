@@ -74,10 +74,12 @@ instance Free a => Free [a] where
 instance Substitutable r a => Substitutable r [a] where 
   apply = map . apply 
 
-instance Substitutable () Type where 
+instance (PP r, F.Reftable r) => Substitutable r (RType r) where 
   apply θ t = appTy θ t
-    where 
-      msg   = printf "apply [θ = %s] [t = %s]" (ppshow θ) (ppshow t)
+--     where 
+--       msg   = printf "apply [θ = %s] [t = %s]" (ppshow θ) (ppshow t)
+
+
 
 instance Free (RType r) where
   free (TApp _ ts _)    = S.unions   $ free <$> ts

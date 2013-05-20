@@ -113,25 +113,32 @@ instance F.Fixpoint Cinfo where
 -- | Subtyping Constraints
 
 data SubC     
-  = Sub { senv :: !CGEnv      -- ^ Environment
-        , slhs :: !RefType    -- ^ Subtyping LHS
-        , srhs :: !RefType    -- ^ Subtyping RHS   ... senv |- slhs <: srhs
+  = Sub { senv  :: !CGEnv      -- ^ Environment
+        , slhs  :: !RefType    -- ^ Subtyping LHS
+        , srhs  :: !RefType    -- ^ Subtyping RHS   ... senv |- slhs <: srhs
+        , sinfo :: !Cinfo      -- ^ Source Information
         }
 
 -- | Wellformedness Constraints
 
 data WfC 
-  = W { wenv :: !CGEnv      -- ^ Scope/Environment
-      , wtyp :: !RefType    -- ^ Type to be Well-formed ... wenv |- wtyp
+  = W { wenv  :: !CGEnv      -- ^ Scope/Environment
+      , wtyp  :: !RefType    -- ^ Type to be Well-formed ... wenv |- wtyp
+      , winfo :: !Cinfo      -- ^ Source Information
       }
 
+instance PP F.Reft where 
+  pp = pprint
+
 instance PP SubC where
-  pp (Sub γ t t') = pp (renv γ)   $+$ pp (guards γ) 
-                       $+$ ((text "|-") <+> (pp t $+$ text "<:" $+$ pp t'))
+  pp (Sub γ t t' i) = pp (renv γ)   $+$ pp (guards γ) 
+                        $+$ ((text "|-") <+> (pp t $+$ text "<:" $+$ pp t'))
+                        $+$ ((text "from:") <+> pp i) 
 
 instance PP WfC where
-  pp (W γ t)      = pp (renv γ) 
-                    $+$ (text "|-" <+> pp t) 
+  pp (W γ t i)      = pp (renv γ) 
+                        $+$ (text "|-" <+> pp t) 
+                        $+$ ((text "from:") <+> pp i) 
 
 -- | Aliases for Fixpoint Constraints
 

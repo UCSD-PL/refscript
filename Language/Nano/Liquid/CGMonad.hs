@@ -43,7 +43,9 @@ import           Language.Nano.Types
 import           Language.Nano.Errors
 import qualified Language.Nano.Env       as E
 import           Language.Nano.Typecheck.Types 
+import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Liquid.Types
+
 
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
@@ -178,22 +180,48 @@ envFindReturn = E.envFindReturn . renv
 ---------------------------------------------------------------------------------------
 
 -- | Instantiate Fresh Type (at Call-site)
-freshTyInst :: CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
-freshTyInst g αs τs t = error "TOBD"
+freshTyInst :: (IsLocated l) => l -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
+freshTyInst l g αs τs tbody
+  = do ts    <- mapM (freshTy "freshTyInst") τs
+       _     <- mapM (wellFormed g) ts
+       let θ  = fromList $ zip αs ts
+       return $ apply θ tbody
 
 -- | Instantiate Fresh Type (at Phi-site) 
-freshTyPhis :: (IsLocated l) => CGEnv -> [(Id l, Type)] -> CGM (CGEnv, [RefType])  
-freshTyPhis = error "TOBD"
+freshTyPhis :: (IsLocated l) => l -> CGEnv -> [Id l] -> [Type] -> CGM (CGEnv, [RefType])  
+freshTyPhis l g xs τs 
+  = do ts <- mapM    (freshTy "freshTyPhis")       τs
+       g' <- envAdds (safeZip "freshTyPhis" xs ts) g
+       _  <- mapM    (wellFormed g') ts
+       return (g', ts)
 
 ---------------------------------------------------------------------------------------
--- | Subtyping Constraints ------------------------------------------------------------
+-- | Adding Subtyping Constraints -----------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-subTypes :: (IsLocated l) => l -> CGEnv -> [RefType] -> [RefType] -> CGM F.Subst 
-subTypes = error "TOBD"  
+subTypes :: (IsLocated l, IsLocated x, F.Symbolic x) => l -> CGEnv -> [x] -> [RefType] -> CGM F.Subst 
+subTypes l g xs ts 
+  = do zipWithM (subType l g) xts ts' 
+       return su
+    where 
+      su  = F.mkSubst $ safeZipWith "subTypes" (\x t -> (rTypeValueVar t, F.eVar x)) xs ts
+      ts' = F.subst su ts
+      xts = (`envFindTy` g) <$> xs 
 
+---------------------------------------------------------------------------------------
 subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
-subType l g t1 t2 = subTypes l g [t1] [t2] >> return ()
+---------------------------------------------------------------------------------------
+subType l g t1 t2 = modify $ \st -> st {cs =  c : (cs st) }
+  where 
+    c             = Sub g t1 t2 $ Ci $ srcPos l
+
+---------------------------------------------------------------------------------------
+-- | Adding Well-Formedness Constraints -----------------------------------------------
+---------------------------------------------------------------------------------------
+
+wellFormed :: CGEnv -> RefType -> CGM ()
+wellFormed = error "TOBD"
+
 
 ---------------------------------------------------------------------------------------
 -- | Generating Fresh Values ----------------------------------------------------------
@@ -218,6 +246,9 @@ instance Freshable String where
 
 freshId   :: (IsLocated l) => l -> CGM (Id l)
 freshId l = Id l <$> fresh
+
+freshTy     :: (Show a) => a -> Type -> CGM RefType 
+freshTy _ τ = {- F.tracePP ("freshTy τ = " ++ show τ) <$> -} (refresh $ rType τ) 
 
 
 instance Freshable F.Refa where

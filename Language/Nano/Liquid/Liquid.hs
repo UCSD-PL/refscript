@@ -81,11 +81,11 @@ envAddFun l g f αs xs ts t = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< 
     varBinds               = safeZipWith "envAddFun" checkFormal 
     (ts', t')              = renameArgs xs ts t 
 
-renameArgs xs ts t = F.substa f (ts, t)
+renameArgs xs ts t = F.subst su (ts, t)
   where 
-     f y           = M.lookupDefault y y m
-     m             = M.fromList $ safeZipWith "renameArgs" g ts xs
-     g t x         = (rTypeValueVar t, F.symbol x)
+     su            = F.mkSubst $ safeZipWith "renameArgs" g ts xs
+     g t x         = (rTypeValueVar t, F.expr x)
+     -- f y        = M.lookupDefault y y m
 
 checkFormal x t 
   | xsym == tsym = (x, t)
@@ -175,9 +175,9 @@ envJoin' l g g1 g2
   = do let xs   = [x | PhiVar x <- ann_fact l] 
        let t1s  = (`envFindTy` g1) <$> xs 
        let t2s  = (`envFindTy` g2) <$> xs
-       (g',ts) <- freshTyPhis g $ zip xs $ toType <$> t1s -- SHOULD BE SAME as t2s 
-       subTypes l g1 t1s ts
-       subTypes l g2 t2s ts
+       (g',ts) <- freshTyPhis (srcPos l) g xs $ map toType t1s -- SHOULD BE SAME as t2s 
+       subTypes l g1 xs ts
+       subTypes l g2 xs ts
        return g'
 
 
@@ -251,11 +251,13 @@ consExpr' g e  = uncurry envFindTy <$> consExpr g e
 
 consCall g l z es ft 
   = do (_,its,ot) <- instantiate l g ft
-       ets        <- mapM (consExpr' g) es
-       θ          <- subTypes l g ets its 
-       envAddFresh l (F.subst θ ot) g
+       (xes, g')  <- consScan consExpr g es 
+       θ          <- subTypes l g' xes its 
+       envAddFresh l (F.subst θ ot) g'
 
-instantiate l g t = fromJust . bkFun <$> freshTyInst g αs τs tbody 
+
+
+instantiate l g t = fromJust . bkFun <$> freshTyInst l g αs τs tbody 
   where 
     (αs, tbody)   = bkAll t
     τs            = getTypArgs l αs 
@@ -266,8 +268,18 @@ getTypArgs l αs
       [i] | length i == length αs -> i 
       _                           -> errorstar $ bugMissingTypeArgs $ srcPos l
 
+
 ---------------------------------------------------------------------------------
-consSeq :: (CGEnv -> a -> CGM (Maybe CGEnv)) -> CGEnv -> [a] -> CGM (Maybe CGEnv) 
+consScan :: (CGEnv -> a -> CGM (b, CGEnv)) -> CGEnv -> [a] -> CGM ([b], CGEnv)
+---------------------------------------------------------------------------------
+consScan step g xs  = go g [] xs 
+  where 
+    go g acc []     = return (reverse acc, g)
+    go g acc (x:xs) = do (y, g') <- step g x
+                         go g' (y:acc) xs
+
+---------------------------------------------------------------------------------
+consSeq  :: (CGEnv -> a -> CGM (Maybe CGEnv)) -> CGEnv -> [a] -> CGM (Maybe CGEnv) 
 ---------------------------------------------------------------------------------
 consSeq f           = foldM step . Just 
   where 

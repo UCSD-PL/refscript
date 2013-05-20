@@ -16,8 +16,9 @@ module Language.Nano.Typecheck.Types (
   , NanoType
   , Source (..)
   , FunctionStatement
-  , sourceNano
-  , sigsNano
+  , mapCode
+  -- , sourceNano
+  -- , sigsNano
 
   -- * (Refinement) Types
   , RType (..)
@@ -157,14 +158,14 @@ data Nano a t = Nano { code   :: !(Source a)
                      , env    :: !(Env t)
                      , consts :: !(Env t) 
                      , quals  :: ![F.Qualifier] 
-                     }
+                     } deriving (Functor)
 
 type NanoBare    = Nano AnnBare Type 
 type NanoSSA     = Nano AnnSSA  Type 
 type NanoType    = Nano AnnType Type 
 
-sourceNano z     = Nano z envEmpty envEmpty []
-sigsNano xts     = Nano (Src []) (envFromList xts) envEmpty []
+-- sourceNano z     = Nano z envEmpty envEmpty []
+-- sigsNano xts     = Nano (Src []) (envFromList xts) envEmpty []
 
 {-@ measure isFunctionStatement :: (Statement SourcePos) -> Prop 
     isFunctionStatement (FunctionStmt {}) = true
@@ -203,13 +204,14 @@ instance Monoid (Nano a t) where
       cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
       qs        = quals p1 ++ quals p2 
 
+mapCode :: (a -> b) -> Nano a t -> Nano b t
+mapCode f n = n { code = fmap f (code n) }
+-- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
 -- getFunctionIds :: [Statement SourcePos] -> [Id SourcePos]
 -- getFunctionIds stmts = everything (++) ([] `mkQ` fromFunction) stmts
 --   where 
 --     fromFunction (FunctionStmt _ x _ _) = [x] 
 --     fromFunction _                      = []
-
--- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
 
 ---------------------------------------------------------------------------
 -- | Pretty Printer Instances ---------------------------------------------

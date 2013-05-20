@@ -80,9 +80,9 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ')
 
 
 -------------------------------------------------------------------------------
-tcError :: SourcePos -> String -> TCM a
+tcError :: (IsLocated l) => l -> String -> TCM a
 -------------------------------------------------------------------------------
-tcError l msg = throwError $ printf "TC-ERROR at %s : %s" (ppshow l) msg
+tcError l msg = throwError $ printf "TC-ERROR at %s : %s" (ppshow $ srcPos l) msg
 
 
 -------------------------------------------------------------------------------
@@ -103,8 +103,6 @@ freshSubst l αs
        setTyArgs l βs
        extSubst βs 
        return $ fromList $ zip αs (tVar <$> βs)
- 
-
 
 setTyArgs l βs 
   = do m <- tc_anns <$> get 
@@ -153,7 +151,7 @@ instance Freshable a => Freshable [a] where
   fresh = mapM fresh
 
 ----------------------------------------------------------------------------------
-unifyTypes :: SourcePos -> String -> [Type] -> [Type] -> TCM Subst
+unifyTypes :: (IsLocated l) => l -> String -> [Type] -> [Type] -> TCM Subst
 ----------------------------------------------------------------------------------
 unifyTypes l msg t1s t2s
   | length t1s /= length t2s = tcError l errorArgMismatch 

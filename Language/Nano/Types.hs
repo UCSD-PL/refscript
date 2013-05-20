@@ -11,6 +11,7 @@ module Language.Nano.Types (
 
   -- * Nano Definition
   , IsNano (..)
+  , checkTopStmt
 
   -- * Located Values
   , Located (..) 
@@ -42,6 +43,8 @@ import           Control.Applicative          ((<$>))
 import           Data.Hashable
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
+import           Data.Generics.Aliases
+import           Data.Generics.Schemes
 import           Data.Monoid                        (Monoid (..))
 import           Data.Maybe                         (catMaybes)
 import           Language.ECMAScript3.Syntax 
@@ -53,6 +56,7 @@ import qualified Language.Fixpoint.Types as F
 
 import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Misc
+import           Language.Nano.Errors
 import           Text.PrettyPrint.HughesPJ
 import           Text.Parsec                        
 
@@ -192,6 +196,28 @@ isNanoExprStatement (AssignExpr _ o lv e) = isNano o && isNano lv && isNano e
 isNanoExprStatement (CallExpr _ e es)     = all isNano (e:es)
 isNanoExprStatement e                     = errortext (text "Not Nano ExprStmt!" <+> pp e) 
 -- isNanoExprStatement _                     = False
+
+
+
+-- | Trivial Syntax Checking 
+
+checkTopStmt :: Statement SourcePos -> Statement SourcePos 
+checkTopStmt f@(FunctionStmt _ _ _ b) 
+  | checkBody b = f
+checkTopStmt s  = errorstar $ errorInvalidTopStmt s
+
+checkBody :: [Statement SourcePos] -> Bool
+checkBody stmts = all isNano stmts && null (getWhiles stmts) 
+    
+getWhiles :: [Statement SourcePos] -> [Statement SourcePos]
+getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
+  where 
+    fromWhile s@(WhileStmt {}) = [s]
+    fromWhile _                = [] 
+
+
+
+
 
 -----------------------------------------------------------------------------------
 -- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 

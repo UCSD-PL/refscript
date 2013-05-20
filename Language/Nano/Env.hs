@@ -53,7 +53,7 @@ instance PP F.Symbol where
 -- | Environments
 --------------------------------------------------------------------------
 
-type Env t = F.SEnv (Located t) 
+type Env t      = F.SEnv (Located t) 
 
 envEmpty        = F.emptySEnv
 envMap    f     = F.mapSEnv (fmap f) 
@@ -101,3 +101,4 @@ instance PP t => PP (Env t) where
   pp = vcat . (ppBind <$>) . F.toListSEnv . fmap val 
 
 ppBind (x, t) = pprint x <+> dcolon <+> pp t
+

@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 module Language.Nano.Typecheck.SSA (ssaTransform) where 
 
 import           Control.Applicative                ((<$>), (<*>))
@@ -17,6 +18,7 @@ import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
+import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Misc             
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Text.Printf                        (printf)
@@ -24,18 +26,19 @@ import qualified Data.Traversable as T
 import           Text.Parsec.Pos              
 
 ----------------------------------------------------------------------------------
-ssaTransform :: NanoBare -> NanoSSA
+ssaTransform :: (PP t) => Nano SourcePos t -> Nano AnnSSA t
 ----------------------------------------------------------------------------------
 ssaTransform = either (errorstar . snd) id . execute . ssaNano 
 
 
 ----------------------------------------------------------------------------------
-ssaNano :: NanoBare -> SSAM NanoSSA
+ssaNano :: (PP t) => Nano SourcePos t -> SSAM (Nano AnnSSA t) 
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano {code = Src fs}) 
-  = do fs'    <- forM fs $ T.mapM stripAnn
-       setImmutables $ envMap (\_ -> ()) (env p) 
-       fs''   <- mapM ssaFun fs'
+  = do -- fs'    <- forM fs $ T.mapM stripAnn
+       addImmutables $ envMap (\_ -> ()) (env    p) 
+       addImmutables $ envMap (\_ -> ()) (consts p) 
+       fs''   <- mapM ssaFun fs
        anns   <- getAnns
        return $ p {code = Src $ (patchAnn anns <$>) <$> fs''}
 
@@ -249,9 +252,11 @@ getSsaEnv   :: SSAM SsaEnv
 getSsaEnv   = names <$> get 
 
 -------------------------------------------------------------------------------------
-setImmutables :: Env () -> SSAM () 
+addImmutables   :: Env () -> SSAM () 
 -------------------------------------------------------------------------------------
-setImmutables z = modify $ \st -> st { immutables = z } 
+addImmutables z = modify $ \st -> st { immutables = envExt z (immutables st) } 
+  where
+    envExt x y  = envFromList (envToList x ++ envToList y)
 
 
 -------------------------------------------------------------------------------------
@@ -283,10 +288,15 @@ newId l (Id _ x) n = Id l (x ++ "_" ++ show n)
 findSsaEnv   :: Id SourcePos -> SSAM (Id SourcePos) 
 -------------------------------------------------------------------------------
 findSsaEnv x 
-  = do θ   <- names <$> get 
+  = do θ  <- names <$> get 
+       -- ns <- allNames  
        case envFindTy x θ of 
          Just (SI i) -> return i 
-         Nothing     -> ssaError (srcPos x) $ errorUnboundId x
+         Nothing     -> ssaError (srcPos x) $ errorUnboundId x -- errorUnboundIdEnv x ns 
+
+allNames = do xs <- map fst . envToList . names      <$> get
+              ys <- map fst . envToList . immutables <$> get
+              return $ xs ++ ys
 
 -------------------------------------------------------------------------------
 addAnn     :: SourcePos -> Fact -> SSAM ()
@@ -317,6 +327,6 @@ execute act
       (Right x, st) -> Right x
 
 initState :: SsaState
-initState = SsaST envEmpty envEmpty  0 M.empty
+initState = SsaST envEmpty envEmpty 0 M.empty
 
 

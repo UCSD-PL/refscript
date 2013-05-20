@@ -8,6 +8,7 @@ import Text.Printf
 import Text.PrettyPrint.HughesPJ
 import Language.ECMAScript3.PrettyPrint
 
+bugUnboundPhiVar x      = printf "BUG: Phi Variable %s is unbound" (ppshow x)
 bugUnboundVariable l x  = printf "BUG: Variable %s is unbound in environment at %s" (ppshow x) (ppshow l)
 bugMissingTypeArgs l    = printf "BUG: Missing Type Arguments at %s" (ppshow l)
 
@@ -16,16 +17,14 @@ errorDuplicate i l l'   = printf "Duplicate Specification for %s:\n  %s \n  %s" 
 errorArgMismatch        = printf "Mismatch in Number of Args in Call" 
 errorNonFunction f      = printf "Non-function type for %s" (ppshow f)  
 errorUnboundId x        = printf "Identifier %s unbound" (ppshow x) 
+errorUnboundIdEnv x t   = printf "Identifier %s unbound in %s" (ppshow x) (ppshow t)
 errorWrongType m e t t' = printf "%s -- unexpected type for %s :: %s expected %s" m (ppshow e) (ppshow t) (ppshow t')
 errorJoin x t t'        = printf "Conflicting join for %s \n   %s\n   %s" (ppshow x) (ppshow t) (ppshow t') 
 errorUnification t t'   = printf "Cannot unify types: %s and %s" (ppshow t) (ppshow t')
 errorBoundTyVar a t     = printf "Cannot unify bound type parameter %s with %s" (ppshow a) (ppshow t)
 errorFreeTyVar t        = printf "Type not fully instantiated: %s" (ppshow t)
-
-
 errorWriteImmutable x   = printf "Cannot write immutable: %s" (ppshow x)
-
-
+errorInvalidTopStmt x   = printf "Invalid top-level statement: %s" (ppshow x) 
 
 ppshow                  = render . pp
 

@@ -36,9 +36,21 @@ verifyFile f = solveConstraints f . generateConstraints =<< mkNano f
 
 
 --------------------------------------------------------------------------------
-mkNano :: FilePath -> IO NanoRefType 
+mkNano    :: FilePath -> IO NanoRefType 
 --------------------------------------------------------------------------------
-mkNano = error "TOBD"
+mkNano fn = error "TOBD"
+
+-- 0. "spec" = Nano a t but with EMPTY code
+-- 1. src    = parseSrc   fn
+-- 2. cspec  = parseSpec  fn
+-- 3. pspec  = parseSpec  prelude.js
+--
+-- 5. parseSpecFromFile :: FilePath -> IO NanoRefType (but only code)
+
+parseNanoFromFile :: FilePath -> IO NanoRefType 
+parseNanoFromFile = error "TOBD"
+
+
 
 
 --------------------------------------------------------------------------------

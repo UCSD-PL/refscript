@@ -8,14 +8,10 @@ import qualified Data.List           as L
 import qualified Data.Traversable    as T
 import           Data.Monoid
 import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
-import           Data.Generics.Aliases
-import           Data.Generics.Schemes
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Text.Printf                        (printf)
 import           System.Exit                        (exitWith)
 
-
-import           Language.Nano.Files
 import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
@@ -30,7 +26,6 @@ import           Language.Fixpoint.Interface        (resultExit)
 import           Language.Fixpoint.Misc             
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
 
 
 -- main cfg 
@@ -44,7 +39,7 @@ import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
 --------------------------------------------------------------------------------
 verifyFile :: FilePath -> IO (F.FixResult SourcePos)
 --------------------------------------------------------------------------------
-verifyFile f = (either unsafe safe . execute . tcNano . ssaTransform) =<< parseNanoFromFile f
+verifyFile f = (either unsafe safe . execute . typeCheck . ssaTransform) =<< parseNanoFromFile f
 
 -- DEBUG MODE
 -- verifyFile f 
@@ -54,49 +49,9 @@ verifyFile f = (either unsafe safe . execute . tcNano . ssaTransform) =<< parseN
 --        let nanoSsa = ssaTransform nano
 --        donePhase Loud "SSA Transform"
 --        putStrLn . render . pp $ nanoSsa
---        r    <- either unsafe safe . execute . tcNano $ nanoSsa
+--        r    <- either unsafe safe . execute . typeCheck $ nanoSsa
 --        donePhase Loud "Typechecking"
 --        return r
-
--------------------------------------------------------------------------------
--- | Parse File and Type Signatures -------------------------------------------
--------------------------------------------------------------------------------
-
-parseNanoFromFile :: FilePath -> IO NanoBare
-parseNanoFromFile f 
-  = do src   <- parseJavaScriptFromFile f
-       spec  <- parseSpecFromFile f
-       ispec <- parseSpecFromFile =<< getPreludePath
-       return $ mkNano (spec `mappend` ispec) src
-    where 
-       err m  = errortext $ text ("Invalid Input file: " ++ f) $+$ m
-
--- | Combining Source and Spec into Nano with Trivial Syntax Checking ----
-
-mkNano  :: NanoBare -> [Statement SourcePos] -> NanoBare 
-mkNano spec = mappend spec . sourceNano . fmap (`Ann` []) . Src . map checkFun 
-
--- | Trivial Syntax Checking 
-
-checkFun :: Statement SourcePos -> Statement SourcePos 
-checkFun f@(FunctionStmt _ _ _ b) 
-  | checkBody b = f
-checkFun s      = errorstar $ "Invalid top-level statement: " ++ ppshow s 
-
-checkBody :: [Statement SourcePos] -> Bool
-checkBody stmts = all isNano stmts && null (getWhiles stmts) 
-    
-getWhiles :: [Statement SourcePos] -> [Statement SourcePos]
-getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
-  where 
-    fromWhile s@(WhileStmt {}) = [s]
-    fromWhile _                = [] 
-
--------------------------------------------------------------------------------
-typeCheck   :: NanoBare -> IO (F.FixResult SourcePos)
--------------------------------------------------------------------------------
-
-typeCheck   = either unsafe safe . execute . tcNano 
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs $ \(l,e) -> putStrLn $ printf "Error at %s\n  %s\n" (ppshow l) e
@@ -110,7 +65,28 @@ safe pgm@(Nano {code = Src fs})
 printAnn :: AnnBare -> IO () 
 printAnn (Ann l fs) = when (not $ null fs) $ putStrLn $ printf "At %s: %s" (ppshow l) (ppshow fs)
 
+-------------------------------------------------------------------------------
+-- | TypeCheck Nano Program ---------------------------------------------------
+-------------------------------------------------------------------------------
 
+-------------------------------------------------------------------------------
+typeCheck :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM (Nano AnnType (RType r)) 
+-------------------------------------------------------------------------------
+typeCheck p@(Nano {code = Src fs})
+  = do m     <- tcNano $ toType <$> p 
+       return $ p {code = Src $ (patchAnn m <$>) <$> fs}
+
+tcNano     :: Nano AnnSSA Type -> TCM AnnInfo  
+tcNano pgm = M.unions <$> (forM fs $ tcFun γ0)
+  where
+    γ0     = env pgm
+    Src fs = code pgm
+
+logAnn :: AnnSSA -> TCM AnnSSA 
+logAnn z@(Ann l fs) = forM_ fs (addAnn l) >> return z
+
+patchAnn              :: AnnInfo -> AnnSSA -> AnnType
+patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
 
 
 -------------------------------------------------------------------------------
@@ -125,32 +101,10 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn $ printf "At %s: %s" (ppsh
 type TCEnv = Maybe (Env Type)
 
 -------------------------------------------------------------------------------
--- | TypeCheck Nano Program ---------------------------------------------------
--------------------------------------------------------------------------------
-
-tcNano :: NanoSSA -> TCM NanoType
-tcNano p@(Nano {code = Src fs})
-  = do fs' <- forM fs $ T.mapM stripAnn
-       m   <- tcNano' $ p { code = Src fs' }
-       return $ p {code = Src $ (patchAnn m <$>) <$> fs'}
-
-tcNano'     :: Nano SourcePos Type -> TCM AnnInfo  
-tcNano' pgm = M.unions <$> (forM fs $ tcFun γ0)
-  where
-    γ0     = env pgm
-    Src fs = code pgm
-
-stripAnn :: AnnBare -> TCM SourcePos
-stripAnn z@(Ann l fs) = forM_ fs (addAnn l) >> return l
-
-patchAnn     :: AnnInfo -> SourcePos -> AnnType
-patchAnn m l = Ann l $ M.lookupDefault [] l m
-
--------------------------------------------------------------------------------
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-tcFun    :: Env Type -> FunctionStatement SourcePos -> TCM AnnInfo  
+tcFun    :: Env Type -> FunctionStatement AnnSSA -> TCM AnnInfo  
 tcFun γ (FunctionStmt l f xs body) 
   = do (αs, ts, t)    <- funTy l γ f xs
        let γ'          = envAddFun l f αs xs ts t γ 
@@ -159,7 +113,7 @@ tcFun γ (FunctionStmt l f xs body)
        annm           <- getAnns
        mapM_ (validInst αs) (M.toList annm)
        return          $ annm
-
+        
 funTy l γ f xs 
   = case bkFun =<< envFindTy f γ of
       Nothing        -> tcError l $ errorNonFunction f
@@ -168,7 +122,7 @@ funTy l γ f xs
 
 envAddFun l f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
   where  
-    tyBinds              = [(Loc l α, tVar α) | α <- αs]
+    tyBinds              = [(Loc (srcPos l) α, tVar α) | α <- αs]
     varBinds             = zip
 
 validInst αs (l, ts)
@@ -190,15 +144,13 @@ tcSeq f             = foldM step . Just
     step (Just γ) x = f γ x
 
 --------------------------------------------------------------------------------
-tcStmts :: Env Type -> [Statement SourcePos]  -> TCM TCEnv
+tcStmts :: Env Type -> [Statement AnnSSA]  -> TCM TCEnv
 --------------------------------------------------------------------------------
-
 tcStmts = tcSeq tcStmt
 
 -------------------------------------------------------------------------------
-tcStmt :: Env Type -> Statement SourcePos  -> TCM TCEnv  
+tcStmt :: Env Type -> Statement AnnSSA -> TCM TCEnv  
 -------------------------------------------------------------------------------
-
 -- skip
 tcStmt γ (EmptyStmt _) 
   = return $ Just γ
@@ -242,7 +194,7 @@ tcStmt γ s
   = convertError "tcStmt" s
 
 -------------------------------------------------------------------------------
-tcVarDecl :: Env Type -> VarDecl SourcePos -> TCM TCEnv  
+tcVarDecl :: Env Type -> VarDecl AnnSSA -> TCM TCEnv  
 -------------------------------------------------------------------------------
 
 tcVarDecl γ (VarDecl l x (Just e)) 
@@ -251,7 +203,7 @@ tcVarDecl γ (VarDecl l x Nothing)
   = return $ Just γ
 
 ------------------------------------------------------------------------------------
-tcAsgn :: Env Type -> SourcePos -> Id SourcePos -> Expression SourcePos -> TCM TCEnv
+tcAsgn :: Env Type -> AnnSSA -> Id AnnSSA -> Expression AnnSSA -> TCM TCEnv
 ------------------------------------------------------------------------------------
 
 tcAsgn γ l x e 
@@ -259,7 +211,7 @@ tcAsgn γ l x e
        return $ Just $ envAdds [(x, t)] γ
 
 -------------------------------------------------------------------------------
-tcExpr :: Env Type -> Expression SourcePos -> TCM Type
+tcExpr :: Env Type -> Expression AnnSSA -> TCM Type
 -------------------------------------------------------------------------------
 
 tcExpr _ (IntLit _ _)               
@@ -272,36 +224,35 @@ tcExpr γ (VarRef l x)
   = maybe (tcError l $ errorUnboundId x) return $ envFindTy x γ
 
 tcExpr γ (PrefixExpr l o e)
-  = tcCall γ l o [e] (prefixOpTy o)
+  = tcCall γ l [e] (prefixOpTy o)
 
 tcExpr γ (InfixExpr l o e1 e2)        
-  = tcCall γ l o  [e1, e2] (infixOpTy o)
+  = tcCall γ l [e1, e2] (infixOpTy o)
 
 tcExpr γ (CallExpr l e es)
-  = tcCall γ l e es =<< tcExpr γ e 
+  = tcCall γ l es =<< tcExpr γ e 
 
 tcExpr γ e 
   = convertError "tcExpr" e
 
 ----------------------------------------------------------------------------------
--- tcCall :: Env Type -> SourcePos -> Type -> [Expression SourcePos] -> TCM Type
+tcCall :: Env Type -> AnnSSA -> [Expression AnnSSA]-> Type -> TCM Type
 ----------------------------------------------------------------------------------
-
-tcCall γ l z es ft 
+tcCall γ l es ft 
   = do (_,its,ot) <- instantiate l ft
        ets        <- mapM (tcExpr γ) es
        θ'         <- unifyTypes l "" its ets
        return      $ apply θ' ot
 
 instantiate l ft 
-  = do t' <- freshTyArgs l $ bkAll ft 
+  = do t' <- freshTyArgs (srcPos l) $ bkAll ft 
        maybe err return   $ bkFun t'
     where
        err = tcError l $ errorNonFunction ft
 
 
 ----------------------------------------------------------------------------------
-envJoin :: SourcePos -> Env Type -> TCEnv -> TCEnv -> TCM TCEnv 
+envJoin :: AnnSSA -> Env Type -> TCEnv -> TCEnv -> TCM TCEnv 
 ----------------------------------------------------------------------------------
 
 envJoin _ _ Nothing x           = return x
@@ -309,24 +260,25 @@ envJoin _ _ x Nothing           = return x
 envJoin l γ (Just γ1) (Just γ2) = envJoin' l γ γ1 γ2 
 
 -- OLD
-envJoin' l _ γ1 γ2 
-  = do forM_ (envToList $ envLefts γall) err 
-       return (Just $ envRights γall)
-    where 
-      γall = envIntersectWith meet γ1 γ2
-      meet = \t1 t2 -> if t1 == t2 then Right t1 else Left (t1,t2)
-      err  = \(y, (t, t')) -> tcError l $ errorJoin y t t'
+-- envJoin' l _ γ1 γ2 
+--   = do forM_ (envToList $ envLefts γall) err 
+--        return (Just $ envRights γall)
+--     where 
+--       γall = envIntersectWith meet γ1 γ2
+--       meet = \t1 t2 -> if t1 == t2 then Right t1 else Left (t1,t2)
+--       err  = \(y, (t, t')) -> tcError l $ errorJoin y t t'
 
 -- NEW update to use the SSA-Vars. Much simpler.
--- envJoin' l γ γ1 γ2
---   = do let xs = [PhiVar x <- ann_fact l]
---        ts    <- mapM (getPhiType l γ1 γ2) xs
---        envAdds (zip xs ts) γ 
---   
--- getPhiType l γ1 γ2 x
---   = case (envFindTy x γ1, envFindTy x γ2) of
---       (Just t1, Just t2) -> if (t1 == t2) 
---                               then return t1 
---                               else tcError (srcPos l) $ errorJoin x t1 t2
---       (_      , _      ) -> tcError (srcPos l) $ errorMissingPhiAsgn x
 
+envJoin' l γ γ1 γ2
+  = do let xs = [x | PhiVar x <- ann_fact l]
+       ts    <- mapM (getPhiType l γ1 γ2) xs
+       return $ Just $ envAdds (zip xs ts) γ 
+  
+getPhiType l γ1 γ2 x
+  = case (envFindTy x γ1, envFindTy x γ2) of
+      (Just t1, Just t2) -> if (t1 == t2) 
+                              then return t1 
+                              else tcError l $ errorJoin x t1 t2
+      (_      , _      ) -> tcError l $ bugUnboundPhiVar x
+      

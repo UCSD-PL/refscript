@@ -4,7 +4,11 @@
 {-# LANGUAGE TypeSynonymInstances      #-} 
 {-# LANGUAGE TupleSections             #-}
 
-module Language.Nano.Typecheck.Parse (parseSpecFromFile) where
+module Language.Nano.Typecheck.Parse (
+    parseNanoFromFile 
+  -- , parseSpecFromFile
+  -- , parseCodeFromFile
+  ) where
 
 import           Control.Monad
 import           Text.Parsec
@@ -12,15 +16,19 @@ import           Text.Parsec.String hiding (parseFromFile)
 import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*), (<*>))
 import           Data.Char (isLower) 
+import           Data.Monoid (mconcat)
 import           Language.Fixpoint.Misc (mapSnd)
-import           Language.Fixpoint.Types
+import           Language.Fixpoint.Types hiding (quals)
 import           Language.Fixpoint.Parse 
 
+import           Language.Nano.Files
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
+import           Language.Nano.Env
 
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
 
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer
@@ -30,15 +38,20 @@ braces     = Token.braces     lexer
 -- | Type Binders ----------------------------------------------------------------
 ----------------------------------------------------------------------------------
  
-specP = mkSpec <$> specWraps idBindP 
-  where 
-    mkSpec = sigsNano . map (mapSnd toType) 
+-- specP = mkSpec <$> specWraps idBindP 
+--   where 
+--     mkSpec = sigsNano . map (mapSnd toType) 
+
+-- specP = specWraps idBindP 
 
 idBindP :: Parser (Id SourcePos, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
 
 identifierP :: Parser (Id SourcePos)
 identifierP = Id <$> getPosition <*> lowerIdP -- Lexer.identifier
+
+annotP      :: Parser AnnType 
+annotP      = (`Ann` []) <$> getPosition
 
 xyP lP sepP rP
   = (\x _ y -> (x, y)) <$> lP <*> (spaces >> sepP) <*> rP
@@ -161,6 +174,74 @@ specWraps = betweenMany start stop
     stop  = spaces >> string "*/"
 
 ---------------------------------------------------------------------------------
+-- | Specifications
+---------------------------------------------------------------------------------
+data PSpec l t 
+  = Meas (Id l, t)
+  | Bind (Id l, t) 
+  | Qual Qualifier
+  deriving (Show)
+
+specP :: Parser (PSpec SourcePos RefType)
+specP 
+  = try (reserved "measure"   >> (Meas <$> idBindP   ))
+    <|> (reserved "qualif"    >> (Qual <$> qualifierP))
+    <|> ({- DEFAULT -}           (Bind <$> idBindP   ))
+
+
+--------------------------------------------------------------------------------------
+parseSpecFromFile :: FilePath -> IO (Nano SourcePos RefType) 
+--------------------------------------------------------------------------------------
+parseSpecFromFile = parseFromFile $ mkSpec <$> specWraps specP  
+
+mkSpec    ::  IsLocated l => [PSpec l t] -> Nano a t
+mkSpec xs = Nano { code   = Src [] 
+                 , env    = envFromList [b | Bind b <- xs] 
+                 , consts = envFromList [b | Meas b <- xs]
+                 , quals  =             [q | Qual q <- xs]  
+                 }
+
+--------------------------------------------------------------------------------------
+parseCodeFromFile :: FilePath -> IO (Nano SourcePos a) 
+--------------------------------------------------------------------------------------
+parseCodeFromFile = fmap mkCode . parseJavaScriptFromFile 
+        
+mkCode    :: [Statement SourcePos] -> Nano SourcePos a
+mkCode ss = Nano { code   = Src (checkTopStmt <$> ss)
+                 , env    = envEmpty  
+                 , consts = envEmpty 
+                 , quals  = []  
+                 } 
+
+-- mkCode spec = mappend spec . sourceNano . fmap (`Ann` []) .  Src . map checkFun 
+
+-------------------------------------------------------------------------------
+-- | Parse File and Type Signatures -------------------------------------------
+-------------------------------------------------------------------------------
+
+parseNanoFromFile :: FilePath-> IO (Nano SourcePos RefType)
+parseNanoFromFile f 
+  = do code  <- parseCodeFromFile f
+       spec  <- parseSpecFromFile f
+       ispec <- parseSpecFromFile =<< getPreludePath
+       return $ mconcat [code, spec, ispec] 
+
+
+-- return $ mapCode (`Ann` []) $ mconcat [code, spec, ispec] 
+-- mkNano (spec `mappend` ispec) src
+
+-- | Combining Source and Spec into Nano with Trivial Syntax Checking ----
+-- mkNano  :: NanoBare -> [Statement SourcePos] -> NanoBare 
+-- mkNano spec = mappend spec . sourceNano . fmap (`Ann` []) . Src . map checkFun 
+
+
+
+
+--------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------
 
 instance Inputable RefType where 
   rr' = doParse' bareTypeP
@@ -168,8 +249,3 @@ instance Inputable RefType where
 instance Inputable Type where 
   rr' = doParse' (fmap (const ()) <$> bareTypeP)
 
--- instance Inputable Spec where 
---   rr' = doParse' specP
-
-parseSpecFromFile :: FilePath -> IO NanoBare 
-parseSpecFromFile = parseFromFile specP  

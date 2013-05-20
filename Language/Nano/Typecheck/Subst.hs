@@ -1,4 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
 module Language.Nano.Typecheck.Subst ( 
   
@@ -119,9 +122,10 @@ unify θ t t'
   | t == t'                           = return θ
   | otherwise                         = Left $ errorUnification t t'             
 
+unifys         ::  Subst -> [Type] -> [Type] -> Either String Subst
 unifys θ xs ys = {- tracePP msg $ -} unifys' θ xs ys 
-  where 
-    msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
+  -- where 
+  --   msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
 unifys' θ ts ts' 
   | nTs == nTs' = go θ (ts, ts') 

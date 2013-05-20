@@ -1,3 +1,6 @@
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances    #-}
+
 -- | Module pertaining to Refinement Type descriptions and conversions
 --   Likely mergeable with @Language.Nano.Typecheck.Types@
 
@@ -14,6 +17,7 @@ module Language.Nano.Liquid.Types (
 
   -- * Constraint Information
   , Cinfo (..)
+  , ci
 
   -- * Constraints
   , SubC (..) , WfC (..)
@@ -97,6 +101,9 @@ newtype Cinfo = Ci SourcePos deriving (Eq, Ord, Show)
 
 emptyCinfo    = Ci $ initialPos ""
 
+ci :: (IsLocated a) => a -> Cinfo
+ci = Ci . srcPos 
+
 instance PP Cinfo where
   pp (Ci l)   = text "CInfo:" <+> pp l 
 
@@ -114,17 +121,17 @@ instance F.Fixpoint Cinfo where
 
 data SubC     
   = Sub { senv  :: !CGEnv      -- ^ Environment
+        , sinfo :: !Cinfo      -- ^ Source Information
         , slhs  :: !RefType    -- ^ Subtyping LHS
         , srhs  :: !RefType    -- ^ Subtyping RHS   ... senv |- slhs <: srhs
-        , sinfo :: !Cinfo      -- ^ Source Information
         }
 
 -- | Wellformedness Constraints
 
 data WfC 
   = W { wenv  :: !CGEnv      -- ^ Scope/Environment
-      , wtyp  :: !RefType    -- ^ Type to be Well-formed ... wenv |- wtyp
       , winfo :: !Cinfo      -- ^ Source Information
+      , wtyp  :: !RefType    -- ^ Type to be Well-formed ... wenv |- wtyp
       }
 
 instance PP F.Reft where 

@@ -26,6 +26,7 @@ module Language.Nano.Types (
   , isSpecification
   , returnSymbol
   , returnId
+  , symbolId
 
   -- * Error message
   , convertError
@@ -207,11 +208,16 @@ isNanoExprStatement e                     = errortext (text "Not Nano ExprStmt!"
 returnName :: String
 returnName = "$result"
 
+symbolId :: (IsLocated l, F.Symbolic x) => l -> x -> Id l
+symbolId l x = Id l $ F.symbolString $ F.symbol x
+
 returnId   :: a -> Id a
 returnId x = Id x returnName 
 
 returnSymbol :: F.Symbol
 returnSymbol = F.stringSymbol returnName
+
+
 
 isSpecification :: Statement a -> Bool
 isSpecification s  = not $ null $ catMaybes $ ($ s) <$> specs 

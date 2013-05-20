@@ -8,7 +8,7 @@ import qualified Data.List           as L
 import qualified Data.Traversable    as T
 import           Data.Monoid
 import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
-import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
+import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>), vcat)
 import           Text.Printf                        (printf)
 import           System.Exit                        (exitWith)
 
@@ -39,7 +39,15 @@ import           Language.ECMAScript3.PrettyPrint
 --------------------------------------------------------------------------------
 verifyFile :: FilePath -> IO (F.FixResult SourcePos)
 --------------------------------------------------------------------------------
-verifyFile f = (either unsafe safe . execute . typeCheck . ssaTransform) =<< parseNanoFromFile f
+verifyFile f = (either unsafe safe . execute . tcNano . ssaTransform) =<< parseNanoFromFile f
+
+-------------------------------------------------------------------------------
+typeCheck :: (F.Reftable r) => Nano AnnSSA (RType r) -> Nano AnnType (RType r) 
+-------------------------------------------------------------------------------
+typeCheck = either crash id . execute . tcNano  
+  where 
+    crash = errorstar . render . vcat . map (text . ppErr)
+ 
 
 -- DEBUG MODE
 -- verifyFile f 
@@ -54,9 +62,11 @@ verifyFile f = (either unsafe safe . execute . typeCheck . ssaTransform) =<< par
 --        return r
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
-                 forM_ errs $ \(l,e) -> putStrLn $ printf "Error at %s\n  %s\n" (ppshow l) e
+                 forM_ errs (putStrLn . ppErr) 
                  return $ F.Unsafe (fst <$> errs)
-    
+
+ppErr (l, e) = printf "Error at %s\n  %s\n" (ppshow l) e
+
 safe pgm@(Nano {code = Src fs})
   -- = return F.Safe
   = do forM fs $ T.mapM printAnn
@@ -70,14 +80,14 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn $ printf "At %s: %s" (ppsh
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-typeCheck :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM (Nano AnnType (RType r)) 
+tcNano :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM (Nano AnnType (RType r)) 
 -------------------------------------------------------------------------------
-typeCheck p@(Nano {code = Src fs})
-  = do m     <- tcNano $ toType <$> p 
+tcNano p@(Nano {code = Src fs})
+  = do m     <- tcNano' $ toType <$> p 
        return $ p {code = Src $ (patchAnn m <$>) <$> fs}
 
-tcNano     :: Nano AnnSSA Type -> TCM AnnInfo  
-tcNano pgm = M.unions <$> (forM fs $ tcFun γ0)
+tcNano'     :: Nano AnnSSA Type -> TCM AnnInfo  
+tcNano' pgm = M.unions <$> (forM fs $ tcFun γ0)
   where
     γ0     = env pgm
     Src fs = code pgm

@@ -26,31 +26,20 @@ import           Language.Fixpoint.Interface        (resultExit, solve)
 import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Parse
+import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
+import           Language.Nano.Typecheck.SSA
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
 
 --------------------------------------------------------------------------------
-verifyFile :: FilePath -> IO (F.FixResult SourcePos)
+verifyFile     :: FilePath -> IO (F.FixResult SourcePos)
 --------------------------------------------------------------------------------
-verifyFile f = solveConstraints f . generateConstraints =<< mkNano f
+verifyFile f   = reftypeCheck f . typeCheck . ssaTransform =<< parseNanoFromFile f
 
 
---------------------------------------------------------------------------------
-mkNano    :: FilePath -> IO NanoRefType 
---------------------------------------------------------------------------------
-mkNano fn = error "TOBD"
-
--- 0. "spec" = Nano a t but with EMPTY code
--- 1. src    = parseSrc   fn
--- 2. cspec  = parseSpec  fn
--- 3. pspec  = parseSpec  prelude.js
---
--- 5. parseSpecFromFile :: FilePath -> IO NanoRefType (but only code)
-
-parseNanoFromFile :: FilePath -> IO NanoRefType 
-parseNanoFromFile = error "TOBD"
-
-
+reftypeCheck   :: FilePath -> Nano AnnType RefType -> IO (F.FixResult SourcePos)
+reftypeCheck f = solveConstraints f . generateConstraints  
 
 
 --------------------------------------------------------------------------------
@@ -71,10 +60,10 @@ generateConstraints pgm = getFInfo pgm $ consNano pgm
 consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) 
-  = initCGEnv pgm >>= (forM_ fs . consFun)
+ = forM_ fs $ consFun $ initCGEnv pgm
 
-initCGEnv    :: NanoRefType -> CGM CGEnv
-initCGEnv pgm  = error "TOBD" -- (\renv -> CGE renv F.emptyIBindEnv [] Nothing) <$> globalEnv info
+initCGEnv    :: NanoRefType -> CGEnv
+initCGEnv pgm = CGE (env pgm) F.emptyIBindEnv []
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> FunctionStatement AnnType -> CGM ()

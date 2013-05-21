@@ -47,10 +47,10 @@ function pos(){
 /************** Types for Builtin Operators ******************************/
 /*************************************************************************/
 
-/*@ builtin_OpLT        :: forall A. (A, A) => bool */
-/*@ builtin_OpLEq       :: forall A. (A, A) => bool */
-/*@ builtin_OpGT        :: forall A. (A, A) => bool */
-/*@ builtin_OpGEq       :: forall A. (A, A) => bool */
+/*@ builtin_OpLT        :: (int, int) => bool */
+/*@ builtin_OpLEq       :: (int, int) => bool */
+/*@ builtin_OpGT        :: (int, int) => bool */
+/*@ builtin_OpGEq       :: (int, int) => bool */
 /*@ builtin_OpEq        :: forall A. (A, A) => bool */
 /*@ builtin_OpNEq       :: forall A. (A, A) => bool */
 /*@ builtin_OpLAnd      :: (bool, bool) => bool     */

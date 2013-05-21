@@ -5,6 +5,7 @@
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
 
+import           Text.Printf                        (printf)
 import           Text.Parsec.Pos                    (initialPos)
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
@@ -258,7 +259,7 @@ baseSingleton _ t              = t
 consCall g l z es ft 
   = do (_,its,ot) <- instantiate l g ft
        (xes, g')  <- consScan consExpr g es 
-       θ          <- subTypes l g' xes its 
+       θ          <- subTypes l g' xes $ tracePP (printf "SUBTYPEBLAH %s" (ppshow l)) its 
        envAddFresh l (F.subst θ ot) g'
 
 

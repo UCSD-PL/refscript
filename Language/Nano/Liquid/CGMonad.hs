@@ -221,7 +221,7 @@ subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 = modify $ \st -> st {cs =  c : cs st }
   where 
-    c             = Sub g (ci l) t1 t2
+    c             = tracePP "subType" $ Sub g (ci l) t1 t2
 
 ---------------------------------------------------------------------------------------
 -- | Adding Well-Formedness Constraints -----------------------------------------------

@@ -15,6 +15,7 @@ module Language.Nano.Liquid.CGMonad (
   , cgError      
 
   -- * Fresh Templates for Unknown Refinement Types 
+  , freshTyFun
   , freshTyInst
   , freshTyPhis
 
@@ -173,6 +174,14 @@ envFindReturn = E.envFindReturn . renv
 -- | Fresh Templates ------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
+-- | Instantiate Fresh Type (at Function-site)
+---------------------------------------------------------------------------------------
+freshTyFun :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType 
+---------------------------------------------------------------------------------------
+freshTyFun l g t 
+  | not $ isTrivialRefType t = return t
+  | otherwise                = freshTy "freshTyFun" (toType t) >>= wellFormed l g 
+
 -- | Instantiate Fresh Type (at Call-site)
 ---------------------------------------------------------------------------------------
 freshTyInst :: (IsLocated l) => l -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
@@ -219,9 +228,10 @@ subType l g t1 t2 = modify $ \st -> st {cs =  c : cs st }
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-wellFormed       :: (IsLocated l) => l -> CGEnv -> RefType -> CGM ()
+wellFormed       :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType  
 ---------------------------------------------------------------------------------------
-wellFormed l g t = modify $ \st -> st { ws = (W g (ci l) t) : ws st }
+wellFormed l g t = do modify $ \st -> st { ws = (W g (ci l) t) : ws st }
+                      return t
 
 ---------------------------------------------------------------------------------------
 -- | Generating Fresh Values ----------------------------------------------------------
@@ -356,7 +366,7 @@ bsplitW g t i
 -- mkSortedReft tce = F.RR . rTypeSort tce
 
 -- refTypeId ::  (F.Reftable r, IsLocated l) => l -> RType r -> Id l
-refTypeId l = symbolId l . rTypeValueVar 
+refTypeId l = symbolId l . F.symbol -- rTypeValueVar 
 
 envTyAdds i ts = envAdds [(refTypeId i t, t) | t <- ts]
 

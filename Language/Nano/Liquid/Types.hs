@@ -37,6 +37,7 @@ module Language.Nano.Liquid.Types (
 
   -- * Predicates On RefType 
   , isBaseRType
+  , isTrivialRefType
 
   -- * Monadic map (TODO: Applicative/Traversable)
   , mapReftM
@@ -293,16 +294,24 @@ isBaseRType (TApp c [] _) = True
 isBaseRType (TVar _ _)    = True
 isBaseRType _             = False
 
+------------------------------------------------------------------------------------------
+isTrivialRefType :: RefType -> Bool
+------------------------------------------------------------------------------------------
+isTrivialRefType t     = foldReft (\r -> (f r &&)) True t
+  where 
+    f (F.Reft (_,ras)) = null ras
+
+
 
 ------------------------------------------------------------------------------------------
 prefixOpRTy :: PrefixOp -> CGEnv -> RefType
 ------------------------------------------------------------------------------------------
-prefixOpRTy = error "TOBD"
+prefixOpRTy o g = prefixOpTy o $ renv g
 
 ------------------------------------------------------------------------------------------
 infixOpRTy :: InfixOp -> CGEnv -> RefType
 ------------------------------------------------------------------------------------------
-infixOpRTy = error "TOBD"
+infixOpRTy o g = infixOpTy o $ renv g
 
 
 

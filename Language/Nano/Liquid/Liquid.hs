@@ -69,7 +69,8 @@ initCGEnv pgm = CGE (env pgm) F.emptyIBindEnv []
 consFun :: CGEnv -> FunctionStatement AnnType -> CGM ()
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = do let (αs, ts, t) = fromJust $ bkFun $ envFindTy f g
+  = do ft             <- freshTyFun l g $ envFindTy f g
+       let (αs, ts, t) = fromJust $ bkFun ft
        g'             <- envAddFun l g f αs xs ts t
        gm             <- consStmts g' body
        case gm of 
@@ -79,7 +80,7 @@ consFun g (FunctionStmt l f xs body)
 envAddFun l g f αs xs ts t = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
   where  
     tyBinds                = [(Loc (srcPos l) α, tVar α) | α <- αs]
-    varBinds               = safeZipWith "envAddFun" checkFormal 
+    varBinds               = safeZip "envAddFun" -- checkFormal 
     (ts', t')              = renameArgs xs ts t 
 
 renameArgs xs ts t = (ts', t')
@@ -92,7 +93,7 @@ checkFormal x t
   | otherwise    = errorstar $ errorArgName (srcPos x) xsym tsym
   where 
     xsym         = F.symbol x
-    tsym         = rTypeValueVar t
+    tsym         = F.symbol t
 
 --------------------------------------------------------------------------------
 consStmts :: CGEnv -> [Statement AnnType]  -> CGM (Maybe CGEnv) 
@@ -216,10 +217,10 @@ consExpr g (VarRef l x)
   = return (x, g) 
 
 consExpr g (PrefixExpr l o e)
-  = consCall g l o [e] (prefixOpRTy o g)
+  = consCall g l o [e] (prefixOpTy o $ renv g)
 
 consExpr g (InfixExpr l o e1 e2)        
-  = consCall g l o [e1, e2] (infixOpRTy o g)
+  = consCall g l o [e1, e2] (infixOpTy o $ renv g)
 
 consExpr g (CallExpr l e es)
   = consCall g l e es =<< consExpr' g e 

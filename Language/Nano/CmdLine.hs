@@ -42,9 +42,9 @@ liquid = Liquid {
  } &= help    "Refinement Type Checker for Nano" 
 
 config = modes [esc, tc, liquid] 
-            &= help    "nano-js is a suite of toy program verifiers"
-            &= program "nano-js" 
-            &= summary "nano-js © Copyright 2013 Regents of the University of California." 
+            &= help    "nanojs is a suite of toy program verifiers"
+            &= program "nanojs" 
+            &= summary "nanojs © Copyright 2013 Regents of the University of California." 
             &= verbosity
             &= verbosity
    
@@ -53,6 +53,6 @@ getOpts = do md <- cmdArgs config
              putStrLn $ banner md
              return   $ md
 
-banner args =  "nano-js © Copyright 2013 Regents of the University of California.\n" 
+banner args =  "nanojs © Copyright 2013 Regents of the University of California.\n" 
             ++ "All Rights Reserved.\n"
-            ++ "nano-js" ++ show args ++ "\n" 
+            ++ "nanojs" ++ show args ++ "\n" 

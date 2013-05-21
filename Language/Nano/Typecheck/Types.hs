@@ -299,11 +299,11 @@ tErr   = tVoid
 
 
 -----------------------------------------------------------------------
-infixOpTy :: InfixOp -> Env Type -> Type
+infixOpTy :: InfixOp -> Env t -> t 
 -----------------------------------------------------------------------
 infixOpTy o g = fromMaybe err $ envFindTy ox g
   where 
-    err       = errorstar $ printf "Cannot find infixOpTy %s in %s" (ppshow ox) (ppshow g)
+    err       = errorstar $ printf "Cannot find infixOpTy %s" (ppshow ox) -- (ppshow g)
     ox        = infixOpId o
 
 infixOpId OpLT  = builtinId "OpLT"         
@@ -321,9 +321,8 @@ infixOpId OpDiv = builtinId "OpDiv"
 infixOpId OpMod = builtinId "OpMod"       
 infixOpId o     = convertError "infixOpId" o
 
-
 -----------------------------------------------------------------------
-prefixOpTy :: PrefixOp -> Env Type -> Type
+prefixOpTy :: PrefixOp -> Env t -> t 
 -----------------------------------------------------------------------
 prefixOpTy o g = fromMaybe err $ envFindTy (prefixOpId o) g
   where 
@@ -332,13 +331,7 @@ prefixOpTy o g = fromMaybe err $ envFindTy (prefixOpId o) g
 prefixOpId PrefixMinus = builtinId "PrefixMinus"
 prefixOpId PrefixLNot  = builtinId "PrefixLNot"
 
-
 builtinId       = mkId . ("builtin_" ++)
-
-
-
-
-
 
 
 -- -----------------------------------------------------------------------
@@ -370,5 +363,3 @@ builtinId       = mkId . ("builtin_" ++)
 -- prefixOpTy PrefixMinus = TFun [tInt] tInt
 -- prefixOpTy PrefixLNot  = TFun [tBool] tBool
 -- prefixOpTy o           = convertError "prefixOpTy" o
--- 
--- 

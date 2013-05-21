@@ -24,9 +24,6 @@ function ensures(p){
   return;
 }
 
-
-
-
 /*@ random :: () => int */
 function random(){
   var r = Math.random();
@@ -45,3 +42,23 @@ function pos(){
     return (1 - x);
   }
 }
+
+/*************************************************************************/
+/************** Types for Builtin Operators ******************************/
+/*************************************************************************/
+
+/*@ builtin_OpLT        :: forall A. (A, A) => bool */
+/*@ builtin_OpLEq       :: forall A. (A, A) => bool */
+/*@ builtin_OpGT        :: forall A. (A, A) => bool */
+/*@ builtin_OpGEq       :: forall A. (A, A) => bool */
+/*@ builtin_OpEq        :: forall A. (A, A) => bool */
+/*@ builtin_OpNEq       :: forall A. (A, A) => bool */
+/*@ builtin_OpLAnd      :: (bool, bool) => bool     */
+/*@ builtin_OpLOr       :: (bool, bool) => bool     */
+/*@ builtin_OpSub       :: (int,  int)  => int      */ 
+/*@ builtin_OpAdd       :: (int,  int)  => int      */
+/*@ builtin_OpMul       :: (int,  int)  => int      */
+/*@ builtin_OpDiv       :: (int,  int)  => int      */ 
+/*@ builtin_OpMod       :: (int,  int)  => int      */
+/*@ builtin_PrefixMinus :: (int) => int             */
+/*@ builtin_PrefixLNot  :: (bool) => bool           */

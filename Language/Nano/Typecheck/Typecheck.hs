@@ -234,10 +234,10 @@ tcExpr γ (VarRef l x)
   = maybe (tcError l $ errorUnboundId x) return $ envFindTy x γ
 
 tcExpr γ (PrefixExpr l o e)
-  = tcCall γ l [e] (prefixOpTy o)
+  = tcCall γ l [e] (prefixOpTy o γ)
 
 tcExpr γ (InfixExpr l o e1 e2)        
-  = tcCall γ l [e1, e2] (infixOpTy o)
+  = tcCall γ l [e1, e2] (infixOpTy o γ)
 
 tcExpr γ (CallExpr l e es)
   = tcCall γ l es =<< tcExpr γ e 

@@ -226,7 +226,6 @@ parseNanoFromFile f
        ispec <- parseSpecFromFile =<< getPreludePath
        return $ mconcat [code, spec, ispec] 
 
-
 -- return $ mapCode (`Ann` []) $ mconcat [code, spec, ispec] 
 -- mkNano (spec `mappend` ispec) src
 

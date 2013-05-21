@@ -28,6 +28,7 @@ module Language.Nano.Types (
   , returnSymbol
   , returnId
   , symbolId
+  , mkId
 
   -- * Error message
   , convertError
@@ -59,6 +60,7 @@ import           Language.Fixpoint.Misc
 import           Language.Nano.Errors
 import           Text.PrettyPrint.HughesPJ
 import           Text.Parsec                        
+import           Text.Parsec.Pos (initialPos)
 
 ---------------------------------------------------------------------
 -- | Command Line Configuration Options
@@ -230,6 +232,8 @@ getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
 --   * invariant(p) 
 --
 -- For now, we hack them with function calls.
+
+mkId = Id (initialPos "") 
 
 returnName :: String
 returnName = "$result"

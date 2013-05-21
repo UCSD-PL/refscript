@@ -56,10 +56,11 @@ module Language.Nano.Typecheck.Types (
   , AnnInfo
   ) where 
 
+import           Text.Printf
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import           Data.Hashable
-import           Data.Maybe             (isJust)
+import           Data.Maybe             (fromMaybe, isJust)
 import           Data.Monoid            hiding ((<>))            
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
@@ -296,35 +297,78 @@ tErr   = tVoid
 -- | Operator Types ---------------------------------------------------
 -----------------------------------------------------------------------
 
------------------------------------------------------------------------
-infixOpTy              :: InfixOp -> Type
------------------------------------------------------------------------
-infixOpTy OpLT         = TAll tvA $ TFun [tA, tA] tBool  
-infixOpTy OpLEq        = TAll tvA $ TFun [tA, tA] tBool
-infixOpTy OpGT         = TAll tvA $ TFun [tA, tA] tBool
-infixOpTy OpGEq        = TAll tvA $ TFun [tA, tA] tBool
-infixOpTy OpEq         = TAll tvA $ TFun [tA, tA] tBool
-infixOpTy OpNEq        = TAll tvA $ TFun [tA, tA] tBool
-
-infixOpTy OpLAnd       = TFun [tBool, tBool] tBool 
-infixOpTy OpLOr        = TFun [tBool, tBool] tBool
-
-infixOpTy OpSub        = TFun [tInt, tInt]   tInt 
-infixOpTy OpAdd        = TFun [tInt, tInt]   tInt 
-infixOpTy OpMul        = TFun [tInt, tInt]   tInt 
-infixOpTy OpDiv        = TFun [tInt, tInt]   tInt 
-infixOpTy OpMod        = TFun [tInt, tInt]   tInt  
-infixOpTy o            = convertError "infixOpTy" o
-
-tvA                    = TV (F.symbol "Z")
-tA                     = tVar tvA
-
 
 -----------------------------------------------------------------------
-prefixOpTy             :: PrefixOp -> Type
+infixOpTy :: InfixOp -> Env Type -> Type
 -----------------------------------------------------------------------
-prefixOpTy PrefixMinus = TFun [tInt] tInt
-prefixOpTy PrefixLNot  = TFun [tBool] tBool
-prefixOpTy o           = convertError "prefixOpTy" o
+infixOpTy o g = fromMaybe err $ envFindTy ox g
+  where 
+    err       = errorstar $ printf "Cannot find infixOpTy %s in %s" (ppshow ox) (ppshow g)
+    ox        = infixOpId o
+
+infixOpId OpLT  = builtinId "OpLT"         
+infixOpId OpLEq = builtinId "OpLEq"      
+infixOpId OpGT  = builtinId "OpGT"       
+infixOpId OpGEq = builtinId "OpGEq"      
+infixOpId OpEq  = builtinId "OpEq"       
+infixOpId OpNEq = builtinId "OpNEq"      
+infixOpId OpLAnd= builtinId "OpLAnd"     
+infixOpId OpLOr = builtinId "OpLOr"      
+infixOpId OpSub = builtinId "OpSub"      
+infixOpId OpAdd = builtinId "OpAdd"      
+infixOpId OpMul = builtinId "OpMul"      
+infixOpId OpDiv = builtinId "OpDiv"      
+infixOpId OpMod = builtinId "OpMod"       
+infixOpId o     = convertError "infixOpId" o
 
 
+-----------------------------------------------------------------------
+prefixOpTy :: PrefixOp -> Env Type -> Type
+-----------------------------------------------------------------------
+prefixOpTy o g = fromMaybe err $ envFindTy (prefixOpId o) g
+  where 
+    err       = convertError "prefixOpTy" o
+
+prefixOpId PrefixMinus = builtinId "PrefixMinus"
+prefixOpId PrefixLNot  = builtinId "PrefixLNot"
+
+
+builtinId       = mkId . ("builtin_" ++)
+
+
+
+
+
+
+
+-- -----------------------------------------------------------------------
+-- infixOpTy              :: InfixOp -> Type
+-- -----------------------------------------------------------------------
+-- infixOpTy OpLT         = TAll tvA $ TFun [tA, tA] tBool  
+-- infixOpTy OpLEq        = TAll tvA $ TFun [tA, tA] tBool
+-- infixOpTy OpGT         = TAll tvA $ TFun [tA, tA] tBool
+-- infixOpTy OpGEq        = TAll tvA $ TFun [tA, tA] tBool
+-- infixOpTy OpEq         = TAll tvA $ TFun [tA, tA] tBool
+-- infixOpTy OpNEq        = TAll tvA $ TFun [tA, tA] tBool
+-- 
+-- infixOpTy OpLAnd       = TFun [tBool, tBool] tBool 
+-- infixOpTy OpLOr        = TFun [tBool, tBool] tBool
+-- 
+-- infixOpTy OpSub        = TFun [tInt, tInt]   tInt 
+-- infixOpTy OpAdd        = TFun [tInt, tInt]   tInt 
+-- infixOpTy OpMul        = TFun [tInt, tInt]   tInt 
+-- infixOpTy OpDiv        = TFun [tInt, tInt]   tInt 
+-- infixOpTy OpMod        = TFun [tInt, tInt]   tInt  
+-- infixOpTy o            = convertError "infixOpTy" o
+-- 
+-- tvA                    = TV (F.symbol "Z")
+-- tA                     = tVar tvA
+-- 
+-- -----------------------------------------------------------------------
+-- prefixOpTy             :: PrefixOp -> Type
+-- -----------------------------------------------------------------------
+-- prefixOpTy PrefixMinus = TFun [tInt] tInt
+-- prefixOpTy PrefixLNot  = TFun [tBool] tBool
+-- prefixOpTy o           = convertError "prefixOpTy" o
+-- 
+-- 

@@ -33,32 +33,32 @@ executable nanojs
   ghc-options:         -W -O2  
   Main-is:             Nano.hs
 
-Library
-  build-depends:       base, pretty, hashable, unordered-containers, 
-                       filepath, ansi-terminal, process, mtl, syb, cmdargs,
-                       liquid-fixpoint, parsec, language-ecmascript 
-
-  extensions:          ExistentialQuantification, 
-                       FlexibleInstances, 
-                       UndecidableInstances,
-                       DeriveDataTypeable,
-                       TupleSections,
-                       NoMonomorphismRestriction,
-                       ScopedTypeVariables,
-                       BangPatterns
-
-  ghc-options:         -W -O2  
- 
- 
-  Exposed-Modules:     Language.Nano.Errors,
-                       Language.Nano.Types,
-                       Language.Nano.CmdLine,
-                       Language.Nano.ESC.Types,
-                       Language.Nano.ESC.VCMonad, 
-                       Language.Nano.ESC.ESC,
-                       Language.Nano.Typecheck.Types,
-                       Language.Nano.Typecheck.TCMonad,
-                       Language.Nano.Typecheck.Typecheck,
-                       Language.Nano.Typecheck.SSA,
-                       Language.Nano.Typecheck.Parse,
-                       Language.Nano.Files
+-- Library
+--   build-depends:       base, pretty, hashable, unordered-containers, 
+--                        filepath, ansi-terminal, process, mtl, syb, cmdargs,
+--                        liquid-fixpoint, parsec, language-ecmascript 
+-- 
+--   extensions:          ExistentialQuantification, 
+--                        FlexibleInstances, 
+--                        UndecidableInstances,
+--                        DeriveDataTypeable,
+--                        TupleSections,
+--                        NoMonomorphismRestriction,
+--                        ScopedTypeVariables,
+--                        BangPatterns
+-- 
+--   ghc-options:         -W -O2  
+--  
+--  
+--   Exposed-Modules:     Language.Nano.Errors,
+--                        Language.Nano.Types,
+--                        Language.Nano.CmdLine,
+--                        Language.Nano.ESC.Types,
+--                        Language.Nano.ESC.VCMonad, 
+--                        Language.Nano.ESC.ESC,
+--                        Language.Nano.Typecheck.Types,
+--                        Language.Nano.Typecheck.TCMonad,
+--                        Language.Nano.Typecheck.Typecheck,
+--                        Language.Nano.Typecheck.SSA,
+--                        Language.Nano.Typecheck.Parse,
+--                        Language.Nano.Files

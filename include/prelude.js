@@ -4,22 +4,22 @@ function crash(){
 }
 
 
-/*@ assume :: (bool) => void */ 
+/*@ assume :: (boolean) => void */ 
 function assume(p){
   return;
 }
 
-/*@ assert :: ({x:bool|(Prop x)}) => void */ 
+/*@ assert :: ({x:boolean|(Prop x)}) => void */ 
 function assert(p){
   return;
 }
 
-/*@ requires :: (bool) => void */ 
+/*@ requires :: (boolean) => void */ 
 function requires(p){
   return;
 }
 
-/*@ ensures :: (bool) => void */ 
+/*@ ensures :: (boolean) => void */ 
 function ensures(p){
   return;
 }
@@ -44,21 +44,31 @@ function pos(){
 }
 
 /*************************************************************************/
+/************** Builtin Qualifiers ***************************************/
+/*************************************************************************/
+
+/*@ qualif Bot(v:int): 0 = 1 */
+/*@ qualif NonNeg(v:int): v >= 0 */
+
+/*************************************************************************/
 /************** Types for Builtin Operators ******************************/
 /*************************************************************************/
 
-/*@ builtin_OpLT        :: (int, int) => bool */
-/*@ builtin_OpLEq       :: (int, int) => bool */
-/*@ builtin_OpGT        :: (int, int) => bool */
-/*@ builtin_OpGEq       :: (int, int) => bool */
-/*@ builtin_OpEq        :: forall A. (A, A) => bool */
-/*@ builtin_OpNEq       :: forall A. (A, A) => bool */
-/*@ builtin_OpLAnd      :: (bool, bool) => bool     */
-/*@ builtin_OpLOr       :: (bool, bool) => bool     */
-/*@ builtin_OpSub       :: (int,  int)  => int      */ 
-/*@ builtin_OpAdd       :: (int,  int)  => int      */
-/*@ builtin_OpMul       :: (int,  int)  => int      */
-/*@ builtin_OpDiv       :: (int,  int)  => int      */ 
-/*@ builtin_OpMod       :: (int,  int)  => int      */
-/*@ builtin_PrefixMinus :: (int) => int             */
-/*@ builtin_PrefixLNot  :: (bool) => bool           */
+/*@ builtin_OpLT        :: (int, int) => boolean          */
+/*@ builtin_OpLEq       :: (int, int) => boolean          */
+/*@ builtin_OpGT        :: (int, int) => boolean          */
+/*@ builtin_OpGEq       :: (int, int) => boolean          */
+/*@ builtin_OpEq        :: forall A. (A, A) => boolean    */
+/*@ builtin_OpNEq       :: forall A. (A, A) => boolean    */
+/*@ builtin_OpLAnd      :: (boolean, boolean) => boolean  */
+/*@ builtin_OpLOr       :: (boolean, boolean) => boolean  */
+/*@ builtin_OpSub       :: (int,  int)  => int            */ 
+/*@ builtin_OpAdd       :: (int,  int)  => int            */
+/*@ builtin_OpMul       :: (int,  int)  => int            */
+/*@ builtin_OpDiv       :: (int,  int)  => int            */ 
+/*@ builtin_OpMod       :: (int,  int)  => int            */
+/*@ builtin_PrefixMinus :: (int) => int                   */
+/*@ builtin_PrefixLNot  :: (boolean) => boolean           */
+
+/*@ measure prop        :: (boolean) => bool              */
+

@@ -46,38 +46,18 @@ HW 3
 Liquid Nano-JS
 --------------
 
-* Parse Types 
-* Vanilla Type Checker     
-    + Basic Int/Bool/Expr 
-    + First-order Funs      
-    + Polymorphism  
-    + Higher-Order Funs 
-* SSA
-
 * Test Files
-    + tests/liquid/pos/abs.js
+    + tests/liquid/pos/abs.js {------------------
+    + get sigs for builtins working GT, +, -, damn prop AAAAARGHHH!!  
+      blasted fixpoint wants it as Prop, but that is not a valid JS thing.
+      So what... should parse as reft.
 
-
-HEREHEREHEREHERE  -- see "TOBD" in Language/Nano/Liquid/Liquid.hs
-
-
-* Parse 
-    + RefTypes
-    + Qualifiers
-
-* Liquid Constraint Generation [HW]
-
-* Subtyping
-
-* Fixpoint-Solver 
 
 * Bells and whistles
     + Scrape Qualifiers
     + list
     + array
     - Records
-
-* Cleanup envJoin in TypeCheck to use SSA information
 
 Tests
 -----

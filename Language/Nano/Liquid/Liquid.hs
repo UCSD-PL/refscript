@@ -36,7 +36,9 @@ import           Language.Nano.Liquid.CGMonad
 --------------------------------------------------------------------------------
 verifyFile     :: FilePath -> IO (F.FixResult SourcePos)
 --------------------------------------------------------------------------------
-verifyFile f   = reftypeCheck f . typeCheck . ssaTransform =<< parseNanoFromFile f
+verifyFile f   = reftypeCheck f . typeCheck . ssaTransform' =<< parseNanoFromFile f
+
+ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
 
 reftypeCheck   :: FilePath -> Nano AnnType RefType -> IO (F.FixResult SourcePos)
@@ -147,10 +149,14 @@ consStmt g (VarDeclStmt _ ds)
   = consSeq consVarDecl g ds
 
 -- return e 
-consStmt g (ReturnStmt l eo)
-  = do t <- maybe (return tVoid) (consExpr' g) eo 
-       subType l g t (envFindReturn g) 
+consStmt g (ReturnStmt l (Just e))
+  = do (xe, g') <- consExpr g e 
+       subType l g' (envTy xe g') $ envFindReturn g' 
        return Nothing
+
+-- return
+consStmt g (ReturnStmt l Nothing)
+  = return Nothing 
 
 -- OTHER (Not handled)
 consStmt g s 
@@ -190,6 +196,7 @@ consVarDecl :: CGEnv -> VarDecl AnnType -> CGM (Maybe CGEnv)
 
 consVarDecl g (VarDecl l x (Just e)) 
   = consAsgn g x e  
+
 consVarDecl g (VarDecl l x Nothing)  
   = return $ Just g
 
@@ -197,8 +204,8 @@ consVarDecl g (VarDecl l x Nothing)
 consAsgn :: CGEnv -> Id AnnType -> Expression AnnType -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consAsgn g x e 
-  = do t <- consExpr' g e
-       Just <$> envAdds [(x, t)] g
+  = do (x', g') <- consExpr g e
+       Just <$> envAdds [(x, envTy x' g')] g'
 
 ------------------------------------------------------------------------------------
 consExpr :: CGEnv -> Expression AnnType -> CGM (Id AnnType, CGEnv) 
@@ -218,25 +225,27 @@ consExpr g (VarRef l x)
   = return (x, g) 
 
 consExpr g (PrefixExpr l o e)
-  = consCall g l o [e] (prefixOpTy o $ renv g)
+  = do (x', g') <- consCall g l o [e] (prefixOpTy o $ renv g)
+       return (x', tracePP ("consEXPRPREFIXOP " ++ ppshow x') $ g')
 
 consExpr g (InfixExpr l o e1 e2)        
-  = consCall g l o [e1, e2] (infixOpTy o $ renv g)
+  = do (x', g') <- consCall g l o [e1, e2] (infixOpTy o $ renv g)
+       return (x', tracePP ("consEXPRINFIXOP" ++ ppshow x') $ g')
 
 consExpr g (CallExpr l e es)
-  = consCall g l e es =<< consExpr' g e 
+  = do (x, g') <- consExpr g e 
+       consCall g' l e es $ envTy x g'
 
 consExpr g e 
   = errorstar "consExpr: not handled" (pp e)
 
------------------------------------------------------------------------------------
-consExpr' :: CGEnv -> Expression AnnType -> CGM RefType
+
 -----------------------------------------------------------------------------------
 -- | A helper that returns the actual @RefType@ of the expression by
---   looking up the environment with the new temporary (ANF binder) name.
-consExpr' g e --  = uncurry envFindTy <$> consExpr g e 
-  = do (x, g') <- consExpr g e
-       return $ baseSingleton x $ envFindTy x g'
+--     looking up the environment with the name, strengthening with
+--     singleton for base-types.
+-----------------------------------------------------------------------------------
+envTy x g' = baseSingleton x $ envFindTy x g'
 
 baseSingleton x t@(TApp _ _ _) = eSingleton x $ toType t 
 baseSingleton x t@(TVar _ _)   = eSingleton x $ toType t 
@@ -252,17 +261,15 @@ baseSingleton _ t              = t
 --
 --   1. Fill in @instantiate@ to get a monomorphic instance of @ft@ 
 --      i.e. the callee's RefType, at this call-site
---   2. Use @consExpr'@ to determine types for arguments @es@
+--   2. Use @consExpr@ to determine types for arguments @es@
 --   3. Use @subTypes@ to add constraints between the types from (step 2) and (step 1)
 --   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in output type of callee.
 
 consCall g l z es ft 
   = do (_,its,ot) <- instantiate l g ft
        (xes, g')  <- consScan consExpr g es 
-       θ          <- subTypes l g' xes $ tracePP (printf "SUBTYPEBLAH %s" (ppshow l)) its 
+       θ          <- subTypes l g' xes its 
        envAddFresh l (F.subst θ ot) g'
-
-
 
 instantiate l g t = fromJust . bkFun <$> freshTyInst l g αs τs tbody 
   where 

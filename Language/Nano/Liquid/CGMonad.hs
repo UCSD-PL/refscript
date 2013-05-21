@@ -68,11 +68,12 @@ import           Language.ECMAScript3.Syntax
 -------------------------------------------------------------------------------
 getFInfo       :: NanoRefType -> CGM a -> F.FInfo Cinfo  
 -------------------------------------------------------------------------------
-getFInfo pgm = cgStateFInfo pgm . execute . (fixCWs <*)
+getFInfo pgm = cgStateFInfo pgm . execute . (>> fixCWs)
   where 
     fixCWs   = (,) <$> fixCs <*> fixWs
     fixCs    = concatMapM splitC . cs =<< get 
     fixWs    = concatMapM splitW . ws =<< get
+
 
 execute :: CGM a -> (a, CGState)
 execute act
@@ -91,7 +92,7 @@ cgStateFInfo pgm ((fcs, fws), cg)
          , F.gs    = measureEnv pgm 
          , F.lits  = []
          , F.kuts  = F.ksEmpty
-         , F.quals = [] 
+         , F.quals = quals pgm 
          }
 
 measureEnv   ::  Nano a (RType F.Reft) -> F.SEnv F.SortedReft
@@ -125,7 +126,7 @@ cgError l msg = throwError $ printf "CG-ERROR at %s : %s" (ppshow $ srcPos l) ms
 envAddFresh :: (IsLocated l) => l -> RefType -> CGEnv -> CGM (Id l, CGEnv) 
 ---------------------------------------------------------------------------------------
 envAddFresh l t g 
-  = do x  <- freshId l
+  = do x  <- tracePP ("envAddFresh" ++ ppshow t) <$> freshId l
        g' <- envAdds [(x, t)] g
        return (x, g')
 
@@ -210,18 +211,20 @@ freshTyPhis l g xs τs
 subTypes :: (IsLocated l, IsLocated x, F.Symbolic x) => l -> CGEnv -> [x] -> [RefType] -> CGM F.Subst 
 ---------------------------------------------------------------------------------------
 subTypes l g xs ts 
-  = do zipWithM (subType l g) xts ts' 
+  = do mapM (uncurry $ subType l g) xts_ts' 
        return su
     where 
       (su, ts') = shiftVVs ts xs 
-      xts       = (`envFindTy` g) <$> xs 
+      xts       = [envFindTy x g | x <- xs]
+      xts_ts'   = safeZip "subTypes" xts ts'
+
 
 ---------------------------------------------------------------------------------------
 subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
-subType l g t1 t2 = modify $ \st -> st {cs =  c : cs st }
+subType l g t1 t2 = modify $ \st -> st {cs =  c : (cs st)}
   where 
-    c             = tracePP "subType" $ Sub g (ci l) t1 t2
+    c             = Sub g (ci l) t1 t2
 
 ---------------------------------------------------------------------------------------
 -- | Adding Well-Formedness Constraints -----------------------------------------------
@@ -258,7 +261,7 @@ freshId   :: (IsLocated l) => l -> CGM (Id l)
 freshId l = Id l <$> fresh
 
 freshTy     :: (Show a) => a -> Type -> CGM RefType 
-freshTy _ τ = {- F.tracePP ("freshTy τ = " ++ show τ) <$> -} (refresh $ rType τ) 
+freshTy _ τ = (refresh $ rType τ) 
 
 instance Freshable F.Refa where
   fresh = (`F.RKvar` F.emptySubst) <$> (F.intKvar <$> fresh)

@@ -15,8 +15,10 @@ import           Text.Parsec
 import           Text.Parsec.String hiding (parseFromFile)
 import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*), (<*>))
-import           Data.Char (isLower) 
+import           Data.Char (toLower, isLower) 
 import           Data.Monoid (mconcat)
+
+import           Language.Fixpoint.Names (propConName)
 import           Language.Fixpoint.Misc (mapSnd)
 import           Language.Fixpoint.Types hiding (quals)
 import           Language.Fixpoint.Parse 
@@ -37,12 +39,6 @@ braces     = Token.braces     lexer
 ----------------------------------------------------------------------------------
 -- | Type Binders ----------------------------------------------------------------
 ----------------------------------------------------------------------------------
- 
--- specP = mkSpec <$> specWraps idBindP 
---   where 
---     mkSpec = sigsNano . map (mapSnd toType) 
-
--- specP = specWraps idBindP 
 
 idBindP :: Parser (Id SourcePos, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
@@ -95,10 +91,10 @@ upperWordP = condIdP nice (not . isLower . head)
     nice   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
 tconP :: Parser TCon
-tconP =  try (reserved "int"  >> return TInt)
-     <|> try (reserved "bool" >> return TBool)
-     <|> try (reserved "void" >> return TVoid)
-     <|> (TDef . stringSymbol) <$> lowerIdP
+tconP =  try (reserved "int"       >> return TInt)
+     <|> try (reserved "boolean"   >> return TBool)
+     <|> try (reserved "void"      >> return TVoid)
+     <|> (TDef . stringSymbol)  <$> lowerIdP
 
 bareAllP 
   = do reserved "forall"
@@ -197,9 +193,14 @@ parseSpecFromFile = parseFromFile $ mkSpec <$> specWraps specP
 mkSpec    ::  IsLocated l => [PSpec l t] -> Nano a t
 mkSpec xs = Nano { code   = Src [] 
                  , env    = envFromList [b | Bind b <- xs] 
-                 , consts = envFromList [b | Meas b <- xs]
+                 , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
                  , quals  =             [q | Qual q <- xs]  
                  }
+
+-- YUCK. Worst hack of all time.
+switchProp i@(Id l x) 
+  | x == (toLower <$> propConName) = Id l propConName
+  | otherwise                      = i
 
 --------------------------------------------------------------------------------------
 parseCodeFromFile :: FilePath -> IO (Nano SourcePos a) 

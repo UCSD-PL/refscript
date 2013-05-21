@@ -42,6 +42,8 @@ module Language.Nano.Typecheck.Types (
   , tVoid
   , tErr
   , tVar
+  , tProp
+  , tcProp
 
   -- * Operator Types
   , infixOpTy
@@ -71,6 +73,8 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
+
+import           Language.Fixpoint.Names (propConName)
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
@@ -237,7 +241,7 @@ instance F.Reftable r => PP (RType r) where
 ppArgs p sep          = p . intersperse sep . map pp
 
 ppTC TInt             = text "int"
-ppTC TBool            = text "bool"
+ppTC TBool            = text "boolean"
 ppTC TVoid            = text "void"
 ppTC (TDef x)         = pprint x
 
@@ -287,11 +291,14 @@ instance (PP a, PP b) => PP (Annot b a) where
 tVar   :: (F.Reftable r) => TVar -> RType r
 tVar   = (`TVar` F.top) 
 
-tInt, tBool, tVoid, tErr :: (F.Reftable r) => RType r
+tInt, tBool, tVoid, tErr, tProp :: (F.Reftable r) => RType r
 tInt   = TApp TInt  [] F.top 
 tBool  = TApp TBool [] F.top
 tVoid  = TApp TVoid [] F.top
 tErr   = tVoid
+
+tProp  = TApp tcProp [] F.top 
+tcProp = TDef $ F.S propConName 
 
 -----------------------------------------------------------------------
 -- | Operator Types ---------------------------------------------------

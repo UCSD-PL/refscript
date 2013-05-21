@@ -1,3 +1,5 @@
+/*@ qualif NonNeg(v:int): v >= 0 */
+
 /*@ abs :: ({ x:int | true }) => int */ 
 function abs(x){
   var res = 0;

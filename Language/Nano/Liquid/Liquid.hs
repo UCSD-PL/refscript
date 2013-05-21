@@ -4,7 +4,6 @@
 
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
-
 import           Text.Printf                        (printf)
 import           Text.Parsec.Pos                    (initialPos)
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
@@ -38,12 +37,10 @@ verifyFile     :: FilePath -> IO (F.FixResult SourcePos)
 --------------------------------------------------------------------------------
 verifyFile f   = reftypeCheck f . typeCheck . ssaTransform' =<< parseNanoFromFile f
 
-ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
-
+ssaTransform' x = {- tracePP "SSATX" $ -} ssaTransform x 
 
 reftypeCheck   :: FilePath -> Nano AnnType RefType -> IO (F.FixResult SourcePos)
 reftypeCheck f = solveConstraints f . generateConstraints  
-
 
 --------------------------------------------------------------------------------
 solveConstraints :: FilePath -> F.FInfo Cinfo -> IO (F.FixResult SourcePos) 
@@ -83,7 +80,7 @@ consFun g (FunctionStmt l f xs body)
 envAddFun l g f αs xs ts t = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
   where  
     tyBinds                = [(Loc (srcPos l) α, tVar α) | α <- αs]
-    varBinds               = safeZip "envAddFun" -- checkFormal 
+    varBinds               = safeZip "envAddFun"
     (ts', t')              = renameArgs xs ts t 
 
 renameArgs xs ts t = (ts', t')
@@ -175,7 +172,8 @@ envJoin' :: AnnType -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 
 -- HINT: 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
 --       2. use @freshTy@ to generate fresh types (and an extended environment with 
---          the fresh-type bindings) for all the phi-vars using the un-refined types from step 1.
+--          the fresh-type bindings) for all the phi-vars using the un-refined types 
+--          from step 1.
 --       3. generate subtyping constraints between the types from step 1 and the fresh types
 --       4. return the extended environment.
 
@@ -187,8 +185,6 @@ envJoin' l g g1 g2
        subTypes l g1 xs ts
        subTypes l g2 xs ts
        return g'
-
-
 
 -------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnType -> CGM (Maybe CGEnv) 

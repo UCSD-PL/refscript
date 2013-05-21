@@ -1,4 +1,6 @@
-/*@ abs :: ({ x:int | true }) => {v:int | v >= x} */ 
+/*@ qualif NonNeg(v:int): v >= 0 */
+
+/*@ abs :: ({ x:int | true }) => int */ 
 function abs(x){
   var res = 0;
   if (x > 0) {
@@ -6,6 +8,6 @@ function abs(x){
   } else {
     res = -x;
   };
-  assert(res >= 0);
+  assert(res >= 10);
   return res;
 }

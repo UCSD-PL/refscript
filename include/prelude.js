@@ -43,32 +43,53 @@ function pos(){
   }
 }
 
-/*************************************************************************/
-/************** Builtin Qualifiers ***************************************/
-/*************************************************************************/
-
-/*@ qualif Bot(v:int): 0 = 1 */
-/*@ qualif NonNeg(v:int): v >= 0 */
 
 /*************************************************************************/
 /************** Types for Builtin Operators ******************************/
 /*************************************************************************/
 
-/*@ builtin_OpLT        :: (int, int) => boolean          */
-/*@ builtin_OpLEq       :: (int, int) => boolean          */
-/*@ builtin_OpGT        :: (int, int) => boolean          */
-/*@ builtin_OpGEq       :: (int, int) => boolean          */
-/*@ builtin_OpEq        :: forall A. (A, A) => boolean    */
-/*@ builtin_OpNEq       :: forall A. (A, A) => boolean    */
-/*@ builtin_OpLAnd      :: (boolean, boolean) => boolean  */
-/*@ builtin_OpLOr       :: (boolean, boolean) => boolean  */
-/*@ builtin_OpSub       :: (int,  int)  => int            */ 
-/*@ builtin_OpAdd       :: (int,  int)  => int            */
-/*@ builtin_OpMul       :: (int,  int)  => int            */
-/*@ builtin_OpDiv       :: (int,  int)  => int            */ 
-/*@ builtin_OpMod       :: (int,  int)  => int            */
-/*@ builtin_PrefixMinus :: (int) => int                   */
-/*@ builtin_PrefixLNot  :: (boolean) => boolean           */
+/*@ builtin_OpLT        :: ({x:int|true}, {y:int|true}) => {v:boolean | ((Prop v) <=> (x <  y)) }*/
+/*@ builtin_OpLEq       :: ({x:int|true}, {y:int|true}) => {v:boolean | ((Prop v) <=> (x <= y)) }*/
+/*@ builtin_OpGT        :: ({x:int|true}, {y:int|true}) => {v:boolean | ((Prop v) <=> (x >  y)) }*/
+/*@ builtin_OpGEq       :: ({x:int|true}, {y:int|true}) => {v:boolean | ((Prop v) <=> (x >= y)) }*/
+/*@ builtin_OpEq        :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x = y)) } */
+/*@ builtin_OpNEq       :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x != y)) } */
+/*@ builtin_OpLAnd      :: ({x:boolean|true}, {y:boolean|true}) => {v:boolean | ((Prop v) <=> ((Prop x) && (Prop y)))} */
+/*@ builtin_OpLOr       :: ({x:boolean|true}, {y:boolean|true}) => {v:boolean | ((Prop v) <=> ((Prop x) || (Prop y)))}  */
+/*@ builtin_OpAdd       :: ({x:int | true}, {y:int | true})  => {v:int | v = x + y} */ 
+/*@ builtin_OpSub       :: ({x:int | true}, {y:int | true})  => {v:int | v = x - y} */ 
+/*@ builtin_OpMul       :: (int,  int)  => int                                      */
+/*@ builtin_OpDiv       :: (int,  int)  => int                                      */ 
+/*@ builtin_OpMod       :: (int,  int)  => int                                      */
+/*@ builtin_PrefixMinus :: ({x:int | true}) => {v:int | v = (0 - x)}                */
+/*@ builtin_PrefixLNot  :: (boolean) => boolean                                     */
+/*@ measure prop        :: (boolean) => bool                                        */
 
-/*@ measure prop        :: (boolean) => bool              */
+/*************************************************************************/
+/************** Pre-Loaded Qualifiers ************************************/
+/*************************************************************************/
+
+/*@ qualif Bot(v:a)       : 0 = 1      */
+/*@ qualif Bot(v:obj)     : 0 = 1      */ 
+/*@ qualif Bot(v:bool)    : 0 = 1      */
+/*@ qualif Bot(v:int)     : 0 = 1      */
+/*@ qualif CmpZ(v:int)    : v < 0      */    
+/*@ qualif CmpZ(v:int)    : v <= 0     */    
+/*@ qualif CmpZ(v:int)    : v >  0     */    
+/*@ qualif CmpZ(v:int)    : v >= 0     */    
+/*@ qualif CmpZ(v:int)    : v =  0     */
+/*@ qualif CmpZ(v:int)    : v != 0     */
+/*@ qualif Cmp(v:a,x:a)   : v <  x    */    
+/*@ qualif Cmp(v:a,x:a)   : v <= x    */    
+/*@ qualif Cmp(v:a,x:a)   : v >  x    */    
+/*@ qualif Cmp(v:a,x:a)   : v >= x    */    
+/*@ qualif Cmp(v:a,x:a)   : v =  x    */    
+/*@ qualif Cmp(v:a,x:a)   : v != x    */    
+/*@ qualif One(v:int)     : v = 1      */
+/*@ qualif True(v:bool)   : (? v)      */
+/*@ qualif False(v:bool)  : not (? v)    */
+/*@ qualif True1(v:Bool)  : (Prop v)   */                                   
+/*@ qualif False1(v:Bool) : not (Prop v) */
+
+
 

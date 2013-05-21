@@ -42,16 +42,12 @@ HW 3
 3a. VCG for Refinement Type Checking            [Hard]
 3b. Consgen = VCG+K for Liquid Inference via FIXPOINT
 
-
 Liquid Nano-JS
 --------------
 
 * Test Files
     + tests/liquid/pos/abs.js {------------------
-    + get sigs for builtins working GT, +, -, damn prop AAAAARGHHH!!  
-      blasted fixpoint wants it as Prop, but that is not a valid JS thing.
-      So what... should parse as reft.
-
+    + work through ALL tests...
 
 * Bells and whistles
     + Scrape Qualifiers

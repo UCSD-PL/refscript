@@ -9,7 +9,7 @@ function assume(p){
   return;
 }
 
-/*@ assert :: (bool) => void */ 
+/*@ assert :: ({x:bool|(Prop x)}) => void */ 
 function assert(p){
   return;
 }

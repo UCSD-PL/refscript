@@ -358,20 +358,7 @@ bsplitW g t i
 -- refTypeId ::  (F.Reftable r, IsLocated l) => l -> RType r -> Id l
 refTypeId l = symbolId l . rTypeValueVar 
 
-
-instance (F.Reftable r) => F.Symbolic (RType r) where 
-  symbol = rTypeValueVar 
-
 envTyAdds i ts = envAdds [(refTypeId i t, t) | t <- ts]
 
 -------------------------------------------------------------------------------------------
-shiftVVs :: (F.Symbolic x) => [RefType] -> [x] -> (F.Subst, [RefType])
-shiftVVs ts xs = (su, ts')
-  where 
-    ts'        = F.subst su $ safeZipWith "shiftVV1" shiftVV ts xs
-    su         = F.mkSubst  $ safeZipWith "shiftVV2" (\t x -> (F.symbol t, F.eVar x)) ts xs 
-
-shiftVV t@(TApp c ts r) x = TApp c ts $ r `F.shiftVV` (F.symbol x)
-shiftVV t@(TVar a r)    x = TVar a    $ r `F.shiftVV` (F.symbol x)
-shiftVV t _               = t
 

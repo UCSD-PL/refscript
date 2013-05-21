@@ -82,11 +82,10 @@ envAddFun l g f αs xs ts t = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< 
     varBinds               = safeZipWith "envAddFun" checkFormal 
     (ts', t')              = renameArgs xs ts t 
 
-renameArgs xs ts t = F.subst su (ts, t)
+renameArgs xs ts t = (ts', t')
   where 
-     su            = F.mkSubst $ safeZipWith "renameArgs" g ts xs
-     g t x         = (rTypeValueVar t, F.expr x)
-     -- f y        = M.lookupDefault y y m
+    (su, ts')      = shiftVVs ts xs
+    t'             = F.subst su t
 
 checkFormal x t 
   | xsym == tsym = (x, t)
@@ -228,13 +227,18 @@ consExpr g (CallExpr l e es)
 consExpr g e 
   = errorstar "consExpr: not handled" (pp e)
 
-
--------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------
 consExpr' :: CGEnv -> Expression AnnType -> CGM RefType
--------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------
 -- | A helper that returns the actual @RefType@ of the expression by
 --   looking up the environment with the new temporary (ANF binder) name.
-consExpr' g e  = uncurry envFindTy <$> consExpr g e 
+consExpr' g e --  = uncurry envFindTy <$> consExpr g e 
+  = do (x, g') <- consExpr g e
+       return $ baseSingleton x $ envFindTy x g'
+
+baseSingleton x t@(TApp _ _ _) = eSingleton x $ toType t 
+baseSingleton x t@(TVar _ _)   = eSingleton x $ toType t 
+baseSingleton _ t              = t 
 
 ----------------------------------------------------------------------------------
 -- consCall :: Env Type -> SourcePos -> Type -> [Expression SourcePos] -> TCM Type

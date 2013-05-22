@@ -226,7 +226,7 @@ consExpr g (PrefixExpr l o e)
 
 consExpr g (InfixExpr l o e1 e2)        
   = do (x', g') <- consCall g l o [e1, e2] (infixOpTy o $ renv g)
-       return (x', tracePP ("consEXPRINFIXOP" ++ ppshow x') $ g')
+       return (x', tracePP (printf "consEXPR INFIXOP %s %s %s" (ppshow o) (ppshow [e1,e2]) (ppshow x')) $ g')
 
 consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 
@@ -265,7 +265,7 @@ consCall g l z es ft
   = do (_,its,ot) <- instantiate l g ft
        (xes, g')  <- consScan consExpr g es 
        θ          <- subTypes l g' xes its 
-       envAddFresh l (F.subst θ ot) g'
+       envAddFresh l (F.subst (F.traceFix (printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)) θ) ot) g'
 
 instantiate l g t = fromJust . bkFun <$> freshTyInst l g αs τs tbody 
   where 

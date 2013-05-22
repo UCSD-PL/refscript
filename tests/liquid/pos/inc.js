@@ -1,8 +1,11 @@
+
+/* qualif PlusOne(v:int,x:int)   : v = x + 1    */    
+
+// IGNORED inc :: ({x:int | x > 0}) => {v:int | v = x + 1}
+
+
 /*@ inc :: (int) => int */
 function inc(x){
-  requires(x > 0);
-  ensures($result > 0);
-  ensures($result == x + 1);
   var res = x + 1;
   return res;
 }
@@ -11,6 +14,8 @@ function inc(x){
 function main(){
   var a = pos();
   var b = inc(a);
-  assert (b == a + 1);
+  var c = (b != (a + 1));
+  assert(c);
+  assert(b > 0);
 }
 

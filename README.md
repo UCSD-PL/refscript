@@ -32,24 +32,35 @@ HW 3
 Liquid Nano-JS
 --------------
 
-* Test Files
-    + tests/liquid/pos/abs.js
-
-    + work through ALL tests...
-
-HEREHERE
-
 Failed 10 tests: 
-    liquid/pos/id.js, 
-    liquid/pos/id2.js, 
-    liquid/pos/inc.js, 
+    
+    liquid/pos/inc.js,      {--------------- HEREHEREHEREHEREHEREHERE
+    
+    AARGH. When instantiating:
+
+       forall A. ({x:A|true},{y:A|true}) -> ...
+
+    with 
+        
+        A = [int]
+
+    we are screwed because 
+    
+        fresh :: [int] --> [{vRANDOM:int| K1}] 
+
+    and now "meeting this with the "x:A|true" obliterates the "x" from the sig... 
+    
+    YIKES.
+
+    meaning the subsequent SUBSTITUtION IS NOT OVER x but the vRANDOM...
+
     
     liquid/pos/driver.js, 
     liquid/pos/locks-fun.js, 
-    
     liquid/pos/sum-return.js, 
     liquid/pos/sum.js, 
     liquid/pos/while5.js
+
 
 * Bells and whistles
     + Scrape Qualifiers

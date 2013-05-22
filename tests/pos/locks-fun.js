@@ -36,10 +36,10 @@ function main(){
 
   while (0 < n){
     invariant(l==0);
-    if (0 < flag){ 
+    if (0 <= flag){ 
       l = acquire(l); 
     }
-    if (0 < flag){ 
+    if (0 <= flag){ 
       l = release(l);
     }
     n = n - 1;

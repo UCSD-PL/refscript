@@ -42,8 +42,8 @@ module Language.Nano.Typecheck.Types (
   , tVoid
   , tErr
   , tVar
-  , tProp
-  , tcProp
+  -- , tProp
+  -- , tcProp
 
   -- * Operator Types
   , infixOpTy

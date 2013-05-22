@@ -35,11 +35,19 @@ Liquid Nano-JS
 * Bells and whistles
     
     + list
-    + array
     + HTML annot
     + Scrape Qualifiers
-    
     - Records
+
+Lists
+-----
+
+    + TDEF      (list A)
+    + Parser 
+
+    Automatic
+        + SUBTYPE
+        + WF
 
 Tests
 -----

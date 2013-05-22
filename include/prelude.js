@@ -40,6 +40,21 @@ function pos(){
     return (1 - x);
   }
 }
+/*************************************************************************/
+/************** Types for list Operators ******************************/
+/*************************************************************************/
+
+/*@ measure len :: forall A. (list [A]) => int */
+
+/*@ cons  :: forall A. (x:A, xs:list [A]) => {v: list [A] | (len v) = 1 + (len xs)}            */
+/*@ nil   :: forall A. () => {v: list [A] | (len v) = 0}                                       */
+/*@ head  :: forall A. ({xs:list [A] | (len xs) > 0}) => A                                     */
+/*@ tail  :: forall A. ({xs:list [A] | (len xs) > 0}) => {v:list [A] | (len v) = (len xs) - 1} */
+/*@ nth   :: forall A. (xs:list [A], {i:int| ((0 <= i) && i < (len xs))}) => A                 */
+/*@ empty :: forall A. (xs:list [A]) => {v:boolean | ((Prop v) <=> ((len xs) = 0))}  */
+
+
+
 
 
 /*************************************************************************/

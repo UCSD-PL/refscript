@@ -6,8 +6,6 @@
 
 module Language.Nano.Typecheck.Parse (
     parseNanoFromFile 
-  -- , parseSpecFromFile
-  -- , parseCodeFromFile
   ) where
 
 import           Control.Monad
@@ -74,6 +72,7 @@ bareFunP
 
 bareAtomP 
   =  refP bbaseP 
+ <|> try (bindRefP bbaseP)
  <|> try (dummyP (bbaseP <* spaces))
 
 bbaseP :: Parser (Reft -> RefType)
@@ -110,6 +109,13 @@ locParserP p = liftM2 Loc getPosition p
 dummyP ::  Monad m => m (Reft -> b) -> m b
 dummyP fm 
   = fm `ap` return top 
+
+bindRefP :: Parser (Reft -> a) -> Parser a
+bindRefP kindP
+  = do v <- symbolP 
+       colon
+       t <- kindP
+       return $ t (Reft (v, []))
 
 refP :: Parser (Reft -> a) -> Parser a
 refP kindP
@@ -226,13 +232,6 @@ parseNanoFromFile f
        spec  <- parseSpecFromFile f
        ispec <- parseSpecFromFile =<< getPreludePath
        return $ mconcat [code, spec, ispec] 
-
--- return $ mapCode (`Ann` []) $ mconcat [code, spec, ispec] 
--- mkNano (spec `mappend` ispec) src
-
--- | Combining Source and Spec into Nano with Trivial Syntax Checking ----
--- mkNano  :: NanoBare -> [Statement SourcePos] -> NanoBare 
--- mkNano spec = mappend spec . sourceNano . fmap (`Ann` []) . Src . map checkFun 
 
 --------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------

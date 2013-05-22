@@ -72,9 +72,6 @@ envFindReturn   = maybe msg val . F.lookupSEnv returnSymbol
 
 envSEnv         :: Env a -> F.SEnv a
 envSEnv         = F.fromListSEnv . map (mapFst F.symbol) . envToList
--- envSEnv g       = F.fromListSEnv [(F.symbol x, t) | (x, Loc _ t) <- envToList g]
-
--- envFromList xts   = F.fromListSEnv [(F.symbol x, (Loc (srcPos x) t)) | (x, t) <- xts]
 
 envFromList       :: (PP x, IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
 envFromList       = L.foldl' step envEmpty

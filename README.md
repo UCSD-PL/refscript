@@ -46,13 +46,12 @@ Failed 2 tests:
     + Scrape Qualifiers
     + list
     + array
+
     - Records
 
 Tests
 -----
-
-tests/typed/pos/*.js
-
+    
     higher-order
         id.js   
         twice.js

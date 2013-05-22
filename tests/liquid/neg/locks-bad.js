@@ -1,6 +1,5 @@
-/*@ qualif Locked(v:int): v = 1    */    
+/*@ qualif Locked(v:int): v != 0    */    
 /*@ qualif Unlocked(v:int): v = 0  */    
-/* qualif CondLock(v:int,x:int): v = ((0 < x) ? 0 : 1)  */    
 
 /*@ create :: () => int */
 function create(){
@@ -15,34 +14,34 @@ function acquire(l){
 
 /*@ release :: (int) => int */
 function release(l){
-  assert(l == 1);
+  assert(l != 0);
   return 0;
+}
+
+/*@ work :: () => void */
+function work(){
+  return;
 }
 
 /*@ loop :: (int, int) => int */
 function loop(n, l) {
   
   var flag = random();
-  assert(0 == 1);
-
-  if (0 < n){
-    if (0 < flag){ 
-      l = acquire(l); 
-    }
-    if (0 < flag){ 
-      l = release(l);
-    }
-    n = n - 1;
-    loop(n-1, l);
+  if (n <= 0) {
+    return l;
   }
-  return l;
+
+  l = acquire(l); 
+  work();
+  // l = release(l);
+  
+  return loop(n-1, l);
 }
+
 
 /*@ main :: ({n:int|n > 0}) => void */
 function main(n){
-  var flag = random();
-  assert (0 == 1);
-  var l    = create();
+  var l = create();
   loop(n, l);
   assert(l == 0);
 }

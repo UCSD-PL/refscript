@@ -126,7 +126,7 @@ cgError l msg = throwError $ printf "CG-ERROR at %s : %s" (ppshow $ srcPos l) ms
 envAddFresh :: (IsLocated l) => l -> RefType -> CGEnv -> CGM (Id l, CGEnv) 
 ---------------------------------------------------------------------------------------
 envAddFresh l t g 
-  = do x  <- tracePP ("envAddFresh" ++ ppshow t) <$> freshId l
+  = do x  <- {- tracePP ("envAddFresh" ++ ppshow t) <$> -} freshId l
        g' <- envAdds [(x, t)] g
        return (x, g')
 
@@ -191,7 +191,7 @@ freshTyInst l g αs τs tbody
   = do ts    <- mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
        let θ  = fromList $ zip αs ts
-       return $ tracePP msg  $ apply θ tbody
+       return $ {- tracePP msg $ -} apply θ tbody
     where
        msg = printf "freshTyInst αs=%s τs=%s: " (ppshow αs) (ppshow τs)
 

@@ -1,3 +1,11 @@
+/*@ qualif Locked(v:int): v != 0   */    
+/*@ qualif Unlocked(v:int): v = 0  */    
+/*@ qualif CondLock2(v:int,x:int,y:int): ((x != y) <=> (v = 0))  */    
+
+// HINT: Recall the `invariant` for the corresponding test in tests/esc/pos
+//       Find a way to represent that invariant as a qualifier (or a conjunction of qualifiers.)
+//       You can use operators like <=>, =>, &&, || in the qualifiers.
+
 /*@ create :: () => int */
 function create(){
   return 0;
@@ -11,21 +19,15 @@ function acquire(l){
 
 /*@ release :: (int) => int */
 function release(l){
-  assert(l == 1);
+  assert(l != 0);
   return 0;
 }
 
 /*@ driver :: (int, int, int) => int */ 
-function driver(l0, newCount0, oldCount0){
-  requires(((newCount0 != oldCount0) && (l0 == 0)) || ((newCount0 == oldCount0) && (l0 == 1)));
-  ensures($result == 1);
-  var l        = l0;
-  var newCount = newCount0;
-  var oldCount = oldCount0;
-  
+function driver(l, newCount, oldCount){
   if (newCount != oldCount){
-    l        = acquire(l0);
-    oldCount = newCount0;
+    l        = acquire(l);
+    oldCount = newCount;
     if (0 < newCount){
       l = release(l);
       newCount = newCount - 1;
@@ -33,7 +35,7 @@ function driver(l0, newCount0, oldCount0){
       newCount = newCount;
     }
     l = driver(l, newCount, oldCount);
-  };
+  }
   return l;
 }
 

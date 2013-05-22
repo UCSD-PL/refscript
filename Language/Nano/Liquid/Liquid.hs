@@ -65,20 +65,25 @@ consNano pgm@(Nano {code = Src fs})
   = forM_ fs . consFun =<< initCGEnv pgm
 
 initCGEnv     :: NanoRefType -> CGM CGEnv
-initCGEnv pgm 
-  = do ts'    <- forM xts (uncurry $ freshTyFun g0)
-       return  $ g0 { renv = E.envFromList $ zip xs ts'} 
+initCGEnv pgm@(Nano {code = Src fs}) 
+  = do ts'    <- forM fts (uncurry $ freshTyFun g0)
+       return  $ g0 { renv = E.envAdds (zip fns ts') γ} 
     where 
-       g0      = CGE (env pgm) F.emptyIBindEnv []
-       xts     = E.envToList $ env pgm
-       (xs, _) = unzip xts
+       g0      = CGE γ F.emptyIBindEnv []
+       γ       = env pgm
+       fns     = [fn | (FunctionStmt _ fn _ _) <- fs]
+       fts     = [(fn, initFunTy fn γ) | fn <- fns]
+
+initFunTy fn γ = fromMaybe err $ E.envFindTy fn γ 
+  where 
+    err        = errorstar $ bugUnboundVariable (srcPos fn) fn
 
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> FunctionStatement AnnType -> CGM ()
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = do ft             <- freshTyFun g l $ envFindTy f g
+  = do ft             <- {- TODO: NESTED FUNCTIONS freshTyFun g l $ -} return $ envFindTy f g
        let (αs, ts, t) = fromJust $ bkFun ft
        g'             <- envAddFun l g f αs xs ts t
        gm             <- consStmts g' body
@@ -231,11 +236,11 @@ consExpr g (VarRef l x)
 
 consExpr g (PrefixExpr l o e)
   = do (x', g') <- consCall g l o [e] (prefixOpTy o $ renv g)
-       return (x', tracePP ("consEXPRPREFIXOP " ++ ppshow x') $ g')
+       return (x', g')
 
 consExpr g (InfixExpr l o e1 e2)        
   = do (x', g') <- consCall g l o [e1, e2] (infixOpTy o $ renv g)
-       return (x', tracePP (printf "consEXPR INFIXOP %s %s %s" (ppshow o) (ppshow [e1,e2]) (ppshow x')) $ g')
+       return (x', g')
 
 consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 
@@ -274,7 +279,7 @@ consCall g l z es ft
   = do (_,its,ot) <- instantiate l g ft
        (xes, g')  <- consScan consExpr g es 
        θ          <- subTypes l g' xes its 
-       envAddFresh l (F.subst (F.traceFix (printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)) θ) ot) g'
+       envAddFresh l (F.subst ({- F.traceFix (printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)) -} θ) ot) g'
 
 instantiate l g t = fromJust . bkFun <$> freshTyInst l g αs τs tbody 
   where 

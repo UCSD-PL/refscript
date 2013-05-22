@@ -1,4 +1,6 @@
-{-# LANGUAGE TupleSections #-}
+
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 module Language.Nano.Typecheck.SSA (ssaTransform) where 
 
 import           Control.Applicative                ((<$>), (<*>))

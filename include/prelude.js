@@ -31,9 +31,7 @@ function random(){
   return x;
 }
 
-// pos    :: () -> {v:Int | v > 0}
-
-/*@ pos    :: () => int */
+/*@ pos    :: () => {v:int | v > 0} */
 function pos(){
   var x = random();
   if (x > 0) {

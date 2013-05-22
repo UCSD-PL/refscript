@@ -14,19 +14,6 @@ Dependencies
 * git clone git@github.com:UCSD-PL/language-ecmascript.git
 * nano-js
 
-
-TODO
-----
-
-* Types
-
-* Liquid  
-
-* Lists
-
-* Arrays
-
-
 Homework Plan
 -------------
 
@@ -46,8 +33,23 @@ Liquid Nano-JS
 --------------
 
 * Test Files
-    + tests/liquid/pos/abs.js {------------------
+    + tests/liquid/pos/abs.js
+
     + work through ALL tests...
+
+HEREHERE
+
+Failed 10 tests: 
+    liquid/pos/id.js, 
+    liquid/pos/id2.js, 
+    liquid/pos/inc.js, 
+    
+    liquid/pos/driver.js, 
+    liquid/pos/locks-fun.js, 
+    
+    liquid/pos/sum-return.js, 
+    liquid/pos/sum.js, 
+    liquid/pos/while5.js
 
 * Bells and whistles
     + Scrape Qualifiers

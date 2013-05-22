@@ -7,3 +7,11 @@ function forloop(lo, hi, body, acc){
   return acc;
 }
 
+/*@ plus :: (int, int) => int */
+function plus(i, x) { return x + i ; }
+
+/*@ main :: ({n:int| n > 0}) => void */
+function main(n){
+  var m = forloop(0, n, plus, n);
+  assert(m >= n);
+}

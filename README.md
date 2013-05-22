@@ -50,6 +50,7 @@ Tests
     ------------ STOPPED 
 
     lists
+        forloop.js
         listsum.js
         range.js   
         map.js
@@ -64,23 +65,19 @@ Tests
             empty :: forall A. (xs:list A)   => {v: boolean | (Prop v) <=> ((len v) = 0) }
 
     arrays
-        DOTPROD?
-        KMP?
-        mapreduce/kmeans?
+            DOTPROD?
+            KMP?
+            mapreduce/kmeans?
 
     measure
-        kmeans.js
+            kmeans.js
 
     measures: 
-        cons  :: forall A. (x:A, xs:List A) -> {v: List A | (len v) = 1 + (len xs)}
-        nil   :: forall A. () -> {v: List A | (len v) = 0}
-        head  :: forall A. (xs:{v: List A | 0 < (len v)}) -> A 
-        tail  :: forall A. (xs:{v: List A | 0 < (len v)}) -> {v: List A | (len v) = (len xs) - 1 }
-        empty :: forall A. (xs:List A) -> {v: Bool | (Prop v) <=> ((len v) = 0) }
-        
-
-    
-
+            cons  :: forall A. (x:A, xs:List A) -> {v: List A | (len v) = 1 + (len xs)}
+            nil   :: forall A. () -> {v: List A | (len v) = 0}
+            head  :: forall A. (xs:{v: List A | 0 < (len v)}) -> A 
+            tail  :: forall A. (xs:{v: List A | 0 < (len v)}) -> {v: List A | (len v) = (len xs) - 1 }
+            empty :: forall A. (xs:List A) -> {v: Bool | (Prop v) <=> ((len v) = 0) }
 
 Include
 -------

@@ -26,8 +26,8 @@ module Language.Nano.Typecheck.TCMonad (
   , getSubst, setSubst
 
   -- * Annotations
-  , addAnn
-  , getAnns
+  , accumAnn
+  , getAllAnns
 
   -- * Unification
   , unifyType
@@ -57,6 +57,7 @@ data TCState = TCS { tc_errs  :: ![(SourcePos, String)]
                    , tc_subst :: !Subst
                    , tc_cnt   :: !Int
                    , tc_anns  :: AnnInfo
+                   , tc_annss :: [AnnInfo]
                    }
 
 type TCM     = ErrorT String (State TCState)
@@ -110,6 +111,11 @@ setTyArgs l βs
        addAnn l $ TypInst (tVar <$> βs)
 
 
+
+-------------------------------------------------------------------------------
+-- | Managing Annotations: Type Instantiations --------------------------------
+-------------------------------------------------------------------------------
+
 -------------------------------------------------------------------------------
 getAnns :: TCM AnnInfo  
 -------------------------------------------------------------------------------
@@ -125,12 +131,34 @@ addAnn :: SourcePos -> Fact -> TCM ()
 addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
 
 -------------------------------------------------------------------------------
+getAllAnns :: TCM [AnnInfo]  
+-------------------------------------------------------------------------------
+getAllAnns = tc_annss <$> get
+
+
+-------------------------------------------------------------------------------
+accumAnn :: (AnnInfo -> [(SourcePos, String)]) -> TCM () -> TCM ()
+-------------------------------------------------------------------------------
+accumAnn check act 
+  = do m     <- tc_anns <$> get 
+       modify $ \st -> st {tc_anns = M.empty}
+       act
+       m'    <- getAnns
+       forM_ (check m') $ \(l, s) -> tcError l s 
+       modify $ \st -> st {tc_anns = m} {tc_annss = m' : tc_annss st}
+
+
+
+
+-------------------------------------------------------------------------------
 execute     :: TCM a -> Either [(SourcePos, String)] a
 -------------------------------------------------------------------------------
-execute act = case runState (runErrorT act) (TCS [] mempty 0 M.empty) of 
+execute act = case runState (runErrorT act) initState of 
                 (Left err, _) -> Left [(initialPos "" ,  err)]
                 (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errs st)
 
+initState :: TCState
+initState = TCS [] mempty 0 M.empty []
 --------------------------------------------------------------------------
 -- | Generating Fresh Values ---------------------------------------------
 --------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import qualified Data.HashMap.Strict as M
 import qualified Data.List           as L
 import qualified Data.Traversable    as T
 import           Data.Monoid
-import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
+import           Data.Maybe                         (catMaybes, isJust, fromMaybe, maybeToList)
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>), vcat)
 import           Text.Printf                        (printf)
 import           System.Exit                        (exitWith)
@@ -87,17 +87,12 @@ tcNano p@(Nano {code = Src fs})
        return $ p {code = Src $ (patchAnn m <$>) <$> fs}
 
 tcNano'     :: Nano AnnSSA Type -> TCM AnnInfo  
-tcNano' pgm = M.unions <$> (forM fs $ tcFun γ0)
-  where
-    γ0     = env pgm
-    Src fs = code pgm
-
-logAnn :: AnnSSA -> TCM AnnSSA 
-logAnn z@(Ann l fs) = forM_ fs (addAnn l) >> return z
+tcNano' pgm@(Nano {code = Src fs}) 
+  = do forM_ fs $ tcFun (env pgm)
+       M.unions <$> getAllAnns 
 
 patchAnn              :: AnnInfo -> AnnSSA -> AnnType
 patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
-
 
 -------------------------------------------------------------------------------
 -- | Type Check Environment ---------------------------------------------------
@@ -114,16 +109,22 @@ type TCEnv = Maybe (Env Type)
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-tcFun    :: Env Type -> FunctionStatement AnnSSA -> TCM AnnInfo  
+tcFun    :: Env Type -> FunctionStatement AnnSSA -> TCM () 
 tcFun γ (FunctionStmt l f xs body) 
-  = do (αs, ts, t)    <- funTy l γ f xs
-       let γ'          = envAddFun l f αs xs ts t γ 
-       q              <- tcStmts γ' body
-       when (isJust q) $ unifyType l "Missing return" f tVoid t
-       annm           <- getAnns
-       mapM_ (validInst αs) (M.toList annm)
-       return          $ annm
-        
+  = do (αs, ts, t) <- funTy l γ f xs
+       accumAnn (catMaybes . map (validInst αs) . M.toList) $  
+         do let γ'          = envAddFun l f αs xs ts t γ 
+            q              <- tcStmts γ' body
+            when (isJust q) $ unifyType l "Missing return" f tVoid t
+       
+       
+       -- annm           <- getAnns
+       -- mapM_ (validInst αs) (M.toList annm)
+       -- return          $ annm
+     
+
+
+
 funTy l γ f xs 
   = case bkFun =<< envFindTy f γ of
       Nothing        -> tcError l $ errorNonFunction f
@@ -137,8 +138,8 @@ envAddFun l f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddR
 
 validInst αs (l, ts)
   = case S.toList (βS `S.difference` αS) of 
-      [] -> return ()
-      βs -> tcError l $ errorFreeTyVar βs 
+      [] -> Nothing
+      βs -> Just (l, errorFreeTyVar βs) 
     where 
       βS = free ts
       αS = S.fromList αs
@@ -268,17 +269,6 @@ envJoin :: AnnSSA -> Env Type -> TCEnv -> TCEnv -> TCM TCEnv
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
 envJoin l γ (Just γ1) (Just γ2) = envJoin' l γ γ1 γ2 
-
--- OLD
--- envJoin' l _ γ1 γ2 
---   = do forM_ (envToList $ envLefts γall) err 
---        return (Just $ envRights γall)
---     where 
---       γall = envIntersectWith meet γ1 γ2
---       meet = \t1 t2 -> if t1 == t2 then Right t1 else Left (t1,t2)
---       err  = \(y, (t, t')) -> tcError l $ errorJoin y t t'
-
--- NEW update to use the SSA-Vars. Much simpler.
 
 envJoin' l γ γ1 γ2
   = do let xs = [x | PhiVar x <- ann_fact l]

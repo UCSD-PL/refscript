@@ -167,11 +167,18 @@ instance RefTypable Type where
 instance RefTypable RefType where
   rType = ofType . toType           -- removes all refinements
 
-eSingleton      :: (F.Expression e) => e -> Type -> RefType 
-eSingleton e t  = (rType t) `strengthen` (F.exprReft e)
+eSingleton      :: (F.Expression e) => RefType -> e -> RefType 
+eSingleton t e  = t `strengthen` (F.exprReft e)
 
-pSingleton      :: (F.Predicate p) => p -> Type -> RefType 
-pSingleton p t  = (rType t) `strengthen` (F.propReft p)
+pSingleton      :: (F.Predicate p) => RefType -> p -> RefType 
+pSingleton t p  = t `strengthen` (F.propReft p)
+
+
+-- eSingleton      :: (F.Expression e) => Type -> e -> RefType 
+-- eSingleton t e  = (rType t) `strengthen` (F.exprReft e)
+-- 
+-- pSingleton      :: (F.Predicate p) => Type -> p -> RefType 
+-- pSingleton t p  = (rType t) `strengthen` (F.propReft p)
 
 shiftVVs :: (F.Symbolic x) => [RefType] -> [x] -> (F.Subst, [RefType])
 shiftVVs ts xs = (su, ts')

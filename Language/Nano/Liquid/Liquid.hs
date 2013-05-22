@@ -226,10 +226,10 @@ consExpr :: CGEnv -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 --   g' is g extended with a binding for x' (and other temps required for `e`)
 
 consExpr g (IntLit l i)               
-  = envAddFresh l (eSingleton i tInt) g
+  = envAddFresh l (eSingleton tInt i) g
 
 consExpr g (BoolLit l b)
-  = envAddFresh l (pSingleton b tBool) g 
+  = envAddFresh l (pSingleton tBool b) g 
 
 consExpr g (VarRef l x)
   = return (x, g) 
@@ -257,9 +257,16 @@ consExpr g e
 -----------------------------------------------------------------------------------
 envTy x g' = baseSingleton x $ envFindTy x g'
 
-baseSingleton x t@(TApp _ _ _) = eSingleton x $ toType t 
-baseSingleton x t@(TVar _ _)   = eSingleton x $ toType t 
-baseSingleton _ t              = t 
+baseSingleton x t = eSingleton t x
+
+-- baseSingleton x t@(TApp c ts r) = TApp c ts $ r `F.meet` (F.exprReft x) -- eSingleton t x -- $ toType t 
+-- baseSingleton x t@(TVar α r)    = TVar α    $ r `F.meet` (F.exprReft x) -- eSingleton t x -- $ toType t 
+-- baseSingleton _ t               = t 
+
+-- baseSingleton x t@(TApp c ts r) = eSingleton (toType t) x 
+-- baseSingleton x t@(TVar α r)    = eSingleton (toType t) x  
+-- baseSingleton _ t               = t 
+
 
 ----------------------------------------------------------------------------------
 -- consCall :: Env Type -> SourcePos -> Type -> [Expression SourcePos] -> TCM Type

@@ -33,51 +33,18 @@ Liquid Nano-JS
 --------------
 
 * Bells and whistles
-    
-    + list
     + HTML annot
-    + Scrape Qualifiers
+    
+    - Scrape Qualifiers
     - Records
-
-Lists
------
-
-    + TDEF      (list A)
-    + Parser 
-
-    Automatic
-        + SUBTYPE
-        + WF
 
 Tests
 -----
     
-    higher-order
-        forloop.js
-
-    ------------ STOPPED 
-
-    lists
-        forloop.js
-        listsum.js
-        range.js   
-        map.js
-        fold.js
-
-        (List A -- ADT)
-            cons  :: forall A. (A, list A)   => list A
-            nil   :: forall A. ()            => list A
-            head  :: forall A. (list A)      => A
-            tail  :: forall A. (list a)      => (list A)
-            nth   :: forall A. (int, list A) => A
-            empty :: forall A. (xs:list A)   => {v: boolean | (Prop v) <=> ((len v) = 0) }
-
     arrays
             DOTPROD?
             KMP?
             mapreduce/kmeans?
-
-    measure
             kmeans.js
 
     measures: 
@@ -95,5 +62,4 @@ Include
   >> update parser
   >> recursively traverse all files
           traverseFiles :: (FilePath -> IO [FilePath]) -> FilePath -> IO [FilePath]
-
 

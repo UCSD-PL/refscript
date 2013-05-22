@@ -123,11 +123,9 @@ tcFun γ (FunctionStmt l f xs body)
        -- return          $ annm
      
 
-
-
 funTy l γ f xs 
   = case bkFun =<< envFindTy f γ of
-      Nothing        -> tcError l $ errorNonFunction f
+      Nothing        -> tcError l $ errorUnboundId f
       Just (αs,ts,t) -> do when (length xs /= length ts) $ tcError l $ errorArgMismatch
                            return (αs,ts,t)
 
@@ -235,31 +233,31 @@ tcExpr γ (VarRef l x)
   = maybe (tcError l $ errorUnboundId x) return $ envFindTy x γ
 
 tcExpr γ (PrefixExpr l o e)
-  = tcCall γ l [e] (prefixOpTy o γ)
+  = tcCall γ l o [e] (prefixOpTy o γ)
 
 tcExpr γ (InfixExpr l o e1 e2)        
-  = tcCall γ l [e1, e2] (infixOpTy o γ)
+  = tcCall γ l o [e1, e2] (infixOpTy o γ)
 
 tcExpr γ (CallExpr l e es)
-  = tcCall γ l es =<< tcExpr γ e 
+  = tcCall γ l e es =<< tcExpr γ e 
 
 tcExpr γ e 
   = convertError "tcExpr" e
 
 ----------------------------------------------------------------------------------
-tcCall :: Env Type -> AnnSSA -> [Expression AnnSSA]-> Type -> TCM Type
+tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> TCM Type
 ----------------------------------------------------------------------------------
-tcCall γ l es ft 
-  = do (_,its,ot) <- instantiate l ft
+tcCall γ l fn es ft 
+  = do (_,its,ot) <- instantiate l fn ft
        ets        <- mapM (tcExpr γ) es
        θ'         <- unifyTypes l "" its ets
        return      $ apply θ' ot
 
-instantiate l ft 
+instantiate l fn ft 
   = do t' <- freshTyArgs (srcPos l) $ bkAll ft 
        maybe err return   $ bkFun t'
     where
-       err = tcError l $ errorNonFunction ft
+       err = tcError l $ errorNonFunction fn ft
 
 
 ----------------------------------------------------------------------------------

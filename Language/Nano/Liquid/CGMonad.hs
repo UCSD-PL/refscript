@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 -- | Operations pertaining to Constraint Generation
 

@@ -1,8 +1,11 @@
+/*@ qualif Locked(v:int): v = 1    */    
+/*@ qualif Unlocked(v:int): v = 0  */    
+/* qualif CondLock(v:int,x:int): v = ((0 < x) ? 0 : 1)  */    
+
 /*@ create :: () => int */
 function create(){
   return 0;
 }
-
 
 /*@ acquire :: (int) => int */
 function acquire(l){
@@ -16,11 +19,11 @@ function release(l){
   return 0;
 }
 
-
 /*@ loop :: (int, int) => int */
 function loop(n, l) {
   
   var flag = random();
+  assert(0 == 1);
 
   if (0 < n){
     if (0 < flag){ 
@@ -35,10 +38,10 @@ function loop(n, l) {
   return l;
 }
 
-/*@ main :: () => void */
-function main(){
-  var n    = pos();
+/*@ main :: ({n:int|n > 0}) => void */
+function main(n){
   var flag = random();
+  assert (0 == 1);
   var l    = create();
   loop(n, l);
   assert(l == 0);

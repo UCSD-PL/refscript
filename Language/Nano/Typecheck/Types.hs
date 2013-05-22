@@ -154,10 +154,9 @@ strengthen (TApp c ts r) r'  = TApp c ts $ r' `F.meet` r
 strengthen (TVar α r)    r'  = TVar α    $ r' `F.meet` r 
 strengthen t _               = t                         
 
--- NOTE: 
--- r' is the OLD refinement. 
--- We want to preserve its VV binder as it "escapes", 
--- e.g. function types. Sigh. Should have used a separate function binder.
+-- NOTE: r' is the OLD refinement. 
+--       We want to preserve its VV binder as it "escapes", 
+--       e.g. function types. Sigh. Should have used a separate function binder.
 
 ---------------------------------------------------------------------------------
 -- | Nano Program = Code + Types for all function binders

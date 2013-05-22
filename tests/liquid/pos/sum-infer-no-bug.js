@@ -1,12 +1,14 @@
 
-/*@ sumLoop :: ({acc:int | true}, {i:int| 0 <= i}) => {v:int|v = acc + i} */
+// Ha ha. Why is this safe? :)
+
+/*@ sumLoop :: (int, int) => int */
 function sumLoop(acc, i){
-  var r = 0;
+  var r = acc;
+  
   if (0 < i){
-    r = sumLoop(acc + 1, i - 1);
-  } else {
-    r = acc;
-  }
+    r = sumLoop(acc + 1, i);
+  } 
+  
   return r;
 }
 

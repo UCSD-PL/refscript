@@ -1,8 +1,11 @@
-/*@ loop :: (int) => int */
+
+// loop :: (int) => int
+
+
+/*@ loop :: ({x:int|x <= 6}) => {v:int| v=6} */
 function loop(x){
   if (x <= 5) {
-    var r = loop(x + 1);
-    return r;
+    return loop(x + 1);
   }
   return x;
 }

@@ -3,7 +3,7 @@
 function sumLoop(acc, i){
   var r = 0;
   if (0 < i){
-    r = sumLoop(acc + 1, i - 1);
+    r = sumLoop(acc + 1, i);
   } else {
     r = acc;
   }

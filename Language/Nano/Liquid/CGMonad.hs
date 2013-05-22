@@ -177,9 +177,9 @@ envFindReturn = E.envFindReturn . renv
 
 -- | Instantiate Fresh Type (at Function-site)
 ---------------------------------------------------------------------------------------
-freshTyFun :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType 
+freshTyFun :: (IsLocated l) => CGEnv -> l -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
-freshTyFun l g t 
+freshTyFun g l t 
   | not $ isTrivialRefType t = return t
   | otherwise                = freshTy "freshTyFun" (toType t) >>= wellFormed l g 
 
@@ -191,7 +191,9 @@ freshTyInst l g αs τs tbody
   = do ts    <- mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
        let θ  = fromList $ zip αs ts
-       return $ apply θ tbody
+       return $ tracePP msg  $ apply θ tbody
+    where
+       msg = printf "freshTyInst αs=%s τs=%s: " (ppshow αs) (ppshow τs)
 
 -- | Instantiate Fresh Type (at Phi-site) 
 ---------------------------------------------------------------------------------------

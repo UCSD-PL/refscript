@@ -13,7 +13,7 @@ function inc(x){
 function main(){
   var a = pos();
   var b = inc(a);
-  assert (b == (a + 1));
+  assert (b > (a + 1));
   assert(b > 0);
 }
 

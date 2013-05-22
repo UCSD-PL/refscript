@@ -29,6 +29,8 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
 import           Language.Nano.Typecheck.SSA
+
+import qualified Language.Nano.Env as E 
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
 
@@ -60,16 +62,23 @@ generateConstraints pgm = getFInfo pgm $ consNano pgm
 consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) 
- = forM_ fs $ consFun $ initCGEnv pgm
+  = forM_ fs . consFun =<< initCGEnv pgm
 
-initCGEnv    :: NanoRefType -> CGEnv
-initCGEnv pgm = CGE (env pgm) F.emptyIBindEnv []
+initCGEnv     :: NanoRefType -> CGM CGEnv
+initCGEnv pgm 
+  = do ts'    <- forM xts (uncurry $ freshTyFun g0)
+       return  $ g0 { renv = E.envFromList $ zip xs ts'} 
+    where 
+       g0      = CGE (env pgm) F.emptyIBindEnv []
+       xts     = E.envToList $ env pgm
+       (xs, _) = unzip xts
+
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> FunctionStatement AnnType -> CGM ()
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = do ft             <- freshTyFun l g $ envFindTy f g
+  = do ft             <- freshTyFun g l $ envFindTy f g
        let (αs, ts, t) = fromJust $ bkFun ft
        g'             <- envAddFun l g f αs xs ts t
        gm             <- consStmts g' body
@@ -186,9 +195,9 @@ envJoin' l g g1 g2
        subTypes l g2 xs ts
        return g'
 
--------------------------------------------------------------------------------
+------------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnType -> CGM (Maybe CGEnv) 
--------------------------------------------------------------------------------
+------------------------------------------------------------------------------------
 
 consVarDecl g (VarDecl l x (Just e)) 
   = consAsgn g x e  
@@ -277,7 +286,6 @@ getTypArgs l αs
   = case [i | TypInst i <- ann_fact l] of 
       [i] | length i == length αs -> i 
       _                           -> errorstar $ bugMissingTypeArgs $ srcPos l
-
 
 ---------------------------------------------------------------------------------
 consScan :: (CGEnv -> a -> CGM (b, CGEnv)) -> CGEnv -> [a] -> CGM ([b], CGEnv)

@@ -15,5 +15,3 @@ function main(x, y){
   }
   return xr + z;
 }
- 
-

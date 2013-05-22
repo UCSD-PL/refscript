@@ -5,3 +5,16 @@ function twice(f, x0){
   return x1;
 }
 
+/*@ foo :: (int) => int */
+function foo(x){
+  var z  = 0;
+  if (random() > 0) {
+    z = 10;
+  }
+  return x + z;
+}
+ 
+/*@ main :: ({n:int|true}) => {v:int |v >= n} */
+function main(x){
+  return twice(foo, x);
+}

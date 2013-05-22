@@ -32,29 +32,19 @@ HW 3
 Liquid Nano-JS
 --------------
 
-Failed 2 tests: 
-    
-    liquid/pos/driver.js,   <<------------ HEREHEREHEREHERE
-                                           "random()" gets a FRESH type
-                                           which is then "FALSED" out...
-                                           only FRESH for funs with code...
-
-    liquid/pos/locks-fun.js, 
-
-
 * Bells and whistles
-    + Scrape Qualifiers
+    
     + list
     + array
-
+    + HTML annot
+    + Scrape Qualifiers
+    
     - Records
 
 Tests
 -----
     
     higher-order
-        id.js   
-        twice.js
         forloop.js
 
     ------------ STOPPED 
@@ -66,19 +56,30 @@ Tests
         fold.js
 
         (List A -- ADT)
-            single :: forall A. (A) => (List A)
-            head   :: forall A. (List A) => A
-            tail   :: forall A. (List a) => (List A)
+            cons  :: forall A. (A, list A)   => list A
+            nil   :: forall A. ()            => list A
+            head  :: forall A. (list A)      => A
+            tail  :: forall A. (list a)      => (list A)
+            nth   :: forall A. (int, list A) => A
+            empty :: forall A. (xs:list A)   => {v: boolean | (Prop v) <=> ((len v) = 0) }
+
+    arrays
+        DOTPROD?
+        KMP?
+        mapreduce/kmeans?
 
     measure
         kmeans.js
 
     measures: 
-        cons :: forall A. (x:A, xs:List A) -> {v: List A | (len v) = 1 + (len xs)}
-        nil  :: forall A. () -> {v: List A | (len v) = 0}
-        head :: forall A. (xs:{v: List A | 0 < (len v)}) -> A 
-        tail :: forall A. (xs:{v: List A | 0 < (len v)}) -> {v: List A | (len v) = (len xs) - 1 }
-        null :: forall A. (xs:List A) -> {v: Bool | (Prop v) <=> ((len v) = 0) }
+        cons  :: forall A. (x:A, xs:List A) -> {v: List A | (len v) = 1 + (len xs)}
+        nil   :: forall A. () -> {v: List A | (len v) = 0}
+        head  :: forall A. (xs:{v: List A | 0 < (len v)}) -> A 
+        tail  :: forall A. (xs:{v: List A | 0 < (len v)}) -> {v: List A | (len v) = (len xs) - 1 }
+        empty :: forall A. (xs:List A) -> {v: Bool | (Prop v) <=> ((len v) = 0) }
+        
+
+    
 
 
 Include

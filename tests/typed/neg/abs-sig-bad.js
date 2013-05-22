@@ -1,4 +1,4 @@
-/*@ abs :: ({ x:int | true }) => {v:int | v > x} */ 
+/*@ abs :: (int) => boolean */ 
 function abs(x){
   var res = 0;
   if (x > 0) {

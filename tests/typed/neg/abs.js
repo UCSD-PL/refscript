@@ -1,7 +1,7 @@
 /*@ abs :: ({ x:int | true }) => int */ 
 function abs(x){
   var y = x;
-  if (x > 0) {
+  if (x) {
     y = x;
   } else {
     y = 10 + x;

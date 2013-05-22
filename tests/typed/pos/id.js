@@ -2,10 +2,10 @@
 function id(x) { return x;}
 
 
-/*@ idbool :: (bool) => bool */
+/*@ idbool :: (boolean) => boolean */
 function idbool(x) { return id(x); }
 
-/*@ main :: (int, bool) => int */
+/*@ main :: (int, boolean) => int */
 function main(x, y){
   var yr = id(y);
   var xr = id(x);

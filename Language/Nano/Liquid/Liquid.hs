@@ -62,9 +62,10 @@ generateConstraints pgm = getFInfo pgm $ consNano pgm
 consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) 
-  = consStmts (specs pgm) fs >> return ()
-  -- = forM_ fs . consFun =<< initCGEnv pgm
+  = consStmts (initCGEnv pgm) fs >> return ()
 
+  -- = forM_ fs . consFun =<< initCGEnv pgm
+initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> FunctionStatement AnnType -> CGM CGEnv  
@@ -158,7 +159,7 @@ consStmt g (ReturnStmt l Nothing)
 
 -- function f(x1...xn){ s }
 consStmt g s@(FunctionStmt _ _ _ _)
-  = consFun g s
+  = Just <$> consFun g s
 
 -- OTHER (Not handled)
 consStmt g s 

@@ -37,13 +37,12 @@ ssaTransform = either (errorstar . snd) id . execute . ssaNano
 ssaNano :: (PP t) => Nano SourcePos t -> SSAM (Nano AnnSSA t) 
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano {code = Src fs}) 
-  = do -- fs'    <- forM fs $ T.mapM stripAnn
-       addImmutables $ envMap (\_ -> ()) (specs p) 
+  = do addImmutables $ envMap (\_ -> ()) (specs p) 
        addImmutables $ envMap (\_ -> ()) (defs  p) 
        addImmutables $ envMap (\_ -> ()) (consts p) 
-       fs''   <- mapM ssaFun fs
-       anns   <- getAnns
-       return $ p {code = Src $ (patchAnn anns <$>) <$> fs''}
+       (_,fs') <- ssaStmts fs -- mapM ssaFun fs
+       anns    <- getAnns
+       return   $ p {code = Src $ (patchAnn anns <$>) <$> fs'}
 
 stripAnn :: AnnBare -> SSAM SourcePos
 stripAnn (Ann l fs) = forM_ fs (addAnn l) >> return l   
@@ -55,9 +54,17 @@ patchAnn m l = Ann l $ M.lookupDefault [] l m
 ssaFun :: FunctionStatement SourcePos -> SSAM (FunctionStatement SourcePos)
 -------------------------------------------------------------------------------------
 ssaFun (FunctionStmt l f xs body) 
-  = do setSsaEnv   $ initSsaEnv $ (returnId l) : xs 
-       (_, body') <- ssaStmts body 
-       return      $ FunctionStmt l f xs body'
+  = do θ            <- getSsaEnv  
+       imms         <- getImmutables
+
+       addImmutables $ envMap (\_ -> ()) θ              -- Variables from OUTER scope are IMMUTABLE
+       setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
+       (_, body')   <- ssaStmts body                    -- Transform function
+
+       setSsaEnv θ                                      -- Restore Outer SsaEnv
+       setImmutables imms                               -- Restore Outer Immutables
+
+       return        $ FunctionStmt l f xs body'
 
 -------------------------------------------------------------------------------------
 ssaSeq :: (a -> SSAM (Bool, a)) -> [a] -> SSAM (Bool, [a])  
@@ -127,6 +134,10 @@ ssaStmt s@(ReturnStmt l Nothing)
 ssaStmt (ReturnStmt l (Just e)) 
   = do e' <- ssaExpr e
        return (False, ReturnStmt l (Just e'))
+
+-- function f(...){ s }
+ssaStmt s@(FunctionStmt _ _ _ _)
+  = (True,) <$> ssaFun s
 
 -- OTHER (Not handled)
 ssaStmt s 
@@ -244,10 +255,9 @@ type SsaEnv     = Env SsaInfo
 newtype SsaInfo = SI (Id SourcePos) deriving (Eq)
 
 -------------------------------------------------------------------------------------
-initSsaEnv    :: [Id SourcePos] -> SsaEnv 
+extSsaEnv    :: [Id SourcePos] -> SsaEnv -> SsaEnv 
 -------------------------------------------------------------------------------------
-initSsaEnv xs = envFromList [(x, SI x) | x <- xs] 
-
+extSsaEnv xs = envAdds [(x, SI x) | x <- xs]
 
 -------------------------------------------------------------------------------------
 getSsaEnv   :: SSAM SsaEnv 
@@ -260,6 +270,18 @@ addImmutables   :: Env () -> SSAM ()
 addImmutables z = modify $ \st -> st { immutables = envExt z (immutables st) } 
   where
     envExt x y  = envFromList (envToList x ++ envToList y)
+
+-------------------------------------------------------------------------------------
+setImmutables   :: Env () -> SSAM () 
+-------------------------------------------------------------------------------------
+setImmutables z = modify $ \st -> st { immutables = z } 
+
+-------------------------------------------------------------------------------------
+getImmutables   :: SSAM (Env ()) 
+-------------------------------------------------------------------------------------
+getImmutables   = immutables <$> get
+
+
 
 
 -------------------------------------------------------------------------------------
@@ -278,6 +300,7 @@ updSsaEnv l x
        let x' = newId l x n
        modify $ \st -> st {names = envAdds [(x, SI x')] (names st)} {count = 1 + n}
        return x'
+
 
 ---------------------------------------------------------------------------------
 isImmutable   :: Id SourcePos -> SSAM Bool 

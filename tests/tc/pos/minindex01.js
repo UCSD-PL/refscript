@@ -1,10 +1,8 @@
-/*@ qualif UBound(v:int, x:a) : v < (len x) */
-
-/*@ forLoop :: forall A. (int, int, (int, A) => A, A) => A */
-function forLoop(lo, hi, body, acc){
+/*@ ranjit :: forall A. (int, int, (int, A) => A, A) => A */
+function ranjit(lo, hi, body, acc){
   if (lo < hi) {
     var newAcc = body(lo, acc);
-    return forLoop(lo + 1, hi, body, newAcc);
+    return ranjit(lo + 1, hi, body, newAcc);
   }
   return acc;
 }
@@ -18,5 +16,5 @@ function minIndex(a){
     } 
     return min; 
   };
-  return forLoop(0, length(a), step, 0);
+  return ranjit(0, length(a), step, 0);
 }

@@ -224,7 +224,9 @@ tcExpr _ (BoolLit _ _)
   = return tBool
 
 tcExpr γ (VarRef l x)
-  = maybe (tcError l $ errorUnboundId x) return $ envFindTy x γ
+  = case envFindTy x γ of 
+      Nothing -> tcError l $ errorUnboundIdEnv x γ
+      Just z  -> return z 
 
 tcExpr γ (PrefixExpr l o e)
   = tcCall γ l o [e] (prefixOpTy o γ)

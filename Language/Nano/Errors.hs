@@ -14,12 +14,12 @@ bugMissingTypeArgs l    = printf "BUG: Missing Type Arguments at %s" (ppshow l)
 
 errorArgName l x y      = printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 
-errorMissingSpec l f      = printf "Missing Signature For %s defined at %s" (ppshow f) (ppshow l)
+errorMissingSpec l f    = printf "Missing Signature For %s defined at %s" (ppshow f) (ppshow l)
 errorDuplicate i l l'   = printf "Duplicate Specification for %s:\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
 errorArgMismatch        = printf "Mismatch in Number of Args in Call" 
 errorNonFunction f t    = printf "Non-function type for %s :: %s" (ppshow f) (ppshow t)  
 errorUnboundId x        = printf "Identifier %s unbound" (ppshow x) 
-errorUnboundIdEnv x t   = printf "Identifier %s unbound in %s" (ppshow x) (ppshow t)
+errorUnboundIdEnv x t   = printf "ZOGBERT Identifier %s unbound in %s" (ppshow x) (ppshow t)
 errorWrongType m e t t' = printf "%s -- unexpected type for %s :: %s expected %s" m (ppshow e) (ppshow t) (ppshow t')
 errorJoin x t t'        = printf "Conflicting join for %s \n   %s\n   %s" (ppshow x) (ppshow t) (ppshow t') 
 errorUnification t t'   = printf "Cannot unify types: %s and %s" (ppshow t) (ppshow t')

@@ -51,7 +51,9 @@ function pos(){
 /*@ head  :: forall A. (xs:list [A]) => A        */
 /*@ tail  :: forall A. (xs:list [A]) => list [A] */
 /*@ nth   :: forall A. (xs:list [A], {i:int| ((0 <= i) && i < (len xs))}) => A                 */
-/*@ empty :: forall A. (xs:list [A]) => {v:boolean | ((Prop v) <=> ((len xs) = 0))}  */
+/*@ empty :: forall A. (xs:list [A]) => {v:boolean | ((Prop v) <=> ((len xs) = 0))}            */
+
+/*@ length   :: forall A. (xs:list [A]) => {v:int | ((v >= 0) && v = (len xs))}                */
 
 /*@ safehead :: forall A. ({xs:list [A] | (len xs) > 0}) => A                                     */
 /*@ safetail :: forall A. ({xs:list [A] | (len xs) > 0}) => {v:list [A] | (len v) = (len xs) - 1} */
@@ -86,27 +88,30 @@ function pos(){
 /************** Pre-Loaded Qualifiers ************************************/
 /*************************************************************************/
 
-/*@ qualif Bot(v:a)       : 0 = 1        */
-/*@ qualif Bot(v:obj)     : 0 = 1        */ 
-/*@ qualif Bot(v:bool)    : 0 = 1        */
-/*@ qualif Bot(v:int)     : 0 = 1        */
-/*@ qualif CmpZ(v:int)    : v < 0        */    
-/*@ qualif CmpZ(v:int)    : v <= 0       */    
-/*@ qualif CmpZ(v:int)    : v >  0       */    
-/*@ qualif CmpZ(v:int)    : v >= 0       */    
-/*@ qualif CmpZ(v:int)    : v =  0       */
-/*@ qualif CmpZ(v:int)    : v != 0       */
-/*@ qualif Cmp(v:a,x:a)   : v <  x       */    
-/*@ qualif Cmp(v:a,x:a)   : v <= x       */    
-/*@ qualif Cmp(v:a,x:a)   : v >  x       */    
-/*@ qualif Cmp(v:a,x:a)   : v >= x       */    
-/*@ qualif Cmp(v:a,x:a)   : v =  x       */    
-/*@ qualif Cmp(v:a,x:a)   : v != x       */    
-/*@ qualif One(v:int)     : v = 1        */
-/*@ qualif True(v:bool)   : (? v)        */
-/*@ qualif False(v:bool)  : not (? v)    */
-/*@ qualif True1(v:Bool)  : (Prop v)     */                                   
-/*@ qualif False1(v:Bool) : not (Prop v) */
+/*@ qualif Bot(v:a)       : 0 = 1            */
+/*@ qualif Bot(v:obj)     : 0 = 1            */ 
+/*@ qualif Bot(v:bool)    : 0 = 1            */
+/*@ qualif Bot(v:int)     : 0 = 1            */
+/*@ qualif CmpZ(v:int)    : v < 0            */    
+/*@ qualif CmpZ(v:int)    : v <= 0           */    
+/*@ qualif CmpZ(v:int)    : v >  0           */    
+/*@ qualif CmpZ(v:int)    : v >= 0           */    
+/*@ qualif CmpZ(v:int)    : v =  0           */
+/*@ qualif CmpZ(v:int)    : v != 0           */
+/*@ qualif Cmp(v:a,x:a)   : v <  x           */    
+/*@ qualif Cmp(v:a,x:a)   : v <= x           */    
+/*@ qualif Cmp(v:a,x:a)   : v >  x           */    
+/*@ qualif Cmp(v:a,x:a)   : v >= x           */    
+/*@ qualif Cmp(v:a,x:a)   : v =  x           */    
+/*@ qualif Cmp(v:a,x:a)   : v != x           */    
+/*@ qualif One(v:int)     : v = 1            */
+/*@ qualif True(v:bool)   : (? v)            */
+/*@ qualif False(v:bool)  : not (? v)        */
+/*@ qualif True1(v:Bool)  : (Prop v)         */                                   
+/*@ qualif False1(v:Bool) : not (Prop v)     */
+
+
+
 
 // Somewhat more controversial qualifiers (i.e. "expensive"...)
 

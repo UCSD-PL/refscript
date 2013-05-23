@@ -162,7 +162,7 @@ consStmt g (VarDeclStmt _ ds)
 -- return e 
 consStmt g (ReturnStmt l (Just e))
   = do (xe, g') <- consExpr g e 
-       subType l g' (envTy xe g') $ envFindReturn g' 
+       subType l g' (envFindTy xe g') $ envFindReturn g' 
        return Nothing
 
 -- return
@@ -215,7 +215,7 @@ consAsgn :: CGEnv -> Id AnnType -> Expression AnnType -> CGM (Maybe CGEnv)
 ------------------------------------------------------------------------------------
 consAsgn g x e 
   = do (x', g') <- consExpr g e
-       Just <$> envAdds [(x, envTy x' g')] g'
+       Just <$> envAdds [(x, envFindTy x' g')] g'
 
 ------------------------------------------------------------------------------------
 consExpr :: CGEnv -> Expression AnnType -> CGM (Id AnnType, CGEnv) 
@@ -244,28 +244,10 @@ consExpr g (InfixExpr l o e1 e2)
 
 consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 
-       consCall g' l e es $ envTy x g'
+       consCall g' l e es $ envFindTy x g'
 
 consExpr g e 
   = errorstar "consExpr: not handled" (pp e)
-
-
------------------------------------------------------------------------------------
--- | A helper that returns the actual @RefType@ of the expression by
---     looking up the environment with the name, strengthening with
---     singleton for base-types.
------------------------------------------------------------------------------------
-envTy x g' = baseSingleton x $ envFindTy x g'
-
-baseSingleton x t = eSingleton t x
-
--- baseSingleton x t@(TApp c ts r) = TApp c ts $ r `F.meet` (F.exprReft x) -- eSingleton t x -- $ toType t 
--- baseSingleton x t@(TVar α r)    = TVar α    $ r `F.meet` (F.exprReft x) -- eSingleton t x -- $ toType t 
--- baseSingleton _ t               = t 
-
--- baseSingleton x t@(TApp c ts r) = eSingleton (toType t) x 
--- baseSingleton x t@(TVar α r)    = eSingleton (toType t) x  
--- baseSingleton _ t               = t 
 
 
 ----------------------------------------------------------------------------------

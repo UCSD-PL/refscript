@@ -161,11 +161,27 @@ envAddGuard x b g = g { guards = guard b x : guards g }
     guard False   = F.PNot . F.eProp
 
 ---------------------------------------------------------------------------------------
-envFindTy     :: (IsLocated x, F.Symbolic x) => x -> CGEnv -> RefType 
+envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
 ---------------------------------------------------------------------------------------
-envFindTy x g = fromMaybe err $ E.envFindTy x $ renv g
+-- | A helper that returns the actual @RefType@ of the expression by
+--     looking up the environment with the name, strengthening with
+--     singleton for base-types.
+
+envFindTy x g = (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
   where 
     err       = errorstar $ bugUnboundVariable (srcPos x) (F.symbol x)
+
+-- envFindTy x g = baseSingleton x $ envFindTy x g'
+-- baseSingleton x t = eSingleton t x
+-- baseSingleton x t@(TApp c ts r) = TApp c ts $ r `F.meet` (F.exprReft x) -- eSingleton t x -- $ toType t 
+-- baseSingleton x t@(TVar α r)    = TVar α    $ r `F.meet` (F.exprReft x) -- eSingleton t x -- $ toType t 
+-- baseSingleton _ t               = t 
+
+-- baseSingleton x t@(TApp c ts r) = eSingleton (toType t) x 
+-- baseSingleton x t@(TVar α r)    = eSingleton (toType t) x  
+-- baseSingleton _ t               = t 
+
+
 
 ---------------------------------------------------------------------------------------
 envFindReturn :: CGEnv -> RefType 
@@ -211,7 +227,7 @@ freshTyPhis l g xs τs
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-subTypes :: (IsLocated l, IsLocated x, F.Symbolic x) => l -> CGEnv -> [x] -> [RefType] -> CGM F.Subst 
+subTypes :: (IsLocated l, IsLocated x, F.Expression x, F.Symbolic x) => l -> CGEnv -> [x] -> [RefType] -> CGM F.Subst 
 ---------------------------------------------------------------------------------------
 subTypes l g xs ts 
   = do mapM (uncurry $ subType l g) xts_ts' 
@@ -227,7 +243,7 @@ subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 = modify $ \st -> st {cs =  c : (cs st)}
   where 
-    c             = Sub g (ci l) t1 t2
+    c             = tracePP ("subType at" ++ ppshow (srcPos l)) $ Sub g (ci l) t1 t2
 
 ---------------------------------------------------------------------------------------
 -- | Adding Well-Formedness Constraints -----------------------------------------------

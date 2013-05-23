@@ -172,16 +172,16 @@ instance IsNano PrefixOp where
   -- isNano _           = False
 
 instance IsNano (Statement a) where
-  isNano (EmptyStmt _)         = True                   -- ^ skip
-  isNano (ExprStmt _ e)        = isNanoExprStatement e  -- ^ x = e
-  isNano (BlockStmt _ ss)      = isNano ss              -- ^ sequence
-  isNano (IfSingleStmt _ b s)  = isNano b && isNano s   
-  isNano (IfStmt _ b s1 s2)    = isNano b && isNano s1 && isNano s2
-  isNano (WhileStmt _ b s)     = isNano b && isNano s
-  isNano (VarDeclStmt _ ds)    = all isNano ds 
-  isNano (ReturnStmt _ e)      = isNano e 
-  isNano e                     = errortext (text "Not Nano Statement!" <+> pp e) 
-  -- isNano _                     = False
+  isNano (EmptyStmt _)          = True                   -- ^ skip
+  isNano (ExprStmt _ e)         = isNanoExprStatement e  -- ^ x = e
+  isNano (BlockStmt _ ss)       = isNano ss              -- ^ sequence
+  isNano (IfSingleStmt _ b s)   = isNano b && isNano s   
+  isNano (IfStmt _ b s1 s2)     = isNano b && isNano s1 && isNano s2
+  isNano (WhileStmt _ b s)      = isNano b && isNano s
+  isNano (VarDeclStmt _ ds)     = all isNano ds 
+  isNano (ReturnStmt _ e)       = isNano e 
+  isNano (FunctionStmt _ _ _ b) = isNano b
+  isNano e                      = errortext (text "Not Nano Statement!" <+> pp e) 
 
 instance IsNano a => IsNano (Maybe a) where 
   isNano (Just x) = isNano x

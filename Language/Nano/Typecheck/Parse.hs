@@ -8,6 +8,9 @@ module Language.Nano.Typecheck.Parse (
     parseNanoFromFile 
   ) where
 
+import           Data.Maybe (fromMaybe)
+import           Data.Generics.Aliases
+import           Data.Generics.Schemes
 import           Control.Monad
 import           Text.Parsec
 import           Text.Parsec.String hiding (parseFromFile)
@@ -17,10 +20,11 @@ import           Data.Char (toLower, isLower)
 import           Data.Monoid (mconcat)
 
 import           Language.Fixpoint.Names (propConName)
-import           Language.Fixpoint.Misc (mapSnd)
+import           Language.Fixpoint.Misc (errorstar, mapSnd)
 import           Language.Fixpoint.Types hiding (quals)
 import           Language.Fixpoint.Parse 
 
+import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
@@ -198,7 +202,8 @@ parseSpecFromFile = parseFromFile $ mkSpec <$> specWraps specP
 
 mkSpec    ::  IsLocated l => [PSpec l t] -> Nano a t
 mkSpec xs = Nano { code   = Src [] 
-                 , env    = envFromList [b | Bind b <- xs] 
+                 , specs  = envFromList [b | Bind b <- xs] 
+                 , defs   = envEmpty
                  , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
                  , quals  =             [q | Qual q <- xs]  
                  }
@@ -215,12 +220,11 @@ parseCodeFromFile = fmap mkCode . parseJavaScriptFromFile
         
 mkCode    :: [Statement SourcePos] -> Nano SourcePos a
 mkCode ss = Nano { code   = Src (checkTopStmt <$> ss)
-                 , env    = envEmpty  
+                 , specs  = envEmpty  
+                 , defs   = envEmpty
                  , consts = envEmpty 
                  , quals  = []  
                  } 
-
--- mkCode spec = mappend spec . sourceNano . fmap (`Ann` []) .  Src . map checkFun 
 
 -------------------------------------------------------------------------------
 -- | Parse File and Type Signatures -------------------------------------------
@@ -231,7 +235,30 @@ parseNanoFromFile f
   = do code  <- parseCodeFromFile f
        spec  <- parseSpecFromFile f
        ispec <- parseSpecFromFile =<< getPreludePath
-       return $ mconcat [code, spec, ispec] 
+       return $ shuffleSpecDefs $ mconcat [code, spec, ispec] 
+
+shuffleSpecDefs pgm = pgm { specs = specγ } { defs = defγ }
+  where 
+    defγ            = envFromList [(fn, initFunTy fn γ) | fn <- fns]
+    specγ           = envFromList [(x, t) | (x, t) <- xts, not (x `envMem` defγ)]
+    γ               = specs pgm
+    xts             = envToList γ
+    fns             = definedFuns fs 
+    Src fs          = code pgm
+
+initFunTy fn γ = fromMaybe err $ envFindTy fn γ 
+  where 
+    err        = errorstar $ bugUnboundVariable (srcPos fn) fn
+
+
+-- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
+definedFuns       :: [Statement SourcePos] -> [Id SourcePos]
+definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
+  where 
+    fromFunction (FunctionStmt _ x _ _) = [x] 
+    fromFunction _                      = []
+
+
 
 --------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------

@@ -32,6 +32,9 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Unification
   , unifyType
   , unifyTypes
+
+  -- * Get Type Signature 
+  , getDefType 
   )  where 
 
 import           Text.Printf
@@ -40,6 +43,8 @@ import           Control.Monad.State
 import           Control.Monad.Error
 import           Language.Fixpoint.Misc 
 import qualified Language.Fixpoint.Types as F
+
+import           Language.Nano.Env
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
@@ -58,6 +63,7 @@ data TCState = TCS { tc_errs  :: ![(SourcePos, String)]
                    , tc_cnt   :: !Int
                    , tc_anns  :: AnnInfo
                    , tc_annss :: [AnnInfo]
+                   , tc_defs  :: !(Env Type) 
                    }
 
 type TCM     = ErrorT String (State TCState)
@@ -147,18 +153,26 @@ accumAnn check act
        forM_ (check m') $ \(l, s) -> tcError l s 
        modify $ \st -> st {tc_anns = m} {tc_annss = m' : tc_annss st}
 
-
-
-
 -------------------------------------------------------------------------------
-execute     :: TCM a -> Either [(SourcePos, String)] a
+execute     :: Nano z (RType r) -> TCM a -> Either [(SourcePos, String)] a
 -------------------------------------------------------------------------------
-execute act = case runState (runErrorT act) initState of 
-                (Left err, _) -> Left [(initialPos "" ,  err)]
-                (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errs st)
+execute pgm act 
+  = case runState (runErrorT act) $ initState pgm of 
+      (Left err, _) -> Left [(initialPos "" ,  err)]
+      (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errs st)
 
-initState :: TCState
-initState = TCS [] mempty 0 M.empty []
+initState :: Nano z (RType r) -> TCState
+initState pgm = TCS [] mempty 0 M.empty [] (envMap toType $ defs pgm) 
+
+
+getDefType f 
+  = do m <- tc_defs <$> get
+       maybe err return $ envFindTy f m 
+    where 
+       err = tcError l $ errorMissingSpec l f
+       l   = srcPos f
+
+
 --------------------------------------------------------------------------
 -- | Generating Fresh Values ---------------------------------------------
 --------------------------------------------------------------------------

@@ -162,18 +162,16 @@ strengthen t _               = t
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-data Nano a t = Nano { code   :: !(Source a) 
-                     , env    :: !(Env t)
-                     , consts :: !(Env t) 
-                     , quals  :: ![F.Qualifier] 
+data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
+                     , specs  :: !(Env t)           -- ^ Imported Specifications
+                     , defs   :: !(Env t)           -- ^ Signatures for Code
+                     , consts :: !(Env t)           -- ^ Measure Signatures 
+                     , quals  :: ![F.Qualifier]     -- ^ Qualifiers
                      } deriving (Functor)
 
 type NanoBare    = Nano AnnBare Type 
 type NanoSSA     = Nano AnnSSA  Type 
 type NanoType    = Nano AnnType Type 
-
--- sourceNano z     = Nano z envEmpty envEmpty []
--- sigsNano xts     = Nano (Src []) (envFromList xts) envEmpty []
 
 {-@ measure isFunctionStatement :: (Statement SourcePos) -> Prop 
     isFunctionStatement (FunctionStmt {}) = true
@@ -193,8 +191,10 @@ instance PP t => PP (Nano a t) where
   pp pgm@(Nano {code = (Src s) }) 
     =   text "********************** CODE **********************"
     $+$ pp s
-    $+$ text "********************** ENV ***********************"
-    $+$ pp (env    pgm)
+    $+$ text "********************** SPECS *********************"
+    $+$ pp (specs pgm)
+    $+$ text "********************** DEFS *********************"
+    $+$ pp (defs  pgm)
     $+$ text "********************** CONSTS ********************"
     $+$ pp (consts pgm) 
     $+$ text "********************** QUALS *********************"
@@ -202,24 +202,19 @@ instance PP t => PP (Nano a t) where
     $+$ text "**************************************************"
 
 instance Monoid (Nano a t) where 
-  mempty        = Nano (Src []) envEmpty envEmpty []
-  mappend p1 p2 = Nano ss e cs qs 
+  mempty        = Nano (Src []) envEmpty envEmpty envEmpty [] 
+  mappend p1 p2 = Nano ss e e' cs qs 
     where 
       ss        = Src $ s1 ++ s2
       Src s1    = code p1
       Src s2    = code p2
-      e         = envFromList ((envToList $ env p1) ++ (envToList $ env p2))
+      e         = envFromList ((envToList $ specs p1) ++ (envToList $ specs p2))
+      e'        = envFromList ((envToList $ defs p1)  ++ (envToList $ defs p2))
       cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
       qs        = quals p1 ++ quals p2 
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }
--- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
--- getFunctionIds :: [Statement SourcePos] -> [Id SourcePos]
--- getFunctionIds stmts = everything (++) ([] `mkQ` fromFunction) stmts
---   where 
---     fromFunction (FunctionStmt _ x _ _) = [x] 
---     fromFunction _                      = []
 
 ---------------------------------------------------------------------------
 -- | Pretty Printer Instances ---------------------------------------------
@@ -343,33 +338,3 @@ prefixOpId PrefixLNot  = builtinId "PrefixLNot"
 
 builtinId       = mkId . ("builtin_" ++)
 
-
--- -----------------------------------------------------------------------
--- infixOpTy              :: InfixOp -> Type
--- -----------------------------------------------------------------------
--- infixOpTy OpLT         = TAll tvA $ TFun [tA, tA] tBool  
--- infixOpTy OpLEq        = TAll tvA $ TFun [tA, tA] tBool
--- infixOpTy OpGT         = TAll tvA $ TFun [tA, tA] tBool
--- infixOpTy OpGEq        = TAll tvA $ TFun [tA, tA] tBool
--- infixOpTy OpEq         = TAll tvA $ TFun [tA, tA] tBool
--- infixOpTy OpNEq        = TAll tvA $ TFun [tA, tA] tBool
--- 
--- infixOpTy OpLAnd       = TFun [tBool, tBool] tBool 
--- infixOpTy OpLOr        = TFun [tBool, tBool] tBool
--- 
--- infixOpTy OpSub        = TFun [tInt, tInt]   tInt 
--- infixOpTy OpAdd        = TFun [tInt, tInt]   tInt 
--- infixOpTy OpMul        = TFun [tInt, tInt]   tInt 
--- infixOpTy OpDiv        = TFun [tInt, tInt]   tInt 
--- infixOpTy OpMod        = TFun [tInt, tInt]   tInt  
--- infixOpTy o            = convertError "infixOpTy" o
--- 
--- tvA                    = TV (F.symbol "Z")
--- tA                     = tVar tvA
--- 
--- -----------------------------------------------------------------------
--- prefixOpTy             :: PrefixOp -> Type
--- -----------------------------------------------------------------------
--- prefixOpTy PrefixMinus = TFun [tInt] tInt
--- prefixOpTy PrefixLNot  = TFun [tBool] tBool
--- prefixOpTy o           = convertError "prefixOpTy" o

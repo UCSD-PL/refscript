@@ -62,34 +62,21 @@ generateConstraints pgm = getFInfo pgm $ consNano pgm
 consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) 
-  = forM_ fs . consFun =<< initCGEnv pgm
-
-initCGEnv     :: NanoRefType -> CGM CGEnv
-initCGEnv pgm@(Nano {code = Src fs}) 
-  = do ts'    <- forM fts (uncurry $ freshTyFun g0)
-       return  $ g0 { renv = E.envAdds (zip fns ts') γ} 
-    where 
-       g0      = CGE γ F.emptyIBindEnv []
-       γ       = env pgm
-       fns     = [fn | (FunctionStmt _ fn _ _) <- fs]
-       fts     = [(fn, initFunTy fn γ) | fn <- fns]
-
-initFunTy fn γ = fromMaybe err $ E.envFindTy fn γ 
-  where 
-    err        = errorstar $ bugUnboundVariable (srcPos fn) fn
+  = consStmts (specs pgm) fs >> return ()
+  -- = forM_ fs . consFun =<< initCGEnv pgm
 
 
 --------------------------------------------------------------------------------
-consFun :: CGEnv -> FunctionStatement AnnType -> CGM ()
+consFun :: CGEnv -> FunctionStatement AnnType -> CGM CGEnv  
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = do ft             <- {- TODO: NESTED FUNCTIONS freshTyFun g l $ -} return $ envFindTy f g
+  = do ft             <- freshTyFun g l =<< getDefType f
+       g'             <- envAdds [(f, ft)] g 
        let (αs, ts, t) = fromJust $ bkFun ft
-       g'             <- envAddFun l g f αs xs ts t
-       gm             <- consStmts g' body
-       case gm of 
-         Just g'      -> subType l g' tVoid t
-         Nothing      -> return ()
+       g''            <- envAddFun l g' f αs xs ts t
+       gm             <- consStmts g'' body
+       maybe (return ()) (\g -> subType l g tVoid t) gm
+       return g'
 
 envAddFun l g f αs xs ts t = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
   where  
@@ -168,6 +155,10 @@ consStmt g (ReturnStmt l (Just e))
 -- return
 consStmt g (ReturnStmt l Nothing)
   = return Nothing 
+
+-- function f(x1...xn){ s }
+consStmt g s@(FunctionStmt _ _ _ _)
+  = consFun g s
 
 -- OTHER (Not handled)
 consStmt g s 

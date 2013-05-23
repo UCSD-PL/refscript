@@ -12,6 +12,9 @@ module Language.Nano.Liquid.CGMonad (
   -- * Execute Action and Get FInfo
   , getFInfo 
 
+  -- * Get Defined Function Type Signature
+  , getDefType
+
   -- * Throw Errors
   , cgError      
 
@@ -69,21 +72,28 @@ import           Language.ECMAScript3.Syntax
 -------------------------------------------------------------------------------
 getFInfo       :: NanoRefType -> CGM a -> F.FInfo Cinfo  
 -------------------------------------------------------------------------------
-getFInfo pgm = cgStateFInfo pgm . execute . (>> fixCWs)
+getFInfo pgm = cgStateFInfo pgm . execute pgm . (>> fixCWs)
   where 
     fixCWs   = (,) <$> fixCs <*> fixWs
     fixCs    = concatMapM splitC . cs =<< get 
     fixWs    = concatMapM splitW . ws =<< get
 
-
-execute :: CGM a -> (a, CGState)
-execute act
-  = case runState (runErrorT act) initState of 
+execute :: Nano z RefType -> CGM a -> (a, CGState)
+execute pgm act
+  = case runState (runErrorT act) $ initState pgm of 
       (Left err, _) -> errorstar err
       (Right x, st) -> (x, st)  
 
-initState ::  CGState
-initState = CGS F.emptyBindEnv [] [] 0
+initState :: Nano z RefType -> CGState
+initState pgm = CGS F.emptyBindEnv (defs pgm) [] [] 0
+
+getDefType f 
+  = do m <- cg_defs <$> get
+       maybe err return $ E.envFindTy f m 
+    where 
+       err = cgError l $ errorMissingSpec l f
+       l   = srcPos f
+
 
 cgStateFInfo :: Nano a1 (RType F.Reft)-> (([F.SubC a], [F.WfC a]), CGState) -> F.FInfo a
 cgStateFInfo pgm ((fcs, fws), cg)  
@@ -104,10 +114,11 @@ measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts
 ---------------------------------------------------------------------------------------
 
 data CGState 
-  = CGS { binds :: F.BindEnv  -- ^ global list of fixpoint binders
-        , cs    :: ![SubC]    -- ^ subtyping constraints
-        , ws    :: ![WfC]     -- ^ well-formedness constraints
-        , count :: !Integer   -- ^ freshness counter
+  = CGS { binds   :: F.BindEnv        -- ^ global list of fixpoint binders
+        , cg_defs :: !(E.Env RefType) -- ^ type sigs for all defined functions
+        , cs      :: ![SubC]          -- ^ subtyping constraints
+        , ws      :: ![WfC]           -- ^ well-formedness constraints
+        , count   :: !Integer         -- ^ freshness counter
         }
 
 

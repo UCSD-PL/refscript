@@ -32,14 +32,16 @@ import           Language.ECMAScript3.PrettyPrint
 --------------------------------------------------------------------------------
 verifyFile :: FilePath -> IO (F.FixResult SourcePos)
 --------------------------------------------------------------------------------
-verifyFile f = (either unsafe safe . execute . tcNano . ssaTransform) =<< parseNanoFromFile f
+verifyFile f = tc =<< parseNanoFromFile f
+  where 
+   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
 -------------------------------------------------------------------------------
-typeCheck :: (F.Reftable r) => Nano AnnSSA (RType r) -> Nano AnnType (RType r) 
+typeCheck     :: (F.Reftable r) => Nano AnnSSA (RType r) -> Nano AnnType (RType r) 
 -------------------------------------------------------------------------------
-typeCheck = either crash id . execute . tcNano  
+typeCheck pgm = either crash id . execute pgm . tcNano $ pgm 
   where 
-    crash = errorstar . render . vcat . map (text . ppErr)
+    crash     = errorstar . render . vcat . map (text . ppErr)
 
 -- DEBUG MODE
 -- verifyFile f 
@@ -80,10 +82,8 @@ tcNano p@(Nano {code = Src fs})
 
 tcNano'     :: Nano AnnSSA Type -> TCM AnnInfo  
 tcNano' pgm@(Nano {code = Src fs}) 
-  = do setTyBindings (env pgm)
-       γ' <- tcStmts γ0 fs
-       -- forM_ fs $ tcFun (env pgm)
-       M.unions <$> getAllAnns 
+  = do tcStmts (specs pgm) fs
+       M.unions <$> getAllAnns
 
 patchAnn              :: AnnInfo -> AnnSSA -> AnnType
 patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
@@ -103,19 +103,22 @@ type TCEnv = Maybe (Env Type)
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-tcFun    :: Env Type -> FunctionStatement AnnSSA -> TCM () 
+tcFun    :: Env Type -> FunctionStatement AnnSSA -> TCM TCEnv 
 tcFun γ (FunctionStmt l f xs body) 
-  = do (αs, ts, t) <- funTy l γ f xs
+  = do (ft, (αs, ts, t)) <- funTy l f xs
+       let γ' = envAdds [(f, ft)] γ
        accumAnn (catMaybes . map (validInst αs) . M.toList) $  
-         do let γ'          = envAddFun l f αs xs ts t γ 
-            q              <- tcStmts γ' body
+         do let γ''         = envAddFun l f αs xs ts t γ'
+            q              <- tcStmts γ'' body
             when (isJust q) $ unifyType l "Missing return" f tVoid t
+       return $ Just γ' 
 
-funTy l γ f xs 
-  = case bkFun =<< envFindTy f γ of
-      Nothing        -> tcError l $ errorUnboundId f
-      Just (αs,ts,t) -> do when (length xs /= length ts) $ tcError l $ errorArgMismatch
-                           return (αs,ts,t)
+funTy l f xs 
+  = do ft <- getDefType f 
+       case bkFun ft of
+         Nothing        -> tcError l $ errorUnboundId f
+         Just (αs,ts,t) -> do when (length xs /= length ts) $ tcError l $ errorArgMismatch
+                              return (ft, (αs, ts, t))
 
 envAddFun l f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
   where  
@@ -186,9 +189,12 @@ tcStmt γ (ReturnStmt l eo)
        unifyType l "Return" eo t $ envFindReturn γ 
        return Nothing
 
+tcStmt γ s@(FunctionStmt _ _ _ _)
+  = tcFun γ s
+
 -- OTHER (Not handled)
 tcStmt γ s 
-  = convertError "tcStmt" s
+  = convertError "TC Cannot Handle: tcStmt" s
 
 -------------------------------------------------------------------------------
 tcVarDecl :: Env Type -> VarDecl AnnSSA -> TCM TCEnv  

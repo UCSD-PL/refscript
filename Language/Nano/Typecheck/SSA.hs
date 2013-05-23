@@ -38,7 +38,8 @@ ssaNano :: (PP t) => Nano SourcePos t -> SSAM (Nano AnnSSA t)
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano {code = Src fs}) 
   = do -- fs'    <- forM fs $ T.mapM stripAnn
-       addImmutables $ envMap (\_ -> ()) (env    p) 
+       addImmutables $ envMap (\_ -> ()) (specs p) 
+       addImmutables $ envMap (\_ -> ()) (defs  p) 
        addImmutables $ envMap (\_ -> ()) (consts p) 
        fs''   <- mapM ssaFun fs
        anns   <- getAnns

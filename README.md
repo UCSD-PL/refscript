@@ -17,14 +17,8 @@ Dependencies
 HW 2 Release Checklist
 ----------------------
 
-* Add safehead/safetail versions
+* Fix: tests/liquid/pos/safeList.js
 
-* Add vanilla "list-lengths" test with 
-
-    - append
-    - reverse
-    - map
-    
 * Remove all GHC make "warnings"
 
 * Make hw-liquid branch 
@@ -35,6 +29,11 @@ HW 2 Release Checklist
 
 * Copy over to algo-verif repo
 
+* Update GOTO haddocks
+    
+    - liquid-fixpoint
+    - nano-js [generate from algo-verif-repo]
+    
 * RELEASE
 
 Homework Plan

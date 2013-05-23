@@ -274,5 +274,10 @@ getPhiType l γ1 γ2 x
       (Just t1, Just t2) -> if (t1 == t2) 
                               then return t1 
                               else tcError l $ errorJoin x t1 t2
-      (_      , _      ) -> tcError l $ bugUnboundPhiVar x
-      
+      (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
+                              then tcError l $ "Oh no, the HashMap GREMLIN is back...1"
+                              else tcError l $ bugUnboundPhiVar x
+
+forceCheck x γ 
+  = elem x $ fst <$> envToList γ
+

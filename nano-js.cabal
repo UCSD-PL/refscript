@@ -21,10 +21,11 @@ data-files:          README.md,
 executable nanojs
   build-depends:       base, 
                        pretty, 
-                       hashable >= 1.2.0.7, 
+                       hashable, 
+                       -- hashable < 1.2, 
                        unordered-containers, 
                        filepath, ansi-terminal, process, mtl, syb, cmdargs,
-                       liquid-fixpoint, parsec, language-ecmascript 
+                       liquid-fixpoint, parsec, language-ecmascript-pp
 
   extensions:          ExistentialQuantification, 
                        FlexibleInstances, 

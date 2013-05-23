@@ -7,15 +7,15 @@ function forloop(lo, hi, body, acc){
   return acc;
 }
 
-/*@ step :: (list [int], int, int) => int */
-function step(b, i, min){
-  if (nth(b, i) < nth(b, min)) { 
-      return i;
-  } 
-  return min; 
-}
 
 /*@ minIndex :: ({a:list [int] | 0 < (len a)}) => {v:int | (0 <= v && v < (len a))} */ 
 function minIndex(a){
+  /*@ step :: (int, int) => int */
+  function step(i, min){
+    if (nth(a, i) < nth(a, min)) { 
+      return i;
+    } 
+    return min; 
+  };
   return forloop(0, length(a), step, 0);
 }

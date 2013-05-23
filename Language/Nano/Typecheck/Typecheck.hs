@@ -27,13 +27,6 @@ import           Language.Fixpoint.Misc
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
-
--- main cfg 
---   = do rs   <- mapM verifyFile $ files cfg
---        let r = mconcat rs
---        donePhase (F.colorResult r) (render $ pp r) 
---        exitWith (resultExit r)
-
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
@@ -47,7 +40,6 @@ typeCheck :: (F.Reftable r) => Nano AnnSSA (RType r) -> Nano AnnType (RType r)
 typeCheck = either crash id . execute . tcNano  
   where 
     crash = errorstar . render . vcat . map (text . ppErr)
- 
 
 -- DEBUG MODE
 -- verifyFile f 
@@ -88,7 +80,9 @@ tcNano p@(Nano {code = Src fs})
 
 tcNano'     :: Nano AnnSSA Type -> TCM AnnInfo  
 tcNano' pgm@(Nano {code = Src fs}) 
-  = do forM_ fs $ tcFun (env pgm)
+  = do setTyBindings (env pgm)
+       γ' <- tcStmts γ0 fs
+       -- forM_ fs $ tcFun (env pgm)
        M.unions <$> getAllAnns 
 
 patchAnn              :: AnnInfo -> AnnSSA -> AnnType
@@ -116,12 +110,6 @@ tcFun γ (FunctionStmt l f xs body)
          do let γ'          = envAddFun l f αs xs ts t γ 
             q              <- tcStmts γ' body
             when (isJust q) $ unifyType l "Missing return" f tVoid t
-       
-       
-       -- annm           <- getAnns
-       -- mapM_ (validInst αs) (M.toList annm)
-       -- return          $ annm
-     
 
 funTy l γ f xs 
   = case bkFun =<< envFindTy f γ of

@@ -14,6 +14,29 @@ Dependencies
 * git clone git@github.com:UCSD-PL/language-ecmascript.git
 * nano-js
 
+HW 2 Release Checklist
+----------------------
+
+* Add safehead/safetail versions
+
+* Add vanilla "list-lengths" test with 
+
+    - append
+    - reverse
+    - map
+    
+* Remove all GHC make "warnings"
+
+* Make hw-liquid branch 
+
+    - NUKE ESC
+    - EDIT Liquid.hs
+    - EDIT tests (remove quals/spec)
+
+* Copy over to algo-verif repo
+
+* RELEASE
+
 Homework Plan
 -------------
 
@@ -80,5 +103,4 @@ grumble about "unbound variable" (due to missing key in envFindTy)
 
     you get the error in:
         tests/liquid/pos/locks-cond.js
-
 

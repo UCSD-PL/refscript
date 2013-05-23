@@ -28,7 +28,7 @@ import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
-import           Language.Nano.Typecheck.SSA
+import           Language.Nano.SSA.SSA
 
 import qualified Language.Nano.Env as E 
 import           Language.Nano.Liquid.Types

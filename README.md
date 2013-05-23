@@ -74,5 +74,11 @@ grumble about "unbound variable" (due to missing key in envFindTy)
     when it doesn't if you change the name to "forLoop" or
     "humphreyAppleby" it works fine!
 
-Failed 3 tests: liquid/pos/locks-cond.js, liquid/pos/minindex01.js, liquid/pos/twice.js
+    using: 
+        ~/research/liquid/hsenv
+        hashable-1.2.0.7
+
+    you get the error in:
+        tests/liquid/pos/locks-cond.js
+
 

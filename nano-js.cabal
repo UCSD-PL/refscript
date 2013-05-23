@@ -57,13 +57,18 @@ executable nanojs
 --  
 --   Exposed-Modules:     Language.Nano.Errors,
 --                        Language.Nano.Types,
+--                        Language.Nano.Files,
 --                        Language.Nano.CmdLine,
 --                        Language.Nano.ESC.Types,
 --                        Language.Nano.ESC.VCMonad, 
 --                        Language.Nano.ESC.ESC,
+--                        Language.Nano.SSA.SSA,
+--                        Language.Nano.SSA.SSAMonad,
 --                        Language.Nano.Typecheck.Types,
 --                        Language.Nano.Typecheck.TCMonad,
 --                        Language.Nano.Typecheck.Typecheck,
---                        Language.Nano.Typecheck.SSA,
 --                        Language.Nano.Typecheck.Parse,
---                        Language.Nano.Files
+--                        Language.Nano.Liquid.Types,
+--                        Language.Nano.Liquid.Liquid,
+--                        Language.Nano.Liquid.CGMonad
+

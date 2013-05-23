@@ -39,7 +39,7 @@ verifyFile     :: FilePath -> IO (F.FixResult SourcePos)
 --------------------------------------------------------------------------------
 verifyFile f   = reftypeCheck f . typeCheck . ssaTransform' =<< parseNanoFromFile f
 
-ssaTransform' x = {- tracePP "SSATX" $ -} ssaTransform x 
+ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
 reftypeCheck   :: FilePath -> Nano AnnType RefType -> IO (F.FixResult SourcePos)
 reftypeCheck f = solveConstraints f . generateConstraints  

@@ -1,28 +1,28 @@
 /*@ idt :: forall A. (A) => A */
 function idt(x) { return x;}
 
-/*@ twice :: forall A. ((A) => A, A) => A */
-function twice(f, x0){
+/*@ apply :: forall A B. ((A) => B, A) => B */
+function apply(f, x0){
   var x1 = f(x0);
-  var x1 = f(x1);
   return x1;
 }
 
-/*@ main :: (x:int, boolean) => { v:int |v >= x} */
+/*@ main :: (x:int, boolean) => { v:int |v > x} */
 function main(x,y){
   var yr = idt(y);
   var xr = idt(x);
-  var z  = 1;
+  var z  = 0;
   if (yr) {
     z = 10;
   }
 
-  assert (z > 0);
-
   /*@ plus :: (int) => int */
   function plus(a){ return a + z };
+  
+  xr = apply(plus, xr);
+  xr = apply(plus, xr);
 
-  return twice(plus, xr);
+  return xr;
 }
  
 

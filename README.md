@@ -63,3 +63,16 @@ Include
   >> recursively traverse all files
           traverseFiles :: (FilePath -> IO [FilePath]) -> FilePath -> IO [FilePath]
 
+HashMap.Strict Container MADNESS
+--------------------------------
+
+    tests/liquid/pos/minindex01.js
+
+grumble about "unbound variable" (due to missing key in envFindTy)
+
+    sometimes it works with "forloop" sometimes doesn't!
+    when it doesn't if you change the name to "forLoop" or
+    "humphreyAppleby" it works fine!
+
+Failed 3 tests: liquid/pos/locks-cond.js, liquid/pos/minindex01.js, liquid/pos/twice.js
+

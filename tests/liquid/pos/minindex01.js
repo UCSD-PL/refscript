@@ -1,16 +1,17 @@
 /*@ qualif UBound(v:int, x:a) : v < (len x) */
 
-/*@ forLoop :: forall A. (int, int, (int, A) => A, A) => A */
-function forLoop(lo, hi, body, acc){
+/*@ forloop :: forall A. (int, int, (int, A) => A, A) => A */
+function forloop(lo, hi, body, accum){
   if (lo < hi) {
-    var newAcc = body(lo, acc);
-    return forLoop(lo + 1, hi, body, newAcc);
+    var newAcc = body(lo, accum);
+    return forloop(lo + 1, hi, body, newAcc);
   }
-  return acc;
+  return accum;
 }
 
 /*@ minIndex :: ({a:list [int] | 0 < (len a)}) => {v:int | (0 <= v && v < (len a))} */ 
 function minIndex(a){
+  
   /*@ step :: (int, int) => int */
   function step(i, min){
     if (nth(a, i) < nth(a, min)) { 
@@ -18,5 +19,5 @@ function minIndex(a){
     } 
     return min; 
   };
-  return forLoop(0, length(a), step, 0);
+  return forloop(0, length(a), step, 0);
 }

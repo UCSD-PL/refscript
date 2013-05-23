@@ -98,10 +98,12 @@ function pos(){
 /*@ qualif CmpZ(v:int)    : v >= 0           */    
 /*@ qualif CmpZ(v:int)    : v =  0           */
 /*@ qualif CmpZ(v:int)    : v != 0           */
-/*@ qualif Cmp(v:a,x:a)   : v <  x           */    
-/*@ qualif Cmp(v:a,x:a)   : v <= x           */    
-/*@ qualif Cmp(v:a,x:a)   : v >  x           */    
-/*@ qualif Cmp(v:a,x:a)   : v >= x           */    
+
+/*@ qualif Cmp(v:int, x:int)   : v <  x           */    
+/*@ qualif Cmp(v:int, x:int)   : v <= x           */    
+/*@ qualif Cmp(v:int, x:int)   : v >  x           */    
+/*@ qualif Cmp(v:int, x:int)   : v >= x           */    
+
 /*@ qualif Cmp(v:a,x:a)   : v =  x           */    
 /*@ qualif Cmp(v:a,x:a)   : v != x           */    
 /*@ qualif One(v:int)     : v = 1            */

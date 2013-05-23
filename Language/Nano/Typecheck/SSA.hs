@@ -172,7 +172,14 @@ ssaExpr e@(BoolLit _ _)
 
 ssaExpr e@(VarRef l x)
   = do imm <- isImmutable x
-       if imm then return e else (VarRef l <$> findSsaEnv x)
+       xo  <- findSsaEnv x
+       case xo of
+         Just z  -> return $ VarRef l z
+         Nothing -> if imm 
+                      then return e 
+                      else ssaError (srcPos x) $ errorUnboundId x 
+                      
+                       -- errorUnboundIdEnv x ns 
 
 ssaExpr (PrefixExpr l o e)
   = PrefixExpr l o <$> ssaExpr e
@@ -311,14 +318,14 @@ newId :: SourcePos -> Id SourcePos -> Int -> Id SourcePos
 newId l (Id _ x) n = Id l (x ++ "_" ++ show n)  
 
 -------------------------------------------------------------------------------
-findSsaEnv   :: Id SourcePos -> SSAM (Id SourcePos) 
+findSsaEnv   :: Id SourcePos -> SSAM (Maybe (Id SourcePos))
 -------------------------------------------------------------------------------
 findSsaEnv x 
   = do θ  <- names <$> get 
        -- ns <- allNames  
        case envFindTy x θ of 
-         Just (SI i) -> return i 
-         Nothing     -> ssaError (srcPos x) $ errorUnboundId x -- errorUnboundIdEnv x ns 
+         Just (SI i) -> return $ Just i 
+         Nothing     -> return Nothing 
 
 allNames = do xs <- map fst . envToList . names      <$> get
               ys <- map fst . envToList . immutables <$> get

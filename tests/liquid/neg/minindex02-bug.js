@@ -2,7 +2,7 @@
 
 /*@ range :: (int, int) => list [int] */
 function range(lo, hi) {
-  if (lo < hi) { 
+  if (lo <= hi) { 
     var rest = range(lo + 1, hi); 
     return cons(lo, rest); 
   }
@@ -31,6 +31,6 @@ function minIndex(a){
    };
    
    return foldl(step, 0, range(0, length(a)));
-}
+ }
 
 

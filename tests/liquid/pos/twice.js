@@ -1,7 +1,3 @@
-/*@ idt :: forall A. (A) => A */
-function idt(x0){
-  return x0;
-}
 
 /*@ twice :: forall A. ((A) => A, A) => A */
 function twice(f, x0){
@@ -22,12 +18,6 @@ function foo(x){
 }
  
 /*@ main :: (x:int) => {v:int |v >= x} */
-function main(goop){
-  return twice(foo, goop);
+function main(x){
+  return twice(foo, x);
 }
-
-
-// (zog:int) => {v>=zog} <: (v1:K1[v1/v2]) => {v2: K1}
-//    K1 <: zog 
-
-

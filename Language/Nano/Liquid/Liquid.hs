@@ -270,7 +270,7 @@ consCall g l z es ft
     where 
        msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)
 
-instantiate l g t = tracePP msg  <$> freshTyInst l g αs τs tbody 
+instantiate l g t = {- tracePP msg  <$> -} freshTyInst l g αs τs tbody 
   where 
     (αs, tbody)   = bkAll t
     τs            = getTypArgs l αs 

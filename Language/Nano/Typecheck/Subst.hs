@@ -111,9 +111,10 @@ appTy (Su m) (TAll α t)    = apply (Su $ M.delete α m) t
 -----------------------------------------------------------------------------
 unify :: Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
-unify θ (TFun xts t _) (TFun xts' t' _) = unifys  θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
-unify θ (TVar α _) t                    = varAsgn θ α t 
-unify θ t (TVar α _)                    = varAsgn θ α t
+unify θ (TFun xts t _) (TFun xts' t' _) = unifys θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
+unify θ (TVar α _) (TVar β _)           = varEql θ α β 
+unify θ (TVar α _) t                    = varAsn θ α t 
+unify θ t (TVar α _)                    = varAsn θ α t
 unify θ (TApp c ts _) (TApp c' ts' _) 
   | c == c'                             = unifys  θ ts ts'
 unify θ t t' 
@@ -134,13 +135,20 @@ unifys' θ ts ts'
     go θ (t:ts , t':ts') = unify θ t t' >>= \θ' -> go θ' (mapPair (apply θ') (ts, ts'))
     go θ ([]   , []    ) = return θ 
 
-varAsgn θ α t 
+
+varEql θ α β = case varAsn θ α (tVar β) of 
+                 z@(Right _) -> z
+                 (Left e1)   -> case varAsn θ β (tVar α) of
+                                  z@(Right _) -> z
+                                  (Left e2)   -> Left (e1 ++ "\n OR \n" ++ e2) 
+ 
+varAsn θ α t 
   | t == tVar α         = Right $ θ 
-  | α `S.member` free t = Left  $ printf "Occur check fails: %s in %s" (ppshow α) (ppshow t)
+  | α `S.member` free t = Left  $ errorOccursCheck α t 
   | unassigned α θ      = Right $ θ `mappend` (Su $ M.singleton α t) 
-  | otherwise           = Left  $ printf "Cannot unify rigid variable %s with %s" (ppshow α) (ppshow t) 
+  | otherwise           = Left  $ errorRigidUnify α t
   
 unassigned α (Su m) = M.lookup α m == Just (tVar α)
-
+ 
 
 

@@ -28,7 +28,7 @@ function reverse(xs){
   /*@ go :: (list [A], list[A]) => list [A] */ 
   function go(acc, ys){
     if (empty(ys)){
-      return acc;
+      return ys; 
     }
     var y    = safehead(ys);
     var ys_  = safetail(ys);

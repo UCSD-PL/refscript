@@ -82,16 +82,25 @@ import           Control.Applicative
 import           Control.Monad.Error ()
 
 -- | Type Variables
-newtype TVar = TV F.Symbol deriving (Eq, Show, Ord)
+data TVar = TV { tv_sym :: F.Symbol
+               , tv_loc :: SourcePos 
+               }
+            deriving (Show, Ord)
+
+instance Eq TVar where 
+  a == b = tv_sym a == tv_sym b
+
+instance IsLocated TVar where 
+  srcPos = tv_loc
 
 instance Hashable TVar where 
-  hashWithSalt i (TV a) = hashWithSalt i a
-
-instance PP TVar where 
-  pp (TV x) = pprint x
+  hashWithSalt i α = hashWithSalt i $ tv_sym α 
 
 instance F.Symbolic TVar where
-  symbol (TV α) = α  
+  symbol = tv_sym 
+
+instance PP TVar where 
+  pp     = pprint . F.symbol
 
 instance F.Symbolic a => F.Symbolic (Located a) where 
   symbol = F.symbol . val

@@ -91,7 +91,7 @@ bbaseP
  <|> try ((`TApp` []) <$> tconP)
 
 tvarP :: Parser TVar
-tvarP = TV <$> (stringSymbol <$> upperWordP) 
+tvarP = TV <$> (stringSymbol <$> upperWordP) <*> getPosition
 
 upperWordP :: Parser String
 upperWordP = condIdP nice (not . isLower . head)

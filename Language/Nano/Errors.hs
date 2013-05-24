@@ -27,7 +27,9 @@ errorBoundTyVar a t     = printf "Cannot unify bound type parameter %s with %s" 
 errorFreeTyVar t        = printf "Type not fully instantiated: %s" (ppshow t)
 errorWriteImmutable x   = printf "Cannot write immutable: %s" (ppshow x)
 errorInvalidTopStmt x   = printf "Invalid top-level statement: %s" (ppshow x) 
-
+errorOccursCheck a t    = printf "Occurs check fails: %s in %s" (ppshow a) (ppshow t)
+errorRigidUnify a t     = printf "Cannot unify rigid variable %s with %s" (ppshow a) (ppshow t) 
+ 
 ppshow                  = render . pp
 
 tracePP     ::  (PP a) => String -> a -> a

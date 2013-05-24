@@ -55,30 +55,21 @@ HW 3
 3a. VCG for Refinement Type Checking            [Hard]
 3b. Consgen = VCG+K for Liquid Inference via FIXPOINT
 
-Liquid Nano-JS
---------------
+MAJOR REMAINING FEATURES
+------------------------
 
-* Bells and whistles
     + HTML annot
-    
     - Scrape Qualifiers
+    - unions
     - Records
 
 Tests
 -----
-    
-    arrays
-            DOTPROD?
-            KMP?
-            mapreduce/kmeans?
-            kmeans.js
 
-    measures: 
-            cons  :: forall A. (x:A, xs:List A) -> {v: List A | (len v) = 1 + (len xs)}
-            nil   :: forall A. () -> {v: List A | (len v) = 0}
-            head  :: forall A. (xs:{v: List A | 0 < (len v)}) -> A 
-            tail  :: forall A. (xs:{v: List A | 0 < (len v)}) -> {v: List A | (len v) = (len xs) - 1 }
-            empty :: forall A. (xs:List A) -> {v: Bool | (Prop v) <=> ((len v) = 0) }
+    DOTPROD?
+    KMP?
+    mapreduce?
+    kmeans?
 
 Include
 -------
@@ -106,9 +97,4 @@ grumble about "unbound variable" (due to missing key in envFindTy)
 
     you get the error in:
         tests/liquid/pos/locks-cond.js
-
-
-
-HEREHEREHEREHERE
-- Fix the silly scoped tvar issue. add Tvar (or figure out ENV tvars from Gamma.)
 

@@ -106,7 +106,7 @@ freshTyArgs l (αs, t)
 
 freshSubst :: SourcePos -> [TVar] -> TCM Subst
 freshSubst l αs
-  = do βs <- fresh αs
+  = do βs <- mapM (freshTVar l) αs
        setTyArgs l βs
        extSubst βs 
        return $ fromList $ zip αs (tVar <$> βs)
@@ -186,11 +186,14 @@ tick = do st    <- get
 class Freshable a where 
   fresh :: a -> TCM a 
 
-instance Freshable TVar where 
-  fresh _ = TV . F.intSymbol "T" <$> tick
+-- instance Freshable TVar where 
+--   fresh _ = TV . F.intSymbol "T" <$> tick
 
 instance Freshable a => Freshable [a] where 
   fresh = mapM fresh
+
+freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
+              
 
 ----------------------------------------------------------------------------------
 unifyTypes :: (IsLocated l) => l -> String -> [Type] -> [Type] -> TCM Subst

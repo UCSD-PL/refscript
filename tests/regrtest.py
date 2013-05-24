@@ -92,10 +92,11 @@ options, args = parser.parse_args()
 ## runner    = rtest.TestRunner (Config ("nanojs esc", options.opts, testdirs, logfile, options.threadcount))
 ## runner.run ()
 ## 
+
 ## # tc Tests
-## testdirs  = [ ("tc/pos", 0), ("tc/neg", 1) ]
-## runner    = rtest.TestRunner (Config ("nanojs tc", options.opts, testdirs, logfile, options.threadcount))
-## runner.run ()
+testdirs  = [ ("tc/pos", 0), ("tc/neg", 1) ]
+runner    = rtest.TestRunner (Config ("nanojs tc", options.opts, testdirs, logfile, options.threadcount))
+runner.run ()
 
 # liquid Tests
 testdirs  = [ ("liquid/pos", 0), ("liquid/neg", 1) ]

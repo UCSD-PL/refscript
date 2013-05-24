@@ -122,19 +122,18 @@ funTy l f xs
 
 envAddFun l f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
   where  
-    tyBinds              = [(Loc (srcPos l) α, tVar α) | α <- αs]
+    tyBinds              = [(tVarId α, tVar α) | α <- αs]
     varBinds             = zip
-
+    
+    -- tyBinds              = [(Loc (srcPos l) α, tVar α) | α <- αs]
 
 validInst γ (l, ts)
-  = case S.toList (βS `S.difference` αS) of 
+  = case [β | β <- S.toList $ free ts, not ((tVarId β) `envMem` γ)] of
       [] -> Nothing
-      βs -> Just (l, errorFreeTyVar βs) 
-    where 
-      βS = free ts
-      αS = S.fromList αs
-
-
+      βs -> Just (l, errorFreeTyVar βs)
+   
+-- | Strings ahead: HACK Alert
+tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a   
 
 --------------------------------------------------------------------------------
 tcSeq :: (Env Type -> a -> TCM TCEnv) -> Env Type -> [a] -> TCM TCEnv

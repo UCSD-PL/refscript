@@ -73,25 +73,27 @@ consFun :: CGEnv -> FunctionStatement AnnType -> CGM CGEnv
 consFun g (FunctionStmt l f xs body) 
   = do ft             <- freshTyFun g l =<< getDefType f
        g'             <- envAdds [(f, ft)] g 
-       let (αs, ts, t) = fromJust $ bkFun ft
-       g''            <- envAddFun l g' f αs xs ts t
+       g''            <- envAddFun l g' f xs ft
        gm             <- consStmts g'' body
-       maybe (return ()) (\g -> subType l g tVoid t) gm
+       maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
        return g'
 
-envAddFun l g f αs xs yts t = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
+-----------------------------------------------------------------------------------
+envAddFun :: AnnType -> CGEnv -> Id AnnType -> [Id AnnType] -> RefType -> CGM CGEnv
+-----------------------------------------------------------------------------------
+envAddFun l g f xs ft = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
   where  
-    tyBinds                 = [(Loc (srcPos l) α, tVar α) | α <- αs]
-    varBinds                = safeZip "envAddFun"
-    (su, ts')               = renameBinds yts xs 
-    t'                      = F.subst su t
+    (αs, yts, t)      = fromJust $ bkFun ft
+    tyBinds           = [(Loc (srcPos l) α, tVar α) | α <- αs]
+    varBinds          = safeZip "envAddFun"
+    (su, ts')         = renameBinds yts xs 
+    t'                = F.subst su t
 
 renameBinds yts xs   = (su, [F.subst su ty | B _ ty <- yts])
   where 
     su               = F.mkSubst $ safeZipWith "renameArgs" fSub yts xs 
     fSub yt x        = (b_sym yt, F.eVar x)
     
-
 -- checkFormal x t 
 --   | xsym == tsym = (x, t)
 --   | otherwise    = errorstar $ errorArgName (srcPos x) xsym tsym

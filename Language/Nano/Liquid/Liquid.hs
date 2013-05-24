@@ -181,7 +181,7 @@ envJoin' :: AnnType -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 
 -- HINT: 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
 --       2. use @freshTy@ to generate fresh types (and an extended environment with 
---          the fresh-type bindings) for all the phi-vars using the un-refined types 
+--          the fresh-type bindings) for all the phi-vars using the unrefined types 
 --          from step 1.
 --       3. generate subtyping constraints between the types from step 1 and the fresh types
 --       4. return the extended environment.
@@ -255,7 +255,8 @@ consExpr g e
 --   instead of unification.
 --
 --   1. Fill in @instantiate@ to get a monomorphic instance of @ft@ 
---      i.e. the callee's RefType, at this call-site
+--      i.e. the callee's RefType, at this call-site (You may want 
+--      to use @freshTyInst@)
 --   2. Use @consExpr@ to determine types for arguments @es@
 --   3. Use @subTypes@ to add constraints between the types from (step 2) and (step 1)
 --   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in output type of callee.
@@ -269,10 +270,12 @@ consCall g l z es ft
     where 
        msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)
 
-instantiate l g t = tracePP (printf "instantiate %s %s" (ppshow αs) (ppshow tbody)) <$> freshTyInst l g αs τs tbody 
+instantiate l g t = tracePP msg  <$> freshTyInst l g αs τs tbody 
   where 
     (αs, tbody)   = bkAll t
     τs            = getTypArgs l αs 
+    msg           = printf "instantiate %s %s" (ppshow αs) (ppshow tbody)
+
 
 getTypArgs :: AnnType -> [TVar] -> [Type] 
 getTypArgs l αs

@@ -27,7 +27,7 @@ module Language.Nano.Liquid.Types (
   , RefTypable (..)
   , eSingleton
   , pSingleton
-  , shiftVVs
+  -- , shiftVVs
 
   -- * Manipulating RefType
   , rTypeReft
@@ -180,12 +180,12 @@ pSingleton t p  = t `strengthen` (F.propReft p)
 -- pSingleton t p  = (rType t) `strengthen` (F.propReft p)
 
 
-shiftVVs :: (F.Symbolic x) => [RefType] -> [x] -> (F.Subst, [RefType])
-shiftVVs ts xs = (su, ts')
-  where 
-    ts'        = F.subst su $ safeZipWith "shiftVV1" shiftVV ts xs
-    su         = F.mkSubst  $ catMaybes $ safeZipWith "shiftVV2" fSub ts xs 
-    fSub t x   = if isBaseRType t then Just (F.symbol t, F.eVar x) else Nothing
+-- shiftVVs :: (F.Symbolic x) => [RefType] -> [x] -> (F.Subst, [RefType])
+-- shiftVVs ts xs = (su, ts')
+--   where 
+--     ts'        = F.subst su $ safeZipWith "shiftVV1" shiftVV ts xs
+--     su         = F.mkSubst  $ catMaybes $ safeZipWith "shiftVV2" fSub ts xs 
+--     fSub t x   = if isBaseRType t then Just (F.symbol t, F.eVar x) else Nothing
 
 -- shiftVVs :: (F.Symbolic x) => [RefType] -> [x] -> (F.Subst, [RefType])
 -- shiftVVs ts xs = (su, ts')
@@ -193,10 +193,10 @@ shiftVVs ts xs = (su, ts')
 --     ts'        = F.subst su $ safeZipWith "shiftVV1" shiftVV ts xs
 --     su         = F.mkSubst  $ safeZipWith "shiftVV2" (\t x -> (F.symbol t, F.eVar x)) ts xs 
 
-shiftVV t@(TApp c ts r) x = TApp c ts $ r `F.shiftVV` (F.symbol x)
-shiftVV t@(TVar a r)    x = TVar a    $ r `F.shiftVV` (F.symbol x)
--- shiftVV t@(TFun ts t r) x = TFun ts t $ r `F.shiftVV` (F.symbol x)
-shiftVV t _               = t
+-- shiftVV t@(TApp c ts r) x = TApp c ts $ r `F.shiftVV` (F.symbol x)
+-- shiftVV t@(TVar a r)    x = TVar a    $ r `F.shiftVV` (F.symbol x)
+-- -- shiftVV t@(TFun ts t r) x = TFun ts t $ r `F.shiftVV` (F.symbol x)
+-- shiftVV t _               = t
 
 
 instance (F.Reftable r) => F.Symbolic (RType r) where 

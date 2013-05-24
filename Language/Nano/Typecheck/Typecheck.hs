@@ -106,10 +106,10 @@ type TCEnv = Maybe (Env Type)
 tcFun    :: Env Type -> FunctionStatement AnnSSA -> TCM TCEnv 
 tcFun γ (FunctionStmt l f xs body) 
   = do (ft, (αs, ts, t)) <- funTy l f xs
-       let γ' = envAdds [(f, ft)] γ
-       accumAnn (catMaybes . map (validInst αs) . M.toList) $  
-         do let γ''         = envAddFun l f αs xs ts t γ'
-            q              <- tcStmts γ'' body
+       let γ'  = envAdds [(f, ft)] γ
+       let γ'' = envAddFun l f αs xs ts t γ'
+       accumAnn (catMaybes . map (validInst γ'') . M.toList) $  
+         do q              <- tcStmts γ'' body
             when (isJust q) $ unifyType l "Missing return" f tVoid t
        return $ Just γ' 
 
@@ -125,13 +125,15 @@ envAddFun l f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddR
     tyBinds              = [(Loc (srcPos l) α, tVar α) | α <- αs]
     varBinds             = zip
 
-validInst αs (l, ts)
+
+validInst γ (l, ts)
   = case S.toList (βS `S.difference` αS) of 
       [] -> Nothing
       βs -> Just (l, errorFreeTyVar βs) 
     where 
       βS = free ts
       αS = S.fromList αs
+
 
 
 --------------------------------------------------------------------------------

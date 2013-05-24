@@ -70,7 +70,6 @@ import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 import           Text.Parsec.Pos    (initialPos)
 import           Control.Applicative 
-
   
 -------------------------------------------------------------------------------------
 ----- | Refinement Types and Environments -------------------------------------------
@@ -115,9 +114,9 @@ instance IsLocated Cinfo where
 instance F.Fixpoint Cinfo where 
   toFix = pp
 
--------------------------------------------------------------------------------------
--- | Constraints --------------------------------------------------------------------
--------------------------------------------------------------------------------------
+----------------------------------------------------------------------------
+-- | Constraints -----------------------------------------------------------
+----------------------------------------------------------------------------
 
 -- | Subtyping Constraints
 
@@ -172,36 +171,6 @@ eSingleton t e  = t `strengthen` (F.exprReft e)
 
 pSingleton      :: (F.Predicate p) => RefType -> p -> RefType 
 pSingleton t p  = t `strengthen` (F.propReft p)
-
--- eSingleton      :: (F.Expression e) => Type -> e -> RefType 
--- eSingleton t e  = (rType t) `strengthen` (F.exprReft e)
--- 
--- pSingleton      :: (F.Predicate p) => Type -> p -> RefType 
--- pSingleton t p  = (rType t) `strengthen` (F.propReft p)
-
-
--- shiftVVs :: (F.Symbolic x) => [RefType] -> [x] -> (F.Subst, [RefType])
--- shiftVVs ts xs = (su, ts')
---   where 
---     ts'        = F.subst su $ safeZipWith "shiftVV1" shiftVV ts xs
---     su         = F.mkSubst  $ catMaybes $ safeZipWith "shiftVV2" fSub ts xs 
---     fSub t x   = if isBaseRType t then Just (F.symbol t, F.eVar x) else Nothing
-
--- shiftVVs :: (F.Symbolic x) => [RefType] -> [x] -> (F.Subst, [RefType])
--- shiftVVs ts xs = (su, ts')
---   where 
---     ts'        = F.subst su $ safeZipWith "shiftVV1" shiftVV ts xs
---     su         = F.mkSubst  $ safeZipWith "shiftVV2" (\t x -> (F.symbol t, F.eVar x)) ts xs 
-
--- shiftVV t@(TApp c ts r) x = TApp c ts $ r `F.shiftVV` (F.symbol x)
--- shiftVV t@(TVar a r)    x = TVar a    $ r `F.shiftVV` (F.symbol x)
--- -- shiftVV t@(TFun ts t r) x = TFun ts t $ r `F.shiftVV` (F.symbol x)
--- shiftVV t _               = t
-
-
-instance (F.Reftable r) => F.Symbolic (RType r) where 
-  symbol = rTypeValueVar 
-
 
 ------------------------------------------------------------------------------
 -- | Converting RType to Fixpoint --------------------------------------------
@@ -339,9 +308,5 @@ prefixOpRTy o g = prefixOpTy o $ renv g
 infixOpRTy :: InfixOp -> CGEnv -> RefType
 ------------------------------------------------------------------------------------------
 infixOpRTy o g = infixOpTy o $ renv g
-
-
-
-
 
 

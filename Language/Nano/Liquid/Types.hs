@@ -47,28 +47,29 @@ module Language.Nano.Liquid.Types (
   , infixOpRTy 
   ) where
 
-import           Control.Applicative ((<$>), (<*>))
-import           Data.Maybe             (catMaybes, fromMaybe, isJust)
-import           Data.Monoid            hiding ((<>))            
-import           Data.Ord               (comparing) 
+-- import           Data.Monoid            hiding ((<>))            
+-- import           Control.Applicative ((<$>), (<*>))
+-- import           Data.Ord               (comparing) 
+-- import           Data.Generics.Aliases
+-- import           Data.Generics.Schemes
+
+-- import           Language.ECMAScript3.Syntax.Annotations
+
+import           Data.Maybe             (fromMaybe) -- (catMaybes, , isJust)
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
-import           Data.Generics.Aliases
-import           Data.Generics.Schemes
-
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 
-import           Language.Nano.Errors
+-- import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
-import           Text.Parsec.Pos    (initialPos)
+-- import           Language.Fixpoint.Misc
+-- import           Text.Parsec.Pos    (initialPos)
 import           Control.Applicative 
   
 -------------------------------------------------------------------------------------
@@ -100,7 +101,7 @@ instance PP CGEnv where
 
 newtype Cinfo = Ci SourcePos deriving (Eq, Ord, Show) 
 
-emptyCinfo    = Ci $ initialPos ""
+-- emptyCinfo    = Ci $ initialPos ""
 
 ci :: (IsLocated a) => a -> Cinfo
 ci = Ci . srcPos 
@@ -147,6 +148,12 @@ instance PP WfC where
   pp (W γ t i)      = pp (renv γ) 
                         $+$ (text "|-" <+> pp t) 
                         $+$ ((text "from:") <+> pp i) 
+
+instance IsLocated SubC where
+  srcPos = srcPos . sinfo
+
+instance IsLocated WfC where
+  srcPos = srcPos . winfo
 
 -- | Aliases for Fixpoint Constraints
 
@@ -255,7 +262,7 @@ mapReftM :: (F.Reftable b, Monad m, Applicative m) => (a -> m b) -> RType a -> m
 ------------------------------------------------------------------------------------------
 mapReftM f (TVar α r)      = TVar α <$> f r
 mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> f r
-mapReftM f (TFun xts t r)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return F.top) --f r 
+mapReftM f (TFun xts t _)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return F.top) --f r 
 mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
 
 mapReftBindM f (B x t)     = B x <$> mapReftM f t
@@ -274,7 +281,7 @@ efoldReft :: (F.Reftable r) => (RType r -> b) -> (F.SEnv b -> r -> a -> a) -> F.
 ------------------------------------------------------------------------------------------
 efoldReft _ f γ z (TVar _ r)       = f γ r z
 efoldReft g f γ z t@(TApp _ ts r)  = f γ r $ efoldRefts g f (efoldExt g (B (rTypeValueVar t) t) γ) z ts
-efoldReft g f γ z (TAll α t)       = efoldReft g f γ z t
+efoldReft g f γ z (TAll _ t)       = efoldReft g f γ z t
 efoldReft g f γ z (TFun xts t r)   = f γ r $ efoldReft g f γ' (efoldRefts g f γ' z (b_type <$> xts)) t  
   where 
     γ'                             = foldr (efoldExt g) γ xts
@@ -286,7 +293,7 @@ efoldExt g xt γ                    = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
 ------------------------------------------------------------------------------------------
 isBaseRType :: RType r -> Bool
 ------------------------------------------------------------------------------------------
-isBaseRType (TApp c [] _) = True
+isBaseRType (TApp _ [] _) = True
 isBaseRType (TVar _ _)    = True
 isBaseRType _             = False
 

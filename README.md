@@ -17,27 +17,50 @@ Dependencies
 HW 2 Release Checklist
 ----------------------
 
-* Add Refts to Functions
-
-* Add FRESH binders to all parsed, nameless refinements.
-
-* Fix: tests/liquid/pos/safeList.js
-
 * Remove all GHC make "warnings"
 
 * Make hw-liquid branch 
-
+    
     - NUKE ESC
     - EDIT Liquid.hs
     - EDIT tests (remove quals/spec)
 
 * Copy over to algo-verif repo
+    
+    - ADD README with hints
+        
+        > use "tracePP"
+        
+        (See lecture notes: https://github.com/UCSD-PL/algorithmic-software-verification/blob/master/web/slides/lec-refinement-types-3.markdown)
+
+        step 1. fresh* return types with templates
+        step 2. "typechecking" as in Liquid/Liquid.hs will generate constraints over templates
+        step 3. these are solved by "fixpoint"
+
+        verifyFile f   = reftypeCheck f . typeCheck . ssaTransform =<< parseNanoFromFile f
+        reftypeCheck f = solveConstraints f . generateConstraints  
+        
+        You only implement "step 2" 
+        
+            > Only need to fill in code in Language/Nano/Liquid/Liquid.hs
+
+            > See "HINTS" to see how to get fresh templates for unknown types for 
+                + phi-vars                  (`freshTyPhis`)
+                + function signatures       (`freshTyFun`)
+                + polymorphic instantiation (`freshTyInst`)
+
+            Debugging will be **HARD**: use `tracePP` and related functions aggressively.
+
+            1. modify envAdds    to log the types/template
+            2. modify subType/s  to see EXACTLY what constraints are being added at each site.
+            3. stare at .fq files to see what the generated constraints look like.
 
 * Update GOTO haddocks
     
     - liquid-fixpoint
     - nano-js [generate from algo-verif-repo]
     
+
 * RELEASE
 
 Homework Plan

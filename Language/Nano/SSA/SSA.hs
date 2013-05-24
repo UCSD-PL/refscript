@@ -6,14 +6,13 @@ module Language.Nano.SSA.SSA (ssaTransform) where
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
-import           Control.Monad.State                
-import           Control.Monad.Error
-
 import qualified Data.HashMap.Strict as M 
-import qualified Data.HashSet as S 
-import qualified Data.List as L
-import           Data.Monoid
-import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
+-- import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
+-- import           Control.Monad.State                
+-- import           Control.Monad.Error
+-- import qualified Data.HashSet as S 
+-- import qualified Data.List as L
+-- import           Data.Monoid
 
 import           Language.Nano.Types
 import           Language.Nano.Errors
@@ -25,10 +24,10 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Misc             
-import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Text.Printf                        (printf)
-import qualified Data.Traversable as T
-import           Text.Parsec.Pos              
+-- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
+-- import qualified Data.Traversable as T
+-- import           Text.Parsec.Pos              
 
 ----------------------------------------------------------------------------------
 ssaTransform :: (PP t) => Nano SourcePos t -> Nano AnnSSA t
@@ -47,8 +46,8 @@ ssaNano p@(Nano {code = Src fs})
        anns    <- getAnns
        return   $ p {code = Src $ (patchAnn anns <$>) <$> fs'}
 
-stripAnn :: AnnBare -> SSAM SourcePos
-stripAnn (Ann l fs) = forM_ fs (addAnn l) >> return l   
+-- stripAnn :: AnnBare -> SSAM SourcePos
+-- stripAnn (Ann l fs) = forM_ fs (addAnn l) >> return l   
 
 patchAnn     :: AnnInfo -> SourcePos -> AnnSSA
 patchAnn m l = Ann l $ M.lookupDefault [] l m
@@ -130,7 +129,7 @@ ssaStmt (VarDeclStmt l ds)
        return (True, VarDeclStmt l ds')
 
 -- return e 
-ssaStmt s@(ReturnStmt l Nothing) 
+ssaStmt s@(ReturnStmt _ Nothing) 
   = return (False, s)
 
 -- return e 
@@ -205,7 +204,7 @@ ssaVarDecl (VarDecl l x (Just e))
        return    (True, VarDecl l x' (Just e'))
 
 ssaVarDecl z@(VarDecl l x Nothing)  
-  = convertError "ssaVarDECL x" x 
+  = errorstar $ printf "Cannot handle ssaVarDECL %s at %s" (ppshow x) (ppshow l)
 
 ------------------------------------------------------------------------------------
 ssaAsgn :: SourcePos -> Id SourcePos -> Expression SourcePos -> SSAM (Id SourcePos, Expression SourcePos) 
@@ -223,8 +222,8 @@ envJoin :: SourcePos -> Maybe SsaEnv -> Maybe SsaEnv
                    , Maybe (Statement SourcePos) )
 -------------------------------------------------------------------------------------
 envJoin _ Nothing Nothing     = return (Nothing, Nothing, Nothing)
-envJoin l Nothing (Just θ)    = return (Just θ , Nothing, Nothing) 
-envJoin l (Just θ) Nothing    = return (Just θ , Nothing, Nothing) 
+envJoin _ Nothing (Just θ)    = return (Just θ , Nothing, Nothing) 
+envJoin _ (Just θ) Nothing    = return (Just θ , Nothing, Nothing) 
 envJoin l (Just θ1) (Just θ2) = envJoin' l θ1 θ2
 
 envJoin' l θ1 θ2

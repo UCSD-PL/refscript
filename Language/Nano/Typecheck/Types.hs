@@ -72,7 +72,7 @@ import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
 
-import           Language.Fixpoint.Names (propConName)
+-- import           Language.Fixpoint.Names (propConName)
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
@@ -342,7 +342,7 @@ infixOpId OpAdd = builtinId "OpAdd"
 infixOpId OpMul = builtinId "OpMul"      
 infixOpId OpDiv = builtinId "OpDiv"      
 infixOpId OpMod = builtinId "OpMod"       
-infixOpId o     = convertError "infixOpId" o
+infixOpId o     = errorstar $ "Cannot handle: infixOpId " ++ ppshow o
 
 -----------------------------------------------------------------------
 prefixOpTy :: PrefixOp -> Env t -> t 
@@ -353,6 +353,7 @@ prefixOpTy o g = fromMaybe err $ envFindTy (prefixOpId o) g
 
 prefixOpId PrefixMinus = builtinId "PrefixMinus"
 prefixOpId PrefixLNot  = builtinId "PrefixLNot"
+prefixOpId o           = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
 
 builtinId       = mkId . ("builtin_" ++)
 

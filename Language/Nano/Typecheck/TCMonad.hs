@@ -49,7 +49,7 @@ import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
-import           Data.Maybe                   (fromMaybe)
+-- import           Data.Maybe                   (fromMaybe)
 import           Data.Monoid                  
 import qualified Data.HashMap.Strict     as M
 import           Text.Parsec.Pos              

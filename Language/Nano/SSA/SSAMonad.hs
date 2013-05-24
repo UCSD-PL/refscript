@@ -35,28 +35,28 @@ module Language.Nano.SSA.SSAMonad (
    , addImmutables
    ) where 
 
-import           Control.Applicative                ((<$>), (<*>))
+import           Control.Applicative                ((<$>))
 import           Control.Monad                
 import           Control.Monad.State                
 import           Control.Monad.Error
 
 import qualified Data.HashMap.Strict as M 
-import qualified Data.HashSet as S 
-import qualified Data.List as L
-import           Data.Monoid
-import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
+-- import qualified Data.HashSet as S 
+-- import qualified Data.List as L
+-- import           Data.Monoid
+-- import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
 
-import           Language.Nano.Types
+-- import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Syntax.Annotations
-import           Language.ECMAScript3.PrettyPrint
+-- import           Language.ECMAScript3.Syntax.Annotations
+-- import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Misc             
-import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
+-- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Text.Printf                        (printf)
-import qualified Data.Traversable as T
+-- import qualified Data.Traversable as T
 import           Text.Parsec.Pos              
 
 type SSAM     = ErrorT String (State SsaState)
@@ -131,14 +131,13 @@ findSsaEnv   :: Id SourcePos -> SSAM (Maybe (Id SourcePos))
 -------------------------------------------------------------------------------
 findSsaEnv x 
   = do θ  <- names <$> get 
-       -- ns <- allNames  
        case envFindTy x θ of 
          Just (SI i) -> return $ Just i 
          Nothing     -> return Nothing 
 
-allNames = do xs <- map fst . envToList . names      <$> get
-              ys <- map fst . envToList . immutables <$> get
-              return $ xs ++ ys
+-- allNames = do xs <- map fst . envToList . names      <$> get
+--               ys <- map fst . envToList . immutables <$> get
+--               return $ xs ++ ys
 
 -------------------------------------------------------------------------------
 addAnn     :: SourcePos -> Fact -> SSAM ()
@@ -166,7 +165,7 @@ execute         :: SSAM a -> Either (SourcePos, String) a
 execute act 
   = case runState (runErrorT act) initState of 
       (Left err, _) -> Left  (initialPos "" ,  err)
-      (Right x, st) -> Right x
+      (Right x, _)  -> Right x
 
 initState :: SsaState
 initState = SsaST envEmpty envEmpty 0 M.empty

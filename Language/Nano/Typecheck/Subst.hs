@@ -33,7 +33,7 @@ import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
-import           Text.Printf 
+-- import           Text.Printf 
 
 ---------------------------------------------------------------------------
 -- | Substitutions --------------------------------------------------------
@@ -92,7 +92,7 @@ instance Free (RType r) where
   free (TAll α t)       = S.delete α $ free t 
 
 instance Substitutable () Fact where
-  apply θ x@(PhiVar _)  = x
+  apply _ x@(PhiVar _)  = x
   apply θ (TypInst ts)  = TypInst $ apply θ ts
 
 instance Free Fact where
@@ -133,7 +133,7 @@ unifys' θ ts ts'
     nTs                  = length ts
     nTs'                 = length ts'
     go θ (t:ts , t':ts') = unify θ t t' >>= \θ' -> go θ' (mapPair (apply θ') (ts, ts'))
-    go θ ([]   , []    ) = return θ 
+    go θ (_    , _    )  = return θ 
 
 
 varEql θ α β = case varAsn θ α (tVar β) of 

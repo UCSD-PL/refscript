@@ -7,7 +7,7 @@
 module Language.Nano.Liquid.CGMonad (
     
   -- * Constraint Generation Monad
-    CGM (..)
+    CGM
 
   -- * Execute Action and Get FInfo
   , getFInfo 
@@ -36,14 +36,11 @@ module Language.Nano.Liquid.CGMonad (
   , subType 
   ) where
 
-import           Data.Maybe             (fromMaybe, isJust)
-import           Data.Monoid            hiding ((<>))            
-
-import qualified Data.List               as L
+import           Data.Maybe             (fromMaybe)
+-- import           Data.Monoid            hiding ((<>))            
+-- import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 
-import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 
@@ -57,9 +54,7 @@ import           Language.Nano.Liquid.Types
 
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.PrettyPrint
 import           Control.Applicative 
-import           Control.Arrow
 
 import           Control.Monad
 import           Control.Monad.State
@@ -220,8 +215,8 @@ freshTyInst l g αs τs tbody
        _     <- mapM (wellFormed l g) ts
        let θ  = fromList $ zip αs ts
        return $ {- tracePP msg $ -} apply θ tbody
-    where
-       msg = printf "freshTyInst αs=%s τs=%s: " (ppshow αs) (ppshow τs)
+    -- where
+    --    msg = printf "freshTyInst αs=%s τs=%s: " (ppshow αs) (ppshow τs)
 
 -- | Instantiate Fresh Type (at Phi-site) 
 ---------------------------------------------------------------------------------------
@@ -364,6 +359,9 @@ splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
   = do let cs = bsplitC g i t1 t2
        cs'   <- concatMapM splitC $ safeZipWith "splitC2" (Sub g i) t1s t2s
        return $ cs ++ cs'
+
+splitC x 
+  = cgError (srcPos x) $ bugBadSubtypes x 
 
 bsplitC g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2

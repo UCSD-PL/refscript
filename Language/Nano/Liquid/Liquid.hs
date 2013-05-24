@@ -4,25 +4,18 @@
 
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
-import           Text.Printf                        (printf)
-import           Text.Parsec.Pos                    (initialPos)
+-- import           Text.Printf                        (printf)
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
-import           Control.Applicative                ((<$>), (<*>))
-import           Data.Maybe                         (fromMaybe, fromJust, isJust)
-import           Data.Monoid                 hiding ((<>))            
-import           Data.Ord                           (comparing) 
-import qualified Data.List                   as L
-import qualified Data.HashMap.Strict         as M
-import           Data.Generics.Aliases
-import           Data.Generics.Schemes
+import           Control.Applicative                ((<$>))
+import           Data.Maybe                         (fromJust) -- fromMaybe, isJust)
+
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
-import           Language.Fixpoint.Interface        (resultExit, solve)
+import           Language.Fixpoint.Interface        (solve)
 import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
@@ -30,7 +23,7 @@ import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
 import           Language.Nano.SSA.SSA
 
-import qualified Language.Nano.Env as E 
+-- import qualified Language.Nano.Env as E 
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
 
@@ -51,8 +44,13 @@ solveConstraints :: FilePath -> F.FInfo Cinfo -> IO (F.FixResult SourcePos)
 solveConstraints f ci 
   = do (r, sol) <- solve f [] ci
        let r'    = fmap (srcPos . F.sinfo) r
+       renderAnnotations sol
        donePhase (F.colorResult r) (F.showFix r) 
        return r'
+
+renderAnnotations   :: a -> IO ()
+renderAnnotations _ = donePhase Loud "Ask Santo to: render inferred types"
+
 
 --------------------------------------------------------------------------------
 generateConstraints     :: NanoRefType -> F.FInfo Cinfo 
@@ -87,18 +85,18 @@ envAddFun l g f αs xs yts t = envAdds tyBinds =<< envAdds (varBinds xs ts') =<<
     (su, ts')               = renameBinds yts xs 
     t'                      = F.subst su t
 
-renameBinds yts xs   = (su, [F.subst su ty | B y ty <- yts])
+renameBinds yts xs   = (su, [F.subst su ty | B _ ty <- yts])
   where 
     su               = F.mkSubst $ safeZipWith "renameArgs" fSub yts xs 
     fSub yt x        = (b_sym yt, F.eVar x)
     
 
-checkFormal x t 
-  | xsym == tsym = (x, t)
-  | otherwise    = errorstar $ errorArgName (srcPos x) xsym tsym
-  where 
-    xsym         = F.symbol x
-    tsym         = F.symbol t
+-- checkFormal x t 
+--   | xsym == tsym = (x, t)
+--   | otherwise    = errorstar $ errorArgName (srcPos x) xsym tsym
+--   where 
+--     xsym         = F.symbol x
+--     tsym         = F.symbol t
 
 --------------------------------------------------------------------------------
 consStmts :: CGEnv -> [Statement AnnType]  -> CGM (Maybe CGEnv) 
@@ -118,7 +116,7 @@ consStmt g (EmptyStmt _)
   = return $ Just g
 
 -- x = e
-consStmt g (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))   
+consStmt g (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))   
   = consAsgn g (Id lx x) e
 
 -- e
@@ -157,7 +155,7 @@ consStmt g (ReturnStmt l (Just e))
        return Nothing
 
 -- return
-consStmt g (ReturnStmt l Nothing)
+consStmt _ (ReturnStmt _ Nothing)
   = return Nothing 
 
 -- function f(x1...xn){ s }
@@ -165,7 +163,7 @@ consStmt g s@(FunctionStmt _ _ _ _)
   = Just <$> consFun g s
 
 -- OTHER (Not handled)
-consStmt g s 
+consStmt _ s 
   = errorstar $ "consStmt: not handled " ++ ppshow s
 
 ----------------------------------------------------------------------------------
@@ -180,7 +178,7 @@ envJoin' :: AnnType -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 ----------------------------------------------------------------------------------
 
 -- HINT: 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
---       2. use @freshTy@ to generate fresh types (and an extended environment with 
+--       2. use @freshTyPhis@ to generate fresh types (and an extended environment with 
 --          the fresh-type bindings) for all the phi-vars using the unrefined types 
 --          from step 1.
 --       3. generate subtyping constraints between the types from step 1 and the fresh types
@@ -190,6 +188,7 @@ envJoin' l g g1 g2
   = do let xs   = [x | PhiVar x <- ann_fact l] 
        let t1s  = (`envFindTy` g1) <$> xs 
        let t2s  = (`envFindTy` g2) <$> xs
+       -- when (length t1s /= length t2s) $ cgError (bugBadPhi l t1s t2s)
        (g',ts) <- freshTyPhis (srcPos l) g xs $ map toType t1s -- SHOULD BE SAME as t2s 
        subTypes l g1 xs ts
        subTypes l g2 xs ts
@@ -200,10 +199,10 @@ envJoin' l g g1 g2
 consVarDecl :: CGEnv -> VarDecl AnnType -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 
-consVarDecl g (VarDecl l x (Just e)) 
+consVarDecl g (VarDecl _ x (Just e)) 
   = consAsgn g x e  
 
-consVarDecl g (VarDecl l x Nothing)  
+consVarDecl g (VarDecl _ _ Nothing)  
   = return $ Just g
 
 ------------------------------------------------------------------------------------
@@ -227,7 +226,7 @@ consExpr g (IntLit l i)
 consExpr g (BoolLit l b)
   = envAddFresh l (pSingleton tBool b) g 
 
-consExpr g (VarRef l x)
+consExpr g (VarRef _ x)
   = return (x, g) 
 
 consExpr g (PrefixExpr l o e)
@@ -242,13 +241,14 @@ consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 
        consCall g' l e es $ envFindTy x g'
 
-consExpr g e 
+consExpr _ e 
   = errorstar "consExpr: not handled" (pp e)
 
 
-----------------------------------------------------------------------------------
--- consCall :: Env Type -> SourcePos -> Type -> [Expression SourcePos] -> TCM Type
-----------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------
+consCall :: (PP a) 
+         => CGEnv -> AnnType -> a -> [Expression AnnType] -> RefType -> CGM (Id AnnType, CGEnv)
+---------------------------------------------------------------------------------------------
 
 -- HINT: This code is almost isomorphic to the version in 
 --   @Liquid.Nano.Typecheck.Typecheck@ except we use subtyping
@@ -261,20 +261,20 @@ consExpr g e
 --   3. Use @subTypes@ to add constraints between the types from (step 2) and (step 1)
 --   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in output type of callee.
 
-consCall g l z es ft 
+consCall g l _ es ft 
   = do (_,its,ot)   <- fromJust . bkFun <$> instantiate l g ft
        (xes, g')    <- consScan consExpr g es 
        let (su, ts') = renameBinds its xes   
        subTypes l g' xes ts' 
        envAddFresh l (F.subst ({- F.traceFix msg -} su) ot) g'
-    where 
-       msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)
+    -- where 
+    --   msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)
 
 instantiate l g t = {- tracePP msg  <$> -} freshTyInst l g αs τs tbody 
   where 
     (αs, tbody)   = bkAll t
     τs            = getTypArgs l αs 
-    msg           = printf "instantiate %s %s" (ppshow αs) (ppshow tbody)
+    -- msg           = printf "instantiate %s %s" (ppshow αs) (ppshow tbody)
 
 
 getTypArgs :: AnnType -> [TVar] -> [Type] 

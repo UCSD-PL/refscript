@@ -1,16 +1,15 @@
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
 
-import           Control.Applicative                ((<$>), (<*>))
+import           Control.Applicative                ((<$>)) -- (<*>))
 import           Control.Monad                
 import qualified Data.HashSet        as S 
 import qualified Data.HashMap.Strict as M 
-import qualified Data.List           as L
+-- import qualified Data.List           as L
 import qualified Data.Traversable    as T
-import           Data.Monoid
-import           Data.Maybe                         (catMaybes, isJust, fromMaybe, maybeToList)
+-- import           Data.Monoid
+import           Data.Maybe                         (catMaybes, isJust) -- fromMaybe, maybeToList)
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>), vcat)
 import           Text.Printf                        (printf)
-import           System.Exit                        (exitWith)
 
 import           Language.Nano.Errors
 import           Language.Nano.Types
@@ -22,8 +21,9 @@ import           Language.Nano.Typecheck.Subst
 import           Language.Nano.SSA.SSA
 
 import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.Interface        (resultExit)
+-- import           Language.Fixpoint.Interface        (resultExit)
 import           Language.Fixpoint.Misc             
+-- import           System.Exit                        (exitWith)
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
@@ -61,8 +61,7 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
 
 ppErr (l, e) = printf "Error at %s\n  %s\n" (ppshow l) e
 
-safe pgm@(Nano {code = Src fs})
-  -- = return F.Safe
+safe (Nano {code = Src fs})
   = do forM fs $ T.mapM printAnn
        return F.Safe 
 
@@ -120,7 +119,7 @@ funTy l f xs
          Just (αs,ts,t) -> do when (length xs /= length ts) $ tcError l $ errorArgMismatch
                               return (ft, (αs, b_type <$> ts, t))
 
-envAddFun l f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
+envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
   where  
     tyBinds              = [(tVarId α, tVar α) | α <- αs]
     varBinds             = zip
@@ -194,7 +193,7 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
   = tcFun γ s
 
 -- OTHER (Not handled)
-tcStmt γ s 
+tcStmt _ s 
   = convertError "TC Cannot Handle: tcStmt" s
 
 -------------------------------------------------------------------------------
@@ -203,14 +202,14 @@ tcVarDecl :: Env Type -> VarDecl AnnSSA -> TCM TCEnv
 
 tcVarDecl γ (VarDecl l x (Just e)) 
   = tcAsgn γ l x e  
-tcVarDecl γ (VarDecl l x Nothing)  
+tcVarDecl γ (VarDecl _ _ Nothing)  
   = return $ Just γ
 
 ------------------------------------------------------------------------------------
 tcAsgn :: Env Type -> AnnSSA -> Id AnnSSA -> Expression AnnSSA -> TCM TCEnv
 ------------------------------------------------------------------------------------
 
-tcAsgn γ l x e 
+tcAsgn γ _ x e 
   = do t <- tcExpr γ e
        return $ Just $ envAdds [(x, t)] γ
 
@@ -238,7 +237,7 @@ tcExpr γ (InfixExpr l o e1 e2)
 tcExpr γ (CallExpr l e es)
   = tcCall γ l e es =<< tcExpr γ e 
 
-tcExpr γ e 
+tcExpr _ e 
   = convertError "tcExpr" e
 
 ----------------------------------------------------------------------------------

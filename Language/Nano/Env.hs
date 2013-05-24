@@ -26,15 +26,10 @@ module Language.Nano.Env (
   ) where 
 
 import           Data.Maybe             (isJust)
-import           Data.Hashable
-import           Data.Monoid            hiding ((<>))            
--- import           Data.Ord               (comparing) 
+import           Data.Hashable          ()
+import           Data.Monoid            () 
 import qualified Data.List               as L
-import           Data.Generics.Aliases
-import           Data.Generics.Schemes
-import qualified Data.HashMap.Strict     as M
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Types
 import           Language.Nano.Errors
@@ -44,7 +39,7 @@ import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative 
 import           Control.Monad.Error ()
-import           Control.Arrow      ((***))
+
 
 instance PP F.Symbol where 
   pp = pprint

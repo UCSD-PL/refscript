@@ -9,7 +9,8 @@ import           System.Exit                        (exitWith)
 import           Language.Fixpoint.Interface        (resultExit)
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc             
-import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
+-- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
+import           Text.PrettyPrint.HughesPJ          (render)
 import           Language.ECMAScript3.PrettyPrint
 
 main = do cfg  <- getOpts

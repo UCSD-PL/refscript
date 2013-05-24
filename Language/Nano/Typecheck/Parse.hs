@@ -13,14 +13,14 @@ import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import           Control.Monad
 import           Text.Parsec
-import           Text.Parsec.String hiding (Parser, parseFromFile)
+-- import           Text.Parsec.String hiding (Parser, parseFromFile)
 import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*), (<*>))
 import           Data.Char (toLower, isLower) 
 import           Data.Monoid (mconcat)
 
 import           Language.Fixpoint.Names (propConName)
-import           Language.Fixpoint.Misc (errorstar, mapSnd)
+import           Language.Fixpoint.Misc (errorstar)
 import           Language.Fixpoint.Types hiding (quals)
 import           Language.Fixpoint.Parse 
 
@@ -48,8 +48,8 @@ idBindP = xyP identifierP dcolon bareTypeP
 identifierP :: Parser (Id SourcePos)
 identifierP = Id <$> getPosition <*> lowerIdP -- Lexer.identifier
 
-annotP      :: Parser AnnType 
-annotP      = (`Ann` []) <$> getPosition
+-- annotP      :: Parser AnnType 
+-- annotP      = (`Ann` []) <$> getPosition
 
 xyP lP sepP rP
   = (\x _ y -> (x, y)) <$> lP <*> (spaces >> sepP) <*> rP
@@ -111,23 +111,22 @@ bareAllP
        t  <- bareTypeP
        return $ foldr TAll t as
 
-locParserP :: Parser a -> Parser (Located a)
-locParserP p = liftM2 Loc getPosition p
-  
+ 
 dummyP ::  Parser (Reft -> b) -> Parser b
 dummyP fm = fm `ap` topP 
 
 topP   :: Parser Reft
 topP   = (Reft . (, []) . vv . Just) <$> freshIntP
 
-positionNameP = dummyNamePos <$> getPosition
-  
-dummyNamePos pos  = "dummy." ++ name ++ ['.'] ++ line ++ ['.'] ++ col
-    where name    = san <$> sourceName pos
-          line    = show $ sourceLine pos  
-          col     = show $ sourceColumn pos  
-          san '/' = '.'
-          san c   = toLower c
+-- locParserP :: Parser a -> Parser (Located a)
+-- locParserP p = liftM2 Loc getPosition p
+-- positionNameP = dummyNamePos <$> getPosition
+-- dummyNamePos pos  = "dummy." ++ name ++ ['.'] ++ line ++ ['.'] ++ col
+--     where name    = san <$> sourceName pos
+--           line    = show $ sourceLine pos  
+--           col     = show $ sourceColumn pos  
+--           san '/' = '.'
+--           san c   = toLower c
 
 bindRefP :: Parser (Reft -> a) -> Parser a
 bindRefP kindP

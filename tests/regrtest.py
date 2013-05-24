@@ -86,12 +86,11 @@ parser.add_option("-o", "--opts", dest="opts", default="", type=str, help="addit
 parser.disable_interspersed_args()
 options, args = parser.parse_args()
 
+# esc Tests
+testdirs  = [ ("esc/pos", 0), ("esc/neg", 1)]
+runner    = rtest.TestRunner (Config ("nanojs esc", options.opts, testdirs, logfile, options.threadcount))
+runner.run ()
 
-## # esc Tests
-## testdirs  = [ ("esc/pos", 0), ("esc/neg", 1)]
-## runner    = rtest.TestRunner (Config ("nanojs esc", options.opts, testdirs, logfile, options.threadcount))
-## runner.run ()
-## 
 
 ## # tc Tests
 testdirs  = [ ("tc/pos", 0), ("tc/neg", 1) ]

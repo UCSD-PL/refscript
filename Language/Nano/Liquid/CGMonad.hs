@@ -238,15 +238,19 @@ freshTyPhis l g xs τs
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-subTypes :: (IsLocated l, IsLocated x, F.Expression x, F.Symbolic x) => l -> CGEnv -> [x] -> [RefType] -> CGM F.Subst 
+subTypes :: (IsLocated l, IsLocated x, F.Expression x, F.Symbolic x) 
+         => l -> CGEnv -> [x] -> [RefType] -> CGM () 
 ---------------------------------------------------------------------------------------
-subTypes l g xs ts 
-  = do mapM (uncurry $ subType l g) xts_ts' 
-       return su
-    where 
-      (su, ts') = shiftVVs ts xs 
-      xts       = [envFindTy x g | x <- xs]
-      xts_ts'   = safeZip "subTypes" xts ts'
+subTypes l g xs ts = zipWithM_ (subType l g) [envFindTy x g | x <- xs] ts
+
+
+-- subTypes l g xs ts 
+--   = do mapM (uncurry $ subType l g) xts_ts' 
+--        return su
+--     where 
+--       (su, ts') = shiftVVs ts xs 
+--       xts       = [envFindTy x g | x <- xs]
+--       xts_ts'   = safeZip "subTypes" xts ts'
 
 
 ---------------------------------------------------------------------------------------
@@ -325,16 +329,21 @@ refreshRefType = mapReftM refresh
 -- | Splitting Subtyping Constraints --------------------------------------------------
 ---------------------------------------------------------------------------------------
 
+
 splitC :: SubC -> CGM [FixSubC]
 
-splitC (Sub g i (TFun t1s t1 _) (TFun t2s t2 _))
-  = do let bcs   = bsplitC g i t1 t2
-       g'       <- envTyAdds i t2s g 
-       cs       <- concatMapM splitC $ safeZipWith "splitC1" (Sub g' i) t2s t1s' 
-       cs'      <- splitC $ Sub g' i (F.subst su t1) t2      
-       return    $ bcs ++ cs ++ cs'
+splitC (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
+  = do let bcs    = bsplitC g i tf1 tf2
+       g'        <- envTyAdds i xt2s g 
+       cs        <- concatMapM splitC $ safeZipWith "splitC1" (Sub g' i) t2s t1s' 
+       cs'       <- splitC $ Sub g' i (F.subst su t1) t2      
+       return     $ bcs ++ cs ++ cs'
     where 
-      (su, t1s') = shiftVVs t1s (F.symbol <$> t2s)
+       t2s        = b_type <$> xt2s
+       t1s'       = F.subst su (b_type <$> xt1s)
+       su         = F.mkSubst $ safeZipWith "splitC2" bSub xt1s xt2s
+       bSub b1 b2 = (b_sym b1, F.eVar $ b_sym b2)
+
 
 splitC (Sub g i (TAll α1 t1) (TAll α2 t2))
   | α1 == α2 
@@ -368,6 +377,7 @@ bsplitC g ci t1 t2
     r1 = rTypeSortedReft t1
     r2 = rTypeSortedReft t2
 
+
 ---------------------------------------------------------------------------------------
 -- | Splitting Well-Formedness Constraints --------------------------------------------
 ---------------------------------------------------------------------------------------
@@ -378,7 +388,7 @@ splitW :: WfC -> CGM [FixWfC]
 splitW (W g i (TFun ts t _)) 
   = do let bws = bsplitW g t i
        g'     <- envTyAdds i ts g 
-       ws     <- concatMapM splitW [W g' i ti | ti <- ts]
+       ws     <- concatMapM splitW [W g' i ti | B _ ti <- ts]
        ws'    <-            splitW (W g' i t)
        return  $ bws ++ ws ++ ws'
 
@@ -403,9 +413,9 @@ bsplitW g t i
 -- mkSortedReft tce = F.RR . rTypeSort tce
 
 -- refTypeId ::  (F.Reftable r, IsLocated l) => l -> RType r -> Id l
-refTypeId l = symbolId l . F.symbol -- rTypeValueVar 
+-- refTypeId l = symbolId l . F.symbol -- rTypeValueVar 
 
-envTyAdds i ts = envAdds [(refTypeId i t, t) | t <- ts]
+envTyAdds l xts = envAdds [(symbolId l x, t) | B x t <- xts]
 
 -------------------------------------------------------------------------------------------
 

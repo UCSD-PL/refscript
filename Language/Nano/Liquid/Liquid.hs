@@ -80,16 +80,18 @@ consFun g (FunctionStmt l f xs body)
        maybe (return ()) (\g -> subType l g tVoid t) gm
        return g'
 
-envAddFun l g f αs xs ts t = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
+envAddFun l g f αs xs yts t = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
   where  
-    tyBinds                = [(Loc (srcPos l) α, tVar α) | α <- αs]
-    varBinds               = safeZip "envAddFun"
-    (ts', t')              = renameArgs xs ts t 
+    tyBinds                 = [(Loc (srcPos l) α, tVar α) | α <- αs]
+    varBinds                = safeZip "envAddFun"
+    (su, ts')               = renameBinds yts xs 
+    t'                      = F.subst su t
 
-renameArgs xs ts t = (ts', t')
+renameBinds yts xs   = (su, [F.subst su ty | B y ty <- yts])
   where 
-    (su, ts')      = shiftVVs ts xs
-    t'             = F.subst su t
+    su               = F.mkSubst $ safeZipWith "renameArgs" fSub yts xs 
+    fSub yt x        = (b_sym yt, F.eVar x)
+    
 
 checkFormal x t 
   | xsym == tsym = (x, t)
@@ -193,6 +195,7 @@ envJoin' l g g1 g2
        subTypes l g2 xs ts
        return g'
 
+
 ------------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnType -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
@@ -258,12 +261,15 @@ consExpr g e
 --   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in output type of callee.
 
 consCall g l z es ft 
-  = do (_,its,ot) <- instantiate l g ft
-       (xes, g')  <- consScan consExpr g es 
-       θ          <- subTypes l g' xes its 
-       envAddFresh l (F.subst ({- F.traceFix (printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)) -} θ) ot) g'
+  = do (_,its,ot)   <- fromJust . bkFun <$> instantiate l g ft
+       (xes, g')    <- consScan consExpr g es 
+       let (su, ts') = renameBinds its xes   
+       subTypes l g' xes ts' 
+       envAddFresh l (F.subst ({- F.traceFix msg -} su) ot) g'
+    where 
+       msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)
 
-instantiate l g t = fromJust . bkFun <$> freshTyInst l g αs τs tbody 
+instantiate l g t = tracePP (printf "instantiate %s %s" (ppshow αs) (ppshow tbody)) <$> freshTyInst l g αs τs tbody 
   where 
     (αs, tbody)   = bkAll t
     τs            = getTypArgs l αs 

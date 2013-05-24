@@ -82,12 +82,13 @@ instance (PP r, F.Reftable r) => Substitutable r (RType r) where
 --     where 
 --       msg   = printf "apply [θ = %s] [t = %s]" (ppshow θ) (ppshow t)
 
-
+instance (PP r, F.Reftable r) => Substitutable r (Bind r) where 
+  apply θ (B z t) = B z $ appTy θ t
 
 instance Free (RType r) where
   free (TApp _ ts _)    = S.unions   $ free <$> ts
   free (TVar α _)       = S.singleton α 
-  free (TFun ts t _)    = S.unions   $ free <$> t:ts
+  free (TFun xts t _)   = S.unions   $ free <$> t:ts where ts = b_type <$> xts
   free (TAll α t)       = S.delete α $ free t 
 
 instance Substitutable () Fact where
@@ -110,14 +111,14 @@ appTy (Su m) (TAll α t)    = apply (Su $ M.delete α m) t
 -----------------------------------------------------------------------------
 unify :: Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
-unify θ (TFun ts t _) (TFun ts' t' _) = unifys  θ (t:ts) (t':ts')
-unify θ (TVar α _) t                  = varAsgn θ α t 
-unify θ t (TVar α _)                  = varAsgn θ α t
+unify θ (TFun xts t _) (TFun xts' t' _) = unifys  θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
+unify θ (TVar α _) t                    = varAsgn θ α t 
+unify θ t (TVar α _)                    = varAsgn θ α t
 unify θ (TApp c ts _) (TApp c' ts' _) 
-  | c == c'                           = unifys  θ ts ts'
+  | c == c'                             = unifys  θ ts ts'
 unify θ t t' 
-  | t == t'                           = return θ
-  | otherwise                         = Left $ errorUnification t t'             
+  | t == t'                             = return θ
+  | otherwise                           = Left $ errorUnification t t'             
 
 unifys         ::  Subst -> [Type] -> [Type] -> Either String Subst
 unifys θ xs ys = {- tracePP msg $ -} unifys' θ xs ys 

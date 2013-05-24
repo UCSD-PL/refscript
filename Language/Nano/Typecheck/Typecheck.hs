@@ -118,7 +118,7 @@ funTy l f xs
        case bkFun ft of
          Nothing        -> tcError l $ errorUnboundId f
          Just (αs,ts,t) -> do when (length xs /= length ts) $ tcError l $ errorArgMismatch
-                              return (ft, (αs, ts, t))
+                              return (ft, (αs, b_type <$> ts, t))
 
 envAddFun l f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
   where  
@@ -246,7 +246,7 @@ tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> T
 tcCall γ l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
        ets        <- mapM (tcExpr γ) es
-       θ'         <- unifyTypes l "" its ets
+       θ'         <- unifyTypes l "" (b_type <$> its) ets
        return      $ apply θ' ot
 
 instantiate l fn ft 

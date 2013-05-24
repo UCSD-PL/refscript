@@ -107,3 +107,11 @@ grumble about "unbound variable" (due to missing key in envFindTy)
     you get the error in:
         tests/liquid/pos/locks-cond.js
 
+
+
+Failed 7 tests: liquid/neg/listsum-bad.js, liquid/neg/minindex02-bug.js, liquid/pos/listsum.js, liquid/pos/minindex00.js, liquid/pos/minindex01.js, liquid/pos/minindex02.js, liquid/pos/safeLists.js
+
+Exceptions thrown on 6 tests: liquid/neg/listsum-bad.js, liquid/neg/minindex02-bug.js, liquid/pos/listsum.js, liquid/pos/minindex00.js, liquid/pos/minindex01.js, liquid/pos/minindex02.js
+
+
+

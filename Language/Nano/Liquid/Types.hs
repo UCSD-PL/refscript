@@ -184,7 +184,7 @@ shiftVVs :: (F.Symbolic x) => [RefType] -> [x] -> (F.Subst, [RefType])
 shiftVVs ts xs = (su, ts')
   where 
     ts'        = F.subst su $ safeZipWith "shiftVV1" shiftVV ts xs
-    su         = F.mkSubst  $ catMaybes $ safeZipWith "shiftVV2" fSub    ts xs 
+    su         = F.mkSubst  $ catMaybes $ safeZipWith "shiftVV2" fSub ts xs 
     fSub t x   = if isBaseRType t then Just (F.symbol t, F.eVar x) else Nothing
 
 -- shiftVVs :: (F.Symbolic x) => [RefType] -> [x] -> (F.Subst, [RefType])
@@ -223,7 +223,7 @@ rTypeSort :: (F.Reftable r) => RType r -> F.Sort
 rTypeSort (TApp TInt [] _) = F.FInt
 rTypeSort (TVar α _)       = F.FObj $ F.symbol α 
 rTypeSort t@(TAll _ _)     = rTypeSortForAll t 
-rTypeSort (TFun ts t _)    = F.FFunc 0 $ rTypeSort <$> ts ++ [t]
+rTypeSort (TFun xts t _)   = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
 
 
@@ -271,18 +271,25 @@ instance (F.Reftable r, F.Subable r) => F.Subable (RType r) where
 ------------------------------------------------------------------------------------------
 emapReft  :: (F.Reftable a) => ([F.Symbol] -> a -> b) -> [F.Symbol] -> RType a -> RType b
 ------------------------------------------------------------------------------------------
-emapReft f γ (TVar α r)    = TVar α (f γ r)
-emapReft f γ (TApp c ts r) = TApp c (emapReft f γ <$> ts) (f γ r)
-emapReft f γ (TAll α t)    = TAll α (emapReft f γ t)
-emapReft f γ (TFun ts t r) = TFun (emapReft f γ' <$> ts) (emapReft f γ' t) (f γ r) where γ' = (rTypeValueVar <$> ts) ++ γ 
+emapReft f γ (TVar α r)     = TVar α (f γ r)
+emapReft f γ (TApp c ts r)  = TApp c (emapReft f γ <$> ts) (f γ r)
+emapReft f γ (TAll α t)     = TAll α (emapReft f γ t)
+emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts) (emapReft f γ' t) (f γ r) 
+  where 
+    γ'                      = (b_sym <$> xts) ++ γ 
+    -- ts                      = b_type <$> xts 
+
+emapReftBind f γ (B x t)    = B x $ emapReft f γ t
 
 ------------------------------------------------------------------------------------------
-mapReftM :: (Monad m, Applicative m) => (a -> m b) -> RType a -> m (RType b)
+mapReftM :: (F.Reftable b, Monad m, Applicative m) => (a -> m b) -> RType a -> m (RType b)
 ------------------------------------------------------------------------------------------
 mapReftM f (TVar α r)      = TVar α <$> f r
 mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> f r
-mapReftM f (TFun ts t r)   = TFun   <$> mapM (mapReftM f) ts <*> mapReftM f t <*> f r
+mapReftM f (TFun xts t r)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return F.top) --f r 
 mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
+
+mapReftBindM f (B x t)     = B x <$> mapReftM f t
 
 ------------------------------------------------------------------------------------------
 -- | fold over @RType@ -------------------------------------------------------------------
@@ -297,11 +304,15 @@ foldReft  f = efoldReft (\_ -> ()) (\_ -> f) F.emptySEnv
 efoldReft :: (F.Reftable r) => (RType r -> b) -> (F.SEnv b -> r -> a -> a) -> F.SEnv b -> a -> RType r -> a
 ------------------------------------------------------------------------------------------
 efoldReft _ f γ z (TVar _ r)       = f γ r z
-efoldReft g f γ z t@(TApp _ ts r)  = f γ r $ efoldRefts g f (efoldExt g t γ) z ts
-efoldReft g f γ z (TFun ts t r)    = f γ r $ efoldReft g f γ' (efoldRefts g f γ' z ts) t  where γ' = foldr (efoldExt g) γ ts
+efoldReft g f γ z t@(TApp _ ts r)  = f γ r $ efoldRefts g f (efoldExt g (B (rTypeValueVar t) t) γ) z ts
 efoldReft g f γ z (TAll α t)       = efoldReft g f γ z t
+efoldReft g f γ z (TFun xts t r)   = f γ r $ efoldReft g f γ' (efoldRefts g f γ' z (b_type <$> xts)) t  
+  where 
+    γ'                             = foldr (efoldExt g) γ xts
+
 efoldRefts g f γ z ts              = L.foldl' (efoldReft g f γ) z ts
-efoldExt g t γ                     = F.insertSEnv (rTypeValueVar t) (g t) γ
+
+efoldExt g xt γ                    = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
 
 ------------------------------------------------------------------------------------------
 isBaseRType :: RType r -> Bool

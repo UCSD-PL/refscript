@@ -75,8 +75,9 @@ bareFunP
        reserved "=>" 
        ret    <- bareTypeP 
        r      <- topP
-       return $ TFun args ret r
+       return $ TFun (argBind <$> args) ret r
 
+argBind t = B (rTypeValueVar t) t
 
 bareAtomP 
   =  refP bbaseP 

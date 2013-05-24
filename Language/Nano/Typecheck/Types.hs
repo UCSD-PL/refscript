@@ -22,6 +22,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * (Refinement) Types
   , RType (..)
+  , Bind (..)
   , toType
   , ofType
   , strengthen 
@@ -41,8 +42,6 @@ module Language.Nano.Typecheck.Types (
   , tVoid
   , tErr
   , tVar
-  -- , tProp
-  -- , tcProp
 
   -- * Operator Types
   , infixOpTy
@@ -58,12 +57,12 @@ module Language.Nano.Typecheck.Types (
   ) where 
 
 import           Text.Printf
-import           Data.Generics.Aliases
-import           Data.Generics.Schemes
+-- import           Data.Generics.Aliases
+-- import           Data.Generics.Schemes
 import           Data.Hashable
-import           Data.Maybe             (fromMaybe, isJust)
+import           Data.Maybe             (fromMaybe) --, isJust)
 import           Data.Monoid            hiding ((<>))            
-import qualified Data.List               as L
+-- import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -115,11 +114,18 @@ data TCon
 
 -- | (Raw) Refined Types 
 data RType r  
-  = TApp TCon [RType r]      r
-  | TVar TVar                r 
-  | TFun [RType r] (RType r) r
+  = TApp TCon [RType r]     r
+  | TVar TVar               r 
+  | TFun [Bind r] (RType r) r
   | TAll TVar (RType r)
     deriving (Eq, Ord, Show, Functor)
+
+data Bind r
+  = B { b_sym  :: F.Symbol
+      , b_type :: !(RType r)
+      } 
+    deriving (Eq, Ord, Show, Functor)
+
 
 -- | Standard Types
 type Type    = RType ()
@@ -132,7 +138,7 @@ toType = fmap (const ())
 ofType :: (F.Reftable r) => Type -> RType r
 ofType = fmap (const F.top)
 
-bkFun :: RType a -> Maybe ([TVar], [RType a], RType a)
+bkFun :: RType r -> Maybe ([TVar], [Bind r], RType r)
 bkFun t = do let (αs, t') = bkAll t
              (xts, t'')  <- bkArr t'
              return        (αs, xts, t'')
@@ -230,13 +236,16 @@ instance PP a => PP (Maybe a) where
 
 instance F.Reftable r => PP (RType r) where
   pp (TVar α r)     = F.ppTy r $ pp α 
-  pp (TFun ts t _)  = ppArgs parens comma ts <+> text "=>" <+> pp t 
+  pp (TFun xts t _) = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
   pp (TApp c [] r)  = F.ppTy r $ ppTC c 
   pp (TApp c ts r)  = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
 
-ppArgs p sep          = p . intersperse sep . map pp
 
+instance F.Reftable r => PP (Bind r) where 
+  pp (B x t)        = pp x <> colon <> pp t 
+
+ppArgs p sep          = p . intersperse sep . map pp
 ppTC TInt             = text "int"
 ppTC TBool            = text "boolean"
 ppTC TVoid            = text "void"
@@ -288,14 +297,15 @@ instance (PP a, PP b) => PP (Annot b a) where
 tVar   :: (F.Reftable r) => TVar -> RType r
 tVar   = (`TVar` F.top) 
 
-tInt, tBool, tVoid, tErr, tProp :: (F.Reftable r) => RType r
+tInt, tBool, tVoid, tErr :: (F.Reftable r) => RType r
 tInt   = TApp TInt  [] F.top 
 tBool  = TApp TBool [] F.top
 tVoid  = TApp TVoid [] F.top
 tErr   = tVoid
 
-tProp  = TApp tcProp [] F.top 
-tcProp = TDef $ F.S propConName 
+-- tProp :: (F.Reftable r) => RType r
+-- tProp  = TApp tcProp [] F.top 
+-- tcProp = TDef $ F.S propConName 
 
 -----------------------------------------------------------------------
 -- | Operator Types ---------------------------------------------------

@@ -17,7 +17,7 @@ Dependencies
 HW 2 Release Checklist
 ----------------------
 
-* Remove all GHC make "warnings"
+* dumpInferredTypes
 
 * Make hw-liquid branch 
     
@@ -52,8 +52,18 @@ HW 2 Release Checklist
             Debugging will be **HARD**: use `tracePP` and related functions aggressively.
 
             1. modify envAdds    to log the types/template
+            
             2. modify subType/s  to see EXACTLY what constraints are being added at each site.
+            
             3. stare at .fq files to see what the generated constraints look like.
+            
+            4. use the `ssaTransform'` (instead of `ssaTransform`) if you
+               want to see the output SSA.
+            
+            5. the recorded templates and constraints for each binder will be saved 
+               in `foo.js.annot`. look at it to make sure the right templates/types 
+               are being inferred.
+
 
 * Update GOTO haddocks
     

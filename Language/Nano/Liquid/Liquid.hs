@@ -49,7 +49,8 @@ solveConstraints f ci
        return r'
 
 renderAnnotations   :: a -> IO ()
-renderAnnotations _ = donePhase Loud "Ask Santo to: render inferred types"
+renderAnnotations _ 
+  = donePhase Loud "Ask Santa to: render inferred types (pull request forthcoming)"
 
 
 --------------------------------------------------------------------------------

@@ -87,7 +87,7 @@ instance (PP r, F.Reftable r) => Substitutable r (RType r) where
 instance Free (RType r) where
   free (TApp _ ts _)    = S.unions   $ free <$> ts
   free (TVar α _)       = S.singleton α 
-  free (TFun ts t)      = S.unions   $ free <$> t:ts
+  free (TFun ts t _)    = S.unions   $ free <$> t:ts
   free (TAll α t)       = S.delete α $ free t 
 
 instance Substitutable () Fact where
@@ -98,22 +98,19 @@ instance Free Fact where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
 
--- type GType r = RType r without any TAll
--- appTy :: Subst -> GType r -> GType r
-
 ------------------------------------------------------------------------
 -- appTy :: RSubst r -> RType r -> RType r
 ------------------------------------------------------------------------
 appTy θ (TApp c ts z)      = TApp c (apply θ ts) z 
 appTy (Su m) t@(TVar α r)  = (M.lookupDefault t α m) `strengthen` r
-appTy θ (TFun ts t)        = TFun  (apply θ ts) (apply θ t)
+appTy θ (TFun ts t r)      = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m) (TAll α t)    = apply (Su $ M.delete α m) t 
 
 
 -----------------------------------------------------------------------------
 unify :: Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
-unify θ (TFun ts t) (TFun ts' t')     = unifys  θ (t:ts) (t':ts')
+unify θ (TFun ts t _) (TFun ts' t' _) = unifys  θ (t:ts) (t':ts')
 unify θ (TVar α _) t                  = varAsgn θ α t 
 unify θ t (TVar α _)                  = varAsgn θ α t
 unify θ (TApp c ts _) (TApp c' ts' _) 

@@ -48,7 +48,7 @@ module Language.Nano.Liquid.Types (
   ) where
 
 import           Control.Applicative ((<$>), (<*>))
-import           Data.Maybe             (fromMaybe, isJust)
+import           Data.Maybe             (catMaybes, fromMaybe, isJust)
 import           Data.Monoid            hiding ((<>))            
 import           Data.Ord               (comparing) 
 import qualified Data.List               as L
@@ -173,21 +173,29 @@ eSingleton t e  = t `strengthen` (F.exprReft e)
 pSingleton      :: (F.Predicate p) => RefType -> p -> RefType 
 pSingleton t p  = t `strengthen` (F.propReft p)
 
-
 -- eSingleton      :: (F.Expression e) => Type -> e -> RefType 
 -- eSingleton t e  = (rType t) `strengthen` (F.exprReft e)
 -- 
 -- pSingleton      :: (F.Predicate p) => Type -> p -> RefType 
 -- pSingleton t p  = (rType t) `strengthen` (F.propReft p)
 
+
 shiftVVs :: (F.Symbolic x) => [RefType] -> [x] -> (F.Subst, [RefType])
 shiftVVs ts xs = (su, ts')
   where 
     ts'        = F.subst su $ safeZipWith "shiftVV1" shiftVV ts xs
-    su         = F.mkSubst  $ safeZipWith "shiftVV2" (\t x -> (F.symbol t, F.eVar x)) ts xs 
+    su         = F.mkSubst  $ catMaybes $ safeZipWith "shiftVV2" fSub    ts xs 
+    fSub t x   = if isBaseRType t then Just (F.symbol t, F.eVar x) else Nothing
+
+-- shiftVVs :: (F.Symbolic x) => [RefType] -> [x] -> (F.Subst, [RefType])
+-- shiftVVs ts xs = (su, ts')
+--   where 
+--     ts'        = F.subst su $ safeZipWith "shiftVV1" shiftVV ts xs
+--     su         = F.mkSubst  $ safeZipWith "shiftVV2" (\t x -> (F.symbol t, F.eVar x)) ts xs 
 
 shiftVV t@(TApp c ts r) x = TApp c ts $ r `F.shiftVV` (F.symbol x)
 shiftVV t@(TVar a r)    x = TVar a    $ r `F.shiftVV` (F.symbol x)
+-- shiftVV t@(TFun ts t r) x = TFun ts t $ r `F.shiftVV` (F.symbol x)
 shiftVV t _               = t
 
 
@@ -215,7 +223,7 @@ rTypeSort :: (F.Reftable r) => RType r -> F.Sort
 rTypeSort (TApp TInt [] _) = F.FInt
 rTypeSort (TVar α _)       = F.FObj $ F.symbol α 
 rTypeSort t@(TAll _ _)     = rTypeSortForAll t 
-rTypeSort (TFun ts t)      = F.FFunc 0 $ rTypeSort <$> ts ++ [t]
+rTypeSort (TFun ts t _)    = F.FFunc 0 $ rTypeSort <$> ts ++ [t]
 rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
 
 
@@ -242,6 +250,7 @@ stripRTypeBase :: RType r -> Maybe r
 ------------------------------------------------------------------------------------------
 stripRTypeBase (TApp _ _ r) = Just r
 stripRTypeBase (TVar _ r)   = Just r
+stripRTypeBase (TFun _ _ r) = Just r
 stripRTypeBase _            = Nothing
  
 ------------------------------------------------------------------------------------------
@@ -265,14 +274,14 @@ emapReft  :: (F.Reftable a) => ([F.Symbol] -> a -> b) -> [F.Symbol] -> RType a -
 emapReft f γ (TVar α r)    = TVar α (f γ r)
 emapReft f γ (TApp c ts r) = TApp c (emapReft f γ <$> ts) (f γ r)
 emapReft f γ (TAll α t)    = TAll α (emapReft f γ t)
-emapReft f γ (TFun ts t)   = TFun (emapReft f γ' <$> ts) (emapReft f γ' t) where γ' = (rTypeValueVar <$> ts) ++ γ 
+emapReft f γ (TFun ts t r) = TFun (emapReft f γ' <$> ts) (emapReft f γ' t) (f γ r) where γ' = (rTypeValueVar <$> ts) ++ γ 
 
 ------------------------------------------------------------------------------------------
 mapReftM :: (Monad m, Applicative m) => (a -> m b) -> RType a -> m (RType b)
 ------------------------------------------------------------------------------------------
 mapReftM f (TVar α r)      = TVar α <$> f r
 mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> f r
-mapReftM f (TFun ts t)     = TFun   <$> mapM (mapReftM f) ts <*> mapReftM f t
+mapReftM f (TFun ts t r)   = TFun   <$> mapM (mapReftM f) ts <*> mapReftM f t <*> f r
 mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
 
 ------------------------------------------------------------------------------------------
@@ -289,7 +298,7 @@ efoldReft :: (F.Reftable r) => (RType r -> b) -> (F.SEnv b -> r -> a -> a) -> F.
 ------------------------------------------------------------------------------------------
 efoldReft _ f γ z (TVar _ r)       = f γ r z
 efoldReft g f γ z t@(TApp _ ts r)  = f γ r $ efoldRefts g f (efoldExt g t γ) z ts
-efoldReft g f γ z (TFun ts t)      = efoldReft g f γ' (efoldRefts g f γ' z ts) t  where γ' = foldr (efoldExt g) γ ts
+efoldReft g f γ z (TFun ts t r)    = f γ r $ efoldReft g f γ' (efoldRefts g f γ' z ts) t  where γ' = foldr (efoldExt g) γ ts
 efoldReft g f γ z (TAll α t)       = efoldReft g f γ z t
 efoldRefts g f γ z ts              = L.foldl' (efoldReft g f γ) z ts
 efoldExt g t γ                     = F.insertSEnv (rTypeValueVar t) (g t) γ

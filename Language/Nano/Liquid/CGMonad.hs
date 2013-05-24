@@ -327,11 +327,12 @@ refreshRefType = mapReftM refresh
 
 splitC :: SubC -> CGM [FixSubC]
 
-splitC (Sub g i (TFun t1s t1) (TFun t2s t2))
-  = do g'       <- envTyAdds i t2s g 
+splitC (Sub g i (TFun t1s t1 _) (TFun t2s t2 _))
+  = do let bcs   = bsplitC g i t1 t2
+       g'       <- envTyAdds i t2s g 
        cs       <- concatMapM splitC $ safeZipWith "splitC1" (Sub g' i) t2s t1s' 
        cs'      <- splitC $ Sub g' i (F.subst su t1) t2      
-       return    $ cs ++ cs'
+       return    $ bcs ++ cs ++ cs'
     where 
       (su, t1s') = shiftVVs t1s (F.symbol <$> t2s)
 
@@ -356,6 +357,8 @@ splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
        return $ cs ++ cs'
 
 bsplitC g ci t1 t2
+  | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2
+  = [F.subC (fenv g) F.PTrue (r1 {F.sr_reft = F.top}) r2 Nothing [] ci]
   | F.isNonTrivialSortedReft r2
   = [F.subC (fenv g) p r1 r2 Nothing [] ci]
   | otherwise
@@ -372,11 +375,12 @@ bsplitC g ci t1 t2
 ---------------------------------------------------------------------------------------
 splitW :: WfC -> CGM [FixWfC]
 ---------------------------------------------------------------------------------------
-splitW (W g i (TFun ts t)) 
-  = do g'    <- envTyAdds i ts g 
-       ws    <- concatMapM splitW [W g' i ti | ti <- ts]
-       ws'   <-            splitW (W g' i t)
-       return $ ws ++ ws'
+splitW (W g i (TFun ts t _)) 
+  = do let bws = bsplitW g t i
+       g'     <- envTyAdds i ts g 
+       ws     <- concatMapM splitW [W g' i ti | ti <- ts]
+       ws'    <-            splitW (W g' i t)
+       return  $ bws ++ ws ++ ws'
 
 splitW (W g i (TAll _ t)) 
   = splitW (W g i t)

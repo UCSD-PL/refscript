@@ -17,6 +17,10 @@ Dependencies
 HW 2 Release Checklist
 ----------------------
 
+* Add Refts to Functions
+
+* Add FRESH binders to all parsed, nameless refinements.
+
 * Fix: tests/liquid/pos/safeList.js
 
 * Remove all GHC make "warnings"

@@ -13,7 +13,7 @@ import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import           Control.Monad
 import           Text.Parsec
-import           Text.Parsec.String hiding (parseFromFile)
+import           Text.Parsec.String hiding (Parser, parseFromFile)
 import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*), (<*>))
 import           Data.Char (toLower, isLower) 
@@ -59,7 +59,9 @@ xyP lP sepP rP
 -- | RefTypes -------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 
--- Top-level parser for "bare" types. If refinements not supplied, then "top" refinement is used.
+-- Top-level parser for "bare" types. 
+-- If refinements not supplied, 
+-- then "top" refinement is used.
 
 bareTypeP :: Parser RefType 
 
@@ -72,7 +74,9 @@ bareFunP
   = do args   <- parens $ sepBy bareTypeP comma
        reserved "=>" 
        ret    <- bareTypeP 
-       return $ TFun args ret
+       r      <- topP
+       return $ TFun args ret r
+
 
 bareAtomP 
   =  refP bbaseP 
@@ -106,13 +110,23 @@ bareAllP
        t  <- bareTypeP
        return $ foldr TAll t as
 
-
 locParserP :: Parser a -> Parser (Located a)
 locParserP p = liftM2 Loc getPosition p
   
-dummyP ::  Monad m => m (Reft -> b) -> m b
-dummyP fm 
-  = fm `ap` return top 
+dummyP ::  Parser (Reft -> b) -> Parser b
+dummyP fm = fm `ap` topP 
+
+topP   :: Parser Reft
+topP   = (Reft . (, []) . vv . Just) <$> freshIntP
+
+positionNameP = dummyNamePos <$> getPosition
+  
+dummyNamePos pos  = "dummy." ++ name ++ ['.'] ++ line ++ ['.'] ++ col
+    where name    = san <$> sourceName pos
+          line    = show $ sourceLine pos  
+          col     = show $ sourceColumn pos  
+          san '/' = '.'
+          san c   = toLower c
 
 bindRefP :: Parser (Reft -> a) -> Parser a
 bindRefP kindP

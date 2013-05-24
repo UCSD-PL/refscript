@@ -34,7 +34,6 @@ module Language.Nano.Typecheck.Types (
   , Type
   , TVar (..)
   , TCon (..)
-  , TBody (..)
 
   -- * Primitive Types
   , tInt
@@ -99,12 +98,12 @@ instance F.Symbolic a => F.Symbolic (Located a) where
   symbol = F.symbol . val
 
 -- | Constructed Type Bodies
-data TBody r 
-  = TD { td_con  :: !TCon
-       , td_args :: ![TVar]
-       , td_body :: !(RType r)
-       , td_pos  :: !SourcePos
-       } deriving (Show, Functor)
+-- data TBody r 
+--   = TD { td_con  :: !TCon
+--        , td_args :: ![TVar]
+--        , td_body :: !(RType r)
+--        , td_pos  :: !SourcePos
+--        } deriving (Show, Functor)
 
 -- | Type Constructors
 data TCon 
@@ -116,9 +115,9 @@ data TCon
 
 -- | (Raw) Refined Types 
 data RType r  
-  = TApp TCon [RType r] r
-  | TVar TVar r 
-  | TFun [RType r] (RType r)
+  = TApp TCon [RType r]      r
+  | TVar TVar                r 
+  | TFun [RType r] (RType r) r
   | TAll TVar (RType r)
     deriving (Eq, Ord, Show, Functor)
 
@@ -138,8 +137,8 @@ bkFun t = do let (αs, t') = bkAll t
              (xts, t'')  <- bkArr t'
              return        (αs, xts, t'')
          
-bkArr (TFun xts t) = Just (xts, t)
-bkArr _            = Nothing
+bkArr (TFun xts t _) = Just (xts, t)
+bkArr _              = Nothing
 
 bkAll                :: RType a -> ([TVar], RType a)
 bkAll t              = go [] t
@@ -231,7 +230,7 @@ instance PP a => PP (Maybe a) where
 
 instance F.Reftable r => PP (RType r) where
   pp (TVar α r)     = F.ppTy r $ pp α 
-  pp (TFun ts t)    = ppArgs parens comma ts <+> text "=>" <+> pp t 
+  pp (TFun ts t _)  = ppArgs parens comma ts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
   pp (TApp c [] r)  = F.ppTy r $ ppTC c 
   pp (TApp c ts r)  = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  

@@ -12,6 +12,7 @@ import           Data.Maybe                         (fromJust) -- fromMaybe, isJ
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
@@ -28,18 +29,18 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
 
 --------------------------------------------------------------------------------
-verifyFile     :: FilePath -> IO (F.FixResult SourcePos)
+verifyFile     :: FilePath -> IO (F.FixResult SourceSpan)
 --------------------------------------------------------------------------------
 verifyFile f   = reftypeCheck f . typeCheck . ssaTransform =<< parseNanoFromFile f
 
 -- DEBUG VERSION 
 ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
-reftypeCheck   :: FilePath -> Nano AnnType RefType -> IO (F.FixResult SourcePos)
+reftypeCheck   :: FilePath -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
 reftypeCheck f = solveConstraints f . generateConstraints  
 
 --------------------------------------------------------------------------------
-solveConstraints :: FilePath -> F.FInfo Cinfo -> IO (F.FixResult SourcePos) 
+solveConstraints :: FilePath -> F.FInfo Cinfo -> IO (F.FixResult SourceSpan) 
 --------------------------------------------------------------------------------
 solveConstraints f ci 
   = do (r, sol) <- solve f [] ci

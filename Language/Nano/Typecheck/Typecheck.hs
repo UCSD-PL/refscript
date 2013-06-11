@@ -8,7 +8,7 @@ import qualified Data.HashMap.Strict as M
 import qualified Data.Traversable    as T
 -- import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust) -- fromMaybe, maybeToList)
-import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>), vcat)
+import           Text.PrettyPrint.HughesPJ          ({-Doc,-} text, render, {-($+$), (<+>),-} vcat)
 import           Text.Printf                        (printf)
 
 import           Language.Nano.Errors
@@ -111,6 +111,8 @@ tcFun γ (FunctionStmt l f xs body)
          do q              <- tcStmts γ'' body
             when (isJust q) $ unifyType l "Missing return" f tVoid t
        return $ Just γ' 
+
+tcFun _  _ = error "Calling tcFun not on FunctionStatement"
 
 funTy l f xs 
   = do ft <- getDefType f 

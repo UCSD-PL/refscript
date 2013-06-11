@@ -5,7 +5,7 @@
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
 -- import           Text.Printf                        (printf)
-import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
+-- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
 import           Control.Applicative                ((<$>))
 import           Data.Maybe                         (fromJust) -- fromMaybe, isJust)
@@ -14,7 +14,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.PrettyPrint
+-- import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Interface        (solve)
 import           Language.Nano.Errors
 import           Language.Nano.Types
@@ -33,7 +33,7 @@ verifyFile     :: FilePath -> IO (F.FixResult SourcePos)
 verifyFile f   = reftypeCheck f . typeCheck . ssaTransform =<< parseNanoFromFile f
 
 -- DEBUG VERSION 
-ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
+-- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
 reftypeCheck   :: FilePath -> Nano AnnType RefType -> IO (F.FixResult SourcePos)
 reftypeCheck f = solveConstraints f . generateConstraints  
@@ -77,6 +77,8 @@ consFun g (FunctionStmt l f xs body)
        gm             <- consStmts g'' body
        maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
        return g'
+
+consFun _ _ = error "consFun called not with FunctionStmt"
 
 -----------------------------------------------------------------------------------
 envAddFun :: AnnType -> CGEnv -> Id AnnType -> [Id AnnType] -> RefType -> CGM CGEnv
@@ -190,7 +192,7 @@ envJoin' :: AnnType -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 envJoin' l g g1 g2
   = do let xs   = [x | PhiVar x <- ann_fact l] 
        let t1s  = (`envFindTy` g1) <$> xs 
-       let t2s  = (`envFindTy` g2) <$> xs
+       -- let t2s  = (`envFindTy` g2) <$> xs
        -- when (length t1s /= length t2s) $ cgError (bugBadPhi l t1s t2s)
        (g',ts) <- freshTyPhis (srcPos l) g xs $ map toType t1s -- SHOULD BE SAME as t2s 
        subTypes l g1 xs ts

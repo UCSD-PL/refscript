@@ -4,12 +4,12 @@
 // error_reporting(E_ALL | E_STRICT);
 
 
-function execCommand($ths, $dir, $log, $packagedir) {
-  $cmd_ld_lib  = 'LANG=en_US.UTF-8 PATH=./:$PATH' ;  #LD_LIBRARY_PATH='.$dir.'external/z3/lib' ;
-  $cmd_liqhs   = 'LIQUIDHS='.$dir;
+function execCommand($tsrc, $dir, $log, $packagedir) {
+  $cmd_ld_lib  = 'LANG=en_US.UTF-8 PATH=./:$PATH' ;
+  $cmd_libdir  = 'LIQUIDHS='.$dir;
   $cmd_packdir = 'GHC_PACKAGE_PATH='.$packagedir.':' ;
-  $cmd_liquid  = $dir.'liquid '.$ths ;
-  $cmd         = $cmd_ld_lib.' '.$cmd_liqhs.' '.$cmd_packdir.' '.$cmd_liquid.' > '.$log.' 2>&1';
+  $cmd_checker = $dir.'nanojs liquid '.$tsrc ;
+  $cmd         = $cmd_ld_lib.' '.$cmd_libdir.' '.$cmd_packdir.' '.$cmd_checker.' > '.$log.' 2>&1';
   return $cmd;
 }
 
@@ -86,7 +86,6 @@ $data             = file_get_contents("php://input");
 $query            = json_decode($data);
 // $packagedir       = "/home/rjhala/.ghc/x86_64-linux-7.4.1/package.conf.d/";
 $packagedir       = "/home/rjhala/research/liquid/.hsenv_liquid/ghc/lib/ghc-7.6.3/package.conf.d";
-
 $log              = "log";
 
 // echo 'HELLO TO HELL!\n';
@@ -95,21 +94,21 @@ $log              = "log";
 
 // Generate temporary filenames 
 $t                = time();
-$ths              = $t   . ".hs";
-$thq              = $ths . ".hquals";
-$thtml            = $ths . ".html"; 
-$tout             = $ths . ".out";  
-$terr             = $ths . ".err";
-$tjson            = $ths . ".json";
+$tsrc             = $t    . ".js";
+$thq              = $tsrc . ".hquals";
+$thtml            = $tsrc . ".html"; 
+$tout             = $tsrc . ".out";  
+$terr             = $tsrc . ".err";
+$tjson            = $tsrc . ".json";
 
 // Write query to files
 writeFileRaw($thq, $query->qualifiers);
-writeFileRaw($ths, $query->program);
+writeFileRaw($tsrc, $query->program);
 
 // echo 'wrote files';
 
 // Run solver
-$cmd              = execCommand($ths, "./", $log, $packagedir);
+$cmd              = execCommand($tsrc, "./", $log, $packagedir);
 writeFileRaw("cmdlog", $cmd);
 $res              = shell_exec($cmd);
 
@@ -123,8 +122,8 @@ $out['annots']    = json_decode(file_get_contents($tjson));
 // echo 'warns = '  . $out['warns'];
 
 // Cleanup temporary files
-shell_exec("rm -rf ".$ths."hi");
-shell_exec("rm -rf ".$ths."o");
+// shell_exec("rm -rf ".$tsrc."hi");
+// shell_exec("rm -rf ".$tsrc."o");
 shell_exec("mv ".$t."* saved/");
 
 // Put outputs 

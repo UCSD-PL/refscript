@@ -1,7 +1,7 @@
 <html lang="en" ng-app>
   <head>
     <meta charset="utf-8">
-    <title>LiquidHaskell · Demo</title>
+    <title>NanoJS · Demo</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="">
     <meta name="author" content="">
@@ -110,8 +110,8 @@
            
    <header class="jumbotron subhead" id="overview">
      <div class="container">
-         <h1>LiquidHaskell</h1>
-         <p class="lead">Refinement Types via SMT and Predicate Abstraction</p>
+         <h1>NanoJS</h1>
+         <p class="lead">Liquid Types for JavaScript</p>
      </div>
    </header>
 
@@ -134,9 +134,11 @@
 
          <li class="nav-header">Datatype Measures</li>
          <li ng-repeat="demo in measureDemos"><a href="" ng-click="changeTarget(demo)">{{demo.name}}</a></li>
-         
+
+         <!--
          <li class="nav-header">Abstract Refinements</li>
          <li ng-repeat="demo in abstRefDemos"><a href="" ng-click="changeTarget(demo)">{{demo.name}}</a></li>
+         -->
 
        </ul>
      </div>
@@ -147,12 +149,9 @@
 
        <div class="tabbable"> <!-- Only required for left/right tabs -->
          <ul class="nav nav-tabs">
-           <li class="active"><a href="#tabSrc" data-toggle="tab">Haskell Source</a></li>
+           <li class="active"><a href="#tabSrc" data-toggle="tab">Source</a></li>
            <li><a href="#tabQuals" data-toggle="tab">Qualifiers</a></li>
            <li ng-show="outReady"><a href="#tabOut" data-toggle="tab">Result</a></li>
-           <!-- <li ng-show="outReady"><a href="#tabLog" data-toggle="tab">Log</a></li>
-           -->
-
          </ul>
          
          <div class="tab-content">
@@ -199,12 +198,6 @@
            
            <div class="tab-pane" id="tabQuals">
              <div id="qualifier-pane" class="well" style="background:#fff">
-               <!--
-               <textarea class="field" id='qualifiers' name='qualifiers' rows='20' cols='80'>
-                // Wait for it ... 
-               </textarea>
-               -->
-
                <div id="qualifiers" style="height: 90%">
                    // Wait for it ...
                </div>
@@ -246,13 +239,6 @@
              <br>
              <br>
            </div>
-
-           <!--
-           <div class="tab-pane" id="tabLog">
-             Click <a href="log">this</a> to see the log. 
-           </div>
-           -->
-
          </div>
        </div> 
      </div>
@@ -269,22 +255,24 @@
 
   <script src="js/ace/ace.js" type="text/javascript" charset="utf-8"></script> 
   <script src="js/ace/theme-xcode.js" type="text/javascript" charset="utf-8"></script>
-  <script src="js/ace/mode-haskell.js" type="text/javascript" charset="utf-8"></script>
+  <script src="js/ace/mode-javascript.js" type="text/javascript" charset="utf-8"></script>
   
   <script src="js/tooltip.js"></script> 
   <script src="js/annot.js"></script> 
-  <script src="js/liquid.js"></script>
+  <script src="js/demo.js"></script>
     
-  <!--Site Meter -->
+  <!--Site Meter 
   <script type="text/javascript" 
     src="http://s23.sitemeter.com/js/counter.js?site=s23liquidtypes">
   </script>
+
   <noscript>
     <a href="http://s23.sitemeter.com/stats.asp?site=s23liquidtypes" 
       target="_top">
       <img src="http://s23.sitemeter.com/meter.asp?site=s23liquidtypes" 
       alt="Site Meter" border="0"/></a>
   /</noscript>
+  -->
   <!-- Copyright (c)2009 Site Meter -->
 
 

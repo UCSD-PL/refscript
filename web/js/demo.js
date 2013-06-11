@@ -10,28 +10,13 @@ var errorMarkers = [];
 
 var allDemos =
   { // Basic Demos
-    "blank.hs"              : { "name" : "Blank"            , "type" : "basic"  },
-    "refinements101.hs"     : { "name" : "Refinements 101"  , "type" : "basic"  },
-    "refinements101reax.hs" : { "name" : "Refinements 102"  , "type" : "basic"  },
-    "vectorbounds.hs"       : { "name" : "Vector Bounds"    , "type" : "basic"  },
+    "blank.js"              : { "name" : "Blank"            , "type" : "basic"  },
+    "abs.js"                : { "name" : "Abs"              , "type" : "basic"  },
+    "while5.hs"             : { "name" : "Refinements 102"  , "type" : "basic"  },
+    "minindex.hs"           : { "name" : "Refinements 101"  , "type" : "basic"  },
 
     // Measure Demos
-    "lenMapReduce.hs"       : { "name" : "Safe List"        , "type" : "measure"},
-    "KMeansHelper.hs"       : { "name" : "K-Means Lib"      , "type" : "measure"},
-    "KMeans.hs"             : { "name" : "K-Means"          , "type" : "measure"}, 
-    "TalkingAboutSets.hs"   : { "name" : "Talk About Sets"  , "type" : "measure"},
-    "UniqueZipper.hs"       : { "name" : "Unique Zippers"   , "type" : "measure"},
-    "LambdaEval.hs"         : { "name" : "Lambda Eval"      , "type" : "measure"}, 
-    "treesum.hs"            : { "name" : "List-Tree Sum"    , "type" : "measure"},
-    // "ListLength.hs"     : { "name" : "List Lengths"     , "type" : "measure"},
-    // "MapReduce.hs"      : { "name" : "Map Reduce"       , "type" : "measure"}, 
-    // "ListElts.hs"           : { "name" : "List Elements"    , "type" : "measure"}, 
-
-    // Abstract Refinement Demos
-    "absref101.hs"      : { "name" : "Parametric Invariants", "type" : "absref" },  
-    "ListSort.hs"       : { "name" : "Sorting Lists"    , "type" : "absref" },
-    "Map.hs"            : { "name" : "BinSearch Tree"   , "type" : "absref" },
-    "Foldr.hs"          : { "name" : "Induction"        , "type" : "absref" }
+    "safeLists.hs"          : { "name" : "Safe List"        , "type" : "measure"},
   };
 
 
@@ -56,7 +41,7 @@ function getDemos(ty){
 
 var progEditor  = ace.edit("program");
 progEditor.setTheme("ace/theme/xcode");
-var SrcMode     = require("ace/mode/haskell").Mode;
+var SrcMode     = require("ace/mode/javascript").Mode;
 progEditor.getSession().setMode(new SrcMode());
 var typeTooltip = new TokenTooltip(progEditor, getAnnot);
 
@@ -132,7 +117,7 @@ function setErrors(editor, errs){
 
 function getSrcURL(file)   { return ('demos/' + file);              }
 function getQualsURL(file) { return ('demos/' + file + '.hquals');  }
-function getVerifierURL()  { return 'liquid.php';                   }
+function getVerifierURL()  { return 'demo.php';                   }
 
 /*******************************************************************************/
 /************** Tracking Status ************************************************/
@@ -176,7 +161,7 @@ function LiquidDemoCtrl($scope, $http, $location) {
   // Populate list of demos
   $scope.basicDemos   = getDemos("basic")  ;  
   $scope.measureDemos = getDemos("measure");
-  $scope.abstRefDemos = getDemos("absref") ;
+  // $scope.abstRefDemos = getDemos("absref") ;
 
   // Load a particular demo
   $scope.loadSource   = function(demo){
@@ -184,13 +169,7 @@ function LiquidDemoCtrl($scope, $http, $location) {
     var qualsURL      = 'demos/' + demo.file + '.hquals';
    
     clearStatus($scope);
-
-    // $scope.isSafe     = false;
-    // $scope.isUnsafe   = false;
-    // $scope.isCrash    = false; 
-    // $scope.isChecking = false;
-    // $scope.isUnknown  = true; 
-
+    
     $scope.msg        = demo.file; 
     $scope.outReady   = false;
 
@@ -236,11 +215,8 @@ function LiquidDemoCtrl($scope, $http, $location) {
 
     $http.post(getVerifierURL(), query)
          .success(function(data, status) {
-           
-            //Nuke this: results now viewable in editor pane!
-            //$scope.outReady  = true;
             
-            $scope.status    = status;
+           $scope.status    = status;
             globData         = data;
             $scope.result    = data.result;
             $scope.warns     = data.warns;
@@ -248,7 +224,7 @@ function LiquidDemoCtrl($scope, $http, $location) {
             $scope.annotHtml = data.annotHtml;
             setStatusResult($scope, data.result);
            
-            // This may be "null" if liquid crashed...
+            // This may be "null" if checker crashed...
             debugAnnots      = data.annots;
             if (data.annots) { 
               setAnnots(data.annots.types);

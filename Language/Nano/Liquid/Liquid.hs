@@ -31,7 +31,7 @@ import           Language.Nano.Liquid.CGMonad
 --------------------------------------------------------------------------------
 verifyFile     :: FilePath -> IO (F.FixResult SourceSpan)
 --------------------------------------------------------------------------------
-verifyFile f   = reftypeCheck f . typeCheck . ssaTransform =<< parseNanoFromFile f
+verifyFile f   =  reftypeCheck f . typeCheck . ssaTransform =<< parseNanoFromFile f
 
 -- DEBUG VERSION 
 ssaTransform' x = tracePP "SSATX" $ ssaTransform x 

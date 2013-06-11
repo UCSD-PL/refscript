@@ -9,6 +9,9 @@ module Language.Nano.Liquid.CGMonad (
   -- * Constraint Generation Monad
     CGM
 
+  -- * Constraint Information
+  , CGInfo (..)
+
   -- * Execute Action and Get FInfo
   , getFInfo 
 
@@ -46,6 +49,7 @@ import           Text.PrettyPrint.HughesPJ
 
 import           Language.Nano.Types
 import           Language.Nano.Errors
+import           Language.Nano.Annots
 import qualified Language.Nano.Env       as E
 import           Language.Nano.Typecheck.Types 
 import           Language.Nano.Typecheck.Subst
@@ -65,9 +69,17 @@ import           Language.ECMAScript3.Syntax
 
 
 -------------------------------------------------------------------------------
-getFInfo       :: NanoRefType -> CGM a -> F.FInfo Cinfo  
+-- | Top level type returned after Constraint Generation ----------------------
 -------------------------------------------------------------------------------
-getFInfo pgm = cgStateFInfo pgm . execute pgm . (>> fixCWs)
+
+data CGInfo = { cgi_finfo :: F.FInfo Cinfo
+              , cgi_annot :: AnnInfo RefType  
+              }
+
+-------------------------------------------------------------------------------
+getCGInfo    :: NanoRefType -> CGM a -> F.FInfo Cinfo  
+-------------------------------------------------------------------------------
+getFInfo pgm = cgStateCInfo pgm . execute pgm . (>> fixCWs)
   where 
     fixCWs   = (,) <$> fixCs <*> fixWs
     fixCs    = concatMapM splitC . cs =<< get 
@@ -80,7 +92,7 @@ execute pgm act
       (Right x, st) -> (x, st)  
 
 initState :: Nano z RefType -> CGState
-initState pgm = CGS F.emptyBindEnv (defs pgm) [] [] 0
+initState pgm = CGS F.emptyBindEnv (defs pgm) [] [] 0 mempty
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -90,16 +102,17 @@ getDefType f
        l   = srcPos f
 
 
-cgStateFInfo :: Nano a1 (RType F.Reft)-> (([F.SubC a], [F.WfC a]), CGState) -> F.FInfo a
-cgStateFInfo pgm ((fcs, fws), cg)  
-  = F.FI { F.cm    = M.fromList $ F.addIds fcs  
-         , F.ws    = fws
-         , F.bs    = binds cg
-         , F.gs    = measureEnv pgm 
-         , F.lits  = []
-         , F.kuts  = F.ksEmpty
-         , F.quals = quals pgm 
-         }
+-- cgStateFInfo :: Nano a1 (RType F.Reft)-> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
+cgStateFInfo pgm ((fcs, fws), cg) = CGI fi (cg_ann cg)
+  where 
+    fi   = F.FI { F.cm    = M.fromList $ F.addIds fcs  
+                , F.ws    = fws
+                , F.bs    = binds cg
+                , F.gs    = measureEnv pgm 
+                , F.lits  = []
+                , F.kuts  = F.ksEmpty
+                , F.quals = quals pgm 
+                }
 
 measureEnv   ::  Nano a (RType F.Reft) -> F.SEnv F.SortedReft
 measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts 
@@ -114,8 +127,8 @@ data CGState
         , cs      :: ![SubC]          -- ^ subtyping constraints
         , ws      :: ![WfC]           -- ^ well-formedness constraints
         , count   :: !Integer         -- ^ freshness counter
+        , cg_ann  :: AnnInfo RefType  -- ^ recorded annotations
         }
-
 
 type CGM     = ErrorT String (State CGState)
 

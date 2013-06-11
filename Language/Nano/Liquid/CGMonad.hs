@@ -13,7 +13,7 @@ module Language.Nano.Liquid.CGMonad (
   , CGInfo (..)
 
   -- * Execute Action and Get FInfo
-  , getFInfo 
+  , getCGInfo 
 
   -- * Get Defined Function Type Signature
   , getDefType
@@ -40,7 +40,7 @@ module Language.Nano.Liquid.CGMonad (
   ) where
 
 import           Data.Maybe             (fromMaybe)
--- import           Data.Monoid            hiding ((<>))            
+import           Data.Monoid            (mempty) -- hiding ((<>))            
 -- import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 
@@ -49,8 +49,8 @@ import           Text.PrettyPrint.HughesPJ
 
 import           Language.Nano.Types
 import           Language.Nano.Errors
-import           Language.Nano.Annots
-import qualified Language.Nano.Env       as E
+import qualified Language.Nano.Annots           as A
+import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types 
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Liquid.Types
@@ -73,17 +73,17 @@ import           Language.ECMAScript3.Syntax
 -------------------------------------------------------------------------------
 
 data CGInfo = CGI { cgi_finfo :: F.FInfo Cinfo
-                  , cgi_annot :: AnnInfo RefType  
+                  , cgi_annot :: A.AnnInfo RefType  
                   }
 
 -------------------------------------------------------------------------------
-getCGInfo    :: NanoRefType -> CGM a -> F.FInfo Cinfo  
+getCGInfo     :: NanoRefType -> CGM a -> CGInfo  
 -------------------------------------------------------------------------------
-getFInfo pgm = cgStateCInfo pgm . execute pgm . (>> fixCWs)
+getCGInfo pgm = cgStateCInfo pgm . execute pgm . (>> fixCWs)
   where 
-    fixCWs   = (,) <$> fixCs <*> fixWs
-    fixCs    = concatMapM splitC . cs =<< get 
-    fixWs    = concatMapM splitW . ws =<< get
+    fixCWs    = (,) <$> fixCs <*> fixWs
+    fixCs     = concatMapM splitC . cs =<< get 
+    fixWs     = concatMapM splitW . ws =<< get
 
 execute :: Nano z RefType -> CGM a -> (a, CGState)
 execute pgm act
@@ -103,7 +103,7 @@ getDefType f
 
 
 -- cgStateFInfo :: Nano a1 (RType F.Reft)-> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
-cgStateFInfo pgm ((fcs, fws), cg) = CGI fi (cg_ann cg)
+cgStateCInfo pgm ((fcs, fws), cg) = CGI fi (cg_ann cg)
   where 
     fi   = F.FI { F.cm    = M.fromList $ F.addIds fcs  
                 , F.ws    = fws
@@ -122,12 +122,12 @@ measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts
 ---------------------------------------------------------------------------------------
 
 data CGState 
-  = CGS { binds   :: F.BindEnv        -- ^ global list of fixpoint binders
-        , cg_defs :: !(E.Env RefType) -- ^ type sigs for all defined functions
-        , cs      :: ![SubC]          -- ^ subtyping constraints
-        , ws      :: ![WfC]           -- ^ well-formedness constraints
-        , count   :: !Integer         -- ^ freshness counter
-        , cg_ann  :: AnnInfo RefType  -- ^ recorded annotations
+  = CGS { binds   :: F.BindEnv          -- ^ global list of fixpoint binders
+        , cg_defs :: !(E.Env RefType)   -- ^ type sigs for all defined functions
+        , cs      :: ![SubC]            -- ^ subtyping constraints
+        , ws      :: ![WfC]             -- ^ well-formedness constraints
+        , count   :: !Integer           -- ^ freshness counter
+        , cg_ann  :: A.AnnInfo RefType  -- ^ recorded annotations
         }
 
 type CGM     = ErrorT String (State CGState)

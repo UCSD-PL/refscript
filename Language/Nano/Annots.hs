@@ -6,12 +6,12 @@ module Language.Nano.Annots (
    
     -- * Type for Annotation Map
     AnnInfo 
-    
+   
     -- * Adding new Annotations
   , addAnnot
 
     -- * Rendering Annotations
-  , annotate 
+  , annotByteString 
   ) where
 
 import qualified Data.List              as L
@@ -26,38 +26,59 @@ import           GHC.Exts                           (groupWith, sortWith)
 import           Language.Fixpoint.Files
 import           Language.Fixpoint.Misc             (inserts)
 import qualified Language.Fixpoint.Types    as F
--- import           Language.ECMAScript3.PrettyPrint   ()
+import           Language.ECMAScript3.PrettyPrint   
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Text.Parsec.Pos                   
 import           Language.Nano.Types
+import           Language.Nano.Errors
+
+
+------------------------------------------------------------------------------
+-- | Type Definitions For Annotations ----------------------------------------
+------------------------------------------------------------------------------
+
+data Annot t       = AnnBind { ann_bind :: F.Symbol, ann_type :: t }
 
 {-@ type NonNull a = {v: [a] | 0 < (len v)} @-}
 type NonEmpty a    = [a] 
-newtype AnnInfo a  = AI (M.HashMap SourceSpan (NonEmpty a))
+newtype AnnInfo a  = AI (M.HashMap SourceSpan (NonEmpty (Annot a)))
+
+instance Functor Annot where 
+  fmap f (AnnBind x t) = AnnBind x (f t)
 
 instance Functor AnnInfo where 
-  fmap f (AI m) = AI (fmap (fmap f) m)
+  fmap f (AI m) = AI (fmap (fmap (fmap f)) m)
 
 instance Monoid (AnnInfo a) where 
   mempty                  = AI M.empty
   mappend (AI m1) (AI m2) = AI (M.unionWith mappend m1 m2)
 
+------------------------------------------------------------------------
+-- | PP Instance -------------------------------------------------------
+------------------------------------------------------------------------
+
+instance PP a => PP (AnnInfo a) where 
+  pp = error "TOBD: pp instance for AnnInfo"
+
+
 ------------------------------------------------------------------------------
 -- | Adding New Annotations --------------------------------------------------
 ------------------------------------------------------------------------------
 
-addAnnot            :: SourceSpan -> a -> AnnInfo a -> AnnInfo a
-addAnnot l x (AI m) = AI (inserts l x m)
+addAnnot :: (F.Symbolic x) => SourceSpan -> x -> a -> AnnInfo a -> AnnInfo a
+addAnnot l x t (AI m) = AI (inserts l (AnnBind (F.symbol x) t) m)
 
 ------------------------------------------------------------------------------
 -- | Dumping Annotations To Disk ---------------------------------------------
 ------------------------------------------------------------------------------
 
--- annotate :: ( ) => FilePath -> FixResult SourceSpan -> AnnInfo a -> IO ()
-annotate src res a = B.writeFile jsonFile annJson 
-  where 
-    jsonFile       = extFileName Json src
-    annJson        = encode $ mkAnnMap res a
+-- writeAnnotations :: (PP t) => FilePath -> F.FixResult SourceSpan -> AnnInfo t -> IO ()
+-- writeAnnotations f res a = B.writeFile f annJson 
+--   where  
+--     annJson              = encode $ mkAnnMap res a
+
+annotByteString       :: (PP t) => F.FixResult SourceSpan -> AnnInfo t -> B.ByteString
+annotByteString res a = encode $ mkAnnMap res a
 
 ------------------------------------------------------------------------------
 -- | Type Representing Inferred Annotations ----------------------------------
@@ -68,14 +89,14 @@ data AnnMap  = Ann {
   , errors :: [SourceSpan]                           -- ^ List of errors
   } 
 
-mkAnnMap ::  F.FixResult SourceSpan -> AnnInfo (String, String) -> AnnMap 
 mkAnnMap res ann = Ann (mkAnnMapTyp ann) (mkAnnMapErr res)
 
 mkAnnMapErr (F.Unsafe ls) = ls
 mkAnnMapErr _             = []
 
 mkAnnMapTyp (AI m) 
-  = M.fromList
+  = M.map (\a -> (F.symbolString $ ann_bind a, ppshow $ ann_type a))
+  $ M.fromList
   $ map (head . sortWith (srcSpanEndCol . fst)) 
   $ groupWith (lineCol . fst) 
   $ M.toList

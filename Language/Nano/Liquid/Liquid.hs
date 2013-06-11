@@ -9,16 +9,19 @@ import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (
 import           Control.Monad
 import           Control.Applicative                ((<$>))
 import           Data.Maybe                         (fromJust) -- fromMaybe, isJust)
-
+import qualified Data.ByteString.Lazy   as B
+import qualified Data.HashMap.Strict as M
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Files
 import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Interface        (solve)
 import           Language.Nano.Errors
 import           Language.Nano.Types
+import qualified Language.Nano.Annots as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
@@ -40,24 +43,40 @@ reftypeCheck   :: FilePath -> Nano AnnType RefType -> IO (F.FixResult SourceSpan
 reftypeCheck f = solveConstraints f . generateConstraints  
 
 --------------------------------------------------------------------------------
-solveConstraints :: FilePath -> F.FInfo Cinfo -> IO (F.FixResult SourceSpan) 
+solveConstraints :: FilePath -> CGInfo -> IO (F.FixResult SourceSpan) 
 --------------------------------------------------------------------------------
-solveConstraints f ci 
-  = do (r, sol) <- solve f [] ci
+solveConstraints f cgi 
+  = do (r, sol) <- solve f [] $ cgi_finfo cgi
        let r'    = fmap (srcPos . F.sinfo) r
-       renderAnnotations sol
+       renderAnnotations f sol r' $ cgi_annot cgi
        donePhase (F.colorResult r) (F.showFix r) 
        return r'
 
-renderAnnotations   :: a -> IO ()
-renderAnnotations _ 
-  = donePhase Loud "Ask Santa to: render inferred types (pull request forthcoming)"
+renderAnnotations srcFile sol res ann  
+  = do appendFile  annFile  $ wrapStars "Constraint Templates" 
+       appendFile  annFile  $ ppshow ann
+       appendFile  annFile  $ wrapStars "Inferred Types" 
+       appendFile  annFile  $ ppshow ann'
+       B.writeFile jsonFile $ A.annotByteString res ann' 
+       donePhase Loud "Written Inferred Types"
+    where 
+       jsonFile = extFileName Json  srcFile
+       annFile  = extFileName Annot srcFile
+       ann'     = tidy $ applySolution sol ann
 
+applySolution :: F.FixSolution -> A.AnnInfo RefType -> A.AnnInfo RefType 
+applySolution = fmap . fmap . tx
+  where
+    tx s (F.Reft (x, zs))   = F.Reft (x, F.squishRefas (appSol s <$> zs))
+    appSol _ ra@(F.RConc _) = ra 
+    appSol s (F.RKvar k su) = F.RConc $ F.subst su $ M.lookupDefault F.PTop k s  
+
+tidy = id
 
 --------------------------------------------------------------------------------
-generateConstraints     :: NanoRefType -> F.FInfo Cinfo 
+generateConstraints     :: NanoRefType -> CGInfo 
 --------------------------------------------------------------------------------
-generateConstraints pgm = getFInfo pgm $ consNano pgm
+generateConstraints pgm = getCGInfo pgm $ consNano pgm
 
 --------------------------------------------------------------------------------
 consNano     :: NanoRefType -> CGM ()

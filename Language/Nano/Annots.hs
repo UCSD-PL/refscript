@@ -31,7 +31,7 @@ import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Text.Parsec.Pos                   
 import           Language.Nano.Types
 import           Language.Nano.Errors
-
+import           Text.PrettyPrint.HughesPJ          (($+$), vcat, nest, (<+>)) 
 
 ------------------------------------------------------------------------------
 -- | Type Definitions For Annotations ----------------------------------------
@@ -58,8 +58,9 @@ instance Monoid (AnnInfo a) where
 ------------------------------------------------------------------------
 
 instance PP a => PP (AnnInfo a) where 
-  pp = error "TOBD: pp instance for AnnInfo"
-
+  pp (AI m) = vcat [pp sp $+$ nest 4 (vcat $ map ppB bs) | (sp, bs) <- M.toList m]
+    where 
+      ppB a = pp (ann_bind a) <+> pp (ann_type a)
 
 ------------------------------------------------------------------------------
 -- | Adding New Annotations --------------------------------------------------

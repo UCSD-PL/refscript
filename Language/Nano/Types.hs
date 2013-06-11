@@ -36,7 +36,9 @@ module Language.Nano.Types (
   -- * Deconstructing Id
   , idName
   , idLoc 
-  
+ 
+  -- * Dummy SourceSpan
+  , dummySpan
   ) where
 
 import           Control.Applicative          ((<$>))
@@ -51,7 +53,7 @@ import           Data.Maybe                         (catMaybes)
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
--- import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
+import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 import qualified Language.Fixpoint.Types as F
 
@@ -60,7 +62,8 @@ import           Language.Fixpoint.Misc
 import           Language.Nano.Errors
 import           Text.PrettyPrint.HughesPJ
 import           Text.Parsec                        
-import           Text.Parsec.Pos (initialPos)
+import           Text.Parsec.Pos                    (initialPos)
+import           Text.Printf                        (printf)
 
 ---------------------------------------------------------------------
 -- | Command Line Configuration Options
@@ -80,7 +83,7 @@ data Config
 
 
 data Located a 
-  = Loc { loc :: !SourcePos
+  = Loc { loc :: !SourceSpan
         , val :: a
         }
  
@@ -91,9 +94,9 @@ instance Functor Located where
 --    a SourcePos
 
 class IsLocated a where 
-  srcPos :: a -> SourcePos 
+  srcPos :: a -> SourceSpan
 
-instance IsLocated (SourcePos) where 
+instance IsLocated SourceSpan where 
   srcPos x = x 
 
 instance IsLocated (Located a) where 
@@ -203,15 +206,15 @@ isNanoExprStatement e                     = errortext (text "Not Nano ExprStmt!"
 
 -- | Trivial Syntax Checking 
 
-checkTopStmt :: Statement SourcePos -> Statement SourcePos 
+checkTopStmt :: Statement SourceSpan -> Statement SourceSpan 
 checkTopStmt f@(FunctionStmt _ _ _ b) 
   | checkBody b = f
 checkTopStmt s  = errorstar $ errorInvalidTopStmt s
 
-checkBody :: [Statement SourcePos] -> Bool
+checkBody :: [Statement SourceSpan] -> Bool
 checkBody stmts = all isNano stmts && null (getWhiles stmts) 
     
-getWhiles :: [Statement SourcePos] -> [Statement SourcePos]
+getWhiles :: [Statement SourceSpan] -> [Statement SourceSpan]
 getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
   where 
     fromWhile s@(WhileStmt {}) = [s]
@@ -347,12 +350,16 @@ bop o     = convertError "F.Bop" o
 ------------------------------------------------------------------
 pAnd p q  = F.pAnd [p, q] 
 pOr  p q  = F.pOr  [p, q]
+
 ------------------------------------------------------------------
 -- SourcePos Instances -------------------------------------------
 ------------------------------------------------------------------
 
 instance Hashable SourcePos where 
-  hashWithSalt i = hashWithSalt i . sourcePosElts
+  hashWithSalt i   = hashWithSalt i . sourcePosElts
+
+instance Hashable SourceSpan where 
+  hashWithSalt i z = hashWithSalt i (sp_begin z, sp_end z)
 
 instance Hashable a => Hashable (Id a) where 
   hashWithSalt i x = hashWithSalt i (idLoc x, idName x)
@@ -360,11 +367,18 @@ instance Hashable a => Hashable (Id a) where
 idName (Id _ x) = x
 idLoc  (Id l _) = l
 
-instance PP SourcePos where 
-  pp = ppSourcePos 
-    
-instance F.Fixpoint SourcePos where
+-- instance PP SourcePos where 
+--   pp = ppSourcePos 
+-- 
+-- instance F.Fixpoint SourcePos where
+--   toFix = pp 
+
+instance PP SourceSpan where 
+  pp    = ppSourceSpan
+
+instance F.Fixpoint SourceSpan where
   toFix = pp 
+
 
 instance (Ord a, F.Fixpoint a) => PP (F.FixResult a) where
   pp = F.resultDoc
@@ -380,6 +394,12 @@ ppSourcePos src = parens
   where 
     (f,l,c)     = sourcePosElts src 
 
+ppSourceSpan z  = parens 
+                $ text (printf "file %s: (%d, %d) - (%d, %d)" f l c l' c')  
+  where 
+    (f,l ,c )   = sourcePosElts $ sp_begin z
+    (_,l',c')   = sourcePosElts $ sp_end   z
+
 instance PP F.Pred where 
   pp = pprint
 
@@ -390,4 +410,6 @@ instance PP a => PP (Located a) where
   pp x = pp (val x) <+> text "at:" <+> pp (loc x)
 --------------------------------------------------------------------------------
 
-
+dummySpan :: SourceSpan
+dummySpan = Span l l 
+  where l = initialPos ""

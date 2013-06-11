@@ -24,8 +24,7 @@ import           Data.Monoid                        (Monoid (..))
 import           Data.Maybe                         (catMaybes, fromMaybe)
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
-import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
-
+import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile, SourceSpan (..))
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Misc
@@ -47,7 +46,7 @@ parseNanoFromFile f
 -- | Nano Programs : Wrapper around EcmaScript -------------------
 ------------------------------------------------------------------
 
-type Nano        = [Fun SourcePos] 
+type Nano        = [Fun SourceSpan] 
 
 data Fun a       = Fun { floc  :: a             -- ^ sourceloc 
                        , fname :: Id a          -- ^ name
@@ -59,7 +58,7 @@ data Fun a       = Fun { floc  :: a             -- ^ sourceloc
 
 -- functions fns = fns
 
-mkNano :: [Statement SourcePos] -> Maybe Nano
+mkNano :: [Statement SourceSpan] -> Maybe Nano
 mkNano =  sequence . map mkFun 
 
 mkFun :: Statement a -> Maybe (Fun a)
@@ -76,10 +75,10 @@ mkFun s             = convertError "mkFun" s
 -- | Verification Conditions -------------------------------------
 ------------------------------------------------------------------
 
--- | `VCond` are formulas indexed by `SourcePos` from which 
+-- | `VCond` are formulas indexed by `SourceSpan` from which 
 --   the obligation arises.
 
-newtype VCond_ a = VC (M.HashMap SourcePos a)
+newtype VCond_ a = VC (M.HashMap SourceSpan a)
 
 type VCond       = VCond_ F.Pred
 
@@ -93,7 +92,7 @@ instance Monoid VCond where
 instance PP VCond where 
   pp = ppObligations . obligationsVCond 
 
-instance PP (Fun SourcePos) where 
+instance PP (Fun SourceSpan) where 
   pp (Fun l n xs _ pre post) =   pp n <+> text "defined at" <+> pp l
                              $+$ text "formals: "  <+> intersperse comma (pp <$> xs)
                              $+$ text "requires: " <+> pp pre
@@ -105,13 +104,13 @@ ppObligations lps   =   text "Verification Condition"
 ppObligation (l, p) = text "for" <+> pp l <+> dcolon <+> pp p
 
 ------------------------------------------------------------------
-obligationsVCond :: VCond_ a -> [(SourcePos, a)] 
+obligationsVCond :: VCond_ a -> [(SourceSpan, a)] 
 ------------------------------------------------------------------
 
 obligationsVCond (VC x) = M.toList x
 
 ------------------------------------------------------------------
-newVCond     :: SourcePos -> F.Pred -> VCond
+newVCond     :: SourceSpan -> F.Pred -> VCond
 ------------------------------------------------------------------
 
 newVCond l p = VC $ M.singleton l p

@@ -47,19 +47,12 @@ module Language.Nano.Liquid.Types (
   , infixOpRTy 
   ) where
 
--- import           Data.Monoid            hiding ((<>))            
--- import           Control.Applicative ((<$>), (<*>))
--- import           Data.Ord               (comparing) 
--- import           Data.Generics.Aliases
--- import           Data.Generics.Schemes
-
--- import           Language.ECMAScript3.Syntax.Annotations
-
 import           Data.Maybe             (fromMaybe) -- (catMaybes, , isJust)
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 -- import           Language.Nano.Errors
 import           Language.Nano.Types
@@ -68,8 +61,6 @@ import           Language.Nano.Typecheck.Types
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
--- import           Language.Fixpoint.Misc
--- import           Text.Parsec.Pos    (initialPos)
 import           Control.Applicative 
   
 -------------------------------------------------------------------------------------
@@ -99,7 +90,7 @@ instance PP CGEnv where
 -- | Constraint Information ------------------------------------------------
 ----------------------------------------------------------------------------
 
-newtype Cinfo = Ci SourcePos deriving (Eq, Ord, Show) 
+newtype Cinfo = Ci SourceSpan deriving (Eq, Ord, Show) 
 
 -- emptyCinfo    = Ci $ initialPos ""
 

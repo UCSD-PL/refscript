@@ -57,8 +57,6 @@ module Language.Nano.Typecheck.Types (
   ) where 
 
 import           Text.Printf
--- import           Data.Generics.Aliases
--- import           Data.Generics.Schemes
 import           Data.Hashable
 import           Data.Maybe             (fromMaybe) --, isJust)
 import           Data.Monoid            hiding ((<>))            

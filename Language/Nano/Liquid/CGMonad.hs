@@ -72,9 +72,9 @@ import           Language.ECMAScript3.Syntax
 -- | Top level type returned after Constraint Generation ----------------------
 -------------------------------------------------------------------------------
 
-data CGInfo = { cgi_finfo :: F.FInfo Cinfo
-              , cgi_annot :: AnnInfo RefType  
-              }
+data CGInfo = CGI { cgi_finfo :: F.FInfo Cinfo
+                  , cgi_annot :: AnnInfo RefType  
+                  }
 
 -------------------------------------------------------------------------------
 getCGInfo    :: NanoRefType -> CGM a -> F.FInfo Cinfo  

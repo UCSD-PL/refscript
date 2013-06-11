@@ -413,6 +413,9 @@ ppSourceSpan z  = parens
 instance PP F.Pred where 
   pp = pprint
 
+instance PP F.Symbol where 
+  pp = pprint
+
 instance PP (Id a) where
   pp (Id _ x) = text x
 

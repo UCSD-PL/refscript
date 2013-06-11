@@ -58,6 +58,8 @@ ssaFun (FunctionStmt l f xs body)
 
        return        $ FunctionStmt l f xs body'
 
+ssaFun _ = error "Calling ssaFun not with FunctionStmt"
+
 -------------------------------------------------------------------------------------
 ssaSeq :: (a -> SSAM (Bool, a)) -> [a] -> SSAM (Bool, [a])  
 -------------------------------------------------------------------------------------
@@ -193,7 +195,7 @@ ssaVarDecl (VarDecl l x (Just e))
   = do (x', e') <- ssaAsgn l x e
        return    (True, VarDecl l x' (Just e'))
 
-ssaVarDecl z@(VarDecl l x Nothing)  
+ssaVarDecl {-z@-}(VarDecl l x Nothing)  
   = errorstar $ printf "Cannot handle ssaVarDECL %s at %s" (ppshow x) (ppshow l)
 
 ------------------------------------------------------------------------------------

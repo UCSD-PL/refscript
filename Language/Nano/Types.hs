@@ -399,10 +399,10 @@ sourcePosElts s = (src, line, col)
     line        = sourceLine   s
     col         = sourceColumn s 
 
-ppSourcePos src = parens 
-                $ text ("file: " ++ f) <> comma <+> int l <> comma <+> int c
-  where 
-    (f,l,c)     = sourcePosElts src 
+--ppSourcePos src = parens 
+--                $ text ("file: " ++ f) <> comma <+> int l <> comma <+> int c
+--  where 
+--    (f,l,c)     = sourcePosElts src 
 
 ppSourceSpan z  = parens 
                 $ text (printf "file %s: (%d, %d) - (%d, %d)" f l c l' c')  

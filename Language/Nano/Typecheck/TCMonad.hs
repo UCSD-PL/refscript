@@ -55,7 +55,7 @@ import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
 import           Data.Monoid                  
 import qualified Data.HashMap.Strict     as M
-import           Text.Parsec.Pos              
+-- import           Text.Parsec.Pos              
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 -------------------------------------------------------------------------------
@@ -224,7 +224,7 @@ subTypes l msg t1s t2s
                                     Left msg' -> logError (ann l) (msg ++ "\n" ++ msg') θ
                                     Right θ'  -> setSubst θ' >> return θ' 
 
-subType l m e t t' = subTypes l msg [t] [t'] >> return ()
+subType l m _ t t' = subTypes l ("[" ++ m ++ "] " ++ msg) [t] [t'] >> return ()
   where 
     msg              = errorSubType "subType" t t'
 

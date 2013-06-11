@@ -34,10 +34,9 @@ import           Language.Nano.Typecheck.Types
 
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
-import qualified Data.Set as Set
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
-import           Data.List           (sort, partition)
+import           Data.List           (partition)
 import           Text.Printf 
 
 ---------------------------------------------------------------------------
@@ -175,7 +174,7 @@ subty θ t@(TApp TUn xs  _) t' =
 subty θ t t'@(TApp TUn ts _ ) = 
   case tracePP "Subset" (subset [t] ts θ) of 
     Right θ -> Right θ
-    Left  s -> unify θ t t'
+    Left  _ -> unify θ t t'
 
 subty θ t t' = unify θ t t'
 
@@ -206,8 +205,8 @@ subset xs ys θ =
   if {- tracePP msg $ -} all (\a -> any (== a) ys) xs
     then Right $ θ
     else Left  $ errorSubType "subset" xs ys
-  where
-    msg = printf "Checking: %s <: %s" (ppshow xs) (ppshow ys) 
+  {- where
+    msg = printf "Checking: %s <: %s" (ppshow xs) (ppshow ys) -}
 
 instance PP Bool where 
   pp True  = text "true"

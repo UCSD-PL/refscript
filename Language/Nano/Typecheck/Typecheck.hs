@@ -2,14 +2,14 @@ module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where
 
 import           Control.Applicative                ((<$>)) -- (<*>))
 import           Control.Monad                
-import           Control.Monad.State
+-- import           Control.Monad.State
 import qualified Data.HashSet        as S 
 import qualified Data.HashMap.Strict as M 
 -- import qualified Data.List           as L
 import qualified Data.Traversable    as T
 -- import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust) -- fromMaybe, maybeToList)
-import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>), vcat)
+import           Text.PrettyPrint.HughesPJ          ({-Doc,-} text, render, {-($+$), (<+>),-} vcat)
 import           Text.Printf                        (printf)
 
 import           Language.Nano.Errors
@@ -113,6 +113,8 @@ tcFun γ (FunctionStmt l f xs body)
          do q              <- tcStmts γ'' body
             when (isJust q) $ unifyType l "Missing return" f tVoid t
        return $ Just γ' 
+
+tcFun _  _ = error "Calling tcFun not on FunctionStatement"
 
 funTy l f xs 
   = do ft <- getDefType f 
@@ -284,7 +286,7 @@ getPhiType l γ1 γ2 x
         case (prep t1, prep t2) of 
           (Just t1s, Just t2s) -> return $ TApp TUn (t1s ++ t2s) ()
           (_       , _       ) -> logError (ann l) (errorJoin x t1 t2) tErr
-      prep (TApp TUn l r) = Just l
+      prep (TApp TUn l _) = Just l
       prep t@(TApp _ _ _) = Just [t]
       prep t@(TVar _ _ )  = Just [t]
       prep _              = Nothing

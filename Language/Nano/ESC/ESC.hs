@@ -10,19 +10,19 @@ import           Text.PrettyPrint.HughesPJ    (text, render, (<+>))
 import           System.FilePath              (addExtension)
 import           Control.Monad.State
 import           Control.Applicative          ((<$>))
-import           Control.Monad                (mapM)
+-- import           Control.Monad                (mapM)
 import qualified Control.Exception as Ex
 import           Data.Monoid
 import           Data.Maybe                   (isJust, fromJust) -- fromMaybe, maybe)
-import           System.Exit                  (exitWith)
+-- import           System.Exit                  (exitWith)
 
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.Interface  (checkValid, resultExit)
-import           Language.Fixpoint.Misc       (safeZip, sortNub, donePhase)
+import           Language.Fixpoint.Interface  (checkValid {-, resultExit-} )
+import           Language.Fixpoint.Misc       (safeZip, sortNub {-, donePhase -} )
 
 import           Language.Nano.Types
 import           Language.Nano.ESC.Types

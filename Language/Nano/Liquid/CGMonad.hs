@@ -47,8 +47,8 @@ import           Data.Monoid            (mempty) -- hiding ((<>))
 -- import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 
-import           Language.Fixpoint.PrettyPrint
-import           Text.PrettyPrint.HughesPJ
+-- import           Language.Fixpoint.PrettyPrint
+-- import           Text.PrettyPrint.HughesPJ
 
 import           Language.Nano.Types
 import           Language.Nano.Errors

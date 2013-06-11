@@ -37,8 +37,14 @@ module Language.Nano.Types (
   , idName
   , idLoc 
  
-  -- * Dummy SourceSpan
+  -- * Manipulating SourceSpan
   , dummySpan
+  , srcSpanFile
+  , srcSpanStartLine
+  , srcSpanEndLine
+  , srcSpanStartCol
+  , srcSpanEndCol
+
   ) where
 
 import           Control.Applicative          ((<$>))
@@ -82,6 +88,11 @@ data Config
   deriving (Data, Typeable, Show, Eq)
 
 
+---------------------------------------------------------------------
+-- | Tracking Source Code Locations --------------------------------- 
+---------------------------------------------------------------------
+
+
 data Located a 
   = Loc { loc :: !SourceSpan
         , val :: a
@@ -90,8 +101,7 @@ data Located a
 instance Functor Located where 
   fmap f (Loc l x) = Loc l (f x)
 
--- | `IsLocated` is a predicate that describes values for which we have 
---    a SourcePos
+-- | `IsLocated` is a predicate for values which we have a SourceSpan
 
 class IsLocated a where 
   srcPos :: a -> SourceSpan
@@ -413,3 +423,10 @@ instance PP a => PP (Located a) where
 dummySpan :: SourceSpan
 dummySpan = Span l l 
   where l = initialPos ""
+
+srcSpanStartLine = snd3 . sourcePosElts . sp_begin 
+srcSpanEndLine   = snd3 . sourcePosElts . sp_end
+srcSpanStartCol  = thd3 . sourcePosElts . sp_begin 
+srcSpanEndCol    = thd3 . sourcePosElts . sp_end
+srcSpanFile      = fst3 . sourcePosElts . sp_begin
+

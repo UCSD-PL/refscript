@@ -54,9 +54,6 @@ withSpan f p = do pos   <- getPosition
                   pos'  <- getPosition
                   return $ f (Span pos pos') x
 
--- annotP      :: Parser AnnType 
--- annotP      = (`Ann` []) <$> getPosition
-
 xyP lP sepP rP
   = (\x _ y -> (x, y)) <$> lP <*> (spaces >> sepP) <*> rP
 
@@ -65,9 +62,8 @@ xyP lP sepP rP
 -- | RefTypes -------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 
--- Top-level parser for "bare" types. 
--- If refinements not supplied, 
--- then "top" refinement is used.
+-- | Top-level parser for "bare" types. 
+-- If refinements not supplied, then "top" refinement is used.
 
 bareTypeP :: Parser RefType 
 

@@ -15,12 +15,10 @@ extra-source-files:  README.md,
 data-files:          README.md, 
                      include/prelude.js
 
-
-
-
 executable nanojs
   build-depends:       base, 
                        pretty, 
+                       vector, bytestring, text, aeson, 
                        hashable < 1.2, 
                        unordered-containers, 
                        filepath, ansi-terminal, process, mtl, syb, cmdargs,
@@ -58,6 +56,7 @@ executable nanojs
 --   Exposed-Modules:     Language.Nano.Errors,
 --                        Language.Nano.Types,
 --                        Language.Nano.Files,
+--                        Language.Nano.Annots,
 --                        Language.Nano.CmdLine,
 --                        Language.Nano.ESC.Types,
 --                        Language.Nano.ESC.VCMonad, 

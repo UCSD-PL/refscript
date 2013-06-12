@@ -31,7 +31,7 @@ import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Text.Parsec.Pos                   
 import           Language.Nano.Types
 import           Language.Nano.Errors
-import           Text.PrettyPrint.HughesPJ          (($+$), vcat, nest, (<+>)) 
+import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat, nest, (<+>), punctuate)
 
 ------------------------------------------------------------------------------
 -- | Type Definitions For Annotations ----------------------------------------
@@ -58,9 +58,11 @@ instance Monoid (AnnInfo a) where
 ------------------------------------------------------------------------
 
 instance PP a => PP (AnnInfo a) where 
-  pp (AI m) = vcat [pp sp $+$ nest 4 (vcat $ map ppB bs) | (sp, bs) <- M.toList m]
+  pp (AI m)  = vcatLn [pp sp $+$ nest 4 (vcatLn $ map ppB bs) | (sp, bs) <- M.toList m]
     where 
-      ppB a = pp (ann_bind a) <+> pp (ann_type a)
+      ppB a  = pp (ann_bind a) <+> text "::" <+> pp (ann_type a)
+      vcatLn = vcat . punctuate nl 
+      nl     = text "\n"
 
 ------------------------------------------------------------------------------
 -- | Adding New Annotations --------------------------------------------------

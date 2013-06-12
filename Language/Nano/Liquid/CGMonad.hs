@@ -37,6 +37,9 @@ module Language.Nano.Liquid.CGMonad (
   -- * Add Subtyping Constraints
   , subTypes
   , subType 
+  
+  -- * Add Type Annotations
+  , addAnnot
   ) where
 
 import           Data.Maybe             (fromMaybe)
@@ -66,7 +69,7 @@ import           Control.Monad.Error
 import           Text.Printf 
 
 import           Language.ECMAScript3.Syntax
-
+import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation ----------------------
@@ -154,7 +157,8 @@ envAddFresh l t g
 envAdds      :: (F.Symbolic x, IsLocated x) => [(x, RefType)] -> CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 envAdds xts g
-  = do is    <- mapM addFixpointBind xts
+  = do is    <- forM xts $ addFixpointBind 
+       _     <- forM xts $ \(x, t) -> addAnnot (srcPos x) x t 
        return $ g { renv = E.envAdds xts        (renv g) } 
                   { fenv = F.insertsIBindEnv is (fenv g) }
 
@@ -165,6 +169,12 @@ addFixpointBind (x, t)
        (i, bs') <- F.insertBindEnv s r . binds <$> get 
        modify    $ \st -> st { binds = bs' }
        return i 
+
+---------------------------------------------------------------------------------------
+addAnnot       :: (F.Symbolic x) => SourceSpan -> x -> RefType -> CGM () 
+---------------------------------------------------------------------------------------
+addAnnot l x t = modify $ \st -> st {cg_ann = A.addAnnot l x t (cg_ann st)}
+
 
 ---------------------------------------------------------------------------------------
 envAddReturn        :: (IsLocated f)  => f -> RefType -> CGEnv -> CGEnv 
@@ -189,18 +199,6 @@ envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> Re
 envFindTy x g = (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
   where 
     err       = errorstar $ bugUnboundVariable (srcPos x) (F.symbol x)
-
--- envFindTy x g = baseSingleton x $ envFindTy x g'
--- baseSingleton x t = eSingleton t x
--- baseSingleton x t@(TApp c ts r) = TApp c ts $ r `F.meet` (F.exprReft x) -- eSingleton t x -- $ toType t 
--- baseSingleton x t@(TVar α r)    = TVar α    $ r `F.meet` (F.exprReft x) -- eSingleton t x -- $ toType t 
--- baseSingleton _ t               = t 
-
--- baseSingleton x t@(TApp c ts r) = eSingleton (toType t) x 
--- baseSingleton x t@(TVar α r)    = eSingleton (toType t) x  
--- baseSingleton _ t               = t 
-
-
 
 ---------------------------------------------------------------------------------------
 envFindReturn :: CGEnv -> RefType 

@@ -4,7 +4,7 @@
 
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
--- import           Text.Printf                        (printf)
+import           Text.Printf                        (printf)
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
 import           Control.Applicative                ((<$>))
@@ -53,9 +53,9 @@ solveConstraints f cgi
        return r'
 
 renderAnnotations srcFile sol res ann  
-  = do appendFile  annFile  $ wrapStars "Constraint Templates" 
+  = do writeFile   annFile  $ wrapStars "Constraint Templates" ++ "\n" 
        appendFile  annFile  $ ppshow ann
-       appendFile  annFile  $ wrapStars "Inferred Types" 
+       appendFile  annFile  $ wrapStars "Inferred Types"       ++ "\n" 
        appendFile  annFile  $ ppshow ann'
        B.writeFile jsonFile $ A.annotByteString res ann' 
        donePhase Loud "Written Inferred Types"
@@ -249,8 +249,13 @@ consExpr g (IntLit l i)
 consExpr g (BoolLit l b)
   = envAddFresh l (pSingleton tBool b) g 
 
-consExpr g (VarRef _ x)
-  = return (x, g) 
+consExpr g (VarRef i x)
+  = do addAnnot l x' $ envFindTy x g
+       return (x', g) 
+    where 
+       x'  = tracePP msg x 
+       msg = printf "consExpr x = %s at %s" (ppshow x) (ppshow l)
+       l   = srcPos i
 
 consExpr g (PrefixExpr l o e)
   = do (x', g') <- consCall g l o [e] (prefixOpTy o $ renv g)

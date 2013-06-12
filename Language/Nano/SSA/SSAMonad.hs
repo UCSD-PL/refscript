@@ -117,7 +117,7 @@ isImmutable   :: Id SourceSpan -> SSAM Bool
 isImmutable x = envMem x . immutables <$> get
 
 newId :: SourceSpan -> Id SourceSpan -> Int -> Id SourceSpan 
-newId l (Id _ x) n = Id l (x ++ "_" ++ show n)  
+newId l (Id _ x) n = Id l (x ++ "_SSA_" ++ show n)  
 
 -------------------------------------------------------------------------------
 findSsaEnv   :: Id SourceSpan -> SSAM (Maybe (Id SourceSpan))

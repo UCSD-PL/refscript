@@ -32,22 +32,22 @@ import qualified Data.HashMap.Strict as M
 import           Control.Applicative          ((<$>))
 import           Control.Monad.State
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc 
 -- import           Language.Nano.Types
 import           Language.Nano.ESC.Types
 import           Data.Monoid
 import           Data.Maybe                   (fromMaybe)
--- import           Text.Parsec                  (SourcePos)
 
 --------------------------------------------------------------------
 -- | `VCM` is a VCGen monad that logs the loop-inv "side conditions" 
 --------------------------------------------------------------------
 
 data VCState = VCS { vc_vc    :: !VCond 
-                   , vc_spec  :: M.HashMap String (Fun SourcePos)  
+                   , vc_spec  :: M.HashMap String (Fun SourceSpan)  
                    , vc_count :: !Int 
-                   , vc_fun   :: Maybe (Fun SourcePos) 
+                   , vc_fun   :: Maybe (Fun SourceSpan) 
                    }
 
 type VCM     = State VCState
@@ -77,7 +77,7 @@ getSideCond = vc_vc <$> get
 
 
 -------------------------------------------------------------------
-setFunction :: Fun SourcePos -> VCM () 
+setFunction :: Fun SourceSpan -> VCM () 
 -------------------------------------------------------------------
 setFunction fn = modify $ \st -> st { vc_fun = Just fn } 
                                     { vc_vc  = mempty }
@@ -98,7 +98,7 @@ freshId l    = do st    <- get
                   return $ Id l $ "nanoTmp" ++ show (vc_count st)
 
 -------------------------------------------------------------------
-getCalleeSpec :: String -> VCM (Fun SourcePos)
+getCalleeSpec :: String -> VCM (Fun SourceSpan)
 -------------------------------------------------------------------
 getCalleeSpec f = (fromMaybe err . M.lookup f . vc_spec) <$> get
   where 

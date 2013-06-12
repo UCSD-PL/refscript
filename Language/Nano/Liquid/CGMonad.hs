@@ -9,8 +9,11 @@ module Language.Nano.Liquid.CGMonad (
   -- * Constraint Generation Monad
     CGM
 
+  -- * Constraint Information
+  , CGInfo (..)
+
   -- * Execute Action and Get FInfo
-  , getFInfo 
+  , getCGInfo 
 
   -- * Get Defined Function Type Signature
   , getDefType
@@ -34,10 +37,13 @@ module Language.Nano.Liquid.CGMonad (
   -- * Add Subtyping Constraints
   , subTypes
   , subType 
+  
+  -- * Add Type Annotations
+  , addAnnot
   ) where
 
 import           Data.Maybe             (fromMaybe)
--- import           Data.Monoid            hiding ((<>))            
+import           Data.Monoid            (mempty) -- hiding ((<>))            
 -- import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 
@@ -46,7 +52,8 @@ import qualified Data.HashMap.Strict     as M
 
 import           Language.Nano.Types
 import           Language.Nano.Errors
-import qualified Language.Nano.Env       as E
+import qualified Language.Nano.Annots           as A
+import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types 
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Liquid.Types
@@ -62,16 +69,24 @@ import           Control.Monad.Error
 import           Text.Printf 
 
 import           Language.ECMAScript3.Syntax
-
+import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 -------------------------------------------------------------------------------
-getFInfo       :: NanoRefType -> CGM a -> F.FInfo Cinfo  
+-- | Top level type returned after Constraint Generation ----------------------
 -------------------------------------------------------------------------------
-getFInfo pgm = cgStateFInfo pgm . execute pgm . (>> fixCWs)
+
+data CGInfo = CGI { cgi_finfo :: F.FInfo Cinfo
+                  , cgi_annot :: A.AnnInfo RefType  
+                  }
+
+-------------------------------------------------------------------------------
+getCGInfo     :: NanoRefType -> CGM a -> CGInfo  
+-------------------------------------------------------------------------------
+getCGInfo pgm = cgStateCInfo pgm . execute pgm . (>> fixCWs)
   where 
-    fixCWs   = (,) <$> fixCs <*> fixWs
-    fixCs    = concatMapM splitC . cs =<< get 
-    fixWs    = concatMapM splitW . ws =<< get
+    fixCWs    = (,) <$> fixCs <*> fixWs
+    fixCs     = concatMapM splitC . cs =<< get 
+    fixWs     = concatMapM splitW . ws =<< get
 
 execute :: Nano z RefType -> CGM a -> (a, CGState)
 execute pgm act
@@ -80,7 +95,7 @@ execute pgm act
       (Right x, st) -> (x, st)  
 
 initState :: Nano z RefType -> CGState
-initState pgm = CGS F.emptyBindEnv (defs pgm) [] [] 0
+initState pgm = CGS F.emptyBindEnv (defs pgm) [] [] 0 mempty
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -90,16 +105,17 @@ getDefType f
        l   = srcPos f
 
 
-cgStateFInfo :: Nano a1 (RType F.Reft)-> (([F.SubC a], [F.WfC a]), CGState) -> F.FInfo a
-cgStateFInfo pgm ((fcs, fws), cg)  
-  = F.FI { F.cm    = M.fromList $ F.addIds fcs  
-         , F.ws    = fws
-         , F.bs    = binds cg
-         , F.gs    = measureEnv pgm 
-         , F.lits  = []
-         , F.kuts  = F.ksEmpty
-         , F.quals = quals pgm 
-         }
+-- cgStateFInfo :: Nano a1 (RType F.Reft)-> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
+cgStateCInfo pgm ((fcs, fws), cg) = CGI fi (cg_ann cg)
+  where 
+    fi   = F.FI { F.cm    = M.fromList $ F.addIds fcs  
+                , F.ws    = fws
+                , F.bs    = binds cg
+                , F.gs    = measureEnv pgm 
+                , F.lits  = []
+                , F.kuts  = F.ksEmpty
+                , F.quals = quals pgm 
+                }
 
 measureEnv   ::  Nano a (RType F.Reft) -> F.SEnv F.SortedReft
 measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts 
@@ -109,13 +125,13 @@ measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts
 ---------------------------------------------------------------------------------------
 
 data CGState 
-  = CGS { binds   :: F.BindEnv        -- ^ global list of fixpoint binders
-        , cg_defs :: !(E.Env RefType) -- ^ type sigs for all defined functions
-        , cs      :: ![SubC]          -- ^ subtyping constraints
-        , ws      :: ![WfC]           -- ^ well-formedness constraints
-        , count   :: !Integer         -- ^ freshness counter
+  = CGS { binds   :: F.BindEnv          -- ^ global list of fixpoint binders
+        , cg_defs :: !(E.Env RefType)   -- ^ type sigs for all defined functions
+        , cs      :: ![SubC]            -- ^ subtyping constraints
+        , ws      :: ![WfC]             -- ^ well-formedness constraints
+        , count   :: !Integer           -- ^ freshness counter
+        , cg_ann  :: A.AnnInfo RefType  -- ^ recorded annotations
         }
-
 
 type CGM     = ErrorT String (State CGState)
 
@@ -141,7 +157,8 @@ envAddFresh l t g
 envAdds      :: (F.Symbolic x, IsLocated x) => [(x, RefType)] -> CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 envAdds xts g
-  = do is    <- mapM addFixpointBind xts
+  = do is    <- forM xts $ addFixpointBind 
+       _     <- forM xts $ \(x, t) -> addAnnot (srcPos x) x t 
        return $ g { renv = E.envAdds xts        (renv g) } 
                   { fenv = F.insertsIBindEnv is (fenv g) }
 
@@ -152,6 +169,12 @@ addFixpointBind (x, t)
        (i, bs') <- F.insertBindEnv s r . binds <$> get 
        modify    $ \st -> st { binds = bs' }
        return i 
+
+---------------------------------------------------------------------------------------
+addAnnot       :: (F.Symbolic x) => SourceSpan -> x -> RefType -> CGM () 
+---------------------------------------------------------------------------------------
+addAnnot l x t = modify $ \st -> st {cg_ann = A.addAnnot l x t (cg_ann st)}
+
 
 ---------------------------------------------------------------------------------------
 envAddReturn        :: (IsLocated f)  => f -> RefType -> CGEnv -> CGEnv 
@@ -176,18 +199,6 @@ envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> Re
 envFindTy x g = (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
   where 
     err       = errorstar $ bugUnboundVariable (srcPos x) (F.symbol x)
-
--- envFindTy x g = baseSingleton x $ envFindTy x g'
--- baseSingleton x t = eSingleton t x
--- baseSingleton x t@(TApp c ts r) = TApp c ts $ r `F.meet` (F.exprReft x) -- eSingleton t x -- $ toType t 
--- baseSingleton x t@(TVar α r)    = TVar α    $ r `F.meet` (F.exprReft x) -- eSingleton t x -- $ toType t 
--- baseSingleton _ t               = t 
-
--- baseSingleton x t@(TApp c ts r) = eSingleton (toType t) x 
--- baseSingleton x t@(TVar α r)    = eSingleton (toType t) x  
--- baseSingleton _ t               = t 
-
-
 
 ---------------------------------------------------------------------------------------
 envFindReturn :: CGEnv -> RefType 

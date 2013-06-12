@@ -41,8 +41,8 @@ import           Control.Applicative
 import           Control.Monad.Error ()
 
 
-instance PP F.Symbol where 
-  pp = pprint
+-- instance PP F.Symbol where 
+--   pp = pprint
 
 --------------------------------------------------------------------------
 -- | Environments

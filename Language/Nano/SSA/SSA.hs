@@ -7,36 +7,26 @@ module Language.Nano.SSA.SSA (ssaTransform) where
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
 import qualified Data.HashMap.Strict as M 
--- import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
--- import           Control.Monad.State                
--- import           Control.Monad.Error
--- import qualified Data.HashSet as S 
--- import qualified Data.List as L
--- import           Data.Monoid
-
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.SSA.SSAMonad
-
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.Fixpoint.Misc             
 import           Text.Printf                        (printf)
--- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
--- import qualified Data.Traversable as T
--- import           Text.Parsec.Pos              
 
 ----------------------------------------------------------------------------------
-ssaTransform :: (PP t) => Nano SourcePos t -> Nano AnnSSA t
+ssaTransform :: (PP t) => Nano SourceSpan t -> Nano AnnSSA t
 ----------------------------------------------------------------------------------
 ssaTransform = either (errorstar . snd) id . execute . ssaNano 
 
 
 ----------------------------------------------------------------------------------
-ssaNano :: (PP t) => Nano SourcePos t -> SSAM (Nano AnnSSA t) 
+ssaNano :: (PP t) => Nano SourceSpan t -> SSAM (Nano AnnSSA t) 
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano {code = Src fs}) 
   = do addImmutables $ envMap (\_ -> ()) (specs p) 
@@ -46,14 +36,14 @@ ssaNano p@(Nano {code = Src fs})
        anns    <- getAnns
        return   $ p {code = Src $ (patchAnn anns <$>) <$> fs'}
 
--- stripAnn :: AnnBare -> SSAM SourcePos
+-- stripAnn :: AnnBare -> SSAM SourceSpan
 -- stripAnn (Ann l fs) = forM_ fs (addAnn l) >> return l   
 
-patchAnn     :: AnnInfo -> SourcePos -> AnnSSA
+patchAnn     :: AnnInfo -> SourceSpan -> AnnSSA
 patchAnn m l = Ann l $ M.lookupDefault [] l m
 
 -------------------------------------------------------------------------------------
-ssaFun :: FunctionStatement SourcePos -> SSAM (FunctionStatement SourcePos)
+ssaFun :: FunctionStatement SourceSpan -> SSAM (FunctionStatement SourceSpan)
 -------------------------------------------------------------------------------------
 ssaFun (FunctionStmt l f xs body) 
   = do θ            <- getSsaEnv  
@@ -82,12 +72,12 @@ ssaSeq f            = go True
                          return      (b', y:ys)
 
 -------------------------------------------------------------------------------------
-ssaStmts   :: [Statement SourcePos] -> SSAM (Bool, [Statement SourcePos])
+ssaStmts   :: [Statement SourceSpan] -> SSAM (Bool, [Statement SourceSpan])
 -------------------------------------------------------------------------------------
 ssaStmts = ssaSeq ssaStmt
 
 -------------------------------------------------------------------------------------
-ssaStmt    :: Statement SourcePos -> SSAM (Bool, Statement SourcePos)
+ssaStmt    :: Statement SourceSpan -> SSAM (Bool, Statement SourceSpan)
 -------------------------------------------------------------------------------------
 
 -- skip
@@ -148,7 +138,7 @@ ssaStmt s
   = convertError "ssaStmt" s
 
 -------------------------------------------------------------------------------------
-splice :: Statement SourcePos -> Maybe (Statement SourcePos) -> Statement SourcePos
+splice :: Statement SourceSpan -> Maybe (Statement SourceSpan) -> Statement SourceSpan
 -------------------------------------------------------------------------------------
 splice s Nothing   = s
 splice s (Just s') = seqStmt (getAnnotation s) s s' 
@@ -165,7 +155,7 @@ ssaWith θ f x
        (, x')  <$> (if b then Just <$> getSsaEnv else return Nothing)
 
 -------------------------------------------------------------------------------------
-ssaExpr    :: Expression SourcePos -> SSAM (Expression SourcePos) 
+ssaExpr    :: Expression SourceSpan -> SSAM (Expression SourceSpan) 
 -------------------------------------------------------------------------------------
 
 ssaExpr e@(IntLit _ _)               
@@ -198,7 +188,7 @@ ssaExpr e
   = convertError "ssaExpr" e
 
 -------------------------------------------------------------------------------------
-ssaVarDecl :: VarDecl SourcePos -> SSAM (Bool, VarDecl SourcePos)
+ssaVarDecl :: VarDecl SourceSpan -> SSAM (Bool, VarDecl SourceSpan)
 -------------------------------------------------------------------------------------
 
 ssaVarDecl (VarDecl l x (Just e)) 
@@ -209,7 +199,8 @@ ssaVarDecl {-z@-}(VarDecl l x Nothing)
   = errorstar $ printf "Cannot handle ssaVarDECL %s at %s" (ppshow x) (ppshow l)
 
 ------------------------------------------------------------------------------------
-ssaAsgn :: SourcePos -> Id SourcePos -> Expression SourcePos -> SSAM (Id SourcePos, Expression SourcePos) 
+ssaAsgn :: SourceSpan -> Id SourceSpan -> Expression SourceSpan 
+        -> SSAM (Id SourceSpan, Expression SourceSpan) 
 ------------------------------------------------------------------------------------
 ssaAsgn l x e 
   = do e' <- ssaExpr e 
@@ -218,10 +209,10 @@ ssaAsgn l x e
 
 
 -------------------------------------------------------------------------------------
-envJoin :: SourcePos -> Maybe SsaEnv -> Maybe SsaEnv 
+envJoin :: SourceSpan -> Maybe SsaEnv -> Maybe SsaEnv 
            -> SSAM ( Maybe SsaEnv
-                   , Maybe (Statement SourcePos)
-                   , Maybe (Statement SourcePos) )
+                   , Maybe (Statement SourceSpan)
+                   , Maybe (Statement SourceSpan) )
 -------------------------------------------------------------------------------------
 envJoin _ Nothing Nothing     = return (Nothing, Nothing, Nothing)
 envJoin _ Nothing (Just θ)    = return (Just θ , Nothing, Nothing) 

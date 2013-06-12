@@ -26,11 +26,12 @@ import           Language.Fixpoint.Misc
 -- import           System.Exit                        (exitWith)
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
-verifyFile :: FilePath -> IO (F.FixResult SourcePos)
+verifyFile :: FilePath -> IO (F.FixResult SourceSpan)
 --------------------------------------------------------------------------------
 verifyFile f = tc =<< parseNanoFromFile f
   where 

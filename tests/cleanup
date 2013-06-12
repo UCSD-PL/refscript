@@ -1,1 +1,1 @@
-rm *.css *.md *.vc *.hi *.out *.fqout *.fq *.o *.err *.annot *log *html *.cgi
+rm *.css *.json *.md *.vc *.hi *.out *.fqout *.fq *.o *.err *.annot *log *html *.cgi

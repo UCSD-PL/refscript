@@ -32,7 +32,7 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
 
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
+import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile, SourceSpan (..))
 
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer
@@ -42,14 +42,17 @@ braces     = Token.braces     lexer
 -- | Type Binders ----------------------------------------------------------------
 ----------------------------------------------------------------------------------
 
-idBindP :: Parser (Id SourcePos, RefType)
+idBindP :: Parser (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
 
-identifierP :: Parser (Id SourcePos)
-identifierP = Id <$> getPosition <*> lowerIdP -- Lexer.identifier
+identifierP :: Parser (Id SourceSpan)
+identifierP = withSpan Id lowerIdP -- <$> getPosition <*> lowerIdP -- Lexer.identifier
 
--- annotP      :: Parser AnnType 
--- annotP      = (`Ann` []) <$> getPosition
+
+withSpan f p = do pos   <- getPosition
+                  x     <- p
+                  pos'  <- getPosition
+                  return $ f (Span pos pos') x
 
 xyP lP sepP rP
   = (\x _ y -> (x, y)) <$> lP <*> (spaces >> sepP) <*> rP
@@ -59,9 +62,8 @@ xyP lP sepP rP
 -- | RefTypes -------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 
--- Top-level parser for "bare" types. 
--- If refinements not supplied, 
--- then "top" refinement is used.
+-- | Top-level parser for "bare" types. 
+-- If refinements not supplied, then "top" refinement is used.
 
 bareTypeP :: Parser RefType 
 
@@ -91,7 +93,9 @@ bbaseP
  <|> try ((`TApp` []) <$> tconP)
 
 tvarP :: Parser TVar
-tvarP = TV <$> (stringSymbol <$> upperWordP) <*> getPosition
+-- tvarP = TV <$> (stringSymbol <$> upperWordP) <*> getPosition
+tvarP = withSpan (\l x -> TV x l) (stringSymbol <$> upperWordP)
+
 
 upperWordP :: Parser String
 upperWordP = condIdP nice (not . isLower . head)
@@ -202,7 +206,7 @@ data PSpec l t
   | Qual Qualifier
   deriving (Show)
 
-specP :: Parser (PSpec SourcePos RefType)
+specP :: Parser (PSpec SourceSpan RefType)
 specP 
   = try (reserved "measure"   >> (Meas <$> idBindP   ))
     <|> (reserved "qualif"    >> (Qual <$> qualifierP))
@@ -210,7 +214,7 @@ specP
 
 
 --------------------------------------------------------------------------------------
-parseSpecFromFile :: FilePath -> IO (Nano SourcePos RefType) 
+parseSpecFromFile :: FilePath -> IO (Nano SourceSpan RefType) 
 --------------------------------------------------------------------------------------
 parseSpecFromFile = parseFromFile $ mkSpec <$> specWraps specP  
 
@@ -228,11 +232,11 @@ switchProp i@(Id l x)
   | otherwise                      = i
 
 --------------------------------------------------------------------------------------
-parseCodeFromFile :: FilePath -> IO (Nano SourcePos a) 
+parseCodeFromFile :: FilePath -> IO (Nano SourceSpan a) 
 --------------------------------------------------------------------------------------
 parseCodeFromFile = fmap mkCode . parseJavaScriptFromFile 
         
-mkCode    :: [Statement SourcePos] -> Nano SourcePos a
+mkCode    :: [Statement SourceSpan] -> Nano SourceSpan a
 mkCode ss = Nano { code   = Src (checkTopStmt <$> ss)
                  , specs  = envEmpty  
                  , defs   = envEmpty
@@ -244,7 +248,7 @@ mkCode ss = Nano { code   = Src (checkTopStmt <$> ss)
 -- | Parse File and Type Signatures -------------------------------------------
 -------------------------------------------------------------------------------
 
-parseNanoFromFile :: FilePath-> IO (Nano SourcePos RefType)
+parseNanoFromFile :: FilePath-> IO (Nano SourceSpan RefType)
 parseNanoFromFile f 
   = do code  <- parseCodeFromFile f
        spec  <- parseSpecFromFile f
@@ -266,7 +270,7 @@ initFunTy fn γ = fromMaybe err $ envFindTy fn γ
 
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
-definedFuns       :: [Statement SourcePos] -> [Id SourcePos]
+definedFuns       :: [Statement SourceSpan] -> [Id SourceSpan]
 definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
   where 
     fromFunction (FunctionStmt _ x _ _) = [x] 

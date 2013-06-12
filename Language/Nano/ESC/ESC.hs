@@ -18,6 +18,7 @@ import           Data.Maybe                   (isJust, fromJust) -- fromMaybe, m
 
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface  (checkValid {-, resultExit-} )
@@ -38,7 +39,7 @@ import           Language.Nano.ESC.VCMonad
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
-verifyFile :: FilePath -> IO (F.FixResult SourcePos)
+verifyFile :: FilePath -> IO (F.FixResult SourceSpan)
 --------------------------------------------------------------------------------
 
 verifyFile f 
@@ -64,7 +65,7 @@ genVC pgm = execute pgm act
 -----------------------------------------------------------------------------------
 -- | Top-level SMT Interface 
 -----------------------------------------------------------------------------------
-checkVC :: (SourcePos, F.Pred) -> IO (F.FixResult SourcePos)
+checkVC :: (SourceSpan, F.Pred) -> IO (F.FixResult SourceSpan)
 -----------------------------------------------------------------------------------
 checkVC z@(loc, _) 
   = do r <- checkVC' z
@@ -84,22 +85,22 @@ checkVC' (loc, p)
 class IsVerifiable a where 
   generateVC :: a -> VCond -> VCM VCond 
 
-instance IsVerifiable (Fun SourcePos) where 
+instance IsVerifiable (Fun SourceSpan) where 
   generateVC fn _   = generateFunVC fn
 
 instance IsVerifiable a => IsVerifiable [a] where 
   generateVC xs vc  = foldM (\vc s -> generateVC s vc) vc (reverse xs)
 
-instance IsVerifiable (Statement SourcePos) where 
+instance IsVerifiable (Statement SourceSpan) where 
   generateVC        = generateStmtVC
 
-instance IsVerifiable (VarDecl SourcePos) where 
+instance IsVerifiable (VarDecl SourceSpan) where 
   generateVC (VarDecl l x (Just e)) vc = generateAsgnVC l x e vc
   generateVC (VarDecl _ _ Nothing)  vc = return vc
 
 
 -----------------------------------------------------------------------------------
-generateFunVC    :: Fun SourcePos -> VCM VCond 
+generateFunVC    :: Fun SourceSpan -> VCM VCond 
 -----------------------------------------------------------------------------------
 generateFunVC fn 
   = do _        <- setFunction fn
@@ -110,7 +111,7 @@ generateFunVC fn
       
 retStmt l = ReturnStmt l (Just $ IntLit l 0)
 -----------------------------------------------------------------------------------
-generateStmtVC :: Statement SourcePos -> VCond -> VCM VCond 
+generateStmtVC :: Statement SourceSpan -> VCond -> VCM VCond 
 -----------------------------------------------------------------------------------
 
 -- skip
@@ -179,7 +180,7 @@ generateStmtVC w _
   = convertError "generateStmtVC" w
 
 -----------------------------------------------------------------------------------
-generateAsgnVC :: F.Symbolic x => SourcePos -> x -> Expression a -> VCond -> VCM VCond
+generateAsgnVC :: F.Symbolic x => SourceSpan -> x -> Expression a -> VCond -> VCM VCond
 -----------------------------------------------------------------------------------
 
 generateAsgnVC l x (CallExpr _ (VarRef _ (Id _ f)) es) vc
@@ -194,7 +195,7 @@ generateAsgnVC _ x e  vc
 generateAssumeVC :: F.Pred -> VCond -> VCM VCond 
 generateAssumeVC   p vc = return $ (p `F.PImp`) <$> vc
 
-generateAssertVC :: SourcePos -> F.Pred -> VCond -> VCM VCond 
+generateAssertVC :: SourceSpan -> F.Pred -> VCond -> VCM VCond 
 generateAssertVC l p vc = return $ newVCond l p <> vc
 
 -- x = e; // where e is not a function call
@@ -203,7 +204,7 @@ generateExprAsgnVC x e vc = return   $ (`F.subst1` (F.symbol x, F.expr e)) <$> v
 
 -- x = f(e1,...,en)
 generateFunAsgnVC :: (F.Symbolic x, F.Expression e) 
-                  => SourcePos -> x -> String -> [e] -> VCond -> VCM VCond 
+                  => SourceSpan -> x -> String -> [e] -> VCond -> VCM VCond 
 generateFunAsgnVC l x f es vc
   = do z       <- freshId l
        sp      <- getCalleeSpec f
@@ -214,7 +215,7 @@ generateFunAsgnVC l x f es vc
        (generateAssertVC l pre <=< generateAssumeVC post <=< generateExprAsgnVC x z) vc 
 
 -- return e
-generateReturnVC :: SourcePos-> Expression SourcePos -> VCond-> VCM VCond
+generateReturnVC :: SourceSpan-> Expression SourceSpan -> VCond-> VCM VCond
 generateReturnVC l e vc 
   = do p <- getFunctionPostcond
        (generateAsgnVC l returnSymbol e <=<  generateAssertVC l p <=< generateAssumeVC F.PFalse) $ vc

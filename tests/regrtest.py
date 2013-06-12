@@ -27,7 +27,10 @@ import rtest as rtest
 
 null       = open("/dev/null", "w")
 now	       = (time.asctime(time.localtime(time.time()))).replace(" ","_")
-logfile    = "../tests/logs/regrtest_results_%s_%s" % (socket.gethostname (), now)
+logdir     = "../tests/logs"
+logfile    = logdir + "/regrtest_results_%s_%s" % (socket.gethostname (), now)
+if not os.path.exists(logdir):
+  os.makedirs(logdir)
 argcomment = "--! run with "
 
 def logged_sys_call(args, out=None, err=None):

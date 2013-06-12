@@ -41,22 +41,15 @@ import           Control.Monad.State
 import           Control.Monad.Error
 
 import qualified Data.HashMap.Strict as M 
--- import qualified Data.HashSet as S 
--- import qualified Data.List as L
--- import           Data.Monoid
--- import           Data.Maybe                         (isJust, fromMaybe, maybeToList)
-
--- import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
+import           Language.Nano.Types                (dummySpan)
 import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
--- import           Language.ECMAScript3.Syntax.Annotations
--- import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Parser        (SourceSpan (..))
+
 import           Language.Fixpoint.Misc             
--- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Text.Printf                        (printf)
--- import qualified Data.Traversable as T
 import           Text.Parsec.Pos              
 
 type SSAM     = ErrorT String (State SsaState)
@@ -68,10 +61,10 @@ data SsaState = SsaST { immutables :: Env ()   -- ^ globals
                       }
 
 type SsaEnv     = Env SsaInfo 
-newtype SsaInfo = SI (Id SourcePos) deriving (Eq)
+newtype SsaInfo = SI (Id SourceSpan) deriving (Eq)
 
 -------------------------------------------------------------------------------------
-extSsaEnv    :: [Id SourcePos] -> SsaEnv -> SsaEnv 
+extSsaEnv    :: [Id SourceSpan] -> SsaEnv -> SsaEnv 
 -------------------------------------------------------------------------------------
 extSsaEnv xs = envAdds [(x, SI x) | x <- xs]
 
@@ -107,7 +100,7 @@ setSsaEnv θ = modify $ \st -> st { names = θ }
 
 
 -------------------------------------------------------------------------------------
-updSsaEnv   :: SourcePos -> Id SourcePos -> SSAM (Id SourcePos) 
+updSsaEnv   :: SourceSpan -> Id SourceSpan -> SSAM (Id SourceSpan) 
 -------------------------------------------------------------------------------------
 updSsaEnv l x 
   = do imm   <- isImmutable x 
@@ -119,15 +112,15 @@ updSsaEnv l x
 
 
 ---------------------------------------------------------------------------------
-isImmutable   :: Id SourcePos -> SSAM Bool 
+isImmutable   :: Id SourceSpan -> SSAM Bool 
 ---------------------------------------------------------------------------------
 isImmutable x = envMem x . immutables <$> get
 
-newId :: SourcePos -> Id SourcePos -> Int -> Id SourcePos 
-newId l (Id _ x) n = Id l (x ++ "_" ++ show n)  
+newId :: SourceSpan -> Id SourceSpan -> Int -> Id SourceSpan 
+newId l (Id _ x) n = Id l (x ++ "_SSA_" ++ show n)  
 
 -------------------------------------------------------------------------------
-findSsaEnv   :: Id SourcePos -> SSAM (Maybe (Id SourcePos))
+findSsaEnv   :: Id SourceSpan -> SSAM (Maybe (Id SourceSpan))
 -------------------------------------------------------------------------------
 findSsaEnv x 
   = do θ  <- names <$> get 
@@ -140,7 +133,7 @@ findSsaEnv x
 --               return $ xs ++ ys
 
 -------------------------------------------------------------------------------
-addAnn     :: SourcePos -> Fact -> SSAM ()
+addAnn     :: SourceSpan -> Fact -> SSAM ()
 -------------------------------------------------------------------------------
 addAnn l f = modify $ \st -> st { anns = inserts l f (anns st) }
 
@@ -152,7 +145,7 @@ getAnns    = anns <$> get
 
 
 -------------------------------------------------------------------------------
-ssaError       :: SourcePos -> String -> SSAM a
+ssaError       :: SourceSpan -> String -> SSAM a
 -------------------------------------------------------------------------------
 ssaError l msg = throwError $ printf "ERROR at %s : %s" (ppshow l) msg
 
@@ -160,11 +153,11 @@ ssaError l msg = throwError $ printf "ERROR at %s : %s" (ppshow l) msg
 -- inserts l xs m = M.insert l (xs ++ M.lookupDefault [] l m) m
 
 -------------------------------------------------------------------------------
-execute         :: SSAM a -> Either (SourcePos, String) a 
+execute         :: SSAM a -> Either (SourceSpan, String) a 
 -------------------------------------------------------------------------------
 execute act 
   = case runState (runErrorT act) initState of 
-      (Left err, _) -> Left  (initialPos "" ,  err)
+      (Left err, _) -> Left  (dummySpan,  err)
       (Right x, _)  -> Right x
 
 initState :: SsaState

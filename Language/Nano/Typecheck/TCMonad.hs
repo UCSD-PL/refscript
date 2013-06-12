@@ -49,16 +49,16 @@ import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
--- import           Data.Maybe                   (fromMaybe)
 import           Data.Monoid                  
 import qualified Data.HashMap.Strict     as M
 import           Text.Parsec.Pos              
+import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 -------------------------------------------------------------------------------
 -- | Typechecking monad -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-data TCState = TCS { tc_errs  :: ![(SourcePos, String)]
+data TCState = TCS { tc_errs  :: ![(SourceSpan, String)]
                    , tc_subst :: !Subst
                    , tc_cnt   :: !Int
                    , tc_anns  :: AnnInfo
@@ -93,18 +93,18 @@ tcError l msg = throwError $ printf "TC-ERROR at %s : %s" (ppshow $ srcPos l) ms
 
 
 -------------------------------------------------------------------------------
-logError   :: a -> SourcePos -> String -> TCM a
+logError   :: a -> SourceSpan -> String -> TCM a
 -------------------------------------------------------------------------------
 logError x l msg = (modify $ \st -> st { tc_errs = (l,msg):(tc_errs st)}) >> return x
 
 
 -------------------------------------------------------------------------------
-freshTyArgs :: SourcePos -> ([TVar], Type) -> TCM Type 
+freshTyArgs :: SourceSpan -> ([TVar], Type) -> TCM Type 
 -------------------------------------------------------------------------------
 freshTyArgs l (αs, t) 
   = (`apply` t) <$> freshSubst l αs
 
-freshSubst :: SourcePos -> [TVar] -> TCM Subst
+freshSubst :: SourceSpan -> [TVar] -> TCM Subst
 freshSubst l αs
   = do βs <- mapM (freshTVar l) αs
        setTyArgs l βs
@@ -132,7 +132,7 @@ getAnns = do θ     <- tc_subst <$> get
              return m' 
 
 -------------------------------------------------------------------------------
-addAnn :: SourcePos -> Fact -> TCM () 
+addAnn :: SourceSpan -> Fact -> TCM () 
 -------------------------------------------------------------------------------
 addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
 
@@ -143,7 +143,7 @@ getAllAnns = tc_annss <$> get
 
 
 -------------------------------------------------------------------------------
-accumAnn :: (AnnInfo -> [(SourcePos, String)]) -> TCM () -> TCM ()
+accumAnn :: (AnnInfo -> [(SourceSpan, String)]) -> TCM () -> TCM ()
 -------------------------------------------------------------------------------
 accumAnn check act 
   = do m     <- tc_anns <$> get 
@@ -154,11 +154,11 @@ accumAnn check act
        modify $ \st -> st {tc_anns = m} {tc_annss = m' : tc_annss st}
 
 -------------------------------------------------------------------------------
-execute     :: Nano z (RType r) -> TCM a -> Either [(SourcePos, String)] a
+execute     :: Nano z (RType r) -> TCM a -> Either [(SourceSpan, String)] a
 -------------------------------------------------------------------------------
 execute pgm act 
   = case runState (runErrorT act) $ initState pgm of 
-      (Left err, _) -> Left [(initialPos "" ,  err)]
+      (Left err, _) -> Left [(dummySpan,  err)]
       (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errs st)
 
 initState :: Nano z (RType r) -> TCState

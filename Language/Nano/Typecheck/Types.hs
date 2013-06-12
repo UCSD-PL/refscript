@@ -57,8 +57,6 @@ module Language.Nano.Typecheck.Types (
   ) where 
 
 import           Text.Printf
--- import           Data.Generics.Aliases
--- import           Data.Generics.Schemes
 import           Data.Hashable
 import           Data.Maybe             (fromMaybe) --, isJust)
 import           Data.Monoid            hiding ((<>))            
@@ -67,7 +65,7 @@ import qualified Data.HashMap.Strict     as M
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
-
+import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
@@ -83,7 +81,7 @@ import           Control.Monad.Error ()
 
 -- | Type Variables
 data TVar = TV { tv_sym :: F.Symbol
-               , tv_loc :: SourcePos 
+               , tv_loc :: SourceSpan 
                }
             deriving (Show, Ord)
 
@@ -110,7 +108,7 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 --   = TD { td_con  :: !TCon
 --        , td_args :: ![TVar]
 --        , td_body :: !(RType r)
---        , td_pos  :: !SourcePos
+--        , td_pos  :: !SourceSpan
 --        } deriving (Show, Functor)
 
 -- | Type Constructors
@@ -187,12 +185,12 @@ type NanoBare    = Nano AnnBare Type
 type NanoSSA     = Nano AnnSSA  Type 
 type NanoType    = Nano AnnType Type 
 
-{-@ measure isFunctionStatement :: (Statement SourcePos) -> Prop 
+{-@ measure isFunctionStatement :: (Statement SourceSpan) -> Prop 
     isFunctionStatement (FunctionStmt {}) = true
     isFunctionStatement (_)               = false
   @-}
 
-{-@ type FunctionStatement = {v:(Statement SourcePos) | (isFunctionStatement v)} @-}
+{-@ type FunctionStatement = {v:(Statement SourceSpan) | (isFunctionStatement v)} @-}
 type FunctionStatement a = Statement a 
 
 {-@ newtype Source a = Src [FunctionStatement a] @-}
@@ -269,22 +267,22 @@ ppTC (TDef x)         = pprint x
 --   @Expression@ type, but are tucking them in using the @a@ parameter.
 
 data Fact 
-  = PhiVar  !(Id SourcePos) 
+  = PhiVar  !(Id SourceSpan) 
   | TypInst ![Type]
     deriving (Eq, Ord, Show)
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show)
-type AnnBare   = Annot Fact SourcePos -- NO facts
-type AnnSSA    = Annot Fact SourcePos -- Only Phi       facts
-type AnnType   = Annot Fact SourcePos -- Only Phi + Typ facts
-type AnnInfo   = M.HashMap SourcePos [Fact] 
+type AnnBare   = Annot Fact SourceSpan -- NO facts
+type AnnSSA    = Annot Fact SourceSpan -- Only Phi       facts
+type AnnType   = Annot Fact SourceSpan -- Only Phi + Typ facts
+type AnnInfo   = M.HashMap SourceSpan [Fact] 
 
 
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 
 
 
-instance IsLocated (Annot a SourcePos) where 
+instance IsLocated (Annot a SourceSpan) where 
   srcPos = ann
 
 instance PP Fact where

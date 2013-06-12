@@ -72,6 +72,16 @@ function getAnnotText(row, col, annT) {
 }
 
 
+/*@ posString :: (pos) => String */
+function posString(p){
+  return "(" + p.line + ", " + p.column + ")";
+}
+
+/*@ errorString :: (error) => string */
+function errorString(e){
+  return "Error at: " + posString(e.start) + "--" + posString(e.stop);
+}
+
 /******************************************************************/
 /****** PUBLIC API ************************************************/
 /******************************************************************/
@@ -86,6 +96,23 @@ function getAnnot(row, col){
 /*@ setAnnots :: (Annot) => void */
 function setAnnots(t) {
   annotTable = t;
+}
+
+/*@ getResult :: (Annot) => {v:string | v = "safe" || v = "unsafe" || v = "crash" } */
+function getResult(t){
+  if (!t){ 
+    return "crash" 
+  } else if (t.errors.length > 0) { 
+    return "unsafe"
+  } else { 
+    return "safe" 
+  }
+}
+
+/*@ getWarns :: (annot) => list [string] */
+function getWarns(t){
+  if (!t){ return [] }
+  return t.errors.map(errorString);
 }
 
 

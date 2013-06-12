@@ -5,7 +5,7 @@ function abs(x){
     res = x;
   } else {
     res = -x;
-  };
+  }
   assert(res >= 0);
   return res;
 }

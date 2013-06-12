@@ -10,13 +10,13 @@ var errorMarkers = [];
 
 var allDemos =
   { // Basic Demos
-    "blank.js"              : { "name" : "Blank"            , "type" : "basic"  },
-    "abs.js"                : { "name" : "Abs"              , "type" : "basic"  },
-    "while5.hs"             : { "name" : "Refinements 102"  , "type" : "basic"  },
-    "minindex.hs"           : { "name" : "Refinements 101"  , "type" : "basic"  },
+    "blank.js"              : { "name" : "Blank"    , "type" : "basic"  },
+    "abs.js"                : { "name" : "Abs"      , "type" : "basic"  },
+    "while5.js"             : { "name" : "Loop"     , "type" : "basic"  },
+    "minindex01.js"         : { "name" : "MinIndex" , "type" : "basic"  },
 
     // Measure Demos
-    "safeLists.hs"          : { "name" : "Safe List"        , "type" : "measure"},
+    "safeLists.js"          : { "name" : "Safe List", "type" : "measure"},
   };
 
 
@@ -197,7 +197,7 @@ function LiquidDemoCtrl($scope, $http, $location) {
     $scope.demoName = ($location.search()).demo;
     if ($scope.demoName in allDemos) 
       $scope.loadSource(getDemo($scope.demoName));
-    }, true);
+    }, true)
 
   // Update demo name in URL 
   $scope.changeTarget = function(demo) {
@@ -218,14 +218,18 @@ function LiquidDemoCtrl($scope, $http, $location) {
             
            $scope.status    = status;
             globData         = data;
-            $scope.result    = data.result;
-            $scope.warns     = data.warns;
+            // $scope.result    = data.result;
+            // $scope.warns     = data.warns;
+            // $scope.annotHtml = data.annotHtml;
+            var result       = getResult(data.annots);
+            $scope.result    = result; 
+            $scope.warns     = getWarns(data.annots);
             $scope.crash     = data.crash; 
-            $scope.annotHtml = data.annotHtml;
-            setStatusResult($scope, data.result);
+            setStatusResult($scope, result);
            
             // This may be "null" if checker crashed...
             debugAnnots      = data.annots;
+            
             if (data.annots) { 
               setAnnots(data.annots.types);
               setErrors(progEditor, data.annots.errors);

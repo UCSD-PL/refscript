@@ -3,13 +3,14 @@
 // ini_set('display_errors', 'On');
 // error_reporting(E_ALL | E_STRICT);
 
-
-function execCommand($tsrc, $dir, $log, $packagedir) {
-  $cmd_ld_lib  = 'LANG=en_US.UTF-8 PATH=./:$PATH' ;
-  $cmd_libdir  = 'LIQUIDHS='.$dir;
+function execCommand($tsrc, $hsenvdir, $log) {
+  $packagedir  = $hsenvdir . '/lib/ghc-7.6.3/package.conf.d';
+  $bindir      = $hsenvdir . '/cabal/bin';
+  $cmd_lang    = 'LANG=en_US.UTF-8'; 
+  $cmd_path    = 'PATH=' . $bindir . ':$PATH';
   $cmd_packdir = 'GHC_PACKAGE_PATH='.$packagedir.':' ;
-  $cmd_checker = $dir.'nanojs liquid '.$tsrc ;
-  $cmd         = $cmd_ld_lib.' '.$cmd_libdir.' '.$cmd_packdir.' '.$cmd_checker.' > '.$log.' 2>&1';
+  $cmd_checker = 'nanojs liquid '.$tsrc ;
+  $cmd         = $cmd_lang.' '.$cmd_path.' '.$cmd_packdir.' '.$cmd_checker.' > '.$log.' 2>&1';
   return $cmd;
 }
 
@@ -37,6 +38,7 @@ function getCrash($logfile){
   return $crash;
 }
 
+/*
 function getResultAndWarns($outfile){
   $wflag = 0;
   $warns = array();
@@ -76,6 +78,7 @@ function getResultAndWarns($outfile){
 
 }
 
+*/
 ////////////////////////////////////////////////////////////////////////////////////
 //////////////////// Top Level Server //////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////
@@ -85,8 +88,9 @@ function getResultAndWarns($outfile){
 $data             = file_get_contents("php://input");
 $query            = json_decode($data);
 // $packagedir       = "/home/rjhala/.ghc/x86_64-linux-7.4.1/package.conf.d/";
-$packagedir       = "/home/rjhala/research/liquid/.hsenv_liquid/ghc/lib/ghc-7.6.3/package.conf.d";
+$hsenvdir         = "/home/rjhala/research/liquid/.hsenv_liquid/";
 $log              = "log";
+
 
 // echo 'HELLO TO HELL!\n';
 // echo ('PGM\n' . $query->program) ;
@@ -108,12 +112,13 @@ writeFileRaw($tsrc, $query->program);
 // echo 'wrote files';
 
 // Run solver
-$cmd              = execCommand($tsrc, "./", $log, $packagedir);
+$cmd              = execCommand($tsrc, $hsenvdir, $log);
 writeFileRaw("cmdlog", $cmd);
 $res              = shell_exec($cmd);
 
 // Parse results
-$out              = getResultAndWarns($tout) ;
+// $out              = getResultAndWarns($tout) ;
+$out              = array();
 $out['crash']     = getCrash($log)           ;       
 $out['annotHtml'] = file_get_contents($thtml);
 $out['annots']    = json_decode(file_get_contents($tjson));

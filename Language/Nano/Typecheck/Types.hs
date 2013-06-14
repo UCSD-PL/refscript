@@ -117,6 +117,7 @@ data TCon
   | TBool                
   | TVoid              
   | TDef  F.Symbol
+  | TUn
     deriving (Eq, Ord, Show)
 
 -- | (Raw) Refined Types 
@@ -256,6 +257,7 @@ ppArgs p sep          = p . intersperse sep . map pp
 ppTC TInt             = text "int"
 ppTC TBool            = text "boolean"
 ppTC TVoid            = text "void"
+ppTC TUn              = text "union:"
 ppTC (TDef x)         = pprint x
 
 -----------------------------------------------------------------------------
@@ -354,4 +356,5 @@ prefixOpId PrefixLNot  = builtinId "PrefixLNot"
 prefixOpId o           = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
 
 builtinId       = mkId . ("builtin_" ++)
+
 

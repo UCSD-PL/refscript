@@ -20,6 +20,9 @@ module Language.Nano.Typecheck.Subst (
   -- * Unification
   , unifys
 
+  -- * Subtyping
+  , subtys
+
   ) where 
 
 import           Text.PrettyPrint.HughesPJ
@@ -31,9 +34,11 @@ import           Language.Nano.Typecheck.Types
 
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
+import qualified Data.Set as Set
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
--- import           Text.Printf 
+import           Data.List           (sort, partition)
+import           Text.Printf 
 
 ---------------------------------------------------------------------------
 -- | Substitutions --------------------------------------------------------
@@ -108,6 +113,16 @@ appTy θ (TFun ts t r)      = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m) (TAll α t)    = apply (Su $ M.delete α m) t 
 
 
+
+applys f err θ ts ts' 
+  | nTs == nTs' = go θ (ts, ts') 
+  | otherwise   = Left $ err ts ts'
+  where 
+    nTs                  = length ts
+    nTs'                 = length ts'
+    go θ (t:ts , t':ts') = f θ t t' >>= \θ' -> go θ' (mapPair (apply θ') (ts, ts'))
+    go θ (_    , _    )  = return θ 
+
 -----------------------------------------------------------------------------
 unify :: Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
@@ -115,26 +130,20 @@ unify θ (TFun xts t _) (TFun xts' t' _) = unifys θ (t: (b_type <$> xts)) (t': 
 unify θ (TVar α _) (TVar β _)           = varEql θ α β 
 unify θ (TVar α _) t                    = varAsn θ α t 
 unify θ t (TVar α _)                    = varAsn θ α t
+-- There shouldn't be any union types at this point
 unify θ (TApp c ts _) (TApp c' ts' _) 
   | c == c'                             = unifys  θ ts ts'
+
 unify θ t t' 
   | t == t'                             = return θ
   | otherwise                           = Left $ errorUnification t t'             
 
 unifys         ::  Subst -> [Type] -> [Type] -> Either String Subst
-unifys θ xs ys = {- tracePP msg $ -} unifys' θ xs ys 
-  -- where 
-  --   msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
+unifys θ xs ys =  tracePP msg $  unifys' θ xs ys 
+   where 
+     msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
-unifys' θ ts ts' 
-  | nTs == nTs' = go θ (ts, ts') 
-  | otherwise   = Left $ errorUnification ts ts'
-  where 
-    nTs                  = length ts
-    nTs'                 = length ts'
-    go θ (t:ts , t':ts') = unify θ t t' >>= \θ' -> go θ' (mapPair (apply θ') (ts, ts'))
-    go θ (_    , _    )  = return θ 
-
+unifys' = applys unify errorUnification
 
 varEql θ α β = case varAsn θ α (tVar β) of 
                  z@(Right _) -> z
@@ -150,5 +159,36 @@ varAsn θ α t
   
 unassigned α (Su m) = M.lookup α m == Just (tVar α)
  
+
+-----------------------------------------------------------------------------
+subty :: Subst -> Type -> Type -> Either String Subst
+-----------------------------------------------------------------------------
+subty θ (TApp TUn ts _ ) (TApp TUn ts' _) = unionSub θ ts ts'     
+subty θ t                (TApp TUn ts  _) = unionSub θ [t] ts 
+subty θ t                t'               = unify θ t t'
+
+subtys         ::  Subst -> [Type] -> [Type] -> Either String Subst
+subtys θ xs ys =  tracePP msg $  subtys' θ xs ys 
+   where 
+     msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
+
+subtys' = applys subty errorSubType
+
+-----------------------------------------------------------------------------
+unionSub :: Subst -> [Type] -> [Type] -> Either String Subst
+-----------------------------------------------------------------------------
+unionSub θ ts ts' = 
+  unifys' θ a b >>= sub rs rs'
+  where 
+    (vs,rs)   = partition tv ts
+    (vs',rs') = partition tv ts'
+    (a, b)    = unzip [(x,y)|x<-vs, y<-vs']
+    tv (TVar _ _) = True
+    sub l l' θ =   
+      if Set.isSubsetOf s s' 
+        then Right $ θ
+        else Left  $ errorSubType l l'
+      where (s, s') = mapPair Set.fromList (l, l')
+
 
 

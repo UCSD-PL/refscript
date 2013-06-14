@@ -210,3 +210,14 @@ unifyType l m e t t' = unifyTypes l msg [t] [t'] >> return ()
     msg              = errorWrongType m e t t'
 
 
+----------------------------------------------------------------------------------
+subTypes :: (IsLocated l) => l -> String -> [Type] -> [Type] -> TCM Subst
+----------------------------------------------------------------------------------
+subTypes l msg t1s t2s
+  | length t1s /= length t2s = tcError l errorArgMismatch
+  | otherwise                = do θ <- getSubst
+                                  case subtys θ t1s t2s of
+                                    Left msg' -> tcError l $ msg ++ msg'
+                                    Right θ'  -> setSubst θ' >> return θ' 
+
+

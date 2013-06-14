@@ -187,7 +187,7 @@ tcStmt γ (VarDeclStmt _ ds)
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
   = do t <- maybe (return tVoid) (tcExpr γ) eo 
-       unifyType l "Return" eo t $ envFindReturn γ 
+       unifyType l "Return" eo (tracePP "ReturnType" t) $ envFindReturn γ 
        return Nothing
 
 tcStmt γ s@(FunctionStmt _ _ _ _)

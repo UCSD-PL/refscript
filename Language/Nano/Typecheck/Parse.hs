@@ -34,8 +34,10 @@ import           Language.Nano.Env
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile, SourceSpan (..))
 
+
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer
+bar        = Token.symbol     lexer "|"
 -- angles     = Token.angles     lexer
 
 ----------------------------------------------------------------------------------
@@ -90,6 +92,7 @@ bbaseP :: Parser (Reft -> RefType)
 bbaseP 
   =  try (TVar <$> tvarP)
  <|> try (TApp <$> tconP <*> (brackets $ sepBy bareTypeP comma))
+ <|> try (TApp TUn <$> (parens $ sepBy bareTypeP bar))
  <|> try ((`TApp` []) <$> tconP)
 
 tvarP :: Parser TVar

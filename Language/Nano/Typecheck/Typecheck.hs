@@ -2,6 +2,7 @@ module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where
 
 import           Control.Applicative                ((<$>)) -- (<*>))
 import           Control.Monad                
+import           Control.Monad.State
 import qualified Data.HashSet        as S 
 import qualified Data.HashMap.Strict as M 
 -- import qualified Data.List           as L
@@ -116,8 +117,8 @@ tcFun γ (FunctionStmt l f xs body)
 funTy l f xs 
   = do ft <- getDefType f 
        case bkFun ft of
-         Nothing        -> tcError l $ errorUnboundId f
-         Just (αs,ts,t) -> do when (length xs /= length ts) $ tcError l $ errorArgMismatch
+         Nothing        -> logError (ann l) (errorUnboundId f) (tErr, tFunErr)
+         Just (αs,ts,t) -> do when (length xs /= length ts) $ logError (ann l) errorArgMismatch ()
                               return (ft, (αs, b_type <$> ts, t))
 
 envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
@@ -226,7 +227,7 @@ tcExpr _ (BoolLit _ _)
 
 tcExpr γ (VarRef l x)
   = case envFindTy x γ of 
-      Nothing -> tcError l $ errorUnboundIdEnv x γ
+      Nothing -> logError (ann l) (errorUnboundIdEnv x γ) tErr
       Just z  -> return z 
 
 tcExpr γ (PrefixExpr l o e)
@@ -254,7 +255,7 @@ instantiate l fn ft
   = do t' <- freshTyArgs (srcPos l) $ bkAll ft 
        maybe err return   $ bkFun t'
     where
-       err = tcError l $ errorNonFunction fn ft
+       err = logError (ann l) (errorNonFunction fn ft) ([],[],tErr)
 
 
 ----------------------------------------------------------------------------------
@@ -274,10 +275,10 @@ getPhiType l γ1 γ2 x
   = case (envFindTy x γ1, envFindTy x γ2) of
       (Just t1, Just t2) -> if (t1 == t2) 
                               then return t1 
-                              else tcError l $ errorJoin x t1 t2
+                              else logError (ann l) (errorJoin x t1 t2) tErr
       (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
-                              then tcError l $ "Oh no, the HashMap GREMLIN is back...1"
-                              else tcError l $ bugUnboundPhiVar x
+                              then logError (ann l) "Oh no, the HashMap GREMLIN is back...1" tErr
+                              else logError (ann l) (bugUnboundPhiVar x) tErr
 
 forceCheck x γ 
   = elem x $ fst <$> envToList γ

@@ -41,6 +41,7 @@ module Language.Nano.Typecheck.Types (
   , tBool
   , tVoid
   , tErr
+  , tFunErr
   , tVar
 
   -- * Operator Types
@@ -311,6 +312,7 @@ tInt   = TApp TInt  [] F.top
 tBool  = TApp TBool [] F.top
 tVoid  = TApp TVoid [] F.top
 tErr   = tVoid
+tFunErr = ([],[],tErr)
 
 -- tProp :: (F.Reftable r) => RType r
 -- tProp  = TApp tcProp [] F.top 

@@ -150,7 +150,7 @@ accumAnn check act
        modify $ \st -> st {tc_anns = M.empty}
        act
        m'    <- getAnns
-       forM_ (check m') $ \(l, s) -> tcError l s 
+       forM_ (check m') $ \(l, s) -> logError l s ()
        modify $ \st -> st {tc_anns = m} {tc_annss = m' : tc_annss st}
 
 -------------------------------------------------------------------------------
@@ -199,10 +199,10 @@ freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
 unifyTypes :: AnnSSA -> String -> [Type] -> [Type] -> TCM Subst
 ----------------------------------------------------------------------------------
 unifyTypes l msg t1s t2s
-  | length t1s /= length t2s = tcError l errorArgMismatch 
+  | length t1s /= length t2s = getSubst >>= logError (ann l) errorArgMismatch
   | otherwise                = do θ <- getSubst 
                                   case unifys θ t1s t2s of
-                                    Left msg' -> tcError l $ msg ++ "\n" ++ msg'
+                                    Left msg' -> logError (ann l) (msg ++ "\n" ++ msg') θ
                                     Right θ'  -> setSubst θ' >> return θ' 
 
 unifyType l m e t t' = unifyTypes l msg [t] [t'] >> return ()

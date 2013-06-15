@@ -48,8 +48,8 @@ solveConstraints :: FilePath -> CGInfo -> IO (F.FixResult SourceSpan)
 solveConstraints f cgi 
   = do (r, sol) <- solve f [] $ cgi_finfo cgi
        let r'    = fmap (srcPos . F.sinfo) r
-       renderAnnotations f sol r' $ cgi_annot cgi
-       donePhase (F.colorResult r) (F.showFix r) 
+       {-renderAnnotations f sol r' $ cgi_annot cgi-}
+       {-donePhase (F.colorResult r) (F.showFix r) -}
        return r'
 
 renderAnnotations srcFile sol res ann  

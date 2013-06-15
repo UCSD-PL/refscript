@@ -33,9 +33,9 @@ import           Language.ECMAScript3.Parser        (SourceSpan (..))
 --------------------------------------------------------------------------------
 verifyFile :: FilePath -> IO (F.FixResult SourceSpan)
 --------------------------------------------------------------------------------
-verifyFile f = tc =<< parseNanoFromFile f
-  where 
-   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
+--verifyFile f = tc =<< parseNanoFromFile f
+--  where 
+--   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
 -------------------------------------------------------------------------------
 typeCheck     :: (F.Reftable r) => Nano AnnSSA (RType r) -> Nano AnnType (RType r) 
@@ -45,16 +45,16 @@ typeCheck pgm = either crash id . execute pgm . tcNano $ pgm
     crash     = errorstar . render . vcat . map (text . ppErr)
 
 -- DEBUG MODE
--- verifyFile f 
---   = do nano <- parseNanoFromFile f 
---        donePhase Loud "Parse"
---        putStrLn . render . pp $ nano
---        let nanoSsa = ssaTransform nano
---        donePhase Loud "SSA Transform"
---        putStrLn . render . pp $ nanoSsa
---        r    <- either unsafe safe . execute . typeCheck $ nanoSsa
---        donePhase Loud "Typechecking"
---        return r
+verifyFile f 
+   = do nano <- parseNanoFromFile f 
+        {-donePhase Loud "Parse"-}
+        {-putStrLn . render . pp $ nano-}
+        let nanoSsa = ssaTransform nano
+        donePhase Loud "SSA Transform"
+        putStrLn . render . pp $ nanoSsa
+        r    <- either unsafe safe $ execute nanoSsa $ tcNano nanoSsa
+        donePhase Loud "Typechecking"
+        return r
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppErr) 

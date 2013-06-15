@@ -163,8 +163,8 @@ unassigned α (Su m) = M.lookup α m == Just (tVar α)
 -----------------------------------------------------------------------------
 subty :: Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
-subty θ (TApp TUn ts _ ) (TApp TUn ts' _) = unionSub θ ts ts'     
-subty θ t                (TApp TUn ts  _) = unionSub θ [t] ts 
+subty θ (TApp TUn ts _ ) (TApp TUn ts' _) = subUnion θ ts ts'     
+subty θ t                (TApp TUn ts  _) = subUnion θ [t] ts 
 subty θ t                t'               = unify θ t t'
 
 subtys         ::  Subst -> [Type] -> [Type] -> Either String Subst
@@ -175,17 +175,18 @@ subtys θ xs ys =  tracePP msg $  subtys' θ xs ys
 subtys' = applys subty errorSubType
 
 -----------------------------------------------------------------------------
-unionSub :: Subst -> [Type] -> [Type] -> Either String Subst
+subUnion :: Subst -> [Type] -> [Type] -> Either String Subst
 -----------------------------------------------------------------------------
-unionSub θ ts ts' = 
+subUnion θ ts ts' = 
   unifys' θ a b >>= sub rs rs'
   where 
     (vs,rs)   = partition tv ts
     (vs',rs') = partition tv ts'
+    -- Might be too much 
     (a, b)    = unzip [(x,y)|x<-vs, y<-vs']
     tv (TVar _ _) = True
-    sub l l' θ =   
-      if Set.isSubsetOf s s' 
+    sub l l' θ =
+      if Set.isSubsetOf s s'
         then Right $ θ
         else Left  $ errorSubType l l'
       where (s, s') = mapPair Set.fromList (l, l')

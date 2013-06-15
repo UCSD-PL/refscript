@@ -93,9 +93,9 @@ tcError l msg = throwError $ printf "TC-ERROR at %s : %s" (ppshow $ srcPos l) ms
 
 
 -------------------------------------------------------------------------------
-logError   :: a -> SourceSpan -> String -> TCM a
+logError   :: SourceSpan -> String -> a -> TCM a
 -------------------------------------------------------------------------------
-logError x l msg = (modify $ \st -> st { tc_errs = (l,msg):(tc_errs st)}) >> return x
+logError l msg x = (modify $ \st -> st { tc_errs = (l,msg):(tc_errs st)}) >> return x
 
 
 -------------------------------------------------------------------------------
@@ -196,13 +196,13 @@ freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
               
 
 ----------------------------------------------------------------------------------
-unifyTypes :: (IsLocated l) => l -> String -> [Type] -> [Type] -> TCM Subst
+unifyTypes :: AnnSSA -> String -> [Type] -> [Type] -> TCM Subst
 ----------------------------------------------------------------------------------
 unifyTypes l msg t1s t2s
   | length t1s /= length t2s = tcError l errorArgMismatch 
   | otherwise                = do θ <- getSubst 
                                   case unifys θ t1s t2s of
-                                    Left msg' -> tcError l $ msg ++ msg'
+                                    Left msg' -> tcError l $ msg ++ "\n" ++ msg'
                                     Right θ'  -> setSubst θ' >> return θ' 
 
 unifyType l m e t t' = unifyTypes l msg [t] [t'] >> return ()

@@ -255,7 +255,7 @@ instantiate l fn ft
   = do t' <- freshTyArgs (srcPos l) $ bkAll ft 
        maybe err return   $ bkFun t'
     where
-       err = logError (ann l) (errorNonFunction fn ft) ([],[],tErr)
+       err = logError (ann l) (errorNonFunction fn ft) tFunErr
 
 
 ----------------------------------------------------------------------------------

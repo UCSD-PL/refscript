@@ -130,13 +130,13 @@ unify θ (TFun xts t _) (TFun xts' t' _) = unifys θ (t: (b_type <$> xts)) (t': 
 unify θ (TVar α _) (TVar β _)           = varEql θ α β 
 unify θ (TVar α _) t                    = varAsn θ α t 
 unify θ t (TVar α _)                    = varAsn θ α t
--- There shouldn't be any union types at this point
-unify θ (TApp c ts _) (TApp c' ts' _) 
+
+unify θ (TApp c ts _) (TApp c' ts' _)
   | c == c'                             = unifys  θ ts ts'
 
 unify θ t t' 
   | t == t'                             = return θ
-  | otherwise                           = Left $ errorUnification t t'             
+  | otherwise                           = Left $ errorUnification t t'
 
 unifys         ::  Subst -> [Type] -> [Type] -> Either String Subst
 unifys θ xs ys =  tracePP msg $  unifys' θ xs ys 
@@ -163,33 +163,47 @@ unassigned α (Su m) = M.lookup α m == Just (tVar α)
 -----------------------------------------------------------------------------
 subty :: Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
-subty θ (TApp TUn ts _ ) (TApp TUn ts' _) = subUnion θ ts ts'     
-subty θ t                (TApp TUn ts  _) = subUnion θ [t] ts 
-subty θ t                t'               = unify θ t t'
+subty θ (TApp TUn ts _ ) (TApp TUn ts' _) | not $ any var ts = subset ts ts' θ
+subty θ t@(TApp TUn xs  _) t' = 
+  case tvs of
+    [ ]  -> subset xs [t'] θ
+    [v]  -> unify θ v t' >>= subset ts [t']
+    _    -> Left $ errorSubType t t'
+  where 
+    (tvs, ts) = partition var xs
 
-subtys         ::  Subst -> [Type] -> [Type] -> Either String Subst
+subty θ t t'@(TApp TUn ts _ ) = 
+  case t of 
+    TVar _ _ -> unify θ t t'
+    _        -> subset [t] ts θ
+
+subty θ t t' = unify θ t t'
+
+-- subty θ (TApp TUn ts _ ) t  = subtys ts [t]
+-- subty θ t (TApp TUn ts' _ ) = subtys [t] ts'
+-- subty θ t t'                = subtys [t] [t']
+
+var (TVar _ _) = True
+var _ = False
+
+-----------------------------------------------------------------------------
+subtys ::  Subst -> [Type] -> [Type] -> Either String Subst
+-----------------------------------------------------------------------------
 subtys θ xs ys =  tracePP msg $  subtys' θ xs ys 
    where 
      msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
+
 subtys' = applys subty errorSubType
 
------------------------------------------------------------------------------
-subUnion :: Subst -> [Type] -> [Type] -> Either String Subst
------------------------------------------------------------------------------
-subUnion θ ts ts' = 
-  unifys' θ a b >>= sub rs rs'
-  where 
-    (vs,rs)   = partition tv ts
-    (vs',rs') = partition tv ts'
-    -- Might be too much 
-    (a, b)    = unzip [(x,y)|x<-vs, y<-vs']
-    tv (TVar _ _) = True
-    sub l l' θ =
-      if Set.isSubsetOf s s'
-        then Right $ θ
-        else Left  $ errorSubType l l'
-      where (s, s') = mapPair Set.fromList (l, l')
 
-
+-----------------------------------------------------------------------------
+-- At this point the lists contain flat types (no unions)
+-----------------------------------------------------------------------------
+subset ::  [Type] -> [Type] -> Subst -> Either String Subst
+-----------------------------------------------------------------------------
+subset xs ys θ = 
+  if Set.isSubsetOf (Set.fromList xs) (Set.fromList ys)
+    then Right $ θ
+    else Left  $ errorSubType xs ys
 

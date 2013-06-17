@@ -33,6 +33,10 @@ module Language.Nano.Typecheck.TCMonad (
   , unifyType
   , unifyTypes
 
+  -- * Subtyping
+  , subTypes
+  , subType
+
   -- * Get Type Signature 
   , getDefType 
   )  where 
@@ -211,13 +215,17 @@ unifyType l m e t t' = unifyTypes l msg [t] [t'] >> return ()
 
 
 ----------------------------------------------------------------------------------
-subTypes :: (IsLocated l) => l -> String -> [Type] -> [Type] -> TCM Subst
+subTypes :: AnnSSA -> String -> [Type] -> [Type] -> TCM Subst
 ----------------------------------------------------------------------------------
 subTypes l msg t1s t2s
-  | length t1s /= length t2s = tcError l errorArgMismatch
+  | length t1s /= length t2s = getSubst >>= logError (ann l) errorArgMismatch 
   | otherwise                = do θ <- getSubst
                                   case subtys θ t1s t2s of
-                                    Left msg' -> tcError l $ msg ++ msg'
+                                    Left msg' -> logError (ann l) (msg ++ "\n" ++ msg') θ
                                     Right θ'  -> setSubst θ' >> return θ' 
+
+subType l m e t t' = subTypes l msg [t] [t'] >> return ()
+  where 
+    msg              = errorSubType "subType" t t'
 
 

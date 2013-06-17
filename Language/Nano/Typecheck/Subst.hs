@@ -168,14 +168,14 @@ subty θ t@(TApp TUn xs  _) t' =
   case tvs of
     [ ]  -> subset xs [t'] θ
     [v]  -> unify θ v t' >>= subset ts [t']
-    _    -> Left $ errorSubType t t'
+    _    -> Left $ errorSubType "In subty" t t'
   where 
     (tvs, ts) = partition var xs
 
 subty θ t t'@(TApp TUn ts _ ) = 
-  case t of 
-    TVar _ _ -> unify θ t t'
-    _        -> subset [t] ts θ
+  case tracePP "Subset" (subset [t] ts θ) of 
+    Right θ -> Right θ
+    Left  s -> unify θ t t'
 
 subty θ t t' = unify θ t t'
 
@@ -191,10 +191,10 @@ subtys ::  Subst -> [Type] -> [Type] -> Either String Subst
 -----------------------------------------------------------------------------
 subtys θ xs ys =  tracePP msg $  subtys' θ xs ys 
    where 
-     msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
+     msg      = printf "subtys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
 
-subtys' = applys subty errorSubType
+subtys' = applys subty $ errorSubType "subtys'"
 
 
 -----------------------------------------------------------------------------
@@ -203,7 +203,12 @@ subtys' = applys subty errorSubType
 subset ::  [Type] -> [Type] -> Subst -> Either String Subst
 -----------------------------------------------------------------------------
 subset xs ys θ = 
-  if Set.isSubsetOf (Set.fromList xs) (Set.fromList ys)
+  if {- tracePP msg $ -} all (\a -> any (== a) ys) xs
     then Right $ θ
-    else Left  $ errorSubType xs ys
+    else Left  $ errorSubType "subset" xs ys
+  where
+    msg = printf "Checking: %s <: %s" (ppshow xs) (ppshow ys) 
 
+instance PP Bool where 
+  pp True  = text "true"
+  pp False = text "false"

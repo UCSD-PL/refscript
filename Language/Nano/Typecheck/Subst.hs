@@ -138,7 +138,7 @@ unify θ t t'
   | otherwise                           = Left $ errorUnification t t'
 
 unifys         ::  Subst -> [Type] -> [Type] -> Either String Subst
-unifys θ xs ys =  tracePP msg $  unifys' θ xs ys 
+unifys θ xs ys =  {- tracePP msg $ -} unifys' θ xs ys 
    where 
      msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
@@ -172,7 +172,7 @@ subty θ t@(TApp TUn xs  _) t' =
     (tvs, ts) = partition var xs
 
 subty θ t t'@(TApp TUn ts _ ) = 
-  case tracePP "Subset" (subset [t] ts θ) of 
+  case {- tracePP "Subset" $ -} subset [t] ts θ of 
     Right θ -> Right θ
     Left  _ -> unify θ t t'
 
@@ -188,7 +188,7 @@ var _ = False
 -----------------------------------------------------------------------------
 subtys ::  Subst -> [Type] -> [Type] -> Either String Subst
 -----------------------------------------------------------------------------
-subtys θ xs ys =  tracePP msg $  subtys' θ xs ys 
+subtys θ xs ys =  {- tracePP msg $ -} subtys' θ xs ys 
    where 
      msg      = printf "subtys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 

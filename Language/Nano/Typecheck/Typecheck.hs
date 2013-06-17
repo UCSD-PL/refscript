@@ -5,7 +5,7 @@ import           Control.Monad
 -- import           Control.Monad.State
 import qualified Data.HashSet        as S 
 import qualified Data.HashMap.Strict as M 
--- import qualified Data.List           as L
+import           Data.List           (nub)
 import qualified Data.Traversable    as T
 -- import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust) -- fromMaybe, maybeToList)
@@ -64,7 +64,7 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
 ppErr (l, e) = printf "Error at %s\n  %s\n" (ppshow l) e
 
 safe (Nano {code = Src fs})
-  = do forM fs $ T.mapM printAnn
+  = do {- forM fs $ T.mapM printAnn -}
        return F.Safe 
 
 printAnn :: AnnBare -> IO () 
@@ -236,7 +236,7 @@ tcExpr γ (PrefixExpr l o e)
   = tcCall γ l o [e] (prefixOpTy o γ)
 
 tcExpr γ (InfixExpr l o e1 e2)        
-  = tcCall γ l o [e1, e2] (infixOpTy o γ)
+  = tcCall γ l o (tracePP "tcExpr" [e1, e2]) (infixOpTy o γ)
 
 tcExpr γ (CallExpr l e es)
   = tcCall γ l e es =<< tcExpr γ e 
@@ -250,7 +250,7 @@ tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> T
 tcCall γ l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
        ets        <- mapM (tcExpr γ) es
-       θ'         <- subTypes l "" (b_type <$> its) ets
+       θ'         <- subTypes l "" (tracePP "rhs" ets) (tracePP "lhs" (b_type <$> its))
        return      $ apply θ' ot
 
 instantiate l fn ft 
@@ -284,7 +284,11 @@ getPhiType l γ1 γ2 x
     where
       mkUnion t1 t2 = 
         case (prep t1, prep t2) of 
-          (Just t1s, Just t2s) -> return $ TApp TUn (t1s ++ t2s) ()
+          (Just t1s, Just t2s) -> 
+            case nub $ t1s ++ t2s of
+              [ ] -> logError (ann l) (errorJoin x t1 t2) tErr
+              [t] -> return $ t
+              ts  -> return $ TApp TUn ts ()
           (_       , _       ) -> logError (ann l) (errorJoin x t1 t2) tErr
       prep (TApp TUn l _) = Just l
       prep t@(TApp _ _ _) = Just [t]

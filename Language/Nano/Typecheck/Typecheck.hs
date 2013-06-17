@@ -275,10 +275,20 @@ getPhiType l γ1 γ2 x
   = case (envFindTy x γ1, envFindTy x γ2) of
       (Just t1, Just t2) -> if (t1 == t2) 
                               then return t1 
-                              else logError (ann l) (errorJoin x t1 t2) tErr
+                              else mkUnion t1 t2 -- logError (ann l) (errorJoin x t1 t2) tErr
       (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
                               then logError (ann l) "Oh no, the HashMap GREMLIN is back...1" tErr
                               else logError (ann l) (bugUnboundPhiVar x) tErr
+    where
+      mkUnion t1 t2 = 
+        case (prep t1, prep t2) of 
+          (Just t1s, Just t2s) -> return $ TApp TUn (t1s ++ t2s) ()
+          (_       , _       ) -> logError (ann l) (errorJoin x t1 t2) tErr
+      prep (TApp TUn l r) = Just l
+      prep t@(TApp _ _ _) = Just [t]
+      prep t@(TVar _ _ )  = Just [t]
+      prep _              = Nothing
+
 
 forceCheck x γ 
   = elem x $ fst <$> envToList γ

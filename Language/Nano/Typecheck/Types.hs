@@ -129,11 +129,6 @@ data RType r
   | TAll TVar (RType r)
     deriving (Eq, Ord, Show, Functor)
 
---instance Eq (RType r) where 
-  -- XXX: maybe define set equality for union types
---  TApp a l1 r1 == TApp b l2 r2 = a == b && l1 == l2 && r1 == r2
---  TVar v1 r1   == TVar v2 r2   = v1 == v2 && r1 == r2
-
 
 data Bind r
   = B { b_sym  :: F.Symbol

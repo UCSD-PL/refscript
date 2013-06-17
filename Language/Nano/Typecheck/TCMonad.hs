@@ -55,7 +55,7 @@ import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
 import           Data.Monoid                  
 import qualified Data.HashMap.Strict     as M
--- import           Text.Parsec.Pos              
+import           Text.Parsec.Pos              
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 -------------------------------------------------------------------------------

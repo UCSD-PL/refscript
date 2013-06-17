@@ -2,14 +2,14 @@ module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where
 
 import           Control.Applicative                ((<$>)) -- (<*>))
 import           Control.Monad                
--- import           Control.Monad.State
+import           Control.Monad.State
 import qualified Data.HashSet        as S 
 import qualified Data.HashMap.Strict as M 
 import           Data.List           (nub)
 import qualified Data.Traversable    as T
 -- import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust) -- fromMaybe, maybeToList)
-import           Text.PrettyPrint.HughesPJ          ({-Doc,-} text, render, {-($+$), (<+>),-} vcat)
+import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>), vcat)
 import           Text.Printf                        (printf)
 
 import           Language.Nano.Errors
@@ -64,7 +64,7 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
 ppErr (l, e) = printf "Error at %s\n  %s\n" (ppshow l) e
 
 safe (Nano {code = Src fs})
-  = do {- forM fs $ T.mapM printAnn -}
+  = do forM fs $ T.mapM printAnn
        return F.Safe 
 
 printAnn :: AnnBare -> IO () 

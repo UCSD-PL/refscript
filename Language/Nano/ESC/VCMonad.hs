@@ -35,7 +35,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc 
--- import           Language.Nano.Types
+import           Language.Nano.Types
 import           Language.Nano.ESC.Types
 import           Data.Monoid
 import           Data.Maybe                   (fromMaybe)

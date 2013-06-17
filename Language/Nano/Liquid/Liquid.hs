@@ -5,7 +5,7 @@
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
 import           Text.Printf                        (printf)
--- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
+import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
 import           Control.Applicative                ((<$>))
 import           Data.Maybe                         (fromJust) -- fromMaybe, isJust)
@@ -17,7 +17,7 @@ import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Files
--- import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Interface        (solve)
 import           Language.Nano.Errors
 import           Language.Nano.Types
@@ -255,7 +255,7 @@ consExpr g (VarRef i x)
   = do addAnnot l x' $ envFindTy x g
        return (x', g) 
     where 
-       x'  =  tracePP msg x 
+       x'  =  {- tracePP msg   -} x 
        msg = printf "consExpr x = %s at %s" (ppshow x') (ppshow l)
        l   = srcPos i
 

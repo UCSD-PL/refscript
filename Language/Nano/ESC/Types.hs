@@ -17,20 +17,20 @@ module Language.Nano.ESC.Types (
 
 import           Control.Applicative          ((<$>))
 import qualified Data.HashMap.Strict as M
--- import           Data.Hashable
--- import           Data.Typeable                      (Typeable)
--- import           Data.Generics                      (Data)   
+import           Data.Hashable
+import           Data.Typeable                      (Typeable)
+import           Data.Generics                      (Data)   
 import           Data.Monoid                        (Monoid (..))
-import           Data.Maybe                         ({-catMaybes,-} fromMaybe)
+import           Data.Maybe                         (catMaybes, fromMaybe)
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
 import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile, SourceSpan (..))
 import qualified Language.Fixpoint.Types as F
--- import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Misc
 import           Language.Nano.Types
 import           Text.PrettyPrint.HughesPJ
--- import           Text.Parsec                        
+import           Text.Parsec                        
 
 ---------------------------------------------------------------------
 -- | Top-level Parser 

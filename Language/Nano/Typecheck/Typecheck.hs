@@ -188,7 +188,7 @@ tcStmt γ (VarDeclStmt _ ds)
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
   = do t <- maybe (return tVoid) (tcExpr γ) eo 
-       unifyType l "Return" eo (tracePP "ReturnType" t) $ envFindReturn γ 
+       subType l "Return" eo {- (tracePP "ReturnType" -} t $ envFindReturn γ 
        return Nothing
 
 tcStmt γ s@(FunctionStmt _ _ _ _)
@@ -248,7 +248,7 @@ tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> T
 tcCall γ l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
        ets        <- mapM (tcExpr γ) es
-       θ'         <- unifyTypes l "" (b_type <$> its) ets
+       θ'         <- subTypes l "" (b_type <$> its) ets
        return      $ apply θ' ot
 
 instantiate l fn ft 

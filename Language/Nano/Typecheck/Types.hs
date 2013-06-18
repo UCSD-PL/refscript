@@ -40,6 +40,7 @@ module Language.Nano.Typecheck.Types (
   , tInt
   , tBool
   , tString
+  , tTop
   , tVoid
   , tErr
   , tFunErr
@@ -119,6 +120,7 @@ data TCon
   | TBool                
   | TString
   | TVoid              
+  | TTop
   | TDef  F.Symbol
   | TUn
     deriving (Eq, Ord, Show)
@@ -262,6 +264,7 @@ ppTC TInt             = text "int"
 ppTC TBool            = text "boolean"
 ppTC TString          = text "string"
 ppTC TVoid            = text "void"
+ppTC TTop             = text "top"
 ppTC TUn              = text "union:"
 ppTC (TDef x)         = pprint x
 
@@ -315,6 +318,7 @@ tInt, tBool, tString, tVoid, tErr :: (F.Reftable r) => RType r
 tInt    = TApp TInt     [] F.top 
 tBool   = TApp TBool    [] F.top
 tString = TApp TString  [] F.top
+tTop    = TApp TTop     [] F.top
 tVoid   = TApp TVoid    [] F.top
 tErr    = tVoid
 tFunErr = ([],[],tErr)

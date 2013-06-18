@@ -190,7 +190,7 @@ tcStmt γ (VarDeclStmt _ ds)
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
   = do t <- maybe (return tVoid) (tcExpr γ) eo 
-       subType l "Return" eo {- (tracePP "ReturnType" -} t $ envFindReturn γ 
+       subType l "Return" eo t $ envFindReturn γ 
        return Nothing
 
 tcStmt γ s@(FunctionStmt _ _ _ _)
@@ -239,7 +239,7 @@ tcExpr γ (PrefixExpr l o e)
   = tcCall γ l o [e] (prefixOpTy o γ)
 
 tcExpr γ (InfixExpr l o e1 e2)        
-  = tcCall γ l o (tracePP "tcExpr" [e1, e2]) (infixOpTy o γ)
+  = tcCall γ l o [e1, e2] (infixOpTy o γ)
 
 tcExpr γ (CallExpr l e es)
   = tcCall γ l e es =<< tcExpr γ e 

@@ -139,8 +139,9 @@ unify θ t t'
   | t == t'                             = return θ
   | otherwise                           = Left $ errorUnification t t'
 
+
 unifys         ::  Subst -> [Type] -> [Type] -> Either String Subst
-unifys θ xs ys =  tracePP msg $ unifys' θ xs ys 
+unifys θ xs ys =  {- tracePP msg $ -} unifys' θ xs ys 
    where 
      msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
@@ -164,6 +165,7 @@ unassigned α (Su m) = M.lookup α m == Just (tVar α)
 -----------------------------------------------------------------------------
 subty :: Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
+subty θ _ t | isTop t = Right θ
 subty θ t@(TApp TUn ts _ ) t'@(TApp TUn ts' _) 
   | noTVars && subset ts ts' = Right $ θ 
   | noTVars                  = Left  $ errorSubType "Unions" t t'
@@ -206,8 +208,21 @@ subtys' = applys subty $ errorSubType "subtys'"
 subset ::  [Type] -> [Type] -> Bool
 -----------------------------------------------------------------------------
 subset xs ys = 
-  elem tTop ys || all (\a -> any (== a) ys) xs
+  isTop ys || all (\a -> any (== a) ys) xs
+
+
+class IsTop a where 
+  isTop :: a -> Bool
+
+instance IsTop Type where 
+  isTop t = t == tTop
+
+instance IsTop a => IsTop [a] where
+  isTop = any isTop
 
 instance PP Bool where 
   pp True  = text "true"
   pp False = text "false"
+
+boolToString b | b = "true"  
+boolToString _     = "false"

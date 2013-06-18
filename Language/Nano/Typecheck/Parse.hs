@@ -109,6 +109,7 @@ tconP :: Parser TCon
 tconP =  try (reserved "int"       >> return TInt)
      <|> try (reserved "boolean"   >> return TBool)
      <|> try (reserved "void"      >> return TVoid)
+     <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
      <|> (TDef . stringSymbol)  <$> lowerIdP
 

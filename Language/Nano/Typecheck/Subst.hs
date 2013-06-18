@@ -205,7 +205,8 @@ subtys' = applys subty $ errorSubType "subtys'"
 -----------------------------------------------------------------------------
 subset ::  [Type] -> [Type] -> Bool
 -----------------------------------------------------------------------------
-subset xs ys = all (\a -> any (== a) ys) xs
+subset xs ys = 
+  elem tTop ys || all (\a -> any (== a) ys) xs
 
 instance PP Bool where 
   pp True  = text "true"

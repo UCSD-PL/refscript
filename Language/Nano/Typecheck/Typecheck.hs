@@ -227,6 +227,9 @@ tcExpr _ (IntLit _ _)
 tcExpr _ (BoolLit _ _)
   = return tBool
 
+tcExpr _ (StringLit _ _)
+  = return tString
+
 tcExpr γ (VarRef l x)
   = case envFindTy x γ of 
       Nothing -> logError (ann l) (errorUnboundIdEnv x γ) tErr
@@ -250,7 +253,7 @@ tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> T
 tcCall γ l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
        ets        <- mapM (tcExpr γ) es
-       θ'         <- subTypes l "" (tracePP "rhs" ets) (tracePP "lhs" (b_type <$> its))
+       θ'         <- subTypes l "" ets (b_type <$> its)
        return      $ apply θ' ot
 
 instantiate l fn ft 

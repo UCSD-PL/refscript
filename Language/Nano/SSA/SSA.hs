@@ -164,6 +164,9 @@ ssaExpr e@(IntLit _ _)
 ssaExpr e@(BoolLit _ _)
   = return e 
 
+ssaExpr e@(StringLit _ _)
+  = return e 
+
 ssaExpr e@(VarRef l x)
   = do imm <- isImmutable x
        xo  <- findSsaEnv x

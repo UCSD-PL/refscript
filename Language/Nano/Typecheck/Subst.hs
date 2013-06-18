@@ -38,6 +38,8 @@ import qualified Data.HashMap.Strict as M
 import           Data.Monoid
 import           Data.List           (partition)
 import           Text.Printf 
+import           Debug.Trace
+import           Language.Nano.Misc (mkEither)
 
 ---------------------------------------------------------------------------
 -- | Substitutions --------------------------------------------------------
@@ -138,11 +140,11 @@ unify θ t t'
   | otherwise                           = Left $ errorUnification t t'
 
 unifys         ::  Subst -> [Type] -> [Type] -> Either String Subst
-unifys θ xs ys =  {- tracePP msg $ -} unifys' θ xs ys 
+unifys θ xs ys =  tracePP msg $ unifys' θ xs ys 
    where 
      msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
-unifys' = applys unify errorUnification
+unifys' = applys unify errorUnification 
 
 varEql θ α β = case varAsn θ α (tVar β) of 
                  z@(Right _) -> z
@@ -162,28 +164,29 @@ unassigned α (Su m) = M.lookup α m == Just (tVar α)
 -----------------------------------------------------------------------------
 subty :: Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
-subty θ (TApp TUn ts _ ) (TApp TUn ts' _) | not $ any var ts = subset ts ts' θ
+subty θ t@(TApp TUn ts _ ) t'@(TApp TUn ts' _) 
+  | noTVars && subset ts ts' = Right $ θ 
+  | noTVars                  = Left  $ errorSubType "Unions" t t'
+  where 
+    noTVars = not $ any var ts
+
 subty θ t@(TApp TUn xs  _) t' = 
   case tvs of
-    [ ]  -> subset xs [t'] θ
-    [v]  -> unify θ v t' >>= subset ts [t']
-    _    -> Left $ errorSubType "In subty" t t'
+    [ ]  | subset xs [t'] -> Right θ        -- If it is a subset -- OK 
+         | otherwise      -> unify θ t t'   -- Otherwise try to unify
+    [v]                   -> unify θ v t' >>= mkEither (subset ts [t']) "subty"
+    _                     -> Left $ errorSubType "In subty" t t'
   where 
     (tvs, ts) = partition var xs
 
-subty θ t t'@(TApp TUn ts _ ) = 
-  case {- tracePP "Subset" $ -} subset [t] ts θ of 
-    Right θ -> Right θ
-    Left  _ -> unify θ t t'
+subty θ t t'@(TApp TUn ts _ ) 
+  | subset [t] ts = Right θ
+  | otherwise     = unify θ t t'
 
 subty θ t t' = unify θ t t'
 
--- subty θ (TApp TUn ts _ ) t  = subtys ts [t]
--- subty θ t (TApp TUn ts' _ ) = subtys [t] ts'
--- subty θ t t'                = subtys [t] [t']
-
 var (TVar _ _) = True
-var _ = False
+var _          = False
 
 -----------------------------------------------------------------------------
 subtys ::  Subst -> [Type] -> [Type] -> Either String Subst
@@ -198,15 +201,11 @@ subtys' = applys subty $ errorSubType "subtys'"
 
 -----------------------------------------------------------------------------
 -- At this point the lists contain flat types (no unions)
+-- Take care of Top Type in the future here!
 -----------------------------------------------------------------------------
-subset ::  [Type] -> [Type] -> Subst -> Either String Subst
+subset ::  [Type] -> [Type] -> Bool
 -----------------------------------------------------------------------------
-subset xs ys θ = 
-  if {- tracePP msg $ -} all (\a -> any (== a) ys) xs
-    then Right $ θ
-    else Left  $ errorSubType "subset" xs ys
-  {- where
-    msg = printf "Checking: %s <: %s" (ppshow xs) (ppshow ys) -}
+subset xs ys = all (\a -> any (== a) ys) xs
 
 instance PP Bool where 
   pp True  = text "true"

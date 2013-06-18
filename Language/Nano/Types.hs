@@ -70,6 +70,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Text.Parsec                        
 import           Text.Parsec.Pos                    (initialPos)
 import           Text.Printf                        (printf)
+import           Debug.Trace
 
 ---------------------------------------------------------------------
 -- | Command Line Configuration Options
@@ -138,22 +139,24 @@ class IsNano a where
 
 
 instance IsNano InfixOp where
-  isNano OpLT   = True -- ^ @<@
-  isNano OpLEq  = True -- ^ @<=@
-  isNano OpGT   = True -- ^ @>@
-  isNano OpGEq  = True -- ^ @>=@
-  isNano OpEq   = True -- ^ @==@
-  isNano OpNEq  = True -- ^ @!=@
-  
-  isNano OpLAnd = True -- ^ @&&@
-  isNano OpLOr  = True -- ^ @||@
+  isNano OpLT       = True -- ^ @<@
+  isNano OpLEq      = True -- ^ @<=@
+  isNano OpGT       = True -- ^ @>@
+  isNano OpGEq      = True -- ^ @>=@
+  isNano OpEq       = True -- ^ @==@
+  -- PV adding @===@
+  isNano OpStrictEq = True -- ^ @===@
+  isNano OpNEq      = True -- ^ @!=@
 
-  isNano OpSub  = True -- ^ @-@
-  isNano OpAdd  = True -- ^ @+@
-  isNano OpMul  = True -- ^ @*@
-  isNano OpDiv  = True -- ^ @/@
-  isNano OpMod  = True -- ^ @%@
-  isNano _      = False
+  isNano OpLAnd     = True -- ^ @&&@
+  isNano OpLOr      = True -- ^ @||@
+
+  isNano OpSub      = True -- ^ @-@
+  isNano OpAdd      = True -- ^ @+@
+  isNano OpMul      = True -- ^ @*@
+  isNano OpDiv      = True -- ^ @/@
+  isNano OpMod      = True -- ^ @%@
+  isNano e          = errortext (text "Not Nano InfixOp!" <+> pp e)
 
 instance IsNano (LValue a) where 
   isNano (LVar _ _) = True
@@ -166,6 +169,8 @@ instance IsNano (VarDecl a) where
 instance IsNano (Expression a) where 
   isNano (BoolLit _ _)         = True
   isNano (IntLit _ _)          = True
+  -- PV adding StringLit
+  isNano (StringLit _ _)       = True
   isNano (VarRef _ _)          = True
   isNano (InfixExpr _ o e1 e2) = isNano o && isNano e1 && isNano e2
   isNano (PrefixExpr _ o e)    = isNano o && isNano e
@@ -179,10 +184,11 @@ instance IsNano AssignOp where
   -- isNano _        = False
 
 instance IsNano PrefixOp where
-  isNano PrefixLNot  = True
-  isNano PrefixMinus = True 
-  isNano e           = errortext (text "Not Nano PrefixOp!" <+> pp e) 
-  -- isNano _           = False
+  isNano PrefixLNot   = True
+  isNano PrefixMinus  = True 
+  isNano PrefixTypeof = True 
+  isNano e            = errortext (text "Not Nano PrefixOp!" <+> pp e)
+  -- isNano _            = False
 
 instance IsNano (Statement a) where
   isNano (EmptyStmt _)          = True                   -- ^ skip
@@ -336,15 +342,18 @@ convertError tgt e  = errortext $ msg <+> pp e
 eProp :: Expression a -> F.Pred
 ------------------------------------------------------------------
 
-eProp (InfixExpr _ OpLT   e1 e2) = F.PAtom F.Lt (F.expr e1) (F.expr e2) 
-eProp (InfixExpr _ OpLEq  e1 e2) = F.PAtom F.Le (F.expr e1) (F.expr e2) 
-eProp (InfixExpr _ OpGT   e1 e2) = F.PAtom F.Gt (F.expr e1) (F.expr e2)  
-eProp (InfixExpr _ OpGEq  e1 e2) = F.PAtom F.Ge (F.expr e1) (F.expr e2)  
-eProp (InfixExpr _ OpEq   e1 e2) = F.PAtom F.Eq (F.expr e1) (F.expr e2) 
-eProp (InfixExpr _ OpNEq  e1 e2) = F.PAtom F.Ne (F.expr e1) (F.expr e2) 
-eProp (InfixExpr _ OpLAnd e1 e2) = pAnd (F.prop e1) (F.prop e2) 
-eProp (InfixExpr _ OpLOr  e1 e2) = pOr  (F.prop e1) (F.prop e2)
-eProp e                          = convertError "InfixExpr -> F.Prop" e
+eProp (InfixExpr _ OpLT   e1 e2)       = F.PAtom F.Lt (F.expr e1) (F.expr e2) 
+eProp (InfixExpr _ OpLEq  e1 e2)       = F.PAtom F.Le (F.expr e1) (F.expr e2) 
+eProp (InfixExpr _ OpGT   e1 e2)       = F.PAtom F.Gt (F.expr e1) (F.expr e2)  
+eProp (InfixExpr _ OpGEq  e1 e2)       = F.PAtom F.Ge (F.expr e1) (F.expr e2)  
+eProp (InfixExpr _ OpEq   e1 e2)       = F.PAtom F.Eq (F.expr e1) (F.expr e2) 
+-- XXX @==@ and @===@ are translated the same. This should not make a difference
+-- as long as same type operands are used.
+eProp (InfixExpr _ OpStrictEq   e1 e2) = F.PAtom F.Eq (F.expr e1) (F.expr e2) 
+eProp (InfixExpr _ OpNEq  e1 e2)       = F.PAtom F.Ne (F.expr e1) (F.expr e2) 
+eProp (InfixExpr _ OpLAnd e1 e2)       = pAnd (F.prop e1) (F.prop e2) 
+eProp (InfixExpr _ OpLOr  e1 e2)       = pOr  (F.prop e1) (F.prop e2)
+eProp e                                = convertError "InfixExpr -> F.Prop" e
 
 ------------------------------------------------------------------
 bop       :: InfixOp -> F.Bop

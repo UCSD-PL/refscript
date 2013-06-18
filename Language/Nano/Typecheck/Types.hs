@@ -39,6 +39,7 @@ module Language.Nano.Typecheck.Types (
   -- * Primitive Types
   , tInt
   , tBool
+  , tString
   , tVoid
   , tErr
   , tFunErr
@@ -116,6 +117,7 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 data TCon 
   = TInt                   
   | TBool                
+  | TString
   | TVoid              
   | TDef  F.Symbol
   | TUn
@@ -258,6 +260,7 @@ instance F.Reftable r => PP (Bind r) where
 ppArgs p sep          = p . intersperse sep . map pp
 ppTC TInt             = text "int"
 ppTC TBool            = text "boolean"
+ppTC TString          = text "string"
 ppTC TVoid            = text "void"
 ppTC TUn              = text "union:"
 ppTC (TDef x)         = pprint x
@@ -308,11 +311,12 @@ instance (PP a, PP b) => PP (Annot b a) where
 tVar   :: (F.Reftable r) => TVar -> RType r
 tVar   = (`TVar` F.top) 
 
-tInt, tBool, tVoid, tErr :: (F.Reftable r) => RType r
-tInt   = TApp TInt  [] F.top 
-tBool  = TApp TBool [] F.top
-tVoid  = TApp TVoid [] F.top
-tErr   = tVoid
+tInt, tBool, tString, tVoid, tErr :: (F.Reftable r) => RType r
+tInt    = TApp TInt     [] F.top 
+tBool   = TApp TBool    [] F.top
+tString = TApp TString  [] F.top
+tVoid   = TApp TVoid    [] F.top
+tErr    = tVoid
 tFunErr = ([],[],tErr)
 
 -- tProp :: (F.Reftable r) => RType r
@@ -332,20 +336,21 @@ infixOpTy o g = fromMaybe err $ envFindTy ox g
     err       = errorstar $ printf "Cannot find infixOpTy %s" (ppshow ox) -- (ppshow g)
     ox        = infixOpId o
 
-infixOpId OpLT  = builtinId "OpLT"         
-infixOpId OpLEq = builtinId "OpLEq"      
-infixOpId OpGT  = builtinId "OpGT"       
-infixOpId OpGEq = builtinId "OpGEq"      
-infixOpId OpEq  = builtinId "OpEq"       
-infixOpId OpNEq = builtinId "OpNEq"      
-infixOpId OpLAnd= builtinId "OpLAnd"     
-infixOpId OpLOr = builtinId "OpLOr"      
-infixOpId OpSub = builtinId "OpSub"      
-infixOpId OpAdd = builtinId "OpAdd"      
-infixOpId OpMul = builtinId "OpMul"      
-infixOpId OpDiv = builtinId "OpDiv"      
-infixOpId OpMod = builtinId "OpMod"       
-infixOpId o     = errorstar $ "Cannot handle: infixOpId " ++ ppshow o
+infixOpId OpLT       = builtinId "OpLT"
+infixOpId OpLEq      = builtinId "OpLEq"
+infixOpId OpGT       = builtinId "OpGT"
+infixOpId OpGEq      = builtinId "OpGEq"
+infixOpId OpEq       = builtinId "OpEq"
+infixOpId OpStrictEq = builtinId "OpSEq"
+infixOpId OpNEq      = builtinId "OpNEq"
+infixOpId OpLAnd     = builtinId "OpLAnd"
+infixOpId OpLOr      = builtinId "OpLOr"
+infixOpId OpSub      = builtinId "OpSub"
+infixOpId OpAdd      = builtinId "OpAdd"
+infixOpId OpMul      = builtinId "OpMul"
+infixOpId OpDiv      = builtinId "OpDiv"
+infixOpId OpMod      = builtinId "OpMod"
+infixOpId o          = errorstar $ "Cannot handle: infixOpId " ++ ppshow o
 
 -----------------------------------------------------------------------
 prefixOpTy :: PrefixOp -> Env t -> t 
@@ -354,9 +359,10 @@ prefixOpTy o g = fromMaybe err $ envFindTy (prefixOpId o) g
   where 
     err       = convertError "prefixOpTy" o
 
-prefixOpId PrefixMinus = builtinId "PrefixMinus"
-prefixOpId PrefixLNot  = builtinId "PrefixLNot"
-prefixOpId o           = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
+prefixOpId PrefixMinus  = builtinId "PrefixMinus"
+prefixOpId PrefixLNot   = builtinId "PrefixLNot"
+prefixOpId PrefixTypeof = builtinId "PrefixTypeof"
+prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
 
 builtinId       = mkId . ("builtin_" ++)
 

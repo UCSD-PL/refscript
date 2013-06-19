@@ -23,6 +23,9 @@ module Language.Nano.Typecheck.Subst (
   -- * Subtyping
   , subtys
 
+  -- * Top Type
+  , IsTop (..)
+
   ) where 
 
 import           Text.PrettyPrint.HughesPJ
@@ -137,7 +140,16 @@ unify θ (TApp c ts _) (TApp c' ts' _)
 
 unify θ t t' 
   | t == t'                             = return θ
+  | isTop t                             = go θ $ strip t'
+  | isTop t'                            = go θ $ strip t
   | otherwise                           = Left $ errorUnification t t'
+  where strip (TApp _ xs _ )            = xs
+        strip x@(TVar _ _)              = [x]
+        strip (TFun xs y _)             = (b_type <$> xs) ++ [y]
+        strip (TAll _ x)                = [x]
+        tops = map $ const tTop
+        go θ ts = unifys θ ts $ tops ts
+
 
 
 unifys         ::  Subst -> [Type] -> [Type] -> Either String Subst
@@ -165,7 +177,8 @@ unassigned α (Su m) = M.lookup α m == Just (tVar α)
 -----------------------------------------------------------------------------
 subty :: Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
-subty θ _ t | isTop t = Right θ
+subty θ t t' | isTop t'      = unify θ t tTop
+
 subty θ t@(TApp TUn ts _ ) t'@(TApp TUn ts' _) 
   | noTVars && subset ts ts' = Right $ θ 
   | noTVars                  = Left  $ errorSubType "Unions" t t'
@@ -215,7 +228,9 @@ class IsTop a where
   isTop :: a -> Bool
 
 instance IsTop Type where 
-  isTop t = t == tTop
+  isTop (TApp TTop _ _) = True 
+  isTop (TApp TUn  ts _ ) = isTop ts
+  isTop _ = False
 
 instance IsTop a => IsTop [a] where
   isTop = any isTop
@@ -223,6 +238,3 @@ instance IsTop a => IsTop [a] where
 instance PP Bool where 
   pp True  = text "true"
   pp False = text "false"
-
-boolToString b | b = "true"  
-boolToString _     = "false"

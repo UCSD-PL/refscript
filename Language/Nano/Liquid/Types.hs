@@ -201,6 +201,7 @@ tconFTycon TInt      = F.intFTyCon
 tconFTycon TBool     = F.stringFTycon "boolean"
 tconFTycon TVoid     = F.stringFTycon "void"
 tconFTycon (TDef s)  = F.stringFTycon $ F.symbolString s
+tconFTycon TUn       = F.stringFTycon "union"
 
 
 rTypeSortForAll t    = genSort n θ $ rTypeSort tbody

@@ -260,13 +260,13 @@ instance F.Reftable r => PP (Bind r) where
   pp (B x t)        = pp x <> colon <> pp t 
 
 ppArgs p sep          = p . intersperse sep . map pp
-ppTC TInt             = text "int"
-ppTC TBool            = text "boolean"
-ppTC TString          = text "string"
-ppTC TVoid            = text "void"
-ppTC TTop             = text "top"
-ppTC TUn              = text "union:"
-ppTC (TDef x)         = pprint x
+ppTC TInt             = text "Tint"
+ppTC TBool            = text "Tboolean"
+ppTC TString          = text "Tstring"
+ppTC TVoid            = text "Tvoid"
+ppTC TTop             = text "Ttop"
+ppTC TUn              = text "Tunion:"
+ppTC (TDef x)         = text "TDef: " <+> pprint x
 
 -----------------------------------------------------------------------------
 -- | Annotations ------------------------------------------------------------

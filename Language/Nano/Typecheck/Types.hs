@@ -299,7 +299,7 @@ ppTC (TDef x)         = text "TDef: " <+> pprint x
 data Fact 
   = PhiVar  !(Id SourceSpan) 
   | TypInst ![Type]
-  {-| Assert  !(Expression, Type)-}
+  {-| Assert  !(Expression (), Type)-}
     deriving (Eq, Ord, Show)
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show)
@@ -319,7 +319,7 @@ instance IsLocated (Annot a SourceSpan) where
 instance PP Fact where
   pp (PhiVar x)     = text "phi"  <+> pp x
   pp (TypInst ts)   = text "inst" <+> pp ts 
-  {-pp (Assert (e,t)) = text "assert" <+> pp e <+> " :: " <+> pp t-}
+  {-pp (Assert (e,t)) = text "assert" <+> pp e <+> text " :: " <+> pp t-}
 
 instance PP AnnInfo where
   pp             = vcat . (ppB <$>) . M.toList 

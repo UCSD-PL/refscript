@@ -54,7 +54,9 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
 import           Data.Monoid                  
+import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict     as M
+import           Data.List           (partition)
 import           Text.Parsec.Pos              
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
@@ -62,7 +64,8 @@ import           Language.ECMAScript3.Parser        (SourceSpan (..))
 -- | Typechecking monad -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-data TCState = TCS { tc_errs  :: ![(SourceSpan, String)]
+data TCState = TCS { tc_errss :: ![(SourceSpan, String)]
+                   , tc_errs  :: ![String]
                    , tc_subst :: !Subst
                    , tc_cnt   :: !Int
                    , tc_anns  :: AnnInfo
@@ -99,7 +102,7 @@ tcError l msg = throwError $ printf "TC-ERROR at %s : %s" (ppshow $ srcPos l) ms
 -------------------------------------------------------------------------------
 logError   :: SourceSpan -> String -> a -> TCM a
 -------------------------------------------------------------------------------
-logError l msg x = (modify $ \st -> st { tc_errs = (l,msg):(tc_errs st)}) >> return x
+logError l msg x = (modify $ \st -> st { tc_errss = (l,msg):(tc_errss st)}) >> return x
 
 
 -------------------------------------------------------------------------------
@@ -163,10 +166,10 @@ execute     :: Nano z (RType r) -> TCM a -> Either [(SourceSpan, String)] a
 execute pgm act 
   = case runState (runErrorT act) $ initState pgm of 
       (Left err, _) -> Left [(dummySpan,  err)]
-      (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errs st)
+      (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errss st)
 
 initState :: Nano z (RType r) -> TCState
-initState pgm = TCS [] mempty 0 M.empty [] (envMap toType $ defs pgm) 
+initState pgm = TCS [] [] mempty 0 M.empty [] (envMap toType $ defs pgm) 
 
 
 getDefType f 
@@ -175,6 +178,15 @@ getDefType f
     where 
        err = tcError l $ errorMissingSpec l f
        l   = srcPos f
+
+
+-------------------------------------------------------------------------------
+accumErrs :: AnnSSA -> TCM ()
+-------------------------------------------------------------------------------
+accumErrs l
+  = do m     <- tc_errs <$> get 
+       modify   $ \st -> st {tc_errs = []}
+       forM_  m $ \s -> logError (ann l) s ()
 
 
 --------------------------------------------------------------------------
@@ -204,10 +216,14 @@ unifyTypes :: AnnSSA -> String -> [Type] -> [Type] -> TCM Subst
 ----------------------------------------------------------------------------------
 unifyTypes l msg t1s t2s
   | length t1s /= length t2s = getSubst >>= logError (ann l) errorArgMismatch
-  | otherwise                = do θ <- getSubst 
-                                  case unifys θ t1s t2s of
-                                    Left msg' -> logError (ann l) (msg ++ "\n" ++ msg') θ
-                                    Right θ'  -> setSubst θ' >> return θ' 
+  | otherwise                = do θ  <- getSubst 
+                                  θ' <- unifys θ t1s t2s
+                                  {-addError msg-}
+                                  accumErrs l
+                                  setSubst θ' 
+                                  return θ'
+                                  {- Left msg' -> logError (ann l) (msg ++ "\n" ++ msg') θ-}
+                                  {- Right θ'  -> setSubst θ' >> return θ' -}
 
 unifyType l m e t t' = unifyTypes l msg [t] [t'] >> return ()
   where 
@@ -215,17 +231,141 @@ unifyType l m e t t' = unifyTypes l msg [t] [t'] >> return ()
 
 
 ----------------------------------------------------------------------------------
-subTypes :: AnnSSA -> String -> [Type] -> [Type] -> TCM Subst
+subTypes :: AnnSSA -> [Type] -> [Type] -> TCM Subst
 ----------------------------------------------------------------------------------
-subTypes l msg t1s t2s
+subTypes l t1s t2s
   | length t1s /= length t2s = getSubst >>= logError (ann l) errorArgMismatch 
-  | otherwise                = do θ <- getSubst
-                                  case subtys θ t1s t2s of
-                                    Left msg' -> logError (ann l) (msg ++ "\n" ++ msg') θ
-                                    Right θ'  -> setSubst θ' >> return θ' 
+  | otherwise                = do θ  <- getSubst
+                                  θ' <- subtys θ t1s t2s
+                                  accumErrs l
+                                  setSubst θ' 
+                                  return θ'
 
-subType l m _ t t' = subTypes l ("[" ++ m ++ "] " ++ msg) [t] [t'] >> return ()
+subType l _ t t' = subTypes l [t] [t'] >> return ()
+  {-where -}
+  {-  msg              = errorSubType "subType" t t'-}
+
+
+-----------------------------------------------------------------------------
+unify :: Subst -> Type -> Type -> TCM Subst
+-----------------------------------------------------------------------------
+unify θ (TFun xts t _) (TFun xts' t' _) = unifys θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
+unify θ (TVar α _) (TVar β _)           = varEql θ α β 
+unify θ (TVar α _) t                    = varAsnM θ α t 
+unify θ t (TVar α _)                    = varAsnM θ α t
+
+unify θ (TApp c ts _) (TApp c' ts' _)
+  | c == c'                             = unifys  θ ts ts'
+
+unify θ t t' 
+  | t == t'                             = return θ
+  | isTop t                             = go θ $ strip t'
+  | isTop t'                            = go θ $ strip t
+  | otherwise                           = addError (errorUnification t t') θ
+  where strip (TApp _ xs _ )            = xs
+        strip x@(TVar _ _)              = [x]
+        strip (TFun xs y _)             = (b_type <$> xs) ++ [y]
+        strip (TAll _ x)                = [x]
+        tops = map $ const tTop
+        go θ ts = unifys θ ts $ tops ts
+
+
+
+unifys         ::  Subst -> [Type] -> [Type] -> TCM Subst
+unifys θ xs ys =  {- tracePP msg $ -} unifys' θ xs ys 
+   where 
+     msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
+
+unifys' θ ts ts' 
+  | nTs == nTs' = go θ (ts, ts') 
+  | otherwise   = addError (errorUnification ts ts') θ
   where 
-    msg              = errorSubType "subType" t t'
+    nTs                  = length ts
+    nTs'                 = length ts'
+    go θ (t:ts , t':ts') = unify θ t t' >>= \θ' -> go θ' (mapPair (apply θ') (ts, ts'))
+    go θ (_    , _    )  = return θ 
 
+
+-----------------------------------------------------------------------------
+varEql :: Subst -> TVar -> TVar -> TCM Subst
+-----------------------------------------------------------------------------
+varEql θ α β = case varAsn θ α (tVar β) of 
+                 Right θ' -> return θ'
+                 Left e1  -> case varAsn θ β (tVar α) of
+                                  Right θ' -> return θ'
+                                  Left e2  -> addError (e1 ++ "\n OR \n" ++ e2) θ
+ 
+-----------------------------------------------------------------------------
+varAsn :: Subst -> TVar -> Type -> Either String Subst
+-----------------------------------------------------------------------------
+varAsn θ α t 
+  | t == tVar α         = Right $ θ 
+  | α `S.member` free t = Left  $ errorOccursCheck α t 
+  | unassigned α θ      = Right $ θ `mappend` (Su $ M.singleton α t) 
+  | otherwise           = Left  $ errorRigidUnify α t
+  
+unassigned α (Su m) = M.lookup α m == Just (tVar α)
+
+-----------------------------------------------------------------------------
+varAsnM :: Subst -> TVar -> Type -> TCM Subst
+-----------------------------------------------------------------------------
+varAsnM θ a t = 
+  case varAsn θ a t of 
+    Left s -> addError s θ
+    Right θ' -> return θ
+
+
+-----------------------------------------------------------------------------
+subty :: Subst -> Type -> Type -> TCM Subst
+-----------------------------------------------------------------------------
+subty θ t t' | isTop t'      = unify θ t tTop
+
+subty θ t@(TApp TUn ts _ ) t'@(TApp TUn ts' _) 
+  | noTVars && subset ts ts' = return θ 
+--  | noTVars && subset ts' ts = mkAnnot ts ts' 
+  | noTVars                  = addError (errorSubType "Unions" t t') θ
+  where 
+    noTVars = not $ any var ts
+
+subty θ t@(TApp TUn xs  _) t' = 
+  case tvs of
+    [ ]  | subset xs [t'] -> return θ       -- If it is a subset -- OK 
+         | otherwise      -> unify θ t t'   -- Otherwise try to unify
+    [v]                   -> unify θ v t' >>= if subset ts [t'] 
+                                                then addError "subty"
+                                                else return
+    _                     -> addError (errorSubType "In subty" t t') θ
+  where 
+    (tvs, ts) = partition var xs
+
+subty θ t t'@(TApp TUn ts _ ) 
+  | subset [t] ts = return θ
+  | otherwise     = unify θ t t'
+
+subty θ t t' = unify θ t t'
+
+var (TVar _ _) = True
+var _          = False
+
+-----------------------------------------------------------------------------
+subtys ::  Subst -> [Type] -> [Type] -> TCM Subst
+-----------------------------------------------------------------------------
+subtys θ xs ys =  {- tracePP msg $ -} subtys' θ xs ys 
+   where 
+     msg      = printf "subtys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
+
+subtys' θ ts ts' 
+  | nTs == nTs' = go θ (ts, ts')
+  | otherwise   = addError (errorSubType "" ts ts) θ
+  where 
+    nTs                  = length ts
+    nTs'                 = length ts'
+    go θ (t:ts , t':ts') = subty θ t t' >>= \θ' -> go θ' (mapPair (apply θ') (ts, ts'))
+    go θ (_    , _    )  = return θ 
+
+
+-------------------------------------------------------------------------------
+addError   :: String -> a -> TCM a
+-------------------------------------------------------------------------------
+addError msg x = (modify $ \st -> st { tc_errs = msg:(tc_errs st)}) >> return x
 

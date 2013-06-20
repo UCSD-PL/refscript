@@ -17,14 +17,6 @@ module Language.Nano.Typecheck.Subst (
   -- * Type-class with operations
   , Substitutable (..)
 
-  -- * Unification
-  , unifys
-
-  -- * Subtyping
-  , subtys
-
-  -- * Top Type
-  , IsTop (..)
 
   ) where 
 
@@ -42,7 +34,7 @@ import           Data.Monoid
 import           Data.List           (partition)
 import           Text.Printf 
 import           Debug.Trace
-import           Language.Nano.Misc (mkEither)
+-- import           Language.Nano.Misc (mkEither)
 
 ---------------------------------------------------------------------------
 -- | Substitutions --------------------------------------------------------
@@ -117,124 +109,3 @@ appTy θ (TFun ts t r)      = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m) (TAll α t)    = apply (Su $ M.delete α m) t 
 
 
-
-applys f err θ ts ts' 
-  | nTs == nTs' = go θ (ts, ts') 
-  | otherwise   = Left $ err ts ts'
-  where 
-    nTs                  = length ts
-    nTs'                 = length ts'
-    go θ (t:ts , t':ts') = f θ t t' >>= \θ' -> go θ' (mapPair (apply θ') (ts, ts'))
-    go θ (_    , _    )  = return θ 
-
------------------------------------------------------------------------------
-unify :: Subst -> Type -> Type -> Either String Subst
------------------------------------------------------------------------------
-unify θ (TFun xts t _) (TFun xts' t' _) = unifys θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
-unify θ (TVar α _) (TVar β _)           = varEql θ α β 
-unify θ (TVar α _) t                    = varAsn θ α t 
-unify θ t (TVar α _)                    = varAsn θ α t
-
-unify θ (TApp c ts _) (TApp c' ts' _)
-  | c == c'                             = unifys  θ ts ts'
-
-unify θ t t' 
-  | t == t'                             = return θ
-  | isTop t                             = go θ $ strip t'
-  | isTop t'                            = go θ $ strip t
-  | otherwise                           = Left $ errorUnification t t'
-  where strip (TApp _ xs _ )            = xs
-        strip x@(TVar _ _)              = [x]
-        strip (TFun xs y _)             = (b_type <$> xs) ++ [y]
-        strip (TAll _ x)                = [x]
-        tops = map $ const tTop
-        go θ ts = unifys θ ts $ tops ts
-
-
-
-unifys         ::  Subst -> [Type] -> [Type] -> Either String Subst
-unifys θ xs ys =  {- tracePP msg $ -} unifys' θ xs ys 
-   where 
-     msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
-
-unifys' = applys unify errorUnification 
-
-varEql θ α β = case varAsn θ α (tVar β) of 
-                 z@(Right _) -> z
-                 (Left e1)   -> case varAsn θ β (tVar α) of
-                                  z@(Right _) -> z
-                                  (Left e2)   -> Left (e1 ++ "\n OR \n" ++ e2) 
- 
-varAsn θ α t 
-  | t == tVar α         = Right $ θ 
-  | α `S.member` free t = Left  $ errorOccursCheck α t 
-  | unassigned α θ      = Right $ θ `mappend` (Su $ M.singleton α t) 
-  | otherwise           = Left  $ errorRigidUnify α t
-  
-unassigned α (Su m) = M.lookup α m == Just (tVar α)
- 
-
------------------------------------------------------------------------------
-subty :: Subst -> Type -> Type -> Either String Subst
------------------------------------------------------------------------------
-subty θ t t' | isTop t'      = unify θ t tTop
-
-subty θ t@(TApp TUn ts _ ) t'@(TApp TUn ts' _) 
-  | noTVars && subset ts ts' = Right $ θ 
-  | noTVars                  = Left  $ errorSubType "Unions" t t'
-  where 
-    noTVars = not $ any var ts
-
-subty θ t@(TApp TUn xs  _) t' = 
-  case tvs of
-    [ ]  | subset xs [t'] -> Right θ        -- If it is a subset -- OK 
-         | otherwise      -> unify θ t t'   -- Otherwise try to unify
-    [v]                   -> unify θ v t' >>= mkEither (subset ts [t']) "subty"
-    _                     -> Left $ errorSubType "In subty" t t'
-  where 
-    (tvs, ts) = partition var xs
-
-subty θ t t'@(TApp TUn ts _ ) 
-  | subset [t] ts = Right θ
-  | otherwise     = unify θ t t'
-
-subty θ t t' = unify θ t t'
-
-var (TVar _ _) = True
-var _          = False
-
------------------------------------------------------------------------------
-subtys ::  Subst -> [Type] -> [Type] -> Either String Subst
------------------------------------------------------------------------------
-subtys θ xs ys =  {- tracePP msg $ -} subtys' θ xs ys 
-   where 
-     msg      = printf "subtys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
-
-
-subtys' = applys subty $ errorSubType "subtys'"
-
-
------------------------------------------------------------------------------
--- At this point the lists contain flat types (no unions)
--- Take care of Top Type in the future here!
------------------------------------------------------------------------------
-subset ::  [Type] -> [Type] -> Bool
------------------------------------------------------------------------------
-subset xs ys = 
-  isTop ys || all (\a -> any (== a) ys) xs
-
-
-class IsTop a where 
-  isTop :: a -> Bool
-
-instance IsTop Type where 
-  isTop (TApp TTop _ _) = True 
-  isTop (TApp TUn  ts _ ) = isTop ts
-  isTop _ = False
-
-instance IsTop a => IsTop [a] where
-  isTop = any isTop
-
-instance PP Bool where 
-  pp True  = text "true"
-  pp False = text "false"

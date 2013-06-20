@@ -27,6 +27,9 @@ module Language.Nano.Typecheck.Types (
   , ofType
   , strengthen 
 
+  -- * Top Type
+  , IsTop (..)
+
   -- * Deconstructing Types
   , bkFun
   , bkAll
@@ -57,6 +60,9 @@ module Language.Nano.Typecheck.Types (
   , AnnSSA
   , AnnType
   , AnnInfo
+
+  -- * Useful Operations
+  , subset
   ) where 
 
 import           Text.Printf
@@ -177,6 +183,20 @@ strengthen t _               = t
 --       We want to preserve its VV binder as it "escapes", 
 --       e.g. function types. Sigh. Should have used a separate function binder.
 
+
+-- | Top Type
+class IsTop a where 
+  isTop :: a -> Bool
+
+instance IsTop Type where 
+  isTop (TApp TTop _ _) = True 
+  isTop (TApp TUn  ts _ ) = isTop ts
+  isTop _ = False
+
+instance IsTop a => IsTop [a] where
+  isTop = any isTop
+
+
 ---------------------------------------------------------------------------------
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
@@ -279,6 +299,7 @@ ppTC (TDef x)         = text "TDef: " <+> pprint x
 data Fact 
   = PhiVar  !(Id SourceSpan) 
   | TypInst ![Type]
+  {-| Assert  !(Expression, Type)-}
     deriving (Eq, Ord, Show)
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show)
@@ -296,8 +317,9 @@ instance IsLocated (Annot a SourceSpan) where
   srcPos = ann
 
 instance PP Fact where
-  pp (PhiVar x)   = text "phi"  <+> pp x
-  pp (TypInst ts) = text "inst" <+> pp ts 
+  pp (PhiVar x)     = text "phi"  <+> pp x
+  pp (TypInst ts)   = text "inst" <+> pp ts 
+  {-pp (Assert (e,t)) = text "assert" <+> pp e <+> " :: " <+> pp t-}
 
 instance PP AnnInfo where
   pp             = vcat . (ppB <$>) . M.toList 
@@ -370,4 +392,13 @@ prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
 
 builtinId       = mkId . ("builtin_" ++)
 
+
+
+-----------------------------------------------------------------------------
+-- Lists contain flat types (no unions)
+-----------------------------------------------------------------------------
+subset ::  [Type] -> [Type] -> Bool
+-----------------------------------------------------------------------------
+subset xs ys = 
+  isTop ys || all (\a -> any (== a) ys) xs
 

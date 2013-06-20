@@ -121,7 +121,7 @@ freshSubst l αs
 setTyArgs l βs 
   = do m <- tc_anns <$> get 
        when (M.member l m) $ tcError l "Multiple Type Args"
-       addAnn l $ TypInst (tVar <$> βs)
+       addAnn l $ TypInst (tVar <$> (tracePP ("setTA" ++ show l) βs))
 
 
 

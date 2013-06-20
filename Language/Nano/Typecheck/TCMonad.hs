@@ -331,10 +331,10 @@ subty θ t@(TApp TUn xs  _) t' =
   case tvs of
     [ ]  | subset xs [t'] -> return θ       -- If it is a subset -- OK 
          | otherwise      -> unify θ t t'   -- Otherwise try to unify
-    [v]                   -> unify θ v t' >>= if subset ts [t'] 
-                                                then addError "subty"
-                                                else return
-    _                     -> addError (errorSubType "In subty" t t') θ
+    [v]                   -> unify θ v t' >>= if subset ts [t']
+                                                then return
+                                                else addError (errorSubType "Rigid subset" t t')
+    _                     -> addError (errorSubType "Multiple type variables in union type" t t') θ
   where 
     (tvs, ts) = partition var xs
 

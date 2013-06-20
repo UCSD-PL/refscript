@@ -31,7 +31,6 @@ import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
-import           Data.List           (partition)
 import           Text.Printf 
 import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)

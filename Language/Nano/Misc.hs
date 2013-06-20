@@ -41,3 +41,7 @@ mkEither :: Bool -> s -> a -> Either s a
 -------------------------------------------------------------------------------
 mkEither b s a | b         = Right a
 mkEither b s a | otherwise = Left s
+
+instance PP Bool where 
+  pp True  = text "true"
+  pp False = text "false"

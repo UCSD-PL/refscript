@@ -109,7 +109,7 @@ tcFun γ (FunctionStmt l f xs body)
   = do (ft, (αs, ts, t)) <- funTy l f xs
        let γ'  = envAdds [(f, ft)] γ
        let γ'' = envAddFun l f αs xs ts t γ'
-       accumAnn (catMaybes . map (validInst γ'') . M.toList) $  
+       accumAnn (\a -> catMaybes (map (validInst γ'') (M.toList {- $ tracePP "tcFun" -} a))) $  
          do q              <- tcStmts γ'' body
             when (isJust q) $ unifyType l "Missing return" f tVoid t
        return $ Just γ' 
@@ -131,9 +131,9 @@ envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddR
     -- tyBinds              = [(Loc (srcPos l) α, tVar α) | α <- αs]
 
 validInst γ (l, ts)
-  = case [β | β <- S.toList $ free (tracePP "validInst" ts), not ((tVarId β) `envMem` γ)] of
+  = case [β | β <- S.toList $ free ts, not ((tVarId β) `envMem` γ)] of
       [] -> Nothing
-      βs -> Just (l, errorFreeTyVar (tracePP "βs" βs))
+      βs -> Just (l, errorFreeTyVar βs)
    
 -- | Strings ahead: HACK Alert
 tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a   

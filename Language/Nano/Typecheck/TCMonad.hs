@@ -121,7 +121,7 @@ freshSubst l αs
 setTyArgs l βs 
   = do m <- tc_anns <$> get 
        when (M.member l m) $ tcError l "Multiple Type Args"
-       addAnn l $ TypInst (tVar <$> (tracePP ("setTA" ++ show l) βs))
+       addAnn l $ TypInst (tVar <$> {- tracePP ("setTA" ++ show l)-}  βs)
 
 
 
@@ -312,7 +312,7 @@ varAsnM :: Subst -> TVar -> Type -> TCM Subst
 varAsnM θ a t = 
   case varAsn θ a t of 
     Left s -> addError s θ
-    Right θ' -> return θ
+    Right θ' -> return θ'
 
 
 -----------------------------------------------------------------------------
@@ -350,7 +350,7 @@ var _          = False
 -----------------------------------------------------------------------------
 subtys ::  Subst -> [Type] -> [Type] -> TCM Subst
 -----------------------------------------------------------------------------
-subtys θ xs ys =  {- tracePP msg $ -} subtys' θ xs ys 
+subtys θ xs ys =  {- tracePP msg <$> -} subtys' θ xs ys 
    where 
      msg      = printf "subtys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 

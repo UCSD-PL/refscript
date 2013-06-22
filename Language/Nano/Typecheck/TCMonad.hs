@@ -54,11 +54,15 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
 import           Data.Monoid                  
-import qualified Data.HashSet as S
-import qualified Data.HashMap.Strict     as M
-import           Data.List           (partition)
+import qualified Data.HashSet             as HS
+import qualified Data.Set                 as S
+import qualified Data.HashMap.Strict      as M
+import qualified Data.List                as L
 import           Text.Parsec.Pos              
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Language.ECMAScript3.Syntax
+
+import           Debug.Trace
 
 -------------------------------------------------------------------------------
 -- | Typechecking monad -------------------------------------------------------
@@ -71,6 +75,7 @@ data TCState = TCS { tc_errss :: ![(SourceSpan, String)]
                    , tc_anns  :: AnnInfo
                    , tc_annss :: [AnnInfo]
                    , tc_defs  :: !(Env Type) 
+                   , tc_expr  :: Maybe (Expression AnnSSA)
                    }
 
 type TCM     = ErrorT String (State TCState)
@@ -169,7 +174,7 @@ execute pgm act
       (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errss st)
 
 initState :: Nano z (RType r) -> TCState
-initState pgm = TCS [] [] mempty 0 M.empty [] (envMap toType $ defs pgm) 
+initState pgm = TCS [] [] mempty 0 M.empty [] (envMap toType $ defs pgm) Nothing
 
 
 getDefType f 
@@ -231,28 +236,39 @@ unifyType l m e t t' = unifyTypes l msg [t] [t'] >> return ()
 
 
 ----------------------------------------------------------------------------------
-subTypes :: AnnSSA -> [Type] -> [Type] -> TCM Subst
+subTypes :: AnnSSA -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Subst
 ----------------------------------------------------------------------------------
-subTypes l t1s t2s
+subTypes l es t1s t2s
   | length t1s /= length t2s = getSubst >>= logError (ann l) errorArgMismatch 
   | otherwise                = do θ  <- getSubst
-                                  θ' <- subtys θ t1s t2s
+                                  θ' <- subtys θ es t1s t2s
                                   accumErrs l
                                   setSubst θ' 
                                   return θ'
 
-subType l _ t t' = subTypes l [t] [t'] >> return ()
-  {-where -}
-  {-  msg              = errorSubType "subType" t t'-}
+----------------------------------------------------------------------------------
+subType :: AnnSSA -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM ()
+----------------------------------------------------------------------------------
+subType l eo t t' = subTypes l [eo] [t] [t'] >> return ()
 
 
 -----------------------------------------------------------------------------
 unify :: Subst -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
 unify θ (TFun xts t _) (TFun xts' t' _) = unifys θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
-unify θ (TVar α _) (TVar β _)           = varEql θ α β 
-unify θ (TVar α _) t                    = varAsnM θ α t 
-unify θ t (TVar α _)                    = varAsnM θ α t
+unify θ (TVar α _)     (TVar β _)       = varEql θ α β 
+unify θ (TVar α _)     t                = varAsnM θ α t 
+unify θ t              (TVar α _)       = varAsnM θ α t
+
+unify θ (TApp TUn ts _) (TApp TUn ts' _)
+  | unifiable ts && unifiable ts' 
+      && subset ts ts'                  = return θ
+  where
+    -- Simple check to prohibit multiple type vars in a union type
+    -- Might need a stronger check here.
+    unifiable ts = length (filter var ts) < 2 
+    var (TVar _ _) = True
+    var _          = False
 
 unify θ (TApp c ts _) (TApp c' ts' _)
   | c == c'                             = unifys  θ ts ts'
@@ -262,14 +278,14 @@ unify θ t t'
   | isTop t                             = go θ $ strip t'
   | isTop t'                            = go θ $ strip t
   | otherwise                           = addError (errorUnification t t') θ
-  where strip (TApp _ xs _ )            = xs
-        strip x@(TVar _ _)              = [x]
-        strip (TFun xs y _)             = (b_type <$> xs) ++ [y]
-        strip (TAll _ x)                = [x]
-        tops = map $ const tTop
-        go θ ts = unifys θ ts $ tops ts
-
-
+  
+  where 
+    strip (TApp _ xs _ )            = xs
+    strip x@(TVar _ _)              = [x]
+    strip (TFun xs y _)             = (b_type <$> xs) ++ [y]
+    strip (TAll _ x)                = [x]
+    tops = map $ const tTop
+    go θ ts = unifys θ ts $ tops ts
 
 unifys         ::  Subst -> [Type] -> [Type] -> TCM Subst
 unifys θ xs ys =  {- tracePP msg $ -} unifys' θ xs ys 
@@ -299,10 +315,10 @@ varEql θ α β = case varAsn θ α (tVar β) of
 varAsn :: Subst -> TVar -> Type -> Either String Subst
 -----------------------------------------------------------------------------
 varAsn θ α t 
-  | t == tVar α         = Right $ θ 
-  | α `S.member` free t = Left  $ errorOccursCheck α t 
-  | unassigned α θ      = Right $ θ `mappend` (Su $ M.singleton α t) 
-  | otherwise           = Left  $ errorRigidUnify α t
+  | t == tVar α          = Right $ θ 
+  | α `HS.member` free t = Left  $ errorOccursCheck α t 
+  | unassigned α θ       = Right $ θ `mappend` (Su $ M.singleton α t) 
+  | otherwise            = Left  $ errorRigidUnify α t
   
 unassigned α (Su m) = M.lookup α m == Just (tVar α)
 
@@ -314,58 +330,46 @@ varAsnM θ a t =
     Left s -> addError s θ
     Right θ' -> return θ'
 
-
 -----------------------------------------------------------------------------
 subty :: Subst -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
-subty θ t t' | isTop t'      = unify θ t tTop
-
+subty θ t t'                                   | isTop t'       = unify θ t tTop
 subty θ t@(TApp TUn ts _ ) t'@(TApp TUn ts' _) 
-  | noTVars && subset ts ts' = return θ 
---  | noTVars && subset ts' ts = mkAnnot ts ts' 
-  | noTVars                  = addError (errorSubType "Unions" t t') θ
-  where 
-    noTVars = not $ any var ts
+  | subset ts  ts' = return θ
+subty θ t                  t'@(TApp TUn ts' _) | subset [t] ts' = return θ
+subty θ t t'                                                    = unify θ t t'
 
-subty θ t@(TApp TUn xs  _) t' = 
-  case tvs of
-    [ ]  | subset xs [t'] -> return θ       -- If it is a subset -- OK 
-         | otherwise      -> unify θ t t'   -- Otherwise try to unify
-    [v]                   -> unify θ v t' >>= if subset ts [t']
-                                                then return
-                                                else addError (errorSubType "Rigid subset" t t')
-    _                     -> addError (errorSubType "Multiple type variables in union type" t t') θ
-  where 
-    (tvs, ts) = partition var xs
 
-subty θ t t'@(TApp TUn ts _ ) 
-  | subset [t] ts = return θ
-  | otherwise     = unify θ t t'
-
-subty θ t t' = unify θ t t'
-
-var (TVar _ _) = True
-var _          = False
 
 -----------------------------------------------------------------------------
-subtys ::  Subst -> [Type] -> [Type] -> TCM Subst
+subtys ::  Subst -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Subst
 -----------------------------------------------------------------------------
-subtys θ xs ys =  {- tracePP msg <$> -} subtys' θ xs ys 
+subtys θ es xs ys =  {- tracePP msg <$> -} subtys' θ es xs ys 
    where 
      msg      = printf "subtys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
-subtys' θ ts ts' 
-  | nTs == nTs' = go θ (ts, ts')
+subtys' θ es ts ts' 
+  | nTs == nTs' = go θ (es, ts, ts')
   | otherwise   = addError (errorSubType "" ts ts) θ
   where 
     nTs                  = length ts
     nTs'                 = length ts'
-    go θ (t:ts , t':ts') = subty θ t t' >>= \θ' -> go θ' (mapPair (apply θ') (ts, ts'))
-    go θ (_    , _    )  = return θ 
+    go θ (eo:eos, t:ts , t':ts') = do setExpr eo
+                                      θ' <- subty θ t t' 
+                                      go θ' $ (eos, apply θ' ts, apply θ' ts')
+    go θ (_, _  , _  )   = return θ
 
 
 -------------------------------------------------------------------------------
 addError   :: String -> a -> TCM a
 -------------------------------------------------------------------------------
 addError msg x = (modify $ \st -> st { tc_errs = msg:(tc_errs st)}) >> return x
+
+
+-------------------------------------------------------------------------------
+setExpr   :: Maybe (Expression AnnSSA) -> TCM () 
+-------------------------------------------------------------------------------
+setExpr eo = modify $ \st -> st { tc_expr = eo }
+
+getExpr = tc_expr <$> get
 

@@ -81,7 +81,10 @@ tcNano p@(Nano {code = Src fs})
   = do m     <- tcNano' $ toType <$> p 
        return $ p {code = Src $ (patchAnn m <$>) <$> fs}
 
-tcNano'     :: Nano AnnSSA Type -> TCM AnnInfo  
+
+-------------------------------------------------------------------------------
+tcNano' :: Nano AnnSSA Type -> TCM AnnInfo  
+-------------------------------------------------------------------------------
 tcNano' pgm@(Nano {code = Src fs}) 
   = do tcStmts (specs pgm) fs
        M.unions <$> getAllAnns
@@ -253,7 +256,7 @@ tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> T
 tcCall γ l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
        ets        <- mapM (tcExpr γ) es
-       θ'         <- subTypes l ets (b_type <$> its)
+       θ'         <- subTypes l (map Just es) ets (b_type <$> its)
        return      $ apply θ' ot
 
 instantiate l fn ft 

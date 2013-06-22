@@ -16,7 +16,6 @@ module Language.Nano.Misc (
 -- import           Control.Applicative                ((<$>))
 import           Control.Monad                      (liftM2)
 
-
 -------------------------------------------------------------------------------
 mapFstM :: (Functor m, Monad m) => (a -> m c) -> (a, b) -> m (c, b)
 -------------------------------------------------------------------------------

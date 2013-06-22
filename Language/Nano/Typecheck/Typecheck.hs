@@ -8,7 +8,7 @@ import qualified Data.HashMap.Strict as M
 import           Data.List           (nub)
 import qualified Data.Traversable    as T
 -- import           Data.Monoid
-import           Data.Maybe                         (catMaybes, isJust) -- fromMaybe, maybeToList)
+import           Data.Maybe                         (catMaybes, isJust, fromJust) -- fromMaybe, maybeToList)
 import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>), vcat)
 import           Text.Printf                        (printf)
 
@@ -180,11 +180,12 @@ tcStmt γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
-  = do t     <- tcExpr γ e
+  = do (γo, t) <- tcExpr γ e
        unifyType l "If condition" e t tBool
-       γ1    <- tcStmt γ s1
-       γ2    <- tcStmt γ s2
-       envJoin l γ γ1 γ2
+       let γ' = fromJust γo
+       γ1      <- tcStmt γ' s1
+       γ2      <- tcStmt γ' s2
+       envJoin l γ' γ1 γ2
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt _ ds)
@@ -192,7 +193,7 @@ tcStmt γ (VarDeclStmt _ ds)
 
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
-  = do t <- maybe (return tVoid) (tcExpr γ) eo 
+  = do t <- maybe (return tVoid) (\e -> snd <$> tcExpr γ e) eo 
        subType l eo t $ envFindReturn γ 
        return Nothing
 
@@ -217,26 +218,26 @@ tcAsgn :: Env Type -> AnnSSA -> Id AnnSSA -> Expression AnnSSA -> TCM TCEnv
 ------------------------------------------------------------------------------------
 
 tcAsgn γ _ x e 
-  = do t <- tcExpr γ e
-       return $ Just $ envAdds [(x, t)] γ
+  = do (γ', t) <- tcExpr γ e
+       return $ Just $ envAdds [(x, t)] (fromJust γ')
 
 -------------------------------------------------------------------------------
-tcExpr :: Env Type -> Expression AnnSSA -> TCM Type
+tcExpr :: Env Type -> Expression AnnSSA -> TCM (TCEnv, Type)
 -------------------------------------------------------------------------------
 
-tcExpr _ (IntLit _ _)               
-  = return tInt 
+tcExpr γ (IntLit _ _)               
+  = return (Just γ, tInt)
 
-tcExpr _ (BoolLit _ _)
-  = return tBool
+tcExpr γ (BoolLit _ _)
+  = return (Just γ, tBool)
 
-tcExpr _ (StringLit _ _)
-  = return tString
+tcExpr γ (StringLit _ _)
+  = return (Just γ, tString)
 
 tcExpr γ (VarRef l x)
   = case envFindTy x γ of 
-      Nothing -> logError (ann l) (errorUnboundIdEnv x γ) tErr
-      Just z  -> return z 
+      Nothing -> logError (ann l) (errorUnboundIdEnv x γ) (Just γ, tErr)
+      Just z  -> return (Just γ, z) 
 
 tcExpr γ (PrefixExpr l o e)
   = tcCall γ l o [e] (prefixOpTy o γ)
@@ -245,19 +246,21 @@ tcExpr γ (InfixExpr l o e1 e2)
   = tcCall γ l o [e1, e2] (infixOpTy o γ)
 
 tcExpr γ (CallExpr l e es)
-  = tcCall γ l e es =<< tcExpr γ e 
+  = tcExpr γ e >>= \(γ',t) -> tcCall (fromJust γ') l e es t
 
 tcExpr _ e 
   = convertError "tcExpr" e
 
 ----------------------------------------------------------------------------------
-tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> TCM Type
+tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> TCM (TCEnv, Type)
 ----------------------------------------------------------------------------------
 tcCall γ l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
-       ets        <- mapM (tcExpr γ) es
+       (γ'', ets) <- foldM (\(γ,ts) e -> 
+                              tcExpr (fromJust γ) e >>= 
+                              \(γ',t) -> return (γ', ts++[t])) (Just γ,[]) es
        θ'         <- subTypes l (map Just es) ets (b_type <$> its)
-       return      $ apply θ' ot
+       return      $ (γ'' , apply θ' ot)
 
 instantiate l fn ft 
   = do t' <- freshTyArgs (srcPos l) $ bkAll ft 

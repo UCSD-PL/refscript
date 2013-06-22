@@ -270,6 +270,11 @@ unify θ (TApp TUn ts _) (TApp TUn ts' _)
     var (TVar _ _) = True
     var _          = False
 
+{-unify θ (TApp TUn ts _) (TApp TUn ts' _)-}
+{-  | unifiable ts && unifiable ts' -}
+{-      && subset ts' ts                  = do  e <- getExpr-}
+{-                                              cast e ts'-}
+  
 unify θ (TApp c ts _) (TApp c' ts' _)
   | c == c'                             = unifys  θ ts ts'
 
@@ -278,7 +283,6 @@ unify θ t t'
   | isTop t                             = go θ $ strip t'
   | isTop t'                            = go θ $ strip t
   | otherwise                           = addError (errorUnification t t') θ
-  
   where 
     strip (TApp _ xs _ )            = xs
     strip x@(TVar _ _)              = [x]
@@ -334,10 +338,17 @@ varAsnM θ a t =
 subty :: Subst -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
 subty θ t t'                                   | isTop t'       = unify θ t tTop
+{-subty θ t@(TApp TUn ts _ ) t' -}
+{-  | subset [t] ts = do  e <- getExpr-}
+{-                        cast e t-}
 subty θ t@(TApp TUn ts _ ) t'@(TApp TUn ts' _) 
   | subset ts  ts' = return θ
+  {-| subset ts' ts  = mkAnnot θ ts'-}
 subty θ t                  t'@(TApp TUn ts' _) | subset [t] ts' = return θ
 subty θ t t'                                                    = unify θ t t'
+
+  where 
+    isc a b = (S.fromList a) `S.intersection` (S.fromList b)
 
 
 
@@ -372,4 +383,15 @@ setExpr   :: Maybe (Expression AnnSSA) -> TCM ()
 setExpr eo = modify $ \st -> st { tc_expr = eo }
 
 getExpr = tc_expr <$> get
+
+
+{---------------------------------------------------------------------------------}
+{-cast :: Env Type -> Expression a -> Type -> TCM () -}
+{---------------------------------------------------------------------------------}
+{-cast γ (VarRef _ id) t = envAdds [(id,t)] γ -- ???-}
+{-cast _ _             _ = return () -- addError errorSubTe -}
+
+
+
+
 

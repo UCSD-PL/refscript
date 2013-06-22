@@ -12,6 +12,7 @@ module Language.Nano.Types (
   -- * Nano Definition
   , IsNano (..)
   , checkTopStmt
+  , IsAssertable (..)
 
   -- * Located Values
   , Located (..) 
@@ -237,6 +238,14 @@ getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
     fromWhile _                = [] 
 
 
+-- | Is a ammendable to accepting assertions
+
+class IsAssertable a where 
+  isAssertable :: a -> Bool 
+
+instance IsAssertable (Expression a) where 
+  isAssertable (VarRef _ _) = True 
+  isAssertable _            = False
 
 
 

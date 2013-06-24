@@ -63,6 +63,7 @@ import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 
 import           Debug.Trace
+import           Language.Nano.Misc
 
 -------------------------------------------------------------------------------
 -- | Typechecking monad -------------------------------------------------------
@@ -347,17 +348,17 @@ subty θ γ eo t@(TApp TUn ts _ ) t'
 
 subty θ γ eo t@(TApp TUn ts _ ) t'@(TApp TUn ts' _) 
   | subset ts  ts'            = return (γ, θ)
-  | S.size (isc ts ts') > 0   = do  γ' <- addCast γ $ tracePP "Adding cast" $ mkUnion (S.toList (isc ts ts'))
-                                    return (γ', θ)
+  | S.size (tracePP "intersection" (isc ts ts')) > 0   = 
+      do  γ' <- addCast γ $ tracePP "Adding cast" $ mkUnion (S.toList (isc ts ts'))
+          return (γ', θ)
   where 
     isc a b = (S.fromList a) `S.intersection` (S.fromList b)
 
 subty θ γ eo t                  t'@(TApp TUn ts' _) 
   | subset [t] ts' = return (γ, θ)
 
-subty θ γ eo t t' = do  θ' <- trace "unifying..." unify θ t t'
+subty θ γ eo t t' = do  θ' <- trace "unifying..." $ unify θ t t'
                         return (γ, θ')
-
 
 
 -----------------------------------------------------------------------------

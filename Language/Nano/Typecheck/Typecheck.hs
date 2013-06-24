@@ -193,8 +193,9 @@ tcStmt γ (VarDeclStmt _ ds)
 
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
-  = do t <- maybe (return tVoid) (\e -> snd <$> tcExpr γ e) eo 
-       subType l eo t $ envFindReturn γ 
+  = do (γ', t) <- maybe (return (Just γ, tVoid)) (tcExpr γ) eo 
+       let γ'' = fromJust γ'
+       subType l γ'' eo t $ envFindReturn γ''
        return Nothing
 
 tcStmt γ s@(FunctionStmt _ _ _ _)
@@ -254,13 +255,13 @@ tcExpr _ e
 ----------------------------------------------------------------------------------
 tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> TCM (TCEnv, Type)
 ----------------------------------------------------------------------------------
-tcCall γ l fn es ft 
+tcCall γ0 l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
-       (γ'', ets) <- foldM (\(γ,ts) e -> 
+       (γ2, ets)  <- foldM (\(γ,ts) e -> 
                               tcExpr (fromJust γ) e >>= 
-                              \(γ',t) -> return (γ', ts++[t])) (Just γ,[]) es
-       θ'         <- subTypes l (map Just es) ets (b_type <$> its)
-       return      $ (γ'' , apply θ' ot)
+                              \(γ1,t) -> return (γ1, ts++[t])) (Just γ0,[]) es
+       (γ3, θ')   <- subTypes l (fromJust γ2) (map Just es) ets (b_type <$> its)
+       return      $ (Just γ3 , apply θ' ot)
 
 instantiate l fn ft 
   = do t' <- freshTyArgs (srcPos l) $ bkAll ft 

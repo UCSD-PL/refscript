@@ -30,6 +30,9 @@ module Language.Nano.Typecheck.Types (
   -- * Top Type
   , IsTop (..)
 
+  -- * Constructing Types
+  , mkUnion
+
   -- * Deconstructing Types
   , bkFun
   , bkAll
@@ -172,6 +175,11 @@ bkAll t              = go [] t
   where 
     go αs (TAll α t) = go (α : αs) t
     go αs t          = (reverse αs, t)
+
+mkUnion :: [Type] -> Type
+mkUnion [ ] = tErr
+mkUnion [t] = t
+mkUnion ts  = TApp TUn ts ()
 
 ---------------------------------------------------------------------------------
 strengthen                   :: F.Reftable r => RType r -> r -> RType r

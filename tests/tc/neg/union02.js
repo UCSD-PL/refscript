@@ -4,7 +4,7 @@ function id(a) {
   return a;
 }
 
-/*@ foo1 :: ((int|bool|void)) => (bool|int) */
+/*@ foo1 :: ((int|boolean|void)) => (boolean|int) */
 function foo1(x) {
   id(x);
   return id(x);

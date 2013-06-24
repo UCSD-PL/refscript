@@ -263,7 +263,7 @@ unify θ t              (TVar α _)       = varAsnM θ α t
 
 unify θ (TApp TUn ts _) (TApp TUn ts' _)
   | unifiable ts && unifiable ts' 
-      && subset ts ts'                  = return θ
+      && subset ts ts'                  = return $ tracePP "ts c ts\'" θ
   where
     -- Simple check to prohibit multiple type vars in a union type
     -- Might need a stronger check here.
@@ -277,7 +277,7 @@ unify θ (TApp TUn ts _) (TApp TUn ts' _)
 {-                                              cast e ts'-}
   
 unify θ (TApp c ts _) (TApp c' ts' _)
-  | c == c'                             = unifys  θ ts ts'
+  | c == c'                             = unifys  θ (tracePP "ts" ts) (tracePP "ts\'" ts')
 
 unify θ t t' 
   | t == t'                             = return θ
@@ -293,7 +293,7 @@ unify θ t t'
     go θ ts = unifys θ ts $ tops ts
 
 unifys         ::  Subst -> [Type] -> [Type] -> TCM Subst
-unifys θ xs ys =  {- tracePP msg $ -} unifys' θ xs ys 
+unifys θ xs ys =  trace msg $ unifys' θ xs ys 
    where 
      msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
@@ -342,12 +342,12 @@ subty θ γ eo t t'
   | isTop t'       = (γ,) <$> unify θ t tTop
 
 subty θ γ eo t@(TApp TUn ts _ ) t'                     
-  | subset [t] ts  = do γ' <- addCast γ t
-                        return (γ', θ)
+  | subset [t'] ts  = do  γ' <- addCast γ t'
+                          return (γ', θ)
 
 subty θ γ eo t@(TApp TUn ts _ ) t'@(TApp TUn ts' _) 
   | subset ts  ts'            = return (γ, θ)
-  | S.size (isc ts ts') > 0   = do  γ' <- addCast γ $ mkUnion (S.toList (isc ts ts'))
+  | S.size (isc ts ts') > 0   = do  γ' <- addCast γ $ tracePP "Adding cast" $ mkUnion (S.toList (isc ts ts'))
                                     return (γ', θ)
   where 
     isc a b = (S.fromList a) `S.intersection` (S.fromList b)
@@ -355,15 +355,15 @@ subty θ γ eo t@(TApp TUn ts _ ) t'@(TApp TUn ts' _)
 subty θ γ eo t                  t'@(TApp TUn ts' _) 
   | subset [t] ts' = return (γ, θ)
 
-subty θ γ eo t t' = do  θ' <- unify θ t t'
-                        return (γ, θ)
+subty θ γ eo t t' = do  θ' <- trace "unifying..." unify θ t t'
+                        return (γ, θ')
 
 
 
 -----------------------------------------------------------------------------
 subtys ::  Subst -> Env Type -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM (Env Type, Subst)
 -----------------------------------------------------------------------------
-subtys θ γ es xs ys =  {- tracePP msg <$> -} applyToList subty θ γ es xs ys 
+subtys θ γ es xs ys =  trace msg <$> applyToList subty θ γ es xs ys 
    where 
      msg      = printf "subtys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 

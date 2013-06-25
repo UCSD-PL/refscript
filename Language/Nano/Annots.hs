@@ -23,7 +23,7 @@ import           Data.Monoid
 import           Data.Aeson               
 import           GHC.Exts                           (groupWith, sortWith)
 
-import           Language.Fixpoint.Files
+import           Language.Fixpoint.Files()
 import           Language.Fixpoint.Misc             (inserts)
 import qualified Language.Fixpoint.Types    as F
 import           Language.ECMAScript3.PrettyPrint   

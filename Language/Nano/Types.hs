@@ -71,7 +71,6 @@ import           Text.PrettyPrint.HughesPJ
 import           Text.Parsec                        
 import           Text.Parsec.Pos                    (initialPos)
 import           Text.Printf                        (printf)
-import           Debug.Trace
 
 ---------------------------------------------------------------------
 -- | Command Line Configuration Options

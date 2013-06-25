@@ -42,7 +42,7 @@ module Language.Nano.Typecheck.TCMonad (
   )  where 
 
 import           Text.Printf
-import           Control.Applicative          ((<$>), (<*>))
+import           Control.Applicative          ((<$>))
 import           Control.Monad.State
 import           Control.Monad.Error
 import           Language.Fixpoint.Misc 
@@ -57,13 +57,11 @@ import           Data.Monoid
 import qualified Data.HashSet             as HS
 import qualified Data.Set                 as S
 import qualified Data.HashMap.Strict      as M
-import qualified Data.List                as L
-import           Text.Parsec.Pos              
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 
 import           Debug.Trace
-import           Language.Nano.Misc
+import           Language.Nano.Misc               ()
 
 -------------------------------------------------------------------------------
 -- | Typechecking monad -------------------------------------------------------
@@ -127,7 +125,7 @@ freshSubst l αs
 setTyArgs l βs 
   = do m <- tc_anns <$> get 
        when (M.member l m) $ tcError l "Multiple Type Args"
-       addAnn l $ TypInst (tVar <$> {- tracePP ("setTA" ++ show l)-}  βs)
+       addAnn l $ TypInst (tVar <$> {- tracePP ("setTA" ++ show l) -} βs)
 
 
 
@@ -220,7 +218,7 @@ freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
 ----------------------------------------------------------------------------------
 unifyTypes :: AnnSSA -> String -> [Type] -> [Type] -> TCM Subst
 ----------------------------------------------------------------------------------
-unifyTypes l msg t1s t2s
+unifyTypes l _ t1s t2s
   | length t1s /= length t2s = getSubst >>= logError (ann l) errorArgMismatch
   | otherwise                = do θ  <- getSubst 
                                   θ' <- unifys θ t1s t2s
@@ -272,11 +270,6 @@ unify θ (TApp TUn ts _) (TApp TUn ts' _)
     var (TVar _ _) = True
     var _          = False
 
-{-unify θ (TApp TUn ts _) (TApp TUn ts' _)-}
-{-  | unifiable ts && unifiable ts' -}
-{-      && subset ts' ts                  = do  e <- getExpr-}
-{-                                              cast e ts'-}
-  
 unify θ (TApp c ts _) (TApp c' ts' _)
   | c == c'                             = unifys  θ (tracePP "ts" ts) (tracePP "ts\'" ts')
 
@@ -339,26 +332,26 @@ varAsnM θ a t =
 -----------------------------------------------------------------------------
 subty :: Subst -> Env Type -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM (Env Type, Subst)
 -----------------------------------------------------------------------------
-subty θ γ eo t t'                                   
+subty θ γ _ t t'                                   
   | isTop t'       = (γ,) <$> unify θ t tTop
 
-subty θ γ eo t@(TApp TUn ts _ ) t'                     
+subty θ γ _ (TApp TUn ts _ ) t'                     
   | subset [t'] ts  = do  γ' <- addCast γ t'
                           return (γ', θ)
 
-subty θ γ eo t@(TApp TUn ts _ ) t'@(TApp TUn ts' _) 
+subty θ γ _ (TApp TUn ts _ ) (TApp TUn ts' _) 
   | subset ts  ts'            = return (γ, θ)
-  | S.size (tracePP "intersection" (isc ts ts')) > 0   = 
-      do  γ' <- addCast γ $ tracePP "Adding cast" $ mkUnion (S.toList (isc ts ts'))
+  | S.size (tracePP "intersection" (isc ts ts')) > 0 = 
+      do  γ' <- addCast γ $ mkUnion $ S.toList (isc ts ts')
           return (γ', θ)
   where 
     isc a b = (S.fromList a) `S.intersection` (S.fromList b)
 
-subty θ γ eo t                  t'@(TApp TUn ts' _) 
+subty θ γ _ t (TApp TUn ts' _) 
   | subset [t] ts' = return (γ, θ)
 
-subty θ γ eo t t' = do  θ' <- trace "unifying..." $ unify θ t t'
-                        return (γ, θ')
+subty θ γ _ t t1 = do θ <- trace "unifying..." $ unify θ t t1
+                      return (γ, θ)
 
 
 -----------------------------------------------------------------------------
@@ -384,7 +377,8 @@ applyToList f θ γ es ts ts'
   where 
     nTs                  = length ts
     nTs'                 = length ts'
-    go θ γ (eo:eos, t:ts , t':ts') = do (γ', θ') <- f θ γ eo t t' 
+    go θ γ (eo:eos, t:ts , t':ts') = do setExpr eo
+                                        (γ', θ') <- f θ γ eo t t' 
                                         go θ' γ' (eos, apply θ' ts, apply θ' ts')
     go θ γ (_, _  , _  )   = return (γ, θ)
 
@@ -408,8 +402,8 @@ getExpr = tc_expr <$> get
 addCast :: Env Type -> Type -> TCM (Env Type)
 -------------------------------------------------------------------------------
 addCast γ t = 
-  do  e <- getExpr
-      case e of 
-        Just (VarRef _ id) -> return $ envAdds [tracePP "CAST" (id,t)] γ
-        _                  -> return $ trace "NO CAST ADDED" γ
+  do  eo <- getExpr
+      case {- tracePP "Casting A" -} eo of 
+        Just e@(VarRef a id)  -> (addAnn (srcPos a) (Assert [(e, t)])) >> return (envAdds [(id,t)] γ)
+        _                     -> logError dummySpan "NO CAST" () >> return γ
 

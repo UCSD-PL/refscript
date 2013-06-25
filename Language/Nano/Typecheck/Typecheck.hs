@@ -2,14 +2,14 @@ module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where
 
 import           Control.Applicative                ((<$>)) -- (<*>))
 import           Control.Monad                
-import           Control.Monad.State
+import           Control.Monad.State()
 import qualified Data.HashSet        as S 
 import qualified Data.HashMap.Strict as M 
 import           Data.List           (nub)
 import qualified Data.Traversable    as T
 -- import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust, fromJust) -- fromMaybe, maybeToList)
-import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>), vcat)
+import           Text.PrettyPrint.HughesPJ          (text, render, vcat)
 import           Text.Printf                        (printf)
 
 import           Language.Nano.Errors

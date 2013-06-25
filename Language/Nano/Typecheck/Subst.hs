@@ -77,6 +77,9 @@ instance Free a => Free [a] where
 instance Substitutable r a => Substitutable r [a] where 
   apply = map . apply 
 
+instance (Substitutable r a, Substitutable r b) => Substitutable r (a,b) where 
+  apply f (x,y) = (apply f x, apply f y)
+
 instance (PP r, F.Reftable r) => Substitutable r (RType r) where 
   apply θ t = appTy θ t
 --     where 
@@ -94,11 +97,15 @@ instance Free (RType r) where
 instance Substitutable () Fact where
   apply _ x@(PhiVar _)  = x
   apply θ (TypInst ts)  = TypInst $ apply θ ts
+  apply θ (Assert ets)  = Assert (zip es (apply θ ts))
+    where
+      (es, ts) = unzip ets 
 
 instance Free Fact where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
-
+  free (Assert ets)     = S.unions (map (\(e,t) -> free t) ets)
+ 
 ------------------------------------------------------------------------
 -- appTy :: RSubst r -> RType r -> RType r
 ------------------------------------------------------------------------

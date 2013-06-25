@@ -12,6 +12,7 @@ module Language.Nano.Typecheck.TCMonad (
  
   -- * Execute 
   , execute
+  , execute'
 
   -- * Log Errors
   , logError
@@ -39,10 +40,13 @@ module Language.Nano.Typecheck.TCMonad (
 
   -- * Get Type Signature 
   , getDefType 
+
+  -- * Patch the program with assertions
+  , patch
   )  where 
 
 import           Text.Printf
-import           Control.Applicative          ((<$>))
+import           Control.Applicative            ((<$>))
 import           Control.Monad.State
 import           Control.Monad.Error
 import           Language.Fixpoint.Misc 
@@ -53,12 +57,16 @@ import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
+import           Language.Nano.Misc             (mapSndM)
 import           Data.Monoid                  
 import qualified Data.HashSet             as HS
 import qualified Data.Set                 as S
-import qualified Data.HashMap.Strict      as M
-import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import qualified Data.HashMap.Strict      as HM
+import qualified Data.Map                 as M
+import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.PrettyPrint
+import           Text.PrettyPrint.HughesPJ          (render)
 
 import           Debug.Trace
 import           Language.Nano.Misc               ()
@@ -73,6 +81,7 @@ data TCState = TCS { tc_errss :: ![(SourceSpan, String)]
                    , tc_cnt   :: !Int
                    , tc_anns  :: AnnInfo
                    , tc_annss :: [AnnInfo]
+                   , tc_asrt  :: M.Map (Expression AnnSSA) Type
                    , tc_defs  :: !(Env Type) 
                    , tc_expr  :: Maybe (Expression AnnSSA)
                    }
@@ -124,7 +133,7 @@ freshSubst l αs
 
 setTyArgs l βs 
   = do m <- tc_anns <$> get 
-       when (M.member l m) $ tcError l "Multiple Type Args"
+       when (HM.member l m) $ tcError l "Multiple Type Args"
        addAnn l $ TypInst (tVar <$> {- tracePP ("setTA" ++ show l) -} βs)
 
 
@@ -158,7 +167,7 @@ accumAnn :: (AnnInfo -> [(SourceSpan, String)]) -> TCM () -> TCM ()
 -------------------------------------------------------------------------------
 accumAnn check act 
   = do m     <- tc_anns <$> get 
-       modify $ \st -> st {tc_anns = M.empty}
+       modify $ \st -> st {tc_anns = HM.empty}
        act
        m'    <- getAnns
        forM_ (check m') $ \(l, s) -> logError l s ()
@@ -173,7 +182,12 @@ execute pgm act
       (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errss st)
 
 initState :: Nano z (RType r) -> TCState
-initState pgm = TCS [] [] mempty 0 M.empty [] (envMap toType $ defs pgm) Nothing
+initState pgm = TCS [] [] mempty 0 HM.empty [] M.empty (envMap toType $ defs pgm) Nothing
+
+execute' f pgm act 
+  = case runState (runErrorT act) $ initState pgm of 
+      (Left err, _) -> Left [(dummySpan,  err)]
+      (Right x, st) ->  applyNonNull (Right $ f st x) Left (reverse $ tc_errss st)
 
 
 getDefType f 
@@ -316,10 +330,10 @@ varAsn :: Subst -> TVar -> Type -> Either String Subst
 varAsn θ α t 
   | t == tVar α          = Right $ θ 
   | α `HS.member` free t = Left  $ errorOccursCheck α t 
-  | unassigned α θ       = Right $ θ `mappend` (Su $ M.singleton α t) 
+  | unassigned α θ       = Right $ θ `mappend` (Su $ HM.singleton α t) 
   | otherwise            = Left  $ errorRigidUnify α t
   
-unassigned α (Su m) = M.lookup α m == Just (tVar α)
+unassigned α (Su m) = HM.lookup α m == Just (tVar α)
 
 -----------------------------------------------------------------------------
 varAsnM :: Subst -> TVar -> Type -> TCM Subst
@@ -404,6 +418,88 @@ addCast :: Env Type -> Type -> TCM (Env Type)
 addCast γ t = 
   do  eo <- getExpr
       case {- tracePP "Casting A" -} eo of 
-        Just e@(VarRef a id)  -> (addAnn (srcPos a) (Assert [(e, t)])) >> return (envAdds [(id,t)] γ)
+        Just e@(VarRef _ id)  -> addAsrt e t >> return (envAdds [(id,t)] γ)
         _                     -> logError dummySpan "NO CAST" () >> return γ
+
+addAsrt e t = modify $ \st -> st { tc_asrt = M.insert e t (tc_asrt st) } 
+
+
+
+
+--------------------------------------------------------------------------------
+-- | Insert the assertions as annotations in the AST
+--------------------------------------------------------------------------------
+
+
+type Anns = M.Map (Expression AnnSSA) Type
+data PState = PS { p_ann :: Anns }
+type PM       = State PState 
+
+
+-------------------------------------------------------------------------------
+patch :: TCState -> Nano AnnType (RType r) -> Nano AnnAsrt (RType r) 
+-------------------------------------------------------------------------------
+patch st pgm@(Nano {code = Src _}) = fst $ runState (patchPgm pgm) $ PS (tc_asrt st)
+
+
+-------------------------------------------------------------------------------
+patchPgm  :: Nano AnnType (RType r) -> PM (Nano AnnAsrt (RType r))
+-------------------------------------------------------------------------------
+patchPgm p@(Nano {code = Src fs})
+  = do fs' <- patchFuns fs
+       return p {code = Src fs'}
+
+
+patchFuns  = mapM patchFun
+
+patchFun   = patchStmt
+
+patchStmts = mapM patchStmt 
+
+patchStmt (BlockStmt a sts)         = BlockStmt a <$> patchStmts sts
+patchStmt e@(EmptyStmt _)           = return $ e
+patchStmt (ExprStmt a e)            = ExprStmt a <$> patchExpr e
+patchStmt (IfStmt a e s1 s2)        = liftM3 (IfStmt a) (patchExpr e) (patchStmt s1) (patchStmt s2)
+patchStmt (IfSingleStmt a e s)      = liftM2 (IfSingleStmt a) (patchExpr e) (patchStmt s)
+patchStmt (ReturnStmt a (Just e))   = ReturnStmt a . Just <$> patchExpr e
+patchStmt r@(ReturnStmt _ _ )       = return $ r
+patchStmt (VarDeclStmt a vds)       = VarDeclStmt a <$> mapM patchVarDecl vds
+patchStmt (FunctionStmt a id as bd) = FunctionStmt a id as <$> patchStmts bd
+patchStmt s                         = return $ error $ "Does not support patchStmt for: " 
+                                                  ++ (render (pp s))
+
+patchExprs = mapM patchExpr
+
+annt e a = 
+  do  m <- p_ann <$> get
+      case M.lookup e m of
+        Just t -> return $ a { ann_fact = (Assert $ tracePP "patching" t) : (ann_fact a) } 
+        _      -> return $ a
+
+patchExpr e@(StringLit _ _ )        = return $ e 
+patchExpr e@(NumLit _ _ )           = return $ e 
+patchExpr e@(IntLit _ _ )           = return $ e 
+patchExpr e@(BoolLit _ _)           = return $ e 
+patchExpr e@(NullLit _)             = return $ e 
+patchExpr e@(ArrayLit a es)         = liftM2 ArrayLit (annt e a) (patchExprs es)
+patchExpr e@(ObjectLit a pes)       = liftM2 ObjectLit (annt e a) (mapM (mapSndM patchExpr) pes)
+patchExpr e@(ThisRef _)             = return $ e
+patchExpr e@(VarRef a id)           = do a' <- annt e a
+                                         return $ VarRef a' id
+patchExpr e@(PrefixExpr a p e')     = do a' <- annt e a
+                                         PrefixExpr a' p <$> patchExpr e'
+patchExpr e@(InfixExpr a o e1 e2)   = do a' <- annt e a 
+                                         liftM2 (InfixExpr a' o) (patchExpr e1) (patchExpr e2)
+patchExpr e@(AssignExpr a o lv e')  = do a' <- annt e a 
+                                         AssignExpr a' o lv <$> patchExpr e'
+patchExpr e@(CallExpr a e' el)      = do a' <- annt e a
+                                         liftM2 (CallExpr a') (patchExpr e') (patchExprs el)
+patchExpr e@(FuncExpr a oi is ss)   = do a' <- annt e a
+                                         FuncExpr a' oi is <$> patchStmts ss
+patchExpr e                         = return $ error $ "Does not support patchExpr for."
+                                                  ++ (render (pp e))
+                                                  
+
+patchVarDecl vd = return vd    
+
 

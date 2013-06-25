@@ -20,10 +20,10 @@ import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.SSA.SSA
-
 import qualified Language.Fixpoint.Types as F
 -- import           Language.Fixpoint.Interface        (resultExit)
 import           Language.Fixpoint.Misc             
+import           Language.Fixpoint.PrettyPrint        (showpp)
 -- import           System.Exit                        (exitWith)
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
@@ -53,7 +53,7 @@ verifyFile f
         let nanoSsa = ssaTransform nano
         donePhase Loud "SSA Transform"
         putStrLn . render . pp $ nanoSsa
-        r    <- either unsafe safe $ execute nanoSsa $ tcNano nanoSsa
+        r    <- either unsafe safe $ execute' patch nanoSsa $ tcNano nanoSsa
         donePhase Loud "Typechecking"
         return r
 

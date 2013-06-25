@@ -32,7 +32,7 @@ import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
 import           Text.Printf 
-import           Debug.Trace
+-- import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
 
 ---------------------------------------------------------------------------
@@ -97,14 +97,12 @@ instance Free (RType r) where
 instance Substitutable () Fact where
   apply _ x@(PhiVar _)  = x
   apply θ (TypInst ts)  = TypInst $ apply θ ts
-  apply θ (Assert ets)  = Assert (zip es (apply θ ts))
-    where
-      (es, ts) = unzip ets 
+  apply θ (Assert t)    = Assert (apply θ t)
 
 instance Free Fact where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
-  free (Assert ets)     = S.unions (map (\(e,t) -> free t) ets)
+  free (Assert t)       = free t
  
 ------------------------------------------------------------------------
 -- appTy :: RSubst r -> RType r -> RType r

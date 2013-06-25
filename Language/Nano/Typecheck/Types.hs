@@ -62,6 +62,7 @@ module Language.Nano.Typecheck.Types (
   , AnnBare
   , AnnSSA
   , AnnType
+  , AnnAsrt
   , AnnInfo
 
   -- * Useful Operations
@@ -308,13 +309,14 @@ ppTC (TDef x)         = text "TDef: " <+> pprint x
 data Fact 
   = PhiVar  !(Id SourceSpan) 
   | TypInst ![Type]
-  | Assert  ![(Expression AnnSSA, Type)]
+  | Assert  ! Type
     deriving (Eq, Ord, Show)
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show)
 type AnnBare   = Annot Fact SourceSpan -- NO facts
-type AnnSSA    = Annot Fact SourceSpan -- Only Phi       facts
-type AnnType   = Annot Fact SourceSpan -- Only Phi + Typ facts
+type AnnSSA    = Annot Fact SourceSpan -- Only Phi              facts
+type AnnType   = Annot Fact SourceSpan -- Only Phi + Typ        facts
+type AnnAsrt   = Annot Fact SourceSpan -- Only Phi + Typ + Asrt facts
 type AnnInfo   = M.HashMap SourceSpan [Fact] 
 
 
@@ -333,7 +335,7 @@ instance IsLocated (Annot a SourceSpan) where
 instance PP Fact where
   pp (PhiVar x)     = text "phi"  <+> pp x
   pp (TypInst ts)   = text "inst" <+> pp ts 
-  pp (Assert ets)   = text "assert" <+> pp ets 
+  pp (Assert t)   = text "assert" <+> pp t
 
 instance PP AnnInfo where
   pp             = vcat . (ppB <$>) . M.toList 

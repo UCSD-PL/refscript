@@ -88,9 +88,9 @@ import           Language.Nano.Env
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
-import           Text.PrettyPrint.HughesPJ
+import           Text.PrettyPrint.HughesPJ 
 
-import           Control.Applicative 
+import           Control.Applicative hiding (empty)
 import           Control.Monad.Error ()
 
 -- | Type Variables
@@ -282,6 +282,7 @@ instance F.Reftable r => PP (RType r) where
   pp (TVar α r)     = F.ppTy r $ pp α 
   pp (TFun xts t _) = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
+  pp (TApp TUn ts r) = F.ppTy r $ ppArgs id (text "|") ts 
   pp (TApp c [] r)  = F.ppTy r $ ppTC c 
   pp (TApp c ts r)  = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
 
@@ -327,7 +328,7 @@ instance Ord AnnSSA where
   compare (Ann s1 f1) (Ann s2 f2) = compare s1 s2
 
 instance Eq (Annot a SourceSpan) where 
-  (Ann s1 f1) == (Ann s2 f2) = s1 == s2
+  (Ann s1 _) == (Ann s2 _) = s1 == s2
 
 instance IsLocated (Annot a SourceSpan) where 
   srcPos = ann

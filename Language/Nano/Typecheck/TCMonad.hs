@@ -62,6 +62,7 @@ import qualified Data.HashSet             as HS
 import qualified Data.Set                 as S
 import qualified Data.HashMap.Strict      as HM
 import qualified Data.Map                 as M
+import qualified Data.List                as L
 import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
@@ -451,7 +452,7 @@ patchStmt (FunctionStmt a id as bd) = FunctionStmt a id as <$> patchStmts bd
 patchStmt s                         = return $ error $ "Does not support patchStmt for: " 
                                                   ++ (render (pp s))
 
-patchExprs = mapM patchExpr
+patchExprs = mapM patchExpr'
 
 annt e a = 
   do  m <- tc_asrt <$> get
@@ -459,33 +460,43 @@ annt e a =
         Just t -> return $ a { ann_fact = (Assert $ tracePP "patching" t) : (ann_fact a) } 
         _      -> return $ a
 
-patchExpr e@(StringLit _ _ )        = return $ e 
-patchExpr e@(NumLit _ _ )           = return $ e 
-patchExpr e@(IntLit _ _ )           = return $ e 
-patchExpr e@(BoolLit _ _)           = return $ e 
-patchExpr e@(NullLit _)             = return $ e 
-patchExpr e@(ArrayLit a es)         = liftM2 ArrayLit (annt e a) (patchExprs es)
-patchExpr e@(ObjectLit a pes)       = liftM2 ObjectLit (annt e a) (mapM (mapSndM patchExpr) pes)
-patchExpr e@(ThisRef _)             = return $ e
-patchExpr e@(VarRef a id)           = do a' <- annt e a
-                                         return $ VarRef a' id
-patchExpr e@(PrefixExpr a p e')     = do a' <- annt e a
-                                         PrefixExpr a' p <$> patchExpr e'
-patchExpr e@(InfixExpr a o e1 e2)   = do a' <- annt e a 
-                                         liftM2 (InfixExpr a' o) (patchExpr e1) (patchExpr e2)
-patchExpr e@(AssignExpr a o lv e')  = do a' <- annt e a 
-                                         AssignExpr a' o lv <$> patchExpr e'
-patchExpr e@(CallExpr a e' el)      = do a' <- annt e a
-                                         liftM2 (CallExpr a') (patchExpr e') (patchExprs el)
-patchExpr e@(FuncExpr a oi is ss)   = do a' <- annt e a
-                                         FuncExpr a' oi is <$> patchStmts ss
-patchExpr e                         = return $ error $ "Does not support patchExpr for."
+patchExpr' e@(StringLit _ _ )        = return $ e 
+patchExpr' e@(NumLit _ _ )           = return $ e 
+patchExpr' e@(IntLit _ _ )           = return $ e 
+patchExpr' e@(BoolLit _ _)           = return $ e 
+patchExpr' e@(NullLit _)             = return $ e 
+patchExpr' e@(ArrayLit a es)         = liftM2 ArrayLit (annt e a) (patchExprs es)
+patchExpr' e@(ObjectLit a pes)       = liftM2 ObjectLit (annt e a) (mapM (mapSndM patchExpr) pes)
+patchExpr' e@(ThisRef _)             = return $ e
+patchExpr' e@(VarRef a id)           = do a' <- annt e a
+                                          return $ VarRef a' id
+patchExpr' e@(PrefixExpr a p e')     = do a' <- annt e a
+                                          PrefixExpr a' p <$> patchExpr e'
+patchExpr' e@(InfixExpr a o e1 e2)   = do a' <- annt e a 
+                                          liftM2 (InfixExpr a' o) (patchExpr e1) (patchExpr e2)
+patchExpr' e@(AssignExpr a o lv e')  = do a' <- annt e a 
+                                          AssignExpr a' o lv <$> patchExpr e'
+patchExpr' e@(CallExpr a e' el)      = do a' <- annt e a
+                                          liftM2 (CallExpr a') (patchExpr e') (patchExprs el)
+patchExpr' e@(FuncExpr a oi is ss)   = do a' <- annt e a
+                                          FuncExpr a' oi is <$> patchStmts ss
+patchExpr' e                         = return $ error $ "Does not support patchExpr for."
                                                   ++ (render (pp e))
                                                   
-patchExpr' :: Expression a -> ()
-patchExpr' e = ()
-  where a = getAnnotation e 
-
+-------------------------------------------------------------------------------
+patchExpr :: Expression AnnType -> TCM (Expression AnnType)
+-------------------------------------------------------------------------------
+patchExpr = liftM go . patchExpr'
+  where 
+  go e = 
+    case L.find asrt $ tracePP (ppshow e) $ ann_fact $ getAnnotation e of
+      Just (Assert t) -> CallExpr ann name $ (tracePP "adding" $ arg e t)
+      _               -> e
+  asrt (Assert _) = True
+  asrt _          = False
+  ann = Ann dummySpan []
+  name = VarRef ann (Id ann "__cast")
+  arg e t = [e, StringLit ann $ show t]
 
 
 patchVarDecl vd = return vd    

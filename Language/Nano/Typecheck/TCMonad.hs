@@ -12,7 +12,6 @@ module Language.Nano.Typecheck.TCMonad (
  
   -- * Execute 
   , execute
-  , execute'
 
   -- * Log Errors
   , logError
@@ -42,7 +41,7 @@ module Language.Nano.Typecheck.TCMonad (
   , getDefType 
 
   -- * Patch the program with assertions
-  , patch
+  , patchPgm
   )  where 
 
 import           Text.Printf
@@ -66,6 +65,7 @@ import qualified Data.Map                 as M
 import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Syntax.Annotations
 import           Text.PrettyPrint.HughesPJ          (render)
 
 import           Debug.Trace
@@ -183,11 +183,6 @@ execute pgm act
 
 initState :: Nano z (RType r) -> TCState
 initState pgm = TCS [] [] mempty 0 HM.empty [] M.empty (envMap toType $ defs pgm) Nothing
-
-execute' f pgm act 
-  = case runState (runErrorT act) $ initState pgm of 
-      (Left err, _) -> Left [(dummySpan,  err)]
-      (Right x, st) ->  applyNonNull (Right $ f st x) Left (reverse $ tc_errss st)
 
 
 getDefType f 
@@ -430,20 +425,8 @@ addAsrt e t = modify $ \st -> st { tc_asrt = M.insert e t (tc_asrt st) }
 -- | Insert the assertions as annotations in the AST
 --------------------------------------------------------------------------------
 
-
-type Anns = M.Map (Expression AnnSSA) Type
-data PState = PS { p_ann :: Anns }
-type PM       = State PState 
-
-
 -------------------------------------------------------------------------------
-patch :: TCState -> Nano AnnType (RType r) -> Nano AnnAsrt (RType r) 
--------------------------------------------------------------------------------
-patch st pgm@(Nano {code = Src _}) = fst $ runState (patchPgm pgm) $ PS (tc_asrt st)
-
-
--------------------------------------------------------------------------------
-patchPgm  :: Nano AnnType (RType r) -> PM (Nano AnnAsrt (RType r))
+patchPgm  :: Nano AnnType (RType r) -> TCM (Nano AnnAsrt (RType r))
 -------------------------------------------------------------------------------
 patchPgm p@(Nano {code = Src fs})
   = do fs' <- patchFuns fs
@@ -471,7 +454,7 @@ patchStmt s                         = return $ error $ "Does not support patchSt
 patchExprs = mapM patchExpr
 
 annt e a = 
-  do  m <- p_ann <$> get
+  do  m <- tc_asrt <$> get
       case M.lookup e m of
         Just t -> return $ a { ann_fact = (Assert $ tracePP "patching" t) : (ann_fact a) } 
         _      -> return $ a
@@ -499,6 +482,11 @@ patchExpr e@(FuncExpr a oi is ss)   = do a' <- annt e a
 patchExpr e                         = return $ error $ "Does not support patchExpr for."
                                                   ++ (render (pp e))
                                                   
+patchExpr' :: Expression a -> ()
+patchExpr' e = ()
+  where a = getAnnotation e 
+
+
 
 patchVarDecl vd = return vd    
 

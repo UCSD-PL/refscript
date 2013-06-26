@@ -53,7 +53,7 @@ verifyFile f
         let nanoSsa = ssaTransform nano
         donePhase Loud "SSA Transform"
         putStrLn . render . pp $ nanoSsa
-        r    <- either unsafe safe $ execute' patch nanoSsa $ tcNano nanoSsa
+        r    <- either unsafe safe $ execute nanoSsa $ tcNano nanoSsa
         donePhase Loud "Typechecking"
         return r
 
@@ -73,6 +73,8 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn $ printf "At %s: %s" (ppsh
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
+
+patch p = tcNano p >>= patchPgm 
 
 -------------------------------------------------------------------------------
 tcNano :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM (Nano AnnType (RType r)) 

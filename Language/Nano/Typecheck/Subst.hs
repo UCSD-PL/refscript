@@ -108,6 +108,7 @@ instance Free Fact where
 -- appTy :: RSubst r -> RType r -> RType r
 ------------------------------------------------------------------------
 appTy θ (TApp c ts z)      = TApp c (apply θ ts) z 
+appTy θ (TObj bs z)        = TObj (map (\b -> B { b_sym = b_sym b, b_type = appTy θ $ b_type b } ) bs ) z
 appTy (Su m) t@(TVar α r)  = (M.lookupDefault t α m) `strengthen` r
 appTy θ (TFun ts t r)      = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m) (TAll α t)    = apply (Su $ M.delete α m) t 

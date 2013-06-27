@@ -16,7 +16,7 @@ import           Text.Parsec
 -- import           Text.Parsec.String hiding (Parser, parseFromFile)
 import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*), (<*>))
-import           Data.Char (toLower, isLower) 
+import           Data.Char (toLower, isLower, isSpace) 
 import           Data.Monoid (mconcat)
 
 import           Language.Fixpoint.Names (propConName)
@@ -72,7 +72,8 @@ bareTypeP :: Parser RefType
 bareTypeP   
   =  try bareAllP
  <|> try bareFunP
- <|> bareAtomP 
+ <|> try bareObjP
+ <|> bareUnionP
 
 bareFunP  
   = do args   <- parens $ sepBy bareTypeP comma
@@ -83,6 +84,18 @@ bareFunP
 
 argBind t = B (rTypeValueVar t) t
 
+
+bareUnionP  
+  =   parens bareUnionP'
+  <|> bareUnionP'
+  
+bareUnionP' = do  h  <- bareAtomP
+                  tl <- many $ bar >> bareAtomP
+                  r   <- topP    -- unions get top refinement
+                  case tl of
+                    [] -> return h
+                    _  -> return $ TApp TUn (h:tl) r
+
 bareAtomP 
   =  refP bbaseP 
  <|> try (bindRefP bbaseP)
@@ -92,7 +105,6 @@ bbaseP :: Parser (Reft -> RefType)
 bbaseP 
   =  try (TVar <$> tvarP)
  <|> try (TApp <$> tconP <*> (brackets $ sepBy bareTypeP comma))
- <|> try (TApp TUn <$> (parens $ sepBy bareTypeP bar))
  <|> try ((`TApp` []) <$> tconP)
 
 tvarP :: Parser TVar
@@ -111,7 +123,15 @@ tconP =  try (reserved "int"       >> return TInt)
      <|> try (reserved "void"      >> return TVoid)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
-     <|> (TDef . stringSymbol)  <$> lowerIdP
+     {-<|> (TDef . stringSymbol)  <$> lowerIdP-}
+     <|> tDefP
+
+tDefP 
+  = do  s <- lowerIdP
+        -- This list will have to be enhanced.
+        if s `elem` ["true", "false"] 
+          then parserZero
+          else return $ TDef $ stringSymbol s
 
 bareAllP 
   = do reserved "forall"
@@ -119,6 +139,17 @@ bareAllP
        dot
        t  <- bareTypeP
        return $ foldr TAll t as
+
+bareBindP 
+  = do  s <- binderP
+        colon
+        t <- bareTypeP
+        return $ B s t 
+
+bareObjP 
+  = do bs  <- braces $ sepBy bareBindP comma
+       r   <- topP    -- objects get top refinement
+       return $ TObj bs r
 
  
 dummyP ::  Parser (Reft -> b) -> Parser b
@@ -169,15 +200,15 @@ refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi))
 -- 
 -- 
 -- embedP     = xyP upperIdP (reserved "as") fTyConP
--- 
--- binderP :: Parser Symbol
--- binderP =  try $ liftM stringSymbol (idP badc)
---        <|> liftM pwr (parens (idP bad))
---        where idP p  = many1 (satisfy (not . p))
---              badc c = (c == ':') ||  bad c
---              bad c  = isSpace c || c `elem` "()"
---              pwr s  = stringSymbol $ "(" ++ s ++ ")" 
---              
+ 
+binderP :: Parser Symbol
+binderP =  try $ liftM stringSymbol (idP badc)
+      <|> liftM pwr (parens (idP bad))
+      where idP p  = many1 (satisfy (not . p))
+            badc c = (c == ':') ||  bad c
+            bad c  = isSpace c || c `elem` "()"
+            pwr s  = stringSymbol $ "(" ++ s ++ ")" 
+              
 -- grabs p = try (liftM2 (:) p (grabs p)) 
 --        <|> return []
 

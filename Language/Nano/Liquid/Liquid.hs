@@ -4,7 +4,7 @@
 
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
--- import           Text.Printf                        (printf)
+import           Text.Printf                        (printf)
 -- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
 import           Control.Applicative                ((<$>))

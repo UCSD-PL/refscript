@@ -39,6 +39,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Regular Types
   , Type
+  , TBody (..)
   , TVar (..)
   , TCon (..)
 
@@ -121,7 +122,7 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 data TBody r 
    = TD { td_con  :: !TCon          -- TDef name ...
         , td_args :: ![TVar]        -- Type variables
-        , td_body :: !(RType r)     -- TObj ...
+        , td_body :: !(RType r)     -- int or bool or fun or object ...
         , td_pos  :: !SourceSpan    -- Source position
         } deriving (Show, Functor)
 
@@ -218,6 +219,7 @@ data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
                      , specs  :: !(Env t)           -- ^ Imported Specifications
                      , defs   :: !(Env t)           -- ^ Signatures for Code
                      , consts :: !(Env t)           -- ^ Measure Signatures 
+                     , tDefs  :: !(Env t)           -- ^ Type definitions
                      , quals  :: ![F.Qualifier]     -- ^ Qualifiers
                      } deriving (Functor)
 
@@ -254,8 +256,8 @@ instance PP t => PP (Nano a t) where
     $+$ text "**************************************************"
 
 instance Monoid (Nano a t) where 
-  mempty        = Nano (Src []) envEmpty envEmpty envEmpty [] 
-  mappend p1 p2 = Nano ss e e' cs qs 
+  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty [] 
+  mappend p1 p2 = Nano ss e e' cs tds qs 
     where 
       ss        = Src $ s1 ++ s2
       Src s1    = code p1
@@ -263,6 +265,7 @@ instance Monoid (Nano a t) where
       e         = envFromList ((envToList $ specs p1) ++ (envToList $ specs p2))
       e'        = envFromList ((envToList $ defs p1)  ++ (envToList $ defs p2))
       cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
+      tds       = envFromList $ (envToList $ tDefs p1) ++ (envToList $ tDefs p2)
       qs        = quals p1 ++ quals p2 
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
@@ -303,7 +306,7 @@ ppTC TString          = text "String"
 ppTC TVoid            = text "Void"
 ppTC TTop             = text "Top"
 ppTC TUn              = text "Union:"
-ppTC (TDef x)         = {-text "TDef: " <+> -} pprint x
+ppTC (TDef x)         = text "TDef: " <+> pprint x
 ppTC TNull            = text "Null"
 ppTC TUndef           = text "Undefined"
 

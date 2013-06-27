@@ -50,6 +50,11 @@ idBindP = xyP identifierP dcolon bareTypeP
 identifierP :: Parser (Id SourceSpan)
 identifierP = withSpan Id lowerIdP -- <$> getPosition <*> lowerIdP -- Lexer.identifier
 
+typeP :: Parser (TBody Reft)
+typeP = withSpan (\l x -> x l) $ TD <$> tDefP <*> tParP <*> bareTypeP 
+
+-- <A,B,C...>
+tParP = brackets $ sepBy tvarP comma
 
 withSpan f p = do pos   <- getPosition
                   x     <- p
@@ -104,7 +109,7 @@ bareAtomP
 bbaseP :: Parser (Reft -> RefType)
 bbaseP 
   =  try (TVar <$> tvarP)
- <|> try (TApp <$> tconP <*> (brackets $ sepBy bareTypeP comma))
+ <|> try (TApp <$> tDefP <*> (brackets $ sepBy bareTypeP comma))  -- This is what allows: list [A], tree [A,B] etc...
  <|> try ((`TApp` []) <$> tconP)
 
 tvarP :: Parser TVar
@@ -128,8 +133,8 @@ tconP =  try (reserved "int"       >> return TInt)
 
 tDefP 
   = do  s <- lowerIdP
-        -- This list will have to be enhanced.
-        if s `elem` ["true", "false"] 
+        -- XXX: This list will have to be enhanced.
+        if s `elem` ["true", "false", "int", "boolean", "string", "top", "void"] 
           then parserZero
           else return $ TDef $ stringSymbol s
 
@@ -240,12 +245,14 @@ data PSpec l t
   = Meas (Id l, t)
   | Bind (Id l, t) 
   | Qual Qualifier
+  | Type (TBody Reft)
   deriving (Show)
 
 specP :: Parser (PSpec SourceSpan RefType)
 specP 
   = try (reserved "measure"   >> (Meas <$> idBindP   ))
     <|> (reserved "qualif"    >> (Qual <$> qualifierP))
+    <|> (reserved "type"      >> (Type <$> typeP))
     <|> ({- DEFAULT -}           (Bind <$> idBindP   ))
 
 
@@ -259,6 +266,7 @@ mkSpec xs = Nano { code   = Src []
                  , specs  = envFromList [b | Bind b <- xs] 
                  , defs   = envEmpty
                  , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
+                 , tDefs  = envEmpty -- envFromList [ prepTDefs b | Type b <- xs]
                  , quals  =             [q | Qual q <- xs]  
                  }
 
@@ -266,6 +274,8 @@ mkSpec xs = Nano { code   = Src []
 switchProp i@(Id l x) 
   | x == (toLower <$> propConName) = Id l propConName
   | otherwise                      = i
+
+prepTDefs (TD n _ b _ ) = (n, b)
 
 --------------------------------------------------------------------------------------
 parseCodeFromFile :: FilePath -> IO (Nano SourceSpan a) 
@@ -277,6 +287,7 @@ mkCode ss = Nano { code   = Src (checkTopStmt <$> ss)
                  , specs  = envEmpty  
                  , defs   = envEmpty
                  , consts = envEmpty 
+                 , tDefs  = envEmpty
                  , quals  = []  
                  } 
 

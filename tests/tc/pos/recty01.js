@@ -1,8 +1,6 @@
-/*@ type List[A] = {  data : A, 
-                      next : ( List[A] | Null ) 
-                   } */
+/*@ type list[A] int */
 
-/*@ forall A . (x: List[A]) => void */
+/*@ foo :: forall A . (x: list [A]) => void */
 function foo(l) {
   return;
 }

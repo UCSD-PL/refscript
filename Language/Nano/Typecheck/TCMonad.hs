@@ -414,9 +414,14 @@ addCast :: Env Type -> Type -> TCM (Env Type)
 addCast γ t = 
   do  eo <- getExpr
       case trace (printf "Casting %s to %s"  (ppshow eo) (ppshow t)) eo of 
+      -- Right now only casts on variables are added to Γ - the
+      -- rest cannot update Γ, but propagate the casted type. This 
+      -- is to avoid returning a modified AST - this might have to be 
+      -- done anyway at some point. 
         Just e@(VarRef _ id)  -> addAsrt e t >> return (envAdds [(id,t)] γ)
-        Just e                -> logError dummySpan 
-                                   ("Does not support cast on: " ++ show e) () >> 
+        Just e                -> addAsrt e t >>
+                                 {-logError dummySpan 
+                                   ("Does not support cast on: " ++ ppshow e) () >> -}
                                  return γ
         _                     -> logError dummySpan "NO CAST" () >> return γ
 
@@ -455,7 +460,7 @@ patchStmt r@(ReturnStmt _ _ )       = return $ r
 patchStmt (VarDeclStmt a vds)       = VarDeclStmt a <$> mapM patchVarDecl vds
 patchStmt (FunctionStmt a id as bd) = FunctionStmt a id as <$> patchStmts bd
 patchStmt s                         = return $ error $ "Does not support patchStmt for: " 
-                                                  ++ (render (pp s))
+                                                  ++ ppshow s
 
 patchExprs = mapM patchExpr'
 
@@ -487,7 +492,7 @@ patchExpr' e@(CallExpr a e' el)      = do a' <- annt e a
 patchExpr' e@(FuncExpr a oi is ss)   = do a' <- annt e a
                                           FuncExpr a' oi is <$> patchStmts ss
 patchExpr' e                         = return $ error $ "Does not support patchExpr for: "
-                                                  ++ (render (pp e))
+                                                  ++ ppshow e
                                                   
 -------------------------------------------------------------------------------
 patchExpr :: Expression AnnType -> TCM (Expression AnnType)

@@ -17,14 +17,12 @@ module Language.Nano.Typecheck.Subst (
   -- * Type-class with operations
   , Substitutable (..)
 
-  -- * Unification
-  , unifys
 
   ) where 
 
 import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
-import           Language.Fixpoint.Misc
+-- import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Errors 
 import           Language.Nano.Typecheck.Types
@@ -33,7 +31,9 @@ import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
--- import           Text.Printf 
+import           Text.Printf 
+-- import           Debug.Trace
+-- import           Language.Nano.Misc (mkEither)
 
 ---------------------------------------------------------------------------
 -- | Substitutions --------------------------------------------------------
@@ -77,6 +77,9 @@ instance Free a => Free [a] where
 instance Substitutable r a => Substitutable r [a] where 
   apply = map . apply 
 
+instance (Substitutable r a, Substitutable r b) => Substitutable r (a,b) where 
+  apply f (x,y) = (apply f x, apply f y)
+
 instance (PP r, F.Reftable r) => Substitutable r (RType r) where 
   apply θ t = appTy θ t
 --     where 
@@ -94,11 +97,13 @@ instance Free (RType r) where
 instance Substitutable () Fact where
   apply _ x@(PhiVar _)  = x
   apply θ (TypInst ts)  = TypInst $ apply θ ts
+  apply θ (Assert t)    = Assert (apply θ t)
 
 instance Free Fact where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
-
+  free (Assert t)       = free t
+ 
 ------------------------------------------------------------------------
 -- appTy :: RSubst r -> RType r -> RType r
 ------------------------------------------------------------------------
@@ -106,49 +111,5 @@ appTy θ (TApp c ts z)      = TApp c (apply θ ts) z
 appTy (Su m) t@(TVar α r)  = (M.lookupDefault t α m) `strengthen` r
 appTy θ (TFun ts t r)      = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m) (TAll α t)    = apply (Su $ M.delete α m) t 
-
-
------------------------------------------------------------------------------
-unify :: Subst -> Type -> Type -> Either String Subst
------------------------------------------------------------------------------
-unify θ (TFun xts t _) (TFun xts' t' _) = unifys θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
-unify θ (TVar α _) (TVar β _)           = varEql θ α β 
-unify θ (TVar α _) t                    = varAsn θ α t 
-unify θ t (TVar α _)                    = varAsn θ α t
-unify θ (TApp c ts _) (TApp c' ts' _) 
-  | c == c'                             = unifys  θ ts ts'
-unify θ t t' 
-  | t == t'                             = return θ
-  | otherwise                           = Left $ errorUnification t t'             
-
-unifys         ::  Subst -> [Type] -> [Type] -> Either String Subst
-unifys θ xs ys = {- tracePP msg $ -} unifys' θ xs ys 
-  -- where 
-  --   msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
-
-unifys' θ ts ts' 
-  | nTs == nTs' = go θ (ts, ts') 
-  | otherwise   = Left $ errorUnification ts ts'
-  where 
-    nTs                  = length ts
-    nTs'                 = length ts'
-    go θ (t:ts , t':ts') = unify θ t t' >>= \θ' -> go θ' (mapPair (apply θ') (ts, ts'))
-    go θ (_    , _    )  = return θ 
-
-
-varEql θ α β = case varAsn θ α (tVar β) of 
-                 z@(Right _) -> z
-                 (Left e1)   -> case varAsn θ β (tVar α) of
-                                  z@(Right _) -> z
-                                  (Left e2)   -> Left (e1 ++ "\n OR \n" ++ e2) 
- 
-varAsn θ α t 
-  | t == tVar α         = Right $ θ 
-  | α `S.member` free t = Left  $ errorOccursCheck α t 
-  | unassigned α θ      = Right $ θ `mappend` (Su $ M.singleton α t) 
-  | otherwise           = Left  $ errorRigidUnify α t
-  
-unassigned α (Su m) = M.lookup α m == Just (tVar α)
- 
 
 

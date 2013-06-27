@@ -118,12 +118,12 @@ instance F.Symbolic a => F.Symbolic (Located a) where
   symbol = F.symbol . val
 
 -- | Constructed Type Bodies
--- data TBody r 
---   = TD { td_con  :: !TCon
---        , td_args :: ![TVar]
---        , td_body :: !(RType r)
---        , td_pos  :: !SourceSpan
---        } deriving (Show, Functor)
+data TBody r 
+   = TD { td_con  :: !TCon          -- TDef name ...
+        , td_args :: ![TVar]        -- Type variables
+        , td_body :: !(RType r)     -- TObj ...
+        , td_pos  :: !SourceSpan    -- Source position
+        } deriving (Show, Functor)
 
 -- | Type Constructors
 data TCon 
@@ -134,6 +134,8 @@ data TCon
   | TTop
   | TDef  F.Symbol
   | TUn
+  | TNull
+  | TUndef
     deriving (Eq, Ord, Show)
 
 -- | (Raw) Refined Types 
@@ -141,6 +143,7 @@ data RType r
   = TApp TCon [RType r]     r
   | TVar TVar               r 
   | TFun [Bind r] (RType r) r
+  | TObj [Bind r]           r
   | TAll TVar (RType r)
     deriving (Eq, Ord, Show, Functor)
 
@@ -279,26 +282,31 @@ instance PP a => PP (Maybe a) where
   pp = maybe (text "Nothing") pp 
 
 instance F.Reftable r => PP (RType r) where
-  pp (TVar α r)     = F.ppTy r $ pp α 
-  pp (TFun xts t _) = ppArgs parens comma xts <+> text "=>" <+> pp t 
-  pp t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." 
-                        <+> pp t' where (αs, t') = bkAll t
-  pp (TApp TUn ts r) = F.ppTy r $ ppArgs id (text "|") ts 
-  pp (TApp c [] r)  = F.ppTy r $ ppTC c 
-  pp (TApp c ts r)  = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
+  pp (TVar α r)       = F.ppTy r $ pp α 
+  pp (TFun xts t _)   = ppArgs parens comma xts <+> text "=>" <+> pp t 
+  pp t@(TAll _ _)     = text "forall" <+> ppArgs id space αs <> text "." 
+                          <+> pp t' where (αs, t') = bkAll t
+  pp (TApp TUn ts r)  = F.ppTy r $ ppArgs id (text "|") ts 
+  pp (TApp c [] r)    = F.ppTy r $ ppTC c 
+  pp (TApp c ts r)    = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
+  pp (TObj bs r )     = ppArgs braces comma bs
+
 
 
 instance F.Reftable r => PP (Bind r) where 
   pp (B x t)        = pp x <> colon <> pp t 
 
 ppArgs p sep          = p . intersperse sep . map pp
-ppTC TInt             = text "int"
-ppTC TBool            = text "boolean"
-ppTC TString          = text "string"
-ppTC TVoid            = text "void"
-ppTC TTop             = text "top"
-ppTC TUn              = text "union:"
+ppTC TInt             = text "Int"
+ppTC TBool            = text "Boolean"
+ppTC TString          = text "String"
+ppTC TVoid            = text "Void"
+ppTC TTop             = text "Top"
+ppTC TUn              = text "Union:"
 ppTC (TDef x)         = {-text "TDef: " <+> -} pprint x
+ppTC TNull            = text "Null"
+ppTC TUndef           = text "Undefined"
+
 
 -----------------------------------------------------------------------------
 -- | Annotations ------------------------------------------------------------
@@ -326,7 +334,7 @@ instance HasAnnotation (Annot b) where
   getAnnotation = ann 
 
 instance Ord AnnSSA where 
-  compare (Ann s1 f1) (Ann s2 f2) = compare s1 s2
+  compare (Ann s1 _) (Ann s2 _) = compare s1 s2
 
 instance Eq (Annot a SourceSpan) where 
   (Ann s1 _) == (Ann s2 _) = s1 == s2

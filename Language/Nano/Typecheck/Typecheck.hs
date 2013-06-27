@@ -2,9 +2,10 @@ module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where
 
 import           Control.Applicative                ((<$>)) -- (<*>))
 import           Control.Monad                
+import           Control.Monad.State()
 import qualified Data.HashSet        as S 
 import qualified Data.HashMap.Strict as M 
--- import qualified Data.List           as L
+import           Data.List           (nub)
 import qualified Data.Traversable    as T
 -- import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust, fromJust) -- fromMaybe, maybeToList)
@@ -27,15 +28,16 @@ import           Language.Fixpoint.Misc
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Debug.Trace
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
 verifyFile :: FilePath -> IO (F.FixResult SourceSpan)
 --------------------------------------------------------------------------------
-verifyFile f = tc =<< parseNanoFromFile f
-  where 
-   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
+--verifyFile f = tc =<< parseNanoFromFile f
+--  where 
+--   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
 -------------------------------------------------------------------------------
 typeCheck     :: (F.Reftable r) => Nano AnnSSA (RType r) -> Nano AnnType (RType r) 
@@ -45,16 +47,16 @@ typeCheck pgm = either crash id . execute pgm . tcNano $ pgm
     crash     = errorstar . render . vcat . map (text . ppErr)
 
 -- DEBUG MODE
--- verifyFile f 
---   = do nano <- parseNanoFromFile f 
---        donePhase Loud "Parse"
---        putStrLn . render . pp $ nano
---        let nanoSsa = ssaTransform nano
---        donePhase Loud "SSA Transform"
---        putStrLn . render . pp $ nanoSsa
---        r    <- either unsafe safe . execute . typeCheck $ nanoSsa
---        donePhase Loud "Typechecking"
---        return r
+verifyFile f 
+   = do nano <- parseNanoFromFile f 
+        {-donePhase Loud "Parse"-}
+        {-putStrLn . render . pp $ nano-}
+        let nanoSsa = ssaTransform nano
+        donePhase Loud "SSA Transform"
+        putStrLn . render . pp $ nanoSsa
+        r    <- either unsafe safe $ execute nanoSsa $ patch nanoSsa
+        donePhase Loud "Typechecking"
+        return r
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppErr) 
@@ -67,11 +69,20 @@ safe (Nano {code = Src fs})
        return F.Safe 
 
 printAnn :: AnnBare -> IO () 
-printAnn (Ann l fs) = when (not $ null fs) $ putStrLn $ printf "At %s: %s" (ppshow l) (ppshow fs)
+printAnn (Ann l fs) = when (not $ null fs) $ putStrLn 
+    $ printf "At %s: %s" (ppshow l) (ppshow fs)
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
+
+patch p = tcNano p >>= patchPgm >>= \p1 -> return $ (trace $ codePP p1) p1
+  where 
+    codePP Nano {code = Src s} = render $ 
+          text "********************** CODE **********************"
+      $+$ pp s
+      $+$ text "**************************************************"
+    
 
 -------------------------------------------------------------------------------
 tcNano :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM (Nano AnnType (RType r)) 
@@ -80,7 +91,10 @@ tcNano p@(Nano {code = Src fs})
   = do m     <- tcNano' $ toType <$> p 
        return $ p {code = Src $ (patchAnn m <$>) <$> fs}
 
-tcNano'     :: Nano AnnSSA Type -> TCM AnnInfo  
+
+-------------------------------------------------------------------------------
+tcNano' :: Nano AnnSSA Type -> TCM AnnInfo  
+-------------------------------------------------------------------------------
 tcNano' pgm@(Nano {code = Src fs}) 
   = do tcStmts (specs pgm) fs
        M.unions <$> getAllAnns
@@ -108,16 +122,18 @@ tcFun γ (FunctionStmt l f xs body)
   = do (ft, (αs, ts, t)) <- funTy l f xs
        let γ'  = envAdds [(f, ft)] γ
        let γ'' = envAddFun l f αs xs ts t γ'
-       accumAnn (catMaybes . map (validInst γ'') . M.toList) $  
+       accumAnn (\a -> catMaybes (map (validInst γ'') (M.toList {- $ tracePP "tcFun" -} a))) $  
          do q              <- tcStmts γ'' body
             when (isJust q) $ unifyType l "Missing return" f tVoid t
        return $ Just γ' 
 
+tcFun _  _ = error "Calling tcFun not on FunctionStatement"
+
 funTy l f xs 
   = do ft <- getDefType f 
        case bkFun ft of
-         Nothing        -> tcError l $ errorUnboundId f
-         Just (αs,ts,t) -> do when (length xs /= length ts) $ tcError l $ errorArgMismatch
+         Nothing        -> logError (ann l) (errorUnboundId f) (tErr, tFunErr)
+         Just (αs,ts,t) -> do when (length xs /= length ts) $ logError (ann l) errorArgMismatch ()
                               return (ft, (αs, b_type <$> ts, t))
 
 envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
@@ -174,11 +190,12 @@ tcStmt γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
-  = do t     <- tcExpr γ e
+  = do (γo, t) <- tcExpr γ e
        unifyType l "If condition" e t tBool
-       γ1    <- tcStmt γ s1
-       γ2    <- tcStmt γ s2
-       envJoin l γ γ1 γ2
+       let γ' = fromJust γo
+       γ1      <- tcStmt γ' s1
+       γ2      <- tcStmt γ' s2
+       envJoin l γ' γ1 γ2
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt _ ds)
@@ -186,8 +203,9 @@ tcStmt γ (VarDeclStmt _ ds)
 
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
-  = do t <- maybe (return tVoid) (tcExpr γ) eo 
-       unifyType l "Return" eo t $ envFindReturn γ 
+  = do (γ', t) <- maybe (return (Just γ, tVoid)) (tcExpr γ) eo 
+       let γ'' = fromJust γ'
+       subType l γ'' eo t $ envFindReturn γ''
        return Nothing
 
 tcStmt γ s@(FunctionStmt _ _ _ _)
@@ -211,23 +229,26 @@ tcAsgn :: Env Type -> AnnSSA -> Id AnnSSA -> Expression AnnSSA -> TCM TCEnv
 ------------------------------------------------------------------------------------
 
 tcAsgn γ _ x e 
-  = do t <- tcExpr γ e
-       return $ Just $ envAdds [(x, t)] γ
+  = do (γ', t) <- tcExpr γ e
+       return $ Just $ envAdds [(x, t)] (fromJust γ')
 
 -------------------------------------------------------------------------------
-tcExpr :: Env Type -> Expression AnnSSA -> TCM Type
+tcExpr :: Env Type -> Expression AnnSSA -> TCM (TCEnv, Type)
 -------------------------------------------------------------------------------
 
-tcExpr _ (IntLit _ _)               
-  = return tInt 
+tcExpr γ (IntLit _ _)               
+  = return (Just γ, tInt)
 
-tcExpr _ (BoolLit _ _)
-  = return tBool
+tcExpr γ (BoolLit _ _)
+  = return (Just γ, tBool)
+
+tcExpr γ (StringLit _ _)
+  = return (Just γ, tString)
 
 tcExpr γ (VarRef l x)
   = case envFindTy x γ of 
-      Nothing -> tcError l $ errorUnboundIdEnv x γ
-      Just z  -> return z 
+      Nothing -> logError (ann l) (errorUnboundIdEnv x γ) (Just γ, tErr)
+      Just z  -> return (Just γ, z) 
 
 tcExpr γ (PrefixExpr l o e)
   = tcCall γ l o [e] (prefixOpTy o γ)
@@ -236,25 +257,27 @@ tcExpr γ (InfixExpr l o e1 e2)
   = tcCall γ l o [e1, e2] (infixOpTy o γ)
 
 tcExpr γ (CallExpr l e es)
-  = tcCall γ l e es =<< tcExpr γ e 
+  = tcExpr γ e >>= \(γ',t) -> tcCall (fromJust γ') l e es t
 
 tcExpr _ e 
   = convertError "tcExpr" e
 
 ----------------------------------------------------------------------------------
-tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> TCM Type
+tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> TCM (TCEnv, Type)
 ----------------------------------------------------------------------------------
-tcCall γ l fn es ft 
+tcCall γ0 l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
-       ets        <- mapM (tcExpr γ) es
-       θ'         <- unifyTypes l "" (b_type <$> its) ets
-       return      $ apply θ' ot
+       (γ2, ets)  <- foldM (\(γ,ts) e -> 
+                              tcExpr (fromJust γ) e >>= 
+                              \(γ1,t) -> return (γ1, ts++[t])) (Just γ0,[]) es
+       (γ3, θ')   <- subTypes l (fromJust γ2) (map Just es) ets (b_type <$> its)
+       return      $ (Just γ3 , apply θ' ot)
 
 instantiate l fn ft 
   = do t' <- freshTyArgs (srcPos l) $ bkAll ft 
        maybe err return   $ bkFun t'
     where
-       err = tcError l $ errorNonFunction fn ft
+       err = logError (ann l) (errorNonFunction fn ft) tFunErr
 
 
 ----------------------------------------------------------------------------------
@@ -274,10 +297,24 @@ getPhiType l γ1 γ2 x
   = case (envFindTy x γ1, envFindTy x γ2) of
       (Just t1, Just t2) -> if (t1 == t2) 
                               then return t1 
-                              else tcError l $ errorJoin x t1 t2
+                              else mkUnion t1 t2 -- logError (ann l) (errorJoin x t1 t2) tErr
       (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
-                              then tcError l $ "Oh no, the HashMap GREMLIN is back...1"
-                              else tcError l $ bugUnboundPhiVar x
+                              then logError (ann l) "Oh no, the HashMap GREMLIN is back...1" tErr
+                              else logError (ann l) (bugUnboundPhiVar x) tErr
+    where
+      mkUnion t1 t2 = 
+        case (prep t1, prep t2) of 
+          (Just t1s, Just t2s) -> 
+            case nub $ t1s ++ t2s of
+              [ ] -> logError (ann l) (errorJoin x t1 t2) tErr
+              [t] -> return $ t
+              ts  -> return $ TApp TUn ts ()
+          (_       , _       ) -> logError (ann l) (errorJoin x t1 t2) tErr
+      prep (TApp TUn l _) = Just l
+      prep t@(TApp _ _ _) = Just [t]
+      prep t@(TVar _ _ )  = Just [t]
+      prep _              = Nothing
+
 
 forceCheck x γ 
   = elem x $ fst <$> envToList γ

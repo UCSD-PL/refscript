@@ -281,7 +281,8 @@ instance PP a => PP (Maybe a) where
 instance F.Reftable r => PP (RType r) where
   pp (TVar α r)     = F.ppTy r $ pp α 
   pp (TFun xts t _) = ppArgs parens comma xts <+> text "=>" <+> pp t 
-  pp t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
+  pp t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." 
+                        <+> pp t' where (αs, t') = bkAll t
   pp (TApp TUn ts r) = F.ppTy r $ ppArgs id (text "|") ts 
   pp (TApp c [] r)  = F.ppTy r $ ppTC c 
   pp (TApp c ts r)  = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
@@ -291,13 +292,13 @@ instance F.Reftable r => PP (Bind r) where
   pp (B x t)        = pp x <> colon <> pp t 
 
 ppArgs p sep          = p . intersperse sep . map pp
-ppTC TInt             = text "Tint"
-ppTC TBool            = text "Tboolean"
-ppTC TString          = text "Tstring"
-ppTC TVoid            = text "Tvoid"
-ppTC TTop             = text "Ttop"
-ppTC TUn              = text "Tunion:"
-ppTC (TDef x)         = text "TDef: " <+> pprint x
+ppTC TInt             = text "int"
+ppTC TBool            = text "boolean"
+ppTC TString          = text "string"
+ppTC TVoid            = text "void"
+ppTC TTop             = text "top"
+ppTC TUn              = text "union:"
+ppTC (TDef x)         = {-text "TDef: " <+> -} pprint x
 
 -----------------------------------------------------------------------------
 -- | Annotations ------------------------------------------------------------

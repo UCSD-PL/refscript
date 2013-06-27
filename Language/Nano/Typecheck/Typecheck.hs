@@ -9,7 +9,7 @@ import           Data.List           (nub)
 import qualified Data.Traversable    as T
 -- import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust, fromJust) -- fromMaybe, maybeToList)
-import           Text.PrettyPrint.HughesPJ          (text, render, vcat)
+import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$))
 import           Text.Printf                        (printf)
 
 import           Language.Nano.Errors
@@ -23,11 +23,11 @@ import           Language.Nano.SSA.SSA
 import qualified Language.Fixpoint.Types as F
 -- import           Language.Fixpoint.Interface        (resultExit)
 import           Language.Fixpoint.Misc             
-import           Language.Fixpoint.PrettyPrint        (showpp)
 -- import           System.Exit                        (exitWith)
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Debug.Trace
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
@@ -68,17 +68,20 @@ safe (Nano {code = Src fs})
        return F.Safe 
 
 printAnn :: AnnBare -> IO () 
-printAnn (Ann l fs) = when (not $ null fs) $ putStrLn $ printf "At %s: %s" (ppshow l) (ppshow fs)
+printAnn (Ann l fs) = when (not $ null fs) $ putStrLn 
+    $ printf "At %s: %s" (ppshow l) (ppshow fs)
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
 
-patch p = 
-  do
-    p1 <- tcNano p 
-    p2 <- tracePP "Patched" <$> patchPgm p1
-    return p2
+patch p = tcNano p >>= patchPgm >>= \p1 -> return $ (trace $ codePP p1) p1
+  where 
+    codePP Nano {code = Src s} = render $ 
+          text "********************** CODE **********************"
+      $+$ pp s
+      $+$ text "**************************************************"
+    
 
 -------------------------------------------------------------------------------
 tcNano :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM (Nano AnnType (RType r)) 

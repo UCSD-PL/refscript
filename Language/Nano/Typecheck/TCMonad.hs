@@ -272,7 +272,7 @@ unify θ t              (TVar α _)       = varAsnM θ α t
 
 unify θ (TApp TUn ts _) (TApp TUn ts' _)
   | unifiable ts && unifiable ts' 
-      && subset ts ts'                  = return $ tracePP "ts c ts\'" θ
+      && subset ts ts'                  = return $ θ
   where
     -- Simple check to prohibit multiple type vars in a union type
     -- Might need a stronger check here.
@@ -281,7 +281,7 @@ unify θ (TApp TUn ts _) (TApp TUn ts' _)
     var _          = False
 
 unify θ (TApp c ts _) (TApp c' ts' _)
-  | c == c'                             = unifys  θ (tracePP "ts" ts) (tracePP "ts\'" ts')
+  | c == c'                             = unifys  θ ts ts'
 
 unify θ t t' 
   | t == t'                             = return θ
@@ -297,7 +297,7 @@ unify θ t t'
     go θ ts = unifys θ ts $ tops ts
 
 unifys         ::  Subst -> [Type] -> [Type] -> TCM Subst
-unifys θ xs ys =  trace msg $ unifys' θ xs ys 
+unifys θ xs ys =  {- trace msg $ -} unifys' θ xs ys 
    where 
      msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
@@ -351,23 +351,23 @@ subty θ γ _ (TApp TUn ts _ ) t'
 
 subty θ γ _ (TApp TUn ts _ ) (TApp TUn ts' _) 
   | subset ts  ts'            = return (γ, θ)
-  | S.size (tracePP "intersection" (isc ts ts')) > 0 = 
-      do  γ' <- addCast γ $ mkUnion $ S.toList (isc ts ts')
+  | S.size (tracePP "intersection" isct) > 0 = 
+      do  γ' <- addCast γ $ mkUnion $ S.toList isct
           return (γ', θ)
   where 
-    isc a b = (S.fromList a) `S.intersection` (S.fromList b)
+    isct = (S.fromList ts) `S.intersection` (S.fromList ts')
 
 subty θ γ _ t (TApp TUn ts' _) 
   | subset [t] ts' = return (γ, θ)
 
-subty θ γ _ t t1 = do θ <- trace "unifying..." $ unify θ t t1
+subty θ γ _ t t1 = do θ <- {- trace "unifying..." $ -} unify θ t t1
                       return (γ, θ)
 
 
 -----------------------------------------------------------------------------
 subtys ::  Subst -> Env Type -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM (Env Type, Subst)
 -----------------------------------------------------------------------------
-subtys θ γ es xs ys =  trace msg <$> applyToList subty θ γ es xs ys 
+subtys θ γ es xs ys =  {- trace msg <$> -} applyToList subty θ γ es xs ys 
    where 
      msg      = printf "subtys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
@@ -413,8 +413,11 @@ addCast :: Env Type -> Type -> TCM (Env Type)
 -------------------------------------------------------------------------------
 addCast γ t = 
   do  eo <- getExpr
-      case {- tracePP "Casting A" -} eo of 
+      case trace (printf "Casting %s to %s"  (ppshow eo) (ppshow t)) eo of 
         Just e@(VarRef _ id)  -> addAsrt e t >> return (envAdds [(id,t)] γ)
+        Just e                -> logError dummySpan 
+                                   ("Does not support cast on: " ++ show e) () >> 
+                                 return γ
         _                     -> logError dummySpan "NO CAST" () >> return γ
 
 addAsrt e t = modify $ \st -> st { tc_asrt = M.insert e t (tc_asrt st) } 
@@ -438,7 +441,9 @@ patchFuns  = mapM patchFun
 
 patchFun   = patchStmt
 
-patchStmts = mapM patchStmt 
+patchStmts = mapM patchStmt'
+
+patchStmt' s = patchStmt {- $ tracePP "patch stmt" -} s
 
 patchStmt (BlockStmt a sts)         = BlockStmt a <$> patchStmts sts
 patchStmt e@(EmptyStmt _)           = return $ e
@@ -457,7 +462,7 @@ patchExprs = mapM patchExpr'
 annt e a = 
   do  m <- tc_asrt <$> get
       case M.lookup e m of
-        Just t -> return $ a { ann_fact = (Assert $ tracePP "patching" t) : (ann_fact a) } 
+        Just t -> return $ a { ann_fact = (Assert {-$ tracePP "patching"-} t) : (ann_fact a) } 
         _      -> return $ a
 
 patchExpr' e@(StringLit _ _ )        = return $ e 
@@ -466,7 +471,8 @@ patchExpr' e@(IntLit _ _ )           = return $ e
 patchExpr' e@(BoolLit _ _)           = return $ e 
 patchExpr' e@(NullLit _)             = return $ e 
 patchExpr' e@(ArrayLit a es)         = liftM2 ArrayLit (annt e a) (patchExprs es)
-patchExpr' e@(ObjectLit a pes)       = liftM2 ObjectLit (annt e a) (mapM (mapSndM patchExpr) pes)
+patchExpr' e@(ObjectLit a pes)       = liftM2 ObjectLit (annt e a) $
+                                        mapM (mapSndM patchExpr) pes
 patchExpr' e@(ThisRef _)             = return $ e
 patchExpr' e@(VarRef a id)           = do a' <- annt e a
                                           return $ VarRef a' id
@@ -480,7 +486,7 @@ patchExpr' e@(CallExpr a e' el)      = do a' <- annt e a
                                           liftM2 (CallExpr a') (patchExpr e') (patchExprs el)
 patchExpr' e@(FuncExpr a oi is ss)   = do a' <- annt e a
                                           FuncExpr a' oi is <$> patchStmts ss
-patchExpr' e                         = return $ error $ "Does not support patchExpr for."
+patchExpr' e                         = return $ error $ "Does not support patchExpr for: "
                                                   ++ (render (pp e))
                                                   
 -------------------------------------------------------------------------------
@@ -489,8 +495,8 @@ patchExpr :: Expression AnnType -> TCM (Expression AnnType)
 patchExpr = liftM go . patchExpr'
   where 
   go e = 
-    case L.find asrt $ tracePP (ppshow e) $ ann_fact $ getAnnotation e of
-      Just (Assert t) -> CallExpr ann name $ (tracePP "adding" $ arg e t)
+    case L.find asrt $ {- tracePP ("patching " ++ ppshow e) $ -} ann_fact $ getAnnotation e of
+      Just (Assert t) -> CallExpr ann name $ {-tracePP "adding" $-} arg e t
       _               -> e
   asrt (Assert _) = True
   asrt _          = False
@@ -498,7 +504,6 @@ patchExpr = liftM go . patchExpr'
   name = VarRef ann (Id ann "__cast")
   arg e t = [e, StringLit ann $ show t]
 
-
-patchVarDecl vd = return vd    
-
-
+patchVarDecl (VarDecl a id (Just e)) = do e' <- patchExpr' e
+                                          return $ VarDecl a id $ Just e'
+patchVarDecl v                         = return v

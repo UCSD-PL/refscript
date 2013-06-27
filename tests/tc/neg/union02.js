@@ -6,7 +6,6 @@ function id(a) {
 
 /*@ foo1 :: ((int|boolean|void)) => (boolean|int) */
 function foo1(x) {
-
   return id(x);
 }
 

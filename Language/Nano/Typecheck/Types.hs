@@ -27,6 +27,12 @@ module Language.Nano.Typecheck.Types (
   , ofType
   , strengthen 
 
+  -- * Top Type
+  , IsTop (..)
+
+  -- * Constructing Types
+  , mkUnion
+
   -- * Deconstructing Types
   , bkFun
   , bkAll
@@ -39,8 +45,11 @@ module Language.Nano.Typecheck.Types (
   -- * Primitive Types
   , tInt
   , tBool
+  , tString
+  , tTop
   , tVoid
   , tErr
+  , tFunErr
   , tVar
 
   -- * Operator Types
@@ -53,11 +62,16 @@ module Language.Nano.Typecheck.Types (
   , AnnBare
   , AnnSSA
   , AnnType
+  , AnnAsrt
   , AnnInfo
+
+  -- * Useful Operations
+  , subset
   ) where 
 
 import           Text.Printf
 import           Data.Hashable
+import qualified Data.Foldable           as F
 import           Data.Maybe             (fromMaybe) --, isJust)
 import           Data.Monoid            hiding ((<>))            
 -- import qualified Data.List               as L
@@ -74,9 +88,9 @@ import           Language.Nano.Env
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
-import           Text.PrettyPrint.HughesPJ
+import           Text.PrettyPrint.HughesPJ 
 
-import           Control.Applicative 
+import           Control.Applicative hiding (empty)
 import           Control.Monad.Error ()
 
 -- | Type Variables
@@ -115,8 +129,11 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 data TCon 
   = TInt                   
   | TBool                
+  | TString
   | TVoid              
+  | TTop
   | TDef  F.Symbol
+  | TUn
     deriving (Eq, Ord, Show)
 
 -- | (Raw) Refined Types 
@@ -126,6 +143,7 @@ data RType r
   | TFun [Bind r] (RType r) r
   | TAll TVar (RType r)
     deriving (Eq, Ord, Show, Functor)
+
 
 data Bind r
   = B { b_sym  :: F.Symbol
@@ -159,6 +177,11 @@ bkAll t              = go [] t
     go αs (TAll α t) = go (α : αs) t
     go αs t          = (reverse αs, t)
 
+mkUnion :: [Type] -> Type
+mkUnion [ ] = tErr
+mkUnion [t] = t
+mkUnion ts  = TApp TUn ts ()
+
 ---------------------------------------------------------------------------------
 strengthen                   :: F.Reftable r => RType r -> r -> RType r
 ---------------------------------------------------------------------------------
@@ -169,6 +192,20 @@ strengthen t _               = t
 -- NOTE: r' is the OLD refinement. 
 --       We want to preserve its VV binder as it "escapes", 
 --       e.g. function types. Sigh. Should have used a separate function binder.
+
+
+-- | Top Type
+class IsTop a where 
+  isTop :: a -> Bool
+
+instance IsTop Type where 
+  isTop (TApp TTop _ _) = True 
+  isTop (TApp TUn  ts _ ) = isTop ts
+  isTop _ = False
+
+
+instance (IsTop a, F.Foldable f) => IsTop (f a) where
+  isTop = F.any isTop
 
 ---------------------------------------------------------------------------------
 -- | Nano Program = Code + Types for all function binders
@@ -244,7 +281,9 @@ instance PP a => PP (Maybe a) where
 instance F.Reftable r => PP (RType r) where
   pp (TVar α r)     = F.ppTy r $ pp α 
   pp (TFun xts t _) = ppArgs parens comma xts <+> text "=>" <+> pp t 
-  pp t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
+  pp t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." 
+                        <+> pp t' where (αs, t') = bkAll t
+  pp (TApp TUn ts r) = F.ppTy r $ ppArgs id (text "|") ts 
   pp (TApp c [] r)  = F.ppTy r $ ppTC c 
   pp (TApp c ts r)  = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
 
@@ -255,8 +294,11 @@ instance F.Reftable r => PP (Bind r) where
 ppArgs p sep          = p . intersperse sep . map pp
 ppTC TInt             = text "int"
 ppTC TBool            = text "boolean"
+ppTC TString          = text "string"
 ppTC TVoid            = text "void"
-ppTC (TDef x)         = pprint x
+ppTC TTop             = text "top"
+ppTC TUn              = text "union:"
+ppTC (TDef x)         = {-text "TDef: " <+> -} pprint x
 
 -----------------------------------------------------------------------------
 -- | Annotations ------------------------------------------------------------
@@ -269,25 +311,33 @@ ppTC (TDef x)         = pprint x
 data Fact 
   = PhiVar  !(Id SourceSpan) 
   | TypInst ![Type]
+  | Assert  ! Type
     deriving (Eq, Ord, Show)
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show)
 type AnnBare   = Annot Fact SourceSpan -- NO facts
-type AnnSSA    = Annot Fact SourceSpan -- Only Phi       facts
-type AnnType   = Annot Fact SourceSpan -- Only Phi + Typ facts
+type AnnSSA    = Annot Fact SourceSpan -- Only Phi              facts
+type AnnType   = Annot Fact SourceSpan -- Only Phi + Typ        facts
+type AnnAsrt   = Annot Fact SourceSpan -- Only Phi + Typ + Asrt facts
 type AnnInfo   = M.HashMap SourceSpan [Fact] 
 
 
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 
 
+instance Ord AnnSSA where 
+  compare (Ann s1 f1) (Ann s2 f2) = compare s1 s2
+
+instance Eq (Annot a SourceSpan) where 
+  (Ann s1 _) == (Ann s2 _) = s1 == s2
 
 instance IsLocated (Annot a SourceSpan) where 
   srcPos = ann
 
 instance PP Fact where
-  pp (PhiVar x)   = text "phi"  <+> pp x
-  pp (TypInst ts) = text "inst" <+> pp ts 
+  pp (PhiVar x)     = text "phi"  <+> pp x
+  pp (TypInst ts)   = text "inst" <+> pp ts 
+  pp (Assert t)   = text "assert" <+> pp t
 
 instance PP AnnInfo where
   pp             = vcat . (ppB <$>) . M.toList 
@@ -304,11 +354,14 @@ instance (PP a, PP b) => PP (Annot b a) where
 tVar   :: (F.Reftable r) => TVar -> RType r
 tVar   = (`TVar` F.top) 
 
-tInt, tBool, tVoid, tErr :: (F.Reftable r) => RType r
-tInt   = TApp TInt  [] F.top 
-tBool  = TApp TBool [] F.top
-tVoid  = TApp TVoid [] F.top
-tErr   = tVoid
+tInt, tBool, tString, tVoid, tErr :: (F.Reftable r) => RType r
+tInt    = TApp TInt     [] F.top 
+tBool   = TApp TBool    [] F.top
+tString = TApp TString  [] F.top
+tTop    = TApp TTop     [] F.top
+tVoid   = TApp TVoid    [] F.top
+tErr    = tVoid
+tFunErr = ([],[],tErr)
 
 -- tProp :: (F.Reftable r) => RType r
 -- tProp  = TApp tcProp [] F.top 
@@ -327,20 +380,21 @@ infixOpTy o g = fromMaybe err $ envFindTy ox g
     err       = errorstar $ printf "Cannot find infixOpTy %s" (ppshow ox) -- (ppshow g)
     ox        = infixOpId o
 
-infixOpId OpLT  = builtinId "OpLT"         
-infixOpId OpLEq = builtinId "OpLEq"      
-infixOpId OpGT  = builtinId "OpGT"       
-infixOpId OpGEq = builtinId "OpGEq"      
-infixOpId OpEq  = builtinId "OpEq"       
-infixOpId OpNEq = builtinId "OpNEq"      
-infixOpId OpLAnd= builtinId "OpLAnd"     
-infixOpId OpLOr = builtinId "OpLOr"      
-infixOpId OpSub = builtinId "OpSub"      
-infixOpId OpAdd = builtinId "OpAdd"      
-infixOpId OpMul = builtinId "OpMul"      
-infixOpId OpDiv = builtinId "OpDiv"      
-infixOpId OpMod = builtinId "OpMod"       
-infixOpId o     = errorstar $ "Cannot handle: infixOpId " ++ ppshow o
+infixOpId OpLT       = builtinId "OpLT"
+infixOpId OpLEq      = builtinId "OpLEq"
+infixOpId OpGT       = builtinId "OpGT"
+infixOpId OpGEq      = builtinId "OpGEq"
+infixOpId OpEq       = builtinId "OpEq"
+infixOpId OpStrictEq = builtinId "OpSEq"
+infixOpId OpNEq      = builtinId "OpNEq"
+infixOpId OpLAnd     = builtinId "OpLAnd"
+infixOpId OpLOr      = builtinId "OpLOr"
+infixOpId OpSub      = builtinId "OpSub"
+infixOpId OpAdd      = builtinId "OpAdd"
+infixOpId OpMul      = builtinId "OpMul"
+infixOpId OpDiv      = builtinId "OpDiv"
+infixOpId OpMod      = builtinId "OpMod"
+infixOpId o          = errorstar $ "Cannot handle: infixOpId " ++ ppshow o
 
 -----------------------------------------------------------------------
 prefixOpTy :: PrefixOp -> Env t -> t 
@@ -349,9 +403,20 @@ prefixOpTy o g = fromMaybe err $ envFindTy (prefixOpId o) g
   where 
     err       = convertError "prefixOpTy" o
 
-prefixOpId PrefixMinus = builtinId "PrefixMinus"
-prefixOpId PrefixLNot  = builtinId "PrefixLNot"
-prefixOpId o           = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
+prefixOpId PrefixMinus  = builtinId "PrefixMinus"
+prefixOpId PrefixLNot   = builtinId "PrefixLNot"
+prefixOpId PrefixTypeof = builtinId "PrefixTypeof"
+prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
 
 builtinId       = mkId . ("builtin_" ++)
+
+
+
+-----------------------------------------------------------------------------
+-- Lists contain flat types (no unions)
+-----------------------------------------------------------------------------
+subset ::  [Type] -> [Type] -> Bool
+-----------------------------------------------------------------------------
+subset xs ys = 
+  isTop ys || all (\a -> any (== a) ys) xs
 

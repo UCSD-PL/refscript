@@ -69,7 +69,9 @@ function pos(){
 /*@ builtin_OpLEq       :: ({x:int|true}, {y:int|true}) => {v:boolean | ((Prop v) <=> (x <= y)) }*/
 /*@ builtin_OpGT        :: ({x:int|true}, {y:int|true}) => {v:boolean | ((Prop v) <=> (x >  y)) }*/
 /*@ builtin_OpGEq       :: ({x:int|true}, {y:int|true}) => {v:boolean | ((Prop v) <=> (x >= y)) }*/
+//PV: @==@ and @===@ could be handled more precisely
 /*@ builtin_OpEq        :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x = y)) } */
+/*@ builtin_OpSEq       :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x = y)) } */
 /*@ builtin_OpNEq       :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x != y)) } */
 /*@ builtin_OpLAnd      :: ({x:boolean|true}, {y:boolean|true}) => {v:boolean | ((Prop v) <=> ((Prop x) && (Prop y)))} */
 /*@ builtin_OpLOr       :: ({x:boolean|true}, {y:boolean|true}) => {v:boolean | ((Prop v) <=> ((Prop x) || (Prop y)))}  */
@@ -80,6 +82,7 @@ function pos(){
 /*@ builtin_OpMod       :: (int,  int)  => int                                      */
 /*@ builtin_PrefixMinus :: ({x:int | true}) => {v:int | v = (0 - x)}                */
 /*@ builtin_PrefixLNot  :: (boolean) => boolean                                     */
+/*@ builtin_PrefixTypeof:: forall A. (A) => string                                  */
 /*@ measure prop        :: (boolean) => bool                                        */
 
 /*************************************************************************/

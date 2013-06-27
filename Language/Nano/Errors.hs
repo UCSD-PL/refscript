@@ -31,6 +31,8 @@ errorWriteImmutable x   = printf "Cannot write immutable: %s" (ppshow x)
 errorInvalidTopStmt x   = printf "Invalid top-level statement: %s" (ppshow x) 
 errorOccursCheck a t    = printf "Occurs check fails: %s in %s" (ppshow a) (ppshow t)
 errorRigidUnify a t     = printf "Cannot unify rigid variable %s with %s" (ppshow a) (ppshow t) 
+errorSubType m t t'     = printf "%s -- Type %s is not a subtype of %s" m (ppshow t) (ppshow t')
+errorCast m e t         = printf "%s -- Cannot cast non-variable expression: %s to %t" m (ppshow e) (ppshow t)
  
 ppshow                  = render . pp
 

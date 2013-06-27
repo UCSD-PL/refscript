@@ -254,8 +254,8 @@ consExpr g (VarRef i x)
   = do addAnnot l x' $ envFindTy x g
        return (x', g) 
     where 
-       x'  = {- tracePP msg -} x 
-       msg = printf "consExpr x = %s at %s" (ppshow x) (ppshow l)
+       x'  =  {- tracePP msg   -} x 
+       msg = printf "consExpr x = %s at %s" (ppshow x') (ppshow l)
        l   = srcPos i
 
 consExpr g (PrefixExpr l o e)

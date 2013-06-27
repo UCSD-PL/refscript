@@ -22,7 +22,7 @@ executable nanojs
                        hashable < 1.2, 
                        unordered-containers, 
                        filepath, ansi-terminal, process, mtl, syb, cmdargs,
-                       liquid-fixpoint, parsec, language-ecmascript
+                       liquid-fixpoint, parsec, language-ecmascript, containers
 
   extensions:          ExistentialQuantification, 
                        FlexibleInstances, 

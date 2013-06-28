@@ -54,7 +54,7 @@ tBodyP :: Parser (Id SourceSpan, RType Reft)
 tBodyP = do  id <- identifierP 
              tv <- option [] tParP
              tb <- bareTypeP
-             return $ (id, TBd $ TD (TDef $ symbol id) tv tb (idLoc id))
+             return $ (id, TBd $ TD (TDef id) tv tb (idLoc id))
 
 -- [A,B,C...]
 tParP = brackets $ sepBy tvarP comma
@@ -133,15 +133,14 @@ tconP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
-     {-<|> (TDef . stringSymbol)  <$> lowerIdP-}
      <|> tDefP
 
 tDefP 
-  = do  s <- lowerIdP
+  = do  s <- identifierP 
         -- XXX: This list will have to be enhanced.
-        if s `elem` ["true", "false", "number", "boolean", "string", "top", "void", "null"] 
+        if unId s `elem` ["true", "false", "number", "boolean", "string", "top", "void", "null"] 
           then parserZero
-          else return $ TDef $ stringSymbol s
+          else return $ TDef s
 
 bareAllP 
   = do reserved "forall"
@@ -284,7 +283,7 @@ mkSpec xs = Nano { code   = Src []
                  , specs  = envFromList [b | Bind b <- xs] 
                  , defs   = envEmpty
                  , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
-                 , tDefs  = envFromList [ b | Type b <- xs]
+                 , tDefs  = envFromList [b | Type b <- xs]
                  , quals  =             [q | Qual q <- xs]  
                  }
 
@@ -293,7 +292,6 @@ switchProp i@(Id l x)
   | x == (toLower <$> propConName) = Id l propConName
   | otherwise                      = i
 
--- prepTDefs tb@(TD (TDef s) _ b p ) = (p, TBd tb)
 
 --------------------------------------------------------------------------------------
 parseCodeFromFile :: FilePath -> IO (Nano SourceSpan a) 

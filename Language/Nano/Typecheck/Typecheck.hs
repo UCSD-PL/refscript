@@ -8,7 +8,7 @@ import qualified Data.HashMap.Strict as M
 import           Data.List           (nub)
 import qualified Data.Traversable    as T
 -- import           Data.Monoid
-import           Data.Maybe                         (catMaybes, isJust, fromJust) -- fromMaybe, maybeToList)
+import           Data.Maybe                         (catMaybes, isJust)
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$))
 import           Text.Printf                        (printf)
 
@@ -190,12 +190,11 @@ tcStmt γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
-  = do (γo, t) <- tcExpr γ e
+  = do t <- tcExpr γ e
        unifyType l "If condition" e t tBool
-       let γ' = fromJust γo
-       γ1      <- tcStmt γ' s1
-       γ2      <- tcStmt γ' s2
-       envJoin l γ' γ1 γ2
+       γ1      <- tcStmt γ s1
+       γ2      <- tcStmt γ s2
+       envJoin l γ γ1 γ2
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt _ ds)
@@ -203,9 +202,8 @@ tcStmt γ (VarDeclStmt _ ds)
 
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
-  = do (γ', t) <- maybe (return (Just γ, tVoid)) (tcExpr γ) eo 
-       let γ'' = fromJust γ'
-       subType l γ'' eo t $ envFindReturn γ''
+  = do t <- maybe (return tVoid) (tcExpr γ) eo 
+       subType l eo t $ envFindReturn γ
        return Nothing
 
 tcStmt γ s@(FunctionStmt _ _ _ _)
@@ -229,26 +227,29 @@ tcAsgn :: Env Type -> AnnSSA -> Id AnnSSA -> Expression AnnSSA -> TCM TCEnv
 ------------------------------------------------------------------------------------
 
 tcAsgn γ _ x e 
-  = do (γ', t) <- tcExpr γ e
-       return $ Just $ envAdds [(x, t)] (fromJust γ')
+  = do t <- tcExpr γ e
+       return $ Just $ envAdds [(x, t)] γ
 
 -------------------------------------------------------------------------------
-tcExpr :: Env Type -> Expression AnnSSA -> TCM (TCEnv, Type)
+tcExpr :: Env Type -> Expression AnnSSA -> TCM Type
 -------------------------------------------------------------------------------
 
-tcExpr γ (IntLit _ _)               
-  = return (Just γ, tInt)
+tcExpr _ (IntLit _ _)
+  = return tInt
 
-tcExpr γ (BoolLit _ _)
-  = return (Just γ, tBool)
+tcExpr _ (BoolLit _ _)
+  = return tBool
 
-tcExpr γ (StringLit _ _)
-  = return (Just γ, tString)
+tcExpr _ (StringLit _ _)
+  = return tString
+
+tcExpr _ (NullLit _)
+  = return tNull
 
 tcExpr γ (VarRef l x)
   = case envFindTy x γ of 
-      Nothing -> logError (ann l) (errorUnboundIdEnv x γ) (Just γ, tErr)
-      Just z  -> return (Just γ, z) 
+      Nothing -> logError (ann l) (errorUnboundIdEnv x γ) tErr
+      Just z  -> return z
 
 tcExpr γ (PrefixExpr l o e)
   = tcCall γ l o [e] (prefixOpTy o γ)
@@ -257,7 +258,7 @@ tcExpr γ (InfixExpr l o e1 e2)
   = tcCall γ l o [e1, e2] (infixOpTy o γ)
 
 tcExpr γ (CallExpr l e es)
-  = tcExpr γ e >>= \(γ',t) -> tcCall (fromJust γ') l e es t
+  = tcExpr γ e >>= tcCall γ l e es
 
 tcExpr γ (ObjectLit _ ps) 
   = tcObject γ (tracePP "tcObject" ps)
@@ -269,15 +270,13 @@ tcExpr _ e
   = convertError "tcExpr" e
 
 ----------------------------------------------------------------------------------
-tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> TCM (TCEnv, Type)
+tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> TCM Type
 ----------------------------------------------------------------------------------
-tcCall γ0 l fn es ft 
+tcCall γ l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
-       (γ2, ets)  <- foldM (\(γ,ts) e -> 
-                              tcExpr (fromJust γ) e >>= 
-                              \(γ1,t) -> return (γ1, ts++[t])) (Just γ0,[]) es
-       (γ3, θ')   <- subTypes l (fromJust γ2) (map Just es) ets (b_type <$> its)
-       return      $ (Just γ3 , apply θ' ot)
+       ets        <- mapM (tcExpr γ) es
+       θ'         <- unifyTypes l "" (b_type <$> its) ets
+       return      $ apply θ' ot
 
 instantiate l fn ft 
   = do t' <- freshTyArgs (srcPos l) $ bkAll ft 
@@ -287,21 +286,17 @@ instantiate l fn ft
 
 
 ----------------------------------------------------------------------------------
-tcObject :: Env Type -> [(Prop AnnSSA, Expression AnnSSA)] -> TCM (TCEnv, Type)
+tcObject :: Env Type -> [(Prop AnnSSA, Expression AnnSSA)] -> TCM Type
 ----------------------------------------------------------------------------------
 tcObject γ bs 
-  = do  
-        let (ps, es) = unzip bs
-        (γ2, ts)    <-  foldM (\(γ,ts) e -> 
-                          tcExpr (fromJust γ) e >>= 
-                          \(γ1,t) -> return (γ1, ts++[t])) (Just γ,[]) es
-        let ss       = map F.symbol ps
-        let bts      = zipWith B ss ts
-        return       $ (γ2, tracePP "tcObject" $ TObj bts ())
+  = do 
+      let (ps, es) = unzip bs
+      bts <- zipWith B (map F.symbol ps) <$> mapM (tcExpr γ) es
+      return $ tracePP "tcObject" $ TObj bts ()
 
 
 ----------------------------------------------------------------------------------
-tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM (TCEnv, Type)
+tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 ----------------------------------------------------------------------------------
 tcAccess _ _ _ _ = error "UNIMPLEMENTED"
 -- tcAccess γ l e f = 

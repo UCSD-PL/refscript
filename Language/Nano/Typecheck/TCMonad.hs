@@ -181,7 +181,18 @@ execute pgm act
       (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errss st)
 
 initState :: Nano z (RType r) -> TCState
-initState pgm = TCS [] [] mempty 0 HM.empty [] M.empty (envMap toType $ defs pgm) Nothing
+initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns 
+                    tc_annss tc_asrt tc_defs tc_expr 
+  where
+    tc_errss = []
+    tc_errs  = []
+    tc_subst = mempty 
+    tc_cnt   = 0
+    tc_anns  = HM.empty
+    tc_annss = []
+    tc_asrt  = M.empty
+    tc_defs  = envMap toType $ defs pgm `envUnion` tDefs pgm
+    tc_expr  = Nothing
 
 
 getDefType f 
@@ -243,21 +254,20 @@ unifyType l m e t t' = unifyTypes l msg [t] [t'] >> return ()
 
 
 ----------------------------------------------------------------------------------
-subTypes :: AnnSSA -> Env Type -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM (Env Type, Subst)
+subTypes :: AnnSSA -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Subst
 ----------------------------------------------------------------------------------
-subTypes l γ es t1s t2s
-  | length t1s /= length t2s = getSubst >>= logError (ann l) errorArgMismatch >>= return <$> (γ,)
-
-  | otherwise                = do θ         <- getSubst
-                                  (γ', θ')  <- subtys θ γ es t1s t2s
+subTypes l es t1s t2s
+  | length t1s /= length t2s = getSubst >>= logError (ann l) errorArgMismatch
+  | otherwise                = do θ  <- getSubst
+                                  θ' <- subtys θ es t1s t2s
                                   accumErrs l
                                   setSubst θ' 
-                                  return (γ', θ')
+                                  return θ'
 
 ----------------------------------------------------------------------------------
-subType :: AnnSSA -> Env Type -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM ()
+subType :: AnnSSA -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM ()
 ----------------------------------------------------------------------------------
-subType l γ eo t t' = subTypes l γ [eo] [t] [t'] >> return ()
+subType l eo t t' = subTypes l [eo] [t] [t'] >> return ()
 
 
 -----------------------------------------------------------------------------
@@ -339,57 +349,50 @@ varAsnM θ a t =
     Right θ' -> return θ'
 
 -----------------------------------------------------------------------------
-subty :: Subst -> Env Type -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM (Env Type, Subst)
+subty :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
-subty θ γ _ t t'                                   
-  | isTop t'       = (γ,) <$> unify θ t tTop
+subty θ _ t t'                                   
+  | isTop t'       = unify θ t tTop
 
-subty θ γ _ (TApp TUn ts _ ) t'                     
-  | subset [t'] ts  = do  γ' <- addCast γ t'
-                          return (γ', θ)
+subty θ _ (TApp TUn ts _ ) t'                     
+  | subset [t'] ts  = addCast t' >> return θ
 
-subty θ γ _ (TApp TUn ts _ ) (TApp TUn ts' _) 
-  | subset ts  ts'            = return (γ, θ)
-  | S.size (tracePP "intersection" isct) > 0 = 
-      do  γ' <- addCast γ $ mkUnion $ S.toList isct
-          return (γ', θ)
+subty θ _ (TApp TUn ts _ ) (TApp TUn ts' _) 
+  | subset ts  ts'                           = return θ
+  | S.size (tracePP "intersection" isct) > 0 = addCast (mkUnion $ S.toList isct) >> return θ
   where 
     isct = (S.fromList ts) `S.intersection` (S.fromList ts')
 
-subty θ γ _ t (TApp TUn ts' _) 
-  | subset [t] ts' = return (γ, θ)
+subty θ _ t (TApp TUn ts' _) 
+  | subset [t] ts' = return θ
 
-subty θ γ _ t t1 = do θ <- {- trace "unifying..." $ -} unify θ t t1
-                      return (γ, θ)
+subty θ e t (TApp (TDef s) _ _)= 
+  do 
+    t' <- tracePP "getDefType" <$> getDefType s
+    subty θ e t t'
+
+-- | Object Subtyping
+-- TODO !!!
+  
+
+subty θ _ t t' = unify θ t t'
 
 
 -----------------------------------------------------------------------------
-subtys ::  Subst -> Env Type -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM (Env Type, Subst)
+subtys ::  Subst -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Subst
 -----------------------------------------------------------------------------
-subtys θ γ es xs ys =  {- trace msg <$> -} applyToList subty θ γ es xs ys 
-   {-where -}
-   {-  msg      = printf "subtys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
+subtys θ es xs ys =  {- trace msg <$> -} applyToList subty θ es xs ys 
 
-  {-| nTs == nTs' = go θ (es, ts, ts')-}
-  {-| otherwise   = addError (errorSubType "" ts ts) θ-}
-  {-where -}
-  {-  nTs                  = length ts-}
-  {-  nTs'                 = length ts'-}
-  {-  go θ (eo:eos, t:ts , t':ts') = do setExpr eo-}
-  {-                                    θ' <- subty θ t t' -}
-  {-                                    go θ' $ (eos, apply θ' ts, apply θ' ts')-}
-  {-  go θ (_, _  , _  )   = return θ-}
-
-applyToList f θ γ es ts ts'
-  | nTs == nTs' = go θ γ (es, ts, ts')
-  | otherwise   = addError (errorSubType "" ts ts) θ >>= return <$> (γ,)
-  where 
+applyToList f θ es ts ts'
+  | nTs == nTs' = go θ (es, ts, ts')
+  | otherwise   = addError (errorSubType "" ts ts) θ
+  where
     nTs                  = length ts
     nTs'                 = length ts'
-    go θ γ (eo:eos, t:ts , t':ts') = do setExpr eo
-                                        (γ', θ') <- f θ γ eo t t' 
-                                        go θ' γ' (eos, apply θ' ts, apply θ' ts')
-    go θ γ (_, _  , _  )   = return (γ, θ)
+    go θ (eo:eos, t:ts , t':ts') = do setExpr eo
+                                      θ' <- f θ eo t t'
+                                      go θ' (eos, apply θ' ts, apply θ' ts')
+    go θ (_, _  , _  )   = return θ
 
 
 
@@ -408,25 +411,17 @@ getExpr = tc_expr <$> get
 
 
 -------------------------------------------------------------------------------
-addCast :: Env Type -> Type -> TCM (Env Type)
+addCast :: Type -> TCM ()
 -------------------------------------------------------------------------------
-addCast γ t = 
+addCast t = 
   do  eo <- getExpr
       case trace (printf "Casting %s to %s"  (ppshow eo) (ppshow t)) eo of 
-      -- Right now only casts on variables are added to Γ - the
-      -- rest cannot update Γ, but propagate the casted type. This 
-      -- is to avoid returning a modified AST - this might have to be 
-      -- done anyway at some point. 
-        Just e@(VarRef _ id)  -> addAsrt e t >> return γ -- (envAdds [(id,t)] γ)
-        Just e                -> addAsrt e t >>
-                                 {-logError dummySpan 
-                                   ("Does not support cast on: " ++ ppshow e) () >> -}
-                                 return γ
-        _                     -> logError dummySpan "NO CAST" () >> return γ
+      -- Right now nothing is added explicitly to . The casted type is just
+      -- propagated. 
+        Just e                -> addAsrt e t 
+        _                     -> logError dummySpan "NO CAST" ()
 
 addAsrt e t = modify $ \st -> st { tc_asrt = M.insert e t (tc_asrt st) } 
-
-
 
 
 --------------------------------------------------------------------------------

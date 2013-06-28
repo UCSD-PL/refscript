@@ -4,7 +4,7 @@
 
 
 
-/*@ foo :: forall B . (x:list[A], A) => list[A] */
+/*@ append :: forall B . (x:list[A], A) => list[A] */
 function append(x, a) {
 
     return { data: a , next: x };

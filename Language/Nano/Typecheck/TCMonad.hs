@@ -67,7 +67,7 @@ import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
-import           Debug.Trace
+-- import           Debug.Trace hiding (traceShow)
 import           Language.Nano.Misc               ()
 
 -------------------------------------------------------------------------------
@@ -80,7 +80,7 @@ data TCState = TCS { tc_errss :: ![(SourceSpan, String)]
                    , tc_cnt   :: !Int
                    , tc_anns  :: AnnInfo
                    , tc_annss :: [AnnInfo]
-                   , tc_asrt  :: M.Map (Expression AnnSSA) Type
+                   , tc_asrt  :: M.Map SourceSpan Type
                    , tc_defs  :: !(Env Type) 
                    , tc_expr  :: Maybe (Expression AnnSSA)
                    }
@@ -259,7 +259,12 @@ subTypes :: AnnSSA -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Sub
 subTypes l es t1s t2s
   | length t1s /= length t2s = getSubst >>= logError (ann l) errorArgMismatch
   | otherwise                = do θ  <- getSubst
-                                  θ' <- subtys θ es t1s t2s
+                                  θ' <- subtys θ es t1s t2s 
+                                  -- θ' <- subtys θ 
+                                  --   (trace (printf "ST: %s :: %s - %s" 
+                                  --     (ppshow es) 
+                                  --     (ppshow t1s)
+                                  --     (ppshow t2s)) es) t1s t2s
                                   accumErrs l
                                   setSubst θ' 
                                   return θ'
@@ -306,7 +311,7 @@ unify θ t t'
     go θ ts = unifys θ ts $ tops ts
 
 unifys         ::  Subst -> [Type] -> [Type] -> TCM Subst
-unifys θ xs ys =  {- trace msg $ -} unifys' θ xs ys 
+unifys θ xs ys =  {- trace msg $  -} unifys' θ xs ys 
    {-where -}
    {-  msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
 
@@ -415,13 +420,15 @@ addCast :: Type -> TCM ()
 -------------------------------------------------------------------------------
 addCast t = 
   do  eo <- getExpr
-      case trace (printf "Casting %s to %s"  (ppshow eo) (ppshow t)) eo of 
+      case {- trace (printf "Casting %s to %s"  (ppshow eo) (ppshow t)) -} eo of 
       -- Right now nothing is added explicitly to . The casted type is just
       -- propagated. 
         Just e                -> addAsrt e t 
         _                     -> logError dummySpan "NO CAST" ()
 
-addAsrt e t = modify $ \st -> st { tc_asrt = M.insert e t (tc_asrt st) } 
+addAsrt e t = modify $ \st -> st { tc_asrt = M.insert ss t (tc_asrt st) } 
+  where 
+    ss = {- tracePP "Adding" $ -} ann $ getAnnotation e
 
 
 --------------------------------------------------------------------------------
@@ -456,13 +463,15 @@ patchStmt (FunctionStmt a id as bd) = FunctionStmt a id as <$> patchStmts bd
 patchStmt s                         = return $ error $ "Does not support patchStmt for: " 
                                                   ++ ppshow s
 
-patchExprs = mapM patchExpr'
+patchExprs = mapM patchExpr
 
 annt e a = 
   do  m <- tc_asrt <$> get
-      case M.lookup e m of
-        Just t -> return $ a { ann_fact = (Assert {-$ tracePP "patching"-} t) : (ann_fact a) } 
+      case M.lookup key m of
+        Just t -> return $ a { ann_fact = (Assert $ t) : (ann_fact a) } 
         _      -> return $ a
+        where 
+          key = ann $ getAnnotation e
 
 patchExpr' e@(StringLit _ _ )        = return $ e 
 patchExpr' e@(NumLit _ _ )           = return $ e 
@@ -494,8 +503,8 @@ patchExpr :: Expression AnnType -> TCM (Expression AnnType)
 patchExpr = liftM go . patchExpr'
   where 
   go e = 
-    case L.find asrt $ {- tracePP ("patching " ++ ppshow e) $ -} ann_fact $ getAnnotation e of
-      Just (Assert t) -> CallExpr ann name $ {-tracePP "adding" $-} arg e t
+    case L.find asrt $ {- tracePP ("patching " ++ ppshow e) $ -}  ann_fact $ getAnnotation e of
+      Just (Assert t) -> CallExpr ann name {- $ tracePP "adding" -} $ arg e t
       _               -> e
   asrt (Assert _) = True
   asrt _          = False

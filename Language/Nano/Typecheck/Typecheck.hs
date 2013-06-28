@@ -274,8 +274,8 @@ tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> T
 ----------------------------------------------------------------------------------
 tcCall γ l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
-       ets        <- mapM (tcExpr γ) es
-       θ'         <- unifyTypes l "" (b_type <$> its) ets
+       ts         <- mapM (tcExpr γ) es
+       θ'         <- subTypes l (map Just es) ts (b_type <$> its)
        return      $ apply θ' ot
 
 instantiate l fn ft 

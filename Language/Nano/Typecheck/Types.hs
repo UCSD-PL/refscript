@@ -52,6 +52,8 @@ module Language.Nano.Typecheck.Types (
   , tErr
   , tFunErr
   , tVar
+  , tUndef
+  , tNull
 
   -- * Operator Types
   , infixOpTy
@@ -68,6 +70,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Useful Operations
   , subset
+  , stripProp
   ) where 
 
 import           Text.Printf
@@ -194,6 +197,14 @@ strengthen (TApp c ts r) r'  = TApp c ts $ r' `F.meet` r
 strengthen (TVar α r)    r'  = TVar α    $ r' `F.meet` r 
 strengthen t _               = t                         
 
+----------------------------------------------------------------------------------
+stripProp :: Prop a -> Prop ()
+----------------------------------------------------------------------------------
+stripProp (PropId _ (Id _ s)) = PropId () (Id () s) 
+stripProp (PropString _ s)    = PropString () s     
+stripProp (PropNum _ i)       = PropNum () i        
+
+
 -- NOTE: r' is the OLD refinement. 
 --       We want to preserve its VV binder as it "escapes", 
 --       e.g. function types. Sigh. Should have used a separate function binder.
@@ -216,12 +227,12 @@ instance (IsTop a, F.Foldable f) => IsTop (f a) where
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-data Nano a t = Nano { code   :: !(Source a)          -- ^ Code to check
-                     , specs  :: !(Env t)             -- ^ Imported Specifications
-                     , defs   :: !(Env t)             -- ^ Signatures for Code
-                     , consts :: !(Env t)             -- ^ Measure Signatures 
+data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
+                     , specs  :: !(Env t)           -- ^ Imported Specifications
+                     , defs   :: !(Env t)           -- ^ Signatures for Code
+                     , consts :: !(Env t)           -- ^ Measure Signatures 
                      , tDefs  :: !(Env t)             -- ^ Type definitions
-                     , quals  :: ![F.Qualifier]       -- ^ Qualifiers
+                     , quals  :: ![F.Qualifier]     -- ^ Qualifiers
                      } deriving (Functor)
 
 type NanoBare    = Nano AnnBare Type 
@@ -351,8 +362,8 @@ instance IsLocated (Annot a SourceSpan) where
   srcPos = ann
 
 instance PP Fact where
-  pp (PhiVar x)     = text "phi"  <+> pp x
-  pp (TypInst ts)   = text "inst" <+> pp ts 
+  pp (PhiVar x)   = text "phi"  <+> pp x
+  pp (TypInst ts) = text "inst" <+> pp ts 
   pp (Assert t)   = text "assert" <+> pp t
 
 instance PP AnnInfo where
@@ -370,12 +381,14 @@ instance (PP a, PP b) => PP (Annot b a) where
 tVar   :: (F.Reftable r) => TVar -> RType r
 tVar   = (`TVar` F.top) 
 
-tInt, tBool, tString, tVoid, tErr :: (F.Reftable r) => RType r
+tInt, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RType r
 tInt    = TApp TInt     [] F.top 
 tBool   = TApp TBool    [] F.top
 tString = TApp TString  [] F.top
 tTop    = TApp TTop     [] F.top
 tVoid   = TApp TVoid    [] F.top
+tUndef  = TApp TUndef [] F.top
+tNull   = TApp TNull  [] F.top
 tErr    = tVoid
 tFunErr = ([],[],tErr)
 

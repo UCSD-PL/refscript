@@ -10,6 +10,7 @@ import qualified Data.HashMap.Strict as M
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
+import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.SSA.SSAMonad
 import           Language.ECMAScript3.Syntax
@@ -186,6 +187,12 @@ ssaExpr (InfixExpr l o e1 e2)
 
 ssaExpr (CallExpr l e es)
   = CallExpr l <$> ssaExpr e <*> mapM ssaExpr es
+
+ssaExpr (ObjectLit l ps) 
+  = ObjectLit l <$> mapM (mapSndM ssaExpr) ps
+
+ssaExpr (DotRef l e i) 
+  = DotRef l <$> ssaExpr e <*> return i
 
 ssaExpr e 
   = convertError "ssaExpr" e

@@ -417,7 +417,7 @@ addCast γ t =
       -- rest cannot update Γ, but propagate the casted type. This 
       -- is to avoid returning a modified AST - this might have to be 
       -- done anyway at some point. 
-        Just e@(VarRef _ id)  -> addAsrt e t >> return (envAdds [(id,t)] γ)
+        Just e@(VarRef _ id)  -> addAsrt e t >> return γ -- (envAdds [(id,t)] γ)
         Just e                -> addAsrt e t >>
                                  {-logError dummySpan 
                                    ("Does not support cast on: " ++ ppshow e) () >> -}

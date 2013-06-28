@@ -136,7 +136,7 @@ data TCon
   | TString
   | TVoid              
   | TTop
-  | TDef  F.Symbol
+  | TDef  (Id SourceSpan)
   | TUn
   | TNull
   | TUndef
@@ -307,7 +307,7 @@ instance F.Reftable r => PP (RType r) where
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 
   pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
   pp (TObj bs _ )               = ppArgs braces comma bs
-  pp (TBd (TD (TDef id) v r _)) = pp id <+> ppArgs brackets comma v <+> pp r
+  pp (TBd (TD (TDef id) v r _)) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r
   pp (TBd _)                    = error "This is not an acceptable form for TBody"                          
 
 
@@ -322,7 +322,7 @@ ppTC TString          = text "String"
 ppTC TVoid            = text "Void"
 ppTC TTop             = text "Top"
 ppTC TUn              = text "Union:"
-ppTC (TDef x)         = text "TDef: " <+> pprint x
+ppTC (TDef x)         = text "TDef: " <+> pprint (F.symbol x)
 ppTC TNull            = text "Null"
 ppTC TUndef           = text "Undefined"
 

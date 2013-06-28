@@ -1,11 +1,11 @@
 // DEMO EXAMPLE. Crucially requires:
 
-/*@ qualif Equal(v:int, x:int) : v = x */
+/*@ qualif Equal(v:number, x:number) : v = x */
 
 // Note that the example works even "without" the above, 
 // as this qualifier is in include/prelude.js
 
-/*@ loop :: (int, int) => void */
+/*@ loop :: (number, number) => void */
 
 function loop(n, m){
   
@@ -27,7 +27,7 @@ function loop(n, m){
   loop(n, m);
 }
 
-/*@ main :: ({n:int| n > 0}) => void */
+/*@ main :: ({n:number| n > 0}) => void */
 function main(n){
    loop(n, n); 
 }

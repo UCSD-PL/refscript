@@ -1,5 +1,5 @@
 
-/*@ foo :: (int, bool) => int */
+/*@ foo :: (number, bool) => number */
 function foo(x, y){
   x = x + 1;
   y = y + 1;

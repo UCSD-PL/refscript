@@ -1,4 +1,4 @@
-/*@ hop :: (list [{v:int| 0 <= v}]) => void */
+/*@ hop :: (list [{v:number| 0 <= v}]) => void */
 function hop(xs){
   if (empty(xs)) {
     return;

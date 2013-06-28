@@ -2,9 +2,9 @@
 
 // BUG: Why is it not inferring the type?
 
-/* abs :: (({z:int| z >= 0}) => {v:int | v >= 0}, int) => {v:int|v >= 0} */ 
+/* abs :: (({z:number| z >= 0}) => {v:number | v >= 0}, number) => {v:number|v >= 0} */ 
 
-/*@ abs :: ((int) => int, int) => int */ 
+/*@ abs :: ((number) => number, number) => number */ 
 function abs(f, x){
   var r = x;
   if (x < 0){
@@ -15,10 +15,10 @@ function abs(f, x){
   return r;
 }
 
-/*@ dubble :: ({p:int | p >= 0}) => {v:int | v >= p} */
+/*@ dubble :: ({p:number | p >= 0}) => {v:number | v >= p} */
 function dubble(p){ return p + p }
 
-/*@ main :: (int) => {v:int | v >= 0 } */
+/*@ main :: (number) => {v:number | v >= 0 } */
 function main(y){
   var y = abs(dubble, y);
   assert(y >= 0);

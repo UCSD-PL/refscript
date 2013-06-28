@@ -6,29 +6,29 @@
 // * bufferstep toggle
 // */
 //
-//int main()
+//number main()
 //{
-//  int len;
-//  int bufferstep;
-//  int n, nsamples;
+//  number len;
+//  number bufferstep;
+//  number n, nsamples;
 //
 //  /* 
-//  int *inp;
-//  int *outp;
-//  int *inp0;
-//  int *outp0;
+//  number *inp;
+//  number *outp;
+//  number *inp0;
+//  number *outp0;
 //   */
 //  
-//  int inp;
-//  int outp;
-//  int inp0;
-//  int outp0;
+//  number inp;
+//  number outp;
+//  number inp0;
+//  number outp0;
 //  
 //  n = nondetpos(); 
 //  nsamples = 2*n;
 //
-//  inp0  = 0;//(int *)malloc(2*n);
-//  outp0 = 0;//(int *)malloc(n);
+//  inp0  = 0;//(number *)malloc(2*n);
+//  outp0 = 0;//(number *)malloc(n);
 //  
 //  inp  = inp0;
 //  outp = outp0;

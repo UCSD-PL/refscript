@@ -1,4 +1,4 @@
-/*@ forloop :: forall A. (int, int, (int, A) => A, A) => A */
+/*@ forloop :: forall A. (number, number, (number, A) => A, A) => A */
 function forloop(lo, hi, body, acc){
   if (lo < hi) {
     var newAcc = body(lo, acc);
@@ -7,10 +7,10 @@ function forloop(lo, hi, body, acc){
   return acc;
 }
 
-/*@ plus :: (int, int) => int */
+/*@ plus :: (number, number) => number */
 function plus(i, x) { return x + i ; }
 
-/*@ main :: ({n:int| n > 0}) => void */
+/*@ main :: ({n:number| n > 0}) => void */
 function main(n){
   var m = forloop(0, n, plus, n);
   assert(m >= n);

@@ -17,9 +17,9 @@ function minIndex(a){
    return min;
 }
 
-/*@ type Rng A = {v:int | 0 <= v < length A}
+/*@ type Rng A = {v:number | 0 <= v < length A}
 
-/*@ loop :: ( a:{v:array int | 0 < (length v)}, min:Rng a) => Rng a  */
+/*@ loop :: ( a:{v:array number | 0 < (length v)}, min:Rng a) => Rng a  */
 function loop(a, min, i){
  
   var minNext = min;
@@ -31,7 +31,7 @@ function loop(a, min, i){
   return minNext;
 }
 
-/*@ minIndex :: (array int) => int */
+/*@ minIndex :: (array number) => number */
 function minIndex(a){
   requires(length(a) > 0);
   ensures(0 <= $result && $result < (length(a)))
@@ -58,7 +58,7 @@ function minIndex(a){
 ////////////////////////////////////////////////////////////////
 // EVERY number in output between lo ... hi
 
-/*@ range :: (lo:int, hi:int) => list {v:int | lo <= v < hi}*/
+/*@ range :: (lo:number, hi:number) => list {v:number | lo <= v < hi}*/
 function range(lo, hi) {
   if (lo < hi) { 
     var rest = range(lo + 1, hi); 
@@ -78,7 +78,7 @@ function foldl(f, acc, xs){
   }
 }
 
-/*@ minIndex :: (a:{v:array int | 0 < (length v)}) => v:int | 0 <= v && v < length(a)} */
+/*@ minIndex :: (a:{v:array number | 0 < (length v)}) => v:number | 0 <= v && v < length(a)} */
 
  function minIndex(a){
   requires(length(a) > 0);
@@ -88,8 +88,8 @@ function foldl(f, acc, xs){
     if (a[i] < a[min]) { return i } else { return min }
   }
   
-  //P = {v:int | 0 <= v < len(a)} 
-  //Q = {v:int | 0 <= v < len(a)} 
+  //P = {v:number | 0 <= v < len(a)} 
+  //Q = {v:number | 0 <= v < len(a)} 
   var indices = range(0, length(a));
   return foldl(step, 0, indices);
 }

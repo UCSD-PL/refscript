@@ -288,16 +288,16 @@ instance PP a => PP (Maybe a) where
   pp = maybe (text "Nothing") pp 
 
 instance F.Reftable r => PP (RType r) where
-  pp (TVar α r)         = F.ppTy r $ pp α 
-  pp (TFun xts t _)     = ppArgs parens comma xts <+> text "=>" <+> pp t 
-  pp t@(TAll _ _)       = text "forall" <+> ppArgs id space αs <> text "." 
-                           <+> pp t' where (αs, t') = bkAll t
-  pp (TApp TUn ts r)    = F.ppTy r $ ppArgs id (text "|") ts 
-  pp (TApp c [] r)      = F.ppTy r $ ppTC c 
-  pp (TApp c ts r)      = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
-  pp (TObj bs _ )       = ppArgs braces comma bs
-  pp (TBd (TD (TDef id) v r _)) =
-                          pp id <+> ppArgs brackets comma v <+> pp r
+  pp (TVar α r)                 = F.ppTy r $ pp α 
+  pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
+  pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." 
+                                   <+> pp t' where (αs, t') = bkAll t
+  pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "|") ts 
+  pp (TApp c [] r)              = F.ppTy r $ ppTC c 
+  pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
+  pp (TObj bs _ )               = ppArgs braces comma bs
+  pp (TBd (TD (TDef id) v r _)) = pp id <+> ppArgs brackets comma v <+> pp r
+  pp (TBd _)                    = error "This is not an acceptable form for TBody"                          
 
 
 

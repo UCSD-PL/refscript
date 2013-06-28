@@ -6,7 +6,7 @@ function twice(f, x0){
   return x1;
 }
 
-/*@ foo :: (x:int) => {v:int | v >= x} */
+/*@ foo :: (x:number) => {v:number | v >= x} */
 function foo(x){
   var z  = 0;
   if (random() > 0) {
@@ -17,7 +17,7 @@ function foo(x){
   return r;
 }
  
-/*@ main :: (x:int) => {v:int |v >= x} */
+/*@ main :: (x:number) => {v:number |v >= x} */
 function main(x){
   return twice(foo, x);
 }

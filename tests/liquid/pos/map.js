@@ -13,7 +13,7 @@ function map(f, xs){
 
 }
 
-/*@ abs :: (int) => {v:int | 0 <= v} */
+/*@ abs :: (number) => {v:number | 0 <= v} */
 function abs(x){
   if (x <= 0){
     return (0 - x);
@@ -21,7 +21,7 @@ function abs(x){
   return x;
 }
 
-/*@ main :: (list [int]) => list [{v:int | 0 <= v}] */
+/*@ main :: (list [number]) => list [{v:number | 0 <= v}] */
 function main(xs){
   var bs = map(abs, xs);
   return bs;

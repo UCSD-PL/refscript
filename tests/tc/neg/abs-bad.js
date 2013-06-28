@@ -1,6 +1,6 @@
-/*@ qualif NonNeg(v:int): v >= 0 */
+/*@ qualif NonNeg(v:number): v >= 0 */
 
-/*@ abs :: ({x:int | true}) => boolean */ 
+/*@ abs :: ({x:number | true}) => boolean */ 
 function abs(x){
   var res = 0;
   if (x > 0) {

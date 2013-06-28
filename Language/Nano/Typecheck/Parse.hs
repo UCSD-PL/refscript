@@ -50,10 +50,13 @@ idBindP = xyP identifierP dcolon bareTypeP
 identifierP :: Parser (Id SourceSpan)
 identifierP = withSpan Id lowerIdP -- <$> getPosition <*> lowerIdP -- Lexer.identifier
 
-typeP :: Parser (TBody Reft)
-typeP = withSpan (\l x -> x l) $ TD <$> tDefP <*> tParP <*> bareTypeP 
+tBodyP :: Parser (Id SourceSpan, RType Reft)
+tBodyP = do  id <- identifierP 
+             tv <- option [] tParP
+             tb <- bareTypeP
+             return $ (id, TBd $ TD (TDef $ symbol id) tv tb (idLoc id))
 
--- <A,B,C...>
+-- [A,B,C...]
 tParP = brackets $ sepBy tvarP comma
 
 withSpan f p = do pos   <- getPosition
@@ -102,8 +105,9 @@ bareUnionP' = do  h  <- bareAtomP
                     _  -> return $ TApp TUn (h:tl) r
 
 bareAtomP 
-  =  refP bbaseP 
- <|> try (bindRefP bbaseP)
+  =  try (refP bbaseP) 
+ <|> try (bRefP bbaseP)
+ <|> try (bindP bbaseP)
  <|> try (dummyP (bbaseP <* spaces))
 
 bbaseP :: Parser (Reft -> RefType)
@@ -123,18 +127,19 @@ upperWordP = condIdP nice (not . isLower . head)
     nice   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
 tconP :: Parser TCon
-tconP =  try (reserved "int"       >> return TInt)
+tconP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "boolean"   >> return TBool)
      <|> try (reserved "void"      >> return TVoid)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
+     <|> try (reserved "null"      >> return TNull)
      {-<|> (TDef . stringSymbol)  <$> lowerIdP-}
      <|> tDefP
 
 tDefP 
   = do  s <- lowerIdP
         -- XXX: This list will have to be enhanced.
-        if s `elem` ["true", "false", "int", "boolean", "string", "top", "void"] 
+        if s `elem` ["true", "false", "number", "boolean", "string", "top", "void", "null"] 
           then parserZero
           else return $ TDef $ stringSymbol s
 
@@ -147,6 +152,7 @@ bareAllP
 
 bareBindP 
   = do  s <- binderP
+        spaces      --ugly
         colon
         t <- bareTypeP
         return $ B s t 
@@ -173,22 +179,34 @@ topP   = (Reft . (, []) . vv . Just) <$> freshIntP
 --           san '/' = '.'
 --           san c   = toLower c
 
-bindRefP :: Parser (Reft -> a) -> Parser a
-bindRefP kindP
+
+-- | Parses types of the form: `x : kind`
+bindP :: Parser (Reft -> a) -> Parser a
+bindP kindP
   = do v <- symbolP 
        colon
        t <- kindP
        return $ t (Reft (v, []))
 
-refP :: Parser (Reft -> a) -> Parser a
-refP kindP
+-- | Parses refined types of the form: `{ x : kind | refinement }`
+bRefP :: Parser (Reft -> a) -> Parser a
+bRefP kindP
   = braces $ do
-      v   <- symbolP 
+      v   <- symbolP
       colon
       t   <- kindP
       reserved "|"
       ras <- refasP 
       return $ t (Reft (v, ras))
+
+-- | Parses refined types of the form: `{ kind | refinement }`
+refP :: Parser (Reft -> a) -> Parser a
+refP kindP
+  = braces $ do
+      t   <- kindP
+      reserved "|"
+      ras <- refasP 
+      return $ t (Reft (stringSymbol "v", ras))
 
 refasP :: Parser [Refa]
 refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi)) 
@@ -245,15 +263,15 @@ data PSpec l t
   = Meas (Id l, t)
   | Bind (Id l, t) 
   | Qual Qualifier
-  | Type (TBody Reft)
+  | Type (Id l, t)
   deriving (Show)
 
 specP :: Parser (PSpec SourceSpan RefType)
 specP 
-  = try (reserved "measure"   >> (Meas <$> idBindP   ))
-    <|> (reserved "qualif"    >> (Qual <$> qualifierP))
-    <|> (reserved "type"      >> (Type <$> typeP))
-    <|> ({- DEFAULT -}           (Bind <$> idBindP   ))
+  = try (reserved "measure"   >> (Meas <$> idBindP    ))
+    <|> (reserved "qualif"    >> (Qual <$> qualifierP ))
+    <|> (reserved "type"      >> (Type <$> tBodyP     )) 
+    <|> ({- DEFAULT -}           (Bind <$> idBindP    ))
 
 
 --------------------------------------------------------------------------------------
@@ -266,7 +284,7 @@ mkSpec xs = Nano { code   = Src []
                  , specs  = envFromList [b | Bind b <- xs] 
                  , defs   = envEmpty
                  , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
-                 , tDefs  = envEmpty -- envFromList [ prepTDefs b | Type b <- xs]
+                 , tDefs  = envFromList [ b | Type b <- xs]
                  , quals  =             [q | Qual q <- xs]  
                  }
 
@@ -275,7 +293,7 @@ switchProp i@(Id l x)
   | x == (toLower <$> propConName) = Id l propConName
   | otherwise                      = i
 
-prepTDefs (TD n _ b _ ) = (n, b)
+-- prepTDefs tb@(TD (TDef s) _ b p ) = (p, TBd tb)
 
 --------------------------------------------------------------------------------------
 parseCodeFromFile :: FilePath -> IO (Nano SourceSpan a) 

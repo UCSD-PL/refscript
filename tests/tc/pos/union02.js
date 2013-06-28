@@ -1,15 +1,15 @@
 
-/*@ foo0 :: ((int|bool)) => (bool|int) */
+/*@ foo0 :: ((number|bool)) => (bool|number) */
 function foo0(x) {
   return x;
 }
 
-/*@ foo1 :: ((int|bool)) => (bool|int) */
+/*@ foo1 :: ((number|bool)) => (bool|number) */
 function foo1(x) {
   return x;
 }
 
-/*@ foo2 :: ((int|bool)) => (bool|int|void) */
+/*@ foo2 :: ((number|bool)) => (bool|number|void) */
 function foo2(x) {
   return x;
 }

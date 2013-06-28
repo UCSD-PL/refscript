@@ -1,5 +1,5 @@
 
-/*@ foo0 :: ((int|boolean)) => int */
+/*@ foo0 :: ((number|boolean)) => number */
 function foo0(x) {
   return x;
 }

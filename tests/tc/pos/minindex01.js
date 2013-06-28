@@ -1,4 +1,4 @@
-/*@ ranjit :: forall A. (int, int, (int, A) => A, A) => A */
+/*@ ranjit :: forall A. (number, number, (number, A) => A, A) => A */
 function ranjit(lo, hi, body, acc){
   if (lo < hi) {
     var newAcc = body(lo, acc);
@@ -7,9 +7,9 @@ function ranjit(lo, hi, body, acc){
   return acc;
 }
 
-/*@ minIndex :: ({a:list [int] | 0 < (len a)}) => {v:int | (0 <= v && v < (len a))} */ 
+/*@ minIndex :: ({a:list [number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a))} */ 
 function minIndex(a){
-  /*@ step :: (int, int) => int */
+  /*@ step :: (number, number) => number */
   function step(i, min){
     if (nth(a, i) < nth(a, min)) { 
       return i;

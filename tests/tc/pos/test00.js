@@ -1,5 +1,5 @@
 
-/*@ foo :: () => int */
+/*@ foo :: () => number */
 function foo()
 {
   var x = 0;

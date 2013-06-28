@@ -1,4 +1,4 @@
-/*@ inc :: (int) => int */
+/*@ inc :: (number) => number */
 function inc(x){
   requires(x > 0);
   ensures($result > 0);

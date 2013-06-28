@@ -1,5 +1,5 @@
 
-/*@ foo :: forall A B. ((int|B)) => int */
+/*@ foo :: forall A B. ((number|B)) => number */
 function foo(x) {
   var r = 1;
   if (x > 0) {

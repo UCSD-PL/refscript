@@ -1,5 +1,5 @@
 
-/*@ sumLoop :: (int, int) => int */
+/*@ sumLoop :: (number, number) => number */
 function sumLoop(acc, i){
   requires(0 <= i);
   ensures($result == acc + i);

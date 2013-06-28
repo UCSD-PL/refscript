@@ -175,6 +175,9 @@ instance IsNano (Expression a) where
   isNano (InfixExpr _ o e1 e2) = isNano o && isNano e1 && isNano e2
   isNano (PrefixExpr _ o e)    = isNano o && isNano e
   isNano (CallExpr _ e es)     = all isNano (e:es)
+  -- PV adding more types to support objects
+  isNano (ObjectLit _ bs)      = all isNano $ snd <$> bs
+  isNano (DotRef _ e _)        = isNano e
   isNano e                     = errortext (text "Not Nano Expression!" <+> pp e) 
   -- isNano _                     = False
 
@@ -320,6 +323,11 @@ instance F.Symbolic   (Id a) where
 instance F.Symbolic (LValue a) where
   symbol (LVar _ x) = F.symbol x
   symbol lv         = convertError "F.Symbol" lv
+
+instance F.Symbolic (Prop a) where 
+  symbol (PropId _ id) = F.symbol id
+  symbol p             = 
+    error $ printf "Symbol of property %s not supported yet" (ppshow p)
 
 instance F.Expression (Id a) where
   expr = F.eVar

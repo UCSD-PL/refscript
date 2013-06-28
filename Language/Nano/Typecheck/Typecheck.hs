@@ -259,6 +259,12 @@ tcExpr γ (InfixExpr l o e1 e2)
 tcExpr γ (CallExpr l e es)
   = tcExpr γ e >>= \(γ',t) -> tcCall (fromJust γ') l e es t
 
+tcExpr γ (ObjectLit _ ps) 
+  = tcObject γ (tracePP "tcObject" ps)
+
+tcExpr γ (DotRef l e i) 
+  = tcAccess γ l e i
+
 tcExpr _ e 
   = convertError "tcExpr" e
 
@@ -281,9 +287,38 @@ instantiate l fn ft
 
 
 ----------------------------------------------------------------------------------
+tcObject :: Env Type -> [(Prop AnnSSA, Expression AnnSSA)] -> TCM (TCEnv, Type)
+----------------------------------------------------------------------------------
+tcObject γ bs 
+  = do  
+        let (ps, es) = unzip bs
+        (γ2, ts)    <-  foldM (\(γ,ts) e -> 
+                          tcExpr (fromJust γ) e >>= 
+                          \(γ1,t) -> return (γ1, ts++[t])) (Just γ,[]) es
+        let ss       = map F.symbol ps
+        let bts      = zipWith B ss ts
+        return       $ (γ2, tracePP "tcObject" $ TObj bts ())
+
+
+----------------------------------------------------------------------------------
+tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM (TCEnv, Type)
+----------------------------------------------------------------------------------
+tcAccess _ _ _ _ = error "UNIMPLEMENTED"
+-- tcAccess γ l e f = 
+--   do  (γ', t) <- tcExpr γ e 
+--       binders . tracePP "Accessing object type" >>= access (tracePP "Field" f)
+--   where
+--     binders (TObj b) = return b
+--     binders _        = tcError l $ errorObjectAccess e f
+--     access f = return . maybe tUndef o_type . L.find (match f)
+--     match (Id _ s) OB { o_prop = PropId _ (Id _ s') } = s == s'
+--     match _        _                                  = False
+
+  
+
+----------------------------------------------------------------------------------
 envJoin :: AnnSSA -> Env Type -> TCEnv -> TCEnv -> TCM TCEnv 
 ----------------------------------------------------------------------------------
-
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
 envJoin l γ (Just γ1) (Just γ2) = envJoin' l γ γ1 γ2 

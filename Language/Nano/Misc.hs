@@ -18,7 +18,7 @@ import           Control.Monad                      (liftM2)
 import qualified Data.Set                 as S
 import           Language.ECMAScript3.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
-import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Types()
 
 -------------------------------------------------------------------------------
 mapFstM :: (Functor m, Monad m) => (a -> m c) -> (a, b) -> m (c, b)

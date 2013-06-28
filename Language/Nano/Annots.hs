@@ -118,11 +118,12 @@ lineCol sp      = (srcSpanStartLine sp, srcSpanStartCol sp)
 data Assoc k a = Asc (M.HashMap k a)
 type AnnTypes  = Assoc Int (Assoc Int Annot1)
 type AnnErrors = [SourceSpan]
-data Annot1    = A1  { ident :: String
-                     , ann   :: String
-                     , row   :: Int
-                     , col   :: Int  
-                     }
+data Annot1    = A1 String String Int Int 
+                    --  { ident :: String
+                    --  , ann   :: String
+                    --  , row   :: Int
+                    --  , col   :: Int  
+                    --  }
 
 ------------------------------------------------------------------------
 -- | JSON Instances ----------------------------------------------------

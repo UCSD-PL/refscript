@@ -412,6 +412,8 @@ splitW (W g i t@(TApp _ ts _))
         ws'   <- concatMapM splitW [W g i ti | ti <- ts]
         return $ ws ++ ws'
 
+splitW (W _ _ _ ) = error "Not supported in splitW"
+
 bsplitW g t i 
   | F.isNonTrivialSortedReft r'
   = [F.wfC (fenv g) r' Nothing i] 

@@ -1,4 +1,4 @@
-/*@ abs :: ({ x:int | true }) => int */ 
+/*@ abs :: ({ x:number | true }) => number */ 
 function abs(x){
   var y = x;
   if (x > 0) {

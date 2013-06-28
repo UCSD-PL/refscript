@@ -39,7 +39,7 @@ function reverse(xs){
 }
 
 
-/*@ makeList :: (int) => list [int] */
+/*@ makeList :: (number) => list [number] */
 function makeList(n){
   if (n <= 0){
     return nil();
@@ -47,7 +47,7 @@ function makeList(n){
   return cons(random(), makeList(n-1));
 }
 
-/*@ abs :: (int) => int */
+/*@ abs :: (number) => number */
 function abs(x){
   var r = x;
   if (x <= 0) {
@@ -56,7 +56,7 @@ function abs(x){
   return r;
 }
 
-/*@ main :: ({n:int | n > 0}) => void */
+/*@ main :: ({n:number | n > 0}) => void */
 function main(n){
   // Generate: Two random lists
   var xs = makeList(n);

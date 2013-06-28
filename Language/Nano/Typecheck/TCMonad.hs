@@ -65,9 +65,7 @@ import qualified Data.Map                 as M
 import qualified Data.List                as L
 import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
-import           Text.PrettyPrint.HughesPJ          (render)
 
 import           Debug.Trace
 import           Language.Nano.Misc               ()
@@ -293,13 +291,14 @@ unify θ t t'
     strip x@(TVar _ _)              = [x]
     strip (TFun xs y _)             = (b_type <$> xs) ++ [y]
     strip (TAll _ x)                = [x]
+    strip _                         = error "Not supported in unify - strip"
     tops = map $ const tTop
     go θ ts = unifys θ ts $ tops ts
 
 unifys         ::  Subst -> [Type] -> [Type] -> TCM Subst
 unifys θ xs ys =  {- trace msg $ -} unifys' θ xs ys 
-   where 
-     msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
+   {-where -}
+   {-  msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
 
 unifys' θ ts ts' 
   | nTs == nTs' = go θ (ts, ts') 
@@ -368,8 +367,8 @@ subty θ γ _ t t1 = do θ <- {- trace "unifying..." $ -} unify θ t t1
 subtys ::  Subst -> Env Type -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM (Env Type, Subst)
 -----------------------------------------------------------------------------
 subtys θ γ es xs ys =  {- trace msg <$> -} applyToList subty θ γ es xs ys 
-   where 
-     msg      = printf "subtys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
+   {-where -}
+   {-  msg      = printf "subtys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
 
   {-| nTs == nTs' = go θ (es, ts, ts')-}
   {-| otherwise   = addError (errorSubType "" ts ts) θ-}
@@ -507,7 +506,7 @@ patchExpr = liftM go . patchExpr'
   asrt _          = False
   ann = Ann dummySpan []
   name = VarRef ann (Id ann "__cast")
-  arg e t = [e, StringLit ann $ show t]
+  arg e t = [e, StringLit ann $ ppshow t]
 
 patchVarDecl (VarDecl a id (Just e)) = do e' <- patchExpr' e
                                           return $ VarDecl a id $ Just e'

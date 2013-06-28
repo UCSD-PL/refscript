@@ -1,4 +1,4 @@
-/*@ abs :: (x:int) => {v:int | v >= x} */ 
+/*@ abs :: (x:number) => {v:number | v >= x} */ 
 function abs(x){
   var res = true;
   if (x > 0) {

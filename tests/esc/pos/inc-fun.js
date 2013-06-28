@@ -10,7 +10,7 @@ function pos(){
   return x;
 }
 
-/*@ inc :: (int) => int @*/
+/*@ inc :: (number) => number @*/
 function inc(x){
   ensures($result == x + 1);
   var res = x + 1;

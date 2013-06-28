@@ -1,7 +1,7 @@
 
 // Ha ha. Why is this safe? :)
 
-/*@ sumLoop :: (int, int) => int */
+/*@ sumLoop :: (number, number) => number */
 function sumLoop(acc, i){
   var r = acc;
   

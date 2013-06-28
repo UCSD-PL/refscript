@@ -7,7 +7,7 @@ function apply(f, x0){
   return x1;
 }
 
-/*@ main :: (x:int, boolean) => { v:int |v > x} */
+/*@ main :: (x:number, boolean) => { v:number |v > x} */
 function main(x,y){
   var yr = idt(y);
   var xr = idt(x);
@@ -16,7 +16,7 @@ function main(x,y){
     z = 10;
   }
 
-  /*@ plus :: (int) => int */
+  /*@ plus :: (number) => number */
   function plus(a){ return a + z };
   
   xr = apply(plus, xr);

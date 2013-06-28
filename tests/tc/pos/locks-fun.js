@@ -1,23 +1,23 @@
-/*@ create :: () => int */
+/*@ create :: () => number */
 function create(){
   return 0;
 }
 
 
-/*@ acquire :: (int) => int */
+/*@ acquire :: (number) => number */
 function acquire(l){
   assert(l == 0);
   return 1;
 }
 
-/*@ release :: (int) => int */
+/*@ release :: (number) => number */
 function release(l){
   assert(l == 1);
   return 0;
 }
 
 
-/*@ loop :: (int, int) => int */
+/*@ loop :: (number, number) => number */
 function loop(n, l) {
   
   var flag = random();

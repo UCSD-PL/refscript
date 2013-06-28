@@ -1,4 +1,4 @@
-/*@ forloop :: forall A. (int, int, (int, A) => A, A) => A */
+/*@ forloop :: forall A. (number, number, (number, A) => A, A) => A */
 function forloop(lo, hi, body, acc){
   if (lo < hi) {
     var newAcc = body(lo, acc);
@@ -7,10 +7,10 @@ function forloop(lo, hi, body, acc){
   return acc;
 }
 
-/*@ minIndex :: ({a:list [int] | 0 < (len a)}) => {v:int | (0 <= v && v < (len a))} */ 
+/*@ minIndex :: ({a:list [number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a))} */ 
 function minIndex(a){
 
-  /*@ step :: (int, int) => int */
+  /*@ step :: (number, number) => number */
   function step(i, min){
     var a = 12;
     if (nth(a, i) < nth(a, min)) { 

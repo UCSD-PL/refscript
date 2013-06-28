@@ -124,7 +124,7 @@ data TBody r
         , td_args :: ![TVar]        -- Type variables
         , td_body :: !(RType r)     -- int or bool or fun or object ...
         , td_pos  :: !SourceSpan    -- Source position
-        } deriving (Show, Functor)
+        } deriving (Eq, Ord, Show, Functor)
 
 -- | Type Constructors
 data TCon 
@@ -145,6 +145,7 @@ data RType r
   | TVar TVar               r 
   | TFun [Bind r] (RType r) r
   | TObj [Bind r]           r
+  | TBd  (TBody r)
   | TAll TVar (RType r)
     deriving (Eq, Ord, Show, Functor)
 
@@ -215,12 +216,12 @@ instance (IsTop a, F.Foldable f) => IsTop (f a) where
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
-                     , specs  :: !(Env t)           -- ^ Imported Specifications
-                     , defs   :: !(Env t)           -- ^ Signatures for Code
-                     , consts :: !(Env t)           -- ^ Measure Signatures 
-                     , tDefs  :: !(Env t)           -- ^ Type definitions
-                     , quals  :: ![F.Qualifier]     -- ^ Qualifiers
+data Nano a t = Nano { code   :: !(Source a)          -- ^ Code to check
+                     , specs  :: !(Env t)             -- ^ Imported Specifications
+                     , defs   :: !(Env t)             -- ^ Signatures for Code
+                     , consts :: !(Env t)             -- ^ Measure Signatures 
+                     , tDefs  :: !(Env t)             -- ^ Type definitions
+                     , quals  :: ![F.Qualifier]       -- ^ Qualifiers
                      } deriving (Functor)
 
 type NanoBare    = Nano AnnBare Type 
@@ -251,6 +252,8 @@ instance PP t => PP (Nano a t) where
     $+$ pp (defs  pgm)
     $+$ text "********************** CONSTS ********************"
     $+$ pp (consts pgm) 
+    $+$ text "********************** TYPE DEFS *****************"
+    $+$ pp (tDefs  pgm)
     $+$ text "********************** QUALS *********************"
     $+$ F.toFix (quals  pgm) 
     $+$ text "**************************************************"
@@ -285,14 +288,16 @@ instance PP a => PP (Maybe a) where
   pp = maybe (text "Nothing") pp 
 
 instance F.Reftable r => PP (RType r) where
-  pp (TVar α r)       = F.ppTy r $ pp α 
-  pp (TFun xts t _)   = ppArgs parens comma xts <+> text "=>" <+> pp t 
-  pp t@(TAll _ _)     = text "forall" <+> ppArgs id space αs <> text "." 
-                          <+> pp t' where (αs, t') = bkAll t
-  pp (TApp TUn ts r)  = F.ppTy r $ ppArgs id (text "|") ts 
-  pp (TApp c [] r)    = F.ppTy r $ ppTC c 
-  pp (TApp c ts r)    = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
-  pp (TObj bs r )     = ppArgs braces comma bs
+  pp (TVar α r)         = F.ppTy r $ pp α 
+  pp (TFun xts t _)     = ppArgs parens comma xts <+> text "=>" <+> pp t 
+  pp t@(TAll _ _)       = text "forall" <+> ppArgs id space αs <> text "." 
+                           <+> pp t' where (αs, t') = bkAll t
+  pp (TApp TUn ts r)    = F.ppTy r $ ppArgs id (text "|") ts 
+  pp (TApp c [] r)      = F.ppTy r $ ppTC c 
+  pp (TApp c ts r)      = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
+  pp (TObj bs _ )       = ppArgs braces comma bs
+  pp (TBd (TD (TDef id) v r _)) =
+                          pp id <+> ppArgs brackets comma v <+> pp r
 
 
 

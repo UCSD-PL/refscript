@@ -1,21 +1,21 @@
-/*@ create :: () => int */
+/*@ create :: () => number */
 function create(){
   return 0;
 }
 
-/*@ acquire :: (int) => int */
+/*@ acquire :: (number) => number */
 function acquire(l){
   assert(l == 0);
   return 1;
 }
 
-/*@ release :: (int) => int */
+/*@ release :: (number) => number */
 function release(l){
   assert(l == 1);
   return 0;
 }
 
-/*@ driver :: (int, int) => int */ 
+/*@ driver :: (number, number) => number */ 
 function driver(l0, newCount0, oldCount0){
   requires(((newCount0 != oldCount0) && (l0 == 0)) || ((newCount0 == oldCount0) && (l0 == 1)));
   ensures($result == 1);

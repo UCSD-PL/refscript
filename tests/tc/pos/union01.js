@@ -1,5 +1,5 @@
 
-/*@ foo :: ((int|bool)) => (int|bool) */
+/*@ foo :: ((number|bool)) => (number|bool) */
 function foo(x) {
   return x;
 }

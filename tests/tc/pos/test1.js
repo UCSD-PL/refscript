@@ -1,4 +1,4 @@
-/*@ foo :: (int) => int */
+/*@ foo :: (number) => number */
 function foo(x){
   var y = 0;
   if (0 < x) {

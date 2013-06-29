@@ -1,10 +1,10 @@
 
-/*@ type list[A]  {  data : A, 
-                     next : list[A] | Null } */
+/*@ type nlist  {  data : number,
+                   next : nlist | Null } */
 
 
 
-/*@ append :: forall B . (x:list[A], A) => list[A] */
+/*@ append :: (x:nlist, number) => nlist */
 function append(x, a) {
 
     return { data: a , next: x };

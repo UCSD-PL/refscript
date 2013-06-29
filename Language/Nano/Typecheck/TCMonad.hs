@@ -191,8 +191,30 @@ initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns
     tc_anns  = HM.empty
     tc_annss = []
     tc_asrt  = M.empty
-    tc_defs  = envMap toType $ defs pgm `envUnion` tDefs pgm
+    -- Refinements are lost here ... 
+    tc_defs  = tracePP "tc_defs after" 
+      $ envMap (instTBodies $ envMap toType $ tDefs pgm) 
+      $ tracePP "tc_defs before" $ envMap toType $ defs pgm
+    -- tc_defs  = envMap toType $ defs pgm
+    -- tc_tdefs'  = tracePP (printf "TVars: %s" 
+    --   (ppshow $ tvars . snd <$> envToList tc_tdefs')) tc_tdefs
+    -- tc_tdefs = envMap toType $ tDefs pgm
     tc_expr  = Nothing
+
+-- tvars (TBd (TD c a b p))   = a
+
+
+-- | Instantiate the type body pointed to by "TDef id" with the actual types in
+-- "acts". Here is the only place we shall allow TDef, so after this part TDefs
+-- should be eliminated. 
+-------------------------------------------------------------------------------
+instTBodies :: Env Type -> Type -> Type
+-------------------------------------------------------------------------------
+instTBodies env (TApp (TDef id) acts ()) = 
+  case envFindTy (F.symbol id) env of
+    Just (TBd (TD _ vs bd _ )) -> apply (tracePP "apply" $ fromList $ zip vs acts ) bd
+    _                          -> error "instTBodies: this should have been a TBody"
+instTBodies _ t = t 
 
 
 getDefType f 
@@ -369,16 +391,25 @@ subty θ _ (TApp TUn ts _ ) (TApp TUn ts' _)
     isct = (S.fromList ts) `S.intersection` (S.fromList ts')
 
 subty θ _ t (TApp TUn ts' _) 
-  | subset [t] ts' = return θ
+  | tracePP "Result" $ subset [t] ts' = return θ
 
-subty θ e t (TApp (TDef s) _ _)= 
-  do 
-    t' <- tracePP "getDefType" <$> getDefType s
-    subty θ e t t'
+-- subty θ e t t'@(TApp (TDef s) _ _) =
+--   do 
+--  -- TODO: substitute tvars 
 
 -- | Object Subtyping
--- TODO !!!
-  
+subty θ e t@(TObj bs _) t'@(TObj bs' _)
+  | l < l'          = addError (errorObjSubtyping t t') θ
+  -- All keys in the right hand should also be in the left hand
+  | k' L.\\ k == [] = subtys θ es ts ts'
+    where 
+      (k,k')   = tracePP "subObjKeys" $ (map b_sym) `mapPair` (bs, bs')
+      l        = length bs
+      l'       = length bs'
+      es       = replicate l' e
+      (ts,ts') = tracePP "subObjTypes" 
+        ([b_type b | b <- bs, (b_sym b) `elem` k'], b_type <$> bs')
+
 
 subty θ _ t t' = unify θ t t'
 

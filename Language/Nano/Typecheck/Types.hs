@@ -140,7 +140,7 @@ data TCon
   | TUn
   | TNull
   | TUndef
-    deriving (Eq, Ord, Show)
+    deriving (Ord, Show)
 
 -- | (Raw) Refined Types 
 data RType r  
@@ -222,6 +222,20 @@ instance IsTop Type where
 
 instance (IsTop a, F.Foldable f) => IsTop (f a) where
   isTop = F.any isTop
+
+instance Eq TCon where
+  TInt    == TInt    = True   
+  TBool   == TBool   = True           
+  TString == TString = True
+  TVoid   == TVoid   = True         
+  TTop    == TTop    = True
+  TDef i  == TDef i' = F.symbol i == F.symbol i'
+  TUn     == TUn     = True
+  TNull   == TNull   = True
+  TUndef  == TUndef  = True
+  _       == _       = False
+ 
+  
 
 ---------------------------------------------------------------------------------
 -- | Nano Program = Code + Types for all function binders
@@ -447,5 +461,5 @@ builtinId       = mkId . ("builtin_" ++)
 subset ::  [Type] -> [Type] -> Bool
 -----------------------------------------------------------------------------
 subset xs ys = 
-  isTop ys || all (\a -> any (== a) ys) xs
+  isTop ys || all (\x -> any (\y -> x == y) ys) xs
 

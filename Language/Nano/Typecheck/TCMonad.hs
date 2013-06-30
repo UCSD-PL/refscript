@@ -210,11 +210,20 @@ initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns
 -------------------------------------------------------------------------------
 instTBodies :: Env Type -> Type -> Type
 -------------------------------------------------------------------------------
-instTBodies env (TApp (TDef id) acts ()) = 
-  case envFindTy (F.symbol id) env of
-    Just (TBd (TD _ vs bd _ )) -> apply (tracePP "apply" $ fromList $ zip vs acts ) bd
-    _                          -> error "instTBodies: this should have been a TBody"
-instTBodies _ t = t 
+instTBodies env t = go t
+  where 
+    go (TFun its ot r)         = TFun ((appTBi go) <$> its) (go ot) r
+    go (TObj bs r)             = TObj ((appTBi go) <$> bs) r
+    go (TBd  _)                = error "instTBodies: there should not be a TBody here"
+    go (TAll v t)              = TAll v $ go t
+    go (TApp (TDef id) acts _) = 
+      case envFindTy (F.symbol id) $ tracePP "instTBodies" env of
+        Just (TBd (TD _ vs bd _ )) -> 
+          apply (tracePP "apply" $ fromList $ zip vs acts ) bd
+        _                          -> error "instTBodies: this should have been a TBody"
+    go (TApp c a r)            = TApp c (go <$> a) r
+    go t                       = error $ printf "Missed case %s" (ppshow t)
+    appTBi f (B s t)           = B s $ f t
 
 
 getDefType f 

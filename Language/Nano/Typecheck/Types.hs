@@ -318,6 +318,8 @@ instance F.Reftable r => PP (RType r) where
   pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." 
                                    <+> pp t' where (αs, t') = bkAll t
   pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "|") ts 
+  pp (TApp d@(TDef _)ts r)      = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
+
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 
   pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
   pp (TObj bs _ )               = ppArgs braces comma bs
@@ -335,7 +337,7 @@ ppTC TString          = text "String"
 ppTC TVoid            = text "Void"
 ppTC TTop             = text "Top"
 ppTC TUn              = text "Union:"
-ppTC (TDef x)         = text "TDef: " <+> pprint (F.symbol x)
+ppTC (TDef x)         = pprint (F.symbol x)
 ppTC TNull            = text "Null"
 ppTC TUndef           = text "Undefined"
 

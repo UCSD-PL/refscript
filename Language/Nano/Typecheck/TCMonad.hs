@@ -67,7 +67,7 @@ import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
--- import           Debug.Trace hiding (traceShow)
+import           Debug.Trace hiding (traceShow)
 import           Language.Nano.Misc               ()
 
 -------------------------------------------------------------------------------
@@ -213,12 +213,14 @@ instTBodies t env = go t
     go (TBd  _)                = error "instTBodies: there should not be a TBody here"
     go (TAll v t)              = TAll v $ go t
     go (TApp (TDef id) acts _) = 
-      case envFindTy (F.symbol id) $ tracePP "instTBodies" env of
+      case envFindTy (F.symbol id) env of
         Just (TBd (TD _ vs bd _ )) -> apply (fromList $ zip vs acts) bd
-        _                          -> error "instTBodies: this should have been a TBody"
+        _                          -> 
+          error $printf "Symbol: %s has not been defined" (ppshow id)
     go (TApp c a r)            = TApp c (go <$> a) r
     go t                       = error $ printf "Missed case %s" (ppshow t)
     appTBi f (B s t)           = B s $ f t
+    
 
 
 getDefType f 
@@ -308,7 +310,7 @@ unify θ (TFun xts t _) (TFun xts' t' _) =
   unifys θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
 
 unify θ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _) 
-  | s == s'   = unifys θ ts ts'
+  | tracePP "s" s == tracePP "sp" s'   = unifys θ ts ts'
   | otherwise = addError (errorUnification t t') θ
 
 unify θ t@(TApp (TDef _) _ _) t'        =
@@ -334,6 +336,9 @@ unify θ (TApp TUn ts _) (TApp TUn ts' _)
 unify θ (TApp c ts _) (TApp c' ts' _)
   | c == c'                             = unifys  θ ts ts'
 
+unify _ (TBd _) _ = error "NO TBD"  
+unify _ _ (TBd _) = error "NO TBD"  
+
 unify θ t t' 
   | t == t'                             = return θ
   | isTop t                             = go θ $ strip t'
@@ -348,10 +353,12 @@ unify θ t t'
     tops = map $ const tTop
     go θ ts = unifys θ ts $ tops ts
 
+
+
 unifys         ::  Subst -> [Type] -> [Type] -> TCM Subst
-unifys θ xs ys =  {- trace msg $  -} unifys' θ xs ys 
-   {-where -}
-   {-  msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
+unifys θ xs ys =  trace msg $  unifys' θ xs ys 
+   where 
+     msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
 unifys' θ ts ts' 
   | nTs == nTs' = go θ (ts, ts') 
@@ -391,70 +398,87 @@ varAsnM θ a t =
     Left s -> addError s θ
     Right θ' -> return θ'
 
+-- | Subtyping without unions
 -----------------------------------------------------------------------------
-subty :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
+subtyNoUnion :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
-subty θ _ t t' 
+
+-- | Reject union types here
+subtyNoUnion _ _ (TApp TUn _ _ ) _ = error "No union type is allowed here"
+subtyNoUnion _ _ _ (TApp TUn _ _ ) = error "No union type is allowed here"
+
+
+-- | Top type gets simplified
+subtyNoUnion θ _ t t' 
   | isTop t'       = unify θ t tTop
 
-subty θ _ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _) 
-  -- for the moment keep type parameters invariant (i.e. unify them)
-  | s == s'   = unifys θ ts ts' 
-  | otherwise = addError (errorUnification t t') θ
 
-subty θ e t@(TApp (TDef _) _ _) t'        =
+-- | Subtyping named TDefs: for the moment require that the 
+-- names of the bodies be the same - otherwise flag as error
+-- TODO: This is a complete nominal and restrictive approach.
+-- Will probably need to unfold and do structural subtyping here
+subtyNoUnion θ _ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _) 
+  -- for the moment keep type parameters invariant (i.e. unify them)
+  | TDef s == TDef s' = unifys θ ts ts' 
+  | otherwise         = addError (errorSubType "NoUnion" t t') θ
+
+-- | Expand the type definitions
+subtyNoUnion θ e t@(TApp (TDef _) _ _) t'        =
   tc_tdefs <$> get >>= return . instTBodies t >>= subty θ e t'
 
-subty θ e t t'@(TApp (TDef _) _ _)        =
+subtyNoUnion θ e t t'@(TApp (TDef _) _ _)        =
   tc_tdefs <$> get >>= return . instTBodies t' >>= subty θ e t
 
-subty θ _ (TApp TUn ts _ ) t'                     
-  | subset [t'] ts  = addCast t' >> return θ
 
-subty θ _ (TApp TUn ts _ ) (TApp TUn ts' _) 
-  | subset ts  ts'                           = return θ
-  | S.size (tracePP "intersection" isct) > 0 = addCast (mkUnion $ S.toList isct) >> return θ
-  where 
-    isct = (S.fromList ts) `S.intersection` (S.fromList ts')
-
-subty θ _ t (TApp TUn ts' _) 
-  | subset [t] ts' = return θ
-
--- | Object Subtyping
-subty θ e t@(TObj bs _) t'@(TObj bs' _)
+-- | Object subtyping
+subtyNoUnion θ e t@(TObj bs _) t'@(TObj bs' _)
   | l < l'          = addError (errorObjSubtyping t t') θ
   -- All keys in the right hand should also be in the left hand
   | k' L.\\ k == [] = subtys θ es ts ts'
     where 
-      (k,k')   = tracePP "subObjKeys" $ (map b_sym) `mapPair` (bs, bs')
+      (k,k')   = {- tracePP "subObjKeys" $ -} (map b_sym) `mapPair` (bs, bs')
       l        = length bs
       l'       = length bs'
       es       = replicate l' e
-      (ts,ts') = tracePP "subObjTypes" 
+      (ts,ts') = {- tracePP "subObjTypes" -}
         ([b_type b | b <- bs, (b_sym b) `elem` k'], b_type <$> bs')
 
+subtyNoUnion θ _ t t' = unify θ t t'
 
-subty θ _ t t' = unify θ t t'
 
 
--- | Helper functions for Subtyping
-
+-- | General Subtyping -- including unions
 -----------------------------------------------------------------------------
-(⊆<:) :: Subst -> Maybe (Expression AnnSSA) -> [Type] -> [Type] -> TCM Subst
+subty :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
-(⊆<:) θ e xs ys  
+subty θ e (TApp TUn ts _ ) (TApp TUn ts' _)  = subtyUnions θ e ts  ts'
+subty θ e (TApp TUn ts _ ) t'                = subtyUnions θ e ts  [t']
+subty θ e t                (TApp TUn ts' _)  = subtyUnions θ e [t] ts'
+-- subtype without worrying about unions 
+subty θ e t                t'                = subtyNoUnion θ e t t'  
+-----------------------------------------------------------------------------
+subtyUnions :: Subst -> Maybe (Expression AnnSSA) -> [Type] -> [Type] -> TCM Subst
+-----------------------------------------------------------------------------
+subtyUnions θ e xs ys  
   | isTop ys  = return θ 
-  | otherwise = foldM (\θ x -> go θ e x ys) θ xs
+  | otherwise = foldM (\θ y -> go θ e xs y) θ ys
     where
-      runIt θ e t t' st = runState (runErrorT $ subty θ e t t') st
-      go θ e t (t':ts') =         
+      runIt θ e t t' st = runState (runErrorT $ subty θ e (tracePP "t" t) (tracePP "t\'" t')) st
+      
+-- NOT WORKING!!!      
+      go θ e (t:ts) t' =
         do  st <- get
             case runIt θ e t t' st of
-              (Left _  , _ ) -> go θ e t ts'
+              (Left _  , _ ) -> go θ e ts t'
               (Right θ', s') -> modify (const s') >> return θ'
-      go θ _ _ _        = addError (errorSubType "Union" xs ys) θ
+      -- See if there can be a cast added
+      go θ _ _ _
+        | S.size (tracePP "intersection" isct) > 0 = addCast (mkUnion $ S.toList isct) >> return θ
+        | otherwise                                = addError (errorSubType "Union" xs ys) θ
+      isct = (S.fromList xs) `S.intersection` (S.fromList ys)
 
 
+-- | Subtype lists of types
 -----------------------------------------------------------------------------
 subtys ::  Subst -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Subst
 -----------------------------------------------------------------------------

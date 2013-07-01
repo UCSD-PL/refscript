@@ -82,6 +82,7 @@ data TCState = TCS { tc_errss :: ![(SourceSpan, String)]
                    , tc_annss :: [AnnInfo]
                    , tc_asrt  :: M.Map SourceSpan Type
                    , tc_defs  :: !(Env Type) 
+                   , tc_tdefs :: !(Env Type)
                    , tc_expr  :: Maybe (Expression AnnSSA)
                    }
 
@@ -182,7 +183,7 @@ execute pgm act
 
 initState :: Nano z (RType r) -> TCState
 initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns 
-                    tc_annss tc_asrt tc_defs tc_expr 
+                    tc_annss tc_asrt tc_defs tc_tdefs tc_expr 
   where
     tc_errss = []
     tc_errs  = []
@@ -192,25 +193,20 @@ initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns
     tc_annss = []
     tc_asrt  = M.empty
     -- Refinements are lost here ... 
-    tc_defs  = tracePP "tc_defs after" 
-      $ envMap (instTBodies $ envMap toType $ tDefs pgm) 
-      $ tracePP "tc_defs before" $ envMap toType $ defs pgm
-    -- tc_defs  = envMap toType $ defs pgm
-    -- tc_tdefs'  = tracePP (printf "TVars: %s" 
-    --   (ppshow $ tvars . snd <$> envToList tc_tdefs')) tc_tdefs
-    -- tc_tdefs = envMap toType $ tDefs pgm
+    tc_defs  = tracePP "tc_defs" 
+      {- $ envMap (instTBodies $ envMap toType $ tDefs pgm) 
+      $ tracePP "tc_defs before"-} $ envMap toType $ defs pgm
+    tc_tdefs = tracePP "tc_tdefs" $ envMap toType $ tDefs pgm
     tc_expr  = Nothing
-
--- tvars (TBd (TD c a b p))   = a
 
 
 -- | Instantiate the type body pointed to by "TDef id" with the actual types in
 -- "acts". Here is the only place we shall allow TDef, so after this part TDefs
 -- should be eliminated. 
 -------------------------------------------------------------------------------
-instTBodies :: Env Type -> Type -> Type
+instTBodies :: Type -> Env Type -> Type
 -------------------------------------------------------------------------------
-instTBodies env t = go t
+instTBodies t env = go t
   where 
     go (TFun its ot r)         = TFun ((appTBi go) <$> its) (go ot) r
     go (TObj bs r)             = TObj ((appTBi go) <$> bs) r
@@ -218,8 +214,7 @@ instTBodies env t = go t
     go (TAll v t)              = TAll v $ go t
     go (TApp (TDef id) acts _) = 
       case envFindTy (F.symbol id) $ tracePP "instTBodies" env of
-        Just (TBd (TD _ vs bd _ )) -> 
-          apply (tracePP "apply" $ fromList $ zip vs acts ) bd
+        Just (TBd (TD _ vs bd _ )) -> apply (fromList $ zip vs acts) bd
         _                          -> error "instTBodies: this should have been a TBody"
     go (TApp c a r)            = TApp c (go <$> a) r
     go t                       = error $ printf "Missed case %s" (ppshow t)
@@ -309,7 +304,19 @@ subType l eo t t' = subTypes l [eo] [t] [t'] >> return ()
 -----------------------------------------------------------------------------
 unify :: Subst -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
-unify θ (TFun xts t _) (TFun xts' t' _) = unifys θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
+unify θ (TFun xts t _) (TFun xts' t' _) = 
+  unifys θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
+
+unify θ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _) 
+  | s == s'   = unifys θ ts ts'
+  | otherwise = addError (errorUnification t t') θ
+
+unify θ t@(TApp (TDef _) _ _) t'        =
+  tc_tdefs <$> get >>= return . instTBodies t >>= unify θ t'
+
+unify θ t t'@(TApp (TDef _) _ _)        =
+  tc_tdefs <$> get >>= return . instTBodies t' >>= unify θ t
+
 unify θ (TVar α _)     (TVar β _)       = varEql θ α β 
 unify θ (TVar α _)     t                = varAsnM θ α t 
 unify θ t              (TVar α _)       = varAsnM θ α t
@@ -387,8 +394,19 @@ varAsnM θ a t =
 -----------------------------------------------------------------------------
 subty :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
-subty θ _ t t'                                   
+subty θ _ t t' 
   | isTop t'       = unify θ t tTop
+
+subty θ _ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _) 
+  -- for the moment keep type parameters invariant (i.e. unify them)
+  | s == s'   = unifys θ ts ts' 
+  | otherwise = addError (errorUnification t t') θ
+
+subty θ e t@(TApp (TDef _) _ _) t'        =
+  tc_tdefs <$> get >>= return . instTBodies t >>= subty θ e t'
+
+subty θ e t t'@(TApp (TDef _) _ _)        =
+  tc_tdefs <$> get >>= return . instTBodies t' >>= subty θ e t
 
 subty θ _ (TApp TUn ts _ ) t'                     
   | subset [t'] ts  = addCast t' >> return θ
@@ -400,11 +418,7 @@ subty θ _ (TApp TUn ts _ ) (TApp TUn ts' _)
     isct = (S.fromList ts) `S.intersection` (S.fromList ts')
 
 subty θ _ t (TApp TUn ts' _) 
-  | tracePP "Result" $ subset [t] ts' = return θ
-
--- subty θ e t t'@(TApp (TDef s) _ _) =
---   do 
---  -- TODO: substitute tvars 
+  | subset [t] ts' = return θ
 
 -- | Object Subtyping
 subty θ e t@(TObj bs _) t'@(TObj bs' _)
@@ -421,6 +435,24 @@ subty θ e t@(TObj bs _) t'@(TObj bs' _)
 
 
 subty θ _ t t' = unify θ t t'
+
+
+-- | Helper functions for Subtyping
+
+-----------------------------------------------------------------------------
+(⊆<:) :: Subst -> Maybe (Expression AnnSSA) -> [Type] -> [Type] -> TCM Subst
+-----------------------------------------------------------------------------
+(⊆<:) θ e xs ys  
+  | isTop ys  = return θ 
+  | otherwise = foldM (\θ x -> go θ e x ys) θ xs
+    where
+      runIt θ e t t' st = runState (runErrorT $ subty θ e t t') st
+      go θ e t (t':ts') =         
+        do  st <- get
+            case runIt θ e t t' st of
+              (Left _  , _ ) -> go θ e t ts'
+              (Right θ', s') -> modify (const s') >> return θ'
+      go θ _ _ _        = addError (errorSubType "Union" xs ys) θ
 
 
 -----------------------------------------------------------------------------

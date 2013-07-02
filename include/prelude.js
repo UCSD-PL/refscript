@@ -72,7 +72,7 @@ function pos(){
 //PV: @==@ and @===@ could be handled more precisely
 /*@ builtin_OpEq        :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x = y)) } */
 /*@ builtin_OpSEq       :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x = y)) } */
-/*@ builtin_OpNEq       :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x != y)) } */
+/*@ builtin_OpNEq       :: forall A B. ({x:A|true}, {y:B|true}) => {v:boolean | ((Prop v) <=> (x != y)) } */
 /*@ builtin_OpLAnd      :: ({x:boolean|true}, {y:boolean|true}) => {v:boolean | ((Prop v) <=> ((Prop x) && (Prop y)))} */
 /*@ builtin_OpLOr       :: ({x:boolean|true}, {y:boolean|true}) => {v:boolean | ((Prop v) <=> ((Prop x) || (Prop y)))}  */
 /*@ builtin_OpAdd       :: ({x:number | true}, {y:number | true})  => {v:number | v = x + y} */ 

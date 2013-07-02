@@ -5,7 +5,7 @@ import           Control.Monad
 import           Control.Monad.State()
 import qualified Data.HashSet        as S 
 import qualified Data.HashMap.Strict as M 
-import           Data.List           (nub)
+import           Data.List           (nub, find)
 import qualified Data.Traversable    as T
 -- import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust)
@@ -220,6 +220,7 @@ tcVarDecl :: Env Type -> VarDecl AnnSSA -> TCM TCEnv
 tcVarDecl γ (VarDecl l x (Just e)) 
   = tcAsgn γ l x e  
 tcVarDecl γ (VarDecl _ _ Nothing)  
+-- TODO: add binding from the declared variable to undefined
   = return $ Just γ
 
 ------------------------------------------------------------------------------------
@@ -298,16 +299,16 @@ tcObject γ bs
 ----------------------------------------------------------------------------------
 tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 ----------------------------------------------------------------------------------
-tcAccess _ _ _ _ = error "UNIMPLEMENTED"
--- tcAccess γ l e f = 
---   do  (γ', t) <- tcExpr γ e 
---       binders . tracePP "Accessing object type" >>= access (tracePP "Field" f)
---   where
---     binders (TObj b) = return b
---     binders _        = tcError l $ errorObjectAccess e f
---     access f = return . maybe tUndef o_type . L.find (match f)
---     match (Id _ s) OB { o_prop = PropId _ (Id _ s') } = s == s'
---     match _        _                                  = False
+tcAccess γ l e f = 
+  do  t <- tcExpr γ e 
+      (binders <=< unfoldTDefM) (tracePP "Accessing object type" t) >>= access (tracePP "Field" f)
+  where
+    binders (TObj b _ )    = return b
+    binders t | t == tNull = return []
+    binders t              = tcError l $ errorObjectAccess e t
+    access f               = return . maybe tUndef b_type . find (match $ F.symbol f)
+    match s (B f t)        = s == f
+    match _ _              = False
 
   
 

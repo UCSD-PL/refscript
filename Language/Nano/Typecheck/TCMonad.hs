@@ -30,15 +30,16 @@ module Language.Nano.Typecheck.TCMonad (
   , getAllAnns
 
   -- * Unification
-  , unifyType
-  , unifyTypes
+  , unifyType, unifyTypes
 
   -- * Subtyping
-  , subTypes
-  , subType
+  , subType, subTypes
 
   -- * Get Type Signature 
   , getDefType 
+
+  -- * Unfold type definition
+  , unfoldTDef, unfoldTDefM
 
   -- * Patch the program with assertions
   , patchPgm
@@ -194,7 +195,7 @@ initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns
     tc_asrt  = M.empty
     -- Refinements are lost here ... 
     tc_defs  = tracePP "tc_defs" 
-      {- $ envMap (instTBodies $ envMap toType $ tDefs pgm) 
+      {- $ envMap (unfoldTDef $ envMap toType $ tDefs pgm) 
       $ tracePP "tc_defs before"-} $ envMap toType $ defs pgm
     tc_tdefs = tracePP "tc_tdefs" $ envMap toType $ tDefs pgm
     tc_expr  = Nothing
@@ -203,21 +204,27 @@ initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns
 -- | Instantiate the type body pointed to by "TDef id" with the actual types in
 -- "acts". Here is the only place we shall allow TDef, so after this part TDefs
 -- should be eliminated. 
+
 -------------------------------------------------------------------------------
-instTBodies :: Type -> Env Type -> Type
+unfoldTDefM :: Type -> TCM Type
 -------------------------------------------------------------------------------
-instTBodies t env = go t
+unfoldTDefM t = tc_tdefs <$> get >>= return . unfoldTDef t
+
+-------------------------------------------------------------------------------
+unfoldTDef :: Type -> Env Type -> Type
+-------------------------------------------------------------------------------
+unfoldTDef t env = go t
   where 
     go (TFun its ot r)         = TFun ((appTBi go) <$> its) (go ot) r
     go (TObj bs r)             = TObj ((appTBi go) <$> bs) r
-    go (TBd  _)                = error "instTBodies: there should not be a TBody here"
+    go (TBd  _)                = error "unfoldTDef: there should not be a TBody here"
     go (TAll v t)              = TAll v $ go t
     go (TApp (TDef id) acts _) = 
       case envFindTy (F.symbol id) env of
         Just (TBd (TD _ vs bd _ )) -> apply (fromList $ zip vs acts) bd
         _                          -> 
-          error $printf "Symbol: %s has not been defined" (ppshow id)
-    go (TApp c a r)            = TApp c (go <$> a) r
+          error $printf "Symbol: %s has not been defined" (show id)
+    go (TApp c a r)            = TApp (traceShow "Cons" c) (go <$> (tracePP "Go rec" a)) r
     go t                       = error $ printf "Missed case %s" (ppshow t)
     appTBi f (B s t)           = B s $ f t
     
@@ -314,12 +321,12 @@ unify θ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _)
   | otherwise = addError (errorUnification t t') θ
 
 unify θ t@(TApp (TDef _) _ _) t'        =
-  tc_tdefs <$> get >>= return . instTBodies t >>= unify θ t'
+  tc_tdefs <$> get >>= return . unfoldTDef t >>= unify θ t'
 
 unify θ t t'@(TApp (TDef _) _ _)        =
-  tc_tdefs <$> get >>= return . instTBodies t' >>= unify θ t
+  tc_tdefs <$> get >>= return . unfoldTDef t' >>= unify θ t
 
-unify θ (TVar α _)     (TVar β _)       = varEql θ α β 
+unify θ (TVar α _)     (TVar β _)       = trace "unifying" <$> varEql θ α β 
 unify θ (TVar α _)     t                = varAsnM θ α t 
 unify θ t              (TVar α _)       = varAsnM θ α t
 
@@ -356,9 +363,9 @@ unify θ t t'
 
 
 unifys         ::  Subst -> [Type] -> [Type] -> TCM Subst
-unifys θ xs ys =  trace msg $  unifys' θ xs ys 
-   where 
-     msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
+unifys θ xs ys =  {- trace msg $ -} unifys' θ xs ys 
+   {-where -}
+   {-  msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
 
 unifys' θ ts ts' 
   | nTs == nTs' = go θ (ts, ts') 
@@ -424,10 +431,10 @@ subtyNoUnion θ _ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _)
 
 -- | Expand the type definitions
 subtyNoUnion θ e t@(TApp (TDef _) _ _) t'        =
-  tc_tdefs <$> get >>= return . instTBodies t >>= subty θ e t'
+  tc_tdefs <$> get >>= return . unfoldTDef t >>= subty θ e t'
 
 subtyNoUnion θ e t t'@(TApp (TDef _) _ _)        =
-  tc_tdefs <$> get >>= return . instTBodies t' >>= subty θ e t
+  tc_tdefs <$> get >>= return . unfoldTDef t' >>= subty θ e t
 
 
 -- | Object subtyping
@@ -447,35 +454,90 @@ subtyNoUnion θ _ t t' = unify θ t t'
 
 
 
+-----------------------------------------------------------------------------
 -- | General Subtyping -- including unions
 -----------------------------------------------------------------------------
 subty :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
-subty θ e (TApp TUn ts _ ) (TApp TUn ts' _)  = subtyUnions θ e ts  ts'
-subty θ e (TApp TUn ts _ ) t'                = subtyUnions θ e ts  [t']
-subty θ e t                (TApp TUn ts' _)  = subtyUnions θ e [t] ts'
--- subtype without worrying about unions 
+subty θ e (TApp TUn ts _ ) t'@(TApp TUn _ _)  = 
+  foldM (\θ t -> subty θ e t t') θ ts 
+
+subty θ e t@(TApp TUn ts _ ) t'                =
+  do  s <- get
+      case tryError s (subtyUnions θ e ts [t']) of 
+        (Left _  , _ ) -> unify θ t t'
+        (Right θ', s') -> modify (const s') >> return θ'
+
+subty θ e t                t'@(TApp TUn ts' _)  = 
+  do  s <- get
+      case tryError s (subtyUnions θ e [t] ts') of 
+        (Left _  , _ ) -> unify θ t t' 
+        (Right θ', s') -> modify (const s') >> return θ'
+
 subty θ e t                t'                = subtyNoUnion θ e t t'  
 -----------------------------------------------------------------------------
 subtyUnions :: Subst -> Maybe (Expression AnnSSA) -> [Type] -> [Type] -> TCM Subst
 -----------------------------------------------------------------------------
-subtyUnions θ e xs ys  
-  | isTop ys  = return θ 
-  | otherwise = foldM (\θ y -> go θ e xs y) θ ys
+subtyUnions θ e xs ys
+  | isTop ys  = return θ
+  | otherwise = loop θ e xs ys
     where
-      runIt θ e t t' st = runState (runErrorT $ subty θ e (tracePP "t" t) (tracePP "t\'" t')) st
-      
--- NOT WORKING!!!      
-      go θ e (t:ts) t' =
+
+      go θ e t (t':ts') =
         do  st <- get
-            case runIt θ e t t' st of
-              (Left _  , _ ) -> go θ e ts t'
-              (Right θ', s') -> modify (const s') >> return θ'
-      -- See if there can be a cast added
-      go θ _ _ _
-        | S.size (tracePP "intersection" isct) > 0 = addCast (mkUnion $ S.toList isct) >> return θ
-        | otherwise                                = addError (errorSubType "Union" xs ys) θ
-      isct = (S.fromList xs) `S.intersection` (S.fromList ys)
+            case tryError st (subtyNoUnion θ e t t') of
+              -- Left means that subtyping was unsuccessful
+              (Left _  , _ ) -> go θ e t {- $ tracePP "will check next" -} ts'
+              -- Right means we found a candidate
+              (Right θ', s') ->
+                do  modify (const s')
+                    return $ θ'
+      -- TODO: ADD A CASTS !!!
+      go θ _ _ _       = addError (errorSubType "U" xs ys) θ
+      -- -- Disabling for the moment 
+      --  | S.size (tracePP "∩" isct) > 0 = addCast (mkUnion $ S.toList isct) >> return θ
+      --  | otherwise = addError (errorSubType "U" xs ys) θ
+      -- isct = (S.fromList xs) `S.intersection` (S.fromList ys)
+
+      loop θ e (x:xs) ys = 
+        do  θ' <- go θ e x ys
+            loop θ' e xs ys
+      loop θ _ [] _  = return θ
+
+
+-----------------------------------------------------------------------------
+tryError :: TCState -> TCM a -> (Either [String] a, TCState)
+-----------------------------------------------------------------------------
+tryError = tryIt clearError applyError
+
+
+-----------------------------------------------------------------------------
+tryIt ::     
+             (TCState -> (b, TCState))    -- Clear the initial state and get some info
+          -> (TCState -> b -> TCState)    -- Restore state
+          -> TCState                      -- The initial state 
+          -> TCM a                        -- The monadic computation 
+          -> (Either [String] a, TCState) -- Result of computation
+-----------------------------------------------------------------------------
+tryIt c a st f = 
+  let (errs, stc) = c st in
+  let (res , st') = case runState (runErrorT $ f ) stc of 
+                      (Left err, s) -> (Left [err], s)
+                      (Right x , s) -> 
+                        (applyNonNull (Right x) Left (reverse $ tc_errs s), s)
+  in
+  let st''        = a st' errs in
+  (res, st'')
+
+-----------------------------------------------------------------------------
+clearError ::     TCState -> ([String], TCState)
+-----------------------------------------------------------------------------
+clearError s@(TCS {tc_errs=e}) = (e, s {tc_errs=[]})
+
+-----------------------------------------------------------------------------
+applyError ::     TCState -> [String] -> TCState
+-----------------------------------------------------------------------------
+applyError s@(TCS {}) e        = s {tc_errs= e ++ tc_errs s}
 
 
 -- | Subtype lists of types
@@ -590,6 +652,8 @@ patchExpr' e@(CallExpr a e' el)      = do a' <- annt e a
                                           liftM2 (CallExpr a') (patchExpr e') (patchExprs el)
 patchExpr' e@(FuncExpr a oi is ss)   = do a' <- annt e a
                                           FuncExpr a' oi is <$> patchStmts ss
+patchExpr' e@(DotRef a e' i)         = do a' <- annt e a 
+                                          return $ DotRef a' e' i 
 patchExpr' e                         = return $ error $ "Does not support patchExpr for: "
                                                   ++ ppshow e
                                                   

@@ -1,7 +1,7 @@
 /*@ type list[A]  {  data : A, 
-                     next : list[A] | Null } */
+                     next : list[A] | null } */
 
-/*@ foo :: (x:list[number]) => number */
+/*@ sum :: (x:list[number] | null) => number */
 function sum(l) {
     
   var s = 0;

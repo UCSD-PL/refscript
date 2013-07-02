@@ -34,6 +34,7 @@ errorRigidUnify a t     = printf "Cannot unify rigid variable %s with %s" (ppsho
 errorSubType m t t'     = printf "%s -- Type %s is not a subtype of %s" m (ppshow t) (ppshow t')
 errorCast m e t         = printf "%s -- Cannot cast non-variable expression: %s to %t" m (ppshow e) (ppshow t)
 errorObjSubtyping t t'  = printf "Object type: %s is not a subtype of %s" (ppshow t) (ppshow t')
+errorObjectAccess e t   = printf "Dot notation on non object expression %s :: %s" (ppshow e) (ppshow t)
  
 ppshow                  = render . pp
 

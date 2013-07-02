@@ -326,6 +326,17 @@ instance F.Reftable r => PP (RType r) where
   pp (TBd (TD (TDef id) v r _)) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r
   pp (TBd _)                    = error "This is not an acceptable form for TBody" 
 
+instance PP TCon where
+  pp TInt             = text "Int"
+  pp TBool            = text "Boolean"
+  pp TString          = text "String"
+  pp TVoid            = text "Void"
+  pp TTop             = text "Top"
+  pp TUn              = text "Union:"
+  pp (TDef x)         = pprint (F.symbol x)
+  pp TNull            = text "Null"
+  pp TUndef           = text "Undefined"
+
 
 instance F.Reftable r => PP (Bind r) where 
   pp (B x t)        = pp x <> colon <> pp t 

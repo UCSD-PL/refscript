@@ -60,7 +60,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Misc             (mapSndM)
 import           Data.Monoid                  
 import qualified Data.HashSet             as HS
-import qualified Data.Set                 as S
+-- import qualified Data.Set                 as S
 import qualified Data.HashMap.Strict      as HM
 import qualified Data.Map                 as M
 import qualified Data.List                as L
@@ -68,23 +68,32 @@ import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
-import           Debug.Trace hiding (traceShow)
+-- import           Debug.Trace hiding (traceShow)
 import           Language.Nano.Misc               ()
 
 -------------------------------------------------------------------------------
 -- | Typechecking monad -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-data TCState = TCS { tc_errss :: ![(SourceSpan, String)]
+data TCState = TCS { 
+                   -- Errors
+                     tc_errss :: ![(SourceSpan, String)]
                    , tc_errs  :: ![String]
                    , tc_subst :: !Subst
                    , tc_cnt   :: !Int
+                   -- Annotations
                    , tc_anns  :: AnnInfo
                    , tc_annss :: [AnnInfo]
+                   -- Assertions
                    , tc_asrt  :: M.Map SourceSpan Type
+                   -- Function definitions
                    , tc_defs  :: !(Env Type) 
+                   -- Type definitions
                    , tc_tdefs :: !(Env Type)
+                   -- The currently typed expression 
                    , tc_expr  :: Maybe (Expression AnnSSA)
+                   -- Keep track of mutually recursive type constructors
+                   , tc_mut   :: [(TCon,TCon)]                
                    }
 
 type TCM     = ErrorT String (State TCState)
@@ -183,8 +192,8 @@ execute pgm act
       (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errss st)
 
 initState :: Nano z (RType r) -> TCState
-initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns 
-                    tc_annss tc_asrt tc_defs tc_tdefs tc_expr 
+initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns tc_annss 
+                    tc_asrt tc_defs tc_tdefs tc_expr tc_mut
   where
     tc_errss = []
     tc_errs  = []
@@ -196,6 +205,7 @@ initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns
     tc_defs  = envMap toType $ defs pgm
     tc_tdefs = envMap toType $ tDefs pgm
     tc_expr  = Nothing
+    tc_mut   = []
 
 
 -- | Instantiate the type body pointed to by "TDef id" with the actual types in
@@ -222,7 +232,6 @@ unfoldTDef t env = go t
         _                          -> error $ errorUnboundId id
     go (TApp c a r)            = TApp (traceShow "Cons" c) (go <$> (tracePP "Go rec" a)) r
     go t@(TVar _ _ )           = t
-    go t                       = error $ printf "Missed case %s" (ppshow t)
     appTBi f (B s t)           = B s $ f t
     
 
@@ -416,15 +425,9 @@ subtyNoUnion _ _ _ (TApp TUn _ _ ) = error "No union type is allowed here"
 subtyNoUnion θ _ t t' 
   | isTop t'       = unify θ t tTop
 
-
--- | Subtyping named TDefs: for the moment require that the 
--- names of the bodies be the same - otherwise flag as error
--- TODO: This is a complete nominal and restrictive approach.
--- Will probably need to unfold and do structural subtyping here
-subtyNoUnion θ _ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _) 
-  -- for the moment keep type parameters invariant (i.e. unify them)
-  | TDef s == TDef s' = unifys θ ts ts' 
-  | otherwise         = addError (errorSubType "NoUnion" t t') θ
+-- | Defined types
+subtyNoUnion θ e t@(TApp (TDef _) _ _) t'@(TApp (TDef _) _ _) = 
+  subtdef θ e t t'
 
 -- | Expand the type definitions
 subtyNoUnion θ e t@(TApp (TDef _) _ _) t'        =
@@ -449,6 +452,35 @@ subtyNoUnion θ e t@(TObj bs _) t'@(TObj bs' _)
 
 subtyNoUnion θ _ t t' = unify θ t t'
 
+subtyNoUnion' θ e t t' = subtyNoUnion θ e t t'
+
+
+-----------------------------------------------------------------------------
+subtdef :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
+-----------------------------------------------------------------------------
+subtdef θ e t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _) = 
+  do 
+    seen <- tc_mut <$> get 
+    if d == d' 
+      -- Proved subtyping so , clear the state for mutual recursive types
+      then modify (\s -> s { tc_mut = [] }) >> unifys θ ts ts'
+      else 
+        if (d,d') `elem` seen 
+      -- Proved subtyping so , clear the state for mutual recursive types
+          then modify (\s -> s { tc_mut = [] }) >> unifys θ ts ts'
+          else 
+            do  u  <- unfoldTDefM t
+                u' <- unfoldTDefM t'
+      -- Start populating the state for mutual recursive types
+                modify (\s -> s { tc_mut = (d,d'):(tc_mut s) })
+                subtdef θ e u u'
+
+subtdef θ e t@(TApp (TDef _) _ _) t'    = do  u  <- unfoldTDefM t 
+                                              subtyNoUnion θ e u t'
+subtdef θ e t t'@(TApp (TDef _) _ _)  = do  u' <- unfoldTDefM t'
+                                            subtyNoUnion θ e t u'
+                                                      
+subtdef θ e t t'                           = subtyNoUnion' θ e t t'
 
 
 -----------------------------------------------------------------------------
@@ -489,8 +521,8 @@ subtyUnions θ e xs ys
             case tryError st (subtyNoUnion θ e t t') of
               (Left _  , _ ) -> anyM θ e t {- $ tracePP "will check next" -} ts'
               (Right θ', s') -> do { modify (const s'); return $ θ' }
-      -- TODO: ADD A CASTS !!!
       anyM θ _ _ _       = addError (errorSubType "U" xs ys) θ
+      -- TODO: ADD A CASTS !!!
       -- -- Disabling for the moment 
       --  | S.size (tracePP "∩" isct) > 0 = addCast (mkUnion $ S.toList isct) >> return θ
       --  | otherwise = addError (errorSubType "U" xs ys) θ

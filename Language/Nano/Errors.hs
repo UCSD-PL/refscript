@@ -9,7 +9,7 @@ import Text.PrettyPrint.HughesPJ
 import Language.ECMAScript3.PrettyPrint
 
 bugBadPhi l t1s t2s     = printf "BUG: Unbalanced Phi at %s \n %s \n %s" (ppshow l) (ppshow t1s) (ppshow t2s)
-bugBadSubtypes x    = printf "BUG: Unexpected Subtyping Constraint \n %s" (ppshow x)
+bugBadSubtypes x        = printf "BUG: Unexpected Subtyping Constraint \n %s" (ppshow x)
 bugUnboundPhiVar x      = printf "BUG: Phi Variable %s is unbound" (ppshow x)
 bugUnboundVariable l x  = printf "BUG: Variable %s is unbound in environment at %s" (ppshow x) (ppshow l)
 bugMissingTypeArgs l    = printf "BUG: Missing Type Arguments at %s" (ppshow l)

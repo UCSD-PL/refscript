@@ -480,25 +480,25 @@ subtyUnions :: Subst -> Maybe (Expression AnnSSA) -> [Type] -> [Type] -> TCM Sub
 -----------------------------------------------------------------------------
 subtyUnions θ e xs ys
   | isTop ys  = return θ
-  | otherwise = loop θ e xs ys
+  | otherwise = allM θ e xs ys
     where
+      allM θ e (x:xs) ys = 
+        do  θ' <- anyM θ e x ys
+            allM θ' e xs ys
+      allM θ _ [] _  = return θ
 
-      go θ e t (t':ts') =
+      anyM θ e t (t':ts') =
         do  st <- get
             case tryError st (subtyNoUnion θ e t t') of
-              (Left _  , _ ) -> go θ e t {- $ tracePP "will check next" -} ts'
+              (Left _  , _ ) -> anyM θ e t {- $ tracePP "will check next" -} ts'
               (Right θ', s') -> do { modify (const s'); return $ θ' }
       -- TODO: ADD A CASTS !!!
-      go θ _ _ _       = addError (errorSubType "U" xs ys) θ
+      anyM θ _ _ _       = addError (errorSubType "U" xs ys) θ
       -- -- Disabling for the moment 
       --  | S.size (tracePP "∩" isct) > 0 = addCast (mkUnion $ S.toList isct) >> return θ
       --  | otherwise = addError (errorSubType "U" xs ys) θ
       -- isct = (S.fromList xs) `S.intersection` (S.fromList ys)
 
-      loop θ e (x:xs) ys = 
-        do  θ' <- go θ e x ys
-            loop θ' e xs ys
-      loop θ _ [] _  = return θ
 
 
 -----------------------------------------------------------------------------

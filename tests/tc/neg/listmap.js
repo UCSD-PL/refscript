@@ -1,8 +1,8 @@
 /*@ type nlist  {  data : number, 
-                   next : nlist  } */
+                   next : nlist | Null } */
 
 /*@ type blist  {  data : boolean, 
-                   next : blist  } */
+                   next : blist | Null } */
 
 /*@ map :: (nlist, (number) => boolean) => blist */
 function map(x,f) {

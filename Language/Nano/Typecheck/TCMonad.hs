@@ -356,7 +356,7 @@ unify θ t t'
     strip x@(TVar _ _)              = [x]
     strip (TFun xs y _)             = (b_type <$> xs) ++ [y]
     strip (TAll _ x)                = [x]
-    strip _                         = error "Not supported in unify - strip"
+    strip t                         = error (printf "%s: Not supported in unify - strip" $ ppshow t)
     tops = map $ const tTop
     go θ ts = unifys θ ts $ tops ts
 
@@ -459,22 +459,22 @@ subtyNoUnion θ _ t t' = unify θ t t'
 -----------------------------------------------------------------------------
 subty :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
-subty θ e (TApp TUn ts _ ) t'@(TApp TUn _ _)  = 
+subty θ e (TApp TUn ts _ ) t'@(TApp TUn _ _) = 
   foldM (\θ t -> subty θ e t t') θ ts 
 
-subty θ e t@(TApp TUn ts _ ) t'                =
+subty θ e t@(TApp TUn ts _ ) t' =
   do  s <- get
-      case tryError s (subtyUnions θ e ts [t']) of 
+      case tryError s (subtyUnions θ e (tracePP "ts" ts) (tracePP "[t\']" [t'])) of 
         (Left _  , _ ) -> unify θ t t'
         (Right θ', s') -> modify (const s') >> return θ'
 
-subty θ e t                t'@(TApp TUn ts' _)  = 
+subty θ e t t'@(TApp TUn ts' _) = 
   do  s <- get
       case tryError s (subtyUnions θ e [t] ts') of 
         (Left _  , _ ) -> unify θ t t' 
         (Right θ', s') -> modify (const s') >> return θ'
 
-subty θ e t                t'                = subtyNoUnion θ e t t'  
+subty θ e t t' = subtyNoUnion θ e t t'  
 -----------------------------------------------------------------------------
 subtyUnions :: Subst -> Maybe (Expression AnnSSA) -> [Type] -> [Type] -> TCM Subst
 -----------------------------------------------------------------------------
@@ -486,12 +486,8 @@ subtyUnions θ e xs ys
       go θ e t (t':ts') =
         do  st <- get
             case tryError st (subtyNoUnion θ e t t') of
-              -- Left means that subtyping was unsuccessful
               (Left _  , _ ) -> go θ e t {- $ tracePP "will check next" -} ts'
-              -- Right means we found a candidate
-              (Right θ', s') ->
-                do  modify (const s')
-                    return $ θ'
+              (Right θ', s') -> do { modify (const s'); return $ θ' }
       -- TODO: ADD A CASTS !!!
       go θ _ _ _       = addError (errorSubType "U" xs ys) θ
       -- -- Disabling for the moment 

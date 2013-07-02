@@ -300,13 +300,14 @@ tcObject γ bs
 tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 ----------------------------------------------------------------------------------
 tcAccess γ l e f = 
-  tcExpr γ e >>= (unfoldTDefM >=> binders) >>= access {-$ tracePP "Field" -} f
+  tcExpr γ e >>= (unfoldTDefM >=> binders l e) >>= access {-$ tracePP "Field" -} f
   where
-    binders (TObj b _ )    = return b
-    binders t              = tcError l $ errorObjectAccess e t
     access f               = return . maybe tUndef b_type . find (match $ F.symbol f)
     match s (B f _)        = s == f
 
+binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
+binders l e (TObj b _ )    = return b
+binders l e t              = tcError l $ errorObjectAccess e t
   
 
 ----------------------------------------------------------------------------------

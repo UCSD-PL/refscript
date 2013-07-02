@@ -304,7 +304,6 @@ tcAccess γ l e f =
       (binders <=< unfoldTDefM) (tracePP "Accessing object type" t) >>= access (tracePP "Field" f)
   where
     binders (TObj b _ )    = return b
-    binders t | t == tNull = return []
     binders t              = tcError l $ errorObjectAccess e t
     access f               = return . maybe tUndef b_type . find (match $ F.symbol f)
     match s (B f t)        = s == f

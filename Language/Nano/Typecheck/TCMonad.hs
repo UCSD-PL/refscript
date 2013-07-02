@@ -193,11 +193,8 @@ initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns
     tc_anns  = HM.empty
     tc_annss = []
     tc_asrt  = M.empty
-    -- Refinements are lost here ... 
-    tc_defs  = tracePP "tc_defs" 
-      {- $ envMap (unfoldTDef $ envMap toType $ tDefs pgm) 
-      $ tracePP "tc_defs before"-} $ envMap toType $ defs pgm
-    tc_tdefs = tracePP "tc_tdefs" $ envMap toType $ tDefs pgm
+    tc_defs  = envMap toType $ defs pgm
+    tc_tdefs = envMap toType $ tDefs pgm
     tc_expr  = Nothing
 
 
@@ -222,9 +219,9 @@ unfoldTDef t env = go t
     go (TApp (TDef id) acts _) = 
       case envFindTy (F.symbol id) env of
         Just (TBd (TD _ vs bd _ )) -> apply (fromList $ zip vs acts) bd
-        _                          -> 
-          error $printf "Symbol: %s has not been defined" (show id)
+        _                          -> error $ errorUnboundId id
     go (TApp c a r)            = TApp (traceShow "Cons" c) (go <$> (tracePP "Go rec" a)) r
+    go t@(TVar _ _ )           = t
     go t                       = error $ printf "Missed case %s" (ppshow t)
     appTBi f (B s t)           = B s $ f t
     
@@ -317,7 +314,7 @@ unify θ (TFun xts t _) (TFun xts' t' _) =
   unifys θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
 
 unify θ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _) 
-  | tracePP "s" s == tracePP "sp" s'   = unifys θ ts ts'
+  | s == s'   = unifys θ ts ts'
   | otherwise = addError (errorUnification t t') θ
 
 unify θ t@(TApp (TDef _) _ _) t'        =
@@ -326,7 +323,7 @@ unify θ t@(TApp (TDef _) _ _) t'        =
 unify θ t t'@(TApp (TDef _) _ _)        =
   tc_tdefs <$> get >>= return . unfoldTDef t' >>= unify θ t
 
-unify θ (TVar α _)     (TVar β _)       = trace "unifying" <$> varEql θ α β 
+unify θ (TVar α _)     (TVar β _)       = varEql θ α β 
 unify θ (TVar α _)     t                = varAsnM θ α t 
 unify θ t              (TVar α _)       = varAsnM θ α t
 
@@ -343,8 +340,8 @@ unify θ (TApp TUn ts _) (TApp TUn ts' _)
 unify θ (TApp c ts _) (TApp c' ts' _)
   | c == c'                             = unifys  θ ts ts'
 
-unify _ (TBd _) _ = error "NO TBD"  
-unify _ _ (TBd _) = error "NO TBD"  
+unify _ (TBd _) _ = error $ bugTBodiesOccur "unify"
+unify _ _ (TBd _) = error $ bugTBodiesOccur "unify"
 
 unify θ t t' 
   | t == t'                             = return θ

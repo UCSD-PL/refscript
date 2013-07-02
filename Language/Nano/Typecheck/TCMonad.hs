@@ -421,9 +421,17 @@ subtyNoUnion _ _ (TApp TUn _ _ ) _ = error "No union type is allowed here"
 subtyNoUnion _ _ _ (TApp TUn _ _ ) = error "No union type is allowed here"
 
 
--- | Top type gets simplified
-subtyNoUnion θ _ t t' 
-  | isTop t'       = unify θ t tTop
+-- | Top 
+subtyNoUnion θ _ _ t' 
+  | isTop t'       = return θ
+
+-- | Undefined
+subtyNoUnion θ _ t _
+  | isUndefined t  = return θ 
+
+-- | Null
+subtyNoUnion θ _ t _
+  | isNull t       = return θ 
 
 -- | Defined types
 subtyNoUnion θ e t@(TApp (TDef _) _ _) t'@(TApp (TDef _) _ _) = 
@@ -461,19 +469,16 @@ subtdef :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 subtdef θ e t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _) = 
   do 
     seen <- tc_mut <$> get 
-    if d == d' 
-      -- Proved subtyping so , clear the state for mutual recursive types
-      then modify (\s -> s { tc_mut = [] }) >> unifys θ ts ts'
+    -- Proved subtyping -- no need to clear the state for mutual recursive
+    -- types, as this could be used later on as well
+    if d == d' || (d,d') `elem` seen 
+      then unifys θ ts ts'
       else 
-        if (d,d') `elem` seen 
-      -- Proved subtyping so , clear the state for mutual recursive types
-          then modify (\s -> s { tc_mut = [] }) >> unifys θ ts ts'
-          else 
-            do  u  <- unfoldTDefM t
-                u' <- unfoldTDefM t'
-      -- Start populating the state for mutual recursive types
-                modify (\s -> s { tc_mut = (d,d'):(tc_mut s) })
-                subtdef θ e u u'
+      do  u  <- unfoldTDefM t
+          u' <- unfoldTDefM t'
+          -- Populate the state for mutual recursive types
+          modify (\s -> s { tc_mut = (d,d'):(tc_mut s) })
+          subtdef θ e u u'
 
 subtdef θ e t@(TApp (TDef _) _ _) t'    = do  u  <- unfoldTDefM t 
                                               subtyNoUnion θ e u t'
@@ -508,7 +513,7 @@ subty θ e t t' = subtyNoUnion θ e t t'
 subtyUnions :: Subst -> Maybe (Expression AnnSSA) -> [Type] -> [Type] -> TCM Subst
 -----------------------------------------------------------------------------
 subtyUnions θ e xs ys
-  | isTop ys  = return θ
+  | any isTop ys  = return θ
   | otherwise = allM θ e xs ys
     where
       allM θ e (x:xs) ys = 

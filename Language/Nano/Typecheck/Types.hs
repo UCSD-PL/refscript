@@ -27,8 +27,8 @@ module Language.Nano.Typecheck.Types (
   , ofType
   , strengthen 
 
-  -- * Top Type
-  , IsTop (..)
+  -- * Helpful checks
+  , isTop, isNull, isUndefined
 
   -- * Constructing Types
   , mkUnion
@@ -75,7 +75,6 @@ module Language.Nano.Typecheck.Types (
 
 import           Text.Printf
 import           Data.Hashable
-import qualified Data.Foldable           as F
 import           Data.Maybe             (fromMaybe) --, isJust)
 import           Data.Monoid            hiding ((<>))            
 -- import qualified Data.List               as L
@@ -210,18 +209,23 @@ stripProp (PropNum _ i)       = PropNum () i
 --       e.g. function types. Sigh. Should have used a separate function binder.
 
 
--- | Top Type
-class IsTop a where 
-  isTop :: a -> Bool
+---------------------------------------------------------------------------------
+-- | Helpful type checks
+---------------------------------------------------------------------------------
 
-instance IsTop Type where 
-  isTop (TApp TTop _ _) = True 
-  isTop (TApp TUn  ts _ ) = isTop ts
-  isTop _ = False
+isTop :: Type -> Bool
+isTop (TApp TTop _ _)   = True 
+isTop (TApp TUn  ts _ ) = any isTop ts
+isTop _                 = False
 
+isUndefined :: Type -> Bool
+isUndefined (TApp TUndef _ _)   = True 
+isUndefined _                   = False
 
-instance (IsTop a, F.Foldable f) => IsTop (f a) where
-  isTop = F.any isTop
+isNull :: Type -> Bool
+isNull (TApp TNull _ _)   = True 
+isNull _                  = False
+
 
 instance Eq TCon where
   TInt    == TInt    = True   
@@ -473,5 +477,5 @@ builtinId       = mkId . ("builtin_" ++)
 subset ::  [Type] -> [Type] -> Bool
 -----------------------------------------------------------------------------
 subset xs ys = 
-  isTop ys || all (\x -> any (\y -> x == y) ys) xs
+  any isTop ys || all (\x -> any (\y -> x == y) ys) xs
 

@@ -302,11 +302,13 @@ tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 tcAccess γ l e f = 
   tcExpr γ e >>= (unfoldTDefM >=> binders) >>= access {-$ tracePP "Field" -} f
   where
-    binders (TObj b _ )    = return b
-    binders t              = tcError l $ errorObjectAccess e t
     access f               = return . maybe tUndef b_type . find (match $ F.symbol f)
     match s (B f _)        = s == f
 
+binders :: Expression AnnSSA -> Type -> TCM [Bind r]
+binders e (TObj b _ )    = return b
+-- TODO: Add case for union type here
+binders e t              = tcError l $ errorObjectAccess e t
   
 
 ----------------------------------------------------------------------------------

@@ -230,7 +230,7 @@ unfoldTDef t env = go t
       case envFindTy (F.symbol id) env of
         Just (TBd (TD _ vs bd _ )) -> apply (fromList $ zip vs acts) bd
         _                          -> error $ errorUnboundId id
-    go (TApp c a r)            = TApp (traceShow "Cons" c) (go <$> (tracePP "Go rec" a)) r
+    go (TApp c a r)            = TApp c (go <$> a) r
     go t@(TVar _ _ )           = t
     appTBi f (B s t)           = B s $ f t
     

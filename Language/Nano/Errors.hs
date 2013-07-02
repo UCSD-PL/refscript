@@ -13,6 +13,7 @@ bugBadSubtypes x        = printf "BUG: Unexpected Subtyping Constraint \n %s" (p
 bugUnboundPhiVar x      = printf "BUG: Phi Variable %s is unbound" (ppshow x)
 bugUnboundVariable l x  = printf "BUG: Variable %s is unbound in environment at %s" (ppshow x) (ppshow l)
 bugMissingTypeArgs l    = printf "BUG: Missing Type Arguments at %s" (ppshow l)
+bugTBodiesOccur s       = printf "BUG: There should be no TBodies herie %s" s
 
 errorArgName l x y      = printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 

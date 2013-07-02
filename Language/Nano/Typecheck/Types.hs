@@ -402,8 +402,8 @@ tBool   = TApp TBool    [] F.top
 tString = TApp TString  [] F.top
 tTop    = TApp TTop     [] F.top
 tVoid   = TApp TVoid    [] F.top
-tUndef  = TApp TUndef [] F.top
-tNull   = TApp TNull  [] F.top
+tUndef  = TApp TUndef   [] F.top
+tNull   = TApp TNull    [] F.top
 tErr    = tVoid
 tFunErr = ([],[],tErr)
 

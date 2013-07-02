@@ -169,7 +169,7 @@ instance IsNano (VarDecl a) where
 instance IsNano (Expression a) where 
   isNano (BoolLit _ _)         = True
   isNano (IntLit _ _)          = True
-  -- PV adding StringLit
+  isNano (NullLit _ )          = True
   isNano (StringLit _ _)       = True
   isNano (VarRef _ _)          = True
   isNano (InfixExpr _ o e1 e2) = isNano o && isNano e1 && isNano e2

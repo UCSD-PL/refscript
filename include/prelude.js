@@ -59,7 +59,7 @@ function pos(){
 
 /*@ measure len :: forall A. (list [A]) => number */
 
-/*@ cons  :: forall A. (x:A, xs:list [A]) => list [A] */
+/*@ cons  :: forall A. (A, list[A] | Null) => list [A] */
 /*@ nil   :: () => Null */
 /*@ head  :: forall A. (xs:list [A]) => A        */
 /*@ tail  :: forall A. (xs:list [A]) => list [A] */

@@ -231,43 +231,51 @@ tcAsgn γ _ x e
   = do t <- tcExpr γ e
        return $ Just $ envAdds [(x, t)] γ
 
+
+
 -------------------------------------------------------------------------------
 tcExpr :: Env Type -> Expression AnnSSA -> TCM Type
 -------------------------------------------------------------------------------
+tcExpr γ e = setExpr (Just e) >> tcExpr' γ e 
 
-tcExpr _ (IntLit _ _)
+
+-------------------------------------------------------------------------------
+tcExpr' :: Env Type -> Expression AnnSSA -> TCM Type
+-------------------------------------------------------------------------------
+
+tcExpr' _ (IntLit _ _)
   = return tInt
 
-tcExpr _ (BoolLit _ _)
+tcExpr' _ (BoolLit _ _)
   = return tBool
 
-tcExpr _ (StringLit _ _)
+tcExpr' _ (StringLit _ _)
   = return tString
 
-tcExpr _ (NullLit _)
+tcExpr' _ (NullLit _)
   = return tNull
 
-tcExpr γ (VarRef l x)
+tcExpr' γ (VarRef l x)
   = case envFindTy x γ of 
       Nothing -> logError (ann l) (errorUnboundIdEnv x γ) tErr
       Just z  -> return z
 
-tcExpr γ (PrefixExpr l o e)
+tcExpr' γ (PrefixExpr l o e)
   = tcCall γ l o [e] (prefixOpTy o γ)
 
-tcExpr γ (InfixExpr l o e1 e2)        
+tcExpr' γ (InfixExpr l o e1 e2)        
   = tcCall γ l o [e1, e2] (infixOpTy o γ)
 
-tcExpr γ (CallExpr l e es)
+tcExpr' γ (CallExpr l e es)
   = tcExpr γ e >>= tcCall γ l e es
 
-tcExpr γ (ObjectLit _ ps) 
+tcExpr' γ (ObjectLit _ ps) 
   = tcObject γ (tracePP "tcObject" ps)
 
-tcExpr γ (DotRef l e i) 
+tcExpr' γ (DotRef l e i) 
   = tcAccess γ l e i
 
-tcExpr _ e 
+tcExpr' _ e 
   = convertError "tcExpr" e
 
 ----------------------------------------------------------------------------------
@@ -300,15 +308,18 @@ tcObject γ bs
 tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 ----------------------------------------------------------------------------------
 tcAccess γ l e f = 
-  tcExpr γ e >>= (unfoldTDefM >=> binders) >>= access {-$ tracePP "Field" -} f
+  tcExpr γ e >>= (unfoldTDefM >=> binders l e) >>= access {-$ tracePP "Field" -} f
   where
     access f               = return . maybe tUndef b_type . find (match $ F.symbol f)
     match s (B f _)        = s == f
 
-binders :: Expression AnnSSA -> Type -> TCM [Bind r]
-binders e (TObj b _ )    = return b
--- TODO: Add case for union type here
-binders e t              = tcError l $ errorObjectAccess e t
+binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
+binders l e (TObj b _ )       = return b
+binders l e t@(TApp TUn ts _) = 
+  case find isObj ts of
+    Just t' -> addCast t' >> tracePP "Casting" <$> binders l e t'
+    _       -> tcError l $ errorObjectAccess e t
+binders l e t                 = tcError l $ errorObjectAccess e t
   
 
 ----------------------------------------------------------------------------------

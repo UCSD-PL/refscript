@@ -25,7 +25,7 @@ errorUnboundId x        = printf "Identifier %s unbound" (ppshow x)
 errorUnboundIdEnv x t   = printf "ZOGBERT Identifier %s unbound in %s" (ppshow x) (ppshow t)
 errorWrongType m e t t' = printf "%s -- unexpected type for %s :: %s expected %s" m (ppshow e) (ppshow t) (ppshow t')
 errorJoin x t t'        = printf "Conflicting join for %s \n   %s\n   %s" (ppshow x) (ppshow t) (ppshow t') 
-errorUnification t t'   = printf "Cannot unify types: %s and %s" (ppshow t) (ppshow t')
+errorUnification t t'   = printf "Cannot unify types: %s and %s at %s" (ppshow t) (ppshow t')
 errorBoundTyVar a t     = printf "Cannot unify bound type parameter %s with %s" (ppshow a) (ppshow t)
 errorFreeTyVar t        = printf "Type not fully instantiated: %s" (ppshow t)
 errorWriteImmutable x   = printf "Cannot write immutable: %s" (ppshow x)
@@ -36,6 +36,7 @@ errorSubType m t t'     = printf "%s -- Type %s is not a subtype of %s" m (ppsho
 errorCast m e t         = printf "%s -- Cannot cast non-variable expression: %s to %t" m (ppshow e) (ppshow t)
 errorObjSubtyping t t'  = printf "Object type: %s is not a subtype of %s" (ppshow t) (ppshow t')
 errorObjectAccess e t   = printf "Dot notation on non object expression %s :: %s" (ppshow e) (ppshow t)
+errorNullUndefined      = printf "Null type is not a subtype of undefined"
  
 ppshow                  = render . pp
 

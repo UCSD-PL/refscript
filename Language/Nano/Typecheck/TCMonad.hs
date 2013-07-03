@@ -430,7 +430,8 @@ subtyNoUnion θ _ t _
   | isUndefined t  = return θ 
 
 -- | Null
-subtyNoUnion θ _ t _
+subtyNoUnion θ _ t t'
+  | isNull t && isUndefined t' = addError errorNullUndefined θ
   | isNull t       = return θ 
 
 -- | Defined types
@@ -443,7 +444,6 @@ subtyNoUnion θ e t@(TApp (TDef _) _ _) t'        =
 
 subtyNoUnion θ e t t'@(TApp (TDef _) _ _)        =
   tc_tdefs <$> get >>= return . unfoldTDef t' >>= subty θ e t
-
 
 -- | Object subtyping
 subtyNoUnion θ e t@(TObj bs _) t'@(TObj bs' _)

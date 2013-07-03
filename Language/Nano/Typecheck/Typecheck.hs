@@ -306,8 +306,12 @@ tcAccess γ l e f =
     match s (B f _)        = s == f
 
 binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
-binders l e (TObj b _ )    = return b
-binders l e t              = tcError l $ errorObjectAccess e t
+binders l e (TObj b _ )       = return b
+binders l e t@(TApp TUn ts _) = 
+  case find isObj ts of
+    Just t' -> binders l e t'
+    _       -> tcError l $ errorObjectAccess e t
+binders l e t                 = tcError l $ errorObjectAccess e t
   
 
 ----------------------------------------------------------------------------------

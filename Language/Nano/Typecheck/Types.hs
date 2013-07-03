@@ -28,7 +28,7 @@ module Language.Nano.Typecheck.Types (
   , strengthen 
 
   -- * Helpful checks
-  , isTop, isNull, isUndefined
+  , isTop, isNull, isUndefined, isObj
 
   -- * Constructing Types
   , mkUnion
@@ -226,6 +226,10 @@ isNull :: Type -> Bool
 isNull (TApp TNull _ _)   = True 
 isNull _                  = False
 
+isObj :: Type -> Bool
+isObj (TObj _ _)        = True
+isObj _                 = False
+
 
 instance Eq TCon where
   TInt    == TInt    = True   
@@ -249,7 +253,7 @@ data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
                      , specs  :: !(Env t)           -- ^ Imported Specifications
                      , defs   :: !(Env t)           -- ^ Signatures for Code
                      , consts :: !(Env t)           -- ^ Measure Signatures 
-                     , tDefs  :: !(Env t)             -- ^ Type definitions
+                     , tDefs  :: !(Env t)           -- ^ Type definitions
                      , quals  :: ![F.Qualifier]     -- ^ Qualifiers
                      } deriving (Functor)
 

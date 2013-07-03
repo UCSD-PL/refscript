@@ -28,6 +28,7 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Annotations
   , accumAnn
   , getAllAnns
+  , addCast
 
   -- * Unification
   , unifyType, unifyTypes
@@ -43,6 +44,9 @@ module Language.Nano.Typecheck.TCMonad (
 
   -- * Patch the program with assertions
   , patchPgm
+
+  -- * Set the current expression
+  , setExpr
   )  where 
 
 import           Text.Printf
@@ -68,7 +72,7 @@ import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
--- import           Debug.Trace hiding (traceShow)
+import           Debug.Trace hiding (traceShow)
 import           Language.Nano.Misc               ()
 
 -------------------------------------------------------------------------------
@@ -608,7 +612,7 @@ addCast :: Type -> TCM ()
 -------------------------------------------------------------------------------
 addCast t = 
   do  eo <- getExpr
-      case {- trace (printf "Casting %s to %s"  (ppshow eo) (ppshow t)) -} eo of 
+      case trace (printf "Casting %s to %s"  (ppshow eo) (ppshow t)) eo of 
       -- Right now nothing is added explicitly to . The casted type is just
       -- propagated. 
         Just e                -> addAsrt e t 
@@ -682,8 +686,9 @@ patchExpr' e@(CallExpr a e' el)      = do a' <- annt e a
                                           liftM2 (CallExpr a') (patchExpr e') (patchExprs el)
 patchExpr' e@(FuncExpr a oi is ss)   = do a' <- annt e a
                                           FuncExpr a' oi is <$> patchStmts ss
-patchExpr' e@(DotRef a e' i)         = do a' <- annt e a 
-                                          return $ DotRef a' e' i 
+patchExpr' e@(DotRef a b f)          = do a' <- annt e a 
+                                          b' <- patchExpr b
+                                          return $ DotRef a' b' f
 patchExpr' e                         = return $ error $ "Does not support patchExpr for: "
                                                   ++ ppshow e
                                                   

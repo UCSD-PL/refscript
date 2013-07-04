@@ -501,10 +501,10 @@ subty θ e t                  t'@(TApp TUn ts' _) = tryWithBackups (subtyUnions 
 subty θ e t                  t'                  = subtyNoUnion θ e t t'
 
 cast θ xs ys 
-  | S.size (tracePP "∩" $ isct xs ys) > 0 = addCast (mkUnion $ S.toList $ isct xs ys) >> return θ
-  | otherwise                             = addError (errorSubType "U" xs ys) θ
+  | S.size (isct xs ys) > 0 = addCast (mkUnion $ S.toList $ isct xs ys) >> return θ
+  | otherwise               = addError (errorSubType "Cast" xs ys) θ
   where
-    isct xs ys = (tracePP "xs" $ S.fromList xs) `S.intersection` (tracePP "ys" $ S.fromList ys)
+    isct xs ys = (S.fromList xs) `S.intersection` (S.fromList ys)
 
 
 -----------------------------------------------------------------------------
@@ -614,11 +614,11 @@ addCast :: Type -> TCM ()
 -------------------------------------------------------------------------------
 addCast t = 
   do  eo <- getExpr
-      case trace (printf "Casting %s to %s"  (ppshow eo) (ppshow t)) eo of 
-      -- Right now nothing is added explicitly to . The casted type is just
-      -- propagated. 
-        Just e                -> addAsrt e t 
-        _                     -> logError dummySpan "NO CAST" ()
+      case eo of 
+      -- Add the cast (assertion) to the state
+      -- Not the AST
+        Just e -> addAsrt e $ tracePP (printf "Casting %s (%s)" (ppshow e) (ppshow $ getAnnotation e)) t
+        _      -> logError dummySpan "NO CAST" ()
 
 addAsrt e t = modify $ \st -> st { tc_asrt = M.insert ss t (tc_asrt st) } 
   where 
@@ -662,7 +662,7 @@ patchExprs = mapM patchExpr
 annt e a = 
   do  m <- tc_asrt <$> get
       case M.lookup key m of
-        Just t -> return $ a { ann_fact = (Assert $ t) : (ann_fact a) } 
+        Just t -> return $ a { ann_fact = (Assert $ trace (printf "Found %s" $ ppshow key) t) : (ann_fact a) } 
         _      -> return $ a
         where 
           key = ann $ getAnnotation e

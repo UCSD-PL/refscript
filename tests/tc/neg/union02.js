@@ -4,8 +4,8 @@ function id(a) {
   return a;
 }
 
-/*@ foo1 :: ((number|boolean|void)) => (boolean|number) */
-function foo1(x) {
+/*@ foo :: ((number|boolean|void)) => boolean|number */
+function foo(x) {
   return id(x);
 }
 

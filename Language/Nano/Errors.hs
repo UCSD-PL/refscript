@@ -14,6 +14,7 @@ bugUnboundPhiVar x      = printf "BUG: Phi Variable %s is unbound" (ppshow x)
 bugUnboundVariable l x  = printf "BUG: Variable %s is unbound in environment at %s" (ppshow x) (ppshow l)
 bugMissingTypeArgs l    = printf "BUG: Missing Type Arguments at %s" (ppshow l)
 bugTBodiesOccur s       = printf "BUG: There should be no TBodies herie %s" s
+bugBadUnions s          = printf "BUG: No unions should be found here (%s)" s
 
 errorArgName l x y      = printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 
@@ -25,7 +26,7 @@ errorUnboundId x        = printf "Identifier %s unbound" (ppshow x)
 errorUnboundIdEnv x t   = printf "ZOGBERT Identifier %s unbound in %s" (ppshow x) (ppshow t)
 errorWrongType m e t t' = printf "%s -- unexpected type for %s :: %s expected %s" m (ppshow e) (ppshow t) (ppshow t')
 errorJoin x t t'        = printf "Conflicting join for %s \n   %s\n   %s" (ppshow x) (ppshow t) (ppshow t') 
-errorUnification t t'   = printf "Cannot unify types: %s and %s at %s" (ppshow t) (ppshow t')
+errorUnification t t'   = printf "Cannot unify types: %s and %s" (ppshow t) (ppshow t')
 errorBoundTyVar a t     = printf "Cannot unify bound type parameter %s with %s" (ppshow a) (ppshow t)
 errorFreeTyVar t        = printf "Type not fully instantiated: %s" (ppshow t)
 errorWriteImmutable x   = printf "Cannot write immutable: %s" (ppshow x)

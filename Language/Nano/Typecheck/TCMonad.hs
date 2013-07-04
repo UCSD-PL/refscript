@@ -304,12 +304,12 @@ subTypes :: AnnSSA -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Sub
 subTypes l es t1s t2s
   | length t1s /= length t2s = getSubst >>= logError (ann l) errorArgMismatch
   | otherwise                = do θ  <- getSubst
-                                  θ' <- subtys θ es t1s t2s 
-                                  -- θ' <- subtys θ 
-                                  --   (trace (printf "ST: %s :: %s - %s" 
-                                  --     (ppshow es) 
-                                  --     (ppshow t1s)
-                                  --     (ppshow t2s)) es) t1s t2s
+                                  {-θ' <- subtys θ es t1s t2s -}
+                                  θ' <- subtys θ 
+                                    (trace (printf "ST: %s :: %s - %s" 
+                                      (ppshow es) 
+                                      (ppshow t1s)
+                                      (ppshow t2s)) es) t1s t2s
                                   accumErrs l
                                   setSubst θ' 
                                   return θ'
@@ -407,7 +407,7 @@ varAsn θ α t
   | unassigned α θ       = Right $ θ `mappend` (Su $ HM.singleton α t) 
   | otherwise            = Left  $ errorRigidUnify α t
   
-unassigned α (Su m) = HM.lookup α m == Just (tVar α)
+unassigned α (Su m) = tracePP "Got" (HM.lookup (trace (printf "Looking up %s in %s" (ppshow α) (show m)) α) m) == Just (tVar α)
 
 -----------------------------------------------------------------------------
 varAsnM :: Subst -> TVar -> Type -> TCM Subst
@@ -463,7 +463,7 @@ subtyNoUnion θ e t@(TObj bs _) t'@(TObj bs' _)
       (ts,ts') = {- tracePP "subObjTypes" -}
         ([b_type b | b <- bs, (b_sym b) `elem` k'], b_type <$> bs')
 
-subtyNoUnion θ _ t t' = unify θ t t'
+subtyNoUnion θ _ t t' = unify θ (trace (printf "About to unify (%s) with (%s) in %s" (ppshow t) (ppshow t') (ppshow θ)) t) t'
 
 subtyNoUnion' θ e t t' = subtyNoUnion θ e t t'
 
@@ -501,7 +501,7 @@ subty θ e t                  t'@(TApp TUn ts' _) = tryWithBackups (subtyUnions 
 subty θ e t                  t'                  = subtyNoUnion θ e t t'
 
 cast θ xs ys 
-  | S.size (isct xs ys) > 0 = addCast (mkUnion $ S.toList $ isct xs ys) >> return θ
+--  | S.size (isct xs ys) > 0 = addCast (mkUnion $ S.toList $ isct xs ys) >> return θ
   | otherwise               = addError (errorSubType "Cast" xs ys) θ
   where
     isct xs ys = (S.fromList xs) `S.intersection` (S.fromList ys)
@@ -583,15 +583,15 @@ subtys ::  Subst -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Subst
 subtys θ es xs ys =  {- trace msg <$> -} applyToList subty θ es xs ys 
 
 applyToList f θ es ts ts'
-  | nTs == nTs' = go θ (es, ts, ts')
+  | nTs == nTs' = go θ (tracePP "Exprs" es, tracePP "ts" ts, tracePP "ts\'" ts')
   | otherwise   = addError (errorSubType "" ts ts) θ
   where
     nTs                  = length ts
     nTs'                 = length ts'
-    go θ (eo:eos, t:ts , t':ts') = do setExpr eo
+    go θ (eo:eos, t:ts , t':ts') = do setExpr (tracePP "Expr: " eo)
                                       θ' <- f θ eo t t'
-                                      go θ' (eos, apply θ' ts, apply θ' ts')
-    go θ (_, _  , _  )   = return θ
+                                      go (tracePP "θ" θ') (eos, apply θ' ts, apply θ' ts')
+    go θ (_, _  , _  )   = return θ 
 
 
 

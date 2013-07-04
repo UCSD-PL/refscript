@@ -1,6 +1,8 @@
 /*@ type list[A]  {  data : A, 
                      next : list[A] | Null } */
 
+// #define list?[A] = {list[A] | ...} | {Null | ... }
+
 /*@ map :: forall A B. ((A) => B, list [A]|Null) => list[B]|Null */
 function map(f, xs){
   

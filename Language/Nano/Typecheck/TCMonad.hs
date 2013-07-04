@@ -64,7 +64,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Misc             (mapSndM)
 import           Data.Monoid                  
 import qualified Data.HashSet             as HS
--- import qualified Data.Set                 as S
+import qualified Data.Set                 as S
 import qualified Data.HashMap.Strict      as HM
 import qualified Data.Map                 as M
 import qualified Data.List                as L
@@ -372,7 +372,9 @@ unify θ t t'
 
 
 
+-----------------------------------------------------------------------------
 unifys         ::  Subst -> [Type] -> [Type] -> TCM Subst
+-----------------------------------------------------------------------------
 unifys θ xs ys =  {- trace msg $ -} unifys' θ xs ys 
    {-where -}
    {-  msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
@@ -421,9 +423,8 @@ subtyNoUnion :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
 
 -- | Reject union types here
-subtyNoUnion _ _ (TApp TUn _ _ ) _ = error "No union type is allowed here"
-subtyNoUnion _ _ _ (TApp TUn _ _ ) = error "No union type is allowed here"
-
+subtyNoUnion _ _ (TApp TUn _ _ ) _ = error $ bugBadUnions "subtyNoUnion-1"
+subtyNoUnion _ _ _ (TApp TUn _ _ ) = error $ bugBadUnions "subtyNoUnion-2"
 
 -- | Top 
 subtyNoUnion θ _ _ t' 
@@ -476,7 +477,7 @@ subtdef θ e t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _) =
     -- Proved subtyping -- no need to clear the state for mutual recursive
     -- types, as this could be used later on as well
     if d == d' || (d,d') `elem` seen 
-      then unifys θ ts ts'
+      then unifys θ ts ts' -- invariant in type arguments
       else 
       do  u  <- unfoldTDefM t
           u' <- unfoldTDefM t'
@@ -484,12 +485,9 @@ subtdef θ e t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _) =
           modify (\s -> s { tc_mut = (d,d'):(tc_mut s) })
           subtdef θ e u u'
 
-subtdef θ e t@(TApp (TDef _) _ _) t'    = do  u  <- unfoldTDefM t 
-                                              subtyNoUnion θ e u t'
-subtdef θ e t t'@(TApp (TDef _) _ _)  = do  u' <- unfoldTDefM t'
-                                            subtyNoUnion θ e t u'
-                                                      
-subtdef θ e t t'                           = subtyNoUnion' θ e t t'
+subtdef θ e t@(TApp (TDef _) _ _) t'  = unfoldTDefM t >>= \u  -> subtyNoUnion θ e u t'
+subtdef θ e t t'@(TApp (TDef _) _ _)  = unfoldTDefM t'>>= \u' -> subtyNoUnion θ e t u'                                                      
+subtdef θ e t t'                      = subtyNoUnion' θ e t t'
 
 
 -----------------------------------------------------------------------------
@@ -497,46 +495,49 @@ subtdef θ e t t'                           = subtyNoUnion' θ e t t'
 -----------------------------------------------------------------------------
 subty :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
-subty θ e (TApp TUn ts _ ) t'@(TApp TUn _ _) = 
-  foldM (\θ t -> subty θ e t t') θ ts 
+subty θ e t@(TApp TUn ts _ ) t'@(TApp TUn ts' _) = tryWithBackup (foldM (\θ t -> subty θ e t t') θ ts) (cast θ ts ts')
+subty θ e t@(TApp TUn ts _ ) t'                  = tryWithBackups (subtyUnions θ e ts [t']) [unify θ t t', cast θ ts [t']]
+subty θ e t                  t'@(TApp TUn ts' _) = tryWithBackups (subtyUnions θ e [t] ts') [unify θ t t', cast θ [t] ts']
+subty θ e t                  t'                  = subtyNoUnion θ e t t'
 
-subty θ e t@(TApp TUn ts _ ) t' =
-  do  s <- get
-      case tryError s (subtyUnions θ e (tracePP "ts" ts) (tracePP "[t\']" [t'])) of 
-        (Left _  , _ ) -> unify θ t t'
-        (Right θ', s') -> modify (const s') >> return θ'
+cast θ xs ys 
+  | S.size (tracePP "∩" $ isct xs ys) > 0 = addCast (mkUnion $ S.toList $ isct xs ys) >> return θ
+  | otherwise                             = addError (errorSubType "U" xs ys) θ
+  where
+    isct xs ys = (tracePP "xs" $ S.fromList xs) `S.intersection` (tracePP "ys" $ S.fromList ys)
 
-subty θ e t t'@(TApp TUn ts' _) = 
-  do  s <- get
-      case tryError s (subtyUnions θ e [t] ts') of 
-        (Left _  , _ ) -> unify θ t t' 
-        (Right θ', s') -> modify (const s') >> return θ'
 
-subty θ e t t' = subtyNoUnion θ e t t'  
 -----------------------------------------------------------------------------
 subtyUnions :: Subst -> Maybe (Expression AnnSSA) -> [Type] -> [Type] -> TCM Subst
 -----------------------------------------------------------------------------
 subtyUnions θ e xs ys
   | any isTop ys  = return θ
-  | otherwise = allM θ e xs ys
+  | otherwise     = allM θ e xs ys
     where
-      allM θ e (x:xs) ys = 
-        do  θ' <- anyM θ e x ys
-            allM θ' e xs ys
-      allM θ _ [] _  = return θ
+      allM θ e (x:xs) ys  = anyM θ e x ys >>= \θ -> allM θ e xs ys
+      allM θ _ [] _       = return θ
+      anyM θ e t (t':ts') = tryWithBackup (subtyNoUnion θ e t t') (anyM θ e t ts')
+      anyM θ _ _ _        = addError (errorSubType "U" xs ys) θ
 
-      anyM θ e t (t':ts') =
-        do  st <- get
-            case tryError st (subtyNoUnion θ e t t') of
-              (Left _  , _ ) -> anyM θ e t {- $ tracePP "will check next" -} ts'
-              (Right θ', s') -> do { modify (const s'); return $ θ' }
-      anyM θ _ _ _       = addError (errorSubType "U" xs ys) θ
-      -- TODO: ADD A CASTS !!!
-      -- -- Disabling for the moment 
-      --  | S.size (tracePP "∩" isct) > 0 = addCast (mkUnion $ S.toList isct) >> return θ
-      --  | otherwise = addError (errorSubType "U" xs ys) θ
-      -- isct = (S.fromList xs) `S.intersection` (S.fromList ys)
+-- | Try to execute the operation in the first argument's monad. 
+-- And if it fails try successively the operations in the second 
+-- argument list.
+-----------------------------------------------------------------------------
+tryWithBackups :: TCM a -> [TCM a] -> TCM a
+-----------------------------------------------------------------------------
+tryWithBackups = foldl tryWithBackup
+  
 
+-- | Try to execute the operation in the first argument's monad. 
+-- And if it fails try the operations in the second argument.
+-----------------------------------------------------------------------------
+tryWithBackup :: TCM a -> TCM a -> TCM a
+-----------------------------------------------------------------------------
+tryWithBackup action backup =
+  do  s <- get
+      case tryError s $ action of 
+        (Left _  , _ ) -> backup
+        (Right r, s') -> modify (const s') >> return r
 
 
 -----------------------------------------------------------------------------
@@ -545,6 +546,7 @@ tryError :: TCState -> TCM a -> (Either [String] a, TCState)
 tryError = tryIt clearError applyError
 
 
+-- TODO Make this more generic
 -----------------------------------------------------------------------------
 tryIt ::     
              (TCState -> (b, TCState))    -- Clear the initial state and get some info

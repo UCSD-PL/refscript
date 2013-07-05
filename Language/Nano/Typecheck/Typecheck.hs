@@ -108,7 +108,7 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
 
 --   We define this alias as the "output" type for typechecking any entity
 --   that can create or affect binders (e.g. @VarDecl@ or @Statement@)
---   @Nothing@ means if we definitely hits a "return" 
+--   @Nothing@ means if we definitely hit a "return" 
 --   @Just γ'@ means environment extended with statement binders
 
 type TCEnv = Maybe (Env Type)
@@ -284,11 +284,11 @@ tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> T
 tcCall γ l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
        ts         <- mapM (tcExpr γ) es
-       θ'         <- subTypes l (map Just es) ts (b_type <$> its)
+       θ'         <- tracePP (printf "tcCall to %s: θ\'" (ppshow fn)) <$> subTypes l (map Just es) ts (b_type <$> its)
        return      $ apply θ' ot
 
 instantiate l fn ft 
-  = do t' <- freshTyArgs (srcPos l) $ bkAll ft 
+  = do t' <- tracePP "new Ty Args" <$> freshTyArgs (srcPos l) (bkAll ft)
        maybe err return   $ bkFun t'
     where
        err = logError (ann l) (errorNonFunction fn ft) tFunErr

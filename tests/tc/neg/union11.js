@@ -1,4 +1,3 @@
-
 /*@ id :: forall A . (A,A) => A */
 function id(a,b) {
   return b;

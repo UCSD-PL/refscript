@@ -634,7 +634,10 @@ subtys θ es ts ts'
   where
     nTs                       = length ts
     nTs'                      = length ts'
-    go l = mapM (\(e,t,t') -> setExpr e >> subty θ e t t') l >>= joinSubsts
+    go l = 
+      do  θs <- mapM (\(e,t,t') -> setExpr e >> subty θ e t t') l
+          case θs of [] -> return θ
+                     _  -> joinSubsts θs
 
 
 -------------------------------------------------------------------------------

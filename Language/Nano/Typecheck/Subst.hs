@@ -117,3 +117,4 @@ appTy (Su m) (TAll α t)          = apply (Su $ M.delete α m) t
 appTy (Su m) (TBd (TD c α t s))  = TBd $ TD c α (apply (Su $ foldr M.delete m α) t) s
 
 
+

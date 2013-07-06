@@ -42,7 +42,7 @@ verifyFile :: FilePath -> IO (F.FixResult SourceSpan)
 -------------------------------------------------------------------------------
 typeCheck     :: (F.Reftable r) => Nano AnnSSA (RType r) -> Nano AnnType (RType r) 
 -------------------------------------------------------------------------------
-typeCheck pgm = either crash id . execute pgm . tcNano $ pgm 
+typeCheck pgm = either crash id . execute pgm . patch $ pgm 
   where 
     crash     = errorstar . render . vcat . map (text . ppErr)
 

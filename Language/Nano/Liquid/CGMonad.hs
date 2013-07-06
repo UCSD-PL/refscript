@@ -95,7 +95,7 @@ execute pgm act
       (Right x, st) -> (x, st)  
 
 initState :: Nano z RefType -> CGState
-initState pgm = CGS F.emptyBindEnv (defs pgm) [] [] 0 mempty
+initState pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -125,12 +125,13 @@ measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts
 ---------------------------------------------------------------------------------------
 
 data CGState 
-  = CGS { binds   :: F.BindEnv          -- ^ global list of fixpoint binders
-        , cg_defs :: !(E.Env RefType)   -- ^ type sigs for all defined functions
-        , cs      :: ![SubC]            -- ^ subtyping constraints
-        , ws      :: ![WfC]             -- ^ well-formedness constraints
-        , count   :: !Integer           -- ^ freshness counter
-        , cg_ann  :: A.AnnInfo RefType  -- ^ recorded annotations
+  = CGS { binds    :: F.BindEnv          -- ^ global list of fixpoint binders
+        , cg_defs  :: !(E.Env RefType)   -- ^ type sigs for all defined functions
+        , cg_tdefs :: !(E.Env RefType)   -- ^ type definitions
+        , cs       :: ![SubC]            -- ^ subtyping constraints
+        , ws       :: ![WfC]             -- ^ well-formedness constraints
+        , count    :: !Integer           -- ^ freshness counter
+        , cg_ann   :: A.AnnInfo RefType  -- ^ recorded annotations
         }
 
 type CGM     = ErrorT String (State CGState)
@@ -149,7 +150,7 @@ cgError l msg = throwError $ printf "CG-ERROR at %s : %s" (ppshow $ srcPos l) ms
 envAddFresh :: (IsLocated l) => l -> RefType -> CGEnv -> CGM (Id l, CGEnv) 
 ---------------------------------------------------------------------------------------
 envAddFresh l t g 
-  = do x  <- {- tracePP ("envAddFresh" ++ ppshow t) <$> -} freshId l
+  = do x  <- tracePP ("envAddFresh" ++ ppshow t) <$> freshId l
        g' <- envAdds [(x, t)] g
        return (x, g')
 

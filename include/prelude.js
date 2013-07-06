@@ -46,6 +46,8 @@ function pos(){
 
 /* measure len :: forall A. (list [A]) => number */
 
+/* measure null :: forall A. (A) => bool */
+
 /* cons  :: forall A. (x:A, xs:list [A]) => {v: list [A] | (len v) = 1 + (len xs)}            */
 /* nil   :: forall A. () => {v: list [A] | (len v) = 0}                                       */
 /* head  :: forall A. (xs:list [A]) => A        */

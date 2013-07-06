@@ -4,7 +4,7 @@
 
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
--- import           Text.Printf                        (printf)
+import           Text.Printf                        (printf)
 -- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
 import           Control.Applicative                ((<$>))
@@ -241,7 +241,7 @@ consExpr :: CGEnv -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 ------------------------------------------------------------------------------------
 
 -- | @consExpr g e@ returns a pair (g', x') where
---   x' is a fresh, temporary (A-Normalized) holding the value of `e`,
+--   x' is a fresh, temporary (A-Normalized) variable holding the value of `e`,
 --   g' is g extended with a binding for x' (and other temps required for `e`)
 
 consExpr g (IntLit l i)               
@@ -270,8 +270,20 @@ consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 
        consCall g' l e es $ envFindTy x g'
 
+
+consExpr  g (DotRef l e i)
+  = do  (x, g') <- consExpr g e
+        case getBinding i $ envFindTy x g' of 
+          Left  s -> errorstar s
+          Right t -> envAddFresh l t g'
+       
+consExpr g (ObjectLit l ps) 
+  = do  (x, g') <- consObj l g ps
+        envAddFresh l (envFindTy x g') g'
+
+
 consExpr _ e 
-  = errorstar "consExpr: not handled" (pp e)
+  = error $ (printf "consExpr: not handled %s" (ppshow e))
 
 
 ---------------------------------------------------------------------------------------------
@@ -330,3 +342,15 @@ consSeq f           = foldM step . Just
     step Nothing _  = return Nothing
     step (Just g) x = f g x
 
+
+---------------------------------------------------------------------------------
+consObj :: AnnType -> CGEnv -> [(Prop AnnType, Expression AnnType)] -> CGM (Id AnnType, CGEnv)
+---------------------------------------------------------------------------------
+consObj l g pe = 
+  do
+    let (ps, es) = unzip pe
+    (xes, g')    <- consScan consExpr g es
+    let pxs = zipWith B (map F.symbol ps) $ map (\x -> envFindTy x g') xes
+    envAddFresh  l (tracePP "consObject" $ TObj pxs F.top) g'
+    -- XXX What kind of refinements could we get here?
+  

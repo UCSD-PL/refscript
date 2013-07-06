@@ -37,6 +37,8 @@ errorSubType m t t'     = printf "%s -- Type %s is not a subtype of %s" m (ppsho
 errorCast m e t         = printf "%s -- Cannot cast non-variable expression: %s to %t" m (ppshow e) (ppshow t)
 errorObjSubtyping t t'  = printf "Object type: %s is not a subtype of %s" (ppshow t) (ppshow t')
 errorObjectAccess e t   = printf "Dot notation on non object expression %s :: %s" (ppshow e) (ppshow t)
+errorObjectTAccess t    = printf "Dot notation not permitted on expressions of type %s" (ppshow t)
+errorObjectBinding      = printf "Field does not exist in object" 
 errorNullUndefined      = printf "Null type is not a subtype of undefined"
  
 ppshow                  = render . pp

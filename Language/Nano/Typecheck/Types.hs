@@ -71,13 +71,14 @@ module Language.Nano.Typecheck.Types (
   -- * Useful Operations
   , subset
   , stripProp
+  , getBinding
   ) where 
 
 import           Text.Printf
 import           Data.Hashable
 import           Data.Maybe             (fromMaybe) --, isJust)
 import           Data.Monoid            hiding ((<>))            
--- import qualified Data.List               as L
+import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -185,9 +186,21 @@ bkAll t              = go [] t
     go αs t          = (reverse αs, t)
 
 mkUnion :: [Type] -> Type
-mkUnion [ ] = tErr
+mkUnion [ ] = tErr -- maybe sth like false
 mkUnion [t] = t
 mkUnion ts  = TApp TUn ts ()
+
+
+
+-- | Get binding from object type
+getBinding :: Id a -> RType r -> Either String (RType r)
+getBinding i to@(TObj bs _ ) = 
+  case L.find (\s -> F.symbol i == b_sym s) bs of
+    Just b -> Right $ b_type b
+    _      -> Left  $ errorObjectBinding
+getBinding t _ = Left $ errorObjectTAccess t
+
+
 
 ---------------------------------------------------------------------------------
 strengthen                   :: F.Reftable r => RType r -> r -> RType r

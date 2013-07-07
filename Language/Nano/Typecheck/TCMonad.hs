@@ -34,13 +34,13 @@ module Language.Nano.Typecheck.TCMonad (
   , unifyType, unifyTypes
 
   -- * Subtyping
-  , subType, subTypes
+  , SCache, subType, subTypes, getCache
 
   -- * Get Type Signature 
   , getDefType 
 
   -- * Unfold type definition
-  , unfoldTDef, unfoldTDefM
+  , unfoldTDef, unfoldTDefM, unfoldTDefMaybe
 
   -- * Patch the program with assertions
   , patchPgm
@@ -63,13 +63,13 @@ import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
 import           Language.Nano.Misc             (mapSndM)
 import           Data.Monoid                  
-import qualified Data.HashSet             as HS
-import qualified Data.Set                 as S
+import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as HM
 import qualified Data.Map                 as M
 import qualified Data.List                as L
 import           Data.Maybe                     (fromJust)
 import           Language.ECMAScript3.Parser    (SourceSpan (..))
+import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
@@ -98,10 +98,15 @@ data TCState = TCS {
                    -- The currently typed expression 
                    , tc_expr  :: Maybe (Expression AnnSSA)
                    -- Keep track of mutually recursive type constructors
-                   , tc_mut   :: [(TCon,TCon)]                
+                   , tc_mut   :: [(TCon,TCon)]
+                   -- Cache subtyping relations
+                   , tc_cache :: SCache
                    }
 
 type TCM     = ErrorT String (State TCState)
+
+-- TODO: replace with something more efficient
+type SCache  = [(Type, Type)]
 
 -------------------------------------------------------------------------------
 getSubst :: TCM Subst
@@ -198,7 +203,7 @@ execute pgm act
 
 initState :: Nano z (RType r) -> TCState
 initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns tc_annss 
-                    tc_asrt tc_defs tc_tdefs tc_expr tc_mut
+                    tc_asrt tc_defs tc_tdefs tc_expr tc_mut tc_cache
   where
     tc_errss = []
     tc_errs  = []
@@ -211,6 +216,7 @@ initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns tc_annss
     tc_tdefs = envMap toType $ tDefs pgm
     tc_expr  = Nothing
     tc_mut   = []
+    tc_cache = []
 
 
 -- | Instantiate the type body pointed to by "TDef id" with the actual types in
@@ -238,7 +244,19 @@ unfoldTDef t env = go t
     go (TApp c a r)            = TApp c (go <$> a) r
     go t@(TVar _ _ )           = t
     appTBi f (B s t)           = B s $ f t
-    
+
+
+-- | Unfold a type definition once. Return Just t, where t is the unfolded type 
+-- if there was an unfolding, otherwise Nothing.
+-------------------------------------------------------------------------------
+unfoldTDefMaybe :: (PP r, F.Reftable r) => RType r -> Env (RType r) -> Maybe (RType r)
+-------------------------------------------------------------------------------
+unfoldTDefMaybe (TApp (TDef id) acts _) env = 
+      case envFindTy (F.symbol id) env of
+        Just (TBd (TD _ vs bd _ )) -> Just $ apply (fromList $ zip vs acts) bd
+        _                          -> error $ errorUnboundId id
+unfoldTDefMaybe _                       _   = Nothing
+   
 
 
 getDefType f 
@@ -317,6 +335,9 @@ subTypes l es t1s t2s
       setSubst θ'
       return θ'
 
+getCache :: TCM ([(Type, Type)])
+getCache = tc_cache <$> get
+
 
 
 -- | Join a list of Subst 
@@ -347,9 +368,6 @@ joinSubst (Su m1) (Su m2) =
         join s θ e t t' | success s $ subty θ e t t' = return t'
                         | success s $ subty θ e t' t = return t
                         | otherwise                  = addError (printf "Cannot join %s with %s" (ppshow t) (ppshow t')) t
-
-
-
 
 
 -----------------------------------------------------------------------------
@@ -439,7 +457,7 @@ varAsn :: Subst -> TVar -> Type -> Either String Subst
 -----------------------------------------------------------------------------
 varAsn θ α t 
   | t == tVar α          = Right $ θ 
-  | α `HS.member` free t = Left  $ errorOccursCheck α t 
+  | α `S.member` free t = Left  $ errorOccursCheck α t 
   | unassigned α θ       = Right $ θ `mappend` (Su $ HM.singleton α t) 
   | otherwise            = Left  $ errorRigidUnify α t
   
@@ -529,12 +547,18 @@ subtdef θ e t t'                      = subtyNoUnion' θ e t t'
 -----------------------------------------------------------------------------
 -- | General Subtyping -- including unions
 -----------------------------------------------------------------------------
-subty :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
+subty' :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
-subty θ e  (TApp TUn ts _ ) t'@(TApp TUn ts' _) = tryWithBackup (foldM (\θ t -> subty θ e t t') θ ts) (cast θ ts ts')
-subty θ e t@(TApp TUn ts _ ) t'                  = tryWithBackups (subtyUnions θ e ts [t']) [unify θ t t', cast θ ts [t']]
-subty θ e t                  t'@(TApp TUn ts' _) = tryWithBackups (subtyUnions θ e [t] ts') [unify θ t t', cast θ [t] ts']
-subty θ e t                  t'                  = subtyNoUnion θ e t t'
+subty' θ e   (TApp TUn ts _ ) t'@(TApp TUn ts' _) = tryWithBackup (foldM (\θ t -> subty θ e t t') θ ts) (cast θ ts ts')
+subty' θ e t@(TApp TUn ts _ ) t'                  = tryWithBackups (subtyUnions θ e ts [t']) [unify θ t t', cast θ ts [t']]
+subty' θ e t                  t'@(TApp TUn ts' _) = tryWithBackups (subtyUnions θ e [t] ts') [unify θ t t', cast θ [t] ts']
+subty' θ e t                  t'                  = subtyNoUnion θ e t t'
+
+-- subty  θ e t t' = tryWithSuccessAndBackup (subty' θ e t t')
+subty  θ e t t' = tryWithSuccessAndBackup (subty' θ e t t') succ (return θ)
+  where 
+    succ θ' = addSubCache t t' >> return θ'
+    addSubCache t t' = modify $ \st -> st {tc_cache = if (t,t')  `L.elem` (tc_cache st) then tc_cache st else (t,t'):(tc_cache st)}
 
 cast θ xs ys 
 -- TOGGLE CASTS 
@@ -582,11 +606,16 @@ success s action =
 -----------------------------------------------------------------------------
 tryWithBackup :: TCM a -> TCM a -> TCM a
 -----------------------------------------------------------------------------
-tryWithBackup action backup =
+tryWithBackup act bkup = tryWithSuccessAndBackup act return bkup
+
+-----------------------------------------------------------------------------
+tryWithSuccessAndBackup :: TCM a -> (a -> TCM a) -> TCM a -> TCM a
+-----------------------------------------------------------------------------
+tryWithSuccessAndBackup act succ bkup =
   do  s <- get
-      case tryError s $ action of 
-        (Left _  , _ ) -> backup
-        (Right r , s') -> modify (const s') >> return r
+      case tryError s $ act of 
+        (Left _  , _ ) -> bkup
+        (Right r , s') -> modify (const s') >> succ r
 
 
 -----------------------------------------------------------------------------
@@ -633,8 +662,9 @@ subtys θ es ts ts'
   | nTs == nTs' = go $ zip3 es ts ts'
   | otherwise   = addError (errorSubType "" ts ts) θ
   where
-    nTs                       = length ts
-    nTs'                      = length ts'
+    nTs  = length ts
+    nTs' = length ts'
+    {-sub θ e t t' = tryError (subty θ e t t') -}
     go l = 
       do  θs <- mapM (\(e,t,t') -> setExpr e >> subty θ e t t') l
           case θs of [] -> return θ

@@ -44,7 +44,7 @@ module Language.Nano.Liquid.CGMonad (
 
 import           Data.Maybe             (fromMaybe)
 import           Data.Monoid            (mempty) -- hiding ((<>))            
--- import qualified Data.List               as L
+import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 
 -- import           Language.Fixpoint.PrettyPrint
@@ -55,6 +55,7 @@ import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types 
+import           Language.Nano.Typecheck.TCMonad (unfoldTDefMaybe, SCache)
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Liquid.Types
 
@@ -70,6 +71,7 @@ import           Text.Printf
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Debug.Trace
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation ----------------------
@@ -80,22 +82,22 @@ data CGInfo = CGI { cgi_finfo :: F.FInfo Cinfo
                   }
 
 -------------------------------------------------------------------------------
-getCGInfo     :: NanoRefType -> CGM a -> CGInfo  
+getCGInfo     :: (NanoRefType, SCache) -> CGM a -> CGInfo  
 -------------------------------------------------------------------------------
-getCGInfo pgm = cgStateCInfo pgm . execute pgm . (>> fixCWs)
+getCGInfo (pgm, c) = cgStateCInfo pgm . execute (pgm,c) . (>> fixCWs)
   where 
-    fixCWs    = (,) <$> fixCs <*> fixWs
-    fixCs     = concatMapM splitC . cs =<< get 
-    fixWs     = concatMapM splitW . ws =<< get
+    fixCWs         = (,) <$> fixCs <*> fixWs
+    fixCs          = concatMapM splitC . cs =<< get 
+    fixWs          = concatMapM splitW . ws =<< get
 
-execute :: Nano z RefType -> CGM a -> (a, CGState)
+execute :: (Nano z RefType, SCache) -> CGM a -> (a, CGState)
 execute pgm act
   = case runState (runErrorT act) $ initState pgm of 
       (Left err, _) -> errorstar err
       (Right x, st) -> (x, st)  
 
-initState :: Nano z RefType -> CGState
-initState pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty
+initState :: (Nano z RefType, SCache) -> CGState
+initState (pgm, c) = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty c
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -132,6 +134,7 @@ data CGState
         , ws       :: ![WfC]             -- ^ well-formedness constraints
         , count    :: !Integer           -- ^ freshness counter
         , cg_ann   :: A.AnnInfo RefType  -- ^ recorded annotations
+        , tc_cache :: SCache             -- ^ cached sutyping relations from type-checking
         }
 
 type CGM     = ErrorT String (State CGState)
@@ -265,7 +268,7 @@ subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 = modify $ \st -> st {cs =  c : (cs st)}
   where 
-    c             = {- tracePP ("subType at" ++ ppshow (srcPos l)) $ -} Sub g (ci l) t1 t2
+    c             = trace (printf "subType at %s with gurads %s: %s <: %s" (ppshow $ srcPos l) (ppshow $ guards g) (ppshow t1) (ppshow t2)) $ Sub g (ci l) t1 t2
 
 ---------------------------------------------------------------------------------------
 -- | Adding Well-Formedness Constraints -----------------------------------------------
@@ -367,11 +370,51 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   | otherwise
   = errorstar "UNEXPECTED CRASH in splitC"
 
-splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
-  = do let cs = bsplitC g i t1 t2
-       cs'   <- concatMapM splitC $ safeZipWith "splitC2" (Sub g i) t1s t2s
+-- | S1 ∪ ... ∪ Sn <: T --> S1 <: T ∧ ... ∧ Sn <: T
+splitC (Sub g i t1@(TApp TUn t1s _) t2)
+  = do let cs = bsplitC g i t1 t2 -- ???
+       cs'   <- concatMapM (\t -> splitC $ Sub g i t t2) t1s
        return $ cs ++ cs'
 
+-- | S <: T1 ∪ ... ∪ Tn --> select only one Ti that has a supertype of S as raw 
+-- type of and use that for the subtyping constraint
+splitC (Sub g i t1 t2@(TApp TUn t2s _))
+  = do let cs = bsplitC g i t1 t2
+       cache <- tc_cache <$> get  -- check the subtyping cache
+       case filter (\t -> L.elem (toType t1,toType t) cache) t2s of
+         [ ] -> error "This should not pass the raw typechecking phase"
+         [t] -> (++) cs <$> splitC (Sub g i t1 t)
+         _   -> error $ printf "Cannot handle subtyping: %s <: %s" (ppshow t1) (ppshow t2)
+
+splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
+  = do let cs = bsplitC g i t1 t2
+       cs'   <- concatMapM splitC $ safeZipWith (printf "splitC4: %s - %s" (ppshow t1) (ppshow t2)) (Sub g i) t1s t2s
+       return $ cs ++ cs'
+
+splitC (Sub g i tf1@(TObj xt1s _ ) tf2@(TObj xt2s _ ))
+  = do let bcs    = bsplitC g i tf1 tf2
+       g'        <- envTyAdds i xt2s g 
+       cs        <- concatMapM splitC $ safeZipWith "splitC5" (Sub g' i) t1s' t2s
+       return     $ bcs ++ cs
+    where
+       t2s        = b_type <$> xt2s
+       t1s'       = F.subst su (b_type <$> xt1s)
+       su         = F.mkSubst $ safeZipWith "splitC6" bSub xt1s xt2s
+       bSub b1 b2 = (b_sym b1, F.eVar $ b_sym b2)
+
+
+splitC (Sub g i t1 t2@(TObj _ _ ))
+  = do  env <- cg_tdefs <$> get
+        case unfoldTDefMaybe t1 env of 
+          Just t1' -> splitC (Sub g i t1' t2)
+          Nothing  -> error "splitC _ TObj not supported"
+
+splitC (Sub g i t1@(TObj _ _ ) t2)
+  = do  env <- cg_tdefs <$> get
+        case unfoldTDefMaybe t2 env of 
+          Just t2' -> splitC (Sub g i t1 t2')
+          Nothing  -> error "splitC _ TObj not supported"
+  
 splitC x 
   = cgError (srcPos x) $ bugBadSubtypes x 
 
@@ -412,6 +455,10 @@ splitW (W g i t@(TApp _ ts _))
   =  do let ws = bsplitW g t i
         ws'   <- concatMapM splitW [W g i ti | ti <- ts]
         return $ ws ++ ws'
+
+splitW (W g i t@(TObj ts _ ))
+  = do  g' <- envTyAdds i ts g
+        concatMapM splitW [W g' i ti | B _ ti <- ts]
 
 splitW (W _ _ _ ) = error "Not supported in splitW"
 

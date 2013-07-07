@@ -3,7 +3,7 @@ module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where
 import           Control.Applicative                ((<$>)) -- (<*>))
 import           Control.Monad                
 import           Control.Monad.State()
-import qualified Data.HashSet        as S 
+import qualified Data.HashSet        as HS 
 import qualified Data.HashMap.Strict as M 
 import           Data.List           (nub, find)
 import qualified Data.Traversable    as T
@@ -40,7 +40,7 @@ verifyFile :: FilePath -> IO (F.FixResult SourceSpan)
 --   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
 -------------------------------------------------------------------------------
-typeCheck     :: (F.Reftable r) => Nano AnnSSA (RType r) -> Nano AnnType (RType r) 
+typeCheck     :: (F.Reftable r) => Nano AnnSSA (RType r) -> (Nano AnnType (RType r), SCache)
 -------------------------------------------------------------------------------
 typeCheck pgm = either crash id . execute pgm . patch $ pgm 
   where 
@@ -54,7 +54,7 @@ verifyFile f
         let nanoSsa = ssaTransform nano
         donePhase Loud "SSA Transform"
         putStrLn . render . pp $ nanoSsa
-        r    <- either unsafe safe $ execute nanoSsa $ patch nanoSsa
+        r    <- either unsafe (safe . fst) $ execute nanoSsa $ patch nanoSsa
         donePhase Loud "Typechecking"
         return r
 
@@ -76,11 +76,20 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
 
-patch p = tcNano p >>= patchPgm >>= \p1 -> return $ (trace $ codePP p1) p1
+-------------------------------------------------------------------------------
+patch :: F.Reftable r => Nano AnnSSA (RType r) -> TCM (Nano  AnnAsrt (RType r), SCache)
+-------------------------------------------------------------------------------
+patch p = 
+  do p1 <- tcNano p 
+     p2 <- patchPgm p1
+     cache <- getCache
+     return $ trace (codePP p2 cache) (p2, cache)
   where 
-    codePP Nano {code = Src s} = render $ 
+    codePP (Nano {code = Src s}) cache = render $ 
           text "********************** CODE **********************"
       $+$ pp s
+      $+$ text "********************** CACHE *********************"
+      $+$ pp cache
       $+$ text "**************************************************"
     
 
@@ -89,7 +98,12 @@ tcNano :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM (Nano AnnType (RType r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do m     <- tcNano' $ toType <$> p 
-       return $ p {code = Src $ (patchAnn m <$>) <$> fs}
+       return $ (trace "") $ p {code = Src $ (patchAnn m <$>) <$> fs}
+    where
+      cachePP cache = render $
+            text "********************** CODE **********************"
+        $+$ pp cache
+        $+$ text "**************************************************"
 
 
 -------------------------------------------------------------------------------
@@ -144,7 +158,7 @@ envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddR
     -- tyBinds              = [(Loc (srcPos l) α, tVar α) | α <- αs]
 
 validInst γ (l, ts)
-  = case [β | β <- S.toList $ free ts, not ((tVarId β) `envMem` γ)] of
+  = case [β | β <- HS.toList $ free ts, not ((tVarId β) `envMem` γ)] of
       [] -> Nothing
       βs -> Just (l, errorFreeTyVar βs)
    

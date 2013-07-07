@@ -150,7 +150,7 @@ data RType r
   | TObj [Bind r]           r
   | TBd  (TBody r)
   | TAll TVar (RType r)
-    deriving (Eq, Ord, Show, Functor)
+    deriving (Ord, Show, Functor)
 
 
 data Bind r
@@ -194,7 +194,7 @@ mkUnion ts  = TApp TUn ts ()
 
 -- | Get binding from object type
 getBinding :: Id a -> RType r -> Either String (RType r)
-getBinding i to@(TObj bs _ ) = 
+getBinding i (TObj bs _ ) = 
   case L.find (\s -> F.symbol i == b_sym s) bs of
     Just b -> Right $ b_type b
     _      -> Left  $ errorObjectBinding
@@ -250,13 +250,30 @@ instance Eq TCon where
   TString == TString = True
   TVoid   == TVoid   = True         
   TTop    == TTop    = True
-  TDef i  == TDef i' = F.symbol i == F.symbol i'
+  TDef i1 == TDef i2 = F.symbol i1 == F.symbol i2
   TUn     == TUn     = True
   TNull   == TNull   = True
   TUndef  == TUndef  = True
   _       == _       = False
  
-  
+instance (Eq r, F.Reftable r) => Eq (RType r) where
+  TApp TUn t1 _       == TApp TUn t2 _        = 
+    (tracePP (printf "Diff: %s \\ %s" (ppshow $ L.nub t1) (ppshow $ L.nub t2)) $ (L.nub t1) L.\\ (L.nub t2)) == [] 
+  TApp c1 t1s r1      == TApp c2 t2s r2       = 
+    (c1, t1s, r1) == (c2, t2s, r2)
+  TVar v1 r1          == TVar v2 r2           =      
+    (v1, r1) == (v2, r2)
+  TFun b1 t1 r1       == TFun b2 t2 r2        = 
+    (b1, t1, r1)  == (b2, t2, r2)
+  TObj b1 r1          == TObj b2 r2           = 
+    (b1, r1) == (b2, r2)
+  TBd (TD c1 a1 b1 _) == TBd (TD c2 a2 b2 _)  =
+    (c1, a1, b1) == (c2, a2, b2)
+  TAll v1 t1      == TAll v2 t2               =
+    (v1, t1) == (v2, t2)
+  _               == _                        = False
+
+
 
 ---------------------------------------------------------------------------------
 -- | Nano Program = Code + Types for all function binders
@@ -305,7 +322,7 @@ instance PP t => PP (Nano a t) where
     $+$ text "**************************************************"
 
 instance Monoid (Nano a t) where 
-  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty [] 
+  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty []
   mappend p1 p2 = Nano ss e e' cs tds qs 
     where 
       ss        = Src $ s1 ++ s2

@@ -23,6 +23,7 @@ import           Language.Nano.Types
 import qualified Language.Nano.Annots as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
+import           Language.Nano.Typecheck.TCMonad    (SCache)
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
 import           Language.Nano.SSA.SSA
 
@@ -38,8 +39,8 @@ verifyFile f   =  reftypeCheck f . typeCheck . ssaTransform =<< parseNanoFromFil
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
-reftypeCheck   :: FilePath -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
-reftypeCheck f = solveConstraints f . generateConstraints  
+reftypeCheck   :: FilePath -> (Nano AnnType RefType, SCache) -> IO (F.FixResult SourceSpan)
+reftypeCheck f  = solveConstraints f . generateConstraints
 
 --------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (F.FixResult SourceSpan) 
@@ -73,9 +74,9 @@ applySolution = fmap . fmap . tx
 tidy = id
 
 --------------------------------------------------------------------------------
-generateConstraints     :: NanoRefType -> CGInfo 
+generateConstraints     :: (NanoRefType, SCache) -> CGInfo 
 --------------------------------------------------------------------------------
-generateConstraints pgm = getCGInfo pgm $ consNano pgm
+generateConstraints (pgm, c) = getCGInfo (pgm,c) $ consNano pgm
 
 --------------------------------------------------------------------------------
 consNano     :: NanoRefType -> CGM ()
@@ -270,7 +271,6 @@ consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 
        consCall g' l e es $ envFindTy x g'
 
-
 consExpr  g (DotRef l e i)
   = do  (x, g') <- consExpr g e
         case getBinding i $ envFindTy x g' of 
@@ -280,7 +280,6 @@ consExpr  g (DotRef l e i)
 consExpr g (ObjectLit l ps) 
   = do  (x, g') <- consObj l g ps
         envAddFresh l (envFindTy x g') g'
-
 
 consExpr _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))

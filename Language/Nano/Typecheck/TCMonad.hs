@@ -34,7 +34,7 @@ module Language.Nano.Typecheck.TCMonad (
   , unifyType, unifyTypes
 
   -- * Subtyping
-  , SCache, subType, subTypes, getCache
+  , SCache, subType, subTypes, getCache, isSubtype
 
   -- * Get Type Signature 
   , getDefType 
@@ -457,7 +457,7 @@ varAsn :: Subst -> TVar -> Type -> Either String Subst
 -----------------------------------------------------------------------------
 varAsn θ α t 
   | t == tVar α          = Right $ θ 
-  | α `S.member` free t = Left  $ errorOccursCheck α t 
+  | α `S.member` free t  = Left  $ errorOccursCheck α t 
   | unassigned α θ       = Right $ θ `mappend` (Su $ HM.singleton α t) 
   | otherwise            = Left  $ errorRigidUnify α t
   
@@ -552,9 +552,8 @@ subty' :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 subty' θ e   (TApp TUn ts _ ) t'@(TApp TUn ts' _) = tryWithBackup (foldM (\θ t -> subty θ e t t') θ ts) (cast θ ts ts')
 subty' θ e t@(TApp TUn ts _ ) t'                  = tryWithBackups (subtyUnions θ e ts [t']) [unify θ t t', cast θ ts [t']]
 subty' θ e t                  t'@(TApp TUn ts' _) = tryWithBackups (subtyUnions θ e [t] ts') [unify θ t t', cast θ [t] ts']
-subty' θ e t                  t'                  = subtyNoUnion θ e t t'
+subty' θ e t                  t'                  = subtyNoUnion' θ e (traceShow "sub no union lhs" t) (traceShow "sub no union rhs" t')
 
--- subty  θ e t t' = tryWithSuccessAndBackup (subty' θ e t t')
 subty  θ e t t' = tryWithSuccessAndBackup (subty' θ e t t') succ (return θ)
   where 
     succ θ' = addSubCache t t' >> return θ'
@@ -599,6 +598,12 @@ success s action =
   case tryError s action of 
     (Left _  , _) -> False
     (Right _ , _) -> True
+
+
+-----------------------------------------------------------------------------
+isSubtype :: Nano z (RType r) -> Type -> Type -> Bool 
+-----------------------------------------------------------------------------
+isSubtype pgm t t' = success (initState pgm) $ subty' mempty Nothing (trace (printf "lhs: %s" (show t)) $ t) (trace (printf "rhs: %s" (show t')) $ t')
 
 
 -- | Try to execute the operation in the first argument's monad. 

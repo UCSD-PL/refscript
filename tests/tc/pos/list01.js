@@ -1,6 +1,6 @@
 
 /*@ type nlist  {  data : number,
-                   next : nlist | Null } */
+                   next : nlist | null } */
 
 
 

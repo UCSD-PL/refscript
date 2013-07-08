@@ -55,7 +55,7 @@ import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types 
-import           Language.Nano.Typecheck.TCMonad (unfoldTDefMaybe, SCache)
+import           Language.Nano.Typecheck.TCMonad (unfoldTDefMaybe, SCache, isSubtype)
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Liquid.Types
 
@@ -90,14 +90,14 @@ getCGInfo (pgm, c) = cgStateCInfo pgm . execute (pgm,c) . (>> fixCWs)
     fixCs          = concatMapM splitC . cs =<< get 
     fixWs          = concatMapM splitW . ws =<< get
 
-execute :: (Nano z RefType, SCache) -> CGM a -> (a, CGState)
+execute :: (Nano AnnType RefType, SCache) -> CGM a -> (a, CGState)
 execute pgm act
   = case runState (runErrorT act) $ initState pgm of 
       (Left err, _) -> errorstar err
       (Right x, st) -> (x, st)  
 
-initState :: (Nano z RefType, SCache) -> CGState
-initState (pgm, c) = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty c
+initState :: (Nano AnnType RefType, SCache) -> CGState
+initState (pgm, c) = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty c pgm
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -134,7 +134,9 @@ data CGState
         , ws       :: ![WfC]             -- ^ well-formedness constraints
         , count    :: !Integer           -- ^ freshness counter
         , cg_ann   :: A.AnnInfo RefType  -- ^ recorded annotations
+
         , tc_cache :: SCache             -- ^ cached sutyping relations from type-checking
+        , pgm      :: Nano AnnType RefType     -- ^ the pro
         }
 
 type CGM     = ErrorT String (State CGState)
@@ -380,11 +382,11 @@ splitC (Sub g i t1@(TApp TUn t1s _) t2)
 -- type of and use that for the subtyping constraint
 splitC (Sub g i t1 t2@(TApp TUn t2s _))
   = do let cs = bsplitC g i t1 t2
-       cache <- tc_cache <$> get  -- check the subtyping cache
-       case filter (\t -> L.elem (toType t1,toType t) cache) t2s of
+       pgm <- pgm <$> get
+       case filter (\t -> tracePP (printf "%s <: %s" (ppshow $ toType t1) (ppshow $ toType t)) $ isSubtype pgm (toType t1) (toType t)) t2s of
          [ ] -> error "This should not pass the raw typechecking phase"
          [t] -> (++) cs <$> splitC (Sub g i t1 t)
-         _   -> error $ printf "Cannot handle subtyping: %s <: %s" (ppshow t1) (ppshow t2)
+         ts  -> error $ printf "Cannot handle subtyping: %s <: %s (%s)" (ppshow t1) (ppshow t2) (ppshow ts)
 
 splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
   = do let cs = bsplitC g i t1 t2

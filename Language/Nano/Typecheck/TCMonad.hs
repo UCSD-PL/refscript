@@ -545,7 +545,7 @@ subty θ e t                  t'@(TApp TUn ts' _) = tryWithBackups (subtyUnions 
 subty θ e t                  t'                  = subtyNoUnion θ e t t'
 
 cast θ xs ys 
---  | S.size (isct xs ys) > 0 = addCast (mkUnion $ S.toList $ isct xs ys) >> return θ
+  | S.size (isct xs ys) > 0 = addCast (mkUnion $ S.toList $ isct xs ys) >> return θ
   | otherwise               = addError (errorSubType "No Cast" xs ys) θ
   where
     isct xs ys = (S.fromList xs) `S.intersection` (S.fromList ys)

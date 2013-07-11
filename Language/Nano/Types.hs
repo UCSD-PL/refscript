@@ -86,6 +86,9 @@ data Config
   | Liquid { files   :: [FilePath]     -- ^ source files to check
            , incdirs :: [FilePath]     -- ^ path to directory for include specs
            }
+  | Visit  { files   :: [FilePath]     -- ^ source files to check
+           , incdirs :: [FilePath]     -- ^ path to directory for include specs
+           }
   deriving (Data, Typeable, Show, Eq)
 
 

@@ -16,7 +16,7 @@
 --  this version.
 --
 
-module Language.Nano.Visitor (
+module Language.Nano.Visitor.Visitor (
     NanoVisitor(..)
   , VisitAction(..)
   , visitProgram 

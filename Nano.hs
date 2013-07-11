@@ -2,6 +2,7 @@
 import qualified Language.Nano.ESC.ESC              as ESC
 import qualified Language.Nano.Typecheck.Typecheck  as TC 
 import qualified Language.Nano.Liquid.Liquid        as Liquid 
+import qualified Language.Nano.Visitor.Visit        as Visit
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Types
 import           Data.Monoid
@@ -19,6 +20,7 @@ main = do cfg  <- getOpts
 verifier (Esc {})    = ESC.verifyFile
 verifier (TC {})     = TC.verifyFile
 verifier (Liquid {}) = Liquid.verifyFile
+verifier (Visit {})  = Visit.verifyFile
 
 run verifyFile cfg 
   = do rs   <- mapM verifyFile $ files cfg

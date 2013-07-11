@@ -41,7 +41,20 @@ liquid = Liquid {
    
  } &= help    "Refinement Type Checker for Nano" 
 
-config = modes [esc, tc, liquid] 
+
+visit = Visit { 
+   files   = def &= typ "TARGET" 
+                 &= args 
+                 &= typFile 
+ 
+ , incdirs = def &= typDir 
+                 &= help "Paths to Spec Include Directory " 
+   
+ } &= help    "Visitor testing" 
+
+
+
+config = modes [esc, tc, liquid, visit] 
             &= help    "nanojs is a suite of toy program verifiers"
             &= program "nanojs" 
             &= summary "nanojs © Copyright 2013 Regents of the University of California." 

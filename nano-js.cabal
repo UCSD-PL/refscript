@@ -36,6 +36,7 @@ executable nanojs
   ghc-options:         -W -O2
   Main-is:             Nano.hs
 
+
 -- Library
 --   build-depends:       base, pretty, hashable, unordered-containers, 
 --                        filepath, ansi-terminal, process, mtl, syb, cmdargs,

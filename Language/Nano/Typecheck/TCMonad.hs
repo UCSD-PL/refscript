@@ -61,7 +61,7 @@ import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
-import           Language.Nano.Visitor
+import           Language.Nano.Visitor.Visitor
 import           Language.Nano.Misc             (mapSndM)
 import           Data.Monoid                  
 import qualified Data.HashSet             as HS

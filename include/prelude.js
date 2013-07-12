@@ -79,29 +79,30 @@ function pos(){
 /************** Types for Builtin Operators ******************************/
 /*************************************************************************/
 
-/*@ builtin_OpLT        :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x <  y)) }*/
-/*@ builtin_OpLEq       :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x <= y)) }*/
-/*@ builtin_OpGT        :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x >  y)) }*/
-/*@ builtin_OpGEq       :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x >= y)) }*/
+/*@ builtin_OpLT        :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x <  y)) }                */
+/*@ builtin_OpLEq       :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x <= y)) }                */
+/*@ builtin_OpGT        :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x >  y)) }                */
+/*@ builtin_OpGEq       :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x >= y)) }                */
 //PV: @==@ and @===@ could be handled more precisely
-/*@ builtin_OpEq        :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x = y)) } */
-/*@ builtin_OpSEq       :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x = y)) } */
-/*@ builtin_OpNEq       :: forall A B. ({x:A|true}, {y:B|true}) => {v:boolean | ((Prop v) <=> (x != y)) } */
+/*@ builtin_OpEq        :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x = y)) }                 */
+/*@ builtin_OpSEq       :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x = y)) }                 */
+/*@ builtin_OpNEq       :: forall A B. ({x:A|true}, {y:B|true}) => {v:boolean | ((Prop v) <=> (x != y)) }              */
 /*@ builtin_OpLAnd      :: ({x:boolean|true}, {y:boolean|true}) => {v:boolean | ((Prop v) <=> ((Prop x) && (Prop y)))} */
-/*@ builtin_OpLOr       :: ({x:boolean|true}, {y:boolean|true}) => {v:boolean | ((Prop v) <=> ((Prop x) || (Prop y)))}  */
-/*@ builtin_OpAdd       :: ({x:number | true}, {y:number | true})  => {v:number | v = x + y} */ 
-/*@ builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v = x - y} */ 
-/*@ builtin_OpMul       :: (number,  number)  => number                                      */
-/*@ builtin_OpDiv       :: (number,  number)  => number                                      */ 
-/*@ builtin_OpMod       :: (number,  number)  => number                                      */
-/*@ builtin_PrefixMinus :: ({x:number | true}) => {v:number | v = (0 - x)}                */
-/*@ builtin_PrefixLNot  :: (boolean) => boolean                                     */
+/*@ builtin_OpLOr       :: ({x:boolean|true}, {y:boolean|true}) => {v:boolean | ((Prop v) <=> ((Prop x) || (Prop y)))} */
+/*@ builtin_OpAdd       :: ({x:number | true}, {y:number | true})  => {v:number | v = x + y}                           */
+/*@ builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v = x - y}                           */
+/*@ builtin_OpMul       :: (number,  number)  => number                                                                */
+/*@ builtin_OpDiv       :: (number,  number)  => number                                                                */
+/*@ builtin_OpMod       :: (number,  number)  => number                                                                */
+/*@ builtin_PrefixMinus :: ({x:number | true}) => {v:number | v = (0 - x)}                                             */
+/*@ builtin_PrefixLNot  :: (boolean) => boolean                                                                        */
 
 //Changing temprorarily until strings are supported
-/* builtin_PrefixTypeof:: forall A. (A) => string                                  */
+/* builtin_PrefixTypeof:: forall A. (A) => string                                                                      */
 
-/*@ builtin_PrefixTypeof:: forall A. (A) => number                                 */
-/*@ measure prop        :: (boolean) => bool                                        */
+/*@ measure ttag :: forall A. (A) => number                                                                            */
+/*@ builtin_PrefixTypeof:: forall A. ({x:A|true}) => {v:number | (ttag x) = v }                                        */
+/*@ measure prop        :: (boolean) => bool                                                                           */
 
 /*************************************************************************/
 /************** Pre-Loaded Qualifiers ************************************/

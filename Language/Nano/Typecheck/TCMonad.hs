@@ -330,7 +330,8 @@ subTypes l es t1s t2s
   | otherwise = 
     do
       θ  <- getSubst 
-      θ' <- tracePP (printf "SubTypes %s <: %s in %s" (ppshow t1s) (ppshow t2s) (ppshow θ)) <$> subtys θ es t1s t2s
+      θ' <- {-tracePP (printf "SubTypes %s <: %s in %s" (ppshow t1s) (ppshow t2s) (ppshow θ)) <$> -} 
+        subtys θ es t1s t2s
       accumErrs l
       setSubst θ'
       return θ'
@@ -344,7 +345,7 @@ getCache = tc_cache <$> get
 ----------------------------------------------------------------------------------
 joinSubsts :: [Subst] -> TCM Subst
 ----------------------------------------------------------------------------------
-joinSubsts θs = foldM (\θ1 θ2 -> tracePP (printf "Joining substs: %s ++ %s" (ppshow θ1) (ppshow θ2)) <$> joinSubst θ1 θ2) mempty θs
+joinSubsts θs = foldM joinSubst mempty θs
 
 
 -- | Join two substitutions
@@ -358,7 +359,8 @@ joinSubst (Su m1) (Su m2) =
     θ     <- getSubst 
     e     <- getExpr
     s     <- get
-    cmnV  <- zipWithM (\t1 t2 ->  tracePP (printf "Joining types: (%s <: %s)" (ppshow t1) (ppshow t2)) <$> join s θ e t1 t2) (sureMap cmnK m1) (sureMap cmnK m2)
+    cmnV  <- zipWithM (\t1 t2 ->  {-tracePP (printf "Joining types: (%s <: %s)" (ppshow t1) (ppshow t2)) <$> -}
+               join s θ e t1 t2) (sureMap cmnK m1) (sureMap cmnK m2)
     return $ Su $ only1 `HM.union` only2 `HM.union` (HM.fromList $ zip cmnK cmnV)
       where 
         cmnK         = HM.keys $ m1 `HM.intersection` m2
@@ -552,7 +554,8 @@ subty' :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 subty' θ e   (TApp TUn ts _ ) t'@(TApp TUn ts' _) = tryWithBackup (foldM (\θ t -> subty θ e t t') θ ts) (cast θ ts ts')
 subty' θ e t@(TApp TUn ts _ ) t'                  = tryWithBackups (subtyUnions θ e ts [t']) [unify θ t t', cast θ ts [t']]
 subty' θ e t                  t'@(TApp TUn ts' _) = tryWithBackups (subtyUnions θ e [t] ts') [unify θ t t', cast θ [t] ts']
-subty' θ e t                  t'                  = subtyNoUnion' θ e (traceShow "sub no union lhs" t) (traceShow "sub no union rhs" t')
+subty' θ e t                  t'                  = subtyNoUnion' θ e ({-traceShow "sub no union lhs"-} t) 
+                                                                      ({-traceShow "sub no union rhs"-} t')
 
 subty  θ e t t' = tryWithSuccessAndBackup (subty' θ e t t') succ (return θ)
   where 
@@ -601,9 +604,11 @@ success s action =
 
 
 -----------------------------------------------------------------------------
-isSubtype :: Nano z (RType r) -> Type -> Type -> Bool 
+isSubtype :: Nano z (RType r) -> RType r -> RType r -> Bool 
 -----------------------------------------------------------------------------
-isSubtype pgm t t' = success (initState pgm) $ subty' mempty Nothing (trace (printf "lhs: %s" (show t)) $ t) (trace (printf "rhs: %s" (show t')) $ t')
+isSubtype pgm t t' = success (initState pgm) $ subty' mempty Nothing 
+                       (trace (printf "lhs: %s" (ppshow $ toType t )) $ toType t) 
+                       (trace (printf "rhs: %s" (ppshow $ toType t')) $ toType t')
 
 
 -- | Try to execute the operation in the first argument's monad. 

@@ -96,7 +96,11 @@ function pos(){
 /*@ builtin_OpMod       :: (number,  number)  => number                                      */
 /*@ builtin_PrefixMinus :: ({x:number | true}) => {v:number | v = (0 - x)}                */
 /*@ builtin_PrefixLNot  :: (boolean) => boolean                                     */
-/*@ builtin_PrefixTypeof:: forall A. (A) => string                                  */
+
+//Changing temprorarily until strings are supported
+/* builtin_PrefixTypeof:: forall A. (A) => string                                  */
+
+/*@ builtin_PrefixTypeof:: forall A. (A) => number                                 */
 /*@ measure prop        :: (boolean) => bool                                        */
 
 /*************************************************************************/

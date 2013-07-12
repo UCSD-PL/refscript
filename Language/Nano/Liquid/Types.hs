@@ -45,6 +45,9 @@ module Language.Nano.Liquid.Types (
   -- * Primitive Types
   , prefixOpRTy
   , infixOpRTy 
+
+  -- * Useful Operations
+  , foldReft
   ) where
 
 import           Data.Maybe             (fromMaybe) -- (catMaybes, , isJust)

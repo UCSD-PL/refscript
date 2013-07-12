@@ -1,9 +1,13 @@
-/*@ negate :: ((number|boolean)) => (number|boolean) */
+/*@ negate :: (number|boolean) => number|boolean */
 function negate(x) {
-  if (typeof(x) == "number") {
+
+//Original - revert when strings are supported   
+//  if (typeof(x) == "number") {
+
+  if (typeof(x) == 1) {
     return 0 - x;
   } else {
-    return !x;
   }
+  return 0;
 }
 

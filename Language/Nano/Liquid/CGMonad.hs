@@ -270,7 +270,25 @@ subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 = modify $ \st -> st {cs =  c : (cs st)}
   where 
-    c             = trace (printf "subType at %s with gurads %s: %s <: %s" (ppshow $ srcPos l) (ppshow $ guards g) (ppshow t1) (ppshow t2)) $ Sub g (ci l) t1 t2
+    (t1', t2')    = (t1, t2) -- (unionCheck t1, unionCheck t2)
+    c             = trace (printf "subType at %s with gurads %s: %s <: %s"
+                            (ppshow $ srcPos l) 
+                            (ppshow $ guards g) 
+                            (ppshow t1') (ppshow t2')) $ Sub g (ci l) t1' t2'
+
+
+noUnion (TApp TUn _ _)  = False
+noUnion (TApp _  rs _)  = and $ map noUnion rs
+noUnion (TFun bs rt _)  = and $ map noUnion $ rt : (map b_type bs)
+noUnion (TObj bs    _)  = and $ map noUnion $ map b_type bs
+noUnion (TBd  _      )  = error "noUnion: cannot have TBodies here"
+noUnion (TAll _ t    )  = noUnion t
+noUnion _               = True
+
+unionCheck t | noUnion t = t 
+unionCheck t | otherwise = error $ printf "%s found. Cannot have unions." $ ppshow t
+
+
 
 ---------------------------------------------------------------------------------------
 -- | Adding Well-Formedness Constraints -----------------------------------------------
@@ -372,21 +390,29 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   | otherwise
   = errorstar "UNEXPECTED CRASH in splitC"
 
+-- | S1 ∪ ... ∪ Sn <: T1 ∪ ... ∪ Tn ---> 
+-- Si <: Tj forall matching i,j ∧
+-- Sj <: { Sj | false } ∧ { Ti | false } <: Tj for the remainig (unmatched) j's 
+splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
+  = do  let cs = bsplitC g i t1 t2
+        p     <- pgm <$> get
+        cs'   <- unionSubs p i g t1s t2s
+        return $ {-cs ++ -} cs'
+
 -- | S1 ∪ ... ∪ Sn <: T --> S1 <: T ∧ ... ∧ Sn <: T
 splitC (Sub g i t1@(TApp TUn t1s _) t2)
-  = do let cs = bsplitC g i t1 t2 -- ???
-       cs'   <- concatMapM (\t -> splitC $ Sub g i t t2) t1s
-       return $ cs ++ cs'
+  = do  let cs = bsplitC g i t1 t2
+        p     <- pgm <$> get
+        cs'   <- unionSubs p i g t1s [t2]
+        return $ {-cs ++ -} cs'
 
 -- | S <: T1 ∪ ... ∪ Tn --> select only one Ti that has a supertype of S as raw 
 -- type of and use that for the subtyping constraint
 splitC (Sub g i t1 t2@(TApp TUn t2s _))
-  = do let cs = bsplitC g i t1 t2
-       pgm <- pgm <$> get
-       case filter (\t -> tracePP (printf "%s <: %s" (ppshow $ toType t1) (ppshow $ toType t)) $ isSubtype pgm (toType t1) (toType t)) t2s of
-         [ ] -> error "This should not pass the raw typechecking phase"
-         [t] -> (++) cs <$> splitC (Sub g i t1 t)
-         ts  -> error $ printf "Cannot handle subtyping: %s <: %s (%s)" (ppshow t1) (ppshow t2) (ppshow ts)
+  = do  let cs = bsplitC g i t1 t2
+        p     <- pgm <$> get
+        cs'   <- unionSubs p i g [t1] t2s
+        return $ {-cs ++ -} cs'
 
 splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
   = do let cs = bsplitC g i t1 t2
@@ -431,6 +457,18 @@ bsplitC g ci t1 t2
     p  = F.pAnd $ guards g
     r1 = rTypeSortedReft t1
     r2 = rTypeSortedReft t2
+
+unionSubs p i g t1s t2s = concatMapM mkSub $ pairup p t1s t2s
+  where
+    pairup p xs ys  = fill $ foldl (\(acc,ys') x -> f p acc x ys') ([],ys) xs
+    f p acc x  ys   = case L.find (isSubtype p x) ys of
+                        Just y -> ((x,y):acc, L.delete y ys)
+                        _      -> ((x, fal x):acc, ys)
+    fill (a, ys)    = a ++ map (\y -> (fal y, y)) ys
+    fal t           = (ofType $ toType t) `strengthen` (F.predReft F.PFalse)
+    mkSub (x,y)     = splitC $ Sub g i x y
+
+
 
 
 ---------------------------------------------------------------------------------------

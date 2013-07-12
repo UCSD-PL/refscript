@@ -71,7 +71,7 @@ import           Text.Printf
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
-import           Debug.Trace
+import qualified Debug.Trace                    as T
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation ----------------------
@@ -164,7 +164,7 @@ envAdds      :: (F.Symbolic x, IsLocated x) => [(x, RefType)] -> CGEnv -> CGM CG
 ---------------------------------------------------------------------------------------
 envAdds xts g
   = do is    <- forM xts $ addFixpointBind 
-       _     <- forM xts $ \(x, t) -> addAnnot (srcPos x) x t 
+       _     <- forM xts $ \(x, t) -> addAnnot (srcPos x) x t
        return $ g { renv = E.envAdds xts        (renv g) } 
                   { fenv = F.insertsIBindEnv is (fenv g) }
 
@@ -174,7 +174,7 @@ addFixpointBind (x, t)
        let r     = rTypeSortedReft t
        (i, bs') <- F.insertBindEnv s r . binds <$> get 
        modify    $ \st -> st { binds = bs' }
-       return i 
+       return    $ traceShow (printf "envAdds %s" (ppshow $ t)) i
 
 ---------------------------------------------------------------------------------------
 addAnnot       :: (F.Symbolic x) => SourceSpan -> x -> RefType -> CGM () 
@@ -271,7 +271,7 @@ subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 subType l g t1 t2 = modify $ \st -> st {cs =  c : (cs st)}
   where 
     (t1', t2')    = (t1, t2) -- (unionCheck t1, unionCheck t2)
-    c             = trace (printf "subType at %s with gurads %s: %s <: %s"
+    c             = T.trace (printf "subType at %s with gurads %s: %s <: %s"
                             (ppshow $ srcPos l) 
                             (ppshow $ guards g) 
                             (ppshow t1') (ppshow t2')) $ Sub g (ci l) t1' t2'

@@ -63,10 +63,11 @@ import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
 import           Language.Nano.Misc             (mapSndM)
 import           Data.Monoid                  
-import qualified Data.HashSet             as S
+import qualified Data.HashSet             as HS
 import qualified Data.HashMap.Strict      as HM
 import qualified Data.Map                 as M
 import qualified Data.List                as L
+import qualified Data.Set                 as S
 import           Data.Maybe                     (fromJust)
 import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.PrettyPrint
@@ -459,7 +460,7 @@ varAsn :: Subst -> TVar -> Type -> Either String Subst
 -----------------------------------------------------------------------------
 varAsn θ α t 
   | t == tVar α          = Right $ θ 
-  | α `S.member` free t  = Left  $ errorOccursCheck α t 
+  | α `HS.member` free t  = Left  $ errorOccursCheck α t 
   | unassigned α θ       = Right $ θ `mappend` (Su $ HM.singleton α t) 
   | otherwise            = Left  $ errorRigidUnify α t
   
@@ -562,9 +563,8 @@ subty  θ e t t' = tryWithSuccessAndBackup (subty' θ e t t') succ (return θ)
     succ θ' = addSubCache t t' >> return θ'
     addSubCache t t' = modify $ \st -> st {tc_cache = if (t,t')  `L.elem` (tc_cache st) then tc_cache st else (t,t'):(tc_cache st)}
 
-cast θ xs ys 
--- TOGGLE CASTS 
---  | S.size (isct xs ys) > 0 = addCast (mkUnion $ S.toList $ isct xs ys) >> return θ
+cast θ xs ys  
+  | S.size (isct xs ys) > 0 = addCast (mkUnion $ S.toList $ isct xs ys) >> return θ
   | otherwise               = addError (errorSubType "No Cast" xs ys) θ
   where
     isct xs ys = (S.fromList xs) `S.intersection` (S.fromList ys)
@@ -606,9 +606,7 @@ success s action =
 -----------------------------------------------------------------------------
 isSubtype :: Nano z (RType r) -> RType r -> RType r -> Bool 
 -----------------------------------------------------------------------------
-isSubtype pgm t t' = success (initState pgm) $ subty' mempty Nothing 
-                       (trace (printf "lhs: %s" (ppshow $ toType t )) $ toType t) 
-                       (trace (printf "rhs: %s" (ppshow $ toType t')) $ toType t')
+isSubtype pgm t t' = success (initState pgm) $ subty' mempty Nothing (toType t) (toType t')
 
 
 -- | Try to execute the operation in the first argument's monad. 
@@ -703,7 +701,7 @@ addCast t =
       case eo of 
       -- Add the cast (assertion) to the state
       -- Not the AST
-        Just e -> addAsrt e $ tracePP (printf "Casting %s (%s)" (ppshow e) (ppshow $ getAnnotation e)) t
+        Just e -> addAsrt e {- $ tracePP (printf "Casting %s (%s)" (ppshow e) (ppshow $ getAnnotation e)) -} t
         _      -> logError dummySpan "NO CAST" ()
 
 addAsrt e t = modify $ \st -> st { tc_asrt = M.insert ss t (tc_asrt st) } 
@@ -716,34 +714,34 @@ addAsrt e t = modify $ \st -> st { tc_asrt = M.insert ss t (tc_asrt st) }
 --------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-patchPgm  :: Nano AnnType (RType r) -> TCM (Nano AnnAsrt (RType r))
+patchPgm  :: Bool -> Nano AnnType (RType r) -> TCM (Nano AnnAsrt (RType r))
 -------------------------------------------------------------------------------
-patchPgm p@(Nano {code = Src fs})
-  = do fs' <- patchFuns fs
+patchPgm b p@(Nano {code = Src fs})
+  = do fs' <- patchFuns b fs
        return p {code = Src fs'}
 
 
-patchFuns  = mapM patchFun
+patchFuns b  = mapM (patchFun b)
 
-patchFun   = patchStmt
+patchFun  b  = patchStmt b
 
-patchStmts = mapM patchStmt'
+patchStmts b = mapM (patchStmt' b)
 
-patchStmt' s = patchStmt {- $ tracePP "patch stmt" -} s
+patchStmt' b s = patchStmt b {- $ tracePP "patch stmt" -} s
 
-patchStmt (BlockStmt a sts)         = BlockStmt a <$> patchStmts sts
-patchStmt e@(EmptyStmt _)           = return $ e
-patchStmt (ExprStmt a e)            = ExprStmt a <$> patchExpr e
-patchStmt (IfStmt a e s1 s2)        = liftM3 (IfStmt a) (patchExpr e) (patchStmt s1) (patchStmt s2)
-patchStmt (IfSingleStmt a e s)      = liftM2 (IfSingleStmt a) (patchExpr e) (patchStmt s)
-patchStmt (ReturnStmt a (Just e))   = ReturnStmt a . Just <$> patchExpr e
-patchStmt r@(ReturnStmt _ _ )       = return $ r
-patchStmt (VarDeclStmt a vds)       = VarDeclStmt a <$> mapM patchVarDecl vds
-patchStmt (FunctionStmt a id as bd) = FunctionStmt a id as <$> patchStmts bd
-patchStmt s                         = return $ error $ "Does not support patchStmt for: " 
+patchStmt b (BlockStmt a sts)         = BlockStmt a <$> patchStmts b sts
+patchStmt b e@(EmptyStmt _)           = return $ e
+patchStmt b (ExprStmt a e)            = ExprStmt a <$> patchExpr b e
+patchStmt b (IfStmt a e s1 s2)        = liftM3 (IfStmt a) (patchExpr b e) (patchStmt b s1) (patchStmt b s2)
+patchStmt b (IfSingleStmt a e s)      = liftM2 (IfSingleStmt a) (patchExpr b e) (patchStmt b s)
+patchStmt b (ReturnStmt a (Just e))   = ReturnStmt a . Just <$> patchExpr b e
+patchStmt b r@(ReturnStmt _ _ )       = return $ r
+patchStmt b (VarDeclStmt a vds)       = VarDeclStmt a <$> mapM (patchVarDecl b) vds
+patchStmt b (FunctionStmt a id as bd) = FunctionStmt a id as <$> patchStmts b bd
+patchStmt b s                         = return $ error $ "Does not support patchStmt for: " 
                                                   ++ ppshow s
 
-patchExprs = mapM patchExpr
+patchExprs b = mapM (patchExpr b)
 
 annt e a = 
   do  m <- tc_asrt <$> get
@@ -753,41 +751,42 @@ annt e a =
         where 
           key = ann $ getAnnotation e
 
-patchExpr' e@(StringLit _ _ )        = return $ e 
-patchExpr' e@(NumLit _ _ )           = return $ e 
-patchExpr' e@(IntLit _ _ )           = return $ e 
-patchExpr' e@(BoolLit _ _)           = return $ e 
-patchExpr' e@(NullLit _)             = return $ e 
-patchExpr' e@(ArrayLit a es)         = liftM2 ArrayLit (annt e a) (patchExprs es)
-patchExpr' e@(ObjectLit a pes)       = liftM2 ObjectLit (annt e a) $
-                                        mapM (mapSndM patchExpr) pes
-patchExpr' e@(ThisRef _)             = return $ e
-patchExpr' e@(VarRef a id)           = do a' <- annt e a
-                                          return $ VarRef a' id
-patchExpr' e@(PrefixExpr a p e')     = do a' <- annt e a
-                                          PrefixExpr a' p <$> patchExpr e'
-patchExpr' e@(InfixExpr a o e1 e2)   = do a' <- annt e a 
-                                          liftM2 (InfixExpr a' o) (patchExpr e1) (patchExpr e2)
-patchExpr' e@(AssignExpr a o lv e')  = do a' <- annt e a 
-                                          AssignExpr a' o lv <$> patchExpr e'
-patchExpr' e@(CallExpr a e' el)      = do a' <- annt e a
-                                          liftM2 (CallExpr a') (patchExpr e') (patchExprs el)
-patchExpr' e@(FuncExpr a oi is ss)   = do a' <- annt e a
-                                          FuncExpr a' oi is <$> patchStmts ss
-patchExpr' e@(DotRef a b f)          = do a' <- annt e a 
-                                          b' <- patchExpr b
-                                          return $ DotRef a' b' f
-patchExpr' e                         = return $ error $ "Does not support patchExpr for: "
+patchExpr' b e@(StringLit _ _ )        = return $ e 
+patchExpr' b e@(NumLit _ _ )           = return $ e 
+patchExpr' b e@(IntLit _ _ )           = return $ e 
+patchExpr' b e@(BoolLit _ _)           = return $ e 
+patchExpr' b e@(NullLit _)             = return $ e 
+patchExpr' b e@(ArrayLit a es)         = liftM2 ArrayLit (annt e a) (patchExprs b es)
+patchExpr' b e@(ObjectLit a pes)       = liftM2 ObjectLit (annt e a) $
+                                          mapM (mapSndM (patchExpr b)) pes
+patchExpr' b e@(ThisRef _)             = return $ e
+patchExpr' b e@(VarRef a id)           = do a' <- annt e a
+                                            return $ VarRef a' id
+patchExpr' b e@(PrefixExpr a p e')     = do a' <- annt e a
+                                            PrefixExpr a' p <$> patchExpr b e'
+patchExpr' b e@(InfixExpr a o e1 e2)   = do a' <- annt e a 
+                                            liftM2 (InfixExpr a' o) (patchExpr b e1) (patchExpr b e2)
+patchExpr' b e@(AssignExpr a o lv e')  = do a' <- annt e a 
+                                            AssignExpr a' o lv <$> patchExpr b e'
+patchExpr' b e@(CallExpr a e' el)      = do a' <- annt e a
+                                            liftM2 (CallExpr a') (patchExpr b e') (patchExprs b el)
+patchExpr' b e@(FuncExpr a oi is ss)   = do a' <- annt e a
+                                            FuncExpr a' oi is <$> patchStmts b ss
+patchExpr' b e@(DotRef a c f)          = do a' <- annt e a 
+                                            c' <- patchExpr b c
+                                            return $ DotRef a' c' f
+patchExpr' b e                         = return $ error $ "Does not support patchExpr b for: "
                                                   ++ ppshow e
                                                   
 -------------------------------------------------------------------------------
-patchExpr :: Expression AnnType -> TCM (Expression AnnType)
+patchExpr :: Bool -> Expression AnnType -> TCM (Expression AnnType)
 -------------------------------------------------------------------------------
-patchExpr = liftM go . patchExpr'
+patchExpr b = liftM go . patchExpr' b
   where 
   go e = 
     case L.find asrt $ {- tracePP ("patching " ++ ppshow e) $ -}  ann_fact $ getAnnotation e of
-      Just (Assert t) -> CallExpr ann name {- $ tracePP "adding" -} $ arg e t
+      Just (Assert t) ->  if b then CallExpr ann name $ tracePP "adding" $ arg e t
+                            else e
       _               -> e
   asrt (Assert _) = True
   asrt _          = False
@@ -795,6 +794,6 @@ patchExpr = liftM go . patchExpr'
   name = VarRef ann (Id ann "__cast")
   arg e t = [e, StringLit ann $ ppshow t]
 
-patchVarDecl (VarDecl a id (Just e)) = do e' <- patchExpr' e
-                                          return $ VarDecl a id $ Just e'
-patchVarDecl v                         = return v
+patchVarDecl b (VarDecl a id (Just e)) = do e' <- patchExpr' b e
+                                            return $ VarDecl a id $ Just e'
+patchVarDecl b v                       = return v

@@ -258,7 +258,8 @@ instance Eq TCon where
  
 instance (Eq r, F.Reftable r) => Eq (RType r) where
   TApp TUn t1 _       == TApp TUn t2 _        = 
-    (tracePP (printf "Diff: %s \\ %s" (ppshow $ L.nub t1) (ppshow $ L.nub t2)) $ (L.nub t1) L.\\ (L.nub t2)) == [] 
+    {-tracePP (printf "Diff: %s \\ %s" (ppshow $ L.nub t1) (ppshow $ L.nub t2)) $-}
+    (L.nub t1) L.\\ (L.nub t2) == []
   TApp c1 t1s r1      == TApp c2 t2s r2       = 
     (c1, t1s, r1) == (c2, t2s, r2)
   TVar v1 r1          == TVar v2 r2           =      

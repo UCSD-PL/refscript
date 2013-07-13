@@ -9,9 +9,11 @@ import           Text.Printf                        (printf)
 import           Control.Monad
 import           Control.Applicative                ((<$>))
 import           Data.Maybe                         (fromJust) -- fromMaybe, isJust)
+import qualified Data.List as L  
 import qualified Data.ByteString.Lazy   as B
 import qualified Data.HashMap.Strict as M
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import qualified Language.Fixpoint.Types as F
@@ -245,44 +247,59 @@ consExpr :: CGEnv -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 --   x' is a fresh, temporary (A-Normalized) variable holding the value of `e`,
 --   g' is g extended with a binding for x' (and other temps required for `e`)
 
-consExpr g (IntLit l i)               
+-- | First check if this expression is casted
+consExpr g e = consExpr' g e 
+--   case  L.find isAsrt $ ann_fact l of
+--     Just (Assert t) ->  
+--       do  let rt   = rType t
+--           (x',g') <- consExpr' g (tracePP (printf "Casting to %s" (ppshow rt)) e)
+--           subTypes l g' [x'] [rt]
+--           envAddFresh l rt g'
+--     _               -> consExpr' g e 
+--   where
+--     l = getAnnotation e
+--     isAsrt (Assert _) = True
+--     isAsrt _          = False
+
+
+consExpr' g (IntLit l i)               
   = envAddFresh l (eSingleton tInt i) g
 
-consExpr g (BoolLit l b)
+consExpr' g (BoolLit l b)
   = envAddFresh l (pSingleton tBool b) g 
 
-consExpr g (VarRef i x)
+consExpr' g (VarRef i x)
   = do addAnnot l x' $ envFindTy x g
        return (x', g) 
     where 
        x'  =  {- tracePP msg   -} x 
-       {-msg = printf "consExpr x = %s at %s" (ppshow x') (ppshow l)-}
+       {-msg = printf "consExpr' x = %s at %s" (ppshow x') (ppshow l)-}
        l   = srcPos i
 
-consExpr g (PrefixExpr l o e)
+consExpr' g (PrefixExpr l o e)
   = do (x', g') <- consCall g l o [e] (prefixOpTy o $ renv g)
        return (x', g')
 
-consExpr g (InfixExpr l o e1 e2)        
+consExpr' g (InfixExpr l o e1 e2)        
   = do (x', g') <- consCall g l o [e1, e2] (infixOpTy o $ renv g)
        return (x', g')
 
-consExpr g (CallExpr l e es)
-  = do (x, g') <- consExpr g e 
+consExpr' g (CallExpr l e es)
+  = do (x, g') <- consExpr' g e 
        consCall g' l e es $ envFindTy x g'
 
-consExpr  g (DotRef l e i)
-  = do  (x, g') <- consExpr g e
+consExpr'  g (DotRef l e i)
+  = do  (x, g') <- consExpr' g e
         case getBinding i $ envFindTy x g' of 
           Left  s -> errorstar s
           Right t -> envAddFresh l t g'
        
-consExpr g (ObjectLit l ps) 
+consExpr' g (ObjectLit l ps) 
   = do  (x, g') <- consObj l g ps
         envAddFresh l (envFindTy x g') g'
 
-consExpr _ e 
-  = error $ (printf "consExpr: not handled %s" (ppshow e))
+consExpr' _ e 
+  = error $ (printf "consExpr': not handled %s" (ppshow e))
 
 
 ---------------------------------------------------------------------------------------------
@@ -290,10 +307,6 @@ consCall :: (PP a)
          => CGEnv -> AnnType -> a -> [Expression AnnType] -> RefType -> CGM (Id AnnType, CGEnv)
 ---------------------------------------------------------------------------------------------
 
--- HINT: This code is almost isomorphic to the version in 
---   @Liquid.Nano.Typecheck.Typecheck@ except we use subtyping
---   instead of unification.
---
 --   1. Fill in @instantiate@ to get a monomorphic instance of @ft@ 
 --      i.e. the callee's RefType, at this call-site (You may want 
 --      to use @freshTyInst@)

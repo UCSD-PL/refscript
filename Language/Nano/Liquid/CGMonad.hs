@@ -155,7 +155,7 @@ cgError l msg = throwError $ printf "CG-ERROR at %s : %s" (ppshow $ srcPos l) ms
 envAddFresh :: (IsLocated l) => l -> RefType -> CGEnv -> CGM (Id l, CGEnv) 
 ---------------------------------------------------------------------------------------
 envAddFresh l t g 
-  = do x  <- tracePP ("envAddFresh" ++ ppshow t) <$> freshId l
+  = do x  <- {- tracePP ("envAddFresh" ++ ppshow t) <i$> -} freshId l
        g' <- envAdds [(x, t)] g
        return (x, g')
 
@@ -171,10 +171,34 @@ envAdds xts g
 addFixpointBind :: (F.Symbolic x) => (x, RefType) -> CGM F.BindId
 addFixpointBind (x, t) 
   = do let s     = F.symbol x
-       let r     = rTypeSortedReft t
-       (i, bs') <- F.insertBindEnv s r . binds <$> get 
+       let t'    = tag t
+       let r     = rTypeSortedReft t'
+       (i, bs') <- F.insertBindEnv s 
+        ({-T.trace (printf "Inserting bind: %s :: %s" (show s) (ppshow t'))-} r) . binds <$> get 
        modify    $ \st -> st { binds = bs' }
-       return    $ traceShow (printf "envAdds %s" (ppshow $ t)) i
+       return    $ i
+
+tag :: RType F.Reft -> RType F.Reft
+tag t@(TApp TInt  [] r) = TApp TInt  [] $ taggedReft t
+tag t@(TApp TBool [] r) = TApp TBool [] $ taggedReft t
+--tag   (TApp TUn   ts r) = TApp TTop [] $ foldl  mempty $ map taggedReft ts
+tag t                   = t
+
+
+taggedReft :: RType F.Reft -> F.Reft
+taggedReft (TApp TInt  [] r) = tagByNumber r 0
+taggedReft (TApp TBool [] r) = tagByNumber r 1
+taggedReft t                 = rTypeReft t
+
+tagByNumber :: F.Reft -> Integer -> F.Reft
+tagByNumber r@(F.Reft (sym, refa)) n = F.Reft (sym, (tagPred r n):refa)
+
+
+tagPred (F.Reft (sym, refa)) n = F.RConc pred
+  where
+    pred = F.PAtom F.Eq (F.EApp tag [vv]) (F.expr n)
+    tag  = F.stringSymbol "ttag"
+    vv   = F.EVar sym
 
 ---------------------------------------------------------------------------------------
 addAnnot       :: (F.Symbolic x) => SourceSpan -> x -> RefType -> CGM () 
@@ -274,7 +298,8 @@ subType l g t1 t2 = modify $ \st -> st {cs =  c : (cs st)}
     c             = T.trace (printf "subType at %s with gurads %s: %s <: %s"
                             (ppshow $ srcPos l) 
                             (ppshow $ guards g) 
-                            (ppshow t1') (ppshow t2')) $ Sub g (ci l) t1' t2'
+                            (ppshow t1') (ppshow t2')) $
+                    Sub g (ci l) t1' t2'
 
 
 noUnion (TApp TUn _ _)  = False

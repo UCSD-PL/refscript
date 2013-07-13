@@ -42,8 +42,8 @@ verifyFile :: FilePath -> IO (F.FixResult SourceSpan)
 -------------------------------------------------------------------------------
 typeCheck     :: (F.Reftable r) => Nano AnnSSA (RType r) -> (Nano AnnType (RType r), SCache)
 -------------------------------------------------------------------------------
-typeCheck pgm = either crash id . execute pgm . patch $ pgm 
-  where 
+typeCheck pgm = either crash id (execute pgm (patch False $ pgm))
+  where
     crash     = errorstar . render . vcat . map (text . ppErr)
 
 -- DEBUG MODE
@@ -54,7 +54,7 @@ verifyFile f
         let nanoSsa = ssaTransform nano
         donePhase Loud "SSA Transform"
         putStrLn . render . pp $ nanoSsa
-        r    <- either unsafe (safe . fst) $ execute nanoSsa $ patch nanoSsa
+        r    <- either unsafe (safe . fst) $ execute nanoSsa $ patch True nanoSsa
         donePhase Loud "Typechecking"
         return r
 
@@ -75,13 +75,13 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
-
+-- | The first argument true to tranform casted expressions e to __cast(e,T)
 -------------------------------------------------------------------------------
-patch :: F.Reftable r => Nano AnnSSA (RType r) -> TCM (Nano  AnnAsrt (RType r), SCache)
+patch :: F.Reftable r => Bool -> Nano AnnSSA (RType r) -> TCM (Nano  AnnAsrt (RType r), SCache)
 -------------------------------------------------------------------------------
-patch p = 
+patch b p = 
   do p1 <- tcNano p 
-     p2 <- patchPgm p1
+     p2 <- patchPgm b p1
      cache <- getCache
      return $ trace (codePP p2 cache) (p2, cache)
   where 
@@ -331,7 +331,7 @@ binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
 binders l e (TObj b _ )       = return b
 binders l e t@(TApp TUn ts _) = 
   case find isObj ts of
-    Just t' -> addCast t' >> tracePP "Casting" <$> binders l e t'
+    Just t' -> addCast t' >> binders l e t'
     _       -> tcError l $ errorObjectAccess e t
 binders l e t                 = tcError l $ errorObjectAccess e t
   

@@ -61,6 +61,7 @@ import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
+import           Language.Nano.Visitor.Visitor
 import           Language.Nano.Misc             (mapSndM)
 import           Data.Monoid                  
 import qualified Data.HashSet             as HS
@@ -346,7 +347,9 @@ getCache = tc_cache <$> get
 ----------------------------------------------------------------------------------
 joinSubsts :: [Subst] -> TCM Subst
 ----------------------------------------------------------------------------------
-joinSubsts θs = foldM joinSubst mempty θs
+joinSubsts θs = foldM (\θ1 θ2 -> 
+  {- tracePP (printf "Joining substs: %s ++ %s" (ppshow θ1) (ppshow θ2)) <$> -} 
+  joinSubst θ1 θ2) mempty θs
 
 
 -- | Join two substitutions
@@ -475,6 +478,10 @@ varAsnM θ a t =
     Right θ' -> return θ'
 
 -- | Subtyping without unions
+-- TypeScript lists its subtyping rules § 3.8.2
+-- The rules for subtyping with Null or Undefined type are unsound, so we're
+-- using a sound version instead, i.e. Null and Undefined are not subtypes of
+-- every type T.
 -----------------------------------------------------------------------------
 subtyNoUnion :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
@@ -488,13 +495,15 @@ subtyNoUnion θ _ _ t'
   | isTop t'       = return θ
 
 -- | Undefined
-subtyNoUnion θ _ t _
-  | isUndefined t  = return θ 
+subtyNoUnion θ _ t t'
+  | isUndefined t && isUndefined t'  = return θ
+  | isUndefined t && isNull t'       = return θ
+  | isUndefined t                    = addError (errorSubType "subtyNoUnion" t t') θ
 
 -- | Null
 subtyNoUnion θ _ t t'
-  | isNull t && isUndefined t' = addError errorNullUndefined θ
-  | isNull t       = return θ 
+  | isNull t && isNull t'       = return θ
+  | isNull t                    = addError (errorSubType "subtyNoUnion" t t') θ
 
 -- | Defined types
 subtyNoUnion θ e t@(TApp (TDef _) _ _) t'@(TApp (TDef _) _ _) = 
@@ -564,6 +573,7 @@ subty  θ e t t' = tryWithSuccessAndBackup (subty' θ e t t') succ (return θ)
     addSubCache t t' = modify $ \st -> st {tc_cache = if (t,t')  `L.elem` (tc_cache st) then tc_cache st else (t,t'):(tc_cache st)}
 
 cast θ xs ys  
+
   | S.size (isct xs ys) > 0 = addCast (mkUnion $ S.toList $ isct xs ys) >> return θ
   | otherwise               = addError (errorSubType "No Cast" xs ys) θ
   where

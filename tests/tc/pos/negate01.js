@@ -1,22 +1,18 @@
-/*@ negate :: (number|boolean) => number */
-function negate(n) {
-
-  assert(false);
+/*@ negate :: (number|boolean) => number|boolean */
+function negate(x) {
 
 //Original - revert when strings are supported   
-  //if (typeof(x) == 0) {
-  //  return 0-x;
-  //}
-  //else {
-  //  return !x;
-  //}
-  return 1;
+  if (typeof(x) == 0) {
+    return 0-x;
+  }
+  else {
+    return !x;
+  }
 }
 
-/*@ main :: ({v:number|v > 0}, boolean) => void */ 
+/*@ main :: (number|boolean, {v:number|v>0}) => void */ 
 function main(x,y) {
 
   negate(x);
-
 
 }

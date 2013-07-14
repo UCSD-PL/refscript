@@ -101,6 +101,7 @@ data Located a
   = Loc { loc :: !SourceSpan
         , val :: a
         }
+    deriving (Data, Typeable)
  
 instance Functor Located where 
   fmap f (Loc l x) = Loc l (f x)

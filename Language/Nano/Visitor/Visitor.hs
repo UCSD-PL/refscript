@@ -36,6 +36,8 @@ module Language.Nano.Visitor.Visitor (
   , visitVarDecl 
   , visitForInInit 
 
+  , defaultVisitor
+
   , NanoVisitorM(..)
   , VisitActionM(..)
   , runVisitProgramM       
@@ -55,15 +57,19 @@ module Language.Nano.Visitor.Visitor (
   , runVisitPropM          
   , runVisitInfixOpM       
 
+  , defaultVisitorM
+
 ) where 
 
 import           Control.Applicative            ((<$>))
 import           Control.Monad.State
+import           Language.Nano.Errors
 
 import           Language.Nano.Typecheck.Types
 import           Data.Traversable         as T
 import           Language.ECMAScript3.Syntax
-
+import           Language.ECMAScript3.PrettyPrint
+import           Debug.Trace
 
 -------------------------------------------------------------------------------
 -- | AST Visitor
@@ -72,7 +78,7 @@ import           Language.ECMAScript3.Syntax
 data VisitAction a =  SkipChildren 
                     | DoChildren
                     | ChangeTo a
-                    | ChangeDoChildrenPost (a, a -> a)
+                    | ChangeDoChildrenPost a  (a -> a)
 
 
 data NanoVisitor a b = NV {
@@ -95,15 +101,20 @@ data NanoVisitor a b = NV {
   }
 
 
+defaultVisitor = NV d d d d d d d d d d d d d d d d
+  where
+    d _ = DoChildren
+
+
 -------------------------------------------------------------------------------
 doVisit :: NanoVisitor a b -> VisitAction c -> (NanoVisitor a b -> c -> c) -> c -> c  
 -------------------------------------------------------------------------------
 doVisit  vis action children n = 
   case action of
-    SkipChildren                 -> n
-    ChangeTo n'                  -> n'
-    DoChildren                   -> children vis n
-    ChangeDoChildrenPost (n', f) -> f (children vis n')
+    SkipChildren              -> n
+    ChangeTo n'               -> n'
+    DoChildren                -> children vis n
+    ChangeDoChildrenPost n' f -> f $ trace "From Children" (children vis (trace "in doVisit" n'))
 
 
 -------------------------------------------------------------------------------
@@ -152,7 +163,7 @@ visitStatement vis st = doVisit vis (vStatement vis st) ch st
 -------------------------------------------------------------------------------
 visitExpression :: NanoVisitor a b -> Expression a -> Expression a
 -------------------------------------------------------------------------------
-visitExpression vis e = doVisit vis (vExpression vis e) ch e
+visitExpression vis e = doVisit vis (vExpression vis $ tracePP "visiting b" e) ch (tracePP "visiting a" e)
   where 
     ch vis e = 
       let ve   = visitExpression    vis
@@ -174,7 +185,7 @@ visitExpression vis e = doVisit vis (vExpression vis e) ch e
         ArrayLit l es            -> ArrayLit l $ ve <$> es
         ObjectLit l pes          -> ObjectLit l $ (\(p,e) -> (vp p, ve e)) <$> pes
         ThisRef l                -> ThisRef l
-        VarRef l i               -> VarRef l $ vi i
+        VarRef l i               -> VarRef l $ vi (tracePP "Going into" i)
         DotRef l e i             -> DotRef l (ve e) (vi i)
         BracketRef l e1 e2       -> BracketRef l (ve e1) (ve e2)
         NewExpr l e es           -> NewExpr l (ve e) (ve <$> es)
@@ -186,6 +197,7 @@ visitExpression vis e = doVisit vis (vExpression vis e) ch e
         ListExpr l es            -> ListExpr l (ve <$> es)
         CallExpr l e es          -> CallExpr l (ve e) (ve <$> es)
         FuncExpr l mi is ss      -> FuncExpr l (vi <$> mi) (vi <$> is) (vs <$> ss)
+        Cast l e                 -> Cast l $ ve (tracePP "visiting c" e)
       
             
 -------------------------------------------------------------------------------
@@ -216,7 +228,7 @@ visitCatchClause vis c = doVisit vis (vCatchClause vis c) ch c
 -------------------------------------------------------------------------------
 visitId :: NanoVisitor a b -> Id a -> Id a
 -------------------------------------------------------------------------------
-visitId vis i = doVisit vis (vId vis i) (flip const) i
+visitId vis i = doVisit vis (vId vis $ tracePP "visit id a" i) (flip const) (tracePP "visit id" i)
             
 
 -------------------------------------------------------------------------------
@@ -319,9 +331,10 @@ visitForInInit vis fi = doVisit vis (vForInInit vis fi) ch fi
  - instances will have to refer to a b, which are quantified over in VT.
  -
  -}
-data VisitActionM m a b c = SkipChildrenM 
+data VisitActionM m a b c =  SkipChildrenM 
                            | DoChildrenM
                            | ChangeToM c
+                           -- TODO: fix this: VT should not be exposed
                            | ChangeDoChildrenPostM (c, c -> VT m a b c)
 
 
@@ -347,6 +360,12 @@ data NanoVisitorM m a b = NVM {
 
 type VT m a b = StateT (NanoVisitorM m a b) m 
 
+
+defaultVisitorM = NVM d d d d d d d d d d d d d d d d
+  where
+    d _ = DoChildrenM
+
+
 -------------------------------------------------------------------------------
 doVisitM :: (Functor m, Monad m) => 
      (NanoVisitorM m a b -> c -> VisitActionM m a b c) 
@@ -358,7 +377,7 @@ doVisitM op children n =
   do  v <- get
       case op v n of
         SkipChildrenM                -> return n
-        ChangeToM n                  -> return n
+        ChangeToM n'                 -> return n'
         DoChildrenM                  -> children n
         ChangeDoChildrenPostM (n, f) -> children n >>= f 
  
@@ -396,39 +415,39 @@ runVisitAssignOpM      :: ( Functor m, Monad m ) => NanoVisitorM m a b -> Assign
 runVisitPropM          :: ( Functor m, Monad m ) => NanoVisitorM m a b -> Prop            a -> m ( Prop           a )
 runVisitInfixOpM       :: ( Functor m, Monad m ) => NanoVisitorM m a b -> InfixOp           -> m ( InfixOp          )
 
-runVisitProgramM       v  n = fst <$> runStateT (visitProgramM         n) v
-runVisitJavascriptM    v  n = fst <$> runStateT (visitJavaScriptM      n) v
-runVisitExpressionM    v  n = fst <$> runStateT (visitExpressionM      n) v    
-runVisitStatementM     v  n = fst <$> runStateT (visitStatementM       n) v 
-runVisitCaseClauseM    v  n = fst <$> runStateT (visitCaseClauseM      n) v 
-runVisitCatchClauseM   v  n = fst <$> runStateT (visitCatchClauseM     n) v 
-runVisitIdM            v  n = fst <$> runStateT (visitIdM              n) v 
-runVisitForInitM       v  n = fst <$> runStateT (visitForInitM         n) v 
-runVisitForInInitM     v  n = fst <$> runStateT (visitForInInitM       n) v 
-runVisitVarDeclM       v  n = fst <$> runStateT (visitVarDeclM         n) v 
-runVisitPrefixOpM      v  n = fst <$> runStateT (visitPrefixOpM        n) v
-runVisitUnaryAssignOpM v  n = fst <$> runStateT (visitUnaryAssignOpM   n) v
-runVisitLValueM        v  n = fst <$> runStateT (visitLValueM          n) v
-runVisitAssignOpM      v  n = fst <$> runStateT (visitAssignOpM        n) v
-runVisitPropM          v  n = fst <$> runStateT (visitPropM            n) v
-runVisitInfixOpM       v  n = fst <$> runStateT (visitInfixOpM         n) v
+runVisitProgramM       v  n = fst <$> runStateT (visitProgramM        n) v
+runVisitJavascriptM    v  n = fst <$> runStateT (visitJavaScriptM     n) v
+runVisitExpressionM    v  n = fst <$> runStateT (visitExpressionM     n) v
+runVisitStatementM     v  n = fst <$> runStateT (visitStatementM      n) v
+runVisitCaseClauseM    v  n = fst <$> runStateT (visitCaseClauseM     n) v
+runVisitCatchClauseM   v  n = fst <$> runStateT (visitCatchClauseM    n) v
+runVisitIdM            v  n = fst <$> runStateT (visitIdM             n) v
+runVisitForInitM       v  n = fst <$> runStateT (visitForInitM        n) v
+runVisitForInInitM     v  n = fst <$> runStateT (visitForInInitM      n) v
+runVisitVarDeclM       v  n = fst <$> runStateT (visitVarDeclM        n) v
+runVisitPrefixOpM      v  n = fst <$> runStateT (visitPrefixOpM       n) v
+runVisitUnaryAssignOpM v  n = fst <$> runStateT (visitUnaryAssignOpM  n) v
+runVisitLValueM        v  n = fst <$> runStateT (visitLValueM         n) v
+runVisitAssignOpM      v  n = fst <$> runStateT (visitAssignOpM       n) v
+runVisitPropM          v  n = fst <$> runStateT (visitPropM           n) v
+runVisitInfixOpM       v  n = fst <$> runStateT (visitInfixOpM        n) v
 
 
 -- | Shorthand aliases:
-ve   = visitExpressionM  
-vs   = visitStatementM   
-vc   = visitCaseClauseM  
-vcc  = visitCatchClauseM 
-vi   = visitIdM          
-vfi  = visitForInitM     
-vfii = visitForInInitM   
-vd   = visitVarDeclM     
-vpo  = visitPrefixOpM     
-vuao = visitUnaryAssignOpM
-vlv  = visitLValueM       
-vao  = visitAssignOpM     
-vp   = visitPropM         
-vio  = visitInfixOpM      
+ve   n = visitExpressionM    $ tracePP "Visiting Expression" n
+vs   n = visitStatementM     $ tracePP "Visiting Statement" n
+vc   n = visitCaseClauseM                         n
+vcc  n = visitCatchClauseM                        n
+vi   n = visitIdM            $ tracePP "Visiting Id" n
+vfi  n = visitForInitM                            n
+vfii n = visitForInInitM                          n
+vd   n = visitVarDeclM                            n
+vpo  n = visitPrefixOpM      $ tracePP "Visiting PrefixOp" n
+vuao n = visitUnaryAssignOpM                      n
+vlv  n = visitLValueM        $ tracePP "Visiting LValue" n
+vao  n = visitAssignOpM      $ tracePP "Visiting AssignOp" n
+vp   n = visitPropM          $ tracePP "Visiting Prop" n
+vio  n = visitInfixOpM       $ tracePP "Visiting InfixOp" n
 
 
 -------------------------------------------------------------------------------
@@ -493,6 +512,7 @@ visitExpressionM =  doVisitM vExpressionM ch
     ch (ListExpr l es           ) = ListExpr l <$> T.mapM ve es
     ch (CallExpr l e es         ) = liftM2 (CallExpr l) (ve e) (T.mapM ve es)
     ch (FuncExpr l mi is ss     ) = liftM3 (FuncExpr l) (T.mapM vi mi) (T.mapM vi is) (T.mapM vs ss)
+    ch (Cast l e                ) = Cast l <$> ve e
 
 
 -------------------------------------------------------------------------------

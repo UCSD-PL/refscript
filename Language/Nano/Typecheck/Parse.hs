@@ -80,8 +80,7 @@ bareTypeP :: Parser RefType
 bareTypeP   
   =  try bareAllP
  <|> try bareFunP
- <|> try bareObjP
- <|> bareUnionP
+ <|> try bareUnionP
 
 bareFunP  
   = do args   <- parens $ sepBy bareTypeP comma
@@ -94,27 +93,31 @@ argBind t = B (rTypeValueVar t) t
 
 
 bareUnionP  
-  =   parens bareUnionP'
-  <|> bareUnionP'
+  = bareUnionP'
   
-bareUnionP' = do  h  <- bareAtomP
-                  tl <- many $ bar >> bareAtomP
-                  r   <- topP    -- unions get top refinement
-                  case tl of
-                    [] -> return h
-                    _  -> return $ TApp TUn (h:tl) r
+  {-try $ parens bareUnionP'-}
+  {-<|> try bareUnionP'-}
+  
+bareUnionP' = do ts <- bareAtomP `sepBy1` bar
+                 r  <- topP
+                 case ts of 
+                      [ ] -> error "impossible"
+                      [t] -> return t
+                      _   -> return $ TApp TUn ts r
+
 
 bareAtomP 
   =  try (refP bbaseP) 
  <|> try (bRefP bbaseP)
  <|> try (bindP bbaseP)
- <|> try (dummyP (bbaseP <* spaces))
+ <|>     (dummyP (bbaseP <* spaces))
 
 bbaseP :: Parser (Reft -> RefType)
 bbaseP 
   =  try (TVar <$> tvarP)
+ <|> try (TObj <$> (braces $ bindsP) )
  <|> try (TApp <$> tDefP <*> (brackets $ sepBy bareTypeP comma))  -- This is what allows: list [A], tree [A,B] etc...
- <|> try ((`TApp` []) <$> tconP)
+ <|>     ((`TApp` []) <$> tconP)
 
 tvarP :: Parser TVar
 -- tvarP = TV <$> (stringSymbol <$> upperWordP) <*> getPosition
@@ -149,17 +152,16 @@ bareAllP
        t  <- bareTypeP
        return $ foldr TAll t as
 
+bindsP 
+  =     try (spaces >> return [])
+    <|>     sepBy bareBindP comma
+
 bareBindP 
   = do  s <- binderP
         spaces      --ugly
         colon
         t <- bareTypeP
         return $ B s t 
-
-bareObjP 
-  = do bs  <- braces $ sepBy bareBindP comma
-       r   <- topP    -- objects get top refinement
-       return $ TObj bs r
 
  
 dummyP ::  Parser (Reft -> b) -> Parser b
@@ -179,7 +181,7 @@ topP   = (Reft . (, []) . vv . Just) <$> freshIntP
 --           san c   = toLower c
 
 
--- | Parses types of the form: `x : kind`
+-- | Parses bindings of the form: `x : kind`
 bindP :: Parser (Reft -> a) -> Parser a
 bindP kindP
   = do v <- symbolP 

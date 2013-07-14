@@ -44,19 +44,19 @@ function pos(){
 /************** Types for list Operators ******************************/
 /*************************************************************************/
 
-/* measure len :: forall A. (list [A]) => number */
+// ORIGINAL VERSION BEGIN
+    /* measure len :: forall A. (list [A]) => number */
 
-/* measure null :: forall A. (A) => bool */
-
-/* cons  :: forall A. (x:A, xs:list [A]) => {v: list [A] | (len v) = 1 + (len xs)}            */
-/* nil   :: forall A. () => {v: list [A] | (len v) = 0}                                       */
-/* head  :: forall A. (xs:list [A]) => A        */
-/* tail  :: forall A. (xs:list [A]) => list [A] */
-/* nth   :: forall A. (xs:list [A], {i:number| ((0 <= i) && i < (len xs))}) => A                 */
-/* empty :: forall A. (xs:list [A]) => {v:boolean | (if (Prop v) then ((len xs) = 0) else ((len xs) > 0))} */
-/* length   :: forall A. (xs:list [A]) => {v:number | ((v >= 0) && v = (len xs))}                */
-/* safehead :: forall A. ({xs:list [A] | (len xs) > 0}) => A                                     */
-/* safetail :: forall A. ({xs:list [A] | (len xs) > 0}) => {v:list [A] | (len v) = (len xs) - 1} */
+    /* cons  :: forall A. (x:A, xs:list [A]) => {v: list [A] | (len v) = 1 + (len xs)}            */
+    /* nil   :: forall A. () => {v: list [A] | (len v) = 0}                                       */
+    /* head  :: forall A. (xs:list [A]) => A        */
+    /* tail  :: forall A. (xs:list [A]) => list [A] */
+    /* nth   :: forall A. (xs:list [A], {i:number| ((0 <= i) && i < (len xs))}) => A                 */
+    /* empty :: forall A. (xs:list [A]) => {v:boolean | (if (Prop v) then ((len xs) = 0) else ((len xs) > 0))} */
+    /* length   :: forall A. (xs:list [A]) => {v:number | ((v >= 0) && v = (len xs))}                */
+    /* safehead :: forall A. ({xs:list [A] | (len xs) > 0}) => A                                     */
+    /* safetail :: forall A. ({xs:list [A] | (len xs) > 0}) => {v:list [A] | (len v) = (len xs) - 1} */
+// ORIGINAL VERSION END
 
 
 /*@ measure len :: forall A. (list [A]) => number */
@@ -103,6 +103,8 @@ function pos(){
 /*@ measure ttag :: forall A. (A) => number                                                                            */
 /*@ builtin_PrefixTypeof:: forall A. ({x:A|true}) => {v:number | (ttag x) = v }                                        */
 /*@ measure prop        :: (boolean) => bool                                                                           */
+
+
 
 /*************************************************************************/
 /************** Pre-Loaded Qualifiers ************************************/

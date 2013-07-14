@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE RankNTypes             #-}
 
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
@@ -9,7 +10,7 @@ import           Control.Monad
 import           Control.Monad.State()
 import qualified Data.HashSet        as HS 
 import qualified Data.HashMap.Strict as M 
-import           Data.List           (nub, find)
+import           Data.List           (nub, find, partition)
 import qualified Data.Traversable    as T
 -- import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust)
@@ -57,7 +58,7 @@ verifyFile :: FilePath -> IO (F.FixResult SourceSpan)
 -------------------------------------------------------------------------------
 typeCheck     :: (Data r, Typeable r, F.Reftable r) => Nano AnnSSA (RType r) -> (Nano AnnType (RType r), SCache)
 -------------------------------------------------------------------------------
-typeCheck pgm = either crash id (execute pgm (patch False pgm >>= \(p,c) -> return (tracePP "After cast Trans" $ castTransform p, c)))
+typeCheck pgm = either crash id (execute pgm (patch True pgm))
   where
     crash     = errorstar . render . vcat . map (text . ppErr)
 
@@ -66,28 +67,56 @@ castTransform = visitProgram vis
   where 
     vis                  = defaultVisitor { vExpression = castExpr }
     castExpr  (Cast _ _) = SkipChildren
-    castExpr  e          = annot (tracePP "Annots" [Assert t | Assert t <- ann_fact $ getAnnotation e]) (tracePP "eee" e)
+    castExpr  e          = annot (tracePP "Annots" $ filter isAsrt $ ann_fact $ an e) e
     annot [ ] e          = DoChildren
-    annot [Assert t] e   = ChangeDoChildrenPost (tracePP "Giving" (dropCasts ({-Cast (an e)-} (dropCasts $ tracePP "inner" e)))) (dropCasts)
+    annot [Assert t] e   = ChangeDoChildrenPost (traceShow "inner" $ dropCasts $ Cast (an e) e) dropCasts
     annot _   _          = error "An expression can only have single type cast"
     an                   = getAnnotation
     dropCasts            = reannotate remCast
     remCast (Ann a fs)   = Ann a $ dropWhile isAsrt fs
 
 
--- -- Would have been cool if Generics worked - atm they give an infinite loop in
--- -- the Cast expression.
+printAnnots = visitProgram vis 
+  where
+    vis       = defaultVisitor { vExpression = dumpAnnots }
+    dumpAnnots e = trace (printf "expr: %s --> %s" (ppshow e) (show $ filter isAsrt $ ann_fact $ getAnnotation e)) DoChildren 
+
+
+
+-- -- Generics version
 -- castExpr   :: Expression (Annot Fact SourceSpan) -> Expression (Annot Fact SourceSpan)
 -- castExpr e@(Cast _ _) = e
--- castExpr  e = annot [Assert t | Assert t <- ann_fact $ getAnnotation $ tracePP "Getting annots" e] e
--- annot [ ] e = e
--- annot [a] e = Cast (Ann (ann $ an e) [a]) $ tracePP "Adding cast to " e
--- annot _   _ = error "An expression can only have single type cast"
--- an          = getAnnotation 
+-- castExpr e            = case e of 
+--                           Cast a e' ->  e'
+--                           _         ->  let ant           = getAnnotation e                            
+--                                             (asrt , rest) = partition isAsrt $ ann_fact ant
+--                                             ss            = ann ant in
+--                                         case asrt of 
+--                                           []          -> e
+--                                           [Assert t]  -> Cast (Ann ss rest) (traceShow "Recurse" $ dropCasts e)
+--                                           _           -> error "ERROR"
+--  
+-- 
+-- 
+-- --annot (tracePP "annot" [ t | Assert t <- ann_fact $ an e]) e
+-- 
+-- annot [ ] e           = e
+-- annot [t] e           = Cast (Ann (ann $ an e) [Assume $ tracePP "to" t]) $ tracePP "Casting" e
+-- annot _   _           = error "An expression can only have single type cast"
+-- 
+-- an                    = getAnnotation
+-- 
+-- dropCasts             = reannotate remCast
+-- remCast (Ann a fs)    = Ann a $ dropWhile isAsrt fs
 -- 
 -- 
 -- castTransform :: (Typeable a, Data a) => a -> a
 -- castTransform = everywhere' (mkT castExpr)
+-- 
+-- -- myEverywhere' :: (forall a. Data a => a -> a)
+-- --             -> (forall a. Data a => a -> a)
+-- -- myEverywhere' f x = gmapT (myEverywhere' f) (f $ trace "Recusring" x)
+
 
 
 -- DEBUG MODE

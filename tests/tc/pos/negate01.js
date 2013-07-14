@@ -5,9 +5,10 @@ function negate(x) {
   if (typeof(x) == 0) {
     return 0-x;
   }
-  else {
-    return !x;
-  }
+  return 0;
+  //else {
+  //  return !x;
+  //}
 }
 
 /*@ main :: (number|boolean, {v:number|v>0}) => void */ 

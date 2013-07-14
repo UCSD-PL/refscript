@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
 
 module Language.Nano.Typecheck.Types (
 
@@ -67,6 +68,7 @@ module Language.Nano.Typecheck.Types (
   , AnnType
   , AnnAsrt
   , AnnInfo
+  , isAsrt
 
   -- * Useful Operations
   , subset
@@ -80,6 +82,8 @@ import           Data.Maybe             (fromMaybe) --, isJust)
 import           Data.Monoid            hiding ((<>))            
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
+import           Data.Generics                   
+import           Data.Typeable                  
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
@@ -101,7 +105,7 @@ import           Control.Monad.Error ()
 data TVar = TV { tv_sym :: F.Symbol
                , tv_loc :: SourceSpan 
                }
-            deriving (Show, Ord)
+            deriving (Show, Ord, Data, Typeable)
 
 instance Eq TVar where 
   a == b = tv_sym a == tv_sym b
@@ -127,7 +131,7 @@ data TBody r
         , td_args :: ![TVar]        -- Type variables
         , td_body :: !(RType r)     -- int or bool or fun or object ...
         , td_pos  :: !SourceSpan    -- Source position
-        } deriving (Eq, Ord, Show, Functor)
+        } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 -- | Type Constructors
 data TCon 
@@ -140,7 +144,7 @@ data TCon
   | TUn
   | TNull
   | TUndef
-    deriving (Ord, Show)
+    deriving (Ord, Show, Data, Typeable)
 
 -- | (Raw) Refined Types 
 data RType r  
@@ -150,14 +154,14 @@ data RType r
   | TObj [Bind r]           r
   | TBd  (TBody r)
   | TAll TVar (RType r)
-    deriving (Ord, Show, Functor)
+    deriving (Ord, Show, Functor, Data, Typeable)
 
 
 data Bind r
   = B { b_sym  :: F.Symbol
       , b_type :: !(RType r)
       } 
-    deriving (Eq, Ord, Show, Functor)
+    deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 
 -- | Standard Types
@@ -286,7 +290,7 @@ data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
                      , consts :: !(Env t)           -- ^ Measure Signatures 
                      , tDefs  :: !(Env t)           -- ^ Type definitions
                      , quals  :: ![F.Qualifier]     -- ^ Qualifiers
-                     } deriving (Functor)
+                     } deriving (Functor, Data, Typeable)
 
 type NanoBare    = Nano AnnBare Type 
 type NanoSSA     = Nano AnnSSA  Type 
@@ -302,6 +306,7 @@ type FunctionStatement a = Statement a
 
 {-@ newtype Source a = Src [FunctionStatement a] @-}
 newtype Source a = Src [FunctionStatement a]
+  deriving (Data, Typeable)
 
 instance Functor Source where 
   fmap f (Src zs) = Src (map (fmap f) zs)
@@ -404,9 +409,10 @@ data Fact
   = PhiVar  !(Id SourceSpan) 
   | TypInst ![Type]
   | Assert  ! Type
-    deriving (Eq, Ord, Show)
+  | Assume  ! Type
+    deriving (Eq, Ord, Show, Data, Typeable)
 
-data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show)
+data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show, Data, Typeable)
 type AnnBare   = Annot Fact SourceSpan -- NO facts
 type AnnSSA    = Annot Fact SourceSpan -- Only Phi              facts
 type AnnType   = Annot Fact SourceSpan -- Only Phi + Typ        facts
@@ -430,6 +436,7 @@ instance PP Fact where
   pp (PhiVar x)   = text "phi"  <+> pp x
   pp (TypInst ts) = text "inst" <+> pp ts 
   pp (Assert t)   = text "assert" <+> pp t
+  pp (Assert t)   = text "assume" <+> pp t
 
 instance PP AnnInfo where
   pp             = vcat . (ppB <$>) . M.toList 
@@ -438,6 +445,10 @@ instance PP AnnInfo where
 
 instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
+
+isAsrt :: Fact -> Bool
+isAsrt (Assert _) = True
+isAsrt _          = False
 
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------

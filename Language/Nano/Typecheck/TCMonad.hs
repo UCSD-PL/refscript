@@ -756,7 +756,7 @@ patchExprs b = mapM (patchExpr b)
 annt e a = 
   do  m <- tc_asrt <$> get
       case M.lookup key m of
-        Just t -> return $ a { ann_fact = (Assert $ trace (printf "Found %s" $ ppshow key) t) : (ann_fact a) } 
+        Just t -> return $ a { ann_fact = (Assert t) : (ann_fact a) } 
         _      -> return $ a
         where 
           key = ann $ getAnnotation e

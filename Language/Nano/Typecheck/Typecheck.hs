@@ -1,3 +1,7 @@
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+
+
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
 
 import           Control.Applicative                ((<$>)) -- (<*>))
@@ -9,26 +13,37 @@ import           Data.List           (nub, find)
 import qualified Data.Traversable    as T
 -- import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust)
+
+import           Data.Generics                   
+import           Data.Generics.Aliases
+import           Data.Generics.Schemes
+import           Data.Typeable                  
+
+
+
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$))
 import           Text.Printf                        (printf)
 
 import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
+import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.SSA.SSA
+import           Language.Nano.Visitor.Visitor
 
 import qualified Language.Fixpoint.Types as F
 -- import           Language.Fixpoint.Interface        (resultExit)
 import           Language.Fixpoint.Misc             
 -- import           System.Exit                        (exitWith)
+import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
-import           Debug.Trace
+import           Debug.Trace    hiding (traceShow)
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
@@ -40,11 +55,40 @@ verifyFile :: FilePath -> IO (F.FixResult SourceSpan)
 --   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
 -------------------------------------------------------------------------------
-typeCheck     :: (F.Reftable r) => Nano AnnSSA (RType r) -> (Nano AnnType (RType r), SCache)
+typeCheck     :: (Data r, Typeable r, F.Reftable r) => Nano AnnSSA (RType r) -> (Nano AnnType (RType r), SCache)
 -------------------------------------------------------------------------------
-typeCheck pgm = either crash id (execute pgm (patch False $ pgm))
+typeCheck pgm = either crash id (execute pgm (patch False pgm >>= \(p,c) -> return (tracePP "After cast Trans" $ castTransform p, c)))
   where
     crash     = errorstar . render . vcat . map (text . ppErr)
+
+
+castTransform = visitProgram vis
+  where 
+    vis                  = defaultVisitor { vExpression = castExpr }
+    castExpr  (Cast _ _) = SkipChildren
+    castExpr  e          = annot (tracePP "Annots" [Assert t | Assert t <- ann_fact $ getAnnotation e]) (tracePP "eee" e)
+    annot [ ] e          = DoChildren
+    annot [Assert t] e   = ChangeDoChildrenPost (tracePP "Giving" (dropCasts ({-Cast (an e)-} (dropCasts $ tracePP "inner" e)))) (dropCasts)
+    annot _   _          = error "An expression can only have single type cast"
+    an                   = getAnnotation
+    dropCasts            = reannotate remCast
+    remCast (Ann a fs)   = Ann a $ dropWhile isAsrt fs
+
+
+-- -- Would have been cool if Generics worked - atm they give an infinite loop in
+-- -- the Cast expression.
+-- castExpr   :: Expression (Annot Fact SourceSpan) -> Expression (Annot Fact SourceSpan)
+-- castExpr e@(Cast _ _) = e
+-- castExpr  e = annot [Assert t | Assert t <- ann_fact $ getAnnotation $ tracePP "Getting annots" e] e
+-- annot [ ] e = e
+-- annot [a] e = Cast (Ann (ann $ an e) [a]) $ tracePP "Adding cast to " e
+-- annot _   _ = error "An expression can only have single type cast"
+-- an          = getAnnotation 
+-- 
+-- 
+-- castTransform :: (Typeable a, Data a) => a -> a
+-- castTransform = everywhere' (mkT castExpr)
+
 
 -- DEBUG MODE
 verifyFile f 

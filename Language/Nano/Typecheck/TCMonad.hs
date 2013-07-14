@@ -793,16 +793,17 @@ patchExpr :: Bool -> Expression AnnType -> TCM (Expression AnnType)
 -------------------------------------------------------------------------------
 patchExpr b = liftM go . patchExpr' b
   where 
-  go e = 
+  go e =
     case L.find asrt $ {- tracePP ("patching " ++ ppshow e) $ -}  ann_fact $ getAnnotation e of
-      Just (Assert t) ->  if b then CallExpr ann name $ tracePP "adding" $ arg e t
+      Just (Assert t) ->  if b --then CallExpr ann name $ tracePP "adding" $ arg e t
+                            then Cast (getAnnotation e) e
                             else e
       _               -> e
   asrt (Assert _) = True
   asrt _          = False
-  ann = Ann dummySpan []
-  name = VarRef ann (Id ann "__cast")
-  arg e t = [e, StringLit ann $ ppshow t]
+  ann             = Ann dummySpan []
+  name            = VarRef ann (Id ann "__cast")
+  arg e t         = [e, StringLit ann $ ppshow t]
 
 patchVarDecl b (VarDecl a id (Just e)) = do e' <- patchExpr' b e
                                             return $ VarDecl a id $ Just e'

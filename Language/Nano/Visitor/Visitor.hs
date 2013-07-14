@@ -64,11 +64,13 @@ module Language.Nano.Visitor.Visitor (
 import           Control.Applicative            ((<$>))
 import           Control.Monad.State
 import           Language.Nano.Errors
+import           Text.Printf                        (printf)
 
 import           Language.Nano.Typecheck.Types
 import           Data.Traversable         as T
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Syntax.Annotations
 import           Debug.Trace
 
 -------------------------------------------------------------------------------
@@ -114,7 +116,7 @@ doVisit  vis action children n =
     SkipChildren              -> n
     ChangeTo n'               -> n'
     DoChildren                -> children vis n
-    ChangeDoChildrenPost n' f -> f $ trace "From Children" (children vis (trace "in doVisit" n'))
+    ChangeDoChildrenPost n' f -> f $ children vis n'
 
 
 -------------------------------------------------------------------------------
@@ -163,7 +165,7 @@ visitStatement vis st = doVisit vis (vStatement vis st) ch st
 -------------------------------------------------------------------------------
 visitExpression :: NanoVisitor a b -> Expression a -> Expression a
 -------------------------------------------------------------------------------
-visitExpression vis e = doVisit vis (vExpression vis $ tracePP "visiting b" e) ch (tracePP "visiting a" e)
+visitExpression vis e = doVisit vis (vExpression vis $ tracePP "vExpression" e) ch e
   where 
     ch vis e = 
       let ve   = visitExpression    vis
@@ -185,7 +187,7 @@ visitExpression vis e = doVisit vis (vExpression vis $ tracePP "visiting b" e) c
         ArrayLit l es            -> ArrayLit l $ ve <$> es
         ObjectLit l pes          -> ObjectLit l $ (\(p,e) -> (vp p, ve e)) <$> pes
         ThisRef l                -> ThisRef l
-        VarRef l i               -> VarRef l $ vi (tracePP "Going into" i)
+        VarRef l i               -> VarRef l $ vi i
         DotRef l e i             -> DotRef l (ve e) (vi i)
         BracketRef l e1 e2       -> BracketRef l (ve e1) (ve e2)
         NewExpr l e es           -> NewExpr l (ve e) (ve <$> es)
@@ -197,7 +199,7 @@ visitExpression vis e = doVisit vis (vExpression vis $ tracePP "visiting b" e) c
         ListExpr l es            -> ListExpr l (ve <$> es)
         CallExpr l e es          -> CallExpr l (ve e) (ve <$> es)
         FuncExpr l mi is ss      -> FuncExpr l (vi <$> mi) (vi <$> is) (vs <$> ss)
-        Cast l e                 -> Cast l $ ve (tracePP "visiting c" e)
+        Cast l e                 -> Cast l $ ve e
       
             
 -------------------------------------------------------------------------------
@@ -228,7 +230,7 @@ visitCatchClause vis c = doVisit vis (vCatchClause vis c) ch c
 -------------------------------------------------------------------------------
 visitId :: NanoVisitor a b -> Id a -> Id a
 -------------------------------------------------------------------------------
-visitId vis i = doVisit vis (vId vis $ tracePP "visit id a" i) (flip const) (tracePP "visit id" i)
+visitId vis i = doVisit vis (vId vis i) (flip const) i
             
 
 -------------------------------------------------------------------------------

@@ -246,59 +246,51 @@ consExpr :: CGEnv -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 --   x' is a fresh, temporary (A-Normalized) variable holding the value of `e`,
 --   g' is g extended with a binding for x' (and other temps required for `e`)
 
--- | First check if this expression is casted
-consExpr g e = consExpr' g e 
---   case  L.find isAsrt $ ann_fact l of
---     Just (Assert t) ->  
---       do  let rt   = rType t
---           (x',g') <- consExpr' g (tracePP (printf "Casting to %s" (ppshow rt)) e)
---           subTypes l g' [x'] [rt]
---           envAddFresh l rt g'
---     _               -> consExpr' g e 
---   where
---     l = getAnnotation e
---     isAsrt (Assert _) = True
---     isAsrt _          = False
+consExpr g (Cast a e) 
+  = do  (xE, gE) <- consExpr g $ tracePP (printf "consExpr for cast to %s on" (ppshow castRT)) e
+        (xC, gC) <- envAddFresh l castRT gE
+        subTypes l gC [xE] [castRT]
+        return (xC, gC)
+    where 
+      l      = getAnnotation e
+      castRT = rType $ head [ t | Assume t <- ann_fact a]
 
-
-consExpr' g (IntLit l i)               
+consExpr g (IntLit l i)               
   = envAddFresh l (eSingleton tInt i) g
 
-consExpr' g (BoolLit l b)
+consExpr g (BoolLit l b)
   = envAddFresh l (pSingleton tBool b) g 
 
-consExpr' g (VarRef i x)
+consExpr g (VarRef i x)
   = do addAnnot l x' $ envFindTy x g
        return (x', g) 
     where 
        x'  =  {- tracePP msg   -} x 
-       {-msg = printf "consExpr' x = %s at %s" (ppshow x') (ppshow l)-}
+       {-msg = printf "consExpr x = %s at %s" (ppshow x') (ppshow l)-}
        l   = srcPos i
 
-consExpr' g (PrefixExpr l o e)
-  = do (x', g') <- consCall g l o [e] (prefixOpTy o $ renv g)
-       return (x', g')
+consExpr g (PrefixExpr l o e)
+  = consCall g l o [e] (prefixOpTy o $ renv g)
 
-consExpr' g (InfixExpr l o e1 e2)        
-  = do (x', g') <- consCall g l o [e1, e2] (infixOpTy o $ renv g)
-       return (x', g')
+consExpr g (InfixExpr l o e1 e2)        
+  = consCall g l o [e1, e2] (infixOpTy o $ renv g)
 
-consExpr' g (CallExpr l e es)
-  = do (x, g') <- consExpr' g e 
+consExpr g (CallExpr l e es)
+  = do (x, g') <- consExpr g e 
        consCall g' l e es $ envFindTy x g'
 
-consExpr'  g (DotRef l e i)
-  = do  (x, g') <- consExpr' g e
+consExpr  g (DotRef l e i)
+  = do  (x, g') <- consExpr g e
         case getBinding i $ envFindTy x g' of 
           Left  s -> errorstar s
           Right t -> envAddFresh l t g'
        
-consExpr' g (ObjectLit l ps) 
+consExpr g (ObjectLit l ps) 
   = do  (x, g') <- consObj l g ps
         envAddFresh l (envFindTy x g') g'
 
-consExpr' _ e 
-  = error $ (printf "consExpr': not handled %s" (ppshow e))
+consExpr _ e 
+  = error $ (printf "consExpr: not handled %s" (ppshow e))
 
 
 ---------------------------------------------------------------------------------------------

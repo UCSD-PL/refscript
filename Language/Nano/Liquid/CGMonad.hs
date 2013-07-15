@@ -176,6 +176,7 @@ addFixpointBind (x, t)
        modify    $ \st -> st { binds = bs' }
        return    $ i
 
+-- TODO: this needs major update
 tag :: RType F.Reft -> RType F.Reft
 tag t@(TApp TInt  [] r) = TApp TInt  [] $ taggedReft t
 tag t@(TApp TBool [] r) = TApp TBool [] $ taggedReft t
@@ -418,7 +419,7 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
 splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
   = do  let cs = bsplitC g i t1 t2
         p     <- pgm <$> get
-        cs'   <- unionSubs p i g t1s t2s
+        cs'   <- T.trace (printf "UnionSubs: %s <: %s" (ppshow t1s) (ppshow t2s)) $ unionSubs p i g t1s t2s
         return $ {-cs ++ -} cs'
 
 -- | S1 ∪ ... ∪ Sn <: T --> S1 <: T ∧ ... ∧ Sn <: T
@@ -484,8 +485,8 @@ unionSubs p i g t1s t2s = concatMapM mkSub $ pairup p t1s t2s
   where
     pairup p xs ys  = fst $ foldl (\(acc,ys') x -> f p acc x ys') ([],ys) xs
     f p acc x  ys   = case L.find (isSubtype p x) ys of
-                        Just y -> ((x,y):acc, L.delete y ys)
-                        _      -> ((x, fal x):acc, ys)
+                        Just y -> ((tag x, tag y):acc, L.delete y ys)
+                        _      -> ((tag x, tag $ fal x):acc, ys)
     fal t           = (ofType $ toType t) `strengthen` (F.predReft F.PFalse)
     mkSub (x,y)     = splitC $ Sub g i x y
 

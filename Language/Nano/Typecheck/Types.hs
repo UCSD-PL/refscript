@@ -69,6 +69,7 @@ module Language.Nano.Typecheck.Types (
   , AnnAsrt
   , AnnInfo
   , isAsrt
+  , isAsm
 
   -- * Useful Operations
   , subset
@@ -436,7 +437,7 @@ instance PP Fact where
   pp (PhiVar x)   = text "phi"  <+> pp x
   pp (TypInst ts) = text "inst" <+> pp ts 
   pp (Assert t)   = text "assert" <+> pp t
-  pp (Assert t)   = text "assume" <+> pp t
+  pp (Assume t)   = text "assume" <+> pp t
 
 instance PP AnnInfo where
   pp             = vcat . (ppB <$>) . M.toList 
@@ -449,6 +450,10 @@ instance (PP a, PP b) => PP (Annot b a) where
 isAsrt :: Fact -> Bool
 isAsrt (Assert _) = True
 isAsrt _          = False
+
+isAsm  :: Fact -> Bool
+isAsm  (Assume _) = True
+isAsm  _          = False
 
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------

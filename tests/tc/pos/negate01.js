@@ -1,19 +1,18 @@
-/*@ negate :: (number|boolean) => number|boolean */
-function negate(x) {
+/*@ negate :: (number|boolean, {v:number|v>0}) => number|boolean */
+function negate(www,y) {
 
 //Original - revert when strings are supported   
-  if (typeof(x) == 0) {
-    return 0-x;
+  if (typeof(www) == 0) {
+    return 0-www;
   }
-  return 0;
   //else {
-  //  return !x;
+  //  return !www;
   //}
+  return 0;
 }
 
 /*@ main :: (number|boolean, {v:number|v>0}) => void */ 
 function main(x,y) {
-
-  negate(x);
+  negate(x,y);
 
 }

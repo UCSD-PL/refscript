@@ -95,8 +95,9 @@ data TCState = TCS {
                    -- Annotations
                    , tc_anns  :: AnnInfo
                    , tc_annss :: [AnnInfo]
-                   -- Assertions
-                   , tc_asrt  :: M.Map SourceSpan Type
+                   -- Assertions (back the comparison on SourceSpan with 
+                   -- a check on the AST Expression node
+                   , tc_asrt  :: M.Map SourceSpan (Expression AnnSSA, Type)
                    -- Function definitions
                    , tc_defs  :: !(Env Type) 
                    -- Type definitions
@@ -716,25 +717,30 @@ addCast t =
         Just e -> addAsrt e t
         _      -> logError dummySpan "NO CAST" ()
 
-addAsrt e t = modify $ \st -> st { tc_asrt = M.insert ss t (tc_asrt st) } 
+addAsrt e t = modify $ \st -> st { tc_asrt = M.insert ss (e,t) (tc_asrt st) } 
   where 
-    ss = ann $ getAnnotation e
+    ss = tracePP "Adding cast at" $ ann $ getAnnotation e
 
 
 --------------------------------------------------------------------------------
 -- | Insert casts in the AST
 --------------------------------------------------------------------------------
 
+--------------------------------------------------------------------------------
 patchPgmM :: (Typeable r, Data r) => Nano AnnSSA (RType r) -> TCM (Nano AnnSSA (RType r))
+--------------------------------------------------------------------------------
 patchPgmM pgm = 
   do  m <- tc_asrt <$> get
       return $ everywhere (mkT $ castExpr m) pgm
 
-castExpr :: M.Map SourceSpan Type -> Expression (Annot Fact SourceSpan) -> Expression (Annot Fact SourceSpan)
+--------------------------------------------------------------------------------
+castExpr :: M.Map SourceSpan (Expression AnnSSA, Type) -> 
+  Expression (Annot Fact SourceSpan) -> Expression (Annot Fact SourceSpan)
+--------------------------------------------------------------------------------
 castExpr m e =
   case M.lookup ss m of
-    Just t -> Cast (a { ann_fact = (Assume t):fs }) (tracePP "Casting" $ dropCasts e)
-    _      -> e
+    Just (e',t) | e == e' -> Cast (a { ann_fact = (Assume t):fs }) (tracePP "Casting" $ dropCasts e)
+    _                     -> e
   where 
     ss                = ann a
     fs                = dropWhile isAsrt $ ann_fact a

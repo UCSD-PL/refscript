@@ -82,22 +82,22 @@ data CGInfo = CGI { cgi_finfo :: F.FInfo Cinfo
                   }
 
 -------------------------------------------------------------------------------
-getCGInfo     :: (NanoRefType, SCache) -> CGM a -> CGInfo  
+getCGInfo     :: NanoRefType -> CGM a -> CGInfo  
 -------------------------------------------------------------------------------
-getCGInfo (pgm, c) = cgStateCInfo pgm . execute (pgm,c) . (>> fixCWs)
+getCGInfo pgm  = cgStateCInfo pgm . execute pgm . (>> fixCWs)
   where 
     fixCWs         = (,) <$> fixCs <*> fixWs
     fixCs          = concatMapM splitC . cs =<< get 
     fixWs          = concatMapM splitW . ws =<< get
 
-execute :: (Nano AnnType RefType, SCache) -> CGM a -> (a, CGState)
+execute :: Nano AnnType RefType -> CGM a -> (a, CGState)
 execute pgm act
   = case runState (runErrorT act) $ initState pgm of 
       (Left err, _) -> errorstar err
       (Right x, st) -> (x, st)  
 
-initState :: (Nano AnnType RefType, SCache) -> CGState
-initState (pgm, c) = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty c pgm
+initState :: Nano AnnType RefType -> CGState
+initState pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty pgm
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -127,16 +127,14 @@ measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts
 ---------------------------------------------------------------------------------------
 
 data CGState 
-  = CGS { binds    :: F.BindEnv          -- ^ global list of fixpoint binders
-        , cg_defs  :: !(E.Env RefType)   -- ^ type sigs for all defined functions
-        , cg_tdefs :: !(E.Env RefType)   -- ^ type definitions
-        , cs       :: ![SubC]            -- ^ subtyping constraints
-        , ws       :: ![WfC]             -- ^ well-formedness constraints
-        , count    :: !Integer           -- ^ freshness counter
-        , cg_ann   :: A.AnnInfo RefType  -- ^ recorded annotations
-
-        , tc_cache :: SCache             -- ^ cached sutyping relations from type-checking
-        , pgm      :: Nano AnnType RefType     -- ^ the pro
+  = CGS { binds    :: F.BindEnv            -- ^ global list of fixpoint binders
+        , cg_defs  :: !(E.Env RefType)     -- ^ type sigs for all defined functions
+        , cg_tdefs :: !(E.Env RefType)     -- ^ type definitions
+        , cs       :: ![SubC]              -- ^ subtyping constraints
+        , ws       :: ![WfC]               -- ^ well-formedness constraints
+        , count    :: !Integer             -- ^ freshness counter
+        , cg_ann   :: A.AnnInfo RefType    -- ^ recorded annotations
+        , pgm      :: Nano AnnType RefType -- ^ the program
         }
 
 type CGM     = ErrorT String (State CGState)

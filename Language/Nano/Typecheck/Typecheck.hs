@@ -55,70 +55,6 @@ verifyFile :: FilePath -> IO (F.FixResult SourceSpan)
 --  where 
 --   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
--------------------------------------------------------------------------------
-typeCheck     :: (Data r, Typeable r, F.Reftable r) => Nano AnnSSA (RType r) -> (Nano AnnType (RType r), SCache)
--------------------------------------------------------------------------------
-typeCheck pgm = either crash id (execute pgm (patch True pgm))
-  where
-    crash     = errorstar . render . vcat . map (text . ppErr)
-
-
-castTransform = visitProgram vis
-  where 
-    vis                  = defaultVisitor { vExpression = castExpr }
-    castExpr  (Cast _ _) = SkipChildren
-    castExpr  e          = annot (tracePP "Annots" $ filter isAsrt $ ann_fact $ an e) e
-    annot [ ] e          = DoChildren
-    annot [Assert t] e   = ChangeDoChildrenPost (traceShow "inner" $ dropCasts $ Cast (an e) e) dropCasts
-    annot _   _          = error "An expression can only have single type cast"
-    an                   = getAnnotation
-    dropCasts            = reannotate remCast
-    remCast (Ann a fs)   = Ann a $ dropWhile isAsrt fs
-
-
-printAnnots = visitProgram vis 
-  where
-    vis       = defaultVisitor { vExpression = dumpAnnots }
-    dumpAnnots e = trace (printf "expr: %s --> %s" (ppshow e) (show $ filter isAsrt $ ann_fact $ getAnnotation e)) DoChildren 
-
-
-
--- -- Generics version
--- castExpr   :: Expression (Annot Fact SourceSpan) -> Expression (Annot Fact SourceSpan)
--- castExpr e@(Cast _ _) = e
--- castExpr e            = case e of 
---                           Cast a e' ->  e'
---                           _         ->  let ant           = getAnnotation e                            
---                                             (asrt , rest) = partition isAsrt $ ann_fact ant
---                                             ss            = ann ant in
---                                         case asrt of 
---                                           []          -> e
---                                           [Assert t]  -> Cast (Ann ss rest) (traceShow "Recurse" $ dropCasts e)
---                                           _           -> error "ERROR"
---  
--- 
--- 
--- --annot (tracePP "annot" [ t | Assert t <- ann_fact $ an e]) e
--- 
--- annot [ ] e           = e
--- annot [t] e           = Cast (Ann (ann $ an e) [Assume $ tracePP "to" t]) $ tracePP "Casting" e
--- annot _   _           = error "An expression can only have single type cast"
--- 
--- an                    = getAnnotation
--- 
--- dropCasts             = reannotate remCast
--- remCast (Ann a fs)    = Ann a $ dropWhile isAsrt fs
--- 
--- 
--- castTransform :: (Typeable a, Data a) => a -> a
--- castTransform = everywhere' (mkT castExpr)
--- 
--- -- myEverywhere' :: (forall a. Data a => a -> a)
--- --             -> (forall a. Data a => a -> a)
--- -- myEverywhere' f x = gmapT (myEverywhere' f) (f $ trace "Recusring" x)
-
-
-
 -- DEBUG MODE
 verifyFile f 
    = do nano <- parseNanoFromFile f 
@@ -127,9 +63,18 @@ verifyFile f
         let nanoSsa = ssaTransform nano
         donePhase Loud "SSA Transform"
         putStrLn . render . pp $ nanoSsa
-        r    <- either unsafe (safe . fst) $ execute nanoSsa $ patch True nanoSsa
+        r    <- either unsafe safe $ execute nanoSsa $ tcAndPatch nanoSsa
         donePhase Loud "Typechecking"
         return r
+
+
+-------------------------------------------------------------------------------
+typeCheck     :: (Data r, Typeable r, F.Reftable r) => Nano AnnSSA (RType r) -> (Nano AnnType (RType r))
+-------------------------------------------------------------------------------
+typeCheck pgm = either crash id (execute pgm (tcAndPatch pgm))
+  where
+    crash     = errorstar . render . vcat . map (text . ppErr)
+
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppErr) 
@@ -148,23 +93,18 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
--- | The first argument true to tranform casted expressions e to __cast(e,T)
+-- | The first argument true to tranform casted expressions e to Cast(e,T)
 -------------------------------------------------------------------------------
-patch :: F.Reftable r => Bool -> Nano AnnSSA (RType r) -> TCM (Nano  AnnAsrt (RType r), SCache)
+tcAndPatch :: (Data r, Typeable r, F.Reftable r) => 
+  Nano AnnSSA (RType r) -> TCM (Nano  AnnAsrt (RType r))
 -------------------------------------------------------------------------------
-patch b p = 
-  do p1 <- tcNano p 
-     p2 <- patchPgm b p1
-     cache <- getCache
-     return $ trace (codePP p2 cache) (p2, cache)
+tcAndPatch p = tcNano p >>= patchPgmM >>= \p' -> return $ trace (codePP p') p'
   where 
-    codePP (Nano {code = Src s}) cache = render $ 
+    codePP (Nano {code = Src s}) = render $
           text "********************** CODE **********************"
       $+$ pp s
-      $+$ text "********************** CACHE *********************"
-      $+$ pp cache
       $+$ text "**************************************************"
-    
+
 
 -------------------------------------------------------------------------------
 tcNano :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM (Nano AnnType (RType r)) 

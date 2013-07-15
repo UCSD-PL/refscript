@@ -43,7 +43,7 @@ module Language.Nano.Typecheck.TCMonad (
   , unfoldTDef, unfoldTDefM, unfoldTDefMaybe
 
   -- * Patch the program with assertions
-  , patchPgm
+  , patchPgmM
 
   -- * Set the current expression
   , setExpr
@@ -70,6 +70,10 @@ import qualified Data.Map                 as M
 import qualified Data.List                as L
 import qualified Data.Set                 as S
 import           Data.Maybe                     (fromJust)
+import           Data.Generics                   
+import           Data.Generics.Aliases
+import           Data.Generics.Schemes
+import           Data.Typeable
 import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
@@ -561,9 +565,9 @@ subtdef θ e t t'                      = subtyNoUnion' θ e t t'
 -----------------------------------------------------------------------------
 subty' :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
-subty' θ e   (TApp TUn ts _ ) t'@(TApp TUn ts' _) = tryWithBackup (foldM (\θ t -> subty θ e t t') θ ts) (cast θ ts ts')
-subty' θ e t@(TApp TUn ts _ ) t'                  = tryWithBackups (subtyUnions θ e ts [t']) [unify θ t t', cast θ ts [t']]
-subty' θ e t                  t'@(TApp TUn ts' _) = tryWithBackups (subtyUnions θ e [t] ts') [unify θ t t', cast θ [t] ts']
+subty' θ e   (TApp TUn ts _ ) t'@(TApp TUn ts' _) = tryWithBackup (foldM (\θ t -> subty θ e t t') θ ts) (castTs θ ts ts')
+subty' θ e t@(TApp TUn ts _ ) t'                  = tryWithBackups (subtyUnions θ e ts [t']) [unify θ t t', castTs θ ts [t']]
+subty' θ e t                  t'@(TApp TUn ts' _) = tryWithBackups (subtyUnions θ e [t] ts') [unify θ t t', castTs θ [t] ts']
 subty' θ e t                  t'                  = subtyNoUnion' θ e ({-traceShow "sub no union lhs"-} t) 
                                                                       ({-traceShow "sub no union rhs"-} t')
 
@@ -572,7 +576,7 @@ subty  θ e t t' = tryWithSuccessAndBackup (subty' θ e t t') succ (return θ)
     succ θ' = addSubCache t t' >> return θ'
     addSubCache t t' = modify $ \st -> st {tc_cache = if (t,t')  `L.elem` (tc_cache st) then tc_cache st else (t,t'):(tc_cache st)}
 
-cast θ xs ys  
+castTs θ xs ys  
 
   | S.size (isct xs ys) > 0 = addCast (mkUnion $ S.toList $ isct xs ys) >> return θ
   | otherwise               = addError (errorSubType "No Cast" xs ys) θ
@@ -709,102 +713,32 @@ addCast :: Type -> TCM ()
 addCast t = 
   do  eo <- getExpr
       case eo of 
-      -- Add the cast (assertion) to the state
-      -- Not the AST
-        Just e -> addAsrt e {- $ tracePP (printf "Casting %s (%s)" (ppshow e) (ppshow $ getAnnotation e)) -} t
+        Just e -> addAsrt e t
         _      -> logError dummySpan "NO CAST" ()
 
 addAsrt e t = modify $ \st -> st { tc_asrt = M.insert ss t (tc_asrt st) } 
   where 
-    ss = {- tracePP "Adding" $ -} ann $ getAnnotation e
+    ss = ann $ getAnnotation e
 
 
 --------------------------------------------------------------------------------
--- | Insert the assertions as annotations in the AST
+-- | Insert casts in the AST
 --------------------------------------------------------------------------------
 
--------------------------------------------------------------------------------
-patchPgm  :: Bool -> Nano AnnType (RType r) -> TCM (Nano AnnAsrt (RType r))
--------------------------------------------------------------------------------
-patchPgm b p@(Nano {code = Src fs})
-  = do fs' <- patchFuns b fs
-       return p {code = Src fs'}
-
-
-patchFuns b  = mapM (patchFun b)
-
-patchFun  b  = patchStmt b
-
-patchStmts b = mapM (patchStmt' b)
-
-patchStmt' b s = patchStmt b {- $ tracePP "patch stmt" -} s
-
-patchStmt b (BlockStmt a sts)         = BlockStmt a <$> patchStmts b sts
-patchStmt b e@(EmptyStmt _)           = return $ e
-patchStmt b (ExprStmt a e)            = ExprStmt a <$> patchExpr b e
-patchStmt b (IfStmt a e s1 s2)        = liftM3 (IfStmt a) (patchExpr b e) (patchStmt b s1) (patchStmt b s2)
-patchStmt b (IfSingleStmt a e s)      = liftM2 (IfSingleStmt a) (patchExpr b e) (patchStmt b s)
-patchStmt b (ReturnStmt a (Just e))   = ReturnStmt a . Just <$> patchExpr b e
-patchStmt b r@(ReturnStmt _ _ )       = return $ r
-patchStmt b (VarDeclStmt a vds)       = VarDeclStmt a <$> mapM (patchVarDecl b) vds
-patchStmt b (FunctionStmt a id as bd) = FunctionStmt a id as <$> patchStmts b bd
-patchStmt b s                         = return $ error $ "Does not support patchStmt for: " 
-                                                  ++ ppshow s
-
-patchExprs b = mapM (patchExpr b)
-
-annt e a = 
+patchPgmM :: (Typeable r, Data r) => Nano AnnSSA (RType r) -> TCM (Nano AnnSSA (RType r))
+patchPgmM pgm = 
   do  m <- tc_asrt <$> get
-      case M.lookup key m of
-        Just t -> return $ a { ann_fact = (Assert t) : (ann_fact a) } 
-        _      -> return $ a
-        where 
-          key = ann $ getAnnotation e
+      return $ everywhere (mkT $ castExpr m) pgm
 
-patchExpr' b e@(StringLit _ _ )        = return $ e 
-patchExpr' b e@(NumLit _ _ )           = return $ e 
-patchExpr' b e@(IntLit _ _ )           = return $ e 
-patchExpr' b e@(BoolLit _ _)           = return $ e 
-patchExpr' b e@(NullLit _)             = return $ e 
-patchExpr' b e@(ArrayLit a es)         = liftM2 ArrayLit (annt e a) (patchExprs b es)
-patchExpr' b e@(ObjectLit a pes)       = liftM2 ObjectLit (annt e a) $
-                                          mapM (mapSndM (patchExpr b)) pes
-patchExpr' b e@(ThisRef _)             = return $ e
-patchExpr' b e@(VarRef a id)           = do a' <- annt e a
-                                            return $ VarRef a' id
-patchExpr' b e@(PrefixExpr a p e')     = do a' <- annt e a
-                                            PrefixExpr a' p <$> patchExpr b e'
-patchExpr' b e@(InfixExpr a o e1 e2)   = do a' <- annt e a 
-                                            liftM2 (InfixExpr a' o) (patchExpr b e1) (patchExpr b e2)
-patchExpr' b e@(AssignExpr a o lv e')  = do a' <- annt e a 
-                                            AssignExpr a' o lv <$> patchExpr b e'
-patchExpr' b e@(CallExpr a e' el)      = do a' <- annt e a
-                                            liftM2 (CallExpr a') (patchExpr b e') (patchExprs b el)
-patchExpr' b e@(FuncExpr a oi is ss)   = do a' <- annt e a
-                                            FuncExpr a' oi is <$> patchStmts b ss
-patchExpr' b e@(DotRef a c f)          = do a' <- annt e a 
-                                            c' <- patchExpr b c
-                                            return $ DotRef a' c' f
-patchExpr' b e                         = return $ error $ "Does not support patchExpr b for: "
-                                                  ++ ppshow e
-                                                  
--------------------------------------------------------------------------------
-patchExpr :: Bool -> Expression AnnType -> TCM (Expression AnnType)
--------------------------------------------------------------------------------
-patchExpr b = liftM go . patchExpr' b
+castExpr :: M.Map SourceSpan Type -> Expression (Annot Fact SourceSpan) -> Expression (Annot Fact SourceSpan)
+castExpr m e =
+  case M.lookup ss m of
+    Just t -> Cast (a { ann_fact = (Assume t):fs }) (tracePP "Casting" $ dropCasts e)
+    _      -> e
   where 
-  go e =
-    case L.find asrt $ {- tracePP ("patching " ++ ppshow e) $ -}  ann_fact $ getAnnotation e of
-      Just (Assert t) ->  if b --then CallExpr ann name $ tracePP "adding" $ arg e t
-                            then Cast (getAnnotation e) e
-                            else e
-      _               -> e
-  asrt (Assert _) = True
-  asrt _          = False
-  ann             = Ann dummySpan []
-  name            = VarRef ann (Id ann "__cast")
-  arg e t         = [e, StringLit ann $ ppshow t]
+    ss                = ann a
+    fs                = dropWhile isAsrt $ ann_fact a
+    a                 = getAnnotation e
+    dropCasts         = reannotate remCast
+    remCast (Ann a f) = Ann a $ dropWhile isAsrt f
 
-patchVarDecl b (VarDecl a id (Just e)) = do e' <- patchExpr' b e
-                                            return $ VarDecl a id $ Just e'
-patchVarDecl b v                       = return v

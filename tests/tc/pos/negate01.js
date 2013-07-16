@@ -1,3 +1,5 @@
+// The second argument is kinda necessary atm 
+
 /*@ negate :: (number|boolean, {v:number|v>0}) => number|boolean */
 function negate(www,y) {
 
@@ -5,10 +7,9 @@ function negate(www,y) {
   if (typeof(www) == 0) {
     return 0-www;
   }
-  //else {
-  //  return !www;
-  //}
-  return 0;
+  else {
+    return !www;
+  }
 }
 
 /*@ main :: (number|boolean, {v:number|v>0}) => void */ 

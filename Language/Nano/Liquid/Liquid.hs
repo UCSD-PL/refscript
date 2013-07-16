@@ -247,13 +247,9 @@ consExpr :: CGEnv -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 --   g' is g extended with a binding for x' (and other temps required for `e`)
 
 consExpr g (Cast a e) 
-  = do  (xE, gE) <- consExpr g $ tracePP (printf "consExpr for cast to %s on" (ppshow castRT)) e
-        (xC, gC) <- envAddFresh l castRT gE
-        subTypes l gC [xE] [castRT]
-        return (xC, gC)
-    where 
-      l      = getAnnotation e
-      castRT = rType $ head [ t | Assume t <- ann_fact a]
+  = do  (x, g') <- consExpr g e
+        consCast g' x a e 
+
 
 consExpr g (IntLit l i)               
   = envAddFresh l (eSingleton tInt i) g
@@ -291,6 +287,49 @@ consExpr g (ObjectLit l ps)
 
 consExpr _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))
+
+
+---------------------------------------------------------------------------------------------
+consCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
+---------------------------------------------------------------------------------------------
+consCast g x a e = 
+  do 
+    tts       <- tracePP "Matched Types" <$> matchTypes g (ci l) tEs tCs
+    mapM_ mkSub tts
+    (x', g')  <- envAddFresh l tC g
+    return (tracePP "xC" x', g')
+  where 
+    extract (TApp TUn ts _) = ts
+    extract t               = [t]
+    mkSub (e,c) = fixBase g x (e,c) >>= \(g',e',c') -> subType l g' e' c'
+    tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
+    tCs = extract tC                                      -- extract types from cast type
+    tEs = extract $ envFindTy x g                         -- extract types from expression type
+    l   = getAnnotation e 
+
+
+-- | fixBase converts:
+--                         -----tE-----              -----tC-----
+-- g, x :: { v: U | r } |- { v: B | p }           <: { v: B | q }   
+--                                                                  
+-- into:
+--
+-- g, x :: { v: B | r } |- { v: B | p ∧ (v = x) } <: { v: B | q }
+-- --------g'----------    ----------tE'---------    ---- tC-----
+--
+fixBase g x (tE,tC) =
+  do  g' <- envAdds [(x,rX')] g
+      return (g', tE', tC) 
+  where
+--  { v: B | r } = { v: B | _ } `strengthen` r                        
+    rX'          = strip tE     `strengthen` rTypeReft (envFindTy x g)
+--  v 
+    v     = rTypeValueVar tE
+--  (v = x)
+    vEqX  = F.Reft (v, [F.RConc (F.PAtom F.Eq (F.EVar v) (F.EVar $ F.symbol x))])
+--  { v: B | p ∧ (v = x)} = { v: B | p } `strengthen` (v = x)
+    tE'                   = tE           `strengthen` vEqX
+
 
 
 ---------------------------------------------------------------------------------------------

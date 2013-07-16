@@ -7,7 +7,7 @@
 module Language.Nano.Liquid.CGMonad (
     
   -- * Constraint Generation Monad
-    CGM
+    CGM, CGState (..)
 
   -- * Constraint Information
   , CGInfo (..)
@@ -37,6 +37,9 @@ module Language.Nano.Liquid.CGMonad (
   -- * Add Subtyping Constraints
   , subTypes
   , subType 
+   
+  -- * Match same sort types
+  , matchTypes
   
   -- * Add Type Annotations
   , addAnnot
@@ -153,7 +156,7 @@ cgError l msg = throwError $ printf "CG-ERROR at %s : %s" (ppshow $ srcPos l) ms
 envAddFresh :: (IsLocated l) => l -> RefType -> CGEnv -> CGM (Id l, CGEnv) 
 ---------------------------------------------------------------------------------------
 envAddFresh l t g 
-  = do x  <- {- tracePP ("envAddFresh" ++ ppshow t) <i$> -} freshId l
+  = do x  <- tracePP ("envAddFresh " ++ ppshow t) <$> freshId l
        g' <- envAdds [(x, t)] g
        return (x, g')
 
@@ -418,15 +421,14 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
 -- Sj <: { Sj | false } ∧ { Ti | false } <: Tj for the remainig (unmatched) j's 
 splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
   = do  let cs = bsplitC g i t1 t2
-        p     <- pgm <$> get
-        cs'   <- T.trace (printf "UnionSubs: %s <: %s" (ppshow t1s) (ppshow t2s)) $ unionSubs p i g t1s t2s
+        cs'   <- unionFixSubs g i t1s t2s
         return $ {-cs ++ -} cs'
 
 -- | S1 ∪ ... ∪ Sn <: T --> S1 <: T ∧ ... ∧ Sn <: T
 splitC (Sub g i t1@(TApp TUn t1s _) t2)
   = do  let cs = bsplitC g i t1 t2
         p     <- pgm <$> get
-        cs'   <- unionSubs p i g t1s [t2]
+        cs'   <- unionFixSubs g i t1s [t2]
         return $ {-cs ++ -} cs'
 
 -- | S <: T1 ∪ ... ∪ Tn --> select only one Ti that has a supertype of S as raw 
@@ -434,7 +436,7 @@ splitC (Sub g i t1@(TApp TUn t1s _) t2)
 splitC (Sub g i t1 t2@(TApp TUn t2s _))
   = do  let cs = bsplitC g i t1 t2
         p     <- pgm <$> get
-        cs'   <- unionSubs p i g [t1] t2s
+        cs'   <- unionFixSubs g i [t1] t2s
         return $ {-cs ++ -} cs'
 
 splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
@@ -481,14 +483,28 @@ bsplitC g ci t1 t2
     r1 = rTypeSortedReft t1
     r2 = rTypeSortedReft t2
 
-unionSubs p i g t1s t2s = concatMapM mkSub $ pairup p t1s t2s
+
+---------------------------------------------------------------------------------------
+unionFixSubs :: CGEnv -> Cinfo -> [RefType] -> [RefType] -> CGM [FixSubC]
+---------------------------------------------------------------------------------------
+unionFixSubs g i t1s t2s = concatMapM mkSub =<< matchTypes g i t1s t2s
+  where
+    mkSub (x,y)     = T.trace (printf "UnionFixSubs %s: %s <: %s" (ppshow i) (ppshow x) (ppshow y))
+                    $ splitC $ Sub g i x y
+
+
+---------------------------------------------------------------------------------------
+matchTypes :: CGEnv -> Cinfo -> [RefType] -> [RefType] -> CGM [(RefType, RefType)]
+---------------------------------------------------------------------------------------
+matchTypes g i t1s t2s = 
+  do  p <- pgm <$> get
+      return $ pairup p t1s t2s
   where
     pairup p xs ys  = fst $ foldl (\(acc,ys') x -> f p acc x ys') ([],ys) xs
     f p acc x  ys   = case L.find (isSubtype p x) ys of
                         Just y -> ((tag x, tag y):acc, L.delete y ys)
                         _      -> ((tag x, tag $ fal x):acc, ys)
     fal t           = (ofType $ toType t) `strengthen` (F.predReft F.PFalse)
-    mkSub (x,y)     = splitC $ Sub g i x y
 
 
 

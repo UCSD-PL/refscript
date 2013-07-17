@@ -12,7 +12,6 @@ module Language.Nano.Types (
   -- * Nano Definition
   , IsNano (..)
   , checkTopStmt
-  , IsAssertable (..)
 
   -- * Located Values
   , Located (..) 
@@ -244,17 +243,6 @@ getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
     fromWhile _                = [] 
 
 
--- | Is a ammendable to accepting assertions
-
-class IsAssertable a where 
-  isAssertable :: a -> Bool 
-
-instance IsAssertable (Expression a) where 
-  isAssertable (VarRef _ _) = True 
-  isAssertable _            = False
-
-
-
 -----------------------------------------------------------------------------------
 -- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 
 -----------------------------------------------------------------------------------
@@ -286,7 +274,7 @@ returnSymbol = F.stringSymbol returnName
 isSpecification :: Statement a -> Bool
 isSpecification s  = not $ null $ catMaybes $ ($ s) <$> specs 
   where 
-    specs          = [getAssert, getAssume, getInv, getRequires, getEnsures]
+    specs          = [getAssume, getInv, getRequires, getEnsures]
 
 getInvariant :: Statement a -> F.Pred 
 

@@ -68,14 +68,15 @@ module Language.Nano.Typecheck.Types (
   , AnnType
   , AnnAsrt
   , AnnInfo
-  , isAsrt
   , isAsm
 
   -- * Useful Operations
+  , extractUnion
   , subset
   , strip
   , stripProp
   , getBinding
+  , 
   ) where 
 
 import           Text.Printf
@@ -196,7 +197,9 @@ mkUnion [ ] = tErr -- maybe sth like false
 mkUnion [t] = t
 mkUnion ts  = TApp TUn ts ()
 
-
+extractUnion :: RType r -> [RType r]
+extractUnion (TApp TUn ts _) = ts
+extractUnion t               = [t]
 
 -- | Get binding from object type
 getBinding :: Id a -> RType r -> Either String (RType r)
@@ -429,7 +432,6 @@ ppTC TUndef           = text "Undefined"
 data Fact 
   = PhiVar  !(Id SourceSpan) 
   | TypInst ![Type]
-  | Assert  ! Type
   | Assume  ! Type
     deriving (Eq, Ord, Show, Data, Typeable)
 
@@ -456,7 +458,6 @@ instance IsLocated (Annot a SourceSpan) where
 instance PP Fact where
   pp (PhiVar x)   = text "phi"  <+> pp x
   pp (TypInst ts) = text "inst" <+> pp ts 
-  pp (Assert t)   = text "assert" <+> pp t
   pp (Assume t)   = text "assume" <+> pp t
 
 instance PP AnnInfo where
@@ -466,10 +467,6 @@ instance PP AnnInfo where
 
 instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
-
-isAsrt :: Fact -> Bool
-isAsrt (Assert _) = True
-isAsrt _          = False
 
 isAsm  :: Fact -> Bool
 isAsm  (Assume _) = True

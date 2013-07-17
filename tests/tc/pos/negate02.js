@@ -8,7 +8,6 @@ function negate(x) {
   else {
     return !x;
   }
-  return 1;
 }
 
 /*@ main :: (number, {v:number|v>0}) => void */ 

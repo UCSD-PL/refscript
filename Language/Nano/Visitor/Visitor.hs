@@ -200,6 +200,7 @@ visitExpression vis e = doVisit vis (vExpression vis $ tracePP "vExpression" e) 
         CallExpr l e es          -> CallExpr l (ve e) (ve <$> es)
         FuncExpr l mi is ss      -> FuncExpr l (vi <$> mi) (vi <$> is) (vs <$> ss)
         Cast l e                 -> Cast l $ ve e
+        DeadCast l e             -> DeadCast l $ ve e
       
             
 -------------------------------------------------------------------------------
@@ -515,6 +516,7 @@ visitExpressionM =  doVisitM vExpressionM ch
     ch (CallExpr l e es         ) = liftM2 (CallExpr l) (ve e) (T.mapM ve es)
     ch (FuncExpr l mi is ss     ) = liftM3 (FuncExpr l) (T.mapM vi mi) (T.mapM vi is) (T.mapM vs ss)
     ch (Cast l e                ) = Cast l <$> ve e
+    ch (DeadCast l e            ) = DeadCast l <$> ve e
 
 
 -------------------------------------------------------------------------------

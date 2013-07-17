@@ -32,6 +32,9 @@ import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
 
+import           Debug.Trace
+import           Text.Printf 
+
 --------------------------------------------------------------------------------
 verifyFile     :: FilePath -> IO (F.FixResult SourceSpan)
 --------------------------------------------------------------------------------
@@ -250,6 +253,8 @@ consExpr g (Cast a e)
   = do  (x, g') <- consExpr g e
         consCast g' x a e 
 
+consExpr g (DeadCast a e)
+  = consDeadCast g a e
 
 consExpr g (IntLit l i)               
   = envAddFresh l (eSingleton tInt i) g
@@ -299,12 +304,10 @@ consCast g x a e =
     (x', g')  <- envAddFresh l tC g
     return (tracePP "xC" x', g')
   where 
-    extract (TApp TUn ts _) = ts
-    extract t               = [t]
     mkSub (e,c) = fixBase g x (e,c) >>= \(g',e',c') -> subType l g' e' c'
     tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
-    tCs = extract tC                                      -- extract types from cast type
-    tEs = extract $ envFindTy x g                         -- extract types from expression type
+    tCs = tracePP "tCs" $ extractUnion tC                                 -- extract types from cast type
+    tEs = tracePP "tEs" $ extractUnion $ envFindTy x g                    -- extract types from expression type
     l   = getAnnotation e 
 
 
@@ -318,18 +321,32 @@ consCast g x a e =
 -- --------g'----------    ----------tE'---------    ---- tC-----
 --
 fixBase g x (tE,tC) =
-  do  g' <- envAdds [(x,rX')] g
-      return (g', tE', tC) 
+  do  g' <- envAdds [(x, rX')] g
+      return (g', trace msg tE', tC)
   where
 --  { v: B | r } = { v: B | _ } `strengthen` r                        
     rX'          = strip tE     `strengthen` rTypeReft (envFindTy x g)
 --  v 
-    v     = rTypeValueVar tE
+    v     = rTypeValueVar $ tracePP "fixbase tE (before)" tE
 --  (v = x)
     vEqX  = F.Reft (v, [F.RConc (F.PAtom F.Eq (F.EVar v) (F.EVar $ F.symbol x))])
 --  { v: B | p ∧ (v = x)} = { v: B | p } `strengthen` (v = x)
     tE'                   = tE           `strengthen` vEqX
 
+    msg =  printf "fixbase (%s::%s) |- tE: %s <: tC: %s" (ppshow x) (ppshow rX') (ppshow tE') (ppshow tC)
+
+
+---------------------------------------------------------------------------------------------
+consDeadCast :: CGEnv -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
+---------------------------------------------------------------------------------------------
+consDeadCast g a e =
+  do  subType l g tru fls
+      envAddFresh l tC g
+  where
+    tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
+    l   = getAnnotation e
+    tru = tTop
+    fls = tTop `strengthen` F.predReft F.PFalse
 
 
 ---------------------------------------------------------------------------------------------

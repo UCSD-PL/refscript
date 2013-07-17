@@ -397,15 +397,19 @@ unify θ (TVar α _)     (TVar β _)       = varEqlM θ α β
 unify θ (TVar α _)     t                = varAsnM θ α t 
 unify θ t              (TVar α _)       = varAsnM θ α t
 
-unify θ (TApp TUn ts _) (TApp TUn ts' _)
-  | unifiable ts && unifiable ts' 
-      && subset ts ts'                  = return $ θ
-  where
-    -- Simple check to prohibit multiple type vars in a union type
-    -- Might need a stronger check here.
-    unifiable ts = length (filter var ts) < 2 
-    var (TVar _ _) = True
-    var _          = False
+--
+--  XXX: Objects, Unions, will have been broken down by subtype 
+--  unless unify is being called directly
+--
+-- unify θ (TApp TUn ts _) (TApp TUn ts' _)
+--   | unifiable ts && unifiable ts' 
+--       && subset ts ts'                  = return $ θ
+--   where
+--     -- Simple check to prohibit multiple type vars in a union type
+--     -- Might need a stronger check here.
+--     unifiable ts = length (filter var ts) < 2 
+--     var (TVar _ _) = True
+--     var _          = False
 
 unify θ (TApp c ts _) (TApp c' ts' _)
   | c == c'                             = unifys  θ ts ts'

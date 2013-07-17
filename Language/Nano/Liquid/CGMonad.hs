@@ -58,7 +58,7 @@ import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types 
-import           Language.Nano.Typecheck.TCMonad (unfoldTDefMaybe, SCache, isSubtype)
+import           Language.Nano.Typecheck.TCMonad (unfoldTDefMaybe, isSubtype)
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Liquid.Types
 

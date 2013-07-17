@@ -34,7 +34,7 @@ module Language.Nano.Typecheck.TCMonad (
   , unifyType, unifyTypes
 
   -- * Subtyping
-  , SCache, subType, subTypes, getCache, isSubtype
+  , subType, subTypes, isSubtype
 
   -- * Get Type Signature 
   , getDefType 
@@ -97,7 +97,10 @@ data TCState = TCS {
                    , tc_annss :: [AnnInfo]
                    -- Assertions (back the comparison on SourceSpan with 
                    -- a check on the AST Expression node
-                   , tc_asrt  :: M.Map SourceSpan (Expression AnnSSA, Type)
+                   , tc_casts :: M.Map SourceSpan (Expression AnnSSA, Type)
+                   -- Dead casts: this will require from the liquid system 
+                   -- to prove that this code is dead
+                   , tc_dead  :: M.Map SourceSpan (Expression AnnSSA, Type)
                    -- Function definitions
                    , tc_defs  :: !(Env Type) 
                    -- Type definitions
@@ -106,14 +109,9 @@ data TCState = TCS {
                    , tc_expr  :: Maybe (Expression AnnSSA)
                    -- Keep track of mutually recursive type constructors
                    , tc_mut   :: [(TCon,TCon)]
-                   -- Cache subtyping relations
-                   , tc_cache :: SCache
                    }
 
 type TCM     = ErrorT String (State TCState)
-
--- TODO: replace with something more efficient
-type SCache  = [(Type, Type)]
 
 -------------------------------------------------------------------------------
 getSubst :: TCM Subst
@@ -210,7 +208,7 @@ execute pgm act
 
 initState :: Nano z (RType r) -> TCState
 initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns tc_annss 
-                    tc_asrt tc_defs tc_tdefs tc_expr tc_mut tc_cache
+                    tc_casts tc_dead tc_defs tc_tdefs tc_expr tc_mut 
   where
     tc_errss = []
     tc_errs  = []
@@ -218,12 +216,12 @@ initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns tc_annss
     tc_cnt   = 0
     tc_anns  = HM.empty
     tc_annss = []
-    tc_asrt  = M.empty
+    tc_casts = M.empty
+    tc_dead  = M.empty 
     tc_defs  = envMap toType $ defs pgm
     tc_tdefs = envMap toType $ tDefs pgm
     tc_expr  = Nothing
     tc_mut   = []
-    tc_cache = []
 
 
 -- | Instantiate the type body pointed to by "TDef id" with the actual types in
@@ -324,27 +322,25 @@ unifyType l m e t t' = unifyTypes l msg [t] [t'] >> return ()
     msg              = errorWrongType m e t t'
 
 
+-- | The first parameter determines if casts are allowed 
 ----------------------------------------------------------------------------------
-subType :: AnnSSA -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM ()
+subType :: Bool -> AnnSSA -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM ()
 ----------------------------------------------------------------------------------
-subType l eo t t' = subTypes l [eo] [t] [t'] >> return ()
+subType b l eo t t' = subTypes b l [eo] [t] [t'] >> return ()
 
 ----------------------------------------------------------------------------------
-subTypes :: AnnSSA -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Subst
+subTypes :: Bool -> AnnSSA -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Subst
 ----------------------------------------------------------------------------------
-subTypes l es t1s t2s
+subTypes b l es t1s t2s
   | length t1s /= length t2s = getSubst >>= logError (ann l) errorArgMismatch
   | otherwise = 
     do
       θ  <- getSubst 
-      θ' <- {-tracePP (printf "SubTypes %s <: %s in %s" (ppshow t1s) (ppshow t2s) (ppshow θ)) <$> -} 
-        subtys θ es t1s t2s
+      θ' <- {- tracePP (printf "SubTypes %s <: %s" (ppshow t1s) (ppshow t2s)) <$> -}
+        subtys b θ es t1s t2s
       accumErrs l
       setSubst θ'
       return θ'
-
-getCache :: TCM ([(Type, Type)])
-getCache = tc_cache <$> get
 
 
 
@@ -376,8 +372,8 @@ joinSubst (Su m1) (Su m2) =
         only1        = foldr HM.delete m1 cmnK
         only2        = foldr HM.delete m2 cmnK
         sureMap s m  = map (\k -> fromJust $ HM.lookup k m) s
-        join s θ e t t' | success s $ subty θ e t t' = return t'
-                        | success s $ subty θ e t' t = return t
+        join s θ e t t' | success s $ subty False θ e t t' = return t'
+                        | success s $ subty False θ e t' t = return t
                         | otherwise                  = addError (printf "Cannot join %s with %s" (ppshow t) (ppshow t')) t
 
 
@@ -488,44 +484,44 @@ varAsnM θ a t =
 -- using a sound version instead, i.e. Null and Undefined are not subtypes of
 -- every type T.
 -----------------------------------------------------------------------------
-subtyNoUnion :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
+subtyNoUnion :: Bool -> Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
 
 -- | Reject union types here
-subtyNoUnion _ _ (TApp TUn _ _ ) _ = error $ bugBadUnions "subtyNoUnion-1"
-subtyNoUnion _ _ _ (TApp TUn _ _ ) = error $ bugBadUnions "subtyNoUnion-2"
+subtyNoUnion _ _ _ (TApp TUn _ _ ) _ = error $ bugBadUnions "subtyNoUnion-1"
+subtyNoUnion _ _ _ _ (TApp TUn _ _ ) = error $ bugBadUnions "subtyNoUnion-2"
 
 -- | Top 
-subtyNoUnion θ _ _ t' 
+subtyNoUnion b θ _ _ t' 
   | isTop t'       = return θ
 
 -- | Undefined
-subtyNoUnion θ _ t t'
+subtyNoUnion b θ _ t t'
   | isUndefined t && isUndefined t'  = return θ
   | isUndefined t && isNull t'       = return θ
   | isUndefined t                    = addError (errorSubType "subtyNoUnion" t t') θ
 
 -- | Null
-subtyNoUnion θ _ t t'
+subtyNoUnion b θ _ t t'
   | isNull t && isNull t'       = return θ
   | isNull t                    = addError (errorSubType "subtyNoUnion" t t') θ
 
 -- | Defined types
-subtyNoUnion θ e t@(TApp (TDef _) _ _) t'@(TApp (TDef _) _ _) = 
-  subtdef θ e t t'
+subtyNoUnion b θ e t@(TApp (TDef _) _ _) t'@(TApp (TDef _) _ _) = 
+  subtdef b θ e t t'
 
 -- | Expand the type definitions
-subtyNoUnion θ e t@(TApp (TDef _) _ _) t'        =
-  tc_tdefs <$> get >>= return . unfoldTDef t >>= subty θ e t'
+subtyNoUnion b θ e t@(TApp (TDef _) _ _) t'        =
+  tc_tdefs <$> get >>= return . unfoldTDef t >>= subty b θ e t'
 
-subtyNoUnion θ e t t'@(TApp (TDef _) _ _)        =
-  tc_tdefs <$> get >>= return . unfoldTDef t' >>= subty θ e t
+subtyNoUnion b θ e t t'@(TApp (TDef _) _ _)        =
+  tc_tdefs <$> get >>= return . unfoldTDef t' >>= subty b θ e t
 
 -- | Object subtyping
-subtyNoUnion θ e t@(TObj bs _) t'@(TObj bs' _)
+subtyNoUnion b θ e t@(TObj bs _) t'@(TObj bs' _)
   | l < l'          = addError (errorObjSubtyping t t') θ
   -- All keys in the right hand should also be in the left hand
-  | k' L.\\ k == [] = subtys θ es ts ts'
+  | k' L.\\ k == [] = subtys b θ es ts ts'
     where 
       (k,k')   = {- tracePP "subObjKeys" $ -} (map b_sym) `mapPair` (bs, bs')
       l        = length bs
@@ -534,15 +530,15 @@ subtyNoUnion θ e t@(TObj bs _) t'@(TObj bs' _)
       (ts,ts') = {- tracePP "subObjTypes" -}
         ([b_type b | b <- bs, (b_sym b) `elem` k'], b_type <$> bs')
 
-subtyNoUnion θ _ t t' = unify θ t t'
+subtyNoUnion _ θ _ t t' = unify θ t t'
 
-subtyNoUnion' θ e t t' = subtyNoUnion θ e t t'
+subtyNoUnion' b θ e t t' = subtyNoUnion b θ e t t'
 
 
 -----------------------------------------------------------------------------
-subtdef :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
+subtdef :: Bool -> Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
-subtdef θ e t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _) = 
+subtdef b θ e t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _) = 
   do 
     seen <- tc_mut <$> get 
     -- Proved subtyping -- no need to clear the state for mutual recursive
@@ -554,48 +550,59 @@ subtdef θ e t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _) =
           u' <- unfoldTDefM t'
           -- Populate the state for mutual recursive types
           modify (\s -> s { tc_mut = (d,d'):(tc_mut s) })
-          subtdef θ e u u'
+          subtdef b θ e u u'
 
-subtdef θ e t@(TApp (TDef _) _ _) t'  = unfoldTDefM t >>= \u  -> subtyNoUnion θ e u t'
-subtdef θ e t t'@(TApp (TDef _) _ _)  = unfoldTDefM t'>>= \u' -> subtyNoUnion θ e t u'                                                      
-subtdef θ e t t'                      = subtyNoUnion' θ e t t'
+subtdef b θ e t@(TApp (TDef _) _ _) t'  = unfoldTDefM t >>= \u  -> subtyNoUnion b θ e u t'
+subtdef b θ e t t'@(TApp (TDef _) _ _)  = unfoldTDefM t'>>= \u' -> subtyNoUnion b θ e t u'                                                      
+subtdef b θ e t t'                      = subtyNoUnion' b θ e t t'
 
 
 -----------------------------------------------------------------------------
 -- | General Subtyping -- including unions
 -----------------------------------------------------------------------------
-subty' :: Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
+subty :: Bool -> Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
-subty' θ e   (TApp TUn ts _ ) t'@(TApp TUn ts' _) = tryWithBackup (foldM (\θ t -> subty θ e t t') θ ts) (castTs θ ts ts')
-subty' θ e t@(TApp TUn ts _ ) t'                  = tryWithBackups (subtyUnions θ e ts [t']) [unify θ t t', castTs θ ts [t']]
-subty' θ e t                  t'@(TApp TUn ts' _) = tryWithBackups (subtyUnions θ e [t] ts') [unify θ t t', castTs θ [t] ts']
-subty' θ e t                  t'                  = subtyNoUnion' θ e ({-traceShow "sub no union lhs"-} t) 
-                                                                      ({-traceShow "sub no union rhs"-} t')
+subty b θ e   (TApp TUn ts _ ) t'@(TApp TUn ts' _) 
+  | b         = tryWithBackups (foldM (\θ t -> subty b θ e t t') θ ts) [castTs θ ts ts']
+  | otherwise = foldM (\θ t -> subty b θ e t t') θ ts
 
-subty  θ e t t' = tryWithSuccessAndBackup (subty' θ e t t') succ (return θ)
-  where 
-    succ θ' = addSubCache t t' >> return θ'
-    addSubCache t t' = modify $ \st -> st {tc_cache = if (t,t')  `L.elem` (tc_cache st) then tc_cache st else (t,t'):(tc_cache st)}
+subty b θ e t@(TApp TUn ts _ ) t'
+  | b         = tryWithBackups (subtyUnions b θ e ts [t']) [unify θ t t', castTs θ ts [t']]
+  | otherwise = tryWithBackup  (subtyUnions b θ e ts [t']) (unify θ t t')
+
+subty b θ e t t'@(TApp TUn ts' _)
+  | b         = tryWithBackups (subtyUnions b θ e [t] ts') [unify θ t t', castTs θ [t] ts']
+  | otherwise = tryWithBackup  (subtyUnions b θ e [t] ts') (unify θ t t')
+
+subty b θ e t t'
+  | b         = tryWithBackups (subtyNoUnion' b θ e t t') [castTs θ [t] [t']]
+  | otherwise = subtyNoUnion' b θ e t t'
+
 
 castTs θ xs ys  
-
+-- Attempt to add a cast
   | S.size (isct xs ys) > 0 = addCast (mkUnion $ S.toList $ isct xs ys) >> return θ
-  | otherwise               = addError (errorSubType "No Cast" xs ys) θ
+-- Otherwise require that this is dead code, and freely 
+-- give exactly the type that is expected
+  | otherwise               = addDeadCast (mkUnion ys) >> return θ
   where
+--TODO:  This intersection should be based on subtyping rather than type equality
     isct xs ys = (S.fromList xs) `S.intersection` (S.fromList ys)
 
 
 -----------------------------------------------------------------------------
-subtyUnions :: Subst -> Maybe (Expression AnnSSA) -> [Type] -> [Type] -> TCM Subst
+subtyUnions :: Bool -> Subst -> Maybe (Expression AnnSSA) -> [Type] -> [Type] -> TCM Subst
 -----------------------------------------------------------------------------
-subtyUnions θ e xs ys
+subtyUnions b θ e xs ys
   | any isTop ys  = return θ
   | otherwise     = allM θ e xs ys
     where
       allM θ e (x:xs) ys  = anyM θ e x ys >>= \θ -> allM θ e xs ys
       allM θ _ [] _       = return θ
-      anyM θ e t (t':ts') = tryWithBackup (subtyNoUnion θ e t t') (anyM θ e t ts')
-      anyM θ _ _ []        = addError (errorSubType "U" xs ys) θ
+      -- Do not allow casts in this check
+      anyM θ e t (t':ts') = tryWithBackup (subtyNoUnion False θ e t t') (anyM θ e t ts')
+      anyM θ _ _ []       = addError (errorSubType "U" xs ys) θ
+
 
 -- | Try to execute the operation in the first argument's monad. 
 -- And if it fails try successively the operations in the second 
@@ -619,9 +626,12 @@ success s action =
 
 
 -----------------------------------------------------------------------------
+-- | isSubtype will call subty without letting it resort to casts,
+-- otherwise it would be trivally true always.
+-----------------------------------------------------------------------------
 isSubtype :: Nano z (RType r) -> RType r -> RType r -> Bool 
 -----------------------------------------------------------------------------
-isSubtype pgm t t' = success (initState pgm) $ subty' mempty Nothing (toType t) (toType t')
+isSubtype pgm t t' = success (initState pgm) $ subty False mempty Nothing (toType t) (toType t')
 
 
 -- | Try to execute the operation in the first argument's monad. 
@@ -679,17 +689,16 @@ applyError s@(TCS {}) e        = s {tc_errs= e ++ tc_errs s}
 
 -- | Subtype lists of types
 -----------------------------------------------------------------------------
-subtys ::  Subst -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Subst
+subtys :: Bool -> Subst -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Subst
 -----------------------------------------------------------------------------
-subtys θ es ts ts'
+subtys b θ es ts ts'
   | nTs == nTs' = go $ zip3 es ts ts'
   | otherwise   = addError (errorSubType "" ts ts) θ
   where
     nTs  = length ts
     nTs' = length ts'
-    {-sub θ e t t' = tryError (subty θ e t t') -}
     go l = 
-      do  θs <- mapM (\(e,t,t') -> setExpr e >> subty θ e t t') l
+      do  θs <- mapM (\(e,t,t') -> setExpr e >> subty b θ e t t') l
           case θs of [] -> return θ
                      _  -> joinSubsts θs
 
@@ -712,39 +721,57 @@ getExpr = tc_expr <$> get
 addCast :: Type -> TCM ()
 -------------------------------------------------------------------------------
 addCast t = 
-  do  eo <- getExpr
-      case eo of 
-        Just e -> addAsrt e t
-        _      -> logError dummySpan "NO CAST" ()
+  do  e <- fromJust <$> getExpr 
+      let l = ann $ getAnnotation e
+      modify $ \st -> st { tc_casts = M.insert l (e,t) (tc_casts st) } 
 
-addAsrt e t = modify $ \st -> st { tc_asrt = M.insert ss (e,t) (tc_asrt st) } 
-  where 
-    ss = tracePP "Adding cast at" $ ann $ getAnnotation e
+
+-------------------------------------------------------------------------------
+addDeadCast :: Type -> TCM ()
+-------------------------------------------------------------------------------
+addDeadCast t = 
+  do  e <- fromJust <$> getExpr 
+      let l = ann $ getAnnotation $ tracePP "Dead code" e
+      modify $ \st -> st { tc_dead = M.insert (tracePP "at" l) (e,t) (tc_dead st) } 
 
 
 --------------------------------------------------------------------------------
--- | Insert casts in the AST
+-- | Insert casts and dead code casts in the AST
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 patchPgmM :: (Typeable r, Data r) => Nano AnnSSA (RType r) -> TCM (Nano AnnSSA (RType r))
 --------------------------------------------------------------------------------
 patchPgmM pgm = 
-  do  m <- tc_asrt <$> get
-      return $ everywhere (mkT $ castExpr m) pgm
+  do  c <- tc_casts <$> get
+      d <- tc_dead  <$> get
+      return $ everywhere (mkT $ patchExpr c d) pgm
 
 --------------------------------------------------------------------------------
-castExpr :: M.Map SourceSpan (Expression AnnSSA, Type) -> 
+patchExpr :: 
+  M.Map SourceSpan (Expression AnnSSA, Type)  ->    -- Cast map
+  M.Map SourceSpan (Expression AnnSSA, Type)  ->    -- Dead map
   Expression (Annot Fact SourceSpan) -> Expression (Annot Fact SourceSpan)
 --------------------------------------------------------------------------------
+patchExpr c d = (castExpr c) . (deadExpr d)
+
 castExpr m e =
   case M.lookup ss m of
-    Just (e',t) | e == e' -> Cast (a { ann_fact = (Assume t):fs }) (tracePP "Casting" $ dropCasts e)
+    Just (e',t) | e == e' -> Cast (a { ann_fact = (Assume t):fs }) e
     _                     -> e
   where 
-    ss                = ann a
-    fs                = dropWhile isAsrt $ ann_fact a
-    a                 = getAnnotation e
-    dropCasts         = reannotate remCast
-    remCast (Ann a f) = Ann a $ dropWhile isAsrt f
+    ss = ann a
+    fs = ann_fact a
+    a  = getAnnotation e
+
+deadExpr m e =
+  case M.lookup ss m of
+  -- WARNING: checking for expression equality will be skewed by 
+  -- the presence of Cast and DeadCast nodes.
+    Just  (e',t) {- | e == e' -} -> DeadCast (a { ann_fact = (Assume t):fs }) e
+    _                  -> e
+  where 
+    ss = ann a
+    fs = ann_fact a
+    a  = getAnnotation e
 

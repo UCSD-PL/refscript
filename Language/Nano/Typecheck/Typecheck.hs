@@ -196,49 +196,51 @@ tcStmts = tcSeq tcStmt
 tcStmt :: Env Type -> Statement AnnSSA -> TCM TCEnv  
 -------------------------------------------------------------------------------
 -- skip
-tcStmt γ (EmptyStmt _) 
+tcStmt' γ (EmptyStmt _) 
   = return $ Just γ
 
 -- x = e
-tcStmt γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))   
+tcStmt' γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))   
   = tcAsgn γ l (Id lx x) e
 
 -- e
-tcStmt γ (ExprStmt _ e)   
+tcStmt' γ (ExprStmt _ e)   
   = tcExpr γ e >> return (Just γ) 
 
 -- s1;s2;...;sn
-tcStmt γ (BlockStmt _ stmts) 
+tcStmt' γ (BlockStmt _ stmts) 
   = tcStmts γ stmts 
 
 -- if b { s1 }
-tcStmt γ (IfSingleStmt l b s)
-  = tcStmt γ (IfStmt l b s (EmptyStmt l))
+tcStmt' γ (IfSingleStmt l b s)
+  = tcStmt' γ (IfStmt l b s (EmptyStmt l))
 
 -- if b { s1 } else { s2 }
-tcStmt γ (IfStmt l e s1 s2)
+tcStmt' γ (IfStmt l e s1 s2)
   = do t <- tcExpr γ e
        unifyType l "If condition" e t tBool
-       γ1      <- tcStmt γ s1
-       γ2      <- tcStmt γ s2
+       γ1      <- tcStmt' γ s1
+       γ2      <- tcStmt' γ s2
        envJoin l γ γ1 γ2
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
-tcStmt γ (VarDeclStmt _ ds)
+tcStmt' γ (VarDeclStmt _ ds)
   = tcSeq tcVarDecl γ ds
 
 -- return e 
-tcStmt γ (ReturnStmt l eo) 
+tcStmt' γ (ReturnStmt l eo) 
   = do t <- maybe (return tVoid) (tcExpr γ) eo 
-       subType l eo t $ envFindReturn γ
+       subType True l eo t $ envFindReturn γ
        return Nothing
 
-tcStmt γ s@(FunctionStmt _ _ _ _)
+tcStmt' γ s@(FunctionStmt _ _ _ _)
   = tcFun γ s
 
 -- OTHER (Not handled)
-tcStmt _ s 
-  = convertError "TC Cannot Handle: tcStmt" s
+tcStmt' _ s 
+  = convertError "TC Cannot Handle: tcStmt'" s
+
+tcStmt γ s = tcStmt' γ {- $ tracePP "TC stmt" -} s
 
 -------------------------------------------------------------------------------
 tcVarDecl :: Env Type -> VarDecl AnnSSA -> TCM TCEnv  
@@ -263,7 +265,7 @@ tcAsgn γ _ x e
 -------------------------------------------------------------------------------
 tcExpr :: Env Type -> Expression AnnSSA -> TCM Type
 -------------------------------------------------------------------------------
-tcExpr γ e = setExpr (Just e) >> tcExpr' γ e 
+tcExpr γ e = setExpr (Just e) >> (tcExpr' γ {- $ tracePP "TC expr" -} e)
 
 
 -------------------------------------------------------------------------------
@@ -311,7 +313,7 @@ tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> T
 tcCall γ l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
        ts         <- mapM (tcExpr γ) es
-       θ'         <- tracePP (printf "tcCall to %s: θ\'" (ppshow fn)) <$> subTypes l (map Just es) ts (b_type <$> its)
+       θ'         <- subTypes True l (map Just es) ts (b_type <$> its)
        return      $ apply θ' ot
 
 instantiate l fn ft 

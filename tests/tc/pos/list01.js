@@ -1,8 +1,4 @@
-
-/*@ type nlist  {  data : number,
-                   next : nlist | null } */
-
-
+/*@ type nlist  {  data : number, next : nlist } */
 
 /*@ append :: (x:nlist, number) => nlist */
 function append(x, a) {

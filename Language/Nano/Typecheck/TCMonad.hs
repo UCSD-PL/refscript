@@ -464,7 +464,7 @@ varAsn :: Subst -> TVar -> Type -> Either String Subst
 -----------------------------------------------------------------------------
 varAsn θ α t 
   | t == tVar α          = Right $ θ 
-  | α `HS.member` free t  = Left  $ errorOccursCheck α t 
+  | α `HS.member` free t = Left  $ errorOccursCheck α t 
   | unassigned α θ       = Right $ θ `mappend` (Su $ HM.singleton α t) 
   | otherwise            = Left  $ errorRigidUnify α t
   
@@ -530,6 +530,13 @@ subtyNoUnion b θ e t@(TObj bs _) t'@(TObj bs' _)
       (ts,ts') = {- tracePP "subObjTypes" -}
         ([b_type b | b <- bs, (b_sym b) `elem` k'], b_type <$> bs')
 
+-- | Function subtyping: 
+--  - Contravariant in argumnets
+--  - Covariant in return type
+subtyNoUnion b θ (Just e@(CallExpr _ _ es)) (TFun xts t _) (TFun xts' t' _) = 
+  subtys False θ (Just <$> es) (b_type <$> xts') (b_type <$> xts) >>= 
+    \θ' -> subty False θ' (Just e) t t'
+
 subtyNoUnion _ θ _ t t' = unify θ t t'
 
 subtyNoUnion' b θ e t t' = subtyNoUnion b θ e t t'
@@ -563,7 +570,8 @@ subtdef b θ e t t'                      = subtyNoUnion' b θ e t t'
 subty :: Bool -> Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
 subty b θ e   (TApp TUn ts _ ) t'@(TApp TUn ts' _) 
-  | b         = tryWithBackups (foldM (\θ t -> subty b θ e t t') θ ts) [castTs θ ts ts']
+  -- | b         = tryWithBackups (foldM (\θ t -> subty b θ e t t') θ ts) [castTs θ ts ts']
+  | b         = tryWithBackups (subtyUnions b θ e ts ts') [castTs θ ts ts']
   | otherwise = foldM (\θ t -> subty b θ e t t') θ ts
 
 subty b θ e t@(TApp TUn ts _ ) t'

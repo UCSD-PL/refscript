@@ -501,7 +501,7 @@ matchTypes g i t1s t2s =
       return $ pairup p t1s t2s
   where
     pairup p xs ys  = fst $ foldl (\(acc,ys') x -> f p acc x ys') ([],ys) xs
-    f p acc x  ys   = case L.find (isSubtype p x) ys of
+    f p acc x  ys   = case L.find (isSubtype (Left p) x) ys of
                         Just y -> ((tag x, tag y):acc, L.delete y ys)
                         _      -> ((tag x, tag $ fal x):acc, ys)
     fal t           = (ofType $ toType t) `strengthen` (F.predReft F.PFalse)

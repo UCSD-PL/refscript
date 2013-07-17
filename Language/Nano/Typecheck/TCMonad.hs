@@ -587,15 +587,19 @@ subty b θ e t t'
   | otherwise = subtyNoUnion' b θ e t t'
 
 
-castTs θ xs ys  
--- Attempt to add a cast
-  | S.size (isct xs ys) > 0 = addCast (mkUnion $ S.toList $ isct xs ys) >> return θ
--- Otherwise require that this is dead code, and freely 
--- give exactly the type that is expected
-  | otherwise               = addDeadCast (mkUnion ys) >> return θ
+-- | Add a cast from the disjunction of types @fromTs@ to the disjunction of 
+--   @toTs@. Resort to dead code annotation if this fails.
+-----------------------------------------------------------------------------
+castTs :: Subst -> [Type] -> [Type] -> TCM Subst
+-----------------------------------------------------------------------------
+castTs θ fromTs toTs = 
+  do st <- get
+     use $ L.nub [ a | a <- fromTs, b <- toTs, isSubtype (Right st) a b ]
   where
---TODO:  This intersection should be based on subtyping rather than type equality
-    isct xs ys = (S.fromList xs) `S.intersection` (S.fromList ys)
+-- If there is no possiblity for a subtype, require that this is dead 
+-- code, and freely give exactly the type that is expected
+    use [] = addDeadCast (mkUnion toTs) >> return θ 
+    use ts = addCast (mkUnion ts)       >> return θ
 
 
 -----------------------------------------------------------------------------
@@ -635,11 +639,15 @@ success s action =
 
 -----------------------------------------------------------------------------
 -- | isSubtype will call subty without letting it resort to casts,
--- otherwise it would be trivally true always.
+-- otherwise it would always return tyre trivially. Also the state we 
+-- use for it is initially empty. 
 -----------------------------------------------------------------------------
-isSubtype :: Nano z (RType r) -> RType r -> RType r -> Bool 
+isSubtype :: Either (Nano z (RType r)) TCState -> RType r -> RType r -> Bool 
 -----------------------------------------------------------------------------
-isSubtype pgm t t' = success (initState pgm) $ subty False mempty Nothing (toType t) (toType t')
+isSubtype (Left pgm) t t' = success (initState pgm) 
+                            $ subty False mempty Nothing (toType t) (toType t')
+isSubtype (Right st) t t' = success st
+                            $ subty False mempty Nothing (toType t) (toType t')
 
 
 -- | Try to execute the operation in the first argument's monad. 
@@ -665,7 +673,6 @@ tryError :: TCState -> TCM a -> (Either [String] a, TCState)
 tryError = tryIt clearError applyError
 
 
--- TODO Make this more generic
 -----------------------------------------------------------------------------
 tryIt ::     
              (TCState -> (b, TCState))    -- Clear the initial state and get some info

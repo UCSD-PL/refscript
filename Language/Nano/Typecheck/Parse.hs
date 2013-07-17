@@ -80,7 +80,7 @@ bareTypeP :: Parser RefType
 bareTypeP   
   =  try bareAllP
  <|> try bareFunP
- <|> try bareUnionP
+ <|>     bareUnionP
 
 bareFunP  
   = do args   <- parens $ sepBy bareTypeP comma
@@ -99,7 +99,7 @@ bareUnionP
   {-<|> try bareUnionP'-}
   
 bareUnionP' = do ts <- bareAtomP `sepBy1` bar
-                 r  <- topP
+                 r  <- topP   -- unions have Top ref. type atm
                  case ts of 
                       [ ] -> error "impossible"
                       [t] -> return t

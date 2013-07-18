@@ -400,6 +400,9 @@ splitC c = tracePP (printf "Before Splitting: %s\n\nAfter splitting" (ppshow c))
 
 splitC' :: SubC -> CGM [FixSubC]
 
+---------------------------------------------------------------------------------------
+-- | Function types
+---------------------------------------------------------------------------------------
 splitC' (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
   = do let bcs    = bsplitC g i tf1 tf2
        g'        <- envTyAdds i xt2s g 
@@ -413,6 +416,9 @@ splitC' (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
        bSub b1 b2 = (b_sym b1, F.eVar $ b_sym b2)
 
 
+---------------------------------------------------------------------------------------
+-- | TAlls
+---------------------------------------------------------------------------------------
 splitC' (Sub g i (TAll α1 t1) (TAll α2 t2))
   | α1 == α2 
   = splitC $ Sub g i t1 t2
@@ -422,35 +428,72 @@ splitC' (Sub g i (TAll α1 t1) (TAll α2 t2))
     θ   = fromList [(α2, tVar α1 :: RefType)]
     t2' = apply θ t2
 
+
+---------------------------------------------------------------------------------------
+-- | TVars
+---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TVar α1 _) t2@(TVar α2 _)) 
   | α1 == α2
   = return $ bsplitC g i t1 t2
   | otherwise
   = errorstar "UNEXPECTED CRASH in splitC"
 
--- | S1 ∪ ... ∪ Sn <: T1 ∪ ... ∪ Tn ---> 
--- Si <: Tj forall matching i,j ∧
--- Sj <: { Sj | false } ∧ { Ti | false } <: Tj for the remainig (unmatched) j's 
+
+---------------------------------------------------------------------------------------
+-- | Unions
+---------------------------------------------------------------------------------------
+-- S1 ∪ ... ∪ Sn <: T1 ∪ ... ∪ Tn ---> 
+-- Si <: Tj forall matching i,j ∧ Sj <: { Sj | false } for the remaining j's
 splitC' (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
   = do  let cs = bsplitC g i t1 t2
         cs'   <- unionFixSubs g i t1s t2s
         return $ {-cs ++ -} cs'
 
--- | S1 ∪ ... ∪ Sn <: T --> S1 <: T ∧ ... ∧ Sn <: T
+-- S1 ∪ ... ∪ Sn <: T --> S1 <: T ∧ ... ∧ Sn <: T
 splitC' (Sub g i t1@(TApp TUn t1s _) t2)
   = do  let cs = bsplitC g i t1 t2
-        p     <- pgm <$> get
         cs'   <- unionFixSubs g i t1s [t2]
         return $ {-cs ++ -} cs'
 
--- | S <: T1 ∪ ... ∪ Tn --> select only one Ti that has a supertype of S as raw 
+-- S <: T1 ∪ ... ∪ Tn --> select only one Ti that has a supertype of S as raw 
 -- type of and use that for the subtyping constraint
 splitC' (Sub g i t1 t2@(TApp TUn t2s _))
   = do  let cs = bsplitC g i t1 t2
-        p     <- pgm <$> get
         cs'   <- unionFixSubs g i [t1] t2s
         return $ {-cs ++ -} cs'
 
+
+---------------------------------------------------------------------------------------
+-- | Type definitions
+---------------------------------------------------------------------------------------
+splitC' (Sub g i t1@(TApp d1@(TDef _) t1s _) t2@(TApp d2@(TDef _) t2s _)) | d1 == d2
+  = do  let cs = bsplitC g i t1 t2
+        -- XXX: What is the variance of type constructor parameters?
+        cs'   <- T.trace (printf "TDEF %s <: TDEF %s" (ppshow d1) (ppshow d2)) <$> 
+          concatMapM splitC $ safeZipWith "splitcTDef" (Sub g i) t1s t2s
+        return $ cs ++ cs' 
+
+splitC' (Sub g i (TApp (TDef _) _ _) (TApp (TDef _) _ _))
+  = error "Unimplemented: Check type definition cycles"
+  
+splitC' (Sub g i t1@(TApp (TDef _) _ _ ) t2)
+  = do  env <- cg_tdefs <$> get
+        case unfoldTDefMaybe t1 env of 
+          Just t1' -> tracePP (printf "TDEF1: %s <: %s" (ppshow t1') (ppshow t2)) <$> 
+            splitC (Sub g i t1' t2)
+          Nothing  -> error "splitC _ TDef1 failed"
+
+splitC' (Sub g i t1 t2@(TApp (TDef _) _ _ ))
+  = do  env <- cg_tdefs <$> get
+        case unfoldTDefMaybe t2 env of 
+          Just t2' -> tracePP (printf "TDEF2: %s <: %s" (ppshow t1) (ppshow t2')) <$> 
+            splitC (Sub g i t1 t2')
+          Nothing  -> error "splitC _ TDef2 failed"
+
+
+---------------------------------------------------------------------------------------
+-- | Rest of TApp
+---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
   = do let cs = bsplitC g i t1 t2
        cs'   <- concatMapM splitC $ safeZipWith 
@@ -458,7 +501,10 @@ splitC' (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
                                     (Sub g i) t1s t2s
        return $ cs ++ cs'
 
+
+---------------------------------------------------------------------------------------
 -- | Objects 
+---------------------------------------------------------------------------------------
 splitC' (Sub g i tf1@(TObj xt1s _ ) tf2@(TObj xt2s _ ))
   = do let bcs    = bsplitC g i tf1 tf2
        -- g'        <- envTyAdds i xt2s g -- XXX: is this needed here?
@@ -467,7 +513,6 @@ splitC' (Sub g i tf1@(TObj xt1s _ ) tf2@(TObj xt2s _ ))
     where
        t1s        = b_type <$> xt1s
        t2s        = b_type <$> xt2s
-
 
 splitC' (Sub g i t1 t2@(TObj _ _ ))
   = do  env <- cg_tdefs <$> get
@@ -480,9 +525,10 @@ splitC' (Sub g i t1@(TObj _ _ ) t2)
         case unfoldTDefMaybe t2 env of 
           Just t2' -> splitC (Sub g i t1 t2')
           Nothing  -> error "splitC _ TObj not supported"
-  
+ 
 splitC' x 
   = cgError (srcPos x) $ bugBadSubtypes x 
+
 
 bsplitC g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2

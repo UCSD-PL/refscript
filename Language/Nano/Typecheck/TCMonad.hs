@@ -336,7 +336,7 @@ subTypes b l es t1s t2s
   | otherwise = 
     do
       θ  <- getSubst 
-      θ' <- {- tracePP (printf "SubTypes %s <: %s" (ppshow t1s) (ppshow t2s)) <$> -}
+      θ' <- tracePP (printf "SubTypes %s <: %s" (ppshow t1s) (ppshow t2s)) <$> 
         subtys b θ es t1s t2s
       accumErrs l
       setSubst θ'

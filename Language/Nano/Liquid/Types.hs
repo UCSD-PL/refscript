@@ -57,7 +57,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
--- import           Language.Nano.Errors
+import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
@@ -134,8 +134,8 @@ instance PP F.Reft where
   pp = pprint
 
 instance PP SubC where
-  pp (Sub γ i t t') = pp (renv γ)   $+$ pp (guards γ) 
-                        $+$ ((text "|-") <+> (pp t $+$ text "<:" $+$ pp t'))
+  pp (Sub γ i t t') = {-pp (renv γ) $+$ pp (guards γ) 
+                        $+$-} ((text "|-") <+> (pp t $+$ text "<:" $+$ pp t'))
                         $+$ ((text "from:") <+> pp i) 
 
 instance PP WfC where
@@ -195,7 +195,9 @@ rTypeSort (TVar α _)       = F.FObj $ F.symbol α
 rTypeSort t@(TAll _ _)     = rTypeSortForAll t 
 rTypeSort (TFun xts t _)   = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
-rTypeSort _                = error "Not supported in rTypeSort"
+rTypeSort (TObj xts _)     = F.FApp (F.stringFTycon "object") []
+rTypeSort t                = error ("Type: " ++ ppshow t ++ 
+                                    " is not supported in rTypeSort")
 
 
 rTypeSortApp TInt [] = F.FInt

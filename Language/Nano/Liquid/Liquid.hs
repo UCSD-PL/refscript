@@ -33,7 +33,6 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
 
 import           Debug.Trace
-import           Text.Printf 
 
 --------------------------------------------------------------------------------
 verifyFile     :: FilePath -> IO (F.FixResult SourceSpan)

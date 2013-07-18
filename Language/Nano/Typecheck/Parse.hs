@@ -34,6 +34,7 @@ import           Language.Nano.Env
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile, SourceSpan (..))
 
+import           Debug.Trace
 
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer
@@ -153,8 +154,8 @@ bareAllP
        return $ foldr TAll t as
 
 bindsP 
-  =     try (spaces >> return [])
-    <|>     sepBy bareBindP comma
+  =     --try (spaces >> return [])
+    sepBy bareBindP comma
 
 bareBindP 
   = do  s <- binderP

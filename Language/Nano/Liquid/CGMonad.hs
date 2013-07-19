@@ -58,7 +58,7 @@ import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types 
-import           Language.Nano.Typecheck.TCMonad (unfoldTDefMaybe, isSubtype)
+import           Language.Nano.Typecheck.TCMonad (unfoldTDefSafe, unfoldTDefSafeM, isSubtype)
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Liquid.Types
 
@@ -396,7 +396,7 @@ refreshRefType = mapReftM refresh
 -- | Splitting Subtyping Constraints --------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-splitC c = tracePP (printf "Before Splitting: %s\n\nAfter splitting" (ppshow c)) <$> splitC' c
+splitC c = {- tracePP (printf "Before Splitting: %s\n\nAfter splitting" (ppshow c)) <$> -} splitC' c
 
 splitC' :: SubC -> CGM [FixSubC]
 
@@ -478,17 +478,11 @@ splitC' (Sub g i (TApp (TDef _) _ _) (TApp (TDef _) _ _))
   
 splitC' (Sub g i t1@(TApp (TDef _) _ _ ) t2)
   = do  env <- cg_tdefs <$> get
-        case unfoldTDefMaybe t1 env of 
-          Just t1' -> tracePP (printf "TDEF1: %s <: %s" (ppshow t1') (ppshow t2)) <$> 
-            splitC (Sub g i t1' t2)
-          Nothing  -> error "splitC _ TDef1 failed"
+        splitC $ Sub g i (unfoldTDefSafe t1 env) t2
 
 splitC' (Sub g i t1 t2@(TApp (TDef _) _ _ ))
   = do  env <- cg_tdefs <$> get
-        case unfoldTDefMaybe t2 env of 
-          Just t2' -> tracePP (printf "TDEF2: %s <: %s" (ppshow t1) (ppshow t2')) <$> 
-            splitC (Sub g i t1 t2')
-          Nothing  -> error "splitC _ TDef2 failed"
+        splitC $ Sub g i t1 (unfoldTDefSafe t2 env)
 
 
 ---------------------------------------------------------------------------------------
@@ -516,16 +510,13 @@ splitC' (Sub g i tf1@(TObj xt1s _ ) tf2@(TObj xt2s _ ))
 
 splitC' (Sub g i t1 t2@(TObj _ _ ))
   = do  env <- cg_tdefs <$> get
-        case unfoldTDefMaybe t1 env of 
-          Just t1' -> splitC (Sub g i t1' t2)
-          Nothing  -> error "splitC _ TObj not supported"
+        splitC $ Sub g i (unfoldTDefSafe t1 env) t2
 
 splitC' (Sub g i t1@(TObj _ _ ) t2)
   = do  env <- cg_tdefs <$> get
-        case unfoldTDefMaybe t2 env of 
-          Just t2' -> splitC (Sub g i t1 t2')
-          Nothing  -> error "splitC _ TObj not supported"
- 
+        splitC $ Sub g i (unfoldTDefSafe t1 env) t2
+
+
 splitC' x 
   = cgError (srcPos x) $ bugBadSubtypes x 
 
@@ -536,7 +527,7 @@ bsplitC g ci t1 t2
   | F.isNonTrivialSortedReft r2
   = [F.subC (fenv g) p r1 r2 Nothing [] ci]
   | otherwise
-  = tracePP "bsplitC trivial" []
+  = {- tracePP "bsplitC trivial" -} []
   where
     p  = F.pAnd $ guards g
     r1 = rTypeSortedReft t1

@@ -22,7 +22,7 @@ executable nanojs
                        hashable < 1.2, 
                        unordered-containers, 
                        filepath, ansi-terminal, process, mtl, syb, cmdargs,
-                       liquid-fixpoint, parsec, language-ecmascript, containers
+                       liquid-fixpoint, parsec, language-ecmascript
 
   extensions:          ExistentialQuantification, 
                        FlexibleInstances, 
@@ -33,9 +33,8 @@ executable nanojs
                        ScopedTypeVariables,
                        BangPatterns
 
-  ghc-options:         -W -O2
+  ghc-options:         -W -O2  
   Main-is:             Nano.hs
-
 
 -- Library
 --   build-depends:       base, pretty, hashable, unordered-containers, 

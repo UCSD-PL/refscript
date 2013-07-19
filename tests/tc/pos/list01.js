@@ -1,7 +1,7 @@
 /*@ type nlist  { data : number, 
-                  next : nlist | null } */
+                  next : nlist } */
 
-/*@ append :: (x:nlist, number) => nlist */
+/*@ append :: (x:nlist, {v:number| 1 > 0}) => nlist */
 function append(x, a) {
 
     return { data: a , next: x };

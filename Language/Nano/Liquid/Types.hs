@@ -134,8 +134,8 @@ instance PP F.Reft where
   pp = pprint
 
 instance PP SubC where
-  pp (Sub γ i t t') = {-pp (renv γ) $+$ pp (guards γ) 
-                        $+$-} ((text "|-") <+> (pp t $+$ text "<:" $+$ pp t'))
+  pp (Sub γ i t t') = pp (renv γ) $+$ pp (guards γ) 
+                        $+$ ((text "|-") <+> (pp t $+$ text "<:" $+$ pp t'))
                         $+$ ((text "from:") <+> pp i) 
 
 instance PP WfC where

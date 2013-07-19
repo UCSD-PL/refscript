@@ -40,7 +40,7 @@ module Language.Nano.Typecheck.TCMonad (
   , getDefType 
 
   -- * Unfold type definition
-  , unfoldTDef, unfoldTDefM, unfoldTDefMaybe
+  , unfoldTDefSafe, unfoldTDefDeep, unfoldTDefSafeM, unfoldTDefDeepM
 
   -- * Patch the program with assertions
   , patchPgmM
@@ -228,19 +228,16 @@ initState pgm = TCS tc_errss tc_errs tc_subst tc_cnt tc_anns tc_annss
 -- "acts". Here is the only place we shall allow TDef, so after this part TDefs
 -- should be eliminated. 
 
--------------------------------------------------------------------------------
-unfoldTDefM :: Type -> TCM Type
--------------------------------------------------------------------------------
-unfoldTDefM t = tc_tdefs <$> get >>= return . unfoldTDef t
 
+-- | Unfold the first TDef at any part of the type @t@.
 -------------------------------------------------------------------------------
-unfoldTDef :: Type -> Env Type -> Type
+unfoldTDefDeep :: Type -> Env Type -> Type
 -------------------------------------------------------------------------------
-unfoldTDef t env = go t
+unfoldTDefDeep t env = go t
   where 
     go (TFun its ot r)         = TFun ((appTBi go) <$> its) (go ot) r
     go (TObj bs r)             = TObj ((appTBi go) <$> bs) r
-    go (TBd  _)                = error "unfoldTDef: there should not be a TBody here"
+    go (TBd  _)                = error "unfoldTDefDeep: there should not be a TBody here"
     go (TAll v t)              = TAll v $ go t
     go (TApp (TDef id) acts _) = 
       case envFindTy (F.symbol id) env of
@@ -259,9 +256,29 @@ unfoldTDefMaybe :: (PP r, F.Reftable r) => RType r -> Env (RType r) -> Maybe (RT
 unfoldTDefMaybe (TApp (TDef id) acts _) env = 
       case envFindTy (F.symbol id) env of
         Just (TBd (TD _ vs bd _ )) -> Just $ apply (fromList $ zip vs acts) bd
-        _                          -> error $ errorUnboundId id
+        _                          -> Nothing
 unfoldTDefMaybe _                       _   = Nothing
-   
+
+
+-- | Force a successful unfolding
+-------------------------------------------------------------------------------
+unfoldTDefSafe :: (PP r, F.Reftable r) => RType r -> Env (RType r) -> RType r
+-------------------------------------------------------------------------------
+unfoldTDefSafe t env = maybe (error $ printf "Unfolding of % failed" $ ppshow t) 
+                             id (unfoldTDefMaybe t env)
+
+
+-- | Monadic versions
+-------------------------------------------------------------------------------
+unfoldTDefDeepM :: Type -> TCM Type
+-------------------------------------------------------------------------------
+unfoldTDefDeepM t = tc_tdefs <$> get >>= return . unfoldTDefDeep t
+
+-------------------------------------------------------------------------------
+unfoldTDefSafeM :: Type -> TCM Type
+-------------------------------------------------------------------------------
+unfoldTDefSafeM t = tc_tdefs <$> get >>= return . unfoldTDefSafe t
+
 
 
 getDefType f 
@@ -388,10 +405,10 @@ unify θ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _)
   | otherwise = addError (errorUnification t t') θ
 
 unify θ t@(TApp (TDef _) _ _) t'        =
-  tc_tdefs <$> get >>= return . unfoldTDef t >>= unify θ t'
+  tc_tdefs <$> get >>= return . unfoldTDefSafe t >>= unify θ t'
 
 unify θ t t'@(TApp (TDef _) _ _)        =
-  tc_tdefs <$> get >>= return . unfoldTDef t' >>= unify θ t
+  tc_tdefs <$> get >>= return . unfoldTDefSafe t' >>= unify θ t
 
 unify θ (TVar α _)     (TVar β _)       = varEqlM θ α β 
 unify θ (TVar α _)     t                = varAsnM θ α t 
@@ -516,10 +533,10 @@ subtyNoUnion b θ e t@(TApp (TDef _) _ _) t'@(TApp (TDef _) _ _) =
 
 -- | Expand the type definitions
 subtyNoUnion b θ e t@(TApp (TDef _) _ _) t'        =
-  tc_tdefs <$> get >>= return . unfoldTDef t >>= subty b θ e t'
+  tc_tdefs <$> get >>= return . unfoldTDefSafe t >>= subty b θ e t'
 
 subtyNoUnion b θ e t t'@(TApp (TDef _) _ _)        =
-  tc_tdefs <$> get >>= return . unfoldTDef t' >>= subty b θ e t
+  tc_tdefs <$> get >>= return . unfoldTDefSafe t' >>= subty b θ e t
 
 -- | Object subtyping
 subtyNoUnion b θ e t@(TObj bs _) t'@(TObj bs' _)
@@ -557,14 +574,14 @@ subtdef b θ e t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _) =
     if d == d' || (d,d') `elem` seen 
       then unifys θ ts ts' -- invariant in type arguments
       else 
-      do  u  <- unfoldTDefM t
-          u' <- unfoldTDefM t'
+      do  u  <- unfoldTDefSafeM t
+          u' <- unfoldTDefSafeM t'
           -- Populate the state for mutual recursive types
           modify (\s -> s { tc_mut = (d,d'):(tc_mut s) })
           subtdef b θ e u u'
 
-subtdef b θ e t@(TApp (TDef _) _ _) t'  = unfoldTDefM t >>= \u  -> subtyNoUnion b θ e u t'
-subtdef b θ e t t'@(TApp (TDef _) _ _)  = unfoldTDefM t'>>= \u' -> subtyNoUnion b θ e t u'                                                      
+subtdef b θ e t@(TApp (TDef _) _ _) t'  = unfoldTDefSafeM t >>= \u  -> subtyNoUnion b θ e u t'
+subtdef b θ e t t'@(TApp (TDef _) _ _)  = unfoldTDefSafeM t'>>= \u' -> subtyNoUnion b θ e t u'                                                      
 subtdef b θ e t t'                      = subtyNoUnion' b θ e t t'
 
 
@@ -574,7 +591,6 @@ subtdef b θ e t t'                      = subtyNoUnion' b θ e t t'
 subty :: Bool -> Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
 -----------------------------------------------------------------------------
 subty b θ e   (TApp TUn ts _ ) t'@(TApp TUn ts' _) 
-  -- | b         = tryWithBackups (foldM (\θ t -> subty b θ e t t') θ ts) [castTs θ ts ts']
   | b         = tryWithBackups (subtyUnions b θ e ts ts') [castTs θ ts ts']
   | otherwise = foldM (\θ t -> subty b θ e t t') θ ts
 
@@ -787,8 +803,8 @@ deadExpr m e =
   case M.lookup ss m of
   -- WARNING: checking for expression equality will be skewed by 
   -- the presence of Cast and DeadCast nodes.
-    Just  (e',t) {- | e == e' -} -> DeadCast (a { ann_fact = (Assume t):fs }) e
-    _                  -> e
+    Just  (e',t) -> DeadCast (a { ann_fact = (Assume t):fs }) e
+    _            -> e
   where 
     ss = ann a
     fs = ann_fact a

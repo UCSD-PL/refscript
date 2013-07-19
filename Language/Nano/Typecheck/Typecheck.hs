@@ -149,7 +149,7 @@ tcFun γ (FunctionStmt l f xs body)
   = do (ft, (αs, ts, t)) <- funTy l f xs
        let γ'  = envAdds [(f, ft)] γ
        let γ'' = envAddFun l f αs xs ts t γ'
-       accumAnn (\a -> catMaybes (map (validInst γ'') (M.toList {- $ tracePP "tcFun" -} a))) $  
+       accumAnn (\a -> catMaybes (map (validInst γ'') (M.toList a))) $  
          do q              <- tcStmts γ'' body
             when (isJust q) $ unifyType l "Missing return" f tVoid t
        return $ Just γ' 
@@ -240,7 +240,7 @@ tcStmt' γ s@(FunctionStmt _ _ _ _)
 tcStmt' _ s 
   = convertError "TC Cannot Handle: tcStmt'" s
 
-tcStmt γ s = tcStmt' γ {- $ tracePP "TC stmt" -} s
+tcStmt γ s = tcStmt' γ s
 
 -------------------------------------------------------------------------------
 tcVarDecl :: Env Type -> VarDecl AnnSSA -> TCM TCEnv  
@@ -265,7 +265,7 @@ tcAsgn γ _ x e
 -------------------------------------------------------------------------------
 tcExpr :: Env Type -> Expression AnnSSA -> TCM Type
 -------------------------------------------------------------------------------
-tcExpr γ e = setExpr (Just e) >> (tcExpr' γ {- $ tracePP "TC expr" -} e)
+tcExpr γ e = setExpr (Just e) >> (tcExpr' γ e)
 
 
 -------------------------------------------------------------------------------
@@ -337,7 +337,7 @@ tcObject γ bs
 tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 ----------------------------------------------------------------------------------
 tcAccess γ l e f = 
-  tcExpr γ e >>= (unfoldTDefM >=> binders l e) >>= access {-$ tracePP "Field" -} f
+  tcExpr γ e >>= (unfoldTDefSafeM >=> binders l e) >>= access f
   where
     access f               = return . maybe tUndef b_type . find (match $ F.symbol f)
     match s (B f _)        = s == f

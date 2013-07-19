@@ -7,6 +7,7 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE DeriveDataTypeable   #-}
+{-# LANGUAGE NoMonomorphismRestriction   #-}
 
 module Language.Nano.Typecheck.Types (
 

@@ -1,221 +1,137 @@
 
-First Order Programs
---------------------
+NANO JS
+-------
 
-**Base Types**
+#Language
 
-    B := int 
-       | bool 
-       | array int 
-       | list int 
-       | ...
+##Base Types
 
-
-
-
-
-
+    B := number 
+       | boolean
+       | string
+       | undefined
+       | null
+       | void 
+       | top
 
 
-**Types**
+##Types
 
-    T := {v:B | p}                  // Base types
-       | (x1:T1,...,xn:Tn) => T     // Function types
-
-
-
-
+    T := {v:B | p}                    // Base types
+       | (x1:T1,...,xn:Tn) => T       // Function types
+       | {v:A | p}                    // Variables
+       | forall A. T                  // Quantification
 
 
-**Expressions**
+##Expressions
 
-    E := x                 // Variables
-       | c                 // Constants 0, 1, +, -, true...
-       | f(e1,...,en)      // Function Call 
-
-
-
-
-
-
-
+    E := x                          // Variables
+       | c                          // Constants 0, 1, +, -, true...       
+       | e1.e2
+       | {x1:e1,...,xn:en}
+       | Cast(e,T)
+       | f[T1,...,Tm](e1,...,en)    // Function Call with type instantiation
+       
+       c.f. @instantiate@ in Language.Nano.Liquid.Liquid.hs
 
 
+##Constants
+
+    c := Numeric Literal 
+       | Boolean Literal
+       | String Literal
+       | Null Literal
+       | + | - | * | /  
 
 
+##Statements
 
-**Statements**
-
-    S := skip                        
-       | x = e 
+    S := skip 
+       | x = e
        | s1; s2
-       | if [φ] (e) { s1 } else { s2 }
+       | if (e) { s1 } else { s2 }
        | return e
 
-**Phi-Variables**
 
-    φ := x1:T1 ... xn:Tn
-
-    // OLD
-
-    /*@ abs :: (x:int) => {v:int | v>=0}
-    function abs(x){
-      r = x;
-      if (x < 0){
-        r = 0 - x
-      }
-      return r
-    }
-
-
-
-    // SSA Transformed
-    r0 = x0;
-    if [r1:{v:int | v >= 1000 }] 
-      (x0 < 0){
-      r1 = 0 - x0;
-    } else {
-      r1 = r0
-    }
-    return r1 // v>= 1000
-
-
-
-
-
-
-
-
-
-
-**Functions**
+##Functions
     
     F := function f(x1...xn){s}   // Function Definition
 
 
 
-**Programs**
+##Programs
 
-    P := f1:T1, ... fn:Tn   // Sequence of function definitions
-
-
+    P := f1:T1, ... fn:Tn         // Sequence of function definitions
 
 
+##Simplifying Assumption
 
+`forall` only appears `outside` function types
 
+       forall A B C. (A, B, C) => A
 
+Is ok. But,
 
+       forall A. A
 
+is not ok (no function!) and
 
+       (forall A. A) => int
 
-
-
-
-**Environments**
-
-    G = x1:T1,...,xn:Tn
-
-
-    - A sequence of type bindings
-    - No *duplicate* bindings
+is not ok (forall appears *inside* =>)
 
 
 
 
 
+#Environments
+
+- A sequence of type bindings for variables
+- No *duplicate* bindings
+
+
+`G = x1:T1,...,xn:Tn`
 
 
 
-**Wellformedness**
+
+##Wellformedness
 
     G |- p : bool
-   ________________
-
+    ______________
     G |- {v:b | p}
 
-    
-    *Intuition* `p` must be a boolean predicate in `G`
+**Intuition**: `p` must be a boolean predicate in `G`
 
 
 
-
-
-
-
-
-
-**Embedding Environments**
+##Embedding Environments
 
     embed                    :: G -> Predicate
     embed empty              = True                -- Empty Environment
-    embed (x1:{v:B | p1}, G) = p1[x1/v] && embed G -- Base     Binding
+    embed (x1:{v:B | p1}, G) = p1[x1/v] && embed G -- Base Binding
     embed (x1:T, G)          = embed G             -- Non-Base Binding
 
-    Intuition: Environment is like a Floyd-Hoare **Precondition**
 
-    
-
-
-       K2 /\ K1     => K98
-       K912 /\ K131 => V >= 0
-       K912 /\ K11  => K12 
-       K912 /\ K31  => V >= 0
+**Intuition**: Environment is like a Floyd-Hoare **Precondition**
 
 
-
-**Subtyping: Base Types**
-
-       (embed G) /\ K1 => K98
-    _____________________________ [Sub-Base]
-
-
-    G |- {v:b | K1} <: {v:b | K98}
-
-
-
-
-**Subtyping: Function Types**
-
-    
-    G, yi:Ti' |- Ti' <: (Ti θ)  foreach i in 1..n
-    
-    G, yi:Ti' |- T θ <: T'
-
-    θ = [y1..yn/x1..xn]
-    ______________________________________________________ [Sub-Fun]
-
-    G |- (x1:T1...xn:Tn) => T <: (y1:T1'...yn:Tn') => T'
+       K2   ∧ K1   => K98
+       K912 ∧ K131 => V >= 0
+       K912 ∧ K11  => K12 
+       K912 ∧ K31  => V >= 0
 
 
 
 
 
 
+<!--
 
 
-
-
-
-
-
-
-    Intuition: Subtyping is like Floyd-Hoare **Rule Of Consequence**
-    
-    P' => P    {P} c {Q}      Q => Q'
-    _________________________________
-
-               {P'} c {Q'}
-
-
-
-
-
-
-
-**Program Typing**
+###Program Typing
 
     G = f1:T1...fn:Tn
-
     G |- fi:Ti for i in 1..n
     ___________________________[Program]
 
@@ -223,46 +139,33 @@ First Order Programs
 
 
 
-
-
-**Function Typing**
+###Function Typing
 
     G, x1:T1...,$result:T |- s  
     ___________________________[Fun]
-
     G |- function f(x1...){ s } 
 
 
 
-
-
-
-
-
-
-**Expression Typing**   
+###Expression Typing
 
     G |- e : t
     
-    In environment `G` the expression `e` evaluates to a value of type `t`
+In environment `G` the expression `e` evaluates to a value of type `t`
 
-    We will see this is problematic, will revisit...
-
-
+We will see this is problematic, will revisit...
 
 
 
 
-
-**Typing Constants**
+####Constants
 
     ______________[E-Const]
-
     G |- c : ty(c) 
 
 
 
-    Intuition: Each constant has a *primitive* or *builtin* type
+**Intuition**: Each constant has a *primitive* or *builtin* type
 
     ty(1) = {v:int| v = 1}
     
@@ -275,23 +178,12 @@ First Order Programs
 
 
 
-
-
-
-
-
-
-
 **Typing Variables**
    
       G(x) = T 
     _____________[E-Var]
 
      G |- x : T 
-
-
-
-
 
 
 
@@ -361,82 +253,56 @@ That is, all arguments are **variables**
     G |- f(y1...yn) : T θ 
 
     Result type is just output type with [actuals/formals]
+-->
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-**On the Fly ANF Conversion**
+#On the Fly ANF Conversion
 
 Rejigger typing rules to perform ANF-conversion
 
     G |- e : G', xe
 
-    1. `G'` : the output environment with new temp binders
-    2. `xe` : the temp binder (in `G'`) corresponding to `e` 
+The typing relation returns:
+
+1. `G'` : the output environment with new temp binders
+2. `xe` : the temp binder (in `G'`) corresponding to `e` 
 
 
 
-
-
-
-
-**On the Fly ANF Conversion: EXAMPLE**
+##Example (On the Fly ANF Conversion)
 
     G |- ((1 + 2) + 3) : G', x'
 
-    where 
+where 
 
     G' = G, t0:{v = 1      }
           , t1:{v = 2      }
           , t2:{v = t1 + t2}
           , t3:{v = 3      }
           , t4:{v = t2 + t3}
-    
+  
     x' = t4
 
 
 
 
 
+#Typing
 
 
-
-**Lets Revisit Typing Rules for ANF ...**
-
-
-
-
-
-
-
-
-
-**ANF-Expression Typing**   
+##Expression Typing
 
 Rejigger typing rules to perform ANF-conversion
 
     G |- e : G', xe
 
-    1. `G'` : the output environment with new temp binders
-    2. `xe` : the temp binder (in `G'`) corresponding to `e` 
+1. `G'` : the output environment with new temp binders
+2. `xe` : the temp binder (in `G'`) corresponding to `e` 
 
 
 
-
-
-
-
-**ANF-Typing Constants**
+###Constants
 
     z is *FRESH*
 
@@ -447,19 +313,8 @@ Rejigger typing rules to perform ANF-conversion
 
 
 
+###Variables
 
-
-
-
-
-
-
-
-
-
-
-**ANF-Typing Variables**
-   
 
     ________________[E-Var]
 
@@ -467,14 +322,8 @@ Rejigger typing rules to perform ANF-conversion
 
 
 
-    Yay! Easier than before ... :)
-
-
-
-
-
-**ANF Typing Function Calls**
-
+###(Polymporphic) Function Calls
+<!--
     G(f) = (x1:T1...) => T     
     
     G   |- e1...en : G', y1...yn
@@ -487,55 +336,46 @@ Rejigger typing rules to perform ANF-conversion
     ______________________________________________[E-Call]
 
     G   |- f(e1...en) : G'', z  
+-->
+
+<!--
+**Typing ANF + Polymorphic Function Calls**
+-->
+
+    G(f) = forall A1...Am.TBODY 
+    
+    TBODY[τ1...τm/A1...Am] = (x1:T1...) => T     
+    
+    G |- yi:Ti'                 foreach i in 1..n
+    
+    G |- Ti' <: Ti θ            foreach i in 1..n
+
+    Θ = [y1...yn/x1...xn]
+    ______________________________________[E-Call]
+
+    G |- f[τ1...τm](y1...yn) : T θ 
+
+Result type is just output type with [actuals/formals]
+
+c.f. @instantiate@ in Language.Nano.Liquid.Liquid.hs
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-**Statement Typing**
+##Statement Typing
 
     G |- s : G'
 
-    G' is G extended with **new bindings** for assigments in `s`
+G' is G extended with **new bindings** for assigments in `s`
 
 
 
-
-
-
-
-
-**Statement Typing: skip**
+###Statement Typing: skip
 
     G |- skip : G
 
 
 
-
-
-
-
-
-
-
-
-
-**Statement Typing: assign**
+###Assign
 
 
          G |- e : G',xe
@@ -549,18 +389,10 @@ Rejigger typing rules to perform ANF-conversion
         G(x) = {v:b| v = x} if T == {v:b|p}
            
                T               otherwise
-           
 
 
 
-
-
-
-
-
-
-
-**Statement Typing: sequence**
+###Sequence
 
 
        G  |- s1 : G1 
@@ -572,16 +404,11 @@ Rejigger typing rules to perform ANF-conversion
 
 
 
-
-
-
-
-
-
-**Statement Typing: return**
+###Return
 
 
     G  |- e : G', xe
+
     G' |- G'(xe) <: G'($result)
     _____________________________[Ret]
 
@@ -589,19 +416,7 @@ Rejigger typing rules to perform ANF-conversion
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-**Statement Typing: branch**
+###Branch
 
 
     G          |- e : G', xe     
@@ -619,24 +434,12 @@ Rejigger typing rules to perform ANF-conversion
     G2         |- G2(x) <: T    foreach x:T in φ 
     ____________________________________________
 
-      G |- if [φ] e { s1 } else { s2 } : G+φ      
+    G |- if [φ] e { s1 } else { s2 } : G+φ      
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-**Example 1**
+<!--
+###Example 1
 
     /*@ abs :: ({x:int|true}) => {v:int|v >= 0} */ 
     function abs(x){
@@ -694,23 +497,6 @@ G0,r1:{v>=0} |- {v=r1} <: {v>=0}
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     /*@ abs :: ({x:int|true}) => {v:int|v >= 0} */ 
     function abs(x){
       var r = x;
@@ -719,26 +505,6 @@ G0,r1:{v>=0} |- {v=r1} <: {v>=0}
       } 
       return r;
     }
-
-
-
-
-
-
-------------------------------------------------------------------------
-START HERE: RECAP from TUE.
-
-
-**Subtyping: Function Types**
-    
-    G,yi:Ti' |- Ti' <: (Ti θ)  foreach i in 1..n
-    
-    G,yi:Ti' |- T θ <: T'
-
-    θ = [y1..yn/x1..xn]
-    ______________________________________________________ [Sub-Fun]
-
-    G |- (x1:T1...xn:Tn) => T <: (y1:T1'...yn:Tn') => T'
 
 
 **Example 2**
@@ -787,11 +553,9 @@ START HERE: RECAP from TUE.
     
     G, z:{z:int| z>= 0}  |- {v:int| v=z+z}   <: {v:int| v>=z }
 
--------------------------------------------------------------------------
 
-**Polymorphism** 
 
-Consider this variant.
+
 
 **Example 3**
     
@@ -820,73 +584,7 @@ Consider this variant.
     }
 
 
----------------------------------------------------------------------------
 
-**Types**
-
-    T := {v:B | p}                       // Base types
-       | {(x1:T1,...,xn:Tn) => T | p}    // Function types
-       | {v:A | p}                       // Variables
-       | forall A. T                     // Quantification
-
-
-
-
-
-
-
-
-
-**Simplifying Assumption**
-
-    `forall` only appears `outside` function types
-
-            forall A B C. (A, B, C) => A
-    
-    Is ok. But,
-
-            forall A. A
-
-    is not ok (no function!) and
-
-            (forall A. A) => int
-
-    is not ok (forall appears *inside* =>)
-
-
-
-**Updating Expressions With Type Instantiation**
-
-
-    E := ...
-       | f[T1,...,Tm](e1,...,en)    // Function Call 
-       
-       c.f. @instantiate@ in Language.Nano.Liquid.Liquid.hs
-
-
-**Typing ANF + Polymorphic Function Calls**
-
-    G(f) = forall A1...Am.TBODY 
-    
-    TBODY[τ1...τm/A1...Am] = (x1:T1...) => T     
-    
-    G |- yi:Ti'                 foreach i in 1..n
-    
-    G |- Ti' <: Ti θ            foreach i in 1..n
-
-    Θ = [y1...yn/x1...xn]
-    ______________________________________[E-Call]
-
-    G |- f[τ1...τm](y1...yn) : T θ 
-
-    Result type is just output type with [actuals/formals]
-
-    c.f. @instantiate@ in Language.Nano.Liquid.Liquid.hs
-
-
-**And that's it!** 
-
-Lets go back to our example and see the constraints...
 
 
 **Example 3**
@@ -958,7 +656,8 @@ Example: find *index* of smallest element in a list.
           
     tests/liquid/pos/minindex01.js
 
-    /*@ loop :: (b:ilist, {min:int | (0 <= min && min < (len b)), {i:int | 0 <= i})                    => {v:int | 0 <= v && v < (len b)} */ 
+    /*@ loop :: (b:ilist, {min:int | (0 <= min && min < (len b)), 
+      {i:int | 0 <= i})   => {v:int | 0 <= v && v < (len b)} */ 
     function loop(b, min, i){
       if (i < length(b)) {
         var min_ = min;
@@ -1009,26 +708,6 @@ Example: find *index* of smallest element in a list.
     nth     :: (xs:ilist, {i:int| ((0 <= i) && i < (len xs))}) => int
     
     length  :: (xs:ilist) => {v:int | (v = (len xs))}               
-
-
-**Expressions?**
-
-**Wellformedness?**
-
-**Subtyping?**
-
-**Typechecking?**
-
-
-
-
-    
-
-
-
-
-
-
 
 **How to verify properties of data INSIDE containers**
 
@@ -1089,95 +768,127 @@ Example: find *index* of smallest element in a list.
 
 -----------------------------------------------------------------------------
 
-**What about INFERENCE** ?
+-->
 
-    It is painful to have to write down ALL types ALL the time.
 
-        1. WHAT needs to be inferred?
+#Subtyping
+
+
+**Intuition**: Subtyping is like Floyd-Hoare **Rule Of Consequence**
     
-        2. HOW can we infer it?
+    P' => P    {P} c {Q}      Q => Q'
+    _________________________________
+               {P'} c {Q'}
+
+
+
+
+##Base Types
+
+       (embed G) ∧ K1 => K2
+    ______________________________ [Sub-Base]
+    G |- {v:b | K1} <: {v:b | K2}
+
+
+
+##Subtyping: Function Types
+    
+    G,yi:Ti' |- Ti' <: (Ti θ)  foreach i in 1..n
+    
+    G,yi:Ti' |- T θ <: T'
+
+    θ = [y1..yn/x1..xn]
+    ______________________________________________________ [Sub-Fun]
+
+    G |- (x1:T1...xn:Tn) => T <: (y1:T1'...yn:Tn') => T'
+
+
+
+
+
+#Inference
+
 
 -----------------------------------------------------------------------------
-**1. What needs to be inferred?**
+## What needs to be inferred?
 
   A: the stuff we DONT want to write down!
 
-/*@ loop :: ( b:list [int]
-            , {min:int | ((0 <= min) && (min < (len b)))}
-            , {i:int | 0 <= i})  
-            => {v:int | ((0 <= v) && (v < (len b)))} */ 
-    
-function loop(b, min, i){
-  if (i < length(b)) {
-    var min_ = min;
-    assert(i < length(b));
-    if (nth(b, i) < nth(b, min)) { 
-      min_ = i; 
-    } 
-    return loop(b, min_, i + 1)
-  }
-  return min;
-}
+    /*@ loop :: ( b:list [int]
+                , {min:int | ((0 <= min) && (min < (len b)))}
+                , {i:int | 0 <= i})  
+                => {v:int | ((0 <= v) && (v < (len b)))} */ 
+        
+    function loop(b, min, i){
+      if (i < length(b)) {
+        var min_ = min;
+        assert(i < length(b));
+        if (nth(b, i) < nth(b, min)) { 
+          min_ = i; 
+        } 
+        return loop(b, min_, i + 1)
+      }
+      return min;
+    }
 
------------------------------------------------------------------------------
-**1. What needs to be inferred?**
 
-  A: the stuff we DONT want to write down!
 
-**Step 1: Templates**
+
+
+##Inference Algorithm
+
+###Step 1: Templates
 
 Generate **FRESH** K variables for unknown refinements
 
-/*@ loop :: ( {b:list [int] | K1}, {min:int | K2}, {i:int | K3}) => {v:int | K4} */ 
-function loop(b, min, i){
-  if [min_ :: K8] (i < length[K5](b)) {
-    var min_ = min;
-    if (nth[K6](b, i) < nth[K7](b, min)) { 
-      min_ = i; 
-    } 
-    return loop(b, min_, i + 1)
-  }
-  return min;
-}
+    /*@ loop :: ( {b:list [int] | K1}, {min:int | K2}, {i:int | K3}) => {v:int | K4} */ 
+    function loop(b, min, i){
+      if [min_ :: K8] (i < length[K5](b)) {
+        var min_ = min;
+        if (nth[K6](b, i) < nth[K7](b, min)) { 
+          min_ = i; 
+        } 
+        return loop(b, min_, i + 1)
+      }
+      return min;
+    }
 
-**Step 2: Perform TypeChecking**
+###Step 2: Perform TypeChecking
 
-    Generate a bunch of subtyping requirements
+Generate a bunch of subtyping requirements
 
-    Via subtyping, boils down to subtyping over base types
+Via subtyping, boils down to subtyping over base types
 
-    **Subtyping: Base Types**
+**Subtyping: Base Types**
 
-       (embed G) /\ K1 => K98
+       (embed G) ∧ K1 => K98
     _____________________________ [Sub-Base]
 
     G |- {v:b | K1} <: {v:b | K98}
 
-    
-    cf Language.Nano.Liquid.CGMonad.splitC
 
-    So **step 2** yields a bunch of **base subtyping constraints**
+cf Language.Nano.Liquid.CGMonad.splitC
 
-        x:K2       |- {v:int|K1}      <: {v:int|K9}
-        y:K9       |- {v:list int|K3} <: {v:list int| 0 < (len v)} 
-        y:K9, b:K1 |- {v:int|K3}      <: {v:int| K2} 
-        y:K9, z:K3 |- {v:int|v=y}     <: {v:int| v>=0} 
+So **step 2** yields a bunch of **base subtyping constraints**
 
-
+    x:K2       |- {v:int|K1}      <: {v:int|K9}
+    y:K9       |- {v:list int|K3} <: {v:list int| 0 < (len v)} 
+    y:K9, b:K1 |- {v:int|K3}      <: {v:int| K2} 
+    y:K9, z:K3 |- {v:int|v=y}     <: {v:int| v>=0} 
 
 
-**Step 3: Solve Constraints via TypeChecking**
-
-    Subtyping constraints are simply (via definition of **embed**)
-
-        K2[x/v] /\ K1                 => K9
-        K9[y/v] /\ K3                 => 0 < (len v)
-        K9[y/v] /\ K1[b/v] /\ K3      => K2 
-        K9[y/v] /\ K3[z/v] /\ {v = y} => (v >= 0)
-
-    Solved via **fixpoint** computation (i.e. abstract interpretation!)
 
 
+###Step 3: Solve Constraints via TypeChecking
+
+Subtyping constraints are simply (via definition of **embed**)
+
+        K2[x/v] ∧ K1                 => K9
+        K9[y/v] ∧ K3                 => 0 < (len v)
+        K9[y/v] ∧ K1[b/v] ∧ K3      => K2 
+        K9[y/v] ∧ K3[z/v] ∧ {v = y} => (v >= 0)
+
+Solved via **fixpoint** computation (i.e. abstract interpretation!)
 
 
 

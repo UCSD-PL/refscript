@@ -229,7 +229,7 @@ tcStmt' γ (VarDeclStmt _ ds)
 
 -- return e 
 tcStmt' γ (ReturnStmt l eo) 
-  = do t <- maybe (return tVoid) (tcExpr γ) eo 
+  = do t <- maybe (return tVoid) (tcExpr γ) eo
        subType True l eo t $ envFindReturn γ
        return Nothing
 
@@ -299,7 +299,7 @@ tcExpr' γ (CallExpr l e es)
   = tcExpr γ e >>= tcCall γ l e es
 
 tcExpr' γ (ObjectLit _ ps) 
-  = tcObject γ (tracePP "tcObject" ps)
+  = tcObject γ ps
 
 tcExpr' γ (DotRef l e i) 
   = tcAccess γ l e i
@@ -330,7 +330,7 @@ tcObject γ bs
   = do 
       let (ps, es) = unzip bs
       bts <- zipWith B (map F.symbol ps) <$> mapM (tcExpr γ) es
-      return $ tracePP "tcObject" $ TObj bts ()
+      return $ TObj bts ()
 
 
 ----------------------------------------------------------------------------------

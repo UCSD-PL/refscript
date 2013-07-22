@@ -309,9 +309,9 @@ subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 subType l g t1 t2 = modify $ \st -> st {cs =  c : (cs st)}
   where 
     (t1', t2')    = (t1, t2) -- (unionCheck t1, unionCheck t2)
-    c             = {- T.trace (printf "subType with gurads %s: %s <: %s"
+    c             = T.trace (printf "subType with gurads %s: %s <: %s"
                             (ppshow $ guards g) 
-                            (ppshow t1') (ppshow t2')) $ -}
+                            (ppshow t1') (ppshow t2')) $ 
                     Sub g (ci l) t1' t2'
 
 
@@ -397,7 +397,8 @@ refreshRefType = mapReftM refresh
 -- | Splitting Subtyping Constraints --------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-splitC c = {- tracePP (printf "Before Splitting: %s\n\nAfter splitting" (ppshow c)) <$> -} splitC' c
+-- splitC c = tracePP "After splitting" <$> splitC' (tracePP "Before Splitting" c)
+splitC c = splitC' c
 
 splitC' :: SubC -> CGM [FixSubC]
 
@@ -515,7 +516,7 @@ splitC' (Sub g i t1 t2@(TObj _ _ ))
 
 splitC' (Sub g i t1@(TObj _ _ ) t2)
   = do  env <- cg_tdefs <$> get
-        splitC $ Sub g i (unfoldTDefSafe t1 env) t2
+        splitC $ Sub g i t1 (unfoldTDefSafe t2 env)
 
 
 splitC' x 

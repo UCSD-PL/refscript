@@ -6,51 +6,57 @@ NANO JS
 
 ##Base Types
 
-    B := number 
-       | boolean
-       | string
-       | undefined
-       | null
-       | void 
-       | top
+    B := number                       // Number
+       | boolean                      // Boolean
+       | string                       // String
+       | undefined                    // Undefined
+       | null                         // Null
+       | void                         // Void
+       | top                          // Top
+       | A                            // Variables
 
 
 ##Types
 
     T := {v:B | p}                    // Base types
        | (x1:T1,...,xn:Tn) => T       // Function types
-       | {v:A | p}                    // Variables
        | forall A. T                  // Quantification
+       | T ∪ ... ∪ T                  // Union types
+       | {x1:T1,...,xn:Tn}            // Object types       
+       | μX.T                         // Recursive types
+
 
 
 ##Expressions
 
-    E := x                          // Variables
-       | c                          // Constants 0, 1, +, -, true...       
-       | e1.e2
-       | {x1:e1,...,xn:en}
-       | Cast(e,T)
-       | f[T1,...,Tm](e1,...,en)    // Function Call with type instantiation
+    E := x                            // Variables
+       | c                            // Constants 0, 1, +, -, true...       
+       | e1.e2                        // Dot reference
+       | {x1:e1,...,xn:en}            // Object literal
+       | f[T1,...,Tm](e1,...,en)      // Function Call with type instantiation
+       
+       | Cast(e,T)                    // Type cast
        
        c.f. @instantiate@ in Language.Nano.Liquid.Liquid.hs
 
 
 ##Constants
 
-    c := Numeric Literal 
-       | Boolean Literal
-       | String Literal
-       | Null Literal
-       | + | - | * | /  
+    c := 1 | 2 | ...                  // Numeric literals
+       | true | false                 // Boolean literals
+       | "a" | "foo" | ...            // String literals
+       | null                         // Null
+       | !                            // Prefix operators
+       | + | - | * | /                // Infix operators
 
 
 ##Statements
 
-    S := skip 
-       | x = e
-       | s1; s2
-       | if (e) { s1 } else { s2 }
-       | return e
+    S := skip                         // Empty statement 
+       | x = e                        // Assignment
+       | s1; s2                       // Sequence 
+       | if (e) { s1 } else { s2 }    // If statement
+       | return e                     // Return
 
 
 ##Functions
@@ -123,140 +129,6 @@ is not ok (forall appears *inside* =>)
 
 
 
-
-
-
-<!--
-
-
-###Program Typing
-
-    G = f1:T1...fn:Tn
-    G |- fi:Ti for i in 1..n
-    ___________________________[Program]
-
-      0 |- f1:T1...fn:Tn
-
-
-
-###Function Typing
-
-    G, x1:T1...,$result:T |- s  
-    ___________________________[Fun]
-    G |- function f(x1...){ s } 
-
-
-
-###Expression Typing
-
-    G |- e : t
-    
-In environment `G` the expression `e` evaluates to a value of type `t`
-
-We will see this is problematic, will revisit...
-
-
-
-
-####Constants
-
-    ______________[E-Const]
-    G |- c : ty(c) 
-
-
-
-**Intuition**: Each constant has a *primitive* or *builtin* type
-
-    ty(1) = {v:int| v = 1}
-    
-    ty(+) = (x:int, y:int) => {v:int  | v  =  x + y}
-    
-    ty(<) = (x:int, y:int) => {v:bool | v <=> x < y}
-
-    etc.
-
-
-
-
-**Typing Variables**
-   
-      G(x) = T 
-    _____________[E-Var]
-
-     G |- x : T 
-
-
-
-**Typing Function Calls**
-
-    G(f) = (x1:T1...xn:Tn) => T     
-    
-    G |- ei:Ti'     foreach i in 1..n
-
-    G |- Ti' <: Ti  foreach i in 1..n
-    ____________________________________[E-Call]
-
-    G |- f(e1...en) : ??? 
-
-    Uh oh. What type do we give to the *output* of the call?
-
-**Typing Function Calls: What We'd Like**
-
-    + :: (x1:int, x2:int) => {v:int|v = x1 + x2}
-    
-    +(a,b)              : {v:int | v = a + b}
-
-    Option 1: Direct Substitution
-       
-    +(foo(a), bar(b))   : {v:int | v = foo(a) + bar(b)}
-
-    - SMT solver knows nothing about `foo` and `bar`
-    - Lose all information (e.g. `foo` returns *positive* integers)
-
-    Option 2: Name Intermediate Subexpressions
-
-    var t1 = foo(a)
-    var t2 = bar(b) 
-    +(t1,t2)
-
-    t1          : {output type of foo, with formal subst. with a}
-    t1          : {output type of bar, with formal subst. with b}
-    +(t1, t2)   : {v:int | v = foo(t1) + bar(t2)}
-
-
-
-**Administrative Normal Form**
-
-a.k.a. **ANF**
-
-Translate program so *every* call is of the form
-
-    f(y1,...,yn)
-
-That is, all arguments are **variables**
-
-
-
-
-
-**Typing ANF Function Calls**
-
-    G(f) = (x1:T1...) => T     
-    
-    G |- yi:Ti'         foreach i in 1..n
-    
-    G |- Ti' <: Ti θ    foreach i in 1..n
-
-    Θ = [y1...yn/x1...xn]
-    ______________________________________[E-Call]
-
-    G |- f(y1...yn) : T θ 
-
-    Result type is just output type with [actuals/formals]
--->
-
-
-
 #On the Fly ANF Conversion
 
 Rejigger typing rules to perform ANF-conversion
@@ -302,6 +174,15 @@ Rejigger typing rules to perform ANF-conversion
 
 
 
+###Variables
+
+
+    ________________[E-Var]
+
+     G |- x : G, x 
+
+
+
 ###Constants
 
     z is *FRESH*
@@ -313,34 +194,57 @@ Rejigger typing rules to perform ANF-conversion
 
 
 
-###Variables
+###Dot reference
+
+    z is *FRESH*
+
+    G |- e1 : G1, x1
+    
+    S1 = G1(x1)
+
+    unfold(s1) = {f1:T1,...,f:T,...fn:Tn}
+
+    z:Ti
+
+    ______________________[E-DotRef]
+    G |- e1.f : G1, z
 
 
-    ________________[E-Var]
 
-     G |- x : G, x 
+    z is *FRESH*
+
+    G |- e1 : G1, x1
+    
+    S1 = G1(x1)
+
+    unfold(s1) = {f1:T1,...,fn:Tn}
+
+    f not in {f1,...,fn} 
+
+    z: undefined
+
+    ______________________[E-DotRef]
+    G |- e1.f : G1, z
+
+
+
+###Object Literal
+
+    z is *FRESH*
+
+    G |- yi: Ti   foreach i in 1..n
+
+    z:{x1:T1,...,xn:Tn}
+
+    ______________________[E-DotRef]
+    G |- {x1:y1,...,xn:yn} : G1, z
+ 
 
 
 
 ###(Polymporphic) Function Calls
-<!--
-    G(f) = (x1:T1...) => T     
-    
-    G   |- e1...en : G', y1...yn
 
-    G'  |- G'(yi) <: Ti   foreach i in 1..n
-
-    θ   = [y1...yn/x1...xn]
-
-    G'' = G', z:T θ     z is *FRESH*
-    ______________________________________________[E-Call]
-
-    G   |- f(e1...en) : G'', z  
--->
-
-<!--
-**Typing ANF + Polymorphic Function Calls**
--->
+    z is *FRESH*
 
     G(f) = forall A1...Am.TBODY 
     
@@ -351,6 +255,7 @@ Rejigger typing rules to perform ANF-conversion
     G |- Ti' <: Ti θ            foreach i in 1..n
 
     Θ = [y1...yn/x1...xn]
+
     ______________________________________[E-Call]
 
     G |- f[τ1...τm](y1...yn) : T θ 
@@ -429,351 +334,64 @@ G' is G extended with **new bindings** for assigments in `s`
     
     G',z:{!xe} |- s2 : G2
     
-    G1         |- G1(x) <: T    foreach x:T in φ 
+    G1         |- G1(x) <: T    ∀ x:T in φ 
     
-    G2         |- G2(x) <: T    foreach x:T in φ 
+    G2         |- G2(x) <: T    ∀ x:T in φ 
     ____________________________________________
 
     G |- if [φ] e { s1 } else { s2 } : G+φ      
 
 
 
-<!--
-###Example 1
-
-    /*@ abs :: ({x:int|true}) => {v:int|v >= 0} */ 
-    function abs(x){
-      var r = x;
-      if (x < 0){
-        r = 0 - x;
-      } 
-      return r;
-    }
-
-    /*@ abs :: ({x:int|true}) => {v:int|v >= 0} */ 
-    function abs(x){
-      /*G0*/ var r0 = x;
-      if [r1:{v:int|v>=0}] (x < 0){
-        /* G1  */
-        r1 = 0 - x;
-      } /* G1' */ 
-      else {
-        /* G2 */
-        r1 = r0
-      } /* G2' */
-      return r1;
-    }
-
-    G0  = x:int
-    G1  = G0, r0:{v=x},t0:{v:bool| v <=> x < 0}, t0<=>true
-    G1' = G1, r1:{v=0-x}
-    
-    G1' |- G1'(r1) <: {v:int|v >=0}      
-    G1' |- {v=r1} <: {v >=0}      
-
-    
-r0=x
-t0 <=> x < 0
-t0<=>true
-r1=0-x
-v=r1
-=> v >= 0       OK!
-
-r0=x
-t0 <=> x < 0
-t0<=>false
-r1=r0
-v=r1
-=> v >= 0       OK!
- 
-G0,r1:{v>=0} |- {v=r1} <: {v>=0}
-
-
-
-    G2  = G0, r0:{v=x},t0:{v:bool| v <=> x < 0}, t0<=>false
-    G2' = G2, r1:{v=r0}
-    
-    G2' |- G2'(r1) <: {v:int|v>=0}
-
-
-
-    /*@ abs :: ({x:int|true}) => {v:int|v >= 0} */ 
-    function abs(x){
-      var r = x;
-      if (x < 0){
-        r = 0 - x;
-      } 
-      return r;
-    }
-
-
-**Example 2**
-
-    /*@ abs :: ((({z:int|z>=0}) => {v>=z})
-                
-                , int
-               ) 
-               => {v:int|v >= 0} */ 
-
-    function abs(f, x){
-      var r = x;
-      if (x < 0){
-        r = 0 - x;
-      } 
-      return f(r);
-    }
-
-    /*@ double :: (x:int) => {v:int| v = x + x } */
-    function double(x){ return x + x }
-
-    /*@ main :: (int) => {v:int | v>=0} */
-    function main(x){
-      return /* G */ abs(double, x);
-    }
-
-
-
-               G |- { x:int | x>=0 }    <: {x:int|true}
-               
-    G,x:{v:int|v>=0} |- {v:int| v=x+x}  <: {v:int | v>=x}
-
-
-
-    G |- {z:int| z>=0}     <: {x:int| true }
-    
-    G, z:{z:int| z>= 0}  |- {v:int| v=z+z}   <: {v:int| v>=z }
-    _____________________________________________________
-
-    G |- ({z:int|true}) => {v:int| v=z+z}
-         <: 
-         (({z:int|z>=0}) => {v>=z})
-
-        (embed G) && z >= 0 && v = z + z => v >= z
-    _____________________________________________________
-    
-    G, z:{z:int| z>= 0}  |- {v:int| v=z+z}   <: {v:int| v>=z }
-
-
-
-
-
-**Example 3**
-    
-    /*@ idt :: forall A. (A) => A */
-    function idt(x){ return x}
-
-    /*@ idt :: (T) => T*/
-    function idtT(x){ return x}
-
-    /*@ abs :: (x:int) => {v:int | v >= 0} */
-    function abs(x){
-      var r = x;
-      if (x < 0){
-        r = 0 - x;
-      }
-      assert(r >= 0);
-      r = idt[T](r);
-      return r;
-    }
-
-    /*@ main :: (int) => {v:int | v>=0} */
-    function main(x){
-      var z = abs(double, x);
-      assert(z >= 0);
-      return id(z);
-    }
-
-
-
-
-
-**Example 3**
-
-    /*@ idt :: forall A. (A) => A */
-    function idt(x){ return x}
-
-
-    /*@ abs :: ({x:int|true}) => {v:int|v >= 0} */ 
-    function abs(f, x){
-      var r = x;
-      if (x < 0){
-        r = 0 - x;
-      } 
-      return idt[{v:int|v>=0}](r);
-    }
-
-    /*@ main :: (int) => {v:int | v>=0} */
-    function main(x){
-      var z = abs(x);
-      assert(z >= 0);
-      return id(z);
-    }
-
-**Lets just focus on the action**
-
- /*@ abs :: ({x:int|true}) => {v:int|v >= 0} */ 
-    function abs(x){
-      /*G0*/ var r0 = x;
-      if [r1:{v:int|v>=0}] (x < 0){
-        /* G1  */
-        r1 = 0 - x;
-      } /* G1' */ 
-      else {
-        /* G2 */
-        r1 = r0
-      } /* G2' */
-      /* G3 */
-      return idt[{v>=0}](r1);
-    }
-
-    G3: x  : true
-        r0 : v =  x
-        r1 : v >= 0
-        {v = r1} <: v>=0  OK
-
-
-
-    What are the type instantiation parameters?
-
-        ???
-
-
-    What are the constraints?
-
-        ???
-
-
-    All solves out easily.
-
-
-
-**Reasoning About Data Structures**
-
-Example: find *index* of smallest element in a list.
-
-         prove that data-structure accesses are SAFE 
-         (within bounds)
-          
-    tests/liquid/pos/minindex01.js
-
-    /*@ loop :: (b:ilist, {min:int | (0 <= min && min < (len b)), 
-      {i:int | 0 <= i})   => {v:int | 0 <= v && v < (len b)} */ 
-    function loop(b, min, i){
-      if (i < length(b)) {
-        var min_ = min;
-        if (nth(b, i) < nth(b, min)) { 
-          min_ = i; 
-        } 
-        return loop(b, min_, i + 1)
-      }
-      return min;
-    }
-
-    /*@ minIndex :: (list) => int */ 
-    function minIndex(a){
-      var r = loop(a, 0, 0);
-      return r;
-    }
-
-
-
-
-**Types?**
-
-    Just think of "int-list" as a type (like int)
-
-    T = {v: ilist | p}
-
-
-**Properties: Uninterpreted Functions in SMT logic**
-    
-    len :: (ilist) => int
-
-    So if `a` is a `ilist` of size 10, then
-
-    a   :: {v: ilist | (len v) = 10}
-
-
-    //LIBRARY
-    nth    :: (a:ilist, {i:int | 0 <= i && i < (len a) }) => int
-    length :: (a:ilist) => {v:int | v = (len a)}
-
-
-    
-
-
-
-    Give the access "library" function a suitable type
-
-    nth     :: (xs:ilist, {i:int| ((0 <= i) && i < (len xs))}) => int
-    
-    length  :: (xs:ilist) => {v:int | (v = (len xs))}               
-
-**How to verify properties of data INSIDE containers**
-
-    How shall we prove this assert? [tests/liquid/pos/list00.js]
-
-    /*@ hop :: (list [{v:int | v >= 0}]) => void */
-    function hop(xs){
-      if (empty[true](xs)) {
-        return;
-      } else {
-        var h = safehead[{v >= 0}](xs);
-        assert(0 <= h);    
-        hop(safetail[{v>=0}](xs));
-      }
-    }
-
-    empty     :: forall A. (xs:list [A]) => {v: boolean | ((Prop v) <=> ((len xs) == 0))} 
-    safehead  :: forall A. ({v: list [A] | (0 < (len v))) => A
-    safetail  :: forall A. ({v: list [A] | (0 < (len v))) => list [A]
-
-
-
-
-
-**Containers: Types?**
-
-    T := ...
-       | {v: C [T1,...,Tn] | r}
-
-
-**Containers: Expressions?**
-
-**Containers: Wellformedness?**
-
-        G |- Ti     for each i in 1..n
-
-        G, v:C[T1..] |- p : boolean
-        ___________________________
-
-        G |- {v: C [T1...Tn] | p}
-
-
-**Containers: Subtyping?**
-
-        
-                  G |- Ti <: Ti'
-        
-        G, v:C[...] |- p => p' 
-        ____________________________________________________
-
-        G |- {v: C [T1...Tn] | p} <: {v: C [T1'...Tn'] | p'}
-
-
-
-
-**Containers: Typechecking?**
-
-
------------------------------------------------------------------------------
-
--->
-
 
 #Subtyping
 
+##Light Subtyping
 
+    G, θ |- S <: T : θ'
+
+
+
+###Reflective
+
+    ___________________ [S-Refl]
+    G, θ |- T <: T : θ
+
+
+
+###Unions
+
+
+    ∀i∈[1..n] ∃j∈[1..m] . G, θ |- Si <: Ti : θi'
+
+    θ' = join({θi'})
+    ______________________________________________[S-Union]
+    G, θ |- S1 | ... | Sn <: T1 | ... | Tm : θt
+
+
+
+###Top
+    
+    _________________ [S-Top]
+    G, θ |- S <: top : θ
+
+
+
+###Undefined
+    
+    ___________________________________ [S-Undef-2]
+    G, θ |- undefined <: null : θ
+
+
+###Defined Type
+
+
+
+
+
+
+
+##Liquid Subtyping
 **Intuition**: Subtyping is like Floyd-Hoare **Rule Of Consequence**
     
     P' => P    {P} c {Q}      Q => Q'
@@ -782,16 +400,17 @@ Example: find *index* of smallest element in a list.
 
 
 
+###Base Types
 
-##Base Types
+    b1 <: b2          // Light Subtyping
 
-       (embed G) ∧ K1 => K2
-    ______________________________ [Sub-Base]
-    G |- {v:b | K1} <: {v:b | K2}
+    (embed G) ∧ K1 => K2
+    ________________________________ [Sub-Base]
+    G |- {v:b1 | K1} <: {v:b2 | K2}
 
 
 
-##Subtyping: Function Types
+###Subtyping: Function Types
     
     G,yi:Ti' |- Ti' <: (Ti θ)  foreach i in 1..n
     

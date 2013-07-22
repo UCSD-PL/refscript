@@ -79,15 +79,16 @@ type NanoRefType = Nano AnnType RefType
 -------------------------------------------------------------------------------------
 
 data CGEnv   
-  = CGE { renv   :: !(Env RefType) -- ^ bindings in scope 
+  = CGE { opts   :: OptionConf
+        , renv   :: !(Env RefType) -- ^ bindings in scope 
         , fenv   :: F.IBindEnv     -- ^ fixpoint bindings
         , guards :: ![F.Pred]      -- ^ branch target conditions  
         }
 
-emptyCGEnv = CGE envEmpty F.emptyIBindEnv []
+emptyCGEnv = CGE [] envEmpty F.emptyIBindEnv []
 
 instance PP CGEnv where
-  pp (CGE re _ gs) = vcat [pp re, pp gs] 
+  pp (CGE _ re _ gs) = vcat [pp re, pp gs] 
 
 ----------------------------------------------------------------------------
 -- | Constraint Information ------------------------------------------------

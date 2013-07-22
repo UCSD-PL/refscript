@@ -4,6 +4,8 @@
 module Language.Nano.Types (
   -- * Configuration Options
     Config (..)
+  , Option (..)
+  , OptionConf
 
   -- * Some Operators on Pred
   , pAnd
@@ -84,12 +86,18 @@ data Config
            }
   | Liquid { files   :: [FilePath]     -- ^ source files to check
            , incdirs :: [FilePath]     -- ^ path to directory for include specs
+           , noKVarInst :: Bool
            }
   | Visit  { files   :: [FilePath]     -- ^ source files to check
            , incdirs :: [FilePath]     -- ^ path to directory for include specs
            }
   deriving (Data, Typeable, Show, Eq)
 
+data Option
+  = NoKVarInst
+  deriving (Eq)
+
+type OptionConf = [(Option, Bool)]
 
 ---------------------------------------------------------------------
 -- | Tracking Source Code Locations --------------------------------- 

@@ -178,8 +178,8 @@ consStmt g (VarDeclStmt _ ds)
 
 -- return e 
 consStmt g (ReturnStmt l (Just e))
-  = do (xe, g') <- consExpr g e 
-       subType l g' (envFindTy xe g') $ envFindReturn g' 
+  = do (xe, g') <- consExpr g $ tracePP "Ret EXP" e 
+       subType l g' (tracePP "Ret exp type" $ envFindTy xe g') $ envFindReturn g' 
        return Nothing
 
 -- return

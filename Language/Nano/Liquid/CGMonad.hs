@@ -254,11 +254,12 @@ envFindReturn = E.envFindReturn . renv
 
 -- | Instantiate Fresh Type (at Function-site)
 ---------------------------------------------------------------------------------------
-freshTyFun :: (IsLocated l) => CGEnv -> l -> RefType -> CGM RefType 
+freshTyFun :: (IsLocated l) => CGEnv -> l -> Id AnnType -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
-freshTyFun g l t 
-  | not $ isTrivialRefType t = return t
-  | otherwise                = freshTy "freshTyFun" (toType t) >>= wellFormed l g 
+freshTyFun g l f t 
+  | not $ isTrivialRefType t            = return t
+  | L.elem (NoKVarInst, True) (opts g)  = return t
+  | otherwise                           = freshTy "freshTyFun" (toType t) >>= wellFormed l g 
 
 -- | Instantiate Fresh Type (at Call-site)
 ---------------------------------------------------------------------------------------

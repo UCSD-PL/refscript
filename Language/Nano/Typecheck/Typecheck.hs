@@ -49,14 +49,14 @@ import           Debug.Trace    hiding (traceShow)
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
-verifyFile :: FilePath -> IO (F.FixResult SourceSpan)
+verifyFile :: OptionConf -> FilePath -> IO (F.FixResult SourceSpan)
 --------------------------------------------------------------------------------
 --verifyFile f = tc =<< parseNanoFromFile f
 --  where 
 --   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
 -- DEBUG MODE
-verifyFile f 
+verifyFile _ f 
    = do nano <- parseNanoFromFile f 
         {-donePhase Loud "Parse"-}
         {-putStrLn . render . pp $ nano-}

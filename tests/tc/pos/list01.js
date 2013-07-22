@@ -1,24 +1,17 @@
 /*@ type nlist  { data : number, 
-                  next : nlist } */
+                  next : nlist | Null} */
 
-/*@ append :: (x:nlist, {v:number| 1 > 0}) => nlist */
-function append(x, a) {
+
+/*@ main :: (x:nlist, v:number) => nlist */
+function main(x, a) {
 
     return { data: a , next: x };
 
 }
 
 
-/* append1 :: (x:nlist, number) => nlist */
-//function append1(x, a) {
-
-//    return { data: a , next: x };
-
-//}
-
-/* append1 :: (x:nlist | Null, number) => nlist */
-// function append1(x, a) {
-// 
-//     return { data: a , next: x };
-// }
+/*@ append1 :: (x:nlist | Null, number) => nlist */
+function append1(x, a) {
+  return { data: a , next: x };
+}
 

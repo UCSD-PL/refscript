@@ -264,7 +264,7 @@ unfoldTDefMaybe _                       _   = Nothing
 -------------------------------------------------------------------------------
 unfoldTDefSafe :: (PP r, F.Reftable r) => RType r -> Env (RType r) -> RType r
 -------------------------------------------------------------------------------
-unfoldTDefSafe t env = maybe (error $ printf "Unfolding of % failed" $ ppshow t) 
+unfoldTDefSafe t env = maybe (error $ printf "Unfolding of %s failed" $ ppshow t) 
                              id (unfoldTDefMaybe t env)
 
 
@@ -499,8 +499,9 @@ varAsnM θ a t =
     Left s -> addError s θ
     Right θ' -> return θ'
 
+
 -- | Subtyping without unions
--- TypeScript lists its subtyping rules § 3.8.2
+-- TypeScript lists its subtyping rules in § 3.8.2 of the manual.
 -- The rules for subtyping with Null or Undefined type are unsound, so we're
 -- using a sound version instead, i.e. Null and Undefined are not subtypes of
 -- every type T.
@@ -529,7 +530,11 @@ subtyNoUnion b θ _ t t'
 
 -- | Defined types
 subtyNoUnion b θ e t@(TApp (TDef _) _ _) t'@(TApp (TDef _) _ _) = 
-  subtdef b θ e t t'
+  do  st <- get
+      case subTyDef st θ e t t' of 
+        Just θ  -> return θ
+        Nothing -> addError "different type definitions" θ
+  
 
 -- | Expand the type definitions
 subtyNoUnion b θ e t@(TApp (TDef _) _ _) t'        =
@@ -539,17 +544,46 @@ subtyNoUnion b θ e t t'@(TApp (TDef _) _ _)        =
   tc_tdefs <$> get >>= return . unfoldTDefSafe t' >>= subty b θ e t
 
 -- | Object subtyping
-subtyNoUnion b θ e t@(TObj bs _) t'@(TObj bs' _)
+subtyNoUnion b θ e@(Just (ObjectLit _ bl)) t@(TObj bs _) t'@(TObj bs' _)
   | l < l'          = addError (errorObjSubtyping t t') θ
   -- All keys in the right hand should also be in the left hand
   | k' L.\\ k == [] = subtys b θ es ts ts'
     where 
-      (k,k')   = {- tracePP "subObjKeys" $ -} (map b_sym) `mapPair` (bs, bs')
-      l        = length bs
-      l'       = length bs'
-      es       = replicate l' e
-      (ts,ts') = {- tracePP "subObjTypes" -}
-        ([b_type b | b <- bs, (b_sym b) `elem` k'], b_type <$> bs')
+      (k,k')  = (map b_sym) `mapPair` (bs, bs')
+      (l,l')  = length `mapPair` (bs, bs')
+      es      = [Just $ snd b | b <- bl, (F.symbol $ fst b) `elem` k']
+      ts      = [b_type b     | b <- bs, (b_sym b) `elem` k']
+      ts'     = b_type <$> bs'
+
+
+
+
+subtyNoUnion False θ Nothing t@(TObj bs _) t'@(TObj bs' _) 
+  | l < l'          = addError (errorObjSubtyping t t') θ
+  | k' L.\\ k == [] = subtys False θ es ts ts'
+    where 
+      (k,k')  = (map b_sym) `mapPair` (bs, bs')
+      (l,l')  = length `mapPair` (bs, bs')
+      es      = replicate (length ts) Nothing
+      ts      = [b_type b | b <- bs, (b_sym b) `elem` k']
+      ts'     = b_type <$> bs'
+
+
+
+subtyNoUnion True θ Nothing t@(TObj bs _) t'@(TObj bs' _)
+  | l < l'          = addError (errorObjSubtyping t t') θ
+  | k' L.\\ k == [] = castTs θ (tracePP "obj cast 1" [t]) (tracePP "obj cast 2" [t'])
+    where
+      (k,k')  = (map b_sym) `mapPair` (bs, bs')
+      (l,l')  = length `mapPair` (bs, bs')
+
+  -- error (printf "Unimplemented: subtyping on %s :: %s <: %s" 
+  --         (ppshow e) (ppshow t) (ppshow t'))
+        
+
+
+
+
 
 -- | Function subtyping: 
 --  - Contravariant in argumnets
@@ -563,26 +597,45 @@ subtyNoUnion _ θ _ t t' = unify θ t t'
 subtyNoUnion' b θ e t t' = subtyNoUnion b θ e t t'
 
 
+
+-- XXX:
+-- XXX: Still diverging
+-- XXX: try on tc/neg/list01.js
+-- XXX:
+
 -----------------------------------------------------------------------------
-subtdef :: Bool -> Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
+subTyDef :: TCState -> Subst -> Maybe (Expression AnnSSA) -> Type -> Type -> Maybe Subst
 -----------------------------------------------------------------------------
-subtdef b θ e t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _) = 
+
+subTyDef st θ e t t' = 
+  case tryIt clear restore st action of
+    (Left str, _) -> Nothing
+    (Right θ', _) -> Just θ' 
+  where
+    clear s@(TCS {tc_errs=e, tc_mut=m}) = ((e,m), s {tc_errs=[], tc_mut=[]})
+    restore s (e,m) = s {tc_errs= e ++ tc_errs s, tc_mut = m ++ tc_mut s}
+    action = stdef False θ e t t'
+-- XXX: By default do not allow casts - at least for now
+
+
+stdef b θ e t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _) = 
   do 
-    seen <- tc_mut <$> get 
+    seen <- tracePP "knonw aliases" <$> tc_mut <$> get 
     -- Proved subtyping -- no need to clear the state for mutual recursive
     -- types, as this could be used later on as well
-    if d == d' || (d,d') `elem` seen 
-      then unifys θ ts ts' -- invariant in type arguments
+    if d == d' || (d,d') `elem` seen
+      then tracePP "Unifying" <$> unifys θ (tracePP "ts" ts) (tracePP "ts'" ts')
+      -- invariant in type arguments
       else 
-      do  u  <- unfoldTDefSafeM t
-          u' <- unfoldTDefSafeM t'
+      do  u  <- unfoldTDefSafeM $ tracePP "Unfolding 1" t
+          u' <- unfoldTDefSafeM $ tracePP "Unfolding 2" t'
           -- Populate the state for mutual recursive types
           modify (\s -> s { tc_mut = (d,d'):(tc_mut s) })
-          subtdef b θ e u u'
+          stdef b θ e (tracePP "recurse 1 "u) (tracePP "recurse 2" u')
 
-subtdef b θ e t@(TApp (TDef _) _ _) t'  = unfoldTDefSafeM t >>= \u  -> subtyNoUnion b θ e u t'
-subtdef b θ e t t'@(TApp (TDef _) _ _)  = unfoldTDefSafeM t'>>= \u' -> subtyNoUnion b θ e t u'                                                      
-subtdef b θ e t t'                      = subtyNoUnion' b θ e t t'
+stdef b θ e t@(TApp (TDef _) _ _) t'  = unfoldTDefSafeM t >>= \u  -> subtyNoUnion b θ e u t'
+stdef b θ e t t'@(TApp (TDef _) _ _)  = unfoldTDefSafeM t'>>= \u' -> subtyNoUnion b θ e t u'
+stdef b θ e t t'                      = subtyNoUnion' b θ e t t'
 
 
 -----------------------------------------------------------------------------
@@ -603,7 +656,8 @@ subty b θ e t t'@(TApp TUn ts' _)
   | otherwise = tryWithBackup  (subtyUnions b θ e [t] ts') (unify θ t t')
 
 subty b θ e t t'
-  | b         = tryWithBackups (subtyNoUnion' b θ e t t') [castTs θ [t] [t']]
+  | b         = tryWithBackups (subtyNoUnion' b θ e t t') 
+      [trace (printf "(Dead)Cast %s :: %s - %s" (ppshow e) (ppshow t) (ppshow t')) $ castTs θ [t] [t']]
   | otherwise = subtyNoUnion' b θ e t t'
 
 
@@ -664,10 +718,12 @@ success s action =
 -----------------------------------------------------------------------------
 isSubtype :: Either (Nano z (RType r)) TCState -> RType r -> RType r -> Bool 
 -----------------------------------------------------------------------------
-isSubtype (Left pgm) t t' = success (initState pgm) 
+isSubtype (Left pgm) t t' = success (initState pgm)
                             $ subty False mempty Nothing (toType t) (toType t')
 isSubtype (Right st) t t' = success st
-                            $ subty False mempty Nothing (toType t) (toType t')
+                            $ subty False mempty Nothing
+                              (tracePP "isSubtype 1" $ toType t)
+                              (tracePP "isSubtype 2" $ toType t')
 
 
 -- | Try to execute the operation in the first argument's monad. 
@@ -766,8 +822,8 @@ addDeadCast :: Type -> TCM ()
 -------------------------------------------------------------------------------
 addDeadCast t = 
   do  e <- fromJust <$> getExpr 
-      let l = ann $ getAnnotation $ tracePP "Dead code" e
-      modify $ \st -> st { tc_dead = M.insert (tracePP "at" l) (e,t) (tc_dead st) } 
+      let l = ann $ getAnnotation e
+      modify $ \st -> st { tc_dead = M.insert l (tracePP "Adding dc" (e,t)) (tc_dead st) } 
 
 
 --------------------------------------------------------------------------------

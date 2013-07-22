@@ -38,6 +38,9 @@ liquid = Liquid {
  
  , incdirs = def &= typDir 
                  &= help "Paths to Spec Include Directory " 
+
+ , noKVarInst = def &= help "Disable k-var toplevel function type instantiation"
+                    &= name "no-kvar-inst"
    
  } &= help    "Refinement Type Checker for Nano" 
 

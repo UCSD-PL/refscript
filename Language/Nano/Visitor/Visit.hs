@@ -2,6 +2,7 @@ module Language.Nano.Visitor.Visit (verifyFile) where
 
 import           Text.PrettyPrint.HughesPJ          (render)
 
+import           Language.Nano.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Visitor.Visitor
@@ -18,9 +19,9 @@ import           Language.ECMAScript3.Parser        (SourceSpan (..))
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-verifyFile :: FilePath -> IO (F.FixResult SourceSpan)
+verifyFile :: OptionConf -> FilePath -> IO (F.FixResult SourceSpan)
 --------------------------------------------------------------------------------
-verifyFile f 
+verifyFile _ f 
    = do nano <- parseNanoFromFile f 
         {-donePhase Loud "Parse"-}
         {-putStrLn . render . pp $ nano-}

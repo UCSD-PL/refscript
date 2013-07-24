@@ -196,7 +196,7 @@ rTypeSort (TVar α _)       = F.FObj $ F.symbol α
 rTypeSort t@(TAll _ _)     = rTypeSortForAll t 
 rTypeSort (TFun xts t _)   = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
-rTypeSort (TObj xts _)     = F.FApp (F.stringFTycon "object") []
+rTypeSort (TObj _ _)       = F.FApp (F.stringFTycon "object") []
 rTypeSort t                = error ("Type: " ++ ppshow t ++ 
                                     " is not supported in rTypeSort")
 

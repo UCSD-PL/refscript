@@ -32,6 +32,7 @@ import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad
+import           Language.Nano.Typecheck.STMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Visitor.Visitor
@@ -151,7 +152,7 @@ tcFun γ (FunctionStmt l f xs body)
        let γ'' = envAddFun l f αs xs ts t γ'
        accumAnn (\a -> catMaybes (map (validInst γ'') (M.toList a))) $  
          do q              <- tcStmts γ'' body
-            when (isJust q) $ unifyType l "Missing return" f tVoid t
+            when (isJust q) $ subTypeM_ l Nothing tVoid t
        return $ Just γ' 
 
 tcFun _  _ = error "Calling tcFun not on FunctionStatement"
@@ -218,7 +219,7 @@ tcStmt' γ (IfSingleStmt l b s)
 -- if b { s1 } else { s2 }
 tcStmt' γ (IfStmt l e s1 s2)
   = do t <- tcExpr γ e
-       unifyType l "If condition" e t tBool
+       subTypeM_ l (Just e) t tBool
        γ1      <- tcStmt' γ s1
        γ2      <- tcStmt' γ s2
        envJoin l γ γ1 γ2
@@ -230,7 +231,7 @@ tcStmt' γ (VarDeclStmt _ ds)
 -- return e 
 tcStmt' γ (ReturnStmt l eo) 
   = do t <- maybe (return tVoid) (tcExpr γ) eo
-       subType True l eo t $ envFindReturn γ
+       subTypeM_ l eo t $ envFindReturn γ
        return Nothing
 
 tcStmt' γ s@(FunctionStmt _ _ _ _)
@@ -313,7 +314,7 @@ tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> T
 tcCall γ l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
        ts         <- mapM (tcExpr γ) es
-       θ'         <- subTypes True l (map Just es) ts (b_type <$> its)
+       θ'         <- subTypesM l (map Just es) ts (b_type <$> its)
        return      $ apply θ' ot
 
 instantiate l fn ft 
@@ -337,7 +338,7 @@ tcObject γ bs
 tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 ----------------------------------------------------------------------------------
 tcAccess γ l e f = 
-  tcExpr γ e >>= (unfoldTDefSafeM >=> binders l e) >>= access f
+  tcExpr γ e >>= (unfoldTDefSafeTC >=> binders l e) >>= access f
   where
     access f               = return . maybe tUndef b_type . find (match $ F.symbol f)
     match s (B f _)        = s == f
@@ -346,7 +347,7 @@ binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
 binders l e (TObj b _ )       = return b
 binders l e t@(TApp TUn ts _) = 
   case find isObj ts of
-    Just t' -> addCast t' >> binders l e t'
+    Just t' -> error $ "UNIMPLEMENTED: Typecheck.hs, binders " -- addCast t' >> binders l e t'
     _       -> tcError l $ errorObjectAccess e t
 binders l e t                 = tcError l $ errorObjectAccess e t
   

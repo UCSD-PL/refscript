@@ -58,7 +58,7 @@ import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types 
-import           Language.Nano.Typecheck.TCMonad (unfoldTDefSafe, unfoldTDefSafeM, isSubtype)
+import           Language.Nano.Typecheck.STMonad (unfoldTDefSafe, isSubType)
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Liquid.Types
 
@@ -550,11 +550,14 @@ unionFixSubs g i t1s t2s = concatMapM mkSub =<< matchTypes g i t1s t2s
 matchTypes :: CGEnv -> Cinfo -> [RefType] -> [RefType] -> CGM [(RefType, RefType)]
 ---------------------------------------------------------------------------------------
 matchTypes g i t1s t2s = 
-  do  p <- pgm <$> get
+  do  p     <- cg_tdefs <$> get
       return $ pairup p t1s t2s
   where
     pairup p xs ys  = fst $ foldl (\(acc,ys') x -> f p acc x ys') ([],ys) xs
-    f p acc x  ys   = case L.find (isSubtype (Left p) x) ys of
+-- TODO: We should be calling isSubType with the actual substitution that 
+-- TODO: we computed during the raw TCing phase (for precision).
+-- TODO: So, maybe include this info in CGSTate 
+    f p acc x  ys   = case L.find (isSubType p x) ys of
                         Just y -> ((tag x, tag y):acc, L.delete y ys)
                         _      -> ((tag x, tag $ fal x):acc, ys)
     fal t           = (ofType $ toType t) `strengthen` (F.predReft F.PFalse)

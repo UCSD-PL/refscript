@@ -168,7 +168,7 @@ funTy l f xs
        case bkFun ft of
          Nothing        -> logError (ann l) (errorUnboundId f) (tErr, tFunErr)
          Just (αs,ts,t) -> do when (length xs /= length ts) $ logError (ann l) errorArgMismatch ()
-                              return (tracePP "FType" ft, (tracePP "αs" αs, tracePP "ts" $ b_type <$> ts, t))
+                              return (ft, (αs, b_type <$> ts, t))
 
 envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
   where  
@@ -178,7 +178,7 @@ envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddR
     -- tyBinds              = [(Loc (srcPos l) α, tVar α) | α <- αs]
 
 validInst γ (l, ts)
-  = case [β | β <- tracePP "free" $ HS.toList $ free $ tracePP "Validating" ts, not ((tVarId β) `envMem` γ)] of
+  = case [β | β <-  HS.toList $ free ts, not ((tVarId β) `envMem` γ)] of
       [] -> Nothing
       βs -> Just (l, errorFreeTyVar βs)
    

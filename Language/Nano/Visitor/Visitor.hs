@@ -64,14 +64,10 @@ module Language.Nano.Visitor.Visitor (
 import           Control.Applicative            ((<$>))
 import           Control.Monad.State
 import           Language.Nano.Errors
-import           Text.Printf                        (printf)
 
 import           Language.Nano.Typecheck.Types
 import           Data.Traversable         as T
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Syntax.Annotations
-import           Debug.Trace
 
 -------------------------------------------------------------------------------
 -- | AST Visitor

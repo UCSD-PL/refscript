@@ -34,7 +34,6 @@ import           Language.Nano.Env
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile, SourceSpan (..))
 
-import           Debug.Trace
 
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer

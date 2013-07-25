@@ -44,6 +44,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 
+import           Debug.Trace
 
 --------------------------------------------------------------------------
 -- | Subtype Monad  ------------------------------------------------------
@@ -224,9 +225,9 @@ addTAlias cc = modify (\s -> s { st_aliases = cc : st_aliases s })
 ----------------------------------------------------------------------------------
 joinSubsts :: Subst -> [Subst] -> STM Subst
 ----------------------------------------------------------------------------------
-joinSubsts θ = foldM (joinSubst θ) mempty 
-  {-foldM (\θ1 θ2 -> tracePP (printf "Joining substs: %s ++ %s" (ppshow θ1) (ppshow θ2)) 
-    <$> joinSubst θ1 θ2) mempty θs -}
+joinSubsts θ θs = -- foldM (joinSubst θ) mempty θs
+   foldM (\θ1 θ2 -> tracePP (printf "Joining substs: %s ++ %s ++ %s" (ppshow θ) (ppshow θ1) (ppshow θ2)) 
+    <$> joinSubst θ θ1 θ2) mempty θs 
 
 
 ----------------------------------------------------------------------------------
@@ -238,14 +239,15 @@ joinSubst :: Subst -> Subst -> Subst -> STM Subst
 joinSubst θ (Su m1) (Su m2) =
   do 
     s     <- get
-    cmnV  <- zipWithM (\t t' -> haltCasts (join s θ t t')) (safeMap cmnK m1) (safeMap cmnK m2)
+    cmnV  <- zipWithM (\t t' -> haltCasts (join s θ t t')) (safeMap commonK m1) (safeMap commonK m2)
     {-tracePP (printf "Joining types: (%s <: %s)" (ppshow t1) (ppshow t2)) <$> -}
-    return $ Su $ only1 `HM.union` only2 `HM.union` (HM.fromList $ zip cmnK cmnV)
+    return $ Su $ only1 `HM.union` only2 `HM.union` (HM.fromList $ zip commonK cmnV)
   where 
-    cmnK         = HM.keys $ m1 `HM.intersection` m2
-    only1        = foldr HM.delete m1 cmnK
-    only2        = foldr HM.delete m2 cmnK
-    safeMap s m  = (\k -> fromJust $ HM.lookup k m) <$> s
+    commonK       = HM.keys $ (rr m1) `HM.intersection` (rr m2)
+    rr m         = HM.filterWithKey (\α t -> not $ tVar α == t) m
+    only1         = foldr HM.delete m1 commonK
+    only2         = foldr HM.delete m2 commonK
+    safeMap s m   = (\k -> fromJust $ HM.lookup k m) <$> s
     join s θ t t' | execSubTypeB s θ t t' = return t'
                   | execSubTypeB s θ t' t = return t
                   | otherwise = addError (printf "Cannot join %s with %s" (ppshow t) (ppshow t')) t
@@ -263,7 +265,7 @@ addError msg x = modify f >> return x
 -------------------------------------------------------------------------------
 either2Bool :: Either a b -> Bool
 -------------------------------------------------------------------------------
-either2Bool = either (const True) (const False)
+either2Bool = either (const False) (const True)
 
 
 
@@ -319,10 +321,10 @@ subtys θ es ts ts'
   where
     nTs  = length ts
     nTs' = length ts'
-    go l = 
-      do  θs <- mapM (\(e,t,t') -> withExpr e $ subty θ t t') l
-          case θs of [] -> return θ
-                     _  -> joinSubsts θ θs
+    go l = foldM (\θ' (e,t,t') -> withExpr e $ subty θ' t t') θ l  
+      {-do  θs <- mapM (\(e,t,t') -> withExpr e $ subty θ t t') l-}
+      {-    case θs of [] -> return θ-}
+      {-               _  -> joinSubsts θ θs-}
 
 
 -----------------------------------------------------------------------------
@@ -592,7 +594,7 @@ varAsn :: Subst -> TVar -> Type -> Either String Subst
 varAsn θ α t 
   | t == tVar α          = Right $ θ 
   | α `HS.member` free t = Left  $ errorOccursCheck α t 
-  | unassigned α θ       = Right $ θ `mappend` (Su $ HM.singleton α t) 
+  | unassigned α θ       = Right $ θ `mappend` (Su $ HM.singleton (trace (printf "Adding %s |-> %s" (ppshow α) (ppshow t)) α) t) 
   | otherwise            = Left  $ errorRigidUnify α t
   
 unassigned α (Su m) = HM.lookup α m == Just (tVar α)

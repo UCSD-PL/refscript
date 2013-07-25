@@ -99,11 +99,17 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn
 tcAndPatch :: (Data r, Typeable r, F.Reftable r) => 
   Nano AnnSSA (RType r) -> TCM (Nano  AnnAsrt (RType r))
 -------------------------------------------------------------------------------
-tcAndPatch p = tcNano p >>= patchPgmM >>= \p' -> return $ trace (codePP p') p'
+tcAndPatch p = 
+  do  p1 <- tcNano p 
+      p2 <- patchPgmM p1
+      s  <- getSubst
+      return $ trace (codePP p2 s) p2
   where 
-    codePP (Nano {code = Src s}) = render $
+    codePP (Nano {code = Src src}) sub = render $
           text "********************** CODE **********************"
-      $+$ pp s
+      $+$ pp src
+      $+$ text "**************************************************"
+      $+$ pp sub
       $+$ text "**************************************************"
 
 
@@ -162,7 +168,7 @@ funTy l f xs
        case bkFun ft of
          Nothing        -> logError (ann l) (errorUnboundId f) (tErr, tFunErr)
          Just (αs,ts,t) -> do when (length xs /= length ts) $ logError (ann l) errorArgMismatch ()
-                              return (ft, (αs, b_type <$> ts, t))
+                              return (tracePP "FType" ft, (tracePP "αs" αs, tracePP "ts" $ b_type <$> ts, t))
 
 envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
   where  
@@ -172,7 +178,7 @@ envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddR
     -- tyBinds              = [(Loc (srcPos l) α, tVar α) | α <- αs]
 
 validInst γ (l, ts)
-  = case [β | β <- HS.toList $ free ts, not ((tVarId β) `envMem` γ)] of
+  = case [β | β <- tracePP "free" $ HS.toList $ free $ tracePP "Validating" ts, not ((tVarId β) `envMem` γ)] of
       [] -> Nothing
       βs -> Just (l, errorFreeTyVar βs)
    
@@ -343,7 +349,10 @@ tcAccess γ l e f =
     access f               = return . maybe tUndef b_type . find (match $ F.symbol f)
     match s (B f _)        = s == f
 
+
+----------------------------------------------------------------------------------
 binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
+----------------------------------------------------------------------------------
 binders l e (TObj b _ )       = return b
 binders l e t@(TApp TUn ts _) = 
   case find isObj ts of

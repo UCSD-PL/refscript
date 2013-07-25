@@ -72,7 +72,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
 -- import           Debug.Trace hiding (traceShow)
-import           Language.Nano.Misc               ()
+import           Language.Nano.Misc               (unique)
 
 -------------------------------------------------------------------------------
 -- | Typechecking monad -------------------------------------------------------
@@ -135,19 +135,23 @@ logError l msg x = (modify $ \st -> st { tc_errss = (l,msg):(tc_errss st)}) >> r
 freshTyArgs :: SourceSpan -> ([TVar], Type) -> TCM Type 
 -------------------------------------------------------------------------------
 freshTyArgs l (αs, t) 
-  = (`apply` t) <$> freshSubst l αs
+  = (`apply` t) <$> tracePP "freshSubst" <$> freshSubst l αs
 
 freshSubst :: SourceSpan -> [TVar] -> TCM Subst
 freshSubst l αs
-  = do βs <- mapM (freshTVar l) αs
-       setTyArgs l βs
-       extSubst βs 
-       return $ fromList $ zip αs (tVar <$> βs)
+  = do
+      fUnique αs
+      βs        <- mapM (freshTVar l) αs
+      setTyArgs l βs
+      extSubst βs 
+      return     $ fromList $ zip αs (tVar <$> βs)
+    where
+      fUnique xs = when (not $ unique xs) $ logError l errorUniqueTypeParams ()
 
 setTyArgs l βs 
   = do m <- tc_anns <$> get 
        when (HM.member l m) $ tcError l "Multiple Type Args"
-       addAnn l $ TypInst (tVar <$> {- tracePP ("setTA" ++ show l) -} βs)
+       addAnn l $ TypInst (tVar <$> tracePP ("setTA " ++ ppshow l) βs)
 
 
 addCasts :: Casts -> TCM ()
@@ -287,7 +291,8 @@ subTypesM l es t1s t2s
   | otherwise   = subTAux subTypesCast es t1s t2s
 
       
--- | SubTyping within the TCMonad invokes casting by default
+-- | SubTyping variant that returns void.
+-- Invokes casting by default.
 --------------------------------------------------------------------------------
 subTypesM_ :: AnnSSA -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM ()
 --------------------------------------------------------------------------------

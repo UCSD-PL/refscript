@@ -87,7 +87,7 @@ import           Data.Monoid            hiding ((<>))
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 import           Data.Generics                   
-import           Data.Typeable                  
+import           Data.Typeable          ()
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
@@ -223,10 +223,10 @@ class Stripable a where
   strip :: a -> a
 
 instance (F.Reftable r) => Stripable (RType r) where
-  strip (TApp c ts r) = TApp c ts mempty
-  strip (TVar v r)    = TVar v mempty 
-  strip (TFun bs t r) = TFun bs t mempty
-  strip (TObj bs r)   = TObj bs mempty
+  strip (TApp c ts _) = TApp c ts mempty
+  strip (TVar v _)    = TVar v mempty 
+  strip (TFun bs t _) = TFun bs t mempty
+  strip (TObj bs _)   = TObj bs mempty
   strip (TBd  tbd)    = TBd tbd
   strip (TAll v t)    = TAll v t
 
@@ -255,20 +255,20 @@ stripProp (PropNum _ i)       = PropNum () i
 -- | Helpful type checks
 ---------------------------------------------------------------------------------
 
-isTop :: Type -> Bool
+isTop :: RType r -> Bool
 isTop (TApp TTop _ _)   = True 
 isTop (TApp TUn  ts _ ) = any isTop ts
 isTop _                 = False
 
-isUndefined :: Type -> Bool
+isUndefined :: RType r -> Bool
 isUndefined (TApp TUndef _ _)   = True 
 isUndefined _                   = False
 
-isNull :: Type -> Bool
+isNull :: RType r -> Bool
 isNull (TApp TNull _ _)   = True 
 isNull _                  = False
 
-isObj :: Type -> Bool
+isObj :: RType r -> Bool
 isObj (TObj _ _)        = True
 isObj _                 = False
 

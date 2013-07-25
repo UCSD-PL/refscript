@@ -15,6 +15,7 @@ bugUnboundVariable l x  = printf "BUG: Variable %s is unbound in environment at 
 bugMissingTypeArgs l    = printf "BUG: Missing Type Arguments at %s" (ppshow l)
 bugTBodiesOccur s       = printf "BUG: There should be no TBodies herie %s" s
 bugBadUnions s          = printf "BUG: No unions should be found here (%s)" s
+bugBadFunction          = printf "BUG: No function expression was found"
 
 errorArgName l x y      = printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 
@@ -40,6 +41,7 @@ errorObjectAccess e t   = printf "Dot notation on non object expression %s :: %s
 errorObjectTAccess t    = printf "Dot notation not permitted on expressions of type %s" (ppshow t)
 errorObjectBinding      = printf "Field does not exist in object" 
 errorNullUndefined      = printf "Null type is not a subtype of undefined"
+errorUniqueTypeParams   = printf "Only unique type paramteres are allowed"
  
 ppshow                  = render . pp
 

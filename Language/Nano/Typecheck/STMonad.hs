@@ -25,7 +25,7 @@ import           Text.Printf
 import           Control.Applicative            ((<$>))
 import           Control.Monad.State
 import           Control.Monad.Error
-import           Language.Fixpoint.Misc 
+import           Language.Fixpoint.Misc hiding (traceShow) 
 import qualified Language.Fixpoint.Types as F
 
 import           Language.Nano.Env
@@ -33,6 +33,7 @@ import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
+import           Language.Nano.Misc
 import           Data.Monoid                  
 import qualified Data.HashSet             as HS
 import qualified Data.HashMap.Strict      as HM
@@ -147,22 +148,25 @@ subTypesCast m θ es t t' = either Left (\b -> Right (b, st_casts s)) r
 -------------------------------------------------------------------------------
 
 -----------------------------------------------------------------------------
-executeST :: STState -> STM a -> (Either STError a, STState)
+executeST :: (PP a) => STState -> STM a -> (Either STError a, STState)
 -----------------------------------------------------------------------------
-executeST initState action =
-  case runState (runErrorT $ action) initState of 
+executeST st action =
+  case runState (runErrorT $ action) st of 
     (Left err, s) -> (Left [(dummySpan, err)], s)
-    (Right x , s) -> (applyNonNull (Right x) Left (reverse $ st_err s), s)
+    (Right x , s) | null (st_err s) -> (Right x, s)
+                  | otherwise       -> (Left $ reverse $ st_err s, s)
+      
+-- (applyNonNull (Right x) Left (trace (printf "Errs: %d" (length $ st_err s)) $ reverse $ st_err s), s)
 
 
 -----------------------------------------------------------------------------
-execute :: STState -> STM a -> Either STError a
+execute :: (PP a) => STState -> STM a -> Either STError a
 -----------------------------------------------------------------------------
 execute s = fst . executeST s
 
 
 -----------------------------------------------------------------------------
-tryWithBackup :: STM a -> STM a -> STM a
+tryWithBackup :: (PP a) => STM a -> STM a -> STM a
 -----------------------------------------------------------------------------
 tryWithBackup action backup =
   do  s <- get
@@ -174,7 +178,7 @@ tryWithBackup action backup =
 
 
 -----------------------------------------------------------------------------
-tryWithBackups :: STM a -> [STM a] -> STM a
+tryWithBackups :: (PP a) => STM a -> [STM a] -> STM a
 -----------------------------------------------------------------------------
 tryWithBackups = foldl tryWithBackup
 
@@ -295,10 +299,40 @@ execSubTypesS st es θ t1 t2 = executeST st $ subtys θ es t1 t2
 -----------------------------------------------------------------------------
 subty :: Subst -> Type -> Type -> STM Subst
 -----------------------------------------------------------------------------
-subty θ   (TApp TUn ts _ )    (TApp TUn ts' _) = tryWithBackups (subtyUnions  θ ts  ts' ) [castTs θ ts ts']
-subty θ t@(TApp TUn ts _ ) t'                  = tryWithBackups (subtyUnions  θ ts  [t']) [unify  θ t t', castTs θ ts [t']]
-subty θ t                  t'@(TApp TUn ts' _) = tryWithBackups (subtyUnions  θ [t] ts' ) [unify  θ t t', castTs θ [t] ts']
-subty θ t                  t'                  = tryWithBackups (subtyNoUnion θ t t') [castTs θ [t] [t']]
+subty θ   (TApp TUn ts _ )    (TApp TUn ts' _) = 
+  do  s <- get 
+      if st_docasts s 
+        then 
+          tryWithBackup (subtyUnions  θ ts  ts' ) (castTs θ ts ts')
+        else subtyUnions θ ts ts'
+
+subty θ t@(TApp TUn ts _ ) t'                  = 
+  do  s <- get 
+      if st_docasts s 
+        then 
+          tryWithBackups (subtyUnions  θ ts  [t'] ) [unify θ t t', castTs θ ts [t']]
+        else 
+          tryWithBackups (subtyUnions  θ ts  [t'] ) [unify θ t t']
+  --tryWithBackups (subtyUnions  θ ts  [t']) [unify  θ t t', castTs θ ts [t']]
+
+subty θ t                  t'@(TApp TUn ts' _) = 
+  do  s <- get 
+      if st_docasts s 
+        then 
+          tryWithBackups (subtyUnions  θ [t]  ts' ) [unify θ t t', castTs θ [t] ts']
+        else 
+          tryWithBackups (subtyUnions  θ [t]  ts' ) [unify θ t t']
+  --tryWithBackups (subtyUnions  θ [t] ts' ) [unify  θ t t', castTs θ [t] ts']
+
+subty θ t                  t'                  = 
+  do  s <- get 
+      if st_docasts s 
+        then 
+          tryWithBackups (subtyNoUnion  θ t  t' ) [castTs θ [t] [t']]
+        else 
+          tryWithBackups (subtyNoUnion  θ t  t' ) []
+  --tryWithBackups (subtyNoUnion θ t t') [castTs θ [t] [t']]
+
 
 
 -----------------------------------------------------------------------------
@@ -387,8 +421,9 @@ subtyNoUnion' θ (TFun xts t _) (TFun xts' t' _) =
 subtyNoUnion' θ t t' = unify θ t t'
 
 subtyNoUnion θ t t' = subtyNoUnion' θ t t'
-  {-tracePP "subTyNoUnion Returns" <$> subtyNoUnion' θ (trace 
-  (printf "subtyNoUnion: %s <: %s" (ppshow t) (ppshow t')) t) t'-}
+{-subtyNoUnion θ t t' = -}
+{-  tracePP "subTyNoUnion Returns" <$> subtyNoUnion' θ (trace -}
+{-  (printf "subtyNoUnion: %s <: %s" (ppshow t) (ppshow t')) t) t'-}
 
 
 --------------------------------------------------------------------------------
@@ -530,6 +565,10 @@ unfoldTDefSafeST t = liftM (unfoldTDefSafe t) (st_tdefs <$> get)
 -----------------------------------------------------------------------------
 unify :: Subst -> Type -> Type -> STM Subst
 -----------------------------------------------------------------------------
+
+unify' θ t@(TApp c _ _) t'@(TApp c' _ _) 
+  | c /= c' = addError (errorUnification t t') θ
+
 unify' θ (TFun xts t _) (TFun xts' t' _) = 
   unifys θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
 
@@ -548,27 +587,27 @@ unify' θ (TVar α _)     t                = varAsnM θ α t
 unify' θ t              (TVar α _)       = varAsnM θ α t
 
 unify' θ (TApp c ts _) (TApp c' ts' _)
-  | c == c'                             = unifys  θ ts ts'
+  | c == c'                              = unifys θ ts ts'
 
 unify' _ (TBd _) _ = error $ bugTBodiesOccur "unify"
 unify' _ _ (TBd _) = error $ bugTBodiesOccur "unify"
 
 unify' θ t t' 
-  | t == t'                             = return θ
-  | isTop t                             = go θ $ strip t'
-  | isTop t'                            = go θ $ strip t
-  | otherwise                           = addError (errorUnification t t') θ
+  | t == t'                              = return θ
+  | isTop t                              = go θ $ strip t'
+  | isTop t'                             = go θ $ strip t
+  | otherwise                            = addError (errorUnification t t') θ
   where 
-    strip (TApp _ xs _ )            = xs
-    strip x@(TVar _ _)              = [x]
-    strip (TFun xs y _)             = (b_type <$> xs) ++ [y]
-    strip (TAll _ x)                = [x]
-    strip t                         = error (printf "%s: Not supported in unify - strip" $ ppshow t)
+    strip (TApp _ xs _ )                 = xs
+    strip x@(TVar _ _)                   = [x]
+    strip (TFun xs y _)                  = (b_type <$> xs) ++ [y]
+    strip (TAll _ x)                     = [x]
+    strip t                              = error (printf "%s: Not supported in unify - strip" $ ppshow t)
     tops = map $ const tTop
     go θ ts = unifys θ ts $ tops ts
 
 
--- unify θ t t' = unify' θ (trace (printf "unify: %s ~ %s" (ppshow t) (ppshow t')) t) t'
+-- unify θ t t' = unify' θ (trace (printf "unify: %s ~ %s" (show t) (show t')) t) t'
 unify θ t t' = unify' θ t t'
 
 -----------------------------------------------------------------------------

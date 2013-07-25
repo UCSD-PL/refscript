@@ -5,7 +5,7 @@ function foo(x) {
 }
 
 
-/*@ bar ::  (number) => (top|number) */
+/*@ bar ::  (number) => top|number */
 function bar(x) {
   return nil();
 }

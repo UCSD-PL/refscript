@@ -515,7 +515,7 @@ splitC' (Sub g i t1 t2@(TObj _ _ ))
 
 splitC' (Sub g i t1@(TObj _ _ ) t2)
   = do  env <- cg_tdefs <$> get
-        splitC $ Sub g i (unfoldTDefSafe t1 env) t2
+        splitC $ Sub g i t1 (unfoldTDefSafe t2 env)
 
 
 splitC' x 

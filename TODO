@@ -1,2 +1,7 @@
-1. Disallow undefined types.
-2. Fix sourcespan error reporting at object accesses.
+1.  Disallow use of undefined types. I.e. all constructed types should be
+    introduced with /*@ type ... */.
+
+2.  Fix sourcespan error reporting at object accesses.
+
+3.  Add an addError variant that ignores (does not print or consider) all error
+    that are reported after it.

@@ -317,7 +317,7 @@ tcCall γ l fn es ft
        return      $ apply θ' ot
 
 instantiate l fn ft 
-  = do t' <- {-tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (bkAll ft)
+  = do t' <- tracePP "new Ty Args" <$>  freshTyArgs (srcPos l) (bkAll ft)
        maybe err return   $ bkFun t'
     where
        err = logError (ann l) (errorNonFunction fn ft) tFunErr

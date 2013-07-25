@@ -62,7 +62,7 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
 import           Language.Nano.Visitor.Visitor
-import           Language.Nano.Misc             (mapSndM)
+import           Language.Nano.Misc             (mapSndM, unique)
 import           Data.Monoid                  
 import qualified Data.HashSet             as HS
 import qualified Data.HashMap.Strict      as HM
@@ -151,10 +151,14 @@ freshTyArgs l (αs, t)
 
 freshSubst :: SourceSpan -> [TVar] -> TCM Subst
 freshSubst l αs
-  = do βs <- mapM (freshTVar l) αs
-       setTyArgs l βs
-       extSubst βs 
-       return $ fromList $ zip αs (tVar <$> βs)
+  = do
+      fUnique αs
+      βs        <- mapM (freshTVar l) αs
+      setTyArgs l βs
+      extSubst βs 
+      return     $ fromList $ zip αs (tVar <$> βs)
+    where
+      fUnique xs = when (not $ unique xs) $ addError (errorUniqueTypeParams l) ()
 
 setTyArgs l βs 
   = do m <- tc_anns <$> get 
@@ -353,7 +357,8 @@ subTypes b l es t1s t2s
   | otherwise = 
     do
       θ  <- getSubst 
-      θ' <- tracePP (printf "SubTypes %s <: %s" (ppshow t1s) (ppshow t2s)) <$> 
+      θ' <- 
+        {-tracePP (printf "SubTypes %s <: %s" (ppshow t1s) (ppshow t2s)) <$> -}
         subtys b θ es t1s t2s
       accumErrs l
       setSubst θ'
@@ -366,7 +371,7 @@ subTypes b l es t1s t2s
 joinSubsts :: [Subst] -> TCM Subst
 ----------------------------------------------------------------------------------
 joinSubsts θs = foldM (\θ1 θ2 -> 
-  {- tracePP (printf "Joining substs: %s ++ %s" (ppshow θ1) (ppshow θ2)) <$> -} 
+  {- tracePP (printf "Joining substs: %s ++ %s" (ppshow θ1) (ppshow θ2)) <$>  -}
   joinSubst θ1 θ2) mempty θs
 
 
@@ -381,17 +386,19 @@ joinSubst (Su m1) (Su m2) =
     θ     <- getSubst 
     e     <- getExpr
     s     <- get
-    cmnV  <- zipWithM (\t1 t2 ->  {-tracePP (printf "Joining types: (%s <: %s)" (ppshow t1) (ppshow t2)) <$> -}
-               join s θ e t1 t2) (sureMap cmnK m1) (sureMap cmnK m2)
-    return $ Su $ only1 `HM.union` only2 `HM.union` (HM.fromList $ zip cmnK cmnV)
-      where 
-        cmnK         = HM.keys $ m1 `HM.intersection` m2
-        only1        = foldr HM.delete m1 cmnK
-        only2        = foldr HM.delete m2 cmnK
-        sureMap s m  = map (\k -> fromJust $ HM.lookup k m) s
-        join s θ e t t' | success s $ subty False θ e t t' = return t'
-                        | success s $ subty False θ e t' t = return t
-                        | otherwise                  = addError (printf "Cannot join %s with %s" (ppshow t) (ppshow t')) t
+    cmnV  <- zipWithM (\t1 t2 ->  
+              {-tracePP (printf "Joining types: (%s <: %s)" (ppshow t1) (ppshow t2)) <$> -}
+              join s θ e t1 t2) (safeMap commonK m1) (safeMap commonK m2)
+    return $ Su $ only1 `HM.union` only2 `HM.union` (HM.fromList $ zip commonK cmnV)
+  where 
+    commonK      = HM.keys $ (rr m1) `HM.intersection` (rr m2)
+    rr m         = HM.filterWithKey (\α t -> not $ tVar α == t) m
+    only1        = foldr HM.delete m1 commonK
+    only2        = foldr HM.delete m2 commonK
+    safeMap s m  = map (\k -> fromJust $ HM.lookup k m) s
+    join s θ e t t' | success s $ subty False θ e t t' = return t'
+                    | success s $ subty False θ e t' t = return t
+                    | otherwise = addError (printf "Cannot join %s with %s" (ppshow t) (ppshow t')) t
 
 
 -----------------------------------------------------------------------------
@@ -733,6 +740,7 @@ subtys b θ es ts ts'
     nTs  = length ts
     nTs' = length ts'
     go l = 
+      -- foldM (\θ' (e,t,t') -> setExpr e >> subty b θ' e t t') θ l 
       do  θs <- mapM (\(e,t,t') -> setExpr e >> subty b θ e t t') l
           case θs of [] -> return θ
                      _  -> joinSubsts θs

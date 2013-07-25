@@ -10,12 +10,14 @@ module Language.Nano.Misc (
   , mapSndM
   , mapPairM
   , mkEither
+  , unique
 
 ) where
 
 -- import           Control.Applicative                ((<$>))
 import           Control.Monad                      (liftM2)
 import qualified Data.Set                 as S
+import qualified Data.List                as L
 import           Language.ECMAScript3.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 import           Language.Nano.Typecheck.Types()
@@ -42,6 +44,9 @@ mkEither True  _ a = Right a
 mkEither False s _ = Left s
 
 
+unique :: (Eq a) => [a] -> Bool
+unique xs = length xs == length (L.nub xs)
+
 
 instance PP Bool where 
   pp True  = text "true"
@@ -49,4 +54,5 @@ instance PP Bool where
 
 instance PP a => PP (S.Set a) where
   pp = pp . S.toList
+
 

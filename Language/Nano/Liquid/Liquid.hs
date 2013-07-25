@@ -178,8 +178,8 @@ consStmt g (VarDeclStmt _ ds)
 
 -- return e 
 consStmt g (ReturnStmt l (Just e))
-  = do (xe, g') <- consExpr g $ tracePP "Ret EXP" e 
-       subType l g' (tracePP "Ret exp type" $ envFindTy xe g') $ envFindReturn g' 
+  = do (xe, g') <- consExpr g e 
+       subType l g' (envFindTy xe g') $ envFindReturn g' 
        return Nothing
 
 -- return
@@ -298,15 +298,15 @@ consCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnT
 ---------------------------------------------------------------------------------------------
 consCast g x a e = 
   do 
-    tts       <- tracePP "Matched Types" <$> matchTypes g (ci l) tEs tCs
+    tts       <- matchTypes g (ci l) tEs tCs
     mapM_ mkSub tts
     (x', g')  <- envAddFresh l tC g
-    return (tracePP "xC" x', g')
+    return (x', g')
   where 
     mkSub (e,c) = fixBase g x (e,c) >>= \(g',e',c') -> subType l g' e' c'
     tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
-    tCs = tracePP "tCs" $ extractUnion tC                                 -- extract types from cast type
-    tEs = tracePP "tEs" $ extractUnion $ envFindTy x g                    -- extract types from expression type
+    tCs = extractUnion tC                                 -- extract types from cast type
+    tEs = extractUnion $ envFindTy x g                    -- extract types from expression type
     l   = getAnnotation e 
 
 
@@ -326,7 +326,7 @@ fixBase g x (tE,tC) =
 --  { v: B | r } = { v: B | _ } `strengthen` r                        
     rX'          = strip tE     `strengthen` rTypeReft (envFindTy x g)
 --  v 
-    v     = rTypeValueVar $ tracePP "fixbase tE (before)" tE
+    v     = rTypeValueVar {-$ tracePP "fixbase tE (before)" -} tE
 --  (v = x)
     vEqX  = F.Reft (v, [F.RConc (F.PAtom F.Eq (F.EVar v) (F.EVar $ F.symbol x))])
 --  { v: B | p ∧ (v = x)} = { v: B | p } `strengthen` (v = x)
@@ -409,6 +409,6 @@ consObj l g pe =
     let (ps, es) = unzip pe
     (xes, g')    <- consScan consExpr g es
     let pxs = zipWith B (map F.symbol ps) $ map (\x -> envFindTy x g') xes
-    envAddFresh  l (tracePP "consObject" $ TObj pxs F.top) g'
+    envAddFresh  l (TObj pxs F.top) g'
     -- XXX What kind of refinements could we get here?
   

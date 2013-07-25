@@ -191,17 +191,6 @@ getExpr   :: STM (Maybe (Expression AnnSSA))
 getExpr    = st_expr <$> get
 
 
--- | Ensure that casts are disabled while @action@ is executed.
------------------------------------------------------------------------------
-haltCasts :: STM a -> STM a
------------------------------------------------------------------------------
-haltCasts action = 
-  do  c <- st_docasts <$> get       
-      modify (\st -> st { st_docasts = False })
-      r <- action
-      modify (\st -> st { st_docasts = c     })
-      return r
-
 
 -----------------------------------------------------------------------------
 withExpr  :: Maybe (Expression AnnSSA) -> STM a -> STM a
@@ -225,9 +214,9 @@ addTAlias cc = modify (\s -> s { st_aliases = cc : st_aliases s })
 ----------------------------------------------------------------------------------
 joinSubsts :: Subst -> [Subst] -> STM Subst
 ----------------------------------------------------------------------------------
-joinSubsts θ θs = -- foldM (joinSubst θ) mempty θs
-   foldM (\θ1 θ2 -> tracePP (printf "Joining substs: %s ++ %s ++ %s" (ppshow θ) (ppshow θ1) (ppshow θ2)) 
-    <$> joinSubst θ θ1 θ2) mempty θs 
+joinSubsts θ θs =  foldM (joinSubst θ) mempty θs
+   {-foldM (\θ1 θ2 -> tracePP (printf "Joining substs: %s ++ %s ++ %s" (ppshow θ) (ppshow θ1) (ppshow θ2)) -}
+   {- <$> joinSubst θ θ1 θ2) mempty θs -}
 
 
 ----------------------------------------------------------------------------------
@@ -282,25 +271,25 @@ execSubTypeB st θ t1 t2 = either2Bool $ execSubTypeE st θ t1 t2
 -----------------------------------------------------------------------------
 execSubTypeE :: STState -> Subst -> Type -> Type -> Either STError Subst
 -----------------------------------------------------------------------------
-execSubTypeE initState θ t1 t2 = execute initState $ subty θ t1 t2
+execSubTypeE st θ t1 t2 = execute st $ subty θ t1 t2
 
 
 -----------------------------------------------------------------------------
 execSubTypesE :: STState -> Subst -> [Type] -> [Type] -> Either STError Subst
 -----------------------------------------------------------------------------
-execSubTypesE initState θ t1s t2s = execute initState $ subtys θ (repeat Nothing) t1s t2s
+execSubTypesE st θ t1s t2s = execute st $ subtys θ (repeat Nothing) t1s t2s
 
 
 -----------------------------------------------------------------------------
 execSubTypeS :: STState -> Subst -> Type -> Type -> (Either STError Subst, STState)
 -----------------------------------------------------------------------------
-execSubTypeS initState θ t1 t2 = executeST initState $ subty θ t1 t2
+execSubTypeS st θ t1 t2 = executeST st $ subty θ t1 t2
 
 
 -----------------------------------------------------------------------------
 execSubTypesS :: STState -> [Maybe (Expression AnnSSA)] -> Subst -> [Type] -> [Type] -> (Either STError Subst, STState)
 -----------------------------------------------------------------------------
-execSubTypesS initState es θ t1 t2 = executeST initState $ subtys θ es t1 t2
+execSubTypesS st es θ t1 t2 = executeST st $ subtys θ es t1 t2
 
 
 -----------------------------------------------------------------------------
@@ -309,7 +298,7 @@ subty :: Subst -> Type -> Type -> STM Subst
 subty θ   (TApp TUn ts _ )    (TApp TUn ts' _) = tryWithBackups (subtyUnions  θ ts  ts' ) [castTs θ ts ts']
 subty θ t@(TApp TUn ts _ ) t'                  = tryWithBackups (subtyUnions  θ ts  [t']) [unify  θ t t', castTs θ ts [t']]
 subty θ t                  t'@(TApp TUn ts' _) = tryWithBackups (subtyUnions  θ [t] ts' ) [unify  θ t t', castTs θ [t] ts']
-subty θ t                  t'                  = tryWithBackups (subtyNoUnion θ t   t'  ) [castTs θ [t] [t']]
+subty θ t                  t'                  = tryWithBackups (subtyNoUnion θ t t') [castTs θ [t] [t']]
 
 
 -----------------------------------------------------------------------------
@@ -345,30 +334,30 @@ subtyUnions θ xs ys
 subtyNoUnion :: Subst -> Type -> Type -> STM Subst
 -----------------------------------------------------------------------------
 -- | Reject union types
-subtyNoUnion _ (TApp TUn _ _ ) _ = error $ bugBadUnions "subtyNoUnion-1"
-subtyNoUnion _ _ (TApp TUn _ _ ) = error $ bugBadUnions "subtyNoUnion-2"
+subtyNoUnion' _ (TApp TUn _ _ ) _ = error $ bugBadUnions "subtyNoUnion-1"
+subtyNoUnion' _ _ (TApp TUn _ _ ) = error $ bugBadUnions "subtyNoUnion-2"
 -- | Top
-subtyNoUnion θ _ t' 
+subtyNoUnion' θ _ t' 
   | isTop t'       = return θ
 -- | Undefined
-subtyNoUnion θ t t'
+subtyNoUnion' θ t t'
   | isUndefined t && isUndefined t'  = return θ
   | isUndefined t && isNull t'       = return θ
   | isUndefined t                    = addError (errorSubType "subtyNoUnion" t t') θ
 -- | Null
-subtyNoUnion θ t t'
+subtyNoUnion' θ t t'
   | isNull t && isNull t'       = return θ
   | isNull t                    = addError (errorSubType "subtyNoUnion" t t') θ
 
 -- | Defined types
-subtyNoUnion θ t@(TApp (TDef _) _ _) t'@(TApp (TDef _) _ _) = subTyDef θ t t'
+subtyNoUnion' θ t@(TApp (TDef _) _ _) t'@(TApp (TDef _) _ _) = subTyDef θ t t'
 
 -- | Expand the type definitions
-subtyNoUnion θ t@(TApp (TDef _) _ _) t' = liftM (unfoldTDefSafe t) (st_tdefs <$> get) >>= subty θ t'
-subtyNoUnion θ t t'@(TApp (TDef _) _ _) = liftM (unfoldTDefSafe t') (st_tdefs <$> get) >>= subty θ t
+subtyNoUnion' θ t@(TApp (TDef _) _ _) t' = liftM (unfoldTDefSafe t) (st_tdefs <$> get) >>= subty θ t'
+subtyNoUnion' θ t t'@(TApp (TDef _) _ _) = liftM (unfoldTDefSafe t') (st_tdefs <$> get) >>= subty θ t
 
 -- | Object subtyping
-subtyNoUnion θ t@(TObj bs _) t'@(TObj bs' _)
+subtyNoUnion' θ t@(TObj bs _) t'@(TObj bs' _)
   | l < l'          = addError (errorObjSubtyping t t') θ
   -- All keys in the right hand should also be in the left hand
   | k' L.\\ k == [] = 
@@ -384,7 +373,7 @@ subtyNoUnion θ t@(TObj bs _) t'@(TObj bs' _)
       ts'     = b_type <$> bs'
 
 -- | Function subtyping: Contravariant in argumnets, Covariant in return type
-subtyNoUnion θ (TFun xts t _) (TFun xts' t' _) = 
+subtyNoUnion' θ (TFun xts t _) (TFun xts' t' _) = 
   do  e <- st_expr <$> get
       θ' <- subtys θ (es e) ts' ts  -- contravariant argument types
       subty θ' t t'                 -- covariant return type
@@ -393,11 +382,13 @@ subtyNoUnion θ (TFun xts t _) (TFun xts' t' _) =
     ts'  = b_type <$> xts'
     es e = case e of Just (CallExpr _ _ es) -> Just <$> es
                      _                      -> repeat Nothing
-     
 
-subtyNoUnion θ t t' = unify θ t t'
+-- | Fall-back to unification
+subtyNoUnion' θ t t' = unify θ t t'
 
--- subtyNoUnion' θ t t' = subtyNoUnion θ t t'
+subtyNoUnion θ t t' = subtyNoUnion' θ t t'
+  {-tracePP "subTyNoUnion Returns" <$> subtyNoUnion' θ (trace 
+  (printf "subtyNoUnion: %s <: %s" (ppshow t) (ppshow t')) t) t'-}
 
 
 --------------------------------------------------------------------------------
@@ -416,7 +407,7 @@ subTyDef θ t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _) =
             subTyDef θ (tracePP "recurse 1 " u) (tracePP "recurse 2" u')
 subTyDef θ t@(TApp (TDef _) _ _) t'  = unfoldTDefSafeST t >>= \u  -> subtyNoUnion θ u t'
 subTyDef θ t t'@(TApp (TDef _) _ _)  = unfoldTDefSafeST t'>>= \u' -> subtyNoUnion θ t u'
-subTyDef θ t t'                      = subtyNoUnion θ t t'
+subTyDef θ t t'                      = subtyNoUnion θ (trace "subTyDef" t) t'
 
 
 -- | Add a cast from the disjunction of types @fromTs@ to the disjunction of 
@@ -430,7 +421,8 @@ castTs θ fromTs toTs = ifM (st_docasts <$> get) (get >>= use . subs) (return θ
     -- code, and freely give exactly the type that is expected
     use [] = addDeadCast (mkUnion toTs) >> return θ 
     use ts = addCast     (mkUnion ts)   >> return θ
-    subs s = L.nub [ a | a <- fromTs, b <- toTs, execSubTypeB s θ a b ]
+    -- IMPORTANT: Don't allow casts when checking subtyping here
+    subs s = L.nub [ a | a <- fromTs, b <- toTs, execSubTypeB (noCasts s) θ a b ]
 
 
 
@@ -456,6 +448,22 @@ addDeadCast t =
       modify $ \st -> st { st_casts = M.insert l (e, DD t) (st_casts st) } 
 
 
+-- | Ensure that casts are disabled while @action@ is executed.
+-----------------------------------------------------------------------------
+haltCasts :: STM a -> STM a
+-----------------------------------------------------------------------------
+haltCasts action = 
+  do  c <- st_docasts <$> get       
+      modify noCasts
+      r <- action
+      modify (\st -> st { st_docasts = c     })
+      return r
+
+
+-----------------------------------------------------------------------------
+noCasts :: STState -> STState
+-----------------------------------------------------------------------------
+noCasts st = st { st_docasts = False }
 
 
 
@@ -522,30 +530,30 @@ unfoldTDefSafeST t = liftM (unfoldTDefSafe t) (st_tdefs <$> get)
 -----------------------------------------------------------------------------
 unify :: Subst -> Type -> Type -> STM Subst
 -----------------------------------------------------------------------------
-unify θ (TFun xts t _) (TFun xts' t' _) = 
+unify' θ (TFun xts t _) (TFun xts' t' _) = 
   unifys θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
 
-unify θ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _)
+unify' θ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _)
   | s == s'   = unifys θ ts ts'
   | otherwise = addError (errorUnification t t') θ 
 
-unify θ t@(TApp (TDef _) _ _) t' =
+unify' θ t@(TApp (TDef _) _ _) t' =
   liftM (unfoldTDefSafe t) (st_tdefs <$> get) >>= unify θ t'
 
-unify θ t t'@(TApp (TDef _) _ _)        =
+unify' θ t t'@(TApp (TDef _) _ _)        =
   liftM (unfoldTDefSafe t') (st_tdefs <$> get) >>= unify θ t
 
-unify θ (TVar α _)     (TVar β _)       = varEqlM θ α β 
-unify θ (TVar α _)     t                = varAsnM θ α t 
-unify θ t              (TVar α _)       = varAsnM θ α t
+unify' θ (TVar α _)     (TVar β _)       = varEqlM θ α β 
+unify' θ (TVar α _)     t                = varAsnM θ α t 
+unify' θ t              (TVar α _)       = varAsnM θ α t
 
-unify θ (TApp c ts _) (TApp c' ts' _)
+unify' θ (TApp c ts _) (TApp c' ts' _)
   | c == c'                             = unifys  θ ts ts'
 
-unify _ (TBd _) _ = error $ bugTBodiesOccur "unify"
-unify _ _ (TBd _) = error $ bugTBodiesOccur "unify"
+unify' _ (TBd _) _ = error $ bugTBodiesOccur "unify"
+unify' _ _ (TBd _) = error $ bugTBodiesOccur "unify"
 
-unify θ t t' 
+unify' θ t t' 
   | t == t'                             = return θ
   | isTop t                             = go θ $ strip t'
   | isTop t'                            = go θ $ strip t
@@ -559,6 +567,9 @@ unify θ t t'
     tops = map $ const tTop
     go θ ts = unifys θ ts $ tops ts
 
+
+-- unify θ t t' = unify' θ (trace (printf "unify: %s ~ %s" (ppshow t) (ppshow t')) t) t'
+unify θ t t' = unify' θ t t'
 
 -----------------------------------------------------------------------------
 unifys         ::  Subst -> [Type] -> [Type] -> STM Subst
@@ -594,7 +605,7 @@ varAsn :: Subst -> TVar -> Type -> Either String Subst
 varAsn θ α t 
   | t == tVar α          = Right $ θ 
   | α `HS.member` free t = Left  $ errorOccursCheck α t 
-  | unassigned α θ       = Right $ θ `mappend` (Su $ HM.singleton (trace (printf "Adding %s |-> %s" (ppshow α) (ppshow t)) α) t) 
+  | unassigned α θ       = Right $ θ `mappend` (Su $ HM.singleton α t)
   | otherwise            = Left  $ errorRigidUnify α t
   
 unassigned α (Su m) = HM.lookup α m == Just (tVar α)

@@ -135,7 +135,7 @@ logError l msg x = (modify $ \st -> st { tc_errss = (l,msg):(tc_errss st)}) >> r
 freshTyArgs :: SourceSpan -> ([TVar], Type) -> TCM Type 
 -------------------------------------------------------------------------------
 freshTyArgs l (αs, t) 
-  = (`apply` t) <$> tracePP "freshSubst" <$> freshSubst l αs
+  = (`apply` t) <$> freshSubst l αs
 
 freshSubst :: SourceSpan -> [TVar] -> TCM Subst
 freshSubst l αs
@@ -151,7 +151,7 @@ freshSubst l αs
 setTyArgs l βs 
   = do m <- tc_anns <$> get 
        when (HM.member l m) $ tcError l "Multiple Type Args"
-       addAnn l $ TypInst (tVar <$> tracePP ("setTA " ++ ppshow l) βs)
+       addAnn l $ TypInst (tVar <$> βs)
 
 
 addCasts :: Casts -> TCM ()

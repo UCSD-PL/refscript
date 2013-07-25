@@ -16,13 +16,13 @@ data-files:          README.md,
                      include/prelude.js
 
 executable nanojs
-  build-depends:       base, 
+  build-depends:       base, containers, 
                        pretty, 
                        vector, bytestring, text, aeson, 
                        hashable < 1.2, 
                        unordered-containers, 
                        filepath, ansi-terminal, process, mtl, syb, cmdargs,
-                       liquid-fixpoint, parsec, language-ecmascript, containers
+                       liquid-fixpoint, parsec, language-ecmascript
 
   extensions:          ExistentialQuantification, 
                        FlexibleInstances, 

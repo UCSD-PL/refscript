@@ -20,6 +20,7 @@ module Language.Nano.Env (
   , envMap
   , envLefts
   , envRights
+  , envUnion
   , envIntersectWith
   , envEmpty
   , envSEnv
@@ -78,6 +79,9 @@ envFromList       = L.foldl' step envEmpty
 envIntersectWith :: (a -> b -> c) -> Env a -> Env b -> Env c
 envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))
 
+-- | Favors the bindings in the first environment
+envUnion :: Env a -> Env a -> Env a
+envUnion = envAdds . envToList
 
 envRights :: Env (Either a b) -> Env b
 envRights = envMap (\(Right z) -> z) . envFilter isRight

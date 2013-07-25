@@ -38,10 +38,26 @@ liquid = Liquid {
  
  , incdirs = def &= typDir 
                  &= help "Paths to Spec Include Directory " 
+
+ , noKVarInst = def &= help "Disable k-var toplevel function type instantiation"
+                    &= name "no-kvar-inst"
    
  } &= help    "Refinement Type Checker for Nano" 
 
-config = modes [esc, tc, liquid] 
+
+visit = Visit { 
+   files   = def &= typ "TARGET" 
+                 &= args 
+                 &= typFile 
+ 
+ , incdirs = def &= typDir 
+                 &= help "Paths to Spec Include Directory " 
+   
+ } &= help    "Visitor testing" 
+
+
+
+config = modes [esc, tc, liquid, visit] 
             &= help    "nanojs is a suite of toy program verifiers"
             &= program "nanojs" 
             &= summary "nanojs © Copyright 2013 Regents of the University of California." 

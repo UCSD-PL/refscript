@@ -1,5 +1,5 @@
 
-/*@ inc :: ({x:int|true}) => {v:int | v = x+1} */
+/*@ inc :: ({x:number|true}) => {v:number | v = x+1} */
 function inc(x){
   var res = x + 1;
   return res;

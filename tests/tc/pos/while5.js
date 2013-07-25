@@ -1,4 +1,4 @@
-/*@ loop :: (int) => int */
+/*@ loop :: (number) => number */
 function loop(x){
   if (x <= 5) {
     var r = loop(x + 1);

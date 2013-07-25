@@ -1,21 +1,21 @@
 
-/*@ foo ::  (int) => top */
+/*@ foo ::  (number) => top */
 function foo(x) {
   return nil();
 }
 
 
-/*@ bar ::  (int) => (top|int) */
+/*@ bar ::  (number) => (top|number) */
 function bar(x) {
   return nil();
 }
 
-/*@ baz ::  (int) => list [top] */
+/*@ baz ::  (number) => list [top] */
 function baz(x) {
   return nil();
 }
 
-/*@ bak ::  (int) => list[int]  */
+/*@ bak ::  (number) => list[number]  */
 function bak(x) {
   var r = 1;
   return nil();

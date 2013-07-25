@@ -1,5 +1,5 @@
 
-/*@ sumLoop :: (int, int) => int */
+/*@ sumLoop :: (number, number) => number */
 function sumLoop(acc, i){
   if (0 < i){
     return sumLoop(acc + 1, i - 1);

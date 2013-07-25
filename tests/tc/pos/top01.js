@@ -1,15 +1,15 @@
 
-/*@ foo :: ((int|bool)) => top */
+/*@ foo :: ((number|bool)) => top */
 function foo(x) {
   return x;
 }
 
-/*@ bar :: ((int|bool)) => (top|int) */
+/*@ bar :: ((number|bool)) => (top|number) */
 function bar(x) {
   return x;
 }
 
-/*@ baz :: ((int|top)) => top */
+/*@ baz :: ((number|top)) => top */
 function baz(x) {
   return x;
 }

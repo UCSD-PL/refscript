@@ -1,60 +1,80 @@
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE RankNTypes             #-}
+
+
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
 
 import           Control.Applicative                ((<$>)) -- (<*>))
 import           Control.Monad                
-import qualified Data.HashSet        as S 
+import           Control.Monad.State()
+import qualified Data.HashSet        as HS 
 import qualified Data.HashMap.Strict as M 
--- import qualified Data.List           as L
+import           Data.List           (nub, find, partition)
 import qualified Data.Traversable    as T
 -- import           Data.Monoid
-import           Data.Maybe                         (catMaybes, isJust, fromJust) -- fromMaybe, maybeToList)
+import           Data.Maybe                         (catMaybes, isJust)
+
+import           Data.Generics                   
+import           Data.Generics.Aliases
+import           Data.Generics.Schemes
+import           Data.Typeable                  
+
+
+
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$))
 import           Text.Printf                        (printf)
 
 import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
+import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.SSA.SSA
+import           Language.Nano.Visitor.Visitor
 
 import qualified Language.Fixpoint.Types as F
 -- import           Language.Fixpoint.Interface        (resultExit)
 import           Language.Fixpoint.Misc             
 -- import           System.Exit                        (exitWith)
+import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Debug.Trace    hiding (traceShow)
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
-verifyFile :: FilePath -> IO (F.FixResult SourceSpan)
+verifyFile :: OptionConf -> FilePath -> IO (F.FixResult SourceSpan)
 --------------------------------------------------------------------------------
-verifyFile f = tc =<< parseNanoFromFile f
-  where 
-   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
-
--------------------------------------------------------------------------------
-typeCheck     :: (F.Reftable r) => Nano AnnSSA (RType r) -> Nano AnnType (RType r) 
--------------------------------------------------------------------------------
-typeCheck pgm = either crash id . execute pgm . tcNano $ pgm 
-  where 
-    crash     = errorstar . render . vcat . map (text . ppErr)
+--verifyFile f = tc =<< parseNanoFromFile f
+--  where 
+--   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
 -- DEBUG MODE
--- verifyFile f 
---   = do nano <- parseNanoFromFile f 
---        donePhase Loud "Parse"
---        putStrLn . render . pp $ nano
---        let nanoSsa = ssaTransform nano
---        donePhase Loud "SSA Transform"
---        putStrLn . render . pp $ nanoSsa
---        r    <- either unsafe safe . execute . typeCheck $ nanoSsa
---        donePhase Loud "Typechecking"
---        return r
+verifyFile _ f 
+   = do nano <- parseNanoFromFile f 
+        {-donePhase Loud "Parse"-}
+        {-putStrLn . render . pp $ nano-}
+        let nanoSsa = ssaTransform nano
+        donePhase Loud "SSA Transform"
+        putStrLn . render . pp $ nanoSsa
+        r    <- either unsafe safe $ execute nanoSsa $ tcAndPatch nanoSsa
+        donePhase Loud "Typechecking"
+        return r
+
+
+-------------------------------------------------------------------------------
+typeCheck     :: (Data r, Typeable r, F.Reftable r) => Nano AnnSSA (RType r) -> (Nano AnnType (RType r))
+-------------------------------------------------------------------------------
+typeCheck pgm = either crash id (execute pgm (tcAndPatch pgm))
+  where
+    crash     = errorstar . render . vcat . map (text . ppErr)
+
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppErr) 
@@ -67,20 +87,41 @@ safe (Nano {code = Src fs})
        return F.Safe 
 
 printAnn :: AnnBare -> IO () 
-printAnn (Ann l fs) = when (not $ null fs) $ putStrLn $ printf "At %s: %s" (ppshow l) (ppshow fs)
+printAnn (Ann l fs) = when (not $ null fs) $ putStrLn 
+    $ printf "At %s: %s" (ppshow l) (ppshow fs)
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
+-- | The first argument true to tranform casted expressions e to Cast(e,T)
+-------------------------------------------------------------------------------
+tcAndPatch :: (Data r, Typeable r, F.Reftable r) => 
+  Nano AnnSSA (RType r) -> TCM (Nano  AnnAsrt (RType r))
+-------------------------------------------------------------------------------
+tcAndPatch p = tcNano p >>= patchPgmM >>= \p' -> return $ trace (codePP p') p'
+  where 
+    codePP (Nano {code = Src s}) = render $
+          text "********************** CODE **********************"
+      $+$ pp s
+      $+$ text "**************************************************"
+
 
 -------------------------------------------------------------------------------
 tcNano :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM (Nano AnnType (RType r)) 
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do m     <- tcNano' $ toType <$> p 
-       return $ p {code = Src $ (patchAnn m <$>) <$> fs}
+       return $ (trace "") $ p {code = Src $ (patchAnn m <$>) <$> fs}
+    where
+      cachePP cache = render $
+            text "********************** CODE **********************"
+        $+$ pp cache
+        $+$ text "**************************************************"
 
-tcNano'     :: Nano AnnSSA Type -> TCM AnnInfo  
+
+-------------------------------------------------------------------------------
+tcNano' :: Nano AnnSSA Type -> TCM AnnInfo  
+-------------------------------------------------------------------------------
 tcNano' pgm@(Nano {code = Src fs}) 
   = do tcStmts (specs pgm) fs
        M.unions <$> getAllAnns
@@ -94,7 +135,7 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
 
 --   We define this alias as the "output" type for typechecking any entity
 --   that can create or affect binders (e.g. @VarDecl@ or @Statement@)
---   @Nothing@ means if we definitely hits a "return" 
+--   @Nothing@ means if we definitely hit a "return" 
 --   @Just γ'@ means environment extended with statement binders
 
 type TCEnv = Maybe (Env Type)
@@ -108,16 +149,18 @@ tcFun γ (FunctionStmt l f xs body)
   = do (ft, (αs, ts, t)) <- funTy l f xs
        let γ'  = envAdds [(f, ft)] γ
        let γ'' = envAddFun l f αs xs ts t γ'
-       accumAnn (catMaybes . map (validInst γ'') . M.toList) $  
+       accumAnn (\a -> catMaybes (map (validInst γ'') (M.toList a))) $  
          do q              <- tcStmts γ'' body
             when (isJust q) $ unifyType l "Missing return" f tVoid t
        return $ Just γ' 
 
+tcFun _  _ = error "Calling tcFun not on FunctionStatement"
+
 funTy l f xs 
   = do ft <- getDefType f 
        case bkFun ft of
-         Nothing        -> tcError l $ errorUnboundId f
-         Just (αs,ts,t) -> do when (length xs /= length ts) $ tcError l $ errorArgMismatch
+         Nothing        -> logError (ann l) (errorUnboundId f) (tErr, tFunErr)
+         Just (αs,ts,t) -> do when (length xs /= length ts) $ logError (ann l) errorArgMismatch ()
                               return (ft, (αs, b_type <$> ts, t))
 
 envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
@@ -128,7 +171,7 @@ envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddR
     -- tyBinds              = [(Loc (srcPos l) α, tVar α) | α <- αs]
 
 validInst γ (l, ts)
-  = case [β | β <- S.toList $ free ts, not ((tVarId β) `envMem` γ)] of
+  = case [β | β <- HS.toList $ free ts, not ((tVarId β) `envMem` γ)] of
       [] -> Nothing
       βs -> Just (l, errorFreeTyVar βs)
    
@@ -153,49 +196,51 @@ tcStmts = tcSeq tcStmt
 tcStmt :: Env Type -> Statement AnnSSA -> TCM TCEnv  
 -------------------------------------------------------------------------------
 -- skip
-tcStmt γ (EmptyStmt _) 
+tcStmt' γ (EmptyStmt _) 
   = return $ Just γ
 
 -- x = e
-tcStmt γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))   
+tcStmt' γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))   
   = tcAsgn γ l (Id lx x) e
 
 -- e
-tcStmt γ (ExprStmt _ e)   
+tcStmt' γ (ExprStmt _ e)   
   = tcExpr γ e >> return (Just γ) 
 
 -- s1;s2;...;sn
-tcStmt γ (BlockStmt _ stmts) 
+tcStmt' γ (BlockStmt _ stmts) 
   = tcStmts γ stmts 
 
 -- if b { s1 }
-tcStmt γ (IfSingleStmt l b s)
-  = tcStmt γ (IfStmt l b s (EmptyStmt l))
+tcStmt' γ (IfSingleStmt l b s)
+  = tcStmt' γ (IfStmt l b s (EmptyStmt l))
 
 -- if b { s1 } else { s2 }
-tcStmt γ (IfStmt l e s1 s2)
-  = do t     <- tcExpr γ e
+tcStmt' γ (IfStmt l e s1 s2)
+  = do t <- tcExpr γ e
        unifyType l "If condition" e t tBool
-       γ1    <- tcStmt γ s1
-       γ2    <- tcStmt γ s2
+       γ1      <- tcStmt' γ s1
+       γ2      <- tcStmt' γ s2
        envJoin l γ γ1 γ2
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
-tcStmt γ (VarDeclStmt _ ds)
+tcStmt' γ (VarDeclStmt _ ds)
   = tcSeq tcVarDecl γ ds
 
 -- return e 
-tcStmt γ (ReturnStmt l eo) 
+tcStmt' γ (ReturnStmt l eo) 
   = do t <- maybe (return tVoid) (tcExpr γ) eo 
-       unifyType l "Return" eo t $ envFindReturn γ 
+       subType True l eo t $ envFindReturn γ
        return Nothing
 
-tcStmt γ s@(FunctionStmt _ _ _ _)
+tcStmt' γ s@(FunctionStmt _ _ _ _)
   = tcFun γ s
 
 -- OTHER (Not handled)
-tcStmt _ s 
-  = convertError "TC Cannot Handle: tcStmt" s
+tcStmt' _ s 
+  = convertError "TC Cannot Handle: tcStmt'" s
+
+tcStmt γ s = tcStmt' γ s
 
 -------------------------------------------------------------------------------
 tcVarDecl :: Env Type -> VarDecl AnnSSA -> TCM TCEnv  
@@ -204,6 +249,7 @@ tcVarDecl :: Env Type -> VarDecl AnnSSA -> TCM TCEnv
 tcVarDecl γ (VarDecl l x (Just e)) 
   = tcAsgn γ l x e  
 tcVarDecl γ (VarDecl _ _ Nothing)  
+-- TODO: add binding from the declared variable to undefined
   = return $ Just γ
 
 ------------------------------------------------------------------------------------
@@ -214,31 +260,51 @@ tcAsgn γ _ x e
   = do t <- tcExpr γ e
        return $ Just $ envAdds [(x, t)] γ
 
+
+
 -------------------------------------------------------------------------------
 tcExpr :: Env Type -> Expression AnnSSA -> TCM Type
 -------------------------------------------------------------------------------
+tcExpr γ e = setExpr (Just e) >> (tcExpr' γ e)
 
-tcExpr _ (IntLit _ _)               
-  = return tInt 
 
-tcExpr _ (BoolLit _ _)
+-------------------------------------------------------------------------------
+tcExpr' :: Env Type -> Expression AnnSSA -> TCM Type
+-------------------------------------------------------------------------------
+
+tcExpr' _ (IntLit _ _)
+  = return tInt
+
+tcExpr' _ (BoolLit _ _)
   = return tBool
 
-tcExpr γ (VarRef l x)
-  = case envFindTy x γ of 
-      Nothing -> tcError l $ errorUnboundIdEnv x γ
-      Just z  -> return z 
+tcExpr' _ (StringLit _ _)
+  = return tString
 
-tcExpr γ (PrefixExpr l o e)
+tcExpr' _ (NullLit _)
+  = return tNull
+
+tcExpr' γ (VarRef l x)
+  = case envFindTy x γ of 
+      Nothing -> logError (ann l) (errorUnboundIdEnv x γ) tErr
+      Just z  -> return z
+
+tcExpr' γ (PrefixExpr l o e)
   = tcCall γ l o [e] (prefixOpTy o γ)
 
-tcExpr γ (InfixExpr l o e1 e2)        
+tcExpr' γ (InfixExpr l o e1 e2)        
   = tcCall γ l o [e1, e2] (infixOpTy o γ)
 
-tcExpr γ (CallExpr l e es)
-  = tcCall γ l e es =<< tcExpr γ e 
+tcExpr' γ (CallExpr l e es)
+  = tcExpr γ e >>= tcCall γ l e es
 
-tcExpr _ e 
+tcExpr' γ (ObjectLit _ ps) 
+  = tcObject γ (tracePP "tcObject" ps)
+
+tcExpr' γ (DotRef l e i) 
+  = tcAccess γ l e i
+
+tcExpr' _ e 
   = convertError "tcExpr" e
 
 ----------------------------------------------------------------------------------
@@ -246,21 +312,48 @@ tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> T
 ----------------------------------------------------------------------------------
 tcCall γ l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
-       ets        <- mapM (tcExpr γ) es
-       θ'         <- unifyTypes l "" (b_type <$> its) ets
+       ts         <- mapM (tcExpr γ) es
+       θ'         <- subTypes True l (map Just es) ts (b_type <$> its)
        return      $ apply θ' ot
 
 instantiate l fn ft 
-  = do t' <- freshTyArgs (srcPos l) $ bkAll ft 
+  = do t' <- {-tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (bkAll ft)
        maybe err return   $ bkFun t'
     where
-       err = tcError l $ errorNonFunction fn ft
+       err = logError (ann l) (errorNonFunction fn ft) tFunErr
 
+
+----------------------------------------------------------------------------------
+tcObject :: Env Type -> [(Prop AnnSSA, Expression AnnSSA)] -> TCM Type
+----------------------------------------------------------------------------------
+tcObject γ bs 
+  = do 
+      let (ps, es) = unzip bs
+      bts <- zipWith B (map F.symbol ps) <$> mapM (tcExpr γ) es
+      return $ tracePP "tcObject" $ TObj bts ()
+
+
+----------------------------------------------------------------------------------
+tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
+----------------------------------------------------------------------------------
+tcAccess γ l e f = 
+  tcExpr γ e >>= (unfoldTDefSafeM >=> binders l e) >>= access f
+  where
+    access f               = return . maybe tUndef b_type . find (match $ F.symbol f)
+    match s (B f _)        = s == f
+
+binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
+binders l e (TObj b _ )       = return b
+binders l e t@(TApp TUn ts _) = 
+  case find isObj ts of
+    Just t' -> addCast t' >> binders l e t'
+    _       -> tcError l $ errorObjectAccess e t
+binders l e t                 = tcError l $ errorObjectAccess e t
+  
 
 ----------------------------------------------------------------------------------
 envJoin :: AnnSSA -> Env Type -> TCEnv -> TCEnv -> TCM TCEnv 
 ----------------------------------------------------------------------------------
-
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
 envJoin l γ (Just γ1) (Just γ2) = envJoin' l γ γ1 γ2 
@@ -274,10 +367,24 @@ getPhiType l γ1 γ2 x
   = case (envFindTy x γ1, envFindTy x γ2) of
       (Just t1, Just t2) -> if (t1 == t2) 
                               then return t1 
-                              else tcError l $ errorJoin x t1 t2
+                              else mkUnion t1 t2 -- logError (ann l) (errorJoin x t1 t2) tErr
       (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
-                              then tcError l $ "Oh no, the HashMap GREMLIN is back...1"
-                              else tcError l $ bugUnboundPhiVar x
+                              then logError (ann l) "Oh no, the HashMap GREMLIN is back...1" tErr
+                              else logError (ann l) (bugUnboundPhiVar x) tErr
+    where
+      mkUnion t1 t2 = 
+        case (prep t1, prep t2) of 
+          (Just t1s, Just t2s) -> 
+            case nub $ t1s ++ t2s of
+              [ ] -> logError (ann l) (errorJoin x t1 t2) tErr
+              [t] -> return $ t
+              ts  -> return $ TApp TUn ts ()
+          (_       , _       ) -> logError (ann l) (errorJoin x t1 t2) tErr
+      prep (TApp TUn l _) = Just l
+      prep t@(TApp _ _ _) = Just [t]
+      prep t@(TVar _ _ )  = Just [t]
+      prep _              = Nothing
+
 
 forceCheck x γ 
   = elem x $ fst <$> envToList γ

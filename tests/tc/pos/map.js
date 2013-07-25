@@ -1,17 +1,19 @@
-/*@ map :: forall A B. ((A) => B, list [A]) => list [B] */
+/*@ type list[A]  {  data : A, 
+                     next : list[A] | Null } */
+
+// #define list?[A] = {list[A] | ...} | {Null | ... }
+
+/*@ map :: forall A B. ((A) => B, list [A]|Null) => list[B]|Null */
 function map(f, xs){
-  
   if (empty(xs)) {
     return nil();
   }
+       
+  var y   = f(xs.data);
   
-  // return cons(f(head(xs)), map(f, tail(xs)));
+  var ys = map(f, xs.next);
 
-  var x0  = head(xs);
-  var xs_ = tail(xs);
-  var y   = f(x0);
-  var ys_ = map(f, xs_);
-  return cons(y, ys_);
+  return cons(y, ys);
 
 }
 

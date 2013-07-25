@@ -1,4 +1,4 @@
-/*@ max :: (int, int) => int */ 
+/*@ max :: (number, number) => number */ 
 function max(x, y){ 
   var r = 0;
   if (x > y) {

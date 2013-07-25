@@ -45,6 +45,9 @@ module Language.Nano.Liquid.Types (
   -- * Primitive Types
   , prefixOpRTy
   , infixOpRTy 
+
+  -- * Useful Operations
+  , foldReft
   ) where
 
 import           Data.Maybe             (fromMaybe) -- (catMaybes, , isJust)
@@ -54,7 +57,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
--- import           Language.Nano.Errors
+import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
@@ -76,15 +79,16 @@ type NanoRefType = Nano AnnType RefType
 -------------------------------------------------------------------------------------
 
 data CGEnv   
-  = CGE { renv   :: !(Env RefType) -- ^ bindings in scope 
+  = CGE { opts   :: OptionConf
+        , renv   :: !(Env RefType) -- ^ bindings in scope 
         , fenv   :: F.IBindEnv     -- ^ fixpoint bindings
         , guards :: ![F.Pred]      -- ^ branch target conditions  
         }
 
-emptyCGEnv = CGE envEmpty F.emptyIBindEnv []
+emptyCGEnv = CGE [] envEmpty F.emptyIBindEnv []
 
 instance PP CGEnv where
-  pp (CGE re _ gs) = vcat [pp re, pp gs] 
+  pp (CGE _ re _ gs) = vcat [pp re, pp gs] 
 
 ----------------------------------------------------------------------------
 -- | Constraint Information ------------------------------------------------
@@ -131,7 +135,7 @@ instance PP F.Reft where
   pp = pprint
 
 instance PP SubC where
-  pp (Sub γ i t t') = pp (renv γ)   $+$ pp (guards γ) 
+  pp (Sub γ i t t') = pp (renv γ) $+$ pp (guards γ) 
                         $+$ ((text "|-") <+> (pp t $+$ text "<:" $+$ pp t'))
                         $+$ ((text "from:") <+> pp i) 
 
@@ -192,6 +196,9 @@ rTypeSort (TVar α _)       = F.FObj $ F.symbol α
 rTypeSort t@(TAll _ _)     = rTypeSortForAll t 
 rTypeSort (TFun xts t _)   = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
+rTypeSort (TObj xts _)     = F.FApp (F.stringFTycon "object") []
+rTypeSort t                = error ("Type: " ++ ppshow t ++ 
+                                    " is not supported in rTypeSort")
 
 
 rTypeSortApp TInt [] = F.FInt
@@ -200,8 +207,12 @@ rTypeSortApp c ts    = F.FApp (tconFTycon c) (rTypeSort <$> ts)
 tconFTycon TInt      = F.intFTyCon
 tconFTycon TBool     = F.stringFTycon "boolean"
 tconFTycon TVoid     = F.stringFTycon "void"
-tconFTycon (TDef s)  = F.stringFTycon $ F.symbolString s
+tconFTycon (TDef s)  = F.stringFTycon $ unId s
 tconFTycon TUn       = F.stringFTycon "union"
+tconFTycon TString   = F.stringFTycon "string"
+tconFTycon TTop      = F.stringFTycon "top"
+tconFTycon TNull     = F.stringFTycon "null"
+tconFTycon TUndef    = F.stringFTycon "undefined"
 
 
 rTypeSortForAll t    = genSort n θ $ rTypeSort tbody
@@ -246,6 +257,7 @@ emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts) (emapReft f γ'
   where 
     γ'                      = (b_sym <$> xts) ++ γ 
     -- ts                      = b_type <$> xts 
+emapReft _ _ _              = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)    = B x $ emapReft f γ t
 
@@ -256,6 +268,7 @@ mapReftM f (TVar α r)      = TVar α <$> f r
 mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> f r
 mapReftM f (TFun xts t _)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return F.top) --f r 
 mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
+mapReftM _ _               = error "Not supported in mapReftM"
 
 mapReftBindM f (B x t)     = B x <$> mapReftM f t
 
@@ -277,6 +290,7 @@ efoldReft g f γ z (TAll _ t)       = efoldReft g f γ z t
 efoldReft g f γ z (TFun xts t r)   = f γ r $ efoldReft g f γ' (efoldRefts g f γ' z (b_type <$> xts)) t  
   where 
     γ'                             = foldr (efoldExt g) γ xts
+efoldReft _ _ _ _ _                = error "Not supported in efoldReft"
 
 efoldRefts g f γ z ts              = L.foldl' (efoldReft g f γ) z ts
 

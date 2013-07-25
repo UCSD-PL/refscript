@@ -16,7 +16,7 @@ import           Text.Parsec
 -- import           Text.Parsec.String hiding (Parser, parseFromFile)
 import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*), (<*>))
-import           Data.Char (toLower, isLower) 
+import           Data.Char (toLower, isLower, isSpace) 
 import           Data.Monoid (mconcat)
 
 import           Language.Fixpoint.Names (propConName)
@@ -34,6 +34,7 @@ import           Language.Nano.Env
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile, SourceSpan (..))
 
+import           Debug.Trace
 
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer
@@ -50,6 +51,14 @@ idBindP = xyP identifierP dcolon bareTypeP
 identifierP :: Parser (Id SourceSpan)
 identifierP = withSpan Id lowerIdP -- <$> getPosition <*> lowerIdP -- Lexer.identifier
 
+tBodyP :: Parser (Id SourceSpan, RType Reft)
+tBodyP = do  id <- identifierP 
+             tv <- option [] tParP
+             tb <- bareTypeP
+             return $ (id, TBd $ TD (TDef id) tv tb (idLoc id))
+
+-- [A,B,C...]
+tParP = brackets $ sepBy tvarP comma
 
 withSpan f p = do pos   <- getPosition
                   x     <- p
@@ -72,7 +81,7 @@ bareTypeP :: Parser RefType
 bareTypeP   
   =  try bareAllP
  <|> try bareFunP
- <|> bareAtomP 
+ <|>     bareUnionP
 
 bareFunP  
   = do args   <- parens $ sepBy bareTypeP comma
@@ -83,17 +92,33 @@ bareFunP
 
 argBind t = B (rTypeValueVar t) t
 
+
+bareUnionP  
+  = bareUnionP'
+  
+  {-try $ parens bareUnionP'-}
+  {-<|> try bareUnionP'-}
+  
+bareUnionP' = do ts <- bareAtomP `sepBy1` bar
+                 r  <- topP   -- unions have Top ref. type atm
+                 case ts of 
+                      [ ] -> error "impossible"
+                      [t] -> return t
+                      _   -> return $ TApp TUn ts r
+
+
 bareAtomP 
-  =  refP bbaseP 
- <|> try (bindRefP bbaseP)
- <|> try (dummyP (bbaseP <* spaces))
+  =  try (refP bbaseP) 
+ <|> try (bRefP bbaseP)
+ <|> try (bindP bbaseP)
+ <|>     (dummyP (bbaseP <* spaces))
 
 bbaseP :: Parser (Reft -> RefType)
 bbaseP 
   =  try (TVar <$> tvarP)
- <|> try (TApp <$> tconP <*> (brackets $ sepBy bareTypeP comma))
- <|> try (TApp TUn <$> (parens $ sepBy bareTypeP bar))
- <|> try ((`TApp` []) <$> tconP)
+ <|> try (TObj <$> (braces $ bindsP) )
+ <|> try (TApp <$> tDefP <*> (brackets $ sepBy bareTypeP comma))  -- This is what allows: list [A], tree [A,B] etc...
+ <|>     ((`TApp` []) <$> tconP)
 
 tvarP :: Parser TVar
 -- tvarP = TV <$> (stringSymbol <$> upperWordP) <*> getPosition
@@ -106,12 +131,20 @@ upperWordP = condIdP nice (not . isLower . head)
     nice   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
 tconP :: Parser TCon
-tconP =  try (reserved "int"       >> return TInt)
+tconP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "boolean"   >> return TBool)
      <|> try (reserved "void"      >> return TVoid)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
-     <|> (TDef . stringSymbol)  <$> lowerIdP
+     <|> try (reserved "null"      >> return TNull)
+     <|> tDefP
+
+tDefP 
+  = do  s <- identifierP 
+        -- XXX: This list will have to be enhanced.
+        if unId s `elem` ["true", "false", "number", "boolean", "string", "top", "void", "null"] 
+          then parserZero
+          else return $ TDef s
 
 bareAllP 
   = do reserved "forall"
@@ -119,6 +152,17 @@ bareAllP
        dot
        t  <- bareTypeP
        return $ foldr TAll t as
+
+bindsP 
+  =     --try (spaces >> return [])
+    sepBy bareBindP comma
+
+bareBindP 
+  = do  s <- binderP
+        spaces      --ugly
+        colon
+        t <- bareTypeP
+        return $ B s t 
 
  
 dummyP ::  Parser (Reft -> b) -> Parser b
@@ -137,22 +181,34 @@ topP   = (Reft . (, []) . vv . Just) <$> freshIntP
 --           san '/' = '.'
 --           san c   = toLower c
 
-bindRefP :: Parser (Reft -> a) -> Parser a
-bindRefP kindP
+
+-- | Parses bindings of the form: `x : kind`
+bindP :: Parser (Reft -> a) -> Parser a
+bindP kindP
   = do v <- symbolP 
        colon
        t <- kindP
        return $ t (Reft (v, []))
 
-refP :: Parser (Reft -> a) -> Parser a
-refP kindP
+-- | Parses refined types of the form: `{ x : kind | refinement }`
+bRefP :: Parser (Reft -> a) -> Parser a
+bRefP kindP
   = braces $ do
-      v   <- symbolP 
+      v   <- symbolP
       colon
       t   <- kindP
       reserved "|"
       ras <- refasP 
       return $ t (Reft (v, ras))
+
+-- | Parses refined types of the form: `{ kind | refinement }`
+refP :: Parser (Reft -> a) -> Parser a
+refP kindP
+  = braces $ do
+      t   <- kindP
+      reserved "|"
+      ras <- refasP 
+      return $ t (Reft (stringSymbol "v", ras))
 
 refasP :: Parser [Refa]
 refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi)) 
@@ -169,15 +225,15 @@ refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi))
 -- 
 -- 
 -- embedP     = xyP upperIdP (reserved "as") fTyConP
--- 
--- binderP :: Parser Symbol
--- binderP =  try $ liftM stringSymbol (idP badc)
---        <|> liftM pwr (parens (idP bad))
---        where idP p  = many1 (satisfy (not . p))
---              badc c = (c == ':') ||  bad c
---              bad c  = isSpace c || c `elem` "()"
---              pwr s  = stringSymbol $ "(" ++ s ++ ")" 
---              
+ 
+binderP :: Parser Symbol
+binderP =  try $ liftM stringSymbol (idP badc)
+      <|> liftM pwr (parens (idP bad))
+      where idP p  = many1 (satisfy (not . p))
+            badc c = (c == ':') ||  bad c
+            bad c  = isSpace c || c `elem` "()"
+            pwr s  = stringSymbol $ "(" ++ s ++ ")" 
+              
 -- grabs p = try (liftM2 (:) p (grabs p)) 
 --        <|> return []
 
@@ -209,13 +265,15 @@ data PSpec l t
   = Meas (Id l, t)
   | Bind (Id l, t) 
   | Qual Qualifier
+  | Type (Id l, t)
   deriving (Show)
 
 specP :: Parser (PSpec SourceSpan RefType)
 specP 
-  = try (reserved "measure"   >> (Meas <$> idBindP   ))
-    <|> (reserved "qualif"    >> (Qual <$> qualifierP))
-    <|> ({- DEFAULT -}           (Bind <$> idBindP   ))
+  = try (reserved "measure"   >> (Meas <$> idBindP    ))
+    <|> (reserved "qualif"    >> (Qual <$> qualifierP ))
+    <|> (reserved "type"      >> (Type <$> tBodyP     )) 
+    <|> ({- DEFAULT -}           (Bind <$> idBindP    ))
 
 
 --------------------------------------------------------------------------------------
@@ -228,6 +286,7 @@ mkSpec xs = Nano { code   = Src []
                  , specs  = envFromList [b | Bind b <- xs] 
                  , defs   = envEmpty
                  , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
+                 , tDefs  = envFromList [b | Type b <- xs]
                  , quals  =             [q | Qual q <- xs]  
                  }
 
@@ -235,6 +294,7 @@ mkSpec xs = Nano { code   = Src []
 switchProp i@(Id l x) 
   | x == (toLower <$> propConName) = Id l propConName
   | otherwise                      = i
+
 
 --------------------------------------------------------------------------------------
 parseCodeFromFile :: FilePath -> IO (Nano SourceSpan a) 
@@ -246,6 +306,7 @@ mkCode ss = Nano { code   = Src (checkTopStmt <$> ss)
                  , specs  = envEmpty  
                  , defs   = envEmpty
                  , consts = envEmpty 
+                 , tDefs  = envEmpty
                  , quals  = []  
                  } 
 

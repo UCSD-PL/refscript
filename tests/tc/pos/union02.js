@@ -1,27 +1,19 @@
 
-/*@ foo0 :: ((int|bool)) => (bool|int) */
+/*@ foo0 :: ((number|boolean)) => (boolean|number) */
 function foo0(x) {
   return x;
 }
 
-/*@ foo1 :: ((int|bool)) => (bool|int) */
+/*@ foo1 :: ((number|boolean)) => (boolean|number) */
 function foo1(x) {
   return x;
 }
 
-/*@ foo2 :: ((int|bool)) => (bool|int|void) */
+/*@ foo2 :: ((number|boolean)) => (boolean|number|void) */
 function foo2(x) {
   return x;
 }
 
-
-/*@ foo3 :: forall A. (A) => (A|int) */
-function foo3(x) {
-  var a = 1;
-  if (a > 10) 
-    return a;
-  return x;
-}
 
 
 /*@ foo4 :: forall A. (A) => A */

@@ -4,6 +4,8 @@
 module Language.Nano.Types (
   -- * Configuration Options
     Config (..)
+  , Option (..)
+  , OptionConf
 
   -- * Some Operators on Pred
   , pAnd
@@ -12,7 +14,6 @@ module Language.Nano.Types (
   -- * Nano Definition
   , IsNano (..)
   , checkTopStmt
-  , IsAssertable (..)
 
   -- * Located Values
   , Located (..) 
@@ -85,9 +86,18 @@ data Config
            }
   | Liquid { files   :: [FilePath]     -- ^ source files to check
            , incdirs :: [FilePath]     -- ^ path to directory for include specs
+           , noKVarInst :: Bool
+           }
+  | Visit  { files   :: [FilePath]     -- ^ source files to check
+           , incdirs :: [FilePath]     -- ^ path to directory for include specs
            }
   deriving (Data, Typeable, Show, Eq)
 
+data Option
+  = NoKVarInst
+  deriving (Eq)
+
+type OptionConf = [(Option, Bool)]
 
 ---------------------------------------------------------------------
 -- | Tracking Source Code Locations --------------------------------- 
@@ -98,6 +108,7 @@ data Located a
   = Loc { loc :: !SourceSpan
         , val :: a
         }
+    deriving (Data, Typeable)
  
 instance Functor Located where 
   fmap f (Loc l x) = Loc l (f x)
@@ -139,23 +150,23 @@ class IsNano a where
 
 
 instance IsNano InfixOp where
-  isNano OpLT       = True -- ^ @<@
-  isNano OpLEq      = True -- ^ @<=@
-  isNano OpGT       = True -- ^ @>@
-  isNano OpGEq      = True -- ^ @>=@
-  isNano OpEq       = True -- ^ @==@
+  isNano OpLT       = True --  @<@
+  isNano OpLEq      = True --  @<=@
+  isNano OpGT       = True --  @>@
+  isNano OpGEq      = True --  @>=@
+  isNano OpEq       = True --  @==@
   -- PV adding @===@
-  isNano OpStrictEq = True -- ^ @===@
-  isNano OpNEq      = True -- ^ @!=@
+  isNano OpStrictEq = True --  @===@
+  isNano OpNEq      = True --  @!=@
 
-  isNano OpLAnd     = True -- ^ @&&@
-  isNano OpLOr      = True -- ^ @||@
+  isNano OpLAnd     = True --  @&&@
+  isNano OpLOr      = True --  @||@
 
-  isNano OpSub      = True -- ^ @-@
-  isNano OpAdd      = True -- ^ @+@
-  isNano OpMul      = True -- ^ @*@
-  isNano OpDiv      = True -- ^ @/@
-  isNano OpMod      = True -- ^ @%@
+  isNano OpSub      = True --  @-@
+  isNano OpAdd      = True --  @+@
+  isNano OpMul      = True --  @*@
+  isNano OpDiv      = True --  @/@
+  isNano OpMod      = True --  @%@
   isNano e          = errortext (text "Not Nano InfixOp!" <+> pp e)
 
 instance IsNano (LValue a) where 
@@ -169,12 +180,15 @@ instance IsNano (VarDecl a) where
 instance IsNano (Expression a) where 
   isNano (BoolLit _ _)         = True
   isNano (IntLit _ _)          = True
-  -- PV adding StringLit
+  isNano (NullLit _ )          = True
   isNano (StringLit _ _)       = True
   isNano (VarRef _ _)          = True
   isNano (InfixExpr _ o e1 e2) = isNano o && isNano e1 && isNano e2
   isNano (PrefixExpr _ o e)    = isNano o && isNano e
   isNano (CallExpr _ e es)     = all isNano (e:es)
+  -- PV adding more types to support objects
+  isNano (ObjectLit _ bs)      = all isNano $ snd <$> bs
+  isNano (DotRef _ e _)        = isNano e
   isNano e                     = errortext (text "Not Nano Expression!" <+> pp e) 
   -- isNano _                     = False
 
@@ -191,9 +205,9 @@ instance IsNano PrefixOp where
   -- isNano _            = False
 
 instance IsNano (Statement a) where
-  isNano (EmptyStmt _)          = True                   -- ^ skip
-  isNano (ExprStmt _ e)         = isNanoExprStatement e  -- ^ x = e
-  isNano (BlockStmt _ ss)       = isNano ss              -- ^ sequence
+  isNano (EmptyStmt _)          = True                   --  skip
+  isNano (ExprStmt _ e)         = isNanoExprStatement e  --  x = e
+  isNano (BlockStmt _ ss)       = isNano ss              --  sequence
   isNano (IfSingleStmt _ b s)   = isNano b && isNano s   
   isNano (IfStmt _ b s1 s2)     = isNano b && isNano s1 && isNano s2
   isNano (WhileStmt _ b s)      = isNano b && isNano s
@@ -237,17 +251,6 @@ getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
     fromWhile _                = [] 
 
 
--- | Is a ammendable to accepting assertions
-
-class IsAssertable a where 
-  isAssertable :: a -> Bool 
-
-instance IsAssertable (Expression a) where 
-  isAssertable (VarRef _ _) = True 
-  isAssertable _            = False
-
-
-
 -----------------------------------------------------------------------------------
 -- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 
 -----------------------------------------------------------------------------------
@@ -279,7 +282,7 @@ returnSymbol = F.stringSymbol returnName
 isSpecification :: Statement a -> Bool
 isSpecification s  = not $ null $ catMaybes $ ($ s) <$> specs 
   where 
-    specs          = [getAssert, getAssume, getInv, getRequires, getEnsures]
+    specs          = [getAssume, getInv, getRequires, getEnsures]
 
 getInvariant :: Statement a -> F.Pred 
 
@@ -320,6 +323,11 @@ instance F.Symbolic   (Id a) where
 instance F.Symbolic (LValue a) where
   symbol (LVar _ x) = F.symbol x
   symbol lv         = convertError "F.Symbol" lv
+
+instance F.Symbolic (Prop a) where 
+  symbol (PropId _ id) = F.symbol id
+  symbol p             = 
+    error $ printf "Symbol of property %s not supported yet" (ppshow p)
 
 instance F.Expression (Id a) where
   expr = F.eVar

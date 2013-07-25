@@ -6,6 +6,8 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
+{-# LANGUAGE NoMonomorphismRestriction   #-}
 
 module Language.Nano.Typecheck.Types (
 
@@ -27,8 +29,8 @@ module Language.Nano.Typecheck.Types (
   , ofType
   , strengthen 
 
-  -- * Top Type
-  , IsTop (..)
+  -- * Helpful checks
+  , isTop, isNull, isUndefined, isObj
 
   -- * Constructing Types
   , mkUnion
@@ -39,6 +41,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Regular Types
   , Type
+  , TBody (..)
   , TVar (..)
   , TCon (..)
 
@@ -51,6 +54,8 @@ module Language.Nano.Typecheck.Types (
   , tErr
   , tFunErr
   , tVar
+  , tUndef
+  , tNull
 
   -- * Operator Types
   , infixOpTy
@@ -64,18 +69,25 @@ module Language.Nano.Typecheck.Types (
   , AnnType
   , AnnAsrt
   , AnnInfo
+  , isAsm
 
   -- * Useful Operations
+  , extractUnion
   , subset
+  , strip
+  , stripProp
+  , getBinding
+  , 
   ) where 
 
 import           Text.Printf
 import           Data.Hashable
-import qualified Data.Foldable           as F
 import           Data.Maybe             (fromMaybe) --, isJust)
 import           Data.Monoid            hiding ((<>))            
--- import qualified Data.List               as L
+import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
+import           Data.Generics                   
+import           Data.Typeable                  
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
@@ -97,7 +109,7 @@ import           Control.Monad.Error ()
 data TVar = TV { tv_sym :: F.Symbol
                , tv_loc :: SourceSpan 
                }
-            deriving (Show, Ord)
+            deriving (Show, Ord, Data, Typeable)
 
 instance Eq TVar where 
   a == b = tv_sym a == tv_sym b
@@ -118,12 +130,12 @@ instance F.Symbolic a => F.Symbolic (Located a) where
   symbol = F.symbol . val
 
 -- | Constructed Type Bodies
--- data TBody r 
---   = TD { td_con  :: !TCon
---        , td_args :: ![TVar]
---        , td_body :: !(RType r)
---        , td_pos  :: !SourceSpan
---        } deriving (Show, Functor)
+data TBody r 
+   = TD { td_con  :: !TCon          -- TDef name ...
+        , td_args :: ![TVar]        -- Type variables
+        , td_body :: !(RType r)     -- int or bool or fun or object ...
+        , td_pos  :: !SourceSpan    -- Source position
+        } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 -- | Type Constructors
 data TCon 
@@ -132,24 +144,28 @@ data TCon
   | TString
   | TVoid              
   | TTop
-  | TDef  F.Symbol
+  | TDef  (Id SourceSpan)
   | TUn
-    deriving (Eq, Ord, Show)
+  | TNull
+  | TUndef
+    deriving (Ord, Show, Data, Typeable)
 
 -- | (Raw) Refined Types 
 data RType r  
   = TApp TCon [RType r]     r
   | TVar TVar               r 
   | TFun [Bind r] (RType r) r
+  | TObj [Bind r]           r
+  | TBd  (TBody r)
   | TAll TVar (RType r)
-    deriving (Eq, Ord, Show, Functor)
+    deriving (Ord, Show, Functor, Data, Typeable)
 
 
 data Bind r
   = B { b_sym  :: F.Symbol
       , b_type :: !(RType r)
       } 
-    deriving (Eq, Ord, Show, Functor)
+    deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 
 -- | Standard Types
@@ -178,9 +194,23 @@ bkAll t              = go [] t
     go αs t          = (reverse αs, t)
 
 mkUnion :: [Type] -> Type
-mkUnion [ ] = tErr
+mkUnion [ ] = tErr -- maybe sth like false
 mkUnion [t] = t
 mkUnion ts  = TApp TUn ts ()
+
+extractUnion :: RType r -> [RType r]
+extractUnion (TApp TUn ts _) = ts
+extractUnion t               = [t]
+
+-- | Get binding from object type
+getBinding :: Id a -> RType r -> Either String (RType r)
+getBinding i (TObj bs _ ) = 
+  case L.find (\s -> F.symbol i == b_sym s) bs of
+    Just b -> Right $ b_type b
+    _      -> Left  $ errorObjectBinding
+getBinding t _ = Left $ errorObjectTAccess t
+
+
 
 ---------------------------------------------------------------------------------
 strengthen                   :: F.Reftable r => RType r -> r -> RType r
@@ -189,23 +219,91 @@ strengthen (TApp c ts r) r'  = TApp c ts $ r' `F.meet` r
 strengthen (TVar α r)    r'  = TVar α    $ r' `F.meet` r 
 strengthen t _               = t                         
 
+class Stripable a where 
+  strip :: a -> a
+
+instance (F.Reftable r) => Stripable (RType r) where
+  strip (TApp c ts r) = TApp c ts mempty
+  strip (TVar v r)    = TVar v mempty 
+  strip (TFun bs t r) = TFun bs t mempty
+  strip (TObj bs r)   = TObj bs mempty
+  strip (TBd  tbd)    = TBd tbd
+  strip (TAll v t)    = TAll v t
+
+-- instance data TBody r 
+--    = TD { td_con  :: !TCon          -- TDef name ...
+--         , td_args :: ![TVar]        -- Type variables
+--         , td_body :: !(RType r)     -- int or bool or fun or object ...
+--         , td_pos  :: !SourceSpan    -- Source position
+--         } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+
+
+----------------------------------------------------------------------------------
+stripProp :: Prop a -> Prop ()
+----------------------------------------------------------------------------------
+stripProp (PropId _ (Id _ s)) = PropId () (Id () s) 
+stripProp (PropString _ s)    = PropString () s     
+stripProp (PropNum _ i)       = PropNum () i        
+
+
 -- NOTE: r' is the OLD refinement. 
 --       We want to preserve its VV binder as it "escapes", 
 --       e.g. function types. Sigh. Should have used a separate function binder.
 
 
--- | Top Type
-class IsTop a where 
-  isTop :: a -> Bool
+---------------------------------------------------------------------------------
+-- | Helpful type checks
+---------------------------------------------------------------------------------
 
-instance IsTop Type where 
-  isTop (TApp TTop _ _) = True 
-  isTop (TApp TUn  ts _ ) = isTop ts
-  isTop _ = False
+isTop :: Type -> Bool
+isTop (TApp TTop _ _)   = True 
+isTop (TApp TUn  ts _ ) = any isTop ts
+isTop _                 = False
+
+isUndefined :: Type -> Bool
+isUndefined (TApp TUndef _ _)   = True 
+isUndefined _                   = False
+
+isNull :: Type -> Bool
+isNull (TApp TNull _ _)   = True 
+isNull _                  = False
+
+isObj :: Type -> Bool
+isObj (TObj _ _)        = True
+isObj _                 = False
 
 
-instance (IsTop a, F.Foldable f) => IsTop (f a) where
-  isTop = F.any isTop
+instance Eq TCon where
+  TInt    == TInt    = True   
+  TBool   == TBool   = True           
+  TString == TString = True
+  TVoid   == TVoid   = True         
+  TTop    == TTop    = True
+  TDef i1 == TDef i2 = F.symbol i1 == F.symbol i2
+  TUn     == TUn     = True
+  TNull   == TNull   = True
+  TUndef  == TUndef  = True
+  _       == _       = False
+ 
+instance (Eq r, F.Reftable r) => Eq (RType r) where
+  TApp TUn t1 _       == TApp TUn t2 _        = 
+    {-tracePP (printf "Diff: %s \\ %s" (ppshow $ L.nub t1) (ppshow $ L.nub t2)) $-}
+    (L.nub t1) L.\\ (L.nub t2) == []
+  TApp c1 t1s r1      == TApp c2 t2s r2       = 
+    (c1, t1s, r1) == (c2, t2s, r2)
+  TVar v1 r1          == TVar v2 r2           =      
+    (v1, r1) == (v2, r2)
+  TFun b1 t1 r1       == TFun b2 t2 r2        = 
+    (b1, t1, r1)  == (b2, t2, r2)
+  TObj b1 r1          == TObj b2 r2           = 
+    (b1, r1) == (b2, r2)
+  TBd (TD c1 a1 b1 _) == TBd (TD c2 a2 b2 _)  =
+    (c1, a1, b1) == (c2, a2, b2)
+  TAll v1 t1      == TAll v2 t2               =
+    (v1, t1) == (v2, t2)
+  _               == _                        = False
+
+
 
 ---------------------------------------------------------------------------------
 -- | Nano Program = Code + Types for all function binders
@@ -215,8 +313,9 @@ data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
                      , specs  :: !(Env t)           -- ^ Imported Specifications
                      , defs   :: !(Env t)           -- ^ Signatures for Code
                      , consts :: !(Env t)           -- ^ Measure Signatures 
+                     , tDefs  :: !(Env t)           -- ^ Type definitions
                      , quals  :: ![F.Qualifier]     -- ^ Qualifiers
-                     } deriving (Functor)
+                     } deriving (Functor, Data, Typeable)
 
 type NanoBare    = Nano AnnBare Type 
 type NanoSSA     = Nano AnnSSA  Type 
@@ -232,6 +331,7 @@ type FunctionStatement a = Statement a
 
 {-@ newtype Source a = Src [FunctionStatement a] @-}
 newtype Source a = Src [FunctionStatement a]
+  deriving (Data, Typeable)
 
 instance Functor Source where 
   fmap f (Src zs) = Src (map (fmap f) zs)
@@ -246,13 +346,15 @@ instance PP t => PP (Nano a t) where
     $+$ pp (defs  pgm)
     $+$ text "********************** CONSTS ********************"
     $+$ pp (consts pgm) 
+    $+$ text "********************** TYPE DEFS *****************"
+    $+$ pp (tDefs  pgm)
     $+$ text "********************** QUALS *********************"
     $+$ F.toFix (quals  pgm) 
     $+$ text "**************************************************"
 
 instance Monoid (Nano a t) where 
-  mempty        = Nano (Src []) envEmpty envEmpty envEmpty [] 
-  mappend p1 p2 = Nano ss e e' cs qs 
+  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty []
+  mappend p1 p2 = Nano ss e e' cs tds qs 
     where 
       ss        = Src $ s1 ++ s2
       Src s1    = code p1
@@ -260,6 +362,7 @@ instance Monoid (Nano a t) where
       e         = envFromList ((envToList $ specs p1) ++ (envToList $ specs p2))
       e'        = envFromList ((envToList $ defs p1)  ++ (envToList $ defs p2))
       cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
+      tds       = envFromList $ (envToList $ tDefs p1) ++ (envToList $ tDefs p2)
       qs        = quals p1 ++ quals p2 
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
@@ -279,26 +382,45 @@ instance PP a => PP (Maybe a) where
   pp = maybe (text "Nothing") pp 
 
 instance F.Reftable r => PP (RType r) where
-  pp (TVar α r)     = F.ppTy r $ pp α 
-  pp (TFun xts t _) = ppArgs parens comma xts <+> text "=>" <+> pp t 
-  pp t@(TAll _ _)   = text "forall" <+> ppArgs id space αs <> text "." 
-                        <+> pp t' where (αs, t') = bkAll t
-  pp (TApp TUn ts r) = F.ppTy r $ ppArgs id (text "|") ts 
-  pp (TApp c [] r)  = F.ppTy r $ ppTC c 
-  pp (TApp c ts r)  = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
+  pp (TVar α r)                 = F.ppTy r $ pp α 
+  pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
+  pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." 
+                                   <+> pp t' where (αs, t') = bkAll t
+  pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "|") ts 
+  pp (TApp d@(TDef _)ts r)      = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
+
+  pp (TApp c [] r)              = F.ppTy r $ ppTC c 
+  pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
+  pp (TObj bs _ )               = ppArgs braces comma bs
+  pp (TBd (TD (TDef id) v r _)) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r
+  pp (TBd _)                    = error "This is not an acceptable form for TBody" 
+
+instance PP TCon where
+  pp TInt             = text "Int"
+  pp TBool            = text "Boolean"
+  pp TString          = text "String"
+  pp TVoid            = text "Void"
+  pp TTop             = text "Top"
+  pp TUn              = text "Union:"
+  pp (TDef x)         = pprint (F.symbol x)
+  pp TNull            = text "Null"
+  pp TUndef           = text "Undefined"
 
 
 instance F.Reftable r => PP (Bind r) where 
   pp (B x t)        = pp x <> colon <> pp t 
 
 ppArgs p sep          = p . intersperse sep . map pp
-ppTC TInt             = text "int"
-ppTC TBool            = text "boolean"
-ppTC TString          = text "string"
-ppTC TVoid            = text "void"
-ppTC TTop             = text "top"
-ppTC TUn              = text "union:"
-ppTC (TDef x)         = {-text "TDef: " <+> -} pprint x
+ppTC TInt             = text "Int"
+ppTC TBool            = text "Boolean"
+ppTC TString          = text "String"
+ppTC TVoid            = text "Void"
+ppTC TTop             = text "Top"
+ppTC TUn              = text "Union:"
+ppTC (TDef x)         = pprint (F.symbol x)
+ppTC TNull            = text "Null"
+ppTC TUndef           = text "Undefined"
+
 
 -----------------------------------------------------------------------------
 -- | Annotations ------------------------------------------------------------
@@ -311,10 +433,10 @@ ppTC (TDef x)         = {-text "TDef: " <+> -} pprint x
 data Fact 
   = PhiVar  !(Id SourceSpan) 
   | TypInst ![Type]
-  | Assert  ! Type
-    deriving (Eq, Ord, Show)
+  | Assume  ! Type
+    deriving (Eq, Ord, Show, Data, Typeable)
 
-data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show)
+data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show, Data, Typeable)
 type AnnBare   = Annot Fact SourceSpan -- NO facts
 type AnnSSA    = Annot Fact SourceSpan -- Only Phi              facts
 type AnnType   = Annot Fact SourceSpan -- Only Phi + Typ        facts
@@ -326,7 +448,7 @@ instance HasAnnotation (Annot b) where
   getAnnotation = ann 
 
 instance Ord AnnSSA where 
-  compare (Ann s1 f1) (Ann s2 f2) = compare s1 s2
+  compare (Ann s1 _) (Ann s2 _) = compare s1 s2
 
 instance Eq (Annot a SourceSpan) where 
   (Ann s1 _) == (Ann s2 _) = s1 == s2
@@ -335,9 +457,9 @@ instance IsLocated (Annot a SourceSpan) where
   srcPos = ann
 
 instance PP Fact where
-  pp (PhiVar x)     = text "phi"  <+> pp x
-  pp (TypInst ts)   = text "inst" <+> pp ts 
-  pp (Assert t)   = text "assert" <+> pp t
+  pp (PhiVar x)   = text "phi"  <+> pp x
+  pp (TypInst ts) = text "inst" <+> pp ts 
+  pp (Assume t)   = text "assume" <+> pp t
 
 instance PP AnnInfo where
   pp             = vcat . (ppB <$>) . M.toList 
@@ -347,6 +469,10 @@ instance PP AnnInfo where
 instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
 
+isAsm  :: Fact -> Bool
+isAsm  (Assume _) = True
+isAsm  _          = False
+
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------
 -----------------------------------------------------------------------
@@ -354,12 +480,14 @@ instance (PP a, PP b) => PP (Annot b a) where
 tVar   :: (F.Reftable r) => TVar -> RType r
 tVar   = (`TVar` F.top) 
 
-tInt, tBool, tString, tVoid, tErr :: (F.Reftable r) => RType r
+tInt, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RType r
 tInt    = TApp TInt     [] F.top 
 tBool   = TApp TBool    [] F.top
 tString = TApp TString  [] F.top
 tTop    = TApp TTop     [] F.top
 tVoid   = TApp TVoid    [] F.top
+tUndef  = TApp TUndef   [] F.top
+tNull   = TApp TNull    [] F.top
 tErr    = tVoid
 tFunErr = ([],[],tErr)
 
@@ -418,5 +546,5 @@ builtinId       = mkId . ("builtin_" ++)
 subset ::  [Type] -> [Type] -> Bool
 -----------------------------------------------------------------------------
 subset xs ys = 
-  isTop ys || all (\a -> any (== a) ys) xs
+  any isTop ys || all (\x -> any (\y -> x == y) ys) xs
 

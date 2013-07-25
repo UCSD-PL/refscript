@@ -1,5 +1,5 @@
 
-/*@ inc :: (int) => void */
+/*@ inc :: (number) => void */
 function inc(x){
   assume(x > 0);
   var y = x + 1;

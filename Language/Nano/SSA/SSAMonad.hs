@@ -50,7 +50,6 @@ import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 import           Language.Fixpoint.Misc             
 import           Text.Printf                        (printf)
-import           Text.Parsec.Pos              
 
 type SSAM     = ErrorT String (State SsaState)
 

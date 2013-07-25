@@ -1,4 +1,4 @@
-/*@ sum :: (list [{v:int| 0 <= v}]) => int */
+/*@ sum :: (list [{v:number| 0 <= v}]) => number */
 function sum(xs){
   if (empty(xs)) {
     return 0;

@@ -9,10 +9,12 @@ import Text.PrettyPrint.HughesPJ
 import Language.ECMAScript3.PrettyPrint
 
 bugBadPhi l t1s t2s     = printf "BUG: Unbalanced Phi at %s \n %s \n %s" (ppshow l) (ppshow t1s) (ppshow t2s)
-bugBadSubtypes x    = printf "BUG: Unexpected Subtyping Constraint \n %s" (ppshow x)
+bugBadSubtypes x        = printf "BUG: Unexpected Subtyping Constraint \n %s" (ppshow x)
 bugUnboundPhiVar x      = printf "BUG: Phi Variable %s is unbound" (ppshow x)
 bugUnboundVariable l x  = printf "BUG: Variable %s is unbound in environment at %s" (ppshow x) (ppshow l)
 bugMissingTypeArgs l    = printf "BUG: Missing Type Arguments at %s" (ppshow l)
+bugTBodiesOccur s       = printf "BUG: There should be no TBodies herie %s" s
+bugBadUnions s          = printf "BUG: No unions should be found here (%s)" s
 
 errorArgName l x y      = printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 
@@ -33,6 +35,11 @@ errorOccursCheck a t    = printf "Occurs check fails: %s in %s" (ppshow a) (ppsh
 errorRigidUnify a t     = printf "Cannot unify rigid variable %s with %s" (ppshow a) (ppshow t) 
 errorSubType m t t'     = printf "%s -- Type %s is not a subtype of %s" m (ppshow t) (ppshow t')
 errorCast m e t         = printf "%s -- Cannot cast non-variable expression: %s to %t" m (ppshow e) (ppshow t)
+errorObjSubtyping t t'  = printf "Object type: %s is not a subtype of %s" (ppshow t) (ppshow t')
+errorObjectAccess e t   = printf "Dot notation on non object expression %s :: %s" (ppshow e) (ppshow t)
+errorObjectTAccess t    = printf "Dot notation not permitted on expressions of type %s" (ppshow t)
+errorObjectBinding      = printf "Field does not exist in object" 
+errorNullUndefined      = printf "Null type is not a subtype of undefined"
  
 ppshow                  = render . pp
 

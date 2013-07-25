@@ -14,7 +14,10 @@ var allDemos =
     "abs.js"                : { "name" : "Abs"      , "type" : "basic"  },
     "while5.js"             : { "name" : "Loop"     , "type" : "basic"  },
     "minindex01.js"         : { "name" : "MinIndex" , "type" : "basic"  },
-
+    
+    "paste1.js"             : { "name" : "PASTE 1" , "type" : "basic"  },
+    "paste2.js"             : { "name" : "PASTE 2" , "type" : "basic"  },
+    "paste3.js"             : { "name" : "PASTE 3" , "type" : "basic"  },
     // Measure Demos
     "safeLists.js"          : { "name" : "Safe List", "type" : "measure"},
   };

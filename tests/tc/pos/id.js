@@ -5,7 +5,7 @@ function id(x) { return x;}
 /*@ idbool :: (boolean) => boolean */
 function idbool(x) { return id(x); }
 
-/*@ main :: (int, boolean) => int */
+/*@ main :: (number, boolean) => number */
 function main(x, y){
   var yr = id(y);
   var xr = id(x);

@@ -1,8 +1,8 @@
 
-// loop :: (int) => int
+// loop :: (number) => number
 
 
-/*@ loop :: ({x:int|x <= 6}) => {v:int| v=6} */
+/*@ loop :: ({x:number|x <= 6}) => {v:number| v=6} */
 function loop(x){
   if (x <= 5) {
     return loop(x + 1);

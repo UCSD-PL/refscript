@@ -39,10 +39,10 @@ import           Language.Nano.ESC.VCMonad
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
-verifyFile :: OptionConf -> FilePath -> IO (F.FixResult (SourceSpan, String))
+verifyFile :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 
-verifyFile _ f 
+verifyFile f 
   = do nano   <- parseNanoFromFile f
        forM_ nano (putStrLn . render . pp)
        let vc  = genVC nano 

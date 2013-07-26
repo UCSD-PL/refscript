@@ -14,14 +14,15 @@ import           Language.Fixpoint.Misc
 -- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Text.PrettyPrint.HughesPJ          (render)
 import           Language.ECMAScript3.PrettyPrint
+import           System.Console.CmdArgs.Verbosity as V
 
 main = do cfg  <- getOpts
           run (verifier cfg) cfg
       
-verifier c@(Esc    {} ) = ESC.verifyFile []
-verifier c@(TC     {} ) = TC.verifyFile     [(NoFailCasts, noFailCasts c)]
-verifier c@(Liquid {} ) = Liquid.verifyFile [(NoKVarInst , noKVarInst c)]
-verifier c@(Visit  {} ) = Visit.verifyFile []
+verifier c@(Esc    {} ) = ESC.verifyFile
+verifier c@(TC     {} ) = TC.verifyFile c
+verifier c@(Liquid {} ) = Liquid.verifyFile
+verifier c@(Visit  {} ) = Visit.verifyFile
 
 run verifyFile cfg 
   = do rs   <- mapM verifyFile $ files cfg

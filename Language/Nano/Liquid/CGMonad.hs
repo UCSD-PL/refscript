@@ -258,7 +258,8 @@ freshTyFun :: (IsLocated l) => CGEnv -> l -> Id AnnType -> RefType -> CGM RefTyp
 ---------------------------------------------------------------------------------------
 freshTyFun g l f t 
   | not $ isTrivialRefType t            = return t
-  | L.elem (NoKVarInst, True) (opts g)  = return t
+-- TODO  
+--  | L.elem (NoKVarInst, True) (opts g)  = return t
   | otherwise                           = freshTy "freshTyFun" (toType t) >>= wellFormed l g 
 
 -- | Instantiate Fresh Type (at Call-site)

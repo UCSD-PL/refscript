@@ -19,9 +19,9 @@ import           Language.ECMAScript3.Parser        (SourceSpan (..))
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-verifyFile :: OptionConf -> FilePath -> IO (F.FixResult (SourceSpan, String))
+verifyFile :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
-verifyFile _ f 
+verifyFile f 
    = do nano <- parseNanoFromFile f 
         {-donePhase Loud "Parse"-}
         {-putStrLn . render . pp $ nano-}

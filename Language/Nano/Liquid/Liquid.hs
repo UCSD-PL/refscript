@@ -35,17 +35,17 @@ import           Language.Nano.Liquid.CGMonad
 import           Debug.Trace
 
 --------------------------------------------------------------------------------
-verifyFile       :: OptionConf -> FilePath -> IO (F.FixResult (SourceSpan, String))
+verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
-verifyFile opt f =   
+verifyFile f =   
   do  p <- parseNanoFromFile f
-      fmap (,"") <$> reftypeCheck opt f (typeCheck (ssaTransform p))
+      fmap (,"") <$> reftypeCheck f (typeCheck (ssaTransform p))
 
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
-reftypeCheck   :: OptionConf -> FilePath -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
-reftypeCheck opts f  = solveConstraints f . (generateConstraints opts) 
+reftypeCheck   :: FilePath -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
+reftypeCheck f  = solveConstraints f . generateConstraints 
 
 --------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (F.FixResult SourceSpan) 
@@ -79,18 +79,18 @@ applySolution = fmap . fmap . tx
 tidy = id
 
 --------------------------------------------------------------------------------
-generateConstraints     :: OptionConf -> NanoRefType -> CGInfo 
+generateConstraints     :: NanoRefType -> CGInfo 
 --------------------------------------------------------------------------------
-generateConstraints opts pgm = getCGInfo pgm $ consNano opts pgm
+generateConstraints pgm = getCGInfo pgm $ consNano pgm
 
 --------------------------------------------------------------------------------
-consNano     :: OptionConf -> NanoRefType -> CGM ()
+consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
-consNano opts pgm@(Nano {code = Src fs}) 
-  = consStmts (initCGEnv opts pgm) fs >> return ()
+consNano pgm@(Nano {code = Src fs}) 
+  = consStmts (initCGEnv pgm) fs >> return ()
 
   -- = forM_ fs . consFun =<< initCGEnv pgm
-initCGEnv opts pgm = CGE opts (specs pgm) F.emptyIBindEnv []
+initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> FunctionStatement AnnType -> CGM CGEnv  

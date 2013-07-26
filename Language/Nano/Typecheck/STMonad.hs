@@ -241,9 +241,8 @@ joinSubst θ (Su m1) (Su m2) =
     only1         = foldr HM.delete m1 commonK
     only2         = foldr HM.delete m2 commonK
     safeMap s m   = (\k -> fromJust $ HM.lookup k m) <$> s
-    join s θ t t' | execSubTypeB s θ t t' = return t'
-                  | execSubTypeB s θ t' t = return t
-                  | otherwise = addError (printf "Cannot join %s with %s" (ppshow t) (ppshow t')) t
+    join s θ t t' | t == t'   = return t
+                  | otherwise = addError (printf "Cannot unify %s and %s" (ppshow t) (ppshow t')) t
 
 
 -------------------------------------------------------------------------------

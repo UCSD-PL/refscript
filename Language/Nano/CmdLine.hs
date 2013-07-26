@@ -27,6 +27,8 @@ tc = TC {
  
  , incdirs = def &= typDir 
                  &= help "Paths to Spec Include Directory " 
+ , noFailCasts    = def &= help "Do not fail typecheck when casts are added"
+                    &= name "noFailCasts"
    
  } &= help    "Type Checker for Nano" 
 

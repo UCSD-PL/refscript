@@ -1,12 +1,10 @@
 {-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE OverlappingInstances   #-}
 
 module Language.Nano.Types (
   -- * Configuration Options
     Config (..)
-  , Option (..)
-  , OptionConf
-  , getOptionB
 
   -- * Some Operators on Pred
   , pAnd
@@ -95,18 +93,6 @@ data Config
            , incdirs     :: [FilePath]     -- ^ path to directory for include specs
            }
   deriving (Data, Typeable, Show, Eq)
-
-data Option
-  = NoKVarInst
-  | NoFailCasts
-  deriving (Eq)
-
-type OptionConf = [(Option, Bool)]
-
-
--- | By default absense of a variable means false
-getOptionB :: OptionConf -> Option -> Bool -> Bool
-getOptionB oc o def = maybe def snd $ L.find ((== o) . fst) oc
 
 
 ---------------------------------------------------------------------
@@ -424,6 +410,8 @@ instance PP SourceSpan where
 instance F.Fixpoint SourceSpan where
   toFix = pp 
 
+instance F.Fixpoint String where
+  toFix = text 
 
 instance (Ord a, F.Fixpoint a) => PP (F.FixResult a) where
   pp = F.resultDoc

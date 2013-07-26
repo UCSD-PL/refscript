@@ -11,11 +11,10 @@ module Language.Nano.Misc (
   , mapPairM
   , mkEither
   , unique
-
 ) where
 
 -- import           Control.Applicative                ((<$>))
-import           Control.Monad                      (liftM2)
+import           Control.Monad                      (liftM2, when)
 import qualified Data.Set                 as S
 import qualified Data.List                as L
 import qualified Language.Fixpoint.Types as F
@@ -61,3 +60,4 @@ instance PP Char where
 
 instance F.Fixpoint Char where
   toFix = char
+ 

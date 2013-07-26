@@ -27,6 +27,7 @@ import           Data.Typeable
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$))
 import           Text.Printf                        (printf)
 
+import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
@@ -41,7 +42,7 @@ import           Language.Nano.Visitor.Visitor
 
 import qualified Language.Fixpoint.Types as F
 -- import           Language.Fixpoint.Interface        (resultExit)
-import           Language.Fixpoint.Misc             
+import           Language.Fixpoint.Misc  as FM 
 -- import           System.Exit                        (exitWith)
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.Syntax
@@ -49,27 +50,31 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Debug.Trace    hiding (traceShow)
 
+import           System.Console.CmdArgs.Verbosity as V
+
+
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
-verifyFile :: OptionConf -> FilePath -> IO (F.FixResult (SourceSpan, String))
+verifyFile :: Config -> FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 --verifyFile f = tc =<< parseNanoFromFile f
 --  where 
 --   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
 -- | Debug mode
-verifyFile opt f 
-   = do nano <- parseNanoFromFile f 
-        {-donePhase Loud "Parse"-}
+verifyFile c f 
+   = do nano <- parseNanoFromFile f
+        whenLoud $ donePhase FM.Loud "Parse"
         {-putStrLn . render . pp $ nano-}
         let nanoSsa = ssaTransform nano
-        donePhase Loud "SSA Transform"
-        putStrLn . render . pp $ nanoSsa
+        whenLoud $ donePhase FM.Loud "SSA Transform"
+        whenLoud $ putStrLn . render . pp $ nanoSsa
         let p =  execute nanoSsa $ tcAndPatch nanoSsa
-        r    <- either unsafe (\q -> safe q >>= \r -> return $ r `mappend` failCasts opt q) p
-        donePhase Loud "Typechecking"
-        return $ r --  `mappend` failCasts opt nanoSsa
+        TC{ noFailCasts = nfc } <- getOpts
+        r <- either unsafe (\q -> safe q >>= return . (`mappend` failCasts nfc q)) p
+        whenLoud $ donePhase FM.Loud "Typechecking"
+        return $ r
 
 
 -------------------------------------------------------------------------------
@@ -87,29 +92,25 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
 ppErr (l, e) = printf "Error at %s\n  %s\n" (ppshow l) e
 
 safe (Nano {code = Src fs})
-  = do forM fs $ T.mapM printAnn
+  = do whenLoud $ forM_ fs $ T.mapM printAnn
        return F.Safe 
 
 -------------------------------------------------------------------------------
-failCasts :: (Data r, Typeable r) => OptionConf -> Nano AnnSSA (RType r) -> F.FixResult (SourceSpan, String)
+failCasts :: (Data r, Typeable r) => 
+  Bool -> Nano AnnSSA (RType r) -> F.FixResult (SourceSpan, String)
 -------------------------------------------------------------------------------
-failCasts opt (Nano {code = Src fs}) 
-  | getOptionB opt NoFailCasts False
-  = F.Safe
-  | length csts > 0 
-  = F.Unsafe csts
-  | otherwise 
-  = F.Safe
-    where csts = mapFst ann <$> allCasts fs
+failCasts False (Nano {code = Src fs}) | not $ null csts = F.Unsafe csts
+                                       | otherwise       = F.Safe
+  where csts = mapFst ann <$> allCasts fs
+failCasts True   _                                       = F.Safe                                            
     
 
--- | TODO: fix the error message 
 -------------------------------------------------------------------------------
 allCasts :: [FunctionStatement AnnSSA] -> [(AnnSSA, [Char])]
 -------------------------------------------------------------------------------
 allCasts fs =  everything (++) ([] `mkQ` f) $ fs
-  where f (Cast l t)      = [(l, "C")]
-        f (DeadCast l t)  = [(l, "D")]
+  where f (Cast l t)      = [(l, "Cast")]
+        f (DeadCast l t)  = [(l, "DeadCode")]
         f _               = [ ]
 
 
@@ -131,7 +132,7 @@ tcAndPatch p =
   do  p1 <- tcNano p 
       p2 <- patchPgmM p1
       s  <- getSubst
-      return $ trace (codePP p2 s) p2
+      return $ {- trace (codePP p2 s) -} p2
   where 
     codePP (Nano {code = Src src}) sub = render $
           text "********************** CODE **********************"

@@ -39,17 +39,17 @@ import           Language.Nano.ESC.VCMonad
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
-verifyFile :: OptionConf -> FilePath -> IO (F.FixResult SourceSpan)
+verifyFile :: OptionConf -> FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 
 verifyFile _ f 
   = do nano   <- parseNanoFromFile f
-       forM_ nano (putStrLn . render . pp)  
+       forM_ nano (putStrLn . render . pp)
        let vc  = genVC nano 
        writeFile (f `addExtension` ".vc") (render $ pp vc)
        rs     <- mapM checkVC $ obligationsVCond vc
-       forM rs $ (putStrLn . render . pp)  
-       return  $ mconcat rs
+       forM rs $ (putStrLn . render . pp)
+       return  $ fmap (,"") $ mconcat rs
 
 --------------------------------------------------------------------------------
 -- | Top-level VC Generator 

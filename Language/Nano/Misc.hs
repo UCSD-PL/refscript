@@ -18,6 +18,7 @@ module Language.Nano.Misc (
 import           Control.Monad                      (liftM2)
 import qualified Data.Set                 as S
 import qualified Data.List                as L
+import qualified Language.Fixpoint.Types as F
 import           Language.ECMAScript3.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 import           Language.Nano.Typecheck.Types()
@@ -55,4 +56,8 @@ instance PP Bool where
 instance PP a => PP (S.Set a) where
   pp = pp . S.toList
 
+instance PP Char where
+  pp = char
 
+instance F.Fixpoint Char where
+  toFix = char

@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE TupleSections          #-}
 
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
@@ -10,9 +11,10 @@ import           Control.Monad
 import           Control.Monad.State()
 import qualified Data.HashSet        as HS 
 import qualified Data.HashMap.Strict as M 
+import qualified Data.Foldable       as FD
 import           Data.List           (nub, find, partition)
 import qualified Data.Traversable    as T
--- import           Data.Monoid
+import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust)
 
 import           Data.Generics                   
@@ -50,23 +52,24 @@ import           Debug.Trace    hiding (traceShow)
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
-verifyFile :: OptionConf -> FilePath -> IO (F.FixResult SourceSpan)
+verifyFile :: OptionConf -> FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 --verifyFile f = tc =<< parseNanoFromFile f
 --  where 
 --   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
--- DEBUG MODE
-verifyFile _ f 
+-- | Debug mode
+verifyFile opt f 
    = do nano <- parseNanoFromFile f 
         {-donePhase Loud "Parse"-}
         {-putStrLn . render . pp $ nano-}
         let nanoSsa = ssaTransform nano
         donePhase Loud "SSA Transform"
         putStrLn . render . pp $ nanoSsa
-        r    <- either unsafe safe $ execute nanoSsa $ tcAndPatch nanoSsa
+        let p =  execute nanoSsa $ tcAndPatch nanoSsa
+        r    <- either unsafe (\q -> safe q >>= \r -> return $ r `mappend` failCasts opt q) p
         donePhase Loud "Typechecking"
-        return r
+        return $ r --  `mappend` failCasts opt nanoSsa
 
 
 -------------------------------------------------------------------------------
@@ -79,7 +82,7 @@ typeCheck pgm = either crash id (execute pgm (tcAndPatch pgm))
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppErr) 
-                 return $ F.Unsafe (fst <$> errs)
+                 return $ F.Unsafe errs
 
 ppErr (l, e) = printf "Error at %s\n  %s\n" (ppshow l) e
 
@@ -87,7 +90,32 @@ safe (Nano {code = Src fs})
   = do forM fs $ T.mapM printAnn
        return F.Safe 
 
+-------------------------------------------------------------------------------
+failCasts :: (Data r, Typeable r) => OptionConf -> Nano AnnSSA (RType r) -> F.FixResult (SourceSpan, String)
+-------------------------------------------------------------------------------
+failCasts opt (Nano {code = Src fs}) 
+  | getOptionB opt NoFailCasts False
+  = F.Safe
+  | length csts > 0 
+  = F.Unsafe csts
+  | otherwise 
+  = F.Safe
+    where csts = mapFst ann <$> allCasts fs
+    
+
+-- | TODO: fix the error message 
+-------------------------------------------------------------------------------
+allCasts :: [FunctionStatement AnnSSA] -> [(AnnSSA, [Char])]
+-------------------------------------------------------------------------------
+allCasts fs =  everything (++) ([] `mkQ` f) $ fs
+  where f (Cast l t)      = [(l, "C")]
+        f (DeadCast l t)  = [(l, "D")]
+        f _               = [ ]
+
+
+-------------------------------------------------------------------------------
 printAnn :: AnnBare -> IO () 
+-------------------------------------------------------------------------------
 printAnn (Ann l fs) = when (not $ null fs) $ putStrLn 
     $ printf "At %s: %s" (ppshow l) (ppshow fs)
 

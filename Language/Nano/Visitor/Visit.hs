@@ -19,7 +19,7 @@ import           Language.ECMAScript3.Parser        (SourceSpan (..))
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-verifyFile :: OptionConf -> FilePath -> IO (F.FixResult SourceSpan)
+verifyFile :: OptionConf -> FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 verifyFile _ f 
    = do nano <- parseNanoFromFile f 

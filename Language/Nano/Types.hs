@@ -6,6 +6,7 @@ module Language.Nano.Types (
     Config (..)
   , Option (..)
   , OptionConf
+  , getOptionB
 
   -- * Some Operators on Pred
   , pAnd
@@ -56,6 +57,7 @@ import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
+import qualified Data.List as L
 import           Data.Monoid                        (Monoid (..))
 import           Data.Maybe                         (catMaybes)
 import           Language.ECMAScript3.Syntax 
@@ -78,26 +80,34 @@ import           Text.Printf                        (printf)
 ---------------------------------------------------------------------
 
 data Config 
-  = Esc    { files   :: [FilePath]     -- ^ source files to check
-           , incdirs :: [FilePath]     -- ^ path to directory for include specs
-           } 
-  | TC     { files   :: [FilePath]     -- ^ source files to check
-           , incdirs :: [FilePath]     -- ^ path to directory for include specs
+  = Esc    { files       :: [FilePath]     -- ^ source files to check
+           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
            }
-  | Liquid { files   :: [FilePath]     -- ^ source files to check
-           , incdirs :: [FilePath]     -- ^ path to directory for include specs
-           , noKVarInst :: Bool
+  | TC     { files       :: [FilePath]     -- ^ source files to check
+           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
+           , noFailCasts :: Bool           -- ^ fail typecheck when casts are inserted
            }
-  | Visit  { files   :: [FilePath]     -- ^ source files to check
-           , incdirs :: [FilePath]     -- ^ path to directory for include specs
+  | Liquid { files       :: [FilePath]     -- ^ source files to check
+           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
+           , noKVarInst  :: Bool           -- ^ instantiate function types with k-vars
+           }
+  | Visit  { files       :: [FilePath]     -- ^ source files to check
+           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
            }
   deriving (Data, Typeable, Show, Eq)
 
 data Option
   = NoKVarInst
+  | NoFailCasts
   deriving (Eq)
 
 type OptionConf = [(Option, Bool)]
+
+
+-- | By default absense of a variable means false
+getOptionB :: OptionConf -> Option -> Bool -> Bool
+getOptionB oc o def = maybe def snd $ L.find ((== o) . fst) oc
+
 
 ---------------------------------------------------------------------
 -- | Tracking Source Code Locations --------------------------------- 

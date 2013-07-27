@@ -126,13 +126,14 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn
 -- | The first argument true to tranform casted expressions e to Cast(e,T)
 -------------------------------------------------------------------------------
 tcAndPatch :: (Data r, Typeable r, F.Reftable r) => 
-  Nano AnnSSA (RType r) -> TCM (Nano  AnnAsrt (RType r))
+  Nano AnnSSA (RType r) -> TCM (Nano  AnnSSA (RType r))
 -------------------------------------------------------------------------------
 tcAndPatch p = 
   do  p1 <- tcNano p 
       p2 <- patchPgmM p1
       s  <- getSubst
-      return $ {- trace (codePP p2 s) -} p2
+      return $ trace (codePP p2 s) p2
+      -- return p2
   where 
     codePP (Nano {code = Src src}) sub = render $
           text "********************** CODE **********************"

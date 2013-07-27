@@ -149,6 +149,7 @@ data CGState
         , count    :: !Integer             -- ^ freshness counter
         , cg_ann   :: A.AnnInfo RefType    -- ^ recorded annotations
         , pgm      :: Nano AnnType RefType -- ^ the program
+        -- , cg_subst :: !Subst               -- ^ the type var substitution gatheredduring subtyping
         }
 
 type CGM     = ErrorT String (State CGState)
@@ -267,7 +268,8 @@ freshTyFun g l f t
 freshTyInst :: (IsLocated l) => l -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
 freshTyInst l g αs τs tbody
-  = do ts    <- mapM (freshTy "freshTyInst") τs
+  = do ts    <- {- tracePP (printf "Liquid FreshTVars at %s" (ppshow l)) <$> -} 
+                mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
        let θ  = fromList $ zip αs ts
        return $ {- tracePP msg $ -} apply θ tbody
@@ -289,8 +291,8 @@ freshTyPhis l g xs τs
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-subTypes :: (IsLocated l, IsLocated x, F.Expression x, F.Symbolic x) 
-         => l -> CGEnv -> [x] -> [RefType] -> CGM () 
+subTypes :: (IsLocated x, F.Expression x, F.Symbolic x) 
+         => AnnType -> CGEnv -> [x] -> [RefType] -> CGM ()
 ---------------------------------------------------------------------------------------
 subTypes l g xs ts = zipWithM_ (subType l g) [envFindTy x g | x <- xs] ts
 
@@ -305,14 +307,14 @@ subTypes l g xs ts = zipWithM_ (subType l g) [envFindTy x g | x <- xs] ts
 
 
 ---------------------------------------------------------------------------------------
-subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
+subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 = modify $ \st -> st {cs =  c : (cs st)}
   where 
     (t1', t2')    = (t1, t2) -- (unionCheck t1, unionCheck t2)
-    c             = {- T.trace (printf "subType with gurads %s: %s <: %s"
-                            (ppshow $ guards g) 
-                            (ppshow t1') (ppshow t2')) $ -}
+    c             =  T.trace (printf "subType with guards %s and annots %s: %s <: %s"
+                            (ppshow $ guards g) (ppshow $ ann_fact l)
+                            (ppshow t1') (ppshow t2')) $ 
                     Sub g (ci l) t1' t2'
 
 

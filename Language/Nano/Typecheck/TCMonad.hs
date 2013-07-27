@@ -141,7 +141,7 @@ freshSubst :: SourceSpan -> [TVar] -> TCM Subst
 freshSubst l αs
   = do
       fUnique αs
-      βs        <- mapM (freshTVar l) αs
+      βs        <-tracePP "TC FreshTVars" <$> mapM (freshTVar l) αs
       setTyArgs l βs
       extSubst βs 
       return     $ fromList $ zip αs (tVar <$> βs)

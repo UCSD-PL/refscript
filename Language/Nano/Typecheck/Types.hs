@@ -67,7 +67,6 @@ module Language.Nano.Typecheck.Types (
   , AnnBare
   , AnnSSA
   , AnnType
-  , AnnAsrt
   , AnnInfo
   , isAsm
 
@@ -439,9 +438,8 @@ data Fact
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show, Data, Typeable)
 type AnnBare   = Annot Fact SourceSpan -- NO facts
-type AnnSSA    = Annot Fact SourceSpan -- Only Phi              facts
+type AnnSSA    = Annot Fact SourceSpan -- Only Phi + Assume     facts
 type AnnType   = Annot Fact SourceSpan -- Only Phi + Typ        facts
-type AnnAsrt   = Annot Fact SourceSpan -- Only Phi + Typ + Asrt facts
 type AnnInfo   = M.HashMap SourceSpan [Fact] 
 
 

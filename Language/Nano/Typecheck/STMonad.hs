@@ -327,7 +327,7 @@ subty θ t                  t'                  =
   do  s <- get 
       if st_docasts s 
         then 
-          tryWithBackups (subtyNoUnion  θ t  t' ) [castTs θ [t] [t']]
+          tryWithBackups (subtyNoUnion θ t t') [castTs θ [t] [t']]
         else 
           tryWithBackups (subtyNoUnion  θ t  t' ) []
   --tryWithBackups (subtyNoUnion θ t t') [castTs θ [t] [t']]
@@ -641,10 +641,11 @@ varEqlM θ α β =
 varAsn :: Subst -> TVar -> Type -> Either String Subst
 -----------------------------------------------------------------------------
 varAsn θ α t 
-  | t == tVar α          = Right $ θ 
-  | α `HS.member` free t = Left  $ errorOccursCheck α t 
-  | unassigned α θ       = Right $ θ `mappend` (Su $ HM.singleton α t)
-  | otherwise            = Left  $ errorRigidUnify α t
+  | t == apply θ (tVar α)  = Right $ θ -- Check if previous substs are sufficient 
+  | t == tVar α            = Right $ θ 
+  | α `HS.member` free t   = Left  $ errorOccursCheck α t 
+  | unassigned α θ         = Right $ θ `mappend` (Su $ HM.singleton α t)
+  | otherwise              = Left  $ errorRigidUnify α t
   
 unassigned α (Su m) = HM.lookup α m == Just (tVar α)
 

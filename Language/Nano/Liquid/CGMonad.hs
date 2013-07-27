@@ -311,10 +311,10 @@ subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 = modify $ \st -> st {cs =  c : (cs st)}
   where 
-    (t1', t2')    = (t1, t2) -- (unionCheck t1, unionCheck t2)
-    c             =  T.trace (printf "subType with guards %s and annots %s: %s <: %s"
+    (t1', t2')    = (t1,t2) -- (unionCheck t1, unionCheck t2)
+    c             =  {- T.trace (printf "subType with guards %s and annots %s: %s <: %s"
                             (ppshow $ guards g) (ppshow $ ann_fact l)
-                            (ppshow t1') (ppshow t2')) $ 
+                            (ppshow t1') (ppshow t2')) $ -} 
                     Sub g (ci l) t1' t2'
 
 

@@ -118,7 +118,7 @@ envAddFun l g f xs ft = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (retur
 
 renameBinds yts xs   = (su, [F.subst su ty | B _ ty <- yts])
   where 
-    su               = F.mkSubst $ safeZipWith "renameArgs" fSub yts xs 
+    su               = F.mkSubst $ safeZipWith "renameBinds" fSub yts xs 
     fSub yt x        = (b_sym yt, F.eVar x)
     
 -- checkFormal x t 
@@ -181,7 +181,7 @@ consStmt g (VarDeclStmt _ ds)
 -- return e 
 consStmt g (ReturnStmt l (Just e))
   = do (xe, g') <- consExpr g e 
-       subType l g' (envFindTy xe g') $ envFindReturn g' 
+       subType l g' (envFindTy xe g') (envFindReturn g')
        return Nothing
 
 -- return
@@ -305,7 +305,8 @@ consCast g x a e =
     (x', g')  <- envAddFresh l tC g
     return (x', g')
   where 
-    mkSub (e,c) = fixBase g x (e,c) >>= \(g',e',c') -> subType l g' (tracePP "CAST LHS" e') (tracePP "CAST RHS" c')
+    mkSub (e,c) = fixBase g x (e,c) >>= 
+      \(g',e',c') -> subType l g' e' c'
     tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
     tCs = extractUnion tC                                 -- extract types from cast type
     tEs = extractUnion $ envFindTy x g                    -- extract types from expression type
@@ -364,19 +365,19 @@ consCall :: (PP a)
 
 consCall g l _ es ft 
   = do (_,its,ot)   <- fromJust . bkFun <$> instantiate l g ft
-       (xes, g')    <- consScan consExpr g es 
-       let (su, ts') = renameBinds its xes   
-       subTypes l g' xes ts' 
+       (xes, g')    <- consScan consExpr g es
+       let (su, ts') = renameBinds its xes
+       subTypes l g' xes ts'
        envAddFresh l (F.subst ({- F.traceFix msg -} su) ot) g'
     -- where 
     --   msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)
 
 instantiate :: AnnType -> CGEnv -> RefType -> CGM RefType
-instantiate l g t = tracePP msg  <$> freshTyInst l g αs τs tbody 
+instantiate l g t = {- tracePP msg  <$> -} freshTyInst l g αs τs tbody 
   where 
     (αs, tbody)   = bkAll t
     τs            = getTypArgs l αs 
-    msg           = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)
+    {-msg           = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)-}
 
 
 getTypArgs :: AnnType -> [TVar] -> [Type] 

@@ -153,8 +153,8 @@ bareAllP
        return $ foldr TAll t as
 
 bindsP 
-  =     --try (spaces >> return [])
-    sepBy bareBindP comma
+  =  try (spaces >> return [])
+ <|> sepBy bareBindP comma
 
 bareBindP 
   = do  s <- binderP

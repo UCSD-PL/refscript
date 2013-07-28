@@ -527,22 +527,22 @@ unfoldTDefDeep t env = go t
 -- | Unfold a type definition once. Return Just t, where t is the unfolded type 
 -- if there was an unfolding, otherwise Nothing.
 -------------------------------------------------------------------------------
-unfoldTDefMaybe :: (PP r, F.Reftable r) => RType r -> Env (RType r) -> Maybe (RType r)
+unfoldTDefMaybe :: (PP r, F.Reftable r) => RType r -> Env (RType r) -> Either String (RType r)
 -------------------------------------------------------------------------------
-unfoldTDefMaybe (TApp (TDef id) acts _) env = 
+unfoldTDefMaybe t@(TApp (TDef id) acts _) env =
       case envFindTy (F.symbol id) env of
-        Just (TBd (TD _ vs bd _ )) -> Just $ apply (fromList $ zip vs acts) bd
-        _                          -> Nothing
-unfoldTDefMaybe _                       _   = Nothing
+        Just (TBd (TD _ vs bd _ )) -> Right $ apply (fromList $ zip vs acts) bd
+        _                          -> Left  $ (printf "Failed unfolding: %s" $ ppshow t)
+-- The only thing that is unfoldable is a TDef.
+-- The rest are just returned as they are.
+unfoldTDefMaybe t                       _   = Right t
 
 
 -- | Force a successful unfolding
 -------------------------------------------------------------------------------
 unfoldTDefSafe :: (PP r, F.Reftable r) => RType r -> Env (RType r) -> RType r
 -------------------------------------------------------------------------------
-unfoldTDefSafe t env = 
-  maybe (error $ printf "Unfolding of %s failed" $ ppshow $ toType t) 
-        id (unfoldTDefMaybe t env)
+unfoldTDefSafe t env = either error id $ unfoldTDefMaybe t env
 
 
 -- | Monadic versions

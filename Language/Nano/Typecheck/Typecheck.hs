@@ -255,7 +255,9 @@ tcStmt' γ (IfSingleStmt l b s)
 -- if b { s1 } else { s2 }
 tcStmt' γ (IfStmt l e s1 s2)
   = do t <- tcExpr γ e
-       subTypeM_ l (Just e) t tBool
+  -- With truthy and falsy values, 
+  -- we cannot enforce this to be bool.
+       -- subTypeM_ l (Just e) t tBool
        γ1      <- tcStmt' γ s1
        γ2      <- tcStmt' γ s2
        envJoin l γ γ1 γ2

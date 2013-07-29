@@ -58,7 +58,7 @@ import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types 
-import           Language.Nano.Typecheck.TCMonad (unfoldTDefSafe, unfoldTDefSafeM, isSubtype)
+import           Language.Nano.Typecheck.STMonad (unfoldTDefSafe, isSubType)
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Liquid.Types
 
@@ -149,6 +149,7 @@ data CGState
         , count    :: !Integer             -- ^ freshness counter
         , cg_ann   :: A.AnnInfo RefType    -- ^ recorded annotations
         , pgm      :: Nano AnnType RefType -- ^ the program
+        -- , cg_subst :: !Subst               -- ^ the type var substitution gatheredduring subtyping
         }
 
 type CGM     = ErrorT String (State CGState)
@@ -197,7 +198,6 @@ tag t@(TApp TBool [] r) = TApp TBool [] $ taggedReft t
 --tag   (TApp TUn   ts r) = TApp TTop [] $ foldl  mempty $ map taggedReft ts
 tag t                   = t
 
-
 taggedReft :: RType F.Reft -> F.Reft
 taggedReft (TApp TInt  [] r) = tagByNumber r 0
 taggedReft (TApp TBool [] r) = tagByNumber r 1
@@ -217,7 +217,6 @@ tagPred (F.Reft (sym, refa)) n = F.RConc pred
 addAnnot       :: (F.Symbolic x) => SourceSpan -> x -> RefType -> CGM () 
 ---------------------------------------------------------------------------------------
 addAnnot l x t = modify $ \st -> st {cg_ann = A.addAnnot l x t (cg_ann st)}
-
 
 ---------------------------------------------------------------------------------------
 envAddReturn        :: (IsLocated f)  => f -> RefType -> CGEnv -> CGEnv 
@@ -248,6 +247,8 @@ envFindReturn :: CGEnv -> RefType
 ---------------------------------------------------------------------------------------
 envFindReturn = E.envFindReturn . renv
 
+
+
 ---------------------------------------------------------------------------------------
 -- | Fresh Templates ------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
@@ -258,7 +259,8 @@ freshTyFun :: (IsLocated l) => CGEnv -> l -> Id AnnType -> RefType -> CGM RefTyp
 ---------------------------------------------------------------------------------------
 freshTyFun g l f t 
   | not $ isTrivialRefType t            = return t
-  | L.elem (NoKVarInst, True) (opts g)  = return t
+-- TODO  
+--  | L.elem (NoKVarInst, True) (opts g)  = return t
   | otherwise                           = freshTy "freshTyFun" (toType t) >>= wellFormed l g 
 
 -- | Instantiate Fresh Type (at Call-site)
@@ -266,7 +268,8 @@ freshTyFun g l f t
 freshTyInst :: (IsLocated l) => l -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
 freshTyInst l g αs τs tbody
-  = do ts    <- mapM (freshTy "freshTyInst") τs
+  = do ts    <- {- tracePP (printf "Liquid FreshTVars at %s" (ppshow l)) <$> -} 
+                mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
        let θ  = fromList $ zip αs ts
        return $ {- tracePP msg $ -} apply θ tbody
@@ -288,8 +291,8 @@ freshTyPhis l g xs τs
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-subTypes :: (IsLocated l, IsLocated x, F.Expression x, F.Symbolic x) 
-         => l -> CGEnv -> [x] -> [RefType] -> CGM () 
+subTypes :: (IsLocated x, F.Expression x, F.Symbolic x) 
+         => AnnType -> CGEnv -> [x] -> [RefType] -> CGM ()
 ---------------------------------------------------------------------------------------
 subTypes l g xs ts = zipWithM_ (subType l g) [envFindTy x g | x <- xs] ts
 
@@ -304,14 +307,14 @@ subTypes l g xs ts = zipWithM_ (subType l g) [envFindTy x g | x <- xs] ts
 
 
 ---------------------------------------------------------------------------------------
-subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
+subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 = modify $ \st -> st {cs =  c : (cs st)}
   where 
-    (t1', t2')    = (t1, t2) -- (unionCheck t1, unionCheck t2)
-    c             = {- T.trace (printf "subType with gurads %s: %s <: %s"
-                            (ppshow $ guards g) 
-                            (ppshow t1') (ppshow t2')) $ -}
+    (t1', t2')    = (t1,t2) -- (unionCheck t1, unionCheck t2)
+    c             =  {- T.trace (printf "subType with guards %s and annots %s: %s <: %s"
+                            (ppshow $ guards g) (ppshow $ ann_fact l)
+                            (ppshow t1') (ppshow t2')) $ -} 
                     Sub g (ci l) t1' t2'
 
 
@@ -337,6 +340,8 @@ wellFormed       :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
 wellFormed l g t = do modify $ \st -> st { ws = (W g (ci l) t) : ws st }
                       return t
+
+
 
 ---------------------------------------------------------------------------------------
 -- | Generating Fresh Values ----------------------------------------------------------
@@ -397,10 +402,10 @@ refreshRefType = mapReftM refresh
 -- | Splitting Subtyping Constraints --------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-splitC c = {- tracePP (printf "Before Splitting: %s\n\nAfter splitting" (ppshow c)) <$> -} splitC' c
+-- splitC c = tracePP "After splitting" <$> splitC' (tracePP "Before Splitting" c)
+splitC c = splitC' c
 
 splitC' :: SubC -> CGM [FixSubC]
-
 ---------------------------------------------------------------------------------------
 -- | Function types
 ---------------------------------------------------------------------------------------
@@ -416,7 +421,6 @@ splitC' (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
        su         = F.mkSubst $ safeZipWith "splitC2" bSub xt1s xt2s
        bSub b1 b2 = (b_sym b1, F.eVar $ b_sym b2)
 
-
 ---------------------------------------------------------------------------------------
 -- | TAlls
 ---------------------------------------------------------------------------------------
@@ -429,7 +433,6 @@ splitC' (Sub g i (TAll α1 t1) (TAll α2 t2))
     θ   = fromList [(α2, tVar α1 :: RefType)]
     t2' = apply θ t2
 
-
 ---------------------------------------------------------------------------------------
 -- | TVars
 ---------------------------------------------------------------------------------------
@@ -438,7 +441,6 @@ splitC' (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   = return $ bsplitC g i t1 t2
   | otherwise
   = errorstar "UNEXPECTED CRASH in splitC"
-
 
 ---------------------------------------------------------------------------------------
 -- | Unions
@@ -463,7 +465,6 @@ splitC' (Sub g i t1 t2@(TApp TUn t2s _))
         cs'   <- unionFixSubs g i [t1] t2s
         return $ {-cs ++ -} cs'
 
-
 ---------------------------------------------------------------------------------------
 -- | Type definitions
 ---------------------------------------------------------------------------------------
@@ -485,7 +486,6 @@ splitC' (Sub g i t1 t2@(TApp (TDef _) _ _ ))
   = do  env <- cg_tdefs <$> get
         splitC $ Sub g i t1 (unfoldTDefSafe t2 env)
 
-
 ---------------------------------------------------------------------------------------
 -- | Rest of TApp
 ---------------------------------------------------------------------------------------
@@ -495,7 +495,6 @@ splitC' (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
                                     (printf "splitC4: %s - %s" (ppshow t1) (ppshow t2)) 
                                     (Sub g i) t1s t2s
        return $ cs ++ cs'
-
 
 ---------------------------------------------------------------------------------------
 -- | Objects 
@@ -534,7 +533,6 @@ bsplitC g ci t1 t2
     r1 = rTypeSortedReft t1
     r2 = rTypeSortedReft t2
 
-
 ---------------------------------------------------------------------------------------
 unionFixSubs :: CGEnv -> Cinfo -> [RefType] -> [RefType] -> CGM [FixSubC]
 ---------------------------------------------------------------------------------------
@@ -544,20 +542,21 @@ unionFixSubs g i t1s t2s = concatMapM mkSub =<< matchTypes g i t1s t2s
                           (ppshow i) (ppshow x) (ppshow y)) $ -}
                       splitC $ Sub g i x y
 
-
 ---------------------------------------------------------------------------------------
 matchTypes :: CGEnv -> Cinfo -> [RefType] -> [RefType] -> CGM [(RefType, RefType)]
 ---------------------------------------------------------------------------------------
 matchTypes g i t1s t2s = 
-  do  p <- pgm <$> get
+  do  p     <- cg_tdefs <$> get
       return $ pairup p t1s t2s
   where
     pairup p xs ys  = fst $ foldl (\(acc,ys') x -> f p acc x ys') ([],ys) xs
-    f p acc x  ys   = case L.find (isSubtype (Left p) x) ys of
+-- TODO: We should be calling isSubType with the actual substitution that 
+-- TODO: we computed during the raw TCing phase (for precision).
+-- TODO: So, maybe include this info in CGSTate 
+    f p acc x  ys   = case L.find (isSubType p x) ys of
                         Just y -> ((tag x, tag y):acc, L.delete y ys)
                         _      -> ((tag x, tag $ fal x):acc, ys)
     fal t           = (ofType $ toType t) `strengthen` (F.predReft F.PFalse)
-
 
 
 

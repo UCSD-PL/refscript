@@ -79,16 +79,18 @@ type NanoRefType = Nano AnnType RefType
 -------------------------------------------------------------------------------------
 
 data CGEnv   
-  = CGE { opts   :: OptionConf
-        , renv   :: !(Env RefType) -- ^ bindings in scope 
+  = CGE { 
+        -- TODO: add opts 
+        --opts   :: OptionConf
+          renv   :: !(Env RefType) -- ^ bindings in scope 
         , fenv   :: F.IBindEnv     -- ^ fixpoint bindings
         , guards :: ![F.Pred]      -- ^ branch target conditions  
         }
 
-emptyCGEnv = CGE [] envEmpty F.emptyIBindEnv []
+emptyCGEnv = CGE {-[] -} envEmpty F.emptyIBindEnv []
 
 instance PP CGEnv where
-  pp (CGE _ re _ gs) = vcat [pp re, pp gs] 
+  pp (CGE {-_ -} re _ gs) = vcat [pp re, pp gs] 
 
 ----------------------------------------------------------------------------
 -- | Constraint Information ------------------------------------------------
@@ -196,7 +198,7 @@ rTypeSort (TVar α _)       = F.FObj $ F.symbol α
 rTypeSort t@(TAll _ _)     = rTypeSortForAll t 
 rTypeSort (TFun xts t _)   = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
-rTypeSort (TObj xts _)     = F.FApp (F.stringFTycon "object") []
+rTypeSort (TObj _ _)       = F.FApp (F.stringFTycon "object") []
 rTypeSort t                = error ("Type: " ++ ppshow t ++ 
                                     " is not supported in rTypeSort")
 

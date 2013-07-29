@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE TupleSections          #-}
 
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
@@ -10,9 +11,10 @@ import           Control.Monad
 import           Control.Monad.State()
 import qualified Data.HashSet        as HS 
 import qualified Data.HashMap.Strict as M 
+import qualified Data.Foldable       as FD
 import           Data.List           (nub, find, partition)
 import qualified Data.Traversable    as T
--- import           Data.Monoid
+import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust)
 
 import           Data.Generics                   
@@ -25,6 +27,7 @@ import           Data.Typeable
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$))
 import           Text.Printf                        (printf)
 
+import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
@@ -32,13 +35,14 @@ import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad
+import           Language.Nano.Typecheck.STMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Visitor.Visitor
 
 import qualified Language.Fixpoint.Types as F
 -- import           Language.Fixpoint.Interface        (resultExit)
-import           Language.Fixpoint.Misc             
+import           Language.Fixpoint.Misc  as FM 
 -- import           System.Exit                        (exitWith)
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.Syntax
@@ -46,26 +50,31 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Debug.Trace    hiding (traceShow)
 
+import           System.Console.CmdArgs.Verbosity as V
+
+
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
-verifyFile :: OptionConf -> FilePath -> IO (F.FixResult SourceSpan)
+verifyFile :: Config -> FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 --verifyFile f = tc =<< parseNanoFromFile f
 --  where 
 --   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
--- DEBUG MODE
-verifyFile _ f 
-   = do nano <- parseNanoFromFile f 
-        {-donePhase Loud "Parse"-}
+-- | Debug mode
+verifyFile c f 
+   = do nano <- parseNanoFromFile f
+        whenLoud $ donePhase FM.Loud "Parse"
         {-putStrLn . render . pp $ nano-}
         let nanoSsa = ssaTransform nano
-        donePhase Loud "SSA Transform"
-        putStrLn . render . pp $ nanoSsa
-        r    <- either unsafe safe $ execute nanoSsa $ tcAndPatch nanoSsa
-        donePhase Loud "Typechecking"
-        return r
+        whenLoud $ donePhase FM.Loud "SSA Transform"
+        whenLoud $ putStrLn . render . pp $ nanoSsa
+        let p =  execute nanoSsa $ tcAndPatch nanoSsa
+        TC{ noFailCasts = nfc } <- getOpts
+        r <- either unsafe (\q -> safe q >>= return . (`mappend` failCasts nfc q)) p
+        whenLoud $ donePhase FM.Loud "Typechecking"
+        return $ r
 
 
 -------------------------------------------------------------------------------
@@ -78,15 +87,36 @@ typeCheck pgm = either crash id (execute pgm (tcAndPatch pgm))
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppErr) 
-                 return $ F.Unsafe (fst <$> errs)
+                 return $ F.Unsafe errs
 
 ppErr (l, e) = printf "Error at %s\n  %s\n" (ppshow l) e
 
 safe (Nano {code = Src fs})
-  = do forM fs $ T.mapM printAnn
+  = do whenLoud $ forM_ fs $ T.mapM printAnn
        return F.Safe 
 
+-------------------------------------------------------------------------------
+failCasts :: (Data r, Typeable r) => 
+  Bool -> Nano AnnSSA (RType r) -> F.FixResult (SourceSpan, String)
+-------------------------------------------------------------------------------
+failCasts False (Nano {code = Src fs}) | not $ null csts = F.Unsafe csts
+                                       | otherwise       = F.Safe
+  where csts = mapFst ann <$> allCasts fs
+failCasts True   _                                       = F.Safe                                            
+    
+
+-------------------------------------------------------------------------------
+allCasts :: [FunctionStatement AnnSSA] -> [(AnnSSA, [Char])]
+-------------------------------------------------------------------------------
+allCasts fs =  everything (++) ([] `mkQ` f) $ fs
+  where f (Cast l t)      = [(l, "Cast")]
+        f (DeadCast l t)  = [(l, "DeadCode")]
+        f _               = [ ]
+
+
+-------------------------------------------------------------------------------
 printAnn :: AnnBare -> IO () 
+-------------------------------------------------------------------------------
 printAnn (Ann l fs) = when (not $ null fs) $ putStrLn 
     $ printf "At %s: %s" (ppshow l) (ppshow fs)
 
@@ -96,13 +126,20 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn
 -- | The first argument true to tranform casted expressions e to Cast(e,T)
 -------------------------------------------------------------------------------
 tcAndPatch :: (Data r, Typeable r, F.Reftable r) => 
-  Nano AnnSSA (RType r) -> TCM (Nano  AnnAsrt (RType r))
+  Nano AnnSSA (RType r) -> TCM (Nano  AnnSSA (RType r))
 -------------------------------------------------------------------------------
-tcAndPatch p = tcNano p >>= patchPgmM >>= \p' -> return $ trace (codePP p') p'
+tcAndPatch p = 
+  do  p1 <- tcNano p 
+      p2 <- patchPgmM p1
+      s  <- getSubst
+      return $ trace (codePP p2 s) p2
+      -- return p2
   where 
-    codePP (Nano {code = Src s}) = render $
+    codePP (Nano {code = Src src}) sub = render $
           text "********************** CODE **********************"
-      $+$ pp s
+      $+$ pp src
+      $+$ text "**************************************************"
+      $+$ pp sub
       $+$ text "**************************************************"
 
 
@@ -151,7 +188,7 @@ tcFun γ (FunctionStmt l f xs body)
        let γ'' = envAddFun l f αs xs ts t γ'
        accumAnn (\a -> catMaybes (map (validInst γ'') (M.toList a))) $  
          do q              <- tcStmts γ'' body
-            when (isJust q) $ unifyType l "Missing return" f tVoid t
+            when (isJust q) $ subTypeM_ l Nothing tVoid t
        return $ Just γ' 
 
 tcFun _  _ = error "Calling tcFun not on FunctionStatement"
@@ -171,7 +208,7 @@ envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddR
     -- tyBinds              = [(Loc (srcPos l) α, tVar α) | α <- αs]
 
 validInst γ (l, ts)
-  = case [β | β <- HS.toList $ free ts, not ((tVarId β) `envMem` γ)] of
+  = case [β | β <-  HS.toList $ free ts, not ((tVarId β) `envMem` γ)] of
       [] -> Nothing
       βs -> Just (l, errorFreeTyVar βs)
    
@@ -218,7 +255,9 @@ tcStmt' γ (IfSingleStmt l b s)
 -- if b { s1 } else { s2 }
 tcStmt' γ (IfStmt l e s1 s2)
   = do t <- tcExpr γ e
-       unifyType l "If condition" e t tBool
+  -- With truthy and falsy values, 
+  -- we cannot enforce this to be bool.
+       -- subTypeM_ l (Just e) t tBool
        γ1      <- tcStmt' γ s1
        γ2      <- tcStmt' γ s2
        envJoin l γ γ1 γ2
@@ -229,8 +268,8 @@ tcStmt' γ (VarDeclStmt _ ds)
 
 -- return e 
 tcStmt' γ (ReturnStmt l eo) 
-  = do t <- maybe (return tVoid) (tcExpr γ) eo 
-       subType True l eo t $ envFindReturn γ
+  = do t <- maybe (return tVoid) (tcExpr γ) eo
+       subTypeM_ l eo t $ envFindReturn γ
        return Nothing
 
 tcStmt' γ s@(FunctionStmt _ _ _ _)
@@ -299,7 +338,7 @@ tcExpr' γ (CallExpr l e es)
   = tcExpr γ e >>= tcCall γ l e es
 
 tcExpr' γ (ObjectLit _ ps) 
-  = tcObject γ (tracePP "tcObject" ps)
+  = tcObject γ ps
 
 tcExpr' γ (DotRef l e i) 
   = tcAccess γ l e i
@@ -313,7 +352,7 @@ tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> T
 tcCall γ l fn es ft 
   = do (_,its,ot) <- instantiate l fn ft
        ts         <- mapM (tcExpr γ) es
-       θ'         <- subTypes True l (map Just es) ts (b_type <$> its)
+       θ'         <- subTypesM l (map Just es) ts (b_type <$> its)
        return      $ apply θ' ot
 
 instantiate l fn ft 
@@ -330,23 +369,26 @@ tcObject γ bs
   = do 
       let (ps, es) = unzip bs
       bts <- zipWith B (map F.symbol ps) <$> mapM (tcExpr γ) es
-      return $ tracePP "tcObject" $ TObj bts ()
+      return $ TObj bts ()
 
 
 ----------------------------------------------------------------------------------
 tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 ----------------------------------------------------------------------------------
 tcAccess γ l e f = 
-  tcExpr γ e >>= (unfoldTDefSafeM >=> binders l e) >>= access f
+  tcExpr γ e >>= (unfoldTDefSafeTC >=> binders l e) >>= access f
   where
     access f               = return . maybe tUndef b_type . find (match $ F.symbol f)
     match s (B f _)        = s == f
 
+
+----------------------------------------------------------------------------------
 binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
+----------------------------------------------------------------------------------
 binders l e (TObj b _ )       = return b
 binders l e t@(TApp TUn ts _) = 
   case find isObj ts of
-    Just t' -> addCast t' >> binders l e t'
+    Just t' -> error $ "UNIMPLEMENTED: Typecheck.hs, binders " -- addCast t' >> binders l e t'
     _       -> tcError l $ errorObjectAccess e t
 binders l e t                 = tcError l $ errorObjectAccess e t
   

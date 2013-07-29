@@ -5,3 +5,5 @@
 
 3.  Add an addError variant that ignores (does not print or consider) all error
     that are reported after it.
+
+4.  Fix "Cannot handle ssaVarDECL" at "var foo;"

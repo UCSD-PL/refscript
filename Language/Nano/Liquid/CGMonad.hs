@@ -33,6 +33,7 @@ module Language.Nano.Liquid.CGMonad (
   , envAddGuard
   , envFindTy
   , envFindReturn
+  , envJoin
 
   -- * Add Subtyping Constraints
   , subTypes
@@ -96,22 +97,22 @@ instance PP (F.SubC c) where
 
 
 -------------------------------------------------------------------------------
-getCGInfo     :: NanoRefType -> CGM a -> CGInfo  
+getCGInfo     :: NanoRefType -> Bool -> CGM a -> CGInfo  
 -------------------------------------------------------------------------------
-getCGInfo pgm  = cgStateCInfo pgm . execute pgm . (>> fixCWs)
+getCGInfo pgm  nkv = cgStateCInfo pgm . execute pgm nkv . (>> fixCWs)
   where 
     fixCWs         = (,) <$> fixCs <*> fixWs
     fixCs          = concatMapM splitC . cs =<< get 
     fixWs          = concatMapM splitW . ws =<< get
 
-execute :: Nano AnnType RefType -> CGM a -> (a, CGState)
-execute pgm act
-  = case runState (runErrorT act) $ initState pgm of 
+execute :: Nano AnnType RefType -> Bool -> CGM a -> (a, CGState)
+execute pgm nkv act
+  = case runState (runErrorT act) $ initState pgm nkv of 
       (Left err, _) -> errorstar err
       (Right x, st) -> (x, st)  
 
-initState :: Nano AnnType RefType -> CGState
-initState pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty pgm
+initState :: Nano AnnType RefType -> Bool -> CGState
+initState pgm b = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty pgm b
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -149,7 +150,7 @@ data CGState
         , count    :: !Integer             -- ^ freshness counter
         , cg_ann   :: A.AnnInfo RefType    -- ^ recorded annotations
         , pgm      :: Nano AnnType RefType -- ^ the program
-        -- , cg_subst :: !Subst               -- ^ the type var substitution gatheredduring subtyping
+        , noKVars  :: Bool                 -- ^ If true do not instatiate function types with K-vars
         }
 
 type CGM     = ErrorT String (State CGState)
@@ -248,6 +249,38 @@ envFindReturn :: CGEnv -> RefType
 envFindReturn = E.envFindReturn . renv
 
 
+----------------------------------------------------------------------------------
+envJoin :: AnnType -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)
+----------------------------------------------------------------------------------
+envJoin _ _ Nothing x           = return x
+envJoin _ _ x Nothing           = return x
+envJoin l g (Just g1) (Just g2) = Just <$> envJoin' l g g1 g2 
+
+----------------------------------------------------------------------------------
+envJoin' :: AnnType -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
+----------------------------------------------------------------------------------
+
+-- HINT: 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
+--       2. use @freshTyPhis@ to generate fresh types (and an extended environment with 
+--          the fresh-type bindings) for all the phi-vars using the unrefined types 
+--          from step 1.
+--       3. generate subtyping constraints between the types from step 1 and the fresh types
+--       4. return the extended environment.
+
+envJoin' l g g1 g2
+  = do td      <- E.envMap toType <$> cg_tdefs <$> get
+       let xs   = [x | PhiVar x <- ann_fact l] 
+       let t1s  = (`envFindTy` g1) <$> xs 
+       let t2s  = (`envFindTy` g2) <$> xs
+       when (length t1s /= length t2s) $ cgError l (bugBadPhi l t1s t2s)
+       -- Require the base types to be the union 
+       let f = combineTypes (isSubType td)
+       (g',ts) <- freshTyPhis (srcPos l) g xs $ zipWith f (toType <$> t1s) (toType <$> t2s)
+       subTypes l g1 xs $ tracePP (printf "envJoin1: %s" $ ppshow xs) ts
+       subTypes l g2 xs $ tracePP (printf "envJoin2: %s" $ ppshow xs) ts
+       return g'
+
+
 
 ---------------------------------------------------------------------------------------
 -- | Fresh Templates ------------------------------------------------------------------
@@ -257,11 +290,11 @@ envFindReturn = E.envFindReturn . renv
 ---------------------------------------------------------------------------------------
 freshTyFun :: (IsLocated l) => CGEnv -> l -> Id AnnType -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
-freshTyFun g l f t 
-  | not $ isTrivialRefType t            = return t
--- TODO  
---  | L.elem (NoKVarInst, True) (opts g)  = return t
-  | otherwise                           = freshTy "freshTyFun" (toType t) >>= wellFormed l g 
+freshTyFun g l f t  = noKVars <$> get >>= freshTyFun' g l f t 
+
+freshTyFun' g l f t b
+  | b || (not $ isTrivialRefType t) = return $ tracePP "instantiating to" t
+  | otherwise                       = freshTy "freshTyFun" (toType t) >>= wellFormed l g 
 
 -- | Instantiate Fresh Type (at Call-site)
 ---------------------------------------------------------------------------------------
@@ -278,10 +311,10 @@ freshTyInst l g αs τs tbody
 
 -- | Instantiate Fresh Type (at Phi-site) 
 ---------------------------------------------------------------------------------------
-freshTyPhis :: (IsLocated l) => l -> CGEnv -> [Id l] -> [Type] -> CGM (CGEnv, [RefType])  
+freshTyPhis :: (PP l, IsLocated l) => l -> CGEnv -> [Id l] -> [Type] -> CGM (CGEnv, [RefType])  
 ---------------------------------------------------------------------------------------
 freshTyPhis l g xs τs 
-  = do ts <- mapM    (freshTy "freshTyPhis")       τs
+  = do ts <- tracePP (printf "Liquid FreshTyPhis at %s" (ppshow l)) <$> mapM    (freshTy "freshTyPhis")       (tracePP "From" τs)
        g' <- envAdds (safeZip "freshTyPhis" xs ts) g
        _  <- mapM    (wellFormed l g') ts
        return (g', ts)
@@ -312,9 +345,9 @@ subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
 subType l g t1 t2 = modify $ \st -> st {cs =  c : (cs st)}
   where 
     (t1', t2')    = (t1,t2) -- (unionCheck t1, unionCheck t2)
-    c             =  {- T.trace (printf "subType with guards %s and annots %s: %s <: %s"
-                            (ppshow $ guards g) (ppshow $ ann_fact l)
-                            (ppshow t1') (ppshow t2')) $ -} 
+    c             = T.trace (printf "%s subType with guards %s: %s <: %s"
+                            (ppshow $ ann l) (ppshow $ guards g)
+                            (ppshow t1') (ppshow t2')) $  
                     Sub g (ci l) t1' t2'
 
 
@@ -368,7 +401,7 @@ freshId   :: (IsLocated l) => l -> CGM (Id l)
 freshId l = Id l <$> fresh
 
 freshTy     :: (Show a) => a -> Type -> CGM RefType 
-freshTy _ τ = (refresh $ rType τ) 
+freshTy _ τ = (tracePP "refresh" <$> (refresh $ tracePP "rType" $ rType τ))
 
 instance Freshable F.Refa where
   fresh = (`F.RKvar` F.emptySubst) <$> (F.intKvar <$> fresh)
@@ -379,7 +412,7 @@ instance Freshable [F.Refa] where
 instance Freshable F.Reft where
   fresh                  = errorstar "fresh Reft"
   true    (F.Reft (v,_)) = return $ F.Reft (v, []) 
-  refresh (F.Reft (_,_)) = curry F.Reft <$> freshVV <*> fresh
+  refresh (F.Reft (_,_)) = curry F.Reft <$> (tracePP "freshVV" <$> freshVV) <*> fresh
     where freshVV        = F.vv . Just  <$> fresh
 
 instance Freshable F.SortedReft where
@@ -555,8 +588,8 @@ matchTypes g i t1s t2s =
 -- TODO: So, maybe include this info in CGSTate 
     f p acc x  ys   = case L.find (isSubType p x) ys of
                         Just y -> ((tag x, tag y):acc, L.delete y ys)
-                        _      -> ((tag x, tag $ fal x):acc, ys)
-    fal t           = (ofType $ toType t) `strengthen` (F.predReft F.PFalse)
+                        _      -> ((tag x, tag $ fls x):acc, ys)
+    fls t           = (ofType $ toType t) `strengthen` (F.predReft F.PFalse)
 
 
 

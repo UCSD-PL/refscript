@@ -38,6 +38,7 @@ module Language.Nano.Typecheck.Types (
   -- * Deconstructing Types
   , bkFun
   , bkAll
+  , bkUnion
 
   -- * Regular Types
   , Type
@@ -71,12 +72,12 @@ module Language.Nano.Typecheck.Types (
   , isAsm
 
   -- * Useful Operations
-  , extractUnion
   , subset
   , strip
   , stripProp
   , getBinding
-  , 
+  , combineTypes 
+
   ) where 
 
 import           Text.Printf
@@ -192,23 +193,50 @@ bkAll t              = go [] t
     go αs (TAll α t) = go (α : αs) t
     go αs t          = (reverse αs, t)
 
+
+---------------------------------------------------------------------------------
 mkUnion :: [Type] -> Type
+---------------------------------------------------------------------------------
 mkUnion [ ] = tErr -- maybe sth like false
 mkUnion [t] = t
 mkUnion ts  = TApp TUn ts ()
 
-extractUnion :: RType r -> [RType r]
-extractUnion (TApp TUn ts _) = ts
-extractUnion t               = [t]
+
+---------------------------------------------------------------------------------
+bkUnion :: RType r -> [RType r]
+---------------------------------------------------------------------------------
+bkUnion (TApp TUn xs _) = xs
+bkUnion t               = [t]
+
+
 
 -- | Get binding from object type
+---------------------------------------------------------------------------------
 getBinding :: Id a -> RType r -> Either String (RType r)
+---------------------------------------------------------------------------------
 getBinding i (TObj bs _ ) = 
   case L.find (\s -> F.symbol i == b_sym s) bs of
     Just b -> Right $ b_type b
     _      -> Left  $ errorObjectBinding
 getBinding t _ = Left $ errorObjectTAccess t
 
+
+
+-- | Combine the two types t1 and t2 into a union, but choose the greater of two
+-- types based on @sub@ if they are related.
+---------------------------------------------------------------------------------
+combineTypes ::  (Type -> Type -> Bool) -> Type -> Type -> Type
+---------------------------------------------------------------------------------
+combineTypes sub t1 t2 = 
+  mkUnion $ choose (bkUnion t1) (bkUnion t2)
+  where
+    choose [] ys =  ys
+    choose xs [] =  xs
+    choose xs ys =     [y | x <- xs, y <- ys, x `sub` y, not (y `sub` x)]       -- x <: y
+                   ++  [x | x <- xs, y <- ys, y `sub` x, not (x `sub` y)]       -- y <: x
+                   ++  [x | x <- xs, y <- ys, x `sub` y, y `sub` x]             -- x == y
+        ++  concat [[x,y] | x <- xs, y <- ys, not $ x `sub` y, not $ y `sub` x] -- unrelated
+                      
 
 
 ---------------------------------------------------------------------------------

@@ -20,7 +20,7 @@ main = do cfg  <- getOpts
           run (verifier cfg) cfg
       
 verifier c@(Esc    {} ) = ESC.verifyFile
-verifier c@(TC     {} ) = TC.verifyFile c
+verifier c@(TC     {} ) = TC.verifyFile
 verifier c@(Liquid {} ) = Liquid.verifyFile
 verifier c@(Visit  {} ) = Visit.verifyFile
 

@@ -8,7 +8,7 @@ module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where
 
 import           Control.Applicative                ((<$>)) -- (<*>))
 import           Control.Monad                
-import           Control.Monad.State()
+import           Control.Monad.State
 import qualified Data.HashSet        as HS 
 import qualified Data.HashMap.Strict as M 
 import qualified Data.Foldable       as FD
@@ -56,14 +56,14 @@ import           System.Console.CmdArgs.Verbosity as V
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
-verifyFile :: Config -> FilePath -> IO (F.FixResult (SourceSpan, String))
+verifyFile :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 --verifyFile f = tc =<< parseNanoFromFile f
 --  where 
 --   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
 -- | Debug mode
-verifyFile c f 
+verifyFile f 
    = do nano <- parseNanoFromFile f
         whenLoud $ donePhase FM.Loud "Parse"
         {-putStrLn . render . pp $ nano-}
@@ -405,27 +405,34 @@ envJoin' l γ γ1 γ2
        ts    <- mapM (getPhiType l γ1 γ2) xs
        return $ Just $ envAdds (zip xs ts) γ 
   
+
+----------------------------------------------------------------------------------
+getPhiType :: Annot b SourceSpan -> Env Type -> Env Type -> Id SourceSpan-> TCM Type
+----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x
-  = case (envFindTy x γ1, envFindTy x γ2) of
-      (Just t1, Just t2) -> if (t1 == t2) 
-                              then return t1 
-                              else mkUnion t1 t2 -- logError (ann l) (errorJoin x t1 t2) tErr
-      (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
-                              then logError (ann l) "Oh no, the HashMap GREMLIN is back...1" tErr
-                              else logError (ann l) (bugUnboundPhiVar x) tErr
-    where
-      mkUnion t1 t2 = 
-        case (prep t1, prep t2) of 
-          (Just t1s, Just t2s) -> 
-            case nub $ t1s ++ t2s of
-              [ ] -> logError (ann l) (errorJoin x t1 t2) tErr
-              [t] -> return $ t
-              ts  -> return $ TApp TUn ts ()
-          (_       , _       ) -> logError (ann l) (errorJoin x t1 t2) tErr
-      prep (TApp TUn l _) = Just l
-      prep t@(TApp _ _ _) = Just [t]
-      prep t@(TVar _ _ )  = Just [t]
-      prep _              = Nothing
+  = do  td <- getTDefs
+        case (envFindTy x γ1, envFindTy x γ2) of
+          (Just t1, Just t2) -> return $ tracePP "Joining into" $ combineTypes (isSubType td) t1 t2 
+                            --if (t1 == t2) 
+                            --  then return t1 
+                            --  else tracePP "Joining into union" <$> mkUnion t1 t2 
+                            --  -- logError (ann l) (errorJoin x t1 t2) tErr
+          (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
+                                  then logError (ann l) "Oh no, the HashMap GREMLIN is back...1" tErr
+                                  else logError (ann l) (bugUnboundPhiVar x) tErr
+    {-where-}
+    {-  mkUnion t1 t2 = -}
+    {-    case (prep t1, prep t2) of -}
+    {-      (Just t1s, Just t2s) -> -}
+    {-        case nub $ t1s ++ t2s of-}
+    {-          [ ] -> logError (ann l) (errorJoin x t1 t2) tErr-}
+    {-          [t] -> return $ t-}
+    {-          ts  -> return $ TApp TUn ts ()-}
+    {-      (_       , _       ) -> logError (ann l) (errorJoin x t1 t2) tErr-}
+    {-  prep (TApp TUn l _) = Just l-}
+    {-  prep t@(TApp _ _ _) = Just [t]-}
+    {-  prep t@(TVar _ _ )  = Just [t]-}
+    {-  prep _              = Nothing-}
 
 
 forceCheck x γ 

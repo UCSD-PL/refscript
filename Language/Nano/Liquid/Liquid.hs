@@ -1,4 +1,5 @@
 {-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE TupleSections        #-}
 
 -- | Top Level for Refinement Type checker
 
@@ -20,12 +21,14 @@ import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Files
 import           Language.Fixpoint.Interface        (solve)
+import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Types
 import qualified Language.Nano.Annots as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
+import           Language.Nano.Typecheck.STMonad    (isSubType)
 import           Language.Nano.SSA.SSA
 
 -- import qualified Language.Nano.Env as E 
@@ -39,13 +42,14 @@ verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 verifyFile f =   
   do  p <- parseNanoFromFile f
-      fmap (,"") <$> reftypeCheck f (typeCheck (ssaTransform p))
+      Liquid{ noKVarInst = nkv } <- getOpts
+      fmap (,"") <$> reftypeCheck f nkv (typeCheck (ssaTransform p))
 
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
-reftypeCheck   :: FilePath -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
-reftypeCheck f  = solveConstraints f . generateConstraints 
+reftypeCheck   :: FilePath -> Bool -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
+reftypeCheck f nkv = solveConstraints f . generateConstraints nkv
 
 --------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (F.FixResult SourceSpan) 
@@ -79,9 +83,9 @@ applySolution = fmap . fmap . tx
 tidy = id
 
 --------------------------------------------------------------------------------
-generateConstraints     :: NanoRefType -> CGInfo 
+generateConstraints     :: Bool -> NanoRefType -> CGInfo 
 --------------------------------------------------------------------------------
-generateConstraints pgm = getCGInfo pgm $ consNano pgm
+generateConstraints nkv pgm = getCGInfo pgm nkv $ consNano pgm
 
 --------------------------------------------------------------------------------
 consNano     :: NanoRefType -> CGM ()
@@ -196,34 +200,6 @@ consStmt g s@(FunctionStmt _ _ _ _)
 consStmt _ s 
   = errorstar $ "consStmt: not handled " ++ ppshow s
 
-----------------------------------------------------------------------------------
-envJoin :: AnnType -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)
-----------------------------------------------------------------------------------
-envJoin _ _ Nothing x           = return x
-envJoin _ _ x Nothing           = return x
-envJoin l g (Just g1) (Just g2) = Just <$> envJoin' l g g1 g2 
-
-----------------------------------------------------------------------------------
-envJoin' :: AnnType -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
-----------------------------------------------------------------------------------
-
--- HINT: 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
---       2. use @freshTyPhis@ to generate fresh types (and an extended environment with 
---          the fresh-type bindings) for all the phi-vars using the unrefined types 
---          from step 1.
---       3. generate subtyping constraints between the types from step 1 and the fresh types
---       4. return the extended environment.
-
-envJoin' l g g1 g2
-  = do let xs   = [x | PhiVar x <- ann_fact l] 
-       let t1s  = (`envFindTy` g1) <$> xs 
-       -- let t2s  = (`envFindTy` g2) <$> xs
-       -- when (length t1s /= length t2s) $ cgError (bugBadPhi l t1s t2s)
-       (g',ts) <- freshTyPhis (srcPos l) g xs $ map toType t1s -- SHOULD BE SAME as t2s 
-       subTypes l g1 xs ts
-       subTypes l g2 xs ts
-       return g'
-
 
 ------------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnType -> CGM (Maybe CGEnv) 
@@ -305,11 +281,10 @@ consCast g x a e =
     (x', g')  <- envAddFresh l tC g
     return (x', g')
   where 
-    mkSub (e,c) = fixBase g x (e,c) >>= 
-      \(g',e',c') -> subType l g' e' c'
+    mkSub (e,c) = fixBase g x (e,c) >>= \(g',e',c') -> subType l g' e' c'
     tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
-    tCs = extractUnion tC                                 -- extract types from cast type
-    tEs = extractUnion $ envFindTy x g                    -- extract types from expression type
+    tCs = bkUnion tC                                 -- extract types from cast type
+    tEs = bkUnion $ envFindTy x g                    -- extract types from expression type
     l   = getAnnotation e 
 
 
@@ -322,6 +297,9 @@ consCast g x a e =
 -- g, x :: { v: B | r } |- { v: B | p ∧ (v = x) } <: { v: B | q }       
 -- --------g'----------    ----------tE'---------    ---- tC-----       
 --                                                                      
+---------------------------------------------------------------------------------------------
+fixBase :: (PP t) => CGEnv-> Id AnnType -> (RType F.Reft, t)-> CGM (CGEnv, RType F.Reft, t)
+---------------------------------------------------------------------------------------------
 fixBase g x (tE,tC) =
   do  g' <- envAdds [(x, rX')] g
       return (g', trace msg tE', tC)
@@ -335,7 +313,7 @@ fixBase g x (tE,tC) =
 --  { v: B | p ∧ (v = x)} = { v: B | p } `strengthen` (v = x)
     tE'                   = tE           `strengthen` vEqX
 
-    msg =  printf "fixbase (%s::%s) |- tE: %s <: tC: %s" (ppshow x) (ppshow rX') (ppshow tE') (ppshow tC)
+    msg =  printf "fixbase %s -> (%s::%s) \n|- tE: %s <: tC: %s\n" (ppshow $ envFindTy x g) (ppshow x) (ppshow rX') (ppshow tE') (ppshow tC)
 
 
 ---------------------------------------------------------------------------------------------

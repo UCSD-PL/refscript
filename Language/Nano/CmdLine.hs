@@ -11,36 +11,36 @@ import System.Console.CmdArgs
 ---------------------------------------------------------------------------------
 
 esc = Esc { 
-   files   = def &= typ "TARGET" 
-                 &= args 
-                 &= typFile 
- 
- , incdirs = def &= typDir 
-                 &= help "Paths to Spec Include Directory " 
-   
+   files   = def  &= typ "TARGET"
+                  &= args
+                  &= typFile
+
+ , incdirs = def  &= typDir
+                  &= help "Paths to Spec Include Directory "
+
  } &= help    "Extended Static Checker for Nano" 
 
 tc = TC { 
-   files   = def &= typ "TARGET" 
-                 &= args 
-                 &= typFile 
- 
- , incdirs = def &= typDir 
-                 &= help "Paths to Spec Include Directory " 
-   
+   files        = def   &= typ "TARGET"
+                        &= args
+                        &= typFile
+
+ , incdirs      = def   &= typDir
+                        &= help "Paths to Spec Include Directory "
+ , noFailCasts  = def   &= help "Do not fail typecheck when casts are added"
+
  } &= help    "Type Checker for Nano" 
 
 
 liquid = Liquid { 
-   files   = def &= typ "TARGET" 
-                 &= args 
-                 &= typFile 
- 
- , incdirs = def &= typDir 
-                 &= help "Paths to Spec Include Directory " 
+   files      = def  &= typ "TARGET"
+                     &= args
+                     &= typFile
 
- , noKVarInst = def &= help "Disable k-var toplevel function type instantiation"
-                    &= name "no-kvar-inst"
+ , incdirs    = def  &= typDir
+                     &= help "Paths to Spec Include Directory "
+
+ , noKVarInst = def  &= help "Disable k-var toplevel function type instantiation"
    
  } &= help    "Refinement Type Checker for Nano" 
 
@@ -66,7 +66,7 @@ config = modes [esc, tc, liquid, visit]
    
 getOpts :: IO Config 
 getOpts = do md <- cmdArgs config 
-             putStrLn $ banner md
+             whenLoud $ putStrLn $ banner md
              return   $ md
 
 banner args =  "nanojs © Copyright 2013 Regents of the University of California.\n" 

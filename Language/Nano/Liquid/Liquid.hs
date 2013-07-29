@@ -35,15 +35,17 @@ import           Language.Nano.Liquid.CGMonad
 import           Debug.Trace
 
 --------------------------------------------------------------------------------
-verifyFile       :: OptionConf -> FilePath -> IO (F.FixResult SourceSpan)
+verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
-verifyFile opt f =  reftypeCheck opt f . typeCheck . ssaTransform =<< parseNanoFromFile f
+verifyFile f =   
+  do  p <- parseNanoFromFile f
+      fmap (,"") <$> reftypeCheck f (typeCheck (ssaTransform p))
 
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
-reftypeCheck   :: OptionConf -> FilePath -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
-reftypeCheck opts f  = solveConstraints f . (generateConstraints opts) 
+reftypeCheck   :: FilePath -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
+reftypeCheck f  = solveConstraints f . generateConstraints 
 
 --------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (F.FixResult SourceSpan) 
@@ -77,18 +79,18 @@ applySolution = fmap . fmap . tx
 tidy = id
 
 --------------------------------------------------------------------------------
-generateConstraints     :: OptionConf -> NanoRefType -> CGInfo 
+generateConstraints     :: NanoRefType -> CGInfo 
 --------------------------------------------------------------------------------
-generateConstraints opts pgm = getCGInfo pgm $ consNano opts pgm
+generateConstraints pgm = getCGInfo pgm $ consNano pgm
 
 --------------------------------------------------------------------------------
-consNano     :: OptionConf -> NanoRefType -> CGM ()
+consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
-consNano opts pgm@(Nano {code = Src fs}) 
-  = consStmts (initCGEnv opts pgm) fs >> return ()
+consNano pgm@(Nano {code = Src fs}) 
+  = consStmts (initCGEnv pgm) fs >> return ()
 
   -- = forM_ fs . consFun =<< initCGEnv pgm
-initCGEnv opts pgm = CGE opts (specs pgm) F.emptyIBindEnv []
+initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> FunctionStatement AnnType -> CGM CGEnv  
@@ -116,7 +118,7 @@ envAddFun l g f xs ft = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (retur
 
 renameBinds yts xs   = (su, [F.subst su ty | B _ ty <- yts])
   where 
-    su               = F.mkSubst $ safeZipWith "renameArgs" fSub yts xs 
+    su               = F.mkSubst $ safeZipWith "renameBinds" fSub yts xs 
     fSub yt x        = (b_sym yt, F.eVar x)
     
 -- checkFormal x t 
@@ -179,7 +181,7 @@ consStmt g (VarDeclStmt _ ds)
 -- return e 
 consStmt g (ReturnStmt l (Just e))
   = do (xe, g') <- consExpr g e 
-       subType l g' (envFindTy xe g') $ envFindReturn g' 
+       subType l g' (envFindTy xe g') (envFindReturn g')
        return Nothing
 
 -- return
@@ -298,27 +300,28 @@ consCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnT
 ---------------------------------------------------------------------------------------------
 consCast g x a e = 
   do 
-    tts       <- tracePP "Matched Types" <$> matchTypes g (ci l) tEs tCs
+    tts       <- matchTypes g (ci l) tEs tCs
     mapM_ mkSub tts
     (x', g')  <- envAddFresh l tC g
-    return (tracePP "xC" x', g')
+    return (x', g')
   where 
-    mkSub (e,c) = fixBase g x (e,c) >>= \(g',e',c') -> subType l g' e' c'
+    mkSub (e,c) = fixBase g x (e,c) >>= 
+      \(g',e',c') -> subType l g' e' c'
     tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
-    tCs = tracePP "tCs" $ extractUnion tC                                 -- extract types from cast type
-    tEs = tracePP "tEs" $ extractUnion $ envFindTy x g                    -- extract types from expression type
+    tCs = extractUnion tC                                 -- extract types from cast type
+    tEs = extractUnion $ envFindTy x g                    -- extract types from expression type
     l   = getAnnotation e 
 
 
--- | fixBase converts:
---                         -----tE-----              -----tC-----
--- g, x :: { v: U | r } |- { v: B | p }           <: { v: B | q }   
---                                                                  
--- into:
---
--- g, x :: { v: B | r } |- { v: B | p ∧ (v = x) } <: { v: B | q }
--- --------g'----------    ----------tE'---------    ---- tC-----
---
+-- | fixBase converts:                                                  
+--                         -----tE-----              -----tC-----       
+-- g, x :: { v: U | r } |- { v: B | p }           <: { v: B | q }       
+--                                                                      
+-- into:                                                                
+--                                                                      
+-- g, x :: { v: B | r } |- { v: B | p ∧ (v = x) } <: { v: B | q }       
+-- --------g'----------    ----------tE'---------    ---- tC-----       
+--                                                                      
 fixBase g x (tE,tC) =
   do  g' <- envAdds [(x, rX')] g
       return (g', trace msg tE', tC)
@@ -326,7 +329,7 @@ fixBase g x (tE,tC) =
 --  { v: B | r } = { v: B | _ } `strengthen` r                        
     rX'          = strip tE     `strengthen` rTypeReft (envFindTy x g)
 --  v 
-    v     = rTypeValueVar $ tracePP "fixbase tE (before)" tE
+    v     = rTypeValueVar {-$ tracePP "fixbase tE (before)" -} tE
 --  (v = x)
     vEqX  = F.Reft (v, [F.RConc (F.PAtom F.Eq (F.EVar v) (F.EVar $ F.symbol x))])
 --  { v: B | p ∧ (v = x)} = { v: B | p } `strengthen` (v = x)
@@ -362,9 +365,9 @@ consCall :: (PP a)
 
 consCall g l _ es ft 
   = do (_,its,ot)   <- fromJust . bkFun <$> instantiate l g ft
-       (xes, g')    <- consScan consExpr g es 
-       let (su, ts') = renameBinds its xes   
-       subTypes l g' xes ts' 
+       (xes, g')    <- consScan consExpr g es
+       let (su, ts') = renameBinds its xes
+       subTypes l g' xes ts'
        envAddFresh l (F.subst ({- F.traceFix msg -} su) ot) g'
     -- where 
     --   msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)
@@ -374,7 +377,7 @@ instantiate l g t = {- tracePP msg  <$> -} freshTyInst l g αs τs tbody
   where 
     (αs, tbody)   = bkAll t
     τs            = getTypArgs l αs 
-    -- msg           = printf "instantiate %s %s" (ppshow αs) (ppshow tbody)
+    {-msg           = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)-}
 
 
 getTypArgs :: AnnType -> [TVar] -> [Type] 
@@ -409,6 +412,6 @@ consObj l g pe =
     let (ps, es) = unzip pe
     (xes, g')    <- consScan consExpr g es
     let pxs = zipWith B (map F.symbol ps) $ map (\x -> envFindTy x g') xes
-    envAddFresh  l (tracePP "consObject" $ TObj pxs F.top) g'
+    envAddFresh  l (TObj pxs F.top) g'
     -- XXX What kind of refinements could we get here?
   

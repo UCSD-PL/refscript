@@ -1,11 +1,10 @@
 {-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE OverlappingInstances   #-}
 
 module Language.Nano.Types (
   -- * Configuration Options
     Config (..)
-  , Option (..)
-  , OptionConf
 
   -- * Some Operators on Pred
   , pAnd
@@ -56,6 +55,7 @@ import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
+import qualified Data.List as L
 import           Data.Monoid                        (Monoid (..))
 import           Data.Maybe                         (catMaybes)
 import           Language.ECMAScript3.Syntax 
@@ -78,26 +78,22 @@ import           Text.Printf                        (printf)
 ---------------------------------------------------------------------
 
 data Config 
-  = Esc    { files   :: [FilePath]     -- ^ source files to check
-           , incdirs :: [FilePath]     -- ^ path to directory for include specs
-           } 
-  | TC     { files   :: [FilePath]     -- ^ source files to check
-           , incdirs :: [FilePath]     -- ^ path to directory for include specs
+  = Esc    { files       :: [FilePath]     -- ^ source files to check
+           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
            }
-  | Liquid { files   :: [FilePath]     -- ^ source files to check
-           , incdirs :: [FilePath]     -- ^ path to directory for include specs
-           , noKVarInst :: Bool
+  | TC     { files       :: [FilePath]     -- ^ source files to check
+           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
+           , noFailCasts :: Bool           -- ^ fail typecheck when casts are inserted
            }
-  | Visit  { files   :: [FilePath]     -- ^ source files to check
-           , incdirs :: [FilePath]     -- ^ path to directory for include specs
+  | Liquid { files       :: [FilePath]     -- ^ source files to check
+           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
+           , noKVarInst  :: Bool           -- ^ instantiate function types with k-vars
+           }
+  | Visit  { files       :: [FilePath]     -- ^ source files to check
+           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
            }
   deriving (Data, Typeable, Show, Eq)
 
-data Option
-  = NoKVarInst
-  deriving (Eq)
-
-type OptionConf = [(Option, Bool)]
 
 ---------------------------------------------------------------------
 -- | Tracking Source Code Locations --------------------------------- 
@@ -414,6 +410,8 @@ instance PP SourceSpan where
 instance F.Fixpoint SourceSpan where
   toFix = pp 
 
+instance F.Fixpoint String where
+  toFix = text 
 
 instance (Ord a, F.Fixpoint a) => PP (F.FixResult a) where
   pp = F.resultDoc

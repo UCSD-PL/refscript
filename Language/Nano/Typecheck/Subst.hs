@@ -99,10 +99,12 @@ instance Free (RType r) where
 instance Substitutable () Fact where
   apply _ x@(PhiVar _)  = x
   apply θ (TypInst ts)  = TypInst $ apply θ ts
+  apply θ (Assume  t )  = Assume  $ apply θ t
 
 instance Free Fact where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
+  free (Assume t)       = free t
  
 ------------------------------------------------------------------------
 -- appTy :: RSubst r -> RType r -> RType r

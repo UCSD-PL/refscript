@@ -109,8 +109,8 @@ failCasts True   _                                       = F.Safe
 allCasts :: [FunctionStatement AnnSSA] -> [(AnnSSA, [Char])]
 -------------------------------------------------------------------------------
 allCasts fs =  everything (++) ([] `mkQ` f) $ fs
-  where f (Cast l t)      = [(l, "Cast")]
-        f (DeadCast l t)  = [(l, "DeadCode")]
+  where f (Cast l t)      = [(l, "Cast: " ++ ppshow t)]
+        f (DeadCast l _)  = [(l, "DeadCode")]
         f _               = [ ]
 
 
@@ -149,11 +149,11 @@ tcNano :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM (Nano AnnType (RType r)
 tcNano p@(Nano {code = Src fs})
   = do m     <- tcNano' $ toType <$> p 
        return $ (trace "") $ p {code = Src $ (patchAnn m <$>) <$> fs}
-    where
-      cachePP cache = render $
-            text "********************** CODE **********************"
-        $+$ pp cache
-        $+$ text "**************************************************"
+    {-where-}
+    {-  cachePP cache = render $-}
+    {-        text "********************** CODE **********************"-}
+    {-    $+$ pp cache-}
+    {-    $+$ text "**************************************************"-}
 
 
 -------------------------------------------------------------------------------
@@ -254,7 +254,7 @@ tcStmt' γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt' γ (IfStmt l e s1 s2)
-  = do t <- tcExpr γ e
+  = do {- t <- tcExpr γ e -}
   -- With truthy and falsy values, 
   -- we cannot enforce this to be bool.
        -- subTypeM_ l (Just e) t tBool
@@ -385,10 +385,10 @@ tcAccess γ l e f =
 ----------------------------------------------------------------------------------
 binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
 ----------------------------------------------------------------------------------
-binders l e (TObj b _ )       = return b
+binders _ _  (TObj b _ )       = return b
 binders l e t@(TApp TUn ts _) = 
   case find isObj ts of
-    Just t' -> error $ "UNIMPLEMENTED: Typecheck.hs, binders " -- addCast t' >> binders l e t'
+    Just _  -> error $ "UNIMPLEMENTED: Typecheck.hs, binders " -- addCast t' >> binders l e t'
     _       -> tcError l $ errorObjectAccess e t
 binders l e t                 = tcError l $ errorObjectAccess e t
   

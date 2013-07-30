@@ -76,7 +76,6 @@ module Language.Nano.Typecheck.Types (
   , strip
   , stripProp
   , getBinding
-  , combineTypes 
   , joinTypes
 
   ) where 
@@ -105,6 +104,8 @@ import           Text.PrettyPrint.HughesPJ
 
 import           Control.Applicative hiding (empty)
 import           Control.Monad.Error ()
+
+import           Debug.Trace (trace)
 
 -- | Type Variables
 data TVar = TV { tv_sym :: F.Symbol
@@ -196,11 +197,11 @@ bkAll t              = go [] t
 
 
 ---------------------------------------------------------------------------------
-mkUnion :: (F.Reftable r) => [RType r] -> RType r
- ---------------------------------------------------------------------------------
+mkUnion :: (Ord r, Eq r, F.Reftable r) => [RType r] -> RType r
+---------------------------------------------------------------------------------
 mkUnion [ ] = tErr -- maybe sth like false
 mkUnion [t] = t
-mkUnion ts  = TApp TUn ts F.top
+mkUnion ts  = TApp TUn (L.nub ts) F.top
 
 
 ---------------------------------------------------------------------------------
@@ -223,23 +224,23 @@ getBinding t _ = Left $ errorObjectTAccess t
 
 
 
--- | Combine the two types t1 and t2 into a union, but choose the greater of two
--- types based on @sub@ if they are related.
----------------------------------------------------------------------------------
-combineTypes ::  (Type -> Type -> Bool) -> Type -> Type -> Type
----------------------------------------------------------------------------------
-combineTypes sub t1 t2 = 
-  mkUnion $ choose (bkUnion t1) (bkUnion t2)
-  where
-    choose [] ys =  ys
-    choose xs [] =  xs
-    choose xs ys =     [y | x <- xs, y <- ys, x `sub` y, not (y `sub` x)]       -- x <: y
-                   ++  [x | x <- xs, y <- ys, y `sub` x, not (x `sub` y)]       -- y <: x
-                   ++  [x | x <- xs, y <- ys, x `sub` y, y `sub` x]             -- x == y
-        ++  concat [[x,y] | x <- xs, y <- ys, not $ x `sub` y, not $ y `sub` x] -- unrelated
+{--- | Combine the two types t1 and t2 into a union, but choose the greater of two-}
+{--- types based on @sub@ if they are related.-}
+{-----------------------------------------------------------------------------------}
+{-combineTypes ::  (Type -> Type -> Bool) -> Type -> Type -> Type-}
+{-----------------------------------------------------------------------------------}
+{-combineTypes sub t1 t2 = -}
+{-  mkUnion $ choose (bkUnion t1) (bkUnion t2)-}
+{-  where-}
+{-    choose [] ys =  ys-}
+{-    choose xs [] =  xs-}
+{-    choose xs ys =     [y | x <- xs, y <- ys, x `sub` y, not (y `sub` x)]       -- x <: y-}
+{-                   ++  [x | x <- xs, y <- ys, y `sub` x, not (x `sub` y)]       -- y <: x-}
+{-                   ++  [x | x <- xs, y <- ys, x `sub` y, y `sub` x]             -- x == y-}
+{-        ++  concat [[x,y] | x <- xs, y <- ys, not $ x `sub` y, not $ y `sub` x] -- unrelated-}
                       
 
--- | Join types @t1@ and @t2@. Useful at environment joins.                     
+-- | Join types @t1@ and @t2@ (t1 ㄩ t2). Useful at environment joins.          
 -- Join produces an equivalent type for @t1@ (resp. @t2@) that has is extended  
 -- by the missing sorts to the common upper bound of @t1@ and @t2@. The extra   
 -- types that are added in the union are refined with False to keep the         
@@ -261,11 +262,13 @@ combineTypes sub t1 t2 =
 --                                  {{ a: Int } | _})                           
 --  WHERE { a: Int } <: { }                                                     
 --
+-- TODO: Force same sort check on the results... 
+--
 --------------------------------------------------------------------------------
 joinTypes ::  (Eq r, Ord r, F.Reftable r) => (RType r -> RType r -> Bool) ->
               RType r -> RType r -> (RType r, RType r, RType r)
 --------------------------------------------------------------------------------
-joinTypes sub t1 t2 = 
+joinTypes _ {- sub -} t1 t2 = 
   (mkUnion $ ccs ++ dcs, 
    mkUnion $ c1s ++ (fmap F.bot <$> d1s), 
    mkUnion $ c2s ++ (fmap F.bot <$> d2s))
@@ -277,20 +280,22 @@ joinTypes sub t1 t2 =
     -- d2s are contained in t1 but not in t2, so should be included as bot
     (dcs, d1s, d2s) = map3 L.nub $ unzip3 $ distinct t1s t2s
     map3 f (a,b,c)  = (f a, f b, f c)
-    t1s = bkUnion t1 
-    t2s = bkUnion t2
+    t1s = {- trace ("joinTypes 1" ++ show (toType $ t1)) $ -} bkUnion t1
+    t2s = {- trace ("joinTypes 2" ++ show (toType $ t2)) $ -} bkUnion t2
 
     common xs ys | null xs || null ys = []
-    common xs ys | otherwise          = 
-          [(y, x, y) | x <- xs, y <- ys, x `sub` y, not (y `sub` x)] -- x <: y
-      ++  [(x, x, y) | x <- xs, y <- ys, y `sub` x, not (x `sub` y)] -- y <: x
-      ++  [(x, x, y) | x <- xs, y <- ys, y `sub` x,      x `sub` y ] -- x == y
+    common xs ys | otherwise          = [(y, x, y) | x <- xs, y <- ys, x == y ] -- x == y
+    
+      {-    [(y, x, y) | x <- xs, y <- ys, x `sub` y, not (y `sub` x)] -- x <: y-}
+      {-++  [(x, x, y) | x <- xs, y <- ys, y `sub` x, not (x `sub` y)] -- y <: x-}
+      {-++  [(x, x, y) | x <- xs, y <- ys, y `sub` x,      x `sub` y ] -- x == y-}
 
     distinct xs [] = zip3 xs [] xs
     distinct [] ys = zip3 ys ys []
-    distinct xs ys = 
-         [(x, y, x) | x <- xs, y <- ys, not $ y `sub` x, not $ x `sub` y] -- unrelated
-      ++ [(y, y, x) | x <- xs, y <- ys, not $ y `sub` x, not $ x `sub` y] -- unrelated
+    distinct xs ys = [(y, y, x) | x <- xs, y <- ys, x /= y] 
+                  ++ [(x, y, x) | x <- xs, y <- ys, x /= y]
+      {-   [(x, y, x) | x <- xs, y <- ys, not $ y `sub` x, not $ x `sub` y] -- unrelated-}
+      {-++ [(y, y, x) | x <- xs, y <- ys, not $ y `sub` x, not $ x `sub` y] -- unrelated-}
 
 
 ---------------------------------------------------------------------------------
@@ -367,12 +372,12 @@ instance Eq TCon where
   _       == _       = False
  
 instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
-  TApp TUn t1 _       == TApp TUn t2 _       = (L.nub t1) L.\\ (L.nub t2) == []
+  TApp TUn t1 _       == TApp TUn t2 _       = (null $ t1 L.\\ t2) && (null $ t2 L.\\ t1)
     {-tracePP (printf "Diff: %s \\ %s" (ppshow $ L.nub t1) (ppshow $ L.nub t2)) $-}
   TApp c1 t1s r1      == TApp c2 t2s r2      = (c1, t1s, r1)  == (c2, t2s, r2)
   TVar v1 r1          == TVar v2 r2          = (v1, r1)       == (v2, r2)
   TFun b1 t1 r1       == TFun b2 t2 r2       = (b1, t1, r1)   == (b2, t2, r2)
-  TObj b1 r1          == TObj b2 r2          = b1 L.\\ b2 == [] && r1 == r2
+  TObj b1 r1          == TObj b2 r2          = (null $ b1 L.\\ b2) && (null $ b2 L.\\ b1) && r1 == r2
   TBd (TD c1 a1 b1 _) == TBd (TD c2 a2 b2 _) = (c1, a1, b1)   == (c2, a2, b2)
   TAll v1 t1          == TAll v2 t2          = (v1, t1)       == (v2, t2)
   _                   == _                   = False

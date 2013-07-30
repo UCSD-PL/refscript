@@ -19,6 +19,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Config           
 import           Language.Fixpoint.Files
 import           Language.Fixpoint.Interface        (solve)
 import           Language.Nano.CmdLine              (getOpts)
@@ -35,6 +36,7 @@ import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
 
+import           System.Console.CmdArgs.Default
 import           Debug.Trace
 
 --------------------------------------------------------------------------------
@@ -55,7 +57,7 @@ reftypeCheck f nkv = solveConstraints f . generateConstraints nkv
 solveConstraints :: FilePath -> CGInfo -> IO (F.FixResult SourceSpan) 
 --------------------------------------------------------------------------------
 solveConstraints f cgi 
-  = do (r, sol) <- solve f [] $ cgi_finfo cgi
+  = do (r, sol) <- solve def f [] $ cgi_finfo cgi
        let r'    = fmap (srcPos . F.sinfo) r
        renderAnnotations f sol r' $ cgi_annot cgi
        donePhase (F.colorResult r) (F.showFix r) 

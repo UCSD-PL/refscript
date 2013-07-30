@@ -587,7 +587,7 @@ matchTypes g i t1s t2s =
 -- TODO: we computed during the raw TCing phase (for precision).
 -- TODO: So, maybe include this info in CGSTate 
     f p acc x  ys   = case L.find (isSubType p x) ys of
-                        Just y -> ((tag x, tag y):acc, L.delete y ys)
+                        Just y -> ((tag x, tag y):acc, {-L.delete y -}ys)
                         _      -> ((tag x, tag $ fls x):acc, ys)
     fls t           = (ofType $ toType t) `strengthen` (F.predReft F.PFalse)
 

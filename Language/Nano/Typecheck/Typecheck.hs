@@ -412,7 +412,7 @@ getPhiType :: Annot b SourceSpan -> Env Type -> Env Type -> Id SourceSpan-> TCM 
 getPhiType l γ1 γ2 x
   = do  td <- getTDefs
         case (envFindTy x γ1, envFindTy x γ2) of
-          (Just t1, Just t2) -> return $ tracePP "Joining into" $ combineTypes (isSubType td) t1 t2 
+          (Just t1, Just t2) -> return $ tracePP "Joining into" $ fst3 $ joinTypes (isSubType td) t1 t2 
                             --if (t1 == t2) 
                             --  then return t1 
                             --  else tracePP "Joining into union" <$> mkUnion t1 t2 

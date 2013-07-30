@@ -10,7 +10,7 @@ import           Text.Printf                        (printf)
 import           Control.Monad
 import           Control.Applicative                ((<$>))
 import           Data.Maybe                         (fromJust) -- fromMaybe, isJust)
-import qualified Data.List as L  
+-- import qualified Data.List as L  
 import qualified Data.ByteString.Lazy   as B
 import qualified Data.HashMap.Strict as M
 import           Language.ECMAScript3.Syntax
@@ -19,7 +19,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Config           
+-- import           Language.Fixpoint.Config           
 import           Language.Fixpoint.Files
 import           Language.Fixpoint.Interface        (solve)
 import           Language.Nano.CmdLine              (getOpts)
@@ -29,7 +29,7 @@ import qualified Language.Nano.Annots as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
-import           Language.Nano.Typecheck.STMonad    (isSubType)
+-- import           Language.Nano.Typecheck.STMonad    (isSubType)
 import           Language.Nano.SSA.SSA
 
 -- import qualified Language.Nano.Env as E 
@@ -37,7 +37,7 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
-import           Debug.Trace
+-- import           Debug.Trace
 
 --------------------------------------------------------------------------------
 verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
@@ -277,16 +277,16 @@ consExpr _ e
 consCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 ---------------------------------------------------------------------------------------------
 consCast g x a e = 
-  do 
-    tts       <- matchTypes g (ci l) tEs tCs
+  do
+    tts       <- matchTypesM g tEs tCs
     mapM_ mkSub tts
     (x', g')  <- envAddFresh l tC g
     return (x', g')
   where 
     mkSub (e,c) = fixBase g x (e,c) >>= \(g',e',c') -> subType l g' e' c'
     tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
-    tCs = bkUnion tC                                 -- extract types from cast type
-    tEs = bkUnion $ envFindTy x g                    -- extract types from expression type
+    tCs = tC
+    tEs = envFindTy x g
     l   = getAnnotation e 
 
 
@@ -304,7 +304,7 @@ fixBase :: (PP t) => CGEnv-> Id AnnType -> (RType F.Reft, t)-> CGM (CGEnv, RType
 ---------------------------------------------------------------------------------------------
 fixBase g x (tE,tC) =
   do  g' <- envAdds [(x, rX')] g
-      return (g', trace msg tE', tC)
+      return (g', {-trace msg -}tE', tC)
   where
 --  { v: B | r } = { v: B | _ } `strengthen` r                        
     rX'          = strip tE     `strengthen` rTypeReft (envFindTy x g)
@@ -315,7 +315,8 @@ fixBase g x (tE,tC) =
 --  { v: B | p ∧ (v = x)} = { v: B | p } `strengthen` (v = x)
     tE'                   = tE           `strengthen` vEqX
 
-    msg =  printf "fixbase %s -> (%s::%s) \n|- tE: %s <: tC: %s\n" (ppshow $ envFindTy x g) (ppshow x) (ppshow rX') (ppshow tE') (ppshow tC)
+    {- msg =  printf "fixbase %s -> (%s::%s) \n|- tE: %s <: tC: %s\n" 
+    (ppshow $ envFindTy x g) (ppshow x) (ppshow rX') (ppshow tE') (ppshow tC) -} 
 
 
 ---------------------------------------------------------------------------------------------

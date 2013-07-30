@@ -61,12 +61,12 @@ function pos(){
 
 /*@ measure len :: forall A. (list [A]) => number */
 
-/*@ cons  :: forall A. (A, list[A] | Null) => list [A] */
+/*@ cons  :: forall A. (A, list[A] + Null) => list [A] */
 /*@ nil   :: () => Null */
 /*@ head  :: forall A. (xs:list [A]) => A        */
 /*@ tail  :: forall A. (xs:list [A]) => list [A] */
 /*@ nth   :: forall A. (xs:list [A], {i:number| ((0 <= i) && i < (len xs))}) => A                 */
-/*@ empty :: forall A. (xs:list [A] | Null) => boolean */
+/*@ empty :: forall A. (xs:list [A] + Null) => boolean */
 /*@ length   :: forall A. (xs:list [A]) => {v:number | ((v >= 0) && v = (len xs))}                */
 /*@ safehead :: forall A. ({xs:list [A] | (len xs) > 0}) => A                                     */
 /*@ safetail :: forall A. ({xs:list [A] | (len xs) > 0}) => {v:list [A] | (len v) = (len xs) - 1} */

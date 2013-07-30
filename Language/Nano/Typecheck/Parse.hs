@@ -38,6 +38,7 @@ import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile, So
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer
 bar        = Token.symbol     lexer "|"
+plus       = Token.symbol     lexer "+"
 -- angles     = Token.angles     lexer
 
 ----------------------------------------------------------------------------------
@@ -98,7 +99,7 @@ bareUnionP
   {-try $ parens bareUnionP'-}
   {-<|> try bareUnionP'-}
   
-bareUnionP' = do ts <- bareAtomP `sepBy1` bar
+bareUnionP' = do ts <- bareAtomP `sepBy1` plus
                  r  <- topP   -- unions have Top ref. type atm
                  case ts of 
                       [ ] -> error "impossible"
@@ -153,7 +154,7 @@ bareAllP
        return $ foldr TAll t as
 
 bindsP 
-  =  try (sepBy bareBindP comma)
+  =  try (sepBy1 bareBindP comma)
  <|> (spaces >> return [])
 
 bareBindP 

@@ -7,3 +7,5 @@
     that are reported after it.
 
 4.  Fix "Cannot handle ssaVarDECL" at "var foo;"
+
+5.  Add option to not solve constraints

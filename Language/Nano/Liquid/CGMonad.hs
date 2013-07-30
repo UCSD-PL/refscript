@@ -302,16 +302,17 @@ freshTyFun' g l f t b
 
 -- | Instantiate Fresh Type (at Call-site)
 ---------------------------------------------------------------------------------------
-freshTyInst :: (IsLocated l) => l -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
+-- freshTyInst :: (IsLocated l) => l -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
+freshTyInst :: AnnType -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
 freshTyInst l g αs τs tbody
-  = do ts    <- {- tracePP (printf "Liquid FreshTVars at %s" (ppshow l)) <$> -} 
-                mapM (freshTy "freshTyInst") τs
+  = do ts    <- tracePP (printf "Liquid FreshTVars at %s" (ppshow l)) <$>  
+                  mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
        let θ  = fromList $ zip αs ts
-       return $ {- tracePP msg $ -} apply θ tbody
-    -- where
-    --    msg = printf "freshTyInst αs=%s τs=%s: " (ppshow αs) (ppshow τs)
+       return $  tracePP msg $  apply θ tbody
+    where
+       msg = printf "freshTyInst αs=%s τs=%s: " (ppshow αs) (ppshow τs)
 
 -- | Instantiate Fresh Type (at Phi-site) 
 ---------------------------------------------------------------------------------------

@@ -354,11 +354,11 @@ consCall g l _ es ft
     --   msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)
 
 instantiate :: AnnType -> CGEnv -> RefType -> CGM RefType
-instantiate l g t = {- tracePP msg  <$> -} freshTyInst l g αs τs tbody 
+instantiate l g t =  tracePP msg  <$>  freshTyInst l g αs τs tbody 
   where 
     (αs, tbody)   = bkAll t
     τs            = getTypArgs l αs 
-    {-msg           = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)-}
+    msg           = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)
 
 
 getTypArgs :: AnnType -> [TVar] -> [Type] 

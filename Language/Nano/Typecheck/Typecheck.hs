@@ -254,13 +254,15 @@ tcStmt' γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt' γ (IfStmt l e s1 s2)
-  = do {- t <- tcExpr γ e -}
-  -- With truthy and falsy values, 
-  -- we cannot enforce this to be bool.
+  = do  
+    -- This check needs to be done even though 
+    -- we're not gonna require to have a boolean 
+    -- value here (see truthy and falsy)
+        _ <- tcExpr γ e 
        -- subTypeM_ l (Just e) t tBool
-       γ1      <- tcStmt' γ s1
-       γ2      <- tcStmt' γ s2
-       envJoin l γ γ1 γ2
+        γ1      <- tcStmt' γ s1
+        γ2      <- tcStmt' γ s2
+        envJoin l γ γ1 γ2
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt' γ (VarDeclStmt _ ds)
@@ -356,7 +358,7 @@ tcCall γ l fn es ft
        return      $ apply θ' ot
 
 instantiate l fn ft 
-  = do t' <- {- tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (bkAll ft)
+  = do t' <-  {- tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (bkAll ft)
        maybe err return   $ bkFun t'
     where
        err = logError (ann l) (errorNonFunction fn ft) tFunErr

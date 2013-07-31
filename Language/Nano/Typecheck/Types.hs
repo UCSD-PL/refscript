@@ -82,7 +82,7 @@ module Language.Nano.Typecheck.Types (
 
 import           Text.Printf
 import           Data.Hashable
-import           Data.Maybe             (fromMaybe) --, isJust)
+import           Data.Maybe             (fromMaybe, isNothing)
 import           Data.Monoid            hiding ((<>))            
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
@@ -105,7 +105,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative hiding (empty)
 import           Control.Monad.Error ()
 
-import           Debug.Trace (trace)
+-- import           Debug.Trace (trace)
 
 -- | Type Variables
 data TVar = TV { tv_sym :: F.Symbol
@@ -199,9 +199,17 @@ bkAll t              = go [] t
 ---------------------------------------------------------------------------------
 mkUnion :: (Ord r, Eq r, F.Reftable r) => [RType r] -> RType r
 ---------------------------------------------------------------------------------
-mkUnion [ ] = tErr -- maybe sth like false
+mkUnion [ ] = tErr
 mkUnion [t] = t
 mkUnion ts  = TApp TUn (L.nub ts) F.top
+
+
+---------------------------------------------------------------------------------
+mkUnionR :: (Ord r, Eq r, F.Reftable r) => r -> [RType r] -> RType r
+---------------------------------------------------------------------------------
+mkUnionR _ [ ] = tErr
+mkUnionR _ [t] = t       
+mkUnionR r ts  = TApp TUn (L.nub ts) r
 
 
 ---------------------------------------------------------------------------------
@@ -246,17 +254,19 @@ getBinding t _ = Left $ errorObjectTAccess t
 -- types that are added in the union are refined with False to keep the         
 -- equivalence. 
 -- The output is the following triplet:                                         
---  o common upper bound type (@t1@ ∪ @t2@),                                    
+--  o common upper bound type (@t1@ ∪ @t2@) WITH NULLIFIED PREDICATES           
 --  o adjusted type for @t1@ to be sort compatible,                             
 --  o adjusted type for @t2@ to be sort compatible)                             
 --
 --
 -- Examples:                                                                    
---  {Int | p} ㄩ {Bool | q} => ({Int | _}     ∪ {Bool | _},                     
---                              {Int | _}     ∪ {Bool | False},                 
---                              {Int | False} ∪ {Bool | _})                     
+--  {Int | p} ㄩ {Bool | q} => ({Int | ⊥    } ∪ {Bool | ⊥    },                 
+--                              {Int | p    } ∪ {Bool | ⊥    },                 
+--                              {Int | ⊥    } ∪ {Bool | q    })                 
 --
--- XXX: The output types should be freshened up                                 
+-- TODO: No subtyping is supported at the moment - so objects will be more      
+-- tricky                                                                       
+--
 --  {{ } | p} ㄩ {{a:Int} | q} => ( {{ }        | _},                           
 --                                  {{ }        | _},                           
 --                                  {{ a: Int } | _})                           
@@ -268,34 +278,46 @@ getBinding t _ = Left $ errorObjectTAccess t
 joinTypes ::  (Eq r, Ord r, F.Reftable r) => (RType r -> RType r -> Bool) ->
               RType r -> RType r -> (RType r, RType r, RType r)
 --------------------------------------------------------------------------------
-joinTypes _ {- sub -} t1 t2 = 
-  (mkUnion $ ccs ++ dcs, 
-   mkUnion $ c1s ++ (fmap F.bot <$> d1s), 
-   mkUnion $ c2s ++ (fmap F.bot <$> d2s))
+joinTypes eq t1 t2 = 
+  ({-tracePP "JOINED 1" $-} mkUnion $ fmap F.bot <$> (cmn ++ ds), 
+   {-tracePP "JOINED 2" $-} mkUnionR topR1 $ t1s ++ (fmap F.bot <$> d2s), 
+   {-tracePP "JOINED 3" $-} mkUnionR topR2 $ t2s ++ (fmap F.bot <$> d1s))
   where
-    -- c1s and c2s are both present in t1 and t2 respectively, 
-    -- so will be included 'as is'
-    (ccs, c1s, c2s) = map3 L.nub $ unzip3 $ common   t1s t2s 
+    topR1           = rTypeR t1 
+    topR2           = rTypeR t2
+    t1s             = bkUnion t1
+    t2s             = bkUnion t2
+    -- ccs: types in both t1s and t2s
+    cmn             = L.nub $ common t1s t2s 
     -- d1s are contained in t2 but not in t1, so should be included as bot
     -- d2s are contained in t1 but not in t2, so should be included as bot
-    (dcs, d1s, d2s) = map3 L.nub $ unzip3 $ distinct t1s t2s
-    map3 f (a,b,c)  = (f a, f b, f c)
-    t1s = {- trace ("joinTypes 1" ++ show (toType $ t1)) $ -} bkUnion t1
-    t2s = {- trace ("joinTypes 2" ++ show (toType $ t2)) $ -} bkUnion t2
+    -- ds = d1s ++ d2s 
+    (ds, d1s, d2s)  = distinct t1s t2s
+    {-map3 f (a,b,c)  = (f a, f b, f c)-}
 
     common xs ys | null xs || null ys = []
-    common xs ys | otherwise          = [(y, x, y) | x <- xs, y <- ys, x == y ] -- x == y
+    common xs ys | otherwise          = [x | x <- xs, y <- ys, x `eq` y ] -- x == y
     
       {-    [(y, x, y) | x <- xs, y <- ys, x `sub` y, not (y `sub` x)] -- x <: y-}
       {-++  [(x, x, y) | x <- xs, y <- ys, y `sub` x, not (x `sub` y)] -- y <: x-}
       {-++  [(x, x, y) | x <- xs, y <- ys, y `sub` x,      x `sub` y ] -- x == y-}
 
-    distinct xs [] = zip3 xs [] xs
-    distinct [] ys = zip3 ys ys []
-    distinct xs ys = [(y, y, x) | x <- xs, y <- ys, x /= y] 
-                  ++ [(x, y, x) | x <- xs, y <- ys, x /= y]
+    distinct xs [] = (xs, [], xs)
+    distinct [] ys = (ys, ys, [])
+    distinct xs ys =  let dx = [x | x <- xs, isNothing $ L.find (x `eq`) ys ]
+                          dy = [y | y <- ys, isNothing $ L.find (y `eq`) xs ] in
+                      (L.nub $ dx ++ dy, dx, dy)
+
       {-   [(x, y, x) | x <- xs, y <- ys, not $ y `sub` x, not $ x `sub` y] -- unrelated-}
       {-++ [(y, y, x) | x <- xs, y <- ys, not $ y `sub` x, not $ x `sub` y] -- unrelated-}
+
+
+
+rTypeR             :: RType r -> r
+rTypeR (TApp _ _ r) = r
+rTypeR (TVar _ r)   = r
+rTypeR (TFun _ _ r) = r
+rTypeR _            = errorstar "rTypeR"
 
 
 ---------------------------------------------------------------------------------

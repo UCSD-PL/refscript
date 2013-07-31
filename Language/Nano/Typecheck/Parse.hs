@@ -37,7 +37,6 @@ import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile, So
 
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer
-bar        = Token.symbol     lexer "|"
 plus       = Token.symbol     lexer "+"
 -- angles     = Token.angles     lexer
 

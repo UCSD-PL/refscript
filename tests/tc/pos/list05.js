@@ -1,12 +1,12 @@
 /*@ type list[A]  {  data : A, 
-                     next : list[A] + Null } */
+                     next : list[A] + null } */
 
-/*@ safeNull :: forall A . (x:list[A] + Null, def: list[A]) => list[A] */
+/*@ safeNull :: forall A . (x:list[A] + null, def: list[A]) => list[A] */
 function safeNull(x, def) {
 
-  if (x != null) 
-    return x;
-  else 
+  if (empty(x)) 
     return def;
+  else 
+    return x;
 
 }

@@ -35,7 +35,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace
+import           Debug.Trace                        as T
 
 --------------------------------------------------------------------------------
 verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
@@ -288,7 +288,8 @@ consCast g x a e =
 
 castSubM g x l t1 t2 = 
   do  (g', t1', t2') <- fixBase g x (t1, t2) 
-      modify $ \st -> st {cs = Sub g' (ci l) t1' t2' : (cs st)}
+      let (tt1', tt2') = mapPair addTag (t1', t2')
+      modify $ \st -> st {cs = Sub g' (ci l) (T.trace (printf "Adding cast Sub: %s\n<:\n%s" (ppshow tt1') (ppshow tt2')) tt1') tt2' : (cs st)}
 
 
 -- | fixBase converts:                                                  

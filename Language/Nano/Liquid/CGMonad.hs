@@ -36,6 +36,7 @@ module Language.Nano.Liquid.CGMonad (
   , envJoin
 
   -- * Add Subtyping Constraints
+  , addTag
   , subTypes
   , subType 
   , bkTypesM
@@ -186,33 +187,32 @@ envAdds xts g
 addFixpointBind :: (F.Symbolic x) => (x, RefType) -> CGM F.BindId
 addFixpointBind (x, t) 
   = do let s     = F.symbol x
-       let t'    = tag t
+       let t'    = addTag t
        let r     = rTypeSortedReft t'
        (i, bs') <- F.insertBindEnv s 
         ({-T.trace (printf "Inserting bind: %s :: %s" (show s) (ppshow t'))-} r) . binds <$> get 
        modify    $ \st -> st { binds = bs' }
        return    $ i
 
--- TODO: this needs major update
-tag :: RType F.Reft -> RType F.Reft
-tag t@(TApp TInt  [] _) = TApp TInt  [] $ taggedReft t
-tag t@(TApp TBool [] _) = TApp TBool [] $ taggedReft t
---tag   (TApp TUn   ts r) = TApp TTop [] $ foldl  mempty $ map taggedReft ts
-tag t                   = t
+-- | Add tags to connect the raw type with the liquid part 
+-- TODO: Fill with the rest of the tags
+---------------------------------------------------------------------------------------
+addTag :: RType F.Reft -> RType F.Reft
+---------------------------------------------------------------------------------------
+addTag t@(TApp TInt   [] r) = t `strengthen` tagPred r 0
+addTag t@(TApp TBool  [] r) = t `strengthen` tagPred r 1
+addTag t@(TApp TNull  [] r) = t `strengthen` tagPred r 2
+addTag t@(TApp TUndef [] r) = t `strengthen` tagPred r 3
+addTag t                    = traceShow "addTag DEFAULT" t
 
-taggedReft :: RType F.Reft -> F.Reft
-taggedReft (TApp TInt  [] r) = tagByNumber r 0
-taggedReft (TApp TBool [] r) = tagByNumber r 1
-taggedReft t                 = rTypeReft t
-
-tagByNumber :: F.Reft -> Integer -> F.Reft
-tagByNumber r@(F.Reft (sym, refa)) n = F.Reft (sym, (tagPred r n):refa)
-
-
-tagPred (F.Reft (sym, _)) n = F.RConc pred
+-- | Create tag predicate: (ttag vv = n)
+---------------------------------------------------------------------------------------
+tagPred :: F.Reft -> Int -> F.Reft
+---------------------------------------------------------------------------------------
+tagPred (F.Reft (sym, _)) n = F.Reft (sym, [F.RConc pred])
   where
-    pred = F.PAtom F.Eq (F.EApp tag [vv]) (F.expr n)
-    tag  = F.stringSymbol "ttag"
+    pred = F.PAtom F.Eq (F.EApp addTag [vv]) (F.expr n)
+    addTag  = F.stringSymbol "ttag"
     vv   = F.EVar sym
 
 ---------------------------------------------------------------------------------------
@@ -310,9 +310,9 @@ freshTyInst l g αs τs tbody
   = do ts    <- mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
        let θ  = fromList $ zip αs ts
-       return $  tracePP msg $  apply θ tbody
-    where
-       msg = printf "freshTyInst αs=%s τs=%s: " (ppshow αs) (ppshow τs)
+       return $  {- tracePP msg $ -} apply θ tbody
+    {-where-}
+    {-   msg = printf "freshTyInst αs=%s τs=%s: " (ppshow αs) (ppshow τs)-}
 
 -- | Instantiate Fresh Type (at Phi-site) 
 ---------------------------------------------------------------------------------------
@@ -335,23 +335,15 @@ subTypes :: (IsLocated x, F.Expression x, F.Symbolic x)
 subTypes l g xs ts = zipWithM_ (subType l g) [envFindTy x g | x <- xs] ts
 
 
--- subTypes l g xs ts 
---   = do mapM (uncurry $ subType l g) xts_ts' 
---        return su
---     where 
---       (su, ts') = shiftVVs ts xs 
---       xts       = [envFindTy x g | x <- xs]
---       xts_ts'   = safeZip "subTypes" xts ts'
-
-
 ---------------------------------------------------------------------------------------
 subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 = 
   do  
-    s <- bkTypesM (T.trace (printf "Adding Sub: %s\n<:\n%s" (ppshow t1) (ppshow t2)) t1, t2)
+    s <- bkTypesM (T.trace (printf "Adding Sub: %s\n<:\n%s" (ppshow t1) (ppshow t2)) tt1, tt2)
     modify $ \st -> st {cs = c s ++ (cs st)}
   where 
+    (tt1, tt2) = mapPair addTag (t1, t2)
     c s = map (uncurry $ Sub g (ci l)) s 
 
 
@@ -403,7 +395,7 @@ bkTypesM (t1, t2@(TObj _ _)) =
   cg_tdefs <$> get >>= \env -> bkTypesM (tracePP ("Unfolded " ++ (ppshow t1)) $ unfoldTDefSafe t1 env, t2)
 
 -- | Default case: Just return the types
-bkTypesM tt = return $ tracePP "bkTypes default" [tt]
+bkTypesM tt = return {- $ tracePP "bkTypes default" -} [tt]
 
 
 
@@ -522,8 +514,8 @@ refreshRefType = mapReftM refresh
 -- | Splitting Subtyping Constraints --------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-splitC c = tracePP "After splitting" <$> splitC' (tracePP "Before Splitting" c)
--- splitC c = splitC' c
+-- splitC c = tracePP "After splitting" <$> splitC' c
+splitC c = splitC' c
 
 splitC' :: SubC -> CGM [FixSubC]
 ---------------------------------------------------------------------------------------

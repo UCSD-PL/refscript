@@ -1,16 +1,14 @@
-/*@ negate :: (number + boolean) => number */
+/*@ negate :: (number) => number */
 function negate(x) {
 
   //Revert when strings are supported   
-  if (typeof(x) == 1) {
-    if (typeof(x) == 0) 
+  if (typeof(x) == 0) {
       return 0-x;
-    else 
-      return 0;
   }
-  else if (typeof(x) == 1) {
+  else {
     return !x;
   }
+  
 }
 
 /*@ main :: (number) => void */ 

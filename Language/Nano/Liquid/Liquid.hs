@@ -11,7 +11,6 @@ import           Control.Monad
 import           Control.Monad.State
 import           Control.Applicative                ((<$>))
 
-import           Data.Maybe                         (fromJust)
 import qualified Data.ByteString.Lazy               as B
 import qualified Data.HashMap.Strict                as M
 
@@ -115,7 +114,7 @@ envAddFun :: AnnType -> CGEnv -> Id AnnType -> [Id AnnType] -> RefType -> CGM CG
 -----------------------------------------------------------------------------------
 envAddFun l g f xs ft = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
   where  
-    (αs, yts, t)      = fromJust $ bkFun ft
+    (αs, yts, t)      = mfromJust "envAddFun" $ bkFun ft
     tyBinds           = [(Loc (srcPos l) α, tVar α) | α <- αs]
     varBinds          = safeZip "envAddFun"
     (su, ts')         = renameBinds yts xs 
@@ -277,7 +276,7 @@ consCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnT
 ---------------------------------------------------------------------------------------------
 consCast g x a e = 
   do
-    ps        <- bkTypesM tE tC
+    ps        <- bkTypesM (tE, tC)
     mapM_ (uncurry $ castSubM g x l) ps 
     (x', g')  <- envAddFresh l tC g
     return (x', g')
@@ -349,7 +348,7 @@ consCall :: (PP a)
 --   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in output type of callee.
 
 consCall g l _ es ft 
-  = do (_,its,ot)   <- fromJust . bkFun <$> instantiate l g ft
+  = do (_,its,ot)   <- mfromJust "consCall" . bkFun <$> instantiate l g ft
        (xes, g')    <- consScan consExpr g es
        let (su, ts') = renameBinds its xes
        subTypes l g' xes ts'

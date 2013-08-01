@@ -6,23 +6,16 @@
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
 
-import           Control.Applicative                ((<$>)) -- (<*>))
+import           Control.Applicative                ((<$>))
 import           Control.Monad                
--- import           Control.Monad.State
-import qualified Data.HashSet        as HS 
-import qualified Data.HashMap.Strict as M 
--- import qualified Data.Foldable       as FD
-import           Data.List           (find)
-import qualified Data.Traversable    as T
+
+import qualified Data.HashSet                       as HS 
+import qualified Data.HashMap.Strict                as M 
+import           Data.List                          (find)
+import qualified Data.Traversable                   as T
 import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust)
-
 import           Data.Generics                   
--- import           Data.Generics.Aliases
--- import           Data.Generics.Schemes
--- import           Data.Typeable                  
-
-
 
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$))
 import           Text.Printf                        (printf)
@@ -31,26 +24,21 @@ import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
-import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.STMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.SSA.SSA
--- import           Language.Nano.Visitor.Visitor
 
-import qualified Language.Fixpoint.Types as F
--- import           Language.Fixpoint.Interface        (resultExit)
-import           Language.Fixpoint.Misc  as FM 
--- import           System.Exit                        (exitWith)
--- import           Language.ECMAScript3.Syntax.Annotations
+import qualified Language.Fixpoint.Types            as F
+import           Language.Fixpoint.Misc             as FM 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
-import           Debug.Trace    hiding (traceShow)
+import           Debug.Trace                        hiding (traceShow)
 
-import           System.Console.CmdArgs.Verbosity as V
+import           System.Console.CmdArgs.Verbosity   as V
 
 
 --------------------------------------------------------------------------------
@@ -138,7 +126,7 @@ tcAndPatch p =
     codePP (Nano {code = Src src}) sub = render $
           text "********************** CODE **********************"
       $+$ pp src
-      $+$ text "**************************************************"
+      $+$ text "***************** SUBSTITUTIONS ******************"
       $+$ pp sub
       $+$ text "**************************************************"
 
@@ -414,27 +402,10 @@ getPhiType :: Annot b SourceSpan -> Env Type -> Env Type -> Id SourceSpan-> TCM 
 getPhiType l γ1 γ2 x
   = do  td <- getTDefs
         case (envFindTy x γ1, envFindTy x γ2) of
-          (Just t1, Just t2) -> return $ fst3 $ joinTypes (isSubType td) t1 t2 
-                            --if (t1 == t2) 
-                            --  then return t1 
-                            --  else tracePP "Joining into union" <$> mkUnion t1 t2 
-                            --  -- logError (ann l) (errorJoin x t1 t2) tErr
+          (Just t1, Just t2) -> return $ fst3 $ joinTypes (isSubType td) (t1, t2)
           (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
                                   then logError (ann l) "Oh no, the HashMap GREMLIN is back...1" tErr
                                   else logError (ann l) (bugUnboundPhiVar x) tErr
-    {-where-}
-    {-  mkUnion t1 t2 = -}
-    {-    case (prep t1, prep t2) of -}
-    {-      (Just t1s, Just t2s) -> -}
-    {-        case nub $ t1s ++ t2s of-}
-    {-          [ ] -> logError (ann l) (errorJoin x t1 t2) tErr-}
-    {-          [t] -> return $ t-}
-    {-          ts  -> return $ TApp TUn ts ()-}
-    {-      (_       , _       ) -> logError (ann l) (errorJoin x t1 t2) tErr-}
-    {-  prep (TApp TUn l _) = Just l-}
-    {-  prep t@(TApp _ _ _) = Just [t]-}
-    {-  prep t@(TVar _ _ )  = Just [t]-}
-    {-  prep _              = Nothing-}
 
 
 forceCheck x γ 

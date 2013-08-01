@@ -38,6 +38,7 @@ module Language.Nano.Liquid.CGMonad (
   -- * Add Subtyping Constraints
   , subTypes
   , subType 
+  , bkTypesM
    
   -- * Match same sort types
   , matchTypes
@@ -307,8 +308,7 @@ freshTyFun' g l _ t b
 freshTyInst :: AnnType -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
 freshTyInst l g αs τs tbody
-  = do ts    <- tracePP (printf "Liquid FreshTVars at %s" (ppshow l)) <$>  
-                  mapM (freshTy "freshTyInst") τs
+  = do ts    <- mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
        let θ  = fromList $ zip αs ts
        return $  tracePP msg $  apply θ tbody
@@ -320,9 +320,7 @@ freshTyInst l g αs τs tbody
 freshTyPhis :: (PP l, IsLocated l) => l -> CGEnv -> [Id l] -> [Type] -> CGM (CGEnv, [RefType])  
 ---------------------------------------------------------------------------------------
 freshTyPhis l g xs τs 
-  = do ts <- 
-         {-tracePP (printf "Liquid FreshTyPhis at %s" (ppshow l)) <$> -}
-         mapM    (freshTy "freshTyPhis")  ({-tracePP "From" -} τs)
+  = do ts <- mapM    (freshTy "freshTyPhis")  ({-tracePP "From" -} τs)
        g' <- envAdds (safeZip "freshTyPhis" xs ts) g
        _  <- mapM    (wellFormed l g') ts
        return (g', ts)
@@ -356,8 +354,8 @@ subType l g t1 t2 =
     modify $ \st -> st {cs = (c p) ++ (cs st)}
   where 
     c p = map (uncurry $ Sub g (ci l))  
-            $ tracePP "SUBTYPE (Break-down)" 
-            $ bkTypes p g (T.trace (printf "Adding Sub: %s\n<:\n%s" (ppshow t1) (ppshow t2)) t1) t2
+            {-$ tracePP "SUBTYPE (Break-down)" -}
+            $ bkTypes (T.trace (printf "Adding Sub: %s\n<:\n%s" (ppshow t1) (ppshow t2)) t1) t2
 
 
 ---------------------------------------------------------------------------------------
@@ -366,7 +364,7 @@ subType l g t1 t2 =
 
 -- | The output of this function should be of the same sort
 ---------------------------------------------------------------------------------------
-bkTypes :: E.Env RefType -> CGEnv -> RefType -> RefType -> [(RefType, RefType)]
+bkTypes :: RefType -> RefType -> [(RefType, RefType)]
 ---------------------------------------------------------------------------------------
 -- | Unions:                                                                
 -- S1 ∪ ... ∪ Sn <: T1 ∪ ... ∪ Tn --->                                      
@@ -374,15 +372,17 @@ bkTypes :: E.Env RefType -> CGEnv -> RefType -> RefType -> [(RefType, RefType)]
 -- Should use the joinType trick (adding false and matching that are missing
 -- from each side) to keep the refinements for the union                    
 -- Handle top-level union here
-bkTypes p g t1 t2 | union t1 || union t2 = matchTypes t1' t2'
+bkTypes t1 t2 | union t1 || union t2 = matchTypes t1' t2'
   where eq a b               = toType a == toType b
         (_, t1', t2')        = joinTypes eq t1 t2
         -- t1' and t2' should be compatible at this point!
 
 -- XXX: No more union cases supported. E.g. nested unions
-bkTypes _ _ t1 t2 | otherwise
+bkTypes t1 t2 | otherwise
   = [mapPair unionCheck (t1 ,t2)]
 
+
+bkTypesM t1 t2 = return $ bkTypes t1 t2
 
 ---------------------------------------------------------------------------------------
 joinTypesM ::  (RefType -> RefType -> Bool) -> RefType -> RefType -> CGM (RefType, RefType, RefType)

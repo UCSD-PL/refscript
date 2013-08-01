@@ -1,17 +1,20 @@
-/*@ negate :: (number) => number */
+/*@ negate :: (number + boolean) => number */
 function negate(x) {
 
-//Original - revert when strings are supported   
-  if (typeof(x) == 0) {
-    return 0-x;
+  //Revert when strings are supported   
+  if (typeof(x) == 1) {
+    if (typeof(x) == 0) 
+      return 0-x;
+    else 
+      return 0;
   }
-  else {
+  else if (typeof(x) == 1) {
     return !x;
   }
 }
 
-/*@ main :: (number, {v:number|v>0}) => void */ 
-function main(x,y) {
+/*@ main :: (number) => void */ 
+function main(x) {
 
   negate(x);
 

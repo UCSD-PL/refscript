@@ -199,9 +199,7 @@ bkAll t              = go [] t
 ---------------------------------------------------------------------------------
 mkUnion :: (Ord r, Eq r, F.Reftable r) => [RType r] -> RType r
 ---------------------------------------------------------------------------------
-mkUnion [ ] = tErr
-mkUnion [t] = t
-mkUnion ts  = TApp TUn (L.nub ts) F.top
+mkUnion = mkUnionR F.top
 
 
 ---------------------------------------------------------------------------------
@@ -209,7 +207,7 @@ mkUnionR :: (Ord r, Eq r, F.Reftable r) => r -> [RType r] -> RType r
 ---------------------------------------------------------------------------------
 mkUnionR _ [ ] = tErr
 mkUnionR _ [t] = t       
-mkUnionR r ts  = TApp TUn (L.nub ts) r
+mkUnionR r ts  = TApp TUn (L.sort $ L.nub ts) r
 
 
 ---------------------------------------------------------------------------------
@@ -283,8 +281,8 @@ joinTypes eq t1 t2 =
    {-tracePP "JOINED 2" $-} mkUnionR topR1 $ t1s ++ (fmap F.bot <$> d2s), 
    {-tracePP "JOINED 3" $-} mkUnionR topR2 $ t2s ++ (fmap F.bot <$> d1s))
   where
-    topR1           = rTypeR t1 
-    topR2           = rTypeR t2
+    topR1           = rUnion t1 
+    topR2           = rUnion t2
     t1s             = bkUnion t1
     t2s             = bkUnion t2
     -- ccs: types in both t1s and t2s
@@ -312,13 +310,11 @@ joinTypes eq t1 t2 =
       {-++ [(y, y, x) | x <- xs, y <- ys, not $ y `sub` x, not $ x `sub` y] -- unrelated-}
 
 
-
-rTypeR             :: RType r -> r
-rTypeR (TApp _ _ r) = r
-rTypeR (TVar _ r)   = r
-rTypeR (TFun _ _ r) = r
-rTypeR _            = errorstar "rTypeR"
-
+-- | Get the top-level refinement for unions - use Top (True) otherwise
+rUnion                :: F.Reftable r => RType r -> r
+rUnion (TApp TUn _ r) = r
+rUnion _              = F.top
+  
 
 ---------------------------------------------------------------------------------
 strengthen                   :: F.Reftable r => RType r -> r -> RType r

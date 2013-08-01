@@ -99,15 +99,15 @@ instance PP (F.SubC c) where
 -------------------------------------------------------------------------------
 getCGInfo     :: NanoRefType -> Bool -> CGM a -> CGInfo  
 -------------------------------------------------------------------------------
-getCGInfo pgm  nkv = cgStateCInfo pgm . execute pgm nkv . (>> fixCWs)
+getCGInfo pgm  kv = cgStateCInfo pgm . execute pgm kv . (>> fixCWs)
   where 
     fixCWs         = (,) <$> fixCs <*> fixWs
     fixCs          = concatMapM splitC . cs =<< get 
     fixWs          = concatMapM splitW . ws =<< get
 
 execute :: Nano AnnType RefType -> Bool -> CGM a -> (a, CGState)
-execute pgm nkv act
-  = case runState (runErrorT act) $ initState pgm nkv of 
+execute pgm kv act
+  = case runState (runErrorT act) $ initState pgm kv of 
       (Left err, _) -> errorstar err
       (Right x, st) -> (x, st)  
 
@@ -150,7 +150,7 @@ data CGState
         , count    :: !Integer             -- ^ freshness counter
         , cg_ann   :: A.AnnInfo RefType    -- ^ recorded annotations
         , pgm      :: Nano AnnType RefType -- ^ the program
-        , noKVars  :: Bool                 -- ^ If true do not instatiate function types with K-vars
+        , kVars    :: Bool                 -- ^ If true do not instatiate function types with K-vars
         }
 
 type CGM     = ErrorT String (State CGState)
@@ -282,7 +282,7 @@ envJoin' l g g1 g2
         -- the added False's to make the types equivalent
         envAdds (zip xs $ snd3 <$> ttt) g1 
         envAdds (zip xs $ thd3 <$> ttt) g2
-        subTypes l g1 xs ts
+        subTypes l g1 xs (tracePP "After JOIN" ts)
         subTypes l g2 xs ts
         return g'
 
@@ -295,11 +295,11 @@ envJoin' l g g1 g2
 ---------------------------------------------------------------------------------------
 freshTyFun :: (IsLocated l) => CGEnv -> l -> Id AnnType -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
-freshTyFun g l f t  = noKVars <$> get >>= freshTyFun' g l f t 
+freshTyFun g l f t  = kVars <$> get >>= freshTyFun' g l f t 
 
 freshTyFun' g l _ t b
-  | b || (not $ isTrivialRefType t) = return t
-  | otherwise                       = freshTy "freshTyFun" (toType t) >>= wellFormed l g 
+  | b && isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g 
+  | otherwise               = return t
 
 -- | Instantiate Fresh Type (at Call-site)
 ---------------------------------------------------------------------------------------
@@ -355,7 +355,9 @@ subType l g t1 t2 =
     p <- cg_tdefs <$> get
     modify $ \st -> st {cs = (c p) ++ (cs st)}
   where 
-    c p = map (uncurry $ Sub g (ci l)) (tracePP "SUBTYPE (Break-down)" $ bkTypes p g t1 t2)
+    c p = map (uncurry $ Sub g (ci l))  
+            $ tracePP "SUBTYPE (Break-down)" 
+            $ bkTypes p g (T.trace (printf "Adding Sub: %s\n<:\n%s" (ppshow t1) (ppshow t2)) t1) t2
 
 
 ---------------------------------------------------------------------------------------
@@ -372,16 +374,12 @@ bkTypes :: E.Env RefType -> CGEnv -> RefType -> RefType -> [(RefType, RefType)]
 -- Should use the joinType trick (adding false and matching that are missing
 -- from each side) to keep the refinements for the union                    
 -- Handle top-level union here
-bkTypes p g t1 t2 | union t1 || union t2 
-  = matchTypes t1' t2'
-  where union (TApp TUn _ _) = True
-        union _              = False
-        eq a b               = toType a == toType b
+bkTypes p g t1 t2 | union t1 || union t2 = matchTypes t1' t2'
+  where eq a b               = toType a == toType b
         (_, t1', t2')        = joinTypes eq t1 t2
         -- t1' and t2' should be compatible at this point!
 
--- The rest of the cases should not have unions
--- TODO: cases with nested unions will not be supported
+-- XXX: No more union cases supported. E.g. nested unions
 bkTypes _ _ t1 t2 | otherwise
   = [mapPair unionCheck (t1 ,t2)]
 
@@ -395,6 +393,13 @@ joinTypesM eq t1 t2 =
       return            $ (j', t1', t2')
 
 
+-- | Check for top-level union
+---------------------------------------------------------------------------------------
+union :: RType r -> Bool
+---------------------------------------------------------------------------------------
+union (TApp TUn _ _) = True
+union _              = False
+        
 ---------------------------------------------------------------------------------------
 noUnion :: (F.Reftable r) => RType r -> Bool
 ---------------------------------------------------------------------------------------

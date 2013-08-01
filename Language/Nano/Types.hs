@@ -87,7 +87,7 @@ data Config
            }
   | Liquid { files       :: [FilePath]     -- ^ source files to check
            , incdirs     :: [FilePath]     -- ^ path to directory for include specs
-           , noKVarInst  :: Bool           -- ^ instantiate function types with k-vars
+           , kVarInst    :: Bool           -- ^ instantiate function types with k-vars
            }
   | Visit  { files       :: [FilePath]     -- ^ source files to check
            , incdirs     :: [FilePath]     -- ^ path to directory for include specs

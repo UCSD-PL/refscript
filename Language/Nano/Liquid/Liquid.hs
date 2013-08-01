@@ -276,14 +276,14 @@ consCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnT
 ---------------------------------------------------------------------------------------------
 consCast g x a e = 
   do
-    ps        <- bkTypesM (tE, tC)
+    ps       <- bkTypesM (tE, tC)
     mapM_ (uncurry $ castSubM g x l) ps 
-    (x', g')  <- envAddFresh l tC g
+    (x', g') <- envAddFresh l tC g
     return (x', g')
   where 
-    tE            = tracePP ("CAST FROM " ++ ppshow x) $ envFindTy x g
-    tC            = tracePP "CAST TO" $ rType $ head [ t | Assume t <- ann_fact a]
-    l             = getAnnotation e
+    tE        = tracePP ("CAST FROM " ++ ppshow x) $ envFindTy x g
+    tC        = tracePP "CAST TO" $ rType $ head [ t | Assume t <- ann_fact a]
+    l         = getAnnotation e
 
 
 castSubM g x l t1 t2 = 

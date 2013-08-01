@@ -8,35 +8,34 @@ module Language.Nano.Liquid.Liquid (verifyFile) where
 import           Text.Printf                        (printf)
 -- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
+import           Control.Monad.State
 import           Control.Applicative                ((<$>))
-import           Data.Maybe                         (fromJust) -- fromMaybe, isJust)
--- import qualified Data.List as L  
-import qualified Data.ByteString.Lazy   as B
-import qualified Data.HashMap.Strict as M
+
+import           Data.Maybe                         (fromJust)
+import qualified Data.ByteString.Lazy               as B
+import qualified Data.HashMap.Strict                as M
+
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
-import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc
--- import           Language.Fixpoint.Config           
 import           Language.Fixpoint.Files
 import           Language.Fixpoint.Interface        (solve)
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Types
-import qualified Language.Nano.Annots as A
+import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
--- import           Language.Nano.Typecheck.STMonad    (isSubType)
 import           Language.Nano.SSA.SSA
-
--- import qualified Language.Nano.Env as E 
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
+
 -- import           Debug.Trace
 
 --------------------------------------------------------------------------------
@@ -278,24 +277,26 @@ consCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnT
 ---------------------------------------------------------------------------------------------
 consCast g x a e = 
   do
-    --mapM_ mkSub tts
-    subType l g tE tC
+    ps        <- bkTypesM tE tC
+    mapM_ (uncurry $ castSubM g x l) ps 
     (x', g')  <- envAddFresh l tC g
     return (x', g')
   where 
-    {-mkSub (e,c)   = fixBase g x (tracePP "FIXBASE BEFORE" (e,c)) -}
-    {-                  >>= \(g',e',c') -> subType l g' (tracePP "FIXBASE E" e') (tracePP "FIXBASE C" c')-}
-    {-tts           = tracePP "CAST" $ matchTypes tE' tC'-}
-    {-(_, tE', tC') = joinTypes eq  tE tC  -}
     tE            = tracePP ("CAST FROM " ++ ppshow x) $ envFindTy x g
-    tC            = tracePP "CAST TO" $ rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
-    {-eq a b        = toType a == toType b-}
+    tC            = tracePP "CAST TO" $ rType $ head [ t | Assume t <- ann_fact a]
     l             = getAnnotation e
+
+
+castSubM g x l t1 t2 = 
+  do  (g', t1', t2') <- fixBase g x (t1, t2) 
+      modify $ \st -> st {cs = Sub g' (ci l) t1' t2' : (cs st)}
 
 
 -- | fixBase converts:                                                  
 --                         -----tE-----              -----tC-----       
 -- g, x :: { v: U | r } |- { v: B | p }           <: { v: B | q }       
+--              ^                                                       
+--              |______Union                                            
 --                                                                      
 -- into:                                                                
 --                                                                      

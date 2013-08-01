@@ -1,19 +1,17 @@
-// The second argument is kinda necessary atm 
-
-/*@ negate :: (number|boolean, {v:number|v>0}) => number|boolean */
-function negate(www,y) {
-
-//Original - revert when strings are supported   
-  if (typeof(www) == 0) {
-    return 0-www;
+/*@ negate :: (number + boolean) => number + boolean */
+function negate(x) {
+//Int   -> 0
+//Bool  -> 1
+//Revert when strings are supported   
+  if (typeof(x) == 0) {
+    return 0-x;
   }
   else {
-    return !www;
+    return !x;
   }
 }
 
-/*@ main :: (number|boolean, {v:number|v>0}) => void */ 
-function main(x,y) {
-  negate(x,y);
-
+/*@ main :: (number + boolean) => void */ 
+function main(n) {
+  negate(n);
 }

@@ -8,6 +8,7 @@ module Language.Nano.Typecheck.Parse (
     parseNanoFromFile 
   ) where
 
+import           Data.List (sort)
 import           Data.Maybe (fromMaybe)
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
@@ -103,7 +104,7 @@ bareUnionP' = do ts <- bareAtomP `sepBy1` plus
                  case ts of 
                       [ ] -> error "impossible"
                       [t] -> return t
-                      _   -> return $ TApp TUn ts r
+                      _   -> return $ TApp TUn (sort ts) r
 
 
 bareAtomP 

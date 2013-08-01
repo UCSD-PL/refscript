@@ -44,14 +44,14 @@ verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 verifyFile f =   
   do  p <- parseNanoFromFile f
-      Liquid{ noKVarInst = nkv } <- getOpts
-      fmap (,"") <$> reftypeCheck f nkv (typeCheck (ssaTransform p))
+      Liquid{ kVarInst = kv } <- getOpts
+      fmap (,"") <$> reftypeCheck f kv (typeCheck (ssaTransform p))
 
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
 reftypeCheck   :: FilePath -> Bool -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
-reftypeCheck f nkv = solveConstraints f . generateConstraints nkv
+reftypeCheck f kv = solveConstraints f . generateConstraints kv
 
 --------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (F.FixResult SourceSpan) 
@@ -87,7 +87,7 @@ tidy = id
 --------------------------------------------------------------------------------
 generateConstraints     :: Bool -> NanoRefType -> CGInfo 
 --------------------------------------------------------------------------------
-generateConstraints nkv pgm = getCGInfo pgm nkv $ consNano pgm
+generateConstraints kv pgm = getCGInfo pgm kv $ consNano pgm
 
 --------------------------------------------------------------------------------
 consNano     :: NanoRefType -> CGM ()

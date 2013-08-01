@@ -275,8 +275,7 @@ envJoin' l g g1 g2
         let t2s  = (`envFindTy` g2) <$> xs
         when (length t1s /= length t2s) $ cgError l (bugBadPhi l t1s t2s)
         -- joinTypes triplets
-        let ttt  = (uncurry $ joinTypes (\a b -> toType a == toType b)) 
-                    <$> zip ({- tracePP "JOINING 1" -} t1s) ({-tracePP "JOINING 2" -}t2s)
+        let ttt  = joinTypes (\a b -> toType a == toType b) <$> zip t1s t2s
         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst3 <$> ttt
         -- To facilitate the sort check t1s and t2s need to change to their
         -- equivalents that have the same sort with the joined types (ts) (with
@@ -350,47 +349,63 @@ subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 = 
   do  
-    p <- cg_tdefs <$> get
-    modify $ \st -> st {cs = (c p) ++ (cs st)}
+    s <- bkTypesM (T.trace (printf "Adding Sub: %s\n<:\n%s" (ppshow t1) (ppshow t2)) t1, t2)
+    modify $ \st -> st {cs = c s ++ (cs st)}
   where 
-    c p = map (uncurry $ Sub g (ci l))  
-            {-$ tracePP "SUBTYPE (Break-down)" -}
-            $ bkTypes (T.trace (printf "Adding Sub: %s\n<:\n%s" (ppshow t1) (ppshow t2)) t1) t2
+    c s = map (uncurry $ Sub g (ci l)) s 
 
 
 ---------------------------------------------------------------------------------------
--- | Breaking and joining unions ------------------------------------------------------
+-- | Breaking Types              ------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
 -- | The output of this function should be of the same sort
 ---------------------------------------------------------------------------------------
-bkTypes :: RefType -> RefType -> [(RefType, RefType)]
+bkTypesM :: (RefType, RefType) -> CGM [(RefType, RefType)]
 ---------------------------------------------------------------------------------------
--- | Unions:                                                                
+
+-- | Top-level Unions:                                                      
+--
 -- S1 ∪ ... ∪ Sn <: T1 ∪ ... ∪ Tn --->                                      
 -- Si <: Tj forall matching i,j ∧ Sj <: { Sj | false } for the remaining j's
 -- Should use the joinType trick (adding false and matching that are missing
 -- from each side) to keep the refinements for the union                    
--- Handle top-level union here
-bkTypes t1 t2 | union t1 || union t2 = matchTypes t1' t2'
-  where eq a b               = toType a == toType b
-        (_, t1', t2')        = joinTypes eq t1 t2
-        -- t1' and t2' should be compatible at this point!
+--
+-- Adds the normalized top-level union, not in recursion to avoid infinite 
+-- loop.
 
--- XXX: No more union cases supported. E.g. nested unions
-bkTypes t1 t2 | otherwise
-  = [mapPair unionCheck (t1 ,t2)]
+bkTypesM (t1, t2) | union t1 || union t2 = 
+  liftM2 (:) (return (t1',t2')) (concatMapM bkTypesM $ matchTypes t1' t2')
+  where eq a b        = toType a == toType b
+        (_, t1', t2') = joinTypes eq (t1, t2) -- make compatible
 
 
-bkTypesM t1 t2 = return $ bkTypes t1 t2
+-- | Top-level Objects:                                                     
+--
+-- TODO: Add toplevel refinement constraint on r1 - r2                      
 
----------------------------------------------------------------------------------------
-joinTypesM ::  (RefType -> RefType -> Bool) -> RefType -> RefType -> CGM (RefType, RefType, RefType)
----------------------------------------------------------------------------------------
-joinTypesM eq t1 t2 = 
-  do  let (j, t1', t2') = joinTypes eq t1 t2 
-      j'               <- refresh j
-      return            $ (j', t1', t2')
+bkTypesM (TObj xt1s r1, TObj xt2s r2) | L.sort s1s == L.sort s2s =
+  concatMapM bkTypesM $ zip t1s t2s 
+  where
+    split l    = (b_sym l, b_type l)
+    ord a b    = compare (b_sym a) (b_sym b)
+    (s1s, t1s) = unzip $ split <$> L.sortBy ord xt1s
+    (s2s, t2s) = unzip $ split <$> L.sortBy ord xt2s
+
+    
+bkTypesM (TObj xt1s r1, TObj xt2s r2) | otherwise =
+  errorstar "UNIMPLEMENTED - bkObjects: breaking objects with different keys"
+
+bkTypesM (t1@(TObj _ _), t2) = 
+  cg_tdefs <$> get >>= \env -> bkTypesM (t1, tracePP ("Unfolded " ++ (ppshow t2)) $ unfoldTDefSafe t2 env)
+
+bkTypesM (t1, t2@(TObj _ _)) = 
+  cg_tdefs <$> get >>= \env -> bkTypesM (tracePP ("Unfolded " ++ (ppshow t1)) $ unfoldTDefSafe t1 env, t2)
+
+-- | Default case: Just return the types
+bkTypesM tt = return $ tracePP "bkTypes default" [tt]
+
+
 
 
 -- | Check for top-level union
@@ -415,28 +430,25 @@ unionCheck t | noUnion t = t
 unionCheck t | otherwise = error $ printf "%s found. Cannot have unions." $ ppshow t
 
 
+-- | XXX: Does not add top-level constraint
 ---------------------------------------------------------------------------------------
 matchTypes :: RefType -> RefType -> [(RefType, RefType)]
 ---------------------------------------------------------------------------------------
-matchTypes t1 t2 | length t1s == length t2s = 
-  (t1, t2) : zipWith sanity t1s t2s
+matchTypes t1 t2 | and $ zipWith req t1s t2s = 
+  zipWith sanity t1s t2s
   where
     t1s = L.sortBy ord $ bkUnion t1
     t2s = L.sortBy ord $ bkUnion t2
     -- sorting t1s and t2s by raw-type should align them !
     -- by using sanity check anyway to make sure
     ord a b = compare (toType a) (toType b) 
+    req a b = (toType a) == (toType b) 
     sanity a b | toType a == toType b = (a,b)
-    sanity _ _ | otherwise            = errorstar "matchTypes types not aligned"
+    sanity _ _ | otherwise            = errorstar "matchTypes"
 
 matchTypes t1 t2 | otherwise =
-  errorstar $ printf "matchTypes with different length: %s - %s" (ppshow t1) (ppshow t2) 
+  errorstar $ printf "matchTypes not aligned: %s - %s" (ppshow t1) (ppshow t2) 
 
-    {-pairup p xs ys  = fst $ foldl (\(acc,ys') x -> f p acc x ys') ([],ys) xs-}
-    {-f p acc x  ys   = case L.find (isSubType p x) ys of-}
-    {-                    Just y -> ((tag x, tag y):acc, L.delete y ys)-}
-    {-                    _      -> ((tag x, tag $ fls x):acc, ys)-}
-    {-fls t           = (ofType $ toType t) `strengthen` (F.predReft F.PFalse)-}
 
 
 ---------------------------------------------------------------------------------------
@@ -510,8 +522,8 @@ refreshRefType = mapReftM refresh
 -- | Splitting Subtyping Constraints --------------------------------------------------
 ---------------------------------------------------------------------------------------
 
--- splitC c = tracePP "After splitting" <$> splitC' (tracePP "Before Splitting" c)
-splitC c = splitC' c
+splitC c = tracePP "After splitting" <$> splitC' (tracePP "Before Splitting" c)
+-- splitC c = splitC' c
 
 splitC' :: SubC -> CGM [FixSubC]
 ---------------------------------------------------------------------------------------
@@ -553,37 +565,37 @@ splitC' (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
 ---------------------------------------------------------------------------------------
 -- | Unions:
 -- We need to get the bsplitC for the top level refinements 
--- TODO: check if they are added any way earlier
 -- Nothing more should be added, the internal subtyping constrains have been
 -- dealt with separately
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TApp TUn _ _) t2@(TApp TUn _ _)) 
-  | toType t1 == toType t2 = return $ bsplitC g i t1 t2
+  | toType t1 == toType t2 = return    $ bsplitC g i t1 t2
   | otherwise              = errorstar $ printf "Unions in splitC: %s - %s" (ppshow t1) (ppshow t2)
 
-splitC' (Sub _ _ t1@(TApp TUn _ _) t2) = errorstar $ printf "Unions in splitC: %s - %s" (ppshow t1) (ppshow t2)
-splitC' (Sub _ _ t1 t2@(TApp TUn _ _)) = errorstar $ printf "Unions in splitC: %s - %s" (ppshow t1) (ppshow t2)
+splitC' (Sub _ _ t1@(TApp TUn _ _) t2) = 
+  errorstar $ printf "Unions in splitC: %s - %s" (ppshow t1) (ppshow t2)
+splitC' (Sub _ _ t1 t2@(TApp TUn _ _)) = 
+  errorstar $ printf "Unions in splitC: %s - %s" (ppshow t1) (ppshow t2)
 
 ---------------------------------------------------------------------------------------
 -- | Type definitions
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TApp d1@(TDef _) t1s _) t2@(TApp d2@(TDef _) t2s _)) | d1 == d2
   = do  let cs = bsplitC g i t1 t2
-        -- XXX: What is the variance of type constructor parameters?
-        cs'   <- T.trace (printf "TDEF %s <: TDEF %s" (ppshow d1) (ppshow d2)) <$> 
-          concatMapM splitC $ safeZipWith "splitcTDef" (Sub g i) t1s t2s
+        -- constructor parameters are covariant
+        cs'   <- concatMapM splitC $ safeZipWith "splitcTDef" (Sub g i) t1s t2s
         return $ cs ++ cs' 
 
 splitC' (Sub _ _ (TApp (TDef _) _ _) (TApp (TDef _) _ _))
-  = error "Unimplemented: Check type definition cycles"
+  = errorstar "Unimplemented: Check type definition cycles"
   
-splitC' (Sub g i t1@(TApp (TDef _) _ _ ) t2)
-  = do  env <- cg_tdefs <$> get
-        splitC $ Sub g i (unfoldTDefSafe t1 env) t2
+splitC' (Sub g i t1@(TApp (TDef _) _ _ ) t2)  
+  = errorstar $ printf "splitC - should have been broken down earlier:\n%s <: %s" 
+            (ppshow t1) (ppshow t2)
 
 splitC' (Sub g i t1 t2@(TApp (TDef _) _ _ ))
-  = do  env <- cg_tdefs <$> get
-        splitC $ Sub g i t1 (unfoldTDefSafe t2 env)
+  = errorstar $ printf "splitC - should have been broken down earlier:\n%s <: %s" 
+            (ppshow t1) (ppshow t2)
 
 ---------------------------------------------------------------------------------------
 -- | Rest of TApp
@@ -596,24 +608,19 @@ splitC' (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
        return $ cs ++ cs'
 
 ---------------------------------------------------------------------------------------
--- | Objects 
+-- | Objects
+-- Only empty objects (top-level) should reach this far                               
 ---------------------------------------------------------------------------------------
-splitC' (Sub g i tf1@(TObj xt1s _ ) tf2@(TObj xt2s _ ))
-  = do let bcs    = bsplitC g i tf1 tf2
-       -- g'        <- envTyAdds i xt2s g -- XXX: is this needed here?
-       cs        <- concatMapM splitC $ safeZipWith "splitC5" (Sub g i) t1s t2s
-       return     $ bcs ++ cs
-    where
-       t1s        = b_type <$> xt1s
-       t2s        = b_type <$> xt2s
+splitC' (Sub g i tf1@(TObj [] _ ) tf2@(TObj [] _ ))
+  = return $ bsplitC g i tf1 tf2
 
 splitC' (Sub g i t1 t2@(TObj _ _ ))
-  = do  env <- cg_tdefs <$> get
-        splitC $ Sub g i (unfoldTDefSafe t1 env) t2
+  = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" 
+            (ppshow t1) (ppshow t2)
 
 splitC' (Sub g i t1@(TObj _ _ ) t2)
-  = do  env <- cg_tdefs <$> get
-        splitC $ Sub g i t1 (unfoldTDefSafe t2 env)
+  = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" 
+            (ppshow t1) (ppshow t2)
 
 
 splitC' x 
@@ -632,14 +639,6 @@ bsplitC g ci t1 t2
     r1 = rTypeSortedReft t1
     r2 = rTypeSortedReft t2
 
-{-----------------------------------------------------------------------------------------}
-{-unionFixSubs :: CGEnv -> Cinfo -> [RefType] -> [RefType] -> CGM [FixSubC]-}
-{-----------------------------------------------------------------------------------------}
-{-unionFixSubs g i t1s t2s = concatMapM mkSub =<< matchTypes g i t1s t2s-}
-{-  where-}
-{-    mkSub (x,y)     = {- T.trace (printf "UnionFixSubs %s: %s <: %s" -}
-{-                          (ppshow i) (ppshow x) (ppshow y)) $ -}-}
-{-                      splitC $ Sub g i x y-}
 
 
 ---------------------------------------------------------------------------------------

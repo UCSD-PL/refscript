@@ -39,7 +39,6 @@ import qualified Data.HashSet             as HS
 import qualified Data.HashMap.Strict      as HM
 import qualified Data.Map                 as M
 import qualified Data.List                as L
-import           Data.Maybe                     (fromJust)
 import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -240,7 +239,7 @@ joinSubst θ (Su m1) (Su m2) =
     rr m         = HM.filterWithKey (\α t -> not $ tVar α == t) m
     only1         = foldr HM.delete m1 commonK
     only2         = foldr HM.delete m2 commonK
-    safeMap s m   = (\k -> fromJust $ HM.lookup k m) <$> s
+    safeMap s m   = (\k -> mfromJust "joinSubst" $ HM.lookup k m) <$> s
     join s θ t t' | t == t'   = return t
                   | otherwise = addError (printf "Cannot unify %s and %s" (ppshow t) (ppshow t')) t
 
@@ -298,40 +297,21 @@ execSubTypesS st es θ t1 t2 = executeST st $ subtys θ es t1 t2
 -----------------------------------------------------------------------------
 subty :: Subst -> Type -> Type -> STM Subst
 -----------------------------------------------------------------------------
-subty θ   (TApp TUn ts _ )    (TApp TUn ts' _) = 
-  do  s <- get 
-      if st_docasts s 
-        then 
-          tryWithBackup (subtyUnions  θ ts  ts' ) (castTs θ ts ts')
-        else subtyUnions θ ts ts'
+subty θ (TApp TUn ts _ ) (TApp TUn ts' _) = 
+  subtyAux (tryWithBackup (subtyUnions  θ ts  ts' ) (castTs θ ts ts'), subtyUnions θ ts ts')
 
-subty θ t@(TApp TUn ts _ ) t'                  = 
-  do  s <- get 
-      if st_docasts s 
-        then 
-          tryWithBackups (subtyUnions  θ ts  [t'] ) [unify θ t t', castTs θ ts [t']]
-        else 
-          tryWithBackups (subtyUnions  θ ts  [t'] ) [unify θ t t']
-  --tryWithBackups (subtyUnions  θ ts  [t']) [unify  θ t t', castTs θ ts [t']]
+subty θ t@(TApp TUn ts _ ) t' = 
+  subtyAux (tryWithBackups (subtyUnions  θ ts  [t'] ) [unify θ t t', castTs θ ts [t']], 
+             tryWithBackups (subtyUnions  θ ts  [t'] ) [unify θ t t'])
 
-subty θ t                  t'@(TApp TUn ts' _) = 
-  do  s <- get 
-      if st_docasts s 
-        then 
-          tryWithBackups (subtyUnions  θ [t]  ts' ) [unify θ t t', castTs θ [t] ts']
-        else 
-          tryWithBackups (subtyUnions  θ [t]  ts' ) [unify θ t t']
-  --tryWithBackups (subtyUnions  θ [t] ts' ) [unify  θ t t', castTs θ [t] ts']
+subty θ t t'@(TApp TUn ts' _) = 
+  subtyAux (tryWithBackups (subtyUnions  θ [t]  ts' ) [unify θ t t', castTs θ [t] ts'],
+             tryWithBackups (subtyUnions  θ [t]  ts' ) [unify θ t t'])
 
-subty θ t                  t'                  = 
-  do  s <- get 
-      if st_docasts s 
-        then 
-          tryWithBackups (subtyNoUnion θ t t') [castTs θ [t] [t']]
-        else 
-          tryWithBackups (subtyNoUnion  θ t  t' ) []
-  --tryWithBackups (subtyNoUnion θ t t') [castTs θ [t] [t']]
+subty θ t t' = 
+  subtyAux (tryWithBackups (subtyNoUnion θ t t') [castTs θ [t] [t']], subtyNoUnion  θ t  t')
 
+subtyAux (a,b) = get >>= \s -> if (st_docasts s) then a else b
 
 
 -----------------------------------------------------------------------------
@@ -453,7 +433,7 @@ castTs θ fromTs toTs = ifM (st_docasts <$> get) (get >>= use . subs) (return θ
   where
     -- If there is no possiblity for a subtype, require that this is dead 
     -- code, and freely give exactly the type that is expected
-    use [] = addDeadCast (mkUnion toTs) >> return θ 
+    use [] = addDeadCast (mkUnion toTs) >> return θ
     use ts = addCast     (mkUnion ts)   >> return θ
     -- IMPORTANT: Don't allow casts when checking subtyping here
     subs s = L.nub [ a | a <- fromTs, b <- toTs, execSubTypeB (noCasts s) θ a b ]
@@ -468,18 +448,19 @@ castTs θ fromTs toTs = ifM (st_docasts <$> get) (get >>= use . subs) (return θ
 addCast :: Type -> STM ()
 --------------------------------------------------------------------------------
 addCast t = 
-  do  e <- fromJust <$> getExpr 
+  do  e <- mfromJust "addCast" <$> getExpr 
       let l = ann $ getAnnotation e
-      modify $ \st -> st { st_casts = M.insert l (e, CST t) (st_casts st) } 
+      modify $ \st -> st { st_casts = M.insert l (e, CST t) (st_casts st) }
 
 
 --------------------------------------------------------------------------------
 addDeadCast :: Type -> STM ()
 --------------------------------------------------------------------------------
 addDeadCast t = 
-  do  e <- fromJust <$> getExpr 
+  do  e <- mfromJust "addDeadCast" <$> getExpr 
       let l = ann $ getAnnotation e
       modify $ \st -> st { st_casts = M.insert l (e, DD t) (st_casts st) } 
+
 
 
 -- | Ensure that casts are disabled while @action@ is executed.
@@ -505,7 +486,7 @@ noCasts st = st { st_docasts = False }
 -- Unfolding ----------------------------------------------------------------
 -----------------------------------------------------------------------------
 
--- | Unfold the first TDef at any part of the type @t@.
+-- | Unfold the FIRST TDef at any part of the type @t@.
 -------------------------------------------------------------------------------
 unfoldTDefDeep :: Type -> Env Type -> Type
 -------------------------------------------------------------------------------
@@ -526,6 +507,7 @@ unfoldTDefDeep t env = go t
 
 -- | Unfold a type definition once. Return Just t, where t is the unfolded type 
 -- if there was an unfolding, otherwise Nothing.
+-- TODO: Restore toplevel refinements
 -------------------------------------------------------------------------------
 unfoldTDefMaybe :: (PP r, F.Reftable r) => RType r -> Env (RType r) -> Either String (RType r)
 -------------------------------------------------------------------------------

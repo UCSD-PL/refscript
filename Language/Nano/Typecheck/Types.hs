@@ -274,9 +274,9 @@ getBinding t _ = Left $ errorObjectTAccess t
 --
 --------------------------------------------------------------------------------
 joinTypes ::  (Eq r, Ord r, F.Reftable r) => (RType r -> RType r -> Bool) ->
-              RType r -> RType r -> (RType r, RType r, RType r)
+              (RType r, RType r) -> (RType r, RType r, RType r)
 --------------------------------------------------------------------------------
-joinTypes eq t1 t2 = 
+joinTypes eq (t1, t2) = 
   ({-tracePP "JOINED 1" $-} mkUnion $ fmap F.bot <$> (cmn ++ ds), 
    {-tracePP "JOINED 2" $-} mkUnionR topR1 $ t1s ++ (fmap F.bot <$> d2s), 
    {-tracePP "JOINED 3" $-} mkUnionR topR2 $ t2s ++ (fmap F.bot <$> d1s))
@@ -484,7 +484,7 @@ instance F.Reftable r => PP (RType r) where
   pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." 
                                    <+> pp t' where (αs, t') = bkAll t
-  pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "|") ts 
+  pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "+") ts 
   pp (TApp d@(TDef _)ts r)      = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
 
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 

@@ -1,5 +1,5 @@
 /*@ type list[A]  {  data : A, 
-                     next : list[A] | Null } */
+                     next : list[A] + Null } */
 
 
 /*@ append :: (x:list[number], number) => list[number] */

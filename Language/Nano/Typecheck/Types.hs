@@ -220,13 +220,17 @@ bkUnion t               = [t]
 
 -- | Get binding from object type
 ---------------------------------------------------------------------------------
-getBinding :: Id a -> RType r -> Either String (RType r)
+getBinding :: Env (RType r) -> Id a -> RType r -> Either String (RType r)
 ---------------------------------------------------------------------------------
-getBinding i (TObj bs _ ) = 
+getBinding _ i (TObj bs _ ) = 
   case L.find (\s -> F.symbol i == b_sym s) bs of
     Just b -> Right $ b_type b
     _      -> Left  $ errorObjectBinding
-getBinding t _ = Left $ errorObjectTAccess t
+getBinding defs i t@(TDef _ _) = 
+  case unfoldTDefMaybe t defs of
+    Just t' -> getBinding defs i t'
+    _       -> Left $ errorObjectTAccess t
+getBinding defs t _ = Left $ errorObjectTAccess t
 
 
 

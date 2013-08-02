@@ -340,7 +340,7 @@ subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 = 
   do  
-    s <- bkTypesM (T.trace (printf "Adding Sub: %s\n<:\n%s" (ppshow t1) (ppshow t2)) tt1, tt2)
+    s <- bkTypesM ({-T.trace (printf "Adding Sub: %s\n<:\n%s" (ppshow t1) (ppshow t2))-} tt1, tt2)
     modify $ \st -> st {cs = c s ++ (cs st)}
   where 
     (tt1, tt2) = mapPair addTag (t1, t2)
@@ -389,10 +389,10 @@ bkTypesM (TObj xt1s r1, TObj xt2s r2) | otherwise =
   errorstar "UNIMPLEMENTED - bkObjects: breaking objects with different keys"
 
 bkTypesM (t1@(TObj _ _), t2) = 
-  cg_tdefs <$> get >>= \env -> bkTypesM (t1, tracePP ("Unfolded " ++ (ppshow t2)) $ unfoldTDefSafe t2 env)
+  cg_tdefs <$> get >>= \env -> bkTypesM (t1, {-tracePP ("Unfolded " ++ (ppshow t2)) $-} unfoldTDefSafe t2 env)
 
 bkTypesM (t1, t2@(TObj _ _)) = 
-  cg_tdefs <$> get >>= \env -> bkTypesM (tracePP ("Unfolded " ++ (ppshow t1)) $ unfoldTDefSafe t1 env, t2)
+  cg_tdefs <$> get >>= \env -> bkTypesM ({-tracePP ("Unfolded " ++ (ppshow t1)) $-} unfoldTDefSafe t1 env, t2)
 
 -- | Default case: Just return the types
 bkTypesM tt = return {- $ tracePP "bkTypes default" -} [tt]

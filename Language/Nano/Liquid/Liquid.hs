@@ -1,4 +1,5 @@
 {-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE TupleSections        #-}
 
 -- | Top Level for Refinement Type checker
 
@@ -7,51 +8,54 @@ module Language.Nano.Liquid.Liquid (verifyFile) where
 import           Text.Printf                        (printf)
 -- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
+import           Control.Monad.State
 import           Control.Applicative                ((<$>))
-import           Data.Maybe                         (fromJust) -- fromMaybe, isJust)
-import qualified Data.List as L  
-import qualified Data.ByteString.Lazy   as B
-import qualified Data.HashMap.Strict as M
+
+import qualified Data.ByteString.Lazy               as B
+import qualified Data.HashMap.Strict                as M
+
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
-import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Files
 import           Language.Fixpoint.Interface        (solve)
+import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Types
-import qualified Language.Nano.Annots as A
+import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
 import           Language.Nano.SSA.SSA
-
--- import qualified Language.Nano.Env as E 
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
 
-import           Debug.Trace
+import           System.Console.CmdArgs.Default
+
+import           Debug.Trace                        as T
 
 --------------------------------------------------------------------------------
 verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 verifyFile f =   
   do  p <- parseNanoFromFile f
-      fmap (,"") <$> reftypeCheck f (typeCheck (ssaTransform p))
+      Liquid{ kVarInst = kv } <- getOpts
+      fmap (,"") <$> reftypeCheck f kv (typeCheck (ssaTransform p))
 
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
-reftypeCheck   :: FilePath -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
-reftypeCheck f  = solveConstraints f . generateConstraints 
+reftypeCheck   :: FilePath -> Bool -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
+reftypeCheck f kv = solveConstraints f . generateConstraints kv
 
 --------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (F.FixResult SourceSpan) 
 --------------------------------------------------------------------------------
 solveConstraints f cgi 
-  = do (r, sol) <- solve f [] $ cgi_finfo cgi
+  = do (r, sol) <- solve def f [] $ cgi_finfo cgi
        let r'    = fmap (srcPos . F.sinfo) r
        renderAnnotations f sol r' $ cgi_annot cgi
        donePhase (F.colorResult r) (F.showFix r) 
@@ -79,9 +83,9 @@ applySolution = fmap . fmap . tx
 tidy = id
 
 --------------------------------------------------------------------------------
-generateConstraints     :: NanoRefType -> CGInfo 
+generateConstraints     :: Bool -> NanoRefType -> CGInfo 
 --------------------------------------------------------------------------------
-generateConstraints pgm = getCGInfo pgm $ consNano pgm
+generateConstraints kv pgm = getCGInfo pgm kv $ consNano pgm
 
 --------------------------------------------------------------------------------
 consNano     :: NanoRefType -> CGM ()
@@ -110,7 +114,7 @@ envAddFun :: AnnType -> CGEnv -> Id AnnType -> [Id AnnType] -> RefType -> CGM CG
 -----------------------------------------------------------------------------------
 envAddFun l g f xs ft = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
   where  
-    (αs, yts, t)      = fromJust $ bkFun ft
+    (αs, yts, t)      = mfromJust "envAddFun" $ bkFun ft
     tyBinds           = [(Loc (srcPos l) α, tVar α) | α <- αs]
     varBinds          = safeZip "envAddFun"
     (su, ts')         = renameBinds yts xs 
@@ -196,34 +200,6 @@ consStmt g s@(FunctionStmt _ _ _ _)
 consStmt _ s 
   = errorstar $ "consStmt: not handled " ++ ppshow s
 
-----------------------------------------------------------------------------------
-envJoin :: AnnType -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)
-----------------------------------------------------------------------------------
-envJoin _ _ Nothing x           = return x
-envJoin _ _ x Nothing           = return x
-envJoin l g (Just g1) (Just g2) = Just <$> envJoin' l g g1 g2 
-
-----------------------------------------------------------------------------------
-envJoin' :: AnnType -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
-----------------------------------------------------------------------------------
-
--- HINT: 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
---       2. use @freshTyPhis@ to generate fresh types (and an extended environment with 
---          the fresh-type bindings) for all the phi-vars using the unrefined types 
---          from step 1.
---       3. generate subtyping constraints between the types from step 1 and the fresh types
---       4. return the extended environment.
-
-envJoin' l g g1 g2
-  = do let xs   = [x | PhiVar x <- ann_fact l] 
-       let t1s  = (`envFindTy` g1) <$> xs 
-       -- let t2s  = (`envFindTy` g2) <$> xs
-       -- when (length t1s /= length t2s) $ cgError (bugBadPhi l t1s t2s)
-       (g',ts) <- freshTyPhis (srcPos l) g xs $ map toType t1s -- SHOULD BE SAME as t2s 
-       subTypes l g1 xs ts
-       subTypes l g2 xs ts
-       return g'
-
 
 ------------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnType -> CGM (Maybe CGEnv) 
@@ -299,32 +275,40 @@ consExpr _ e
 consCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 ---------------------------------------------------------------------------------------------
 consCast g x a e = 
-  do 
-    tts       <- matchTypes g (ci l) tEs tCs
-    mapM_ mkSub tts
-    (x', g')  <- envAddFresh l tC g
+  do
+    ps       <- bkTypesM (tE, tC)
+    mapM_ (uncurry $ castSubM g x l) ps 
+    (x', g') <- envAddFresh l tC g
     return (x', g')
   where 
-    mkSub (e,c) = fixBase g x (e,c) >>= 
-      \(g',e',c') -> subType l g' e' c'
-    tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
-    tCs = extractUnion tC                                 -- extract types from cast type
-    tEs = extractUnion $ envFindTy x g                    -- extract types from expression type
-    l   = getAnnotation e 
+    tE        = tracePP ("CAST FROM " ++ ppshow x) $ envFindTy x g
+    tC        = tracePP "CAST TO" $ rType $ head [ t | Assume t <- ann_fact a]
+    l         = getAnnotation e
+
+
+castSubM g x l t1 t2 = 
+  do  (g', t1', t2') <- fixBase g x (t1, t2) 
+      let (tt1', tt2') = mapPair addTag (t1', t2')
+      modify $ \st -> st {cs = Sub g' (ci l) (T.trace (printf "Adding cast Sub: %s\n<:\n%s" (ppshow tt1') (ppshow tt2')) tt1') tt2' : (cs st)}
 
 
 -- | fixBase converts:                                                  
 --                         -----tE-----              -----tC-----       
 -- g, x :: { v: U | r } |- { v: B | p }           <: { v: B | q }       
+--              ^                                                       
+--              |______Union                                            
 --                                                                      
 -- into:                                                                
 --                                                                      
 -- g, x :: { v: B | r } |- { v: B | p ∧ (v = x) } <: { v: B | q }       
 -- --------g'----------    ----------tE'---------    ---- tC-----       
 --                                                                      
+---------------------------------------------------------------------------------------------
+fixBase :: CGEnv-> Id AnnType -> (RefType, RefType)-> CGM (CGEnv, RefType, RefType)
+---------------------------------------------------------------------------------------------
 fixBase g x (tE,tC) =
   do  g' <- envAdds [(x, rX')] g
-      return (g', trace msg tE', tC)
+      return (g', {-trace msg -}tE', tC)
   where
 --  { v: B | r } = { v: B | _ } `strengthen` r                        
     rX'          = strip tE     `strengthen` rTypeReft (envFindTy x g)
@@ -335,7 +319,8 @@ fixBase g x (tE,tC) =
 --  { v: B | p ∧ (v = x)} = { v: B | p } `strengthen` (v = x)
     tE'                   = tE           `strengthen` vEqX
 
-    msg =  printf "fixbase (%s::%s) |- tE: %s <: tC: %s" (ppshow x) (ppshow rX') (ppshow tE') (ppshow tC)
+    {- msg =  printf "fixbase %s -> (%s::%s) \n|- tE: %s <: tC: %s\n" 
+    (ppshow $ envFindTy x g) (ppshow x) (ppshow rX') (ppshow tE') (ppshow tC) -} 
 
 
 ---------------------------------------------------------------------------------------------
@@ -364,7 +349,7 @@ consCall :: (PP a)
 --   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in output type of callee.
 
 consCall g l _ es ft 
-  = do (_,its,ot)   <- fromJust . bkFun <$> instantiate l g ft
+  = do (_,its,ot)   <- mfromJust "consCall" . bkFun <$> instantiate l g ft
        (xes, g')    <- consScan consExpr g es
        let (su, ts') = renameBinds its xes
        subTypes l g' xes ts'
@@ -373,7 +358,7 @@ consCall g l _ es ft
     --   msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)
 
 instantiate :: AnnType -> CGEnv -> RefType -> CGM RefType
-instantiate l g t = {- tracePP msg  <$> -} freshTyInst l g αs τs tbody 
+instantiate l g t =  {- tracePP msg  <$>  -} freshTyInst l g αs τs tbody 
   where 
     (αs, tbody)   = bkAll t
     τs            = getTypArgs l αs 

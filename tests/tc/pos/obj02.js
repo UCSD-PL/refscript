@@ -1,4 +1,4 @@
-/*@ getNum ::  ({}   ) => number */
+/*@ getNum ::  ({ }) => number */
 
 function getNum(x) {
 

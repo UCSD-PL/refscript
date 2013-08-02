@@ -3,7 +3,7 @@ function id(a,b) {
   return b;
 }
 
-/*@ foo :: (number|boolean) => number */
+/*@ foo :: (number  + boolean) => number */
 function foo(x) {
   return id(x,1);
 }

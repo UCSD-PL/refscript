@@ -259,6 +259,9 @@ emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts) (emapReft f γ'
   where 
     γ'                      = (b_sym <$> xts) ++ γ 
     -- ts                      = b_type <$> xts 
+emapReft f γ (TObj bs r)    = TObj (emapReftBind f γ' <$> bs) (f γ r)
+  where 
+    γ'                      = (b_sym <$> bs) ++ γ 
 emapReft _ _ _              = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)    = B x $ emapReft f γ t
@@ -270,6 +273,7 @@ mapReftM f (TVar α r)      = TVar α <$> f r
 mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> f r
 mapReftM f (TFun xts t _)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return F.top) --f r 
 mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
+mapReftM f (TObj bs r)     = TObj   <$> mapM (mapReftBindM f) bs <*> f r
 mapReftM _ _               = error "Not supported in mapReftM"
 
 mapReftBindM f (B x t)     = B x <$> mapReftM f t

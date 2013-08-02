@@ -86,7 +86,7 @@ function pos(){
 /*@ nth   :: forall A. (xs:list [A], {i:number| ((0 <= i) && i < (len xs))}) => A                 */
 
 /*@ empty :: forall A. (x: list[A] + null ) => 
-                        {v: boolean | ((Prop v) <=> ((ttag x) = 2))}                             */
+                        {v: boolean | ((Prop v) <=> ((ttag x) = "null"))}                             */
 
 /*@ length   :: forall A. (xs:list [A]) => {v:number | ((v >= 0) && v = (len xs))}                */
 /*@ safehead :: forall A. ({xs:list [A] | (len xs) > 0}) => A                                     */
@@ -127,9 +127,11 @@ function pos(){
 //Changing temprorarily until strings are supported
 /* builtin_PrefixTypeof:: forall A. (A) => string                                                         */
 
-/*@ measure ttag :: forall A. (A) => number                                                               */
-/*@ builtin_PrefixTypeof:: forall A. ({x:A|true}) => {v:number | (ttag x) = v }                           */
-/*@ measure prop        :: (boolean) => bool                                                              */
+
+/*@ measure ttag :: forall A. (A) => string                               */
+/*@ builtin_PrefixTypeof:: forall A. (x:A) => {v:string | (ttag x) = v }  */
+
+/*@ measure prop        :: (boolean) => bool                              */
 
 
 

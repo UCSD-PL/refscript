@@ -7,6 +7,13 @@ nano-js is the basis for the programming assignments in
 
     http://goto.ucsd.edu/~rjhala/classes/sp13/cse291
 
+Strings
+-------
+
+- add a simple test
+- update TC to support `string` type
+- update constraint generation
+- run
 Dependencies
 ------------
 
@@ -37,7 +44,8 @@ Todo List
 - Objects
 - Heap
 - etc.
-
+- Disallow undefined types.
+- Fix sourcespan error reporting at object accesses.
 
 Tests
 -----
@@ -46,6 +54,8 @@ Tests
     KMP?
     mapreduce?
     kmeans?
+
+
 
 PASTE Demo
 ----------

@@ -18,12 +18,14 @@ Todo List
 Strings
 -------
 
++ update TC to support `string` type
+
 + add a simple test 
   * tests/liquid/pos/str0.js
   * tests/liquid/neg/str0-unsafe.js
 
-+ update TC to support `string` type
 - update constraint generation
+
 - run
 
 - Scrape Qualifiers

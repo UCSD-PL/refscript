@@ -1,2 +1,0 @@
-1. Disallow undefined types.
-2. Fix sourcespan error reporting at object accesses.

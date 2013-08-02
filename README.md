@@ -37,7 +37,8 @@ Todo List
 - Objects
 - Heap
 - etc.
-
+- Disallow undefined types.
+- Fix sourcespan error reporting at object accesses.
 
 Tests
 -----
@@ -46,6 +47,14 @@ Tests
     KMP?
     mapreduce?
     kmeans?
+
+Strings
+-------
+
+- add a simple test
+- update TC to support `string` type
+- update constraint generation
+- run
 
 PASTE Demo
 ----------

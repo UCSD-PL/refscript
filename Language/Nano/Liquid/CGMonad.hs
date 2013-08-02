@@ -199,21 +199,22 @@ addFixpointBind (x, t)
 ---------------------------------------------------------------------------------------
 addTag :: RType F.Reft -> RType F.Reft
 ---------------------------------------------------------------------------------------
-addTag t@(TApp TInt   [] r) = t `strengthen` tagPred r 0
-addTag t@(TApp TBool  [] r) = t `strengthen` tagPred r 1
-addTag t@(TApp TNull  [] r) = t `strengthen` tagPred r 2
-addTag t@(TApp TUndef [] r) = t `strengthen` tagPred r 3
-addTag t                    = traceShow "addTag DEFAULT" t
+addTag t@(TApp TInt    [] r) = t `strengthen` tagPred r "number" 
+addTag t@(TApp TBool   [] r) = t `strengthen` tagPred r "boolean" 
+addTag t@(TApp TNull   [] r) = t `strengthen` tagPred r "object" 
+addTag t@(TApp TUndef  [] r) = t `strengthen` tagPred r "undefined"
+addTag t@(TApp TString [] r) = t `strengthen` tagPred r "string"
+addTag t                     = traceShow "addTag DEFAULT" t
 
 -- | Create tag predicate: (ttag vv = n)
 ---------------------------------------------------------------------------------------
-tagPred :: F.Reft -> Int -> F.Reft
+tagPred :: F.Reft -> String -> F.Reft
 ---------------------------------------------------------------------------------------
 tagPred (F.Reft (sym, _)) n = F.Reft (sym, [F.RConc pred])
   where
-    pred = F.PAtom F.Eq (F.EApp addTag [vv]) (F.expr n)
+    pred    = F.PAtom F.Eq (F.EApp addTag [vv]) (F.expr n)
     addTag  = F.stringSymbol "ttag"
-    vv   = F.EVar sym
+    vv      = F.EVar sym
 
 ---------------------------------------------------------------------------------------
 addAnnot       :: (F.Symbolic x) => SourceSpan -> x -> RefType -> CGM () 

@@ -117,18 +117,42 @@ tcAndPatch :: (Data r, Typeable r, F.Reftable r) =>
   Nano AnnSSA (RType r) -> TCM (Nano  AnnSSA (RType r))
 -------------------------------------------------------------------------------
 tcAndPatch p = 
-  do  p1 <- tcNano p 
-      p2 <- patchPgmM p1
+  do  _  <- checkTypeDefs p
+      p2 <- tcNano        p
+      p3 <- patchPgmM     p2
       s  <- getSubst
-      return $ trace (codePP p2 s) p2
+      d  <- getTDefs
+      return $ trace (codePP p2 s d) p2
       -- return p2
   where 
-    codePP (Nano {code = Src src}) sub = render $
+    codePP (Nano {code = Src src}) sub defs = render $
           text "********************** CODE **********************"
       $+$ pp src
       $+$ text "***************** SUBSTITUTIONS ******************"
       $+$ pp sub
+      $+$ text "****************** DEFINITIONS *******************"
+      $+$ pp defs
       $+$ text "**************************************************"
+
+
+
+-------------------------------------------------------------------------------
+checkTypeDefs :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM ()
+-------------------------------------------------------------------------------
+checkTypeDefs pgm = 
+  do  defs  <- tracePP  "Definitions" <$> getDefs
+      tdefs <- tracePP "Type Definitions" <$> getTDefs
+      case grep defs of 
+        [] -> return ()
+        is -> mapM_ report is
+  where 
+    grep defs = concatMap (HS.toList . free) $ snd <$> envToList defs
+
+    report t@(TV _ _) = logError (srcPos t) (errorUnboundType (ppshow t)) ()
+    {-grep ds ts      = everything (++) ([] `mkQ` f ts) ds-}
+    {-f ts (TDef i) | not $ envMem (tracePP "Checking" i) ts = [i]-}
+    {-f _  _                            = [ ]-}
+      
 
 
 -------------------------------------------------------------------------------

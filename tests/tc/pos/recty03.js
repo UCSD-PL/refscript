@@ -1,5 +1,5 @@
 /*@ type list[A]  {  data : A, 
-                     next : list[A] | null } */
+                     next : list[A] + null } */
 
 /*@ sum :: (x:list[number]) => number */
 function sum(l) {

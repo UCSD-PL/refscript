@@ -1,7 +1,7 @@
 
 /*@ strConcat :: (string, string) => string */
 
-/*@ foo :: (number | string ) => number | string */
+/*@ foo :: (number + string ) => number + string */
 
 function foo(x) {
 

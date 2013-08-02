@@ -1,7 +1,7 @@
 /*@ id2 :: forall A. (A, A) => A */
 function id2(x, y) { return x;}
 
-/*@ main :: (number, boolean|number) => number */
+/*@ main :: (number, boolean + number) => number */
 function main(x, y){
   var yr = id2(y, x);
   var xr = id2(x, y);

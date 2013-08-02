@@ -21,6 +21,9 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Freshness
   , freshTyArgs
 
+  -- * Type definitions
+  , getTDefs
+
   -- * Substitutions
   , getSubst, setSubst
 
@@ -100,6 +103,12 @@ data TCState = TCS {
                    }
 
 type TCM     = ErrorT String (State TCState)
+
+
+-------------------------------------------------------------------------------
+getTDefs :: TCM (Env Type)
+-------------------------------------------------------------------------------
+getTDefs = tc_tdefs <$> get 
 
 -------------------------------------------------------------------------------
 getSubst :: TCM Subst

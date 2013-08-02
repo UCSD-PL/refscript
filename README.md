@@ -7,6 +7,13 @@ nano-js is the basis for the programming assignments in
 
     http://goto.ucsd.edu/~rjhala/classes/sp13/cse291
 
+Strings
+-------
+
+- add a simple test
+- update TC to support `string` type
+- update constraint generation
+- run
 Dependencies
 ------------
 
@@ -48,13 +55,7 @@ Tests
     mapreduce?
     kmeans?
 
-Strings
--------
 
-- add a simple test
-- update TC to support `string` type
-- update constraint generation
-- run
 
 PASTE Demo
 ----------

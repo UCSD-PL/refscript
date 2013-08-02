@@ -1,5 +1,5 @@
 
-/*@ foo ::  (number) => number|boolean */
+/*@ foo ::  (number) => number + boolean */
 function foo(x) {
   var r = 1;
   if (x > 0) {

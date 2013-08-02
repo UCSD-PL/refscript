@@ -322,8 +322,12 @@ instance F.Symbolic (LValue a) where
 
 instance F.Symbolic (Prop a) where 
   symbol (PropId _ id) = F.symbol id
-  symbol p             = 
-    error $ printf "Symbol of property %s not supported yet" (ppshow p)
+  symbol p             = error $ printf "Symbol of property %s not supported yet" (ppshow p)
+
+instance PP (Prop a) where 
+  pp (PropId _ id)     = pp id
+  pp (PropString _ s)  = text $ "\"" ++ s ++ "\"" 
+  pp (PropNum _ s)     = integer s 
 
 instance F.Expression (Id a) where
   expr = F.eVar

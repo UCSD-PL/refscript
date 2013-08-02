@@ -6,23 +6,16 @@
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
 
-import           Control.Applicative                ((<$>)) -- (<*>))
+import           Control.Applicative                ((<$>))
 import           Control.Monad                
-import           Control.Monad.State()
-import qualified Data.HashSet        as HS 
-import qualified Data.HashMap.Strict as M 
-import qualified Data.Foldable       as FD
-import           Data.List           (nub, find, partition)
-import qualified Data.Traversable    as T
+
+import qualified Data.HashSet                       as HS 
+import qualified Data.HashMap.Strict                as M 
+import           Data.List                          (find)
+import qualified Data.Traversable                   as T
 import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust)
-
 import           Data.Generics                   
-import           Data.Generics.Aliases
-import           Data.Generics.Schemes
-import           Data.Typeable                  
-
-
 
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$))
 import           Text.Printf                        (printf)
@@ -31,39 +24,34 @@ import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
-import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.STMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.SSA.SSA
-import           Language.Nano.Visitor.Visitor
 
-import qualified Language.Fixpoint.Types as F
--- import           Language.Fixpoint.Interface        (resultExit)
-import           Language.Fixpoint.Misc  as FM 
--- import           System.Exit                        (exitWith)
-import           Language.ECMAScript3.Syntax.Annotations
+import qualified Language.Fixpoint.Types            as F
+import           Language.Fixpoint.Misc             as FM 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
-import           Debug.Trace    hiding (traceShow)
+import           Debug.Trace                        hiding (traceShow)
 
-import           System.Console.CmdArgs.Verbosity as V
+import           System.Console.CmdArgs.Verbosity   as V
 
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
-verifyFile :: Config -> FilePath -> IO (F.FixResult (SourceSpan, String))
+verifyFile :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 --verifyFile f = tc =<< parseNanoFromFile f
 --  where 
 --   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
 -- | Debug mode
-verifyFile c f 
+verifyFile f 
    = do nano <- parseNanoFromFile f
         whenLoud $ donePhase FM.Loud "Parse"
         {-putStrLn . render . pp $ nano-}
@@ -109,8 +97,8 @@ failCasts True   _                                       = F.Safe
 allCasts :: [FunctionStatement AnnSSA] -> [(AnnSSA, [Char])]
 -------------------------------------------------------------------------------
 allCasts fs =  everything (++) ([] `mkQ` f) $ fs
-  where f (Cast l t)      = [(l, "Cast")]
-        f (DeadCast l t)  = [(l, "DeadCode")]
+  where f (Cast l t)      = [(l, "Cast: " ++ ppshow t)]
+        f (DeadCast l _)  = [(l, "DeadCode")]
         f _               = [ ]
 
 
@@ -138,7 +126,7 @@ tcAndPatch p =
     codePP (Nano {code = Src src}) sub = render $
           text "********************** CODE **********************"
       $+$ pp src
-      $+$ text "**************************************************"
+      $+$ text "***************** SUBSTITUTIONS ******************"
       $+$ pp sub
       $+$ text "**************************************************"
 
@@ -149,11 +137,11 @@ tcNano :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM (Nano AnnType (RType r)
 tcNano p@(Nano {code = Src fs})
   = do m     <- tcNano' $ toType <$> p 
        return $ (trace "") $ p {code = Src $ (patchAnn m <$>) <$> fs}
-    where
-      cachePP cache = render $
-            text "********************** CODE **********************"
-        $+$ pp cache
-        $+$ text "**************************************************"
+    {-where-}
+    {-  cachePP cache = render $-}
+    {-        text "********************** CODE **********************"-}
+    {-    $+$ pp cache-}
+    {-    $+$ text "**************************************************"-}
 
 
 -------------------------------------------------------------------------------
@@ -254,13 +242,15 @@ tcStmt' γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt' γ (IfStmt l e s1 s2)
-  = do t <- tcExpr γ e
-  -- With truthy and falsy values, 
-  -- we cannot enforce this to be bool.
+  = do  
+    -- This check needs to be done even though 
+    -- we're not gonna require to have a boolean 
+    -- value here (see truthy and falsy)
+        _ <- tcExpr γ e 
        -- subTypeM_ l (Just e) t tBool
-       γ1      <- tcStmt' γ s1
-       γ2      <- tcStmt' γ s2
-       envJoin l γ γ1 γ2
+        γ1      <- tcStmt' γ s1
+        γ2      <- tcStmt' γ s2
+        envJoin l γ γ1 γ2
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt' γ (VarDeclStmt _ ds)
@@ -356,7 +346,7 @@ tcCall γ l fn es ft
        return      $ apply θ' ot
 
 instantiate l fn ft 
-  = do t' <- {-tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (bkAll ft)
+  = do t' <-  {- tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (bkAll ft)
        maybe err return   $ bkFun t'
     where
        err = logError (ann l) (errorNonFunction fn ft) tFunErr
@@ -385,10 +375,10 @@ tcAccess γ l e f =
 ----------------------------------------------------------------------------------
 binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
 ----------------------------------------------------------------------------------
-binders l e (TObj b _ )       = return b
+binders _ _  (TObj b _ )       = return b
 binders l e t@(TApp TUn ts _) = 
   case find isObj ts of
-    Just t' -> error $ "UNIMPLEMENTED: Typecheck.hs, binders " -- addCast t' >> binders l e t'
+    Just _  -> error $ "UNIMPLEMENTED: Typecheck.hs, binders " -- addCast t' >> binders l e t'
     _       -> tcError l $ errorObjectAccess e t
 binders l e t                 = tcError l $ errorObjectAccess e t
   
@@ -405,27 +395,17 @@ envJoin' l γ γ1 γ2
        ts    <- mapM (getPhiType l γ1 γ2) xs
        return $ Just $ envAdds (zip xs ts) γ 
   
+
+----------------------------------------------------------------------------------
+getPhiType :: Annot b SourceSpan -> Env Type -> Env Type -> Id SourceSpan-> TCM Type
+----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x
-  = case (envFindTy x γ1, envFindTy x γ2) of
-      (Just t1, Just t2) -> if (t1 == t2) 
-                              then return t1 
-                              else mkUnion t1 t2 -- logError (ann l) (errorJoin x t1 t2) tErr
-      (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
-                              then logError (ann l) "Oh no, the HashMap GREMLIN is back...1" tErr
-                              else logError (ann l) (bugUnboundPhiVar x) tErr
-    where
-      mkUnion t1 t2 = 
-        case (prep t1, prep t2) of 
-          (Just t1s, Just t2s) -> 
-            case nub $ t1s ++ t2s of
-              [ ] -> logError (ann l) (errorJoin x t1 t2) tErr
-              [t] -> return $ t
-              ts  -> return $ TApp TUn ts ()
-          (_       , _       ) -> logError (ann l) (errorJoin x t1 t2) tErr
-      prep (TApp TUn l _) = Just l
-      prep t@(TApp _ _ _) = Just [t]
-      prep t@(TVar _ _ )  = Just [t]
-      prep _              = Nothing
+  = do  td <- getTDefs
+        case (envFindTy x γ1, envFindTy x γ2) of
+          (Just t1, Just t2) -> return $ fst3 $ joinTypes (isSubType td) (t1, t2)
+          (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
+                                  then logError (ann l) "Oh no, the HashMap GREMLIN is back...1" tErr
+                                  else logError (ann l) (bugUnboundPhiVar x) tErr
 
 
 forceCheck x γ 

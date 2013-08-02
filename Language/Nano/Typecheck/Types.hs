@@ -38,6 +38,7 @@ module Language.Nano.Typecheck.Types (
   -- * Deconstructing Types
   , bkFun
   , bkAll
+  , bkUnion
 
   -- * Regular Types
   , Type
@@ -71,17 +72,17 @@ module Language.Nano.Typecheck.Types (
   , isAsm
 
   -- * Useful Operations
-  , extractUnion
   , subset
   , strip
   , stripProp
   , getBinding
-  , 
+  , joinTypes
+
   ) where 
 
 import           Text.Printf
 import           Data.Hashable
-import           Data.Maybe             (fromMaybe) --, isJust)
+import           Data.Maybe             (fromMaybe, isNothing)
 import           Data.Monoid            hiding ((<>))            
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
@@ -103,6 +104,8 @@ import           Text.PrettyPrint.HughesPJ
 
 import           Control.Applicative hiding (empty)
 import           Control.Monad.Error ()
+
+-- import           Debug.Trace (trace)
 
 -- | Type Variables
 data TVar = TV { tv_sym :: F.Symbol
@@ -192,17 +195,33 @@ bkAll t              = go [] t
     go αs (TAll α t) = go (α : αs) t
     go αs t          = (reverse αs, t)
 
-mkUnion :: [Type] -> Type
-mkUnion [ ] = tErr -- maybe sth like false
-mkUnion [t] = t
-mkUnion ts  = TApp TUn ts ()
 
-extractUnion :: RType r -> [RType r]
-extractUnion (TApp TUn ts _) = ts
-extractUnion t               = [t]
+---------------------------------------------------------------------------------
+mkUnion :: (Ord r, Eq r, F.Reftable r) => [RType r] -> RType r
+---------------------------------------------------------------------------------
+mkUnion = mkUnionR F.top
+
+
+---------------------------------------------------------------------------------
+mkUnionR :: (Ord r, Eq r, F.Reftable r) => r -> [RType r] -> RType r
+---------------------------------------------------------------------------------
+mkUnionR _ [ ] = tErr
+mkUnionR _ [t] = t       
+mkUnionR r ts  = TApp TUn (L.sort $ L.nub ts) r
+
+
+---------------------------------------------------------------------------------
+bkUnion :: RType r -> [RType r]
+---------------------------------------------------------------------------------
+bkUnion (TApp TUn xs _) = xs
+bkUnion t               = [t]
+
+
 
 -- | Get binding from object type
+---------------------------------------------------------------------------------
 getBinding :: Id a -> RType r -> Either String (RType r)
+---------------------------------------------------------------------------------
 getBinding i (TObj bs _ ) = 
   case L.find (\s -> F.symbol i == b_sym s) bs of
     Just b -> Right $ b_type b
@@ -210,6 +229,92 @@ getBinding i (TObj bs _ ) =
 getBinding t _ = Left $ errorObjectTAccess t
 
 
+
+{--- | Combine the two types t1 and t2 into a union, but choose the greater of two-}
+{--- types based on @sub@ if they are related.-}
+{-----------------------------------------------------------------------------------}
+{-combineTypes ::  (Type -> Type -> Bool) -> Type -> Type -> Type-}
+{-----------------------------------------------------------------------------------}
+{-combineTypes sub t1 t2 = -}
+{-  mkUnion $ choose (bkUnion t1) (bkUnion t2)-}
+{-  where-}
+{-    choose [] ys =  ys-}
+{-    choose xs [] =  xs-}
+{-    choose xs ys =     [y | x <- xs, y <- ys, x `sub` y, not (y `sub` x)]       -- x <: y-}
+{-                   ++  [x | x <- xs, y <- ys, y `sub` x, not (x `sub` y)]       -- y <: x-}
+{-                   ++  [x | x <- xs, y <- ys, x `sub` y, y `sub` x]             -- x == y-}
+{-        ++  concat [[x,y] | x <- xs, y <- ys, not $ x `sub` y, not $ y `sub` x] -- unrelated-}
+                      
+
+-- | Join types @t1@ and @t2@ (t1 ㄩ t2). Useful at environment joins.          
+-- Join produces an equivalent type for @t1@ (resp. @t2@) that has is extended  
+-- by the missing sorts to the common upper bound of @t1@ and @t2@. The extra   
+-- types that are added in the union are refined with False to keep the         
+-- equivalence. 
+-- The output is the following triplet:                                         
+--  o common upper bound type (@t1@ ∪ @t2@) WITH NULLIFIED PREDICATES           
+--  o adjusted type for @t1@ to be sort compatible,                             
+--  o adjusted type for @t2@ to be sort compatible)                             
+--
+--
+-- Examples:                                                                    
+--  {Int | p} ㄩ {Bool | q} => ({Int | ⊥    } ∪ {Bool | ⊥    },                 
+--                              {Int | p    } ∪ {Bool | ⊥    },                 
+--                              {Int | ⊥    } ∪ {Bool | q    })                 
+--
+-- TODO: No subtyping is supported at the moment - so objects will be more      
+-- tricky                                                                       
+--
+--  {{ } | p} ㄩ {{a:Int} | q} => ( {{ }        | _},                           
+--                                  {{ }        | _},                           
+--                                  {{ a: Int } | _})                           
+--  WHERE { a: Int } <: { }                                                     
+--
+-- TODO: Force same sort check on the results... 
+--
+--------------------------------------------------------------------------------
+joinTypes ::  (Eq r, Ord r, F.Reftable r) => (RType r -> RType r -> Bool) ->
+              (RType r, RType r) -> (RType r, RType r, RType r)
+--------------------------------------------------------------------------------
+joinTypes eq (t1, t2) = 
+  ({-tracePP "JOINED 1" $-} mkUnion $ fmap F.bot <$> (cmn ++ ds), 
+   {-tracePP "JOINED 2" $-} mkUnionR topR1 $ t1s ++ (fmap F.bot <$> d2s), 
+   {-tracePP "JOINED 3" $-} mkUnionR topR2 $ t2s ++ (fmap F.bot <$> d1s))
+  where
+    topR1           = rUnion t1 
+    topR2           = rUnion t2
+    t1s             = bkUnion t1
+    t2s             = bkUnion t2
+    -- ccs: types in both t1s and t2s
+    cmn             = L.nub $ common t1s t2s 
+    -- d1s are contained in t2 but not in t1, so should be included as bot
+    -- d2s are contained in t1 but not in t2, so should be included as bot
+    -- ds = d1s ++ d2s 
+    (ds, d1s, d2s)  = distinct t1s t2s
+    {-map3 f (a,b,c)  = (f a, f b, f c)-}
+
+    common xs ys | null xs || null ys = []
+    common xs ys | otherwise          = [x | x <- xs, y <- ys, x `eq` y ] -- x == y
+    
+      {-    [(y, x, y) | x <- xs, y <- ys, x `sub` y, not (y `sub` x)] -- x <: y-}
+      {-++  [(x, x, y) | x <- xs, y <- ys, y `sub` x, not (x `sub` y)] -- y <: x-}
+      {-++  [(x, x, y) | x <- xs, y <- ys, y `sub` x,      x `sub` y ] -- x == y-}
+
+    distinct xs [] = (xs, [], xs)
+    distinct [] ys = (ys, ys, [])
+    distinct xs ys =  let dx = [x | x <- xs, isNothing $ L.find (x `eq`) ys ]
+                          dy = [y | y <- ys, isNothing $ L.find (y `eq`) xs ] in
+                      (L.nub $ dx ++ dy, dx, dy)
+
+      {-   [(x, y, x) | x <- xs, y <- ys, not $ y `sub` x, not $ x `sub` y] -- unrelated-}
+      {-++ [(y, y, x) | x <- xs, y <- ys, not $ y `sub` x, not $ x `sub` y] -- unrelated-}
+
+
+-- | Get the top-level refinement for unions - use Top (True) otherwise
+rUnion                :: F.Reftable r => RType r -> r
+rUnion (TApp TUn _ r) = r
+rUnion _              = F.top
+  
 
 ---------------------------------------------------------------------------------
 strengthen                   :: F.Reftable r => RType r -> r -> RType r
@@ -284,23 +389,16 @@ instance Eq TCon where
   TUndef  == TUndef  = True
   _       == _       = False
  
-instance (Eq r, F.Reftable r) => Eq (RType r) where
-  TApp TUn t1 _       == TApp TUn t2 _        = 
+instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
+  TApp TUn t1 _       == TApp TUn t2 _       = (null $ t1 L.\\ t2) && (null $ t2 L.\\ t1)
     {-tracePP (printf "Diff: %s \\ %s" (ppshow $ L.nub t1) (ppshow $ L.nub t2)) $-}
-    (L.nub t1) L.\\ (L.nub t2) == []
-  TApp c1 t1s r1      == TApp c2 t2s r2       = 
-    (c1, t1s, r1) == (c2, t2s, r2)
-  TVar v1 r1          == TVar v2 r2           =      
-    (v1, r1) == (v2, r2)
-  TFun b1 t1 r1       == TFun b2 t2 r2        = 
-    (b1, t1, r1)  == (b2, t2, r2)
-  TObj b1 r1          == TObj b2 r2           = 
-    (b1, r1) == (b2, r2)
-  TBd (TD c1 a1 b1 _) == TBd (TD c2 a2 b2 _)  =
-    (c1, a1, b1) == (c2, a2, b2)
-  TAll v1 t1      == TAll v2 t2               =
-    (v1, t1) == (v2, t2)
-  _               == _                        = False
+  TApp c1 t1s r1      == TApp c2 t2s r2      = (c1, t1s, r1)  == (c2, t2s, r2)
+  TVar v1 r1          == TVar v2 r2          = (v1, r1)       == (v2, r2)
+  TFun b1 t1 r1       == TFun b2 t2 r2       = (b1, t1, r1)   == (b2, t2, r2)
+  TObj b1 r1          == TObj b2 r2          = (null $ b1 L.\\ b2) && (null $ b2 L.\\ b1) && r1 == r2
+  TBd (TD c1 a1 b1 _) == TBd (TD c2 a2 b2 _) = (c1, a1, b1)   == (c2, a2, b2)
+  TAll v1 t1          == TAll v2 t2          = (v1, t1)       == (v2, t2)
+  _                   == _                   = False
 
 
 
@@ -386,7 +484,7 @@ instance F.Reftable r => PP (RType r) where
   pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." 
                                    <+> pp t' where (αs, t') = bkAll t
-  pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "|") ts 
+  pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "+") ts 
   pp (TApp d@(TDef _)ts r)      = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
 
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 

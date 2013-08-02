@@ -1,5 +1,5 @@
 /*@ type list[A]  {  data : A, 
-                     next : list[A] | Null } */
+                     next : list[A] + Null } */
 
 /*@ append :: forall A . (x:list[A], A) => list[A] */
 function append(x, a) {

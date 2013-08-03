@@ -4,7 +4,7 @@ function id(a) {
   return a;
 }
 
-/*@ foo1 :: (number|boolean) => boolean|number */
+/*@ foo1 :: (number + boolean) => boolean + number */
 function foo1(x) {
 
   var a = 1;

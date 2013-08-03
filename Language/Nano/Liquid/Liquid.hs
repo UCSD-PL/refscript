@@ -312,7 +312,7 @@ fixBase :: CGEnv-> Id AnnType -> (RefType, RefType)-> CGM (CGEnv, RefType, RefTy
 ---------------------------------------------------------------------------------------------
 fixBase g x (tE,tC) =
   do  g' <- envAdds [(x, rX')] g
-      return (g', {-trace msg -}tE', tC)
+      return (g', {-trace msg -} tE', tC)
   where
 --  { v: B | r } = { v: B | _ } `strengthen` r                        
     rX'          = strip tE     `strengthen` rTypeReft (envFindTy x g)

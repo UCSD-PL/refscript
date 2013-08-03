@@ -1,9 +1,9 @@
 /*@ type list[A]  {  data : A, 
-                     next : list[A] | Null } */
+                     next : list[A] + null } */
 
-// #define list?[A] = {list[A] | ...} | {Null | ... }
+// #define list?[A] = {list[A] | ...} + {null | ... }
 
-/*@ map :: forall A B. ((A) => B, list [A]|Null) => list[B]|Null */
+/*@ map :: forall A B. ((A) => B, list [A] + null) => list[B] + null */
 function map(f, xs){
   if (empty(xs)) {
     return nil();

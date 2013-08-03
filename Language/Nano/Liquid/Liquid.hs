@@ -1,4 +1,5 @@
 {-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE TupleSections        #-}
 
 -- | Top Level for Refinement Type checker
@@ -238,6 +239,9 @@ consExpr g (IntLit l i)
 
 consExpr g (BoolLit l b)
   = envAddFresh l (pSingleton tBool b) g 
+
+consExpr g (StringLit l s)
+  = envAddFresh l (eSingleton tString s) g
 
 consExpr g (VarRef i x)
   = do addAnnot l x' $ envFindTy x g

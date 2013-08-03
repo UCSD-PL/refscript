@@ -22,14 +22,12 @@ module Language.Nano.Typecheck.Subst (
 
 import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
--- import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types as F
--- import           Language.Nano.Errors 
+import qualified Language.Fixpoint.Types                as F
 import           Language.Nano.Typecheck.Types
 
-import           Control.Applicative ((<$>))
-import qualified Data.HashSet as S
-import qualified Data.HashMap.Strict as M 
+import           Control.Applicative                    ((<$>))
+import qualified Data.HashSet                           as S
+import qualified Data.HashMap.Strict                    as M 
 import           Data.Monoid
 -- import           Text.Printf 
 -- import           Debug.Trace

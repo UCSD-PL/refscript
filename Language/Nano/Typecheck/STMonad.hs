@@ -18,6 +18,9 @@ module Language.Nano.Typecheck.STMonad (
   -- * Unfold type definition
   , unfoldTDefSafe, unfoldTDefDeep, unfoldTDefSafeST, unfoldTDefDeepST
 
+  -- * Bindings 
+  , getBinding
+
 
   )  where 
 
@@ -514,10 +517,10 @@ unfoldTDefMaybe :: (PP r, F.Reftable r) => RType r -> Env (RType r) -> Either St
 unfoldTDefMaybe t@(TApp (TDef id) acts _) env =
       case envFindTy (F.symbol id) env of
         Just (TBd (TD _ vs bd _ )) -> Right $ apply (fromList $ zip vs acts) bd
-        _                          -> Left  $ (printf "Failed unfolding: %s" $ ppshow t)
+        _                          -> Left  $ printf "Failed unfolding: %s" $ ppshow t
 -- The only thing that is unfoldable is a TDef.
 -- The rest are just returned as they are.
-unfoldTDefMaybe t                       _   = Right t
+unfoldTDefMaybe t                       _   = Left $ printf "Failed unfolding: %s" $ ppshow t
 
 
 -- | Force a successful unfolding
@@ -636,4 +639,21 @@ unassigned α (Su m) = HM.lookup α m == Just (tVar α)
 varAsnM :: Subst -> TVar -> Type -> STM Subst
 -----------------------------------------------------------------------------
 varAsnM θ a t = either (`addError` θ) return $ varAsn θ a t 
+
+
+
+
+-- | Get binding from object type
+---------------------------------------------------------------------------------
+getBinding :: (PP r, F.Reftable r) => Env (RType r) -> Id a -> RType r -> Either String (RType r)
+---------------------------------------------------------------------------------
+getBinding _ i (TObj bs _ ) = 
+  case L.find (\s -> F.symbol i == b_sym s) bs of
+    Just b -> Right $ b_type b
+    _      -> Left  $ errorObjectBinding
+getBinding defs i t@(TApp (TDef _) _ _) = 
+  case unfoldTDefMaybe t defs of
+    Right t' -> getBinding defs i t'
+    Left  s  -> Left $ s ++ "\nand\n" ++ errorObjectTAccess t
+getBinding defs t _ = Left $ errorObjectTAccess t
 

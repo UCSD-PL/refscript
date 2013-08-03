@@ -72,10 +72,8 @@ module Language.Nano.Typecheck.Types (
   , isAsm
 
   -- * Useful Operations
-  , subset
   , strip
   , stripProp
-  , getBinding
   , joinTypes
 
   ) where 
@@ -218,37 +216,8 @@ bkUnion t               = [t]
 
 
 
--- | Get binding from object type
----------------------------------------------------------------------------------
-getBinding :: Env (RType r) -> Id a -> RType r -> Either String (RType r)
----------------------------------------------------------------------------------
-getBinding _ i (TObj bs _ ) = 
-  case L.find (\s -> F.symbol i == b_sym s) bs of
-    Just b -> Right $ b_type b
-    _      -> Left  $ errorObjectBinding
-getBinding defs i t@(TDef _ _) = 
-  case unfoldTDefMaybe t defs of
-    Just t' -> getBinding defs i t'
-    _       -> Left $ errorObjectTAccess t
-getBinding defs t _ = Left $ errorObjectTAccess t
 
 
-
-{--- | Combine the two types t1 and t2 into a union, but choose the greater of two-}
-{--- types based on @sub@ if they are related.-}
-{-----------------------------------------------------------------------------------}
-{-combineTypes ::  (Type -> Type -> Bool) -> Type -> Type -> Type-}
-{-----------------------------------------------------------------------------------}
-{-combineTypes sub t1 t2 = -}
-{-  mkUnion $ choose (bkUnion t1) (bkUnion t2)-}
-{-  where-}
-{-    choose [] ys =  ys-}
-{-    choose xs [] =  xs-}
-{-    choose xs ys =     [y | x <- xs, y <- ys, x `sub` y, not (y `sub` x)]       -- x <: y-}
-{-                   ++  [x | x <- xs, y <- ys, y `sub` x, not (x `sub` y)]       -- y <: x-}
-{-                   ++  [x | x <- xs, y <- ys, x `sub` y, y `sub` x]             -- x == y-}
-{-        ++  concat [[x,y] | x <- xs, y <- ys, not $ x `sub` y, not $ y `sub` x] -- unrelated-}
-                      
 
 -- | Join types @t1@ and @t2@ (t1 ㄩ t2). Useful at environment joins.          
 -- Join produces an equivalent type for @t1@ (resp. @t2@) that has is extended  
@@ -477,6 +446,9 @@ mapCode f n = n { code = fmap f (code n) }
 instance PP () where 
   pp _ = text ""
 
+instance PP String where 
+  pp   = text
+
 instance PP a => PP [a] where 
   pp = ppArgs brackets comma 
 
@@ -640,12 +612,4 @@ prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
 builtinId       = mkId . ("builtin_" ++)
 
 
-
------------------------------------------------------------------------------
--- Lists contain flat types (no unions)
------------------------------------------------------------------------------
-subset ::  [Type] -> [Type] -> Bool
------------------------------------------------------------------------------
-subset xs ys = 
-  any isTop ys || all (\x -> any (\y -> x == y) ys) xs
 

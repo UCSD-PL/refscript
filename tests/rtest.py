@@ -85,11 +85,11 @@ class TestRunner:
             print "\n\033[1;32mPassed all tests! :D\033[1;0m"
         else:
             failnames  = [fail[0] for fail in failed]
-            print "\n\033[1;31mFailed %d tests:\033[1;0m %s" % (failcount, ", ".join(failnames))
+            print "\n\033[1;31mFailed %d tests:\033[1;0m \n %s" % (failcount, ",\n ".join(failnames))
 
             exceptions = [fail[0] for fail in failed if fail[1]]
             if exceptions != []:
-                print "\n\033[1;31mExceptions thrown on %d tests:\033[1;0m %s" % (len(exceptions), ", ".join(exceptions))
+                print "\n\033[1;31mExceptions thrown on %d tests:\033[1;0m\n %s" % (len(exceptions), ",\n ".join(exceptions))
 
         return (failcount != 0)
 

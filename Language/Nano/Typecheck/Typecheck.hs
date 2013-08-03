@@ -390,10 +390,31 @@ tcObject γ bs
 tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 ----------------------------------------------------------------------------------
 tcAccess γ l e f = 
-  tcExpr γ e >>= (unfoldTDefSafeTC >=> binders l e) >>= access f
-  where
-    access f               = return . maybe tUndef b_type . find (match $ F.symbol f)
-    match s (B f _)        = s == f
+  do  t   <- tcExpr γ e 
+      access l t f 
+
+
+----------------------------------------------------------------------------------
+-- access :: (F.Reftable r) => AnnSSA -> RType r -> TCM (RType r)
+----------------------------------------------------------------------------------
+
+access l   (TObj bs _) f = return $ maybe tUndef b_type $ find (match $ F.symbol f) bs
+  where match s (B f _)  = s == f
+
+access l t@(TApp c ts _ ) f =
+  case c of 
+    TUn      -> undefined --return a union, but also CAST if necessary
+    TInt     -> return tUndef
+    TBool    -> return tUndef
+    TString  -> return tUndef
+    TUndef   -> undefined -- TC-error
+    TNull    -> undefined -- TC-error
+    TDef _   -> do  t' <- tracePP "tcAccess: Unfolding" <$> unfoldTDefSafeTC t
+                    access l t' f
+    TTop     -> return undefined -- wtf
+    TVoid    -> undefined -- wtf
+
+access _ _ _            = undefined
 
 
 ----------------------------------------------------------------------------------

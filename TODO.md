@@ -13,8 +13,8 @@ Todo List
 
 5.  Add option to not solve constraints
 
-Invariants
-----------
+Invariants [HEREHEREHEREHERE]
+-----------------------------
 
 - Add to prelude.js 
 

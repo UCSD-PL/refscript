@@ -4,6 +4,9 @@
 {- LANGUAGE ScopedTypeVariables  #-}
 
 
+-- RJ: Please add documentation for what this module is 
+-- supposed to do. I have no idea from the name.
+
 module Language.Nano.Typecheck.STMonad (
   
   -- * Casting

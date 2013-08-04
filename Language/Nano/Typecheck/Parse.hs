@@ -65,6 +65,7 @@ withSpan f p = do pos   <- getPosition
                   pos'  <- getPosition
                   return $ f (Span pos pos') x
 
+
 xyP lP sepP rP
   = (\x _ y -> (x, y)) <$> lP <*> (spaces >> sepP) <*> rP
 
@@ -171,17 +172,6 @@ dummyP fm = fm `ap` topP
 topP   :: Parser Reft
 topP   = (Reft . (, []) . vv . Just) <$> freshIntP
 
--- locParserP :: Parser a -> Parser (Located a)
--- locParserP p = liftM2 Loc getPosition p
--- positionNameP = dummyNamePos <$> getPosition
--- dummyNamePos pos  = "dummy." ++ name ++ ['.'] ++ line ++ ['.'] ++ col
---     where name    = san <$> sourceName pos
---           line    = show $ sourceLine pos  
---           col     = show $ sourceColumn pos  
---           san '/' = '.'
---           san c   = toLower c
-
-
 -- | Parses bindings of the form: `x : kind`
 bindP :: Parser (Reft -> a) -> Parser a
 bindP kindP
@@ -266,6 +256,7 @@ data PSpec l t
   | Bind (Id l, t) 
   | Qual Qualifier
   | Type (Id l, t)
+  | Invt l t 
   deriving (Show)
 
 specP :: Parser (PSpec SourceSpan RefType)
@@ -273,8 +264,8 @@ specP
   = try (reserved "measure"   >> (Meas <$> idBindP    ))
     <|> (reserved "qualif"    >> (Qual <$> qualifierP ))
     <|> (reserved "type"      >> (Type <$> tBodyP     )) 
+    <|> (reserved "invariant" >> (withSpan Invt bareTypeP))
     <|> ({- DEFAULT -}           (Bind <$> idBindP    ))
-
 
 --------------------------------------------------------------------------------------
 parseSpecFromFile :: FilePath -> IO (Nano SourceSpan RefType) 
@@ -286,8 +277,9 @@ mkSpec xs = Nano { code   = Src []
                  , specs  = envFromList [b | Bind b <- xs] 
                  , defs   = envEmpty
                  , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
-                 , tDefs  = envFromList [b | Type b <- xs]
-                 , quals  =             [q | Qual q <- xs]  
+                 , tDefs  = envFromList [b        | Type b <- xs]
+                 , quals  =             [q        | Qual q <- xs]  
+                 , invts  =             [Loc l t  | Invt l t <- xs] 
                  }
 
 -- YUCK. Worst hack of all time.

@@ -26,6 +26,9 @@ module Language.Nano.Liquid.CGMonad (
   , freshTyInst
   , freshTyPhis
 
+  -- * Freshable
+  , Freshable (..)
+
   -- * Environment API
   , envAddFresh
   , envAdds

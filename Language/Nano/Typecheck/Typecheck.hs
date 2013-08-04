@@ -11,7 +11,6 @@ import           Control.Monad
 
 import qualified Data.HashSet                       as HS 
 import qualified Data.HashMap.Strict                as M 
-import           Data.List                          (find)
 import qualified Data.Traversable                   as T
 import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust)
@@ -117,13 +116,12 @@ tcAndPatch :: (Data r, Typeable r, F.Reftable r) =>
   Nano AnnSSA (RType r) -> TCM (Nano  AnnSSA (RType r))
 -------------------------------------------------------------------------------
 tcAndPatch p = 
-  do  _  <- checkTypeDefs p
-      p2 <- tcNano        p
-      p3 <- patchPgmM     p2
+  do  checkTypeDefs p
+      p1 <- tcNano        p
+      p2 <- patchPgmM     p1
       s  <- getSubst
       d  <- getTDefs
       return $ trace (codePP p2 s d) p2
-      -- return p2
   where 
     codePP (Nano {code = Src src}) sub defs = render $
           text "********************** CODE **********************"
@@ -389,44 +387,13 @@ tcObject γ bs
 ----------------------------------------------------------------------------------
 tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 ----------------------------------------------------------------------------------
-tcAccess γ l e f = 
-  do  t   <- tcExpr γ e 
-      access l t f 
+tcAccess γ l e f 
+  = do  t <- tcExpr γ e 
+        f <- dotAccess l e f t
+        case f of
+          Just t  -> return t
+          Nothing -> undefined -- dead code
 
-
-----------------------------------------------------------------------------------
--- access :: (F.Reftable r) => AnnSSA -> RType r -> TCM (RType r)
-----------------------------------------------------------------------------------
-
-access l   (TObj bs _) f = return $ maybe tUndef b_type $ find (match $ F.symbol f) bs
-  where match s (B f _)  = s == f
-
-access l t@(TApp c ts _ ) f =
-  case c of 
-    TUn      -> undefined --return a union, but also CAST if necessary
-    TInt     -> return tUndef
-    TBool    -> return tUndef
-    TString  -> return tUndef
-    TUndef   -> undefined -- TC-error
-    TNull    -> undefined -- TC-error
-    TDef _   -> do  t' <- tracePP "tcAccess: Unfolding" <$> unfoldTDefSafeTC t
-                    access l t' f
-    TTop     -> return undefined -- wtf
-    TVoid    -> undefined -- wtf
-
-access _ _ _            = undefined
-
-
-----------------------------------------------------------------------------------
-binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
-----------------------------------------------------------------------------------
-binders _ _  (TObj b _ )       = return b
-binders l e t@(TApp TUn ts _) = 
-  case find isObj ts of
-    Just _  -> error $ "UNIMPLEMENTED: Typecheck.hs, binders " -- addCast t' >> binders l e t'
-    _       -> tcError l $ errorObjectAccess e t
-binders l e t                 = tcError l $ errorObjectAccess e t
-  
 
 ----------------------------------------------------------------------------------
 envJoin :: AnnSSA -> Env Type -> TCEnv -> TCEnv -> TCM TCEnv 

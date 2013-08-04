@@ -44,6 +44,9 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Expression Getter/Setter
   , getExpr, setExpr
 
+  -- * Dot Access
+  , dotAccess
+
   -- * Patch the program with assertions
   , patchPgmM
 
@@ -62,9 +65,10 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.STMonad
 import           Language.Nano.Errors
-import           Data.Monoid                  
-import qualified Data.HashMap.Strict      as HM
-import qualified Data.Map                 as M
+import           Data.List                      (find)
+import           Data.Monoid                    
+import qualified Data.HashMap.Strict            as HM
+import qualified Data.Map                       as M
 import           Data.Generics                  (Data(..))
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
@@ -168,6 +172,10 @@ setTyArgs l βs
        addAnn l $ TypInst (tVar <$> βs)
 
 
+-------------------------------------------------------------------------------
+-- | Managing Casts -----------------------------------------------------------
+-------------------------------------------------------------------------------
+
 addCasts :: Casts -> TCM ()
 addCasts cs = 
   do  cs'  <- tc_casts <$> get
@@ -176,6 +184,65 @@ addCasts cs =
   where
     err e _ _ = error $ printf "There should be no prior cast on %s" (ppshow e)
 
+
+addCast   :: SourceSpan -> Expression AnnSSA -> Type -> TCM ()
+addCast l e t  = addCasts $ M.fromList [(l, (e, CST t))]
+
+addDeadCast   :: SourceSpan -> Expression AnnSSA -> Type -> TCM ()
+addDeadCast l e t  = addCasts $ M.fromList [(l, (e, DD t))]
+
+-------------------------------------------------------------------------------
+-- | Field access -------------------------------------------------------------
+-------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------
+dotAccess :: AnnSSA -> Expression AnnSSA -> Id AnnSSA -> Type -> TCM (Maybe Type)
+-------------------------------------------------------------------------------
+dotAccess l e f   (TObj bs _) = 
+  return $ Just $ maybe tUndef b_type $ find (match $ F.symbol f) bs
+  where match s (B f _)  = s == f
+
+dotAccess l e f t@(TApp c ts _ ) = go c
+  where  go TUn      = dotAccessUnion l e f ts
+         go TInt     = return $ Just tUndef
+         go TBool    = return $ Just tUndef
+         go TString  = return $ Just tUndef
+         go TUndef   = return   Nothing
+         go TNull    = return   Nothing
+         go (TDef _) = unfoldTDefSafeTC t >>= dotAccess l e f
+         go TTop     = undefined
+         go TVoid    = undefined
+
+dotAccess l _ _   (TFun _ _ _ ) = tcError l "Cannot access a function type"
+dotAccess _ _ _ _               = undefined
+
+
+-------------------------------------------------------------------------------
+dotAccessUnion :: AnnSSA -> Expression AnnSSA -> Id AnnSSA -> [Type] -> TCM (Maybe Type)
+-------------------------------------------------------------------------------
+dotAccessUnion l e f ts = 
+  do  tfs            <- mapM (dotAccess l e f) ts
+      -- Gather all the types that do not throw errors
+      cast $ unzip [(t,tf) | (t, Just tf) <- zip ts tfs]
+  where 
+    s = srcPos l
+    --The cast type here does not matter
+    cast ([], _  ) = addDeadCast s e tTop         >> return Nothing 
+    cast (ts, tfs) = 
+      do  addCast s e (mkUnion ts)
+          return $ Just (mkUnion tfs)
+
+
+-------------------------------------------------------------------------------
+binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
+-------------------------------------------------------------------------------
+binders _ _  (TObj b _ )       = return b
+binders l e t@(TApp TUn ts _) = 
+  case find isObj ts of
+    Just _  -> error $ "UNIMPLEMENTED: Typecheck.hs, binders " -- addCast t' >> binders l e t'
+    _       -> tcError l $ errorObjectAccess e t
+binders l e t                 = tcError l $ errorObjectAccess e t
+  
 
                 
       

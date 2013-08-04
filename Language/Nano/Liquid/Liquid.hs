@@ -30,7 +30,6 @@ import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
-import           Language.Nano.Typecheck.STMonad    (getBinding) 
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad

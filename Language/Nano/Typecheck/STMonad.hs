@@ -104,7 +104,7 @@ subType :: Env Type             -- Type definitions
 subType m = execSubTypeE $ STS [] (envMap toType m) False M.empty [] Nothing 
  
  
--- | Decides if @t1@ is a subtype of @t2@. If true, it returns the the 
+-- | Decides if @t1@ is a subtype of @t2@. If true, it returns the 
 -- succeful substitution that does this. Otherwise, a list of error messages.
 -- Casts are enabled in this version, so with the addition of "dead code casts"
 -- this version is unlikely to fail.

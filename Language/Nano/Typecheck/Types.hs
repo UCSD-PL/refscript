@@ -422,8 +422,8 @@ instance PP t => PP (Nano a t) where
     $+$ text "**************************************************"
 
 instance Monoid (Nano a t) where 
-  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty []
-  mappend p1 p2 = Nano ss e e' cs tds qs 
+  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty [] []
+  mappend p1 p2 = Nano ss e e' cs tds qs is 
     where 
       ss        = Src $ s1 ++ s2
       Src s1    = code p1
@@ -432,7 +432,8 @@ instance Monoid (Nano a t) where
       e'        = envFromList ((envToList $ defs p1)  ++ (envToList $ defs p2))
       cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
       tds       = envFromList $ (envToList $ tDefs p1) ++ (envToList $ tDefs p2)
-      qs        = quals p1 ++ quals p2 
+      qs        = quals p1 ++ quals p2
+      is        = invts p1 ++ invts p2
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }

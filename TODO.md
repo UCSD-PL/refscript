@@ -31,13 +31,13 @@ Invariants
 
 - Add to prelude.js 
 
-    invariant {v:number    | (ttag v) = "number"   }
-    invariant {v:number    | (ttag v) = "number"   }
-    invariant {v:undefined | (ttag v) = "undefined"}
-    invariant {v:null      | (ttag v) = "object"   }
-    invariant {v:boolean   | (ttag v) = "boolean"  }  
-    invariant {v:number    | (ttag v) = "number"   } 
-    invariant {v:string    | (ttag v) = "string"   } 
+    invariant {v:number    | ttag(v) = "number"   }
+    invariant {v:number    | ttag(v) = "number"   }
+    invariant {v:undefined | ttag(v) = "undefined"}
+    invariant {v:null      | ttag(v) = "object"   }
+    invariant {v:boolean   | ttag(v) = "boolean"  }  
+    invariant {v:number    | ttag(v) = "number"   } 
+    invariant {v:string    | ttag(v) = "string"   } 
 
 Failing Tests
 -------------

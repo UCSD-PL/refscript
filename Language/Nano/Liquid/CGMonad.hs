@@ -1,5 +1,5 @@
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
 -- | Operations pertaining to Constraint Generation
@@ -117,9 +117,9 @@ execute pgm kv act
       (Right x, st) -> (x, st)  
 
 initState       :: Nano AnnType RefType -> Bool -> CGState
-initState pgm b = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty pgm b -- HEREHEREHERE
+initState pgm b = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty pgm invs b
   where 
-    pgmInvs     = error "TODO"
+    inv        = error "TODO"
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -157,11 +157,13 @@ data CGState
         , count    :: !Integer             -- ^ freshness counter
         , cg_ann   :: A.AnnInfo RefType    -- ^ recorded annotations
         , pgm      :: Nano AnnType RefType -- ^ the program
+        , invs     :: TConInv              -- ^ type constructor invariants
         , kVars    :: Bool                 -- ^ If true do not instatiate function types with K-vars
-        , invs     :: !TConInv             -- ^ type constructor invariants
         }
 
 type CGM     = ErrorT String (State CGState)
+
+type TConInv = M.HashMap TCon (Located RefType)
 
 ---------------------------------------------------------------------------------------
 cgError :: (IsLocated l) => l -> String -> CGM a 

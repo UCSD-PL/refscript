@@ -113,8 +113,10 @@ execute pgm kv act
       (Left err, _) -> errorstar err
       (Right x, st) -> (x, st)  
 
-initState :: Nano AnnType RefType -> Bool -> CGState
-initState pgm b = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty pgm b
+initState       :: Nano AnnType RefType -> Bool -> CGState
+initState pgm b = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty pgm b -- HEREHEREHERE
+  where 
+    pgmInvs     = error "TODO"
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -153,6 +155,7 @@ data CGState
         , cg_ann   :: A.AnnInfo RefType    -- ^ recorded annotations
         , pgm      :: Nano AnnType RefType -- ^ the program
         , kVars    :: Bool                 -- ^ If true do not instatiate function types with K-vars
+        , invs     :: !TConInv             -- ^ type constructor invariants
         }
 
 type CGM     = ErrorT String (State CGState)

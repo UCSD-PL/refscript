@@ -13,8 +13,21 @@ Todo List
 
 5.  Add option to not solve constraints
 
-Invariants [HEREHEREHEREHERE]
------------------------------
+Invariants
+----------
+
++ New type (see liquidhaskell)
+
+    data Invariant = ...
+
++ Update parser (see liquidhaskell)
+
++ Thread invariant environment into CGE
+  > see `initState` in CGMonad
+
+- Strengthen the reft in `CGMonad.envAdds`
+
+- Delete `addTag` and calls to it.
 
 - Add to prelude.js 
 
@@ -25,18 +38,6 @@ Invariants [HEREHEREHEREHERE]
     invariant {v:boolean   | (ttag v) = "boolean"  }  
     invariant {v:number    | (ttag v) = "number"   } 
     invariant {v:string    | (ttag v) = "string"   } 
-
-- New type (see liquidhaskell)
-
-    data Invariant = ...
-
-- Update parser (see liquidhaskell)
-
-- Thread invariant environment into CGE
-
-- Strengthen the reft in `CGMonad.envAdds`
-
-- Delete `addTag` and calls to it.
 
 Failing Tests
 -------------

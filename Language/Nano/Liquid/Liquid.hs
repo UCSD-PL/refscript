@@ -316,6 +316,8 @@ fixBase g x (tE,tC) =
   where
 --  { v: B | r } = { v: B | _ } `strengthen` r                        
     rX'          = strip tE     `strengthen` rTypeReft (envFindTy x g)
+                 -- FIX: DO NOT DUPLICATE CODE, use `true` from the `Freshable` class 
+    
 --  v 
     v     = rTypeValueVar {-$ tracePP "fixbase tE (before)" -} tE
 --  (v = x)

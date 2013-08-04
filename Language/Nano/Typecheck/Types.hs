@@ -323,15 +323,16 @@ strengthen (TApp c ts r) r'  = TApp c ts $ r' `F.meet` r
 strengthen (TVar α r)    r'  = TVar α    $ r' `F.meet` r 
 strengthen t _               = t                         
 
+-- RJ: what is this for?  To replace with "true" ? 
 class Stripable a where 
   strip :: a -> a
 
 instance (F.Reftable r) => Stripable (RType r) where
-  strip (TApp c ts _) = TApp c ts mempty
-  strip (TVar v _)    = TVar v mempty 
-  strip (TFun bs t _) = TFun bs t mempty
-  strip (TObj bs _)   = TObj bs mempty
-  strip (TBd  tbd)    = TBd tbd
+  strip (TApp c ts _) = TApp c ts top 
+  strip (TVar v _)    = TVar v    top 
+  strip (TFun bs t _) = TFun bs t top 
+  strip (TObj bs _)   = TObj bs   top 
+  strip (TBd  tbd)    = TBd  tbd
   strip (TAll v t)    = TAll v t
 
 -- instance data TBody r 
@@ -412,6 +413,7 @@ data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
                      , consts :: !(Env t)           -- ^ Measure Signatures 
                      , tDefs  :: !(Env t)           -- ^ Type definitions
                      , quals  :: ![F.Qualifier]     -- ^ Qualifiers
+                     , invts  :: ![Located t]       -- ^ Type Invariants
                      } deriving (Functor, Data, Typeable)
 
 type NanoBare    = Nano AnnBare Type 

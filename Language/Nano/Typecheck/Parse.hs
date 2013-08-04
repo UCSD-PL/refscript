@@ -277,9 +277,9 @@ mkSpec xs = Nano { code   = Src []
                  , specs  = envFromList [b | Bind b <- xs] 
                  , defs   = envEmpty
                  , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
-                 , tDefs  = envFromList [b        | Type b <- xs]
-                 , quals  =             [q        | Qual q <- xs]  
-                 , invts  =             [Loc l t  | Invt l t <- xs] 
+                 , tDefs  = envFromList [b         | Type b <- xs]
+                 , quals  =             [q         | Qual q <- xs]  
+                 , invts  =             [Loc l' t  | Invt l t <- xs, let l' = srcPos l] 
                  }
 
 -- YUCK. Worst hack of all time.
@@ -299,7 +299,8 @@ mkCode ss = Nano { code   = Src (checkTopStmt <$> ss)
                  , defs   = envEmpty
                  , consts = envEmpty 
                  , tDefs  = envEmpty
-                 , quals  = []  
+                 , quals  = [] 
+                 , invts  = [] 
                  } 
 
 -------------------------------------------------------------------------------

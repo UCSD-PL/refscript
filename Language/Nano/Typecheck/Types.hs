@@ -73,8 +73,6 @@ module Language.Nano.Typecheck.Types (
 
   -- * Useful Operations
   , subset
-  , strip
-  , stripProp
   , getBinding
   , joinTypes
 
@@ -323,31 +321,6 @@ strengthen (TApp c ts r) r'  = TApp c ts $ r' `F.meet` r
 strengthen (TVar α r)    r'  = TVar α    $ r' `F.meet` r 
 strengthen t _               = t                         
 
-class Stripable a where 
-  strip :: a -> a
-
-instance (F.Reftable r) => Stripable (RType r) where
-  strip (TApp c ts _) = TApp c ts mempty
-  strip (TVar v _)    = TVar v mempty 
-  strip (TFun bs t _) = TFun bs t mempty
-  strip (TObj bs _)   = TObj bs mempty
-  strip (TBd  tbd)    = TBd tbd
-  strip (TAll v t)    = TAll v t
-
--- instance data TBody r 
---    = TD { td_con  :: !TCon          -- TDef name ...
---         , td_args :: ![TVar]        -- Type variables
---         , td_body :: !(RType r)     -- int or bool or fun or object ...
---         , td_pos  :: !SourceSpan    -- Source position
---         } deriving (Eq, Ord, Show, Functor, Data, Typeable)
-
-
-----------------------------------------------------------------------------------
-stripProp :: Prop a -> Prop ()
-----------------------------------------------------------------------------------
-stripProp (PropId _ (Id _ s)) = PropId () (Id () s) 
-stripProp (PropString _ s)    = PropString () s     
-stripProp (PropNum _ i)       = PropNum () i        
 
 
 -- NOTE: r' is the OLD refinement. 

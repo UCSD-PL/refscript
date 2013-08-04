@@ -18,6 +18,9 @@ module Language.Nano.Liquid.CGMonad (
   -- * Get Defined Function Type Signature
   , getDefType
 
+  -- * Get binding
+  , getBindingM
+
   -- * Throw Errors
   , cgError      
 
@@ -61,7 +64,7 @@ import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types 
-import           Language.Nano.Typecheck.STMonad (unfoldTDefSafe, isSubType)
+import           Language.Nano.Typecheck.STMonad (unfoldTDefSafe, isSubType, getBinding)
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Liquid.Types
 
@@ -139,6 +142,12 @@ cgStateCInfo pgm ((fcs, fws), cg) = CGI fi (cg_ann cg)
 measureEnv   ::  Nano a (RType F.Reft) -> F.SEnv F.SortedReft
 measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts 
 
+
+getBindingM i t 
+  = do  td <- cg_tdefs <$> get
+        return $ getBinding td i t 
+
+
 ---------------------------------------------------------------------------------------
 -- | Constraint Generation Monad ------------------------------------------------------
 ---------------------------------------------------------------------------------------
@@ -204,7 +213,7 @@ addTag t@(TApp TBool   [] r) = t `strengthen` tagPred r "boolean"
 addTag t@(TApp TNull   [] r) = t `strengthen` tagPred r "object" 
 addTag t@(TApp TUndef  [] r) = t `strengthen` tagPred r "undefined"
 addTag t@(TApp TString [] r) = t `strengthen` tagPred r "string"
-addTag t                     = traceShow "addTag DEFAULT" t
+addTag t                     = t
 
 -- | Create tag predicate: (ttag vv = n)
 ---------------------------------------------------------------------------------------

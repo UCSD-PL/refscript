@@ -311,20 +311,17 @@ castSubM g x l t1 t2 =
 fixBase :: CGEnv-> Id AnnType -> (RefType, RefType)-> CGM (CGEnv, RefType, RefType)
 ---------------------------------------------------------------------------------------------
 fixBase g x (tE,tC) =
-  do  g' <- envAdds [(x, rX')] g
-      return (g', {-trace msg -} tE', tC)
-  where
---  { v: B | r } = { v: B | _ } `strengthen` r                        
-    rX'          = strip tE     `strengthen` rTypeReft (envFindTy x g)
-                 -- FIX: DO NOT DUPLICATE CODE, use `true` from the `Freshable` class 
-    
---  v 
-    v     = rTypeValueVar {-$ tracePP "fixbase tE (before)" -} tE
---  (v = x)
-    vEqX  = F.Reft (v, [F.RConc (F.PAtom F.Eq (F.EVar v) (F.EVar $ F.symbol x))])
---  { v: B | p ∧ (v = x)} = { v: B | p } `strengthen` (v = x)
-    tE'                   = tE           `strengthen` vEqX
-
+  do ttE     <- true tE
+     -- { v: B | r } = { v: B | _ } `strengthen` r
+     let rX'  = ttE `strengthen` rTypeReft (envFindTy x g)
+     g'      <- envAdds [(x, rX')] g
+     -- v
+     let v    = rTypeValueVar {-$ tracePP "fixbase tE (before)" -} ttE
+     -- (v = x)
+     let vEqX = F.Reft (v, [F.RConc (F.PAtom F.Eq (F.EVar v) (F.EVar $ F.symbol x))])
+     -- { v: B | p ∧ (v = x)} = { v: B | p } `strengthen` (v = x)
+     let ttE' = ttE `strengthen` vEqX
+     return (g', ttE', tC)
     {- msg =  printf "fixbase %s -> (%s::%s) \n|- tE: %s <: tC: %s\n" 
     (ppshow $ envFindTy x g) (ppshow x) (ppshow rX') (ppshow tE') (ppshow tC) -} 
 

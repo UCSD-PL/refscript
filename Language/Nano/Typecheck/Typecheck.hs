@@ -135,22 +135,23 @@ tcAndPatch p =
 
 
 -------------------------------------------------------------------------------
-checkTypeDefs :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM ()
+checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano AnnSSA (RType r) -> TCM ()
 -------------------------------------------------------------------------------
-checkTypeDefs pgm = 
-  do  defs  <- tracePP  "Definitions" <$> getDefs
-      tdefs <- tracePP "Type Definitions" <$> getTDefs
-      case grep defs of 
-        [] -> return ()
-        is -> mapM_ report is
+checkTypeDefs pgm =
+  do  reportAll $ grep1 
+      reportAll $ grep2 
   where 
-    grep defs = concatMap (HS.toList . free) $ snd <$> envToList defs
-
-    report t@(TV _ _) = logError (srcPos t) (errorUnboundType (ppshow t)) ()
-    {-grep ds ts      = everything (++) ([] `mkQ` f ts) ds-}
-    {-f ts (TDef i) | not $ envMem (tracePP "Checking" i) ts = [i]-}
-    {-f _  _                            = [ ]-}
-      
+    ds        = defs pgm 
+    ts        = tDefs pgm
+    reportAll = mapM_ report
+    report t  = tcError (srcPos t) $ errorUnboundType (ppshow t)
+    -- There should be no top-level free type variables
+    grep1     = concatMap (HS.toList . free) $ snd <$> envToList ds
+    -- There should be no undefined type constructors
+    grep2 :: [Id SourceSpan] = everything (++) ([] `mkQ` f ts) ds
+    f ts d@(TDef i) | not $ envMem i ts = [i]
+    f _  _                              = [ ]
+  
 
 
 -------------------------------------------------------------------------------

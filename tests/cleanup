@@ -14,6 +14,7 @@ find .  -name "*.css"   -o \
         -name "*.annot" -o \
         -name "*.log"   -o \
         -name "*.cgi"   -o \
+        -name "*.smt2"   -o \
         -name "*.html"
 
 while true; do
@@ -32,6 +33,7 @@ while true; do
                     -name "*.annot" -o \
                     -name "*.log"   -o \
                     -name "*.cgi"   -o \
+                    -name "*.smt2"   -o \
                     -name "*.html"  | xargs rm -rf ; exit;;
     [Nn]* ) exit;;
     * ) echo "Please answer yes or no.";;

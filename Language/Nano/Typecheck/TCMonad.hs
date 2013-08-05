@@ -1,7 +1,7 @@
-{- LANGUAGE TypeSynonymInstances #-}
-{- LANGUAGE FlexibleInstances    #-}
+{- LANGUAGE TypeSynonymInstances      #-}
+{- LANGUAGE FlexibleInstances         #-}
 {- LANGUAGE NoMonomorphismRestriction #-}
-{- LANGUAGE ScopedTypeVariables  #-}
+{- LANGUAGE ScopedTypeVariables       #-}
 
 -- | This module has the code for the Type-Checker Monad. 
 
@@ -38,6 +38,9 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Unfolding
   , unfoldTDefSafeTC, unfoldTDefDeepTC
 
+  -- * Get Casts
+  , getCasts
+  
   -- * Get Type Signature 
   , getDefType 
 
@@ -63,8 +66,9 @@ import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.STMonad
 import           Language.Nano.Errors
 import           Data.Monoid                  
-import qualified Data.HashMap.Strict      as HM
-import qualified Data.Map                 as M
+import qualified Data.HashMap.Strict            as HM
+import qualified Data.Map                       as M
+import           Data.Maybe                     (fromJust)
 import           Data.Generics                  (Data(..))
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
@@ -74,7 +78,7 @@ import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
--- import           Debug.Trace hiding (traceShow)
+import           Debug.Trace                      (trace)
 import           Language.Nano.Misc               (unique)
 
 -------------------------------------------------------------------------------
@@ -89,11 +93,9 @@ data TCState = TCS {
                    -- Annotations
                    , tc_anns  :: AnnInfo
                    , tc_annss :: [AnnInfo]
-                   -- Assertions (back the comparison on SourceSpan with 
-                   -- a check on the AST Expression node OR
-                   -- Dead casts: this will require from the liquid system 
-                   -- to prove that this code is dead
-                   , tc_casts :: M.Map SourceSpan (Expression AnnSSA, Cast Type)
+                   -- Cast map: SourceSpan alone is not enough as key, 
+                   -- so backing up with expression
+                   , tc_casts :: M.Map (SourceSpan, Expression AnnSSA) (Cast Type)
                    -- Function definitions
                    , tc_defs  :: !(Env Type) 
                    -- Type definitions
@@ -114,6 +116,9 @@ getTDefs = tc_tdefs <$> get
 getSubst :: TCM Subst
 -------------------------------------------------------------------------------
 getSubst = tc_subst <$> get 
+
+getCasts = do c <- tc_casts <$> get 
+              return $ M.toList c
 
 -------------------------------------------------------------------------------
 setSubst   :: Subst -> TCM () 
@@ -163,17 +168,18 @@ setTyArgs l βs
        addAnn l $ TypInst (tVar <$> βs)
 
 
+-------------------------------------------------------------------------------
 addCasts :: Casts -> TCM ()
+-------------------------------------------------------------------------------
 addCasts cs = 
   do  cs'  <- tc_casts <$> get
-      e    <- tc_expr <$> get
-      modify $ \st -> st {tc_casts = M.unionWith (err e) cs cs' }
-  where
-    err e _ _ = error $ printf "There should be no prior cast on %s" (ppshow e)
+      let err (s,e) _ _ 
+            = error $ printf "[%s] There should be no prior cast on %s\nNew Casts: %s\nOld casts: %s" 
+                      (ppshow $ s) (ppshow e)
+                      (ppshow $ M.toList cs)
+                      (ppshow $ M.toList cs')
+      modify $ \st -> st {tc_casts = M.unionWithKey err cs cs' }
 
-
-                
-      
 
 -------------------------------------------------------------------------------
 -- | Managing Annotations: Type Instantiations --------------------------------
@@ -345,10 +351,11 @@ patchPgmM pgm =
 patchExpr :: Casts -> Expression AnnSSA -> Expression AnnSSA
 --------------------------------------------------------------------------------
 patchExpr m e =
-  case M.lookup ss m of
-    Just (e',CST t) | e == e' -> DownCast     (a { ann_fact = (Assume t):fs }) e
-    Just (e',DD  t) | e == e' -> DeadCast (a { ann_fact = (Assume t):fs }) e
-    _                         -> e
+  case M.lookup (ss, e) m of
+    Just (UCST t) -> UpCast   (a { ann_fact = (Assume t):fs }) e
+    Just (DCST t) -> DownCast (a { ann_fact = (Assume t):fs }) e
+    Just (DC   t) -> DeadCast (a { ann_fact = (Assume t):fs }) e
+    _             -> e
   where 
     ss = ann a
     fs = ann_fact a

@@ -121,14 +121,17 @@ tcAndPatch p =
   do  p1 <- tcNano p 
       p2 <- patchPgmM p1
       s  <- getSubst
-      return $ trace (codePP p2 s) p2
+      c  <- getCasts
+      return $ trace (codePP p2 s c) p2
       -- return p2
   where 
-    codePP (Nano {code = Src src}) sub = render $
+    codePP (Nano {code = Src src}) sub cst = render $
           text "********************** CODE **********************"
       $+$ pp src
       $+$ text "***************** SUBSTITUTIONS ******************"
       $+$ pp sub
+      $+$ text "******************** CASTS ***********************"
+      $+$ pp cst
       $+$ text "**************************************************"
 
 

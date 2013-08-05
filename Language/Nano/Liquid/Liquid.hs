@@ -227,9 +227,12 @@ consExpr :: CGEnv -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 --   x' is a fresh, temporary (A-Normalized) variable holding the value of `e`,
 --   g' is g extended with a binding for x' (and other temps required for `e`)
 
-consExpr g (Cast a e) 
+consExpr g (DownCast a e) 
   = do  (x, g') <- consExpr g e
         consCast g' x a e 
+
+consExpr g (UpCast a e)
+  = undefined
 
 consExpr g (DeadCast a e)
   = consDeadCast g a e

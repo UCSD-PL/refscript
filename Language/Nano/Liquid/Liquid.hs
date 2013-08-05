@@ -290,12 +290,11 @@ consCast g x a e
 
 castSubM g x l (t1, t2)
   = do (g', t1', t2') <- fixBase g x (t1, t2) 
-       -- t1'' <- addInvariant t1'
-       -- t2'' <- addInvariant t2' 
-       let (t1'', t2'') = mapPair addTag (t1', t2')
-       subType l g' t1'' t2''
-       -- mapPair addTag (t1', t2')
-       --  modify $ \st -> st {cs = Sub g' (ci l) (T.trace (printf "Adding cast Sub: %s\n<:\n%s" (ppshow tt1') (ppshow tt2')) tt1') tt2' : (cs st)}
+       t1'' <- addInvariant t1'
+       t2'' <- addInvariant t2' 
+       -- FIX: At this point you should JUST call subType
+       -- subType l g' t1'' t2''
+       modify $ \st -> st {cs = Sub g' (ci l) (T.trace (printf "Adding cast Sub: %s\n<:\n%s" (ppshow t1'') (ppshow t2'')) t1'') t2'' : (cs st)}
 
 -- RJ: castSubM g x l (t1, t2) 
 -- RJ:   = do (g', t1', t2') <- fixBase g x (t1, t2)

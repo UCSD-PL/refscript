@@ -8,6 +8,7 @@ module Language.Nano.Liquid.CGMonad (
     
   -- * Constraint Generation Monad
     CGM
+  , CGState (..)
 
   -- * Constraint Information
   , CGInfo (..)
@@ -42,10 +43,9 @@ module Language.Nano.Liquid.CGMonad (
   , subTypes
   , subType
 
-  -- TODO: eliminate from interface
+  -- FIX: eliminate from interface
   , bkTypesM
   , addInvariant
-  , addTag
 
   -- * Match same sort types
   , matchTypes
@@ -202,10 +202,8 @@ envAdds xts' g
 addFixpointBind :: (F.Symbolic x) => (x, RefType) -> CGM F.BindId
 addFixpointBind (x, t) 
   = do let s     = F.symbol x
-       let t'    = addTag t
-       let r     = rTypeSortedReft t'
-       (i, bs') <- F.insertBindEnv s 
-        ({-T.trace (printf "Inserting bind: %s :: %s" (show s) (ppshow t'))-} r) . binds <$> get 
+       let r     = rTypeSortedReft t
+       (i, bs') <- F.insertBindEnv s r . binds <$> get 
        modify    $ \st -> st { binds = bs' }
        return    $ i
 
@@ -217,28 +215,6 @@ addInvariant t           = ((`tx` t) . invs) <$> get
     tx i t@(TApp tc _ _) = maybe t (strengthen t . rTypeReft . val) $ M.lookup tc i
     tx _ t               = t 
 
-
--- INV -- | Add tags to connect the raw type with the liquid part 
--- INV -- TODO: Fill with the rest of the tags
----------------------------------------------------------------------------------------
-addTag :: RType F.Reft -> RType F.Reft
----------------------------------------------------------------------------------------
-addTag t@(TApp TInt    [] r) = t `strengthen` tagPred r "number" 
-addTag t@(TApp TBool   [] r) = t `strengthen` tagPred r "boolean" 
-addTag t@(TApp TNull   [] r) = t `strengthen` tagPred r "object" 
-addTag t@(TApp TUndef  [] r) = t `strengthen` tagPred r "undefined"
-addTag t@(TApp TString [] r) = t `strengthen` tagPred r "string"
-addTag t                     = traceShow "addTag DEFAULT" t
-
--- | Create tag predicate: (ttag vv = n)
----------------------------------------------------------------------------------------
-tagPred :: F.Reft -> String -> F.Reft
----------------------------------------------------------------------------------------
-tagPred (F.Reft (sym, _)) n = F.Reft (sym, [F.RConc pred])
-  where
-    pred    = F.PAtom F.Eq (F.EApp addTag [vv]) (F.expr n)
-    addTag  = F.stringSymbol "ttag"
-    vv      = F.EVar sym
 
 ---------------------------------------------------------------------------------------
 addAnnot       :: (F.Symbolic x) => SourceSpan -> x -> RefType -> CGM () 
@@ -363,17 +339,17 @@ subTypes l g xs ts = zipWithM_ (subType l g) [envFindTy x g | x <- xs] ts
 ---------------------------------------------------------------------------------------
 subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
--- RJ subType l g t1 t2 = modify $ \st -> st {cs =  c : cs st}
--- RJ   where 
--- RJ     c             = {- tracePP ("subType at" ++ ppshow (srcPos l)) $ -} Sub g (ci l) t1 t2
+-- subType l g t1 t2 = modify $ \st -> st {cs =  c : cs st}
+--   where 
+--     c             = {- tracePP ("subType at" ++ ppshow (srcPos l)) $ -} Sub g (ci l) t1 t2
 
 subType l g t1 t2 = 
-  do -- tt1 <- addInvariant t1
-     -- tt2 <- addInvariant t2 
+  do tt1 <- addInvariant t1
+     tt2 <- addInvariant t2 
      s   <- bkTypesM ({-T.trace (printf "Adding Sub: %s\n<:\n%s" (ppshow t1) (ppshow t2))-} tt1, tt2)
      modify $ \st -> st {cs = c s ++ (cs st)}
   where 
-     (tt1, tt2) = mapPair addTag (t1, t2)
+     -- (tt1, tt2) = mapPair addTag (t1, t2)
      c s        = map (uncurry $ Sub g (ci l)) s 
 
 

@@ -137,8 +137,6 @@ function pos(){
 /*@ measure ttag :: forall A. (A) => string                               */
 /*@ builtin_PrefixTypeof:: forall A. (x:A) => {v:string | (ttag x) = v }  */
 
-/*@ invariant {v:number    | ttag(v) = "number"   } */ 
-/*@ invariant {v:number    | ttag(v) = "number"   } */
 /*@ invariant {v:undefined | ttag(v) = "undefined"} */
 /*@ invariant {v:null      | ttag(v) = "object"   } */
 /*@ invariant {v:boolean   | ttag(v) = "boolean"  } */ 

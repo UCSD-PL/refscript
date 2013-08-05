@@ -655,5 +655,5 @@ getBinding defs i t@(TApp (TDef _) _ _) =
   case unfoldTDefMaybe t defs of
     Right t' -> getBinding defs i t'
     Left  s  -> Left $ s ++ "\nand\n" ++ errorObjectTAccess t
-getBinding defs t _ = Left $ errorObjectTAccess t
+getBinding defs _ t = Left $ errorObjectTAccess t
 

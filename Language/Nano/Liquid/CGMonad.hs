@@ -239,10 +239,22 @@ envAddReturn f t g  = g { renv = E.envAddReturn f t (renv g) }
 envAddGuard       :: (F.Symbolic x, IsLocated x) => x -> Bool -> CGEnv -> CGEnv  
 ---------------------------------------------------------------------------------------
 envAddGuard x b g = g { guards = guard b x : guards g }
-  where 
-    guard True    = F.eProp 
-    guard False   = F.PNot . F.eProp
-
+  where
+    -- Falsy values:
+    -- ∙ false
+    -- ∙ 0 (zero)
+    -- ∙ "" (empty string)
+    -- ∙ null
+    -- ∙ undefined
+    -- ∙ NaN (Not a number)
+    guard True  v = F.eProp v
+    guard False v = F.pOr [ F.PNot (F.eProp v) 
+                            
+                          ] 
+      where
+        vEqX x    = F.PAtom F.Eq (F.eVar v) x
+                           
+                    
 ---------------------------------------------------------------------------------------
 envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
 ---------------------------------------------------------------------------------------

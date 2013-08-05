@@ -339,18 +339,26 @@ subTypes l g xs ts = zipWithM_ (subType l g) [envFindTy x g | x <- xs] ts
 ---------------------------------------------------------------------------------------
 subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
--- subType l g t1 t2 = modify $ \st -> st {cs =  c : cs st}
---   where 
---     c             = {- tracePP ("subType at" ++ ppshow (srcPos l)) $ -} Sub g (ci l) t1 t2
+subType l g t1 t2 =
+  do tt1   <- addInvariant t1
+     tt2   <- addInvariant t2
+     -- removing bkTypes from here:
+     -- With the addition of upcasts the type sorts
+     -- should be aligned and compatible so just do a check here
+     -- s   <- bkTypesM ({-T.trace (printf "Adding Sub: %s\n<:\n%s" 
+     -- (ppshow t1) (ppshow t2))-} tt1, tt2)
+     let s  = checkTypes tt1 tt2
+     modify $ \st -> st {cs = c s : (cs st)}
+  where
+     c      = uncurry $ Sub g (ci l)
 
-subType l g t1 t2 = 
-  do tt1 <- addInvariant t1
-     tt2 <- addInvariant t2 
-     s   <- bkTypesM ({-T.trace (printf "Adding Sub: %s\n<:\n%s" (ppshow t1) (ppshow t2))-} tt1, tt2)
-     modify $ \st -> st {cs = c s ++ (cs st)}
-  where 
-     -- (tt1, tt2) = mapPair addTag (t1, t2)
-     c s        = map (uncurry $ Sub g (ci l)) s 
+
+
+checkTypes t1 t2 | toType t1 == toType t2 = (t1,t2)
+checkTypes t1 t2 | otherwise              = 
+  errorstar (printf "CGMonad: checkTypes not aligned: %s - %s"
+            (ppshow t1) (ppshow t2))
+
 
 
 ---------------------------------------------------------------------------------------

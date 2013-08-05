@@ -60,6 +60,7 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 
 import           Language.Nano.Env
+import           Language.Nano.Misc             (unique, everywhereM')
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
@@ -68,7 +69,6 @@ import           Language.Nano.Errors
 import           Data.Monoid                  
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map                       as M
-import           Data.Maybe                     (fromJust)
 import           Data.Generics                  (Data(..))
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
@@ -78,8 +78,7 @@ import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
-import           Debug.Trace                      (trace)
-import           Language.Nano.Misc               (unique)
+-- import           Debug.Trace                      (trace)
 
 -------------------------------------------------------------------------------
 -- | Typechecking monad -------------------------------------------------------
@@ -95,7 +94,7 @@ data TCState = TCS {
                    , tc_annss :: [AnnInfo]
                    -- Cast map: SourceSpan alone is not enough as key, 
                    -- so backing up with expression
-                   , tc_casts :: M.Map (SourceSpan, Expression AnnSSA) (Cast Type)
+                   , tc_casts :: M.Map (Expression AnnSSA) (Cast Type)
                    -- Function definitions
                    , tc_defs  :: !(Env Type) 
                    -- Type definitions
@@ -173,9 +172,9 @@ addCasts :: Casts -> TCM ()
 -------------------------------------------------------------------------------
 addCasts cs = 
   do  cs'  <- tc_casts <$> get
-      let err (s,e) _ _ 
-            = error $ printf "[%s] There should be no prior cast on %s\nNew Casts: %s\nOld casts: %s" 
-                      (ppshow $ s) (ppshow e)
+      let err e _ _ 
+            = error $ printf "There should be no prior cast on %s\nNew Casts: %s\nOld casts: %s" 
+                      (ppshow e)
                       (ppshow $ M.toList cs)
                       (ppshow $ M.toList cs')
       modify $ \st -> st {tc_casts = M.unionWithKey err cs cs' }
@@ -345,19 +344,30 @@ patchPgmM :: (Typeable r, Data r) => Nano AnnSSA (RType r) -> TCM (Nano AnnSSA (
 --------------------------------------------------------------------------------
 patchPgmM pgm = 
   do  c <- tc_casts <$> get
-      return $ everywhere (mkT $ patchExpr c) pgm
+      return $ fst $ runState (everywhereM' (mkM transform) pgm) (PS c)
+
+
+data PState = PS { m :: Casts }
+type PM     = State PState
+
+--------------------------------------------------------------------------------
+transform :: Expression AnnSSA -> PM (Expression AnnSSA)
+--------------------------------------------------------------------------------
+transform e = 
+  do  c  <- m <$> get      
+      put (PS $ M.delete e c)
+      return $ patchExpr c e
 
 --------------------------------------------------------------------------------
 patchExpr :: Casts -> Expression AnnSSA -> Expression AnnSSA
 --------------------------------------------------------------------------------
 patchExpr m e =
-  case M.lookup (ss, e) m of
+  case M.lookup e m of
     Just (UCST t) -> UpCast   (a { ann_fact = (Assume t):fs }) e
     Just (DCST t) -> DownCast (a { ann_fact = (Assume t):fs }) e
     Just (DC   t) -> DeadCast (a { ann_fact = (Assume t):fs }) e
     _             -> e
   where 
-    ss = ann a
     fs = ann_fact a
     a  = getAnnotation e
 

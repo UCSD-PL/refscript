@@ -73,7 +73,7 @@ type STM     = ErrorT String (State STState)
 
 type STError = [(SourceSpan, String)]
 
-type Casts   = M.Map (SourceSpan, Expression AnnSSA) (Cast Type)
+type Casts   = M.Map (Expression AnnSSA) (Cast Type)
 
 data Cast t  = UCST t | DCST t | DC  t
 
@@ -479,7 +479,7 @@ addDownCast :: Type -> STM ()
 addDownCast t = 
   do  e <- mfromJust "addDownCast" <$> getExpr 
       let l = ann $ getAnnotation e
-      modify $ \st -> st { st_casts = M.insert (l,e) (DCST t) (st_casts st) }
+      modify $ \st -> st { st_casts = M.insert e (DCST t) (st_casts st) }
 
 
 --------------------------------------------------------------------------------
@@ -488,7 +488,7 @@ addUpCast :: Type -> STM ()
 addUpCast t = 
   do  e <- mfromJust "addUpCast" <$> getExpr 
       let l = ann $ getAnnotation e
-      modify $ \st -> st { st_casts = M.insert (l,e) (UCST t) (st_casts st) }
+      modify $ \st -> st { st_casts = M.insert e (UCST t) (st_casts st) }
 
 
 --------------------------------------------------------------------------------
@@ -497,7 +497,7 @@ addDeadCast :: Type -> STM ()
 addDeadCast t = 
   do  e <- mfromJust "addDeadCast" <$> getExpr 
       let l = ann $ getAnnotation e
-      modify $ \st -> st { st_casts = M.insert (l,e) (DC t) (st_casts st) } 
+      modify $ \st -> st { st_casts = M.insert e (DC t) (st_casts st) } 
 
 
 

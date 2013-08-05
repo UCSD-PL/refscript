@@ -42,15 +42,16 @@ import           Debug.Trace                        as T
 verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 verifyFile f =   
-  do  p <- parseNanoFromFile f
-      Liquid{ kVarInst = kv } <- getOpts
-      fmap (,"") <$> reftypeCheck f kv (typeCheck (ssaTransform p))
+  do  p   <- parseNanoFromFile f
+      -- Liquid { kVarInst = kv } <- getOpts
+      cfg <- getOpts 
+      fmap (, "") <$> reftypeCheck cfg f (typeCheck (ssaTransform p))
 
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
-reftypeCheck   :: FilePath -> Bool -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
-reftypeCheck f kv = solveConstraints f . generateConstraints kv
+reftypeCheck       :: Config -> FilePath -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
+reftypeCheck cfg f = solveConstraints f . generateConstraints cfg
 
 --------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (F.FixResult SourceSpan) 
@@ -84,9 +85,9 @@ applySolution = fmap . fmap . tx
 tidy = id
 
 --------------------------------------------------------------------------------
-generateConstraints     :: Bool -> NanoRefType -> CGInfo 
+generateConstraints     :: Config -> NanoRefType -> CGInfo 
 --------------------------------------------------------------------------------
-generateConstraints kv pgm = getCGInfo pgm kv $ consNano pgm
+generateConstraints cfg pgm = getCGInfo cfg pgm $ consNano pgm
 
 --------------------------------------------------------------------------------
 consNano     :: NanoRefType -> CGM ()
@@ -101,12 +102,14 @@ initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
 consFun :: CGEnv -> FunctionStatement AnnType -> CGM CGEnv  
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = do ft             <- freshTyFun g l f =<< getDefType f
+  = do ft             <- tracePP msg <$> (freshTyFun g l f =<< getDefType f)
        g'             <- envAdds [(f, ft)] g 
        g''            <- envAddFun l g' f xs ft
        gm             <- consStmts g'' body
        maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
        return g'
+    where 
+       msg = printf "freshTyFun f = %s" (ppshow f)
 
 consFun _ _ = error "consFun called not with FunctionStmt"
 

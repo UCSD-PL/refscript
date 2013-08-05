@@ -99,22 +99,22 @@ instance PP (F.SubC c) where
 
 
 -------------------------------------------------------------------------------
-getCGInfo     :: NanoRefType -> Bool -> CGM a -> CGInfo  
+getCGInfo        :: Config -> NanoRefType -> CGM a -> CGInfo  
 -------------------------------------------------------------------------------
-getCGInfo pgm  kv = cgStateCInfo pgm . execute pgm kv . (>> fixCWs)
+getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
   where 
-    fixCWs         = (,) <$> fixCs <*> fixWs
-    fixCs          = concatMapM splitC . cs =<< get 
-    fixWs          = concatMapM splitW . ws =<< get
+    fixCWs       = (,) <$> fixCs <*> fixWs
+    fixCs        = concatMapM splitC . cs =<< get 
+    fixWs        = concatMapM splitW . ws =<< get
 
-execute :: Nano AnnType RefType -> Bool -> CGM a -> (a, CGState)
-execute pgm kv act
-  = case runState (runErrorT act) $ initState pgm kv of 
+execute :: Config -> Nano AnnType RefType -> CGM a -> (a, CGState)
+execute cfg pgm act
+  = case runState (runErrorT act) $ initState cfg pgm of 
       (Left err, _) -> errorstar err
       (Right x, st) -> (x, st)  
 
-initState :: Nano AnnType RefType -> Bool -> CGState
-initState pgm b = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty pgm b
+initState :: Config -> Nano AnnType RefType -> CGState
+initState c pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty pgm c 
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -152,7 +152,7 @@ data CGState
         , count    :: !Integer             -- ^ freshness counter
         , cg_ann   :: A.AnnInfo RefType    -- ^ recorded annotations
         , pgm      :: Nano AnnType RefType -- ^ the program
-        , kVars    :: Bool                 -- ^ If true do not instatiate function types with K-vars
+        , cg_opts  :: Config               -- ^ configuration options
         }
 
 type CGM     = ErrorT String (State CGState)
@@ -296,7 +296,7 @@ envJoin' l g g1 g2
 ---------------------------------------------------------------------------------------
 freshTyFun :: (IsLocated l) => CGEnv -> l -> Id AnnType -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
-freshTyFun g l f t  = kVars <$> get >>= freshTyFun' g l f t 
+freshTyFun g l f t = freshTyFun' g l f t . kVarInst . cg_opts =<< get  
 
 freshTyFun' g l _ t b
   | b && isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g 

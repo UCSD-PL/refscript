@@ -33,14 +33,14 @@ tc = TC {
 
 
 liquid = Liquid { 
-   files      = def  &= typ "TARGET"
-                     &= args
-                     &= typFile
+   files    = def  &= typ "TARGET"
+                   &= args
+                   &= typFile
 
- , incdirs    = def  &= typDir
-                     &= help "Paths to Spec Include Directory "
+ , incdirs  = def  &= typDir
+                   &= help "Paths to Spec Include Directory "
 
- , kVarInst = def  &= help "Disable k-var toplevel function type instantiation"
+ , kVarInst = True &= help "Enable k-var toplevel function type instantiation [default = True]"
    
  } &= help    "Refinement Type Checker for Nano" 
 

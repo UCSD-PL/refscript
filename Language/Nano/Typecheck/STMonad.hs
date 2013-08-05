@@ -25,11 +25,12 @@ module Language.Nano.Typecheck.STMonad (
   )  where 
 
 import           Text.Printf
-import           Control.Applicative            ((<$>))
+import           Text.PrettyPrint.HughesPJ          (text, (<+>), ($+$))
+import           Control.Applicative                ((<$>))
 import           Control.Monad.State
 import           Control.Monad.Error
-import           Language.Fixpoint.Misc hiding (traceShow) 
-import qualified Language.Fixpoint.Types as F
+import           Language.Fixpoint.Misc             hiding (traceShow) 
+import qualified Language.Fixpoint.Types            as F
 
 import           Language.Nano.Env
 import           Language.Nano.Types
@@ -38,11 +39,11 @@ import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
 import           Language.Nano.Misc
 import           Data.Monoid                  
-import qualified Data.HashSet             as HS
-import qualified Data.HashMap.Strict      as HM
-import qualified Data.Map                 as M
-import qualified Data.List                as L
-import           Language.ECMAScript3.Parser    (SourceSpan (..))
+import qualified Data.HashSet                       as HS
+import qualified Data.HashMap.Strict                as HM
+import qualified Data.Map                           as M
+import qualified Data.List                          as L
+import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
@@ -72,9 +73,9 @@ type STM     = ErrorT String (State STState)
 
 type STError = [(SourceSpan, String)]
 
-type Casts   = M.Map SourceSpan (Expression AnnSSA, Cast Type)
+type Casts   = M.Map (SourceSpan, Expression AnnSSA) (Cast Type)
 
-data Cast t  = CST t | DD  t
+data Cast t  = UCST t | DCST t | DC  t
 
 
 -------------------------------------------------------------------------------
@@ -297,24 +298,41 @@ execSubTypesS :: STState -> [Maybe (Expression AnnSSA)] -> Subst -> [Type] -> [T
 execSubTypesS st es θ t1 t2 = executeST st $ subtys θ es t1 t2
 
 
+-- | The pattern followed below:
+-- ∙ Try to apply regular subtyping (for unions or non-unions
+-- ∙ If this succeeds, add an upcast (if needed)
+-- ∙ If subtyping fails, try unification
+-- ∙ if unification fails, add a down-cast (or, dead code annotation)
+--
+-- For everything there is both a "casting" and a "non-casting" version.
 -----------------------------------------------------------------------------
 subty :: Subst -> Type -> Type -> STM Subst
 -----------------------------------------------------------------------------
 subty θ (TApp TUn ts _ ) (TApp TUn ts' _) = 
-  subtyAux (tryWithBackup (subtyUnions  θ ts  ts' ) (castTs θ ts ts'), subtyUnions θ ts ts')
+  subtyIfCast (tryWithBackup (subtyUnions θ ts  ts' >>= upCastTs ts ts') 
+                             (castTs θ ts ts'),
+               subtyUnions θ ts ts')
 
 subty θ t@(TApp TUn ts _ ) t' = 
-  subtyAux (tryWithBackups (subtyUnions  θ ts  [t'] ) [unify θ t t', castTs θ ts [t']], 
-             tryWithBackups (subtyUnions  θ ts  [t'] ) [unify θ t t'])
+  subtyIfCast (tryWithBackups (subtyUnions θ ts [t'] >>= upCastTs ts [t']) 
+                              [unify θ t t', castTs θ ts [t']], 
+               tryWithBackups (subtyUnions θ ts [t']) 
+                              [unify θ t t'])
 
 subty θ t t'@(TApp TUn ts' _) = 
-  subtyAux (tryWithBackups (subtyUnions  θ [t]  ts' ) [unify θ t t', castTs θ [t] ts'],
-             tryWithBackups (subtyUnions  θ [t]  ts' ) [unify θ t t'])
+  subtyIfCast (tryWithBackups (subtyUnions θ [t] ts' >>= upCastTs [t] ts') 
+                              [unify θ t t', castTs θ [t] ts'],
+               tryWithBackups (subtyUnions θ [t] ts') 
+                              [unify θ t t'])
 
 subty θ t t' = 
-  subtyAux (tryWithBackups (subtyNoUnion θ t t') [castTs θ [t] [t']], subtyNoUnion  θ t  t')
+  subtyIfCast (tryWithBackups (subtyNoUnion θ t t' >>= upCastTs [t] [t'])
+                              [castTs θ [t] [t']], 
+               subtyNoUnion θ t t')
 
-subtyAux (a,b) = get >>= \s -> if (st_docasts s) then a else b
+-- | If casts are set, do @a@, otherwise do @b@
+subtyIfCast (a,b) = get >>= \s -> if (st_docasts s) then a else b
+
 
 
 -----------------------------------------------------------------------------
@@ -427,33 +445,50 @@ subTyDef θ t t'@(TApp (TDef _) _ _)  = unfoldTDefSafeST t'>>= \u' -> subtyNoUni
 subTyDef θ t t'                      = subtyNoUnion θ (trace "subTyDef" t) t'
 
 
+
+
+--------------------------------------------------------------------------------
+-- Adding Casts ----------------------------------------------------------------
+--------------------------------------------------------------------------------
+
 -- | Add a cast from the disjunction of types @fromTs@ to the disjunction of 
 --   @toTs@. Resort to dead code annotation if this fails.
 --------------------------------------------------------------------------------
 castTs :: Subst -> [Type] -> [Type] -> STM Subst
 --------------------------------------------------------------------------------
-castTs θ fromTs toTs = ifM (st_docasts <$> get) (get >>= use . subs) (return θ)
+castTs θ fromTs toTs = get >>= use . subs
   where
     -- If there is no possiblity for a subtype, require that this is dead 
     -- code, and freely give exactly the type that is expected
     use [] = addDeadCast (mkUnion toTs) >> return θ
-    use ts = addCast     (mkUnion ts)   >> return θ
+    use ts = addDownCast (mkUnion ts)   >> return θ
     -- IMPORTANT: Don't allow casts when checking subtyping here
     subs s = L.nub [ a | a <- fromTs, b <- toTs, execSubTypeB (noCasts s) θ a b ]
 
 
+upCastTs ts ts' θ = go (mkUnion ts) (mkUnion ts') >> return θ
+  -- The only case where an upcast will not be added
+  where go t t' | apply θ t == apply θ t'   = return ()
+  -- t <: t' so it's safe to cast the current expression to t'
+        go t t' | otherwise                 = addUpCast t'
+
 
 --------------------------------------------------------------------------------
--- Casts -----------------------------------------------------------------------
+addDownCast :: Type -> STM ()
 --------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
-addCast :: Type -> STM ()
---------------------------------------------------------------------------------
-addCast t = 
-  do  e <- mfromJust "addCast" <$> getExpr 
+addDownCast t = 
+  do  e <- mfromJust "addDownCast" <$> getExpr 
       let l = ann $ getAnnotation e
-      modify $ \st -> st { st_casts = M.insert l (e, CST t) (st_casts st) }
+      modify $ \st -> st { st_casts = M.insert (l,e) (DCST t) (st_casts st) }
+
+
+--------------------------------------------------------------------------------
+addUpCast :: Type -> STM ()
+--------------------------------------------------------------------------------
+addUpCast t = 
+  do  e <- mfromJust "addUpCast" <$> getExpr 
+      let l = ann $ getAnnotation e
+      modify $ \st -> st { st_casts = M.insert (l,e) (UCST t) (st_casts st) }
 
 
 --------------------------------------------------------------------------------
@@ -462,7 +497,7 @@ addDeadCast :: Type -> STM ()
 addDeadCast t = 
   do  e <- mfromJust "addDeadCast" <$> getExpr 
       let l = ann $ getAnnotation e
-      modify $ \st -> st { st_casts = M.insert l (e, DD t) (st_casts st) } 
+      modify $ \st -> st { st_casts = M.insert (l,e) (DC t) (st_casts st) } 
 
 
 
@@ -482,6 +517,13 @@ haltCasts action =
 noCasts :: STState -> STState
 -----------------------------------------------------------------------------
 noCasts st = st { st_docasts = False }
+
+
+instance (PP a) => PP (Cast a) where
+  pp (UCST t) = text "Upcast  : " <+> pp t
+  pp (DCST t) = text "Downcast: " <+> pp t
+  pp (DC   t) = text "Deadcast: " <+> pp t
+
 
 
 

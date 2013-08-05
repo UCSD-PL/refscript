@@ -1,6 +1,8 @@
 Todo List
 =========
 
+0.  Scrape Qualifiers
+
 1.  Disallow use of undefined types. I.e. all constructed types should be
     introduced with /*@ type ... */.
 
@@ -12,31 +14,6 @@ Todo List
 4.  Fix "Cannot handle ssaVarDECL" at "var foo;"
 
 5.  Add option to not solve constraints
-
-Invariants
-----------
-
-- Add to prelude.js 
-
-    invariant {v:number    | (ttag v) = "number"   }
-    invariant {v:number    | (ttag v) = "number"   }
-    invariant {v:undefined | (ttag v) = "undefined"}
-    invariant {v:null      | (ttag v) = "object"   }
-    invariant {v:boolean   | (ttag v) = "boolean"  }  
-    invariant {v:number    | (ttag v) = "number"   } 
-    invariant {v:string    | (ttag v) = "string"   } 
-
-- New type (see liquidhaskell)
-
-    data Invariant = ...
-
-- Update parser (see liquidhaskell)
-
-- Thread invariant environment into CGE
-
-- Strengthen the reft in `CGMonad.envAdds`
-
-- Delete `addTag` and calls to it.
 
 Failing Tests
 -------------
@@ -95,18 +72,7 @@ Exceptions thrown on 16 tests:
  liquid/pos/safereverse.js
 
 
-Strings
--------
-
-+ update TC to support `string` type
-
-+ add a simple test 
-  * tests/liquid/pos/str0.js
-  * tests/liquid/neg/str0-unsafe.js
-
-- update constraint generation
-
-- run
+ run
 
 - Scrape Qualifiers
 - unions

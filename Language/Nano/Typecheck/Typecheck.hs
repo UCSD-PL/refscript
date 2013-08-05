@@ -97,8 +97,9 @@ failCasts True   _                                       = F.Safe
 allCasts :: [FunctionStatement AnnSSA] -> [(AnnSSA, [Char])]
 -------------------------------------------------------------------------------
 allCasts fs =  everything (++) ([] `mkQ` f) $ fs
-  where f (Cast l t)      = [(l, "Cast: " ++ ppshow t)]
+  where f (DownCast l t)  = [(l, "Cast: " ++ ppshow t)]
         f (DeadCast l _)  = [(l, "DeadCode")]
+        -- UpCasts are safe
         f _               = [ ]
 
 

@@ -346,7 +346,7 @@ patchExpr :: Casts -> Expression AnnSSA -> Expression AnnSSA
 --------------------------------------------------------------------------------
 patchExpr m e =
   case M.lookup ss m of
-    Just (e',CST t) | e == e' -> Cast     (a { ann_fact = (Assume t):fs }) e
+    Just (e',CST t) | e == e' -> DownCast     (a { ann_fact = (Assume t):fs }) e
     Just (e',DD  t) | e == e' -> DeadCast (a { ann_fact = (Assume t):fs }) e
     _                         -> e
   where 

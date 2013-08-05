@@ -17,7 +17,7 @@ import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust)
 import           Data.Generics                   
 
-import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$))
+import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$), (<+>))
 import           Text.Printf                        (printf)
 
 import           Language.Nano.CmdLine              (getOpts)
@@ -34,6 +34,7 @@ import           Language.Nano.SSA.SSA
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc             as FM 
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Debug.Trace                        hiding (traceShow)
@@ -131,7 +132,7 @@ tcAndPatch p =
       $+$ text "***************** SUBSTITUTIONS ******************"
       $+$ pp sub
       $+$ text "******************** CASTS ***********************"
-      $+$ vcat (pp <$> cst)
+      $+$ vcat ((\(e,t) -> (pp $ ann $ getAnnotation e) <+> pp (e,t)) <$> cst)
       $+$ text "**************************************************"
 
 

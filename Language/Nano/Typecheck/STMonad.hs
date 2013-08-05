@@ -470,7 +470,9 @@ upCastTs ts ts' θ = go (mkUnion ts) (mkUnion ts') >> return θ
   -- The only case where an upcast will not be added
   where go t t' | apply θ t == apply θ t'   = return ()
   -- t <: t' so it's safe to cast the current expression to t'
-        go t t' | otherwise                 = addUpCast t'
+        -- go t t' | otherwise                 = addUpCast t'
+        go t t' | otherwise                 = 
+          addUpCast (tracePP ("UpCasting from " ++ ppshow t ++ "to") t')
 
 
 --------------------------------------------------------------------------------

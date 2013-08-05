@@ -86,7 +86,7 @@ function pos(){
 /*@ nth   :: forall A. (xs:list [A], {i:number| ((0 <= i) && i < (len xs))}) => A                 */
 
 /*@ empty :: forall A. (x: list[A] + null ) => 
-                        {v: boolean | ((Prop v) <=> ((ttag x) = "null"))}                             */
+                        {v: boolean | ((Prop v) <=> ((ttag x) = "null"))}                         */
 
 /*@ length   :: forall A. (xs:list [A]) => {v:number | ((v >= 0) && v = (len xs))}                */
 /*@ safehead :: forall A. ({xs:list [A] | (len xs) > 0}) => A                                     */
@@ -111,11 +111,19 @@ function pos(){
 /*@ builtin_OpNEq       :: forall A B. ({x:A|true}, {y:B|true}) => {v:boolean | ((Prop v) <=> (x != y)) } */
 
 /*@ builtin_OpLAnd      :: ({x:top|true}, {y:top|true}) => {v:boolean | true}                             */
-/*  builtin_OpLAnd      :: ({x:top|true}, {y:top|true}) =>
-                            {v:boolean | ((Prop v) <=> (if (falsy x) then (v = y) else (v = x)))}         */
+
+
+// XXX: Will eventually switch to truthy and falsy:
+/*  builtin_OpLAnd      :: (x:top, y:top) =>
+                            {v:top | ((Prop v) <=> (if (truthy x) then (v = y) else (v = x)))}            */
 
 /*@ builtin_OpLOr       :: ({x:boolean|true}, {y:boolean|true}) =>
                             {v:boolean | ((Prop v) <=> ((Prop x) || (Prop y)))}                           */
+
+// XXX: Will eventually switch to truthy and falsy:
+/*  builtin_OpLOr       :: (x:top, y:top) => 
+                             {v:top | ((Prop v) <=> (if (falsy x) then (v = y) else (v = x) ))}           */
+
 /*@ builtin_OpAdd       :: ({x:number | true}, {y:number | true})  => {v:number | v = x + y}              */
 /*@ builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v = x - y}              */
 /*@ builtin_OpMul       :: (number,  number)  => number                                                   */

@@ -266,13 +266,11 @@ tcStmt' γ (IfSingleStmt l b s)
 -- if b { s1 } else { s2 }
 tcStmt' γ (IfStmt l e s1 s2)
   = do  
-    -- This check needs to be done even though 
-    -- we're not gonna require to have a boolean 
-    -- value here (see truthy and falsy)
-        _ <- tcExpr γ e 
-       -- subTypeM_ l (Just e) t tBool
-        γ1      <- tcStmt' γ s1
-        γ2      <- tcStmt' γ s2
+    -- Pretty much any type can be here, so no subtyping 
+    -- constraint. But we still need to check @e@. 
+        _  <- tcExpr γ e 
+        γ1 <- tcStmt' γ s1
+        γ2 <- tcStmt' γ s2
         envJoin l γ γ1 γ2
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
@@ -389,9 +387,9 @@ tcObject γ bs
 tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 ----------------------------------------------------------------------------------
 tcAccess γ l e f 
-  = do  t <- tcExpr γ e 
-        f <- dotAccess l e f t
-        case f of
+  = do  t  <- tcExpr γ e 
+        tf <- dotAccess l e f t
+        case tracePP (printf "Accessing %s . %s" (ppshow e) (ppshow f)) tf of
           Just t  -> return t
           Nothing -> undefined -- dead code
 

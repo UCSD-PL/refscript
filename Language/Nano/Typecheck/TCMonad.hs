@@ -198,7 +198,7 @@ addDeadCast l e t  = addCasts $ M.fromList [(l, (e, DD t))]
 -------------------------------------------------------------------------------
 dotAccess :: AnnSSA -> Expression AnnSSA -> Id AnnSSA -> Type -> TCM (Maybe Type)
 -------------------------------------------------------------------------------
-dotAccess l e f   (TObj bs _) = 
+dotAccess _ _ f   (TObj bs _) = 
   return $ Just $ maybe tUndef b_type $ find (match $ F.symbol f) bs
   where match s (B f _)  = s == f
 
@@ -232,19 +232,6 @@ dotAccessUnion l e f ts =
       do  addCast s e (mkUnion ts)
           return $ Just (mkUnion tfs)
 
-
--------------------------------------------------------------------------------
-binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
--------------------------------------------------------------------------------
-binders _ _  (TObj b _ )       = return b
-binders l e t@(TApp TUn ts _) = 
-  case find isObj ts of
-    Just _  -> error $ "UNIMPLEMENTED: Typecheck.hs, binders " -- addCast t' >> binders l e t'
-    _       -> tcError l $ errorObjectAccess e t
-binders l e t                 = tcError l $ errorObjectAccess e t
-  
-
-                
       
 
 -------------------------------------------------------------------------------

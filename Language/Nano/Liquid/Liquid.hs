@@ -301,6 +301,9 @@ castSubM g x l (t1, t2)
 -- RJ:        let msg         = printf "Adding cast Sub: %s\n<:\n%s" (ppshow t1') (ppshow t2')
 -- RJ:        tracePP msg   <$> subType l g' t1' t2'
 
+--  g, x :: U t1 ... tn |- x <: {v:T | q}
+
+
 -- | fixBase converts:                                                  
 --                         -----tE-----              -----tC-----       
 -- g, x :: { v: U | r } |- { v: B | p }           <: { v: B | q }       
@@ -315,25 +318,25 @@ castSubM g x l (t1, t2)
 ---------------------------------------------------------------------------------------------
 fixBase :: CGEnv-> Id AnnType -> (RefType, RefType) -> CGM (CGEnv, RefType, RefType)
 ---------------------------------------------------------------------------------------------
--- RJ:  fixBase g x (tE, tC) =
--- RJ:    do ttE     <- true tE
--- RJ:       let rX'  = ttE `strengthen` rTypeReft (envFindTy x g)
--- RJ:       g'      <- envAdds [(x, rX')] g
--- RJ:       let ttE' = eSingleton ttE x 
--- RJ:       return (g', ttE', tC)
-   
-fixBase g x (tE,tC) =
+fixBase g x (tE, tC) =
   do ttE     <- true tE
-     -- { v: B | r } = { v: B | _ } `strengthen` r
      let rX'  = ttE `strengthen` rTypeReft (envFindTy x g)
      g'      <- envAdds [(x, rX')] g
-     -- v
-     let v    = rTypeValueVar {-$ tracePP "fixbase tE (before)" -} ttE
-     -- (v = x)
-     let vEqX = F.Reft (v, [F.RConc (F.PAtom F.Eq (F.EVar v) (F.EVar $ F.symbol x))])
-     -- { v: B | p ∧ (v = x)} = { v: B | p } `strengthen` (v = x)
-     let ttE' = ttE `strengthen` vEqX
+     let ttE' = eSingleton ttE x 
      return (g', ttE', tC)
+   
+-- OLD fixBase g x (tE,tC) =
+-- OLD   do ttE     <- true tE
+-- OLD      -- { v: B | r } = { v: B | _ } `strengthen` r
+-- OLD      let rX'  = ttE `strengthen` rTypeReft (envFindTy x g)
+-- OLD      g'      <- envAdds [(x, rX')] g
+-- OLD      -- v
+-- OLD      let v    = rTypeValueVar {-$ tracePP "fixbase tE (before)" -} ttE
+-- OLD      -- (v = x)
+-- OLD      let vEqX = F.Reft (v, [F.RConc (F.PAtom F.Eq (F.EVar v) (F.EVar $ F.symbol x))])
+-- OLD      -- { v: B | p ∧ (v = x)} = { v: B | p } `strengthen` (v = x)
+-- OLD      let ttE' = ttE `strengthen` vEqX
+-- OLD      return (g', ttE', tC)
 
 
     {- msg =  printf "fixbase %s -> (%s::%s) \n|- tE: %s <: tC: %s\n" 

@@ -274,27 +274,23 @@ consExpr g (ObjectLit l ps)
 consExpr _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))
 
-
 ---------------------------------------------------------------------------------------------
 consCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 ---------------------------------------------------------------------------------------------
-consCast g x a e = 
-  do
-    ps       <- bkTypesM (tE, tC)
-    mapM_ (uncurry $ castSubM g x l) ps 
-    (x', g') <- envAddFresh l tC g
-    return (x', g')
-  where 
-    tE        = tracePP ("CAST FROM " ++ ppshow x) $ envFindTy x g
-    tC        = tracePP "CAST TO" $ rType $ head [ t | Assume t <- ann_fact a]
-    l         = getAnnotation e
+consCast g x a e 
+  = do ps       <- bkTypesM (tE, tC)
+       forM_ ps  $ castSubM g x l
+       (x', g') <- envAddFresh l tC g
+       return (x', g')
+    where 
+      tE        = tracePP ("CAST FROM " ++ ppshow x) $ envFindTy x g
+      tC        = tracePP "CAST TO"                  $ rType $ head [ t | Assume t <- ann_fact a]
+      l         = getAnnotation e
 
-
-castSubM g x l t1 t2 = 
-  do  (g', t1', t2') <- fixBase g x (t1, t2) 
-      let (tt1', tt2') = mapPair addTag (t1', t2')
-      modify $ \st -> st {cs = Sub g' (ci l) (T.trace (printf "Adding cast Sub: %s\n<:\n%s" (ppshow tt1') (ppshow tt2')) tt1') tt2' : (cs st)}
-
+castSubM g x l (t1, t2) 
+  = do (g', t1', t2') <- fixBase g x (t1, t2)
+       let msg         = printf "Adding cast Sub: %s\n<:\n%s" (ppshow t1') (ppshow t2')
+       tracePP msg   <$> subType l g' t1' t2'
 
 -- | fixBase converts:                                                  
 --                         -----tE-----              -----tC-----       
@@ -308,20 +304,24 @@ castSubM g x l t1 t2 =
 -- --------g'----------    ----------tE'---------    ---- tC-----       
 --                                                                      
 ---------------------------------------------------------------------------------------------
-fixBase :: CGEnv-> Id AnnType -> (RefType, RefType)-> CGM (CGEnv, RefType, RefType)
+fixBase :: CGEnv-> Id AnnType -> (RefType, RefType) -> CGM (CGEnv, RefType, RefType)
 ---------------------------------------------------------------------------------------------
-fixBase g x (tE,tC) =
+fixBase g x (tE, tC) =
   do ttE     <- true tE
-     -- { v: B | r } = { v: B | _ } `strengthen` r
      let rX'  = ttE `strengthen` rTypeReft (envFindTy x g)
      g'      <- envAdds [(x, rX')] g
-     -- v
-     let v    = rTypeValueVar {-$ tracePP "fixbase tE (before)" -} ttE
-     -- (v = x)
-     let vEqX = F.Reft (v, [F.RConc (F.PAtom F.Eq (F.EVar v) (F.EVar $ F.symbol x))])
-     -- { v: B | p ∧ (v = x)} = { v: B | p } `strengthen` (v = x)
-     let ttE' = ttE `strengthen` vEqX
+     let ttE' = eSingleton ttE x 
      return (g', ttE', tC)
+     
+     -- { v: B | r } = { v: B | _ } `strengthen` r
+     -- -- v
+     -- let v    = rTypeValueVar {-$ tracePP "fixbase tE (before)" -} ttE
+     -- -- (v = x)
+     -- let vEqX = F.Reft (v, [F.RConc (F.PAtom F.Eq (F.EVar v) (F.EVar $ F.symbol x))])
+     -- -- { v: B | p ∧ (v = x)} = { v: B | p } `strengthen` (v = x)
+     -- let ttE' = ttE `strengthen` vEqX
+   
+
     {- msg =  printf "fixbase %s -> (%s::%s) \n|- tE: %s <: tC: %s\n" 
     (ppshow $ envFindTy x g) (ppshow x) (ppshow rX') (ppshow tE') (ppshow tC) -} 
 

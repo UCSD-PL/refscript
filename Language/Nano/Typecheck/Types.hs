@@ -419,8 +419,10 @@ instance PP t => PP (Nano a t) where
     $+$ pp (tDefs  pgm)
     $+$ text "********************** QUALS *********************"
     $+$ F.toFix (quals  pgm) 
+    $+$ text "********************** QUALS *********************"
+    $+$ pp (invts pgm) 
     $+$ text "**************************************************"
-
+    
 instance Monoid (Nano a t) where 
   mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty [] []
   mappend p1 p2 = Nano ss e e' cs tds qs is 
@@ -477,6 +479,16 @@ instance PP TCon where
   pp TNull            = text "Null"
   pp TUndef           = text "Undefined"
 
+instance Hashable TCon where
+  hashWithSalt s TInt        = hashWithSalt s (0 :: Int)
+  hashWithSalt s TBool       = hashWithSalt s (1 :: Int)
+  hashWithSalt s TString     = hashWithSalt s (2 :: Int)
+  hashWithSalt s TVoid       = hashWithSalt s (3:: Int)
+  hashWithSalt s TTop        = hashWithSalt s (4 :: Int)
+  hashWithSalt s TUn         = hashWithSalt s (5 :: Int)
+  hashWithSalt s TNull       = hashWithSalt s (6 :: Int)
+  hashWithSalt s TUndef      = hashWithSalt s (7 :: Int)
+  hashWithSalt s (TDef z)    = hashWithSalt s (8 :: Int) + hashWithSalt s z
 
 instance F.Reftable r => PP (Bind r) where 
   pp (B x t)        = pp x <> colon <> pp t 

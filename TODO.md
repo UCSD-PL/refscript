@@ -23,13 +23,13 @@ Invariants
 + Update parser (see liquidhaskell)
 
 + Thread invariant environment into CGE
-  > see `initState` in CGMonad
+  see `initState` in CGMonad
 
-- Strengthen the reft in `CGMonad.envAdds`
++ Strengthen the reft in `CGMonad.envAdds`
 
-- Delete `addTag` and calls to it.
++ Delete `addTag` and calls to it.
 
-- Add to prelude.js 
++ Add to prelude.js 
 
     invariant {v:number    | ttag(v) = "number"   }
     invariant {v:number    | ttag(v) = "number"   }
@@ -96,18 +96,7 @@ Exceptions thrown on 16 tests:
  liquid/pos/safereverse.js
 
 
-Strings
--------
-
-+ update TC to support `string` type
-
-+ add a simple test 
-  * tests/liquid/pos/str0.js
-  * tests/liquid/neg/str0-unsafe.js
-
-- update constraint generation
-
-- run
+ run
 
 - Scrape Qualifiers
 - unions

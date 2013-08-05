@@ -6,4 +6,3 @@ function negate(x) {
     return 0 - x;
   }
 }
-

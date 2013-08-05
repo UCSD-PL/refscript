@@ -128,11 +128,22 @@ function pos(){
 /* builtin_PrefixTypeof:: forall A. (A) => string                                                         */
 
 
+/*@ measure prop        :: (boolean) => bool                              */
+
+/*************************************************************************/
+/************** Run-Time Tags ********************************************/
+/*************************************************************************/
+
 /*@ measure ttag :: forall A. (A) => string                               */
 /*@ builtin_PrefixTypeof:: forall A. (x:A) => {v:string | (ttag x) = v }  */
 
-/*@ measure prop        :: (boolean) => bool                              */
-
+/*@ invariant {v:number    | ttag(v) = "number"   } */ 
+/*@ invariant {v:number    | ttag(v) = "number"   } */
+/*@ invariant {v:undefined | ttag(v) = "undefined"} */
+/*@ invariant {v:null      | ttag(v) = "object"   } */
+/*@ invariant {v:boolean   | ttag(v) = "boolean"  } */ 
+/*@ invariant {v:number    | ttag(v) = "number"   } */
+/*@ invariant {v:string    | ttag(v) = "string"   } */
 
 
 /*************************************************************************/

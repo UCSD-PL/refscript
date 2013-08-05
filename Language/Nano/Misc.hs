@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE Rank2Types             #-} 
 
 
 
@@ -11,10 +12,13 @@ module Language.Nano.Misc (
   , mapPairM
   , mkEither
   , unique
+
+  , everywhereM'
 ) where
 
 -- import           Control.Applicative                ((<$>))
 import           Control.Monad                      (liftM2, when)
+import           Data.Data
 import qualified Data.Set                 as S
 import qualified Data.List                as L
 import qualified Language.Fixpoint.Types as F
@@ -22,6 +26,8 @@ import           Language.ECMAScript3.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 import           Language.Nano.Typecheck.Types()
 
+import           Data.Generics.Aliases
+import           Data.Generics.Schemes
 -------------------------------------------------------------------------------
 mapFstM :: (Functor m, Monad m) => (a -> m c) -> (a, b) -> m (c, b)
 -------------------------------------------------------------------------------
@@ -61,3 +67,11 @@ instance PP Char where
 instance F.Fixpoint Char where
   toFix = char
  
+
+--------------------------------------------------------------------------------
+everywhereM' :: Monad m => GenericM m -> GenericM m
+--------------------------------------------------------------------------------
+everywhereM' f x = do { x' <- f x;
+                        gmapM (everywhereM' f) x' }
+
+

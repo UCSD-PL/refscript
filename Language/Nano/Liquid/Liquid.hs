@@ -285,7 +285,7 @@ consUpCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id An
 ---------------------------------------------------------------------------------------------
 consUpCast g x a e 
   = do  (x',g') <- envAddFresh l tE' g 
-        return   $ (x', g')
+        return   $ (trace (printf "UPCAST adding %s :: %s" (ppshow x') (ppshow tE')) x', g')
   where tE       = envFindTy x g 
         tU       = tracePP "UPCAST TO" $ rType $ head [ t | Assume t <- ann_fact a]
         eq a b   = toType a == toType b
@@ -302,9 +302,9 @@ consDownCast g x a e
        (x', g') <- envAddFresh l tC g
        return (x', g')
     where 
-      tE        = tracePP ("CAST FROM " ++ ppshow x) $ envFindTy x g
-      tC        = tracePP "CAST TO"                  $ rType $ head [ t | Assume t <- ann_fact a]
-      l         = getAnnotation e
+      tE         = tracePP ("CAST FROM " ++ ppshow x) $ envFindTy x g
+      tC         = tracePP "CAST TO"                  $ rType $ head [ t | Assume t <- ann_fact a]
+      l          = getAnnotation e
 
 
 castSubM g x l (t1, t2)

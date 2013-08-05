@@ -8,7 +8,6 @@ module Language.Nano.Liquid.CGMonad (
     
   -- * Constraint Generation Monad
     CGM
-  , CGState (..)
 
   -- * Constraint Information
   , CGInfo (..)
@@ -18,6 +17,9 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Get Defined Function Type Signature
   , getDefType
+
+  -- * Get Defined Types
+  , getTDefs
 
   -- * Throw Errors
   , cgError      
@@ -43,12 +45,7 @@ module Language.Nano.Liquid.CGMonad (
   , subTypes
   , subType
 
-  -- FIX: eliminate from interface
-  , bkTypesM
   , addInvariant
-
-  -- * Match same sort types
-  , matchTypes
   
   -- * Add Type Annotations
   , addAnnot
@@ -131,7 +128,6 @@ getDefType f
        err = cgError l $ errorMissingSpec l f
        l   = srcPos f
 
-
 -- cgStateFInfo :: Nano a1 (RType F.Reft)-> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
 cgStateCInfo pgm ((fcs, fws), cg) = CGI fi (cg_ann cg)
   where 
@@ -144,7 +140,15 @@ cgStateCInfo pgm ((fcs, fws), cg) = CGI fi (cg_ann cg)
                 , F.quals = quals pgm 
                 }
 
+---------------------------------------------------------------------------------------
+getTDefs :: CGM (E.Env RefType)
+---------------------------------------------------------------------------------------
+getTDefs  = cg_tdefs <$> get
+
+
+---------------------------------------------------------------------------------------
 measureEnv   ::  Nano a (RType F.Reft) -> F.SEnv F.SortedReft
+---------------------------------------------------------------------------------------
 measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts 
 
 ---------------------------------------------------------------------------------------
@@ -325,6 +329,7 @@ freshTyPhis l g xs τs
        _  <- mapM    (wellFormed l g') ts
        return (g', ts)
 
+
 ---------------------------------------------------------------------------------------
 -- | Adding Subtyping Constraints -----------------------------------------------------
 ---------------------------------------------------------------------------------------
@@ -342,86 +347,19 @@ subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
 subType l g t1 t2 =
   do tt1   <- addInvariant t1
      tt2   <- addInvariant t2
-     -- removing bkTypes from here:
+     -- Removing bkTypes from here:
      -- With the addition of upcasts the type sorts
      -- should be aligned and compatible so just do a check here
-     -- s   <- bkTypesM ({-T.trace (printf "Adding Sub: %s\n<:\n%s" 
-     -- (ppshow t1) (ppshow t2))-} tt1, tt2)
      let s  = checkTypes tt1 tt2
      modify $ \st -> st {cs = c s : (cs st)}
   where
-     c      = uncurry $ Sub g (ci l)
+    c      = uncurry $ Sub g (ci l)
+    checkTypes t1 t2 | toType t1 == toType t2 = (t1,t2)
+    checkTypes t1 t2 | otherwise              = 
+      errorstar (printf "CGMonad: checkTypes not aligned: \n%s\nwith\n%s"
+                (ppshow t1) (ppshow t2))
 
 
-
-checkTypes t1 t2 | toType t1 == toType t2 = (t1,t2)
-checkTypes t1 t2 | otherwise              = 
-  errorstar (printf "CGMonad: checkTypes not aligned: %s - %s"
-            (ppshow t1) (ppshow t2))
-
-
-
----------------------------------------------------------------------------------------
--- | Breaking Types              ------------------------------------------------------
----------------------------------------------------------------------------------------
-
--- | The output of this function should be of the same sort
----------------------------------------------------------------------------------------
-bkTypesM :: (RefType, RefType) -> CGM [(RefType, RefType)]
----------------------------------------------------------------------------------------
-
--- | Top-level Unions:                                                      
---
--- S1 ∪ ... ∪ Sn <: T1 ∪ ... ∪ Tn --->                                      
--- Si <: Tj forall matching i,j ∧ Sj <: { Sj | false } for the remaining j's
--- Should use the joinType trick (adding false and matching that are missing
--- from each side) to keep the refinements for the union                    
---
--- Adds the normalized top-level union, not in recursion to avoid infinite 
--- loop.
-
-bkTypesM (t1, t2) | union t1 || union t2 = 
-  liftM2 (:) (return (t1',t2')) (concatMapM bkTypesM $ matchTypes t1' t2')
-  where 
-    eq a b        = toType a == toType b
-    (_, t1', t2') = joinTypes eq (t1, t2) -- make compatible
-
-
--- | Top-level Objects:                                                     
---
--- TODO: Add toplevel refinement constraint on r1 - r2                      
-
-bkTypesM (TObj xt1s r1, TObj xt2s r2) | L.sort s1s == L.sort s2s =
-  concatMapM bkTypesM $ zip t1s t2s 
-  where
-    split l    = (b_sym l, b_type l)
-    ord a b    = compare (b_sym a) (b_sym b)
-    (s1s, t1s) = unzip $ split <$> L.sortBy ord xt1s
-    (s2s, t2s) = unzip $ split <$> L.sortBy ord xt2s
-
-    
-bkTypesM (TObj xt1s r1, TObj xt2s r2) | otherwise =
-  errorstar "UNIMPLEMENTED - bkObjects: breaking objects with different keys"
-
-bkTypesM (t1@(TObj _ _), t2) = 
-  cg_tdefs <$> get >>= \env -> bkTypesM (t1, {-tracePP ("Unfolded " ++ (ppshow t2)) $-} unfoldTDefSafe t2 env)
-
-bkTypesM (t1, t2@(TObj _ _)) = 
-  cg_tdefs <$> get >>= \env -> bkTypesM ({-tracePP ("Unfolded " ++ (ppshow t1)) $-} unfoldTDefSafe t1 env, t2)
-
--- | Default case: Just return the types
-bkTypesM tt = return {- $ tracePP "bkTypes default" -} [tt]
-
-
-
-
--- | Check for top-level union
----------------------------------------------------------------------------------------
-union :: RType r -> Bool
----------------------------------------------------------------------------------------
-union (TApp TUn _ _) = True
-union _              = False
-        
 ---------------------------------------------------------------------------------------
 noUnion :: (F.Reftable r) => RType r -> Bool
 ---------------------------------------------------------------------------------------
@@ -435,27 +373,6 @@ noUnion _               = True
 
 unionCheck t | noUnion t = t 
 unionCheck t | otherwise = error $ printf "%s found. Cannot have unions." $ ppshow t
-
-
--- | XXX: Does not add top-level constraint
----------------------------------------------------------------------------------------
-matchTypes :: RefType -> RefType -> [(RefType, RefType)]
----------------------------------------------------------------------------------------
-matchTypes t1 t2 | and $ zipWith req t1s t2s = 
-  zipWith sanity t1s t2s
-  where
-    t1s = L.sortBy ord $ bkUnion t1
-    t2s = L.sortBy ord $ bkUnion t2
-    -- sorting t1s and t2s by raw-type should align them !
-    -- by using sanity check anyway to make sure
-    ord a b = compare (toType a) (toType b) 
-    req a b = (toType a) == (toType b) 
-    sanity a b | toType a == toType b = (a,b)
-    sanity _ _ | otherwise            = errorstar "matchTypes"
-
-matchTypes t1 t2 | otherwise =
-  errorstar $ printf "matchTypes not aligned: %s - %s" (ppshow t1) (ppshow t2) 
-
 
 
 ---------------------------------------------------------------------------------------

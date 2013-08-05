@@ -321,8 +321,6 @@ strengthen (TApp c ts r) r'  = TApp c ts $ r' `F.meet` r
 strengthen (TVar α r)    r'  = TVar α    $ r' `F.meet` r 
 strengthen t _               = t                         
 
-
-
 -- NOTE: r' is the OLD refinement. 
 --       We want to preserve its VV binder as it "escapes", 
 --       e.g. function types. Sigh. Should have used a separate function binder.
@@ -385,6 +383,7 @@ data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
                      , consts :: !(Env t)           -- ^ Measure Signatures 
                      , tDefs  :: !(Env t)           -- ^ Type definitions
                      , quals  :: ![F.Qualifier]     -- ^ Qualifiers
+                     , invts  :: ![Located t]       -- ^ Type Invariants
                      } deriving (Functor, Data, Typeable)
 
 type NanoBare    = Nano AnnBare Type 
@@ -420,11 +419,13 @@ instance PP t => PP (Nano a t) where
     $+$ pp (tDefs  pgm)
     $+$ text "********************** QUALS *********************"
     $+$ F.toFix (quals  pgm) 
+    $+$ text "********************** QUALS *********************"
+    $+$ pp (invts pgm) 
     $+$ text "**************************************************"
-
+    
 instance Monoid (Nano a t) where 
-  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty []
-  mappend p1 p2 = Nano ss e e' cs tds qs 
+  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty [] []
+  mappend p1 p2 = Nano ss e e' cs tds qs is 
     where 
       ss        = Src $ s1 ++ s2
       Src s1    = code p1
@@ -433,7 +434,8 @@ instance Monoid (Nano a t) where
       e'        = envFromList ((envToList $ defs p1)  ++ (envToList $ defs p2))
       cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
       tds       = envFromList $ (envToList $ tDefs p1) ++ (envToList $ tDefs p2)
-      qs        = quals p1 ++ quals p2 
+      qs        = quals p1 ++ quals p2
+      is        = invts p1 ++ invts p2
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }
@@ -477,6 +479,16 @@ instance PP TCon where
   pp TNull            = text "Null"
   pp TUndef           = text "Undefined"
 
+instance Hashable TCon where
+  hashWithSalt s TInt        = hashWithSalt s (0 :: Int)
+  hashWithSalt s TBool       = hashWithSalt s (1 :: Int)
+  hashWithSalt s TString     = hashWithSalt s (2 :: Int)
+  hashWithSalt s TVoid       = hashWithSalt s (3:: Int)
+  hashWithSalt s TTop        = hashWithSalt s (4 :: Int)
+  hashWithSalt s TUn         = hashWithSalt s (5 :: Int)
+  hashWithSalt s TNull       = hashWithSalt s (6 :: Int)
+  hashWithSalt s TUndef      = hashWithSalt s (7 :: Int)
+  hashWithSalt s (TDef z)    = hashWithSalt s (8 :: Int) + hashWithSalt s z
 
 instance F.Reftable r => PP (Bind r) where 
   pp (B x t)        = pp x <> colon <> pp t 

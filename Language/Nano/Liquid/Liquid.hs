@@ -229,10 +229,11 @@ consExpr :: CGEnv -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 
 consExpr g (DownCast a e) 
   = do  (x, g') <- consExpr g e
-        consCast g' x a e 
+        consDownCast g' x a e 
 
 consExpr g (UpCast a e)
-  = undefined
+  = do  (x, g') <- consExpr g e
+        consUpCast g' x a e
 
 consExpr g (DeadCast a e)
   = consDeadCast g a e
@@ -277,10 +278,25 @@ consExpr g (ObjectLit l ps)
 consExpr _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))
 
+
+
 ---------------------------------------------------------------------------------------------
-consCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
+consUpCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 ---------------------------------------------------------------------------------------------
-consCast g x a e 
+consUpCast g x a e 
+  = do  (x',g') <- envAddFresh l tE' g 
+        return   $ (x', g')
+  where tE       = envFindTy x g 
+        tU       = tracePP "UPCAST TO" $ rType $ head [ t | Assume t <- ann_fact a]
+        eq a b   = toType a == toType b
+        tE'      = tracePP "compatible version" $ snd3 $ joinTypes eq (tE, tU) -- the compatible version for tE
+        l        = getAnnotation e
+      
+
+---------------------------------------------------------------------------------------------
+consDownCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
+---------------------------------------------------------------------------------------------
+consDownCast g x a e 
   = do ps       <- bkTypesM (tE, tC)
        forM_ ps  $ castSubM g x l
        (x', g') <- envAddFresh l tC g

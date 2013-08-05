@@ -29,32 +29,32 @@ verifyFile f
         donePhase Loud "SSA Transform"
         putStrLn . render . pp $ nanoSsa
 
-        nanoVisited <- runVisitProgramM skipVisitorM nanoSsa 
+        {-nanoVisited <- runVisitProgramM skipVisitorM nanoSsa -}
         
-        donePhase Loud "After Visit"
-        putStrLn . render . pp $ nanoVisited
+        {-donePhase Loud "After Visit"-}
+        {-putStrLn . render . pp $ nanoVisited-}
 
         return F.Safe 
 
 
--- | Define visitor
---skipVisitorM :: NanoVisitorM (IO (F.FixResult SourceSpan)) AnnSSA (RType r)
-skipVisitorM = NVM {
-     vProgramM       = const SkipChildrenM  
-  ,  vStatementM     = const SkipChildrenM
-  ,  vJavaScriptM    = const SkipChildrenM
-  ,  vIdM            = const SkipChildrenM
-  ,  vInfixOpM       = const SkipChildrenM
-  ,  vAssignOpM      = const SkipChildrenM
-  ,  vUnaryAssignOpM = const SkipChildrenM
-  ,  vPrefixOpM      = const SkipChildrenM
-  ,  vPropM          = const SkipChildrenM
-  ,  vLValueM        = const SkipChildrenM
-  ,  vExpressionM    = const SkipChildrenM
-  ,  vCaseClauseM    = const SkipChildrenM
-  ,  vCatchClauseM   = const SkipChildrenM
-  ,  vVarDeclM       = const SkipChildrenM 
-  ,  vForInitM       = const SkipChildrenM 
-  ,  vForInInitM     = const SkipChildrenM 
-  }
+{--- | Define visitor-}
+{---skipVisitorM :: NanoVisitorM (IO (F.FixResult SourceSpan)) AnnSSA (RType r)-}
+{-skipVisitorM = NVM { -}
+{-     vProgramM       = const SkipChildrenM  -}
+{-  ,  vStatementM     = const SkipChildrenM-}
+{-  ,  vJavaScriptM    = const SkipChildrenM-}
+{-  ,  vIdM            = const SkipChildrenM-}
+{-  ,  vInfixOpM       = const SkipChildrenM-}
+{-  ,  vAssignOpM      = const SkipChildrenM-}
+{-  ,  vUnaryAssignOpM = const SkipChildrenM-}
+{-  ,  vPrefixOpM      = const SkipChildrenM-}
+{-  ,  vPropM          = const SkipChildrenM-}
+{-  ,  vLValueM        = const SkipChildrenM-}
+{-  ,  vExpressionM    = const SkipChildrenM-}
+{-  ,  vCaseClauseM    = const SkipChildrenM-}
+{-  ,  vCatchClauseM   = const SkipChildrenM-}
+{-  ,  vVarDeclM       = const SkipChildrenM -}
+{-  ,  vForInitM       = const SkipChildrenM -}
+{-  ,  vForInInitM     = const SkipChildrenM -}
+{-  }-}
 

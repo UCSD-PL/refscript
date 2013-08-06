@@ -20,20 +20,23 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
+
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Files
 import           Language.Fixpoint.Interface        (solve)
+
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import qualified Language.Nano.Env                  as E
+import           Language.Nano.Misc
 import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
 import           Language.Nano.Typecheck.Subst      (fromList)
-import           Language.Nano.Typecheck.STMonad (unfoldTDefSafe, isSubType)
+import           Language.Nano.Typecheck.Compare
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
@@ -291,148 +294,41 @@ consExpr _ e
 consUpCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 ---------------------------------------------------------------------------------------------
 consUpCast g x a e 
-  = do  (x',g') <- envAddFresh l tE' g 
-        return   $ (x', g')
-  where tE       = envFindTy x g 
-        tU       = rType $ head [ t | Assume t <- ann_fact a]
-        eq a b   = toType a == toType b
-        tE'      = snd3 $ joinTypes eq (tE, tU) -- the compatible version for tE
-        l        = getAnnotation e
+  = do  γ         <- getTDefs
+        let tE'    = thd4 $ compareTs γ tE tU -- the compatible version for tE
+        (x',g')   <- envAddFresh l tE' g 
+        return     $ (x', g')
+  where tE         = envFindTy x g 
+        tU         = rType $ head [ t | Assume t <- ann_fact a]
+        eq a b     = toType a == toType b
+        l          = getAnnotation e
       
 
 ---------------------------------------------------------------------------------------------
 consDownCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 ---------------------------------------------------------------------------------------------
 consDownCast g x a e 
-  = do  td       <- getTDefs
-        let ps    = mkCompatible td (tE, tC)
-        forM_ ps  $ castSubM g x l
+  = do  
+        γ        <- getTDefs
+        let (_,ts,_)  = unionParts γ tE tC
+        -- TODO: Also need the toplevel constraint here
+        forM_ ts  $ castSubM g x l
         (x', g') <- envAddFresh l tC g
         return    $ (x', g')
     where 
-      tE         = envFindTy x g
-      tC         = rType $ head [ t | Assume t <- ann_fact a]
-      l          = getAnnotation e
+      tE               = envFindTy x g
+      tC               = rType $ head [ t | Assume t <- ann_fact a]
+      l                = getAnnotation e
 
 
----------------------------------------------------------------------------------------
--- | Making Types Compatible ----------------------------------------------------------
----------------------------------------------------------------------------------------
-
--- mkCompatible pads the input types so that he output consists of types of the
--- same sort, i.e. compatible. This function also includes the top-level
--- constraint in the output (which still keeps the "same-sort" invariant as the
--- compatible "joined" version of each of the input types is used (the one
--- returned from joinTypes).
---
--- XXX: Matching (pairing up the parts of the top-level constraint into a list 
--- of constraints on compatible parts) is still done here, instead of being 
--- deferrred to splitC, because `fixBase` needs to happen now for constraints 
--- that originate from casts. If they were included to the rest of the constraints 
--- it would be harder to distinguish which constraints need `fixBase` later.
----------------------------------------------------------------------------------------
-mkCompatible :: E.Env RefType -> (RefType, RefType) -> [(RefType, RefType)]
----------------------------------------------------------------------------------------
-
--- | Top-level Unions
-
--- S1 ∪ ... ∪ Sn <: T1 ∪ ... ∪ Tn --->
--- Si <: Tj forall matching i,j ∧ Sj <: { Sj | false } for the remaining j's
--- Should use the joinType trick (adding false and matching that are missing
--- from each side) to keep the refinements for the union
---
--- Also, adds the normalized top-level union
-mkCompatible env (t1, t2) 
-  | union t1 || union t2 
-  = topLevel : parts
-  where topLevel      = (t1', t2')
-        parts         = concatMap (mkCompatible env) $ matchTypes t1' t2'
-        eq a b        = toType a == toType b
-        (_, t1', t2') = joinTypes eq (t1, t2) -- make compatible
-
-
-union (TApp TUn _ _) = True           -- top-level union
-union _              = False
-
--- | Top-level Objects
-
--- TODO: Add toplevel refinement constraint on r1 - r2
-mkCompatible env (TObj xt1s r1, TObj xt2s r2) 
-  | L.sort s1s == L.sort s2s 
-  = concatMap (mkCompatible env) $ zip t1s t2s
-  where
-    split l    = (b_sym l, b_type l)
-    ord a b    = compare (b_sym a) (b_sym b)
-    (s1s, t1s) = unzip $ split <$> L.sortBy ord xt1s
-    (s2s, t2s) = unzip $ split <$> L.sortBy ord xt2s
-    
-mkCompatible _ (TObj xt1s r1, TObj xt2s r2) | otherwise =
-  errorstar "UNIMPLEMENTED - bkObjects: breaking objects with different keys"
-
-mkCompatible env (t1@(TObj _ _), t2) = 
-  mkCompatible env (t1, {-tracePP ("Unfolded " ++ (ppshow t2)) $-} unfoldTDefSafe t2 env)
-
-mkCompatible env (t1, t2@(TObj _ _)) = 
-  mkCompatible env ({-tracePP ("Unfolded " ++ (ppshow t1)) $-} unfoldTDefSafe t1 env, t2)
-
--- | Default case: Just return the types
-mkCompatible _ tt = [tt]
-
-
-
--- | Pair-up the parts of types @t1@ and @t2@.
--- There is a check that makes sure that thet inpu types are indeed compatible.
--- XXX : Does not add top-level constraint
--- TODO: Object types (?)
----------------------------------------------------------------------------------------
-matchTypes :: RefType -> RefType -> [(RefType, RefType)]
----------------------------------------------------------------------------------------
-matchTypes t1 t2 | and $ zipWith req t1s t2s = 
-  zipWith sanity t1s t2s
-  where
-    t1s = L.sortBy ord $ bkUnion t1
-    t2s = L.sortBy ord $ bkUnion t2
-    -- sorting t1s and t2s by raw-type should align them !
-    -- by using sanity check anyway to make sure
-    ord a b = compare (toType a) (toType b) 
-    req a b = (toType a) == (toType b) 
-    sanity a b | toType a == toType b = (a,b)
-    sanity _ _ | otherwise            = errorstar "matchTypes"
-
-matchTypes t1 t2 | otherwise =
-  errorstar $ printf "matchTypes not aligned: %s - %s" (ppshow t1) (ppshow t2) 
-
-
--- | Type equivalence
--- Make typeclass
-
--- This is a slightly more relaxed version of equality. 
-class Equivalent a where 
-  equiv :: a -> a -> Bool
-
-class Equivalent a => Equivalent [a] where
-  equiv = all zipWith equiv
-
-instance Equivalent Type where 
-  equiv t t'                                        | union t || union t' 
-                                                    = errorstar "equiv: no unions"
-  -- No unions beyond this point!
-  equiv (TApp (TDef d) ts _) (TApp (TDef d') ts' _) = d == d' && ts `equiv` ts'
-  equiv (TApp (TDef d) ts _) _                      = undefined -- TODO unfold
-  equiv _                    (TApp (TDef d) ts _)   = undefined -- TODO unfold
-  equiv (TApp c _ _)         (TApp c' _ _)          = c == c'
-  equiv (TVar v _  )         (TVar v' _  )          = v == v'
-  -- Functions need to be exactly the same - no padding can happen here
-  equiv (TFun b o _)         (TFun b' o'_)          = b `equiv` b' && o `equiv` o 
-  -- Any two objects can be combined - so they should be equivalent
-  equiv (TObj _ _  )         (TObj _ _   )          = True
-  equiv (TBd _     )         (TBd _      )          = errorstar "equiv: no type bodies"
-  equiv (TAll v t  )         (TAll v' t' )          = 
-    t `equiv` apply (fromList [(v',tVar v)]) t'
-  equiv _                    _                      = False
-  
-
-
+---------------------------------------------------------------------------------------------
+castSubM :: CGEnv -> Id AnnType -> AnnType -> (RefType, RefType) -> CGM () 
+---------------------------------------------------------------------------------------------
+castSubM g x l (t1, t2) 
+  = do (g', t1', t2') <- fixBase g x (t1, t2)
+       let msg         = printf "Adding cast Sub: %s\n<:\n%s" (ppshow t1') (ppshow t2')
+       -- subType can be called directly at this point
+       tracePP msg   <$> subType l g' t1' t2'
 
 
 -- | fixBase converts:                                                  
@@ -455,15 +351,6 @@ fixBase g x (tE, tC) =
      g'      <- envAdds [(x, rX')] g
      let ttE' = eSingleton ttE x 
      return (g', ttE', tC)
-
----------------------------------------------------------------------------------------------
-castSubM :: CGEnv -> Id AnnType -> AnnType -> (RefType, RefType) -> CGM () 
----------------------------------------------------------------------------------------------
-castSubM g x l (t1, t2) 
-  = do (g', t1', t2') <- fixBase g x (t1, t2)
-       let msg         = printf "Adding cast Sub: %s\n<:\n%s" (ppshow t1') (ppshow t2')
-       -- subType can be called directly at this point
-       tracePP msg   <$> subType l g' t1' t2'
 
 
 ---------------------------------------------------------------------------------------------

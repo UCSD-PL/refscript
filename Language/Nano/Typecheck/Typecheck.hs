@@ -24,10 +24,10 @@ import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
+import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad
-import           Language.Nano.Typecheck.STMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Compare
 import           Language.Nano.SSA.SSA
@@ -182,7 +182,7 @@ tcFun γ (FunctionStmt l f xs body)
        let γ'' = envAddFun l f αs xs ts t γ'
        accumAnn (\a -> catMaybes (map (validInst γ'') (M.toList a))) $  
          do q              <- tcStmts γ'' body
-            when (isJust q) $ subTypeM_ l Nothing tVoid t
+            when (isJust q) $ void $ unifyTypeM l "Missing return" f tVoid t
        return $ Just γ' 
 
 tcFun _  _ = error "Calling tcFun not on FunctionStatement"
@@ -264,9 +264,15 @@ tcStmt' γ (VarDeclStmt _ ds)
 
 -- return e 
 tcStmt' γ (ReturnStmt l eo) 
-  = do t <- maybe (return tVoid) (tcExpr γ) eo
-       subTypeM_ l eo t $ envFindReturn γ
-       return Nothing
+  = do  t           <- maybe (return tVoid) (tcExpr γ) eo
+        let rt       = envFindReturn γ 
+        θ           <- unifyTypeM l "Return" eo t rt
+        -- Apply the substitution
+        let (rt',t') = mapPair (apply θ) (rt,t)
+        -- Subtype the arguments against the formals and cast if 
+        -- necessary based on the direction of the subtyping outcome
+        maybeM_ (\e -> subTypeM l e t' rt' >>= castM e t) eo
+        return Nothing
 
 tcStmt' γ s@(FunctionStmt _ _ _ _)
   = tcFun γ s
@@ -346,22 +352,25 @@ tcExpr' _ e
 tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> TCM Type
 ----------------------------------------------------------------------------------
 tcCall γ l fn es ft 
-  = do  (_,its,ot) <- instantiate l fn ft
+  = do  (_,ibs,ot) <- instantiate l fn ft
+        let its     = b_type <$> ibs
+        -- Typecheck arguments
         ts         <- mapM (tcExpr γ) es
-        θ'         <- subTypesM l (map Just es) ts (b_type <$> its)
-
--- XXX: We are going to need:
--- 1. unification
--- 2. subtyping
--- 3. casting
-
-        return      $ apply θ' ot
+        -- Unify with formal parameter types
+        θ          <- unifyTypesM l "tcCall" ts its
+        -- Apply the substitution
+        let ts'     = apply θ ts
+        -- Subtype the arguments against the formals and cast if 
+        -- necessary based on the direction of the subtyping outcome
+        subTypesM l es ts' its >>= castsM es its
+        return      $ apply θ ot
 
 instantiate l fn ft 
   = do t' <-  {- tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (bkAll ft)
        maybe err return   $ bkFun t'
     where
        err = logError (ann l) (errorNonFunction fn ft) tFunErr
+
 
 
 ----------------------------------------------------------------------------------
@@ -378,10 +387,10 @@ tcObject γ bs
 tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 ----------------------------------------------------------------------------------
 tcAccess γ l e f = 
-  tcExpr γ e >>= (unfoldTDefSafeTC >=> binders l e) >>= access f
+  tcExpr γ e >>= (unfoldSafeTC >=> binders l e) >>= access f
   where
-    access f               = return . maybe tUndef b_type . find (match $ F.symbol f)
-    match s (B f _)        = s == f
+    access f        = return . maybe tUndef b_type . find (match $ F.symbol f)
+    match s (B f _) = s == f
 
 
 ----------------------------------------------------------------------------------
@@ -411,14 +420,14 @@ envJoin' l γ γ1 γ2
 ----------------------------------------------------------------------------------
 getPhiType :: Annot b SourceSpan -> Env Type -> Env Type -> Id SourceSpan-> TCM Type
 ----------------------------------------------------------------------------------
-getPhiType l γ1 γ2 x
-  = do  td <- getTDefs
-        case (envFindTy x γ1, envFindTy x γ2) of
-          (Just t1, Just t2) -> return $ fst3 $ joinTypes (isSubType td) (t1, t2)
-          (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
-                                  then logError (ann l) "Oh no, the HashMap GREMLIN is back...1" tErr
-                                  else logError (ann l) (bugUnboundPhiVar x) tErr
-
+getPhiType l γ1 γ2 x =
+  case (envFindTy x γ1, envFindTy x γ2) of
+    (Just t1, Just t2) -> if t1 == t2 -- TODO: Too strict
+                            then return t1 
+                            else tcError l $ errorJoin x t1 t2
+    (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
+                            then tcError (ann l) "Oh no, the HashMap GREMLIN is back...1"
+                            else tcError (ann l) (bugUnboundPhiVar x)
 
 forceCheck x γ 
   = elem x $ fst <$> envToList γ

@@ -11,14 +11,25 @@
 
 module Language.Nano.Typecheck.Compare (
 
+  -- * Type comparison/joining/subtyping
+    compareTs
+  , unionParts
+
+  
+  -- * Casting
+  , Cast(..)
+  , Casts
+
+  , SubDirection (..)
+
   ) where 
 
 import           Text.Printf
 import           Data.Hashable
-import           Data.Maybe             (fromMaybe, isNothing)
-import           Data.Monoid            hiding ((<>))            
-import qualified Data.List               as L
-import qualified Data.HashMap.Strict     as M
+import           Data.Maybe                         (fromMaybe, isNothing)
+import           Data.Monoid                        hiding ((<>))            
+import qualified Data.List                          as L
+import qualified Data.Map                           as M
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
@@ -31,15 +42,32 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 
 -- import           Language.Fixpoint.Names (propConName)
-import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ 
 
-import           Control.Applicative hiding (empty)
-import           Control.Monad.Error ()
+import           Control.Applicative                hiding (empty)
+import           Control.Monad.Error                ()
 
 -- import           Debug.Trace (trace)
+
+
+
+
+---------------------------------------------------------------------------------------
+-- Casts ------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------
+
+type Casts   = M.Map (Expression AnnSSA) (Cast Type)
+
+data Cast t  = UCST t | DCST t | DC t
+
+instance (PP a) => PP (Cast a) where
+  pp (UCST t) = text "Upcast  : " <+> pp t
+  pp (DCST t) = text "Downcast: " <+> pp t
+  pp (DC   t) = text "Deadcast: " <+> pp t
+
 
 
 
@@ -62,55 +90,32 @@ compareTs :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r 
 -- | Top-level Unions
 
 -- Eliminate top-level unions
-compareTs env t1 t2 | any isUnion [t1,t2]     = padUnion env t1  t2
+compareTs γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
 
 -- | Top-level Objects
 
--- TODO: toplevel refinement
+compareTs γ t1@(TObj _ _) t2@(TObj _ _)     = padObject γ t1 t2
 
-compareTs env t1@(TObj _ _) t2@(TObj _ _)     = padObject env t1 t2
+-- | Type definitions
 
-compareTs env t1@(TApp (TDef _) _ _) t2       = compareTs env (unfoldSafe env t1) t2
+compareTs γ t1@(TApp (TDef _) _ _) t2@(TApp (TDef _) _ _) = compareTs γ (unfoldSafe γ t1) t2
 
-compareTs env t1 t2@(TApp (TDef _) _ _)       = compareTs env t1 (unfoldSafe env t2)
+compareTs γ t1@(TApp (TDef _) _ _) t2       = compareTs γ (unfoldSafe γ t1) t2
+
+compareTs γ t1 t2@(TApp (TDef _) _ _)       = compareTs γ t1 (unfoldSafe γ t2)
 
 -- | Everything else in TApp besides unions and defined types
-compareTs env t1@(TApp _ _ _) t2@(TApp _ _ _) = padUnion env t1 t2 
+compareTs γ t1@(TApp _ _ _) t2@(TApp _ _ _) = padUnion γ t1 t2 
 
-compareTs env t1@(TFun _ _ _) t2@(TFun _ _ _) = undefined
-compareTs env t1@(TAll _ _  ) t2@(TAll _ _  ) = undefined
-compareTs env t1@(TBd  _    ) t2@(TBd  _    ) = undefined
+compareTs γ t1@(TFun _ _ _) t2@(TFun _ _ _) = undefined
+compareTs γ t1@(TAll _ _  ) t2@(TAll _ _  ) = undefined
+compareTs γ t1@(TBd  _    ) t2@(TBd  _    ) = undefined
 
 compareTs _   _               _               = undefined
 
 
--- | Pair-up the parts of types @t1@ and @t2@.
-
--- There is a check that makes sure that thet inpu types are indeed compatible.
--- XXX : Does not add top-level constraint
--- TODO: Object types (?)
-
-{-----------------------------------------------------------------------------------------}
-{-alignUnion :: RefType -> RefType -> [(RefType, RefType)]-}
-{-----------------------------------------------------------------------------------------}
-{-alignUnion t1 t2 | and $ zipWith req t1s t2s = -}
-{-  zipWith sanity t1s t2s-}
-{-  where-}
-{-    t1s = L.sortBy ord $ bkUnion t1-}
-{-    t2s = L.sortBy ord $ bkUnion t2-}
-{-    -- sorting t1s and t2s by raw-type should alignUnion them !-}
-{-    -- by using sanity check anyway to make sure-}
-{-    ord a b = compare (toType a) (toType b) -}
-{-    req a b = (toType a) == (toType b) -}
-{-    sanity a b | toType a == toType b = (a,b)-}
-{-    sanity _ _ | otherwise            = errorstar "alignUnion"-}
-
-{-alignUnion t1 t2 | otherwise =-}
-{-  errorstar $ printf "alignUnion not alignUnioned: %s - %s" (ppshow t1) (ppshow t2) -}
-
 
 -- | Type equivalence
--- Make typeclass
 
 -- This is a slightly more relaxed version of equality. 
 class Equivalent a where 
@@ -149,10 +154,10 @@ instance Equivalent (Bind r) where
 data SubDirection = SubT | SupT | EqT | Nth deriving (Eq, Show)
 
 instance PP SubDirection where 
-  pp SubT  = text "<:"
-  pp SupT  = text ":>"
+  pp SubT = text "<:"
+  pp SupT = text ":>"
   pp EqT  = text "≈"
-  pp Nth = text "≠"
+  pp Nth  = text "≠"
 
 joinSub :: SubDirection -> SubDirection -> SubDirection
 joinSub c   c'  | c == c' = c
@@ -172,10 +177,10 @@ joinSubs = foldl joinSub EqT
 -- types that are added in the union are refined with False to keep the
 -- equivalence.
 -- The output is the following triplet:
---  o common upper bound type (@t1@ ∪ @t2@) with Top predicates
---  o adjusted type for @t1@ to be sort compatible,
---  o adjusted type for @t2@ to be sort compatible)
-
+--  ∙ common upper bound type (@t1@ ∪ @t2@) with Top predicates
+--  ∙ adjusted type for @t1@ to be sort compatible,
+--  ∙ adjusted type for @t2@ to be sort compatible)
+--  ∙ a subtyping direction 
 
 -- Example:
 --  {Int | p} ㄩ {Bool | q} => ({Int | ⊥    } ∪ {Bool | ⊥    },
@@ -193,19 +198,37 @@ padUnion ::  (Eq r, Ord r, F.Reftable r, PP r) =>
                 SubDirection)            -- Subtyping relation between LHS and RHS
 --------------------------------------------------------------------------------
 padUnion env t1 t2 = 
-  (mkUnion        $ (ofType . toType) <$> (commonJoin ++ ds),
-  -- No reason to add the kVars here. They will be added in the CGMonad
-   mkUnionR topR1 $ commonT1s ++ (fmap F.bot <$> d2s), 
-   mkUnionR topR2 $ commonT2s ++ (fmap F.bot <$> d1s), 
-   direction)
+  (joinType, mkUnionR topR1 $ t1s, mkUnionR topR2 $ t2s, dir)
   where
+    (t1s, t2s)          = unzip ts
+    (joinType, ts, dir) = unionParts env t1 t2
     -- Extract top-level refinements
-    topR1           = rUnion t1 
-    topR2           = rUnion t2
+    topR1               = rUnion t1 
+    topR2               = rUnion t2
 
-    -- Break the union inputs into their parts
-    t1s             = bkUnion t1
-    t2s             = bkUnion t2
+
+
+-- The top-level refinements will be lost here.
+-- Use `padUnion` to keep them
+--------------------------------------------------------------------------------
+unionParts ::  (Eq r, Ord r, F.Reftable r, PP r) => 
+             Env (RType r) 
+          -> RType r      -- LHS
+          -> RType r      -- RHS
+          -> (  RType r,                 -- The join of the two types
+                [(RType r, RType r)],    -- 
+                SubDirection)            -- Subtyping relation between LHS and RHS
+--------------------------------------------------------------------------------
+unionParts env t1 t2 = 
+  -- No reason to add the kVars here. They will be added in the CGMonad
+  ( mkUnion $ (ofType . toType) <$> (commonJoin ++ ds), ts, direction)
+  where
+
+    ts  = safeZip "unionParts" t1s t2s
+    -- It is crucial to sort the types so that they are aligned
+    t1s = L.sort $ commonT1s ++ (fmap F.bot <$> d2s)    
+    t2s = L.sort $ commonT2s ++ (fmap F.bot <$> d1s)
+    
 
     -- commonTs: types in both t1 and t2
     -- `common` does a "light" matching - which is determined by `equiv`. 
@@ -215,12 +238,12 @@ padUnion env t1 t2 =
     -- This only needs to happen on the common (structurally) types.
     -- The distinct ones are gonna be identical (due to padding).
     -- Also `common` returns aligned types - so no need to re-align them.
-    commonTs        = map (uncurry $ compareTs env) $ common t1s t2s
+    commonTs   = map (uncurry $ compareTs env) $ common (bkUnion t1) (bkUnion t2)
 
-    commonJoin      = fst4 <$> commonTs
-    commonT1s       = snd4 <$> commonTs
-    commonT2s       = thd4 <$> commonTs
-    comSub          = joinSubs $ fth4 <$> commonTs
+    commonJoin = fst4 <$> commonTs
+    commonT1s  = snd4 <$> commonTs
+    commonT2s  = thd4 <$> commonTs
+    comSub     = joinSubs $ fth4 <$> commonTs
 
     -- d1s: types on @t1@ but not @t2@
     -- d2s: types on @t2@ but not @t1@
@@ -250,6 +273,9 @@ padUnion env t1 t2 =
                   (_ , []) -> SupT  -- >:
                   (_ , _ ) -> Nth -- no relation
 
+
+
+-- | Pad objects
 
 --  Example: 
 --  {{ } | p} ㄩ {{a:Int} | q} => ( {{ }        | _},

@@ -13,6 +13,11 @@ module Language.Nano.Misc (
   , mkEither
   , unique
 
+  , fst4
+  , snd4
+  , thd4
+  , fth4
+
   , everywhereM'
 ) where
 
@@ -53,6 +58,13 @@ mkEither False s _ = Left s
 unique :: (Eq a) => [a] -> Bool
 unique xs = length xs == length (L.nub xs)
 
+fst4 (a,_,_,_) = a
+snd4 (_,b,_,_) = b
+thd4 (_,_,c,_) = c
+fth4 (_,_,_,d) = d
+
+
+
 
 instance PP Bool where 
   pp True  = text "true"
@@ -73,5 +85,8 @@ everywhereM' :: Monad m => GenericM m -> GenericM m
 --------------------------------------------------------------------------------
 everywhereM' f x = do { x' <- f x;
                         gmapM (everywhereM' f) x' }
+
+
+
 
 

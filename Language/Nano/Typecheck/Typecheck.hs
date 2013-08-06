@@ -29,6 +29,7 @@ import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.STMonad
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Compare
 import           Language.Nano.SSA.SSA
 
 import qualified Language.Fixpoint.Types            as F
@@ -247,12 +248,12 @@ tcStmt' γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt' γ (IfStmt l e s1 s2)
-  = do  
+  = do  _ <- tcExpr γ e 
     -- This check needs to be done even though 
     -- we're not gonna require to have a boolean 
     -- value here (see truthy and falsy)
-        _ <- tcExpr γ e 
-       -- subTypeM_ l (Just e) t tBool
+        
+        -- subTypeM_ l (Just e) t tBool
         γ1      <- tcStmt' γ s1
         γ2      <- tcStmt' γ s2
         envJoin l γ γ1 γ2
@@ -345,10 +346,16 @@ tcExpr' _ e
 tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> TCM Type
 ----------------------------------------------------------------------------------
 tcCall γ l fn es ft 
-  = do (_,its,ot) <- instantiate l fn ft
-       ts         <- mapM (tcExpr γ) es
-       θ'         <- subTypesM l (map Just es) ts (b_type <$> its)
-       return      $ apply θ' ot
+  = do  (_,its,ot) <- instantiate l fn ft
+        ts         <- mapM (tcExpr γ) es
+        θ'         <- subTypesM l (map Just es) ts (b_type <$> its)
+
+-- XXX: We are going to need:
+-- 1. unification
+-- 2. subtyping
+-- 3. casting
+
+        return      $ apply θ' ot
 
 instantiate l fn ft 
   = do t' <-  {- tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (bkAll ft)

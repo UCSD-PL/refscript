@@ -36,6 +36,7 @@ import           Language.Nano.Env
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Errors
 import           Language.Nano.Misc
 import           Data.Monoid                  
@@ -531,46 +532,6 @@ instance (PP a) => PP (Cast a) where
 -----------------------------------------------------------------------------
 -- Unfolding ----------------------------------------------------------------
 -----------------------------------------------------------------------------
-
--- | Unfold the FIRST TDef at any part of the type @t@.
--------------------------------------------------------------------------------
-unfoldTDefDeep :: Type -> Env Type -> Type
--------------------------------------------------------------------------------
-unfoldTDefDeep t env = go t
-  where 
-    go (TFun its ot r)         = TFun (appTBi go <$> its) (go ot) r
-    go (TObj bs r)             = TObj (appTBi go <$> bs) r
-    go (TBd  _)                = error "unfoldTDefDeep: there should not be a TBody here"
-    go (TAll v t)              = TAll v $ go t
-    go (TApp (TDef id) acts _) = 
-      case envFindTy (F.symbol id) env of
-        Just (TBd (TD _ vs bd _ )) -> apply (fromList $ zip vs acts) bd
-        _                          -> error $ errorUnboundId id
-    go (TApp c a r)            = TApp c (go <$> a) r
-    go t@(TVar _ _ )           = t
-    appTBi f (B s t)           = B s $ f t
-
-
--- | Unfold a type definition once. Return Just t, where t is the unfolded type 
--- if there was an unfolding, otherwise Nothing.
--- TODO: Restore toplevel refinements
--------------------------------------------------------------------------------
-unfoldTDefMaybe :: (PP r, F.Reftable r) => RType r -> Env (RType r) -> Either String (RType r)
--------------------------------------------------------------------------------
-unfoldTDefMaybe t@(TApp (TDef id) acts _) env =
-      case envFindTy (F.symbol id) env of
-        Just (TBd (TD _ vs bd _ )) -> Right $ apply (fromList $ zip vs acts) bd
-        _                          -> Left  $ (printf "Failed unfolding: %s" $ ppshow t)
--- The only thing that is unfoldable is a TDef.
--- The rest are just returned as they are.
-unfoldTDefMaybe t                       _   = Right t
-
-
--- | Force a successful unfolding
--------------------------------------------------------------------------------
-unfoldTDefSafe :: (PP r, F.Reftable r) => RType r -> Env (RType r) -> RType r
--------------------------------------------------------------------------------
-unfoldTDefSafe t env = either error id $ unfoldTDefMaybe t env
 
 
 -- | Monadic versions

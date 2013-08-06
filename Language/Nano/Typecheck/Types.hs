@@ -30,15 +30,15 @@ module Language.Nano.Typecheck.Types (
   , strengthen 
 
   -- * Helpful checks
-  , isTop, isNull, isUndefined, isObj
+  , isTop, isNull, isUndefined, isObj, isUnion
 
   -- * Constructing Types
-  , mkUnion
+  , mkUnion, mkUnionR
 
   -- * Deconstructing Types
   , bkFun
   , bkAll
-  , bkUnion
+  , bkUnion, rUnion
 
   -- * Regular Types
   , Type
@@ -72,36 +72,34 @@ module Language.Nano.Typecheck.Types (
   , isAsm
 
   -- * Useful Operations
-  , subset
   , getBinding
-  , joinTypes
 
   ) where 
 
 import           Text.Printf
 import           Data.Hashable
-import           Data.Maybe             (fromMaybe, isNothing)
-import           Data.Monoid            hiding ((<>))            
-import qualified Data.List               as L
-import qualified Data.HashMap.Strict     as M
+import           Data.Maybe                     (fromMaybe)
+import           Data.Monoid                    hiding ((<>))            
+import qualified Data.List                      as L
+import qualified Data.HashMap.Strict            as M
 import           Data.Generics                   
-import           Data.Typeable          ()
+import           Data.Typeable                  ()
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
 
 -- import           Language.Fixpoint.Names (propConName)
-import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ 
 
-import           Control.Applicative hiding (empty)
-import           Control.Monad.Error ()
+import           Control.Applicative            hiding (empty)
+import           Control.Monad.Error            ()
 
 -- import           Debug.Trace (trace)
 
@@ -228,92 +226,6 @@ getBinding t _ = Left $ errorObjectTAccess t
 
 
 
-{--- | Combine the two types t1 and t2 into a union, but choose the greater of two-}
-{--- types based on @sub@ if they are related.-}
-{-----------------------------------------------------------------------------------}
-{-combineTypes ::  (Type -> Type -> Bool) -> Type -> Type -> Type-}
-{-----------------------------------------------------------------------------------}
-{-combineTypes sub t1 t2 = -}
-{-  mkUnion $ choose (bkUnion t1) (bkUnion t2)-}
-{-  where-}
-{-    choose [] ys =  ys-}
-{-    choose xs [] =  xs-}
-{-    choose xs ys =     [y | x <- xs, y <- ys, x `sub` y, not (y `sub` x)]       -- x <: y-}
-{-                   ++  [x | x <- xs, y <- ys, y `sub` x, not (x `sub` y)]       -- y <: x-}
-{-                   ++  [x | x <- xs, y <- ys, x `sub` y, y `sub` x]             -- x == y-}
-{-        ++  concat [[x,y] | x <- xs, y <- ys, not $ x `sub` y, not $ y `sub` x] -- unrelated-}
-                      
-
--- | Join types @t1@ and @t2@ (t1 ㄩ t2). Useful at environment joins.          
--- Join produces an equivalent type for @t1@ (resp. @t2@) that has is extended  
--- by the missing sorts to the common upper bound of @t1@ and @t2@. The extra   
--- types that are added in the union are refined with False to keep the         
--- equivalence. 
--- The output is the following triplet:                                         
---  o common upper bound type (@t1@ ∪ @t2@) WITH NULLIFIED PREDICATES           
---  o adjusted type for @t1@ to be sort compatible,                             
---  o adjusted type for @t2@ to be sort compatible)                             
---
---
--- Examples:                                                                    
---  {Int | p} ㄩ {Bool | q} => ({Int | ⊥    } ∪ {Bool | ⊥    },                 
---                              {Int | p    } ∪ {Bool | ⊥    },                 
---                              {Int | ⊥    } ∪ {Bool | q    })                 
---
--- TODO: No subtyping is supported at the moment - so objects will be more      
--- tricky                                                                       
---
---  {{ } | p} ㄩ {{a:Int} | q} => ( {{ }        | _},                           
---                                  {{ }        | _},                           
---                                  {{ a: Int } | _})                           
---  WHERE { a: Int } <: { }                                                     
---
--- TODO: Force same sort check on the results... 
---
---------------------------------------------------------------------------------
-joinTypes ::  (Eq r, Ord r, F.Reftable r) => (RType r -> RType r -> Bool) ->
-              (RType r, RType r) -> (RType r, RType r, RType r)
---------------------------------------------------------------------------------
-joinTypes eq (t1, t2) = 
-  ({-tracePP "JOINED 1" $-} mkUnion $ fmap F.bot <$> (cmn ++ ds), 
-   {-tracePP "JOINED 2" $-} mkUnionR topR1 $ t1s ++ (fmap F.bot <$> d2s), 
-   {-tracePP "JOINED 3" $-} mkUnionR topR2 $ t2s ++ (fmap F.bot <$> d1s))
-  where
-    topR1           = rUnion t1 
-    topR2           = rUnion t2
-    t1s             = bkUnion t1
-    t2s             = bkUnion t2
-    -- ccs: types in both t1s and t2s
-    cmn             = L.nub $ common t1s t2s 
-    -- d1s are contained in t2 but not in t1, so should be included as bot
-    -- d2s are contained in t1 but not in t2, so should be included as bot
-    -- ds = d1s ++ d2s 
-    (ds, d1s, d2s)  = distinct t1s t2s
-    {-map3 f (a,b,c)  = (f a, f b, f c)-}
-
-    common xs ys | null xs || null ys = []
-    common xs ys | otherwise          = [x | x <- xs, y <- ys, x `eq` y ] -- x == y
-    
-      {-    [(y, x, y) | x <- xs, y <- ys, x `sub` y, not (y `sub` x)] -- x <: y-}
-      {-++  [(x, x, y) | x <- xs, y <- ys, y `sub` x, not (x `sub` y)] -- y <: x-}
-      {-++  [(x, x, y) | x <- xs, y <- ys, y `sub` x,      x `sub` y ] -- x == y-}
-
-    distinct xs [] = (xs, [], xs)
-    distinct [] ys = (ys, ys, [])
-    distinct xs ys =  let dx = [x | x <- xs, isNothing $ L.find (x `eq`) ys ]
-                          dy = [y | y <- ys, isNothing $ L.find (y `eq`) xs ] in
-                      (L.nub $ dx ++ dy, dx, dy)
-
-      {-   [(x, y, x) | x <- xs, y <- ys, not $ y `sub` x, not $ x `sub` y] -- unrelated-}
-      {-++ [(y, y, x) | x <- xs, y <- ys, not $ y `sub` x, not $ x `sub` y] -- unrelated-}
-
-
--- | Get the top-level refinement for unions - use Top (True) otherwise
-rUnion                :: F.Reftable r => RType r -> r
-rUnion (TApp TUn _ r) = r
-rUnion _              = F.top
-  
-
 ---------------------------------------------------------------------------------
 strengthen                   :: F.Reftable r => RType r -> r -> RType r
 ---------------------------------------------------------------------------------
@@ -347,6 +259,16 @@ isObj :: RType r -> Bool
 isObj (TObj _ _)        = True
 isObj _                 = False
 
+isUnion :: RType r -> Bool
+isUnion (TApp TUn _ _) = True           -- top-level union
+isUnion _              = False
+
+-- Get the top-level refinement for unions - use Top (True) otherwise
+-- TODO: Fill up for other types
+rUnion               :: F.Reftable r => RType r -> r
+rUnion (TApp TUn _ r) = r
+rUnion _              = F.top
+ 
 
 instance Eq TCon where
   TInt    == TInt    = True   
@@ -368,7 +290,7 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
   TFun b1 t1 r1       == TFun b2 t2 r2       = (b1, t1, r1)   == (b2, t2, r2)
   TObj b1 r1          == TObj b2 r2          = (null $ b1 L.\\ b2) && (null $ b2 L.\\ b1) && r1 == r2
   TBd (TD c1 a1 b1 _) == TBd (TD c2 a2 b2 _) = (c1, a1, b1)   == (c2, a2, b2)
-  TAll v1 t1          == TAll v2 t2          = (v1, t1)       == (v2, t2)
+  TAll _ _            == TAll _ _            = undefined -- TODO
   _                   == _                   = False
 
 
@@ -619,14 +541,4 @@ prefixOpId PrefixTypeof = builtinId "PrefixTypeof"
 prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
 
 builtinId       = mkId . ("builtin_" ++)
-
-
-
------------------------------------------------------------------------------
--- Lists contain flat types (no unions)
------------------------------------------------------------------------------
-subset ::  [Type] -> [Type] -> Bool
------------------------------------------------------------------------------
-subset xs ys = 
-  any isTop ys || all (\x -> any (\y -> x == y) ys) xs
 

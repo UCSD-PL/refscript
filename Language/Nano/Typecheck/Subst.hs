@@ -17,6 +17,11 @@ module Language.Nano.Typecheck.Subst (
   -- * Type-class with operations
   , Substitutable (..)
 
+  -- * Unfolding
+  , unfoldFirst, unfoldMaybe, unfoldSafe
+  
+  -- * Unification 
+  , unify
 
   ) where 
 
@@ -125,9 +130,9 @@ appTy (Su m) (TBd (TD c α t s))  = TBd $ TD c α (apply (Su $ foldr M.delete m 
 
 -- | Unfold the FIRST TDef at any part of the type @t@.
 -------------------------------------------------------------------------------
-unfoldFirst :: Type -> Env Type -> Type
+unfoldFirst :: (PP r, F.Reftable r) => Env (RType r) -> RType r -> RType r
 -------------------------------------------------------------------------------
-unfoldFirst t env = go t
+unfoldFirst env t = go t
   where 
     go (TFun its ot r)         = TFun (appTBi go <$> its) (go ot) r
     go (TObj bs r)             = TObj (appTBi go <$> bs) r
@@ -151,9 +156,9 @@ unfoldFirst t env = go t
 --
 -- TODO: Make sure toplevel refinements are the same.
 -------------------------------------------------------------------------------
-unfoldMaybe :: (PP r, F.Reftable r) => RType r -> Env (RType r) -> Either String (RType r)
+unfoldMaybe :: (PP r, F.Reftable r) => Env (RType r) -> RType r -> Either String (RType r)
 -------------------------------------------------------------------------------
-unfoldMaybe t@(TApp (TDef id) acts _) env =
+unfoldMaybe env t@(TApp (TDef id) acts _) =
       case envFindTy (F.symbol id) env of
         Just (TBd (TD _ vs bd _ )) -> Right $ apply (fromList $ zip vs acts) bd
         _                          -> Left  $ (printf "Failed unfolding: %s" $ ppshow t)
@@ -164,9 +169,9 @@ unfoldTDefMaybe t                       _   = Right t
 
 -- | Force a successful unfolding
 -------------------------------------------------------------------------------
-unfoldSafe :: (PP r, F.Reftable r) => RType r -> Env (RType r) -> RType r
+unfoldSafe :: (PP r, F.Reftable r) => Env (RType r) -> RType r -> RType r
 -------------------------------------------------------------------------------
-unfoldSafe t env = either error id $ unfoldTDefMaybe t env
+unfoldSafe env t = either error id $ unfoldTDefMaybe t env
 
 
 
@@ -191,10 +196,10 @@ unify env θ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _)
   | otherwise = Left $ errorUnification t t'
 
 unify env θ t@(TApp (TDef _) _ _) t' =
-  unify env θ (unfoldSafe t env) t'
+  unify env θ (unfoldSafe env t) t'
 
 unify env θ t t'@(TApp (TDef _) _ _)        =
-  unify env θ t (unfoldSafe t' env)
+  unify env θ t (unfoldSafe env t')
 
 unify _  θ (TVar α _)     (TVar β _)       = varEql θ α β 
 unify _  θ (TVar α _)     t                = varAsn θ α t 

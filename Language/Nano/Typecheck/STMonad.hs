@@ -417,8 +417,7 @@ subtyNoUnion' θ (TFun xts t _) (TFun xts' t' _) =
     es e = case e of Just (CallExpr _ _ es) -> Just <$> es
                      _                      -> repeat Nothing
 
--- | Fall-back to unification
-subtyNoUnion' θ t t' = unify θ t t'
+subtyNoUnion' θ t t' = undefined
 
 subtyNoUnion θ t t' = subtyNoUnion' θ t t'
 {-subtyNoUnion θ t t' = -}
@@ -585,102 +584,4 @@ unfoldTDefDeepST t = liftM (unfoldTDefDeep t) (st_tdefs <$> get)
 unfoldTDefSafeST :: Type -> STM Type
 -------------------------------------------------------------------------------
 unfoldTDefSafeST t = liftM (unfoldTDefSafe t) (st_tdefs <$> get)
-
------------------------------------------------------------------------------
--- Unification --------------------------------------------------------------
------------------------------------------------------------------------------
-
------------------------------------------------------------------------------
-unify :: Subst -> Type -> Type -> STM Subst
------------------------------------------------------------------------------
-
-unify' θ t@(TApp c _ _) t'@(TApp c' _ _) 
-  | c /= c' = addError (errorUnification t t') θ
-
-unify' θ (TFun xts t _) (TFun xts' t' _) = 
-  unifys θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
-
-unify' θ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _)
-  | s == s'   = unifys θ ts ts'
-  | otherwise = addError (errorUnification t t') θ 
-
-unify' θ t@(TApp (TDef _) _ _) t' =
-  liftM (unfoldTDefSafe t) (st_tdefs <$> get) >>= unify θ t'
-
-unify' θ t t'@(TApp (TDef _) _ _)        =
-  liftM (unfoldTDefSafe t') (st_tdefs <$> get) >>= unify θ t
-
-unify' θ (TVar α _)     (TVar β _)       = varEqlM θ α β 
-unify' θ (TVar α _)     t                = varAsnM θ α t 
-unify' θ t              (TVar α _)       = varAsnM θ α t
-
-unify' θ (TApp c ts _) (TApp c' ts' _)
-  | c == c'                              = unifys θ ts ts'
-
-unify' _ (TBd _) _ = error $ bugTBodiesOccur "unify"
-unify' _ _ (TBd _) = error $ bugTBodiesOccur "unify"
-
-unify' θ t t' 
-  | t == t'                              = return θ
-  | isTop t                              = go θ $ strip t'
-  | isTop t'                             = go θ $ strip t
-  | otherwise                            = addError (errorUnification t t') θ
-  where 
-    strip (TApp _ xs _ )                 = xs
-    strip x@(TVar _ _)                   = [x]
-    strip (TFun xs y _)                  = (b_type <$> xs) ++ [y]
-    strip (TAll _ x)                     = [x]
-    strip t                              = error (printf "%s: Not supported in unify - strip" $ ppshow t)
-    tops = map $ const tTop
-    go θ ts = unifys θ ts $ tops ts
-
-
--- unify θ t t' = unify' θ (trace (printf "unify: %s ~ %s" (show t) (show t')) t) t'
-unify θ t t' = unify' θ t t'
-
------------------------------------------------------------------------------
-unifys         ::  Subst -> [Type] -> [Type] -> STM Subst
------------------------------------------------------------------------------
-unifys θ xs ys =  {- trace msg $ -} unifys' θ xs ys 
-   {-where -}
-   {-  msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
-
-unifys' θ ts ts' 
-  | nTs == nTs' = go θ (ts, ts') 
-  | otherwise   = addError (errorUnification ts ts') θ
-  where 
-    nTs                  = length ts
-    nTs'                 = length ts'
-    go θ (t:ts , t':ts') = unify θ t t' >>= \θ' -> go θ' (mapPair (apply θ') (ts, ts'))
-    go θ (_    , _    )  = return θ 
-
-
------------------------------------------------------------------------------
-varEqlM :: Subst -> TVar -> TVar -> STM Subst
------------------------------------------------------------------------------
-varEqlM θ α β =  
-  do  case varAsn θ α $ tVar β of
-        Right θ' -> return θ'
-        Left  s1 -> case varAsn θ β $ tVar α of
-                      Right θ'' -> return θ''
-                      Left  s2  -> addError (s1 ++ "\n OR \n" ++ s2) θ
-
-
------------------------------------------------------------------------------
-varAsn :: Subst -> TVar -> Type -> Either String Subst
------------------------------------------------------------------------------
-varAsn θ α t 
-  | t == apply θ (tVar α)  = Right $ θ -- Check if previous substs are sufficient 
-  | t == tVar α            = Right $ θ 
-  | α `HS.member` free t   = Left  $ errorOccursCheck α t 
-  | unassigned α θ         = Right $ θ `mappend` (Su $ HM.singleton α t)
-  | otherwise              = Left  $ errorRigidUnify α t
-  
-unassigned α (Su m) = HM.lookup α m == Just (tVar α)
-
-
------------------------------------------------------------------------------
-varAsnM :: Subst -> TVar -> Type -> STM Subst
------------------------------------------------------------------------------
-varAsnM θ a t = either (`addError` θ) return $ varAsn θ a t 
 

@@ -7,21 +7,56 @@ nano-js is the basis for the programming assignments in
 
     http://goto.ucsd.edu/~rjhala/classes/sp13/cse291
 
-Strings
--------
 
-- add a simple test
-- update TC to support `string` type
-- update constraint generation
-- run
+Install
+=======
+
 Dependencies
 ------------
 
 * git clone git@github.com:ucsd-progsys/liquid-fixpoint.git 
 * git clone git@github.com:UCSD-PL/language-ecmascript.git
+* git clone git@github.com:UCSD-PL/nano-js.git
+
+Build
+-----
+
+Execute the following:
+
+    cd liquid-fixpoint     && cabal install && cd ..
+    cd language-ecmascript && cabal install && cd ..
+    cd nano-js             && cabal install && cd ..
+
+Specifications
+==============
+
+
+Signatures
+----------
+
+TODO
+
+
+Type Invariants
+---------------
+
+You can write type-invariants like:
+
+    invariant {v:number    | ttag(v) = "number"   }
+    invariant {v:number    | ttag(v) = "number"   }
+    invariant {v:undefined | ttag(v) = "undefined"}
+    invariant {v:null      | ttag(v) = "object"   }
+    invariant {v:boolean   | ttag(v) = "boolean"  }  
+    invariant {v:number    | ttag(v) = "number"   } 
+    invariant {v:string    | ttag(v) = "string"   } 
+
+These invariants are automatically used to strengthen the refinements
+for values of the relevant types.
+
+
 
 Homework Plan
--------------
+=============
 
 HW 1
 1a. VCG 
@@ -35,18 +70,6 @@ HW 3
 3a. VCG for Refinement Type Checking            [Hard]
 3b. Consgen = VCG+K for Liquid Inference via FIXPOINT
 
-Todo List
----------
-
-- Scrape Qualifiers
-- unions
-- Records
-- Objects
-- Heap
-- etc.
-- Disallow undefined types.
-- Fix sourcespan error reporting at object accesses.
-
 Tests
 -----
 
@@ -55,20 +78,3 @@ Tests
     mapreduce?
     kmeans?
 
-
-
-PASTE Demo
-----------
-
-+ Substitute and drop trivial preds
-    * x: v = x, v >= x  etc.
-
-+ Drop the VV#...
-
-+ PP for function types super wide and gross
-    * cf. `forloop` in `minindex`
-
-+ Unify function template names with formal names
-    * cf. `forloop` in `minindex`
-
-+ SSA variables? hmm. Perhaps leave

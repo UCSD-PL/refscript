@@ -31,15 +31,19 @@ module Language.Nano.Typecheck.TCMonad (
   , accumAnn
   , getAllAnns
 
-  -- * Subtyping
-  , subTypeM  , subTypesM
-  , subTypeM_ , subTypesM_
-
   -- * Unfolding
-  , unfoldTDefSafeTC, unfoldTDefDeepTC
+  , unfoldFirstTC, unfoldSafeTC
 
-  -- * Get Casts
+  -- * Subtyping
+  , subTypeM  , subTypeM'
+  , subTypesM
+
+  -- * Unification
+  , unifyTypeM, unifyTypesM
+
+  -- * Casts
   , getCasts
+  , castM, castsM
   
   -- * Get Type Signature 
   , getDefType 
@@ -64,7 +68,6 @@ import           Language.Nano.Misc             (unique, everywhereM')
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
-import           Language.Nano.Typecheck.STMonad
 import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Errors
 import           Data.Monoid                  
@@ -168,17 +171,9 @@ setTyArgs l βs
        addAnn l $ TypInst (tVar <$> βs)
 
 
--------------------------------------------------------------------------------
-addCasts :: Casts -> TCM ()
--------------------------------------------------------------------------------
-addCasts cs = 
-  do  cs'  <- tc_casts <$> get
-      let err e _ _ 
-            = error $ printf "There should be no prior cast on %s\nNew Casts: %s\nOld casts: %s" 
-                      (ppshow e)
-                      (ppshow $ M.toList cs)
-                      (ppshow $ M.toList cs')
-      modify $ \st -> st {tc_casts = M.unionWithKey err cs cs' }
+
+
+
 
 
 -------------------------------------------------------------------------------
@@ -283,62 +278,136 @@ freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
 
 
 
--- | SubTyping within the TCMonad invokes casting by default
---------------------------------------------------------------------------------
-subTypeM :: AnnSSA -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst
---------------------------------------------------------------------------------
-subTypeM _  eo t t' = subTAux subTypeCast eo t t'
+{--- | SubTyping within the TCMonad invokes casting by default-}
+{----------------------------------------------------------------------------------}
+{-subTypeM :: AnnSSA -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst-}
+{----------------------------------------------------------------------------------}
+{-subTypeM _  eo t t' = subTAux subTypeCast eo t t'-}
 
 
--- | SubTyping within the TCMonad invokes casting by default
---------------------------------------------------------------------------------
-subTypeM_ :: AnnSSA -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM ()
---------------------------------------------------------------------------------
-subTypeM_ l eo t t' = subTypeM l eo t t' >> return ()
-
-      
--- | SubTyping within the TCMonad invokes casting by default
---------------------------------------------------------------------------------
-subTypesM :: AnnSSA -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Subst
---------------------------------------------------------------------------------
-subTypesM l es t1s t2s
-  | length t1s /= length t2s = tcError (ann l) errorArgMismatch
-  | otherwise   = subTAux subTypesCast es t1s t2s
+{--- | SubTyping within the TCMonad invokes casting by default-}
+{----------------------------------------------------------------------------------}
+{-subTypeM_ :: AnnSSA -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM ()-}
+{----------------------------------------------------------------------------------}
+{-subTypeM_ l eo t t' = subTypeM l eo t t' >> return ()-}
 
       
--- | SubTyping variant that returns void.
--- Invokes casting by default.
---------------------------------------------------------------------------------
-subTypesM_ :: AnnSSA -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM ()
---------------------------------------------------------------------------------
-subTypesM_ l es t1s t2s = subTypesM l es t1s t2s >> return ()
+{--- | SubTyping within the TCMonad invokes casting by default-}
+{----------------------------------------------------------------------------------}
+{-subTypesM :: AnnSSA -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Subst-}
+{----------------------------------------------------------------------------------}
+{-subTypesM l es t1s t2s-}
+{-  | length t1s /= length t2s = tcError (ann l) errorArgMismatch-}
+{-  | otherwise   = subTAux subTypesCast es t1s t2s-}
+
+      
+{--- | SubTyping variant that returns void.-}
+{--- Invokes casting by default.-}
+{----------------------------------------------------------------------------------}
+{-subTypesM_ :: AnnSSA -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM ()-}
+{----------------------------------------------------------------------------------}
+{-subTypesM_ l es t1s t2s = subTypesM l es t1s t2s >> return ()-}
 
 
-subTAux action e t t' =
-  do  θ <- getSubst
-      m <- tc_tdefs <$> get
-      case action m θ e t t' of
-        Left  s      -> forM_  s (\(l,m) -> logError l m θ) >> return θ
-        Right (θ',c) -> setSubst θ' >> addCasts c >> return θ'
+{-subTAux action e t t' =-}
+{-  do  θ <- getSubst-}
+{-      m <- tc_tdefs <$> get-}
+{-      case action m θ e t t' of-}
+{-        Left  s      -> forM_  s (\(l,m) -> logError l m θ) >> return θ-}
+{-        Right (θ',c) -> setSubst θ' >> addCasts c >> return θ'-}
 
 
 -- | Monadic unfolding
 -------------------------------------------------------------------------------
-unfoldTDefDeepTC :: Type -> TCM Type
+unfoldFirstTC :: Type -> TCM Type
 -------------------------------------------------------------------------------
-unfoldTDefDeepTC t = liftM (unfoldTDefDeep t) (tc_tdefs <$> get)
+unfoldFirstTC t = getTDefs >>= \γ -> return $ unfoldFirst γ t
 
 
 -------------------------------------------------------------------------------
-unfoldTDefSafeTC :: Type -> TCM Type
+unfoldSafeTC :: Type -> TCM Type
 -------------------------------------------------------------------------------
-unfoldTDefSafeTC t = liftM (unfoldTDefSafe t) (tc_tdefs <$> get)
-     
-      
+unfoldSafeTC   t = getTDefs >>= \γ -> return $ unfoldSafe γ t
+
+
 
 --------------------------------------------------------------------------------
--- | Insert casts and dead code casts in the AST
+--  Unification and Subtyping --------------------------------------------------
 --------------------------------------------------------------------------------
+
+
+----------------------------------------------------------------------------------
+unifyTypesM :: (IsLocated l) => l -> String -> [Type] -> [Type] -> TCM Subst
+----------------------------------------------------------------------------------
+unifyTypesM l msg t1s t2s
+  -- TODO: This check might be done multiple times
+  | length t1s /= length t2s = tcError l errorArgMismatch 
+  | otherwise                = do θ <- getSubst 
+                                  γ <- getTDefs
+                                  case unifys γ θ t1s t2s of
+                                    Left msg' -> tcError l $ msg ++ msg'
+                                    Right θ'  -> setSubst θ' >> return θ' 
+
+----------------------------------------------------------------------------------
+--unifyTypeM :: (IsLocated l) => l -> String -> Expression AnnSSA -> Type -> Type -> TCM Subst
+----------------------------------------------------------------------------------
+unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
+  where 
+    msg              = errorWrongType m e t t'
+
+
+----------------------------------------------------------------------------------
+subTypeM :: (IsLocated l) => l -> Expression AnnSSA -> Type -> Type -> TCM SubDirection
+----------------------------------------------------------------------------------
+subTypeM l e t t' = undefined
+
+----------------------------------------------------------------------------------
+subTypeM' :: (IsLocated l) => l -> Type -> Type -> TCM ()
+----------------------------------------------------------------------------------
+subTypeM' l t t' = undefined
+ 
+----------------------------------------------------------------------------------
+subTypesM :: (IsLocated l) => l -> [Expression AnnSSA] -> [Type] -> [Type] -> TCM [SubDirection]
+----------------------------------------------------------------------------------
+subTypesM l es ts ts' = mapM (\(e,t,t') -> subTypeM l e t t') $ zip3 es ts ts'
+
+
+
+--------------------------------------------------------------------------------
+--  Cast Helpers ---------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+
+-----------------------------------------------------------------------------
+withExpr  :: Maybe (Expression AnnSSA) -> TCM a -> TCM a
+-----------------------------------------------------------------------------
+withExpr e action = 
+  do  eold  <- getExpr 
+      setExpr  e 
+      r     <- action 
+      setExpr  eold
+      return $ r
+
+
+
+castM  e  t  = undefined
+castsM es ts = undefined 
+
+
+-------------------------------------------------------------------------------
+addCasts :: Casts -> TCM ()
+-------------------------------------------------------------------------------
+addCasts cs = 
+  do  cs'  <- tc_casts <$> get
+      {-let err e _ _ -}
+      {-      = error $ printf "There should be no prior cast on %s\nNew Casts: %s\nOld casts: %s" -}
+      {-                (ppshow e)-}
+      {-                (ppshow $ M.toList cs)-}
+      {-                (ppshow $ M.toList cs')-}
+      let err e _ _ = error $ printf "Erro at TCMonad addCasts on %s" (ppshow e)
+      modify $ \st -> st {tc_casts = M.unionWithKey err cs cs' }
+
+
 
 --------------------------------------------------------------------------------
 patchPgmM :: (Typeable r, Data r) => Nano AnnSSA (RType r) -> TCM (Nano AnnSSA (RType r))
@@ -372,26 +441,6 @@ patchExpr m e =
     fs = ann_fact a
     a  = getAnnotation e
 
-
-
-
-
-
-----------------------------------------------------------------------------------
-unifyTypes :: (IsLocated l) => l -> String -> [Type] -> [Type] -> TCM Subst
-----------------------------------------------------------------------------------
-unifyTypes l msg t1s t2s
-  -- TODO: This check might be done multiple times
-  | length t1s /= length t2s = tcError l errorArgMismatch 
-  | otherwise                = do θ <- getSubst 
-                                  γ <- getTDefs
-                                  case unifys γ θ t1s t2s of
-                                    Left msg' -> tcError l $ msg ++ msg'
-                                    Right θ'  -> setSubst θ' >> return θ' 
-
-unifyType l m e t t' = unifyTypes l msg [t] [t'] >> return ()
-  where 
-    msg              = errorWrongType m e t t'
 
 
 

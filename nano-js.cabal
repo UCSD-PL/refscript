@@ -70,7 +70,7 @@ executable nanojs
 --                        Language.Nano.Typecheck.Types
 --                        Language.Nano.Typecheck.Parse
 --                        Language.Nano.Typecheck.TCMonad
---                        Language.Nano.Typecheck.STMonad
+--                        Language.Nano.Typecheck.Compare
 --                        Language.Nano.Typecheck.Subst
 --                        Language.Nano.Typecheck.Typecheck
 --                        Language.Nano.Annots

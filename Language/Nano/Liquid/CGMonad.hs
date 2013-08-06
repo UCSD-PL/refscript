@@ -63,9 +63,10 @@ import           Language.Nano.Types
 import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
 import qualified Language.Nano.Env              as E
+import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types 
-import           Language.Nano.Typecheck.STMonad (unfoldTDefSafe, isSubType)
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Liquid.Types
 
 
@@ -276,17 +277,20 @@ envJoin' :: AnnType -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 envJoin' l g g1 g2
   = do  {- td      <- E.envMap toType <$> cg_tdefs <$> get -}
         let xs   = [x | PhiVar x <- ann_fact l] 
-        let t1s  = (`envFindTy` g1) <$> xs 
-        let t2s  = (`envFindTy` g2) <$> xs
+            t1s  = (`envFindTy` g1) <$> xs 
+            t2s  = (`envFindTy` g2) <$> xs
         when (length t1s /= length t2s) $ cgError l (bugBadPhi l t1s t2s)
-        -- joinTypes triplets
-        let ttt  = joinTypes (\a b -> toType a == toType b) <$> zip t1s t2s
-        (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst3 <$> ttt
+
+        γ       <- getTDefs
+        let t4   = zipWith (compareTs γ) t1s t2s
+
+
+        (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst4 <$> t4
         -- To facilitate the sort check t1s and t2s need to change to their
         -- equivalents that have the same sort with the joined types (ts) (with
         -- the added False's to make the types equivalent
-        envAdds (zip xs $ snd3 <$> ttt) g1 
-        envAdds (zip xs $ thd3 <$> ttt) g2
+        envAdds (zip xs $ snd4 <$> t4) g1 
+        envAdds (zip xs $ thd4 <$> t4) g2
         subTypes l g1 xs (tracePP "After JOIN" ts)
         subTypes l g2 xs ts
         return g'

@@ -11,6 +11,8 @@ module Language.Nano.Misc (
   , mapSndM
   , mapPairM
   , mkEither
+  , either2Bool
+  , maybeM, maybeM_
   , unique
 
   , fst4
@@ -54,16 +56,31 @@ mkEither :: Bool -> s -> a -> Either s a
 mkEither True  _ a = Right a
 mkEither False s _ = Left s
 
+-------------------------------------------------------------------------------
+either2Bool :: Either a b -> Bool
+-------------------------------------------------------------------------------
+either2Bool = either (const False) (const True)
 
+-------------------------------------------------------------------------------
+maybeM :: (Monad m) => b -> (a -> m b) -> Maybe a -> m b
+-------------------------------------------------------------------------------
+maybeM d f a = maybe (return d) f a
+
+-------------------------------------------------------------------------------
+maybeM_ :: (Monad m) => (a -> m ()) -> Maybe a -> m ()
+-------------------------------------------------------------------------------
+maybeM_ = maybeM ()
+
+-------------------------------------------------------------------------------
 unique :: (Eq a) => [a] -> Bool
+-------------------------------------------------------------------------------
 unique xs = length xs == length (L.nub xs)
+
 
 fst4 (a,_,_,_) = a
 snd4 (_,b,_,_) = b
 thd4 (_,_,c,_) = c
 fth4 (_,_,_,d) = d
-
-
 
 
 instance PP Bool where 

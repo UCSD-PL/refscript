@@ -21,7 +21,7 @@ module Language.Nano.Typecheck.Subst (
   , unfoldFirst, unfoldMaybe, unfoldSafe
   
   -- * Unification 
-  , unify
+  , unify, unifys
 
   ) where 
 
@@ -164,14 +164,14 @@ unfoldMaybe env t@(TApp (TDef id) acts _) =
         _                          -> Left  $ (printf "Failed unfolding: %s" $ ppshow t)
 -- The only thing that is unfoldable is a TDef.
 -- The rest are just returned as they are.
-unfoldTDefMaybe t                       _   = Right t
+unfoldMaybe _ t                           = Right t
 
 
 -- | Force a successful unfolding
 -------------------------------------------------------------------------------
 unfoldSafe :: (PP r, F.Reftable r) => Env (RType r) -> RType r -> RType r
 -------------------------------------------------------------------------------
-unfoldSafe env t = either error id $ unfoldTDefMaybe t env
+unfoldSafe env = either error id . unfoldMaybe env
 
 
 

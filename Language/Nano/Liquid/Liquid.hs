@@ -32,6 +32,7 @@ import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
+import           Language.Nano.Typecheck.Subst      (fromList)
 import           Language.Nano.Typecheck.STMonad (unfoldTDefSafe, isSubType)
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
@@ -318,7 +319,7 @@ consDownCast g x a e
 -- | Making Types Compatible ----------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
--- | mkCompatible pads the input types so that he output consists of types of the 
+-- mkCompatible pads the input types so that he output consists of types of the
 -- same sort, i.e. compatible. This function also includes the top-level
 -- constraint in the output (which still keeps the "same-sort" invariant as the
 -- compatible "joined" version of each of the input types is used (the one
@@ -333,15 +334,14 @@ consDownCast g x a e
 mkCompatible :: E.Env RefType -> (RefType, RefType) -> [(RefType, RefType)]
 ---------------------------------------------------------------------------------------
 
--- | Top-level Unions:                                                      
---
--- S1 ∪ ... ∪ Sn <: T1 ∪ ... ∪ Tn --->                                      
+-- | Top-level Unions
+
+-- S1 ∪ ... ∪ Sn <: T1 ∪ ... ∪ Tn --->
 -- Si <: Tj forall matching i,j ∧ Sj <: { Sj | false } for the remaining j's
 -- Should use the joinType trick (adding false and matching that are missing
--- from each side) to keep the refinements for the union                    
+-- from each side) to keep the refinements for the union
 --
--- Adds the normalized top-level union, not in recursion to avoid infinite 
--- loop.
+-- Also, adds the normalized top-level union
 mkCompatible env (t1, t2) 
   | union t1 || union t2 
   = topLevel : parts
@@ -349,11 +349,14 @@ mkCompatible env (t1, t2)
         parts         = concatMap (mkCompatible env) $ matchTypes t1' t2'
         eq a b        = toType a == toType b
         (_, t1', t2') = joinTypes eq (t1, t2) -- make compatible
-        union (TApp TUn _ _) = True           -- top-level union
-        union _              = False
 
--- | Top-level Objects:                                                     
--- TODO: Add toplevel refinement constraint on r1 - r2                      
+
+union (TApp TUn _ _) = True           -- top-level union
+union _              = False
+
+-- | Top-level Objects
+
+-- TODO: Add toplevel refinement constraint on r1 - r2
 mkCompatible env (TObj xt1s r1, TObj xt2s r2) 
   | L.sort s1s == L.sort s2s 
   = concatMap (mkCompatible env) $ zip t1s t2s
@@ -398,6 +401,38 @@ matchTypes t1 t2 | and $ zipWith req t1s t2s =
 
 matchTypes t1 t2 | otherwise =
   errorstar $ printf "matchTypes not aligned: %s - %s" (ppshow t1) (ppshow t2) 
+
+
+-- | Type equivalence
+-- Make typeclass
+
+-- This is a slightly more relaxed version of equality. 
+class Equivalent a where 
+  equiv :: a -> a -> Bool
+
+class Equivalent a => Equivalent [a] where
+  equiv = all zipWith equiv
+
+instance Equivalent Type where 
+  equiv t t'                                        | union t || union t' 
+                                                    = errorstar "equiv: no unions"
+  -- No unions beyond this point!
+  equiv (TApp (TDef d) ts _) (TApp (TDef d') ts' _) = d == d' && ts `equiv` ts'
+  equiv (TApp (TDef d) ts _) _                      = undefined -- TODO unfold
+  equiv _                    (TApp (TDef d) ts _)   = undefined -- TODO unfold
+  equiv (TApp c _ _)         (TApp c' _ _)          = c == c'
+  equiv (TVar v _  )         (TVar v' _  )          = v == v'
+  -- Functions need to be exactly the same - no padding can happen here
+  equiv (TFun b o _)         (TFun b' o'_)          = b `equiv` b' && o `equiv` o 
+  -- Any two objects can be combined - so they should be equivalent
+  equiv (TObj _ _  )         (TObj _ _   )          = True
+  equiv (TBd _     )         (TBd _      )          = errorstar "equiv: no type bodies"
+  equiv (TAll v t  )         (TAll v' t' )          = 
+    t `equiv` apply (fromList [(v',tVar v)]) t'
+  equiv _                    _                      = False
+  
+
+
 
 
 -- | fixBase converts:                                                  

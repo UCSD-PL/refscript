@@ -65,6 +65,7 @@ import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.STMonad
+import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Errors
 import           Data.Monoid                  
 import qualified Data.HashMap.Strict            as HM
@@ -370,4 +371,27 @@ patchExpr m e =
   where 
     fs = ann_fact a
     a  = getAnnotation e
+
+
+
+
+
+
+----------------------------------------------------------------------------------
+unifyTypes :: (IsLocated l) => l -> String -> [Type] -> [Type] -> TCM Subst
+----------------------------------------------------------------------------------
+unifyTypes l msg t1s t2s
+  -- TODO: This check might be done multiple times
+  | length t1s /= length t2s = tcError l errorArgMismatch 
+  | otherwise                = do θ <- getSubst 
+                                  γ <- getTDefs
+                                  case unifys γ θ t1s t2s of
+                                    Left msg' -> tcError l $ msg ++ msg'
+                                    Right θ'  -> setSubst θ' >> return θ' 
+
+unifyType l m e t t' = unifyTypes l msg [t] [t'] >> return ()
+  where 
+    msg              = errorWrongType m e t t'
+
+
 

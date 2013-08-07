@@ -24,13 +24,13 @@ module Language.Nano.Typecheck.Compare (
 
   ) where 
 
--- import           Text.Printf
+import           Text.Printf
 import           Data.Maybe                         (isNothing)
 import qualified Data.List                          as L
 import qualified Data.Map                           as M
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
--- import           Language.Nano.Errors
+import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
@@ -38,13 +38,45 @@ import           Language.Nano.Typecheck.Subst
 
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc
--- import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ 
 
 import           Control.Applicative                hiding (empty)
 import           Control.Monad.Error                ()
 
 -- import           Debug.Trace (trace)
+
+
+
+-- | Type equivalence
+
+-- This is a slightly more relaxed version of equality. 
+class Equivalent a where 
+  equiv :: a -> a -> Bool
+
+instance Equivalent a => Equivalent [a] where
+  equiv a b = and $ zipWith equiv a b 
+
+instance Equivalent (RType r) where 
+  equiv t t'                                        | any isUnion [t,t']
+                                                    = errorstar "equiv: no unions"
+  -- No unions beyond this point!
+  equiv (TApp (TDef d) ts _) (TApp (TDef d') ts' _) = d == d' && ts `equiv` ts'
+  equiv (TApp (TDef _) _ _) _                       = undefined -- TODO unfold
+  equiv _                    (TApp (TDef _) _ _)    = undefined -- TODO unfold
+  equiv (TApp c _ _)         (TApp c' _ _)          = c == c'
+  equiv (TVar v _  )         (TVar v' _  )          = v == v'
+  -- Functions need to be exactly the same - no padding can happen here
+  equiv (TFun b o _)         (TFun b' o' _)         = b `equiv` b' && o `equiv` o' 
+  -- Any two objects can be combined - so they should be equivalent
+  equiv (TObj _ _  )         (TObj _ _   )          = True
+  equiv (TBd _     )         (TBd _      )          = errorstar "equiv: no type bodies"
+  equiv (TAll _ _   )        (TAll _ _ )            = undefined
+    -- t `equiv` apply (fromList [(v',tVar v)]) t'
+  equiv _                    _                      = False
+
+instance Equivalent (Bind r) where 
+  equiv (B s t) (B s' t') = s == s' && t `equiv` t' 
 
 
 
@@ -80,64 +112,51 @@ instance (PP a) => PP (Cast a) where
 compareTs :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r -> 
                                   (RType r, RType r, RType r, SubDirection)
 ---------------------------------------------------------------------------------------
+compareTs γ t1 t2 | all isTop [t1,t2] = 
+  let (j,t1',t2',_) = compareTs' γ t1 t2 in (j, t1', t2', EqT)
+
+compareTs γ t1 t2 | isTop t1 = 
+  let (j,t1',t2',_) = compareTs' γ t1 t2 in (j, t1', t2', SupT)
+
+compareTs γ t1 t2 | isTop t2 = 
+  let (j,t1',t2',_) = compareTs' γ t1 t2 in (j, t1', t2', SubT)
+
+compareTs γ t1 t2   = compareTs' γ t1 t2
+
 
 -- | Top-level Unions
 
 -- Eliminate top-level unions
-compareTs γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
+compareTs' γ t1 t2 | any isUnion [t1,t2]     = error "Unimplemented: compareTs-1"
+  -- = padUnion γ t1  t2
 
 -- | Top-level Objects
 
-compareTs γ t1@(TObj _ _) t2@(TObj _ _)     = padObject γ t1 t2
+compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = error "Unimplemented: compareTs-2"
+  -- padObject γ t1 t2
 
 -- | Type definitions
 
-compareTs γ t1@(TApp (TDef _) _ _) t2@(TApp (TDef _) _ _) = compareTs γ (unfoldSafe γ t1) t2
+compareTs' γ t1@(TApp (TDef _) _ _) t2@(TApp (TDef _) _ _) = compareTs γ (unfoldSafe γ t1) t2
 
-compareTs γ t1@(TApp (TDef _) _ _) t2       = compareTs γ (unfoldSafe γ t1) t2
+compareTs' γ t1@(TApp (TDef _) _ _) t2       = error "Unimplemented: compareTs-3"
+  -- compareTs γ (unfoldSafe γ t1) t2
 
-compareTs γ t1 t2@(TApp (TDef _) _ _)       = compareTs γ t1 (unfoldSafe γ t2)
+compareTs' γ t1 t2@(TApp (TDef _) _ _)       = error "Unimplemented: compareTs-4"
+  -- compareTs γ t1 (unfoldSafe γ t2)
 
 -- | Everything else in TApp besides unions and defined types
-compareTs γ t1@(TApp _ _ _) t2@(TApp _ _ _) = padUnion γ t1 t2 
+compareTs' γ t1@(TApp _ _ _) t2@(TApp _ _ _) = padSimpleApp t1 t2 
 
-compareTs _ (TFun _ _ _) (TFun _ _ _) = undefined
-compareTs _ (TAll _ _  ) (TAll _ _  ) = undefined
-compareTs _ (TBd  _    ) (TBd  _    ) = undefined
+compareTs' _ t1@(TVar v1 _) t2@(TVar v2 _)   = padVar t1 t2
 
-compareTs _   _           _               = undefined
+compareTs' γ t1@(TFun _ _ _) t2@(TFun _ _ _) = error "Unimplemented: compareTs-6"
 
+compareTs' _ (TAll _ _  ) (TAll _ _  )       = error "Unimplemented: compareTs-7"
+compareTs' _ (TBd  _    ) (TBd  _    )       = error "Unimplemented: compareTs-8"
 
-
--- | Type equivalence
-
--- This is a slightly more relaxed version of equality. 
-class Equivalent a where 
-  equiv :: a -> a -> Bool
-
-instance Equivalent a => Equivalent [a] where
-  equiv a b = and $ zipWith equiv a b 
-
-instance Equivalent (RType r) where 
-  equiv t t'                                        | any isUnion [t,t']
-                                                    = errorstar "equiv: no unions"
-  -- No unions beyond this point!
-  equiv (TApp (TDef d) ts _) (TApp (TDef d') ts' _) = d == d' && ts `equiv` ts'
-  equiv (TApp (TDef _) _ _) _                       = undefined -- TODO unfold
-  equiv _                    (TApp (TDef _) _ _)    = undefined -- TODO unfold
-  equiv (TApp c _ _)         (TApp c' _ _)          = c == c'
-  equiv (TVar v _  )         (TVar v' _  )          = v == v'
-  -- Functions need to be exactly the same - no padding can happen here
-  equiv (TFun b o _)         (TFun b' o' _)          = b `equiv` b' && o `equiv` o' 
-  -- Any two objects can be combined - so they should be equivalent
-  equiv (TObj _ _  )         (TObj _ _   )          = True
-  equiv (TBd _     )         (TBd _      )          = errorstar "equiv: no type bodies"
-  equiv (TAll _ _   )         (TAll _ _ )           = undefined
-    -- t `equiv` apply (fromList [(v',tVar v)]) t'
-  equiv _                    _                      = False
-
-instance Equivalent (Bind r) where 
-  equiv (B s t) (B s' t') = s == s' && t `equiv` t' 
+compareTs' _ t1           t2                 = 
+  error $ printf "Unimplemented: compareTs-9 for types %s - %s " (ppshow t1) (ppshow t2)
 
 
 ---------------------------------------------------------------------------------
@@ -167,6 +186,30 @@ joinSub SupT SupT           = Nth
 
 joinSubs :: [SubDirection] -> SubDirection
 joinSubs = foldl joinSub EqT
+
+transposeSub :: SubDirection -> SubDirection
+transposeSub SubT = SupT
+transposeSub SupT = SubT
+transposeSub EqT  = EqT
+transposeSub Nth  = Nth
+
+
+-- | `padSimpleApp`
+
+padSimpleApp t1@(TApp c1 _ _) t2@(TApp c2 _ _) 
+  | t1 == t2  = (t1, t1, t2, EqT)
+  | otherwise = (joinType, t1', t2', Nth)
+    where joinType = (ofType . toType) $ mkUnion [t1,t2]
+          t1'      = mkUnion [t1, fmap F.bot t2]
+          t2'      = mkUnion [fmap F.bot t1, t2]
+padSimpleApp _ _   = error "BUG: padSimpleApp - no other case should be here"
+
+
+-- | `padVar`
+
+padVar t1@(TVar v1 _ ) t2@(TVar v2 _) | v1 == v2 = ((ofType . toType) t1, t1, t2, EqT)
+padVar t1 t2 = errorstar $ printf "padVar: cannot compare %s and %s" (ppshow t1) (ppshow t2)
+
 
 
 -- | `padUnion`
@@ -218,30 +261,36 @@ unionParts ::  (Eq r, Ord r, F.Reftable r, PP r) =>
                 [(RType r, RType r)],    -- 
                 SubDirection)            -- Subtyping relation between LHS and RHS
 --------------------------------------------------------------------------------
-unionParts env t1 t2 = 
-  -- No reason to add the kVars here. They will be added in the CGMonad
-  ( mkUnion $ (ofType . toType) <$> (commonJoin ++ ds), ts, direction)
+unionParts env t1 t2 = (commonJoin, ts, direction)
   where
+    -- No reason to add the kVars here. They will be added in the CGMonad
+    commonJoin = mkUnion $ (ofType . toType) <$> ((fst4 <$> commonTs) ++ ds)
+    ts         = safeZip "unionParts" t1s' t2s'
+    direction  = distSub `joinSub` comSub
 
-    ts  = safeZip "unionParts" t1s t2s
     -- It is crucial to sort the types so that they are aligned
-    t1s = L.sort $ commonT1s ++ (fmap F.bot <$> d2s)    
-    t2s = L.sort $ commonT2s ++ (fmap F.bot <$> d1s)
-    
+    t1s'       = L.sort $ commonT1s ++ (fmap F.bot <$> d2s)    
+    t2s'       = L.sort $ commonT2s ++ (fmap F.bot <$> d1s)
+
+    commonT1s  = snd4 <$> commonTs
+    commonT2s  = thd4 <$> commonTs
 
     -- commonTs: types in both t1 and t2
     -- `common` does a "light" matching - which is determined by `equiv`. 
-    -- The main difference is in objects: all objects are matched together, so 
-    -- the common parts may not be the same in terms of raw type. 
-    -- This is why `compareTs` is called on the common parts recursively
-    -- This only needs to happen on the common (structurally) types.
-    -- The distinct ones are gonna be identical (due to padding).
+    -- Right now the only difference is in objects: 
+    -- all objects are matched together, so the common parts may not be 
+    -- the same in terms of raw type. 
+    -- This is why `padObject` is called on the common parts. Non-object types
+    -- fall through
     -- Also `common` returns aligned types - so no need to re-align them.
-    commonTs   = map (uncurry $ compareTs env) $ common (bkUnion t1) (bkUnion t2)
+    (t1s, t2s) = sanityCheck $ mapPair bkUnion (t1, t2)
+    -- Make sure that the recursion will happen on smalled inputs
+    commonTs = map (uncurry $ compareTs env) $ common t1s t2s
+      --TODO: deal with the case of smaller inputs earlier in compareTs and not
+      --in union padding  !!!
 
-    commonJoin = fst4 <$> commonTs
-    commonT1s  = snd4 <$> commonTs
-    commonT2s  = thd4 <$> commonTs
+
+    -- The joined subtyping result
     comSub     = joinSubs $ fth4 <$> commonTs
 
     -- d1s: types on @t1@ but not @t2@
@@ -265,13 +314,17 @@ unionParts env t1 t2 =
     -- ∙ The distinct types (the one that has more is a supertype)
     -- ∙ The common types (recursively call `compareTs` to compare the types
     --   of the parts and join the subtyping relations)
-    direction = distSub `joinSub` comSub
     distSub   = case (d1s, d2s) of
                   ([], []) -> EqT
                   ([], _ ) -> SubT  -- <:
                   (_ , []) -> SupT  -- >:
                   (_ , _ ) -> Nth -- no relation
 
+    sanityCheck ([ ],[ ]) = errorstar "unionParts, called on too small input"
+    sanityCheck ([_],[ ]) = errorstar "unionParts, called on too small input"
+    sanityCheck ([ ],[_]) = errorstar "unionParts, called on too small input"
+    sanityCheck ([_],[_]) = errorstar "unionParts, called on too small input"
+    sanityCheck p         = p
 
 
 -- | Pad objects
@@ -292,20 +345,11 @@ padObject ::  (Eq r, Ord r, F.Reftable r) =>
                 RType r,            -- The equivalent to @t2@
                 SubDirection)       -- Subtyping relation between LHS and RHS
 --------------------------------------------------------------------------------
--- padObject env (TObj bs1 r1) (TObj bs2 r2) = undefined
+padObject env (TObj bs1 r1) (TObj bs2 r2) = undefined
     {-b1s                 = unzip $ split <$> L.sortBy ord xt1s-}
     {-b2s                 = unzip $ split <$> L.sortBy ord xt2s-}
     {-split (B l t)       = (l,t)-}
     {-ord a b             = b_sym a `compare` b_sym b-}
 
-
-padObject _ _ _ = errorstar "padObject can only happen between objects"
-
-
-
-
-
-
-
-
+padObject _ _ _ = error "padObject: Cannot pad non-objects"
 

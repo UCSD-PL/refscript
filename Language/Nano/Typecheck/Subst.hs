@@ -185,36 +185,39 @@ unfoldSafe env = either error id . unfoldMaybe env
 unify :: Env Type -> Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
 
-unify _ _ t@(TApp c _ _) t'@(TApp c' _ _) 
-  | c /= c' = Left $ errorUnification t t'
+unify _ θ t@(TApp c _ _) t'@(TApp c' _ _) 
+  | any isTop [t,t']                    = Right $ θ
+  | c /= c'                             = Left $ errorUnification t t'
 
 unify env θ (TFun xts t _) (TFun xts' t' _) = 
   unifys env θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
 
 unify env θ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _)
-  | s == s'   = unifys env θ ts ts'
-  | otherwise = Left $ errorUnification t t'
+  | s == s'                             = unifys env θ ts ts'
+  | otherwise                           = Left $ errorUnification t t'
 
-unify env θ t@(TApp (TDef _) _ _) t' =
-  unify env θ (unfoldSafe env t) t'
+unify env θ t@(TApp (TDef _) _ _) t'    = unify env θ (unfoldSafe env t) t'
 
-unify env θ t t'@(TApp (TDef _) _ _)        =
-  unify env θ t (unfoldSafe env t')
+unify env θ t t'@(TApp (TDef _) _ _)    = unify env θ t (unfoldSafe env t')
 
-unify _  θ (TVar α _)     (TVar β _)       = varEql θ α β 
-unify _  θ (TVar α _)     t                = varAsn θ α t 
-unify _  θ t              (TVar α _)       = varAsn θ α t
+unify _  θ (TVar α _)     (TVar β _)    = varEql θ α β 
+unify _  θ (TVar α _)     t             = varAsn θ α t 
+unify _  θ t              (TVar α _)    = varAsn θ α t
 
 -- TODO: handle unions
-unify env θ (TApp c ts _) (TApp c' ts' _)
-  | c == c' = unifys env θ ts ts'
+unify _ _ (TApp TUn _ _) (TApp TUn _ _) = error "Unimplemented: unify unions1"
+unify _ _ (TApp TUn _ _) _              = error "Unimplemented: unify unions2"
+unify _ _ _              (TApp TUn _ _) = error "Unimplemented: unify unions3"
 
-unify _ _ (TBd _) _ = error $ bugTBodiesOccur "unify"
-unify _ _ _ (TBd _) = error $ bugTBodiesOccur "unify"
+unify env θ (TApp c ts _) (TApp c' ts' _)
+  | c == c'           = unifys env θ ts ts'
+
+unify _ _ (TBd _) _   = error $ bugTBodiesOccur "unify"
+unify _ _ _ (TBd _)   = error $ bugTBodiesOccur "unify"
 
 unify _ θ t t' 
-  | t == t'   = Right $ θ
-  | otherwise = Left  $ errorUnification t t'
+  | t == t'           = Right $ θ
+  | otherwise         = Left  $ errorUnification t t'
 
 
 -----------------------------------------------------------------------------

@@ -64,7 +64,7 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 
 import           Language.Nano.Env
-import           Language.Nano.Misc             (unique, everywhereM')
+import           Language.Nano.Misc             (unique, everywhereM', zipWith3M_)
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
@@ -81,7 +81,7 @@ import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
--- import           Debug.Trace                      (trace)
+import           Debug.Trace                      (trace)
 
 -------------------------------------------------------------------------------
 -- | Typechecking monad -------------------------------------------------------
@@ -168,10 +168,6 @@ setTyArgs l βs
   = do m <- tc_anns <$> get 
        when (HM.member l m) $ tcError l "Multiple Type Args"
        addAnn l $ TypInst (tVar <$> βs)
-
-
-
-
 
 
 
@@ -277,45 +273,6 @@ freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
 
 
 
-{--- | SubTyping within the TCMonad invokes casting by default-}
-{----------------------------------------------------------------------------------}
-{-subTypeM :: AnnSSA -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM Subst-}
-{----------------------------------------------------------------------------------}
-{-subTypeM _  eo t t' = subTAux subTypeCast eo t t'-}
-
-
-{--- | SubTyping within the TCMonad invokes casting by default-}
-{----------------------------------------------------------------------------------}
-{-subTypeM_ :: AnnSSA -> Maybe (Expression AnnSSA) -> Type -> Type -> TCM ()-}
-{----------------------------------------------------------------------------------}
-{-subTypeM_ l eo t t' = subTypeM l eo t t' >> return ()-}
-
-      
-{--- | SubTyping within the TCMonad invokes casting by default-}
-{----------------------------------------------------------------------------------}
-{-subTypesM :: AnnSSA -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM Subst-}
-{----------------------------------------------------------------------------------}
-{-subTypesM l es t1s t2s-}
-{-  | length t1s /= length t2s = tcError (ann l) errorArgMismatch-}
-{-  | otherwise   = subTAux subTypesCast es t1s t2s-}
-
-      
-{--- | SubTyping variant that returns void.-}
-{--- Invokes casting by default.-}
-{----------------------------------------------------------------------------------}
-{-subTypesM_ :: AnnSSA -> [Maybe (Expression AnnSSA)] -> [Type] -> [Type] -> TCM ()-}
-{----------------------------------------------------------------------------------}
-{-subTypesM_ l es t1s t2s = subTypesM l es t1s t2s >> return ()-}
-
-
-{-subTAux action e t t' =-}
-{-  do  θ <- getSubst-}
-{-      m <- tc_tdefs <$> get-}
-{-      case action m θ e t t' of-}
-{-        Left  s      -> forM_  s (\(l,m) -> logError l m θ) >> return θ-}
-{-        Right (θ',c) -> setSubst θ' >> addCasts c >> return θ'-}
-
-
 -- | Monadic unfolding
 -------------------------------------------------------------------------------
 unfoldFirstTC :: Type -> TCM Type
@@ -344,7 +301,7 @@ unifyTypesM l msg t1s t2s
   | otherwise                = do θ <- getSubst 
                                   γ <- getTDefs
                                   case unifys γ θ t1s t2s of
-                                    Left msg' -> tcError l $ msg ++ msg'
+                                    Left msg' -> tcError l $ msg ++ ": " ++ msg'
                                     Right θ'  -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------
@@ -358,12 +315,15 @@ unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
 ----------------------------------------------------------------------------------
 subTypeM :: (IsLocated l) => l -> Expression AnnSSA -> Type -> Type -> TCM SubDirection
 ----------------------------------------------------------------------------------
-subTypeM _ _ _ _  = undefined
+subTypeM _ _ t t' 
+  = do  θ            <- getTDefs 
+        let (_,_,_,d) = compareTs θ t t'
+        return $ trace (printf "subTypeM: %s %s %s" (ppshow t) (ppshow d) (ppshow t')) d
 
 ----------------------------------------------------------------------------------
 subTypeM' :: (IsLocated l) => l -> Type -> Type -> TCM ()
 ----------------------------------------------------------------------------------
-subTypeM' _ _ _   = undefined
+subTypeM' _ _ _  = error "unimplemented: subTypeM\'"
  
 ----------------------------------------------------------------------------------
 subTypesM :: (IsLocated l) => l -> [Expression AnnSSA] -> [Type] -> [Type] -> TCM [SubDirection]
@@ -388,9 +348,36 @@ withExpr e action =
       return $ r
 
 
+--------------------------------------------------------------------------------
+castM     :: SubDirection -> Expression AnnSSA -> Type -> TCM ()
+--------------------------------------------------------------------------------
+castM SupT = addDownCast
+castM SubT = addUpCast
+castM EqT  = \_ _ -> return ()
+castM Nth  = addDeadCast
 
-castM  _  _  = undefined
-castsM _  _  = undefined 
+
+--------------------------------------------------------------------------------
+castsM    :: [SubDirection] -> [Expression AnnSSA] -> [Type] -> TCM ()
+--------------------------------------------------------------------------------
+castsM     = zipWith3M_ castM 
+
+
+--------------------------------------------------------------------------------
+addUpCast :: Expression AnnSSA -> Type -> TCM ()
+--------------------------------------------------------------------------------
+addUpCast e t = modify $ \st -> st { tc_casts = M.insert e (UCST t) (tc_casts st) }
+
+--------------------------------------------------------------------------------
+addDownCast :: Expression AnnSSA -> Type -> TCM ()
+--------------------------------------------------------------------------------
+addDownCast e t = modify $ \st -> st { tc_casts = M.insert e (DCST t) (tc_casts st) }
+
+
+--------------------------------------------------------------------------------
+addDeadCast :: Expression AnnSSA -> Type -> TCM ()
+--------------------------------------------------------------------------------
+addDeadCast e t = modify $ \st -> st { tc_casts = M.insert e (DC t) (tc_casts st) } 
 
 
 --------------------------------------------------------------------------------

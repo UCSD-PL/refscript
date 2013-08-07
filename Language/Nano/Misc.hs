@@ -21,6 +21,9 @@ module Language.Nano.Misc (
   , fth4
 
   , everywhereM'
+
+  , zipWith3M, zipWith3M_
+  , unzip4
 ) where
 
 -- import           Control.Applicative                ((<$>))
@@ -103,7 +106,20 @@ everywhereM' :: Monad m => GenericM m -> GenericM m
 everywhereM' f x = do { x' <- f x;
                         gmapM (everywhereM' f) x' }
 
+--------------------------------------------------------------------------------
+zipWith3M           :: (Monad m) => (a -> b -> c -> m d) -> [a] -> [b] -> [c] -> m [d]
+--------------------------------------------------------------------------------
+zipWith3M f xs ys zs =  sequence (zipWith3 f xs ys zs)
+
+--------------------------------------------------------------------------------
+zipWith3M_          :: (Monad m) => (a -> b -> c -> m d) -> [a] -> [b] -> [c] -> m ()
+--------------------------------------------------------------------------------
+zipWith3M_ f xs ys zs =  sequence_ (zipWith3 f xs ys zs)
 
 
-
+--------------------------------------------------------------------------------
+unzip4   :: [(a,b,c,d)] -> ([a],[b],[c],[d])
+--------------------------------------------------------------------------------
+unzip4   =  foldr (\(a,b,c,d) ~(as,bs,cs,ds) -> (a:as,b:bs,c:cs,d:ds))
+                  ([],[],[],[])
 

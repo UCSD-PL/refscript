@@ -98,7 +98,7 @@ failCasts True   _                                       = F.Safe
 allCasts :: [FunctionStatement AnnSSA] -> [(AnnSSA, [Char])]
 -------------------------------------------------------------------------------
 allCasts fs =  everything (++) ([] `mkQ` f) $ fs
-  where f (DownCast l t)  = [(l, "Cast: " ++ ppshow t)]
+  where f (DownCast l t)  = [(l, "DownCast: " ++ ppshow t)]
         f (DeadCast l _)  = [(l, "DeadCode")]
         -- UpCasts are safe
         f _               = [ ]
@@ -124,7 +124,7 @@ tcAndPatch p =
       s  <- getSubst
       c  <- getCasts
       return $ trace (codePP p2 s c) p2
-      -- return p2
+      -- return p1
   where 
     codePP (Nano {code = Src src}) sub cst = render $
           text "********************** CODE **********************"
@@ -218,7 +218,7 @@ tcSeq f             = foldM step . Just
     step (Just γ) x = f γ x
 
 --------------------------------------------------------------------------------
-tcStmts :: Env Type -> [Statement AnnSSA]  -> TCM TCEnv
+tcStmts :: Env Type -> [Statement AnnSSA] -> TCM TCEnv
 --------------------------------------------------------------------------------
 tcStmts = tcSeq tcStmt
 
@@ -247,12 +247,10 @@ tcStmt' γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt' γ (IfStmt l e s1 s2)
-  = do  _ <- tcExpr γ e 
-    -- This check needs to be done even though 
-    -- we're not gonna require to have a boolean 
-    -- value here (see truthy and falsy)
-        
-        -- subTypeM_ l (Just e) t tBool
+  = do  t <- tcExpr γ e 
+    -- Doing check for boolean for the conditional for now
+    -- TODO: Will have to suppert truthy/falsy later.
+        unifyTypeM l "If condition" e t tBool
         γ1      <- tcStmt' γ s1
         γ2      <- tcStmt' γ s2
         envJoin l γ γ1 γ2
@@ -270,7 +268,7 @@ tcStmt' γ (ReturnStmt l eo)
         let (rt',t') = mapPair (apply θ) (rt,t)
         -- Subtype the arguments against the formals and cast if 
         -- necessary based on the direction of the subtyping outcome
-        maybeM_ (\e -> subTypeM l e t' rt' >>= castM e t) eo
+        maybeM_ (\e -> subTypeM l e t' rt' >>= \d -> castM d e t) eo
         return Nothing
 
 tcStmt' γ s@(FunctionStmt _ _ _ _)
@@ -351,18 +349,18 @@ tcExpr' _ e
 tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> TCM Type
 ----------------------------------------------------------------------------------
 tcCall γ l fn es ft 
-  = do  (_,ibs,ot) <- instantiate l fn ft
-        let its     = b_type <$> ibs
+  = do  (_,ibs,ot)    <- instantiate l fn ft
+        let its        = b_type <$> ibs
         -- Typecheck arguments
-        ts         <- mapM (tcExpr γ) es
+        ts            <- mapM (tcExpr γ) es
         -- Unify with formal parameter types
-        θ          <- unifyTypesM l "tcCall" ts its
+        θ             <- unifyTypesM l "tcCall" ts its
         -- Apply the substitution
-        let ts'     = apply θ ts
+        let (ts',its') = mapPair (apply θ) (ts,its)
         -- Subtype the arguments against the formals and cast if 
         -- necessary based on the direction of the subtyping outcome
-        subTypesM l es ts' its >>= castsM es its
-        return      $ apply θ ot
+        subTypesM l es ts' its' >>= \ds -> castsM ds es its'
+        return         $ apply θ ot
 
 instantiate l fn ft 
   = do t' <-  {- tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (bkAll ft)

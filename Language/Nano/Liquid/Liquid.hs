@@ -9,12 +9,10 @@ module Language.Nano.Liquid.Liquid (verifyFile) where
 import           Text.Printf                        (printf)
 -- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
-import           Control.Monad.State
 import           Control.Applicative                ((<$>))
 
 import qualified Data.ByteString.Lazy               as B
 import qualified Data.HashMap.Strict                as M
-import qualified Data.List                          as L
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -28,14 +26,12 @@ import           Language.Fixpoint.Interface        (solve)
 
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
-import qualified Language.Nano.Env                  as E
 import           Language.Nano.Misc
 import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
-import           Language.Nano.Typecheck.Subst      (fromList)
 import           Language.Nano.Typecheck.Compare
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
@@ -43,7 +39,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        as T
+-- import           Debug.Trace                        as T
 
 --------------------------------------------------------------------------------
 verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
@@ -300,7 +296,6 @@ consUpCast g x a e
         return     $ (x', g')
   where tE         = envFindTy x g 
         tU         = rType $ head [ t | Assume t <- ann_fact a]
-        eq a b     = toType a == toType b
         l          = getAnnotation e
       
 

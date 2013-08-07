@@ -24,27 +24,21 @@ module Language.Nano.Typecheck.Compare (
 
   ) where 
 
-import           Text.Printf
-import           Data.Hashable
-import           Data.Maybe                         (fromMaybe, isNothing)
-import           Data.Monoid                        hiding ((<>))            
+-- import           Text.Printf
+import           Data.Maybe                         (isNothing)
 import qualified Data.List                          as L
 import qualified Data.Map                           as M
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Parser        (SourceSpan (..))
-import           Language.Nano.Types
-import           Language.Nano.Errors
+-- import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 
--- import           Language.Fixpoint.Names (propConName)
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.PrettyPrint
+-- import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ 
 
 import           Control.Applicative                hiding (empty)
@@ -107,11 +101,11 @@ compareTs γ t1 t2@(TApp (TDef _) _ _)       = compareTs γ t1 (unfoldSafe γ t2
 -- | Everything else in TApp besides unions and defined types
 compareTs γ t1@(TApp _ _ _) t2@(TApp _ _ _) = padUnion γ t1 t2 
 
-compareTs γ t1@(TFun _ _ _) t2@(TFun _ _ _) = undefined
-compareTs γ t1@(TAll _ _  ) t2@(TAll _ _  ) = undefined
-compareTs γ t1@(TBd  _    ) t2@(TBd  _    ) = undefined
+compareTs _ (TFun _ _ _) (TFun _ _ _) = undefined
+compareTs _ (TAll _ _  ) (TAll _ _  ) = undefined
+compareTs _ (TBd  _    ) (TBd  _    ) = undefined
 
-compareTs _   _               _               = undefined
+compareTs _   _           _               = undefined
 
 
 
@@ -129,16 +123,16 @@ instance Equivalent (RType r) where
                                                     = errorstar "equiv: no unions"
   -- No unions beyond this point!
   equiv (TApp (TDef d) ts _) (TApp (TDef d') ts' _) = d == d' && ts `equiv` ts'
-  equiv (TApp (TDef d) ts _) _                      = undefined -- TODO unfold
-  equiv _                    (TApp (TDef d) ts _)   = undefined -- TODO unfold
+  equiv (TApp (TDef _) _ _) _                       = undefined -- TODO unfold
+  equiv _                    (TApp (TDef _) _ _)    = undefined -- TODO unfold
   equiv (TApp c _ _)         (TApp c' _ _)          = c == c'
   equiv (TVar v _  )         (TVar v' _  )          = v == v'
   -- Functions need to be exactly the same - no padding can happen here
-  equiv (TFun b o _)         (TFun b' o' _)          = b `equiv` b' && o `equiv` o 
+  equiv (TFun b o _)         (TFun b' o' _)          = b `equiv` b' && o `equiv` o' 
   -- Any two objects can be combined - so they should be equivalent
   equiv (TObj _ _  )         (TObj _ _   )          = True
   equiv (TBd _     )         (TBd _      )          = errorstar "equiv: no type bodies"
-  equiv (TAll v t  )         (TAll v' t' )          = undefined
+  equiv (TAll _ _   )         (TAll _ _ )           = undefined
     -- t `equiv` apply (fromList [(v',tVar v)]) t'
   equiv _                    _                      = False
 
@@ -160,11 +154,16 @@ instance PP SubDirection where
   pp Nth  = text "≠"
 
 joinSub :: SubDirection -> SubDirection -> SubDirection
-joinSub c   c'  | c == c' = c
-joinSub Nth _             = Nth
-joinSub _   Nth           = Nth
-joinSub EqT  c             = c
-joinSub c   EqT            = c
+joinSub c    c'   | c == c' = c
+joinSub Nth  _              = Nth
+joinSub _    Nth            = Nth
+joinSub EqT  c              = c
+joinSub c    EqT            = c
+joinSub SubT SubT           = Nth 
+joinSub SubT SupT           = Nth
+joinSub SupT SubT           = Nth
+joinSub SupT SupT           = Nth
+
 
 joinSubs :: [SubDirection] -> SubDirection
 joinSubs = foldl joinSub EqT
@@ -293,7 +292,7 @@ padObject ::  (Eq r, Ord r, F.Reftable r) =>
                 RType r,            -- The equivalent to @t2@
                 SubDirection)       -- Subtyping relation between LHS and RHS
 --------------------------------------------------------------------------------
-padObject env (TObj bs1 r1) (TObj bs2 r2) = undefined
+-- padObject env (TObj bs1 r1) (TObj bs2 r2) = undefined
     {-b1s                 = unzip $ split <$> L.sortBy ord xt1s-}
     {-b2s                 = unzip $ split <$> L.sortBy ord xt2s-}
     {-split (B l t)       = (l,t)-}

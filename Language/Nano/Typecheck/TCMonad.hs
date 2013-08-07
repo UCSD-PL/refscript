@@ -49,7 +49,7 @@ module Language.Nano.Typecheck.TCMonad (
   , getDefType 
 
   -- * Expression Getter/Setter
-  , getExpr, setExpr
+  , getExpr, setExpr, withExpr
 
   -- * Patch the program with assertions
   , patchPgmM
@@ -75,7 +75,6 @@ import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map                       as M
 import           Data.Generics                  (Data(..))
 import           Data.Generics.Aliases
-import           Data.Generics.Schemes
 import           Data.Typeable                  (Typeable (..))
 import           Language.ECMAScript3.Parser    (SourceSpan (..))
 -- import           Language.ECMAScript3.PrettyPrint
@@ -359,12 +358,12 @@ unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
 ----------------------------------------------------------------------------------
 subTypeM :: (IsLocated l) => l -> Expression AnnSSA -> Type -> Type -> TCM SubDirection
 ----------------------------------------------------------------------------------
-subTypeM l e t t' = undefined
+subTypeM _ _ _ _  = undefined
 
 ----------------------------------------------------------------------------------
 subTypeM' :: (IsLocated l) => l -> Type -> Type -> TCM ()
 ----------------------------------------------------------------------------------
-subTypeM' l t t' = undefined
+subTypeM' _ _ _   = undefined
  
 ----------------------------------------------------------------------------------
 subTypesM :: (IsLocated l) => l -> [Expression AnnSSA] -> [Type] -> [Type] -> TCM [SubDirection]
@@ -390,23 +389,8 @@ withExpr e action =
 
 
 
-castM  e  t  = undefined
-castsM es ts = undefined 
-
-
--------------------------------------------------------------------------------
-addCasts :: Casts -> TCM ()
--------------------------------------------------------------------------------
-addCasts cs = 
-  do  cs'  <- tc_casts <$> get
-      {-let err e _ _ -}
-      {-      = error $ printf "There should be no prior cast on %s\nNew Casts: %s\nOld casts: %s" -}
-      {-                (ppshow e)-}
-      {-                (ppshow $ M.toList cs)-}
-      {-                (ppshow $ M.toList cs')-}
-      let err e _ _ = error $ printf "Erro at TCMonad addCasts on %s" (ppshow e)
-      modify $ \st -> st {tc_casts = M.unionWithKey err cs cs' }
-
+castM  _  _  = undefined
+castsM _  _  = undefined 
 
 
 --------------------------------------------------------------------------------

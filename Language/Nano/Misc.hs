@@ -24,17 +24,17 @@ module Language.Nano.Misc (
 ) where
 
 -- import           Control.Applicative                ((<$>))
-import           Control.Monad                      (liftM2, when)
+import           Control.Monad                        (liftM2)
 import           Data.Data
-import qualified Data.Set                 as S
-import qualified Data.List                as L
-import qualified Language.Fixpoint.Types as F
+import qualified Data.Set                             as S
+import qualified Data.List                            as L
+import qualified Language.Fixpoint.Types              as F
 import           Language.ECMAScript3.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
-import           Language.Nano.Typecheck.Types()
+import           Language.Nano.Typecheck.Types        ()
 
 import           Data.Generics.Aliases
-import           Data.Generics.Schemes
+
 -------------------------------------------------------------------------------
 mapFstM :: (Functor m, Monad m) => (a -> m c) -> (a, b) -> m (c, b)
 -------------------------------------------------------------------------------

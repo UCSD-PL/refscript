@@ -41,11 +41,9 @@ module Language.Nano.Visitor.Visitor (
 ) where 
 
 import           Control.Applicative            ((<$>))
-import           Control.Monad.State
 import           Language.Nano.Errors
 
 import           Language.Nano.Typecheck.Types
-import           Data.Traversable         as T
 import           Language.ECMAScript3.Syntax
 
 -------------------------------------------------------------------------------

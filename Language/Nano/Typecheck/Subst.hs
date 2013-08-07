@@ -185,7 +185,7 @@ unfoldSafe env = either error id . unfoldMaybe env
 unify :: Env Type -> Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
 
-unify env θ t@(TApp c _ _) t'@(TApp c' _ _) 
+unify _ _ t@(TApp c _ _) t'@(TApp c' _ _) 
   | c /= c' = Left $ errorUnification t t'
 
 unify env θ (TFun xts t _) (TFun xts' t' _) = 
@@ -231,7 +231,7 @@ unifys' env θ ts ts'
     nTs                      = length ts
     nTs'                     = length ts'
     go env θ (t:ts , t':ts') = unify env θ t t' >>= \θ' -> go env θ' (mapPair (apply θ') (ts, ts'))
-    go env θ (_    , _    )  = return θ 
+    go _   θ (_    , _    )  = return θ 
 
 
 -----------------------------------------------------------------------------

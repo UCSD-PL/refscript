@@ -14,6 +14,7 @@ module Language.Nano.Typecheck.Compare (
   -- * Type comparison/joining/subtyping
     compareTs
   , unionParts
+  , isSubType
 
   
   -- * Casting
@@ -127,8 +128,7 @@ compareTs γ t1 t2   = compareTs' γ t1 t2
 -- | Top-level Unions
 
 -- Eliminate top-level unions
-compareTs' γ t1 t2 | any isUnion [t1,t2]     = error "Unimplemented: compareTs-1"
-  -- = padUnion γ t1  t2
+compareTs' γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
 
 -- | Top-level Objects
 
@@ -150,13 +150,22 @@ compareTs' γ t1@(TApp _ _ _) t2@(TApp _ _ _) = padSimpleApp t1 t2
 
 compareTs' _ t1@(TVar v1 _) t2@(TVar v2 _)   = padVar t1 t2
 
-compareTs' γ t1@(TFun _ _ _) t2@(TFun _ _ _) = error "Unimplemented: compareTs-6"
+compareTs' γ t1@(TFun _ _ _) t2@(TFun _ _ _) = padFun γ t1 t2
 
 compareTs' _ (TAll _ _  ) (TAll _ _  )       = error "Unimplemented: compareTs-7"
 compareTs' _ (TBd  _    ) (TBd  _    )       = error "Unimplemented: compareTs-8"
 
 compareTs' _ t1           t2                 = 
   error $ printf "Unimplemented: compareTs-9 for types %s - %s " (ppshow t1) (ppshow t2)
+
+
+
+---------------------------------------------------------------------------------
+-- SubType API ------------------------------------------------------------------
+---------------------------------------------------------------------------------
+isSubType :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r -> Bool
+isSubType γ t1 t2 = (fth4 $ compareTs γ t1 t2) `elem` [EqT, SubT]
+
 
 
 ---------------------------------------------------------------------------------
@@ -352,4 +361,23 @@ padObject env (TObj bs1 r1) (TObj bs2 r2) = undefined
     {-ord a b             = b_sym a `compare` b_sym b-}
 
 padObject _ _ _ = error "padObject: Cannot pad non-objects"
+
+
+-- | `padFun`
+
+-- XXX: Not sure if this is the right way to do it 
+-- Instead one could create a top-level union with the two function types
+padFun γ (TFun b1s o1 r1) (TFun b2s o2 r2) 
+  | length b1s == length b2s = (joinT, t1', t2', direction)
+    where
+      -- XXX: using the first function's bindings - This needs to change !!!
+      joinT                  = TFun (updTs b1s tjs) oj F.top 
+      t1'                    = TFun (updTs b1s t1s') o1' r1
+      t2'                    = TFun (updTs b2s t2s') o2' r2
+      (tjs, t1s', t2s', bds) = unzip4 $ zipWith (compareTs γ) (b_type <$> b1s) (b_type <$> b2s)
+      (oj , o1' , o2' , od ) = compareTs γ o1 o2
+      direction              = transposeSub (joinSubs bds) `joinSub` od
+      updTs                  = zipWith (\b t -> b { b_type = t })
+
+padFun _ _ _ = error "padFun: no other cases supported"
 

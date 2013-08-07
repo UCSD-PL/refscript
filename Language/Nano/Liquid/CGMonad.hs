@@ -51,10 +51,9 @@ module Language.Nano.Liquid.CGMonad (
   , addAnnot
   ) where
 
-import           Data.Maybe             (fromMaybe)
-import           Data.Monoid            (mempty) -- hiding ((<>))            
-import qualified Data.List               as L
-import qualified Data.HashMap.Strict     as M
+import           Data.Maybe                     (fromMaybe)
+import           Data.Monoid                    (mempty)
+import qualified Data.HashMap.Strict            as M
 
 -- import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
@@ -83,7 +82,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.ECMAScript3.PrettyPrint
 
-import qualified Debug.Trace                    as T
+-- import qualified Debug.Trace                    as T
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation ----------------------
@@ -118,7 +117,7 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnType RefType -> CGState
-initState c pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty pgm invs c 
+initState c pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty invs c 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts pgm]  
 
@@ -164,7 +163,6 @@ data CGState
         , ws       :: ![WfC]               -- ^ well-formedness constraints
         , count    :: !Integer             -- ^ freshness counter
         , cg_ann   :: A.AnnInfo RefType    -- ^ recorded annotations
-        , pgm      :: Nano AnnType RefType -- ^ the program
         , invs     :: TConInv              -- ^ type constructor invariants
         , cg_opts  :: Config               -- ^ configuration options
         }
@@ -364,20 +362,6 @@ subType l g t1 t2 =
                 (ppshow t1) (ppshow t2))
 
 
----------------------------------------------------------------------------------------
-noUnion :: (F.Reftable r) => RType r -> Bool
----------------------------------------------------------------------------------------
-noUnion (TApp TUn _ _)  = False
-noUnion (TApp _  rs _)  = and $ map noUnion rs
-noUnion (TFun bs rt _)  = and $ map noUnion $ rt : (map b_type bs)
-noUnion (TObj bs    _)  = and $ map noUnion $ map b_type bs
-noUnion (TBd  _      )  = error "noUnion: cannot have TBodies here"
-noUnion (TAll _ t    )  = noUnion t
-noUnion _               = True
-
-unionCheck t | noUnion t = t 
-unionCheck t | otherwise = error $ printf "%s found. Cannot have unions." $ ppshow t
-
 
 ---------------------------------------------------------------------------------------
 -- | Adding Well-Formedness Constraints -----------------------------------------------
@@ -526,11 +510,11 @@ splitC' (Sub g i t1@(TApp d1@(TDef _) t1s _) t2@(TApp d2@(TDef _) t2s _)) | d1 =
 splitC' (Sub _ _ (TApp (TDef _) _ _) (TApp (TDef _) _ _))
   = errorstar "Unimplemented: Check type definition cycles"
   
-splitC' (Sub g i t1@(TApp (TDef _) _ _ ) t2)  
+splitC' (Sub _ _ t1@(TApp (TDef _) _ _ ) t2)  
   = errorstar $ printf "splitC - should have been broken down earlier:\n%s <: %s" 
             (ppshow t1) (ppshow t2)
 
-splitC' (Sub g i t1 t2@(TApp (TDef _) _ _ ))
+splitC' (Sub _ _  t1 t2@(TApp (TDef _) _ _ ))
   = errorstar $ printf "splitC - should have been broken down earlier:\n%s <: %s" 
             (ppshow t1) (ppshow t2)
 
@@ -551,11 +535,11 @@ splitC' (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
 splitC' (Sub g i tf1@(TObj [] _ ) tf2@(TObj [] _ ))
   = return $ bsplitC g i tf1 tf2
 
-splitC' (Sub g i t1 t2@(TObj _ _ ))
+splitC' (Sub _ _ t1 t2@(TObj _ _ ))
   = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" 
             (ppshow t1) (ppshow t2)
 
-splitC' (Sub g i t1@(TObj _ _ ) t2)
+splitC' (Sub _ _ t1@(TObj _ _ ) t2)
   = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" 
             (ppshow t1) (ppshow t2)
 

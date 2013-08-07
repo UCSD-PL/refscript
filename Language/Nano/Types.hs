@@ -55,7 +55,6 @@ import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
-import qualified Data.List as L
 import           Data.Monoid                        (Monoid (..))
 import           Data.Maybe                         (catMaybes)
 import           Language.ECMAScript3.Syntax 
@@ -88,9 +87,6 @@ data Config
   | Liquid { files       :: [FilePath]     -- ^ source files to check
            , incdirs     :: [FilePath]     -- ^ path to directory for include specs
            , kVarInst    :: Bool           -- ^ instantiate function types with k-vars
-           }
-  | Visit  { files       :: [FilePath]     -- ^ source files to check
-           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
            }
   deriving (Data, Typeable, Show, Eq)
 

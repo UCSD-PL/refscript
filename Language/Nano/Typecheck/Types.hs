@@ -39,6 +39,7 @@ module Language.Nano.Typecheck.Types (
   , bkFun
   , bkAll
   , bkUnion, rUnion
+  , noUnion, unionCheck
 
   -- * Regular Types
   , Type
@@ -269,6 +270,21 @@ rUnion               :: F.Reftable r => RType r -> r
 rUnion (TApp TUn _ r) = r
 rUnion _              = F.top
  
+
+---------------------------------------------------------------------------------------
+noUnion :: (F.Reftable r) => RType r -> Bool
+---------------------------------------------------------------------------------------
+noUnion (TApp TUn _ _)  = False
+noUnion (TApp _  rs _)  = and $ map noUnion rs
+noUnion (TFun bs rt _)  = and $ map noUnion $ rt : (map b_type bs)
+noUnion (TObj bs    _)  = and $ map noUnion $ map b_type bs
+noUnion (TBd  _      )  = error "noUnion: cannot have TBodies here"
+noUnion (TAll _ t    )  = noUnion t
+noUnion _               = True
+
+unionCheck t | noUnion t = t 
+unionCheck t | otherwise = error $ printf "%s found. Cannot have unions." $ ppshow t
+
 
 instance Eq TCon where
   TInt    == TInt    = True   

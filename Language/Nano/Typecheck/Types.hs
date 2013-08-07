@@ -243,6 +243,7 @@ strengthen t _               = t
 -- | Helpful type checks
 ---------------------------------------------------------------------------------
 
+-- | Top-level Top (any) check
 isTop :: RType r -> Bool
 isTop (TApp TTop _ _)   = True 
 isTop (TApp TUn  ts _ ) = any isTop ts

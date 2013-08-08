@@ -121,7 +121,8 @@ tcAndPatch :: (Data r, Typeable r, F.Reftable r) =>
   Nano AnnSSA (RType r) -> TCM (Nano  AnnSSA (RType r))
 -------------------------------------------------------------------------------
 tcAndPatch p = 
-  do  p1 <- tcNano p 
+  do  checkTypeDefs p
+      p1 <- tcNano p 
       p2 <- patchPgmM p1
       s  <- getSubst
       c  <- getCasts
@@ -136,6 +137,27 @@ tcAndPatch p =
       $+$ text "******************** CASTS ***********************"
       $+$ vcat ((\(e,t) -> (pp $ ann $ getAnnotation e) <+> pp (e,t)) <$> cst)
       $+$ text "**************************************************"
+
+
+
+-------------------------------------------------------------------------------
+checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano AnnSSA (RType r) -> TCM ()
+-------------------------------------------------------------------------------
+checkTypeDefs pgm =
+  do  reportAll $ grep1 
+      reportAll $ grep2 
+  where 
+    ds        = defs pgm 
+    ts        = tDefs pgm
+    reportAll = mapM_ report
+    report t  = tcError (srcPos t) $ errorUnboundType (ppshow t)
+    -- There should be no top-level free type variables
+    grep1     = concatMap (HS.toList . free) $ snd <$> envToList ds
+    -- There should be no undefined type constructors
+    grep2 :: [Id SourceSpan] = everything (++) ([] `mkQ` f ts) ds
+    f ts d@(TDef i) | not $ envMem i ts = [i]
+    f _  _                              = [ ]
+  
 
 
 -------------------------------------------------------------------------------
@@ -270,7 +292,7 @@ tcStmt' γ (ReturnStmt l eo)
         let (rt',t') = mapPair (apply θ) (rt,t)
         -- Subtype the arguments against the formals and cast if 
         -- necessary based on the direction of the subtyping outcome
-        maybeM_ (\e -> subTypeM l e t' rt' >>= \d -> castM d e t) eo
+        maybeM_ (\e -> subTypeM l e t' rt' >>= \d -> castM d e rt') eo
         return Nothing
 
 tcStmt' γ s@(FunctionStmt _ _ _ _)

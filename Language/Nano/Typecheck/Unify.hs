@@ -25,6 +25,7 @@ import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
+import qualified Data.List           as L
 import           Text.Printf 
 import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
@@ -47,9 +48,9 @@ unify _ θ t@(TApp _ _ _) t'@(TApp _ _ _)
 unify env θ (TFun xts t _) (TFun xts' t' _) = 
   unifys env θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
 
+-- TODO: Cycles
 unify env θ t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _)
   | d == d'                             = unifys env θ ts ts'
-  | otherwise                           = Left $ errorUnification t t'
 
 unify env θ t@(TApp (TDef _) _ _) t'    = unify env θ (unfoldSafe env t) t'
 
@@ -63,10 +64,22 @@ unify _  θ t              (TVar α _)    = varAsn θ α t
 -- TODO: make sure other nothing weird is going on with TVars,
 -- e.g.  List[A] + B `unif` ... => this should not even be allowed!!!
 unify γ θ t t' | any isUnion [t,t']     = 
-  (uncurry $ unifys γ θ) $ unzip $ fst3 $ unionPartsWithEq unifEq γ t t'
+  (uncurry $ unifys γ θ) $ unzip $ fst3 {- $ tracePP "unify union" -} 
+    $ unionPartsWithEq (unifEq γ) γ t t'
 
 unify _ _ (TBd _) _   = error $ bugTBodiesOccur "unify"
 unify _ _ _ (TBd _)   = error $ bugTBodiesOccur "unify"
+
+-- only unify if the objects align perfectly
+unify γ θ (TObj bs1 _) (TObj bs2 _) 
+  | s1s == s2s 
+  = unifys γ θ (b_type <$> L.sortBy ord bs1) (b_type <$> L.sortBy ord bs2)
+  | otherwise 
+  = return θ
+    where
+      s1s = L.sort $ b_sym <$> bs1 
+      s2s = L.sort $ b_sym <$> bs2
+      ord b b' = compare (b_sym b) (b_sym b')
 
 -- For the rest of the cases, blindly return the subst
 -- Defer all other checks for later
@@ -75,9 +88,11 @@ unify _ θ _ _         = Right $ θ
 
 {-unify' γ θ t t' = unify γ θ (trace (printf "unify: %s - %s" (show t) (show t')) t) t' -}
 
-
-unifEq (TApp d@(TDef _) _ _) (TApp d'@(TDef _) _ _) = d == d'
-unifEq t t' = equiv t t'
+-- TODO: cycles
+unifEq γ (TApp d@(TDef _) _ _) (TApp d'@(TDef _) _ _) | d == d' = True
+unifEq γ t@(TApp d@(TDef _) _ _) t' = unifEq γ (unfoldSafe γ t) t'
+unifEq γ t t'@(TApp d@(TDef _) _ _) = unifEq γ t (unfoldSafe γ t')
+unifEq γ t t' = equiv γ t t'
   
 
 

@@ -1,6 +1,5 @@
 
-/*@ type nlist  {  data : number,
-                   next : nlist + null } */
+/*@ type nlist list[number] */
 
 /*@ next :: (x:nlist + null) => nlist + null */
 function next(x) {

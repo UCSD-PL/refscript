@@ -27,7 +27,7 @@ import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
 import           Text.Printf 
--- import           Debug.Trace
+import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
 
 
@@ -65,8 +65,10 @@ unify _  θ t              (TVar α _)    = varAsn θ α t
 -- unify _ _ (TApp TUn _ _) _              = error "Unimplemented: unify unions2"
 -- unify _ _ _              (TApp TUn _ _) = error "Unimplemented: unify unions3"
 
-unify env θ (TApp c ts _) (TApp c' ts' _)
-  | c == c'           = unifys env θ ts ts'
+-- This messes up with Union!!!
+-- If isSubtype is correct - this is not needed!
+{-unify env θ (TApp c ts _) (TApp c' ts' _)-}
+{-  | c == c'           = unifys env θ ts ts'-}
 
 unify _ _ (TBd _) _   = error $ bugTBodiesOccur "unify"
 unify _ _ _ (TBd _)   = error $ bugTBodiesOccur "unify"
@@ -76,6 +78,9 @@ unify γ θ t t'
   | isSubType γ t t'  = Right $ θ     -- XXX
   | isSubType γ t' t  = Right $ θ     -- XXX
   | otherwise         = Left  $ errorUnification t t'
+
+
+{-unify' γ θ t t' = unify γ θ (trace (printf "unify: %s - %s" (show t) (show t')) t) t' -}
 
 
 
@@ -92,27 +97,22 @@ unifys' env θ ts ts'
   where 
     nTs                      = length ts
     nTs'                     = length ts'
-    {-go env θ (t:ts , t':ts') = unify env θ t t' >>= \θ' -> go env θ' (mapPair (apply θ') (ts, ts'))-}
-    {-go _   θ (_    , _    )  = return θ -}
-
-    go γ θ ts ts' = foldl (joinEither safeJoin) (Right $ θ) $ zipWith (unify γ θ) ts ts'
-    
+    go γ θ ts ts' = foldl safeJoin (Right $ θ) $ zipWith (unify γ θ) ts ts'
     -- Only allow joining unifications where the common keys map to identical
     -- types
-    safeJoin θ@(Su m) θ'@(Su m') 
-      | check m m' = mappend θ θ'
-      | otherwise  = errorstar $ printf "Cannot join substs: %s\nand\n%s"
-                                 (ppshow θ) (ppshow θ')
+    safeJoin (Right θ@(Su m)) (Right θ'@(Su m'))
+      | check m m' = Right $ mappend θ θ'
+      | otherwise  = Left  $ printf "Cannot join substs: %s\nand\n%s"
+                               (ppshow θ) (ppshow θ')
+    safeJoin (Left l        ) _                  = Left l
+    safeJoin _                (Left l        )   = Left l
+                               
 
 check m m' = vs == vs'
   where vs  = (`M.lookup` m ) <$> ks
         vs' = (`M.lookup` m') <$> ks
         ks  = M.keys $ M.intersection (clr m) (clr m')
         clr = M.filterWithKey (\k v -> tVar k /= v)
-
-joinEither f _         (Left  l) = Left  $ l
-joinEither f (Left l)  _         = Left  $ l
-joinEither f (Right a) (Right b) = Right $ f a b
 
 
 -----------------------------------------------------------------------------
@@ -131,7 +131,10 @@ varEql θ α β =
 varAsn :: Subst -> TVar -> Type -> Either String Subst
 -----------------------------------------------------------------------------
 varAsn θ α t 
-  | t == apply θ (tVar α)  = Right $ θ -- Check if previous substs are sufficient 
+  -- Check if previous substs are sufficient 
+  | t == apply θ (tVar α)  = Right $ θ 
+  -- We are not even checking if t is a subtype of `tVar α`, i.e.:
+  -- unifying A with A + B will fail!
   | t == tVar α            = Right $ θ 
   | α `S.member` free t    = Left  $ errorOccursCheck α t 
   | unassigned α θ         = Right $ θ `mappend` (Su $ M.singleton α t)

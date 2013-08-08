@@ -2,6 +2,3 @@
 function foo3(x,y) {
   return x;
 }
-
-
-

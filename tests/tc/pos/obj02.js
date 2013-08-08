@@ -2,7 +2,7 @@
 
 function getNum(x) {
 
-  if (x && x.a && typeof(x.a) == 1)
+  if (x && x.a && typeof(x.a) == "number")
     return x.a;
   
   return -1;

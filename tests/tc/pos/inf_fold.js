@@ -1,8 +1,5 @@
 
-/*@ type list[A]  {  data : A, 
-                     next : list[A]  } */
-
-/*@ fold :: (list[A], (A,B) => B, B) => B */
+/*@ fold :: forall A B. (list[A], (A,B) => B, B) => B */
 function fold(l,f,b) {
 
 

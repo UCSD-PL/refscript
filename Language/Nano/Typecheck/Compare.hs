@@ -5,6 +5,7 @@
 {-# LANGUAGE TupleSections        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE DeriveDataTypeable   #-}
 {-# LANGUAGE NoMonomorphismRestriction   #-}
@@ -32,6 +33,7 @@ import           Text.Printf
 import           Data.Maybe                         (isNothing)
 import qualified Data.List                          as L
 import qualified Data.Map                           as M
+import           Data.Monoid
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Errors
@@ -114,7 +116,14 @@ instance (PP a) => PP (Cast a) where
 ---------------------------------------------------------------------------------------
 
 -- | Subtyping directions
-data SubDirection = SubT | SupT | EqT | Rel | Nth deriving (Eq, Show)
+data SubDirection = SubT    -- Subtype
+                  | SupT    -- Supertype
+                  | EqT     -- Same type
+                  | Rel     -- Relatable type: can be thought of in terms of 
+                            -- unions as a non-empty intersection of two types,
+                            -- but not strong enough to be SubT, SupT, ot EqT
+                  | Nth     -- No relation between two types is known
+                  deriving (Eq, Show)
 
 instance PP SubDirection where 
   pp SubT = text "<:"
@@ -123,39 +132,58 @@ instance PP SubDirection where
   pp Rel  = text "⨝"
   pp Nth  = text "≠"
 
-addSub :: SubDirection -> SubDirection -> SubDirection
-addSub c    c'   | c == c' = c
-addSub Nth  _              = Nth
-addSub _    Nth            = Nth
-addSub EqT  c              = c
-addSub c    EqT            = c
-addSub SubT SubT           = Nth 
-addSub SubT SupT           = Nth
-addSub SupT SubT           = Nth
-addSub SupT SupT           = Nth
+-- The Subtyping directions form a monoid both as a `sum` and as a `product`, 
+-- cause they are combined in different ways when used in unions and object (the
+-- two places where subtyping occurs).
 
--- TODO: Fill this up
-{-mulSub :: SubDirection -> SubDirection -> SubDirection-}
-{-mulSub c    c'   | c == c' = c-}
-{-mulSub Nth  _              = Nth-}
-{-mulSub _    Nth            = Nth-}
-{-mulSub EqT  c              = c-}
-{-mulSub c    EqT            = c-}
-{-mulSub SubT SubT           = Nth -}
-{-mulSub SubT SupT           = Nth-}
-{-mulSub SupT SubT           = Nth-}
-{-mulSub SupT SupT           = Nth-}
+-- Sum: Relaxed version (To be used in unions)
+instance Monoid (Sum SubDirection) where
+  mempty = Sum Nth
+
+  Sum d    `mappend` Sum d'   | d == d' = Sum d
+  
+  -- We know nothing about the types so far (Nth), but we can use the other part
+  -- to make any assumptions, that's why @d@ is propagated.
+  Sum Nth  `mappend` Sum d              = Sum d
+  Sum d    `mappend` Sum Nth            = Sum d
+
+  Sum EqT  `mappend` Sum d              = Sum d
+  Sum d    `mappend` Sum EqT            = Sum d
+  
+  Sum _    `mappend` Sum _              = Sum Rel
 
 
+(&+&)   :: Monoid (Sum t) => t -> t -> t
+a &+& b = getSum $ mappend (Sum a) (Sum b)
 
-joinSubs :: [SubDirection] -> SubDirection
-joinSubs = foldl addSub EqT
+mconcatS   :: Monoid (Sum t) => [t] -> t
+mconcatS xs = getSum $ mconcat (Sum <$> xs)
 
-transposeSub :: SubDirection -> SubDirection
-transposeSub SubT = SupT
-transposeSub SupT = SubT
-transposeSub EqT  = EqT
-transposeSub Nth  = Nth
+
+-- Product: Strict version (To be used in objects)
+instance Monoid (Product SubDirection) where
+  mempty = Product EqT
+
+  Product d    `mappend` Product d'   | d == d' = Product d
+  
+  Product Nth  `mappend` Product d              = Product Nth
+  Product d    `mappend` Product Nth            = Product Nth
+
+  Product EqT  `mappend` Product d              = Product d
+  Product d    `mappend` Product EqT            = Product d
+  
+  Product _    `mappend` Product _              = Product Nth
+
+
+
+(&*&)   :: Monoid (Product t) => t -> t -> t 
+a &*& b = getProduct $ mappend (Product a) (Product b)
+
+mconcatP   :: Monoid (Product t) => [t] -> t
+mconcatP xs = getProduct $ mconcat (Product <$> xs)
+
+
+
 
 
 ---------------------------------------------------------------------------------
@@ -173,21 +201,21 @@ eqType :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r -> 
 eqType γ t1 t2 = (fth4 $ compareTs γ t1 t2) == EqT
 
 
--- `compareTs` pads the input types so that he output consists of types of the
--- same sort, i.e. compatible. This function also includes the top-level
--- constraint in the output (which still keeps the "same-sort" invariant as the
--- compatible "joined" version of each of the input types is used (the one
--- returned from padUnion).
+-- | `compareTs`
+
+-- General purpose function that returns:
 --
--- XXX: Matching (pairing up the parts of the top-level constraint into a list 
--- of constraints on compatible parts) is still done here, instead of being 
--- deferrred to splitC, because `fixBase` needs to happen now for constraints 
--- that originate from casts. If they were included to the rest of the constraints 
--- it would be harder to distinguish which constraints need `fixBase` later.
+-- ∙ A padded version of the upper bound of @t1@ and @t2@
+-- ∙ An equivalent version of @t1@ that has the same sort as the first output
+-- ∙ An equivalent version of @t2@ that has the same sort as the first output
+-- ∙ A subtyping direction between @t1@ and @t2@
+--
+-- Padding the input types gives them the same sort, i.e. makes them compatible. 
 ---------------------------------------------------------------------------------------
 compareTs :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r -> 
                                   (RType r, RType r, RType r, SubDirection)
 ---------------------------------------------------------------------------------------
+-- Deal with some standard cases of subtyping, e.g.: Top, Null, Undefined ...
 compareTs γ t1 t2 | all isTop [t1,t2] = 
   let (j,t1',t2',_) = compareTs' γ t1 t2 in (j, t1', t2', EqT)
 
@@ -215,8 +243,9 @@ compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     =
 
 -- | Type definitions
 
-compareTs' γ (TApp d1@(TDef _) t1s r1) (TApp d2@(TDef _) t2s r2) | d1 == d2 = -- only handle this case for now
-  (mk tjs F.top, mk t1s' r1, mk t2s' r2, joinSubs bds)
+-- TODO: only handles this case for now - cyclic type defs will loop infinitely
+compareTs' γ (TApp d1@(TDef _) t1s r1) (TApp d2@(TDef _) t2s r2) | d1 == d2 = 
+  (mk tjs F.top, mk t1s' r1, mk t2s' r2, mconcatP bds)
   where
     (tjs, t1s', t2s', bds)  = unzip4 $ zipWith (compareTs γ) t1s t2s
     mk xs r                 = TApp d1 xs r 
@@ -259,15 +288,16 @@ padVar t1 t2 = errorstar $ printf "padVar: cannot compare %s and %s" (ppshow t1)
 
 -- | `padUnion`
 
--- Produces an equivalent type for @t1@ (resp. @t2@) that has is extended
--- by the missing sorts to the common upper bound of @t1@ and @t2@. The extra
+-- Produces an equivalent type for @t1@ (resp. @t2@) that is extended with 
+-- the missing sorts to the common upper bound of @t1@ and @t2@. The extra
 -- types that are added in the union are refined with False to keep the
--- equivalence.
--- The output is the following triplet:
---  ∙ common upper bound type (@t1@ ∪ @t2@) with Top predicates
+-- equivalence with the input types.
+--
+-- The output is the following tuple:
+--  ∙ common upper bound type (@t1@ ∪ @t2@) with topped predicates
 --  ∙ adjusted type for @t1@ to be sort compatible,
---  ∙ adjusted type for @t2@ to be sort compatible)
---  ∙ a subtyping direction 
+--  ∙ adjusted type for @t2@ to be sort compatible
+--  ∙ a subtyping direction
 
 -- Example:
 --  {Int | p} ㄩ {Bool | q} => ({Int | ⊥    } ∪ {Bool | ⊥    },
@@ -276,13 +306,13 @@ padVar t1 t2 = errorstar $ printf "padVar: cannot compare %s and %s" (ppshow t1)
 --                              unrelated )
 --------------------------------------------------------------------------------
 padUnion ::  (Eq r, Ord r, F.Reftable r, PP r) => 
-             Env (RType r) 
-          -> RType r      -- LHS
-          -> RType r      -- RHS
-          -> (  RType r,            -- The join of the two types
-                RType r,            -- The equivalent to @t1@
-                RType r,            -- The equivalent to @t2@
-                SubDirection)            -- Subtyping relation between LHS and RHS
+             Env (RType r)    -- Type defs
+          -> RType r          -- LHS
+          -> RType r          -- RHS
+          -> (  RType r,        -- The join of the two types
+                RType r,        -- The equivalent to @t1@
+                RType r,        -- The equivalent to @t2@
+                SubDirection)   -- Subtyping relation between LHS and RHS
 --------------------------------------------------------------------------------
 padUnion env t1 t2 = 
   (joinType, mkUnionR topR1 $ t1s, mkUnionR topR2 $ t2s, direction)
@@ -305,7 +335,7 @@ padUnion env t1 t2 =
     commonTs = map (uncurry $ compareTs env) $ cmnPs
 
     -- To figure out the direction of the subtyping, we must take into account:
-    direction  = distSub `addSub` comSub
+    direction  = distSub &+& comSub
     -- ∙ The distinct types (the one that has more is a supertype)
     distSub   = case (d1s, d2s) of
                   ([], []) -> EqT
@@ -314,7 +344,7 @@ padUnion env t1 t2 =
                   (_ , _ ) -> Nth -- no relation
     -- ∙ The common types (recursively call `compareTs` to compare the types
     --   of the parts and join the subtyping relations)
-    comSub     = joinSubs $ fth4 <$> commonTs
+    comSub     = mconcatS $ fth4 <$> commonTs
     
     (cmnPs, d1s, d2s) = unionParts env t1 t2
 
@@ -396,9 +426,9 @@ padObject γ (TObj bs1 r1) (TObj bs2 r2) =
   (TObj jbs' F.top, TObj b1s' r1, TObj b2s' r2, direction)
   where
     -- Total direction
-    direction = cmnDir `addSub` distDir d1s d2s
+    direction = cmnDir &*& distDir d1s d2s
     -- Direction from all the common keys  
-    cmnDir    = joinSubs $ (\(s,(t,t')) -> fth4 $ compareTs γ t t') <$> cmn
+    cmnDir    = mconcatP $ (\(s,(t,t')) -> fth4 $ compareTs γ t t') <$> cmn
     -- Direction from distinct keys
     distDir xs ys | null (xs ++ ys) = EqT
                   | null xs         = SupT

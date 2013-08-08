@@ -305,8 +305,9 @@ consDownCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id 
 consDownCast g x a e 
   = do  
         γ        <- getTDefs
-        let (_,ts,_)  = unionParts γ tE tC
+        -- TODO: This might not really be what we want excaclty !!
         -- TODO: Also need the toplevel constraint here
+        let (ts,_,_)  = unionParts γ tE tC
         forM_ ts  $ castSubM g x l
         (x', g') <- envAddFresh l tC g
         return    $ (x', g')

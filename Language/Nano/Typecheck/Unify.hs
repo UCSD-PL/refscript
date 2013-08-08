@@ -21,8 +21,7 @@ import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Compare
 
 import           Control.Applicative ((<$>))
-import           Control.Monad
-import           Data.Either         (rights, lefts) 
+-- import           Control.Monad
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
@@ -41,15 +40,15 @@ import           Debug.Trace
 unify :: Env Type -> Subst -> Type -> Type -> Either String Subst
 -----------------------------------------------------------------------------
 
-unify _ θ t@(TApp c _ _) t'@(TApp c' _ _) 
+-- TODO: is this right??
+unify _ θ t@(TApp _ _ _) t'@(TApp _ _ _) 
   | any isTop [t,t']                    = Right $ θ
-  {- | c /= c'                             = Left $ errorUnification t t'-}
 
 unify env θ (TFun xts t _) (TFun xts' t' _) = 
   unifys env θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
 
-unify env θ t@(TApp (TDef s) ts _) t'@(TApp (TDef s') ts' _)
-  | s == s'                             = unifys env θ ts ts'
+unify env θ t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _)
+  | d == d'                             = unifys env θ ts ts'
   | otherwise                           = Left $ errorUnification t t'
 
 unify env θ t@(TApp (TDef _) _ _) t'    = unify env θ (unfoldSafe env t) t'
@@ -60,34 +59,32 @@ unify _  θ (TVar α _)     (TVar β _)    = varEql θ α β
 unify _  θ (TVar α _)     t             = varAsn θ α t 
 unify _  θ t              (TVar α _)    = varAsn θ α t
 
--- TODO: handle unions ???
--- unify _ _ (TApp TUn _ _) (TApp TUn _ _) = error "Unimplemented: unify unions1"
--- unify _ _ (TApp TUn _ _) _              = error "Unimplemented: unify unions2"
--- unify _ _ _              (TApp TUn _ _) = error "Unimplemented: unify unions3"
-
--- This messes up with Union!!!
--- If isSubtype is correct - this is not needed!
-{-unify env θ (TApp c ts _) (TApp c' ts' _)-}
-{-  | c == c'           = unifys env θ ts ts'-}
+-- List[A] + Null `unif` List[T0] + Null => A `unif` T0
+-- TODO: make sure other nothing weird is going on with TVars,
+-- e.g.  List[A] + B `unif` ... => this should not even be allowed!!!
+unify γ θ t t' | any isUnion [t,t']     = 
+  (uncurry $ unifys γ θ) $ unzip $ fst3 $ unionPartsWithEq unifEq γ t t'
 
 unify _ _ (TBd _) _   = error $ bugTBodiesOccur "unify"
 unify _ _ _ (TBd _)   = error $ bugTBodiesOccur "unify"
 
-unify γ θ t t' 
-  | t == t'           = Right $ θ
-  | isSubType γ t t'  = Right $ θ     -- XXX
-  | isSubType γ t' t  = Right $ θ     -- XXX
-  | otherwise         = Left  $ errorUnification t t'
+-- For the rest of the cases, blindly return the subst
+-- Defer all other checks for later
+unify _ θ _ _         = Right $ θ  
 
 
 {-unify' γ θ t t' = unify γ θ (trace (printf "unify: %s - %s" (show t) (show t')) t) t' -}
 
 
+unifEq (TApp d@(TDef _) _ _) (TApp d'@(TDef _) _ _) = d == d'
+unifEq t t' = equiv t t'
+  
+
 
 -----------------------------------------------------------------------------
 unifys ::  Env Type -> Subst -> [Type] -> [Type] -> Either String Subst
 -----------------------------------------------------------------------------
-unifys env θ xs ys =  {- trace msg $ -} unifys' env θ xs ys 
+unifys env θ xs ys = {-  tracePP msg $ -} unifys' env θ xs ys 
    {-where -}
    {-  msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
 

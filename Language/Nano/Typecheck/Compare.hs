@@ -45,7 +45,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative                hiding (empty)
 import           Control.Monad.Error                ()
 
--- import           Debug.Trace (trace)
+import           Debug.Trace (trace)
 
 
 
@@ -132,8 +132,7 @@ compareTs' γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
 
 -- | Top-level Objects
 
-compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = error "Unimplemented: compareTs-2"
-  -- padObject γ t1 t2
+compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = tracePP (printf "Padding: %s and %s" (ppshow t1) (ppshow t2)) $ padObject γ t1 t2
 
 -- | Type definitions
 
@@ -165,6 +164,10 @@ compareTs' _ t1           t2                 =
 ---------------------------------------------------------------------------------
 isSubType :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r -> Bool
 isSubType γ t1 t2 = (fth4 $ compareTs γ t1 t2) `elem` [EqT, SubT]
+{-isSubType γ t1 t2 = (fth4 $ compareTs γ -}
+{-                              (tracePP (printf "Comparing: %s - %s" (ppshow t1) (ppshow t2)) t1) -}
+{-                              t2) -}
+{-                    `elem` [EqT, SubT]-}
 
 
 
@@ -278,8 +281,8 @@ unionParts env t1 t2 = (commonJoin, ts, direction)
     direction  = distSub `joinSub` comSub
 
     -- It is crucial to sort the types so that they are aligned
-    t1s'       = L.sort $ commonT1s ++ (fmap F.bot <$> d2s)    
-    t2s'       = L.sort $ commonT2s ++ (fmap F.bot <$> d1s)
+    t1s'       = L.sort $ commonT1s ++ d1s ++ (fmap F.bot <$> d2s)    
+    t2s'       = L.sort $ commonT2s ++ d2s ++ (fmap F.bot <$> d1s)
 
     commonT1s  = snd4 <$> commonTs
     commonT2s  = thd4 <$> commonTs
@@ -294,10 +297,8 @@ unionParts env t1 t2 = (commonJoin, ts, direction)
     -- Also `common` returns aligned types - so no need to re-align them.
     (t1s, t2s) = sanityCheck $ mapPair bkUnion (t1, t2)
     -- Make sure that the recursion will happen on smalled inputs
+    -- TODO: make sure the input is getting smaller
     commonTs = map (uncurry $ compareTs env) $ common t1s t2s
-      --TODO: deal with the case of smaller inputs earlier in compareTs and not
-      --in union padding  !!!
-
 
     -- The joined subtyping result
     comSub     = joinSubs $ fth4 <$> commonTs
@@ -339,26 +340,46 @@ unionParts env t1 t2 = (commonJoin, ts, direction)
 -- | Pad objects
 
 --  Example: 
---  {{ } | p} ㄩ {{a:Int} | q} => ( {{ }        | _},
---                                  {{ a: Top } | p},
---                                  {{ a: Int } | q},
+--  {{ } | p} ㄩ {{a:Int} | q} => ( { a: { {Int | _     } + {Top | _    } | _ } },
+--                                  { a: { {Int | False } + {Top | _    } | p } },
+--                                  { a: { {Int | _     } + {Top | False} | q } },
 --                                  :> )
                               
 --------------------------------------------------------------------------------
-padObject ::  (Eq r, Ord r, F.Reftable r) => 
-             Env (RType r) 
-          -> RType r      -- LHS
-          -> RType r      -- RHS
-          -> (  RType r,            -- The join of the two types
-                RType r,            -- The equivalent to @t1@
-                RType r,            -- The equivalent to @t2@
-                SubDirection)       -- Subtyping relation between LHS and RHS
+padObject :: (Eq r, Ord r, F.Reftable r, PP r) => 
+             Env (RType r) -> RType r -> RType r -> 
+               (RType r, RType r, RType r, SubDirection)
 --------------------------------------------------------------------------------
-padObject env (TObj bs1 r1) (TObj bs2 r2) = undefined
-    {-b1s                 = unzip $ split <$> L.sortBy ord xt1s-}
-    {-b2s                 = unzip $ split <$> L.sortBy ord xt2s-}
-    {-split (B l t)       = (l,t)-}
-    {-ord a b             = b_sym a `compare` b_sym b-}
+padObject γ (TObj bs1 r1) (TObj bs2 r2) = 
+  (TObj jbs' F.top, TObj b1s' r1, TObj b2s' r2, direction)
+  where
+    -- Total direction
+    direction = cmnDir `joinSub` (distDir d1s d2s)
+    -- Direction from all the common keys  
+    cmnDir    = joinSubs $ (\(s,(t,t')) -> fth4 $ compareTs γ t t') <$> cmn
+    -- Direction from distinct keys
+    distDir xs ys | null (xs ++ ys) = EqT
+                  | null xs         = SupT
+                  | null ys         = SubT
+                  | otherwise       = Nth
+
+    jbs' = (\(s,(t,t')) -> B s $ fst4 $ compareTs γ t t') <$> cmn ++ d1s ++ d2s 
+    -- Bindings for 1st object
+    b1s' = (\(s,(t,t')) -> B s $ snd4 $ compareTs γ t t') <$> cmn ++ d1s ++ d2s 
+    -- Bindings for 2nd object
+    b2s' = (\(s,(t,t')) -> B s $ thd4 $ compareTs γ t t') <$> cmn ++ d1s ++ d2s
+
+    (d1s, d2s) = distinct bs1 bs2
+
+    distinct :: (F.Reftable r) => [Bind r] -> [Bind r] -> ([(F.Symbol, (RType r, RType r))],[(F.Symbol, (RType r, RType r))])
+    distinct b1 [] = ((\(B s t) -> (s,(t,tTop))) <$> b1, [])
+    distinct [] b2 = ([], (\(B s t) -> (s,(tTop,t))) <$> b2)
+    distinct b1 b2 = ([(s,(t,tTop)) | B s t <- b1, not $ M.member s (mm b2)],
+                      [(s,(tTop,t)) | B s t <- b2, not $ M.member s (mm b1)])
+                     
+    cmn = M.toList $ M.intersectionWith (,) (mm bs1) (mm bs2) -- bindings in both objects
+    mm = M.fromList . map (\(B s t) -> (s,t))
+
 
 padObject _ _ _ = error "padObject: Cannot pad non-objects"
 
@@ -381,3 +402,11 @@ padFun γ (TFun b1s o1 r1) (TFun b2s o2 r2)
 
 padFun _ _ _ = error "padFun: no other cases supported"
 
+
+
+-- | Helper
+instance (PP a, PP b, PP c) => PP (a,b,c) where
+  pp (a,b,c) = pp a <+>  pp b <+> pp c
+
+instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
+  pp (a,b,c,d) = pp a <+>  pp b <+> pp c <+> pp d

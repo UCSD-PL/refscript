@@ -25,6 +25,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
 import           Language.Nano.Misc
+import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad
@@ -420,12 +421,16 @@ getPhiType :: Annot b SourceSpan -> Env Type -> Env Type -> Id SourceSpan-> TCM 
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (envFindTy x γ1, envFindTy x γ2) of
-    (Just t1, Just t2) -> if t1 == t2 -- TODO: Too strict
-                            then return t1 
-                            else tcError l $ errorJoin x t1 t2
+    (Just t1, Just t2) -> do  env <- getTDefs
+                              return $ fst4 $ compareTs env t1 t2
+                          {-if t1 == t2-}
+                          {-  then return t1 -}
+                          {-  else tcError l $ errorJoin x t1 t2-}
     (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
                             then tcError (ann l) "Oh no, the HashMap GREMLIN is back...1"
                             else tcError (ann l) (bugUnboundPhiVar x)
+
+
 
 forceCheck x γ 
   = elem x $ fst <$> envToList γ

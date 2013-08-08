@@ -302,7 +302,7 @@ unifyTypesM l msg t1s t2s
   | otherwise                = do θ <- getSubst 
                                   γ <- getTDefs
                                   case unifys γ θ t1s t2s of
-                                    Left msg' -> tcError l $ msg ++ ": " ++ msg'
+                                    Left msg' -> tcError l $ msg ++ "\n" ++ msg'
                                     Right θ'  -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------

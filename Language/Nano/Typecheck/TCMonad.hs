@@ -54,6 +54,10 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Patch the program with assertions
   , patchPgmM
 
+  -- * Verbosity
+  , whenLoud', whenLoud
+  , whenQuiet', whenQuiet
+
   )  where 
 
 import           Text.Printf
@@ -83,6 +87,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
 import           Debug.Trace                      (trace)
+import qualified System.Console.CmdArgs.Verbosity as V
 
 -------------------------------------------------------------------------------
 -- | Typechecking monad -------------------------------------------------------
@@ -105,9 +110,43 @@ data TCState = TCS {
                    , tc_tdefs :: !(Env Type)
                    -- The currently typed expression 
                    , tc_expr  :: Maybe (Expression AnnSSA)
+
+                   -- Verbosiry
+                   , tc_verb  :: V.Verbosity
                    }
 
 type TCM     = ErrorT String (State TCState)
+
+
+-------------------------------------------------------------------------------
+whenLoud :: TCM () -> TCM ()
+-------------------------------------------------------------------------------
+whenLoud  act = whenLoud' act $ return ()
+
+-------------------------------------------------------------------------------
+whenLoud' :: TCM a -> TCM a -> TCM a
+-------------------------------------------------------------------------------
+whenLoud' loud other = do  v <- tc_verb <$> get
+                           case v of
+                             V.Loud -> loud 
+                             _      -> other
+
+-------------------------------------------------------------------------------
+whenQuiet :: TCM () -> TCM ()
+-------------------------------------------------------------------------------
+whenQuiet  act = whenQuiet' act $ return ()
+
+-------------------------------------------------------------------------------
+whenQuiet' :: TCM a -> TCM a -> TCM a
+-------------------------------------------------------------------------------
+whenQuiet' quiet other = do  v <- tc_verb <$> get
+                             case v of
+                               V.Quiet -> quiet
+                               _       -> other
+
+
+
+
 
 
 -------------------------------------------------------------------------------
@@ -208,17 +247,17 @@ accumAnn check act
        modify $ \st -> st {tc_anns = m} {tc_annss = m' : tc_annss st}
 
 -------------------------------------------------------------------------------
-execute     :: Nano z (RType r) -> TCM a -> Either [(SourceSpan, String)] a
+execute     :: V.Verbosity -> Nano z (RType r) -> TCM a -> Either [(SourceSpan, String)] a
 -------------------------------------------------------------------------------
-execute pgm act 
-  = case runState (runErrorT act) $ initState pgm of 
+execute verb pgm act 
+  = case runState (runErrorT act) $ initState verb pgm of 
       (Left err, _) -> Left [(dummySpan,  err)]
       (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errss st)
 
 
-initState :: Nano z (RType r) -> TCState
-initState pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss 
-                    tc_casts tc_defs tc_tdefs tc_expr  
+initState :: V.Verbosity -> Nano z (RType r) -> TCState
+initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss 
+                       tc_casts tc_defs tc_tdefs tc_expr tc_verb 
   where
     tc_errss = []
     tc_subst = mempty 
@@ -229,6 +268,7 @@ initState pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss
     tc_defs  = envMap toType $ defs pgm
     tc_tdefs = envMap toType $ tDefs pgm
     tc_expr  = Nothing
+    tc_verb  = verb
 
 
 getDefType f 

@@ -210,7 +210,7 @@ compareTs' γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
 -- | Top-level Objects
 
 compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = 
-  tracePP (printf "Padding: %s and %s" (ppshow t1) (ppshow t2)) $ 
+  {-tracePP (printf "Padding: %s and %s" (ppshow t1) (ppshow t2)) $ -}
   padObject γ ({-trace ("padding obj " ++ ppshow t1 ++ " - " ++ ppshow t2)-} t1) t2
 
 -- | Type definitions
@@ -222,7 +222,7 @@ compareTs' γ (TApp d1@(TDef _) t1s r1) (TApp d2@(TDef _) t2s r2) | d1 == d2 = -
     mk xs r                 = TApp d1 xs r 
 
 compareTs' γ t1@(TApp (TDef _) _ _) t2       = compareTs γ (unfoldSafe γ t1) t2
-compareTs' γ t1 t2@(TApp (TDef _) _ _)       = compareTs γ t1 (tracePP "unfold" $ unfoldSafe γ t2)
+compareTs' γ t1 t2@(TApp (TDef _) _ _)       = compareTs γ t1 (unfoldSafe γ t2)
 
 -- | Everything else in TApp besides unions and defined types
 compareTs' _ t1@(TApp _ _ _) t2@(TApp _ _ _) = padSimpleApp t1 t2 
@@ -419,7 +419,7 @@ padObject γ (TObj bs1 r1) (TObj bs2 r2) =
     distinct b1 b2 = ([(s,(t,tTop)) | B s t <- b1, not $ M.member s (mm b2)],
                       [(s,(tTop,t)) | B s t <- b2, not $ M.member s (mm b1)])
                      
-    cmn = tracePP "common" $ M.toList $ M.intersectionWith (,) (mm bs1) (mm bs2) -- bindings in both objects
+    cmn = M.toList $ M.intersectionWith (,) (mm bs1) (mm bs2) -- bindings in both objects
     mm  = M.fromList . map (\(B s t) -> (s,t))
 
 

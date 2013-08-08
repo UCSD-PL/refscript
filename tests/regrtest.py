@@ -97,7 +97,7 @@ options, args = parser.parse_args()
 
 # tc Tests
 testdirs  = [ ("tc/pos", 0) ]
-runner    = rtest.TestRunner (Config ("nanojs tc", options.opts + "nofailcasts", testdirs, logfile, options.threadcount))
+runner    = rtest.TestRunner (Config ("nanojs tc -q", options.opts + "nofailcasts", testdirs, logfile, options.threadcount))
 runner.run ()
 
 #testdirs  = [ ("tc/neg", 1) ]

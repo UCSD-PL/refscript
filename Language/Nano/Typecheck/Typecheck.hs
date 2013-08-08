@@ -41,7 +41,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Debug.Trace                        hiding (traceShow)
 
-import           System.Console.CmdArgs.Verbosity   as V
+import qualified System.Console.CmdArgs.Verbosity as V
 
 
 --------------------------------------------------------------------------------
@@ -55,23 +55,24 @@ verifyFile :: FilePath -> IO (F.FixResult (SourceSpan, String))
 
 -- | Debug mode
 verifyFile f 
-   = do nano <- parseNanoFromFile f
-        whenLoud $ donePhase FM.Loud "Parse"
+   = do nano    <- parseNanoFromFile f
+        V.whenLoud $ donePhase FM.Loud "Parse"
         {-putStrLn . render . pp $ nano-}
         let nanoSsa = ssaTransform nano
-        whenLoud $ donePhase FM.Loud "SSA Transform"
-        whenLoud $ putStrLn . render . pp $ nanoSsa
-        let p =  execute nanoSsa $ tcAndPatch nanoSsa
+        V.whenLoud $ donePhase FM.Loud "SSA Transform"
+        V.whenLoud $ putStrLn . render . pp $ nanoSsa
+        verb    <- V.getVerbosity
+        let p =  execute verb nanoSsa $ tcAndPatch nanoSsa
         TC{ noFailCasts = nfc } <- getOpts
         r <- either unsafe (\q -> safe q >>= return . (`mappend` failCasts nfc q)) p
-        whenLoud $ donePhase FM.Loud "Typechecking"
+        V.whenLoud $ donePhase FM.Loud "Typechecking"
         return $ r
 
 
 -------------------------------------------------------------------------------
 typeCheck     :: (Data r, Typeable r, F.Reftable r) => Nano AnnSSA (RType r) -> (Nano AnnType (RType r))
 -------------------------------------------------------------------------------
-typeCheck pgm = either crash id (execute pgm (tcAndPatch pgm))
+typeCheck pgm = either crash id (execute V.Normal pgm (tcAndPatch pgm))
   where
     crash     = errorstar . render . vcat . map (text . ppErr)
 
@@ -83,7 +84,7 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
 ppErr (l, e) = printf "Error at %s\n  %s\n" (ppshow l) e
 
 safe (Nano {code = Src fs})
-  = do whenLoud $ forM_ fs $ T.mapM printAnn
+  = do V.whenLoud $ forM_ fs $ T.mapM printAnn
        return F.Safe 
 
 -------------------------------------------------------------------------------
@@ -118,7 +119,7 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn
 -- | The first argument true to tranform casted expressions e to Cast(e,T)
 -------------------------------------------------------------------------------
 tcAndPatch :: (Data r, Typeable r, F.Reftable r) => 
-  Nano AnnSSA (RType r) -> TCM (Nano  AnnSSA (RType r))
+    Nano AnnSSA (RType r) -> TCM (Nano  AnnSSA (RType r))
 -------------------------------------------------------------------------------
 tcAndPatch p = 
   do  checkTypeDefs p
@@ -126,7 +127,7 @@ tcAndPatch p =
       p2 <- patchPgmM p1
       s  <- getSubst
       c  <- getCasts
-      return $ trace (codePP p2 s c) p2
+      whenQuiet' (return p2) (return $ trace (codePP p2 s c) p2)
       -- return p1
   where 
     codePP (Nano {code = Src src}) sub cst = render $

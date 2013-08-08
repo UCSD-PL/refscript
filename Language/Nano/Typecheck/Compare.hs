@@ -114,28 +114,42 @@ instance (PP a) => PP (Cast a) where
 ---------------------------------------------------------------------------------------
 
 -- | Subtyping directions
-data SubDirection = SubT | SupT | EqT | Nth deriving (Eq, Show)
+data SubDirection = SubT | SupT | EqT | Rel | Nth deriving (Eq, Show)
 
 instance PP SubDirection where 
   pp SubT = text "<:"
   pp SupT = text ":>"
   pp EqT  = text "≈"
+  pp Rel  = text "⨝"
   pp Nth  = text "≠"
 
-joinSub :: SubDirection -> SubDirection -> SubDirection
-joinSub c    c'   | c == c' = c
-joinSub Nth  _              = Nth
-joinSub _    Nth            = Nth
-joinSub EqT  c              = c
-joinSub c    EqT            = c
-joinSub SubT SubT           = Nth 
-joinSub SubT SupT           = Nth
-joinSub SupT SubT           = Nth
-joinSub SupT SupT           = Nth
+addSub :: SubDirection -> SubDirection -> SubDirection
+addSub c    c'   | c == c' = c
+addSub Nth  _              = Nth
+addSub _    Nth            = Nth
+addSub EqT  c              = c
+addSub c    EqT            = c
+addSub SubT SubT           = Nth 
+addSub SubT SupT           = Nth
+addSub SupT SubT           = Nth
+addSub SupT SupT           = Nth
+
+-- TODO: Fill this up
+{-mulSub :: SubDirection -> SubDirection -> SubDirection-}
+{-mulSub c    c'   | c == c' = c-}
+{-mulSub Nth  _              = Nth-}
+{-mulSub _    Nth            = Nth-}
+{-mulSub EqT  c              = c-}
+{-mulSub c    EqT            = c-}
+{-mulSub SubT SubT           = Nth -}
+{-mulSub SubT SupT           = Nth-}
+{-mulSub SupT SubT           = Nth-}
+{-mulSub SupT SupT           = Nth-}
+
 
 
 joinSubs :: [SubDirection] -> SubDirection
-joinSubs = foldl joinSub EqT
+joinSubs = foldl addSub EqT
 
 transposeSub :: SubDirection -> SubDirection
 transposeSub SubT = SupT
@@ -196,7 +210,7 @@ compareTs' γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
 -- | Top-level Objects
 
 compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = 
-  {-tracePP (printf "Padding: %s and %s" (ppshow t1) (ppshow t2)) $ -}
+  tracePP (printf "Padding: %s and %s" (ppshow t1) (ppshow t2)) $ 
   padObject γ ({-trace ("padding obj " ++ ppshow t1 ++ " - " ++ ppshow t2)-} t1) t2
 
 -- | Type definitions
@@ -208,7 +222,7 @@ compareTs' γ (TApp d1@(TDef _) t1s r1) (TApp d2@(TDef _) t2s r2) | d1 == d2 = -
     mk xs r                 = TApp d1 xs r 
 
 compareTs' γ t1@(TApp (TDef _) _ _) t2       = compareTs γ (unfoldSafe γ t1) t2
-compareTs' γ t1 t2@(TApp (TDef _) _ _)       = compareTs γ t1 (unfoldSafe γ t2)
+compareTs' γ t1 t2@(TApp (TDef _) _ _)       = compareTs γ t1 (tracePP "unfold" $ unfoldSafe γ t2)
 
 -- | Everything else in TApp besides unions and defined types
 compareTs' _ t1@(TApp _ _ _) t2@(TApp _ _ _) = padSimpleApp t1 t2 
@@ -291,7 +305,7 @@ padUnion env t1 t2 =
     commonTs = map (uncurry $ compareTs env) $ cmnPs
 
     -- To figure out the direction of the subtyping, we must take into account:
-    direction  = distSub `joinSub` comSub
+    direction  = distSub `addSub` comSub
     -- ∙ The distinct types (the one that has more is a supertype)
     distSub   = case (d1s, d2s) of
                   ([], []) -> EqT
@@ -382,7 +396,7 @@ padObject γ (TObj bs1 r1) (TObj bs2 r2) =
   (TObj jbs' F.top, TObj b1s' r1, TObj b2s' r2, direction)
   where
     -- Total direction
-    direction = cmnDir `joinSub` distDir d1s d2s
+    direction = cmnDir `addSub` distDir d1s d2s
     -- Direction from all the common keys  
     cmnDir    = joinSubs $ (\(s,(t,t')) -> fth4 $ compareTs γ t t') <$> cmn
     -- Direction from distinct keys
@@ -405,8 +419,8 @@ padObject γ (TObj bs1 r1) (TObj bs2 r2) =
     distinct b1 b2 = ([(s,(t,tTop)) | B s t <- b1, not $ M.member s (mm b2)],
                       [(s,(tTop,t)) | B s t <- b2, not $ M.member s (mm b1)])
                      
-    cmn = M.toList $ M.intersectionWith (,) (mm bs1) (mm bs2) -- bindings in both objects
-    mm = M.fromList . map (\(B s t) -> (s,t))
+    cmn = tracePP "common" $ M.toList $ M.intersectionWith (,) (mm bs1) (mm bs2) -- bindings in both objects
+    mm  = M.fromList . map (\(B s t) -> (s,t))
 
 
 padObject _ _ _ = error "padObject: Cannot pad non-objects"

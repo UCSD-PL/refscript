@@ -8,6 +8,7 @@
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE DeriveDataTypeable   #-}
 {-# LANGUAGE NoMonomorphismRestriction   #-}
+{-# LANGUAGE MultiParamTypeClasses   #-}
 
 module Language.Nano.Typecheck.Compare (
 
@@ -54,40 +55,43 @@ import           Debug.Trace (trace)
 -- | Type equivalence
 
 -- This is a slightly more relaxed version of equality. 
-class Equivalent a where 
-  equiv :: a -> a -> Bool
+class Equivalent e a where 
+  equiv :: e -> a -> a -> Bool
 
-instance Equivalent a => Equivalent [a] where
-  equiv a b = and $ zipWith equiv a b 
+instance Equivalent e a => Equivalent e [a] where
+  equiv γ a b = and $ zipWith (equiv γ) a b 
 
-instance (PP r, F.Reftable r) => Equivalent (RType r) where 
-  equiv t t'  | any isUnion [t,t']                  = errorstar "equiv: no unions"
+instance (PP r, F.Reftable r) => Equivalent (Env (RType r)) (RType r) where 
+  equiv _ t t'  | any isUnion [t,t']                  = errorstar "equiv: no unions"
   -- No unions beyond this point!
   
-  equiv (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _) = d == d' && ts `equiv` ts'
-  
-  equiv (TApp c _ _)         (TApp c' _ _)          = c == c'
+  equiv γ (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _) | d == d' = equiv γ ts ts'
 
-  equiv (TVar v _  )         (TVar v' _  )          = v == v'
+  equiv γ t@(TApp d@(TDef _) _ _) t' = equiv γ (unfoldSafe γ t) t'
+  equiv γ t t'@(TApp d@(TDef _) _ _) = equiv γ t (unfoldSafe γ t')
+  
+  equiv _ (TApp c _ _)         (TApp c' _ _)          = c == c'
+
+  equiv _ (TVar v _  )         (TVar v' _  )          = v == v'
 
   -- Functions need to be exactly the same - no padding can happen here
-  equiv (TFun b o _)         (TFun b' o' _)         = 
-    (b_type <$> b) `equiv` (b_type <$> b') && o `equiv` o' 
-  
+  equiv γ (TFun b o _)         (TFun b' o' _)         = 
+    equiv γ (b_type <$> b) (b_type <$> b') && equiv γ o o' 
+
   -- Any two objects can be combined - so they should be equivalent
-  equiv (TObj _ _  )         (TObj _ _   )          = True
+  equiv _ (TObj _ _  )         (TObj _ _   )          = True
   
-  equiv (TBd _     )         (TBd _      )          = errorstar "equiv: no type bodies"
+  equiv _ (TBd _     )         (TBd _      )          = errorstar "equiv: no type bodies"
   
-  equiv (TAll _ _   )        (TAll _ _ )            = error "equiv-tall"
+  equiv _ (TAll _ _   )        (TAll _ _ )            = error "equiv-tall"
     -- t `equiv` apply (fromList [(v',tVar v)]) t'
-  equiv _                    _                      = False
+  equiv _ _                    _                      = False
 
-instance (PP r, F.Reftable r) => Equivalent (Bind r) where 
-  equiv (B s t) (B s' t') = s == s' && t `equiv` t' 
+instance (PP r, F.Reftable r) => Equivalent (Env (RType r)) (Bind r) where 
+  equiv γ (B s t) (B s' t') = s == s' && equiv γ t t' 
 
-instance Equivalent (Id a) where 
-  equiv i i' = F.symbol i == F.symbol i'
+instance Equivalent e (Id a) where 
+  equiv _ i i' = F.symbol i == F.symbol i'
 
 
 
@@ -312,7 +316,7 @@ unionParts ::  (Eq r, Ord r, F.Reftable r, PP r) =>
           -> ([(RType r, RType r)], [RType r], [RType r])
 --------------------------------------------------------------------------------
 
-unionParts = unionPartsWithEq equiv
+unionParts γ = unionPartsWithEq (equiv γ) γ
 
 
 -- General purpose function that pairs up the components of the two union typed

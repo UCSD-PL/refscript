@@ -25,6 +25,7 @@ errorArgMismatch        = printf "Mismatch in Number of Args in Call"
 errorNonFunction f t    = printf "Non-function type for %s :: %s" (ppshow f) (ppshow t)  
 errorUnboundId x        = printf "Identifier %s unbound" (ppshow x) 
 errorUnboundIdEnv x t   = printf "ZOGBERT Identifier %s unbound in %s" (ppshow x) (ppshow t)
+errorUnboundType x      = printf "Type identifier \'%s\' unbound" (ppshow x)
 errorWrongType m e t t' = printf "%s -- unexpected type for %s :: %s expected %s" m (ppshow e) (ppshow t) (ppshow t')
 errorJoin x t t'        = printf "Conflicting join for %s \n   %s\n   %s" (ppshow x) (ppshow t) (ppshow t') 
 errorUnification t t'   = printf "Cannot unify types: %s and %s" (ppshow t) (ppshow t')
@@ -51,3 +52,6 @@ tracePP s x = trace (printf "\nTrace: [%s]: %s" s (ppshow x)) x
 instance PP a => PP (Either String a) where 
   pp (Left s)  = text $ "ERROR!" ++ s
   pp (Right x) = pp x 
+
+instance PP String where
+  pp = text

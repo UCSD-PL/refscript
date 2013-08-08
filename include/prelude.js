@@ -77,6 +77,8 @@ function pos(){
 /************** Types for list Operators ******************************/
 /*************************************************************************/
 
+/*@ type list[A]  {  data : A, next : list[A] + null } */
+
 /*@ measure len :: forall A. (list [A]) => number                                                 */
 
 /*@ cons  :: forall A. (A, list[A] + null) => list [A]                                            */

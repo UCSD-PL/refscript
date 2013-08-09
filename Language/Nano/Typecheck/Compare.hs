@@ -16,7 +16,7 @@ module Language.Nano.Typecheck.Compare (
   -- * Type comparison/joining/subtyping
     Equivalent, equiv
   , compareTs
-  , unionParts, unionPartsWithEq
+  , unionParts, unionPartsWithEq, bkPaddedUnion
   , isSubType
   , eqType
 
@@ -216,17 +216,17 @@ compareTs :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r 
                                   (RType r, RType r, RType r, SubDirection)
 ---------------------------------------------------------------------------------------
 -- Deal with some standard cases of subtyping, e.g.: Top, Null, Undefined ...
-compareTs γ t1 t2 | t1 == t2          = (ofType $ toType t1, t1, t2, EqT)
+compareTs γ t1 t2 | toType t1 == toType t2 = (ofType $ toType t1, t1, t2, EqT)
 
-compareTs γ t1 t2 | all isTop [t1,t2] = setFth4 (compareTs' γ t1 t2) EqT
-compareTs γ t1 t2 | isTop t1          = setFth4 (compareTs' γ t1 t2) SupT
-compareTs γ t1 t2 | isTop t2          = setFth4 (compareTs' γ t1 t2) SubT
+compareTs γ t1 t2 | all isTop [t1,t2]      = setFth4 (compareTs' γ t1 t2) EqT
+compareTs γ t1 t2 | isTop t1               = setFth4 (compareTs' γ t1 t2) SupT
+compareTs γ t1 t2 | isTop t2               = setFth4 (compareTs' γ t1 t2) SubT
 
-compareTs γ t1 t2 | isUndefined t1    = setFth4 (compareTs' γ t1 t2) SubT
+compareTs γ t1 t2 | isUndefined t1         = setFth4 (compareTs' γ t1 t2) SubT
 
 compareTs γ t1 t2 | and [isNull t1, not $ isUndefined t2] = setFth4 (compareTs' γ t1 t2) SubT
 
-compareTs γ t1 t2 | otherwise         = 
+compareTs γ t1 t2 | otherwise              = 
   {- tracePP (printf "compareTs %s - %s" (ppshow t1) (ppshow t2)) $-}  
   compareTs' γ t1 t2
 
@@ -360,6 +360,17 @@ padUnion env t1 t2 =
     comSub     = mconcatS $ fth4 <$> commonTs
     
     (cmnPs, d1s, d2s) = {- tracePP "padUnion: unionParts" $-} unionParts env t1 t2
+
+
+--------------------------------------------------------------------------------
+bkPaddedUnion :: (Eq r, Ord r, F.Reftable r, PP r) => 
+  Env (RType r) -> RType r -> RType r -> [(RType r, RType r)]
+--------------------------------------------------------------------------------
+bkPaddedUnion γ t1 t2 =
+  zipWith check (bkUnion t1) (bkUnion t2)
+  where
+    check t t' | equiv γ t t' = (t,t')
+               | otherwise    = errorstar "bkPaddedUnion"
 
 
 

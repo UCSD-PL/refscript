@@ -119,6 +119,11 @@ function pos(){
 
 /*@ builtin_OpLOr       :: ({x:boolean|true}, {y:boolean|true}) =>
                             {v:boolean | ((Prop v) <=> ((Prop x) || (Prop y)))}                           */
+
+// XXX: Will eventually switch to truthy and falsy:
+/*  builtin_OpLOr       :: (x:top, y:top) => 
+                             {v:top | ((Prop v) <=> (if (falsy x) then (v = y) else (v = x) ))}           */
+
 /*@ builtin_OpAdd       :: ({x:number | true}, {y:number | true})  => {v:number | v = x + y}              */
 /*@ builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v = x - y}              */
 /*@ builtin_OpMul       :: (number,  number)  => number                                                   */

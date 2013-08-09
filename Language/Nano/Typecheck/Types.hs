@@ -72,9 +72,6 @@ module Language.Nano.Typecheck.Types (
   , AnnInfo
   , isAsm
 
-  -- * Useful Operations
-  , getBinding
-
   ) where 
 
 import           Text.Printf
@@ -212,19 +209,6 @@ bkUnion :: RType r -> [RType r]
 ---------------------------------------------------------------------------------
 bkUnion (TApp TUn xs _) = xs
 bkUnion t               = [t]
-
-
-
--- | Get binding from object type
----------------------------------------------------------------------------------
-getBinding :: Id a -> RType r -> Either String (RType r)
----------------------------------------------------------------------------------
-getBinding i (TObj bs _ ) = 
-  case L.find (\s -> F.symbol i == b_sym s) bs of
-    Just b -> Right $ b_type b
-    _      -> Left  $ errorObjectBinding
-getBinding t _ = Left $ errorObjectTAccess t
-
 
 
 ---------------------------------------------------------------------------------

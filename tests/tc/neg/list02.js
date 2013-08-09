@@ -2,7 +2,7 @@
                   next : nlist } */
 
 
-/*@ main :: (x:nlist, a:number|boolean) => nlist */
+/*@ main :: (x:nlist, a:number + boolean) => nlist */
 function main(x, a) {
 
     return { data: a , next: x };

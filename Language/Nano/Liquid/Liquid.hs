@@ -273,9 +273,10 @@ consExpr g (CallExpr l e es)
 
 consExpr  g (DotRef l e i)
   = do  (x, g') <- consExpr g e
-        case getBinding i $ envFindTy x g' of 
-          Left  s -> errorstar s
-          Right t -> envAddFresh l t g'
+        t       <- getBindingM i $ envFindTy x g'
+        case t of
+          Left  s  -> errorstar s
+          Right t' -> envAddFresh l t' g'
        
 consExpr g (ObjectLit l ps) 
   = do  (x, g') <- consObj l g ps

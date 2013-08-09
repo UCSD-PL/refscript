@@ -79,6 +79,7 @@ import           Data.Monoid
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map                       as M
 import           Data.Generics                  (Data(..))
+import           Data.List                      (find)
 import           Data.Generics.Aliases
 import           Data.Typeable                  (Typeable (..))
 import           Language.ECMAScript3.Parser    (SourceSpan (..))
@@ -101,8 +102,7 @@ data TCState = TCS {
                    -- Annotations
                    , tc_anns  :: AnnInfo
                    , tc_annss :: [AnnInfo]
-                   -- Cast map: SourceSpan alone is not enough as key, 
-                   -- so backing up with expression
+                   -- Cast map: 
                    , tc_casts :: M.Map (Expression AnnSSA) (Cast Type)
                    -- Function definitions
                    , tc_defs  :: !(Env Type) 
@@ -210,6 +210,46 @@ setTyArgs l βs
        addAnn l $ TypInst (tVar <$> βs)
 
 
+-------------------------------------------------------------------------------
+-- | Field access -------------------------------------------------------------
+-------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------
+dotAccess :: AnnSSA -> Expression AnnSSA -> Id AnnSSA -> Type -> TCM (Maybe Type)
+-------------------------------------------------------------------------------
+dotAccess _ _ f   (TObj bs _) = 
+  return $ Just $ maybe tUndef b_type $ find (match $ F.symbol f) bs
+  where match s (B f _)  = s == f
+
+dotAccess l e f t@(TApp c ts _ ) = go c
+  where  go TUn      = dotAccessUnion l e f ts
+         go TInt     = return $ Just tUndef
+         go TBool    = return $ Just tUndef
+         go TString  = return $ Just tUndef
+         go TUndef   = return   Nothing
+         go TNull    = return   Nothing
+         go (TDef _) = unfoldSafeTC t >>= dotAccess l e f
+         go TTop     = undefined
+         go TVoid    = undefined
+
+dotAccess l _ _   (TFun _ _ _ ) = tcError l "Cannot access a function type"
+dotAccess _ _ _ _               = undefined
+
+
+-------------------------------------------------------------------------------
+dotAccessUnion :: AnnSSA -> Expression AnnSSA -> Id AnnSSA -> [Type] -> TCM (Maybe Type)
+-------------------------------------------------------------------------------
+dotAccessUnion l e f ts = 
+  do  tfs            <- mapM (dotAccess l e f) ts
+      -- Gather all the types that do not throw errors
+      cast $ unzip [(t,tf) | (t, Just tf) <- zip ts tfs]
+  where 
+    s = srcPos l
+    --The cast type here does not matter
+    cast ([], _  ) = error "unimplemented: dotAccessUnion - add deadcast"
+    cast (ts, tfs) = error "unimplemented: dotAccessUnion - add cast" 
+
+      
 
 -------------------------------------------------------------------------------
 -- | Managing Annotations: Type Instantiations --------------------------------

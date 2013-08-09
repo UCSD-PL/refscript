@@ -21,6 +21,9 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Freshness
   , freshTyArgs
 
+  -- * Dot Access
+  , dotAccess
+
   -- * Type definitions
   , getTDefs
 
@@ -79,6 +82,7 @@ import           Data.Monoid
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map                       as M
 import           Data.Generics                  (Data(..))
+import           Data.Maybe                     (fromJust)
 import           Data.List                      (find)
 import           Data.Generics.Aliases
 import           Data.Typeable                  (Typeable (..))
@@ -215,39 +219,41 @@ setTyArgs l βs
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-dotAccess :: AnnSSA -> Expression AnnSSA -> Id AnnSSA -> Type -> TCM (Maybe Type)
+dotAccess :: Id AnnSSA -> Type -> TCM (Maybe Type)
 -------------------------------------------------------------------------------
-dotAccess _ _ f   (TObj bs _) = 
+dotAccess f   (TObj bs _) = 
   return $ Just $ maybe tUndef b_type $ find (match $ F.symbol f) bs
   where match s (B f _)  = s == f
 
-dotAccess l e f t@(TApp c ts _ ) = go c
-  where  go TUn      = dotAccessUnion l e f ts
+dotAccess f t@(TApp c ts _ ) = go c
+  where  go TUn      = dotAccessUnion f ts
          go TInt     = return $ Just tUndef
          go TBool    = return $ Just tUndef
          go TString  = return $ Just tUndef
          go TUndef   = return   Nothing
          go TNull    = return   Nothing
-         go (TDef _) = unfoldSafeTC t >>= dotAccess l e f
-         go TTop     = undefined
-         go TVoid    = undefined
+         go (TDef _) = unfoldSafeTC t >>= dotAccess f
+         go TTop     = error "dotAccess top"
+         go TVoid    = error "dotAccess void"
 
-dotAccess l _ _   (TFun _ _ _ ) = tcError l "Cannot access a function type"
-dotAccess _ _ _ _               = undefined
+dotAccess _   (TFun _ _ _ ) = return $ Just tUndef
+dotAccess _ t               = error $ "dotAccess " ++ (ppshow t) 
 
 
 -------------------------------------------------------------------------------
-dotAccessUnion :: AnnSSA -> Expression AnnSSA -> Id AnnSSA -> [Type] -> TCM (Maybe Type)
+dotAccessUnion :: Id AnnSSA -> [Type] -> TCM (Maybe Type)
 -------------------------------------------------------------------------------
-dotAccessUnion l e f ts = 
-  do  tfs            <- mapM (dotAccess l e f) ts
-      -- Gather all the types that do not throw errors
-      cast $ unzip [(t,tf) | (t, Just tf) <- zip ts tfs]
-  where 
-    s = srcPos l
-    --The cast type here does not matter
-    cast ([], _  ) = error "unimplemented: dotAccessUnion - add deadcast"
-    cast (ts, tfs) = error "unimplemented: dotAccessUnion - add cast" 
+dotAccessUnion f ts = 
+  do  e              <- fromJust <$> getExpr
+      tfs            <- mapM (dotAccess f) ts
+      -- Gather all the types that do not throw errors, and the type of 
+      -- the accessed expression that yields them
+      let (ts', tfs') = unzip [(t,tf) | (t, Just tf) <- zip ts tfs]
+      γ <- getTDefs
+      castM e (mkUnion ts) (mkUnion ts')
+      case tfs' of
+        [] -> return Nothing
+        _  -> return $ Just $ mkUnion tfs'
 
       
 
@@ -394,12 +400,12 @@ unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
 
 
 ----------------------------------------------------------------------------------
-subTypeM :: (IsLocated l) => l -> Expression AnnSSA -> Type -> Type -> TCM SubDirection
+subTypeM :: Type -> Type -> TCM SubDirection
 ----------------------------------------------------------------------------------
-subTypeM _ _ t t' 
+subTypeM t t' 
   = do  θ            <- getTDefs 
         let (_,_,_,d) = compareTs θ t t'
-        return $ trace (printf "subTypeM: %s %s %s" (ppshow t) (ppshow d) (ppshow t')) d
+        return $ {- trace (printf "subTypeM: %s %s %s" (ppshow t) (ppshow d) (ppshow t')) -} d
 
 ----------------------------------------------------------------------------------
 subTypeM' :: (IsLocated l) => l -> Type -> Type -> TCM ()
@@ -407,10 +413,9 @@ subTypeM' :: (IsLocated l) => l -> Type -> Type -> TCM ()
 subTypeM' _ _ _  = error "unimplemented: subTypeM\'"
  
 ----------------------------------------------------------------------------------
-subTypesM :: (IsLocated l) => l -> [Expression AnnSSA] -> [Type] -> [Type] -> TCM [SubDirection]
+subTypesM :: [Type] -> [Type] -> TCM [SubDirection]
 ----------------------------------------------------------------------------------
-subTypesM l es ts ts' = mapM (\(e,t,t') -> subTypeM l e t t') $ zip3 es ts ts'
-
+subTypesM ts ts' = zipWithM subTypeM ts ts'
 
 
 --------------------------------------------------------------------------------
@@ -430,16 +435,18 @@ withExpr e action =
 
 
 --------------------------------------------------------------------------------
-castM     :: SubDirection -> Expression AnnSSA -> Type -> TCM ()
+castM     :: Expression AnnSSA -> Type -> Type -> TCM ()
 --------------------------------------------------------------------------------
-castM SupT = addDownCast
-castM SubT = addUpCast
-castM EqT  = \_ _ -> return ()
-castM Nth  = addDeadCast
+castM e t t'    = subTypeM t t' >>= go
+  where go SupT = addDownCast e t'
+        go Rel  = addDownCast e t'
+        go SubT = addUpCast e t'
+        go EqT  = return ()
+        go Nth  = addDeadCast e t'
 
 
 --------------------------------------------------------------------------------
-castsM    :: [SubDirection] -> [Expression AnnSSA] -> [Type] -> TCM ()
+castsM    :: [Expression AnnSSA] -> [Type] -> [Type] -> TCM ()
 --------------------------------------------------------------------------------
 castsM     = zipWith3M_ castM 
 

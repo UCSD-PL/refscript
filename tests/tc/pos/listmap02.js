@@ -1,7 +1,7 @@
-/*@ type list[A]  {  data : A, 
+/*@ type list_non_null[A]  {  data : A, 
                      next : list[A]  } */
 
-/*@ map :: (list[A], (A) => B) => list[B] */
+/*@ map :: forall A B. (list_non_null[A], (A) => B) => list_non_null[B] */
 function map(x,f) {
 
   return { 

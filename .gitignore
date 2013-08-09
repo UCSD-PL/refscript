@@ -30,10 +30,13 @@ _build
 *~
 *.swp
 *.swo
+*.smt2
+/Paths_nano_js.hs
 
 TAGS
 a.out
 *.json
 js/
 css/
-
+/tests/logs/*
+/out

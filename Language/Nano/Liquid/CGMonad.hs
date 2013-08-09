@@ -21,6 +21,9 @@ module Language.Nano.Liquid.CGMonad (
   -- * Get Defined Types
   , getTDefs
 
+  -- * Get binding
+  , getBindingM
+
   -- * Throw Errors
   , cgError      
 
@@ -52,6 +55,7 @@ module Language.Nano.Liquid.CGMonad (
   ) where
 
 import           Data.Maybe                     (fromMaybe)
+import qualified Data.List                      as L
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 
@@ -145,6 +149,26 @@ getTDefs :: CGM (E.Env RefType)
 ---------------------------------------------------------------------------------------
 getTDefs  = cg_tdefs <$> get
 
+getBindingM i t 
+  = do  td <- cg_tdefs <$> get
+        return $ getBinding td i t 
+
+
+-- | Get binding from object type
+---------------------------------------------------------------------------------
+getBinding :: (PP r, F.Reftable r) => E.Env (RType r) -> Id a -> RType r -> Either String (RType r)
+---------------------------------------------------------------------------------
+getBinding _ i (TObj bs _ ) = 
+  case L.find (\s -> F.symbol i == b_sym s) bs of
+    Just b -> Right $ b_type b
+    _      -> Left  $ errorObjectBinding
+getBinding defs i t@(TApp (TDef _) _ _) = 
+  case unfoldMaybe defs t of
+    Right t' -> getBinding defs i t'
+    Left  s  -> Left $ s ++ "\nand\n" ++ errorObjectTAccess t
+getBinding defs _ t = Left $ errorObjectTAccess t
+
+
 
 ---------------------------------------------------------------------------------------
 measureEnv   ::  Nano a (RType F.Reft) -> F.SEnv F.SortedReft
@@ -236,7 +260,22 @@ envAddGuard x b g = g { guards = guard b x : guards g }
   where 
     guard True    = F.eProp 
     guard False   = F.PNot . F.eProp
+    -- Falsy values:
+    -- ∙ false
+    -- ∙ 0 (zero)
+    -- ∙ "" (empty string)
+    -- ∙ null
+    -- ∙ undefined
+    -- ∙ NaN (Not a number)
 
+    -- guard True  v = F.eProp v
+    -- guard False v = F.pOr [ F.PNot (F.eProp v) 
+    --                         
+    --                      ] 
+    --   where
+    --     vEqX x    = F.PAtom F.Eq (F.eVar v) x
+                           
+                    
 ---------------------------------------------------------------------------------------
 envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
 ---------------------------------------------------------------------------------------

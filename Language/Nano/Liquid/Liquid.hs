@@ -292,7 +292,7 @@ consUpCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id An
 ---------------------------------------------------------------------------------------------
 consUpCast g x a e 
   = do  γ         <- getTDefs
-        let tE'    = thd4 $ compareTs γ tE tU -- the compatible version for tE
+        let tE'    = thd4 $ compareTs γ tE tU 
         (x',g')   <- envAddFresh l tE' g 
         return     $ (x', g')
   where tE         = envFindTy x g 
@@ -305,17 +305,15 @@ consDownCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id 
 ---------------------------------------------------------------------------------------------
 consDownCast g x a e 
   = do  
-        γ        <- getTDefs
-        -- TODO: This might not really be what we want excaclty !!
-        -- TODO: Also need the toplevel constraint here
+        γ             <- getTDefs
         let (ts,_,_)  = unionParts γ tE tC
-        forM_ ts  $ castSubM g x l
-        (x', g') <- envAddFresh l tC g
-        return    $ (x', g')
+        forM_ ts      $ castSubM g x l
+        (x', g')     <- envAddFresh l tC g
+        return        $ (x', g')
     where 
-      tE               = envFindTy x g
-      tC               = rType $ head [ t | Assume t <- ann_fact a]
-      l                = getAnnotation e
+      tE              = tracePP "consDownCast: Found type" $ envFindTy x g
+      tC              = tracePP "cast type"                $ rType $ head [ t | Assume t <- ann_fact a]
+      l               = getAnnotation e
 
 
 ---------------------------------------------------------------------------------------------

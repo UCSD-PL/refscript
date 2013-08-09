@@ -95,19 +95,19 @@ options, args = parser.parse_args()
 #runner.run ()
 
 
-# tc Tests
-testdirs  = [ ("tc/pos", 0) ]
-runner    = rtest.TestRunner (Config ("nanojs tc -q", options.opts + "nofailcasts", testdirs, logfile, options.threadcount))
-runner.run ()
-
-testdirs  = [ ("tc/neg", 1) ]
-runner    = rtest.TestRunner (Config ("nanojs tc -q", options.opts, testdirs, logfile, options.threadcount))
-runner.run ()
-
-## liquid Tests
-#testdirs  = [ ("liquid/pos", 0), ("liquid/neg", 1) ]
-#runner    = rtest.TestRunner (Config ("nanojs liquid", options.opts, testdirs, logfile, options.threadcount))
+## tc Tests
+#testdirs  = [ ("tc/pos", 0) ]
+#runner    = rtest.TestRunner (Config ("nanojs tc -q", options.opts + "nofailcasts", testdirs, logfile, options.threadcount))
 #runner.run ()
+
+#testdirs  = [ ("tc/neg", 1) ]
+#runner    = rtest.TestRunner (Config ("nanojs tc -q", options.opts, testdirs, logfile, options.threadcount))
+#runner.run ()
+
+# liquid Tests
+testdirs  = [ ("liquid/pos", 0), ("liquid/neg", 1) ]
+runner    = rtest.TestRunner (Config ("nanojs liquid", options.opts, testdirs, logfile, options.threadcount))
+runner.run ()
 
 
 # [os.system(("cd %s; ../../cleanup; cd ../" % d)) for (d,_) in testdirs]  

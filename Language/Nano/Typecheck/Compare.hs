@@ -138,7 +138,7 @@ instance PP SubDirection where
 
 -- Sum: Relaxed version (To be used in unions)
 instance Monoid (Sum SubDirection) where
-  mempty = Sum Nth
+  mempty = Sum EqT
 
   Sum d    `mappend` Sum d'   | d == d' = Sum d
   

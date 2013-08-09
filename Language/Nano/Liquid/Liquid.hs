@@ -39,14 +39,13 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        as T
+import           Debug.Trace                        (trace)
 
 --------------------------------------------------------------------------------
 verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 verifyFile f =   
   do  p   <- parseNanoFromFile f
-      -- Liquid { kVarInst = kv } <- getOpts
       cfg <- getOpts 
       fmap (, "") <$> reftypeCheck cfg f (typeCheck (ssaTransform p))
 
@@ -304,15 +303,16 @@ consUpCast g x a e
 consDownCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
 ---------------------------------------------------------------------------------------------
 consDownCast g x a e 
-  = do  
-        γ             <- getTDefs
-        let (ts,_,_)  = unionParts γ tE tC
-        forM_ ts      $ castSubM g x l
-        (x', g')     <- envAddFresh l tC g
-        return        $ (x', g')
+  = do  tdefs              <- getTDefs
+        let (_, tE', tC',_) = compareTs tdefs tE tC
+        let ts              = bkPaddedUnion tdefs tE' tC'
+        forM_ ts            $ castSubM g x l      -- Parts 
+        castSubM            g x l (tE', tC')      -- Top-level
+        (x', g')           <- envAddFresh l tC g
+        return              $ (x', g')
     where 
-      tE              = tracePP "consDownCast: Found type" $ envFindTy x g
-      tC              = tracePP "cast type"                $ rType $ head [ t | Assume t <- ann_fact a]
+      tE              = envFindTy x g
+      tC              = rType $ head [ t | Assume t <- ann_fact a]
       l               = getAnnotation e
 
 
@@ -320,10 +320,10 @@ consDownCast g x a e
 castSubM :: CGEnv -> Id AnnType -> AnnType -> (RefType, RefType) -> CGM () 
 ---------------------------------------------------------------------------------------------
 castSubM g x l (t1, t2) 
-  = do (g', t1', t2') <- fixBase g x (t1, t2)
+  = do (g', t1', t2') <- fixBase g x $ {- tracePP "Calling fixbase on" -} (t1, t2)
        let msg         = printf "Adding cast Sub: %s\n<:\n%s" (ppshow t1') (ppshow t2')
        -- subType can be called directly at this point
-       tracePP msg   <$> subType l g' t1' t2'
+       subType l g' (trace msg t1') t2'
 
 
 -- | fixBase converts:                                                  
@@ -378,9 +378,9 @@ consCall g l _ es ft
        (xes, g')    <- consScan consExpr g es
        let (su, ts') = renameBinds its xes
        subTypes l g' xes ts'
-       envAddFresh l (F.subst ({- F.traceFix msg -} su) ot) g'
-    -- where 
-    --   msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)
+       envAddFresh l (tracePP ("Adding at " ++ ppshow l) $ F.subst su ot) g'
+     where 
+       msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)
 
 instantiate :: AnnType -> CGEnv -> RefType -> CGM RefType
 instantiate l g t =  {- tracePP msg  <$>  -} freshTyInst l g αs τs tbody 

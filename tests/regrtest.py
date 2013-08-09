@@ -100,9 +100,9 @@ testdirs  = [ ("tc/pos", 0) ]
 runner    = rtest.TestRunner (Config ("nanojs tc -q", options.opts + "nofailcasts", testdirs, logfile, options.threadcount))
 runner.run ()
 
-#testdirs  = [ ("tc/neg", 1) ]
-#runner    = rtest.TestRunner (Config ("nanojs tc", options.opts, testdirs, logfile, options.threadcount))
-#runner.run ()
+testdirs  = [ ("tc/neg", 1) ]
+runner    = rtest.TestRunner (Config ("nanojs tc -q", options.opts, testdirs, logfile, options.threadcount))
+runner.run ()
 
 ## liquid Tests
 #testdirs  = [ ("liquid/pos", 0), ("liquid/neg", 1) ]

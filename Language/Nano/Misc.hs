@@ -19,6 +19,12 @@ module Language.Nano.Misc (
   , snd4
   , thd4
   , fth4
+  
+  , setFst4
+  , setSnd4
+  , setThd4
+  , setFth4
+  
 
   , everywhereM'
 
@@ -85,6 +91,10 @@ snd4 (_,b,_,_) = b
 thd4 (_,_,c,_) = c
 fth4 (_,_,_,d) = d
 
+setFst4 (a,b,c,d) a' = (a',b,c,d)
+setSnd4 (a,b,c,d) b' = (a,b',c,d)
+setThd4 (a,b,c,d) c' = (a,b,c',d)
+setFth4 (a,b,c,d) d' = (a,b,c,d')
 
 instance PP Bool where 
   pp True  = text "true"

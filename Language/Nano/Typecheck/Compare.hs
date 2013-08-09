@@ -216,16 +216,17 @@ compareTs :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r 
                                   (RType r, RType r, RType r, SubDirection)
 ---------------------------------------------------------------------------------------
 -- Deal with some standard cases of subtyping, e.g.: Top, Null, Undefined ...
-compareTs γ t1 t2 | all isTop [t1,t2] = 
-  let (j,t1',t2',_) = compareTs' γ t1 t2 in (j, t1', t2', EqT)
+compareTs γ t1 t2 | t1 == t2          = (ofType $ toType t1, t1, t2, EqT)
 
-compareTs γ t1 t2 | isTop t1 = 
-  let (j,t1',t2',_) = compareTs' γ t1 t2 in (j, t1', t2', SupT)
+compareTs γ t1 t2 | all isTop [t1,t2] = setFth4 (compareTs' γ t1 t2) EqT
+compareTs γ t1 t2 | isTop t1          = setFth4 (compareTs' γ t1 t2) SupT
+compareTs γ t1 t2 | isTop t2          = setFth4 (compareTs' γ t1 t2) SubT
 
-compareTs γ t1 t2 | isTop t2 = 
-  let (j,t1',t2',_) = compareTs' γ t1 t2 in (j, t1', t2', SubT)
+compareTs γ t1 t2 | isUndefined t1    = setFth4 (compareTs' γ t1 t2) SubT
 
-compareTs γ t1 t2   = 
+compareTs γ t1 t2 | and [isNull t1, not $ isUndefined t2] = setFth4 (compareTs' γ t1 t2) SubT
+
+compareTs γ t1 t2 | otherwise         = 
   {- tracePP (printf "compareTs %s - %s" (ppshow t1) (ppshow t2)) $-}  
   compareTs' γ t1 t2
 
@@ -254,29 +255,40 @@ compareTs' γ t1@(TApp (TDef _) _ _) t2       = compareTs γ (unfoldSafe γ t1) 
 compareTs' γ t1 t2@(TApp (TDef _) _ _)       = compareTs γ t1 (unfoldSafe γ t2)
 
 -- | Everything else in TApp besides unions and defined types
-compareTs' _ t1@(TApp _ _ _) t2@(TApp _ _ _) = padSimpleApp t1 t2 
+compareTs' γ t1@(TApp _ _ _) t2@(TApp _ _ _) = padSimple t1 t2 
 
+-- | Type Vars
 compareTs' _ t1@(TVar _ _)   t2@(TVar _ _)   = padVar t1 t2
 
+-- | Function Types
 compareTs' γ t1@(TFun _ _ _) t2@(TFun _ _ _) = padFun γ t1 t2
+compareTs' γ (TFun _ _ _)    _               = error "Unimplemented compareTs-1"
+compareTs' γ _               (TFun _ _ _)    = error "Unimplemented compareTs-2"
 
-compareTs' _ (TAll _ _  ) (TAll _ _  )       = error "Unimplemented: compareTs-7"
-compareTs' _ (TBd  _    ) (TBd  _    )       = error "Unimplemented: compareTs-8"
+-- | TAll
+compareTs' _ (TAll _ _  ) _                  = error "Unimplemented: compareTs-3"
+compareTs' _ _            (TAll _ _  )       = error "Unimplemented: compareTs-4"
 
-compareTs' _ t1           t2                 = 
-  error $ printf "Unimplemented: compareTs-9 for types %s - %s " (ppshow t1) (ppshow t2)
+-- | TBd
+compareTs' _ _            (TBd  _    )       = error "Unimplemented: compareTs-5"
+compareTs' _ (TBd  _    ) _                  = error "Unimplemented: compareTs-6"
+
+-- | Rest of cases
+
+-- Let these cases be dealt by padding unions
+compareTs' _ t1           t2                 = padSimple t1 t2 
 
 
 
--- | `padSimpleApp`
+-- | `padSimple`
 
-padSimpleApp t1@(TApp _ _ _) t2@(TApp _ _ _) 
+-- Not calling padUnion because the inputs are too small
+padSimple t1 t2
   | t1 == t2  = (t1, t1, t2, EqT)
   | otherwise = (joinType, t1', t2', Nth)
     where joinType = (ofType . toType) $ mkUnion [t1,t2]
-          t1'      = mkUnion [t1, fmap F.bot t2]
+          t1'      = mkUnion [t1, fmap F.bot t2]  -- Toplevel refs?
           t2'      = mkUnion [fmap F.bot t1, t2]
-padSimpleApp _ _   = error "BUG: padSimpleApp - no other case should be here"
 
 
 -- | `padVar`

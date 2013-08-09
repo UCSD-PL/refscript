@@ -14,7 +14,7 @@ import qualified Data.HashMap.Strict                as M
 import           Data.List                          (find)
 import qualified Data.Traversable                   as T
 import           Data.Monoid
-import           Data.Maybe                         (catMaybes, isJust)
+import           Data.Maybe                         (catMaybes, isJust, fromJust)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$), (<+>))
@@ -293,7 +293,7 @@ tcStmt' γ (ReturnStmt l eo)
         let (rt',t') = mapPair (apply θ) (rt,t)
         -- Subtype the arguments against the formals and cast if 
         -- necessary based on the direction of the subtyping outcome
-        maybeM_ (\e -> subTypeM l e t' rt' >>= \d -> castM d e rt') eo
+        maybeM_ (\e -> castM e t' rt') eo
         return Nothing
 
 tcStmt' γ s@(FunctionStmt _ _ _ _)
@@ -384,7 +384,7 @@ tcCall γ l fn es ft
         let (ts',its') = mapPair (apply θ) (ts,its)
         -- Subtype the arguments against the formals and cast if 
         -- necessary based on the direction of the subtyping outcome
-        subTypesM l es ts' its' >>= \ds -> castsM ds es its'
+        castsM es ts' its'
         return         $ apply θ ot
 
 instantiate l fn ft 
@@ -409,22 +409,12 @@ tcObject γ bs
 tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 ----------------------------------------------------------------------------------
 tcAccess γ l e f = 
-  tcExpr γ e >>= (unfoldSafeTC >=> binders l e) >>= access f
+  do  t     <- tcExpr γ e
+      t'    <- dotAccess f t
+      return $ fromJust t'
   where
-    access f        = return . maybe tUndef b_type . find (match $ F.symbol f)
     match s (B f _) = s == f
 
-
-----------------------------------------------------------------------------------
-binders :: AnnSSA -> Expression AnnSSA -> Type -> TCM [Bind ()]
-----------------------------------------------------------------------------------
-binders _ _  (TObj b _ )       = return b
-binders l e t@(TApp TUn ts _) = 
-  case find isObj ts of
-    Just _  -> error $ "UNIMPLEMENTED: Typecheck.hs, binders " -- addCast t' >> binders l e t'
-    _       -> tcError l $ errorObjectAccess e t
-binders l e t                 = tcError l $ errorObjectAccess e t
-  
 
 ----------------------------------------------------------------------------------
 envJoin :: AnnSSA -> Env Type -> TCEnv -> TCEnv -> TCM TCEnv 

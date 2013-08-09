@@ -144,8 +144,8 @@ instance Monoid (Sum SubDirection) where
   
   -- We know nothing about the types so far (Nth), but we can use the other part
   -- to make any assumptions, that's why @d@ is propagated.
-  Sum Nth  `mappend` Sum d              = Sum d
-  Sum d    `mappend` Sum Nth            = Sum d
+  Sum Nth  `mappend` Sum d              = Sum Rel
+  Sum d    `mappend` Sum Nth            = Sum Rel
 
   Sum EqT  `mappend` Sum d              = Sum d
   Sum d    `mappend` Sum EqT            = Sum d
@@ -234,13 +234,13 @@ compareTs γ t1 t2 | otherwise         =
 -- | Top-level Unions
 
 -- Eliminate top-level unions
-compareTs' γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
+compareTs' γ t1 t2 | any isUnion [t1,t2]     = {- tracePP "padUnion" $-} padUnion γ t1  t2
 
 -- | Top-level Objects
 
 compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = 
   {-tracePP (printf "Padding: %s and %s" (ppshow t1) (ppshow t2)) $ -}
-  padObject γ ({-trace ("padding obj " ++ ppshow t1 ++ " - " ++ ppshow t2)-} t1) t2
+  padObject γ ({- trace ("padding obj " ++ ppshow t1 ++ " - " ++ ppshow t2) -} t1) t2
 
 -- | Type definitions
 
@@ -344,7 +344,8 @@ padUnion env t1 t2 =
     commonT1s  = snd4 <$> commonTs
     commonT2s  = thd4 <$> commonTs
 
-    commonTs = map (uncurry $ compareTs env) $ cmnPs
+    commonTs = {- tracePP "padUnion: compaTs on common parts" $ -}
+      map (uncurry $ compareTs env) $ cmnPs
 
     -- To figure out the direction of the subtyping, we must take into account:
     direction  = distSub &+& comSub
@@ -358,7 +359,7 @@ padUnion env t1 t2 =
     --   of the parts and join the subtyping relations)
     comSub     = mconcatS $ fth4 <$> commonTs
     
-    (cmnPs, d1s, d2s) = unionParts env t1 t2
+    (cmnPs, d1s, d2s) = {- tracePP "padUnion: unionParts" $-} unionParts env t1 t2
 
 
 

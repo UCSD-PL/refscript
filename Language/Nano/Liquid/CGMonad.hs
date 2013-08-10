@@ -388,18 +388,19 @@ subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
 subType l g t1 t2 =
   do tt1   <- addInvariant t1
      tt2   <- addInvariant t2
-     -- Removing bkTypes from here:
-     -- With the addition of upcasts the type sorts
-     -- should be aligned and compatible so just do a check here
-     let s  = checkTypes tt1 tt2
+     tdefs <- getTDefs
+     let s  = checkTypes tdefs tt1 tt2
      modify $ \st -> st {cs = c s : (cs st)}
   where
     c      = uncurry $ Sub g (ci l)
-    checkTypes t1 t2 | toType t1 == toType t2 = (t1,t2)
-    checkTypes t1 t2 | otherwise              = 
-      errorstar (printf "CGMonad: checkTypes not aligned: \n%s\nwith\n%s"
-                (ppshow t1) (ppshow t2))
-
+    -- Sort check 
+    checkTypes tdefs t1 t2 | equivWUnions tdefs t1 t2 = (t1,t2)
+    checkTypes tdefs t1 t2 | otherwise                = 
+      errorstar (printf "[%s]\nCGMonad: checkTypes not aligned: \n%s\nwith\n%s"
+                (ppshow $ ann l) (ppshow t1) (ppshow t2))
+    equivWUnions γ (TApp TUn ts _) (TApp TUn ts' _) = 
+      and $ safeZipWith "equivWUnions" (equivWUnions γ) (L.sort ts) (L.sort ts')
+    equivWUnions γ t t' = equiv γ t t'
 
 
 ---------------------------------------------------------------------------------------

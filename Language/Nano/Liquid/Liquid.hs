@@ -378,12 +378,12 @@ consCall g l _ es ft
        (xes, g')    <- consScan consExpr g es
        let (su, ts') = renameBinds its xes
        subTypes l g' xes ts'
-       envAddFresh l (tracePP ("Adding at " ++ ppshow l) $ F.subst su ot) g'
-     where 
-       msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)
+       envAddFresh l (F.subst su ot) g'
+     {-where -}
+     {-  msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)-}
 
 instantiate :: AnnType -> CGEnv -> RefType -> CGM RefType
-instantiate l g t =  {- tracePP msg  <$>  -} freshTyInst l g αs τs tbody 
+instantiate l g t = {-  tracePP msg  <$>  -} freshTyInst l g αs τs tbody 
   where 
     (αs, tbody)   = bkAll t
     τs            = getTypArgs l αs 

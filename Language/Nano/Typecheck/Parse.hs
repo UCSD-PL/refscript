@@ -35,6 +35,8 @@ import           Language.Nano.Env
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile, SourceSpan (..))
 
+import           Language.ECMAScript3.PrettyPrint
+import           Text.Printf                        (printf)
 
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer
@@ -71,48 +73,53 @@ xyP lP sepP rP
 
 
 ----------------------------------------------------------------------------------
--- | RefTypes -------------------------------------------------------------------
+-- | RefTypes --------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 
 -- | Top-level parser for "bare" types. 
 -- If refinements not supplied, then "top" refinement is used.
 
 bareTypeP :: Parser RefType 
+bareTypeP 
+  = do  ts <- bareTypeNoUnionP `sepBy1` plus
+        tr <- topP   -- unions have Top ref. type atm
+        case ts of
+          [ ] -> error "impossible"
+          [t] -> return t
+          _   -> return $ TApp TUn (sort ts) tr
 
-bareTypeP   
+
+bareTypeNoUnionP
   =  try bareAllP
  <|> try bareFunP
- <|>     bareUnionP
+ <|>     (bareAtomP bbaseP)
 
-bareFunP  
-  = do args   <- parens $ sepBy bareTypeP comma
+-- Creating the bindings right away at bareArgP
+bareFunP
+  -- = do args   <- parens $ sepBy bareTypeP comma
+  = do args   <- parens $ sepBy bareArgP comma
        reserved "=>" 
        ret    <- bareTypeP 
        r      <- topP
-       return $ TFun (argBind <$> args) ret r
+       return $ TFun args ret r
+
+bareArgP 
+  =   (try boundTypeP)
+ <|>  (argBind <$> try (bareTypeP))
+
+boundTypeP = do s <- symbolP 
+                spaces
+                colon
+                spaces
+                B s <$> bareTypeP
 
 argBind t = B (rTypeValueVar t) t
 
-
-bareUnionP  
-  = bareUnionP'
-  
-  {-try $ parens bareUnionP'-}
-  {-<|> try bareUnionP'-}
-  
-bareUnionP' = do ts <- bareAtomP `sepBy1` plus
-                 r  <- topP   -- unions have Top ref. type atm
-                 case ts of 
-                      [ ] -> error "impossible"
-                      [t] -> return t
-                      _   -> return $ TApp TUn (sort ts) r
-
-
-bareAtomP 
-  =  try (refP bbaseP) 
- <|> try (bRefP bbaseP)
- <|> try (bindP bbaseP)
- <|>     (dummyP (bbaseP <* spaces))
+bareAtomP p
+  =  try (refP  p)
+ <|> try (bRefP p)
+--  <|> try (bindP p)   -- This case is taken separately at Function parser
+ <|>     (dummyP (p <* spaces))
 
 bbaseP :: Parser (Reft -> RefType)
 bbaseP 
@@ -162,6 +169,7 @@ bareBindP
   = do  s <- binderP
         spaces      --ugly
         colon
+        spaces
         t <- bareTypeP
         return $ B s t 
 
@@ -272,7 +280,7 @@ parseSpecFromFile :: FilePath -> IO (Nano SourceSpan RefType)
 --------------------------------------------------------------------------------------
 parseSpecFromFile = parseFromFile $ mkSpec <$> specWraps specP  
 
-mkSpec    ::  IsLocated l => [PSpec l t] -> Nano a t
+mkSpec    ::  (PP t, IsLocated l) => [PSpec l t] -> Nano a t
 mkSpec xs = Nano { code   = Src [] 
                  , specs  = envFromList [b | Bind b <- xs] 
                  , defs   = envEmpty

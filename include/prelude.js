@@ -87,7 +87,7 @@ function pos(){
 /*@ tail  :: forall A. (xs:list [A]) => list [A]                                                  */
 /*@ nth   :: forall A. (xs:list [A], {i:number| ((0 <= i) && i < (len xs))}) => A                 */
 /*@ empty :: forall A. (xango: list[A] + null ) => 
-                        {v: boolean | ((Prop v) <=> (ttag(xango) = "null"))}                             */
+                        {v: boolean | ((Prop v) <=> (ttag(xango) = "null"))}                      */
 /*@ emptyPoly :: forall A. (x:A) => {v: boolean | ((Prop v) <=> ((ttag x) = "null"))}             */
 
 

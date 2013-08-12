@@ -328,7 +328,7 @@ envJoin' l g g1 g2
         -- the added False's to make the types equivalent
         envAdds (zip xs $ snd4 <$> t4) g1 
         envAdds (zip xs $ thd4 <$> t4) g2
-        subTypes l g1 xs (tracePP "After JOIN" ts)
+        subTypes l g1 xs ts
         subTypes l g2 xs ts
         return g'
 

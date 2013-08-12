@@ -41,13 +41,16 @@ import           System.Console.CmdArgs.Default
 
 import           Debug.Trace                        (trace)
 
+import qualified System.Console.CmdArgs.Verbosity as V
+
 --------------------------------------------------------------------------------
 verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 verifyFile f =   
   do  p   <- parseNanoFromFile f
       cfg <- getOpts 
-      fmap (, "") <$> reftypeCheck cfg f (typeCheck (ssaTransform p))
+      verb    <- V.getVerbosity
+      fmap (, "") <$> reftypeCheck cfg f (typeCheck verb (ssaTransform p))
 
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 

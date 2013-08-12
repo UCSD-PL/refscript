@@ -70,11 +70,12 @@ verifyFile f
 
 
 -------------------------------------------------------------------------------
-typeCheck     :: (Data r, Typeable r, F.Reftable r) => Nano AnnSSA (RType r) -> (Nano AnnType (RType r))
+typeCheck     :: (Data r, Typeable r, F.Reftable r) => V.Verbosity -> 
+                   Nano AnnSSA (RType r) -> (Nano AnnType (RType r))
 -------------------------------------------------------------------------------
-typeCheck pgm = either crash id (execute V.Normal pgm (tcAndPatch pgm))
+typeCheck verb pgm = either crash id (execute verb pgm (tcAndPatch pgm))
   where
-    crash     = errorstar . render . vcat . map (text . ppErr)
+    crash          = errorstar . render . vcat . map (text . ppErr)
 
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 

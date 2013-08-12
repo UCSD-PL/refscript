@@ -403,6 +403,19 @@ subType l g t1 t2 =
     equivWUnions γ t t' = equiv γ t t'
 
 
+-- | Monadic unfolding
+-------------------------------------------------------------------------------
+unfoldFirstCG :: RefType -> CGM RefType
+-------------------------------------------------------------------------------
+unfoldFirstCG t = getTDefs >>= \γ -> return $ unfoldFirst γ t
+
+
+-------------------------------------------------------------------------------
+unfoldSafeCG :: RefType -> CGM RefType
+-------------------------------------------------------------------------------
+unfoldSafeCG   t = getTDefs >>= \γ -> return $ unfoldSafe γ t
+
+
 ---------------------------------------------------------------------------------------
 -- | Adding Well-Formedness Constraints -----------------------------------------------
 ---------------------------------------------------------------------------------------
@@ -479,14 +492,6 @@ splitC' :: SubC -> CGM [FixSubC]
 ---------------------------------------------------------------------------------------
 splitC = splitC'
 
--- RJ splitC c = bkTypesC c >>= concatMapM splitC'
--- RJ 
--- RJ bkTypesC c@(Sub g i t1 t2)
--- RJ   = do t1'   <- addInvariant t1
--- RJ        t2'   <- addInvariant t2
--- RJ        s     <- bkTypesM (t1, t2)
--- RJ        return   [Sub g i t1' t2' | (t1', t2') <- s] 
-
 ---------------------------------------------------------------------------------------
 -- | Function types
 ---------------------------------------------------------------------------------------
@@ -550,13 +555,11 @@ splitC' (Sub g i t1@(TApp d1@(TDef _) t1s _) t2@(TApp d2@(TDef _) t2s _)) | d1 =
 splitC' (Sub _ _ (TApp (TDef _) _ _) (TApp (TDef _) _ _))
   = errorstar "Unimplemented: Check type definition cycles"
   
-splitC' (Sub _ _ t1@(TApp (TDef _) _ _ ) t2)  
-  = errorstar $ printf "splitC - should have been broken down earlier:\n%s <: %s" 
-            (ppshow t1) (ppshow t2)
+splitC' (Sub g i t1@(TApp (TDef _) _ _ ) t2) = 
+  unfoldSafeCG t1 >>= \t1' -> splitC' $ Sub g i t1' t2
 
-splitC' (Sub _ _  t1 t2@(TApp (TDef _) _ _ ))
-  = errorstar $ printf "splitC - should have been broken down earlier:\n%s <: %s" 
-            (ppshow t1) (ppshow t2)
+splitC' (Sub g i  t1 t2@(TApp (TDef _) _ _)) = 
+  unfoldSafeCG t1 >>= \t2' -> splitC' $ Sub g i t1 t2'
 
 ---------------------------------------------------------------------------------------
 -- | Rest of TApp
@@ -570,10 +573,17 @@ splitC' (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
 
 ---------------------------------------------------------------------------------------
 -- | Objects
--- Only empty objects (top-level) should reach this far                               
+-- Just the top-level constraint will be included here
 ---------------------------------------------------------------------------------------
-splitC' (Sub g i tf1@(TObj [] _ ) tf2@(TObj [] _ ))
-  = return $ bsplitC g i tf1 tf2
+splitC' (Sub g i t1@(TObj xt1s _ ) t2@(TObj xt2s _ ))
+  = do let bcs     = bsplitC g i t1 t2
+       cs         <- concatMapM splitC $ map (uncurry $ Sub g i) ts 
+       return      $ bcs ++ cs
+    where 
+       ts          = safeZipWith "splitC:obj" checkB xt1s xt2s
+       t1s         = b_type <$> xt1s
+       t2s         = b_type <$> xt2s
+       checkB b b' | b_sym b == b_sym b' = (b_type b, b_type b')
 
 splitC' (Sub _ _ t1 t2@(TObj _ _ ))
   = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" 

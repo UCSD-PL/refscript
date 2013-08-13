@@ -145,21 +145,21 @@ tcAndPatch p =
 -------------------------------------------------------------------------------
 checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano AnnSSA (RType r) -> TCM ()
 -------------------------------------------------------------------------------
-checkTypeDefs pgm =
-  do  reportAll $ grep1 
-      reportAll $ grep2 
+checkTypeDefs pgm = reportAll $ grep
   where 
     ds        = defs pgm 
     ts        = tDefs pgm
     reportAll = mapM_ report
     report t  = tcError (srcPos t) $ errorUnboundType (ppshow t)
-    -- There should be no top-level free type variables
-    grep1     = concatMap (HS.toList . free) $ snd <$> envToList ds
+
     -- There should be no undefined type constructors
-    grep2 :: [Id SourceSpan] = everything (++) ([] `mkQ` f ts) ds
-    f ts d@(TDef i) | not $ envMem i ts = [i]
-    f _  _                              = [ ]
+    grep :: [Id SourceSpan] = everything (++) ([] `mkQ` g) ds
+    g d@(TDef i) | not $ envMem i ts = [i]
+    g _                              = [ ]
   
+    -- TODO: Also add check for free top-level type variables, i.e. make sure 
+    -- all type variables used are bound. Use something like:
+    -- @everythingWithContext@
 
 
 -------------------------------------------------------------------------------

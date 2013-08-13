@@ -27,7 +27,7 @@ import qualified Data.HashMap.Strict as M
 import           Data.Monoid
 import qualified Data.List           as L
 import           Text.Printf 
-import           Debug.Trace
+-- import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
 
 
@@ -49,7 +49,7 @@ unify env θ (TFun xts t _) (TFun xts' t' _) =
   unifys env θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
 
 -- TODO: Cycles
-unify env θ t@(TApp d@(TDef _) ts _) t'@(TApp d'@(TDef _) ts' _)
+unify env θ (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _)
   | d == d'                             = unifys env θ ts ts'
 
 unify env θ t@(TApp (TDef _) _ _) t'    = unify env θ (unfoldSafe env t) t'
@@ -65,7 +65,7 @@ unify _  θ t              (TVar α _)    = varAsn θ α t
 -- e.g.  List[A] + B `unif` ... => this should not even be allowed!!!
 unify γ θ t t' | any isUnion [t,t']     = 
   (uncurry $ unifys γ θ) $ unzip $ fst3 {- $ tracePP "unify union" -} 
-    $ unionPartsWithEq (unifEq γ) γ t t'
+    $ unionPartsWithEq (unifEq γ) t t'
 
 unify _ _ (TBd _) _   = error $ bugTBodiesOccur "unify"
 unify _ _ _ (TBd _)   = error $ bugTBodiesOccur "unify"
@@ -89,10 +89,10 @@ unify _ θ _ _         = Right $ θ
 {-unify' γ θ t t' = unify γ θ (trace (printf "unify: %s - %s" (show t) (show t')) t) t' -}
 
 -- TODO: cycles
-unifEq γ (TApp d@(TDef _) _ _) (TApp d'@(TDef _) _ _) | d == d' = True
-unifEq γ t@(TApp d@(TDef _) _ _) t' = unifEq γ (unfoldSafe γ t) t'
-unifEq γ t t'@(TApp d@(TDef _) _ _) = unifEq γ t (unfoldSafe γ t')
-unifEq γ t t' = equiv γ t t'
+unifEq _ (TApp d@(TDef _) _ _) (TApp d'@(TDef _) _ _) | d == d' = True
+unifEq γ t@(TApp (TDef _) _ _) t' = unifEq γ (unfoldSafe γ t) t'
+unifEq γ t t'@(TApp (TDef _) _ _) = unifEq γ t (unfoldSafe γ t')
+unifEq γ t t'                     = equiv γ t t'
   
 
 

@@ -19,6 +19,12 @@ Todo List
     Eg:
       tc/pos/listmap02.js 
 
+5.  Comparing objects with null causes upcasts that fail during constraint
+    genereation.
+
+6.  Spurious falsified k-vars:
+    liquid/pos/minindex02.js
+
 
 Failing Tests
 -------------

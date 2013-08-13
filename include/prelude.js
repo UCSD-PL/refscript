@@ -62,14 +62,6 @@ function pos(){
 //
 // For Null
 // typeof null === 'object'; // This stands since the beginning of JavaScript
-//
-
-
-// 0 -> Number
-// 1 -> Boolean
-// 2 -> Null              -- this does not follow the above very closely
-// 3 -> Undefined  
-
 
 
 
@@ -146,7 +138,7 @@ function pos(){
 /*@ builtin_PrefixTypeof:: forall A. (x:A) => {v:string | (ttag x) = v }  */
 
 /*@ invariant {v:undefined | ttag(v) = "undefined"} */
-/*@ invariant {v:null      | ttag(v) = "object"   } */
+/*@ invariant {v:null      | ttag(v) = "null"     } */  //TODO: this is not very precise
 /*@ invariant {v:boolean   | ttag(v) = "boolean"  } */ 
 /*@ invariant {v:number    | ttag(v) = "number"   } */
 /*@ invariant {v:string    | ttag(v) = "string"   } */

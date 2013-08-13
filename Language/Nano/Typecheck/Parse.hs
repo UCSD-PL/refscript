@@ -36,7 +36,6 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile, SourceSpan (..))
 
 import           Language.ECMAScript3.PrettyPrint
-import           Text.Printf                        (printf)
 
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer
@@ -180,13 +179,13 @@ dummyP fm = fm `ap` topP
 topP   :: Parser Reft
 topP   = (Reft . (, []) . vv . Just) <$> freshIntP
 
--- | Parses bindings of the form: `x : kind`
-bindP :: Parser (Reft -> a) -> Parser a
-bindP kindP
-  = do v <- symbolP 
-       colon
-       t <- kindP
-       return $ t (Reft (v, []))
+{--- | Parses bindings of the form: `x : kind`-}
+{-bindP :: Parser (Reft -> a) -> Parser a-}
+{-bindP kindP-}
+{-  = do v <- symbolP -}
+{-       colon-}
+{-       t <- kindP-}
+{-       return $ t (Reft (v, []))-}
 
 -- | Parses refined types of the form: `{ x : kind | refinement }`
 bRefP :: Parser (Reft -> a) -> Parser a

@@ -91,7 +91,7 @@ import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
-import           Debug.Trace                      (trace)
+-- import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity as V
 
 -------------------------------------------------------------------------------
@@ -249,7 +249,6 @@ dotAccessUnion f ts =
       -- Gather all the types that do not throw errors, and the type of 
       -- the accessed expression that yields them
       let (ts', tfs') = unzip [(t,tf) | (t, Just tf) <- zip ts tfs]
-      γ <- getTDefs
       castM e (mkUnion ts) (mkUnion ts')
       case tfs' of
         [] -> return Nothing
@@ -405,7 +404,7 @@ subTypeM :: Type -> Type -> TCM SubDirection
 subTypeM t t' 
   = do  θ            <- getTDefs 
         let (_,_,_,d) = compareTs θ t t'
-        return $  {- trace (printf "subTypeM: %s %s %s" (ppshow t) (ppshow d) (ppshow t')) -} d
+        return $  {- trace (printf "subTypeM: %s %s %s" (ppshow t) (ppshow d) (ppshow t')) -}  d
 
 ----------------------------------------------------------------------------------
 subTypeM' :: (IsLocated l) => l -> Type -> Type -> TCM ()

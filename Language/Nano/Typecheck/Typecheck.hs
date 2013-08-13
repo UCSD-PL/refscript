@@ -11,7 +11,6 @@ import           Control.Monad
 
 import qualified Data.HashSet                       as HS 
 import qualified Data.HashMap.Strict                as M 
-import           Data.List                          (find)
 import qualified Data.Traversable                   as T
 import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust, fromJust)
@@ -30,7 +29,6 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
-import           Language.Nano.Typecheck.Unify
 import           Language.Nano.SSA.SSA
 
 import qualified Language.Fixpoint.Types            as F
@@ -154,8 +152,8 @@ checkTypeDefs pgm = reportAll $ grep
 
     -- There should be no undefined type constructors
     grep :: [Id SourceSpan] = everything (++) ([] `mkQ` g) ds
-    g d@(TDef i) | not $ envMem i ts = [i]
-    g _                              = [ ]
+    g (TDef i) | not $ envMem i ts = [i]
+    g _                            = [ ]
   
     -- TODO: Also add check for free top-level type variables, i.e. make sure 
     -- all type variables used are bound. Use something like:
@@ -409,12 +407,10 @@ tcObject γ bs
 ----------------------------------------------------------------------------------
 tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
 ----------------------------------------------------------------------------------
-tcAccess γ l e f = 
+tcAccess γ _ e f = 
   do  t     <- tcExpr γ e
       t'    <- dotAccess f t
       return $ fromJust t'
-  where
-    match s (B f _) = s == f
 
 
 ----------------------------------------------------------------------------------

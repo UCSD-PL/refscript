@@ -39,7 +39,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -327,9 +327,9 @@ castSubM :: CGEnv -> Id AnnType -> AnnType -> (RefType, RefType) -> CGM ()
 ---------------------------------------------------------------------------------------------
 castSubM g x l (t1, t2) 
   = do (g', t1', t2') <- fixBase g x $ {- tracePP "Calling fixbase on" -} (t1, t2)
-       let msg         = printf "Adding cast Sub: %s\n<:\n%s" (ppshow t1') (ppshow t2')
+       {-let msg         = printf "Adding cast Sub: %s\n<:\n%s" (ppshow t1') (ppshow t2')-}
        -- subType can be called directly at this point
-       subType l g' (trace msg t1') t2'
+       subType l g' ({-trace msg -} t1') t2'
 
 
 -- | fixBase converts:                                                  

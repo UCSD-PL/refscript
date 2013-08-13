@@ -25,7 +25,6 @@ module Language.Nano.Typecheck.Subst (
 
 import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
-import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Errors 
 import           Language.Nano.Env

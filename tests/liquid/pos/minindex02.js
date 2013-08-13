@@ -1,6 +1,6 @@
 /*@ qualif UBound(v:number, x:a) : v < (len x) */
 
-/*@ range :: (number, number) => list [number] */
+/*@ range :: (number, number) => list [number] + null */
 function range(lo, hi) {
   if (lo < hi) { 
     var rest = range(lo + 1, hi); 
@@ -9,7 +9,7 @@ function range(lo, hi) {
   return nil();
 }
 
-/*@ foldl :: forall A B. ((A, B) => A, A, list[B]) => A */
+/*@ foldl :: forall A B. ((A, B) => A, A, list[B] + null) => A */
 function foldl(f, acc, xs){ 
   if (empty(xs)) {
     return acc;
@@ -18,7 +18,7 @@ function foldl(f, acc, xs){
     return foldl(f, acc_, tail(xs));
   }
 }
-
+ 
 /*@ minIndex :: ({a:list [number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a))} */ 
 function minIndex(a){
    

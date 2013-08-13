@@ -30,7 +30,7 @@ module Language.Nano.Typecheck.Compare (
   ) where 
 
 import           Text.Printf
-import           Data.Maybe                         (isNothing)
+
 import qualified Data.List                          as L
 import qualified Data.Map                           as M
 import           Data.Monoid
@@ -44,13 +44,13 @@ import           Language.Nano.Typecheck.Subst
 
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.PrettyPrint
+-- import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ 
 
 import           Control.Applicative                hiding (empty)
 import           Control.Monad.Error                ()
 
-import           Debug.Trace (trace)
+-- import           Debug.Trace (trace)
 
 
 
@@ -64,13 +64,13 @@ instance Equivalent e a => Equivalent e [a] where
   equiv γ a b = and $ zipWith (equiv γ) a b 
 
 instance (PP r, F.Reftable r) => Equivalent (Env (RType r)) (RType r) where 
-  equiv _ t t'  | any isUnion [t,t']                  = errorstar "equiv: no unions"
+  equiv _ t t'  | any isUnion [t,t']                  = errorstar (printf "equiv: no unions: %s\n\t\t%s" (ppshow t) (ppshow t'))
   -- No unions beyond this point!
   
   equiv γ (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _) | d == d' = equiv γ ts ts'
 
-  equiv γ t@(TApp d@(TDef _) _ _) t' = equiv γ (unfoldSafe γ t) t'
-  equiv γ t t'@(TApp d@(TDef _) _ _) = equiv γ t (unfoldSafe γ t')
+  equiv γ t@(TApp (TDef _) _ _) t' = equiv γ (unfoldSafe γ t) t'
+  equiv γ t t'@(TApp (TDef _) _ _) = equiv γ t (unfoldSafe γ t')
   
   equiv _ (TApp c _ _)         (TApp c' _ _)          = c == c'
 
@@ -143,8 +143,8 @@ instance Monoid (Sum SubDirection) where
   
   -- We know nothing about the types so far (Nth), but we can use the other part
   -- to make any assumptions, that's why @d@ is propagated.
-  Sum Nth  `mappend` Sum d              = Sum Rel
-  Sum d    `mappend` Sum Nth            = Sum Rel
+  Sum Nth  `mappend` Sum _              = Sum Rel
+  Sum _    `mappend` Sum Nth            = Sum Rel
 
   Sum EqT  `mappend` Sum d              = Sum d
   Sum d    `mappend` Sum EqT            = Sum d
@@ -165,8 +165,8 @@ instance Monoid (Product SubDirection) where
 
   Product d    `mappend` Product d'   | d == d' = Product d
   
-  Product Nth  `mappend` Product d              = Product Nth
-  Product d    `mappend` Product Nth            = Product Nth
+  Product Nth  `mappend` Product _              = Product Nth
+  Product _    `mappend` Product Nth            = Product Nth
 
   Product EqT  `mappend` Product d              = Product d
   Product d    `mappend` Product EqT            = Product d
@@ -215,7 +215,7 @@ compareTs :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r 
                                   (RType r, RType r, RType r, SubDirection)
 ---------------------------------------------------------------------------------------
 -- Deal with some standard cases of subtyping, e.g.: Top, Null, Undefined ...
-compareTs γ t1 t2 | toType t1 == toType t2 = (ofType $ toType t1, t1, t2, EqT)
+compareTs _ t1 t2 | toType t1 == toType t2 = (ofType $ toType t1, t1, t2, EqT)
 
 compareTs γ t1 t2 | all isTop [t1,t2]      = setFth4 (compareTs' γ t1 t2) EqT
 compareTs γ t1 t2 | isTop t1               = setFth4 (compareTs' γ t1 t2) SupT
@@ -226,20 +226,21 @@ compareTs γ t1 t2 | isUndefined t1         = setFth4 (compareTs' γ t1 t2) SubT
 compareTs γ t1 t2 | and [isNull t1, not $ isUndefined t2] = setFth4 (compareTs' γ t1 t2) SubT
 
 compareTs γ t1 t2 | otherwise              = 
-  {- tracePP (printf "compareTs %s - %s" (ppshow t1) (ppshow t2)) $-}  
+   {-tracePP (printf "compareTs %s - %s" (ppshow t1) (ppshow t2)) $  -}
   compareTs' γ t1 t2
 
 
 -- | Top-level Unions
 
 -- Eliminate top-level unions
-compareTs' γ t1 t2 | any isUnion [t1,t2]     = {- tracePP "padUnion" $-} padUnion γ t1  t2
+compareTs' γ t1 t2 | any isUnion [t1,t2]     = {- tracePP "padUnion" $-} padUnion γ 
+  ({- trace ("padding union " ++ ppshow t1 ++ "\n - " ++ ppshow t2) -} t1)  t2
 
 -- | Top-level Objects
 
 compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = 
   {-tracePP (printf "Padding: %s and %s" (ppshow t1) (ppshow t2)) $ -}
-  padObject γ ({- trace ("padding obj " ++ ppshow t1 ++ " - " ++ ppshow t2) -} t1) t2
+  padObject γ ({-trace ("padding obj " ++ ppshow t1 ++ "\n - " ++ ppshow t2)-} t1) t2
 
 -- | Type definitions
 
@@ -254,15 +255,15 @@ compareTs' γ t1@(TApp (TDef _) _ _) t2       = compareTs γ (unfoldSafe γ t1) 
 compareTs' γ t1 t2@(TApp (TDef _) _ _)       = compareTs γ t1 (unfoldSafe γ t2)
 
 -- | Everything else in TApp besides unions and defined types
-compareTs' γ t1@(TApp _ _ _) t2@(TApp _ _ _) = padSimple t1 t2 
+compareTs' _ t1@(TApp _ _ _) t2@(TApp _ _ _) = padSimple t1 t2 
 
 -- | Type Vars
 compareTs' _ t1@(TVar _ _)   t2@(TVar _ _)   = padVar t1 t2
 
 -- | Function Types
 compareTs' γ t1@(TFun _ _ _) t2@(TFun _ _ _) = padFun γ t1 t2
-compareTs' γ (TFun _ _ _)    _               = error "Unimplemented compareTs-1"
-compareTs' γ _               (TFun _ _ _)    = error "Unimplemented compareTs-2"
+compareTs' _ (TFun _ _ _)    _               = error "Unimplemented compareTs-1"
+compareTs' _ _               (TFun _ _ _)    = error "Unimplemented compareTs-2"
 
 -- | TAll
 compareTs' _ (TAll _ _  ) _                  = error "Unimplemented: compareTs-3"
@@ -383,7 +384,7 @@ unionParts ::  (Eq r, Ord r, F.Reftable r, PP r) =>
           -> ([(RType r, RType r)], [RType r], [RType r])
 --------------------------------------------------------------------------------
 
-unionParts γ = unionPartsWithEq (equiv γ) γ
+unionParts = unionPartsWithEq . equiv
 
 
 -- General purpose function that pairs up the components of the two union typed
@@ -396,12 +397,11 @@ unionParts γ = unionPartsWithEq (equiv γ) γ
 --------------------------------------------------------------------------------
 unionPartsWithEq ::  (Eq r, Ord r, F.Reftable r, PP r) => 
              (RType r -> RType r -> Bool)
-          -> Env (RType r) 
           -> RType r 
           -> RType r 
           -> ([(RType r, RType r)], [RType r], [RType r])
 --------------------------------------------------------------------------------
-unionPartsWithEq eq env t1 t2 = (common t1s t2s, d1s, d2s)
+unionPartsWithEq eq t1 t2 = (common t1s t2s, d1s, d2s)
   where
     -- `common` does a "light" matching - which is determined by `equiv`. 
     -- Right now the only difference is in objects: 
@@ -451,7 +451,7 @@ padObject γ (TObj bs1 r1) (TObj bs2 r2) =
     -- Total direction
     direction = cmnDir &*& distDir d1s d2s
     -- Direction from all the common keys  
-    cmnDir    = mconcatP $ (\(s,(t,t')) -> fth4 $ compareTs γ t t') <$> cmn
+    cmnDir    = mconcatP $ (\(_,(t,t')) -> fth4 $ compareTs γ t t') <$> cmn
     -- Direction from distinct keys
     distDir xs ys | null (xs ++ ys) = EqT
                   | null xs         = SupT

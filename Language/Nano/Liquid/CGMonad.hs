@@ -52,6 +52,9 @@ module Language.Nano.Liquid.CGMonad (
   
   -- * Add Type Annotations
   , addAnnot
+
+  -- * Unfolding
+  , unfoldSafeCG, unfoldFirstCG
   ) where
 
 import           Data.Maybe                     (fromMaybe)
@@ -86,7 +89,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.ECMAScript3.PrettyPrint
 
--- import qualified Debug.Trace                    as T
+-- import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation ----------------------
@@ -160,13 +163,13 @@ getBinding :: (PP r, F.Reftable r) => E.Env (RType r) -> Id a -> RType r -> Eith
 ---------------------------------------------------------------------------------
 getBinding _ i (TObj bs _ ) = 
   case L.find (\s -> F.symbol i == b_sym s) bs of
-    Just b -> Right $ b_type b
-    _      -> Left  $ errorObjectBinding
+    Just b      -> Right $ b_type b
+    _           -> Left  $ errorObjectBinding
 getBinding defs i t@(TApp (TDef _) _ _) = 
   case unfoldMaybe defs t of
-    Right t' -> getBinding defs i t'
-    Left  s  -> Left $ s ++ "\nand\n" ++ errorObjectTAccess t
-getBinding defs _ t = Left $ errorObjectTAccess t
+    Right t'    -> getBinding defs i t'
+    Left  s     -> Left $ s ++ "\nand\n" ++ errorObjectTAccess t
+getBinding _ _ t = Left $ errorObjectTAccess t
 
 
 
@@ -386,16 +389,17 @@ subTypes l g xs ts = zipWithM_ (subType l g) [envFindTy x g | x <- xs] ts
 subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 =
-  do tt1   <- addInvariant t1
-     tt2   <- addInvariant t2
+  do tt1   <- addInvariant ({-tracePP "Liquid:subtype t1" -}t1)
+     tt2   <- addInvariant ({-tracePP "Liquid:subtype t2" -}t2)
      tdefs <- getTDefs
-     let s  = checkTypes tdefs tt1 tt2
+     let s  = checkTypes tdefs 
+              ({-trace ("Liquid subTypes checktypes: " ++ ppshow tt1 ++ " - " ++ ppshow tt2)-} tt1) tt2
      modify $ \st -> st {cs = c s : (cs st)}
   where
     c      = uncurry $ Sub g (ci l)
     -- Sort check 
     checkTypes tdefs t1 t2 | equivWUnions tdefs t1 t2 = (t1,t2)
-    checkTypes tdefs t1 t2 | otherwise                = 
+    checkTypes  _ t1 t2 | otherwise                   = 
       errorstar (printf "[%s]\nCGMonad: checkTypes not aligned: \n%s\nwith\n%s"
                 (ppshow $ ann l) (ppshow t1) (ppshow t2))
     equivWUnions γ (TApp TUn ts _) (TApp TUn ts' _) = 
@@ -559,7 +563,7 @@ splitC' (Sub g i t1@(TApp (TDef _) _ _ ) t2) =
   unfoldSafeCG t1 >>= \t1' -> splitC' $ Sub g i t1' t2
 
 splitC' (Sub g i  t1 t2@(TApp (TDef _) _ _)) = 
-  unfoldSafeCG t1 >>= \t2' -> splitC' $ Sub g i t1 t2'
+  unfoldSafeCG t2 >>= \t2' -> splitC' $ Sub g i t1 t2'
 
 ---------------------------------------------------------------------------------------
 -- | Rest of TApp
@@ -581,9 +585,8 @@ splitC' (Sub g i t1@(TObj xt1s _ ) t2@(TObj xt2s _ ))
        return      $ bcs ++ cs
     where 
        ts          = safeZipWith "splitC:obj" checkB xt1s xt2s
-       t1s         = b_type <$> xt1s
-       t2s         = b_type <$> xt2s
        checkB b b' | b_sym b == b_sym b' = (b_type b, b_type b')
+       checkB _ _  = errorstar "unimplemented: splitC: cannot split these objects"
 
 splitC' (Sub _ _ t1 t2@(TObj _ _ ))
   = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" 

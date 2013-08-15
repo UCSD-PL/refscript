@@ -205,7 +205,7 @@ eqType γ t1 t2 = (fth4 $ compareTs γ t1 t2) == EqT
 -- General purpose function that returns:
 --
 -- ∙ A padded version of the upper bound of @t1@ and @t2@
--- ∙ An equivalent version of @t1@ that has the same sort as the first output
+-- ∙ An equivalent version of @t1@ that has the same sort as the second output
 -- ∙ An equivalent version of @t2@ that has the same sort as the first output
 -- ∙ A subtyping direction between @t1@ and @t2@
 --
@@ -217,20 +217,25 @@ compareTs :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r 
 -- Deal with some standard cases of subtyping, e.g.: Top, Null, Undefined ...
 compareTs _ t1 t2 | toType t1 == toType t2 = (ofType $ toType t1, t1, t2, EqT)
 
-compareTs γ t1 t2 | all isTop [t1,t2]      = setFth4 (compareTs' γ t1 t2) EqT
-compareTs γ t1 t2 | isTop t1               = setFth4 (compareTs' γ t1 t2) SupT
-compareTs γ t1 t2 | isTop t2               = setFth4 (compareTs' γ t1 t2) SubT
-
 compareTs γ t1 t2 | isUndefined t1         = setFth4 (compareTs' γ t1 t2) SubT
 
 compareTs γ t1 t2 | and [isNull t1, not $ isUndefined t2] = setFth4 (compareTs' γ t1 t2) SubT
 
 compareTs γ t1 t2 | otherwise              = 
-   {-tracePP (printf "compareTs %s - %s" (ppshow t1) (ppshow t2)) $  -}
+   tracePP (printf "compareTs %s - %s" (ppshow t1) (ppshow t2)) $  
   compareTs' γ t1 t2
 
 
 -- | Top-level Unions
+
+compareTs' _ t1 t2 | isTop t1               = errorstar "unimplemented: compareTs - top"
+compareTs' _ t1 t2 | isTop t2               = (t1', t1, t2', SubT)
+  where
+    t1' = setRTypeR t1 F.top -- this will be kVared
+    -- @t2@ is a Top, so just to make the types compatible we will 
+    -- use the base type of @t1@ and stregthen with @t2@'s refinement.
+    t2' = setRTypeR t1 $ rTypeR t2
+  
 
 -- Eliminate top-level unions
 compareTs' γ t1 t2 | any isUnion [t1,t2]     = {- tracePP "padUnion" $-} padUnion γ 

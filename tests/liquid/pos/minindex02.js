@@ -19,7 +19,7 @@ function foldl(f, acc, xs){
   }
 }
  
-/*@ minIndex :: ({a:list [number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a))} */ 
+/*@ minIndex :: ({a:list [number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a)  )} */ 
 function minIndex(a){
    
    /*@ step :: (number, number) => number */

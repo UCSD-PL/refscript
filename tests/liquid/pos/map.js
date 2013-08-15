@@ -1,4 +1,4 @@
-/*@ map :: forall A B. ((A) => B, list [A] + null) => list [B] + null */
+/*@ map :: forall A B. ((A) => B, list [A]) => list [B] */
 function map(f, xs){
   if (empty(xs)) {
     return nil();

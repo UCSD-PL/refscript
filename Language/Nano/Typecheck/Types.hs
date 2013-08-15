@@ -38,7 +38,7 @@ module Language.Nano.Typecheck.Types (
   -- * Deconstructing Types
   , bkFun
   , bkAll
-  , bkUnion, rUnion
+  , bkUnion, rUnion, rTypeR, setRTypeR
   , noUnion, unionCheck
 
   -- * Regular Types
@@ -211,9 +211,13 @@ bkUnion (TApp TUn xs _) = xs
 bkUnion t               = [t]
 
 
+-- | Strengthen the top-level refinement
+
 ---------------------------------------------------------------------------------
 strengthen                   :: F.Reftable r => RType r -> r -> RType r
 ---------------------------------------------------------------------------------
+{-strengthen t = setRTypeR t . (rTypeR t `F.meet`)-} 
+-- The above does not handle cases other than TApp and TVar correctly
 strengthen (TApp c ts r) r'  = TApp c ts $ r' `F.meet` r 
 strengthen (TVar α r)    r'  = TVar α    $ r' `F.meet` r 
 strengthen t _               = t                         
@@ -255,6 +259,23 @@ rUnion               :: F.Reftable r => RType r -> r
 rUnion (TApp TUn _ r) = r
 rUnion _              = F.top
  
+-- Get the top-level refinement 
+rTypeR :: RType r -> r
+rTypeR (TApp _ _ r) = r
+rTypeR (TVar _ r)   = r
+rTypeR (TFun _ _ r) = r
+rTypeR (TObj _ r)   = r
+rTypeR (TBd  _)     = errorstar "Unimplemented: rTypeR - TBd"
+rTypeR (TAll _ _ )  = errorstar "Unimplemented: rTypeR - TAll"
+
+setRTypeR :: RType r -> r -> RType r
+setRTypeR (TApp c ts _) r'   = TApp c ts r'
+setRTypeR (TVar v _)    r'   = TVar v r'
+setRTypeR (TFun xts ot _) r' = TFun xts ot r'
+setRTypeR (TObj xts _)  r'   = TObj xts r'
+setRTypeR (TBd  _)     _     = errorstar "Unimplemented: setRTypeR - TBd"
+setRTypeR (TAll _ _ )  _     = errorstar "Unimplemented: setRTypeR - TAll"
+
 
 ---------------------------------------------------------------------------------------
 noUnion :: (F.Reftable r) => RType r -> Bool

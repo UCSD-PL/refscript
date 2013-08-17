@@ -204,6 +204,7 @@ rTypeSort t                = error ("Type: " ++ ppshow t ++
 
 
 rTypeSortApp TInt [] = F.FInt
+rTypeSortApp TUn  _  = F.FApp (tconFTycon TUn) [] -- simplifying union sorts, the checks will have been done earlier
 rTypeSortApp c ts    = F.FApp (tconFTycon c) (rTypeSort <$> ts) 
 
 tconFTycon TInt      = F.intFTyCon

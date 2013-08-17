@@ -39,7 +39,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -284,8 +284,7 @@ consExpr  g (DotRef l e i)
           Right t' -> envAddFresh l t' g'
        
 consExpr g (ObjectLit l ps) 
-  = do  (x, g') <- consObj l g ps
-        envAddFresh l (envFindTy x g') g'
+  = consObj l g ps
 
 consExpr _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))
@@ -297,7 +296,9 @@ consUpCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id An
 ---------------------------------------------------------------------------------------------
 consUpCast g x a e 
   = do  γ         <- getTDefs
-        let tE'    = thd4 $ compareTs γ tE tU 
+        let cmp    = compareTs γ tE tU 
+            tE'    = snd4 cmp
+            tU'    = thd4 cmp
         (x',g')   <- envAddFresh l tE' g 
         return     $ (x', g')
   where tE         = envFindTy x g 
@@ -310,7 +311,7 @@ consDownCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id 
 ---------------------------------------------------------------------------------------------
 consDownCast g x a e 
   = do  tdefs              <- getTDefs
-        let (_, tE', tC',_) = compareTs tdefs tE tC
+        let (_, tE', tC',_) = compareTs tdefs (trace ("consDownCast " ++ ppshow (toType tE) ++ "\nto\n" ++ ppshow tC) tE) tC
         let ts              = bkPaddedUnion tdefs tE' tC'
         forM_ ts            $ castSubM g x l      -- Parts 
         castSubM            g x l (tE', tC')      -- Top-level
@@ -426,8 +427,9 @@ consObj :: AnnType -> CGEnv -> [(Prop AnnType, Expression AnnType)] -> CGM (Id A
 consObj l g pe = 
   do
     let (ps, es) = unzip pe
-    (xes, g')    <- consScan consExpr g es
-    let pxs = zipWith B (map F.symbol ps) $ map (\x -> envFindTy x g') xes
-    envAddFresh  l (TObj pxs F.top) g'
-    -- XXX What kind of refinements could we get here?
+    (xes, g')   <- consScan consExpr g es
+    let pxs      = zipWith B (map F.symbol ps) $ map (\x -> envFindTy x g') xes
+    let tob      = TObj pxs F.top
+    (i, g'')    <- envAddFresh  l tob g'
+    return       $ {- trace (printf "Adding: %s :: %s" (ppshow i) (ppshow tob)) -} (i,g'')
   

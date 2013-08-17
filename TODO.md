@@ -21,6 +21,8 @@ Todo List
 5.  Spurious falsified k-vars:
     liquid/pos/minindex02.js
 
+6.  Need to restore the check for unbounded type variables.
+
 
 Failing Tests
 -------------

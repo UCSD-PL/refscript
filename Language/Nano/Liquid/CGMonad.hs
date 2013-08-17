@@ -399,12 +399,21 @@ subType l g t1 t2 =
     c      = uncurry $ Sub g (ci l)
     -- Sort check 
     checkTypes tdefs t1 t2 | equivWUnions tdefs t1 t2 = (t1,t2)
-    checkTypes  _ t1 t2 | otherwise                   = 
+    checkTypes  _ t1 t2    | otherwise                   = 
       errorstar (printf "[%s]\nCGMonad: checkTypes not aligned: \n%s\nwith\n%s"
-                (ppshow $ ann l) (ppshow t1) (ppshow t2))
-    equivWUnions γ (TApp TUn ts _) (TApp TUn ts' _) = 
-      and $ safeZipWith "equivWUnions" (equivWUnions γ) (L.sort ts) (L.sort ts')
-    equivWUnions γ t t' = equiv γ t t'
+                (ppshow $ ann l) (ppshow $ toType t1) (ppshow $ toType t2))
+
+-------------------------------------------------------------------------------
+equivWUnions :: E.Env RefType -> RefType -> RefType -> Bool
+-------------------------------------------------------------------------------
+equivWUnions γ t1@(TApp TUn _ _) t2@(TApp TUn _ _) = 
+  case unionPartsWithEq (equiv γ) t1 t2 of 
+    (ts,[],[])  -> and $ uncurry (safeZipWith "equivWUnions" $ equivWUnions γ) (unzip ts)
+    _           -> False
+equivWUnions γ t t' = equiv γ t t'
+
+equivWUnionsM t t' = getTDefs >>= \γ -> return $ equivWUnions γ t t'
+
 
 
 -- | Monadic unfolding
@@ -538,9 +547,10 @@ splitC' (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
 -- Nothing more should be added, the internal subtyping constrains have been
 -- dealt with separately
 ---------------------------------------------------------------------------------------
-splitC' (Sub g i t1@(TApp TUn _ _) t2@(TApp TUn _ _)) 
-  | toType t1 == toType t2 = return    $ bsplitC g i t1 t2
-  | otherwise              = errorstar $ printf "Unions in splitC: %s - %s" (ppshow t1) (ppshow t2)
+splitC' (Sub g i t1@(TApp TUn _ _) t2@(TApp TUn _ _)) =
+  ifM (equivWUnionsM t1 t2) 
+    (return $ bsplitC g i t1 t2) 
+    (errorstar $ printf "Unequal unions in splitC: %s - %s" (ppshow $ toType t1) (ppshow $ toType t2))
 
 splitC' (Sub _ _ t1@(TApp TUn _ _) t2) = 
   errorstar $ printf "Unions in splitC: %s - %s" (ppshow t1) (ppshow t2)

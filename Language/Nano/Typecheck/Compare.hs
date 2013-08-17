@@ -50,7 +50,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative                hiding (empty)
 import           Control.Monad.Error                ()
 
--- import           Debug.Trace (trace)
+import           Debug.Trace (trace)
 
 
 
@@ -64,6 +64,9 @@ instance Equivalent e a => Equivalent e [a] where
   equiv γ a b = and $ zipWith (equiv γ) a b 
 
 instance (PP r, F.Reftable r) => Equivalent (Env (RType r)) (RType r) where 
+
+  equiv _ t t'  | toType t == toType t'               = True
+  
   equiv _ t t'  | any isUnion [t,t']                  = errorstar (printf "equiv: no unions: %s\n\t\t%s" (ppshow t) (ppshow t'))
   -- No unions beyond this point!
   
@@ -217,13 +220,14 @@ compareTs :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r 
 -- Deal with some standard cases of subtyping, e.g.: Top, Null, Undefined ...
 compareTs _ t1 t2 | toType t1 == toType t2 = (ofType $ toType t1, t1, t2, EqT)
 
-compareTs γ t1 t2 | isUndefined t1         = setFth4 (compareTs' γ t1 t2) SubT
+-- compareTs γ t1 t2 | isUndefined t1         = setFth4 (compareTs' γ t1 t2) SubT
 
-compareTs γ t1 t2 | and [isNull t1, not $ isUndefined t2] = setFth4 (compareTs' γ t1 t2) SubT
+-- XXX: Null is not considered a subtype of all types. If null is to be 
+-- expected this should be explicitly specified by using " + null"
+-- compareTs γ t1 t2 | and [isNull t1, not $ isUndefined t2] = setFth4 (compareTs' γ t1 t2) SubT
 
-compareTs γ t1 t2 | otherwise              = 
-   tracePP (printf "compareTs %s - %s" (ppshow t1) (ppshow t2)) $  
-  compareTs' γ t1 t2
+compareTs γ t1 t2 | otherwise              = compareTs' γ t1 t2
+  {-where msg = printf "About to compareTs %s and %s" (ppshow $ toType t1) (ppshow $ toType t2)-}
 
 
 -- | Top-level Unions
@@ -238,14 +242,13 @@ compareTs' _ t1 t2 | isTop t2               = (t1', t1, t2', SubT)
   
 
 -- Eliminate top-level unions
-compareTs' γ t1 t2 | any isUnion [t1,t2]     = {- tracePP "padUnion" $-} padUnion γ 
-  ({- trace ("padding union " ++ ppshow t1 ++ "\n - " ++ ppshow t2) -} t1)  t2
+compareTs' γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
 
 -- | Top-level Objects
 
 compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = 
   {-tracePP (printf "Padding: %s and %s" (ppshow t1) (ppshow t2)) $ -}
-  padObject γ ({-trace ("padding obj " ++ ppshow t1 ++ "\n - " ++ ppshow t2)-} t1) t2
+  padObject γ ( {- trace ("padding obj " ++ ppshow t1 ++ "\n - " ++ ppshow t2) -} t1) t2
 
 -- | Type definitions
 
@@ -349,7 +352,8 @@ padUnion env t1 t2 =
     commonT1s  = snd4 <$> commonTs
     commonT2s  = thd4 <$> commonTs
 
-    commonTs = {- tracePP "padUnion: compaTs on common parts" $ -}
+    commonTs = 
+      {-tracePP "padUnion: compaTs on common parts" $ -}
       map (uncurry $ compareTs env) $ cmnPs
 
     -- To figure out the direction of the subtyping, we must take into account:
@@ -364,7 +368,7 @@ padUnion env t1 t2 =
     --   of the parts and join the subtyping relations)
     comSub     = mconcatS $ fth4 <$> commonTs
     
-    (cmnPs, d1s, d2s) = {- tracePP "padUnion: unionParts" $-} unionParts env t1 t2
+    (cmnPs, d1s, d2s) =  {- tracePP "padUnion: unionParts" $ -} unionParts env t1 t2
 
 
 --------------------------------------------------------------------------------
@@ -406,7 +410,7 @@ unionPartsWithEq ::  (Eq r, Ord r, F.Reftable r, PP r) =>
           -> RType r 
           -> ([(RType r, RType r)], [RType r], [RType r])
 --------------------------------------------------------------------------------
-unionPartsWithEq eq t1 t2 = (common t1s t2s, d1s, d2s)
+unionPartsWithEq equal t1 t2 = (common t1s t2s, d1s, d2s)
   where
     -- `common` does a "light" matching - which is determined by `equiv`. 
     -- Right now the only difference is in objects: 
@@ -417,18 +421,18 @@ unionPartsWithEq eq t1 t2 = (common t1s t2s, d1s, d2s)
     -- Also `common` returns aligned types - so no need to re-align them.
     (t1s, t2s) = sanityCheck $ mapPair bkUnion (t1, t2)
 
-    (d1s, d2s)  = distinct t1s t2s
+    (d1s, d2s) = distinct t1s t2s
 
     -- Compare the types based on the Equivalence relation and pair them up into
     -- Type structures that are common in both sides, and ...
     common xs ys | any null [xs,ys] = []
-    common xs ys | otherwise        = [(x,y) | x <- xs, y <- ys, x `eq` y ]
+    common xs ys | otherwise        = [(x,y) | x <- xs, y <- ys, x `equal` y ]
 
     -- ... type structures that are distinct in the two sides
     distinct xs [] = ([], xs)
     distinct [] ys = (ys, [])
-    distinct xs ys = ([x | x <- xs, not $ any (x `eq`) ys ],
-                      [y | y <- ys, not $ any (y `eq`) xs ])
+    distinct xs ys = ([x | x <- xs, not $ any (x `equal`) ys ],
+                      [y | y <- ys, not $ any (y `equal`) xs ])
 
     sanityCheck ([ ],[ ]) = errorstar "unionParts, called on too small input"
     sanityCheck ([_],[ ]) = errorstar "unionParts, called on too small input"
@@ -455,7 +459,7 @@ padObject γ (TObj bs1 r1) (TObj bs2 r2) =
   where
     -- Total direction
     direction = cmnDir &*& distDir d1s d2s
-    -- Direction from all the common keys  
+    -- Direction from all the common keys
     cmnDir    = mconcatP $ (\(_,(t,t')) -> fth4 $ compareTs γ t t') <$> cmn
     -- Direction from distinct keys
     distDir xs ys | null (xs ++ ys) = EqT
@@ -463,7 +467,7 @@ padObject γ (TObj bs1 r1) (TObj bs2 r2) =
                   | null ys         = SubT
                   | otherwise       = Nth
 
-    jbs' = (\(s,(t,t')) -> B s $ fst4 $ compareTs γ t t') <$> cmn ++ d1s ++ d2s 
+    jbs' = (\(s,(t,t')) -> B s $ fst4 $ compareTs γ t t') <$> cmn ++ d1s ++ d2s
     -- Bindings for 1st object
     b1s' = (\(s,(t,t')) -> B s $ snd4 $ compareTs γ t t') <$> cmn ++ d1s ++ d2s 
     -- Bindings for 2nd object

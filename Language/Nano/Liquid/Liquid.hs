@@ -193,9 +193,13 @@ consStmt g (VarDeclStmt _ ds)
 
 -- return e 
 consStmt g (ReturnStmt l (Just e))
-  = do (xe, g') <- consExpr g e 
-       subType l g' (envFindTy xe g') (envFindReturn g')
-       return Nothing
+  = do  (xe, g') <- consExpr g e 
+        let te    = envFindTy xe g'
+            rt    = envFindReturn g'          
+        if isTop rt 
+          then subType l g' te $ setRTypeR te (rTypeR rt)
+          else subType l g' te rt --normall
+        return Nothing
 
 -- return
 consStmt _ (ReturnStmt _ Nothing)
@@ -296,7 +300,7 @@ consUpCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id An
 ---------------------------------------------------------------------------------------------
 consUpCast g x a e 
   = do  γ         <- getTDefs
-        let cmp    = compareTs γ tE tU 
+        let cmp    = compareTs γ tE (tracePP "Upcasting to" tU)
             tE'    = snd4 cmp
             tU'    = thd4 cmp
         (x',g')   <- envAddFresh l tE' g 

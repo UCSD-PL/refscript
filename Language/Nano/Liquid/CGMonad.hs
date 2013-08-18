@@ -399,7 +399,7 @@ subType l g t1 t2 =
     c      = uncurry $ Sub g (ci l)
     -- Sort check 
     checkTypes tdefs t1 t2 | equivWUnions tdefs t1 t2 = (t1,t2)
-    checkTypes  _ t1 t2    | otherwise                   = 
+    checkTypes  _ t1 t2    | otherwise                   =
       errorstar (printf "[%s]\nCGMonad: checkTypes not aligned: \n%s\nwith\n%s"
                 (ppshow $ ann l) (ppshow $ toType t1) (ppshow $ toType t2))
 

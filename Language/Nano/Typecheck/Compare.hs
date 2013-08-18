@@ -233,7 +233,7 @@ compareTs γ t1 t2 | otherwise              = compareTs' γ t1 t2
 -- | Top-level Unions
 
 compareTs' _ t1 t2 | isTop t1               = errorstar "unimplemented: compareTs - top"
-compareTs' _ t1 t2 | isTop t2               = (t1', t1, t2', SubT)
+compareTs' _ t1 t2 | isTop t2               = tracePP "Compare with top" (t1', t1, t2', SubT)
   where
     t1' = setRTypeR t1 F.top -- this will be kVared
     -- @t2@ is a Top, so just to make the types compatible we will 

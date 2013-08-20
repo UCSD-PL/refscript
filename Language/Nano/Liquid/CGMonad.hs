@@ -31,6 +31,7 @@ module Language.Nano.Liquid.CGMonad (
   , freshTyFun
   , freshTyInst
   , freshTyPhis
+  , freshTyCast
 
   -- * Freshable
   , Freshable (..)
@@ -47,6 +48,8 @@ module Language.Nano.Liquid.CGMonad (
   -- * Add Subtyping Constraints
   , subTypes
   , subType
+  , subTypeContainers
+  , subTypesContainers
 
   , addInvariant
   
@@ -89,7 +92,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.ECMAScript3.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation ----------------------
@@ -373,6 +376,17 @@ freshTyPhis l g xs τs
        _  <- mapM    (wellFormed l g') ts
        return (g', ts)
 
+-- | Instantiate Fresh Type (at Cast-site)
+---------------------------------------------------------------------------------------
+freshTyCast :: (PP l, IsLocated l) => l -> CGEnv -> Id l -> Type -> CGM (CGEnv, RefType)  
+---------------------------------------------------------------------------------------
+freshTyCast l g x τ
+  = do t  <- freshTy "freshTyCast" {-tracePP "From" -} τ
+       g' <- envAdds [(x, t)] g
+       _  <- wellFormed l g t
+       return (g', t)
+
+
 
 ---------------------------------------------------------------------------------------
 -- | Adding Subtyping Constraints -----------------------------------------------------
@@ -389,11 +403,13 @@ subTypes l g xs ts = zipWithM_ (subType l g) [envFindTy x g | x <- xs] ts
 subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 =
-  do tt1   <- addInvariant ({-tracePP "Liquid:subtype t1" -}t1)
-     tt2   <- addInvariant ({-tracePP "Liquid:subtype t2" -}t2)
+  do tt1   <- addInvariant {- $ tracePP "Liquid:subtype t1" -} t1
+     tt2   <- addInvariant {- $ tracePP "Liquid:subtype t2" -} t2
+-- XXX: Are the invariants added for types nested in containers (i.e. unions and
+-- objects)? Probably not, so this process should be done after the splitC.
      tdefs <- getTDefs
      let s  = checkTypes tdefs 
-              ({-trace ("Liquid subTypes checktypes: " ++ ppshow tt1 ++ " - " ++ ppshow tt2)-} tt1) tt2
+              ({- trace ("subTypes: " ++ ppshow tt1 ++ " - " ++ ppshow tt2 ++ "\n")-} tt1) tt2
      modify $ \st -> st {cs = c s : (cs st)}
   where
     c      = uncurry $ Sub g (ci l)
@@ -415,6 +431,44 @@ equivWUnions γ t t' = equiv γ t t'
 equivWUnionsM t t' = getTDefs >>= \γ -> return $ equivWUnions γ t t'
 
 
+-- | Subtyping container contents: unions, objects. Includes top-level
+
+-- Need to be padded and so on...
+-------------------------------------------------------------------------------
+subTypeContainers :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
+-------------------------------------------------------------------------------
+-- XXX: Will loop infinitely for cycles in type definitions
+subTypeContainers l g (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _) | d == d' = 
+  mapM_ (uncurry $ subTypeContainers l g) $ zip ts ts'
+
+subTypeContainers l g t1 t2@(TApp (TDef _) _ _ ) = 
+  unfoldSafeCG t2 >>= \t2' -> subTypeContainers l g t1 t2'
+
+subTypeContainers l g t1@(TApp (TDef _) _ _ ) t2 = 
+  unfoldSafeCG t1 >>= \t1' -> subTypeContainers l g t1' t2
+
+subTypeContainers l g t1@(TApp TUn _ _) t2@(TApp TUn _ _) = 
+  do  γ <- getTDefs
+      case unionParts γ t1 t2 of
+        (ts, [], []) -> mapM_ (uncurry $ subTypeContainers l g) ts
+        _            -> errorstar "subTypeContainers: Unions non-matchable"
+      subType l g t1 t2   -- top-level
+
+subTypeContainers l g t1@(TObj ts1 _) t2@(TObj ts2 _) =
+  -- TODO: might need to match like the union case
+  do  mapM_ (uncurry $ subTypeContainers l g) $ bkPaddedObject t1 t2
+      subType l g t1 t2   -- top-level
+
+subTypeContainers l g t1 t2 = subType l g t1 t2
+
+
+---------------------------------------------------------------------------------------
+subTypesContainers :: (IsLocated x, F.Expression x, F.Symbolic x) 
+         => AnnType -> CGEnv -> [x] -> [RefType] -> CGM ()
+---------------------------------------------------------------------------------------
+subTypesContainers l g xs ts = zipWithM_ (subTypeContainers l g) [envFindTy x g | x <- xs] ts
+
+ 
 
 -- | Monadic unfolding
 -------------------------------------------------------------------------------
@@ -549,7 +603,7 @@ splitC' (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TApp TUn _ _) t2@(TApp TUn _ _)) =
   ifM (equivWUnionsM t1 t2) 
-    (return $ bsplitC g i t1 t2) 
+    (return    $ bsplitC g i t1 t2) 
     (errorstar $ printf "Unequal unions in splitC: %s - %s" (ppshow $ toType t1) (ppshow $ toType t2))
 
 splitC' (Sub _ _ t1@(TApp TUn _ _) t2) = 
@@ -589,14 +643,8 @@ splitC' (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
 -- | Objects
 -- Just the top-level constraint will be included here
 ---------------------------------------------------------------------------------------
-splitC' (Sub g i t1@(TObj xt1s _ ) t2@(TObj xt2s _ ))
-  = do let bcs     = bsplitC g i t1 t2
-       cs         <- concatMapM splitC $ map (uncurry $ Sub g i) ts 
-       return      $ bcs ++ cs
-    where 
-       ts          = safeZipWith "splitC:obj" checkB xt1s xt2s
-       checkB b b' | b_sym b == b_sym b' = (b_type b, b_type b')
-       checkB _ _  = errorstar "unimplemented: splitC: cannot split these objects"
+splitC' (Sub g i t1@(TObj _ _ ) t2@(TObj _ _ ))
+  = return $ bsplitC g i t1 t2
 
 splitC' (Sub _ _ t1 t2@(TObj _ _ ))
   = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" 

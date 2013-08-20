@@ -193,12 +193,13 @@ consStmt g (VarDeclStmt _ ds)
 
 -- return e 
 consStmt g (ReturnStmt l (Just e))
-  = do  (xe, g') <- consExpr g e 
+  = do  (xe, g') <- consExpr g e
         let te    = envFindTy xe g'
-            rt    = envFindReturn g'          
-        if isTop rt 
-          then subType l g' te $ setRTypeR te (rTypeR rt)
-          else subType l g' te rt --normall
+            rt    = envFindReturn g'
+        if isTop rt
+          then subTypeContainers l g' te (setRTypeR te (rTypeR rt))
+          else subTypeContainers l g' ({- tracePP "consStmt: Ret te" -} te) 
+                                      ({- tracePP "consStmt: Ret rt" -} rt)
         return Nothing
 
 -- return
@@ -300,13 +301,14 @@ consUpCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id An
 ---------------------------------------------------------------------------------------------
 consUpCast g x a e 
   = do  γ         <- getTDefs
-        let cmp    = compareTs γ tE (tracePP "Upcasting to" tU)
+        let tU     = rType $ head [ t | Assume t <- ann_fact a]
+        -- tU's refinements will not be used here! 
+        -- Instead keep the original type since it's more precise
+        let cmp    = compareTs γ tE tU
             tE'    = snd4 cmp
-            tU'    = thd4 cmp
-        (x',g')   <- envAddFresh l tE' g 
+        (x',g')   <- envAddFresh l tE' g
         return     $ (x', g')
   where tE         = envFindTy x g 
-        tU         = rType $ head [ t | Assume t <- ann_fact a]
         l          = getAnnotation e
       
 
@@ -315,26 +317,31 @@ consDownCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id 
 ---------------------------------------------------------------------------------------------
 consDownCast g x a e 
   = do  tdefs              <- getTDefs
-        let (_, tE', tC',_) = compareTs tdefs (trace ("consDownCast " ++ ppshow (toType tE) ++ "\nto\n" ++ ppshow tC) tE) tC
-        let ts              = bkPaddedUnion tdefs tE' tC'
+        (g', tC)           <- freshTyCast l g x $ head [ t | Assume t <- ann_fact a]
+        let msg             = "consDownCast " ++ ppshow tE ++ "\nto\n" ++ ppshow tC
+        let (_, tE', tC',_) = tracePP "consDownCast:compareTs" $ compareTs tdefs (trace msg tE) tC
+        -- XXX: Casting to a type should preserve the refinements of 
+        -- the original expression that is being casted.
+        -- TODO: may need to use a version of @subTypeContainers@
+        let ts              = tracePP "After bkPaddedUnion" $ bkPaddedUnion tdefs tE' tC'
         forM_ ts            $ castSubM g x l      -- Parts 
-        castSubM            g x l (tE', tC')      -- Top-level
-        (x', g')           <- envAddFresh l tC g
-        return              $ (x', g')
+        castSubM            g' x l (tE', tC')      -- Top-level
+        (x', g'')          <- envAddFresh l tC g'
+        return              $ (x', g'')
     where 
-      tE              = envFindTy x g
-      tC              = rType $ head [ t | Assume t <- ann_fact a]
-      l               = getAnnotation e
+        tE                  = envFindTy x g
+        l                   = getAnnotation e
 
 
 ---------------------------------------------------------------------------------------------
 castSubM :: CGEnv -> Id AnnType -> AnnType -> (RefType, RefType) -> CGM () 
 ---------------------------------------------------------------------------------------------
 castSubM g x l (t1, t2) 
-  = do (g', t1', t2') <- fixBase g x $ {- tracePP "Calling fixbase on" -} (t1, t2)
-       {-let msg         = printf "Adding cast Sub: %s\n<:\n%s" (ppshow t1') (ppshow t2')-}
-       -- subType can be called directly at this point
-       subType l g' ({-trace msg -} t1') t2'
+  = do  (g', t1', t2') <- fixBase g x (t1, t2)
+        let msg         = printf "castSub: (%s, %s) \n-- fixbase-->\n(%s,%s)\n"
+                            (ppshow t1) (ppshow t2) (ppshow t1') (ppshow t2')
+        -- subType can be called directly at this point
+        subType l g' (trace msg  t1') t2'
 
 
 -- | fixBase converts:                                                  
@@ -355,7 +362,7 @@ fixBase g x (tE, tC) =
   do ttE     <- true tE
      let rX'  = ttE `strengthen` rTypeReft (envFindTy x g)
      g'      <- envAdds [(x, rX')] g
-     let ttE' = eSingleton ttE x 
+     let ttE' = eSingleton tE x 
      return (g', ttE', tC)
 
 
@@ -388,8 +395,8 @@ consCall g l _ es ft
   = do (_,its,ot)   <- mfromJust "consCall" . bkFun <$> instantiate l g ft
        (xes, g')    <- consScan consExpr g es
        let (su, ts') = renameBinds its xes
-       subTypes l g' xes ts'
-       envAddFresh l (F.subst su ot) g'
+       subTypesContainers l g' xes ts'
+       envAddFresh l ({- tracePP "Ret Call Type" $ -} F.subst su ot) g'
      {-where -}
      {-  msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)-}
 

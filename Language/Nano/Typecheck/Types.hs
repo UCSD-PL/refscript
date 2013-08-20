@@ -28,6 +28,7 @@ module Language.Nano.Typecheck.Types (
   , toType
   , ofType
   , strengthen 
+  , strengthenContainers 
 
   -- * Helpful checks
   , isTop, isNull, isUndefined, isObj, isUnion
@@ -225,6 +226,22 @@ strengthen t _               = t
 -- NOTE: r' is the OLD refinement. 
 --       We want to preserve its VV binder as it "escapes", 
 --       e.g. function types. Sigh. Should have used a separate function binder.
+
+
+-- | Strengthen the refinement of a type @t2@ deeply, using the 
+-- refinements of an equivalnet (having the same raw version) 
+-- type @t1@
+-- TODO: Add checks for equivalence in union and objects
+strengthenContainers (TApp TUn ts r) (TApp TUn ts' r') =
+  TApp TUn (zipWith strengthenContainers ts ts') $ r' `F.meet` r
+strengthenContainers (TObj ts r) (TObj ts' r') = 
+  TObj (zipWith doB ts ts') $ r' `F.meet` r
+  where 
+    doB (B s t) (B s' t') | s == s' =  B s $ strengthenContainers t t'
+    doB _       _                   = errorstar "strengthenContainers: sanity check - 1"
+strengthenContainers t t' | toType t == toType t' = strengthen t' $ rTypeR t
+strengthenContainers t t' | otherwise = errorstar "strengthenContainers: sanity check - 2"
+  
 
 
 ---------------------------------------------------------------------------------

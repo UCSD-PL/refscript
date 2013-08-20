@@ -16,7 +16,8 @@ module Language.Nano.Typecheck.Compare (
   -- * Type comparison/joining/subtyping
     Equivalent, equiv
   , compareTs
-  , unionParts, unionPartsWithEq, bkPaddedUnion
+  , unionParts, unionPartsWithEq
+  , bkPaddedUnion, bkPaddedObject
   , isSubType
   , eqType
 
@@ -379,7 +380,7 @@ bkPaddedUnion γ t1 t2 =
   zipWith check (bkUnion t1) (bkUnion t2)
   where
     check t t' | equiv γ t t' = (t,t')
-               | otherwise    = errorstar "bkPaddedUnion"
+               | otherwise    = errorstar $ printf "bkPaddedUnion: %s - %s" (ppshow t) (ppshow t') 
 
 
 
@@ -487,6 +488,14 @@ padObject γ (TObj bs1 r1) (TObj bs2 r2) =
 
 padObject _ _ _ = error "padObject: Cannot pad non-objects"
 
+
+-- | Break one level of padded objects
+bkPaddedObject t1@(TObj xt1s _) t2@(TObj xt2s _) =
+  safeZipWith "splitC:obj" checkB xt1s xt2s
+  where
+    checkB b b' | b_sym b == b_sym b' = (b_type b, b_type b')
+    checkB _ _  = errorstar "unimplemented: splitC: cannot split these objects"
+bkPaddedObject _ _ = errorstar "bkPaddedObject: can only break objects"
 
 
 -- | `padFun`

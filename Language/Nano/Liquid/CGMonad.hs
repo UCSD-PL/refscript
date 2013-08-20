@@ -381,7 +381,7 @@ freshTyPhis l g xs τs
 freshTyCast :: (PP l, IsLocated l) => l -> CGEnv -> Id l -> Type -> CGM (CGEnv, RefType)  
 ---------------------------------------------------------------------------------------
 freshTyCast l g x τ
-  = do t  <- freshTy "freshTyCast" {-tracePP "From" -} τ
+  = do t  <- freshTy "freshTyCast" τ
        g' <- envAdds [(x, t)] g
        _  <- wellFormed l g t
        return (g', t)
@@ -454,7 +454,7 @@ subTypeContainers l g t1@(TApp TUn _ _) t2@(TApp TUn _ _) =
         _            -> errorstar "subTypeContainers: Unions non-matchable"
       subType l g t1 t2   -- top-level
 
-subTypeContainers l g t1@(TObj ts1 _) t2@(TObj ts2 _) =
+subTypeContainers l g t1@(TObj _ _) t2@(TObj _ _) =
   -- TODO: might need to match like the union case
   do  mapM_ (uncurry $ subTypeContainers l g) $ bkPaddedObject t1 t2
       subType l g t1 t2   -- top-level

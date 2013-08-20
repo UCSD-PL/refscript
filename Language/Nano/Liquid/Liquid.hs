@@ -318,12 +318,13 @@ consDownCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id 
 consDownCast g x a e 
   = do  tdefs              <- getTDefs
         (g', tC)           <- freshTyCast l g x $ head [ t | Assume t <- ann_fact a]
-        let msg             = "consDownCast " ++ ppshow tE ++ "\nto\n" ++ ppshow tC
-        let (_, tE', tC',_) = tracePP "consDownCast:compareTs" $ compareTs tdefs (trace msg tE) tC
+        {-let msg             = "consDownCast " ++ ppshow tE ++ "\nto\n" ++ ppshow tC-}
+        let (_, tE', tC',_) = compareTs tdefs tE tC
         -- XXX: Casting to a type should preserve the refinements of 
         -- the original expression that is being casted.
         -- TODO: may need to use a version of @subTypeContainers@
-        let ts              = tracePP "After bkPaddedUnion" $ bkPaddedUnion tdefs tE' tC'
+        let ts              = {- tracePP "consDownCast: after bkPaddedUnion" $ -} 
+                              bkPaddedUnion tdefs tE' tC'
         forM_ ts            $ castSubM g x l      -- Parts 
         castSubM            g' x l (tE', tC')      -- Top-level
         (x', g'')          <- envAddFresh l tC g'
@@ -338,10 +339,10 @@ castSubM :: CGEnv -> Id AnnType -> AnnType -> (RefType, RefType) -> CGM ()
 ---------------------------------------------------------------------------------------------
 castSubM g x l (t1, t2) 
   = do  (g', t1', t2') <- fixBase g x (t1, t2)
-        let msg         = printf "castSub: (%s, %s) \n-- fixbase-->\n(%s,%s)\n"
-                            (ppshow t1) (ppshow t2) (ppshow t1') (ppshow t2')
+        {-let msg         = printf "castSub: (%s, %s) \n-- fixbase-->\n(%s,%s)\n"-}
+        {-                    (ppshow t1) (ppshow t2) (ppshow t1') (ppshow t2')-}
         -- subType can be called directly at this point
-        subType l g' (trace msg  t1') t2'
+        subType l g' ({- trace msg -} t1') t2'
 
 
 -- | fixBase converts:                                                  

@@ -122,7 +122,7 @@ consFun _ _ = error "consFun called not with FunctionStmt"
 envAddFun :: AnnType -> CGEnv -> Id AnnType -> [Id AnnType] -> RefType -> CGM CGEnv
 -----------------------------------------------------------------------------------
 envAddFun l g f xs ft = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
-  where  
+  where
     (αs, yts, t)      = mfromJust "envAddFun" $ bkFun ft
     tyBinds           = [(Loc (srcPos l) α, tVar α) | α <- αs]
     varBinds          = safeZip "envAddFun"
@@ -323,7 +323,7 @@ consDownCast g x a e
         -- XXX: Casting to a type should preserve the refinements of 
         -- the original expression that is being casted.
         -- TODO: may need to use a version of @subTypeContainers@
-        let ts              = {- tracePP "consDownCast: after bkPaddedUnion" $ -} 
+        let ts              = {- tracePP "consDownCast: after bkPaddedUnion" $ -}
                               bkPaddedUnion tdefs tE' tC'
         forM_ ts            $ castSubM g x l      -- Parts 
         castSubM            g' x l (tE', tC')      -- Top-level
@@ -355,16 +355,32 @@ castSubM g x l (t1, t2)
 --                                                                      
 -- g, x :: { v: B | r } |- { v: B | p ∧ (v = x) } <: { v: B | q }       
 -- --------g'----------    ----------tE'---------    ---- tC-----       
---                                                                      
+
 ---------------------------------------------------------------------------------------------
-fixBase :: CGEnv-> Id AnnType -> (RefType, RefType) -> CGM (CGEnv, RefType, RefType)
+fixBase :: CGEnv -> Id AnnType -> (RefType, RefType) -> CGM (CGEnv, RefType, RefType)
 ---------------------------------------------------------------------------------------------
 fixBase g x (tE, tC) =
-  do ttE     <- true tE
-     let rX'  = ttE `strengthen` rTypeReft (envFindTy x g)
-     g'      <- envAdds [(x, rX')] g
-     let ttE' = eSingleton tE x 
-     return (g', ttE', tC)
+  do  -- ttE     <- true tE
+      let tX   = envFindTy x g
+      let tE'  = eSingleton tE x
+      
+      g'      <- undefined -- fixEnv g (veqx tE') tE
+      
+      let msg  = printf "TE: %s -> %s\nx: %s\nTC: %s\n\n" 
+                   (ppshow tE) (ppshow tE') (ppshow x) (ppshow tC)
+
+      return   $ (g, trace msg tE', tC)
+
+
+veqx t      = [ x | F.RConc (F.PAtom F.Eq (F.EVar s) (F.EVar x)) <- refas, s == vv ]
+  where vv               = rTypeValueVar t
+        F.Reft (_,refas) = rTypeReft t
+
+
+fixEnv g xs t = 
+  foldM (\g_ x -> envAdds [(x, toT x)] g_) g xs  
+  where 
+    toT x = t `strengthen` rTypeReft (envFindTy x g)
 
 
 ---------------------------------------------------------------------------------------------
@@ -397,7 +413,7 @@ consCall g l _ es ft
        (xes, g')    <- consScan consExpr g es
        let (su, ts') = renameBinds its xes
        subTypesContainers l g' xes ts'
-       envAddFresh l ({- tracePP "Ret Call Type" $ -} F.subst su ot) g'
+       tracePP "consCall" <$> envAddFresh l ({- tracePP "Ret Call Type" $ -} F.subst su ot) g'
      {-where -}
      {-  msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)-}
 

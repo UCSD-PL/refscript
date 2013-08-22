@@ -42,6 +42,7 @@ import           Language.Nano.Env
 import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Liquid.Types
 
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc
@@ -104,7 +105,7 @@ instance Equivalent e (Id a) where
 -- Casts ------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-type Casts   = M.Map (Expression AnnSSA) (Cast Type)
+type Casts   = M.Map (Expression (AnnSSA_ F.Reft)) (Cast RefType)
 
 data Cast t  = UCST t | DCST t | DC t
 

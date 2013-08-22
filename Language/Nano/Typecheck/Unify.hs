@@ -11,9 +11,10 @@ module Language.Nano.Typecheck.Unify (
   ) where 
 
 -- import           Text.PrettyPrint.HughesPJ
--- import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Misc
--- import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Types as F
+import           Language.Nano.Liquid.Types
 import           Language.Nano.Errors 
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
@@ -38,7 +39,8 @@ import           Text.Printf
 -- | Unify types @t@ and @t'@, using @θ@ as the current substitution and @env@
 -- as the current type definition environment.
 -----------------------------------------------------------------------------
-unify :: Env Type -> Subst -> Type -> Type -> Either String Subst
+unify :: (PP r, F.Reftable r, Ord r) => 
+  Env (RType r) -> Subst_ r -> RType r -> RType r -> Either String (Subst_ r)
 -----------------------------------------------------------------------------
 
 -- TODO: is this right??
@@ -97,7 +99,8 @@ unifEq γ t t'                     = equiv γ t t'
 
 
 -----------------------------------------------------------------------------
-unifys ::  Env Type -> Subst -> [Type] -> [Type] -> Either String Subst
+unifys ::  (PP r, F.Reftable r, Ord r) =>  
+  Env (RType r) -> Subst_ r -> [RType r] -> [RType r] -> Either String (Subst_ r)
 -----------------------------------------------------------------------------
 unifys env θ xs ys = {-  tracePP msg $ -} unifys' env θ xs ys 
    {-where -}
@@ -128,7 +131,8 @@ check m m' = vs == vs'
 
 
 -----------------------------------------------------------------------------
-varEql :: Subst -> TVar -> TVar -> Either String Subst
+varEql :: (PP r, F.Reftable r, Ord r) => 
+  Subst_ r -> TVar -> TVar -> Either String (Subst_ r)
 -----------------------------------------------------------------------------
 varEql θ α β =  
   case varAsn θ α $ tVar β of
@@ -140,7 +144,8 @@ varEql θ α β =
 
 
 -----------------------------------------------------------------------------
-varAsn :: Subst -> TVar -> Type -> Either String Subst
+varAsn ::  (PP r, F.Reftable r, Ord r) => 
+  Subst_ r -> TVar -> RType r -> Either String (Subst_ r)
 -----------------------------------------------------------------------------
 varAsn θ α t 
   -- Check if previous substs are sufficient 

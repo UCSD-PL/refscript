@@ -6,7 +6,7 @@
 module Language.Nano.Typecheck.Subst ( 
   
   -- * Substitutions
-    RSubst (..)
+    Subst_ (..)
   , Subst 
   , toList
   , fromList
@@ -44,22 +44,22 @@ import           Text.Printf
 
 -- | Type alias for Map from @TVar@ to @Type@. Hidden
 
-data RSubst r = Su (M.HashMap TVar (RType r))
-type Subst    = RSubst ()
+data Subst_ r = Su (M.HashMap TVar (RType r))
+type Subst    = Subst_ ()
 
-toList        :: RSubst r -> [(TVar, RType r)]
+toList        :: Subst_ r -> [(TVar, RType r)]
 toList (Su m) =  M.toList m 
 
-fromList      :: [(TVar, RType r)] -> RSubst r
+fromList      :: [(TVar, RType r)] -> Subst_ r
 fromList      = Su . M.fromList 
 
 -- | Substitutions form a monoid; not commutative
 
-instance (F.Reftable r, Substitutable r (RType r)) => Monoid (RSubst r) where 
+instance (F.Reftable r, Substitutable r (RType r)) => Monoid (Subst_ r) where 
   mempty                    = Su M.empty
   mappend (Su m) θ'@(Su m') = Su $ (apply θ' <$> m) `M.union` m'
 
-instance (F.Reftable r, PP r) => PP (RSubst r) where 
+instance (F.Reftable r, PP r) => PP (Subst_ r) where 
   pp (Su m) = if M.null m then text "empty" else vcat $ (ppBind <$>) $ M.toList m 
 
 ppBind (x, t) = pp x <+> text ":=" <+> pp t
@@ -72,7 +72,7 @@ class Free a where
   free  :: a -> S.HashSet TVar
 
 class Substitutable r a where 
-  apply :: (RSubst r) -> a -> a 
+  apply :: (Subst_ r) -> a -> a 
 
 instance Free a => Free [a] where 
   free = S.unions . map free
@@ -104,13 +104,19 @@ instance Substitutable () Fact where
   apply θ (TypInst ts)  = TypInst $ apply θ ts
   apply θ (Assume  t )  = Assume  $ apply θ t
 
+instance (PP r, F.Reftable r) => Substitutable r (Fact_ r) where
+  apply _ x@(PhiVar _)  = x
+  apply θ (TypInst ts)  = TypInst $ apply θ ts
+  apply θ (Assume  t )  = Assume  $ apply θ t
+
+
 instance Free Fact where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
   free (Assume t)       = free t
  
 ------------------------------------------------------------------------
--- appTy :: RSubst r -> RType r -> RType r
+-- appTy :: Subst_ r -> RType r -> RType r
 ------------------------------------------------------------------------
 appTy θ (TApp c ts z)            = TApp c (apply θ ts) z 
 appTy θ (TObj bs z)              = TObj (map (\b -> B { b_sym = b_sym b, b_type = appTy θ $ b_type b } ) bs ) z

@@ -53,10 +53,10 @@ import           Text.Printf                        (printf)
 
 type SSAM     = ErrorT String (State SsaState)
 
-data SsaState = SsaST { immutables :: Env ()   -- ^ globals
-                      , names      :: SsaEnv   -- ^ current SSA names 
-                      , count      :: !Int     -- ^ fresh index
-                      , anns       :: !AnnInfo -- ^ built up map of annots 
+data SsaState = SsaST { immutables :: Env ()      -- ^ globals
+                      , names      :: SsaEnv      -- ^ current SSA names 
+                      , count      :: !Int        -- ^ fresh index
+                      , anns       :: !AnnInfo    -- ^ built up map of annots 
                       }
 
 type SsaEnv     = Env SsaInfo 
@@ -138,7 +138,7 @@ addAnn l f = modify $ \st -> st { anns = inserts l f (anns st) }
 
 
 -------------------------------------------------------------------------------
-getAnns    :: SSAM AnnInfo 
+getAnns    :: SSAM AnnInfo
 -------------------------------------------------------------------------------
 getAnns    = anns <$> get
 

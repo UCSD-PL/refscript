@@ -42,6 +42,7 @@ module Language.Nano.Liquid.CGMonad (
   , envAddReturn
   , envAddGuard
   , envFindTy
+  , envToList
   , envFindReturn
   , envJoin
 
@@ -58,12 +59,18 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Unfolding
   , unfoldSafeCG, unfoldFirstCG
+
+  -- * Environment sort check
+  , fixBase, fixEnv
+  , findCC, mkCCs, mkGraph, veqx
   ) where
 
-import           Data.Maybe                     (fromMaybe)
+import           Data.Maybe                     (fromMaybe, maybeToList)
 import qualified Data.List                      as L
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
+import qualified Data.Graph                     as G
+import qualified Data.Tree                      as T
 
 -- import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
@@ -292,6 +299,20 @@ envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> Re
 envFindTy x g = (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
   where 
     err       = errorstar $ bugUnboundVariable (srcPos x) (F.symbol x)
+                    
+---------------------------------------------------------------------------------------
+envFindTy'     :: (F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
+---------------------------------------------------------------------------------------
+envFindTy' x g = (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
+  where 
+    err       = errorstar $ bugUnboundVariable dummySpan (F.symbol x)
+
+
+---------------------------------------------------------------------------------------
+envToList     ::  CGEnv -> [(Id SourceSpan, RefType)]
+---------------------------------------------------------------------------------------
+envToList g = E.envToList $ renv g
+
 
 ---------------------------------------------------------------------------------------
 envFindReturn :: CGEnv -> RefType 
@@ -557,7 +578,12 @@ refreshRefType = mapReftM refresh
 ---------------------------------------------------------------------------------------
 splitC' :: SubC -> CGM [FixSubC]
 ---------------------------------------------------------------------------------------
-splitC = splitC'
+splitC c@(Sub g i t t') 
+  | envSortCheck g 
+  = splitC' c
+  | otherwise      
+  = do  g' <- envSortSanitize g 
+        splitC' (tracePP  "SANITIZED" $ Sub g' i t t')
 
 ---------------------------------------------------------------------------------------
 -- | Function types
@@ -612,13 +638,13 @@ splitC' (Sub _ _ t1 t2@(TApp TUn _ _)) =
   errorstar $ printf "Unions in splitC: %s - %s" (ppshow t1) (ppshow t2)
 
 ---------------------------------------------------------------------------------------
--- | Type definitions
+-- |Type definitions
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TApp d1@(TDef _) t1s _) t2@(TApp d2@(TDef _) t2s _)) | d1 == d2
   = do  let cs = bsplitC g i t1 t2
         -- constructor parameters are covariant
         cs'   <- concatMapM splitC $ safeZipWith "splitcTDef" (Sub g i) t1s t2s
-        return $ cs ++ cs' 
+        return $ tracePP "splitC TDefs" $ cs ++ cs' 
 
 splitC' (Sub _ _ (TApp (TDef _) _ _) (TApp (TDef _) _ _))
   = errorstar "Unimplemented: Check type definition cycles"
@@ -670,6 +696,106 @@ bsplitC g ci t1 t2
     p  = F.pAnd $ guards g
     r1 = rTypeSortedReft t1
     r2 = rTypeSortedReft t2
+
+
+
+
+
+
+
+-- | fixBase converts:                                                  
+--                         -----tE-----              -----tC-----       
+-- g, x :: { v: U | r } |- { v: B | p }           <: { v: B | q }       
+--              ^                                                       
+--              |______Union                                            
+--                                                                      
+-- into:                                                                
+--                                                                      
+-- g, x :: { v: B | r } |- { v: B | p ∧ (v = x) } <: { v: B | q }       
+-- --------g'----------    ----------tE'---------    ---- tC-----       
+
+---------------------------------------------------------------------------------------------
+fixBase :: (F.Symbolic x, F.Expression x) => CGEnv -> x -> RefType -> CGM (CGEnv, RefType)
+---------------------------------------------------------------------------------------------
+fixBase g x t =
+  do  let t'   = eSingleton t x
+      let msg  = printf "############################\nTE: %s\nWill fix:%s\n"
+                   (ppshow t') (ppshow $ findCC (F.symbol x) g)
+      g'      <- fixEnv g (F.symbol $ trace msg x) t
+      return   $ (g', t')
+
+fixBaseG g x t = fst <$> fixBase g x t 
+
+---------------------------------------------------------------------------------------------
+fixEnv :: F.Symbolic a => CGEnv -> a -> RType F.Reft -> CGM CGEnv
+---------------------------------------------------------------------------------------------
+fixEnv g start base = foldM fixX g xs
+  where xs          = concat $ maybeToList $ findCC (F.symbol start) g
+        fixX g x    = envAdds [tracePP "fixEnv adjusting" (x, toT x)] g 
+        toT  x      = base `strengthen` rTypeReft (envFindTy' x g)
+
+
+---------------------------------------------------------------------------------------------
+envSortCheck :: CGEnv -> Bool
+---------------------------------------------------------------------------------------------
+envSortCheck g = and $ map (check . sorts) $ mkCCs g 
+  where
+    check elts = length (L.nub elts) < 2
+    sorts xs   = rTypeSort . (`envFindTy'` g) <$> xs
+
+-- -- DEBUG
+-- envSortCheck g = and $ map (\l -> traceShow "check them" $ check (sorts l)) $ mkCCs g 
+--   where
+--     check elts = length (L.nub elts) < 2
+--     sorts xs   = traceShow "envSortCheck:sorts" $ rTypeSort . (`envFindTy'` g) <$> (tracePP "xs" xs)
+
+
+---------------------------------------------------------------------------------------------
+envSortSanitize :: CGEnv -> CGM CGEnv
+---------------------------------------------------------------------------------------------
+envSortSanitize g = foldM fixGroup g xs 
+  where
+    xs         = mkCCs g
+    fixGroup g xs | check $ sorts xs = return g
+                  | otherwise        = freshBase >>= \b -> foldM (\g x -> fixBaseG g x b) g xs
+ 
+    freshBase  = freshId dummySpan >>= \i -> return $ ofType $ TApp (TDef i) [] ()
+
+    check elts = length (L.nub elts) < 2
+    sorts xs   = rTypeSort . (`envFindTy'` g) <$> xs
+
+  
+---------------------------------------------------------------------------------------------
+findCC :: F.Symbol -> CGEnv -> Maybe [F.Symbol]
+---------------------------------------------------------------------------------------------
+findCC x g = L.find (x `elem`) $ mkCCs g 
+
+-- Connected componets in the symbols in the graph
+-- The ccs need to have the same sort! 
+---------------------------------------------------------------------------------------------
+mkCCs :: CGEnv -> [[F.Symbol]]
+---------------------------------------------------------------------------------------------
+mkCCs g   = (fst3 . vs <$>) <$> T.flatten <$> G.components gr
+  where (gr, vs, _) = mkGraph g
+
+-- Make a graph:
+-- ∙ Vertices: the symbols in the environment
+-- ∙ Edges   : same sort constraint ("v = x")
+---------------------------------------------------------------------------------------------
+mkGraph :: CGEnv -> (G.Graph, G.Vertex -> (F.Symbol, F.Symbol, [F.Symbol]), F.Symbol -> Maybe G.Vertex)
+---------------------------------------------------------------------------------------------
+mkGraph g = G.graphFromEdges $ f <$> envToList g
+  where
+    f (id, t) = (F.symbol id, F.symbol id, veqx t)
+
+-- XXX: might need to generalize this, e.g. x < y, x = y, etc.   
+---------------------------------------------------------------------------------------------
+veqx :: F.Reftable r => RType r -> [F.Symbol]
+---------------------------------------------------------------------------------------------
+veqx t      = L.nub [ x | F.RConc (F.PAtom F.Eq (F.EVar s) (F.EVar x)) <- refas, s == vv ]
+  where vv               = rTypeValueVar t
+        F.Reft (_,refas) = rTypeReft t
+
 
 
 

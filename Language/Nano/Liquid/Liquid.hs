@@ -13,6 +13,10 @@ import           Control.Applicative                ((<$>))
 
 import qualified Data.ByteString.Lazy               as B
 import qualified Data.HashMap.Strict                as M
+import           Data.List                          (nub, find)
+import           Data.Maybe                         (maybeToList)
+import qualified Data.Graph                         as G
+import qualified Data.Tree                          as T
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -264,11 +268,10 @@ consExpr g (NullLit l)
   = envAddFresh l tNull g
 
 consExpr g (VarRef i x)
-  = do addAnnot l x' $ envFindTy x g
-       return (x', g) 
+  = do addAnnot l x t
+       return ({-trace ("consExpr:VarRef" ++ ppshow x ++ " : " ++ ppshow t)-} x, g) 
     where 
-       x'  =  {- tracePP msg   -} x 
-       {-msg = printf "consExpr x = %s at %s" (ppshow x') (ppshow l)-}
+       t   = envFindTy x g
        l   = srcPos i
 
 consExpr g (PrefixExpr l o e)
@@ -325,8 +328,8 @@ consDownCast g x a e
         -- TODO: may need to use a version of @subTypeContainers@
         let ts              = {- tracePP "consDownCast: after bkPaddedUnion" $ -}
                               bkPaddedUnion tdefs tE' tC'
-        forM_ ts            $ castSubM g x l      -- Parts 
-        castSubM            g' x l (tE', tC')      -- Top-level
+        forM_ ts            $ castSubM g x l      -- Parts: need fixbase
+        subType             l g tE' tC'           -- Top-level: Does not need fixBase
         (x', g'')          <- envAddFresh l tC g'
         return              $ (x', g'')
     where 
@@ -338,49 +341,12 @@ consDownCast g x a e
 castSubM :: CGEnv -> Id AnnType -> AnnType -> (RefType, RefType) -> CGM () 
 ---------------------------------------------------------------------------------------------
 castSubM g x l (t1, t2) 
-  = do  (g', t1', t2') <- fixBase g x (t1, t2)
+  = do  (g', t1') <- fixBase g x t1
         {-let msg         = printf "castSub: (%s, %s) \n-- fixbase-->\n(%s,%s)\n"-}
         {-                    (ppshow t1) (ppshow t2) (ppshow t1') (ppshow t2')-}
         -- subType can be called directly at this point
-        subType l g' ({- trace msg -} t1') t2'
+        subType l g' ({- trace msg -} t1') t2
 
-
--- | fixBase converts:                                                  
---                         -----tE-----              -----tC-----       
--- g, x :: { v: U | r } |- { v: B | p }           <: { v: B | q }       
---              ^                                                       
---              |______Union                                            
---                                                                      
--- into:                                                                
---                                                                      
--- g, x :: { v: B | r } |- { v: B | p ∧ (v = x) } <: { v: B | q }       
--- --------g'----------    ----------tE'---------    ---- tC-----       
-
----------------------------------------------------------------------------------------------
-fixBase :: CGEnv -> Id AnnType -> (RefType, RefType) -> CGM (CGEnv, RefType, RefType)
----------------------------------------------------------------------------------------------
-fixBase g x (tE, tC) =
-  do  -- ttE     <- true tE
-      let tX   = envFindTy x g
-      let tE'  = eSingleton tE x
-      
-      g'      <- undefined -- fixEnv g (veqx tE') tE
-      
-      let msg  = printf "TE: %s -> %s\nx: %s\nTC: %s\n\n" 
-                   (ppshow tE) (ppshow tE') (ppshow x) (ppshow tC)
-
-      return   $ (g, trace msg tE', tC)
-
-
-veqx t      = [ x | F.RConc (F.PAtom F.Eq (F.EVar s) (F.EVar x)) <- refas, s == vv ]
-  where vv               = rTypeValueVar t
-        F.Reft (_,refas) = rTypeReft t
-
-
-fixEnv g xs t = 
-  foldM (\g_ x -> envAdds [(x, toT x)] g_) g xs  
-  where 
-    toT x = t `strengthen` rTypeReft (envFindTy x g)
 
 
 ---------------------------------------------------------------------------------------------
@@ -413,7 +379,7 @@ consCall g l _ es ft
        (xes, g')    <- consScan consExpr g es
        let (su, ts') = renameBinds its xes
        subTypesContainers l g' xes ts'
-       tracePP "consCall" <$> envAddFresh l ({- tracePP "Ret Call Type" $ -} F.subst su ot) g'
+       envAddFresh l ({- tracePP "Ret Call Type" $ -} F.subst su ot) g'
      {-where -}
      {-  msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)-}
 

@@ -80,12 +80,20 @@ xyP lP sepP rP
 
 bareTypeP :: Parser RefType 
 bareTypeP 
-  = do  ts <- bareTypeNoUnionP `sepBy1` plus
-        tr <- topP   -- unions have Top ref. type atm
-        case ts of
-          [ ] -> error "impossible"
-          [t] -> return t
-          _   -> return $ TApp TUn (sort ts) tr
+  =  try (do  ts <- bareTypeNoUnionP `sepBy1` plus
+              tr <- topP   -- unions have Top ref. type atm
+              case ts of
+                [ ] -> error "impossible"
+                [t] -> return t
+                _   -> return $ TApp TUn (sort ts) tr)
+         
+ <|> try (bRefP ( do  ts <- bareTypeNoUnionP `sepBy1` plus
+                      tr <- topP   -- unions have Top ref. type atm
+                      case ts of
+                        [ ] -> error "impossible"
+                        [t] -> undefined
+                        _   -> return $ TApp TUn (sort ts) 
+                ))
 
 
 bareTypeNoUnionP

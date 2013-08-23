@@ -122,6 +122,8 @@ instance IsLocated (Located a) where
 instance IsLocated a => IsLocated (Id a) where 
   srcPos (Id x _) = srcPos x
 
+instance IsLocated F.Symbol where 
+  srcPos _ = dummySpan
 
 instance HasAnnotation Id where 
   getAnnotation (Id x _) = x

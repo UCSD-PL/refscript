@@ -13,10 +13,6 @@ import           Control.Applicative                ((<$>))
 
 import qualified Data.ByteString.Lazy               as B
 import qualified Data.HashMap.Strict                as M
-import           Data.List                          (nub, find)
-import           Data.Maybe                         (maybeToList)
-import qualified Data.Graph                         as G
-import qualified Data.Tree                          as T
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -43,7 +39,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -102,7 +98,8 @@ generateConstraints cfg pgm = getCGInfo cfg pgm $ consNano pgm
 consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) 
-  = consStmts (initCGEnv pgm) fs >> return ()
+  =  
+    consStmts (initCGEnv pgm) fs >> return ()
 
   -- = forM_ fs . consFun =<< initCGEnv pgm
 initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
@@ -111,14 +108,14 @@ initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
 consFun :: CGEnv -> FunctionStatement AnnType -> CGM CGEnv  
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = do ft             <- {- tracePP msg <$> -} (freshTyFun g l f =<< getDefType f)
+  = do ft             <-  tracePP msg <$>  (freshTyFun g l f =<< getDefType f)
        g'             <- envAdds [(f, ft)] g 
        g''            <- envAddFun l g' f xs ft
        gm             <- consStmts g'' body
        maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
        return g'
-    {-where -}
-    {-   msg = printf "freshTyFun f = %s" (ppshow f)-}
+    where 
+       msg = printf "freshTyFun f = %s" (ppshow f)
 
 consFun _ _ = error "consFun called not with FunctionStmt"
 
@@ -308,10 +305,10 @@ consUpCast g x a e
         -- tU's refinements will not be used here! 
         -- Instead keep the original type since it's more precise
         let cmp    = compareTs γ tE tU
-            tE'    = snd4 cmp
+            tE'    = tracePP "UPCAST EXP AFTER COMPARISON" $ snd4 cmp
         (x',g')   <- envAddFresh l tE' g
         return     $ (x', g')
-  where tE         = envFindTy x g 
+  where tE         = tracePP "UPCAST EXP TYPE" $ envFindTy x g 
         l          = getAnnotation e
       
 

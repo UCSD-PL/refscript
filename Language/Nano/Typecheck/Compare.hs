@@ -234,7 +234,7 @@ compareTs γ t1 t2 | otherwise              = compareTs' γ t1 t2
 -- | Top-level Unions
 
 compareTs' _ t1 t2 | isTop t1               = errorstar "unimplemented: compareTs - top"
-compareTs' _ t1 t2 | isTop t2               = tracePP "Compare with top" (t1', t1, t2', SubT)
+compareTs' _ t1 t2 | isTop t2               = (t1', t1, t2', SubT)
   where
     t1' = setRTypeR t1 F.top -- this will be kVared
     -- @t2@ is a Top, so just to make the types compatible we will 
@@ -336,18 +336,19 @@ padUnion ::  (Eq r, Ord r, F.Reftable r, PP r) =>
                 SubDirection)   -- Subtyping relation between LHS and RHS
 --------------------------------------------------------------------------------
 padUnion env t1 t2 = 
-  (joinType, mkUnionR topR1 $ t1s, mkUnionR topR2 $ t2s, direction)
+  (joinType, tracePP "PAD-UNION: out 1" $ mkUnionR topR1 $ t1s, 
+             tracePP "PAD-UNION: out 2" $ mkUnionR topR2 $ t2s, direction)
   where
     -- Extract top-level refinements
-    topR1       = rUnion t1 
-    topR2       = rUnion t2
+    topR1       = tracePP "PAD-UNION TOP 1" $ rUnion $ tracePP "PAD-UNION: in 1" t1
+    topR2       = tracePP "PAD-UNION TOP 2" $ rUnion $ tracePP "PAD-UNION: in 2" t2
 
     -- No reason to add the kVars here. They will be added in the CGMonad
     joinType   = mkUnion $ (ofType . toType) <$> ((fst4 <$> commonTs) ++ d1s ++ d2s)
     (t1s, t2s) = unzip $ safeZip "unionParts" t1s' t2s'
 
     -- It is crucial to sort the types so that they are aligned
-    t1s'       = L.sort $ commonT1s ++ d1s ++ (fmap F.bot <$> d2s)    
+    t1s'       = L.sort $ commonT1s ++ d1s ++ (fmap F.bot <$> d2s)
     t2s'       = L.sort $ commonT2s ++ d2s ++ (fmap F.bot <$> d1s)
 
     commonT1s  = snd4 <$> commonTs

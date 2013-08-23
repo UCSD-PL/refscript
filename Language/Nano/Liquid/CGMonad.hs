@@ -62,7 +62,7 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Environment sort check
   , fixBase, fixEnv
-  , findCC, mkCCs, mkGraph, veqx
+  , fixBase'
   ) where
 
 import           Data.Maybe                     (fromMaybe, maybeToList)
@@ -701,27 +701,25 @@ bsplitC g ci t1 t2
 
 
 
-
-
--- | fixBase converts:                                                  
---                         -----tE-----              -----tC-----       
--- g, x :: { v: U | r } |- { v: B | p }           <: { v: B | q }       
---              ^                                                       
---              |______Union                                            
---                                                                      
--- into:                                                                
---                                                                      
--- g, x :: { v: B | r } |- { v: B | p ∧ (v = x) } <: { v: B | q }       
--- --------g'----------    ----------tE'---------    ---- tC-----       
+-- fixBase converts:
+--                         -----tE-----
+-- g, x :: { v: U | r } |- { v: B | p }
+--              ^
+--            Union
+--
+-- into:
+--
+-- g, x :: { v: B | r } |- { v: B | p ∧ (v = x) }
+-- --------g'----------    ----------tE'---------
 
 ---------------------------------------------------------------------------------------------
 fixBase :: (F.Symbolic x, F.Expression x) => CGEnv -> x -> RefType -> CGM (CGEnv, RefType)
 ---------------------------------------------------------------------------------------------
 fixBase g x t =
   do  let t'   = eSingleton t x
-      let msg  = printf "############################\nTE: %s\nWill fix:%s\n"
-                   (ppshow t') (ppshow $ findCC (F.symbol x) g)
-      g'      <- fixEnv g (F.symbol $ trace msg x) t
+      {-let msg  = printf "TE: %s\nWill fix:%s\n"-}
+      {-             (ppshow t') (ppshow $ findCCs (F.symbol x) g)-}
+      g'      <- fixEnv g (F.symbol $ {- trace msg -} x) t
       return   $ (g', t')
 
 fixBaseG g x t = fst <$> fixBase g x t 
@@ -730,10 +728,30 @@ fixBaseG g x t = fst <$> fixBase g x t
 fixEnv :: F.Symbolic a => CGEnv -> a -> RType F.Reft -> CGM CGEnv
 ---------------------------------------------------------------------------------------------
 fixEnv g start base = foldM fixX g xs
-  where xs          = concat $ maybeToList $ findCC (F.symbol start) g
-        fixX g x    = envAdds [tracePP "fixEnv adjusting" (x, toT x)] g 
+  where xs          = findCCs (F.symbol start) g
+        fixX g x    = envAdds [(x, toT x)] g 
         toT  x      = base `strengthen` rTypeReft (envFindTy' x g)
 
+
+-- fixBase' converts:
+--
+-- Γ  |- x :: { v: B | p }
+--
+-- into:
+--
+-- Γ' |- x :: { v: U | p' } , where: 
+--
+-- Γ' = Γ / [ ∀ w ~ v. w :: T [B/U]
+
+---------------------------------------------------------------------------------------------
+fixBase' :: (F.Symbolic x, F.Expression x) => CGEnv -> x -> RefType -> CGM CGEnv
+---------------------------------------------------------------------------------------------
+fixBase' g x u =
+  do  let b    = envFindTy' x g     -- base type
+      fixEnv g x u
+      {-let msg  = printf "TE: %s\nWill fix:%s\n"-}
+      {-             (ppshow t') (ppshow $ findCCs (F.symbol x) g)-}
+      
 
 ---------------------------------------------------------------------------------------------
 envSortCheck :: CGEnv -> Bool
@@ -766,12 +784,12 @@ envSortSanitize g = foldM fixGroup g xs
 
   
 ---------------------------------------------------------------------------------------------
-findCC :: F.Symbol -> CGEnv -> Maybe [F.Symbol]
+findCCs :: F.Symbol -> CGEnv -> [F.Symbol]
 ---------------------------------------------------------------------------------------------
-findCC x g = L.find (x `elem`) $ mkCCs g 
+findCCs x g = concat $ maybeToList $ L.find (x `elem`) $ mkCCs g 
 
 -- Connected componets in the symbols in the graph
--- The ccs need to have the same sort! 
+-- The CCs need to have the same sort!
 ---------------------------------------------------------------------------------------------
 mkCCs :: CGEnv -> [[F.Symbol]]
 ---------------------------------------------------------------------------------------------

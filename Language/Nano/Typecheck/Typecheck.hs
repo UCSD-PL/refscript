@@ -69,7 +69,7 @@ verifyFile f
 
 -------------------------------------------------------------------------------
 typeCheck     :: (Data r, Typeable r, F.Reftable r) => V.Verbosity -> 
-                   Nano AnnSSA (RType r) -> (Nano AnnType (RType r))
+                   Nano AnnSSA (RType r) -> Nano AnnType (RType r)
 -------------------------------------------------------------------------------
 typeCheck verb pgm = either crash id (execute verb pgm (tcAndPatch pgm))
   where

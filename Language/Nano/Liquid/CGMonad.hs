@@ -649,7 +649,7 @@ splitC' (Sub g i t1@(TApp d1@(TDef _) t1s _) t2@(TApp d2@(TDef _) t2s _)) | d1 =
   = do  let cs = bsplitC g i t1 t2
         -- constructor parameters are covariant
         cs'   <- concatMapM splitC $ safeZipWith "splitcTDef" (Sub g i) t1s t2s
-        return $ tracePP "splitC TDefs" $ cs ++ cs' 
+        return $ cs ++ cs' 
 
 splitC' (Sub _ _ (TApp (TDef _) _ _) (TApp (TDef _) _ _))
   = errorstar "Unimplemented: Check type definition cycles"
@@ -738,41 +738,42 @@ fixEnv g start base = foldM fixX g xs
         toT  x      = base `strengthen` rTypeReft (envFindTy' x g)
 
 
--- fixBase' converts:
+-- `fixUpcast` compares/patches types @b@ and @u@ and returns their "comparible"
+-- version. It also tries to propagate as much of the refinements of the base
+-- type to the top-level (union) type.
 --
--- Γ  |- x :: { v: B | p }
+-- b = { v: B | p } -- upcast --> b = { v: U | p' }
+-- 
+-- where
 --
--- into:
---
--- Γ' |- x :: { v: U | p' } , where: 
---
--- Γ' = Γ / [ ∀ w ~ v. w :: T [B/U]
+-- u  = { v: U | q }
+-- p' = global(p)
+-- B    is part of U
 
 ---------------------------------------------------------------------------------------------
-fixBase' :: (F.Symbolic x, F.Expression x) => CGEnv -> x -> RefType -> CGM CGEnv
+fixUpcast :: RefType -> RefType -> CGM (RefType, RefType)
 ---------------------------------------------------------------------------------------------
-fixBase' g x u =
-  do  let b    = envFindTy' x g     -- base type
-      fixEnv g x u
-      {-let msg  = printf "TE: %s\nWill fix:%s\n"-}
-      {-             (ppshow t') (ppshow $ findCCs (F.symbol x) g)-}
-      
-
----------------------------------------------------------------------------------------------
-fixUpcast :: E.Env RefType -> RefType -> RefType -> CGM (RefType, RefType)
----------------------------------------------------------------------------------------------
-fixUpcast γ b u =
-  -- TODO: subst VV
-  do  gs <- glbs <$> get
-      maybe (return (b', u')) (\p -> return (b' `strengthen` p, u'))
-        (traceShow "glbPreds" <$> glbPreds gs b)
+fixUpcast b u =
+  do  γ                   <- cg_tdefs <$> get
+      let (_,b', u',_)     = compareTs γ b u
+          -- Substitute the v variable
+          vv               = rTypeValueVar b
+          vv'              = rTypeValueVar b'
+          fx v | v == vv   = vv'
+          fx v | otherwise = v
+          {-msg              = printf "VV(b) = %s, VV(b') = %s\nGlobPreds" (ppshow vv) (ppshow vv')-}
+      gs                  <- glbs     <$> get
+      maybe (return (b', u')) 
+            (\p -> return (F.substa fx $ b' `strengthen` p, u'))
+            ({-traceShow msg <$> -} glbPreds gs b)
   where
-    glbPreds gs t = glbReft gs $ rTypeReft t
-    (_,b', u',_)  = compareTs γ b u
+    glbPreds gs = glbReft gs . rTypeReft
 
 
 glbReft g (F.Reft (v, rs)) = glb g rs >>= \rs' -> return $ F.Reft (v, rs')
 
+-- Specifies the parts of a refinement that can be propagated to the top-level
+-- union refinement. Needed for proving properties when upcasting. 
 class Global a where 
   glb :: TGlobs -> a -> Maybe a
 

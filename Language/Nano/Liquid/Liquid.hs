@@ -108,14 +108,14 @@ initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
 consFun :: CGEnv -> FunctionStatement AnnType -> CGM CGEnv  
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = do ft             <-  tracePP msg <$>  (freshTyFun g l f =<< getDefType f)
+  = do ft             <- {- tracePP msg <$> -} (freshTyFun g l f =<< getDefType f)
        g'             <- envAdds [(f, ft)] g 
        g''            <- envAddFun l g' f xs ft
        gm             <- consStmts g'' body
        maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
        return g'
-    where 
-       msg = printf "freshTyFun f = %s" (ppshow f)
+    {-where -}
+    {-   msg = printf "freshTyFun f = %s" (ppshow f)-}
 
 consFun _ _ = error "consFun called not with FunctionStmt"
 
@@ -302,10 +302,10 @@ consUpCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id An
 consUpCast g x a e 
   = do  γ         <- getTDefs
         let u      = rType $ head [ t | Assume t <- ann_fact a]
-        (b',u')   <- tracePP "AFTER FIX-UPCAST" <$> fixUpcast γ b u
+        (b',u')   <- fixUpcast b u
         (x',g')   <- envAddFresh l b' g
         return     $ (x', g')
-  where b          = tracePP "UPCAST EXP TYPE" $ envFindTy x g 
+  where b          = envFindTy x g 
         l          = getAnnotation e
       
 

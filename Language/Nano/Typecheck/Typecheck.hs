@@ -70,7 +70,8 @@ verifyFile f
 
 
 -------------------------------------------------------------------------------
-typeCheck     :: V.Verbosity -> Nano AnnSSAR RefType -> Nano AnnTypeR RefType
+typeCheck     :: (Data r, Typeable r, F.Reftable r) => V.Verbosity -> 
+                   Nano AnnSSA (RType r) -> (Nano AnnType (RType r))
 -------------------------------------------------------------------------------
 typeCheck verb pgm = either crash id (execute verb pgm (tcAndPatch pgm))
   where
@@ -88,7 +89,8 @@ safe (Nano {code = Src fs})
        return F.Safe 
 
 -------------------------------------------------------------------------------
-failCasts :: Bool -> Nano AnnSSAR RefType -> F.FixResult (SourceSpan, String)
+failCasts :: (Data r, Typeable r) => 
+  Bool -> Nano AnnSSA (RType r) -> F.FixResult (SourceSpan, String)
 -------------------------------------------------------------------------------
 failCasts False (Nano {code = Src fs}) | not $ null csts = F.Unsafe csts
                                        | otherwise       = F.Safe
@@ -117,7 +119,8 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn
 -------------------------------------------------------------------------------
 -- | The first argument true to tranform casted expressions e to Cast(e,T)
 -------------------------------------------------------------------------------
-tcAndPatch :: Nano AnnSSAR RefType -> TCM (Nano  AnnSSAR RefType)
+tcAndPatch :: (Data r, Typeable r, F.Reftable r) => 
+    Nano AnnSSA (RType r) -> TCM (Nano  AnnSSA (RType r))
 -------------------------------------------------------------------------------
 tcAndPatch p = 
   do  checkTypeDefs p
@@ -140,7 +143,7 @@ tcAndPatch p =
 
 
 -------------------------------------------------------------------------------
-checkTypeDefs :: Nano AnnSSAR RefType -> TCM ()
+checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano AnnSSA (RType r) -> TCM ()
 -------------------------------------------------------------------------------
 checkTypeDefs pgm = reportAll $ grep
   where 

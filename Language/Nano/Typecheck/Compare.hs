@@ -24,7 +24,7 @@ module Language.Nano.Typecheck.Compare (
   
   -- * Casting
   , Cast(..)
-  , Casts
+  , Casts, Casts_
 
   , SubDirection (..)
 
@@ -105,7 +105,8 @@ instance Equivalent e (Id a) where
 -- Casts ------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-type Casts   = M.Map (Expression (AnnSSA_ F.Reft)) (Cast RefType)
+type Casts    = M.Map (Expression (AnnSSA_ F.Reft)) (Cast RefType)
+type Casts_ r = M.Map (Expression (AnnSSA_ r)) (Cast (RType r))
 
 data Cast t  = UCST t | DCST t | DC t
 

@@ -345,6 +345,7 @@ data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
                      , tDefs  :: !(Env t)           -- ^ Type definitions
                      , quals  :: ![F.Qualifier]     -- ^ Qualifiers
                      , invts  :: ![Located t]       -- ^ Type Invariants
+                     , globs  :: ![Located F.Symbol] -- ^ Global predicates -- can refer to any sort
                      } deriving (Functor, Data, Typeable)
 
 type NanoBare    = Nano AnnBare Type 
@@ -380,13 +381,15 @@ instance PP t => PP (Nano a t) where
     $+$ pp (tDefs  pgm)
     $+$ text "********************** QUALS *********************"
     $+$ F.toFix (quals  pgm) 
-    $+$ text "********************** QUALS *********************"
+    $+$ text "********************** INVARIANTS ****************"
     $+$ pp (invts pgm) 
+    $+$ text "********************** GLOBAL PREDS **************"
+    $+$ pp (globs pgm) 
     $+$ text "**************************************************"
     
 instance Monoid (Nano a t) where 
-  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty [] []
-  mappend p1 p2 = Nano ss e e' cs tds qs is 
+  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty [] [] []
+  mappend p1 p2 = Nano ss e e' cs tds qs is gs 
     where 
       ss        = Src $ s1 ++ s2
       Src s1    = code p1
@@ -397,6 +400,7 @@ instance Monoid (Nano a t) where
       tds       = envFromList $ (envToList $ tDefs p1) ++ (envToList $ tDefs p2)
       qs        = quals p1 ++ quals p2
       is        = invts p1 ++ invts p2
+      gs        = globs p1 ++ globs p2
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }

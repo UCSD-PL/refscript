@@ -13,10 +13,6 @@ import           Control.Applicative                ((<$>))
 
 import qualified Data.ByteString.Lazy               as B
 import qualified Data.HashMap.Strict                as M
-import           Data.List                          (nub, find)
-import           Data.Maybe                         (maybeToList)
-import qualified Data.Graph                         as G
-import qualified Data.Tree                          as T
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -43,7 +39,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -102,7 +98,8 @@ generateConstraints cfg pgm = getCGInfo cfg pgm $ consNano pgm
 consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) 
-  = consStmts (initCGEnv pgm) fs >> return ()
+  =  
+    consStmts (initCGEnv pgm) fs >> return ()
 
   -- = forM_ fs . consFun =<< initCGEnv pgm
 initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
@@ -304,14 +301,11 @@ consUpCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id An
 ---------------------------------------------------------------------------------------------
 consUpCast g x a e 
   = do  γ         <- getTDefs
-        let tU     = rType $ head [ t | Assume t <- ann_fact a]
-        -- tU's refinements will not be used here! 
-        -- Instead keep the original type since it's more precise
-        let cmp    = compareTs γ tE tU
-            tE'    = snd4 cmp
-        (x',g')   <- envAddFresh l tE' g
+        let u      = rType $ head [ t | Assume t <- ann_fact a]
+        (b',u')   <- fixUpcast b u
+        (x',g')   <- envAddFresh l b' g
         return     $ (x', g')
-  where tE         = envFindTy x g 
+  where b          = envFindTy x g 
         l          = getAnnotation e
       
 

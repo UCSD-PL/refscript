@@ -80,12 +80,20 @@ xyP lP sepP rP
 
 bareTypeP :: Parser RefType 
 bareTypeP 
-  = do  ts <- bareTypeNoUnionP `sepBy1` plus
-        tr <- topP   -- unions have Top ref. type atm
-        case ts of
-          [ ] -> error "impossible"
-          [t] -> return t
-          _   -> return $ TApp TUn (sort ts) tr
+  =  try (do  ts <- bareTypeNoUnionP `sepBy1` plus
+              tr <- topP   -- unions have Top ref. type atm
+              case ts of
+                [ ] -> error "impossible"
+                [t] -> return t
+                _   -> return $ TApp TUn (sort ts) tr)
+         
+ <|> try (bRefP ( do  ts <- bareTypeNoUnionP `sepBy1` plus
+                      tr <- topP   -- unions have Top ref. type atm
+                      case ts of
+                        [ ] -> error "impossible"
+                        [t] -> undefined
+                        _   -> return $ TApp TUn (sort ts) 
+                ))
 
 
 bareTypeNoUnionP
@@ -264,6 +272,7 @@ data PSpec l t
   | Qual Qualifier
   | Type (Id l, t)
   | Invt l t 
+  | Glb  l Symbol 
   deriving (Show)
 
 specP :: Parser (PSpec SourceSpan RefType)
@@ -272,6 +281,7 @@ specP
     <|> (reserved "qualif"    >> (Qual <$> qualifierP ))
     <|> (reserved "type"      >> (Type <$> tBodyP     )) 
     <|> (reserved "invariant" >> (withSpan Invt bareTypeP))
+    <|> (reserved "global"    >> (withSpan Glb symbolP))
     <|> ({- DEFAULT -}           (Bind <$> idBindP    ))
 
 --------------------------------------------------------------------------------------
@@ -285,8 +295,9 @@ mkSpec xs = Nano { code   = Src []
                  , defs   = envEmpty
                  , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
                  , tDefs  = envFromList [b         | Type b <- xs]
-                 , quals  =             [q         | Qual q <- xs]  
-                 , invts  =             [Loc l' t  | Invt l t <- xs, let l' = srcPos l] 
+                 , quals  =             [q         | Qual q <- xs]
+                 , invts  =             [Loc l' t  | Invt l t <- xs, let l' = srcPos l]
+                 , globs  =             [Loc l' s  | Glb  l s <- xs, let l' = srcPos l]
                  }
 
 -- YUCK. Worst hack of all time.
@@ -308,6 +319,7 @@ mkCode ss = Nano { code   = Src (checkTopStmt <$> ss)
                  , tDefs  = envEmpty
                  , quals  = [] 
                  , invts  = [] 
+                 , globs  = []
                  } 
 
 -------------------------------------------------------------------------------

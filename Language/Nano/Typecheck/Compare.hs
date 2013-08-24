@@ -336,12 +336,12 @@ padUnion ::  (Eq r, Ord r, F.Reftable r, PP r) =>
                 SubDirection)   -- Subtyping relation between LHS and RHS
 --------------------------------------------------------------------------------
 padUnion env t1 t2 = 
-  (joinType, tracePP "PAD-UNION: out 1" $ mkUnionR topR1 $ t1s, 
-             tracePP "PAD-UNION: out 2" $ mkUnionR topR2 $ t2s, direction)
+  (joinType, mkUnionR topR1 $ t1s, 
+             mkUnionR topR2 $ t2s, direction)
   where
     -- Extract top-level refinements
-    topR1       = tracePP "PAD-UNION TOP 1" $ rUnion $ tracePP "PAD-UNION: in 1" t1
-    topR2       = tracePP "PAD-UNION TOP 2" $ rUnion $ tracePP "PAD-UNION: in 2" t2
+    topR1       = rUnion t1
+    topR2       = rUnion t2
 
     -- No reason to add the kVars here. They will be added in the CGMonad
     joinType   = mkUnion $ (ofType . toType) <$> ((fst4 <$> commonTs) ++ d1s ++ d2s)

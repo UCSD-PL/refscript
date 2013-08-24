@@ -27,6 +27,8 @@ Tool / Implementation
 
 5.  Multiple fixpoint bindings in the same environment
 
+6.  Disallow type to have multiple tags
+
 
 Failing Tests
 -------------

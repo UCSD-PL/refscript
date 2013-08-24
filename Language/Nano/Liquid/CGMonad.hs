@@ -62,13 +62,14 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Environment sort check
   , fixBase, fixEnv
-  , fixBase'
+  , fixUpcast
   ) where
 
-import           Data.Maybe                     (fromMaybe, maybeToList)
+import           Data.Maybe                     (fromMaybe, maybeToList, catMaybes, isJust)
 import qualified Data.List                      as L
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
+import qualified Data.HashSet                   as S
 import qualified Data.Graph                     as G
 import qualified Data.Tree                      as T
 
@@ -134,9 +135,10 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnType RefType -> CGState
-initState c pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty invs c 
+initState c pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty invs glbs c 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts pgm]  
+    glbs        = S.fromList [s       | t@(Loc l s)             <- globs pgm]  
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -201,12 +203,15 @@ data CGState
         , count    :: !Integer             -- ^ freshness counter
         , cg_ann   :: A.AnnInfo RefType    -- ^ recorded annotations
         , invs     :: TConInv              -- ^ type constructor invariants
+        , glbs     :: TGlobs               -- ^ predicate symbols that can be lifted to supertypes
         , cg_opts  :: Config               -- ^ configuration options
         }
 
 type CGM     = ErrorT String (State CGState)
 
 type TConInv = M.HashMap TCon (Located RefType)
+
+type TGlobs  = S.HashSet F.Symbol
 
 ---------------------------------------------------------------------------------------
 cgError :: (IsLocated l) => l -> String -> CGM a 
@@ -752,6 +757,67 @@ fixBase' g x u =
       {-let msg  = printf "TE: %s\nWill fix:%s\n"-}
       {-             (ppshow t') (ppshow $ findCCs (F.symbol x) g)-}
       
+
+---------------------------------------------------------------------------------------------
+fixUpcast :: E.Env RefType -> RefType -> RefType -> CGM (RefType, RefType)
+---------------------------------------------------------------------------------------------
+fixUpcast γ b u =
+  -- TODO: subst VV
+  do  gs <- glbs <$> get
+      maybe (return (b', u')) (\p -> return (b' `strengthen` p, u'))
+        (traceShow "glbPreds" <$> glbPreds gs b)
+  where
+    glbPreds gs t = glbReft gs $ rTypeReft t
+    (_,b', u',_)  = compareTs γ b u
+
+
+glbReft g (F.Reft (v, rs)) = glb g rs >>= \rs' -> return $ F.Reft (v, rs')
+
+class Global a where 
+  glb :: TGlobs -> a -> Maybe a
+
+instance (Show a, Global a) => Global [a] where
+  glb = glbAny
+
+instance Global F.Refa where
+  glb g (F.RConc p   ) = F.RConc <$> glb g p
+  glb _ (F.RKvar _ _ )       = Nothing
+
+instance Global F.Pred where
+   glb _  F.PTrue            = return  $  F.PTrue
+   glb _  F.PFalse           = return  $  F.PFalse
+   glb g (F.PAnd xs)         = F.PAnd   <$> glb g xs
+   glb g (F.POr xs)          = F.POr    <$> glbAll g xs
+   glb g (F.PNot x)          = F.PNot   <$> glb g x
+   glb g (F.PImp x y)        = liftM2 F.PImp (glb g x) (glb g y)
+   glb g (F.PIff x y)        = liftM2 F.PIff (glb g x) (glb g y)
+   glb g (F.PBexp e)         = F.PBexp  <$> glb g e
+   glb g (F.PAtom b e1 e2)   = liftM2 (F.PAtom b) (glb g e1) (glb g e2)
+   glb _  _                  = Nothing
+
+instance Global F.Expr where
+  glb _ (F.ESym sc)      = return $ F.ESym sc 
+  glb _ (F.ECon cst)     = return $ F.ECon cst
+  glb g (F.EVar s)       = F.EVar <$> glb g s
+  glb _ (F.ELit _ _ )    = Nothing
+  glb g (F.EApp s es)    = glb g s >>= \s' -> return $ F.EApp s' es
+  glb g (F.EBin b e1 e2) = liftM2 (F.EBin b) (glb g e1) (glb g e2)
+  glb g (F.EIte p e1 e2) = liftM3 F.EIte (glb g p) (glb g e1) (glb g e2)
+  glb g (F.ECst e srt)   = glb g e >>= return . (`F.ECst` srt)
+  glb _  F.EBot          = return $ F.EBot
+          
+glbAll = glbList all
+glbAny = glbList any
+
+glbList what g xs | what isJust ms = Just $ catMaybes ms
+                  | otherwise     = Nothing
+                    where ms = map (glb g) xs
+
+instance Global F.Symbol where
+  glb g s | s `S.member` g = return s   -- only allow the designated vars
+          | otherwise      = Nothing 
+
+
 
 ---------------------------------------------------------------------------------------------
 envSortCheck :: CGEnv -> Bool

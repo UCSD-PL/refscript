@@ -301,14 +301,11 @@ consUpCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id An
 ---------------------------------------------------------------------------------------------
 consUpCast g x a e 
   = do  γ         <- getTDefs
-        let tU     = rType $ head [ t | Assume t <- ann_fact a]
-        -- tU's refinements will not be used here! 
-        -- Instead keep the original type since it's more precise
-        let cmp    = compareTs γ tE tU
-            tE'    = tracePP "UPCAST EXP AFTER COMPARISON" $ snd4 cmp
-        (x',g')   <- envAddFresh l tE' g
+        let u      = rType $ head [ t | Assume t <- ann_fact a]
+        (b',u')   <- tracePP "AFTER FIX-UPCAST" <$> fixUpcast γ b u
+        (x',g')   <- envAddFresh l b' g
         return     $ (x', g')
-  where tE         = tracePP "UPCAST EXP TYPE" $ envFindTy x g 
+  where b          = tracePP "UPCAST EXP TYPE" $ envFindTy x g 
         l          = getAnnotation e
       
 

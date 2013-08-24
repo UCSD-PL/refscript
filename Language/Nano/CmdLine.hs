@@ -4,7 +4,7 @@
 module Language.Nano.CmdLine (getOpts) where
 
 import Language.Nano.Types                      (Config (..))
-import System.Console.CmdArgs                  
+import System.Console.CmdArgs 
 
 ---------------------------------------------------------------------------------
 -- | Parsing Command Line -------------------------------------------------------

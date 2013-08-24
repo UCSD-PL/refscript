@@ -62,13 +62,14 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Environment sort check
   , fixBase, fixEnv
-  , findCC, mkCCs, mkGraph, veqx
+  , fixUpcast
   ) where
 
-import           Data.Maybe                     (fromMaybe, maybeToList)
+import           Data.Maybe                     (fromMaybe, maybeToList, catMaybes, isJust)
 import qualified Data.List                      as L
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
+import qualified Data.HashSet                   as S
 import qualified Data.Graph                     as G
 import qualified Data.Tree                      as T
 
@@ -134,9 +135,10 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnType RefType -> CGState
-initState c pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty invs c 
+initState c pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty invs glbs c 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts pgm]  
+    glbs        = S.fromList [s       | t@(Loc l s)             <- globs pgm]  
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -201,12 +203,15 @@ data CGState
         , count    :: !Integer             -- ^ freshness counter
         , cg_ann   :: A.AnnInfo RefType    -- ^ recorded annotations
         , invs     :: TConInv              -- ^ type constructor invariants
+        , glbs     :: TGlobs               -- ^ predicate symbols that can be lifted to supertypes
         , cg_opts  :: Config               -- ^ configuration options
         }
 
 type CGM     = ErrorT String (State CGState)
 
 type TConInv = M.HashMap TCon (Located RefType)
+
+type TGlobs  = S.HashSet F.Symbol
 
 ---------------------------------------------------------------------------------------
 cgError :: (IsLocated l) => l -> String -> CGM a 
@@ -644,7 +649,7 @@ splitC' (Sub g i t1@(TApp d1@(TDef _) t1s _) t2@(TApp d2@(TDef _) t2s _)) | d1 =
   = do  let cs = bsplitC g i t1 t2
         -- constructor parameters are covariant
         cs'   <- concatMapM splitC $ safeZipWith "splitcTDef" (Sub g i) t1s t2s
-        return $ tracePP "splitC TDefs" $ cs ++ cs' 
+        return $ cs ++ cs' 
 
 splitC' (Sub _ _ (TApp (TDef _) _ _) (TApp (TDef _) _ _))
   = errorstar "Unimplemented: Check type definition cycles"
@@ -701,27 +706,25 @@ bsplitC g ci t1 t2
 
 
 
-
-
--- | fixBase converts:                                                  
---                         -----tE-----              -----tC-----       
--- g, x :: { v: U | r } |- { v: B | p }           <: { v: B | q }       
---              ^                                                       
---              |______Union                                            
---                                                                      
--- into:                                                                
---                                                                      
--- g, x :: { v: B | r } |- { v: B | p ∧ (v = x) } <: { v: B | q }       
--- --------g'----------    ----------tE'---------    ---- tC-----       
+-- fixBase converts:
+--                         -----tE-----
+-- g, x :: { v: U | r } |- { v: B | p }
+--              ^
+--            Union
+--
+-- into:
+--
+-- g, x :: { v: B | r } |- { v: B | p ∧ (v = x) }
+-- --------g'----------    ----------tE'---------
 
 ---------------------------------------------------------------------------------------------
 fixBase :: (F.Symbolic x, F.Expression x) => CGEnv -> x -> RefType -> CGM (CGEnv, RefType)
 ---------------------------------------------------------------------------------------------
 fixBase g x t =
   do  let t'   = eSingleton t x
-      let msg  = printf "############################\nTE: %s\nWill fix:%s\n"
-                   (ppshow t') (ppshow $ findCC (F.symbol x) g)
-      g'      <- fixEnv g (F.symbol $ trace msg x) t
+      {-let msg  = printf "TE: %s\nWill fix:%s\n"-}
+      {-             (ppshow t') (ppshow $ findCCs (F.symbol x) g)-}
+      g'      <- fixEnv g (F.symbol $ {- trace msg -} x) t
       return   $ (g', t')
 
 fixBaseG g x t = fst <$> fixBase g x t 
@@ -730,9 +733,91 @@ fixBaseG g x t = fst <$> fixBase g x t
 fixEnv :: F.Symbolic a => CGEnv -> a -> RType F.Reft -> CGM CGEnv
 ---------------------------------------------------------------------------------------------
 fixEnv g start base = foldM fixX g xs
-  where xs          = concat $ maybeToList $ findCC (F.symbol start) g
-        fixX g x    = envAdds [tracePP "fixEnv adjusting" (x, toT x)] g 
+  where xs          = findCCs (F.symbol start) g
+        fixX g x    = envAdds [(x, toT x)] g 
         toT  x      = base `strengthen` rTypeReft (envFindTy' x g)
+
+
+-- `fixUpcast` compares/patches types @b@ and @u@ and returns their "comparible"
+-- version. It also tries to propagate as much of the refinements of the base
+-- type to the top-level (union) type.
+--
+-- b = { v: B | p } -- upcast --> b = { v: U | p' }
+-- 
+-- where
+--
+-- u  = { v: U | q }
+-- p' = global(p)
+-- B    is part of U
+
+---------------------------------------------------------------------------------------------
+fixUpcast :: RefType -> RefType -> CGM (RefType, RefType)
+---------------------------------------------------------------------------------------------
+fixUpcast b u =
+  do  γ                   <- cg_tdefs <$> get
+      let (_,b', u',_)     = compareTs γ b u
+          -- Substitute the v variable
+          vv               = rTypeValueVar b
+          vv'              = rTypeValueVar b'
+          fx v | v == vv   = vv'
+          fx v | otherwise = v
+          {-msg              = printf "VV(b) = %s, VV(b') = %s\nGlobPreds" (ppshow vv) (ppshow vv')-}
+      gs                  <- glbs     <$> get
+      maybe (return (b', u')) 
+            (\p -> return (F.substa fx $ b' `strengthen` p, u'))
+            ({-traceShow msg <$> -} glbPreds gs b)
+  where
+    glbPreds gs = glbReft gs . rTypeReft
+
+
+glbReft g (F.Reft (v, rs)) = glb g rs >>= \rs' -> return $ F.Reft (v, rs')
+
+-- Specifies the parts of a refinement that can be propagated to the top-level
+-- union refinement. Needed for proving properties when upcasting. 
+class Global a where 
+  glb :: TGlobs -> a -> Maybe a
+
+instance (Show a, Global a) => Global [a] where
+  glb = glbAny
+
+instance Global F.Refa where
+  glb g (F.RConc p   ) = F.RConc <$> glb g p
+  glb _ (F.RKvar _ _ )       = Nothing
+
+instance Global F.Pred where
+   glb _  F.PTrue            = return  $  F.PTrue
+   glb _  F.PFalse           = return  $  F.PFalse
+   glb g (F.PAnd xs)         = F.PAnd   <$> glb g xs
+   glb g (F.POr xs)          = F.POr    <$> glbAll g xs
+   glb g (F.PNot x)          = F.PNot   <$> glb g x
+   glb g (F.PImp x y)        = liftM2 F.PImp (glb g x) (glb g y)
+   glb g (F.PIff x y)        = liftM2 F.PIff (glb g x) (glb g y)
+   glb g (F.PBexp e)         = F.PBexp  <$> glb g e
+   glb g (F.PAtom b e1 e2)   = liftM2 (F.PAtom b) (glb g e1) (glb g e2)
+   glb _  _                  = Nothing
+
+instance Global F.Expr where
+  glb _ (F.ESym sc)      = return $ F.ESym sc 
+  glb _ (F.ECon cst)     = return $ F.ECon cst
+  glb g (F.EVar s)       = F.EVar <$> glb g s
+  glb _ (F.ELit _ _ )    = Nothing
+  glb g (F.EApp s es)    = glb g s >>= \s' -> return $ F.EApp s' es
+  glb g (F.EBin b e1 e2) = liftM2 (F.EBin b) (glb g e1) (glb g e2)
+  glb g (F.EIte p e1 e2) = liftM3 F.EIte (glb g p) (glb g e1) (glb g e2)
+  glb g (F.ECst e srt)   = glb g e >>= return . (`F.ECst` srt)
+  glb _  F.EBot          = return $ F.EBot
+          
+glbAll = glbList all
+glbAny = glbList any
+
+glbList what g xs | what isJust ms = Just $ catMaybes ms
+                  | otherwise     = Nothing
+                    where ms = map (glb g) xs
+
+instance Global F.Symbol where
+  glb g s | s `S.member` g = return s   -- only allow the designated vars
+          | otherwise      = Nothing 
+
 
 
 ---------------------------------------------------------------------------------------------
@@ -766,12 +851,12 @@ envSortSanitize g = foldM fixGroup g xs
 
   
 ---------------------------------------------------------------------------------------------
-findCC :: F.Symbol -> CGEnv -> Maybe [F.Symbol]
+findCCs :: F.Symbol -> CGEnv -> [F.Symbol]
 ---------------------------------------------------------------------------------------------
-findCC x g = L.find (x `elem`) $ mkCCs g 
+findCCs x g = concat $ maybeToList $ L.find (x `elem`) $ mkCCs g 
 
 -- Connected componets in the symbols in the graph
--- The ccs need to have the same sort! 
+-- The CCs need to have the same sort!
 ---------------------------------------------------------------------------------------------
 mkCCs :: CGEnv -> [[F.Symbol]]
 ---------------------------------------------------------------------------------------------

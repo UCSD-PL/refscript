@@ -1,7 +1,12 @@
-{- LANGUAGE TypeSynonymInstances      #-}
-{- LANGUAGE FlexibleInstances         #-}
-{- LANGUAGE NoMonomorphismRestriction #-}
-{- LANGUAGE ScopedTypeVariables       #-}
+{- LANGUAGE TypeSynonymInstances       #-}
+{- LANGUAGE FlexibleInstances          #-}
+{- LANGUAGE NoMonomorphismRestriction  #-}
+{- LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE ImpredicativeTypes        #-}
+{-# LANGUAGE LiberalTypeSynonyms       #-}
+{-# LANGUAGE FlexibleContexts          #-}
 
 -- | This module has the code for the Type-Checker Monad. 
 
@@ -104,41 +109,43 @@ import qualified System.Console.CmdArgs.Verbosity as V
 -- | Typechecking monad -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-data TCState = TCS {
+data TCState r = TCS {
                    -- Errors
                      tc_errss :: ![(SourceSpan, String)]
-                   , tc_subst :: !SubstR
+                   , tc_subst :: !(Subst_ r)
                    , tc_cnt   :: !Int
                    -- Annotations
-                   , tc_anns  :: AnnInfoR
-                   , tc_annss :: [AnnInfoR]
+                   , tc_anns  :: AnnInfo_ r
+                   , tc_annss :: [AnnInfo_ r]
                    -- Cast map: 
-                   , tc_casts :: M.Map (Expression AnnSSAR) (Cast RefType)
+                   , tc_casts :: M.Map (Expression (AnnSSA_ r)) (Cast (RType r))
                    -- Function definitions
-                   , tc_defs  :: !(Env RefType) 
+                   , tc_defs  :: !(Env (RType r))
                    -- Type definitions
-                   , tc_tdefs :: !(Env RefType)
+                   , tc_tdefs :: !(Env (RType r))
                    -- The currently typed expression 
-                   , tc_expr  :: Maybe (Expression AnnSSAR)
+                   , tc_expr  :: Maybe (Expression (AnnSSA_ r))
 
                    -- Verbosiry
                    , tc_verb  :: V.Verbosity
                    }
 
-type TCM      = ErrorT String (State TCState)
+type TCM r     = ErrorT String (State (TCState r))
 
-type AnnSSAR  = AnnSSA_  F.Reft
-type AnnInfoR = AnnInfo_ F.Reft
-type FactR    = Fact_    F.Reft
-type SubstR   = Subst_   F.Reft
+type AnnSSAR  = forall r. AnnSSA_  r
+type AnnInfoR = forall r. AnnInfo_ r  
+type FactR    = forall r. Fact_    r 
+type SubstR   = forall r. Subst_   r 
+type RTypeR   = forall r. RType    r
+type EnvTypeR = forall r. Env (RType r)
 
 -------------------------------------------------------------------------------
-whenLoud :: TCM () -> TCM ()
+whenLoud :: TCM r () -> TCM r ()
 -------------------------------------------------------------------------------
 whenLoud  act = whenLoud' act $ return ()
 
 -------------------------------------------------------------------------------
-whenLoud' :: TCM a -> TCM a -> TCM a
+whenLoud' :: TCM r a -> TCM r a -> TCM r a
 -------------------------------------------------------------------------------
 whenLoud' loud other = do  v <- tc_verb <$> get
                            case v of
@@ -146,12 +153,12 @@ whenLoud' loud other = do  v <- tc_verb <$> get
                              _      -> other
 
 -------------------------------------------------------------------------------
-whenQuiet :: TCM () -> TCM ()
+whenQuiet :: TCM r () -> TCM r ()
 -------------------------------------------------------------------------------
 whenQuiet  act = whenQuiet' act $ return ()
 
 -------------------------------------------------------------------------------
-whenQuiet' :: TCM a -> TCM a -> TCM a
+whenQuiet' :: TCM r a -> TCM r a -> TCM r a
 -------------------------------------------------------------------------------
 whenQuiet' quiet other = do  v <- tc_verb <$> get
                              case v of
@@ -161,12 +168,12 @@ whenQuiet' quiet other = do  v <- tc_verb <$> get
 
 
 -------------------------------------------------------------------------------
-getTDefs :: TCM (Env RefType)
+getTDefs :: TCM r (Env (RType r))
 -------------------------------------------------------------------------------
 getTDefs = tc_tdefs <$> get 
 
 -------------------------------------------------------------------------------
-getSubst :: TCM SubstR
+getSubst :: TCM r (Subst_ r)
 -------------------------------------------------------------------------------
 getSubst = tc_subst <$> get 
 
@@ -174,12 +181,12 @@ getCasts = do c <- tc_casts <$> get
               return $ M.toList c
 
 -------------------------------------------------------------------------------
-setSubst   :: SubstR -> TCM () 
+setSubst   :: Subst_ r -> TCM r () 
 -------------------------------------------------------------------------------
 setSubst θ = modify $ \st -> st { tc_subst = θ }
 
 -------------------------------------------------------------------------------
-extSubst :: [TVar] -> TCM ()
+extSubst :: (F.Reftable r, PP r) => [TVar] -> TCM r ()
 -------------------------------------------------------------------------------
 extSubst βs = getSubst >>= setSubst . (`mappend` θ')
   where 
@@ -187,24 +194,24 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ')
 
 
 -------------------------------------------------------------------------------
-tcError :: (IsLocated l) => l -> String -> TCM a
+tcError :: (IsLocated l) => l -> String -> TCM r a
 -------------------------------------------------------------------------------
 tcError l msg = throwError $ printf "TC-ERROR at %s : %s" (ppshow $ srcPos l) msg
 
 
 -------------------------------------------------------------------------------
-logError   :: SourceSpan -> String -> a -> TCM a
+logError   :: SourceSpan -> String -> a -> TCM r a
 -------------------------------------------------------------------------------
 logError l msg x = (modify $ \st -> st { tc_errss = (l,msg):(tc_errss st)}) >> return x
 
 
 -------------------------------------------------------------------------------
-freshTyArgs :: (PP r, F.Reftable r) => SourceSpan -> ([TVar], RefType) -> TCM RefType
+freshTyArgs :: (PP r, F.Reftable r) => SourceSpan -> ([TVar], RType r) -> TCM r (RType r)
 -------------------------------------------------------------------------------
 freshTyArgs l (αs, t) 
   = (`apply` t) <$> freshSubst l αs
 
-freshSubst :: SourceSpan -> [TVar] -> TCM SubstR
+freshSubst :: (PP r, F.Reftable r) => SourceSpan -> [TVar] -> TCM r (Subst_ r)
 freshSubst l αs
   = do
       fUnique αs
@@ -226,7 +233,7 @@ setTyArgs l βs
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-dotAccess :: Id AnnSSAR -> RefType -> TCM (Maybe RefType)
+dotAccess ::  (Ord r, PP r, F.Reftable r) => Id (AnnSSA_ r) -> RType r -> TCM r (Maybe (RType r))
 -------------------------------------------------------------------------------
 dotAccess f   (TObj bs _) = 
   return $ Just $ maybe tUndef b_type $ find (match $ F.symbol f) bs
@@ -248,7 +255,7 @@ dotAccess _ t               = error $ "dotAccess " ++ (ppshow t)
 
 
 -------------------------------------------------------------------------------
-dotAccessUnion :: Id AnnSSAR -> [RefType] -> TCM (Maybe RefType)
+dotAccessUnion ::  (Ord r, PP r, F.Reftable r) => Id (AnnSSA_ r) -> [RType r] -> TCM r (Maybe (RType r))
 -------------------------------------------------------------------------------
 dotAccessUnion f ts = 
   do  e              <- fromJust <$> getExpr
@@ -268,7 +275,7 @@ dotAccessUnion f ts =
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-getAnns :: TCM AnnInfoR
+getAnns :: (Ord r, F.Reftable r, Substitutable r (Fact_ r)) => TCM r (AnnInfo_ r)
 -------------------------------------------------------------------------------
 getAnns = do θ     <- tc_subst <$> get
              m     <- tc_anns  <$> get
@@ -277,18 +284,19 @@ getAnns = do θ     <- tc_subst <$> get
              return m' 
 
 -------------------------------------------------------------------------------
-addAnn :: SourceSpan -> FactR -> TCM () 
+addAnn :: SourceSpan -> Fact_ r -> TCM r () 
 -------------------------------------------------------------------------------
 addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
 
 -------------------------------------------------------------------------------
-getAllAnns :: TCM [AnnInfoR]  
+getAllAnns :: TCM r [AnnInfo_ r]  
 -------------------------------------------------------------------------------
 getAllAnns = tc_annss <$> get
 
 
 -------------------------------------------------------------------------------
-accumAnn :: (AnnInfoR -> [(SourceSpan, String)]) -> TCM () -> TCM ()
+accumAnn :: (Ord r, F.Reftable r, Substitutable r (Fact_ r)) =>
+  (AnnInfo_ r -> [(SourceSpan, String)]) -> TCM r () -> TCM r ()
 -------------------------------------------------------------------------------
 accumAnn check act 
   = do m     <- tc_anns <$> get 
@@ -299,7 +307,7 @@ accumAnn check act
        modify $ \st -> st {tc_anns = m} {tc_annss = m' : tc_annss st}
 
 -------------------------------------------------------------------------------
-execute     :: V.Verbosity -> Nano z RefType -> TCM a -> Either [(SourceSpan, String)] a
+execute     ::  (PP r, F.Reftable r) => V.Verbosity -> Nano z (RType r) -> TCM r a -> Either [(SourceSpan, String)] a
 -------------------------------------------------------------------------------
 execute verb pgm act 
   = case runState (runErrorT act) $ initState verb pgm of 
@@ -307,7 +315,7 @@ execute verb pgm act
       (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errss st)
 
 
-initState :: V.Verbosity -> Nano z RefType -> TCState
+initState ::  (PP r, F.Reftable r) => V.Verbosity -> Nano z (RType r) -> TCState r
 initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss 
                        tc_casts tc_defs tc_tdefs tc_expr tc_verb 
   where
@@ -332,13 +340,13 @@ getDefType f
 
 
 -------------------------------------------------------------------------------
-setExpr   :: Maybe (Expression AnnSSAR) -> TCM () 
+setExpr   :: Maybe (Expression (AnnSSA_ r)) -> TCM r () 
 -------------------------------------------------------------------------------
 setExpr eo = modify $ \st -> st { tc_expr = eo }
 
 
 -------------------------------------------------------------------------------
-getExpr   :: TCM (Maybe (Expression AnnSSAR))
+getExpr   :: TCM r (Maybe (Expression (AnnSSA_ r)))
 -------------------------------------------------------------------------------
 getExpr = tc_expr <$> get
 
@@ -346,14 +354,14 @@ getExpr = tc_expr <$> get
 -- | Generating Fresh Values ---------------------------------------------
 --------------------------------------------------------------------------
 
-tick :: TCM Int
+tick :: TCM r Int
 tick = do st    <- get 
           let n  = tc_cnt st
           put    $ st { tc_cnt = n + 1 }
           return n 
 
 class Freshable a where 
-  fresh :: a -> TCM a 
+  fresh :: a -> TCM r a
 
 -- instance Freshable TVar where 
 --   fresh _ = TV . F.intSymbol "T" <$> tick
@@ -368,13 +376,13 @@ freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
 
 -- | Monadic unfolding
 -------------------------------------------------------------------------------
-unfoldFirstTC :: RefType -> TCM RefType
+unfoldFirstTC :: (PP r, F.Reftable r) => RType r -> TCM r (RType r)
 -------------------------------------------------------------------------------
 unfoldFirstTC t = getTDefs >>= \γ -> return $ unfoldFirst γ t
 
 
 -------------------------------------------------------------------------------
-unfoldSafeTC :: RefType -> TCM RefType
+unfoldSafeTC :: (PP r, F.Reftable r) => RType r -> TCM r (RType r)
 -------------------------------------------------------------------------------
 unfoldSafeTC   t = getTDefs >>= \γ -> return $ unfoldSafe γ t
 
@@ -386,7 +394,7 @@ unfoldSafeTC   t = getTDefs >>= \γ -> return $ unfoldSafe γ t
 
 
 ----------------------------------------------------------------------------------
-unifyTypesM :: (IsLocated l) => l -> String -> [RefType] -> [RefType] -> TCM SubstR
+unifyTypesM :: (IsLocated l, Ord r, PP r, F.Reftable r) => l -> String -> [RType r] -> [RType r] -> TCM r (Subst_ r)
 ----------------------------------------------------------------------------------
 unifyTypesM l msg t1s t2s
   -- TODO: This check might be done multiple times
@@ -398,7 +406,8 @@ unifyTypesM l msg t1s t2s
                                     Right θ'  -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------
---unifyTypeM :: (IsLocated l) => l -> String -> Expression AnnSSA -> Type -> Type -> TCM Subst
+unifyTypeM :: (Ord r, PrintfArg t1, PP r, PP a, F.Reftable r, IsLocated l) =>
+  l -> t1 -> a -> RType r -> RType r -> TCM r (Subst_ r)
 ----------------------------------------------------------------------------------
 unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
   where 
@@ -406,7 +415,7 @@ unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
 
 
 ----------------------------------------------------------------------------------
-subTypeM :: RefType -> RefType -> TCM SubDirection
+subTypeM :: (Ord r, PP r, F.Reftable r) => RType r -> RType r -> TCM r SubDirection
 ----------------------------------------------------------------------------------
 subTypeM t t' 
   = do  θ            <- getTDefs 
@@ -414,12 +423,12 @@ subTypeM t t'
         return $  {- trace (printf "subTypeM: %s %s %s" (ppshow t) (ppshow d) (ppshow t')) -}  d
 
 ----------------------------------------------------------------------------------
-subTypeM' :: (IsLocated l) => l -> Type -> Type -> TCM ()
+subTypeM' :: (IsLocated l, Ord r, PP r, F.Reftable r) => l -> RType r -> RType r -> TCM r ()
 ----------------------------------------------------------------------------------
 subTypeM' _ _ _  = error "unimplemented: subTypeM\'"
  
 ----------------------------------------------------------------------------------
-subTypesM :: [RefType] -> [RefType] -> TCM [SubDirection]
+subTypesM :: (Ord r, PP r, F.Reftable r) => [RType r] -> [RType r] -> TCM r [SubDirection]
 ----------------------------------------------------------------------------------
 subTypesM ts ts' = zipWithM subTypeM ts ts'
 
@@ -430,7 +439,7 @@ subTypesM ts ts' = zipWithM subTypeM ts ts'
 
 
 -----------------------------------------------------------------------------
-withExpr  :: Maybe (Expression AnnSSAR) -> TCM a -> TCM a
+withExpr  :: Maybe (Expression (AnnSSA_ r)) -> TCM r a -> TCM r a
 -----------------------------------------------------------------------------
 withExpr e action = 
   do  eold  <- getExpr 
@@ -441,7 +450,7 @@ withExpr e action =
 
 
 --------------------------------------------------------------------------------
-castM     :: Expression AnnSSAR -> RefType -> RefType -> TCM ()
+castM     :: (Ord r, PP r, F.Reftable r) => Expression (AnnSSA_ r) -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 castM e t t'    = subTypeM t t' >>= go
   where go SupT = addDownCast e t'
@@ -452,41 +461,41 @@ castM e t t'    = subTypeM t t' >>= go
 
 
 --------------------------------------------------------------------------------
-castsM    :: [Expression AnnSSAR] -> [RefType] -> [RefType] -> TCM ()
+castsM    :: (Ord r, PP r, F.Reftable r) => [Expression (AnnSSA_ r)] -> [RType r] -> [RType r] -> TCM r ()
 --------------------------------------------------------------------------------
 castsM     = zipWith3M_ castM 
 
 
 --------------------------------------------------------------------------------
-addUpCast :: Expression AnnSSAR -> RefType -> TCM ()
+addUpCast :: Expression (AnnSSA_ r) -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 addUpCast e t = modify $ \st -> st { tc_casts = M.insert e (UCST t) (tc_casts st) }
 
 --------------------------------------------------------------------------------
-addDownCast :: Expression AnnSSAR -> RefType -> TCM ()
+addDownCast :: (Ord r, PP r, F.Reftable r) => Expression (AnnSSA_ r) -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 addDownCast e t = modify $ \st -> st { tc_casts = M.insert e (DCST t) (tc_casts st) }
 
 
 --------------------------------------------------------------------------------
-addDeadCast :: Expression AnnSSAR -> RefType -> TCM ()
+addDeadCast :: Expression (AnnSSA_ r) -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 addDeadCast e t = modify $ \st -> st { tc_casts = M.insert e (DC t) (tc_casts st) } 
 
 
 --------------------------------------------------------------------------------
-patchPgmM :: Nano AnnSSAR RefType -> TCM (Nano AnnSSAR RefType)
+patchPgmM :: (Data b, Functor m, Typeable r) => b -> TCM r b
 --------------------------------------------------------------------------------
 patchPgmM pgm = 
   do  c <- tc_casts <$> get
       return $ fst $ runState (everywhereM' (mkM transform) pgm) (PS c)
 
 
-data PState = PS { m :: Casts }
-type PM     = State PState
+data PState r = PS { m :: Casts_ r }
+type PM     r = State (PState r)
 
 --------------------------------------------------------------------------------
-transform :: Expression AnnSSAR -> PM (Expression AnnSSAR)
+transform :: Expression (AnnSSA_ r) -> PM r (Expression (AnnSSA_ r))
 --------------------------------------------------------------------------------
 transform e = 
   do  c  <- m <$> get      
@@ -494,7 +503,7 @@ transform e =
       return $ patchExpr c e
 
 --------------------------------------------------------------------------------
-patchExpr :: Casts -> Expression AnnSSAR -> Expression AnnSSAR
+patchExpr :: Casts_ r -> Expression (AnnSSA_ r) -> Expression (AnnSSA_ r)
 --------------------------------------------------------------------------------
 patchExpr m e =
   case M.lookup e m of

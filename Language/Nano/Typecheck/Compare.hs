@@ -24,7 +24,7 @@ module Language.Nano.Typecheck.Compare (
   
   -- * Casting
   , Cast(..)
-  , Casts
+  , Casts, Casts_
 
   , SubDirection (..)
 
@@ -42,6 +42,7 @@ import           Language.Nano.Env
 import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Liquid.Types
 
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc
@@ -51,7 +52,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative                hiding (empty)
 import           Control.Monad.Error                ()
 
-import           Debug.Trace (trace)
+-- import           Debug.Trace (trace)
 
 
 
@@ -104,7 +105,8 @@ instance Equivalent e (Id a) where
 -- Casts ------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-type Casts   = M.Map (Expression AnnSSA) (Cast Type)
+type Casts    = M.Map (Expression (AnnSSA_ F.Reft)) (Cast RefType)
+type Casts_ r = M.Map (Expression (AnnSSA_ r)) (Cast (RType r))
 
 data Cast t  = UCST t | DCST t | DC t
 
@@ -233,7 +235,7 @@ compareTs γ t1 t2 | otherwise              = compareTs' γ t1 t2
 
 -- | Top-level Unions
 
-compareTs' _ t1 t2 | isTop t1               = errorstar "unimplemented: compareTs - top"
+compareTs' _ t1 _  | isTop t1               = errorstar "unimplemented: compareTs - top"
 compareTs' _ t1 t2 | isTop t2               = (t1', t1, t2', SubT)
   where
     t1' = setRTypeR t1 F.top -- this will be kVared
@@ -491,7 +493,7 @@ padObject _ _ _ = error "padObject: Cannot pad non-objects"
 
 
 -- | Break one level of padded objects
-bkPaddedObject t1@(TObj xt1s _) t2@(TObj xt2s _) =
+bkPaddedObject (TObj xt1s _) (TObj xt2s _) =
   safeZipWith "splitC:obj" checkB xt1s xt2s
   where
     checkB b b' | b_sym b == b_sym b' = (b_type b, b_type b')

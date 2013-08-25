@@ -49,15 +49,16 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 import           Language.Fixpoint.Misc             
+import qualified Language.Fixpoint.Types            as F
 import           Text.Printf                        (printf)
 
-type SSAM     = ErrorT String (State SsaState)
+type SSAM r     = ErrorT String (State (SsaState r))
 
-data SsaState = SsaST { immutables :: Env ()      -- ^ globals
-                      , names      :: SsaEnv      -- ^ current SSA names 
-                      , count      :: !Int        -- ^ fresh index
-                      , anns       :: !AnnInfo    -- ^ built up map of annots 
-                      }
+data SsaState r = SsaST { immutables :: Env r       -- ^ globals
+                        , names      :: SsaEnv      -- ^ current SSA names 
+                        , count      :: !Int        -- ^ fresh index
+                        , anns       :: !(AnnInfo_ r)    -- ^ built up map of annots 
+                        }
 
 type SsaEnv     = Env SsaInfo 
 newtype SsaInfo = SI (Id SourceSpan) deriving (Eq)
@@ -68,24 +69,24 @@ extSsaEnv    :: [Id SourceSpan] -> SsaEnv -> SsaEnv
 extSsaEnv xs = envAdds [(x, SI x) | x <- xs]
 
 -------------------------------------------------------------------------------------
-getSsaEnv   :: SSAM SsaEnv 
+getSsaEnv   :: SSAM r SsaEnv 
 -------------------------------------------------------------------------------------
 getSsaEnv   = names <$> get 
 
 -------------------------------------------------------------------------------------
-addImmutables   :: Env () -> SSAM () 
+addImmutables   :: (F.Reftable r) => Env r -> SSAM r ()
 -------------------------------------------------------------------------------------
 addImmutables z = modify $ \st -> st { immutables = envExt z (immutables st) } 
   where
     envExt x y  = envFromList (envToList x ++ envToList y)
 
 -------------------------------------------------------------------------------------
-setImmutables   :: Env () -> SSAM () 
+setImmutables   :: Env r -> SSAM r ()
 -------------------------------------------------------------------------------------
 setImmutables z = modify $ \st -> st { immutables = z } 
 
 -------------------------------------------------------------------------------------
-getImmutables   :: SSAM (Env ()) 
+getImmutables   :: (F.Reftable r) => SSAM r (Env r) 
 -------------------------------------------------------------------------------------
 getImmutables   = immutables <$> get
 
@@ -93,13 +94,13 @@ getImmutables   = immutables <$> get
 
 
 -------------------------------------------------------------------------------------
-setSsaEnv    :: SsaEnv -> SSAM () 
+setSsaEnv    :: SsaEnv -> SSAM r () 
 -------------------------------------------------------------------------------------
 setSsaEnv θ = modify $ \st -> st { names = θ } 
 
 
 -------------------------------------------------------------------------------------
-updSsaEnv   :: SourceSpan -> Id SourceSpan -> SSAM (Id SourceSpan) 
+updSsaEnv   :: SourceSpan -> Id SourceSpan -> SSAM r (Id SourceSpan) 
 -------------------------------------------------------------------------------------
 updSsaEnv l x 
   = do imm   <- isImmutable x 
@@ -111,7 +112,7 @@ updSsaEnv l x
 
 
 ---------------------------------------------------------------------------------
-isImmutable   :: Id SourceSpan -> SSAM Bool 
+isImmutable   :: Id SourceSpan -> SSAM r Bool 
 ---------------------------------------------------------------------------------
 isImmutable x = envMem x . immutables <$> get
 
@@ -119,7 +120,7 @@ newId :: SourceSpan -> Id SourceSpan -> Int -> Id SourceSpan
 newId l (Id _ x) n = Id l (x ++ "_SSA_" ++ show n)  
 
 -------------------------------------------------------------------------------
-findSsaEnv   :: Id SourceSpan -> SSAM (Maybe (Id SourceSpan))
+findSsaEnv   :: Id SourceSpan -> SSAM r (Maybe (Id SourceSpan))
 -------------------------------------------------------------------------------
 findSsaEnv x 
   = do θ  <- names <$> get 
@@ -132,19 +133,19 @@ findSsaEnv x
 --               return $ xs ++ ys
 
 -------------------------------------------------------------------------------
-addAnn     :: SourceSpan -> Fact -> SSAM ()
+addAnn     :: SourceSpan -> Fact_ r -> SSAM r ()
 -------------------------------------------------------------------------------
 addAnn l f = modify $ \st -> st { anns = inserts l f (anns st) }
 
 
 -------------------------------------------------------------------------------
-getAnns    :: SSAM AnnInfo
+getAnns    :: (F.Reftable r) => SSAM r (AnnInfo_ r)
 -------------------------------------------------------------------------------
 getAnns    = anns <$> get
 
 
 -------------------------------------------------------------------------------
-ssaError       :: SourceSpan -> String -> SSAM a
+ssaError       :: SourceSpan -> String -> SSAM r a
 -------------------------------------------------------------------------------
 ssaError l msg = throwError $ printf "ERROR at %s : %s" (ppshow l) msg
 
@@ -152,14 +153,14 @@ ssaError l msg = throwError $ printf "ERROR at %s : %s" (ppshow l) msg
 -- inserts l xs m = M.insert l (xs ++ M.lookupDefault [] l m) m
 
 -------------------------------------------------------------------------------
-execute         :: SSAM a -> Either (SourceSpan, String) a 
+execute         :: SSAM r a -> Either (SourceSpan, String) a 
 -------------------------------------------------------------------------------
 execute act 
   = case runState (runErrorT act) initState of 
       (Left err, _) -> Left  (dummySpan,  err)
       (Right x, _)  -> Right x
 
-initState :: SsaState
+initState :: SsaState r
 initState = SsaST envEmpty envEmpty 0 M.empty
 
 

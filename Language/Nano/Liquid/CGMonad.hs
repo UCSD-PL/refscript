@@ -120,7 +120,7 @@ instance PP (F.SubC c) where
 
 
 -------------------------------------------------------------------------------
-getCGInfo        :: Config -> NanoRefType -> CGM a -> CGInfo  
+getCGInfo :: Config -> Nano AnnType RefType -> CGM a -> CGInfo
 -------------------------------------------------------------------------------
 getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
   where 

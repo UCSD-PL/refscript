@@ -74,7 +74,7 @@ import           Control.Applicative
 
 type RefType     = RType F.Reft
 type REnv        = Env RefType
-type NanoRefType = Nano (AnnType_ F.Reft) RefType 
+type NanoRefType = Nano AnnType RefType 
 
 type AnnTypeR    = AnnType_ F.Reft
 

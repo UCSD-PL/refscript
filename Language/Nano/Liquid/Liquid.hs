@@ -50,12 +50,14 @@ verifyFile f =
   do  p   <- parseNanoFromFile f
       cfg <- getOpts 
       verb    <- V.getVerbosity
-      fmap (, "") <$> reftypeCheck cfg f (typeCheck verb (ssaTransform p))
+      fmap (, "") <$> reftypeCheck cfg f undefined -- (typeCheck verb (ssaTransform p))
 
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
-reftypeCheck       :: Config -> FilePath -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
+--------------------------------------------------------------------------------
+reftypeCheck :: Config -> FilePath -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
+--------------------------------------------------------------------------------
 reftypeCheck cfg f = solveConstraints f . generateConstraints cfg
 
 --------------------------------------------------------------------------------
@@ -105,7 +107,7 @@ consNano pgm@(Nano {code = Src fs})
 initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
 
 --------------------------------------------------------------------------------
-consFun :: CGEnv -> FunctionStatement AnnType -> CGM CGEnv  
+consFun :: CGEnv -> Statement AnnType -> CGM CGEnv
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
   = do ft             <- {- tracePP msg <$> -} (freshTyFun g l f =<< getDefType f)

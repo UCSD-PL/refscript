@@ -11,6 +11,7 @@ import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Misc
+import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.SSA.SSAMonad
 import           Language.ECMAScript3.Syntax
@@ -18,21 +19,22 @@ import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.Fixpoint.Misc             
+import qualified Language.Fixpoint.Types            as F
 import           Text.Printf                        (printf)
 
 ----------------------------------------------------------------------------------
-ssaTransform :: (PP t) => Nano SourceSpan t -> Nano AnnSSA t
+ssaTransform :: (F.Reftable r) => Nano SourceSpan (RType r) -> Nano (Annot (Fact_ r) SourceSpan) (RType r)
 ----------------------------------------------------------------------------------
 ssaTransform = either (errorstar . snd) id . execute . ssaNano 
 
 
 ----------------------------------------------------------------------------------
-ssaNano :: (PP t) => Nano SourceSpan t -> SSAM (Nano AnnSSA t) 
+-- ssaNano :: F.Reftable r => Nano SourceSpan t -> SSAM r (Nano (Annot (Fact_ r) SourceSpan) t)
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano {code = Src fs}) 
-  = do addImmutables $ envMap (\_ -> ()) (specs p) 
-       addImmutables $ envMap (\_ -> ()) (defs  p) 
-       addImmutables $ envMap (\_ -> ()) (consts p) 
+  = do addImmutables $ envMap (\_ -> F.top) (specs p) 
+       addImmutables $ envMap (\_ -> F.top) (defs  p) 
+       addImmutables $ envMap (\_ -> F.top) (consts p) 
        (_,fs') <- ssaStmts fs -- mapM ssaFun fs
        anns    <- getAnns
        return   $ p {code = Src $ (patchAnn anns <$>) <$> fs'}
@@ -40,17 +42,17 @@ ssaNano p@(Nano {code = Src fs})
 -- stripAnn :: AnnBare -> SSAM SourceSpan
 -- stripAnn (Ann l fs) = forM_ fs (addAnn l) >> return l   
 
-patchAnn     :: AnnInfo -> SourceSpan -> AnnSSA
+-- patchAnn     :: AnnInfo -> SourceSpan -> (AnnSSA_ r)
 patchAnn m l = Ann l $ M.lookupDefault [] l m
 
 -------------------------------------------------------------------------------------
-ssaFun :: FunctionStatement SourceSpan -> SSAM (FunctionStatement SourceSpan)
+-- ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)
 -------------------------------------------------------------------------------------
 ssaFun (FunctionStmt l f xs body) 
   = do θ            <- getSsaEnv  
        imms         <- getImmutables
 
-       addImmutables $ envMap (\_ -> ()) θ              -- Variables from OUTER scope are IMMUTABLE
+       addImmutables $ envMap (\_ -> F.top) θ              -- Variables from OUTER scope are IMMUTABLE
        setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
        (_, body')   <- ssaStmts body                    -- Transform function
 
@@ -62,7 +64,7 @@ ssaFun (FunctionStmt l f xs body)
 ssaFun _ = error "Calling ssaFun not with FunctionStmt"
 
 -------------------------------------------------------------------------------------
-ssaSeq :: (a -> SSAM (Bool, a)) -> [a] -> SSAM (Bool, [a])  
+{-ssaSeq :: (a -> SSAM r (Bool, a)) -> [a] -> SSAM r (Bool, [a])  -}
 -------------------------------------------------------------------------------------
 ssaSeq f            = go True 
   where 
@@ -73,14 +75,13 @@ ssaSeq f            = go True
                          return      (b', y:ys)
 
 -------------------------------------------------------------------------------------
-ssaStmts   :: [Statement SourceSpan] -> SSAM (Bool, [Statement SourceSpan])
+{-ssaStmts :: F.Reftable r => [Statement SourceSpan] -> SSAM r (Bool, [Statement SourceSpan])-}
 -------------------------------------------------------------------------------------
 ssaStmts = ssaSeq ssaStmt
 
 -------------------------------------------------------------------------------------
-ssaStmt    :: Statement SourceSpan -> SSAM (Bool, Statement SourceSpan)
+{-ssaStmt :: F.Reftable r => Statement SourceSpan -> SSAM r (Bool, Statement SourceSpan)-}
 -------------------------------------------------------------------------------------
-
 -- skip
 ssaStmt s@(EmptyStmt _) 
   = return (True, s)
@@ -139,7 +140,7 @@ ssaStmt s
   = convertError "ssaStmt" s
 
 -------------------------------------------------------------------------------------
-splice :: Statement SourceSpan -> Maybe (Statement SourceSpan) -> Statement SourceSpan
+{-splice :: Statement SourceSpan -> Maybe (Statement SourceSpan) -> Statement SourceSpan-}
 -------------------------------------------------------------------------------------
 splice s Nothing   = s
 splice s (Just s') = seqStmt (getAnnotation s) s s' 
@@ -148,7 +149,7 @@ seqStmt _ (BlockStmt l s) (BlockStmt _ s') = BlockStmt l (s ++ s')
 seqStmt l s s'                             = BlockStmt l [s, s']
 
 -------------------------------------------------------------------------------------
-ssaWith :: SsaEnv -> (a -> SSAM (Bool, a)) -> a -> SSAM (Maybe SsaEnv, a)
+-- ssaWith :: F.Reftable r => SsaEnv -> (a -> SSAM (Bool, a)) -> a -> SSAM r (Maybe SsaEnv, a)
 -------------------------------------------------------------------------------------
 ssaWith θ f x 
   = do setSsaEnv θ
@@ -156,7 +157,7 @@ ssaWith θ f x
        (, x')  <$> (if b then Just <$> getSsaEnv else return Nothing)
 
 -------------------------------------------------------------------------------------
-ssaExpr    :: Expression SourceSpan -> SSAM (Expression SourceSpan) 
+{-ssaExpr    :: F.Reftable r => Expression SourceSpan -> SSAM r (Expression SourceSpan) -}
 -------------------------------------------------------------------------------------
 
 ssaExpr e@(IntLit _ _)               
@@ -201,9 +202,8 @@ ssaExpr e
   = convertError "ssaExpr" e
 
 -------------------------------------------------------------------------------------
-ssaVarDecl :: VarDecl SourceSpan -> SSAM (Bool, VarDecl SourceSpan)
+{-ssaVarDecl :: F.Reftable r => VarDecl SourceSpan -> SSAM r (Bool, VarDecl SourceSpan)-}
 -------------------------------------------------------------------------------------
-
 ssaVarDecl (VarDecl l x (Just e)) 
   = do (x', e') <- ssaAsgn l x e
        return    (True, VarDecl l x' (Just e'))
@@ -212,8 +212,8 @@ ssaVarDecl {-z@-}(VarDecl l x Nothing)
   = errorstar $ printf "Cannot handle ssaVarDECL %s at %s" (ppshow x) (ppshow l)
 
 ------------------------------------------------------------------------------------
-ssaAsgn :: SourceSpan -> Id SourceSpan -> Expression SourceSpan 
-        -> SSAM (Id SourceSpan, Expression SourceSpan) 
+{-ssaAsgn :: F.Reftable r => SourceSpan -> Id SourceSpan -> Expression SourceSpan -> -}
+           {-SSAM r (Id SourceSpan, Expression SourceSpan)-}
 ------------------------------------------------------------------------------------
 ssaAsgn l x e 
   = do e' <- ssaExpr e 
@@ -222,10 +222,10 @@ ssaAsgn l x e
 
 
 -------------------------------------------------------------------------------------
-envJoin :: SourceSpan -> Maybe SsaEnv -> Maybe SsaEnv 
-           -> SSAM ( Maybe SsaEnv
-                   , Maybe (Statement SourceSpan)
-                   , Maybe (Statement SourceSpan) )
+{-envJoin :: SourceSpan -> Maybe SsaEnv -> Maybe SsaEnv -}
+{-        -> SSAM r ( Maybe SsaEnv,-}
+{-                    Maybe (Statement SourceSpan),-}
+{-                    Maybe (Statement SourceSpan))-}
 -------------------------------------------------------------------------------------
 envJoin _ Nothing Nothing     = return (Nothing, Nothing, Nothing)
 envJoin _ Nothing (Just θ)    = return (Just θ , Nothing, Nothing) 

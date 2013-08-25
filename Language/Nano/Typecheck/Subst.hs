@@ -114,6 +114,12 @@ instance Free Fact where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
   free (Assume t)       = free t
+
+instance Free (Fact_ r) where
+  free (PhiVar _)       = S.empty
+  free (TypInst ts)     = free ts
+  free (Assume t)       = free t
+ 
  
 ------------------------------------------------------------------------
 -- appTy :: Subst_ r -> RType r -> RType r

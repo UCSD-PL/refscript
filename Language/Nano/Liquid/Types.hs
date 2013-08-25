@@ -48,6 +48,8 @@ module Language.Nano.Liquid.Types (
 
   -- * Useful Operations
   , foldReft
+  
+  , AnnTypeR
   ) where
 
 import           Data.Maybe             (fromMaybe) -- (catMaybes, , isJust)
@@ -72,7 +74,9 @@ import           Control.Applicative
 
 type RefType     = RType F.Reft
 type REnv        = Env RefType
-type NanoRefType = Nano AnnType RefType 
+type NanoRefType = Nano (AnnType_ F.Reft) RefType 
+
+type AnnTypeR    = AnnType_ F.Reft
 
 -------------------------------------------------------------------------------------
 -- | Constraint Generation Environment  ---------------------------------------------

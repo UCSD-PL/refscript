@@ -66,11 +66,12 @@ module Language.Nano.Typecheck.Types (
   
   -- * Annotations
   , Annot (..)
-  , Fact (..)
-  , AnnBare
-  , AnnSSA
-  , AnnType
-  , AnnInfo
+  , Fact
+  , Fact_ (..)
+  , AnnBare_ ,AnnBare
+  , AnnSSA_, AnnSSA
+  , AnnType_, AnnType
+  , AnnInfo_, AnnInfo
   , isAsm
 
   ) where 
@@ -240,7 +241,7 @@ strengthenContainers (TObj ts r) (TObj ts' r') =
     doB (B s t) (B s' t') | s == s' =  B s $ strengthenContainers t t'
     doB _       _                   = errorstar "strengthenContainers: sanity check - 1"
 strengthenContainers t t' | toType t == toType t' = strengthen t' $ rTypeR t
-strengthenContainers t t' | otherwise = errorstar "strengthenContainers: sanity check - 2"
+strengthenContainers _ _  | otherwise = errorstar "strengthenContainers: sanity check - 2"
   
 
 
@@ -348,9 +349,13 @@ data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
                      , globs  :: ![Located F.Symbol] -- ^ Global predicates -- can refer to any sort
                      } deriving (Functor, Data, Typeable)
 
-type NanoBare    = Nano AnnBare Type 
-type NanoSSA     = Nano AnnSSA  Type 
-type NanoType    = Nano AnnType Type 
+type NanoBareR r   = Nano (AnnBare_ r) (RType r)
+type NanoSSAR r    = Nano (AnnSSA_  r) (RType r)
+type NanoTypeR r   = Nano (AnnType_ r) (RType r)
+
+type NanoBare   = NanoBareR ()
+type NanoSSA    = NanoSSAR ()
+type NanoType   = NanoTypeR ()
 
 {-@ measure isFunctionStatement :: (Statement SourceSpan) -> Prop 
     isFunctionStatement (FunctionStmt {}) = true
@@ -478,23 +483,30 @@ ppTC TUndef           = text "Undefined"
 --   Ideally, we'd have "room" for these inside the @Statement@ and
 --   @Expression@ type, but are tucking them in using the @a@ parameter.
 
-data Fact 
-  = PhiVar  !(Id SourceSpan) 
-  | TypInst ![Type]
-  | Assume  ! Type
+data Fact_ r
+  = PhiVar  ! (Id SourceSpan) 
+  | TypInst ! [RType r]
+  | Assume  ! (RType r)
     deriving (Eq, Ord, Show, Data, Typeable)
 
+type Fact = Fact_ ()
+
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show, Data, Typeable)
-type AnnBare   = Annot Fact SourceSpan -- NO facts
-type AnnSSA    = Annot Fact SourceSpan -- Only Phi + Assume     facts
-type AnnType   = Annot Fact SourceSpan -- Only Phi + Typ        facts
-type AnnInfo   = M.HashMap SourceSpan [Fact] 
+type AnnBare_ r  = Annot (Fact_ r) SourceSpan -- NO facts
+type AnnSSA_  r  = Annot (Fact_ r) SourceSpan -- Only Phi + Assume     facts
+type AnnType_ r  = Annot (Fact_ r) SourceSpan -- Only Phi + Typ        facts
+type AnnInfo_ r  = M.HashMap SourceSpan [Fact_ r] 
+
+type AnnBare = AnnBare_ () 
+type AnnSSA  = AnnSSA_  ()
+type AnnType = AnnType_ ()
+type AnnInfo = AnnInfo_ ()
 
 
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 
 
-instance Ord AnnSSA where 
+instance Ord (AnnSSA_  r) where 
   compare (Ann s1 _) (Ann s2 _) = compare s1 s2
 
 instance Eq (Annot a SourceSpan) where 
@@ -508,7 +520,12 @@ instance PP Fact where
   pp (TypInst ts) = text "inst" <+> pp ts 
   pp (Assume t)   = text "assume" <+> pp t
 
-instance PP AnnInfo where
+instance (F.Reftable r, PP r) => PP (Fact_ r) where
+  pp (PhiVar x)   = text "phi"  <+> pp x
+  pp (TypInst ts) = text "inst" <+> pp ts 
+  pp (Assume t)   = text "assume" <+> pp t
+
+instance (F.Reftable r, PP r) => PP (AnnInfo_ r) where
   pp             = vcat . (ppB <$>) . M.toList 
     where 
       ppB (x, t) = pp x <+> dcolon <+> pp t

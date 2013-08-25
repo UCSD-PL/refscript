@@ -88,10 +88,9 @@ bareTypeP
                 _   -> return $ TApp TUn (sort ts) tr)
          
  <|> try (bRefP ( do  ts <- bareTypeNoUnionP `sepBy1` plus
-                      tr <- topP   -- unions have Top ref. type atm
                       case ts of
                         [ ] -> error "impossible"
-                        [t] -> undefined
+                        [_] -> error "bareTypeP parser BUG"
                         _   -> return $ TApp TUn (sort ts) 
                 ))
 

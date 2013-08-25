@@ -100,7 +100,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.ECMAScript3.PrettyPrint
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation ----------------------
@@ -120,7 +120,7 @@ instance PP (F.SubC c) where
 
 
 -------------------------------------------------------------------------------
-getCGInfo        :: Config -> NanoRefType -> CGM a -> CGInfo  
+getCGInfo :: Config -> Nano AnnTypeR RefType -> CGM a -> CGInfo
 -------------------------------------------------------------------------------
 getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
   where 
@@ -128,17 +128,17 @@ getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
     fixCs        = concatMapM splitC . cs =<< get 
     fixWs        = concatMapM splitW . ws =<< get
 
-execute :: Config -> Nano AnnType RefType -> CGM a -> (a, CGState)
+execute :: Config -> Nano AnnTypeR RefType -> CGM a -> (a, CGState)
 execute cfg pgm act
   = case runState (runErrorT act) $ initState cfg pgm of 
       (Left err, _) -> errorstar err
       (Right x, st) -> (x, st)  
 
-initState       :: Config -> Nano AnnType RefType -> CGState
+initState       :: Config -> Nano AnnTypeR RefType -> CGState
 initState c pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty invs glbs c 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts pgm]  
-    glbs        = S.fromList [s       | t@(Loc l s)             <- globs pgm]  
+    glbs        = S.fromList [s       |   (Loc _ s)             <- globs pgm]  
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -326,14 +326,14 @@ envFindReturn = E.envFindReturn . renv
 
 
 ----------------------------------------------------------------------------------
-envJoin :: AnnType -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)
+envJoin :: AnnTypeR -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)
 ----------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
 envJoin l g (Just g1) (Just g2) = Just <$> envJoin' l g g1 g2 
 
 ----------------------------------------------------------------------------------
-envJoin' :: AnnType -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
+envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 ----------------------------------------------------------------------------------
 
 -- HINT: 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
@@ -371,7 +371,7 @@ envJoin' l g g1 g2
 
 -- | Instantiate Fresh Type (at Function-site)
 ---------------------------------------------------------------------------------------
-freshTyFun :: (IsLocated l) => CGEnv -> l -> Id AnnType -> RefType -> CGM RefType 
+freshTyFun :: (IsLocated l) => CGEnv -> l -> Id AnnTypeR -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
 freshTyFun g l f t = freshTyFun' g l f t . kVarInst . cg_opts =<< get  
 
@@ -380,9 +380,10 @@ freshTyFun' g l _ t b
   | otherwise               = return t
 
 -- | Instantiate Fresh Type (at Call-site)
+
 ---------------------------------------------------------------------------------------
 -- freshTyInst :: (IsLocated l) => l -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
-freshTyInst :: AnnType -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
+-- freshTyInst :: AnnTypeR -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
 freshTyInst l g αs τs tbody
   = do ts    <- mapM (freshTy "freshTyInst") τs
@@ -404,7 +405,7 @@ freshTyPhis l g xs τs
 
 -- | Instantiate Fresh Type (at Cast-site)
 ---------------------------------------------------------------------------------------
-freshTyCast :: (PP l, IsLocated l) => l -> CGEnv -> Id l -> Type -> CGM (CGEnv, RefType)  
+freshTyCast :: (PP l, IsLocated l) => l -> CGEnv -> Id l -> RefType -> CGM (CGEnv, RefType)  
 ---------------------------------------------------------------------------------------
 freshTyCast l g x τ
   = do t  <- freshTy "freshTyCast" τ
@@ -420,13 +421,13 @@ freshTyCast l g x τ
 
 ---------------------------------------------------------------------------------------
 subTypes :: (IsLocated x, F.Expression x, F.Symbolic x) 
-         => AnnType -> CGEnv -> [x] -> [RefType] -> CGM ()
+         => AnnTypeR -> CGEnv -> [x] -> [RefType] -> CGM ()
 ---------------------------------------------------------------------------------------
 subTypes l g xs ts = zipWithM_ (subType l g) [envFindTy x g | x <- xs] ts
 
 
 ---------------------------------------------------------------------------------------
-subType :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
+subType :: AnnTypeR -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 =
   do tt1   <- addInvariant {- $ tracePP "Liquid:subtype t1" -} t1
@@ -461,7 +462,7 @@ equivWUnionsM t t' = getTDefs >>= \γ -> return $ equivWUnions γ t t'
 
 -- Need to be padded and so on...
 -------------------------------------------------------------------------------
-subTypeContainers :: AnnType -> CGEnv -> RefType -> RefType -> CGM ()
+subTypeContainers :: AnnTypeR -> CGEnv -> RefType -> RefType -> CGM ()
 -------------------------------------------------------------------------------
 -- XXX: Will loop infinitely for cycles in type definitions
 subTypeContainers l g (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _) | d == d' = 
@@ -490,7 +491,7 @@ subTypeContainers l g t1 t2 = subType l g t1 t2
 
 ---------------------------------------------------------------------------------------
 subTypesContainers :: (IsLocated x, F.Expression x, F.Symbolic x) 
-         => AnnType -> CGEnv -> [x] -> [RefType] -> CGM ()
+         => AnnTypeR -> CGEnv -> [x] -> [RefType] -> CGM ()
 ---------------------------------------------------------------------------------------
 subTypesContainers l g xs ts = zipWithM_ (subTypeContainers l g) [envFindTy x g | x <- xs] ts
 
@@ -545,7 +546,7 @@ instance Freshable String where
 freshId   :: (IsLocated l) => l -> CGM (Id l)
 freshId l = Id l <$> fresh
 
-freshTy     :: (Show a) => a -> Type -> CGM RefType 
+-- freshTy     :: (Show a) => a -> Type -> CGM RefType 
 freshTy _ τ = refresh $ rType τ
 
 instance Freshable F.Refa where

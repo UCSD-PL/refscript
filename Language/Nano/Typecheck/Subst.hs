@@ -10,6 +10,7 @@ module Language.Nano.Typecheck.Subst (
   , Subst 
   , toList
   , fromList
+  , toSubst
 
   -- * Free Type Variables
   , Free (..)
@@ -46,6 +47,9 @@ import           Text.Printf
 
 data RSubst r = Su (M.HashMap TVar (RType r))
 type Subst    = RSubst ()
+
+toSubst :: RSubst r -> Subst
+toSubst (Su m) = Su $ M.map toType m
 
 toList        :: RSubst r -> [(TVar, RType r)]
 toList (Su m) =  M.toList m 
@@ -104,13 +108,25 @@ instance Substitutable () Fact where
   apply θ (TypInst ts)  = TypInst $ apply θ ts
   apply θ (Assume  t )  = Assume  $ apply θ t
 
+instance (PP r, F.Reftable r) => Substitutable r (Fact_ r) where
+  apply _ x@(PhiVar _)  = x
+  apply θ (TypInst ts)  = TypInst $ apply θ ts
+  apply θ (Assume  t )  = Assume  $ apply θ t
+
+
 instance Free Fact where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
   free (Assume t)       = free t
+
+instance Free (Fact_ r) where
+  free (PhiVar _)       = S.empty
+  free (TypInst ts)     = free ts
+  free (Assume t)       = free t
+ 
  
 ------------------------------------------------------------------------
--- appTy :: RSubst r -> RType r -> RType r
+-- appTy :: Subst_ r -> RType r -> RType r
 ------------------------------------------------------------------------
 appTy θ (TApp c ts z)            = TApp c (apply θ ts) z 
 appTy θ (TObj bs z)              = TObj (map (\b -> B { b_sym = b_sym b, b_type = appTy θ $ b_type b } ) bs ) z

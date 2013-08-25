@@ -26,7 +26,6 @@ import           Language.Fixpoint.Interface        (solve)
 
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
-import           Language.Nano.Misc
 import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
@@ -43,20 +42,20 @@ import           System.Console.CmdArgs.Default
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
---------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 verifyFile f =   
   do  p   <- parseNanoFromFile f
       cfg <- getOpts 
       verb    <- V.getVerbosity
-      fmap (, "") <$> reftypeCheck cfg f undefined -- (typeCheck verb (ssaTransform p))
+      fmap (, "") <$> reftypeCheck cfg f (typeCheck verb (ssaTransform p))
 
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
 --------------------------------------------------------------------------------
-reftypeCheck :: Config -> FilePath -> Nano AnnType RefType -> IO (F.FixResult SourceSpan)
+reftypeCheck :: Config -> FilePath -> Nano AnnTypeR RefType -> IO (F.FixResult SourceSpan)
 --------------------------------------------------------------------------------
 reftypeCheck cfg f = solveConstraints f . generateConstraints cfg
 
@@ -107,7 +106,7 @@ consNano pgm@(Nano {code = Src fs})
 initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
 
 --------------------------------------------------------------------------------
-consFun :: CGEnv -> Statement AnnType -> CGM CGEnv
+consFun :: CGEnv -> Statement (AnnType_ F.Reft) -> CGM CGEnv
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
   = do ft             <- {- tracePP msg <$> -} (freshTyFun g l f =<< getDefType f)
@@ -122,7 +121,7 @@ consFun g (FunctionStmt l f xs body)
 consFun _ _ = error "consFun called not with FunctionStmt"
 
 -----------------------------------------------------------------------------------
-envAddFun :: AnnType -> CGEnv -> Id AnnType -> [Id AnnType] -> RefType -> CGM CGEnv
+envAddFun :: AnnTypeR -> CGEnv -> Id AnnTypeR -> [Id AnnTypeR] -> RefType -> CGM CGEnv
 -----------------------------------------------------------------------------------
 envAddFun l g f xs ft = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
   where
@@ -145,12 +144,12 @@ renameBinds yts xs   = (su, [F.subst su ty | B _ ty <- yts])
 --     tsym         = F.symbol t
 
 --------------------------------------------------------------------------------
-consStmts :: CGEnv -> [Statement AnnType]  -> CGM (Maybe CGEnv) 
+consStmts :: CGEnv -> [Statement AnnTypeR]  -> CGM (Maybe CGEnv) 
 --------------------------------------------------------------------------------
 consStmts = consSeq consStmt
 
 --------------------------------------------------------------------------------
-consStmt :: CGEnv -> Statement AnnType -> CGM (Maybe CGEnv) 
+consStmt :: CGEnv -> Statement AnnTypeR -> CGM (Maybe CGEnv) 
 --------------------------------------------------------------------------------
 
 -- | @consStmt g s@ returns the environment extended with binders that are
@@ -201,8 +200,7 @@ consStmt g (ReturnStmt l (Just e))
             rt    = envFindReturn g'
         if isTop rt
           then subTypeContainers l g' te (setRTypeR te (rTypeR rt))
-          else subTypeContainers l g' ({- tracePP "consStmt: Ret te" -} te) 
-                                      ({- tracePP "consStmt: Ret rt" -} rt)
+          else subTypeContainers l g' te rt
         return Nothing
 
 -- return
@@ -219,7 +217,7 @@ consStmt _ s
 
 
 ------------------------------------------------------------------------------------
-consVarDecl :: CGEnv -> VarDecl AnnType -> CGM (Maybe CGEnv) 
+consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 
 consVarDecl g (VarDecl _ x (Just e)) 
@@ -229,14 +227,14 @@ consVarDecl g (VarDecl _ _ Nothing)
   = return $ Just g
 
 ------------------------------------------------------------------------------------
-consAsgn :: CGEnv -> Id AnnType -> Expression AnnType -> CGM (Maybe CGEnv) 
+consAsgn :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consAsgn g x e 
   = do (x', g') <- consExpr g e
        Just <$> envAdds [(x, envFindTy x' g')] g'
 
 ------------------------------------------------------------------------------------
-consExpr :: CGEnv -> Expression AnnType -> CGM (Id AnnType, CGEnv) 
+consExpr :: CGEnv -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv) 
 ------------------------------------------------------------------------------------
 
 -- | @consExpr g e@ returns a pair (g', x') where
@@ -268,7 +266,7 @@ consExpr g (NullLit l)
 
 consExpr g (VarRef i x)
   = do addAnnot l x t
-       return ({-trace ("consExpr:VarRef" ++ ppshow x ++ " : " ++ ppshow t)-} x, g) 
+       return ({- trace ("consExpr:VarRef" ++ ppshow x ++ " : " ++ ppshow t)-} x, g) 
     where 
        t   = envFindTy x g
        l   = srcPos i
@@ -299,12 +297,11 @@ consExpr _ e
 
 
 ---------------------------------------------------------------------------------------------
-consUpCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
----------------------------------------------------------------------------------------------
+consUpCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
+------------------------------------------------------------------------------------------
 consUpCast g x a e 
-  = do  γ         <- getTDefs
-        let u      = rType $ head [ t | Assume t <- ann_fact a]
-        (b',u')   <- fixUpcast b u
+  = do  let u      = rType $ head [ t | Assume t <- ann_fact a]
+        (b',_ )   <- fixUpcast b u
         (x',g')   <- envAddFresh l b' g
         return     $ (x', g')
   where b          = envFindTy x g 
@@ -312,7 +309,7 @@ consUpCast g x a e
       
 
 ---------------------------------------------------------------------------------------------
-consDownCast :: CGEnv -> Id AnnType -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
+consDownCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
 consDownCast g x a e 
   = do  tdefs              <- getTDefs
@@ -334,7 +331,7 @@ consDownCast g x a e
 
 
 ---------------------------------------------------------------------------------------------
-castSubM :: CGEnv -> Id AnnType -> AnnType -> (RefType, RefType) -> CGM () 
+castSubM :: CGEnv -> Id AnnTypeR -> AnnTypeR -> (RefType, RefType) -> CGM () 
 ---------------------------------------------------------------------------------------------
 castSubM g x l (t1, t2) 
   = do  (g', t1') <- fixBase g x t1
@@ -346,7 +343,7 @@ castSubM g x l (t1, t2)
 
 
 ---------------------------------------------------------------------------------------------
-consDeadCast :: CGEnv -> AnnType -> Expression AnnType -> CGM (Id AnnType, CGEnv)
+consDeadCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
 consDeadCast g a e =
   do  subType l g tru fls
@@ -360,7 +357,7 @@ consDeadCast g a e =
 
 ---------------------------------------------------------------------------------------------
 consCall :: (PP a) 
-         => CGEnv -> AnnType -> a -> [Expression AnnType] -> RefType -> CGM (Id AnnType, CGEnv)
+         => CGEnv -> AnnTypeR -> a -> [Expression AnnTypeR] -> RefType -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
 
 --   1. Fill in @instantiate@ to get a monomorphic instance of @ft@ 
@@ -379,7 +376,7 @@ consCall g l _ es ft
      {-where -}
      {-  msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)-}
 
-instantiate :: AnnType -> CGEnv -> RefType -> CGM RefType
+instantiate :: AnnTypeR -> CGEnv -> RefType -> CGM RefType
 instantiate l g t = {-  tracePP msg  <$>  -} freshTyInst l g αs τs tbody 
   where 
     (αs, tbody)   = bkAll t
@@ -387,7 +384,7 @@ instantiate l g t = {-  tracePP msg  <$>  -} freshTyInst l g αs τs tbody
     {-msg           = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)-}
 
 
-getTypArgs :: AnnType -> [TVar] -> [Type] 
+getTypArgs :: AnnTypeR -> [TVar] -> [RefType] 
 getTypArgs l αs
   = case [i | TypInst i <- ann_fact l] of 
       [i] | length i == length αs -> i 
@@ -412,7 +409,7 @@ consSeq f           = foldM step . Just
 
 
 ---------------------------------------------------------------------------------
-consObj :: AnnType -> CGEnv -> [(Prop AnnType, Expression AnnType)] -> CGM (Id AnnType, CGEnv)
+consObj :: AnnTypeR -> CGEnv -> [(Prop AnnTypeR, Expression AnnTypeR)] -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------
 consObj l g pe = 
   do

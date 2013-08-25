@@ -6,10 +6,11 @@
 module Language.Nano.Typecheck.Subst ( 
   
   -- * Substitutions
-    Subst_ (..)
+    RSubst (..)
   , Subst 
   , toList
   , fromList
+  , toSubst
 
   -- * Free Type Variables
   , Free (..)
@@ -44,22 +45,25 @@ import           Text.Printf
 
 -- | Type alias for Map from @TVar@ to @Type@. Hidden
 
-data Subst_ r = Su (M.HashMap TVar (RType r))
-type Subst    = Subst_ ()
+data RSubst r = Su (M.HashMap TVar (RType r))
+type Subst    = RSubst ()
 
-toList        :: Subst_ r -> [(TVar, RType r)]
+toSubst :: RSubst r -> Subst
+toSubst (Su m) = Su $ M.map toType m
+
+toList        :: RSubst r -> [(TVar, RType r)]
 toList (Su m) =  M.toList m 
 
-fromList      :: [(TVar, RType r)] -> Subst_ r
+fromList      :: [(TVar, RType r)] -> RSubst r
 fromList      = Su . M.fromList 
 
 -- | Substitutions form a monoid; not commutative
 
-instance (F.Reftable r, Substitutable r (RType r)) => Monoid (Subst_ r) where 
+instance (F.Reftable r, Substitutable r (RType r)) => Monoid (RSubst r) where 
   mempty                    = Su M.empty
   mappend (Su m) θ'@(Su m') = Su $ (apply θ' <$> m) `M.union` m'
 
-instance (F.Reftable r, PP r) => PP (Subst_ r) where 
+instance (F.Reftable r, PP r) => PP (RSubst r) where 
   pp (Su m) = if M.null m then text "empty" else vcat $ (ppBind <$>) $ M.toList m 
 
 ppBind (x, t) = pp x <+> text ":=" <+> pp t
@@ -72,7 +76,7 @@ class Free a where
   free  :: a -> S.HashSet TVar
 
 class Substitutable r a where 
-  apply :: (Subst_ r) -> a -> a 
+  apply :: (RSubst r) -> a -> a 
 
 instance Free a => Free [a] where 
   free = S.unions . map free

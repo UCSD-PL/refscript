@@ -52,7 +52,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative                hiding (empty)
 import           Control.Monad.Error                ()
 
-import           Debug.Trace (trace)
+-- import           Debug.Trace (trace)
 
 
 
@@ -235,7 +235,7 @@ compareTs γ t1 t2 | otherwise              = compareTs' γ t1 t2
 
 -- | Top-level Unions
 
-compareTs' _ t1 t2 | isTop t1               = errorstar "unimplemented: compareTs - top"
+compareTs' _ t1 _  | isTop t1               = errorstar "unimplemented: compareTs - top"
 compareTs' _ t1 t2 | isTop t2               = (t1', t1, t2', SubT)
   where
     t1' = setRTypeR t1 F.top -- this will be kVared
@@ -493,7 +493,7 @@ padObject _ _ _ = error "padObject: Cannot pad non-objects"
 
 
 -- | Break one level of padded objects
-bkPaddedObject t1@(TObj xt1s _) t2@(TObj xt2s _) =
+bkPaddedObject (TObj xt1s _) (TObj xt2s _) =
   safeZipWith "splitC:obj" checkB xt1s xt2s
   where
     checkB b b' | b_sym b == b_sym b' = (b_type b, b_type b')

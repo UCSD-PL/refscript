@@ -20,8 +20,6 @@ import           Data.Generics
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$), (<+>))
 import           Text.Printf                        (printf)
 
-import           Language.Nano.Liquid.Types
-
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Types
@@ -309,7 +307,7 @@ tcStmt' _ s
 tcStmt γ s = tcStmt' γ s
 
 -------------------------------------------------------------------------------
--- tcVarDecl :: (F.Reftable r) => Env (RType r) -> VarDecl (AnnSSA_ r) -> TCM r (TCEnv r)
+tcVarDecl :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> VarDecl (AnnSSA_ r) -> TCM r (TCEnv r)
 -------------------------------------------------------------------------------
 
 tcVarDecl γ (VarDecl l x (Just e)) 
@@ -319,7 +317,8 @@ tcVarDecl γ (VarDecl _ _ Nothing)
   = return $ Just γ
 
 ------------------------------------------------------------------------------------
--- tcAsgn :: (F.Reftable r) => Env (RType r) -> (AnnSSA_ r) -> Id (AnnSSA_ r) -> Expression (AnnSSA_ r) -> TCM r (TCEnv r)
+tcAsgn :: (PP r, Ord r, F.Reftable r) => 
+  Env (RType r) -> (AnnSSA_ r) -> Id (AnnSSA_ r) -> Expression (AnnSSA_ r) -> TCM r (TCEnv r)
 ------------------------------------------------------------------------------------
 
 tcAsgn γ _ x e 
@@ -329,13 +328,13 @@ tcAsgn γ _ x e
 
 
 -------------------------------------------------------------------------------
--- tcExpr :: (F.Reftable r) => Env (RType r) -> Expression (AnnSSA_ r) -> TCM r (RType r)
+tcExpr :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> Expression (AnnSSA_ r) -> TCM r (RType r)
 -------------------------------------------------------------------------------
 tcExpr γ e = setExpr (Just e) >> (tcExpr' γ e)
 
 
 -------------------------------------------------------------------------------
--- tcExpr' :: (F.Reftable r) => Env (RType r) -> Expression (AnnSSA_ r) -> TCM r (RType r)
+tcExpr' :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> Expression (AnnSSA_ r) -> TCM r (RType r)
 -------------------------------------------------------------------------------
 
 tcExpr' _ (IntLit _ _)
@@ -358,11 +357,11 @@ tcExpr' γ (VarRef l x)
 tcExpr' γ (PrefixExpr l o e)
   = tcCall γ l o [e] (prefixOpTy o γ)
 
-{-tcExpr' γ (InfixExpr l o e1 e2)        -}
-{-  = tcCall γ l o [e1, e2] (infixOpTy o γ)-}
+tcExpr' γ (InfixExpr l o e1 e2)        
+  = tcCall γ l o [e1, e2] (infixOpTy o γ)
 
-{-tcExpr' γ (CallExpr l e es)-}
-{-  = tcExpr γ e >>= tcCall γ l e es-}
+tcExpr' γ (CallExpr l e es)
+  = tcExpr γ e >>= tcCall γ l e es
 
 tcExpr' γ (ObjectLit _ ps) 
   = tcObject γ ps
@@ -374,7 +373,8 @@ tcExpr' _ e
   = convertError "tcExpr" e
 
 ----------------------------------------------------------------------------------
--- tcCall :: (PP fn) => Env (RType r) -> (AnnSSA_ r) -> fn -> [Expression (AnnSSA_ r)]-> (RType r) -> TCM r (RType r)
+tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 
+  Env (RType r) -> (AnnSSA_ r) -> fn -> [Expression (AnnSSA_ r)]-> (RType r) -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcCall γ l fn es ft 
   = do  (_,ibs,ot)    <- instantiate l fn ft
@@ -399,7 +399,8 @@ instantiate l fn ft
 
 
 ----------------------------------------------------------------------------------
--- tcObject :: Env (RType r) -> [(Prop (AnnSSA_ r), Expression (AnnSSA_ r))] -> TCM r (RType r)
+tcObject ::  (Ord r, F.Reftable r, PP r) => 
+  Env (RType r) -> [(Prop (AnnSSA_ r), Expression (AnnSSA_ r))] -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcObject γ bs 
   = do 
@@ -409,7 +410,8 @@ tcObject γ bs
 
 
 ----------------------------------------------------------------------------------
--- tcAccess :: Env (RType r) -> (AnnSSA_ r) -> Expression (AnnSSA_ r) -> Id (AnnSSA_ r) -> TCM r (RType r)
+tcAccess ::  (Ord r, F.Reftable r, PP r) =>
+  Env (RType r) -> (AnnSSA_ r) -> Expression (AnnSSA_ r) -> Id (AnnSSA_ r) -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcAccess γ _ e f = 
   do  t     <- tcExpr γ e
@@ -418,7 +420,8 @@ tcAccess γ _ e f =
 
 
 ----------------------------------------------------------------------------------
--- envJoin :: (AnnSSA_ r) -> Env (RType r) -> TCEnv r -> TCEnv r -> TCM r (TCEnv r)
+envJoin :: (Ord r, F.Reftable r, PP r) =>
+  (AnnSSA_ r) -> Env (RType r) -> TCEnv r -> TCEnv r -> TCM r (TCEnv r)
 ----------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
@@ -431,7 +434,8 @@ envJoin' l γ γ1 γ2
   
 
 ----------------------------------------------------------------------------------
--- getPhiType :: Annot b SourceSpan -> Env (RType r) -> Env (RType r) -> Id SourceSpan-> TCM r (RType r)
+getPhiType ::  (Ord r, F.Reftable r, PP r) => 
+  Annot b SourceSpan -> Env (RType r) -> Env (RType r) -> Id SourceSpan-> TCM r (RType r)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (envFindTy x γ1, envFindTy x γ2) of

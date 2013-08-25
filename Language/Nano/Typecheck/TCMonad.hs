@@ -66,8 +66,6 @@ module Language.Nano.Typecheck.TCMonad (
   , whenLoud', whenLoud
   , whenQuiet', whenQuiet
 
-  , AnnSSAR
-
   )  where 
 
 import           Text.Printf
@@ -80,8 +78,6 @@ import qualified Language.Fixpoint.Types as F
 
 import           Language.Nano.Env
 import           Language.Nano.Misc             (unique, everywhereM', zipWith3M_)
-
-import           Language.Nano.Liquid.Types
 
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
@@ -112,7 +108,7 @@ import qualified System.Console.CmdArgs.Verbosity as V
 data TCState r = TCS {
                    -- Errors
                      tc_errss :: ![(SourceSpan, String)]
-                   , tc_subst :: !(Subst_ r)
+                   , tc_subst :: !(RSubst r)
                    , tc_cnt   :: !Int
                    -- Annotations
                    , tc_anns  :: AnnInfo_ r
@@ -132,12 +128,6 @@ data TCState r = TCS {
 
 type TCM r     = ErrorT String (State (TCState r))
 
-type AnnSSAR  = forall r. AnnSSA_  r
-type AnnInfoR = forall r. AnnInfo_ r  
-type FactR    = forall r. Fact_    r 
-type SubstR   = forall r. Subst_   r 
-type RTypeR   = forall r. RType    r
-type EnvTypeR = forall r. Env (RType r)
 
 -------------------------------------------------------------------------------
 whenLoud :: TCM r () -> TCM r ()
@@ -173,7 +163,7 @@ getTDefs :: TCM r (Env (RType r))
 getTDefs = tc_tdefs <$> get 
 
 -------------------------------------------------------------------------------
-getSubst :: TCM r (Subst_ r)
+getSubst :: TCM r (RSubst r)
 -------------------------------------------------------------------------------
 getSubst = tc_subst <$> get 
 
@@ -181,7 +171,7 @@ getCasts = do c <- tc_casts <$> get
               return $ M.toList c
 
 -------------------------------------------------------------------------------
-setSubst   :: Subst_ r -> TCM r () 
+setSubst   :: RSubst r -> TCM r () 
 -------------------------------------------------------------------------------
 setSubst θ = modify $ \st -> st { tc_subst = θ }
 
@@ -211,7 +201,7 @@ freshTyArgs :: (PP r, F.Reftable r) => SourceSpan -> ([TVar], RType r) -> TCM r 
 freshTyArgs l (αs, t) 
   = (`apply` t) <$> freshSubst l αs
 
-freshSubst :: (PP r, F.Reftable r) => SourceSpan -> [TVar] -> TCM r (Subst_ r)
+freshSubst :: (PP r, F.Reftable r) => SourceSpan -> [TVar] -> TCM r (RSubst r)
 freshSubst l αs
   = do
       fUnique αs
@@ -394,7 +384,7 @@ unfoldSafeTC   t = getTDefs >>= \γ -> return $ unfoldSafe γ t
 
 
 ----------------------------------------------------------------------------------
-unifyTypesM :: (IsLocated l, Ord r, PP r, F.Reftable r) => l -> String -> [RType r] -> [RType r] -> TCM r (Subst_ r)
+unifyTypesM :: (IsLocated l, Ord r, PP r, F.Reftable r) => l -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
 unifyTypesM l msg t1s t2s
   -- TODO: This check might be done multiple times
@@ -407,7 +397,7 @@ unifyTypesM l msg t1s t2s
 
 ----------------------------------------------------------------------------------
 unifyTypeM :: (Ord r, PrintfArg t1, PP r, PP a, F.Reftable r, IsLocated l) =>
-  l -> t1 -> a -> RType r -> RType r -> TCM r (Subst_ r)
+  l -> t1 -> a -> RType r -> RType r -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
 unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
   where 

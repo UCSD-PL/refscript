@@ -66,7 +66,7 @@ module Language.Nano.Typecheck.Types (
   
   -- * Annotations
   , Annot (..)
-  , Fact (..)
+  , Fact
   , Fact_ (..)
   , AnnBare_ ,AnnBare
   , AnnSSA_, AnnSSA
@@ -241,7 +241,7 @@ strengthenContainers (TObj ts r) (TObj ts' r') =
     doB (B s t) (B s' t') | s == s' =  B s $ strengthenContainers t t'
     doB _       _                   = errorstar "strengthenContainers: sanity check - 1"
 strengthenContainers t t' | toType t == toType t' = strengthen t' $ rTypeR t
-strengthenContainers t t' | otherwise = errorstar "strengthenContainers: sanity check - 2"
+strengthenContainers _ _  | otherwise = errorstar "strengthenContainers: sanity check - 2"
   
 
 

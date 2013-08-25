@@ -11,12 +11,12 @@ import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Misc
-import           Language.Nano.Typecheck.Subst
+-- import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.SSA.SSAMonad
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
-import           Language.ECMAScript3.PrettyPrint
+-- import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.Fixpoint.Misc             
 import qualified Language.Fixpoint.Types            as F
@@ -29,7 +29,7 @@ ssaTransform = either (errorstar . snd) id . execute . ssaNano
 
 
 ----------------------------------------------------------------------------------
--- ssaNano :: F.Reftable r => Nano SourceSpan t -> SSAM r (Nano (Annot (Fact_ r) SourceSpan) t)
+ssaNano :: F.Reftable r => Nano SourceSpan t -> SSAM r (Nano (Annot (Fact_ r) SourceSpan) t)
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano {code = Src fs}) 
   = do addImmutables $ envMap (\_ -> F.top) (specs p) 
@@ -46,7 +46,7 @@ ssaNano p@(Nano {code = Src fs})
 patchAnn m l = Ann l $ M.lookupDefault [] l m
 
 -------------------------------------------------------------------------------------
--- ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)
+ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)
 -------------------------------------------------------------------------------------
 ssaFun (FunctionStmt l f xs body) 
   = do θ            <- getSsaEnv  
@@ -64,7 +64,7 @@ ssaFun (FunctionStmt l f xs body)
 ssaFun _ = error "Calling ssaFun not with FunctionStmt"
 
 -------------------------------------------------------------------------------------
-{-ssaSeq :: (a -> SSAM r (Bool, a)) -> [a] -> SSAM r (Bool, [a])  -}
+ssaSeq :: (a -> SSAM r (Bool, a)) -> [a] -> SSAM r (Bool, [a]) 
 -------------------------------------------------------------------------------------
 ssaSeq f            = go True 
   where 
@@ -75,12 +75,12 @@ ssaSeq f            = go True
                          return      (b', y:ys)
 
 -------------------------------------------------------------------------------------
-{-ssaStmts :: F.Reftable r => [Statement SourceSpan] -> SSAM r (Bool, [Statement SourceSpan])-}
+ssaStmts :: F.Reftable r => [Statement SourceSpan] -> SSAM r (Bool, [Statement SourceSpan])
 -------------------------------------------------------------------------------------
 ssaStmts = ssaSeq ssaStmt
 
 -------------------------------------------------------------------------------------
-{-ssaStmt :: F.Reftable r => Statement SourceSpan -> SSAM r (Bool, Statement SourceSpan)-}
+ssaStmt :: F.Reftable r => Statement SourceSpan -> SSAM r (Bool, Statement SourceSpan)
 -------------------------------------------------------------------------------------
 -- skip
 ssaStmt s@(EmptyStmt _) 
@@ -140,7 +140,7 @@ ssaStmt s
   = convertError "ssaStmt" s
 
 -------------------------------------------------------------------------------------
-{-splice :: Statement SourceSpan -> Maybe (Statement SourceSpan) -> Statement SourceSpan-}
+splice :: Statement SourceSpan -> Maybe (Statement SourceSpan) -> Statement SourceSpan
 -------------------------------------------------------------------------------------
 splice s Nothing   = s
 splice s (Just s') = seqStmt (getAnnotation s) s s' 
@@ -149,7 +149,7 @@ seqStmt _ (BlockStmt l s) (BlockStmt _ s') = BlockStmt l (s ++ s')
 seqStmt l s s'                             = BlockStmt l [s, s']
 
 -------------------------------------------------------------------------------------
--- ssaWith :: F.Reftable r => SsaEnv -> (a -> SSAM (Bool, a)) -> a -> SSAM r (Maybe SsaEnv, a)
+ssaWith :: SsaEnv -> (t -> SSAM r (Bool, t)) -> t -> SSAM r (Maybe SsaEnv, t)
 -------------------------------------------------------------------------------------
 ssaWith θ f x 
   = do setSsaEnv θ
@@ -157,7 +157,7 @@ ssaWith θ f x
        (, x')  <$> (if b then Just <$> getSsaEnv else return Nothing)
 
 -------------------------------------------------------------------------------------
-{-ssaExpr    :: F.Reftable r => Expression SourceSpan -> SSAM r (Expression SourceSpan) -}
+ssaExpr    :: F.Reftable r => Expression SourceSpan -> SSAM r (Expression SourceSpan) 
 -------------------------------------------------------------------------------------
 
 ssaExpr e@(IntLit _ _)               
@@ -202,7 +202,7 @@ ssaExpr e
   = convertError "ssaExpr" e
 
 -------------------------------------------------------------------------------------
-{-ssaVarDecl :: F.Reftable r => VarDecl SourceSpan -> SSAM r (Bool, VarDecl SourceSpan)-}
+ssaVarDecl :: F.Reftable r => VarDecl SourceSpan -> SSAM r (Bool, VarDecl SourceSpan)
 -------------------------------------------------------------------------------------
 ssaVarDecl (VarDecl l x (Just e)) 
   = do (x', e') <- ssaAsgn l x e
@@ -212,8 +212,8 @@ ssaVarDecl {-z@-}(VarDecl l x Nothing)
   = errorstar $ printf "Cannot handle ssaVarDECL %s at %s" (ppshow x) (ppshow l)
 
 ------------------------------------------------------------------------------------
-{-ssaAsgn :: F.Reftable r => SourceSpan -> Id SourceSpan -> Expression SourceSpan -> -}
-           {-SSAM r (Id SourceSpan, Expression SourceSpan)-}
+ssaAsgn :: F.Reftable r => SourceSpan -> Id SourceSpan -> Expression SourceSpan -> 
+           SSAM r (Id SourceSpan, Expression SourceSpan)
 ------------------------------------------------------------------------------------
 ssaAsgn l x e 
   = do e' <- ssaExpr e 
@@ -222,10 +222,10 @@ ssaAsgn l x e
 
 
 -------------------------------------------------------------------------------------
-{-envJoin :: SourceSpan -> Maybe SsaEnv -> Maybe SsaEnv -}
-{-        -> SSAM r ( Maybe SsaEnv,-}
-{-                    Maybe (Statement SourceSpan),-}
-{-                    Maybe (Statement SourceSpan))-}
+envJoin :: SourceSpan -> Maybe SsaEnv -> Maybe SsaEnv 
+        -> SSAM r ( Maybe SsaEnv,
+                    Maybe (Statement SourceSpan),
+                    Maybe (Statement SourceSpan))
 -------------------------------------------------------------------------------------
 envJoin _ Nothing Nothing     = return (Nothing, Nothing, Nothing)
 envJoin _ Nothing (Just θ)    = return (Just θ , Nothing, Nothing) 

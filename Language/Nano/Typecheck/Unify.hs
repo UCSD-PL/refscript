@@ -11,9 +11,9 @@ module Language.Nano.Typecheck.Unify (
   ) where 
 
 -- import           Text.PrettyPrint.HughesPJ
--- import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Misc
--- import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Errors 
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
@@ -38,7 +38,8 @@ import           Text.Printf
 -- | Unify types @t@ and @t'@, using @θ@ as the current substitution and @env@
 -- as the current type definition environment.
 -----------------------------------------------------------------------------
-unify :: Env Type -> Subst -> Type -> Type -> Either String Subst
+unify :: (PP r, F.Reftable r, Ord r) => 
+  Env (RType r) -> RSubst r -> RType r -> RType r -> Either String (RSubst r)
 -----------------------------------------------------------------------------
 
 -- TODO: is this right??
@@ -97,7 +98,8 @@ unifEq γ t t'                     = equiv γ t t'
 
 
 -----------------------------------------------------------------------------
-unifys ::  Env Type -> Subst -> [Type] -> [Type] -> Either String Subst
+unifys ::  (PP r, F.Reftable r, Ord r) =>  
+  Env (RType r) -> RSubst r -> [RType r] -> [RType r] -> Either String (RSubst r)
 -----------------------------------------------------------------------------
 unifys env θ xs ys = {-  tracePP msg $ -} unifys' env θ xs ys 
    {-where -}
@@ -121,14 +123,15 @@ unifys' env θ ts ts'
                                
 
 check m m' = vs == vs'
-  where vs  = (`M.lookup` m ) <$> ks
-        vs' = (`M.lookup` m') <$> ks
+  where vs  = map (toType <$>) $ (`M.lookup` m ) <$> ks
+        vs' = map (toType <$>) $ (`M.lookup` m') <$> ks
         ks  = M.keys $ M.intersection (clr m) (clr m')
         clr = M.filterWithKey (\k v -> tVar k /= v)
 
 
 -----------------------------------------------------------------------------
-varEql :: Subst -> TVar -> TVar -> Either String Subst
+varEql :: (PP r, F.Reftable r, Ord r) => 
+  RSubst r -> TVar -> TVar -> Either String (RSubst r)
 -----------------------------------------------------------------------------
 varEql θ α β =  
   case varAsn θ α $ tVar β of
@@ -140,7 +143,8 @@ varEql θ α β =
 
 
 -----------------------------------------------------------------------------
-varAsn :: Subst -> TVar -> Type -> Either String Subst
+varAsn ::  (PP r, F.Reftable r, Ord r) => 
+  RSubst r -> TVar -> RType r -> Either String (RSubst r)
 -----------------------------------------------------------------------------
 varAsn θ α t 
   -- Check if previous substs are sufficient 

@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE TupleSections          #-}
+{-# LANGUAGE FlexibleContexts       #-}
 
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
@@ -45,7 +46,7 @@ import qualified System.Console.CmdArgs.Verbosity as V
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
-verifyFile :: FilePath -> IO (F.FixResult (SourceSpan, String))
+-- verifyFile :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 --verifyFile f = tc =<< parseNanoFromFile f
 --  where 
@@ -55,7 +56,7 @@ verifyFile :: FilePath -> IO (F.FixResult (SourceSpan, String))
 verifyFile f 
    = do nano    <- parseNanoFromFile f
         V.whenLoud $ donePhase FM.Loud "Parse"
-        {-putStrLn . render . pp $ nano-}
+        putStrLn . render . pp $ nano
         let nanoSsa = ssaTransform nano
         V.whenLoud $ donePhase FM.Loud "SSA Transform"
         V.whenLoud $ putStrLn . render . pp $ nanoSsa
@@ -68,8 +69,9 @@ verifyFile f
 
 
 -------------------------------------------------------------------------------
-typeCheck     :: (Data r, Typeable r, F.Reftable r) => V.Verbosity -> 
-                   Nano AnnSSA (RType r) -> Nano AnnType (RType r)
+typeCheck ::
+  (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact_ r), Free (Fact_ r)) =>
+  V.Verbosity -> Nano (AnnSSA_ r) (RType r) -> Nano (AnnType_ r) (RType r)
 -------------------------------------------------------------------------------
 typeCheck verb pgm = either crash id (execute verb pgm (tcAndPatch pgm))
   where
@@ -88,7 +90,7 @@ safe (Nano {code = Src fs})
 
 -------------------------------------------------------------------------------
 failCasts :: (Data r, Typeable r) => 
-  Bool -> Nano AnnSSA (RType r) -> F.FixResult (SourceSpan, String)
+              Bool -> Nano (AnnSSA_ r) (RType r) -> F.FixResult (SourceSpan, String)
 -------------------------------------------------------------------------------
 failCasts False (Nano {code = Src fs}) | not $ null csts = F.Unsafe csts
                                        | otherwise       = F.Safe
@@ -97,7 +99,7 @@ failCasts True   _                                       = F.Safe
     
 
 -------------------------------------------------------------------------------
-allCasts :: [FunctionStatement AnnSSA] -> [(AnnSSA, [Char])]
+allCasts :: (Data r, Typeable r) => [FunctionStatement (AnnSSA_ r)] -> [((AnnSSA_ r), [Char])]
 -------------------------------------------------------------------------------
 allCasts fs =  everything (++) ([] `mkQ` f) $ fs
   where f (DownCast l t)  = [(l, "DownCast: " ++ ppshow t)]
@@ -106,9 +108,6 @@ allCasts fs =  everything (++) ([] `mkQ` f) $ fs
         f _               = [ ]
 
 
--------------------------------------------------------------------------------
-printAnn :: AnnBare -> IO () 
--------------------------------------------------------------------------------
 printAnn (Ann l fs) = when (not $ null fs) $ putStrLn 
     $ printf "At %s: %s" (ppshow l) (ppshow fs)
 
@@ -117,8 +116,8 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn
 -------------------------------------------------------------------------------
 -- | The first argument true to tranform casted expressions e to Cast(e,T)
 -------------------------------------------------------------------------------
-tcAndPatch :: (Data r, Typeable r, F.Reftable r) => 
-    Nano AnnSSA (RType r) -> TCM (Nano  AnnSSA (RType r))
+-- tcAndPatch :: (Data r, Typeable r, F.Reftable r, PP r, Ord r) => 
+--     Nano (AnnSSA_ r) (RType r) -> TCM r (Nano (AnnSSA_ r) (RType r))
 -------------------------------------------------------------------------------
 tcAndPatch p = 
   do  checkTypeDefs p
@@ -141,7 +140,7 @@ tcAndPatch p =
 
 
 -------------------------------------------------------------------------------
-checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano AnnSSA (RType r) -> TCM ()
+checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano (AnnSSA_ r) (RType r) -> TCM r ()
 -------------------------------------------------------------------------------
 checkTypeDefs pgm = reportAll $ grep
   where 
@@ -161,10 +160,11 @@ checkTypeDefs pgm = reportAll $ grep
 
 
 -------------------------------------------------------------------------------
-tcNano :: (F.Reftable r) => Nano AnnSSA (RType r) -> TCM (Nano AnnType (RType r)) 
+tcNano :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact_ r), Free (Fact_ r)) =>
+  Nano (AnnSSA_ r) (RType r) -> TCM r (Nano (AnnType_ r) (RType r))
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
-  = do m     <- tcNano' $ toType <$> p 
+  = do m     <- tcNano' $ {- toType <$> -} p 
        return $ (trace "") $ p {code = Src $ (patchAnn m <$>) <$> fs}
     {-where-}
     {-  cachePP cache = render $-}
@@ -174,17 +174,17 @@ tcNano p@(Nano {code = Src fs})
 
 
 -------------------------------------------------------------------------------
-tcNano' :: Nano AnnSSA Type -> TCM AnnInfo  
+-- tcNano' :: Nano (AnnSSA_ r) (RType r) -> TCM r AnnInfo  
 -------------------------------------------------------------------------------
 tcNano' pgm@(Nano {code = Src fs}) 
   = do tcStmts (specs pgm) fs
        M.unions <$> getAllAnns
 
-patchAnn              :: AnnInfo -> AnnSSA -> AnnType
+-- patchAnn              :: AnnInfo -> (AnnSSA_ r) -> (AnnType_ r)
 patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
 
 -------------------------------------------------------------------------------
--- | Type Check Environment ---------------------------------------------------
+-- | (RType r) Check Environment ---------------------------------------------------
 -------------------------------------------------------------------------------
 
 --   We define this alias as the "output" type for typechecking any entity
@@ -192,13 +192,13 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
 --   @Nothing@ means if we definitely hit a "return" 
 --   @Just γ'@ means environment extended with statement binders
 
-type TCEnv = Maybe (Env Type)
+type TCEnv r = Maybe (Env (RType r))
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-tcFun    :: Env Type -> FunctionStatement AnnSSA -> TCM TCEnv 
+-- tcFun    :: (F.Reftable r) => Env (RType r) -> FunctionStatement (AnnSSA_ r) -> TCM r (TCEnv r)
 tcFun γ (FunctionStmt l f xs body) 
   = do (ft, (αs, ts, t)) <- funTy l f xs
        let γ'  = envAdds [(f, ft)] γ
@@ -233,7 +233,7 @@ validInst γ (l, ts)
 tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a   
 
 --------------------------------------------------------------------------------
-tcSeq :: (Env Type -> a -> TCM TCEnv) -> Env Type -> [a] -> TCM TCEnv
+tcSeq :: (Env (RType r) -> a -> TCM r (TCEnv r)) -> Env (RType r) -> [a] -> TCM r (TCEnv r)
 --------------------------------------------------------------------------------
 
 tcSeq f             = foldM step . Just 
@@ -242,12 +242,14 @@ tcSeq f             = foldM step . Just
     step (Just γ) x = f γ x
 
 --------------------------------------------------------------------------------
-tcStmts :: Env Type -> [Statement AnnSSA] -> TCM TCEnv
+tcStmts :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact_ r), Free (Fact_ r)) =>
+            Env (RType r) -> [Statement (AnnSSA_ r)] -> TCM r (TCEnv r)
 --------------------------------------------------------------------------------
 tcStmts = tcSeq tcStmt
 
 -------------------------------------------------------------------------------
-tcStmt :: Env Type -> Statement AnnSSA -> TCM TCEnv  
+tcStmt  :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact_ r), Free (Fact_ r)) =>
+            Env (RType r) -> Statement (AnnSSA_ r) -> TCM r (TCEnv r)
 -------------------------------------------------------------------------------
 -- skip
 tcStmt' γ (EmptyStmt _) 
@@ -305,7 +307,7 @@ tcStmt' _ s
 tcStmt γ s = tcStmt' γ s
 
 -------------------------------------------------------------------------------
-tcVarDecl :: Env Type -> VarDecl AnnSSA -> TCM TCEnv  
+tcVarDecl :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> VarDecl (AnnSSA_ r) -> TCM r (TCEnv r)
 -------------------------------------------------------------------------------
 
 tcVarDecl γ (VarDecl l x (Just e)) 
@@ -315,7 +317,8 @@ tcVarDecl γ (VarDecl _ _ Nothing)
   = return $ Just γ
 
 ------------------------------------------------------------------------------------
-tcAsgn :: Env Type -> AnnSSA -> Id AnnSSA -> Expression AnnSSA -> TCM TCEnv
+tcAsgn :: (PP r, Ord r, F.Reftable r) => 
+  Env (RType r) -> (AnnSSA_ r) -> Id (AnnSSA_ r) -> Expression (AnnSSA_ r) -> TCM r (TCEnv r)
 ------------------------------------------------------------------------------------
 
 tcAsgn γ _ x e 
@@ -325,13 +328,13 @@ tcAsgn γ _ x e
 
 
 -------------------------------------------------------------------------------
-tcExpr :: Env Type -> Expression AnnSSA -> TCM Type
+tcExpr :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> Expression (AnnSSA_ r) -> TCM r (RType r)
 -------------------------------------------------------------------------------
 tcExpr γ e = setExpr (Just e) >> (tcExpr' γ e)
 
 
 -------------------------------------------------------------------------------
-tcExpr' :: Env Type -> Expression AnnSSA -> TCM Type
+tcExpr' :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> Expression (AnnSSA_ r) -> TCM r (RType r)
 -------------------------------------------------------------------------------
 
 tcExpr' _ (IntLit _ _)
@@ -370,7 +373,8 @@ tcExpr' _ e
   = convertError "tcExpr" e
 
 ----------------------------------------------------------------------------------
-tcCall :: (PP fn) => Env Type -> AnnSSA -> fn -> [Expression AnnSSA]-> Type -> TCM Type
+tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 
+  Env (RType r) -> (AnnSSA_ r) -> fn -> [Expression (AnnSSA_ r)]-> (RType r) -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcCall γ l fn es ft 
   = do  (_,ibs,ot)    <- instantiate l fn ft
@@ -395,17 +399,19 @@ instantiate l fn ft
 
 
 ----------------------------------------------------------------------------------
-tcObject :: Env Type -> [(Prop AnnSSA, Expression AnnSSA)] -> TCM Type
+tcObject ::  (Ord r, F.Reftable r, PP r) => 
+  Env (RType r) -> [(Prop (AnnSSA_ r), Expression (AnnSSA_ r))] -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcObject γ bs 
   = do 
       let (ps, es) = unzip bs
       bts <- zipWith B (map F.symbol ps) <$> mapM (tcExpr γ) es
-      return $ TObj bts ()
+      return $ TObj bts F.top
 
 
 ----------------------------------------------------------------------------------
-tcAccess :: Env Type -> AnnSSA -> Expression AnnSSA -> Id AnnSSA -> TCM Type
+tcAccess ::  (Ord r, F.Reftable r, PP r) =>
+  Env (RType r) -> (AnnSSA_ r) -> Expression (AnnSSA_ r) -> Id (AnnSSA_ r) -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcAccess γ _ e f = 
   do  t     <- tcExpr γ e
@@ -414,7 +420,8 @@ tcAccess γ _ e f =
 
 
 ----------------------------------------------------------------------------------
-envJoin :: AnnSSA -> Env Type -> TCEnv -> TCEnv -> TCM TCEnv 
+envJoin :: (Ord r, F.Reftable r, PP r) =>
+  (AnnSSA_ r) -> Env (RType r) -> TCEnv r -> TCEnv r -> TCM r (TCEnv r)
 ----------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
@@ -427,7 +434,8 @@ envJoin' l γ γ1 γ2
   
 
 ----------------------------------------------------------------------------------
-getPhiType :: Annot b SourceSpan -> Env Type -> Env Type -> Id SourceSpan-> TCM Type
+getPhiType ::  (Ord r, F.Reftable r, PP r) => 
+  Annot b SourceSpan -> Env (RType r) -> Env (RType r) -> Id SourceSpan-> TCM r (RType r)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (envFindTy x γ1, envFindTy x γ2) of

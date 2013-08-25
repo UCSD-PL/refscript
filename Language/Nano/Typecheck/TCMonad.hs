@@ -484,7 +484,7 @@ addDeadCast e t = modify $ \st -> st { tc_casts = M.insert e (DC t) (tc_casts st
 
 
 --------------------------------------------------------------------------------
-patchPgmM :: (Data b, Functor m, Typeable r) => b -> TCM r b
+patchPgmM :: (Data b, Typeable r) => b -> TCM r b
 --------------------------------------------------------------------------------
 patchPgmM pgm = 
   do  c <- tc_casts <$> get

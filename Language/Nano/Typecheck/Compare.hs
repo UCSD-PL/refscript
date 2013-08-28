@@ -554,28 +554,28 @@ zipType1 γ f t1 t2 = zipType2 γ f t2 t1
 --------------------------------------------------------------------------------
 zipType2 :: (PP r, F.Reftable r) => Env (RType r) -> (r -> r -> r) ->  RType r -> RType r -> RType r
 --------------------------------------------------------------------------------
-zipType2 γ f (TApp TUn ts r) t =  
+zipType2 γ f (TApp TUn ts r) (TApp TUn ts' r')  = 
+  TApp TUn (zipTypes γ f ts <$> ts') $ f r r'
+
+zipType2 γ f (TApp TUn ts _) t =  
   zipTypes γ f ts t
 
 zipType2 γ f t (TApp TUn ts' r') =  
   TApp TUn (zipTypes γ f [t] <$> ts') r'        -- The top-level refinement for t' should remain
 
-zipType2 γ f (TApp TUn ts r) (TApp TUn ts' r')  = 
-  TApp TUn (zipTypes γ f ts <$> ts') $ f r r'
-
 zipType2 γ f (TApp d@(TDef _) ts r) (TApp d'@(TDef _) ts' r') | d == d' =
   TApp d' (zipWith (zipType2 γ f) ts ts') $ f r r'
 
-zipType2 γ f t@(TApp d@(TDef _) _ _) t' =
+zipType2 γ f t@(TApp (TDef _) _ _) t' =
   zipType2 γ f (unfoldSafe γ t) t'
 
-zipType2 γ f t t'@(TApp d@(TDef _) _ _) =
+zipType2 γ f t t'@(TApp (TDef _) _ _) =
   zipType2 γ f (unfoldSafe γ t) t'
 
-zipType2 γ f (TApp c [] r) (TApp c' [] r')    | c == c' = 
+zipType2 _ f (TApp c [] r) (TApp c' [] r')    | c == c' = 
   TApp c [] $ f r r'
 
-zipType2 γ f (TVar v r) (TVar v' r') | v == v' = TVar v $ f r r'
+zipType2 _ f (TVar v r) (TVar v' r') | v == v' = TVar v $ f r r'
 
 zipType2 γ f (TFun xts t r) (TFun xts' t' r') = 
   TFun (safeZipWith "zipType2:TFun" (zipBind2 γ f) xts xts') (zipType2 γ f t t') $ f r r'

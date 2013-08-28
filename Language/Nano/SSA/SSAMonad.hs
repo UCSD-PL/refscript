@@ -52,6 +52,8 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types            as F
 import           Text.Printf                        (printf)
 
+import           Debug.Trace                        (trace)
+
 type SSAM r     = ErrorT String (State (SsaState r))
 
 data SsaState r = SsaST { immutables :: Env r       -- ^ globals
@@ -78,7 +80,7 @@ addImmutables   :: (F.Reftable r) => Env r -> SSAM r ()
 -------------------------------------------------------------------------------------
 addImmutables z = modify $ \st -> st { immutables = envExt z (immutables st) } 
   where
-    envExt x y  = envFromList (envToList x ++ envToList y)
+    envExt x y  = envFromList $ (envToList x ++ envToList y)
 
 -------------------------------------------------------------------------------------
 setImmutables   :: Env r -> SSAM r ()

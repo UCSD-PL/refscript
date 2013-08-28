@@ -49,6 +49,7 @@ module Language.Nano.Liquid.CGMonad (
   -- * Add Subtyping Constraints
   , subTypes
   , subType
+  , subType'
   , subTypeContainers
   , subTypesContainers
 
@@ -100,7 +101,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.ECMAScript3.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation ----------------------
@@ -349,19 +350,18 @@ envJoin' l g g1 g2
             t1s  = (`envFindTy` g1) <$> xs 
             t2s  = (`envFindTy` g2) <$> xs
         when (length t1s /= length t2s) $ cgError l (bugBadPhi l t1s t2s)
-
         γ       <- getTDefs
-        let t4   = zipWith (compareTs γ) t1s t2s
-
-
+        let t4   = tracePP "envJoin padding" $ zipWith (compareTs γ) t1s t2s
         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst4 <$> t4
         -- To facilitate the sort check t1s and t2s need to change to their
         -- equivalents that have the same sort with the joined types (ts) (with
         -- the added False's to make the types equivalent
-        envAdds (zip xs $ snd4 <$> t4) g1 
-        envAdds (zip xs $ thd4 <$> t4) g2
-        subTypes l g1 xs ts
-        subTypes l g2 xs ts
+        g1' <- envAdds (zip xs $ snd4 <$> t4) g1 
+        g2' <- envAdds (zip xs $ thd4 <$> t4) g2
+
+        zipWithM_ (subTypeContainers l g1') [envFindTy x g1' | x <- xs] ts
+        zipWithM_ (subTypeContainers l g2') [envFindTy x g2' | x <- xs] ts
+
         return g'
 
 
@@ -426,30 +426,39 @@ subTypes :: (IsLocated x, F.Expression x, F.Symbolic x)
 subTypes l g xs ts = zipWithM_ (subType l g) [envFindTy x g | x <- xs] ts
 
 
+subTypes' msg l g xs ts = zipWithM_ (subType' msg l g) [envFindTy x g | x <- xs] ts
+
+-- | Subtyping
+
+-- Also adds invariants
+-- XXX: Are the invariants added for types nested in containers (i.e. unions and
+-- objects)? Probably not, so this process should be done after the splitC.
+
 ---------------------------------------------------------------------------------------
 subType :: AnnTypeR -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 =
-  do tt1   <- addInvariant {- $ tracePP "Liquid:subtype t1" -} t1
-     tt2   <- addInvariant {- $ tracePP "Liquid:subtype t2" -} t2
--- XXX: Are the invariants added for types nested in containers (i.e. unions and
--- objects)? Probably not, so this process should be done after the splitC.
+  do tt1   <- addInvariant t1
+     tt2   <- addInvariant t2
      tdefs <- getTDefs
-     let s  = checkTypes tdefs 
-              ({- trace ("subTypes: " ++ ppshow tt1 ++ " - " ++ ppshow tt2 ++ "\n")-} tt1) tt2
+     let s  = checkTypes tdefs tt1 tt2
      modify $ \st -> st {cs = c s : (cs st)}
   where
     c      = uncurry $ Sub g (ci l)
-    -- Sort check 
     checkTypes tdefs t1 t2 | equivWUnions tdefs t1 t2 = (t1,t2)
-    checkTypes  _ t1 t2    | otherwise                   =
-      errorstar (printf "[%s]\nCGMonad: checkTypes not aligned: \n%s\nwith\n%s"
-                (ppshow $ ann l) (ppshow $ toType t1) (ppshow $ toType t2))
+    checkTypes  _ t1 t2    | otherwise                = errorstar $ msg t1 t2
+    msg t1 t2 = printf "[%s]\nCGMonad: checkTypes not aligned: \n%s\nwith\n%s"
+                  (ppshow $ ann l) (ppshow $ toType t1) (ppshow $ toType t2)
+
+-- A more verbose version
+subType' msg l g t1 t2 = 
+  subType l g (trace (printf "SubType[%s]:\n\t%s\n\t%s" msg (ppshow t1) (ppshow t2)) t1) t2
 
 -------------------------------------------------------------------------------
 equivWUnions :: E.Env RefType -> RefType -> RefType -> Bool
 -------------------------------------------------------------------------------
 equivWUnions γ t1@(TApp TUn _ _) t2@(TApp TUn _ _) = 
+  {-let msg = printf "In equivWUnions:\n%s - \n%s" (ppshow t1) (ppshow t2) in -}
   case unionPartsWithEq (equiv γ) t1 t2 of 
     (ts,[],[])  -> and $ uncurry (safeZipWith "equivWUnions" $ equivWUnions γ) (unzip ts)
     _           -> False
@@ -458,9 +467,11 @@ equivWUnions γ t t' = equiv γ t t'
 equivWUnionsM t t' = getTDefs >>= \γ -> return $ equivWUnions γ t t'
 
 
+
 -- | Subtyping container contents: unions, objects. Includes top-level
 
 -- Need to be padded and so on...
+-- BUT, still needs fixbase for the parts!!!
 -------------------------------------------------------------------------------
 subTypeContainers :: AnnTypeR -> CGEnv -> RefType -> RefType -> CGM ()
 -------------------------------------------------------------------------------
@@ -474,20 +485,28 @@ subTypeContainers l g t1 t2@(TApp (TDef _) _ _ ) =
 subTypeContainers l g t1@(TApp (TDef _) _ _ ) t2 = 
   unfoldSafeCG t1 >>= \t1' -> subTypeContainers l g t1' t2
 
-subTypeContainers l g t1@(TApp TUn _ _) t2@(TApp TUn _ _) = 
+subTypeContainers l g u1@(TApp TUn _ _) u2@(TApp TUn _ _) = 
   do  γ <- getTDefs
-      case unionParts γ t1 t2 of
-        (ts, [], []) -> mapM_ (uncurry $ subTypeContainers l g) ts
+      case unionParts γ u1 u2 of
+        (ts, [], []) -> mapM_ (uncurry $ fixSub l g) ts
         _            -> errorstar "subTypeContainers: Unions non-matchable"
-      subType l g t1 t2   -- top-level
+      subType l g u1 u2   -- top-level
+  where
+    fixSub l g t1 t2 = 
+      do g1 <- fixBaseVar g t1
+         g2 <- fixBaseVar g1 t2
+         subTypeContainers' "rec-unions" l g2 t1 t2
+         
 
 subTypeContainers l g t1@(TObj _ _) t2@(TObj _ _) =
-  -- TODO: might need to match like the union case
+  -- XXX: does not work for wrong sized objects -- see. liquid/pos/obj03.js
   do  mapM_ (uncurry $ subTypeContainers l g) $ bkPaddedObject t1 t2
       subType l g t1 t2   -- top-level
 
 subTypeContainers l g t1 t2 = subType l g t1 t2
 
+subTypeContainers' msg l g t1 t2 = 
+  subTypeContainers l g (trace (printf "subTypeContainers[%s]:\n\t%s\n\t%s" msg (ppshow t1) (ppshow t2)) t1) t2
 
 ---------------------------------------------------------------------------------------
 subTypesContainers :: (IsLocated x, F.Expression x, F.Symbolic x) 
@@ -707,28 +726,38 @@ bsplitC g ci t1 t2
 
 
 
--- fixBase converts:
---                         -----tE-----
--- g, x :: { v: U | r } |- { v: B | p }
---              ^
---            Union
+-- `fixBase` does the following conversion:
+-- 
+-- ∀x. x ∈ g ∧ x ∈ nb(x) => Γ(x) = { v: B | r ∧ ( v = x) } 
 --
--- into:
---
--- g, x :: { v: B | r } |- { v: B | p ∧ (v = x) }
--- --------g'----------    ----------tE'---------
+-- Namely, searches the entire environment and replaces the raw type of all 
+-- bindings in the neighborhood of symbol @x@ with the raw type of @t@. 
+-- The neighborhood of @x@ is the component in which @x@ belongs in the 
+-- connectivity graph whose edges denote a relation of the form "v = x" in 
+-- some refinement found in the environment. 
 
 ---------------------------------------------------------------------------------------------
-fixBase :: (F.Symbolic x, F.Expression x) => CGEnv -> x -> RefType -> CGM (CGEnv, RefType)
+fixBase :: (F.Symbolic x, F.Expression x, PP x) => 
+  CGEnv -> x -> RefType -> CGM (CGEnv, RefType)
 ---------------------------------------------------------------------------------------------
 fixBase g x t =
   do  let t'   = eSingleton t x
-      {-let msg  = printf "TE: %s\nWill fix:%s\n"-}
-      {-             (ppshow t') (ppshow $ findCCs (F.symbol x) g)-}
-      g'      <- fixEnv g (F.symbol $ {- trace msg -} x) t
+      let msg  = printf "fixBase:\n\tx= %s, t= %s\n\tsinglet= %s\n\tWill fix: nb(%s) = %s\n"
+                   (ppshow x) (ppshow t) (ppshow t') (ppshow x) (ppshow $ findCCs (F.symbol x) g)
+      g'      <- fixEnv g (F.symbol $  trace msg  x) t
       return   $ (g', t')
 
 fixBaseG g x t = fst <$> fixBase g x t 
+
+-- Like fixbase but correct the environment @g@ based on the base variable for
+-- type @t@. 
+fixBaseVar g t = 
+  do  let x    = rTypeValueVar t
+          msg  = printf "fixBase:\n\tx= %s, t= %s\n\tWill fix: nb(%s) = %s\n"
+                   (ppshow x) (ppshow t) (ppshow x) (ppshow $ findCCs (F.symbol x) g)
+      g'      <- fixEnv g (F.symbol $  trace msg  x) t
+      return   $ g'
+
 
 ---------------------------------------------------------------------------------------------
 fixEnv :: F.Symbolic a => CGEnv -> a -> RType F.Reft -> CGM CGEnv

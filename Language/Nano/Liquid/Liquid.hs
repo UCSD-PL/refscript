@@ -38,7 +38,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -313,6 +313,7 @@ consDownCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (
 ---------------------------------------------------------------------------------------------
 consDownCast g x a e 
   = do  tdefs              <- getTDefs
+        -- (g', tC)           <- return $ (g, tracePP "consDownCast: tC" $ head [ t | Assume t <- ann_fact a]) 
         (g', tC)           <- freshTyCast l g x $ head [ t | Assume t <- ann_fact a]
         {-let msg             = "consDownCast " ++ ppshow tE ++ "\nto\n" ++ ppshow tC-}
         let (_, tE', tC',_) = compareTs tdefs tE tC
@@ -324,6 +325,7 @@ consDownCast g x a e
         forM_ ts            $ castSubM g x l      -- Parts: need fixbase
         subType             l g tE' tC'           -- Top-level: Does not need fixBase
         (x', g'')          <- envAddFresh l tC g'
+        -- let msg             = printf "CONSDOWNCAST adding: %s :: %s" (ppshow x') (ppshow tC)
         return              $ (x', g'')
     where 
         tE                  = envFindTy x g

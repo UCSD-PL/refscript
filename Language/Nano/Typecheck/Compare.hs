@@ -16,6 +16,7 @@ module Language.Nano.Typecheck.Compare (
   -- * Type comparison/joining/subtyping
     Equivalent, equiv
   , compareTs
+  , alignTs
   , unionParts, unionPartsWithEq
   , bkPaddedUnion, bkPaddedObject
   , isSubType
@@ -25,6 +26,7 @@ module Language.Nano.Typecheck.Compare (
   -- * Casting
   , Cast(..)
   , Casts, Casts_
+  , zipType1, zipType2
 
   , SubDirection (..)
 
@@ -204,6 +206,12 @@ isSubType γ t1 t2 = (fth4 $ compareTs γ t1 t2) `elem` [EqT, SubT]
 
 eqType :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r -> Bool
 eqType γ t1 t2 = (fth4 $ compareTs γ t1 t2) == EqT
+
+
+
+-- | `alignTs`
+alignTs γ t1 t2 = (t1', t2')
+  where (_,t1', t2', _) = compareTs γ t1 t2
 
 
 -- | `compareTs`
@@ -526,4 +534,90 @@ instance (PP a, PP b, PP c) => PP (a,b,c) where
 
 instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
   pp (a,b,c,d) = pp a <+>  pp b <+> pp c <+> pp d
+
+
+
+-- `zipType1` matches structurally equivalent parts of types @t1@ and @t2@:
+-- ∙ Keeping the the structure of @t1@
+-- ∙ Applying f on the respective refinements 
+-- ∙ f is commutative
+-- 
+-- E.g. zipType1 (number + { booliean | p } ) { number | v > 0 } meet = 
+--        { number | v > 0 } + { boolean | p } 
+
+zipType1 γ f t1 t2 = zipType2 γ f t2 t1
+ 
+
+
+-- This function @t2@ with the refinements from @t1@ by matching equivalent 
+-- parts of the two types.
+--------------------------------------------------------------------------------
+zipType2 :: (PP r, F.Reftable r) => Env (RType r) -> (r -> r -> r) ->  RType r -> RType r -> RType r
+--------------------------------------------------------------------------------
+zipType2 γ f (TApp TUn ts r) t =  
+  zipTypes γ f ts t
+
+zipType2 γ f t (TApp TUn ts' r') =  
+  TApp TUn (zipTypes γ f [t] <$> ts') r'        -- The top-level refinement for t' should remain
+
+zipType2 γ f (TApp TUn ts r) (TApp TUn ts' r')  = 
+  TApp TUn (zipTypes γ f ts <$> ts') $ f r r'
+
+zipType2 γ f (TApp d@(TDef _) ts r) (TApp d'@(TDef _) ts' r') | d == d' =
+  TApp d' (zipWith (zipType2 γ f) ts ts') $ f r r'
+
+zipType2 γ f t@(TApp d@(TDef _) _ _) t' =
+  zipType2 γ f (unfoldSafe γ t) t'
+
+zipType2 γ f t t'@(TApp d@(TDef _) _ _) =
+  zipType2 γ f (unfoldSafe γ t) t'
+
+zipType2 γ f (TApp c [] r) (TApp c' [] r')    | c == c' = 
+  TApp c [] $ f r r'
+
+zipType2 γ f (TVar v r) (TVar v' r') | v == v' = TVar v $ f r r'
+
+zipType2 γ f (TFun xts t r) (TFun xts' t' r') = 
+  TFun (safeZipWith "zipType2:TFun" (zipBind2 γ f) xts xts') (zipType2 γ f t t') $ f r r'
+
+zipType2 γ f (TObj bs r) (TObj bs' r') = TObj mbs $ f r r'
+  where
+    mbs = safeZipWith "zipType2:TObj" (zipBind2 γ f) (L.sortBy compB bs) (L.sortBy compB bs')
+    compB (B s _) (B s' _) = compare s s'
+
+zipType2 _ _ t t' = 
+  errorstar $ printf "BUG[zipType2]: mis-aligned types:\n%s\nwith\n%s" (ppshow t) (ppshow t')
+
+zipTypes γ f ts t = 
+  case filter (equiv γ t) ts of
+    [  ] -> t
+    [t'] -> zipType2 γ f t' t
+    _    -> errorstar "BUG[zipType]: mulitple equivalent types" 
+  
+
+zipBind2 γ f (B s t) (B s' t') | s == s' = B s $ zipType2 γ f t t' 
+zipBind2 _ _ _       _                   = errorstar "BUG[zipBind2]: mis-matching binders"
+
+ 
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+-- matchEquiv _ t1 t2 | isTop t1                = matchTop1 t1 t2 
+-- matchEquiv _ t1 t2 | isTop t2                = matchTop2 t1 t2`
+-- matchEquiv γ t1 t2 | any isUnion [t1,t2]     = tracePP "padUnion" $ padUnion γ t1  t2
+-- matchEquiv γ t1@(TObj _ _) t2@(TObj _ _)     = padObject γ t1 t2
+-- matchEquiv γ (TApp d1@(TDef _) t1s r1) (TApp d2@(TDef _) t2s r2) | d1 == d2 =  matchTDef t1 t2 
+-- matchEquiv γ t1@(TApp (TDef _) _ _) t2       = matchEquiv γ (unfoldSafe γ t1) t2
+-- matchEquiv γ t1 t2@(TApp (TDef _) _ _)       = matchEquiv γ t1 (unfoldSafe γ t2)
+-- matchEquiv _ t1@(TApp _ _ _) t2@(TApp _ _ _) = matchSimple t1 t2 
+-- matchEquiv _ t1@(TVar _ _)   t2@(TVar _ _)   = matchTVar t1 t2
+-- matchEquiv γ t1@(TFun _ _ _) t2@(TFun _ _ _) = matchFun t1 t2
+-- matchEquiv _    (TFun _ _ _) _               = error "Unimplemented matchEquiv-1"
+-- matchEquiv _ _               (TFun _ _ _)    = error "Unimplemented matchEquiv-2"
+-- matchEquiv _ (TAll _ _  )    _               = error "Unimplemented: matchEquiv-3"
+-- matchEquiv _ _               (TAll _ _  )    = error "Unimplemented: matchEquiv-4"
+-- matchEquiv _ _               (TBd  _    )    = error "Unimplemented: matchEquiv-5"
+-- matchEquiv _ (TBd  _    )    _               = error "Unimplemented: matchEquiv-6"
+-- matchEquiv _ t1              t2              = padSimple t1 t2 
 

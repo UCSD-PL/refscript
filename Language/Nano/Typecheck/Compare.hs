@@ -502,11 +502,13 @@ padObject _ _ _ = error "padObject: Cannot pad non-objects"
 
 -- | Break one level of padded objects
 bkPaddedObject (TObj xt1s _) (TObj xt2s _) =
-  safeZipWith "splitC:obj" checkB xt1s xt2s
+  safeZipWith "bkPaddedObject" checkB xt1s xt2s
   where
     checkB b b' | b_sym b == b_sym b' = (b_type b, b_type b')
-    checkB _ _  = errorstar "unimplemented: splitC: cannot split these objects"
-bkPaddedObject _ _ = errorstar "bkPaddedObject: can only break objects"
+    checkB _ _                        = 
+      errorstar "unimplemented: bkPaddedObject: cannot split these objects"
+bkPaddedObject _ _                    = 
+  errorstar "bkPaddedObject: can only break objects"
 
 
 -- | `padFun`

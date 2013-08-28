@@ -113,7 +113,7 @@ consFun g (FunctionStmt l f xs body)
        g'             <- envAdds [(f, ft)] g 
        g''            <- envAddFun l g' f xs ft
        gm             <- consStmts g'' body
-       maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
+       maybe (return ()) (\g -> subType' "consFun" l g tVoid (envFindReturn g'')) gm
        return g'
     {-where -}
     {-   msg = printf "freshTyFun f = %s" (ppshow f)-}
@@ -300,7 +300,7 @@ consExpr _ e
 consUpCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ------------------------------------------------------------------------------------------
 consUpCast g x a e 
-  = do  let u      = rType $ head [ t | Assume t <- ann_fact a]
+  = do  let u      = tracePP "Upcast type" $ rType $ head [ t | Assume t <- ann_fact a]
         (b',_ )   <- fixUpcast b u
         (x',g')   <- envAddFresh l b' g
         return     $ (x', g')

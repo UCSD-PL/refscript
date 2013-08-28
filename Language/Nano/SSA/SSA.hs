@@ -21,6 +21,7 @@ import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.Fixpoint.Misc             
 import qualified Language.Fixpoint.Types            as F
 import           Text.Printf                        (printf)
+import           Debug.Trace                        hiding (traceShow)
 
 ----------------------------------------------------------------------------------
 ssaTransform :: (F.Reftable r) => Nano SourceSpan (RType r) -> Nano (Annot (Fact_ r) SourceSpan) (RType r)

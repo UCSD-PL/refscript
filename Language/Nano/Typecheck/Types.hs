@@ -366,7 +366,8 @@ type NanoType   = NanoTypeR ()
 type FunctionStatement a = Statement a 
 
 {-@ newtype Source a = Src [FunctionStatement a] @-}
-newtype Source a = Src [FunctionStatement a]
+-- newtype Source a = Src [FunctionStatement a]
+newtype Source a = Src [Statement a]
   deriving (Data, Typeable)
 
 instance Functor Source where 

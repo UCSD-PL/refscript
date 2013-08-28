@@ -98,7 +98,7 @@ import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
--- import           Debug.Trace                      (trace)
+import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity as V
 
 -------------------------------------------------------------------------------
@@ -443,8 +443,8 @@ withExpr e action =
 castM     :: (Ord r, PP r, F.Reftable r) => Expression (AnnSSA_ r) -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 castM e t t'    = subTypeM t t' >>= go
-  where go SupT = addDownCast e t'
-        go Rel  = addDownCast e t'
+  where go SupT = addDownCast e t t'
+        go Rel  = addDownCast e t t'
         go SubT = addUpCast e t'
         go EqT  = return ()
         go Nth  = addDeadCast e t'
@@ -462,15 +462,22 @@ addUpCast :: Expression (AnnSSA_ r) -> RType r -> TCM r ()
 addUpCast e t = modify $ \st -> st { tc_casts = M.insert e (UCST t) (tc_casts st) }
 
 --------------------------------------------------------------------------------
-addDownCast :: (Ord r, PP r, F.Reftable r) => Expression (AnnSSA_ r) -> RType r -> TCM r ()
+addDownCast :: (Ord r, PP r, F.Reftable r) => Expression (AnnSSA_ r) -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
-addDownCast e t = modify $ \st -> st { tc_casts = M.insert e (DCST t) (tc_casts st) }
+addDownCast e base cast = 
+  -- Down casts will be k-vared later - so no need to pass the refinements here
+  do  {- 
+      γ <- getTDefs
+      let cast' = zipType2 γ F.meet base cast    -- copy the refinements from the base type 
+          msg   =  printf "DOWN CAST ADDS: %s\ninstead of just:\n%s" (ppshow cast') (ppshow cast)
+      -}
+      modify $ \st -> st { tc_casts = M.insert e (DCST cast) (tc_casts st) }
 
 
 --------------------------------------------------------------------------------
 addDeadCast :: Expression (AnnSSA_ r) -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
-addDeadCast e t = modify $ \st -> st { tc_casts = M.insert e (DC t) (tc_casts st) } 
+addDeadCast e t = modify $ \st -> st { tc_casts = M.insert e (DC t) (tc_casts st) }
 
 
 --------------------------------------------------------------------------------

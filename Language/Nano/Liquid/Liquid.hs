@@ -283,11 +283,12 @@ consExpr g (CallExpr l e es)
 
 consExpr  g (DotRef l e i)
   = do  (x, g') <- consExpr g e
-        t       <- getBindingM i $ envFindTy x g'
-        case t of
-          Left  s  -> errorstar s
-          Right t' -> envAddFresh l t' g'
-       
+        consAccess l x g' i
+
+consExpr  g (BracketRef l e (StringLit _ s))
+  = do  (x, g') <- consExpr g e
+        consAccess l x g' s
+
 consExpr g (ObjectLit l ps) 
   = consObj l g ps
 
@@ -295,6 +296,14 @@ consExpr _ e
   = error $ (printf "consExpr: not handled %s" (ppshow e))
 
 
+---------------------------------------------------------------------------------------------
+consAccess :: (F.Symbolic s, F.Symbolic x, F.Expression x, IsLocated l, IsLocated x) =>
+  l -> x -> CGEnv -> s -> CGM (Id l, CGEnv)
+---------------------------------------------------------------------------------------------
+consAccess l x g i = getBindingM i (envFindTy x g) >>= f
+  where f (Left  s) = errorstar s
+        f (Right t) = envAddFresh l t g
+       
 
 ---------------------------------------------------------------------------------------------
 consUpCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)

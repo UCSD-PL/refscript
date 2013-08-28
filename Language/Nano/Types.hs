@@ -180,9 +180,9 @@ instance IsNano (Expression a) where
   isNano (InfixExpr _ o e1 e2) = isNano o && isNano e1 && isNano e2
   isNano (PrefixExpr _ o e)    = isNano o && isNano e
   isNano (CallExpr _ e es)     = all isNano (e:es)
-  -- PV adding more types to support objects
   isNano (ObjectLit _ bs)      = all isNano $ snd <$> bs
   isNano (DotRef _ e _)        = isNano e
+  isNano (BracketRef _ e1 e2)  = isNano e1 && isNano e2
   isNano e                     = errortext (text "Not Nano Expression!" <+> pp e) 
   -- isNano _                     = False
 

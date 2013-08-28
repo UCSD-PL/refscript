@@ -223,7 +223,8 @@ setTyArgs l βs
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-dotAccess ::  (Ord r, PP r, F.Reftable r) => Id (AnnSSA_ r) -> RType r -> TCM r (Maybe (RType r))
+dotAccess ::  (Ord r, PP r, F.Reftable r, F.Symbolic s) => 
+  s -> RType r -> TCM r (Maybe (RType r))
 -------------------------------------------------------------------------------
 dotAccess f   (TObj bs _) = 
   return $ Just $ maybe tUndef b_type $ find (match $ F.symbol f) bs
@@ -245,7 +246,8 @@ dotAccess _ t               = error $ "dotAccess " ++ (ppshow t)
 
 
 -------------------------------------------------------------------------------
-dotAccessUnion ::  (Ord r, PP r, F.Reftable r) => Id (AnnSSA_ r) -> [RType r] -> TCM r (Maybe (RType r))
+dotAccessUnion ::  (Ord r, PP r, F.Reftable r, F.Symbolic s) => 
+  s -> [RType r] -> TCM r (Maybe (RType r))
 -------------------------------------------------------------------------------
 dotAccessUnion f ts = 
   do  e              <- fromJust <$> getExpr

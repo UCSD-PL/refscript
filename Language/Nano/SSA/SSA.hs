@@ -199,6 +199,9 @@ ssaExpr (ObjectLit l ps)
 ssaExpr (DotRef l e i) 
   = DotRef l <$> ssaExpr e <*> return i
 
+ssaExpr (BracketRef l e1 e2) 
+  = BracketRef l <$> ssaExpr e1 <*> ssaExpr e2
+
 ssaExpr e 
   = convertError "ssaExpr" e
 

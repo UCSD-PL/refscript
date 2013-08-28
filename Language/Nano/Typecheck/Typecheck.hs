@@ -369,6 +369,15 @@ tcExpr' γ (ObjectLit _ ps)
 tcExpr' γ (DotRef l e i) 
   = tcAccess γ l e i
 
+tcExpr' γ (BracketRef l e (StringLit _ s))
+  = tcAccess γ l e s
+
+-- General case of dynamic key dictionary access
+tcExpr' γ (BracketRef l e1 e2)
+  = do  t2 <- tcExpr γ e2
+        unifyTypeM l "BracketRef" e2 t2 tString
+        tcAccess γ l e1 s
+
 tcExpr' _ e 
   = convertError "tcExpr" e
 
@@ -410,8 +419,8 @@ tcObject γ bs
 
 
 ----------------------------------------------------------------------------------
-tcAccess ::  (Ord r, F.Reftable r, PP r) =>
-  Env (RType r) -> (AnnSSA_ r) -> Expression (AnnSSA_ r) -> Id (AnnSSA_ r) -> TCM r (RType r)
+tcAccess ::  (Ord r, F.Reftable r, PP r, F.Symbolic s) =>
+  Env (RType r) -> (AnnSSA_ r) -> Expression (AnnSSA_ r) -> s -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcAccess γ _ e f = 
   do  t     <- tcExpr γ e

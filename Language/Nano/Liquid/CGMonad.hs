@@ -164,6 +164,9 @@ getTDefs :: CGM (E.Env RefType)
 ---------------------------------------------------------------------------------------
 getTDefs  = cg_tdefs <$> get
 
+---------------------------------------------------------------------------------------
+getBindingM :: (F.Symbolic s) => s -> RefType -> CGM (Either String RefType)
+---------------------------------------------------------------------------------------
 getBindingM i t 
   = do  td <- cg_tdefs <$> get
         return $ getBinding td i t 
@@ -171,7 +174,8 @@ getBindingM i t
 
 -- | Get binding from object type
 ---------------------------------------------------------------------------------
-getBinding :: (PP r, F.Reftable r) => E.Env (RType r) -> Id a -> RType r -> Either String (RType r)
+getBinding :: (PP r, F.Reftable r, F.Symbolic s) => 
+  E.Env (RType r) -> s -> RType r -> Either String (RType r)
 ---------------------------------------------------------------------------------
 getBinding _ i (TObj bs _ ) = 
   case L.find (\s -> F.symbol i == b_sym s) bs of

@@ -312,36 +312,23 @@ consUpCast g x a e
 consDownCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
 consDownCast g x a e 
-  = do  tdefs              <- getTDefs
-        -- (g', tC)           <- return $ (g, tracePP "consDownCast: tC" $ head [ t | Assume t <- ann_fact a]) 
-        (g', tC)           <- freshTyCast l g x $ head [ t | Assume t <- ann_fact a]
-        {-let msg             = "consDownCast " ++ ppshow tE ++ "\nto\n" ++ ppshow tC-}
-        let (_, tE', tC',_) = compareTs tdefs tE tC
-        -- XXX: Casting to a type should preserve the refinements of 
-        -- the original expression that is being casted.
-        -- TODO: may need to use a version of @subTypeContainers@
-        let ts              = {- tracePP "consDownCast: after bkPaddedUnion" $ -}
-                              bkPaddedUnion tdefs tE' tC'
-        forM_ ts            $ castSubM g x l      -- Parts: need fixbase
-        subType             l g tE' tC'           -- Top-level: Does not need fixBase
-        (x', g'')          <- envAddFresh l tC g'
-        -- let msg             = printf "CONSDOWNCAST adding: %s :: %s" (ppshow x') (ppshow tC)
-        return              $ (x', g'')
+  = do  tdefs          <- getTDefs
+        -- TODO: do not freshen here - instread keep refs from original type
+        (g', fc)      <- freshTyCast l g x c
+        let (te', fc') = alignTs tdefs te fc
+        -- SubTyping of parts 
+        -- TODO: use subTypeContainers
+        mapM_ sbp      $ bkPaddedUnion tdefs te' fc'
+        -- No fixbase needed anymore
+        -- TODO; get rid of top-level constraint
+        subType l g te' fc'
+        (x', g'')     <- envAddFresh l fc g'    
+        return         $ (x', g'')
     where 
-        tE                  = envFindTy x g
-        l                   = getAnnotation e
-
-
----------------------------------------------------------------------------------------------
-castSubM :: CGEnv -> Id AnnTypeR -> AnnTypeR -> (RefType, RefType) -> CGM () 
----------------------------------------------------------------------------------------------
-castSubM g x l (t1, t2) 
-  = do  (g', t1') <- fixBase g x t1
-        {-let msg         = printf "castSub: (%s, %s) \n-- fixbase-->\n(%s,%s)\n"-}
-        {-                    (ppshow t1) (ppshow t2) (ppshow t1') (ppshow t2')-}
-        -- subType can be called directly at this point
-        subType l g' ({- trace msg -} t1') t2
-
+        sbp (t1, t2)   = subType l g (eSingleton t1 x) t2
+        c              = head [ t | Assume t <- ann_fact a]
+        te             = envFindTy x g
+        l              = getAnnotation e
 
 
 ---------------------------------------------------------------------------------------------

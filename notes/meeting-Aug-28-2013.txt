@@ -14,18 +14,15 @@ STATUS
     
     will be broken down to: 
     
-    { x: union | p1 } <: { y: union | p2 }
+      { x: union | p1 } <: { y: union | p2 }
     
--->    { A | (...x.. ) } <: { A | a2 }
-       { B | b1 } <: { B | b2 }
+      { A | (...x.. ) } <: { A | a2 }
+      { B | b1 } <: { B | b2 }
  
     For the last two we need to substitute: (any reference to union) -> A ( or B resp.)
     
     
-    v = x, y = v 
-    
-    
-    EXAMPLE PROGRAM?
+EXAMPLE PROGRAM?
 
        // (x:num+bool) => {v:num+bool | v /= x}
        function foo(x){
@@ -76,8 +73,6 @@ EXISTING:
                              
                              {y:bool | false } <: {v:bool|true & v /= x}
                              
-                             
-                                   
                                    
                                    
      {y:num + bool  | v = ... + 1} <: {v:num+bool | v /= x}
@@ -88,20 +83,6 @@ EXISTING:
        
      
 
-
-Γ0 : {y: union}, {x: union}, { z: union | .. z=x || z=y .. }
-    
-Γ: [x: {union | _}], guards |-    { x: union   | p } <: { union | q }
-
-Γ: [x: {union | p}], guards(... x. ) |-    { x: number | pn } <: {number | true}
-
-x: Union --> x: number BUT p --> p'
-
-
-Γ, guards |-    { x: boolean | pb} <: {boolean | false}
-       
-    fixbase atm: - finds the neighborhood of all the 
-    
 - Downcasts: Cast(e, Tc), where G |- e :: Te
 
     G |- Cast(e, Tc) :: Tc''

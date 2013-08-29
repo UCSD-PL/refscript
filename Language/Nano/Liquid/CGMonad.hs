@@ -47,11 +47,8 @@ module Language.Nano.Liquid.CGMonad (
   , envJoin
 
   -- * Add Subtyping Constraints
-  , subTypes
-  , subType
-  , subType'
-  , subTypeContainers
-  , subTypesContainers
+  , subTypes, subTypes', subType, subType'
+  , subTypeContainers, subTypeContainers', subTypesContainers 
 
   , addInvariant
   
@@ -123,11 +120,11 @@ instance PP (F.SubC c) where
 -------------------------------------------------------------------------------
 getCGInfo :: Config -> Nano AnnTypeR RefType -> CGM a -> CGInfo
 -------------------------------------------------------------------------------
-getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
+getCGInfo cfg pgm = clear . cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
   where 
     fixCWs       = (,) <$> fixCs <*> fixWs
-    fixCs        = concatMapM splitC . cs =<< get 
-    fixWs        = concatMapM splitW . ws =<< get
+    fixCs        = get >>= concatMapM splitC . cs
+    fixWs        = get >>= concatMapM splitW . ws
 
 execute :: Config -> Nano AnnTypeR RefType -> CGM a -> (a, CGState)
 execute cfg pgm act
@@ -149,7 +146,7 @@ getDefType f
        l   = srcPos f
 
 -- cgStateFInfo :: Nano a1 (RType F.Reft)-> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
-cgStateCInfo pgm ((fcs, fws), cg) = CGI fi (cg_ann cg)
+cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
   where 
     fi   = F.FI { F.cm    = M.fromList $ F.addIds fcs  
                 , F.ws    = fws
@@ -160,6 +157,8 @@ cgStateCInfo pgm ((fcs, fws), cg) = CGI fi (cg_ann cg)
                 , F.quals = quals pgm 
                 }
 
+patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
+    
 ---------------------------------------------------------------------------------------
 getTDefs :: CGM (E.Env RefType)
 ---------------------------------------------------------------------------------------
@@ -351,7 +350,7 @@ envJoin' l g g1 g2
             t2s  = (`envFindTy` g2) <$> xs
         when (length t1s /= length t2s) $ cgError l (bugBadPhi l t1s t2s)
         γ       <- getTDefs
-        let t4   = tracePP "envJoin padding" $ zipWith (compareTs γ) t1s t2s
+        let t4   = zipWith (compareTs γ) t1s t2s
         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst4 <$> t4
         -- To facilitate the sort check t1s and t2s need to change to their
         -- equivalents that have the same sort with the joined types (ts) (with
@@ -495,7 +494,7 @@ subTypeContainers l g u1@(TApp TUn _ _) u2@(TApp TUn _ _) =
     fixSub l g t1 t2 = 
       do g1 <- fixBaseVar g t1
          g2 <- fixBaseVar g1 t2
-         subTypeContainers' "rec-unions" l g2 t1 t2
+         subTypeContainers {- "rec-unions" -} l g2 t1 t2
          
 
 subTypeContainers l g t1@(TObj _ _) t2@(TObj _ _) =
@@ -710,6 +709,9 @@ splitC' x
   = cgError (srcPos x) $ bugBadSubtypes x 
 
 
+---------------------------------------------------------------------------------------
+bsplitC :: (F.Reftable r) => CGEnv -> a -> RType r -> RType r -> [F.SubC a]
+---------------------------------------------------------------------------------------
 bsplitC g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2
   = [F.subC (fenv g) F.PTrue (r1 {F.sr_reft = F.top}) r2 Nothing [] ci]
@@ -742,9 +744,9 @@ fixBase :: (F.Symbolic x, F.Expression x, PP x) =>
 ---------------------------------------------------------------------------------------------
 fixBase g x t =
   do  let t'   = eSingleton t x
-      let msg  = printf "fixBase:\n\tx= %s, t= %s\n\tsinglet= %s\n\tWill fix: nb(%s) = %s\n"
-                   (ppshow x) (ppshow t) (ppshow t') (ppshow x) (ppshow $ findCCs (F.symbol x) g)
-      g'      <- fixEnv g (F.symbol $  trace msg  x) t
+      {-let msg  = printf "fixBase:\n\tx= %s, t= %s\n\tsinglet= %s\n\tWill fix: nb(%s) = %s\n"-}
+      {-             (ppshow x) (ppshow t) (ppshow t') (ppshow x) (ppshow $ findCCs (F.symbol x) g)-}
+      g'      <- fixEnv g (F.symbol $ {- trace msg -} x) t
       return   $ (g', t')
 
 fixBaseG g x t = fst <$> fixBase g x t 
@@ -753,9 +755,9 @@ fixBaseG g x t = fst <$> fixBase g x t
 -- type @t@. 
 fixBaseVar g t = 
   do  let x    = rTypeValueVar t
-          msg  = printf "fixBase:\n\tx= %s, t= %s\n\tWill fix: nb(%s) = %s\n"
-                   (ppshow x) (ppshow t) (ppshow x) (ppshow $ findCCs (F.symbol x) g)
-      g'      <- fixEnv g (F.symbol $  trace msg  x) t
+          {-msg  = printf "fixBase:\n\tx= %s, t= %s\n\tWill fix: nb(%s) = %s\n"-}
+          {-         (ppshow x) (ppshow t) (ppshow x) (ppshow $ findCCs (F.symbol x) g)-}
+      g'      <- fixEnv g (F.symbol $ {- trace msg -} x) t
       return   $ g'
 
 
@@ -960,4 +962,62 @@ bsplitW g t i
 envTyAdds l xts = envAdds [(symbolId l x, t) | B x t <- xts]
 
 -------------------------------------------------------------------------------------------
+
+-- | Replace all sorts with FInt
+
+
+class ClearSorts a where
+  clear :: a -> a
+  clearM :: a -> CGM a 
+  clearM = return . clear
+
+instance ClearSorts F.BindEnv where
+  clear = F.mapBindEnv (mapSnd clear)
+
+instance (ClearSorts a, ClearSorts b) => ClearSorts (a,b) where
+  clear (a,b) = (clear a, clear b)
+                 
+instance ClearSorts (F.SubC a) where
+  clear (F.SubC e g l r i t ii) = F.SubC e g (clear l) (clear r) i t ii
+
+instance ClearSorts a => ClearSorts [a] where
+  clear xs = clear <$> xs
+
+instance ClearSorts F.SortedReft where
+  clear (F.RR s r) = F.RR (clear s) r
+
+instance ClearSorts F.Sort where 
+  clear F.FInt        = F.FInt
+  clear F.FNum        = F.FInt
+  clear (F.FObj _)    = F.FInt
+  clear (F.FVar _)    = F.FInt
+  clear (F.FFunc i s) = F.FFunc i $ clear <$> s
+  clear (F.FApp _ _ ) = F.FInt -- F.FApp  c $ clear s
+
+instance ClearSorts F.Symbol where
+  clear = id
+
+instance ClearSorts (F.WfC a) where
+  clear (F.WfC e r i ii) = F.WfC e (clear r) i ii 
+
+instance ClearSorts CGInfo where
+  clear (CGI f a) = CGI (clear f) a
+
+instance ClearSorts (F.FInfo a) where
+  clear (F.FI cm ws bs gs lits kuts quals) =
+    {-let msg = printf "\nGS: %s\n\n" (render $ F.toFix $ F.toListSEnv gs) in-}
+    F.FI (M.map clear cm)
+         (clear ws)
+         (clear bs)
+         -- XXX: Special treatment for Prop
+         (F.mapSEnvWithKey clearProp {- $ trace msg -} gs)
+         (clear lits)
+         kuts
+         quals
+
+clearProp (sy, F.RR so re) 
+  | F.symbolString sy == "Prop" 
+  = (sy, F.RR (F.FFunc 2 [F.FInt, F.FApp F.boolFTyCon []]) re)
+  | otherwise                   
+  = (clear sy, clear $ F.RR so re)
 

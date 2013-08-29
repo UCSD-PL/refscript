@@ -41,7 +41,7 @@ module Language.Nano.Liquid.CGMonad (
   , envAdds
   , envAddReturn
   , envAddGuard
-  , envFindTy
+  , envFindTy, envFindTy'
   , envToList
   , envFindReturn
   , envJoin
@@ -59,17 +59,14 @@ module Language.Nano.Liquid.CGMonad (
   , unfoldSafeCG, unfoldFirstCG
 
   -- * Environment sort check
-  , fixBase, fixEnv
   , fixUpcast
   ) where
 
-import           Data.Maybe                     (fromMaybe, maybeToList, catMaybes, isJust)
+import           Data.Maybe                     (fromMaybe, catMaybes, isJust)
 import qualified Data.List                      as L
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 import qualified Data.HashSet                   as S
-import qualified Data.Graph                     as G
-import qualified Data.Tree                      as T
 
 -- import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
@@ -487,14 +484,9 @@ subTypeContainers l g t1@(TApp (TDef _) _ _ ) t2 =
 subTypeContainers l g u1@(TApp TUn _ _) u2@(TApp TUn _ _) = 
   do  γ <- getTDefs
       case unionParts γ u1 u2 of
-        (ts, [], []) -> mapM_ (uncurry $ fixSub l g) ts
+        (ts, [], []) -> mapM_ (uncurry $ subTypeContainers l g) ts
         _            -> errorstar "subTypeContainers: Unions non-matchable"
       subType l g u1 u2   -- top-level
-  where
-    fixSub l g t1 t2 = 
-      do g1 <- fixBaseVar g t1
-         g2 <- fixBaseVar g1 t2
-         subTypeContainers {- "rec-unions" -} l g2 t1 t2
          
 
 subTypeContainers l g t1@(TObj _ _) t2@(TObj _ _) =
@@ -602,12 +594,7 @@ refreshRefType = mapReftM refresh
 ---------------------------------------------------------------------------------------
 splitC' :: SubC -> CGM [FixSubC]
 ---------------------------------------------------------------------------------------
-splitC c@(Sub g i t t') 
-  | envSortCheck g 
-  = splitC' c
-  | otherwise      
-  = do  g' <- envSortSanitize g 
-        splitC' (tracePP  "SANITIZED" $ Sub g' i t t')
+splitC c = splitC' c
 
 ---------------------------------------------------------------------------------------
 -- | Function types
@@ -726,50 +713,6 @@ bsplitC g ci t1 t2
 
 
 
-
-
--- `fixBase` does the following conversion:
--- 
--- ∀x. x ∈ g ∧ x ∈ nb(x) => Γ(x) = { v: B | r ∧ ( v = x) } 
---
--- Namely, searches the entire environment and replaces the raw type of all 
--- bindings in the neighborhood of symbol @x@ with the raw type of @t@. 
--- The neighborhood of @x@ is the component in which @x@ belongs in the 
--- connectivity graph whose edges denote a relation of the form "v = x" in 
--- some refinement found in the environment. 
-
----------------------------------------------------------------------------------------------
-fixBase :: (F.Symbolic x, F.Expression x, PP x) => 
-  CGEnv -> x -> RefType -> CGM (CGEnv, RefType)
----------------------------------------------------------------------------------------------
-fixBase g x t =
-  do  let t'   = eSingleton t x
-      {-let msg  = printf "fixBase:\n\tx= %s, t= %s\n\tsinglet= %s\n\tWill fix: nb(%s) = %s\n"-}
-      {-             (ppshow x) (ppshow t) (ppshow t') (ppshow x) (ppshow $ findCCs (F.symbol x) g)-}
-      g'      <- fixEnv g (F.symbol $ {- trace msg -} x) t
-      return   $ (g', t')
-
-fixBaseG g x t = fst <$> fixBase g x t 
-
--- Like fixbase but correct the environment @g@ based on the base variable for
--- type @t@. 
-fixBaseVar g t = 
-  do  let x    = rTypeValueVar t
-          {-msg  = printf "fixBase:\n\tx= %s, t= %s\n\tWill fix: nb(%s) = %s\n"-}
-          {-         (ppshow x) (ppshow t) (ppshow x) (ppshow $ findCCs (F.symbol x) g)-}
-      g'      <- fixEnv g (F.symbol $ {- trace msg -} x) t
-      return   $ g'
-
-
----------------------------------------------------------------------------------------------
-fixEnv :: F.Symbolic a => CGEnv -> a -> RType F.Reft -> CGM CGEnv
----------------------------------------------------------------------------------------------
-fixEnv g start base = foldM fixX g xs
-  where xs          = findCCs (F.symbol start) g
-        fixX g x    = envAdds [(x, toT x)] g 
-        toT  x      = base `strengthen` rTypeReft (envFindTy' x g)
-
-
 -- `fixUpcast` compares/patches types @b@ and @u@ and returns their "comparible"
 -- version. It also tries to propagate as much of the refinements of the base
 -- type to the top-level (union) type.
@@ -849,71 +792,6 @@ glbList what g xs | what isJust ms = Just $ catMaybes ms
 instance Global F.Symbol where
   glb g s | s `S.member` g = return s   -- only allow the designated vars
           | otherwise      = Nothing 
-
-
-
----------------------------------------------------------------------------------------------
-envSortCheck :: CGEnv -> Bool
----------------------------------------------------------------------------------------------
-envSortCheck g = and $ map (check . sorts) $ mkCCs g 
-  where
-    check elts = length (L.nub elts) < 2
-    sorts xs   = rTypeSort . (`envFindTy'` g) <$> xs
-
--- -- DEBUG
--- envSortCheck g = and $ map (\l -> traceShow "check them" $ check (sorts l)) $ mkCCs g 
---   where
---     check elts = length (L.nub elts) < 2
---     sorts xs   = traceShow "envSortCheck:sorts" $ rTypeSort . (`envFindTy'` g) <$> (tracePP "xs" xs)
-
-
----------------------------------------------------------------------------------------------
-envSortSanitize :: CGEnv -> CGM CGEnv
----------------------------------------------------------------------------------------------
-envSortSanitize g = foldM fixGroup g xs 
-  where
-    xs         = mkCCs g
-    fixGroup g xs | check $ sorts xs = return g
-                  | otherwise        = freshBase >>= \b -> foldM (\g x -> fixBaseG g x b) g xs
- 
-    freshBase  = freshId dummySpan >>= \i -> return $ ofType $ TApp (TDef i) [] ()
-
-    check elts = length (L.nub elts) < 2
-    sorts xs   = rTypeSort . (`envFindTy'` g) <$> xs
-
-  
----------------------------------------------------------------------------------------------
-findCCs :: F.Symbol -> CGEnv -> [F.Symbol]
----------------------------------------------------------------------------------------------
-findCCs x g = concat $ maybeToList $ L.find (x `elem`) $ mkCCs g 
-
--- Connected componets in the symbols in the graph
--- The CCs need to have the same sort!
----------------------------------------------------------------------------------------------
-mkCCs :: CGEnv -> [[F.Symbol]]
----------------------------------------------------------------------------------------------
-mkCCs g   = (fst3 . vs <$>) <$> T.flatten <$> G.components gr
-  where (gr, vs, _) = mkGraph g
-
--- Make a graph:
--- ∙ Vertices: the symbols in the environment
--- ∙ Edges   : same sort constraint ("v = x")
----------------------------------------------------------------------------------------------
-mkGraph :: CGEnv -> (G.Graph, G.Vertex -> (F.Symbol, F.Symbol, [F.Symbol]), F.Symbol -> Maybe G.Vertex)
----------------------------------------------------------------------------------------------
-mkGraph g = G.graphFromEdges $ f <$> envToList g
-  where
-    f (id, t) = (F.symbol id, F.symbol id, veqx t)
-
--- XXX: might need to generalize this, e.g. x < y, x = y, etc.   
----------------------------------------------------------------------------------------------
-veqx :: F.Reftable r => RType r -> [F.Symbol]
----------------------------------------------------------------------------------------------
-veqx t      = L.nub [ x | F.RConc (F.PAtom F.Eq (F.EVar s) (F.EVar x)) <- refas, s == vv ]
-  where vv               = rTypeValueVar t
-        F.Reft (_,refas) = rTypeReft t
-
-
 
 
 ---------------------------------------------------------------------------------------

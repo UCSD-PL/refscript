@@ -1,0 +1,172 @@
+-----------------
+STATUS
+-----------------
+
+- 3-5 failing tests in regression suite (for each one of pos neg tests)
+
+
+- Typecheck is parametric on r (RType r) -> useful to keep refinements at casting
+
+
+- Fixbase: needed for subtyping & envJoin (fixing atm) of container types (objects, unions):
+
+    { x: { A | a1 } + { B | b1 } | p1 } <: { y: { A | a2} + { B | b2} | p2 }
+    
+    will be broken down to: 
+    
+      { x: union | p1 } <: { y: union | p2 }
+    
+      { A | (...x.. ) } <: { A | a2 }
+      { B | b1 } <: { B | b2 }
+ 
+    For the last two we need to substitute: (any reference to union) -> A ( or B resp.)
+    
+    
+EXAMPLE PROGRAM?
+
+       // (x:num+bool) => {v:num+bool | v /= x}
+       function foo(x){
+         if (typeof x == "number"){
+           var t0 = cast(x, num);                // t0 :: {v:num | v = (x:num)}
+           var y  = t0 + 1;                      // y  :: {v:num | v = t0 + 1}
+           var t1 = UpCast(y, NoB);              // t1 :: {v:num/(v=t0 + 1) + bool/false | TRUE} 
+           return t1;                            // G  |- {v:num/(v=t0 + 1) + bool/false | TRUE} <: {v:num+bool | v /= x}
+         }
+         else { 
+           var z = !x;
+           return z;
+         }
+       }
+       
+       
+       G  |- {v:num/(v=t0 + 1) <: {v:num  | v /= x} 
+       G  |- {v:bool/false}    <: {v:bool | v /= x} 
+       ---------------------------------------------------------------------
+       G  |- {v:num/(v=t0 + 1) + bool/false | TRUE} <: {v:num+bool | v /= x}
+       
+
+EXISTING:       
+       G  |- {T1/P1}    <: {T1/P1'}
+       G  |- {T2/P2}    <: {T2/P2'}
+       G  |- {union/(P1_ \/ P2_) /\ P3} <: {union/(P1_' \/ P2_') /\ P3'}
+       --------------------------------------------------------  
+       G  |- {v:T1/P1 + T2/P2 | P3} <: {v:T1/P1' + T2/P2' | P3'}
+       
+       
+
+ GO WITH THIS ONE:
+     G |- {v:T1|P1&P3}    <: {v:T1|P1' & P3'}
+     G |- {v:T2|P2&P3}    <: {v:T2|P2' & P3'}
+     --------------------------------------------------------  
+     G |- {v:T1/P1 + T2/P2 | P3} <: {v:T1/P1' + T2/P2' | P3'}
+ 
+ 
+ 
+     DownCast:    {y: { num | pn} + { bool | pb} | p } <: {y: num + { bool | false} | _}
+
+ 
+     UpCast:
+     
+       {y:num|p} --upcast--> {y:num/p+bool/false | TRUE} <: {v:num/true + bool/true | v /= x}
+         
+           x:num+bool |-     {y:num  | y = (x:num) + 1}  <: {v:num | v /= x}
+                             
+                             {y:bool | false } <: {v:bool|true & v /= x}
+                             
+                                   
+                                   
+     {y:num + bool  | v = ... + 1} <: {v:num+bool | v /= x}
+
+     {y:num | v = ... + 1} <: {v:num+bool | v /= x}
+       
+        
+       
+     
+
+- Downcasts: Cast(e, Tc), where G |- e :: Te
+
+    G |- Cast(e, Tc) :: Tc''
+        where
+            (Te', Tc') = mkCompatible(Te, Tc)    
+            Tc''       = freshen(Tc')
+            freshen({ T | false }) = { freshen(T) | false }
+            freshen({ T | p     }) = { freshen(T) | K     }
+    
+    side-effect (constraint):
+        Te' <: Tc''
+        
+        Cast(e, num) where G |- e :: num+bool
+        Te'  = {v:num/P1 + bool/P2 | P3} 
+        Tc'  = num + bool/false
+        Tc'' = {v: num/K1 + bool/false | K3}
+        
+        {v:num/P1 + bool/P2 | P3} <: {v: num/K1 + bool/false | K3}
+
+instead:
+        {v:num/P1 + bool/P2 | P3} <: {v: num/P1 + bool/false | P3}
+        
+ 
+- Upcasts: UpCast(e, Tu), where G |- e :: Te
+    G |- Cast(e, Tc) :: Tu''
+        where
+            (Te', Tu') = mkCompatible(Te, Tu)    
+            Tu''       = zipStrengthen(Te' -> Tu')      -- strengthen the respective parts of Tu based on refs in Te
+
+
+
+
+
+
+-----------------
+FEATURES
+-----------------
+
+- Arrays:
+    - Homogeneous  : number[], string[], ...
+    - Heterogeneous: [1,"a", function() {}]        --> encoded as 
+    - Primitives   : length, isArray
+
+XXX - Null: is causing the remaining exceptions in the regression tests
+
+
+- Objects: 
+    - Records: match-up and split constraints
+    - Dynamic fields, dictionary primitives (DJS: set, get, upd, ...)       
+        
+        
+        Encode objects as dictionaries that have two parts:
+            HOMOGENOUS   : K  -> V
+            TUPLE        : K1 -> V1 ... Kn -> Vn
+        
+        e.g.
+        a :: {f : num, g: bool, * : T }
+         
+         
+                                      // DJS                      // NanoJS  
+        var a = { f: 1, g:true };     // a :: d0@{'f' : num }   
+        var s = "ff";                 // s :: string                
+        /* assert s != "f" */
+        a[s]  = "s";                  // a :: d1@upd(d s 5)      // a :: { 'f' : num, @s : string }
+        var r = a.f                   // r ::get(d' "f")         // r :: num
+
+        RJ: branch objects; tests/notjs/elementget    
+
+- Loops. Approaches:
+    - Invariants
+    - Recursion (pre- and post-conditions, before loop and at exit of loop)
+    
+- Prototyping
+
+- Constructors (new ...)
+
+
+
+-----------------
+TEST SUITES
+-----------------
+
+- Nano-js
+- NotJS (abstract interpreter): lots of unit tests, sif, event handlers, ...
+- Strobe (google gadgets)
+- DJS
+- ADSafe

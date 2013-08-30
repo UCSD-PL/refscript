@@ -372,11 +372,11 @@ tcExpr' γ (DotRef l e i)
 tcExpr' γ (BracketRef l e (StringLit _ s))
   = tcAccess γ l e s
 
--- General case of dynamic key dictionary access
-tcExpr' γ (BracketRef l e1 e2)
-  = do  t2 <- tcExpr γ e2
-        unifyTypeM l "BracketRef" e2 t2 tString
-        tcAccess γ l e1 s
+{--- General case of dynamic key dictionary access-}
+{-tcExpr' γ (BracketRef l e1 e2)-}
+{-  = do  t2 <- tcExpr γ e2-}
+{-        unifyTypeM l "BracketRef" e2 t2 tString-}
+{-        tcAccess γ l e1 s-}
 
 tcExpr' _ e 
   = convertError "tcExpr" e

@@ -38,7 +38,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -300,55 +300,35 @@ consExpr _ e
 consUpCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ------------------------------------------------------------------------------------------
 consUpCast g x a e 
-  = do  let u      = rType $ head [ t | Assume t <- ann_fact a]
-        (b',_ )   <- fixUpcast b u
-        (x',g')   <- envAddFresh l b' g
-        return     $ (x', g')
-  where b          = envFindTy x g 
-        l          = getAnnotation e
+  = do  γ     <- getTDefs
+        let b' = fst $ alignTs γ b u
+        envAddFresh l b' g
+  where 
+    u          = rType $ head [ t | Assume t <- ann_fact a]
+    b          = envFindTy x g 
+    l          = getAnnotation e
       
 
+-- No fresh K-Vars here - instead keep refs from original type
 ---------------------------------------------------------------------------------------------
 consDownCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
 consDownCast g x a e 
-  = do  tdefs              <- getTDefs
-        -- (g', tC)           <- return $ (g, tracePP "consDownCast: tC" $ head [ t | Assume t <- ann_fact a]) 
-        (g', tC)           <- freshTyCast l g x $ head [ t | Assume t <- ann_fact a]
-        {-let msg             = "consDownCast " ++ ppshow tE ++ "\nto\n" ++ ppshow tC-}
-        let (_, tE', tC',_) = compareTs tdefs tE tC
-        -- XXX: Casting to a type should preserve the refinements of 
-        -- the original expression that is being casted.
-        -- TODO: may need to use a version of @subTypeContainers@
-        let ts              = {- tracePP "consDownCast: after bkPaddedUnion" $ -}
-                              bkPaddedUnion tdefs tE' tC'
-        forM_ ts            $ castSubM g x l      -- Parts: need fixbase
-        subType             l g tE' tC'           -- Top-level: Does not need fixBase
-        (x', g'')          <- envAddFresh l tC g'
-        -- let msg             = printf "CONSDOWNCAST adding: %s :: %s" (ppshow x') (ppshow tC)
-        return              $ (x', g'')
+  = do  γ   <- getTDefs
+        g'  <- envAdds [(x, tc)] g
+        uncurry (subTypeContainers l g') $ alignTs γ te tc
+        envAddFresh l tc g'
     where 
-        tE                  = envFindTy x g
-        l                   = getAnnotation e
-
-
----------------------------------------------------------------------------------------------
-castSubM :: CGEnv -> Id AnnTypeR -> AnnTypeR -> (RefType, RefType) -> CGM () 
----------------------------------------------------------------------------------------------
-castSubM g x l (t1, t2) 
-  = do  (g', t1') <- fixBase g x t1
-        {-let msg         = printf "castSub: (%s, %s) \n-- fixbase-->\n(%s,%s)\n"-}
-        {-                    (ppshow t1) (ppshow t2) (ppshow t1') (ppshow t2')-}
-        -- subType can be called directly at this point
-        subType l g' ({- trace msg -} t1') t2
-
+        tc   = head [ t | Assume t <- ann_fact a]
+        te   = envFindTy x g
+        l    = getAnnotation e
 
 
 ---------------------------------------------------------------------------------------------
 consDeadCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
 consDeadCast g a e =
-  do  subType l g tru fls
+  do  subTypeContainers l g tru fls
       envAddFresh l tC g
   where
     tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type

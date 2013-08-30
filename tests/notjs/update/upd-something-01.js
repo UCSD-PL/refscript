@@ -1,3 +1,7 @@
-var x = {foo: "bar"}
-x.moo = "cow"
-x.foo
+
+/*@ foo :: () => {string | v = "bar" } */
+function foo () {
+  var x = {foo: "bar"};
+  x.moo = "cow";
+  return x.foo;
+}

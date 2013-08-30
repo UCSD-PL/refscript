@@ -31,7 +31,6 @@ module Language.Nano.Liquid.CGMonad (
   , freshTyFun
   , freshTyInst
   , freshTyPhis
-  , freshTyCast
 
   -- * Freshable
   , Freshable (..)
@@ -58,11 +57,9 @@ module Language.Nano.Liquid.CGMonad (
   -- * Unfolding
   , unfoldSafeCG, unfoldFirstCG
 
-  -- * Environment sort check
-  , fixUpcast
   ) where
 
-import           Data.Maybe                     (fromMaybe, catMaybes, isJust)
+import           Data.Maybe                     (fromMaybe)
 import qualified Data.List                      as L
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
@@ -130,10 +127,10 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnTypeR RefType -> CGState
-initState c pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty invs glbs c 
+initState c pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty invs c 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts pgm]  
-    glbs        = S.fromList [s       |   (Loc _ s)             <- globs pgm]  
+    -- glbs        = S.fromList [s       |   (Loc _ s)             <- globs pgm]  
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -200,7 +197,7 @@ data CGState
         , count    :: !Integer             -- ^ freshness counter
         , cg_ann   :: A.AnnInfo RefType    -- ^ recorded annotations
         , invs     :: TConInv              -- ^ type constructor invariants
-        , glbs     :: TGlobs               -- ^ predicate symbols that can be lifted to supertypes
+--        , glbs     :: TGlobs               -- ^ predicate symbols that can be lifted to supertypes
         , cg_opts  :: Config               -- ^ configuration options
         }
 
@@ -208,7 +205,7 @@ type CGM     = ErrorT String (State CGState)
 
 type TConInv = M.HashMap TCon (Located RefType)
 
-type TGlobs  = S.HashSet F.Symbol
+-- type TGlobs  = S.HashSet F.Symbol
 
 ---------------------------------------------------------------------------------------
 cgError :: (IsLocated l) => l -> String -> CGM a 
@@ -399,18 +396,6 @@ freshTyPhis l g xs τs
        _  <- mapM    (wellFormed l g') ts
        return (g', ts)
 
--- | Instantiate Fresh Type (at Cast-site)
----------------------------------------------------------------------------------------
-freshTyCast :: (PP l, IsLocated l) => l -> CGEnv -> Id l -> RefType -> CGM (CGEnv, RefType)  
----------------------------------------------------------------------------------------
-freshTyCast l g x τ
-  = do t  <- freshTy "freshTyCast" τ
-       g' <- envAdds [(x, t)] g
-       _  <- wellFormed l g t
-       return (g', t)
-
-
-
 ---------------------------------------------------------------------------------------
 -- | Adding Subtyping Constraints -----------------------------------------------------
 ---------------------------------------------------------------------------------------
@@ -466,12 +451,23 @@ equivWUnionsM t t' = getTDefs >>= \γ -> return $ equivWUnions γ t t'
 
 -- | Subtyping container contents: unions, objects. Includes top-level
 
--- Need to be padded and so on...
--- BUT, still needs fixbase for the parts!!!
+-- `subTypeContainers` breaks down container types (unions and objects) to their
+-- sub-parts and recursively creates subtyping constraints for these parts. It
+-- returns simple subtyping for the rest of the cases (non-container types).
+--
+-- The top-level refinements of the container types strengthen the parts.
+--
+--      Γ |- {v:T1 | P1 ∧ P3}       <: { v:T1 | P1' ∧ P3'}
+--      Γ |- {v:T2 | P2 ∧ P3}       <: { v:T2 | P2' ∧ P3'}
+--      −−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−   
+--      Γ |- {v:T1/P1 + T2/P2 | P3} <: {v:T1/P1' + T2/P2' | P3'}
+--
+--
+-- TODO: Will loop infinitely for cycles in type definitions
+--
 -------------------------------------------------------------------------------
 subTypeContainers :: AnnTypeR -> CGEnv -> RefType -> RefType -> CGM ()
 -------------------------------------------------------------------------------
--- XXX: Will loop infinitely for cycles in type definitions
 subTypeContainers l g (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _) | d == d' = 
   mapM_ (uncurry $ subTypeContainers l g) $ zip ts ts'
 
@@ -482,13 +478,18 @@ subTypeContainers l g t1@(TApp (TDef _) _ _ ) t2 =
   unfoldSafeCG t1 >>= \t1' -> subTypeContainers l g t1' t2
 
 subTypeContainers l g u1@(TApp TUn _ _) u2@(TApp TUn _ _) = 
-  do  γ <- getTDefs
-      case unionParts γ u1 u2 of
-        (ts, [], []) -> mapM_ (uncurry $ subTypeContainers l g) ts
-        _            -> errorstar "subTypeContainers: Unions non-matchable"
-      subType l g u1 u2   -- top-level
-         
+  getTDefs >>= \γ -> sbs $ bkPaddedUnion "subTypeContainers" γ u1 u2
+  where    
+    (r1, r2)     = mapPair rTypeR        (u1, u2)
+    -- Fix the ValueVar of the top-level refinement to be the same as the
+    -- Valuevar of the part
+    fix t b v    | v == b    = rTypeValueVar t
+                 | otherwise = v
+    rr t r       = F.substa (fix t b) r where F.Reft (b,_) = r
+    sb  (t1 ,t2) = subTypeContainers l g (t1 `strengthen` rr t1 r1) (t2 `strengthen` rr t2 r2)
+    sbs ts       = mapM_ sb ts
 
+-- TODO: Fix objects like unions
 subTypeContainers l g t1@(TObj _ _) t2@(TObj _ _) =
   -- XXX: does not work for wrong sized objects -- see. liquid/pos/obj03.js
   do  mapM_ (uncurry $ subTypeContainers l g) $ bkPaddedObject t1 t2
@@ -710,88 +711,6 @@ bsplitC g ci t1 t2
     p  = F.pAnd $ guards g
     r1 = rTypeSortedReft t1
     r2 = rTypeSortedReft t2
-
-
-
--- `fixUpcast` compares/patches types @b@ and @u@ and returns their "comparible"
--- version. It also tries to propagate as much of the refinements of the base
--- type to the top-level (union) type.
---
--- b = { v: B | p } -- upcast --> b = { v: U | p' }
--- 
--- where
---
--- u  = { v: U | q }
--- p' = global(p)
--- B    is part of U
-
----------------------------------------------------------------------------------------------
-fixUpcast :: RefType -> RefType -> CGM (RefType, RefType)
----------------------------------------------------------------------------------------------
-fixUpcast b u =
-  do  γ                   <- cg_tdefs <$> get
-      let (_,b', u',_)     = compareTs γ b u
-          -- Substitute the v variable
-          vv               = rTypeValueVar b
-          vv'              = rTypeValueVar b'
-          fx v | v == vv   = vv'
-          fx v | otherwise = v
-          {-msg              = printf "VV(b) = %s, VV(b') = %s\nGlobPreds" (ppshow vv) (ppshow vv')-}
-      gs                  <- glbs     <$> get
-      maybe (return (b', u')) 
-            (\p -> return (F.substa fx $ b' `strengthen` p, u'))
-            ({-traceShow msg <$> -} glbPreds gs b)
-  where
-    glbPreds gs = glbReft gs . rTypeReft
-
-
-glbReft g (F.Reft (v, rs)) = glb g rs >>= \rs' -> return $ F.Reft (v, rs')
-
--- Specifies the parts of a refinement that can be propagated to the top-level
--- union refinement. Needed for proving properties when upcasting. 
-class Global a where 
-  glb :: TGlobs -> a -> Maybe a
-
-instance (Show a, Global a) => Global [a] where
-  glb = glbAny
-
-instance Global F.Refa where
-  glb g (F.RConc p   ) = F.RConc <$> glb g p
-  glb _ (F.RKvar _ _ )       = Nothing
-
-instance Global F.Pred where
-   glb _  F.PTrue            = return  $  F.PTrue
-   glb _  F.PFalse           = return  $  F.PFalse
-   glb g (F.PAnd xs)         = F.PAnd   <$> glb g xs
-   glb g (F.POr xs)          = F.POr    <$> glbAll g xs
-   glb g (F.PNot x)          = F.PNot   <$> glb g x
-   glb g (F.PImp x y)        = liftM2 F.PImp (glb g x) (glb g y)
-   glb g (F.PIff x y)        = liftM2 F.PIff (glb g x) (glb g y)
-   glb g (F.PBexp e)         = F.PBexp  <$> glb g e
-   glb g (F.PAtom b e1 e2)   = liftM2 (F.PAtom b) (glb g e1) (glb g e2)
-   glb _  _                  = Nothing
-
-instance Global F.Expr where
-  glb _ (F.ESym sc)      = return $ F.ESym sc 
-  glb _ (F.ECon cst)     = return $ F.ECon cst
-  glb g (F.EVar s)       = F.EVar <$> glb g s
-  glb _ (F.ELit _ _ )    = Nothing
-  glb g (F.EApp s es)    = glb g s >>= \s' -> return $ F.EApp s' es
-  glb g (F.EBin b e1 e2) = liftM2 (F.EBin b) (glb g e1) (glb g e2)
-  glb g (F.EIte p e1 e2) = liftM3 F.EIte (glb g p) (glb g e1) (glb g e2)
-  glb g (F.ECst e srt)   = glb g e >>= return . (`F.ECst` srt)
-  glb _  F.EBot          = return $ F.EBot
-          
-glbAll = glbList all
-glbAny = glbList any
-
-glbList what g xs | what isJust ms = Just $ catMaybes ms
-                  | otherwise     = Nothing
-                    where ms = map (glb g) xs
-
-instance Global F.Symbol where
-  glb g s | s `S.member` g = return s   -- only allow the designated vars
-          | otherwise      = Nothing 
 
 
 ---------------------------------------------------------------------------------------

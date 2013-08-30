@@ -98,7 +98,7 @@ import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
--- import           Debug.Trace                      (trace)
+import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity as V
 
 -------------------------------------------------------------------------------
@@ -464,16 +464,15 @@ addUpCast e t = modify $ \st -> st { tc_casts = M.insert e (UCST t) (tc_casts st
 --------------------------------------------------------------------------------
 addDownCast :: (Ord r, PP r, F.Reftable r) => Expression (AnnSSA_ r) -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
-addDownCast e _ cast = modify $ \st -> st { tc_casts = M.insert e (DCST cast) (tc_casts st) }
+-- addDownCast e _ cast = modify $ \st -> st { tc_casts = M.insert e (DCST cast) (tc_casts st) }
 
-{-  
--- Down casts will be k-vared later - so no need to pass the refinements here
+  
+-- Down casts will not be k-vared later - so pass the refinements here!
 addDownCast e base cast = 
   do  γ <- getTDefs
       let cast' = zipType2 γ F.meet base cast    -- copy the refinements from the base type 
-          msg   =  printf "DOWN CAST ADDS: %s\ninstead of just:\n%s" (ppshow cast') (ppshow cast)
-      modify $ \st -> st { tc_casts = M.insert e (DCST cast) (tc_casts st) }
--}
+          {-msg   =  printf "DOWN CAST ADDS: %s\ninstead of just:\n%s" (ppshow cast') (ppshow cast)-}
+      modify $ \st -> st { tc_casts = M.insert e (DCST $ {- trace msg -} cast') (tc_casts st) }
 
 --------------------------------------------------------------------------------
 addDeadCast :: Expression (AnnSSA_ r) -> RType r -> TCM r ()

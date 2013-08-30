@@ -300,42 +300,35 @@ consExpr _ e
 consUpCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ------------------------------------------------------------------------------------------
 consUpCast g x a e 
-  = do  let u      = rType $ head [ t | Assume t <- ann_fact a]
-        (b',_ )   <- fixUpcast b u
-        (x',g')   <- envAddFresh l b' g
-        return     $ (x', g')
-  where b          = envFindTy x g 
-        l          = getAnnotation e
+  = do  γ     <- getTDefs
+        let b' = fst $ alignTs γ b u
+        envAddFresh l b' g
+  where 
+    u          = rType $ head [ t | Assume t <- ann_fact a]
+    b          = envFindTy x g 
+    l          = getAnnotation e
       
 
+-- No fresh K-Vars here - instead keep refs from original type
 ---------------------------------------------------------------------------------------------
 consDownCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
 consDownCast g x a e 
-  = do  tdefs          <- getTDefs
-        -- TODO: do not freshen here - instread keep refs from original type
-        (g', fc)      <- freshTyCast l g x c
-        let (te', fc') = alignTs tdefs te fc
-        -- SubTyping of parts 
-        -- TODO: use subTypeContainers
-        mapM_ sbp      $ bkPaddedUnion tdefs te' fc'
-        -- No fixbase needed anymore
-        -- TODO; get rid of top-level constraint
-        subType l g te' fc'
-        (x', g'')     <- envAddFresh l fc g'    
-        return         $ (x', g'')
+  = do  γ   <- getTDefs
+        g'  <- envAdds [(x, tc)] g
+        uncurry (subTypeContainers l g') $ alignTs γ te tc
+        envAddFresh l tc g'
     where 
-        sbp (t1, t2)   = subType l g (eSingleton t1 x) t2
-        c              = head [ t | Assume t <- ann_fact a]
-        te             = envFindTy x g
-        l              = getAnnotation e
+        tc   = head [ t | Assume t <- ann_fact a]
+        te   = envFindTy x g
+        l    = getAnnotation e
 
 
 ---------------------------------------------------------------------------------------------
 consDeadCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
 consDeadCast g a e =
-  do  subType l g tru fls
+  do  subTypeContainers l g tru fls
       envAddFresh l tC g
   where
     tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type

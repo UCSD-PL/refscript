@@ -52,7 +52,7 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types            as F
 import           Text.Printf                        (printf)
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 type SSAM r     = ErrorT String (State (SsaState r))
 

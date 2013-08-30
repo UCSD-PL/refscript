@@ -385,13 +385,15 @@ padUnion env t1 t2 =
 
 --------------------------------------------------------------------------------
 bkPaddedUnion :: (Eq r, Ord r, F.Reftable r, PP r) => 
-  Env (RType r) -> RType r -> RType r -> [(RType r, RType r)]
+  String -> Env (RType r) -> RType r -> RType r -> [(RType r, RType r)]
 --------------------------------------------------------------------------------
-bkPaddedUnion γ t1 t2 =
+bkPaddedUnion msg γ t1 t2 =
   zipWith check (bkUnion t1) (bkUnion t2)
   where
-    check t t' | equiv γ t t' = (t,t')
-               | otherwise    = errorstar $ printf "bkPaddedUnion: %s - %s" (ppshow t) (ppshow t') 
+    check t t' 
+      | equiv γ t t' = (t,t')
+      | otherwise    = errorstar $ printf "bkPaddedUnion[%s]\n\t%s\nand\n\t%s" 
+                                     msg (ppshow t1) (ppshow t2) 
 
 
 

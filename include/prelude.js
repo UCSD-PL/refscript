@@ -135,7 +135,6 @@ function pos(){
 /*************************************************************************/
 
 /*@ measure ttag :: forall A. (A) => string                               */
-/*@ global ttag                                                           */
 
 /*@ builtin_PrefixTypeof:: forall A. (x:A) => {v:string | (ttag x) = v }  */
 

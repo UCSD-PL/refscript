@@ -271,7 +271,6 @@ data PSpec l t
   | Qual Qualifier
   | Type (Id l, t)
   | Invt l t 
-  | Glb  l Symbol 
   deriving (Show)
 
 specP :: Parser (PSpec SourceSpan RefType)
@@ -280,7 +279,6 @@ specP
     <|> (reserved "qualif"    >> (Qual <$> qualifierP ))
     <|> (reserved "type"      >> (Type <$> tBodyP     )) 
     <|> (reserved "invariant" >> (withSpan Invt bareTypeP))
-    <|> (reserved "global"    >> (withSpan Glb symbolP))
     <|> ({- DEFAULT -}           (Bind <$> idBindP    ))
 
 --------------------------------------------------------------------------------------
@@ -296,7 +294,6 @@ mkSpec xs = Nano { code   = Src []
                  , tDefs  = envFromList [b         | Type b <- xs]
                  , quals  =             [q         | Qual q <- xs]
                  , invts  =             [Loc l' t  | Invt l t <- xs, let l' = srcPos l]
-                 , globs  =             [Loc l' s  | Glb  l s <- xs, let l' = srcPos l]
                  }
 
 -- YUCK. Worst hack of all time.
@@ -318,7 +315,6 @@ mkCode ss = Nano { code   = Src (checkTopStmt <$> ss)
                  , tDefs  = envEmpty
                  , quals  = [] 
                  , invts  = [] 
-                 , globs  = []
                  } 
 
 -------------------------------------------------------------------------------

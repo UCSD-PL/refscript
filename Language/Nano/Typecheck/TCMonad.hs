@@ -466,15 +466,15 @@ addUpCast e t = modify $ \st -> st { tc_casts = M.insert e (UCST t) (tc_casts st
 --------------------------------------------------------------------------------
 addDownCast :: (Ord r, PP r, F.Reftable r) => Expression (AnnSSA_ r) -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
-addDownCast e base cast = 
-  -- Down casts will be k-vared later - so no need to pass the refinements here
-  do  {- 
-      γ <- getTDefs
-      let cast' = zipType2 γ F.meet base cast    -- copy the refinements from the base type 
-          msg   =  printf "DOWN CAST ADDS: %s\ninstead of just:\n%s" (ppshow cast') (ppshow cast)
-      -}
-      modify $ \st -> st { tc_casts = M.insert e (DCST cast) (tc_casts st) }
+-- addDownCast e _ cast = modify $ \st -> st { tc_casts = M.insert e (DCST cast) (tc_casts st) }
 
+  
+-- Down casts will not be k-vared later - so pass the refinements here!
+addDownCast e base cast = 
+  do  γ <- getTDefs
+      let cast' = zipType2 γ F.meet base cast    -- copy the refinements from the base type 
+          {-msg   =  printf "DOWN CAST ADDS: %s\ninstead of just:\n%s" (ppshow cast') (ppshow cast)-}
+      modify $ \st -> st { tc_casts = M.insert e (DCST $ {- trace msg -} cast') (tc_casts st) }
 
 --------------------------------------------------------------------------------
 addDeadCast :: Expression (AnnSSA_ r) -> RType r -> TCM r ()

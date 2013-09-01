@@ -198,10 +198,6 @@ mconcatP xs = getProduct $ mconcat (Product <$> xs)
 ---------------------------------------------------------------------------------
 isSubType :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r -> Bool
 isSubType γ t1 t2 = (fth4 $ compareTs γ t1 t2) `elem` [EqT, SubT]
-{-isSubType γ t1 t2 = (fth4 $ compareTs γ -}
-{-                              (tracePP (printf "Comparing: %s - %s" (ppshow t1) (ppshow t2)) t1) -}
-{-                              t2) -}
-{-                    `elem` [EqT, SubT]-}
 
 
 eqType :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r -> Bool
@@ -601,27 +597,4 @@ zipTypes γ f ts t =
 
 zipBind2 γ f (B s t) (B s' t') | s == s' = B s $ zipType2 γ f t t' 
 zipBind2 _ _ _       _                   = errorstar "BUG[zipBind2]: mis-matching binders"
-
- 
---------------------------------------------------------------------------------
---------------------------------------------------------------------------------
---------------------------------------------------------------------------------
-
--- matchEquiv _ t1 t2 | isTop t1                = matchTop1 t1 t2 
--- matchEquiv _ t1 t2 | isTop t2                = matchTop2 t1 t2`
--- matchEquiv γ t1 t2 | any isUnion [t1,t2]     = tracePP "padUnion" $ padUnion γ t1  t2
--- matchEquiv γ t1@(TObj _ _) t2@(TObj _ _)     = padObject γ t1 t2
--- matchEquiv γ (TApp d1@(TDef _) t1s r1) (TApp d2@(TDef _) t2s r2) | d1 == d2 =  matchTDef t1 t2 
--- matchEquiv γ t1@(TApp (TDef _) _ _) t2       = matchEquiv γ (unfoldSafe γ t1) t2
--- matchEquiv γ t1 t2@(TApp (TDef _) _ _)       = matchEquiv γ t1 (unfoldSafe γ t2)
--- matchEquiv _ t1@(TApp _ _ _) t2@(TApp _ _ _) = matchSimple t1 t2 
--- matchEquiv _ t1@(TVar _ _)   t2@(TVar _ _)   = matchTVar t1 t2
--- matchEquiv γ t1@(TFun _ _ _) t2@(TFun _ _ _) = matchFun t1 t2
--- matchEquiv _    (TFun _ _ _) _               = error "Unimplemented matchEquiv-1"
--- matchEquiv _ _               (TFun _ _ _)    = error "Unimplemented matchEquiv-2"
--- matchEquiv _ (TAll _ _  )    _               = error "Unimplemented: matchEquiv-3"
--- matchEquiv _ _               (TAll _ _  )    = error "Unimplemented: matchEquiv-4"
--- matchEquiv _ _               (TBd  _    )    = error "Unimplemented: matchEquiv-5"
--- matchEquiv _ (TBd  _    )    _               = error "Unimplemented: matchEquiv-6"
--- matchEquiv _ t1              t2              = padSimple t1 t2 
 

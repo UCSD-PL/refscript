@@ -489,11 +489,11 @@ subTypeContainers l g u1@(TApp TUn _ _) u2@(TApp TUn _ _) =
     sb  (t1 ,t2) = subTypeContainers l g (t1 `strengthen` rr t1 r1) (t2 `strengthen` rr t2 r2)
     sbs ts       = mapM_ sb ts
 
--- TODO: Fix objects like unions
-subTypeContainers l g t1@(TObj _ _) t2@(TObj _ _) =
-  -- XXX: does not work for wrong sized objects -- see. liquid/pos/obj03.js
-  do  mapM_ (uncurry $ subTypeContainers l g) $ bkPaddedObject t1 t2
-      subType l g t1 t2   -- top-level
+subTypeContainers l g t1@(TObj _ _) t2@(TObj _ _) = undefined
+  {-getTDefs >>= \γ -> sbs $ bkPaddedObject γ t1 t2-}
+  {-  where-}
+  {-    sbs ts     = undefined-}
+  
 
 subTypeContainers l g t1 t2 = subType l g t1 t2
 

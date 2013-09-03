@@ -27,7 +27,7 @@ module Language.Nano.Typecheck.TCMonad (
   , freshTyArgs
 
   -- * Dot Access
-  , dotAccess
+  , safeDotAccess
 
   -- * Type definitions
   , getTDefs
@@ -90,7 +90,6 @@ import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map                       as M
 import           Data.Generics                  (Data(..))
 import           Data.Maybe                     (fromJust)
-import           Data.List                      (find)
 import           Data.Generics.Aliases
 import           Data.Typeable                  (Typeable (..))
 import           Language.ECMAScript3.Parser    (SourceSpan (..))
@@ -222,43 +221,18 @@ setTyArgs l βs
 -- | Field access -------------------------------------------------------------
 -------------------------------------------------------------------------------
 
+-- Access field @f@ of type @t@, adding a cast if needed to avoid errors.
 -------------------------------------------------------------------------------
-dotAccess ::  (Ord r, PP r, F.Reftable r, F.Symbolic s) => 
-  s -> RType r -> TCM r (Maybe (RType r))
+safeDotAccess :: (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) => 
+  s -> RType r -> TCM r (RType r)
 -------------------------------------------------------------------------------
-dotAccess f   (TObj bs _) = 
-  return $ Just $ maybe tUndef b_type $ find (match $ F.symbol f) bs
-  where match s (B f _)  = s == f
+safeDotAccess f t  
+  = do  γ <- getTDefs 
+        e <- fromJust <$> getExpr
+        case dotAccess γ f t of 
+          Just (t',tf) -> castM e t t' >> return tf
+          Nothing      -> error "safeDotAccess: unsafe"
 
-dotAccess f t@(TApp c ts _ ) = go c
-  where  go TUn      = dotAccessUnion f ts
-         go TInt     = return $ Just tUndef
-         go TBool    = return $ Just tUndef
-         go TString  = return $ Just tUndef
-         go TUndef   = return   Nothing
-         go TNull    = return   Nothing
-         go (TDef _) = unfoldSafeTC t >>= dotAccess f
-         go TTop     = error "dotAccess top"
-         go TVoid    = error "dotAccess void"
-
-dotAccess _   (TFun _ _ _ ) = return $ Just tUndef
-dotAccess _ t               = error $ "dotAccess " ++ (ppshow t) 
-
-
--------------------------------------------------------------------------------
-dotAccessUnion ::  (Ord r, PP r, F.Reftable r, F.Symbolic s) => 
-  s -> [RType r] -> TCM r (Maybe (RType r))
--------------------------------------------------------------------------------
-dotAccessUnion f ts = 
-  do  e              <- fromJust <$> getExpr
-      tfs            <- mapM (dotAccess f) ts
-      -- Gather all the types that do not throw errors, and the type of 
-      -- the accessed expression that yields them
-      let (ts', tfs') = unzip [(t,tf) | (t, Just tf) <- zip ts tfs]
-      castM e (mkUnion ts) (mkUnion ts')
-      case tfs' of
-        [] -> return Nothing
-        _  -> return $ Just $ mkUnion tfs'
 
       
 

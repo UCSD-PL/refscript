@@ -13,6 +13,7 @@ import           Control.Applicative                ((<$>))
 
 import qualified Data.ByteString.Lazy               as B
 import qualified Data.HashMap.Strict                as M
+import           Data.Maybe                         (fromJust)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -30,6 +31,7 @@ import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
+import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
 import           Language.Nano.Typecheck.Compare
 import           Language.Nano.SSA.SSA
@@ -42,7 +44,7 @@ import           System.Console.CmdArgs.Default
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
-------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
 verifyFile f =   
@@ -297,15 +299,16 @@ consExpr _ e
 
 
 ---------------------------------------------------------------------------------------------
-consAccess :: (F.Symbolic s, F.Symbolic x, F.Expression x, IsLocated l, IsLocated x) =>
-  l -> x -> CGEnv -> s -> CGM (Id l, CGEnv)
+consAccess :: (F.Symbolic s, F.Symbolic x, F.Expression x, IsLocated l, IsLocated x, PP s) =>
+              l -> x -> CGEnv -> s -> CGM (Id l, CGEnv)
 ---------------------------------------------------------------------------------------------
-consAccess l x g i = getBindingM i (envFindTy x g) >>= f
-  where f (Left  s) = errorstar s
-        f (Right t) = envAddFresh l t g
+consAccess l x g i = dotAccessM i (envFindTy x g) >>= \t -> envAddFresh l t g
+
+dotAccessM f t = getTDefs >>= \γ -> return $ snd $ fromJust $ dotAccess γ f t
+
        
 
----------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------
 consUpCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ------------------------------------------------------------------------------------------
 consUpCast g x a e 

@@ -419,13 +419,12 @@ tcObject γ bs
 
 
 ----------------------------------------------------------------------------------
-tcAccess ::  (Ord r, F.Reftable r, PP r, F.Symbolic s) =>
+tcAccess ::  (Ord r, F.Reftable r, PP r, F.Symbolic s, PP s) =>
   Env (RType r) -> (AnnSSA_ r) -> Expression (AnnSSA_ r) -> s -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcAccess γ _ e f = 
-  do  t     <- tcExpr γ e
-      t'    <- dotAccess f t
-      return $ fromJust t'
+  -- TODO: handle case of Nothing being returned from dotAccess
+  tcExpr γ e >>= safeDotAccess f
 
 
 ----------------------------------------------------------------------------------

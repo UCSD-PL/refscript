@@ -21,18 +21,23 @@ module Language.Nano.Typecheck.Subst (
   -- * Unfolding
   , unfoldFirst, unfoldMaybe, unfoldSafe
   
+  -- * Accessing fields
+  , dotAccess
+  
 
   ) where 
 
 import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
+import           Language.Fixpoint.Misc
 import           Language.Nano.Errors 
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
+import           Data.List                      (find)
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
 import           Text.Printf 
@@ -185,4 +190,47 @@ unfoldMaybe _ t                           = Right t
 unfoldSafe :: (PP r, F.Reftable r) => Env (RType r) -> RType r -> RType r
 -------------------------------------------------------------------------------
 unfoldSafe env = either error id . unfoldMaybe env
+
+
+-- Returns type to cast the current expression and the returned type
+-------------------------------------------------------------------------------
+dotAccess ::  (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) => 
+  Env (RType r) -> s -> RType r -> Maybe (RType r, RType r)
+-------------------------------------------------------------------------------
+dotAccess _ f t@(TObj bs _) = 
+  do  case find (match $ F.symbol f) (tracePP ("Looking for " ++ ppshow f) bs) of
+        Just b -> Just (t, b_type b)
+        _      -> case find (match $ F.stringSymbol "*") bs of
+                    Just b' -> Just (t, b_type b')
+                    _       -> Just (t, tUndef)
+  where match s (B f _)  = s == f
+
+dotAccess γ f t@(TApp c ts _ ) = go c
+  where  go TUn      = dotAccessUnion γ f ts
+         go TInt     = Just (t, tUndef)
+         go TBool    = Just (t, tUndef)
+         go TString  = Just (t, tUndef)
+         go TUndef   = Nothing
+         go TNull    = Nothing
+         go (TDef _) = dotAccess γ f $ unfoldSafe γ t
+         go TTop     = error "dotAccess top"
+         go TVoid    = error "dotAccess void"
+
+dotAccess _ _ t@(TFun _ _ _ ) = Just (t, tUndef)
+dotAccess _ _ t               = error $ "dotAccess " ++ (ppshow t) 
+
+
+-- Accessing the @x@ field of the union type with @ts@ as its parts, returns
+-- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
+-- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
+-------------------------------------------------------------------------------
+dotAccessUnion ::  (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) => 
+  Env (RType r) -> s -> [RType r] -> Maybe (RType r, RType r)
+-------------------------------------------------------------------------------
+dotAccessUnion γ f ts = 
+  -- Gather all the types that do not throw errors, and the type of 
+  -- the accessed expression that yields them
+  case [tts | Just tts <- dotAccess γ f <$> ts] of
+    [] -> Nothing
+    ts -> Just $ mapPair mkUnion $ unzip ts
 

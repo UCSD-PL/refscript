@@ -21,9 +21,6 @@ module Language.Nano.Liquid.CGMonad (
   -- * Get Defined Types
   , getTDefs
 
-  -- * Get binding
-  , getBindingM
-
   -- * Throw Errors
   , cgError      
 
@@ -60,10 +57,8 @@ module Language.Nano.Liquid.CGMonad (
   ) where
 
 import           Data.Maybe                     (fromMaybe)
-import qualified Data.List                      as L
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
-import qualified Data.HashSet                   as S
 
 -- import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
@@ -157,29 +152,32 @@ getTDefs :: CGM (E.Env RefType)
 ---------------------------------------------------------------------------------------
 getTDefs  = cg_tdefs <$> get
 
----------------------------------------------------------------------------------------
-getBindingM :: (F.Symbolic s) => s -> RefType -> CGM (Either String RefType)
----------------------------------------------------------------------------------------
-getBindingM i t 
-  = do  td <- cg_tdefs <$> get
-        return $ getBinding td i t 
 
 
 -- | Get binding from object type
----------------------------------------------------------------------------------
-getBinding :: (PP r, F.Reftable r, F.Symbolic s) => 
-  E.Env (RType r) -> s -> RType r -> Either String (RType r)
----------------------------------------------------------------------------------
-getBinding _ i (TObj bs _ ) = 
-  case L.find (\s -> F.symbol i == b_sym s) bs of
-    Just b      -> Right $ b_type b
-    _           -> Left  $ errorObjectBinding
-getBinding defs i t@(TApp (TDef _) _ _) = 
-  case unfoldMaybe defs t of
-    Right t'    -> getBinding defs i t'
-    Left  s     -> Left $ s ++ "\nand\n" ++ errorObjectTAccess t
-getBinding _ _ t = Left $ errorObjectTAccess t
 
+-- Use the TCMonad dotAccess
+
+{-----------------------------------------------------------------------------------}
+{-getBinding :: (PP r, F.Reftable r, F.Symbolic s) => -}
+{-  E.Env (RType r) -> s -> RType r -> Either String (RType r)-}
+{-----------------------------------------------------------------------------------}
+{-getBinding _ i (TObj bs _ ) = -}
+{-  case L.find (\s -> F.symbol i == b_sym s) bs of-}
+{-    Just b      -> Right $ b_type b-}
+{-    _           -> Left  $ errorObjectBinding-}
+{-getBinding defs i t@(TApp (TDef _) _ _) = -}
+{-  case unfoldMaybe defs t of-}
+{-    Right t'    -> getBinding defs i t'-}
+{-    Left  s     -> Left $ s ++ "\nand\n" ++ errorObjectTAccess t-}
+{-getBinding _ _ t = Left $ errorObjectTAccess t-}
+
+{-----------------------------------------------------------------------------------------}
+{-getBindingM :: (F.Symbolic s) => s -> RefType -> CGM (Either String RefType)-}
+{-----------------------------------------------------------------------------------------}
+{-getBindingM i t -}
+{-  = do  td <- cg_tdefs <$> get-}
+{-        return $ getBinding td i t -}
 
 
 ---------------------------------------------------------------------------------------
@@ -489,6 +487,7 @@ subTypeContainers l g u1@(TApp TUn _ _) u2@(TApp TUn _ _) =
     sb  (t1 ,t2) = subTypeContainers l g (t1 `strengthen` rr t1 r1) (t2 `strengthen` rr t2 r2)
     sbs ts       = mapM_ sb ts
 
+-- TODO
 subTypeContainers l g t1@(TObj _ _) t2@(TObj _ _) = undefined
   {-getTDefs >>= \γ -> sbs $ bkPaddedObject γ t1 t2-}
   {-  where-}

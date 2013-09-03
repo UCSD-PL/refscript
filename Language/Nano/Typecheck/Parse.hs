@@ -40,6 +40,7 @@ import           Language.ECMAScript3.PrettyPrint
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer
 plus       = Token.symbol     lexer "+"
+star       = Token.symbol     lexer "*"
 -- angles     = Token.angles     lexer
 
 ----------------------------------------------------------------------------------
@@ -231,7 +232,8 @@ refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi))
 -- embedP     = xyP upperIdP (reserved "as") fTyConP
  
 binderP :: Parser Symbol
-binderP =  try $ liftM stringSymbol (idP badc)
+binderP = try (stringSymbol <$> idP badc)
+      <|> try (star >> return (stringSymbol "*"))
       <|> liftM pwr (parens (idP bad))
       where idP p  = many1 (satisfy (not . p))
             badc c = (c == ':') ||  bad c

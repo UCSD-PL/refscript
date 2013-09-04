@@ -44,7 +44,8 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Add Subtyping Constraints
   , subTypes, subTypes', subType, subType'
-  , subTypeContainers, subTypeContainers', subTypesContainers 
+  , subTypeContainers, subTypeContainers'
+  , alignTsM, withAlignedM
 
   , addInvariant
   
@@ -367,7 +368,7 @@ freshTyFun :: (IsLocated l) => CGEnv -> l -> Id AnnTypeR -> RefType -> CGM RefTy
 freshTyFun g l f t = freshTyFun' g l f t . kVarInst . cg_opts =<< get  
 
 freshTyFun' g l _ t b
-  | b && isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g 
+  | b && isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= \t -> wellFormed l g t
   | otherwise               = return t
 
 -- | Instantiate Fresh Type (at Call-site)
@@ -467,44 +468,60 @@ equivWUnionsM t t' = getTDefs >>= \γ -> return $ equivWUnions γ t t'
 subTypeContainers :: AnnTypeR -> CGEnv -> RefType -> RefType -> CGM ()
 -------------------------------------------------------------------------------
 subTypeContainers l g (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _) | d == d' = 
-  mapM_ (uncurry $ subTypeContainers l g) $ zip ts ts'
+  mapM_ (uncurry $ subTypeContainers' "def0" l g) $ zip ts ts'
 
 subTypeContainers l g t1 t2@(TApp (TDef _) _ _ ) = 
-  unfoldSafeCG t2 >>= \t2' -> subTypeContainers l g t1 t2'
+  unfoldSafeCG t2 >>= \t2' -> subTypeContainers' "subc def1" l g t1 t2'
 
 subTypeContainers l g t1@(TApp (TDef _) _ _ ) t2 = 
-  unfoldSafeCG t1 >>= \t1' -> subTypeContainers l g t1' t2
+  unfoldSafeCG t1 >>= \t1' -> subTypeContainers' "subc def2" l g t1' t2
 
 subTypeContainers l g u1@(TApp TUn _ _) u2@(TApp TUn _ _) = 
   getTDefs >>= \γ -> sbs $ bkPaddedUnion "subTypeContainers" γ u1 u2
-  where    
+  where        
     (r1, r2)     = mapPair rTypeR        (u1, u2)
     -- Fix the ValueVar of the top-level refinement to be the same as the
     -- Valuevar of the part
     fix t b v    | v == b    = rTypeValueVar t
                  | otherwise = v
     rr t r       = F.substa (fix t b) r where F.Reft (b,_) = r
-    sb  (t1 ,t2) = subTypeContainers l g (t1 `strengthen` rr t1 r1) (t2 `strengthen` rr t2 r2)
+    sb  (t1 ,t2) = subTypeContainers' "subc un" l g (t1 `strengthen` rr t1 r1) 
+                                         (t2 `strengthen` rr t2 r2)
     sbs ts       = mapM_ sb ts
 
--- TODO
-subTypeContainers l g t1@(TObj _ _) t2@(TObj _ _) = undefined
-  {-getTDefs >>= \γ -> sbs $ bkPaddedObject γ t1 t2-}
-  {-  where-}
-  {-    sbs ts     = undefined-}
-  
+-- TODO: the environment for subtyping each part of the object should have the
+-- tyopes for the rest of the bindings
+subTypeContainers l g o1@(TObj _ _) o2@(TObj _ _) = 
+  getTDefs >>= \γ -> sbs $ bkPaddedObject o1 o2
+  where
+    sbs          = mapM_ sb
+    (r1, r2)     = mapPair rTypeR (o1, o2)
+    -- Fix the ValueVar of the top-level refinement 
+    -- to be the same as the Valuevar of the part
+    fix t b v    | v == b    = rTypeValueVar t
+                 | otherwise = v
+    rr t r       = F.substa (fix t b) r where F.Reft (b,_) = r
+    sb (t1 ,t2)  = subTypeContainers' "subc obj" l g (t1 `strengthen` rr t1 r1) 
+                                         (t2 `strengthen` rr t2 r2)
 
 subTypeContainers l g t1 t2 = subType l g t1 t2
 
+
 subTypeContainers' msg l g t1 t2 = 
-  subTypeContainers l g (trace (printf "subTypeContainers[%s]:\n\t%s\n\t%s" msg (ppshow t1) (ppshow t2)) t1) t2
+  subTypeContainers l g ({-trace (printf "subTypeContainers[%s]:\n\t%s\n\t%s" 
+                                msg (ppshow t1) (ppshow t2)) -} t1) t2
 
----------------------------------------------------------------------------------------
-subTypesContainers :: (IsLocated x, F.Expression x, F.Symbolic x) 
-         => AnnTypeR -> CGEnv -> [x] -> [RefType] -> CGM ()
----------------------------------------------------------------------------------------
-subTypesContainers l g xs ts = zipWithM_ (subTypeContainers l g) [envFindTy x g | x <- xs] ts
 
+-------------------------------------------------------------------------------
+alignTsM :: RefType -> RefType -> CGM (RefType, RefType)
+-------------------------------------------------------------------------------
+alignTsM t t' = getTDefs >>= \g -> return $ alignTs g t t'
+
+
+-------------------------------------------------------------------------------
+withAlignedM :: (RefType -> RefType -> CGM a) -> RefType -> RefType -> CGM a
+-------------------------------------------------------------------------------
+withAlignedM f t t' = alignTsM t t' >>= uncurry f 
  
 
 -- | Monadic unfolding
@@ -556,7 +573,7 @@ instance Freshable String where
 freshId   :: (IsLocated l) => l -> CGM (Id l)
 freshId l = Id l <$> fresh
 
--- freshTy     :: (Show a) => a -> Type -> CGM RefType 
+freshTy :: RefTypable a => s -> a -> CGM RefType
 freshTy _ τ = refresh $ rType τ
 
 instance Freshable F.Refa where
@@ -737,9 +754,11 @@ splitW (W g i t@(TApp _ ts _))
         ws'   <- concatMapM splitW [W g i ti | ti <- ts]
         return $ ws ++ ws'
 
-splitW (W g i (TObj ts _ ))
-  = do  g' <- envTyAdds i ts g
-        concatMapM splitW [W g' i ti | B _ ti <- ts]
+splitW (W g i t@(TObj ts _ ))
+  = do  g'    <- envTyAdds i ts g
+        let bs = bsplitW g t i
+        ws    <- concatMapM splitW [W g' i ti | B _ ti <- ts]
+        return $ bs ++ ws
 
 splitW (W _ _ _ ) = error "Not supported in splitW"
 

@@ -433,7 +433,7 @@ castsM     = zipWith3M_ castM
 
 
 --------------------------------------------------------------------------------
-addUpCast :: Expression (AnnSSA_ r) -> RType r -> TCM r ()
+addUpCast :: (F.Reftable r, PP r) => Expression (AnnSSA_ r) -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 addUpCast e t = modify $ \st -> st { tc_casts = M.insert e (UCST t) (tc_casts st) }
 

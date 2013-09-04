@@ -431,7 +431,7 @@ instance F.Reftable r => PP (RType r) where
 
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 
   pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
-  pp (TObj bs _ )               = ppArgs braces comma bs
+  pp (TObj bs r )               = F.ppTy r $ ppArgs braces comma bs
   pp (TBd (TD (TDef id) v r _)) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r
   pp (TBd _)                    = error "This is not an acceptable form for TBody" 
 

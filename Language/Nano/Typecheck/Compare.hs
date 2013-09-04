@@ -499,9 +499,13 @@ padObject _ _ _ = error "padObject: Cannot pad non-objects"
 
 
 -- | Break one level of padded objects
-bkPaddedObject (TObj xt1s _) (TObj xt2s _) =
-  safeZipWith "bkPaddedObject" checkB xt1s xt2s
-  where
+
+--------------------------------------------------------------------------------
+bkPaddedObject :: (F.Reftable r, PP r) => RType r -> RType r -> [(RType r, RType r)]
+--------------------------------------------------------------------------------
+bkPaddedObject t1@(TObj xt1s _) t2@(TObj xt2s _) =
+  safeZipWith (printf "bkPaddedObject: %s vs %s" (ppshow t1) (ppshow t2)) checkB xt1s xt2s
+  where 
     checkB b b' | b_sym b == b_sym b' = (b_type b, b_type b')
     checkB _ _                        = 
       errorstar "unimplemented: bkPaddedObject: cannot split these objects"

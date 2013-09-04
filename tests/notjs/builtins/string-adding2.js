@@ -1,3 +1,0 @@
-
-(new String("H")) + "i"
-

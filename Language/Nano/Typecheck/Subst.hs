@@ -198,7 +198,7 @@ dotAccess ::  (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) =>
   Env (RType r) -> s -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 dotAccess _ f t@(TObj bs _) = 
-  do  case find (match $ F.symbol f) (tracePP ("Looking for " ++ ppshow f) bs) of
+  do  case find (match $ F.symbol f) bs of
         Just b -> Just (t, b_type b)
         _      -> case find (match $ F.stringSymbol "*") bs of
                     Just b' -> Just (t, b_type b')

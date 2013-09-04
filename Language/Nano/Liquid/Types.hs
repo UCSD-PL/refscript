@@ -237,6 +237,7 @@ stripRTypeBase :: RType r -> Maybe r
 stripRTypeBase (TApp _ _ r) = Just r
 stripRTypeBase (TVar _ r)   = Just r
 stripRTypeBase (TFun _ _ r) = Just r
+stripRTypeBase (TObj _ r)   = Just r
 stripRTypeBase _            = Nothing
  
 ------------------------------------------------------------------------------------------

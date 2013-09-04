@@ -201,8 +201,8 @@ consStmt g (ReturnStmt l (Just e))
         let te    = envFindTy xe g'
             rt    = envFindReturn g'
         if isTop rt
-          then subTypeContainers l g' te (setRTypeR te (rTypeR rt))
-          else subTypeContainers l g' te rt
+          then withAlignedM (subTypeContainers l g') te (setRTypeR te (rTypeR rt))
+          else withAlignedM (subTypeContainers' "Return" l g') te rt
         return Nothing
 
 -- return
@@ -328,7 +328,7 @@ consDownCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (
 consDownCast g x a e 
   = do  γ   <- getTDefs
         g'  <- envAdds [(x, tc)] g
-        uncurry (subTypeContainers l g') $ alignTs γ te tc
+        withAlignedM (subTypeContainers' "Downcast" l g') te tc
         envAddFresh l tc g'
     where 
         tc   = head [ t | Assume t <- ann_fact a]
@@ -340,7 +340,7 @@ consDownCast g x a e
 consDeadCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
 consDeadCast g a e =
-  do  subTypeContainers l g tru fls
+  do  subTypeContainers' "dead" l g tru fls
       envAddFresh l tC g
   where
     tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
@@ -365,7 +365,7 @@ consCall g l _ es ft
   = do (_,its,ot)   <- mfromJust "consCall" . bkFun <$> instantiate l g ft
        (xes, g')    <- consScan consExpr g es
        let (su, ts') = renameBinds its xes
-       subTypesContainers l g' xes ts'
+       zipWithM_ (withAlignedM $ subTypeContainers' "call" l g') [envFindTy x g' | x <- xes] ts'
        envAddFresh l ({- tracePP "Ret Call Type" $ -} F.subst su ot) g'
      {-where -}
      {-  msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)-}

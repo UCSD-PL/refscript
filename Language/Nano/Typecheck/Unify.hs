@@ -53,13 +53,12 @@ unify env θ (TFun xts t _) (TFun xts' t' _) =
 unify env θ (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _)
   | d == d'                             = unifys env θ ts ts'
 
-unify env θ t@(TApp (TDef _) _ _) t'    = unify env θ (unfoldSafe env t) t'
-
-unify env θ t t'@(TApp (TDef _) _ _)    = unify env θ t (unfoldSafe env t')
-
 unify _  θ (TVar α _)     (TVar β _)    = varEql θ α β 
 unify _  θ (TVar α _)     t             = varAsn θ α t 
 unify _  θ t              (TVar α _)    = varAsn θ α t
+
+unify env θ t@(TApp (TDef _) _ _) t'    = unify env θ (unfoldSafe env t) t'
+unify env θ t t'@(TApp (TDef _) _ _)    = unify env θ t (unfoldSafe env t')
 
 -- List[A] + Null `unif` List[T0] + Null => A `unif` T0
 -- TODO: make sure other nothing weird is going on with TVars,

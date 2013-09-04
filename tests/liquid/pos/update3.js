@@ -1,3 +1,4 @@
-function foo(o, s) /*: {/x/: Num, /y/: Str + Num} * /y/ -> Undef */ {
-    o[s] = "a string";
+/*@ foo ::  ({ x: number, *: string }) => { void | true } */ 
+function foo(o) { 
+    o.y = "aaa";
 }

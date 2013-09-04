@@ -1,3 +1,4 @@
-function foo(o, s) /*: {/x/: Num, /y/: Str + Num} * /(x|y)/ -> Undef */ {
-    o[s] = 10;
+/*@ foo ::  ({ x: { v: number | v > 10 } , y: string + number }) => void */ 
+function foo(o) { 
+    o.x = 20;
 }

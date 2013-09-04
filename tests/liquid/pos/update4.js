@@ -1,4 +1,5 @@
-// Assigning to star
-function foo(o, s) /*: { *: Bool, /x/: Num, /y/: Str + Num} * /(z*)/ -> Undef */ {
-    o[s] = true;
+/*@ foo ::  ({ x: { v: number | v = 10 } }) => { v: number | v = 20 } */ 
+function foo(o) { 
+  o.x = 10;
+  return o.x + 10
 }

@@ -166,6 +166,17 @@ consStmt g (EmptyStmt _)
 consStmt g (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))   
   = consAsgn g (Id lx x) e
 
+-- e1.x = e2
+-- @e3.x@ should have the exact same type with @e2@
+consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
+  = do  (x2,g2) <- consExpr g e2
+        (x3,g3) <- consExpr g2 e3
+        let t2   = envFindTy x2 g2
+            t3   = envFindTy x3 g3
+        tx      <- dotAccessM x t3
+        withAlignedM (subTypeContainers' "DotRef-assign" l2 g3) t2 tx
+        return   $ Just g3
+
 -- e
 consStmt g (ExprStmt _ e)   
   = consExpr g e >> return (Just g) 

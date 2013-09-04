@@ -1,3 +1,5 @@
-function foo(o) /*: {/x/: Num} -> Undef */ {
-    o.x = 10;
+
+/*@ foo :: ({x: Num}) => void */ 
+function foo(o) {
+  o.x = 10;
 }

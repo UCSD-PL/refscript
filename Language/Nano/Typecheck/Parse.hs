@@ -174,7 +174,9 @@ arrayBindsP
   = do reserved "[|"
        ts    <- sepBy bareTypeP comma
        reserved "|]"
-       return $ zipWith B (symbol . show <$> [0..]) ts
+       return $ zipWith B (symbol . show <$> [0..]) ts ++ [len ts]
+    where
+      len ts = B (symbol "length") (eSingleton tInt $ length ts)
 
 
 bindsP 

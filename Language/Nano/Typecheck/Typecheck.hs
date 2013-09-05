@@ -380,16 +380,32 @@ tcExpr' γ (ObjectLit _ ps)
   = tcObject γ ps
 
 tcExpr' γ (DotRef l e i) 
-  = tcAccess γ l e i
+  = tcAccessObj γ l e i
 
 tcExpr' γ (BracketRef l e (StringLit _ s))
-  = tcAccess γ l e s
+  = tcAccessObj γ l e s
 
-{--- General case of dynamic key dictionary access-}
-{-tcExpr' γ (BracketRef l e1 e2)-}
-{-  = do  t2 <- tcExpr γ e2-}
-{-        unifyTypeM l "BracketRef" e2 t2 tString-}
-{-        tcAccess γ l e1 s-}
+tcExpr' γ (BracketRef l e1 (IntLit l2 i2))
+  = do t1 <- tcExpr γ e1 
+       case t1 of 
+         TArr t  r -> return t
+         TObj bs r -> safeDotAccess (show i2) t1
+
+--tcExpr' γ (BracketRef l e1 e2)
+--  = do t1 <- tcExpr γ e1 
+--       t2 <- tcExpr γ e2
+--       case t2 of 
+--         TApp TInt _ _ -> 
+--           case t1 of 
+--             TArr t  r -> return t
+--             TObj bs r -> safeDotAccess (show i2) t1
+--         _             -> undefined 
+
+tcExpr' γ (BracketRef l e1 (StringLit l2 s2))
+  = tcAccessObj γ l e1 s2
+
+-- General case of dynamic key dictionary access
+-- TODO 
 
 tcExpr' _ e 
   = convertError "tcExpr" e
@@ -432,17 +448,19 @@ tcObject γ bs
 
 
 ----------------------------------------------------------------------------------
-tcAccess ::  (Ord r, F.Reftable r, PP r, F.Symbolic s, PP s) =>
+tcAccessObj ::  (Ord r, F.Reftable r, PP r, F.Symbolic s, PP s) =>
   Env (RType r) -> (AnnSSA_ r) -> Expression (AnnSSA_ r) -> s -> TCM r (RType r)
 ----------------------------------------------------------------------------------
-tcAccess γ _ e f = 
+tcAccessObj γ _ e f = 
   -- TODO: handle case of Nothing being returned from dotAccess
   tcExpr γ e >>= safeDotAccess f
 
 
 tcArray γ es = mapM (tcExpr γ) es >>= return . mkObj
   where 
-    mkObj ts = tracePP (ppshow es) $ TObj (zipWith B (F.symbol . show <$> [0..]) ts) F.top
+    mkObj ts = tracePP (ppshow es) $ TObj (bs ts) F.top
+    bs ts    = zipWith B (F.symbol . show <$> [0..]) ts ++ [len ts]
+    len ts   = B (F.symbol "length") tInt
 
 
 ----------------------------------------------------------------------------------

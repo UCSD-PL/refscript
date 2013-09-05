@@ -301,6 +301,10 @@ consExpr  g (DotRef l e i)
   = do  (x, g') <- consExpr g e
         consAccess l x g' i
 
+consExpr  g (BracketRef l e (IntLit _ i))
+  = do  (x, g') <- consExpr g e
+        consAccess l x g' (show i)
+
 consExpr  g (BracketRef l e (StringLit _ s))
   = do  (x, g') <- consExpr g e
         consAccess l x g' s
@@ -431,7 +435,10 @@ consArr ::AnnTypeR -> CGEnv -> [Expression AnnTypeR] -> CGM  (Id AnnTypeR, CGEnv
 ---------------------------------------------------------------------------------
 consArr l g es = 
   do  (xes, g')   <- consScan consExpr g es
-      let pxs      = zipWith B (F.symbol . show <$> [0..]) $ (`envFindTy` g') <$> xes
+      let ts       = (`envFindTy` g') <$> xes
+      let pxs      = zipWith B (F.symbol . show <$> [0..]) ts ++ [len ts]
       envAddFresh l (tracePP (ppshow es) $ TObj pxs F.top) g'
+  where
+    len ts   = B (F.symbol "length") (eSingleton tInt $ length ts)
       
 

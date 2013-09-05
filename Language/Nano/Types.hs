@@ -177,6 +177,7 @@ instance IsNano (Expression a) where
   isNano (BoolLit _ _)         = True
   isNano (IntLit _ _)          = True
   isNano (NullLit _ )          = True
+  isNano (ArrayLit _ es)       = all isNano es
   isNano (StringLit _ _)       = True
   isNano (VarRef _ _)          = True
   isNano (InfixExpr _ o e1 e2) = isNano o && isNano e1 && isNano e2
@@ -184,8 +185,7 @@ instance IsNano (Expression a) where
   isNano (CallExpr _ e es)     = all isNano (e:es)
   isNano (ObjectLit _ bs)      = all isNano $ snd <$> bs
   isNano (DotRef _ e _)        = isNano e
-  -- Do not enable yet
-  -- isNano (BracketRef _ e1 e2)  = isNano e1 && isNano e2
+  isNano (BracketRef _ e1 e2)  = isNano e1 && isNano e2
   isNano e                     = errortext (text "Not Nano Expression!" <+> pp e) 
   -- isNano _                     = False
 

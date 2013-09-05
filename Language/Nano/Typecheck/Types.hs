@@ -279,22 +279,22 @@ rUnion _              = F.top
  
 -- Get the top-level refinement 
 rTypeR :: RType r -> r
-rTypeR (TApp _ _ r) = r
-rTypeR (TVar _ r)   = r
-rTypeR (TFun _ _ r) = r
-rTypeR (TObj _ r)   = r
-rTypeR (TArr _ r)   = r
-rTypeR (TBd  _)     = errorstar "Unimplemented: rTypeR - TBd"
-rTypeR (TAll _ _ )  = errorstar "Unimplemented: rTypeR - TAll"
+rTypeR (TApp _ _ r ) = r
+rTypeR (TVar _ r   ) = r
+rTypeR (TFun _ _ r ) = r
+rTypeR (TObj _ r   ) = r
+rTypeR (TArr _ r   ) = r
+rTypeR (TBd  _     ) = errorstar "Unimplemented: rTypeR - TBd"
+rTypeR (TAll _ _   ) = errorstar "Unimplemented: rTypeR - TAll"
 
 setRTypeR :: RType r -> r -> RType r
-setRTypeR (TApp c ts _)   r' = TApp c ts r'
-setRTypeR (TVar v _)      r' = TVar v r'
-setRTypeR (TFun xts ot _) r' = TFun xts ot r'
-setRTypeR (TObj xts _)    r' = TObj xts r'
-setRTypeR (TArr t _)      r  = TArr t r
-setRTypeR (TBd  _)        _  = errorstar "Unimplemented: setRTypeR - TBd"
-setRTypeR (TAll _ _ )     _  = errorstar "Unimplemented: setRTypeR - TAll"
+setRTypeR (TApp c ts _   ) r' = TApp c ts r'
+setRTypeR (TVar v _      ) r' = TVar v r'
+setRTypeR (TFun xts ot _ ) r' = TFun xts ot r'
+setRTypeR (TObj xts _    ) r' = TObj xts r'
+setRTypeR (TArr t _      ) r  = TArr t r
+setRTypeR (TBd  _        ) _  = errorstar "Unimplemented: setRTypeR - TBd"
+setRTypeR (TAll _ _      ) _  = errorstar "Unimplemented: setRTypeR - TAll"
 
 
 ---------------------------------------------------------------------------------------
@@ -435,6 +435,7 @@ instance F.Reftable r => PP (RType r) where
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 
   pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
   pp (TObj bs r )               = F.ppTy r $ ppArgs braces comma bs
+  pp (TArr _ _ )                = error "unimplemented pp array"
   pp (TBd (TD (TDef id) v r _)) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r
   pp (TBd _)                    = error "This is not an acceptable form for TBody" 
 

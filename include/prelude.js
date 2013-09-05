@@ -87,6 +87,8 @@ function pos(){
 /*@ safehead :: forall A. ({xs:list [A] | (len xs) > 0}) => A                                     */
 /*@ safetail :: forall A. ({xs:list [A] | (len xs) > 0}) => {v:list [A] | (len v) = (len xs) - 1} */
 
+/*@ Array    :: (n : { v: number | 0 <= v } ) => { v: [ undefined ] | (len v) = n }               */
+
 
 
 /*************************************************************************/

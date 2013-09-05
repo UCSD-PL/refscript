@@ -264,7 +264,7 @@ tcStmt' γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))
 tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot l3 e3 x) e2))
   = do  t2 <- tcExpr γ e2 
         t3 <- tcExpr γ e3
-        tx <- safeDotAccess x t2
+        tx <- safeAccessType x t2
         unifyTypeM l2 "DotRef" e2 t2 tx
         return $ Just γ 
 -- No strong updates allowed here - so return the same envirnment      
@@ -379,17 +379,26 @@ tcExpr' γ (CallExpr l e es)
 tcExpr' γ (ObjectLit _ ps) 
   = tcObject γ ps
 
-tcExpr' γ (DotRef l e i) 
-  = tcAccessObj γ l e i
+tcExpr' γ (DotRef l e i)
+  = tcExpr γ e >>= safeAccessType i
 
 tcExpr' γ (BracketRef l e (StringLit _ s))
-  = tcAccessObj γ l e s
+  = do t <- tcExpr γ e
+       case t of 
+         TArr ta r -> return ta
+         -- TODO: TArr: - Add array bounds checks
+         --             - Add support for special fields like:
+         --               length, __proto__, pop, push, ...
+--         TObj bs r -> accessObj s t
+         _         -> error $ errorBracketAccess s t 
 
-tcExpr' γ (BracketRef l e1 (IntLit l2 i2))
-  = do t1 <- tcExpr γ e1 
-       case t1 of 
-         TArr t  r -> return t
-         TObj bs r -> safeDotAccess (show i2) t1
+tcExpr' γ (BracketRef _ e (IntLit _ i2))
+  = do t <- tcExpr γ e
+       case t of
+         TArr ta r -> return $ tracePP "tcExpr:BrancketRef" ta 
+         -- TODO: TArr: - Add array bounds checks
+--         TObj bs r -> accessObj (show i2) t
+         _         -> error $ errorBracketAccess (show i2) t 
 
 --tcExpr' γ (BracketRef l e1 e2)
 --  = do t1 <- tcExpr γ e1 
@@ -400,9 +409,6 @@ tcExpr' γ (BracketRef l e1 (IntLit l2 i2))
 --             TArr t  r -> return t
 --             TObj bs r -> safeDotAccess (show i2) t1
 --         _             -> undefined 
-
-tcExpr' γ (BracketRef l e1 (StringLit l2 s2))
-  = tcAccessObj γ l e1 s2
 
 -- General case of dynamic key dictionary access
 -- TODO 
@@ -445,15 +451,6 @@ tcObject γ bs
       let (ps, es) = unzip bs
       bts <- zipWith B (map F.symbol ps) <$> mapM (tcExpr γ) es
       return $ TObj bts F.top
-
-
-----------------------------------------------------------------------------------
-tcAccessObj ::  (Ord r, F.Reftable r, PP r, F.Symbolic s, PP s) =>
-  Env (RType r) -> (AnnSSA_ r) -> Expression (AnnSSA_ r) -> s -> TCM r (RType r)
-----------------------------------------------------------------------------------
-tcAccessObj γ _ e f = 
-  -- TODO: handle case of Nothing being returned from dotAccess
-  tcExpr γ e >>= safeDotAccess f
 
 
 tcArray γ es = mapM (tcExpr γ) es >>= return . mkObj

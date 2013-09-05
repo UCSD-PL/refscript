@@ -43,6 +43,7 @@ errorObjectTAccess t    = printf "Dot notation not permitted on expressions of t
 errorObjectBinding      = printf "Field does not exist in object" 
 errorNullUndefined      = printf "Null type is not a subtype of undefined"
 errorUniqueTypeParams   = printf "Only unique type paramteres are allowed"
+errorBracketAccess t f  = printf "Cannot access field \"%s\" of type: %s" (ppshow f) (ppshow t)
  
 ppshow                  = render . pp
 

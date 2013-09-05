@@ -434,6 +434,7 @@ instance F.Reftable r => PP (RType r) where
 
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 
   pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
+  pp (TArr t r)                 = F.ppTy r $ brackets (pp t)  
   pp (TObj bs r )               = F.ppTy r $ ppArgs braces comma bs
   pp (TArr _ _ )                = error "unimplemented pp array"
   pp (TBd (TD (TDef id) v r _)) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r

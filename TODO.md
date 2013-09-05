@@ -4,6 +4,11 @@ Todo List
 JS support / Features
 ---------------------
 
+0.  What should Array(n) return? 
+    In a setting without strong updates, it returns an array of undefined, but
+    this is not very helpful since it will not be able to be updated to anything
+    useful.
+
 1.  prelude.js: restore refinemnets in logical negation
 
 2.  Encoding truthy, falsy, undefined, null etc.

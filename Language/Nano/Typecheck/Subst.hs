@@ -22,7 +22,7 @@ module Language.Nano.Typecheck.Subst (
   , unfoldFirst, unfoldMaybe, unfoldSafe
   
   -- * Accessing fields
-  , dotAccess
+  , accessType
   
 
   ) where 
@@ -102,6 +102,7 @@ instance (PP r, F.Reftable r) => Substitutable r (Bind r) where
 
 instance Free (RType r) where
   free (TApp _ ts _)        = S.unions   $ free <$> ts
+  free (TArr t _)           = free t
   free (TVar α _)           = S.singleton α 
   free (TFun xts t _)       = S.unions   $ free <$> t:ts where ts = b_type <$> xts
   free (TAll α t)           = S.delete α $ free t 
@@ -138,6 +139,7 @@ appTy θ (TObj bs z)              = TObj (map (\b -> B { b_sym = b_sym b, b_type
 appTy (Su m) t@(TVar α r)        = (M.lookupDefault t α m) `strengthen` r
 appTy θ (TFun ts t r)            = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m) (TAll α t)          = apply (Su $ M.delete α m) t 
+appTy θ (TArr t r)               = TArr (apply θ t) r
 appTy (Su m) (TBd (TD c α t s))  = TBd $ TD c α (apply (Su $ foldr M.delete m α) t) s
 
 
@@ -161,6 +163,7 @@ unfoldFirst env t = go t
         Just (TBd (TD _ vs bd _ )) -> apply (fromList $ zip vs acts) bd
         _                          -> error $ errorUnboundId id
     go (TApp c a r)            = TApp c (go <$> a) r
+    go (TArr t r)              = TArr (go t) r
     go t@(TVar _ _ )           = t
     appTBi f (B s t)           = B s $ f t
 
@@ -192,12 +195,17 @@ unfoldSafe :: (PP r, F.Reftable r) => Env (RType r) -> RType r -> RType r
 unfoldSafe env = either error id . unfoldMaybe env
 
 
--- Returns type to cast the current expression and the returned type
+-- Given an environment @γ@, a field @s@ and a type @t@, `accessType` returns a
+-- tupple with elements:
+-- ∙ The subtype of @t@ for which the access does not throw an error.
+-- ∙ The type the corresponds to the access of exactly that type that does not
+--   throw an error.
+--
 -------------------------------------------------------------------------------
-dotAccess ::  (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) => 
+accessType ::  (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) => 
   Env (RType r) -> s -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-dotAccess _ f t@(TObj bs _) = 
+accessType _ f t@(TObj bs _) = 
   do  case find (match $ F.symbol f) bs of
         Just b -> Just (t, b_type b)
         _      -> case find (match $ F.stringSymbol "*") bs of
@@ -205,19 +213,21 @@ dotAccess _ f t@(TObj bs _) =
                     _       -> Just (t, tUndef)
   where match s (B f _)  = s == f
 
-dotAccess γ f t@(TApp c ts _ ) = go c
+accessType γ f t@(TApp c ts _ ) = go c
   where  go TUn      = dotAccessUnion γ f ts
          go TInt     = Just (t, tUndef)
          go TBool    = Just (t, tUndef)
          go TString  = Just (t, tUndef)
          go TUndef   = Nothing
          go TNull    = Nothing
-         go (TDef _) = dotAccess γ f $ unfoldSafe γ t
-         go TTop     = error "dotAccess top"
-         go TVoid    = error "dotAccess void"
+         go (TDef _) = accessType γ f $ unfoldSafe γ t
+         go TTop     = error "accessType top"
+         go TVoid    = error "accessType void"
 
-dotAccess _ _ t@(TFun _ _ _ ) = Just (t, tUndef)
-dotAccess _ _ t               = error $ "dotAccess " ++ (ppshow t) 
+accessType _ _ t@(TFun _ _ _ ) = Just (t, tUndef)
+accessType _ _ a@(TArr t _)    = Just (a, t)
+
+accessType _ _ t               = error $ "accessType " ++ (ppshow t) 
 
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns
@@ -230,7 +240,7 @@ dotAccessUnion ::  (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) =>
 dotAccessUnion γ f ts = 
   -- Gather all the types that do not throw errors, and the type of 
   -- the accessed expression that yields them
-  case [tts | Just tts <- dotAccess γ f <$> ts] of
+  case [tts | Just tts <- accessType γ f <$> ts] of
     [] -> Nothing
     ts -> Just $ mapPair mkUnion $ unzip ts
 

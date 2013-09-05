@@ -27,7 +27,7 @@ module Language.Nano.Typecheck.TCMonad (
   , freshTyArgs
 
   -- * Dot Access
-  , safeDotAccess
+  , safeAccessType
 
   -- * Type definitions
   , getTDefs
@@ -223,15 +223,15 @@ setTyArgs l βs
 
 -- Access field @f@ of type @t@, adding a cast if needed to avoid errors.
 -------------------------------------------------------------------------------
-safeDotAccess :: (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) => 
+safeAccessType :: (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) => 
   s -> RType r -> TCM r (RType r)
 -------------------------------------------------------------------------------
-safeDotAccess f t  
+safeAccessType f t 
   = do  γ <- getTDefs 
         e <- fromJust <$> getExpr
-        case dotAccess γ f t of 
+        case accessType γ f t of 
           Just (t',tf) -> castM e t t' >> return tf
-          Nothing      -> error "safeDotAccess: unsafe"
+          Nothing      -> error "safeAccessType: unsafe"
 
 
       

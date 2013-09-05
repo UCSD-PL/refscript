@@ -179,6 +179,9 @@ ssaExpr e@(StringLit _ _)
 ssaExpr e@(NullLit _)               
   = return e 
 
+ssaExpr e@(ArrayLit l es)
+  = ArrayLit l <$> (mapM ssaExpr es)
+
 ssaExpr e@(VarRef l x)
   = do imm <- isImmutable x
        xo  <- findSsaEnv x

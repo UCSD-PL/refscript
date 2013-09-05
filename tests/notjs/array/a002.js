@@ -1,2 +1,5 @@
-var arr = [];
-arr["0"];
+/*@ foo :: () => { undefined | true } */
+function foo () {
+  var arr = [];
+  return arr["0"];
+}

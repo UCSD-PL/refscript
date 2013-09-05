@@ -131,7 +131,8 @@ bareAtomP p
 bbaseP :: Parser (Reft -> RefType)
 bbaseP 
   =  try (TVar <$> tvarP)
- <|> try (TObj <$> (braces $ bindsP) )
+ <|> try (TObj <$> (braces $ bindsP) )      -- Object types
+ <|> try (TObj <$> arrayBindsP)             -- Array literal types
  <|> try (TApp <$> tDefP <*> (brackets $ sepBy bareTypeP comma))  -- This is what allows: list [A], tree [A,B] etc...
  <|>     ((`TApp` []) <$> tconP)
 
@@ -148,6 +149,7 @@ upperWordP = condIdP nice (not . isLower . head)
 tconP :: Parser TCon
 tconP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "boolean"   >> return TBool)
+     <|> try (reserved "undefined" >> return TUndef)
      <|> try (reserved "void"      >> return TVoid)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
@@ -167,6 +169,13 @@ bareAllP
        dot
        t  <- bareTypeP
        return $ foldr TAll t as
+
+arrayBindsP 
+  = do reserved "[|"
+       ts    <- sepBy bareTypeP comma
+       reserved "|]"
+       return $ zipWith B (symbol . show <$> [0..]) ts
+
 
 bindsP 
   =  try (sepBy1 bareBindP comma)

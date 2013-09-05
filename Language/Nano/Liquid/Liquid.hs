@@ -277,6 +277,9 @@ consExpr g (StringLit l s)
 consExpr g (NullLit l)
   = envAddFresh l tNull g
 
+consExpr g (ArrayLit l es)
+  = consArr l g es
+
 consExpr g (VarRef i x)
   = do addAnnot l x t
        return ({- trace ("consExpr:VarRef" ++ ppshow x ++ " : " ++ ppshow t)-} x, g) 
@@ -417,11 +420,18 @@ consSeq f           = foldM step . Just
 consObj :: AnnTypeR -> CGEnv -> [(Prop AnnTypeR, Expression AnnTypeR)] -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------
 consObj l g pe = 
-  do
-    let (ps, es) = unzip pe
-    (xes, g')   <- consScan consExpr g es
-    let pxs      = zipWith B (map F.symbol ps) $ map (\x -> envFindTy x g') xes
-    let tob      = TObj pxs F.top
-    (i, g'')    <- envAddFresh  l tob g'
-    return       $ {- trace (printf "Adding: %s :: %s" (ppshow i) (ppshow tob)) -} (i,g'')
-  
+  do  let (ps, es) = unzip pe
+      (xes, g')   <- consScan consExpr g es
+      let pxs      = zipWith B (map F.symbol ps) $ (`envFindTy` g') <$> xes
+      envAddFresh l (TObj pxs F.top) g'
+    
+
+---------------------------------------------------------------------------------
+consArr ::AnnTypeR -> CGEnv -> [Expression AnnTypeR] -> CGM  (Id AnnTypeR, CGEnv)
+---------------------------------------------------------------------------------
+consArr l g es = 
+  do  (xes, g')   <- consScan consExpr g es
+      let pxs      = zipWith B (F.symbol . show <$> [0..]) $ (`envFindTy` g') <$> xes
+      envAddFresh l (tracePP (ppshow es) $ TObj pxs F.top) g'
+      
+

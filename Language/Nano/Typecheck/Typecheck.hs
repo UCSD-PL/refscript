@@ -359,6 +359,9 @@ tcExpr' _ (StringLit _ _)
 tcExpr' _ (NullLit _)
   = return tNull
 
+tcExpr' γ (ArrayLit _ es)
+  = tcArray γ es
+
 tcExpr' γ (VarRef l x)
   = case envFindTy x γ of 
       Nothing -> logError (ann l) (errorUnboundIdEnv x γ) tErr
@@ -435,6 +438,11 @@ tcAccess ::  (Ord r, F.Reftable r, PP r, F.Symbolic s, PP s) =>
 tcAccess γ _ e f = 
   -- TODO: handle case of Nothing being returned from dotAccess
   tcExpr γ e >>= safeDotAccess f
+
+
+tcArray γ es = mapM (tcExpr γ) es >>= return . mkObj
+  where 
+    mkObj ts = tracePP (ppshow es) $ TObj (zipWith B (F.symbol . show <$> [0..]) ts) F.top
 
 
 ----------------------------------------------------------------------------------

@@ -51,7 +51,9 @@ idBindP :: Parser (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
 
 identifierP :: Parser (Id SourceSpan)
-identifierP = withSpan Id lowerIdP -- <$> getPosition <*> lowerIdP -- Lexer.identifier
+-- identifierP = withSpan Id lowerIdP 
+identifierP =   try (withSpan Id upperIdP)
+           <|>      (withSpan Id lowerIdP)
 
 tBodyP :: Parser (Id SourceSpan, RType Reft)
 tBodyP = do  id <- identifierP 
@@ -103,7 +105,6 @@ bareTypeNoUnionP
 
 -- Creating the bindings right away at bareArgP
 bareFunP
-  -- = do args   <- parens $ sepBy bareTypeP comma
   = do args   <- parens $ sepBy bareArgP comma
        reserved "=>" 
        ret    <- bareTypeP 
@@ -133,6 +134,7 @@ bbaseP
   =  try (TVar <$> tvarP)
  <|> try (TObj <$> (braces $ bindsP) )      -- Object types
  <|> try (TObj <$> arrayBindsP)             -- Array literal types
+ <|> try (TArr <$> arrayP)
  <|> try (TApp <$> tDefP <*> (brackets $ sepBy bareTypeP comma))  -- This is what allows: list [A], tree [A,B] etc...
  <|>     ((`TApp` []) <$> tconP)
 
@@ -169,6 +171,9 @@ bareAllP
        dot
        t  <- bareTypeP
        return $ foldr TAll t as
+
+arrayP = brackets bareTypeP
+
 
 arrayBindsP 
   = do reserved "[|"

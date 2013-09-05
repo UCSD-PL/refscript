@@ -203,6 +203,7 @@ rTypeSort t@(TAll _ _)     = rTypeSortForAll t
 rTypeSort (TFun xts t _)   = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
 rTypeSort (TObj _ _)       = F.FApp (F.stringFTycon "object") []
+rTypeSort (TArr _ _)       = F.FApp (F.stringFTycon "array") []
 rTypeSort t                = error ("Type: " ++ ppshow t ++ 
                                     " is not supported in rTypeSort")
 
@@ -268,6 +269,7 @@ emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts) (emapReft f γ'
 emapReft f γ (TObj bs r)    = TObj (emapReftBind f γ' <$> bs) (f γ r)
   where 
     γ'                      = (b_sym <$> bs) ++ γ 
+emapReft f γ (TArr t r)     = TArr (emapReft f γ t) (f γ r)
 emapReft _ _ _              = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)    = B x $ emapReft f γ t

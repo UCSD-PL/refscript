@@ -173,7 +173,7 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
         (x3,g3) <- consExpr g2 e3
         let t2   = envFindTy x2 g2
             t3   = envFindTy x3 g3
-        tx      <- dotAccessM x t3
+        tx      <- accessTypeM x t3
         withAlignedM (subTypeContainers' "DotRef-assign" l2 g3) t2 tx
         return   $ Just g3
 
@@ -320,9 +320,9 @@ consExpr _ e
 consAccess :: (F.Symbolic s, F.Symbolic x, F.Expression x, IsLocated l, IsLocated x, PP s) =>
               l -> x -> CGEnv -> s -> CGM (Id l, CGEnv)
 ---------------------------------------------------------------------------------------------
-consAccess l x g i = dotAccessM i (envFindTy x g) >>= \t -> envAddFresh l t g
+consAccess l x g i = accessTypeM i (envFindTy x g) >>= \t -> envAddFresh l t g
 
-dotAccessM f t = getTDefs >>= \γ -> return $ snd $ fromJust $ dotAccess γ f t
+accessTypeM f t = getTDefs >>= \γ -> return $ snd $ fromJust $ accessType γ f t
 
        
 

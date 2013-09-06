@@ -27,7 +27,8 @@ module Language.Nano.Typecheck.TCMonad (
   , freshTyArgs
 
   -- * Dot Access
-  , safeAccessType
+  , safeGetProp
+  , safeGetIdx
 
   -- * Type definitions
   , getTDefs
@@ -223,17 +224,25 @@ setTyArgs l βs
 
 -- Access field @f@ of type @t@, adding a cast if needed to avoid errors.
 -------------------------------------------------------------------------------
-safeAccessType :: (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) => 
-  s -> RType r -> TCM r (RType r)
+safeGetProp :: (Ord r, PP r, F.Reftable r) => String -> RType r -> TCM r (RType r)
 -------------------------------------------------------------------------------
-safeAccessType f t 
-  = do  γ <- getTDefs 
+safeGetProp f t
+  = do  γ <- getTDefs
         e <- fromJust <$> getExpr
-        case accessType γ f t of 
+        case getProp γ f t of
           Just (t',tf) -> castM e t t' >> return tf
-          Nothing      -> error "safeAccessType: unsafe"
-
-
+          Nothing      -> error "safeGetProp" --TODO: deadcode
+ 
+-- Access index @i@ of type @t@, adding a cast if needed to avoid errors.
+-------------------------------------------------------------------------------
+safeGetIdx :: (Ord r, PP r, F.Reftable r) => Int -> RType r -> TCM r (RType r)
+-------------------------------------------------------------------------------
+safeGetIdx f t
+  = do  γ <- getTDefs
+        e <- fromJust <$> getExpr
+        case getIdx γ f t of
+          Just (t',tf) -> castM e t t' >> return tf
+          Nothing      -> error "safeGetIdx" --TODO: deadcode
       
 
 -------------------------------------------------------------------------------
@@ -415,6 +424,9 @@ withExpr e action =
       return $ r
 
 
+-- For the expression @e@, check the subtyping relation between the type @t@
+-- which is the actual type for @e@ and @t'@ which is the desired (cast) type
+-- and insert the right kind of cast. 
 --------------------------------------------------------------------------------
 castM     :: (Ord r, PP r, F.Reftable r) => Expression (AnnSSA_ r) -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------

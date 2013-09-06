@@ -264,7 +264,7 @@ tcStmt' γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))
 tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot l3 e3 x) e2))
   = do  t2 <- tcExpr γ e2 
         t3 <- tcExpr γ e3
-        tx <- safeAccessType x t2
+        tx <- safeGetProp x t2
         unifyTypeM l2 "DotRef" e2 t2 tx
         return $ Just γ 
 -- No strong updates allowed here - so return the same envirnment      
@@ -379,42 +379,19 @@ tcExpr' γ (CallExpr l e es)
 tcExpr' γ (ObjectLit _ ps) 
   = tcObject γ ps
 
-tcExpr' γ (DotRef l e i)
-  = tcExpr γ e >>= safeAccessType i
+-- x.f = x["f"]
+tcExpr' γ (DotRef l e s) = tcExpr γ e >>= safeGetProp (unId s) 
 
-tcExpr' γ (BracketRef l e (StringLit _ s))
-  = do t <- tcExpr γ e
-       case t of 
-         TArr ta r -> return ta
-         -- TODO: TArr: - Add array bounds checks
-         --             - Add support for special fields like:
-         --               length, __proto__, pop, push, ...
---         TObj bs r -> accessObj s t
-         _         -> error $ errorBracketAccess s t 
+-- x["f"]
+tcExpr' γ (BracketRef _ e (StringLit _ s)) = tcExpr γ e >>= safeGetProp s
 
-tcExpr' γ (BracketRef _ e (IntLit _ i2))
-  = do t <- tcExpr γ e
-       case t of
-         TArr ta r -> return $ tracePP "tcExpr:BrancketRef" ta 
-         -- TODO: TArr: - Add array bounds checks
---         TObj bs r -> accessObj (show i2) t
-         _         -> error $ errorBracketAccess (show i2) t 
-
---tcExpr' γ (BracketRef l e1 e2)
---  = do t1 <- tcExpr γ e1 
---       t2 <- tcExpr γ e2
---       case t2 of 
---         TApp TInt _ _ -> 
---           case t1 of 
---             TArr t  r -> return t
---             TObj bs r -> safeDotAccess (show i2) t1
---         _             -> undefined 
-
--- General case of dynamic key dictionary access
--- TODO 
+-- x[i] 
+tcExpr' γ (BracketRef _ e (IntLit _ i)) = tcExpr γ e >>= safeGetIdx i
 
 tcExpr' _ e 
   = convertError "tcExpr" e
+
+
 
 ----------------------------------------------------------------------------------
 tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 

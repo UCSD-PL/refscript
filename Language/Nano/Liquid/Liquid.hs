@@ -297,13 +297,13 @@ consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 
        consCall g' l e es $ envFindTy x g'
 
-consExpr  g (DotRef l e i)
+consExpr  g (DotRef l e s)
   = do  (x, g') <- consExpr g e
-        consAccess l x g' i
+        consAccess l x g' (unId s)
 
-consExpr  g (BracketRef l e (IntLit _ i))
-  = do  (x, g') <- consExpr g e
-        consAccess l x g' (show i)
+{-consExpr  g (BracketRef l e (IntLit _ i))-}
+{-  = do  (x, g') <- consExpr g e-}
+{-        consAccess l x g' (show i)-}
 
 consExpr  g (BracketRef l e (StringLit _ s))
   = do  (x, g') <- consExpr g e
@@ -316,13 +316,20 @@ consExpr _ e
   = error $ (printf "consExpr: not handled %s" (ppshow e))
 
 
----------------------------------------------------------------------------------------------
-consAccess :: (F.Symbolic s, F.Symbolic x, F.Expression x, IsLocated l, IsLocated x, PP s) =>
-              l -> x -> CGEnv -> s -> CGM (Id l, CGEnv)
----------------------------------------------------------------------------------------------
-consAccess l x g i = accessTypeM i (envFindTy x g) >>= \t -> envAddFresh l t g
+--------------------------------------------------------------------------------
+consAccess :: ( IsLocated l, F.Symbolic x, F.Expression x, IsLocated x) => 
+              l -> x -> CGEnv -> String -> CGM (Id l, CGEnv)
+--------------------------------------------------------------------------------
+consAccess l x g s = accessTypeM s (envFindTy x g) >>= (`add` g)
+  where
+    add = envAddFresh l
 
-accessTypeM f t = getTDefs >>= \γ -> return $ snd $ fromJust $ accessType γ f t
+-- NOTE: There is some duplication done here in terms of what Typecheck does
+--------------------------------------------------------------------------------
+accessTypeM :: String -> RefType -> CGM RefType
+--------------------------------------------------------------------------------
+accessTypeM s t = getTDefs >>= \γ -> return $ snd $ fromJust $ getProp γ s t
+
 
        
 

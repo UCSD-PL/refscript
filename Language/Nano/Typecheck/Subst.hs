@@ -22,7 +22,8 @@ module Language.Nano.Typecheck.Subst (
   , unfoldFirst, unfoldMaybe, unfoldSafe
   
   -- * Accessing fields
-  , accessType
+  , getProp
+  , getIdx
   
 
   ) where 
@@ -31,6 +32,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Parse as P
 import           Language.Nano.Errors 
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
@@ -40,6 +42,13 @@ import qualified Data.HashSet as S
 import           Data.List                      (find)
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
+
+import Text.Parsec
+import Text.Parsec.Expr
+import Text.Parsec.Language
+import Text.Parsec.String hiding (Parser, parseFromFile)
+import Text.Printf  (printf)
+
 import           Text.Printf 
 -- import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
@@ -195,52 +204,91 @@ unfoldSafe :: (PP r, F.Reftable r) => Env (RType r) -> RType r -> RType r
 unfoldSafe env = either error id . unfoldMaybe env
 
 
--- Given an environment @γ@, a field @s@ and a type @t@, `accessType` returns a
--- tupple with elements:
+-- Given an environment @γ@, a (string) field @s@ and a type @t@, `getProp` 
+-- returns a tupple with elements:
 -- ∙ The subtype of @t@ for which the access does not throw an error.
 -- ∙ The type the corresponds to the access of exactly that type that does not
 --   throw an error.
 --
 -------------------------------------------------------------------------------
-accessType ::  (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) => 
-  Env (RType r) -> s -> RType r -> Maybe (RType r, RType r)
+getProp ::  (Ord r, PP r, F.Reftable r) => 
+  Env (RType r) -> String -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-accessType _ f t@(TObj bs _) = 
-  do  case find (match $ F.symbol f) bs of
+getProp _ s t@(TObj bs _) = 
+  do  case find (match $ F.symbol s) bs of
         Just b -> Just (t, b_type b)
         _      -> case find (match $ F.stringSymbol "*") bs of
                     Just b' -> Just (t, b_type b')
                     _       -> Just (t, tUndef)
   where match s (B f _)  = s == f
 
-accessType γ f t@(TApp c ts _ ) = go c
-  where  go TUn      = dotAccessUnion γ f ts
+getProp γ s t@(TApp c ts _ ) = go c
+  where  go TUn      = getPropUnion γ s ts
          go TInt     = Just (t, tUndef)
          go TBool    = Just (t, tUndef)
          go TString  = Just (t, tUndef)
          go TUndef   = Nothing
          go TNull    = Nothing
-         go (TDef _) = accessType γ f $ unfoldSafe γ t
-         go TTop     = error "accessType top"
-         go TVoid    = error "accessType void"
+         go (TDef _) = getProp γ s $ unfoldSafe γ t
+         go TTop     = error "getProp top"
+         go TVoid    = error "getProp void"
 
-accessType _ _ t@(TFun _ _ _ ) = Just (t, tUndef)
-accessType _ _ a@(TArr t _)    = Just (a, t)
+getProp _ _ t@(TFun _ _ _ ) = Just (t, tUndef)
 
-accessType _ _ t               = error $ "accessType " ++ (ppshow t) 
+getProp γ s a@(TArr t _)    = 
+  case s of
+    -- TODO: make more specific, add refinements
+    "length" -> Just (a, tInt) 
+    _        -> case stringToInt s of
+    -- Implicit coersion of numieric strings:
+    -- x["0"] = x[0], x["1"] = x[1], etc.
+                  Just i  -> getIdx γ i a 
+    -- The rest of the cases are undefined
+                  Nothing -> Just (a, tUndef) 
+
+getProp _ _ t               = error $ "getProp " ++ (ppshow t) 
+
+
+-------------------------------------------------------------------------------
+stringToInt :: String -> Maybe Int
+-------------------------------------------------------------------------------
+stringToInt s = 
+  case runParser P.integer 0 "" s of
+    Right i -> Just $ fromInteger i
+    Left _  -> Nothing
 
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
-dotAccessUnion ::  (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) => 
-  Env (RType r) -> s -> [RType r] -> Maybe (RType r, RType r)
+getPropUnion ::  (Ord r, PP r, F.Reftable r) => 
+  Env (RType r) -> String -> [RType r] -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-dotAccessUnion γ f ts = 
+getPropUnion γ f ts = 
   -- Gather all the types that do not throw errors, and the type of 
   -- the accessed expression that yields them
-  case [tts | Just tts <- accessType γ f <$> ts] of
+  case [tts | Just tts <- getProp γ f <$> ts] of
     [] -> Nothing
     ts -> Just $ mapPair mkUnion $ unzip ts
+
+
+-- Given an environment @γ@, a numeric index @i@ and a type @t@, `getIdx` 
+-- returns a tupple with elements:
+-- ∙ TODO: An array bounds check.
+-- ∙ The accessed type.
+--
+-------------------------------------------------------------------------------
+getIdx ::  (Ord r, PP r, F.Reftable r) => 
+  Env (RType r) -> Int -> RType r -> Maybe (RType r, RType r)
+-------------------------------------------------------------------------------
+-- NOTE: For the moment only allow index access to array types
+-- When prototypes are encoded, also allow accesses to whatever has Array in its 
+-- prototype chain. In a nominal prototyping system, it should be sound to
+-- encode `instanceof` this way.
+-- TODO: Add array bounds checks
+getIdx _ _ a@(TArr t _)  = Just (a,t)
+getIdx γ i t             = getProp γ (show i) t 
+--error $ "Unimplemented: getIdx on" ++ (ppshow t) 
+
 

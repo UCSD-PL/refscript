@@ -9,14 +9,16 @@ JS support / Features
     this is not very helpful since it will not be able to be updated to anything
     useful.
 
-1.  prelude.js: restore refinemnets in logical negation
+1.  How do you cast to Array? 
 
-2.  Encoding truthy, falsy, undefined, null etc.
+2.  prelude.js: restore refinemnets in logical negation
+
+3.  Encoding truthy, falsy, undefined, null etc.
     Eg: tc/pos/obj02.js, tc/pos/union05.js
 
-3.  For/while loops
+4.  For/while loops
 
-4.  Prototyping
+5.  Prototyping
 
 
 Tool / Implementation

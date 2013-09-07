@@ -173,7 +173,7 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
         (x3,g3) <- consExpr g2 e3
         let t2   = envFindTy x2 g2
             t3   = envFindTy x3 g3
-        tx      <- accessTypeM x t3
+        tx      <- safeGetProp x t3
         withAlignedM (subTypeContainers' "DotRef-assign" l2 g3) t2 tx
         return   $ Just g3
 
@@ -266,16 +266,16 @@ consExpr g (DeadCast a e)
   = consDeadCast g a e
 
 consExpr g (IntLit l i)               
-  = envAddFresh l (eSingleton tInt i) g
+  = envAddFresh "consExpr:IntLit" l (eSingleton tInt i) g
 
 consExpr g (BoolLit l b)
-  = envAddFresh l (pSingleton tBool b) g 
+  = envAddFresh "consExpr:BoolLit" l (pSingleton tBool b) g 
 
 consExpr g (StringLit l s)
-  = envAddFresh l (eSingleton tString s) g
+  = envAddFresh "consExpr:StringLit" l (eSingleton tString s) g
 
 consExpr g (NullLit l)
-  = envAddFresh l tNull g
+  = envAddFresh "consExpr:NullLit" l tNull g
 
 consExpr g (ArrayLit l es)
   = consArr l g es
@@ -299,37 +299,24 @@ consExpr g (CallExpr l e es)
 
 consExpr  g (DotRef l e s)
   = do  (x, g') <- consExpr g e
-        consAccess l x g' (unId s)
+        t       <- safeGetProp (unId s) (envFindTy x g')
+        envAddFresh "consExpr:DotRef" l t g'
 
-{-consExpr  g (BracketRef l e (IntLit _ i))-}
-{-  = do  (x, g') <- consExpr g e-}
-{-        consAccess l x g' (show i)-}
+consExpr  g (BracketRef l e (IntLit _ i))
+  = do  (x, g') <- consExpr g e
+        t       <- safeGetIdx i (envFindTy x g') 
+        envAddFresh "consExpr:[IntLit]" l t g'
 
 consExpr  g (BracketRef l e (StringLit _ s))
   = do  (x, g') <- consExpr g e
-        consAccess l x g' s
+        t       <- safeGetProp s (envFindTy x g') 
+        envAddFresh "consExpr[StringLit]" l t g'
 
 consExpr g (ObjectLit l ps) 
   = consObj l g ps
 
 consExpr _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))
-
-
---------------------------------------------------------------------------------
-consAccess :: ( IsLocated l, F.Symbolic x, F.Expression x, IsLocated x) => 
-              l -> x -> CGEnv -> String -> CGM (Id l, CGEnv)
---------------------------------------------------------------------------------
-consAccess l x g s = accessTypeM s (envFindTy x g) >>= (`add` g)
-  where
-    add = envAddFresh l
-
--- NOTE: There is some duplication done here in terms of what Typecheck does
---------------------------------------------------------------------------------
-accessTypeM :: String -> RefType -> CGM RefType
---------------------------------------------------------------------------------
-accessTypeM s t = getTDefs >>= \γ -> return $ snd $ fromJust $ getProp γ s t
-
 
        
 
@@ -339,22 +326,24 @@ consUpCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id
 consUpCast g x a e 
   = do  γ     <- getTDefs
         let b' = fst $ alignTs γ b u
-        envAddFresh l b' g
+        envAddFresh "consUpCast" l b' g
   where 
     u          = rType $ head [ t | Assume t <- ann_fact a]
     b          = envFindTy x g 
     l          = getAnnotation e
       
 
--- No fresh K-Vars here - instead keep refs from original type
+-- Constraint generation for down-casting: In an environment @g@, cast the
+-- binding @x@ to the type @tc@ (retrieved from the annotation of the cast
+-- expression @a@. @e@ is the expression to be casted.
 ---------------------------------------------------------------------------------------------
 consDownCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
 consDownCast g x a e 
   = do  γ   <- getTDefs
         g'  <- envAdds [(x, tc)] g
-        withAlignedM (subTypeContainers' "Downcast" l g') te tc
-        envAddFresh l tc g'
+        withAlignedM (subTypeContainers' "Downcast" l g) te tc
+        envAddFresh "consDownCast" l tc g'
     where 
         tc   = head [ t | Assume t <- ann_fact a]
         te   = envFindTy x g
@@ -366,7 +355,7 @@ consDeadCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CG
 ---------------------------------------------------------------------------------------------
 consDeadCast g a e =
   do  subTypeContainers' "dead" l g tru fls
-      envAddFresh l tC g
+      envAddFresh "consDeadCast" l tC g
   where
     tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
     l   = getAnnotation e
@@ -391,7 +380,7 @@ consCall g l _ es ft
        (xes, g')    <- consScan consExpr g es
        let (su, ts') = renameBinds its xes
        zipWithM_ (withAlignedM $ subTypeContainers' "call" l g') [envFindTy x g' | x <- xes] ts'
-       envAddFresh l ({- tracePP "Ret Call Type" $ -} F.subst su ot) g'
+       envAddFresh "consCall" l ({- tracePP "Ret Call Type" $ -} F.subst su ot) g'
      {-where -}
      {-  msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)-}
 
@@ -434,7 +423,7 @@ consObj l g pe =
   do  let (ps, es) = unzip pe
       (xes, g')   <- consScan consExpr g es
       let pxs      = zipWith B (map F.symbol ps) $ (`envFindTy` g') <$> xes
-      envAddFresh l (TObj pxs F.top) g'
+      envAddFresh "consObj" l (TObj pxs F.top) g'
     
 
 ---------------------------------------------------------------------------------
@@ -444,7 +433,7 @@ consArr l g es =
   do  (xes, g')   <- consScan consExpr g es
       let ts       = (`envFindTy` g') <$> xes
       let pxs      = zipWith B (F.symbol . show <$> [0..]) ts ++ [len ts]
-      envAddFresh l (tracePP (ppshow es) $ TObj pxs F.top) g'
+      envAddFresh "consArr" l (tracePP (ppshow es) $ TObj pxs F.top) g'
   where
     len ts   = B (F.symbol "length") (eSingleton tInt $ length ts)
       

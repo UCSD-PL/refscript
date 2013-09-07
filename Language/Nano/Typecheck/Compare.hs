@@ -553,8 +553,10 @@ zipType1 γ f t1 t2 = zipType2 γ f t2 t1
  
 
 
--- This function @t2@ with the refinements from @t1@ by matching equivalent 
--- parts of the two types.
+-- `zipType2` walks throught the equivalent parts of types @t1@ and @t2@. It 
+-- applies function $f$ on the refinements of the equivalent parts and keeps the
+-- output as the resulting refinement. The shape of @t2@ is preserved in the
+-- output.
 --------------------------------------------------------------------------------
 zipType2 :: (PP r, F.Reftable r) => Env (RType r) -> (r -> r -> r) ->  RType r -> RType r -> RType r
 --------------------------------------------------------------------------------
@@ -589,8 +591,10 @@ zipType2 γ f (TObj bs r) (TObj bs' r') = TObj mbs $ f r r'
     mbs = safeZipWith "zipType2:TObj" (zipBind2 γ f) (L.sortBy compB bs) (L.sortBy compB bs')
     compB (B s _) (B s' _) = compare s s'
 
+zipType2 γ f (TArr t r) (TArr t' r') = TArr (zipType2 γ f t t') $ f r r'
+
 zipType2 _ _ t t' = 
-  errorstar $ printf "BUG[zipType2]: mis-aligned types:\n%s\nwith\n%s" (ppshow t) (ppshow t')
+  errorstar $ printf "BUG[zipType2]: mis-aligned types:\n\t%s\nand\n\t%s" (ppshow t) (ppshow t')
 
 zipTypes γ f ts t = 
   case filter (equiv γ t) ts of

@@ -97,6 +97,14 @@ ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LDot l3 e3 x) e2))
   = do e2' <- ssaExpr e2
        e3' <- ssaExpr e3
        return (True, ExprStmt l1 (AssignExpr l2 OpAssign (LDot l3 e3' x) e2'))
+     
+-- e1[i] = e2
+ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LBracket l3 e3 (IntLit l4 i)) e2))
+  = do e2' <- ssaExpr e2
+       e3' <- ssaExpr e3
+       return (True, ExprStmt l1 (AssignExpr l2 OpAssign 
+                      (LBracket l3 e3' (IntLit l4 i)) e2'))
+
 
 -- e
 ssaStmt (ExprStmt l e)   

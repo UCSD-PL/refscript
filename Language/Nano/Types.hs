@@ -164,9 +164,10 @@ instance IsNano InfixOp where
   isNano e          = errortext (text "Not Nano InfixOp!" <+> pp e)
 
 instance IsNano (LValue a) where 
-  isNano (LVar _ _)   = True
-  isNano (LDot _ e _) = isNano e
-  isNano e            = errortext (text "Not Nano Expression!" <+> pp e) 
+  isNano (LVar _ _)                  = True
+  isNano (LDot _ e _)                = isNano e
+  isNano (LBracket _ e (IntLit _ _)) = isNano e
+  isNano e                           = errortext (text "Not Nano Expression!" <+> pp e)
   -- isNano _          = False
 
 instance IsNano (VarDecl a) where

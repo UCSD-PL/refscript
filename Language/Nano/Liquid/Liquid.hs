@@ -166,7 +166,7 @@ consStmt g (EmptyStmt _)
 consStmt g (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))   
   = consAsgn g (Id lx x) e
 
--- e1.x = e2
+-- e3.x = e2
 -- @e3.x@ should have the exact same type with @e2@
 consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
   = do  (x2,g2) <- consExpr g e2
@@ -174,8 +174,20 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
         let t2   = envFindTy x2 g2
             t3   = envFindTy x3 g3
         tx      <- safeGetProp x t3
-        withAlignedM (subTypeContainers' "DotRef-assign" l2 g3) t2 tx
+        withAlignedM (subTypeContainers' "e.x = e" l2 g3) t2 tx
         return   $ Just g3
+
+-- e3[i] = e2
+-- @e3.x@ should have the exact same type with @e2@
+consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket l3 e3 (IntLit l4 i)) e2))
+  = do  (x2,g2) <- consExpr g e2
+        (x3,g3) <- consExpr g2 e3
+        let t2   = envFindTy x2 g2
+            t3   = envFindTy x3 g3
+        ti      <- safeGetIdx i t3
+        withAlignedM (subTypeContainers' "e[i] = e" l2 g3) t2 ti
+        return   $ Just g3
+
 
 -- e
 consStmt g (ExprStmt _ e)   

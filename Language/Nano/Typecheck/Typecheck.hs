@@ -260,14 +260,16 @@ tcStmt' γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))
   = tcAsgn γ l (Id lx x) e
 
 -- e3.x = e2
--- @e3.x@ should have the exact same type with @e2@
+-- The type of @e2@ should be assignable (a subtype of) the type of @e3.x@.
 tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot l3 e3 x) e2))
-  = do  t2 <- tcExpr γ e2 
+  = do  θ  <- getTDefs
+        t2 <- tcExpr γ e2 
         t3 <- tcExpr γ e3
         tx <- safeGetProp x t3
-        unifyTypeM l2 "DotRef" e2 t2 tx
-        return $ Just γ 
--- No strong updates allowed here - so return the same envirnment      
+        if isSubType θ t2 tx 
+          then return $ Just γ
+          else tcError l2 (printf "Cannot assing type %s to %s" 
+                             (ppshow tx) (ppshow t2))
 
 tcStmt' γ (ExprStmt l1 (AssignExpr l2 OpAssign (LBracket l3 e3 (IntLit l4 i)) e2))
   = do  t2 <- tcExpr γ e2 
@@ -293,7 +295,7 @@ tcStmt' γ (IfSingleStmt l b s)
 tcStmt' γ (IfStmt l e s1 s2)
   = do  t <- tcExpr γ e 
     -- Doing check for boolean for the conditional for now
-    -- TODO: Will have to suppert truthy/falsy later.
+    -- TODO: Will have to support truthy/falsy later.
         unifyTypeM l "If condition" e t tBool
         γ1      <- tcStmt' γ s1
         γ2      <- tcStmt' γ s2

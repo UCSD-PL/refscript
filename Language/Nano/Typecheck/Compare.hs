@@ -227,7 +227,7 @@ compareTs :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r 
 -- Deal with some standard cases of subtyping, e.g.: Top, Null, Undefined ...
 compareTs _ t1 t2 | toType t1 == toType t2 = (ofType $ toType t1, t1, t2, EqT)
 
--- compareTs γ t1 t2 | isUndefined t1         = setFth4 (compareTs' γ t1 t2) SubT
+compareTs γ t1 t2 | isUndefined t1         = setFth4 (compareTs' γ t1 t2) SubT
 
 -- XXX: Null is not considered a subtype of all types. If null is to be 
 -- expected this should be explicitly specified by using " + null"

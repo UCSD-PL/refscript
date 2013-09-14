@@ -57,8 +57,11 @@ module Language.Nano.Typecheck.Types (
   , tErr
   , tFunErr
   , tVar
+  , tArr
   , tUndef
   , tNull
+
+  , isTVar
 
   -- * Operator Types
   , infixOpTy
@@ -436,7 +439,6 @@ instance F.Reftable r => PP (RType r) where
   pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
   pp (TArr t r)                 = F.ppTy r $ brackets (pp t)  
   pp (TObj bs r )               = F.ppTy r $ ppArgs braces comma bs
-  pp (TArr _ _ )                = error "unimplemented pp array"
   pp (TBd (TD (TDef id) v r _)) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r
   pp (TBd _)                    = error "This is not an acceptable form for TBody" 
 
@@ -546,6 +548,9 @@ isAsm  _          = False
 tVar   :: (F.Reftable r) => TVar -> RType r
 tVar   = (`TVar` F.top) 
 
+isTVar (TVar _ _) = True
+isTVar _          = False
+
 tInt, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RType r
 tInt    = TApp TInt     [] F.top 
 tBool   = TApp TBool    [] F.top
@@ -556,6 +561,8 @@ tUndef  = TApp TUndef   [] F.top
 tNull   = TApp TNull    [] F.top
 tErr    = tVoid
 tFunErr = ([],[],tErr)
+
+tArr    = (`TArr` F.top)
 
 -- tProp :: (F.Reftable r) => RType r
 -- tProp  = TApp tcProp [] F.top 

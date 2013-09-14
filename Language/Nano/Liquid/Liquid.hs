@@ -100,9 +100,7 @@ generateConstraints cfg pgm = getCGInfo cfg pgm $ consNano pgm
 --------------------------------------------------------------------------------
 consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
-consNano pgm@(Nano {code = Src fs}) 
-  =  
-    consStmts (initCGEnv pgm) fs >> return ()
+consNano pgm@(Nano {code = Src fs}) = consStmts (initCGEnv pgm) fs >> return ()
 
   -- = forM_ fs . consFun =<< initCGEnv pgm
 initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
@@ -178,12 +176,11 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
         return   $ Just g3
 
 -- e3[i] = e2
--- @e3.x@ should have the exact same type with @e2@
 consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket l3 e3 (IntLit l4 i)) e2))
   = do  (x2,g2) <- consExpr g e2
         (x3,g3) <- consExpr g2 e3
         let t2   = envFindTy x2 g2
-            t3   = envFindTy x3 g3
+            t3   = tracePP "e3 :: " $ envFindTy x3 g3
         ti      <- safeGetIdx i t3
         withAlignedM (subTypeContainers' "e[i] = e" l2 g3) t2 ti
         return   $ Just g3
@@ -438,9 +435,18 @@ consObj l g pe =
       envAddFresh "consObj" l (TObj pxs F.top) g'
     
 
+-- consArr should return the type that was instantiated at TC
 ---------------------------------------------------------------------------------
 consArr ::AnnTypeR -> CGEnv -> [Expression AnnTypeR] -> CGM  (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------
+-- []
+consArr l g [] =  
+  case [t | TypInst t <- ann_fact l] of 
+    [[t]] -> envAddFresh "consArr:empty" l (TArr t F.top) g
+    _     -> errorstar $ "consArr: Empty array literal should be " ++ 
+                         "instantiated by single type"
+
+-- [e1, ... ]
 consArr l g es = 
   do  (xes, g')   <- consScan consExpr g es
       let ts       = (`envFindTy` g') <$> xes
@@ -448,5 +454,6 @@ consArr l g es =
       envAddFresh "consArr" l (tracePP (ppshow es) $ TObj pxs F.top) g'
   where
     len ts   = B (F.symbol "length") (eSingleton tInt $ length ts)
+    ann = getAnnotation l
       
 

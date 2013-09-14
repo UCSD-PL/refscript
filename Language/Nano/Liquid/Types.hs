@@ -239,6 +239,7 @@ stripRTypeBase (TApp _ _ r) = Just r
 stripRTypeBase (TVar _ r)   = Just r
 stripRTypeBase (TFun _ _ r) = Just r
 stripRTypeBase (TObj _ r)   = Just r
+stripRTypeBase (TArr _ r)   = Just r
 stripRTypeBase _            = Nothing
  
 ------------------------------------------------------------------------------------------
@@ -282,6 +283,7 @@ mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> f r
 mapReftM f (TFun xts t _)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return F.top) --f r 
 mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
 mapReftM f (TObj bs r)     = TObj   <$> mapM (mapReftBindM f) bs <*> f r
+mapReftM f (TArr t r)      = TArr   <$> (mapReftM f t) <*> f r
 mapReftM _ _               = error "Not supported in mapReftM"
 
 mapReftBindM f (B x t)     = B x <$> mapReftM f t

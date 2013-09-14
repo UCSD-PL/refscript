@@ -36,6 +36,8 @@ Tool / Implementation
 
 6.  Disallow type to have multiple tags
 
+7.  Remove duplicate invariants.
+
 
 Failing Tests
 -------------

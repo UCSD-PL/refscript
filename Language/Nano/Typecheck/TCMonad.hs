@@ -25,6 +25,7 @@ module Language.Nano.Typecheck.TCMonad (
 
   -- * Freshness
   , freshTyArgs
+  , freshTArray
 
   -- * Dot Access
   , safeGetProp
@@ -345,6 +346,14 @@ instance Freshable a => Freshable [a] where
   fresh = mapM fresh
 
 freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
+
+
+freshTArray l = 
+  do  v <- ((`TV` l). F.intSymbol "A") <$> tick
+      extSubst [v]
+      let t = tVar v
+      addAnn l $ TypInst [t]
+      return $ tArr t
               
 
 
@@ -369,7 +378,8 @@ unfoldSafeTC   t = getTDefs >>= \γ -> return $ unfoldSafe γ t
 
 
 ----------------------------------------------------------------------------------
-unifyTypesM :: (IsLocated l, Ord r, PP r, F.Reftable r) => l -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
+unifyTypesM :: (IsLocated l, Ord r, PP r, F.Reftable r) => 
+  l -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
 unifyTypesM l msg t1s t2s
   -- TODO: This check might be done multiple times
@@ -439,21 +449,23 @@ castM e t t'    = subTypeM t t' >>= go
 
 
 --------------------------------------------------------------------------------
-castsM    :: (Ord r, PP r, F.Reftable r) => [Expression (AnnSSA_ r)] -> [RType r] -> [RType r] -> TCM r ()
+castsM    :: (Ord r, PP r, F.Reftable r) => 
+  [Expression (AnnSSA_ r)] -> [RType r] -> [RType r] -> TCM r ()
 --------------------------------------------------------------------------------
 castsM     = zipWith3M_ castM 
 
 
 --------------------------------------------------------------------------------
-addUpCast :: (F.Reftable r, PP r) => Expression (AnnSSA_ r) -> RType r -> TCM r ()
+addUpCast :: (F.Reftable r, PP r) => 
+  Expression (AnnSSA_ r) -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 addUpCast e t = modify $ \st -> st { tc_casts = M.insert e (UCST t) (tc_casts st) }
 
 --------------------------------------------------------------------------------
-addDownCast :: (Ord r, PP r, F.Reftable r) => Expression (AnnSSA_ r) -> RType r -> RType r -> TCM r ()
+addDownCast :: (Ord r, PP r, F.Reftable r) => 
+  Expression (AnnSSA_ r) -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 -- addDownCast e _ cast = modify $ \st -> st { tc_casts = M.insert e (DCST cast) (tc_casts st) }
-
   
 -- Down casts will not be k-vared later - so pass the refinements here!
 addDownCast e base cast = 
@@ -499,7 +511,5 @@ patchExpr m e =
   where 
     fs = ann_fact a
     a  = getAnnotation e
-
-
 
 

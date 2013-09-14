@@ -309,6 +309,7 @@ efoldReft g f γ z (TFun xts t r)   = f γ r $ efoldReft g f γ' (efoldRefts g f
 efoldReft g f γ z (TObj xts r)     = f γ r $ (efoldRefts g f γ' z (b_type <$> xts))
   where 
     γ'                             = foldr (efoldExt g) γ xts
+efoldReft g f γ z (TArr t r)       = f γ r $ efoldReft g f γ z t    
 efoldReft _ _ _ _ _                = error "Not supported in efoldReft"
 
 efoldRefts g f γ z ts              = L.foldl' (efoldReft g f γ) z ts

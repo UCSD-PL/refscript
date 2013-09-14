@@ -189,7 +189,12 @@ a &*& b = getProduct $ mappend (Product a) (Product b)
 mconcatP   :: Monoid (Product t) => [t] -> t
 mconcatP xs = getProduct $ mconcat (Product <$> xs)
 
-
+arrDir     :: SubDirection -> SubDirection
+arrDir SubT = Rel
+arrDir SupT = Rel
+arrDir EqT  = EqT
+arrDir Rel  = Rel
+arrDir Nth  = Nth
 
 
 
@@ -256,6 +261,11 @@ compareTs' γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
 compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = 
   {-tracePP (printf "Padding: %s and %s" (ppshow t1) (ppshow t2)) $ -}
   padObject γ ( {- trace ("padding obj " ++ ppshow t1 ++ "\n - " ++ ppshow t2) -} t1) t2
+
+-- | Arrays
+compareTs' γ a@(TArr t r) a'@(TArr t' r')    = padArray γ a a'
+compareTs' _   (TObj _ _)    (TArr _ _  )    = error "Unimplemented compareTs-Obj-Arr" 
+compareTs' _   (TArr _ _)    (TObj _ _  )    = error "Unimplemented compareTs-Arr-Obj" 
 
 -- | Type definitions
 
@@ -529,6 +539,15 @@ padFun γ (TFun b1s o1 r1) (TFun b2s o2 r2)
       updTs                  = zipWith (\b t -> b { b_type = t })
 
 padFun _ _ _ = error "padFun: no other cases supported"
+
+
+
+-- | `padArray`
+padArray γ (TArr t1 r1) (TArr t2 r2)
+  = (TArr tj F.top, TArr t1' r1, TArr t2' r2, arrDir ad)
+    where
+      (tj, t1', t2', ad) = compareTs γ t1 t2
+
 
 
 

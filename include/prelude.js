@@ -130,8 +130,8 @@ function pos(){
 /*@ builtin_OpMul       :: (number,  number)  => number                                                   */
 /*@ builtin_OpDiv       :: (number,  number)  => number                                                   */
 /*@ builtin_OpMod       :: (number,  number)  => number                                                   */
-/*@ builtin_PrefixMinus :: ({x:number | true}) => {v:number | v = (0 - x)}                                */
-/*@ builtin_PrefixLNot  :: (boolean) => boolean                                                           */
+/*@ builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v = (0 - x)}                              */
+/*@ builtin_PrefixLNot  :: ({x:boolean | true}) => {v:boolean | ((Prop v) <=> not (Prop x))}              */
 
 //Changing temprorarily until strings are supported
 /* builtin_PrefixTypeof:: forall A. (A) => string                                                         */

@@ -1,5 +1,5 @@
 
-/*@ foo :: ( { w: number| w > 0} ) => { number | v > 0 } */ 
+/*@ foo :: ( { w: number| w > 0} ) => { number | v > 1 } */ 
 function foo (n) {
 
   var a = []; 

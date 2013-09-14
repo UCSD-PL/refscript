@@ -375,10 +375,6 @@ freshTyFun' g l _ t b
 
 -- | Instantiate Fresh Type (at Call-site)
 
----------------------------------------------------------------------------------------
--- freshTyInst :: (IsLocated l) => l -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
--- freshTyInst :: AnnTypeR -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
----------------------------------------------------------------------------------------
 freshTyInst l g αs τs tbody
   = do ts    <- mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts

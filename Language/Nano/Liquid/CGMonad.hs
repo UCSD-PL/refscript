@@ -28,6 +28,7 @@ module Language.Nano.Liquid.CGMonad (
   , freshTyFun
   , freshTyInst
   , freshTyPhis
+  , freshTyArr
 
   -- * Freshable
   , Freshable (..)
@@ -46,6 +47,7 @@ module Language.Nano.Liquid.CGMonad (
   , subTypes, subTypes', subType, subType'
   , subTypeContainers, subTypeContainers'
   , alignTsM, withAlignedM
+  , wellFormed
 
   , addInvariant
   
@@ -221,7 +223,7 @@ cgError l msg = throwError $ printf "CG-ERROR at %s : %s" (ppshow $ srcPos l) ms
 ---------------------------------------------------------------------------------------
 envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id l, CGEnv) 
 ---------------------------------------------------------------------------------------
-envAddFresh _ l t g 
+envAddFresh s l t g 
   = do x  <- {- tracePP ("envAddFresh: " ++ s ++ ": "++ ppshow t) <$> -} freshId l
        g' <- envAdds [(x, t)] g
        return (x, g')
@@ -340,7 +342,7 @@ envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 
 envJoin' l g g1 g2
   = do  {- td      <- E.envMap toType <$> cg_tdefs <$> get -}
-        let xs   = [x | PhiVar x <- ann_fact l] 
+        let xs   = [x | PhiVar [x] <- ann_fact l] 
             t1s  = (`envFindTy` g1) <$> xs 
             t2s  = (`envFindTy` g2) <$> xs
         when (length t1s /= length t2s) $ cgError l (bugBadPhi l t1s t2s)
@@ -392,6 +394,19 @@ freshTyPhis l g xs τs
        g' <- envAdds (safeZip "freshTyPhis" xs ts) g
        _  <- mapM    (wellFormed l g') ts
        return (g', ts)
+
+
+-- | Fresh Array Type
+---------------------------------------------------------------------------------------
+freshTyArr :: (PP l, IsLocated l) => l -> CGEnv -> RefType -> CGM (Id l, CGEnv)
+---------------------------------------------------------------------------------------
+freshTyArr l g t 
+  = do t'     <- freshTy "freshTyPhis" {-tracePP "From" -} t
+       (x,g') <- envAddFresh "consArr:empty" l (TArr t' F.top) g
+       wellFormed l g' t'
+       return  $ (x, g')
+
+
 
 ---------------------------------------------------------------------------------------
 -- | Adding Subtyping Constraints -----------------------------------------------------
@@ -520,8 +535,8 @@ subTypeContainers l g t1 t2 = subType l g t1 t2
 
 
 subTypeContainers' msg l g t1 t2 = 
-  subTypeContainers l g ({-trace (printf "subTypeContainers[%s]:\n\t%s\n\t%s" 
-                                msg (ppshow t1) (ppshow t2))-}  t1) t2
+  subTypeContainers l g (trace (printf "subTypeContainers[%s]:\n\t%s\n\t%s" 
+                                msg (ppshow t1) (ppshow t2))  t1) t2
 
 
 -------------------------------------------------------------------------------

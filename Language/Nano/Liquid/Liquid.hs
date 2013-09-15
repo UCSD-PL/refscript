@@ -40,7 +40,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -179,8 +179,8 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
 consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket l3 e3 (IntLit l4 i)) e2))
   = do  (x2,g2) <- consExpr g e2
         (x3,g3) <- consExpr g2 e3
-        let t2   = envFindTy x2 g2
-            t3   = tracePP "e3 :: " $ envFindTy x3 g3
+        let t2   = {-tracePP (ppshow e2 ++ " ANF: " ++ ppshow x2) $ -} envFindTy x2 g2
+            t3   = envFindTy x3 g3
         ti      <- safeGetIdx i t3
         withAlignedM (subTypeContainers' "e[i] = e" l2 g3) t2 ti
         return   $ Just g3
@@ -210,6 +210,103 @@ consStmt g (IfStmt l e s1 s2)
        g1'      <- (`consStmt` s1) $ envAddGuard xe True  ge 
        g2'      <- (`consStmt` s2) $ envAddGuard xe False ge 
        envJoin l g g1' g2'
+
+
+
+
+-- G   |- C :: xe, G1                         // Init -defs
+-- 
+-- Tinv = freshen( G1(x) ) = { _ | K }, ∀x∈Φ
+
+-- TODO
+-- G1(xe) = { v: boolean | ... }
+-- 
+-- G1  |- G1(x) <: Tinv, ∀x∈Φ                 // Before the loop body: constraints on Φ Vars
+-- 
+-- G1, z:{xe}, ∀x∈Φ.x:Tinv |- B :: G2         // typecheck the loop where the condition holds and 
+--                                            // the Φ vars have invariant types
+--
+-- G2  |- G2(x) <: Tinv, ∀x∈Φ                 // After the loop body: constraints on Φ vars
+-- 
+-- G3 = G2 + z:{¬xe} + { x: Tinv | x∈Φ }      // the environment after the loop should use the 
+--                                            // invariant types for the Φ vars and also be updated
+--                                            // with negation of the loop condition
+-- ------------------------------------------
+-- G |- while[Φ](C) { B } :: G3
+
+
+-- Code               Phis
+-- ----               ----
+-- var x = ...        
+--                    // x0
+-- while( ... ) {
+--                    // x1
+--   x = x + 1;       
+--                    // x2
+-- }
+-- ... x ...          // φ(x0,x2)
+--
+
+consStmt g (WhileStmt l c b) = 
+  do  
+    -- G   |- C :: xe, G1
+    -- NOTE: Is this affecting the SSA value of the phi vars?
+    -- If it is, we should make sure we're getting the right 
+    -- value for the SSA phi vars.
+    (xe, g0)       <- consExpr g c
+    
+    -- Need to get the types for phi_0 before updating with the KVared types
+    let t1s         = (`envFindTy` g0) <$> φ_1
+
+    -- Tinv = freshen( G0(x1) ) = { _ | K }, ∀x∈Φ_1
+    (g1a, invs)    <- tInv g0
+
+-- | BEFORE BODY
+
+    -- In the loop body, so add the guard, and check that the invariant 
+    -- subsumes the type of the Phi values that enter the loop.
+    -- 
+    -- G1  |- G1(x) <: Tinv, ∀x∈Φ
+    let g1          = envAddGuard xe True g0
+    zipWithM_         (sub "Before loop body" g1) t1s invs
+
+-- | BODY
+
+    -- Keep checking in an environment that has the guards and the 
+    -- invariant types for the phi vars. So keep g1 here.
+
+    -- G1, z:{xe}, ∀x∈Φ.x:Tinv |- B :: G2
+    g2             <- fromJust <$> consStmt g1 b
+
+-- | AFTER BODY
+
+    -- This environment still has the loop guard. Check the that the 
+    -- invariants are still good abstractions for the phi vars.
+    -- G2  |- G2(x) <: Tinv, ∀x∈Φ
+    let t2s         = (`envFindTy` g2) <$> φ_2
+    -- Use the invariant delegated for the φ-vars (version before the body).
+    g2a            <- envAdds (zip φ_1 invs) g2
+    -- Fire the constraints 
+    zipWithM_         (sub "After loop body" g2a) t2s invs
+
+-- | AFTER LOOP
+
+    -- G3 = G2, { x0: Tinv | x∈Φ }, { x2: Tinv | x∈Φ }, z:{¬xe}
+    -- After the loop keep the invariant types for all phi vars.
+    -- Ignore the bindings introduced in the loop and negate the 
+    -- guard. Hence, use g0.
+    g3a            <- envAdds (zip φ_1 invs ++ zip φ_2 invs) g0
+    return          $ Just $ envAddGuard xe False g3a
+  where 
+    tInv g          = freshTyPhis (ann l) g φ_1 $ toType . (`envFindTy` g) <$> φ_1
+    -- The phi before the loop should have singleton lists
+    φ_0             = [x | PhiVar [x] <- ann_fact l]
+    (φ_1,φ_2)       = unzip [(x1,x2) | PhiVar [x1,x2] <- ann_fact b_ann ]
+    b_ann           = getAnnotation b
+
+    sub s g t t'    = subTypeContainers' ("While:" ++ s) l g t t'
+
+
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 consStmt g (VarDeclStmt _ ds)
@@ -442,7 +539,8 @@ consArr ::AnnTypeR -> CGEnv -> [Expression AnnTypeR] -> CGM  (Id AnnTypeR, CGEnv
 -- []
 consArr l g [] =  
   case [t | TypInst t <- ann_fact l] of 
-    [[t]] -> envAddFresh "consArr:empty" l (TArr t F.top) g
+    [[t]] -> freshTyArr l g t
+          -- TODO: Should the toplevel refinement be freshened up as well?
     _     -> errorstar $ "consArr: Empty array literal should be " ++ 
                          "instantiated by single type"
 
@@ -451,7 +549,7 @@ consArr l g es =
   do  (xes, g')   <- consScan consExpr g es
       let ts       = (`envFindTy` g') <$> xes
       let pxs      = zipWith B (F.symbol . show <$> [0..]) ts ++ [len ts]
-      envAddFresh "consArr" l (tracePP (ppshow es) $ TObj pxs F.top) g'
+      envAddFresh "consArr" l (TObj pxs F.top) g'
   where
     len ts   = B (F.symbol "length") (eSingleton tInt $ length ts)
     ann = getAnnotation l

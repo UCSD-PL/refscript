@@ -1,46 +1,49 @@
-Todo List
-=========
+# Quicktask v1.2
 
-JS support / Features
----------------------
-
-0.  What should Array(n) return? 
-    In a setting without strong updates, it returns an array of undefined, but
-    this is not very helpful since it will not be able to be updated to anything
-    useful.
-
-1.  How do you cast to Array? 
-
-2.  prelude.js: restore refinemnets in logical negation
-
-3.  Encoding truthy, falsy, undefined, null etc.
+JS SUPPORT / FEATURES:
+  - Arrays:
+    - Array access: add array bounds checks or return undefined. Right now an
+      array access is unsound in that it returns the contained type regardless
+      of the access index
+      @ Added [Sun 2013-09-15]
+      @ Start [Sun 2013-09-15] [15:53]
+    - What should Array(n) return?  In a setting without strong updates, it 
+      returns an array of undefined, but this is not very helpful since it will 
+      not be able to be updated to anything useful.
+      @ Added [Sun 2013-09-15]
+    @ Added [Sun 2013-09-15]
+  - Encoding truthy, falsy, undefined, null etc.
     Eg: tc/pos/obj02.js, tc/pos/union05.js
+    @ Added [Sun 2013-09-15]
+  - For/While loops
+    @ Added [Sun 2013-09-15
+  - Prototyping
+    @ Added [Sun 2013-09-15]
 
-4.  For/while loops
 
-5.  Prototyping
-
-
-Tool / Implementation
----------------------
-1.  Scrape Qualifiers
-
-2.  Fix "Cannot handle ssaVarDECL" at "var foo;"
-
-3.  Do not add casts deep inside objects.
+TOOL / IMPLEMENTATION:
+  - Scrape Qualifiers
+    @ Added [Sun 2013-09-15]
+  - Fix "Cannot handle ssaVarDECL" at "var foo;"
+    @ Added [Sun 2013-09-15]
+  - Do not add casts deep inside objects.
     Eg: tc/pos/listmap02.js 
+    @ Added [Sun 2013-09-15]
+  - Restore the check for unbounded type variables
+    @ Added [Sun 2013-09-15]
+  - Multiple fixpoint bindings in the same environment
+    @ Added [Sun 2013-09-15]
+  - Disallow type to have multiple tags
+    @ Added [Sun 2013-09-15]
+  - Remove duplicate invariants.
+    @ Added [Sun 2013-09-15]
 
-4.  Restore the check for unbounded type variables
 
-5.  Multiple fixpoint bindings in the same environment
-
-6.  Disallow type to have multiple tags
-
-7.  Remove duplicate invariants.
-
-
-Failing Tests
--------------
-1.  Is "liquid/neg/minindex02-bug.js - line 5" indeed a bug?
+FAILING TESTS:
+  - Is "liquid/neg/minindex02-bug.js - line 5" indeed a bug?
     Using new representation of lists.
+    @ Added [Sun 2013-09-15]
 
+
+
+# vim:ft=quicktask

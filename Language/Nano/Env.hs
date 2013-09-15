@@ -11,8 +11,8 @@ module Language.Nano.Env (
     Env    
   , envFromList 
   , envToList
-  , envAdd 
-  , envAdds 
+  , envAdd, envAdds 
+  , envDel, envDels
   , envFindTy
   , envAddReturn
   , envFindReturn
@@ -60,6 +60,8 @@ envFindLoc i γ  = fmap loc $ envFind i γ
 envFindTy  i γ  = fmap val $ envFind i γ
 envAdd   i t γ  = F.insertSEnv (F.symbol i) (Loc (srcPos i) t) γ
 envAdds  xts γ  = L.foldl' (\γ (x,t) -> envAdd x t γ) γ xts
+envDel   i   γ  = F.deleteSEnv (F.symbol i) γ
+envDels  is  γ  = L.foldl' (\γ x -> envDel x γ) γ is
 envToList  γ    = [ (Id l (F.symbolString x), t) | (x, Loc l t) <- F.toListSEnv γ]
 envAddReturn f  = envAdd (returnId (srcPos f))
 envFindReturn   = maybe msg val . F.lookupSEnv returnSymbol  

@@ -235,14 +235,12 @@ isNanoExprStatement e                     = errortext (text "Not Nano ExprStmt!"
 -- | Trivial Syntax Checking 
 
 checkTopStmt :: Statement SourceSpan -> Statement SourceSpan 
--- checkTopStmt f@(FunctionStmt _ _ _ b) 
---  checkBody b = f
--- checkTopStmt s  = errorstar $ errorInvalidTopStmt s
 checkTopStmt s | checkBody [s] = s
 checkTopStmt s | otherwise     = errorstar $ errorInvalidTopStmt s
 
 checkBody :: [Statement SourceSpan] -> Bool
-checkBody stmts = all isNano stmts && null (getWhiles stmts) 
+-- Adding support for loops so removing the while check
+checkBody stmts = all isNano stmts -- && null (getWhiles stmts) 
     
 getWhiles :: [Statement SourceSpan] -> [Statement SourceSpan]
 getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts

@@ -305,6 +305,14 @@ tcStmt' γ (IfStmt l e s1 s2)
         γ2      <- tcStmt' γ s2
         envJoin l γ γ1 γ2
 
+
+tcStmt' γ (WhileStmt l c b)
+  = do  t <- tcExpr γ c
+    -- Doing check for boolean for the conditional for now
+    -- TODO: Will have to support truthy/falsy later.
+        unifyTypeM l "If condition" c t tBool
+        tcStmt' γ b
+
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt' γ (VarDeclStmt _ ds)
   = tcSeq tcVarDecl γ ds
@@ -450,17 +458,14 @@ tcArray :: (Ord r, PP r, F.Reftable r) =>
 ----------------------------------------------------------------------------------
 tcArray l γ es = 
   case es of 
-    [] -> tracePP "created fresh TArr" <$> freshTArray l
+    [] -> freshTArray l
     _  -> mapM (tcExpr γ) es >>= return . mkObj
   where 
     mkObj ts = tracePP (ppshow es) $ TObj (bs ts) F.top
     bs ts    = zipWith B (F.symbol . show <$> [0..]) ts ++ [len ts]
     len ts   = B (F.symbol "length") tInt
 
-
               
-
-
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, F.Reftable r, PP r) =>
   (AnnSSA_ r) -> Env (RType r) -> TCEnv r -> TCEnv r -> TCM r (TCEnv r)
@@ -470,9 +475,13 @@ envJoin _ _ x Nothing           = return x
 envJoin l γ (Just γ1) (Just γ2) = envJoin' l γ γ1 γ2 
 
 envJoin' l γ γ1 γ2
-  = do let xs = [x | PhiVar x <- ann_fact l]
-       ts    <- mapM (getPhiType l γ1 γ2) (tracePP "Phi vars" xs)
-       return $ Just $ envAdds (zip xs ts) γ 
+  = do let xs = concat [x | PhiVar x <- ann_fact l]
+       ts    <- mapM (getPhiType l γ1 γ2) xs
+       -- NOTE: Instantiation on arrays could have happened in the branches and
+       -- then lost if the variables are no Phi. So replay the application of
+       -- the instantiations on γ
+       θ     <- getSubst
+       return $ Just $ envAdds (zip xs ts) (apply θ γ)
   
 
 ----------------------------------------------------------------------------------

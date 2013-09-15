@@ -28,6 +28,7 @@ module Language.Nano.Liquid.CGMonad (
   , freshTyFun
   , freshTyInst
   , freshTyPhis
+  , freshTyArr
 
   -- * Freshable
   , Freshable (..)
@@ -221,7 +222,7 @@ cgError l msg = throwError $ printf "CG-ERROR at %s : %s" (ppshow $ srcPos l) ms
 ---------------------------------------------------------------------------------------
 envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id l, CGEnv) 
 ---------------------------------------------------------------------------------------
-envAddFresh _ l t g 
+envAddFresh s l t g 
   = do x  <- {- tracePP ("envAddFresh: " ++ s ++ ": "++ ppshow t) <$> -} freshId l
        g' <- envAdds [(x, t)] g
        return (x, g')
@@ -392,6 +393,19 @@ freshTyPhis l g xs τs
        g' <- envAdds (safeZip "freshTyPhis" xs ts) g
        _  <- mapM    (wellFormed l g') ts
        return (g', ts)
+
+
+-- | Fresh Array Type
+---------------------------------------------------------------------------------------
+freshTyArr :: (PP l, IsLocated l) => l -> CGEnv -> RefType -> CGM (Id l, CGEnv)
+---------------------------------------------------------------------------------------
+freshTyArr l g t 
+  = do t'     <- freshTy "freshTyPhis" {-tracePP "From" -} t
+       (x,g') <- envAddFresh "consArr:empty" l (TArr t' F.top) g
+       wellFormed l g' t'
+       return  $ (x, g')
+
+
 
 ---------------------------------------------------------------------------------------
 -- | Adding Subtyping Constraints -----------------------------------------------------

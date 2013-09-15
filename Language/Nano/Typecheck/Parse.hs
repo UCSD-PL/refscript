@@ -51,7 +51,9 @@ idBindP :: Parser (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
 
 identifierP :: Parser (Id SourceSpan)
-identifierP = withSpan Id lowerIdP -- <$> getPosition <*> lowerIdP -- Lexer.identifier
+-- identifierP = withSpan Id lowerIdP 
+identifierP =   try (withSpan Id upperIdP)
+           <|>      (withSpan Id lowerIdP)
 
 tBodyP :: Parser (Id SourceSpan, RType Reft)
 tBodyP = do  id <- identifierP 
@@ -103,7 +105,6 @@ bareTypeNoUnionP
 
 -- Creating the bindings right away at bareArgP
 bareFunP
-  -- = do args   <- parens $ sepBy bareTypeP comma
   = do args   <- parens $ sepBy bareArgP comma
        reserved "=>" 
        ret    <- bareTypeP 
@@ -131,7 +132,9 @@ bareAtomP p
 bbaseP :: Parser (Reft -> RefType)
 bbaseP 
   =  try (TVar <$> tvarP)
- <|> try (TObj <$> (braces $ bindsP) )
+ <|> try (TObj <$> (braces $ bindsP) )      -- Object types
+ <|> try (TObj <$> arrayBindsP)             -- Array literal types
+ <|> try (TArr <$> arrayP)
  <|> try (TApp <$> tDefP <*> (brackets $ sepBy bareTypeP comma))  -- This is what allows: list [A], tree [A,B] etc...
  <|>     ((`TApp` []) <$> tconP)
 
@@ -148,6 +151,7 @@ upperWordP = condIdP nice (not . isLower . head)
 tconP :: Parser TCon
 tconP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "boolean"   >> return TBool)
+     <|> try (reserved "undefined" >> return TUndef)
      <|> try (reserved "void"      >> return TVoid)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
@@ -167,6 +171,18 @@ bareAllP
        dot
        t  <- bareTypeP
        return $ foldr TAll t as
+
+arrayP = brackets bareTypeP
+
+
+arrayBindsP 
+  = do reserved "[|"
+       ts    <- sepBy bareTypeP comma
+       reserved "|]"
+       return $ zipWith B (symbol . show <$> [0..]) ts ++ [len ts]
+    where
+      len ts = B (symbol "length") (eSingleton tInt $ length ts)
+
 
 bindsP 
   =  try (sepBy1 bareBindP comma)

@@ -57,8 +57,11 @@ module Language.Nano.Typecheck.Types (
   , tErr
   , tFunErr
   , tVar
+  , tArr
   , tUndef
   , tNull
+
+  , isTVar
 
   -- * Operator Types
   , infixOpTy
@@ -154,6 +157,7 @@ data RType r
   | TVar TVar               r 
   | TFun [Bind r] (RType r) r
   | TObj [Bind r]           r
+  | TArr (RType r)          r
   | TBd  (TBody r)
   | TAll TVar (RType r)
     deriving (Ord, Show, Functor, Data, Typeable)
@@ -202,8 +206,10 @@ mkUnion = mkUnionR F.top
 mkUnionR :: (Ord r, Eq r, F.Reftable r) => r -> [RType r] -> RType r
 ---------------------------------------------------------------------------------
 mkUnionR _ [ ] = tErr
-mkUnionR _ [t] = t       
-mkUnionR r ts  = TApp TUn (L.sort $ L.nub ts) r
+mkUnionR r [t] = strengthen t r
+mkUnionR r ts  | length ts' > 1 = TApp TUn ts' r
+               | otherwise      = strengthen (head ts') r
+                where ts' = L.sort $ L.nub ts
 
 
 ---------------------------------------------------------------------------------
@@ -218,8 +224,6 @@ bkUnion t               = [t]
 ---------------------------------------------------------------------------------
 strengthen                   :: F.Reftable r => RType r -> r -> RType r
 ---------------------------------------------------------------------------------
-{-strengthen t = setRTypeR t . (rTypeR t `F.meet`)-} 
--- The above does not handle cases other than TApp and TVar correctly
 strengthen (TApp c ts r) r'  = TApp c ts $ r' `F.meet` r 
 strengthen (TVar α r)    r'  = TVar α    $ r' `F.meet` r 
 strengthen t _               = t                         
@@ -230,8 +234,8 @@ strengthen t _               = t
 
 
 -- | Strengthen the refinement of a type @t2@ deeply, using the 
--- refinements of an equivalnet (having the same raw version) 
--- type @t1@
+-- refinements of an equivalent (having the same raw version) 
+-- type @t1@.
 -- TODO: Add checks for equivalence in union and objects
 strengthenContainers (TApp TUn ts r) (TApp TUn ts' r') =
   TApp TUn (zipWith strengthenContainers ts ts') $ r' `F.meet` r
@@ -272,27 +276,28 @@ isUnion (TApp TUn _ _) = True           -- top-level union
 isUnion _              = False
 
 -- Get the top-level refinement for unions - use Top (True) otherwise
--- TODO: Fill up for other types
 rUnion               :: F.Reftable r => RType r -> r
 rUnion (TApp TUn _ r) = r
 rUnion _              = F.top
  
 -- Get the top-level refinement 
 rTypeR :: RType r -> r
-rTypeR (TApp _ _ r) = r
-rTypeR (TVar _ r)   = r
-rTypeR (TFun _ _ r) = r
-rTypeR (TObj _ r)   = r
-rTypeR (TBd  _)     = errorstar "Unimplemented: rTypeR - TBd"
-rTypeR (TAll _ _ )  = errorstar "Unimplemented: rTypeR - TAll"
+rTypeR (TApp _ _ r ) = r
+rTypeR (TVar _ r   ) = r
+rTypeR (TFun _ _ r ) = r
+rTypeR (TObj _ r   ) = r
+rTypeR (TArr _ r   ) = r
+rTypeR (TBd  _     ) = errorstar "Unimplemented: rTypeR - TBd"
+rTypeR (TAll _ _   ) = errorstar "Unimplemented: rTypeR - TAll"
 
 setRTypeR :: RType r -> r -> RType r
-setRTypeR (TApp c ts _) r'   = TApp c ts r'
-setRTypeR (TVar v _)    r'   = TVar v r'
-setRTypeR (TFun xts ot _) r' = TFun xts ot r'
-setRTypeR (TObj xts _)  r'   = TObj xts r'
-setRTypeR (TBd  _)     _     = errorstar "Unimplemented: setRTypeR - TBd"
-setRTypeR (TAll _ _ )  _     = errorstar "Unimplemented: setRTypeR - TAll"
+setRTypeR (TApp c ts _   ) r' = TApp c ts r'
+setRTypeR (TVar v _      ) r' = TVar v r'
+setRTypeR (TFun xts ot _ ) r' = TFun xts ot r'
+setRTypeR (TObj xts _    ) r' = TObj xts r'
+setRTypeR (TArr t _      ) r  = TArr t r
+setRTypeR (TBd  _        ) _  = errorstar "Unimplemented: setRTypeR - TBd"
+setRTypeR (TAll _ _      ) _  = errorstar "Unimplemented: setRTypeR - TAll"
 
 
 ---------------------------------------------------------------------------------------
@@ -302,6 +307,7 @@ noUnion (TApp TUn _ _)  = False
 noUnion (TApp _  rs _)  = and $ map noUnion rs
 noUnion (TFun bs rt _)  = and $ map noUnion $ rt : (map b_type bs)
 noUnion (TObj bs    _)  = and $ map noUnion $ map b_type bs
+noUnion (TArr t     _)  = noUnion t
 noUnion (TBd  _      )  = error "noUnion: cannot have TBodies here"
 noUnion (TAll _ t    )  = noUnion t
 noUnion _               = True
@@ -324,13 +330,13 @@ instance Eq TCon where
  
 instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
   TApp TUn t1 _       == TApp TUn t2 _       = (null $ t1 L.\\ t2) && (null $ t2 L.\\ t1)
-    {-tracePP (printf "Diff: %s \\ %s" (ppshow $ L.nub t1) (ppshow $ L.nub t2)) $-}
   TApp c1 t1s r1      == TApp c2 t2s r2      = (c1, t1s, r1)  == (c2, t2s, r2)
   TVar v1 r1          == TVar v2 r2          = (v1, r1)       == (v2, r2)
   TFun b1 t1 r1       == TFun b2 t2 r2       = (b1, t1, r1)   == (b2, t2, r2)
   TObj b1 r1          == TObj b2 r2          = (null $ b1 L.\\ b2) && (null $ b2 L.\\ b1) && r1 == r2
+  TArr t1 r1          == TArr t2 r2          = t1 == t2 && r1 == r2
   TBd (TD c1 a1 b1 _) == TBd (TD c2 a2 b2 _) = (c1, a1, b1)   == (c2, a2, b2)
-  TAll _ _            == TAll _ _            = undefined -- TODO
+  TAll _ _            == TAll _ _            = errorstar "Unimplemented: Eq (RType r)" -- TODO
   _                   == _                   = False
 
 
@@ -431,6 +437,7 @@ instance F.Reftable r => PP (RType r) where
 
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 
   pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
+  pp (TArr t r)                 = F.ppTy r $ brackets (pp t)  
   pp (TObj bs r )               = F.ppTy r $ ppArgs braces comma bs
   pp (TBd (TD (TDef id) v r _)) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r
   pp (TBd _)                    = error "This is not an acceptable form for TBody" 
@@ -541,6 +548,9 @@ isAsm  _          = False
 tVar   :: (F.Reftable r) => TVar -> RType r
 tVar   = (`TVar` F.top) 
 
+isTVar (TVar _ _) = True
+isTVar _          = False
+
 tInt, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RType r
 tInt    = TApp TInt     [] F.top 
 tBool   = TApp TBool    [] F.top
@@ -551,6 +561,8 @@ tUndef  = TApp TUndef   [] F.top
 tNull   = TApp TNull    [] F.top
 tErr    = tVoid
 tFunErr = ([],[],tErr)
+
+tArr    = (`TArr` F.top)
 
 -- tProp :: (F.Reftable r) => RType r
 -- tProp  = TApp tcProp [] F.top 

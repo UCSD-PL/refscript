@@ -87,6 +87,8 @@ function pos(){
 /*@ safehead :: forall A. ({xs:list [A] | (len xs) > 0}) => A                                     */
 /*@ safetail :: forall A. ({xs:list [A] | (len xs) > 0}) => {v:list [A] | (len v) = (len xs) - 1} */
 
+/*@ Array    :: (n : { v: number | 0 <= v } ) => { v: [ undefined ] | (len v) = n }               */
+
 
 
 /*************************************************************************/
@@ -128,8 +130,8 @@ function pos(){
 /*@ builtin_OpMul       :: (number,  number)  => number                                                   */
 /*@ builtin_OpDiv       :: (number,  number)  => number                                                   */
 /*@ builtin_OpMod       :: (number,  number)  => number                                                   */
-/*@ builtin_PrefixMinus :: ({x:number | true}) => {v:number | v = (0 - x)}                                */
-/*@ builtin_PrefixLNot  :: (boolean) => boolean                                                           */
+/*@ builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v = (0 - x)}                              */
+/*@ builtin_PrefixLNot  :: ({x:boolean | true}) => {v:boolean | ((Prop v) <=> not (Prop x))}              */
 
 //Changing temprorarily until strings are supported
 /* builtin_PrefixTypeof:: forall A. (A) => string                                                         */

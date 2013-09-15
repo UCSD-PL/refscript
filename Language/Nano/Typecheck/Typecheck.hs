@@ -116,8 +116,8 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn
 -------------------------------------------------------------------------------
 -- | The first argument true to tranform casted expressions e to Cast(e,T)
 -------------------------------------------------------------------------------
--- tcAndPatch :: (Data r, Typeable r, F.Reftable r, PP r, Ord r) => 
---     Nano (AnnSSA_ r) (RType r) -> TCM r (Nano (AnnSSA_ r) (RType r))
+tcAndPatch :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact_ r), Free (Fact_ r)) =>
+  Nano (AnnSSA_ r) (RType r) -> TCM r (Nano (AnnType_ r) (RType r))
 -------------------------------------------------------------------------------
 tcAndPatch p = 
   do  checkTypeDefs p
@@ -259,15 +259,29 @@ tcStmt' γ (EmptyStmt _)
 tcStmt' γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))   
   = tcAsgn γ l (Id lx x) e
 
--- e1.x = e2
--- @e3.x@ should have the exact same type with @e2@
+-- e3.x = e2
+-- The type of @e2@ should be assignable (a subtype of) the type of @e3.x@.
 tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot l3 e3 x) e2))
+  = do  θ  <- getTDefs
+        t2 <- tcExpr γ e2 
+        t3 <- tcExpr γ e3
+        tx <- safeGetProp x t3
+        if isSubType θ t2 tx 
+          then return $ Just γ
+          else tcError l2 (printf "Cannot assing type %s to %s" 
+                             (ppshow tx) (ppshow t2))
+
+-- e3[i] = e2
+tcStmt' γ (ExprStmt l1 (AssignExpr l2 OpAssign (LBracket l3 e3 (IntLit l4 i)) e2))
   = do  t2 <- tcExpr γ e2 
         t3 <- tcExpr γ e3
-        tx <- safeDotAccess x t2
-        unifyTypeM l2 "DotRef" e2 t2 tx
-        return $ Just γ 
--- No strong updates allowed here - so return the same envirnment      
+        ti <- safeGetIdx i t3
+        θ  <- unifyTypeM l2 "DotRef" e2 t2 ti 
+        -- Once we've figured out what the type of the array should be,
+        -- update the output environment.
+        setSubst θ
+        return $ Just $ apply θ γ 
+
 
 -- e
 tcStmt' γ (ExprStmt _ e)   
@@ -285,7 +299,7 @@ tcStmt' γ (IfSingleStmt l b s)
 tcStmt' γ (IfStmt l e s1 s2)
   = do  t <- tcExpr γ e 
     -- Doing check for boolean for the conditional for now
-    -- TODO: Will have to suppert truthy/falsy later.
+    -- TODO: Will have to support truthy/falsy later.
         unifyTypeM l "If condition" e t tBool
         γ1      <- tcStmt' γ s1
         γ2      <- tcStmt' γ s2
@@ -359,6 +373,9 @@ tcExpr' _ (StringLit _ _)
 tcExpr' _ (NullLit _)
   = return tNull
 
+tcExpr' γ (ArrayLit l es)
+  = tcArray (ann l) γ es
+
 tcExpr' γ (VarRef l x)
   = case envFindTy x γ of 
       Nothing -> logError (ann l) (errorUnboundIdEnv x γ) tErr
@@ -376,20 +393,19 @@ tcExpr' γ (CallExpr l e es)
 tcExpr' γ (ObjectLit _ ps) 
   = tcObject γ ps
 
-tcExpr' γ (DotRef l e i) 
-  = tcAccess γ l e i
+-- x.f = x["f"]
+tcExpr' γ (DotRef l e s) = tcExpr γ e >>= safeGetProp (unId s) 
 
-tcExpr' γ (BracketRef l e (StringLit _ s))
-  = tcAccess γ l e s
+-- x["f"]
+tcExpr' γ (BracketRef _ e (StringLit _ s)) = tcExpr γ e >>= safeGetProp s
 
-{--- General case of dynamic key dictionary access-}
-{-tcExpr' γ (BracketRef l e1 e2)-}
-{-  = do  t2 <- tcExpr γ e2-}
-{-        unifyTypeM l "BracketRef" e2 t2 tString-}
-{-        tcAccess γ l e1 s-}
+-- x[i] 
+tcExpr' γ (BracketRef _ e (IntLit _ i)) = tcExpr γ e >>= safeGetIdx i
 
 tcExpr' _ e 
   = convertError "tcExpr" e
+
+
 
 ----------------------------------------------------------------------------------
 tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 
@@ -429,12 +445,20 @@ tcObject γ bs
 
 
 ----------------------------------------------------------------------------------
-tcAccess ::  (Ord r, F.Reftable r, PP r, F.Symbolic s, PP s) =>
-  Env (RType r) -> (AnnSSA_ r) -> Expression (AnnSSA_ r) -> s -> TCM r (RType r)
+tcArray :: (Ord r, PP r, F.Reftable r) =>
+    SourceSpan -> Env (RType r) -> [Expression (AnnSSA_ r)] -> TCM r (RType r)
 ----------------------------------------------------------------------------------
-tcAccess γ _ e f = 
-  -- TODO: handle case of Nothing being returned from dotAccess
-  tcExpr γ e >>= safeDotAccess f
+tcArray l γ es = 
+  case es of 
+    [] -> tracePP "created fresh TArr" <$> freshTArray l
+    _  -> mapM (tcExpr γ) es >>= return . mkObj
+  where 
+    mkObj ts = tracePP (ppshow es) $ TObj (bs ts) F.top
+    bs ts    = zipWith B (F.symbol . show <$> [0..]) ts ++ [len ts]
+    len ts   = B (F.symbol "length") tInt
+
+
+              
 
 
 ----------------------------------------------------------------------------------
@@ -447,7 +471,7 @@ envJoin l γ (Just γ1) (Just γ2) = envJoin' l γ γ1 γ2
 
 envJoin' l γ γ1 γ2
   = do let xs = [x | PhiVar x <- ann_fact l]
-       ts    <- mapM (getPhiType l γ1 γ2) xs
+       ts    <- mapM (getPhiType l γ1 γ2) (tracePP "Phi vars" xs)
        return $ Just $ envAdds (zip xs ts) γ 
   
 
@@ -465,7 +489,6 @@ getPhiType l γ1 γ2 x =
     (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
                             then tcError (ann l) "Oh no, the HashMap GREMLIN is back...1"
                             else tcError (ann l) (bugUnboundPhiVar x)
-
 
 
 forceCheck x γ 

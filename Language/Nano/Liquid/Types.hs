@@ -203,6 +203,7 @@ rTypeSort t@(TAll _ _)     = rTypeSortForAll t
 rTypeSort (TFun xts t _)   = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
 rTypeSort (TObj _ _)       = F.FApp (F.stringFTycon "object") []
+rTypeSort (TArr _ _)       = F.FApp (F.stringFTycon "array") []
 rTypeSort t                = error ("Type: " ++ ppshow t ++ 
                                     " is not supported in rTypeSort")
 
@@ -238,6 +239,7 @@ stripRTypeBase (TApp _ _ r) = Just r
 stripRTypeBase (TVar _ r)   = Just r
 stripRTypeBase (TFun _ _ r) = Just r
 stripRTypeBase (TObj _ r)   = Just r
+stripRTypeBase (TArr _ r)   = Just r
 stripRTypeBase _            = Nothing
  
 ------------------------------------------------------------------------------------------
@@ -268,6 +270,7 @@ emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts) (emapReft f γ'
 emapReft f γ (TObj bs r)    = TObj (emapReftBind f γ' <$> bs) (f γ r)
   where 
     γ'                      = (b_sym <$> bs) ++ γ 
+emapReft f γ (TArr t r)     = TArr (emapReft f γ t) (f γ r)
 emapReft _ _ _              = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)    = B x $ emapReft f γ t
@@ -280,6 +283,7 @@ mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> f r
 mapReftM f (TFun xts t _)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return F.top) --f r 
 mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
 mapReftM f (TObj bs r)     = TObj   <$> mapM (mapReftBindM f) bs <*> f r
+mapReftM f (TArr t r)      = TArr   <$> (mapReftM f t) <*> f r
 mapReftM _ _               = error "Not supported in mapReftM"
 
 mapReftBindM f (B x t)     = B x <$> mapReftM f t
@@ -305,6 +309,7 @@ efoldReft g f γ z (TFun xts t r)   = f γ r $ efoldReft g f γ' (efoldRefts g f
 efoldReft g f γ z (TObj xts r)     = f γ r $ (efoldRefts g f γ' z (b_type <$> xts))
   where 
     γ'                             = foldr (efoldExt g) γ xts
+efoldReft g f γ z (TArr t r)       = f γ r $ efoldReft g f γ z t    
 efoldReft _ _ _ _ _                = error "Not supported in efoldReft"
 
 efoldRefts g f γ z ts              = L.foldl' (efoldReft g f γ) z ts

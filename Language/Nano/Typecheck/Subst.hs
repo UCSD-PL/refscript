@@ -22,7 +22,8 @@ module Language.Nano.Typecheck.Subst (
   , unfoldFirst, unfoldMaybe, unfoldSafe
   
   -- * Accessing fields
-  , dotAccess
+  , getProp
+  , getIdx
   
 
   ) where 
@@ -31,6 +32,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Parse as P
 import           Language.Nano.Errors 
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
@@ -40,6 +42,13 @@ import qualified Data.HashSet as S
 import           Data.List                      (find)
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
+
+import Text.Parsec
+import Text.Parsec.Expr
+import Text.Parsec.Language
+import Text.Parsec.String hiding (Parser, parseFromFile)
+import Text.Printf  (printf)
+
 import           Text.Printf 
 -- import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
@@ -100,8 +109,13 @@ instance (PP r, F.Reftable r) => Substitutable r (RType r) where
 instance (PP r, F.Reftable r) => Substitutable r (Bind r) where 
   apply θ (B z t) = B z $ appTy θ t
 
+instance (PP r, F.Reftable r) => Substitutable r (Env (RType r)) where 
+  apply = envMap . apply
+
+
 instance Free (RType r) where
   free (TApp _ ts _)        = S.unions   $ free <$> ts
+  free (TArr t _)           = free t
   free (TVar α _)           = S.singleton α 
   free (TFun xts t _)       = S.unions   $ free <$> t:ts where ts = b_type <$> xts
   free (TAll α t)           = S.delete α $ free t 
@@ -138,6 +152,7 @@ appTy θ (TObj bs z)              = TObj (map (\b -> B { b_sym = b_sym b, b_type
 appTy (Su m) t@(TVar α r)        = (M.lookupDefault t α m) `strengthen` r
 appTy θ (TFun ts t r)            = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m) (TAll α t)          = apply (Su $ M.delete α m) t 
+appTy θ (TArr t r)               = TArr (apply θ t) r
 appTy (Su m) (TBd (TD c α t s))  = TBd $ TD c α (apply (Su $ foldr M.delete m α) t) s
 
 
@@ -161,6 +176,7 @@ unfoldFirst env t = go t
         Just (TBd (TD _ vs bd _ )) -> apply (fromList $ zip vs acts) bd
         _                          -> error $ errorUnboundId id
     go (TApp c a r)            = TApp c (go <$> a) r
+    go (TArr t r)              = TArr (go t) r
     go t@(TVar _ _ )           = t
     appTBi f (B s t)           = B s $ f t
 
@@ -192,45 +208,91 @@ unfoldSafe :: (PP r, F.Reftable r) => Env (RType r) -> RType r -> RType r
 unfoldSafe env = either error id . unfoldMaybe env
 
 
--- Returns type to cast the current expression and the returned type
+-- Given an environment @γ@, a (string) field @s@ and a type @t@, `getProp` 
+-- returns a tupple with elements:
+-- ∙ The subtype of @t@ for which the access does not throw an error.
+-- ∙ The type the corresponds to the access of exactly that type that does not
+--   throw an error.
+--
 -------------------------------------------------------------------------------
-dotAccess ::  (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) => 
-  Env (RType r) -> s -> RType r -> Maybe (RType r, RType r)
+getProp ::  (Ord r, PP r, F.Reftable r) => 
+  Env (RType r) -> String -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-dotAccess _ f t@(TObj bs _) = 
-  do  case find (match $ F.symbol f) bs of
+getProp _ s t@(TObj bs _) = 
+  do  case find (match $ F.symbol s) bs of
         Just b -> Just (t, b_type b)
         _      -> case find (match $ F.stringSymbol "*") bs of
                     Just b' -> Just (t, b_type b')
                     _       -> Just (t, tUndef)
   where match s (B f _)  = s == f
 
-dotAccess γ f t@(TApp c ts _ ) = go c
-  where  go TUn      = dotAccessUnion γ f ts
+getProp γ s t@(TApp c ts _ ) = go c
+  where  go TUn      = getPropUnion γ s ts
          go TInt     = Just (t, tUndef)
          go TBool    = Just (t, tUndef)
          go TString  = Just (t, tUndef)
          go TUndef   = Nothing
          go TNull    = Nothing
-         go (TDef _) = dotAccess γ f $ unfoldSafe γ t
-         go TTop     = error "dotAccess top"
-         go TVoid    = error "dotAccess void"
+         go (TDef _) = getProp γ s $ unfoldSafe γ t
+         go TTop     = error "getProp top"
+         go TVoid    = error "getProp void"
 
-dotAccess _ _ t@(TFun _ _ _ ) = Just (t, tUndef)
-dotAccess _ _ t               = error $ "dotAccess " ++ (ppshow t) 
+getProp _ _ t@(TFun _ _ _ ) = Just (t, tUndef)
+
+getProp γ s a@(TArr t _)    = 
+  case s of
+    -- TODO: make more specific, add refinements
+    "length" -> Just (a, tInt) 
+    _        -> case stringToInt s of
+    -- Implicit coersion of numieric strings:
+    -- x["0"] = x[0], x["1"] = x[1], etc.
+                  Just i  -> getIdx γ i a 
+    -- The rest of the cases are undefined
+                  Nothing -> Just (a, tUndef) 
+
+getProp _ _ t               = error $ "getProp " ++ (ppshow t) 
+
+
+-------------------------------------------------------------------------------
+stringToInt :: String -> Maybe Int
+-------------------------------------------------------------------------------
+stringToInt s = 
+  case runParser P.integer 0 "" s of
+    Right i -> Just $ fromInteger i
+    Left _  -> Nothing
 
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
-dotAccessUnion ::  (Ord r, PP r, F.Reftable r, F.Symbolic s, PP s) => 
-  Env (RType r) -> s -> [RType r] -> Maybe (RType r, RType r)
+getPropUnion ::  (Ord r, PP r, F.Reftable r) => 
+  Env (RType r) -> String -> [RType r] -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-dotAccessUnion γ f ts = 
+getPropUnion γ f ts = 
   -- Gather all the types that do not throw errors, and the type of 
   -- the accessed expression that yields them
-  case [tts | Just tts <- dotAccess γ f <$> ts] of
+  case [tts | Just tts <- getProp γ f <$> ts] of
     [] -> Nothing
     ts -> Just $ mapPair mkUnion $ unzip ts
+
+
+-- Given an environment @γ@, a numeric index @i@ and a type @t@, `getIdx` 
+-- returns a tupple with elements:
+-- ∙ TODO: An array bounds check.
+-- ∙ The accessed type.
+--
+-------------------------------------------------------------------------------
+getIdx ::  (Ord r, PP r, F.Reftable r) => 
+  Env (RType r) -> Int -> RType r -> Maybe (RType r, RType r)
+-------------------------------------------------------------------------------
+-- NOTE: For the moment only allow index access to array types
+-- When prototypes are encoded, also allow accesses to whatever has Array in its 
+-- prototype chain. In a nominal prototyping system, it should be sound to
+-- encode `instanceof` this way.
+-- TODO: Add array bounds checks
+getIdx _ _ a@(TArr t _)  = Just (a,t)
+getIdx γ i t             = getProp γ (show i) t 
+--error $ "Unimplemented: getIdx on" ++ (ppshow t) 
+
 

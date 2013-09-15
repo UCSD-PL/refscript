@@ -52,12 +52,16 @@ module Language.Nano.Liquid.CGMonad (
   -- * Add Type Annotations
   , addAnnot
 
+  -- * Access container types
+  , safeGetIdx, safeGetProp
+
+
   -- * Unfolding
   , unfoldSafeCG, unfoldFirstCG
 
   ) where
 
-import           Data.Maybe                     (fromMaybe)
+import           Data.Maybe                     (fromMaybe, fromJust)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 
@@ -157,28 +161,26 @@ getTDefs  = cg_tdefs <$> get
 
 -- | Get binding from object type
 
--- Use the TCMonad dotAccess
+-- Access field @f@ of type @t@, adding a cast if needed to avoid errors.
+-------------------------------------------------------------------------------
+safeGetProp :: String -> RefType -> CGM RefType
+-------------------------------------------------------------------------------
+safeGetProp f t
+  = do  γ <- getTDefs
+        case getProp γ f t of
+          Just (_,tf) -> return tf
+          Nothing      -> error "safeGetProp" --TODO: deadcode
+ 
+-- Access index @i@ of type @t@, adding a cast if needed to avoid errors.
+-------------------------------------------------------------------------------
+safeGetIdx :: Int -> RefType -> CGM RefType
+-------------------------------------------------------------------------------
+safeGetIdx i t
+  = do  γ <- getTDefs
+        case getIdx γ i t of
+          Just (_,tf) -> return tf
+          Nothing     -> error "CGM:safeGetIdx" --TODO: deadcode
 
-{-----------------------------------------------------------------------------------}
-{-getBinding :: (PP r, F.Reftable r, F.Symbolic s) => -}
-{-  E.Env (RType r) -> s -> RType r -> Either String (RType r)-}
-{-----------------------------------------------------------------------------------}
-{-getBinding _ i (TObj bs _ ) = -}
-{-  case L.find (\s -> F.symbol i == b_sym s) bs of-}
-{-    Just b      -> Right $ b_type b-}
-{-    _           -> Left  $ errorObjectBinding-}
-{-getBinding defs i t@(TApp (TDef _) _ _) = -}
-{-  case unfoldMaybe defs t of-}
-{-    Right t'    -> getBinding defs i t'-}
-{-    Left  s     -> Left $ s ++ "\nand\n" ++ errorObjectTAccess t-}
-{-getBinding _ _ t = Left $ errorObjectTAccess t-}
-
-{-----------------------------------------------------------------------------------------}
-{-getBindingM :: (F.Symbolic s) => s -> RefType -> CGM (Either String RefType)-}
-{-----------------------------------------------------------------------------------------}
-{-getBindingM i t -}
-{-  = do  td <- cg_tdefs <$> get-}
-{-        return $ getBinding td i t -}
 
 
 ---------------------------------------------------------------------------------------
@@ -217,10 +219,10 @@ cgError l msg = throwError $ printf "CG-ERROR at %s : %s" (ppshow $ srcPos l) ms
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-envAddFresh :: (IsLocated l) => l -> RefType -> CGEnv -> CGM (Id l, CGEnv) 
+envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id l, CGEnv) 
 ---------------------------------------------------------------------------------------
-envAddFresh l t g 
-  = do x  <- {- tracePP ("envAddFresh " ++ ppshow t) <$> -} freshId l
+envAddFresh _ l t g 
+  = do x  <- {- tracePP ("envAddFresh: " ++ s ++ ": "++ ppshow t) <$> -} freshId l
        g' <- envAdds [(x, t)] g
        return (x, g')
 
@@ -373,10 +375,6 @@ freshTyFun' g l _ t b
 
 -- | Instantiate Fresh Type (at Call-site)
 
----------------------------------------------------------------------------------------
--- freshTyInst :: (IsLocated l) => l -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
--- freshTyInst :: AnnTypeR -> CGEnv -> [TVar] -> [Type] -> RefType -> CGM RefType 
----------------------------------------------------------------------------------------
 freshTyInst l g αs τs tbody
   = do ts    <- mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
@@ -476,26 +474,40 @@ subTypeContainers l g t1 t2@(TApp (TDef _) _ _ ) =
 subTypeContainers l g t1@(TApp (TDef _) _ _ ) t2 = 
   unfoldSafeCG t1 >>= \t1' -> subTypeContainers' "subc def2" l g t1' t2
 
-subTypeContainers l g u1@(TApp TUn _ _) u2@(TApp TUn _ _) = 
+subTypeContainers l g u1@(TApp TUn _ r1) u2@(TApp TUn _ r2) = 
   getTDefs >>= \γ -> sbs $ bkPaddedUnion "subTypeContainers" γ u1 u2
   where        
-    (r1, r2)     = mapPair rTypeR        (u1, u2)
     -- Fix the ValueVar of the top-level refinement to be the same as the
     -- Valuevar of the part
     fix t b v    | v == b    = rTypeValueVar t
                  | otherwise = v
     rr t r       = F.substa (fix t b) r where F.Reft (b,_) = r
-    sb  (t1 ,t2) = subTypeContainers' "subc un" l g (t1 `strengthen` rr t1 r1) 
-                                         (t2 `strengthen` rr t2 r2)
+    sb  (t1 ,t2) = subTypeContainers' "subc union" l g (t1 `strengthen` rr t1 r1)
+                                                       (t2 `strengthen` rr t2 r2)
     sbs ts       = mapM_ sb ts
+
+subTypeContainers l g a1@(TArr t1 r1) a2@(TArr t2 r2) =
+  do  γ <- getTDefs 
+      subTypeContainers' "subc arr" l g (t1 `strengthen` rr t1 r1) 
+                                        (t2 `strengthen` rr t2 r2)
+      -- Array subtyping co- and contra-variant?                                    
+      -- subTypeContainers' "subc arr" l g (t2 `strengthen` rr t2 r2) 
+      --                                   (t1 `strengthen` rr t1 r1)
+  where
+    -- Fix the ValueVar of the top-level refinement 
+    -- to be the same as the Valuevar of the part
+    fix t b v    | v == b    = rTypeValueVar t
+                 | otherwise = v
+    rr t r       = F.substa (fix t b) r where F.Reft (b,_) = r
+
+
 
 -- TODO: the environment for subtyping each part of the object should have the
 -- tyopes for the rest of the bindings
-subTypeContainers l g o1@(TObj _ _) o2@(TObj _ _) = 
+subTypeContainers l g o1@(TObj _ r1) o2@(TObj _ r2) = 
   getTDefs >>= \γ -> sbs $ bkPaddedObject o1 o2
   where
     sbs          = mapM_ sb
-    (r1, r2)     = mapPair rTypeR (o1, o2)
     -- Fix the ValueVar of the top-level refinement 
     -- to be the same as the Valuevar of the part
     fix t b v    | v == b    = rTypeValueVar t
@@ -509,7 +521,7 @@ subTypeContainers l g t1 t2 = subType l g t1 t2
 
 subTypeContainers' msg l g t1 t2 = 
   subTypeContainers l g ({-trace (printf "subTypeContainers[%s]:\n\t%s\n\t%s" 
-                                msg (ppshow t1) (ppshow t2)) -} t1) t2
+                                msg (ppshow t1) (ppshow t2))-}  t1) t2
 
 
 -------------------------------------------------------------------------------
@@ -709,6 +721,15 @@ splitC' (Sub _ _ t1@(TObj _ _ ) t2)
             (ppshow t1) (ppshow t2)
 
 
+---------------------------------------------------------------------------------------
+-- | TArr
+---------------------------------------------------------------------------------------
+-- Only top-level constraints here. The splitting for the inner parts of the
+-- types should have been done earlier.
+splitC' (Sub g i t1@(TArr t r) t2@(TArr t' r'))
+  = return $ bsplitC g i t1 t2
+
+
 splitC' x 
   = cgError (srcPos x) $ bugBadSubtypes x 
 
@@ -752,6 +773,11 @@ splitW (W g i t@(TVar _ _))
 splitW (W g i t@(TApp _ ts _))
   =  do let ws = bsplitW g t i
         ws'   <- concatMapM splitW [W g i ti | ti <- ts]
+        return $ ws ++ ws'
+
+splitW (W g i t@(TArr t' _))
+  =  do let ws = bsplitW g t i
+        ws'   <- splitW (W g i t')
         return $ ws ++ ws'
 
 splitW (W g i t@(TObj ts _ ))

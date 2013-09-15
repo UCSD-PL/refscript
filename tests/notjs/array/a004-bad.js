@@ -1,5 +1,5 @@
 
-/*@ foo :: () => { number | v = 17 } */
+/*@ foo :: () => { number | v = 10 } */
 function foo () {
   arr = [2,3,5,7];
   ////Original

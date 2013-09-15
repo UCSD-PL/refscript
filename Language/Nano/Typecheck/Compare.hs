@@ -189,7 +189,12 @@ a &*& b = getProduct $ mappend (Product a) (Product b)
 mconcatP   :: Monoid (Product t) => [t] -> t
 mconcatP xs = getProduct $ mconcat (Product <$> xs)
 
-
+arrDir     :: SubDirection -> SubDirection
+arrDir SubT = Rel
+arrDir SupT = Rel
+arrDir EqT  = EqT
+arrDir Rel  = Rel
+arrDir Nth  = Nth
 
 
 
@@ -227,7 +232,7 @@ compareTs :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r 
 -- Deal with some standard cases of subtyping, e.g.: Top, Null, Undefined ...
 compareTs _ t1 t2 | toType t1 == toType t2 = (ofType $ toType t1, t1, t2, EqT)
 
--- compareTs γ t1 t2 | isUndefined t1         = setFth4 (compareTs' γ t1 t2) SubT
+compareTs γ t1 t2 | isUndefined t1         = setFth4 (compareTs' γ t1 t2) SubT
 
 -- XXX: Null is not considered a subtype of all types. If null is to be 
 -- expected this should be explicitly specified by using " + null"
@@ -256,6 +261,11 @@ compareTs' γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
 compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = 
   {-tracePP (printf "Padding: %s and %s" (ppshow t1) (ppshow t2)) $ -}
   padObject γ ( {- trace ("padding obj " ++ ppshow t1 ++ "\n - " ++ ppshow t2) -} t1) t2
+
+-- | Arrays
+compareTs' γ a@(TArr t r) a'@(TArr t' r')    = padArray γ a a'
+compareTs' _   (TObj _ _)    (TArr _ _  )    = error "Unimplemented compareTs-Obj-Arr" 
+compareTs' _   (TArr _ _)    (TObj _ _  )    = error "Unimplemented compareTs-Arr-Obj" 
 
 -- | Type definitions
 
@@ -532,6 +542,15 @@ padFun _ _ _ = error "padFun: no other cases supported"
 
 
 
+-- | `padArray`
+padArray γ (TArr t1 r1) (TArr t2 r2)
+  = (TArr tj F.top, TArr t1' r1, TArr t2' r2, arrDir ad)
+    where
+      (tj, t1', t2', ad) = compareTs γ t1 t2
+
+
+
+
 -- | Helper
 instance (PP a, PP b, PP c) => PP (a,b,c) where
   pp (a,b,c) = pp a <+> text ",\n" <+> pp b <+> text ",\n" <+> pp c
@@ -553,8 +572,10 @@ zipType1 γ f t1 t2 = zipType2 γ f t2 t1
  
 
 
--- This function @t2@ with the refinements from @t1@ by matching equivalent 
--- parts of the two types.
+-- `zipType2` walks throught the equivalent parts of types @t1@ and @t2@. It 
+-- applies function $f$ on the refinements of the equivalent parts and keeps the
+-- output as the resulting refinement. The shape of @t2@ is preserved in the
+-- output.
 --------------------------------------------------------------------------------
 zipType2 :: (PP r, F.Reftable r) => Env (RType r) -> (r -> r -> r) ->  RType r -> RType r -> RType r
 --------------------------------------------------------------------------------
@@ -589,8 +610,10 @@ zipType2 γ f (TObj bs r) (TObj bs' r') = TObj mbs $ f r r'
     mbs = safeZipWith "zipType2:TObj" (zipBind2 γ f) (L.sortBy compB bs) (L.sortBy compB bs')
     compB (B s _) (B s' _) = compare s s'
 
+zipType2 γ f (TArr t r) (TArr t' r') = TArr (zipType2 γ f t t') $ f r r'
+
 zipType2 _ _ t t' = 
-  errorstar $ printf "BUG[zipType2]: mis-aligned types:\n%s\nwith\n%s" (ppshow t) (ppshow t')
+  errorstar $ printf "BUG[zipType2]: mis-aligned types:\n\t%s\nand\n\t%s" (ppshow t) (ppshow t')
 
 zipTypes γ f ts t = 
   case filter (equiv γ t) ts of

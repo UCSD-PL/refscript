@@ -179,8 +179,8 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
 consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket l3 e3 (IntLit l4 i)) e2))
   = do  (x2,g2) <- consExpr g e2
         (x3,g3) <- consExpr g2 e3
-        let t2   = envFindTy x2 g2
-            t3   = tracePP "e3 :: " $ envFindTy x3 g3
+        let t2   = {-tracePP (ppshow e2 ++ " ANF: " ++ ppshow x2) $ -} envFindTy x2 g2
+            t3   = envFindTy x3 g3
         ti      <- safeGetIdx i t3
         withAlignedM (subTypeContainers' "e[i] = e" l2 g3) t2 ti
         return   $ Just g3
@@ -442,7 +442,8 @@ consArr ::AnnTypeR -> CGEnv -> [Expression AnnTypeR] -> CGM  (Id AnnTypeR, CGEnv
 -- []
 consArr l g [] =  
   case [t | TypInst t <- ann_fact l] of 
-    [[t]] -> envAddFresh "consArr:empty" l (TArr t F.top) g
+    [[t]] -> freshTyArr l g t
+          -- TODO: Should the toplevel refinement be freshened up as well?
     _     -> errorstar $ "consArr: Empty array literal should be " ++ 
                          "instantiated by single type"
 

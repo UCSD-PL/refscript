@@ -1,4 +1,5 @@
 
+/*@ qualif Ineq(v : number ): (v <= 6) */
 
 /*@ loop :: () => { number | v = 6 } */
 function loop(){  
@@ -9,7 +10,3 @@ function loop(){
   return x;
 }
 
-/*@ main :: () => void */
-function main(){
-  loop();
-}

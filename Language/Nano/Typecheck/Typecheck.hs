@@ -14,7 +14,7 @@ import qualified Data.HashSet                       as HS
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.Traversable                   as T
 import           Data.Monoid
-import           Data.Maybe                         (catMaybes, isJust, fromJust)
+import           Data.Maybe                         (catMaybes, isJust)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$), (<+>))
@@ -261,7 +261,7 @@ tcStmt' γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))
 
 -- e3.x = e2
 -- The type of @e2@ should be assignable (a subtype of) the type of @e3.x@.
-tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot l3 e3 x) e2))
+tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
   = do  θ  <- getTDefs
         t2 <- tcExpr γ e2 
         t3 <- tcExpr γ e3
@@ -272,7 +272,7 @@ tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot l3 e3 x) e2))
                              (ppshow tx) (ppshow t2))
 
 -- e3[i] = e2
-tcStmt' γ (ExprStmt l1 (AssignExpr l2 OpAssign (LBracket l3 e3 (IntLit l4 i)) e2))
+tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
   = do  t2 <- tcExpr γ e2 
         t3 <- tcExpr γ e3
         ti <- safeGetIdx i t3
@@ -402,7 +402,7 @@ tcExpr' γ (ObjectLit _ ps)
   = tcObject γ ps
 
 -- x.f = x["f"]
-tcExpr' γ (DotRef l e s) = tcExpr γ e >>= safeGetProp (unId s) 
+tcExpr' γ (DotRef _ e s) = tcExpr γ e >>= safeGetProp (unId s) 
 
 -- x["f"]
 tcExpr' γ (BracketRef _ e (StringLit _ s)) = tcExpr γ e >>= safeGetProp s
@@ -462,8 +462,8 @@ tcArray l γ es =
     _  -> mapM (tcExpr γ) es >>= return . mkObj
   where 
     mkObj ts = tracePP (ppshow es) $ TObj (bs ts) F.top
-    bs ts    = zipWith B (F.symbol . show <$> [0..]) ts ++ [len ts]
-    len ts   = B (F.symbol "length") tInt
+    bs ts    = zipWith B (F.symbol . show <$> [0..]) ts ++ [len]
+    len      = B (F.symbol "length") tInt
 
               
 ----------------------------------------------------------------------------------

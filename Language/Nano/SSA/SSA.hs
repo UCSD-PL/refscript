@@ -158,30 +158,13 @@ ssaStmt (WhileStmt l c b) = do
     -- θ : is the SSA env before the body
     -- θ': is the SSA env after the body
     --
-    vds    <- loopPhis l b' θ (fromJust θ')
-    let stmt'   =  BlockStmt l [vds, WhileStmt l c' b']
+    loopPhis l b' θ (fromJust θ')
+    let stmt'   =  BlockStmt l [{-vds,-} WhileStmt l c' b']
     case θ' of
       Just θ'' -> do  setSsaEnv θ''
                       return  $ (True , stmt')
       Nothing  ->     return  $ (False, stmt')
-      
-{-
-  = do  c'   <- ssaExpr c
-        θ    <- getSsaEnv
-        ifSt <- ssaStmt (IfStmt l tru b (EmptyStmt l))
-        θ'   <- getSsaEnv
-        case ifSt of
-          (b, IfStmt l _ b' emp) -> 
-            do  loopPhis l b' θ θ'
-                return (b, IfStmt l tru (WhileStmt l c' b') emp)
-          _ -> errorstar "BUG: ssaStmt:WhileStmt"
-  where 
-    tru   = (BoolLit lc True)
-    lc    =  getAnnotation c
-  where 
-    dbg θ = trace ("SSA ENV: " ++ ppshow θ) (Just θ)
--}        
-
+     
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 ssaStmt (VarDeclStmt l ds) = do 
@@ -351,12 +334,12 @@ phiAsgn l (x, (SI x1, SI x2)) = do
 --
 -- TOOD:  Is x (first argument of @go@) indeed not needed ???
 loopPhis lw b θ1 θ2 = 
-    VarDeclStmt lw <$> forM phis go
+    forM_ phis go
   where 
     go (_, (SI x1, SI x2)) 
                 = addAnn lw (PhiVar [x1]   ) >> 
-                  addAnn lb (PhiVar [x1,x2]) >>
-                  return (VarDecl lw x2 (Just $ VarRef lw x1))
+                  addAnn lb (PhiVar [x1,x2])
+                  {-return (VarDecl lw x2 (Just $ VarRef lw x1))-}
     θ           = envIntersectWith meet θ1 θ2
     {-θ'          = envRights θ-}
     phis        = envToList (envLefts θ)

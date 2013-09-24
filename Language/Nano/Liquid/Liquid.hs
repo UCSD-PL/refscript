@@ -31,7 +31,6 @@ import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
-import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
 import           Language.Nano.Typecheck.Compare
 import           Language.Nano.SSA.SSA
@@ -40,7 +39,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -176,7 +175,7 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
         return   $ Just g3
 
 -- e3[i] = e2
-consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket l3 e3 (IntLit l4 i)) e2))
+consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
   = do  (x2,g2) <- consExpr g e2
         (x3,g3) <- consExpr g2 e3
         let t2   = {-tracePP (ppshow e2 ++ " ANF: " ++ ppshow x2) $ -} envFindTy x2 g2
@@ -259,7 +258,7 @@ consStmt g (WhileStmt l c b) =
     let t1s         = (`envFindTy` g0) <$> φ_1
 
     -- Tinv = freshen( G0(x1) ) = { _ | K }, ∀x∈Φ_1
-    (g1a, invs)    <- tInv g0
+    (_ , invs)     <- tInv g0
 
 -- | BEFORE BODY
 
@@ -300,7 +299,7 @@ consStmt g (WhileStmt l c b) =
   where 
     tInv g          = freshTyPhis (ann l) g φ_1 $ toType . (`envFindTy` g) <$> φ_1
     -- The phi before the loop should have singleton lists
-    φ_0             = [x | PhiVar [x] <- ann_fact l]
+    -- φ_0             = [x | PhiVar [x] <- ann_fact l]
     (φ_1,φ_2)       = unzip [(x1,x2) | PhiVar [x1,x2] <- ann_fact b_ann ]
     b_ann           = getAnnotation b
 
@@ -445,23 +444,22 @@ consUpCast g x a e
 ---------------------------------------------------------------------------------------------
 consDownCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
-consDownCast g x a e 
-  = do  γ   <- getTDefs
-        g'  <- envAdds [(x, tc)] g
-        withAlignedM (subTypeContainers' "Downcast" l g) te tc
-        envAddFresh "consDownCast" l tc g'
-    where 
-        tc   = head [ t | Assume t <- ann_fact a]
-        te   = envFindTy x g
-        l    = getAnnotation e
+consDownCast g x a e = do  
+    g'  <- envAdds [(x, tc)] g
+    withAlignedM (subTypeContainers' "Downcast" l g) te tc
+    envAddFresh "consDownCast" l tc g'
+  where 
+    tc   = head [ t | Assume t <- ann_fact a]
+    te   = envFindTy x g
+    l    = getAnnotation e
 
 
 ---------------------------------------------------------------------------------------------
 consDeadCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
-consDeadCast g a e =
-  do  subTypeContainers' "dead" l g tru fls
-      envAddFresh "consDeadCast" l tC g
+consDeadCast g a e =  do  
+    subTypeContainers' "dead" l g tru fls
+    envAddFresh "consDeadCast" l tC g
   where
     tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
     l   = getAnnotation e
@@ -552,6 +550,4 @@ consArr l g es =
       envAddFresh "consArr" l (TObj pxs F.top) g'
   where
     len ts   = B (F.symbol "length") (eSingleton tInt $ length ts)
-    ann = getAnnotation l
-      
 

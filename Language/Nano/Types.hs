@@ -53,8 +53,6 @@ import           Control.Applicative          ((<$>))
 import           Data.Hashable
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
-import           Data.Generics.Aliases
-import           Data.Generics.Schemes
 import           Data.Monoid                        (Monoid (..))
 import           Data.Maybe                         (catMaybes)
 import           Language.ECMAScript3.Syntax 
@@ -242,12 +240,13 @@ checkBody :: [Statement SourceSpan] -> Bool
 -- Adding support for loops so removing the while check
 checkBody stmts = all isNano stmts -- && null (getWhiles stmts) 
     
+{-    
 getWhiles :: [Statement SourceSpan] -> [Statement SourceSpan]
 getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
   where 
     fromWhile s@(WhileStmt {}) = [s]
     fromWhile _                = [] 
-
+-}
 
 -----------------------------------------------------------------------------------
 -- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 

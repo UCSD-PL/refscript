@@ -166,6 +166,47 @@ ssaStmt (WhileStmt l c b) = do
       Nothing  ->     return  $ (False, stmt')
      
 
+ssaStmt (ForStmt l NoInit c inc b)     = 
+    errorstar "unimplemented: ssaStmt-for-01"
+ssaStmt (ForStmt l NoInit c Nothing b) =
+    errorstar "unimplemented: ssaStmt-for-02"
+
+ssaStmt (ForStmt l v cOpt (Just (UnaryAssignExpr l1 o lv)) b) =
+    ssaStmt (ForStmt l v cOpt (Just $ AssignExpr l1 (op o) lv (IntLit l1 1)) b)
+  where
+    op PrefixInc   = OpAssignAdd
+    op PrefixDec   = OpAssignSub
+    -- TODO: Should we worry for prefix or postfix?
+    op PostfixInc  = OpAssignAdd    
+    op PostfixDec  = OpAssignSub
+
+ssaStmt (ForStmt l (VarInit vds) cOpt (Just e@(AssignExpr l1 _ _ _)) b) = 
+    ssaForLoop l vds cOpt (ExprStmt l1 (expand e)) b
+  where
+    expand (AssignExpr l1 o lv e) = AssignExpr l1 OpAssign lv (inf o l1 lv e)
+    expand _ = errorstar "unimplemented: expand assignExpr"
+
+    inf OpAssign         l lv = id
+    inf OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalToExp lv)
+    inf OpAssignSub      l lv = InfixExpr l OpSub      (lvalToExp lv)
+    inf OpAssignMul      l lv = InfixExpr l OpMul      (lvalToExp lv)
+    inf OpAssignDiv      l lv = InfixExpr l OpDiv      (lvalToExp lv)
+    inf OpAssignMod      l lv = InfixExpr l OpMod      (lvalToExp lv)
+    inf OpAssignLShift   l lv = InfixExpr l OpLShift   (lvalToExp lv)
+    inf OpAssignSpRShift l lv = InfixExpr l OpSpRShift (lvalToExp lv)
+    inf OpAssignZfRShift l lv = InfixExpr l OpZfRShift (lvalToExp lv)
+    inf OpAssignBAnd     l lv = InfixExpr l OpBAnd     (lvalToExp lv)
+    inf OpAssignBXor     l lv = InfixExpr l OpBXor     (lvalToExp lv)
+    inf OpAssignBOr      l lv = InfixExpr l OpBOr      (lvalToExp lv)
+
+    lvalToExp (LVar l s)         = VarRef l (Id l s)
+    lvalToExp (LDot l e s)       = DotRef l e (Id l s)
+    lvalToExp (LBracket l e1 e2) = BracketRef l e1 e2
+
+ssaStmt (ForStmt l (VarInit vds) cOpt (Just i) b) =
+    ssaForLoop l vds cOpt (ExprStmt (getAnnotation i) i) b
+
+
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 ssaStmt (VarDeclStmt l ds) = do 
     (_, ds') <- ssaSeq ssaVarDecl ds
@@ -347,3 +388,15 @@ loopPhis lw b θ1 θ2 =
     {-dbg θ       = trace ("SSA ENV: " ++ ppshow θ) θ-}
     lb          = getAnnotation b
 
+
+ssaForLoop l vds cOpt incExp b = 
+  do
+    (b, sts') <- ssaStmts sts
+    return     $ (b, BlockStmt l sts')
+  where
+    sts        = [VarDeclStmt l vds, WhileStmt l c bd] 
+    bd         = BlockStmt bl [b, incExp]
+    bl         = getAnnotation b
+    c          = maybe (BoolLit l True) id cOpt
+    il         = getAnnotation
+   

@@ -47,6 +47,7 @@ import           Language.Nano.Types                (dummySpan)
 import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Fixpoint.Misc             
 import qualified Language.Fixpoint.Types            as F
@@ -64,6 +65,9 @@ data SsaState r = SsaST { immutables :: Env r       -- ^ globals
 
 type SsaEnv     = Env SsaInfo 
 newtype SsaInfo = SI (Id SourceSpan) deriving (Eq)
+
+instance PP SsaInfo where
+  pp (SI i) =  pp i
 
 -------------------------------------------------------------------------------------
 extSsaEnv    :: [Id SourceSpan] -> SsaEnv -> SsaEnv 

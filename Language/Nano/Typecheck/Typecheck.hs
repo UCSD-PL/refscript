@@ -14,7 +14,7 @@ import qualified Data.HashSet                       as HS
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.Traversable                   as T
 import           Data.Monoid
-import           Data.Maybe                         (catMaybes, isJust, fromJust)
+import           Data.Maybe                         (catMaybes, isJust)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$), (<+>))
@@ -261,7 +261,7 @@ tcStmt' γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))
 
 -- e3.x = e2
 -- The type of @e2@ should be assignable (a subtype of) the type of @e3.x@.
-tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot l3 e3 x) e2))
+tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
   = do  θ  <- getTDefs
         t2 <- tcExpr γ e2 
         t3 <- tcExpr γ e3
@@ -272,7 +272,7 @@ tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot l3 e3 x) e2))
                              (ppshow tx) (ppshow t2))
 
 -- e3[i] = e2
-tcStmt' γ (ExprStmt l1 (AssignExpr l2 OpAssign (LBracket l3 e3 (IntLit l4 i)) e2))
+tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
   = do  t2 <- tcExpr γ e2 
         t3 <- tcExpr γ e3
         ti <- safeGetIdx i t3
@@ -304,6 +304,14 @@ tcStmt' γ (IfStmt l e s1 s2)
         γ1      <- tcStmt' γ s1
         γ2      <- tcStmt' γ s2
         envJoin l γ γ1 γ2
+
+
+tcStmt' γ (WhileStmt l c b)
+  = do  t <- tcExpr γ c
+    -- Doing check for boolean for the conditional for now
+    -- TODO: Will have to support truthy/falsy later.
+        unifyTypeM l "If condition" c t tBool
+        tcStmt' γ b
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt' γ (VarDeclStmt _ ds)
@@ -394,7 +402,7 @@ tcExpr' γ (ObjectLit _ ps)
   = tcObject γ ps
 
 -- x.f = x["f"]
-tcExpr' γ (DotRef l e s) = tcExpr γ e >>= safeGetProp (unId s) 
+tcExpr' γ (DotRef _ e s) = tcExpr γ e >>= safeGetProp (unId s) 
 
 -- x["f"]
 tcExpr' γ (BracketRef _ e (StringLit _ s)) = tcExpr γ e >>= safeGetProp s
@@ -454,8 +462,8 @@ tcArray l γ es =
     _  -> mapM (tcExpr γ) es >>= return . mkObj
   where 
     mkObj ts = tracePP (ppshow es) $ TObj (bs ts) F.top
-    bs ts    = zipWith B (F.symbol . show <$> [0..]) ts ++ [len ts]
-    len ts   = B (F.symbol "length") tInt
+    bs ts    = zipWith B (F.symbol . show <$> [0..]) ts ++ [len]
+    len      = B (F.symbol "length") tInt
 
               
 ----------------------------------------------------------------------------------
@@ -467,7 +475,7 @@ envJoin _ _ x Nothing           = return x
 envJoin l γ (Just γ1) (Just γ2) = envJoin' l γ γ1 γ2 
 
 envJoin' l γ γ1 γ2
-  = do let xs = [x | PhiVar x <- ann_fact l]
+  = do let xs = concat [x | PhiVar x <- ann_fact l]
        ts    <- mapM (getPhiType l γ1 γ2) xs
        -- NOTE: Instantiation on arrays could have happened in the branches and
        -- then lost if the variables are no Phi. So replay the application of

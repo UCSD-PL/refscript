@@ -263,7 +263,7 @@ compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     =
   padObject γ ( {- trace ("padding obj " ++ ppshow t1 ++ "\n - " ++ ppshow t2) -} t1) t2
 
 -- | Arrays
-compareTs' γ a@(TArr t r) a'@(TArr t' r')    = padArray γ a a'
+compareTs' γ a@(TArr _ _) a'@(TArr _ _  )    = padArray γ a a'
 compareTs' _   (TObj _ _)    (TArr _ _  )    = error "Unimplemented compareTs-Obj-Arr" 
 compareTs' _   (TArr _ _)    (TObj _ _  )    = error "Unimplemented compareTs-Arr-Obj" 
 
@@ -543,10 +543,11 @@ padFun _ _ _ = error "padFun: no other cases supported"
 
 
 -- | `padArray`
-padArray γ (TArr t1 r1) (TArr t2 r2)
-  = (TArr tj F.top, TArr t1' r1, TArr t2' r2, arrDir ad)
-    where
-      (tj, t1', t2', ad) = compareTs γ t1 t2
+padArray γ (TArr t1 r1) (TArr t2 r2) = 
+    (TArr tj F.top, TArr t1' r1, TArr t2' r2, arrDir ad)
+  where
+    (tj, t1', t2', ad) = compareTs γ t1 t2
+padArray _ _ _ = errorstar "BUG: padArray can only pad Arrays"     
 
 
 

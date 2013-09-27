@@ -47,6 +47,7 @@ module Language.Nano.Liquid.CGMonad (
   , subTypes, subTypes', subType, subType'
   , subTypeContainers, subTypeContainers'
   , alignTsM, withAlignedM
+  , wellFormed
 
   , addInvariant
   
@@ -62,7 +63,7 @@ module Language.Nano.Liquid.CGMonad (
 
   ) where
 
-import           Data.Maybe                     (fromMaybe, fromJust)
+import           Data.Maybe                     (fromMaybe)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 
@@ -222,7 +223,7 @@ cgError l msg = throwError $ printf "CG-ERROR at %s : %s" (ppshow $ srcPos l) ms
 ---------------------------------------------------------------------------------------
 envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id l, CGEnv) 
 ---------------------------------------------------------------------------------------
-envAddFresh s l t g 
+envAddFresh _  l t g 
   = do x  <- {- tracePP ("envAddFresh: " ++ s ++ ": "++ ppshow t) <$> -} freshId l
        g' <- envAdds [(x, t)] g
        return (x, g')
@@ -341,7 +342,7 @@ envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 
 envJoin' l g g1 g2
   = do  {- td      <- E.envMap toType <$> cg_tdefs <$> get -}
-        let xs   = [x | PhiVar x <- ann_fact l] 
+        let xs   = [x | PhiVar [x] <- ann_fact l] 
             t1s  = (`envFindTy` g1) <$> xs 
             t2s  = (`envFindTy` g2) <$> xs
         when (length t1s /= length t2s) $ cgError l (bugBadPhi l t1s t2s)
@@ -500,13 +501,12 @@ subTypeContainers l g u1@(TApp TUn _ r1) u2@(TApp TUn _ r2) =
                                                        (t2 `strengthen` rr t2 r2)
     sbs ts       = mapM_ sb ts
 
-subTypeContainers l g a1@(TArr t1 r1) a2@(TArr t2 r2) =
-  do  γ <- getTDefs 
-      subTypeContainers' "subc arr" l g (t1 `strengthen` rr t1 r1) 
-                                        (t2 `strengthen` rr t2 r2)
-      -- Array subtyping co- and contra-variant?                                    
-      -- subTypeContainers' "subc arr" l g (t2 `strengthen` rr t2 r2) 
-      --                                   (t1 `strengthen` rr t1 r1)
+subTypeContainers l g (TArr t1 r1) (TArr t2 r2) = do
+    subTypeContainers' "subc arr" l g (t1 `strengthen` rr t1 r1) 
+                                      (t2 `strengthen` rr t2 r2)
+    -- Array subtyping co- and contra-variant?                                    
+    -- subTypeContainers' "subc arr" l g (t2 `strengthen` rr t2 r2) 
+    --                                   (t1 `strengthen` rr t1 r1)
   where
     -- Fix the ValueVar of the top-level refinement 
     -- to be the same as the Valuevar of the part
@@ -519,7 +519,7 @@ subTypeContainers l g a1@(TArr t1 r1) a2@(TArr t2 r2) =
 -- TODO: the environment for subtyping each part of the object should have the
 -- tyopes for the rest of the bindings
 subTypeContainers l g o1@(TObj _ r1) o2@(TObj _ r2) = 
-  getTDefs >>= \γ -> sbs $ bkPaddedObject o1 o2
+    sbs $ bkPaddedObject o1 o2
   where
     sbs          = mapM_ sb
     -- Fix the ValueVar of the top-level refinement 
@@ -533,9 +533,9 @@ subTypeContainers l g o1@(TObj _ r1) o2@(TObj _ r2) =
 subTypeContainers l g t1 t2 = subType l g t1 t2
 
 
-subTypeContainers' msg l g t1 t2 = 
-  subTypeContainers l g ({-trace (printf "subTypeContainers[%s]:\n\t%s\n\t%s" 
-                                msg (ppshow t1) (ppshow t2))-}  t1) t2
+subTypeContainers' _ {- msg -} l g t1 t2 = 
+  subTypeContainers l g ({- trace (printf "subTypeContainers[%s]:\n\t%s\n\t%s" 
+                                msg (ppshow t1) (ppshow t2)) -} t1) t2
 
 
 -------------------------------------------------------------------------------
@@ -740,7 +740,7 @@ splitC' (Sub _ _ t1@(TObj _ _ ) t2)
 ---------------------------------------------------------------------------------------
 -- Only top-level constraints here. The splitting for the inner parts of the
 -- types should have been done earlier.
-splitC' (Sub g i t1@(TArr t r) t2@(TArr t' r'))
+splitC' (Sub g i t1@(TArr _ _ ) t2@(TArr _ _ ))
   = return $ bsplitC g i t1 t2
 
 

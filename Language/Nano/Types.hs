@@ -53,8 +53,6 @@ import           Control.Applicative          ((<$>))
 import           Data.Hashable
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
-import           Data.Generics.Aliases
-import           Data.Generics.Schemes
 import           Data.Monoid                        (Monoid (..))
 import           Data.Maybe                         (catMaybes)
 import           Language.ECMAScript3.Syntax 
@@ -167,7 +165,7 @@ instance IsNano (LValue a) where
   isNano (LVar _ _)                  = True
   isNano (LDot _ e _)                = isNano e
   isNano (LBracket _ e (IntLit _ _)) = isNano e
-  isNano e                           = errortext (text "Not Nano Expression!" <+> pp e)
+  isNano e                           = errortext (text "Not Nano LValue!" <+> pp e)
   -- isNano _          = False
 
 instance IsNano (VarDecl a) where
@@ -175,24 +173,27 @@ instance IsNano (VarDecl a) where
   isNano (VarDecl _ _ Nothing)  = True
 
 instance IsNano (Expression a) where 
-  isNano (BoolLit _ _)         = True
-  isNano (IntLit _ _)          = True
-  isNano (NullLit _ )          = True
-  isNano (ArrayLit _ es)       = all isNano es
-  isNano (StringLit _ _)       = True
-  isNano (VarRef _ _)          = True
-  isNano (InfixExpr _ o e1 e2) = isNano o && isNano e1 && isNano e2
-  isNano (PrefixExpr _ o e)    = isNano o && isNano e
-  isNano (CallExpr _ e es)     = all isNano (e:es)
-  isNano (ObjectLit _ bs)      = all isNano $ snd <$> bs
-  isNano (DotRef _ e _)        = isNano e
-  isNano (BracketRef _ e1 e2)  = isNano e1 && isNano e2
-  isNano e                     = errortext (text "Not Nano Expression!" <+> pp e) 
+  isNano (BoolLit _ _)           = True
+  isNano (IntLit _ _)            = True
+  isNano (NullLit _ )            = True
+  isNano (ArrayLit _ es)         = all isNano es
+  isNano (StringLit _ _)         = True
+  isNano (VarRef _ _)            = True
+  isNano (InfixExpr _ o e1 e2)   = isNano o && isNano e1 && isNano e2
+  isNano (PrefixExpr _ o e)      = isNano o && isNano e
+  isNano (CallExpr _ e es)       = all isNano (e:es)
+  isNano (ObjectLit _ bs)        = all isNano $ snd <$> bs
+  isNano (DotRef _ e _)          = isNano e
+  isNano (BracketRef _ e1 e2)    = isNano e1 && isNano e2
+  isNano (AssignExpr _ o l e)    = isNano e && isNano l && isNano e
+  isNano (UnaryAssignExpr _ _ l) = isNano l
+  isNano e                       = errortext (text "Not Nano Expression!" <+> pp e)
   -- isNano _                     = False
 
 instance IsNano AssignOp where
-  isNano OpAssign = True
-  isNano x        = errortext (text "Not Nano AssignOp!" <+> pp x) 
+  isNano OpAssign     = True
+  isNano OpAssignAdd  = True
+  isNano x            = errortext (text "Not Nano AssignOp!" <+> pp x) 
   -- isNano _        = False
 
 instance IsNano PrefixOp where
@@ -209,6 +210,7 @@ instance IsNano (Statement a) where
   isNano (IfSingleStmt _ b s)   = isNano b && isNano s   
   isNano (IfStmt _ b s1 s2)     = isNano b && isNano s1 && isNano s2
   isNano (WhileStmt _ b s)      = isNano b && isNano s
+  isNano (ForStmt _ i t inc b)  = isNano i && isNano t && isNano inc && isNano b
   isNano (VarDeclStmt _ ds)     = all isNano ds 
   isNano (ReturnStmt _ e)       = isNano e 
   isNano (FunctionStmt _ _ _ b) = isNano b
@@ -220,6 +222,11 @@ instance IsNano a => IsNano (Maybe a) where
 
 instance IsNano [(Statement a)] where 
   isNano = all isNano 
+
+instance IsNano (ForInit a) where 
+  isNano NoInit        = True
+  isNano (VarInit vds) = all isNano vds
+  isNano (ExprInit e)  = isNano e
 
 
 -- | Holds for `Expression` that is a valid side-effecting `Statement` 
@@ -242,12 +249,13 @@ checkBody :: [Statement SourceSpan] -> Bool
 -- Adding support for loops so removing the while check
 checkBody stmts = all isNano stmts -- && null (getWhiles stmts) 
     
+{-    
 getWhiles :: [Statement SourceSpan] -> [Statement SourceSpan]
 getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
   where 
     fromWhile s@(WhileStmt {}) = [s]
     fromWhile _                = [] 
-
+-}
 
 -----------------------------------------------------------------------------------
 -- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 

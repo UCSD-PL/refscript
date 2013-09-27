@@ -44,10 +44,10 @@ import qualified Data.HashMap.Strict as M
 import           Data.Monoid
 
 import Text.Parsec
-import Text.Parsec.Expr
-import Text.Parsec.Language
-import Text.Parsec.String hiding (Parser, parseFromFile)
-import Text.Printf  (printf)
+-- import Text.Parsec.Expr
+-- import Text.Parsec.Language
+-- import Text.Parsec.String hiding (Parser, parseFromFile)
+-- import Text.Printf  (printf)
 
 import           Text.Printf 
 -- import           Debug.Trace
@@ -239,7 +239,7 @@ getProp γ s t@(TApp c ts _ ) = go c
 
 getProp _ _ t@(TFun _ _ _ ) = Just (t, tUndef)
 
-getProp γ s a@(TArr t _)    = 
+getProp γ s a@(TArr _ _)    = 
   case s of
     -- TODO: make more specific, add refinements
     "length" -> Just (a, tInt) 

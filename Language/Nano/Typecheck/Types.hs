@@ -488,7 +488,7 @@ ppTC TUndef           = text "Undefined"
 --   @Expression@ type, but are tucking them in using the @a@ parameter.
 
 data Fact_ r
-  = PhiVar  ! (Id SourceSpan) 
+  = PhiVar  ! [(Id SourceSpan)]
   | TypInst ! [RType r]
   | Assume  ! (RType r)
     deriving (Eq, Ord, Show, Data, Typeable)

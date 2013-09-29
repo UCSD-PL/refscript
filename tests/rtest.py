@@ -93,6 +93,7 @@ class TestRunner:
 
         return (failcount != 0)
 
+    # NOTE: Empty folders in the test dirs will cause a crash !
     def directory_tests (self, dir, expected_status):
         return it.chain(*[[(os.path.join (dir, file), expected_status) for file in files if self.config.is_test (file)] for dir, dirs, files in os.walk(dir)])
 

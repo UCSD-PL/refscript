@@ -28,6 +28,7 @@ module Language.Nano.Liquid.CGMonad (
   , freshTyFun
   , freshTyInst
   , freshTyPhis
+  , freshTyPhisWhile
   , freshTyArr
 
   -- * Freshable
@@ -275,21 +276,6 @@ envAddGuard x b g = g { guards = guard b x : guards g }
   where 
     guard True    = F.eProp 
     guard False   = F.PNot . F.eProp
-    -- Falsy values:
-    -- ∙ false
-    -- ∙ 0 (zero)
-    -- ∙ "" (empty string)
-    -- ∙ null
-    -- ∙ undefined
-    -- ∙ NaN (Not a number)
-
-    -- guard True  v = F.eProp v
-    -- guard False v = F.pOr [ F.PNot (F.eProp v) 
-    --                         
-    --                      ] 
-    --   where
-    --     vEqX x    = F.PAtom F.Eq (F.eVar v) x
-                           
                     
 ---------------------------------------------------------------------------------------
 envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
@@ -393,6 +379,15 @@ freshTyPhis l g xs τs
   = do ts <- mapM    (freshTy "freshTyPhis")  ({-tracePP "From" -} τs)
        g' <- envAdds (safeZip "freshTyPhis" xs ts) g
        _  <- mapM    (wellFormed l g') ts
+       return (g', ts)
+
+---------------------------------------------------------------------------------------
+freshTyPhisWhile :: (PP l, IsLocated l) => l -> CGEnv -> [Id l] -> [Type] -> CGM (CGEnv, [RefType])  
+---------------------------------------------------------------------------------------
+freshTyPhisWhile l g xs τs 
+  = do ts <- mapM    (freshTy "freshTyPhis")  ({-tracePP "From" -} τs)
+       g' <- envAdds (safeZip "freshTyPhis" xs ts) g
+       _  <- mapM    (wellFormed l g) ts
        return (g', ts)
 
 
@@ -533,9 +528,9 @@ subTypeContainers l g o1@(TObj _ r1) o2@(TObj _ r2) =
 subTypeContainers l g t1 t2 = subType l g t1 t2
 
 
-subTypeContainers' _ {- msg -} l g t1 t2 = 
-  subTypeContainers l g ({- trace (printf "subTypeContainers[%s]:\n\t%s\n\t%s" 
-                                msg (ppshow t1) (ppshow t2)) -} t1) t2
+subTypeContainers'   msg  l g t1 t2 = 
+  subTypeContainers l g ( trace (printf "subTypeContainers[%s]:\n\t%s\n\t%s\n" 
+                                msg (ppshow t1) (ppshow t2))  t1) t2
 
 
 -------------------------------------------------------------------------------

@@ -269,7 +269,7 @@ tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
         if isSubType θ t2 tx 
           then return $ Just γ
           else tcError l2 (printf "Cannot assing type %s to %s" 
-                             (ppshow tx) (ppshow t2))
+                             (ppshow t2) (ppshow tx))
 
 -- e3[i] = e2
 tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))

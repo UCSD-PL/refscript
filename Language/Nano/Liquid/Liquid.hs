@@ -14,6 +14,7 @@ import           Control.Applicative                ((<$>))
 import qualified Data.ByteString.Lazy               as B
 import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (fromJust)
+import qualified Data.List                          as L
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -27,6 +28,8 @@ import           Language.Fixpoint.Interface        (solve)
 
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
+import           Language.Nano.Misc
+import qualified Language.Nano.Env                  as E
 import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
@@ -36,6 +39,7 @@ import           Language.Nano.Typecheck.Compare
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
+import           Language.Nano.Visitor.Visitor
 
 import           System.Console.CmdArgs.Default
 
@@ -213,9 +217,8 @@ consStmt g (IfStmt l e s1 s2)
 
 
 
--- G   |- C :: xe, G1                         // Init -defs
--- 
--- Tinv = freshen( G1(x) ) = { _ | K }, ∀x∈Φ
+-- G   |- C :: xe, G1
+-- Tinv = freshen(G1(x)) = {_|K}, ∀x∈Φ
 
 -- TODO
 -- G1(xe) = { v: boolean | ... }
@@ -236,74 +239,83 @@ consStmt g (IfStmt l e s1 s2)
 
 -- Code               Phis
 -- ----               ----
--- var x = ...        
+-- var x = ...
 --                    // x0
--- while( ... ) {
+-- while( ...x... ) {
 --                    // x1
---   x = x + 1;       
+--   BODY
 --                    // x2
 -- }
 -- ... x ...          // φ(x0,x2)
---
-
-consStmt g (WhileStmt l c b) = 
+  
+consStmt g0 (WhileStmt l c b) = 
   do  
-    -- G   |- C :: xe, G1
-    -- NOTE: Is this affecting the SSA value of the phi vars?
-    -- If it is, we should make sure we're getting the right 
-    -- value for the SSA phi vars.
-    (xe, g0)       <- consExpr g c
-    
-    -- Need to get the types for phi_0 before updating with the KVared types
     let t1s         = (`envFindTy` g0) <$> φ_1
 
-    -- Tinv = freshen( G0(x1) ) = { _ | K }, ∀x∈Φ_1
-    (_ , invs)     <- tInv g0
+-- | BEFORE LOOP
 
--- | BEFORE BODY
+    -- Tinv = freshen(G0(x1)) = {_|K}, ∀x∈Φ_1
+    (g1a , invs)   <- tInv g0
+    -- Check invariants for Φ types that enter the loop: G0(x) <: Tinv, ∀x∈Φ
+    zipWithM_         (sub "Before loop body" g0) t1s ({-tracePP (ppshow φ_1) -} invs)
 
-    -- In the loop body, so add the guard, and check that the invariant 
-    -- subsumes the type of the Phi values that enter the loop.
-    -- 
-    -- G1  |- G1(x) <: Tinv, ∀x∈Φ
-    let g1          = envAddGuard xe True g0
-    zipWithM_         (sub "Before loop body" g1) t1s invs
+-- | CONDITION
+
+    -- G   |- c :: xe, G1
+    (xe, g1b)      <- consExpr g1a c
+
+    -- G1  |- z:{xe}
+    let g1c         = envAddGuard xe True g1b
+    -- G1  |- ∀x∈Φ.x:Tinv
+    g1d            <- envAdds (zip φ_1 invs) g1c
 
 -- | BODY
 
-    -- Keep checking in an environment that has the guards and the 
-    -- invariant types for the phi vars. So keep g1 here.
-
-    -- G1, z:{xe}, ∀x∈Φ.x:Tinv |- B :: G2
-    g2             <- fromJust <$> consStmt g1 b
+    -- Check the body in an environment that:
+    -- ∙ is guarded by the conditional
+    -- ∙ binds Φs with their invariant types 
+    -- G1 |- B :: G2
+    g2             <- fromJust' "Break loop" <$> consStmt g1d b
 
 -- | AFTER BODY
 
-    -- This environment still has the loop guard. Check the that the 
-    -- invariants are still good abstractions for the phi vars.
-    -- G2  |- G2(x) <: Tinv, ∀x∈Φ
+    -- Φ vars before the loop body should be typed with the invariant type.
+    -- Constraint: the invariant Φ types are still supertypes of
+    -- the Φ vars at this point:
+    -- ∀x∈Φ. G2  |- G2(x) <: Tinv
     let t2s         = (`envFindTy` g2) <$> φ_2
-    -- Use the invariant delegated for the φ-vars (version before the body).
-    g2a            <- envAdds (zip φ_1 invs) g2
-    -- Fire the constraints 
-    zipWithM_         (sub "After loop body" g2a) t2s invs
+    zipWithM_         (sub "After loop body" g2) t2s invs
 
 -- | AFTER LOOP
 
     -- G3 = G2, { x0: Tinv | x∈Φ }, { x2: Tinv | x∈Φ }, z:{¬xe}
-    -- After the loop keep the invariant types for all phi vars.
-    -- Ignore the bindings introduced in the loop and negate the 
-    -- guard. Hence, use g0.
-    g3a            <- envAdds (zip φ_1 invs ++ zip φ_2 invs) g0
-    return          $ Just $ envAddGuard xe False g3a
+    -- After the loop propagate an enviroment that:
+    -- ∙ keeps the invariant types for all Φ vars.
+    -- ∙ ignores the bindings introduced in the loop 
+    -- ∙ negates the guard. 
+    -- Hence, use g0.
+
+    -- In the guard replace Φ_1 with Φ_2, and update environment
+    g4a            <- envAdds (zip φ_1 invs ++ zip φ_2 invs) g0
+    (xe', g4b)     <- consExpr g4a c
+
+    return          $ Just $ envAddGuard xe' False g4b
   where 
-    tInv g          = freshTyPhis (ann l) g φ_1 $ toType . (`envFindTy` g) <$> φ_1
+    tInv g          = freshTyPhisWhile (ann l) g φ_1 $ toType . (`envFindTy` g) <$> φ_1
     -- The phi before the loop should have singleton lists
     -- φ_0             = [x | PhiVar [x] <- ann_fact l]
+    -- φ_1: Φ vars before the loop body
+    -- φ_2: Φ vars after the loop body
     (φ_1,φ_2)       = unzip [(x1,x2) | PhiVar [x1,x2] <- ann_fact b_ann ]
     b_ann           = getAnnotation b
 
     sub s g t t'    = subTypeContainers' ("While:" ++ s) l g t t'
+ 
+    substΦ          = visitExpression $ defaultVisitor { vId = idRepl }
+    lΦ              = zip φ_1 φ_2
+    idRepl (Id l s) = maybe DoChildren 
+                        (\(_, Id _ s'') -> ChangeTo (Id l s'')) $
+                        L.find (\(Id _ s',_) -> s == s') lΦ
 
 
 

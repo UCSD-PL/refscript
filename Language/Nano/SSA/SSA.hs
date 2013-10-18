@@ -153,22 +153,21 @@ ssaStmt (WhileStmt l c b) = do
     c'         <- ssaExpr c 
     θ          <- getSsaEnv
     (θ',b')    <- ssaWith θ ssaStmt b
-    -- The updated variables will show if we compare the 
-    -- ssaEnvs before and after running the loop body
+    -- We get the updated variables if we compare the ssaEnvs before 
+    -- and after running the loop body.
     -- θ : is the SSA env before the body
     -- θ': is the SSA env after the body
-    --
     loopPhis l b' θ (fromJust θ')
-    let stmt'   =  BlockStmt l [{-vds,-} WhileStmt l c' b']
+    let stmt'   =  WhileStmt l c' b'
     case θ' of
       Just θ'' -> do  setSsaEnv θ''
                       return  $ (True , stmt')
       Nothing  ->     return  $ (False, stmt')
      
 
-ssaStmt (ForStmt l NoInit c inc b)     = 
+ssaStmt (ForStmt _  NoInit _ _ _ )     = 
     errorstar "unimplemented: ssaStmt-for-01"
-ssaStmt (ForStmt l NoInit c Nothing b) =
+ssaStmt (ForStmt _ NoInit _ Nothing _ ) =
     errorstar "unimplemented: ssaStmt-for-02"
 
 ssaStmt (ForStmt l v cOpt (Just (UnaryAssignExpr l1 o lv)) b) =
@@ -186,7 +185,7 @@ ssaStmt (ForStmt l (VarInit vds) cOpt (Just e@(AssignExpr l1 _ _ _)) b) =
     expand (AssignExpr l1 o lv e) = AssignExpr l1 OpAssign lv (inf o l1 lv e)
     expand _ = errorstar "unimplemented: expand assignExpr"
 
-    inf OpAssign         l lv = id
+    inf OpAssign         _ _  = id
     inf OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalToExp lv)
     inf OpAssignSub      l lv = InfixExpr l OpSub      (lvalToExp lv)
     inf OpAssignMul      l lv = InfixExpr l OpMul      (lvalToExp lv)
@@ -355,37 +354,25 @@ phiAsgn l (x, (SI x1, SI x2)) = do
   where 
     mkPhiAsgn l x y = VarDeclStmt l [VarDecl l x (Just $ VarRef l y)]
 
--- Similar to envJoin but ommitting the addition of new statements with
--- assignment of the Phi vars.
--- Arguments:
---  @lw@: the location of the loop
---  @v@ : the body of the loop
---  @θ1@: the SSA env before @b@
---  @θ2@: the SSA env after @b@
--- Returns:
---  A variable declaration that initializes all the phi vars with the values
---  they had exactly before the loop. This is needed so that the phi vars are
---  still valid even if execution never enters the loop.
+
+--  Similar to envJoin, but for loops (no phi var is computed).
+--  Arguments:
+--    lw : the location of the loop
+--    b  : the body of the loop
+--    θ1 : the SSA env before b
+--    θ2 : the SSA env after b
 --
 -- NOTE:  This function should not be setting the new SSA environment
 --        This will be done by ssaStmt for WhileStmt
---
--- NOTE:  Unless the loop condition causes the creation of a new SSA var
---        for the Phi, we can use the same var for before and after the loop. 
---
--- TOOD:  Is x (first argument of @go@) indeed not needed ???
-loopPhis lw b θ1 θ2 = 
-    forM_ phis go
+-- TODO:  Is `x` (first argument of `go`) indeed not needed?
+loopPhis lw b θ1 θ2 = forM_ phis go
   where 
     go (_, (SI x1, SI x2)) 
                 = addAnn lw (PhiVar [x1]   ) >> 
-                  addAnn lb (PhiVar [x1,x2])
-                  {-return (VarDecl lw x2 (Just $ VarRef lw x1))-}
+                  addAnn lb (PhiVar $ tracePP "PHIVARS" [x1,x2])
     θ           = envIntersectWith meet θ1 θ2
-    {-θ'          = envRights θ-}
     phis        = envToList (envLefts θ)
     meet        = \x1 x2 -> if x1 == x2 then Right x1 else Left (x1, x2)
-    {-dbg θ       = trace ("SSA ENV: " ++ ppshow θ) θ-}
     lb          = getAnnotation b
 
 

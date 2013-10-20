@@ -1,6 +1,14 @@
 # Quicktask v1.2
+# http://quicktask.aaronbieber.com/doc.html
 
 JS SUPPORT / FEATURES:
+  - For/While loops
+    @ Added [Sun 2013-09-15
+    @ Start [Sun 2013-09-15] [15:59]
+    @ DONE [Sun 2013-10-20]
+  - Add formal description of language, translation and discharge of 
+    constraints.
+    @ Added [Fri 2013-10-18]
   - Arrays:
     - Array access: add array bounds checks or return undefined. Right now an
       array access is unsound in that it returns the contained type regardless
@@ -15,9 +23,6 @@ JS SUPPORT / FEATURES:
   - Encoding truthy, falsy, undefined, null etc.
     Eg: tc/pos/obj02.js, tc/pos/union05.js
     @ Added [Sun 2013-09-15]
-  - For/While loops
-    @ Added [Sun 2013-09-15
-    @ Start [Sun 2013-09-15] [15:59]
   - Prototyping
     @ Added [Sun 2013-09-15]
 
@@ -32,7 +37,7 @@ TOOL / IMPLEMENTATION:
     @ Added [Sun 2013-09-15]
   - Restore the check for unbounded type variables
     @ Added [Sun 2013-09-15]
-  - Multiple fixpoint bindings in the same environment
+  - Multiple fixpoint bindings/invariants in the same environment
     @ Added [Sun 2013-09-15]
   - Disallow type to have multiple tags
     @ Added [Sun 2013-09-15]

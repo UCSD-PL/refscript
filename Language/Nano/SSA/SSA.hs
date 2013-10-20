@@ -22,7 +22,7 @@ import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.Fixpoint.Misc             
 import qualified Language.Fixpoint.Types            as F
 import           Text.Printf                        (printf)
-{-import           Debug.Trace                        hiding (traceShow)-}
+-- import           Debug.Trace                        hiding (traceShow)
 
 ----------------------------------------------------------------------------------
 ssaTransform :: (F.Reftable r) => Nano SourceSpan (RType r) -> Nano (Annot (Fact_ r) SourceSpan) (RType r)
@@ -150,19 +150,19 @@ ssaStmt (IfStmt l e s1 s2) = do
 
 -- while c { b }
 ssaStmt (WhileStmt l c b) = do  
+    g0         <- getSsaEnv
+    φ          <- getLoopPhis g0 b
+    let φ0      = [x | (SI x, _) <- (snd <$> φ)]
+    φ1         <- mapM (updSsaEnv l) (fst <$> φ)
+    g1         <- getSsaEnv
     c'         <- ssaExpr c 
-    θ          <- getSsaEnv
-    (θ',b')    <- ssaWith θ ssaStmt b
-    -- We get the updated variables if we compare the ssaEnvs before 
-    -- and after running the loop body.
-    -- θ : is the SSA env before the body
-    -- θ': is the SSA env after the body
-    loopPhis l b' θ (fromJust θ')
-    let stmt'   =  WhileStmt l c' b'
-    case θ' of
-      Just θ'' -> do  setSsaEnv θ''
-                      return  $ (True , stmt')
-      Nothing  ->     return  $ (False, stmt')
+    (t, b')    <- ssaStmt b
+    g2         <- getSsaEnv
+    let φ2      = [x | Just (SI x) <- (`envFindTy` g2) <$> (fst <$> φ)]
+    let f (x, (SI x0, SI x2)) x1 = (x0,x1,x2)
+    addAnn l (LoopPhiVar $ zip3 φ0 φ1 φ2)
+    setSsaEnv g1
+    return (t, WhileStmt l c' b')
      
 
 ssaStmt (ForStmt _  NoInit _ _ _ )     = 
@@ -355,25 +355,13 @@ phiAsgn l (x, (SI x1, SI x2)) = do
     mkPhiAsgn l x y = VarDeclStmt l [VarDecl l x (Just $ VarRef l y)]
 
 
---  Similar to envJoin, but for loops (no phi var is computed).
---  Arguments:
---    lw : the location of the loop
---    b  : the body of the loop
---    θ1 : the SSA env before b
---    θ2 : the SSA env after b
---
--- NOTE:  This function should not be setting the new SSA environment
---        This will be done by ssaStmt for WhileStmt
--- TODO:  Is `x` (first argument of `go`) indeed not needed?
-loopPhis lw b θ1 θ2 = forM_ phis go
-  where 
-    go (_, (SI x1, SI x2)) 
-                = addAnn lw (PhiVar [x1]   ) >> 
-                  addAnn lb (PhiVar $ tracePP "PHIVARS" [x1,x2])
-    θ           = envIntersectWith meet θ1 θ2
-    phis        = envToList (envLefts θ)
-    meet        = \x1 x2 -> if x1 == x2 then Right x1 else Left (x1, x2)
-    lb          = getAnnotation b
+-- Get the phi vars starting from an SSAEnv @θ@ and going through the 
+-- statement @b@.
+getLoopPhis θ b = do
+    θ'    <- names <$> snd <$> tryAction (ssaStmt b) 
+    return $ envToList (envLefts $ envIntersectWith meet θ θ')
+  where
+    meet x1 x2 = if x1 == x2 then Right x1 else Left (x1, x2)
 
 
 ssaForLoop l vds cOpt incExp b = 
@@ -386,4 +374,4 @@ ssaForLoop l vds cOpt incExp b =
     bl         = getAnnotation b
     c          = maybe (BoolLit l True) id cOpt
     il         = getAnnotation
-   
+

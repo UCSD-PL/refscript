@@ -219,17 +219,11 @@ consStmt g (IfStmt l e s1 s2)
 
 -- G   |- C :: xe, G1
 -- Tinv = freshen(G1(x)) = {_|K}, ∀x∈Φ
-
--- TODO
--- G1(xe) = { v: boolean | ... }
--- 
+-- G1(xe) = { v: boolean | ... }              //TODO
 -- G1  |- G1(x) <: Tinv, ∀x∈Φ                 // Before the loop body: constraints on Φ Vars
--- 
 -- G1, z:{xe}, ∀x∈Φ.x:Tinv |- B :: G2         // typecheck the loop where the condition holds and 
 --                                            // the Φ vars have invariant types
---
 -- G2  |- G2(x) <: Tinv, ∀x∈Φ                 // After the loop body: constraints on Φ vars
--- 
 -- G3 = G2 + z:{¬xe} + { x: Tinv | x∈Φ }      // the environment after the loop should use the 
 --                                            // invariant types for the Φ vars and also be updated
 --                                            // with negation of the loop condition
@@ -237,86 +231,39 @@ consStmt g (IfStmt l e s1 s2)
 -- G |- while[Φ](C) { B } :: G3
 
 
--- Code               Phis
--- ----               ----
--- var x = ...
---                    // x0
--- while( ...x... ) {
---                    // x1
+-- var x0 = ...       // G0
+-- while              // G1
+--   ( ...x1... ) {
 --   BODY
---                    // x2
+--                    // G2, x2
 -- }
--- ... x ...          // φ(x0,x2)
+-- ... x1 ...         // G3,
   
 consStmt g0 (WhileStmt l c b) = 
   do  
-    let t1s         = (`envFindTy` g0) <$> φ_1
-
--- | BEFORE LOOP
-
-    -- Tinv = freshen(G0(x1)) = {_|K}, ∀x∈Φ_1
-    (g1a , invs)   <- tInv g0
-    -- Check invariants for Φ types that enter the loop: G0(x) <: Tinv, ∀x∈Φ
-    zipWithM_         (sub "Before loop body" g0) t1s ({-tracePP (ppshow φ_1) -} invs)
-
--- | CONDITION
-
-    -- G   |- c :: xe, G1
-    (xe, g1b)      <- consExpr g1a c
-
-    -- G1  |- z:{xe}
-    let g1c         = envAddGuard xe True g1b
-    -- G1  |- ∀x∈Φ.x:Tinv
-    g1d            <- envAdds (zip φ_1 invs) g1c
-
--- | BODY
-
-    -- Check the body in an environment that:
-    -- ∙ is guarded by the conditional
-    -- ∙ binds Φs with their invariant types 
-    -- G1 |- B :: G2
+--  BEFORE LOOP
+    (g1a , invs)   <- tInv g0 φ0
+    zipWithM_ (sub "BeforeL-B" g0) ((`envFindTy` g0) <$> φ0) invs
+--  CONDITION
+    g1b            <- envAdds (zip φ1 invs) g1a
+    (xe, g1c)      <- consExpr g1b c
+    let g1d         = envAddGuard xe True g1c
+--  BODY
     g2             <- fromJust' "Break loop" <$> consStmt g1d b
-
--- | AFTER BODY
-
-    -- Φ vars before the loop body should be typed with the invariant type.
-    -- Constraint: the invariant Φ types are still supertypes of
-    -- the Φ vars at this point:
-    -- ∀x∈Φ. G2  |- G2(x) <: Tinv
-    let t2s         = (`envFindTy` g2) <$> φ_2
-    zipWithM_         (sub "After loop body" g2) t2s invs
-
--- | AFTER LOOP
-
-    -- G3 = G2, { x0: Tinv | x∈Φ }, { x2: Tinv | x∈Φ }, z:{¬xe}
-    -- After the loop propagate an enviroment that:
-    -- ∙ keeps the invariant types for all Φ vars.
-    -- ∙ ignores the bindings introduced in the loop 
-    -- ∙ negates the guard. 
-    -- Hence, use g0.
-
-    -- In the guard replace Φ_1 with Φ_2, and update environment
-    g4a            <- envAdds (zip φ_1 invs ++ zip φ_2 invs) g0
-    (xe', g4b)     <- consExpr g4a c
-
-    return          $ Just $ envAddGuard xe' False g4b
+--  AFTER BODY
+    zipWithM_ (sub "AfterLBD" g2) ((`envFindTy` g2) <$> φ2) invs
+--  AFTER LOOP
+    g3a            <- envAdds (zip φ1 invs) g0
+    (xe', g3b)     <- consExpr g3a c
+    -- Add the guard in the relevant environment
+    return          $ Just $ envAddGuard xe' False g3b
   where 
-    tInv g          = freshTyPhisWhile (ann l) g φ_1 $ toType . (`envFindTy` g) <$> φ_1
-    -- The phi before the loop should have singleton lists
-    -- φ_0             = [x | PhiVar [x] <- ann_fact l]
-    -- φ_1: Φ vars before the loop body
-    -- φ_2: Φ vars after the loop body
-    (φ_1,φ_2)       = unzip [(x1,x2) | PhiVar [x1,x2] <- ann_fact b_ann ]
-    b_ann           = getAnnotation b
-
+    -- φ0: Φ vars before the loop
+    -- φ1: Φ vars (invariant) at the beginning of the loop body
+    -- φ2: Φ vars at the end of the loop body
+    (φ0, φ1, φ2)    = unzip3 [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
+    tInv g xs       = freshTyPhisWhile (ann l) g xs (toType <$> (`envFindTy` g) <$> xs)
     sub s g t t'    = subTypeContainers' ("While:" ++ s) l g t t'
- 
-    substΦ          = visitExpression $ defaultVisitor { vId = idRepl }
-    lΦ              = zip φ_1 φ_2
-    idRepl (Id l s) = maybe DoChildren 
-                        (\(_, Id _ s'') -> ChangeTo (Id l s'')) $
-                        L.find (\(Id _ s',_) -> s == s') lΦ
-
 
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];

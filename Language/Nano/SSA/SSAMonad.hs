@@ -15,11 +15,13 @@ module Language.Nano.SSA.SSAMonad (
    , SSAM
    , ssaError
    , execute
+   , tryAction
  
    -- * SSA Environment
    , SsaEnv
    , setSsaEnv
    , getSsaEnv
+   , names
    , updSsaEnv 
    , extSsaEnv
    , findSsaEnv
@@ -166,7 +168,10 @@ execute act
       (Left err, _) -> Left  (dummySpan,  err)
       (Right x, _)  -> Right x
 
+-- Try the action @act@ in the current state. 
+-- The state will be intact in the end. Just the result will be returned
+tryAction act = get >>= return . runState (runErrorT act)
+
 initState :: SsaState r
 initState = SsaST envEmpty envEmpty 0 M.empty
-
 

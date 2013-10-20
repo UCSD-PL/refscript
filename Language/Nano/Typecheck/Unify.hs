@@ -27,7 +27,7 @@ import qualified Data.HashMap.Strict as M
 import           Data.Monoid
 import qualified Data.List           as L
 import           Text.Printf 
-import           Debug.Trace
+-- import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
 
 
@@ -84,7 +84,7 @@ unify γ θ (TArr t _) (TArr t' _) = unify γ θ t t'
 unify _ θ _ _         = Right $ θ  
 
 
-unify' γ θ t t' = unify γ θ (trace (printf "unify: %s - %s" (ppshow t) (ppshow t')) t) t' 
+{-unify' γ θ t t' = unify γ θ (trace (printf "unify: %s - %s" (ppshow t) (ppshow t')) t) t' -}
 
 -- TODO: cycles
 unifEq _ (TApp d@(TDef _) _ _) (TApp d'@(TDef _) _ _) | d == d' = True
@@ -98,9 +98,9 @@ unifEq γ t t'                     = equiv γ t t'
 unifys ::  (PP r, F.Reftable r, Ord r) =>  
   Env (RType r) -> RSubst r -> [RType r] -> [RType r] -> Either String (RSubst r)
 -----------------------------------------------------------------------------
-unifys env θ xs ys =   tracePP msg $  unifys' env θ xs ys 
-   where 
-     msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
+unifys env θ xs ys = {- tracePP msg $ -} unifys' env θ xs ys 
+   {-where -}
+   {-  msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
 
 unifys' env θ ts ts' 
   | nTs == nTs' = go env θ ts ts'
@@ -108,7 +108,7 @@ unifys' env θ ts ts'
   where 
     nTs                      = length ts
     nTs'                     = length ts'
-    go γ θ ts ts' = foldl safeJoin (Right $ θ) $ zipWith (unify' γ θ) ts ts'
+    go γ θ ts ts' = foldl safeJoin (Right $ θ) $ zipWith (unify γ θ) ts ts'
     -- Only allow joining unifications where the common keys map to identical
     -- types
     safeJoin (Right θ@(Su m)) (Right θ'@(Su m'))

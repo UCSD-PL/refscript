@@ -460,10 +460,10 @@ tcArray :: (Ord r, PP r, F.Reftable r) =>
 ----------------------------------------------------------------------------------
 tcArray l γ es = 
   case es of 
-    [] -> tracePP "FRESH ARRAY" <$> freshTArray l
+    [] -> freshTArray l
     _  -> mapM (tcExpr γ) es >>= return . mkObj
   where 
-    mkObj ts = tracePP (ppshow es) $ TObj (bs ts) F.top
+    mkObj ts = {- tracePP (ppshow es) $ -} TObj (bs ts) F.top
     bs ts    = zipWith B (F.symbol . show <$> [0..]) ts ++ [len]
     len      = B (F.symbol "length") tInt
 

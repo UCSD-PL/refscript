@@ -27,7 +27,7 @@ import qualified Data.HashMap.Strict as M
 import           Data.Monoid
 import qualified Data.List           as L
 import           Text.Printf 
--- import           Debug.Trace
+import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
 
 
@@ -42,23 +42,22 @@ unify :: (PP r, F.Reftable r, Ord r) =>
   Env (RType r) -> RSubst r -> RType r -> RType r -> Either String (RSubst r)
 -----------------------------------------------------------------------------
 
--- TODO: is this right??
 unify _ θ t@(TApp _ _ _) t'@(TApp _ _ _) 
   | any isTop [t,t']                    = Right $ θ
 
-unify env θ (TFun xts t _) (TFun xts' t' _) = 
-  unifys env θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
+unify γ θ (TFun xts t _) (TFun xts' t' _) = 
+  unifys γ θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
 
 -- TODO: Cycles
-unify env θ (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _)
-  | d == d'                             = unifys env θ ts ts'
+unify γ θ (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _)
+  | d == d'                             = unifys γ θ ts ts'
 
 unify _  θ (TVar α _)     (TVar β _)    = varEql θ α β 
 unify _  θ (TVar α _)     t             = varAsn θ α t 
 unify _  θ t              (TVar α _)    = varAsn θ α t
 
-unify env θ t@(TApp (TDef _) _ _) t'    = unify env θ (unfoldSafe env t) t'
-unify env θ t t'@(TApp (TDef _) _ _)    = unify env θ t (unfoldSafe env t')
+unify γ θ t@(TApp (TDef _) _ _) t'    = unify γ θ (unfoldSafe γ t) t'
+unify γ θ t t'@(TApp (TDef _) _ _)    = unify γ θ t (unfoldSafe γ t')
 
 -- List[A] + Null `unif` List[T0] + Null => A `unif` T0
 -- TODO: make sure other nothing weird is going on with TVars,
@@ -70,7 +69,6 @@ unify γ θ t t' | any isUnion [t,t']     =
 unify _ _ (TBd _) _   = error $ bugTBodiesOccur "unify"
 unify _ _ _ (TBd _)   = error $ bugTBodiesOccur "unify"
 
--- only unify if the objects align perfectly
 unify γ θ (TObj bs1 _) (TObj bs2 _) 
   | s1s == s2s 
   = unifys γ θ (b_type <$> L.sortBy ord bs1) (b_type <$> L.sortBy ord bs2)
@@ -81,12 +79,12 @@ unify γ θ (TObj bs1 _) (TObj bs2 _)
       s2s = L.sort $ b_sym <$> bs2
       ord b b' = compare (b_sym b) (b_sym b')
 
--- For the rest of the cases, blindly return the subst
--- Defer all other checks for later
+unify γ θ (TArr t _) (TArr t' _) = unify γ θ t t'
+
 unify _ θ _ _         = Right $ θ  
 
 
-{-unify' γ θ t t' = unify γ θ (trace (printf "unify: %s - %s" (show t) (show t')) t) t' -}
+unify' γ θ t t' = unify γ θ (trace (printf "unify: %s - %s" (ppshow t) (ppshow t')) t) t' 
 
 -- TODO: cycles
 unifEq _ (TApp d@(TDef _) _ _) (TApp d'@(TDef _) _ _) | d == d' = True
@@ -100,9 +98,9 @@ unifEq γ t t'                     = equiv γ t t'
 unifys ::  (PP r, F.Reftable r, Ord r) =>  
   Env (RType r) -> RSubst r -> [RType r] -> [RType r] -> Either String (RSubst r)
 -----------------------------------------------------------------------------
-unifys env θ xs ys = {-  tracePP msg $ -} unifys' env θ xs ys 
-   {-where -}
-   {-  msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
+unifys env θ xs ys =   tracePP msg $  unifys' env θ xs ys 
+   where 
+     msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
 unifys' env θ ts ts' 
   | nTs == nTs' = go env θ ts ts'
@@ -110,7 +108,7 @@ unifys' env θ ts ts'
   where 
     nTs                      = length ts
     nTs'                     = length ts'
-    go γ θ ts ts' = foldl safeJoin (Right $ θ) $ zipWith (unify γ θ) ts ts'
+    go γ θ ts ts' = foldl safeJoin (Right $ θ) $ zipWith (unify' γ θ) ts ts'
     -- Only allow joining unifications where the common keys map to identical
     -- types
     safeJoin (Right θ@(Su m)) (Right θ'@(Su m'))

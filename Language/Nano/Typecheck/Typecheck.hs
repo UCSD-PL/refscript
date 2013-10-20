@@ -321,8 +321,8 @@ tcStmt' γ (VarDeclStmt _ ds)
 
 -- return e 
 tcStmt' γ (ReturnStmt l eo) 
-  = do  t           <- maybe (return tVoid) (tcExpr γ) eo
-        let rt       = envFindReturn γ 
+  = do  t           <- tracePP "Ret exp type" <$> maybe (return tVoid) (tcExpr γ) eo
+        let rt       = tracePP "Return spec type" $ envFindReturn γ 
         θ           <- unifyTypeM l "Return" eo t rt
         -- Apply the substitution
         let (rt',t') = mapPair (apply θ) (rt,t)
@@ -460,7 +460,7 @@ tcArray :: (Ord r, PP r, F.Reftable r) =>
 ----------------------------------------------------------------------------------
 tcArray l γ es = 
   case es of 
-    [] -> freshTArray l
+    [] -> tracePP "FRESH ARRAY" <$> freshTArray l
     _  -> mapM (tcExpr γ) es >>= return . mkObj
   where 
     mkObj ts = tracePP (ppshow es) $ TObj (bs ts) F.top

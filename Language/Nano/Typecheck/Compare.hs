@@ -553,9 +553,6 @@ padArray _ _ _ = errorstar "BUG: padArray can only pad Arrays"
 
 
 -- | Helper
-instance (PP a, PP b, PP c) => PP (a,b,c) where
-  pp (a,b,c) = pp a <+> text ",\n" <+> pp b <+> text ",\n" <+> pp c
-
 instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
   pp (a,b,c,d) = pp a <+>  pp b <+> pp c <+> pp d
 

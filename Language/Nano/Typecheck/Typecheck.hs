@@ -14,7 +14,7 @@ import qualified Data.HashSet                       as HS
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.Traversable                   as T
 import           Data.Monoid
-import           Data.Maybe                         (catMaybes, isJust)
+import           Data.Maybe                         (catMaybes, isJust, fromJust)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$), (<+>))
@@ -306,12 +306,14 @@ tcStmt' γ (IfStmt l e s1 s2)
         envJoin l γ γ1 γ2
 
 
-tcStmt' γ (WhileStmt l c b)
-  = do  t <- tcExpr γ c
-    -- Doing check for boolean for the conditional for now
-    -- TODO: Will have to support truthy/falsy later.
-        unifyTypeM l "If condition" c t tBool
-        tcStmt' γ b
+tcStmt' γ (WhileStmt l c b) = do
+    let phis = [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
+    let phiTs = fromJust <$> (`envFindTy` γ) <$> (fst3 <$> phis)
+    let γ' =  envAdds (zip (snd3 <$> phis) phiTs) γ
+    t   <- tcExpr γ' c
+    unifyTypeM l "While condition" c t tBool
+    tcStmt' γ' b
+
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt' γ (VarDeclStmt _ ds)
@@ -334,7 +336,7 @@ tcStmt' γ s@(FunctionStmt _ _ _ _)
 
 -- OTHER (Not handled)
 tcStmt' _ s 
-  = convertError "TC Cannot Handle: tcStmt'" s
+  = convertError "tcStmt" s
 
 tcStmt γ s = tcStmt' γ s
 

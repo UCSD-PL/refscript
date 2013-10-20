@@ -489,6 +489,14 @@ ppTC TUndef           = text "Undefined"
 
 data Fact_ r
   = PhiVar  ! [(Id SourceSpan)]
+  -- This will keep track of:
+  -- ∙ the SSA version of the Phi var before entering the loop, and 
+  -- ∙ the SSA version of the Phi var after entering the loop. 
+  -- ∙ the SSA version of the Phi var at the end of the loop.
+  -- This will be helpful to keep track of the base types that the phi vars will 
+  -- need to have in the loop (since there is no definition of them in the
+  -- source).
+  | LoopPhiVar  ! [(Id SourceSpan, Id SourceSpan, Id SourceSpan)]
   | TypInst ! [RType r]
   | Assume  ! (RType r)
     deriving (Eq, Ord, Show, Data, Typeable)
@@ -519,15 +527,14 @@ instance Eq (Annot a SourceSpan) where
 instance IsLocated (Annot a SourceSpan) where 
   srcPos = ann
 
-instance PP Fact where
-  pp (PhiVar x)   = text "phi"  <+> pp x
-  pp (TypInst ts) = text "inst" <+> pp ts 
-  pp (Assume t)   = text "assume" <+> pp t
-
 instance (F.Reftable r, PP r) => PP (Fact_ r) where
-  pp (PhiVar x)   = text "phi"  <+> pp x
-  pp (TypInst ts) = text "inst" <+> pp ts 
-  pp (Assume t)   = text "assume" <+> pp t
+  pp (PhiVar x)       = text "phi"  <+> pp x
+  pp (LoopPhiVar xs)  = text "loopphi ("  
+                          <+> cat ((\(x,x0,x1) -> pp x  <+> text "," 
+                                              <+> pp x0 <+> text "," 
+                                              <+> pp x1 <+> text ")") <$> xs)
+  pp (TypInst ts)     = text "inst" <+> pp ts 
+  pp (Assume t)       = text "assume" <+> pp t
 
 instance (F.Reftable r, PP r) => PP (AnnInfo_ r) where
   pp             = vcat . (ppB <$>) . M.toList 

@@ -86,7 +86,7 @@ renderAnnotations srcFile sol res ann
        annFile  = extFileName Annot srcFile
        ann'     = tidy $ applySolution sol ann
 
-applySolution :: F.FixSolution -> A.AnnInfo RefType -> A.AnnInfo RefType 
+applySolution :: F.FixSolution -> A.UAnnInfo RefType -> A.UAnnInfo RefType 
 applySolution = fmap . fmap . tx
   where
     tx s (F.Reft (x, zs))   = F.Reft (x, F.squishRefas (appSol s <$> zs))
@@ -109,7 +109,7 @@ consNano pgm@(Nano {code = Src fs}) = consStmts (initCGEnv pgm) fs >> return ()
 initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
 
 --------------------------------------------------------------------------------
-consFun :: CGEnv -> Statement (AnnType_ F.Reft) -> CGM CGEnv
+consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
   = do ft             <- {- tracePP msg <$> -} (freshTyFun g l f =<< getDefType f)

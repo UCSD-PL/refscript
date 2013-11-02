@@ -7,17 +7,14 @@ module Language.Nano.SSA.SSA (ssaTransform) where
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
 import qualified Data.HashMap.Strict as M 
-import           Data.Maybe                         (fromJust)
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Misc
--- import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.SSA.SSAMonad
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
--- import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 import           Language.Fixpoint.Misc             
 import qualified Language.Fixpoint.Types            as F
@@ -25,27 +22,26 @@ import           Text.Printf                        (printf)
 -- import           Debug.Trace                        hiding (traceShow)
 
 ----------------------------------------------------------------------------------
-ssaTransform :: (F.Reftable r) => Nano SourceSpan (RType r) -> Nano (Annot (Fact_ r) SourceSpan) (RType r)
+ssaTransform :: (F.Reftable r) => Nano SourceSpan (RType r) -> NanoSSAR r
 ----------------------------------------------------------------------------------
 ssaTransform = either (errorstar . snd) id . execute . ssaNano 
 
 
 ----------------------------------------------------------------------------------
-ssaNano :: F.Reftable r => Nano SourceSpan t -> SSAM r (Nano (Annot (Fact_ r) SourceSpan) t)
+ssaNano :: F.Reftable r => Nano SourceSpan (RType r) -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
-ssaNano p@(Nano {code = Src fs}) = do 
+ssaNano p@(Nano {code = Src fs, tAnns = tAnns}) = do 
     addImmutables $ envMap (\_ -> F.top) (specs p) 
     addImmutables $ envMap (\_ -> F.top) (defs  p) 
     addImmutables $ envMap (\_ -> F.top) (consts p) 
-    (_,fs') <- ssaStmts fs -- mapM ssaFun fs
-    anns    <- getAnns
-    return   $ p {code = Src $ (patchAnn anns <$>) <$> fs'}
+    (_,fs')      <- ssaStmts fs -- mapM ssaFun fs
+    ssaAnns      <- getAnns
+    return        $ p {code = Src $ (patchAnn ssaAnns tAnns' <$>) <$> fs'}
+  where
+    tAnns'        = M.map (\t -> [TAnnot t]) tAnns
 
--- stripAnn :: AnnBare -> SSAM SourceSpan
--- stripAnn (Ann l fs) = forM_ fs (addAnn l) >> return l   
-
--- patchAnn     :: AnnInfo -> SourceSpan -> (AnnSSA_ r)
-patchAnn m l = Ann l $ M.lookupDefault [] l m
+patchAnn :: AnnInfo r -> AnnInfo r -> SourceSpan -> AnnSSA r
+patchAnn m1 m2 l = Ann l $ M.lookupDefault [] l m1 ++ M.lookupDefault [] l m2
 
 -------------------------------------------------------------------------------------
 ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)
@@ -159,7 +155,6 @@ ssaStmt (WhileStmt l c b) = do
     (t, b')    <- ssaStmt b
     g2         <- getSsaEnv
     let φ2      = [x | Just (SI x) <- (`envFindTy` g2) <$> (fst <$> φ)]
-    let f (x, (SI x0, SI x2)) x1 = (x0,x1,x2)
     addAnn l (LoopPhiVar $ zip3 φ0 φ1 φ2)
     setSsaEnv g1
     return (t, WhileStmt l c' b')
@@ -167,8 +162,6 @@ ssaStmt (WhileStmt l c b) = do
 
 ssaStmt (ForStmt _  NoInit _ _ _ )     = 
     errorstar "unimplemented: ssaStmt-for-01"
-ssaStmt (ForStmt _ NoInit _ Nothing _ ) =
-    errorstar "unimplemented: ssaStmt-for-02"
 
 ssaStmt (ForStmt l v cOpt (Just (UnaryAssignExpr l1 o lv)) b) =
     ssaStmt (ForStmt l v cOpt (Just $ AssignExpr l1 (op o) lv (IntLit l1 1)) b)
@@ -373,5 +366,4 @@ ssaForLoop l vds cOpt incExp b =
     bd         = BlockStmt bl [b, incExp]
     bl         = getAnnotation b
     c          = maybe (BoolLit l True) id cOpt
-    il         = getAnnotation
 

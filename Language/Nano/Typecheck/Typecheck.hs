@@ -45,6 +45,7 @@ import qualified System.Console.CmdArgs.Verbosity as V
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
+
 --------------------------------------------------------------------------------
 -- verifyFile :: FilePath -> IO (F.FixResult (SourceSpan, String))
 --------------------------------------------------------------------------------
@@ -53,25 +54,25 @@ import qualified System.Console.CmdArgs.Verbosity as V
 --   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
 
 -- | Debug mode
-verifyFile f 
-   = do nano    <- parseNanoFromFile f
-        V.whenLoud $ donePhase FM.Loud "Parse"
-        putStrLn . render . pp $ nano
-        let nanoSsa = ssaTransform nano
-        V.whenLoud $ donePhase FM.Loud "SSA Transform"
-        V.whenLoud $ putStrLn . render . pp $ nanoSsa
-        verb    <- V.getVerbosity
-        let p =  execute verb nanoSsa $ tcAndPatch nanoSsa
-        TC{ noFailCasts = nfc } <- getOpts
-        r <- either unsafe (\q -> safe q >>= return . (`mappend` failCasts nfc q)) p
-        V.whenLoud $ donePhase FM.Loud "Typechecking"
-        return $ r
+verifyFile f = do 
+    nano    <- parseNanoFromFile f
+    V.whenLoud $ donePhase FM.Loud "Parse"
+    putStrLn . render . pp $ nano
+    let nanoSsa = ssaTransform nano
+    V.whenLoud $ donePhase FM.Loud "SSA Transform"
+    V.whenLoud $ putStrLn . render . pp $ nanoSsa
+    verb    <- V.getVerbosity
+    let p =  execute verb nanoSsa $ tcAndPatch nanoSsa
+    TC{ noFailCasts = nfc } <- getOpts
+    r <- either unsafe (\q -> safe q >>= return . (`mappend` failCasts nfc q)) p
+    V.whenLoud $ donePhase FM.Loud "Typechecking"
+    return $ r
 
 
 -------------------------------------------------------------------------------
 typeCheck ::
-  (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact_ r), Free (Fact_ r)) =>
-  V.Verbosity -> Nano (AnnSSA_ r) (RType r) -> Nano (AnnType_ r) (RType r)
+  (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
+  V.Verbosity -> Nano (AnnSSA r) (RType r) -> Nano (AnnType r) (RType r)
 -------------------------------------------------------------------------------
 typeCheck verb pgm = either crash id (execute verb pgm (tcAndPatch pgm))
   where
@@ -90,7 +91,7 @@ safe (Nano {code = Src fs})
 
 -------------------------------------------------------------------------------
 failCasts :: (Data r, Typeable r) => 
-              Bool -> Nano (AnnSSA_ r) (RType r) -> F.FixResult (SourceSpan, String)
+              Bool -> Nano (AnnSSA r) (RType r) -> F.FixResult (SourceSpan, String)
 -------------------------------------------------------------------------------
 failCasts False (Nano {code = Src fs}) | not $ null csts = F.Unsafe csts
                                        | otherwise       = F.Safe
@@ -99,7 +100,7 @@ failCasts True   _                                       = F.Safe
     
 
 -------------------------------------------------------------------------------
-allCasts :: (Data r, Typeable r) => [FunctionStatement (AnnSSA_ r)] -> [((AnnSSA_ r), [Char])]
+allCasts :: (Data r, Typeable r) => [FunctionStatement (AnnSSA r)] -> [((AnnSSA r), [Char])]
 -------------------------------------------------------------------------------
 allCasts fs =  everything (++) ([] `mkQ` f) $ fs
   where f (DownCast l t)  = [(l, "DownCast: " ++ ppshow t)]
@@ -116,8 +117,8 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn
 -------------------------------------------------------------------------------
 -- | The first argument true to tranform casted expressions e to Cast(e,T)
 -------------------------------------------------------------------------------
-tcAndPatch :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact_ r), Free (Fact_ r)) =>
-  Nano (AnnSSA_ r) (RType r) -> TCM r (Nano (AnnType_ r) (RType r))
+tcAndPatch :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
+  Nano (AnnSSA r) (RType r) -> TCM r (Nano (AnnType r) (RType r))
 -------------------------------------------------------------------------------
 tcAndPatch p = 
   do  checkTypeDefs p
@@ -140,7 +141,7 @@ tcAndPatch p =
 
 
 -------------------------------------------------------------------------------
-checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano (AnnSSA_ r) (RType r) -> TCM r ()
+checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano (AnnSSA r) (RType r) -> TCM r ()
 -------------------------------------------------------------------------------
 checkTypeDefs pgm = reportAll $ grep
   where 
@@ -160,8 +161,8 @@ checkTypeDefs pgm = reportAll $ grep
 
 
 -------------------------------------------------------------------------------
-tcNano :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact_ r), Free (Fact_ r)) =>
-  Nano (AnnSSA_ r) (RType r) -> TCM r (Nano (AnnType_ r) (RType r))
+tcNano :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
+  Nano (AnnSSA r) (RType r) -> TCM r (Nano (AnnType r) (RType r))
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do m     <- tcNano' $ {- toType <$> -} p 
@@ -174,17 +175,17 @@ tcNano p@(Nano {code = Src fs})
 
 
 -------------------------------------------------------------------------------
--- tcNano' :: Nano (AnnSSA_ r) (RType r) -> TCM r AnnInfo  
+-- tcNano' :: Nano (AnnSSA r) (RType r) -> TCM r UAnnInfo  
 -------------------------------------------------------------------------------
 tcNano' pgm@(Nano {code = Src fs}) 
   = do tcStmts (specs pgm) fs
        M.unions <$> getAllAnns
 
--- patchAnn              :: AnnInfo -> (AnnSSA_ r) -> (AnnType_ r)
+-- patchAnn              :: UAnnInfo -> (AnnSSA r) -> (AnnType r)
 patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
 
 -------------------------------------------------------------------------------
--- | (RType r) Check Environment ---------------------------------------------------
+-- | Typecheck Environment ----------------------------------------------------
 -------------------------------------------------------------------------------
 
 --   We define this alias as the "output" type for typechecking any entity
@@ -198,7 +199,7 @@ type TCEnv r = Maybe (Env (RType r))
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
--- tcFun    :: (F.Reftable r) => Env (RType r) -> FunctionStatement (AnnSSA_ r) -> TCM r (TCEnv r)
+-- tcFun    :: (F.Reftable r) => Env (RType r) -> FunctionStatement (AnnSSA r) -> TCM r (TCEnv r)
 tcFun γ (FunctionStmt l f xs body) 
   = do (ft, (αs, ts, t)) <- funTy l f xs
        let γ'  = envAdds [(f, ft)] γ
@@ -242,14 +243,14 @@ tcSeq f             = foldM step . Just
     step (Just γ) x = f γ x
 
 --------------------------------------------------------------------------------
-tcStmts :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact_ r), Free (Fact_ r)) =>
-            Env (RType r) -> [Statement (AnnSSA_ r)] -> TCM r (TCEnv r)
+tcStmts :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
+            Env (RType r) -> [Statement (AnnSSA r)] -> TCM r (TCEnv r)
 --------------------------------------------------------------------------------
 tcStmts = tcSeq tcStmt
 
 -------------------------------------------------------------------------------
-tcStmt  :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact_ r), Free (Fact_ r)) =>
-            Env (RType r) -> Statement (AnnSSA_ r) -> TCM r (TCEnv r)
+tcStmt  :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
+            Env (RType r) -> Statement (AnnSSA r) -> TCM r (TCEnv r)
 -------------------------------------------------------------------------------
 -- skip
 tcStmt' γ (EmptyStmt _) 
@@ -321,8 +322,8 @@ tcStmt' γ (VarDeclStmt _ ds)
 
 -- return e 
 tcStmt' γ (ReturnStmt l eo) 
-  = do  t           <- tracePP "Ret exp type" <$> maybe (return tVoid) (tcExpr γ) eo
-        let rt       = tracePP "Return spec type" $ envFindReturn γ 
+  = do  t           <- maybe (return tVoid) (tcExpr γ) eo
+        let rt       = envFindReturn γ 
         θ           <- unifyTypeM l "Return" eo t rt
         -- Apply the substitution
         let (rt',t') = mapPair (apply θ) (rt,t)
@@ -341,18 +342,18 @@ tcStmt' _ s
 tcStmt γ s = tcStmt' γ s
 
 -------------------------------------------------------------------------------
-tcVarDecl :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> VarDecl (AnnSSA_ r) -> TCM r (TCEnv r)
+tcVarDecl :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> VarDecl (AnnSSA r) -> TCM r (TCEnv r)
 -------------------------------------------------------------------------------
 
 tcVarDecl γ (VarDecl l x (Just e)) 
   = tcAsgn γ l x e  
+
 tcVarDecl γ (VarDecl _ _ Nothing)  
--- TODO: add binding from the declared variable to undefined
   = return $ Just γ
 
 ------------------------------------------------------------------------------------
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
-  Env (RType r) -> (AnnSSA_ r) -> Id (AnnSSA_ r) -> Expression (AnnSSA_ r) -> TCM r (TCEnv r)
+  Env (RType r) -> (AnnSSA r) -> Id (AnnSSA r) -> Expression (AnnSSA r) -> TCM r (TCEnv r)
 ------------------------------------------------------------------------------------
 
 tcAsgn γ _ x e 
@@ -362,13 +363,13 @@ tcAsgn γ _ x e
 
 
 -------------------------------------------------------------------------------
-tcExpr :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> Expression (AnnSSA_ r) -> TCM r (RType r)
+tcExpr :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> Expression (AnnSSA r) -> TCM r (RType r)
 -------------------------------------------------------------------------------
 tcExpr γ e = setExpr (Just e) >> (tcExpr' γ e)
 
 
 -------------------------------------------------------------------------------
-tcExpr' :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> Expression (AnnSSA_ r) -> TCM r (RType r)
+tcExpr' :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> Expression (AnnSSA r) -> TCM r (RType r)
 -------------------------------------------------------------------------------
 
 tcExpr' _ (IntLit _ _)
@@ -412,6 +413,16 @@ tcExpr' γ (BracketRef _ e (StringLit _ s)) = tcExpr γ e >>= safeGetProp s
 -- x[i] 
 tcExpr' γ (BracketRef _ e (IntLit _ i)) = tcExpr γ e >>= safeGetIdx i
 
+-- x[e]
+tcExpr' γ e@(BracketRef l e1 e2) = do
+    t1 <- tcExpr' γ e1
+    t2 <- tcExpr' γ e2
+    case t1 of 
+      TArr t _  -> unifyTypeM l "BracketRef" e t2 tInt >> return t
+      t         -> errorstar $ "Unimplemented: BracketRef of " ++ 
+                               "non-array expression of type " ++ 
+                               ppshow t
+
 tcExpr' _ e 
   = convertError "tcExpr" e
 
@@ -419,7 +430,7 @@ tcExpr' _ e
 
 ----------------------------------------------------------------------------------
 tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 
-  Env (RType r) -> (AnnSSA_ r) -> fn -> [Expression (AnnSSA_ r)]-> (RType r) -> TCM r (RType r)
+  Env (RType r) -> (AnnSSA r) -> fn -> [Expression (AnnSSA r)]-> (RType r) -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcCall γ l fn es ft 
   = do  (_,ibs,ot)    <- instantiate l fn ft
@@ -445,7 +456,7 @@ instantiate l fn ft
 
 ----------------------------------------------------------------------------------
 tcObject ::  (Ord r, F.Reftable r, PP r) => 
-  Env (RType r) -> [(Prop (AnnSSA_ r), Expression (AnnSSA_ r))] -> TCM r (RType r)
+  Env (RType r) -> [(Prop (AnnSSA r), Expression (AnnSSA r))] -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcObject γ bs 
   = do 
@@ -456,7 +467,7 @@ tcObject γ bs
 
 ----------------------------------------------------------------------------------
 tcArray :: (Ord r, PP r, F.Reftable r) =>
-    SourceSpan -> Env (RType r) -> [Expression (AnnSSA_ r)] -> TCM r (RType r)
+    SourceSpan -> Env (RType r) -> [Expression (AnnSSA r)] -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcArray l γ es = 
   case es of 
@@ -470,7 +481,7 @@ tcArray l γ es =
               
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, F.Reftable r, PP r) =>
-  (AnnSSA_ r) -> Env (RType r) -> TCEnv r -> TCEnv r -> TCM r (TCEnv r)
+  (AnnSSA r) -> Env (RType r) -> TCEnv r -> TCEnv r -> TCM r (TCEnv r)
 ----------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x

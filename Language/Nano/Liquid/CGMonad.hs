@@ -102,7 +102,7 @@ import           Debug.Trace                        (trace)
 -------------------------------------------------------------------------------
 
 data CGInfo = CGI { cgi_finfo :: F.FInfo Cinfo
-                  , cgi_annot :: A.AnnInfo RefType  
+                  , cgi_annot :: A.UAnnInfo RefType  
                   }
 
 -- Dump the refinement subtyping constraints
@@ -202,7 +202,7 @@ data CGState
         , cs       :: ![SubC]              -- ^ subtyping constraints
         , ws       :: ![WfC]               -- ^ well-formedness constraints
         , count    :: !Integer             -- ^ freshness counter
-        , cg_ann   :: A.AnnInfo RefType    -- ^ recorded annotations
+        , cg_ann   :: A.UAnnInfo RefType    -- ^ recorded annotations
         , invs     :: TConInv              -- ^ type constructor invariants
         , cg_opts  :: Config               -- ^ configuration options
         }

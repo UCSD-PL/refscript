@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE OverlappingInstances   #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
 
 module Language.Nano.Types (
   -- * Configuration Options
@@ -94,7 +95,7 @@ data Config
 ---------------------------------------------------------------------
 
 
-data Located a 
+data Located a
   = Loc { loc :: !SourceSpan
         , val :: a
         }
@@ -122,6 +123,10 @@ instance IsLocated a => IsLocated (Id a) where
 
 instance IsLocated F.Symbol where 
   srcPos _ = dummySpan
+
+instance IsLocated (SourceSpan, r) where 
+  srcPos = srcPos . fst
+
 
 instance HasAnnotation Id where 
   getAnnotation (Id x _) = x
@@ -241,11 +246,11 @@ isNanoExprStatement e                     = errortext (text "Not Nano ExprStmt!"
 
 -- | Trivial Syntax Checking 
 
-checkTopStmt :: Statement SourceSpan -> Statement SourceSpan 
+checkTopStmt :: Statement a -> Statement a
 checkTopStmt s | checkBody [s] = s
 checkTopStmt s | otherwise     = errorstar $ errorInvalidTopStmt s
 
-checkBody :: [Statement SourceSpan] -> Bool
+checkBody :: [Statement a] -> Bool
 -- Adding support for loops so removing the while check
 checkBody stmts = all isNano stmts -- && null (getWhiles stmts) 
     

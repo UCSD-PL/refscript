@@ -7,7 +7,7 @@
 module Language.Nano.Annots (
    
     -- * Type for Annotation Map
-    AnnInfo 
+    UAnnInfo 
    
     -- * Adding new Annotations
   , addAnnot
@@ -43,15 +43,15 @@ data Annot t       = AnnBind { ann_bind :: F.Symbol, ann_type :: t }
 
 {-@ type NonNull a = {v: [a] | 0 < (len v)} @-}
 type NonEmpty a    = [a] 
-newtype AnnInfo a  = AI (M.HashMap SourceSpan (NonEmpty (Annot a)))
+newtype UAnnInfo a  = AI (M.HashMap SourceSpan (NonEmpty (Annot a)))
 
 instance Functor Annot where 
   fmap f (AnnBind x t) = AnnBind x (f t)
 
-instance Functor AnnInfo where 
+instance Functor UAnnInfo where 
   fmap f (AI m) = AI (fmap (fmap (fmap f)) m)
 
-instance Monoid (AnnInfo a) where 
+instance Monoid (UAnnInfo a) where 
   mempty                  = AI M.empty
   mappend (AI m1) (AI m2) = AI (M.unionWith mappend m1 m2)
 
@@ -59,7 +59,7 @@ instance Monoid (AnnInfo a) where
 -- | PP Instance -------------------------------------------------------
 ------------------------------------------------------------------------
 
-instance PP a => PP (AnnInfo a) where 
+instance PP a => PP (UAnnInfo a) where 
   pp (AI m)  = vcatLn [pp sp $+$ nest 4 (vcatLn $ map ppB bs) | (sp, bs) <- M.toList m]
     where 
       ppB a  = pp (ann_bind a) <+> text "::" <+> pp (ann_type a)
@@ -70,19 +70,19 @@ instance PP a => PP (AnnInfo a) where
 -- | Adding New Annotations --------------------------------------------------
 ------------------------------------------------------------------------------
 
-addAnnot :: (F.Symbolic x) => SourceSpan -> x -> a -> AnnInfo a -> AnnInfo a
+addAnnot :: (F.Symbolic x) => SourceSpan -> x -> a -> UAnnInfo a -> UAnnInfo a
 addAnnot l x t (AI m) = AI (inserts l (AnnBind (F.symbol x) t) m)
 
 ------------------------------------------------------------------------------
 -- | Dumping Annotations To Disk ---------------------------------------------
 ------------------------------------------------------------------------------
 
--- writeAnnotations :: (PP t) => FilePath -> F.FixResult SourceSpan -> AnnInfo t -> IO ()
+-- writeAnnotations :: (PP t) => FilePath -> F.FixResult SourceSpan -> UAnnInfo t -> IO ()
 -- writeAnnotations f res a = B.writeFile f annJson 
 --   where  
 --     annJson              = encode $ mkAnnMap res a
 
-annotByteString       :: (PP t) => F.FixResult SourceSpan -> AnnInfo t -> B.ByteString
+annotByteString       :: (PP t) => F.FixResult SourceSpan -> UAnnInfo t -> B.ByteString
 annotByteString res a = encode $ mkAnnMap res a
 
 ------------------------------------------------------------------------------

@@ -122,23 +122,23 @@ instance Free (RType r) where
   free (TObj bs _)          = S.unions   $ free <$> b_type <$> bs
   free (TBd (TD _ α t _ ))  = foldr S.delete (free t) α
 
-instance Substitutable () Fact where
+instance Substitutable () UFact where
   apply _ x@(PhiVar _)  = x
   apply θ (TypInst ts)  = TypInst $ apply θ ts
   apply θ (Assume  t )  = Assume  $ apply θ t
 
-instance (PP r, F.Reftable r) => Substitutable r (Fact_ r) where
+instance (PP r, F.Reftable r) => Substitutable r (Fact r) where
   apply _ x@(PhiVar _)  = x
   apply θ (TypInst ts)  = TypInst $ apply θ ts
   apply θ (Assume  t )  = Assume  $ apply θ t
 
 
-instance Free Fact where
+instance Free UFact where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
   free (Assume t)       = free t
 
-instance Free (Fact_ r) where
+instance Free (Fact r) where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
   free (Assume t)       = free t

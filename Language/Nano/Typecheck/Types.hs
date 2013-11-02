@@ -14,7 +14,7 @@ module Language.Nano.Typecheck.Types (
   -- * Programs
     Nano (..)
   , NanoBare
-  , NanoSSA
+  , NanoSSA, NanoSSAR
   , NanoType
   , Source (..)
   , FunctionStatement
@@ -69,13 +69,15 @@ module Language.Nano.Typecheck.Types (
   
   -- * Annotations
   , Annot (..)
-  , Fact
-  , Fact_ (..)
-  , AnnBare_ ,AnnBare
-  , AnnSSA_, AnnSSA
-  , AnnType_, AnnType
-  , AnnInfo_, AnnInfo
+  , UFact
+  , Fact (..)
+  , AnnBare ,UAnnBare
+  , AnnSSA, UAnnSSA
+  , AnnType, UAnnType
+  , AnnInfo, UAnnInfo
   , isAsm
+
+  , SST
 
   ) where 
 
@@ -350,13 +352,14 @@ data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
                      , defs   :: !(Env t)           -- ^ Signatures for Code
                      , consts :: !(Env t)           -- ^ Measure Signatures 
                      , tDefs  :: !(Env t)           -- ^ Type definitions
+                     , tAnns  :: !(M.HashMap SourceSpan t)
                      , quals  :: ![F.Qualifier]     -- ^ Qualifiers
                      , invts  :: ![Located t]       -- ^ Type Invariants
                      } deriving (Functor, Data, Typeable)
 
-type NanoBareR r   = Nano (AnnBare_ r) (RType r)
-type NanoSSAR r    = Nano (AnnSSA_  r) (RType r)
-type NanoTypeR r   = Nano (AnnType_ r) (RType r)
+type NanoBareR r   = Nano (AnnBare r) (RType r)
+type NanoSSAR r    = Nano (AnnSSA  r) (RType r)
+type NanoTypeR r   = Nano (AnnType r) (RType r)
 
 type NanoBare   = NanoBareR ()
 type NanoSSA    = NanoSSAR ()
@@ -380,25 +383,27 @@ instance Functor Source where
 
 instance PP t => PP (Nano a t) where
   pp pgm@(Nano {code = (Src s) }) 
-    =   text "********************** CODE **********************"
+    =   text "******************* Code **********************"
     $+$ pp s
-    $+$ text "********************** SPECS *********************"
+    $+$ text "******************* Specifications ************"
     $+$ pp (specs pgm)
-    $+$ text "********************** DEFS *********************"
+    $+$ text "******************* Definitions ***************"
     $+$ pp (defs  pgm)
-    $+$ text "********************** CONSTS ********************"
+    $+$ text "******************* Constants *****************"
     $+$ pp (consts pgm) 
-    $+$ text "********************** TYPE DEFS *****************"
+    $+$ text "******************* Type Annotations **********"
+    $+$ pp (tAnns pgm) 
+    $+$ text "******************* Type Definitions **********"
     $+$ pp (tDefs  pgm)
-    $+$ text "********************** QUALS *********************"
+    $+$ text "******************* Qualifiers ****************"
     $+$ F.toFix (quals  pgm) 
-    $+$ text "********************** INVARIANTS ****************"
+    $+$ text "******************* Invariants ****************"
     $+$ pp (invts pgm) 
-    $+$ text "**************************************************"
+    $+$ text "***********************************************"
     
 instance Monoid (Nano a t) where 
-  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty [] [] 
-  mappend p1 p2 = Nano ss e e' cs tds qs is 
+  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty M.empty [] [] 
+  mappend p1 p2 = Nano ss e e' cs tds ans qs is 
     where 
       ss        = Src $ s1 ++ s2
       Src s1    = code p1
@@ -407,6 +412,7 @@ instance Monoid (Nano a t) where
       e'        = envFromList ((envToList $ defs p1)  ++ (envToList $ defs p2))
       cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
       tds       = envFromList $ (envToList $ tDefs p1) ++ (envToList $ tDefs p2)
+      ans       = M.fromList $ (M.toList $ tAnns p1) ++ (M.toList $ tAnns p2)
       qs        = quals p1 ++ quals p2
       is        = invts p1 ++ invts p2
 
@@ -479,6 +485,9 @@ ppTC TNull            = text "Null"
 ppTC TUndef           = text "Undefined"
 
 
+instance (PP s, PP t) => PP (M.HashMap s t) where
+  pp m = vcat $ pp <$> M.toList m
+
 -----------------------------------------------------------------------------
 -- | Annotations ------------------------------------------------------------
 -----------------------------------------------------------------------------
@@ -487,7 +496,7 @@ ppTC TUndef           = text "Undefined"
 --   Ideally, we'd have "room" for these inside the @Statement@ and
 --   @Expression@ type, but are tucking them in using the @a@ parameter.
 
-data Fact_ r
+data Fact r
   = PhiVar  ! [(Id SourceSpan)]
   -- This will keep track of:
   -- ∙ the SSA version of the Phi var before entering the loop, and 
@@ -499,26 +508,27 @@ data Fact_ r
   | LoopPhiVar  ! [(Id SourceSpan, Id SourceSpan, Id SourceSpan)]
   | TypInst ! [RType r]
   | Assume  ! (RType r)
+  | TAnnot  ! (RType r)
     deriving (Eq, Ord, Show, Data, Typeable)
 
-type Fact = Fact_ ()
+type UFact = Fact ()
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show, Data, Typeable)
-type AnnBare_ r  = Annot (Fact_ r) SourceSpan -- NO facts
-type AnnSSA_  r  = Annot (Fact_ r) SourceSpan -- Only Phi + Assume     facts
-type AnnType_ r  = Annot (Fact_ r) SourceSpan -- Only Phi + Typ        facts
-type AnnInfo_ r  = M.HashMap SourceSpan [Fact_ r] 
+type AnnBare r  = Annot (Fact r) SourceSpan -- NO facts
+type AnnSSA  r  = Annot (Fact r) SourceSpan -- Only Phi + Assume     facts
+type AnnType r  = Annot (Fact r) SourceSpan -- Only Phi + Typ        facts
+type AnnInfo r  = M.HashMap SourceSpan [Fact r] 
 
-type AnnBare = AnnBare_ () 
-type AnnSSA  = AnnSSA_  ()
-type AnnType = AnnType_ ()
-type AnnInfo = AnnInfo_ ()
+type UAnnBare = AnnBare () 
+type UAnnSSA  = AnnSSA  ()
+type UAnnType = AnnType ()
+type UAnnInfo = AnnInfo ()
 
 
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 
 
-instance Ord (AnnSSA_  r) where 
+instance Ord (AnnSSA  r) where 
   compare (Ann s1 _) (Ann s2 _) = compare s1 s2
 
 instance Eq (Annot a SourceSpan) where 
@@ -527,7 +537,7 @@ instance Eq (Annot a SourceSpan) where
 instance IsLocated (Annot a SourceSpan) where 
   srcPos = ann
 
-instance (F.Reftable r, PP r) => PP (Fact_ r) where
+instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)       = text "phi"  <+> pp x
   pp (LoopPhiVar xs)  = text "loopphi ("  
                           <+> cat ((\(x,x0,x1) -> pp x  <+> text "," 
@@ -535,8 +545,9 @@ instance (F.Reftable r, PP r) => PP (Fact_ r) where
                                               <+> pp x1 <+> text ")") <$> xs)
   pp (TypInst ts)     = text "inst" <+> pp ts 
   pp (Assume t)       = text "assume" <+> pp t
+  pp (TAnnot t)       = text "annotation" <+> pp t
 
-instance (F.Reftable r, PP r) => PP (AnnInfo_ r) where
+instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . M.toList 
     where 
       ppB (x, t) = pp x <+> dcolon <+> pp t
@@ -544,9 +555,12 @@ instance (F.Reftable r, PP r) => PP (AnnInfo_ r) where
 instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
 
-isAsm  :: Fact -> Bool
+isAsm  :: UFact -> Bool
 isAsm  (Assume _) = True
 isAsm  _          = False
+
+
+type SST r     = (SourceSpan, Maybe (RType r))
 
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------

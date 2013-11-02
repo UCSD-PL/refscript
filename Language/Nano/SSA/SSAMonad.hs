@@ -62,7 +62,7 @@ type SSAM r     = ErrorT String (State (SsaState r))
 data SsaState r = SsaST { immutables :: Env r       -- ^ globals
                         , names      :: SsaEnv      -- ^ current SSA names 
                         , count      :: !Int        -- ^ fresh index
-                        , anns       :: !(AnnInfo_ r)    -- ^ built up map of annots 
+                        , anns       :: !(AnnInfo r)    -- ^ built up map of annots 
                         }
 
 type SsaEnv     = Env SsaInfo 
@@ -141,13 +141,13 @@ findSsaEnv x
 --               return $ xs ++ ys
 
 -------------------------------------------------------------------------------
-addAnn     :: SourceSpan -> Fact_ r -> SSAM r ()
+addAnn     :: SourceSpan -> Fact r -> SSAM r ()
 -------------------------------------------------------------------------------
 addAnn l f = modify $ \st -> st { anns = inserts l f (anns st) }
 
 
 -------------------------------------------------------------------------------
-getAnns    :: (F.Reftable r) => SSAM r (AnnInfo_ r)
+getAnns    :: (F.Reftable r) => SSAM r (AnnInfo r)
 -------------------------------------------------------------------------------
 getAnns    = anns <$> get
 

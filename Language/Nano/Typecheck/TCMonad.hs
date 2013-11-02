@@ -7,6 +7,7 @@
 {-# LANGUAGE ImpredicativeTypes        #-}
 {-# LANGUAGE LiberalTypeSynonyms       #-}
 {-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 -- | This module has the code for the Type-Checker Monad. 
 
@@ -112,16 +113,16 @@ data TCState r = TCS {
                    , tc_subst :: !(RSubst r)
                    , tc_cnt   :: !Int
                    -- Annotations
-                   , tc_anns  :: AnnInfo_ r
-                   , tc_annss :: [AnnInfo_ r]
+                   , tc_anns  :: AnnInfo r
+                   , tc_annss :: [AnnInfo r]
                    -- Cast map: 
-                   , tc_casts :: M.Map (Expression (AnnSSA_ r)) (Cast (RType r))
+                   , tc_casts :: M.Map (Expression (AnnSSA r)) (Cast (RType r))
                    -- Function definitions
                    , tc_defs  :: !(Env (RType r))
                    -- Type definitions
                    , tc_tdefs :: !(Env (RType r))
                    -- The currently typed expression 
-                   , tc_expr  :: Maybe (Expression (AnnSSA_ r))
+                   , tc_expr  :: Maybe (Expression (AnnSSA r))
 
                    -- Verbosiry
                    , tc_verb  :: V.Verbosity
@@ -251,7 +252,7 @@ safeGetIdx f t
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-getAnns :: (Ord r, F.Reftable r, Substitutable r (Fact_ r)) => TCM r (AnnInfo_ r)
+getAnns :: (Ord r, F.Reftable r, Substitutable r (Fact r)) => TCM r (AnnInfo r)
 -------------------------------------------------------------------------------
 getAnns = do θ     <- tc_subst <$> get
              m     <- tc_anns  <$> get
@@ -260,19 +261,19 @@ getAnns = do θ     <- tc_subst <$> get
              return m' 
 
 -------------------------------------------------------------------------------
-addAnn :: SourceSpan -> Fact_ r -> TCM r () 
+addAnn :: SourceSpan -> Fact r -> TCM r () 
 -------------------------------------------------------------------------------
 addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
 
 -------------------------------------------------------------------------------
-getAllAnns :: TCM r [AnnInfo_ r]  
+getAllAnns :: TCM r [AnnInfo r]  
 -------------------------------------------------------------------------------
 getAllAnns = tc_annss <$> get
 
 
 -------------------------------------------------------------------------------
-accumAnn :: (Ord r, F.Reftable r, Substitutable r (Fact_ r)) =>
-  (AnnInfo_ r -> [(SourceSpan, String)]) -> TCM r () -> TCM r ()
+accumAnn :: (Ord r, F.Reftable r, Substitutable r (Fact r)) =>
+  (AnnInfo r -> [(SourceSpan, String)]) -> TCM r () -> TCM r ()
 -------------------------------------------------------------------------------
 accumAnn check act 
   = do m     <- tc_anns <$> get 
@@ -316,13 +317,13 @@ getDefType f
 
 
 -------------------------------------------------------------------------------
-setExpr   :: Maybe (Expression (AnnSSA_ r)) -> TCM r () 
+setExpr   :: Maybe (Expression (AnnSSA r)) -> TCM r () 
 -------------------------------------------------------------------------------
 setExpr eo = modify $ \st -> st { tc_expr = eo }
 
 
 -------------------------------------------------------------------------------
-getExpr   :: TCM r (Maybe (Expression (AnnSSA_ r)))
+getExpr   :: TCM r (Maybe (Expression (AnnSSA r)))
 -------------------------------------------------------------------------------
 getExpr = tc_expr <$> get
 
@@ -424,7 +425,7 @@ subTypesM ts ts' = zipWithM subTypeM ts ts'
 
 
 -----------------------------------------------------------------------------
-withExpr  :: Maybe (Expression (AnnSSA_ r)) -> TCM r a -> TCM r a
+withExpr  :: Maybe (Expression (AnnSSA r)) -> TCM r a -> TCM r a
 -----------------------------------------------------------------------------
 withExpr e action = 
   do  eold  <- getExpr 
@@ -438,7 +439,7 @@ withExpr e action =
 -- which is the actual type for @e@ and @t'@ which is the desired (cast) type
 -- and insert the right kind of cast. 
 --------------------------------------------------------------------------------
-castM     :: (Ord r, PP r, F.Reftable r) => Expression (AnnSSA_ r) -> RType r -> RType r -> TCM r ()
+castM     :: (Ord r, PP r, F.Reftable r) => Expression (AnnSSA r) -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 castM e t t'    = subTypeM t t' >>= go
   where go SupT = addDownCast e t t'
@@ -450,20 +451,20 @@ castM e t t'    = subTypeM t t' >>= go
 
 --------------------------------------------------------------------------------
 castsM    :: (Ord r, PP r, F.Reftable r) => 
-  [Expression (AnnSSA_ r)] -> [RType r] -> [RType r] -> TCM r ()
+  [Expression (AnnSSA r)] -> [RType r] -> [RType r] -> TCM r ()
 --------------------------------------------------------------------------------
 castsM     = zipWith3M_ castM 
 
 
 --------------------------------------------------------------------------------
 addUpCast :: (F.Reftable r, PP r) => 
-  Expression (AnnSSA_ r) -> RType r -> TCM r ()
+  Expression (AnnSSA r) -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 addUpCast e t = modify $ \st -> st { tc_casts = M.insert e (UCST t) (tc_casts st) }
 
 --------------------------------------------------------------------------------
 addDownCast :: (Ord r, PP r, F.Reftable r) => 
-  Expression (AnnSSA_ r) -> RType r -> RType r -> TCM r ()
+  Expression (AnnSSA r) -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 -- addDownCast e _ cast = modify $ \st -> st { tc_casts = M.insert e (DCST cast) (tc_casts st) }
   
@@ -475,7 +476,7 @@ addDownCast e base cast =
       modify $ \st -> st { tc_casts = M.insert e (DCST $ {- trace msg -} cast') (tc_casts st) }
 
 --------------------------------------------------------------------------------
-addDeadCast :: Expression (AnnSSA_ r) -> RType r -> TCM r ()
+addDeadCast :: Expression (AnnSSA r) -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 addDeadCast e t = modify $ \st -> st { tc_casts = M.insert e (DC t) (tc_casts st) }
 
@@ -492,7 +493,7 @@ data PState r = PS { m :: Casts_ r }
 type PM     r = State (PState r)
 
 --------------------------------------------------------------------------------
-transform :: Expression (AnnSSA_ r) -> PM r (Expression (AnnSSA_ r))
+transform :: Expression (AnnSSA r) -> PM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 transform e = 
   do  c  <- m <$> get      
@@ -500,7 +501,7 @@ transform e =
       return $ patchExpr c e
 
 --------------------------------------------------------------------------------
-patchExpr :: Casts_ r -> Expression (AnnSSA_ r) -> Expression (AnnSSA_ r)
+patchExpr :: Casts_ r -> Expression (AnnSSA r) -> Expression (AnnSSA r)
 --------------------------------------------------------------------------------
 patchExpr m e =
   case M.lookup e m of

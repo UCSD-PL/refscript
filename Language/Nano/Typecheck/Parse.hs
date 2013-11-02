@@ -3,20 +3,24 @@
 {-# LANGUAGE UndecidableInstances      #-} 
 {-# LANGUAGE TypeSynonymInstances      #-} 
 {-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 
 module Language.Nano.Typecheck.Parse (
     parseNanoFromFile 
   ) where
 
 import           Data.List (sort)
+import qualified Data.Foldable                      as F
 import           Data.Maybe (fromMaybe)
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
+import qualified Data.HashMap.Strict                as M 
 import           Control.Monad
 import           Text.Parsec
 -- import           Text.Parsec.String hiding (Parser, parseFromFile)
 import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*), (<*>))
+import           Control.Monad.Identity
 import           Data.Char (toLower, isLower, isSpace) 
 import           Data.Monoid (mconcat)
 
@@ -33,15 +37,19 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
 
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile, SourceSpan (..))
+import           Language.ECMAScript3.Parser        ( parseJavaScriptFromFile ,
+                                                      parseJavaScriptFromFile', 
+                                                      SourceSpan (..), 
+                                                      initialParserState)
+import           Language.ECMAScript3.Parser.Type hiding (Parser)
 
 import           Language.ECMAScript3.PrettyPrint
+-- import           Debug.Trace                        (trace, traceShow)
 
 dot        = Token.dot        lexer
 braces     = Token.braces     lexer
 plus       = Token.symbol     lexer "+"
 star       = Token.symbol     lexer "*"
--- angles     = Token.angles     lexer
 
 ----------------------------------------------------------------------------------
 -- | Type Binders ----------------------------------------------------------------
@@ -280,6 +288,13 @@ specWraps = betweenMany start stop
     start = string "/*@" >> spaces
     stop  = spaces >> string "*/"
 
+-- -- specWrap :: Stream s m Char => ParsecT s u m a -> ParsecT s u m a
+-- specWrap = between start stop
+--   where 
+--     start = string "/*@" >> spaces
+--     stop  = spaces >> string "*/"
+
+
 ---------------------------------------------------------------------------------
 -- | Specifications
 ---------------------------------------------------------------------------------
@@ -302,14 +317,17 @@ specP
 --------------------------------------------------------------------------------------
 parseSpecFromFile :: FilePath -> IO (Nano SourceSpan RefType) 
 --------------------------------------------------------------------------------------
-parseSpecFromFile = parseFromFile $ mkSpec <$> specWraps specP  
+parseSpecFromFile f = parseFromFile (mkSpec <$> specWraps specP) f
 
+--------------------------------------------------------------------------------------
 mkSpec    ::  (PP t, IsLocated l) => [PSpec l t] -> Nano a t
+--------------------------------------------------------------------------------------
 mkSpec xs = Nano { code   = Src [] 
                  , specs  = envFromList [b | Bind b <- xs] 
                  , defs   = envEmpty
                  , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
                  , tDefs  = envFromList [b         | Type b <- xs]
+                 , tAnns  = M.empty
                  , quals  =             [q         | Qual q <- xs]
                  , invts  =             [Loc l' t  | Invt l t <- xs, let l' = srcPos l]
                  }
@@ -320,20 +338,70 @@ switchProp i@(Id l x)
   | otherwise                      = i
 
 
+
+
 --------------------------------------------------------------------------------------
-parseCodeFromFile :: FilePath -> IO (Nano SourceSpan a) 
+myp :: ParsecT  String (ParserState String RefType) Identity (Maybe RefType)
 --------------------------------------------------------------------------------------
-parseCodeFromFile = fmap mkCode . parseJavaScriptFromFile 
+myp = Just <$> changeState fwd bwd bareTypeP
+  where
+    -- XXX: these are pretty much dummy vals
+    fwd _ = initialParserState myp
+    bwd _ = 0
+
+
+
+
+-- `changeState` taken from here:
+-- http://stackoverflow.com/questions/17968784/an-easy-way-to-change-the-type-of-parsec-user-state
+
+--------------------------------------------------------------------------------------
+changeState :: forall m s u v a . (Functor m, Monad m) => 
+  (u -> v) -> (v -> u) -> ParsecT s u m a -> ParsecT s v m a
+--------------------------------------------------------------------------------------
+changeState forward backward = mkPT . transform . runParsecT
+  where
+    mapState :: forall u v . (u -> v) -> State s u -> State s v
+    mapState f st = st { stateUser = f (stateUser st) }
+
+    mapReply :: forall u v . (u -> v) -> Reply s u a -> Reply s v a
+    mapReply f (Ok a st err) = Ok a (mapState f st) err
+    mapReply _ (Error e) = Error e
+
+    fmap3 = fmap . fmap . fmap
+
+    transform
+      :: (State s u -> m (Consumed (m (Reply s u a))))
+      -> (State s v -> m (Consumed (m (Reply s v a))))
+    transform p st = fmap3 (mapReply forward) (p (mapState backward st))
+
+
+
+--------------------------------------------------------------------------------------
+parseCodeFromFile :: FilePath -> IO (Nano SourceSpan RefType)
+--------------------------------------------------------------------------------------
+parseCodeFromFile fp = parseJavaScriptFromFile' myp fp >>= return . mkCode
+
+-- parseCodeFromFile fp = 
+--   parseJavaScriptFromFile fp >>= return . mkCode . (fmap (, Nothing) <$>)
+      
         
-mkCode    :: [Statement SourceSpan] -> Nano SourceSpan a
-mkCode ss = Nano { code   = Src (checkTopStmt <$> ss)
+mkCode    :: [Statement (SST Reft)] -> Nano SourceSpan RefType
+mkCode ss = Nano { code   = Src (stripAnnot $ checkTopStmt <$> ss)
                  , specs  = envEmpty  
                  , defs   = envEmpty
                  , consts = envEmpty 
                  , tDefs  = envEmpty
+                 , tAnns  = all ss
                  , quals  = [] 
                  , invts  = [] 
                  } 
+  where
+    all ss          = foldr one M.empty ss 
+    one s m         = F.foldr f m s
+    f (l,Just t) m  = M.insert l t m 
+    f _          m  = m
+    stripAnnot      = map (fmap fst)
 
 -------------------------------------------------------------------------------
 -- | Parse File and Type Signatures -------------------------------------------

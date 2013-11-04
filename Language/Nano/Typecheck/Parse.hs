@@ -37,8 +37,7 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
 
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Parser        ( parseJavaScriptFromFile ,
-                                                      parseJavaScriptFromFile', 
+import           Language.ECMAScript3.Parser        ( parseJavaScriptFromFile',
                                                       SourceSpan (..), 
                                                       initialParserState)
 import           Language.ECMAScript3.Parser.Type hiding (Parser)
@@ -337,24 +336,17 @@ switchProp i@(Id l x)
   | x == (toLower <$> propConName) = Id l propConName
   | otherwise                      = i
 
-
-
-
 --------------------------------------------------------------------------------------
-myp :: ParsecT  String (ParserState String RefType) Identity (Maybe RefType)
+tAnnotP :: ParsecT  String (ParserState String RefType) Identity (Maybe RefType)
 --------------------------------------------------------------------------------------
-myp = Just <$> changeState fwd bwd bareTypeP
+tAnnotP = Just <$> changeState fwd bwd bareTypeP
   where
     -- XXX: these are pretty much dummy vals
-    fwd _ = initialParserState myp
+    fwd _ = initialParserState tAnnotP
     bwd _ = 0
-
-
-
 
 -- `changeState` taken from here:
 -- http://stackoverflow.com/questions/17968784/an-easy-way-to-change-the-type-of-parsec-user-state
-
 --------------------------------------------------------------------------------------
 changeState :: forall m s u v a . (Functor m, Monad m) => 
   (u -> v) -> (v -> u) -> ParsecT s u m a -> ParsecT s v m a
@@ -375,12 +367,10 @@ changeState forward backward = mkPT . transform . runParsecT
       -> (State s v -> m (Consumed (m (Reply s v a))))
     transform p st = fmap3 (mapReply forward) (p (mapState backward st))
 
-
-
 --------------------------------------------------------------------------------------
 parseCodeFromFile :: FilePath -> IO (Nano SourceSpan RefType)
 --------------------------------------------------------------------------------------
-parseCodeFromFile fp = parseJavaScriptFromFile' myp fp >>= return . mkCode
+parseCodeFromFile fp = parseJavaScriptFromFile' tAnnotP fp >>= return . mkCode
 
 -- parseCodeFromFile fp = 
 --   parseJavaScriptFromFile fp >>= return . mkCode . (fmap (, Nothing) <$>)

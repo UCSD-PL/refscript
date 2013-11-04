@@ -13,8 +13,7 @@ import           Control.Applicative                ((<$>))
 
 import qualified Data.ByteString.Lazy               as B
 import qualified Data.HashMap.Strict                as M
-import           Data.Maybe                         (fromJust)
-import qualified Data.List                          as L
+import           Data.Maybe                         (listToMaybe)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -29,7 +28,6 @@ import           Language.Fixpoint.Interface        (solve)
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Misc
-import qualified Language.Nano.Env                  as E
 import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
@@ -39,11 +37,10 @@ import           Language.Nano.Typecheck.Compare
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
-import           Language.Nano.Visitor.Visitor
 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -170,8 +167,8 @@ consStmt g (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))
 -- e3.x = e2
 -- @e3.x@ should have the exact same type with @e2@
 consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
-  = do  (x2,g2) <- consExpr g e2
-        (x3,g3) <- consExpr g2 e3
+  = do  (x2,g2) <- consExpr g  Nothing e2
+        (x3,g3) <- consExpr g2 Nothing e3
         let t2   = envFindTy x2 g2
             t3   = envFindTy x3 g3
         tx      <- safeGetProp x t3
@@ -180,9 +177,9 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
 
 -- e3[i] = e2
 consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
-  = do  (x2,g2) <- consExpr g e2
-        (x3,g3) <- consExpr g2 e3
-        let t2   = {-tracePP (ppshow e2 ++ " ANF: " ++ ppshow x2) $ -} envFindTy x2 g2
+  = do  (x2,g2) <- consExpr g Nothing e2
+        (x3,g3) <- consExpr g2 Nothing e3
+        let t2   = tracePP (ppshow e2 ++ " ANF: " ++ ppshow x2) $ envFindTy x2 g2
             t3   = envFindTy x3 g3
         ti      <- safeGetIdx i t3
         withAlignedM (subTypeContainers' "e[i] = e" l2 g3) t2 ti
@@ -191,7 +188,7 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
 
 -- e
 consStmt g (ExprStmt _ e)   
-  = consExpr g e >> return (Just g) 
+  = consExpr g Nothing e >> return (Just g) 
 
 -- s1;s2;...;sn
 consStmt g (BlockStmt _ stmts) 
@@ -209,7 +206,7 @@ consStmt g (IfSingleStmt l b s)
 
 -- if e { s1 } else { s2 }
 consStmt g (IfStmt l e s1 s2)
-  = do (xe, ge) <- consExpr g e
+  = do (xe, ge) <- consExpr g Nothing e
        g1'      <- (`consStmt` s1) $ envAddGuard xe True  ge 
        g2'      <- (`consStmt` s2) $ envAddGuard xe False ge 
        envJoin l g g1' g2'
@@ -246,7 +243,7 @@ consStmt g0 (WhileStmt l c b) =
     zipWithM_ (sub "BeforeL-B" g0) ((`envFindTy` g0) <$> φ0) invs
 --  CONDITION
     g1b            <- envAdds (zip φ1 invs) g1a
-    (xe, g1c)      <- consExpr g1b c
+    (xe, g1c)      <- consExpr g1b Nothing c
     let g1d         = envAddGuard xe True g1c
 --  BODY
     g2             <- fromJust' "Break loop" <$> consStmt g1d b
@@ -254,7 +251,7 @@ consStmt g0 (WhileStmt l c b) =
     zipWithM_ (sub "AfterLBD" g2) ((`envFindTy` g2) <$> φ2) invs
 --  AFTER LOOP
     g3a            <- envAdds (zip φ1 invs) g0
-    (xe', g3b)     <- consExpr g3a c
+    (xe', g3b)     <- consExpr g3a Nothing c
     -- Add the guard in the relevant environment
     return          $ Just $ envAddGuard xe' False g3b
   where 
@@ -272,7 +269,7 @@ consStmt g (VarDeclStmt _ ds)
 
 -- return e 
 consStmt g (ReturnStmt l (Just e))
-  = do  (xe, g') <- consExpr g e
+  = do  (xe, g') <- consExpr g Nothing e
         let te    = envFindTy xe g'
             rt    = envFindReturn g'
         if isTop rt
@@ -296,90 +293,91 @@ consStmt _ s
 ------------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
+consVarDecl g v@(VarDecl _ x (Just e)) = do
+    (x', g') <- consExpr g ct e
+    Just <$> envAdds [(x, envFindTy x' g')] g'
+  where
+    ct = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
 
-consVarDecl g (VarDecl _ x (Just e)) 
-  = consAsgn g x e  
-
-consVarDecl g (VarDecl _ _ Nothing)  
+consVarDecl g (VarDecl _ _ Nothing)
   = return $ Just g
 
 ------------------------------------------------------------------------------------
 consAsgn :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consAsgn g x e 
-  = do (x', g') <- consExpr g e
+  = do (x', g') <- consExpr g Nothing e
        Just <$> envAdds [(x, envFindTy x' g')] g'
 
+--  @consExpr g ct e@ returns a pair (g', x') where x' is a fresh, 
+--  temporary (A-Normalized) variable holding the value of `e`,
+--  g' is g extended with a binding for x' (and other temps required 
+--  for `e`)
 ------------------------------------------------------------------------------------
-consExpr :: CGEnv -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv) 
+consExpr :: CGEnv -> Maybe RefType -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv) 
 ------------------------------------------------------------------------------------
-
--- | @consExpr g e@ returns a pair (g', x') where
---   x' is a fresh, temporary (A-Normalized) variable holding the value of `e`,
---   g' is g extended with a binding for x' (and other temps required for `e`)
-
-consExpr g (DownCast a e) 
-  = do  (x, g') <- consExpr g e
+consExpr g _ (DownCast a e) 
+  = do  (x, g') <- consExpr g Nothing e
         consDownCast g' x a e 
 
-consExpr g (UpCast a e)
-  = do  (x, g') <- consExpr g e
+consExpr g _ (UpCast a e)
+  = do  (x, g') <- consExpr g Nothing e
         consUpCast g' x a e
 
-consExpr g (DeadCast a e)
+consExpr g _ (DeadCast a e)
   = consDeadCast g a e
 
-consExpr g (IntLit l i)               
+consExpr g _ (IntLit l i)               
   = envAddFresh "consExpr:IntLit" l (eSingleton tInt i) g
 
-consExpr g (BoolLit l b)
+consExpr g _ (BoolLit l b)
   = envAddFresh "consExpr:BoolLit" l (pSingleton tBool b) g 
 
-consExpr g (StringLit l s)
+consExpr g _ (StringLit l s)
   = envAddFresh "consExpr:StringLit" l (eSingleton tString s) g
 
-consExpr g (NullLit l)
+consExpr g _ (NullLit l)
   = envAddFresh "consExpr:NullLit" l tNull g
 
-consExpr g (ArrayLit l es)
-  = consArr l g es
+consExpr g ct (ArrayLit l es)
+  = consArr l g ct es
 
-consExpr g (VarRef i x)
+consExpr g _ (VarRef i x)
   = do addAnnot l x t
        return ({- trace ("consExpr:VarRef" ++ ppshow x ++ " : " ++ ppshow t)-} x, g) 
     where 
        t   = envFindTy x g
        l   = srcPos i
 
-consExpr g (PrefixExpr l o e)
+consExpr g _ (PrefixExpr l o e)
   = consCall g l o [e] (prefixOpTy o $ renv g)
 
-consExpr g (InfixExpr l o e1 e2)        
+consExpr g _ (InfixExpr l o e1 e2)        
   = consCall g l o [e1, e2] (infixOpTy o $ renv g)
 
-consExpr g (CallExpr l e es)
-  = do (x, g') <- consExpr g e 
+consExpr g _ (CallExpr l e es)
+  = do (x, g') <- consExpr g Nothing e 
        consCall g' l e es $ envFindTy x g'
 
-consExpr  g (DotRef l e s)
-  = do  (x, g') <- consExpr g e
+consExpr g _ (DotRef l e s)
+  = do  (x, g') <- consExpr g Nothing e
         t       <- safeGetProp (unId s) (envFindTy x g')
         envAddFresh "consExpr:DotRef" l t g'
 
-consExpr  g (BracketRef l e (IntLit _ i))
-  = do  (x, g') <- consExpr g e
+consExpr g _ (BracketRef l e (IntLit _ i))
+  = do  (x, g') <- consExpr g Nothing e
         t       <- safeGetIdx i (envFindTy x g') 
         envAddFresh "consExpr:[IntLit]" l t g'
 
-consExpr  g (BracketRef l e (StringLit _ s))
-  = do  (x, g') <- consExpr g e
+consExpr g _ (BracketRef l e (StringLit _ s))
+  = do  (x, g') <- consExpr g Nothing e
         t       <- safeGetProp s (envFindTy x g') 
         envAddFresh "consExpr[StringLit]" l t g'
 
-consExpr g (ObjectLit l ps) 
+consExpr g _ (ObjectLit l ps) 
   = consObj l g ps
 
-consExpr _ e 
+consExpr _ _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))
 
        
@@ -462,12 +460,13 @@ getTypArgs l αs
       _                           -> errorstar $ bugMissingTypeArgs $ srcPos l
 
 ---------------------------------------------------------------------------------
-consScan :: (CGEnv -> a -> CGM (b, CGEnv)) -> CGEnv -> [a] -> CGM ([b], CGEnv)
+consScan :: (CGEnv -> Maybe t -> a -> CGM (b, CGEnv)) 
+         -> CGEnv -> [a] -> CGM ([b], CGEnv)
 ---------------------------------------------------------------------------------
 consScan step g xs  = go g [] xs 
   where 
     go g acc []     = return (reverse acc, g)
-    go g acc (x:xs) = do (y, g') <- step g x
+    go g acc (x:xs) = do (y, g') <- step g Nothing x
                          go g' (y:acc) xs
 
 ---------------------------------------------------------------------------------
@@ -491,22 +490,29 @@ consObj l g pe =
 
 -- consArr should return the type that was instantiated at TC
 ---------------------------------------------------------------------------------
-consArr ::AnnTypeR -> CGEnv -> [Expression AnnTypeR] -> CGM  (Id AnnTypeR, CGEnv)
+consArr ::AnnTypeR -> CGEnv -> Maybe RefType -> [Expression AnnTypeR] -> CGM  (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------
 -- []
-consArr l g [] =  
-  case [t | TypInst t <- ann_fact l] of 
-    [[t]] -> freshTyArr l g t
-          -- TODO: Should the toplevel refinement be freshened up as well?
-    _     -> errorstar $ "consArr: Empty array literal should be " ++ 
-                         "instantiated by single type"
+consArr l g (Just t@(TArr _ _ )) [] = 
+  envAddFresh "consArr:empty" l t g
 
 -- [e1, ... ]
-consArr l g es = 
-  do  (xes, g')   <- consScan consExpr g es
-      let ts       = (`envFindTy` g') <$> xes
-      let pxs      = zipWith B (F.symbol . show <$> [0..]) ts ++ [len ts]
-      envAddFresh "consArr" l (TObj pxs F.top) g'
-  where
-    len ts   = B (F.symbol "length") (eSingleton tInt $ length ts)
+-- XXX: The refinement of the array takes no part in the 
+-- subtyping of the parts of the array.
+consArr l g (Just t@(TArr ta _)) es = do  
+    (xes, g')   <- consScan consExpr g es
+    let ts       = (`envFindTy` g') <$> (tracePP "Finding" <$> xes)
+    checkElts g' ts
+    (x,g'') <- envAddFresh "consArr" l t g'
+    return $ trace (printf "consArr x: %s" (ppshow x)) (x,g'')
+  where 
+    checkElts    = mapM_ . checkElt
+    checkElt g t = withAlignedM (subTypeContainers l g) t ta
+
+consArr _ _ Nothing _  = 
+  errorstar $ "Array literals need type annotations at the moment " ++
+              "to typecheck in Liquid."
+consArr _ _ (Just _) _ = 
+  errorstar $ "Type annotation for array literal needs to be of " ++
+              "Array type in Liquid."
 

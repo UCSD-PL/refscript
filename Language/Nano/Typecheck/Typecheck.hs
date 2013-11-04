@@ -14,7 +14,7 @@ import qualified Data.HashSet                       as HS
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.Traversable                   as T
 import           Data.Monoid
-import           Data.Maybe                         (catMaybes, isJust, fromJust)
+import           Data.Maybe                         (catMaybes, isJust, fromJust, listToMaybe)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$), (<+>))
@@ -257,15 +257,15 @@ tcStmt' γ (EmptyStmt _)
   = return $ Just γ
 
 -- x = e
-tcStmt' γ (ExprStmt _ (AssignExpr l OpAssign (LVar lx x) e))   
-  = tcAsgn γ l (Id lx x) e
+tcStmt' γ (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))   
+  = tcAsgn γ (Id lx x) e
 
 -- e3.x = e2
 -- The type of @e2@ should be assignable (a subtype of) the type of @e3.x@.
 tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
   = do  θ  <- getTDefs
-        t2 <- tcExpr γ e2 
-        t3 <- tcExpr γ e3
+        t2 <- tcExpr γ Nothing e2 
+        t3 <- tcExpr γ Nothing e3
         tx <- safeGetProp x t3
         if isSubType θ t2 tx 
           then return $ Just γ
@@ -274,8 +274,8 @@ tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
 
 -- e3[i] = e2
 tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
-  = do  t2 <- tcExpr γ e2 
-        t3 <- tcExpr γ e3
+  = do  t2 <- tcExpr γ Nothing e2 
+        t3 <- tcExpr γ Nothing e3
         ti <- safeGetIdx i t3
         θ  <- unifyTypeM l2 "DotRef" e2 t2 ti 
         -- Once we've figured out what the type of the array should be,
@@ -286,7 +286,7 @@ tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
 
 -- e
 tcStmt' γ (ExprStmt _ e)   
-  = tcExpr γ e >> return (Just γ) 
+  = tcExpr γ Nothing e >> return (Just γ) 
 
 -- s1;s2;...;sn
 tcStmt' γ (BlockStmt _ stmts) 
@@ -298,7 +298,7 @@ tcStmt' γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt' γ (IfStmt l e s1 s2)
-  = do  t <- tcExpr γ e 
+  = do  t <- tcExpr γ Nothing e 
     -- Doing check for boolean for the conditional for now
     -- TODO: Will have to support truthy/falsy later.
         unifyTypeM l "If condition" e t tBool
@@ -311,7 +311,7 @@ tcStmt' γ (WhileStmt l c b) = do
     let phis = [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
     let phiTs = fromJust <$> (`envFindTy` γ) <$> (fst3 <$> phis)
     let γ' =  envAdds (zip (snd3 <$> phis) phiTs) γ
-    t   <- tcExpr γ' c
+    t   <- tcExpr γ' Nothing c
     unifyTypeM l "While condition" c t tBool
     tcStmt' γ' b
 
@@ -322,7 +322,7 @@ tcStmt' γ (VarDeclStmt _ ds)
 
 -- return e 
 tcStmt' γ (ReturnStmt l eo) 
-  = do  t           <- maybe (return tVoid) (tcExpr γ) eo
+  = do  t           <- maybe (return tVoid) (tcExpr γ Nothing) eo
         let rt       = envFindReturn γ 
         θ           <- unifyTypeM l "Return" eo t rt
         -- Apply the substitution
@@ -344,99 +344,98 @@ tcStmt γ s = tcStmt' γ s
 -------------------------------------------------------------------------------
 tcVarDecl :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> VarDecl (AnnSSA r) -> TCM r (TCEnv r)
 -------------------------------------------------------------------------------
-
-tcVarDecl γ (VarDecl l x (Just e)) 
-  = tcAsgn γ l x e  
+tcVarDecl γ v@(VarDecl _ x (Just e)) = do
+    t <- tcExpr γ (listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]) e
+    return $ Just $ envAdds [(x, t)] γ
 
 tcVarDecl γ (VarDecl _ _ Nothing)  
   = return $ Just γ
 
 ------------------------------------------------------------------------------------
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
-  Env (RType r) -> (AnnSSA r) -> Id (AnnSSA r) -> Expression (AnnSSA r) -> TCM r (TCEnv r)
+  Env (RType r) -> Id (AnnSSA r) -> Expression (AnnSSA r) -> TCM r (TCEnv r)
 ------------------------------------------------------------------------------------
-
-tcAsgn γ _ x e 
-  = do t <- tcExpr γ e
-       return $ Just $ envAdds [(x, t)] γ
+tcAsgn γ x e = tcExpr γ Nothing e >>= \t -> return $ Just $ envAdds [(x, t)] γ
 
 
+-- XXX: At the moment only arrays take annotations into account !!!
+-------------------------------------------------------------------------------
+tcExpr :: (Ord r, PP r, F.Reftable r) => 
+     Env (RType r)          -- Typing environment
+  -> Maybe (RType r)        -- Contextual type
+  -> Expression (AnnSSA r)  -- Current expression
+  -> TCM r (RType r)        -- Return type
+-------------------------------------------------------------------------------
+tcExpr γ ct e = setExpr (Just e) >> tcExpr' γ ct e
 
 -------------------------------------------------------------------------------
-tcExpr :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> Expression (AnnSSA r) -> TCM r (RType r)
+tcExpr' :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> Maybe (RType r) -> Expression (AnnSSA r) -> TCM r (RType r)
 -------------------------------------------------------------------------------
-tcExpr γ e = setExpr (Just e) >> (tcExpr' γ e)
-
-
--------------------------------------------------------------------------------
-tcExpr' :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> Expression (AnnSSA r) -> TCM r (RType r)
--------------------------------------------------------------------------------
-
-tcExpr' _ (IntLit _ _)
+tcExpr' _ _ (IntLit _ _)
   = return tInt
 
-tcExpr' _ (BoolLit _ _)
+tcExpr' _ _ (BoolLit _ _)
   = return tBool
 
-tcExpr' _ (StringLit _ _)
+tcExpr' _ _ (StringLit _ _)
   = return tString
 
-tcExpr' _ (NullLit _)
+tcExpr' _ _ (NullLit _)
   = return tNull
 
-tcExpr' γ (ArrayLit l es)
-  = tcArray (ann l) γ es
+tcExpr' γ ct e@(ArrayLit _ _)
+  = tcArray γ ct e
 
-tcExpr' γ (VarRef l x)
+tcExpr' γ _ (VarRef l x)
   = case envFindTy x γ of 
       Nothing -> logError (ann l) (errorUnboundIdEnv x γ) tErr
       Just z  -> return z
 
-tcExpr' γ (PrefixExpr l o e)
+tcExpr' γ _ (PrefixExpr l o e)
   = tcCall γ l o [e] (prefixOpTy o γ)
 
-tcExpr' γ (InfixExpr l o e1 e2)        
+tcExpr' γ _ (InfixExpr l o e1 e2)        
   = tcCall γ l o [e1, e2] (infixOpTy o γ)
 
-tcExpr' γ (CallExpr l e es)
-  = tcExpr γ e >>= tcCall γ l e es
+tcExpr' γ _ (CallExpr l e es)
+  = tcExpr γ Nothing e >>= tcCall γ l e es
 
-tcExpr' γ (ObjectLit _ ps) 
+tcExpr' γ _ (ObjectLit _ ps) 
   = tcObject γ ps
 
 -- x.f = x["f"]
-tcExpr' γ (DotRef _ e s) = tcExpr γ e >>= safeGetProp (unId s) 
+tcExpr' γ _ (DotRef _ e s) = tcExpr γ Nothing e >>= safeGetProp (unId s) 
 
 -- x["f"]
-tcExpr' γ (BracketRef _ e (StringLit _ s)) = tcExpr γ e >>= safeGetProp s
+tcExpr' γ _ (BracketRef _ e (StringLit _ s)) = tcExpr γ Nothing e >>= safeGetProp s
 
 -- x[i] 
-tcExpr' γ (BracketRef _ e (IntLit _ i)) = tcExpr γ e >>= safeGetIdx i
+tcExpr' γ _ (BracketRef _ e (IntLit _ i)) = tcExpr γ Nothing e >>= safeGetIdx i
 
 -- x[e]
-tcExpr' γ e@(BracketRef l e1 e2) = do
-    t1 <- tcExpr' γ e1
-    t2 <- tcExpr' γ e2
+tcExpr' γ _ e@(BracketRef l e1 e2) = do
+    t1 <- tcExpr' γ Nothing e1
+    t2 <- tcExpr' γ Nothing e2
     case t1 of 
       TArr t _  -> unifyTypeM l "BracketRef" e t2 tInt >> return t
       t         -> errorstar $ "Unimplemented: BracketRef of " ++ 
                                "non-array expression of type " ++ 
                                ppshow t
 
-tcExpr' _ e 
+tcExpr' _ _ e 
   = convertError "tcExpr" e
 
 
 
 ----------------------------------------------------------------------------------
 tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 
-  Env (RType r) -> (AnnSSA r) -> fn -> [Expression (AnnSSA r)]-> (RType r) -> TCM r (RType r)
+  Env (RType r) -> AnnSSA r -> fn -> [Expression (AnnSSA r)]-> RType r -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcCall γ l fn es ft 
   = do  (_,ibs,ot)    <- instantiate l fn ft
         let its        = b_type <$> ibs
         -- Typecheck arguments
-        ts            <- mapM (tcExpr γ) es
+        ts            <- mapM (tcExpr γ Nothing) es
         -- Unify with formal parameter types
         θ             <- unifyTypesM l "tcCall" ts its
         -- Apply the substitution
@@ -461,22 +460,42 @@ tcObject ::  (Ord r, F.Reftable r, PP r) =>
 tcObject γ bs 
   = do 
       let (ps, es) = unzip bs
-      bts <- zipWith B (map F.symbol ps) <$> mapM (tcExpr γ) es
+      bts <- zipWith B (map F.symbol ps) <$> mapM (tcExpr γ Nothing) es
       return $ TObj bts F.top
 
 
 ----------------------------------------------------------------------------------
 tcArray :: (Ord r, PP r, F.Reftable r) =>
-    SourceSpan -> Env (RType r) -> [Expression (AnnSSA r)] -> TCM r (RType r)
+  Env (RType r) -> Maybe (RType r) -> Expression (AnnSSA r) -> TCM r (RType r)
 ----------------------------------------------------------------------------------
-tcArray l γ es = 
-  case es of 
-    [] -> freshTArray l
-    _  -> mapM (tcExpr γ) es >>= return . mkObj
-  where 
-    mkObj ts = {- tracePP (ppshow es) $ -} TObj (bs ts) F.top
-    bs ts    = zipWith B (F.symbol . show <$> [0..]) ts ++ [len]
-    len      = B (F.symbol "length") tInt
+tcArray γ (Just t@(TArr ta _)) (ArrayLit _ es) = do 
+    mapM (tcExpr γ (Just ta)) es >>=
+      checkElts (tracePP "ta" ta) es >>
+        return (tracePP "tcArray ret" t)
+  where
+    checkElts = zipWithM_ . (checkAnnotation "tcArray")
+
+tcArray _ Nothing (ArrayLit _ _)  = 
+  errorstar $ "Array literals need type annotations at " ++
+              "the moment to typecheck in TC."
+tcArray _ (Just _) (ArrayLit _ _) = 
+  errorstar $ "Type annotation for array literal needs to be " ++ 
+              "of Array type."
+tcArray _ _ _ = 
+  errorstar $ "BUG: Only support tcArray for array literals " ++ 
+              "with type annotation"
+
+-- XXX: Infering this very precise will make it very 
+-- hard to do comparison with TArr later. 
+--   case es of 
+--     [] -> freshTArray l
+--     _  -> mapM (tcExpr γ) es >>= return . mkObj
+--   where 
+--     mkObj ts = {- tracePP (ppshow es) $ -} TObj (bs ts) F.top
+--     bs ts    = zipWith B (F.symbol . show <$> [0..]) ts ++ [len]
+--     len      = B (F.symbol "length") tInt
+--     l  = getAnnotation e
+
 
               
 ----------------------------------------------------------------------------------

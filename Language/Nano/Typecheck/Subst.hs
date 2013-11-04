@@ -122,30 +122,23 @@ instance Free (RType r) where
   free (TObj bs _)          = S.unions   $ free <$> b_type <$> bs
   free (TBd (TD _ α t _ ))  = foldr S.delete (free t) α
 
-instance Substitutable () UFact where
-  apply _ x@(PhiVar _)  = x
-  apply θ (TypInst ts)  = TypInst $ apply θ ts
-  apply θ (Assume  t )  = Assume  $ apply θ t
-
 instance (PP r, F.Reftable r) => Substitutable r (Fact r) where
   apply _ x@(PhiVar _)  = x
   apply θ (TypInst ts)  = TypInst $ apply θ ts
   apply θ (Assume  t )  = Assume  $ apply θ t
-
-
-instance Free UFact where
-  free (PhiVar _)       = S.empty
-  free (TypInst ts)     = free ts
-  free (Assume t)       = free t
+  apply _ x@(LoopPhiVar _) = x
+  apply θ (TAnnot t)    = TAnnot  $ apply θ t
 
 instance Free (Fact r) where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
   free (Assume t)       = free t
+  free (LoopPhiVar _)   = S.empty
+  free (TAnnot t)       = free t
  
  
 ------------------------------------------------------------------------
--- appTy :: Subst_ r -> RType r -> RType r
+appTy :: (PP r, F.Reftable r) => RSubst r -> RType r -> RType r
 ------------------------------------------------------------------------
 appTy θ (TApp c ts z)            = TApp c (apply θ ts) z 
 appTy θ (TObj bs z)              = TObj (map (\b -> B { b_sym = b_sym b, b_type = appTy θ $ b_type b } ) bs ) z

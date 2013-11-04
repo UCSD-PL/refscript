@@ -48,6 +48,7 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Subtyping
   , subTypeM  , subTypeM'
   , subTypesM
+  , checkAnnotation
 
   -- * Unification
   , unifyTypeM, unifyTypesM
@@ -377,7 +378,6 @@ unfoldSafeTC   t = getTDefs >>= \γ -> return $ unfoldSafe γ t
 --  Unification and Subtyping --------------------------------------------------
 --------------------------------------------------------------------------------
 
-
 ----------------------------------------------------------------------------------
 unifyTypesM :: (IsLocated l, Ord r, PP r, F.Reftable r) => 
   l -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
@@ -418,11 +418,22 @@ subTypesM :: (Ord r, PP r, F.Reftable r) => [RType r] -> [RType r] -> TCM r [Sub
 ----------------------------------------------------------------------------------
 subTypesM ts ts' = zipWithM subTypeM ts ts'
 
+----------------------------------------------------------------------------------
+checkAnnotation :: (F.Reftable r, PP r, Ord r) => 
+  String -> RType r -> Expression (AnnSSA r) -> RType r -> TCM r () 
+----------------------------------------------------------------------------------
+checkAnnotation msg ta e t = do
+    subTypeM t ta >>= sub
+  where
+    sub SubT = return () 
+    sub EqT  = return () 
+    sub _    = tcError l (msg ++ " : " ++ errorAnnotation e t ta)
+    l        = getAnnotation e
+
 
 --------------------------------------------------------------------------------
 --  Cast Helpers ---------------------------------------------------------------
 --------------------------------------------------------------------------------
-
 
 -----------------------------------------------------------------------------
 withExpr  :: Maybe (Expression (AnnSSA r)) -> TCM r a -> TCM r a

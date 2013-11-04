@@ -190,7 +190,7 @@ instance IsNano (Expression a) where
   isNano (ObjectLit _ bs)        = all isNano $ snd <$> bs
   isNano (DotRef _ e _)          = isNano e
   isNano (BracketRef _ e1 e2)    = isNano e1 && isNano e2
-  isNano (AssignExpr _ o l e)    = isNano e && isNano l && isNano e
+  isNano (AssignExpr _ _ l e)    = isNano e && isNano l && isNano e
   isNano (UnaryAssignExpr _ _ l) = isNano l
   isNano e                       = errortext (text "Not Nano Expression!" <+> pp e)
   -- isNano _                     = False

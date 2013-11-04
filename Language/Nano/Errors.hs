@@ -44,6 +44,7 @@ errorObjectBinding      = printf "Field does not exist in object"
 errorNullUndefined      = printf "Null type is not a subtype of undefined"
 errorUniqueTypeParams   = printf "Only unique type paramteres are allowed"
 errorBracketAccess t f  = printf "Cannot access field \"%s\" of type: %s" (ppshow f) (ppshow t)
+errorAnnotation e t ta  = printf "Type %s does not satisfy annotation %s at expression %s." (ppshow t) (ppshow ta) (ppshow e)
  
 ppshow                  = render . pp
 

@@ -263,9 +263,9 @@ compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     =
   padObject γ ( {- trace ("padding obj " ++ ppshow t1 ++ "\n - " ++ ppshow t2) -} t1) t2
 
 -- | Arrays
-compareTs' γ a@(TArr _ _) a'@(TArr _ _  )    = padArray γ a a'
-compareTs' _   (TObj _ _)    (TArr _ _  )    = error "Unimplemented compareTs-Obj-Arr" 
-compareTs' _   (TArr _ _)    (TObj _ _  )    = error "Unimplemented compareTs-Arr-Obj" 
+compareTs' γ a@(TArr _ _) a'@(TArr _ _  ) = padArray γ a a'
+compareTs' _ t1@(TObj _ _) t2@(TArr _ _ ) = error (printf "Unimplemented compareTs-Obj-Arr:\n\t%s\n\t%s" (ppshow t1) (ppshow t2))
+compareTs' _ t1@(TArr _ _) t2@(TObj _ _ ) = error (printf "Unimplemented compareTs-Arr-Obj:\n\t%s\n\t%s" (ppshow t1) (ppshow t2))
 
 -- | Type definitions
 

@@ -34,6 +34,7 @@ TOOL / IMPLEMENTATION:
     - Need to find a way to allow the language-ecmascript parser to parse 
       comments that start with "/*" and end with "*/"
     @ Added [Mon 2013-10-28]
+    @ DONE [Mon 2013-11-04]
   - Fix "Cannot handle ssaVarDECL" at "var foo;"
     @ Added [Sun 2013-09-15]
   - Do not add casts deep inside objects.

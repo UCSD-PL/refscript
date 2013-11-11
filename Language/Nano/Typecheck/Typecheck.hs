@@ -276,7 +276,7 @@ tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
 tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
   = do  t2 <- tcExpr' γ e2 
         t3 <- tcExpr' γ e3
-        ti <- safeGetIdx i t3
+        ti <- errorstar "UNIMPLEMENTED: tc: e[e] = e" --safeGetIdx i t3
         θ  <- unifyTypeM l2 "DotRef" e2 t2 ti 
         -- Once we've figured out what the type of the array should be,
         -- update the output environment.
@@ -406,20 +406,21 @@ tcExpr'' γ (CallExpr l e es)
 tcExpr'' γ (ObjectLit _ ps) 
   = tcObject γ ps
 
--- x.f = x["f"]
+-- x.f =def= x["f"]
 tcExpr'' γ (DotRef _ e s) = tcExpr' γ e >>= safeGetProp (unId s) 
 
 -- x["f"]
 tcExpr'' γ (BracketRef _ e (StringLit _ s)) = tcExpr' γ e >>= safeGetProp s
 
 -- x[i] 
-tcExpr'' γ (BracketRef _ e (IntLit _ i)) = tcExpr' γ e >>= safeGetIdx i
+tcExpr'' γ (BracketRef _ e (IntLit _ i)) = tcExpr' γ e >>= indexType 
 
 -- x[e]
 tcExpr'' γ e@(BracketRef l e1 e2) = do
     t1 <- tcExpr' γ e1
     t2 <- tcExpr' γ e2
     case t1 of 
+      -- NOTE: Only support dynamic access of array with index of integer type.
       TArr t _  -> unifyTypeM l "BracketRef" e t2 tInt >> return t
       t         -> errorstar $ "Unimplemented: BracketRef of " ++ 
                                "non-array expression of type " ++ 

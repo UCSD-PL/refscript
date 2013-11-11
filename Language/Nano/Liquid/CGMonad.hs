@@ -57,6 +57,7 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Access container types
   , safeGetIdx, safeGetProp
+  , indexType
 
 
   -- * Unfolding
@@ -174,6 +175,7 @@ safeGetProp f t
           Just (_,tf) -> return tf
           Nothing      -> error "safeGetProp" --TODO: deadcode
  
+-- DEPRECATE
 -- Access index @i@ of type @t@, adding a cast if needed to avoid errors.
 -------------------------------------------------------------------------------
 safeGetIdx :: Int -> RefType -> CGM RefType
@@ -183,6 +185,17 @@ safeGetIdx i t
         case getIdx γ i t of
           Just (_,tf) -> return tf
           Nothing     -> error "CGM:safeGetIdx" --TODO: deadcode
+
+-- Only support indexing in arrays atm. Discharging array bounds checks makes
+-- sense only for array types. 
+-------------------------------------------------------------------------------
+indexType :: RefType -> CGM RefType
+-------------------------------------------------------------------------------
+indexType (TArr t _) = return t
+indexType t@(TApp TUn ts r) = do
+    ts' <- mapM indexType ts
+    return $ TApp TUn ts' F.top
+indexType _          = errorstar "Unimplemented: indexing type other than array."
 
 
 

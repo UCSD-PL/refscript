@@ -62,6 +62,7 @@ module Language.Nano.Typecheck.Types (
   , tNull
 
   , isTVar
+  , isArr
 
   -- * Operator Types
   , infixOpTy
@@ -584,6 +585,10 @@ tErr    = tVoid
 tFunErr = ([],[],tErr)
 
 tArr    = (`TArr` F.top)
+
+isArr (TArr _ _ ) = True
+isArr _           = False
+
 
 -- tProp :: (F.Reftable r) => RType r
 -- tProp  = TApp tcProp [] F.top 

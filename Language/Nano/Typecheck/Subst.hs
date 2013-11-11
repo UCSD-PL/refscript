@@ -270,20 +270,10 @@ getPropUnion γ f ts =
     ts -> Just $ mapPair mkUnion $ unzip ts
 
 
--- Given an environment @γ@, a numeric index @i@ and a type @t@, `getIdx` 
--- returns a tupple with elements:
--- ∙ TODO: An array bounds check.
--- ∙ The accessed type.
---
 -------------------------------------------------------------------------------
 getIdx ::  (Ord r, PP r, F.Reftable r) => 
   Env (RType r) -> Int -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
--- NOTE: For the moment only allow index access to array types
--- When prototypes are encoded, also allow accesses to whatever has Array in its 
--- prototype chain. In a nominal prototyping system, it should be sound to
--- encode `instanceof` this way.
--- TODO: Add array bounds checks
 getIdx _ _ a@(TArr t _)  = Just (a,t)
 getIdx γ i t             = getProp γ (show i) t 
 --error $ "Unimplemented: getIdx on" ++ (ppshow t) 

@@ -31,6 +31,7 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Dot Access
   , safeGetProp
   , safeGetIdx
+  , indexType
 
   -- * Type definitions
   , getTDefs
@@ -229,23 +230,55 @@ setTyArgs l βs
 -------------------------------------------------------------------------------
 safeGetProp :: (Ord r, PP r, F.Reftable r) => String -> RType r -> TCM r (RType r)
 -------------------------------------------------------------------------------
-safeGetProp f t
-  = do  γ <- getTDefs
-        e <- fromJust <$> getExpr
-        case getProp γ f t of
-          Just (t',tf) -> castM e t t' >> return tf
-          Nothing      -> error "safeGetProp" --TODO: deadcode
+safeGetProp f t = do
+    γ <- getTDefs
+    e <- fromJust <$> getExpr
+    case getProp γ f t of
+      Just (t',tf) -> castM e t t' >> return tf
+      Nothing      -> error "safeGetProp" --TODO: deadcode
  
--- Access index @i@ of type @t@, adding a cast if needed to avoid errors.
+-- DEPRECATE:
+-- Access index @i@ of type @t@.
+-- In JavaScript semantics, all types can be indexed, besides null and undefined. 
+-- So we're not gonna cast for those types
+-- the accessed type here. Instead
 -------------------------------------------------------------------------------
 safeGetIdx :: (Ord r, PP r, F.Reftable r) => Int -> RType r -> TCM r (RType r)
 -------------------------------------------------------------------------------
-safeGetIdx f t
-  = do  γ <- getTDefs
-        e <- fromJust <$> getExpr
-        case getIdx γ f t of
-          Just (t',tf) -> castM e t t' >> return tf
-          Nothing      -> error "safeGetIdx" --TODO: deadcode
+safeGetIdx f t = do  
+    γ <- getTDefs
+    e <- fromJust <$> getExpr
+    case getIdx γ f t of
+      Just (t',tf) -> castM e t t' >> return tf
+      Nothing      -> error "safeGetIdx" --TODO: deadcode
+
+-- Only support indexing in arrays atm. Discharging array bounds checks makes
+-- sense only for array types. 
+-------------------------------------------------------------------------------
+indexType :: (PP r, Ord r, F.Reftable r) => RType r -> TCM r (RType r)
+-------------------------------------------------------------------------------
+indexType (TArr t _) = return t 
+indexType t@(TApp TUn ts _) = do
+    e <- fromJust <$> getExpr
+    castM e t t'
+    mkUnion <$> mapM indexType arrs
+  where
+    t'   = mkUnion arrs
+    arrs = (filter isArr ts) 
+
+indexType _          = errorstar "Unimplemented: indexing type other than array."
+
+
+
+
+-- Undef and null give a runtime error when accessed. All the other types can be
+-- accessed and will return undefined if there is nothing to find there.
+-------------------------------------------------------------------------------
+indexable :: RType r -> Bool
+-------------------------------------------------------------------------------
+indexable (TApp TNull  _ _) = False
+indexable (TApp TUndef _ _) = False
+indexable _                 = True
       
 
 -------------------------------------------------------------------------------

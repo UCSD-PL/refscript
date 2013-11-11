@@ -328,9 +328,6 @@ consExpr g (Just ta) e = do
 
 consExpr g Nothing e = consExpr' g e
 
-
-
-
 consExpr' g (DownCast a e) 
   = do  (x, g') <- consExpr' g e
         consDownCast g' x a e 
@@ -376,10 +373,19 @@ consExpr' g (DotRef l e s)
         t       <- safeGetProp (unId s) (envFindTy x g')
         envAddFresh "consExpr:DotRef" l t g'
 
-consExpr' g (BracketRef l e (IntLit _ i))
-  = do  (x, g') <- consExpr' g e
-        t       <- safeGetIdx i (envFindTy x g') 
-        envAddFresh "consExpr:[IntLit]" l t g'
+-- e[i]
+consExpr' g (BracketRef l e (IntLit _ i)) = do
+    (x, g') <- consExpr' g e
+    let arrT = envFindTy x g'
+    t       <- indexType arrT
+    withAlignedM (subTypeContainers' "Bounds" l g) arrT (bounds arrT)
+    envAddFresh "consExpr:[IntLit]" l t g'
+  where
+    bounds t = setRTypeR t (F.predReft $ F.PAnd [lo t, hi t])
+    lo t = F.PAtom F.Ge (F.ECon $ F.I (toInteger i)) (F.ECon $ F.I 0)
+    hi t = F.PAtom F.Lt (F.ECon $ F.I (toInteger i)) 
+              (F.EApp (F.stringSymbol "len") [F.EVar $ symT t])
+    symT t = vv where F.Reft (vv,_) =  rTypeReft t 
 
 consExpr' g (BracketRef l e (StringLit _ s))
   = do  (x, g') <- consExpr' g e

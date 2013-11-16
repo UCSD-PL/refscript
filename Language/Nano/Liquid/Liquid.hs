@@ -40,7 +40,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -172,8 +172,11 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
         let t2   = envFindTy x2 g2
             t3   = envFindTy x3 g3
         tx      <- safeGetProp x t3
-        withAlignedM (subTypeContainers' "e.x = e" l2 g3) t2 tx
-        return   $ Just g3
+        case tx of 
+          -- NOTE: Atm assignment to non existing binding has no effect!
+          TApp TUndef _ _ -> return $ Just g3
+          _ -> do withAlignedM (subTypeContainers' "e.x = e" l2 g3) t2 tx
+                  return   $ Just g3
 
 -- e3[i] = e2
 consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
@@ -374,23 +377,33 @@ consExpr' g (DotRef l e s)
         envAddFresh "consExpr:DotRef" l t g'
 
 -- e[i]
-consExpr' g (BracketRef l e (IntLit _ i)) = do
-    (x, g') <- consExpr' g e
-    let arrT = envFindTy x g'
-    t       <- indexType arrT
-    withAlignedM (subTypeContainers' "Bounds" l g) arrT (bounds arrT)
-    envAddFresh "consExpr:[IntLit]" l t g'
+consExpr' g (BracketRef l e i) = do
+    (xe, g')  <- consExpr' g e
+    (xi, g'') <- consExpr' g' i
+    let ta = envFindTy xe g' 
+        ti = envFindTy xi g''
+    case (ta, ti) of
+      (TArr _ _, TApp TInt _ _) -> do  
+        t <- indexType ta
+        withAlignedM (subTypeContainers' "Bounds" l g'') (eSingleton tInt xi) (bt xe)
+        envAddFresh "consExpr:[IntLit]" l t g''
+      _ -> errorstar $ "UNIMPLEMENTED[consExpr] " ++ 
+                       "Can only use BracketRef to access array " ++
+                       "type with an integer. Here used " ++ (ppshow ti)
   where
-    bounds t = setRTypeR t (F.predReft $ F.PAnd [lo t, hi t])
-    lo t = F.PAtom F.Ge (F.ECon $ F.I (toInteger i)) (F.ECon $ F.I 0)
-    hi t = F.PAtom F.Lt (F.ECon $ F.I (toInteger i)) 
-              (F.EApp (F.stringSymbol "len") [F.EVar $ symT t])
-    symT t = vv where F.Reft (vv,_) =  rTypeReft t 
+    -- bt x = { number | ((0 <= v) && (v < (len x)))}
+    bt x = setRTypeR tInt (F.predReft $ F.PAnd [lo, hi x])
+    lo   = F.PAtom F.Le (F.ECon $ F.I 0) v                             -- 0 <= v
+    hi x = F.PAtom F.Lt v (F.EApp (F.stringSymbol "len") [F.eVar $ x]) -- v < len va
+    v    = F.eVar $ F.vv Nothing
 
-consExpr' g (BracketRef l e (StringLit _ s))
-  = do  (x, g') <- consExpr' g e
-        t       <- safeGetProp s (envFindTy x g') 
-        envAddFresh "consExpr[StringLit]" l t g'
+
+-- -- shadowed at the moment...
+-- consExpr' g (BracketRef l e (StringLit _ s))
+--   = do  (x, g') <- consExpr' g e
+--         t       <- safeGetProp s (envFindTy x g') 
+--         envAddFresh "consExpr[StringLit]" l t g'
+        
 
 consExpr' g (ObjectLit l ps) 
   = consObj l g ps
@@ -398,7 +411,6 @@ consExpr' g (ObjectLit l ps)
 consExpr' _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))
 
-       
 
 ------------------------------------------------------------------------------------------
 consUpCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
@@ -514,17 +526,21 @@ consArr l g (Just t@(TArr _ _ )) [] =
   envAddFresh "consArr:empty" l t g
 
 -- [e1, ... ]
--- XXX: The refinement of the array takes no part in the 
--- subtyping of the parts of the array.
+-- XXX: The top-level refinement of the array is ignored at the moment.
+-- Also adds a top-level refinement that captures the length of the array.
 consArr l g (Just t@(TArr ta _)) es = do  
     (xes, g')   <- consScan consExpr' g es
-    let ts       = (`envFindTy` g') <$> (tracePP "Finding" <$> xes)
+    let ts       = (`envFindTy` g') <$> xes
     checkElts g' ts
-    (x,g'') <- envAddFresh "consArr" l t g'
-    return $ trace (printf "consArr x: %s" (ppshow x)) (x,g'')
+    let t'       = t `strengthen` lenReft
+    envAddFresh "consArr" l t' g'
   where 
     checkElts    = mapM_ . checkElt
     checkElt g t = withAlignedM (subTypeContainers l g) t ta
+    v            = rTypeValueVar t
+    lenReft      = F.Reft (v, [F.RConc lenPred])
+    lenPred      = F.PAtom F.Eq (F.expr $ length es) 
+                    (F.EApp (F.stringSymbol "len") [F.eVar $ v])
 
 consArr _ _ Nothing _  = 
   errorstar $ "Array literals need type annotations at the moment " ++

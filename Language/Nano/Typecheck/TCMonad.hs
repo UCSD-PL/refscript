@@ -269,18 +269,6 @@ indexType t@(TApp TUn ts _) = do
 indexType _          = errorstar "Unimplemented: indexing type other than array."
 
 
-
-
--- Undef and null give a runtime error when accessed. All the other types can be
--- accessed and will return undefined if there is nothing to find there.
--------------------------------------------------------------------------------
-indexable :: RType r -> Bool
--------------------------------------------------------------------------------
-indexable (TApp TNull  _ _) = False
-indexable (TApp TUndef _ _) = False
-indexable _                 = True
-      
-
 -------------------------------------------------------------------------------
 -- | Managing Annotations: Type Instantiations --------------------------------
 -------------------------------------------------------------------------------

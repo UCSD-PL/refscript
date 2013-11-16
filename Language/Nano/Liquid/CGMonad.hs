@@ -542,8 +542,8 @@ subTypeContainers l g t1 t2 = subType l g t1 t2
 
 
 subTypeContainers'   msg  l g t1 t2 = 
-  subTypeContainers l g ( trace (printf "subTypeContainers[%s]:\n\t%s\n\t%s\n" 
-                                msg (ppshow t1) (ppshow t2))  t1) t2
+  subTypeContainers l g ({- trace (printf "subTypeContainers[%s]:\n\t%s\n\t%s\n" 
+                                msg (ppshow t1) (ppshow t2)) -} t1) t2
 
 
 -------------------------------------------------------------------------------

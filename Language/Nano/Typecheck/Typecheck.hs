@@ -267,10 +267,13 @@ tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
         t2 <- tcExpr' γ e2 
         t3 <- tcExpr' γ e3
         tx <- safeGetProp x t3
-        if isSubType θ t2 tx 
-          then return $ Just γ
-          else tcError l2 (printf "Cannot assing type %s to %s" 
-                             (ppshow t2) (ppshow tx))
+        case tx of 
+          -- NOTE: Atm assignment to non existing binding has no effect!
+          TApp TUndef _ _ -> return $ Just γ
+          _ ->  if isSubType θ t2 tx 
+                  then return $ Just γ
+                  else tcError l2 (printf "Cannot assing type %s to %s" 
+                                  (ppshow t2) (ppshow tx))
 
 -- e3[i] = e2
 tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
@@ -473,9 +476,9 @@ tcArray :: (Ord r, PP r, F.Reftable r) =>
   Env (RType r) -> Maybe (RType r) -> Expression (AnnSSA r) -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcArray γ (Just t@(TArr ta _)) (ArrayLit _ es) = do 
-    mapM (tcExpr γ (Just ta)) es >>=
-      checkElts ta es >>
-        return t  
+    ts <- mapM (tcExpr γ $ Just ta) es
+    checkElts ta es ts
+    return (tracePP "Type being propagated for array literal: " t)
   where
     checkElts = zipWithM_ . (checkAnnotation "tcArray")
 

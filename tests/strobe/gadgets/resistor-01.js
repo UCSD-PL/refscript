@@ -12,7 +12,7 @@ var currentBandIndex = 0;
 var numberOfColorBands = 4;
 
 
-var bandNumberValues = /*: [{ number | ((0 <= v) && (v < 16)) }] */ [1, 0, 2, 10, 15]; // Brown, Black, Red, Empty, Blank.
+var bandNumberValues = /*: [{ number | (0 <= v && v < 16) }] */ [1, 0, 2, 10, 15]; // Brown, Black, Red, Empty, Blank.
 var buttonStrs = /*: [ string ]*/ ["0black", "1brown", "2red", "3orange", "4yellow", "5green", "6blue", "7violet", "8gray", "9white", "Empty", "Tbrown", "Tred", "Tgold", "Tsilver", "Blank"];
 
 //PV begin
@@ -99,23 +99,25 @@ function view_onOpen() {
 // //	9	White
 // //		Gold		 	 5%
 // //		Silver		 	10%
-// 
-// function doBlackButton() /*:  -> Undef */ {
-//     drawNewColorBand(0);
-//     bandNumberValues[currentBandIndex] = 0;
-//     doCalculateResistance();
-// 
-//     return;
-// }
-// 
-// function doBrownButton() /*:  -> Undef */ {
-//     drawNewColorBand(1);
-//     bandNumberValues[currentBandIndex] = 1;
-//     doCalculateResistance();
-// 
-//     return;
-// }
-// 
+ 
+/*@ doBlueButton :: () => void */
+function doBlackButton() {
+    drawNewColorBand(0);
+    bandNumberValues[currentBandIndex] = 0;
+    doCalculateResistance();
+
+    return;
+}
+
+/*@ doBrownButton :: () => void */
+function doBrownButton() {
+    drawNewColorBand(1);
+    bandNumberValues[currentBandIndex] = 1;
+    doCalculateResistance();
+
+    return;
+}
+ 
 // function doRedButton() /*:  -> Undef */ {
 //     drawNewColorBand(2);
 //     bandNumberValues[currentBandIndex] = 2;

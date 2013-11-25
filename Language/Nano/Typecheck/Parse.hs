@@ -46,7 +46,6 @@ import           Language.ECMAScript3.PrettyPrint
 -- import           Debug.Trace                        (trace, traceShow)
 
 dot        = Token.dot        lexer
-braces     = Token.braces     lexer
 plus       = Token.symbol     lexer "+"
 star       = Token.symbol     lexer "*"
 
@@ -97,11 +96,11 @@ bareTypeP
                 [t] -> return t
                 _   -> return $ TApp TUn (sort ts) tr)
          
- <|> try (bRefP ( do  ts <- bareTypeNoUnionP `sepBy1` plus
-                      case ts of
-                        [ ] -> error "impossible"
-                        [_] -> error "bareTypeP parser BUG"
-                        _   -> return $ TApp TUn (sort ts) 
+ <|> try (refP ( do ts <- bareTypeNoUnionP `sepBy1` plus
+                    case ts of
+                      [ ] -> error "impossible"
+                      [_] -> error "bareTypeP parser BUG"
+                      _   -> return $ TApp TUn (sort ts) 
                 ))
 
 
@@ -131,8 +130,8 @@ boundTypeP = do s <- symbolP
 argBind t = B (rTypeValueVar t) t
 
 bareAtomP p
-  =  try (refP  p)
- <|> try (bRefP p)
+  =  try (xrefP  p)
+ <|> try (refP p)
 --  <|> try (bindP p)   -- This case is taken separately at Function parser
  <|>     (dummyP (p <* spaces))
 
@@ -218,20 +217,9 @@ topP   = (Reft . (, []) . vv . Just) <$> freshIntP
 {-       t <- kindP-}
 {-       return $ t (Reft (v, []))-}
 
--- | Parses refined types of the form: `{ x : kind | refinement }`
-bRefP :: Parser (Reft -> a) -> Parser a
-bRefP kindP
-  = braces $ do
-      v   <- symbolP
-      colon
-      t   <- kindP
-      reserved "|"
-      ras <- refasP 
-      return $ t (Reft (v, ras))
-
 -- | Parses refined types of the form: `{ kind | refinement }`
-refP :: Parser (Reft -> a) -> Parser a
-refP kindP
+xrefP :: Parser (Reft -> a) -> Parser a
+xrefP kindP
   = braces $ do
       t   <- kindP
       reserved "|"

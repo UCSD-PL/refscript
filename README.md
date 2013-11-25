@@ -55,21 +55,6 @@ for values of the relevant types.
 
 
 
-Homework Plan
-=============
-
-HW 1
-1a. VCG 
-1b. Use ESC/J
-
-HW 2
-2a. ConsGen = VCG+K for LoopInv via FIXPOINT    [Easy]
-2b. Implement FIXPOINT (over liquid-fixpoint)   [Hard]
-
-HW 3
-3a. VCG for Refinement Type Checking            [Hard]
-3b. Consgen = VCG+K for Liquid Inference via FIXPOINT
-
 Tests
 -----
 

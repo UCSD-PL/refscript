@@ -1,9 +1,17 @@
 # Quicktask v1.2
 # http://quicktask.aaronbieber.com/doc.html
 
+
+predicate Like X Y = (tag X) = (tag Y)
+(x:num + str, {y:num + str | (Like x V)}) => {v:num + str | (Like X v) && ((num x) && (num y) => v = x + y)}
+
 JS SUPPORT / FEATURES:
+  - Dynamic Writes `x[i] = e`
+    @ Added [Mon 2013-11-24]
+  - Type/predicate aliases
+    @ Added [Mon 2013-11-24]
   - For/While loops
-    @ Added [Sun 2013-09-15
+    @ Added [Sun 2013-09-15]
     @ Start [Sun 2013-09-15] [15:59]
     @ DONE [Sun 2013-10-20]
   - Arrays:

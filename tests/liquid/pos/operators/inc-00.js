@@ -1,9 +1,9 @@
-/*@ qualif PlusOne(v:int, x:int)   : v = x + 1    */    
+/*@ qualif PlusOne(v:number, x:number)   : v = x + 1    */    
 
 /* IGNORED inc :: ({x:number|true}) => {v:number | v = x+1} */
 /* IGNORED inc :: (x:number) => {v:number | v = x+1} */
 
-/*@ inc :: (x:number) => number */
+/*@ inc :: (number) => number */
 function inc(x){
   var res = x + 1;
   return res;

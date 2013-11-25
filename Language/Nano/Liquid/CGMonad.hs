@@ -779,8 +779,8 @@ bsplitC g ci t1 t2
 ---------------------------------------------------------------------------------------
 splitW :: WfC -> CGM [FixWfC]
 ---------------------------------------------------------------------------------------
-splitW (W g i (TFun ts t _)) 
-  = do let bws = bsplitW g t i
+splitW (W g i ft@(TFun ts t _)) 
+  = do let bws = bsplitW g ft i
        g'     <- envTyAdds i ts g 
        ws     <- concatMapM splitW [W g' i ti | B _ ti <- ts]
        ws'    <-            splitW (W g' i t)

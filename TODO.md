@@ -69,12 +69,10 @@ extra failing tests
 
 [HEREHEREHEREHERE] liquid/pos/operators/inc-00.js,
 
-    0. SETUP liquid-server with nanojs...
-    1. WHY is k_4 getting 2 WF constraints? One of which is the EMPTY env?
-    2. does sort checking work with the "number" ?
-    3. add support for string +
-    4. add support for array-write
-    5. add support for predicate aliases
+    + SETUP liquid-server with nanojs...
+    + add support for string +
+    + add support for array-write
+    + add support for predicate aliases
 
 liquid/pos/arrays/arr-04.js,
 liquid/pos/loops/for-rec.js,

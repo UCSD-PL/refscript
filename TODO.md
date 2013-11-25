@@ -2,9 +2,6 @@
 # http://quicktask.aaronbieber.com/doc.html
 
 
-predicate Like X Y = (tag X) = (tag Y)
-(x:num + str, {y:num + str | (Like x V)}) => {v:num + str | (Like X v) && ((num x) && (num y) => v = x + y)}
-
 JS SUPPORT / FEATURES:
   - Dynamic Writes `x[i] = e`
     @ Added [Mon 2013-11-24]
@@ -62,6 +59,28 @@ FAILING TESTS:
   - Is "liquid/neg/minindex02-bug.js - line 5" indeed a bug?
     Using new representation of lists.
     @ Added [Sun 2013-09-15]
+
+
+
+predicate Like X Y = (tag X) = (tag Y)
+(x:num + str, {y:num + str | (Like x V)}) => {v:num + str | (Like X v) && ((num x) && (num y) => v = x + y)}
+
+extra failing tests
+
+[HEREHEREHEREHERE] liquid/pos/operators/inc-00.js,
+
+    0. SETUP liquid-server with nanojs...
+    1. WHY is k_4 getting 2 WF constraints? One of which is the EMPTY env?
+    2. does sort checking work with the "number" ?
+    3. add support for string +
+    4. add support for array-write
+    5. add support for predicate aliases
+
+liquid/pos/arrays/arr-04.js,
+liquid/pos/loops/for-rec.js,
+liquid/pos/objects/obj-01.js,
+
+
 
 
 

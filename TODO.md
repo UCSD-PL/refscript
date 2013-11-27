@@ -67,18 +67,11 @@ predicate Like X Y = (tag X) = (tag Y)
 
 extra failing tests
 
-[HEREHEREHEREHERE] liquid/pos/operators/inc-00.js,
+[HEREHEREHEREHERE] 
 
-    + SETUP liquid-server with nanojs...
     + add support for string +
-    + add support for array-write
+    + add support for array-write (liquid/pos/arrays/arr-04.js)
     + add support for predicate aliases
-
-liquid/pos/arrays/arr-04.js,
-liquid/pos/loops/for-rec.js,
-liquid/pos/objects/obj-01.js,
-
-
 
 
 

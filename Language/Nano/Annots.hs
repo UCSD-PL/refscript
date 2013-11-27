@@ -90,14 +90,21 @@ annotByteString res a = encode $ mkAnnMap res a
 ------------------------------------------------------------------------------
 
 data AnnMap  = Ann { 
-    types  :: M.HashMap SourceSpan (String, String)  -- ^ SourceSpan -> (Var, Type)
-  , errors :: [SourceSpan]                           -- ^ List of errors
+    status :: String
+  , types  :: M.HashMap SourceSpan (String, String)  -- ^ SourceSpan -> (Var, Type)
+  , errors :: AnnErrors                              -- ^ List of errors
   } 
 
-mkAnnMap res ann = Ann (mkAnnMapTyp ann) (mkAnnMapErr res)
+mkAnnMap res ann = Ann (mkAnnMapStatus res) (mkAnnMapTyp ann) (mkAnnMapErr res)
 
-mkAnnMapErr (F.Unsafe ls) = ls
-mkAnnMapErr _             = []
+mkAnnMapStatus (F.Crash _ _)      = "error" 
+mkAnnMapStatus (F.Safe)           = "safe" 
+mkAnnMapStatus (F.Unsafe _)       = "unsafe"
+mkAnnMapStatus (F.UnknownError _) = "crash"
+
+mkAnnMapErr (F.Unsafe ls)         = [(l, msg') | l <- ls] where msg' = "Liquid Type Error" 
+mkAnnMapErr (F.Crash ls msg)      = [(l, msg') | l <- ls] where msg' = "Crash: " ++ msg
+mkAnnMapErr _                     = []
 
 mkAnnMapTyp (AI m) 
   = M.map (\a -> (F.symbolString $ ann_bind a, ppshow $ ann_type a))
@@ -119,7 +126,7 @@ lineCol sp      = (srcSpanStartLine sp, srcSpanStartCol sp)
 
 data Assoc k a = Asc (M.HashMap k a)
 type AnnTypes  = Assoc Int (Assoc Int Annot1)
-type AnnErrors = [SourceSpan]
+type AnnErrors = [(SourceSpan, String)]
 data Annot1    = A1 String String Int Int 
                     --  { ident :: String
                     --  , ann   :: String
@@ -156,7 +163,8 @@ instance (Show k, ToJSON a) => ToJSON (Assoc k a) where
       tshow        = T.pack . show 
 
 instance ToJSON AnnMap where 
-  toJSON a = object [ ("types"  .= (toJSON $ annTypes a))
+  toJSON a = object [ ("status" .= (toJSON $ status   a))
+                    , ("types"  .= (toJSON $ annTypes a))
                     , ("errors" .= (toJSON $ errors   a))
                     ]
 

@@ -40,7 +40,7 @@ module Language.Nano.SSA.SSAMonad (
 import           Control.Applicative                ((<$>))
 import           Control.Monad                
 import           Control.Monad.State                
-import           Control.Monad.Error
+import           Control.Monad.Error hiding (Error)
 
 import qualified Data.HashMap.Strict as M 
 import           Language.Nano.Errors
@@ -57,7 +57,7 @@ import           Text.Printf                        (printf)
 
 -- import           Debug.Trace                        (trace)
 
-type SSAM r     = ErrorT String (State (SsaState r))
+type SSAM r     = ErrorT Error (State (SsaState r))
 
 data SsaState r = SsaST { immutables :: Env r       -- ^ globals
                         , names      :: SsaEnv      -- ^ current SSA names 
@@ -112,7 +112,7 @@ updSsaEnv   :: SourceSpan -> Id SourceSpan -> SSAM r (Id SourceSpan)
 -------------------------------------------------------------------------------------
 updSsaEnv l x 
   = do imm   <- isImmutable x 
-       when imm $ ssaError l $ errorWriteImmutable x
+       when imm $ ssaError $ errorWriteImmutable l x
        n     <- count <$> get
        let x' = newId l x n
        modify $ \st -> st {names = envAdds [(x, SI x')] (names st)} {count = 1 + n}
@@ -153,9 +153,11 @@ getAnns    = anns <$> get
 
 
 -------------------------------------------------------------------------------
-ssaError       :: SourceSpan -> String -> SSAM r a
+ssaError :: Error -> SSAM r a
 -------------------------------------------------------------------------------
-ssaError l msg = throwError $ printf "ERROR at %s : %s" (ppshow l) msg
+ssaError = throwError
+
+-- ssaError e = throwError $ printf "ERROR at %s : %s" (ppshow l) msg
 
 
 -- inserts l xs m = M.insert l (xs ++ M.lookupDefault [] l m) m

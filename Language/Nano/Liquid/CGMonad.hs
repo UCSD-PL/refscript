@@ -39,7 +39,8 @@ module Language.Nano.Liquid.CGMonad (
   , envAdds
   , envAddReturn
   , envAddGuard
-  , envFindTy, envFindTy'
+  , envFindTy
+  -- , envFindTy'
   , envToList
   , envFindReturn
   , envJoin
@@ -86,10 +87,11 @@ import           Language.Nano.Liquid.Types
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Control.Applicative 
+import           Control.Exception (throw)
 
 import           Control.Monad
 import           Control.Monad.State
-import           Control.Monad.Error
+import           Control.Monad.Error hiding (Error)
 import           Text.Printf 
 
 import           Language.ECMAScript3.Syntax
@@ -127,7 +129,7 @@ getCGInfo cfg pgm = clear . cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
 execute :: Config -> Nano AnnTypeR RefType -> CGM a -> (a, CGState)
 execute cfg pgm act
   = case runState (runErrorT act) $ initState cfg pgm of 
-      (Left err, _) -> errorstar err
+      (Left err, _) -> throw err
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnTypeR RefType -> CGState
@@ -220,15 +222,19 @@ data CGState
         , cg_opts  :: Config               -- ^ configuration options
         }
 
-type CGM     = ErrorT String (State CGState)
+type CGM     = ErrorT Error (State CGState)
 
 type TConInv = M.HashMap TCon (Located RefType)
 
 ---------------------------------------------------------------------------------------
-cgError :: (IsLocated l) => l -> String -> CGM a 
----------------------------------------------------------------------------------------
-cgError l msg = throwError $ printf "CG-ERROR at %s : %s" (ppshow $ srcPos l) msg
+-- cgError :: (IsLocated l) => l -> String -> CGM a 
+-- ---------------------------------------------------------------------------------------
+-- cgError l msg = throwError $ printf "CG-ERROR at %s : %s" (ppshow $ srcPos l) msg
 
+---------------------------------------------------------------------------------------
+cgError     :: a -> Error -> CGM b 
+---------------------------------------------------------------------------------------
+cgError _ e = throwError e
 
 ---------------------------------------------------------------------------------------
 -- | Environment API ------------------------------------------------------------------
@@ -299,14 +305,14 @@ envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> Re
 
 envFindTy x g = (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
   where 
-    err       = errorstar $ bugUnboundVariable (srcPos x) (F.symbol x)
+    err       = throw $ bugUnboundVariable (srcPos x) (F.symbol x)
                     
----------------------------------------------------------------------------------------
-envFindTy'     :: (F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
----------------------------------------------------------------------------------------
-envFindTy' x g = (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
-  where 
-    err       = errorstar $ bugUnboundVariable dummySpan (F.symbol x)
+-- ---------------------------------------------------------------------------------------
+-- envFindTy'     :: (F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
+-- ---------------------------------------------------------------------------------------
+-- envFindTy' x g = (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
+--   where 
+--     err       = throw $ bugUnboundVariable dummySpan (F.symbol x)
 
 
 ---------------------------------------------------------------------------------------
@@ -344,7 +350,7 @@ envJoin' l g g1 g2
         let xs   = [x | PhiVar [x] <- ann_fact l] 
             t1s  = (`envFindTy` g1) <$> xs 
             t2s  = (`envFindTy` g2) <$> xs
-        when (length t1s /= length t2s) $ cgError l (bugBadPhi l t1s t2s)
+        when (length t1s /= length t2s) $ cgError l (bugBadPhi (srcPos l) t1s t2s)
         γ       <- getTDefs
         let t4   = zipWith (compareTs γ) t1s t2s
         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst4 <$> t4
@@ -753,8 +759,7 @@ splitC' (Sub g i t1@(TArr _ _ ) t2@(TArr _ _ ))
 
 
 splitC' x 
-  = cgError (srcPos x) $ bugBadSubtypes x 
-
+  = cgError l $ bugBadSubtypes l x where l = srcPos x
 
 ---------------------------------------------------------------------------------------
 bsplitC :: (F.Reftable r) => CGEnv -> a -> RType r -> RType r -> [F.SubC a]

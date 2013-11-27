@@ -40,7 +40,7 @@ import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative 
 import           Control.Monad.Error ()
-
+import           Control.Exception (throw)
 
 -- instance PP F.Symbol where 
 --   pp = pprint
@@ -76,7 +76,7 @@ envFromList       = L.foldl' step envEmpty
   where 
     step γ (i, t) = case envFindLoc i γ of
                       Nothing -> envAdd i t γ 
-                      Just l' -> errorstar $ errorDuplicate i (srcPos i) l'
+                      Just l' -> throw $ errorDuplicate i (srcPos i) l'
 
 envIntersectWith :: (a -> b -> c) -> Env a -> Env b -> Env c
 envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))

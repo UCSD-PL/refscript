@@ -1,5 +1,7 @@
-/*@ foo :: (number) => string */
+/*@ foo :: (number) => {strin | true} */
 function foo(x){
+  
   var y = "dog";
-  return x + y; 
+  
+  return "cat"; // x + y; 
 }

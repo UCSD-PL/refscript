@@ -49,7 +49,8 @@ module Language.Nano.Types (
 
   ) where
 
-import           Control.Applicative          ((<$>))
+import           Control.Exception                  (throw)
+import           Control.Applicative                ((<$>))
 -- import qualified Data.HashMap.Strict as M
 import           Data.Hashable
 import           Data.Typeable                      (Typeable)
@@ -120,6 +121,10 @@ instance IsLocated (Located a) where
 
 instance IsLocated a => IsLocated (Id a) where 
   srcPos (Id x _) = srcPos x
+
+instance (HasAnnotation thing, IsLocated a) => IsLocated (thing a) where 
+  srcPos  = srcPos . getAnnotation  
+
 
 instance IsLocated F.Symbol where 
   srcPos _ = dummySpan
@@ -246,9 +251,9 @@ isNanoExprStatement e                     = errortext (text "Not Nano ExprStmt!"
 
 -- | Trivial Syntax Checking 
 
-checkTopStmt :: Statement a -> Statement a
+checkTopStmt :: (IsLocated a) => Statement a -> Statement a
 checkTopStmt s | checkBody [s] = s
-checkTopStmt s | otherwise     = errorstar $ errorInvalidTopStmt s
+checkTopStmt s | otherwise     = throw $ errorInvalidTopStmt (srcPos s) s
 
 checkBody :: [Statement a] -> Bool
 -- Adding support for loops so removing the while check
@@ -418,9 +423,6 @@ idLoc  (Id l _) = l
 -- instance F.Fixpoint SourcePos where
 --   toFix = pp 
 
-instance PP SourceSpan where 
-  pp    = ppSourceSpan
-
 instance F.Fixpoint SourceSpan where
   toFix = pp 
 
@@ -430,22 +432,11 @@ instance F.Fixpoint String where
 instance (Ord a, F.Fixpoint a) => PP (F.FixResult a) where
   pp = F.resultDoc
  
-sourcePosElts s = (src, line, col)
-  where 
-    src         = sourceName   s 
-    line        = sourceLine   s
-    col         = sourceColumn s 
-
 --ppSourcePos src = parens 
 --                $ text ("file: " ++ f) <> comma <+> int l <> comma <+> int c
 --  where 
 --    (f,l,c)     = sourcePosElts src 
 
-ppSourceSpan z  = parens 
-                $ text (printf "file %s: (%d, %d) - (%d, %d)" f l c l' c')  
-  where 
-    (f,l ,c )   = sourcePosElts $ sp_begin z
-    (_,l',c')   = sourcePosElts $ sp_end   z
 
 instance PP F.Pred where 
   pp = pprint
@@ -460,13 +451,11 @@ instance PP a => PP (Located a) where
   pp x = pp (val x) <+> text "at:" <+> pp (loc x)
 --------------------------------------------------------------------------------
 
-dummySpan :: SourceSpan
-dummySpan = Span l l 
-  where l = initialPos ""
-
 srcSpanStartLine = snd3 . sourcePosElts . sp_begin 
 srcSpanEndLine   = snd3 . sourcePosElts . sp_end
 srcSpanStartCol  = thd3 . sourcePosElts . sp_begin 
 srcSpanEndCol    = thd3 . sourcePosElts . sp_end
 srcSpanFile      = fst3 . sourcePosElts . sp_begin
+
+
 

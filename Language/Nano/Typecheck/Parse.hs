@@ -16,6 +16,7 @@ import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import qualified Data.HashMap.Strict                as M 
 import           Control.Monad
+import           Control.Exception (throw)
 import           Text.Parsec
 -- import           Text.Parsec.String hiding (Parser, parseFromFile)
 import qualified Text.Parsec.Token as Token
@@ -29,7 +30,7 @@ import           Language.Fixpoint.Misc (errorstar)
 import           Language.Fixpoint.Types hiding (quals)
 import           Language.Fixpoint.Parse 
 
-import           Language.Nano.Errors
+import           Language.Nano.Errors hiding (Error)
 import           Language.Nano.Files
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
@@ -403,7 +404,7 @@ shuffleSpecDefs pgm = pgm { specs = specγ } { defs = defγ }
 
 initFunTy fn γ = fromMaybe err $ envFindTy fn γ 
   where 
-    err        = errorstar $ bugUnboundVariable (srcPos fn) fn
+    err        = throw $ bugUnboundVariable (srcPos fn) fn
 
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite

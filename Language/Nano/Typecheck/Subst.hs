@@ -33,10 +33,12 @@ import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Parse as P
+import           Language.Nano.Types
 import           Language.Nano.Errors 
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 
+import           Control.Exception   (throw)
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
 import           Data.List                      (find)
@@ -167,7 +169,7 @@ unfoldFirst env t = go t
     go (TApp (TDef id) acts _) = 
       case envFindTy (F.symbol id) env of
         Just (TBd (TD _ vs bd _ )) -> apply (fromList $ zip vs acts) bd
-        _                          -> error $ errorUnboundId id
+        _                          -> throw $ errorUnboundId (srcPos id) id
     go (TApp c a r)            = TApp c (go <$> a) r
     go (TArr t r)              = TArr (go t) r
     go t@(TVar _ _ )           = t

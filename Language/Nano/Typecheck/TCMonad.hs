@@ -408,7 +408,7 @@ unifyTypesM l msg t1s t2s
   | length t1s /= length t2s = tcError l errorArgMismatch 
   | otherwise                = do θ <- getSubst 
                                   γ <- getTDefs
-                                  case unifys γ θ t1s t2s of
+                                  case unifys (srcPos l) γ θ t1s t2s of
                                     Left msg' -> tcError l $ msg ++ "\n" ++ msg'
                                     Right θ'  -> setSubst θ' >> return θ' 
 

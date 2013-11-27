@@ -78,6 +78,7 @@ errorUnboundType l x      = Error l $ printf "Type identifier \'%s\' unbound" (p
 errorUnboundIdEnv l x t   = Error l $ printf "ZOGBERT Identifier %s unbound in %s" (ppshow x) (ppshow t)
 errorWrongType l m e t t' = Error l $ printf "%s -- unexpected type for %s :: %s expected %s" m (ppshow e) (ppshow t) (ppshow t')
 errorJoin l x t t'        = Error l $ printf "Conflicting join for %s \n   %s\n   %s" (ppshow x) (ppshow t) (ppshow t') 
+errorJoinSubsts l θ θ'    = Error l $ printf "Cannot join substs: %s\nand\n%s" (ppshow θ) (ppshow θ')
 errorUnification l t t'   = Error l $ printf "Cannot unify types: %s and %s" (ppshow t) (ppshow t')
 errorBoundTyVar l a t     = Error l $ printf "Cannot unify bound type parameter %s with %s" (ppshow a) (ppshow t)
 errorFreeTyVar l t        = Error l $ printf "Type not fully instantiated: %s" (ppshow t)

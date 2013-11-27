@@ -6,7 +6,9 @@
 module Language.Nano.Typecheck.Unify ( 
   
   -- * Unification 
-  unify, unifys
+  --   unify
+  -- , 
+  unifys
 
   ) where 
 
@@ -20,13 +22,16 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Compare
 
+
+import           Language.ECMAScript3.Parser    (SourceSpan (..))
 import           Control.Applicative ((<$>))
+import           Control.Exception   (throw)
 -- import           Control.Monad
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
 import qualified Data.List           as L
-import           Text.Printf 
+-- import           Text.Printf 
 -- import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
 
@@ -39,39 +44,39 @@ import           Text.Printf
 -- as the current type definition environment.
 -----------------------------------------------------------------------------
 unify :: (PP r, F.Reftable r, Ord r) => 
-  Env (RType r) -> RSubst r -> RType r -> RType r -> Either String (RSubst r)
+  SourceSpan -> Env (RType r) -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 
-unify _ θ t@(TApp _ _ _) t'@(TApp _ _ _) 
+unify _ _ θ t@(TApp _ _ _) t'@(TApp _ _ _) 
   | any isTop [t,t']                    = Right $ θ
 
-unify γ θ (TFun xts t _) (TFun xts' t' _) = 
-  unifys γ θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
+unify l γ θ (TFun xts t _) (TFun xts' t' _) = 
+  unifys l γ θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
 
 -- TODO: Cycles
-unify γ θ (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _)
-  | d == d'                             = unifys γ θ ts ts'
+unify l γ θ (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _)
+  | d == d'                             = unifys l γ θ ts ts'
 
-unify _  θ (TVar α _)     (TVar β _)    = varEql θ α β 
-unify _  θ (TVar α _)     t             = varAsn θ α t 
-unify _  θ t              (TVar α _)    = varAsn θ α t
+unify l _  θ (TVar α _)     (TVar β _)    = varEql l θ α β 
+unify l _  θ (TVar α _)     t             = varAsn l θ α t 
+unify l _  θ t              (TVar α _)    = varAsn l θ α t
 
-unify γ θ t@(TApp (TDef _) _ _) t'    = unify γ θ (unfoldSafe γ t) t'
-unify γ θ t t'@(TApp (TDef _) _ _)    = unify γ θ t (unfoldSafe γ t')
+unify l γ θ t@(TApp (TDef _) _ _) t'    = unify l γ θ (unfoldSafe γ t) t'
+unify l γ θ t t'@(TApp (TDef _) _ _)    = unify l γ θ t (unfoldSafe γ t')
 
 -- List[A] + Null `unif` List[T0] + Null => A `unif` T0
 -- TODO: make sure other nothing weird is going on with TVars,
 -- e.g.  List[A] + B `unif` ... => this should not even be allowed!!!
-unify γ θ t t' | any isUnion [t,t']     = 
-  (uncurry $ unifys γ θ) $ unzip $ fst3 {- $ tracePP "unify union" -} 
+unify l γ θ t t' | any isUnion [t,t']     = 
+  (uncurry $ unifys l γ θ) $ unzip $ fst3 {- $ tracePP "unify union" -} 
     $ unionPartsWithEq (unifEq γ) t t'
 
-unify _ _ (TBd _) _   = error $ bugTBodiesOccur "unify"
-unify _ _ _ (TBd _)   = error $ bugTBodiesOccur "unify"
+unify l _ _ (TBd _) _   = throw $ bugTBodiesOccur l "unify"
+unify l _ _ _ (TBd _)   = throw $ bugTBodiesOccur l "unify"
 
-unify γ θ (TObj bs1 _) (TObj bs2 _) 
+unify l γ θ (TObj bs1 _) (TObj bs2 _) 
   | s1s == s2s 
-  = unifys γ θ (b_type <$> L.sortBy ord bs1) (b_type <$> L.sortBy ord bs2)
+  = unifys l γ θ (b_type <$> L.sortBy ord bs1) (b_type <$> L.sortBy ord bs2)
   | otherwise 
   = return θ
     where
@@ -79,9 +84,9 @@ unify γ θ (TObj bs1 _) (TObj bs2 _)
       s2s = L.sort $ b_sym <$> bs2
       ord b b' = compare (b_sym b) (b_sym b')
 
-unify γ θ (TArr t _) (TArr t' _) = unify γ θ t t'
+unify l γ θ (TArr t _) (TArr t' _) = unify l γ θ t t'
 
-unify _ θ _ _         = Right $ θ  
+unify l _ θ _ _         = Right $ θ  
 
 
 {-unify' γ θ t t' = unify γ θ (trace (printf "unify: %s - %s" (ppshow t) (ppshow t')) t) t' -}
@@ -96,27 +101,26 @@ unifEq γ t t'                     = equiv γ t t'
 
 -----------------------------------------------------------------------------
 unifys ::  (PP r, F.Reftable r, Ord r) =>  
-  Env (RType r) -> RSubst r -> [RType r] -> [RType r] -> Either String (RSubst r)
+  SourceSpan -> Env (RType r) -> RSubst r -> [RType r] -> [RType r] -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
-unifys env θ xs ys = {- tracePP msg $ -} unifys' env θ xs ys 
+unifys loc env θ xs ys = {- tracePP msg $ -} unifys' loc env θ xs ys 
    {-where -}
    {-  msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
 
-unifys' env θ ts ts' 
+unifys' loc env θ ts ts' 
   | nTs == nTs' = go env θ ts ts'
-  | otherwise   = Left $ errorUnification ts ts'
+  | otherwise   = Left $ errorUnification loc ts ts'
   where 
-    nTs                      = length ts
-    nTs'                     = length ts'
-    go γ θ ts ts' = foldl safeJoin (Right $ θ) $ zipWith (unify γ θ) ts ts'
+    nTs           = length ts
+    nTs'          = length ts'
+    go γ θ ts ts' = foldl safeJoin (Right $ θ) $ zipWith (unify loc γ θ) ts ts'
     -- Only allow joining unifications where the common keys map to identical
     -- types
     safeJoin (Right θ@(Su m)) (Right θ'@(Su m'))
-      | check m m' = Right $ mappend θ θ'
-      | otherwise  = Left  $ printf "Cannot join substs: %s\nand\n%s"
-                               (ppshow θ) (ppshow θ')
-    safeJoin (Left l        ) _                  = Left l
-    safeJoin _                (Left l        )   = Left l
+      | check m m'                                = Right $ mappend θ θ'
+      | otherwise                                 = Left  $ errorJoinSubsts loc θ θ' 
+    safeJoin (Left l        ) _                   = Left l
+    safeJoin _                (Left l        )    = Left l
                                
 
 check m m' = vs == vs'
@@ -128,30 +132,30 @@ check m m' = vs == vs'
 
 -----------------------------------------------------------------------------
 varEql :: (PP r, F.Reftable r, Ord r) => 
-  RSubst r -> TVar -> TVar -> Either String (RSubst r)
+  SourceSpan -> RSubst r -> TVar -> TVar -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
-varEql θ α β =  
-  case varAsn θ α $ tVar β of
+varEql l θ α β =  
+  case varAsn l θ α $ tVar β of
     Right θ' -> Right θ'
     Left  s1 -> 
-      case varAsn θ β $ tVar α of
+      case varAsn l θ β $ tVar α of
         Right θ'' -> Right θ''
-        Left  s2  -> Left (s1 ++ "\n OR \n" ++ s2)
+        Left  s2  -> Left $ s1 { errMsg = (errMsg s1 ++ "\n OR \n" ++ show s2) }
 
 
 -----------------------------------------------------------------------------
 varAsn ::  (PP r, F.Reftable r, Ord r) => 
-  RSubst r -> TVar -> RType r -> Either String (RSubst r)
+  SourceSpan -> RSubst r -> TVar -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
-varAsn θ α t 
+varAsn l θ α t 
   -- Check if previous substs are sufficient 
   | t == apply θ (tVar α)  = Right $ θ 
   -- We are not even checking if t is a subtype of `tVar α`, i.e.:
   -- unifying A with A + B will fail!
   | t == tVar α            = Right $ θ 
-  | α `S.member` free t    = Left  $ errorOccursCheck α t 
+  | α `S.member` free t    = Left  $ errorOccursCheck l α t 
   | unassigned α θ         = Right $ θ `mappend` (Su $ M.singleton α t)
-  | otherwise              = Left  $ errorRigidUnify α t
+  | otherwise              = Left  $ errorRigidUnify l α t
   
 unassigned α (Su m) = M.lookup α m == Just (tVar α)
 

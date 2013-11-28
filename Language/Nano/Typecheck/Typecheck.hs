@@ -7,6 +7,7 @@
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
 
+import           Control.Exception                  (throw)
 import           Control.Applicative                ((<$>))
 import           Control.Monad                
 
@@ -68,22 +69,16 @@ verifyFile f = do
   V.whenLoud $ donePhase FM.Loud "Typechecking"
   return $ r
 
-
 -------------------------------------------------------------------------------
 typeCheck ::
   (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
-  V.Verbosity -> Nano (AnnSSA r) (RType r) -> Nano (AnnType r) (RType r)
+  V.Verbosity -> (NanoSSAR r) -> Either [Error] (NanoTypeR r)
 -------------------------------------------------------------------------------
-typeCheck verb pgm = either crash id (execute verb pgm (tcAndPatch pgm))
-  where
-    crash          = errorstar . render . vcat . map (text . ppErr)
-
+typeCheck verb pgm = execute verb pgm $ tcAndPatch pgm
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
-                 forM_ errs (putStrLn . ppErr) 
+                 forM_ errs (putStrLn . ppshow) 
                  return $ F.Unsafe errs
-
-ppErr (l, e) = printf "Error at %s\n  %s\n" (ppshow l) e
 
 safe (Nano {code = Src fs})
   = do V.whenLoud $ forM_ fs $ T.mapM printAnn
@@ -95,16 +90,16 @@ failCasts :: (Data r, Typeable r) =>
 -------------------------------------------------------------------------------
 failCasts False (Nano {code = Src fs}) | not $ null csts = F.Unsafe csts
                                        | otherwise       = F.Safe
-  where csts = mapFst ann <$> allCasts fs
+  where csts = allCasts fs
 failCasts True   _                                       = F.Safe                                            
     
 
 -------------------------------------------------------------------------------
-allCasts :: (Data r, Typeable r) => [FunctionStatement (AnnSSA r)] -> [((AnnSSA r), [Char])]
+allCasts :: (Data r, Typeable r) => [FunctionStatement (AnnSSA r)] -> [Error]
 -------------------------------------------------------------------------------
 allCasts fs =  everything (++) ([] `mkQ` f) $ fs
-  where f (DownCast l t)  = [(l, "DownCast: " ++ ppshow t)]
-        f (DeadCast l _)  = [(l, "DeadCode")]
+  where f (DownCast l t)  = [errorDownCast l t]
+        f (DeadCast l _)  = [errorDeadCast l  ]
         -- UpCasts are safe
         f _               = [ ]
 
@@ -148,7 +143,7 @@ checkTypeDefs pgm = reportAll $ grep
     ds        = defs pgm 
     ts        = tDefs pgm
     reportAll = mapM_ report
-    report t  = tcError (srcPos t) $ errorUnboundType (ppshow t)
+    report t  = tcError $ errorUnboundType (srcPos t) t
 
     -- There should be no undefined type constructors
     grep :: [Id SourceSpan] = everything (++) ([] `mkQ` g) ds
@@ -204,9 +199,9 @@ tcFun γ (FunctionStmt l f xs body)
   = do (ft, (αs, ts, t)) <- funTy l f xs
        let γ'  = envAdds [(f, ft)] γ
        let γ'' = envAddFun l f αs xs ts t γ'
-       accumAnn (\a -> catMaybes (map (validInst γ'') (M.toList a))) $  
+       accumAnn (catMaybes . map (validInst γ'') . M.toList) $  
          do q              <- tcStmts γ'' body
-            when (isJust q) $ void $ unifyTypeM l "Missing return" f tVoid t
+            when (isJust q) $ void $ unifyTypeM (srcPos l) "Missing return" f tVoid t
        return $ Just γ' 
 
 tcFun _  _ = error "Calling tcFun not on FunctionStatement"
@@ -214,9 +209,12 @@ tcFun _  _ = error "Calling tcFun not on FunctionStatement"
 funTy l f xs 
   = do ft <- getDefType f 
        case bkFun ft of
-         Nothing        -> logError (ann l) (errorUnboundId f) (tErr, tFunErr)
-         Just (αs,ts,t) -> do when (length xs /= length ts) $ logError (ann l) errorArgMismatch ()
+         Nothing        -> logError (errorUnboundId loc f) (tErr, tFunErr)
+         Just (αs,ts,t) -> do when (length xs /= length ts) $ logError (errorArgMismatch loc) ()
                               return (ft, (αs, b_type <$> ts, t))
+    where
+      loc = ann l
+
 
 envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
   where  
@@ -228,8 +226,8 @@ envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddR
 validInst γ (l, ts)
   = case [β | β <-  HS.toList $ free ts, not ((tVarId β) `envMem` γ)] of
       [] -> Nothing
-      βs -> Just (l, errorFreeTyVar βs)
-   
+      βs -> Just $ errorFreeTyVar l βs
+
 -- | Strings ahead: HACK Alert
 tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a   
 
@@ -271,16 +269,15 @@ tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
           -- NOTE: Atm assignment to non existing binding has no effect!
           TApp TUndef _ _ -> return $ Just γ
           _ ->  if isSubType θ t2 tx 
-                  then return $ Just γ
-                  else tcError l2 (printf "Cannot assing type %s to %s" 
-                                  (ppshow t2) (ppshow tx))
+                  then return  $ Just γ
+                  else tcError $ errorTypeAssign (srcPos l2) t2 tx
 
 -- e3[i] = e2
-tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
+tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ _)) e2))
   = do  t2 <- tcExpr' γ e2 
-        t3 <- tcExpr' γ e3
-        ti <- errorstar "UNIMPLEMENTED: tc: e[e] = e" --safeGetIdx i t3
-        θ  <- unifyTypeM l2 "DotRef" e2 t2 ti 
+        _ {- t3 -}  <- tcExpr' γ e3
+        ti <- throw $ bug (srcPos l2) "UNIMPLEMENTED: tc: e[e] = e" --safeGetIdx i t3
+        θ  <- unifyTypeM (srcPos l2) "DotRef" e2 t2 ti 
         -- Once we've figured out what the type of the array should be,
         -- update the output environment.
         setSubst θ
@@ -304,7 +301,7 @@ tcStmt' γ (IfStmt l e s1 s2)
   = do  t <- tcExpr' γ e 
     -- Doing check for boolean for the conditional for now
     -- TODO: Will have to support truthy/falsy later.
-        unifyTypeM l "If condition" e t tBool
+        unifyTypeM (srcPos l) "If condition" e t tBool
         γ1      <- tcStmt' γ s1
         γ2      <- tcStmt' γ s2
         envJoin l γ γ1 γ2
@@ -315,7 +312,7 @@ tcStmt' γ (WhileStmt l c b) = do
     let phiTs = fromJust <$> (`envFindTy` γ) <$> (fst3 <$> phis)
     let γ' =  envAdds (zip (snd3 <$> phis) phiTs) γ
     t   <- tcExpr' γ' c
-    unifyTypeM l "While condition" c t tBool
+    unifyTypeM (srcPos l) "While condition" c t tBool
     tcStmt' γ' b
 
 
@@ -327,7 +324,7 @@ tcStmt' γ (VarDeclStmt _ ds)
 tcStmt' γ (ReturnStmt l eo) 
   = do  t           <- maybe (return tVoid) (tcExpr' γ) eo
         let rt       = envFindReturn γ 
-        θ           <- unifyTypeM l "Return" eo t rt
+        θ           <- unifyTypeM (srcPos l) "Return" eo t rt
         -- Apply the substitution
         let (rt',t') = mapPair (apply θ) (rt,t)
         -- Subtype the arguments against the formals and cast if 
@@ -394,7 +391,7 @@ tcExpr'' _ (NullLit _)
 
 tcExpr'' γ (VarRef l x)
   = case envFindTy x γ of 
-      Nothing -> logError (ann l) (errorUnboundIdEnv x γ) tErr
+      Nothing -> logError (errorUnboundIdEnv (ann l) x γ) tErr
       Just z  -> return z
 
 tcExpr'' γ (PrefixExpr l o e)
@@ -416,7 +413,7 @@ tcExpr'' γ (DotRef _ e s) = tcExpr' γ e >>= safeGetProp (unId s)
 tcExpr'' γ (BracketRef _ e (StringLit _ s)) = tcExpr' γ e >>= safeGetProp s
 
 -- x[i] 
-tcExpr'' γ (BracketRef _ e (IntLit _ i)) = tcExpr' γ e >>= indexType 
+tcExpr'' γ (BracketRef _ e (IntLit _ _)) = tcExpr' γ e >>= indexType 
 
 -- x[e]
 tcExpr'' γ e@(BracketRef l e1 e2) = do
@@ -424,7 +421,7 @@ tcExpr'' γ e@(BracketRef l e1 e2) = do
     t2 <- tcExpr' γ e2
     case t1 of 
       -- NOTE: Only support dynamic access of array with index of integer type.
-      TArr t _  -> unifyTypeM l "BracketRef" e t2 tInt >> return t
+      TArr t _  -> unifyTypeM (srcPos l) "BracketRef" e t2 tInt >> return t
       t         -> errorstar $ "Unimplemented: BracketRef of " ++ 
                                "non-array expression of type " ++ 
                                ppshow t
@@ -444,7 +441,7 @@ tcCall γ l fn es ft
         -- Typecheck arguments
         ts            <- mapM (tcExpr' γ) es
         -- Unify with formal parameter types
-        θ             <- unifyTypesM l "tcCall" ts its
+        θ             <- unifyTypesM (srcPos l) "tcCall" ts its
         -- Apply the substitution
         let (ts',its') = mapPair (apply θ) (ts,its)
         -- Subtype the arguments against the formals and cast if 
@@ -456,7 +453,7 @@ instantiate l fn ft
   = do t' <-  {- tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (bkAll ft)
        maybe err return   $ bkFun t'
     where
-       err = logError (ann l) (errorNonFunction fn ft) tFunErr
+       err = logError (errorNonFunction (ann l) fn ft) tFunErr
 
 
 
@@ -531,13 +528,10 @@ getPhiType l γ1 γ2 x =
   case (envFindTy x γ1, envFindTy x γ2) of
     (Just t1, Just t2) -> do  env <- getTDefs
                               return $ fst4 $ compareTs env t1 t2
-                          {-if t1 == t2-}
-                          {-  then return t1 -}
-                          {-  else tcError l $ errorJoin x t1 t2-}
     (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
-                            then tcError (ann l) "Oh no, the HashMap GREMLIN is back...1"
-                            else tcError (ann l) (bugUnboundPhiVar x)
-
+                            then tcError $ bug loc "Oh no, the HashMap GREMLIN is back...1"
+                            else tcError $ bugUnboundPhiVar loc x
+                          where loc = srcPos $ ann l
 
 forceCheck x γ 
   = elem x $ fst <$> envToList γ

@@ -80,11 +80,14 @@ dummySpan = Span l l
   where l = initialPos ""
 
 
+instance PP Error where
+  pp (Error l msg) = text $ printf "Error at %s\n  %s\n" (ppshow l) msg 
 
 ---------------------------------------------------------------------------
 -- | Constructing Errors --------------------------------------------------
 ---------------------------------------------------------------------------
 
+bug l s                   = Error l $ printf "BUG: %s" s 
 bugBadPhi l t1s t2s       = Error l $ printf "BUG: Unbalanced Phi at %s \n %s \n %s" (ppshow l) (ppshow t1s) (ppshow t2s)
 bugBadSubtypes l x        = Error l $ printf "BUG: Unexpected Subtyping Constraint \n %s" (ppshow x)
 bugUnboundPhiVar l x      = Error l $ printf "BUG: Phi Variable %s is unbound" (ppshow x)
@@ -123,6 +126,6 @@ errorBracketAccess l t f  = Error l $ printf "Cannot access field \"%s\" of type
 errorAnnotation l e t ta  = Error l $ printf "Type %s does not satisfy annotation %s at expression %s." (ppshow t) (ppshow ta) (ppshow e)
 
 errorMultipleTypeArgs l   = Error l $ printf "Multiple Type Args"
-
-
-
+errorDownCast l t         = Error l $ printf "Downcast: %s" (ppshow t) 
+errorDeadCast l           = Error l $ printf "Deadcast"
+errorTypeAssign l t1 t2   = Error l $ printf "Cannot assign type %s to %s" (ppshow t1) (ppshow t2)

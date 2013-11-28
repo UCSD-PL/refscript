@@ -401,15 +401,15 @@ unfoldSafeTC   t = getTDefs >>= \γ -> return $ unfoldSafe γ t
 
 ----------------------------------------------------------------------------------
 unifyTypesM :: (Ord r, PP r, F.Reftable r) => 
-  SourceSpan -> Error -> [RType r] -> [RType r] -> TCM r (RSubst r)
+  SourceSpan -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
-unifyTypesM l err t1s t2s
+unifyTypesM l msg t1s t2s
   -- TODO: This check might be done multiple times
   | length t1s /= length t2s = tcError $ errorArgMismatch l 
   | otherwise                = do θ <- getSubst 
                                   γ <- getTDefs
                                   case unifys l γ θ t1s t2s of
-                                    Left err' -> tcError $ catError err' err 
+                                    Left err' -> tcError $ catMessage err' msg 
                                     Right θ'  -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------
@@ -418,7 +418,7 @@ unifyTypeM :: (Ord r, PrintfArg t1, PP r, PP a, F.Reftable r) =>
 ----------------------------------------------------------------------------------
 unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
   where 
-    msg               = errorWrongType l m e t t'
+    msg               = ppshow $ errorWrongType l m e t t'
 
 
 ----------------------------------------------------------------------------------

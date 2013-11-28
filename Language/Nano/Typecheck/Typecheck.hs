@@ -24,6 +24,7 @@ import           Text.Printf                        (printf)
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Types
+import           Language.Nano.Annots
 import           Language.Nano.Env
 import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Compare
@@ -48,7 +49,7 @@ import qualified System.Console.CmdArgs.Verbosity as V
 -- | Top-level Verifier 
 
 --------------------------------------------------------------------------------
--- verifyFile :: FilePath -> IO (F.FixResult (SourceSpan, String))
+verifyFile :: FilePath -> IO (UAnnSol a, F.FixResult Error)
 --------------------------------------------------------------------------------
 --verifyFile f = tc =<< parseNanoFromFile f
 --  where 
@@ -67,7 +68,7 @@ verifyFile f = do
   TC { noFailCasts = nfc } <- getOpts
   r <- either unsafe (\q -> safe q >>= return . (`mappend` failCasts nfc q)) p
   V.whenLoud $ donePhase FM.Loud "Typechecking"
-  return $ r
+  return (NoAnn, r)
 
 -------------------------------------------------------------------------------
 typeCheck ::

@@ -13,7 +13,7 @@ import Language.ECMAScript3.PrettyPrint
 import Text.Parsec.Pos                   
 import Language.ECMAScript3.Parser        (SourceSpan (..))
 import qualified Control.Monad.Error as E
-
+import qualified Language.Fixpoint.Types as F
 
 --------------------------------------------------------------------------------
 -- | SourceSpans ---------------------------------------------------------------
@@ -34,6 +34,16 @@ sourcePosElts s = (src, line, col)
     src         = sourceName   s 
     line        = sourceLine   s
     col         = sourceColumn s 
+
+--------------------------------------------------------------------------------
+-- | `IsLocated` is a predicate for values which we have a SourceSpan
+--------------------------------------------------------------------------------
+
+class IsLocated a where 
+  srcPos :: a -> SourceSpan
+
+instance IsLocated Error where
+  srcPos = errLoc
 
 ---------------------------------------------------------------------
 ppshow :: (PP a) => a -> String
@@ -68,7 +78,7 @@ instance PP String where
 ---------------------------------------------------------------------------
 
 data Error = Error { errLoc :: SourceSpan, errMsg :: String }
-               deriving (Show, Typeable)
+               deriving (Eq, Ord, Show, Typeable)
 
 instance Exception Error
 
@@ -82,6 +92,14 @@ dummySpan = Span l l
 
 instance PP Error where
   pp (Error l msg) = text $ printf "Error at %s\n  %s\n" (ppshow l) msg 
+
+instance F.Fixpoint Error where
+  toFix = pp
+
+---------------------------------------------------------------------------
+errorInfo :: Error -> (SourceSpan, String)
+---------------------------------------------------------------------------
+errorInfo (Error l msg) = (l, msg)
 
 ---------------------------------------------------------------------------
 -- | Constructing Errors --------------------------------------------------
@@ -124,7 +142,8 @@ errorNullUndefined l      = Error l $ printf "Null type is not a subtype of unde
 errorUniqueTypeParams l   = Error l $ printf "Only unique type paramteres are allowed"
 errorBracketAccess l t f  = Error l $ printf "Cannot access field \"%s\" of type: %s" (ppshow f) (ppshow t)
 errorAnnotation l e t ta  = Error l $ printf "Type %s does not satisfy annotation %s at expression %s." (ppshow t) (ppshow ta) (ppshow e)
-
+errorLiquid l             = Error l $ printf "Liquid Type Error"
+errorESC l                = Error l $ printf "ESC Error"
 errorMultipleTypeArgs l   = Error l $ printf "Multiple Type Args"
 errorDownCast l t         = Error l $ printf "Downcast: %s" (ppshow t) 
 errorDeadCast l           = Error l $ printf "Deadcast"

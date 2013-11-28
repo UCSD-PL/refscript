@@ -10,6 +10,7 @@ import           Text.Printf                        (printf)
 -- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
 import           Control.Applicative                ((<$>))
+import           Control.Exception                  (throw)
 
 import qualified Data.ByteString.Lazy               as B
 import qualified Data.HashMap.Strict                as M
@@ -45,43 +46,35 @@ import           System.Console.CmdArgs.Default
 import qualified System.Console.CmdArgs.Verbosity as V
 
 --------------------------------------------------------------------------------
-verifyFile       :: FilePath -> IO (F.FixResult (SourceSpan, String))
+verifyFile       :: FilePath -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
 verifyFile f =   
   do  p   <- parseNanoFromFile f
       cfg <- getOpts 
       verb    <- V.getVerbosity
-      fmap (, "") <$> reftypeCheck cfg f (typeCheck verb (ssaTransform p))
+      case typeCheck verb (ssaTransform p) of
+        Left errs -> return $ (A.NoAnn, F.Unsafe errs)
+        Right p'  -> reftypeCheck cfg f p'
 
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
 --------------------------------------------------------------------------------
-reftypeCheck :: Config -> FilePath -> Nano AnnTypeR RefType -> IO (F.FixResult SourceSpan)
+reftypeCheck :: Config -> FilePath -> Nano AnnTypeR RefType -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
 reftypeCheck cfg f = solveConstraints f . generateConstraints cfg
 
 --------------------------------------------------------------------------------
-solveConstraints :: FilePath -> CGInfo -> IO (F.FixResult SourceSpan) 
+solveConstraints :: FilePath -> CGInfo -> IO (A.UAnnSol RefType, F.FixResult Error) 
 --------------------------------------------------------------------------------
 solveConstraints f cgi 
-  = do (r, sol) <- solve def f [] $ cgi_finfo cgi
-       let r'    = fmap (srcPos . F.sinfo) r
-       renderAnnotations f sol r' $ cgi_annot cgi
-       donePhase (F.colorResult r) (F.showFix r) 
-       return r'
+  = do (r, s)  <- solve def f [] $ cgi_finfo cgi
+       let r'   = fmap (errorLiquid . srcPos . F.sinfo) r
+       let ann  = cgi_annot cgi
+       let sol  = applySolution s 
+       return (A.SomeAnn ann sol, r') 
 
-renderAnnotations srcFile sol res ann  
-  = do writeFile   annFile  $ wrapStars "Constraint Templates" ++ "\n" 
-       appendFile  annFile  $ ppshow ann
-       appendFile  annFile  $ wrapStars "Inferred Types"       ++ "\n" 
-       appendFile  annFile  $ ppshow ann'
-       B.writeFile jsonFile $ A.annotByteString res ann' 
-       donePhase Loud "Written Inferred Types"
-    where 
-       jsonFile = extFileName Json  srcFile
-       annFile  = extFileName Annot srcFile
-       ann'     = tidy $ applySolution sol ann
+
 
 applySolution :: F.FixSolution -> A.UAnnInfo RefType -> A.UAnnInfo RefType 
 applySolution = fmap . fmap . tx
@@ -89,8 +82,6 @@ applySolution = fmap . fmap . tx
     tx s (F.Reft (x, zs))   = F.Reft (x, F.squishRefas (appSol s <$> zs))
     appSol _ ra@(F.RConc _) = ra 
     appSol s (F.RKvar k su) = F.RConc $ F.subst su $ M.lookupDefault F.PTop k s  
-
-tidy = id
 
 --------------------------------------------------------------------------------
 generateConstraints     :: Config -> NanoRefType -> CGInfo 
@@ -487,7 +478,7 @@ getTypArgs :: AnnTypeR -> [TVar] -> [RefType]
 getTypArgs l αs
   = case [i | TypInst i <- ann_fact l] of 
       [i] | length i == length αs -> i 
-      _                           -> errorstar $ bugMissingTypeArgs $ srcPos l
+      _                           -> throw $ bugMissingTypeArgs $ srcPos l
 
 ---------------------------------------------------------------------------------
 consScan :: (CGEnv -> a -> CGM (b, CGEnv)) 

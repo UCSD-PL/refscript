@@ -8,7 +8,8 @@ module Language.Nano.Annots (
    
     -- * Type for Annotation Map
     UAnnInfo 
-   
+  , UAnnSol (..) 
+
     -- * Adding new Annotations
   , addAnnot
 
@@ -34,16 +35,19 @@ import           Text.Parsec.Pos
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat, nest, (<+>), punctuate)
+import           Control.Applicative                ((<$>))
 
 ------------------------------------------------------------------------------
 -- | Type Definitions For Annotations ----------------------------------------
 ------------------------------------------------------------------------------
 
-data Annot t       = AnnBind { ann_bind :: F.Symbol, ann_type :: t }
+data Annot t        = AnnBind { ann_bind :: F.Symbol, ann_type :: t }
 
 {-@ type NonNull a = {v: [a] | 0 < (len v)} @-}
-type NonEmpty a    = [a] 
+type NonEmpty a     = [a] 
 newtype UAnnInfo a  = AI (M.HashMap SourceSpan (NonEmpty (Annot a)))
+data UAnnSol a      = NoAnn | SomeAnn (UAnnInfo a) (UAnnInfo a -> UAnnInfo a)
+
 
 instance Functor Annot where 
   fmap f (AnnBind x t) = AnnBind x (f t)
@@ -82,7 +86,7 @@ addAnnot l x t (AI m) = AI (inserts l (AnnBind (F.symbol x) t) m)
 --   where  
 --     annJson              = encode $ mkAnnMap res a
 
-annotByteString       :: (PP t) => F.FixResult SourceSpan -> UAnnInfo t -> B.ByteString
+annotByteString       :: (PP t) => F.FixResult Error -> UAnnInfo t -> B.ByteString
 annotByteString res a = encode $ mkAnnMap res a
 
 ------------------------------------------------------------------------------
@@ -102,9 +106,11 @@ mkAnnMapStatus (F.Safe)           = "safe"
 mkAnnMapStatus (F.Unsafe _)       = "unsafe"
 mkAnnMapStatus (F.UnknownError _) = "crash"
 
-mkAnnMapErr (F.Unsafe ls)         = [(l, msg') | l <- ls] where msg' = "Liquid Type Error" 
-mkAnnMapErr (F.Crash ls msg)      = [(l, msg') | l <- ls] where msg' = "Crash: " ++ msg
+mkAnnMapErr (F.Unsafe ls)         = eInfo "Liquid Error: "   <$> ls
+mkAnnMapErr (F.Crash ls msg)      = eInfo ("Crash: " ++ msg) <$> ls 
 mkAnnMapErr _                     = []
+  
+eInfo msg err                     = errorInfo $ catMessage err msg
 
 mkAnnMapTyp (AI m) 
   = M.map (\a -> (F.symbolString $ ann_bind a, ppshow $ ann_type a))
@@ -182,4 +188,5 @@ ins r c x (Asc m)   = Asc (M.insert r (Asc (M.insert c x rm)) m)
     Asc rm          = M.lookupDefault (Asc M.empty) r m
 
 -----------------------------------------------------------------------------
+
 

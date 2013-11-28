@@ -24,6 +24,8 @@ import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface  (checkValid {-, resultExit-} )
 import           Language.Fixpoint.Misc       (safeZip, sortNub {-, donePhase -} )
 
+import           Language.Nano.Annots
+import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.ESC.Types
 import           Language.Nano.ESC.VCMonad
@@ -39,7 +41,7 @@ import           Language.Nano.ESC.VCMonad
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
 --------------------------------------------------------------------------------
-verifyFile :: FilePath -> IO (F.FixResult (SourceSpan, String))
+verifyFile :: FilePath -> IO (UAnnSol a, F.FixResult Error)
 --------------------------------------------------------------------------------
 
 verifyFile f 
@@ -49,7 +51,7 @@ verifyFile f
        writeFile (f `addExtension` ".vc") (render $ pp vc)
        rs     <- mapM checkVC $ obligationsVCond vc
        forM rs $ (putStrLn . render . pp)
-       return  $ fmap (,"") $ mconcat rs
+       return    (NoAnn, errorESC <$> mconcat rs)
 
 --------------------------------------------------------------------------------
 -- | Top-level VC Generator 

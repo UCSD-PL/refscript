@@ -105,11 +105,6 @@ data Located a
 instance Functor Located where 
   fmap f (Loc l x) = Loc l (f x)
 
--- | `IsLocated` is a predicate for values which we have a SourceSpan
-
-class IsLocated a where 
-  srcPos :: a -> SourceSpan
-
 instance IsLocated SourceSpan where 
   srcPos x = x 
 

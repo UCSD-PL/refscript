@@ -35,6 +35,34 @@ sourcePosElts s = (src, line, col)
     line        = sourceLine   s
     col         = sourceColumn s 
 
+---------------------------------------------------------------------
+ppshow :: (PP a) => a -> String
+---------------------------------------------------------------------
+ppshow = render . pp
+
+---------------------------------------------------------------------
+catMessage :: Error -> String -> Error
+---------------------------------------------------------------------
+catMessage err msg = err {errMsg = msg ++ errMsg err} 
+
+
+---------------------------------------------------------------------
+catError :: Error -> Error -> Error
+---------------------------------------------------------------------
+catError e1 e2 = catMessage e1 $ show e2
+
+---------------------------------------------------------------------
+tracePP     ::  (PP a) => String -> a -> a
+---------------------------------------------------------------------
+tracePP s x = trace (printf "\nTrace: [%s]: %s" s (ppshow x)) x
+
+instance PP a => PP (Either String a) where 
+  pp (Left s)  = text $ "ERROR!" ++ s
+  pp (Right x) = pp x 
+
+instance PP String where
+  pp = text
+
 ---------------------------------------------------------------------------
 -- | Errors ---------------------------------------------------------------
 ---------------------------------------------------------------------------
@@ -52,13 +80,10 @@ dummySpan = Span l l
   where l = initialPos ""
 
 
+
 ---------------------------------------------------------------------------
 -- | Constructing Errors --------------------------------------------------
 ---------------------------------------------------------------------------
-
-
-
-
 
 bugBadPhi l t1s t2s       = Error l $ printf "BUG: Unbalanced Phi at %s \n %s \n %s" (ppshow l) (ppshow t1s) (ppshow t2s)
 bugBadSubtypes l x        = Error l $ printf "BUG: Unexpected Subtyping Constraint \n %s" (ppshow x)
@@ -96,15 +121,8 @@ errorNullUndefined l      = Error l $ printf "Null type is not a subtype of unde
 errorUniqueTypeParams l   = Error l $ printf "Only unique type paramteres are allowed"
 errorBracketAccess l t f  = Error l $ printf "Cannot access field \"%s\" of type: %s" (ppshow f) (ppshow t)
 errorAnnotation l e t ta  = Error l $ printf "Type %s does not satisfy annotation %s at expression %s." (ppshow t) (ppshow ta) (ppshow e)
- 
-ppshow                  = render . pp
 
-tracePP     ::  (PP a) => String -> a -> a
-tracePP s x = trace (printf "\nTrace: [%s]: %s" s (ppshow x)) x
+errorMultipleTypeArgs l   = Error l $ printf "Multiple Type Args"
 
-instance PP a => PP (Either String a) where 
-  pp (Left s)  = text $ "ERROR!" ++ s
-  pp (Right x) = pp x 
 
-instance PP String where
-  pp = text
+

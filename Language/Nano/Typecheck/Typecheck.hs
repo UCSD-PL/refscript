@@ -55,18 +55,18 @@ import qualified System.Console.CmdArgs.Verbosity as V
 
 -- | Debug mode
 verifyFile f = do 
-    nano    <- parseNanoFromFile f
-    V.whenLoud $ donePhase FM.Loud "Parse"
-    putStrLn . render . pp $ nano
-    let nanoSsa = ssaTransform nano
-    V.whenLoud $ donePhase FM.Loud "SSA Transform"
-    V.whenLoud $ putStrLn . render . pp $ nanoSsa
-    verb    <- V.getVerbosity
-    let p =  execute verb nanoSsa $ tcAndPatch nanoSsa
-    TC{ noFailCasts = nfc } <- getOpts
-    r <- either unsafe (\q -> safe q >>= return . (`mappend` failCasts nfc q)) p
-    V.whenLoud $ donePhase FM.Loud "Typechecking"
-    return $ r
+  nano    <- parseNanoFromFile f
+  V.whenLoud $ donePhase FM.Loud "Parse"
+  putStrLn . render . pp $ nano
+  let nanoSsa = ssaTransform nano
+  V.whenLoud $ donePhase FM.Loud "SSA Transform"
+  V.whenLoud $ putStrLn . render . pp $ nanoSsa
+  verb    <- V.getVerbosity
+  let p =  execute verb nanoSsa $ tcAndPatch nanoSsa
+  TC { noFailCasts = nfc } <- getOpts
+  r <- either unsafe (\q -> safe q >>= return . (`mappend` failCasts nfc q)) p
+  V.whenLoud $ donePhase FM.Loud "Typechecking"
+  return $ r
 
 
 -------------------------------------------------------------------------------
@@ -91,7 +91,7 @@ safe (Nano {code = Src fs})
 
 -------------------------------------------------------------------------------
 failCasts :: (Data r, Typeable r) => 
-              Bool -> Nano (AnnSSA r) (RType r) -> F.FixResult (SourceSpan, String)
+              Bool -> Nano (AnnSSA r) (RType r) -> F.FixResult Error 
 -------------------------------------------------------------------------------
 failCasts False (Nano {code = Src fs}) | not $ null csts = F.Unsafe csts
                                        | otherwise       = F.Safe

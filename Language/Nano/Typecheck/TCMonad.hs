@@ -77,7 +77,7 @@ import           Text.Printf
 import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative            ((<$>))
 import           Control.Monad.State
-import           Control.Monad.Error
+import           Control.Monad.Error hiding (Error)
 import           Language.Fixpoint.Misc 
 import qualified Language.Fixpoint.Types as F
 
@@ -111,7 +111,7 @@ import qualified System.Console.CmdArgs.Verbosity as V
 
 data TCState r = TCS {
                    -- Errors
-                     tc_errss :: ![(SourceSpan, String)]
+                     tc_errss :: ![Error]
                    , tc_subst :: !(RSubst r)
                    , tc_cnt   :: !Int
                    -- Annotations
@@ -125,12 +125,11 @@ data TCState r = TCS {
                    , tc_tdefs :: !(Env (RType r))
                    -- The currently typed expression 
                    , tc_expr  :: Maybe (Expression (AnnSSA r))
-
-                   -- Verbosiry
+                   -- Verbosity
                    , tc_verb  :: V.Verbosity
                    }
 
-type TCM r     = ErrorT String (State (TCState r))
+type TCM r     = ErrorT Error (State (TCState r))
 
 
 -------------------------------------------------------------------------------
@@ -188,15 +187,15 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ')
 
 
 -------------------------------------------------------------------------------
-tcError :: (IsLocated l) => l -> String -> TCM r a
+tcError     :: Error -> TCM r a
 -------------------------------------------------------------------------------
-tcError l msg = throwError $ printf "TC-ERROR at %s : %s" (ppshow $ srcPos l) msg
+tcError err = throwError $ catMessage err "TC-ERROR "
 
 
 -------------------------------------------------------------------------------
-logError   :: SourceSpan -> String -> a -> TCM r a
+logError   :: Error -> a -> TCM r a
 -------------------------------------------------------------------------------
-logError l msg x = (modify $ \st -> st { tc_errss = (l,msg):(tc_errss st)}) >> return x
+logError err x = (modify $ \st -> st { tc_errss = err : tc_errss st}) >> return x
 
 
 -------------------------------------------------------------------------------
@@ -214,11 +213,11 @@ freshSubst l αs
       extSubst βs 
       return     $ fromList $ zip αs (tVar <$> βs)
     where
-      fUnique xs = when (not $ unique xs) $ logError l errorUniqueTypeParams ()
+      fUnique xs = when (not $ unique xs) $ logError (errorUniqueTypeParams l) ()
 
 setTyArgs l βs
   = do m <- tc_anns <$> get
-       when (HM.member l m) $ tcError l "Multiple Type Args"
+       when (HM.member l m) $ tcError $ errorMultipleTypeArgs l
        addAnn l $ TypInst (tVar <$> βs)
 
 
@@ -295,22 +294,23 @@ getAllAnns = tc_annss <$> get
 
 -------------------------------------------------------------------------------
 accumAnn :: (Ord r, F.Reftable r, Substitutable r (Fact r)) =>
-  (AnnInfo r -> [(SourceSpan, String)]) -> TCM r () -> TCM r ()
+  (AnnInfo r -> [Error]) -> TCM r () -> TCM r ()
 -------------------------------------------------------------------------------
 accumAnn check act 
   = do m     <- tc_anns <$> get 
        modify $ \st -> st {tc_anns = HM.empty}
        act
        m'    <- getAnns
-       forM_ (check m') $ \(l, s) -> logError l s ()
+       forM_ (check m') (`logError` ())
        modify $ \st -> st {tc_anns = m} {tc_annss = m' : tc_annss st}
 
 -------------------------------------------------------------------------------
-execute     ::  (PP r, F.Reftable r) => V.Verbosity -> Nano z (RType r) -> TCM r a -> Either [(SourceSpan, String)] a
+execute     ::  (PP r, F.Reftable r) => 
+  V.Verbosity -> Nano z (RType r) -> TCM r a -> Either [Error] a
 -------------------------------------------------------------------------------
 execute verb pgm act 
   = case runState (runErrorT act) $ initState verb pgm of 
-      (Left err, _) -> Left [(dummySpan,  err)]
+      (Left err, _) -> Left [err]
       (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errss st)
 
 
@@ -334,7 +334,7 @@ getDefType f
   = do m <- tc_defs <$> get
        maybe err return $ envFindTy f m 
     where 
-       err = tcError l $ errorMissingSpec l f
+       err = tcError $ errorMissingSpec l f
        l   = srcPos f
 
 
@@ -400,25 +400,25 @@ unfoldSafeTC   t = getTDefs >>= \γ -> return $ unfoldSafe γ t
 --------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------
-unifyTypesM :: (IsLocated l, Ord r, PP r, F.Reftable r) => 
-  l -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
+unifyTypesM :: (Ord r, PP r, F.Reftable r) => 
+  SourceSpan -> Error -> [RType r] -> [RType r] -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
-unifyTypesM l msg t1s t2s
+unifyTypesM l err t1s t2s
   -- TODO: This check might be done multiple times
-  | length t1s /= length t2s = tcError l errorArgMismatch 
+  | length t1s /= length t2s = tcError $ errorArgMismatch l 
   | otherwise                = do θ <- getSubst 
                                   γ <- getTDefs
-                                  case unifys (srcPos l) γ θ t1s t2s of
-                                    Left msg' -> tcError l $ msg ++ "\n" ++ msg'
+                                  case unifys l γ θ t1s t2s of
+                                    Left err' -> tcError $ catError err' err 
                                     Right θ'  -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------
-unifyTypeM :: (Ord r, PrintfArg t1, PP r, PP a, F.Reftable r, IsLocated l) =>
-  l -> t1 -> a -> RType r -> RType r -> TCM r (RSubst r)
+unifyTypeM :: (Ord r, PrintfArg t1, PP r, PP a, F.Reftable r) =>
+  SourceSpan -> t1 -> a -> RType r -> RType r -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
 unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
   where 
-    msg              = errorWrongType m e t t'
+    msg               = errorWrongType l m e t t'
 
 
 ----------------------------------------------------------------------------------
@@ -448,9 +448,9 @@ checkAnnotation msg ta e t = do
   where
     sub SubT = return () 
     sub EqT  = return () 
-    sub _    = tcError l (msg ++ " : " ++ errorAnnotation e t ta)
-    l        = getAnnotation e
-
+    sub _    = tcError $ catMessage err msg' 
+    err      = errorAnnotation (srcPos $ getAnnotation e) e t ta
+    msg'     = "[" ++ msg ++ "]"
 
 --------------------------------------------------------------------------------
 --  Cast Helpers ---------------------------------------------------------------

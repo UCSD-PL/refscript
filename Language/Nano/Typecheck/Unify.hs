@@ -86,7 +86,7 @@ unify l γ θ (TObj bs1 _) (TObj bs2 _)
 
 unify l γ θ (TArr t _) (TArr t' _) = unify l γ θ t t'
 
-unify l _ θ _ _         = Right $ θ  
+unify _ _ θ _ _         = Right $ θ  
 
 
 {-unify' γ θ t t' = unify γ θ (trace (printf "unify: %s - %s" (ppshow t) (ppshow t')) t) t' -}

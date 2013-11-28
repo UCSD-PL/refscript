@@ -45,7 +45,7 @@ import           Control.Monad.Error hiding (Error)
 import qualified Data.HashMap.Strict as M 
 import           Language.Nano.Errors
 import           Language.Nano.Env
-import           Language.Nano.Types                (dummySpan)
+import           Language.Nano.Types                ()
 import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
@@ -53,7 +53,7 @@ import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Fixpoint.Misc             
 import qualified Language.Fixpoint.Types            as F
-import           Text.Printf                        (printf)
+-- import           Text.Printf                        (printf)
 
 -- import           Debug.Trace                        (trace)
 
@@ -163,11 +163,11 @@ ssaError = throwError
 -- inserts l xs m = M.insert l (xs ++ M.lookupDefault [] l m) m
 
 -------------------------------------------------------------------------------
-execute         :: SSAM r a -> Either (SourceSpan, String) a 
+execute         :: SSAM r a -> Either Error a 
 -------------------------------------------------------------------------------
 execute act 
   = case runState (runErrorT act) initState of 
-      (Left err, _) -> Left  (dummySpan,  err)
+      (Left err, _) -> Left err
       (Right x, _)  -> Right x
 
 -- Try the action @act@ in the current state. 

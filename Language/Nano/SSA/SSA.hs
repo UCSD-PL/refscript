@@ -6,6 +6,7 @@ module Language.Nano.SSA.SSA (ssaTransform) where
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
+import           Control.Exception                  (throw)
 import qualified Data.HashMap.Strict as M 
 import           Language.Nano.Types
 import           Language.Nano.Errors
@@ -24,7 +25,7 @@ import           Text.Printf                        (printf)
 ----------------------------------------------------------------------------------
 ssaTransform :: (F.Reftable r) => Nano SourceSpan (RType r) -> NanoSSAR r
 ----------------------------------------------------------------------------------
-ssaTransform = either (errorstar . snd) id . execute . ssaNano 
+ssaTransform = either throw id . execute . ssaNano 
 
 
 ----------------------------------------------------------------------------------
@@ -272,7 +273,7 @@ ssaExpr e@(VarRef l x) = do
       Just z  -> return $ VarRef l z
       Nothing -> if imm 
                   then return e 
-                  else ssaError (srcPos x) $ errorUnboundId x 
+                  else ssaError $ errorUnboundId (srcPos x) x 
 
 ssaExpr (PrefixExpr l o e)
   = PrefixExpr l o <$> ssaExpr e

@@ -78,6 +78,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative            ((<$>))
 import           Control.Monad.State
 import           Control.Monad.Error hiding (Error)
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
 import qualified Language.Fixpoint.Types as F
 

@@ -20,6 +20,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
+import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Interface  (checkValid {-, resultExit-} )
 import           Language.Fixpoint.Misc       (safeZip, sortNub {-, donePhase -} )

@@ -1,7 +1,7 @@
-/*@ foo :: (number) => {string | tru} */
+/*@ foo :: (number) => {string | v > 100 } */
 function foo(x){
+
+  var y = 120;
  
-  var y = "dog";
- 
-  return "cat"; // x + y; 
+  return y; // x + y; 
 }

@@ -95,9 +95,12 @@ errorNullUndefined l      = mkErr l $ printf "Null type is not a subtype of unde
 errorUniqueTypeParams l   = mkErr l $ printf "Only unique type paramteres are allowed"
 errorBracketAccess l t f  = mkErr l $ printf "Cannot access field \"%s\" of type: %s" (ppshow f) (ppshow t)
 errorAnnotation l e t ta  = mkErr l $ printf "Type %s does not satisfy annotation %s at expression %s." (ppshow t) (ppshow ta) (ppshow e)
-errorLiquid l             = mkErr l $ printf "Liquid Type Error"
-errorESC l                = mkErr l $ printf "ESC Error"
+errorLiquid l             = mkErr l $ printf "Liquid Type Error at %s" (ppshow l)
+errorESC l                = mkErr l $ printf "ESC Error at %s" (ppshow l)
 errorMultipleTypeArgs l   = mkErr l $ printf "Multiple Type Args"
 errorDownCast l t         = mkErr l $ printf "Downcast: %s" (ppshow t) 
 errorDeadCast l           = mkErr l $ printf "Deadcast"
 errorTypeAssign l t1 t2   = mkErr l $ printf "Cannot assign type %s to %s" (ppshow t1) (ppshow t2)
+
+
+ppshow_short (SS x y)     = 

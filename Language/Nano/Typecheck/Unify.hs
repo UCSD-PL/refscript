@@ -16,6 +16,7 @@ module Language.Nano.Typecheck.Unify (
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
+import           Language.Fixpoint.Errors 
 import           Language.Nano.Errors 
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
@@ -140,7 +141,7 @@ varEql l θ α β =
     Left  s1 -> 
       case varAsn l θ β $ tVar α of
         Right θ'' -> Right θ''
-        Left  s2  -> Left $ s1 { errMsg = (errMsg s1 ++ "\n OR \n" ++ show s2) }
+        Left  s2  -> Left $ catMessage s1 (errMsg s2) -- s1 { errMsg = (errMsg s1 ++ "\n OR \n" ++ show s2) }
 
 
 -----------------------------------------------------------------------------

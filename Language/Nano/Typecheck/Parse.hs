@@ -26,11 +26,10 @@ import           Data.Char (toLower, isLower, isSpace)
 import           Data.Monoid (mconcat)
 
 import           Language.Fixpoint.Names (propConName)
-import           Language.Fixpoint.Misc (errorstar)
 import           Language.Fixpoint.Types hiding (quals)
 import           Language.Fixpoint.Parse 
 
-import           Language.Nano.Errors hiding (Error)
+import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types

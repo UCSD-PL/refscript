@@ -64,6 +64,7 @@ import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 import qualified Language.Fixpoint.Types as F
 
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Misc
 import           Language.Nano.Errors
@@ -105,6 +106,19 @@ data Located a
 instance Functor Located where 
   fmap f (Loc l x) = Loc l (f x)
 
+--------------------------------------------------------------------------------
+-- | `IsLocated` is a predicate for values which we have a SourceSpan
+--------------------------------------------------------------------------------
+
+class IsLocated a where 
+  srcPos :: a -> SourceSpan
+
+instance IsLocated SrcSpan where 
+  srcPos (SS a b) = Span a b
+
+instance IsLocated Error where
+  srcPos = srcPos . errLoc 
+
 instance IsLocated SourceSpan where 
   srcPos x = x 
 
@@ -122,7 +136,7 @@ instance (HasAnnotation thing, IsLocated a) => IsLocated (thing a) where
 
 
 instance IsLocated F.Symbol where 
-  srcPos _ = dummySpan
+  srcPos _ = srcPos dummySpan
 
 instance IsLocated (SourceSpan, r) where 
   srcPos = srcPos . fst
@@ -400,11 +414,9 @@ pOr  p q  = F.pOr  [p, q]
 -- SourcePos Instances -------------------------------------------
 ------------------------------------------------------------------
 
-instance Hashable SourcePos where 
-  hashWithSalt i   = hashWithSalt i . sourcePosElts
 
 instance Hashable SourceSpan where 
-  hashWithSalt i z = hashWithSalt i (sp_begin z, sp_end z)
+  hashWithSalt i = hashWithSalt i . sourceSpanSrcSpan
 
 instance Hashable a => Hashable (Id a) where 
   hashWithSalt i x = hashWithSalt i (idLoc x, idName x)
@@ -446,11 +458,9 @@ instance PP a => PP (Located a) where
   pp x = pp (val x) <+> text "at:" <+> pp (loc x)
 --------------------------------------------------------------------------------
 
-srcSpanStartLine = snd3 . sourcePosElts . sp_begin 
-srcSpanEndLine   = snd3 . sourcePosElts . sp_end
-srcSpanStartCol  = thd3 . sourcePosElts . sp_begin 
-srcSpanEndCol    = thd3 . sourcePosElts . sp_end
-srcSpanFile      = fst3 . sourcePosElts . sp_begin
-
-
+srcSpanStartLine = snd3 . sourcePosElts . sp_start . sourceSpanSrcSpan   
+srcSpanEndLine   = snd3 . sourcePosElts . sp_stop  . sourceSpanSrcSpan
+srcSpanStartCol  = thd3 . sourcePosElts . sp_start . sourceSpanSrcSpan 
+srcSpanEndCol    = thd3 . sourcePosElts . sp_stop  . sourceSpanSrcSpan 
+srcSpanFile      = fst3 . sourcePosElts . sp_start . sourceSpanSrcSpan
 

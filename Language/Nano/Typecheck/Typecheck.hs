@@ -34,6 +34,7 @@ import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.SSA.SSA
 
+import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc             as FM 
 import           Language.ECMAScript3.Syntax
@@ -70,13 +71,6 @@ verifyFile f = do
   V.whenLoud $ donePhase FM.Loud "Typechecking"
   return (NoAnn, r)
 
--------------------------------------------------------------------------------
-typeCheck ::
-  (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
-  V.Verbosity -> (NanoSSAR r) -> Either [Error] (NanoTypeR r)
--------------------------------------------------------------------------------
-typeCheck verb pgm = execute verb pgm $ tcAndPatch pgm
-
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppshow) 
                  return $ F.Unsafe errs
@@ -84,6 +78,14 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
 safe (Nano {code = Src fs})
   = do V.whenLoud $ forM_ fs $ T.mapM printAnn
        return F.Safe 
+
+
+-------------------------------------------------------------------------------
+typeCheck ::
+  (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
+  V.Verbosity -> (NanoSSAR r) -> Either [Error] (NanoTypeR r)
+-------------------------------------------------------------------------------
+typeCheck verb pgm = execute verb pgm $ tcAndPatch pgm
 
 -------------------------------------------------------------------------------
 failCasts :: (Data r, Typeable r) => 

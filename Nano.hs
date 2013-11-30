@@ -12,6 +12,7 @@ import           System.Exit                        (exitWith)
 import           Language.Fixpoint.Interface        (resultExit)
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc             
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Files
 -- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Text.PrettyPrint.HughesPJ          (render)
@@ -22,7 +23,7 @@ main = do cfg  <- getOpts
           run (verifier cfg) cfg
     
 -------------------------------------------------------------------------------
--- verifier              :: Config -> FilePath -> IO (F.FixResult Error)  
+-- verifier           :: Config -> FilePath -> IO (F.FixResult Error)  
 -------------------------------------------------------------------------------
 verifier (Esc    {} ) = ESC.verifyFile 
 verifier (TC     {} ) = TC.verifyFile
@@ -41,19 +42,22 @@ runOne verifyFile f
     where
        handler e = return (NoAnn, F.Crash [e] "") 
 
-       -- renderAnnotations f sol r' $ cgi_annot cgi
-       -- donePhase (F.colorResult r) (F.showFix r) 
-       -- return r'
+----------------------------------------------------------------------------------
+renderAnnotations :: (PP t) => FilePath -> F.FixResult Error -> UAnnSol t -> IO () 
+----------------------------------------------------------------------------------
 
-renderAnnotations _       _   NoAnn 
-  = return () 
+renderAnnotations srcFile res (NoAnn :: UAnnSol t)
+  = B.writeFile jsonFile    $ annotByteString res (mempty :: UAnnInfo t) 
+    where 
+       jsonFile = extFileName Json  srcFile
+    
 renderAnnotations srcFile res (SomeAnn ann sol)
   = do writeFile   annFile  $ wrapStars "Constraint Templates" ++ "\n" 
        appendFile  annFile  $ ppshow ann
        appendFile  annFile  $ wrapStars "Inferred Types"       ++ "\n" 
        appendFile  annFile  $ ppshow ann'
        B.writeFile jsonFile $ annotByteString res ann' 
-       donePhase Loud "Written Inferred Types"
+       donePhase Loud "Written Inferred Annotations"
     where 
        jsonFile = extFileName Json  srcFile
        annFile  = extFileName Annot srcFile

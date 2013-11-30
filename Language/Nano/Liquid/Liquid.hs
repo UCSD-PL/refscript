@@ -22,6 +22,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
 
 import qualified Language.Fixpoint.Types            as F
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Files
 import           Language.Fixpoint.Interface        (solve)
@@ -53,7 +54,7 @@ verifyFile f =
       cfg <- getOpts 
       verb    <- V.getVerbosity
       case typeCheck verb (ssaTransform p) of
-        Left errs -> return $ (A.NoAnn, F.Unsafe errs)
+        Left errs -> return $ (A.NoAnn, F.Crash errs "Type Errors")
         Right p'  -> reftypeCheck cfg f p'
 
 -- DEBUG VERSION 

@@ -27,6 +27,7 @@ import           Data.Aeson
 import           GHC.Exts                           (groupWith, sortWith)
 
 import           Language.Fixpoint.Files()
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc             (inserts)
 import qualified Language.Fixpoint.Types    as F
 import           Language.ECMAScript3.PrettyPrint   
@@ -110,7 +111,9 @@ mkAnnMapErr (F.Unsafe ls)         = eInfo "Liquid Error: "   <$> ls
 mkAnnMapErr (F.Crash ls msg)      = eInfo ("Crash: " ++ msg) <$> ls 
 mkAnnMapErr _                     = []
   
-eInfo msg err                     = errorInfo $ catMessage err msg
+eInfo msg err                     = (srcPos $ errLoc err', errMsg err')
+  where 
+    err'                          = catMessage err msg
 
 mkAnnMapTyp (AI m) 
   = M.map (\a -> (F.symbolString $ ann_bind a, ppshow $ ann_type a))
@@ -122,7 +125,7 @@ mkAnnMapTyp (AI m)
   $ M.filterWithKey validAnnot
   $ m
    
-validAnnot sp _ = sp /= dummySpan && oneLine sp
+validAnnot sp _ = sourceSpanSrcSpan sp /= dummySpan && oneLine sp
 oneLine l       = srcSpanStartLine l == srcSpanEndLine l
 lineCol sp      = (srcSpanStartLine sp, srcSpanStartCol sp) 
 
@@ -158,10 +161,13 @@ instance ToJSON SourcePos where
       c              = sourceColumn z 
  
 instance ToJSON SourceSpan where
-  toJSON (Span l l') = object [ ("start" .= toJSON l), ("stop"  .= toJSON l') ]
+  toJSON = object . sourceSpanBinds  
 
 instance ToJSON AnnErrors where 
-  toJSON             = Array . V.fromList . fmap toJSON 
+  toJSON = Array . V.fromList . fmap (\(sp, str) -> object $ ("message" .= str) : sourceSpanBinds sp)
+
+
+sourceSpanBinds (Span l l') = [ ("start" .= toJSON l), ("stop"  .= toJSON l') ]
 
 instance (Show k, ToJSON a) => ToJSON (Assoc k a) where
   toJSON (Asc kas) = object [ (tshow k) .= (toJSON a) | (k, a) <- M.toList kas ]

@@ -86,6 +86,7 @@ import           Language.Nano.Liquid.Types
 
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Errors
 import           Control.Applicative 
 import           Control.Exception (throw)
 

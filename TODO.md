@@ -60,6 +60,10 @@ FAILING TESTS:
     Using new representation of lists.
     @ Added [Sun 2013-09-15]
 
+--> ON CRASH, generate JSON with...
+
+{"status":"error","types":{},"errors":[ {"message":"GHC Error: tests/pos/test00.hs:11:14-16\n    Not in scope: type constructor or class `Boo'\nPerhaps you meant `Bool' (imported from Prelude)","stop":{"column":17,"line":11},"start":{"column":14,"line":11}}]}
+
 
 
 predicate Like X Y = (tag X) = (tag Y)

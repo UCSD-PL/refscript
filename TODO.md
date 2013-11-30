@@ -69,7 +69,19 @@ FAILING TESTS:
 predicate Like X Y = (tag X) = (tag Y)
 (x:num + str, {y:num + str | (Like x V)}) => {v:num + str | (Like X v) && ((num x) && (num y) => v = x + y)}
 
+(x:num + str, y:num + str) => {v: number | (((ttag x) = "number" && (ttag y) = "number") <=> (v = x + y))} + {string | ((ttag x) = "string" || (ttag y) = "string")}
+
 extra failing tests
+
+(x:number + string, y:number + string) => {number | ((num x) && (num y) && (v = x + y))} + {string | (string x) || (string y)}
+
+
+x:num   , y:string => string
+x:string, y:num    => string
+x:string, y:string => string
+
+((str x) || (str y)) 
+
 
 [HEREHEREHEREHERE] 
 

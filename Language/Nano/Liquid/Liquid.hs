@@ -306,8 +306,7 @@ consAsgn g x e
 
 --  @consExpr g ct e@ returns a pair (g', x') where x' is a fresh, 
 --  temporary (A-Normalized) variable holding the value of `e`,
---  g' is g extended with a binding for x' (and other temps required 
---  for `e`)
+--  g' is g extended with a binding for x' (and other temps required for `e`)
 ------------------------------------------------------------------------------------
 consExpr :: CGEnv -> Maybe RefType -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv) 
 ------------------------------------------------------------------------------------
@@ -408,13 +407,13 @@ consExpr' _ e
 consUpCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ------------------------------------------------------------------------------------------
 consUpCast g x a e 
-  = do  γ     <- getTDefs
-        let b' = fst $ alignTs γ b u
-        envAddFresh "consUpCast" l b' g
-  where 
-    u          = rType $ head [ t | Assume t <- ann_fact a]
-    b          = envFindTy x g 
-    l          = getAnnotation e
+  = do γ     <- getTDefs
+       let b' = tracePP ("consUpCast: b = " ++ ppshow b) $ fst $ alignTs γ b u
+       envAddFresh "consUpCast" l b' g
+    where 
+       u       = rType $ head [ t | Assume t <- ann_fact a]
+       b       = envFindTy x g 
+       l       = getAnnotation e
       
 
 -- Constraint generation for down-casting: In an environment @g@, cast the
@@ -461,7 +460,7 @@ consCall :: (PP a)
 consCall g l _ es ft 
   = do (_,its,ot)   <- mfromJust "consCall" . bkFun <$> instantiate l g ft
        (xes, g')    <- consScan consExpr' g es
-       let (su, ts') = renameBinds its xes
+       let (su, ts') = renameBinds its $ tracePP ("consCall2: es=" ++ ppshow es) xes
        zipWithM_ (withAlignedM $ subTypeContainers' "call" l g') [envFindTy x g' | x <- xes] ts'
        envAddFresh "consCall" l ({- tracePP "Ret Call Type" $ -} F.subst su ot) g'
      {-where -}
@@ -482,8 +481,7 @@ getTypArgs l αs
       _                           -> throw $ bugMissingTypeArgs $ srcPos l
 
 ---------------------------------------------------------------------------------
-consScan :: (CGEnv -> a -> CGM (b, CGEnv)) 
-         -> CGEnv -> [a] -> CGM ([b], CGEnv)
+consScan :: (CGEnv -> a -> CGM (b, CGEnv)) -> CGEnv -> [a] -> CGM ([b], CGEnv)
 ---------------------------------------------------------------------------------
 consScan step g xs  = go g [] xs 
   where 
@@ -534,10 +532,6 @@ consArr l g (Just t@(TArr ta _)) es = do
     lenPred      = F.PAtom F.Eq (F.expr $ length es) 
                     (F.EApp (F.stringSymbol "len") [F.eVar $ v])
 
-consArr _ _ Nothing _  = 
-  errorstar $ "Array literals need type annotations at the moment " ++
-              "to typecheck in Liquid."
-consArr _ _ (Just _) _ = 
-  errorstar $ "Type annotation for array literal needs to be of " ++
-              "Array type in Liquid."
+consArr l _ Nothing _  = die $ errorMissingAnnot (srcPos l) "array literal" 
+consArr l _ (Just _) _ = die $ errorBadAnnot     (srcPos l) "array literal" "array" 
 

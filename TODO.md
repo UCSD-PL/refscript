@@ -60,9 +60,23 @@ FAILING TESTS:
     Using new representation of lists.
     @ Added [Sun 2013-09-15]
 
---> ON CRASH, generate JSON with...
-
-{"status":"error","types":{},"errors":[ {"message":"GHC Error: tests/pos/test00.hs:11:14-16\n    Not in scope: type constructor or class `Boo'\nPerhaps you meant `Bool' (imported from Prelude)","stop":{"column":17,"line":11},"start":{"column":14,"line":11}}]}
+Failed 16 tests: 
+ liquid/pos/arrays/arr-04.js,
+ liquid/pos/arrays/safemap.js,
+ liquid/pos/lists/safeLists.js,
+ liquid/pos/lists/safemap.js,
+ liquid/pos/lists/safereverse.js,
+ liquid/pos/loops/obj-02.js,
+ liquid/pos/loops/while-03.js,
+ liquid/pos/misc/apply.js,
+ liquid/pos/misc/twice-hof.js,
+ liquid/pos/objects/obj-03.js,
+ liquid/pos/operators/add-04.js,
+ liquid/pos/operators/sum-00.js,
+ liquid/pos/operators/sum-01.js,
+ liquid/pos/operators/sum-02.js,
+ liquid/pos/operators/sum-infer-00.js,
+ liquid/pos/simple/obj-00.js
 
 
 
@@ -71,21 +85,11 @@ predicate Like X Y = (tag X) = (tag Y)
 
 (x:num + str, y:num + str) => {v: number | (((ttag x) = "number" && (ttag y) = "number") <=> (v = x + y))} + {string | ((ttag x) = "string" || (ttag y) = "string")}
 
-extra failing tests
-
 (x:number + string, y:number + string) => {number | ((num x) && (num y) && (v = x + y))} + {string | (string x) || (string y)}
-
-
-x:num   , y:string => string
-x:string, y:num    => string
-x:string, y:string => string
-
-((str x) || (str y)) 
-
 
 [HEREHEREHEREHERE] 
 
-    + add support for string +
+    + add support for string +    (liquid/pos/operators/add-0{3,4}.js)
     + add support for array-write (liquid/pos/arrays/arr-04.js)
     + add support for predicate aliases
 

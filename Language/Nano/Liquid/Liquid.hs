@@ -408,8 +408,8 @@ consUpCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id
 ------------------------------------------------------------------------------------------
 consUpCast g x a e 
   = do γ      <- getTDefs
-       let b'  = tracePP ("consUpCast: b = " ++ ppshow b) 
-               $ (`strengthen` (F.symbolReft x)) 
+       let b'  = {- tracePP ("consUpCast: b = " ++ ppshow b) $  -}  
+                 (`strengthen` (F.symbolReft x)) 
                $ fst 
                $ alignTs γ b u
        -- let b'' = b' `strengthen` (F.symbolReft x)
@@ -464,7 +464,7 @@ consCall :: (PP a)
 consCall g l _ es ft 
   = do (_,its,ot)   <- mfromJust "consCall" . bkFun <$> instantiate l g ft
        (xes, g')    <- consScan consExpr' g es
-       let (su, ts') = renameBinds its $ tracePP ("consCall2: es=" ++ ppshow es) xes
+       let (su, ts') = renameBinds its $ {- tracePP ("consCall2: es=" ++ ppshow es) -} xes
        zipWithM_ (withAlignedM $ subTypeContainers' "call" l g') [envFindTy x g' | x <- xes] ts'
        envAddFresh "consCall" l ({- tracePP "Ret Call Type" $ -} F.subst su ot) g'
      {-where -}

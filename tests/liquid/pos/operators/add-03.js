@@ -1,35 +1,30 @@
 
 
 /*@ myPlusOk :: (x:number + string, y:number + string) 
-             => {v:number + string | (if ((ttag x) = "number" && (ttag y) = "number") then (ttag v) = "number" else (ttag v)="string")} */
+             => {v:number + string | (if ((ttag x) = "number" && (ttag y) = "number") 
+                                      then ((ttag v) = "number" && v = x + y) 
+                                      else (ttag v) = "string")} 
+  */
 function myPlusOk(x, y){
     return myPlusOk(x,y);
 }
 
-/*@ myPlusBad :: (xanax:number + string, y:number + string) => 
-              {v: number | (((ttag xanax) = "number" && (ttag y) = "number") <=> (v = xanax + y))} 
-            + {string | ((ttag xanax) = "string" || (ttag y) = "string")} */
-function myPlusBad(x, y){
-    return myPlusBad(x,y);
+/*@ num_num :: (a:number, b:number) => {number | v = a + b } */
+function num_num(a, b){
+  var d = myPlusOk(a, b);
+  return d; 
 }
 
-/*@ foo :: (number) => {number | true } */
-function foo(a){
-  var b = 1;
-  var c = 2;
-  return myPlusOk(b, c); 
-}
-
-/*@ bar :: (string) => {string | true } */
-function bar(a){
+/*@ str_str :: (string) => {string | true } */
+function str_str(a){
   var b = "dog";
-  return b; //myPlusBad(a, b); 
+  return  myPlusOk(a, b); 
 }
 
-/*@ baz :: (number) => {string | true } */
-function baz(a){
+/*@ num_str :: (number) => {string | true } */
+function num_str(a){
   var b = "dog";
-  return b; // myPlusBad(a, b); 
+  return myPlusOk(a, b); 
 }
 
 

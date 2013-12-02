@@ -211,8 +211,9 @@ eqType γ t1 t2 = (fth4 $ compareTs γ t1 t2) == EqT
 
 
 -- | `alignTs`
-alignTs γ t1 t2 = (t1', t2')
-  where (_,t1', t2', _) = compareTs γ t1 t2
+alignTs γ t1 t2     = (t1', t2')
+  where 
+    (_,t1', t2', _) = compareTs γ t1 t2
 
 
 -- | `compareTs`

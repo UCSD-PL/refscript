@@ -407,10 +407,14 @@ consExpr' _ e
 consUpCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ------------------------------------------------------------------------------------------
 consUpCast g x a e 
-  = do γ     <- getTDefs
-       let b' = tracePP ("consUpCast: b = " ++ ppshow b) $ fst $ alignTs γ b u
+  = do γ      <- getTDefs
+       let b'  = tracePP ("consUpCast: b = " ++ ppshow b) 
+               $ (`strengthen` (F.symbolReft x)) 
+               $ fst 
+               $ alignTs γ b u
+       -- let b'' = b' `strengthen` (F.symbolReft x)
        envAddFresh "consUpCast" l b' g
-    where 
+    where
        u       = rType $ head [ t | Assume t <- ann_fact a]
        b       = envFindTy x g 
        l       = getAnnotation e

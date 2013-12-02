@@ -26,10 +26,3 @@ function num_str(a){
   var b = "dog";
   return myPlusOk(a, b); 
 }
-
-
-
-/*@ zonk :: (x:number + string, y:number+string) => {number | true} */
-function zonk(x, y){
-  return 12; // x + 1;
-}

@@ -14,7 +14,7 @@ import           Control.Exception                  (throw)
 
 import qualified Data.ByteString.Lazy               as B
 import qualified Data.HashMap.Strict                as M
-import           Data.Maybe                         (listToMaybe)
+import           Data.Maybe                         (fromMaybe, listToMaybe)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -94,14 +94,13 @@ consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) = consStmts (initCGEnv pgm) fs >> return ()
 
-  -- = forM_ fs . consFun =<< initCGEnv pgm
 initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = do ft             <- {- tracePP msg <$> -} (freshTyFun g l f =<< getDefType f)
+  = do ft             <- freshTyFun g l f =<< getDefType f
        g'             <- envAdds [(f, ft)] g 
        g''            <- envAddFun l g' f xs ft
        gm             <- consStmts g'' body
@@ -117,17 +116,33 @@ envAddFun :: AnnTypeR -> CGEnv -> Id AnnTypeR -> [Id AnnTypeR] -> RefType -> CGM
 -----------------------------------------------------------------------------------
 envAddFun l g f xs ft = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
   where
-    (αs, yts, t)      = mfromJust "envAddFun" $ bkFun ft
     tyBinds           = [(Loc (srcPos l) α, tVar α) | α <- αs]
     varBinds          = safeZip "envAddFun"
-    (su, ts')         = renameBinds yts xs 
-    t'                = F.subst su t
+    (αs, ts', t')     = funTy l f xs ft
+
+    -- (αs, yts, t)      = mfromJust "envAddFun" $ bkFun ft
+    -- (su, ts')         = renameBinds yts xs 
+    -- t'                = F.subst su t
+
+funTy l f xs ft      = rn $ fromMaybe err $ bkFun ft 
+  where 
+    loc              = srcPos l
+    err              = die $ errorNonFunction loc f ft
+    eqLen xs ys      = length xs == length ys 
+    rn (αs, yts, t)
+       | eqLen xs yts = let (su, ts') = renameBinds yts xs 
+                        in  (αs, ts', F.subst su t)    
+       | otherwise    = die $ errorArgMismatch loc 
+
+   --  where
+   --    loc = ann l
 
 renameBinds yts xs   = (su, [F.subst su ty | B _ ty <- yts])
   where 
     su               = F.mkSubst $ safeZipWith "renameBinds" fSub yts xs 
     fSub yt x        = (b_sym yt, F.eVar x)
-    
+
+
 -- checkFormal x t 
 --   | xsym == tsym = (x, t)
 --   | otherwise    = errorstar $ errorArgName (srcPos x) xsym tsym
@@ -408,11 +423,7 @@ consUpCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id
 ------------------------------------------------------------------------------------------
 consUpCast g x a e 
   = do γ      <- getTDefs
-       let b'  = {- tracePP ("consUpCast: b = " ++ ppshow b) $  -}  
-                 (`strengthen` (F.symbolReft x)) 
-               $ fst 
-               $ alignTs γ b u
-       -- let b'' = b' `strengthen` (F.symbolReft x)
+       let b'  = (`strengthen` (F.symbolReft x)) $ fst $ alignTs γ b u
        envAddFresh "consUpCast" l b' g
     where
        u       = rType $ head [ t | Assume t <- ann_fact a]
@@ -466,7 +477,7 @@ consCall g l _ es ft
        (xes, g')    <- consScan consExpr' g es
        let (su, ts') = renameBinds its $ {- tracePP ("consCall2: es=" ++ ppshow es) -} xes
        zipWithM_ (withAlignedM $ subTypeContainers' "call" l g') [envFindTy x g' | x <- xes] ts'
-       envAddFresh "consCall" l ({- tracePP "Ret Call Type" $ -} F.subst su ot) g'
+       envAddFresh "consCall" l (tracePP ("Ret Call Type: es = " ++ ppshow es) $ F.subst su ot) g'
      {-where -}
      {-  msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)-}
 

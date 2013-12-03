@@ -40,7 +40,10 @@ module Language.Nano.Typecheck.Types (
   , bkFun
   , bkAll
   , bkUnion, rUnion, rTypeR, setRTypeR
-  , noUnion, unionCheck
+  , noUnion
+  , unionCheck
+  -- , funTy
+  -- , renameBinds 
 
   -- * Regular Types
   , Type
@@ -101,6 +104,7 @@ import           Language.Nano.Env
 -- import           Language.Fixpoint.Names (propConName)
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ 
 

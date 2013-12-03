@@ -212,7 +212,7 @@ tcFun _  _ = error "Calling tcFun not on FunctionStatement"
 funTy l f xs 
   = do ft <- getDefType f 
        case bkFun ft of
-         Nothing        -> logError (errorUnboundId loc f) (tErr, tFunErr)
+         Nothing         -> logError (errorUnboundId loc f) (tErr, tFunErr)
          Just (αs,ts,t) -> do when (length xs /= length ts) $ logError (errorArgMismatch loc) ()
                               return (ft, (αs, b_type <$> ts, t))
     where
@@ -224,7 +224,6 @@ envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddR
     tyBinds              = [(tVarId α, tVar α) | α <- αs]
     varBinds             = zip
     
-    -- tyBinds              = [(Loc (srcPos l) α, tVar α) | α <- αs]
 
 validInst γ (l, ts)
   = case [β | β <-  HS.toList $ free ts, not ((tVarId β) `envMem` γ)] of
@@ -446,7 +445,7 @@ tcCall γ l fn es ft
         -- Unify with formal parameter types
         θ             <- unifyTypesM (srcPos l) "tcCall" ts its
         -- Apply the substitution
-        let (ts',its') = mapPair (apply θ) (ts,its)
+        let (ts',its') = mapPair (apply θ) (ts, its)
         -- Subtype the arguments against the formals and cast if 
         -- necessary based on the direction of the subtyping outcome
         castsM es ts' its'

@@ -559,22 +559,22 @@ instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
 
 
 
--- `zipType1` matches structurally equivalent parts of types @t1@ and @t2@:
+-- | `zipType1` matches structurally equivalent parts of types @t1@ and @t2@:
 -- ∙ Keeping the the structure of @t1@
 -- ∙ Applying f on the respective refinements 
 -- ∙ f is commutative
 -- 
--- E.g. zipType1 (number + { booliean | p } ) { number | v > 0 } meet = 
+-- E.g. zipType1 (number + { boolean | p } ) { number | v > 0 } meet = 
 --        { number | v > 0 } + { boolean | p } 
 
 zipType1 γ f t1 t2 = zipType2 γ f t2 t1
  
 
 
--- `zipType2` walks throught the equivalent parts of types @t1@ and @t2@. It 
+-- | `zipType2` walks through the equivalent parts of types @t1@ and @t2@. It 
 -- applies function $f$ on the refinements of the equivalent parts and keeps the
--- output as the resulting refinement. The shape of @t2@ is preserved in the
--- output.
+-- output as the resulting refinement. 
+-- The shape of @t2@ is preserved in the output.
 --------------------------------------------------------------------------------
 zipType2 :: (PP r, F.Reftable r) => Env (RType r) -> (r -> r -> r) ->  RType r -> RType r -> RType r
 --------------------------------------------------------------------------------
@@ -618,7 +618,7 @@ zipTypes γ f ts t =
   case filter (equiv γ t) ts of
     [  ] -> t
     [t'] -> zipType2 γ f t' t
-    _    -> errorstar "BUG[zipType]: mulitple equivalent types" 
+    _    -> errorstar "BUG[zipType]: multiple equivalent types" 
   
 
 zipBind2 γ f (B s t) (B s' t') | s == s' = B s $ zipType2 γ f t t' 

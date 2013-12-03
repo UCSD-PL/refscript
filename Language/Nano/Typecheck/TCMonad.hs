@@ -468,18 +468,19 @@ withExpr e action =
       return $ r
 
 
--- For the expression @e@, check the subtyping relation between the type @t@
+-- | For the expression @e@, check the subtyping relation between the type @t@
 -- which is the actual type for @e@ and @t'@ which is the desired (cast) type
 -- and insert the right kind of cast. 
 --------------------------------------------------------------------------------
 castM     :: (Ord r, PP r, F.Reftable r) => Expression (AnnSSA r) -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
-castM e t t'    = subTypeM t t' >>= go
-  where go SupT = addDownCast e t t'
-        go Rel  = addDownCast e t t'
-        go SubT = addUpCast e t'
-        go EqT  = return ()
-        go Nth  = addDeadCast e t'
+castM e t t' = subTypeM t t' >>= go
+  where 
+    go SupT  = addDownCast e t t'
+    go Rel   = addDownCast e t t'
+    go SubT  = addUpCast e t'
+    go EqT   = return ()
+    go Nth   = addDeadCast e t'
 
 
 --------------------------------------------------------------------------------
@@ -501,12 +502,17 @@ addDownCast :: (Ord r, PP r, F.Reftable r) =>
 --------------------------------------------------------------------------------
 -- addDownCast e _ cast = modify $ \st -> st { tc_casts = M.insert e (DCST cast) (tc_casts st) }
   
--- Down casts will not be k-vared later - so pass the refinements here!
+-- | Down casts will not be k-vared later - so pass the refinements here!
+--   RJ: unfortunately, TC *does not* correctly propagate the refinements, 
+--   e.g. applying substitutions at call-sites, so the refinements are malformed
+--   c.f. tests/liquid/pos/operators/add-04.js
+--   Why don't we just use "TOP"? Would it be unsound?
+  
 addDownCast e base cast = 
   do  γ <- getTDefs
       let cast' = zipType2 γ F.meet base cast    -- copy the refinements from the base type 
-          {-msg   =  printf "DOWN CAST ADDS: %s\ninstead of just:\n%s" (ppshow cast') (ppshow cast)-}
-      modify $ \st -> st { tc_casts = M.insert e (DCST $ {- trace msg -} cast') (tc_casts st) }
+          msg   =  printf "DOWN CAST: cast = %s" (ppshow cast)
+      modify $ \st -> st { tc_casts = M.insert e (DCST cast {- $ tracePP msg cast' -}) (tc_casts st) }
 
 --------------------------------------------------------------------------------
 addDeadCast :: Expression (AnnSSA r) -> RType r -> TCM r ()

@@ -26,7 +26,8 @@ module Language.Nano.Typecheck.Compare (
   -- * Casting
   , Cast(..)
   , Casts, Casts_
-  , zipType1, zipType2
+  , zipType1
+  , zipType2
 
   , SubDirection (..)
 
@@ -216,10 +217,7 @@ alignTs γ t1 t2     = (t1', t2')
     (_,t1', t2', _) = compareTs γ t1 t2
 
 
--- | `compareTs`
-
--- General purpose function that returns:
---
+-- | `compareTs` returns:
 -- ∙ A padded version of the upper bound of @t1@ and @t2@
 -- ∙ An equivalent version of @t1@ that has the same sort as the second output
 -- ∙ An equivalent version of @t2@ that has the same sort as the first output

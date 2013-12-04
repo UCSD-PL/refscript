@@ -71,31 +71,12 @@ Failed 16 tests:
  liquid/pos/misc/apply.js,
  liquid/pos/misc/twice-hof.js,
  liquid/pos/objects/obj-03.js,
- liquid/pos/operators/add-04.js,
+ liquid/pos/operators/add-03.js,
  liquid/pos/operators/sum-00.js,
  liquid/pos/operators/sum-01.js,
  liquid/pos/operators/sum-02.js,
  liquid/pos/operators/sum-infer-00.js,
  liquid/pos/simple/obj-00.js
-
-
-
-
-
-liquid/pos/arrays/safemap.js,
-liquid/pos/lists/safeLists.js,
-liquid/pos/lists/safemap.js,
-liquid/pos/lists/safereverse.js,
-liquid/pos/loops/obj-02.js,
-liquid/pos/loops/while-03.js,
-liquid/pos/misc/apply.js,
-liquid/pos/misc/twice-hof.js,
-liquid/pos/objects/obj-03.js,
-liquid/pos/operators/sum-00.js,
-liquid/pos/operators/sum-01.js,
-liquid/pos/operators/sum-02.js,
-liquid/pos/operators/sum-infer-00.js,
-liquid/pos/simple/obj-00.js
 
 
 predicate Like X Y = (tag X) = (tag Y)

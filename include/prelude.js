@@ -110,7 +110,7 @@ function pos(){
 /*@ builtin_OpGEq       :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x >= y)) }   */
 
 //PV: @==@ and @===@ could be handled more precisely
-/*@ builtin_OpEq        :: forall A B. ({x:A|true}, {y:B|true}) => {v:boolean | ((Prop v) <=> (x = y)) }    */
+/*@ builtin_OpEq        :: forall AAA BBB. ({x:AAA|true}, {y:BBB|true}) => {v:boolean | ((Prop v) <=> (x = y)) }    */
 /*@ builtin_OpSEq       :: forall A B. ({x:A|true}, {y:B|true}) => {v:boolean | ((Prop v) <=> (x = y)) }    */
 /*@ builtin_OpNEq       :: forall A B. ({x:A|true}, {y:B|true}) => {v:boolean | ((Prop v) <=> (x != y)) } */
 

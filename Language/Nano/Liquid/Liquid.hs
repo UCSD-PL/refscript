@@ -431,21 +431,46 @@ consUpCast g x a e
        l       = getAnnotation e
       
 
--- Constraint generation for down-casting: In an environment @g@, cast the
+-- | Constraint generation for down-casting: In an environment @g@, cast the
 -- binding @x@ to the type @tc@ (retrieved from the annotation of the cast
--- expression @a@. @e@ is the expression to be casted.
+-- expression @a@.) @e@ is the expression to be casted.
 ---------------------------------------------------------------------------------------------
 consDownCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
-consDownCast g x a e = do  
-    g'  <- envAdds [(x, tc)] g
-    withAlignedM (subTypeContainers' "Downcast" l g) te tc
-    envAddFresh "consDownCast" l tc g'
+consDownCast g x a e = 
+  do γ   <- getTDefs
+     tc  <- castTo (srcPos l) γ te τ 
+     g'  <- envAdds [(x, tc)] g
+     withAlignedM (subTypeContainers' "Downcast" l g) te tc
+     envAddFresh "consDownCast" l tc g'
   where 
-    tc   = head [ t | Assume t <- ann_fact a]
-    te   = envFindTy x g
-    l    = getAnnotation e
+     τ    = toType $ head [ t | Assume t <- ann_fact a]
+     te   = envFindTy x g
+     l    = getAnnotation e
 
+-- consDownCast g x a e = do  
+--     g'  <- envAdds [(x, tc)] g
+--     withAlignedM (subTypeContainers' "Downcast" l g) te tc
+--     envAddFresh "consDownCast" l tc g'
+--   where 
+--     tc   = head [ t | Assume t <- ann_fact a]
+--     te   = envFindTy x g
+--     l    = getAnnotation e
+
+-- castTo               :: Env RefType -> Locate RType r -> Type -> RType r
+castTo l γ t τ       = zipType2 γ botJoin t <$> bottify τ 
+  where 
+    bottify          = fmap (fmap F.bot) . true . rType 
+    botJoin r1 r2 
+      | F.isFalse r1 = r2
+      | F.isFalse r2 = r1
+      | otherwise    = die $ bug l msg
+    msg              = printf "botJoin: t = %s τ = %s" (ppshow (t :: RefType)) (ppshow (τ :: Type))
+
+{- 
+ zipType2 γ t t' 
+ t' = bot
+ -}
 
 ---------------------------------------------------------------------------------------------
 consDeadCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)

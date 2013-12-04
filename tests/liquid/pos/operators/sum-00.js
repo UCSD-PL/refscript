@@ -1,3 +1,4 @@
+/*@ qualif Plus(v:number, x:number, y:number)   : v = x + y    */
 
 /*@ sumLoop :: ({acc:number | true}, {i:number| 0 <= i}) => {v:number|v = acc + i} */
 function sumLoop(acc, i){

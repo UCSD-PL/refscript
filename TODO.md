@@ -1,7 +1,6 @@
 # Quicktask v1.2
 # http://quicktask.aaronbieber.com/doc.html
 
-
 JS SUPPORT / FEATURES:
   - Dynamic Writes `x[i] = e`
     @ Added [Mon 2013-11-24]
@@ -71,26 +70,53 @@ Failed 16 tests:
  liquid/pos/misc/apply.js,
  liquid/pos/misc/twice-hof.js,
  liquid/pos/objects/obj-03.js,
- liquid/pos/operators/add-03.js,
  liquid/pos/operators/sum-00.js,
  liquid/pos/operators/sum-01.js,
  liquid/pos/operators/sum-02.js,
  liquid/pos/operators/sum-infer-00.js,
  liquid/pos/simple/obj-00.js
 
+Exceptions thrown on 25 tests:
+ liquid/pos/arrays/arr-04.js,
+ liquid/pos/arrays/safemap.js,
+    liquid/pos/lists/listsum-00.js,
+ liquid/pos/lists/safeLists.js,
+ liquid/pos/lists/safemap.js,
+ liquid/pos/lists/safereverse.js,
+    liquid/pos/loops/for-01.js,
+    liquid/pos/loops/for-02.js,
+    liquid/pos/loops/for-03.js,
+    liquid/pos/loops/for-04.js,
+    liquid/pos/loops/obj-00.js,
+    liquid/pos/loops/obj-01.js,
+ liquid/pos/loops/obj-02.js,
+    liquid/pos/loops/while-01.js,
+ liquid/pos/loops/while-03.js,
+ liquid/pos/misc/apply.js,
+    liquid/pos/misc/cousot.js,
+ liquid/pos/misc/twice-hof.js,
+ liquid/pos/objects/obj-03.js,
+    liquid/pos/operators/inc-00.js,
+    liquid/pos/operators/inc-02.js,
+    liquid/pos/operators/sum-01.js,
+    liquid/pos/operators/sum-02.js,
+    liquid/pos/operators/sum-infer-00.js,
+ liquid/pos/simple/obj-00.js
 
-predicate Like X Y = (tag X) = (tag Y)
-(x:num + str, {y:num + str | (Like x V)}) => {v:num + str | (Like X v) && ((num x) && (num y) => v = x + y)}
 
-(x:num + str, y:num + str) => {v: number | (((ttag x) = "number" && (ttag y) = "number") <=> (v = x + y))} + {string | ((ttag x) = "string" || (ttag y) = "string")}
 
-(x:number + string, y:number + string) => {number | ((num x) && (num y) && (v = x + y))} + {string | (string x) || (string y)}
-
-[HEREHEREHEREHERE] 
-
-    + add support for string +    (liquid/pos/operators/add-0{3,4}.js)
+RJ TODO
+-------
+    + add support for string +    (liquid/pos/operators/add-0{3,4,5}.js)
     + add support for array-write (liquid/pos/arrays/arr-04.js)
     + add support for predicate aliases
+
+Scrape Qualifiers
+-----------------
+
+
+Predicate and Type Aliases
+--------------------------
 
 
 

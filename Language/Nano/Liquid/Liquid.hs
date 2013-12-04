@@ -458,7 +458,7 @@ consDownCast g x a e =
 --     l    = getAnnotation e
 
 -- castTo               :: Env RefType -> Locate RType r -> Type -> RType r
-castTo l γ t τ       = zipType2 γ botJoin t <$> bottify τ 
+castTo l γ t τ       = castStrengthen t . zipType2 γ botJoin t <$> bottify τ 
   where 
     bottify          = fmap (fmap F.bot) . true . rType 
     botJoin r1 r2 
@@ -467,11 +467,9 @@ castTo l γ t τ       = zipType2 γ botJoin t <$> bottify τ
       | otherwise    = die $ bug l msg
     msg              = printf "botJoin: t = %s τ = %s" (ppshow (t :: RefType)) (ppshow (τ :: Type))
 
-{- 
- zipType2 γ t t' 
- t' = bot
- -}
-
+castStrengthen t1 t2 
+  | isUnion t1 && not (isUnion t2) = t2 `strengthen` (rTypeReft t1)
+  | otherwise                      = t2
 ---------------------------------------------------------------------------------------------
 consDeadCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------

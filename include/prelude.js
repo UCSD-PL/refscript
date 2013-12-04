@@ -110,8 +110,8 @@ function pos(){
 /*@ builtin_OpGEq       :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x >= y)) }   */
 
 //PV: @==@ and @===@ could be handled more precisely
-/*@ builtin_OpEq        :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x = y)) }    */
-/*@ builtin_OpSEq       :: forall A. ({x:A|true}, {y:A|true}) => {v:boolean | ((Prop v) <=> (x = y)) }    */
+/*@ builtin_OpEq        :: forall A B. ({x:A|true}, {y:B|true}) => {v:boolean | ((Prop v) <=> (x = y)) }    */
+/*@ builtin_OpSEq       :: forall A B. ({x:A|true}, {y:B|true}) => {v:boolean | ((Prop v) <=> (x = y)) }    */
 /*@ builtin_OpNEq       :: forall A B. ({x:A|true}, {y:B|true}) => {v:boolean | ((Prop v) <=> (x != y)) } */
 
 /*@ builtin_OpLAnd      :: ({x:top|true}, {y:top|true}) => {v:boolean | true}                             */
@@ -125,15 +125,17 @@ function pos(){
 /*  builtin_OpLOr       :: (x:top, y:top) => 
       { top | ((Prop v) <=> (if (falsy x) then (v = y) else (v = x) ))}           */
 
-/*@ builtin_OpAdd       :: ({x:number | true}, {y:number | true})  => {v:number | v = x + y}              */
+/* builtin_OpAdd       :: ({x:number | true}, {y:number | true})  => {v:number | v = x + y}              */
 
 //TODO: We would like to have a more precise type (like the following) that 
 //would include strings into the game, but this does not work well with 
 //equality at the moment:
 
-/*  builtin_OpAdd       :: (x: number + string, y: number + string)  => 
-      { number | (((ttag x) = "string") || ((ttag y) = "string") => false ) } + 
-      { string | (((ttag x) = "number") && ((ttag y) = "number") => false ) }                             */
+/*@ builtin_OpAdd       :: (x:number + string, y:number + string) => 
+                              {number | ((ttag x) = "number" && (ttag y) = "number" && v = x + y) } + 
+                              {string | ((ttag x) = "string" || (ttag y) = "string") } 
+                      
+  */
 
 /*@ builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v = x - y}              */
 /*@ builtin_OpMul       :: (number,  number)  => number                                                   */

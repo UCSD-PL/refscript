@@ -500,7 +500,7 @@ consCall g l _ es ft
        (xes, g')    <- consScan consExpr' g es
        let (su, ts') = renameBinds its $ {- tracePP ("consCall2: es=" ++ ppshow es) -} xes
        zipWithM_ (withAlignedM $ subTypeContainers' "call" l g') [envFindTy x g' | x <- xes] ts'
-       envAddFresh "consCall" l (tracePP ("Ret Call Type: es = " ++ ppshow es) $ F.subst su ot) g'
+       envAddFresh "consCall" l ({- tracePP ("Ret Call Type: es = " ++ ppshow es) $ -} F.subst su ot) g'
      {-where -}
      {-  msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)-}
 

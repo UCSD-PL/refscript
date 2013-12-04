@@ -125,17 +125,32 @@ function pos(){
 /*  builtin_OpLOr       :: (x:top, y:top) => 
       { top | ((Prop v) <=> (if (falsy x) then (v = y) else (v = x) ))}           */
 
-/* builtin_OpAdd       :: ({x:number | true}, {y:number | true})  => {v:number | v = x + y}              */
 
 //TODO: We would like to have a more precise type (like the following) that 
 //would include strings into the game, but this does not work well with 
 //equality at the moment:
 
-/*@ builtin_OpAdd       :: (x:number + string, y:number + string) => 
+
+/*@ builtin_OpAdd      :: (x:number + string, y:number + string) => 
+                              {v:number + string | (if ((ttag x) = "number" && (ttag y) = "number") 
+                                                    then ((ttag v) = "number" && v = x + y) 
+                                                    else (ttag v)  = "string")} 
+  */
+
+
+
+/* builtin_OpAdd       :: ({x:number | true}, {y:number | true})  => {v:number | v = x + y}              */
+
+// The following causes problems with equality. Can't "prove" 0 == (0 + 1) as
+// the RHS has type {num | v = 0 + 1} + string. The crucial fact is buried under
+// the sum -- the `top-level` refinement is `top` which is useless.
+
+/* builtin_OpAdd       :: (x:number + string, y:number + string) => 
                               {number | ((ttag x) = "number" && (ttag y) = "number" && v = x + y) } + 
                               {string | ((ttag x) = "string" || (ttag y) = "string") } 
                       
   */
+
 
 /*@ builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v = x - y}              */
 /*@ builtin_OpMul       :: (number,  number)  => number                                                   */

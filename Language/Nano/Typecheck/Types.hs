@@ -44,8 +44,8 @@ module Language.Nano.Typecheck.Types (
   , rTypeR, setRTypeR
   , noUnion
   , unionCheck
-  -- , funTy
-  -- , renameBinds 
+  , funTys
+  , renameBinds 
 
   -- * Regular Types
   , Type
@@ -191,6 +191,24 @@ toType = fmap (const ())
 -- | Adding in Refinements
 ofType :: (F.Reftable r) => Type -> RType r
 ofType = fmap (const F.top)
+
+funTys l f xs ft 
+  = case bkFuns ft of
+      Nothing -> die $ errorNonFunction (srcPos l) f ft 
+      Just ts -> funTy l f xs <$> ts
+
+funTy l f xs (αs, yts, t) 
+  | eqLen xs yts = let (su, ts') = renameBinds yts xs 
+                   in  (αs, ts', F.subst su t)    
+  | otherwise    = die $ errorArgMismatch (srcPos l)
+
+eqLen xs ys       = length xs == length ys 
+
+renameBinds yts xs    = (su, [F.subst su ty | B _ ty <- yts])
+  where 
+    su                = F.mkSubst $ safeZipWith "renameBinds" fSub yts xs 
+    fSub yt x         = (b_sym yt, F.eVar x)
+
 
 bkFuns :: RType r -> Maybe [([TVar], [Bind r], RType r)]
 bkFuns = sequence . fmap bkFun . bkAnd 

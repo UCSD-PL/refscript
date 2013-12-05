@@ -71,7 +71,14 @@ errorArgName l x y        = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s
 errorMissingSpec l f      = mkErr l $ printf "Missing Signature For %s defined at %s" (ppshow f) (ppshow l)
 errorDuplicate i l l'     = mkErr l $ printf "Duplicate Specification for %s:\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
 errorArgMismatch l        = mkErr l $ printf "Mismatch in Number of Args in Call" 
-errorNonFunction l f t    = mkErr l $ printf "Non-function type for %s :: %s" (ppshow f) (ppshow t)  
+
+errorNoMatchCallee l ts t = mkErr l $ render $   text "No matching callee type!" 
+                                             $+$ text "Argument Types: " <+> pp ts 
+                                             $+$ text "Function Type : " <+> pp t
+
+errorNonFunction l f t    = mkErr l $ render $ text "Non-function type " 
+                                                 $+$ pp f <+> text "::" <+> pp t
+
 errorUnboundId l x        = mkErr l $ printf "Identifier %s unbound" (ppshow x) 
 errorUnboundType l x      = mkErr l $ printf "Type identifier \'%s\' unbound" (ppshow x)
 errorUnboundIdEnv l x t   = mkErr l $ printf "ZOGBERT Identifier %s unbound in %s" (ppshow x) (ppshow t)

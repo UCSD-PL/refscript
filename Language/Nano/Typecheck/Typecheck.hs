@@ -15,8 +15,9 @@ import qualified Data.HashSet                       as HS
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.Traversable                   as T
 import           Data.Monoid
-import           Data.Maybe                         (catMaybes, isJust, fromJust, listToMaybe)
+import           Data.Maybe                         (catMaybes, isJust, fromJust, fromMaybe, listToMaybe)
 import           Data.Generics                   
+import           Data.List
 
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$), (<+>))
 import           Text.Printf                        (printf)
@@ -198,25 +199,49 @@ type TCEnv r = Maybe (Env (RType r))
 -------------------------------------------------------------------------------
 
 -- tcFun    :: (F.Reftable r) => Env (RType r) -> FunctionStatement (AnnSSA r) -> TCM r (TCEnv r)
-tcFun γ (FunctionStmt l f xs body) 
-  = do (ft, (αs, ts, t)) <- funTy l f xs
-       let γ'  = envAdds [(f, ft)] γ
-       let γ'' = envAddFun l f αs xs ts t γ'
-       accumAnn (catMaybes . map (validInst γ'') . M.toList) $  
-         do q              <- tcStmts γ'' body
-            when (isJust q) $ void $ unifyTypeM (srcPos l) "Missing return" f tVoid t
+tcFun γ (FunctionStmt l f xs body)
+  = do ft    <- getDefType f
+       let γ' = envAdds [(f, ft)] γ
+       forM (funTys l f xs ft) $ tcFun1 γ' l f xs body
        return $ Just γ' 
 
-tcFun _  _ = error "Calling tcFun not on FunctionStatement"
+tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
-funTy l f xs 
-  = do ft <- getDefType f 
-       case bkFun $ tracePP ("funTy f = " ++ ppshow f) ft of
-         Nothing        -> die $ errorUnboundId loc f 
-         Just (αs,ts,t) -> do when (length xs /= length ts) $ logError (errorArgMismatch loc) ()
-                              return (ft, (αs, b_type <$> ts, t))
-    where
-      loc = ann l
+tcFun1 γ l f xs body (αs, ts, t) = getAnns $ tcFunBody γ' l f body t
+  where 
+    γ'                           = envAddFun l f αs xs ts t γ 
+    getAnns                      = accumAnn (catMaybes . map (validInst γ') . M.toList) 
+    
+tcFunBody γ l f body t
+  = do q              <- tcStmts γ body
+       when (isJust q) $ void $ unifyTypeM (srcPos l) "Missing return" f tVoid t
+
+funTys l f xs ft 
+  = case bkFuns ft of
+      Nothing -> die $ errorNonFunction (srcPos l) f ft 
+      Just ts -> mapSnd3 (map b_type) <$> checkNumArgs l xs <$> ts
+
+checkNumArgs l xs t@(_,ys,_) 
+  | length xs == length ys = t
+  | otherwise              = die $ errorArgMismatch (srcPos l)  
+
+-- tcFun γ (FunctionStmt l f xs body) 
+--   = do (ft, (αs, ts, t)) <- funTy l f xs
+--        let γ'  = envAdds [(f, ft)] γ
+--        let γ'' = envAddFun l f αs xs ts t γ'
+--        accumAnn (catMaybes . map (validInst γ'') . M.toList) $  
+--          do q              <- tcStmts γ'' body
+--             when (isJust q) $ void $ unifyTypeM (srcPos l) "Missing return" f tVoid t
+--        return $ Just γ' 
+-- 
+-- funTy l f xs 
+--   = do ft <- getDefType f 
+--        case bkFun $ tracePP ("funTy f = " ++ ppshow f) ft of
+--          Nothing        -> die $ errorUnboundId loc f 
+--          Just (αs,ts,t) -> do when (length xs /= length ts) $ logError (errorArgMismatch loc) ()
+--                               return (ft, (αs, b_type <$> ts, t))
+--     where
+--       loc = ann l
 
 
 envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
@@ -437,28 +462,40 @@ tcExpr'' _ e
 tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 
   Env (RType r) -> AnnSSA r -> fn -> [Expression (AnnSSA r)]-> RType r -> TCM r (RType r)
 ----------------------------------------------------------------------------------
-tcCall γ l fn es ft 
-  = do  (_,ibs,ot)    <- instantiate l fn ft
-        let its        = b_type <$> ibs
-        -- Typecheck arguments
-        ts            <- mapM (tcExpr' γ) es
-        -- Unify with formal parameter types
-        θ             <- unifyTypesM (srcPos l) "tcCall" ts its
-        -- Apply the substitution
-        let (ts',its') = mapPair (apply θ) (ts, its)
-        -- Subtype the arguments against the formals and cast if 
-        -- necessary based on the direction of the subtyping outcome
-        castsM es ts' its'
-        return         $ apply θ ot
+
+tcCall γ l fn es ft0
+  = do -- Typecheck arguments
+       ts     <- mapM (tcExpr' γ) es
+       -- Extract callee type (if intersection: match with args)
+       let ft  = calleeType l ts ft0
+       (_,ibs,ot)    <- instantiate l fn ft
+       let its        = b_type <$> ibs
+       -- Unify with formal parameter types
+       θ             <- unifyTypesM (srcPos l) "tcCall" ts its
+       -- Apply substitution
+       let (ts',its') = mapPair (apply θ) (ts, its)
+       -- Subtype the arguments against the formals and up/down cast if needed 
+       castsM es ts' its'
+       return         $ apply θ ot
+
+calleeType l ts ft@(TAnd fts) = fromMaybe uhOh $ find (argsMatch ts) fts
+  where 
+    uhOh                      = die $ errorNoMatchCallee (srcPos l) ts ft
+
+calleeType l ts ft            = ft
 
 instantiate l fn ft 
   = do let (αs, t) = bkAll ft 
        t'         <-  {- tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (αs, t) 
        maybe err return $ tracePP (printf "instantiate/bkFun fn = %s ft = %s t' = %s " (ppshow fn) (ppshow ft) (ppshow t')) $ bkFun t'
     where
-       err = die $ errorNonFunction (ann l) fn ft
+       err = die   $ errorNonFunction (ann l) fn ft
 
-
+-- | `argsMatch ts ft` holds iff the arg-types in `ft` are identical to `ts` ... 
+argsMatch :: [RType a] -> RType b -> Bool
+argsMatch ts ft = case bkFun ft of 
+                    Nothing        -> False
+                    Just (_,xts,_) -> (toType <$> ts) == ((toType . b_type) <$> xts)
 
 ----------------------------------------------------------------------------------
 tcObject ::  (Ord r, F.Reftable r, PP r) => 

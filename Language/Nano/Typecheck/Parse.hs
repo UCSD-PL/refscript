@@ -106,11 +106,16 @@ bareTypeP
 
 bareTypeNoUnionP
   =  try bareAllP
+ <|> try bareFunsP
  <|> try bareFunP
  <|>     (bareAtomP bbaseP)
 
--- Creating the bindings right away at bareArgP
-bareFunP
+-- | `bareFunsP` parses an ordered-intersection type
+bareFunsP 
+  = TAnd <$> many1 (reserved "/\\" >> bareFun1P)
+
+-- | `bareFun1P` parses a single function type
+bareFun1P
   = do args   <- parens $ sepBy bareArgP comma
        reserved "=>" 
        ret    <- bareTypeP 

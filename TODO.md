@@ -121,9 +121,11 @@ Allow intersection types
     * no type parameters
     * will be ordered
 
-    1. RType
-    2. Parser
-    3. Visitors
+    + test [test/liquid/pos/operators/add-07.js]
+    + RType
+    + Parser
+    + Visitors
+
     4. tcFun
     5. tcCall
     6. consFun

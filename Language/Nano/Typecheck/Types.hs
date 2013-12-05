@@ -28,7 +28,7 @@ module Language.Nano.Typecheck.Types (
   , toType
   , ofType
   , strengthen 
-  , strengthenContainers 
+  -- , strengthenContainers 
 
   -- * Helpful checks
   , isTop, isNull, isUndefined, isObj, isUnion
@@ -39,7 +39,9 @@ module Language.Nano.Typecheck.Types (
   -- * Deconstructing Types
   , bkFun
   , bkAll
-  , bkUnion, rUnion, rTypeR, setRTypeR
+  , bkAnd
+  , bkUnion, rUnion
+  , rTypeR, setRTypeR
   , noUnion
   , unionCheck
   -- , funTy
@@ -203,6 +205,9 @@ bkAll t              = go [] t
     go αs (TAll α t) = go (α : αs) t
     go αs t          = (reverse αs, t)
 
+bkAnd                :: RType r -> [RType r]
+bkAnd (TAnd ts)      = ts
+bkAnd t              = [t]
 
 ---------------------------------------------------------------------------------
 mkUnion :: (Ord r, Eq r, F.Reftable r) => [RType r] -> RType r
@@ -246,16 +251,18 @@ strengthen t _               = t
 -- refinements of an equivalent (having the same raw version) 
 -- type @t1@.
 -- TODO: Add checks for equivalence in union and objects
-strengthenContainers (TApp TUn ts r) (TApp TUn ts' r') =
-  TApp TUn (zipWith strengthenContainers ts ts') $ r' `F.meet` r
-strengthenContainers (TObj ts r) (TObj ts' r') = 
-  TObj (zipWith doB ts ts') $ r' `F.meet` r
-  where 
-    doB (B s t) (B s' t') | s == s' =  B s $ strengthenContainers t t'
-    doB _       _                   = errorstar "strengthenContainers: sanity check - 1"
-strengthenContainers t t' | toType t == toType t' = strengthen t' $ rTypeR t
-strengthenContainers _ _  | otherwise = errorstar "strengthenContainers: sanity check - 2"
-  
+
+-- RJ: Not used anywhere, commenting out
+-- strengthenContainers (TApp TUn ts r) (TApp TUn ts' r') =
+--   TApp TUn (zipWith strengthenContainers ts ts') $ r' `F.meet` r
+-- strengthenContainers (TObj ts r) (TObj ts' r') = 
+--   TObj (zipWith doB ts ts') $ r' `F.meet` r
+--   where 
+--     doB (B s t) (B s' t') | s == s' =  B s $ strengthenContainers t t'
+--     doB _       _                   = errorstar "strengthenContainers: sanity check - 1"
+-- strengthenContainers t t' | toType t == toType t' = strengthen t' $ rTypeR t
+-- strengthenContainers _ _  | otherwise = errorstar "strengthenContainers: sanity check - 2"
+--   
 
 
 ---------------------------------------------------------------------------------
@@ -290,7 +297,7 @@ rUnion (TApp TUn _ r) = r
 rUnion _              = F.top
  
 -- Get the top-level refinement 
-rTypeR :: RType r -> r
+rTypeR               :: RType r -> r
 rTypeR (TApp _ _ r ) = r
 rTypeR (TVar _ r   ) = r
 rTypeR (TFun _ _ r ) = r
@@ -298,6 +305,7 @@ rTypeR (TObj _ r   ) = r
 rTypeR (TArr _ r   ) = r
 rTypeR (TBd  _     ) = errorstar "Unimplemented: rTypeR - TBd"
 rTypeR (TAll _ _   ) = errorstar "Unimplemented: rTypeR - TAll"
+rTypeR (TAnd _ )     = errorstar "Unimplemented: rTypeR - TAnd"
 
 setRTypeR :: RType r -> r -> RType r
 setRTypeR (TApp c ts _   ) r' = TApp c ts r'
@@ -307,6 +315,7 @@ setRTypeR (TObj xts _    ) r' = TObj xts r'
 setRTypeR (TArr t _      ) r  = TArr t r
 setRTypeR (TBd  _        ) _  = errorstar "Unimplemented: setRTypeR - TBd"
 setRTypeR (TAll _ _      ) _  = errorstar "Unimplemented: setRTypeR - TAll"
+setRTypeR (TAnd _        ) _  = errorstar "Unimplemented: setRTypeR - TAnd"
 
 
 ---------------------------------------------------------------------------------------
@@ -444,7 +453,8 @@ instance F.Reftable r => PP (RType r) where
   pp (TVar α r)                 = F.ppTy r $ pp α 
   pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." 
-                                   <+> pp t' where (αs, t') = bkAll t
+                                     <+> pp t' where (αs, t') = bkAll t
+  pp (TAnd ts)                  = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "+") ts 
   pp (TApp d@(TDef _)ts r)      = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
 

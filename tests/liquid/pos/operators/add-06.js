@@ -8,10 +8,15 @@ function myPlusOk(x, y){
     return myPlusOk(x,y);    
 }
 
-/*@ num_one :: (a:number) => void */
+/*@ assertEqual :: (x:number, y:number) => void */ 
+function assertEqual(x, y) {
+  assert(x==y);
+}
+
+/*@ num_one :: (a:number) => {void | true} */
 function num_one(a){
   var d = myPlusOk(0, 1);
-  assert (d == 1);
+  assertEqual(d, 1);
   return; 
 }
 

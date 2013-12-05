@@ -275,7 +275,7 @@ emapReft _ _ _              = error "Not supported in emapReft"
 emapReftBind f γ (B x t)    = B x $ emapReft f γ t
 
 ------------------------------------------------------------------------------------------
-mapReftM :: (F.Reftable b, Monad m, Applicative m) => (a -> m b) -> RType a -> m (RType b)
+-- mapReftM :: (PP a, F.Reftable b, Monad m, Applicative m) => (a -> m b) -> RType a -> m (RType b)
 ------------------------------------------------------------------------------------------
 mapReftM f (TVar α r)      = TVar α <$> f r
 mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> f r
@@ -283,7 +283,8 @@ mapReftM f (TFun xts t _)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f
 mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
 mapReftM f (TObj bs r)     = TObj   <$> mapM (mapReftBindM f) bs <*> f r
 mapReftM f (TArr t r)      = TArr   <$> (mapReftM f t) <*> f r
-mapReftM _ _               = error "Not supported in mapReftM"
+mapReftM f (TAnd ts)       = TAnd   <$> mapM (mapReftM f) ts
+mapReftM _ t               = error   $ render $ text "Not supported in mapReftM: " <+> pp t 
 
 mapReftBindM f (B x t)     = B x <$> mapReftM f t
 

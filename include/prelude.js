@@ -110,9 +110,9 @@ function pos(){
 /*@ builtin_OpGEq       :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x >= y)) }   */
 
 //PV: @==@ and @===@ could be handled more precisely
-/*@ builtin_OpEq        :: forall AAA BBB. ({x:AAA|true}, {y:BBB|true}) => {v:boolean | ((Prop v) <=> (x = y)) }    */
-/*@ builtin_OpSEq       :: forall A B. ({x:A|true}, {y:B|true}) => {v:boolean | ((Prop v) <=> (x = y)) }    */
-/*@ builtin_OpNEq       :: forall A B. ({x:A|true}, {y:B|true}) => {v:boolean | ((Prop v) <=> (x != y)) } */
+/*@ builtin_OpEq        :: forall A.   (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }  */
+/*@ builtin_OpSEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x = y)) }  */
+/*@ builtin_OpNEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) } */
 
 /*@ builtin_OpLAnd      :: ({x:top|true}, {y:top|true}) => {v:boolean | true}                             */
 /*  builtin_OpLAnd      :: ({x:top|true}, {y:top|true}) =>
@@ -130,14 +130,17 @@ function pos(){
 //would include strings into the game, but this does not work well with 
 //equality at the moment:
 
+/*@ builtin_OpAdd :: /\ (x:number, y:number) => {number | v = x + y}
+                     /\ (x:number, y:string) => string
+                     /\ (x:string, y:number) => string
+                     /\ (x:string, y:string) => string
+  */
 
-/*@ builtin_OpAdd      :: (x:number + string, y:number + string) => 
+/* builtin_OpAdd      :: (x:number + string, y:number + string) => 
                               {v:number + string | (if ((ttag x) = "number" && (ttag y) = "number") 
                                                     then ((ttag v) = "number" && v = x + y) 
                                                     else (ttag v)  = "string")} 
   */
-
-
 
 /* builtin_OpAdd       :: ({x:number | true}, {y:number | true})  => {v:number | v = x + y}              */
 

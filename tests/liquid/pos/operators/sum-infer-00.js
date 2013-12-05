@@ -1,4 +1,6 @@
 
+/*@ qualif Plus(v:number, x:number, y:number)   : v = x + y    */
+
 // Ha ha. Why is this safe? :)
 
 /*@ sumLoop :: (number, number) => number */
@@ -12,7 +14,7 @@ function sumLoop(acc, i){
   return r;
 }
 
-/*@ main :: () => void */
+/*@ main :: () => {void | true} */
 function main(){
   var n = pos();
   var m = sumLoop(0, n);

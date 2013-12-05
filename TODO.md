@@ -75,34 +75,27 @@ Failed 16 tests:
  liquid/pos/operators/sum-02.js,
  liquid/pos/operators/sum-infer-00.js,
  liquid/pos/simple/obj-00.js
+ 
+Failing Test Triage
+-------------------
 
-Exceptions thrown on 25 tests:
- liquid/pos/arrays/arr-04.js,
  liquid/pos/arrays/safemap.js,
-    liquid/pos/lists/listsum-00.js,
  liquid/pos/lists/safeLists.js,
  liquid/pos/lists/safemap.js,
  liquid/pos/lists/safereverse.js,
-    liquid/pos/loops/for-01.js,
-    liquid/pos/loops/for-02.js,
-    liquid/pos/loops/for-03.js,
-    liquid/pos/loops/for-04.js,
-    liquid/pos/loops/obj-00.js,
-    liquid/pos/loops/obj-01.js,
  liquid/pos/loops/obj-02.js,
-    liquid/pos/loops/while-01.js,
  liquid/pos/loops/while-03.js,
  liquid/pos/misc/apply.js,
-    liquid/pos/misc/cousot.js,
  liquid/pos/misc/twice-hof.js,
- liquid/pos/objects/obj-03.js,
-    liquid/pos/operators/inc-00.js,
-    liquid/pos/operators/inc-02.js,
-    liquid/pos/operators/sum-01.js,
-    liquid/pos/operators/sum-02.js,
-    liquid/pos/operators/sum-infer-00.js,
- liquid/pos/simple/obj-00.js
 
+ [bug:     poly inst issue]        liquid/pos/misc/cousot-01.js,
+ [feature: array writes]           liquid/pos/arrays/arr-04.js,
+ [feature: object annotation]      liquid/pos/simple/obj-00.js
+ [feature: object-dynamic-lookup]  liquid/pos/objects/obj-03.js
+
+  
+ 
+ 
 
 
 RJ TODO

@@ -106,13 +106,14 @@ bareTypeP
 
 bareTypeNoUnionP
   =  try bareAllP
- <|> try bareFunsP
+ <|> try bareFun1P
  <|> try bareFunP
  <|>     (bareAtomP bbaseP)
 
--- | `bareFunsP` parses an ordered-intersection type
-bareFunsP 
-  = TAnd <$> many1 (reserved "/\\" >> bareFun1P)
+-- | `bareFunP` parses an ordered-intersection type
+
+bareFunP 
+  = tAnd <$> many1 (reserved "/\\" >> bareFun1P)
 
 -- | `bareFun1P` parses a single function type
 bareFun1P

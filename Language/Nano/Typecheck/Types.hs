@@ -65,6 +65,7 @@ module Language.Nano.Typecheck.Types (
   , tArr
   , tUndef
   , tNull
+  , tAnd
 
   , isTVar
   , isArr
@@ -452,12 +453,11 @@ instance PP a => PP (Maybe a) where
 instance F.Reftable r => PP (RType r) where
   pp (TVar α r)                 = F.ppTy r $ pp α 
   pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
-  pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." 
-                                     <+> pp t' where (αs, t') = bkAll t
-  pp (TAnd ts)                  = vcat [text "/\\" <+> pp t | t <- ts]
+  pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." <+> pp t'      where (αs, t') = bkAll t
+  pp (TAnd (ts))                = vcat [text "/\\" <+> pp t | t <- ts]
+  -- pp (TAnd (t:ts))              = vcat $ (text "  " <+> pp t) : [text "/\\" <+> pp t | t <- ts]
   pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "+") ts 
   pp (TApp d@(TDef _)ts r)      = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
-
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 
   pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
   pp (TArr t r)                 = F.ppTy r $ brackets (pp t)  
@@ -590,15 +590,19 @@ isTVar (TVar _ _) = True
 isTVar _          = False
 
 tInt, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RType r
-tInt    = TApp TInt     [] F.top 
-tBool   = TApp TBool    [] F.top
-tString = TApp TString  [] F.top
-tTop    = TApp TTop     [] F.top
-tVoid   = TApp TVoid    [] F.top
-tUndef  = TApp TUndef   [] F.top
-tNull   = TApp TNull    [] F.top
-tErr    = tVoid
-tFunErr = ([],[],tErr)
+tInt     = TApp TInt     [] F.top 
+tBool    = TApp TBool    [] F.top
+tString  = TApp TString  [] F.top
+tTop     = TApp TTop     [] F.top
+tVoid    = TApp TVoid    [] F.top
+tUndef   = TApp TUndef   [] F.top
+tNull    = TApp TNull    [] F.top
+tErr     = tVoid
+tFunErr  = ([],[],tErr)
+tAnd ts  = case ts of 
+             [ ] -> errorstar "BUG: empty intersection"
+             [t] -> t
+             _   -> TAnd ts
 
 tArr    = (`TArr` F.top)
 

@@ -126,7 +126,7 @@ Allow intersection types
     + Parser
     + Visitors
 
-    4. tcFun
+    4. tcFun <------------------------------ HEREHEREHEREHEREHERE
     5. tcCall
     6. consFun
     7. consCall

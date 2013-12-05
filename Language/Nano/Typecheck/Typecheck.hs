@@ -211,19 +211,20 @@ tcFun1 γ l f xs body (αs, ts, t) = getAnns $ tcFunBody γ' l f body t
   where 
     γ'                           = envAddFun l f αs xs ts t γ 
     getAnns                      = accumAnn (catMaybes . map (validInst γ') . M.toList) 
-    
+
+
 tcFunBody γ l f body t
   = do q              <- tcStmts γ body
        when (isJust q) $ void $ unifyTypeM (srcPos l) "Missing return" f tVoid t
 
-funTys l f xs ft 
-  = case bkFuns ft of
-      Nothing -> die $ errorNonFunction (srcPos l) f ft 
-      Just ts -> mapSnd3 (map b_type) <$> checkNumArgs l xs <$> ts
+-- funTys l f xs ft 
+--   = case bkFuns ft of
+--       Nothing -> die $ errorNonFunction (srcPos l) f ft 
+--       Just ts -> mapSnd3 (map b_type) <$> checkNumArgs l xs <$> ts
 
-checkNumArgs l xs t@(_,ys,_) 
-  | length xs == length ys = t
-  | otherwise              = die $ errorArgMismatch (srcPos l)  
+-- checkNumArgs l xs t@(_,ys,_) 
+--   | length xs == length ys = t
+--   | otherwise              = die $ errorArgMismatch (srcPos l)  
 
 -- tcFun γ (FunctionStmt l f xs body) 
 --   = do (ft, (αs, ts, t)) <- funTy l f xs
@@ -482,7 +483,7 @@ calleeType l ts ft@(TAnd fts) = fromMaybe uhOh $ find (argsMatch ts) fts
   where 
     uhOh                      = die $ errorNoMatchCallee (srcPos l) ts ft
 
-calleeType l ts ft            = ft
+calleeType _ _ ft             = ft
 
 instantiate l fn ft 
   = do let (αs, t) = bkAll ft 

@@ -310,7 +310,8 @@ efoldReft g f γ z (TObj xts r)     = f γ r $ (efoldRefts g f γ' z (b_type <$>
   where 
     γ'                             = foldr (efoldExt g) γ xts
 efoldReft g f γ z (TArr t r)       = f γ r $ efoldReft g f γ z t    
-efoldReft _ _ _ _ _                = error "Not supported in efoldReft"
+efoldReft g f γ z (TAnd ts)        = efoldRefts g f γ z ts 
+efoldReft _ _ _ _ t                = error $ "Not supported in efoldReft: " ++ ppshow t
 
 efoldRefts g f γ z ts              = L.foldl' (efoldReft g f γ) z ts
 

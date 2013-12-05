@@ -37,7 +37,7 @@ module Language.Nano.Typecheck.Types (
   , mkUnion, mkUnionR
 
   -- * Deconstructing Types
-  , bkFun
+  , bkFun, bkFuns
   , bkAll
   , bkAnd
   , bkUnion, rUnion
@@ -191,6 +191,9 @@ toType = fmap (const ())
 -- | Adding in Refinements
 ofType :: (F.Reftable r) => Type -> RType r
 ofType = fmap (const F.top)
+
+bkFuns :: RType r -> Maybe [([TVar], [Bind r], RType r)]
+bkFuns = sequence . fmap bkFun . bkAnd 
 
 bkFun :: RType r -> Maybe ([TVar], [Bind r], RType r)
 bkFun t = do let (αs, t') = bkAll t

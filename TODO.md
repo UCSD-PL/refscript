@@ -126,9 +126,9 @@ Allow intersection types
     + Parser
     + Visitors
 
-    4. tcFun <------------------------------ HEREHEREHEREHEREHERE
-    5. tcCall
-    6. consFun
+    + tcFun      
+    + tcCall    
+    6. consFun    <------------------------------ HEREHEREHEREHEREHERE
     7. consCall
     8. splitC
 

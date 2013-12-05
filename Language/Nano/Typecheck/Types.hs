@@ -46,6 +46,7 @@ module Language.Nano.Typecheck.Types (
   , unionCheck
   , funTys
   , renameBinds 
+  , calleeType
 
   -- * Regular Types
   , Type
@@ -191,6 +192,23 @@ toType = fmap (const ())
 -- | Adding in Refinements
 ofType :: (F.Reftable r) => Type -> RType r
 ofType = fmap (const F.top)
+
+-- | `calleeType` uses the types at the callsite to extract the appropriate
+--   conjunct from an intersection.
+
+calleeType l ts ft@(TAnd fts) = fromMaybe uhOh $ L.find (argsMatch ts) fts
+  where 
+    uhOh                      = die $ errorNoMatchCallee (srcPos l) ts ft
+
+calleeType _ _ ft             = ft
+
+-- | `argsMatch ts ft` holds iff the arg-types in `ft` are identical to `ts` ... 
+argsMatch :: [RType a] -> RType b -> Bool
+argsMatch ts ft = case bkFun ft of 
+                    Nothing        -> False
+                    Just (_,xts,_) -> (toType <$> ts) == ((toType . b_type) <$> xts)
+
+
 
 funTys l f xs ft 
   = case bkFuns ft of

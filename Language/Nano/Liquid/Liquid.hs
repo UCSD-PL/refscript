@@ -476,20 +476,24 @@ consCall :: (PP a)
 --   3. Use @subTypes@ to add constraints between the types from (step 2) and (step 1)
 --   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in output type of callee.
 
-consCall g l _ es ft 
-  = do (_,its,ot)   <- mfromJust "consCall" . bkFun <$> instantiate l g ft
-       (xes, g')    <- consScan consExpr' g es
+consCall g l fn es ft0 
+  = do (xes, g')    <- consScan consExpr' g es
+       let ts        = [envFindTy x g' | x <- xes]
+       let ft        = calleeType l ts ft0
+       (_,its,ot)   <- instantiate l g fn ft
        let (su, ts') = renameBinds its $ {- tracePP ("consCall2: es=" ++ ppshow es) -} xes
        zipWithM_ (withAlignedM $ subTypeContainers' "call" l g') [envFindTy x g' | x <- xes] ts'
        envAddFresh "consCall" l ({- tracePP ("Ret Call Type: es = " ++ ppshow es) $ -} F.subst su ot) g'
      {-where -}
      {-  msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)-}
 
-instantiate :: AnnTypeR -> CGEnv -> RefType -> CGM RefType
-instantiate l g t = {-  tracePP msg  <$>  -} freshTyInst l g αs τs tbody 
-  where 
-    (αs, tbody)   = bkAll t
-    τs            = getTypArgs l αs 
+-- instantiate :: AnnTypeR -> CGEnv -> RefType -> CGM RefType
+instantiate l g fn ft 
+  = do let (αs, t)      = bkAll ft
+       t'              <- freshTyInst l g αs (getTypArgs l αs) t
+       maybe err return $ bkFun t' 
+    where 
+       err = die $ errorNonFunction (srcPos l) fn ft  
     {-msg           = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)-}
 
 

@@ -1,5 +1,5 @@
 
-/*@ loop :: ({n:number}, {m:number | m = n}) => void */
+/*@ loop :: ({n:number | true}, {m:number | m = n}) => void */
 function loop(n, m){
    
   if (random() > 0){

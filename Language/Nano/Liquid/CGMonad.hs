@@ -814,7 +814,10 @@ splitW (W g i t@(TObj ts _ ))
         ws    <- concatMapM splitW [W g' i ti | B _ ti <- ts]
         return $ bs ++ ws
 
-splitW (W _ _ _ ) = error "Not supported in splitW"
+splitW (W g i (TAnd ts))
+  = concatMapM splitW [W g i t | t <- ts]
+
+splitW (W _ _ t) = error $ render $ text "Not supported in splitW: " <+> pp t
 
 bsplitW g t i 
   | F.isNonTrivialSortedReft r'

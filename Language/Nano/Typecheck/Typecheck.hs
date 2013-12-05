@@ -211,8 +211,8 @@ tcFun _  _ = error "Calling tcFun not on FunctionStatement"
 
 funTy l f xs 
   = do ft <- getDefType f 
-       case bkFun ft of
-         Nothing         -> logError (errorUnboundId loc f) (tErr, tFunErr)
+       case bkFun $ tracePP ("funTy f = " ++ ppshow f) ft of
+         Nothing        -> die $ errorUnboundId loc f 
          Just (αs,ts,t) -> do when (length xs /= length ts) $ logError (errorArgMismatch loc) ()
                               return (ft, (αs, b_type <$> ts, t))
     where
@@ -394,7 +394,7 @@ tcExpr'' _ (NullLit _)
 tcExpr'' γ (VarRef l x)
   = case envFindTy x γ of 
       Nothing -> logError (errorUnboundIdEnv (ann l) x γ) tErr
-      Just z  -> return z
+      Just z  -> return $ tracePP ("tcExpr'' VarRef x = " ++ ppshow x) z
 
 tcExpr'' γ (PrefixExpr l o e)
   = tcCall γ l o [e] (prefixOpTy o γ)
@@ -452,10 +452,11 @@ tcCall γ l fn es ft
         return         $ apply θ ot
 
 instantiate l fn ft 
-  = do t' <-  {- tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (bkAll ft)
-       maybe err return   $ bkFun t'
+  = do let (αs, t) = bkAll ft 
+       t'         <-  {- tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (αs, t) 
+       maybe err return $ tracePP (printf "instantiate/bkFun fn = %s ft = %s t' = %s " (ppshow fn) (ppshow ft) (ppshow t')) $ bkFun t'
     where
-       err = logError (errorNonFunction (ann l) fn ft) tFunErr
+       err = die $ errorNonFunction (ann l) fn ft
 
 
 

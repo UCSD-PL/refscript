@@ -52,7 +52,8 @@ module Language.Nano.Typecheck.TCMonad (
   , checkAnnotation
 
   -- * Unification
-  , unifyTypeM, unifyTypesM
+  , unifyTypeM
+  , unifyTypesM
 
   -- * Casts
   , getCasts

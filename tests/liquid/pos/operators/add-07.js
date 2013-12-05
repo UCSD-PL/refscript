@@ -1,10 +1,15 @@
-/*@ myPlusOk :: (x:number, y:number) => {number | v = x + y}
-             /\ (x:number, y:string) => string
-             /\ (x:string, y:number) => string
-             /\ (x:string, y:string) => string
+/*@ poo :: (number) => number */
+function poo(x){
+  return 0;
+}
+
+/*@ myPlusOk :: /\ (x:number, y:number) => {number | v = x + y}
+                /\ (x:number, y:string) => string
+                /\ (x:string, y:number) => string
+                /\ (x:string, y:string) => string
   */
 function myPlusOk(x, y){
-    return myPlusOk(x,y);    
+    return myPlusOk(x, y);    
 }
 
 /*@ one :: () => {number | v = 1} */
@@ -21,7 +26,7 @@ function num_one(a){
 }
 
 /*@ num_str :: (a:number) => string */
-function num_one(a){
+function num_str(a){
   var d = myPlusOk(0, "cat");
   return d; 
 }

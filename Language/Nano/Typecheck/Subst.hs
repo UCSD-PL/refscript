@@ -123,6 +123,7 @@ instance Free (RType r) where
   free (TAll α t)           = S.delete α $ free t 
   free (TObj bs _)          = S.unions   $ free <$> b_type <$> bs
   free (TBd (TD _ α t _ ))  = foldr S.delete (free t) α
+  free (TAnd ts)            = S.unions   $ free <$> ts 
 
 instance (PP r, F.Reftable r) => Substitutable r (Fact r) where
   apply _ x@(PhiVar _)  = x
@@ -143,7 +144,8 @@ instance Free (Fact r) where
 appTy :: (PP r, F.Reftable r) => RSubst r -> RType r -> RType r
 ------------------------------------------------------------------------
 appTy θ (TApp c ts z)            = TApp c (apply θ ts) z 
-appTy θ (TObj bs z)              = TObj (map (\b -> B { b_sym = b_sym b, b_type = appTy θ $ b_type b } ) bs ) z
+appTy θ (TAnd ts)                = TAnd (apply θ ts) 
+appTy θ (TObj bs z)              = TObj ((\b -> b { b_type = appTy θ $ b_type b}) <$> bs) z
 appTy (Su m) t@(TVar α r)        = (M.lookupDefault t α m) `strengthen` r
 appTy θ (TFun ts t r)            = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m) (TAll α t)          = apply (Su $ M.delete α m) t 
@@ -164,7 +166,8 @@ unfoldFirst env t = go t
   where 
     go (TFun its ot r)         = TFun (appTBi go <$> its) (go ot) r
     go (TObj bs r)             = TObj (appTBi go <$> bs) r
-    go (TBd  _)                = error "unfoldTDefDeep: there should not be a TBody here"
+    go (TBd  _)                = errorstar "BUG: unfoldTDefDeep: there should not be a TBody here"
+    go (TAnd _)                = errorstar "BUG: unfoldFirst: cannot unfold intersection"
     go (TAll v t)              = TAll v $ go t
     go (TApp (TDef id) acts _) = 
       case envFindTy (F.symbol id) env of

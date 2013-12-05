@@ -160,13 +160,14 @@ data TCon
 
 -- | (Raw) Refined Types 
 data RType r  
-  = TApp TCon [RType r]     r
-  | TVar TVar               r 
-  | TFun [Bind r] (RType r) r
-  | TObj [Bind r]           r
-  | TArr (RType r)          r
-  | TBd  (TBody r)
-  | TAll TVar (RType r)
+  = TApp TCon [RType r]     r   -- ^ C T1,...,Tn
+  | TVar TVar               r   -- ^ A
+  | TFun [Bind r] (RType r) r   -- ^ (x1:T1,...,xn:Tn) => T
+  | TObj [Bind r]           r   -- ^ {f1:T1,...,fn:Tn} 
+  | TArr (RType r)          r   -- ^ [T] 
+  | TBd  (TBody r)              -- ^ ???
+  | TAll TVar (RType r)         -- ^ forall A. T
+  | TAnd [RType r]              -- ^ (T1..) => T1' /\ ... /\ (Tn..) => Tn' 
     deriving (Ord, Show, Functor, Data, Typeable)
 
 

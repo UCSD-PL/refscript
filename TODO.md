@@ -108,8 +108,28 @@ Exceptions thrown on 25 tests:
 RJ TODO
 -------
     + add support for string +    (liquid/pos/operators/add-0{3,4,5}.js)
+    + intersections
     + add support for array-write (liquid/pos/arrays/arr-04.js)
     + add support for predicate aliases
+
+Intersections
+-------------
+
+Allow intersection types
+
+    * limited to top level intersections for functions
+    * no type parameters
+    * will be ordered
+
+    1. RType
+    2. Parser
+    3. Visitors
+    4. tcFun
+    5. tcCall
+    6. consFun
+    7. consCall
+    8. splitC
+
 
 Scrape Qualifiers
 -----------------

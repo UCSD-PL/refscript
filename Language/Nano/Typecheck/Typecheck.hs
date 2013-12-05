@@ -17,7 +17,6 @@ import qualified Data.Traversable                   as T
 import           Data.Monoid
 import           Data.Maybe                         (catMaybes, isJust, fromJust, fromMaybe, listToMaybe)
 import           Data.Generics                   
-import           Data.List
 
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$), (<+>))
 import           Text.Printf                        (printf)
@@ -466,9 +465,9 @@ tcCall :: (Ord r, F.Reftable r, PP r, PP fn) =>
 
 tcCall γ l fn es ft0
   = do -- Typecheck arguments
-       ts     <- mapM (tcExpr' γ) es
+       ts            <- mapM (tcExpr' γ) es
        -- Extract callee type (if intersection: match with args)
-       let ft  = calleeType l ts ft0
+       let ft         = calleeType l ts ft0
        (_,ibs,ot)    <- instantiate l fn ft
        let its        = b_type <$> ibs
        -- Unify with formal parameter types
@@ -479,24 +478,12 @@ tcCall γ l fn es ft0
        castsM es ts' its'
        return         $ apply θ ot
 
-calleeType l ts ft@(TAnd fts) = fromMaybe uhOh $ find (argsMatch ts) fts
-  where 
-    uhOh                      = die $ errorNoMatchCallee (srcPos l) ts ft
-
-calleeType _ _ ft             = ft
-
 instantiate l fn ft 
   = do let (αs, t) = bkAll ft 
        t'         <-  {- tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (αs, t) 
        maybe err return $ tracePP (printf "instantiate/bkFun fn = %s ft = %s t' = %s " (ppshow fn) (ppshow ft) (ppshow t')) $ bkFun t'
     where
        err = die   $ errorNonFunction (ann l) fn ft
-
--- | `argsMatch ts ft` holds iff the arg-types in `ft` are identical to `ts` ... 
-argsMatch :: [RType a] -> RType b -> Bool
-argsMatch ts ft = case bkFun ft of 
-                    Nothing        -> False
-                    Just (_,xts,_) -> (toType <$> ts) == ((toType . b_type) <$> xts)
 
 ----------------------------------------------------------------------------------
 tcObject ::  (Ord r, F.Reftable r, PP r) => 

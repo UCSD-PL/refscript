@@ -204,9 +204,8 @@ rTypeSort (TFun xts t _)   = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
 rTypeSort (TObj _ _)       = F.FApp (F.stringFTycon "object") []
 rTypeSort (TArr _ _)       = F.FApp (F.stringFTycon "array") []
-rTypeSort t                = error ("Type: " ++ ppshow t ++ 
-                                    " is not supported in rTypeSort")
-
+rTypeSort (TAnd (t:_))     = rTypeSort t
+rTypeSort t                = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
 
 rTypeSortApp TInt [] = F.FInt
 rTypeSortApp TUn  _  = F.FApp (tconFTycon TUn) [] -- simplifying union sorts, the checks will have been done earlier

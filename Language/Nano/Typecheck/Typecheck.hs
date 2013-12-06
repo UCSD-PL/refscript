@@ -3,7 +3,7 @@
 {-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE TupleSections          #-}
 {-# LANGUAGE FlexibleContexts       #-}
-
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
 
@@ -163,21 +163,17 @@ tcNano :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =
   Nano (AnnSSA r) (RType r) -> TCM r (Nano (AnnType r) (RType r))
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
-  = do m     <- tcNano' $ {- toType <$> -} p 
+  = do m     <- tcNano' p 
        return $ (trace "") $ p {code = Src $ (patchAnn m <$>) <$> fs}
-    {-where-}
-    {-  cachePP cache = render $-}
-    {-        text "********************** CODE **********************"-}
-    {-    $+$ pp cache-}
-    {-    $+$ text "**************************************************"-}
-
 
 -------------------------------------------------------------------------------
 -- tcNano' :: Nano (AnnSSA r) (RType r) -> TCM r UAnnInfo  
 -------------------------------------------------------------------------------
 tcNano' pgm@(Nano {code = Src fs}) 
-  = do tcStmts (specs pgm) fs
+  = do tcStmts (initEnv pgm) fs
        M.unions <$> getAllAnns
+
+initEnv pgm = TCE (specs pgm) emptyContext
 
 -- patchAnn              :: UAnnInfo -> (AnnSSA r) -> (AnnType r)
 patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
@@ -191,7 +187,23 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
 --   @Nothing@ means if we definitely hit a "return" 
 --   @Just γ'@ means environment extended with statement binders
 
-type TCEnv r = Maybe (Env (RType r))
+
+data TCEnv r  = TCE { tce_env :: Env (RType r), tce_ctx :: !IContext }
+
+type TCEnvO r = Maybe (TCEnv r)
+
+-- type TCEnv  r = Maybe (Env (RType r))
+instance (PP r, F.Reftable r) => Substitutable r (TCEnv r) where 
+  apply θ (TCE m c) = TCE (apply θ m) c
+
+tcEnvPushSite i (TCE m c)    = TCE m (pushContext i c)
+tcEnvAdds x      (TCE m c)   = TCE (envAdds x m) c
+tcEnvAddReturn x t (TCE m c) = TCE (envAddReturn x t m) c
+tcEnvMem x                   = envMem x      . tce_env 
+tcEnvFindTy x                = envFindTy x   . tce_env
+tcEnvFindReturn              = envFindReturn . tce_env
+-- tcEnvAdds l x TCEmpty   = die $ bug l $ "Cannot add to TCEmpty"
+-- apply θ TCEmpty   = TCEmpty
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Function -------------------------------------------------------
@@ -200,58 +212,34 @@ type TCEnv r = Maybe (Env (RType r))
 -- tcFun    :: (F.Reftable r) => Env (RType r) -> FunctionStatement (AnnSSA r) -> TCM r (TCEnv r)
 tcFun γ (FunctionStmt l f xs body)
   = do ft    <- getDefType f
-       let γ' = envAdds [(f, ft)] γ
+       let γ' = tcEnvAdds [(f, ft)] γ
        forM (funTys l f xs ft) $ tcFun1 γ' l f xs body
        return $ Just γ' 
 
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
-tcFun1 γ l f xs body (αs, ts, t) = getAnns $ tcFunBody γ' l f body t
+tcFun1 γ l f xs body (i, (αs,ts,t)) = getAnns $ tcFunBody γ' l f body t
   where 
-    γ'                           = envAddFun l f αs xs ts t γ 
-    getAnns                      = accumAnn (catMaybes . map (validInst γ') . M.toList) 
+    γ'                              = envAddFun l f i αs xs ts t γ 
+    getAnns                         = accumAnn (catMaybes . map (validInst γ') . M.toList) 
 
 
 tcFunBody γ l f body t
   = do q              <- tcStmts γ body
        when (isJust q) $ void $ unifyTypeM (srcPos l) "Missing return" f tVoid t
 
--- funTys l f xs ft 
---   = case bkFuns ft of
---       Nothing -> die $ errorNonFunction (srcPos l) f ft 
---       Just ts -> mapSnd3 (map b_type) <$> checkNumArgs l xs <$> ts
 
--- checkNumArgs l xs t@(_,ys,_) 
---   | length xs == length ys = t
---   | otherwise              = die $ errorArgMismatch (srcPos l)  
-
--- tcFun γ (FunctionStmt l f xs body) 
---   = do (ft, (αs, ts, t)) <- funTy l f xs
---        let γ'  = envAdds [(f, ft)] γ
---        let γ'' = envAddFun l f αs xs ts t γ'
---        accumAnn (catMaybes . map (validInst γ'') . M.toList) $  
---          do q              <- tcStmts γ'' body
---             when (isJust q) $ void $ unifyTypeM (srcPos l) "Missing return" f tVoid t
---        return $ Just γ' 
--- 
--- funTy l f xs 
---   = do ft <- getDefType f 
---        case bkFun $ tracePP ("funTy f = " ++ ppshow f) ft of
---          Nothing        -> die $ errorUnboundId loc f 
---          Just (αs,ts,t) -> do when (length xs /= length ts) $ logError (errorArgMismatch loc) ()
---                               return (ft, (αs, b_type <$> ts, t))
---     where
---       loc = ann l
-
-
-envAddFun _ f αs xs ts t = envAdds tyBinds . envAdds (varBinds xs ts) . envAddReturn f t 
+envAddFun _ f i αs xs ts t = tcEnvAdds tyBinds 
+                           . tcEnvAdds (varBinds xs ts) 
+                           . tcEnvAddReturn f t
+                           . tcEnvPushSite i 
   where  
-    tyBinds              = [(tVarId α, tVar α) | α <- αs]
-    varBinds             = zip
+    tyBinds                = [(tVarId α, tVar α) | α <- αs]
+    varBinds               = zip
     
 
 validInst γ (l, ts)
-  = case [β | β <-  HS.toList $ free ts, not ((tVarId β) `envMem` γ)] of
+  = case [β | β <-  HS.toList $ free ts, not ((tVarId β) `tcEnvMem` γ)] of
       [] -> Nothing
       βs -> Just $ errorFreeTyVar l βs
 
@@ -259,7 +247,7 @@ validInst γ (l, ts)
 tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a   
 
 --------------------------------------------------------------------------------
-tcSeq :: (Env (RType r) -> a -> TCM r (TCEnv r)) -> Env (RType r) -> [a] -> TCM r (TCEnv r)
+tcSeq :: (TCEnv r -> a -> TCM r (TCEnvO r)) -> TCEnv r -> [a] -> TCM r (TCEnvO r)
 --------------------------------------------------------------------------------
 
 tcSeq f             = foldM step . Just 
@@ -269,13 +257,13 @@ tcSeq f             = foldM step . Just
 
 --------------------------------------------------------------------------------
 tcStmts :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
-            Env (RType r) -> [Statement (AnnSSA r)] -> TCM r (TCEnv r)
+            TCEnv r -> [Statement (AnnSSA r)] -> TCM r (TCEnvO r)
 --------------------------------------------------------------------------------
 tcStmts = tcSeq tcStmt
 
 -------------------------------------------------------------------------------
 tcStmt  :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
-            Env (RType r) -> Statement (AnnSSA r) -> TCM r (TCEnv r)
+            TCEnv r -> Statement (AnnSSA r) -> TCM r (TCEnvO r)
 -------------------------------------------------------------------------------
 -- skip
 tcStmt' γ (EmptyStmt _) 
@@ -291,7 +279,7 @@ tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
   = do  θ  <- getTDefs
         t2 <- tcExpr' γ e2 
         t3 <- tcExpr' γ e3
-        tx <- safeGetProp x t3
+        tx <- safeGetProp (tce_ctx γ) x t3
         case tx of 
           -- NOTE: Atm assignment to non existing binding has no effect!
           TApp TUndef _ _ -> return $ Just γ
@@ -336,8 +324,8 @@ tcStmt' γ (IfStmt l e s1 s2)
 
 tcStmt' γ (WhileStmt l c b) = do
     let phis = [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
-    let phiTs = fromJust <$> (`envFindTy` γ) <$> (fst3 <$> phis)
-    let γ' =  envAdds (zip (snd3 <$> phis) phiTs) γ
+    let phiTs = fromJust <$> (`tcEnvFindTy` γ) <$> (fst3 <$> phis)
+    let γ' =  tcEnvAdds (zip (snd3 <$> phis) phiTs) γ
     t   <- tcExpr' γ' c
     unifyTypeM (srcPos l) "While condition" c t tBool
     tcStmt' γ' b
@@ -350,13 +338,13 @@ tcStmt' γ (VarDeclStmt _ ds)
 -- return e 
 tcStmt' γ (ReturnStmt l eo) 
   = do  t           <- maybe (return tVoid) (tcExpr' γ) eo
-        let rt       = envFindReturn γ 
+        let rt       = tcEnvFindReturn γ 
         θ           <- unifyTypeM (srcPos l) "Return" eo t rt
         -- Apply the substitution
         let (rt',t') = mapPair (apply θ) (rt,t)
         -- Subtype the arguments against the formals and cast if 
         -- necessary based on the direction of the subtyping outcome
-        maybeM_ (\e -> castM e t' rt') eo
+        maybeM_ (\e -> castM (tce_ctx γ) e t' rt') eo
         return Nothing
 
 tcStmt' γ s@(FunctionStmt _ _ _ _)
@@ -369,27 +357,27 @@ tcStmt' _ s
 tcStmt γ s = tcStmt' γ s
 
 -------------------------------------------------------------------------------
-tcVarDecl :: (Ord r, PP r, F.Reftable r) => Env (RType r) -> VarDecl (AnnSSA r) -> TCM r (TCEnv r)
+tcVarDecl :: (Ord r, PP r, F.Reftable r) => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (TCEnvO r)
 -------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl _ x (Just e)) = do
     t <- tcExpr γ (listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]) e
-    return $ Just $ envAdds [(x, t)] γ
+    return $ Just $ tcEnvAdds [(x, t)] γ
 
 tcVarDecl γ (VarDecl _ _ Nothing)  
   = return $ Just γ
 
 ------------------------------------------------------------------------------------
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
-  Env (RType r) -> Id (AnnSSA r) -> Expression (AnnSSA r) -> TCM r (TCEnv r)
+  TCEnv r -> Id (AnnSSA r) -> Expression (AnnSSA r) -> TCM r (TCEnvO r)
 ------------------------------------------------------------------------------------
-tcAsgn γ x e = tcExpr' γ e >>= \t -> return $ Just $ envAdds [(x, t)] γ
+tcAsgn γ x e = tcExpr' γ e >>= \t -> return $ Just $ tcEnvAdds [(x, t)] γ
 
 
 -- XXX: At the moment only arrays take annotations into account !!!
 -------------------------------------------------------------------------------
 tcExpr :: (Ord r, PP r, F.Reftable r)
-       => Env (RType r)          -- Typing environment
-       -> Maybe (RType r)        -- Contextual type
+       => TCEnv r                -- Typing environment
+       -> Maybe (RType r)        -- Contextual type RJ: meaning what? 
        -> Expression (AnnSSA r)  -- Current expression
        -> TCM r (RType r)        -- Return type
 -------------------------------------------------------------------------------
@@ -399,10 +387,9 @@ tcExpr γ Nothing e           = tcExpr' γ e
 
 tcExpr' γ e                  = setExpr (Just e) >> tcExpr'' γ e
 
--------------------------------------------------------------------------------
-tcExpr'' :: (Ord r, PP r, F.Reftable r) => 
-  Env (RType r) -> Expression (AnnSSA r) -> TCM r (RType r)
--------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------
+tcExpr'' :: (Ord r, PP r, F.Reftable r) => TCEnv r -> Expression (AnnSSA r) -> TCM r (RType r)
+----------------------------------------------------------------------------------------------
 tcExpr'' _ (IntLit _ _)
   = return tInt
 
@@ -416,15 +403,15 @@ tcExpr'' _ (NullLit _)
   = return tNull
 
 tcExpr'' γ (VarRef l x)
-  = case envFindTy x γ of 
-      Nothing -> logError (errorUnboundIdEnv (ann l) x γ) tErr
+  = case tcEnvFindTy x γ of 
+      Nothing -> logError (errorUnboundIdEnv (ann l) x (tce_env γ)) tErr
       Just z  -> return $ tracePP ("tcExpr'' VarRef x = " ++ ppshow x) z
 
 tcExpr'' γ (PrefixExpr l o e)
-  = tcCall γ l o [e] (prefixOpTy o γ)
+  = tcCall γ l o [e] (prefixOpTy o $ tce_env γ)
 
 tcExpr'' γ (InfixExpr l o e1 e2)        
-  = tcCall γ l o [e1, e2] (infixOpTy o γ)
+  = tcCall γ l o [e1, e2] (infixOpTy o $ tce_env γ)
 
 tcExpr'' γ (CallExpr l e es)
   = tcExpr' γ e >>= tcCall γ l e es
@@ -433,13 +420,13 @@ tcExpr'' γ (ObjectLit _ ps)
   = tcObject γ ps
 
 -- x.f =def= x["f"]
-tcExpr'' γ (DotRef _ e s) = tcExpr' γ e >>= safeGetProp (unId s) 
+tcExpr'' γ (DotRef _ e s) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) (unId s) 
 
 -- x["f"]
-tcExpr'' γ (BracketRef _ e (StringLit _ s)) = tcExpr' γ e >>= safeGetProp s
+tcExpr'' γ (BracketRef _ e (StringLit _ s)) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) s
 
 -- x[i] 
-tcExpr'' γ (BracketRef _ e (IntLit _ _)) = tcExpr' γ e >>= indexType 
+tcExpr'' γ (BracketRef _ e (IntLit _ _)) = tcExpr' γ e >>= indexType (tce_ctx γ) 
 
 -- x[e]
 tcExpr'' γ e@(BracketRef l e1 e2) = do
@@ -459,7 +446,7 @@ tcExpr'' _ e
 
 ----------------------------------------------------------------------------------
 tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 
-  Env (RType r) -> AnnSSA r -> fn -> [Expression (AnnSSA r)]-> RType r -> TCM r (RType r)
+  TCEnv r -> AnnSSA r -> fn -> [Expression (AnnSSA r)]-> RType r -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 
 tcCall γ l fn es ft0
@@ -474,7 +461,7 @@ tcCall γ l fn es ft0
        -- Apply substitution
        let (ts',its') = mapPair (apply θ) (ts, its)
        -- Subtype the arguments against the formals and up/down cast if needed 
-       castsM es ts' its'
+       castsM (tce_ctx γ) es ts' its'
        return         $ apply θ ot
 
 instantiate l fn ft 
@@ -486,7 +473,7 @@ instantiate l fn ft
 
 ----------------------------------------------------------------------------------
 tcObject ::  (Ord r, F.Reftable r, PP r) => 
-  Env (RType r) -> [(Prop (AnnSSA r), Expression (AnnSSA r))] -> TCM r (RType r)
+  TCEnv r -> [(Prop (AnnSSA r), Expression (AnnSSA r))] -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcObject γ bs 
   = do 
@@ -497,7 +484,7 @@ tcObject γ bs
 
 ----------------------------------------------------------------------------------
 tcArray :: (Ord r, PP r, F.Reftable r) =>
-  Env (RType r) -> Maybe (RType r) -> Expression (AnnSSA r) -> TCM r (RType r)
+  TCEnv r -> Maybe (RType r) -> Expression (AnnSSA r) -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 tcArray γ (Just t@(TArr ta _)) (ArrayLit _ es) = do 
     ts <- mapM (tcExpr γ $ Just ta) es
@@ -531,7 +518,7 @@ tcArray _ _ _ =
               
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, F.Reftable r, PP r) =>
-  (AnnSSA r) -> Env (RType r) -> TCEnv r -> TCEnv r -> TCM r (TCEnv r)
+  (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)
 ----------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
@@ -544,15 +531,15 @@ envJoin' l γ γ1 γ2
        -- then lost if the variables are no Phi. So replay the application of
        -- the instantiations on γ
        θ     <- getSubst
-       return $ Just $ envAdds (zip xs ts) (apply θ γ)
+       return $ Just $ tcEnvAdds (zip xs ts) (apply θ γ)
   
 
 ----------------------------------------------------------------------------------
 getPhiType ::  (Ord r, F.Reftable r, PP r) => 
-  Annot b SourceSpan -> Env (RType r) -> Env (RType r) -> Id SourceSpan-> TCM r (RType r)
+  Annot b SourceSpan -> TCEnv r -> TCEnv r -> Id SourceSpan-> TCM r (RType r)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
-  case (envFindTy x γ1, envFindTy x γ2) of
+  case (tcEnvFindTy x γ1, tcEnvFindTy x γ2) of
     (Just t1, Just t2) -> do  env <- getTDefs
                               return $ fst4 $ compareTs env t1 t2
     (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
@@ -561,5 +548,5 @@ getPhiType l γ1 γ2 x =
                           where loc = srcPos $ ann l
 
 forceCheck x γ 
-  = elem x $ fst <$> envToList γ
+  = elem x $ fst <$> envToList (tce_env γ)
 

@@ -86,6 +86,13 @@ module Language.Nano.Typecheck.Types (
   , AnnType, UAnnType
   , AnnInfo, UAnnInfo
   , SST
+
+  -- * Contexts
+  , CallSite (..)
+  , IContext
+  , emptyContext
+  , pushContext
+
   ) where 
 
 import           Text.Printf
@@ -208,11 +215,11 @@ argsMatch ts ft = case bkFun ft of
                     Just (_,xts,_) -> (toType <$> ts) == ((toType . b_type) <$> xts)
 
 
-
 funTys l f xs ft 
   = case bkFuns ft of
       Nothing -> die $ errorNonFunction (srcPos l) f ft 
-      Just ts -> funTy l f xs <$> ts
+      Just ts -> zip ([0..] :: [Int]) [funTy l f xs t | t <- ts]
+
 
 funTy l f xs (αs, yts, t) 
   | eqLen xs yts = let (su, ts') = renameBinds yts xs 
@@ -554,13 +561,28 @@ instance (PP s, PP t) => PP (M.HashMap s t) where
 --   from the kth function in lexical scope order (ignoring functions that have
 --   a single conjunct.)
 
-newtype IContext = IC [Int] deriving (Eq, Ord, Show, Data, Typeable)
+class CallSite a where
+  siteIndex :: a -> Int
+
+instance CallSite Int where
+  siteIndex i = i
+
+newtype IContext = IC [Int] 
+                   deriving (Eq, Ord, Show, Data, Typeable)
 
 instance PP Int where
   pp        = int
 
 instance PP IContext where
   pp (IC x) = text "Context: " <+> pp x
+
+emptyContext         :: IContext
+emptyContext         = IC []
+
+pushContext          :: (CallSite a) => a -> IContext -> IContext
+pushContext s (IC c) = IC ((siteIndex s) : c) 
+
+
 
 -----------------------------------------------------------------------------
 -- | Casts ------------------------------------------------------------------

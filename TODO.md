@@ -119,11 +119,19 @@ Allow intersection types
     + Parser
     + Visitors
 
-    + tcFun      
-    + tcCall    
-    6. consFun    <------------------------------ HEREHEREHEREHEREHERE
-    7. consCall
-    8. splitC
+      
+    Need to guard cast by context    
+    - data Context
+    - data Annot = Cast [(Context, Type)]
+
+                                                  <------------------------------ HEREHEREHEREHEREHERE
+    - tcFun         : extend context      
+    - cast-sites    : add context to guard
+    - consFun       : extend context       
+    - consUpCast    : filter-by-context
+    - consDownCast  : filter-by-context
+    - consDeadCast  : filter-by-context
+    - splitC
 
 
 Scrape Qualifiers

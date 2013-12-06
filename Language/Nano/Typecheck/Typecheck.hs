@@ -387,18 +387,17 @@ tcAsgn γ x e = tcExpr' γ e >>= \t -> return $ Just $ envAdds [(x, t)] γ
 
 -- XXX: At the moment only arrays take annotations into account !!!
 -------------------------------------------------------------------------------
-tcExpr :: (Ord r, PP r, F.Reftable r) => 
-     Env (RType r)          -- Typing environment
-  -> Maybe (RType r)        -- Contextual type
-  -> Expression (AnnSSA r)  -- Current expression
-  -> TCM r (RType r)        -- Return type
+tcExpr :: (Ord r, PP r, F.Reftable r)
+       => Env (RType r)          -- Typing environment
+       -> Maybe (RType r)        -- Contextual type
+       -> Expression (AnnSSA r)  -- Current expression
+       -> TCM r (RType r)        -- Return type
 -------------------------------------------------------------------------------
 tcExpr γ ct e@(ArrayLit _ _) = tcArray γ ct e
-tcExpr γ (Just ta) e         = 
-  tcExpr' γ e >>= checkAnnotation "tcExprAnnot" ta e >> return ta
+tcExpr γ (Just ta) e         = tcExpr' γ e >>= checkAnnotation "tcExprAnnot" ta e >> return ta
 tcExpr γ Nothing e           = tcExpr' γ e
 
-tcExpr' γ e = setExpr (Just e) >> tcExpr'' γ e
+tcExpr' γ e                  = setExpr (Just e) >> tcExpr'' γ e
 
 -------------------------------------------------------------------------------
 tcExpr'' :: (Ord r, PP r, F.Reftable r) => 

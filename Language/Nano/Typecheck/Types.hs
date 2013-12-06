@@ -80,9 +80,10 @@ module Language.Nano.Typecheck.Types (
   , UFact
   , Fact (..)
   , Cast(..)
-  , IContext (..)
-  , AnnBare ,UAnnBare
-  , AnnSSA, UAnnSSA
+
+  -- * Aliases for annotated Source 
+  , AnnBare, UAnnBare
+  , AnnSSA , UAnnSSA
   , AnnType, UAnnType
   , AnnInfo, UAnnInfo
   , SST
@@ -103,7 +104,7 @@ import qualified Data.List                      as L
 import qualified Data.HashMap.Strict            as M
 import           Data.Generics                   
 import           Data.Typeable                  ()
-import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.Syntax    hiding (Cast)
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Parser    (SourceSpan (..))
@@ -610,7 +611,7 @@ data Fact r
   = PhiVar      ![(Id SourceSpan)]
   | LoopPhiVar  ![(Id SourceSpan, Id SourceSpan, Id SourceSpan)]
   | TypInst     ![RType r]
-  | Cast        !IContext !(Cast (RType r))
+  | TCast       !IContext !(Cast (RType r))
   | TAnnot      !(RType r)
     deriving (Eq, Ord, Show, Data, Typeable)
 
@@ -626,15 +627,16 @@ data Fact r
 type UFact = Fact ()
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show, Data, Typeable)
-type AnnBare r  = Annot (Fact r) SourceSpan -- NO facts
-type AnnSSA  r  = Annot (Fact r) SourceSpan -- Only Phi facts
-type AnnType r  = Annot (Fact r) SourceSpan -- Only Phi + Cast facts
-type AnnInfo r  = M.HashMap SourceSpan [Fact r] 
+type AnnBare r = Annot (Fact r) SourceSpan -- NO facts
+type AnnSSA  r = Annot (Fact r) SourceSpan -- Only Phi facts
+type AnnType r = Annot (Fact r) SourceSpan -- Only Phi + Cast facts
+type AnnInfo r = M.HashMap SourceSpan [Fact r] 
 
 type UAnnBare = AnnBare () 
 type UAnnSSA  = AnnSSA  ()
 type UAnnType = AnnType ()
 type UAnnInfo = AnnInfo ()
+
 
 
 instance HasAnnotation (Annot b) where 
@@ -656,7 +658,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
                                               <+> pp x0 <+> text "," 
                                               <+> pp x1 <+> text ")") <$> xs)
   pp (TypInst ts)     = text "inst" <+> pp ts 
-  pp (Cast  ctx c)    = text "assume" <+> pp ctx <+> pp c
+  pp (TCast  ctx c)   = text "assume" <+> pp ctx <+> pp c
   pp (TAnnot t)       = text "annotation" <+> pp t
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where

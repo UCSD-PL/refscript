@@ -172,9 +172,7 @@ visitExpression vis e = doVisit vis (vExpression vis $ tracePP "vExpression" e) 
         ListExpr l es            -> ListExpr l (ve <$> es)
         CallExpr l e es          -> CallExpr l (ve e) (ve <$> es)
         FuncExpr l mi is ss      -> FuncExpr l (vi <$> mi) (vi <$> is) (vs <$> ss)
-        DownCast l e             -> DownCast l $ ve e
-        UpCast l e               -> UpCast l $ ve e
-        DeadCast l e             -> DeadCast l $ ve e
+        Cast l e                 -> Cast l $ ve e
       
             
 -------------------------------------------------------------------------------

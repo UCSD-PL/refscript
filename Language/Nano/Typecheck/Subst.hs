@@ -134,7 +134,7 @@ instance (PP r, F.Reftable r) => Substitutable r (Cast (RType r)) where
 instance (PP r, F.Reftable r) => Substitutable r (Fact r) where
   apply _ x@(PhiVar _)     = x
   apply θ (TypInst ts)     = TypInst $ apply θ ts
-  apply θ (Cast x  y)      = Cast x  $ apply θ y
+  apply θ (TCast x  y)     = TCast x  $ apply θ y
   apply _ x@(LoopPhiVar _) = x
   apply θ (TAnnot t)       = TAnnot  $ apply θ t
 
@@ -144,7 +144,7 @@ instance Free (Cast (RType r)) where
 instance Free (Fact r) where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
-  free (Cast _ c)       = free c
+  free (TCast _ c)      = free c
   free (LoopPhiVar _)   = S.empty
   free (TAnnot t)       = free t
  

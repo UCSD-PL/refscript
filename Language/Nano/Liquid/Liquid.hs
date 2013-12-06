@@ -94,7 +94,7 @@ consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) = consStmts (initCGEnv pgm) fs >> return ()
 
-initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv []
+initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
@@ -108,8 +108,8 @@ consFun g (FunctionStmt l f xs body)
 consFun _ s 
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
 
-consFun1 l g' f xs body ft 
-  = do g'' <- envAddFun l g' f xs ft
+consFun1 l g' f xs body (i, ft) 
+  = do g'' <- envAddFun l f i xs ft g'
        gm  <- consStmts g'' body
        maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
 
@@ -125,10 +125,13 @@ consFun1 l g' f xs body ft
 -----------------------------------------------------------------------------------
 -- envAddFun :: AnnTypeR -> CGEnv -> Id AnnTypeR -> [Id AnnTypeR] -> RefType -> CGM CGEnv
 -----------------------------------------------------------------------------------
-envAddFun l g f xs (αs, ts', t') = envAdds tyBinds =<< envAdds (varBinds xs ts') =<< (return $ envAddReturn f t' g) 
+envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g) 
+                                   >>= (return . envAddReturn f t' ) 
+                                   >>= envAdds (varBinds xs ts')
+                                   >>= envAdds tyBinds
   where
-    tyBinds                      = [(Loc (srcPos l) α, tVar α) | α <- αs]
-    varBinds                     = safeZip "envAddFun"
+    tyBinds                        = [(Loc (srcPos l) α, tVar α) | α <- αs]
+    varBinds                       = safeZip "envAddFun"
     -- (αs, ts', t')     = funTy l f xs ft
 
 --------------------------------------------------------------------------------
@@ -318,16 +321,9 @@ consExpr g (Just ta) e = do
 
 consExpr g Nothing e = consExpr' g e
 
-consExpr' g (DownCast a e) 
+consExpr' g (Cast a e)
   = do  (x, g') <- consExpr' g e
-        consDownCast g' x a e 
-
-consExpr' g (UpCast a e)
-  = do  (x, g') <- consExpr' g e
-        consUpCast g' x a e
-
-consExpr' g (DeadCast a e)
-  = consDeadCast g a e
+        consCast g' x a e
 
 consExpr' g (IntLit l i)               
   = envAddFresh "consExpr:IntLit" l (eSingleton tInt i) g
@@ -399,46 +395,43 @@ consExpr' _ e
   = error $ (printf "consExpr: not handled %s" (ppshow e))
 
 
-------------------------------------------------------------------------------------------
-consUpCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
-------------------------------------------------------------------------------------------
-consUpCast g x a e 
+-------------------------------------------------------------------------------------------------
+consCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
+-------------------------------------------------------------------------------------------------
+consCast g x a e = case envGetContextCast (srcPos e) g a of
+                     Nothing        -> return (x, g)
+                     Just (UCST t)  -> consUpCast   g x e t
+                     Just (DCST t)  -> consDownCast g x e t 
+                     Just (DC t)    -> consDeadCast g e t
+
+-------------------------------------------------------------------------------------------------
+-- consUpCast :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> RefType -> CGM (Id AnnTypeR, CGEnv)
+-------------------------------------------------------------------------------------------------
+consUpCast g x e u 
   = do γ      <- getTDefs
        let b'  = (`strengthen` (F.symbolReft x)) $ fst $ alignTs γ b u
        envAddFresh "consUpCast" l b' g
     where
-       u       = rType $ head [ t | Assume t <- ann_fact a]
        b       = envFindTy x g 
        l       = getAnnotation e
-      
 
 -- | Constraint generation for down-casting: In an environment @g@, cast the
 -- binding @x@ to the type @tc@ (retrieved from the annotation of the cast
 -- expression @a@.) @e@ is the expression to be casted.
 ---------------------------------------------------------------------------------------------
-consDownCast :: CGEnv -> Id AnnTypeR -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
+-- consDownCast :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> RefType -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
-consDownCast g x a e = 
+consDownCast g x e t = 
   do γ   <- getTDefs
      tc  <- castTo (srcPos l) γ te τ 
      g'  <- envAdds [(x, tc)] g
      withAlignedM (subTypeContainers' "Downcast" l g) te tc
      envAddFresh "consDownCast" l tc g'
   where 
-     τ    = toType $ head [ t | Assume t <- ann_fact a]
+     τ    = toType t --   $ head [ t | Assume t <- ann_fact a]
      te   = envFindTy x g
      l    = getAnnotation e
 
--- consDownCast g x a e = do  
---     g'  <- envAdds [(x, tc)] g
---     withAlignedM (subTypeContainers' "Downcast" l g) te tc
---     envAddFresh "consDownCast" l tc g'
---   where 
---     tc   = head [ t | Assume t <- ann_fact a]
---     te   = envFindTy x g
---     l    = getAnnotation e
-
--- castTo               :: Env RefType -> Locate RType r -> Type -> RType r
 castTo l γ t τ       = castStrengthen t . zipType2 γ botJoin t <$> bottify τ 
   where 
     bottify          = fmap (fmap F.bot) . true . rType 
@@ -451,17 +444,17 @@ castTo l γ t τ       = castStrengthen t . zipType2 γ botJoin t <$> bottify τ
 castStrengthen t1 t2 
   | isUnion t1 && not (isUnion t2) = t2 `strengthen` (rTypeReft t1)
   | otherwise                      = t2
+
 ---------------------------------------------------------------------------------------------
-consDeadCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
+consDeadCast :: CGEnv -> Expression AnnTypeR -> RefType ->  CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------------
-consDeadCast g a e =  do  
-    subTypeContainers' "dead" l g tru fls
-    envAddFresh "consDeadCast" l tC g
-  where
-    tC  = rType $ head [ t | Assume t <- ann_fact a]      -- the cast type
-    l   = getAnnotation e
-    tru = tTop
-    fls = tTop `strengthen` F.predReft F.PFalse
+consDeadCast g e tC 
+  = do subTypeContainers' "dead" l g tru fls
+       envAddFresh "consDeadCast" l tC g
+    where
+       l   = getAnnotation e
+       tru = tTop
+       fls = tTop `strengthen` F.predReft F.PFalse
 
 
 ---------------------------------------------------------------------------------------------

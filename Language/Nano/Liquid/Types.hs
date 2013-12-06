@@ -84,17 +84,19 @@ type AnnTypeR    = AnnType F.Reft
 
 data CGEnv   
   = CGE { 
-        -- TODO: add opts 
-        --opts   :: OptionConf
-          renv   :: !(Env RefType) -- ^ bindings in scope 
-        , fenv   :: F.IBindEnv     -- ^ fixpoint bindings
-        , guards :: ![F.Pred]      -- ^ branch target conditions  
+         -- TODO: add opts 
+         --opts    :: OptionConf
+          renv    :: !(Env RefType) -- ^ bindings in scope 
+        , fenv    :: F.IBindEnv     -- ^ fixpoint bindings
+        , guards  :: ![F.Pred]      -- ^ branch target conditions  
+        , cge_ctx :: !IContext      -- ^ intersection-type context 
         }
 
-emptyCGEnv = CGE {-[] -} envEmpty F.emptyIBindEnv []
+
+emptyCGEnv = CGE {-[] -} envEmpty F.emptyIBindEnv [] emptyContext
 
 instance PP CGEnv where
-  pp (CGE {-_ -} re _ gs) = vcat [pp re, pp gs] 
+  pp (CGE {-_ -} re _ gs ctx) = vcat [pp re, pp gs, pp ctx] 
 
 ----------------------------------------------------------------------------
 -- | Constraint Information ------------------------------------------------

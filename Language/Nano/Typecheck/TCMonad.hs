@@ -535,10 +535,10 @@ patchPgmM pgm   = everywhereM' (mkM transform) pgm
 --------------------------------------------------------------------------------
 -- patchExpr :: Expression (AnnSSA r) -> Casts_ r -> Expression (AnnSSA r)
 --------------------------------------------------------------------------------
-patchExpr e m = UpCast a' e
+patchExpr e m = Cast a' e
   where 
     a'        = a { ann_fact = (ann_fact a) ++ fs' }
-    fs'       = [Cast x y | (x, y) <- M.findWithDefault [] e m]
+    fs'       = [TCast x y | (x, y) <- M.findWithDefault [] e m]
     a         = getAnnotation e
 
 --   case M.lookupDefault [] e m of

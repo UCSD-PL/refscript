@@ -25,7 +25,8 @@ module Language.Nano.Typecheck.Compare (
   
   -- * Casting
   , Cast(..)
-  , Casts, Casts_
+  -- , Casts
+  , Casts_
   , zipType1
   , zipType2
 
@@ -108,15 +109,8 @@ instance Equivalent e (Id a) where
 -- Casts ------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 
-type Casts    = M.Map (Expression (AnnSSA F.Reft)) (Cast RefType)
+-- type Casts    = M.Map (Expression (AnnSSA F.Reft)) (Cast RefType)
 type Casts_ r = M.Map (Expression (AnnSSA r)) (Cast (RType r))
-
-data Cast t  = UCST t | DCST t | DC t
-
-instance (PP a) => PP (Cast a) where
-  pp (UCST t) = text "Upcast  : " <+> pp t
-  pp (DCST t) = text "Downcast: " <+> pp t
-  pp (DC   t) = text "Deadcast: " <+> pp t
 
 
 ---------------------------------------------------------------------------------------

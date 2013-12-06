@@ -79,14 +79,13 @@ module Language.Nano.Typecheck.Types (
   , Annot (..)
   , UFact
   , Fact (..)
+  , Cast(..)
+  , IContext (..)
   , AnnBare ,UAnnBare
   , AnnSSA, UAnnSSA
   , AnnType, UAnnType
   , AnnInfo, UAnnInfo
-  , isAsm
-
   , SST
-
   ) where 
 
 import           Text.Printf
@@ -545,6 +544,39 @@ instance (PP s, PP t) => PP (M.HashMap s t) where
   pp m = vcat $ pp <$> M.toList m
 
 -----------------------------------------------------------------------------
+-- | IContext keeps track of context of intersection-type cases -------------
+-----------------------------------------------------------------------------
+
+-- | Keeps track of intersection-type context, to allow casts to be guarded by
+--   context. Otherwise, the "dead-casts" for one case must be proven in another
+--   case which is impossible. See tests/liquid/pos/misc/negate-05.js
+--   A context IC [i_1,...,i_n] denotes the case where we use the conjunct i_k
+--   from the kth function in lexical scope order (ignoring functions that have
+--   a single conjunct.)
+
+newtype IContext = IC [Int] deriving (Eq, Ord, Show, Data, Typeable)
+
+instance PP Int where
+  pp        = int
+
+instance PP IContext where
+  pp (IC x) = text "Context: " <+> pp x
+
+-----------------------------------------------------------------------------
+-- | Casts ------------------------------------------------------------------
+-----------------------------------------------------------------------------
+
+data Cast t  = UCST {castTarget :: t } -- ^ up-cast
+             | DCST {castTarget :: t } -- ^ down-cast 
+             | DC   {castTarget :: t } -- ^ dead-cast
+             deriving (Eq, Ord, Show, Data, Typeable)
+
+instance (PP a) => PP (Cast a) where
+  pp (UCST t) = text "Upcast  : " <+> pp t
+  pp (DCST t) = text "Downcast: " <+> pp t
+  pp (DC   t) = text "Deadcast: " <+> pp t
+
+-----------------------------------------------------------------------------
 -- | Annotations ------------------------------------------------------------
 -----------------------------------------------------------------------------
 
@@ -553,26 +585,28 @@ instance (PP s, PP t) => PP (M.HashMap s t) where
 --   @Expression@ type, but are tucking them in using the @a@ parameter.
 
 data Fact r
-  = PhiVar  ! [(Id SourceSpan)]
-  -- This will keep track of:
-  -- ∙ the SSA version of the Phi var before entering the loop, and 
-  -- ∙ the SSA version of the Phi var after entering the loop. 
-  -- ∙ the SSA version of the Phi var at the end of the loop.
-  -- This will be helpful to keep track of the base types that the phi vars will 
-  -- need to have in the loop (since there is no definition of them in the
-  -- source).
-  | LoopPhiVar  ! [(Id SourceSpan, Id SourceSpan, Id SourceSpan)]
-  | TypInst ! [RType r]
-  | Assume  ! (RType r)
-  | TAnnot  ! (RType r)
+  = PhiVar      ![(Id SourceSpan)]
+  | LoopPhiVar  ![(Id SourceSpan, Id SourceSpan, Id SourceSpan)]
+  | TypInst     ![RType r]
+  | Cast        !IContext !(Cast (RType r))
+  | TAnnot      !(RType r)
     deriving (Eq, Ord, Show, Data, Typeable)
+
+-- TODO: make a record with three suitably named fields instead of a raw-tuple.
+-- | LoopPhiVar: will keep track of:
+-- ∙ the SSA version of the Phi var before entering the loop, and 
+-- ∙ the SSA version of the Phi var after entering the loop. 
+-- ∙ the SSA version of the Phi var at the end of the loop.
+-- This will be helpful to keep track of the base types that the phi vars will 
+-- need to have in the loop (since there is no definition of them in the
+-- source).
 
 type UFact = Fact ()
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show, Data, Typeable)
 type AnnBare r  = Annot (Fact r) SourceSpan -- NO facts
-type AnnSSA  r  = Annot (Fact r) SourceSpan -- Only Phi + Assume     facts
-type AnnType r  = Annot (Fact r) SourceSpan -- Only Phi + Typ        facts
+type AnnSSA  r  = Annot (Fact r) SourceSpan -- Only Phi facts
+type AnnType r  = Annot (Fact r) SourceSpan -- Only Phi + Cast facts
 type AnnInfo r  = M.HashMap SourceSpan [Fact r] 
 
 type UAnnBare = AnnBare () 
@@ -600,7 +634,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
                                               <+> pp x0 <+> text "," 
                                               <+> pp x1 <+> text ")") <$> xs)
   pp (TypInst ts)     = text "inst" <+> pp ts 
-  pp (Assume t)       = text "assume" <+> pp t
+  pp (Cast  ctx c)    = text "assume" <+> pp ctx <+> pp c
   pp (TAnnot t)       = text "annotation" <+> pp t
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
@@ -611,10 +645,9 @@ instance (F.Reftable r, PP r) => PP (AnnInfo r) where
 instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
 
-isAsm  :: UFact -> Bool
-isAsm  (Assume _) = True
-isAsm  _          = False
-
+-- isAsm  :: UFact -> Bool
+-- isAsm  (CastTo _ _) = True
+-- isAsm  _          = False
 
 type SST r     = (SourceSpan, Maybe (RType r))
 

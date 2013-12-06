@@ -125,17 +125,26 @@ instance Free (RType r) where
   free (TBd (TD _ α t _ ))  = foldr S.delete (free t) α
   free (TAnd ts)            = S.unions   $ free <$> ts 
 
+instance (PP r, F.Reftable r) => Substitutable r (Cast (RType r)) where
+  apply θ c = c { castTarget = apply θ (castTarget c) }
+  -- apply θ (UCST t) = UCST (apply θ t)
+  -- apply θ (DCST t) = DCST (apply θ t)
+  -- apply θ (DC   t) = DC   (apply θ t)
+
 instance (PP r, F.Reftable r) => Substitutable r (Fact r) where
-  apply _ x@(PhiVar _)  = x
-  apply θ (TypInst ts)  = TypInst $ apply θ ts
-  apply θ (Assume  t )  = Assume  $ apply θ t
+  apply _ x@(PhiVar _)     = x
+  apply θ (TypInst ts)     = TypInst $ apply θ ts
+  apply θ (Cast x  y)      = Cast x  $ apply θ y
   apply _ x@(LoopPhiVar _) = x
-  apply θ (TAnnot t)    = TAnnot  $ apply θ t
+  apply θ (TAnnot t)       = TAnnot  $ apply θ t
+
+instance Free (Cast (RType r)) where
+  free = free . castTarget 
 
 instance Free (Fact r) where
   free (PhiVar _)       = S.empty
   free (TypInst ts)     = free ts
-  free (Assume t)       = free t
+  free (Cast _ c)       = free c
   free (LoopPhiVar _)   = S.empty
   free (TAnnot t)       = free t
  

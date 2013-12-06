@@ -40,10 +40,11 @@ module Language.Nano.Liquid.CGMonad (
   , envAddReturn
   , envAddGuard
   , envFindTy
-  -- , envFindTy'
   , envToList
   , envFindReturn
   , envJoin
+  , envPushContext
+  , envGetContextCast
 
   -- * Add Subtyping Constraints
   , subTypes, subTypes', subType, subType'
@@ -240,6 +241,17 @@ cgError _ e = throwError e
 ---------------------------------------------------------------------------------------
 -- | Environment API ------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
+
+---------------------------------------------------------------------------------------
+envPushContext :: (CallSite a) => a -> CGEnv -> CGEnv
+---------------------------------------------------------------------------------------
+envPushContext c g = g {cge_ctx = pushContext c (cge_ctx g)}
+
+---------------------------------------------------------------------------------------
+envGetContextCast :: SourceSpan -> CGEnv -> AnnTypeR -> Maybe (Cast RefType)
+---------------------------------------------------------------------------------------
+envGetContextCast l g a = error "TODO: call rType on the result"
+
 
 ---------------------------------------------------------------------------------------
 envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id l, CGEnv) 

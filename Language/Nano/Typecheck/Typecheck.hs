@@ -88,7 +88,7 @@ typeCheck ::
 typeCheck verb pgm = execute verb pgm $ tcAndPatch pgm
 
 -------------------------------------------------------------------------------
-failCasts :: (Data r, Typeable r) => 
+failCasts :: (F.Reftable r, Data r, Typeable r) => 
               Bool -> Nano (AnnSSA r) (RType r) -> F.FixResult Error 
 -------------------------------------------------------------------------------
 failCasts False (Nano {code = Src fs}) | not $ null csts = F.Unsafe csts
@@ -97,15 +97,25 @@ failCasts False (Nano {code = Src fs}) | not $ null csts = F.Unsafe csts
 failCasts True   _                                       = F.Safe                                            
     
 
--------------------------------------------------------------------------------
-allCasts :: (Data r, Typeable r) => [FunctionStatement (AnnSSA r)] -> [Error]
--------------------------------------------------------------------------------
-allCasts fs =  everything (++) ([] `mkQ` f) $ fs
-  where f (DownCast l t)  = [errorDownCast l t]
-        f (DeadCast l _)  = [errorDeadCast l  ]
-        -- UpCasts are safe
-        f _               = [ ]
+-------------------------------------------------------------------------------------------
+allCasts :: (F.Reftable r, Data r, Typeable r) => [FunctionStatement (AnnSSA r)] -> [Error]
+-------------------------------------------------------------------------------------------
+allCasts = concatMap castErrors . gimmeCasts 
 
+gimmeCasts    :: (Data r, Typeable r) => [FunctionStatement (AnnSSA r)] -> [(AnnSSA r)] 
+gimmeCasts fs =  everything (++) ([] `mkQ` f) $ fs
+  where
+    -- f            :: Expression (AnnSSA r) -> [ 
+    f (Cast l _) = [l] -- e
+    f _          = []
+
+castErrors     :: (F.Reftable r) => AnnSSA r -> [Error] 
+castErrors l  = downErrs ++ deadErrs 
+  where
+    downErrs  = [errorDownCast loc t | TCast _ (DCST t) <- casts]
+    deadErrs  = [errorDeadCast loc   | TCast _ (DC _)   <- casts]
+    casts     = ann_fact l
+    loc       = srcPos l
 
 printAnn (Ann l fs) = when (not $ null fs) $ putStrLn 
     $ printf "At %s: %s" (ppshow l) (ppshow fs)

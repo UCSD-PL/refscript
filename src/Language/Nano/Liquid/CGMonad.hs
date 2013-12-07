@@ -458,7 +458,7 @@ subTypes' msg l g xs ts = zipWithM_ (subType' msg l g) [envFindTy x g | x <- xs]
 -- objects)? Probably not, so this process should be done after the splitC.
 
 ---------------------------------------------------------------------------------------
-subType :: AnnTypeR -> CGEnv -> RefType -> RefType -> CGM ()
+subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 =
   do tt1   <- addInvariant t1
@@ -469,11 +469,9 @@ subType l g t1 t2 =
   where
     c      = uncurry $ Sub g (ci l)
     checkTypes tdefs t1 t2 | equivWUnions tdefs t1 t2 = (t1,t2)
-    checkTypes  _ t1 t2    | otherwise                = errorstar $ msg t1 t2
-    msg t1 t2 = printf "[%s]\nCGMonad: checkTypes not aligned: \n%s\nwith\n%s"
-                  (ppshow $ ann l) (ppshow $ toType t1) (ppshow $ toType t2)
-
--- A more verbose version
+    checkTypes  _ t1 t2    | otherwise                = die $ bugMalignedSubtype (srcPos l) t1 t2
+    
+ -- A more verbose version
 subType' msg l g t1 t2 = 
   subType l g (trace (printf "SubType[%s]:\n\t%s\n\t%s" msg (ppshow t1) (ppshow t2)) t1) t2
 
@@ -508,7 +506,7 @@ equivWUnionsM t t' = getTDefs >>= \γ -> return $ equivWUnions γ t t'
 -- TODO: Will loop infinitely for cycles in type definitions
 --
 -------------------------------------------------------------------------------
-subTypeContainers :: AnnTypeR -> CGEnv -> RefType -> RefType -> CGM ()
+subTypeContainers :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 -------------------------------------------------------------------------------
 subTypeContainers l g (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _) | d == d' = 
   mapM_ (uncurry $ subTypeContainers' "def0" l g) $ zip ts ts'

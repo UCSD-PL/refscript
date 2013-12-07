@@ -59,115 +59,88 @@ verifyFile f = do
   let nanoSsa = ssaTransform nano
   V.whenLoud $ donePhase FM.Loud "SSA Transform"
   V.whenLoud $ putStrLn . render . pp $ nanoSsa
-  verb    <- V.getVerbosity
-  let p =  execute verb nanoSsa $ tcAndPatch nanoSsa
-  case p of
-    Left err -> error "ERRORS"
-    Right z  -> safe z >> return (NoAnn, F.Safe) 
-  -- TC { noFailCasts = nfc } <- getOpts
-  -- r <- either unsafe (\q -> safe q >>= return . (`mappend` failCasts nfc q)) p
-  -- V.whenLoud $ donePhase FM.Loud "Typechecking"
-  -- return (NoAnn, r)
+  verb      <- V.getVerbosity
+  let annp   = execute verb nanoSsa $ tcNano nanoSsa
+  r         <- either unsafe safe annp 
+  V.whenLoud $ donePhase FM.Loud "Typechecking"
+  return (NoAnn, r)
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppshow) 
                  return $ F.Unsafe errs
 
-safe (Nano {code = Src fs})
+safe (anns, Nano {code = Src fs})
   = do V.whenLoud $ forM_ fs $ T.mapM printAnn
-       return F.Safe 
+       nfc       <- noFailCasts <$> getOpts
+       return     $ F.Safe `mappend` failCasts nfc anns 
 
--------------------------------------------------------------------------------
-typeCheck ::
-  (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
-  V.Verbosity -> (NanoSSAR r) -> Either [Error] (NanoTypeR r)
--------------------------------------------------------------------------------
-typeCheck verb pgm = execute verb pgm $ tcAndPatch pgm
+failCasts True  _    = F.Safe
+failCasts False anns = F.Unsafe $ concatMap castErrors $ annotCasts anns
 
--------------------------------------------------------------------------------
-failCasts :: (F.Reftable r, Data r, Typeable r) => 
-              Bool -> Nano (AnnSSA r) (RType r) -> F.FixResult Error 
--------------------------------------------------------------------------------
-failCasts False (Nano {code = Src fs}) | not $ null csts = F.Unsafe csts
-                                       | otherwise       = F.Safe
-  where csts = allCasts fs
-failCasts True   _                                       = F.Safe                                            
-    
+-- castErrors :: (F.Reftable r) => AnnType r -> [Error] 
+castErrors (loc, TCast _ (DCST t)) = [errorDownCast loc t]
+castErrors (loc, TCast _ (DC _))   = [errorDeadCast loc]
+castErrors _                       = []
 
--------------------------------------------------------------------------------------------
-allCasts :: (F.Reftable r, Data r, Typeable r) => [FunctionStatement (AnnSSA r)] -> [Error]
--------------------------------------------------------------------------------------------
-allCasts _ = []
--- allCasts = concatMap castErrors . gimmeCasts 
-
-gimmeCasts    :: (Data r, Typeable r) => [FunctionStatement (AnnSSA r)] -> [(AnnSSA r)] 
-gimmeCasts fs =  error "gimmeCasts" -- [] -- everything (++) ([] `mkQ` f) $ fs
-  where
-    -- f            :: Expression (AnnSSA r) -> [ 
-    f (Cast l _) = [l] -- e
-    f _          = []
-
-castErrors     :: (F.Reftable r) => AnnSSA r -> [Error] 
-castErrors l  = downErrs ++ deadErrs 
-  where
-    downErrs  = [errorDownCast loc t | TCast _ (DCST t) <- casts]
-    deadErrs  = [errorDeadCast loc   | TCast _ (DC _)   <- casts]
-    casts     = ann_fact l
-    loc       = srcPos l
+-- failCasts :: (Data r, F.Reftable r, Typeable r) => Bool -> NanoTypeR r -> F.FixResult Error  
+-- failCasts True   _  = F.Safe
+-- failCasts False pgm 
+--   | not $ null csts = F.Unsafe csts
+--   | otherwise       = F.Safe
+--   where
+--     csts            = allCasts fs
+--     Src fs          = code pgm
+-- 
+-- allCasts      :: (F.Reftable r, Data r, Typeable r) => [FunctionStatement (AnnType r)] -> [Error] 
+-- allCasts fs   = everything (++) ([] `mkQ` castErrors) $ fs
+-- 
+-- castErrors :: (F.Reftable r, Data r, Typeable r) => AnnType r -> [Error] 
+-- castErrors a  = downErrs ++ deadErrs 
+--   where
+--     downErrs  = [errorDownCast loc t | TCast _ (DCST t) <- casts]
+--     deadErrs  = [errorDeadCast loc   | TCast _ (DC _)   <- casts]
+--     casts     = ann_fact a
+--     loc       = srcPos a
 
 printAnn (Ann l fs) = when (not $ null fs) $ putStrLn 
     $ printf "At %s: %s" (ppshow l) (ppshow fs)
 
+
+-------------------------------------------------------------------------------------------
+typeCheck :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
+          => V.Verbosity -> (NanoSSAR r) -> Either [Error] (NanoTypeR r)
+-------------------------------------------------------------------------------------------
+typeCheck verb pgm = fmap snd (execute verb pgm $ tcNano pgm)
+
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
-tcAndPatch :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
-           => NanoSSAR r -> TCM r (NanoTypeR r)
+tcNano :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
+           => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------
-tcAndPatch p = 
-  do  checkTypeDefs p
-      p1 <- tcNano p
-
-      HEREHEREHEREHERE -- INLINE tcNano and rename tcAndPatch to tcNano
-
-      c  <- getCasts
-      let p2 = patchPgm c p1
-      -- p2 <- return $ tracePP ("CASTS " ++ ppshow c) p1 -- patchPgmM p1
-      s  <- getSubst
-      -- c  <- getCasts
-      whenQuiet' (return p2) (return $ trace (codePP p2 s c) p2)
-      -- return p1
-  where 
-    codePP (Nano {code = Src src}) sub cst = render $
-          text "********************** CODE **********************"
-      $+$ pp src
-      $+$ text "***************** SUBSTITUTIONS ******************"
-      $+$ pp sub
-      $+$ text "******************** CASTS ***********************"
-      $+$ vcat ((\(e,t) -> (pp $ ann $ getAnnotation e) <+> pp (e,t)) <$> cst)
-      $+$ text "**************************************************"
-
-patchAnn :: AnnInfo r -> NanoSSAR r -> NanoTypeR r
-patchAnn c p            = p { code = addAnn m <$> (code p) } --  fmap . addAnn
-  where 
-    -- addAnn :: AnnInfo r -> AnnSSA r -> AnnType r 
-    addAnn m (Ann l fs) = Ann l $ (M.lookupDefault [] l m) ++ fs
-
--------------------------------------------------------------------------------
-tcNano :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
-  Nano (AnnSSA r) (RType r) -> TCM r (Nano (AnnType r) (RType r))
--------------------------------------------------------------------------------
-tcNano pgm@(Nano {code = Src fs})
-  = do tcStmts (initEnv pgm) fs
+tcNano p@(Nano {code = Src fs}) 
+  = do checkTypeDefs p
+       tcStmts (initEnv p) fs
        m     <- M.unions <$> getAllAnns
-       return $ pgm {code = Src $ (patchAnn m <$>) <$> fs}
+       let p' = p {code = patchAnn m <$> code p}
+       whenLoud $ (getSubst >>= traceCodePP p' m)
+       return (m, p')
 
-initEnv pgm = TCE (specs pgm) emptyContext
-
--- patchAnn              :: UAnnInfo -> (AnnSSA r) -> (AnnType r)
 patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
+initEnv pgm           = TCE (specs pgm) emptyContext
+traceCodePP p m s     = trace (render $ codePP p m s) $ return ()
+      
+codePP (Nano {code = Src src}) anns sub 
+  =   text "******************************** CODE ***********************************"
+  $+$ pp src
+  $+$ text "*************************** SUBSTITUTIONS *******************************"
+  $+$ pp sub
+  $+$ text "******************************** CASTS **********************************"
+  $+$ vcat (pp <$> annotCasts anns )
+  --  $+$ vcat ((\(e,t) -> (pp $ ann $ getAnnotation e) <+> pp (e,t)) <$> cst)
+  $+$ text "*************************************************************************"
 
-
+annotCasts anns = [ (l, f) | (l, fs) <- M.toList anns, f@(TCast _ _) <- fs]
 
 -------------------------------------------------------------------------------
 checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano (AnnSSA r) (RType r) -> TCM r ()

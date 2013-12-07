@@ -71,7 +71,7 @@ errorArgName l x y        = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s
 errorMissingSpec l f      = mkErr l $ printf "Missing Signature For %s defined at %s" (ppshow f) (ppshow l)
 errorDuplicate i l l'     = mkErr l $ printf "Duplicate Specification for %s:\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
 errorArgMismatch l        = mkErr l $ printf "Mismatch in Number of Args in Call" 
-
+errorMultipleCasts l cs   = mkErr l $ render $ text "Multiple Casts: " <+> (vcat (map pp cs)) 
 errorNoMatchCallee l ts t = mkErr l $ render $   text "No matching callee type!" 
                                              $+$ text "Argument Types: " <+> pp ts 
                                              $+$ text "Function Type : " <+> pp t

@@ -52,11 +52,6 @@ import qualified System.Console.CmdArgs.Verbosity as V
 --------------------------------------------------------------------------------
 verifyFile :: FilePath -> IO (UAnnSol a, F.FixResult Error)
 --------------------------------------------------------------------------------
---verifyFile f = tc =<< parseNanoFromFile f
---  where 
---   tc pgm    = either unsafe safe . execute pgm . tcNano . ssaTransform $ pgm 
-
--- | Debug mode
 verifyFile f = do 
   nano    <- parseNanoFromFile f
   V.whenLoud $ donePhase FM.Loud "Parse"
@@ -126,18 +121,20 @@ printAnn (Ann l fs) = when (not $ null fs) $ putStrLn
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
--- | The first argument true to tranform casted expressions e to Cast(e,T)
--------------------------------------------------------------------------------
-tcAndPatch :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
-  Nano (AnnSSA r) (RType r) -> TCM r (Nano (AnnType r) (RType r))
+tcAndPatch :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
+           => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcAndPatch p = 
   do  checkTypeDefs p
       p1 <- tcNano p
+
+      HEREHEREHEREHERE -- INLINE tcNano and rename tcAndPatch to tcNano
+
       c  <- getCasts
-      p2 <- return $ tracePP ("CASTS " ++ ppshow c) p1 -- patchPgmM p1
+      let p2 = patchPgm c p1
+      -- p2 <- return $ tracePP ("CASTS " ++ ppshow c) p1 -- patchPgmM p1
       s  <- getSubst
-      c  <- getCasts
+      -- c  <- getCasts
       whenQuiet' (return p2) (return $ trace (codePP p2 s c) p2)
       -- return p1
   where 
@@ -149,6 +146,26 @@ tcAndPatch p =
       $+$ text "******************** CASTS ***********************"
       $+$ vcat ((\(e,t) -> (pp $ ann $ getAnnotation e) <+> pp (e,t)) <$> cst)
       $+$ text "**************************************************"
+
+patchAnn :: AnnInfo r -> NanoSSAR r -> NanoTypeR r
+patchAnn c p            = p { code = addAnn m <$> (code p) } --  fmap . addAnn
+  where 
+    -- addAnn :: AnnInfo r -> AnnSSA r -> AnnType r 
+    addAnn m (Ann l fs) = Ann l $ (M.lookupDefault [] l m) ++ fs
+
+-------------------------------------------------------------------------------
+tcNano :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
+  Nano (AnnSSA r) (RType r) -> TCM r (Nano (AnnType r) (RType r))
+-------------------------------------------------------------------------------
+tcNano pgm@(Nano {code = Src fs})
+  = do tcStmts (initEnv pgm) fs
+       m     <- M.unions <$> getAllAnns
+       return $ pgm {code = Src $ (patchAnn m <$>) <$> fs}
+
+initEnv pgm = TCE (specs pgm) emptyContext
+
+-- patchAnn              :: UAnnInfo -> (AnnSSA r) -> (AnnType r)
+patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
 
 
 
@@ -172,25 +189,6 @@ checkTypeDefs pgm = reportAll $ grep
     -- @everythingWithContext@
 
 
--------------------------------------------------------------------------------
-tcNano :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
-  Nano (AnnSSA r) (RType r) -> TCM r (Nano (AnnType r) (RType r))
--------------------------------------------------------------------------------
-tcNano p@(Nano {code = Src fs})
-  = do m     <- tcNano' p 
-       return $ (trace "") $ p {code = Src $ (patchAnn m <$>) <$> fs}
-
--------------------------------------------------------------------------------
--- tcNano' :: Nano (AnnSSA r) (RType r) -> TCM r UAnnInfo  
--------------------------------------------------------------------------------
-tcNano' pgm@(Nano {code = Src fs}) 
-  = do tcStmts (initEnv pgm) fs
-       M.unions <$> getAllAnns
-
-initEnv pgm = TCE (specs pgm) emptyContext
-
--- patchAnn              :: UAnnInfo -> (AnnSSA r) -> (AnnType r)
-patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
 
 -------------------------------------------------------------------------------
 -- | Typecheck Environment ----------------------------------------------------

@@ -37,7 +37,8 @@ module Language.Nano.Typecheck.TCMonad (
   , getTDefs
 
   -- * Substitutions
-  , getSubst, setSubst
+  , getSubst
+  , setSubst
 
   -- * Annotations
   , accumAnn
@@ -56,7 +57,7 @@ module Language.Nano.Typecheck.TCMonad (
   , unifyTypesM
 
   -- * Casts
-  , getCasts
+  -- , getCasts
   , castM
   , castsM
   
@@ -67,7 +68,7 @@ module Language.Nano.Typecheck.TCMonad (
   , getExpr, setExpr, withExpr
 
   -- * Patch the program with assertions
-  , patchPgmM
+  -- , patchPgmM
 
   -- * Verbosity
   , whenLoud', whenLoud
@@ -120,8 +121,6 @@ data TCState r = TCS {
                    -- Annotations
                    , tc_anns  :: AnnInfo r
                    , tc_annss :: [AnnInfo r]
-                   -- Cast map: 
-                   , tc_casts :: M.Map (Expression (AnnSSA r)) [(IContext, Cast (RType r))]
                    -- Function definitions
                    , tc_defs  :: !(Env (RType r))
                    -- Type definitions
@@ -172,9 +171,6 @@ getTDefs = tc_tdefs <$> get
 getSubst :: TCM r (RSubst r)
 -------------------------------------------------------------------------------
 getSubst = tc_subst <$> get 
-
-getCasts = do c <- tc_casts <$> get 
-              return $ M.toList c
 
 -------------------------------------------------------------------------------
 setSubst   :: RSubst r -> TCM r () 
@@ -300,6 +296,8 @@ getAllAnns = tc_annss <$> get
 accumAnn :: (Ord r, F.Reftable r, Substitutable r (Fact r)) =>
   (AnnInfo r -> [Error]) -> TCM r () -> TCM r ()
 -------------------------------------------------------------------------------
+-- RJ: this function is gross. Why is it being used? why are anns not just
+-- accumulated monotonically?
 accumAnn check act 
   = do m     <- tc_anns <$> get 
        modify $ \st -> st {tc_anns = HM.empty}
@@ -320,14 +318,13 @@ execute verb pgm act
 
 initState ::  (PP r, F.Reftable r) => V.Verbosity -> Nano z (RType r) -> TCState r
 initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss 
-                       tc_casts tc_defs tc_tdefs tc_expr tc_verb 
+                       tc_defs tc_tdefs tc_expr tc_verb 
   where
     tc_errss = []
     tc_subst = mempty 
     tc_cnt   = 0
     tc_anns  = HM.empty
     tc_annss = []
-    tc_casts = M.empty
     tc_defs  = defs pgm
     tc_tdefs = tDefs pgm
     tc_expr  = Nothing
@@ -489,9 +486,7 @@ castM ξ e t t'    = subTypeM t t' >>= go
 addUpCast   ξ e t = addCast ξ e (UCST t)
 addDownCast ξ e t = addCast ξ e (DCST t) 
 addDeadCast ξ e t = addCast ξ e (DC t)
-addCast ξ e c     = modify $ \st -> st { tc_casts = mInserts e (ξ, c) (tc_casts st) }
-mInserts k v m    = M.insert k (v : M.findWithDefault [] k m) m 
-
+addCast ξ e c     = addAnn (srcPos e) (TCast ξ c)
 
 -----------------------------------------------------------------------------------------
 castsM    :: (Ord r, PP r, F.Reftable r) => 
@@ -515,26 +510,26 @@ castsM ξ  = zipWith3M_ (castM ξ)
 --   where 
 --     transform e = (patchExpr e . tc_casts) <$> get
 
-patchPgmM pgm = 
-  do  c <- tc_casts <$> get
-      return $ fst $ runState (everywhereM' (mkM transform) pgm) (PS c)
-
-data PState r = PS { m :: M.Map (Expression (AnnSSA r)) [(IContext, Cast (RType r))] }
-type PM     r = State (PState r)
+-- patchPgmM pgm = 
+--   do  c <- tc_casts <$> get
+--       return $ fst $ runState (everywhereM' (mkM transform) pgm) (PS c)
+-- 
+-- data PState r = PS { m :: M.Map (Expression (AnnSSA r)) [(IContext, Cast (RType r))] }
+-- type PM     r = State (PState r)
 
 -- --------------------------------------------------------------------------------
-transform :: Expression (AnnSSA r) -> PM r (Expression (AnnSSA r))
+-- transform :: Expression (AnnSSA r) -> PM r (Expression (AnnSSA r))
+-- -- --------------------------------------------------------------------------------
+-- transform e = 
+--   do  c  <- m <$> get      
+--       put (PS $ M.delete e c)
+--       return $ patchExpr c e
+-- 
 -- --------------------------------------------------------------------------------
-transform e = 
-  do  c  <- m <$> get      
-      put (PS $ M.delete e c)
-      return $ patchExpr c e
-
---------------------------------------------------------------------------------
--- patchExpr :: Expression (AnnSSA r) -> Casts_ r -> Expression (AnnSSA r)
---------------------------------------------------------------------------------
-patchExpr m e = Cast a' e
-  where 
-    a'        = a { ann_fact = (ann_fact a) ++ fs' }
-    fs'       = [TCast x y | (x, y) <- M.findWithDefault [] e m]
-    a         = getAnnotation e
+-- -- patchExpr :: Expression (AnnSSA r) -> Casts_ r -> Expression (AnnSSA r)
+-- --------------------------------------------------------------------------------
+-- patchExpr m e = Cast a' e
+--   where 
+--     a'        = a { ann_fact = (ann_fact a) ++ fs' }
+--     fs'       = [TCast x y | (x, y) <- M.findWithDefault [] e m]
+--     a         = getAnnotation e

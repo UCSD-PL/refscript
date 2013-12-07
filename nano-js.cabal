@@ -35,6 +35,7 @@ executable nanojs
 
   ghc-options:         -W -O2  
   Main-is:             Nano.hs
+  hs-source-dirs:      src
 
 --Library
 --  build-depends:       base, containers, 

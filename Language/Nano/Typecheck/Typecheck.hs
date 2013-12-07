@@ -66,10 +66,13 @@ verifyFile f = do
   V.whenLoud $ putStrLn . render . pp $ nanoSsa
   verb    <- V.getVerbosity
   let p =  execute verb nanoSsa $ tcAndPatch nanoSsa
-  TC { noFailCasts = nfc } <- getOpts
-  r <- either unsafe (\q -> safe q >>= return . (`mappend` failCasts nfc q)) p
-  V.whenLoud $ donePhase FM.Loud "Typechecking"
-  return (NoAnn, r)
+  case p of
+    Left err -> error "ERRORS"
+    Right z  -> safe z >> return (NoAnn, F.Safe) 
+  -- TC { noFailCasts = nfc } <- getOpts
+  -- r <- either unsafe (\q -> safe q >>= return . (`mappend` failCasts nfc q)) p
+  -- V.whenLoud $ donePhase FM.Loud "Typechecking"
+  -- return (NoAnn, r)
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppshow) 
@@ -78,7 +81,6 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
 safe (Nano {code = Src fs})
   = do V.whenLoud $ forM_ fs $ T.mapM printAnn
        return F.Safe 
-
 
 -------------------------------------------------------------------------------
 typeCheck ::
@@ -100,10 +102,11 @@ failCasts True   _                                       = F.Safe
 -------------------------------------------------------------------------------------------
 allCasts :: (F.Reftable r, Data r, Typeable r) => [FunctionStatement (AnnSSA r)] -> [Error]
 -------------------------------------------------------------------------------------------
-allCasts = concatMap castErrors . gimmeCasts 
+allCasts _ = []
+-- allCasts = concatMap castErrors . gimmeCasts 
 
 gimmeCasts    :: (Data r, Typeable r) => [FunctionStatement (AnnSSA r)] -> [(AnnSSA r)] 
-gimmeCasts fs =  everything (++) ([] `mkQ` f) $ fs
+gimmeCasts fs =  error "gimmeCasts" -- [] -- everything (++) ([] `mkQ` f) $ fs
   where
     -- f            :: Expression (AnnSSA r) -> [ 
     f (Cast l _) = [l] -- e
@@ -130,8 +133,9 @@ tcAndPatch :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free
 -------------------------------------------------------------------------------
 tcAndPatch p = 
   do  checkTypeDefs p
-      p1 <- tcNano p 
-      p2 <- patchPgmM p1
+      p1 <- tcNano p
+      c  <- getCasts
+      p2 <- return $ tracePP ("CASTS " ++ ppshow c) p1 -- patchPgmM p1
       s  <- getSubst
       c  <- getCasts
       whenQuiet' (return p2) (return $ trace (codePP p2 s c) p2)

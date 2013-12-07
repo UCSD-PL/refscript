@@ -60,9 +60,9 @@ import qualified Language.Fixpoint.Types            as F
 
 type SSAM r     = ErrorT Error (State (SsaState r))
 
-data SsaState r = SsaST { immutables :: Env r       -- ^ globals
-                        , names      :: SsaEnv      -- ^ current SSA names 
-                        , count      :: !Int        -- ^ fresh index
+data SsaState r = SsaST { immutables :: Env r           -- ^ globals
+                        , names      :: SsaEnv          -- ^ current SSA names 
+                        , count      :: !Int            -- ^ fresh index
                         , anns       :: !(AnnInfo r)    -- ^ built up map of annots 
                         }
 

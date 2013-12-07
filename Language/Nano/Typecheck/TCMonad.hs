@@ -478,13 +478,20 @@ withExpr e action =
 castM :: (Ord r, PP r, F.Reftable r) => 
            IContext -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
-castM ξ e t t' = subTypeM t t' >>= go
+castM ξ e t t'    = subTypeM t t' >>= go
   where 
-    go SupT    = addDownCast ξ e t'
-    go Rel     = addDownCast ξ e t'
-    go SubT    = addUpCast   ξ e t'
-    go Nth     = addDeadCast ξ e t'
-    go EqT     = return ()
+    go SupT       = addDownCast ξ e t'
+    go Rel        = addDownCast ξ e t'
+    go SubT       = addUpCast   ξ e t'
+    go Nth        = addDeadCast ξ e t'
+    go EqT        = return ()
+
+addUpCast   ξ e t = addCast ξ e (UCST t)
+addDownCast ξ e t = addCast ξ e (DCST t) 
+addDeadCast ξ e t = addCast ξ e (DC t)
+addCast ξ e c     = modify $ \st -> st { tc_casts = mInserts e (ξ, c) (tc_casts st) }
+mInserts k v m    = M.insert k (v : M.findWithDefault [] k m) m 
+
 
 -----------------------------------------------------------------------------------------
 castsM    :: (Ord r, PP r, F.Reftable r) => 
@@ -493,58 +500,41 @@ castsM    :: (Ord r, PP r, F.Reftable r) =>
 castsM ξ  = zipWith3M_ (castM ξ)
 
 -----------------------------------------------------------------------------------------------------
-addUpCast :: (F.Reftable r, PP r) => IContext -> Expression (AnnSSA r) -> RType r -> TCM r ()
 -----------------------------------------------------------------------------------------------------
-addUpCast ξ e t = modify $ \st -> st { tc_casts = mInserts e (ξ, UCST t) (tc_casts st) }
-
 -----------------------------------------------------------------------------------------------------
-addDownCast :: (Ord r,PP r,F.Reftable r) => IContext -> Expression (AnnSSA r) -> RType r -> TCM r ()
------------------------------------------------------------------------------------------------------
-addDownCast ξ e t = modify $ \st -> st { tc_casts = mInserts e (ξ, DCST t) (tc_casts st) }
+-- addDownCast :: (Ord r,PP r,F.Reftable r) => IContext -> Expression (AnnSSA r) -> RType r -> TCM r ()
+-- addUpCast :: (F.Reftable r, PP r) => IContext -> Expression (AnnSSA r) -> RType r -> TCM r ()
+-- addDeadCast :: IContext -> Expression (AnnSSA r) -> RType r -> TCM r ()
 
 -----------------------------------------------------------------------------------------------------
-addDeadCast :: IContext -> Expression (AnnSSA r) -> RType r -> TCM r ()
+-- patchPgmM :: (Data b, Typeable r) => b -> TCM r b
 -----------------------------------------------------------------------------------------------------
-addDeadCast ξ e t = modify $ \st -> st { tc_casts = mInserts e (ξ, DC t) (tc_casts st) }
+-- patchPgmM pgm = return pgm 
 
-mInserts k v m = M.insert k (v : M.findWithDefault [] k m) m 
+-- patchPgmM pgm   = everywhereM' (mkM transform) pgm
+--   where 
+--     transform e = (patchExpr e . tc_casts) <$> get
 
---------------------------------------------------------------------------------
-patchPgmM :: (Data b, Typeable r) => b -> TCM r b
---------------------------------------------------------------------------------
-patchPgmM pgm   = everywhereM' (mkM transform) pgm
-  where 
-    transform e = (patchExpr e . tc_casts) <$> get
+patchPgmM pgm = 
+  do  c <- tc_casts <$> get
+      return $ fst $ runState (everywhereM' (mkM transform) pgm) (PS c)
 
--- patchPgmM pgm = 
---   do  c <- tc_casts <$> get
---       return $ fst $ runState (everywhereM' (mkM transform) pgm) (PS c)
+data PState r = PS { m :: M.Map (Expression (AnnSSA r)) [(IContext, Cast (RType r))] }
+type PM     r = State (PState r)
 
-
--- data PState r = PS { m :: Casts_ r }
--- type PM     r = State (PState r)
--- 
 -- --------------------------------------------------------------------------------
--- transform :: Expression (AnnSSA r) -> PM r (Expression (AnnSSA r))
+transform :: Expression (AnnSSA r) -> PM r (Expression (AnnSSA r))
 -- --------------------------------------------------------------------------------
--- transform e = 
---   do  c  <- m <$> get      
---       put (PS $ M.delete e c)
---       return $ patchExpr c e
+transform e = 
+  do  c  <- m <$> get      
+      put (PS $ M.delete e c)
+      return $ patchExpr c e
 
 --------------------------------------------------------------------------------
 -- patchExpr :: Expression (AnnSSA r) -> Casts_ r -> Expression (AnnSSA r)
 --------------------------------------------------------------------------------
-patchExpr e m = Cast a' e
+patchExpr m e = Cast a' e
   where 
     a'        = a { ann_fact = (ann_fact a) ++ fs' }
     fs'       = [TCast x y | (x, y) <- M.findWithDefault [] e m]
     a         = getAnnotation e
-
---   case M.lookupDefault [] e m of
---     Just (UCST t) -> UpCast   (a { ann_fact = (Assume t):fs }) e
---     Just (DCST t) -> DownCast (a { ann_fact = (Assume t):fs }) e
---     Just (DC   t) -> DeadCast (a { ann_fact = (Assume t):fs }) e
---     _             -> e
---   where 
-

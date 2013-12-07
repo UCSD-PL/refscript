@@ -24,7 +24,6 @@ module Language.Nano.Typecheck.Compare (
 
   
   -- * Casting
-  , Cast(..)
   -- , Casts
   , Casts_
   , zipType1

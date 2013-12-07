@@ -55,7 +55,7 @@ verifyFile f =
       verb    <- V.getVerbosity
       case typeCheck verb (ssaTransform p) of
         Left errs -> return $ (A.NoAnn, F.Crash errs "Type Errors")
-        Right p'  -> reftypeCheck cfg f p'
+        Right p'  -> error "HERE5" -- reftypeCheck cfg f p'
 
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 

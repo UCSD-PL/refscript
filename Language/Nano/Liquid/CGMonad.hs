@@ -250,8 +250,11 @@ envPushContext c g = g {cge_ctx = pushContext c (cge_ctx g)}
 ---------------------------------------------------------------------------------------
 envGetContextCast :: SourceSpan -> CGEnv -> AnnTypeR -> Maybe (Cast RefType)
 ---------------------------------------------------------------------------------------
-envGetContextCast l g a = error "TODO: call rType on the result"
-
+envGetContextCast l g a 
+  = case [c | TCast cx c <- ann_fact a, cx == cge_ctx g] of
+      [ ] -> Nothing
+      [c] -> Just c
+      cs  -> die $ errorMultipleCasts l cs
 
 ---------------------------------------------------------------------------------------
 envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id l, CGEnv) 

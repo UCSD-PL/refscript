@@ -12,7 +12,8 @@ module Language.Nano.Misc (
   , mapPairM
   , mkEither
   , either2Bool
-  , maybeM, maybeM_
+  , maybeM
+  , maybeM_
   , unique
 
   , fst4, snd4, thd4, fth4  

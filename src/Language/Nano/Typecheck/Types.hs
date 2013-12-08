@@ -16,6 +16,7 @@ module Language.Nano.Typecheck.Types (
   , NanoBare
   , NanoSSA, NanoSSAR, NanoTypeR 
   , NanoType
+  , ExprSSAR, StmtSSAR
   , Source (..)
   , FunctionStatement
   , mapCode
@@ -423,6 +424,9 @@ data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
 type NanoBareR r   = Nano (AnnBare r) (RType r)
 type NanoSSAR r    = Nano (AnnSSA  r) (RType r)
 type NanoTypeR r   = Nano (AnnType r) (RType r)
+
+type ExprSSA r     = Expression (AnnSSA r)
+type StmtSSA r     = Statement  (AnnSSA r)
 
 type NanoBare   = NanoBareR ()
 type NanoSSA    = NanoSSAR ()

@@ -6,10 +6,14 @@
  */
 
 function negate(x) {
-  if (typeof(x) == "number") {
-    return 0 - x;
+
+  if (typeof(4) 
+       == 
+       "number") {
+    return 5;
+    // return 0 - x;
   } else {
-    return !x;
+    return true; //!x;
   }
 }
 

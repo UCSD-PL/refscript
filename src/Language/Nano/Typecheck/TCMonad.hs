@@ -468,6 +468,13 @@ withExpr e action =
       return $ r
 
 
+-----------------------------------------------------------------------------------------
+castsM    :: (Ord r, PP r, F.Reftable r) => 
+                IContext -> [Expression (AnnSSA r)] -> [RType r] -> [RType r] -> TCM r ()
+-----------------------------------------------------------------------------------------
+castsM ξ  = zipWith3M_ (castM ξ)
+
+
 -- | For the expression @e@, check the subtyping relation between the type @t@
 -- which is the actual type for @e@ and @t'@ which is the desired (cast) type
 -- and insert the right kind of cast. 
@@ -486,50 +493,4 @@ castM ξ e t t'    = subTypeM t t' >>= go
 addUpCast   ξ e t = addCast ξ e (UCST t)
 addDownCast ξ e t = addCast ξ e (DCST t) 
 addDeadCast ξ e t = addCast ξ e (DC t)
-addCast ξ e c     = addAnn (srcPos e) (TCast ξ c)
-
------------------------------------------------------------------------------------------
-castsM    :: (Ord r, PP r, F.Reftable r) => 
-                IContext -> [Expression (AnnSSA r)] -> [RType r] -> [RType r] -> TCM r ()
------------------------------------------------------------------------------------------
-castsM ξ  = zipWith3M_ (castM ξ)
-
------------------------------------------------------------------------------------------------------
------------------------------------------------------------------------------------------------------
------------------------------------------------------------------------------------------------------
--- addDownCast :: (Ord r,PP r,F.Reftable r) => IContext -> Expression (AnnSSA r) -> RType r -> TCM r ()
--- addUpCast :: (F.Reftable r, PP r) => IContext -> Expression (AnnSSA r) -> RType r -> TCM r ()
--- addDeadCast :: IContext -> Expression (AnnSSA r) -> RType r -> TCM r ()
-
------------------------------------------------------------------------------------------------------
--- patchPgmM :: (Data b, Typeable r) => b -> TCM r b
------------------------------------------------------------------------------------------------------
--- patchPgmM pgm = return pgm 
-
--- patchPgmM pgm   = everywhereM' (mkM transform) pgm
---   where 
---     transform e = (patchExpr e . tc_casts) <$> get
-
--- patchPgmM pgm = 
---   do  c <- tc_casts <$> get
---       return $ fst $ runState (everywhereM' (mkM transform) pgm) (PS c)
--- 
--- data PState r = PS { m :: M.Map (Expression (AnnSSA r)) [(IContext, Cast (RType r))] }
--- type PM     r = State (PState r)
-
--- --------------------------------------------------------------------------------
--- transform :: Expression (AnnSSA r) -> PM r (Expression (AnnSSA r))
--- -- --------------------------------------------------------------------------------
--- transform e = 
---   do  c  <- m <$> get      
---       put (PS $ M.delete e c)
---       return $ patchExpr c e
--- 
--- --------------------------------------------------------------------------------
--- -- patchExpr :: Expression (AnnSSA r) -> Casts_ r -> Expression (AnnSSA r)
--- --------------------------------------------------------------------------------
--- patchExpr m e = Cast a' e
---   where 
---     a'        = a { ann_fact = (ann_fact a) ++ fs' }
---     fs'       = [TCast x y | (x, y) <- M.findWithDefault [] e m]
---     a         = getAnnotation e
+addCast     ξ e c = addAnn (srcPos e) (TCast ξ c)

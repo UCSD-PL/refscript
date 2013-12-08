@@ -72,15 +72,32 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
 safe (anns, Nano {code = Src fs})
   = do V.whenLoud $ forM_ fs $ T.mapM printAnn
        nfc       <- noFailCasts <$> getOpts
-       return     $ F.Safe `mappend` failCasts nfc anns 
+       return     $ F.Safe `mappend` failCasts nfc fs -- anns 
 
+
+
+-- failCasts False anns = F.Unsafe $ concatMap castErrors $ annotCasts anns
 failCasts True  _    = F.Safe
-failCasts False anns = F.Unsafe $ concatMap castErrors $ annotCasts anns
+-- RJ: revert if the damn queries don't work: 
+-- failCasts False fs   = F.Unsafe $ concatMap castErrors $ annotCasts anns
+failCasts False fs   = F.Unsafe $ concatMap castErrors $ getCasts fs 
+
+getCasts :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r)]
+getCasts = everything (++) ([] `mkQ` f) stmts
+  where 
+    f :: Expression (AnnType r) -> [(AnnType r)]
+    f (Cast a _) = [a]
+    f _          = [] 
 
 -- castErrors :: (F.Reftable r) => AnnType r -> [Error] 
-castErrors (loc, TCast _ (DCST t)) = [errorDownCast loc t]
-castErrors (loc, TCast _ (DC _))   = [errorDeadCast loc]
-castErrors _                       = []
+castErrors (Ann l facts) = downErrors ++ deadErrors
+  where 
+    downErrors           = [errorDownCast l t | TCast _ (DCST t) <- facts]
+    deadErrors           = [errorDeadCast l   | TCast _ (DC _)   <- facts]
+
+-- castErrors (loc, TCast _ (DCST t)) = [errorDownCast loc t]
+-- castErrors (loc, TCast _ (DC _))   = [errorDeadCast loc]
+-- castErrors _                       = []
 
 printAnn (Ann l []) = return () 
 printAnn (Ann l fs) = putStrLn $ printf "At %s: %s" (ppshow l) (ppshow fs)
@@ -310,8 +327,7 @@ tcStmt γ (ReturnStmt l eo)
         θ           <- unifyTypeM (srcPos l) "Return" eo t rt
         -- Apply the substitution
         let (rt',t') = mapPair (apply θ) (rt,t)
-        -- Subtype the arguments against the formals and cast if 
-        -- necessary based on the direction of the subtyping outcome
+        -- Subtype the arguments against the formals and cast using subtyping result
         eo''        <- case eo' of
                         Nothing -> return Nothing
                         Just e' -> Just <$> castM (tce_ctx γ) e' t' rt'
@@ -418,8 +434,6 @@ tcExpr γ (ObjectLit l bs)
 tcExpr _ e 
   = convertError "tcExpr" e
 
-HEREHEREHERE
-
 ----------------------------------------------------------------------------------
 tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 
   TCEnv r -> AnnSSA r -> fn -> [ExprSSA r] -> RType r -> TCM r ([ExprSSA r], RType r)
@@ -427,7 +441,8 @@ tcCall :: (Ord r, F.Reftable r, PP r, PP fn) =>
 
 tcCall γ l fn es ft0
   = do -- Typecheck arguments
-       ts            <- mapM (tcExpr' γ) es
+       ets           <- mapM (tcExpr' γ) es
+       let (es', ts)  = unzip ets
        -- Extract callee type (if intersection: match with args)
        let ft         = calleeType l ts ft0
        (_,ibs,ot)    <- instantiate l fn ft
@@ -437,8 +452,9 @@ tcCall γ l fn es ft0
        -- Apply substitution
        let (ts',its') = mapPair (apply θ) (ts, its)
        -- Subtype the arguments against the formals and up/down cast if needed 
-       castsM (tce_ctx γ) es ts' its'
-       return         $ apply θ ot
+       let ξ          = tce_ctx γ
+       es''          <- zipWith3M (castM ξ) es' ts' its'
+       return           (es'', apply θ ot)
 
 instantiate l fn ft 
   = do let (αs, t) = bkAll ft 
@@ -452,20 +468,21 @@ tcArray :: (Ord r, PP r, F.Reftable r) =>
   TCEnv r -> Maybe (RType r) -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 ----------------------------------------------------------------------------------
 tcArray γ (Just t@(TArr ta _)) (ArrayLit l es) = do 
-    ts <- mapM (tcExprT γ $ Just ta) es
-    checkElts ta es ts
-    return (tracePP "Type being propagated for array literal: " t)
+    ets          <- mapM (tcExprT γ $ Just ta) es
+    let (es', ts) = unzip ets
+    checkElts ta es' ts
+    return (ArrayLit l es', t)
   where
     checkElts = zipWithM_ . (checkAnnotation "tcArray")
 
-tcArray _ Nothing (ArrayLit _ _)  = 
-  errorstar $ "Array literals need type annotations at " ++
-              "the moment to typecheck in TC."
-tcArray _ (Just _) (ArrayLit _ _) = 
-  errorstar $ "Type annotation for array literal needs to be of Array type."
+tcArray _ Nothing (ArrayLit l _)  = 
+  die $ bug l "Array literals need type annotations at the moment to typecheck in TC."
 
-tcArray _ _ _ = 
-  errorstar $ "BUG: Only support tcArray for array literals with type annotation"
+tcArray _ (Just _) (ArrayLit l _) = 
+  die $ bug l "Type annotation for array literal needs to be of Array type."
+
+tcArray _ _ e = 
+  die $ bug (srcPos $ getAnnotation e) "BUG: Only support tcArray for array literals with type annotation"
               
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, F.Reftable r, PP r) =>

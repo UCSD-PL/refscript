@@ -59,7 +59,6 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Casts
   -- , getCasts
   , castM
-  , castsM
   
   -- * Get Type Signature 
   , getDefType 
@@ -468,13 +467,6 @@ checkAnnotation msg ta e t = do
 --       r     <- action 
 --       setExpr  eold
 --       return $ r
-
-
------------------------------------------------------------------------------------------
-castsM    :: (Ord r, PP r, F.Reftable r) => 
-                IContext -> [Expression (AnnSSA r)] -> [RType r] -> [RType r] -> TCM r [Expression (AnnSSA r)] 
------------------------------------------------------------------------------------------
-castsM ξ es ts ts' = forM (zipWith3 es ts ts') $ \(e, t, t') -> castM ξ e t t'
 
 
 -- | For the expression @e@, check the subtyping relation between the type @t@

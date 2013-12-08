@@ -220,7 +220,9 @@ freshSubst l ξ αs
 setTyArgs l ξ βs
   = do m <- tc_anns <$> get
        when (HM.member l m) $ tcError $ errorMultipleTypeArgs l
-       addAnn l $ TypInst ξ (tVar <$> βs)
+       addAnn l $ tracePP msg $ TypInst ξ (tVar <$> βs)
+    where 
+       msg = printf "setTyArgs: l = %s ξ = %s" (ppshow l) (ppshow ξ) 
 
 
 -------------------------------------------------------------------------------

@@ -400,7 +400,7 @@ consExpr _ e
 consCast :: AnnTypeR -> (Id AnnTypeR, CGEnv) -> CGM (Id AnnTypeR, CGEnv)
 -------------------------------------------------------------------------------------------------
 consCast a (x', g)
-  = case envGetContextCast l g a of
+  = case envGetContextCast g a of
       Nothing        -> return (x, g)
       Just (UCST t)  -> consUpCast   g l x $ tracePP "consUpCast"   t
       Just (DCST t)  -> tracePP ("consDC2 @ " ++ ppshow x) <$> (consDownCast g l x $ tracePP ("consDC1" ++ ppshow x) t)
@@ -471,25 +471,20 @@ consCall g l fn es ft0
        let ts        = [envFindTy x g' | x <- xes]
        let ft        = calleeType l ts ft0
        (_,its,ot)   <- instantiate l g fn ft
-       let (su, ts') = renameBinds its $ {- tracePP ("consCall2: es=" ++ ppshow es) -} xes
+       let (su, ts') = renameBinds its xes
        zipWithM_ (withAlignedM $ subTypeContainers' "call" l g') [envFindTy x g' | x <- xes] ts'
        envAddFresh "consCall" l (F.subst su ot) g'
 
 -- instantiate :: AnnTypeR -> CGEnv -> RefType -> CGM RefType
 instantiate l g fn ft 
   = do let (αs, t)      = bkAll ft
-       t'              <- freshTyInst l g αs (getTypArgs l αs) t
+       let ts           = envGetContextTypArgs g l αs
+       t'              <- freshTyInst l g αs ts t
        maybe err return $ bkFun t' 
     where 
        err = die $ errorNonFunction (srcPos l) fn ft  
     {-msg           = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)-}
 
-
-getTypArgs :: AnnTypeR -> [TVar] -> [RefType] 
-getTypArgs l αs
-  = case [i | TypInst i <- ann_fact l] of 
-      [i] | length i == length αs -> i 
-      _                           -> throw $ bugMissingTypeArgs $ srcPos l
 
 ---------------------------------------------------------------------------------
 consScan :: (CGEnv -> a -> CGM (b, CGEnv)) -> CGEnv -> [a] -> CGM ([b], CGEnv)

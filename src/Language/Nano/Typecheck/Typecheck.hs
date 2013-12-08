@@ -464,21 +464,21 @@ tcCall γ l fn es ft0
        let (es', ts)  = unzip ets
        -- Extract callee type (if intersection: match with args)
        let ft         = calleeType l ts ft0
-       (_,ibs,ot)    <- instantiate l fn ft
+       let ξ          = tce_ctx γ
+       (_,ibs,ot)    <- instantiate l ξ fn ft
        let its        = b_type <$> ibs
        -- Unify with formal parameter types
        θ             <- unifyTypesM (srcPos l) "tcCall" ts its
        -- Apply substitution
        let (ts',its') = mapPair (apply θ) (ts, its)
        -- Subtype the arguments against the formals and up/down cast if needed 
-       let ξ          = tce_ctx γ
        es''          <- zipWith3M (castM ξ) es' ts' its'
        return           (es'', apply θ ot)
 
-instantiate l fn ft 
-  = do let (αs, t) = bkAll ft 
-       t'         <-  {- tracePP "new Ty Args" <$> -} freshTyArgs (srcPos l) (αs, t) 
-       maybe err return $ tracePP (printf "instantiate/bkFun fn = %s ft = %s t' = %s " (ppshow fn) (ppshow ft) (ppshow t')) $ bkFun t'
+instantiate l ξ fn ft 
+  = do let (αs, t) = bkAll ft
+       t'         <- freshTyArgs (srcPos l) ξ αs t 
+       maybe err return $ bkFun t'
     where
        err = die   $ errorNonFunction (ann l) fn ft
 

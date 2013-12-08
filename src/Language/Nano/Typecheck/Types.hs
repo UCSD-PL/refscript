@@ -612,7 +612,7 @@ instance (PP a) => PP (Cast a) where
 data Fact r
   = PhiVar      ![(Id SourceSpan)]
   | LoopPhiVar  ![(Id SourceSpan, Id SourceSpan, Id SourceSpan)]
-  | TypInst     ![RType r]
+  | TypInst     !IContext ![RType r]
   | TCast       !IContext !(Cast (RType r))
   | TAnnot      !(RType r)
     deriving (Eq, Ord, Show, Data, Typeable)
@@ -659,8 +659,8 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
                           <+> cat ((\(x,x0,x1) -> pp x  <+> text "," 
                                               <+> pp x0 <+> text "," 
                                               <+> pp x1 <+> text ")") <$> xs)
-  pp (TypInst ts)     = text "inst" <+> pp ts 
-  pp (TCast  ctx c)   = text "assume" <+> pp ctx <+> pp c
+  pp (TypInst ξ ts)   = text "inst" <+> pp ξ <+> pp ts 
+  pp (TCast  ξ c)     = text "cast" <+> pp ξ <+> pp c
   pp (TAnnot t)       = text "annotation" <+> pp t
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where

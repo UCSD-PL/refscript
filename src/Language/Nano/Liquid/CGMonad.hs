@@ -45,6 +45,7 @@ module Language.Nano.Liquid.CGMonad (
   , envJoin
   , envPushContext
   , envGetContextCast
+  , envGetContextTypArgs
 
   -- * Add Subtyping Constraints
   , subTypes, subTypes', subType, subType'
@@ -248,13 +249,22 @@ envPushContext :: (CallSite a) => a -> CGEnv -> CGEnv
 envPushContext c g = g {cge_ctx = pushContext c (cge_ctx g)}
 
 ---------------------------------------------------------------------------------------
-envGetContextCast :: SourceSpan -> CGEnv -> AnnTypeR -> Maybe (Cast RefType)
+envGetContextCast :: CGEnv -> AnnTypeR -> Maybe (Cast RefType)
 ---------------------------------------------------------------------------------------
-envGetContextCast l g a 
+envGetContextCast g a 
   = case [c | TCast cx c <- ann_fact a, cx == cge_ctx g] of
       [ ] -> Nothing
       [c] -> Just c
-      cs  -> die $ errorMultipleCasts l cs
+      cs  -> die $ errorMultipleCasts (srcPos a) cs
+
+---------------------------------------------------------------------------------------
+envGetContextTypArgs :: CGEnv -> AnnTypeR -> [TVar] -> [RefType]
+---------------------------------------------------------------------------------------
+envGetContextTypArgs g a αs 
+  = case [i | TypInst ξ' i <- ann_fact a, ξ' == cge_ctx g] of 
+      [i] | length i == length αs -> i 
+      _                           -> die $ bugMissingTypeArgs $ srcPos a
+
 
 ---------------------------------------------------------------------------------------
 envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 

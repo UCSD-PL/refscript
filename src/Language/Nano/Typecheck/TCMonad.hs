@@ -26,7 +26,7 @@ module Language.Nano.Typecheck.TCMonad (
 
   -- * Freshness
   , freshTyArgs
-  , freshTArray
+  -- , freshTArray
 
   -- * Dot Access
   -- , safeGetProp
@@ -200,26 +200,27 @@ logError err x = (modify $ \st -> st { tc_errss = err : tc_errss st}) >> return 
 
 
 -------------------------------------------------------------------------------
-freshTyArgs :: (PP r, F.Reftable r) => SourceSpan -> ([TVar], RType r) -> TCM r (RType r)
+freshTyArgs :: (PP r, F.Reftable r)
+            => SourceSpan -> IContext -> [TVar] -> RType r -> TCM r (RType r)
 -------------------------------------------------------------------------------
-freshTyArgs l (αs, t) 
-  = (`apply` t) <$> freshSubst l αs
+freshTyArgs l ξ αs t 
+  = (`apply` t) <$> freshSubst l ξ αs
 
-freshSubst :: (PP r, F.Reftable r) => SourceSpan -> [TVar] -> TCM r (RSubst r)
-freshSubst l αs
+freshSubst :: (PP r, F.Reftable r) => SourceSpan -> IContext -> [TVar] -> TCM r (RSubst r)
+freshSubst l ξ αs
   = do
       fUnique αs
       βs        <- mapM (freshTVar l) αs
-      setTyArgs l βs
+      setTyArgs l ξ βs
       extSubst βs 
       return     $ fromList $ zip αs (tVar <$> βs)
     where
       fUnique xs = when (not $ unique xs) $ logError (errorUniqueTypeParams l) ()
 
-setTyArgs l βs
+setTyArgs l ξ βs
   = do m <- tc_anns <$> get
        when (HM.member l m) $ tcError $ errorMultipleTypeArgs l
-       addAnn l $ TypInst (tVar <$> βs)
+       addAnn l $ TypInst ξ (tVar <$> βs)
 
 
 -------------------------------------------------------------------------------
@@ -373,13 +374,12 @@ instance Freshable a => Freshable [a] where
 
 freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
 
-
-freshTArray l = 
-  do  v <- ((`TV` l). F.intSymbol "A") <$> tick
-      extSubst [v]
-      let t = tVar v
-      addAnn l $ TypInst [t]
-      return $ tArr t
+-- freshTArray l = 
+--   do  v <- ((`TV` l). F.intSymbol "A") <$> tick
+--       extSubst [v]
+--       let t = tVar v
+--       addAnn l $ TypInst [t]
+--       return $ tArr t
               
 
 

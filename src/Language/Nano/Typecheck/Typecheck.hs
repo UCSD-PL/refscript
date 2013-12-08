@@ -82,28 +82,8 @@ castErrors (loc, TCast _ (DCST t)) = [errorDownCast loc t]
 castErrors (loc, TCast _ (DC _))   = [errorDeadCast loc]
 castErrors _                       = []
 
--- failCasts :: (Data r, F.Reftable r, Typeable r) => Bool -> NanoTypeR r -> F.FixResult Error  
--- failCasts True   _  = F.Safe
--- failCasts False pgm 
---   | not $ null csts = F.Unsafe csts
---   | otherwise       = F.Safe
---   where
---     csts            = allCasts fs
---     Src fs          = code pgm
--- 
--- allCasts      :: (F.Reftable r, Data r, Typeable r) => [FunctionStatement (AnnType r)] -> [Error] 
--- allCasts fs   = everything (++) ([] `mkQ` castErrors) $ fs
--- 
--- castErrors :: (F.Reftable r, Data r, Typeable r) => AnnType r -> [Error] 
--- castErrors a  = downErrs ++ deadErrs 
---   where
---     downErrs  = [errorDownCast loc t | TCast _ (DCST t) <- casts]
---     deadErrs  = [errorDeadCast loc   | TCast _ (DC _)   <- casts]
---     casts     = ann_fact a
---     loc       = srcPos a
-
-printAnn (Ann l fs) = when (not $ null fs) $ putStrLn 
-    $ printf "At %s: %s" (ppshow l) (ppshow fs)
+printAnn (Ann l []) = return () 
+printAnn (Ann l fs) = putStrLn $ printf "At %s: %s" (ppshow l) (ppshow fs)
 
 
 -------------------------------------------------------------------------------------------
@@ -126,7 +106,10 @@ tcNano p@(Nano {code = Src fs})
        whenLoud $ (getSubst >>= traceCodePP p' m)
        return (m, p')
 
-patchAnn m (Ann l fs) = Ann l $ sortNub $ (M.lookupDefault [] l m) ++ fs
+patchAnn m (Ann l fs) = Ann l $ sortNub $ fs' ++ fs
+  where
+    fs'               = tracePP ("patchAnn: l" ++ ppshow (srcPos l))$ M.lookupDefault [] l m
+
 initEnv pgm           = TCE (specs pgm) emptyContext
 traceCodePP p m s     = trace (render $ codePP p m s) $ return ()
       

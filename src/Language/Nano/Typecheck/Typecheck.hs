@@ -100,15 +100,15 @@ tcNano :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fa
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs}) 
   = do checkTypeDefs p
-       tcStmts (initEnv p) fs
-       m     <- M.unions <$> getAllAnns
-       let p' = p {code = patchAnn m <$> code p}
-       whenLoud $ (getSubst >>= traceCodePP p' m)
+       (fs', _) <- tcStmts (initEnv p) fs
+       m        <- M.unions <$> getAllAnns
+       let p'    = p {code = patchAnn m <$> Src fs'}
+       whenLoud  $ (getSubst >>= traceCodePP p' m)
        return (m, p')
 
 patchAnn m (Ann l fs) = Ann l $ sortNub $ fs' ++ fs
   where
-    fs'               = tracePP ("patchAnn: l" ++ ppshow (srcPos l))$ M.lookupDefault [] l m
+    fs'               = {- tracePP ("patchAnn: l" ++ ppshow (srcPos l)) $ -} M.lookupDefault [] l m
 
 initEnv pgm           = TCE (specs pgm) emptyContext
 traceCodePP p m s     = trace (render $ codePP p m s) $ return ()
@@ -178,11 +178,11 @@ tcEnvFindReturn              = envFindReturn . tce_env
 -------------------------------------------------------------------------------
 
 -- tcFun    :: (F.Reftable r) => Env (RType r) -> FunctionStatement (AnnSSA r) -> TCM r (TCEnv r)
-tcFun γ (FunctionStmt l f xs body)
+tcFun γ s@(FunctionStmt l f xs body)
   = do ft    <- getDefType f
        let γ' = tcEnvAdds [(f, ft)] γ
-       forM (funTys l f xs ft) $ tcFun1 γ' l f xs body
-       return $ Just γ' 
+       body' <- foldM (tcFun1 γ' l f xs) body $ funTys l f xs ft
+       return   (FunctionStmt l f xs body', Just γ') 
 
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
@@ -193,9 +193,9 @@ tcFun1 γ l f xs body (i, (αs,ts,t)) = getAnns $ tcFunBody γ' l f body t
 
 
 tcFunBody γ l f body t
-  = do q              <- tcStmts γ body
+  = do (body', q)     <- tcStmts γ body
        when (isJust q) $ void $ unifyTypeM (srcPos l) "Missing return" f tVoid t
-
+       return body'
 
 envAddFun _ f i αs xs ts t = tcEnvAdds tyBinds 
                            . tcEnvAdds (varBinds xs ts) 
@@ -205,7 +205,6 @@ envAddFun _ f i αs xs ts t = tcEnvAdds tyBinds
     tyBinds                = [(tVarId α, tVar α) | α <- αs]
     varBinds               = zip
     
-
 validInst γ (l, ts)
   = case [β | β <-  HS.toList $ free ts, not ((tVarId β) `tcEnvMem` γ)] of
       [] -> Nothing
@@ -215,7 +214,7 @@ validInst γ (l, ts)
 tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a   
 
 --------------------------------------------------------------------------------
-tcSeq :: (TCEnv r -> a -> TCM r (TCEnvO r)) -> TCEnv r -> [a] -> TCM r (TCEnvO r)
+tcSeq :: (TCEnv r -> a -> TCM r (b, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([b], TCEnvO r)
 --------------------------------------------------------------------------------
 
 tcSeq f             = foldM step . Just 
@@ -225,196 +224,205 @@ tcSeq f             = foldM step . Just
 
 --------------------------------------------------------------------------------
 tcStmts :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
-            TCEnv r -> [Statement (AnnSSA r)] -> TCM r (TCEnvO r)
+            TCEnv r -> [Statement (AnnSSA r)] -> TCM r ([Statement (AnnSSA r)], TCEnvO r)
 --------------------------------------------------------------------------------
 tcStmts = tcSeq tcStmt
 
 -------------------------------------------------------------------------------
 tcStmt  :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
-            TCEnv r -> Statement (AnnSSA r) -> TCM r (TCEnvO r)
+            TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r), TCEnvO r)
 -------------------------------------------------------------------------------
 -- skip
-tcStmt' γ (EmptyStmt _) 
-  = return $ Just γ
+tcStmt γ s@(EmptyStmt _) 
+  = return (s, Just γ)
 
 -- x = e
-tcStmt' γ (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))   
-  = tcAsgn γ (Id lx x) e
+tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))   
+  = do (e', g) <- tcAsgn γ (Id lx x) e
+       return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
 -- e3.x = e2
 -- The type of @e2@ should be assignable (a subtype of) the type of @e3.x@.
-tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
-  = do  θ  <- getTDefs
-        t2 <- tcExpr' γ e2 
-        t3 <- tcExpr' γ e3
-        tx <- safeGetProp (tce_ctx γ) x t3
-        case tx of 
-          -- NOTE: Atm assignment to non existing binding has no effect!
-          TApp TUndef _ _ -> return $ Just γ
-          _ ->  if isSubType θ t2 tx 
-                  then return  $ Just γ
-                  else tcError $ errorTypeAssign (srcPos l2) t2 tx
+-- RJ: TODO FIELD tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LDot l3 e3 x) e2))
+-- RJ: TODO FIELD    = do  θ  <- getTDefs
+-- RJ: TODO FIELD          t2 <- tcExpr' γ e2 
+-- RJ: TODO FIELD          t3 <- tcExpr' γ e3
+-- RJ: TODO FIELD          tx <- safeGetProp (tce_ctx γ) x t3
+-- RJ: TODO FIELD          case tx of 
+-- RJ: TODO FIELD            -- NOTE: Atm assignment to non existing binding has no effect!
+-- RJ: TODO FIELD            TApp TUndef _ _ -> return $ Just γ
+-- RJ: TODO FIELD            _ ->  if isSubType θ t2 tx 
+-- RJ: TODO FIELD                    then return  $ Just γ
+-- RJ: TODO FIELD                    else tcError $ errorTypeAssign (srcPos l2) t2 tx
 
 -- e3[i] = e2
-tcStmt' γ (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ _)) e2))
-  = do  t2 <- tcExpr' γ e2 
-        _ {- t3 -}  <- tcExpr' γ e3
-        ti <- throw $ bug (srcPos l2) "UNIMPLEMENTED: tc: e[e] = e" --safeGetIdx i t3
-        θ  <- unifyTypeM (srcPos l2) "DotRef" e2 t2 ti 
-        -- Once we've figured out what the type of the array should be,
-        -- update the output environment.
-        setSubst θ
-        return $ Just $ apply θ γ 
+-- RJ: TODO ARRAY tcStmt γ (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ _)) e2))
+-- RJ: TODO ARRAY   = do  t2 <- tcExpr' γ e2 
+-- RJ: TODO ARRAY         _ {- t3 -}  <- tcExpr' γ e3
+-- RJ: TODO ARRAY         ti <- throw $ bug (srcPos l2) "UNIMPLEMENTED: tc: e[e] = e" --safeGetIdx i t3
+-- RJ: TODO ARRAY         θ  <- unifyTypeM (srcPos l2) "DotRef" e2 t2 ti 
+-- RJ: TODO ARRAY         -- Once we've figured out what the type of the array should be,
+-- RJ: TODO ARRAY         -- update the output environment.
+-- RJ: TODO ARRAY         setSubst θ
+-- RJ: TODO ARRAY         return $ Just $ apply θ γ 
 
 
 -- e
-tcStmt' γ (ExprStmt _ e)   
-  = tcExpr' γ e >> return (Just γ) 
+tcStmt γ s@(ExprStmt l e)   
+  = do e' <- tcExpr' γ e 
+       return (ExprStmt l e', Just γ) 
 
 -- s1;s2;...;sn
-tcStmt' γ (BlockStmt _ stmts) 
-  = tcStmts γ stmts 
+tcStmt γ (BlockStmt l stmts) 
+  = do (stmts', z) <- tcStmts γ stmts
+       return (BlockStmt l stmts', z)
 
 -- if b { s1 }
-tcStmt' γ (IfSingleStmt l b s)
-  = tcStmt' γ (IfStmt l b s (EmptyStmt l))
+tcStmt γ (IfSingleStmt l b s)
+  = tcStmt γ (IfStmt l b s (EmptyStmt l))
 
 -- if b { s1 } else { s2 }
-tcStmt' γ (IfStmt l e s1 s2)
-  = do  t <- tcExpr' γ e 
-    -- Doing check for boolean for the conditional for now
-    -- TODO: Will have to support truthy/falsy later.
-        unifyTypeM (srcPos l) "If condition" e t tBool
-        γ1      <- tcStmt' γ s1
-        γ2      <- tcStmt' γ s2
-        envJoin l γ γ1 γ2
+tcStmt γ (IfStmt l e s1 s2)
+  = do (e', t)   <- tcExpr' γ e 
+       unifyTypeM (srcPos l) "If condition" e t tBool
+       (s1', γ1) <- tcStmt γ s1
+       (s2', γ2) <- tcStmt γ s2
+       return       (IfStmt l e' s1' s2', envJoin l γ γ1 γ2)
 
-
-tcStmt' γ (WhileStmt l c b) = do
-    let phis = [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
-    let phiTs = fromJust <$> (`tcEnvFindTy` γ) <$> (fst3 <$> phis)
-    let γ' =  tcEnvAdds (zip (snd3 <$> phis) phiTs) γ
-    t   <- tcExpr' γ' c
+tcStmt γ (WhileStmt l c b) = do
+    let phis   = [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
+    let phiTs  = fromJust <$> (`tcEnvFindTy` γ) <$> (fst3 <$> phis)
+    let γ'     = tcEnvAdds (zip (snd3 <$> phis) phiTs) γ
+    (c', t)   <- tcExpr' γ' c
     unifyTypeM (srcPos l) "While condition" c t tBool
-    tcStmt' γ' b
-
+    (b', γ'') <- tcStmt γ' b
+    return       (WhileStmt l c' b')
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
-tcStmt' γ (VarDeclStmt _ ds)
-  = tcSeq tcVarDecl γ ds
+tcStmt γ (VarDeclStmt l ds)
+  = do (ds', z) <- tcSeq tcVarDecl γ ds
+       return      (VarDeclStmt l ds', z)
 
 -- return e 
-tcStmt' γ (ReturnStmt l eo) 
-  = do  t           <- maybe (return tVoid) (tcExpr' γ) eo
+tcStmt γ (ReturnStmt l eo) 
+  = do  (eo', t)    <- maybe (return tVoid) ((mapFst Just <$>) . tcExpr' γ) eo
         let rt       = tcEnvFindReturn γ 
         θ           <- unifyTypeM (srcPos l) "Return" eo t rt
         -- Apply the substitution
         let (rt',t') = mapPair (apply θ) (rt,t)
         -- Subtype the arguments against the formals and cast if 
         -- necessary based on the direction of the subtyping outcome
-        maybeM_ (\e -> castM (tce_ctx γ) e t' rt') eo
-        return Nothing
+        eo''        <- case eo' of
+                        Nothing -> return Nothing
+                        Just e' -> Just <$> castM (tce_ctx γ) e' t' rt'
+        return (ReturnStmt l eo'', Nothing)
 
-tcStmt' γ s@(FunctionStmt _ _ _ _)
+tcStmt γ s@(FunctionStmt _ _ _ _)
   = tcFun γ s
 
 -- OTHER (Not handled)
-tcStmt' _ s 
+tcStmt _ s 
   = convertError "tcStmt" s
 
-tcStmt γ s = tcStmt' γ s
 
--------------------------------------------------------------------------------
-tcVarDecl :: (Ord r, PP r, F.Reftable r) => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (TCEnvO r)
--------------------------------------------------------------------------------
-tcVarDecl γ v@(VarDecl _ x (Just e)) = do
-    t <- tcExpr γ (listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]) e
-    return $ Just $ tcEnvAdds [(x, t)] γ
+---------------------------------------------------------------------------------------
+tcVarDecl :: (Ord r, PP r, F.Reftable r) 
+          => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
+---------------------------------------------------------------------------------------
+tcVarDecl γ v@(VarDecl l x (Just e)) = do
+    (e', t) <- tcExprT γ (varDeclAnnot v) e
+    return   (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
 
-tcVarDecl γ (VarDecl _ _ Nothing)  
-  = return $ Just γ
+tcVarDecl γ v@(VarDecl _ _ Nothing)  
+  = return   (v, Just γ)
+
+varDeclAnnot v = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
 
 ------------------------------------------------------------------------------------
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
-  TCEnv r -> Id (AnnSSA r) -> Expression (AnnSSA r) -> TCM r (TCEnvO r)
+  TCEnv r -> Id (AnnSSA r) -> ExprSSA r -> TCM r (ExprSSA r, TCEnvO r)
 ------------------------------------------------------------------------------------
-tcAsgn γ x e = tcExpr' γ e >>= \t -> return $ Just $ tcEnvAdds [(x, t)] γ
+tcAsgn γ x e = do 
+  (e', t) <- tcExpr γ e 
+  return     (e', Just $ tcEnvAdds [(x, t)] γ)
 
-
--- XXX: At the moment only arrays take annotations into account !!!
 -------------------------------------------------------------------------------
-tcExpr :: (Ord r, PP r, F.Reftable r)
-       => TCEnv r                -- Typing environment
-       -> Maybe (RType r)        -- Contextual type RJ: meaning what? 
-       -> Expression (AnnSSA r)  -- Current expression
-       -> TCM r (RType r)        -- Return type
+tcExprT :: (Ord r, PP r, F.Reftable r)
+       => TCEnv r -> ExprSSA r -> Maybe (RType r) -> TCM r (ExprSSA r, RType r)
 -------------------------------------------------------------------------------
-tcExpr γ ct e@(ArrayLit _ _) = tcArray γ ct e
-tcExpr γ (Just ta) e         = tcExpr' γ e >>= checkAnnotation "tcExprAnnot" ta e >> return ta
-tcExpr γ Nothing e           = tcExpr' γ e
+tcExprT γ e@(ArrayLit _ _) ct = tcArray γ ct e
+tcExprT γ e         (Just ta) = tcExpr γ e >>= checkAnnotation "tcExprAnnot" ta e >> return ta
+tcExprT γ e           Nothing = tcExpr γ e
 
-tcExpr' γ e                  = setExpr (Just e) >> tcExpr'' γ e
+-- UGH. STATE!!!! NO!!!!
+tcExpr' γ e                   = {- setExpr (Just e) >> -} tcExpr γ e
 
 ----------------------------------------------------------------------------------------------
-tcExpr'' :: (Ord r, PP r, F.Reftable r) => TCEnv r -> Expression (AnnSSA r) -> TCM r (RType r)
+tcExpr :: (Ord r, PP r, F.Reftable r) => TCEnv r -> ExprSSA r -> TCM r (ExprSSA r, RType r)
 ----------------------------------------------------------------------------------------------
-tcExpr'' _ (IntLit _ _)
-  = return tInt
+tcExpr _ e@(IntLit _ _)
+  = return (e, tInt)
 
-tcExpr'' _ (BoolLit _ _)
-  = return tBool
+tcExpr _ e@(BoolLit _ _)
+  = return (e, tBool)
 
-tcExpr'' _ (StringLit _ _)
-  = return tString
+tcExpr _ e@(StringLit _ _)
+  = return (e, tString)
 
-tcExpr'' _ (NullLit _)
-  = return tNull
+tcExpr _ e@(NullLit _)
+  = return (e, tNull)
 
-tcExpr'' γ (VarRef l x)
+tcExpr γ e@(VarRef l x)
   = case tcEnvFindTy x γ of 
-      Nothing -> logError (errorUnboundIdEnv (ann l) x (tce_env γ)) tErr
-      Just z  -> return $ tracePP ("tcExpr'' VarRef x = " ++ ppshow x) z
+      Nothing -> logError (errorUnboundIdEnv (ann l) x (tce_env γ)) (e, tErr)
+      Just z  -> return $ (e, z)
 
-tcExpr'' γ (PrefixExpr l o e)
-  = tcCall γ l o [e] (prefixOpTy o $ tce_env γ)
+tcExpr γ e@(PrefixExpr l o e)
+  = do ([e'], z) <- tcCall γ l o [e] (prefixOpTy o $ tce_env γ)
+       return (PrefixExpr l o e', z)
 
-tcExpr'' γ (InfixExpr l o e1 e2)        
-  = tcCall γ l o [e1, e2] (infixOpTy o $ tce_env γ)
+tcExpr γ (InfixExpr l o e1 e2)        
+  = do ([e1', e2'], z) <- tcCall γ l o [e1, e2] (infixOpTy o $ tce_env γ)
+       return (InfixExpr l o e1' e2', z)
 
-tcExpr'' γ (CallExpr l e es)
-  = tcExpr' γ e >>= tcCall γ l e es
+tcExpr γ (CallExpr l e es)
+  = do (e', z)   <- tcExpr' γ e 
+       (es', z') <- tcCall γ l e es z
+       return       (CallExpr l e' es', z')
 
-tcExpr'' γ (ObjectLit _ ps) 
-  = tcObject γ ps
+HEREHEREHERE
+
+tcExpr γ (ObjectLit l bs) 
+  = do let (ps, es) = unzip bs
+       bts <- zipWith B (map F.symbol ps) <$> mapM (tcExpr' γ) es
+       return (undefined, TObj bts F.top)
 
 -- x.f =def= x["f"]
-tcExpr'' γ (DotRef _ e s) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) (unId s) 
+-- RJ: TODO FIELD tcExpr γ (DotRef _ e s) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) (unId s) 
 
 -- x["f"]
-tcExpr'' γ (BracketRef _ e (StringLit _ s)) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) s
+-- RJ: TODO FIELD tcExpr γ (BracketRef _ e (StringLit _ s)) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) s
 
 -- x[i] 
-tcExpr'' γ (BracketRef _ e (IntLit _ _)) = tcExpr' γ e >>= indexType (tce_ctx γ) 
+-- RJ: TODO FIELD tcExpr γ (BracketRef _ e (IntLit _ _)) = tcExpr' γ e >>= indexType (tce_ctx γ) 
 
 -- x[e]
-tcExpr'' γ e@(BracketRef l e1 e2) = do
+tcExpr γ e@(BracketRef l e1 e2) = do
     t1 <- tcExpr' γ e1
     t2 <- tcExpr' γ e2
     case t1 of 
       -- NOTE: Only support dynamic access of array with index of integer type.
       TArr t _  -> unifyTypeM (srcPos l) "BracketRef" e t2 tInt >> return t
-      t         -> errorstar $ "Unimplemented: BracketRef of " ++ 
-                               "non-array expression of type " ++ 
-                               ppshow t
+      t         -> errorstar $ "Unimplemented: BracketRef of non-array expression of type " ++ ppshow t
 
-tcExpr'' _ e 
+tcExpr _ e 
   = convertError "tcExpr" e
 
 
 
 ----------------------------------------------------------------------------------
 tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 
-  TCEnv r -> AnnSSA r -> fn -> [Expression (AnnSSA r)]-> RType r -> TCM r (RType r)
+  TCEnv r -> AnnSSA r -> fn -> [ExprSSA r] -> RType r -> TCM r ([ExprSSA r], RType r)
 ----------------------------------------------------------------------------------
 
 tcCall γ l fn es ft0
@@ -440,22 +448,11 @@ instantiate l fn ft
        err = die   $ errorNonFunction (ann l) fn ft
 
 ----------------------------------------------------------------------------------
-tcObject ::  (Ord r, F.Reftable r, PP r) => 
-  TCEnv r -> [(Prop (AnnSSA r), Expression (AnnSSA r))] -> TCM r (RType r)
-----------------------------------------------------------------------------------
-tcObject γ bs 
-  = do 
-      let (ps, es) = unzip bs
-      bts <- zipWith B (map F.symbol ps) <$> mapM (tcExpr' γ) es
-      return $ TObj bts F.top
-
-
-----------------------------------------------------------------------------------
 tcArray :: (Ord r, PP r, F.Reftable r) =>
-  TCEnv r -> Maybe (RType r) -> Expression (AnnSSA r) -> TCM r (RType r)
+  TCEnv r -> Maybe (RType r) -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 ----------------------------------------------------------------------------------
-tcArray γ (Just t@(TArr ta _)) (ArrayLit _ es) = do 
-    ts <- mapM (tcExpr γ $ Just ta) es
+tcArray γ (Just t@(TArr ta _)) (ArrayLit l es) = do 
+    ts <- mapM (tcExprT γ $ Just ta) es
     checkElts ta es ts
     return (tracePP "Type being propagated for array literal: " t)
   where
@@ -465,24 +462,10 @@ tcArray _ Nothing (ArrayLit _ _)  =
   errorstar $ "Array literals need type annotations at " ++
               "the moment to typecheck in TC."
 tcArray _ (Just _) (ArrayLit _ _) = 
-  errorstar $ "Type annotation for array literal needs to be " ++ 
-              "of Array type."
+  errorstar $ "Type annotation for array literal needs to be of Array type."
+
 tcArray _ _ _ = 
-  errorstar $ "BUG: Only support tcArray for array literals " ++ 
-              "with type annotation"
-
--- XXX: Infering this very precise will make it very 
--- hard to do comparison with TArr later. 
---   case es of 
---     [] -> freshTArray l
---     _  -> mapM (tcExpr γ) es >>= return . mkObj
---   where 
---     mkObj ts = {- tracePP (ppshow es) $ -} TObj (bs ts) F.top
---     bs ts    = zipWith B (F.symbol . show <$> [0..]) ts ++ [len]
---     len      = B (F.symbol "length") tInt
---     l  = getAnnotation e
-
-
+  errorstar $ "BUG: Only support tcArray for array literals with type annotation"
               
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, F.Reftable r, PP r) =>

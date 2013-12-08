@@ -29,8 +29,8 @@ module Language.Nano.Typecheck.TCMonad (
   , freshTArray
 
   -- * Dot Access
-  , safeGetProp
-  , safeGetIdx
+  -- , safeGetProp
+  -- , safeGetIdx
   , indexType
 
   -- * Type definitions
@@ -65,7 +65,9 @@ module Language.Nano.Typecheck.TCMonad (
   , getDefType 
 
   -- * Expression Getter/Setter
-  , getExpr, setExpr, withExpr
+  , setExpr
+  -- , getExpr
+  -- , withExpr
 
   -- * Patch the program with assertions
   -- , patchPgmM
@@ -226,14 +228,14 @@ setTyArgs l βs
 
 -- Access field @f@ of type @t@, adding a cast if needed to avoid errors.
 -------------------------------------------------------------------------------
-safeGetProp :: (Ord r, PP r, F.Reftable r) => IContext -> String -> RType r -> TCM r (RType r)
--------------------------------------------------------------------------------
-safeGetProp ξ f t = do
-    γ <- getTDefs
-    e <- fromJust <$> getExpr
-    case getProp γ f t of
-      Just (t', tf) -> castM ξ e t t' >> return tf
-      Nothing       -> error "safeGetProp" --TODO: deadcode
+-- RJ: TODO FIELD safeGetProp :: (Ord r, PP r, F.Reftable r) => IContext -> String -> RType r -> TCM r (RType r)
+-- RJ: TODO FIELD -------------------------------------------------------------------------------
+-- RJ: TODO FIELD safeGetProp ξ f t = do
+-- RJ: TODO FIELD      γ <- getTDefs
+-- RJ: TODO FIELD      e <- fromJust <$> getExpr
+-- RJ: TODO FIELD      case getProp γ f t of
+-- RJ: TODO FIELD        Just (t', tf) -> castM ξ e t t' >> return tf
+-- RJ: TODO FIELD        Nothing       -> error "safeGetProp" --TODO: deadcode
  
 -- DEPRECATE:
 -- Access index @i@ of type @t@.
@@ -253,19 +255,19 @@ safeGetIdx ξ f t = do
 -- Only support indexing in arrays atm. Discharging array bounds checks makes
 -- sense only for array types. 
 -------------------------------------------------------------------------------
-indexType :: (PP r, Ord r, F.Reftable r) => IContext -> RType r -> TCM r (RType r)
--------------------------------------------------------------------------------
-indexType _ (TArr t _)        = return t 
-
-indexType ξ t@(TApp TUn ts _) = do
-    e <- fromJust <$> getExpr
-    castM ξ e t t'
-    mkUnion <$> mapM (indexType ξ) arrs
-  where
-    t'   = mkUnion arrs
-    arrs = filter isArr ts
-
-indexType _ _                 = errorstar "Unimplemented: indexing type other than array."
+-- RJ: TODO FIELD indexType :: (PP r, Ord r, F.Reftable r) => IContext -> RType r -> TCM r (RType r)
+-- RJ: TODO FIELD -------------------------------------------------------------------------------
+-- RJ: TODO FIELD indexType _ (TArr t _)        = return t 
+-- RJ: TODO FIELD 
+-- RJ: TODO FIELD indexType ξ t@(TApp TUn ts _) = do
+-- RJ: TODO FIELD     e <- fromJust <$> getExpr
+-- RJ: TODO FIELD     castM ξ e t t'
+-- RJ: TODO FIELD     mkUnion <$> mapM (indexType ξ) arrs
+-- RJ: TODO FIELD   where
+-- RJ: TODO FIELD     t'   = mkUnion arrs
+-- RJ: TODO FIELD     arrs = filter isArr ts
+-- RJ: TODO FIELD 
+-- RJ: TODO FIELD indexType _ _                 = errorstar "Unimplemented: indexing type other than array."
 
 
 -------------------------------------------------------------------------------
@@ -458,21 +460,21 @@ checkAnnotation msg ta e t = do
 --------------------------------------------------------------------------------
 
 -----------------------------------------------------------------------------
-withExpr  :: Maybe (Expression (AnnSSA r)) -> TCM r a -> TCM r a
------------------------------------------------------------------------------
-withExpr e action = 
-  do  eold  <- getExpr 
-      setExpr  e 
-      r     <- action 
-      setExpr  eold
-      return $ r
+-- withExpr  :: Maybe (Expression (AnnSSA r)) -> TCM r a -> TCM r a
+-- -----------------------------------------------------------------------------
+-- withExpr e action = 
+--   do  eold  <- getExpr 
+--       setExpr  e 
+--       r     <- action 
+--       setExpr  eold
+--       return $ r
 
 
 -----------------------------------------------------------------------------------------
 castsM    :: (Ord r, PP r, F.Reftable r) => 
-                IContext -> [Expression (AnnSSA r)] -> [RType r] -> [RType r] -> TCM r ()
+                IContext -> [Expression (AnnSSA r)] -> [RType r] -> [RType r] -> TCM r [Expression (AnnSSA r)] 
 -----------------------------------------------------------------------------------------
-castsM ξ  = zipWith3M_ (castM ξ)
+castsM ξ es ts ts' = forM (zipWith3 es ts ts') $ \(e, t, t') -> castM ξ e t t'
 
 
 -- | For the expression @e@, check the subtyping relation between the type @t@
@@ -480,7 +482,7 @@ castsM ξ  = zipWith3M_ (castM ξ)
 -- and insert the right kind of cast. 
 --------------------------------------------------------------------------------
 castM :: (Ord r, PP r, F.Reftable r) => 
-           IContext -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r ()
+           IContext -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 castM ξ e t t'    = subTypeM t t' >>= go
   where 
@@ -488,9 +490,16 @@ castM ξ e t t'    = subTypeM t t' >>= go
     go Rel        = addDownCast ξ e t'
     go SubT       = addUpCast   ξ e t'
     go Nth        = addDeadCast ξ e t'
-    go EqT        = return ()
+    go EqT        = return e 
 
 addUpCast   ξ e t = addCast ξ e (UCST t)
 addDownCast ξ e t = addCast ξ e (DCST t) 
 addDeadCast ξ e t = addCast ξ e (DC t)
-addCast     ξ e c = addAnn (srcPos e) (TCast ξ c)
+
+addCast     ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
+  where 
+    loc           = srcPos e
+    fact          = TCast ξ c
+
+wrapCast _ f (Cast (Ann l fs) e) = Cast (Ann l (f:fs)) e
+wrapCast l f e                   = Cast (Ann l [f])    e

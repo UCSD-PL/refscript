@@ -233,7 +233,13 @@ tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
 --------------------------------------------------------------------------------
 tcSeq :: (TCEnv r -> a -> TCM r (b, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([b], TCEnvO r)
 --------------------------------------------------------------------------------
-tcSeq = undefined
+tcSeq f             = go []
+  where
+    go acc γ []     = return (reverse acc, Just γ)
+    go acc γ (x:xs) = do (y, γo) <- f γ x
+                         case γo of
+                           Nothing -> return (reverse (y:acc), Nothing) 
+                           Just γ' -> go (y:acc) γ' xs
 
 -- tcSeq f             = foldM step . Just 
 --   where 
@@ -324,7 +330,9 @@ tcStmt γ (VarDeclStmt l ds)
 
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
-  = do  (eo', t)    <- maybe (return tVoid) ((mapFst Just <$>) . tcExpr' γ) eo
+  = do  (eo', t)    <- case eo of 
+                         Nothing -> return (Nothing, tVoid)
+                         Just e  -> mapFst Just <$>  tcExpr' γ e
         let rt       = tcEnvFindReturn γ 
         θ           <- unifyTypeM (srcPos l) "Return" eo t rt
         -- Apply the substitution
@@ -348,7 +356,7 @@ tcVarDecl :: (Ord r, PP r, F.Reftable r)
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e)) = do
-    (e', t) <- tcExprT γ (varDeclAnnot v) e
+    (e', t) <- tcExprT γ e (varDeclAnnot v)
     return   (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
 
 tcVarDecl γ v@(VarDecl _ _ Nothing)  
@@ -369,7 +377,9 @@ tcExprT :: (Ord r, PP r, F.Reftable r)
        => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
 tcExprT γ e@(ArrayLit _ _) ct = tcArray γ ct e
-tcExprT γ e         (Just ta) = tcExpr γ e >>= checkAnnotation "tcExprAnnot" ta e >> return ta
+tcExprT γ e         (Just ta) = do (e', t) <- tcExpr γ e 
+                                   checkAnnotation "tcExprAnnot" ta e t 
+                                   return (e', ta)
 tcExprT γ e           Nothing = tcExpr γ e
 
 -- UGH. STATE!!!! NO!!!!
@@ -470,7 +480,8 @@ tcArray :: (Ord r, PP r, F.Reftable r) =>
   TCEnv r -> Maybe (RType r) -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 ----------------------------------------------------------------------------------
 tcArray γ (Just t@(TArr ta _)) (ArrayLit l es) = do 
-    ets          <- mapM (tcExprT γ $ Just ta) es
+    let tao       = Just ta
+    ets          <- mapM (\e -> tcExprT γ e tao) es
     let (es', ts) = unzip ets
     checkElts ta es' ts
     return (ArrayLit l es', t)
@@ -478,10 +489,10 @@ tcArray γ (Just t@(TArr ta _)) (ArrayLit l es) = do
     checkElts = zipWithM_ . (checkAnnotation "tcArray")
 
 tcArray _ Nothing (ArrayLit l _)  = 
-  die $ bug l "Array literals need type annotations at the moment to typecheck in TC."
+  die $ bug (srcPos l) "Array literals need type annotations at the moment to typecheck in TC."
 
 tcArray _ (Just _) (ArrayLit l _) = 
-  die $ bug l "Type annotation for array literal needs to be of Array type."
+  die $ bug (srcPos l) "Type annotation for array literal needs to be of Array type."
 
 tcArray _ _ e = 
   die $ bug (srcPos $ getAnnotation e) "BUG: Only support tcArray for array literals with type annotation"

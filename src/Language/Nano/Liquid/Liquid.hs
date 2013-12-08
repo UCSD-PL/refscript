@@ -323,50 +323,45 @@ consAsgn g x e
 ------------------------------------------------------------------------------------
 consExpr :: CGEnv -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ------------------------------------------------------------------------------------
-consExpr g e 
-  = do z <- consExpr' g $ tracePP "consExpr" e -- RJ: this is the ONLY call to consExpr'
-       -- return z
-       if isCast l g a then consCast a z else return z
-    where 
-       a  = getAnnotation e
-       l  = srcPos a
+consExpr g (Cast a e) 
+  = consExpr g e >>= consCast a 
 
-consExpr' g (IntLit l i)               
+consExpr g (IntLit l i)               
   = envAddFresh "consExpr:IntLit" l (eSingleton tInt i) g
 
-consExpr' g (BoolLit l b)
+consExpr g (BoolLit l b)
   = envAddFresh "consExpr:BoolLit" l (pSingleton tBool b) g 
 
-consExpr' g (StringLit l s)
+consExpr g (StringLit l s)
   = envAddFresh "consExpr:StringLit" l (eSingleton tString s) g
 
-consExpr' g (NullLit l)
+consExpr g (NullLit l)
   = envAddFresh "consExpr:NullLit" l tNull g
 
-consExpr' g (VarRef i x)
+consExpr g (VarRef i x)
   = do addAnnot l x t
        return ({- trace ("consExpr:VarRef" ++ ppshow x ++ " : " ++ ppshow t)-} x, g) 
     where 
        t   = envFindTy x g
        l   = srcPos i
 
-consExpr' g (PrefixExpr l o e)
+consExpr g (PrefixExpr l o e)
   = consCall g l o [e] (prefixOpTy o $ renv g)
 
-consExpr' g (InfixExpr l o e1 e2)        
+consExpr g (InfixExpr l o e1 e2)        
   = consCall g l o [e1, e2] (infixOpTy o $ renv g)
 
-consExpr' g (CallExpr l e es)
+consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 
        consCall g' l e es $ envFindTy x g'
 
-consExpr' g (DotRef l e s)
+consExpr g (DotRef l e s)
   = do  (x, g') <- consExpr g e
         t       <- safeGetProp (unId s) (envFindTy x g')
         envAddFresh "consExpr:DotRef" l t g'
 
 -- e[i]
-consExpr' g (BracketRef l e i) = do
+consExpr g (BracketRef l e i) = do
     (xe, g')  <- consExpr g e
     (xi, g'') <- consExpr g' i
     let ta = envFindTy xe g' 
@@ -388,16 +383,16 @@ consExpr' g (BracketRef l e i) = do
 
 
 -- -- shadowed at the moment...
--- consExpr' g (BracketRef l e (StringLit _ s))
+-- consExpr g (BracketRef l e (StringLit _ s))
 --   = do  (x, g') <- consExpr g e
 --         t       <- safeGetProp s (envFindTy x g') 
 --         envAddFresh "consExpr[StringLit]" l t g'
         
 
-consExpr' g (ObjectLit l ps) 
+consExpr g (ObjectLit l ps) 
   = consObj l g ps
 
-consExpr' _ e 
+consExpr _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))
 
 
@@ -414,7 +409,7 @@ consCast a (x', g)
       l              = srcPos a
       x              = tracePP ("consCast a = " ++ ppshow a) x'
 
-isCast l g a = isJust $ envGetContextCast l g a 
+-- isCast l g a = isJust $ envGetContextCast l g a 
 
 ---------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------

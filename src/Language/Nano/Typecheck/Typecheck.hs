@@ -390,12 +390,12 @@ tcExpr γ (CallExpr l e es)
        (es', z') <- tcCall γ l e es z
        return       (CallExpr l e' es', z')
 
-HEREHEREHERE
-
 tcExpr γ (ObjectLit l bs) 
-  = do let (ps, es) = unzip bs
-       bts <- zipWith B (map F.symbol ps) <$> mapM (tcExpr' γ) es
-       return (undefined, TObj bts F.top)
+  = do let (ps, es)  = unzip bs
+       ets          <- mapM (tcExpr' γ) es
+       let (es', ts) = unzip ets
+       let bts       = zipWith B (F.symbol <$> ps) ts -- <$> mapM (tcExpr' γ) es
+       return (ObjectLit l (zip ps es'), TObj bts F.top)
 
 -- x.f =def= x["f"]
 -- RJ: TODO FIELD tcExpr γ (DotRef _ e s) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) (unId s) 
@@ -407,18 +407,18 @@ tcExpr γ (ObjectLit l bs)
 -- RJ: TODO FIELD tcExpr γ (BracketRef _ e (IntLit _ _)) = tcExpr' γ e >>= indexType (tce_ctx γ) 
 
 -- x[e]
-tcExpr γ e@(BracketRef l e1 e2) = do
-    t1 <- tcExpr' γ e1
-    t2 <- tcExpr' γ e2
-    case t1 of 
-      -- NOTE: Only support dynamic access of array with index of integer type.
-      TArr t _  -> unifyTypeM (srcPos l) "BracketRef" e t2 tInt >> return t
-      t         -> errorstar $ "Unimplemented: BracketRef of non-array expression of type " ++ ppshow t
+-- RJ: TODO FIELD tcExpr γ e@(BracketRef l e1 e2) = do
+-- RJ: TODO FIELD     t1 <- tcExpr' γ e1
+-- RJ: TODO FIELD     t2 <- tcExpr' γ e2
+-- RJ: TODO FIELD     case t1 of 
+-- RJ: TODO FIELD       -- NOTE: Only support dynamic access of array with index of integer type.
+-- RJ: TODO FIELD       TArr t _  -> unifyTypeM (srcPos l) "BracketRef" e t2 tInt >> return t
+-- RJ: TODO FIELD       t         -> errorstar $ "Unimplemented: BracketRef of non-array expression of type " ++ ppshow t
 
 tcExpr _ e 
   = convertError "tcExpr" e
 
-
+HEREHEREHERE
 
 ----------------------------------------------------------------------------------
 tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 

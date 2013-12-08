@@ -425,6 +425,13 @@ tcExpr γ (ObjectLit l bs)
        let bts       = zipWith B (F.symbol <$> ps) ts -- <$> mapM (tcExpr' γ) es
        return (ObjectLit l (zip ps es'), TObj bts F.top)
 
+tcExpr γ (Cast l@(Ann loc fs) e)
+  = do (e', t) <- tcExpr γ e
+       case e' of
+         Cast (Ann _ fs') e'' -> return (Cast (Ann loc (fs ++ fs')) e'', t)
+         _                    -> return (Cast l e', t)
+
+
 -- x.f =def= x["f"]
 -- RJ: TODO FIELD tcExpr γ (DotRef _ e s) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) (unId s) 
 

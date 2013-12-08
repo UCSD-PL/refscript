@@ -1,19 +1,13 @@
-/* negate :: ({xxx: number + boolean | true }) => 
-    { ww: number + boolean | (ttag(ww) = ttag(xxx)) } */
-
 /*@ negate :: /\ (number)  => {number  | true}  
               /\ (boolean) => {boolean | true}
  */
 
 function negate(x) {
-
-  if (typeof(4) 
-       == 
-       "number") {
+  if (typeof(x) == "number") {
     return 5;
     // return 0 - x;
   } else {
-    return true; //!x;
+    return !x;
   }
 }
 

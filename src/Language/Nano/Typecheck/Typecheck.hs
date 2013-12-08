@@ -82,8 +82,8 @@ failCasts True  _    = F.Safe
 -- failCasts False fs   = F.Unsafe $ concatMap castErrors $ annotCasts anns
 failCasts False fs   = F.Unsafe $ concatMap castErrors $ getCasts fs 
 
-getCasts :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r)]
-getCasts = everything (++) ([] `mkQ` f) stmts
+getCasts       :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r)]
+getCasts stmts = everything (++) ([] `mkQ` f) stmts
   where 
     f :: Expression (AnnType r) -> [(AnnType r)]
     f (Cast a _) = [a]
@@ -233,11 +233,12 @@ tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
 --------------------------------------------------------------------------------
 tcSeq :: (TCEnv r -> a -> TCM r (b, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([b], TCEnvO r)
 --------------------------------------------------------------------------------
+tcSeq = undefined
 
-tcSeq f             = foldM step . Just 
-  where 
-    step Nothing _  = return Nothing
-    step (Just γ) x = f γ x
+-- tcSeq f             = foldM step . Just 
+--   where 
+--     step Nothing _  = return Nothing
+--     step (Just γ) x = f γ x
 
 --------------------------------------------------------------------------------
 tcStmts :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
@@ -286,7 +287,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 
 -- e
 tcStmt γ s@(ExprStmt l e)   
-  = do e' <- tcExpr' γ e 
+  = do (e', _) <- tcExpr' γ e 
        return (ExprStmt l e', Just γ) 
 
 -- s1;s2;...;sn
@@ -304,7 +305,8 @@ tcStmt γ (IfStmt l e s1 s2)
        unifyTypeM (srcPos l) "If condition" e t tBool
        (s1', γ1) <- tcStmt γ s1
        (s2', γ2) <- tcStmt γ s2
-       return       (IfStmt l e' s1' s2', envJoin l γ γ1 γ2)
+       z         <- envJoin l γ γ1 γ2
+       return       (IfStmt l e' s1' s2', z)
 
 tcStmt γ (WhileStmt l c b) = do
     let phis   = [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
@@ -313,7 +315,7 @@ tcStmt γ (WhileStmt l c b) = do
     (c', t)   <- tcExpr' γ' c
     unifyTypeM (srcPos l) "While condition" c t tBool
     (b', γ'') <- tcStmt γ' b
-    return       (WhileStmt l c' b')
+    return       (WhileStmt l c' b', γ'')
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt l ds)
@@ -356,7 +358,7 @@ varDeclAnnot v = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
 
 ------------------------------------------------------------------------------------
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
-  TCEnv r -> Id (AnnSSA r) -> ExprSSA r -> TCM r (ExprSSA r, TCEnvO r)
+  TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 ------------------------------------------------------------------------------------
 tcAsgn γ x e = do 
   (e', t) <- tcExpr γ e 
@@ -364,7 +366,7 @@ tcAsgn γ x e = do
 
 -------------------------------------------------------------------------------
 tcExprT :: (Ord r, PP r, F.Reftable r)
-       => TCEnv r -> ExprSSA r -> Maybe (RType r) -> TCM r (ExprSSA r, RType r)
+       => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
 tcExprT γ e@(ArrayLit _ _) ct = tcArray γ ct e
 tcExprT γ e         (Just ta) = tcExpr γ e >>= checkAnnotation "tcExprAnnot" ta e >> return ta
@@ -374,7 +376,7 @@ tcExprT γ e           Nothing = tcExpr γ e
 tcExpr' γ e                   = {- setExpr (Just e) >> -} tcExpr γ e
 
 ----------------------------------------------------------------------------------------------
-tcExpr :: (Ord r, PP r, F.Reftable r) => TCEnv r -> ExprSSA r -> TCM r (ExprSSA r, RType r)
+tcExpr :: (Ord r, PP r, F.Reftable r) => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 ----------------------------------------------------------------------------------------------
 tcExpr _ e@(IntLit _ _)
   = return (e, tInt)
@@ -393,7 +395,7 @@ tcExpr γ e@(VarRef l x)
       Nothing -> logError (errorUnboundIdEnv (ann l) x (tce_env γ)) (e, tErr)
       Just z  -> return $ (e, z)
 
-tcExpr γ e@(PrefixExpr l o e)
+tcExpr γ (PrefixExpr l o e)
   = do ([e'], z) <- tcCall γ l o [e] (prefixOpTy o $ tce_env γ)
        return (PrefixExpr l o e', z)
 
@@ -436,7 +438,7 @@ tcExpr _ e
 
 ----------------------------------------------------------------------------------
 tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 
-  TCEnv r -> AnnSSA r -> fn -> [ExprSSA r] -> RType r -> TCM r ([ExprSSA r], RType r)
+  TCEnv r -> AnnSSA r -> fn -> [ExprSSAR r] -> RType r -> TCM r ([ExprSSAR r], RType r)
 ----------------------------------------------------------------------------------
 
 tcCall γ l fn es ft0

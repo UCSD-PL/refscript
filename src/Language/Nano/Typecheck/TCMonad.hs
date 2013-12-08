@@ -31,7 +31,7 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Dot Access
   -- , safeGetProp
   -- , safeGetIdx
-  , indexType
+  -- , indexType
 
   -- * Type definitions
   , getTDefs
@@ -45,7 +45,8 @@ module Language.Nano.Typecheck.TCMonad (
   , getAllAnns
 
   -- * Unfolding
-  , unfoldFirstTC, unfoldSafeTC
+  , unfoldFirstTC
+  , unfoldSafeTC
 
   -- * Subtyping
   , subTypeM  , subTypeM'
@@ -295,18 +296,18 @@ getAllAnns = tc_annss <$> get
 
 -------------------------------------------------------------------------------
 accumAnn :: (Ord r, F.Reftable r, Substitutable r (Fact r)) =>
-  (AnnInfo r -> [Error]) -> TCM r () -> TCM r ()
+  (AnnInfo r -> [Error]) -> TCM r a -> TCM r a
 -------------------------------------------------------------------------------
 -- RJ: this function is gross. Why is it being used? why are anns not just
 -- accumulated monotonically?
 accumAnn check act 
   = do m     <- tc_anns <$> get 
        modify $ \st -> st {tc_anns = HM.empty}
-       act
+       z     <- act
        m'    <- getAnns
        forM_ (check m') (`logError` ())
        modify $ \st -> st {tc_anns = m} {tc_annss = m' : tc_annss st}
-
+       return z
 -------------------------------------------------------------------------------
 execute     ::  (PP r, F.Reftable r) => 
   V.Verbosity -> Nano z (RType r) -> TCM r a -> Either [Error] a

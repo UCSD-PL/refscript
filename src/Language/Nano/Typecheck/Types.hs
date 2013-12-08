@@ -425,12 +425,12 @@ type NanoBareR r   = Nano (AnnBare r) (RType r)
 type NanoSSAR r    = Nano (AnnSSA  r) (RType r)
 type NanoTypeR r   = Nano (AnnType r) (RType r)
 
-type ExprSSA r     = Expression (AnnSSA r)
-type StmtSSA r     = Statement  (AnnSSA r)
+type ExprSSAR r    = Expression (AnnSSA r)
+type StmtSSAR r    = Statement  (AnnSSA r)
 
-type NanoBare   = NanoBareR ()
-type NanoSSA    = NanoSSAR ()
-type NanoType   = NanoTypeR ()
+type NanoBare      = NanoBareR ()
+type NanoSSA       = NanoSSAR ()
+type NanoType      = NanoTypeR ()
 
 {-@ measure isFunctionStatement :: (Statement SourceSpan) -> Prop 
     isFunctionStatement (FunctionStmt {}) = true

@@ -257,12 +257,16 @@ envGetContextCast l g a
       cs  -> die $ errorMultipleCasts l cs
 
 ---------------------------------------------------------------------------------------
-envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id l, CGEnv) 
+envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 
 ---------------------------------------------------------------------------------------
-envAddFresh _  l t g 
-  = do x  <- {- tracePP ("envAddFresh: " ++ s ++ ": "++ ppshow t) <$> -} freshId l
+envAddFresh s  l t g 
+  = do x  <- tracePP ("envAddFresh: " ++ s ++ ": "++ ppshow loc) <$> freshId loc
        g' <- envAdds [(x, t)] g
        return (x, g')
+    where loc = srcPos l
+   
+freshId l = Id (Ann l []) <$> fresh
+
 
 ---------------------------------------------------------------------------------------
 envAdds      :: (F.Symbolic x, IsLocated x) => [(x, RefType)] -> CGEnv -> CGM CGEnv
@@ -428,7 +432,7 @@ freshTyPhisWhile l g xs τs
 
 -- | Fresh Array Type
 ---------------------------------------------------------------------------------------
-freshTyArr :: (PP l, IsLocated l) => l -> CGEnv -> RefType -> CGM (Id l, CGEnv)
+freshTyArr :: (PP l, IsLocated l) => l -> CGEnv -> RefType -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------------
 freshTyArr l g t 
   = do t'     <- freshTy "freshTyPhis" {-tracePP "From" -} t
@@ -623,9 +627,6 @@ instance Freshable F.Symbol where
 
 instance Freshable String where
   fresh = F.symbolString <$> fresh
-
-freshId   :: (IsLocated l) => l -> CGM (Id l)
-freshId l = Id l <$> fresh
 
 freshTy :: RefTypable a => s -> a -> CGM RefType
 freshTy _ τ = refresh $ rType τ

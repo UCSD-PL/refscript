@@ -324,7 +324,8 @@ consAsgn g x e
 consExpr :: CGEnv -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ------------------------------------------------------------------------------------
 consExpr g e 
-  = do z <- consExpr' g e -- RJ: this is the ONLY call to consExpr'
+  = do z <- consExpr' g $ tracePP "consExpr" e -- RJ: this is the ONLY call to consExpr'
+       -- return z
        if isCast l g a then consCast a z else return z
     where 
        a  = getAnnotation e
@@ -403,14 +404,15 @@ consExpr' _ e
 -------------------------------------------------------------------------------------------------
 consCast :: AnnTypeR -> (Id AnnTypeR, CGEnv) -> CGM (Id AnnTypeR, CGEnv)
 -------------------------------------------------------------------------------------------------
-consCast a (x, g)
+consCast a (x', g)
   = case envGetContextCast l g a of
       Nothing        -> return (x, g)
-      Just (UCST t)  -> consUpCast   g a x t
-      Just (DCST t)  -> consDownCast g a x t 
-      Just (DC t)    -> consDeadCast g a t
+      Just (UCST t)  -> consUpCast   g l x $ tracePP "consUpCast"   t
+      Just (DCST t)  -> tracePP ("consDC2 @ " ++ ppshow x) <$> (consDownCast g l x $ tracePP ("consDC1" ++ ppshow x) t)
+      Just (DC t)    -> consDeadCast g l   $ tracePP "consDeadCast" t
     where 
       l              = srcPos a
+      x              = tracePP ("consCast a = " ++ ppshow a) x'
 
 isCast l g a = isJust $ envGetContextCast l g a 
 
@@ -426,9 +428,11 @@ consUpCast g l x t
 consDownCast g l x t = 
   do γ   <- getTDefs
      tc  <- castTo l γ tx (toType t) 
-     g'  <- envAdds [(x, tc)] g
      withAlignedM (subTypeContainers' "Downcast" l g) tx tc
-     envAddFresh "consDownCast" l tc g'
+     g'  <- envAdds [(x, tc)] g
+     return (x, g')
+     -- zog <- envAddFresh "consDownCast" l tc g'
+     --return $ tracePP "consDOWNCAST" zog 
   where 
      tx   = envFindTy x g
 
@@ -474,9 +478,7 @@ consCall g l fn es ft0
        (_,its,ot)   <- instantiate l g fn ft
        let (su, ts') = renameBinds its $ {- tracePP ("consCall2: es=" ++ ppshow es) -} xes
        zipWithM_ (withAlignedM $ subTypeContainers' "call" l g') [envFindTy x g' | x <- xes] ts'
-       envAddFresh "consCall" l ({- tracePP ("Ret Call Type: es = " ++ ppshow es) $ -} F.subst su ot) g'
-     {-where -}
-     {-  msg xes its = printf "consCall-SUBST %s %s" (ppshow xes) (ppshow its)-}
+       envAddFresh "consCall" l (F.subst su ot) g'
 
 -- instantiate :: AnnTypeR -> CGEnv -> RefType -> CGM RefType
 instantiate l g fn ft 

@@ -18,6 +18,7 @@ module Language.Nano.Types (
   -- * Located Values
   , Located (..) 
   , IsLocated (..)
+  , sourcePos
 
   -- * Accessing Spec Annotations
   , getSpec
@@ -96,7 +97,6 @@ data Config
 -- | Tracking Source Code Locations --------------------------------- 
 ---------------------------------------------------------------------
 
-
 data Located a
   = Loc { loc :: !SourceSpan
         , val :: a
@@ -109,6 +109,8 @@ instance Functor Located where
 --------------------------------------------------------------------------------
 -- | `IsLocated` is a predicate for values which we have a SourceSpan
 --------------------------------------------------------------------------------
+
+sourcePos = sp_begin . srcPos 
 
 class IsLocated a where 
   srcPos :: a -> SourceSpan
@@ -125,15 +127,11 @@ instance IsLocated SourceSpan where
 instance IsLocated (Located a) where 
   srcPos = loc
 
--- instance (IsLocated a, HasAnnotation t) => IsLocated (t a) where 
---   srcPos = srcPos . getAnnotation
-
 instance IsLocated a => IsLocated (Id a) where 
   srcPos (Id x _) = srcPos x
 
 instance (HasAnnotation thing, IsLocated a) => IsLocated (thing a) where 
   srcPos  = srcPos . getAnnotation  
-
 
 instance IsLocated F.Symbol where 
   srcPos _ = srcPos dummySpan

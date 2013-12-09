@@ -653,6 +653,10 @@ instance Eq (Annot a SourceSpan) where
 instance IsLocated (Annot a SourceSpan) where 
   srcPos = ann
 
+instance IsLocated TCon where
+  srcPos (TDef z) = srcPos z
+  srcPos _        = srcPos dummySpan
+
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)       = text "phi"  <+> pp x
   pp (LoopPhiVar xs)  = text "loopphi ("  

@@ -118,11 +118,12 @@ tcNano :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fa
 tcNano p@(Nano {code = Src fs}) 
   = do checkTypeDefs p
        (fs', _) <- tcStmts (initEnv p) fs
-       m0       <- M.unions <$> getAllAnns
-       let m     = tracePP "tcNano SHOWME ANNS" m0
+       ms       <- getAllAnns
+       let m     = tracePP "tcNano POST UNIONS: " $ concatMaps $ tracePP "tcNano PRE UNIONS: " ms 
        let p'    = p {code = patchAnn m <$> Src fs'}
        whenLoud  $ (getSubst >>= traceCodePP p' m)
        return (m, p')
+
 
 patchAnn m (Ann l fs) = Ann l $ sortNub $ fs' ++ fs
   where
@@ -204,10 +205,9 @@ tcFun γ s@(FunctionStmt l f xs body)
 
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
-tcFun1 γ l f xs body (i, (αs,ts,t)) = gatherAnns $ tcFunBody γ' l f body t
+tcFun1 γ l f xs body (i, (αs,ts,t)) = accumAnn annCheck $ tcFunBody γ' l f body t
   where 
     γ'                              = envAddFun l f i αs xs ts t γ 
-    gatherAnns                      = accumAnn annCheck 
     annCheck                        = catMaybes . map (validInst γ') . M.toList
 
 tcFunBody γ l f body t

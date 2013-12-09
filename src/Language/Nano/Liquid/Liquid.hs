@@ -378,7 +378,7 @@ consExpr g (BracketRef l e i) = do
     -- bt x = { number | ((0 <= v) && (v < (len x)))}
     bt x = setRTypeR tInt (F.predReft $ F.PAnd [lo, hi x])
     lo   = F.PAtom F.Le (F.ECon $ F.I 0) v                             -- 0 <= v
-    hi x = F.PAtom F.Lt v (F.EApp (F.stringSymbol "len") [F.eVar $ x]) -- v < len va
+    hi x = F.PAtom F.Lt v (F.EApp (rawStringSymbol "len") [F.eVar $ x]) -- v < len va
     v    = F.eVar $ F.vv Nothing
 
 
@@ -536,7 +536,7 @@ consArr l g (Just t@(TArr ta _)) es = do
     v            = rTypeValueVar t
     lenReft      = F.Reft (v, [F.RConc lenPred])
     lenPred      = F.PAtom F.Eq (F.expr $ length es) 
-                    (F.EApp (F.stringSymbol "len") [F.eVar $ v])
+                    (F.EApp (rawStringSymbol "len") [F.eVar $ v])
 
 consArr l _ Nothing _  = die $ errorMissingAnnot (srcPos l) "array literal" 
 consArr l _ (Just _) _ = die $ errorBadAnnot     (srcPos l) "array literal" "array" 

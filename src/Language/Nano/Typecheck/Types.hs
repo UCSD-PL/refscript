@@ -204,11 +204,13 @@ ofType = fmap (const F.top)
 -- | `calleeType` uses the types at the callsite to extract the appropriate
 --   conjunct from an intersection.
 
-calleeType l ts ft@(TAnd fts) = fromMaybe uhOh $ L.find (argsMatch ts) fts
-  where 
-    uhOh                      = die $ errorNoMatchCallee (srcPos l) ts ft
+calleeType l ts ft@(TAnd fts) = L.find (argsMatch ts) fts
+calleeType _ _ ft             = Just ft
 
-calleeType _ _ ft             = ft
+-- calleeType l ts ft@(TAnd fts) = fromMaybe uhOh $ L.find (argsMatch ts) fts
+--   where 
+--     uhOh                      = die $ errorNoMatchCallee (srcPos l) ts ft
+-- calleeType _ _ ft             = ft
 
 -- | `argsMatch ts ft` holds iff the arg-types in `ft` are identical to `ts` ... 
 argsMatch :: [RType a] -> RType b -> Bool

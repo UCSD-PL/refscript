@@ -396,18 +396,14 @@ tcExpr γ e@(VarRef l x)
       Nothing -> logError (errorUnboundIdEnv (ann l) x (tce_env γ)) (e, tErr)
       Just z  -> return $ (e, z)
 
-tcExpr γ (PrefixExpr l o e)
-  = do ([e'], z) <- tcCall γ l o [e] (prefixOpTy o $ tce_env γ)
-       return (PrefixExpr l o e', z)
+tcExpr γ e@(PrefixExpr _ _ _)
+  = tcCallExpr γ e 
 
-tcExpr γ (InfixExpr l o e1 e2)        
-  = do ([e1', e2'], z) <- tcCall γ l o [e1, e2] (infixOpTy o $ tce_env γ)
-       return (InfixExpr l o e1' e2', z)
+tcExpr γ e@(InfixExpr _ _ _ _)
+  = tcCallExpr γ e 
 
-tcExpr γ (CallExpr l e es)
-  = do (e', z)   <- tcExpr' γ e 
-       (es', z') <- tcCall γ l e es z
-       return       (CallExpr l e' es', z')
+tcExpr γ e@(CallExpr _ _ _)
+  = tcCallExpr γ e 
 
 tcExpr γ (ObjectLit l bs) 
   = do let (ps, es)  = unzip bs
@@ -444,18 +440,55 @@ tcExpr γ (Cast l@(Ann loc fs) e)
 tcExpr _ e 
   = convertError "tcExpr" e
 
-----------------------------------------------------------------------------------
-tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 
-  TCEnv r -> AnnSSA r -> fn -> [ExprSSAR r] -> RType r -> TCM r ([ExprSSAR r], RType r)
-----------------------------------------------------------------------------------
 
-tcCall γ l fn es ft0
+---------------------------------------------------------------------------------------
+tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 
+  TCEnv r -> AnnSSA r -> fn -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
+---------------------------------------------------------------------------------------
+
+-- tcCall γ (PrefixExpr l o e)
+--   = do ([e'], z) <- tcCall γ l o [e] (prefixOpTy o $ tce_env γ)
+--        return (PrefixExpr l o e', z)
+-- 
+-- tcCall γ (InfixExpr l o e1 e2)        
+--   = do ([e1', e2'], z) <- tcCall γ l o [e1, e2] (infixOpTy o $ tce_env γ)
+--        return (InfixExpr l o e1' e2', z)
+--
+-- tcCall γ (CallExpr l e es)
+--   = do (e', z)   <- tcExpr' γ e 
+--        (es', z') <- tcCall γ l e es z
+--        return       (CallExpr l e' es', z')
+
+tcCall γ ex@(PrefixExpr l o e)        
+  = do z                      <- tcCallMatch γ l o [e] (prefixOpTy o $ tce_env γ) 
+       case z of
+         Just ([e'], t)       -> return (PrefixExpr l o e', t)
+         Nothing              -> addDeadCast γ ex 
+
+tcCall γ ex@(InfixExpr l o e1 e2)        
+  = do z                      <- tcCallMatch γ l o [e1, e2] (infixOpTy o $ tce_env γ) 
+       case z of
+         Just ([e1', e2'], t) -> return (InfixExpr l o e1' e2', t)
+         Nothing              -> addDeadCast γ ex 
+
+tcCall γ ex@(CallExpr l e es)
+  = do (e', ft0)              <- tcExpr' γ e
+       z                      <- tcCallMatch γ e es ft0
+       case z of
+         Just (es', t)        -> return (CallExpr l e' es', t)
+         Nothing              -> addDeadCast γ ex
+
+addDeadCast γ e = undefined 
+
+tcCallMatch γ l fn es ft0
   = do -- Typecheck arguments
-       ets           <- mapM (tcExpr' γ) es
-       let (es', ts)  = unzip ets
+       (es', ts)     <- unzip <$> mapM (tcExpr' γ) es
        -- Extract callee type (if intersection: match with args)
-       let ft         = calleeType l ts ft0
-       let ξ          = tce_ctx γ
+       maybe (return Nothing) (fmap Just . tcCallCase γ l fn es' ts) $ calleeType l ts ft0
+
+tcCallCase γ l fn es' ts ft 
+  = do let ξ          = tce_ctx γ
+       -- Generate fresh type parameters
        (_,ibs,ot)    <- instantiate l ξ fn ft
        let its        = b_type <$> ibs
        -- Unify with formal parameter types

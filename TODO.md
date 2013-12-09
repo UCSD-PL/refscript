@@ -93,45 +93,23 @@ Failing Test Triage
  [feature: object annotation]      liquid/pos/simple/obj-00.js
  [feature: object-dynamic-lookup]  liquid/pos/objects/obj-03.js
 
-  
- 
- 
-
-
 RJ TODO
 -------
     + add support for string +    (liquid/pos/operators/add-0{3,4,5}.js)
-    + intersections
+    + intersections <------------------- HEREHEREHERE
     + add support for array-write (liquid/pos/arrays/arr-04.js)
     + add support for predicate aliases
 
 Intersections
 -------------
 
-Allow intersection types
 
-    * limited to top level intersections for functions
-    * no type parameters
-    * will be ordered
+Add DEADCAST when there is no matching conjunct
 
-    + test [test/liquid/pos/operators/add-07.js]
-    + RType
-    + Parser
-    + Visitors
+    - nanojs tc -v tests/liquid/pos/misc/negate-06.js
+    - nanojs tc -v tests/liquid/pos/misc/intersect-dead-00.js
 
-      
-    Need to guard cast by context    
-    - data Context
-    - data Annot = Cast [(Context, Type)]
-
-                                                  <------------------------------ HEREHEREHEREHEREHERE
-    - tcFun         : extend context      
-    - cast-sites    : add context to guard
-    - consFun       : extend context       
-    - consUpCast    : filter-by-context
-    - consDownCast  : filter-by-context
-    - consDeadCast  : filter-by-context
-    - splitC
+    + DEADCAST ... <------------------------------ HEREHEREHEREHEREHERE
 
 
 Scrape Qualifiers

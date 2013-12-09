@@ -55,7 +55,7 @@ verifyFile :: FilePath -> IO (UAnnSol a, F.FixResult Error)
 verifyFile f = do 
   nano    <- parseNanoFromFile f
   V.whenLoud $ donePhase FM.Loud "Parse"
-  putStrLn . render . pp $ nano
+  V.whenLoud $ putStrLn . render . pp $ nano
   let nanoSsa = ssaTransform nano
   V.whenLoud $ donePhase FM.Loud "SSA Transform"
   V.whenLoud $ putStrLn . render . pp $ nanoSsa
@@ -75,12 +75,8 @@ safe (anns, Nano {code = Src fs})
        return     $ F.Safe `mappend` failCasts nfc fs -- anns 
 
 
-
--- failCasts False anns = F.Unsafe $ concatMap castErrors $ annotCasts anns
-failCasts True  _    = F.Safe
--- RJ: revert if the damn queries don't work: 
--- failCasts False fs   = F.Unsafe $ concatMap castErrors $ annotCasts anns
-failCasts False fs   = F.Unsafe $ concatMap castErrors $ getCasts fs 
+failCasts True  _  = F.Safe
+failCasts False fs = applyNonNull F.Safe F.Unsafe $ concatMap castErrors $ getCasts fs 
 
 getCasts       :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r)]
 getCasts stmts = everything (++) ([] `mkQ` f) stmts
@@ -94,10 +90,6 @@ castErrors (Ann l facts) = downErrors ++ deadErrors
   where 
     downErrors           = [errorDownCast l t | TCast _ (DCST t) <- facts]
     deadErrors           = [errorDeadCast l   | TCast _ (DC _)   <- facts]
-
--- castErrors (loc, TCast _ (DCST t)) = [errorDownCast loc t]
--- castErrors (loc, TCast _ (DC _))   = [errorDeadCast loc]
--- castErrors _                       = []
 
 printAnn (Ann l []) = return () 
 printAnn (Ann l fs) = putStrLn $ printf "At %s: %s" (ppshow l) (ppshow fs)
@@ -118,16 +110,14 @@ tcNano :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fa
 tcNano p@(Nano {code = Src fs}) 
   = do checkTypeDefs p
        (fs', _) <- tcStmts (initEnv p) fs
-       ms       <- getAllAnns
-       let m     = tracePP "tcNano POST UNIONS: " $ concatMaps $ tracePP "tcNano PRE UNIONS: " ms 
+       m        <- concatMaps <$> getAllAnns
        let p'    = p {code = patchAnn m <$> Src fs'}
        whenLoud  $ (getSubst >>= traceCodePP p' m)
        return (m, p')
 
-
 patchAnn m (Ann l fs) = Ann l $ sortNub $ fs' ++ fs
   where
-    fs'               = {- tracePP ("patchAnn: l" ++ ppshow (srcPos l)) $ -} M.lookupDefault [] l m
+    fs'               = M.lookupDefault [] l m
 
 initEnv pgm           = TCE (specs pgm) emptyContext
 traceCodePP p m s     = trace (render $ codePP p m s) $ return ()
@@ -155,7 +145,7 @@ checkTypeDefs pgm = reportAll $ grep
     report t  = tcError $ errorUnboundType (srcPos t) t
 
     -- There should be no undefined type constructors
-    grep :: [Id SourceSpan] = everything (++) ([] `mkQ` g) ds
+    grep :: [Id SourceSpan]        = everything (++) ([] `mkQ` g) ds
     g (TDef i) | not $ envMem i ts = [i]
     g _                            = [ ]
   

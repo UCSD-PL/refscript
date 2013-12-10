@@ -2,10 +2,10 @@
 /*@ qualif EqLen(v:a, xs:b)       : (len v) = (len xs)            */
 /*@ qualif SumLen(v:a, xs:b, ys:c): (len v) = (len xs) + (len ys) */
 
-/*@ reverse :: forall A. (xs:list [A]) => {v:list [A] | (len v) = (len xs)} */
+/*@ reverse :: forall A. (xs:list [A] + null) => {v:list [A] + null | (len v) = (len xs)} */
 function reverse(xs){
 
-  /*@ go :: (list [A], list[A]) => list [A] */ 
+  /*@ go :: (list[A] + null, list[A] + null) => list[A] + null */ 
   function go(acc, ys){
     if (empty(ys)){
       return acc;

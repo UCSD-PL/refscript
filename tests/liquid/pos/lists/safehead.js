@@ -1,11 +1,11 @@
 
 
-/*@ map :: forall A B. ((A) => B, {xs: list [A] + null | 0 <= (len xs)}) => {v: list [B] | (len v) = (len xs)} + null */
-function map(f, xs){
+/*@ getHead :: (list[number] + null) => {number | true} */
+function getHead(xs){
   if (empty(xs)) {
-    return nil();
+    return 1;
   }
-  return cons(f(safehead(xs)), map(f, safetail(xs)));
+  return safehead(xs);
 }
 
 

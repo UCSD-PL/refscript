@@ -166,7 +166,7 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
         case tx of 
           -- NOTE: Atm assignment to non existing binding has no effect!
           TApp TUndef _ _ -> return $ Just g3
-          _ -> do withAlignedM (subTypeContainers' "e.x = e" l2 g3) t2 tx
+          _ -> do withAlignedM (subTypeContainers "e.x = e" l2 g3) t2 tx
                   return   $ Just g3
 
 -- e3[i] = e2
@@ -176,7 +176,7 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
         let t2   = tracePP (ppshow e2 ++ " ANF: " ++ ppshow x2) $ envFindTy x2 g2
             t3   = envFindTy x3 g3
         ti      <- safeGetIdx i t3
-        withAlignedM (subTypeContainers' "e[i] = e" l2 g3) t2 ti
+        withAlignedM (subTypeContainers "e[i] = e" l2 g3) t2 ti
         return   $ Just g3
 
 
@@ -254,7 +254,7 @@ consStmt g0 (WhileStmt l c b) =
     -- φ2: Φ vars at the end of the loop body
     (φ0, φ1, φ2)    = unzip3 [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
     tInv g xs       = freshTyPhisWhile (ann l) g xs (toType <$> (`envFindTy` g) <$> xs)
-    sub s g t t'    = subTypeContainers' ("While:" ++ s) l g t t'
+    sub s g t t'    = subTypeContainers ("While:" ++ s) l g t t'
 
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
@@ -267,8 +267,8 @@ consStmt g (ReturnStmt l (Just e))
         let te    = envFindTy xe g'
             rt    = envFindReturn g'
         if isTop rt
-          then withAlignedM (subTypeContainers l g') te (setRTypeR te (rTypeR rt))
-          else withAlignedM (subTypeContainers' "Return" l g') te rt
+          then withAlignedM (subTypeContainers "ReturnTop" l g') te (setRTypeR te (rTypeR rt))
+          else withAlignedM (subTypeContainers "Return" l g') te rt
         return Nothing
 
 -- return
@@ -304,7 +304,7 @@ consExprT g (Just ta) e = do
     checkElt g' $ envFindTy x g'
     return (x,g')
   where
-    checkElt g t = withAlignedM (subTypeContainers l g) t ta
+    checkElt g t = withAlignedM (subTypeContainers "consExprT" l g) t ta
     l = getAnnotation e
 
 consExprT g Nothing e = consExpr g e
@@ -369,7 +369,7 @@ consExpr g (BracketRef l e i) = do
     case (ta, ti) of
       (TArr _ _, TApp TInt _ _) -> do  
         t <- indexType ta
-        withAlignedM (subTypeContainers' "Bounds" l g'') (eSingleton tInt xi) (bt xe)
+        withAlignedM (subTypeContainers "Bounds" l g'') (eSingleton tInt xi) (bt xe)
         envAddFresh "consExpr:[IntLit]" l t g''
       _ -> errorstar $ "UNIMPLEMENTED[consExpr] " ++ 
                        "Can only use BracketRef to access array " ++
@@ -410,34 +410,22 @@ consCast g a e
     where 
       l              = srcPos a
 
--- consCast a (x, g)
---   = case envGetContextCast g a of
---       Nothing        -> return (x, g)
---       Just (UCST t)  -> consUpCast   g l x t
---       Just (DCST t)  -> consDownCast g l x t
---       Just (DC t)    -> consDeadCast g l   t
---     where 
---       l              = srcPos a
-
--- isCast l g a = isJust $ envGetContextCast l g a 
-
 ---------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------
 consUpCast g l x t 
   = do γ      <- getTDefs
        let tx  = (`strengthen` (F.symbolReft x)) $ fst $ alignTs γ (envFindTy x g) t
-       envAddFresh "consUpCast" l tx g
+       let tx' = tracePP "consUpCast: " tx
+       envAddFresh "consUpCast" l tx' g
 
 ---------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------
 consDownCast g l x t = 
   do γ   <- getTDefs
      tc  <- castTo l γ tx (toType t) 
-     withAlignedM (subTypeContainers' "Downcast" l g) tx tc
+     withAlignedM (subTypeContainers "Downcast" l g) tx tc
      g'  <- envAdds [(x, tc)] g
      return (x, g')
-     -- zog <- envAddFresh "consDownCast" l tc g'
-     --return $ tracePP "consDOWNCAST" zog 
   where 
      tx   = envFindTy x g
 
@@ -457,7 +445,7 @@ castStrengthen t1 t2
 ---------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------
 consDeadCast g l t 
-  = do subTypeContainers' "dead" l g tru fls
+  = do subTypeContainers "DeadCast" l g tru fls
        envAddFresh "consDeadCast" l t' g
     where
        tru = tTop
@@ -483,7 +471,7 @@ consCall g l fn es ft0
        let ft        = fromMaybe (err ts ft0) $ calleeType l ts ft0
        (_,its,ot)   <- instantiate l g fn ft
        let (su, ts') = renameBinds its xes
-       zipWithM_ (withAlignedM $ subTypeContainers' "call" l g') [envFindTy x g' | x <- xes] ts'
+       zipWithM_ (withAlignedM $ subTypeContainers "Call" l g') [envFindTy x g' | x <- xes] ts'
        envAddFresh "consCall" l (F.subst su ot) g'
     where
        err ts ft0    = die $ errorNoMatchCallee (srcPos l) ts ft0 
@@ -545,7 +533,7 @@ consArr l g (Just t@(TArr ta _)) es = do
     envAddFresh "consArr" l t' g'
   where 
     checkElts    = mapM_ . checkElt
-    checkElt g t = withAlignedM (subTypeContainers l g) t ta
+    checkElt g t = withAlignedM (subTypeContainers "ArrayConst" l g) t ta
     v            = rTypeValueVar t
     lenReft      = F.Reft (v, [F.RConc lenPred])
     lenPred      = F.PAtom F.Eq (F.expr $ length es) 

@@ -48,9 +48,13 @@ module Language.Nano.Liquid.CGMonad (
   , envGetContextTypArgs
 
   -- * Add Subtyping Constraints
-  , subTypes, subTypes', subType, subType'
-  , subTypeContainers, subTypeContainers'
-  , alignTsM, withAlignedM
+  , subTypes
+  , subType
+  , subTypeContainers
+
+  -- RJ: all alignment should already be done in TC why again?
+  -- , alignTsM
+  , withAlignedM
   , wellFormed
 
   , addInvariant
@@ -390,8 +394,8 @@ envJoin' l g g1 g2
         g1' <- envAdds (zip xs $ snd4 <$> t4) g1 
         g2' <- envAdds (zip xs $ thd4 <$> t4) g2
 
-        zipWithM_ (subTypeContainers l g1') [envFindTy x g1' | x <- xs] ts
-        zipWithM_ (subTypeContainers l g2') [envFindTy x g2' | x <- xs] ts
+        zipWithM_ (subTypeContainers "envJoin" l g1') [envFindTy x g1' | x <- xs] ts
+        zipWithM_ (subTypeContainers "envJoin" l g2') [envFindTy x g2' | x <- xs] ts
 
         return g'
 
@@ -460,7 +464,7 @@ freshTyArr l g t
 subTypes :: (IsLocated x, F.Expression x, F.Symbolic x) 
          => AnnTypeR -> CGEnv -> [x] -> [RefType] -> CGM ()
 ---------------------------------------------------------------------------------------
-subTypes l g xs ts = zipWithM_ (subType l g) [envFindTy x g | x <- xs] ts
+subTypes l g xs ts      = zipWithM_ (subType l g)      [envFindTy x g | x <- xs] ts
 
 
 subTypes' msg l g xs ts = zipWithM_ (subType' msg l g) [envFindTy x g | x <- xs] ts
@@ -479,7 +483,7 @@ subType l g t1 t2 =
      tt2   <- addInvariant t2
      tdefs <- getTDefs
      let s  = checkTypes tdefs tt1 tt2
-     modify $ \st -> st {cs = c s : (cs st)}
+     modify $ \st -> st {cs = (tracePP "subType: " $ c s) : (cs st)}
   where
     c      = uncurry $ Sub g (ci l)
     checkTypes tdefs t1 t2 | equivWUnions tdefs t1 t2 = (t1,t2)
@@ -505,9 +509,9 @@ equivWUnionsM t t' = getTDefs >>= \γ -> return $ equivWUnions γ t t'
 
 -- | Subtyping container contents: unions, objects. Includes top-level
 
--- `subTypeContainers` breaks down container types (unions and objects) to their
--- sub-parts and recursively creates subtyping constraints for these parts. It
--- returns simple subtyping for the rest of the cases (non-container types).
+-- `subTypeContainers'` breaks down container types (unions and objects) to their
+-- sub-parts and recursively creates subtyping constraints for these parts. 
+-- It returns simple subtyping for the rest of the cases (non-container types).
 --
 -- The top-level refinements of the container types strengthen the parts.
 --
@@ -518,21 +522,26 @@ equivWUnionsM t t' = getTDefs >>= \γ -> return $ equivWUnions γ t t'
 --
 --
 -- TODO: Will loop infinitely for cycles in type definitions
---
 -------------------------------------------------------------------------------
-subTypeContainers :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
+subTypeContainers :: (IsLocated l) => String -> l -> CGEnv -> RefType -> RefType -> CGM ()
 -------------------------------------------------------------------------------
-subTypeContainers l g (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _) | d == d' = 
+subTypeContainers msg l g t1 t2 = subTypeContainers' msg l g t1 (tracePP msg' t2)
+    where 
+      msg'                      = render $ text "subTypeContainers:" 
+                                           $+$ text "  t1 =" <+> pp t1
+                                           $+$ text "  t2 =" <+> pp t2
+
+subTypeContainers' msg l g (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _) | d == d' = 
   mapM_ (uncurry $ subTypeContainers' "def0" l g) $ zip ts ts'
 
-subTypeContainers l g t1 t2@(TApp (TDef _) _ _ ) = 
+subTypeContainers' msg l g t1 t2@(TApp (TDef _) _ _ ) = 
   unfoldSafeCG t2 >>= \t2' -> subTypeContainers' "subc def1" l g t1 t2'
 
-subTypeContainers l g t1@(TApp (TDef _) _ _ ) t2 = 
+subTypeContainers' msg l g t1@(TApp (TDef _) _ _ ) t2 = 
   unfoldSafeCG t1 >>= \t1' -> subTypeContainers' "subc def2" l g t1' t2
 
-subTypeContainers l g u1@(TApp TUn _ r1) u2@(TApp TUn _ r2) = 
-  getTDefs >>= \γ -> sbs $ bkPaddedUnion "subTypeContainers" γ u1 u2
+subTypeContainers' msg l g u1@(TApp TUn _ r1) u2@(TApp TUn _ r2) = 
+  getTDefs >>= \γ -> sbs $ bkPaddedUnion "subTypeContainers'" γ u1 u2
   where        
     -- Fix the ValueVar of the top-level refinement to be the same as the
     -- Valuevar of the part
@@ -543,7 +552,7 @@ subTypeContainers l g u1@(TApp TUn _ r1) u2@(TApp TUn _ r2) =
                                                        (t2 `strengthen` rr t2 r2)
     sbs ts       = mapM_ sb ts
 
-subTypeContainers l g (TArr t1 r1) (TArr t2 r2) = do
+subTypeContainers' msg l g (TArr t1 r1) (TArr t2 r2) = do
     subTypeContainers' "subc arr" l g (t1 `strengthen` rr t1 r1) 
                                       (t2 `strengthen` rr t2 r2)
     -- Array subtyping co- and contra-variant?                                    
@@ -560,7 +569,7 @@ subTypeContainers l g (TArr t1 r1) (TArr t2 r2) = do
 
 -- TODO: the environment for subtyping each part of the object should have the
 -- tyopes for the rest of the bindings
-subTypeContainers l g o1@(TObj _ r1) o2@(TObj _ r2) = 
+subTypeContainers' msg l g o1@(TObj _ r1) o2@(TObj _ r2) = 
     sbs $ bkPaddedObject o1 o2
   where
     sbs          = mapM_ sb
@@ -572,12 +581,9 @@ subTypeContainers l g o1@(TObj _ r1) o2@(TObj _ r2) =
     sb (t1 ,t2)  = subTypeContainers' "subc obj" l g (t1 `strengthen` rr t1 r1) 
                                          (t2 `strengthen` rr t2 r2)
 
-subTypeContainers l g t1 t2 = subType l g t1 t2
+-- RJ: SHOULD JUST HAVE THIS. REST SHOULD BE IN `splitC`
+subTypeContainers' msg l g t1 t2 = subType l g t1 t2
 
-
-subTypeContainers'   msg  l g t1 t2 = 
-  subTypeContainers l g ({- trace (printf "subTypeContainers[%s]:\n\t%s\n\t%s\n" 
-                                msg (ppshow t1) (ppshow t2)) -} t1) t2
 
 
 -------------------------------------------------------------------------------
@@ -589,8 +595,8 @@ alignTsM t t' = getTDefs >>= \g -> return $ alignTs g t t'
 -------------------------------------------------------------------------------
 withAlignedM :: (RefType -> RefType -> CGM a) -> RefType -> RefType -> CGM a
 -------------------------------------------------------------------------------
-withAlignedM f t t' = alignTsM t t' >>= uncurry f 
- 
+-- withAlignedM f t t' = alignTsM t t' >>= uncurry f 
+withAlignedM f = f 
 
 -- | Monadic unfolding
 -------------------------------------------------------------------------------
@@ -717,7 +723,7 @@ splitC' (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
 ---------------------------------------------------------------------------------------
 -- | Unions:
 -- We need to get the bsplitC for the top level refinements 
--- Nothing more should be added, the internal subtyping constrains have been
+-- Nothing more should be added, the internal subtyping constraints have been
 -- dealt with separately
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TApp TUn _ _) t2@(TApp TUn _ _)) =

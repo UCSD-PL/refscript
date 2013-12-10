@@ -323,8 +323,8 @@ consAsgn g x e
 ------------------------------------------------------------------------------------
 consExpr :: CGEnv -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ------------------------------------------------------------------------------------
-consExpr g (Cast a e) 
-  = consExpr g e >>= consCast a 
+consExpr g (Cast a e)
+  = consCast g a e
 
 consExpr g (IntLit l i)               
   = envAddFresh "consExpr:IntLit" l (eSingleton tInt i) g
@@ -340,7 +340,7 @@ consExpr g (NullLit l)
 
 consExpr g (VarRef i x)
   = do addAnnot l x t
-       return ({- trace ("consExpr:VarRef" ++ ppshow x ++ " : " ++ ppshow t)-} x, g) 
+       return (x, g) 
     where 
        t   = envFindTy x g
        l   = srcPos i
@@ -397,17 +397,27 @@ consExpr _ e
 
 
 -------------------------------------------------------------------------------------------------
-consCast :: AnnTypeR -> (Id AnnTypeR, CGEnv) -> CGM (Id AnnTypeR, CGEnv)
+consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 -------------------------------------------------------------------------------------------------
-consCast a (x', g)
+consCast g a e
   = case envGetContextCast g a of
-      Nothing        -> return (x, g)
-      Just (UCST t)  -> consUpCast   g l x $ tracePP "consUpCast"   t
-      Just (DCST t)  -> tracePP ("consDC2 @ " ++ ppshow x) <$> (consDownCast g l x $ tracePP ("consDC1" ++ ppshow x) t)
-      Just (DC t)    -> consDeadCast g l   $ tracePP "consDeadCast" t
+      Just (DC t) -> consDeadCast g l t
+      z           -> do (x, g') <- consExpr g e
+                        case z of
+                          Nothing        -> return (x, g')
+                          Just (UCST t)  -> consUpCast   g l x t
+                          Just (DCST t)  -> consDownCast g l x t
     where 
       l              = srcPos a
-      x              = tracePP ("consCast a = " ++ ppshow a) x'
+
+-- consCast a (x, g)
+--   = case envGetContextCast g a of
+--       Nothing        -> return (x, g)
+--       Just (UCST t)  -> consUpCast   g l x t
+--       Just (DCST t)  -> consDownCast g l x t
+--       Just (DC t)    -> consDeadCast g l   t
+--     where 
+--       l              = srcPos a
 
 -- isCast l g a = isJust $ envGetContextCast l g a 
 
@@ -448,10 +458,11 @@ castStrengthen t1 t2
 ---------------------------------------------------------------------------------------------
 consDeadCast g l t 
   = do subTypeContainers' "dead" l g tru fls
-       envAddFresh "consDeadCast" l t g
+       envAddFresh "consDeadCast" l t' g
     where
        tru = tTop
        fls = tTop `strengthen` F.predReft F.PFalse
+       t'  = t    `strengthen` F.predReft F.PFalse
 
 
 ---------------------------------------------------------------------------------------------
@@ -469,11 +480,13 @@ consCall :: (PP a)
 consCall g l fn es ft0 
   = do (xes, g')    <- consScan consExpr g es
        let ts        = [envFindTy x g' | x <- xes]
-       let ft        = calleeType l ts ft0
+       let ft        = fromMaybe (err ts ft0) $ calleeType l ts ft0
        (_,its,ot)   <- instantiate l g fn ft
        let (su, ts') = renameBinds its xes
        zipWithM_ (withAlignedM $ subTypeContainers' "call" l g') [envFindTy x g' | x <- xes] ts'
        envAddFresh "consCall" l (F.subst su ot) g'
+    where
+       err ts ft0    = die $ errorNoMatchCallee (srcPos l) ts ft0 
 
 -- instantiate :: AnnTypeR -> CGEnv -> RefType -> CGM RefType
 instantiate l g fn ft 

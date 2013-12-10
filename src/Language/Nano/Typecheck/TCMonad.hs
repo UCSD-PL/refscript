@@ -58,9 +58,9 @@ module Language.Nano.Typecheck.TCMonad (
   , unifyTypesM
 
   -- * Casts
-  -- , getCasts
   , castM
-  
+  , addDeadCast 
+
   -- * Get Type Signature 
   , getDefType 
 
@@ -287,9 +287,11 @@ getAnns = do θ     <- tc_subst <$> get
              return m' 
 
 -------------------------------------------------------------------------------
-addAnn :: SourceSpan -> Fact r -> TCM r () 
+-- addAnn :: (F.Reftable r) => SourceSpan -> Fact r -> TCM r () 
 -------------------------------------------------------------------------------
-addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
+addAnn l f = modify $ \st -> st { tc_anns = inserts l f' (tc_anns st) } 
+  where
+    f'     = tracePP ("addAnn: " ++ ppshow l) $ f
 
 -------------------------------------------------------------------------------
 getAllAnns :: TCM r [AnnInfo r]  

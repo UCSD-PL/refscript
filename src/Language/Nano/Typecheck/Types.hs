@@ -75,7 +75,8 @@ module Language.Nano.Typecheck.Types (
   -- * Operator Types
   , infixOpTy
   , prefixOpTy 
-  
+  , builtinOpTy
+
   -- * Annotations
   , Annot (..)
   , UFact
@@ -722,6 +723,15 @@ isArr _           = False
 -- | Operator Types ---------------------------------------------------
 -----------------------------------------------------------------------
 
+-----------------------------------------------------------------------
+builtinOpTy       :: SourceSpan -> BuiltinOp -> Env t -> t
+-----------------------------------------------------------------------
+builtinOpTy l o g = fromMaybe err $ envFindTy ox g
+  where 
+    err           = die $ bugUnknown (srcPos l) "builtinOp" o
+    ox            = builtinOpId o
+ 
+builtinOpId Undefined = builtinId "OpUndefined"
 
 -----------------------------------------------------------------------
 infixOpTy :: InfixOp -> Env t -> t 

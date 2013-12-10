@@ -47,6 +47,9 @@ module Language.Nano.Types (
   , srcSpanEndLine
   , srcSpanStartCol
   , srcSpanEndCol
+  
+  -- * Builtin Operators
+  , BuiltinOp (..)
 
   ) where
 
@@ -462,3 +465,13 @@ srcSpanStartCol  = thd3 . sourcePosElts . sp_start . sourceSpanSrcSpan
 srcSpanEndCol    = thd3 . sourcePosElts . sp_stop  . sourceSpanSrcSpan 
 srcSpanFile      = fst3 . sourcePosElts . sp_start . sourceSpanSrcSpan
 
+
+---------------------------------------------------------------------------------
+-- | New Builtin Operators ------------------------------------------------------
+---------------------------------------------------------------------------------
+
+data BuiltinOp = Undefined
+                 deriving (Eq, Ord, Show)
+
+instance PP BuiltinOp where
+  pp = text . show 

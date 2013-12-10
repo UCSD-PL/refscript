@@ -66,9 +66,11 @@ Library
                        Language.Nano.Env
                        Language.Nano.Misc
                        Language.Nano.Annots
+                       Language.Nano.CmdLine
                        Paths_nano_js
                        Language.Nano.SSA.SSAMonad
                        Language.Nano.SSA.SSA
+                       Language.Nano.Typecheck.Unify
                        Language.Nano.Typecheck.Types
                        Language.Nano.Typecheck.Parse
                        Language.Nano.Typecheck.TCMonad

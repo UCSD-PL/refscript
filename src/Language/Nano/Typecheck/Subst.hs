@@ -135,6 +135,10 @@ instance (PP r, F.Reftable r) => Substitutable r (Fact r) where
   apply _ x@(LoopPhiVar _) = x
   apply θ (TAnnot t)       = TAnnot  $ apply θ t
 
+
+instance (PP r, F.Reftable r) => Substitutable r (Annot (Fact r) z) where
+  apply θ (Ann z fs)       = Ann z $ apply θ fs
+
 instance Free (Cast (RType r)) where
   free = free . castTarget 
 

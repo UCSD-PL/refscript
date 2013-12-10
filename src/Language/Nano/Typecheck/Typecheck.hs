@@ -69,10 +69,10 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
                  forM_ errs (putStrLn . ppshow) 
                  return $ F.Unsafe errs
 
-safe (anns, Nano {code = Src fs})
+safe (_, Nano {code = Src fs})
   = do V.whenLoud $ forM_ fs $ T.mapM printAnn
        nfc       <- noFailCasts <$> getOpts
-       return     $ F.Safe `mappend` failCasts nfc fs -- anns 
+       return     $ F.Safe `mappend` failCasts nfc fs 
 
 
 failCasts True  _  = F.Safe
@@ -91,7 +91,7 @@ castErrors (Ann l facts) = downErrors ++ deadErrors
     downErrors           = [errorDownCast l t | TCast _ (DCST t) <- facts]
     deadErrors           = [errorDeadCast l   | TCast _ (DC _)   <- facts]
 
-printAnn (Ann l []) = return () 
+printAnn (Ann _ []) = return () 
 printAnn (Ann l fs) = putStrLn $ printf "At %s: %s" (ppshow l) (ppshow fs)
 
 
@@ -111,13 +111,18 @@ tcNano p@(Nano {code = Src fs})
   = do checkTypeDefs p
        (fs', _) <- tcStmts (initEnv p) fs
        m        <- concatMaps <$> getAllAnns
-       let p'    = p {code = patchAnn m <$> Src fs'}
-       whenLoud  $ (getSubst >>= traceCodePP p' m)
+       θ        <- getSubst
+       let p'    = p {code = (patchAnn m . apply θ) <$> Src fs'}
+       whenLoud  $ (traceCodePP p' m θ)
        return (m, p')
 
-patchAnn m (Ann l fs) = Ann l $ sortNub $ fs' ++ fs
+patchAnn m (Ann l fs) = Ann l $ sortNub $ fs' ++ fs 
   where
     fs'               = M.lookupDefault [] l m
+    -- fs''              = tracePP (printf "patchAnn l = %s fs' = %s, fs = %s" (ppshow l) (ppshow fs') (ppshow fs)) 
+    --                        $ fs' ++ fs
+
+
 
 initEnv pgm           = TCE (specs pgm) emptyContext
 traceCodePP p m s     = trace (render $ codePP p m s) $ return ()
@@ -187,7 +192,7 @@ tcEnvFindReturn              = envFindReturn . tce_env
 -------------------------------------------------------------------------------
 
 -- tcFun    :: (F.Reftable r) => Env (RType r) -> FunctionStatement (AnnSSA r) -> TCM r (TCEnv r)
-tcFun γ s@(FunctionStmt l f xs body)
+tcFun γ (FunctionStmt l f xs body)
   = do ft    <- getDefType f
        let γ' = tcEnvAdds [(f, ft)] γ
        body' <- foldM (tcFun1 γ' l f xs) body $ funTys l f xs ft
@@ -283,7 +288,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 
 
 -- e
-tcStmt γ s@(ExprStmt l e)   
+tcStmt γ (ExprStmt l e)   
   = do (e', _) <- tcExpr' γ e 
        return (ExprStmt l e', Just γ) 
 
@@ -397,13 +402,13 @@ tcExpr γ e@(VarRef l x)
       Just z  -> return $ (e, z)
 
 tcExpr γ e@(PrefixExpr _ _ _)
-  = tcCallExpr γ e 
+  = tcCall γ e 
 
 tcExpr γ e@(InfixExpr _ _ _ _)
-  = tcCallExpr γ e 
+  = tcCall γ e 
 
 tcExpr γ e@(CallExpr _ _ _)
-  = tcCallExpr γ e 
+  = tcCall γ e 
 
 tcExpr γ (ObjectLit l bs) 
   = do let (ps, es)  = unzip bs
@@ -442,8 +447,7 @@ tcExpr _ e
 
 
 ---------------------------------------------------------------------------------------
-tcCall :: (Ord r, F.Reftable r, PP r, PP fn) => 
-  TCEnv r -> AnnSSA r -> fn -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
+tcCall :: (Ord r, F.Reftable r, PP r) => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 ---------------------------------------------------------------------------------------
 
 -- tcCall γ (PrefixExpr l o e)
@@ -463,22 +467,23 @@ tcCall γ ex@(PrefixExpr l o e)
   = do z                      <- tcCallMatch γ l o [e] (prefixOpTy o $ tce_env γ) 
        case z of
          Just ([e'], t)       -> return (PrefixExpr l o e', t)
-         Nothing              -> addDeadCast γ ex 
+         Nothing              -> deadCast (srcPos l) γ ex 
 
 tcCall γ ex@(InfixExpr l o e1 e2)        
   = do z                      <- tcCallMatch γ l o [e1, e2] (infixOpTy o $ tce_env γ) 
        case z of
          Just ([e1', e2'], t) -> return (InfixExpr l o e1' e2', t)
-         Nothing              -> addDeadCast γ ex 
+         Nothing              -> deadCast (srcPos l) γ ex 
 
 tcCall γ ex@(CallExpr l e es)
   = do (e', ft0)              <- tcExpr' γ e
-       z                      <- tcCallMatch γ e es ft0
+       z                      <- tcCallMatch γ l e es ft0
        case z of
          Just (es', t)        -> return (CallExpr l e' es', t)
-         Nothing              -> addDeadCast γ ex
+         Nothing              -> deadCast (srcPos l) γ ex
 
-addDeadCast γ e = undefined 
+tcCall γ e
+  = die $ bug (srcPos e) $ "tcCall: cannot handle" ++ ppshow e        
 
 tcCallMatch γ l fn es ft0
   = do -- Typecheck arguments
@@ -505,6 +510,19 @@ instantiate l ξ fn ft
        maybe err return $ bkFun t'
     where
        err = die   $ errorNonFunction (ann l) fn ft
+
+
+deadCast l γ e 
+  = do t'    <- freshTyArgs (srcPos l) ξ [α] t 
+       e'    <- addDeadCast ξ e t'
+       return   (e', t') 
+    where 
+      (α, t)  = undefType l γ
+      ξ       = tce_ctx γ
+
+undefType l γ  = case bkAll $ builtinOpTy l Undefined $ tce_env γ of
+                   ([α], t) -> (α, t)
+                   _        -> die $ bug (srcPos l) "Malformed type for Undefined in prelude.js"
 
 ----------------------------------------------------------------------------------
 tcArray :: (Ord r, PP r, F.Reftable r) =>

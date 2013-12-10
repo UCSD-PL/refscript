@@ -10,7 +10,7 @@ function foo(x){
  */
 function negate(x) {
   if (typeof(x) == "number") {
-    return crash(); // foo(x);
+    return foo(x);
   }
   return x;
 }

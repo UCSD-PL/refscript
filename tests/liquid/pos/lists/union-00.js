@@ -1,5 +1,5 @@
-/*@ qualif Len1(v:a)               : 0 <= (len xs)                 */
-/*@ qualif Len2(v:a)               : 0 <  (len xs)                 */
+/*@ qualif Len1(v:a)               : 0 <= (len v)                 */
+/*@ qualif Len2(v:a)               : 0 <  (len v)                 */
 
 /*@ foo :: forall A. (list[A] + null) => number */
 function foo(xs){

@@ -270,7 +270,7 @@ envGetContextTypArgs g a αs
 envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 
 ---------------------------------------------------------------------------------------
 envAddFresh s  l t g 
-  = do x  <- tracePP ("envAddFresh: " ++ s ++ ": "++ ppshow loc) <$> freshId loc
+  = do x  <- freshId loc
        g' <- envAdds [(x, t)] g
        return (x, g')
     where loc = srcPos l

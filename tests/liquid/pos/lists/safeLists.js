@@ -2,16 +2,15 @@
 /*@ qualif EqLen(v:a, xs:b)       : (len v) = (len xs)            */
 /*@ qualif SumLen(v:a, xs:b, ys:c): (len v) = (len xs) + (len ys) */
 
-
-/*@ map :: forall A B. ((A) => B, list [A]) => list [B] */
+/*@ map :: forall A B. ((A) => B, xs:list[A] + null) => {v:list[B]+null | (len v) = (len xs)} */
 function map(f, xs){
   if (empty(xs)) {
     return nil();
-  }
+  } 
   return cons(f(safehead(xs)), map(f, safetail(xs)));
 }
 
-/*@ append :: forall A. (list [A], list [A]) => list [A] */
+/*@ append :: forall A. (list [A] + null, list [A] + null) => list [A] + null */
 function append(xs, ys){
   if (empty(xs)) {
     return ys;
@@ -22,10 +21,10 @@ function append(xs, ys){
   }
 }
 
-/*@ reverse :: forall A. (list [A]) => list [A] */
+/*@ reverse :: forall A. (list [A] + null) => list [A] + null */
 function reverse(xs){
 
-  /*@ go :: (list [A], list[A]) => list [A] */ 
+  /*@ go :: (list [A] + null, list[A] + null) => list[A] + null */ 
   function go(acc, ys){
     if (empty(ys)){
       return acc;
@@ -39,7 +38,7 @@ function reverse(xs){
 }
 
 
-/*@ makeList :: (number) => list [number] */
+/*@ makeList :: (number) => list[number] + null */
 function makeList(n){
   if (n <= 0){
     return nil();

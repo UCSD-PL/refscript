@@ -66,16 +66,53 @@ Failed 16 tests:
  liquid/pos/lists/safemap.js,
  liquid/pos/lists/safereverse.js,
  liquid/pos/loops/obj-02.js,
- liquid/pos/loops/while-03.js,
  liquid/pos/misc/apply.js,
  liquid/pos/misc/twice-hof.js,
  liquid/pos/objects/obj-03.js,
- liquid/pos/operators/sum-00.js,
- liquid/pos/operators/sum-01.js,
- liquid/pos/operators/sum-02.js,
  liquid/pos/operators/sum-infer-00.js,
  liquid/pos/simple/obj-00.js
+
+
+Exceptions thrown on 26 tests:
+ [ARRAY]
+ liquid/pos/arrays/arr-00.js,
+ liquid/pos/arrays/arr-01.js,
+ liquid/pos/arrays/arr-02.js,
+ liquid/pos/arrays/arr-03.js,
+ liquid/pos/arrays/arr-04.js,
  
+ [FIELD]
+ liquid/pos/arrays/safemap.js,
+
+ [LIST+NULL ISSUE]
+ liquid/pos/lists/safeLists.js,
+ liquid/pos/lists/safemap.js,
+ liquid/pos/lists/safereverse.js,
+
+ liquid/pos/loops/obj-00.js,
+ liquid/pos/loops/obj-02.js,
+ 
+ [RIGID-VAR]
+ liquid/pos/misc/apply.js,
+ liquid/pos/misc/cousot-01.js,
+ liquid/pos/misc/twice-hof.js,
+
+ [OBJ]
+ liquid/pos/objects/obj-01.js,
+ liquid/pos/objects/obj-02.js,
+ liquid/pos/objects/obj-03.js,
+ liquid/pos/objects/obj-04.js,
+ liquid/pos/objects/obj-05.js,
+ liquid/pos/objects/update-00.js,
+ liquid/pos/objects/update-01.js,
+ liquid/pos/objects/update-02.js,
+ liquid/pos/objects/update-03.js,
+ liquid/pos/simple/obj-00.js,
+ 
+ [ARRAY]
+ liquid/pos/simple/parse-01.js
+
+
 Failing Test Triage
 -------------------
 

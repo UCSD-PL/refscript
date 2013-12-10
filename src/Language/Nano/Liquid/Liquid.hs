@@ -405,8 +405,8 @@ consCast g a e
       z           -> do (x, g') <- consExpr g e
                         case z of
                           Nothing        -> return (x, g')
-                          Just (UCST t)  -> consUpCast   g l x t
-                          Just (DCST t)  -> consDownCast g l x t
+                          Just (UCST t)  -> consUpCast   g' l x t
+                          Just (DCST t)  -> consDownCast g' l x t
     where 
       l              = srcPos a
 

@@ -289,9 +289,7 @@ getAnns = do θ     <- tc_subst <$> get
 -------------------------------------------------------------------------------
 -- addAnn :: (F.Reftable r) => SourceSpan -> Fact r -> TCM r () 
 -------------------------------------------------------------------------------
-addAnn l f = modify $ \st -> st { tc_anns = inserts l f' (tc_anns st) } 
-  where
-    f'     = tracePP ("addAnn: " ++ ppshow l) $ f
+addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
 
 -------------------------------------------------------------------------------
 getAllAnns :: TCM r [AnnInfo r]  

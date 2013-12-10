@@ -118,9 +118,7 @@ tcNano p@(Nano {code = Src fs})
 
 patchAnn m (Ann l fs) = Ann l $ sortNub $ fs' ++ fs 
   where
-    fs'               = M.lookupDefault [] l m
-    -- fs''              = tracePP (printf "patchAnn l = %s fs' = %s, fs = %s" (ppshow l) (ppshow fs') (ppshow fs)) 
-    --                        $ fs' ++ fs
+    fs'               = [f | f@(TypInst _ _) <- M.lookupDefault [] l m]
 
 
 

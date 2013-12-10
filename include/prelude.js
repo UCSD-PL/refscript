@@ -73,19 +73,18 @@ function pos(){
 
 /*@ measure len :: forall A. (list [A]) => number                                                 */
 
-/*@ cons  :: forall A. (A, list[A] + null) => list [A]                                            */
-/*@ nil   :: () => null                                                                           */
+/*@ cons  :: forall A. (A, xs:list[A] + null) => {list[A] | (len v) = 1 + (len xs)}               */
+/*@ nil   :: () => { null | (len v) = 0}                                                           */
 /*@ head  :: forall A. (xs:list [A]) => A                                                         */
 /*@ tail  :: forall A. (xs:list [A]) => list [A] + null                                           */
 /*@ nth   :: forall A. (xs:list [A], {i:number| ((0 <= i) && i < (len xs))}) => A                 */
 /*@ empty :: forall A. (xango: list[A] + null ) => 
-                        {v: boolean | ((Prop v) <=> (ttag(xango) = "null"))}                      */
+                        {v: boolean | ((Prop v) <=> (len(v) = 0 && ttag(xango) = "null"))}                      */
 /*@ emptyPoly :: forall A. (x:A) => {v: boolean | ((Prop v) <=> ((ttag x) = "null"))}             */
 
-
-/*@ length   :: forall A. (xs:list [A]) => {v:number | ((v >= 0) && v = (len xs))}                */
-/*@ safehead :: forall A. ({xs:list [A] | (len xs) > 0}) => A                                     */
-/*@ safetail :: forall A. ({xs:list [A] | (len xs) > 0}) => {v:list [A] | (len v) = (len xs) - 1} */
+/*@ length   :: forall A. (xs:list[A] + null) => {v:number | ((v >= 0) && v = (len xs))}         */
+/*@ safehead :: forall A. ({xs:list[A] | (len xs) > 0}) => A                                     */
+/*@ safetail :: forall A. ({xs:list[A] | (len xs) > 0}) => {v:list [A] | (len v) = (len xs) - 1} */
 
 /*@ Array    :: (n : { v: number | 0 <= v } ) => { v: [ undefined ] | (len v) = n }               */
 

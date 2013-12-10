@@ -83,8 +83,8 @@ function pos(){
 /*@ emptyPoly :: forall A. (x:A) => {v: boolean | ((Prop v) <=> ((ttag x) = "null"))}             */
 
 /*@ length   :: forall A. (xs:list[A] + null) => {v:number | ((v >= 0) && v = (len xs))}         */
-/*@ safehead :: forall A. ({xs:list[A] | (len xs) > 0}) => A                                     */
-/*@ safetail :: forall A. ({xs:list[A] | (len xs) > 0}) => {v:list [A] | (len v) = (len xs) - 1} */
+/*@ safehead :: forall A. (list[A]) => A                                     */
+/*@ safetail :: forall A. (xs:list[A]) => {v:list[A] + null | (len v) = (len xs) - 1} */
 
 /*@ Array    :: (n : { v: number | 0 <= v } ) => { v: [ undefined ] | (len v) = n }               */
 

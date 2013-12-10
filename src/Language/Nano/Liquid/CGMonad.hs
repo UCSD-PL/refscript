@@ -483,7 +483,7 @@ subType l g t1 t2 =
      tt2   <- addInvariant t2
      tdefs <- getTDefs
      let s  = checkTypes tdefs tt1 tt2
-     modify $ \st -> st {cs = (tracePP "subType: " $ c s) : (cs st)}
+     modify $ \st -> st {cs = c s : (cs st)}
   where
     c      = uncurry $ Sub g (ci l)
     checkTypes tdefs t1 t2 | equivWUnions tdefs t1 t2 = (t1,t2)
@@ -505,8 +505,6 @@ equivWUnions γ t t' = equiv γ t t'
 
 equivWUnionsM t t' = getTDefs >>= \γ -> return $ equivWUnions γ t t'
 
-
-
 -- | Subtyping container contents: unions, objects. Includes top-level
 
 -- `subTypeContainers'` breaks down container types (unions and objects) to their
@@ -525,7 +523,7 @@ equivWUnionsM t t' = getTDefs >>= \γ -> return $ equivWUnions γ t t'
 -------------------------------------------------------------------------------
 subTypeContainers :: (IsLocated l) => String -> l -> CGEnv -> RefType -> RefType -> CGM ()
 -------------------------------------------------------------------------------
-subTypeContainers msg l g t1 t2 = {- subTypeContainers' msg -} subType l g t1 (tracePP msg' t2)
+subTypeContainers msg l g t1 t2 = {- subTypeContainers' msg -} subType l g t1 t2
     where 
       msg'                      = render $ text "subTypeContainers:" 
                                            $+$ text "  t1 =" <+> pp t1
@@ -597,8 +595,8 @@ alignTsM t t' = getTDefs >>= \g -> return $ alignTs g t t'
 -------------------------------------------------------------------------------
 withAlignedM :: (RefType -> RefType -> CGM a) -> RefType -> RefType -> CGM a
 -------------------------------------------------------------------------------
--- withAlignedM f t t' = alignTsM t t' >>= uncurry f 
-withAlignedM f = f 
+withAlignedM f t t' = alignTsM t t' >>= uncurry f 
+-- withAlignedM f = f 
 
 -- | Monadic unfolding
 -------------------------------------------------------------------------------
@@ -690,7 +688,7 @@ splitC c = splitC' c
 -- | Function types
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
-  = do let bcs    = bsplitC g i tf1 tf2
+  = do bcs       <- bsplitC g i tf1 tf2
        g'        <- envTyAdds i xt2s g 
        cs        <- concatMapM splitC $ safeZipWith "splitC1" (Sub g' i) t2s t1s' 
        cs'       <- splitC $ Sub g' i (F.subst su t1) t2      
@@ -718,7 +716,7 @@ splitC' (Sub g i (TAll α1 t1) (TAll α2 t2))
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TVar α1 _) t2@(TVar α2 _)) 
   | α1 == α2
-  = return $ bsplitC g i t1 t2
+  = bsplitC g i t1 t2
   | otherwise
   = errorstar "UNEXPECTED CRASH in splitC"
 
@@ -730,7 +728,7 @@ splitC' (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TApp TUn t1s r1) t2@(TApp TUn t2s r2)) =
   ifM (equivWUnionsM t1 t2) 
-    (do  let cs   = bsplitC g i t1 t2
+    (do  cs      <- bsplitC g i t1 t2
          -- constructor parameters are covariant
          let t1s' = (`strengthen` r1) <$> t1s
          let t2s' = (`strengthen` r2) <$> t2s
@@ -748,7 +746,7 @@ splitC' (Sub _ _ t1 t2@(TApp TUn _ _)) =
 -- |Type definitions
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TApp d1@(TDef _) t1s _) t2@(TApp d2@(TDef _) t2s _)) | d1 == d2
-  = do  let cs = bsplitC g i t1 t2
+  = do  cs    <- bsplitC g i t1 t2
         -- constructor parameters are covariant
         cs'   <- concatMapM splitC $ safeZipWith "splitcTDef" (Sub g i) t1s t2s
         return $ cs ++ cs' 
@@ -766,7 +764,7 @@ splitC' (Sub g i  t1 t2@(TApp (TDef _) _ _)) =
 -- | Rest of TApp
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
-  = do let cs = bsplitC g i t1 t2
+  = do cs    <- bsplitC g i t1 t2
        cs'   <- concatMapM splitC $ safeZipWith 
                                     (printf "splitC4: %s - %s" (ppshow t1) (ppshow t2)) 
                                     (Sub g i) t1s t2s
@@ -778,7 +776,7 @@ splitC' (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TObj _ _) t2@(TObj _ _ ))
   = do errorstar "TODO: splitC' TObj" 
-       return $ bsplitC g i t1 t2
+       bsplitC g i t1 t2
 
 splitC' (Sub _ _ t1 t2@(TObj _ _ ))
   = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" 
@@ -793,23 +791,30 @@ splitC' (Sub _ _ t1@(TObj _ _ ) t2)
 -- | TArr
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TArr t1v _ ) t2@(TArr t2v _ ))
-  = do let cs = bsplitC g i t1 t2
+  = do cs    <- bsplitC g i t1 t2
        cs'   <- splitC' (Sub g i t1v t2v) -- whither CONTRAVARIANCE?
+       errorstar "TODO: splitC' TArr"
        return $ cs ++ cs'
 
 splitC' x 
   = cgError l $ bugBadSubtypes l x where l = srcPos x
 
 ---------------------------------------------------------------------------------------
-bsplitC :: (F.Reftable r) => CGEnv -> a -> RType r -> RType r -> [F.SubC a]
+-- bsplitC :: (F.Reftable r) => CGEnv -> a -> RType r -> RType r -> CGM [F.SubC a]
 ---------------------------------------------------------------------------------------
 bsplitC g ci t1 t2
+  = bsplitC' g ci <$> addInvariant t1 <*> addInvariant t2
+  -- = do t1'   <- tracePP "addInv1: " <$> addInvariant t1
+  --      t2'   <- tracePP "addInv2: " <$> addInvariant t2
+  --      return $ bsplitC' g ci t1' t2'
+
+bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2
   = [F.subC (fenv g) F.PTrue (r1 {F.sr_reft = F.top}) r2 Nothing [] ci]
   | F.isNonTrivialSortedReft r2
   = [F.subC (fenv g) p r1 r2 Nothing [] ci]
   | otherwise
-  = {- tracePP "bsplitC trivial" -} []
+  = []
   where
     p  = F.pAnd $ guards g
     r1 = rTypeSortedReft t1

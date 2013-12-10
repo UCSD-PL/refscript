@@ -166,7 +166,8 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
         case tx of 
           -- NOTE: Atm assignment to non existing binding has no effect!
           TApp TUndef _ _ -> return $ Just g3
-          _ -> do withAlignedM (subTypeContainers "e.x = e" l2 g3) t2 tx
+          _ -> do {- ONLY AT CAST withAlignedM -} 
+                  (subTypeContainers "e.x = e" l2 g3) t2 tx
                   return   $ Just g3
 
 -- e3[i] = e2
@@ -176,7 +177,8 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
         let t2   = tracePP (ppshow e2 ++ " ANF: " ++ ppshow x2) $ envFindTy x2 g2
             t3   = envFindTy x3 g3
         ti      <- safeGetIdx i t3
-        withAlignedM (subTypeContainers "e[i] = e" l2 g3) t2 ti
+        {- ONLY AT CAST withAlignedM -} 
+        (subTypeContainers "e[i] = e" l2 g3) t2 ti
         return   $ Just g3
 
 
@@ -267,8 +269,8 @@ consStmt g (ReturnStmt l (Just e))
         let te    = envFindTy xe g'
             rt    = envFindReturn g'
         if isTop rt
-          then withAlignedM (subTypeContainers "ReturnTop" l g') te (setRTypeR te (rTypeR rt))
-          else withAlignedM (subTypeContainers "Return" l g') te rt
+          then {- ONLY AT CAST withAlignedM -} (subTypeContainers "ReturnTop" l g') te (setRTypeR te (rTypeR rt))
+          else {- ONLY AT CAST withAlignedM -} (subTypeContainers "Return" l g') te rt
         return Nothing
 
 -- return
@@ -304,7 +306,7 @@ consExprT g (Just ta) e = do
     checkElt g' $ envFindTy x g'
     return (x,g')
   where
-    checkElt g t = withAlignedM (subTypeContainers "consExprT" l g) t ta
+    checkElt g t = {- ONLY AT CAST withAlignedM -} (subTypeContainers "consExprT" l g) t ta
     l = getAnnotation e
 
 consExprT g Nothing e = consExpr g e
@@ -369,7 +371,8 @@ consExpr g (BracketRef l e i) = do
     case (ta, ti) of
       (TArr _ _, TApp TInt _ _) -> do  
         t <- indexType ta
-        withAlignedM (subTypeContainers "Bounds" l g'') (eSingleton tInt xi) (bt xe)
+        {- ONLY AT CAST withAlignedM -} 
+        (subTypeContainers "Bounds" l g'') (eSingleton tInt xi) (bt xe)
         envAddFresh "consExpr:[IntLit]" l t g''
       _ -> errorstar $ "UNIMPLEMENTED[consExpr] " ++ 
                        "Can only use BracketRef to access array " ++
@@ -471,7 +474,7 @@ consCall g l fn es ft0
        let ft        = fromMaybe (err ts ft0) $ calleeType l ts ft0
        (_,its,ot)   <- instantiate l g fn ft
        let (su, ts') = renameBinds its xes
-       zipWithM_ (withAlignedM $ subTypeContainers "Call" l g') [envFindTy x g' | x <- xes] ts'
+       zipWithM_ ({- ONLY AT CAST withAlignedM $ -} subTypeContainers "Call" l g') [envFindTy x g' | x <- xes] ts'
        envAddFresh "consCall" l (F.subst su ot) g'
     where
        err ts ft0    = die $ errorNoMatchCallee (srcPos l) ts ft0 
@@ -533,7 +536,7 @@ consArr l g (Just t@(TArr ta _)) es = do
     envAddFresh "consArr" l t' g'
   where 
     checkElts    = mapM_ . checkElt
-    checkElt g t = withAlignedM (subTypeContainers "ArrayConst" l g) t ta
+    checkElt g t = {- RJ ONLY AT CAST:  withAlignedM -} (subTypeContainers "ArrayConst" l g) t ta
     v            = rTypeValueVar t
     lenReft      = F.Reft (v, [F.RConc lenPred])
     lenPred      = F.PAtom F.Eq (F.expr $ length es) 

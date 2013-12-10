@@ -89,6 +89,7 @@ Exceptions thrown on 26 tests:
  liquid/pos/lists/safemap.js,
  liquid/pos/lists/safereverse.js,
 
+ [OBJ + LOOP-INV]
  liquid/pos/loops/obj-00.js,
  liquid/pos/loops/obj-02.js,
  

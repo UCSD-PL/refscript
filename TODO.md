@@ -116,15 +116,11 @@ Exceptions thrown on 26 tests:
 
 Failing Test Triage
 -------------------
-
- liquid/pos/arrays/safemap.js,
- liquid/pos/lists/safeLists.js,
- liquid/pos/lists/safemap.js,
- liquid/pos/lists/safereverse.js,
- liquid/pos/loops/obj-02.js,
- liquid/pos/loops/while-03.js,
- liquid/pos/misc/apply.js,
- liquid/pos/misc/twice-hof.js,
+ liquid/pos/lists/list-01.js,      [OBJ]
+ liquid/pos/lists/list-02.js,      [OBJ]
+ liquid/pos/lists/list-03.js,      [OBJ]
+ liquid/pos/lists/list-head-01.js, [OBJ]
+ liquid/pos/lists/list-head-02.js, [OBJ]
 
  [bug:     poly inst issue]        liquid/pos/misc/cousot-01.js,
  [feature: array writes]           liquid/pos/arrays/arr-04.js,

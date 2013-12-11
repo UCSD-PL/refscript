@@ -75,7 +75,7 @@ function pos(){
 
 /*@ cons  :: forall A. (A, xs:list[A] + null) => {list[A] | (len v) = 1 + (len xs)}               */
 /*@ nil   :: () => { null | (len v) = 0}                                                           */
-/*@ head  :: forall A. (xs:list [A]) => A                                                         */
+/*@ head  :: forall A. (xs:list[A]) => A                                                         */
 /*@ tail  :: forall A. (xs:list [A]) => list [A] + null                                           */
 /*@ nth   :: forall A. (xs:list [A], {i:number| ((0 <= i) && i < (len xs))}) => A                 */
 /*@ empty :: forall A. (xango: list[A] + null ) => 

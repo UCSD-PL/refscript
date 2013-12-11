@@ -2,7 +2,7 @@
 /*@ qualif EqLen(v:a, xs:b)       : (len v) = (len xs)            */
 /*@ qualif SumLen(v:a, xs:b, ys:c): (len v) = (len xs) + (len ys) */
 
-/*@ map :: forall A B. ((A) => B, xs:list[A] + null) => {v:list[B] + null | (len v) = (len xs)} */
+/*@ map :: forall A B. ((A) => B, xs:list[A] + null) => list[B] + null */
 function map(f, xs){
   if (empty(xs)) {
     return nil();

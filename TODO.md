@@ -59,100 +59,62 @@ FAILING TESTS:
     Using new representation of lists.
     @ Added [Sun 2013-09-15]
 
-Failed 16 tests: 
- liquid/pos/arrays/arr-04.js,
- liquid/pos/arrays/safemap.js,
- liquid/pos/lists/safeLists.js,
- liquid/pos/lists/safemap.js,
- liquid/pos/lists/safereverse.js,
- liquid/pos/loops/obj-02.js,
- liquid/pos/misc/apply.js,
- liquid/pos/misc/twice-hof.js,
- liquid/pos/objects/obj-03.js,
- liquid/pos/operators/sum-infer-00.js,
- liquid/pos/simple/obj-00.js
+RJ TODO
+-------
+    + fix ARR-READ                    <----------------------- HEREHEREHEREHERE 
+    + fix ARR-WRITE (arrays/arr-04.js)
+    + fix OBJ
+    + fix RIGID
+    + add support for predicate aliases
+    + scrape qualifiers
+    + type and predicate aliases
 
 
-Exceptions thrown on 26 tests:
- [ARRAY]
+Failing Tests 
+-------------
+
+Exceptions thrown on 33 tests:
+
+ [ARR]
  liquid/pos/arrays/arr-00.js,
  liquid/pos/arrays/arr-01.js,
  liquid/pos/arrays/arr-02.js,
  liquid/pos/arrays/arr-03.js,
  liquid/pos/arrays/arr-04.js,
- 
- [FIELD]
+ liquid/pos/arrays/arr-05.js,
  liquid/pos/arrays/safemap.js,
 
- [LIST+NULL ISSUE]
- liquid/pos/lists/safeLists.js,
- liquid/pos/lists/safemap.js,
- liquid/pos/lists/safereverse.js,
-
- [OBJ + LOOP-INV]
- liquid/pos/loops/obj-00.js,
- liquid/pos/loops/obj-02.js,
- 
- [RIGID-VAR]
- liquid/pos/misc/apply.js,
- liquid/pos/misc/cousot-01.js,
- liquid/pos/misc/twice-hof.js,
-
  [OBJ]
+ liquid/pos/lists/list-01.js,
+ liquid/pos/lists/list-02.js,
+ liquid/pos/lists/list-03.js,
+ liquid/pos/lists/list-head-01.js,
+ liquid/pos/lists/list-head-02.js,
+ liquid/pos/loops/obj-00.js,
+ liquid/pos/loops/obj-01.js,
+ liquid/pos/loops/obj-02.js,
+ liquid/pos/objects/obj-00.js,
  liquid/pos/objects/obj-01.js,
  liquid/pos/objects/obj-02.js,
  liquid/pos/objects/obj-03.js,
  liquid/pos/objects/obj-04.js,
  liquid/pos/objects/obj-05.js,
+ liquid/pos/objects/obj-subtype-00.js,
+ liquid/pos/objects/obj-subtype-01.js,
  liquid/pos/objects/update-00.js,
  liquid/pos/objects/update-01.js,
  liquid/pos/objects/update-02.js,
  liquid/pos/objects/update-03.js,
  liquid/pos/simple/obj-00.js,
- 
- [ARRAY]
  liquid/pos/simple/parse-01.js
 
 
-Failing Test Triage
--------------------
- liquid/pos/lists/list-01.js,      [OBJ]
- liquid/pos/lists/list-02.js,      [OBJ]
- liquid/pos/lists/list-03.js,      [OBJ]
- liquid/pos/lists/list-head-01.js, [OBJ]
- liquid/pos/lists/list-head-02.js, [OBJ]
-
- [bug:     poly inst issue]        liquid/pos/misc/cousot-01.js,
- [feature: array writes]           liquid/pos/arrays/arr-04.js,
- [feature: object annotation]      liquid/pos/simple/obj-00.js
- [feature: object-dynamic-lookup]  liquid/pos/objects/obj-03.js
-
-RJ TODO
--------
-    + add support for string +    (liquid/pos/operators/add-0{3,4,5}.js)
-    + intersections <------------------- HEREHEREHERE
-    + add support for array-write (liquid/pos/arrays/arr-04.js)
-    + add support for predicate aliases
-
-Intersections
--------------
-
-
-Add DEADCAST when there is no matching conjunct
-
-    - nanojs tc -v tests/liquid/pos/misc/negate-06.js
-    - nanojs tc -v tests/liquid/pos/misc/intersect-dead-00.js
-
-    + DEADCAST ... <------------------------------ HEREHEREHEREHEREHERE
-
-
-Scrape Qualifiers
------------------
-
-
-Predicate and Type Aliases
---------------------------
-
-
+ [LOOPINV+OBJ]
+ liquid/pos/loops/while-04.js,
+ 
+ [RIGID]
+ liquid/pos/misc/apply.js,
+ liquid/pos/misc/cousot-01.js,
+ liquid/pos/misc/twice-hof.js,
 
 # vim:ft=quicktask

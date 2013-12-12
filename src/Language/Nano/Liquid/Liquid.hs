@@ -155,36 +155,39 @@ consStmt g (EmptyStmt _)
 consStmt g (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))   
   = consAsgn g (Id lx x) e
 
--- e3.x = e2
--- @e3.x@ should have the exact same type with @e2@
-consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
-  = do  (x2,g2) <- consExpr g  e2
-        (x3,g3) <- consExpr g2 e3
-        let t2   = envFindTy x2 g2
-            t3   = envFindTy x3 g3
-        tx      <- safeGetProp x t3
-        case tx of 
-          -- NOTE: Atm assignment to non existing binding has no effect!
-          TApp TUndef _ _ -> return $ Just g3
-          _ -> do {- ONLY AT CAST withAlignedM -} 
-                  (subTypeContainers "e.x = e" l2 g3) t2 tx
-                  return   $ Just g3
+consStmt g (ExprStmt l e) 
+  = consExpr g e >> (return $ Just g)
 
--- e3[i] = e2
-consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
-  = do  (x2,g2) <- consExpr g  e2
-        (x3,g3) <- consExpr g2 e3
-        let t2   = tracePP (ppshow e2 ++ " ANF: " ++ ppshow x2) $ envFindTy x2 g2
-            t3   = envFindTy x3 g3
-        ti      <- safeGetIdx i t3
-        {- ONLY AT CAST withAlignedM -} 
-        (subTypeContainers "e[i] = e" l2 g3) t2 ti
-        return   $ Just g3
+-- e3.x = e2
+-- RJ: TODO FIELD -- @e3.x@ should have the exact same type with @e2@
+-- RJ: TODO FIELD consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
+-- RJ: TODO FIELD   = do  (x2,g2) <- consExpr g  e2
+-- RJ: TODO FIELD         (x3,g3) <- consExpr g2 e3
+-- RJ: TODO FIELD         let t2   = envFindTy x2 g2
+-- RJ: TODO FIELD             t3   = envFindTy x3 g3
+-- RJ: TODO FIELD         tx      <- safeGetProp x t3
+-- RJ: TODO FIELD         case tx of 
+-- RJ: TODO FIELD           -- NOTE: Atm assignment to non existing binding has no effect!
+-- RJ: TODO FIELD           TApp TUndef _ _ -> return $ Just g3
+-- RJ: TODO FIELD           _ -> do {- ONLY AT CAST withAlignedM -} 
+-- RJ: TODO FIELD                   (subTypeContainers "e.x = e" l2 g3) t2 tx
+-- RJ: TODO FIELD                   return   $ Just g3
+
+-- RJ: TODO JUNK -- e3[i] = e2
+-- RJ: TODO JUNK consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
+-- RJ: TODO JUNK   = do  (x2,g2) <- consExpr g  e2
+-- RJ: TODO JUNK         (x3,g3) <- consExpr g2 e3
+-- RJ: TODO JUNK         let t2   = tracePP (ppshow e2 ++ " ANF: " ++ ppshow x2) $ envFindTy x2 g2
+-- RJ: TODO JUNK             t3   = envFindTy x3 g3
+-- RJ: TODO JUNK         ti      <- safeGetIdx i t3
+-- RJ: TODO JUNK         {- ONLY AT CAST withAlignedM -} 
+-- RJ: TODO JUNK         (subTypeContainers "e[i] = e" l2 g3) t2 ti
+-- RJ: TODO JUNK         return   $ Just g3
 
 
 -- e
-consStmt g (ExprStmt _ e)   
-  = consExpr g e >> return (Just g) 
+-- consStmt g (ExprStmt _ e)   
+--   = consExpr g e >> return (Just g) 
 
 -- s1;s2;...;sn
 consStmt g (BlockStmt _ stmts) 
@@ -206,9 +209,6 @@ consStmt g (IfStmt l e s1 s2)
        g1'      <- (`consStmt` s1) $ envAddGuard xe True  ge 
        g2'      <- (`consStmt` s2) $ envAddGuard xe False ge 
        envJoin l g g1' g2'
-
-
-
 
 -- G   |- C :: xe, G1
 -- Tinv = freshen(G1(x)) = {_|K}, ∀x∈Φ
@@ -362,27 +362,34 @@ consExpr g (DotRef l e s)
         t       <- safeGetProp (unId s) (envFindTy x g')
         envAddFresh "consExpr:DotRef" l t g'
 
--- e[i]
-consExpr g (BracketRef l e i) = do
-    (xe, g')  <- consExpr g e
-    (xi, g'') <- consExpr g' i
-    let ta = envFindTy xe g' 
-        ti = envFindTy xi g''
-    case (ta, ti) of
-      (TArr _ _, TApp TInt _ _) -> do  
-        t <- indexType ta
-        {- ONLY AT CAST withAlignedM -} 
-        (subTypeContainers "Bounds" l g'') (eSingleton tInt xi) (bt xe)
-        envAddFresh "consExpr:[IntLit]" l t g''
-      _ -> errorstar $ "UNIMPLEMENTED[consExpr] " ++ 
-                       "Can only use BracketRef to access array " ++
-                       "type with an integer. Here used " ++ (ppshow ti)
-  where
-    -- bt x = { number | ((0 <= v) && (v < (len x)))}
-    bt x = setRTypeR tInt (F.predReft $ F.PAnd [lo, hi x])
-    lo   = F.PAtom F.Le (F.ECon $ F.I 0) v                             -- 0 <= v
-    hi x = F.PAtom F.Lt v (F.EApp (rawStringSymbol "len") [F.eVar $ x]) -- v < len va
-    v    = F.eVar $ F.vv Nothing
+-- e1[e2]
+consExpr g (BracketRef l e1 e2) 
+  = consCall g l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ renv g 
+
+-- e1[e2] = e3
+consExpr g s@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
+  = consCall g l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ renv g
+  
+-- consExpr g (BracketRef l e i) = do
+--     (xe, g')  <- consExpr g e
+--     (xi, g'') <- consExpr g' i
+--     let ta = envFindTy xe g' 
+--         ti = envFindTy xi g''
+--     case (ta, ti) of
+--       (TArr _ _, TApp TInt _ _) -> do  
+--         t <- indexType ta
+--         {- ONLY AT CAST withAlignedM -} 
+--         (subTypeContainers "Bounds" l g'') (eSingleton tInt xi) (bt xe)
+--         envAddFresh "consExpr:[IntLit]" l t g''
+--       _ -> errorstar $ "UNIMPLEMENTED[consExpr] " ++ 
+--                        "Can only use BracketRef to access array " ++
+--                        "type with an integer. Here used " ++ (ppshow ti)
+--   where
+--     -- bt x = { number | ((0 <= v) && (v < (len x)))}
+--     bt x = setRTypeR tInt (F.predReft $ F.PAnd [lo, hi x])
+--     lo   = F.PAtom F.Le (F.ECon $ F.I 0) v                             -- 0 <= v
+--     hi x = F.PAtom F.Lt v (F.EApp (rawStringSymbol "len") [F.eVar $ x]) -- v < len va
+--     v    = F.eVar $ F.vv Nothing
 
 
 -- -- shadowed at the moment...

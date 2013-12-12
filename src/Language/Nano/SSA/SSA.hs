@@ -90,32 +90,16 @@ ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LVar l3 x) e)) = do
     (x', e') <- ssaAsgn l2 (Id l3 x) e
     return (True, VarDeclStmt l1 [VarDecl l2 x' (Just e')])
 
--- e1.x = e2
+-- | e1.x = e2
 ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LDot l3 e3 x) e2)) = do 
     e2' <- ssaExpr e2
     e3' <- ssaExpr e3
     return (True, ExprStmt l1 (AssignExpr l2 OpAssign (LDot l3 e3' x) e2'))
-     
--- e1[i] = e2
-ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign 
-          (LBracket l3 e4@(VarRef _ _) (IntLit l5 i5)) e2)) = do  
-    e2'   <- ssaExpr e2
-    e4'   <- ssaExpr e4
-    return $ (True, ExprStmt l1 (AssignExpr l2 OpAssign 
-              (LBracket l3 e4' (IntLit l5 i5)) e2'))
 
--- x[i] = e ==> var x_SSA_1    = x;
---                  x_SSA_1[i] = e;
---              var x_SSA_3    = x_SSA_1;
---
---ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LBracket l3 e4@(VarRef l4 x4) (IntLit l5 i5)) e2))
---  = do e2'     <- ssaExpr e2
---       (_, vd@(VarDecl _ x4' _)) <- ssaVarDecl (VarDecl l4 x4 (Just e4))
---       let s1   = VarDeclStmt l1 [vd]
---       let s2   = ExprStmt l1 (AssignExpr l2 OpAssign 
---                      (LBracket l3 (VarRef l4 x4') (IntLit l5 i5)) e2')
---       return (True, BlockStmt l1 [s1, s2])
-
+-- e1[e2] = e3
+ssaStmt (ExprStmt z1 (AssignExpr l OpAssign (LBracket z2 e1 e2) e3))
+  = do [e1', e2', e3'] <- mapM ssaExpr [e1, e2, e3]
+       return (True, ExprStmt z1 (AssignExpr l OpAssign (LBracket z2 e1' e2') e3'))
 
 -- e
 ssaStmt (ExprStmt l e) = do 
@@ -176,25 +160,8 @@ ssaStmt (ForStmt l v cOpt (Just (UnaryAssignExpr l1 o lv)) b) =
 ssaStmt (ForStmt l (VarInit vds) cOpt (Just e@(AssignExpr l1 _ _ _)) b) = 
     ssaForLoop l vds cOpt (ExprStmt l1 (expand e)) b
   where
-    expand (AssignExpr l1 o lv e) = AssignExpr l1 OpAssign lv (inf o l1 lv e)
+    expand (AssignExpr l1 o lv e) = AssignExpr l1 OpAssign lv (infOp o l1 lv e)
     expand _ = errorstar "unimplemented: expand assignExpr"
-
-    inf OpAssign         _ _  = id
-    inf OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalToExp lv)
-    inf OpAssignSub      l lv = InfixExpr l OpSub      (lvalToExp lv)
-    inf OpAssignMul      l lv = InfixExpr l OpMul      (lvalToExp lv)
-    inf OpAssignDiv      l lv = InfixExpr l OpDiv      (lvalToExp lv)
-    inf OpAssignMod      l lv = InfixExpr l OpMod      (lvalToExp lv)
-    inf OpAssignLShift   l lv = InfixExpr l OpLShift   (lvalToExp lv)
-    inf OpAssignSpRShift l lv = InfixExpr l OpSpRShift (lvalToExp lv)
-    inf OpAssignZfRShift l lv = InfixExpr l OpZfRShift (lvalToExp lv)
-    inf OpAssignBAnd     l lv = InfixExpr l OpBAnd     (lvalToExp lv)
-    inf OpAssignBXor     l lv = InfixExpr l OpBXor     (lvalToExp lv)
-    inf OpAssignBOr      l lv = InfixExpr l OpBOr      (lvalToExp lv)
-
-    lvalToExp (LVar l s)         = VarRef l (Id l s)
-    lvalToExp (LDot l e s)       = DotRef l e (Id l s)
-    lvalToExp (LBracket l e1 e2) = BracketRef l e1 e2
 
 ssaStmt (ForStmt l (VarInit vds) cOpt (Just i) b) =
     ssaForLoop l vds cOpt (ExprStmt (getAnnotation i) i) b
@@ -221,6 +188,24 @@ ssaStmt s@(FunctionStmt _ _ _ _)
 -- OTHER (Not handled)
 ssaStmt s 
   = convertError "ssaStmt" s
+
+infOp OpAssign         _ _  = id
+infOp OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalExp lv)
+infOp OpAssignSub      l lv = InfixExpr l OpSub      (lvalExp lv)
+infOp OpAssignMul      l lv = InfixExpr l OpMul      (lvalExp lv)
+infOp OpAssignDiv      l lv = InfixExpr l OpDiv      (lvalExp lv)
+infOp OpAssignMod      l lv = InfixExpr l OpMod      (lvalExp lv)
+infOp OpAssignLShift   l lv = InfixExpr l OpLShift   (lvalExp lv)
+infOp OpAssignSpRShift l lv = InfixExpr l OpSpRShift (lvalExp lv)
+infOp OpAssignZfRShift l lv = InfixExpr l OpZfRShift (lvalExp lv)
+infOp OpAssignBAnd     l lv = InfixExpr l OpBAnd     (lvalExp lv)
+infOp OpAssignBXor     l lv = InfixExpr l OpBXor     (lvalExp lv)
+infOp OpAssignBOr      l lv = InfixExpr l OpBOr      (lvalExp lv)
+
+lvalExp (LVar l s)          = VarRef l (Id l s)
+lvalExp (LDot l e s)        = DotRef l e (Id l s)
+lvalExp (LBracket l e1 e2)  = BracketRef l e1 e2
+
 
 -------------------------------------------------------------------------------------
 splice :: Statement SourceSpan -> Maybe (Statement SourceSpan) -> Statement SourceSpan

@@ -65,20 +65,56 @@ RJ TODO
     + fix ARR-WRITE (arrays/arr-04.js)
     + fix OBJ
     + fix RIGID
+    
     + add support for predicate aliases
     + scrape qualifiers
+    + fix hacky qualifier parse -> translation e.g. tests/liquid/pos/arrays/arr-03.js
+        /*@ qualif OkLen(v:number, arr:a): v < (len arr) */
+        Note use of lower-case which gets translated into tyvars in fixpoint.
+        sigh.
+
     + type and predicate aliases
 
 
 Failing Tests 
 -------------
 
+Exceptions thrown on 28 tests:
+ liquid/pos/arrays/arr-03.js,
+ liquid/pos/arrays/arr-04.js,
+ liquid/pos/arrays/safemap.js,
+ 
+ liquid/pos/lists/list-01.js,
+ liquid/pos/lists/list-02.js,
+ liquid/pos/lists/list-03.js,
+ liquid/pos/lists/list-head-01.js,
+ liquid/pos/lists/list-head-02.js,
+ liquid/pos/loops/obj-00.js,
+ liquid/pos/loops/obj-01.js,
+ liquid/pos/loops/obj-02.js,
+ liquid/pos/loops/while-04.js,
+ liquid/pos/misc/apply.js,
+ liquid/pos/misc/cousot-01.js,
+ liquid/pos/misc/twice-hof.js,
+ liquid/pos/objects/obj-00.js,
+ liquid/pos/objects/obj-01.js,
+ liquid/pos/objects/obj-02.js,
+ liquid/pos/objects/obj-03.js,
+ liquid/pos/objects/obj-04.js,
+ liquid/pos/objects/obj-05.js,
+ liquid/pos/objects/obj-subtype-00.js,
+ liquid/pos/objects/obj-subtype-01.js,
+ liquid/pos/objects/update-00.js,
+ liquid/pos/objects/update-01.js,
+ liquid/pos/objects/update-02.js,
+ liquid/pos/objects/update-03.js,
+ liquid/pos/simple/obj-00.js
+
+
+
 Exceptions thrown on 33 tests:
 
  [ARR]
- liquid/pos/arrays/arr-00.js,
- liquid/pos/arrays/arr-01.js,
- liquid/pos/arrays/arr-02.js,
  liquid/pos/arrays/arr-03.js,
  liquid/pos/arrays/arr-04.js,
  liquid/pos/arrays/arr-05.js,

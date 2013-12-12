@@ -273,6 +273,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 -- RJ: TODO FIELD                    then return  $ Just γ
 -- RJ: TODO FIELD                    else tcError $ errorTypeAssign (srcPos l2) t2 tx
 
+
 -- e3[i] = e2
 -- RJ: TODO ARRAY tcStmt γ (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ _)) e2))
 -- RJ: TODO ARRAY   = do  t2 <- tcExpr' γ e2 
@@ -440,45 +441,58 @@ tcExpr γ (Cast l@(Ann loc fs) e)
 -- RJ: TODO FIELD       TArr t _  -> unifyTypeM (srcPos l) "BracketRef" e t2 tInt >> return t
 -- RJ: TODO FIELD       t         -> errorstar $ "Unimplemented: BracketRef of non-array expression of type " ++ ppshow t
 
+-- | e1[e2]
+tcExpr γ e@(BracketRef _ _ _) 
+  = tcCall γ e
+
+-- | e1[e2] = e3
+tcExpr γ e@(AssignExpr _ OpAssign (LBracket _ _ _) _)
+  = tcCall γ e
+
 tcExpr _ e 
   = convertError "tcExpr" e
-
 
 ---------------------------------------------------------------------------------------
 tcCall :: (Ord r, F.Reftable r, PP r) => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 ---------------------------------------------------------------------------------------
 
--- tcCall γ (PrefixExpr l o e)
---   = do ([e'], z) <- tcCall γ l o [e] (prefixOpTy o $ tce_env γ)
---        return (PrefixExpr l o e', z)
--- 
--- tcCall γ (InfixExpr l o e1 e2)        
---   = do ([e1', e2'], z) <- tcCall γ l o [e1, e2] (infixOpTy o $ tce_env γ)
---        return (InfixExpr l o e1' e2', z)
---
--- tcCall γ (CallExpr l e es)
---   = do (e', z)   <- tcExpr' γ e 
---        (es', z') <- tcCall γ l e es z
---        return       (CallExpr l e' es', z')
-
+-- | `o e`
 tcCall γ ex@(PrefixExpr l o e)        
   = do z                      <- tcCallMatch γ l o [e] (prefixOpTy o $ tce_env γ) 
        case z of
          Just ([e'], t)       -> return (PrefixExpr l o e', t)
          Nothing              -> deadCast (srcPos l) γ ex 
 
+-- | `e1 o e2`
 tcCall γ ex@(InfixExpr l o e1 e2)        
   = do z                      <- tcCallMatch γ l o [e1, e2] (infixOpTy o $ tce_env γ) 
        case z of
          Just ([e1', e2'], t) -> return (InfixExpr l o e1' e2', t)
          Nothing              -> deadCast (srcPos l) γ ex 
-
+         
+-- | `e(e1,...,en)`
 tcCall γ ex@(CallExpr l e es)
   = do (e', ft0)              <- tcExpr' γ e
        z                      <- tcCallMatch γ l e es ft0
        case z of
          Just (es', t)        -> return (CallExpr l e' es', t)
          Nothing              -> deadCast (srcPos l) γ ex
+
+-- | `e1[e2]`
+tcCall γ ex@(BracketRef l e1 e2)
+  = do z                      <- tcCallMatch γ l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ tce_env γ 
+       case z of
+         Just ([e1', e2'], t) -> return (BracketRef l e1' e2', t)
+         Nothing              -> tcError $ errorBracketRead (srcPos l) ex 
+                                 -- deadCast (srcPos l) γ ex 
+   
+
+-- | `e1[e2] = e3`
+tcCall γ ex@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
+  = do z                           <- tcCallMatch γ l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ tce_env γ
+       case z of
+         Just ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
+         Nothing                   -> tcError $ errorBracketAssign (srcPos l) ex 
 
 tcCall γ e
   = die $ bug (srcPos e) $ "tcCall: cannot handle" ++ ppshow e        
@@ -518,9 +532,9 @@ deadCast l γ e
       (α, t)  = undefType l γ
       ξ       = tce_ctx γ
 
-undefType l γ  = case bkAll $ builtinOpTy l Undefined $ tce_env γ of
+undefType l γ  = case bkAll $ builtinOpTy l BIUndefined $ tce_env γ of
                    ([α], t) -> (α, t)
-                   _        -> die $ bug (srcPos l) "Malformed type for Undefined in prelude.js"
+                   _        -> die $ bug (srcPos l) "Malformed type for BIUndefined in prelude.js"
 
 ----------------------------------------------------------------------------------
 tcArray :: (Ord r, PP r, F.Reftable r) =>

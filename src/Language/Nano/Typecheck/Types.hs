@@ -724,14 +724,16 @@ isArr _           = False
 -----------------------------------------------------------------------
 
 -----------------------------------------------------------------------
-builtinOpTy       :: SourceSpan -> BuiltinOp -> Env t -> t
+builtinOpTy       :: (IsLocated l) => l -> BuiltinOp -> Env t -> t
 -----------------------------------------------------------------------
 builtinOpTy l o g = fromMaybe err $ envFindTy ox g
   where 
     err           = die $ bugUnknown (srcPos l) "builtinOp" o
     ox            = builtinOpId o
  
-builtinOpId Undefined = builtinId "OpUndefined"
+builtinOpId BIUndefined     = builtinId "BIUndefined"
+builtinOpId BIBracketRef    = builtinId "BIBracketRef"
+builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
 
 -----------------------------------------------------------------------
 infixOpTy :: InfixOp -> Env t -> t 
@@ -768,6 +770,7 @@ prefixOpId PrefixMinus  = builtinId "PrefixMinus"
 prefixOpId PrefixLNot   = builtinId "PrefixLNot"
 prefixOpId PrefixTypeof = builtinId "PrefixTypeof"
 prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
+
 
 builtinId       = mkId . ("builtin_" ++)
 

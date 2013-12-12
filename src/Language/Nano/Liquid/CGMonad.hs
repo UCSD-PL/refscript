@@ -792,9 +792,9 @@ splitC' (Sub _ _ t1@(TObj _ _ ) t2)
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TArr t1v _ ) t2@(TArr t2v _ ))
   = do cs    <- bsplitC g i t1 t2
-       cs'   <- splitC' (Sub g i t1v t2v) -- whither CONTRAVARIANCE?
-       errorstar "TODO: splitC' TArr"
-       return $ cs ++ cs'
+       cs'   <- splitC' (Sub g i t1v t2v) -- CO-VARIANCE 
+       cs''  <- splitC' (Sub g i t2v t1v) -- CONTRA-VARIANCE 
+       return $ cs ++ cs' ++ cs''
 
 splitC' x 
   = cgError l $ bugBadSubtypes l x where l = srcPos x

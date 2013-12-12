@@ -112,5 +112,6 @@ errorMultipleTypeArgs l   = mkErr l $ printf "Multiple Type Args"
 errorDownCast l t         = mkErr l $ printf "Downcast: %s" (ppshow t) 
 errorDeadCast l           = mkErr l $ printf "Deadcast"
 errorTypeAssign l t1 t2   = mkErr l $ printf "Cannot assign type %s to %s" (ppshow t1) (ppshow t2)
-
+errorBracketAssign l x    = mkErr l $ printf "Invalid bracket assignment %s" (ppshow x) 
+errorBracketRead  l x     = mkErr l $ printf "Invalid bracket reference %s" (ppshow x) 
 

@@ -102,7 +102,18 @@ function pos(){
 /*************************************************************************/
 /************** Types for Builtin Operators ******************************/
 /*************************************************************************/
-/*@ builtin_OpUndefined :: forall A. {A | false} */
+// NO bounds check
+/* builtin_BIBracketRef     :: forall A. (arr:[A], idx:number) => A  */
+/* builtin_BIBracketAssign  :: forall A. (arr:[A], idx:number, val:A) => void */
+
+// YES bounds check 
+/*@ builtin_BIBracketRef    :: forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}) => A  */
+/*@ builtin_BIBracketAssign  :: forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}, val:A) => void */
+
+/*@ builtin_BIUndefined     :: forall A. {A | false} */
+
+
+
 
 /*@ builtin_OpLT        :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x <  y)) }   */
 /*@ builtin_OpLEq       :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x <= y)) }   */

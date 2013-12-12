@@ -47,7 +47,10 @@ liquid = Liquid {
 
 
 
-config = modes [esc, tc, liquid] 
+config = modes [ esc
+               , tc
+               , liquid &= auto 
+               ] 
             &= help    "nanojs is a suite of toy program verifiers"
             &= program "nanojs" 
             &= summary "nanojs © Copyright 2013 Regents of the University of California." 

@@ -416,6 +416,9 @@ tcExpr γ (ObjectLit l bs)
        let bts       = zipWith B (F.symbol <$> ps) ts -- <$> mapM (tcExpr' γ) es
        return (ObjectLit l (zip ps es'), TObj bts F.top)
 
+tcExpr γ e@(ArrayLit l _)
+  = die $ bug (srcPos l) $ ("TODO: ArrayLit" ++ ppshow e)
+
 tcExpr γ (Cast l@(Ann loc fs) e)
   = do (e', t) <- tcExpr γ e
        case e' of
@@ -448,6 +451,7 @@ tcExpr γ e@(BracketRef _ _ _)
 -- | e1[e2] = e3
 tcExpr γ e@(AssignExpr _ OpAssign (LBracket _ _ _) _)
   = tcCall γ e
+
 
 tcExpr _ e 
   = convertError "tcExpr" e

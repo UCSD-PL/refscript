@@ -90,6 +90,30 @@ RJ TODO
 Failing Tests 
 -------------
 
+Exceptions thrown on 18 tests:
+ liquid/pos/lists/list-01.js,
+ liquid/pos/lists/list-02.js,
+ liquid/pos/lists/list-03.js,
+ liquid/pos/lists/list-head-01.js,
+ liquid/pos/lists/list-head-02.js,
+
+ liquid/pos/loops/obj-00.js,
+ liquid/pos/loops/obj-02.js,
+ liquid/pos/loops/while-04.js,
+ 
+ liquid/pos/misc/apply.js,
+ liquid/pos/misc/cousot-01.js,
+ liquid/pos/misc/twice-hof.js,
+ liquid/pos/objects/obj-02-00.js,
+ liquid/pos/objects/update-00.js,
+ liquid/pos/objects/update-01.js,
+ liquid/pos/objects/update-02.js,
+ liquid/pos/objects/update-03.js,
+ liquid/pos/simple/obj-00.js
+
+
+
+
   [OBJ]
   liquid/pos/objects/obj-02.js,
 
@@ -101,15 +125,16 @@ Failing Tests
   liquid/pos/objects/update-02.js,
   liquid/pos/objects/update-03.js,
   liquid/pos/simple/parse-01.js
+
+  [LOOPINV+OBJ]
+  liquid/pos/loops/while-04.js,
   liquid/pos/loops/obj-00.js,
   liquid/pos/loops/obj-02.js,
   
   [ARRAY.length]
   liquid/pos/arrays/safemap.js,
 
-  [LOOPINV+OBJ]
-  liquid/pos/loops/while-04.js,
-  
+ 
   [RIGID]
   liquid/pos/misc/apply.js,
   liquid/pos/misc/cousot-01.js,

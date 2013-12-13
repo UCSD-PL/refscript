@@ -79,10 +79,13 @@ RJ TODO
 Failing Tests 
 -------------
 
-Exceptions thrown on 28 tests:
- liquid/pos/arrays/arr-03.js,
- liquid/pos/arrays/arr-04.js,
- liquid/pos/arrays/safemap.js,
+ [OBJ]
+ liquid/pos/objects/obj-00.js,
+ liquid/pos/objects/obj-01.js,
+ liquid/pos/objects/obj-02.js,
+ liquid/pos/objects/obj-03.js,
+ liquid/pos/objects/obj-04.js,
+ liquid/pos/objects/obj-05.js,
  
  liquid/pos/lists/list-01.js,
  liquid/pos/lists/list-02.js,
@@ -92,49 +95,7 @@ Exceptions thrown on 28 tests:
  liquid/pos/loops/obj-00.js,
  liquid/pos/loops/obj-01.js,
  liquid/pos/loops/obj-02.js,
- liquid/pos/loops/while-04.js,
- liquid/pos/misc/apply.js,
- liquid/pos/misc/cousot-01.js,
- liquid/pos/misc/twice-hof.js,
- liquid/pos/objects/obj-00.js,
- liquid/pos/objects/obj-01.js,
- liquid/pos/objects/obj-02.js,
- liquid/pos/objects/obj-03.js,
- liquid/pos/objects/obj-04.js,
- liquid/pos/objects/obj-05.js,
- liquid/pos/objects/obj-subtype-00.js,
- liquid/pos/objects/obj-subtype-01.js,
- liquid/pos/objects/update-00.js,
- liquid/pos/objects/update-01.js,
- liquid/pos/objects/update-02.js,
- liquid/pos/objects/update-03.js,
- liquid/pos/simple/obj-00.js
 
-
-
-Exceptions thrown on 33 tests:
-
- [ARR]
- liquid/pos/arrays/arr-03.js,
- liquid/pos/arrays/arr-04.js,
- liquid/pos/arrays/arr-05.js,
- liquid/pos/arrays/safemap.js,
-
- [OBJ]
- liquid/pos/lists/list-01.js,
- liquid/pos/lists/list-02.js,
- liquid/pos/lists/list-03.js,
- liquid/pos/lists/list-head-01.js,
- liquid/pos/lists/list-head-02.js,
- liquid/pos/loops/obj-00.js,
- liquid/pos/loops/obj-01.js,
- liquid/pos/loops/obj-02.js,
- liquid/pos/objects/obj-00.js,
- liquid/pos/objects/obj-01.js,
- liquid/pos/objects/obj-02.js,
- liquid/pos/objects/obj-03.js,
- liquid/pos/objects/obj-04.js,
- liquid/pos/objects/obj-05.js,
  liquid/pos/objects/obj-subtype-00.js,
  liquid/pos/objects/obj-subtype-01.js,
  liquid/pos/objects/update-00.js,
@@ -144,6 +105,8 @@ Exceptions thrown on 33 tests:
  liquid/pos/simple/obj-00.js,
  liquid/pos/simple/parse-01.js
 
+ [ARRAY.length]
+ liquid/pos/arrays/safemap.js,
 
  [LOOPINV+OBJ]
  liquid/pos/loops/while-04.js,

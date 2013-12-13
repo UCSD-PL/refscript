@@ -24,8 +24,6 @@ module Language.Nano.Typecheck.Subst (
   -- * Accessing fields
   , getProp
   , getIdx
-  
-
   ) where 
 
 import           Text.PrettyPrint.HughesPJ

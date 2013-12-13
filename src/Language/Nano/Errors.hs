@@ -113,6 +113,7 @@ errorDownCast l t         = mkErr l $ printf "Downcast: %s" (ppshow t)
 errorDeadCast l           = mkErr l $ printf "Deadcast"
 errorTypeAssign l t1 t2   = mkErr l $ printf "Cannot assign type %s to %s" (ppshow t1) (ppshow t2)
 errorBracketAssign l x    = mkErr l $ printf "Invalid bracket assignment %s" (ppshow x) 
-errorBracketRead  l x     = mkErr l $ printf "Invalid bracket reference %s" (ppshow x) 
+errorPropRead  l x1 x2    = mkErr l $ printf "Invalid property read object: %s property: %s" (ppshow x1) (ppshow x2) 
 errorArrayLit     l x     = mkErr l $ printf "Invalid array literal %s" (ppshow x) 
+
 

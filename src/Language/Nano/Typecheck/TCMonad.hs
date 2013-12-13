@@ -246,14 +246,14 @@ setTyArgs l ξ βs
 -- So we're not gonna cast for those types
 -- the accessed type here. Instead
 -------------------------------------------------------------------------------
-safeGetIdx :: (Ord r, PP r, F.Reftable r) => IContext -> Int -> RType r -> TCM r (RType r)
--------------------------------------------------------------------------------
-safeGetIdx ξ f t = do  
-    γ <- getTDefs
-    e <- fromJust <$> getExpr
-    case getIdx γ f t of
-      Just (t',tf) -> castM ξ e t t' >> return tf
-      Nothing      -> error "safeGetIdx" --TODO: deadcode
+-- safeGetIdx :: (Ord r, PP r, F.Reftable r) => IContext -> Int -> RType r -> TCM r (RType r)
+-- -------------------------------------------------------------------------------
+-- safeGetIdx ξ f t = do  
+--     γ <- getTDefs
+--     e <- fromJust <$> getExpr
+--     case getIdx γ f t of
+--       Just (t',tf) -> castM ξ e t t' >> return tf
+--       Nothing      -> error "safeGetIdx" --TODO: deadcode
 
 -- Only support indexing in arrays atm. Discharging array bounds checks makes
 -- sense only for array types. 

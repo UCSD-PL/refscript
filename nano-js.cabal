@@ -37,49 +37,49 @@ executable nanojs
   Main-is:             Nano.hs
   hs-source-dirs:      src
 
-Library
-  build-depends:       base, containers, 
-                       pretty, 
-                       vector, bytestring, text, aeson, 
-                       hashable < 1.2, 
-                       unordered-containers, 
-                       filepath, ansi-terminal, process, mtl, syb, cmdargs,
-                       liquid-fixpoint, parsec, language-ecmascript-pp
-
-
-  extensions:          ExistentialQuantification, 
-                       FlexibleInstances, 
-                       UndecidableInstances,
-                       DeriveDataTypeable,
-                       TupleSections,
-                       NoMonomorphismRestriction,
-                       ScopedTypeVariables,
-                       BangPatterns
-
-  ghc-options:         -W -O2  
- 
- 
-  hs-source-dirs:      src
-  Exposed-Modules:     Language.Nano.Errors
-                       Language.Nano.Files
-                       Language.Nano.Types
-                       Language.Nano.Env
-                       Language.Nano.Misc
-                       Language.Nano.Annots
-                       Language.Nano.CmdLine
-                       Paths_nano_js
-                       Language.Nano.SSA.SSAMonad
-                       Language.Nano.SSA.SSA
-                       Language.Nano.Typecheck.Unify
-                       Language.Nano.Typecheck.Types
-                       Language.Nano.Typecheck.Parse
-                       Language.Nano.Typecheck.TCMonad
-                       Language.Nano.Typecheck.Compare
-                       Language.Nano.Typecheck.Subst
-                       Language.Nano.Typecheck.Typecheck
-                       Language.Nano.ESC.Types
-                       Language.Nano.ESC.ESC
-                       Language.Nano.ESC.VCMonad
-                       Language.Nano.Liquid.Liquid
-                       Language.Nano.Liquid.Types
-                       Language.Nano.Liquid.CGMonad
+-- Library
+--   build-depends:       base, containers, 
+--                        pretty, 
+--                        vector, bytestring, text, aeson, 
+--                        hashable < 1.2, 
+--                        unordered-containers, 
+--                        filepath, ansi-terminal, process, mtl, syb, cmdargs,
+--                        liquid-fixpoint, parsec, language-ecmascript-pp
+-- 
+-- 
+--   extensions:          ExistentialQuantification, 
+--                        FlexibleInstances, 
+--                        UndecidableInstances,
+--                        DeriveDataTypeable,
+--                        TupleSections,
+--                        NoMonomorphismRestriction,
+--                        ScopedTypeVariables,
+--                        BangPatterns
+-- 
+--   ghc-options:         -W -O2  
+--  
+--  
+--   hs-source-dirs:      src
+--   Exposed-Modules:     Language.Nano.Errors
+--                        Language.Nano.Files
+--                        Language.Nano.Types
+--                        Language.Nano.Env
+--                        Language.Nano.Misc
+--                        Language.Nano.Annots
+--                        Language.Nano.CmdLine
+--                        Paths_nano_js
+--                        Language.Nano.SSA.SSAMonad
+--                        Language.Nano.SSA.SSA
+--                        Language.Nano.Typecheck.Unify
+--                        Language.Nano.Typecheck.Types
+--                        Language.Nano.Typecheck.Parse
+--                        Language.Nano.Typecheck.TCMonad
+--                        Language.Nano.Typecheck.Compare
+--                        Language.Nano.Typecheck.Subst
+--                        Language.Nano.Typecheck.Typecheck
+--                        Language.Nano.ESC.Types
+--                        Language.Nano.ESC.ESC
+--                        Language.Nano.ESC.VCMonad
+--                        Language.Nano.Liquid.Liquid
+--                        Language.Nano.Liquid.Types
+--                        Language.Nano.Liquid.CGMonad

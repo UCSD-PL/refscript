@@ -74,8 +74,19 @@ RJ TODO
         sigh.
 
     + type and predicate aliases
+    + `compareTs` is totally wrong. it is NOT a symmetric operation.
+        
+        we want something like:
 
+          coerceInto :: src:RType r -> dst:RType r -> (RType r, Direction)
+          
+        such that if
 
+          coerceInto tsrc tdst = (tsrc', dir)
+
+        then tsrc' has the same shape as tdst but is either a SUPER/SUB/EQType of tsrc.
+
+  
 Failing Tests 
 -------------
 

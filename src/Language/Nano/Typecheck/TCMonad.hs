@@ -432,7 +432,7 @@ subTypeM :: (Ord r, PP r, F.Reftable r) => RType r -> RType r -> TCM r SubDirect
 subTypeM t t' 
   = do  θ            <- getTDefs 
         let (_,_,_,d) = compareTs θ t t'
-        return $  {- trace (printf "subTypeM: %s %s %s" (ppshow t) (ppshow d) (ppshow t')) -}  d
+        return d
 
 ----------------------------------------------------------------------------------
 subTypeM' :: (IsLocated l, Ord r, PP r, F.Reftable r) => l -> RType r -> RType r -> TCM r ()

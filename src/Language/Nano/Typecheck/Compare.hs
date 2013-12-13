@@ -18,7 +18,8 @@ module Language.Nano.Typecheck.Compare (
   , compareTs
   , alignTs
   , unionParts, unionPartsWithEq
-  , bkPaddedUnion, bkPaddedObject
+  , bkPaddedUnion
+  , bkPaddedObject
   , isSubType
   , eqType
 
@@ -43,10 +44,12 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Misc
+import           Language.Nano.Types                (IsLocated(..))
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Liquid.Types
 
+import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc
 -- import           Language.Fixpoint.PrettyPrint
@@ -503,18 +506,16 @@ padObject _ _ _ = error "padObject: Cannot pad non-objects"
 -- | Break one level of padded objects
 
 --------------------------------------------------------------------------------
-bkPaddedObject :: (F.Reftable r, PP r) => RType r -> RType r -> [(RType r, RType r)]
+-- bkPaddedObject :: (F.Reftable r, PP r) => SourceSpan -> RType r -> RType r -> [(RType r, RType r)]
 --------------------------------------------------------------------------------
-bkPaddedObject t1@(TObj xt1s _) t2@(TObj xt2s _) =
-  safeZipWith (printf "bkPaddedObject: %s vs %s" (ppshow t1) (ppshow t2)) checkB xt1s xt2s
-  where 
-    checkB b b' | b_sym b == b_sym b' = (b_type b, b_type b')
-    checkB _ _                        = 
-      errorstar "unimplemented: bkPaddedObject: cannot split these objects"
-bkPaddedObject _ _                    = 
-  errorstar "bkPaddedObject: can only break objects"
+bkPaddedObject l t1@(TObj xt1s _) t2@(TObj xt2s _) 
+  | length xt1s == length xt2s = zipWith (checkField l) xt1s xt2s
+  | otherwise                  = die $ bugMalignedFields l t1 t2
+bkPaddedObject l _ _           = die $ bug l $ "bkPaddedObject: can only break objects"
 
-
+checkField _ (B x1 t1) (B x2 t2) | x1 == x2 = (t1, t2)
+checkField l _ _                            = die $ bug l "checkField: non-fields in object!" 
+ 
 -- | `padFun`
 
 padFun γ (TFun b1s o1 r1) (TFun b2s o2 r2) 

@@ -771,7 +771,7 @@ splitC' (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
 splitC' (Sub g i t1@(TObj _ _) t2@(TObj _ _ ))
   = do cs    <- bsplitC g i t1 t2
        -- RJ: not strengthening with top-level reft because not sure we need it...
-       cs'   <- concatMapM splitC [Sub g i t1' t2' | (t1',t2') <- bkPaddedObject t1 t2]
+       cs'   <- concatMapM splitC [Sub g i t1' t2' | (t1',t2') <- bkPaddedObject (srcPos i) t1 t2]
        return $ cs ++ cs' 
 
 splitC' (Sub _ _ t1 t2@(TObj _ _ ))

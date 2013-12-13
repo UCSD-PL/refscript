@@ -62,6 +62,10 @@ bug l s                   = mkErr l $ "BUG: " ++ s
 bugBadPhi l t1s t2s       = mkErr l $ printf "BUG: Unbalanced Phi at %s \n %s \n %s" (ppshow l) (ppshow t1s) (ppshow t2s)
 bugBadSubtypes l x        = mkErr l $ printf "BUG: Unexpected Subtyping Constraint \n %s" (ppshow x)
 bugMalignedSubtype l t t' = mkErr l $ printf "BUG: [%s] \n CGMonad: checkTypes not aligned: \n%s\nwith\n%s" (ppshow l) (ppshow t) (ppshow t')
+bugMalignedFields l t t'  = mkErr l $ render $ text "Misaligned Fields:"
+                                             $+$ text "  t1 =" <+> pp t
+                                             $+$ text "  t2 =" <+> pp t'
+
 bugUnboundPhiVar l x      = mkErr l $ printf "BUG: Phi Variable %s is unbound" (ppshow x)
 bugUnboundVariable l x    = mkErr l $ printf "BUG: Variable %s is unbound in environment at %s" (ppshow x) (ppshow l)
 bugMissingTypeArgs l      = mkErr l $ printf "BUG: Missing Type Arguments at %s" (ppshow l)

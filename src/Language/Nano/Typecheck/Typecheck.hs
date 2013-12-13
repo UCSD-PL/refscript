@@ -416,15 +416,14 @@ tcExpr γ (ObjectLit l bs)
        let bts       = zipWith B (F.symbol <$> ps) ts -- <$> mapM (tcExpr' γ) es
        return (ObjectLit l (zip ps es'), TObj bts F.top)
 
-tcExpr γ e@(ArrayLit l _)
-  = die $ bug (srcPos l) $ ("TODO: ArrayLit" ++ ppshow e)
+tcExpr γ e@(ArrayLit _ _)
+  = tcCall γ e 
 
 tcExpr γ (Cast l@(Ann loc fs) e)
   = do (e', t) <- tcExpr γ e
        case e' of
          Cast (Ann _ fs') e'' -> return (Cast (Ann loc (fs ++ fs')) e'', t)
          _                    -> return (Cast l e', t)
-
 
 -- x.f =def= x["f"]
 -- RJ: TODO FIELD tcExpr γ (DotRef _ e s) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) (unId s) 
@@ -498,9 +497,19 @@ tcCall γ ex@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
          Just ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
          Nothing                   -> tcError $ errorBracketAssign (srcPos l) ex 
 
+
+tcCall γ ex@(ArrayLit l es) 
+  = do z                           <- tcCallMatch γ l BIArrayLit es $ arrayLitTy l (length es) $ tce_env γ
+       case z of
+         Just (es', t)             -> return (ArrayLit l es', t)
+         Nothing                   -> tcError $ errorArrayLit (srcPos l) ex
+
+
 tcCall γ e
   = die $ bug (srcPos e) $ "tcCall: cannot handle" ++ ppshow e        
 
+
+---------------------------------------------------------------------------------------
 tcCallMatch γ l fn es ft0
   = do -- Typecheck arguments
        (es', ts)     <- unzip <$> mapM (tcExpr' γ) es

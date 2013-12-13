@@ -114,4 +114,5 @@ errorDeadCast l           = mkErr l $ printf "Deadcast"
 errorTypeAssign l t1 t2   = mkErr l $ printf "Cannot assign type %s to %s" (ppshow t1) (ppshow t2)
 errorBracketAssign l x    = mkErr l $ printf "Invalid bracket assignment %s" (ppshow x) 
 errorBracketRead  l x     = mkErr l $ printf "Invalid bracket reference %s" (ppshow x) 
+errorArrayLit     l x     = mkErr l $ printf "Invalid array literal %s" (ppshow x) 
 

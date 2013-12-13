@@ -474,6 +474,8 @@ srcSpanFile      = fst3 . sourcePosElts . sp_start . sourceSpanSrcSpan
 data BuiltinOp = BIUndefined
                | BIBracketRef
                | BIBracketAssign
+               | BIArrayLit
+               | BINumArgs
                  deriving (Eq, Ord, Show)
 
 instance PP BuiltinOp where

@@ -367,9 +367,19 @@ consExpr g (BracketRef l e1 e2)
   = consCall g l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ renv g 
 
 -- e1[e2] = e3
-consExpr g s@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
+consExpr g (AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
   = consCall g l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ renv g
-  
+
+consExpr g e@(ArrayLit l es)
+  = consCall g l BIArrayLit es $ arrayLitTy l (length es) $ renv g
+
+consExpr g (ObjectLit l ps) 
+  = consObj l g ps
+
+consExpr _ e 
+  = error $ (printf "consExpr: not handled %s" (ppshow e))
+
+
 -- consExpr g (BracketRef l e i) = do
 --     (xe, g')  <- consExpr g e
 --     (xi, g'') <- consExpr g' i
@@ -399,11 +409,6 @@ consExpr g s@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
 --         envAddFresh "consExpr[StringLit]" l t g'
         
 
-consExpr g (ObjectLit l ps) 
-  = consObj l g ps
-
-consExpr _ e 
-  = error $ (printf "consExpr: not handled %s" (ppshow e))
 
 
 -------------------------------------------------------------------------------------------------

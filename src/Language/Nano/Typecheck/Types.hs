@@ -38,7 +38,8 @@ module Language.Nano.Typecheck.Types (
   , mkUnion, mkUnionR
 
   -- * Deconstructing Types
-  , bkFun, bkFuns
+  , bkFun
+  , bkFuns
   , bkAll
   , bkAnd
   , bkUnion, rUnion
@@ -76,6 +77,7 @@ module Language.Nano.Typecheck.Types (
   , infixOpTy
   , prefixOpTy 
   , builtinOpTy
+  , arrayLitTy
 
   -- * Annotations
   , Annot (..)
@@ -114,7 +116,6 @@ import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
 
--- import           Language.Fixpoint.Names (propConName)
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Errors
@@ -734,6 +735,24 @@ builtinOpTy l o g = fromMaybe err $ envFindTy ox g
 builtinOpId BIUndefined     = builtinId "BIUndefined"
 builtinOpId BIBracketRef    = builtinId "BIBracketRef"
 builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
+builtinOpId BIArrayLit      = builtinId "BIArrayLit"
+builtinOpId BINumArgs       = builtinId "BINumArgs"
+
+-- arrayLitTy :: (IsLocated l) => l -> Int -> Env t -> t
+arrayLitTy l n g 
+  = case ty of 
+      TAll α (TFun [xt] t r) -> TAll α $ TFun (arrayLitBinds n xt) (arrayLitOut n t) r
+      _                      -> err 
+    where
+      ty  = builtinOpTy l BIArrayLit g
+      err = die $ bug (srcPos l) $ "Bad Type for ArrayLit Constructor"
+      
+arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]] 
+  where
+    xs                  = F.symbolString x
+    x_                  = F.symbol . (xs ++) . show 
+
+arrayLitOut n t         = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
 
 -----------------------------------------------------------------------
 infixOpTy :: InfixOp -> Env t -> t 

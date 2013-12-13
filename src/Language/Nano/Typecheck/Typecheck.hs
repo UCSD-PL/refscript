@@ -425,8 +425,23 @@ tcExpr γ (Cast l@(Ann loc fs) e)
          Cast (Ann _ fs') e'' -> return (Cast (Ann loc (fs ++ fs')) e'', t)
          _                    -> return (Cast l e', t)
 
--- x.f =def= x["f"]
--- RJ: TODO FIELD tcExpr γ (DotRef _ e s) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) (unId s) 
+-- e.f
+tcExpr γ (DotRef l e fld) 
+  = do (e', t) <- tcPropRead getProp γ l e (unId fld)
+       return     (DotRef l e' fld, t)
+        
+-- e["f"]
+tcExpr γ (BracketRef l e fld@(StringLit _ s)) 
+  = do (e', t) <- tcPropRead getProp γ l e s
+       return     (BracketRef l e' fld, t)
+ 
+-- e[i] 
+tcExpr γ (BracketRef l e fld@(IntLit _ i)) 
+  = do (e', t) <- tcPropRead getIdx γ l e i 
+       return     (BracketRef l e' fld, t)
+
+-- RJ: TODO FIELD tcExpr γ (BracketRef _ e (StringLit _ s)) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) s
+--TODO: deadcode-- RJ: TODO FIELD tcExpr γ (DotRef _ e s) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) (unId s) 
 
 -- x["f"]
 -- RJ: TODO FIELD tcExpr γ (BracketRef _ e (StringLit _ s)) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) s
@@ -486,7 +501,7 @@ tcCall γ ex@(BracketRef l e1 e2)
   = do z                      <- tcCallMatch γ l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ tce_env γ 
        case z of
          Just ([e1', e2'], t) -> return (BracketRef l e1' e2', t)
-         Nothing              -> tcError $ errorBracketRead (srcPos l) ex 
+         Nothing              -> tcError $ errorPropRead (srcPos l) e1 e2 
                                  -- deadCast (srcPos l) γ ex 
    
 
@@ -570,7 +585,20 @@ tcArray _ (Just _) (ArrayLit l _) =
 
 tcArray _ _ e = 
   die $ bug (srcPos $ getAnnotation e) "BUG: Only support tcArray for array literals with type annotation"
-              
+             
+----------------------------------------------------------------------------------
+-- tcPropRead :: (Ord r, PP r, PP b, F.Reftable r) =>
+--   TCEnv r -> AnnSSA r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
+----------------------------------------------------------------------------------
+tcPropRead getter γ l e fld
+  = do (e', te)   <- tcExpr γ e
+       tdefs      <- getTDefs 
+       case getter tdefs fld te of
+         Nothing        -> tcError $  errorPropRead (srcPos l) e fld
+         Just (te', tf) -> (, tf) <$> castM (tce_ctx γ) e' te te' 
+
+
+
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, F.Reftable r, PP r) =>
   (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)

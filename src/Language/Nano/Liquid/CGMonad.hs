@@ -470,11 +470,6 @@ subTypes l g xs ts      = zipWithM_ (subType l g)      [envFindTy x g | x <- xs]
 subTypes' msg l g xs ts = zipWithM_ (subType' msg l g) [envFindTy x g | x <- xs] ts
 
 -- | Subtyping
-
--- Also adds invariants
--- XXX: Are the invariants added for types nested in containers (i.e. unions and
--- objects)? Probably not, so this process should be done after the splitC.
-
 ---------------------------------------------------------------------------------------
 subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
@@ -570,9 +565,8 @@ subTypeContainers msg l g t1 t2 = {- subTypeContainers' msg -} subType l g t1 t2
 -- RJ: ALL THIS SHOULD BE IN `splitC` -- TODO: the environment for subtyping each part of the object should have the
 -- RJ: ALL THIS SHOULD BE IN `splitC` -- tyopes for the rest of the bindings
 -- RJ: ALL THIS SHOULD BE IN `splitC` subTypeContainers' msg l g o1@(TObj _ r1) o2@(TObj _ r2) = 
--- RJ: ALL THIS SHOULD BE IN `splitC`     sbs $ bkPaddedObject o1 o2
+-- RJ: ALL THIS SHOULD BE IN `splitC`     mapM_ sb $ bkPaddedObject o1 o2
 -- RJ: ALL THIS SHOULD BE IN `splitC`   where
--- RJ: ALL THIS SHOULD BE IN `splitC`     sbs          = mapM_ sb
 -- RJ: ALL THIS SHOULD BE IN `splitC`     -- Fix the ValueVar of the top-level refinement 
 -- RJ: ALL THIS SHOULD BE IN `splitC`     -- to be the same as the Valuevar of the part
 -- RJ: ALL THIS SHOULD BE IN `splitC`     fix t b v    | v == b    = rTypeValueVar t
@@ -772,11 +766,13 @@ splitC' (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
 
 ---------------------------------------------------------------------------------------
 -- | Objects
--- Just the top-level constraint will be included here
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TObj _ _) t2@(TObj _ _ ))
-  = do errorstar "TODO: splitC' TObj" 
-       bsplitC g i t1 t2
+  = do cs    <- bsplitC g i t1 t2
+       -- RJ: not strengthening with top-level reft because not sure we need it...
+       cs'   <- concatMapM splitC [Sub g i t1' t2' | (t1',t2') <- bkPaddedObject t1 t2]
+       return $ cs ++ cs' 
+
 
 splitC' (Sub _ _ t1 t2@(TObj _ _ ))
   = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" 

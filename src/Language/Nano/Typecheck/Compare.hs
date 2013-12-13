@@ -37,7 +37,7 @@ module Language.Nano.Typecheck.Compare (
 import           Text.Printf
 
 import qualified Data.List                          as L
-import qualified Data.Map                           as M
+import qualified Data.HashMap.Strict                as M
 import           Data.Monoid
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
@@ -112,7 +112,7 @@ instance Equivalent e (Id a) where
 ---------------------------------------------------------------------------------------
 
 -- type Casts    = M.Map (Expression (AnnSSA F.Reft)) (Cast RefType)
-type Casts_ r = M.Map (Expression (AnnSSA r)) (Cast (RType r))
+type Casts_ r = M.HashMap (Expression (AnnSSA r)) (Cast (RType r))
 
 
 ---------------------------------------------------------------------------------------
@@ -213,9 +213,11 @@ alignTs γ t1 t2     = (t1', t2')
     (_,t1', t2', _) = compareTs γ t1 t2
 
 
--- | `compareTs` returns:
+-- RJ: 
+-- | `compareTs` 
+--    returns:
 -- ∙ A padded version of the upper bound of @t1@ and @t2@
--- ∙ An equivalent version of @t1@ that has the same sort as the second output
+-- ∙ An equivalent version of @t1@ that has the same sort as the second (RJ: first?) output
 -- ∙ An equivalent version of @t2@ that has the same sort as the first output
 -- ∙ A subtyping direction between @t1@ and @t2@
 --
@@ -229,7 +231,7 @@ compareTs _ t1 t2 | toType t1 == toType t2 = (ofType $ toType t1, t1, t2, EqT)
 
 compareTs γ t1 t2 | isUndefined t1         = setFth4 (compareTs' γ t1 t2) SubT
 
--- XXX: Null is not considered a subtype of all types. If null is to be 
+-- NOTE: Null is NOT considered a subtype of all types. If null is to be 
 -- expected this should be explicitly specified by using " + null"
 -- compareTs γ t1 t2 | and [isNull t1, not $ isUndefined t2] = setFth4 (compareTs' γ t1 t2) SubT
 
@@ -254,8 +256,8 @@ compareTs' γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
 -- | Top-level Objects
 
 compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = 
-  {-tracePP (printf "Padding: %s and %s" (ppshow t1) (ppshow t2)) $ -}
-  padObject γ ( {- trace ("padding obj " ++ ppshow t1 ++ "\n - " ++ ppshow t2) -} t1) t2
+  tracePP (printf "Padding: %s and %s" (ppshow t1) (ppshow t2)) 
+  $ padObject γ t1 t2
 
 -- | Arrays
 compareTs' γ a@(TArr _ _) a'@(TArr _ _  ) = padArray γ a a'
@@ -469,38 +471,36 @@ padObject :: (Eq r, Ord r, F.Reftable r, PP r) =>
              Env (RType r) -> RType r -> RType r -> 
                (RType r, RType r, RType r, SubDirection)
 --------------------------------------------------------------------------------
-padObject γ (TObj bs1 r1) (TObj bs2 r2) = 
-  (TObj jbs' F.top, TObj b1s' r1, TObj b2s' r2, direction)
+
+padObject γ (TObj bs1 r1) (TObj bs2 r2) = (TObj jbs' F.top, TObj b1s' r1, TObj b2s' r2, direction)
   where
-    -- Total direction
-    direction = cmnDir &*& distDir d1s d2s
-    -- Direction from all the common keys
-    cmnDir    = mconcatP $ (\(_,(t,t')) -> fth4 $ compareTs γ t t') <$> cmn
-    -- Direction from distinct keys
-    distDir xs ys | null (xs ++ ys) = EqT
-                  | null xs         = SupT
-                  | null ys         = SubT
-                  | otherwise       = Nth
+    direction                           = cmnDir &*& distDir d1s d2s
+    cmnDir                              = mconcatP [ d | (_, (_ ,_  ,_  ,d)) <- cmnTs] 
+    jbs'                                = [B x t0      | (x, (t0,_  ,_  ,_)) <- cmnTs] 
+    b1s'                                = [B x t1'     | (x, (_ ,t1',_  ,_)) <- cmnTs] 
+    b2s'                                = [B x t2'     | (x, (_ ,_  ,t2',_)) <- cmnTs] 
+    (d1s, d2s)                          = distinctBs bs1 bs2
+    cmnTs                               = [(x, compareTs γ t1 t2) | (x, (t1, t2)) <- cmn]
+    cmn                                 = M.toList $ M.intersectionWith (,) (bindsMap bs1) (bindsMap bs2) -- bindings in both objects
 
-    jbs' = (\(s,(t,t')) -> B s $ fst4 $ compareTs γ t t') <$> cmn ++ d1s ++ d2s
-    -- Bindings for 1st object
-    b1s' = (\(s,(t,t')) -> B s $ snd4 $ compareTs γ t t') <$> cmn ++ d1s ++ d2s 
-    -- Bindings for 2nd object
-    b2s' = (\(s,(t,t')) -> B s $ thd4 $ compareTs γ t t') <$> cmn ++ d1s ++ d2s
+padObject _ _ _                         = error "padObject: Cannot pad non-objects"
 
-    (d1s, d2s) = distinct bs1 bs2
+distinctBs b1 [] = (b_sym <$> b1, []          )
+distinctBs [] b2 = ([]          , b_sym <$> b2)
+distinctBs b1 b2 = (diff m1 m2  , diff m2 m1  )
+  where
+    m1           = bindsMap b1
+    m2           = bindsMap b2
+    diff m m'    = M.keys $ M.difference m m'
 
-    distinct :: (F.Reftable r) => [Bind r] -> [Bind r] -> ([(F.Symbol, (RType r, RType r))],[(F.Symbol, (RType r, RType r))])
-    distinct b1 [] = ((\(B s t) -> (s,(t,tTop))) <$> b1, [])
-    distinct [] b2 = ([], (\(B s t) -> (s,(tTop,t))) <$> b2)
-    distinct b1 b2 = ([(s,(t,tTop)) | B s t <- b1, not $ M.member s (mm b2)],
-                      [(s,(tTop,t)) | B s t <- b2, not $ M.member s (mm b1)])
-                     
-    cmn = M.toList $ M.intersectionWith (,) (mm bs1) (mm bs2) -- bindings in both objects
-    mm  = M.fromList . map (\(B s t) -> (s,t))
+bindsMap bs      = M.fromList [(s, t) | B s t <- bs]
 
-
-padObject _ _ _ = error "padObject: Cannot pad non-objects"
+-- Direction from distinct keys
+distDir xs ys 
+  | null (xs ++ ys) = EqT
+  | null xs         = SupT
+  | null ys         = SubT
+  | otherwise       = Nth
 
 
 -- | Break one level of padded objects

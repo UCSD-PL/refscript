@@ -63,8 +63,9 @@ module Language.Nano.Liquid.CGMonad (
   , addAnnot
 
   -- * Access container types
-  , safeGetIdx, safeGetProp
-  , indexType
+  -- , safeGetIdx
+  -- , safeGetProp
+  -- , indexType
 
 
   -- * Unfolding
@@ -175,25 +176,25 @@ getTDefs  = cg_tdefs <$> get
 -- | Get binding from object type
 
 -- Access field @f@ of type @t@, adding a cast if needed to avoid errors.
--------------------------------------------------------------------------------
-safeGetProp :: String -> RefType -> CGM RefType
--------------------------------------------------------------------------------
-safeGetProp f t
-  = do  γ <- getTDefs
-        case getProp γ f t of
-          Just (_,tf) -> return tf
-          Nothing      -> error "safeGetProp" --TODO: deadcode
+-- -------------------------------------------------------------------------------
+-- safeGetProp :: String -> RefType -> CGM RefType
+-- -------------------------------------------------------------------------------
+-- safeGetProp f t
+--   = do  γ <- getTDefs
+--         case getProp γ f t of
+--           Just (_,tf) -> return tf
+--           Nothing      -> error "safeGetProp" --TODO: deadcode
  
 -- DEPRECATE
 -- Access index @i@ of type @t@, adding a cast if needed to avoid errors.
--------------------------------------------------------------------------------
-safeGetIdx :: Int -> RefType -> CGM RefType
--------------------------------------------------------------------------------
-safeGetIdx i t
-  = do  γ <- getTDefs
-        case getIdx γ i t of
-          Just (_,tf) -> return tf
-          Nothing     -> error "CGM:safeGetIdx" --TODO: deadcode
+-- -------------------------------------------------------------------------------
+-- safeGetIdx :: Int -> RefType -> CGM RefType
+-- -------------------------------------------------------------------------------
+-- safeGetIdx i t
+--   = do  γ <- getTDefs
+--         case getIdx γ i t of
+--           Just (_,tf) -> return tf
+--           Nothing     -> error "CGM:safeGetIdx" --TODO: deadcode
 
 -- Only support indexing in arrays atm. Discharging array bounds checks makes
 -- sense only for array types. 
@@ -772,7 +773,6 @@ splitC' (Sub g i t1@(TObj _ _) t2@(TObj _ _ ))
        -- RJ: not strengthening with top-level reft because not sure we need it...
        cs'   <- concatMapM splitC [Sub g i t1' t2' | (t1',t2') <- bkPaddedObject t1 t2]
        return $ cs ++ cs' 
-
 
 splitC' (Sub _ _ t1 t2@(TObj _ _ ))
   = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" 

@@ -36,6 +36,7 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
 import           Language.Nano.Typecheck.Compare
+import           Language.Nano.Typecheck.Subst      (getProp, getIdx)
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
@@ -357,11 +358,18 @@ consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 
        consCall g' l e es $ envFindTy x g'
 
-consExpr g (DotRef l e s)
-  = do  (x, g') <- consExpr g e
-        t       <- safeGetProp (unId s) (envFindTy x g')
-        envAddFresh "consExpr:DotRef" l t g'
+-- e.f
+consExpr g (DotRef l e (Id _ fld))
+  = consPropRead getProp g l e fld 
 
+-- e["f"]
+consExpr g (BracketRef l e (StringLit _ fld)) 
+  = consPropRead getProp g l e fld
+
+-- e[i]
+consExpr g (BracketRef l e (IntLit _ fld)) 
+  = consPropRead getIdx g l e fld 
+  
 -- e1[e2]
 consExpr g (BracketRef l e1 e2) 
   = consCall g l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ renv g 
@@ -556,3 +564,11 @@ consArr l g (Just t@(TArr ta _)) es = do
 consArr l _ Nothing _  = die $ errorMissingAnnot (srcPos l) "array literal" 
 consArr l _ (Just _) _ = die $ errorBadAnnot     (srcPos l) "array literal" "array" 
 
+
+---------------------------------------------------------------------------------
+consPropRead getter g l e fld
+  = do (x, g')        <- consExpr g e
+       tdefs          <- getTDefs 
+       case getter tdefs fld $ envFindTy x g' of
+         Nothing      -> die $  errorPropRead (srcPos l) e fld
+         Just (_, tf) -> envAddFresh "consPropRead" l tf g'

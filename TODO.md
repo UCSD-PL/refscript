@@ -79,33 +79,29 @@ RJ TODO
 Failing Tests 
 -------------
 
- [OBJ]
- liquid/pos/objects/obj-02.js,
- liquid/pos/objects/obj-03.js,
- liquid/pos/objects/obj-04.js,
- liquid/pos/objects/obj-05.js,
- 
- liquid/pos/loops/obj-00.js,
- liquid/pos/loops/obj-02.js,
+  [OBJ]
+  liquid/pos/objects/obj-02.js,
 
- liquid/pos/objects/obj-subtype-00.js,
- liquid/pos/objects/obj-subtype-01.js,
- liquid/pos/objects/update-00.js,
- liquid/pos/objects/update-01.js,
- liquid/pos/objects/update-02.js,
- liquid/pos/objects/update-03.js,
- liquid/pos/simple/obj-00.js,
- liquid/pos/simple/parse-01.js
+  [OBJ-WRITE]
+  liquid/pos/simple/obj-00.js,
+  liquid/pos/objects/obj-subtype-01.js,
+  liquid/pos/objects/update-00.js,
+  liquid/pos/objects/update-01.js,
+  liquid/pos/objects/update-02.js,
+  liquid/pos/objects/update-03.js,
+  liquid/pos/simple/parse-01.js
+  liquid/pos/loops/obj-00.js,
+  liquid/pos/loops/obj-02.js,
+  
+  [ARRAY.length]
+  liquid/pos/arrays/safemap.js,
 
- [ARRAY.length]
- liquid/pos/arrays/safemap.js,
-
- [LOOPINV+OBJ]
- liquid/pos/loops/while-04.js,
- 
- [RIGID]
- liquid/pos/misc/apply.js,
- liquid/pos/misc/cousot-01.js,
- liquid/pos/misc/twice-hof.js,
+  [LOOPINV+OBJ]
+  liquid/pos/loops/while-04.js,
+  
+  [RIGID]
+  liquid/pos/misc/apply.js,
+  liquid/pos/misc/cousot-01.js,
+  liquid/pos/misc/twice-hof.js,
 
 # vim:ft=quicktask

@@ -215,7 +215,7 @@ unfoldSafe env = either error id . unfoldMaybe env
 
 
 -- Given an environment @γ@, a (string) field @s@ and a type @t@, `getProp` 
--- returns a tupple with elements:
+-- returns a tuple with elements:
 -- ∙ The subtype of @t@ for which the access does not throw an error.
 -- ∙ The type the corresponds to the access of exactly that type that does not
 --   throw an error.

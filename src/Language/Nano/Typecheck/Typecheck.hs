@@ -587,8 +587,6 @@ tcArray _ _ e =
   die $ bug (srcPos $ getAnnotation e) "BUG: Only support tcArray for array literals with type annotation"
              
 ----------------------------------------------------------------------------------
--- tcPropRead :: (Ord r, PP r, PP b, F.Reftable r) =>
---   TCEnv r -> AnnSSA r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 ----------------------------------------------------------------------------------
 tcPropRead getter γ l e fld
   = do (e', te)   <- tcExpr γ e
@@ -596,8 +594,6 @@ tcPropRead getter γ l e fld
        case getter tdefs fld te of
          Nothing        -> tcError $  errorPropRead (srcPos l) e fld
          Just (te', tf) -> (, tf) <$> castM (tce_ctx γ) e' te te' 
-
-
 
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, F.Reftable r, PP r) =>

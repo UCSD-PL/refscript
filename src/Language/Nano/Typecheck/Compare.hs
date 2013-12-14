@@ -481,7 +481,7 @@ padObject γ (TObj bs1 r1) (TObj bs2 r2) = (TObj jbs' F.top, TObj b1s' r1, TObj 
     b2s'                                = [B x t2'     | (x, (_ ,_  ,t2',_)) <- cmnTs] 
     (d1s, d2s)                          = distinctBs bs1 bs2
     cmnTs                               = [(x, compareTs γ t1 t2) | (x, (t1, t2)) <- cmn]
-    cmn                                 = M.toList $ M.intersectionWith (,) (bindsMap bs1) (bindsMap bs2) -- bindings in both objects
+    cmn                                 = meetBinds bs1 bs2 
 
 padObject _ _ _                         = error "padObject: Cannot pad non-objects"
 
@@ -502,6 +502,8 @@ distDir xs ys
   | null ys         = SubT
   | otherwise       = Nth
 
+meetBinds b1s b2s = M.toList $ M.intersectionWith (,) (bindsMap b1s) (bindsMap b2s)
+
 
 -- | Break one level of padded objects
 
@@ -509,13 +511,17 @@ distDir xs ys
 -- bkPaddedObject :: (F.Reftable r, PP r) => SourceSpan -> RType r -> RType r -> [(RType r, RType r)]
 --------------------------------------------------------------------------------
 bkPaddedObject l t1@(TObj xt1s _) t2@(TObj xt2s _) 
-  | length xt1s == length xt2s = zipWith (checkField l) xt1s xt2s
-  | otherwise                  = die $ bugMalignedFields l t1 t2
-bkPaddedObject l _ _           = die $ bug l $ "bkPaddedObject: can only break objects"
+  | n == n1 && n == n2 = snd <$> cmn
+  | otherwise          = die $ bugMalignedFields l t1 t2
+    where
+      cmn              = meetBinds xt1s xt2s
+      n                = length cmn
+      n1               = length xt1s
+      n2               = length xt2s
 
-checkField _ (B x1 t1) (B x2 t2) | x1 == x2 = (t1, t2)
-checkField l _ _                            = die $ bug l "checkField: non-fields in object!" 
- 
+bkPaddedObject l _ _   = die $ bug l $ "bkPaddedObject: can only break objects"
+
+
 -- | `padFun`
 
 padFun γ (TFun b1s o1 r1) (TFun b2s o2 r2) 

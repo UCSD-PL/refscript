@@ -437,11 +437,10 @@ consCast g a e
 ---------------------------------------------------------------------------------------------
 consUpCast g l x t 
   = do γ      <- getTDefs
-       let tx' = tracePP msg $ fst $ alignTs γ (envFindTy x g) t
+       let tx' = fst $ alignTs γ (envFindTy x g) t
        let tx  = (`strengthen` (F.symbolReft x)) $ tx' 
-       envAddFresh "consUpCast" l (tracePP ("consUpCast: x = " ++ ppshow x) tx) g
-    where
-       msg     = printf "consUpCast: alignTs x = %s t = %s" (ppshow x) (ppshow t)
+       envAddFresh "consUpCast" l tx g
+
 ---------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------
 consDownCast g l x t = 

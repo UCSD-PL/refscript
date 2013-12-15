@@ -255,9 +255,7 @@ compareTs' γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
 
 -- | Top-level Objects
 
-compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = 
-  tracePP (printf "Padding: %s and %s" (ppshow t1) (ppshow t2)) 
-  $ padObject γ t1 t2
+compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = padObject γ t1 t2
 
 -- | Arrays
 compareTs' γ a@(TArr _ _) a'@(TArr _ _  ) = padArray γ a a'

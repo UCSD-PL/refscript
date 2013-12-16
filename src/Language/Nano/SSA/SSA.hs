@@ -17,6 +17,7 @@ import           Language.Nano.SSA.SSAMonad
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc             
 import qualified Language.Fixpoint.Types            as F
 import           Text.Printf                        (printf)
@@ -32,13 +33,13 @@ ssaTransform = either throw id . execute . ssaNano
 ssaNano :: F.Reftable r => Nano SourceSpan (RType r) -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano {code = Src fs, tAnns = tAnns}) 
-  = withImmutables (immutableVars p) $ 
-      withMutables  (mutableVars p)  $ 
-        do (_,fs')      <- ssaStmts fs -- mapM ssaFun fs
-           ssaAnns      <- getAnns
-           return        $ p {code = Src $ (patchAnn ssaAnns tAnns' <$>) <$> fs'}
+  = withMutability ReadOnly (readOnlyVars p) 
+    $ withMutability WriteGlobal (writeGlobalVars p) 
+      $ do (_,fs') <- ssaStmts fs -- mapM ssaFun fs
+           ssaAnns <- getAnns
+           return   $ p {code = Src $ (patchAnn ssaAnns tAnns' <$>) <$> fs'}
     where
-      tAnns'             = (single . TAnnot) <$> tAnns
+      tAnns'        = (single . TAnnot) <$> tAnns
 
 
 patchAnn :: AnnInfo r -> AnnInfo r -> SourceSpan -> AnnSSA r
@@ -47,18 +48,24 @@ patchAnn m1 m2 l = Ann l $ M.lookupDefault [] l m1 ++ M.lookupDefault [] l m2
 -------------------------------------------------------------------------------------
 ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)
 -------------------------------------------------------------------------------------
-ssaFun (FunctionStmt l f xs body) = do 
-    θ            <- getSsaEnv  
-    imms         <- getImmutables
+-- ssaFun (FunctionStmt l f xs body) 
+--   = do oVars <- outerVars 
+--        withMutability ReadOnly oVars     $ -- Variables from outer scope are READONLY
+--          withExtSsaEnv iVars             $ -- Extend SsaEnv with formal binders
+--            FunctionStmt l f xs . snd    <$> 
+--              ssaStmts body
+--     where
+--       outerVars = envMap (\_ -> F.top) <$> getSsaEnv
+--       iVars     = returnId l : xs
 
-    addImmutables $ envMap (\_ -> F.top) θ           -- Variables from OUTER scope are IMMUTABLE
-    setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
-    (_, body')   <- ssaStmts body                    -- Transform function
 
-    setSsaEnv θ                                      -- Restore Outer SsaEnv
-    setImmutables imms                               -- Restore Outer Immutables
-
-    return        $ FunctionStmt l f xs body'
+ssaFun (FunctionStmt l f xs body) 
+  = do θ <- getSsaEnv  
+       withMutability ReadOnly (envMap (\_ -> F.top) θ) $    -- Variables from OUTER scope are IMMUTABLE
+         do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
+            (_, body')   <- ssaStmts body                    -- Transform function
+            setSsaEnv θ                                      -- Restore Outer SsaEnv
+            return        $ FunctionStmt l f xs body'
 
 ssaFun _ = error "Calling ssaFun not with FunctionStmt"
 
@@ -251,14 +258,14 @@ ssaExpr e@(NullLit _)
 ssaExpr   (ArrayLit l es)
   = ArrayLit l <$> (mapM ssaExpr es)
 
-ssaExpr e@(VarRef l x) = do 
-    imm <- isImmutable x
-    xo  <- findSsaEnv x
-    case xo of
-      Just z  -> return $ VarRef l z
-      Nothing -> if imm 
-                  then return e 
-                  else ssaError $ errorUnboundId (srcPos x) x 
+ssaExpr e@(VarRef l x) 
+  = do mut <- getMutability x
+       case mut of
+         ReadOnly    -> return e 
+         WriteGlobal -> return e
+         WriteLocal  -> (maybe err (VarRef l)) <$> findSsaEnv x
+    where
+      err = die $ errorUnboundId (srcPos x) x
 
 ssaExpr (PrefixExpr l o e)
   = PrefixExpr l o <$> ssaExpr e

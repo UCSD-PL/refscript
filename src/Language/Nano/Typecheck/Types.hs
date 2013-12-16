@@ -511,19 +511,19 @@ data Mutability
 --    * cannot appear in refinements
 --    * can only use a single monolithing type (declared or inferred)
  
-writeGlobalVars :: Nano a t -> Env t 
-writeGlobalVars = mGnty 
+-- writeGlobalVars   :: (F.Reftable t) => Nano a t -> Env t 
+writeGlobalVars p = mGnty 
   where
-    mGnty       = envMap (\_ -> F.top) (defs  p) -- guarantees
+    mGnty         = envMap (\_ -> F.top) (defs  p) -- guarantees
 
 -- | `immutableVars p` returns symbols that must-not be re-assigned and hence
 --    * can appear in refinements
 
-readOnlyVars  :: Nano a t -> Env t 
-readOnlyVars  = mAssm `envUnion` mMeas
+-- readOnlyVars   :: (F.Reftable t) => Nano a t -> Env t 
+readOnlyVars p = mAssm `envUnion` mMeas
   where 
-    mAssm     = envMap (\_ -> F.top) (specs p)   -- assumes
-    mMeas     = envMap (\_ -> F.top) (consts p)  -- measures
+    mAssm      = envMap (\_ -> F.top) (specs p)   -- assumes
+    mMeas      = envMap (\_ -> F.top) (consts p)  -- measures
 
 
 ---------------------------------------------------------------------------

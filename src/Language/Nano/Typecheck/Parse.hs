@@ -396,16 +396,16 @@ parseNanoFromFile f
   = do code  <- parseCodeFromFile f
        spec  <- parseSpecFromFile f
        ispec <- parseSpecFromFile =<< getPreludePath
-       return $ catSpecDefs (code `mappend` spec) ispec 
+       return $ catSpecDefs $ mconcat [code, spec, ispec] 
 
-catSpecDefs pgm imp = pgm { specs = specγ } { defs = defγ }
+catSpecDefs pgm = pgm { specs = specγ } { defs = defγ }
   where 
-    defγ            = envFromList [(x, lookupTy x γ) | x <- xs ++ fs ]
-    specγ           = γ `envDiff` defγ 
-    γ               = specs $ pgm `mappend` imp 
-    xs              = [ x | x <- definedVars stmts, x `envMem` γ]
-    fs              = definedFuns stmts 
-    Src stmts       = code pgm
+    defγ        = envFromList [(x, lookupTy x γ) | x <- xs ++ fs ]
+    specγ       = γ `envDiff` defγ 
+    γ           = specs pgm
+    xs          = [ x | x <- definedVars stmts, x `envMem` γ]
+    fs          = definedFuns stmts 
+    Src stmts   = code pgm
 
 lookupTy x γ   = fromMaybe err $ envFindTy x γ 
   where 

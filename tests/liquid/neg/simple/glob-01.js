@@ -1,9 +1,7 @@
 /*@ glob :: { number | v > 10 } */
-var glob = 12;
-
-var zoo = "moomp";
+var glob = 20;
 
 /*@ zog :: () => {void | true} */
 function zog(){
-  glob = 79;
+  glob = 3;
 }

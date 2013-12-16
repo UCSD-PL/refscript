@@ -21,9 +21,11 @@ module Language.Nano.Env (
   , envLefts
   , envRights
   , envUnion
+  , envDiff
   , envIntersectWith
   , envEmpty
   , envSEnv
+  , envIds
   ) where 
 
 import           Data.Maybe             (isJust)
@@ -51,6 +53,7 @@ import           Control.Exception (throw)
 
 type Env t      = F.SEnv (Located t) 
 
+envIds          = map fst . envToList
 envEmpty        = F.emptySEnv
 envMap    f     = F.mapSEnv (fmap f) 
 envFilter f     = F.filterSEnv (f . val) 
@@ -90,6 +93,10 @@ envRights = envMap (\(Right z) -> z) . envFilter isRight
 
 envLefts :: Env (Either a b) -> Env a
 envLefts = envMap (\(Left z) -> z) . envFilter isLeft
+
+
+envDiff :: Env a -> Env b -> Env a
+envDiff m1 m2 = envFromList [(x, t) | (x, t) <- envToList m1, not (x `envMem` m2)] 
 
 isRight (Right _) = True
 isRight (_)       = False

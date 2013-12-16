@@ -101,18 +101,17 @@ setSsaEnv    :: SsaEnv -> SSAM r ()
 setSsaEnv θ = modify $ \st -> st { names = θ } 
 
 
-
 -------------------------------------------------------------------------------------
-withMutability :: Mutability -> Env r -> SSAM r a -> SSAM r a 
+withMutability :: Mutability -> [Id SourceSpan] -> SSAM r a -> SSAM r a 
 -------------------------------------------------------------------------------------
-withMutability m z act
+withMutability m xs act
   = do zOld  <- mutability <$> get
        modify $ \st -> st { mutability = zNew `envUnion` zOld } 
        ret   <- act
        modify $ \st -> st { mutability = zOld }
        return $ ret
     where 
-       zNew   = envMap (\_ -> m) z
+       zNew   = envFromList $ (, m) <$> xs 
 
 ---------------------------------------------------------------------------------
 getMutability :: Id SourceSpan -> SSAM r Mutability 

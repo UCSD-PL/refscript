@@ -23,12 +23,12 @@ import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*), (<*>))
 import           Control.Monad.Identity
 import           Data.Char (toLower, isLower, isSpace) 
-import           Data.Monoid (mconcat)
+import           Data.Monoid (mappend, mconcat)
 
 import           Language.Fixpoint.Names (propConName)
 import           Language.Fixpoint.Types hiding (quals, Loc)
 import           Language.Fixpoint.Parse 
-
+import           Language.Fixpoint.Errors
 import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.Types
@@ -396,20 +396,20 @@ parseNanoFromFile f
   = do code  <- parseCodeFromFile f
        spec  <- parseSpecFromFile f
        ispec <- parseSpecFromFile =<< getPreludePath
-       return $ shuffleSpecDefs $ mconcat [code, spec, ispec] 
+       return $ catSpecDefs (code `mappend` spec) ispec 
 
-shuffleSpecDefs pgm = pgm { specs = specγ } { defs = defγ }
+catSpecDefs pgm imp = pgm { specs = specγ } { defs = defγ }
   where 
-    defγ            = envFromList [(fn, initFunTy fn γ) | fn <- fns]
-    specγ           = envFromList [(x, t) | (x, t) <- xts, not (x `envMem` defγ)]
-    γ               = specs pgm
-    xts             = envToList γ
-    fns             = definedFuns fs 
-    Src fs          = code pgm
+    defγ            = envFromList [(x, lookupTy x γ) | x <- xs ++ fs ]
+    specγ           = γ `envDiff` defγ 
+    γ               = specs $ pgm `mappend` imp 
+    xs              = [ x | x <- definedVars stmts, x `envMem` γ]
+    fs              = definedFuns stmts 
+    Src stmts       = code pgm
 
-initFunTy fn γ = fromMaybe err $ envFindTy fn γ 
+lookupTy x γ   = fromMaybe err $ envFindTy x γ 
   where 
-    err        = throw $ bugUnboundVariable (srcPos fn) fn
+    err        = die $ bugUnboundVariable (srcPos x) x 
 
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
@@ -418,6 +418,12 @@ definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
   where 
     fromFunction (FunctionStmt _ x _ _) = [x] 
     fromFunction _                      = []
+
+definedVars          :: [Statement SourceSpan] -> [Id SourceSpan]
+definedVars stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
+  where 
+    fromVarDecl (VarDeclStmt _ ds) = [x | VarDecl _ x (Just _) <- ds]  
+    fromVarDecl _                  = []
 
 
 

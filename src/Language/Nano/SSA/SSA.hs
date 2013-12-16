@@ -30,17 +30,18 @@ ssaTransform = either throw id . execute . ssaNano
 
 
 ----------------------------------------------------------------------------------
-ssaNano :: F.Reftable r => Nano SourceSpan (RType r) -> SSAM r (NanoSSAR r)
+-- ssaNano :: F.Reftable r => Nano SourceSpan (RType r) -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano {code = Src fs, tAnns = tAnns}) 
-  = withMutability ReadOnly (readOnlyVars p) 
-    $ withMutability WriteGlobal (writeGlobalVars p) 
+  = withMutability ReadOnly ros 
+    $ withMutability WriteGlobal wgs 
       $ do (_,fs') <- ssaStmts fs -- mapM ssaFun fs
            ssaAnns <- getAnns
            return   $ p {code = Src $ (patchAnn ssaAnns tAnns' <$>) <$> fs'}
     where
       tAnns'        = (single . TAnnot) <$> tAnns
-
+      ros           = tracePP "readonly vars"    $ readOnlyVars p
+      wgs           = tracePP "writeglobal vars" $ writeGlobalVars p 
 
 patchAnn :: AnnInfo r -> AnnInfo r -> SourceSpan -> AnnSSA r
 patchAnn m1 m2 l = Ann l $ M.lookupDefault [] l m1 ++ M.lookupDefault [] l m2
@@ -61,7 +62,7 @@ ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatem
 
 ssaFun (FunctionStmt l f xs body) 
   = do θ <- getSsaEnv  
-       withMutability ReadOnly (envMap (\_ -> F.top) θ) $    -- Variables from OUTER scope are IMMUTABLE
+       withMutability ReadOnly (envIds θ) $    -- Variables from OUTER scope are IMMUTABLE
          do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv

@@ -98,6 +98,10 @@ module Language.Nano.Typecheck.Types (
   , emptyContext
   , pushContext
 
+  -- * Mutability 
+  , Mutability (..)
+  , writeGlobalVars  
+  , readOnlyVars  
   ) where 
 
 import           Text.Printf
@@ -489,6 +493,37 @@ instance Monoid (Nano a t) where
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }
+
+
+------------------------------------------------------------------------------------------
+-- | Mutability 
+------------------------------------------------------------------------------------------
+
+data Mutability 
+  = ReadOnly    -- ^ import,  cannot be modified, can appear in refinements
+  | WriteLocal  -- ^ written in local-scope, can be SSA-ed, can appear in refinements
+  | WriteGlobal -- ^ written in non-local-scope, cannot do SSA, cannot appear in refinements
+
+
+-- | `writeGlobalVars p` returns symbols that have `WriteMany` status, i.e. may be 
+--    re-assigned multiply in non-local scope, and hence
+--    * cannot be SSA-ed
+--    * cannot appear in refinements
+--    * can only use a single monolithing type (declared or inferred)
+ 
+writeGlobalVars :: Nano a t -> Env t 
+writeGlobalVars = mGnty 
+  where
+    mGnty       = envMap (\_ -> F.top) (defs  p) -- guarantees
+
+-- | `immutableVars p` returns symbols that must-not be re-assigned and hence
+--    * can appear in refinements
+
+readOnlyVars  :: Nano a t -> Env t 
+readOnlyVars  = mAssm `envUnion` mMeas
+  where 
+    mAssm     = envMap (\_ -> F.top) (specs p)   -- assumes
+    mMeas     = envMap (\_ -> F.top) (consts p)  -- measures
 
 
 ---------------------------------------------------------------------------

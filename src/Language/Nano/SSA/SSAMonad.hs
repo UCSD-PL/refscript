@@ -32,9 +32,10 @@ module Language.Nano.SSA.SSAMonad (
 
    -- * Immutable Variables 
    , isImmutable
-   , getImmutables
-   , setImmutables
-   , addImmutables
+   , isMutable
+   , withImmutables
+   , withMutables
+
    ) where 
 
 import           Control.Applicative                ((<$>))

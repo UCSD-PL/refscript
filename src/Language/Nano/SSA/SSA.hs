@@ -31,15 +31,15 @@ ssaTransform = either throw id . execute . ssaNano
 ----------------------------------------------------------------------------------
 ssaNano :: F.Reftable r => Nano SourceSpan (RType r) -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
-ssaNano p@(Nano {code = Src fs, tAnns = tAnns}) = do 
-    addImmutables $ envMap (\_ -> F.top) (specs p) 
-    addImmutables $ envMap (\_ -> F.top) (defs  p) 
-    addImmutables $ envMap (\_ -> F.top) (consts p) 
-    (_,fs')      <- ssaStmts fs -- mapM ssaFun fs
-    ssaAnns      <- getAnns
-    return        $ p {code = Src $ (patchAnn ssaAnns tAnns' <$>) <$> fs'}
-  where
-    tAnns'        = M.map (\t -> [TAnnot t]) tAnns
+ssaNano p@(Nano {code = Src fs, tAnns = tAnns}) 
+  = withImmutables (immutableVars p) $ 
+      withMutables  (mutableVars p)  $ 
+        do (_,fs')      <- ssaStmts fs -- mapM ssaFun fs
+           ssaAnns      <- getAnns
+           return        $ p {code = Src $ (patchAnn ssaAnns tAnns' <$>) <$> fs'}
+    where
+      tAnns'             = (single . TAnnot) <$> tAnns
+
 
 patchAnn :: AnnInfo r -> AnnInfo r -> SourceSpan -> AnnSSA r
 patchAnn m1 m2 l = Ann l $ M.lookupDefault [] l m1 ++ M.lookupDefault [] l m2
@@ -51,7 +51,7 @@ ssaFun (FunctionStmt l f xs body) = do
     θ            <- getSsaEnv  
     imms         <- getImmutables
 
-    addImmutables $ envMap (\_ -> F.top) θ              -- Variables from OUTER scope are IMMUTABLE
+    addImmutables $ envMap (\_ -> F.top) θ           -- Variables from OUTER scope are IMMUTABLE
     setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
     (_, body')   <- ssaStmts body                    -- Transform function
 

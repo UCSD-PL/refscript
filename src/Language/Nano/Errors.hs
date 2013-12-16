@@ -97,7 +97,10 @@ errorJoinSubsts l θ θ'    = mkErr l $ printf "Cannot join substs: %s\nand\n%s"
 errorUnification l t t'   = mkErr l $ printf "Cannot unify types: %s and %s" (ppshow t) (ppshow t')
 errorBoundTyVar l a t     = mkErr l $ printf "Cannot unify bound type parameter %s with %s" (ppshow a) (ppshow t)
 errorFreeTyVar l t        = mkErr l $ printf "Type not fully instantiated: %s" (ppshow t)
-errorWriteImmutable l x   = mkErr l $ printf "Cannot write immutable: %s" (ppshow x)
+errorWriteImmutable l x   = mkErr l $ render $ text "Cannot write variable outside local-scope" <+> pp x
+                                             $+$ text "Add type annotation to indicate it is globally writable"
+
+
 errorInvalidTopStmt l x   = mkErr l $ printf "Invalid top-level statement: %s" (ppshow x) 
 errorOccursCheck l a t    = mkErr l $ printf "Occurs check fails: %s in %s" (ppshow a) (ppshow t)
 errorRigidUnify l a t     = mkErr l $ printf "Cannot unify rigid variable %s with %s" (ppshow a) (ppshow t) 

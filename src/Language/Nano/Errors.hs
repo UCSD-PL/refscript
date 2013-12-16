@@ -73,6 +73,9 @@ bugTBodiesOccur l s       = mkErr l $ printf "BUG: There should be no TBodies he
 bugBadUnions l s          = mkErr l $ printf "BUG: No unions should be found here (%s)" s
 bugBadFunction l          = mkErr l $ printf "BUG: No function expression was found"
 bugUnknown l thing x      = mkErr l $ printf "BUG: Cannot find %s %s" thing (ppshow x) 
+
+
+
 errorArgName l x y        = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 errorMissingSpec l f      = mkErr l $ printf "Missing Signature For %s defined at %s" (ppshow f) (ppshow l)
 errorDuplicate i l l'     = mkErr l $ printf "Duplicate Specification for %s:\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')

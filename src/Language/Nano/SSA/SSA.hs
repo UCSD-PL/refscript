@@ -62,7 +62,7 @@ ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatem
 
 ssaFun (FunctionStmt l f xs body) 
   = do θ <- getSsaEnv  
-       withMutability ReadOnly (envIds θ) $    -- Variables from OUTER scope are IMMUTABLE
+       withMutability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
          do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
@@ -94,9 +94,11 @@ ssaStmt s@(EmptyStmt _)
   = return (True, s)
 
 -- x = e
-ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LVar l3 x) e)) = do 
-    (x', e') <- ssaAsgn l2 (Id l3 x) e
-    return (True, VarDeclStmt l1 [VarDecl l2 x' (Just e')])
+ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LVar l3 v) e)) = do 
+    let x     = Id l3 v 
+    (x', e') <- ssaAsgn l2 x e
+    return    $ if x == x' then (True, ExprStmt l1 (AssignExpr l2 OpAssign (LVar l3 v) e'))
+                           else (True, VarDeclStmt l1 [VarDecl l2 x' (Just e')])
 
 -- | e1.x = e2
 ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LDot l3 e3 x) e2)) = do 
@@ -296,7 +298,7 @@ ssaVarDecl (VarDecl l x (Just e)) = do
     (x', e') <- ssaAsgn l x e
     return    (True, VarDecl l x' (Just e'))
 
-ssaVarDecl {-z@-}(VarDecl l x Nothing)
+ssaVarDecl (VarDecl l x Nothing)
   = errorstar $ printf "Variable definition of %s at %s with no initialization is not supported." (ppshow x) (ppshow l)
 
 ------------------------------------------------------------------------------------

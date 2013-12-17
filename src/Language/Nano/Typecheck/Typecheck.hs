@@ -122,7 +122,7 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ fs' ++ fs
 
 
 
-initEnv pgm           = TCE (specs pgm) emptyContext
+initEnv pgm           = TCE (specs pgm) (defs pgm) emptyContext
 traceCodePP p m s     = trace (render $ codePP p m s) $ return ()
       
 codePP (Nano {code = Src src}) anns sub 
@@ -168,22 +168,24 @@ checkTypeDefs pgm = reportAll $ grep
 --   @Just γ'@ means environment extended with statement binders
 
 
-data TCEnv r  = TCE { tce_env :: Env (RType r), tce_ctx :: !IContext }
+data TCEnv r  = TCE { tce_env  :: Env (RType r)
+                    , tce_spec :: Env (RType r) 
+                    , tce_ctx  :: !IContext 
+                    }
 
 type TCEnvO r = Maybe (TCEnv r)
 
 -- type TCEnv  r = Maybe (Env (RType r))
 instance (PP r, F.Reftable r) => Substitutable r (TCEnv r) where 
-  apply θ (TCE m c) = TCE (apply θ m) c
+  apply θ (TCE m sp c) = TCE (apply θ m) (apply θ sp) c 
 
-tcEnvPushSite i (TCE m c)    = TCE m (pushContext i c)
-tcEnvAdds x      (TCE m c)   = TCE (envAdds x m) c
-tcEnvAddReturn x t (TCE m c) = TCE (envAddReturn x t m) c
+tcEnvPushSite i γ            = γ { tce_ctx = pushContext i    $ tce_ctx γ }
+tcEnvAdds     x γ            = γ { tce_env = envAdds x        $ tce_env γ }
+tcEnvAddReturn x t γ         = γ { tce_env = envAddReturn x t $ tce_env γ }
 tcEnvMem x                   = envMem x      . tce_env 
 tcEnvFindTy x                = envFindTy x   . tce_env
 tcEnvFindReturn              = envFindReturn . tce_env
--- tcEnvAdds l x TCEmpty   = die $ bug l $ "Cannot add to TCEmpty"
--- apply θ TCEmpty   = TCEmpty
+tcEnvFindSpec x              = envFindTy x   . tce_spec
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Function -------------------------------------------------------
@@ -350,22 +352,25 @@ tcStmt _ s
 tcVarDecl :: (Ord r, PP r, F.Reftable r) 
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
-tcVarDecl γ v@(VarDecl l x (Just e)) = do
-    (e', t) <- tcExprT γ e (varDeclAnnot v)
-    return   (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
+tcVarDecl γ v@(VarDecl l x (Just e)) 
+  = do (e', g) <- tcAsgn γ x e
+       return (VarDecl l x (Just e'), g)
+
+--   = do (e', t) <- tcExprT γ e (varDeclAnnot v)
+--        return   (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
 
 tcVarDecl γ v@(VarDecl _ _ Nothing)  
   = return   (v, Just γ)
 
 varDeclAnnot v = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
 
-------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
   TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
-------------------------------------------------------------------------------------
-tcAsgn γ x e = do 
-  (e', t) <- tcExpr γ e 
-  return     (e', Just $ tcEnvAdds [(x, t)] γ)
+---------------------------------------------------------------------------------
+tcAsgn γ x e
+  = do (e' , t) <- tcExprT γ e $ tcEnvFindSpec x γ
+       return      (e', Just   $ tcEnvAdds [(x, t)] γ)
 
 -------------------------------------------------------------------------------
 tcExprT :: (Ord r, PP r, F.Reftable r)

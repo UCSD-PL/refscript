@@ -88,17 +88,18 @@ data CGEnv
   = CGE { 
          -- TODO: add opts 
          --opts    :: OptionConf
-          renv    :: !(Env RefType) -- ^ bindings in scope 
-        , fenv    :: F.IBindEnv     -- ^ fixpoint bindings
-        , guards  :: ![F.Pred]      -- ^ branch target conditions  
-        , cge_ctx :: !IContext      -- ^ intersection-type context 
+          renv     :: !(Env RefType) -- ^ bindings in scope 
+        , fenv     :: F.IBindEnv     -- ^ fixpoint bindings
+        , guards   :: ![F.Pred]      -- ^ branch target conditions  
+        , cge_ctx  :: !IContext      -- ^ intersection-type context 
+        , cge_spec :: !(Env RefType) -- ^ specifications for defined variables/functions
         }
 
 
-emptyCGEnv = CGE {-[] -} envEmpty F.emptyIBindEnv [] emptyContext
+emptyCGEnv = CGE envEmpty F.emptyIBindEnv [] emptyContext envEmpty
 
 instance PP CGEnv where
-  pp (CGE {-_ -} re _ gs ctx) = vcat [pp re, pp gs, pp ctx] 
+  pp (CGE  re _ gs ctx sp) = vcat [pp re, pp gs, pp ctx, pp sp] 
 
 ----------------------------------------------------------------------------
 -- | Constraint Information ------------------------------------------------

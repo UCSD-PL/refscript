@@ -95,7 +95,7 @@ consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) = consStmts (initCGEnv pgm) fs >> return ()
 
-initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext
+initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext (defs pgm)
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
@@ -290,33 +290,39 @@ consStmt _ s
 ------------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
-consVarDecl g v@(VarDecl _ x (Just e)) = do
-    (x', g') <- consExprT g ct e
-    Just <$> envAdds [(x, envFindTy x' g')] g'
-  where
-    ct = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
+consVarDecl g v@(VarDecl _ x (Just e)) 
+  = consAsgn g x e
+
+--  do (x', g') <- consExprT g ct e
+--     Just <$> envAdds [(x, envFindTy x' g')] g'
+--  where
+--    ct = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
 
 consVarDecl g (VarDecl _ _ Nothing)
   = return $ Just g
 
-consExprT :: CGEnv -> Maybe RefType -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv) 
-consExprT g ct (ArrayLit l es) = consArr l g ct es
+------------------------------------------------------------------------------------
+consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
+------------------------------------------------------------------------------------
+consExprT g (ArrayLit l es) to 
+  = consArr l g to es
 
-consExprT g (Just ta) e = do
-    (x, g') <- consExpr g e 
-    checkElt g' $ envFindTy x g'
-    return (x,g')
-  where
-    checkElt g t = {- ONLY AT CAST withAlignedM -} (subTypeContainers "consExprT" l g) t ta
-    l = getAnnotation e
-
-consExprT g Nothing e = consExpr g e
+consExprT g e to 
+  = do (x, g') <- consExpr g e
+       let te   = envFindTy x g'
+       case to of
+         Nothing -> return (x, g')
+         Just t  -> do subTypeContainers "consExprT" l g' te t 
+                       g'' <- envAdds [(x, t)] g'
+                       return (x, g'')
+    where
+       l = getAnnotation e
 
 ------------------------------------------------------------------------------------
 consAsgn :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consAsgn g x e 
-  = do (x', g') <- consExpr g e
+  = do (x', g') <- consExprT g e $ envFindSpec x g 
        Just <$> envAdds [(x, envFindTy x' g')] g'
 
 

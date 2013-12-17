@@ -261,6 +261,16 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
   = do (e', g) <- tcAsgn γ (Id lx x) e
        return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
+-- e1.fld = e2 [No support for field ADDITIOn yet]
+tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
+  = do (DotRef _ e1' _, tfld) <- tcExpr γ $ DotRef l1 e1 fld
+       (e2'           , t2)   <- tcExpr γ $ e2                    
+       e2''                   <- castM  ξ e2' t2 tfld
+       return (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' fld) e2''), Just γ)
+    where
+       ξ                       = tce_ctx γ      
+
+-- The type of @e2@ should be a a subtype of the type of the @f@ field of @e1@. 
 -- e3.x = e2
 -- The type of @e2@ should be assignable (a subtype of) the type of @e3.x@.
 -- RJ: TODO FIELD tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LDot l3 e3 x) e2))

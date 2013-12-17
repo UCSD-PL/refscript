@@ -10,5 +10,5 @@ function bar(){
 /*@ zoo :: () => {void | true} */
 function zoo(){
   bar();
-  assert(glob > 0);
+  assert(glob > 10);
 }

@@ -263,12 +263,12 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 
 -- e1.fld = e2 [No support for field ADDITIOn yet]
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
-  = do (DotRef _ e1' _, tfld) <- tcExpr γ $ DotRef l1 e1 fld
-       (e2'           , t2)   <- tcExpr γ $ e2                    
-       e2''                   <- castM  ξ e2' t2 tfld
-       return (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' fld) e2''), Just γ)
+  = do (e1', tfld) <- tcPropRead getProp γ l e1 fld
+       (e2', t2)   <- tcExpr γ $ e2                    
+       e2''        <- castM  ξ e2' t2 tfld
+       return         (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' fld) e2''), Just γ)
     where
-       ξ                       = tce_ctx γ      
+       ξ            = tce_ctx γ      
 
 -- The type of @e2@ should be a a subtype of the type of the @f@ field of @e1@. 
 -- e3.x = e2

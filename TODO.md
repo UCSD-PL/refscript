@@ -88,14 +88,11 @@ RJ TODO
 Failing Tests 
 -------------
 
+  <----------------------- HEREHEREHEREHERE 
   [OBJ-WRITE]
-  liquid/pos/simple/obj-000.js, <----------------------- HEREHEREHEREHERE 
-  liquid/pos/simple/obj-00.js,
-  
-  liquid/pos/objects/update-00.js,
-  liquid/pos/objects/update-01.js,
-  liquid/pos/objects/update-02.js,
-  liquid/pos/objects/update-03.js,
+  liquid/pos/objects/obj-01.js
+  liquid/pos/objects/obj-02.js
+
   liquid/pos/simple/parse-01.js
 
   [LOOPINV + OBJ-WRITE]

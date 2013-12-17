@@ -49,8 +49,6 @@ module Language.Nano.Liquid.CGMonad (
   , envGetContextTypArgs
 
   -- * Add Subtyping Constraints
-  , subTypes
-  , subType
   , subTypeContainers
 
   -- RJ: all alignment should already be done in TC why again?
@@ -518,7 +516,7 @@ equivWUnionsM t t' = getTDefs >>= \γ -> return $ equivWUnions γ t t'
 -------------------------------------------------------------------------------
 subTypeContainers :: (IsLocated l) => String -> l -> CGEnv -> RefType -> RefType -> CGM ()
 -------------------------------------------------------------------------------
-subTypeContainers msg l g t1 t2 = {- subTypeContainers' msg -} subType l g t1 t2
+subTypeContainers msg l g t1 t2 = subType l g t1 t2
     where 
       msg'                      = render $ text "subTypeContainers:" 
                                            $+$ text "  t1 =" <+> pp t1

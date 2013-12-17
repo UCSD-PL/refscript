@@ -112,7 +112,7 @@ consFun _ s
 consFun1 l g' f xs body (i, ft) 
   = do g'' <- envAddFun l f i xs ft g'
        gm  <- consStmts g'' body
-       maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
+       maybe (return ()) (\g -> subTypeContainers "return void" l g tVoid (envFindReturn g'')) gm
 
 
 -- checkFormal x t 
@@ -156,10 +156,23 @@ consStmt g (EmptyStmt _)
 consStmt g (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))   
   = consAsgn g (Id lx x) e
 
-consStmt g (ExprStmt l e) 
-  = consExpr g e >> (return $ Just g)
+-- e1.fld = e2
+consStmt g (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
+  = do (tfld, _) <- consPropRead getProp g l1 e1 fld
+       (x2,  g') <- consExpr  g  e2
+       let t2     = envFindTy x2 g'
+       subTypeContainers "field-assignment" l2 g' t2 tfld
+       return     $ Just g'
 
--- e3.x = e2
+
+ -- do (e1', tfld) <- tcPropRead getProp γ l e1 fld
+ --      (e2', t2)   <- tcExpr γ $ e2                    
+ --      e2''        <- castM  ξ e2' t2 tfld
+ --      return         (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' fld) e2''), Just γ)
+ --   where
+ --      ξ            = tce_ctx γ      
+
+
 -- RJ: TODO FIELD -- @e3.x@ should have the exact same type with @e2@
 -- RJ: TODO FIELD consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
 -- RJ: TODO FIELD   = do  (x2,g2) <- consExpr g  e2
@@ -185,10 +198,8 @@ consStmt g (ExprStmt l e)
 -- RJ: TODO JUNK         (subTypeContainers "e[i] = e" l2 g3) t2 ti
 -- RJ: TODO JUNK         return   $ Just g3
 
-
--- e
--- consStmt g (ExprStmt _ e)   
---   = consExpr g e >> return (Just g) 
+consStmt g (ExprStmt _ e) 
+  = consExpr g e >> (return $ Just g)
 
 -- s1;s2;...;sn
 consStmt g (BlockStmt _ stmts) 
@@ -366,15 +377,15 @@ consExpr g (CallExpr l e es)
 
 -- e.f
 consExpr g (DotRef l e (Id _ fld))
-  = consPropRead getProp g l e fld 
+  = snd <$> consPropRead getProp g l e fld 
 
 -- e["f"]
 consExpr g (BracketRef l e (StringLit _ fld)) 
-  = consPropRead getProp g l e fld
+  = snd <$> consPropRead getProp g l e fld
 
 -- e[i]
 consExpr g (BracketRef l e (IntLit _ fld)) 
-  = consPropRead getIdx g l e fld 
+  = snd <$> consPropRead getIdx g l e fld 
   
 -- e1[e2]
 consExpr g (BracketRef l e1 e2) 
@@ -577,5 +588,9 @@ consPropRead getter g l e fld
   = do (x, g')        <- consExpr g e
        tdefs          <- getTDefs 
        case getter tdefs fld $ envFindTy x g' of
+         Just (_, tf) -> (tf,) <$> envAddFresh "consPropRead" l tf g'
          Nothing      -> die $  errorPropRead (srcPos l) e fld
-         Just (_, tf) -> envAddFresh "consPropRead" l tf g'
+
+
+
+

@@ -40,8 +40,8 @@ ssaNano p@(Nano {code = Src fs, tAnns = tAnns})
            return   $ p {code = Src $ (patchAnn ssaAnns tAnns' <$>) <$> fs'}
     where
       tAnns'        = (single . TAnnot) <$> tAnns
-      ros           = tracePP "readonly vars"    $ readOnlyVars p
-      wgs           = tracePP "writeglobal vars" $ writeGlobalVars p 
+      ros           = readOnlyVars p
+      wgs           = writeGlobalVars p 
 
 patchAnn :: AnnInfo r -> AnnInfo r -> SourceSpan -> AnnSSA r
 patchAnn m1 m2 l = Ann l $ M.lookupDefault [] l m1 ++ M.lookupDefault [] l m2

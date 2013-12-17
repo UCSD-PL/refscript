@@ -61,8 +61,6 @@ FAILING TESTS:
 
 RJ TODO
 -------
-    + fix ARR-READ                    <----------------------- HEREHEREHEREHERE 
-    + fix ARR-WRITE (arrays/arr-04.js)
     + fix OBJ
     + fix RIGID
     
@@ -91,7 +89,9 @@ Failing Tests
 -------------
 
   [OBJ-WRITE]
+  liquid/pos/simple/obj-000.js, <----------------------- HEREHEREHEREHERE 
   liquid/pos/simple/obj-00.js,
+  
   liquid/pos/objects/update-00.js,
   liquid/pos/objects/update-01.js,
   liquid/pos/objects/update-02.js,

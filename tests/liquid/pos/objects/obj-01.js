@@ -5,7 +5,12 @@ function inc(n) {
   return n + 1;
 }
 
-var obj = {
+/*@ gobj :: {a: {number | v = 5}
+           , b: string
+           , f: (x:number) => {number | v = x + 1}
+           } 
+ */
+var gobj = {
   a: 5,
   b: "String",
   f: inc
@@ -14,7 +19,7 @@ var obj = {
 /*@ foo :: () => { number | v = 6 } */
 function foo () {
   
-  var ff = obj.f;
-  return ff(obj.a);
+  var ff = gobj.f;
+  return ff(gobj.a);
 
 }

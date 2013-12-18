@@ -11,6 +11,7 @@ function inc(n) {
            , f: (x:number) => {number | v = x + 1}
            } 
  */
+
 var gobj = {
   a: 5,
   b: "String",

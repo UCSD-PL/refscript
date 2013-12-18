@@ -63,49 +63,36 @@ RJ TODO
 -------
     + fix OBJ
     + fix RIGID
-    
+    + fix LENGTH
     + add support for predicate aliases
+    
     + scrape qualifiers
+    
     + fix hacky qualifier parse -> translation e.g. tests/liquid/pos/arrays/arr-03.js
         /*@ qualif OkLen(v:number, arr:a): v < (len arr) */
         Note use of lower-case which gets translated into tyvars in fixpoint.
         sigh.
-
     + type and predicate aliases
-    + `compareTs` is totally wrong. it is NOT a symmetric operation.
-        
-        we want something like:
 
-          coerceInto :: src:RType r -> dst:RType r -> (RType r, Direction)
-          
-        such that if
-
-          coerceInto tsrc tdst = (tsrc', dir)
-
-        then tsrc' has the same shape as tdst but is either a SUPER/SUB/EQType of tsrc.
-
-  
+      
 Failing Tests 
 -------------
 
-  [OBJ-WRITE]
-  liquid/pos/objects/obj-01.js      <----------------------- HEREHEREHEREHERE 
-                                        ISSUE: doesn't use type from assignment
-                                        (i.e. needs annotation, which obviously,
-                                        sucks.)
-  liquid/pos/objects/obj-02.js
+  [OBJ-READ-NO-ANNOT]
+  tests/liquid/todo/obj-01.js
 
-  [LOOPINV + OBJ-WRITE]
-  liquid/pos/loops/while-04.js,
-  liquid/pos/loops/obj-00.js,
-  liquid/pos/loops/obj-02.js,
-  
-  [ARRAY.length]
+  [ARRAY.LENGTH]
   liquid/pos/arrays/safemap.js,
  
   [RIGID]
   liquid/pos/misc/apply.js,
   liquid/pos/misc/cousot-01.js,
   liquid/pos/misc/twice-hof.js,
+
+  [LOOPINV+OBJ-WRITE]
+  liquid/pos/loops/while-04.js,
+  liquid/pos/loops/obj-00.js,
+  liquid/pos/loops/obj-02.js,
+  
 
 # vim:ft=quicktask

@@ -543,9 +543,8 @@ instance PP a => PP (Maybe a) where
 instance F.Reftable r => PP (RType r) where
   pp (TVar α r)                 = F.ppTy r $ pp α 
   pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
-  pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." <+> pp t'      where (αs, t') = bkAll t
+  pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
   pp (TAnd (ts))                = vcat [text "/\\" <+> pp t | t <- ts]
-  -- pp (TAnd (t:ts))              = vcat $ (text "  " <+> pp t) : [text "/\\" <+> pp t | t <- ts]
   pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "+") ts 
   pp (TApp d@(TDef _)ts r)      = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 
@@ -780,8 +779,8 @@ arrayLitTy l n g
       TAll α (TFun [xt] t r) -> TAll α $ TFun (arrayLitBinds n xt) (arrayLitOut n t) r
       _                      -> err 
     where
-      ty  = builtinOpTy l BIArrayLit g
-      err = die $ bug (srcPos l) $ "Bad Type for ArrayLit Constructor"
+      ty                     = builtinOpTy l BIArrayLit g
+      err                    = die $ bug (srcPos l) $ "Bad Type for ArrayLit Constructor"
       
 arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]] 
   where

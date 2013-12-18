@@ -157,7 +157,7 @@ appTy θ (TAnd ts)                = TAnd (apply θ ts)
 appTy θ (TObj bs z)              = TObj ((\b -> b { b_type = appTy θ $ b_type b}) <$> bs) z
 appTy (Su m) t@(TVar α r)        = (M.lookupDefault t α m) `strengthen` r
 appTy θ (TFun ts t r)            = TFun  (apply θ ts) (apply θ t) r
-appTy (Su m) (TAll α t)          = apply (Su $ M.delete α m) t 
+appTy (Su m) (TAll α t)          = TAll α $ apply (Su $ M.delete α m) t             -- oh, god! DO NOT DROP TAll here.  
 appTy θ (TArr t r)               = TArr (apply θ t) r
 appTy (Su m) (TBd (TD c α t s))  = TBd $ TD c α (apply (Su $ foldr M.delete m α) t) s
 

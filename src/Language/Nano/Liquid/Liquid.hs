@@ -3,7 +3,6 @@
 {-# LANGUAGE TupleSections        #-}
 
 -- | Top Level for Refinement Type checker
-
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
 import           Text.Printf                        (printf)
@@ -315,8 +314,8 @@ consVarDecl g (VarDecl _ _ Nothing)
 ------------------------------------------------------------------------------------
 consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
 ------------------------------------------------------------------------------------
-consExprT g (ArrayLit l es) to 
-  = consArr l g to es
+-- consExprT g (ArrayLit l es) to 
+--   = consArrayLit l g to es
 
 consExprT g e to 
   = do (x, g') <- consExpr g e
@@ -511,7 +510,7 @@ consCall g l fn es ft0
        let ft        = fromMaybe (err ts ft0) $ calleeType l ts ft0
        (_,its,ot)   <- instantiate l g fn ft
        let (su, ts') = renameBinds its xes
-       zipWithM_ ({- ONLY AT CAST withAlignedM $ -} subTypeContainers "Call" l g') [envFindTy x g' | x <- xes] ts'
+       zipWithM_ (subTypeContainers "Call" l g') [envFindTy x g' | x <- xes] ts'
        envAddFresh "consCall" l (F.subst su ot) g'
     where
        err ts ft0    = die $ errorNoMatchCallee (srcPos l) ts ft0 
@@ -555,32 +554,31 @@ consObj l g pe =
       envAddFresh "consObj" l (TObj pxs F.top) g'
     
 
----------------------------------------------------------------------------------
-consArr ::AnnTypeR -> CGEnv -> Maybe RefType -> [Expression AnnTypeR] -> CGM  (Id AnnTypeR, CGEnv)
----------------------------------------------------------------------------------
--- []
-consArr l g (Just t@(TArr _ _ )) [] = 
-  envAddFresh "consArr:empty" l t g
-
--- [e1, ... ]
--- XXX: The top-level refinement of the array is ignored at the moment.
--- Also adds a top-level refinement that captures the length of the array.
-consArr l g (Just t@(TArr ta _)) es = do  
-    (xes, g')   <- consScan consExpr g es
-    let ts       = (`envFindTy` g') <$> xes
-    checkElts g' ts
-    let t'       = t `strengthen` lenReft
-    envAddFresh "consArr" l t' g'
-  where 
-    checkElts    = mapM_ . checkElt
-    checkElt g t = {- RJ ONLY AT CAST:  withAlignedM -} (subTypeContainers "ArrayConst" l g) t ta
-    v            = rTypeValueVar t
-    lenReft      = F.Reft (v, [F.RConc lenPred])
-    lenPred      = F.PAtom F.Eq (F.expr $ length es) 
-                    (F.EApp (rawStringSymbol "len") [F.eVar $ v])
-
-consArr l _ Nothing _  = die $ errorMissingAnnot (srcPos l) "array literal" 
-consArr l _ (Just _) _ = die $ errorBadAnnot     (srcPos l) "array literal" "array" 
+-- ---------------------------------------------------------------------------------
+-- consArrayLit ::AnnTypeR -> CGEnv -> Maybe RefType -> [Expression AnnTypeR] -> CGM  (Id AnnTypeR, CGEnv)
+-- ---------------------------------------------------------------------------------
+-- 
+-- -- []
+-- -- consArrayLit l g (Just t@(TArr _ _ )) [] = 
+-- --   envAddFresh "consArrayLit:empty" l t g
+-- 
+-- -- [e1, ... ]
+-- -- XXX: The top-level refinement of the array is ignored at the moment.
+-- -- Also adds a top-level refinement that captures the length of the array.
+-- consArrayLit l g (Just t@(TArr ta _)) es = do  
+--     (xes, g')   <- consScan consExpr g es
+--     let tes      = (`envFindTy` g') <$> xes
+--     forM_ tes    $ \te -> subTypeContainers "ArrayConst" l g te ta
+--     let t'       = t `strengthen` lenReft
+--     envAddFresh "consArrayLit" l t' g'
+--   where 
+--     v            = rTypeValueVar t
+--     lenReft      = F.Reft (v, [F.RConc lenPred])
+--     lenPred      = F.PAtom F.Eq (F.expr $ length es) 
+--                     (F.EApp (rawStringSymbol "len") [F.eVar $ v])
+-- 
+-- consArrayLit l _ Nothing _  = die $ errorMissingAnnot (srcPos l) "array literal" 
+-- consArrayLit l _ (Just _) _ = die $ errorBadAnnot     (srcPos l) "array literal" "array" 
 
 
 ---------------------------------------------------------------------------------

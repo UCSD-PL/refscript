@@ -587,7 +587,7 @@ consArr l _ (Just _) _ = die $ errorBadAnnot     (srcPos l) "array literal" "arr
 consPropRead getter g l e fld
   = do (x, g')        <- consExpr g e
        tdefs          <- getTDefs 
-       case getter tdefs fld $ envFindTy x g' of
+       case getter l tdefs fld $ envFindTy x g' of
          Just (_, tf) -> (tf,) <$> envAddFresh "consPropRead" l tf g'
          Nothing      -> die $  errorPropRead (srcPos l) e fld
 

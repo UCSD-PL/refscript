@@ -606,7 +606,7 @@ tcArray _ _ e =
 tcPropRead getter γ l e fld
   = do (e', te)   <- tcExpr γ e
        tdefs      <- getTDefs 
-       case getter tdefs fld te of
+       case getter l tdefs fld te of
          Nothing        -> tcError $  errorPropRead (srcPos l) e fld
          Just (te', tf) -> (, tf) <$> castM (tce_ctx γ) e' te te' 
 

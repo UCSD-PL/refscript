@@ -90,6 +90,9 @@ Failing Tests
 
   [OBJ-WRITE]
   liquid/pos/objects/obj-01.js      <----------------------- HEREHEREHEREHERE 
+                                        ISSUE: doesn't use type from assignment
+                                        (i.e. needs annotation, which obviously,
+                                        sucks.)
   liquid/pos/objects/obj-02.js
 
   [LOOPINV + OBJ-WRITE]

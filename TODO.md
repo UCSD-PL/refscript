@@ -90,6 +90,5 @@ Failing Tests
   liquid/pos/loops/while-04.js,
   liquid/pos/loops/obj-00.js,
   liquid/pos/loops/obj-02.js,
-  
 
 # vim:ft=quicktask

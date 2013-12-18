@@ -35,7 +35,7 @@ ssaTransform = either throw id . execute . ssaNano
 ssaNano p@(Nano {code = Src fs, tAnns = tAnns}) 
   = withMutability ReadOnly ros 
     $ withMutability WriteGlobal wgs 
-      $ do (_,fs') <- ssaStmts fs -- mapM ssaFun fs
+      $ do (_,fs') <- ssaStmts fs 
            ssaAnns <- getAnns
            return   $ p {code = Src $ (patchAnn ssaAnns tAnns' <$>) <$> fs'}
     where
@@ -49,17 +49,6 @@ patchAnn m1 m2 l = Ann l $ M.lookupDefault [] l m1 ++ M.lookupDefault [] l m2
 -------------------------------------------------------------------------------------
 ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)
 -------------------------------------------------------------------------------------
--- ssaFun (FunctionStmt l f xs body) 
---   = do oVars <- outerVars 
---        withMutability ReadOnly oVars     $ -- Variables from outer scope are READONLY
---          withExtSsaEnv iVars             $ -- Extend SsaEnv with formal binders
---            FunctionStmt l f xs . snd    <$> 
---              ssaStmts body
---     where
---       outerVars = envMap (\_ -> F.top) <$> getSsaEnv
---       iVars     = returnId l : xs
-
-
 ssaFun (FunctionStmt l f xs body) 
   = do θ <- getSsaEnv  
        withMutability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
@@ -264,9 +253,9 @@ ssaExpr   (ArrayLit l es)
 ssaExpr e@(VarRef l x) 
   = do mut <- getMutability x
        case mut of
-         ReadOnly    -> return e 
          WriteGlobal -> return e
-         WriteLocal  -> (maybe err (VarRef l)) <$> findSsaEnv x
+         ReadOnly    -> maybe e   (VarRef l) <$> findSsaEnv x
+         WriteLocal  -> maybe err (VarRef l) <$> findSsaEnv x
     where
       err = die $ errorUnboundId (srcPos x) x
 

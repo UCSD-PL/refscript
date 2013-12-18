@@ -208,19 +208,16 @@ freshTyArgs l ξ αs t
 
 freshSubst :: (PP r, F.Reftable r) => SourceSpan -> IContext -> [TVar] -> TCM r (RSubst r)
 freshSubst l ξ αs
-  = do
-      fUnique αs
-      βs        <- mapM (freshTVar l) αs
-      setTyArgs l ξ βs
-      extSubst βs 
-      return     $ fromList $ zip αs (tVar <$> βs)
-    where
-      fUnique xs = when (not $ unique xs) $ logError (errorUniqueTypeParams l) ()
+  = do when (not $ unique αs) $ logError (errorUniqueTypeParams l) ()
+       βs        <- mapM (freshTVar l) αs
+       setTyArgs l ξ βs
+       extSubst βs 
+       return    $ fromList $ zip αs (tVar <$> βs)
 
 setTyArgs l ξ βs
   = do m <- tc_anns <$> get
        when (HM.member l m) $ tcError $ errorMultipleTypeArgs l
-       addAnn l $ {- tracePP msg $ -} TypInst ξ (tVar <$> βs)
+       addAnn l $ TypInst ξ (tVar <$> βs)
     where 
        msg = printf "setTyArgs: l = %s ξ = %s" (ppshow l) (ppshow ξ) 
 
@@ -446,9 +443,9 @@ subTypesM ts ts' = zipWithM subTypeM ts ts'
 
 ----------------------------------------------------------------------------------
 checkAnnotation :: (F.Reftable r, PP r, Ord r) => 
-  String -> RType r -> Expression (AnnSSA r) -> RType r -> TCM r () 
+  String -> Expression (AnnSSA r) -> RType r -> RType r ->  TCM r () 
 ----------------------------------------------------------------------------------
-checkAnnotation msg ta e t = do
+checkAnnotation msg e t ta = do
     subTypeM t ta >>= sub
   where
     sub SubT = return () 

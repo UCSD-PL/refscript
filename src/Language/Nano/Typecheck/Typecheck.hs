@@ -70,7 +70,7 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
                  return $ F.Unsafe errs
 
 safe (_, Nano {code = Src fs})
-  = do V.whenLoud $ forM_ fs $ T.mapM printAnn
+  = do -- V.whenLoud $ forM_ fs $ T.mapM printAnn
        nfc       <- noFailCasts <$> getOpts
        return     $ F.Safe `mappend` failCasts nfc fs 
 
@@ -104,17 +104,20 @@ typeCheck verb pgm = fmap snd (execute verb pgm $ tcNano pgm)
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
-tcNano :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
-           => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
+-- tcNano :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
+--            => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs}) 
   = do checkTypeDefs p
-       (fs', _) <- tcStmts (initEnv p) fs
+       (fs', _) <- tcInScope γ $ tcStmts γ fs
        m        <- concatMaps <$> getAllAnns
        θ        <- getSubst
        let p'    = p {code = (patchAnn m . apply θ) <$> Src fs'}
        whenLoud  $ (traceCodePP p' m θ)
        return (m, p')
+    where
+       γ         = initEnv p
+
 
 patchAnn m (Ann l fs) = Ann l $ sortNub $ fs' ++ fs 
   where
@@ -126,13 +129,12 @@ initEnv pgm           = TCE (specs pgm) (defs pgm) emptyContext
 traceCodePP p m s     = trace (render $ codePP p m s) $ return ()
       
 codePP (Nano {code = Src src}) anns sub 
-  =   text "******************************** CODE ***********************************"
+  =   text "*************************** CODE ****************************************"
   $+$ pp src
   $+$ text "*************************** SUBSTITUTIONS *******************************"
   $+$ pp sub
-  $+$ text "******************************** CASTS **********************************"
-  $+$ vcat (pp <$> annotCasts anns )
-  --  $+$ vcat ((\(e,t) -> (pp $ ann $ getAnnotation e) <+> pp (e,t)) <$> cst)
+  $+$ text "*************************** ANNOTATIONS **********************************"
+  $+$ vcat (pp <$> {- annotCasts -} M.toList anns )
   $+$ text "*************************************************************************"
 
 annotCasts anns = [ (l, f) | (l, fs) <- M.toList anns, f@(TCast _ _) <- fs]
@@ -179,6 +181,18 @@ type TCEnvO r = Maybe (TCEnv r)
 instance (PP r, F.Reftable r) => Substitutable r (TCEnv r) where 
   apply θ (TCE m sp c) = TCE (apply θ m) (apply θ sp) c 
 
+instance (PP r, F.Reftable r) => PP (TCEnv r) where
+  pp = ppTCEnv
+
+ppTCEnv (TCE env spc ctx) 
+  =   text "******************** Environment ************************"
+  $+$ pp env
+  $+$ text "******************** Specifications *********************"
+  $+$ pp spc 
+  $+$ text "******************** Call Context ***********************"
+  $+$ pp ctx
+
+
 tcEnvPushSite i γ            = γ { tce_ctx = pushContext i    $ tce_ctx γ }
 tcEnvAdds     x γ            = γ { tce_env = envAdds x        $ tce_env γ }
 tcEnvAddReturn x t γ         = γ { tce_env = envAddReturn x t $ tce_env γ }
@@ -186,6 +200,14 @@ tcEnvMem x                   = envMem x      . tce_env
 tcEnvFindTy x                = envFindTy x   . tce_env
 tcEnvFindReturn              = envFindReturn . tce_env
 tcEnvFindSpec x              = envFindTy x   . tce_spec
+
+-------------------------------------------------------------------------------
+-- | TypeCheck Scoped Block in Environment ------------------------------------
+-------------------------------------------------------------------------------
+
+tcInScope γ act = accumAnn annCheck act
+  where
+    annCheck    = catMaybes . map (validInst γ) . M.toList
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Function -------------------------------------------------------
@@ -200,10 +222,10 @@ tcFun γ (FunctionStmt l f xs body)
 
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
-tcFun1 γ l f xs body (i, (αs,ts,t)) = accumAnn annCheck $ tcFunBody γ' l f body t
+tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l f body t
   where 
     γ'                              = envAddFun l f i αs xs ts t γ 
-    annCheck                        = catMaybes . map (validInst γ') . M.toList
+    -- annCheck                        = catMaybes . map (validInst γ') . M.toList
 
 tcFunBody γ l f body t
   = do (body', q)     <- tcStmts γ body
@@ -366,9 +388,6 @@ tcVarDecl γ v@(VarDecl l x (Just e))
   = do (e', g) <- tcAsgn γ x e
        return (VarDecl l x (Just e'), g)
 
---   = do (e', t) <- tcExprT γ e (varDeclAnnot v)
---        return   (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
-
 tcVarDecl γ v@(VarDecl _ _ Nothing)  
   = return   (v, Just γ)
 
@@ -386,11 +405,18 @@ tcAsgn γ x e
 tcExprT :: (Ord r, PP r, F.Reftable r)
        => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
-tcExprT γ e@(ArrayLit _ _) ct = tcArray γ ct e
-tcExprT γ e         (Just ta) = do (e', t) <- tcExpr γ e 
-                                   checkAnnotation "tcExprAnnot" ta e t 
-                                   return (e', ta)
-tcExprT γ e           Nothing = tcExpr γ e
+-- tcExprT γ e@(ArrayLit _ _) ct = tcArrayLit γ ct e
+--tcExprT γ e (Just ta) = do (e', t) <- tcExpr γ e 
+--                           checkAnnotation "tcExprAnnot" e t ta 
+--                           return (e', ta)
+--tcExprT γ e Nothing   = tcExpr γ e
+
+tcExprT γ e to 
+  = do (e', t) <- tcExpr γ e
+       te      <- case to of
+                    Nothing -> return t
+                    Just ta -> checkAnnotation "tcExprT" e t ta >> return ta
+       return     (e', te)
 
 -- UGH. STATE!!!! NO!!!!
 tcExpr' γ e                   = {- setExpr (Just e) >> -} tcExpr γ e
@@ -455,29 +481,11 @@ tcExpr γ (BracketRef l e fld@(IntLit _ i))
   = do (e', t) <- tcPropRead getIdx γ l e i 
        return     (BracketRef l e' fld, t)
 
--- RJ: TODO FIELD tcExpr γ (BracketRef _ e (StringLit _ s)) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) s
---TODO: deadcode-- RJ: TODO FIELD tcExpr γ (DotRef _ e s) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) (unId s) 
-
--- x["f"]
--- RJ: TODO FIELD tcExpr γ (BracketRef _ e (StringLit _ s)) = tcExpr' γ e >>= safeGetProp (tce_ctx γ) s
-
--- x[i] 
--- RJ: TODO FIELD tcExpr γ (BracketRef _ e (IntLit _ _)) = tcExpr' γ e >>= indexType (tce_ctx γ) 
-
--- x[e]
--- RJ: TODO FIELD tcExpr γ e@(BracketRef l e1 e2) = do
--- RJ: TODO FIELD     t1 <- tcExpr' γ e1
--- RJ: TODO FIELD     t2 <- tcExpr' γ e2
--- RJ: TODO FIELD     case t1 of 
--- RJ: TODO FIELD       -- NOTE: Only support dynamic access of array with index of integer type.
--- RJ: TODO FIELD       TArr t _  -> unifyTypeM (srcPos l) "BracketRef" e t2 tInt >> return t
--- RJ: TODO FIELD       t         -> errorstar $ "Unimplemented: BracketRef of non-array expression of type " ++ ppshow t
-
--- | e1[e2]
+-- e1[e2]
 tcExpr γ e@(BracketRef _ _ _) 
   = tcCall γ e
 
--- | e1[e2] = e3
+-- e1[e2] = e3
 tcExpr γ e@(AssignExpr _ OpAssign (LBracket _ _ _) _)
   = tcCall γ e
 
@@ -575,31 +583,34 @@ deadCast l γ e
       (α, t)  = undefType l γ
       ξ       = tce_ctx γ
 
-undefType l γ  = case bkAll $ builtinOpTy l BIUndefined $ tce_env γ of
-                   ([α], t) -> (α, t)
-                   _        -> die $ bug (srcPos l) "Malformed type for BIUndefined in prelude.js"
+undefType l γ 
+  = case bkAll $ ut of
+      ([α], t) -> (α, t)
+      _        -> die $ bug (srcPos l) $ "Malformed type --" ++ ppshow ut ++ "-- for BIUndefined in prelude.js"
+    where 
+      ut       = builtinOpTy l BIUndefined $ tce_env γ
 
-----------------------------------------------------------------------------------
-tcArray :: (Ord r, PP r, F.Reftable r) =>
-  TCEnv r -> Maybe (RType r) -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
-----------------------------------------------------------------------------------
-tcArray γ (Just t@(TArr ta _)) (ArrayLit l es) = do 
-    let tao       = Just ta
-    ets          <- mapM (\e -> tcExprT γ e tao) es
-    let (es', ts) = unzip ets
-    checkElts ta es' ts
-    return (ArrayLit l es', t)
-  where
-    checkElts = zipWithM_ . (checkAnnotation "tcArray")
-
-tcArray _ Nothing (ArrayLit l _)  = 
-  die $ bug (srcPos l) "Array literals need type annotations at the moment to typecheck in TC."
-
-tcArray _ (Just _) (ArrayLit l _) = 
-  die $ bug (srcPos l) "Type annotation for array literal needs to be of Array type."
-
-tcArray _ _ e = 
-  die $ bug (srcPos $ getAnnotation e) "BUG: Only support tcArray for array literals with type annotation"
+-- ----------------------------------------------------------------------------------
+-- tcArrayLit :: (Ord r, PP r, F.Reftable r) =>
+--   TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
+-- ----------------------------------------------------------------------------------
+-- tcArrayLit γ (Just t@(TArr ta _)) (ArrayLit l es) = do 
+--     let tao       = Just ta
+--     ets          <- mapM (\e -> tcExprT γ e tao) es
+--     let (es', ts) = unzip ets
+--     checkElts ta es' ts
+--     return (ArrayLit l es', t)
+--   where
+--     checkElts = zipWithM_ . (checkAnnotation "tcArrayLit")
+-- 
+-- tcArrayLit _ Nothing (ArrayLit l _)  = 
+--   die $ bug (srcPos l) "Array literals need type annotations at the moment to typecheck in TC."
+-- 
+-- tcArrayLit _ (Just _) (ArrayLit l _) = 
+--   die $ bug (srcPos l) "Type annotation for array literal needs to be of Array type."
+-- 
+-- tcArrayLit _ _ e = 
+--   die $ bug (srcPos $ getAnnotation e) "BUG: Only support tcArray for array literals with type annotation"
              
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------

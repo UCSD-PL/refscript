@@ -79,20 +79,13 @@ Failing Tests
 -------------
 
   [INFER]
-  tests/liquid/arrays/infer-00.js   <------------------------ HEREHEREHEREHEREHERE
-
-  tests/liquid/objects/infer-00.js
+  tests/liquid/objects/infer-00.js  <------------------------ HEREHEREHEREHEREHERE
   tests/liquid/objects/infer-01.js
   tests/liquid/objects/infer-02.js
 
   [ARRAY.LENGTH]
   liquid/pos/arrays/safemap.js,
  
-  [RIGID]
-  liquid/pos/misc/apply.js,
-  liquid/pos/misc/cousot-01.js,
-  liquid/pos/misc/twice-hof.js,
-
   [LOOPINV+OBJ-WRITE]
   liquid/pos/loops/while-04.js,
   liquid/pos/loops/obj-00.js,

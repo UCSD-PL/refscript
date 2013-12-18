@@ -12,12 +12,15 @@ function main(x,y){
   var yr = idt(y);
   var xr = idt(x);
   var z  = 1;
+  
   if (yr) {
     z = 10;
   }
 
   /*@ plus :: (number) => number */
-  function plus(a){ return a + z };
+  function plus(a){ 
+    return a + z
+  };
   
   xr = apply(plus, xr);
   xr = apply(plus, xr);

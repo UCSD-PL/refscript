@@ -136,10 +136,6 @@ getMutability x = (fromMaybe WriteLocal . envFindTy x . mutability) <$> get
 -- -------------------------------------------------------------------------------------
 -- getImmutables   = immutables <$> get
 
-
-
-
-
 -------------------------------------------------------------------------------------
 updSsaEnv   :: SourceSpan -> Id SourceSpan -> SSAM r (Id SourceSpan) 
 -------------------------------------------------------------------------------------

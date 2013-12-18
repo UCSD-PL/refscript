@@ -29,6 +29,7 @@ module Language.Nano.Typecheck.Subst (
 import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Parse as P
 import           Language.Nano.Types
@@ -221,10 +222,10 @@ unfoldSafe env = either error id . unfoldMaybe env
 --   throw an error.
 --
 -------------------------------------------------------------------------------
-getProp ::  (Ord r, PP r, F.Reftable r) => 
-  Env (RType r) -> String -> RType r -> Maybe (RType r, RType r)
+getProp ::  (IsLocated l, Ord r, PP r, F.Reftable r) => 
+  l -> Env (RType r) -> String -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getProp _ s t@(TObj bs _) = 
+getProp _ _ s t@(TObj bs _) = 
   do  case find (match $ F.symbol s) bs of
         Just b -> Just (t, b_type b)
         _      -> case find (match $ F.stringSymbol "*") bs of
@@ -232,32 +233,33 @@ getProp _ s t@(TObj bs _) =
                     _       -> Just (t, tUndef)
   where match s (B f _)  = s == f
 
-getProp γ s t@(TApp c ts _ ) = go c
-  where  go TUn      = getPropUnion γ s ts
-         go TInt     = Just (t, tUndef)
-         go TBool    = Just (t, tUndef)
-         go TString  = Just (t, tUndef)
-         go TUndef   = Nothing
-         go TNull    = Nothing
-         go (TDef _) = getProp γ s $ unfoldSafe γ t
-         go TTop     = error "getProp top"
-         go TVoid    = error "getProp void"
+getProp l γ s t@(TApp _ _ _)  = getPropApp l γ s t 
+getProp _ _ _ t@(TFun _ _ _ ) = Just (t, tUndef)
+getProp l γ s a@(TArr _ _)    = getPropArr l γ s a
+getProp l _ _ t               = die $ bug (srcPos l) $ "getProp: " ++ (ppshow t) 
 
-getProp _ _ t@(TFun _ _ _ ) = Just (t, tUndef)
+getPropApp l γ s t@(TApp c ts _) 
+  = case c of 
+      TUn      -> getPropUnion l γ s ts
+      TInt     -> Just (t, tUndef)
+      TBool    -> Just (t, tUndef)
+      TString  -> Just (t, tUndef)
+      TUndef   -> Nothing
+      TNull    -> Nothing
+      (TDef _) -> getProp l γ s $ unfoldSafe γ t
+      TTop     -> die $ bug (srcPos l) "getProp top"
+      TVoid    -> die $ bug (srcPos l) "getProp void"
 
-getProp γ s a@(TArr _ _)    = 
-  case s of
-    -- TODO: make more specific, add refinements
+getPropArr l γ s a@(TArr _ _) 
+  = case s of
+    -- TODO: make more specific, add refinements 
     "length" -> Just (a, tInt) 
     _        -> case stringToInt s of
-    -- Implicit coersion of numieric strings:
-    -- x["0"] = x[0], x["1"] = x[1], etc.
-                  Just i  -> getIdx γ i a 
-    -- The rest of the cases are undefined
+                  -- Implicit coersion of numieric strings:
+                  -- x["0"] = x[0], x["1"] = x[1], etc.
+                  Just i  -> getIdx l γ i a 
+                  -- The rest of the cases are undefined
                   Nothing -> Just (a, tUndef) 
-
-getProp _ _ t               = error $ "getProp " ++ (ppshow t) 
-
 
 -------------------------------------------------------------------------------
 stringToInt :: String -> Maybe Int
@@ -272,23 +274,23 @@ stringToInt s =
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
-getPropUnion ::  (Ord r, PP r, F.Reftable r) => 
-  Env (RType r) -> String -> [RType r] -> Maybe (RType r, RType r)
+getPropUnion ::  (IsLocated l, Ord r, PP r, F.Reftable r) => 
+  l -> Env (RType r) -> String -> [RType r] -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getPropUnion γ f ts = 
+getPropUnion l γ f ts = 
   -- Gather all the types that do not throw errors, and the type of 
   -- the accessed expression that yields them
-  case [tts | Just tts <- getProp γ f <$> ts] of
+  case [tts | Just tts <- getProp l γ f <$> ts] of
     [] -> Nothing
     ts -> Just $ mapPair mkUnion $ unzip ts
 
 
 -------------------------------------------------------------------------------
-getIdx ::  (Ord r, PP r, F.Reftable r) => 
-  Env (RType r) -> Int -> RType r -> Maybe (RType r, RType r)
+getIdx ::  (IsLocated l, Ord r, PP r, F.Reftable r) => 
+  l -> Env (RType r) -> Int -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getIdx _ _ a@(TArr t _)  = Just (a,t)
-getIdx γ i t             = getProp γ (show i) t 
+getIdx _ _ _ a@(TArr t _)  = Just (a,t)
+getIdx l γ i t             = getProp l γ (show i) t 
 --error $ "Unimplemented: getIdx on" ++ (ppshow t) 
 
 

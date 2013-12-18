@@ -78,8 +78,12 @@ RJ TODO
 Failing Tests 
 -------------
 
-  [OBJ-READ-NO-ANNOT]
-  tests/liquid/todo/obj-01.js
+  [INFER]
+  tests/liquid/arrays/infer-00.js   <------------------------ HEREHEREHEREHEREHERE
+
+  tests/liquid/objects/infer-00.js
+  tests/liquid/objects/infer-01.js
+  tests/liquid/objects/infer-02.js
 
   [ARRAY.LENGTH]
   liquid/pos/arrays/safemap.js,

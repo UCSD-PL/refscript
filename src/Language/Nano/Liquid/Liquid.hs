@@ -113,15 +113,6 @@ consFun1 l g' f xs body (i, ft)
        gm  <- consStmts g'' body
        maybe (return ()) (\g -> subTypeContainers "return void" l g tVoid (envFindReturn g'')) gm
 
-
--- checkFormal x t 
---   | xsym == tsym = (x, t)
---   | otherwise    = errorstar $ errorArgName (srcPos x) xsym tsym
---   where 
---     xsym         = F.symbol x
---     tsym         = F.symbol t
-
-
 -----------------------------------------------------------------------------------
 -- envAddFun :: AnnTypeR -> CGEnv -> Id AnnTypeR -> [Id AnnTypeR] -> RefType -> CGM CGEnv
 -----------------------------------------------------------------------------------
@@ -132,7 +123,6 @@ envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g)
   where
     tyBinds                        = [(Loc (srcPos l) α, tVar α) | α <- αs]
     varBinds                       = safeZip "envAddFun"
-    -- (αs, ts', t')     = funTy l f xs ft
 
 --------------------------------------------------------------------------------
 consStmts :: CGEnv -> [Statement AnnTypeR]  -> CGM (Maybe CGEnv) 
@@ -144,8 +134,8 @@ consStmt :: CGEnv -> Statement AnnTypeR -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
 
 -- | @consStmt g s@ returns the environment extended with binders that are
--- due to the execution of statement s. @Nothing@ is returned if the
--- statement has (definitely) hit a `return` along the way.
+--   due to the execution of statement s. @Nothing@ is returned if the
+--   statement has (definitely) hit a `return` along the way.
 
 -- skip
 consStmt g (EmptyStmt _) 
@@ -162,41 +152,7 @@ consStmt g (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
        let t2     = envFindTy x2 g'
        subTypeContainers "field-assignment" l2 g' t2 tfld
        return     $ Just g'
-
-
- -- do (e1', tfld) <- tcPropRead getProp γ l e1 fld
- --      (e2', t2)   <- tcExpr γ $ e2                    
- --      e2''        <- castM  ξ e2' t2 tfld
- --      return         (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' fld) e2''), Just γ)
- --   where
- --      ξ            = tce_ctx γ      
-
-
--- RJ: TODO FIELD -- @e3.x@ should have the exact same type with @e2@
--- RJ: TODO FIELD consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot _ e3 x) e2))
--- RJ: TODO FIELD   = do  (x2,g2) <- consExpr g  e2
--- RJ: TODO FIELD         (x3,g3) <- consExpr g2 e3
--- RJ: TODO FIELD         let t2   = envFindTy x2 g2
--- RJ: TODO FIELD             t3   = envFindTy x3 g3
--- RJ: TODO FIELD         tx      <- safeGetProp x t3
--- RJ: TODO FIELD         case tx of 
--- RJ: TODO FIELD           -- NOTE: Atm assignment to non existing binding has no effect!
--- RJ: TODO FIELD           TApp TUndef _ _ -> return $ Just g3
--- RJ: TODO FIELD           _ -> do {- ONLY AT CAST withAlignedM -} 
--- RJ: TODO FIELD                   (subTypeContainers "e.x = e" l2 g3) t2 tx
--- RJ: TODO FIELD                   return   $ Just g3
-
--- RJ: TODO JUNK -- e3[i] = e2
--- RJ: TODO JUNK consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LBracket _ e3 (IntLit _ i)) e2))
--- RJ: TODO JUNK   = do  (x2,g2) <- consExpr g  e2
--- RJ: TODO JUNK         (x3,g3) <- consExpr g2 e3
--- RJ: TODO JUNK         let t2   = tracePP (ppshow e2 ++ " ANF: " ++ ppshow x2) $ envFindTy x2 g2
--- RJ: TODO JUNK             t3   = envFindTy x3 g3
--- RJ: TODO JUNK         ti      <- safeGetIdx i t3
--- RJ: TODO JUNK         {- ONLY AT CAST withAlignedM -} 
--- RJ: TODO JUNK         (subTypeContainers "e[i] = e" l2 g3) t2 ti
--- RJ: TODO JUNK         return   $ Just g3
-
+-- e
 consStmt g (ExprStmt _ e) 
   = consExpr g e >> (return $ Just g)
 
@@ -235,8 +191,8 @@ consStmt g (ReturnStmt l (Just e))
         let te    = envFindTy xe g'
             rt    = envFindReturn g'
         if isTop rt
-          then {- ONLY AT CAST withAlignedM -} (subTypeContainers "ReturnTop" l g') te (setRTypeR te (rTypeR rt))
-          else {- ONLY AT CAST withAlignedM -} (subTypeContainers "Return" l g') te rt
+          then (subTypeContainers "ReturnTop" l g') te (setRTypeR te (rTypeR rt))
+          else (subTypeContainers "Return" l g') te rt
         return Nothing
 
 -- return
@@ -349,46 +305,17 @@ consExpr g (BracketRef l e1 e2)
 consExpr g (AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
   = consCall g l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ renv g
 
+-- [e1,...,en]
 consExpr g e@(ArrayLit l es)
   = consCall g l BIArrayLit es $ arrayLitTy l (length es) $ renv g
 
+-- {f1:e1,...,fn:en}
 consExpr g (ObjectLit l ps) 
   = consObjT l g ps Nothing
 
+-- not handled
 consExpr _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))
-
-
--- consExpr g (BracketRef l e i) = do
---     (xe, g')  <- consExpr g e
---     (xi, g'') <- consExpr g' i
---     let ta = envFindTy xe g' 
---         ti = envFindTy xi g''
---     case (ta, ti) of
---       (TArr _ _, TApp TInt _ _) -> do  
---         t <- indexType ta
---         {- ONLY AT CAST withAlignedM -} 
---         (subTypeContainers "Bounds" l g'') (eSingleton tInt xi) (bt xe)
---         envAddFresh "consExpr:[IntLit]" l t g''
---       _ -> errorstar $ "UNIMPLEMENTED[consExpr] " ++ 
---                        "Can only use BracketRef to access array " ++
---                        "type with an integer. Here used " ++ (ppshow ti)
---   where
---     -- bt x = { number | ((0 <= v) && (v < (len x)))}
---     bt x = setRTypeR tInt (F.predReft $ F.PAnd [lo, hi x])
---     lo   = F.PAtom F.Le (F.ECon $ F.I 0) v                             -- 0 <= v
---     hi x = F.PAtom F.Lt v (F.EApp (rawStringSymbol "len") [F.eVar $ x]) -- v < len va
---     v    = F.eVar $ F.vv Nothing
-
-
--- -- shadowed at the moment...
--- consExpr g (BracketRef l e (StringLit _ s))
---   = do  (x, g') <- consExpr g e
---         t       <- safeGetProp s (envFindTy x g') 
---         envAddFresh "consExpr[StringLit]" l t g'
-        
-
-
 
 -------------------------------------------------------------------------------------------------
 consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
@@ -565,7 +492,7 @@ consWhile g l cond body
        return               $ envAddGuard xc False gI'
 
 
-{-
+{- OLD/DEPRECATED.
 
 -- G   |- C :: xe, G1
 -- Tinv = freshen(G1(x)) = {_|K}, ∀x∈Φ
@@ -633,7 +560,6 @@ envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 --       3. generate subtyping constraints between the types from step 1 and the fresh types
 --       4. return the extended environment.
 
-
 envJoin' l g g1 g2
   = do (g', xs, t1s', t2s', ts) <- envJoinExt l g g1 g2 
        g1' <- envAdds (zip xs t1s') g1 
@@ -654,24 +580,4 @@ envJoinExt l g g1 g2
         let t4   = zipWith (compareTs γ) t1s t2s
         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst4 <$> t4
         return     (g', xs, snd4 <$> t4, thd4 <$> t4, ts)
-
--- envJoin' l g g1 g2
---   = do  let xs   = [x | PhiVar [x] <- ann_fact l] 
---             t1s  = (`envFindTy` g1) <$> xs 
---             t2s  = (`envFindTy` g2) <$> xs
---         when (length t1s /= length t2s) $ cgError l (bugBadPhi (srcPos l) t1s t2s)
---         γ       <- getTDefs
---         let t4   = zipWith (compareTs γ) t1s t2s
---         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst4 <$> t4
---         -- To facilitate the sort check t1s and t2s need to change to their
---         -- equivalents that have the same sort with the joined types (ts) 
---         -- (with the added False's to make the types equivalent)
---         g1' <- envAdds (zip xs $ snd4 <$> t4) g1 
---         g2' <- envAdds (zip xs $ thd4 <$> t4) g2
---         zipWithM_ (subTypeContainers "envJoin 1" l g1') [envFindTy x g1' | x <- xs] ts
---         zipWithM_ (subTypeContainers "envJoin 2" l g2') [envFindTy x g2' | x <- xs] ts
---         return g'
-
-
-
 

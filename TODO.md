@@ -78,12 +78,8 @@ RJ TODO
 Failing Tests 
 -------------
 
-
- liquid/pos/lists/list-01.js,
   [QUALGEN]
-  liquid/pos/simple/qualgen-00.js
-
-  <------------------------ HEREHEREHEREHEREHERE
+  liquid/pos/simple/qualgen-00.js <------------------------ HEREHEREHEREHEREHERE
 
   [ARRAY.LENGTH]
   liquid/pos/arrays/safemap.js,

@@ -27,7 +27,7 @@ module Language.Nano.Liquid.CGMonad (
   -- * Fresh Templates for Unknown Refinement Types 
   , freshTyFun
   , freshTyInst
-  -- , freshTyPhis
+  , freshTyPhis
   , freshTyPhisWhile
   , freshTyObj
 
@@ -43,7 +43,7 @@ module Language.Nano.Liquid.CGMonad (
   , envFindSpec
   , envToList
   , envFindReturn
-  , envJoin
+  -- , envJoin
   , envPushContext
   , envGetContextCast
   , envGetContextTypArgs
@@ -358,41 +358,6 @@ envFindReturn :: CGEnv -> RefType
 ---------------------------------------------------------------------------------------
 envFindReturn = E.envFindReturn . renv
 
-
-----------------------------------------------------------------------------------
-envJoin :: AnnTypeR -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)
-----------------------------------------------------------------------------------
-envJoin _ _ Nothing x           = return x
-envJoin _ _ x Nothing           = return x
-envJoin l g (Just g1) (Just g2) = Just <$> envJoin' l g g1 g2 
-
-----------------------------------------------------------------------------------
-envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
-----------------------------------------------------------------------------------
-
--- HINT: 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
---       2. use @freshTyPhis@ to generate fresh types (and an extended environment with 
---          the fresh-type bindings) for all the phi-vars using the unrefined types 
---          from step 1.
---       3. generate subtyping constraints between the types from step 1 and the fresh types
---       4. return the extended environment.
-
-envJoin' l g g1 g2
-  = do  let xs   = [x | PhiVar [x] <- ann_fact l] 
-            t1s  = (`envFindTy` g1) <$> xs 
-            t2s  = (`envFindTy` g2) <$> xs
-        when (length t1s /= length t2s) $ cgError l (bugBadPhi (srcPos l) t1s t2s)
-        γ       <- getTDefs
-        let t4   = zipWith (compareTs γ) t1s t2s
-        (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst4 <$> t4
-        -- To facilitate the sort check t1s and t2s need to change to their
-        -- equivalents that have the same sort with the joined types (ts) 
-        -- (with the added False's to make the types equivalent)
-        g1' <- envAdds (zip xs $ snd4 <$> t4) g1 
-        g2' <- envAdds (zip xs $ thd4 <$> t4) g2
-        zipWithM_ (subTypeContainers "envJoin 1" l g1') [envFindTy x g1' | x <- xs] ts
-        zipWithM_ (subTypeContainers "envJoin 2" l g2') [envFindTy x g2' | x <- xs] ts
-        return g'
 
 ---------------------------------------------------------------------------------------
 -- | Fresh Templates ------------------------------------------------------------------

@@ -443,13 +443,13 @@ subTypesM ts ts' = zipWithM subTypeM ts ts'
 
 ----------------------------------------------------------------------------------
 checkAnnotation :: (F.Reftable r, PP r, Ord r) => 
-  String -> Expression (AnnSSA r) -> RType r -> RType r ->  TCM r () 
+  String -> Expression (AnnSSA r) -> RType r -> RType r ->  TCM r (RType r) 
 ----------------------------------------------------------------------------------
 checkAnnotation msg e t ta = do
     subTypeM t ta >>= sub
   where
-    sub SubT = return () 
-    sub EqT  = return () 
+    sub SubT = return ta 
+    sub EqT  = return ta
     sub _    = tcError $ catMessage err msg' 
     err      = errorAnnotation (srcPos $ getAnnotation e) e t ta
     msg'     = "[" ++ msg ++ "]"

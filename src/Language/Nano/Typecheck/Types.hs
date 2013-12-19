@@ -650,20 +650,20 @@ instance (PP a) => PP (Cast a) where
 
 data Fact r
   = PhiVar      ![(Id SourceSpan)]
-  | LoopPhiVar  ![(Id SourceSpan, Id SourceSpan, Id SourceSpan)]
+--   | LoopPhiVar  ![(Id SourceSpan, Id SourceSpan, Id SourceSpan)]
   | TypInst     !IContext ![RType r]
   | TCast       !IContext !(Cast (RType r))
   | TAnnot      !(RType r)
     deriving (Eq, Ord, Show, Data, Typeable)
 
--- TODO: make a record with three suitably named fields instead of a raw-tuple.
--- | LoopPhiVar: will keep track of:
--- ∙ the SSA version of the Phi var before entering the loop, and 
--- ∙ the SSA version of the Phi var after entering the loop. 
--- ∙ the SSA version of the Phi var at the end of the loop.
--- This will be helpful to keep track of the base types that the phi vars will 
--- need to have in the loop (since there is no definition of them in the
--- source).
+-- NUKED, USE VANILLA PHI -- TODO: make a record with three suitably named fields instead of a raw-tuple.
+-- NUKED, USE VANILLA PHI -- | LoopPhiVar: will keep track of:
+-- NUKED, USE VANILLA PHI -- ∙ the SSA version of the Phi var before entering the loop, and 
+-- NUKED, USE VANILLA PHI -- ∙ the SSA version of the Phi var after entering the loop. 
+-- NUKED, USE VANILLA PHI -- ∙ the SSA version of the Phi var at the end of the loop.
+-- NUKED, USE VANILLA PHI -- This will be helpful to keep track of the base types that the phi vars will 
+-- NUKED, USE VANILLA PHI -- need to have in the loop (since there is no definition of them in the
+-- NUKED, USE VANILLA PHI -- source).
 
 type UFact = Fact ()
 
@@ -698,13 +698,15 @@ instance IsLocated TCon where
 
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)       = text "phi"  <+> pp x
-  pp (LoopPhiVar xs)  = text "loopphi ("  
-                          <+> cat ((\(x,x0,x1) -> pp x  <+> text "," 
-                                              <+> pp x0 <+> text "," 
-                                              <+> pp x1 <+> text ")") <$> xs)
   pp (TypInst ξ ts)   = text "inst" <+> pp ξ <+> pp ts 
   pp (TCast  ξ c)     = text "cast" <+> pp ξ <+> pp c
   pp (TAnnot t)       = text "annotation" <+> pp t
+
+
+--   pp (LoopPhiVar xs)  = text "loopphi ("  
+--                           <+> cat ((\(x,x0,x1) -> pp x  <+> text "," 
+--                                               <+> pp x0 <+> text "," 
+--                                               <+> pp x1 <+> text ")") <$> xs)
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . M.toList 

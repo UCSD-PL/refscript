@@ -344,22 +344,12 @@ tcStmt γ (IfStmt l e s1 s2)
        z         <- envJoin l γ γ1 γ2
        return       (IfStmt l e' s1' s2', z)
 
--- while c { b } 
--- exit environment is entry as may skip. SSA-Tx adds phi-asgn prior to while.
+-- while c { b } ; exit environment is entry as may skip. SSA adds phi-asgn prior to while.
 tcStmt γ (WhileStmt l c b) 
   = do (c', t)   <- tcExpr γ c
        unifyTypeM (srcPos l) "While condition" c t tBool
        (b', _)   <- tcStmt γ b
        return       (WhileStmt l c' b', Just γ)  
-
--- NUKE tcStmt γ (WhileStmt l c b) = do
--- NUKE     let phis   = [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
--- NUKE     let phiTs  = fromJust <$> (`tcEnvFindTy` γ) <$> (fst3 <$> phis)
--- NUKE     let γ'     = tcEnvAdds (zip (snd3 <$> phis) phiTs) γ
--- NUKE     (c', t)   <- tcExpr' γ' c
--- NUKE     unifyTypeM (srcPos l) "While condition" c t tBool
--- NUKE     (b', γ'') <- tcStmt γ' b
--- NUKE     return       (WhileStmt l c' b', γ'')
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt l ds)

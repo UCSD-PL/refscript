@@ -692,12 +692,6 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (TCast  ξ c)     = text "cast" <+> pp ξ <+> pp c
   pp (TAnnot t)       = text "annotation" <+> pp t
 
-
---   pp (LoopPhiVar xs)  = text "loopphi ("  
---                           <+> cat ((\(x,x0,x1) -> pp x  <+> text "," 
---                                               <+> pp x0 <+> text "," 
---                                               <+> pp x1 <+> text ")") <$> xs)
-
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . M.toList 
     where 
@@ -705,10 +699,6 @@ instance (F.Reftable r, PP r) => PP (AnnInfo r) where
 
 instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
-
--- isAsm  :: UFact -> Bool
--- isAsm  (CastTo _ _) = True
--- isAsm  _          = False
 
 type SST r     = (SourceSpan, Maybe (RType r))
 
@@ -742,10 +732,6 @@ tArr    = (`TArr` F.top)
 isArr (TArr _ _ ) = True
 isArr _           = False
 
-
--- tProp :: (F.Reftable r) => RType r
--- tProp  = TApp tcProp [] F.top 
--- tcProp = TDef $ F.S propConName 
 
 -----------------------------------------------------------------------
 -- | Operator Types ---------------------------------------------------

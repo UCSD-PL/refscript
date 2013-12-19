@@ -144,21 +144,6 @@ ssaStmt (WhileStmt l cond body)
        asgn [] _   = Nothing 
        asgn ls rs  = Just $ BlockStmt l $ zipWith (mkPhiAsgn l) ls rs
 
--- ssaStmt (WhileStmt l c b) = do  
---     g0         <- getSsaEnv
---     φ          <- getLoopPhis g0 b
---     let φ0      = [x | (SI x, _) <- (snd <$> φ)]
---     φ1         <- mapM (updSsaEnv l) (fst <$> φ)
---     g1         <- getSsaEnv
---     c'         <- ssaExpr c 
---     (t, b')    <- ssaStmt b
---     g2         <- getSsaEnv
---     let φ2      = [x | Just (SI x) <- (`envFindTy` g2) <$> (fst <$> φ)]
---     addAnn l (LoopPhiVar $ zip3 φ0 φ1 φ2)
---     setSsaEnv g1
---     return (t, WhileStmt l c' b')
-     
-
 ssaStmt (ForStmt _  NoInit _ _ _ )     = 
     errorstar "unimplemented: ssaStmt-for-01"
 

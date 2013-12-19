@@ -78,11 +78,14 @@ RJ TODO
 Failing Tests 
 -------------
 
-  [QUALGEN]
+Actually new features.
+
+[QUALGEN]
   liquid/pos/simple/qualgen-00.js <------------------------ HEREHEREHEREHEREHERE
   liquid/pos/simple/qualgen-01.js
 
-  [ARRAY.LENGTH]
+[ARRAY.LENGTH]
   liquid/pos/arrays/safemap.js,
- 
+
+
 # vim:ft=quicktask

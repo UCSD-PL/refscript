@@ -314,8 +314,8 @@ consVarDecl g (VarDecl _ _ Nothing)
 ------------------------------------------------------------------------------------
 consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
 ------------------------------------------------------------------------------------
--- consExprT g (ArrayLit l es) to 
---   = consArrayLit l g to es
+consExprT g (ObjectLit l ps) to
+  = consObjT l g ps to
 
 consExprT g e to 
   = do (x, g') <- consExpr g e
@@ -398,7 +398,7 @@ consExpr g e@(ArrayLit l es)
   = consCall g l BIArrayLit es $ arrayLitTy l (length es) $ renv g
 
 consExpr g (ObjectLit l ps) 
-  = consObj l g ps
+  = consObjT l g ps Nothing
 
 consExpr _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))
@@ -545,13 +545,23 @@ consSeq f           = foldM step . Just
 
 
 ---------------------------------------------------------------------------------
-consObj :: AnnTypeR -> CGEnv -> [(Prop AnnTypeR, Expression AnnTypeR)] -> CGM (Id AnnTypeR, CGEnv)
+-- consObjT :: AnnTypeR -> CGEnv -> [(Prop AnnTypeR, Expression AnnTypeR)] -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------
-consObj l g pe = 
-  do  let (ps, es) = unzip pe
-      (xes, g')   <- consScan consExpr g es
-      let pxs      = zipWith B (map F.symbol ps) $ (`envFindTy` g') <$> xes
-      envAddFresh "consObj" l (TObj pxs F.top) g'
+
+-- Generate a fresh template for each literal to not over-specialize.
+consObjT l g pe to 
+  = do let (ps, es) = unzip pe
+       (xes, g')   <- consScan consExpr g es
+       let tLit     = (`TObj` F.top) $ zipWith B (F.symbol <$> ps) ((`envFindTy` g') <$> xes)
+       t           <- maybe (freshTyObj l g tLit) return to
+       subTypeContainers "object literal" l g' tLit t
+       envAddFresh "consObj" l t g'
+ 
+-- OLD consObj l g pe = 
+-- OLD   do  let (ps, es) = unzip pe
+-- OLD       (xes, g')   <- consScan consExpr g es
+-- OLD       let pxs      = zipWith B (map F.symbol ps) $ (`envFindTy` g') <$> xes
+-- OLD       envAddFresh "consObj" l (TObj pxs F.top) g'
     
 
 -- ---------------------------------------------------------------------------------

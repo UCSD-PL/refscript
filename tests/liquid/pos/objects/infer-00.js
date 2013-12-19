@@ -1,4 +1,3 @@
-/*@ gobj :: {a : number} */
 var gobj = {
   a: 5
 }

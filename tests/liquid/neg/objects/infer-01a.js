@@ -3,7 +3,7 @@
 
 /*@ inc :: (number) => number  */
 function inc(n) {
-  return n + 2;
+  return n + 1;
 }
 
 var gobj = {
@@ -14,6 +14,7 @@ var gobj = {
 
 /*@ foo :: () => { number | v = 6 } */
 function foo () {
+  gobj.a = 120;
   var ff = gobj.f;
   return ff(gobj.a);
 }

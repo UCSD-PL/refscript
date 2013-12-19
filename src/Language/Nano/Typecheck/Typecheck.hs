@@ -393,10 +393,10 @@ tcVarDecl γ v@(VarDecl _ _ Nothing)
 
 varDeclAnnot v = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
 
----------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
   TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
----------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 tcAsgn γ x e
   = do (e' , t) <- tcExprT γ e $ tcEnvFindSpec x γ
        return      (e', Just   $ tcEnvAdds [(x, t)] γ)
@@ -405,12 +405,6 @@ tcAsgn γ x e
 tcExprT :: (Ord r, PP r, F.Reftable r)
        => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
--- tcExprT γ e@(ArrayLit _ _) ct = tcArrayLit γ ct e
---tcExprT γ e (Just ta) = do (e', t) <- tcExpr γ e 
---                           checkAnnotation "tcExprAnnot" e t ta 
---                           return (e', ta)
---tcExprT γ e Nothing   = tcExpr γ e
-
 tcExprT γ e to 
   = do (e', t) <- tcExpr γ e
        te      <- case to of
@@ -454,7 +448,7 @@ tcExpr γ (ObjectLit l bs)
   = do let (ps, es)  = unzip bs
        ets          <- mapM (tcExpr' γ) es
        let (es', ts) = unzip ets
-       let bts       = zipWith B (F.symbol <$> ps) ts -- <$> mapM (tcExpr' γ) es
+       let bts       = zipWith B (F.symbol <$> ps) ts
        return (ObjectLit l (zip ps es'), TObj bts F.top)
 
 tcExpr γ e@(ArrayLit _ _)

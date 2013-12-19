@@ -29,7 +29,7 @@ module Language.Nano.Liquid.CGMonad (
   , freshTyInst
   , freshTyPhis
   , freshTyPhisWhile
-  , freshTyArr
+  , freshTyObj
 
   -- * Freshable
   , Freshable (..)
@@ -418,16 +418,14 @@ freshTyInst l g αs τs tbody
   = do ts    <- mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
        let θ  = fromList $ zip αs ts
-       return $  {- tracePP msg $ -} apply θ tbody
-    {-where-}
-    {-   msg = printf "freshTyInst αs=%s τs=%s: " (ppshow αs) (ppshow τs)-}
+       return $ apply θ tbody
 
 -- | Instantiate Fresh Type (at Phi-site) 
 ---------------------------------------------------------------------------------------
 freshTyPhis :: (PP l, IsLocated l) => l -> CGEnv -> [Id l] -> [Type] -> CGM (CGEnv, [RefType])  
 ---------------------------------------------------------------------------------------
 freshTyPhis l g xs τs 
-  = do ts <- mapM    (freshTy "freshTyPhis")  ({-tracePP "From" -} τs)
+  = do ts <- mapM    (freshTy "freshTyPhis")  τs
        g' <- envAdds (safeZip "freshTyPhis" xs ts) g
        _  <- mapM    (wellFormed l g') ts
        return (g', ts)
@@ -436,21 +434,27 @@ freshTyPhis l g xs τs
 freshTyPhisWhile :: (PP l, IsLocated l) => l -> CGEnv -> [Id l] -> [Type] -> CGM (CGEnv, [RefType])  
 ---------------------------------------------------------------------------------------
 freshTyPhisWhile l g xs τs 
-  = do ts <- mapM    (freshTy "freshTyPhis")  ({-tracePP "From" -} τs)
+  = do ts <- mapM    (freshTy "freshTyPhis")  τs
        g' <- envAdds (safeZip "freshTyPhis" xs ts) g
        _  <- mapM    (wellFormed l g) ts
        return (g', ts)
 
+-- | Fresh Object Type
+---------------------------------------------------------------------------------------
+freshTyObj :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType 
+-- ---------------------------------------------------------------------------------------
+freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g 
+
 
 -- | Fresh Array Type
 ---------------------------------------------------------------------------------------
-freshTyArr :: (PP l, IsLocated l) => l -> CGEnv -> RefType -> CGM (Id AnnTypeR, CGEnv)
----------------------------------------------------------------------------------------
-freshTyArr l g t 
-  = do t'     <- freshTy "freshTyPhis" {-tracePP "From" -} t
-       (x,g') <- envAddFresh "consArr:empty" l (TArr t' F.top) g
-       wellFormed l g' t'
-       return  $ (x, g')
+-- freshTyArr :: (PP l, IsLocated l) => l -> CGEnv -> RefType -> CGM (Id AnnTypeR, CGEnv)
+-- ---------------------------------------------------------------------------------------
+-- freshTyArr l g t 
+--   = do t'     <- freshTy "freshTyArr"  t
+--        (x,g') <- envAddFresh "consArr:empty" l (TArr t' F.top) g
+--        wellFormed l g' t'
+--        return  $ (x, g')
 
 
 

@@ -78,10 +78,12 @@ RJ TODO
 Failing Tests 
 -------------
 
-  [INFER]
-  tests/liquid/objects/infer-00.js  <------------------------ HEREHEREHEREHEREHERE
-  tests/liquid/objects/infer-01.js
-  tests/liquid/objects/infer-02.js
+
+ liquid/pos/lists/list-01.js,
+  [QUALGEN]
+  liquid/pos/simple/qualgen-00.js
+
+  <------------------------ HEREHEREHEREHEREHERE
 
   [ARRAY.LENGTH]
   liquid/pos/arrays/safemap.js,

@@ -650,20 +650,10 @@ instance (PP a) => PP (Cast a) where
 
 data Fact r
   = PhiVar      ![(Id SourceSpan)]
---   | LoopPhiVar  ![(Id SourceSpan, Id SourceSpan, Id SourceSpan)]
   | TypInst     !IContext ![RType r]
   | TCast       !IContext !(Cast (RType r))
   | TAnnot      !(RType r)
     deriving (Eq, Ord, Show, Data, Typeable)
-
--- NUKED, USE VANILLA PHI -- TODO: make a record with three suitably named fields instead of a raw-tuple.
--- NUKED, USE VANILLA PHI -- | LoopPhiVar: will keep track of:
--- NUKED, USE VANILLA PHI -- ∙ the SSA version of the Phi var before entering the loop, and 
--- NUKED, USE VANILLA PHI -- ∙ the SSA version of the Phi var after entering the loop. 
--- NUKED, USE VANILLA PHI -- ∙ the SSA version of the Phi var at the end of the loop.
--- NUKED, USE VANILLA PHI -- This will be helpful to keep track of the base types that the phi vars will 
--- NUKED, USE VANILLA PHI -- need to have in the loop (since there is no definition of them in the
--- NUKED, USE VANILLA PHI -- source).
 
 type UFact = Fact ()
 

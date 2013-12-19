@@ -80,13 +80,9 @@ Failing Tests
 
   [QUALGEN]
   liquid/pos/simple/qualgen-00.js <------------------------ HEREHEREHEREHEREHERE
+  liquid/pos/simple/qualgen-01.js
 
   [ARRAY.LENGTH]
   liquid/pos/arrays/safemap.js,
  
-  [LOOPINV+OBJ-WRITE]
-  liquid/pos/loops/while-04.js,
-  liquid/pos/loops/obj-00.js,
-  liquid/pos/loops/obj-02.js,
-
 # vim:ft=quicktask

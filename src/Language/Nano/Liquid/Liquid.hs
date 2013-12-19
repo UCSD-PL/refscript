@@ -270,6 +270,9 @@ consStmt g0 (WhileStmt l c b) =
     sub s g t t'    = subTypeContainers ("While:" ++ s) l g t t'
 
 
+
+
+
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 consStmt g (VarDeclStmt _ ds)
   = consSeq consVarDecl g ds

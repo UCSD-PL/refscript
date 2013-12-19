@@ -27,7 +27,7 @@ module Language.Nano.Liquid.CGMonad (
   -- * Fresh Templates for Unknown Refinement Types 
   , freshTyFun
   , freshTyInst
-  , freshTyPhis
+  -- , freshTyPhis
   , freshTyPhisWhile
   , freshTyObj
 
@@ -378,8 +378,7 @@ envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 --       4. return the extended environment.
 
 envJoin' l g g1 g2
-  = do  {- td      <- E.envMap toType <$> cg_tdefs <$> get -}
-        let xs   = [x | PhiVar [x] <- ann_fact l] 
+  = do  let xs   = [x | PhiVar [x] <- ann_fact l] 
             t1s  = (`envFindTy` g1) <$> xs 
             t2s  = (`envFindTy` g2) <$> xs
         when (length t1s /= length t2s) $ cgError l (bugBadPhi (srcPos l) t1s t2s)
@@ -387,16 +386,13 @@ envJoin' l g g1 g2
         let t4   = zipWith (compareTs γ) t1s t2s
         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst4 <$> t4
         -- To facilitate the sort check t1s and t2s need to change to their
-        -- equivalents that have the same sort with the joined types (ts) (with
-        -- the added False's to make the types equivalent
+        -- equivalents that have the same sort with the joined types (ts) 
+        -- (with the added False's to make the types equivalent)
         g1' <- envAdds (zip xs $ snd4 <$> t4) g1 
         g2' <- envAdds (zip xs $ thd4 <$> t4) g2
-
-        zipWithM_ (subTypeContainers "envJoin" l g1') [envFindTy x g1' | x <- xs] ts
-        zipWithM_ (subTypeContainers "envJoin" l g2') [envFindTy x g2' | x <- xs] ts
-
+        zipWithM_ (subTypeContainers "envJoin 1" l g1') [envFindTy x g1' | x <- xs] ts
+        zipWithM_ (subTypeContainers "envJoin 2" l g2') [envFindTy x g2' | x <- xs] ts
         return g'
-
 
 ---------------------------------------------------------------------------------------
 -- | Fresh Templates ------------------------------------------------------------------

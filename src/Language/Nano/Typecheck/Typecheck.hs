@@ -70,7 +70,7 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
                  return $ F.Unsafe errs
 
 safe (_, Nano {code = Src fs})
-  = do -- V.whenLoud $ forM_ fs $ T.mapM printAnn
+  = do V.whenLoud $ printAllAnns fs 
        nfc       <- noFailCasts <$> getOpts
        return     $ F.Safe `mappend` failCasts nfc fs 
 
@@ -91,8 +91,12 @@ castErrors (Ann l facts) = downErrors ++ deadErrors
     downErrors           = [errorDownCast l t | TCast _ (DCST t) <- facts]
     deadErrors           = [errorDeadCast l   | TCast _ (DC _)   <- facts]
 
-printAnn (Ann _ []) = return () 
-printAnn (Ann l fs) = putStrLn $ printf "At %s: %s" (ppshow l) (ppshow fs)
+printAllAnns fs 
+  = do putStrLn "********************** ALL ANNOTATIONS **********************"
+       forM_ fs $ T.mapM printAnn 
+    where 
+       printAnn (Ann _ []) = return () 
+       printAnn (Ann l fs) = putStrLn $ printf "At %s: %s" (ppshow l) (ppshow fs)
 
 
 -------------------------------------------------------------------------------------------
@@ -118,12 +122,9 @@ tcNano p@(Nano {code = Src fs})
     where
        γ         = initEnv p
 
-
 patchAnn m (Ann l fs) = Ann l $ sortNub $ fs' ++ fs 
   where
     fs'               = [f | f@(TypInst _ _) <- M.lookupDefault [] l m]
-
-
 
 initEnv pgm           = TCE (specs pgm) (defs pgm) emptyContext
 traceCodePP p m s     = trace (render $ codePP p m s) $ return ()

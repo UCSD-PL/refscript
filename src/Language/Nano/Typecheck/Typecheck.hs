@@ -323,7 +323,7 @@ tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
 
 -- e
 tcStmt γ (ExprStmt l e)   
-  = do (e', _) <- tcExpr' γ e 
+  = do (e', _) <- tcExpr γ e 
        return (ExprStmt l e', Just γ) 
 
 -- s1;s2;...;sn
@@ -337,21 +337,29 @@ tcStmt γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
-  = do (e', t)   <- tcExpr' γ e 
+  = do (e', t)   <- tcExpr γ e 
        unifyTypeM (srcPos l) "If condition" e t tBool
        (s1', γ1) <- tcStmt γ s1
        (s2', γ2) <- tcStmt γ s2
        z         <- envJoin l γ γ1 γ2
        return       (IfStmt l e' s1' s2', z)
 
-tcStmt γ (WhileStmt l c b) = do
-    let phis   = [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
-    let phiTs  = fromJust <$> (`tcEnvFindTy` γ) <$> (fst3 <$> phis)
-    let γ'     = tcEnvAdds (zip (snd3 <$> phis) phiTs) γ
-    (c', t)   <- tcExpr' γ' c
-    unifyTypeM (srcPos l) "While condition" c t tBool
-    (b', γ'') <- tcStmt γ' b
-    return       (WhileStmt l c' b', γ'')
+-- while c { b } 
+-- exit environment is entry as may skip. SSA-Tx adds phi-asgn prior to while.
+tcStmt γ (WhileStmt l c b) 
+  = do (c', t)   <- tcExpr γ c
+       unifyTypeM (srcPos l) "While condition" c t tBool
+       (b', _)   <- tcStmt γ b
+       return       (WhileStmt l c' b', Just γ)  
+
+-- NUKE tcStmt γ (WhileStmt l c b) = do
+-- NUKE     let phis   = [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
+-- NUKE     let phiTs  = fromJust <$> (`tcEnvFindTy` γ) <$> (fst3 <$> phis)
+-- NUKE     let γ'     = tcEnvAdds (zip (snd3 <$> phis) phiTs) γ
+-- NUKE     (c', t)   <- tcExpr' γ' c
+-- NUKE     unifyTypeM (srcPos l) "While condition" c t tBool
+-- NUKE     (b', γ'') <- tcStmt γ' b
+-- NUKE     return       (WhileStmt l c' b', γ'')
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt l ds)
@@ -362,7 +370,7 @@ tcStmt γ (VarDeclStmt l ds)
 tcStmt γ (ReturnStmt l eo) 
   = do  (eo', t)    <- case eo of 
                          Nothing -> return (Nothing, tVoid)
-                         Just e  -> mapFst Just <$>  tcExpr' γ e
+                         Just e  -> mapFst Just <$>  tcExpr γ e
         let rt       = tcEnvFindReturn γ 
         θ           <- unifyTypeM (srcPos l) "Return" eo t rt
         -- Apply the substitution
@@ -410,11 +418,8 @@ tcExprT γ e to
   = do (e', t) <- tcExpr γ e
        te      <- case to of
                     Nothing -> return t
-                    Just ta -> checkAnnotation "tcExprT" e t ta >> return ta
+                    Just ta -> checkAnnotation "tcExprT" e t ta
        return     (e', te)
-
--- UGH. STATE!!!! NO!!!!
-tcExpr' γ e                   = {- setExpr (Just e) >> -} tcExpr γ e
 
 ----------------------------------------------------------------------------------------------
 tcExpr :: (Ord r, PP r, F.Reftable r) => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
@@ -447,7 +452,7 @@ tcExpr γ e@(CallExpr _ _ _)
 
 tcExpr γ (ObjectLit l bs) 
   = do let (ps, es)  = unzip bs
-       ets          <- mapM (tcExpr' γ) es
+       ets          <- mapM (tcExpr γ) es
        let (es', ts) = unzip ets
        let bts       = zipWith B (F.symbol <$> ps) ts
        return (ObjectLit l (zip ps es'), TObj bts F.top)
@@ -508,7 +513,7 @@ tcCall γ ex@(InfixExpr l o e1 e2)
          
 -- | `e(e1,...,en)`
 tcCall γ ex@(CallExpr l e es)
-  = do (e', ft0)              <- tcExpr' γ e
+  = do (e', ft0)              <- tcExpr γ e
        z                      <- tcCallMatch γ l e es ft0
        case z of
          Just (es', t)        -> return (CallExpr l e' es', t)
@@ -545,7 +550,7 @@ tcCall γ e
 ---------------------------------------------------------------------------------------
 tcCallMatch γ l fn es ft0
   = do -- Typecheck arguments
-       (es', ts)     <- unzip <$> mapM (tcExpr' γ) es
+       (es', ts)     <- unzip <$> mapM (tcExpr γ) es
        -- Extract callee type (if intersection: match with args)
        maybe (return Nothing) (fmap Just . tcCallCase γ l fn es' ts) $ calleeType l ts ft0
 

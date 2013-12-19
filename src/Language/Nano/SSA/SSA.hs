@@ -129,19 +129,34 @@ ssaStmt (IfStmt l e s1 s2) = do
     dbg (Just θ) = trace ("SSA ENV: " ++ ppshow θ) (Just θ) -}
 
 -- while c { b }
-ssaStmt (WhileStmt l c b) = do  
-    g0         <- getSsaEnv
-    φ          <- getLoopPhis g0 b
-    let φ0      = [x | (SI x, _) <- (snd <$> φ)]
-    φ1         <- mapM (updSsaEnv l) (fst <$> φ)
-    g1         <- getSsaEnv
-    c'         <- ssaExpr c 
-    (t, b')    <- ssaStmt b
-    g2         <- getSsaEnv
-    let φ2      = [x | Just (SI x) <- (`envFindTy` g2) <$> (fst <$> φ)]
-    addAnn l (LoopPhiVar $ zip3 φ0 φ1 φ2)
-    setSsaEnv g1
-    return (t, WhileStmt l c' b')
+ssaStmt (WhileStmt l cond body) 
+  = do (xs, x0s)  <- unzip . map (\(x, (SI xo,_)) -> (x, xo)) <$> getLoopPhis body
+       x1s        <- mapM (updSsaEnv l) xs
+       θ1         <- getSsaEnv
+       cond'      <- ssaExpr cond 
+       (t, body') <- ssaStmt body
+       θ2         <- getSsaEnv
+       let x2s     = [x2 | Just (SI x2) <- (`envFindTy` θ2) <$> xs]
+       addAnn l    $ PhiVar x1s
+       setSsaEnv θ1
+       return      $ (t, (asgn x1s x0s) `presplice` (WhileStmt l cond' (body' `splice` (asgn x1s x2s))))
+    where 
+       asgn [] _   = Nothing 
+       asgn ls rs  = Just $ BlockStmt l $ zipWith (mkPhiAsgn l) ls rs
+
+-- ssaStmt (WhileStmt l c b) = do  
+--     g0         <- getSsaEnv
+--     φ          <- getLoopPhis g0 b
+--     let φ0      = [x | (SI x, _) <- (snd <$> φ)]
+--     φ1         <- mapM (updSsaEnv l) (fst <$> φ)
+--     g1         <- getSsaEnv
+--     c'         <- ssaExpr c 
+--     (t, b')    <- ssaStmt b
+--     g2         <- getSsaEnv
+--     let φ2      = [x | Just (SI x) <- (`envFindTy` g2) <$> (fst <$> φ)]
+--     addAnn l (LoopPhiVar $ zip3 φ0 φ1 φ2)
+--     setSsaEnv g1
+--     return (t, WhileStmt l c' b')
      
 
 ssaStmt (ForStmt _  NoInit _ _ _ )     = 
@@ -205,6 +220,11 @@ lvalExp (LVar l s)          = VarRef l (Id l s)
 lvalExp (LDot l e s)        = DotRef l e (Id l s)
 lvalExp (LBracket l e1 e2)  = BracketRef l e1 e2
 
+-------------------------------------------------------------------------------------
+presplice :: Maybe (Statement SourceSpan) -> Statement SourceSpan -> Statement SourceSpan
+-------------------------------------------------------------------------------------
+presplice Nothing  s' = s'
+presplice (Just s) s' = seqStmt (getAnnotation s) s s' 
 
 -------------------------------------------------------------------------------------
 splice :: Statement SourceSpan -> Maybe (Statement SourceSpan) -> Statement SourceSpan
@@ -329,17 +349,17 @@ phiAsgn l (x, (SI x1, SI x2)) = do
     let s1 = mkPhiAsgn l x' x1   -- Create Phi-Assignments
     let s2 = mkPhiAsgn l x' x2   -- for both branches
     return $ (s1, s2) 
-  where 
-    mkPhiAsgn l x y = VarDeclStmt l [VarDecl l x (Just $ VarRef l y)]
+
+mkPhiAsgn l x y = VarDeclStmt l [VarDecl l x (Just $ VarRef l y)]
 
 
--- Get the phi vars starting from an SSAEnv @θ@ and going through the 
--- statement @b@.
-getLoopPhis θ b = do
+-- Get the phi vars starting from an SSAEnv @θ@ and going through the statement @b@.
+getLoopPhis b = do
+    θ     <- getSsaEnv
     θ'    <- names <$> snd <$> tryAction (ssaStmt b) 
     return $ envToList (envLefts $ envIntersectWith meet θ θ')
   where
-    meet x1 x2 = if x1 == x2 then Right x1 else Left (x1, x2)
+    meet x x' = if x == x' then Right x else Left (x, x')
 
 
 ssaForLoop l vds cOpt incExp b = 

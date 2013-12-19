@@ -221,57 +221,9 @@ consStmt g (IfStmt l e s1 s2)
        g2'      <- (`consStmt` s2) $ envAddGuard xe False ge 
        envJoin l g g1' g2'
 
--- G   |- C :: xe, G1
--- Tinv = freshen(G1(x)) = {_|K}, ∀x∈Φ
--- G1(xe) = { v: boolean | ... }              //TODO
--- G1  |- G1(x) <: Tinv, ∀x∈Φ                 // Before the loop body: constraints on Φ Vars
--- G1, z:{xe}, ∀x∈Φ.x:Tinv |- B :: G2         // typecheck the loop where the condition holds and 
---                                            // the Φ vars have invariant types
--- G2  |- G2(x) <: Tinv, ∀x∈Φ                 // After the loop body: constraints on Φ vars
--- G3 = G2 + z:{¬xe} + { x: Tinv | x∈Φ }      // the environment after the loop should use the 
---                                            // invariant types for the Φ vars and also be updated
---                                            // with negation of the loop condition
--- ------------------------------------------
--- G |- while[Φ](C) { B } :: G3
-
-
--- var x0 = ...       // G0
--- while              // G1
---   ( ...x1... ) {
---   BODY
---                    // G2, x2
--- }
--- ... x1 ...         // G3,
-  
-consStmt g0 (WhileStmt l c b) = 
-  do  
---  BEFORE LOOP
-    (g1a , invs)   <- tInv g0 φ0
-    zipWithM_ (sub "BeforeL-B" g0) ((`envFindTy` g0) <$> φ0) invs
---  CONDITION
-    g1b            <- envAdds (zip φ1 invs) g1a
-    (xe, g1c)      <- consExpr g1b c
-    let g1d         = envAddGuard xe True g1c
---  BODY
-    g2             <- fromJust' "Break loop" <$> consStmt g1d b
---  AFTER BODY
-    zipWithM_ (sub "AfterLBD" g2) ((`envFindTy` g2) <$> φ2) invs
---  AFTER LOOP
-    g3a            <- envAdds (zip φ1 invs) g0
-    (xe', g3b)     <- consExpr g3a c
-    -- Add the guard in the relevant environment
-    return          $ Just $ envAddGuard xe' False g3b
-  where 
-    -- φ0: Φ vars before the loop
-    -- φ1: Φ vars (invariant) at the beginning of the loop body
-    -- φ2: Φ vars at the end of the loop body
-    (φ0, φ1, φ2)    = unzip3 [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
-    tInv g xs       = freshTyPhisWhile (ann l) g xs (toType <$> (`envFindTy` g) <$> xs)
-    sub s g t t'    = subTypeContainers ("While:" ++ s) l g t t'
-
-
-
-
+-- while e { s }  
+consStmt g (WhileStmt l e s) 
+  = Just <$> consWhile g l e s 
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 consStmt g (VarDeclStmt _ ds)
@@ -559,40 +511,6 @@ consObjT l g pe to
        t           <- maybe (freshTyObj l g tLit) return to
        subTypeContainers "object literal" l g' tLit t
        envAddFresh "consObj" l t g'
- 
--- OLD consObj l g pe = 
--- OLD   do  let (ps, es) = unzip pe
--- OLD       (xes, g')   <- consScan consExpr g es
--- OLD       let pxs      = zipWith B (map F.symbol ps) $ (`envFindTy` g') <$> xes
--- OLD       envAddFresh "consObj" l (TObj pxs F.top) g'
-    
-
--- ---------------------------------------------------------------------------------
--- consArrayLit ::AnnTypeR -> CGEnv -> Maybe RefType -> [Expression AnnTypeR] -> CGM  (Id AnnTypeR, CGEnv)
--- ---------------------------------------------------------------------------------
--- 
--- -- []
--- -- consArrayLit l g (Just t@(TArr _ _ )) [] = 
--- --   envAddFresh "consArrayLit:empty" l t g
--- 
--- -- [e1, ... ]
--- -- XXX: The top-level refinement of the array is ignored at the moment.
--- -- Also adds a top-level refinement that captures the length of the array.
--- consArrayLit l g (Just t@(TArr ta _)) es = do  
---     (xes, g')   <- consScan consExpr g es
---     let tes      = (`envFindTy` g') <$> xes
---     forM_ tes    $ \te -> subTypeContainers "ArrayConst" l g te ta
---     let t'       = t `strengthen` lenReft
---     envAddFresh "consArrayLit" l t' g'
---   where 
---     v            = rTypeValueVar t
---     lenReft      = F.Reft (v, [F.RConc lenPred])
---     lenPred      = F.PAtom F.Eq (F.expr $ length es) 
---                     (F.EApp (rawStringSymbol "len") [F.eVar $ v])
--- 
--- consArrayLit l _ Nothing _  = die $ errorMissingAnnot (srcPos l) "array literal" 
--- consArrayLit l _ (Just _) _ = die $ errorBadAnnot     (srcPos l) "array literal" "array" 
-
 
 ---------------------------------------------------------------------------------
 consPropRead getter g l e fld
@@ -601,6 +519,158 @@ consPropRead getter g l e fld
        case getter l tdefs fld $ envFindTy x g' of
          Just (_, tf) -> (tf,) <$> envAddFresh "consPropRead" l tf g'
          Nothing      -> die $  errorPropRead (srcPos l) e fld
+
+---------------------------------------------------------------------------------------------
+consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> CGM CGEnv
+---------------------------------------------------------------------------------------------
+
+{- Typing Rule for `while (cond) {body}`
+   
+      (a) xtIs         <- fresh G [ G(x) | x <- xs]
+      (b) GI            = G, xtIs
+      (c) G            |- G(x)  <: GI(x)  , ∀x∈Φ
+      (d) GI           |- cond : (xc, GI')
+      (e) GI', xc:true |- body : _ 
+      ---------------------------------------------------------
+          G            |- while[Φ] (cond) body :: GI', xc:false
+
+   The above rule assumes that phi-assignments have already been inserted. That is, 
+    
+      i = 0;
+      while (i < n){
+        i = i + 1;
+      }
+
+   Has been SSA-transformed to 
+
+      i_0 = 0;
+      i_2 = i_0;
+      while [i_2] (i_2 < n) {
+        i_1 = i_2 + 1;
+        i_2 = i_1;
+      }
+
+   Note that since the `body` is checked under `GI` which contains the xtI binder
+   for the phi-variables, the rule for assignment `tcAsgn` generates the appropriate
+   subtyping constraint for the values assigned to the phi-variable in (d)
+   Thus, we need only generate a subtyping constraint for the base value in (c).
+
+ -}
+
+consWhile g l cond body 
+  = do (gI, xs, _, _, tIs) <- envJoinExt l g g g                                    -- (a), (b)
+       zipWithM_ (subTypeContainers "While-Pre" l g) ((`envFindTy` g) <$> xs) tIs   -- (c)
+       (xc, gI')           <- consExpr gI cond                                      -- (d)
+       consStmt (envAddGuard xc True gI') body                                      -- (e)
+       return               $ envAddGuard xc False gI'
+
+
+{-
+
+-- G   |- C :: xe, G1
+-- Tinv = freshen(G1(x)) = {_|K}, ∀x∈Φ
+-- G1(xe) = { v: boolean | ... }              //TODO
+-- G1  |- G1(x) <: Tinv, ∀x∈Φ                 // Before the loop body: constraints on Φ Vars
+-- G1, z:{xe}, ∀x∈Φ.x:Tinv |- B :: G2         // typecheck the loop where the condition holds and 
+--                                            // the Φ vars have invariant types
+-- G2  |- G2(x) <: Tinv, ∀x∈Φ                 // After the loop body: constraints on Φ vars
+-- G3 = G2 + z:{¬xe} + { x: Tinv | x∈Φ }      // the environment after the loop should use the 
+--                                            // invariant types for the Φ vars and also be updated
+--                                            // with negation of the loop condition
+-- ------------------------------------------
+-- G |- while[Φ](C) { B } :: G3
+
+
+-- var x0 = ...       // G0
+-- while              // G1
+--   ( ...x1... ) {
+--   BODY
+--                    // G2, x2
+-- }
+-- ... x1 ...         // G3,
+consWhile g0 l c b
+  = do  --  BEFORE LOOP
+       (g1a , invs)   <- tInv g0 φ0
+       zipWithM_ (sub "Before Loop Body" g0) ((`envFindTy` g0) <$> φ0) invs
+       --  CONDITION
+       g1b            <- envAdds (zip φ1 invs) g1a
+       (xe, g1c)      <- consExpr g1b c
+       let g1d         = envAddGuard xe True g1c
+       --  BODY
+       g2             <- fromJust' "Break loop" <$> consStmt g1d b
+       --  AFTER BODY
+       zipWithM_ (sub "After Loop Body" g2) ((`envFindTy` g2) <$> φ2) invs
+       --  AFTER LOOP
+       g3a            <- envAdds (zip φ1 invs) g0
+       (xe', g3b)     <- consExpr g3a c
+       -- Add the guard in the relevant environment
+       return          $ Just $ envAddGuard xe' False g3b
+    where 
+       -- φ0: Φ vars before the loop
+       -- φ1: Φ vars (invariant) at the beginning of the loop body
+       -- φ2: Φ vars at the end of the loop body
+       (φ0, φ1, φ2)    = unzip3 [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
+       tInv g xs       = freshTyPhisWhile (ann l) g xs (toType <$> (`envFindTy` g) <$> xs)
+       sub s g t t'    = subTypeContainers ("While:" ++ s) l g t t'
+
+-}
+
+----------------------------------------------------------------------------------
+envJoin :: AnnTypeR -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)
+----------------------------------------------------------------------------------
+envJoin _ _ Nothing x           = return x
+envJoin _ _ x Nothing           = return x
+envJoin l g (Just g1) (Just g2) = Just <$> envJoin' l g g1 g2 
+
+----------------------------------------------------------------------------------
+envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
+----------------------------------------------------------------------------------
+
+-- HINT: 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
+--       2. use @freshTyPhis@ to generate fresh types (and an extended environment with 
+--          the fresh-type bindings) for all the phi-vars using the unrefined types 
+--          from step 1.
+--       3. generate subtyping constraints between the types from step 1 and the fresh types
+--       4. return the extended environment.
+
+
+envJoin' l g g1 g2
+  = do (g', xs, t1s', t2s', ts) <- envJoinExt l g g1 g2 
+       g1' <- envAdds (zip xs t1s') g1 
+       g2' <- envAdds (zip xs t2s') g2
+       zipWithM_ (subTypeContainers "envJoin 1" l g1') [envFindTy x g1' | x <- xs] ts
+       zipWithM_ (subTypeContainers "envJoin 2" l g2') [envFindTy x g2' | x <- xs] ts
+       return g'
+
+envJoinExt l g g1 g2 
+  = do  let xs   = [x | PhiVar [x] <- ann_fact l] 
+            t1s  = (`envFindTy` g1) <$> xs 
+            t2s  = (`envFindTy` g2) <$> xs
+        when (length t1s /= length t2s) $ cgError l (bugBadPhi (srcPos l) t1s t2s)
+        γ       <- getTDefs
+        -- To facilitate the sort check t1s and t2s need to change to their
+        -- equivalents that have the same sort with the joined types (ts) 
+        -- (with the added False's to make the types equivalent)
+        let t4   = zipWith (compareTs γ) t1s t2s
+        (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst4 <$> t4
+        return     (g', xs, snd4 <$> t4, thd4 <$> t4, ts)
+
+-- envJoin' l g g1 g2
+--   = do  let xs   = [x | PhiVar [x] <- ann_fact l] 
+--             t1s  = (`envFindTy` g1) <$> xs 
+--             t2s  = (`envFindTy` g2) <$> xs
+--         when (length t1s /= length t2s) $ cgError l (bugBadPhi (srcPos l) t1s t2s)
+--         γ       <- getTDefs
+--         let t4   = zipWith (compareTs γ) t1s t2s
+--         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst4 <$> t4
+--         -- To facilitate the sort check t1s and t2s need to change to their
+--         -- equivalents that have the same sort with the joined types (ts) 
+--         -- (with the added False's to make the types equivalent)
+--         g1' <- envAdds (zip xs $ snd4 <$> t4) g1 
+--         g2' <- envAdds (zip xs $ thd4 <$> t4) g2
+--         zipWithM_ (subTypeContainers "envJoin 1" l g1') [envFindTy x g1' | x <- xs] ts
+--         zipWithM_ (subTypeContainers "envJoin 2" l g2') [envFindTy x g2' | x <- xs] ts
+--         return g'
 
 
 

@@ -1,6 +1,4 @@
-/*@ index :: (a: [number], i: {number|((v < (len a)) && (v >= 0))}) => number */
+/*@ index :: (a: [number], i: {number|(0 <= v && v < (len a))}) => number */
 function index(a, i) {
-
   return a[i];
-
 }

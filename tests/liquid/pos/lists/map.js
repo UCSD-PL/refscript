@@ -1,4 +1,4 @@
-/*@ map :: forall A B. ((A) => B, list [A]) => list [B] */
+/*@ map :: forall A B. ((A) => B, list[A] + null) => list[B] + null */
 function map(f, xs){
   if (empty(xs)) {
     return nil();
@@ -21,7 +21,7 @@ function abs(x){
   return x;
 }
 
-/*@ main :: (list [number]) => list [{v:number | 0 <= v}] */
+/*@ main :: (list[number] + null) => list[{v:number | 0 <= v}] + null */
 function main(xs){
   var bs = map(abs, xs);
   return bs;

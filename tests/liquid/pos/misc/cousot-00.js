@@ -1,5 +1,5 @@
 
-/*@ loop :: ({n:number}, {m:number | m = n}) => void */
+/*@ loop :: (n:number, {m:number | m = n}) => void */
 function loop(n, m){
    
   n = n + 1;

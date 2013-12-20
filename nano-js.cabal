@@ -35,6 +35,7 @@ executable nanojs
 
   ghc-options:         -W -O2  
   Main-is:             Nano.hs
+  hs-source-dirs:      src
 
 -- Library
 --   build-depends:       base, containers, 
@@ -58,26 +59,27 @@ executable nanojs
 --   ghc-options:         -W -O2  
 --  
 --  
+--   hs-source-dirs:      src
 --   Exposed-Modules:     Language.Nano.Errors
 --                        Language.Nano.Files
---                        Language.Nano.Visitor.Visit
---                        Language.Nano.Visitor.Visitor
 --                        Language.Nano.Types
---                        Language.Nano.CmdLine
 --                        Language.Nano.Env
+--                        Language.Nano.Misc
+--                        Language.Nano.Annots
+--                        Language.Nano.CmdLine
+--                        Paths_nano_js
 --                        Language.Nano.SSA.SSAMonad
 --                        Language.Nano.SSA.SSA
+--                        Language.Nano.Typecheck.Unify
 --                        Language.Nano.Typecheck.Types
 --                        Language.Nano.Typecheck.Parse
 --                        Language.Nano.Typecheck.TCMonad
 --                        Language.Nano.Typecheck.Compare
 --                        Language.Nano.Typecheck.Subst
 --                        Language.Nano.Typecheck.Typecheck
---                        Language.Nano.Annots
 --                        Language.Nano.ESC.Types
 --                        Language.Nano.ESC.ESC
 --                        Language.Nano.ESC.VCMonad
---                        Language.Nano.Misc
 --                        Language.Nano.Liquid.Liquid
 --                        Language.Nano.Liquid.Types
 --                        Language.Nano.Liquid.CGMonad

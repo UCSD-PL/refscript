@@ -1,9 +1,11 @@
+/*@ qualif OkLen(v:number, arr:a): v < (len arr) */
 
-
-
-/*@ indirectIndex :: (a: [ number ], b: [ {number|((0 <= v) && (v < (len a)))} ], i: { number | ((0 <= v) && (v < (len b)))}) => number */
-function indirectIndex(a, b, i) {
-
-  return a[ b[i] ];
+/*@ indirectIndex :: ( dataArr:[number]
+                     , idxArr:[{number|(0 <= v && v < (len dataArr))}]
+                     , i: { number | ((0 <= v) && (v < (len idxArr)))}) 
+                     => number */
+function indirectIndex(dataArr, idxArr, i) {
+  var j = idxArr[i];
+  return dataArr[j];
 
 }

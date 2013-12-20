@@ -59,65 +59,33 @@ FAILING TESTS:
     Using new representation of lists.
     @ Added [Sun 2013-09-15]
 
-Failed 16 tests: 
- liquid/pos/arrays/arr-04.js,
- liquid/pos/arrays/safemap.js,
- liquid/pos/lists/safeLists.js,
- liquid/pos/lists/safemap.js,
- liquid/pos/lists/safereverse.js,
- liquid/pos/loops/obj-02.js,
- liquid/pos/loops/while-03.js,
- liquid/pos/misc/apply.js,
- liquid/pos/misc/twice-hof.js,
- liquid/pos/objects/obj-03.js,
- liquid/pos/operators/sum-00.js,
- liquid/pos/operators/sum-01.js,
- liquid/pos/operators/sum-02.js,
- liquid/pos/operators/sum-infer-00.js,
- liquid/pos/simple/obj-00.js
-
-Exceptions thrown on 25 tests:
- liquid/pos/arrays/arr-04.js,
- liquid/pos/arrays/safemap.js,
-    liquid/pos/lists/listsum-00.js,
- liquid/pos/lists/safeLists.js,
- liquid/pos/lists/safemap.js,
- liquid/pos/lists/safereverse.js,
-    liquid/pos/loops/for-01.js,
-    liquid/pos/loops/for-02.js,
-    liquid/pos/loops/for-03.js,
-    liquid/pos/loops/for-04.js,
-    liquid/pos/loops/obj-00.js,
-    liquid/pos/loops/obj-01.js,
- liquid/pos/loops/obj-02.js,
-    liquid/pos/loops/while-01.js,
- liquid/pos/loops/while-03.js,
- liquid/pos/misc/apply.js,
-    liquid/pos/misc/cousot.js,
- liquid/pos/misc/twice-hof.js,
- liquid/pos/objects/obj-03.js,
-    liquid/pos/operators/inc-00.js,
-    liquid/pos/operators/inc-02.js,
-    liquid/pos/operators/sum-01.js,
-    liquid/pos/operators/sum-02.js,
-    liquid/pos/operators/sum-infer-00.js,
- liquid/pos/simple/obj-00.js
-
-
-
 RJ TODO
 -------
-    + add support for string +    (liquid/pos/operators/add-0{3,4,5}.js)
-    + add support for array-write (liquid/pos/arrays/arr-04.js)
+    + fix OBJ
+    + fix RIGID
+    + fix LENGTH
     + add support for predicate aliases
+    
+    + scrape qualifiers
+    
+    + fix hacky qualifier parse -> translation e.g. tests/liquid/pos/arrays/arr-03.js
+        /*@ qualif OkLen(v:number, arr:a): v < (len arr) */
+        Note use of lower-case which gets translated into tyvars in fixpoint.
+        sigh.
+    + type and predicate aliases
 
-Scrape Qualifiers
------------------
+      
+Failing Tests 
+-------------
 
+Actually new features.
 
-Predicate and Type Aliases
---------------------------
+[QUALGEN]
+  liquid/pos/simple/qualgen-00.js <------------------------ HEREHEREHEREHEREHERE
+  liquid/pos/simple/qualgen-01.js
 
+[ARRAY.LENGTH]
+  liquid/pos/arrays/safemap.js,
 
 
 # vim:ft=quicktask

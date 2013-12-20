@@ -6,11 +6,8 @@ var x = {
 
 /*@ foo :: () => { v: number | v = 5 } */
 function foo () {
-  
   var y = x;
-
   x.moo = 4345;
-
   return y.moo;
 
 }

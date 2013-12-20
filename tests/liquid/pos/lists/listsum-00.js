@@ -1,4 +1,4 @@
-/*@ map :: forall A B. ((A) => B, list [A]) => list [B] */
+/*@ map :: forall A B. ((A) => B, list[A] + null) => list[B] + null */
 function map(f, xs){
   if (empty(xs)) {
     return nil();
@@ -14,7 +14,7 @@ function abs(x){
   return x;
 }
 
-/*@ listsum :: (list [number]) => number */
+/*@ listsum :: (list[number] + null) => number */
 function listsum(xs){
   if (empty(xs)) {
     return 0;
@@ -24,7 +24,7 @@ function listsum(xs){
   return h + listsum(t);
 }
 
-/*@ main :: ({n: number | true}) => {v:number | v >= 0} */
+/*@ main :: ({n:number|true}) => {v:number | v >= 0} */
 function main(n){
   var as = cons(n, cons(n+1, cons(n+2, nil())));
   var bs = map(abs, as);

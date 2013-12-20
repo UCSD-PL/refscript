@@ -60,14 +60,14 @@ verifyFile f =
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
 
---------------------------------------------------------------------------------
-reftypeCheck :: Config -> FilePath -> Nano AnnTypeR RefType -> IO (A.UAnnSol RefType, F.FixResult Error)
---------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+reftypeCheck :: Config -> FilePath -> NanoRefType -> IO (A.UAnnSol RefType, F.FixResult Error)
+--------------------------------------------------------------------------------------------------
 reftypeCheck cfg f = solveConstraints f . generateConstraints cfg
 
---------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (A.UAnnSol RefType, F.FixResult Error) 
---------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
 solveConstraints f cgi 
   = do (r, s)  <- solve def f [] $ cgi_finfo cgi
        let r'   = fmap (errorLiquid . srcPos . F.sinfo) r

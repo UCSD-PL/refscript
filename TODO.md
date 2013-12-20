@@ -62,29 +62,20 @@ FAILING TESTS:
 RJ TODO
 -------
 
-    + fix LENGTH
-
-    + scrape qualifiers
+    + type and predicate aliases      <------------------------ HEREHEREHEREHEREHERE
     
-    + type and predicate aliases
+    + fix LENGTH
     
     + fix hacky qualifier parse -> translation e.g. tests/liquid/pos/arrays/arr-03.js
         /*@ qualif OkLen(v:number, arr:a): v < (len arr) */
         Note use of lower-case which gets translated into tyvars in fixpoint. sigh.
-
-
       
 Failing Tests 
 -------------
 
-Actually new features.
-
-[QUALGEN]
-  liquid/pos/simple/qualgen-00.js <------------------------ HEREHEREHEREHEREHERE
-  liquid/pos/simple/qualgen-01.js
-
 [ARRAY.LENGTH]
-  liquid/pos/arrays/safemap.js,
+  
+    liquid/pos/arrays/safemap.js,
 
 
 # vim:ft=quicktask

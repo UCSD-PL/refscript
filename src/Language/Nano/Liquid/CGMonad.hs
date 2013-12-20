@@ -88,6 +88,7 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Liquid.Types
+import           Language.Nano.Liquid.Qualifiers
 
 
 import qualified Language.Fixpoint.Types as F
@@ -125,7 +126,7 @@ instance PP (F.SubC c) where
 
 
 -------------------------------------------------------------------------------
-getCGInfo :: Config -> Nano AnnTypeR RefType -> CGM a -> CGInfo
+getCGInfo :: Config -> NanoRefType -> CGM a -> CGInfo
 -------------------------------------------------------------------------------
 getCGInfo cfg pgm = clear . cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
   where 
@@ -133,7 +134,7 @@ getCGInfo cfg pgm = clear . cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
     fixCs        = get >>= concatMapM splitC . cs
     fixWs        = get >>= concatMapM splitW . ws
 
-execute :: Config -> Nano AnnTypeR RefType -> CGM a -> (a, CGState)
+execute :: Config -> NanoRefType -> CGM a -> (a, CGState)
 execute cfg pgm act
   = case runState (runErrorT act) $ initState cfg pgm of 
       (Left err, _) -> throw err
@@ -160,7 +161,7 @@ cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
                 , F.gs    = measureEnv pgm 
                 , F.lits  = []
                 , F.kuts  = F.ksEmpty
-                , F.quals = quals pgm 
+                , F.quals = nanoQualifiers pgm 
                 }
 
 patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }

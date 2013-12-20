@@ -308,19 +308,6 @@ strengthen t _               = t
 -- type @t1@.
 -- TODO: Add checks for equivalence in union and objects
 
--- RJ: Not used anywhere, commenting out
--- strengthenContainers (TApp TUn ts r) (TApp TUn ts' r') =
---   TApp TUn (zipWith strengthenContainers ts ts') $ r' `F.meet` r
--- strengthenContainers (TObj ts r) (TObj ts' r') = 
---   TObj (zipWith doB ts ts') $ r' `F.meet` r
---   where 
---     doB (B s t) (B s' t') | s == s' =  B s $ strengthenContainers t t'
---     doB _       _                   = errorstar "strengthenContainers: sanity check - 1"
--- strengthenContainers t t' | toType t == toType t' = strengthen t' $ rTypeR t
--- strengthenContainers _ _  | otherwise = errorstar "strengthenContainers: sanity check - 2"
---   
-
-
 ---------------------------------------------------------------------------------
 -- | Helpful type checks
 ---------------------------------------------------------------------------------

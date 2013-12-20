@@ -48,6 +48,7 @@ module Language.Nano.Liquid.Types (
 
   -- * Useful Operations
   , foldReft
+  , efoldRType
   , AnnTypeR
 
   -- * Raw low-level Location-less constructors
@@ -306,22 +307,36 @@ foldReft  f = efoldReft (\_ -> ()) (\_ -> f) F.emptySEnv
 ------------------------------------------------------------------------------------------
 efoldReft :: (F.Reftable r) => (RType r -> b) -> (F.SEnv b -> r -> a -> a) -> F.SEnv b -> a -> RType r -> a
 ------------------------------------------------------------------------------------------
-efoldReft _ f γ z (TVar _ r)       = f γ r z
-efoldReft g f γ z t@(TApp _ ts r)  = f γ r $ efoldRefts g f (efoldExt g (B (rTypeValueVar t) t) γ) z ts
-efoldReft g f γ z (TAll _ t)       = efoldReft g f γ z t
-efoldReft g f γ z (TFun xts t r)   = f γ r $ efoldReft g f γ' (efoldRefts g f γ' z (b_type <$> xts)) t  
+efoldReft g f = go 
   where 
-    γ'                             = foldr (efoldExt g) γ xts
-efoldReft g f γ z (TObj xts r)     = f γ r $ (efoldRefts g f γ' z (b_type <$> xts))
+    go γ z (TVar _ r)       = f γ r z
+    go γ z t@(TApp _ ts r)  = f γ r $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
+    go γ z (TAll _ t)       = go γ z t
+    go γ z (TFun xts t r)   = f γ r $ go γ' (gos γ' z (b_type <$> xts)) t  where γ' = foldr (efoldExt g) γ xts
+    go γ z (TObj xts r)     = f γ r $ (gos γ' z (b_type <$> xts))      where γ' = foldr (efoldExt g) γ xts
+    go γ z (TArr t r)       = f γ r $ go γ z t    
+    go γ z (TAnd ts)        = gos γ z ts 
+    go _ _ t                = error $ "Not supported in efoldReft: " ++ ppshow t
+
+    gos γ z ts              = L.foldl' (go γ) z ts
+
+efoldExt g xt γ             = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
+
+------------------------------------------------------------------------------------------
+efoldRType :: (F.Reftable r) => (RType r -> b) -> (F.SEnv b -> RType r -> a -> a) -> F.SEnv b -> a -> RType r -> a
+------------------------------------------------------------------------------------------
+efoldRType g f               = go
   where 
-    γ'                             = foldr (efoldExt g) γ xts
-efoldReft g f γ z (TArr t r)       = f γ r $ efoldReft g f γ z t    
-efoldReft g f γ z (TAnd ts)        = efoldRefts g f γ z ts 
-efoldReft _ _ _ _ t                = error $ "Not supported in efoldReft: " ++ ppshow t
+    go γ z t@(TVar _ _)      = f γ t z
+    go γ z t@(TApp _ ts _)   = f γ t $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
+    go γ z t@(TAll _ t1)     = f γ t $ go γ z t1
+    go γ z t@(TFun xts t1 _) = f γ t $ go γ' (gos γ' z (b_type <$> xts)) t1  where γ' = foldr (efoldExt g) γ xts
+    go γ z t@(TObj xts _)    = f γ t $ (gos γ' z (b_type <$> xts))           where γ' = foldr (efoldExt g) γ xts
+    go γ z t@(TArr t1 _)     = f γ t $ go γ z t1    
+    go γ z   (TAnd ts)       = gos γ z ts 
+    go _ _ t                 = error $ "Not supported in efoldRType: " ++ ppshow t
+    gos γ z ts               = L.foldl' (go γ) z ts
 
-efoldRefts g f γ z ts              = L.foldl' (efoldReft g f γ) z ts
-
-efoldExt g xt γ                    = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
 
 ------------------------------------------------------------------------------------------
 isBaseRType :: RType r -> Bool
@@ -336,8 +351,6 @@ isTrivialRefType :: RefType -> Bool
 isTrivialRefType t     = foldReft (\r -> (f r &&)) True t
   where 
     f (F.Reft (_,ras)) = null ras
-
-
 
 ------------------------------------------------------------------------------------------
 prefixOpRTy :: PrefixOp -> CGEnv -> RefType

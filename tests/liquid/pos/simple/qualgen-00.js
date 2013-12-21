@@ -1,5 +1,5 @@
 
-/*@ z :: {number | (0 < v && v < 3)} */
+/*@ junk :: {number | (0 < v && v < 3)} */
 var junk = 2;
 
 var arr  =  [1, 2];

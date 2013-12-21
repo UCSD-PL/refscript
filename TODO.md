@@ -1,3 +1,8 @@
+BENCHMARKS:
+
+  - tests/strobe/gadgets/resistor-01.js
+
+
 JS SUPPORT / FEATURES:
 
   - FIELDS

@@ -226,7 +226,6 @@ tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l f body t
   where 
     γ'                              = envAddFun l f i αs xs ts t γ 
-    -- annCheck                        = catMaybes . map (validInst γ') . M.toList
 
 tcFunBody γ l f body t
   = do (body', q)     <- tcStmts γ body
@@ -440,15 +439,15 @@ tcExpr γ e@(InfixExpr _ _ _ _)
 tcExpr γ e@(CallExpr _ _ _)
   = tcCall γ e 
 
+tcExpr γ e@(ArrayLit _ _)
+  = tcCall γ e 
+
 tcExpr γ (ObjectLit l bs) 
   = do let (ps, es)  = unzip bs
        ets          <- mapM (tcExpr γ) es
        let (es', ts) = unzip ets
        let bts       = zipWith B (F.symbol <$> ps) ts
        return (ObjectLit l (zip ps es'), TObj bts F.top)
-
-tcExpr γ e@(ArrayLit _ _)
-  = tcCall γ e 
 
 tcExpr γ (Cast l@(Ann loc fs) e)
   = do (e', t) <- tcExpr γ e

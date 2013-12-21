@@ -74,14 +74,13 @@ safe (_, Nano {code = Src fs})
        nfc       <- noFailCasts <$> getOpts
        return     $ F.Safe `mappend` failCasts nfc fs 
 
-
 failCasts True  _  = F.Safe
 failCasts False fs = applyNonNull F.Safe F.Unsafe $ concatMap castErrors $ getCasts fs 
 
-getCasts       :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r)]
-getCasts stmts = everything (++) ([] `mkQ` f) stmts
+getCasts         :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r)]
+getCasts stmts   = everything (++) ([] `mkQ` f) stmts
   where 
-    f :: Expression (AnnType r) -> [(AnnType r)]
+    f            :: Expression (AnnType r) -> [(AnnType r)]
     f (Cast a _) = [a]
     f _          = [] 
 

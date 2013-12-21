@@ -1,5 +1,5 @@
-/*@ predicate gt(x, y) = x >= y                */
-/*@ alias gArray(x)    = [{number | gt(v, x)}] */
+/*@ predicate gt(x, y) = x >= y              */
+/*@ alias nat          = {number | gt(v, 0)} */
 
-/*@ ga :: gArray(0) */
-var ga = [0,0,0,0];
+/*@ z :: nat */
+var z = 12;

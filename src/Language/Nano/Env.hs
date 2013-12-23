@@ -30,7 +30,7 @@ module Language.Nano.Env (
 
 import           Data.Maybe             (isJust)
 import           Data.Hashable          ()
-import           Data.Monoid            () 
+import           Data.Monoid            (Monoid (..))
 import qualified Data.List               as L
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
@@ -43,9 +43,6 @@ import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative 
 import           Control.Monad.Error ()
 import           Control.Exception (throw)
-
--- instance PP F.Symbol where 
---   pp = pprint
 
 --------------------------------------------------------------------------
 -- | Environments
@@ -84,7 +81,7 @@ envFromList       = L.foldl' step envEmpty
 envIntersectWith :: (a -> b -> c) -> Env a -> Env b -> Env c
 envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))
 
--- | Favors the bindings in the first environment
+-- | Favors the bindings in the second environment
 envUnion :: Env a -> Env a -> Env a
 envUnion = envAdds . envToList
 
@@ -94,13 +91,24 @@ envRights = envMap (\(Right z) -> z) . envFilter isRight
 envLefts :: Env (Either a b) -> Env a
 envLefts = envMap (\(Left z) -> z) . envFilter isLeft
 
-
 envDiff :: Env a -> Env b -> Env a
 envDiff m1 m2 = envFromList [(x, t) | (x, t) <- envToList m1, not (x `envMem` m2)] 
 
 isRight (Right _) = True
 isRight (_)       = False
 isLeft            = not . isRight
+
+--------------------------------------------------------------------------------
+-- Monoid Instance -------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+instance Monoid (Env t) where
+  mempty  = envEmpty
+  mappend = envUnion 
+
+--------------------------------------------------------------------------------
+-- Printing Instance -----------------------------------------------------------
+--------------------------------------------------------------------------------
 
 instance PP t => PP (Env t) where
   pp = vcat . (ppBind <$>) . F.toListSEnv . fmap val 

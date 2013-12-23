@@ -29,6 +29,7 @@ import           Language.Fixpoint.Names (propConName)
 import           Language.Fixpoint.Types hiding (quals, Loc)
 import           Language.Fixpoint.Parse 
 import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Misc (mapEither)
 import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.Types
@@ -57,15 +58,28 @@ idBindP :: Parser (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
 
 identifierP :: Parser (Id SourceSpan)
--- identifierP = withSpan Id lowerIdP 
 identifierP =   try (withSpan Id upperIdP)
            <|>      (withSpan Id lowerIdP)
 
-tAliasP :: Parser (Id SourceSpan, TAlias RefType) 
-tAliasP = undefined
+pAliasP :: Parser (Id SourceSpan, PAlias) 
+pAliasP = do name <- identifierP
+             πs   <- many symbolP 
+             reservedOp "="
+             body <- predP 
+             return  (name, Alias name [] πs body) 
 
-pAliasP :: Parser (Id SourceSpan, Pred) 
-pAliasP = undefined
+tAliasP :: Parser (Id SourceSpan, TAlias RefType) 
+tAliasP = do name      <- identifierP
+             (αs, πs)  <- mapEither aliasVarT <$> aliasVarsP 
+             body      <- bareTypeP
+             return      (name, Alias name αs πs body) 
+
+aliasVarsP    = brackets $ sepBy alasVarP comma
+aliasVarP     = withSpan (,) (wordP $ \_ -> True)
+
+aliasVarT (l, x)      
+  | isTvar x  = Left  $ tvar l x
+  | otherwise = Right $ stringSymbol x 
 
 tBodyP :: Parser (Id SourceSpan, RType Reft)
 tBodyP = do  id <- identifierP 
@@ -157,12 +171,15 @@ bbaseP
  <|>     ((`TApp` []) <$> tconP)
 
 tvarP :: Parser TVar
--- tvarP = TV <$> (stringSymbol <$> upperWordP) <*> getPosition
-tvarP = withSpan (\l x -> TV x l) (stringSymbol <$> upperWordP)
+tvarP = withSpan tvar $ wordP isTvar
 
+      -- = withSpan {- (\l x -> TV x l) -} (flip TV) (stringSymbol <$> upperWordP)
 
-upperWordP :: Parser String
-upperWordP = condIdP nice (not . isLower . head)
+tvar l x   = TV (stringSymbol x) l
+
+isTvar     = not . isLower . head
+
+wordP p0   = condIdP nice p0
   where 
     nice   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
@@ -185,10 +202,10 @@ tDefP
 
 bareAllP 
   = do reserved "forall"
-       as <- many1 tvarP
+       αs <- many1 tvarP
        dot
        t  <- bareTypeP
-       return $ foldr TAll t as
+       return $ foldr TAll t αs
 
 arrayP = brackets bareTypeP
 

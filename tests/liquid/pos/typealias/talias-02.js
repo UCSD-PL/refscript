@@ -1,8 +1,8 @@
 /*@ predicate gt x y  = x >= y              */
-/*@ alias nat         = {number | gt(v, 0)} */
+/*@ type gnat[A,x]    = {A | (gt v x)}      */
+/*@ type nat          = gnat[number,0]      */
 
-/*@ type Poo[A](x,y)  = {A | v = x + y }    */
-/*@ type Foo A x y    = {A | v = x + y }    */
+// type nat           = {number | (gt v 0)} 
 
 /*@ z :: nat */
 var z = 12;

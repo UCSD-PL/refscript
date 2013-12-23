@@ -401,14 +401,14 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
-                     , specs  :: !(Env t)           -- ^ Imported Specifications
-                     , defs   :: !(Env t)           -- ^ Signatures for Code
-                     , consts :: !(Env t)           -- ^ Measure Signatures 
-                     , tDefs  :: !(Env t)           -- ^ Type definitions
+data Nano a t = Nano { code   :: !(Source a)                -- ^ Code to check
+                     , specs  :: !(Env t)                   -- ^ Imported Specifications
+                     , defs   :: !(Env t)                   -- ^ Signatures for Code
+                     , consts :: !(Env t)                   -- ^ Measure Signatures 
+                     , tDefs  :: !(Env t)                   -- ^ Type definitions
                      , tAnns  :: !(M.HashMap SourceSpan t)
-                     , quals  :: ![F.Qualifier]     -- ^ Qualifiers
-                     , invts  :: ![Located t]       -- ^ Type Invariants
+                     , quals  :: ![F.Qualifier]             -- ^ Qualifiers
+                     , invts  :: ![Located t]               -- ^ Type Invariants
                      } deriving (Functor, Data, Typeable)
 
 type NanoBareR r   = Nano (AnnBare r) (RType r)

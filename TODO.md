@@ -78,9 +78,10 @@ Type and Predicate Aliases
     + Alias
     + Nano
 
-  - Parser
-    - Alias
-    - Nano
+  + Parser
+    + Alias
 
+  + Test the parser SVP!
+ 
   - Transform-Spec function
 

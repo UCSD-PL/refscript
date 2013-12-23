@@ -29,10 +29,13 @@ module Language.Nano.Typecheck.Types (
   , toType
   , ofType
   , strengthen 
-  -- , strengthenContainers 
 
-  -- * Helpful checks
-  , isTop, isNull, isUndefined, isObj, isUnion
+  -- * Predicates on Types 
+  , isTop
+  , isNull
+  , isUndefined
+  , isObj
+  , isUnion
 
   -- * Constructing Types
   , mkUnion, mkUnionR
@@ -102,6 +105,11 @@ module Language.Nano.Typecheck.Types (
   , Mutability (..)
   , writeGlobalVars  
   , readOnlyVars  
+
+  -- * Aliases
+  , Alias (..)
+  , TAlias (..)
+  , PAlias (..)
   ) where 
 
 import           Text.Printf
@@ -219,12 +227,10 @@ argsMatch ts ft = case bkFun ft of
                     Nothing        -> False
                     Just (_,xts,_) -> (toType <$> ts) == ((toType . b_type) <$> xts)
 
-
 funTys l f xs ft 
   = case bkFuns ft of
       Nothing -> die $ errorNonFunction (srcPos l) f ft 
       Just ts -> zip ([0..] :: [Int]) [funTy l f xs t | t <- ts]
-
 
 funTy l f xs (αs, yts, t) 
   | eqLen xs yts = let (su, ts') = renameBinds yts xs 
@@ -304,7 +310,7 @@ strengthen t _               = t
 -- TODO: Add checks for equivalence in union and objects
 
 ---------------------------------------------------------------------------------
--- | Helpful type checks
+-- | Predicates on Types 
 ---------------------------------------------------------------------------------
 
 -- | Top-level Top (any) check
@@ -406,6 +412,8 @@ data Nano a t = Nano { code   :: !(Source a)                -- ^ Code to check
                      , defs   :: !(Env t)                   -- ^ Signatures for Code
                      , consts :: !(Env t)                   -- ^ Measure Signatures 
                      , tDefs  :: !(Env t)                   -- ^ Type definitions
+                     , tAlias :: !(TAliasEnv t)             -- ^ Type aliases
+                     , pAlias :: !(PAliasEnv)               -- ^ Predicate aliases
                      , tAnns  :: !(M.HashMap SourceSpan t)
                      , quals  :: ![F.Qualifier]             -- ^ Qualifiers
                      , invts  :: ![Located t]               -- ^ Type Invariants
@@ -435,6 +443,10 @@ type FunctionStatement a = Statement a
 newtype Source a = Src [Statement a]
   deriving (Data, Typeable)
 
+instance Monoid (Source a) where
+  mempty                    = Src []
+  mappend (Src s1) (Src s2) = Src $ s1 ++ s2
+
 instance Functor Source where 
   fmap f (Src zs) = Src (map (fmap f) zs)
 
@@ -448,30 +460,50 @@ instance PP t => PP (Nano a t) where
     $+$ pp (defs  pgm)
     $+$ text "******************* Constants *****************"
     $+$ pp (consts pgm) 
-    $+$ text "******************* Type Annotations **********"
-    $+$ pp (tAnns pgm) 
     $+$ text "******************* Type Definitions **********"
     $+$ pp (tDefs  pgm)
+    $+$ text "******************* Predicate Aliases *********"
+    $+$ pp (pAlias pgm)
+    $+$ text "******************* Type Aliases **************"
+    $+$ pp (tAlias pgm)
     $+$ text "******************* Qualifiers ****************"
     $+$ F.toFix (quals  pgm) 
     $+$ text "******************* Invariants ****************"
     $+$ pp (invts pgm) 
+    $+$ text "******************* Type Annotations **********"
+    $+$ pp (tAnns pgm) 
+ 
     $+$ text "***********************************************"
     
 instance Monoid (Nano a t) where 
-  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty M.empty [] [] 
-  mappend p1 p2 = Nano ss e e' cs tds ans qs is 
-    where 
-      ss        = Src $ s1 ++ s2
-      Src s1    = code p1
-      Src s2    = code p2
-      e         = envFromList ((envToList $ specs p1) ++ (envToList $ specs p2))
-      e'        = envFromList ((envToList $ defs p1)  ++ (envToList $ defs p2))
-      cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
-      tds       = envFromList $ (envToList $ tDefs p1) ++ (envToList $ tDefs p2)
-      ans       = M.fromList $ (M.toList $ tAnns p1) ++ (M.toList $ tAnns p2)
-      qs        = quals p1 ++ quals p2
-      is        = invts p1 ++ invts p2
+  mempty        = Nano mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty 
+  mappend p1 p2 = Nano { code   = (code   p1) `mappend` (code   p2)
+                       , specs  = (specs  p1) `mappend` (specs  p2)
+                       , defs   = (defs   p1) `mappend` (defs   p2)
+                       , consts = (consts p1) `mappend` (consts p2)
+                       , tDefs  = (tDefs  p1) `mappend` (tDefs  p2)
+                       , tAlias = (tAlias p1) `mappend` (tAlias p2)
+                       , pAlias = (pAlias p1) `mappend` (pAlias p2)
+                       , tAnns  = (tAnns  p1) `M.union` (tAnns  p2)
+                       , quals  = (quals  p1) `mappend` (quals  p2)
+                       , invts  = (invts  p1) `mappend` (invts  p2)
+                       } 
+
+
+-- mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty envEmpty envEmpty M.empty [] [] 
+--   mappend p1 p2 = Nano ss e e' cs tds ans qs is 
+--     where 
+--       ss        = Src $ s1 ++ s2
+--       Src s1    = code p1
+--       Src s2    = code p2
+-- 
+--       e         = envFromList $ (envToList $ specs p1)  ++ (envToList $ specs p2)
+--       e'        = envFromList $ (envToList $ defs p1)   ++ (envToList $ defs p2)
+--       cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
+--       tds       = envFromList $ (envToList $ tDefs p1)  ++ (envToList $ tDefs p2)
+--       ans       = M.fromList  $ (M.toList $ tAnns p1)   ++ (M.toList $ tAnns p2)
+--       qs        = quals p1 ++ quals p2
+--       is        = invts p1 ++ invts p2
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }
@@ -788,3 +820,23 @@ prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
 
 builtinId       = mkId . ("builtin_" ++)
 
+
+-----------------------------------------------------------------------
+-- Type and Predicate Aliases -----------------------------------------
+-----------------------------------------------------------------------
+
+data Alias a s t = Alias {
+    al_name   :: Id SourceSpan  -- ^ alias name
+  , al_tyvars :: ![a]           -- ^ type  parameters  
+  , al_syvars :: ![s]           -- ^ value parameters 
+  , al_body   :: !t             -- ^ alias body
+  } deriving (Show, Functor, Data, Typeable)
+
+type TAlias t    = Alias TVar F.Symbol t
+type PAlias      = Alias ()   F.Symbol F.Pred 
+type TAliasEnv t = Env (TAlias t)
+type PAliasEnv   = Env (PAlias)
+
+
+instance (PP a, PP s, PP t) => PP (Alias a s t) where
+  pp (Alias n αs πs body) = text "alias" <+> pp n <+> text "=" <+> pp body 

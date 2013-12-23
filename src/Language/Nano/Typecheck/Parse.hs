@@ -23,7 +23,7 @@ import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*), (<*>))
 import           Control.Monad.Identity
 import           Data.Char (toLower, isLower, isSpace) 
-import           Data.Monoid (mappend, mconcat)
+import           Data.Monoid (mappend, mconcat, mempty)
 
 import           Language.Fixpoint.Names (propConName)
 import           Language.Fixpoint.Types hiding (quals, Loc)
@@ -60,6 +60,12 @@ identifierP :: Parser (Id SourceSpan)
 -- identifierP = withSpan Id lowerIdP 
 identifierP =   try (withSpan Id upperIdP)
            <|>      (withSpan Id lowerIdP)
+
+tAliasP :: Parser (Id SourceSpan, TAlias RefType) 
+tAliasP = undefined
+
+pAliasP :: Parser (Id SourceSpan, Pred) 
+pAliasP = undefined
 
 tBodyP :: Parser (Id SourceSpan, RType Reft)
 tBodyP = do  id <- identifierP 
@@ -292,20 +298,24 @@ specWraps = betweenMany start stop
 -- | Specifications
 ---------------------------------------------------------------------------------
 data PSpec l t 
-  = Meas (Id l, t)
-  | Bind (Id l, t) 
-  | Qual Qualifier
-  | Type (Id l, t)
-  | Invt l t 
+  = Meas   (Id l, t)
+  | Bind   (Id l, t) 
+  | Type   (Id l, t)
+  | Talias (Id l, TAlias t)
+  | Palias (Id l, PAlias) 
+  | Qual    Qualifier
+  | Invt   l t 
   deriving (Show)
 
 specP :: Parser (PSpec SourceSpan RefType)
 specP 
-  = try (reserved "measure"   >> (Meas <$> idBindP    ))
-    <|> (reserved "qualif"    >> (Qual <$> qualifierP ))
-    <|> (reserved "type"      >> (Type <$> tBodyP     )) 
-    <|> (reserved "invariant" >> (withSpan Invt bareTypeP))
-    <|> ({- DEFAULT -}           (Bind <$> idBindP    ))
+  =   try (reserved "measure"   >> (Meas   <$> idBindP    ))
+  <|> try (reserved "qualif"    >> (Qual   <$> qualifierP ))
+  <|> try (reserved "type"      >> (Type   <$> tBodyP     )) 
+  <|> try (reserved "type"      >> (Talias <$> tAliasP    ))
+  <|> try (reserved "predicate" >> (Palias <$> pAliasP    ))
+  <|> try (reserved "invariant" >> (withSpan Invt bareTypeP))
+  <|> ({- DEFAULT -}               (Bind <$> idBindP    ))
 
 --------------------------------------------------------------------------------------
 parseSpecFromFile :: FilePath -> IO (Nano SourceSpan RefType) 
@@ -316,19 +326,21 @@ parseSpecFromFile f = parseFromFile (mkSpec <$> specWraps specP) f
 mkSpec    ::  (PP t, IsLocated l) => [PSpec l t] -> Nano a t
 --------------------------------------------------------------------------------------
 mkSpec xs = Nano { code   = Src [] 
-                 , specs  = envFromList [b | Bind b <- xs] 
+                 , specs  = envFromList [b          | Bind b <- xs] 
                  , defs   = envEmpty
-                 , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
-                 , tDefs  = envFromList [b         | Type b <- xs]
+                 , consts = envFromList [(swP i, t) | Meas (i, t) <- xs]
+                 , tDefs  = envFromList [b          | Type b   <- xs]
+                 , tAlias = envFromList [a          | Talias a <- xs]
+                 , pAlias = envFromList [p          | Palias p <- xs]
                  , tAnns  = M.empty
-                 , quals  =             [q         | Qual q <- xs]
-                 , invts  =             [Loc l' t  | Invt l t <- xs, let l' = srcPos l]
+                 , quals  =             [q          | Qual q   <- xs]
+                 , invts  =             [Loc l' t   | Invt l t <- xs, let l' = srcPos l]
                  }
-
--- YUCK. Worst hack of all time.
-switchProp i@(Id l x) 
-  | x == (toLower <$> propConName) = Id l propConName
-  | otherwise                      = i
+            where
+              -- YUCK. Worst hack of all time.
+              swP i@(Id l x) 
+                | x == (toLower <$> propConName) = Id l propConName
+                | otherwise                      = i
 
 --------------------------------------------------------------------------------------
 tAnnotP :: ParsecT  String (ParserState String RefType) Identity (Maybe RefType)
@@ -365,22 +377,11 @@ changeState forward backward = mkPT . transform . runParsecT
 parseCodeFromFile :: FilePath -> IO (Nano SourceSpan RefType)
 --------------------------------------------------------------------------------------
 parseCodeFromFile fp = parseJavaScriptFromFile' tAnnotP fp >>= return . mkCode
-
--- parseCodeFromFile fp = 
---   parseJavaScriptFromFile fp >>= return . mkCode . (fmap (, Nothing) <$>)
-      
         
-mkCode    :: [Statement (SST Reft)] -> Nano SourceSpan RefType
-mkCode ss = Nano { code   = Src (stripAnnot $ checkTopStmt <$> ss)
-                 , specs  = envEmpty  
-                 , defs   = envEmpty
-                 , consts = envEmpty 
-                 , tDefs  = envEmpty
-                 , tAnns  = all ss
-                 , quals  = [] 
-                 , invts  = [] 
-                 } 
+mkCode              :: [Statement (SST Reft)] -> Nano SourceSpan RefType
+mkCode ss           = mempty { code = src } { tAnns = all ss } 
   where
+    src             = Src (stripAnnot $ checkTopStmt <$> ss) 
     all ss          = foldr one M.empty ss 
     one s m         = F.foldr f m s
     f (l,Just t) m  = M.insert l t m 

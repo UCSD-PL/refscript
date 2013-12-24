@@ -110,6 +110,8 @@ module Language.Nano.Typecheck.Types (
   , Alias (..)
   , TAlias (..)
   , PAlias (..)
+  , PAliasEnv
+  , TAliasEnv
   ) where 
 
 import           Text.Printf

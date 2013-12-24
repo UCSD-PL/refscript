@@ -38,6 +38,7 @@ import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Typecheck.Subst      (getProp, getIdx)
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
+import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
@@ -49,13 +50,13 @@ import qualified System.Console.CmdArgs.Verbosity as V
 --------------------------------------------------------------------------------
 verifyFile       :: FilePath -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile f =   
-  do  p   <- parseNanoFromFile f
-      cfg <- getOpts 
-      verb    <- V.getVerbosity
-      case typeCheck verb (ssaTransform p) of
-        Left errs -> return $ (A.NoAnn, F.Crash errs "Type Errors")
-        Right p'  -> reftypeCheck cfg f p'
+verifyFile f 
+  = do p    <- expandAliases <$> parseNanoFromFile f
+       cfg  <- getOpts 
+       verb <- V.getVerbosity
+       case typeCheck verb (ssaTransform p) of
+         Left errs -> return $ (A.NoAnn, F.Crash errs "Type Errors")
+         Right p'  -> reftypeCheck cfg f p'
 
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 

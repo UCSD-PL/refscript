@@ -194,8 +194,8 @@ data RType r
   | TBd  (TBody r)              -- ^ ???
   | TAll TVar (RType r)         -- ^ forall A. T
   | TAnd [RType r]              -- ^ (T1..) => T1' /\ ... /\ (Tn..) => Tn' 
+  | TExp F.Expr                 -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
     deriving (Ord, Show, Functor, Data, Typeable)
-
 
 data Bind r
   = B { b_sym  :: F.Symbol
@@ -350,6 +350,7 @@ rTypeR (TArr _ r   ) = r
 rTypeR (TBd  _     ) = errorstar "Unimplemented: rTypeR - TBd"
 rTypeR (TAll _ _   ) = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )     = errorstar "Unimplemented: rTypeR - TAnd"
+rTypeR (TExp _)      = errorstar "Unimplemented: rTypeR - TExp"
 
 setRTypeR :: RType r -> r -> RType r
 setRTypeR (TApp c ts _   ) r' = TApp c ts r'
@@ -360,6 +361,7 @@ setRTypeR (TArr t _      ) r  = TArr t r
 setRTypeR (TBd  _        ) _  = errorstar "Unimplemented: setRTypeR - TBd"
 setRTypeR (TAll _ _      ) _  = errorstar "Unimplemented: setRTypeR - TAll"
 setRTypeR (TAnd _        ) _  = errorstar "Unimplemented: setRTypeR - TAnd"
+setRTypeR (TExp _        ) _  = errorstar "Unimplemented: setRTypeR - TExp"
 
 
 ---------------------------------------------------------------------------------------
@@ -558,7 +560,8 @@ instance F.Reftable r => PP (RType r) where
   pp (TVar α r)                 = F.ppTy r $ pp α 
   pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
-  pp (TAnd (ts))                = vcat [text "/\\" <+> pp t | t <- ts]
+  pp (TAnd ts)                  = vcat [text "/\\" <+> pp t | t <- ts]
+  pp (TExp e)                   = pprint e 
   pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "+") ts 
   pp (TApp d@(TDef _)ts r)      = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 

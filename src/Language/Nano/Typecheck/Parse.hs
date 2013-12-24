@@ -71,10 +71,11 @@ pAliasP = do name <- identifierP
 tAliasP :: Parser (Id SourceSpan, TAlias RefType) 
 tAliasP = do name      <- identifierP
              (αs, πs)  <- mapEither aliasVarT <$> aliasVarsP 
+             reservedOp "="
              body      <- bareTypeP
              return      (name, Alias name αs πs body) 
 
-aliasVarsP    = brackets $ sepBy alasVarP comma
+aliasVarsP    = brackets $ sepBy aliasVarP comma
 aliasVarP     = withSpan (,) (wordP $ \_ -> True)
 
 aliasVarT (l, x)      
@@ -131,7 +132,6 @@ bareTypeNoUnionP
  <|>     (bareAtomP bbaseP)
 
 -- | `bareFunP` parses an ordered-intersection type
-
 bareFunP 
   = tAnd <$> many1 (reserved "/\\" >> bareFun1P)
 
@@ -163,42 +163,56 @@ bareAtomP p
 
 bbaseP :: Parser (Reft -> RefType)
 bbaseP 
-  =  try (TVar <$> tvarP)
- <|> try (TObj <$> (braces $ bindsP) )      -- Object types
- <|> try (TObj <$> arrayBindsP)             -- Array literal types
- <|> try (TArr <$> arrayP)
- <|> try (TApp <$> tDefP <*> (brackets $ sepBy bareTypeP comma))  -- This is what allows: list [A], tree [A,B] etc...
- <|>     ((`TApp` []) <$> tconP)
+  =  try (TVar <$> tvarP)                  -- A
+ <|> try (TObj <$> (braces $ bindsP) )     -- { f1: T1, ... , fn: Tn} 
+ <|> try (TObj <$> arrayBindsP)            -- { i1: T1, ... , in: Tn}
+ <|> try (TArr <$> arrayP)                 -- [T]
+ <|> try (TApp <$> tDefP <*> bareTyArgsP)  -- list[A], tree[A,B] etc...
+ 
+ -- <|>     ((`TApp` []) <$> tconP)           -- yuck. this is wierd.
 
-tvarP :: Parser TVar
-tvarP = withSpan tvar $ wordP isTvar
+bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
 
-      -- = withSpan {- (\l x -> TV x l) -} (flip TV) (stringSymbol <$> upperWordP)
+bareTyArgP  = try bareTypeP 
+           <|> (TExp <$> exprP)
 
-tvar l x   = TV (stringSymbol x) l
+tvarP    :: Parser TVar
+tvarP    = withSpan tvar $ wordP isTvar                  -- = withSpan {- (\l x -> TV x l) -} (flip TV) (stringSymbol <$> upperWordP)
 
-isTvar     = not . isLower . head
+tvar l x = TV (stringSymbol x) l
 
-wordP p0   = condIdP nice p0
+isTvar   = not . isLower . head
+
+wordP p  = condIdP ok p
   where 
-    nice   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
+    ok   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
-tconP :: Parser TCon
-tconP =  try (reserved "number"    >> return TInt)
+tDefP :: Parser TCon
+tDefP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "boolean"   >> return TBool)
      <|> try (reserved "undefined" >> return TUndef)
      <|> try (reserved "void"      >> return TVoid)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
-     <|> tDefP
+     <|> (TDef <$> identifierP)
 
-tDefP 
-  = do  s <- identifierP 
-        -- XXX: This list will have to be enhanced.
-        if unId s `elem` ["true", "false", "number", "boolean", "string", "top", "void", "null"] 
-          then parserZero
-          else return $ TDef s
+-- tconP :: Parser TCon
+-- tconP =  try (reserved "number"    >> return TInt)
+--      <|> try (reserved "boolean"   >> return TBool)
+--      <|> try (reserved "undefined" >> return TUndef)
+--      <|> try (reserved "void"      >> return TVoid)
+--      <|> try (reserved "top"       >> return TTop)
+--      <|> try (reserved "string"    >> return TString)
+--      <|> try (reserved "null"      >> return TNull)
+--      <|> tDefP
+-- 
+-- tDefP 
+--   = do  s <- identifierP 
+--         -- XXX: This list will have to be enhanced.
+--         if unId s `elem` ["true", "false", "number", "boolean", "string", "top", "void", "null"] 
+--           then parserZero
+--           else return $ TDef s
 
 bareAllP 
   = do reserved "forall"

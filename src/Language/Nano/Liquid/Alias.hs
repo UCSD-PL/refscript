@@ -20,7 +20,15 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
 
 expandAliases :: NanoRefType -> NanoRefType
-expandAliases = undefined
+expandAliases p = expandRefType te' p' 
+  where
+    p'          = p { pAlias = pe' } {tAlias = te'}
+    pe'         = expandPAliasEnv                              $ pAlias p
+    te'         = expandTAliasEnv $ expandPAliasesTAliases pe' $ tAlias p
+
+---------------------------------------------------------------------------------------
+-- | One-shot expansion for @PAlias@ -------------------------------------------------- 
+---------------------------------------------------------------------------------------
 
 expandPAliasEnv :: PAliasEnv -> PAliasEnv 
 expandPAliasEnv pe = solve pe support expandPAlias 
@@ -32,14 +40,28 @@ expandPAliasEnv pe = solve pe support expandPAlias
     fromP (F.PBexp (F.EApp (F.Loc _ f) _)) = [f]
     fromP _                                = []
 
-expandPAlias :: PAliasEnv -> PAlias -> PAlias
-expandPAlias = undefined
 
-expandTAliases :: PAliasEnv -> TAliasEnv RefType -> TAliasEnv RefType 
-expandTAliases = undefined
+expandPAlias  :: PAliasEnv -> PAlias -> PAlias
+expandPAlias  = undefined
 
-expandRefType :: PAliasEnv -> TAliasEnv RefType -> RefType -> RefType  
+expandPred    :: PAliasEnv -> F.Pred -> F.Pred
+expandPred    = undefined
+
+---------------------------------------------------------------------------------------
+-- | One-shot expansion for @TAlias@ -------------------------------------------------- 
+---------------------------------------------------------------------------------------
+
+expandTAliasEnv  :: TAliasEnv RefType -> TAliasEnv RefType 
+expandTAliasEnv  = undefined
+
+expandTAlias :: TAliasEnv RefType -> TAlias RefType -> TAlias RefType
+expandTAlias = undefined
+
+expandRefType :: TAliasEnv RefType -> RefType -> RefType  
 expandRefType = undefined
+
+expandPAliasesTAliases :: PAliasEnv -> TAliasEnv RefType -> TAliasEnv RefType
+expandPAliasesTAliases = undefined
 
 ---------------------------------------------------------------------------------------
 -- | A Generic Solver for Expanding Definitions --------------------------------------- 
@@ -51,19 +73,22 @@ solve :: (IsLocated a)
       -> (Env a -> a -> a)  -- ^ Expansion function
       -> Env a              -- ^ Output "closed" definitions
 
-solve defs deps exp = ex_solved $ snd $ runState st0 $ forM_ xs $ solveM deps exp []
+solve defs deps exp = ex_solved $ snd $ runState act st0
   where 
     st0             = ExS defs envEmpty
-    xs              = [ Loc (srcPos d) x | (x, d) <- envToList defs] 
+    xs              = [x `at` d | (x, d) <- envToList defs]
+    act             = forM_ xs $ solveM deps exp []
+
 
 solveM deps exp stk x 
   | x `elem` stk    = die $ errorCyclicDefs (srcPos x) x stk
   | otherwise       = do xr <- getResult x
                          case xr of
                            Just d' -> return (x, d') 
-                           Nothing -> do d     <- getDefinition x
-                                         xds'  <- mapM (solveM deps exp (x:stk)) $ deps d
-                                         setResult x $ exp (envFromList xds') d
+                           Nothing -> do d      <- getDefinition x
+                                         let ys  = [ y `at` d | y <- deps d]
+                                         yds'   <- mapM (solveM deps exp (x:stk)) ys 
+                                         setResult x $ exp (envFromList yds') d
 
 type ExM a     = State (ExState a)
 
@@ -77,9 +102,9 @@ getDefinition x = (fromMaybe (die $ bugUnknownAlias (srcPos x) x) . envFindTy (v
 -- getResult     :: F.Symbol -> ExM a (Maybe a)
 getResult x   = (envFindTy (val x) . ex_solved) <$> get  
 
--- setResult     :: (IsLocated a) => Symbol -> a -> ExM a (Symbol, a)
-setResult x d = do modify $ \st -> st { ex_solved = envAdd x' d (ex_solved st) } 
-                   return (x', d)
-  where 
-    x'        = Loc (srcPos d) x
+setResult     :: (IsLocated a) => Located F.Symbol -> a -> ExM a (Located F.Symbol, a)
+setResult x d = do modify $ \st -> st { ex_solved = envAdd x d (ex_solved st) } 
+                   return (x, d)
 
+
+at x d        = Loc (srcPos d) (F.symbol x)

@@ -840,8 +840,10 @@ data Alias a s t = Alias {
 type TAlias t    = Alias TVar F.Symbol t
 type PAlias      = Alias ()   F.Symbol F.Pred 
 type TAliasEnv t = Env (TAlias t)
-type PAliasEnv   = Env (PAlias)
+type PAliasEnv   = Env PAlias
 
+instance IsLocated (Alias a s t) where
+  srcPos = srcPos . al_name
 
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n αs πs body) = text "alias" <+> pp n <+> text "=" <+> pp body 

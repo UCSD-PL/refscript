@@ -41,6 +41,7 @@ module Language.Nano.Types (
   , idLoc 
  
   -- * Manipulating SourceSpan
+  , SourceSpan (..)
   , dummySpan
   , srcSpanFile
   , srcSpanStartLine

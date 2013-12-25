@@ -8,7 +8,9 @@
 {-# LANGUAGE OverlappingInstances #-}
 
 module Language.Nano.Env (
-    Env    
+    Env
+  , Var 
+
   , envFromList 
   , envToList
   , envAdd, envAdds 
@@ -49,6 +51,7 @@ import           Control.Exception (throw)
 --------------------------------------------------------------------------
 
 type Env t      = F.SEnv (Located t) 
+type Var        = Id SourceSpan 
 
 envIds          = map fst . envToList
 envEmpty        = F.emptySEnv

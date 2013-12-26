@@ -84,6 +84,8 @@ module Language.Nano.Typecheck.Types (
   , UFact
   , Fact (..)
   , Cast(..)
+  , AnnToken(..)
+  , PSpec(..)
 
   -- * Aliases for annotated Source 
   , AnnBare, UAnnBare
@@ -482,6 +484,27 @@ mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }
 
 
+---------------------------------------------------------------------------------
+-- | Specifications (moved from Parser)
+---------------------------------------------------------------------------------
+data PSpec l t 
+  = Meas (Id l, t)
+  | Bind (Id l, t) 
+  | Extern (Id l, t) 
+  | Qual F.Qualifier
+  | Type (Id l, t)
+  | Invt l t 
+  deriving (Eq, Ord, Show, Data, Typeable)
+
+instance (PP l, PP t) => PP (PSpec l t) where
+  pp (Meas (i, t))   = text "measure: " <+> pp i
+  pp (Bind (i, t))   = text "bind: " <+>  pp i <+> text " :: " <+> pp t
+  pp (Extern (i, t)) = text "extern: " <+>  pp i <+> text " :: " <+> pp t
+  pp (Qual q)        = text "qualifier..."
+  pp (Type (i, t))   = text "type def"
+  pp (Invt l t)      = text "invariant"
+
+
 ------------------------------------------------------------------------------------------
 -- | Mutability 
 ------------------------------------------------------------------------------------------
@@ -654,6 +677,13 @@ type UAnnBare = AnnBare ()
 type UAnnSSA  = AnnSSA  ()
 type UAnnType = AnnType ()
 type UAnnInfo = AnnInfo ()
+
+data AnnToken r 
+  = TBind (Id SourceSpan, RType r) 
+  | TType (RType r)
+  | TSpec (PSpec SourceSpan (RType r))
+  | EmptyToken
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 
 

@@ -327,8 +327,8 @@ initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss
     tc_cnt   = 0
     tc_anns  = HM.empty
     tc_annss = []
-    tc_defs  = defs pgm
-    tc_tdefs = tDefs pgm
+    tc_defs  = sigs pgm
+    tc_tdefs = defs pgm
     tc_expr  = Nothing
     tc_verb  = verb
 

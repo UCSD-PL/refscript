@@ -291,13 +291,6 @@ specWraps = betweenMany start stop
 ---------------------------------------------------------------------------------
 -- | Specifications
 ---------------------------------------------------------------------------------
-data PSpec l t 
-  = Meas (Id l, t)
-  | Bind (Id l, t) 
-  | Qual Qualifier
-  | Type (Id l, t)
-  | Invt l t 
-  deriving (Show)
 
 specP :: Parser (PSpec SourceSpan RefType)
 specP 

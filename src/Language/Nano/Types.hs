@@ -113,6 +113,7 @@ instance Functor Located where
 -- | `IsLocated` is a predicate for values which we have a SourceSpan
 --------------------------------------------------------------------------------
 
+sourcePos :: IsLocated a => a -> SourcePos
 sourcePos = sp_begin . srcPos 
 
 class IsLocated a where 

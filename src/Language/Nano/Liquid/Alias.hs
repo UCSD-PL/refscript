@@ -17,14 +17,15 @@ import           Language.Nano.Env
 import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
+import qualified Language.Nano.Typecheck.Subst as S
 import           Language.Nano.Liquid.Types
 
-expandAliases :: NanoRefType -> NanoRefType
-expandAliases p = expandRefType te' <$> p' 
+expandAliases   :: NanoRefType -> NanoRefType
+expandAliases p = expandPAliasRefType pe' <$> expandRefType te' <$> p' 
   where
     p'          = p { pAlias = pe' } {tAlias = te'}
-    pe'         = expandPAliasEnv                  $ pAlias p
-    te'         = expandTAliasEnv $ expandPATA pe' $ tAlias p
+    pe'         = expandPAliasEnv $ pAlias p
+    te'         = expandTAliasEnv $ tAlias p
 
 ------------------------------------------------------------------------------
 -- | One-shot expansion for @PAlias@ -----------------------------------------
@@ -54,12 +55,15 @@ expandPred pe = everywhere $ mkT $ tx
 
 applyPAlias p f es a   
   | ne == nx  = F.subst su $ al_body a 
-  | otherwise = die $ errorBadPAlias (srcPos f) p (length xs) (length es)
+  | otherwise = die $ errorBadPAlias (srcPos f) p nx ne 
   where
     su        = F.mkSubst $ zip xs es
     xs        = al_syvars a
     nx        = length xs
     ne        = length es
+
+expandPAliasRefType :: PAliasEnv -> RefType -> RefType
+expandPAliasRefType = undefined
 
 ------------------------------------------------------------------------------
 -- | One-shot expansion for @TAlias@ -----------------------------------------
@@ -89,15 +93,25 @@ expandRefType te = everywhere $ mkT $ tx
     tx t         = t
 
 applyTAlias :: RefType -> a -> [RefType] -> F.Reft -> TAlias RefType -> RefType 
-applyTAlias t c ts r a = undefined
+applyTAlias t c ts_ r a 
+  | (nt, ne) == (nα, nx) = (F.subst su $ S.apply θ $ al_body a) `strengthen` r
+  | otherwise            = die $ errorBadTAlias (srcPos c) t nt ne nα nx
+  where 
+    xs                   = al_syvars a
+    αs                   = al_tyvars a
+    nx                   = length xs 
+    nα                   = length αs 
+    ne                   = length es
+    nt                   = length ts
+    (ts, es)             = splitTsEs ts_
+    su                   = F.mkSubst  $ zip xs es
+    θ                    = S.fromList $ zip αs ts 
 
------------------------------------------------------------------------------
--- | Expand @PAlias@ inside @TAlias@ using ----------------------------------
------------------------------------------------------------------------------
-
-expandPATA    :: PAliasEnv -> TAliasEnv RefType -> TAliasEnv RefType
-expandPATA    = undefined
-
+splitTsEs ts       = (ts', [e | TExp e <- es'])
+  where
+    (ts', es')     = break isExp ts
+    isExp (TExp _) = True
+    isExp _        = False 
 -----------------------------------------------------------------------------
 -- | A Generic Solver for Expanding Definitions -----------------------------
 -----------------------------------------------------------------------------

@@ -294,11 +294,11 @@ specWraps = betweenMany start stop
 
 specP :: Parser (PSpec SourceSpan RefType)
 specP 
-  = try (reserved "measure"   >> (Meas <$> idBindP    ))
-    <|> (reserved "qualif"    >> (Qual <$> qualifierP ))
-    <|> (reserved "type"      >> (Type <$> tBodyP     )) 
+  = try (reserved "measure"   >> (Meas   <$> idBindP    ))
+    <|> (reserved "qualif"    >> (Qual   <$> qualifierP ))
+    <|> (reserved "type"      >> (Type   <$> tBodyP     )) 
     <|> (reserved "invariant" >> (withSpan Invt bareTypeP))
-    <|> ({- DEFAULT -}           (Bind <$> idBindP    ))
+    <|> (reserved "extern"    >> (Extern <$> idBindP    ))
 
 --------------------------------------------------------------------------------------
 parseSpecFromFile :: FilePath -> IO (Nano SourceSpan RefType) 

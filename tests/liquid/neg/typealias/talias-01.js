@@ -1,4 +1,4 @@
-/*@ type nat = {number | 0 <= v } */
+/*@ type nat = {number | 10 <= v } */
 
 /*@ ab :: (number) => nat */
 function ab(x){

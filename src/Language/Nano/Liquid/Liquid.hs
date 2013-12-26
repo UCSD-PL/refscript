@@ -33,7 +33,7 @@ import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
-import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
+import           Language.Nano.Typecheck.Typecheck  (typeCheck, patchTypeAnnots) 
 import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Typecheck.Subst      (getProp, getIdx)
 import           Language.Nano.SSA.SSA
@@ -53,7 +53,7 @@ verifyFile f =
   do  p   <- parseNanoFromFile f
       cfg <- getOpts 
       verb    <- V.getVerbosity
-      case typeCheck verb (ssaTransform p) of
+      case typeCheck verb (patchTypeAnnots $ ssaTransform p) of
         Left errs -> return $ (A.NoAnn, F.Crash errs "Type Errors")
         Right p'  -> reftypeCheck cfg f p'
 
@@ -94,7 +94,7 @@ consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) = consStmts (initCGEnv pgm) fs >> return ()
 
-initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext (defs pgm)
+initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext (sigs pgm) (tAnns pgm)
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
@@ -143,7 +143,7 @@ consStmt g (EmptyStmt _)
 
 -- x = e
 consStmt g (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))   
-  = consAsgn g (Id lx x) e
+  = consAsgn g (Id lx x) Nothing e
 
 -- e1.fld = e2
 consStmt g (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
@@ -212,7 +212,7 @@ consStmt _ s
 consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consVarDecl g v@(VarDecl _ x (Just e)) 
-  = consAsgn g x e
+  = consAsgn g x (varDeclAnnot v) e
 
 --  do (x', g') <- consExprT g ct e
 --     Just <$> envAdds [(x, envFindTy x' g')] g'
@@ -240,10 +240,10 @@ consExprT g e to
        l = getAnnotation e
 
 ------------------------------------------------------------------------------------
-consAsgn :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
+consAsgn :: CGEnv -> Id AnnTypeR -> Maybe RefType -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
-consAsgn g x e 
-  = do (x', g') <- consExprT g e $ envFindSpec x g 
+consAsgn g x t e 
+  = do (x', g') <- consExprT g e t 
        Just <$> envAdds [(x, envFindTy x' g')] g'
 
 

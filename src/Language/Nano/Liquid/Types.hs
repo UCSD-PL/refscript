@@ -93,14 +93,15 @@ data CGEnv
         , fenv     :: F.IBindEnv     -- ^ fixpoint bindings
         , guards   :: ![F.Pred]      -- ^ branch target conditions  
         , cge_ctx  :: !IContext      -- ^ intersection-type context 
-        , cge_spec :: !(Env RefType) -- ^ specifications for defined variables/functions
+        , cge_spec :: !(Env RefType) -- ^ specifications for defined functions
+        , cge_anns :: !(SMap RefType) -- ^ specifications for defined variables
         }
 
 
 emptyCGEnv = CGE envEmpty F.emptyIBindEnv [] emptyContext envEmpty
 
 instance PP CGEnv where
-  pp (CGE  re _ gs ctx sp) = vcat [pp re, pp gs, pp ctx, pp sp] 
+  pp (CGE  re _ gs ctx sp an) = vcat [pp re, pp gs, pp ctx, pp sp, pp an] 
 
 ----------------------------------------------------------------------------
 -- | Constraint Information ------------------------------------------------

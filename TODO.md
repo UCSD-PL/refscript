@@ -32,8 +32,6 @@ JS Features
 Tool/Implementation
 -------------------
 
-  - Type/predicate aliases
-
   - Annotation Parser [remove `defs` field from `Nano`]
     - Need to find a way to allow the language-ecmascript parser to parse 
       comments that start with "/*" and end with "*/"
@@ -64,24 +62,8 @@ Failing Tests
   
     liquid/pos/arrays/safemap.js
 
+[METHODS]
 
-Type and Predicate Aliases
---------------------------
+    liquid/pos/objects/meth-00.js
 
-  + tests
-    + tests/liquid/pos/typealias/talias-00.js
-    + tests/liquid/pos/typealias/talias-01.js
-    + tests/liquid/pos/typealias/talias-02.js
-    + tests/liquid/pos/typealias/talias-03.js
-
-  + Type
-    + Alias
-    + Nano
-
-  + Parser
-    + Alias
-
-  + Test the parser SVP!
- 
-  - Transform-Spec function
 

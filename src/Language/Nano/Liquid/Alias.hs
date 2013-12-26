@@ -33,20 +33,24 @@ expandAliases p = expandRefType te' <$> p'
 expandPAliasEnv :: PAliasEnv -> PAliasEnv 
 expandPAliasEnv pe = solve pe support expandPAlias 
   where
-    support        = filter isAlias . getApps . al_body
-    isAlias x      = x `envMem` pe
-    getApps        :: F.Pred -> [F.Symbol]
-    getApps p      = everything (++) ([] `mkQ` fromP) p
-    fromP (F.PBexp (F.EApp (F.Loc _ f) _)) = [f]
-    fromP _                                = []
+    support        = filter (`envMem` pe) . getPApps . al_body
+
+getPApps       :: F.Pred -> [F.Symbol]
+getPApps p     = everything (++) ([] `mkQ` fromP) p
+  where 
+    fromP (F.PBexp (F.EApp (F.Loc _ f) _)) 
+               = [f]
+    fromP _    = []
 
 expandPAlias      :: PAliasEnv -> PAlias -> PAlias
 expandPAlias pe a = a { al_body = expandPred pe $ al_body a } 
 
-expandPred pe                    = everywhere $ mkT $ tx
+expandPred    :: PAliasEnv -> F.Pred -> F.Pred
+expandPred pe = everywhere $ mkT $ tx
   where 
-    tx p@(F.PBexp (F.EApp f es)) = maybe p (applyPAlias p f es) $ envFindTy f pe
-    tx p                         = p
+    tx p@(F.PBexp (F.EApp f es)) 
+              = maybe p (applyPAlias p f es) $ envFindTy f pe
+    tx p      = p
 
 applyPAlias p f es a   
   | ne == nx  = F.subst su $ al_body a 
@@ -57,25 +61,45 @@ applyPAlias p f es a
     nx        = length xs
     ne        = length es
 
----------------------------------------------------------------------------------------
--- | One-shot expansion for @TAlias@ -------------------------------------------------- 
----------------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+-- | One-shot expansion for @TAlias@ -----------------------------------------
+------------------------------------------------------------------------------
 
-expandTAliasEnv :: TAliasEnv RefType -> TAliasEnv RefType 
-expandTAliasEnv = undefined
+expandTAliasEnv    :: TAliasEnv RefType -> TAliasEnv RefType 
+expandTAliasEnv te = solve te support expandTAlias 
+  where
+    support        = filter (`envMem` te) . getTApps . al_body
+
+getTApps                      :: RefType -> [F.Symbol]
+getTApps                      = everything (++) ([] `mkQ` fromT) 
+  where
+    fromT                     :: RefType -> [F.Symbol]
+    fromT (TApp (TDef c) _ _) = [F.symbol c]
+    fromT _                   = []
 
 expandTAlias  :: TAliasEnv RefType -> TAlias RefType -> TAlias RefType
-expandTAlias  = undefined
+expandTAlias te a = a {al_body = expandRefType te $ al_body a}
 
 expandRefType :: TAliasEnv RefType -> RefType -> RefType  
-expandRefType = undefined
+expandRefType te = everywhere $ mkT $ tx
+  where
+    tx t@(TApp (TDef c) ts r) 
+                 = maybe t (applyTAlias t c ts r) $ envFindTy c te
+    tx t         = t
+
+applyTAlias :: RefType -> a -> [RefType] -> F.Reft -> TAlias RefType -> RefType 
+applyTAlias t c ts r a = undefined
+
+-----------------------------------------------------------------------------
+-- | Expand @PAlias@ inside @TAlias@ using ----------------------------------
+-----------------------------------------------------------------------------
 
 expandPATA    :: PAliasEnv -> TAliasEnv RefType -> TAliasEnv RefType
 expandPATA    = undefined
 
----------------------------------------------------------------------------------------
--- | A Generic Solver for Expanding Definitions --------------------------------------- 
----------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------
+-- | A Generic Solver for Expanding Definitions -----------------------------
+-----------------------------------------------------------------------------
 
 solve :: (IsLocated a)
       => Env a              -- ^ Input definitions

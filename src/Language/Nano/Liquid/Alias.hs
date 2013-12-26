@@ -70,12 +70,13 @@ expandTAliasEnv te = solve te support expandTAlias
   where
     support        = filter (`envMem` te) . getTApps . al_body
 
-getTApps                      :: RefType -> [F.Symbol]
-getTApps                      = everything (++) ([] `mkQ` fromT) 
+getTApps    :: RefType -> [F.Symbol]
+getTApps    = everything (++) ([] `mkQ` fromT) 
   where
-    fromT                     :: RefType -> [F.Symbol]
-    fromT (TApp (TDef c) _ _) = [F.symbol c]
-    fromT _                   = []
+    fromT   :: RefType -> [F.Symbol]
+    fromT (TApp (TDef c) _ _) 
+            = [F.symbol c]
+    fromT _ = []
 
 expandTAlias  :: TAliasEnv RefType -> TAlias RefType -> TAlias RefType
 expandTAlias te a = a {al_body = expandRefType te $ al_body a}

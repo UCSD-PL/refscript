@@ -300,37 +300,47 @@ specP
     <|> (reserved "invariant" >> (withSpan Invt bareTypeP))
     <|> (reserved "extern"    >> (Extern <$> idBindP    ))
 
---------------------------------------------------------------------------------------
-parseSpecFromFile :: FilePath -> IO (Nano SourceSpan RefType) 
---------------------------------------------------------------------------------------
-parseSpecFromFile f = parseFromFile (mkSpec <$> specWraps specP) f
+
+-- --------------------------------------------------------------------------------------
+-- parseSpecFromFile :: FilePath -> IO (Nano SourceSpan RefType) 
+-- --------------------------------------------------------------------------------------
+-- parseSpecFromFile f = parseFromFile (mkSpec <$> specWraps specWithDefaultP) f
+-- 
+-- --------------------------------------------------------------------------------------
+-- mkSpec    ::  (PP t, IsLocated l) => [PSpec l t] -> Nano a t
+-- --------------------------------------------------------------------------------------
+-- mkSpec xs = Nano { code   = Src [] 
+--                  , specs  = envFromList [b | Bind b <- xs] 
+--                  , sigs   = envEmpty
+--                  , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
+--                  , defs   = envFromList [b         | Type b <- xs]
+--                  , tAnns  = M.empty
+--                  , quals  =             [q         | Qual q <- xs]
+--                  , invts  =             [Loc l' t  | Invt l t <- xs, let l' = srcPos l]
+--                  }
+
+-- -- YUCK. Worst hack of all time.
+-- switchProp i@(Id l x) 
+--   | x == (toLower <$> propConName) = Id l propConName
+--   | otherwise                      = i
 
 --------------------------------------------------------------------------------------
-mkSpec    ::  (PP t, IsLocated l) => [PSpec l t] -> Nano a t
+tAnnotP :: ParserState String (AnnToken Reft) -> ExternP String (AnnToken Reft)
 --------------------------------------------------------------------------------------
-mkSpec xs = Nano { code   = Src [] 
-                 , specs  = envFromList [b | Bind b <- xs] 
-                 , defs   = envEmpty
-                 , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
-                 , tDefs  = envFromList [b         | Type b <- xs]
-                 , tAnns  = M.empty
-                 , quals  =             [q         | Qual q <- xs]
-                 , invts  =             [Loc l' t  | Invt l t <- xs, let l' = srcPos l]
-                 }
-
--- YUCK. Worst hack of all time.
-switchProp i@(Id l x) 
-  | x == (toLower <$> propConName) = Id l propConName
-  | otherwise                      = i
-
---------------------------------------------------------------------------------------
-tAnnotP :: ParsecT  String (ParserState String RefType) Identity (Maybe RefType)
---------------------------------------------------------------------------------------
-tAnnotP = Just <$> changeState fwd bwd bareTypeP
+tAnnotP stIn = EP typeP fSigP tLevP
   where
-    -- XXX: these are pretty much dummy vals
-    fwd _ = initialParserState tAnnotP
-    bwd _ = 0
+    typeP = TType <$> changeState fwd bwd (tp bareTypeP)
+    fSigP = TBind <$> changeState fwd bwd (tp idBindP)
+    tLevP = TSpec <$> changeState fwd bwd (tp specP)
+    fwd _ = stIn  -- NOTE: need to keep the state of the language-ecmascript parser!!!
+    bwd _ = 0     -- TODO: Is this adequate???
+    tp p = do string "/*@"
+              whiteSpace
+              t <- p
+              whiteSpace
+              string "*/"
+              whiteSpace
+              return t
 
 -- `changeState` taken from here:
 -- http://stackoverflow.com/questions/17968784/an-easy-way-to-change-the-type-of-parsec-user-state
@@ -354,31 +364,30 @@ changeState forward backward = mkPT . transform . runParsecT
       -> (State s v -> m (Consumed (m (Reply s v a))))
     transform p st = fmap3 (mapReply forward) (p (mapState backward st))
 
+
+-- | Parse Code along with type annotations
+
 --------------------------------------------------------------------------------------
 parseCodeFromFile :: FilePath -> IO (Nano SourceSpan RefType)
 --------------------------------------------------------------------------------------
 parseCodeFromFile fp = parseJavaScriptFromFile' tAnnotP fp >>= return . mkCode
 
--- parseCodeFromFile fp = 
---   parseJavaScriptFromFile fp >>= return . mkCode . (fmap (, Nothing) <$>)
-      
-        
-mkCode    :: [Statement (SST Reft)] -> Nano SourceSpan RefType
-mkCode ss = Nano { code   = Src (stripAnnot $ checkTopStmt <$> ss)
-                 , specs  = envEmpty  
-                 , defs   = envEmpty
-                 , consts = envEmpty 
-                 , tDefs  = envEmpty
-                 , tAnns  = all ss
-                 , quals  = [] 
-                 , invts  = [] 
+--------------------------------------------------------------------------------------
+mkCode :: ([Statement SourceSpan], M.HashMap SourceSpan (AnnToken Reft)) -> 
+  Nano SourceSpan RefType
+--------------------------------------------------------------------------------------
+mkCode (ss, m) = Nano { code   = Src (checkTopStmt <$> ss)
+                 , specs  = envAdds [ (i, t) | (_, TSpec (Extern (i, t))) <- list ] envEmpty
+                 , sigs   = envAdds [ (i, t) | (_, TBind (i, t))          <- list ] envEmpty
+                 , consts = envAdds [ (i, t) | (_, TSpec (Meas (i, t)))   <- list ] envEmpty
+                 , defs   = envAdds [ (i, t) | (_, TSpec (Type (i, t)))   <- list ] envEmpty
+                 , tAnns  = M.fromList [ (i, t) | (i, TType t) <- list ]
+                 , quals  = [q         | (_, TSpec (Qual q))   <- list ]
+                 , invts  = [Loc l' t  | (_, TSpec (Invt l t)) <- list, let l' = srcPos l]
                  } 
   where
-    all ss          = foldr one M.empty ss 
-    one s m         = F.foldr f m s
-    f (l,Just t) m  = M.insert l t m 
-    f _          m  = m
-    stripAnnot      = map (fmap fst)
+    list = M.toList m
+
 
 -------------------------------------------------------------------------------
 -- | Parse File and Type Signatures -------------------------------------------
@@ -386,23 +395,20 @@ mkCode ss = Nano { code   = Src (stripAnnot $ checkTopStmt <$> ss)
 
 parseNanoFromFile :: FilePath-> IO (Nano SourceSpan RefType)
 parseNanoFromFile f 
-  = do code  <- parseCodeFromFile f
-       spec  <- parseSpecFromFile f
-       ispec <- parseSpecFromFile =<< getPreludePath
-       return $ catSpecDefs $ mconcat [code, spec, ispec] 
+  = do spec <- parseCodeFromFile =<< getPreludePath
+       code <- parseCodeFromFile f
+       return $ catSpecDefs $ mconcat [spec, code] 
 
-catSpecDefs pgm = pgm { specs = specγ } { defs = defγ }
+catSpecDefs pgm = pgm { sigs = defγ }
   where 
-    defγ        = envFromList [(x, lookupTy x γ) | x <- xs ++ fs ]
-    specγ       = γ `envDiff` defγ 
-    γ           = specs pgm
-    xs          = [ x | x <- definedVars stmts, x `envMem` γ]
+    defγ        = envFromList [ (x, lookupTy x γ) | x <- fs ]
+    γ           = sigs pgm
     fs          = definedFuns stmts 
     Src stmts   = code pgm
 
 lookupTy x γ   = fromMaybe err $ envFindTy x γ 
   where 
-    err        = die $ bugUnboundVariable (srcPos x) x 
+    err        = die $ bugUnboundFunction γ (srcPos x) x
 
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite

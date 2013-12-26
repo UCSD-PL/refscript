@@ -128,3 +128,8 @@ errorPropRead  l x1 x2    = mkErr l $ printf "Invalid property read object: %s p
 errorArrayLit     l x     = mkErr l $ printf "Invalid array literal %s" (ppshow x) 
 
 
+errorBadPAlias l p nx ne  = mkErr l $ printf "Invalid Predicate Alias application: %s \nExpected %d arguments, but got %d." 
+                                       (ppshow p) nx ne 
+
+
+

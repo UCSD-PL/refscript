@@ -20,15 +20,15 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
 
 expandAliases :: NanoRefType -> NanoRefType
-expandAliases p = expandRefType te' p' 
+expandAliases p = expandRefType te' <$> p' 
   where
     p'          = p { pAlias = pe' } {tAlias = te'}
-    pe'         = expandPAliasEnv                              $ pAlias p
-    te'         = expandTAliasEnv $ expandPAliasesTAliases pe' $ tAlias p
+    pe'         = expandPAliasEnv                  $ pAlias p
+    te'         = expandTAliasEnv $ expandPATA pe' $ tAlias p
 
----------------------------------------------------------------------------------------
--- | One-shot expansion for @PAlias@ -------------------------------------------------- 
----------------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+-- | One-shot expansion for @PAlias@ -----------------------------------------
+------------------------------------------------------------------------------
 
 expandPAliasEnv :: PAliasEnv -> PAliasEnv 
 expandPAliasEnv pe = solve pe support expandPAlias 
@@ -40,28 +40,38 @@ expandPAliasEnv pe = solve pe support expandPAlias
     fromP (F.PBexp (F.EApp (F.Loc _ f) _)) = [f]
     fromP _                                = []
 
+expandPAlias      :: PAliasEnv -> PAlias -> PAlias
+expandPAlias pe a = a { al_body = expandPred pe $ al_body a } 
 
-expandPAlias  :: PAliasEnv -> PAlias -> PAlias
-expandPAlias  = undefined
+expandPred pe                    = everywhere $ mkT $ tx
+  where 
+    tx p@(F.PBexp (F.EApp f es)) = maybe p (applyPAlias p f es) $ envFindTy f pe
+    tx p                         = p
 
-expandPred    :: PAliasEnv -> F.Pred -> F.Pred
-expandPred    = undefined
+applyPAlias p f es a   
+  | ne == nx  = F.subst su $ al_body a 
+  | otherwise = die $ errorBadPAlias (srcPos f) p (length xs) (length es)
+  where
+    su        = F.mkSubst $ zip xs es
+    xs        = al_syvars a
+    nx        = length xs
+    ne        = length es
 
 ---------------------------------------------------------------------------------------
 -- | One-shot expansion for @TAlias@ -------------------------------------------------- 
 ---------------------------------------------------------------------------------------
 
-expandTAliasEnv  :: TAliasEnv RefType -> TAliasEnv RefType 
-expandTAliasEnv  = undefined
+expandTAliasEnv :: TAliasEnv RefType -> TAliasEnv RefType 
+expandTAliasEnv = undefined
 
-expandTAlias :: TAliasEnv RefType -> TAlias RefType -> TAlias RefType
-expandTAlias = undefined
+expandTAlias  :: TAliasEnv RefType -> TAlias RefType -> TAlias RefType
+expandTAlias  = undefined
 
 expandRefType :: TAliasEnv RefType -> RefType -> RefType  
 expandRefType = undefined
 
-expandPAliasesTAliases :: PAliasEnv -> TAliasEnv RefType -> TAliasEnv RefType
-expandPAliasesTAliases = undefined
+expandPATA    :: PAliasEnv -> TAliasEnv RefType -> TAliasEnv RefType
+expandPATA    = undefined
 
 ---------------------------------------------------------------------------------------
 -- | A Generic Solver for Expanding Definitions --------------------------------------- 

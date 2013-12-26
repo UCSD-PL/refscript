@@ -5,6 +5,7 @@
 {-# LANGUAGE TupleSections        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE DeriveDataTypeable   #-}
 {-# LANGUAGE NoMonomorphismRestriction   #-}
@@ -14,7 +15,7 @@ module Language.Nano.Typecheck.Types (
   -- * Programs
     Nano (..)
   , NanoBare
-  , NanoSSA, NanoSSAR, NanoTypeR 
+  , NanoSSA, NanoSSAR, NanoTSSAR, NanoTypeR 
   , NanoType
   , ExprSSAR, StmtSSAR
   , Source (..)
@@ -86,13 +87,14 @@ module Language.Nano.Typecheck.Types (
   , Cast(..)
   , AnnToken(..)
   , PSpec(..)
+  , SMap (..)
+  , varDeclAnnot
 
   -- * Aliases for annotated Source 
   , AnnBare, UAnnBare
   , AnnSSA , UAnnSSA
   , AnnType, UAnnType
   , AnnInfo, UAnnInfo
-  , SST
 
   -- * Contexts
   , CallSite (..)
@@ -108,7 +110,7 @@ module Language.Nano.Typecheck.Types (
 
 import           Text.Printf
 import           Data.Hashable
-import           Data.Maybe                     (fromMaybe)
+import           Data.Maybe                     (fromMaybe, listToMaybe)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.List                      as L
 import qualified Data.HashMap.Strict            as M
@@ -117,7 +119,7 @@ import           Data.Typeable                  ()
 import           Language.ECMAScript3.Syntax    hiding (Cast)
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Parser    (SourceSpan (..))
+import           Language.ECMAScript3.Parser.Type  (SourceSpan (..))
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
@@ -408,18 +410,20 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
+
 data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
                      , specs  :: !(Env t)           -- ^ Imported Specifications
-                     , defs   :: !(Env t)           -- ^ Signatures for Code
+                     , sigs   :: !(Env t)           -- ^ Signatures for Code
                      , consts :: !(Env t)           -- ^ Measure Signatures 
-                     , tDefs  :: !(Env t)           -- ^ Type definitions
-                     , tAnns  :: !(M.HashMap SourceSpan t)
+                     , defs   :: !(Env t)           -- ^ Type definitions
+                     , tAnns  :: !(SMap t)          -- ^ Type annotations
                      , quals  :: ![F.Qualifier]     -- ^ Qualifiers
                      , invts  :: ![Located t]       -- ^ Type Invariants
                      } deriving (Functor, Data, Typeable)
 
 type NanoBareR r   = Nano (AnnBare r) (RType r)
 type NanoSSAR r    = Nano (AnnSSA  r) (RType r)
+type NanoTSSAR r   = Nano (AnnTSSA  r) (RType r)
 type NanoTypeR r   = Nano (AnnType r) (RType r)
 
 type ExprSSAR r    = Expression (AnnSSA r)
@@ -428,6 +432,8 @@ type StmtSSAR r    = Statement  (AnnSSA r)
 type NanoBare      = NanoBareR ()
 type NanoSSA       = NanoSSAR ()
 type NanoType      = NanoTypeR ()
+
+type SMap t        = M.HashMap SourceSpan t
 
 {-@ measure isFunctionStatement :: (Statement SourceSpan) -> Prop 
     isFunctionStatement (FunctionStmt {}) = true
@@ -445,20 +451,20 @@ newtype Source a = Src [Statement a]
 instance Functor Source where 
   fmap f (Src zs) = Src (map (fmap f) zs)
 
-instance PP t => PP (Nano a t) where
+instance (PP t, PP F.Reft) => PP (Nano a t) where
   pp pgm@(Nano {code = (Src s) }) 
     =   text "******************* Code **********************"
     $+$ pp s
     $+$ text "******************* Specifications ************"
     $+$ pp (specs pgm)
     $+$ text "******************* Definitions ***************"
-    $+$ pp (defs  pgm)
+    $+$ pp (sigs  pgm)
     $+$ text "******************* Constants *****************"
     $+$ pp (consts pgm) 
     $+$ text "******************* Type Annotations **********"
     $+$ pp (tAnns pgm) 
     $+$ text "******************* Type Definitions **********"
-    $+$ pp (tDefs  pgm)
+    $+$ pp (defs  pgm)
     $+$ text "******************* Qualifiers ****************"
     $+$ F.toFix (quals  pgm) 
     $+$ text "******************* Invariants ****************"
@@ -473,9 +479,9 @@ instance Monoid (Nano a t) where
       Src s1    = code p1
       Src s2    = code p2
       e         = envFromList ((envToList $ specs p1) ++ (envToList $ specs p2))
-      e'        = envFromList ((envToList $ defs p1)  ++ (envToList $ defs p2))
+      e'        = envFromList ((envToList $ sigs p1)  ++ (envToList $ sigs p2))
       cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
-      tds       = envFromList $ (envToList $ tDefs p1) ++ (envToList $ tDefs p2)
+      tds       = envFromList $ (envToList $ defs p1) ++ (envToList $ defs p2)
       ans       = M.fromList $ (M.toList $ tAnns p1) ++ (M.toList $ tAnns p2)
       qs        = quals p1 ++ quals p2
       is        = invts p1 ++ invts p2
@@ -524,7 +530,7 @@ data Mutability
 writeGlobalVars   :: Nano a t -> [Id SourceSpan] 
 writeGlobalVars p = envIds mGnty 
   where
-    mGnty         = defs p -- guarantees
+    mGnty         = sigs p -- guarantees
 
 -- | `immutableVars p` returns symbols that must-not be re-assigned and hence
 --    * can appear in refinements
@@ -604,6 +610,12 @@ ppTC TUndef           = text "Undefined"
 instance (PP s, PP t) => PP (M.HashMap s t) where
   pp m = vcat $ pp <$> M.toList m
 
+instance (PP r, F.Reftable r) => PP (AnnToken r) where
+  pp (TBind (id,t)) = pp id <+> text " :: " <+> pp t
+  pp (TType t)      = pp t
+  pp (TSpec s)      = pp s
+  pp EmptyToken     = text "<empyt>"
+
 -----------------------------------------------------------------------------
 -- | IContext keeps track of context of intersection-type cases -------------
 -----------------------------------------------------------------------------
@@ -669,8 +681,9 @@ type UFact = Fact ()
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show, Data, Typeable)
 type AnnBare r = Annot (Fact r) SourceSpan -- NO facts
-type AnnSSA  r = Annot (Fact r) SourceSpan -- Only Phi facts
-type AnnType r = Annot (Fact r) SourceSpan -- Only Phi + Cast facts
+type AnnSSA  r = Annot (Fact r) SourceSpan -- Phi facts
+type AnnTSSA r = Annot (Fact r) SourceSpan -- Phi + t. annot. facts
+type AnnType r = Annot (Fact r) SourceSpan -- Phi + t. annot. + Cast facts
 type AnnInfo r = M.HashMap SourceSpan [Fact r] 
 
 type UAnnBare = AnnBare () 
@@ -717,7 +730,7 @@ instance (F.Reftable r, PP r) => PP (AnnInfo r) where
 instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
 
-type SST r     = (SourceSpan, Maybe (RType r))
+varDeclAnnot v = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
 
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------

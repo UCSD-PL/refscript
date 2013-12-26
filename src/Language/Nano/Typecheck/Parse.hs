@@ -63,10 +63,13 @@ identifierP =   try (withSpan Id upperIdP)
 
 pAliasP :: Parser (Id SourceSpan, PAlias) 
 pAliasP = do name <- identifierP
-             πs   <- many symbolP 
+             πs   <- pAliasVarsP -- many symbolP 
              reservedOp "="
              body <- predP 
              return  (name, Alias name [] πs body) 
+
+pAliasVarsP = try (parens $ sepBy symbolP comma)
+           <|> many symbolP
 
 tAliasP :: Parser (Id SourceSpan, TAlias RefType) 
 tAliasP = do name      <- identifierP

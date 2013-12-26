@@ -1,5 +1,5 @@
 /*@ predicate gt(x, y) = x >= y                */
-/*@ alias gArray(x)    = [{number | gt(v, x)}] */
+/*@ type gArray[x]     = [{number | gt(v, x)}] */
 
-/*@ ga :: gArray(0) */
+/*@ ga :: gArray[0] */
 var ga = [0,0,0,0];

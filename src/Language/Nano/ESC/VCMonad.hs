@@ -32,7 +32,7 @@ import qualified Data.HashMap.Strict as M
 import           Control.Applicative          ((<$>))
 import           Control.Monad.State
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Language.ECMAScript3.Parser.Type (SourceSpan (..))
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc 
 -- import           Language.Nano.Types

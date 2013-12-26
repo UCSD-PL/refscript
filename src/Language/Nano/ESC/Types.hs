@@ -24,7 +24,8 @@ import           Data.Monoid                        (Monoid (..))
 import           Data.Maybe                         ({-catMaybes,-} fromMaybe)
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
-import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile, SourceSpan (..))
+import           Language.ECMAScript3.Parser        (parseJavaScriptFromFile)
+import           Language.ECMAScript3.Parser.Type   (SourceSpan (..))
 import qualified Language.Fixpoint.Types as F
 -- import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Misc

@@ -64,7 +64,7 @@ import           Data.Maybe                         (catMaybes)
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
-import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Language.ECMAScript3.Parser.Type   (SourceSpan (..))
 
 import qualified Language.Fixpoint.Types as F
 
@@ -416,9 +416,6 @@ pOr  p q  = F.pOr  [p, q]
 -- SourcePos Instances -------------------------------------------
 ------------------------------------------------------------------
 
-
-instance Hashable SourceSpan where 
-  hashWithSalt i = hashWithSalt i . sourceSpanSrcSpan
 
 instance Hashable a => Hashable (Id a) where 
   hashWithSalt i x = hashWithSalt i (idLoc x, idName x)

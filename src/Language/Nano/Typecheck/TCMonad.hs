@@ -103,7 +103,7 @@ import           Data.Generics                  (Data(..))
 import           Data.Maybe                     (fromJust)
 import           Data.Generics.Aliases
 import           Data.Typeable                  (Typeable (..))
-import           Language.ECMAScript3.Parser    (SourceSpan (..))
+import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
 -- import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations

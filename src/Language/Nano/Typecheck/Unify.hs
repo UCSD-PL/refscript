@@ -24,7 +24,7 @@ import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Compare
 
 
-import           Language.ECMAScript3.Parser    (SourceSpan (..))
+import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
 import           Control.Applicative ((<$>))
 import           Control.Exception   (throw)
 -- import           Control.Monad

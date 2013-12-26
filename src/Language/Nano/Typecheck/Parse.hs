@@ -75,7 +75,7 @@ tAliasP = do name      <- identifierP
              body      <- bareTypeP
              return      (name, Alias name αs πs body) 
 
-aliasVarsP    = brackets $ sepBy aliasVarP comma
+aliasVarsP    = try (brackets $ sepBy aliasVarP comma) <|> return []
 aliasVarP     = withSpan (,) (wordP $ \_ -> True)
 
 aliasVarT (l, x)      

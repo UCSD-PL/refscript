@@ -21,7 +21,7 @@ import qualified Language.Nano.Typecheck.Subst as S
 import           Language.Nano.Liquid.Types
 
 expandAliases   :: NanoRefType -> NanoRefType
-expandAliases p = expandPAliasRefType pe' <$> expandRefType te' <$> p' 
+expandAliases p = expandPred pe' <$> expandRefType te' <$> p' 
   where
     p'          = p { pAlias = pe' } {tAlias = te'}
     pe'         = expandPAliasEnv $ pAlias p
@@ -46,7 +46,8 @@ getPApps p     = everything (++) ([] `mkQ` fromP) p
 expandPAlias      :: PAliasEnv -> PAlias -> PAlias
 expandPAlias pe a = a { al_body = expandPred pe $ al_body a } 
 
-expandPred    :: PAliasEnv -> F.Pred -> F.Pred
+
+-- expandPred    :: PAliasEnv -> F.Pred -> F.Pred
 expandPred pe = everywhere $ mkT $ tx
   where 
     tx p@(F.PBexp (F.EApp f es)) 
@@ -62,8 +63,8 @@ applyPAlias p f es a
     nx        = length xs
     ne        = length es
 
-expandPAliasRefType :: PAliasEnv -> RefType -> RefType
-expandPAliasRefType = undefined
+-- expandPAliasRefType :: PAliasEnv -> RefType -> RefType
+-- expandPAliasRefType = expandPred 
 
 ------------------------------------------------------------------------------
 -- | One-shot expansion for @TAlias@ -----------------------------------------
@@ -92,7 +93,6 @@ expandRefType te = everywhere $ mkT $ tx
                  = maybe t (applyTAlias t c ts r) $ envFindTy c te
     tx t         = t
 
-applyTAlias :: RefType -> a -> [RefType] -> F.Reft -> TAlias RefType -> RefType 
 applyTAlias t c ts_ r a 
   | (nt, ne) == (nα, nx) = (F.subst su $ S.apply θ $ al_body a) `strengthen` r
   | otherwise            = die $ errorBadTAlias (srcPos c) t nt ne nα nx

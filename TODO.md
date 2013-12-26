@@ -1,4 +1,4 @@
-Benchmarks
+B"enchmarks
 ----------
 
   - tests/strobe/gadgets/resistor-01.js

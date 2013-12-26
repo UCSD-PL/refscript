@@ -144,7 +144,8 @@
 /* extern builtin_PrefixTypeof:: forall A. (A) => string                                                         */
 
 
-/*@ measure prop        :: (boolean) => bool                              */
+//XXX: Is there an issue with keeping this with a capital P???
+/*@ measure Prop        :: (boolean) => bool                              */
 
 /*************************************************************************/
 /************** Run-Time Tags ********************************************/

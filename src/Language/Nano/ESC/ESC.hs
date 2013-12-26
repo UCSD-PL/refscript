@@ -18,7 +18,7 @@ import           Data.Maybe                   (isJust, fromJust) -- fromMaybe, m
 
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Language.ECMAScript3.Parser.Type (SourceSpan (..))
 
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types as F

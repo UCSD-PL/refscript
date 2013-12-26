@@ -103,7 +103,7 @@ import           Control.Monad.Error hiding (Error)
 import           Text.Printf 
 
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Language.ECMAScript3.Parser.Type   (SourceSpan (..))
 import           Language.ECMAScript3.PrettyPrint
 
 import           Debug.Trace                        (trace)

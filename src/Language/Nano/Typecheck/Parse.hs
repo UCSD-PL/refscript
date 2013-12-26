@@ -38,8 +38,8 @@ import           Language.Nano.Env
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser        ( parseJavaScriptFromFile',
-                                                      SourceSpan (..), 
-                                                      initialParserState)
+                                                      initialParserState )
+import           Language.ECMAScript3.Parser.Type   ( SourceSpan (..))
 import           Language.ECMAScript3.Parser.Type hiding (Parser)
 
 import           Language.ECMAScript3.PrettyPrint

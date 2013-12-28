@@ -527,10 +527,10 @@ data Mutability
 --    * cannot appear in refinements
 --    * can only use a single monolithic type (declared or inferred)
  
-writeGlobalVars   :: Nano a t -> [Id SourceSpan] 
+writeGlobalVars   :: PP t => Nano a t -> [Id SourceSpan] 
 writeGlobalVars p = envIds mGnty 
   where
-    mGnty         = tAnns p -- guarantees
+    mGnty         = foldl1 envUnion [specs p, tAnns p, sigs p]  -- guarantees
 
 -- | `immutableVars p` returns symbols that must-not be re-assigned and hence
 --    * can appear in refinements

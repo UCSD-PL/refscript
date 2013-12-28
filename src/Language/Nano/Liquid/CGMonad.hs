@@ -41,6 +41,7 @@ module Language.Nano.Liquid.CGMonad (
   , envAddGuard
   , envFindTy
   , envFindSpec
+  , envFindAnnot
   , envToList
   , envFindReturn
   -- , envJoin
@@ -347,6 +348,11 @@ envFindTy x g = (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
 envFindSpec     :: (IsLocated x, F.Symbolic x) => x -> CGEnv -> Maybe RefType 
 ---------------------------------------------------------------------------------------
 envFindSpec x g = E.envFindTy x $ cge_spec g
+
+---------------------------------------------------------------------------------------
+envFindAnnot     :: (IsLocated x, F.Symbolic x) => x -> CGEnv -> Maybe RefType 
+---------------------------------------------------------------------------------------
+envFindAnnot x g = E.envFindTy x $ cge_anns g
 
 ---------------------------------------------------------------------------------------
 envToList     ::  CGEnv -> [(Id SourceSpan, RefType)]

@@ -37,6 +37,7 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
 
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.Syntax.Annotations   (getAnnotation)
 import           Language.ECMAScript3.Parser        ( parseJavaScriptFromFile',
                                                       initialParserState )
 import           Language.ECMAScript3.Parser.Type   ( SourceSpan (..))
@@ -329,18 +330,18 @@ tAnnotP :: ParserState String (AnnToken Reft) -> ExternP String (AnnToken Reft)
 --------------------------------------------------------------------------------------
 tAnnotP stIn = EP typeP fSigP tLevP
   where
-    typeP = TType <$> changeState fwd bwd (tp bareTypeP)
-    fSigP = TBind <$> changeState fwd bwd (tp idBindP)
-    tLevP = TSpec <$> changeState fwd bwd (tp specP)
-    fwd _ = stIn  -- NOTE: need to keep the state of the language-ecmascript parser!!!
-    bwd _ = 0     -- TODO: Is this adequate???
-    tp p = do string "/*@"
-              whiteSpace
-              t <- p
-              whiteSpace
-              string "*/"
-              whiteSpace
-              return t
+    typeP  = TType <$> changeState fwd bwd (tp bareTypeP)
+    fSigP  = TBind <$> changeState fwd bwd (tp idBindP)
+    tLevP  = TSpec <$> changeState fwd bwd (tp specP)
+    fwd _  = stIn  -- NOTE: need to keep the state of the language-ecmascript parser!!!
+    bwd _  = 0     -- TODO: Is this adequate???
+    tp p   = do string "/*@"
+                whiteSpace
+                t <- p
+                whiteSpace
+                string "*/"
+                whiteSpace
+                return t
 
 -- `changeState` taken from here:
 -- http://stackoverflow.com/questions/17968784/an-easy-way-to-change-the-type-of-parsec-user-state
@@ -381,12 +382,13 @@ mkCode (ss, m) = Nano { code   = Src (checkTopStmt <$> ss)
                  , sigs   = envAdds [ (i, t) | (_, TBind (i, t))          <- list ] envEmpty
                  , consts = envAdds [ (i, t) | (_, TSpec (Meas (i, t)))   <- list ] envEmpty
                  , defs   = envAdds [ (i, t) | (_, TSpec (Type (i, t)))   <- list ] envEmpty
-                 , tAnns  = M.fromList [ (i, t) | (i, TType t) <- list ]
+                 , tAnns  = envAdds [ (i, t) | (i, Just (TType t)) <- (\id -> (id, M.lookup (getAnnotation id) m)) <$> dVars ] envEmpty
                  , quals  = [q         | (_, TSpec (Qual q))   <- list ]
                  , invts  = [Loc l' t  | (_, TSpec (Invt l t)) <- list, let l' = srcPos l]
                  } 
   where
-    list = M.toList m
+    list  = M.toList m
+    dVars = definedVars ss
 
 
 -------------------------------------------------------------------------------

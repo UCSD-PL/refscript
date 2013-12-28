@@ -30,7 +30,7 @@ ssaTransform = either throw id . execute . ssaNano
 
 
 ----------------------------------------------------------------------------------
--- ssaNano :: F.Reftable r => Nano SourceSpan (RType r) -> SSAM r (NanoSSAR r)
+ssaNano :: F.Reftable r => Nano SourceSpan (RType r) -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano {code = Src fs, tAnns = tAnns}) 
   = withMutability ReadOnly ros 
@@ -39,7 +39,8 @@ ssaNano p@(Nano {code = Src fs, tAnns = tAnns})
            ssaAnns <- getAnns
            return   $ p {code = Src $ (patchAnn ssaAnns tAnns' <$>) <$> fs'}
     where
-      tAnns'        = (single . TAnnot) <$> tAnns
+      tAnns'        = M.fromList $ mapFst getAnnotation 
+                        <$> (envToList $ envMap (single . TAnnot) tAnns)
       ros           = readOnlyVars p
       wgs           = writeGlobalVars p 
 

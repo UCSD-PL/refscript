@@ -1,7 +1,7 @@
 var gobj = {
   a: 5,
   b: "glorp",
-}
+};
 
 /*@ foo :: () => void */
 function foo() {

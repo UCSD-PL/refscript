@@ -525,7 +525,7 @@ data Mutability
 --    re-assigned multiply in non-local scope, and hence
 --    * cannot be SSA-ed
 --    * cannot appear in refinements
---    * can only use a single monolithing type (declared or inferred)
+--    * can only use a single monolithic type (declared or inferred)
  
 writeGlobalVars   :: Nano a t -> [Id SourceSpan] 
 writeGlobalVars p = envIds mGnty 

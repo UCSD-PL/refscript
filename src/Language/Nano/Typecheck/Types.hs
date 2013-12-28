@@ -416,7 +416,7 @@ data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
                      , sigs   :: !(Env t)           -- ^ Signatures for Code
                      , consts :: !(Env t)           -- ^ Measure Signatures 
                      , defs   :: !(Env t)           -- ^ Type definitions
-                     , tAnns  :: !(SMap t)          -- ^ Type annotations
+                     , tAnns  :: !(Env t)           -- ^ Type annotations
                      , quals  :: ![F.Qualifier]     -- ^ Qualifiers
                      , invts  :: ![Located t]       -- ^ Type Invariants
                      } deriving (Functor, Data, Typeable)
@@ -472,7 +472,7 @@ instance (PP t, PP F.Reft) => PP (Nano a t) where
     $+$ text "***********************************************"
     
 instance Monoid (Nano a t) where 
-  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty M.empty [] [] 
+  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty envEmpty [] [] 
   mappend p1 p2 = Nano ss e e' cs tds ans qs is 
     where 
       ss        = Src $ s1 ++ s2
@@ -482,7 +482,7 @@ instance Monoid (Nano a t) where
       e'        = envFromList ((envToList $ sigs p1)  ++ (envToList $ sigs p2))
       cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
       tds       = envFromList $ (envToList $ defs p1) ++ (envToList $ defs p2)
-      ans       = M.fromList $ (M.toList $ tAnns p1) ++ (M.toList $ tAnns p2)
+      ans       = envFromList $ (envToList $ tAnns p1) ++ (envToList $ tAnns p2)
       qs        = quals p1 ++ quals p2
       is        = invts p1 ++ invts p2
 
@@ -530,7 +530,7 @@ data Mutability
 writeGlobalVars   :: Nano a t -> [Id SourceSpan] 
 writeGlobalVars p = envIds mGnty 
   where
-    mGnty         = sigs p -- guarantees
+    mGnty         = tAnns p -- guarantees
 
 -- | `immutableVars p` returns symbols that must-not be re-assigned and hence
 --    * can appear in refinements
@@ -691,11 +691,13 @@ type UAnnSSA  = AnnSSA  ()
 type UAnnType = AnnType ()
 type UAnnInfo = AnnInfo ()
 
+-- | `AnnToken`: Elements that can are parsed along the source as annotations.
+
 data AnnToken r 
-  = TBind (Id SourceSpan, RType r) 
-  | TType (RType r)
-  | TSpec (PSpec SourceSpan (RType r))
-  | EmptyToken
+  = TBind (Id SourceSpan, RType r)          -- ^ Function signature binding
+  | TType (RType r)                         -- ^ Variable declaration binding
+  | TSpec (PSpec SourceSpan (RType r))      -- ^ Specs: qualifiers, measures, type defs, etc.
+  | EmptyToken                              -- ^ Dummy empty token
   deriving (Eq, Ord, Show, Data, Typeable)
 
 

@@ -94,7 +94,7 @@ data CGEnv
         , guards   :: ![F.Pred]      -- ^ branch target conditions  
         , cge_ctx  :: !IContext      -- ^ intersection-type context 
         , cge_spec :: !(Env RefType) -- ^ specifications for defined functions
-        , cge_anns :: !(SMap RefType) -- ^ specifications for defined variables
+        , cge_anns :: !(Env RefType) -- ^ specifications for defined variables
         }
 
 

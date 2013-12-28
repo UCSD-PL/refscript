@@ -80,7 +80,8 @@ patchTypeAnnots :: NanoSSAR r -> NanoTSSAR r
 patchTypeAnnots p@(Nano {code = Src fs, tAnns = m}) = 
     p {code = Src $ (patchAnn <$>) <$> fs}
   where
-    patchAnn (Ann l bs) = Ann l $ (TAnnot <$> (maybeToList $ M.lookup l m)) ++ bs
+    patchAnn (Ann l bs) = Ann l $ (TAnnot <$> (maybeToList $ M.lookup l mm)) ++ bs
+    mm = M.fromList (mapFst getAnnotation <$> envToList m)
 
 
 -- | Cast manipulation
@@ -183,7 +184,7 @@ checkTypeDefs pgm = reportAll $ grep
 
 data TCEnv r  = TCE { tce_env  :: Env (RType r)
                     , tce_spec :: Env (RType r) 
-                    , tce_anns :: SMap (RType r)
+                    , tce_anns :: Env (RType r)
                     , tce_ctx  :: !IContext 
                     }
 
@@ -213,7 +214,7 @@ tcEnvAddReturn x t γ         = γ { tce_env = envAddReturn x t $ tce_env γ }
 tcEnvMem x                   = envMem x      . tce_env 
 tcEnvFindTy x                = envFindTy x   . tce_env
 tcEnvFindReturn              = envFindReturn . tce_env
-tcEnvFindSpec x              = M.lookup (srcPos x) . tce_anns
+tcEnvFindSpec x              = envFindTy x   . tce_anns
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Scoped Block in Environment ------------------------------------

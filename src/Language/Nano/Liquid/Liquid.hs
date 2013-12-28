@@ -143,7 +143,7 @@ consStmt g (EmptyStmt _)
 
 -- x = e
 consStmt g (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))   
-  = consAsgn g (Id lx x) Nothing e
+  = consAsgn g (Id lx x) e
 
 -- e1.fld = e2
 consStmt g (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
@@ -212,7 +212,7 @@ consStmt _ s
 consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consVarDecl g v@(VarDecl _ x (Just e)) 
-  = consAsgn g x (varDeclAnnot v) e
+  = consAsgn g x e
 
 --  do (x', g') <- consExprT g ct e
 --     Just <$> envAdds [(x, envFindTy x' g')] g'
@@ -240,10 +240,10 @@ consExprT g e to
        l = getAnnotation e
 
 ------------------------------------------------------------------------------------
-consAsgn :: CGEnv -> Id AnnTypeR -> Maybe RefType -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
+consAsgn :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
-consAsgn g x t e 
-  = do (x', g') <- consExprT g e t 
+consAsgn g x e 
+  = do (x', g') <- consExprT g e $ envFindAnnot x g 
        Just <$> envAdds [(x, envFindTy x' g')] g'
 
 

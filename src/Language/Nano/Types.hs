@@ -143,11 +143,6 @@ instance IsLocated F.Symbol where
 instance IsLocated (SourceSpan, r) where 
   srcPos = srcPos . fst
 
-
-instance HasAnnotation Id where 
-  getAnnotation (Id x _) = x
-
-
 instance Eq a => Eq (Located a) where 
   x == y = val x == val y
 

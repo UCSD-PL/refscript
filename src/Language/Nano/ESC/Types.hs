@@ -38,7 +38,7 @@ import           Text.PrettyPrint.HughesPJ
 ---------------------------------------------------------------------
 
 parseNanoFromFile f 
-  = do (s,_) <- parseJavaScriptFromFile f
+  = do s     <- parseJavaScriptFromFile f
        return $ fromMaybe err (mkNano s)
     where
        err    = errorstar $ "Invalid Input File: " ++ f

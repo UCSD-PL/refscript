@@ -275,8 +275,8 @@ stringToInt s =
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
-getPropUnion ::  (IsLocated l, Ord r, PP r, F.Reftable r) => 
-  l -> Env (RType r) -> String -> [RType r] -> Maybe (RType r, RType r)
+getPropUnion :: (IsLocated l, Ord r, PP r, F.Reftable r) 
+             => l -> Env (RType r) -> String -> [RType r] -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 getPropUnion l γ f ts = 
   -- Gather all the types that do not throw errors, and the type of 

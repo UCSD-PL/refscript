@@ -5,7 +5,6 @@
 {-# LANGUAGE TupleSections        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE DeriveDataTypeable   #-}
 {-# LANGUAGE NoMonomorphismRestriction   #-}
@@ -30,10 +29,13 @@ module Language.Nano.Typecheck.Types (
   , toType
   , ofType
   , strengthen 
-  -- , strengthenContainers 
 
-  -- * Helpful checks
-  , isTop, isNull, isUndefined, isObj, isUnion
+  -- * Predicates on Types 
+  , isTop
+  , isNull
+  , isUndefined
+  , isObj
+  , isUnion
 
   -- * Constructing Types
   , mkUnion, mkUnionR
@@ -86,8 +88,6 @@ module Language.Nano.Typecheck.Types (
   , Fact (..)
   , Cast(..)
   , AnnToken(..)
-  , PSpec(..)
-  , SMap (..)
   , varDeclAnnot
 
   -- * Aliases for annotated Source 
@@ -95,6 +95,7 @@ module Language.Nano.Typecheck.Types (
   , AnnSSA , UAnnSSA
   , AnnType, UAnnType
   , AnnInfo, UAnnInfo
+--  , SST
 
   -- * Contexts
   , CallSite (..)
@@ -106,6 +107,13 @@ module Language.Nano.Typecheck.Types (
   , Mutability (..)
   , writeGlobalVars  
   , readOnlyVars  
+
+  -- * Aliases
+  , Alias (..)
+  , TAlias (..)
+  , PAlias (..)
+  , PAliasEnv
+  , TAliasEnv
   ) where 
 
 import           Text.Printf
@@ -190,8 +198,8 @@ data RType r
   | TBd  (TBody r)              -- ^ ???
   | TAll TVar (RType r)         -- ^ forall A. T
   | TAnd [RType r]              -- ^ (T1..) => T1' /\ ... /\ (Tn..) => Tn' 
+  | TExp F.Expr                 -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
     deriving (Ord, Show, Functor, Data, Typeable)
-
 
 data Bind r
   = B { b_sym  :: F.Symbol
@@ -217,23 +225,16 @@ ofType = fmap (const F.top)
 calleeType l ts ft@(TAnd fts) = L.find (argsMatch ts) fts
 calleeType _ _ ft             = Just ft
 
--- calleeType l ts ft@(TAnd fts) = fromMaybe uhOh $ L.find (argsMatch ts) fts
---   where 
---     uhOh                      = die $ errorNoMatchCallee (srcPos l) ts ft
--- calleeType _ _ ft             = ft
-
 -- | `argsMatch ts ft` holds iff the arg-types in `ft` are identical to `ts` ... 
 argsMatch :: [RType a] -> RType b -> Bool
 argsMatch ts ft = case bkFun ft of 
                     Nothing        -> False
                     Just (_,xts,_) -> (toType <$> ts) == ((toType . b_type) <$> xts)
 
-
 funTys l f xs ft 
   = case bkFuns ft of
       Nothing -> die $ errorNonFunction (srcPos l) f ft 
       Just ts -> zip ([0..] :: [Int]) [funTy l f xs t | t <- ts]
-
 
 funTy l f xs (αs, yts, t) 
   | eqLen xs yts = let (su, ts') = renameBinds yts xs 
@@ -313,7 +314,7 @@ strengthen t _               = t
 -- TODO: Add checks for equivalence in union and objects
 
 ---------------------------------------------------------------------------------
--- | Helpful type checks
+-- | Predicates on Types 
 ---------------------------------------------------------------------------------
 
 -- | Top-level Top (any) check
@@ -353,6 +354,7 @@ rTypeR (TArr _ r   ) = r
 rTypeR (TBd  _     ) = errorstar "Unimplemented: rTypeR - TBd"
 rTypeR (TAll _ _   ) = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )     = errorstar "Unimplemented: rTypeR - TAnd"
+rTypeR (TExp _)      = errorstar "Unimplemented: rTypeR - TExp"
 
 setRTypeR :: RType r -> r -> RType r
 setRTypeR (TApp c ts _   ) r' = TApp c ts r'
@@ -363,6 +365,7 @@ setRTypeR (TArr t _      ) r  = TArr t r
 setRTypeR (TBd  _        ) _  = errorstar "Unimplemented: setRTypeR - TBd"
 setRTypeR (TAll _ _      ) _  = errorstar "Unimplemented: setRTypeR - TAll"
 setRTypeR (TAnd _        ) _  = errorstar "Unimplemented: setRTypeR - TAnd"
+setRTypeR (TExp _        ) _  = errorstar "Unimplemented: setRTypeR - TExp"
 
 
 ---------------------------------------------------------------------------------------
@@ -410,12 +413,13 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-
 data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
                      , specs  :: !(Env t)           -- ^ Imported Specifications
                      , sigs   :: !(Env t)           -- ^ Signatures for Code
                      , consts :: !(Env t)           -- ^ Measure Signatures 
                      , defs   :: !(Env t)           -- ^ Type definitions
+							       , tAlias :: !(TAliasEnv t)     -- ^ Type aliases
+                     , pAlias :: !(PAliasEnv)       -- ^ Predicate aliases
                      , tAnns  :: !(Env t)           -- ^ Type annotations
                      , quals  :: ![F.Qualifier]     -- ^ Qualifiers
                      , invts  :: ![Located t]       -- ^ Type Invariants
@@ -433,8 +437,6 @@ type NanoBare      = NanoBareR ()
 type NanoSSA       = NanoSSAR ()
 type NanoType      = NanoTypeR ()
 
-type SMap t        = M.HashMap SourceSpan t
-
 {-@ measure isFunctionStatement :: (Statement SourceSpan) -> Prop 
     isFunctionStatement (FunctionStmt {}) = true
     isFunctionStatement (_)               = false
@@ -447,6 +449,10 @@ type FunctionStatement a = Statement a
 -- newtype Source a = Src [FunctionStatement a]
 newtype Source a = Src [Statement a]
   deriving (Data, Typeable)
+
+instance Monoid (Source a) where
+  mempty                    = Src []
+  mappend (Src s1) (Src s2) = Src $ s1 ++ s2
 
 instance Functor Source where 
   fmap f (Src zs) = Src (map (fmap f) zs)
@@ -465,6 +471,10 @@ instance (PP t, PP F.Reft) => PP (Nano a t) where
     $+$ pp (tAnns pgm) 
     $+$ text "******************* Type Definitions **********"
     $+$ pp (defs  pgm)
+    $+$ text "******************* Predicate Aliases *********"
+    $+$ pp (pAlias pgm)
+    $+$ text "******************* Type Aliases **************"
+    $+$ pp (tAlias pgm)
     $+$ text "******************* Qualifiers ****************"
     $+$ F.toFix (quals  pgm) 
     $+$ text "******************* Invariants ****************"
@@ -472,35 +482,27 @@ instance (PP t, PP F.Reft) => PP (Nano a t) where
     $+$ text "***********************************************"
     
 instance Monoid (Nano a t) where 
-  mempty        = Nano (Src []) envEmpty envEmpty envEmpty envEmpty envEmpty [] [] 
-  mappend p1 p2 = Nano ss e e' cs tds ans qs is 
-    where 
-      ss        = Src $ s1 ++ s2
-      Src s1    = code p1
-      Src s2    = code p2
-      e         = envFromList ((envToList $ specs p1) ++ (envToList $ specs p2))
-      e'        = envFromList ((envToList $ sigs p1)  ++ (envToList $ sigs p2))
-      cs        = envFromList $ (envToList $ consts p1) ++ (envToList $ consts p2)
-      tds       = envFromList $ (envToList $ defs p1) ++ (envToList $ defs p2)
-      ans       = envFromList $ (envToList $ tAnns p1) ++ (envToList $ tAnns p2)
-      qs        = quals p1 ++ quals p2
-      is        = invts p1 ++ invts p2
+  mempty        = Nano mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty 
+  mappend p1 p2 = Nano { code   = (code   p1) `mappend` (code   p2)
+                       , specs  = (specs  p1) `mappend` (specs  p2)
+                       , sigs   = (defs   p1) `mappend` (defs   p2)
+                       , consts = (consts p1) `mappend` (consts p2)
+                       , defs   = (tDefs  p1) `mappend` (tDefs  p2)
+                       , tAlias = (tAlias p1) `mappend` (tAlias p2)
+                       , pAlias = (pAlias p1) `mappend` (pAlias p2)
+                       , tAnns  = (tAnns  p1) `M.union` (tAnns  p2)
+                       , quals  = (quals  p1) `mappend` (quals  p2)
+                       , invts  = (invts  p1) `mappend` (invts  p2)
+                       } 
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }
 
 
 ---------------------------------------------------------------------------------
--- | Specifications (moved from Parser)
+-- | Specifications (moved from Parser - MOVE BACK!!!)
 ---------------------------------------------------------------------------------
-data PSpec l t 
-  = Meas (Id l, t)
-  | Bind (Id l, t) 
-  | Extern (Id l, t) 
-  | Qual F.Qualifier
-  | Type (Id l, t)
-  | Invt l t 
-  deriving (Eq, Ord, Show, Data, Typeable)
+
 
 instance (PP l, PP t) => PP (PSpec l t) where
   pp (Meas (i, t))   = text "measure: " <+> pp i
@@ -560,7 +562,8 @@ instance F.Reftable r => PP (RType r) where
   pp (TVar α r)                 = F.ppTy r $ pp α 
   pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
-  pp (TAnd (ts))                = vcat [text "/\\" <+> pp t | t <- ts]
+  pp (TAnd ts)                  = vcat [text "/\\" <+> pp t | t <- ts]
+  pp (TExp e)                   = pprint e 
   pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "+") ts 
   pp (TApp d@(TDef _)ts r)      = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 
@@ -610,6 +613,7 @@ ppTC TUndef           = text "Undefined"
 instance (PP s, PP t) => PP (M.HashMap s t) where
   pp m = vcat $ pp <$> M.toList m
 
+-- MOVE TO PARSER
 instance (PP r, F.Reftable r) => PP (AnnToken r) where
   pp (TBind (id,t)) = pp id <+> text " :: " <+> pp t
   pp (TType t)      = pp t
@@ -691,6 +695,7 @@ type UAnnSSA  = AnnSSA  ()
 type UAnnType = AnnType ()
 type UAnnInfo = AnnInfo ()
 
+-- MOVE TO PARSER !!!
 -- | `AnnToken`: Elements that can are parsed along the source as annotations.
 
 data AnnToken r 
@@ -733,6 +738,7 @@ instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
 
 varDeclAnnot v = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
+--type SST r     = (SourceSpan, Maybe (RType r))
 
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------
@@ -838,3 +844,25 @@ prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
 
 builtinId       = mkId . ("builtin_" ++)
 
+
+-----------------------------------------------------------------------
+-- Type and Predicate Aliases -----------------------------------------
+-----------------------------------------------------------------------
+
+data Alias a s t = Alias {
+    al_name   :: Id SourceSpan  -- ^ alias name
+  , al_tyvars :: ![a]           -- ^ type  parameters  
+  , al_syvars :: ![s]           -- ^ value parameters 
+  , al_body   :: !t             -- ^ alias body
+  } deriving (Show, Functor, Data, Typeable)
+
+type TAlias t    = Alias TVar F.Symbol t
+type PAlias      = Alias ()   F.Symbol F.Pred 
+type TAliasEnv t = Env (TAlias t)
+type PAliasEnv   = Env PAlias
+
+instance IsLocated (Alias a s t) where
+  srcPos = srcPos . al_name
+
+instance (PP a, PP s, PP t) => PP (Alias a s t) where
+  pp (Alias n αs πs body) = text "alias" <+> pp n <+> text "=" <+> pp body 

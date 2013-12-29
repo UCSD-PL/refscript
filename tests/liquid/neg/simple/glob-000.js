@@ -1,5 +1,4 @@
-/*@ glob :: { number | v > 10 } */
-var glob = 12;
+var glob /*@ { number | v > 10 } */ = 12;
 
 /*@ zog :: () => {boolean | true} */
 function zog(){

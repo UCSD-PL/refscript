@@ -2,7 +2,7 @@
 var x = {
   moo: 5,
   b: "String",
-}
+};
 
 /*@ foo :: () => { v: number | v = 5 } */
 function foo () {

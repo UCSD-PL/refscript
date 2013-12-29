@@ -8,7 +8,7 @@ var obj = {
   a: 5,
   b: "String",
   f: inc
-}
+};
 
 /*@ foo :: () => { v: number | v = 7 } */
 function foo () {

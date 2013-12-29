@@ -206,23 +206,6 @@ tDefP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "null"      >> return TNull)
      <|> (TDef <$> identifierP)
 
--- tconP :: Parser TCon
--- tconP =  try (reserved "number"    >> return TInt)
---      <|> try (reserved "boolean"   >> return TBool)
---      <|> try (reserved "undefined" >> return TUndef)
---      <|> try (reserved "void"      >> return TVoid)
---      <|> try (reserved "top"       >> return TTop)
---      <|> try (reserved "string"    >> return TString)
---      <|> try (reserved "null"      >> return TNull)
---      <|> tDefP
--- 
--- tDefP 
---   = do  s <- identifierP 
---         -- XXX: This list will have to be enhanced.
---         if unId s `elem` ["true", "false", "number", "boolean", "string", "top", "void", "null"] 
---           then parserZero
---           else return $ TDef s
-
 bareAllP 
   = do reserved "forall"
        αs <- many1 tvarP
@@ -261,13 +244,6 @@ dummyP fm = fm `ap` topP
 topP   :: Parser Reft
 topP   = (Reft . (, []) . vv . Just) <$> freshIntP
 
-{--- | Parses bindings of the form: `x : kind`-}
-{-bindP :: Parser (Reft -> a) -> Parser a-}
-{-bindP kindP-}
-{-  = do v <- symbolP -}
-{-       colon-}
-{-       t <- kindP-}
-{-       return $ t (Reft (v, []))-}
 
 -- | Parses refined types of the form: `{ kind | refinement }`
 xrefP :: Parser (Reft -> a) -> Parser a
@@ -326,13 +302,6 @@ specWraps = betweenMany start stop
   where 
     start = string "/*@" >> spaces
     stop  = spaces >> string "*/"
-
--- -- specWrap :: Stream s m Char => ParsecT s u m a -> ParsecT s u m a
--- specWrap = between start stop
---   where 
---     start = string "/*@" >> spaces
---     stop  = spaces >> string "*/"
-
 
 ---------------------------------------------------------------------------------
 -- | Specifications

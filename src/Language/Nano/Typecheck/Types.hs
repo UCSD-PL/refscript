@@ -87,7 +87,6 @@ module Language.Nano.Typecheck.Types (
   , UFact
   , Fact (..)
   , Cast(..)
-  , AnnToken(..)
   , varDeclAnnot
 
   -- * Aliases for annotated Source 
@@ -485,33 +484,18 @@ instance Monoid (Nano a t) where
   mempty        = Nano mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty 
   mappend p1 p2 = Nano { code   = (code   p1) `mappend` (code   p2)
                        , specs  = (specs  p1) `mappend` (specs  p2)
-                       , sigs   = (defs   p1) `mappend` (defs   p2)
+                       , sigs   = (sigs   p1) `mappend` (sigs   p2)
                        , consts = (consts p1) `mappend` (consts p2)
-                       , defs   = (tDefs  p1) `mappend` (tDefs  p2)
+                       , defs   = (defs   p1) `mappend` (defs   p2)
                        , tAlias = (tAlias p1) `mappend` (tAlias p2)
                        , pAlias = (pAlias p1) `mappend` (pAlias p2)
-                       , tAnns  = (tAnns  p1) `M.union` (tAnns  p2)
+                       , tAnns  = (tAnns  p1) `mappend` (tAnns  p2)
                        , quals  = (quals  p1) `mappend` (quals  p2)
                        , invts  = (invts  p1) `mappend` (invts  p2)
                        } 
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }
-
-
----------------------------------------------------------------------------------
--- | Specifications (moved from Parser - MOVE BACK!!!)
----------------------------------------------------------------------------------
-
-
-instance (PP l, PP t) => PP (PSpec l t) where
-  pp (Meas (i, t))   = text "measure: " <+> pp i
-  pp (Bind (i, t))   = text "bind: " <+>  pp i <+> text " :: " <+> pp t
-  pp (Extern (i, t)) = text "extern: " <+>  pp i <+> text " :: " <+> pp t
-  pp (Qual q)        = text "qualifier..."
-  pp (Type (i, t))   = text "type def"
-  pp (Invt l t)      = text "invariant"
-
 
 ------------------------------------------------------------------------------------------
 -- | Mutability 
@@ -613,12 +597,6 @@ ppTC TUndef           = text "Undefined"
 instance (PP s, PP t) => PP (M.HashMap s t) where
   pp m = vcat $ pp <$> M.toList m
 
--- MOVE TO PARSER
-instance (PP r, F.Reftable r) => PP (AnnToken r) where
-  pp (TBind (id,t)) = pp id <+> text " :: " <+> pp t
-  pp (TType t)      = pp t
-  pp (TSpec s)      = pp s
-  pp EmptyToken     = text "<empyt>"
 
 -----------------------------------------------------------------------------
 -- | IContext keeps track of context of intersection-type cases -------------
@@ -694,17 +672,6 @@ type UAnnBare = AnnBare ()
 type UAnnSSA  = AnnSSA  ()
 type UAnnType = AnnType ()
 type UAnnInfo = AnnInfo ()
-
--- MOVE TO PARSER !!!
--- | `AnnToken`: Elements that can are parsed along the source as annotations.
-
-data AnnToken r 
-  = TBind (Id SourceSpan, RType r)          -- ^ Function signature binding
-  | TType (RType r)                         -- ^ Variable declaration binding
-  | TSpec (PSpec SourceSpan (RType r))      -- ^ Specs: qualifiers, measures, type defs, etc.
-  | EmptyToken                              -- ^ Dummy empty token
-  deriving (Eq, Ord, Show, Data, Typeable)
-
 
 
 instance HasAnnotation (Annot b) where 
@@ -854,7 +821,7 @@ data Alias a s t = Alias {
   , al_tyvars :: ![a]           -- ^ type  parameters  
   , al_syvars :: ![s]           -- ^ value parameters 
   , al_body   :: !t             -- ^ alias body
-  } deriving (Show, Functor, Data, Typeable)
+  } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 type TAlias t    = Alias TVar F.Symbol t
 type PAlias      = Alias ()   F.Symbol F.Pred 

@@ -15,10 +15,12 @@ import           Data.Maybe (fromMaybe)
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import qualified Data.HashMap.Strict                as M 
+import           Data.Data
+import           Data.Typeable
 import           Control.Monad
 import           Control.Exception (throw)
 import           Text.Parsec
--- import           Text.Parsec.String hiding (Parser, parseFromFile)
+import           Text.PrettyPrint.HughesPJ          (text, (<+>))
 import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*), (<*>))
 import           Control.Monad.Identity
@@ -27,6 +29,7 @@ import           Data.Monoid (mappend, mconcat, mempty)
 
 import           Language.Fixpoint.Names (propConName)
 import           Language.Fixpoint.Types hiding (quals, Loc)
+import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Parse 
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc (mapEither)
@@ -45,6 +48,8 @@ import           Language.ECMAScript3.Parser.Type   ( SourceSpan (..))
 import           Language.ECMAScript3.Parser.Type hiding (Parser)
 
 import           Language.ECMAScript3.PrettyPrint
+
+
 -- import           Debug.Trace                        (trace, traceShow)
 
 dot        = Token.dot        lexer
@@ -341,7 +346,7 @@ data PSpec l t
   | Palias (Id l, PAlias) 
   | Qual    Qualifier
   | Invt   l t 
-  deriving (Show)
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 specP :: Parser (PSpec SourceSpan RefType)
 specP 
@@ -352,6 +357,31 @@ specP
   <|> try (reserved "predicate" >> (Palias <$> pAliasP    ))
   <|> try (reserved "invariant" >> (withSpan Invt bareTypeP))
   <|>     (reserved "extern"    >> (Extern <$> idBindP    ))
+
+instance (PP l, PP t) => PP (PSpec l t) where
+  pp (Meas (i, t))   = text "measure: " <+> pp i
+  pp (Bind (i, t))   = text "bind: " <+>  pp i <+> text " :: " <+> pp t
+  pp (Extern (i, t)) = text "extern: " <+>  pp i <+> text " :: " <+> pp t
+  pp (Type (i, t))   = text "Type:TODO"
+  pp (Talias _)      = text "Talias:TODO"
+  pp (Palias _)      = text "Palias:TODO"
+  pp (Qual _)        = text "Qual:TODO"
+  pp (Invt _ _)      = text "Invt:TODO"
+
+-- | `AnnToken`: Elements that can are parsed along the source as annotations.
+
+data AnnToken r 
+  = TBind (Id SourceSpan, RType r)          -- ^ Function signature binding
+  | TType (RType r)                         -- ^ Variable declaration binding
+  | TSpec (PSpec SourceSpan (RType r))      -- ^ Specs: qualifiers, measures, type defs, etc.
+  | EmptyToken                              -- ^ Dummy empty token
+  deriving (Eq, Ord, Show, Data, Typeable)
+
+instance (PP r, F.Reftable r) => PP (AnnToken r) where
+  pp (TBind (id,t)) = pp id <+> text " :: " <+> pp t
+  pp (TType t)      = pp t
+  pp (TSpec s)      = pp s
+  pp EmptyToken     = text "<empyt>"
 
 
 -- --------------------------------------------------------------------------------------
@@ -430,20 +460,20 @@ mkCode :: ([Statement SourceSpan], M.HashMap SourceSpan (AnnToken Reft)) ->
   Nano SourceSpan RefType
 --------------------------------------------------------------------------------------
 mkCode (ss, m) = Nano { code   = Src (checkTopStmt <$> ss)
-                 , specs  = envFromList [ (i, t) | (_, TSpec (Extern (i, t))) <- list ] 
-                 , sigs   = envFromList [ (i, t) | (_, TBind (i, t))          <- list ] 
-                 , consts = envFromList [ (i, t) | (_, TSpec (Meas (i, t)))   <- list ] 
-                 , defs   = envFromList [ (i, t) | (_, TSpec (Type (i, t)))   <- list ] 
-								 , tAlias = envFromList [a          | (_, Talias a) <- list]
-                 , pAlias = envFromList [p          | (_, Palias p) <- list]
-                 , tAnns  = envFromList [ (i, t) | (i, Just (TType t)) <- (\id -> (id, M.lookup (getAnnotation id) m)) <$> dVars ]
+                 , specs  = envFromList [ a | (_, TSpec (Extern a)) <- list ] 
+                 , sigs   = envFromList [ a | (_, TBind         a)  <- list ] 
+                 , consts = envFromList [ a | (_, TSpec (Meas   a)) <- list ] 
+                 , defs   = envFromList [ a | (_, TSpec (Type   a)) <- list ] 
+                 , tAlias = envFromList [ a | (_, TSpec (Talias a)) <- list ]
+                 , pAlias = envFromList [ p | (_, TSpec (Palias p)) <- list ]
+                 , tAnns  = envFromList [ (i, t) | (i, Just (TType t)) <- spAn <$> dVars ]
                  , quals  = [q         | (_, TSpec (Qual q))   <- list ]
                  , invts  = [Loc l' t  | (_, TSpec (Invt l t)) <- list, let l' = srcPos l]
                  } 
   where
     list  = M.toList m
     dVars = definedVars ss
-
+    spAn id = (id, M.lookup (getAnnotation id) m)    
 
 -------------------------------------------------------------------------------
 -- | Parse File and Type Signatures -------------------------------------------

@@ -137,9 +137,6 @@ instance (PP r, F.Reftable r) => Substitutable r (Fact r) where
 instance (PP r, F.Reftable r) => Substitutable r (Annot (Fact r) z) where
   apply θ (Ann z fs)       = Ann z $ apply θ fs
 
-instance (PP r, F.Reftable r) => Substitutable r (SMap (RType r)) where
-  apply                    = M.map . apply
-
 instance Free (Cast (RType r)) where
   free = free . castTarget 
 

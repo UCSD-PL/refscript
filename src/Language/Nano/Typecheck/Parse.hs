@@ -23,12 +23,13 @@ import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*), (<*>))
 import           Control.Monad.Identity
 import           Data.Char (toLower, isLower, isSpace) 
-import           Data.Monoid (mappend, mconcat)
+import           Data.Monoid (mappend, mconcat, mempty)
 
 import           Language.Fixpoint.Names (propConName)
 import           Language.Fixpoint.Types hiding (quals, Loc)
 import           Language.Fixpoint.Parse 
 import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Misc (mapEither)
 import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.Types
@@ -58,9 +59,32 @@ idBindP :: Parser (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
 
 identifierP :: Parser (Id SourceSpan)
--- identifierP = withSpan Id lowerIdP 
 identifierP =   try (withSpan Id upperIdP)
            <|>      (withSpan Id lowerIdP)
+
+pAliasP :: Parser (Id SourceSpan, PAlias) 
+pAliasP = do name <- identifierP
+             πs   <- pAliasVarsP -- many symbolP 
+             reservedOp "="
+             body <- predP 
+             return  (name, Alias name [] πs body) 
+
+pAliasVarsP = try (parens $ sepBy symbolP comma)
+           <|> many symbolP
+
+tAliasP :: Parser (Id SourceSpan, TAlias RefType) 
+tAliasP = do name      <- identifierP
+             (αs, πs)  <- mapEither aliasVarT <$> aliasVarsP 
+             reservedOp "="
+             body      <- bareTypeP
+             return      (name, Alias name αs πs body) 
+
+aliasVarsP    = try (brackets $ sepBy aliasVarP comma) <|> return []
+aliasVarP     = withSpan (,) (wordP $ \_ -> True)
+
+aliasVarT (l, x)      
+  | isTvar x  = Left  $ tvar l x
+  | otherwise = Right $ stringSymbol x 
 
 tBodyP :: Parser (Id SourceSpan, RType Reft)
 tBodyP = do  id <- identifierP 
@@ -112,7 +136,6 @@ bareTypeNoUnionP
  <|>     (bareAtomP bbaseP)
 
 -- | `bareFunP` parses an ordered-intersection type
-
 bareFunP 
   = tAnd <$> many1 (reserved "/\\" >> bareFun1P)
 
@@ -144,46 +167,63 @@ bareAtomP p
 
 bbaseP :: Parser (Reft -> RefType)
 bbaseP 
-  =  try (TVar <$> tvarP)
- <|> try (TObj <$> (braces $ bindsP) )      -- Object types
- <|> try (TObj <$> arrayBindsP)             -- Array literal types
- <|> try (TArr <$> arrayP)
- <|> try (TApp <$> tDefP <*> (brackets $ sepBy bareTypeP comma))  -- This is what allows: list [A], tree [A,B] etc...
- <|>     ((`TApp` []) <$> tconP)
+  =  try (TVar <$> tvarP)                  -- A
+ <|> try (TObj <$> (braces $ bindsP) )     -- { f1: T1, ... , fn: Tn} 
+ <|> try (TObj <$> arrayBindsP)            -- { i1: T1, ... , in: Tn}
+ <|> try (TArr <$> arrayP)                 -- [T]
+ <|> try (TApp <$> tDefP <*> bareTyArgsP)  -- list[A], tree[A,B] etc...
+ 
+ -- <|>     ((`TApp` []) <$> tconP)           -- yuck. this is wierd.
 
-tvarP :: Parser TVar
--- tvarP = TV <$> (stringSymbol <$> upperWordP) <*> getPosition
-tvarP = withSpan (\l x -> TV x l) (stringSymbol <$> upperWordP)
+bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
 
+bareTyArgP  = try bareTypeP 
+           <|> (TExp <$> exprP)
 
-upperWordP :: Parser String
-upperWordP = condIdP nice (not . isLower . head)
+tvarP    :: Parser TVar
+tvarP    = withSpan tvar $ wordP isTvar                  -- = withSpan {- (\l x -> TV x l) -} (flip TV) (stringSymbol <$> upperWordP)
+
+tvar l x = TV (stringSymbol x) l
+
+isTvar   = not . isLower . head
+
+wordP p  = condIdP ok p
   where 
-    nice   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
+    ok   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
-tconP :: Parser TCon
-tconP =  try (reserved "number"    >> return TInt)
+tDefP :: Parser TCon
+tDefP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "boolean"   >> return TBool)
      <|> try (reserved "undefined" >> return TUndef)
      <|> try (reserved "void"      >> return TVoid)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
-     <|> tDefP
+     <|> (TDef <$> identifierP)
 
-tDefP 
-  = do  s <- identifierP 
-        -- XXX: This list will have to be enhanced.
-        if unId s `elem` ["true", "false", "number", "boolean", "string", "top", "void", "null"] 
-          then parserZero
-          else return $ TDef s
+-- tconP :: Parser TCon
+-- tconP =  try (reserved "number"    >> return TInt)
+--      <|> try (reserved "boolean"   >> return TBool)
+--      <|> try (reserved "undefined" >> return TUndef)
+--      <|> try (reserved "void"      >> return TVoid)
+--      <|> try (reserved "top"       >> return TTop)
+--      <|> try (reserved "string"    >> return TString)
+--      <|> try (reserved "null"      >> return TNull)
+--      <|> tDefP
+-- 
+-- tDefP 
+--   = do  s <- identifierP 
+--         -- XXX: This list will have to be enhanced.
+--         if unId s `elem` ["true", "false", "number", "boolean", "string", "top", "void", "null"] 
+--           then parserZero
+--           else return $ TDef s
 
 bareAllP 
   = do reserved "forall"
-       as <- many1 tvarP
+       αs <- many1 tvarP
        dot
        t  <- bareTypeP
-       return $ foldr TAll t as
+       return $ foldr TAll t αs
 
 arrayP = brackets bareTypeP
 
@@ -292,14 +332,26 @@ specWraps = betweenMany start stop
 ---------------------------------------------------------------------------------
 -- | Specifications
 ---------------------------------------------------------------------------------
+data PSpec l t 
+  = Meas   (Id l, t)
+  | Bind   (Id l, t) 
+  | Extern (Id l, t)
+  | Type   (Id l, t)
+  | Talias (Id l, TAlias t)
+  | Palias (Id l, PAlias) 
+  | Qual    Qualifier
+  | Invt   l t 
+  deriving (Show)
 
 specP :: Parser (PSpec SourceSpan RefType)
 specP 
-  = try (reserved "measure"   >> (Meas   <$> idBindP    ))
-    <|> (reserved "qualif"    >> (Qual   <$> qualifierP ))
-    <|> (reserved "type"      >> (Type   <$> tBodyP     )) 
-    <|> (reserved "invariant" >> (withSpan Invt bareTypeP))
-    <|> (reserved "extern"    >> (Extern <$> idBindP    ))
+  =   try (reserved "measure"   >> (Meas   <$> idBindP    ))
+  <|> try (reserved "qualif"    >> (Qual   <$> qualifierP ))
+  <|> try (reserved "type"      >> (Type   <$> tBodyP     )) 
+  <|> try (reserved "type"      >> (Talias <$> tAliasP    ))
+  <|> try (reserved "predicate" >> (Palias <$> pAliasP    ))
+  <|> try (reserved "invariant" >> (withSpan Invt bareTypeP))
+  <|>     (reserved "extern"    >> (Extern <$> idBindP    ))
 
 
 -- --------------------------------------------------------------------------------------
@@ -378,11 +430,13 @@ mkCode :: ([Statement SourceSpan], M.HashMap SourceSpan (AnnToken Reft)) ->
   Nano SourceSpan RefType
 --------------------------------------------------------------------------------------
 mkCode (ss, m) = Nano { code   = Src (checkTopStmt <$> ss)
-                 , specs  = envAdds [ (i, t) | (_, TSpec (Extern (i, t))) <- list ] envEmpty
-                 , sigs   = envAdds [ (i, t) | (_, TBind (i, t))          <- list ] envEmpty
-                 , consts = envAdds [ (i, t) | (_, TSpec (Meas (i, t)))   <- list ] envEmpty
-                 , defs   = envAdds [ (i, t) | (_, TSpec (Type (i, t)))   <- list ] envEmpty
-                 , tAnns  = envAdds [ (i, t) | (i, Just (TType t)) <- (\id -> (id, M.lookup (getAnnotation id) m)) <$> dVars ] envEmpty
+                 , specs  = envFromList [ (i, t) | (_, TSpec (Extern (i, t))) <- list ] 
+                 , sigs   = envFromList [ (i, t) | (_, TBind (i, t))          <- list ] 
+                 , consts = envFromList [ (i, t) | (_, TSpec (Meas (i, t)))   <- list ] 
+                 , defs   = envFromList [ (i, t) | (_, TSpec (Type (i, t)))   <- list ] 
+								 , tAlias = envFromList [a          | (_, Talias a) <- list]
+                 , pAlias = envFromList [p          | (_, Palias p) <- list]
+                 , tAnns  = envFromList [ (i, t) | (i, Just (TType t)) <- (\id -> (id, M.lookup (getAnnotation id) m)) <$> dVars ]
                  , quals  = [q         | (_, TSpec (Qual q))   <- list ]
                  , invts  = [Loc l' t  | (_, TSpec (Invt l t)) <- list, let l' = srcPos l]
                  } 

@@ -83,3 +83,4 @@ executable nanojs
 --                        Language.Nano.Liquid.Liquid
 --                        Language.Nano.Liquid.Types
 --                        Language.Nano.Liquid.CGMonad
+--                        Language.Nano.Liquid.Qualifiers

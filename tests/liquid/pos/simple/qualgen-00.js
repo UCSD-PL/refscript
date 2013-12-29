@@ -1,8 +1,10 @@
+var junk /*@ {number | (0 < v && v < 30)} */ = 2;
 
-var arr /*@ [ { number |( (v > 0)  && (v < 3))} ] */ =  [1, 2];
+var arr  =  [1, 2];
 
-/*@ foo :: () => { number | v < 4 } */
+/*@ foo :: () => { number | v < 40 } */
 function foo() {
+  arr[0] = 2;
   return arr[0] + 1;
 }
 

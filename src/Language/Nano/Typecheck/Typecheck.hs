@@ -89,10 +89,10 @@ patchTypeAnnots p@(Nano {code = Src fs, tAnns = m}) =
 failCasts True  _  = F.Safe
 failCasts False fs = applyNonNull F.Safe F.Unsafe $ concatMap castErrors $ getCasts fs 
 
-getCasts       :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r)]
-getCasts stmts = everything (++) ([] `mkQ` f) stmts
+getCasts         :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r)]
+getCasts stmts   = everything (++) ([] `mkQ` f) stmts
   where 
-    f :: Expression (AnnType r) -> [(AnnType r)]
+    f            :: Expression (AnnType r) -> [(AnnType r)]
     f (Cast a _) = [a]
     f _          = [] 
 
@@ -240,7 +240,6 @@ tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l f body t
   where 
     γ'                              = envAddFun l f i αs xs ts t γ 
-    -- annCheck                        = catMaybes . map (validInst γ') . M.toList
 
 tcFunBody γ l f body t
   = do (body', q)     <- tcStmts γ body
@@ -295,7 +294,7 @@ tcStmt γ s@(EmptyStmt _)
 
 -- x = e
 tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))   
-  = do (e', g) <- tcAsgn γ (Id lx x) Nothing e
+  = do (e', g) <- tcAsgn γ (Id lx x) e
        return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
 -- e1.fld = e2 [No support for field ADDITIOn yet]
@@ -398,18 +397,20 @@ tcVarDecl :: (Ord r, PP r, F.Reftable r)
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e)) 
-  = do (e', g) <- tcAsgn γ x (varDeclAnnot v) e
+  = do (e', g) <- tcAsgn γ x e
        return (VarDecl l x (Just e'), g)
 
 tcVarDecl γ v@(VarDecl _ _ Nothing)  
   = return   (v, Just γ)
 
+varDeclAnnot v = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
+
 -------------------------------------------------------------------------------
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
-  TCEnv r -> Id (AnnSSA r) -> Maybe (RType r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
+  TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 -------------------------------------------------------------------------------
-tcAsgn γ x t e
-  = do (e' , t) <- tcExprT γ e t
+tcAsgn γ x e
+  = do (e' , t) <- tcExprT γ e $ tcEnvFindSpec x γ
        return      (e', Just   $ tcEnvAdds [(x, t)] γ)
 
 -------------------------------------------------------------------------------
@@ -452,15 +453,15 @@ tcExpr γ e@(InfixExpr _ _ _ _)
 tcExpr γ e@(CallExpr _ _ _)
   = tcCall γ e 
 
+tcExpr γ e@(ArrayLit _ _)
+  = tcCall γ e 
+
 tcExpr γ (ObjectLit l bs) 
   = do let (ps, es)  = unzip bs
        ets          <- mapM (tcExpr γ) es
        let (es', ts) = unzip ets
        let bts       = zipWith B (F.symbol <$> ps) ts
        return (ObjectLit l (zip ps es'), TObj bts F.top)
-
-tcExpr γ e@(ArrayLit _ _)
-  = tcCall γ e 
 
 tcExpr γ (Cast l@(Ann loc fs) e)
   = do (e', t) <- tcExpr γ e

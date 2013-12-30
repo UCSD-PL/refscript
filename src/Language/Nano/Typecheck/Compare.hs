@@ -244,7 +244,7 @@ compareTs γ t1 t2 | otherwise              = compareTs' γ t1 t2
 compareTs' _ t1 _  | isTop t1               = errorstar "unimplemented: compareTs - top"
 compareTs' _ t1 t2 | isTop t2               = (t1', t1, t2', SubT)
   where
-    t1' = setRTypeR t1 F.top -- this will be kVared
+    t1' = setRTypeR t1 fTop -- this will be kVared
     -- @t2@ is a Top, so just to make the types compatible we will 
     -- use the base type of @t1@ and stregthen with @t2@'s refinement.
     t2' = setRTypeR t1 $ rTypeR t2
@@ -266,7 +266,7 @@ compareTs' _ t1@(TArr _ _) t2@(TObj _ _ ) = error (printf "Unimplemented compare
 
 -- TODO: only handles this case for now - cyclic type defs will loop infinitely
 compareTs' γ (TApp d1@(TDef _) t1s r1) (TApp d2@(TDef _) t2s r2) | d1 == d2 = 
-  (mk tjs F.top, mk t1s' r1, mk t2s' r2, mconcatP bds)
+  (mk tjs fTop, mk t1s' r1, mk t2s' r2, mconcatP bds)
   where
     (tjs, t1s', t2s', bds)  = unzip4 $ zipWith (compareTs γ) t1s t2s
     mk xs r                 = TApp d1 xs r 
@@ -470,7 +470,7 @@ padObject :: (Eq r, Ord r, F.Reftable r, PP r) =>
                (RType r, RType r, RType r, SubDirection)
 --------------------------------------------------------------------------------
 
-padObject γ (TObj bs1 r1) (TObj bs2 r2) = (TObj jbs' F.top, TObj b1s' r1, TObj b2s' r2, direction)
+padObject γ (TObj bs1 r1) (TObj bs2 r2) = (TObj jbs' fTop, TObj b1s' r1, TObj b2s' r2, direction)
   where
     direction                           = cmnDir &*& distDir d1s d2s
     cmnDir                              = mconcatP [ d | (_, (_ ,_  ,_  ,d)) <- cmnTs] 
@@ -532,7 +532,7 @@ padFun γ (TFun b1s o1 r1) (TFun b2s o2 r2)
       (oj , o1' , o2' , od ) = compareTs γ o1 o2
       t1'                    = TFun (updTs b1s t1s') o1' r1
       t2'                    = TFun (updTs b2s t2s') o2' r2
-      joinT                  = TFun (updTs b1s tjs) oj F.top 
+      joinT                  = TFun (updTs b1s tjs) oj fTop 
       updTs                  = zipWith (\b t -> b { b_type = t })
 
 padFun _ _ _ = error "padFun: no other cases supported"
@@ -541,7 +541,7 @@ padFun _ _ _ = error "padFun: no other cases supported"
 
 -- | `padArray`
 padArray γ (TArr t1 r1) (TArr t2 r2) = 
-    (TArr tj F.top, TArr t1' r1, TArr t2' r2, arrDir ad)
+    (TArr tj fTop, TArr t1' r1, TArr t2' r2, arrDir ad)
   where
     (tj, t1', t2', ad) = compareTs γ t1 t2
 padArray _ _ _ = errorstar "BUG: padArray can only pad Arrays"     

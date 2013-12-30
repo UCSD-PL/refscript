@@ -23,12 +23,13 @@ import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*), (<*>))
 import           Control.Monad.Identity
 import           Data.Char (toLower, isLower, isSpace) 
-import           Data.Monoid (mappend, mconcat)
+import           Data.Monoid (mappend, mconcat, mempty)
 
 import           Language.Fixpoint.Names (propConName)
 import           Language.Fixpoint.Types hiding (quals, Loc)
 import           Language.Fixpoint.Parse 
 import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Misc (mapEither)
 import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.Types
@@ -57,9 +58,32 @@ idBindP :: Parser (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
 
 identifierP :: Parser (Id SourceSpan)
--- identifierP = withSpan Id lowerIdP 
 identifierP =   try (withSpan Id upperIdP)
            <|>      (withSpan Id lowerIdP)
+
+pAliasP :: Parser (Id SourceSpan, PAlias) 
+pAliasP = do name <- identifierP
+             πs   <- pAliasVarsP -- many symbolP 
+             reservedOp "="
+             body <- predP 
+             return  (name, Alias name [] πs body) 
+
+pAliasVarsP = try (parens $ sepBy symbolP comma)
+           <|> many symbolP
+
+tAliasP :: Parser (Id SourceSpan, TAlias RefType) 
+tAliasP = do name      <- identifierP
+             (αs, πs)  <- mapEither aliasVarT <$> aliasVarsP 
+             reservedOp "="
+             body      <- bareTypeP
+             return      (name, Alias name αs πs body) 
+
+aliasVarsP    = try (brackets $ sepBy aliasVarP comma) <|> return []
+aliasVarP     = withSpan (,) (wordP $ \_ -> True)
+
+aliasVarT (l, x)      
+  | isTvar x  = Left  $ tvar l x
+  | otherwise = Right $ stringSymbol x 
 
 tBodyP :: Parser (Id SourceSpan, RType Reft)
 tBodyP = do  id <- identifierP 
@@ -111,7 +135,6 @@ bareTypeNoUnionP
  <|>     (bareAtomP bbaseP)
 
 -- | `bareFunP` parses an ordered-intersection type
-
 bareFunP 
   = tAnd <$> many1 (reserved "/\\" >> bareFun1P)
 
@@ -143,46 +166,63 @@ bareAtomP p
 
 bbaseP :: Parser (Reft -> RefType)
 bbaseP 
-  =  try (TVar <$> tvarP)
- <|> try (TObj <$> (braces $ bindsP) )      -- Object types
- <|> try (TObj <$> arrayBindsP)             -- Array literal types
- <|> try (TArr <$> arrayP)
- <|> try (TApp <$> tDefP <*> (brackets $ sepBy bareTypeP comma))  -- This is what allows: list [A], tree [A,B] etc...
- <|>     ((`TApp` []) <$> tconP)
+  =  try (TVar <$> tvarP)                  -- A
+ <|> try (TObj <$> (braces $ bindsP) )     -- { f1: T1, ... , fn: Tn} 
+ <|> try (TObj <$> arrayBindsP)            -- { i1: T1, ... , in: Tn}
+ <|> try (TArr <$> arrayP)                 -- [T]
+ <|> try (TApp <$> tDefP <*> bareTyArgsP)  -- list[A], tree[A,B] etc...
+ 
+ -- <|>     ((`TApp` []) <$> tconP)           -- yuck. this is wierd.
 
-tvarP :: Parser TVar
--- tvarP = TV <$> (stringSymbol <$> upperWordP) <*> getPosition
-tvarP = withSpan (\l x -> TV x l) (stringSymbol <$> upperWordP)
+bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
 
+bareTyArgP  = try bareTypeP 
+           <|> (TExp <$> exprP)
 
-upperWordP :: Parser String
-upperWordP = condIdP nice (not . isLower . head)
+tvarP    :: Parser TVar
+tvarP    = withSpan tvar $ wordP isTvar                  -- = withSpan {- (\l x -> TV x l) -} (flip TV) (stringSymbol <$> upperWordP)
+
+tvar l x = TV (stringSymbol x) l
+
+isTvar   = not . isLower . head
+
+wordP p  = condIdP ok p
   where 
-    nice   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
+    ok   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
-tconP :: Parser TCon
-tconP =  try (reserved "number"    >> return TInt)
+tDefP :: Parser TCon
+tDefP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "boolean"   >> return TBool)
      <|> try (reserved "undefined" >> return TUndef)
      <|> try (reserved "void"      >> return TVoid)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
-     <|> tDefP
+     <|> (TDef <$> identifierP)
 
-tDefP 
-  = do  s <- identifierP 
-        -- XXX: This list will have to be enhanced.
-        if unId s `elem` ["true", "false", "number", "boolean", "string", "top", "void", "null"] 
-          then parserZero
-          else return $ TDef s
+-- tconP :: Parser TCon
+-- tconP =  try (reserved "number"    >> return TInt)
+--      <|> try (reserved "boolean"   >> return TBool)
+--      <|> try (reserved "undefined" >> return TUndef)
+--      <|> try (reserved "void"      >> return TVoid)
+--      <|> try (reserved "top"       >> return TTop)
+--      <|> try (reserved "string"    >> return TString)
+--      <|> try (reserved "null"      >> return TNull)
+--      <|> tDefP
+-- 
+-- tDefP 
+--   = do  s <- identifierP 
+--         -- XXX: This list will have to be enhanced.
+--         if unId s `elem` ["true", "false", "number", "boolean", "string", "top", "void", "null"] 
+--           then parserZero
+--           else return $ TDef s
 
 bareAllP 
   = do reserved "forall"
-       as <- many1 tvarP
+       αs <- many1 tvarP
        dot
        t  <- bareTypeP
-       return $ foldr TAll t as
+       return $ foldr TAll t αs
 
 arrayP = brackets bareTypeP
 
@@ -292,20 +332,24 @@ specWraps = betweenMany start stop
 -- | Specifications
 ---------------------------------------------------------------------------------
 data PSpec l t 
-  = Meas (Id l, t)
-  | Bind (Id l, t) 
-  | Qual Qualifier
-  | Type (Id l, t)
-  | Invt l t 
+  = Meas   (Id l, t)
+  | Bind   (Id l, t) 
+  | Type   (Id l, t)
+  | Talias (Id l, TAlias t)
+  | Palias (Id l, PAlias) 
+  | Qual    Qualifier
+  | Invt   l t 
   deriving (Show)
 
 specP :: Parser (PSpec SourceSpan RefType)
 specP 
-  = try (reserved "measure"   >> (Meas <$> idBindP    ))
-    <|> (reserved "qualif"    >> (Qual <$> qualifierP ))
-    <|> (reserved "type"      >> (Type <$> tBodyP     )) 
-    <|> (reserved "invariant" >> (withSpan Invt bareTypeP))
-    <|> ({- DEFAULT -}           (Bind <$> idBindP    ))
+  =   try (reserved "measure"   >> (Meas   <$> idBindP    ))
+  <|> try (reserved "qualif"    >> (Qual   <$> qualifierP ))
+  <|> try (reserved "type"      >> (Type   <$> tBodyP     )) 
+  <|> try (reserved "type"      >> (Talias <$> tAliasP    ))
+  <|> try (reserved "predicate" >> (Palias <$> pAliasP    ))
+  <|> try (reserved "invariant" >> (withSpan Invt bareTypeP))
+  <|> ({- DEFAULT -}               (Bind <$> idBindP    ))
 
 --------------------------------------------------------------------------------------
 parseSpecFromFile :: FilePath -> IO (Nano SourceSpan RefType) 
@@ -316,19 +360,21 @@ parseSpecFromFile f = parseFromFile (mkSpec <$> specWraps specP) f
 mkSpec    ::  (PP t, IsLocated l) => [PSpec l t] -> Nano a t
 --------------------------------------------------------------------------------------
 mkSpec xs = Nano { code   = Src [] 
-                 , specs  = envFromList [b | Bind b <- xs] 
+                 , specs  = envFromList [b          | Bind b <- xs] 
                  , defs   = envEmpty
-                 , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
-                 , tDefs  = envFromList [b         | Type b <- xs]
+                 , consts = envFromList [(swP i, t) | Meas (i, t) <- xs]
+                 , tDefs  = envFromList [b          | Type b   <- xs]
+                 , tAlias = envFromList [a          | Talias a <- xs]
+                 , pAlias = envFromList [p          | Palias p <- xs]
                  , tAnns  = M.empty
-                 , quals  =             [q         | Qual q <- xs]
-                 , invts  =             [Loc l' t  | Invt l t <- xs, let l' = srcPos l]
+                 , quals  =             [q          | Qual q   <- xs]
+                 , invts  =             [Loc l' t   | Invt l t <- xs, let l' = srcPos l]
                  }
-
--- YUCK. Worst hack of all time.
-switchProp i@(Id l x) 
-  | x == (toLower <$> propConName) = Id l propConName
-  | otherwise                      = i
+            where
+              -- YUCK. Worst hack of all time.
+              swP i@(Id l x) 
+                | x == (toLower <$> propConName) = Id l propConName
+                | otherwise                      = i
 
 --------------------------------------------------------------------------------------
 tAnnotP :: ParsecT  String (ParserState String RefType) Identity (Maybe RefType)
@@ -365,22 +411,11 @@ changeState forward backward = mkPT . transform . runParsecT
 parseCodeFromFile :: FilePath -> IO (Nano SourceSpan RefType)
 --------------------------------------------------------------------------------------
 parseCodeFromFile fp = parseJavaScriptFromFile' tAnnotP fp >>= return . mkCode
-
--- parseCodeFromFile fp = 
---   parseJavaScriptFromFile fp >>= return . mkCode . (fmap (, Nothing) <$>)
-      
         
-mkCode    :: [Statement (SST Reft)] -> Nano SourceSpan RefType
-mkCode ss = Nano { code   = Src (stripAnnot $ checkTopStmt <$> ss)
-                 , specs  = envEmpty  
-                 , defs   = envEmpty
-                 , consts = envEmpty 
-                 , tDefs  = envEmpty
-                 , tAnns  = all ss
-                 , quals  = [] 
-                 , invts  = [] 
-                 } 
+mkCode              :: [Statement (SST Reft)] -> Nano SourceSpan RefType
+mkCode ss           = mempty { code = src } { tAnns = all ss } 
   where
+    src             = Src (stripAnnot $ checkTopStmt <$> ss) 
     all ss          = foldr one M.empty ss 
     one s m         = F.foldr f m s
     f (l,Just t) m  = M.insert l t m 

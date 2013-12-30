@@ -66,6 +66,7 @@ bugMalignedFields l t t'  = mkErr l $ render $ text "Misaligned Fields:"
                                              $+$ text "  t1 =" <+> pp t
                                              $+$ text "  t2 =" <+> pp t'
 
+bugUnknownAlias l x       = mkErr l $ printf "BUG: Unknown definition for alias %s" (ppshow x)
 bugUnboundPhiVar l x      = mkErr l $ printf "BUG: Phi Variable %s is unbound" (ppshow x)
 bugUnboundVariable l x    = mkErr l $ printf "BUG: Variable %s is unbound in environment at %s" (ppshow x) (ppshow l)
 bugMissingTypeArgs l      = mkErr l $ printf "BUG: Missing Type Arguments at %s" (ppshow l)
@@ -75,7 +76,7 @@ bugBadFunction l          = mkErr l $ printf "BUG: No function expression was fo
 bugUnknown l thing x      = mkErr l $ printf "BUG: Cannot find %s %s" thing (ppshow x) 
 
 
-
+errorCyclicDefs l x stk   = mkErr l $ printf "Cyclic definitions: %s in %s" (ppshow x) (ppshow stk)
 errorArgName l x y        = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 errorMissingSpec l f      = mkErr l $ printf "Missing Signature For %s defined at %s" (ppshow f) (ppshow l)
 errorDuplicate i l l'     = mkErr l $ printf "Duplicate Specification for %s:\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
@@ -125,5 +126,12 @@ errorTypeAssign l t1 t2   = mkErr l $ printf "Cannot assign type %s to %s" (ppsh
 errorBracketAssign l x    = mkErr l $ printf "Invalid bracket assignment %s" (ppshow x) 
 errorPropRead  l x1 x2    = mkErr l $ printf "Invalid property read object: %s property: %s" (ppshow x1) (ppshow x2) 
 errorArrayLit     l x     = mkErr l $ printf "Invalid array literal %s" (ppshow x) 
+
+
+errorBadPAlias l p nx ne  = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." 
+                                       (ppshow p) nx ne 
+
+errorBadTAlias l t nt ne nα nx  
+                          = mkErr l $ printf "Invalid type alias application: %s \nExpected %d type, %d value arguments, but got %d and %d" (ppshow t) nα nx nt ne  
 
 

@@ -74,14 +74,13 @@ safe (_, Nano {code = Src fs})
        nfc       <- noFailCasts <$> getOpts
        return     $ F.Safe `mappend` failCasts nfc fs 
 
-
 failCasts True  _  = F.Safe
 failCasts False fs = applyNonNull F.Safe F.Unsafe $ concatMap castErrors $ getCasts fs 
 
-getCasts       :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r)]
-getCasts stmts = everything (++) ([] `mkQ` f) stmts
+getCasts         :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r)]
+getCasts stmts   = everything (++) ([] `mkQ` f) stmts
   where 
-    f :: Expression (AnnType r) -> [(AnnType r)]
+    f            :: Expression (AnnType r) -> [(AnnType r)]
     f (Cast a _) = [a]
     f _          = [] 
 
@@ -226,7 +225,6 @@ tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l f body t
   where 
     γ'                              = envAddFun l f i αs xs ts t γ 
-    -- annCheck                        = catMaybes . map (validInst γ') . M.toList
 
 tcFunBody γ l f body t
   = do (body', q)     <- tcStmts γ body
@@ -440,15 +438,15 @@ tcExpr γ e@(InfixExpr _ _ _ _)
 tcExpr γ e@(CallExpr _ _ _)
   = tcCall γ e 
 
+tcExpr γ e@(ArrayLit _ _)
+  = tcCall γ e 
+
 tcExpr γ (ObjectLit l bs) 
   = do let (ps, es)  = unzip bs
        ets          <- mapM (tcExpr γ) es
        let (es', ts) = unzip ets
        let bts       = zipWith B (F.symbol <$> ps) ts
        return (ObjectLit l (zip ps es'), TObj bts fTop)
-
-tcExpr γ e@(ArrayLit _ _)
-  = tcCall γ e 
 
 tcExpr γ (Cast l@(Ann loc fs) e)
   = do (e', t) <- tcExpr γ e

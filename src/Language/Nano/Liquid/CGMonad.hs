@@ -593,7 +593,7 @@ freshTy :: RefTypable a => s -> a -> CGM RefType
 freshTy _ τ = refresh $ rType τ
 
 instance Freshable F.Refa where
-  fresh = (`F.RKvar` F.emptySubst) <$> (F.intKvar <$> fresh)
+  fresh = (`F.RKvar` mempty) <$> (F.intKvar <$> fresh)
 
 instance Freshable [F.Refa] where
   fresh = single <$> fresh

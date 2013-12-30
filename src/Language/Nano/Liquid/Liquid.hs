@@ -38,6 +38,7 @@ import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Typecheck.Subst      (getProp, getIdx)
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
+import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
@@ -49,13 +50,14 @@ import qualified System.Console.CmdArgs.Verbosity as V
 --------------------------------------------------------------------------------
 verifyFile       :: FilePath -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile f =   
-  do  p   <- parseNanoFromFile f
-      cfg <- getOpts 
-      verb    <- V.getVerbosity
-      case typeCheck verb (ssaTransform p) of
-        Left errs -> return $ (A.NoAnn, F.Crash errs "Type Errors")
-        Right p'  -> reftypeCheck cfg f p'
+verifyFile f 
+  = do p     <- parseNanoFromFile f
+       cfg   <- getOpts 
+       verb  <- V.getVerbosity
+       let p' = expandAliases $ ssaTransform p
+       case typeCheck verb p' of
+         Left errs -> return $ (A.NoAnn, F.Crash errs "Type Errors")
+         Right p'  -> reftypeCheck cfg f p'
 
 -- DEBUG VERSION 
 -- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
@@ -152,6 +154,7 @@ consStmt g (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
        let t2     = envFindTy x2 g'
        subTypeContainers "field-assignment" l2 g' t2 tfld
        return     $ Just g'
+
 -- e
 consStmt g (ExprStmt _ e) 
   = consExpr g e >> (return $ Just g)
@@ -229,8 +232,8 @@ consExprT g (ObjectLit l ps) to
   = consObjT l g ps to
 
 consExprT g e to 
-  = do (x, g') <- consExpr g e
-       let te   = envFindTy x g'
+  = do (x, g')  <- consExpr g e
+       let te    = envFindTy x g'
        case to of
          Nothing -> return (x, g')
          Just t  -> do subTypeContainers "consExprT" l g' te t 

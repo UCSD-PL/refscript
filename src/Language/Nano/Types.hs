@@ -41,6 +41,7 @@ module Language.Nano.Types (
   , idLoc 
  
   -- * Manipulating SourceSpan
+  , SourceSpan (..)
   , dummySpan
   , srcSpanFile
   , srcSpanStartLine
@@ -129,6 +130,12 @@ instance IsLocated SourceSpan where
 
 instance IsLocated (Located a) where 
   srcPos = loc
+
+instance IsLocated SourcePos where
+  srcPos x = Span x x 
+
+instance IsLocated (F.Located a) where
+  srcPos = srcPos . F.loc
 
 instance IsLocated a => IsLocated (Id a) where 
   srcPos (Id x _) = srcPos x

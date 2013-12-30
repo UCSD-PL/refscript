@@ -103,12 +103,10 @@ function pos(){
 /************** Types for Builtin Operators ******************************/
 /*************************************************************************/
 
-/*@ builtin_BIBracketRef     :: forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}) => A           */
-/*@ builtin_BIBracketAssign  :: forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}, val:A) => void */
-/*@ builtin_BIArrayLit       :: forall A. (A) => {v:[A] | (len v) = builtin_BINumArgs}                           */
-
+/*@ builtin_BIBracketRef    :: forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}) => A           */
+/*@ builtin_BIBracketAssign :: forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}, val:A) => void */
+/*@ builtin_BIArrayLit      :: forall A. (A) => {v:[A] | (len v) = builtin_BINumArgs}                           */
 /*@ builtin_BIUndefined     :: forall A. {A | false} */
-
 
 
 

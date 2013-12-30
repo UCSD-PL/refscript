@@ -204,7 +204,7 @@ indexType :: RefType -> CGM RefType
 indexType (TArr t _) = return t
 indexType t@(TApp TUn ts r) = do
     ts' <- mapM indexType ts
-    return $ TApp TUn ts' F.top
+    return $ TApp TUn ts' fTop
 indexType _          = errorstar "Unimplemented: indexing type other than array."
 
 
@@ -406,19 +406,6 @@ freshTyPhisWhile l g xs τs
 freshTyObj :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType 
 -- ---------------------------------------------------------------------------------------
 freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g 
-
-
--- | Fresh Array Type
----------------------------------------------------------------------------------------
--- freshTyArr :: (PP l, IsLocated l) => l -> CGEnv -> RefType -> CGM (Id AnnTypeR, CGEnv)
--- ---------------------------------------------------------------------------------------
--- freshTyArr l g t 
---   = do t'     <- freshTy "freshTyArr"  t
---        (x,g') <- envAddFresh "consArr:empty" l (TArr t' F.top) g
---        wellFormed l g' t'
---        return  $ (x, g')
-
-
 
 ---------------------------------------------------------------------------------------
 -- | Adding Subtyping Constraints -----------------------------------------------------
@@ -769,7 +756,7 @@ bsplitC g ci t1 t2
 
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2
-  = [F.subC (fenv g) F.PTrue (r1 {F.sr_reft = F.top}) r2 Nothing [] ci]
+  = [F.subC (fenv g) F.PTrue (r1 {F.sr_reft = fTop}) r2 Nothing [] ci]
   | F.isNonTrivialSortedReft r2
   = [F.subC (fenv g) p r1 r2 Nothing [] ci]
   | otherwise

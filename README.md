@@ -9,7 +9,7 @@ nano-js is the basis for the programming assignments in
 
 
 Install
-=======
+======
 
 Dependencies
 ------------

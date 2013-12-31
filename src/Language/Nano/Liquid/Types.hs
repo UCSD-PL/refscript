@@ -195,10 +195,10 @@ rTypeSortedReft   ::  (F.Reftable r) => RType r -> F.SortedReft
 rTypeSortedReft t = F.RR (rTypeSort t) (rTypeReft t)
 
 rTypeReft         :: (F.Reftable r) => RType r -> F.Reft
-rTypeReft         = fromMaybe F.top . fmap F.toReft . stripRTypeBase 
+rTypeReft         = fromMaybe fTop . fmap F.toReft . stripRTypeBase 
 
 rTypeValueVar     :: (F.Reftable r) => RType r -> F.Symbol
-rTypeValueVar t   = vv where F.Reft (vv,_) =  rTypeReft t 
+rTypeValueVar t   = vv where F.Reft (vv,_) = rTypeReft t 
 
 ------------------------------------------------------------------------------------------
 rTypeSort :: (F.Reftable r) => RType r -> F.Sort
@@ -287,7 +287,7 @@ emapReftBind f γ (B x t)    = B x $ emapReft f γ t
 ------------------------------------------------------------------------------------------
 mapReftM f (TVar α r)      = TVar α <$> f r
 mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> f r
-mapReftM f (TFun xts t _)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return F.top) --f r 
+mapReftM f (TFun xts t r)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return $ F.top r) --f r 
 mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
 mapReftM f (TObj bs r)     = TObj   <$> mapM (mapReftBindM f) bs <*> f r
 mapReftM f (TArr t r)      = TArr   <$> (mapReftM f t) <*> f r

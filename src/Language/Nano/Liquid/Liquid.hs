@@ -437,7 +437,7 @@ consSeq f           = foldM step . Just
 consObjT l g pe to 
   = do let (ps, es) = unzip pe
        (xes, g')   <- consScan consExpr g es
-       let tLit     = (`TObj` F.top) $ zipWith B (F.symbol <$> ps) ((`envFindTy` g') <$> xes)
+       let tLit     = (`TObj` fTop) $ zipWith B (F.symbol <$> ps) ((`envFindTy` g') <$> xes)
        t           <- maybe (freshTyObj l g tLit) return to
        subTypeContainers "object literal" l g' tLit t
        envAddFresh "consObj" l t g'

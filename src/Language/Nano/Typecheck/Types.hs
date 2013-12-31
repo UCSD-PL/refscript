@@ -20,8 +20,6 @@ module Language.Nano.Typecheck.Types (
   , Source (..)
   , FunctionStatement
   , mapCode
-  -- , sourceNano
-  -- , sigsNano
 
   -- * (Refinement) Types
   , RType (..)
@@ -38,7 +36,8 @@ module Language.Nano.Typecheck.Types (
   , isUnion
 
   -- * Constructing Types
-  , mkUnion, mkUnionR
+  , mkUnion
+  , mkUnionR
 
   -- * Deconstructing Types
   , bkFun
@@ -72,9 +71,9 @@ module Language.Nano.Typecheck.Types (
   , tUndef
   , tNull
   , tAnd
-
   , isTVar
   , isArr
+  , fTop
 
   -- * Operator Types
   , infixOpTy
@@ -206,6 +205,9 @@ data Bind r
       } 
     deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
+-- | "pure" top-refinement
+fTop :: (F.Reftable r) => r
+fTop = mempty
 
 -- | Standard Types
 type Type    = RType ()
@@ -216,7 +218,7 @@ toType = fmap (const ())
   
 -- | Adding in Refinements
 ofType :: (F.Reftable r) => Type -> RType r
-ofType = fmap (const F.top)
+ofType = fmap (const fTop)
 
 -- | `calleeType` uses the types at the callsite to extract the appropriate
 --   conjunct from an intersection.
@@ -272,17 +274,19 @@ bkAnd t              = [t]
 ---------------------------------------------------------------------------------
 mkUnion :: (Ord r, Eq r, F.Reftable r) => [RType r] -> RType r
 ---------------------------------------------------------------------------------
-mkUnion = mkUnionR F.top
+mkUnion = mkUnionR fTop 
 
 
 ---------------------------------------------------------------------------------
 mkUnionR :: (Ord r, Eq r, F.Reftable r) => r -> [RType r] -> RType r
 ---------------------------------------------------------------------------------
-mkUnionR _ [ ] = tErr
-mkUnionR r [t] = strengthen t r
-mkUnionR r ts  | length ts' > 1 = TApp TUn ts' r
-               | otherwise      = strengthen (head ts') r
-                where ts' = L.sort $ L.nub ts
+mkUnionR _ [ ]     = tErr
+mkUnionR r [t]     = strengthen t r
+mkUnionR r ts  
+  | length ts' > 1 = TApp TUn ts' r
+  | otherwise      = strengthen (head ts') r
+  where 
+    ts'            = L.sort $ L.nub ts
 
 
 ---------------------------------------------------------------------------------
@@ -341,8 +345,8 @@ isUnion _              = False
 -- Get the top-level refinement for unions - use Top (True) otherwise
 rUnion               :: F.Reftable r => RType r -> r
 rUnion (TApp TUn _ r) = r
-rUnion _              = F.top
- 
+rUnion t              = fTop
+
 -- Get the top-level refinement 
 rTypeR               :: RType r -> r
 rTypeR (TApp _ _ r ) = r
@@ -712,19 +716,19 @@ varDeclAnnot v = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
 -----------------------------------------------------------------------
 
 tVar   :: (F.Reftable r) => TVar -> RType r
-tVar   = (`TVar` F.top) 
+tVar   = (`TVar` fTop) 
 
 isTVar (TVar _ _) = True
 isTVar _          = False
 
 tInt, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RType r
-tInt     = TApp TInt     [] F.top 
-tBool    = TApp TBool    [] F.top
-tString  = TApp TString  [] F.top
-tTop     = TApp TTop     [] F.top
-tVoid    = TApp TVoid    [] F.top
-tUndef   = TApp TUndef   [] F.top
-tNull    = TApp TNull    [] F.top
+tInt     = TApp TInt     [] fTop 
+tBool    = TApp TBool    [] fTop
+tString  = TApp TString  [] fTop
+tTop     = TApp TTop     [] fTop
+tVoid    = TApp TVoid    [] fTop
+tUndef   = TApp TUndef   [] fTop
+tNull    = TApp TNull    [] fTop
 tErr     = tVoid
 tFunErr  = ([],[],tErr)
 tAnd ts  = case ts of 
@@ -732,7 +736,7 @@ tAnd ts  = case ts of
              [t] -> t
              _   -> TAnd ts
 
-tArr    = (`TArr` F.top)
+tArr    = (`TArr` fTop)
 
 isArr (TArr _ _ ) = True
 isArr _           = False

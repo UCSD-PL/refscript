@@ -1,13 +1,16 @@
-var glob /*@ { number | v > 0 } */ = 4;
+/*@ g1 :: { number | v > 0 },
+    g2 :: string */ 
+var g1 = 4,
+    g2 = 2;
 
 /*@ bar :: () => {void | true} */
 function bar(){
-  glob = 7; 
+  g1 = 7; 
   return;
 }
 
 /*@ zoo :: () => {void | true} */
 function zoo(){
   bar();
-  assert(glob > 0);
+  assert(g1 > 0);
 }

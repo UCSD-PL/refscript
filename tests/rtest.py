@@ -59,21 +59,23 @@ class TestRunner:
         self.config = config
 
     def run_test (self, (file, expected_statuses)):
-        start   = time.time ()
-        status  = self.config.run_test (file)
-        runtime = time.time () - start
-        print "%f seconds" % (runtime)
+      start   = time.time ()
+      status  = self.config.run_test (file)
+      runtime = time.time () - start
+      #print "%f seconds" % (runtime)
 
-        if hasattr (expected_statuses, '__iter__'):
-	  ok = (status in expected_statuses)
-	else:
-	  ok = (status == expected_statuses)
+      if hasattr (expected_statuses, '__iter__'):
+        ok = (status in expected_statuses)
+      else:
+        ok = (status == expected_statuses)
         if ok:
-            print "\033[1;32mSUCCESS!\033[1;0m (%s)\n" % (file)
+          #print "\033[1;32mSUCCESS!\033[1;0m (%s)\n" % (file)
+            print "\033[1;32mSUCCESS!\033[1;0m   %40s %10f seconds" % (file, runtime)
         else:
-            print "\033[1;31mFAILURE :(\033[1;0m (%s) \n" % (file)
+          #print "\033[1;31mFAILURE :(\033[1;0m (%s) \n" % (file)
+            print "\033[1;31mFAILURE :(\033[1;0m %40s %10f seconds" % (file, runtime)
         self.config.log_test(file, runtime, ok)
-        
+
         return (file, ok, status not in self.config.valid_exits)
 
     def run_tests (self, tests):

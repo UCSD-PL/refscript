@@ -1,4 +1,3 @@
 
-/*@ x :: { f: { number | v > 10 } } */
-var x = { f: 1 };
+var x /*@ { f: { number | v > 10 } } */ = { f: 1 };
  

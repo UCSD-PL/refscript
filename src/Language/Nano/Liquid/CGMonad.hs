@@ -41,6 +41,7 @@ module Language.Nano.Liquid.CGMonad (
   , envAddGuard
   , envFindTy
   , envFindSpec
+  , envFindAnnot
   , envToList
   , envFindReturn
   -- , envJoin
@@ -103,7 +104,7 @@ import           Control.Monad.Error hiding (Error)
 import           Text.Printf 
 
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Language.ECMAScript3.Parser.Type   (SourceSpan (..))
 import           Language.ECMAScript3.PrettyPrint
 
 import           Debug.Trace                        (trace)
@@ -141,7 +142,7 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnTypeR RefType -> CGState
-initState c pgm = CGS F.emptyBindEnv (defs pgm) (tDefs pgm) [] [] 0 mempty invs c 
+initState c pgm = CGS F.emptyBindEnv (sigs pgm) (defs pgm) [] [] 0 mempty invs c 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts pgm]  
 
@@ -347,6 +348,11 @@ envFindTy x g = (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
 envFindSpec     :: (IsLocated x, F.Symbolic x) => x -> CGEnv -> Maybe RefType 
 ---------------------------------------------------------------------------------------
 envFindSpec x g = E.envFindTy x $ cge_spec g
+
+---------------------------------------------------------------------------------------
+envFindAnnot     :: (IsLocated x, F.Symbolic x) => x -> CGEnv -> Maybe RefType 
+---------------------------------------------------------------------------------------
+envFindAnnot x g = E.envFindTy x $ cge_anns g
 
 ---------------------------------------------------------------------------------------
 envToList     ::  CGEnv -> [(Id SourceSpan, RefType)]

@@ -18,7 +18,7 @@ import           Data.Maybe                         (isJust, fromMaybe, listToMa
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Language.ECMAScript3.Parser.Type  (SourceSpan (..))
 
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Errors
@@ -33,7 +33,7 @@ import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
-import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
+import           Language.Nano.Typecheck.Typecheck  (typeCheck, patchTypeAnnots) 
 import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Typecheck.Subst      (getProp, getIdx)
 import           Language.Nano.SSA.SSA
@@ -54,7 +54,7 @@ verifyFile f
   = do p     <- parseNanoFromFile f
        cfg   <- getOpts 
        verb  <- V.getVerbosity
-       let p' = expandAliases $ ssaTransform p
+       let p' = expandAliases $ patchTypeAnnots $ ssaTransform p
        case typeCheck verb p' of
          Left errs -> return $ (A.NoAnn, F.Crash errs "Type Errors")
          Right p'  -> reftypeCheck cfg f p'
@@ -96,7 +96,7 @@ consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) = consStmts (initCGEnv pgm) fs >> return ()
 
-initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext (defs pgm)
+initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext (sigs pgm) (tAnns pgm)
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
@@ -232,8 +232,8 @@ consExprT g (ObjectLit l ps) to
   = consObjT l g ps to
 
 consExprT g e to 
-  = do (x, g')  <- consExpr g e
-       let te    = envFindTy x g'
+  = do (x, g') <- consExpr g e
+       let te   = envFindTy x g'
        case to of
          Nothing -> return (x, g')
          Just t  -> do subTypeContainers "consExprT" l g' te t 
@@ -246,7 +246,7 @@ consExprT g e to
 consAsgn :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consAsgn g x e 
-  = do (x', g') <- consExprT g e $ envFindSpec x g 
+  = do (x', g') <- consExprT g e $ envFindAnnot x g 
        Just <$> envAdds [(x, envFindTy x' g')] g'
 
 

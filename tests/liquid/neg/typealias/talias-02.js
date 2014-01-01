@@ -4,5 +4,4 @@
 
 // thus `nat` is just an alias for: {number | (gt v 0)} 
 
-/*@ z :: nat */
-var z = 12;
+var z /*@ nat */ = 12;

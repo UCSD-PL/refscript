@@ -5,7 +5,7 @@
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
+module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck, patchTypeAnnots) where 
 
 import           Control.Exception                  (throw)
 import           Control.Applicative                ((<$>))
@@ -15,7 +15,7 @@ import qualified Data.HashSet                       as HS
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.Traversable                   as T
 import           Data.Monoid
-import           Data.Maybe                         (catMaybes, isJust, fromJust, fromMaybe, listToMaybe)
+import           Data.Maybe                         (catMaybes, isJust, fromJust, fromMaybe, listToMaybe, maybeToList)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$), (<+>))
@@ -40,7 +40,7 @@ import           Language.Fixpoint.Misc             as FM
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Language.ECMAScript3.Parser.Type  (SourceSpan (..))
 import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
@@ -56,7 +56,7 @@ verifyFile f = do
   nano    <- parseNanoFromFile f
   V.whenLoud $ donePhase FM.Loud "Parse"
   V.whenLoud $ putStrLn . render . pp $ nano
-  let nanoSsa = ssaTransform nano
+  let nanoSsa = patchTypeAnnots $ ssaTransform nano
   V.whenLoud $ donePhase FM.Loud "SSA Transform"
   V.whenLoud $ putStrLn . render . pp $ nanoSsa
   verb      <- V.getVerbosity
@@ -73,6 +73,18 @@ safe (_, Nano {code = Src fs})
   = do V.whenLoud $ printAllAnns fs 
        nfc       <- noFailCasts <$> getOpts
        return     $ F.Safe `mappend` failCasts nfc fs 
+
+
+-- | Inline type annotations
+patchTypeAnnots :: NanoSSAR r -> NanoTSSAR r
+patchTypeAnnots p@(Nano {code = Src fs, tAnns = m}) = 
+    p {code = Src $ (patchAnn <$>) <$> fs}
+  where
+    patchAnn (Ann l bs) = Ann l $ (TAnnot <$> (maybeToList $ M.lookup l mm)) ++ bs
+    mm = M.fromList (mapFst getAnnotation <$> envToList m)
+
+
+-- | Cast manipulation
 
 failCasts True  _  = F.Safe
 failCasts False fs = applyNonNull F.Safe F.Unsafe $ concatMap castErrors $ getCasts fs 
@@ -125,8 +137,8 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ fs' ++ fs
   where
     fs'               = [f | f@(TypInst _ _) <- M.lookupDefault [] l m]
 
-initEnv pgm           = TCE (specs pgm) (defs pgm) emptyContext
-traceCodePP p m s     = trace (render $ codePP p m s) $ return ()
+initEnv pgm           = TCE (specs pgm) (sigs pgm) (tAnns pgm) emptyContext
+traceCodePP p m s     = trace (render $ {- codePP p m s -} pp p) $ return ()
       
 codePP (Nano {code = Src src}) anns sub 
   =   text "*************************** CODE ****************************************"
@@ -144,8 +156,8 @@ checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano (AnnSSA r) (RType r)
 -------------------------------------------------------------------------------
 checkTypeDefs pgm = reportAll $ grep
   where 
-    ds        = defs pgm 
-    ts        = tDefs pgm
+    ds        = sigs pgm 
+    ts        = defs pgm
     reportAll = mapM_ report
     report t  = tcError $ errorUnboundType (srcPos t) t
 
@@ -172,6 +184,7 @@ checkTypeDefs pgm = reportAll $ grep
 
 data TCEnv r  = TCE { tce_env  :: Env (RType r)
                     , tce_spec :: Env (RType r) 
+                    , tce_anns :: Env (RType r)
                     , tce_ctx  :: !IContext 
                     }
 
@@ -179,16 +192,18 @@ type TCEnvO r = Maybe (TCEnv r)
 
 -- type TCEnv  r = Maybe (Env (RType r))
 instance (PP r, F.Reftable r) => Substitutable r (TCEnv r) where 
-  apply θ (TCE m sp c) = TCE (apply θ m) (apply θ sp) c 
+  apply θ (TCE m sp an c) = TCE (apply θ m) (apply θ sp) (apply θ an) c 
 
 instance (PP r, F.Reftable r) => PP (TCEnv r) where
   pp = ppTCEnv
 
-ppTCEnv (TCE env spc ctx) 
+ppTCEnv (TCE env spc an ctx) 
   =   text "******************** Environment ************************"
   $+$ pp env
   $+$ text "******************** Specifications *********************"
   $+$ pp spc 
+  $+$ text "******************** Annotations ************************"
+  $+$ pp an
   $+$ text "******************** Call Context ***********************"
   $+$ pp ctx
 
@@ -199,7 +214,7 @@ tcEnvAddReturn x t γ         = γ { tce_env = envAddReturn x t $ tce_env γ }
 tcEnvMem x                   = envMem x      . tce_env 
 tcEnvFindTy x                = envFindTy x   . tce_env
 tcEnvFindReturn              = envFindReturn . tce_env
-tcEnvFindSpec x              = envFindTy x   . tce_spec
+tcEnvFindSpec x              = envFindTy x   . tce_anns
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Scoped Block in Environment ------------------------------------

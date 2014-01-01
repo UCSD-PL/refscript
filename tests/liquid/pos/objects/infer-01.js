@@ -10,7 +10,7 @@ var gobj = {
   a: 5,
   b: "String",
   f: inc
-}
+};
 
 /*@ foo :: () => { number | v = 6 } */
 function foo () {

@@ -1,3 +1,4 @@
+/*@ glob :: { number | v > 15 } */
 var glob /*@ { number | v > 10 } */ = 20;
 
 /*@ zog :: () => {void | true} */

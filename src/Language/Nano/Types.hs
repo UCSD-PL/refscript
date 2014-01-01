@@ -65,7 +65,7 @@ import           Data.Maybe                         (catMaybes)
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
-import           Language.ECMAScript3.Parser        (SourceSpan (..))
+import           Language.ECMAScript3.Parser.Type   (SourceSpan (..))
 
 import qualified Language.Fixpoint.Types as F
 
@@ -114,6 +114,7 @@ instance Functor Located where
 -- | `IsLocated` is a predicate for values which we have a SourceSpan
 --------------------------------------------------------------------------------
 
+sourcePos :: IsLocated a => a -> SourcePos
 sourcePos = sp_begin . srcPos 
 
 class IsLocated a where 
@@ -148,11 +149,6 @@ instance IsLocated F.Symbol where
 
 instance IsLocated (SourceSpan, r) where 
   srcPos = srcPos . fst
-
-
-instance HasAnnotation Id where 
-  getAnnotation (Id x _) = x
-
 
 instance Eq a => Eq (Located a) where 
   x == y = val x == val y
@@ -423,9 +419,6 @@ pOr  p q  = F.pOr  [p, q]
 -- SourcePos Instances -------------------------------------------
 ------------------------------------------------------------------
 
-
-instance Hashable SourceSpan where 
-  hashWithSalt i = hashWithSalt i . sourceSpanSrcSpan
 
 instance Hashable a => Hashable (Id a) where 
   hashWithSalt i x = hashWithSalt i (idLoc x, idName x)

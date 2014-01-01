@@ -1,10 +1,6 @@
-
-/*@ junk :: {number | (0 < v && v < 30)} */
-var junk = 2;
-
+var junk /*@ {number | (0 < v && v < 30)} */ = 2;
 
 var arr  =  [1, 2];
-
 
 /*@ foo :: () => { number | v < 40 } */
 function foo() {

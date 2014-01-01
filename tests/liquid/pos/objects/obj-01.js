@@ -5,16 +5,16 @@ function inc(n) {
   return n + 1;
 }
 
-/*@ gobj :: { a: {number | v = 5}
-            , b: string
-            , f: (x:number) => {number | v = x + 1}
-            } 
- */
-var gobj = {
+var gobj 
+/*@ { a: {number | v = 5}
+    , b: string
+    , f: (x:number) => {number | v = x + 1}
+    } 
+ */ = {
   a: 5,
   b: "String",
   f: inc
-}
+};
 
 /*@ foo :: () => { number | v = 6 } */
 function foo () {

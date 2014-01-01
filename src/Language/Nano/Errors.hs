@@ -12,7 +12,7 @@ import Text.Printf
 import Text.PrettyPrint.HughesPJ
 import Language.ECMAScript3.PrettyPrint
 -- import Text.Parsec.Pos                   
-import Language.ECMAScript3.Parser        (SourceSpan (..))
+import Language.ECMAScript3.Parser.Type        (SourceSpan (..))
 -- import qualified Language.Fixpoint.Types as F
 import Language.Fixpoint.Errors
 import Language.Fixpoint.PrettyPrint
@@ -69,6 +69,8 @@ bugMalignedFields l t t'  = mkErr l $ render $ text "Misaligned Fields:"
 bugUnknownAlias l x       = mkErr l $ printf "BUG: Unknown definition for alias %s" (ppshow x)
 bugUnboundPhiVar l x      = mkErr l $ printf "BUG: Phi Variable %s is unbound" (ppshow x)
 bugUnboundVariable l x    = mkErr l $ printf "BUG: Variable %s is unbound in environment at %s" (ppshow x) (ppshow l)
+bugUnboundFunction γ l x  = mkErr l $ printf "BUG: Function %s is unbound in environment %s at %s" (ppshow x) (ppshow γ) (ppshow l)
+bugMultipleAnnots l x     = mkErr l $ printf "BUG: Variable %s has multiple type annotations" (ppshow x)
 bugMissingTypeArgs l      = mkErr l $ printf "BUG: Missing Type Arguments at %s" (ppshow l)
 bugTBodiesOccur l s       = mkErr l $ printf "BUG: There should be no TBodies herie %s" s
 bugBadUnions l s          = mkErr l $ printf "BUG: No unions should be found here (%s)" s

@@ -381,18 +381,11 @@ tAnnotP :: ParserState String (AnnToken Reft) -> ExternP String (AnnToken Reft)
 --------------------------------------------------------------------------------------
 tAnnotP stIn = EP typeP fSigP tLevP
   where
-    typeP  = TType <$> changeState fwd bwd (tp bareTypeP)
-    fSigP  = TBind <$> changeState fwd bwd (tp idBindP)
-    tLevP  = TSpec <$> changeState fwd bwd (tp specP)
+    typeP  = TType <$> changeState fwd bwd bareTypeP
+    fSigP  = TBind <$> changeState fwd bwd idBindP
+    tLevP  = TSpec <$> changeState fwd bwd specP
     fwd _  = stIn  -- NOTE: need to keep the state of the language-ecmascript parser!!!
     bwd _  = 0     -- TODO: Is this adequate???
-    tp p   = do string "/*@"
-                whiteSpace
-                t <- p
-                whiteSpace
-                string "*/"
-                whiteSpace
-                return t
 
 -- `changeState` taken from here:
 -- http://stackoverflow.com/questions/17968784/an-easy-way-to-change-the-type-of-parsec-user-state
@@ -425,24 +418,43 @@ parseCodeFromFile :: FilePath -> IO (Nano SourceSpan RefType)
 parseCodeFromFile fp = parseJavaScriptFromFile' tAnnotP fp >>= return . mkCode
 
 --------------------------------------------------------------------------------------
-mkCode :: ([Statement SourceSpan], M.HashMap SourceSpan (AnnToken Reft)) -> 
+mkCode :: ([Statement SourceSpan], M.HashMap SourceSpan [AnnToken Reft]) -> 
   Nano SourceSpan RefType
 --------------------------------------------------------------------------------------
 mkCode (ss, m) = Nano { code   = Src (checkTopStmt <$> ss)
-                 , specs  = envFromList [ a | (_, TSpec (Extern a)) <- list ] 
-                 , sigs   = envFromList [ a | (_, TBind         a)  <- list ] 
-                 , consts = envFromList [ a | (_, TSpec (Meas   a)) <- list ] 
-                 , defs   = envFromList [ a | (_, TSpec (Type   a)) <- list ] 
-                 , tAlias = envFromList [ a | (_, TSpec (Talias a)) <- list ]
-                 , pAlias = envFromList [ p | (_, TSpec (Palias p)) <- list ]
-                 , tAnns  = envFromList [ (i, t) | (i, Just (TType t)) <- spAn <$> dVars ]
-                 , quals  = [q         | (_, TSpec (Qual q))   <- list ]
-                 , invts  = [Loc l' t  | (_, TSpec (Invt l t)) <- list, let l' = srcPos l]
-                 } 
+    , specs  = envFromList [ a       | TSpec (Extern a)    <- list ] 
+    , sigs   = envFromList [ a       | TBind         a     <- list ] 
+    , consts = envFromList [ a       | TSpec (Meas   a)    <- list ] 
+    , defs   = envFromList [ a       | TSpec (Type   a)    <- list ] 
+    , tAlias = envFromList [ a       | TSpec (Talias a)    <- list ]
+    , pAlias = envFromList [ p       | TSpec (Palias p)    <- list ]
+    , tAnns  = foldr (envUnion . vds) envEmpty $ varDeclStmts ss
+    , quals  = [q                    | TSpec (Qual   q)    <- list ]
+    , invts  = [Loc l' t             | TSpec (Invt l t)    <- list, let l' = srcPos l]
+    } 
   where
-    list  = M.toList m
-    dVars = definedVars ss
-    spAn id = (id, M.lookup (getAnnotation id) m)    
+    list                    = concat $ M.elems m
+    
+    vds (VarDeclStmt l ds)  = mrg (prefixed $ M.lookup l m) (inlined ds)
+    vds _                   = error "BUG: Parse.mkCode"
+
+    prefixed (Just xs)      = envFromList [ a | TBind a <- xs ]
+    prefixed Nothing        = envEmpty
+
+    id (VarDecl _ i _)      = i
+
+    spAn id                 = (id, M.lookup (getAnnotation id) m)
+    inlined xs              = envFromList [(i, t) | (i, Just ans) <- spAn . id <$> xs
+                                                  , TType t <- ans ]
+
+    mrg e1 e2 
+      | not $ null un       = (die . er . head) un
+      where un              = fst <$> (envToList $ envIntersectWith const e1 e2)
+            er s            = bugMultipleAnnots (srcPos s) s
+    mrg e1 e2 
+      | otherwise           = envUnion e1 e2  
+
+
 
 -------------------------------------------------------------------------------
 -- | Parse File and Type Signatures -------------------------------------------
@@ -476,6 +488,12 @@ definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
 definedVars          :: [Statement SourceSpan] -> [Id SourceSpan]
 definedVars stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
   where 
-    fromVarDecl (VarDeclStmt _ ds) = [x | VarDecl _ x (Just _) <- ds]  
+    fromVarDecl (VarDeclStmt _ ds) = [x | VarDecl _ x (Just _) <- ds]
     fromVarDecl _                  = []
+
+varDeclStmts         :: [Statement SourceSpan] -> [Statement SourceSpan]
+varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
+  where 
+    fromVarDecl s@(VarDeclStmt _ _) = [s]
+    fromVarDecl _                   = []
 

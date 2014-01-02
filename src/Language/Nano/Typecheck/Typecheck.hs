@@ -285,9 +285,9 @@ tcStmts :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
 --------------------------------------------------------------------------------
 tcStmts γ stmts = tcSeq tcStmt γ' stmts
   where
-    γ'          = addFunBinds γ stmts
+    γ'          = addStatementFunBinds γ stmts
 
-addFunBinds = undefined
+addStatementFunBinds γ _ = γ -- undefined
 
 -------------------------------------------------------------------------------
 tcStmt  :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>

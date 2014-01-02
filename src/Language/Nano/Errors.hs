@@ -12,7 +12,7 @@ import Text.Printf
 import Text.PrettyPrint.HughesPJ
 import Language.ECMAScript3.PrettyPrint
 -- import Text.Parsec.Pos                   
-import Language.ECMAScript3.Parser.Type        (SourceSpan (..))
+import Language.ECMAScript3.Parser.Type      (SourceSpan (..))
 -- import qualified Language.Fixpoint.Types as F
 import Language.Fixpoint.Errors
 import Language.Fixpoint.PrettyPrint

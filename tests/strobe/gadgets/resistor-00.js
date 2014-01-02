@@ -14,12 +14,18 @@ var numberOfColorBands = 4;
 /*@ bandNumberValues :: [{ number | (0 <= v && v < 16) }] */
 var bandNumberValues =  [1, 0, 2, 10, 15]; // Brown, Black, Red, Empty, Blank.
 
-/*@ buttonStrs :: [string] */ 
+/*@ buttonStrs :: {[string] | (length v) = 16} */ 
 var buttonStrs = ["0black", "1brown", "2red", "3orange", "4yellow", "5green", "6blue", "7violet", "8gray", "9white", "Empty", "Tbrown", "Tred", "Tgold", "Tsilver", "Blank"];
 
 /*@ type band = { downImage : string
                 , image     : string
                 , overImage : string } */
+
+/*@ extern firstBand  :: band */
+/*@ extern secondBand :: band */
+/*@ extern thirdBand  :: band */
+/*@ extern fourthBand :: band */
+/*@ extern fifthBand  :: band */
 
 //var firstBand  = {};
 //var secondBand = {};
@@ -98,7 +104,7 @@ function view_onOpen() {
 // //		Gold		 	 5%
 // //		Silver		 	10%
  
-/*@ doBlueButton :: () => void */
+/*@ doBlackButton :: () => void */
 function doBlackButton() {
     drawNewColorBand(0);
     bandNumberValues[currentBandIndex] = 0;
@@ -231,42 +237,43 @@ function doBrownButton() {
 //     return;
 // }
 // 
-// function drawNewColorBand(color) /*: Num -> Undef */ {
-// 
-//     switch (currentBandIndex) {
-//     case 0:
-//         {
-//             firstBand.downImage = "stock_images\\Button" + buttonStrs[color] + "Down.PNG";
-//             firstBand.image = "stock_images\\Button" + buttonStrs[color] + "Normal.PNG";
-//             firstBand.overImage = "stock_images\\Button" + buttonStrs[color] + "Over.PNG";
-//             break;
-//         }
-//     case 1:
-//         {
-//             secondBand.downImage = "stock_images\\Button" + buttonStrs[color] + "Down.PNG";
-//             secondBand.image = "stock_images\\Button" + buttonStrs[color] + "Normal.PNG";
-//             secondBand.overImage = "stock_images\\Button" + buttonStrs[color] + "Over.PNG";
-//             break;
-//         }
-//     case 2:
-//         {
-//             thirdBand.downImage = "stock_images\\Button" + buttonStrs[color] + "Down.PNG";
-//             thirdBand.image = "stock_images\\Button" + buttonStrs[color] + "Normal.PNG";
-//             thirdBand.overImage = "stock_images\\Button" + buttonStrs[color] + "Over.PNG";
-//             break;
-//         }
-//     case 3:
-//         {
-//             fourthBand.downImage = "stock_images\\Button" + buttonStrs[color] + "Down.PNG";
-//             fourthBand.image = "stock_images\\Button" + buttonStrs[color] + "Normal.PNG";
-//             fourthBand.overImage = "stock_images\\Button" + buttonStrs[color] + "Over.PNG";
-//             break;
-//         }
-//     }
-// 
-//     return;
-// }
-// 
+/*@ drawNewColorBand :: (number) => void */
+function drawNewColorBand(color) {
+
+    switch (currentBandIndex) {
+    case 0:
+        {
+            firstBand.downImage = "stock_images\\Button" + buttonStrs[color] + "Down.PNG";
+            firstBand.image = "stock_images\\Button" + buttonStrs[color] + "Normal.PNG";
+            firstBand.overImage = "stock_images\\Button" + buttonStrs[color] + "Over.PNG";
+            break;
+        }
+    case 1:
+        {
+            secondBand.downImage = "stock_images\\Button" + buttonStrs[color] + "Down.PNG";
+            secondBand.image = "stock_images\\Button" + buttonStrs[color] + "Normal.PNG";
+            secondBand.overImage = "stock_images\\Button" + buttonStrs[color] + "Over.PNG";
+            break;
+        }
+    case 2:
+        {
+            thirdBand.downImage = "stock_images\\Button" + buttonStrs[color] + "Down.PNG";
+            thirdBand.image = "stock_images\\Button" + buttonStrs[color] + "Normal.PNG";
+            thirdBand.overImage = "stock_images\\Button" + buttonStrs[color] + "Over.PNG";
+            break;
+        }
+    case 3:
+        {
+            fourthBand.downImage = "stock_images\\Button" + buttonStrs[color] + "Down.PNG";
+            fourthBand.image = "stock_images\\Button" + buttonStrs[color] + "Normal.PNG";
+            fourthBand.overImage = "stock_images\\Button" + buttonStrs[color] + "Over.PNG";
+            break;
+        }
+    }
+
+    return;
+}
+
 // function doFirstBand() /*:  -> Undef */ {
 //     // Move the arrow pointer.
 //     currentColorBandArrow.y = 79;

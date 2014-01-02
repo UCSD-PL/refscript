@@ -1,5 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances         #-} 
+{-# LANGUAGE DeriveDataTypeable        #-} 
 {-# LANGUAGE UndecidableInstances      #-} 
 {-# LANGUAGE TypeSynonymInstances      #-} 
 {-# LANGUAGE TupleSections             #-}

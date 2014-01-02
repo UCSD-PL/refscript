@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE TupleSections          #-}
@@ -282,7 +283,11 @@ tcSeq f             = go []
 tcStmts :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
             TCEnv r -> [Statement (AnnSSA r)] -> TCM r ([Statement (AnnSSA r)], TCEnvO r)
 --------------------------------------------------------------------------------
-tcStmts = tcSeq tcStmt
+tcStmts γ stmts = tcSeq tcStmt γ' stmts
+  where
+    γ'          = addFunBinds γ stmts
+
+addFunBinds = undefined
 
 -------------------------------------------------------------------------------
 tcStmt  :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
@@ -441,7 +446,8 @@ tcExpr _ e@(NullLit _)
 
 tcExpr γ e@(VarRef l x)
   = case tcEnvFindTy x γ of 
-      Nothing -> logError (errorUnboundIdEnv (ann l) x (tce_env γ)) (e, tErr)
+      Nothing -> die $ errorUnboundId (ann l) x
+      -- Nothing -> logError (errorUnboundIdEnv (ann l) x (tce_env γ)) (e, tErr)
       Just z  -> return $ (e, z)
 
 tcExpr γ e@(PrefixExpr _ _ _)

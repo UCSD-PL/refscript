@@ -261,7 +261,8 @@ instance IsNano (ForInit a) where
 isNanoExprStatement :: Expression a -> Bool
 isNanoExprStatement (AssignExpr _ o lv e) = isNano o && isNano lv && isNano e 
 isNanoExprStatement (CallExpr _ e es)     = all isNano (e:es)
-isNanoExprStatement e                     = errortext (text "Not Nano ExprStmt!" <+> pp e) 
+isNanoExprStatement (Cast _ e)            = isNanoExprStatement e
+isNanoExprStatement e                     = errortext (text "Not Nano ExprStmtZ!" <+> pp e) 
 -- isNanoExprStatement _                     = False
 
 

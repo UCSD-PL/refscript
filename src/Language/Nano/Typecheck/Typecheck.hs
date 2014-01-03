@@ -231,10 +231,10 @@ tcInScope γ act = accumAnn annCheck act
 
 -- tcFun    :: (F.Reftable r) => Env (RType r) -> FunctionStatement (AnnSSA r) -> TCM r (TCEnv r)
 tcFun γ (FunctionStmt l f xs body)
-  = do ft    <- getDefType f
-       let γ' = tcEnvAdds [(f, ft)] γ
-       body' <- foldM (tcFun1 γ' l f xs) body $ funTys l f xs ft
-       return   (FunctionStmt l f xs body', Just γ') 
+  = case tcEnvFindTy f γ of
+      Nothing -> die $ errorMissingSpec (srcPos l) f
+      Just ft -> do body' <- foldM (tcFun1 γ l f xs) body $ funTys l f xs ft
+                    return   (FunctionStmt l f xs body', Just γ) 
 
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
@@ -283,11 +283,16 @@ tcSeq f             = go []
 tcStmts :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
             TCEnv r -> [Statement (AnnSSA r)] -> TCM r ([Statement (AnnSSA r)], TCEnvO r)
 --------------------------------------------------------------------------------
-tcStmts γ stmts = tcSeq tcStmt γ' stmts
-  where
-    γ'          = addStatementFunBinds γ stmts
+tcStmts γ stmts 
+  = do γ' <- addStatementFunBinds γ stmts
+       tcSeq tcStmt γ' stmts
 
-addStatementFunBinds γ _ = γ -- undefined
+addStatementFunBinds γ stmts 
+  = do fts   <- forM fns $ \f -> (f,) <$> getDefType f
+       return $ tcEnvAdds fts γ
+    where
+       fs  = concatMap getFunctionStatements stmts
+       fns = [f | FunctionStmt _ f _ _ <- fs]
 
 -------------------------------------------------------------------------------
 tcStmt  :: (Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) =>
@@ -446,8 +451,8 @@ tcExpr _ e@(NullLit _)
 
 tcExpr γ e@(VarRef l x)
   = case tcEnvFindTy x γ of 
-      Nothing -> die $ errorUnboundId (ann l) x
-      -- Nothing -> logError (errorUnboundIdEnv (ann l) x (tce_env γ)) (e, tErr)
+      -- Nothing -> die $ errorUnboundId (ann l) x
+      Nothing -> die $ errorUnboundIdEnv (ann l) x (tce_env γ)
       Just z  -> return $ (e, z)
 
 tcExpr γ e@(PrefixExpr _ _ _)

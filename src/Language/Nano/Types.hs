@@ -27,6 +27,9 @@ module Language.Nano.Types (
   , getAssume
   , getAssert
   , getInvariant
+  , getFunctionStatements 
+  , getFunctionIds
+
   , isSpecification
   , returnSymbol
   , returnId
@@ -341,6 +344,18 @@ getStatementPred _ _
 
 getSpec   :: (Statement a -> Maybe F.Pred) -> [Statement a] -> F.Pred 
 getSpec g = mconcat . catMaybes . map g
+
+getFunctionStatements :: Statement a -> [Statement a]
+getFunctionStatements s = [fs | fs@(FunctionStmt _ _ _ _) <- flattenStmt s]
+
+getFunctionIds :: Statement a -> [Id a]
+getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
+
+-- getFunctionStatements s@(FunctionStmt _ _ _ _) = [s] 
+-- getFunctionStatements (BlockStmt _ ss)         = concatMap getFunctionStatements ss
+-- getFunctionStatements _                        = []
+
+
 
 ------------------------------------------------------------------
 -- | Converting `ECMAScript3` values into `Fixpoint` values, 

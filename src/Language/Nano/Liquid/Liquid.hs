@@ -102,11 +102,9 @@ initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext (sigs pgm) (tAnn
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = do ft             <- freshTyFun g l f =<< getDefType f
-       g'             <- envAdds [(f, ft)] g
-       forM (funTys l f xs ft) $ consFun1 l g' f xs body
-       return g'
-
+  = do forM (funTys l f xs $ envFindTy f g) $ consFun1 l g f xs body
+       return g
+       
 consFun _ s 
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
 
@@ -129,7 +127,17 @@ envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g)
 --------------------------------------------------------------------------------
 consStmts :: CGEnv -> [Statement AnnTypeR]  -> CGM (Maybe CGEnv) 
 --------------------------------------------------------------------------------
-consStmts = consSeq consStmt
+consStmts g stmts 
+  = do g' <- addStatementFunBinds g stmts 
+       consSeq consStmt g' stmts
+
+addStatementFunBinds g stmts 
+  = do let fs  = concatMap getFunctionStatements stmts
+       fts    <- forM fs $ \(FunctionStmt l f _ _) -> (f,) <$> (freshTyFun g l f =<< getDefType f)
+       envAdds fts g
+
+
+
 
 --------------------------------------------------------------------------------
 consStmt :: CGEnv -> Statement AnnTypeR -> CGM (Maybe CGEnv) 

@@ -14,7 +14,7 @@ var numberOfColorBands = 4;
 /*@ bandNumberValues :: [{ number | (0 <= v && v < 16) }] */
 var bandNumberValues =  [1, 0, 2, 10, 15]; // Brown, Black, Red, Empty, Blank.
 
-/*@ buttonStrs :: {[string] | (length v) = 16} */ 
+/*@ buttonStrs :: [string] */ 
 var buttonStrs = ["0black", "1brown", "2red", "3orange", "4yellow", "5green", "6blue", "7violet", "8gray", "9white", "Empty", "Tbrown", "Tred", "Tgold", "Tsilver", "Blank"];
 
 /*@ type band = { downImage : string
@@ -209,6 +209,7 @@ function doBrownButton() {
 //     return;
 // }
 // 
+
 // function doSecondToleranceButton() /*:  -> Undef */ {
 //     if (numberOfColorBands == 4) {
 //         fourthBand.downImage = secondToleranceButton.image;
@@ -237,8 +238,7 @@ function doBrownButton() {
 //     return;
 // }
 // 
-/*@ drawNewColorBand :: (number) => void */
-function drawNewColorBand(color) {
+function drawNewColorBand(color) /*: Num -> Undef */ {
 
     switch (currentBandIndex) {
     case 0:
@@ -273,7 +273,7 @@ function drawNewColorBand(color) {
 
     return;
 }
-
+// 
 // function doFirstBand() /*:  -> Undef */ {
 //     // Move the arrow pointer.
 //     currentColorBandArrow.y = 79;

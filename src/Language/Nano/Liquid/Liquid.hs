@@ -463,10 +463,10 @@ consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> C
    
       (a) xtIs         <- fresh G [ G(x) | x <- Φ]
       (b) GI            = G, xtIs
-      (c) G            |- G(x)  <: GI(x)  , ∀x∈Φ
+      (c) G            |- G(x)  <: GI(x)  , ∀x∈Φ      [base]
       (d) GI           |- cond : (xc, GI')
       (e) GI', xc:true |- body : GI''
-      (f) GI''         |- GI''(x') <: GI(x)[Φ'/Φ]
+      (f) GI''         |- GI''(x') <: GI(x)[Φ'/Φ]     [step]
       ---------------------------------------------------------
           G            |- while[Φ] (cond) body :: GI', xc:false
 
@@ -486,20 +486,30 @@ consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> C
         i_2' = i_1;
       }
 
-ROT: Note that since the `body` is checked under `GI` which contains the xtI binder
-ROT: for the phi-variables, the rule for assignment `tcAsgn` generates the appropriate
-ROT: subtyping constraint for the values assigned to the phi-variable in (d)
-ROT: Thus, we need only generate a subtyping constraint for the base value in (c).
-
  -}
 
 consWhile g l cond body 
-  = do (gI, xs', _, _, tIs) <- envJoinExt l g g g                                    -- (a), (b)
-       let xs               = tracePP ("consWhile-envJoinExt: ") xs'
-       zipWithM_ (subTypeContainers "While-Pre" l g) ((`envFindTy` g) <$> xs) tIs   -- (c)
-       (xc, gI')           <- consExpr gI cond                                      -- (d)
-       consStmt (envAddGuard xc True gI') body                                      -- (e)
+  = do (gI, xs, _, _, tIs) <- envJoinExt l g g g                      -- (a), (b)
+       _                   <- consWhileBase l xs tIs g                -- (c)
+       (xc, gI')           <- consExpr gI cond                        -- (d)
+       z                   <- consStmt (envAddGuard xc True gI') body -- (e)
+       whenJustM z          $ consWhileStep l xs tIs                  -- (f) 
        return               $ envAddGuard xc False gI'
+
+consWhileBase l xs tIs g    = zipWithM_ (subTypeContainers "WhileBase" l g) xts_base tIs      -- (c)
+  where 
+   xts_base                 = (`envFindTy` g) <$> xs
+ 
+consWhileStep l xs tIs gI'' = zipWithM_ (subTypeContainers "WhileStep" l gI'') xts_step tIs'  -- (f)
+  where 
+    xts_step                = (`envFindTy` gI'') <$> xs'
+    tIs'                    = F.subst su <$> tIs
+    xs'                     = mkNextId   <$> xs
+    su                      = F.mkSubst   $  safeZip "consWhileStep" (F.symbol <$> xs) (F.eVar <$> xs')
+
+whenJustM Nothing  _ = return ()
+whenJustM (Just x) f = f x
+
 
 
 {- OLD/DEPRECATED.

@@ -216,6 +216,7 @@ tcEnvMem x                   = envMem x      . tce_env
 tcEnvFindTy x                = envFindTy x   . tce_env
 tcEnvFindReturn              = envFindReturn . tce_env
 tcEnvFindSpec x              = envFindTy x   . tce_anns
+tcEnvFindTyOrDie l x         = fromMaybe ugh . tcEnvFindTy x  where ugh = die $ errorUnboundId (ann l) x
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Scoped Block in Environment ------------------------------------
@@ -371,8 +372,11 @@ tcStmt γ (IfStmt l e s1 s2)
 tcStmt γ (WhileStmt l c b) 
   = do (c', t)   <- tcExpr γ c
        unifyTypeM (srcPos l) "While condition" c t tBool
-       (b', _)   <- tcStmt γ b
+       (b', _)   <- tcStmt γ' b
        return       (WhileStmt l c' b', Just γ)  
+    where 
+       xts'       = [(mkNextId x, tcEnvFindTyOrDie l x γ) | x <- phiVarsAnnot l]
+       γ'         = tcEnvAdds xts' γ
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt l ds)
@@ -450,10 +454,12 @@ tcExpr _ e@(NullLit _)
   = return (e, tNull)
 
 tcExpr γ e@(VarRef l x)
-  = case tcEnvFindTy x γ of 
-      -- Nothing -> die $ errorUnboundId (ann l) x
-      Nothing -> die $ errorUnboundIdEnv (ann l) x (tce_env γ)
-      Just z  -> return $ (e, z)
+  = return (e, tcEnvFindTyOrDie l x γ) 
+  
+  -- case tcEnvFindTy x γ of 
+  --     -- Nothing -> die $ errorUnboundId (ann l) x
+  --     Nothing -> die $ errorUnboundIdEnv (ann l) x (tce_env γ)
+  --     Just z  -> return $ (e, z)
 
 tcExpr γ e@(PrefixExpr _ _ _)
   = tcCall γ e 
@@ -644,7 +650,7 @@ envJoin _ _ x Nothing           = return x
 envJoin l γ (Just γ1) (Just γ2) = envJoin' l γ γ1 γ2 
 
 envJoin' l γ γ1 γ2
-  = do let xs = concat [x | PhiVar x <- ann_fact l]
+  = do let xs = phiVarsAnnot l -- concat [x | PhiVar x <- ann_fact l]
        ts    <- mapM (getPhiType l γ1 γ2) xs
        -- NOTE: Instantiation on arrays could have happened in the branches and
        -- then lost if the variables are no Phi. So replay the application of

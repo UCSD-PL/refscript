@@ -32,6 +32,8 @@ JS Features
 Tool/Implementation
 -------------------
 
+  - whilefix
+  
   - Annotation Parser [remove `defs` field from `Nano`]
     - Need to find a way to allow the language-ecmascript parser to parse 
       comments that start with "/*" and end with "*/"
@@ -54,19 +56,31 @@ Tool/Implementation
 
   - Do not add casts deep inside objects. Eg: tc/pos/listmap02.js 
 
+whilefix
+--------
+
+   liquid/pos/loops/while-04.js,
+
+    + add NEXT-VAR (Language.Nano.Types)
+    + add NEXT-VAR-ASSIGN (Language.Nano.SSA)
+    - update tcWhile to add NEXT-VAR binders to body in which env is checked
+    - consWhile (Language.Nano.Liquid.Liquid)
 
 Failing Tests 
 -------------
 
 [ARRAY.LENGTH]
-  
-    liquid/pos/arrays/safemap.js
+  liquid/pos/arrays/safemap.js
 
 [METHODS]
+  liquid/pos/objects/meth-00.js
 
-    liquid/pos/objects/meth-00.js
+[REGEXP-PARSE]
+  liquid/pos/objects/obj-02-00.js,
 
-Failed 30 tests: 
+[SWITCH]
+  liquid/pos/objects/switch-00.js
+
 
 [TC-CRASH]
  liquid/neg/misc/unite-00.js,
@@ -93,19 +107,11 @@ Failed 30 tests:
 
 [WIERD-INVARIANT]
  liquid/pos/loops/obj-02.js,
- 
 
 [TC-BETTER-ERROR]
  liquid/neg/operators/sum-return-missing.js, ("missing return statement")
 
-[WHILE-SSA] 
- liquid/pos/loops/while-04.js,
 
-[TODO]
- liquid/pos/arrays/safemap.js,
- liquid/pos/objects/meth-00.js,
- liquid/pos/objects/obj-02-00.js,
- liquid/pos/objects/switch-00.js
 
 
 

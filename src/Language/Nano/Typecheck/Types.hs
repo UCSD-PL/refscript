@@ -86,7 +86,8 @@ module Language.Nano.Typecheck.Types (
   , UFact
   , Fact (..)
   , Cast(..)
-  , varDeclAnnot
+  -- , varDeclAnnot
+  , phiVarsAnnot
 
   -- * Aliases for annotated Source 
   , AnnBare, UAnnBare
@@ -708,8 +709,9 @@ instance (F.Reftable r, PP r) => PP (AnnInfo r) where
 instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
 
-varDeclAnnot v = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
---type SST r     = (SourceSpan, Maybe (RType r))
+-- varDeclAnnot v = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
+
+phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
 
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------

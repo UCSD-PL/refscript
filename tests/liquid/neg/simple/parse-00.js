@@ -1,4 +1,6 @@
-var c = /*: {number | v < 0} */ 1;
+/*@ c :: {number | v < 0} */ 
+var c = 1;
 
-var e = /*: {string | v = "aaaa"} */ "aaa";
+/*@ e :: {string | v = "aaaa"} */
+var e =  "aaa";
 

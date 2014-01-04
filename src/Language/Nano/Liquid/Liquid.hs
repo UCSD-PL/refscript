@@ -300,9 +300,11 @@ consExpr g (BracketRef l e (StringLit _ fld))
   = snd <$> consPropRead getProp g l e fld
 
 -- e[i]
+-- TODO:ARRAY-TUPLE-CHECK (tests/liquid/neg/arrays/arr-00.js)
+-- TODO:ARRAY-TUPLE-CHECK (tests/liquid/neg/arrays/arr-01.js)
 consExpr g (BracketRef l e (IntLit _ fld)) 
   = snd <$> consPropRead getIdx g l e fld 
-  
+
 -- e1[e2]
 consExpr g (BracketRef l e1 e2) 
   = consCall g l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ renv g 
@@ -491,8 +493,8 @@ consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> C
  -}
 
 consWhile g l cond body 
-  = do (gI, xs, _, _, tIs) <- envJoinExt l g g g                                    -- (a), (b)
-       -- let xs               = tracePP ("consWhile-envJoinExt: " ++ ppshow gI) xs'
+  = do (gI, xs', _, _, tIs) <- envJoinExt l g g g                                    -- (a), (b)
+       let xs               = tracePP ("consWhile-envJoinExt: ") xs'
        zipWithM_ (subTypeContainers "While-Pre" l g) ((`envFindTy` g) <$> xs) tIs   -- (c)
        (xc, gI')           <- consExpr gI cond                                      -- (d)
        consStmt (envAddGuard xc True gI') body                                      -- (e)
@@ -576,7 +578,7 @@ envJoin' l g g1 g2
        return g'
 
 envJoinExt l g g1 g2 
-  = do  let xs   = [x | PhiVar [x] <- ann_fact l] 
+  = do  let xs   = concat [xs | PhiVar xs <- ann_fact l] 
             t1s  = (`envFindTy` g1) <$> xs 
             t2s  = (`envFindTy` g2) <$> xs
         when (length t1s /= length t2s) $ cgError l (bugBadPhi (srcPos l) t1s t2s)

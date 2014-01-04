@@ -66,19 +66,11 @@ Failing Tests
 
     liquid/pos/objects/meth-00.js
 
-
-Failed 32 tests: 
+Failed 30 tests: 
  liquid/neg/arrays/arr-00.js,
  liquid/neg/arrays/arr-01.js,
- liquid/neg/loops/for-01.js,
- liquid/neg/loops/for-02.js,
  liquid/neg/loops/for-rec-00.js,
  liquid/neg/loops/for-rec-01.js,
- liquid/neg/loops/obj-01.js,
- liquid/neg/loops/obj-02.js,
- liquid/neg/loops/while-01.js,
- liquid/neg/loops/while-02.js,
- liquid/neg/loops/while-03.js,
  liquid/neg/misc/abs-join-00.js,
  liquid/neg/misc/abs-join-01.js,
  liquid/neg/misc/driver-numargs.js,
@@ -97,6 +89,11 @@ Failed 32 tests:
  liquid/neg/simple/parse-00.js,
  liquid/neg/simple/parse-01.js,
  liquid/pos/arrays/safemap.js,
+ liquid/pos/loops/for-03.js,
+ liquid/pos/loops/obj-01.js,
+ liquid/pos/loops/obj-02.js,
+ liquid/pos/loops/while-03.js,
+ liquid/pos/loops/while-04.js,
  liquid/pos/objects/meth-00.js,
  liquid/pos/objects/obj-02-00.js,
  liquid/pos/objects/switch-00.js

@@ -225,11 +225,6 @@ consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv)
 consVarDecl g v@(VarDecl _ x (Just e)) 
   = consAsgn g x e
 
---  do (x', g') <- consExprT g ct e
---     Just <$> envAdds [(x, envFindTy x' g')] g'
---  where
---    ct = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
-
 consVarDecl g (VarDecl _ _ Nothing)
   = return $ Just g
 
@@ -497,6 +492,7 @@ consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> C
 
 consWhile g l cond body 
   = do (gI, xs, _, _, tIs) <- envJoinExt l g g g                                    -- (a), (b)
+       -- let xs               = tracePP ("consWhile-envJoinExt: " ++ ppshow gI) xs'
        zipWithM_ (subTypeContainers "While-Pre" l g) ((`envFindTy` g) <$> xs) tIs   -- (c)
        (xc, gI')           <- consExpr gI cond                                      -- (d)
        consStmt (envAddGuard xc True gI') body                                      -- (e)

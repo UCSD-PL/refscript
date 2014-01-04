@@ -350,9 +350,25 @@ envFindSpec     :: (IsLocated x, F.Symbolic x) => x -> CGEnv -> Maybe RefType
 envFindSpec x g = E.envFindTy x $ cge_spec g
 
 ---------------------------------------------------------------------------------------
-envFindAnnot     :: (IsLocated x, F.Symbolic x) => x -> CGEnv -> Maybe RefType 
+--envFindAnnot     :: (IsLocated x, F.Symbolic x) => x -> CGEnv -> Maybe RefType 
 ---------------------------------------------------------------------------------------
-envFindAnnot x g = E.envFindTy x $ cge_anns g
+-- envFindAnnot x g = tracePP ("envFindAnnot: " ++ ppshow x ++ " in " ++  ppshow xs) 
+--                  $ E.envFindTy x $ cge_anns g
+--   where 
+--     xs           = fst <$> envToList g
+
+envFindAnnot x g = msum [tAnn, tEnv] 
+  where
+    tAnn         = E.envFindTy x $ cge_anns g
+    tEnv         = E.envFindTy x $ renv     g
+
+
+-- envFindAnnot x g 
+--   | x `E.envMem` gAnns = E.envFindTy x gAnns 
+--   | otherwise          = E.envFindTy x gEnv
+--   where
+--     gAnns              = cge_anns g
+--     gEnv               = renv     g
 
 ---------------------------------------------------------------------------------------
 envToList     ::  CGEnv -> [(Id SourceSpan, RefType)]

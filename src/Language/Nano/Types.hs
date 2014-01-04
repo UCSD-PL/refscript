@@ -36,6 +36,11 @@ module Language.Nano.Types (
   , symbolId
   , mkId
 
+  -- * SSA Ids 
+  , mkNextId
+  , isNextId
+  , mkSSAId
+
   -- * Error message
   , convertError
 
@@ -64,7 +69,8 @@ import           Data.Hashable
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.Monoid                        (Monoid (..))
-import           Data.Maybe                         (catMaybes)
+import           Data.Maybe                         (maybe, catMaybes)
+import           Data.List                          (stripPrefix)
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
@@ -299,6 +305,10 @@ getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
 
 mkId = Id (initialPos "") 
 
+-----------------------------------------------------------------------------------
+-- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 
+-----------------------------------------------------------------------------------
+
 returnName :: String
 returnName = "$result"
 
@@ -496,3 +506,21 @@ data BuiltinOp = BIUndefined
 
 instance PP BuiltinOp where
   pp = text . show 
+
+
+--------------------------------------------------------------------------------
+-- | Manipulating SSA Ids ------------------------------------------------------
+--------------------------------------------------------------------------------
+
+mkSSAId :: SourceSpan -> Id SourceSpan -> Int -> Id SourceSpan 
+mkSSAId l (Id _ x) n = Id l (x ++ ssaStr ++ show n)  
+
+mkNextId :: Id a -> Id a
+mkNextId (Id a x) =  Id a $ nextStr ++ x
+
+isNextId :: Id a -> Maybe (Id a)
+isNextId (Id a s) = Id a <$> stripPrefix nextStr s
+
+nextStr = "_NEXT"
+ssaStr  = "_SSA_"
+

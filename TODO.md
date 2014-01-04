@@ -67,35 +67,45 @@ Failing Tests
     liquid/pos/objects/meth-00.js
 
 Failed 30 tests: 
- liquid/neg/arrays/arr-00.js,
- liquid/neg/arrays/arr-01.js,
+
+[TC-CRASH]
+ liquid/neg/misc/unite-00.js,
+ liquid/neg/misc/unite-01.js, 
  liquid/neg/loops/for-rec-00.js,
  liquid/neg/loops/for-rec-01.js,
- liquid/neg/misc/abs-join-00.js,
- liquid/neg/misc/abs-join-01.js,
  liquid/neg/misc/driver-numargs.js,
  liquid/neg/misc/global.js,
- liquid/neg/misc/unite-00.js,
- liquid/neg/misc/unite-01.js,
  liquid/neg/objects/obj-05.js,
  liquid/neg/operators/id-01.js,
  liquid/neg/operators/stmt-01.js,
  liquid/neg/operators/sum-join-unbound.js,
- liquid/neg/operators/sum-return-missing.js,
  liquid/neg/simple/glob-000.js,
  liquid/neg/simple/glob-001.js,
  liquid/neg/simple/glob-03.js,
  liquid/neg/simple/glob-04.js,
- liquid/neg/simple/parse-00.js,
- liquid/neg/simple/parse-01.js,
- liquid/pos/arrays/safemap.js,
- liquid/pos/loops/for-03.js,
- liquid/pos/loops/obj-01.js,
+
+[ARRAY-TUPLE-CHECK]
+ liquid/neg/arrays/arr-00.js,
+ liquid/neg/arrays/arr-01.js,
+
+[OBJECT-SUBTYPING?]
+ liquid/neg/loop/obj-03.js
+
+[WIERD-INVARIANT]
  liquid/pos/loops/obj-02.js,
- liquid/pos/loops/while-03.js,
+ 
+
+[TC-BETTER-ERROR]
+ liquid/neg/operators/sum-return-missing.js, ("missing return statement")
+
+[WHILE-SSA] 
  liquid/pos/loops/while-04.js,
+
+[TODO]
+ liquid/pos/arrays/safemap.js,
  liquid/pos/objects/meth-00.js,
  liquid/pos/objects/obj-02-00.js,
  liquid/pos/objects/switch-00.js
+
 
 

@@ -1,16 +1,10 @@
-
-/*@ foo :: () => { a: { number | 4 = v } } */ 
-
+/*@ foo :: () => { a: { number | 987 = v } } */ 
 function foo() {
-
   var x = { a: 1 };
-
   for (var i = 0; i < 5; i++) {
      x = { a: i };
   }
-
   return x;
-
 }
 
 /*@ qualif Poo(v:number, i:number): v = i - 1 */
@@ -19,19 +13,4 @@ function foo() {
 /*@ qualif Poo(v:number): v < 4 */
 /*@ qualif Poo(v:number): v <= 5 */
 /*@ qualif Poo(v:number): v <= 4 */
-
-// PROVE THIS FIRST...
-/*@ bar :: () => {number | v = 4 } */ 
-function bar() {
-  var z = 0;
-  var i = 1;
-  
-  while (i < 5){
-    z = i;
-    i = i + 1;
-  }
-
-  return z;
-}
-
 

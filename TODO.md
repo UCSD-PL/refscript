@@ -81,6 +81,9 @@ Failing Tests
 [SWITCH]
   liquid/pos/objects/switch-00.js
 
+[ARRAY-TUPLE-CHECK]
+ liquid/neg/arrays/arr-00.js,
+ liquid/neg/arrays/arr-01.js,
 
 [TC-CRASH]
  liquid/neg/misc/unite-00.js,
@@ -99,17 +102,10 @@ Failing Tests
  liquid/neg/simple/glob-04.js,
  liquid/neg/simple/parse-01.js,
 
-[ARRAY-TUPLE-CHECK]
- liquid/neg/arrays/arr-00.js,
- liquid/neg/arrays/arr-01.js,
-
-[OBJECT-SUBTYPING?]
- liquid/neg/loop/obj-03.js
+[TC-BETTER-ERROR]
+ liquid/neg/operators/sum-return-missing.js, ("missing return statement")
 
 [WIERD-INVARIANT]
  liquid/pos/loops/obj-02.js,
-
-[TC-BETTER-ERROR]
- liquid/neg/operators/sum-return-missing.js, ("missing return statement")
 
 

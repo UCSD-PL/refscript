@@ -86,10 +86,7 @@ type AnnTypeR    = AnnType F.Reft
 -------------------------------------------------------------------------------------
 
 data CGEnv   
-  = CGE { 
-         -- TODO: add opts 
-         --opts    :: OptionConf
-          renv     :: !(Env RefType) -- ^ bindings in scope 
+  = CGE { renv     :: !(Env RefType) -- ^ bindings in scope 
         , fenv     :: F.IBindEnv     -- ^ fixpoint bindings
         , guards   :: ![F.Pred]      -- ^ branch target conditions  
         , cge_ctx  :: !IContext      -- ^ intersection-type context 

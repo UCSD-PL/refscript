@@ -461,11 +461,12 @@ consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> C
 
 {- Typing Rule for `while (cond) {body}`
    
-      (a) xtIs         <- fresh G [ G(x) | x <- xs]
+      (a) xtIs         <- fresh G [ G(x) | x <- Φ]
       (b) GI            = G, xtIs
       (c) G            |- G(x)  <: GI(x)  , ∀x∈Φ
       (d) GI           |- cond : (xc, GI')
-      (e) GI', xc:true |- body : _ 
+      (e) GI', xc:true |- body : GI''
+      (f) GI''         |- GI''(x') <: GI(x)[Φ'/Φ]
       ---------------------------------------------------------
           G            |- while[Φ] (cond) body :: GI', xc:false
 
@@ -481,14 +482,14 @@ consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> C
       i_0 = 0;
       i_2 = i_0;
       while [i_2] (i_2 < n) {
-        i_1 = i_2 + 1;
-        i_2 = i_1;
+        i_1  = i_2 + 1;
+        i_2' = i_1;
       }
 
-   Note that since the `body` is checked under `GI` which contains the xtI binder
-   for the phi-variables, the rule for assignment `tcAsgn` generates the appropriate
-   subtyping constraint for the values assigned to the phi-variable in (d)
-   Thus, we need only generate a subtyping constraint for the base value in (c).
+ROT: Note that since the `body` is checked under `GI` which contains the xtI binder
+ROT: for the phi-variables, the rule for assignment `tcAsgn` generates the appropriate
+ROT: subtyping constraint for the values assigned to the phi-variable in (d)
+ROT: Thus, we need only generate a subtyping constraint for the base value in (c).
 
  -}
 

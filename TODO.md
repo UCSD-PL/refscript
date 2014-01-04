@@ -97,6 +97,7 @@ Failing Tests
  liquid/neg/simple/glob-001.js,
  liquid/neg/simple/glob-03.js,
  liquid/neg/simple/glob-04.js,
+ liquid/neg/simple/parse-01.js,
 
 [ARRAY-TUPLE-CHECK]
  liquid/neg/arrays/arr-00.js,
@@ -110,8 +111,5 @@ Failing Tests
 
 [TC-BETTER-ERROR]
  liquid/neg/operators/sum-return-missing.js, ("missing return statement")
-
-
-
 
 

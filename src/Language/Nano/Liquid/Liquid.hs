@@ -56,7 +56,8 @@ verifyFile f
        verb  <- V.getVerbosity
        let p' = expandAliases $ patchTypeAnnots $ ssaTransform p
        case typeCheck verb p' of
-         Left errs -> return $ (A.NoAnn, F.Crash errs "Type Errors")
+         Left errs -> return $ (A.NoAnn, F.Unsafe errs)
+         -- Left errs -> return $ (A.NoAnn, F.Crash errs "Type Errors")
          Right p'  -> reftypeCheck cfg f p'
 
 -- DEBUG VERSION 

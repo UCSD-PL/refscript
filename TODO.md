@@ -56,16 +56,6 @@ Tool/Implementation
 
   - Do not add casts deep inside objects. Eg: tc/pos/listmap02.js 
 
-whilefix
---------
-
-   liquid/pos/loops/while-04.js,
-
-    + add NEXT-VAR (Language.Nano.Types)
-    + add NEXT-VAR-ASSIGN (Language.Nano.SSA)
-    - update tcWhile to add NEXT-VAR binders to body in which env is checked
-    - consWhile (Language.Nano.Liquid.Liquid)
-
 Failing Tests 
 -------------
 
@@ -97,8 +87,5 @@ Failing Tests
 
 [TC-BETTER-ERROR]
  liquid/neg/operators/sum-return-missing.js, ("missing return statement")
-
-[WIERD-INVARIANT]
- liquid/pos/loops/obj-02.js,
 
 

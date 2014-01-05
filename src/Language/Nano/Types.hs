@@ -521,6 +521,6 @@ mkNextId (Id a x) =  Id a $ nextStr ++ x
 isNextId :: Id a -> Maybe (Id a)
 isNextId (Id a s) = Id a <$> stripPrefix nextStr s
 
-nextStr = "_NEXT"
+nextStr = "_NEXT_"
 ssaStr  = "_SSA_"
 

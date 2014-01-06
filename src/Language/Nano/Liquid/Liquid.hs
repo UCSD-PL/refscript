@@ -103,7 +103,7 @@ initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext (sigs pgm) (tAnn
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = do forM (funTys l f xs $ envFindTy f g) $ consFun1 l g f xs body
+  = do cgFunTys l f xs (envFindTy f g) >>= mapM (consFun1 l g f xs body)
        return g
        
 consFun _ s 

@@ -234,7 +234,7 @@ tcInScope γ act = accumAnn annCheck act
 tcFun γ (FunctionStmt l f xs body)
   = case tcEnvFindTy f γ of
       Nothing -> die $ errorMissingSpec (srcPos l) f
-      Just ft -> do body' <- foldM (tcFun1 γ l f xs) body $ funTys l f xs ft
+      Just ft -> do body' <- foldM (tcFun1 γ l f xs) body =<< tcFunTys l f xs ft
                     return   (FunctionStmt l f xs body', Just γ) 
 
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"

@@ -117,6 +117,7 @@ module Language.Nano.Typecheck.Types (
 
 import           Text.Printf
 import           Data.Hashable
+import           Data.Either                    (partitionEithers)
 import           Data.Maybe                     (fromMaybe, listToMaybe)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.List                      as L
@@ -235,13 +236,16 @@ argsMatch ts ft = case bkFun ft of
 
 funTys l f xs ft 
   = case bkFuns ft of
-      Nothing -> die $ errorNonFunction (srcPos l) f ft 
-      Just ts -> zip ([0..] :: [Int]) [funTy l f xs t | t <- ts]
+      Nothing -> Left $ errorNonFunction (srcPos l) f ft 
+      Just ts -> 
+        case partitionEithers [funTy l f xs t | t <- ts] of 
+          ([], fts) -> Right $ zip ([0..] :: [Int]) fts
+          (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
 
 funTy l f xs (αs, yts, t) 
   | eqLen xs yts = let (su, ts') = renameBinds yts xs 
-                   in  (αs, ts', F.subst su t)    
-  | otherwise    = die $ errorArgMismatch (srcPos l)
+                   in  Right (αs, ts', F.subst su t)    
+  | otherwise    = Left $ errorArgMismatch (srcPos l)
 
 eqLen xs ys       = length xs == length ys 
 

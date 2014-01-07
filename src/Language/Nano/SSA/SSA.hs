@@ -140,7 +140,7 @@ ssaStmt (WhileStmt l cond body)
        let x2s     = [x2 | Just (SI x2) <- (`envFindTy` θ2) <$> xs]
        addAnn l    $ PhiVar x1s
        setSsaEnv θ1
-       return      $ (t, (asgn x1s x0s) `presplice` (WhileStmt l cond' (body' `splice` (asgn x1s x2s))))
+       return      $ (t, (asgn x1s x0s) `presplice` (WhileStmt l cond' (body' `splice` (asgn (mkNextId <$> x1s) x2s))))
     where 
        asgn [] _   = Nothing 
        asgn ls rs  = Just $ BlockStmt l $ zipWith (mkPhiAsgn l) ls rs
@@ -209,14 +209,18 @@ lvalExp (LBracket l e1 e2)  = BracketRef l e1 e2
 -------------------------------------------------------------------------------------
 presplice :: Maybe (Statement SourceSpan) -> Statement SourceSpan -> Statement SourceSpan
 -------------------------------------------------------------------------------------
-presplice Nothing  s' = s'
-presplice (Just s) s' = seqStmt (getAnnotation s) s s' 
+presplice z s' = splice_ (getAnnotation s') z (Just s')
 
 -------------------------------------------------------------------------------------
 splice :: Statement SourceSpan -> Maybe (Statement SourceSpan) -> Statement SourceSpan
 -------------------------------------------------------------------------------------
-splice s Nothing   = s
-splice s (Just s') = seqStmt (getAnnotation s) s s' 
+splice s z = splice_ (getAnnotation s) (Just s) z 
+
+splice_ l Nothing Nothing    = EmptyStmt l
+splice_ _ (Just s) Nothing   = s
+splice_ _ Nothing (Just s)   = s
+splice_ _ (Just s) (Just s') = seqStmt (getAnnotation s) s s'
+
 
 seqStmt _ (BlockStmt l s) (BlockStmt _ s') = BlockStmt l (s ++ s')
 seqStmt l s s'                             = BlockStmt l [s, s']

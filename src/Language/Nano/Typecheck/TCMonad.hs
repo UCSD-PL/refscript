@@ -40,6 +40,9 @@ module Language.Nano.Typecheck.TCMonad (
   , getSubst
   , setSubst
 
+  -- * Function Types
+  , tcFunTys
+
   -- * Annotations
   , accumAnn
   , getAllAnns
@@ -495,3 +498,10 @@ addCast     ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
 
 wrapCast _ f (Cast (Ann l fs) e) = Cast (Ann l (f:fs)) e
 wrapCast l f e                   = Cast (Ann l [f])    e
+
+
+tcFunTys l f xs ft = 
+  case funTys l f xs ft of 
+    Left e  -> tcError e 
+    Right a -> return a
+

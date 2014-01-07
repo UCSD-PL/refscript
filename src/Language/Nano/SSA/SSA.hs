@@ -2,7 +2,7 @@
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
-module Language.Nano.SSA.SSA (ssaTransform) where 
+module Language.Nano.SSA.SSA (ssaTransform, ssaTransform') where 
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
@@ -27,6 +27,8 @@ import           Text.Printf                        (printf)
 ssaTransform :: (F.Reftable r) => Nano SourceSpan (RType r) -> NanoSSAR r
 ----------------------------------------------------------------------------------
 ssaTransform = either throw id . execute . ssaNano 
+
+ssaTransform' = execute . ssaNano
 
 
 ----------------------------------------------------------------------------------

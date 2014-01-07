@@ -1,5 +1,5 @@
 
-/*@ type color = {number | 0 <= v && v < 16} */
+/*@ type color = {number | (0 <= v && v < 16)} */
 
 /*@ type band = { downImage : string
                 , image     : string
@@ -30,7 +30,7 @@ var buttonStrs = [ "0black"
                  , "Blank"];
 
 
-/*@ currentBandIndex :: {number | 0 <= v && v <= 3} */ 
+/*@ currentBandIndex :: {number | (0 <= v && v <= 3)} */ 
 var currentBandIndex = 0;
 
 /*@ drawNewColorBand :: (color) => void */

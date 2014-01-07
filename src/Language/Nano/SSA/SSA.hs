@@ -267,9 +267,11 @@ ssaExpr e@(VarRef l x)
        case mut of
          WriteGlobal -> return e
          ReadOnly    -> maybe e   (VarRef l) <$> findSsaEnv x
-         WriteLocal  -> maybe err (VarRef l) <$> findSsaEnv x
-    where
-      err = die $ errorUnboundId (srcPos x) x
+         WriteLocal  -> 
+           do opX <- findSsaEnv x 
+              case opX of
+                Just t  -> return   $ VarRef l t
+                Nothing -> ssaError $ errorUnboundId (srcPos x) x
 
 ssaExpr (PrefixExpr l o e)
   = PrefixExpr l o <$> ssaExpr e

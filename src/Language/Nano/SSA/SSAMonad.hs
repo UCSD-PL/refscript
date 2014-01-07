@@ -143,7 +143,7 @@ updSsaEnv l x
        case mut of
          WriteLocal  -> updSsaEnvLocal l x
          WriteGlobal -> return x
-         ReadOnly    -> die $ errorWriteImmutable l x 
+         ReadOnly    -> ssaError $ errorWriteImmutable l x 
 
 updSsaEnvLocal l x 
   = do n     <- count <$> get

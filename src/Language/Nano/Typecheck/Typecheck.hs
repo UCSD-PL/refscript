@@ -57,14 +57,18 @@ verifyFile f = do
   nano    <- parseNanoFromFile f
   V.whenLoud $ donePhase FM.Loud "Parse"
   V.whenLoud $ putStrLn . render . pp $ nano
-  let nanoSsa = patchTypeAnnots $ ssaTransform nano
-  V.whenLoud $ donePhase FM.Loud "SSA Transform"
-  V.whenLoud $ putStrLn . render . pp $ nanoSsa
-  verb      <- V.getVerbosity
-  let annp   = execute verb nanoSsa $ tcNano nanoSsa
-  r         <- either unsafe safe annp 
-  V.whenLoud $ donePhase FM.Loud "Typechecking"
-  return (NoAnn, r)
+  case ssaTransform' nano of 
+    Left err -> return (NoAnn, F.Unsafe [err])
+    Right p  -> 
+      do 
+        let nanoSsa = patchTypeAnnots p
+        V.whenLoud  $ donePhase FM.Loud "SSA Transform"
+        V.whenLoud  $ putStrLn . render . pp $ p
+        verb       <- V.getVerbosity
+        let annp    = execute verb nanoSsa $ tcNano p
+        r          <- either unsafe safe annp 
+        V.whenLoud  $ donePhase FM.Loud "Typechecking"
+        return      $ (NoAnn, r)
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppshow) 

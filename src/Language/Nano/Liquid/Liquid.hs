@@ -9,7 +9,6 @@ import           Text.Printf                        (printf)
 -- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
 import           Control.Applicative                ((<$>))
-import           Control.Exception                  (throw)
 
 import qualified Data.ByteString.Lazy               as B
 import qualified Data.HashMap.Strict                as M
@@ -51,17 +50,16 @@ import qualified System.Console.CmdArgs.Verbosity as V
 verifyFile       :: FilePath -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
 verifyFile f 
-  = do p     <- parseNanoFromFile f
-       cfg   <- getOpts 
-       verb  <- V.getVerbosity
-       let p' = expandAliases $ patchTypeAnnots $ ssaTransform p
-       case typeCheck verb p' of
-         Left errs -> return $ (A.NoAnn, F.Unsafe errs)
-         -- Left errs -> return $ (A.NoAnn, F.Crash errs "Type Errors")
-         Right p'  -> reftypeCheck cfg f p'
-
--- DEBUG VERSION 
--- ssaTransform' x = tracePP "SSATX" $ ssaTransform x 
+  = do  p1    <- parseNanoFromFile f
+        cfg   <- getOpts 
+        verb  <- V.getVerbosity
+        case ssaTransform' p1 of 
+          Left err -> return (A.NoAnn, F.Unsafe [err])
+          Right p2 -> 
+              let p3 = expandAliases $ patchTypeAnnots p2 in
+              case typeCheck verb p3 of
+                Left errs -> return $ (A.NoAnn, F.Unsafe errs)
+                Right p4  -> reftypeCheck cfg f p4
 
 --------------------------------------------------------------------------------------------------
 reftypeCheck :: Config -> FilePath -> NanoRefType -> IO (A.UAnnSol RefType, F.FixResult Error)

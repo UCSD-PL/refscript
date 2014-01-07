@@ -453,12 +453,14 @@ subType l g t1 t2 =
   do tt1   <- addInvariant t1
      tt2   <- addInvariant t2
      tdefs <- getTDefs
-     let s  = checkTypes tdefs tt1 tt2
+     s     <- checkTypes tdefs tt1 tt2
      modify $ \st -> st {cs = c s : (cs st)}
   where
     c      = uncurry $ Sub g (ci l)
-    checkTypes tdefs t1 t2 | equivWUnions tdefs t1 t2 = (t1,t2)
-    checkTypes  _ t1 t2    | otherwise                = die $ bugMalignedSubtype (srcPos l) t1 t2
+    checkTypes tdefs t1 t2 
+      | equivWUnions tdefs t1 t2 = return    $ (t1,t2)
+    checkTypes  _ t1 t2    
+      | otherwise                = cgError l $ bugMalignedSubtype (srcPos l) t1 t2
     
  -- A more verbose version
 subType' msg l g t1 t2 = 
@@ -909,6 +911,6 @@ clearProp (sy, F.RR so re)
 
 cgFunTys l f xs ft = 
   case funTys l f xs ft of 
-    Left e  -> cgError "aAAA" e 
+    Left e  -> cgError l e 
     Right a -> return a
 

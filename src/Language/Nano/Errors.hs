@@ -58,6 +58,7 @@ instance PP Error where
 ---------------------------------------------------------------------------
 
 
+bug' l s                  = err   l $ "BUG: " ++ s 
 bug l s                   = mkErr l $ "BUG: " ++ s 
 bugBadPhi l t1s t2s       = mkErr l $ printf "BUG: Unbalanced Phi at %s \n %s \n %s" (ppshow l) (ppshow t1s) (ppshow t2s)
 bugBadSubtypes l x        = mkErr l $ printf "BUG: Unexpected Subtyping Constraint \n %s" (ppshow x)

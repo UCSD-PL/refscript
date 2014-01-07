@@ -592,7 +592,7 @@ instantiate l ξ fn ft
        t'         <- freshTyArgs (srcPos l) ξ αs t 
        maybe err return $ bkFun t'
     where
-       err = die   $ errorNonFunction (ann l) fn ft
+       err = tcError   $ errorNonFunction (ann l) fn ft
 
 
 deadCast l γ e 

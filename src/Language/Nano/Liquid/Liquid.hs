@@ -413,7 +413,7 @@ instantiate l g fn ft
        t'              <- freshTyInst l g αs ts t
        maybe err return $ bkFun t' 
     where 
-       err = die $ errorNonFunction (srcPos l) fn ft  
+       err = cgError l $ errorNonFunction (srcPos l) fn ft  
     {-msg           = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)-}
 
 

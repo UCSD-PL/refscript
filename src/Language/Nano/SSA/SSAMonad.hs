@@ -21,7 +21,6 @@ module Language.Nano.SSA.SSAMonad (
    , SsaEnv
    , names
    , updSsaEnv 
-   -- , withExtSsaEnv
    , findSsaEnv
    , extSsaEnv
    , setSsaEnv
@@ -46,7 +45,7 @@ import           Data.Maybe                         (fromMaybe)
 import qualified Data.HashMap.Strict as M 
 import           Language.Nano.Errors
 import           Language.Nano.Env
-import           Language.Nano.Types                ()
+import           Language.Nano.Types                
 import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Parser.Type   (SourceSpan (..))
@@ -148,21 +147,9 @@ updSsaEnv l x
 
 updSsaEnvLocal l x 
   = do n     <- count <$> get
-       let x' = newId l x n
+       let x' = mkSSAId l x n
        modify $ \st -> st {names = envAdds [(x, SI x')] (names st)} {count = 1 + n}
        return x'
-
-newId :: SourceSpan -> Id SourceSpan -> Int -> Id SourceSpan 
-newId l (Id _ x) n = Id l (x ++ "_SSA_" ++ show n)  
-
--- updSsaEnv l x 
---   = do imm   <- isImmutable x 
---        when imm $ ssaError $ errorWriteImmutable l x
---        n     <- count <$> get
---        let x' = newId l x n
---        modify $ \st -> st {names = envAdds [(x, SI x')] (names st)} {count = 1 + n}
---        return x'
-
 
 -------------------------------------------------------------------------------
 findSsaEnv   :: Id SourceSpan -> SSAM r (Maybe (Id SourceSpan))

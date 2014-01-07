@@ -71,6 +71,9 @@ module Language.Nano.Liquid.CGMonad (
   -- * Unfolding
   , unfoldSafeCG, unfoldFirstCG
 
+  -- * Function Types
+  , cgFunTys
+
   ) where
 
 import           Data.Maybe                     (fromMaybe)
@@ -903,4 +906,9 @@ clearProp (sy, F.RR so re)
   = (sy, F.RR (F.FFunc 2 [F.FInt, F.FApp F.boolFTyCon []]) re)
   | otherwise                   
   = (clear sy, clear $ F.RR so re)
+
+cgFunTys l f xs ft = 
+  case funTys l f xs ft of 
+    Left e  -> cgError "aAAA" e 
+    Right a -> return a
 

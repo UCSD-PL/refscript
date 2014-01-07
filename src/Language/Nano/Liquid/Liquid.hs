@@ -9,7 +9,6 @@ import           Text.Printf                        (printf)
 -- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
 import           Control.Applicative                ((<$>))
-import           Control.Exception                  (throw)
 
 import qualified Data.ByteString.Lazy               as B
 import qualified Data.HashMap.Strict                as M

@@ -2,7 +2,7 @@
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
-module Language.Nano.SSA.SSA (ssaTransform) where 
+module Language.Nano.SSA.SSA (ssaTransform, ssaTransform') where 
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
@@ -27,6 +27,8 @@ import           Text.Printf                        (printf)
 ssaTransform :: (F.Reftable r) => Nano SourceSpan (RType r) -> NanoSSAR r
 ----------------------------------------------------------------------------------
 ssaTransform = either throw id . execute . ssaNano 
+
+ssaTransform' = execute . ssaNano
 
 
 ----------------------------------------------------------------------------------
@@ -265,9 +267,11 @@ ssaExpr e@(VarRef l x)
        case mut of
          WriteGlobal -> return e
          ReadOnly    -> maybe e   (VarRef l) <$> findSsaEnv x
-         WriteLocal  -> maybe err (VarRef l) <$> findSsaEnv x
-    where
-      err = die $ errorUnboundId (srcPos x) x
+         WriteLocal  -> 
+           do opX <- findSsaEnv x 
+              case opX of
+                Just t  -> return   $ VarRef l t
+                Nothing -> ssaError $ errorUnboundId (srcPos x) x
 
 ssaExpr (PrefixExpr l o e)
   = PrefixExpr l o <$> ssaExpr e

@@ -298,12 +298,6 @@ consExpr g (DotRef l e (Id _ fld))
 consExpr g (BracketRef l e (StringLit _ fld)) 
   = snd <$> consPropRead getProp g l e fld
 
--- e[i]
--- TODO:ARRAY-TUPLE-CHECK (tests/liquid/neg/arrays/arr-00.js)
--- TODO:ARRAY-TUPLE-CHECK (tests/liquid/neg/arrays/arr-01.js)
-consExpr g (BracketRef l e (IntLit _ fld)) 
-  = snd <$> consPropRead getIdx g l e fld 
-
 -- e1[e2]
 consExpr g (BracketRef l e1 e2) 
   = consCall g l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ renv g 

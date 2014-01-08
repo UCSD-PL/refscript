@@ -500,11 +500,6 @@ tcExpr γ (BracketRef l e fld@(StringLit _ s))
   = do (e', t) <- tcPropRead getProp γ l e s
        return     (BracketRef l e' fld, t)
  
--- e[i] 
-tcExpr γ (BracketRef l e fld@(IntLit _ i)) 
-  = do (e', t) <- tcPropRead getIdx γ l e i 
-       return     (BracketRef l e' fld, t)
-
 -- e1[e2]
 tcExpr γ e@(BracketRef _ _ _) 
   = tcCall γ e

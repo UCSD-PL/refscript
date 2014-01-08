@@ -247,6 +247,7 @@ instance IsNano (Statement a) where
   isNano (VarDeclStmt _ ds)     = all isNano ds 
   isNano (ReturnStmt _ e)       = isNano e 
   isNano (FunctionStmt _ _ _ b) = isNano b
+  isNano (SwitchStmt _ e cs)    = isNano e && not (null cs) && isNano cs
   isNano e                      = errortext (text "Not Nano Statement!" <+> pp e) 
 
 instance IsNano a => IsNano (Maybe a) where 
@@ -271,7 +272,41 @@ isNanoExprStatement (Cast _ e)            = isNanoExprStatement e
 isNanoExprStatement e                     = errortext (text "Not Nano ExprStmtZ!" <+> pp e) 
 -- isNanoExprStatement _                     = False
 
+-- | Switch Statement
 
+-- Is Nano-js code if each clause ends with a break statement
+
+instance IsNano (CaseClause a) where
+  isNano (CaseClause _ e st) = isNano e && holdsInit isNano st' && endsWithBreak st'
+    where st' = concatMap flattenStmt st
+  isNano (CaseDefault _  st) =             holdsInit isNano st' && endsWithBreak st'
+    where st' = concatMap flattenStmt st
+
+class EndsWithBreak a where
+  endsWithBreak :: a -> Bool
+
+instance EndsWithBreak (Statement a) where
+  endsWithBreak (BlockStmt _ xs)      = endsWithBreak xs
+  endsWithBreak (BreakStmt _ Nothing) = True
+  endsWithBreak _                     = False
+
+instance EndsWithBreak ([Statement a]) where
+  endsWithBreak [] = False
+  endsWithBreak xs = endsWithBreak $ last xs
+
+instance IsNano [(CaseClause a)] where 
+  isNano [] = False
+  isNano xs = all isNano xs && holdsInit (not . defaultC) xs
+    where
+      defaultC (CaseClause _ _ _) = False
+      defaultC (CaseDefault _ _ ) = True
+  isNano xs | otherwise           
+            = errortext (text "Not Nano [CaseClause]!" <+> pp xs)
+
+-- | Check if `p` hold for all xs but the last one.  
+holdsInit :: (a -> Bool) -> [a] -> Bool
+holdsInit _ [] = True
+holdsInit p xs = all p $ init xs
 
 -- | Trivial Syntax Checking 
 

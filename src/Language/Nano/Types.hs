@@ -266,10 +266,11 @@ instance IsNano (ForInit a) where
 -- | Holds for `Expression` that is a valid side-effecting `Statement` 
 
 isNanoExprStatement :: Expression a -> Bool
-isNanoExprStatement (AssignExpr _ o lv e) = isNano o && isNano lv && isNano e 
+isNanoExprStatement (AssignExpr _ o lv e) = isNano o && isNano lv && isNano e
 isNanoExprStatement (CallExpr _ e es)     = all isNano (e:es)
 isNanoExprStatement (Cast _ e)            = isNanoExprStatement e
-isNanoExprStatement e                     = errortext (text "Not Nano ExprStmtZ!" <+> pp e) 
+isNanoExprStatement e@(FuncExpr _ _ _ _ ) = errortext (text "Unannotated function expression" <+> pp e)
+isNanoExprStatement e                     = errortext (text "Not Nano ExprStmtZ!" <+> pp e)
 -- isNanoExprStatement _                     = False
 
 -- | Switch Statement

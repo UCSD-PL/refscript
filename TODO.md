@@ -50,6 +50,11 @@ Tool/Implementation
 
   - Do not add casts deep inside objects. Eg: tc/pos/listmap02.js 
 
+  - There is a confusion with reserved type names (e.g. "null") and defined
+    type (any identifier can be considered as a defined type). So it's very easy
+    to confuse "null" with "Null". So disallow all types that are not defined
+    properly (i.e. through alias, type etc.)
+
 Failing Tests 
 -------------
 

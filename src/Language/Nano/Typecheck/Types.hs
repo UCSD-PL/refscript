@@ -31,6 +31,7 @@ module Language.Nano.Typecheck.Types (
   -- * Predicates on Types 
   , isTop
   , isNull
+  , isVoid
   , isUndefined
   , isObj
   , isUnion
@@ -338,6 +339,10 @@ isUndefined _                   = False
 isNull :: RType r -> Bool
 isNull (TApp TNull _ _)   = True 
 isNull _                  = False
+
+isVoid :: RType r -> Bool
+isVoid (TApp TVoid _ _)   = True 
+isVoid _                  = False
 
 isObj :: RType r -> Bool
 isObj (TObj _ _)        = True

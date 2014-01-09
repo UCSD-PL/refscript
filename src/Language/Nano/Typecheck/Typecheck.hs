@@ -234,7 +234,6 @@ tcInScope γ act = accumAnn annCheck act
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
--- tcFun    :: (F.Reftable r) => Env (RType r) -> FunctionStatement (AnnSSA r) -> TCM r (TCEnv r)
 tcFun γ (FunctionStmt l f xs body)
   = case tcEnvFindTy f γ of
       Nothing -> die $ errorMissingSpec (srcPos l) f
@@ -247,10 +246,10 @@ tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l f body t
   where 
     γ'                              = envAddFun l f i αs xs ts t γ 
 
-tcFunBody γ l f body t
-  = do (body', q)     <- tcStmts γ body
-       when (isJust q) $ void $ unifyTypeM (srcPos l) "Missing return" f tVoid t
-       return body'
+tcFunBody γ l f body t = liftM2 (,) (tcStmts γ body) getTDefs >>= ret
+  where
+    ret ((_, Just _), d) | not (isSubType d t tVoid) = tcError $ errorMissingReturn (srcPos l)
+    ret ((b, _     ), _) | otherwise                 = return b
 
 envAddFun _ f i αs xs ts t = tcEnvAdds tyBinds 
                            . tcEnvAdds (varBinds xs ts) 

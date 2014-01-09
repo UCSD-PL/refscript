@@ -54,21 +54,24 @@ import qualified System.Console.CmdArgs.Verbosity as V
 verifyFile :: FilePath -> IO (UAnnSol a, F.FixResult Error)
 --------------------------------------------------------------------------------
 verifyFile f = do 
-  nano    <- parseNanoFromFile f
-  V.whenLoud $ donePhase FM.Loud "Parse"
-  V.whenLoud $ putStrLn . render . pp $ nano
-  case ssaTransform' nano of 
-    Left err -> return (NoAnn, F.Unsafe [err])
-    Right p  -> 
-      do 
-        let nanoSsa = patchTypeAnnots p
-        V.whenLoud  $ donePhase FM.Loud "SSA Transform"
-        V.whenLoud  $ putStrLn . render . pp $ p
-        verb       <- V.getVerbosity
-        let annp    = execute verb nanoSsa $ tcNano p
-        r          <- either unsafe safe annp 
-        V.whenLoud  $ donePhase FM.Loud "Typechecking"
-        return      $ (NoAnn, r)
+  p <- parseNanoFromFile f
+  case p of 
+    Left err -> return (NoAnn, F.Unsafe [err]) 
+    Right nano -> 
+      do  V.whenLoud $ donePhase FM.Loud "Parse"
+          V.whenLoud $ putStrLn . render . pp $ nano
+          case ssaTransform' nano of 
+            Left err -> return (NoAnn, F.Unsafe [err])
+            Right p  -> 
+              do 
+                let nanoSsa = patchTypeAnnots p
+                V.whenLoud  $ donePhase FM.Loud "SSA Transform"
+                V.whenLoud  $ putStrLn . render . pp $ p
+                verb       <- V.getVerbosity
+                let annp    = execute verb nanoSsa $ tcNano p
+                r          <- either unsafe safe annp 
+                V.whenLoud  $ donePhase FM.Loud "Typechecking"
+                return      $ (NoAnn, r)
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppshow) 

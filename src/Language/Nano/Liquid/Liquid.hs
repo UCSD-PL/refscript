@@ -50,16 +50,20 @@ import qualified System.Console.CmdArgs.Verbosity as V
 verifyFile       :: FilePath -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
 verifyFile f 
-  = do  p1    <- parseNanoFromFile f
-        cfg   <- getOpts 
-        verb  <- V.getVerbosity
-        case ssaTransform' p1 of 
-          Left err -> return (A.NoAnn, F.Unsafe [err])
-          Right p2 -> 
-              let p3 = expandAliases $ patchTypeAnnots p2 in
-              case typeCheck verb p3 of
-                Left errs -> return $ (A.NoAnn, F.Unsafe errs)
-                Right p4  -> reftypeCheck cfg f p4
+  = do  p0 <- parseNanoFromFile f
+        case p0 of 
+          Left err -> return (A.NoAnn, F.Unsafe [err]) 
+          Right p1 ->
+            do
+              cfg   <- getOpts 
+              verb  <- V.getVerbosity
+              case ssaTransform' p1 of 
+                Left err -> return (A.NoAnn, F.Unsafe [err])
+                Right p2 -> 
+                    let p3 = expandAliases $ patchTypeAnnots p2 in
+                    case typeCheck verb p3 of
+                      Left errs -> return $ (A.NoAnn, F.Unsafe errs)
+                      Right p4  -> reftypeCheck cfg f p4
 
 --------------------------------------------------------------------------------
 reftypeCheck :: Config -> FilePath -> NanoRefType -> 

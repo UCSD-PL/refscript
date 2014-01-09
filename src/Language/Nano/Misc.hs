@@ -26,6 +26,7 @@ module Language.Nano.Misc (
   , unzip4
 
   , fromJust'
+  , maybeToEither
 ) where
 
 -- import           Control.Applicative                ((<$>))
@@ -139,3 +140,6 @@ unzip4   =  foldr (\(a,b,c,d) ~(as,bs,cs,ds) -> (a:as,b:bs,c:cs,d:ds))
 
 fromJust' _ (Just a) = a
 fromJust' s _        = error s
+
+maybeToEither _ (Just a) = Right a
+maybeToEither e Nothing  = Left e

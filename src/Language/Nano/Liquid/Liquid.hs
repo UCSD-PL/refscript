@@ -61,14 +61,15 @@ verifyFile f
                 Left errs -> return $ (A.NoAnn, F.Unsafe errs)
                 Right p4  -> reftypeCheck cfg f p4
 
---------------------------------------------------------------------------------------------------
-reftypeCheck :: Config -> FilePath -> NanoRefType -> IO (A.UAnnSol RefType, F.FixResult Error)
---------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+reftypeCheck :: Config -> FilePath -> NanoRefType -> 
+  IO (A.UAnnSol RefType, F.FixResult Error)
+--------------------------------------------------------------------------------
 reftypeCheck cfg f = solveConstraints f . generateConstraints cfg
 
---------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (A.UAnnSol RefType, F.FixResult Error) 
---------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 solveConstraints f cgi 
   = do (r, s)  <- solve def f [] $ cgi_finfo cgi
        let r'   = fmap (errorLiquid . srcPos . F.sinfo) r
@@ -76,9 +77,9 @@ solveConstraints f cgi
        let sol  = applySolution s 
        return (A.SomeAnn ann sol, r') 
 
-
-
+--------------------------------------------------------------------------------
 applySolution :: F.FixSolution -> A.UAnnInfo RefType -> A.UAnnInfo RefType 
+--------------------------------------------------------------------------------
 applySolution = fmap . fmap . tx
   where
     tx s (F.Reft (x, zs))   = F.Reft (x, F.squishRefas (appSol s <$> zs))

@@ -457,12 +457,12 @@ subType l g t1 t2 =
      modify $ \st -> st {cs = c s : (cs st)}
   where
     c      = uncurry $ Sub g (ci l)
-    checkTypes tdefs t1 t2 
+    checkTypes tdefs t1 t2
       | equivWUnions tdefs t1 t2 = return    $ (t1,t2)
-    checkTypes  _ t1 t2    
+    checkTypes  _    t1 t2
       | otherwise                = cgError l $ bugMalignedSubtype (srcPos l) t1 t2
     
- -- A more verbose version
+-- A more verbose version
 subType' msg l g t1 t2 = 
   subType l g (trace (printf "SubType[%s]:\n\t%s\n\t%s" msg (ppshow t1) (ppshow t2)) t1) t2
 

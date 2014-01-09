@@ -1,23 +1,10 @@
+//TODO 
 
-
-/*@ map :: forall A B. ((A) => B, xs: { [A] | 0 <= (len v)}) => { [B] | (len v) = (len xs) } */
+/*@ map :: forall A B. ((A) => B, xs: { [A] | 0 <= (len v)}) => { [B] | (len v) = 0 } */
 function map(f, xs) {
-  
-  if (xs.length == 0) {
-    return [];
-  }
 
-  //var x = xs.pop();
-  //var y = f(x);
- 
-  //var ys = map(f,xs);
+  assert(false);
   
-  //ys.push(y); 
-  
-  //return ys;
-  
-  return [];
-
 }
 
 

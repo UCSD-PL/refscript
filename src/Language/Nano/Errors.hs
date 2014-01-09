@@ -88,6 +88,7 @@ errorMultipleCasts l cs   = mkErr l $ render $ text "Multiple Casts: " <+> (vcat
 errorNoMatchCallee l ts t = mkErr l $ render $   text "No matching callee type!" 
                                              $+$ text "Argument Types: " <+> pp ts 
                                              $+$ text "Function Type : " <+> pp t
+errorMissingReturn l      = mkErr l $ printf "BUG: Missing Return statement at %s" (ppshow l)
 
 errorNonFunction l f t    = mkErr l $ render $ text "Non-function type " 
                                                  $+$ pp f <+> text "::" <+> pp t

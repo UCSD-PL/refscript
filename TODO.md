@@ -55,6 +55,10 @@ Tool/Implementation
     to confuse "null" with "Null". So disallow all types that are not defined
     properly (i.e. through alias, type etc.)
 
+  - Array literal checks are quite slow.
+      E.g.: liquid/pos/arrays/arr-07.js
+
+
 Failing Tests 
 -------------
 

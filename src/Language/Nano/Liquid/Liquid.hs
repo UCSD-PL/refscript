@@ -238,6 +238,19 @@ consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, 
 consExprT g (ObjectLit l ps) to
   = consObjT l g ps to
 
+consExprT g e@(ArrayLit l es) (Just t)
+  = do (x, g')  <- consExpr g e
+       let te    = envFindTy x g'
+       subTypeContainers "consExprT" l g' te t
+        
+       let t' = t `strengthen` F.substa (sf (rv te) (rv t)) (rTypeReft te)
+       g'' <- envAdds [(x, t')] g'
+       return (x, g'')
+    where
+       rv                   = rTypeValueVar
+       sf s1 s2 = \s -> if s == s1 then s2
+                                   else s
+
 consExprT g e to 
   = do (x, g') <- consExpr g e
        let te   = envFindTy x g'

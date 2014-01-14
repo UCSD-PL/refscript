@@ -98,7 +98,7 @@ data CGEnv
 emptyCGEnv = CGE envEmpty F.emptyIBindEnv [] emptyContext envEmpty
 
 instance PP CGEnv where
-  pp (CGE  re _ gs ctx sp an) = vcat [pp re, pp gs, pp ctx, pp sp, pp an] 
+  pp (CGE  re _ gs ctx sp an) = vcat [pp re, text "---------", pp gs, text "--------------", pp ctx, text "------------", pp sp, text "-------------", pp an] 
 
 ----------------------------------------------------------------------------
 -- | Constraint Information ------------------------------------------------

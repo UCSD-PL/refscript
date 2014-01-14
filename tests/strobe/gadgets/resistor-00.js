@@ -20,23 +20,27 @@ var bandNumberValues =  [1, 0, 2, 10, 15]; // Brown, Black, Red, Empty, Blank.
 /*@ extern buttonStrs :: { [string] | (len v) = 16 } */
 //var buttonStrs = ["0black", "1brown", "2red", "3orange", "4yellow", "5green", "6blue", "7violet", "8gray", "9white", "Empty", "Tbrown", "Tred", "Tgold", "Tsilver", "Blank"];
 
-/*@ type color = { number | (0 <= v && v < 16) } */
+/*@ type color  = { number | (0 <= v && v < 16) } */
 
-/*@ type band = { downImage : string
-                , image     : string
-                , overImage : string } */
-
-/*@ extern firstBand  :: band */
-/*@ extern secondBand :: band */
-/*@ extern thirdBand  :: band */
-/*@ extern fourthBand :: band */
-/*@ extern fifthBand  :: band */
-
-/*@ type button = { x: number
-                  , y: number
+/*@ type button = { x         : number
+                  , y         : number
+                  , downImage : string
+                  , image     : string
+                  , overImage : string
+                  , tooltip   : string
                   } */
 
+/*@ extern firstBand             :: button */
+/*@ extern secondBand            :: button */
+/*@ extern thirdBand             :: button */
+/*@ extern fourthBand            :: button */
+/*@ extern fifthBand             :: button */
+/*@ extern firstToleranceButton  :: button */
+/*@ extern secondToleranceButton :: button */
 /*@ extern currentColorBandArrow :: button */
+/*@ extern numberOfBandsButton   :: button */
+/*@ extern noneButton            :: button */
+/*@ extern ohms                  :: button */
 
 
 // END OF DEFINITIONS
@@ -299,94 +303,98 @@ function doFourthBand() {
     return;
 }
 
-// function doFifthBand() /*:  -> Undef */ {
-//     // This is an "empty" function.  The fifth color band should only be set by the Tolerance buttons.
-//     return;
-// }
-// 
-// function doSwitchToFourBandResistor() /*:  -> Undef */ {
-//     bandNumberValues[2] = 10;
-//     thirdBand.downImage = "stock_images\\ButtonEmptyNormal.PNG";
-//     thirdBand.image = "stock_images\\ButtonEmptyNormal.PNG";
-//     thirdBand.overImage = "stock_images\\ButtonEmptyNormal.PNG";
-// 
-//     bandNumberValues[3] = 10;
-//     fourthBand.downImage = "stock_images\\ButtonEmptyNormal.PNG";
-//     fourthBand.image = "stock_images\\ButtonEmptyNormal.PNG";
-//     fourthBand.overImage = "stock_images\\ButtonEmptyNormal.PNG";
-// 
-//     bandNumberValues[4] = 15;
-//     fifthBand.downImage = "stock_images\\ButtonBlankNormal.PNG";
-//     fifthBand.image = "stock_images\\ButtonBlankNormal.PNG";
-//     fifthBand.overImage = "stock_images\\ButtonBlankNormal.PNG";
-// 
-//     firstToleranceButton.downImage = "stock_images\\ButtonTbrownDown.PNG";
-//     firstToleranceButton.image = "stock_images\\ButtonTbrownNormal.PNG";
-//     firstToleranceButton.overImage = "stock_images\\ButtonTbrownOver.PNG";
-// 
-//     secondToleranceButton.downImage = "stock_images\\ButtonTredDown.PNG";
-//     secondToleranceButton.image = "stock_images\\ButtonTredNormal.PNG";
-//     secondToleranceButton.overImage = "stock_images\\ButtonTredOver.PNG";
-// 
-//     return;
-// }
-// 
-// function doSwitchToFiveBandResistor() /*:  -> Undef */ {
-//     bandNumberValues[3] = 10;
-//     fourthBand.downImage = "stock_images\\ButtonEmptyNormal.PNG";
-//     fourthBand.image = "stock_images\\ButtonEmptyNormal.PNG";
-//     fourthBand.overImage = "stock_images\\ButtonEmptyNormal.PNG";
-// 
-//     bandNumberValues[4] = 10;
-//     fifthBand.downImage = "stock_images\\ButtonEmptyNormal.PNG";
-//     fifthBand.image = "stock_images\\ButtonEmptyNormal.PNG";
-//     fifthBand.overImage = "stock_images\\ButtonEmptyNormal.PNG";
-// 
-//     firstToleranceButton.downImage = "stock_images\\ButtonTgoldDown.PNG";
-//     firstToleranceButton.image = "stock_images\\ButtonTgoldNormal.PNG";
-//     firstToleranceButton.overImage = "stock_images\\ButtonTgoldOver.PNG";
-// 
-//     secondToleranceButton.downImage = "stock_images\\ButtonTsilverDown.PNG";
-//     secondToleranceButton.image = "stock_images\\ButtonTsilverNormal.PNG";
-//     secondToleranceButton.overImage = "stock_images\\ButtonTsilverOver.PNG";
-// 
-//     return;
-// }
-// 
-// function toggleNumberOfBandsButton() /*:  -> Undef */ {
-//     if (numberOfColorBands == 4) {
-//         numberOfColorBands = 5;
-//         numberOfBandsButton.downImage = "stock_images\\Button5Down.PNG";
-//         numberOfBandsButton.image = "stock_images\\Button5Normal.PNG";
-//         numberOfBandsButton.overImage = "stock_images\\Button5Over.PNG";
-//         fourthBand.tooltip = "Resistor's fourth color band";
-//         fifthBand.tooltip = "Resistor's tolerance band";
-//         firstToleranceButton.tooltip = "5% Gold will become the fifth band (Tolerance)";
-//         secondToleranceButton.tooltip = "10% Silver will become the fifth band (Tolerance)";
-//         noneButton.tooltip = "Remove the fifth band (Tolerance)";
-//         ohms.tooltip = "Enter an Ohmic value between 0 and 999,000,000,000";
-//         doSwitchToFiveBandResistor();
-//     } else { // numberOfColorBands == 5.
-//         numberOfColorBands = 4;
-//         numberOfBandsButton.downImage = "stock_images\\Button4Down.PNG";
-//         numberOfBandsButton.image = "stock_images\\Button4Normal.PNG";
-//         numberOfBandsButton.overImage = "stock_images\\Button4Over.PNG";
-//         fourthBand.tooltip = "Resistor's tolerance band";
-//         fifthBand.tooltip = "";
-//         firstToleranceButton.tooltip = "1% Brown will become the fourth band (Tolerance)";
-//         secondToleranceButton.tooltip = "1% Red will become the fourth band (Tolerance)";
-//         noneButton.tooltip = "Remove the fourth band (Tolerance)";
-//         ohms.tooltip = "Enter an Ohmic value between 0 and 99,000,000,000";
-//         doSwitchToFourBandResistor();
-//     }
-// 
-//     doFirstBand();
-// 
-//     doCalculateResistance();
-// 
-//     return;
-// }
-// 
+/*@ doFifthBand :: () => void */
+function doFifthBand() {
+    // This is an "empty" function.  The fifth color band should only be set by the Tolerance buttons.
+    return;
+}
+ 
+/*@ doSwitchToFourBandResistor :: () => void */
+function doSwitchToFourBandResistor() {
+    bandNumberValues[2] = 10;
+    thirdBand.downImage = "stock_images\\ButtonEmptyNormal.PNG";
+    thirdBand.image = "stock_images\\ButtonEmptyNormal.PNG";
+    thirdBand.overImage = "stock_images\\ButtonEmptyNormal.PNG";
+
+    bandNumberValues[3] = 10;
+    fourthBand.downImage = "stock_images\\ButtonEmptyNormal.PNG";
+    fourthBand.image = "stock_images\\ButtonEmptyNormal.PNG";
+    fourthBand.overImage = "stock_images\\ButtonEmptyNormal.PNG";
+
+    bandNumberValues[4] = 15;
+    fifthBand.downImage = "stock_images\\ButtonBlankNormal.PNG";
+    fifthBand.image = "stock_images\\ButtonBlankNormal.PNG";
+    fifthBand.overImage = "stock_images\\ButtonBlankNormal.PNG";
+
+    firstToleranceButton.downImage = "stock_images\\ButtonTbrownDown.PNG";
+    firstToleranceButton.image = "stock_images\\ButtonTbrownNormal.PNG";
+    firstToleranceButton.overImage = "stock_images\\ButtonTbrownOver.PNG";
+
+    secondToleranceButton.downImage = "stock_images\\ButtonTredDown.PNG";
+    secondToleranceButton.image = "stock_images\\ButtonTredNormal.PNG";
+    secondToleranceButton.overImage = "stock_images\\ButtonTredOver.PNG";
+
+    return;
+}
+
+/*@ doSwitchToFiveBandResistor :: () => void */
+function doSwitchToFiveBandResistor() {
+    bandNumberValues[3] = 10;
+    fourthBand.downImage = "stock_images\\ButtonEmptyNormal.PNG";
+    fourthBand.image = "stock_images\\ButtonEmptyNormal.PNG";
+    fourthBand.overImage = "stock_images\\ButtonEmptyNormal.PNG";
+
+    bandNumberValues[4] = 10;
+    fifthBand.downImage = "stock_images\\ButtonEmptyNormal.PNG";
+    fifthBand.image = "stock_images\\ButtonEmptyNormal.PNG";
+    fifthBand.overImage = "stock_images\\ButtonEmptyNormal.PNG";
+
+    firstToleranceButton.downImage = "stock_images\\ButtonTgoldDown.PNG";
+    firstToleranceButton.image = "stock_images\\ButtonTgoldNormal.PNG";
+    firstToleranceButton.overImage = "stock_images\\ButtonTgoldOver.PNG";
+
+    secondToleranceButton.downImage = "stock_images\\ButtonTsilverDown.PNG";
+    secondToleranceButton.image = "stock_images\\ButtonTsilverNormal.PNG";
+    secondToleranceButton.overImage = "stock_images\\ButtonTsilverOver.PNG";
+
+    return;
+}
+ 
+/*@ toggleNumberOfBandsButton :: () => void */
+function toggleNumberOfBandsButton() {
+    if (numberOfColorBands == 4) {
+        numberOfColorBands = 5;
+        numberOfBandsButton.downImage = "stock_images\\Button5Down.PNG";
+        numberOfBandsButton.image = "stock_images\\Button5Normal.PNG";
+        numberOfBandsButton.overImage = "stock_images\\Button5Over.PNG";
+        fourthBand.tooltip = "Resistor's fourth color band";
+        fifthBand.tooltip = "Resistor's tolerance band";
+        firstToleranceButton.tooltip = "5% Gold will become the fifth band (Tolerance)";
+        secondToleranceButton.tooltip = "10% Silver will become the fifth band (Tolerance)";
+        noneButton.tooltip = "Remove the fifth band (Tolerance)";
+        ohms.tooltip = "Enter an Ohmic value between 0 and 999,000,000,000";
+        doSwitchToFiveBandResistor();
+    } else { // numberOfColorBands == 5.
+        numberOfColorBands = 4;
+        numberOfBandsButton.downImage = "stock_images\\Button4Down.PNG";
+        numberOfBandsButton.image = "stock_images\\Button4Normal.PNG";
+        numberOfBandsButton.overImage = "stock_images\\Button4Over.PNG";
+        fourthBand.tooltip = "Resistor's tolerance band";
+        fifthBand.tooltip = "";
+        firstToleranceButton.tooltip = "1% Brown will become the fourth band (Tolerance)";
+        secondToleranceButton.tooltip = "1% Red will become the fourth band (Tolerance)";
+        noneButton.tooltip = "Remove the fourth band (Tolerance)";
+        ohms.tooltip = "Enter an Ohmic value between 0 and 99,000,000,000";
+        doSwitchToFourBandResistor();
+    }
+
+    doFirstBand();
+
+    doCalculateResistance();
+
+    return;
+}
+
 
 /*@ doCalculateResistance :: () => void */
 function doCalculateResistance() {

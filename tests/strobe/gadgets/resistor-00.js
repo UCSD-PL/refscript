@@ -7,15 +7,20 @@
 // Resistor Gadget.
 var resistance = 1000;
 
+/*@ currentBandIndex :: { number | (0 <= v && v < 5) } */
 var currentBandIndex = 0;
 
+/*@ numberOfColorBands :: number */
 var numberOfColorBands = 4;
 
 /*@ bandNumberValues :: [{ number | (0 <= v && v < 16) }] */
 var bandNumberValues =  [1, 0, 2, 10, 15]; // Brown, Black, Red, Empty, Blank.
 
-/*@ buttonStrs :: [string] */ 
-var buttonStrs = ["0black", "1brown", "2red", "3orange", "4yellow", "5green", "6blue", "7violet", "8gray", "9white", "Empty", "Tbrown", "Tred", "Tgold", "Tsilver", "Blank"];
+//TODO: revert this 
+/*@ extern buttonStrs :: { [string] | (len v) = 16 } */
+//var buttonStrs = ["0black", "1brown", "2red", "3orange", "4yellow", "5green", "6blue", "7violet", "8gray", "9white", "Empty", "Tbrown", "Tred", "Tgold", "Tsilver", "Blank"];
+
+/*@ type color = { number | (0 <= v && v < 16) } */
 
 /*@ type band = { downImage : string
                 , image     : string
@@ -27,101 +32,80 @@ var buttonStrs = ["0black", "1brown", "2red", "3orange", "4yellow", "5green", "6
 /*@ extern fourthBand :: band */
 /*@ extern fifthBand  :: band */
 
-//var firstBand  = {};
-//var secondBand = {};
-//var thirdBand  = {};
-//var fourthBand = {};
-//var fifthBand  = {};
+/*@ type button = { x: number
+                  , y: number
+                  } */
 
-/*@ add3Str :: (string, string, string) => string */
-function add3Str(a,b,c) { return "" }
+/*@ extern currentColorBandArrow :: button */
 
+
+// END OF DEFINITIONS
 
 /*@ view_onOpen :: () => void */
 function view_onOpen() {
-    firstBand.downImage = "stock_images\\Button" + buttonStrs[bandNumberValues[0]] + "Down.PNG";
-    firstBand.image     = "stock_images\\Button" + buttonStrs[bandNumberValues[0]] + "Normal.PNG";
-    firstBand.overImage = "stock_images\\Button" + buttonStrs[bandNumberValues[0]] + "Over.PNG";
 
-    secondBand.downImage = add3Str( "stock_images\\Button" ,  buttonStrs[bandNumberValues[1]] ,  "Down.PNG");
-    secondBand.image = add3Str( "stock_images\\Button" ,  buttonStrs[bandNumberValues[1]] ,  "Normal.PNG");
-    secondBand.overImage = add3Str( "stock_images\\Button" ,  buttonStrs[bandNumberValues[1]] ,  "Over.PNG");
+  // Initialize the resistor's color bands to match the bandNumberValues array above.
+  firstBand.downImage = "stock_images\\Button" + buttonStrs[bandNumberValues[0]] + "Down.PNG";
+  firstBand.image = "stock_images\\Button" + buttonStrs[bandNumberValues[0]] + "Normal.PNG";
+  firstBand.overImage = "stock_images\\Button" + buttonStrs[bandNumberValues[0]] + "Over.PNG";
 
-    thirdBand.downImage = add3Str( "stock_images\\Button" ,  buttonStrs[bandNumberValues[2]] ,  "Down.PNG");
-    thirdBand.image = add3Str( "stock_images\\Button" ,  buttonStrs[bandNumberValues[2]] ,  "Normal.PNG");
-    thirdBand.overImage = add3Str( "stock_images\\Button" ,  buttonStrs[bandNumberValues[2]] ,  "Over.PNG");
-
-    fourthBand.downImage = add3Str( "stock_images\\Button" ,  buttonStrs[bandNumberValues[3]] ,  "Down.PNG");
-    fourthBand.image = add3Str( "stock_images\\Button" ,  buttonStrs[bandNumberValues[3]] ,  "Normal.PNG");
-    fourthBand.overImage = add3Str( "stock_images\\Button" ,  buttonStrs[bandNumberValues[3]] ,  "Over.PNG");
-
-    fifthBand.downImage = add3Str( "stock_images\\Button" ,  buttonStrs[bandNumberValues[4]] ,  "Down.PNG");
-    fifthBand.image = add3Str( "stock_images\\Button" ,  buttonStrs[bandNumberValues[4]] ,  "Normal.PNG");
-    fifthBand.overImage = add3Str( "stock_images\\Button" ,  buttonStrs[bandNumberValues[4]] ,  "Over.PNG");
-
-//  
-//    // Initialize the resistor's color bands to match the bandNumberValues array above.
-//    firstBand.downImage = "stock_images\\Button" + buttonStrs[bandNumberValues[0]] + "Down.PNG";
-//    firstBand.image = "stock_images\\Button" + buttonStrs[bandNumberValues[0]] + "Normal.PNG";
-//    firstBand.overImage = "stock_images\\Button" + buttonStrs[bandNumberValues[0]] + "Over.PNG";
+//  secondBand.downImage = "stock_images\\Button" + buttonStrs[bandNumberValues[1]] + "Down.PNG";
+//  secondBand.image = "stock_images\\Button" + buttonStrs[bandNumberValues[1]] + "Normal.PNG";
+//  secondBand.overImage = "stock_images\\Button" + buttonStrs[bandNumberValues[1]] + "Over.PNG";
 //
-//    secondBand.downImage = "stock_images\\Button" + buttonStrs[bandNumberValues[1]] + "Down.PNG";
-//    secondBand.image = "stock_images\\Button" + buttonStrs[bandNumberValues[1]] + "Normal.PNG";
-//    secondBand.overImage = "stock_images\\Button" + buttonStrs[bandNumberValues[1]] + "Over.PNG";
+//  thirdBand.downImage = "stock_images\\Button" + buttonStrs[bandNumberValues[2]] + "Down.PNG";
+//  thirdBand.image = "stock_images\\Button" + buttonStrs[bandNumberValues[2]] + "Normal.PNG";
+//  thirdBand.overImage = "stock_images\\Button" + buttonStrs[bandNumberValues[2]] + "Over.PNG";
 //
-//    thirdBand.downImage = "stock_images\\Button" + buttonStrs[bandNumberValues[2]] + "Down.PNG";
-//    thirdBand.image = "stock_images\\Button" + buttonStrs[bandNumberValues[2]] + "Normal.PNG";
-//    thirdBand.overImage = "stock_images\\Button" + buttonStrs[bandNumberValues[2]] + "Over.PNG";
+//  fourthBand.downImage = "stock_images\\Button" + buttonStrs[bandNumberValues[3]] + "Down.PNG";
+//  fourthBand.image = "stock_images\\Button" + buttonStrs[bandNumberValues[3]] + "Normal.PNG";
+//  fourthBand.overImage = "stock_images\\Button" + buttonStrs[bandNumberValues[3]] + "Over.PNG";
 //
-//    fourthBand.downImage = "stock_images\\Button" + buttonStrs[bandNumberValues[3]] + "Down.PNG";
-//    fourthBand.image = "stock_images\\Button" + buttonStrs[bandNumberValues[3]] + "Normal.PNG";
-//    fourthBand.overImage = "stock_images\\Button" + buttonStrs[bandNumberValues[3]] + "Over.PNG";
+//  fifthBand.downImage = "stock_images\\Button" + buttonStrs[bandNumberValues[4]] + "Down.PNG";
+//  fifthBand.image = "stock_images\\Button" + buttonStrs[bandNumberValues[4]] + "Normal.PNG";
+//  fifthBand.overImage = "stock_images\\Button" + buttonStrs[bandNumberValues[4]] + "Over.PNG";
 //
-//    fifthBand.downImage = "stock_images\\Button" + buttonStrs[bandNumberValues[4]] + "Down.PNG";
-//    fifthBand.image = "stock_images\\Button" + buttonStrs[bandNumberValues[4]] + "Normal.PNG";
-//    fifthBand.overImage = "stock_images\\Button" + buttonStrs[bandNumberValues[4]] + "Over.PNG";
-//
-    // Initialize the resistor value.
-//    doCalculateResistance();
+  // Initialize the resistor value.
+//  doCalculateResistance();
 
-    return;
+  return;
 };
 
-// // Resistor   color   codes   and   Tolerances
-// // -------------------------------------------
-// //    Codes	Colors		    Tolerances
-// //    -----     ------              ----------
-// //	0	Black
-// //	1	Brown		 	 1%
-// //	2	Red		 	 2%
-// //	3	Orange
-// //	4	Yellow
-// //	5	Green
-// //	6	Blue
-// //	7	Violet
-// //	8	Gray
-// //	9	White
-// //		Gold		 	 5%
-// //		Silver		 	10%
+ // Resistor   color   codes   and   Tolerances
+ // -------------------------------------------
+ //    Codes	Colors		    Tolerances
+ //    -----     ------              ----------
+ //	0	Black
+ //	1	Brown		 	 1%
+ //	2	Red		 	 2%
+ //	3	Orange
+ //	4	Yellow
+ //	5	Green
+ //	6	Blue
+ //	7	Violet
+ //	8	Gray
+ //	9	White
+ //		Gold		 	 5%
+ //		Silver		 	10%
  
-/*@ doBlackButton :: () => void */
-function doBlackButton() {
-    drawNewColorBand(0);
-    bandNumberValues[currentBandIndex] = 0;
-    doCalculateResistance();
-
-    return;
-}
-
-/*@ doBrownButton :: () => void */
-function doBrownButton() {
-    drawNewColorBand(1);
-    bandNumberValues[currentBandIndex] = 1;
-    doCalculateResistance();
-
-    return;
-}
- 
+///*@ doBlackButton :: () => void */
+//function doBlackButton() {
+//    drawNewColorBand(0);
+//    bandNumberValues[currentBandIndex] = 0;
+//    doCalculateResistance();
+//
+//    return;
+//}
+//
+///*@ doBrownButton :: () => void */
+//function doBrownButton() {
+//    drawNewColorBand(1);
+//    bandNumberValues[currentBandIndex] = 1;
+//    doCalculateResistance();
+//
+//    return;
+//}
+// 
 // function doRedButton() /*:  -> Undef */ {
 //     drawNewColorBand(2);
 //     bandNumberValues[currentBandIndex] = 2;
@@ -238,7 +222,9 @@ function doBrownButton() {
 //     return;
 // }
 // 
-function drawNewColorBand(color) /*: Num -> Undef */ {
+
+/*@ drawNewColorBand :: (color) => void */
+function drawNewColorBand(color) {
 
     switch (currentBandIndex) {
     case 0:
@@ -273,42 +259,46 @@ function drawNewColorBand(color) /*: Num -> Undef */ {
 
     return;
 }
-// 
-// function doFirstBand() /*:  -> Undef */ {
-//     // Move the arrow pointer.
-//     currentColorBandArrow.y = 79;
-//     currentBandIndex = 0;
-// 
-//     return;
-// }
-// 
-// function doSecondBand() /*:  -> Undef */ {
-//     // Move the arrow pointer.
-//     currentColorBandArrow.y = 105;
-//     currentBandIndex = 1;
-// 
-//     return;
-// }
-// 
-// function doThirdBand() /*:  -> Undef */ {
-//     // Move the arrow pointer.
-//     currentColorBandArrow.y = 131;
-//     currentBandIndex = 2;
-// 
-//     return;
-// }
-// 
-// function doFourthBand() /*:  -> Undef */ {
-//     // This function does not need to do anything for a four band resistor.
-//     if (numberOfColorBands == 5) {
-//         // Move the arrow pointer.
-//         currentColorBandArrow.y = 157;
-//         currentBandIndex = 3;
-//     }
-// 
-//     return;
-// }
-// 
+
+/*@ doFirstBand :: () => void */
+function doFirstBand() {
+  // Move the arrow pointer.
+  currentColorBandArrow.y = 79;
+  currentBandIndex = 0;
+
+  return;
+}
+ 
+/*@ doSecondBand :: () => void */
+function doSecondBand() {
+    // Move the arrow pointer.
+    currentColorBandArrow.y = 105;
+    currentBandIndex = 1;
+
+    return;
+}
+
+/*@ doThirdBand :: () => void */
+function doThirdBand() {
+    // Move the arrow pointer.
+    currentColorBandArrow.y = 131;
+    currentBandIndex = 2;
+
+    return;
+}
+
+/*@ doFourthBand :: () => void */
+function doFourthBand() {
+    // This function does not need to do anything for a four band resistor.
+    if (numberOfColorBands == 5) {
+        // Move the arrow pointer.
+        currentColorBandArrow.y = 157;
+        currentBandIndex = 3;
+    }
+
+    return;
+}
+
 // function doFifthBand() /*:  -> Undef */ {
 //     // This is an "empty" function.  The fifth color band should only be set by the Tolerance buttons.
 //     return;
@@ -397,37 +387,40 @@ function drawNewColorBand(color) /*: Num -> Undef */ {
 //     return;
 // }
 // 
-// function doCalculateResistance() /*:  -> Undef */ {
-//     var currentBandValue=0;
-//     var power=0;
-// 
-//     resistance = 0;
-//     for (var bandIndex = 0; bandIndex < numberOfColorBands - 2; bandIndex++) {
-//         currentBandValue = bandNumberValues[bandIndex];
-//         if (currentBandValue > 9) {
-//             resistance = -1; // Undef.
-//         } else {
-//             resistance *= 10;
-//             resistance += Math.floor(Number(currentBandValue));
-//         }
-//     }
-// 
-//     power = bandNumberValues[numberOfColorBands - 2];
-//     if (power > 9) {
-//         resistance = -1; // Undef.
-//     } else {
-//         power = Math.pow(10, power);
-//         resistance *= power;
-//     }
-// 
-//     if (resistance < 0) {
-//         ohms.value = "Undef";
-//     } else {
-//         ohms.value = addCommas(resistance.toStr());
-//     }
-// 
-//     return;
-// }
+
+/*@ doCalculateResistance :: () => void */
+function doCalculateResistance() {
+  var currentBandValue=0;
+  var power=0;
+
+//  resistance = 0;
+//  for (var bandIndex = 0; bandIndex < numberOfColorBands - 2; bandIndex++) {
+//    currentBandValue = bandNumberValues[bandIndex];
+//    if (currentBandValue > 9) {
+//      resistance = -1; // Undef.
+//    } else {
+//      resistance *= 10;
+//      resistance += Math.floor(Number(currentBandValue));
+//    }
+//  }
+//
+//  power = bandNumberValues[numberOfColorBands - 2];
+//  if (power > 9) {
+//    resistance = -1; // Undef.
+//  } else {
+//    power = Math.pow(10, power);
+//    resistance *= power;
+//  }
+//
+//  if (resistance < 0) {
+//    ohms.value = "Undef";
+//  } else {
+//    ohms.value = addCommas(resistance.toStr());
+//  }
+//
+  return;
+}
+
 // 
 // function addCommas(inputStr) /*: Str -> Str */ {
 //     var commaAddedValue = "";

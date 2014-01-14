@@ -79,8 +79,6 @@
 /*@ extern builtin_BIUndefined      :: forall A. {A | false}                                                            */
 
 
-
-
 /*@ extern builtin_OpLT        :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x <  y)) }   */
 /*@ extern builtin_OpLEq       :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x <= y)) }   */
 /*@ extern builtin_OpGT        :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x >  y)) }   */
@@ -102,10 +100,6 @@
 /*  builtin_OpLOr       :: (x:top, y:top) => 
       { top | ((Prop v) <=> (if (falsy x) then (v = y) else (v = x) ))}           */
 
-
-//TODO: We would like to have a more precise type (like the following) that 
-//would include strings into the game, but this does not work well with 
-//equality at the moment:
 
 /*@ extern builtin_OpAdd :: /\ (x:number, y:number) => {number | v = x + y}
                      /\ (x:number, y:string) => string
@@ -145,6 +139,47 @@
 
 //XXX: Is there an issue with keeping this with a capital P???
 /*@ measure Prop        :: (boolean) => bool                              */
+
+
+
+/*************************************************************************/
+/************** Ambient Objects ******************************************/
+/*************************************************************************/
+// Taken from here:
+// http://typescript.codeplex.com/SourceControl/latest#typings/lib.d.ts
+
+/*@ extern Number :: (x: top) => number */
+
+/*@ extern Math :: {
+    E       : number,
+    LN10    : number,
+    LN2     : number,
+    LOG2E   : number,
+    LOG10E  : number,
+    PI      : number,
+    SQRT1_2 : number,
+    SQRT2   : number,
+    abs     : (x: number) => number,
+    acos    : (x: number) => number,
+    asin    : (x: number) => number,
+    atan    : (x: number) => number,
+    atan2   : (y: number, x: number) =>  number,
+    ceil    : (x: number) => number,
+    cos     : (x: number) => number,
+    exp     : (x: number) => number,
+    floor   : (x: number) => number,
+    log     : (x: number) => number,
+    max     : (values: [number]) => number,
+    min     : (values: [number]) => number,
+    pow     : (x: number, y: number) => number,
+    random  : () =>  number,
+    round   : (x: number) => number,
+    sin     : (x: number) => number,
+    sqrt    : (x: number) => number,
+    tan     : (x: number) => number
+} */
+
+
 
 /*************************************************************************/
 /************** Run-Time Tags ********************************************/

@@ -30,6 +30,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Misc
 import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
+import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck, patchTypeAnnots) 
@@ -139,9 +140,6 @@ addStatementFunBinds g stmts
   = do let fs  = concatMap getFunctionStatements stmts
        fts    <- forM fs $ \(FunctionStmt l f _ _) -> (f,) <$> (freshTyFun g l f =<< getDefType f)
        envAdds fts g
-
-
-
 
 --------------------------------------------------------------------------------
 consStmt :: CGEnv -> Statement AnnTypeR -> CGM (Maybe CGEnv) 

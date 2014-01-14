@@ -460,7 +460,9 @@ subType l g t1 t2 =
   where
     c g    = uncurry $ Sub g (ci l)
     checkTypes tdefs t1 t2
-      | equivWUnions tdefs t1 t2 = return    $ (t1,t2)
+      | equivWUnions tdefs t1 t2 = return    $ (t1, t2)
+    checkTypes _ _  t2
+      | isTop t2                 = return    $ (t1, t2)
     checkTypes  _    t1 t2
       | otherwise                = cgError l $ bugMalignedSubtype (srcPos l) t1 t2
 

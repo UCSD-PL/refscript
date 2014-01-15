@@ -96,8 +96,9 @@ import           Language.Nano.Misc             (unique, everywhereM', zipWith3M
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
-import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Typecheck.Unify
+import           Language.Nano.Typecheck.Compare
+import           Language.Nano.Typecheck.Unfold
 import           Language.Nano.Errors
 import           Data.Monoid                  
 import qualified Data.HashMap.Strict            as HM

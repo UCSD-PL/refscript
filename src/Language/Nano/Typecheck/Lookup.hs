@@ -26,7 +26,7 @@ import           Data.Monoid
 import           Text.Parsec
 
 import           Text.Printf 
--- import           Debug.Trace
+import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
 
 -- Given an environment @γ@, a (string) field @s@ and a type @t@, `getProp` 
@@ -36,54 +36,59 @@ import           Text.Printf
 --   throw an error.
 -------------------------------------------------------------------------------
 getProp ::  (IsLocated l, Ord r, PP r, F.Reftable r) => 
-  l -> Env (RType r) -> String -> RType r -> Maybe (RType r, RType r)
+  l -> Env (RType r) -> Env (RType r) -> String -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getProp _ _ s t@(TObj bs _) = 
+getProp l specs defs s t@(TObj bs _) = 
   do  case find (match $ F.symbol s) bs of
-        Just b -> Just (t, b_type b)
+        Just b -> Just (t, tracePP (ppshow s) $ b_type b)
         _      -> case find (match $ F.stringSymbol "*") bs of
-                    Just b' -> Just (t, b_type b')
-                    _       -> Just (t, tUndef)
+                    Just b' -> Just (t, tracePP "Retrieved a * prop" $ b_type b')
+                    _       -> lookupProto l specs defs s t
   where match s (B f _)  = s == f
 
-getProp l γ s t@(TApp _ _ _)  = getPropApp l γ s t 
-getProp _ _ _ t@(TFun _ _ _ ) = Just (t, tUndef)
-getProp l γ s a@(TArr _ _)    = getPropArr l γ s a
-getProp l _ _ t               = die $ bug (srcPos l) $ "getProp: " ++ (ppshow t) 
+getProp l specs defs s t@(TApp _ _ _)  = getPropApp l specs defs s t 
+getProp _ _     _    _ t@(TFun _ _ _ ) = Just (t, tUndef)
+getProp l specs defs s a@(TArr _ _)    = getPropArr l specs defs s a
+getProp l _     _    _ t               = die $ bug (srcPos l) $ "getProp: " ++ (ppshow t) 
 
 
 -------------------------------------------------------------------------------
 lookupProto :: (Ord r, PP r, F.Reftable r, IsLocated a) =>
-  a -> Env (RType r) -> String -> RType r -> Maybe (RType r, RType r)
+  a -> Env (RType r) -> Env (RType r) -> String -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-lookupProto l γ s t@(TObj bs _) = 
+lookupProto l specs defs s t@(TObj bs _) = 
     case find (match $ F.stringSymbol "__proto__") bs of
-      Just (B _ t) -> getProp l γ s t
+      Just (B _ t) -> getProp l specs defs s (tracePP "retrieving property from" t)
       Nothing -> Just (t, tUndef)
   where match s (B f _)  = s == f
-lookupProto l _ _ _ = die $ bug (srcPos l) 
+lookupProto l _ _ _ _ = die $ bug (srcPos l) 
   "lookupProto can only unfold the prototype chain for object types"
 
-getPropApp l γ s t@(TApp c ts _) 
+lookupAmbient l specs defs s amb = 
+  case envFindTy amb (tracePP "SPECS" specs) of 
+    Just t -> getProp l specs defs s t
+    Nothing -> Nothing --die $ bug (srcPos l) s
+
+getPropApp l specs defs s t@(TApp c ts _) 
   = case c of 
-      TUn      -> getPropUnion l γ s ts
+      TUn      -> getPropUnion l specs defs s ts
       TInt     -> Just (t, tUndef)
       TBool    -> Just (t, tUndef)
-      TString  -> Just (t, tUndef)
+      TString  -> lookupAmbient l specs defs s "String"
       TUndef   -> Nothing
       TNull    -> Nothing
-      (TDef _) -> getProp l γ s $ unfoldSafe γ t
+      (TDef _) -> getProp l specs defs s $ unfoldSafe defs t
       TTop     -> die $ bug (srcPos l) "getProp top"
       TVoid    -> die $ bug (srcPos l) "getProp void"
 
-getPropArr l γ s a@(TArr _ _) 
+getPropArr l specs defs s a@(TArr _ _) 
   = case s of
     -- TODO: make more specific, add refinements 
     "length" -> Just (a, tInt) 
     _        -> case stringToInt s of
                   -- Implicit coersion of numieric strings:
                   -- x["0"] = x[0], x["1"] = x[1], etc.
-                  Just i  -> getIdx l γ i a 
+                  Just i  -> getIdx l specs defs i a 
                   -- The rest of the cases are undefined
                   Nothing -> Just (a, tUndef) 
 
@@ -101,22 +106,22 @@ stringToInt s =
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
 getPropUnion :: (IsLocated l, Ord r, PP r, F.Reftable r) 
-             => l -> Env (RType r) -> String -> [RType r] -> Maybe (RType r, RType r)
+             => l -> Env (RType r) -> Env (RType r) -> String -> [RType r] -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getPropUnion l γ f ts = 
+getPropUnion l specs defs f ts = 
   -- Gather all the types that do not throw errors, and the type of 
   -- the accessed expression that yields them
-  case [tts | Just tts <- getProp l γ f <$> ts] of
+  case [tts | Just tts <- getProp l specs defs f <$> ts] of
     [] -> Nothing
     ts -> Just $ mapPair mkUnion $ unzip ts
 
 
 -------------------------------------------------------------------------------
 getIdx ::  (IsLocated l, Ord r, PP r, F.Reftable r) => 
-  l -> Env (RType r) -> Int -> RType r -> Maybe (RType r, RType r)
+  l -> Env (RType r) -> Env (RType r) -> Int -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getIdx _ _ _ a@(TArr t _)  = Just (a,t)
-getIdx l γ i t             = getProp l γ (show i) t 
+getIdx _ _ _ _ a@(TArr t _)  = Just (a,t)
+getIdx l specs defs i t             = getProp l specs defs (show i) t 
 --error $ "Unimplemented: getIdx on" ++ (ppshow t) 
 
 

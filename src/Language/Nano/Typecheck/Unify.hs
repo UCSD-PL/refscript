@@ -21,6 +21,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Unfold
 import           Language.Nano.Typecheck.Compare
 
 

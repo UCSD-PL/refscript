@@ -265,8 +265,8 @@ consExprT g e to
 consAsgn :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consAsgn g x e 
-  = do (x', g') <- consExprT g e $ tracePP "Annot" $ envFindAnnot x g 
-       Just <$> envAdds [(x, tracePP "consAsgn" $ envFindTy x' g')] g'
+  = do (x', g') <- consExprT g e $ envFindAnnot x g 
+       Just <$> envAdds [(x, envFindTy x' g')] g'
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh, 

@@ -497,7 +497,7 @@ tcExpr γ (Cast l@(Ann loc fs) e)
 -- e.f
 tcExpr γ (DotRef l e fld) 
   = do (e', t) <- tcPropRead getProp γ l e (unId fld)
-       return     (DotRef l e' fld, tracePP "Read prop type" t)
+       return     (DotRef l e' fld, t)
         
 -- e["f"]
 tcExpr γ (BracketRef l e fld@(StringLit _ s)) 
@@ -642,7 +642,7 @@ tcPropRead getter γ l e fld
        tdefs      <- getTDefs 
        case getter l (tce_env γ) tdefs fld te of
          Nothing        -> tcError $  errorPropRead (srcPos l) e fld
-         Just (te', tf) -> (, tf) <$> castM (tce_ctx γ) e' te (tracePP "Casting to" te')
+         Just (te', tf) -> (, tf) <$> castM (tce_ctx γ) e' te te'
 
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, F.Reftable r, PP r) =>

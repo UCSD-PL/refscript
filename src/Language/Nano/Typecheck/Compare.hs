@@ -47,6 +47,7 @@ import           Language.Nano.Misc
 import           Language.Nano.Types                (IsLocated(..))
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Unfold
 import           Language.Nano.Liquid.Types
 
 import           Language.Fixpoint.Errors

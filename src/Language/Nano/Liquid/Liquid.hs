@@ -35,7 +35,8 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck, patchTypeAnnots) 
 import           Language.Nano.Typecheck.Compare
-import           Language.Nano.Typecheck.Subst      (getProp, getIdx)
+import           Language.Nano.Typecheck.Lookup
+import           Language.Nano.Typecheck.Unfold
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Alias

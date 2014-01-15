@@ -90,6 +90,7 @@ import qualified Language.Nano.Env              as E
 import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types 
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Unfold
 import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Qualifiers

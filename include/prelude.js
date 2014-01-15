@@ -179,6 +179,63 @@
     tan     : (x: number) => number
 } */
 
+/*@ extern String     :: {
+    toString          : () => string,
+    charAt            : (pos: number) => string,
+    charCodeAt        : (index: number) => number,
+    concat            : (strings: [string]) => string,
+    indexOf           : (searchString: string, position: number) => number,
+    lastIndexOf       : (searchString: string, position: number) => number,
+    localeCompare     : (that: string) => number,
+    match             : (regexp: string) => [string],
+    replace           : (searchValue: string, replaceValue: string) => string,
+    search            : (regexp: string) => number,
+    slice             : (start: number, end: number) => string,
+    split             : (separator: string, limit: number) => [string],
+    substring         : (start: number, end: number) => string,
+    toLowerCase       : () => string,
+    toLocaleLowerCase : () => string,
+    toUpperCase       : () => string,
+    toLocaleUpperCase : () => string,
+    trim              : () => string,
+
+    length: number,
+
+    substr            : (from: number, length: number) => string
+} */
+
+
+// Ideally we'd like to use this version:
+/*  extern String     : {
+    toString          : () => string,
+    charAt            : (pos: number) => string,
+    charCodeAt        : (index: number) => number,
+    concat            : (...strings: [string]) => string,
+    indexOf           : (searchString: string, position?: number) => number,
+    lastIndexOf       : (searchString: string, position?: number) => number,
+    localeCompare     : (that: string) => number,
+    match             : (regexp: string) => [string],
+    match             : (regexp: RegExp) => [string],
+    replace           : (searchValue: string, replaceValue: string) => string,
+    replace           : (searchValue: string, replaceValue: (substring: string, ...args: [top]) => string) => string,
+    replace           : (searchValue: RegExp, replaceValue: string) => string,
+    replace           : (searchValue: RegExp, replaceValue: (substring: string, ...args: [top]) => string) => string,
+    search            : (regexp: string) => number,
+    search            : (regexp: RegExp) => number,
+    slice             : (start: number, end?: number) => string,
+    split             : (separator: string, limit?: number) => [string],
+    split             : (separator: RegExp, limit?: number) => [string],
+    substring         : (start: number, end?: number) => string,
+    toLowerCase       : () => string,
+    toLocaleLowerCase : () => string,
+    toUpperCase       : () => string,
+    toLocaleUpperCase : () => string,
+    trim              : () => string,
+
+    length: number,
+
+    substr            : (from: number, length?: number) => string
+} */
 
 
 /*************************************************************************/

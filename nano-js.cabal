@@ -76,6 +76,8 @@ Library
 --                        Language.Nano.Typecheck.TCMonad
 --                        Language.Nano.Typecheck.Compare
 --                        Language.Nano.Typecheck.Subst
+--                        Language.Nano.Typecheck.Unfold
+--                        Language.Nano.Typecheck.Lookup
 --                        Language.Nano.Typecheck.Typecheck
 --                        Language.Nano.ESC.Types
 --                        Language.Nano.ESC.ESC

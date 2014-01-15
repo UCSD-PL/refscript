@@ -33,6 +33,8 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Lookup
+import           Language.Nano.Typecheck.Unfold
 import           Language.Nano.SSA.SSA
 
 import           Language.Fixpoint.Errors
@@ -495,7 +497,7 @@ tcExpr γ (Cast l@(Ann loc fs) e)
 -- e.f
 tcExpr γ (DotRef l e fld) 
   = do (e', t) <- tcPropRead getProp γ l e (unId fld)
-       return     (DotRef l e' fld, t)
+       return     (DotRef l e' fld, tracePP "Read prop type" t)
         
 -- e["f"]
 tcExpr γ (BracketRef l e fld@(StringLit _ s)) 
@@ -638,9 +640,9 @@ undefType l γ
 tcPropRead getter γ l e fld
   = do (e', te)   <- tcExpr γ e
        tdefs      <- getTDefs 
-       case getter l tdefs fld te of
+       case getter l (tce_env γ) tdefs fld te of
          Nothing        -> tcError $  errorPropRead (srcPos l) e fld
-         Just (te', tf) -> (, tf) <$> castM (tce_ctx γ) e' te te' 
+         Just (te', tf) -> (, tf) <$> castM (tce_ctx γ) e' te (tracePP "Casting to" te')
 
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, F.Reftable r, PP r) =>

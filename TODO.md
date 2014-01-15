@@ -8,7 +8,8 @@ JS Features
 -----------
 
   - FIELDS
-    - array "length
+    - array length
+    - definitely missing field
 
   - METHODS:
     - liquid/pos/objects/meth-00.js

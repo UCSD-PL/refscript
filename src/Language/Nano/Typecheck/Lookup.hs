@@ -40,9 +40,9 @@ getProp ::  (IsLocated l, Ord r, PP r, F.Reftable r) =>
 -------------------------------------------------------------------------------
 getProp l specs defs s t@(TObj bs _) = 
   do  case find (match $ F.symbol s) bs of
-        Just b -> Just (t, tracePP (ppshow s) $ b_type b)
+        Just b -> Just (t, b_type b)
         _      -> case find (match $ F.stringSymbol "*") bs of
-                    Just b' -> Just (t, tracePP "Retrieved a * prop" $ b_type b')
+                    Just b' -> Just (t, b_type b')
                     _       -> lookupProto l specs defs s t
   where match s (B f _)  = s == f
 
@@ -58,7 +58,7 @@ lookupProto :: (Ord r, PP r, F.Reftable r, IsLocated a) =>
 -------------------------------------------------------------------------------
 lookupProto l specs defs s t@(TObj bs _) = 
     case find (match $ F.stringSymbol "__proto__") bs of
-      Just (B _ t) -> getProp l specs defs s (tracePP "retrieving property from" t)
+      Just (B _ t) -> getProp l specs defs s t
       Nothing -> Just (t, tUndef)
   where match s (B f _)  = s == f
 lookupProto l _ _ _ _ = die $ bug (srcPos l) 

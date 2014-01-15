@@ -265,8 +265,8 @@ consExprT g e to
 consAsgn :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consAsgn g x e 
-  = do (x', g') <- consExprT g e $ envFindAnnot x g 
-       Just <$> envAdds [(x, envFindTy x' g')] g'
+  = do (x', g') <- consExprT g e $ tracePP "Annot" $ envFindAnnot x g 
+       Just <$> envAdds [(x, tracePP "consAsgn" $ envFindTy x' g')] g'
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh, 
@@ -461,7 +461,7 @@ consObjT l g pe to
 consPropRead getter g l e fld
   = do (x, g')        <- consExpr g e
        tdefs          <- getTDefs 
-       case getter l (cge_spec g) tdefs fld $ envFindTy x g' of
+       case getter l (renv g) tdefs fld $ envFindTy x g' of
          Just (_, tf) -> (tf,) <$> envAddFresh "consPropRead" l tf g'
          Nothing      -> die $  errorPropRead (srcPos l) e fld
 

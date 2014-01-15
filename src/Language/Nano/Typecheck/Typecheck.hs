@@ -638,11 +638,11 @@ undefType l γ
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 tcPropRead getter γ l e fld
-  = do (e', te)   <- tracePP "Obj type" <$> tcExpr γ e
+  = do (e', te)   <- tcExpr γ e
        tdefs      <- getTDefs 
-       case getter l (tce_spec γ) tdefs fld te of
+       case getter l (tce_env γ) tdefs fld te of
          Nothing        -> tcError $  errorPropRead (srcPos l) e fld
-         Just (te', tf) -> (, tf) <$> castM (tce_ctx γ) e' te te' 
+         Just (te', tf) -> (, tf) <$> castM (tce_ctx γ) e' te (tracePP "Casting to" te')
 
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, F.Reftable r, PP r) =>

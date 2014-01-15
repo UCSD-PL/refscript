@@ -1,6 +1,5 @@
-function foo(o, s) 
-/*:   { __proto__: {y: Bool, __proto__: Object, *: _}, *: Str, x: Num } 
-    * /(x|(y|z))/ 
-   -> Num + Bool + Str + Undef */ {
+/*@ foo :: ({ __proto__: {y: boolean, __proto__: {}, *: _}, *: string, x: number }, 
+            { string | (v = "x" || v = "y" || v = "z")}) => number + boolean + string + undefined */ 
+function foo(o, s) {
     return o[s];
 }

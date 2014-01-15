@@ -497,7 +497,7 @@ tcExpr γ (Cast l@(Ann loc fs) e)
 -- e.f
 tcExpr γ (DotRef l e fld) 
   = do (e', t) <- tcPropRead getProp γ l e (unId fld)
-       return     (DotRef l e' fld, t)
+       return     (DotRef l e' fld, tracePP "Read prop type" t)
         
 -- e["f"]
 tcExpr γ (BracketRef l e fld@(StringLit _ s)) 
@@ -638,9 +638,9 @@ undefType l γ
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 tcPropRead getter γ l e fld
-  = do (e', te)   <- tcExpr γ e
+  = do (e', te)   <- tracePP "Obj type" <$> tcExpr γ e
        tdefs      <- getTDefs 
-       case getter l tdefs fld te of
+       case getter l (tce_spec γ) tdefs fld te of
          Nothing        -> tcError $  errorPropRead (srcPos l) e fld
          Just (te', tf) -> (, tf) <$> castM (tce_ctx γ) e' te te' 
 

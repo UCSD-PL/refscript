@@ -64,17 +64,23 @@ lookupProto l specs defs s t@(TObj bs _) =
 lookupProto l _ _ _ _ = die $ bug (srcPos l) 
   "lookupProto can only unfold the prototype chain for object types"
 
-lookupAmbient l specs defs s amb = 
-  case envFindTy amb (tracePP "SPECS" specs) of 
-    Just t -> getProp l specs defs s t
-    Nothing -> Nothing --die $ bug (srcPos l) s
+-- Access the property from the relevant ambient object but return the 
+-- original accessed type instead of the type of the ambient object. 
+-------------------------------------------------------------------------------
+lookupAmbient :: (Ord r, F.Reftable r, F.Symbolic a, PP r, IsLocated l) =>
+  l -> Env (RType r) -> Env (RType r) -> String -> a -> RType r -> Maybe (RType r, RType r)
+-------------------------------------------------------------------------------
+lookupAmbient l specs defs s amb t = 
+      envFindTy amb specs 
+  >>= getProp l specs defs s 
+  >>= return . mapFst (const t)
 
 getPropApp l specs defs s t@(TApp c ts _) 
   = case c of 
       TUn      -> getPropUnion l specs defs s ts
       TInt     -> Just (t, tUndef)
       TBool    -> Just (t, tUndef)
-      TString  -> lookupAmbient l specs defs s "String"
+      TString  -> lookupAmbient l specs defs s "String" t
       TUndef   -> Nothing
       TNull    -> Nothing
       (TDef _) -> getProp l specs defs s $ unfoldSafe defs t

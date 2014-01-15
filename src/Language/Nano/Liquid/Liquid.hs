@@ -461,7 +461,7 @@ consObjT l g pe to
 consPropRead getter g l e fld
   = do (x, g')        <- consExpr g e
        tdefs          <- getTDefs 
-       case getter l tdefs fld $ envFindTy x g' of
+       case getter l (cge_spec g) tdefs fld $ envFindTy x g' of
          Just (_, tf) -> (tf,) <$> envAddFresh "consPropRead" l tf g'
          Nothing      -> die $  errorPropRead (srcPos l) e fld
 

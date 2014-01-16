@@ -30,6 +30,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Misc
 import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
+import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck, patchTypeAnnots) 
@@ -50,25 +51,30 @@ import qualified System.Console.CmdArgs.Verbosity as V
 verifyFile       :: FilePath -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
 verifyFile f 
-  = do  p1    <- parseNanoFromFile f
-        cfg   <- getOpts 
-        verb  <- V.getVerbosity
-        case ssaTransform' p1 of 
-          Left err -> return (A.NoAnn, F.Unsafe [err])
-          Right p2 -> 
-              let p3 = expandAliases $ patchTypeAnnots p2 in
-              case typeCheck verb p3 of
-                Left errs -> return $ (A.NoAnn, F.Unsafe errs)
-                Right p4  -> reftypeCheck cfg f p4
+  = do  p0 <- parseNanoFromFile f
+        case p0 of 
+          Left err -> return (A.NoAnn, F.Unsafe [err]) 
+          Right p1 ->
+            do
+              cfg   <- getOpts 
+              verb  <- V.getVerbosity
+              case ssaTransform' p1 of 
+                Left err -> return (A.NoAnn, F.Unsafe [err])
+                Right p2 -> 
+                    let p3 = expandAliases $ patchTypeAnnots p2 in
+                    case typeCheck verb p3 of
+                      Left errs -> return $ (A.NoAnn, F.Unsafe errs)
+                      Right p4  -> reftypeCheck cfg f p4
 
---------------------------------------------------------------------------------------------------
-reftypeCheck :: Config -> FilePath -> NanoRefType -> IO (A.UAnnSol RefType, F.FixResult Error)
---------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+reftypeCheck :: Config -> FilePath -> NanoRefType -> 
+  IO (A.UAnnSol RefType, F.FixResult Error)
+--------------------------------------------------------------------------------
 reftypeCheck cfg f = solveConstraints f . generateConstraints cfg
 
---------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (A.UAnnSol RefType, F.FixResult Error) 
---------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 solveConstraints f cgi 
   = do (r, s)  <- solve def f [] $ cgi_finfo cgi
        let r'   = fmap (errorLiquid . srcPos . F.sinfo) r
@@ -76,9 +82,9 @@ solveConstraints f cgi
        let sol  = applySolution s 
        return (A.SomeAnn ann sol, r') 
 
-
-
+--------------------------------------------------------------------------------
 applySolution :: F.FixSolution -> A.UAnnInfo RefType -> A.UAnnInfo RefType 
+--------------------------------------------------------------------------------
 applySolution = fmap . fmap . tx
   where
     tx s (F.Reft (x, zs))   = F.Reft (x, F.squishRefas (appSol s <$> zs))
@@ -134,9 +140,6 @@ addStatementFunBinds g stmts
   = do let fs  = concatMap getFunctionStatements stmts
        fts    <- forM fs $ \(FunctionStmt l f _ _) -> (f,) <$> (freshTyFun g l f =<< getDefType f)
        envAdds fts g
-
-
-
 
 --------------------------------------------------------------------------------
 consStmt :: CGEnv -> Statement AnnTypeR -> CGM (Maybe CGEnv) 
@@ -233,6 +236,19 @@ consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, 
 consExprT g (ObjectLit l ps) to
   = consObjT l g ps to
 
+consExprT g e@(ArrayLit l es) (Just t)
+  = do (x, g')  <- consExpr g e
+       let te    = envFindTy x g'
+       subTypeContainers "consExprT" l g' te t
+        
+       let t' = t `strengthen` F.substa (sf (rv te) (rv t)) (rTypeReft te)
+       g'' <- envAdds [(x, t')] g'
+       return (x, g'')
+    where
+       rv                   = rTypeValueVar
+       sf s1 s2 = \s -> if s == s1 then s2
+                                   else s
+
 consExprT g e to 
   = do (x, g') <- consExpr g e
        let te   = envFindTy x g'
@@ -297,12 +313,6 @@ consExpr g (DotRef l e (Id _ fld))
 -- e["f"]
 consExpr g (BracketRef l e (StringLit _ fld)) 
   = snd <$> consPropRead getProp g l e fld
-
--- e[i]
--- TODO:ARRAY-TUPLE-CHECK (tests/liquid/neg/arrays/arr-00.js)
--- TODO:ARRAY-TUPLE-CHECK (tests/liquid/neg/arrays/arr-01.js)
-consExpr g (BracketRef l e (IntLit _ fld)) 
-  = snd <$> consPropRead getIdx g l e fld 
 
 -- e1[e2]
 consExpr g (BracketRef l e1 e2) 

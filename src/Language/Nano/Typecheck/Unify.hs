@@ -48,46 +48,58 @@ unify :: (PP r, F.Reftable r, Ord r) =>
   SourceSpan -> Env (RType r) -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 
-unify _ _ θ t@(TApp _ _ _) t'@(TApp _ _ _) 
-  | any isTop [t,t']                    = Right $ θ
+unify _ _ θ t@(TApp _ _ _           ) t'@(TApp _ _ _            )       
+  | any isTop [t,t']  
+  = Right $ θ
 
-unify l γ θ (TFun xts t _) (TFun xts' t' _) = 
-  unifys l γ θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
+unify l γ θ   (TFun xts t _         )    (TFun xts' t' _        )       
+  = unifys l γ θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
 
 -- TODO: Cycles
-unify l γ θ (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _)
-  | d == d'                             = unifys l γ θ ts ts'
+unify l γ θ   (TApp d@(TDef _) ts _ )    (TApp d'@(TDef _) ts' _)       
+  | d == d'           
+  = unifys l γ θ ts ts'
 
-unify l _  θ (TVar α _)     (TVar β _)    = varEql l θ α β 
-unify l _  θ (TVar α _)     t             = varAsn l θ α t 
-unify l _  θ t              (TVar α _)    = varAsn l θ α t
+unify l _ θ   (TVar α _             )    (TVar β _)                     
+  = varEql l θ α β 
+unify l _ θ   (TVar α _)              t'                                
+  = varAsn l θ α t'
+unify l _ θ t                            (TVar α _              )       
+  = varAsn l θ α t
 
-unify l γ θ t@(TApp (TDef _) _ _) t'    = unify l γ θ (unfoldSafe γ t) t'
-unify l γ θ t t'@(TApp (TDef _) _ _)    = unify l γ θ t (unfoldSafe γ t')
+unify l γ θ t@(TApp (TDef _) _ _    ) t'                                
+  = unify l γ θ (unfoldSafe γ t) t'
+unify l γ θ t                         t'@(TApp (TDef _) _ _     )       
+  = unify l γ θ t (unfoldSafe γ t')
 
 -- List[A] + Null `unif` List[T0] + Null => A `unif` T0
 -- TODO: make sure other nothing weird is going on with TVars,
 -- e.g.  List[A] + B `unif` ... => this should not even be allowed!!!
-unify l γ θ t t' | any isUnion [t,t']     = 
-  (uncurry $ unifys l γ θ) $ unzip $ fst3 {- $ tracePP "unify union" -} 
-    $ unionPartsWithEq (unifEq γ) t t'
 
-unify l _ _ (TBd _) _   = throw $ bugTBodiesOccur l "unify"
-unify l _ _ _ (TBd _)   = throw $ bugTBodiesOccur l "unify"
+unify l γ θ t                         t'                                
+  | any isUnion [t,t']
+  = (uncurry $ unifys l γ θ) $ unzip $ fst3 $ unionPartsWithEq (unifEq γ) t t'
 
-unify l γ θ (TObj bs1 _) (TObj bs2 _) 
-  | s1s == s2s 
+unify l _ _   (TBd _                ) _                                 
+  = throw $ bugTBodiesOccur l "unify"
+unify l _ _ _                            (TBd _                 )       
+  = throw $ bugTBodiesOccur l "unify"
+
+unify l γ θ   (TObj bs1 _           )    (TObj bs2 _            )       
+  | s1s == s2s        
   = unifys l γ θ (b_type <$> L.sortBy ord bs1) (b_type <$> L.sortBy ord bs2)
-  | otherwise 
+  | otherwise         
   = return θ
     where
       s1s = L.sort $ b_sym <$> bs1 
       s2s = L.sort $ b_sym <$> bs2
       ord b b' = compare (b_sym b) (b_sym b')
 
-unify l γ θ (TArr t _) (TArr t' _) = unify l γ θ t t'
+unify l γ θ   (TArr t _             )    (TArr t' _                )    
+  = unify l γ θ t t'
 
-unify _ _ θ _ _         = Right $ θ  
+unify l _ θ t                         t'
+  = return θ
 
 
 {-unify' γ θ t t' = unify γ θ (trace (printf "unify: %s - %s" (ppshow t) (ppshow t')) t) t' -}

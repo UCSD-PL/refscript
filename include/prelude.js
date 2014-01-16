@@ -76,7 +76,7 @@
 /*@ extern builtin_BIBracketRef     :: forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}) => A           */
 /*@ extern builtin_BIBracketAssign  :: forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}, val:A) => void */
 /*@ extern builtin_BIArrayLit       :: forall A. (A) => {v:[A] | (len v) = builtin_BINumArgs}                           */
-/*@ extern builtin_BIUndefined     :: forall A. {A | false} */
+/*@ extern builtin_BIUndefined      :: forall A. {A | false}                                                            */
 
 
 

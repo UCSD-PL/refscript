@@ -31,6 +31,7 @@ module Language.Nano.Typecheck.Types (
   -- * Predicates on Types 
   , isTop
   , isNull
+  , isVoid
   , isUndefined
   , isObj
   , isUnion
@@ -339,6 +340,10 @@ isNull :: RType r -> Bool
 isNull (TApp TNull _ _)   = True 
 isNull _                  = False
 
+isVoid :: RType r -> Bool
+isVoid (TApp TVoid _ _)   = True 
+isVoid _                  = False
+
 isObj :: RType r -> Bool
 isObj (TObj _ _)        = True
 isObj _                 = False
@@ -435,7 +440,7 @@ data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
 
 type NanoBareR r   = Nano (AnnBare r) (RType r)
 type NanoSSAR r    = Nano (AnnSSA  r) (RType r)
-type NanoTSSAR r   = Nano (AnnTSSA  r) (RType r)
+type NanoTSSAR r   = Nano (AnnTSSA r) (RType r)
 type NanoTypeR r   = Nano (AnnType r) (RType r)
 
 type ExprSSAR r    = Expression (AnnSSA r)

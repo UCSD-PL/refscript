@@ -92,7 +92,7 @@ ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LVar l3 v) e)) = do
     return    $ if x == x' then (True, ExprStmt l1 (AssignExpr l2 OpAssign (LVar l3 v) e'))
                            else (True, VarDeclStmt l1 [VarDecl l2 x' (Just e')])
 
--- | e1.x = e2
+-- e1.x = e2
 ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LDot l3 e3 x) e2)) = do 
     e2' <- ssaExpr e2
     e3' <- ssaExpr e3
@@ -186,6 +186,23 @@ ssaStmt (ReturnStmt l (Just e)) = do
 -- function f(...){ s }
 ssaStmt s@(FunctionStmt _ _ _ _)
   = (True,) <$> ssaFun s
+
+ssaStmt s@(SwitchStmt l e xs) 
+  = do
+      id <- updSsaEnv (an e) (Id (an e) "__switchVar")
+      let go (l, e, s) i = IfStmt (an s) (InfixExpr l OpStrictEq (VarRef l id) e) s i
+      mapSnd (BlockStmt l) <$> ssaStmts
+        [ VarDeclStmt (an e) [VarDecl (an e) id (Just e)], foldr go z sss ]
+  where
+      an                   = getAnnotation
+      sss                  = [ (l, e, BlockStmt l $ remBr ss) | CaseClause l e ss <- xs ]
+      z                    = safeHead (EmptyStmt l) [BlockStmt l $ remBr ss | CaseDefault l ss <- xs]      
+
+      remBr                = filter (not . isBr) . flattenBlock
+      isBr (BreakStmt _ _) = True
+      isBr _               = False
+      safeHead a []        = a
+      safeHead _ xs        = head xs
 
 -- OTHER (Not handled)
 ssaStmt s 

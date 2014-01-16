@@ -79,10 +79,17 @@
 /*@ extern builtin_BIUndefined      :: forall A. {A | false}                                                            */
 
 
-/*@ extern builtin_OpLT        :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x <  y)) }   */
-/*@ extern builtin_OpLEq       :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x <= y)) }   */
-/*@ extern builtin_OpGT        :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x >  y)) }   */
-/*@ extern builtin_OpGEq       :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x >= y)) }   */
+/*@ extern builtin_OpLT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
+                                  /\ (x:string, y:string) => boolean                                */
+
+/*@ extern builtin_OpLEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <= y)) } 
+                                  /\ (x:string, y:string) => boolean                                */
+
+/*@ extern builtin_OpGT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) } 
+                                  /\ (x:string, y:string) => boolean                                */
+
+/*@ extern builtin_OpGEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >= y)) }
+                                  /\ (x:string, y:string) => boolean                                */
 
 //PV: @==@ and @===@ could be handled more precisely
 /*@ extern builtin_OpEq        :: forall A.   (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }  */
@@ -102,10 +109,10 @@
 
 
 /*@ extern builtin_OpAdd :: /\ (x:number, y:number) => {number | v = x + y}
-                     /\ (x:number, y:string) => string
-                     /\ (x:string, y:number) => string
-                     /\ (x:string, y:string) => string
-  */
+                            /\ (x:number, y:string) => string
+                            /\ (x:string, y:number) => string
+                            /\ (x:string, y:string) => string
+*/
 
 /* builtin_OpAdd      :: (x:number + string, y:number + string) => 
                               {v:number + string | (if ((ttag x) = "number" && (ttag y) = "number") 
@@ -179,6 +186,63 @@
     tan     : (x: number) => number
 } */
 
+/*@ extern String     :: {
+    toString          : () => string,
+    charAt            : (pos: number) => string,
+    charCodeAt        : (index: number) => number,
+    concat            : (strings: [string]) => string,
+    indexOf           : (searchString: string, position: number) => number,
+    lastIndexOf       : (searchString: string, position: number) => number,
+    localeCompare     : (that: string) => number,
+    match             : (regexp: string) => [string],
+    replace           : (searchValue: string, replaceValue: string) => string,
+    search            : (regexp: string) => number,
+    slice             : (start: number, end: number) => string,
+    split             : (separator: string, limit: number) => [string],
+    substring         : (start: number, end: number) => string,
+    toLowerCase       : () => string,
+    toLocaleLowerCase : () => string,
+    toUpperCase       : () => string,
+    toLocaleUpperCase : () => string,
+    trim              : () => string,
+
+    length            : number,
+
+    substr            : (from: number, length: number) => string
+} */
+
+
+// Ideally we'd like to use this version:
+/*  extern String     : {
+    toString          : () => string,
+    charAt            : (pos: number) => string,
+    charCodeAt        : (index: number) => number,
+    concat            : (...strings: [string]) => string,
+    indexOf           : (searchString: string, position?: number) => number,
+    lastIndexOf       : (searchString: string, position?: number) => number,
+    localeCompare     : (that: string) => number,
+    match             : (regexp: string) => [string],
+    match             : (regexp: RegExp) => [string],
+    replace           : (searchValue: string, replaceValue: string) => string,
+    replace           : (searchValue: string, replaceValue: (substring: string, ...args: [top]) => string) => string,
+    replace           : (searchValue: RegExp, replaceValue: string) => string,
+    replace           : (searchValue: RegExp, replaceValue: (substring: string, ...args: [top]) => string) => string,
+    search            : (regexp: string) => number,
+    search            : (regexp: RegExp) => number,
+    slice             : (start: number, end?: number) => string,
+    split             : (separator: string, limit?: number) => [string],
+    split             : (separator: RegExp, limit?: number) => [string],
+    substring         : (start: number, end?: number) => string,
+    toLowerCase       : () => string,
+    toLocaleLowerCase : () => string,
+    toUpperCase       : () => string,
+    toLocaleUpperCase : () => string,
+    trim              : () => string,
+
+    length: number,
+
+    substr            : (from: number, length?: number) => string
+} */
 
 
 /*************************************************************************/

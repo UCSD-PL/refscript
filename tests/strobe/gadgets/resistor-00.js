@@ -485,7 +485,7 @@ function containsErroneousNonZeroDigits(inputStr, zerosStartAtPosition) {
 
     for (var i = zerosStartAtPosition; i < length; i++) {
         if (inputStr.charAt(i) != "0") {
-          return (true);
+         return (true);
         }
     }
 

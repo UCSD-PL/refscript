@@ -33,10 +33,6 @@ Tool/Implementation
 -------------------
 
   - whilefix
-  
-  - Annotation Parser [remove `defs` field from `Nano`]
-    - Need to find a way to allow the language-ecmascript parser to parse 
-      comments that start with "/*" and end with "*/"
 
   - Fix "Cannot handle ssaVarDECL" at "var foo;"
 
@@ -46,8 +42,6 @@ Tool/Implementation
 
   - Disallow type to have multiple tags (if possible)
 
-  - Remove duplicate specifications.
-
   - Fix hacky qualifier parse-translation e.g. tests/liquid/pos/arrays/arr-03.js
         
         /* qualif OkLen(v:number, arr:a): v < (len arr) */
@@ -56,24 +50,27 @@ Tool/Implementation
 
   - Do not add casts deep inside objects. Eg: tc/pos/listmap02.js 
 
+  - There is a confusion with reserved type names (e.g. "null") and defined
+    type (any identifier can be considered as a defined type). So it's very easy
+    to confuse "null" with "Null". So disallow all types that are not defined
+    properly (i.e. through alias, type etc.)
+
+  - Array literal checks are quite slow.
+      E.g.: liquid/pos/arrays/arr-07.js
+
+
 Failing Tests 
 -------------
 
 [ARRAY.LENGTH]
-  liquid/pos/arrays/safemap.js
+  Implement and type the following:
+    liquid/pos/arrays/safemap.js
 
 [METHODS]
   liquid/pos/objects/meth-00.js
 
 [REGEXP-PARSE]
-  liquid/pos/objects/obj-02-00.js,
-
-[SWITCH]
-  liquid/pos/objects/switch-00.js
-
-[ARRAY-TUPLE-CHECK]
- liquid/neg/arrays/arr-00.js,
- liquid/neg/arrays/arr-01.js,
+  liquid/pos/objects/obj-02-parse-bug.js,
 
 [TC-CRASH]
  liquid/neg/misc/driver-numargs.js,

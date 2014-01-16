@@ -76,7 +76,7 @@ module Language.Nano.Liquid.CGMonad (
 
   ) where
 
-import           Data.Maybe                     (fromMaybe)
+import           Data.Maybe                     (fromMaybe, catMaybes, isJust)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 
@@ -453,16 +453,27 @@ subType l g t1 t2 =
   do tt1   <- addInvariant t1
      tt2   <- addInvariant t2
      tdefs <- getTDefs
+     -- TODO: Make this more efficient - only introduce new bindings
+     g'    <- envAdds [(symbolId l x, t) | (x, Just t) <- relNames tt1 ++ relNames tt2 ] g
      s     <- checkTypes tdefs tt1 tt2
-     modify $ \st -> st {cs = c s : (cs st)}
+     modify $ \st -> st {cs = c g' s : (cs st)}
   where
-    c      = uncurry $ Sub g (ci l)
-    checkTypes tdefs t1 t2 
-      | equivWUnions tdefs t1 t2 = return    $ (t1,t2)
-    checkTypes  _ t1 t2    
+    c g    = uncurry $ Sub g (ci l)
+    checkTypes tdefs t1 t2
+      | equivWUnions tdefs t1 t2 = return    $ (t1, t2)
+    checkTypes _ _  t2
+      | isTop t2                 = return    $ (t1, t2)
+    checkTypes  _    t1 t2
       | otherwise                = cgError l $ bugMalignedSubtype (srcPos l) t1 t2
+
+    relNames t = (\n -> (n, n `E.envFindTy` renv g)) <$> names t
+
+    names = foldReft rr []
+    rr r xs = reftNames r ++ xs
+    reftNames = F.syms
     
- -- A more verbose version
+    
+-- A more verbose version
 subType' msg l g t1 t2 = 
   subType l g (trace (printf "SubType[%s]:\n\t%s\n\t%s" msg (ppshow t1) (ppshow t2)) t1) t2
 

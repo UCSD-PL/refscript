@@ -1,3 +1,4 @@
+/*@ foo :: () => { number | true } */
 function foo() {
   var i = 0; 
   var z = 10;

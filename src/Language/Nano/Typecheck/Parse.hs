@@ -26,7 +26,7 @@ import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*), (<*>))
 import           Control.Monad.Identity
 import           Data.Char (toLower, isLower, isSpace) 
-import           Data.Monoid (mappend, mconcat, mempty)
+import           Data.Monoid (Monoid, mappend, mconcat, mempty)
 
 import           Language.Fixpoint.Names (propConName)
 import           Language.Fixpoint.Types hiding (quals, Loc)
@@ -34,6 +34,7 @@ import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Parse 
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc (mapEither)
+import           Language.Nano.Misc     (maybeToEither)
 import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.Types
@@ -414,31 +415,31 @@ changeState forward backward = mkPT . transform . runParsecT
 -- | Parse Code along with type annotations
 
 --------------------------------------------------------------------------------------
-parseCodeFromFile :: FilePath -> IO (Nano SourceSpan RefType)
+parseCodeFromFile :: FilePath -> IO (Either Error (Nano SourceSpan RefType))
 --------------------------------------------------------------------------------------
 parseCodeFromFile fp = parseJavaScriptFromFile' tAnnotP fp >>= return . mkCode
 
 --------------------------------------------------------------------------------------
 mkCode :: ([Statement SourceSpan], M.HashMap SourceSpan [AnnToken Reft]) -> 
-  Nano SourceSpan RefType
+  Either Error (Nano SourceSpan RefType)
 --------------------------------------------------------------------------------------
-mkCode (ss, m) = Nano { code   = Src (checkTopStmt <$> ss)
+mkCode (ss, m) =  do
+    tas <- foldM (\a b -> liftM2 envUnion (vds b) (return a)) envEmpty $ varDeclStmts ss
+    return $ Nano { code   = Src (checkTopStmt <$> ss)
     , specs  = envFromList [ a       | TSpec (Extern a)    <- list ] 
     , sigs   = envFromList [ a       | TBind         a     <- list ] 
     , consts = envFromList [ a       | TSpec (Meas   a)    <- list ] 
     , defs   = envFromList [ a       | TSpec (Type   a)    <- list ] 
     , tAlias = envFromList [ a       | TSpec (Talias a)    <- list ]
     , pAlias = envFromList [ p       | TSpec (Palias p)    <- list ]
-    , tAnns  = foldr (envUnion . vds) envEmpty $ varDeclStmts ss
+    , tAnns  = tas
     , quals  = [q                    | TSpec (Qual   q)    <- list ]
     , invts  = [Loc l' t             | TSpec (Invt l t)    <- list, let l' = srcPos l]
     } 
   where
     list                    = concat $ M.elems m
-    
     vds (VarDeclStmt l ds)  = mrg (prefixed $ M.lookup l m) (inlined ds)
     vds _                   = error "BUG: Parse.mkCode"
-
     prefixed (Just xs)      = envFromList [ a | TBind a <- xs ]
     prefixed Nothing        = envEmpty
 
@@ -449,34 +450,38 @@ mkCode (ss, m) = Nano { code   = Src (checkTopStmt <$> ss)
                                                   , TType t <- ans ]
 
     mrg e1 e2 
-      | not $ null un       = (die . er . head) un
+      | not $ null un       = Left $ (er . head) un
       where un              = fst <$> (envToList $ envIntersectWith const e1 e2)
             er s            = bugMultipleAnnots (srcPos s) s
     mrg e1 e2 
-      | otherwise           = envUnion e1 e2  
-
+      | otherwise           = return $ envUnion e1 e2  
 
 
 -------------------------------------------------------------------------------
 -- | Parse File and Type Signatures -------------------------------------------
 -------------------------------------------------------------------------------
 
-parseNanoFromFile :: FilePath-> IO (Nano SourceSpan RefType)
+parseNanoFromFile :: FilePath-> IO (Either Error (Nano SourceSpan RefType))
 parseNanoFromFile f 
   = do spec <- parseCodeFromFile =<< getPreludePath
        code <- parseCodeFromFile f
-       return $ catSpecDefs $ mconcat [spec, code] 
+       case (spec, code) of 
+        (Right s, Right c) -> return $ catSpecDefs $ mconcat [s, c]
+        (Left  e, _      ) -> return $ Left e
+        (_      , Left  e) -> return $ Left e
 
-catSpecDefs pgm = pgm { sigs = defγ }
+catSpecDefs :: PP t => Nano SourceSpan t -> Either Error (Nano SourceSpan t)
+catSpecDefs pgm = do
+    defγ       <- envFromList <$> sequence [ (x,) <$> lookupTy x γ | x <- fs ]
+    return $ pgm { sigs = defγ }
   where 
-    defγ        = envFromList [ (x, lookupTy x γ) | x <- fs ]
     γ           = sigs pgm
     fs          = definedFuns stmts 
     Src stmts   = code pgm
 
-lookupTy x γ   = fromMaybe err $ envFindTy x γ 
+lookupTy x γ   = maybeToEither err $ envFindTy x γ 
   where 
-    err        = die $ bugUnboundFunction γ (srcPos x) x
+    err        = bugUnboundFunction γ (srcPos x) x
 
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite

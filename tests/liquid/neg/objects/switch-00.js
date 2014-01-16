@@ -1,5 +1,5 @@
 
-/*@ type color = {number | (0 <= v && v < 16)} */
+/*@ type color = {number | (0 <= v && v < 17)} */
 
 /*@ type band = { downImage : string
                 , image     : string

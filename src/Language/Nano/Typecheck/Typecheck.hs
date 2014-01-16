@@ -54,21 +54,24 @@ import qualified System.Console.CmdArgs.Verbosity as V
 verifyFile :: FilePath -> IO (UAnnSol a, F.FixResult Error)
 --------------------------------------------------------------------------------
 verifyFile f = do 
-  nano    <- parseNanoFromFile f
-  V.whenLoud $ donePhase FM.Loud "Parse"
-  V.whenLoud $ putStrLn . render . pp $ nano
-  case ssaTransform' nano of 
-    Left err -> return (NoAnn, F.Unsafe [err])
-    Right p  -> 
-      do 
-        let nanoSsa = patchTypeAnnots p
-        V.whenLoud  $ donePhase FM.Loud "SSA Transform"
-        V.whenLoud  $ putStrLn . render . pp $ p
-        verb       <- V.getVerbosity
-        let annp    = execute verb nanoSsa $ tcNano p
-        r          <- either unsafe safe annp 
-        V.whenLoud  $ donePhase FM.Loud "Typechecking"
-        return      $ (NoAnn, r)
+  p <- parseNanoFromFile f
+  case p of 
+    Left err -> return (NoAnn, F.Unsafe [err]) 
+    Right nano -> 
+      do  V.whenLoud $ donePhase FM.Loud "Parse"
+          V.whenLoud $ putStrLn . render . pp $ nano
+          case ssaTransform' nano of 
+            Left err -> return (NoAnn, F.Unsafe [err])
+            Right p  -> 
+              do 
+                let nanoSsa = patchTypeAnnots p
+                V.whenLoud  $ donePhase FM.Loud "SSA Transform"
+                V.whenLoud  $ putStrLn . render . pp $ p
+                verb       <- V.getVerbosity
+                let annp    = execute verb nanoSsa $ tcNano p
+                r          <- either unsafe safe annp 
+                V.whenLoud  $ donePhase FM.Loud "Typechecking"
+                return      $ (NoAnn, r)
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppshow) 
@@ -234,7 +237,6 @@ tcInScope γ act = accumAnn annCheck act
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
--- tcFun    :: (F.Reftable r) => Env (RType r) -> FunctionStatement (AnnSSA r) -> TCM r (TCEnv r)
 tcFun γ (FunctionStmt l f xs body)
   = case tcEnvFindTy f γ of
       Nothing -> die $ errorMissingSpec (srcPos l) f
@@ -247,10 +249,10 @@ tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l f body t
   where 
     γ'                              = envAddFun l f i αs xs ts t γ 
 
-tcFunBody γ l f body t
-  = do (body', q)     <- tcStmts γ body
-       when (isJust q) $ void $ unifyTypeM (srcPos l) "Missing return" f tVoid t
-       return body'
+tcFunBody γ l f body t = liftM2 (,) (tcStmts γ body) getTDefs >>= ret
+  where
+    ret ((_, Just _), d) | not (isSubType d t tVoid) = tcError $ errorMissingReturn (srcPos l)
+    ret ((b, _     ), _) | otherwise                 = return b
 
 envAddFun _ f i αs xs ts t = tcEnvAdds tyBinds 
                            . tcEnvAdds (varBinds xs ts) 
@@ -500,11 +502,6 @@ tcExpr γ (BracketRef l e fld@(StringLit _ s))
   = do (e', t) <- tcPropRead getProp γ l e s
        return     (BracketRef l e' fld, t)
  
--- e[i] 
-tcExpr γ (BracketRef l e fld@(IntLit _ i)) 
-  = do (e', t) <- tcPropRead getIdx γ l e i 
-       return     (BracketRef l e' fld, t)
-
 -- e1[e2]
 tcExpr γ e@(BracketRef _ _ _) 
   = tcCall γ e

@@ -79,10 +79,17 @@
 /*@ extern builtin_BIUndefined      :: forall A. {A | false}                                                            */
 
 
-/*@ extern builtin_OpLT        :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x <  y)) }   */
-/*@ extern builtin_OpLEq       :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x <= y)) }   */
-/*@ extern builtin_OpGT        :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x >  y)) }   */
-/*@ extern builtin_OpGEq       :: ({x:number|true}, {y:number|true}) => {v:boolean | ((Prop v) <=> (x >= y)) }   */
+/*@ extern builtin_OpLT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
+                                  /\ (x:string, y:string) => boolean                                */
+
+/*@ extern builtin_OpLEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <= y)) } 
+                                  /\ (x:string, y:string) => boolean                                */
+
+/*@ extern builtin_OpGT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) } 
+                                  /\ (x:string, y:string) => boolean                                */
+
+/*@ extern builtin_OpGEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >= y)) }
+                                  /\ (x:string, y:string) => boolean                                */
 
 //PV: @==@ and @===@ could be handled more precisely
 /*@ extern builtin_OpEq        :: forall A.   (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }  */
@@ -102,10 +109,10 @@
 
 
 /*@ extern builtin_OpAdd :: /\ (x:number, y:number) => {number | v = x + y}
-                     /\ (x:number, y:string) => string
-                     /\ (x:string, y:number) => string
-                     /\ (x:string, y:string) => string
-  */
+                            /\ (x:number, y:string) => string
+                            /\ (x:string, y:number) => string
+                            /\ (x:string, y:string) => string
+*/
 
 /* builtin_OpAdd      :: (x:number + string, y:number + string) => 
                               {v:number + string | (if ((ttag x) = "number" && (ttag y) = "number") 
@@ -199,7 +206,7 @@
     toLocaleUpperCase : () => string,
     trim              : () => string,
 
-    length: number,
+    length            : number,
 
     substr            : (from: number, length: number) => string
 } */

@@ -429,61 +429,69 @@ function doCalculateResistance() {
   return;
 }
 
-// 
-// function addCommas(inputStr) /*: Str -> Str */ {
-//     var commaAddedValue = "";
-//     var lengthRemaining = inputStr.length;
-//     var index = lengthRemaining - 1;
-//     var digitCount = 0;
-// 
-//     while (lengthRemaining > 0) {
-//         if (digitCount == 3) {
-//             commaAddedValue = "," + commaAddedValue; // Stick a comma in.
-//             digitCount = 0;
-//         }
-//         commaAddedValue = inputStr.charAt(index--) + commaAddedValue;
-//         digitCount++;
-//         lengthRemaining--;
-//     }
-// 
-//     return (commaAddedValue);
-// }
-// 
-// function containsNonDigit(inputStr) /*: Str -> Bool */ {
-//     var stringLength = inputStr.length;
-//     for (var i = 0; i < stringLength; i++) {
-//         if ((inputStr.charAt(i) < "0") || (inputStr.charAt(i) > "9")) {
-//             return (true);
-//         }
-//     }
-// 
-//     return (false);
-// }
-// 
-// function containsLeadingZero(inputStr) /*: Str -> Bool */ {
-//     if ((inputStr.charAt(0) == "0") && (inputStr.length != 1)) {
-//         return (true);
-//     }
-// 
-//     return (false);
-// }
-// 
-// function containsErroneousNonZeroDigits(inputStr, zerosStartAtPosition) /*: Str * Num -> Bool */ {
-//     var length = inputStr.length;
-// 
-//     if (length <= zerosStartAtPosition) {
-//         return (false);
-//     }
-// 
-//     for (var i = zerosStartAtPosition; i < length; i++) {
-//         if (inputStr.charAt(i) != "0") {
-//             return (true);
-//         }
-//     }
-// 
-//     return (false);
-// }
-// 
+/*@ addCommas :: (string) => string */
+function addCommas(inputStr) {
+  var commaAddedValue = "";
+  var lengthRemaining = inputStr.length;
+  var index = lengthRemaining - 1;
+  var digitCount = 0;
+ 
+  while (lengthRemaining > 0) {
+    if (digitCount == 3) {
+       commaAddedValue = "," + commaAddedValue; // Stick a comma in.
+       digitCount = 0;
+     }
+     //Orig:
+     //commaAddedValue = inputStr.charAt(index--) + commaAddedValue;
+     //digitCount++;
+     //lengthRemaining--;
+     commaAddedValue = inputStr.charAt(index) + commaAddedValue;
+     index = index - 1;
+     digitCount = digitCount + 1;
+     lengthRemaining = lengthRemaining - 1;
+   }
+ 
+   return (commaAddedValue);
+}
+ 
+/*@ containsNonDigit :: (inputStr: string) => { boolean | true } */
+function containsNonDigit(inputStr) {
+  var stringLength = inputStr.length;
+  for (var i = 0; i < stringLength; i++) {
+    if ((inputStr.charAt(i) < "0") || (inputStr.charAt(i) > "9")) {
+      return (true);
+    }
+  }
+
+  return (false);
+}
+ 
+/*@ containsLeadingZero :: (inputStr: string) => { boolean | true } */
+function containsLeadingZero(inputStr) {
+    if ((inputStr.charAt(0) == "0") && (inputStr.length != 1)) {
+        return (true);
+    }
+
+    return (false);
+}
+
+/*@ containsErroneousNonZeroDigits :: (inputStr: string, zerosStartAtPosition: number) => { boolean | true } */
+function containsErroneousNonZeroDigits(inputStr, zerosStartAtPosition) {
+    var length = inputStr.length;
+
+    if (length <= zerosStartAtPosition) {
+        return (false);
+    }
+
+    for (var i = zerosStartAtPosition; i < length; i++) {
+        if (inputStr.charAt(i) != "0") {
+          return (true);
+        }
+    }
+
+    return (false);
+}
+
 // function removeCommas(inputStr) /*: Str -> Str */ {
 //     var noCommasValue = "";
 //     var index = 0;

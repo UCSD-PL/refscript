@@ -59,7 +59,7 @@ lookupProto :: (Ord r, PP r, F.Reftable r, IsLocated a) =>
 lookupProto l specs defs s t@(TObj bs _) = 
     case find (match $ F.stringSymbol "__proto__") bs of
       Just (B _ t) -> getProp l specs defs s t
-      Nothing -> Just (t, tUndef)
+      Nothing -> Nothing -- Just (t, tUndef)
   where match s (B f _)  = s == f
 lookupProto l _ _ _ _ = die $ bug (srcPos l) 
   "lookupProto can only unfold the prototype chain for object types"
@@ -78,8 +78,8 @@ lookupAmbient l specs defs s amb t =
 getPropApp l specs defs s t@(TApp c ts _) 
   = case c of 
       TUn      -> getPropUnion l specs defs s ts
-      TInt     -> Just (t, tUndef)
-      TBool    -> Just (t, tUndef)
+      TInt     -> Nothing -- Just (t, tUndef)
+      TBool    -> Nothing -- Just (t, tUndef)
       TString  -> lookupAmbient l specs defs s "String" t
       TUndef   -> Nothing
       TNull    -> Nothing

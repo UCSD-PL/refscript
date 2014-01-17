@@ -63,13 +63,13 @@ function main(n){
   var ys = makeList(n);
   // Property: map preserves lengths
   var as = map(abs, xs);
-  assert(length(as) == length(xs));
+  assert(mylength(as) == mylength(xs));
   // Property: reverse preserves lengths
   var bs = reverse(ys);
-  assert(length(bs) == length(ys));
+  assert(mylength(bs) == mylength(ys));
   // Property: append adds lengths
   var cs = append(xs, ys);
-  assert(length(cs) == (length(xs) + length(bs)));
+  assert(mylength(cs) == (mylength(xs) + mylength(bs)));
 }
   
 

@@ -19,5 +19,5 @@ function minIndex(a){
     } 
     return min; 
   };
-  return forloop(0, length(a), step, 0);
+  return forloop(0, mylength(a), step, 0);
 }

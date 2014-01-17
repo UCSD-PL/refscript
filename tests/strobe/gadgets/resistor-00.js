@@ -505,31 +505,32 @@ function removeCommas(inputStr) {
 
     return (noCommasValue);
 }
-// 
-// function doOhmsCheck() /*:  -> Undef */ {
-//     var cleanedOhms = removeCommas(ohms.value);
-//     var minimumOhmsValue = 0, maximumOhmsValue = 0.0;
-//     if (numberOfColorBands == 4) {
-//         minimumOhmsValue = 0;
-//         maximumOhmsValue = 99000000000.0;
-//     } else {
-//         minimumOhmsValue = 0;
-//         maximumOhmsValue = 999000000000.0;
-//     }
-// 
-//     if ((cleanedOhms < minimumOhmsValue) || (cleanedOhms > maximumOhmsValue) || (containsNonDigit(cleanedOhms)) || (containsLeadingZero(cleanedOhms)) || (containsErroneousNonZeroDigits(cleanedOhms, numberOfColorBands - 2))) {
-//         ohms.color = "#FF0000"; // Red.
-//         ohms.strikeout = true;
-//     } else {
-//         ohms.color = "#000000"; // Black.
-//         ohms.strikeout = false;
-//         resistance = parseNum(cleanedOhms);
-//     }
-// 
-//     doGenerateBandColors();
-// 
-//     return;
-// }
+
+/*@ doOhmsCheck :: () => void */
+function doOhmsCheck() {
+    var cleanedOhms = removeCommas(ohms.value);
+    var minimumOhmsValue = 0, maximumOhmsValue = 0.0;
+    if (numberOfColorBands == 4) {
+        minimumOhmsValue = 0;
+        maximumOhmsValue = 99000000000.0;
+    } else {
+        minimumOhmsValue = 0;
+        maximumOhmsValue = 999000000000.0;
+    }
+
+    if ((cleanedOhms < minimumOhmsValue) || (cleanedOhms > maximumOhmsValue) || (containsNonDigit(cleanedOhms)) || (containsLeadingZero(cleanedOhms)) || (containsErroneousNonZeroDigits(cleanedOhms, numberOfColorBands - 2))) {
+        ohms.color = "#FF0000"; // Red.
+        ohms.strikeout = true;
+    } else {
+        ohms.color = "#000000"; // Black.
+        ohms.strikeout = false;
+        resistance = parseNum(cleanedOhms);
+    }
+
+    doGenerateBandColors();
+
+    return;
+}
 // 
 // function doGenerateBandColors() /*:  -> Undef */ {
 //     var digitStr = resistance.toStr();

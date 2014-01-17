@@ -16,6 +16,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Unfold
+import qualified Language.Nano.Typecheck.Subst as SU
 
 import           Control.Exception   (throw)
 import           Control.Applicative ((<$>))
@@ -26,7 +27,7 @@ import           Data.Monoid
 import           Text.Parsec
 
 import           Text.Printf 
-import           Debug.Trace
+-- import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
 
 -- Given an environment @γ@, a (string) field @s@ and a type @t@, `getProp` 
@@ -46,9 +47,10 @@ getProp l specs defs s t@(TObj bs _) =
                     _       -> lookupProto l specs defs s t
   where match s (B f _)  = s == f
 
-getProp l specs defs s t@(TApp _ _ _)  = getPropApp l specs defs s t 
-getProp _ _     _    _ t@(TFun _ _ _ ) = Just (t, tUndef)
+getProp l specs defs s t@(TApp _ _ _)  = getPropApp l specs defs s t
+getProp _ _     _    _ t@(TFun _ _ _ ) = Nothing
 getProp l specs defs s a@(TArr _ _)    = getPropArr l specs defs s a
+getProp l specs defs s t@(TBd (TD (TDef i) v r _)) = undefined
 getProp l _     _    _ t               = die $ bug (srcPos l) $ "getProp: " ++ (ppshow t) 
 
 
@@ -67,11 +69,16 @@ lookupProto l _ _ _ _ = die $ bug (srcPos l)
 -- Access the property from the relevant ambient object but return the 
 -- original accessed type instead of the type of the ambient object. 
 -------------------------------------------------------------------------------
-lookupAmbient :: (Ord r, F.Reftable r, F.Symbolic a, PP r, IsLocated l) =>
-  l -> Env (RType r) -> Env (RType r) -> String -> a -> RType r -> Maybe (RType r, RType r)
+lookupAmbientVar :: (Ord r, F.Reftable r, PP r, IsLocated l) =>
+  l -> Env (RType r) -> Env (RType r) -> String -> String -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-lookupAmbient l specs defs s amb t = 
-      envFindTy amb specs 
+lookupAmbientVar l specs defs s amb t = 
+      envFindTy amb specs
+  >>= getProp l specs defs s 
+  >>= return . mapFst (const t)
+
+lookupAmbientType l specs defs s amb t = 
+      envFindTy amb defs
   >>= getProp l specs defs s 
   >>= return . mapFst (const t)
 
@@ -80,31 +87,22 @@ getPropApp l specs defs s t@(TApp c ts _)
       TUn      -> getPropUnion l specs defs s ts
       TInt     -> Nothing -- Just (t, tUndef)
       TBool    -> Nothing -- Just (t, tUndef)
-      TString  -> lookupAmbient l specs defs s "String" t
+      TString  -> lookupAmbientVar l specs defs s "String" t
       TUndef   -> Nothing
       TNull    -> Nothing
       (TDef _) -> getProp l specs defs s $ unfoldSafe defs t
       TTop     -> die $ bug (srcPos l) "getProp top"
       TVoid    -> die $ bug (srcPos l) "getProp void"
 
-getPropArr l specs defs s a@(TArr _ _) 
-  = case s of
-    -- TODO: make more specific, add refinements 
-    "length" -> Just (a, tInt) 
-    _        -> case stringToInt s of
-                  -- Implicit coersion of numieric strings:
-                  -- x["0"] = x[0], x["1"] = x[1], etc.
-                  Just i  -> getIdx l specs defs i a 
-                  -- The rest of the cases are undefined
-                  Nothing -> Just (a, tUndef) 
-
--------------------------------------------------------------------------------
-stringToInt :: String -> Maybe Int
--------------------------------------------------------------------------------
-stringToInt s = 
-  case runParser P.integer 0 "" s of
-    Right i -> Just $ fromInteger i
-    Left _  -> Nothing
+getPropArr l specs defs s a@(TArr t _) = 
+        envFindTy "Array" defs
+    >>= getProp l specs defs s . su t
+    >>= return . mapFst (const a)
+  where
+    su s (TBd (TD _ [v] t _)) = SU.apply (SU.fromList [(v, s)]) t
+    su _ _                    = die $ bug (srcPos l) "Array needs to be defined as a generic type in prelude.js"
+ 
+  -- Array has been defined as a generic data type
 
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns

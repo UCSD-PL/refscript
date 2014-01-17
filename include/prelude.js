@@ -57,7 +57,7 @@
 /*@ extern safehead :: forall A. (list[A]) => A                                                               */
 /*@ extern safetail :: forall A. (xs:list[A]) => {v:list[A] + null | (len v) = (len xs) - 1}                  */
 
-/*@ extern Array    :: (n : { v: number | 0 <= v } ) => { v: [ undefined ] | (len v) = n }                    */
+/* extern Array    :: (n : { v: number | 0 <= v } ) => { v: [ undefined ] | (len v) = n }                    */
 
 
 
@@ -151,12 +151,17 @@
 
 
 /*************************************************************************/
-/************** Ambient Objects ******************************************/
+/************** Ambient Definitions **************************************/
 /*************************************************************************/
 // Taken from here:
 // http://typescript.codeplex.com/SourceControl/latest#typings/lib.d.ts
 
+// -| Number
+
 /*@ extern Number :: (x: top) => number */
+
+
+// -| Math
 
 /*@ extern Math :: {
     E       : number,
@@ -187,6 +192,9 @@
     tan     : (x: number) => number
 } */
 
+
+// -| String
+
 /*@ extern String     :: {
     toString          : () => string,
     charAt            : (pos: number) => string,
@@ -213,7 +221,7 @@
 } */
 
 
-// Ideally we'd like to use this version:
+//Typescript Definition:
 /*  extern String     : {
     toString          : () => string,
     charAt            : (pos: number) => string,
@@ -245,6 +253,78 @@
     substr            : (from: number, length?: number) => string
 } */
 
+
+// -| Array
+
+/*@  type Array[T]
+  {
+    toString       : () => string,
+    toLocaleString : () => string,
+    concat         : (items: [T]) => [T],
+    join           : (separator: string) => string,
+    pop            : () => T,
+    push           : (items: [T]) => number,
+    reverse        : () => [T],
+    shift          : () => T,
+    slice          : (start: number, end: number) => [T],
+    sort           : (compareFn: (a: T, b: T) => number) => [T],
+    splice         :  /\ (start: number) => [T]
+                      /\ (start: number, deleteCount: number, items: [T]) => [T],
+    unshift        : (items: [T]) => number,
+
+    indexOf        : (searchElement: T, fromIndex: number) => number,
+    lastIndexOf    : (searchElement: T, fromIndex: number) => number,
+    every          : (callbackfn: (value: T, index: number, array: [T]) => boolean) => boolean,
+    some           : (callbackfn: (value: T, index: number, array: [T]) => boolean) => boolean,
+    forEach        : (callbackfn: (value: T, index: number, array: [T]) => void) => void,
+    map            : forall U . (callbackfn: (value: T) => U) => [U],
+    filter         : (callbackfn: (value: T, index: number, array: [T]) => boolean) => [T],
+    reduce         : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T,
+    reduce         : forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U,
+    reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T,
+    reduceRight    : forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U,
+
+    length         : number
+  }
+*/
+
+
+
+//Typescript Definition:
+/*  type Array[T] 
+  {
+    toString              :: () => string,
+    toLocaleString        :: () => string,
+    concat<U extends T[]> :: (...items: [U]) => [T],
+    concat                :: (...items: [T]) => T[],
+    join                  :: (separator?: string) => string,
+    pop                   :: () => T,
+    push                  :: (...items: [T]) => number,
+    reverse               :: () => [T],
+    shift                 :: () => T,
+    slice                 :: (start: number, end?: number) => [T],
+    sort                  :: (compareFn?: (a: T, b: T) => number) => [T],
+    splice                :: (start: number) => [T],
+    splice                :: (start: number, deleteCount: number, ...items: [T]) => [T],
+    unshift               :: (...items: [T]) => number,
+
+    indexOf               :: (searchElement: T, fromIndex?: number) => number,
+    lastIndexOf           :: (searchElement: T, fromIndex?: number) => number,
+    every                 :: (callbackfn: (value: T, index: number, array: [T]) => boolean, thisArg?: any) => boolean,
+    some                  :: (callbackfn: (value: T, index: number, array: [T]) => boolean, thisArg?: any) => boolean,
+    forEach               :: (callbackfn: (value: T, index: number, array: [T]) => void, thisArg?: any) => void,
+    map<U>                :: (callbackfn: (value: T, index: number, array: [T]) => U, thisArg?: any) => [U],
+    filter                :: (callbackfn: (value: T, index: number, array: [T]) => boolean, thisArg?: any) => [T],
+    reduce                :: (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue?: T) => T,
+    reduce<U>             :: (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U,
+    reduceRight           :: (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue?: T) => T,
+    reduceRight<U>        :: (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U,
+
+    length: number,
+
+    [n: number]: T,
+  }
+*/
 
 /*************************************************************************/
 /************** Run-Time Tags ********************************************/

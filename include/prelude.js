@@ -52,7 +52,6 @@
                         {v: boolean | (((Prop v) <=> len(xango) = 0) && ((Prop v) <=> ttag(xango) = "null"))}                      */
 /*@ extern emptyPoly :: forall A. (x:A) => {v: boolean | ((Prop v) <=> ((ttag x) = "null"))}             */
 
-/*@ extern length   :: forall A. (xs:list[A] + null) => {v:number | ((v >= 0) && v = (len xs))}         */
 /*@ extern safehead :: forall A. (list[A]) => A                                     */
 /*@ extern safetail :: forall A. (xs:list[A]) => {v:list[A] + null | (len v) = (len xs) - 1} */
 

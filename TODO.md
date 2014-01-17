@@ -1,14 +1,14 @@
 Benchmarks
 ----------
 
-  - tests/strobe/gadgets/resistor-01.js
+  - tests/strobe/gadgets/resistor-00.js
 
 
 JS Features
 -----------
 
   - FIELDS
-    - array length
+    - array length - use the same treatment with String methods.
     - definitely missing field
 
   - METHODS:

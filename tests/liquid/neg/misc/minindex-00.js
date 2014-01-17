@@ -30,7 +30,7 @@ function minIndex(a){
      return min; 
    };
    
-   return foldl(step, 0, range(0, length(a)));
+   return foldl(step, 0, range(0, mylength(a)));
  }
 
 

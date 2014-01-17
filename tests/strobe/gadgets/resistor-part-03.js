@@ -15,17 +15,17 @@ var numberOfColorBands = 4;
 
 /*@ extern parseNum :: (string) => number */
  
-/*@ containsNonDigit :: (inputStr: string) => { boolean | true } */
-function containsNonDigit(inputStr) {
-  var stringLength = inputStr.length;
-  for (var i = 0; i < stringLength; i++) {
-    if ((inputStr.charAt(i) < "0") || (inputStr.charAt(i) > "9")) {
-      return (true);
-    }
-  }
-
-  return (false);
-}
+///*@ containsNonDigit :: (inputStr: string) => { boolean | true } */
+//function containsNonDigit(inputStr) {
+//  var stringLength = inputStr.length;
+//  for (var i = 0; i < stringLength; i++) {
+//    if ((inputStr.charAt(i) < "0") || (inputStr.charAt(i) > "9")) {
+//      return (true);
+//    }
+//  }
+//
+//  return (false);
+//}
 
 /*@ removeCommas :: (inputStr: string) => string */
 function removeCommas(inputStr) {
@@ -44,29 +44,29 @@ function removeCommas(inputStr) {
 /*@ doOhmsCheck :: () => { void | true } */
 function doOhmsCheck() {
     var cleanedOhms = removeCommas(ohms.value);
-    //var minimumOhmsValue = 0, maximumOhmsValue = 0.0;
-    var minimumOhmsValue = 0, maximumOhmsValue = 0;
-    if (numberOfColorBands == 4) {
-        minimumOhmsValue = 0;
-        //maximumOhmsValue = 99000000000.0;
-        maximumOhmsValue = 99000000000;
-    } else {
-        minimumOhmsValue = 0;
-        //maximumOhmsValue = 999000000000.0;
-        maximumOhmsValue = 999000000000;
-    }
-
-    //if ((cleanedOhms < minimumOhmsValue) || (cleanedOhms > maximumOhmsValue) || (containsNonDigit(cleanedOhms)) || (containsLeadingZero(cleanedOhms)) || (containsErroneousNonZeroDigits(cleanedOhms, numberOfColorBands - 2))) {
-    if (cleanedOhms < minimumOhmsValue) {
-        ohms.color = "#FF0000"; // Red.
-        ohms.strikeout = true;
-    } else {
-        ohms.color = "#000000"; // Black.
-        ohms.strikeout = false;
-        resistance = parseNum(cleanedOhms);
-    }
-
-    //doGenerateBandColors();
+//    //var minimumOhmsValue = 0, maximumOhmsValue = 0.0;
+//    var minimumOhmsValue = 0, maximumOhmsValue = 0;
+//    if (numberOfColorBands == 4) {
+//        minimumOhmsValue = 0;
+//        //maximumOhmsValue = 99000000000.0;
+//        maximumOhmsValue = 99000000000;
+//    } else {
+//        minimumOhmsValue = 0;
+//        //maximumOhmsValue = 999000000000.0;
+//        maximumOhmsValue = 999000000000;
+//    }
+//
+//    //if ((cleanedOhms < minimumOhmsValue) || (cleanedOhms > maximumOhmsValue) || (containsNonDigit(cleanedOhms)) || (containsLeadingZero(cleanedOhms)) || (containsErroneousNonZeroDigits(cleanedOhms, numberOfColorBands - 2))) {
+//    if (cleanedOhms < minimumOhmsValue) {
+//        ohms.color = "#FF0000"; // Red.
+//        ohms.strikeout = true;
+//    } else {
+//        ohms.color = "#000000"; // Black.
+//        ohms.strikeout = false;
+//        resistance = parseNum(cleanedOhms);
+//    }
+//
+//    //doGenerateBandColors();
 
     return;
 }

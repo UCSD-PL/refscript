@@ -3,7 +3,7 @@
 
 /*@ foo :: forall A. (list[A] + null) => number */
 function foo(xs){
-    assert(length(xs) > 0);
+    assert(mylength(xs) > 0);
     var zs = xs;
     return 12;
 }

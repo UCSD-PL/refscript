@@ -492,18 +492,19 @@ function containsErroneousNonZeroDigits(inputStr, zerosStartAtPosition) {
     return (false);
 }
 
-// function removeCommas(inputStr) /*: Str -> Str */ {
-//     var noCommasValue = "";
-//     var index = 0;
-// 
-//     for (var i = 0; i < inputStr.length; i++) {
-//         if (inputStr.charAt(i) != ",") {
-//             noCommasValue = noCommasValue + inputStr.charAt(i);
-//         }
-//     }
-// 
-//     return (noCommasValue);
-// }
+/*@ removeCommas :: (inputStr: string) => { string | true } */
+function removeCommas(inputStr) {
+    var noCommasValue = "";
+    var index = 0;
+
+    for (var i = 0; i < inputStr.length; i++) {
+        if (inputStr.charAt(i) != ",") {
+            noCommasValue = noCommasValue + inputStr.charAt(i);
+        }
+    }
+
+    return (noCommasValue);
+}
 // 
 // function doOhmsCheck() /*:  -> Undef */ {
 //     var cleanedOhms = removeCommas(ohms.value);

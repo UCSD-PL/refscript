@@ -131,9 +131,9 @@ bareTypeP
  <|> try (refP ( do ts <- bareTypeNoUnionP `sepBy1` plus
                     case ts of
                       [ ] -> error "impossible"
-                      [_] -> error "bareTypeP parser BUG"
+                      [a] -> error $ "bareTypeP parser BUG: " ++ ppshow a
                       _   -> return $ TApp TUn (sort ts) 
-                ))
+               ))
 
 
 bareTypeNoUnionP

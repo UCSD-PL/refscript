@@ -137,14 +137,15 @@ bareTypeP
 
 
 bareTypeNoUnionP
-  =  try bareAllP
+  =  try bareAll1P
+ <|> try (intersectP bareAll1P)
  <|> try bareFun1P
- <|> try bareFunP
+ <|> try (intersectP bareFun1P)
  <|>     (bareAtomP bbaseP)
 
 -- | `bareFunP` parses an ordered-intersection type
-bareFunP 
-  = tAnd <$> many1 (reserved "/\\" >> bareFun1P)
+intersectP p
+  = tAnd <$> many1 (reserved "/\\" >> p)
 
 -- | `bareFun1P` parses a single function type
 bareFun1P
@@ -208,7 +209,7 @@ tDefP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "null"      >> return TNull)
      <|> (TDef <$> identifierP)
 
-bareAllP 
+bareAll1P 
   = do reserved "forall"
        αs <- many1 tvarP
        dot

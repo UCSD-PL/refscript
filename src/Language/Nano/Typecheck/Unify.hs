@@ -42,8 +42,8 @@ import qualified Data.List           as L
 -- Unification --------------------------------------------------------------
 -----------------------------------------------------------------------------
 
--- | Unify types @t@ and @t'@, using @θ@ as the current substitution and @env@
--- as the current type definition environment.
+-- | Unify types @t@ and @t'@, in substitution environment @θ@ and type
+-- definition environment @env@.
 -----------------------------------------------------------------------------
 unify :: (PP r, F.Reftable r, Ord r) => 
   SourceSpan -> Env (RType r) -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)

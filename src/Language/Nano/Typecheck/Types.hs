@@ -417,7 +417,7 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
   TObj b1 r1          == TObj b2 r2          = (null $ b1 L.\\ b2) && (null $ b2 L.\\ b1) && r1 == r2
   TArr t1 r1          == TArr t2 r2          = t1 == t2 && r1 == r2
   TBd (TD c1 a1 b1 _) == TBd (TD c2 a2 b2 _) = (c1, a1, b1)   == (c2, a2, b2)
-  TAll _ _            == TAll _ _            = errorstar "Unimplemented: Eq (RType r)" -- TODO
+  TAll v1 t1          == TAll v2 t2          = v1 == v2 && t1 == t2   -- Very strict Eq here
   _                   == _                   = False
 
 

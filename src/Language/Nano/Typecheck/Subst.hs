@@ -114,10 +114,11 @@ instance (PP r, F.Reftable r) => Substitutable r (Cast (RType r)) where
   apply θ c = c { castTarget = apply θ (castTarget c) }
 
 instance (PP r, F.Reftable r) => Substitutable r (Fact r) where
-  apply _ x@(PhiVar _)     = x
-  apply θ (TypInst ξ ts)   = TypInst ξ $ apply θ ts
-  apply θ (TCast   ξ c)    = TCast   ξ $ apply θ c
-  apply θ (TAnnot t)       = TAnnot  $ apply θ t
+  apply _ x@(PhiVar _)   = x
+  apply θ (TypInst ξ ts) = TypInst ξ $ apply θ ts
+  apply θ (Overload t)   = Overload (apply θ <$> t)
+  apply θ (TCast   ξ c)  = TCast   ξ $ apply θ c
+  apply θ (TAnnot t)     = TAnnot  $ apply θ t
 
 
 instance (PP r, F.Reftable r) => Substitutable r (Annot (Fact r) z) where
@@ -129,9 +130,13 @@ instance Free (Cast (RType r)) where
 instance Free (Fact r) where
   free (PhiVar _)       = S.empty
   free (TypInst _ ts)   = free ts
+  free (Overload t)     = free t
   free (TCast _ c)      = free c
   free (TAnnot t)       = free t
  
+instance Free a => Free (Maybe a) where
+  free Nothing  = S.empty
+  free (Just a) = free a
  
 ------------------------------------------------------------------------
 appTy :: (PP r, F.Reftable r) => RSubst r -> RType r -> RType r

@@ -8,7 +8,7 @@ module Language.Nano.Typecheck.Unify (
   -- * Unification 
   --   unify
   -- , 
-  unifys
+  unifys, unifysV
 
   ) where 
 
@@ -33,7 +33,7 @@ import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
 import qualified Data.List           as L
--- import           Text.Printf 
+import           Text.Printf 
 -- import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
 
@@ -120,6 +120,11 @@ unifys ::  (PP r, F.Reftable r, Ord r) =>
 unifys loc env θ xs ys = {- tracePP msg $ -} unifys' loc env θ xs ys 
    {-where -}
    {-  msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
+
+unifysV loc env θ xs ys = tracePP msg <$> unifys' loc env θ (tracePP "xs" xs) (tracePP "ys" ys)
+  where 
+    msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
+
 
 unifys' loc env θ ts ts' 
   | nTs == nTs' = go env θ ts ts'

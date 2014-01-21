@@ -407,12 +407,17 @@ consCall :: (PP a)
 consCall g l fn es ft0 
   = do (xes, g')    <- consScan consExpr g es
        let ts        = [envFindTy x g' | x <- xes]
-       let ft        = fromMaybe (err ts ft0) $ calleeType l ts ft0
+       let ft        =  case calleeType l ts ft0 of  
+                          Just t -> t
+                          Nothing ->  case overload l of 
+                                        Just t -> tracePP ("Dragged from overload at: " ++ ppshow (srcPos l)) t 
+                                        Nothing -> err ts ft0
        (_,its,ot)   <- instantiate l g fn ft
        let (su, ts') = renameBinds its xes
        zipWithM_ (subTypeContainers "Call" l g') [envFindTy x g' | x <- xes] ts'
        envAddFresh "consCall" l (F.subst su ot) g'
     where
+       overload l    = listToMaybe [ t | Overload (Just t) <- ann_fact l ]
        err ts ft0    = die $ errorNoMatchCallee (srcPos l) ts ft0 
 
 -- instantiate :: AnnTypeR -> CGEnv -> RefType -> CGM RefType

@@ -40,6 +40,7 @@ module Language.Nano.Types (
   , mkNextId
   , isNextId
   , mkSSAId
+  , stripSSAId
 
   -- * Error message
   , convertError
@@ -66,6 +67,7 @@ import           Control.Exception                  (throw)
 import           Control.Applicative                ((<$>))
 -- import qualified Data.HashMap.Strict as M
 import           Data.Hashable
+import           Data.Text                          (splitOn, unpack, pack)
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.Monoid                        (Monoid (..))
@@ -550,6 +552,10 @@ instance PP BuiltinOp where
 
 mkSSAId :: SourceSpan -> Id SourceSpan -> Int -> Id SourceSpan 
 mkSSAId l (Id _ x) n = Id l (x ++ ssaStr ++ show n)  
+
+-- Returns the identifier as is if this is not an SSAed name.
+stripSSAId :: Id a -> Id a
+stripSSAId (Id l x) = Id l (unpack $ head $ splitOn (pack ssaStr) (pack x))
 
 mkNextId :: Id a -> Id a
 mkNextId (Id a x) =  Id a $ nextStr ++ x

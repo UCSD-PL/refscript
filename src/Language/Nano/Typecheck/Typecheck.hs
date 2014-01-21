@@ -224,13 +224,19 @@ ppTCEnv (TCE env spc an ctx)
 
 
 tcEnvPushSite i γ            = γ { tce_ctx = pushContext i    $ tce_ctx γ }
-tcEnvAdds     x γ            = γ { tce_env = envAdds x        $ tce_env γ }
+
+-- Since we assume the raw types should be the same among the various SSA 
+-- variants, we should only be adding bindings for the non-SSA version of the 
+-- variable, to be able to retrieve it correctly later on.
+tcEnvAdds                   :: (IsLocated a, F.Reftable r) => [(Id a, RType r)] -> TCEnv r -> TCEnv r
+tcEnvAdds     x γ            = γ { tce_env = envAdds (mapFst stripSSAId <$> x)        $ tce_env γ }
+
 tcEnvAddReturn x t γ         = γ { tce_env = envAddReturn x t $ tce_env γ }
-tcEnvMem x                   = envMem x      . tce_env 
-tcEnvFindTy x                = envFindTy x   . tce_env
-tcEnvFindReturn              = envFindReturn . tce_env
-tcEnvFindSpec x              = envFindTy x   . tce_anns
-tcEnvFindTyOrDie l x         = fromMaybe ugh . tcEnvFindTy x  where ugh = die $ errorUnboundId (ann l) x
+tcEnvMem x                   = envMem (stripSSAId x)      . tce_env 
+tcEnvFindTy x                = envFindTy (stripSSAId x)   . tce_env
+tcEnvFindReturn              = envFindReturn              . tce_env
+tcEnvFindSpec x              = envFindTy (stripSSAId x)   . tce_anns
+tcEnvFindTyOrDie l x         = fromMaybe ugh . tcEnvFindTy (stripSSAId x)  where ugh = die $ errorUnboundId (ann l) x
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Scoped Block in Environment ------------------------------------
@@ -244,27 +250,42 @@ tcInScope γ act = accumAnn annCheck act
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
+
+
+-------------------------------------------------------------------------------
+tcFun :: (Ord r, F.Reftable r, PP r) =>
+  TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r), Maybe (TCEnv r))
+-------------------------------------------------------------------------------
 tcFun γ (FunctionStmt l f xs body)
   = case tcEnvFindTy f γ of
       Nothing -> die $ errorMissingSpec (srcPos l) f
       Just ft -> do body' <- foldM (tcFun1 γ l f xs) body =<< tcFunTys l f xs ft
                     return   (FunctionStmt l f xs body', Just γ) 
-
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
+-------------------------------------------------------------------------------
+tcFun1 ::
+  (Ord r, F.Reftable r, PP r, IsLocated a1, IsLocated t1, IsLocated a, CallSite t) =>
+  TCEnv r -> a -> t1 -> [Id a1] -> [Statement (AnnSSA r)] -> 
+  (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
+-------------------------------------------------------------------------------
 tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l f body t
   where 
-    γ'                              = envAddFun l f i αs xs ts t γ 
+    γ'                              = envAddFun f i αs xs ts t γ 
 
 tcFunBody γ l f body t = liftM2 (,) (tcStmts γ body) getTDefs >>= ret
   where
     ret ((_, Just _), d) | not (isSubType d t tVoid) = tcError $ errorMissingReturn (srcPos l)
     ret ((b, _     ), _) | otherwise                 = return b
 
-envAddFun _ f i αs xs ts t = tcEnvAdds tyBinds 
-                           . tcEnvAdds (varBinds xs ts) 
-                           . tcEnvAddReturn f t
-                           . tcEnvPushSite i 
+-------------------------------------------------------------------------------
+envAddFun :: (F.Reftable r, IsLocated c, IsLocated a, CallSite b) =>
+  a -> b -> [TVar] -> [Id c] -> [RType r] -> RType r -> TCEnv r -> TCEnv r
+-------------------------------------------------------------------------------
+envAddFun f i αs xs ts t = tcEnvAdds tyBinds 
+                         . tcEnvAdds (varBinds xs ts) 
+                         . tcEnvAddReturn f t
+                         . tcEnvPushSite i 
   where  
     tyBinds                = [(tVarId α, tVar α) | α <- αs]
     varBinds               = zip
@@ -425,7 +446,7 @@ tcVarDecl :: (Ord r, PP r, F.Reftable r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e)) 
   = do (e', g) <- tcAsgn γ x e
-       return (VarDecl l x (Just e'), g)
+       return (VarDecl l x (Just e'), {- trace ("G(x) after assignment on " ++ ppshow (srcPos l) ++  ": " ++ maybe "NONE" (ppshow . tcEnvFindTy x) g) -} g)
 
 tcVarDecl γ v@(VarDecl _ _ Nothing)  
   = return   (v, Just γ)
@@ -437,8 +458,14 @@ tcAsgn :: (PP r, Ord r, F.Reftable r) =>
   TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 -------------------------------------------------------------------------------
 tcAsgn γ x e
-  = do (e' , t) <- tcExprT γ e $ tcEnvFindSpec x γ
-       return      (e', Just   $ tcEnvAdds [(x, t)] γ)
+-- This isn't gonna work as it is for normal assignment, cause the xs are SSAed, 
+-- so you won't get the same variable exactly. I.e. tcEnvFindTy will always 
+-- return Nothing.
+  = do (e' , t) <- tcExprT γ e rhsT
+       return      (e', Just $ tcEnvAdds [(x, t)] γ)
+    where
+       rhsT      = maybe (tcEnvFindTy x γ) Just (tcEnvFindSpec x γ)
+
 
 -------------------------------------------------------------------------------
 tcExprT :: (Ord r, PP r, F.Reftable r)

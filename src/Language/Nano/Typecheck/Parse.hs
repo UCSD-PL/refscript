@@ -117,25 +117,19 @@ xyP lP sepP rP
 ----------------------------------------------------------------------------------
 
 -- | Top-level parser for "bare" types. 
--- If refinements not supplied, then "top" refinement is used.
+-- If no refinements are supplied, then "top" refinement is used.
 
 bareTypeP :: Parser RefType 
-bareTypeP 
-  =  try (do  ts <- bareTypeNoUnionP `sepBy1` plus
-              tr <- topP   -- unions have Top ref. type atm
-              case ts of
-                [ ] -> error "impossible"
-                [t] -> return t
-                _   -> return $ TApp TUn (sort ts) tr)
-         
- <|> try (refP ( do ts <- bareTypeNoUnionP `sepBy1` plus
-                    case ts of
-                      [ ] -> error "impossible"
-                      [a] -> error $ "bareTypeP parser BUG: " ++ ppshow a
-                      _   -> return $ TApp TUn (sort ts) 
-               ))
+bareTypeP =       
+       try (xrefP unP)
+  <|>  try (refP unP)
+  <|>      (dummyP unP)
 
+unP      = mkUn <$> bareTypeNoUnionP `sepBy1` plus
 
+mkUn [a] = setRTypeR a
+mkUn ts  = TApp TUn (sort ts)
+                
 bareTypeNoUnionP
   =  try bareAll1P
  <|> try (intersectP bareAll1P)
@@ -143,7 +137,6 @@ bareTypeNoUnionP
  <|> try (intersectP bareFun1P)
  <|>     (bareAtomP bbaseP)
 
--- | `bareFunP` parses an ordered-intersection type
 intersectP p
   = tAnd <$> many1 (reserved "/\\" >> p)
 
@@ -179,9 +172,7 @@ bbaseP
  <|> try (TObj <$> (braces $ bindsP) )     -- { f1: T1, ... , fn: Tn} 
  <|> try (TObj <$> arrayBindsP)            -- { i1: T1, ... , in: Tn}
  <|> try (TArr <$> arrayP)                 -- [T]
- <|> try (TApp <$> tDefP <*> bareTyArgsP)  -- list[A], tree[A,B] etc...
- 
- -- <|>     ((`TApp` []) <$> tconP)           -- yuck. this is wierd.
+ <|> try (TApp <$> tConP <*> bareTyArgsP)  -- list[A], tree[A,B] etc...
 
 bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
 
@@ -199,15 +190,15 @@ wordP p  = condIdP ok p
   where 
     ok   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
-tDefP :: Parser TCon
-tDefP =  try (reserved "number"    >> return TInt)
+tConP :: Parser TCon
+tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "boolean"   >> return TBool)
      <|> try (reserved "undefined" >> return TUndef)
      <|> try (reserved "void"      >> return TVoid)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
-     <|> (TDef <$> identifierP)
+     <|>     (TDef <$> identifierP)
 
 bareAll1P 
   = do reserved "forall"

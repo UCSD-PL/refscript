@@ -279,15 +279,21 @@
     forEach        : (callbackfn: (value: T, index: number, array: [T]) => void) => void,
     map            : forall U . (callbackfn: (value: T) => U) => [U],
     filter         : (callbackfn: (value: T, index: number, array: [T]) => boolean) => [T],
+
     reduce         : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T,
-    reduce         : forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U,
+
     reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T,
-    reduceRight    : forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U,
 
     length         : number
   }
 */
+/*
+    reduce         :  /\ (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T
+                      /\ forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U,
 
+    reduceRight    :  /\ (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T
+                      /\ forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U,
+*/
 
 
 //Typescript Definition:
@@ -296,7 +302,7 @@
     toString              :: () => string,
     toLocaleString        :: () => string,
     concat<U extends T[]> :: (...items: [U]) => [T],
-    concat                :: (...items: [T]) => T[],
+    concat                :: (...items: [T]) => [T],
     join                  :: (separator?: string) => string,
     pop                   :: () => T,
     push                  :: (...items: [T]) => number,

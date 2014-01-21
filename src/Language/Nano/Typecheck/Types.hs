@@ -380,17 +380,14 @@ rTypeR (TAll _ _   ) = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )     = errorstar "Unimplemented: rTypeR - TAnd"
 rTypeR (TExp _)      = errorstar "Unimplemented: rTypeR - TExp"
 
+-- Set the top-level refinement (wherever applies)
 setRTypeR :: RType r -> r -> RType r
-setRTypeR (TApp c ts _   ) r' = TApp c ts r'
-setRTypeR (TVar v _      ) r' = TVar v r'
-setRTypeR (TFun xts ot _ ) r' = TFun xts ot r'
-setRTypeR (TObj xts _    ) r' = TObj xts r'
-setRTypeR (TArr t _      ) r  = TArr t r
-setRTypeR (TBd  _        ) _  = errorstar "Unimplemented: setRTypeR - TBd"
-setRTypeR (TAll _ _      ) _  = errorstar "Unimplemented: setRTypeR - TAll"
-setRTypeR (TAnd _        ) _  = errorstar "Unimplemented: setRTypeR - TAnd"
-setRTypeR (TExp _        ) _  = errorstar "Unimplemented: setRTypeR - TExp"
-
+setRTypeR (TApp c ts _   ) r = TApp c ts r
+setRTypeR (TVar v _      ) r = TVar v r
+setRTypeR (TFun xts ot _ ) r = TFun xts ot r
+setRTypeR (TObj xts _    ) r = TObj xts r
+setRTypeR (TArr t _      ) r = TArr t r
+setRTypeR t                _ = t
 
 ---------------------------------------------------------------------------------------
 noUnion :: (F.Reftable r) => RType r -> Bool

@@ -147,9 +147,10 @@ tcNano p@(Nano {code = Src fs})
     where
        γ         = initEnv p
 
-patchAnn m (Ann l fs) = Ann l $ sortNub $ fs' ++ fs 
+patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs 
   where
     fs'               = [f | f@(TypInst _ _) <- M.lookupDefault [] l m]
+    fs''              = [f | f@(Overload (Just _)) <- M.lookupDefault [] l m]
 
 initEnv pgm           = TCE (specs pgm) (sigs pgm) (tAnns pgm) emptyContext
 traceCodePP p m s     = trace (render $ {- codePP p m s -} pp p) $ return ()
@@ -541,7 +542,7 @@ tcCall γ ex@(InfixExpr l o e1 e2)
 -- | `e(e1,...,en)`
 tcCall γ ex@(CallExpr l e es)
   = do (e', ft0)              <- tcExpr γ e
-       z                      <- tcCallMatch γ l e es (tracePP "ft0" ft0)
+       z                      <- tcCallMatch γ l e es ft0
        case z of
          Just (es', t)        -> return (CallExpr l e' es', t)
          Nothing              -> deadCast (srcPos l) γ ex
@@ -578,52 +579,39 @@ tcCall γ e
 tcCallMatch γ l fn es ft0
   = do -- Typecheck arguments
        (es', ts)     <- unzip <$> mapM (tcExpr γ) es
-       -- let cand = resolveOverload l ts ft0
-       -- Extract callee type (if intersection: match with args)
-       ctype <- resolveOverload (ann l) ts ft0
-       maybe (return Nothing) (fmap Just . tcCallCase γ l fn es' ts) $ (tracePP "calleeType" $ calleeType l ts ft0)
+       mType         <- resolveOverload γ l fn es' ts ft0
+       addAnn (srcPos l) (Overload mType)
+       maybe (return Nothing) (fmap Just . tcCallCase γ l fn es' ts) mType
 
 
 ---------------------------------------------------------------------------------------
-resolveOverload :: (Ord r, F.Reftable r, PP r) =>
-  SourceSpan -> [RType r] -> RType r -> TCM r (Maybe (RSubst r))
 ---------------------------------------------------------------------------------------
-resolveOverload l args ft =  
-  do
-    θ <- getSubst 
-    γ <- getTDefs   
-    return $ listToMaybe $ E.rights $ (unifys l γ θ args) <$> tts
+resolveOverload γ l fn es ts ft =
+  shd <$> filterM (\t -> isRight <$> tcCallCaseTry γ l fn es ts t) eqLenSigs
   where
+    shd []            = Nothing
+    shd xs            = Just $ head xs
+    isRight (Right _) = True
+    isRight (Left _ ) = False
+    eqLenSigs         = mkFun <$> L.filter (eqLen es . snd3) sigs
+    sigs              = catMaybes (bkFun <$> bkAnd ft)
 
-    tts1        = catMaybes (bkFun <$> bkAnd ft)
-    tts         = (tt <$>) <$> (L.filter (eqLen args) $ snd3 <$> catMaybes (bkFun <$> bkAnd ft))
-    tt (B _ t)  = t
-    eqLen xs ys = length xs == length ys 
+eqLen xs ys       = length xs == length ys 
 
 sameLengthArgs :: [t] -> RType r -> Bool
-sameLengthArgs args f = FL.or (bkFun f >>= \(_,bs,_) -> return $ length args == length bs)
+sameLengthArgs args f = FL.or (bkFun f >>= \(_,bs,_) -> return $ eqLen args bs)
       
 
-tcCallCaseTry γ l fn es' ts (fts)
+tcCallCaseTry γ l fn es' ts ft
   = do let ξ          = tce_ctx γ
        -- Generate fresh type parameters
-       --
-       let fts'       = L.filter (\(_,xs,_) -> eqLen ts xs) catMaybes (bkFun <$> fts)
-       ts {- (_,ibs,ot) -}    <- catMaybes <$> mapM (instantiateTry l ξ fn) fts
-       -- let its        = b_type <$> ibs
-       -- Unify with formal parameter types
-       -- θ             <- unifyTypesM (srcPos l) "tcCall" ts its
-       return undefined
-    where
-
-       eqLen xs ys = length xs == length ys 
-
-instantiateTry l ξ fn ft 
-  = do let (αs, t) = bkAll ft
-       t'         <- freshTyArgs (srcPos l) ξ αs t 
-       return $ bkFun t'
-
-       
+       (_,ibs,ot)    <- instantiate l ξ fn ft
+       let its        = b_type <$> ibs
+       θ             <- getSubst 
+       defs          <- getTDefs
+       --HACK - erase latest annotation on l
+       remAnn         $ (srcPos l)
+       return         $ unifys (ann l) defs θ ts its
 
 tcCallCase γ l fn es' ts ft 
   = do let ξ          = tce_ctx γ

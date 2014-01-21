@@ -44,8 +44,10 @@ module Language.Nano.Typecheck.TCMonad (
   , tcFunTys
 
   -- * Annotations
+  , addAnn    -- TEMP
   , accumAnn
   , getAllAnns
+  , remAnn
 
   -- * Unfolding
   , unfoldFirstTC
@@ -220,9 +222,10 @@ freshSubst l ξ αs
 
 setTyArgs l ξ βs
   = do m <- tc_anns <$> get
-       when (HM.member l m) $ tcError $ errorMultipleTypeArgs l
+       when (hasTI l m) $ tcError $ errorMultipleTypeArgs l
        addAnn l $ TypInst ξ (tVar <$> βs)
     where 
+       hasTI l m = not $ null [ i | i@(TypInst _ _) <- HM.lookupDefault [] l m ]
        msg = printf "setTyArgs: l = %s ξ = %s" (ppshow l) (ppshow ξ) 
 
 
@@ -288,9 +291,20 @@ getAnns = do θ     <- tc_subst <$> get
              return m' 
 
 -------------------------------------------------------------------------------
--- addAnn :: (F.Reftable r) => SourceSpan -> Fact r -> TCM r () 
+addAnn :: (F.Reftable r) => SourceSpan -> Fact r -> TCM r () 
 -------------------------------------------------------------------------------
 addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
+
+-------------------------------------------------------------------------------
+-- remAnn :: (F.Reftable r) => SourceSpan -> TCM r () 
+-------------------------------------------------------------------------------
+remAnn l   = modify $ \st -> st { tc_anns = delLst l (tc_anns st) } 
+  where
+    delLst k m | not (HM.member k m)                  = m
+    delLst k m | null (stl $ HM.lookupDefault [] k m) = HM.delete k m
+    delLst _ m | otherwise                            = errorstar "BUG remAnn"
+    stl []     = []
+    stl (x:xs) = xs
 
 -------------------------------------------------------------------------------
 getAllAnns :: TCM r [AnnInfo r]  

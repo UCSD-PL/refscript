@@ -39,6 +39,8 @@ module Language.Nano.Typecheck.Types (
   -- * Constructing Types
   , mkUnion
   , mkUnionR
+  , mkFun
+  , mkAll
 
   -- * Deconstructing Types
   , bkFun
@@ -263,9 +265,18 @@ bkFun :: RType r -> Maybe ([TVar], [Bind r], RType r)
 bkFun t = do let (αs, t') = bkAll t
              (xts, t'')  <- bkArr t'
              return        (αs, xts, t'')
+
+mkFun :: (F.Reftable r) => ([TVar], [Bind r], RType r) -> RType r
+mkFun ([], bs, rt) = TFun bs rt fTop 
+mkFun (αs, bs, rt) = mkAll αs (TFun bs rt fTop)
          
 bkArr (TFun xts t _) = Just (xts, t)
 bkArr _              = Nothing
+
+mkAll αs t           = go (reverse αs) t
+  where
+    go (α:αs) t      = go αs (TAll α t)
+    go []     t      = t
 
 bkAll                :: RType a -> ([TVar], RType a)
 bkAll t              = go [] t
@@ -669,6 +680,7 @@ instance (PP a) => PP (Cast a) where
 data Fact r
   = PhiVar      ![(Id SourceSpan)]
   | TypInst     !IContext ![RType r]
+  | Overload    !(Maybe (RType r))
   | TCast       !IContext !(Cast (RType r))
   | TAnnot      !(RType r)
     deriving (Eq, Ord, Show, Data, Typeable)
@@ -707,6 +719,7 @@ instance IsLocated TCon where
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)       = text "phi"  <+> pp x
   pp (TypInst ξ ts)   = text "inst" <+> pp ξ <+> pp ts 
+  pp (Overload i)     = text "overload" <+> pp i
   pp (TCast  ξ c)     = text "cast" <+> pp ξ <+> pp c
   pp (TAnnot t)       = text "annotation" <+> pp t
 

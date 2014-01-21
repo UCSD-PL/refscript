@@ -579,22 +579,33 @@ tcCall γ e
 tcCallMatch γ l fn es ft0
   = do -- Typecheck arguments
        (es', ts)     <- unzip <$> mapM (tcExpr γ) es
-       mType         <- resolveOverload γ l fn es' ts ft0
-       addAnn (srcPos l) (Overload mType)
-       maybe (return Nothing) (fmap Just . tcCallCase γ l fn es' ts) mType
+       case calleeType l ts ft0 of 
+        -- Try to match it with a non-generic type
+        Just t -> call es' ts t
+        -- If this fails try to instantiate possible generic types in the
+        -- function signature.
+        Nothing ->
+          do  mType <- resolveOverload γ l fn es' ts ft0
+              addAnn (srcPos l) (Overload mType)
+              maybe (return Nothing) (call es' ts) mType
+    where
+      call es' ts t = fmap Just $ tcCallCase γ l fn es' ts t
 
 
 ---------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------
 resolveOverload γ l fn es ts ft =
-  shd <$> filterM (\t -> isRight <$> tcCallCaseTry γ l fn es ts t) eqLenSigs
+  shd <$> filterM (\t -> valid <$> tcCallCaseTry γ l fn es ts t) eqLenSigs
   where
-    shd []            = Nothing
-    shd xs            = Just $ head xs
-    isRight (Right _) = True
-    isRight (Left _ ) = False
-    eqLenSigs         = mkFun <$> L.filter (eqLen es . snd3) sigs
-    sigs              = catMaybes (bkFun <$> bkAnd ft)
+    valid (Right (Su m) )   | not (M.null m) 
+                            = True
+    valid _                 = False
+    shd []                  = Nothing
+    shd xs                  = Just $ head xs
+    isRight (Right _)       = True
+    isRight (Left _ )       = False
+    eqLenSigs               = mkFun <$> L.filter (eqLen es . snd3) sigs
+    sigs                    = catMaybes (bkFun <$> bkAnd ft)
 
 eqLen xs ys       = length xs == length ys 
 

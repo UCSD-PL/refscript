@@ -447,8 +447,8 @@ subTypeM :: (Ord r, PP r, F.Reftable r) => RType r -> RType r -> TCM r SubDirect
 subTypeM t t' 
   = do  θ            <- getTDefs 
         -- let (_,_,_,d) = compareTs θ (trace ("CompareTs:\n" ++ ppshow t ++ "\nvs\n" ++ ppshow t' ++ "\n") t) t'
-        let (_,_,_,d) = tracePP ("CompareTs " ++ ppshow t ++ " : " ++ ppshow t') $ compareTs θ t t'
-        -- let (_,_,_,d) = compareTs θ t t'
+        -- let (_,_,_,d) = tracePP ("CompareTs " ++ ppshow t ++ " : " ++ ppshow t') $ compareTs θ t t'
+        let (_,_,_,d) = compareTs θ t t'
         return d
 
 ----------------------------------------------------------------------------------
@@ -496,13 +496,20 @@ checkAnnotation msg e t ta = do
 castM :: (Ord r, PP r, F.Reftable r) => 
            IContext -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-castM ξ e t t'    = subTypeM t t' >>= go
+-- Special case casting for objects 
+castM ξ e fromT toT | any isObj [fromT, toT] = subTypeM fromT toT >>= go
+  where
+    go EqT          = return e
+    go SubT         = addUpCast   ξ e toT
+    go _            = addDeadCast ξ e toT
+
+castM ξ e fromT toT = subTypeM fromT toT >>= go
   where 
-    go SupT       = addDownCast ξ e t'
-    go Rel        = addDownCast ξ e t'
-    go SubT       = addUpCast   ξ e t'
-    go Nth        = addDeadCast ξ e t'
-    go EqT        = return e 
+    go SupT         = addDownCast ξ e toT    
+    go Rel          = addDownCast ξ e toT   
+    go SubT         = addUpCast   ξ e toT   
+    go Nth          = addDeadCast ξ e toT   
+    go EqT          = return e 
 
 addUpCast   ξ e t = addCast ξ e (UCST t)
 addDownCast ξ e t = addCast ξ e (DCST t) 

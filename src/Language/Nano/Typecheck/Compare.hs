@@ -478,7 +478,7 @@ padObject :: (Eq r, Ord r, F.Reftable r, PP r) =>
 
 padObject γ (TObj bs1 r1) (TObj bs2 r2) = (TObj jbs' fTop, TObj b1s' r1, TObj b2s' r2, direction)
   where
-    direction                           = tracePP ("padObject: " ++ ppshow cmnDir ++ " * " ++ ppshow (distDir d1s d2s)) $ cmnDir &*& distDir d1s d2s
+    direction                           = cmnDir &*& distDir d1s d2s
     cmnDir                              = mconcatP [ d | (_, (_ ,_  ,_  ,d)) <- cmnTs] 
     jbs'                                = [B x t0      | (x, (t0,_  ,_  ,_)) <- cmnTs] 
     b1s'                                = [B x t1'     | (x, (_ ,t1',_  ,_)) <- cmnTs] 

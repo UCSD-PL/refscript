@@ -342,7 +342,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
   = do (e', g) <- tcAsgn γ (Id lx x) e
        return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
--- e1.fld = e2 [No support for field ADDITIOn yet]
+-- e1.fld = e2
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
   = do (e1', tfld) <- tcPropRead getProp γ l e1 fld
        (e2', t2)   <- tcExpr γ $ e2                    

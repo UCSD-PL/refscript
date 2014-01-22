@@ -447,7 +447,8 @@ subTypeM :: (Ord r, PP r, F.Reftable r) => RType r -> RType r -> TCM r SubDirect
 subTypeM t t' 
   = do  θ            <- getTDefs 
         -- let (_,_,_,d) = compareTs θ (trace ("CompareTs:\n" ++ ppshow t ++ "\nvs\n" ++ ppshow t' ++ "\n") t) t'
-        let (_,_,_,d) = compareTs θ t t'
+        let (_,_,_,d) = tracePP ("CompareTs " ++ ppshow t ++ " : " ++ ppshow t') $ compareTs θ t t'
+        -- let (_,_,_,d) = compareTs θ t t'
         return d
 
 ----------------------------------------------------------------------------------

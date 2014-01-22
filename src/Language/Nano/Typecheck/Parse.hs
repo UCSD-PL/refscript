@@ -116,29 +116,31 @@ xyP lP sepP rP
 -- | RefTypes --------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 
--- | Top-level parser for "bare" types. 
--- If no refinements are supplied, then "top" refinement is used.
+-- | `bareTypeP` parses top-level "bare" types. If no refinements are supplied, 
+-- then "top" refinement is used.
 
 bareTypeP :: Parser RefType 
 bareTypeP =       
+  {-tracePP "PARSED TYPE" <$> (-}
        try (xrefP unP)
   <|>  try (refP unP)
   <|>      (dummyP unP)
+  {-)-}
 
 unP      = mkUn <$> bareTypeNoUnionP `sepBy1` plus
 
 mkUn [a] = setRTypeR a
 mkUn ts  = TApp TUn (sort ts)
-                
-bareTypeNoUnionP
-  =  try bareAll1P
- <|> try (intersectP bareAll1P)
- <|> try bareFun1P
- <|> try (intersectP bareFun1P)
- <|>     (bareAtomP bbaseP)
 
-intersectP p
-  = tAnd <$> many1 (reserved "/\\" >> p)
+-- | `bareTypeNoUnionP` parses a type that does not contain a union at
+-- the top-level.
+bareTypeNoUnionP  = try funcSigP          <|> (bareAtomP bbaseP)
+
+-- | `funcSigP` parses a function type that is possibly generic and an intersection.
+funcSigP          = try (wAndP bareAll1P) <|> (wAndP bareFun1P)
+
+wAndP p           = try p                 <|> intersectP p
+intersectP p      = tAnd <$> many1 (reserved "/\\" >> p)
 
 -- | `bareFun1P` parses a single function type
 bareFun1P

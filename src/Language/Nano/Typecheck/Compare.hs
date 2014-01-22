@@ -14,7 +14,7 @@
 module Language.Nano.Typecheck.Compare (
 
   -- * Type comparison/joining/subtyping
-    Equivalent, equiv
+    Equivalent, equiv, equiv'
   , compareTs
   , alignTs
   , unionParts, unionPartsWithEq
@@ -59,7 +59,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative                hiding (empty)
 import           Control.Monad.Error                ()
 
--- import           Debug.Trace (trace)
+import           Debug.Trace (trace)
 
 
 
@@ -68,6 +68,10 @@ import           Control.Monad.Error                ()
 -- This is a slightly more relaxed version of equality. 
 class Equivalent e a where 
   equiv :: e -> a -> a -> Bool
+
+  equiv' :: String -> e -> a -> a -> Bool
+  equiv' msg a b c = equiv a (trace msg b) c
+
 
 instance Equivalent e a => Equivalent e [a] where
   equiv γ a b = and $ zipWith (equiv γ) a b 
@@ -240,8 +244,7 @@ compareTs γ t1 t2 | otherwise              = compareTs' γ t1 t2
   {-where msg = printf "About to compareTs %s and %s" (ppshow $ toType t1) (ppshow $ toType t2)-}
 
 
--- | Top-level Unions
-
+-- | Top
 compareTs' _ t1 _  | isTop t1               = errorstar "unimplemented: compareTs - top"
 compareTs' _ t1 t2 | isTop t2               = (t1', t1, t2', SubT)
   where
@@ -252,7 +255,9 @@ compareTs' _ t1 t2 | isTop t2               = (t1', t1, t2', SubT)
   
 
 -- Eliminate top-level unions
-compareTs' γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
+compareTs' γ t1 t2 | any isUnion [t1,t2]     = 
+  {-tracePP ("padUnion(" ++ ppshow t1 ++ ", " ++ ppshow t2 ++ ")") $ -}
+  padUnion γ t1 t2
 
 -- | Top-level Objects
 
@@ -450,10 +455,10 @@ unionPartsWithEq equal t1 t2 = (common t1s t2s, d1s, d2s)
     distinct xs ys = ([x | x <- xs, not $ any (x `equal`) ys ],
                       [y | y <- ys, not $ any (y `equal`) xs ])
 
-    sanityCheck ([ ],[ ]) = errorstar "unionParts, called on too small input"
-    sanityCheck ([_],[ ]) = errorstar "unionParts, called on too small input"
-    sanityCheck ([ ],[_]) = errorstar "unionParts, called on too small input"
-    sanityCheck ([_],[_]) = errorstar "unionParts, called on too small input"
+    sanityCheck ([ ],[ ]) = errorstar "unionPartsWithEq, called on too small input"
+    sanityCheck ([_],[ ]) = errorstar "unionPartsWithEq, called on too small input"
+    sanityCheck ([ ],[_]) = errorstar "unionPartsWithEq, called on too small input"
+    sanityCheck ([_],[_]) = errorstar "unionPartsWithEq, called on too small input"
     sanityCheck p         = p
 
 

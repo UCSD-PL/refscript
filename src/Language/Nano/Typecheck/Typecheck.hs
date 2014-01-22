@@ -446,7 +446,7 @@ tcVarDecl :: (Ord r, PP r, F.Reftable r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e)) 
   = do (e', g) <- tcAsgn γ x e
-       return (VarDecl l x (Just e'), {- trace ("G(x) after assignment on " ++ ppshow (srcPos l) ++  ": " ++ maybe "NONE" (ppshow . tcEnvFindTy x) g) -} g)
+       return (VarDecl l x (Just e'), g)
 
 tcVarDecl γ v@(VarDecl _ _ Nothing)  
   = return   (v, Just γ)
@@ -458,9 +458,6 @@ tcAsgn :: (PP r, Ord r, F.Reftable r) =>
   TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 -------------------------------------------------------------------------------
 tcAsgn γ x e
--- This isn't gonna work as it is for normal assignment, cause the xs are SSAed, 
--- so you won't get the same variable exactly. I.e. tcEnvFindTy will always 
--- return Nothing.
   = do (e' , t) <- tcExprT γ e rhsT
        return      (e', Just $ tcEnvAdds [(x, t)] γ)
     where
@@ -472,11 +469,12 @@ tcExprT :: (Ord r, PP r, F.Reftable r)
        => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
 tcExprT γ e to 
-  = do (e', t) <- tcExpr γ e
-       te      <- case to of
-                    Nothing -> return t
-                    Just ta -> checkAnnotation "tcExprT" e t ta
-       return     (e', te)
+  = do (e', t)    <- tcExpr γ e
+       (e'', te)  <- case to of
+                       Nothing -> return (e', t)
+                       Just ta -> (,ta) <$> castM (tce_ctx γ) e t ta
+                    {-Just ta -> checkAnnotation "tcExprT" e t ta-}
+       return     (e'', te)
 
 ----------------------------------------------------------------------------------------------
 tcExpr :: (Ord r, PP r, F.Reftable r) => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)

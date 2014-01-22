@@ -155,8 +155,8 @@ consStmt g (EmptyStmt _)
   = return $ Just g
 
 -- x = e
-consStmt g (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))   
-  = consAsgn g (Id lx x) e
+consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))   
+  = consAsgn g l (Id lx x) e
 
 -- e1.fld = e2
 consStmt g (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
@@ -225,8 +225,8 @@ consStmt _ s
 ------------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
-consVarDecl g v@(VarDecl _ x (Just e)) 
-  = consAsgn g x e
+consVarDecl g v@(VarDecl l x (Just e)) 
+  = consAsgn g l x e
 
 consVarDecl g (VarDecl _ _ Nothing)
   = return $ Just g
@@ -262,10 +262,13 @@ consExprT g e to
        l = getAnnotation e
 
 ------------------------------------------------------------------------------------
-consAsgn :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
+-- consAsgn :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
-consAsgn g x e 
-  = do (x', g') <- consExprT g e $ envFindAnnot x g 
+consAsgn g l x e 
+  = do t <- case envFindAnnot x g of
+              Just t  -> Just <$> freshTyVar g l t
+              Nothing -> return $ Nothing
+       (x', g') <- consExprT g e t
        Just <$> envAdds [(x, envFindTy x' g')] g'
 
 

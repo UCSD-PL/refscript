@@ -26,6 +26,7 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Fresh Templates for Unknown Refinement Types 
   , freshTyFun
+  , freshTyVar
   , freshTyInst
   , freshTyPhis
   , freshTyPhisWhile
@@ -397,8 +398,12 @@ freshTyFun :: (IsLocated l) => CGEnv -> l -> Id AnnTypeR -> RefType -> CGM RefTy
 freshTyFun g l f t = freshTyFun' g l f t . kVarInst . cg_opts =<< get  
 
 freshTyFun' g l _ t b
-  | b && isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= \t -> wellFormed l g t
+  | b && isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g
   | otherwise               = return t
+
+freshTyVar g l t 
+  | isTrivialRefType t = freshTy "freshTyVar" (toType t) >>= wellFormed l g
+  | otherwise          = return t
 
 -- | Instantiate Fresh Type (at Call-site)
 

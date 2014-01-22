@@ -109,7 +109,7 @@ unify l _ θ t                         t'
 unifEq _ (TApp d@(TDef _) _ _) (TApp d'@(TDef _) _ _) | d == d' = True
 unifEq γ t@(TApp (TDef _) _ _) t' = unifEq γ (unfoldSafe γ t) t'
 unifEq γ t t'@(TApp (TDef _) _ _) = unifEq γ t (unfoldSafe γ t')
-unifEq γ t t'                     = equiv γ t t'
+unifEq γ t t'                     = equiv' "unifEq" γ t t'
   
 
 

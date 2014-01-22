@@ -264,9 +264,9 @@ compareTs' γ t1 t2 | any isUnion [t1,t2]     =
 compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = padObject γ t1 t2
 
 -- | Arrays
-compareTs' γ a@(TArr _ _) a'@(TArr _ _  ) = padArray γ a a'
-compareTs' _ t1@(TObj _ _) t2@(TArr _ _ ) = error (printf "Unimplemented compareTs-Obj-Arr:\n\t%s\n\t%s" (ppshow t1) (ppshow t2))
-compareTs' _ t1@(TArr _ _) t2@(TObj _ _ ) = error (printf "Unimplemented compareTs-Arr-Obj:\n\t%s\n\t%s" (ppshow t1) (ppshow t2))
+compareTs' γ a@(TArr _ _) a'@(TArr _ _  )    = padArray γ a a'
+compareTs' _ t1@(TObj _ _) t2@(TArr _ _ )    = error (printf "Unimplemented compareTs-Obj-Arr:\n\t%s\n\t%s" (ppshow t1) (ppshow t2))
+compareTs' _ t1@(TArr _ _) t2@(TObj _ _ )    = error (printf "Unimplemented compareTs-Arr-Obj:\n\t%s\n\t%s" (ppshow t1) (ppshow t2))
 
 -- | Type definitions
 
@@ -478,7 +478,7 @@ padObject :: (Eq r, Ord r, F.Reftable r, PP r) =>
 
 padObject γ (TObj bs1 r1) (TObj bs2 r2) = (TObj jbs' fTop, TObj b1s' r1, TObj b2s' r2, direction)
   where
-    direction                           = cmnDir &*& distDir d1s d2s
+    direction                           = tracePP ("padObject: " ++ ppshow cmnDir ++ " * " ++ ppshow (distDir d1s d2s)) $ cmnDir &*& distDir d1s d2s
     cmnDir                              = mconcatP [ d | (_, (_ ,_  ,_  ,d)) <- cmnTs] 
     jbs'                                = [B x t0      | (x, (t0,_  ,_  ,_)) <- cmnTs] 
     b1s'                                = [B x t1'     | (x, (_ ,t1',_  ,_)) <- cmnTs] 
@@ -509,14 +509,12 @@ distDir xs ys
 meetBinds b1s b2s = M.toList $ M.intersectionWith (,) (bindsMap b1s) (bindsMap b2s)
 
 
--- | Break one level of padded objects
+-- | `bkPaddedObject` breaks one level of padded objects
 
---------------------------------------------------------------------------------
--- bkPaddedObject :: (F.Reftable r, PP r) => SourceSpan -> RType r -> RType r -> [(RType r, RType r)]
---------------------------------------------------------------------------------
 bkPaddedObject l t1@(TObj xt1s _) t2@(TObj xt2s _) 
-  | n == n1 && n == n2 = snd <$> cmn
-  | otherwise          = die $ bugMalignedFields l t1 t2
+  = snd <$> cmn
+  {-| n == n1 && n == n2 = snd <$> cmn-}
+  {-| otherwise          = die $ bugMalignedFields l t1 t2-}
     where
       cmn              = meetBinds xt1s xt2s
       n                = length cmn
@@ -608,7 +606,8 @@ zipType2 γ f (TFun xts t r) (TFun xts' t' r') =
 
 zipType2 γ f (TObj bs r) (TObj bs' r') = TObj mbs $ f r r'
   where
-    mbs = safeZipWith "zipType2:TObj" (zipBind2 γ f) (L.sortBy compB bs) (L.sortBy compB bs')
+    _   = safeZipWith "zipType2:TObj" (zipBind2 γ f) (L.sortBy compB bs) (L.sortBy compB bs')
+    mbs = (\(s,(t,t')) -> B s $ zipType2 γ f t t') <$> meetBinds bs bs' 
     compB (B s _) (B s' _) = compare s s'
 
 zipType2 γ f (TArr t r) (TArr t' r') = TArr (zipType2 γ f t t') $ f r r'

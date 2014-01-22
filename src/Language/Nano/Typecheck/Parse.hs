@@ -52,7 +52,7 @@ import           Language.ECMAScript3.Parser.Type hiding (Parser)
 import           Language.ECMAScript3.PrettyPrint
 
 
--- import           Debug.Trace                        (trace, traceShow)
+import           Debug.Trace                        (trace, traceShow)
 
 dot        = Token.dot        lexer
 plus       = Token.symbol     lexer "+"
@@ -64,6 +64,9 @@ star       = Token.symbol     lexer "*"
 
 idBindP :: Parser (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
+
+fdBindP :: Parser (Id SourceSpan, RefType)
+fdBindP = xyP identifierP dcolon funcSigP
 
 identifierP :: Parser (Id SourceSpan)
 identifierP =   try (withSpan Id upperIdP)
@@ -121,23 +124,29 @@ xyP lP sepP rP
 
 bareTypeP :: Parser RefType 
 bareTypeP =       
-  {-tracePP "PARSED TYPE" <$> (-}
-       try (xrefP unP)
-  <|>  try (refP unP)
-  <|>      (dummyP unP)
-  {-)-}
+      try bUnP
+  <|> try (refP rUnP)
+  <|>     (xrefP rUnP)
 
-unP      = mkUn <$> bareTypeNoUnionP `sepBy1` plus
+rUnP      = mkUn <$> bareTypeNoUnionP `sepBy1` plus
 
-mkUn [a] = setRTypeR a
+bUnP      = bareTypeNoUnionP `sepBy1` plus >>= ifSingle return (\xs -> TApp TUn xs <$> topP)
+  where
+    ifSingle f g [x] = f x
+    ifSingle f g xs  = g xs
+
+mkUn [a] = strengthen a
 mkUn ts  = TApp TUn (sort ts)
 
--- | `bareTypeNoUnionP` parses a type that does not contain a union at
--- the top-level.
+-- | `bareTypeNoUnionP` parses a type that does not contain a union at the top-level.
 bareTypeNoUnionP  = try funcSigP          <|> (bareAtomP bbaseP)
 
--- | `funcSigP` parses a function type that is possibly generic and an intersection.
-funcSigP          = try (wAndP bareAll1P) <|> (wAndP bareFun1P)
+-- | `funcSigP` parses a function type that is possibly generic and/or an intersection.
+funcSigP          = 
+      try bareAll1P
+  <|> try (intersectP bareAll1P) 
+  <|> try bareFun1P
+  <|>     (intersectP bareFun1P)
 
 wAndP p           = try p                 <|> intersectP p
 intersectP p      = tAnd <$> many1 (reserved "/\\" >> p)
@@ -165,8 +174,7 @@ argBind t = B (rTypeValueVar t) t
 bareAtomP p
   =  try (xrefP  p)
  <|> try (refP p)
---  <|> try (bindP p)   -- This case is taken separately at Function parser
- <|>     (dummyP (p <* spaces))
+ <|>     (dummyP p)
 
 bbaseP :: Parser (Reft -> RefType)
 bbaseP 
@@ -375,10 +383,11 @@ instance (PP r, F.Reftable r) => PP (AnnToken r) where
 --------------------------------------------------------------------------------------
 tAnnotP :: ParserState String (AnnToken Reft) -> ExternP String (AnnToken Reft)
 --------------------------------------------------------------------------------------
-tAnnotP stIn = EP typeP fSigP tLevP
+tAnnotP stIn = EP typeP fSigP bTypeP tLevP
   where
     typeP  = TType <$> changeState fwd bwd bareTypeP
-    fSigP  = TBind <$> changeState fwd bwd idBindP
+    fSigP  = TBind <$> changeState fwd bwd fdBindP
+    bTypeP = TBind <$> changeState fwd bwd idBindP
     tLevP  = TSpec <$> changeState fwd bwd specP
     fwd _  = stIn  -- NOTE: need to keep the state of the language-ecmascript parser!!!
     bwd _  = 0     -- TODO: Is this adequate???

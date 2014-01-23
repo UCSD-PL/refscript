@@ -9,23 +9,26 @@ var numberOfColorBands = 4;
                   , image     : string
                   , overImage : string
                   , tooltip   : string
+                  , value     : string
+                  , color     : string
+                  , strikeout : boolean
                   } */
 
 /*@ extern ohms                  :: button */
 
 /*@ extern parseNum :: (string) => number */
  
-///*@ containsNonDigit :: (inputStr: string) => { boolean | true } */
-//function containsNonDigit(inputStr) {
-//  var stringLength = inputStr.length;
-//  for (var i = 0; i < stringLength; i++) {
-//    if ((inputStr.charAt(i) < "0") || (inputStr.charAt(i) > "9")) {
-//      return (true);
-//    }
-//  }
-//
-//  return (false);
-//}
+/*@ containsNonDigit :: (inputStr: string) => { boolean | true } */
+function containsNonDigit(inputStr) {
+  var stringLength = inputStr.length;
+  for (var i = 0; i < stringLength; i++) {
+    if ((inputStr.charAt(i) < "0") || (inputStr.charAt(i) > "9")) {
+      return (true);
+    }
+  }
+
+  return (false);
+}
 
 /*@ removeCommas :: (inputStr: string) => string */
 function removeCommas(inputStr) {
@@ -44,8 +47,8 @@ function removeCommas(inputStr) {
 /*@ doOhmsCheck :: () => { void | true } */
 function doOhmsCheck() {
     var cleanedOhms = removeCommas(ohms.value);
-//    //var minimumOhmsValue = 0, maximumOhmsValue = 0.0;
-//    var minimumOhmsValue = 0, maximumOhmsValue = 0;
+    //var minimumOhmsValue = 0, maximumOhmsValue = 0.0;
+    var minimumOhmsValue = 0, maximumOhmsValue = 0;
 //    if (numberOfColorBands == 4) {
 //        minimumOhmsValue = 0;
 //        //maximumOhmsValue = 99000000000.0;
@@ -56,8 +59,9 @@ function doOhmsCheck() {
 //        maximumOhmsValue = 999000000000;
 //    }
 //
-//    //if ((cleanedOhms < minimumOhmsValue) || (cleanedOhms > maximumOhmsValue) || (containsNonDigit(cleanedOhms)) || (containsLeadingZero(cleanedOhms)) || (containsErroneousNonZeroDigits(cleanedOhms, numberOfColorBands - 2))) {
-//    if (cleanedOhms < minimumOhmsValue) {
+    //if ((cleanedOhms < minimumOhmsValue) || (cleanedOhms > maximumOhmsValue) || (containsNonDigit(cleanedOhms)) || (containsLeadingZero(cleanedOhms)) || (containsErroneousNonZeroDigits(cleanedOhms, numberOfColorBands - 2))) {
+//    if ((cleanedOhms < minimumOhmsValue) || (cleanedOhms > maximumOhmsValue) || (containsNonDigit(cleanedOhms))) {
+//    //if (cleanedOhms < minimumOhmsValue) {
 //        ohms.color = "#FF0000"; // Red.
 //        ohms.strikeout = true;
 //    } else {

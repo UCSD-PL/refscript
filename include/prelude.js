@@ -81,15 +81,23 @@
 
 
 /*@ extern builtin_OpLT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
+                                  /\ (x:string, y:number) => boolean
+                                  /\ (x:number, y:number) => boolean
                                   /\ (x:string, y:string) => boolean                                */
 
 /*@ extern builtin_OpLEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <= y)) } 
+                                  /\ (x:string, y:number) => boolean
+                                  /\ (x:number, y:number) => boolean
                                   /\ (x:string, y:string) => boolean                                */
 
 /*@ extern builtin_OpGT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) } 
+                                  /\ (x:string, y:number) => boolean
+                                  /\ (x:number, y:number) => boolean
                                   /\ (x:string, y:string) => boolean                                */
 
 /*@ extern builtin_OpGEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >= y)) }
+                                  /\ (x:string, y:number) => boolean
+                                  /\ (x:number, y:number) => boolean
                                   /\ (x:string, y:string) => boolean                                */
 
 //PV: @==@ and @===@ could be handled more precisely

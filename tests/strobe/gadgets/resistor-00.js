@@ -5,6 +5,7 @@
 //10x: added parseint
 
 // Resistor Gadget.
+/*@ resistance :: number */
 var resistance = 1000;
 
 /*@ currentBandIndex :: { number | (0 <= v && v < 5) } */
@@ -28,6 +29,9 @@ var bandNumberValues =  [1, 0, 2, 10, 15]; // Brown, Black, Red, Empty, Blank.
                   , image     : string
                   , overImage : string
                   , tooltip   : string
+                  , value     : string
+                  , color     : string
+                  , strikeout : boolean
                   } */
 
 /*@ extern firstBand             :: button */
@@ -41,6 +45,9 @@ var bandNumberValues =  [1, 0, 2, 10, 15]; // Brown, Black, Red, Empty, Blank.
 /*@ extern numberOfBandsButton   :: button */
 /*@ extern noneButton            :: button */
 /*@ extern ohms                  :: button */
+
+
+/*@ extern parseNum :: forall A. (A) => number */
 
 
 // END OF DEFINITIONS
@@ -509,13 +516,19 @@ function removeCommas(inputStr) {
 /*@ doOhmsCheck :: () => void */
 function doOhmsCheck() {
     var cleanedOhms = removeCommas(ohms.value);
-    var minimumOhmsValue = 0, maximumOhmsValue = 0.0;
+    //Orig
+    //var minimumOhmsValue = 0, maximumOhmsValue = 0.0;
+    var minimumOhmsValue = 0, maximumOhmsValue = 0;
     if (numberOfColorBands == 4) {
         minimumOhmsValue = 0;
-        maximumOhmsValue = 99000000000.0;
+        //Orig
+        //maximumOhmsValue = 99000000000.0;
+        maximumOhmsValue = 99000000000;
     } else {
         minimumOhmsValue = 0;
-        maximumOhmsValue = 999000000000.0;
+        //Orig
+        //maximumOhmsValue = 999000000000.0;
+        maximumOhmsValue = 999000000000;
     }
 
     if ((cleanedOhms < minimumOhmsValue) || (cleanedOhms > maximumOhmsValue) || (containsNonDigit(cleanedOhms)) || (containsLeadingZero(cleanedOhms)) || (containsErroneousNonZeroDigits(cleanedOhms, numberOfColorBands - 2))) {
@@ -527,131 +540,132 @@ function doOhmsCheck() {
         resistance = parseNum(cleanedOhms);
     }
 
-    doGenerateBandColors();
+    //doGenerateBandColors();
 
     return;
 }
-// 
-// function doGenerateBandColors() /*:  -> Undef */ {
-//     var digitStr = resistance.toStr();
-//     var length = digitStr.length;
-//     var digit = 0;
-// 
-//     if (resistance < 0) { // Do NOT update the Color Bands if resistance is UNDEFINED.
-//         return;
-//     }
-// 
-//     if (numberOfColorBands == 4) { // Do the first three bands of color bars.
-//         if (resistance < 10) { // Force the first band color to black.
-//             firstBand.downImage = "stock_images\\Button0blackDown.PNG";
-//             firstBand.image = "stock_images\\Button0blackNormal.PNG";
-//             firstBand.overImage = "stock_images\\Button0blackOver.PNG";
-//             bandNumberValues[0] = 0;
-//         } else { // if(resistance >= 10)
-//             // Process the first digit.
-//             digit = parseNum(digitStr.charAt(0));
-//             firstBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
-//             firstBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
-//             firstBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
-//             bandNumberValues[0] = digit;
-//         }
-// 
-//         if (resistance < 10) { // Process the first digit.
-//             if (length == 0) {
-//                 digit = 0;
-//             } else {
-//                 digit = parseNum(digitStr.charAt(0));
-//             }
-//             secondBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
-//             secondBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
-//             secondBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
-//             bandNumberValues[1] = digit;
-//         } else { // Process the second digit.
-//             digit = parseNum(digitStr.charAt(1));
-//             secondBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
-//             secondBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
-//             secondBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
-//             bandNumberValues[1] = digit;
-//         }
-// 
-//         // Process the multiplier.
-//         if (resistance < 100) {
-//             thirdBand.downImage = "stock_images\\Button0blackDown.PNG";
-//             thirdBand.image = "stock_images\\Button0blackNormal.PNG";
-//             thirdBand.overImage = "stock_images\\Button0blackOver.PNG";
-//             bandNumberValues[2] = 0;
-//         } else {
-//             digit = (digitStr.length - 2);
-//             thirdBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
-//             thirdBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
-//             thirdBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
-//             bandNumberValues[2] = digit;
-//         }
-//     } else { // if(numberOfColorBands == 5) { // Do the first four bands of color bars.
-//         if (resistance < 100) { // Force the first band color to black.
-//             firstBand.downImage = "stock_images\\Button0blackDown.PNG";
-//             firstBand.image = "stock_images\\Button0blackNormal.PNG";
-//             firstBand.overImage = "stock_images\\Button0blackOver.PNG";
-//             bandNumberValues[0] = 0;
-//             if (resistance < 10) {
-//                 secondBand.downImage = "stock_images\\Button0blackDown.PNG";
-//                 secondBand.image = "stock_images\\Button0blackNormal.PNG";
-//                 secondBand.overImage = "stock_images\\Button0blackOver.PNG";
-//                 bandNumberValues[1] = 0;
-//                 digit = parseNum(digitStr.charAt(0));
-//                 thirdBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
-//                 thirdBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
-//                 thirdBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
-//                 bandNumberValues[2] = digit;
-//             } else { // Resistance is between 10 and 99.
-//                 // Process the first digit.
-//                 digit = parseNum(digitStr.charAt(0));
-//                 secondBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
-//                 secondBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
-//                 secondBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
-//                 bandNumberValues[1] = digit;
-//                 // Process the second digit.
-//                 digit = parseNum(digitStr.charAt(1));
-//                 thirdBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
-//                 thirdBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
-//                 thirdBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
-//                 bandNumberValues[2] = digit;
-//             }
-//         } else { // if(resistance >= 100)
-//             // Process the first digit.
-//             digit = parseNum(digitStr.charAt(0));
-//             firstBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
-//             firstBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
-//             firstBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
-//             bandNumberValues[0] = digit;
-//             // Process the second digit.
-//             digit = parseNum(digitStr.charAt(1));
-//             secondBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
-//             secondBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
-//             secondBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
-//             bandNumberValues[1] = digit;
-//             // Process the third digit.
-//             digit = parseNum(digitStr.charAt(2));
-//             thirdBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
-//             thirdBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
-//             thirdBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
-//             bandNumberValues[2] = digit;
-//         }
-// 
-//         // Process the multiplier.
-//         if (resistance < 1000) {
-//             fourthBand.downImage = "stock_images\\Button0blackDown.PNG";
-//             fourthBand.image = "stock_images\\Button0blackNormal.PNG";
-//             fourthBand.overImage = "stock_images\\Button0blackOver.PNG";
-//             bandNumberValues[3] = 0;
-//         } else {
-//             digit = (digitStr.length - 3);
-//             fourthBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
-//             fourthBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
-//             fourthBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
-//             bandNumberValues[3] = digit;
-//         }
-//     }
-// 
-//     return;
-// }
+ 
+/*@ doGenerateBandColors :: () => void */ 
+function doGenerateBandColors() {
+  var digitStr = resistance.toStr();
+  var length = digitStr.length;
+  var digit = 0;
+
+  if (resistance < 0) { // Do NOT update the Color Bands if resistance is UNDEFINED.
+    return;
+  }
+
+  //     if (numberOfColorBands == 4) { // Do the first three bands of color bars.
+  //         if (resistance < 10) { // Force the first band color to black.
+  //             firstBand.downImage = "stock_images\\Button0blackDown.PNG";
+  //             firstBand.image = "stock_images\\Button0blackNormal.PNG";
+  //             firstBand.overImage = "stock_images\\Button0blackOver.PNG";
+  //             bandNumberValues[0] = 0;
+  //         } else { // if(resistance >= 10)
+  //             // Process the first digit.
+  //             digit = parseNum(digitStr.charAt(0));
+  //             firstBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
+  //             firstBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
+  //             firstBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
+  //             bandNumberValues[0] = digit;
+  //         }
+  // 
+  //         if (resistance < 10) { // Process the first digit.
+  //             if (length == 0) {
+  //                 digit = 0;
+  //             } else {
+  //                 digit = parseNum(digitStr.charAt(0));
+  //             }
+  //             secondBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
+  //             secondBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
+  //             secondBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
+  //             bandNumberValues[1] = digit;
+  //         } else { // Process the second digit.
+  //             digit = parseNum(digitStr.charAt(1));
+  //             secondBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
+  //             secondBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
+  //             secondBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
+  //             bandNumberValues[1] = digit;
+  //         }
+  // 
+  //         // Process the multiplier.
+  //         if (resistance < 100) {
+  //             thirdBand.downImage = "stock_images\\Button0blackDown.PNG";
+  //             thirdBand.image = "stock_images\\Button0blackNormal.PNG";
+  //             thirdBand.overImage = "stock_images\\Button0blackOver.PNG";
+  //             bandNumberValues[2] = 0;
+  //         } else {
+  //             digit = (digitStr.length - 2);
+  //             thirdBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
+  //             thirdBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
+  //             thirdBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
+  //             bandNumberValues[2] = digit;
+  //         }
+  //     } else { // if(numberOfColorBands == 5) { // Do the first four bands of color bars.
+  //         if (resistance < 100) { // Force the first band color to black.
+  //             firstBand.downImage = "stock_images\\Button0blackDown.PNG";
+  //             firstBand.image = "stock_images\\Button0blackNormal.PNG";
+  //             firstBand.overImage = "stock_images\\Button0blackOver.PNG";
+  //             bandNumberValues[0] = 0;
+  //             if (resistance < 10) {
+  //                 secondBand.downImage = "stock_images\\Button0blackDown.PNG";
+  //                 secondBand.image = "stock_images\\Button0blackNormal.PNG";
+  //                 secondBand.overImage = "stock_images\\Button0blackOver.PNG";
+  //                 bandNumberValues[1] = 0;
+  //                 digit = parseNum(digitStr.charAt(0));
+  //                 thirdBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
+  //                 thirdBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
+  //                 thirdBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
+  //                 bandNumberValues[2] = digit;
+  //             } else { // Resistance is between 10 and 99.
+  //                 // Process the first digit.
+  //                 digit = parseNum(digitStr.charAt(0));
+  //                 secondBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
+  //                 secondBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
+  //                 secondBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
+  //                 bandNumberValues[1] = digit;
+  //                 // Process the second digit.
+  //                 digit = parseNum(digitStr.charAt(1));
+  //                 thirdBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
+  //                 thirdBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
+  //                 thirdBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
+  //                 bandNumberValues[2] = digit;
+  //             }
+  //         } else { // if(resistance >= 100)
+  //             // Process the first digit.
+  //             digit = parseNum(digitStr.charAt(0));
+  //             firstBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
+  //             firstBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
+  //             firstBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
+  //             bandNumberValues[0] = digit;
+  //             // Process the second digit.
+  //             digit = parseNum(digitStr.charAt(1));
+  //             secondBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
+  //             secondBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
+  //             secondBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
+  //             bandNumberValues[1] = digit;
+  //             // Process the third digit.
+  //             digit = parseNum(digitStr.charAt(2));
+  //             thirdBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
+  //             thirdBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
+  //             thirdBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
+  //             bandNumberValues[2] = digit;
+  //         }
+  // 
+  //         // Process the multiplier.
+  //         if (resistance < 1000) {
+  //             fourthBand.downImage = "stock_images\\Button0blackDown.PNG";
+  //             fourthBand.image = "stock_images\\Button0blackNormal.PNG";
+  //             fourthBand.overImage = "stock_images\\Button0blackOver.PNG";
+  //             bandNumberValues[3] = 0;
+  //         } else {
+  //             digit = (digitStr.length - 3);
+  //             fourthBand.downImage = "stock_images\\Button" + buttonStrs[digit] + "Down.PNG";
+  //             fourthBand.image = "stock_images\\Button" + buttonStrs[digit] + "Normal.PNG";
+  //             fourthBand.overImage = "stock_images\\Button" + buttonStrs[digit] + "Over.PNG";
+  //             bandNumberValues[3] = digit;
+  //         }
+  //     }
+  // 
+  return;
+}

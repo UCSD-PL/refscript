@@ -166,7 +166,7 @@
 
 // -| Number
 
-/*@ extern Number :: (x: top) => number */
+/*@ extern NumberC :: (x: top) => number */
 
 
 // -| Math
@@ -259,6 +259,25 @@
     length: number,
 
     substr            : (from: number, length?: number) => string
+} */
+
+
+// -| Number
+
+/*@ extern Number :: {
+    toString        :  /\ (radix: number) => string
+                       /\ () => string,
+    toFixed         : (fractionDigits: number) => string,
+    toExponential   : (fractionDigits: number) => string,
+    toPrecision     : (precision: number) => string
+} */
+
+//Typescript Definition:
+/*  extern Number : {
+    toString        : (radix?: number) => string
+    toFixed         : (fractionDigits?: number) => string,
+    toExponential   : (fractionDigits?: number) => string,
+    toPrecision     : (precision: number) => string
 } */
 
 

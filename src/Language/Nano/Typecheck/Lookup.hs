@@ -85,7 +85,7 @@ lookupAmbientType l specs defs s amb t =
 getPropApp l specs defs s t@(TApp c ts _) 
   = case c of 
       TUn      -> getPropUnion l specs defs s ts
-      TInt     -> Nothing -- Just (t, tUndef)
+      TInt     -> lookupAmbientVar l specs defs s "Number" t
       TBool    -> Nothing -- Just (t, tUndef)
       TString  -> lookupAmbientVar l specs defs s "String" t
       TUndef   -> Nothing

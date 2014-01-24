@@ -269,7 +269,7 @@ consAsgn g l x e
               Just t  -> Just <$> freshTyVar g l t
               Nothing -> return $ Nothing
        (x', g') <- consExprT g e t
-       Just <$> envAdds [(x, envFindTy x' g')] g'
+       Just <$> envAdds [(x, tracePP (ppshow x) $ envFindTy x' g')] g'
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh, 

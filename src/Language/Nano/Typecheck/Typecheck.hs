@@ -448,10 +448,12 @@ tcVarDecl γ v@(VarDecl l x (Just e))
   = do (e', g) <- tcAsgn γ x e
        return (VarDecl l x (Just e'), g)
 
-tcVarDecl γ v@(VarDecl _ _ Nothing)  
-  = return   (v, Just γ)
-
-varDeclAnnot v = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
+tcVarDecl γ v@(VarDecl l x Nothing)  
+  = case tcEnvFindSpec x γ of
+      Just  t -> return (v, Just $ tcEnvAdds [(x, t)] γ)
+      Nothing -> errorstar $ printf "Variable definition of " ++ ppshow x  ++ 
+                  "at " ++ ppshow l ++ " with neither type annotation nor " ++
+                  "initialization is not supported."
 
 -------------------------------------------------------------------------------
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 

@@ -228,8 +228,12 @@ consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv)
 consVarDecl g v@(VarDecl l x (Just e)) 
   = consAsgn g l x e
 
-consVarDecl g (VarDecl _ _ Nothing)
-  = return $ Just g
+consVarDecl g (VarDecl l x Nothing)
+  = case envFindAnnot x g of
+      Just  t -> Just <$> envAdds [(x, t)] g
+      Nothing -> errorstar $ printf "Variable definition of " ++ ppshow x  ++ 
+                  "at " ++ ppshow l ++ " with neither type annotation nor " ++
+                  "initialization is not supported."
 
 ------------------------------------------------------------------------------------
 consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
@@ -269,7 +273,7 @@ consAsgn g l x e
               Just t  -> Just <$> freshTyVar g l t
               Nothing -> return $ Nothing
        (x', g') <- consExprT g e t
-       Just <$> envAdds [(x, tracePP (ppshow x) $ envFindTy x' g')] g'
+       Just <$> envAdds [(x, envFindTy x' g')] g'
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh, 

@@ -52,6 +52,8 @@ Tool/Implementation
   - Array literal checks are quite slow.
       E.g.: liquid/pos/arrays/arr-07.js
 
+  - Restore the (liquid) property of Array.length (i.e. that it returns a number
+    equal to the length of the array)
 
 Failing Tests 
 -------------

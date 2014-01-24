@@ -1,7 +1,7 @@
 
 /*@ toNumber :: (x: string) => { number | 0 <= v }*/
 function toNumber(x) {
-  var n = Number(x);
+  var n = NumberC(x);
   if (n >= 0) {
     return n;
   }

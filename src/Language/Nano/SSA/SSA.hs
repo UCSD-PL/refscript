@@ -318,8 +318,10 @@ ssaVarDecl (VarDecl l x (Just e)) = do
     (x', e') <- ssaAsgn l x e
     return    (True, VarDecl l x' (Just e'))
 
-ssaVarDecl (VarDecl l x Nothing)
-  = errorstar $ printf "Variable definition of %s at %s with no initialization is not supported." (ppshow x) (ppshow l)
+ssaVarDecl (VarDecl l x Nothing) = do
+    x' <- updSsaEnv l x
+    return    (True, VarDecl l x' Nothing)
+--  = errorstar $ printf "Variable definition of %s at %s with no initialization is not supported." (ppshow x) (ppshow l)
 
 ------------------------------------------------------------------------------------
 ssaAsgn :: F.Reftable r => SourceSpan -> Id SourceSpan -> Expression SourceSpan -> 

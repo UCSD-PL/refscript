@@ -686,28 +686,6 @@ undefType l γ
       _        -> die $ bug (srcPos l) $ "Malformed type --" ++ ppshow ut ++ "-- for BIUndefined in prelude.js"
     where 
       ut       = builtinOpTy l BIUndefined $ tce_env γ
-
--- ----------------------------------------------------------------------------------
--- tcArrayLit :: (Ord r, PP r, F.Reftable r) =>
---   TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
--- ----------------------------------------------------------------------------------
--- tcArrayLit γ (Just t@(TArr ta _)) (ArrayLit l es) = do 
---     let tao       = Just ta
---     ets          <- mapM (\e -> tcExprT γ e tao) es
---     let (es', ts) = unzip ets
---     checkElts ta es' ts
---     return (ArrayLit l es', t)
---   where
---     checkElts = zipWithM_ . (checkAnnotation "tcArrayLit")
--- 
--- tcArrayLit _ Nothing (ArrayLit l _)  = 
---   die $ bug (srcPos l) "Array literals need type annotations at the moment to typecheck in TC."
--- 
--- tcArrayLit _ (Just _) (ArrayLit l _) = 
---   die $ bug (srcPos l) "Type annotation for array literal needs to be of Array type."
--- 
--- tcArrayLit _ _ e = 
---   die $ bug (srcPos $ getAnnotation e) "BUG: Only support tcArray for array literals with type annotation"
              
 ----------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------

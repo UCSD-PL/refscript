@@ -44,7 +44,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -465,13 +465,23 @@ consObjT l g pe to
        subTypeContainers "object literal" l g' tLit t
        envAddFresh "consObj" l t g'
 
----------------------------------------------------------------------------------
+
 consPropRead getter g l e fld
-  = do (x, g')        <- consExpr g e
-       tdefs          <- getTDefs 
-       case getter l (renv g) tdefs fld $ envFindTy x g' of
-         Just (_, tf) -> (tf,) <$> envAddFresh "consPropRead" l tf g'
-         Nothing      -> die $  errorPropRead (srcPos l) e fld
+  = do 
+      (x, g')        <- consExpr g e
+      tdefs          <- getTDefs 
+      let tx          = envFindTy x g'
+      (this, g'')    <- envAddFresh "this" l tx g
+      case getter l (renv g'') tdefs fld tx of
+        Just (tObj, tf) -> 
+          do
+            let tf'   = F.substa (sf (F.symbol "this") (F.symbol this)) tf
+            g'''     <- envAddFresh "consPropRead" l tf' g''
+            return    $ (tf', g''')
+        Nothing         -> die $  errorPropRead (srcPos l) e fld
+    where  
+       sf s1 s2 = \s -> if s == s1 then s2
+                                   else s
 
 ---------------------------------------------------------------------------------------------
 consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> CGM CGEnv

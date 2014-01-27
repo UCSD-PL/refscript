@@ -152,7 +152,7 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs
     fs'               = [f | f@(TypInst _ _) <- M.lookupDefault [] l m]
     fs''              = [f | f@(Overload (Just _)) <- M.lookupDefault [] l m]
 
-initEnv pgm           = TCE (specs pgm) (sigs pgm) (tAnns pgm) emptyContext
+initEnv pgm           = TCE (specs pgm) (sigs pgm) (tAnns pgm) [] emptyContext
 traceCodePP p m s     = trace (render $ {- codePP p m s -} pp p) $ return ()
       
 codePP (Nano {code = Src src}) anns sub 
@@ -200,6 +200,7 @@ checkTypeDefs pgm = reportAll $ grep
 data TCEnv r  = TCE { tce_env  :: Env (RType r)
                     , tce_spec :: Env (RType r) 
                     , tce_anns :: Env (RType r)
+                    , tce_this ::     [RType r]
                     , tce_ctx  :: !IContext 
                     }
 
@@ -207,18 +208,20 @@ type TCEnvO r = Maybe (TCEnv r)
 
 -- type TCEnv  r = Maybe (Env (RType r))
 instance (PP r, F.Reftable r) => Substitutable r (TCEnv r) where 
-  apply θ (TCE m sp an c) = TCE (apply θ m) (apply θ sp) (apply θ an) c 
+  apply θ (TCE m sp an th c) = TCE (apply θ m) (apply θ sp) (apply θ an) (apply θ th) c 
 
 instance (PP r, F.Reftable r) => PP (TCEnv r) where
   pp = ppTCEnv
 
-ppTCEnv (TCE env spc an ctx) 
+ppTCEnv (TCE env spc an th ctx) 
   =   text "******************** Environment ************************"
   $+$ pp env
   $+$ text "******************** Specifications *********************"
   $+$ pp spc 
   $+$ text "******************** Annotations ************************"
   $+$ pp an
+  $+$ text "******************** \"this\" stack *********************"
+  $+$ pp th
   $+$ text "******************** Call Context ***********************"
   $+$ pp ctx
 
@@ -237,6 +240,8 @@ tcEnvFindTy x                = envFindTy (stripSSAId x)   . tce_env
 tcEnvFindReturn              = envFindReturn              . tce_env
 tcEnvFindSpec x              = envFindTy (stripSSAId x)   . tce_anns
 tcEnvFindTyOrDie l x         = fromMaybe ugh . tcEnvFindTy (stripSSAId x)  where ugh = die $ errorUnboundId (ann l) x
+
+tcPushThis t γ               = γ { tce_this = t : tce_this γ } 
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Scoped Block in Environment ------------------------------------
@@ -687,14 +692,21 @@ undefType l γ
     where 
       ut       = builtinOpTy l BIUndefined $ tce_env γ
              
-----------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
 tcPropRead getter γ l e fld
-  = do (e', te)   <- tcExpr γ e
-       tdefs      <- getTDefs 
-       case getter l (tce_env γ) tdefs fld te of
-         Nothing        -> tcError $  errorPropRead (srcPos l) e fld
-         Just (te', tf) -> (, tf) <$> castM (tce_ctx γ) e' te te'
+  = do  (e', te)   <- tcExpr γ e
+        tdefs      <- getTDefs 
+        withThis γ te $ 
+          \γ -> 
+            case getter l (tce_env γ) tdefs fld te of
+              Nothing         -> tcError $  errorPropRead (srcPos l) e fld
+              Just (te', tf)  -> (, tf) <$> castM (tce_ctx γ) e' te te'
+
+
+----------------------------------------------------------------------------------
+withThis :: F.Reftable r => TCEnv r -> RType r -> (TCEnv r -> t) -> t
+----------------------------------------------------------------------------------
+withThis γ t p = p $ tcPushThis t γ  
+
 
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, F.Reftable r, PP r) =>

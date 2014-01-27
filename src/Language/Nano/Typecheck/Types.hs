@@ -116,6 +116,9 @@ module Language.Nano.Typecheck.Types (
   , PAlias (..)
   , PAliasEnv
   , TAliasEnv
+
+  -- * Keywords
+  , thisId
   ) where 
 
 import           Text.Printf
@@ -836,6 +839,7 @@ prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
 
 builtinId       = mkId . ("builtin_" ++)
 
+thisId          = mkId "__this__" 
 
 -----------------------------------------------------------------------
 -- Type and Predicate Aliases -----------------------------------------

@@ -283,36 +283,36 @@
 
 // -| Array
 
-/*@  type Array[T]
-  {
-    toString       : () => string,
-    toLocaleString : () => string,
-    concat         : (items: [T]) => [T],
-    join           : (separator: string) => string,
-    pop            : () => T,
-    push           : (items: [T]) => number,
-    reverse        : () => [T],
-    shift          : () => T,
-    slice          : (start: number, end: number) => [T],
-    sort           : (compareFn: (a: T, b: T) => number) => [T],
-    splice         :  /\ (start: number) => [T]
-                      /\ (start: number, deleteCount: number, items: [T]) => [T],
-    unshift        : (items: [T]) => number,
+/*@ type Array[T]
+    {
+      toString       : () => string,
+      toLocaleString : () => string,
+      concat         : (items: [T]) => [T],
+      join           : (separator: string) => string,
+      pop            : () => T,
+      push           : (items: [T]) => number,
+      reverse        : () => [T],
+      shift          : () => T,
+      slice          : (start: number, end: number) => [T],
+      sort           : (compareFn: (a: T, b: T) => number) => [T],
+      splice         :  /\ (start: number) => [T]
+                        /\ (start: number, deleteCount: number, items: [T]) => [T],
+      unshift        : (items: [T]) => number,
 
-    indexOf        : (searchElement: T, fromIndex: number) => number,
-    lastIndexOf    : (searchElement: T, fromIndex: number) => number,
-    every          : (callbackfn: (value: T, index: number, array: [T]) => boolean) => boolean,
-    some           : (callbackfn: (value: T, index: number, array: [T]) => boolean) => boolean,
-    forEach        : (callbackfn: (value: T, index: number, array: [T]) => void) => void,
-    map            : forall U . (callbackfn: (value: T) => U) => [U],
-    filter         : (callbackfn: (value: T, index: number, array: [T]) => boolean) => [T],
+      indexOf        : (searchElement: T, fromIndex: number) => number,
+      lastIndexOf    : (searchElement: T, fromIndex: number) => number,
+      every          : (callbackfn: (value: T, index: number, array: [T]) => boolean) => boolean,
+      some           : (callbackfn: (value: T, index: number, array: [T]) => boolean) => boolean,
+      forEach        : (callbackfn: (value: T, index: number, array: [T]) => void) => void,
+      map            : forall U . (callbackfn: (value: T) => U) => [U],
+      filter         : (callbackfn: (value: T, index: number, array: [T]) => boolean) => [T],
 
-    reduce         : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T,
+      reduce         : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T,
 
-    reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T,
+      reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T,
 
-    length         : number
-  }
+      length         : { v: number | v = (len this) } 
+    } 
 */
 
 /*

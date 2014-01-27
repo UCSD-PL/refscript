@@ -276,6 +276,9 @@ ssaExpr e@(StringLit _ _)
 ssaExpr e@(NullLit _)               
   = return e 
 
+ssaExpr e@(ThisRef _)               
+  = return e 
+
 ssaExpr   (ArrayLit l es)
   = ArrayLit l <$> (mapM ssaExpr es)
 

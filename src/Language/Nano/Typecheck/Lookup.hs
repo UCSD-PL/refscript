@@ -32,6 +32,7 @@ import           Text.Printf
 
 -- Given an environment @γ@, a (string) field @s@ and a type @t@, `getProp` 
 -- returns a tuple with elements:
+-- ∙ The type parameter present in the returned types.
 -- ∙ The subtype of @t@ for which the access does not throw an error.
 -- ∙ The type the corresponds to the access of exactly that type that does not
 --   throw an error.
@@ -50,7 +51,6 @@ getProp l specs defs s t@(TObj bs _) =
 getProp l specs defs s t@(TApp _ _ _)  = getPropApp l specs defs s t
 getProp _ _     _    _ t@(TFun _ _ _ ) = Nothing
 getProp l specs defs s a@(TArr _ _)    = getPropArr l specs defs s a
-getProp l specs defs s t@(TBd (TD (TDef i) v r _)) = undefined
 getProp l _     _    _ t               = die $ bug (srcPos l) $ "getProp: " ++ (show $ toType t) 
 
 
@@ -96,11 +96,11 @@ getPropApp l specs defs s t@(TApp c ts _)
 
 getPropArr l specs defs s a@(TArr t _) = 
         envFindTy "Array" defs
-    >>= getProp l specs defs s . su t
-    >>= return . mapFst (const a)
+    >>= \to -> (getProp l specs defs s (su t to)) 
+    >>= \tr -> return ((mapFst (const a) tr))
   where
-    su s (TBd (TD _ [v] t _)) = SU.apply (SU.fromList [(v, s)]) t
-    su _ _                    = die $ bug (srcPos l) "Array needs to be defined as a generic type in prelude.js"
+    su s (TBd (TD _ [v] tdef _)) = SU.apply (SU.fromList [(v, s)]) tdef
+    su _ _                       = die $ bug (srcPos l) "Array needs to be defined as a generic type in prelude.js"
  
   -- Array has been defined as a generic data type
 

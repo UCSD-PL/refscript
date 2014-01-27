@@ -610,7 +610,6 @@ tcCall γ e
   = die $ bug (srcPos e) $ "tcCall: cannot handle" ++ ppshow e        
 
 
----------------------------------------------------------------------------------------
 tcCallMatch γ l fn es ft0
   = do -- Typecheck arguments
        (es', ts)     <- unzip <$> mapM (tcExpr γ) es
@@ -627,8 +626,6 @@ tcCallMatch γ l fn es ft0
       call es' ts t = fmap Just $ tcCallCase γ l fn es' ts t
 
 
----------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------
 resolveOverload γ l fn es ts ft =
   shd <$> filterM (\t -> valid <$> tcCallCaseTry γ l fn es ts t) eqLenSigs
   where

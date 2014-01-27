@@ -196,13 +196,13 @@ ssaStmt s@(SwitchStmt l e xs)
   where
       an                   = getAnnotation
       sss                  = [ (l, e, BlockStmt l $ remBr ss) | CaseClause l e ss <- xs ]
-      z                    = safeHead (EmptyStmt l) [BlockStmt l $ remBr ss | CaseDefault l ss <- xs]      
+      z                    = headWithDefault (EmptyStmt l) [BlockStmt l $ remBr ss | CaseDefault l ss <- xs]      
 
       remBr                = filter (not . isBr) . flattenBlock
       isBr (BreakStmt _ _) = True
       isBr _               = False
-      safeHead a []        = a
-      safeHead _ xs        = head xs
+      headWithDefault a [] = a
+      headWithDefault _ xs = head xs
 
 -- OTHER (Not handled)
 ssaStmt s 

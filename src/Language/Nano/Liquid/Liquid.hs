@@ -297,6 +297,9 @@ consExpr g (StringLit l s)
 consExpr g (NullLit l)
   = envAddFresh "consExpr:NullLit" l tNull g
 
+consExpr g (ThisRef l)
+  = peekThis >>= \t -> envAddFresh "consExpr:ThisRef" l t g
+
 consExpr g (VarRef i x)
   = do addAnnot l x t
        return (x, g) 

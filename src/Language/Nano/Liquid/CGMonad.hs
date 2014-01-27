@@ -75,6 +75,9 @@ module Language.Nano.Liquid.CGMonad (
   -- * Function Types
   , cgFunTys
 
+  -- * This
+  , peekThis
+
   ) where
 
 import           Data.Maybe                     (fromMaybe, catMaybes, isJust)
@@ -147,9 +150,10 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnTypeR RefType -> CGState
-initState c pgm = CGS F.emptyBindEnv (sigs pgm) (defs pgm) [] [] 0 mempty invs c 
+initState c pgm = CGS F.emptyBindEnv (sigs pgm) (defs pgm) [] [] 0 mempty invs c [this] 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts pgm]  
+    this        = tTop
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -231,9 +235,10 @@ data CGState
         , cs       :: ![SubC]              -- ^ subtyping constraints
         , ws       :: ![WfC]               -- ^ well-formedness constraints
         , count    :: !Integer             -- ^ freshness counter
-        , cg_ann   :: A.UAnnInfo RefType    -- ^ recorded annotations
+        , cg_ann   :: A.UAnnInfo RefType   -- ^ recorded annotations
         , invs     :: TConInv              -- ^ type constructor invariants
         , cg_opts  :: Config               -- ^ configuration options
+        , cg_this  :: ![RefType]           -- ^ a stack holding types for 'this' 
         }
 
 type CGM     = ErrorT Error (State CGState)
@@ -931,3 +936,7 @@ cgFunTys l f xs ft =
     Left e  -> cgError l e 
     Right a -> return a
 
+
+-- | `this`
+
+peekThis = safeHead "get 'this'" <$> (cg_this <$> get)

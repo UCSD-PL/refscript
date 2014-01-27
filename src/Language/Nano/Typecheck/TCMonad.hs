@@ -81,6 +81,9 @@ module Language.Nano.Typecheck.TCMonad (
   , whenLoud', whenLoud
   , whenQuiet', whenQuiet
 
+  -- * This
+  , peekThis
+
   )  where 
 
 import           Text.Printf
@@ -113,6 +116,7 @@ import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
 -- import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
+import           Language.Fixpoint.Misc
 
 import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity as V
@@ -137,6 +141,8 @@ data TCState r = TCS {
                    , tc_expr  :: Maybe (Expression (AnnSSA r))
                    -- Verbosity
                    , tc_verb  :: V.Verbosity
+                   -- This stack
+                   , tc_this  :: ![RType r]
                    }
 
 type TCM r     = ErrorT Error (State (TCState r))
@@ -338,7 +344,7 @@ execute verb pgm act
 
 initState ::  (PP r, F.Reftable r) => V.Verbosity -> Nano z (RType r) -> TCState r
 initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss 
-                       tc_defs tc_tdefs tc_expr tc_verb 
+                       tc_defs tc_tdefs tc_expr tc_verb tc_this
   where
     tc_errss = []
     tc_subst = mempty 
@@ -349,6 +355,7 @@ initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss
     tc_tdefs = defs pgm
     tc_expr  = Nothing
     tc_verb  = verb
+    tc_this  = [tTop]
 
 
 getDefType f 
@@ -529,3 +536,7 @@ tcFunTys l f xs ft =
     Left e  -> tcError e 
     Right a -> return a
 
+
+-- | `this`
+
+peekThis = safeHead "get 'this'" <$> (tc_this <$> get)

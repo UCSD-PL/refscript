@@ -152,7 +152,7 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs
     fs'               = [f | f@(TypInst _ _) <- M.lookupDefault [] l m]
     fs''              = [f | f@(Overload (Just _)) <- M.lookupDefault [] l m]
 
-initEnv pgm           = TCE (specs pgm) (sigs pgm) (tAnns pgm) [] emptyContext
+initEnv pgm           = TCE (specs pgm) (sigs pgm) (tAnns pgm) [tTop] emptyContext
 traceCodePP p m s     = trace (render $ {- codePP p m s -} pp p) $ return ()
       
 codePP (Nano {code = Src src}) anns sub 
@@ -497,6 +497,9 @@ tcExpr _ e@(StringLit _ _)
 
 tcExpr _ e@(NullLit _)
   = return (e, tNull)
+
+tcExpr _ e@(ThisRef _)
+  = (e,) <$> peekThis
 
 tcExpr γ e@(VarRef l x)
   = return (e, tcEnvFindTyOrDie l x γ) 

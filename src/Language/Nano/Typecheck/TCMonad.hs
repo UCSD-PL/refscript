@@ -398,15 +398,6 @@ instance Freshable a => Freshable [a] where
 
 freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
 
--- freshTArray l = 
---   do  v <- ((`TV` l). F.intSymbol "A") <$> tick
---       extSubst [v]
---       let t = tVar v
---       addAnn l $ TypInst [t]
---       return $ tArr t
-              
-
-
 
 -- | Monadic unfolding
 -------------------------------------------------------------------------------

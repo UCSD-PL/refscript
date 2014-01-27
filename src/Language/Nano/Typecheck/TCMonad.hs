@@ -228,7 +228,7 @@ freshSubst l ξ αs
 
 setTyArgs l ξ βs
   = do m <- tc_anns <$> get
-       when (hasTI l m) $ tcError $ errorMultipleTypeArgs l
+       {-when (hasTI l m) $ tcError $ errorMultipleTypeArgs l-}
        addAnn l $ TypInst ξ (tVar <$> βs)
     where 
        hasTI l m = not $ null [ i | i@(TypInst _ _) <- HM.lookupDefault [] l m ]

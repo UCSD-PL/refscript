@@ -611,17 +611,16 @@ tcCall γ e
 
 
 tcCallMatch γ l fn es ft0
-  = do -- Typecheck arguments
-       (es', ts)     <- unzip <$> mapM (tcExpr γ) es
-       case calleeType l ts ft0 of 
-        -- Try to match it with a non-generic type
-        Just t -> call es' ts t
-        -- If this fails try to instantiate possible generic types in the
-        -- function signature.
-        Nothing ->
-          do  mType <- resolveOverload γ l fn es' ts ft0
-              addAnn (srcPos l) (Overload mType)
-              maybe (return Nothing) (call es' ts) mType
+  = do  (es', ts)     <- unzip <$> mapM (tcExpr γ) es
+        case calleeType l ts ft0 of 
+          -- Try to match it with a non-generic type
+          Just t -> call es' ts t
+          -- If this fails, try to instantiate possible generic types found
+          -- in the function signature.
+          Nothing ->
+            do  mType <- resolveOverload γ l fn es' ts ft0
+                addAnn (srcPos l) (Overload mType)
+                maybe (return Nothing) (call es' ts) mType
     where
       call es' ts t = fmap Just $ tcCallCase γ l fn es' ts t
 

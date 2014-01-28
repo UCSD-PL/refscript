@@ -276,7 +276,12 @@ envGetContextCast g a
 ---------------------------------------------------------------------------------------
 envGetContextTypArgs :: CGEnv -> AnnTypeR -> [TVar] -> [RefType]
 ---------------------------------------------------------------------------------------
-envGetContextTypArgs g a αs 
+-- NOTE: If we do not need to instantiate any type parameter (i.e. length αs ==
+-- 0), DO NOT attempt to compare that with the TypInst that might hide withing
+-- the expression, cause those type instantiations might serve anothor reason
+-- (i.e. might be there for a separate instantiation).  
+envGetContextTypArgs _ _ []        = []
+envGetContextTypArgs g a αs
   = case [i | TypInst ξ' i <- ann_fact a, ξ' == cge_ctx g] of 
       [i] | length i == length αs -> i 
       _                           -> die $ bugMissingTypeArgs $ srcPos a

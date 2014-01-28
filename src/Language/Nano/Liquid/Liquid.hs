@@ -44,7 +44,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -417,7 +417,7 @@ consCall :: (PP a)
 consCall g l fn es ft0 
   = do (xes, g')    <- consScan consExpr g es
        let ts        = [envFindTy x g' | x <- xes]
-       let ft        = tracePP "consCall" $ fromMaybe (fromMaybe (err ts ft0) (overload l)) (calleeType l ts ft0)
+       let ft        = fromMaybe (fromMaybe (err ts ft0) (overload l)) (calleeType l ts ft0)
        (_,its,ot)   <- instantiate l g fn ft
        let (su, ts') = renameBinds its xes
        zipWithM_ (subTypeContainers "Call" l g') [envFindTy x g' | x <- xes] ts'
@@ -428,7 +428,7 @@ consCall g l fn es ft0
 
 -- instantiate :: AnnTypeR -> CGEnv -> RefType -> CGM RefType
 instantiate l g fn ft 
-  = do let (αs, t)      = tracePP "liquid:instantiate" $ bkAll ft
+  = do let (αs, t)      = bkAll ft
   --TODO: There is a TypInst missing here!!!
        let ts           = envGetContextTypArgs g l αs
        t'              <- freshTyInst l g αs ts t

@@ -218,21 +218,25 @@ freshTyArgs :: (PP r, F.Reftable r)
 freshTyArgs l ξ αs t 
   = (`apply` t) <$> freshSubst l ξ αs
 
+-------------------------------------------------------------------------------
 freshSubst :: (PP r, F.Reftable r) => SourceSpan -> IContext -> [TVar] -> TCM r (RSubst r)
+-------------------------------------------------------------------------------
 freshSubst l ξ αs
   = do when (not $ unique αs) $ logError (errorUniqueTypeParams l) ()
        βs        <- mapM (freshTVar l) αs
        setTyArgs l ξ βs
-       extSubst βs 
-       return    $ fromList $ zip αs (tVar <$> βs)
+       extSubst   $ βs 
+       return     $ fromList $ zip αs (tVar <$> βs)
 
 setTyArgs l ξ βs
-  = do m <- tc_anns <$> get
-       {-when (hasTI l m) $ tcError $ errorMultipleTypeArgs l-}
-       addAnn l $ TypInst ξ (tVar <$> βs)
-    where 
-       hasTI l m = not $ null [ i | i@(TypInst _ _) <- HM.lookupDefault [] l m ]
-       msg = printf "setTyArgs: l = %s ξ = %s" (ppshow l) (ppshow ξ) 
+  = do  m <- tc_anns <$> get
+        {-when (hasTI l m) $ tcError $ errorMultipleTypeArgs l-}
+        case map tVar βs of 
+          [] -> return ()
+          vs -> addAnn l $ TypInst ξ vs
+    where
+       hasTI l m  = not $ null [ i | i@(TypInst _ _) <- HM.lookupDefault [] l m ]
+       msg        = printf "setTyArgs: l = %s ξ = %s" (ppshow l) (ppshow ξ) 
 
 
 -------------------------------------------------------------------------------

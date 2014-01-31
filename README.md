@@ -1,43 +1,27 @@
-README
-=======
+#### Language for experimenting with verification algorithms
 
-Language for experimenting with verification algorithms
+## Install
 
-nano-js is the basis for the programming assignments in 
+### Dependencies:
 
-    http://goto.ucsd.edu/~rjhala/classes/sp13/cse291
+    git clone git@github.com:ucsd-progsys/liquid-fixpoint.git 
+    git clone git@github.com:UCSD-PL/language-ecmascript.git
+    git clone git@github.com:UCSD-PL/nano-js.git
 
-
-Install
-======
-
-Dependencies
-------------
-
-* git clone git@github.com:ucsd-progsys/liquid-fixpoint.git 
-* git clone git@github.com:UCSD-PL/language-ecmascript.git
-* git clone git@github.com:UCSD-PL/nano-js.git
-
-Build
------
-
-Execute the following:
+### Build:
 
     cd liquid-fixpoint     && cabal install && cd ..
     cd language-ecmascript && cabal install && cd ..
     cd nano-js             && cabal install && cd ..
 
-Specifications
-==============
+## Specifications
 
-Signatures
-----------
+### Signatures
 
 TODO
 
 
-Type Invariants
----------------
+### Type Invariants
 
 You can write type-invariants like:
 
@@ -52,8 +36,7 @@ You can write type-invariants like:
 These invariants are automatically used to strengthen the refinements
 for values of the relevant types.
 
-Aliases
--------
+### Aliases
 
 You can write parameterized *predicate* and *type* aliases to abbreviate
 commonly used types, for example:
@@ -85,13 +68,3 @@ and now use `nat` as an alias for: `{number | v >= 0}`
 
     /*@ z :: nat */
     var z = 12;
-
-
-Tests
------
-
-    DOTPROD?
-    KMP?
-    mapreduce?
-    kmeans?
-

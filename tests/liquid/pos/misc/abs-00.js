@@ -1,6 +1,7 @@
+
 /*@ abs :: (x:number) => {v:number | v >= x} */ 
 function abs(x){
-  var res = true;
+  var res /*@  number */  = 0;
   if (x > 0) {
     res = x;
   } else {

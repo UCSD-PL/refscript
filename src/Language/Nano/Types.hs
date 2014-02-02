@@ -40,6 +40,7 @@ module Language.Nano.Types (
   , mkNextId
   , isNextId
   , mkSSAId
+  , stripSSAId
 
   -- * Error message
   , convertError
@@ -66,6 +67,7 @@ import           Control.Exception                  (throw)
 import           Control.Applicative                ((<$>))
 -- import qualified Data.HashMap.Strict as M
 import           Data.Hashable
+import           Data.Text                          (splitOn, unpack, pack)
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.Monoid                        (Monoid (..))
@@ -220,6 +222,7 @@ instance IsNano (Expression a) where
   isNano (BracketRef _ e1 e2)    = isNano e1 && isNano e2
   isNano (AssignExpr _ _ l e)    = isNano e && isNano l && isNano e
   isNano (UnaryAssignExpr _ _ l) = isNano l
+  isNano (ThisRef _)             = True 
   isNano e                       = errortext (text "Not Nano Expression!" <+> pp e)
   -- isNano _                     = False
 
@@ -550,6 +553,10 @@ instance PP BuiltinOp where
 
 mkSSAId :: SourceSpan -> Id SourceSpan -> Int -> Id SourceSpan 
 mkSSAId l (Id _ x) n = Id l (x ++ ssaStr ++ show n)  
+
+-- Returns the identifier as is if this is not an SSAed name.
+stripSSAId :: Id a -> Id a
+stripSSAId (Id l x) = Id l (unpack $ head $ splitOn (pack ssaStr) (pack x))
 
 mkNextId :: Id a -> Id a
 mkNextId (Id a x) =  Id a $ nextStr ++ x

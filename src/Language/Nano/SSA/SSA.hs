@@ -196,13 +196,13 @@ ssaStmt s@(SwitchStmt l e xs)
   where
       an                   = getAnnotation
       sss                  = [ (l, e, BlockStmt l $ remBr ss) | CaseClause l e ss <- xs ]
-      z                    = safeHead (EmptyStmt l) [BlockStmt l $ remBr ss | CaseDefault l ss <- xs]      
+      z                    = headWithDefault (EmptyStmt l) [BlockStmt l $ remBr ss | CaseDefault l ss <- xs]      
 
       remBr                = filter (not . isBr) . flattenBlock
       isBr (BreakStmt _ _) = True
       isBr _               = False
-      safeHead a []        = a
-      safeHead _ xs        = head xs
+      headWithDefault a [] = a
+      headWithDefault _ xs = head xs
 
 -- OTHER (Not handled)
 ssaStmt s 
@@ -276,6 +276,9 @@ ssaExpr e@(StringLit _ _)
 ssaExpr e@(NullLit _)               
   = return e 
 
+ssaExpr e@(ThisRef _)               
+  = return e 
+
 ssaExpr   (ArrayLit l es)
   = ArrayLit l <$> (mapM ssaExpr es)
 
@@ -318,8 +321,10 @@ ssaVarDecl (VarDecl l x (Just e)) = do
     (x', e') <- ssaAsgn l x e
     return    (True, VarDecl l x' (Just e'))
 
-ssaVarDecl (VarDecl l x Nothing)
-  = errorstar $ printf "Variable definition of %s at %s with no initialization is not supported." (ppshow x) (ppshow l)
+ssaVarDecl (VarDecl l x Nothing) = do
+    x' <- updSsaEnv l x
+    return    (True, VarDecl l x' Nothing)
+--  = errorstar $ printf "Variable definition of %s at %s with no initialization is not supported." (ppshow x) (ppshow l)
 
 ------------------------------------------------------------------------------------
 ssaAsgn :: F.Reftable r => SourceSpan -> Id SourceSpan -> Expression SourceSpan -> 

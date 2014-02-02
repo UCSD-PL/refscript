@@ -14,7 +14,7 @@
 module Language.Nano.Typecheck.Compare (
 
   -- * Type comparison/joining/subtyping
-    Equivalent, equiv
+    Equivalent, equiv, equiv'
   , compareTs
   , alignTs
   , unionParts, unionPartsWithEq
@@ -47,6 +47,7 @@ import           Language.Nano.Misc
 import           Language.Nano.Types                (IsLocated(..))
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Unfold
 import           Language.Nano.Liquid.Types
 
 import           Language.Fixpoint.Errors
@@ -58,7 +59,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative                hiding (empty)
 import           Control.Monad.Error                ()
 
--- import           Debug.Trace (trace)
+import           Debug.Trace (trace)
 
 
 
@@ -67,6 +68,10 @@ import           Control.Monad.Error                ()
 -- This is a slightly more relaxed version of equality. 
 class Equivalent e a where 
   equiv :: e -> a -> a -> Bool
+
+  equiv' :: String -> e -> a -> a -> Bool
+  equiv' msg a b c = equiv a (trace msg b) c
+
 
 instance Equivalent e a => Equivalent e [a] where
   equiv γ a b = and $ zipWith (equiv γ) a b 
@@ -239,8 +244,7 @@ compareTs γ t1 t2 | otherwise              = compareTs' γ t1 t2
   {-where msg = printf "About to compareTs %s and %s" (ppshow $ toType t1) (ppshow $ toType t2)-}
 
 
--- | Top-level Unions
-
+-- | Top
 compareTs' _ t1 _  | isTop t1               = errorstar "unimplemented: compareTs - top"
 compareTs' _ t1 t2 | isTop t2               = (t1', t1, t2', SubT)
   where
@@ -251,16 +255,18 @@ compareTs' _ t1 t2 | isTop t2               = (t1', t1, t2', SubT)
   
 
 -- Eliminate top-level unions
-compareTs' γ t1 t2 | any isUnion [t1,t2]     = padUnion γ t1  t2
+compareTs' γ t1 t2 | any isUnion [t1,t2]     = 
+  {-tracePP ("padUnion(" ++ ppshow t1 ++ ", " ++ ppshow t2 ++ ")") $ -}
+  padUnion γ t1 t2
 
 -- | Top-level Objects
 
 compareTs' γ t1@(TObj _ _) t2@(TObj _ _)     = padObject γ t1 t2
 
 -- | Arrays
-compareTs' γ a@(TArr _ _) a'@(TArr _ _  ) = padArray γ a a'
-compareTs' _ t1@(TObj _ _) t2@(TArr _ _ ) = error (printf "Unimplemented compareTs-Obj-Arr:\n\t%s\n\t%s" (ppshow t1) (ppshow t2))
-compareTs' _ t1@(TArr _ _) t2@(TObj _ _ ) = error (printf "Unimplemented compareTs-Arr-Obj:\n\t%s\n\t%s" (ppshow t1) (ppshow t2))
+compareTs' γ a@(TArr _ _) a'@(TArr _ _  )    = padArray γ a a'
+compareTs' _ t1@(TObj _ _) t2@(TArr _ _ )    = error (printf "Unimplemented compareTs-Obj-Arr:\n\t%s\n\t%s" (ppshow t1) (ppshow t2))
+compareTs' _ t1@(TArr _ _) t2@(TObj _ _ )    = error (printf "Unimplemented compareTs-Arr-Obj:\n\t%s\n\t%s" (ppshow t1) (ppshow t2))
 
 -- | Type definitions
 
@@ -449,10 +455,10 @@ unionPartsWithEq equal t1 t2 = (common t1s t2s, d1s, d2s)
     distinct xs ys = ([x | x <- xs, not $ any (x `equal`) ys ],
                       [y | y <- ys, not $ any (y `equal`) xs ])
 
-    sanityCheck ([ ],[ ]) = errorstar "unionParts, called on too small input"
-    sanityCheck ([_],[ ]) = errorstar "unionParts, called on too small input"
-    sanityCheck ([ ],[_]) = errorstar "unionParts, called on too small input"
-    sanityCheck ([_],[_]) = errorstar "unionParts, called on too small input"
+    sanityCheck ([ ],[ ]) = errorstar "unionPartsWithEq, called on too small input"
+    sanityCheck ([_],[ ]) = errorstar "unionPartsWithEq, called on too small input"
+    sanityCheck ([ ],[_]) = errorstar "unionPartsWithEq, called on too small input"
+    sanityCheck ([_],[_]) = errorstar "unionPartsWithEq, called on too small input"
     sanityCheck p         = p
 
 
@@ -503,14 +509,12 @@ distDir xs ys
 meetBinds b1s b2s = M.toList $ M.intersectionWith (,) (bindsMap b1s) (bindsMap b2s)
 
 
--- | Break one level of padded objects
+-- | `bkPaddedObject` breaks one level of padded objects
 
---------------------------------------------------------------------------------
--- bkPaddedObject :: (F.Reftable r, PP r) => SourceSpan -> RType r -> RType r -> [(RType r, RType r)]
---------------------------------------------------------------------------------
 bkPaddedObject l t1@(TObj xt1s _) t2@(TObj xt2s _) 
-  | n == n1 && n == n2 = snd <$> cmn
-  | otherwise          = die $ bugMalignedFields l t1 t2
+  = snd <$> cmn
+  {-| n == n1 && n == n2 = snd <$> cmn-}
+  {-| otherwise          = die $ bugMalignedFields l t1 t2-}
     where
       cmn              = meetBinds xt1s xt2s
       n                = length cmn
@@ -602,7 +606,8 @@ zipType2 γ f (TFun xts t r) (TFun xts' t' r') =
 
 zipType2 γ f (TObj bs r) (TObj bs' r') = TObj mbs $ f r r'
   where
-    mbs = safeZipWith "zipType2:TObj" (zipBind2 γ f) (L.sortBy compB bs) (L.sortBy compB bs')
+    _   = safeZipWith "zipType2:TObj" (zipBind2 γ f) (L.sortBy compB bs) (L.sortBy compB bs')
+    mbs = (\(s,(t,t')) -> B s $ zipType2 γ f t t') <$> meetBinds bs bs' 
     compB (B s _) (B s' _) = compare s s'
 
 zipType2 γ f (TArr t r) (TArr t' r') = TArr (zipType2 γ f t t') $ f r r'

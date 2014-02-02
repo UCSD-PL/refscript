@@ -39,6 +39,8 @@ module Language.Nano.Typecheck.Types (
   -- * Constructing Types
   , mkUnion
   , mkUnionR
+  , mkFun
+  , mkAll
 
   -- * Deconstructing Types
   , bkFun
@@ -114,6 +116,9 @@ module Language.Nano.Typecheck.Types (
   , PAlias (..)
   , PAliasEnv
   , TAliasEnv
+
+  -- * Keywords
+  , thisId
   ) where 
 
 import           Text.Printf
@@ -263,9 +268,18 @@ bkFun :: RType r -> Maybe ([TVar], [Bind r], RType r)
 bkFun t = do let (αs, t') = bkAll t
              (xts, t'')  <- bkArr t'
              return        (αs, xts, t'')
+
+mkFun :: (F.Reftable r) => ([TVar], [Bind r], RType r) -> RType r
+mkFun ([], bs, rt) = TFun bs rt fTop 
+mkFun (αs, bs, rt) = mkAll αs (TFun bs rt fTop)
          
 bkArr (TFun xts t _) = Just (xts, t)
 bkArr _              = Nothing
+
+mkAll αs t           = go (reverse αs) t
+  where
+    go (α:αs) t      = go αs (TAll α t)
+    go []     t      = t
 
 bkAll                :: RType a -> ([TVar], RType a)
 bkAll t              = go [] t
@@ -369,17 +383,14 @@ rTypeR (TAll _ _   ) = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )     = errorstar "Unimplemented: rTypeR - TAnd"
 rTypeR (TExp _)      = errorstar "Unimplemented: rTypeR - TExp"
 
+-- Set the top-level refinement (wherever applies)
 setRTypeR :: RType r -> r -> RType r
-setRTypeR (TApp c ts _   ) r' = TApp c ts r'
-setRTypeR (TVar v _      ) r' = TVar v r'
-setRTypeR (TFun xts ot _ ) r' = TFun xts ot r'
-setRTypeR (TObj xts _    ) r' = TObj xts r'
-setRTypeR (TArr t _      ) r  = TArr t r
-setRTypeR (TBd  _        ) _  = errorstar "Unimplemented: setRTypeR - TBd"
-setRTypeR (TAll _ _      ) _  = errorstar "Unimplemented: setRTypeR - TAll"
-setRTypeR (TAnd _        ) _  = errorstar "Unimplemented: setRTypeR - TAnd"
-setRTypeR (TExp _        ) _  = errorstar "Unimplemented: setRTypeR - TExp"
-
+setRTypeR (TApp c ts _   ) r = TApp c ts r
+setRTypeR (TVar v _      ) r = TVar v r
+setRTypeR (TFun xts ot _ ) r = TFun xts ot r
+setRTypeR (TObj xts _    ) r = TObj xts r
+setRTypeR (TArr t _      ) r = TArr t r
+setRTypeR t                _ = t
 
 ---------------------------------------------------------------------------------------
 noUnion :: (F.Reftable r) => RType r -> Bool
@@ -417,7 +428,7 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
   TObj b1 r1          == TObj b2 r2          = (null $ b1 L.\\ b2) && (null $ b2 L.\\ b1) && r1 == r2
   TArr t1 r1          == TArr t2 r2          = t1 == t2 && r1 == r2
   TBd (TD c1 a1 b1 _) == TBd (TD c2 a2 b2 _) = (c1, a1, b1)   == (c2, a2, b2)
-  TAll _ _            == TAll _ _            = errorstar "Unimplemented: Eq (RType r)" -- TODO
+  TAll v1 t1          == TAll v2 t2          = v1 == v2 && t1 == t2   -- Very strict Eq here
   _                   == _                   = False
 
 
@@ -669,6 +680,7 @@ instance (PP a) => PP (Cast a) where
 data Fact r
   = PhiVar      ![(Id SourceSpan)]
   | TypInst     !IContext ![RType r]
+  | Overload    !(Maybe (RType r))
   | TCast       !IContext !(Cast (RType r))
   | TAnnot      !(RType r)
     deriving (Eq, Ord, Show, Data, Typeable)
@@ -707,6 +719,7 @@ instance IsLocated TCon where
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)       = text "phi"  <+> pp x
   pp (TypInst ξ ts)   = text "inst" <+> pp ξ <+> pp ts 
+  pp (Overload i)     = text "overload" <+> pp i
   pp (TCast  ξ c)     = text "cast" <+> pp ξ <+> pp c
   pp (TAnnot t)       = text "annotation" <+> pp t
 
@@ -826,6 +839,7 @@ prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
 
 builtinId       = mkId . ("builtin_" ++)
 
+thisId          = mkId "__this__" 
 
 -----------------------------------------------------------------------
 -- Type and Predicate Aliases -----------------------------------------

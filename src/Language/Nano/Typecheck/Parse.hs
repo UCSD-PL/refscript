@@ -52,7 +52,7 @@ import           Language.ECMAScript3.Parser.Type hiding (Parser)
 import           Language.ECMAScript3.PrettyPrint
 
 
--- import           Debug.Trace                        (trace, traceShow)
+import           Debug.Trace                        (trace, traceShow)
 
 dot        = Token.dot        lexer
 plus       = Token.symbol     lexer "+"
@@ -64,6 +64,9 @@ star       = Token.symbol     lexer "*"
 
 idBindP :: Parser (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
+
+fdBindP :: Parser (Id SourceSpan, RefType)
+fdBindP = xyP identifierP dcolon funcSigP
 
 identifierP :: Parser (Id SourceSpan)
 identifierP =   try (withSpan Id upperIdP)
@@ -116,35 +119,37 @@ xyP lP sepP rP
 -- | RefTypes --------------------------------------------------------------------
 ----------------------------------------------------------------------------------
 
--- | Top-level parser for "bare" types. 
--- If refinements not supplied, then "top" refinement is used.
+-- | `bareTypeP` parses top-level "bare" types. If no refinements are supplied, 
+-- then "top" refinement is used.
 
 bareTypeP :: Parser RefType 
-bareTypeP 
-  =  try (do  ts <- bareTypeNoUnionP `sepBy1` plus
-              tr <- topP   -- unions have Top ref. type atm
-              case ts of
-                [ ] -> error "impossible"
-                [t] -> return t
-                _   -> return $ TApp TUn (sort ts) tr)
-         
- <|> try (refP ( do ts <- bareTypeNoUnionP `sepBy1` plus
-                    case ts of
-                      [ ] -> error "impossible"
-                      [_] -> error "bareTypeP parser BUG"
-                      _   -> return $ TApp TUn (sort ts) 
-                ))
+bareTypeP =       
+      try bUnP
+  <|> try (refP rUnP)
+  <|>     (xrefP rUnP)
 
+rUnP      = mkUn <$> bareTypeNoUnionP `sepBy1` plus
 
-bareTypeNoUnionP
-  =  try bareAllP
- <|> try bareFun1P
- <|> try bareFunP
- <|>     (bareAtomP bbaseP)
+bUnP      = bareTypeNoUnionP `sepBy1` plus >>= ifSingle return (\xs -> TApp TUn xs <$> topP)
+  where
+    ifSingle f g [x] = f x
+    ifSingle f g xs  = g xs
 
--- | `bareFunP` parses an ordered-intersection type
-bareFunP 
-  = tAnd <$> many1 (reserved "/\\" >> bareFun1P)
+mkUn [a] = strengthen a
+mkUn ts  = TApp TUn (sort ts)
+
+-- | `bareTypeNoUnionP` parses a type that does not contain a union at the top-level.
+bareTypeNoUnionP  = try funcSigP          <|> (bareAtomP bbaseP)
+
+-- | `funcSigP` parses a function type that is possibly generic and/or an intersection.
+funcSigP          = 
+      try bareAll1P
+  <|> try (intersectP bareAll1P) 
+  <|> try bareFun1P
+  <|>     (intersectP bareFun1P)
+
+wAndP p           = try p                 <|> intersectP p
+intersectP p      = tAnd <$> many1 (reserved "/\\" >> p)
 
 -- | `bareFun1P` parses a single function type
 bareFun1P
@@ -169,8 +174,7 @@ argBind t = B (rTypeValueVar t) t
 bareAtomP p
   =  try (xrefP  p)
  <|> try (refP p)
---  <|> try (bindP p)   -- This case is taken separately at Function parser
- <|>     (dummyP (p <* spaces))
+ <|>     (dummyP p)
 
 bbaseP :: Parser (Reft -> RefType)
 bbaseP 
@@ -178,9 +182,7 @@ bbaseP
  <|> try (TObj <$> (braces $ bindsP) )     -- { f1: T1, ... , fn: Tn} 
  <|> try (TObj <$> arrayBindsP)            -- { i1: T1, ... , in: Tn}
  <|> try (TArr <$> arrayP)                 -- [T]
- <|> try (TApp <$> tDefP <*> bareTyArgsP)  -- list[A], tree[A,B] etc...
- 
- -- <|>     ((`TApp` []) <$> tconP)           -- yuck. this is wierd.
+ <|> try (TApp <$> tConP <*> bareTyArgsP)  -- list[A], tree[A,B] etc...
 
 bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
 
@@ -198,17 +200,17 @@ wordP p  = condIdP ok p
   where 
     ok   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
-tDefP :: Parser TCon
-tDefP =  try (reserved "number"    >> return TInt)
+tConP :: Parser TCon
+tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "boolean"   >> return TBool)
      <|> try (reserved "undefined" >> return TUndef)
      <|> try (reserved "void"      >> return TVoid)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
-     <|> (TDef <$> identifierP)
+     <|>     (TDef <$> identifierP)
 
-bareAllP 
+bareAll1P 
   = do reserved "forall"
        αs <- many1 tvarP
        dot
@@ -381,10 +383,11 @@ instance (PP r, F.Reftable r) => PP (AnnToken r) where
 --------------------------------------------------------------------------------------
 tAnnotP :: ParserState String (AnnToken Reft) -> ExternP String (AnnToken Reft)
 --------------------------------------------------------------------------------------
-tAnnotP stIn = EP typeP fSigP tLevP
+tAnnotP stIn = EP typeP fSigP bTypeP tLevP
   where
     typeP  = TType <$> changeState fwd bwd bareTypeP
-    fSigP  = TBind <$> changeState fwd bwd idBindP
+    fSigP  = TBind <$> changeState fwd bwd fdBindP
+    bTypeP = TBind <$> changeState fwd bwd idBindP
     tLevP  = TSpec <$> changeState fwd bwd specP
     fwd _  = stIn  -- NOTE: need to keep the state of the language-ecmascript parser!!!
     bwd _  = 0     -- TODO: Is this adequate???

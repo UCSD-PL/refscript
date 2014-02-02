@@ -345,6 +345,7 @@ instance (PP l, PP t) => PP (PSpec l t) where
 
 data AnnToken r 
   = TBind (Id SourceSpan, RType r)          -- ^ Function signature binding
+  | TAnonSig (RType r)                      -- ^ Function signature binding
   | TType (RType r)                         -- ^ Variable declaration binding
   | TSpec (PSpec SourceSpan (RType r))      -- ^ Specs: qualifiers, measures, type defs, etc.
   | EmptyToken                              -- ^ Dummy empty token
@@ -383,12 +384,12 @@ instance (PP r, F.Reftable r) => PP (AnnToken r) where
 --------------------------------------------------------------------------------------
 tAnnotP :: ParserState String (AnnToken Reft) -> ExternP String (AnnToken Reft)
 --------------------------------------------------------------------------------------
-tAnnotP stIn = EP typeP fSigP bTypeP tLevP
+tAnnotP stIn = EP typeP bFSigP bTypeP tLevP
   where
-    typeP  = TType <$> changeState fwd bwd bareTypeP
-    fSigP  = TBind <$> changeState fwd bwd fdBindP
-    bTypeP = TBind <$> changeState fwd bwd idBindP
-    tLevP  = TSpec <$> changeState fwd bwd specP
+    typeP  = TType    <$> changeState fwd bwd bareTypeP
+    bFSigP = TBind    <$> changeState fwd bwd fdBindP
+    bTypeP = TBind    <$> changeState fwd bwd idBindP
+    tLevP  = TSpec    <$> changeState fwd bwd specP
     fwd _  = stIn  -- NOTE: need to keep the state of the language-ecmascript parser!!!
     bwd _  = 0     -- TODO: Is this adequate???
 

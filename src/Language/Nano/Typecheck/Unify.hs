@@ -8,7 +8,7 @@ module Language.Nano.Typecheck.Unify (
   -- * Unification 
   --   unify
   -- , 
-  unifys
+  unifys, unifysV
 
   ) where 
 
@@ -21,6 +21,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Unfold
 import           Language.Nano.Typecheck.Compare
 
 
@@ -32,7 +33,7 @@ import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
 import qualified Data.List           as L
--- import           Text.Printf 
+import           Text.Printf 
 -- import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
 
@@ -41,8 +42,8 @@ import qualified Data.List           as L
 -- Unification --------------------------------------------------------------
 -----------------------------------------------------------------------------
 
--- | Unify types @t@ and @t'@, using @θ@ as the current substitution and @env@
--- as the current type definition environment.
+-- | Unify types @t@ and @t'@, in substitution environment @θ@ and type
+-- definition environment @env@.
 -----------------------------------------------------------------------------
 unify :: (PP r, F.Reftable r, Ord r) => 
   SourceSpan -> Env (RType r) -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
@@ -119,6 +120,11 @@ unifys ::  (PP r, F.Reftable r, Ord r) =>
 unifys loc env θ xs ys = {- tracePP msg $ -} unifys' loc env θ xs ys 
    {-where -}
    {-  msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
+
+unifysV loc env θ xs ys = tracePP msg <$> unifys' loc env θ (tracePP "xs" xs) (tracePP "ys" ys)
+  where 
+    msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
+
 
 unifys' loc env θ ts ts' 
   | nTs == nTs' = go env θ ts ts'

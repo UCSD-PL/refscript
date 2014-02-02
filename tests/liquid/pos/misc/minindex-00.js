@@ -2,9 +2,9 @@
 
 /*@ loop :: (list [number], number, number) => number */ 
 function loop(b, min, i){
-  if (i < length(b)) {
+  if (i < mylength(b)) {
     var min_ = min;
-    assert(i < length(b));
+    assert(i < mylength(b));
     if (nth(b, i) < nth(b, min)) { 
       min_ = i; 
     } 

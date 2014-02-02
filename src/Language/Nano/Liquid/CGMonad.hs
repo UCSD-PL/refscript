@@ -26,6 +26,7 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Fresh Templates for Unknown Refinement Types 
   , freshTyFun
+  , freshTyVar
   , freshTyInst
   , freshTyPhis
   , freshTyPhisWhile
@@ -74,6 +75,9 @@ module Language.Nano.Liquid.CGMonad (
   -- * Function Types
   , cgFunTys
 
+  -- * This
+  , peekThis
+
   ) where
 
 import           Data.Maybe                     (fromMaybe, catMaybes, isJust)
@@ -90,6 +94,7 @@ import qualified Language.Nano.Env              as E
 import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types 
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Unfold
 import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Qualifiers
@@ -145,9 +150,10 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnTypeR RefType -> CGState
-initState c pgm = CGS F.emptyBindEnv (sigs pgm) (defs pgm) [] [] 0 mempty invs c 
+initState c pgm = CGS F.emptyBindEnv (sigs pgm) (defs pgm) [] [] 0 mempty invs c [this] 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts pgm]  
+    this        = tTop
 
 getDefType f 
   = do m <- cg_defs <$> get
@@ -229,9 +235,10 @@ data CGState
         , cs       :: ![SubC]              -- ^ subtyping constraints
         , ws       :: ![WfC]               -- ^ well-formedness constraints
         , count    :: !Integer             -- ^ freshness counter
-        , cg_ann   :: A.UAnnInfo RefType    -- ^ recorded annotations
+        , cg_ann   :: A.UAnnInfo RefType   -- ^ recorded annotations
         , invs     :: TConInv              -- ^ type constructor invariants
         , cg_opts  :: Config               -- ^ configuration options
+        , cg_this  :: ![RefType]           -- ^ a stack holding types for 'this' 
         }
 
 type CGM     = ErrorT Error (State CGState)
@@ -278,7 +285,7 @@ envGetContextTypArgs g a αs
 ---------------------------------------------------------------------------------------
 envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 
 ---------------------------------------------------------------------------------------
-envAddFresh s  l t g 
+envAddFresh _ l t g 
   = do x  <- freshId loc
        g' <- envAdds [(x, t)] g
        return (x, g')
@@ -396,8 +403,12 @@ freshTyFun :: (IsLocated l) => CGEnv -> l -> Id AnnTypeR -> RefType -> CGM RefTy
 freshTyFun g l f t = freshTyFun' g l f t . kVarInst . cg_opts =<< get  
 
 freshTyFun' g l _ t b
-  | b && isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= \t -> wellFormed l g t
+  | b && isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g
   | otherwise               = return t
+
+freshTyVar g l t 
+  | isTrivialRefType t = freshTy "freshTyVar" (toType t) >>= wellFormed l g
+  | otherwise          = return t
 
 -- | Instantiate Fresh Type (at Call-site)
 
@@ -925,3 +936,7 @@ cgFunTys l f xs ft =
     Left e  -> cgError l e 
     Right a -> return a
 
+
+-- | `this`
+
+peekThis = safeHead "get 'this'" <$> (cg_this <$> get)

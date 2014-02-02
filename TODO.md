@@ -1,14 +1,14 @@
 Benchmarks
 ----------
 
-  - tests/strobe/gadgets/resistor-01.js
+  - [DONE] tests/strobe/gadgets/resistor-00.js
 
 
 JS Features
 -----------
 
   - FIELDS
-    - array "length
+    - definitely missing field
 
   - METHODS:
     - liquid/pos/objects/meth-00.js
@@ -32,10 +32,6 @@ JS Features
 Tool/Implementation
 -------------------
 
-  - whilefix
-
-  - Fix "Cannot handle ssaVarDECL" at "var foo;"
-
   - Restore the check for unbounded/undefined type variables
 
   - Multiple fixpoint bindings/invariants in the same environment
@@ -48,8 +44,6 @@ Tool/Implementation
 
     Note use of lower-case which gets translated into tyvars in fixpoint. sigh.
 
-  - Do not add casts deep inside objects. Eg: tc/pos/listmap02.js 
-
   - There is a confusion with reserved type names (e.g. "null") and defined
     type (any identifier can be considered as a defined type). So it's very easy
     to confuse "null" with "Null". So disallow all types that are not defined
@@ -58,13 +52,14 @@ Tool/Implementation
   - Array literal checks are quite slow.
       E.g.: liquid/pos/arrays/arr-07.js
 
+  - Restore the (liquid) property of Array.length (i.e. that it returns a number
+    equal to the length of the array)
 
 Failing Tests 
 -------------
 
 [ARRAY.LENGTH]
-  Implement and type the following:
-    liquid/pos/arrays/safemap.js
+  liquid/pos/lists/safeList.js
 
 [METHODS]
   liquid/pos/objects/meth-00.js
@@ -72,17 +67,13 @@ Failing Tests
 [REGEXP-PARSE]
   liquid/pos/objects/obj-02-parse-bug.js,
 
-[TC-CRASH]
- liquid/neg/misc/driver-numargs.js,
- liquid/neg/misc/global.js,
- liquid/neg/objects/obj-05.js,
- liquid/neg/operators/id-01.js,
- liquid/neg/operators/stmt-01.js,
- liquid/neg/operators/sum-join-unbound.js,
- liquid/neg/simple/glob-03.js,
- liquid/neg/simple/parse-01.js,
+[K-VAR INSTANTIATION]
+ liquid/pos/lists/safeLists.js,
+ liquid/pos/misc/abs-00.js,
 
-[TC-BETTER-ERROR]
- liquid/neg/operators/sum-return-missing.js, ("missing return statement")
-
+[PROTOTYPES - NOT DONE]
+ liquid/pos/proto/proto-lookup3.js,
+ liquid/pos/proto/proto-lookup4.js,
+ liquid/pos/proto/proto-lookup5.js,
+ liquid/pos/proto/proto-lookup6.js
 

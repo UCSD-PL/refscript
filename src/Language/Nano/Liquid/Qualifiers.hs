@@ -19,7 +19,7 @@ nanoQualifiers p       = quals p ++ nanoQualifiers' p
 nanoQualifiers'        :: NanoRefType -> [Qualifier]
 nanoQualifiers' p      = concatMap (refTypeQualifiers γ0) $ envToList $ envs 
   where
-    envs               = envUnion (sigs p) (tAnns p)
+    envs               = envUnionList [sigs p, tAnns p]
     γ0                 = envSEnv $ envMap rTypeSort $ specs p
 
 refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t 

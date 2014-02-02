@@ -44,8 +44,10 @@ module Language.Nano.Typecheck.TCMonad (
   , tcFunTys
 
   -- * Annotations
+  , addAnn    -- TEMP
   , accumAnn
   , getAllAnns
+  , remAnn
 
   -- * Unfolding
   , unfoldFirstTC
@@ -79,6 +81,9 @@ module Language.Nano.Typecheck.TCMonad (
   , whenLoud', whenLoud
   , whenQuiet', whenQuiet
 
+  -- * This
+  , peekThis
+
   )  where 
 
 import           Text.Printf
@@ -96,8 +101,9 @@ import           Language.Nano.Misc             (unique, everywhereM', zipWith3M
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
-import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Typecheck.Unify
+import           Language.Nano.Typecheck.Compare
+import           Language.Nano.Typecheck.Unfold
 import           Language.Nano.Errors
 import           Data.Monoid                  
 import qualified Data.HashMap.Strict            as HM
@@ -110,8 +116,9 @@ import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
 -- import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
+import           Language.Fixpoint.Misc
 
--- import           Debug.Trace                      (trace)
+import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity as V
 
 -------------------------------------------------------------------------------
@@ -134,6 +141,8 @@ data TCState r = TCS {
                    , tc_expr  :: Maybe (Expression (AnnSSA r))
                    -- Verbosity
                    , tc_verb  :: V.Verbosity
+                   -- This stack
+                   , tc_this  :: ![RType r]
                    }
 
 type TCM r     = ErrorT Error (State (TCState r))
@@ -219,9 +228,10 @@ freshSubst l ξ αs
 
 setTyArgs l ξ βs
   = do m <- tc_anns <$> get
-       when (HM.member l m) $ tcError $ errorMultipleTypeArgs l
+       when (hasTI l m) $ tcError $ errorMultipleTypeArgs l
        addAnn l $ TypInst ξ (tVar <$> βs)
     where 
+       hasTI l m = not $ null [ i | i@(TypInst _ _) <- HM.lookupDefault [] l m ]
        msg = printf "setTyArgs: l = %s ξ = %s" (ppshow l) (ppshow ξ) 
 
 
@@ -287,9 +297,20 @@ getAnns = do θ     <- tc_subst <$> get
              return m' 
 
 -------------------------------------------------------------------------------
--- addAnn :: (F.Reftable r) => SourceSpan -> Fact r -> TCM r () 
+addAnn :: (F.Reftable r) => SourceSpan -> Fact r -> TCM r () 
 -------------------------------------------------------------------------------
 addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
+
+-------------------------------------------------------------------------------
+-- remAnn :: (F.Reftable r) => SourceSpan -> TCM r () 
+-------------------------------------------------------------------------------
+remAnn l   = modify $ \st -> st { tc_anns = delLst l (tc_anns st) } 
+  where
+    delLst k m | not (HM.member k m)                  = m
+    delLst k m | null (stl $ HM.lookupDefault [] k m) = HM.delete k m
+    delLst _ m | otherwise                            = errorstar "BUG remAnn"
+    stl []     = []
+    stl (x:xs) = xs
 
 -------------------------------------------------------------------------------
 getAllAnns :: TCM r [AnnInfo r]  
@@ -323,7 +344,7 @@ execute verb pgm act
 
 initState ::  (PP r, F.Reftable r) => V.Verbosity -> Nano z (RType r) -> TCState r
 initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss 
-                       tc_defs tc_tdefs tc_expr tc_verb 
+                       tc_defs tc_tdefs tc_expr tc_verb tc_this
   where
     tc_errss = []
     tc_subst = mempty 
@@ -334,6 +355,7 @@ initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss
     tc_tdefs = defs pgm
     tc_expr  = Nothing
     tc_verb  = verb
+    tc_this  = [tTop]
 
 
 getDefType f 
@@ -431,6 +453,8 @@ subTypeM :: (Ord r, PP r, F.Reftable r) => RType r -> RType r -> TCM r SubDirect
 ----------------------------------------------------------------------------------
 subTypeM t t' 
   = do  θ            <- getTDefs 
+        -- let (_,_,_,d) = compareTs θ (trace ("CompareTs:\n" ++ ppshow t ++ "\nvs\n" ++ ppshow t' ++ "\n") t) t'
+        -- let (_,_,_,d) = tracePP ("CompareTs " ++ ppshow t ++ " : " ++ ppshow t') $ compareTs θ t t'
         let (_,_,_,d) = compareTs θ t t'
         return d
 
@@ -479,13 +503,20 @@ checkAnnotation msg e t ta = do
 castM :: (Ord r, PP r, F.Reftable r) => 
            IContext -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-castM ξ e t t'    = subTypeM t t' >>= go
+-- Special case casting for objects 
+castM ξ e fromT toT | any isObj [fromT, toT] = subTypeM fromT toT >>= go
+  where
+    go EqT          = return e
+    go SubT         = addUpCast   ξ e toT
+    go _            = addDeadCast ξ e toT
+
+castM ξ e fromT toT = subTypeM fromT toT >>= go
   where 
-    go SupT       = addDownCast ξ e t'
-    go Rel        = addDownCast ξ e t'
-    go SubT       = addUpCast   ξ e t'
-    go Nth        = addDeadCast ξ e t'
-    go EqT        = return e 
+    go SupT         = addDownCast ξ e toT    
+    go Rel          = addDownCast ξ e toT   
+    go SubT         = addUpCast   ξ e toT   
+    go Nth          = addDeadCast ξ e toT   
+    go EqT          = return e 
 
 addUpCast   ξ e t = addCast ξ e (UCST t)
 addDownCast ξ e t = addCast ξ e (DCST t) 
@@ -505,3 +536,7 @@ tcFunTys l f xs ft =
     Left e  -> tcError e 
     Right a -> return a
 
+
+-- | `this`
+
+peekThis = safeHead "get 'this'" <$> (tc_this <$> get)

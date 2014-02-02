@@ -23,6 +23,7 @@ module Language.Nano.Env (
   , envLefts
   , envRights
   , envUnion
+  , envUnionList
   , envDiff
   , envIntersectWith
   , envEmpty
@@ -87,6 +88,11 @@ envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (va
 -- | Favors the bindings in the second environment
 envUnion :: Env a -> Env a -> Env a
 envUnion = envAdds . envToList
+
+envUnionList    = go envEmpty 
+  where
+    go acc (y:ys) = go (envUnion acc y) ys
+    go acc []     = acc
 
 envRights :: Env (Either a b) -> Env b
 envRights = envMap (\(Right z) -> z) . envFilter isRight

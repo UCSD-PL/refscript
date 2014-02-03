@@ -9,3 +9,6 @@ function foo () {
   // BAD: 
   return obj["f1"].f11 + obj.f1["f11"] + obj["f1"]["f11"];
 }
+
+var objNoAnnot = { f: 1, g: "str" }
+

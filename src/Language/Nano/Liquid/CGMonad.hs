@@ -150,7 +150,7 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnTypeR RefType -> CGState
-initState c pgm = CGS F.emptyBindEnv (sigs pgm) (defs pgm) [] [] 0 mempty invs c [this] 
+initState c pgm = CGS F.emptyBindEnv (specs pgm) (defs pgm) [] [] 0 mempty invs c [this] 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts pgm]  
     this        = tTop
@@ -374,7 +374,7 @@ envFindSpec x g = E.envFindTy x $ cge_spec g
 
 envFindAnnot x g = msum [tAnn, tEnv] 
   where
-    tAnn         = E.envFindTy x $ cge_anns g
+    tAnn         = E.envFindTy x $ cge_spec g
     tEnv         = E.envFindTy x $ renv     g
 
 

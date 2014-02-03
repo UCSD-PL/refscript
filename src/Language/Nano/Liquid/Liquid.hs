@@ -102,7 +102,7 @@ consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) = consStmts (initCGEnv pgm) fs >> return ()
 
-initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext (sigs pgm) (tAnns pgm)
+initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext (specs pgm)
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv

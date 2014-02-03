@@ -12,7 +12,7 @@ module Language.Nano.Typecheck.Parse (
 
 import           Data.List (sort)
 import qualified Data.Foldable                      as F
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe, maybeToList)
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import qualified Data.HashMap.Strict                as M 
@@ -427,37 +427,32 @@ mkCode :: ([Statement SourceSpan], M.HashMap SourceSpan [AnnToken Reft]) ->
   Either Error (Nano SourceSpan RefType)
 --------------------------------------------------------------------------------------
 mkCode (ss, m) =  do
-    tas <- foldM (\a b -> liftM2 envUnion (vds b) (return a)) envEmpty $ varDeclStmts ss
+    tas   <- annots
     return $ Nano { code   = Src (checkTopStmt <$> ss)
-    , specs  = envFromList [ a       | TSpec (Extern a)    <- list ] 
-    , sigs   = envFromList [ a       | TBind         a     <- list ] 
+    , specs  = envFromList $ [ a       | TSpec (Extern a)    <- list ] ++
+                             [ a       | TBind         a     <- list ] ++
+                             tas
     , consts = envFromList [ a       | TSpec (Meas   a)    <- list ] 
     , defs   = envFromList [ a       | TSpec (Type   a)    <- list ] 
     , tAlias = envFromList [ a       | TSpec (Talias a)    <- list ]
     , pAlias = envFromList [ p       | TSpec (Palias p)    <- list ]
-    , tAnns  = tas
     , quals  = [q                    | TSpec (Qual   q)    <- list ]
     , invts  = [Loc l' t             | TSpec (Invt l t)    <- list, let l' = srcPos l]
     } 
   where
-    list                    = concat $ M.elems m
-    vds (VarDeclStmt l ds)  = mrg (prefixed $ M.lookup l m) (inlined ds)
-    vds _                   = error "BUG: Parse.mkCode"
-    prefixed (Just xs)      = envFromList [ a | TBind a <- xs ]
-    prefixed Nothing        = envEmpty
-
-    id (VarDecl _ i _)      = i
-
-    spAn id                 = (id, M.lookup (getAnnotation id) m)
-    inlined xs              = envFromList [(i, t) | (i, Just ans) <- spAn . id <$> xs
-                                                  , TType t <- ans ]
-
-    mrg e1 e2 
-      | not $ null un       = Left $ (er . head) un
-      where un              = fst <$> (envToList $ envIntersectWith const e1 e2)
-            er s            = bugMultipleAnnots (srcPos s) s
-    mrg e1 e2 
-      | otherwise           = return $ envUnion e1 e2  
+    list        = concat $ M.elems m
+    vds         = varDeclStmts ss
+    prefixed    = [ a     | VarDeclStmt l _  <- vds
+                          , ts               <- maybeToList (M.lookup l m)
+                          , TBind a <- ts ]
+    inlined     = [ (i,t) | VarDeclStmt _ ds <- vds
+                          , VarDecl l i _    <- ds
+                          , ts               <- maybeToList (M.lookup l m)
+                          , TType t          <- ts ]
+    doubleTyped = [ (l1,s1) | (Id l1 s1, _) <- prefixed, (Id _ s2, _) <- inlined, s1 == s2 ]
+    annots      | null doubleTyped = Right    $ prefixed ++ inlined
+                | otherwise        = Left     $ errors
+    errors      = foldl1 catError $ (uncurry bugMultipleAnnots) <$> doubleTyped 
 
 
 -------------------------------------------------------------------------------
@@ -475,10 +470,10 @@ parseNanoFromFile f
 
 catSpecDefs :: PP t => Nano SourceSpan t -> Either Error (Nano SourceSpan t)
 catSpecDefs pgm = do
-    defγ       <- envFromList <$> sequence [ (x,) <$> lookupTy x γ | x <- fs ]
-    return $ pgm { sigs = defγ }
+    defγ       <- envFromList <$> sequence [ (x,) <$> lookupTy x (specs pgm) | x <- fs ]
+    -- XXX
+    return $ pgm { specs = defγ }
   where 
-    γ           = sigs pgm
     fs          = definedFuns stmts 
     Src stmts   = code pgm
 

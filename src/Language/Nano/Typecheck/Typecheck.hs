@@ -91,7 +91,7 @@ safe (_, Nano {code = Src fs})
 
 -- | Inline type annotations
 patchTypeAnnots :: NanoSSAR r -> NanoTSSAR r
-patchTypeAnnots p@(Nano {code = Src fs, tAnns = m}) = 
+patchTypeAnnots p@(Nano {code = Src fs, specs = m}) = 
     p {code = Src $ (patchAnn <$>) <$> fs}
   where
     patchAnn (Ann l bs) = Ann l $ (TAnnot <$> (maybeToList $ M.lookup l mm)) ++ bs
@@ -152,7 +152,8 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs
     fs'               = [f | f@(TypInst _ _) <- M.lookupDefault [] l m]
     fs''              = [f | f@(Overload (Just _)) <- M.lookupDefault [] l m]
 
-initEnv pgm           = TCE (specs pgm) (sigs pgm) (tAnns pgm) [tTop] emptyContext
+-- Initalize the environment with all the available specs!
+initEnv pgm           = TCE (specs pgm) (specs pgm) [tTop] emptyContext
 traceCodePP p m s     = trace (render $ {- codePP p m s -} pp p) $ return ()
       
 codePP (Nano {code = Src src}) anns sub 
@@ -171,7 +172,7 @@ checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano (AnnSSA r) (RType r)
 -------------------------------------------------------------------------------
 checkTypeDefs pgm = reportAll $ grep
   where 
-    ds        = sigs pgm 
+    ds        = specs pgm 
     ts        = defs pgm
     reportAll = mapM_ report
     report t  = tcError $ errorUnboundType (srcPos t) t
@@ -199,7 +200,6 @@ checkTypeDefs pgm = reportAll $ grep
 
 data TCEnv r  = TCE { tce_env  :: Env (RType r)
                     , tce_spec :: Env (RType r) 
-                    , tce_anns :: Env (RType r)
                     , tce_this ::     [RType r]
                     , tce_ctx  :: !IContext 
                     }
@@ -208,18 +208,16 @@ type TCEnvO r = Maybe (TCEnv r)
 
 -- type TCEnv  r = Maybe (Env (RType r))
 instance (PP r, F.Reftable r) => Substitutable r (TCEnv r) where 
-  apply θ (TCE m sp an th c) = TCE (apply θ m) (apply θ sp) (apply θ an) (apply θ th) c 
+  apply θ (TCE m sp th c) = TCE (apply θ m) (apply θ sp) (apply θ th) c 
 
 instance (PP r, F.Reftable r) => PP (TCEnv r) where
   pp = ppTCEnv
 
-ppTCEnv (TCE env spc an th ctx) 
+ppTCEnv (TCE env spc th ctx) 
   =   text "******************** Environment ************************"
   $+$ pp env
   $+$ text "******************** Specifications *********************"
   $+$ pp spc 
-  $+$ text "******************** Annotations ************************"
-  $+$ pp an
   $+$ text "******************** \"this\" stack *********************"
   $+$ pp th
   $+$ text "******************** Call Context ***********************"
@@ -238,7 +236,7 @@ tcEnvAddReturn x t γ         = γ { tce_env = envAddReturn x t $ tce_env γ }
 tcEnvMem x                   = envMem (stripSSAId x)      . tce_env 
 tcEnvFindTy x                = envFindTy (stripSSAId x)   . tce_env
 tcEnvFindReturn              = envFindReturn              . tce_env
-tcEnvFindSpec x              = envFindTy (stripSSAId x)   . tce_anns
+tcEnvFindSpec x              = envFindTy (stripSSAId x)   . tce_spec
 tcEnvFindTyOrDie l x         = fromMaybe ugh . tcEnvFindTy (stripSSAId x)  where ugh = die $ errorUnboundId (ann l) x
 
 tcPushThis t γ               = γ { tce_this = t : tce_this γ } 

@@ -240,18 +240,24 @@ instance IsNano PrefixOp where
   -- isNano _            = False
 
 instance IsNano (Statement a) where
-  isNano (EmptyStmt _)          = True                   --  skip
-  isNano (ExprStmt _ e)         = isNanoExprStatement e  --  x = e
-  isNano (BlockStmt _ ss)       = isNano ss              --  sequence
-  isNano (IfSingleStmt _ b s)   = isNano b && isNano s   
-  isNano (IfStmt _ b s1 s2)     = isNano b && isNano s1 && isNano s2
-  isNano (WhileStmt _ b s)      = isNano b && isNano s
-  isNano (ForStmt _ i t inc b)  = isNano i && isNano t && isNano inc && isNano b
-  isNano (VarDeclStmt _ ds)     = all isNano ds 
-  isNano (ReturnStmt _ e)       = isNano e 
-  isNano (FunctionStmt _ _ _ b) = isNano b
-  isNano (SwitchStmt _ e cs)    = isNano e && not (null cs) && isNano cs
-  isNano e                      = errortext (text "Not Nano Statement!" <+> pp e) 
+  isNano (EmptyStmt _)            = True                   --  skip
+  isNano (ExprStmt _ e)           = isNanoExprStatement e  --  x = e
+  isNano (BlockStmt _ ss)         = isNano ss              --  sequence
+  isNano (IfSingleStmt _ b s)     = isNano b && isNano s
+  isNano (IfStmt _ b s1 s2)       = isNano b && isNano s1 && isNano s2
+  isNano (WhileStmt _ b s)        = isNano b && isNano s
+  isNano (ForStmt _ i t inc b)    = isNano i && isNano t && isNano inc && isNano b
+  isNano (VarDeclStmt _ ds)       = all isNano ds
+  isNano (ReturnStmt _ e)         = isNano e
+  isNano (FunctionStmt _ _ _ b)   = isNano b
+  isNano (SwitchStmt _ e cs)      = isNano e && not (null cs) && isNano cs
+  isNano (ClassStmt _ _ _ _  bd)  = all isNano bd
+  isNano e                        = errortext (text "Not Nano Statement!" <+> pp e)
+
+instance IsNano (ClassElt a) where
+  isNano (Constructor _ _ ss)          = all isNano ss
+  isNano (MemberFuncDecl _ _ _ _ _ ss) = all isNano ss
+  isNano (MemberVarDecl _ _ _ vd)      = isNano vd
 
 instance IsNano a => IsNano (Maybe a) where 
   isNano (Just x) = isNano x

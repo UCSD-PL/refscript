@@ -187,6 +187,7 @@ ssaStmt (ReturnStmt l (Just e)) = do
 ssaStmt s@(FunctionStmt _ _ _ _)
   = (True,) <$> ssaFun s
 
+-- switch (e) { ... }
 ssaStmt s@(SwitchStmt l e xs) 
   = do
       id <- updSsaEnv (an e) (Id (an e) "__switchVar")
@@ -204,9 +205,20 @@ ssaStmt s@(SwitchStmt l e xs)
       headWithDefault a [] = a
       headWithDefault _ xs = head xs
 
+-- class A extends B implements I,J,... { ... }
+ssaStmt s@(ClassStmt l n e is bd) =  
+  ssaSeq ssaClassElt bd >>= return . mapSnd (ClassStmt l n e is)
+
 -- OTHER (Not handled)
 ssaStmt s 
   = convertError "ssaStmt" s
+
+ssaClassElt (Constructor l is ss) = 
+  ssaStmts ss >>= return . mapSnd (Constructor l is)
+ssaClassElt (MemberVarDecl l m s vd) = 
+  ssaVarDecl vd >>= return . mapSnd (MemberVarDecl l m s)
+ssaClassElt (MemberFuncDecl l m s e i cs) =
+  ssaStmts cs >>= return . mapSnd (MemberFuncDecl l m s e i)
 
 infOp OpAssign         _ _  = id
 infOp OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalExp lv)

@@ -345,7 +345,6 @@ instance (PP l, PP t) => PP (PSpec l t) where
 
 data AnnToken r 
   = TBind (Id SourceSpan, RType r)          -- ^ Function signature binding
-  | TAnonSig (RType r)                      -- ^ Function signature binding
   | TType (RType r)                         -- ^ Variable declaration binding
   | TSpec (PSpec SourceSpan (RType r))      -- ^ Specs: qualifiers, measures, type defs, etc.
   | EmptyToken                              -- ^ Dummy empty token

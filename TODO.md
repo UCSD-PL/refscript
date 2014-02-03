@@ -31,6 +31,9 @@ JS Features
 
 Tool/Implementation
 -------------------
+  - Force Class definitions to be at top-level
+
+  - Pay attention to capital first letter at function/class defs.
 
   - Restore the check for unbounded/undefined type variables
 

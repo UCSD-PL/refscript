@@ -102,7 +102,7 @@ consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) = consStmts (initCGEnv pgm) fs >> return ()
 
-initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext (specs pgm)
+initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext (chSpecs pgm)
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
@@ -541,58 +541,6 @@ consWhileStep l xs tIs gI'' = zipWithM_ (subTypeContainers "WhileStep" l gI'') x
 
 whenJustM Nothing  _ = return ()
 whenJustM (Just x) f = f x
-
-
-
-{- OLD/DEPRECATED.
-
--- G   |- C :: xe, G1
--- Tinv = freshen(G1(x)) = {_|K}, ∀x∈Φ
--- G1(xe) = { v: boolean | ... }              //TODO
--- G1  |- G1(x) <: Tinv, ∀x∈Φ                 // Before the loop body: constraints on Φ Vars
--- G1, z:{xe}, ∀x∈Φ.x:Tinv |- B :: G2         // typecheck the loop where the condition holds and 
---                                            // the Φ vars have invariant types
--- G2  |- G2(x) <: Tinv, ∀x∈Φ                 // After the loop body: constraints on Φ vars
--- G3 = G2 + z:{¬xe} + { x: Tinv | x∈Φ }      // the environment after the loop should use the 
---                                            // invariant types for the Φ vars and also be updated
---                                            // with negation of the loop condition
--- ------------------------------------------
--- G |- while[Φ](C) { B } :: G3
-
-
--- var x0 = ...       // G0
--- while              // G1
---   ( ...x1... ) {
---   BODY
---                    // G2, x2
--- }
--- ... x1 ...         // G3,
-consWhile g0 l c b
-  = do  --  BEFORE LOOP
-       (g1a , invs)   <- tInv g0 φ0
-       zipWithM_ (sub "Before Loop Body" g0) ((`envFindTy` g0) <$> φ0) invs
-       --  CONDITION
-       g1b            <- envAdds (zip φ1 invs) g1a
-       (xe, g1c)      <- consExpr g1b c
-       let g1d         = envAddGuard xe True g1c
-       --  BODY
-       g2             <- fromJust' "Break loop" <$> consStmt g1d b
-       --  AFTER BODY
-       zipWithM_ (sub "After Loop Body" g2) ((`envFindTy` g2) <$> φ2) invs
-       --  AFTER LOOP
-       g3a            <- envAdds (zip φ1 invs) g0
-       (xe', g3b)     <- consExpr g3a c
-       -- Add the guard in the relevant environment
-       return          $ Just $ envAddGuard xe' False g3b
-    where 
-       -- φ0: Φ vars before the loop
-       -- φ1: Φ vars (invariant) at the beginning of the loop body
-       -- φ2: Φ vars at the end of the loop body
-       (φ0, φ1, φ2)    = unzip3 [φ | LoopPhiVar φs <- ann_fact l, φ <- φs]
-       tInv g xs       = freshTyPhisWhile (ann l) g xs (toType <$> (`envFindTy` g) <$> xs)
-       sub s g t t'    = subTypeContainers ("While:" ++ s) l g t t'
-
--}
 
 ----------------------------------------------------------------------------------
 envJoin :: AnnTypeR -> CGEnv -> Maybe CGEnv -> Maybe CGEnv -> CGM (Maybe CGEnv)

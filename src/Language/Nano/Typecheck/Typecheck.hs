@@ -153,7 +153,7 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs
     fs''              = [f | f@(Overload (Just _)) <- M.lookupDefault [] l m]
 
 -- Initalize the environment with all the available specs!
-initEnv pgm           = TCE (specs pgm) (specs pgm) [tTop] emptyContext
+initEnv pgm           = TCE (envUnion (specs pgm) (chSpecs pgm)) (chSpecs pgm) [tTop] emptyContext
 traceCodePP p m s     = trace (render $ {- codePP p m s -} pp p) $ return ()
       
 codePP (Nano {code = Src src}) anns sub 
@@ -236,7 +236,8 @@ tcEnvAddReturn x t γ         = γ { tce_env = envAddReturn x t $ tce_env γ }
 tcEnvMem x                   = envMem (stripSSAId x)      . tce_env 
 tcEnvFindTy x                = envFindTy (stripSSAId x)   . tce_env
 tcEnvFindReturn              = envFindReturn              . tce_env
-tcEnvFindSpec x              = envFindTy (stripSSAId x)   . tce_spec
+tcEnvFindSpec x              = envFindTy (stripSSAId x)   . tce_spec 
+tcEnvFindSpecOrTy x γ        = msum [tcEnvFindTy x γ, tcEnvFindSpec x γ]
 tcEnvFindTyOrDie l x         = fromMaybe ugh . tcEnvFindTy (stripSSAId x)  where ugh = die $ errorUnboundId (ann l) x
 
 tcPushThis t γ               = γ { tce_this = t : tce_this γ } 
@@ -466,7 +467,7 @@ tcAsgn γ x e
   = do (e' , t) <- tcExprT γ e rhsT
        return      (e', Just $ tcEnvAdds [(x, t)] γ)
     where
-       rhsT      = maybe (tcEnvFindTy x γ) Just (tcEnvFindSpec x γ)
+       rhsT      = tcEnvFindSpecOrTy x γ
 
 
 -------------------------------------------------------------------------------

@@ -13,7 +13,6 @@ module Language.Nano.Liquid.Types (
 
   -- * Constraint Environments
   , CGEnv (..)
-  , emptyCGEnv
 
   -- * Constraint Information
   , Cinfo (..)
@@ -93,8 +92,6 @@ data CGEnv
         , cge_spec :: !(Env RefType) -- ^ specifications for defined functions
         }
 
-
-emptyCGEnv = CGE envEmpty F.emptyIBindEnv [] emptyContext
 
 instance PP CGEnv where
   pp (CGE  re _ gs ctx sp) = vcat [pp re, 

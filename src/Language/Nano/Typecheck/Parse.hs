@@ -356,30 +356,6 @@ instance (PP r, F.Reftable r) => PP (AnnToken r) where
   pp (TSpec s)      = pp s
   pp EmptyToken     = text "<empyt>"
 
-
--- --------------------------------------------------------------------------------------
--- parseSpecFromFile :: FilePath -> IO (Nano SourceSpan RefType) 
--- --------------------------------------------------------------------------------------
--- parseSpecFromFile f = parseFromFile (mkSpec <$> specWraps specWithDefaultP) f
--- 
--- --------------------------------------------------------------------------------------
--- mkSpec    ::  (PP t, IsLocated l) => [PSpec l t] -> Nano a t
--- --------------------------------------------------------------------------------------
--- mkSpec xs = Nano { code   = Src [] 
---                  , specs  = envFromList [b | Bind b <- xs] 
---                  , sigs   = envEmpty
---                  , consts = envFromList [(switchProp i, t) | Meas (i, t) <- xs]
---                  , defs   = envFromList [b         | Type b <- xs]
---                  , tAnns  = M.empty
---                  , quals  =             [q         | Qual q <- xs]
---                  , invts  =             [Loc l' t  | Invt l t <- xs, let l' = srcPos l]
---                  }
-
--- -- YUCK. Worst hack of all time.
--- switchProp i@(Id l x) 
---   | x == (toLower <$> propConName) = Id l propConName
---   | otherwise                      = i
-
 --------------------------------------------------------------------------------------
 tAnnotP :: ParserState String (AnnToken Reft) -> ExternP String (AnnToken Reft)
 --------------------------------------------------------------------------------------
@@ -429,15 +405,14 @@ mkCode :: ([Statement SourceSpan], M.HashMap SourceSpan [AnnToken Reft]) ->
 mkCode (ss, m) =  do
     tas   <- annots
     return $ Nano { code   = Src (checkTopStmt <$> ss)
-    , specs  = envFromList $ [ a       | TSpec (Extern a)    <- list ] ++
-                             [ a       | TBind         a     <- list ] ++
-                             tas
-    , consts = envFromList [ a       | TSpec (Meas   a)    <- list ] 
-    , defs   = envFromList [ a       | TSpec (Type   a)    <- list ] 
-    , tAlias = envFromList [ a       | TSpec (Talias a)    <- list ]
-    , pAlias = envFromList [ p       | TSpec (Palias p)    <- list ]
-    , quals  = [q                    | TSpec (Qual   q)    <- list ]
-    , invts  = [Loc l' t             | TSpec (Invt l t)    <- list, let l' = srcPos l]
+    , specs   = envFromList ([ a | TSpec (Extern a) <- list ] ++ [ a | TBind a <- list ])
+    , chSpecs = envFromList tas -- populated further with functions later
+    , consts  = envFromList  [ a | TSpec (Meas   a) <- list ] 
+    , defs    = envFromList  [ a | TSpec (Type   a) <- list ] 
+    , tAlias  = envFromList  [ a | TSpec (Talias a) <- list ]
+    , pAlias  = envFromList  [ p | TSpec (Palias p) <- list ]
+    , quals   = [q               | TSpec (Qual   q) <- list ]
+    , invts   = [Loc l' t        | TSpec (Invt l t) <- list, let l' = srcPos l]
     } 
   where
     list        = concat $ M.elems m
@@ -470,9 +445,8 @@ parseNanoFromFile f
 
 catSpecDefs :: PP t => Nano SourceSpan t -> Either Error (Nano SourceSpan t)
 catSpecDefs pgm = do
-    defγ       <- envFromList <$> sequence [ (x,) <$> lookupTy x (specs pgm) | x <- fs ]
-    -- XXX
-    return $ pgm { specs = defγ }
+    defL  <- sequence [ (x,) <$> lookupTy x (specs pgm) | x <- fs ]
+    return $ pgm { chSpecs = envUnion (envFromList defL) (chSpecs pgm) }
   where 
     fs          = definedFuns stmts 
     Src stmts   = code pgm

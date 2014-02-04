@@ -150,7 +150,7 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnTypeR RefType -> CGState
-initState c pgm = CGS F.emptyBindEnv (sigs pgm) (defs pgm) [] [] 0 mempty invs c [this] 
+initState c pgm = CGS F.emptyBindEnv (specs pgm) (defs pgm) [] [] 0 mempty invs c [this] 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts pgm]  
     this        = tTop
@@ -365,25 +365,11 @@ envFindSpec     :: (IsLocated x, F.Symbolic x) => x -> CGEnv -> Maybe RefType
 envFindSpec x g = E.envFindTy x $ cge_spec g
 
 ---------------------------------------------------------------------------------------
---envFindAnnot     :: (IsLocated x, F.Symbolic x) => x -> CGEnv -> Maybe RefType 
----------------------------------------------------------------------------------------
--- envFindAnnot x g = tracePP ("envFindAnnot: " ++ ppshow x ++ " in " ++  ppshow xs) 
---                  $ E.envFindTy x $ cge_anns g
---   where 
---     xs           = fst <$> envToList g
-
 envFindAnnot x g = msum [tAnn, tEnv] 
+---------------------------------------------------------------------------------------
   where
-    tAnn         = E.envFindTy x $ cge_anns g
+    tAnn         = E.envFindTy x $ cge_spec g
     tEnv         = E.envFindTy x $ renv     g
-
-
--- envFindAnnot x g 
---   | x `E.envMem` gAnns = E.envFindTy x gAnns 
---   | otherwise          = E.envFindTy x gEnv
---   where
---     gAnns              = cge_anns g
---     gEnv               = renv     g
 
 ---------------------------------------------------------------------------------------
 envToList     ::  CGEnv -> [(Id SourceSpan, RefType)]
@@ -528,61 +514,6 @@ subTypeContainers msg l g t1 t2 = subType l g t1 t2
       msg'                      = render $ text "subTypeContainers:" 
                                            $+$ text "  t1 =" <+> pp t1
                                            $+$ text "  t2 =" <+> pp t2
-
-
--- BUG RIGHT HERE. SIGH.
--- RJ: ALL THIS SHOULD BE IN `splitC` subTypeContainers' msg l g (TApp d@(TDef _) ts _) (TApp d'@(TDef _) ts' _) | d == d' = 
--- RJ: ALL THIS SHOULD BE IN `splitC`   mapM_ (uncurry $ subTypeContainers' "def0" l g) $ zip ts ts'
--- RJ: ALL THIS SHOULD BE IN `splitC` 
--- RJ: ALL THIS SHOULD BE IN `splitC` subTypeContainers' msg l g t1 t2@(TApp (TDef _) _ _ ) = 
--- RJ: ALL THIS SHOULD BE IN `splitC`   unfoldSafeCG t2 >>= \t2' -> subTypeContainers' "subc def1" l g t1 t2'
--- RJ: ALL THIS SHOULD BE IN `splitC` 
--- RJ: ALL THIS SHOULD BE IN `splitC` subTypeContainers' msg l g t1@(TApp (TDef _) _ _ ) t2 = 
--- RJ: ALL THIS SHOULD BE IN `splitC`   unfoldSafeCG t1 >>= \t1' -> subTypeContainers' "subc def2" l g t1' t2
--- RJ: ALL THIS SHOULD BE IN `splitC` 
--- RJ: ALL THIS SHOULD BE IN `splitC` subTypeContainers' msg l g u1@(TApp TUn _ r1) u2@(TApp TUn _ r2) = 
--- RJ: ALL THIS SHOULD BE IN `splitC`   getTDefs >>= \γ -> sbs $ bkPaddedUnion "subTypeContainers'" γ u1 u2
--- RJ: ALL THIS SHOULD BE IN `splitC`   where        
--- RJ: ALL THIS SHOULD BE IN `splitC`     -- Fix the ValueVar of the top-level refinement to be the same as the
--- RJ: ALL THIS SHOULD BE IN `splitC`     -- Valuevar of the part
--- RJ: ALL THIS SHOULD BE IN `splitC`     fix t b v    | v == b    = rTypeValueVar t
--- RJ: ALL THIS SHOULD BE IN `splitC`                  | otherwise = v
--- RJ: ALL THIS SHOULD BE IN `splitC`     rr t r       = F.substa (fix t b) r where F.Reft (b,_) = r
--- RJ: ALL THIS SHOULD BE IN `splitC`     sb  (t1 ,t2) = subTypeContainers' "subc union" l g (t1 `strengthen` rr t1 r1)
--- RJ: ALL THIS SHOULD BE IN `splitC`                                                        (t2 `strengthen` rr t2 r2)
--- RJ: ALL THIS SHOULD BE IN `splitC`     sbs ts       = mapM_ sb ts
--- RJ: ALL THIS SHOULD BE IN `splitC` 
--- RJ: ALL THIS SHOULD BE IN `splitC` subTypeContainers' msg l g (TArr t1 r1) (TArr t2 r2) = do
--- RJ: ALL THIS SHOULD BE IN `splitC`     subTypeContainers' "subc arr" l g (t1 `strengthen` rr t1 r1) 
--- RJ: ALL THIS SHOULD BE IN `splitC`                                       (t2 `strengthen` rr t2 r2)
--- RJ: ALL THIS SHOULD BE IN `splitC`     -- Array subtyping co- and contra-variant?                                    
--- RJ: ALL THIS SHOULD BE IN `splitC`     -- subTypeContainers' "subc arr" l g (t2 `strengthen` rr t2 r2) 
--- RJ: ALL THIS SHOULD BE IN `splitC`     --                                   (t1 `strengthen` rr t1 r1)
--- RJ: ALL THIS SHOULD BE IN `splitC`   where
--- RJ: ALL THIS SHOULD BE IN `splitC`     -- Fix the ValueVar of the top-level refinement 
--- RJ: ALL THIS SHOULD BE IN `splitC`     -- to be the same as the Valuevar of the part
--- RJ: ALL THIS SHOULD BE IN `splitC`     fix t b v    | v == b    = rTypeValueVar t
--- RJ: ALL THIS SHOULD BE IN `splitC`                  | otherwise = v
--- RJ: ALL THIS SHOULD BE IN `splitC`     rr t r       = F.substa (fix t b) r where F.Reft (b,_) = r
--- RJ: ALL THIS SHOULD BE IN `splitC` 
--- RJ: ALL THIS SHOULD BE IN `splitC` 
--- RJ: ALL THIS SHOULD BE IN `splitC` 
--- RJ: ALL THIS SHOULD BE IN `splitC` -- TODO: the environment for subtyping each part of the object should have the
--- RJ: ALL THIS SHOULD BE IN `splitC` -- tyopes for the rest of the bindings
--- RJ: ALL THIS SHOULD BE IN `splitC` subTypeContainers' msg l g o1@(TObj _ r1) o2@(TObj _ r2) = 
--- RJ: ALL THIS SHOULD BE IN `splitC`     mapM_ sb $ bkPaddedObject o1 o2
--- RJ: ALL THIS SHOULD BE IN `splitC`   where
--- RJ: ALL THIS SHOULD BE IN `splitC`     -- Fix the ValueVar of the top-level refinement 
--- RJ: ALL THIS SHOULD BE IN `splitC`     -- to be the same as the Valuevar of the part
--- RJ: ALL THIS SHOULD BE IN `splitC`     fix t b v    | v == b    = rTypeValueVar t
--- RJ: ALL THIS SHOULD BE IN `splitC`                  | otherwise = v
--- RJ: ALL THIS SHOULD BE IN `splitC`     rr t r       = F.substa (fix t b) r where F.Reft (b,_) = r
--- RJ: ALL THIS SHOULD BE IN `splitC`     sb (t1 ,t2)  = subTypeContainers' "subc obj" l g (t1 `strengthen` rr t1 r1) 
--- RJ: ALL THIS SHOULD BE IN `splitC`                                          (t2 `strengthen` rr t2 r2)
--- RJ: ALL THIS SHOULD BE IN `splitC` 
--- RJ: ALL THIS SHOULD BE IN `splitC` 
--- RJ: ALL THIS SHOULD BE IN `splitC` subTypeContainers' msg l g t1 t2 = subType l g t1 t2
-
 
 
 -------------------------------------------------------------------------------
@@ -945,3 +876,4 @@ cgFunTys l f xs ft =
 -- | `this`
 
 peekThis = safeHead "get 'this'" <$> (cg_this <$> get)
+

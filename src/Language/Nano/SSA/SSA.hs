@@ -34,20 +34,18 @@ ssaTransform' = execute . ssaNano
 ----------------------------------------------------------------------------------
 ssaNano :: F.Reftable r => Nano SourceSpan (RType r) -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
-ssaNano p@(Nano {code = Src fs, tAnns = tAnns}) 
+ssaNano p@(Nano {code = Src fs, specs = anns }) 
   = withMutability ReadOnly ros 
     $ withMutability WriteGlobal wgs 
       $ do (_,fs') <- ssaStmts fs 
            ssaAnns <- getAnns
-           return   $ p {code = Src $ (patchAnn ssaAnns tAnns' <$>) <$> fs'}
+           return   $ p {code = Src $ (patch ssaAnns anns' <$>) <$> fs'}
     where
-      tAnns'        = M.fromList $ mapFst getAnnotation 
-                        <$> (envToList $ envMap (single . TAnnot) tAnns)
+      anns'         = M.fromList $ mapFst getAnnotation 
+                        <$> (envToList $ envMap (single . TAnnot) anns)
       ros           = readOnlyVars p
       wgs           = writeGlobalVars p 
-
-patchAnn :: AnnInfo r -> AnnInfo r -> SourceSpan -> AnnSSA r
-patchAnn m1 m2 l = Ann l $ M.lookupDefault [] l m1 ++ M.lookupDefault [] l m2
+      patch m1 m2 l = Ann l $ M.lookupDefault [] l m1 ++ M.lookupDefault [] l m2
 
 -------------------------------------------------------------------------------------
 ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)

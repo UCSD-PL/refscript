@@ -134,7 +134,7 @@ data TCState r = TCS {
                    , tc_anns  :: AnnInfo r
                    , tc_annss :: [AnnInfo r]
                    -- Function definitions
-                   , tc_defs  :: !(Env (RType r))
+                   , tc_specs  :: !(Env (RType r))
                    -- Type definitions
                    , tc_tdefs :: !(Env (RType r))
                    -- The currently typed expression 
@@ -348,14 +348,14 @@ execute verb pgm act
 
 initState ::  (PP r, F.Reftable r) => V.Verbosity -> Nano z (RType r) -> TCState r
 initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss 
-                       tc_defs tc_tdefs tc_expr tc_verb tc_this
+                       tc_specs tc_tdefs tc_expr tc_verb tc_this
   where
     tc_errss = []
     tc_subst = mempty 
     tc_cnt   = 0
     tc_anns  = HM.empty
     tc_annss = []
-    tc_defs  = sigs pgm
+    tc_specs  = specs pgm
     tc_tdefs = defs pgm
     tc_expr  = Nothing
     tc_verb  = verb
@@ -363,7 +363,7 @@ initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss
 
 
 getDefType f 
-  = do m <- tc_defs <$> get
+  = do m <- tc_specs <$> get
        maybe err return $ envFindTy f m 
     where 
        err = tcError $ errorMissingSpec l f

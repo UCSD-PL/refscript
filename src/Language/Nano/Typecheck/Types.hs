@@ -438,13 +438,12 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
 ---------------------------------------------------------------------------------
 
 data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
-                     , specs  :: !(Env t)           -- ^ Imported Specifications
-                     , sigs   :: !(Env t)           -- ^ Signatures for Code
+                     , specs  :: !(Env t)           -- ^ Imported (unchecked) specifications
+                     , chSpecs:: !(Env t)           -- ^ Checked specifications (signatures and annotations)
                      , consts :: !(Env t)           -- ^ Measure Signatures 
                      , defs   :: !(Env t)           -- ^ Type definitions
 							       , tAlias :: !(TAliasEnv t)     -- ^ Type aliases
                      , pAlias :: !(PAliasEnv)       -- ^ Predicate aliases
-                     , tAnns  :: !(Env t)           -- ^ Type annotations
                      , quals  :: ![F.Qualifier]     -- ^ Qualifiers
                      , invts  :: ![Located t]       -- ^ Type Invariants
                      } deriving (Functor, Data, Typeable)
@@ -487,12 +486,10 @@ instance (PP t, PP F.Reft) => PP (Nano a t) where
     $+$ pp s
     $+$ text "******************* Specifications ************"
     $+$ pp (specs pgm)
-    $+$ text "******************* Definitions ***************"
-    $+$ pp (sigs  pgm)
+    $+$ text "******************* Checked specifications ****"
+    $+$ pp (chSpecs pgm)
     $+$ text "******************* Constants *****************"
     $+$ pp (consts pgm) 
-    $+$ text "******************* Type Annotations **********"
-    $+$ pp (tAnns pgm) 
     $+$ text "******************* Type Definitions **********"
     $+$ pp (defs  pgm)
     $+$ text "******************* Predicate Aliases *********"
@@ -506,17 +503,16 @@ instance (PP t, PP F.Reft) => PP (Nano a t) where
     $+$ text "***********************************************"
     
 instance Monoid (Nano a t) where 
-  mempty        = Nano mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty 
-  mappend p1 p2 = Nano { code   = (code   p1) `mappend` (code   p2)
-                       , specs  = (specs  p1) `mappend` (specs  p2)
-                       , sigs   = (sigs   p1) `mappend` (sigs   p2)
-                       , consts = (consts p1) `mappend` (consts p2)
-                       , defs   = (defs   p1) `mappend` (defs   p2)
-                       , tAlias = (tAlias p1) `mappend` (tAlias p2)
-                       , pAlias = (pAlias p1) `mappend` (pAlias p2)
-                       , tAnns  = (tAnns  p1) `mappend` (tAnns  p2)
-                       , quals  = (quals  p1) `mappend` (quals  p2)
-                       , invts  = (invts  p1) `mappend` (invts  p2)
+  mempty        = Nano mempty mempty mempty mempty mempty mempty mempty mempty mempty 
+  mappend p1 p2 = Nano { code    = (code   p1) `mappend` (code   p2)
+                       , chSpecs = (chSpecs  p1) `mappend` (chSpecs  p2)
+                       , specs   = (specs  p1) `mappend` (specs  p2)
+                       , consts  = (consts p1) `mappend` (consts p2)
+                       , defs    = (defs   p1) `mappend` (defs   p2)
+                       , tAlias  = (tAlias p1) `mappend` (tAlias p2)
+                       , pAlias  = (pAlias p1) `mappend` (pAlias p2)
+                       , quals   = (quals  p1) `mappend` (quals  p2)
+                       , invts   = (invts  p1) `mappend` (invts  p2)
                        } 
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
@@ -541,7 +537,7 @@ data Mutability
 writeGlobalVars   :: PP t => Nano a t -> [Id SourceSpan] 
 writeGlobalVars p = envIds mGnty 
   where
-    mGnty         = foldl1 envUnion [specs p, tAnns p, sigs p]  -- guarantees
+    mGnty         = foldl1 envUnion [specs p, chSpecs p]  -- guarantees
 
 -- | `immutableVars p` returns symbols that must-not be re-assigned and hence
 --    * can appear in refinements
@@ -571,7 +567,7 @@ instance F.Reftable r => PP (RType r) where
   pp (TVar α r)                 = F.ppTy r $ pp α 
   pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
-  pp (TAnd ts)                  = vcat [text "/\\" <+> pp t | t <- ts]
+  pp (TAnd ts)                  = hsep [text "/\\" <+> pp t | t <- ts]
   pp (TExp e)                   = pprint e 
   pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "+") ts 
   pp (TApp d@(TDef _)ts r)      = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
@@ -862,3 +858,4 @@ instance IsLocated (Alias a s t) where
 
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n αs πs body) = text "alias" <+> pp n <+> text "=" <+> pp body 
+

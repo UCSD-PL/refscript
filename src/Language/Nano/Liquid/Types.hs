@@ -13,7 +13,6 @@ module Language.Nano.Liquid.Types (
 
   -- * Constraint Environments
   , CGEnv (..)
-  , emptyCGEnv
 
   -- * Constraint Information
   , Cinfo (..)
@@ -91,14 +90,17 @@ data CGEnv
         , guards   :: ![F.Pred]      -- ^ branch target conditions  
         , cge_ctx  :: !IContext      -- ^ intersection-type context 
         , cge_spec :: !(Env RefType) -- ^ specifications for defined functions
-        , cge_anns :: !(Env RefType) -- ^ specifications for defined variables
         }
 
 
-emptyCGEnv = CGE envEmpty F.emptyIBindEnv [] emptyContext envEmpty
-
 instance PP CGEnv where
-  pp (CGE  re _ gs ctx sp an) = vcat [pp re, text "---------", pp gs, text "--------------", pp ctx, text "------------", pp sp, text "-------------", pp an] 
+  pp (CGE  re _ gs ctx sp) = vcat [pp re, 
+                                   text "---------", 
+                                   pp gs, 
+                                   text "--------------", 
+                                   pp ctx, 
+                                   text "------------", 
+                                   pp sp] 
 
 ----------------------------------------------------------------------------
 -- | Constraint Information ------------------------------------------------

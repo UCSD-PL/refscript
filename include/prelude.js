@@ -39,7 +39,7 @@
 /***************** Types for list Operators ******************************/
 /*************************************************************************/
 
-/*@ type list[A]  {  data : A, next : list[A] + null }                                                        */
+/*@ type list[A] = {  data : A, next : list[A] + null }                                                        */
 
 /*@ measure len :: forall A. (list [A]) => number                                                             */
 
@@ -283,7 +283,7 @@
 
 // -| Array
 
-/*@ type Array[T]
+/*@ type Array[T] =
     {
       toString       : () => string,
       toLocaleString : () => string,
@@ -326,7 +326,7 @@
 
 
 //Typescript Definition:
-/*  type Array[T] 
+/*  type Array[T] =
   {
     toString              :: () => string,
     toLocaleString        :: () => string,

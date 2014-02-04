@@ -1,9 +1,9 @@
 
-/*@ type color = {number | (0 <= v && v < 16)} */
+/*@ alias color = { number | (0 <= v && v < 16)} */
 
-/*@ type band = { downImage : string
-                , image     : string
-                , overImage : string } */
+/*@ alias band  = { downImage : string
+                  , image     : string
+                  , overImage : string } */
 
 /*@ extern firstBand  :: band */
 /*@ extern secondBand :: band */

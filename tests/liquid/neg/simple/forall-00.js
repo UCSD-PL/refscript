@@ -1,7 +1,6 @@
 
-/*@  type fooT {  f:  /\ forall U . ((U) => U) => [U] 
-                      /\ forall V . ((V,V) => V) => [V]
- } */
+/*@  type fooT = { f: /\ forall U . ((U) => U) => [U] 
+                      /\ forall V . ((V,V) => V) => [V] } */
 
 /*@ f1 :: (number) => number */
 function f1(x) {

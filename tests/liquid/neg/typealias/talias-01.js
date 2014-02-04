@@ -1,4 +1,4 @@
-/*@ type nat = {number | 10 <= v } */
+/*@ alias nat = { number | 10 <= v } */
 
 /*@ ab :: (number) => nat */
 function ab(x){

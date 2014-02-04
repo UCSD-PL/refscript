@@ -97,9 +97,10 @@ aliasVarT (l, x)
   | otherwise = Right $ stringSymbol x 
 
 tBodyP :: Parser (Id SourceSpan, RType Reft)
-tBodyP = do  id <- identifierP 
-             tv <- option [] tParP
-             tb <- bareTypeP
+tBodyP = do  id    <- identifierP 
+             tv    <- option [] tParP
+             reservedOp "="
+             tb    <- bareTypeP
              return $ (id, TBd $ TD (TDef id) tv tb (idLoc id))
 
 -- [A,B,C...]
@@ -326,7 +327,7 @@ specP
   =   try (reserved "measure"   >> (Meas   <$> idBindP    ))
   <|> try (reserved "qualif"    >> (Qual   <$> qualifierP ))
   <|> try (reserved "type"      >> (Type   <$> tBodyP     )) 
-  <|> try (reserved "type"      >> (Talias <$> tAliasP    ))
+  <|> try (reserved "alias"     >> (Talias <$> tAliasP    ))
   <|> try (reserved "predicate" >> (Palias <$> pAliasP    ))
   <|> try (reserved "invariant" >> (withSpan Invt bareTypeP))
   <|>     (reserved "extern"    >> (Extern <$> idBindP    ))

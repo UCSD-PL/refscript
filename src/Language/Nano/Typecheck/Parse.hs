@@ -346,7 +346,7 @@ instance (PP l, PP t) => PP (PSpec l t) where
 
 data AnnToken r 
   = TBind (Id SourceSpan, RType r)          -- ^ Function signature binding
-  | TType (RType r)                         -- ^ Variable declaration binding
+  | TType (RType r)                         -- ^ Type annotation
   | TSpec (PSpec SourceSpan (RType r))      -- ^ Specs: qualifiers, measures, type defs, etc.
   | EmptyToken                              -- ^ Dummy empty token
   deriving (Eq, Ord, Show, Data, Typeable)
@@ -405,15 +405,17 @@ mkCode :: ([Statement SourceSpan], M.HashMap SourceSpan [AnnToken Reft]) ->
 --------------------------------------------------------------------------------------
 mkCode (ss, m) =  do
     tas   <- annots
-    return $ Nano { code   = Src (checkTopStmt <$> ss)
-    , specs   = envFromList ([ a | TSpec (Extern a) <- list ] ++ [ a | TBind a <- list ])
-    , chSpecs = envFromList tas -- populated further with functions later
-    , consts  = envFromList  [ a | TSpec (Meas   a) <- list ] 
-    , defs    = envFromList  [ a | TSpec (Type   a) <- list ] 
-    , tAlias  = envFromList  [ a | TSpec (Talias a) <- list ]
-    , pAlias  = envFromList  [ p | TSpec (Palias p) <- list ]
-    , quals   = [q               | TSpec (Qual   q) <- list ]
-    , invts   = [Loc l' t        | TSpec (Invt l t) <- list, let l' = srcPos l]
+    return $ Nano { 
+        code    = Src (checkTopStmt <$> ss)
+      , specs   = envFromList ([ a | TSpec (Extern a) <- list ] ++ [ a | TBind a <- list ])
+      , chSpecs = envFromList tas -- populated further with functions later
+      , tAnns   = M.fromList $ annT $ M.toList m
+      , consts  = envFromList  [ a | TSpec (Meas   a) <- list ] 
+      , defs    = envFromList  [ a | TSpec (Type   a) <- list ] 
+      , tAlias  = envFromList  [ a | TSpec (Talias a) <- list ]
+      , pAlias  = envFromList  [ p | TSpec (Palias p) <- list ]
+      , quals   =              [ q | TSpec (Qual   q) <- list ]
+      , invts   = [Loc l' t        | TSpec (Invt l t) <- list, let l' = srcPos l]
     } 
   where
     list        = concat $ M.elems m
@@ -421,12 +423,13 @@ mkCode (ss, m) =  do
     prefixed    = [ a     | VarDeclStmt l _  <- vds
                           , ts               <- maybeToList (M.lookup l m)
                           , TBind a <- ts ]
-    inlined     = [ (i,t) | VarDeclStmt _ ds <- vds
+    varDeclAnns = [ (i,t) | VarDeclStmt _ ds <- vds
                           , VarDecl l i _    <- ds
                           , ts               <- maybeToList (M.lookup l m)
                           , TType t          <- ts ]
-    doubleTyped = [ (l1,s1) | (Id l1 s1, _) <- prefixed, (Id _ s2, _) <- inlined, s1 == s2 ]
-    annots      | null doubleTyped = Right    $ prefixed ++ inlined
+    annT xs     = [ (ss, t) | (ss, tt) <- xs , TType t <- tt ]
+    doubleTyped = [ (l1,s1) | (Id l1 s1, _)  <- prefixed, (Id _ s2, _) <- varDeclAnns, s1 == s2 ]
+    annots      | null doubleTyped = Right    $ prefixed ++ varDeclAnns
                 | otherwise        = Left     $ errors
     errors      = foldl1 catError $ (uncurry bugMultipleAnnots) <$> doubleTyped 
 

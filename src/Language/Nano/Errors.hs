@@ -130,6 +130,7 @@ errorTypeAssign l t1 t2   = mkErr l $ printf "Cannot assign type %s to %s" (ppsh
 errorBracketAssign l x    = mkErr l $ printf "Invalid bracket assignment %s" (ppshow x) 
 errorPropRead  l x1 x2    = mkErr l $ printf "Invalid property read object: %s property: %s" (ppshow x1) (ppshow x2) 
 errorArrayLit     l x     = mkErr l $ printf "Invalid array literal %s" (ppshow x) 
+errorClassExtends l x y s = mkErr l $ printf "Class %s cannot extend class %s: types for property %s are incompatible" (ppshow x) (ppshow y) (ppshow s)
 
 
 errorBadPAlias l p nx ne  = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." 

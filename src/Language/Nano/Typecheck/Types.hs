@@ -432,20 +432,20 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
   _                   == _                   = False
 
 
-
 ---------------------------------------------------------------------------------
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-data Nano a t = Nano { code   :: !(Source a)        -- ^ Code to check
-                     , specs  :: !(Env t)           -- ^ Imported (unchecked) specifications
-                     , chSpecs:: !(Env t)           -- ^ Checked specifications (signatures and annotations)
-                     , consts :: !(Env t)           -- ^ Measure Signatures 
-                     , defs   :: !(Env t)           -- ^ Type definitions
-							       , tAlias :: !(TAliasEnv t)     -- ^ Type aliases
-                     , pAlias :: !(PAliasEnv)       -- ^ Predicate aliases
-                     , quals  :: ![F.Qualifier]     -- ^ Qualifiers
-                     , invts  :: ![Located t]       -- ^ Type Invariants
+data Nano a t = Nano { code   :: !(Source a)               -- ^ Code to check
+                     , specs  :: !(Env t)                  -- ^ Imported (unchecked) specifications
+                     , chSpecs:: !(Env t)                  -- ^ Checked specifications (signatures and annotations)
+                     , tAnns  :: !(M.HashMap SourceSpan t) -- ^ Mapping from source positions to annotations
+                     , consts :: !(Env t)                  -- ^ Measure Signatures
+                     , defs   :: !(Env t)                  -- ^ Type definitions
+							       , tAlias :: !(TAliasEnv t)            -- ^ Type aliases
+                     , pAlias :: !(PAliasEnv)              -- ^ Predicate aliases
+                     , quals  :: ![F.Qualifier]            -- ^ Qualifiers
+                     , invts  :: ![Located t]              -- ^ Type Invariants
                      } deriving (Functor, Data, Typeable)
 
 type NanoBareR r   = Nano (AnnBare r) (RType r)
@@ -503,17 +503,18 @@ instance (PP t, PP F.Reft) => PP (Nano a t) where
     $+$ text "***********************************************"
     
 instance Monoid (Nano a t) where 
-  mempty        = Nano mempty mempty mempty mempty mempty mempty mempty mempty mempty 
-  mappend p1 p2 = Nano { code    = (code   p1) `mappend` (code   p2)
-                       , chSpecs = (chSpecs  p1) `mappend` (chSpecs  p2)
-                       , specs   = (specs  p1) `mappend` (specs  p2)
-                       , consts  = (consts p1) `mappend` (consts p2)
-                       , defs    = (defs   p1) `mappend` (defs   p2)
-                       , tAlias  = (tAlias p1) `mappend` (tAlias p2)
-                       , pAlias  = (pAlias p1) `mappend` (pAlias p2)
-                       , quals   = (quals  p1) `mappend` (quals  p2)
-                       , invts   = (invts  p1) `mappend` (invts  p2)
-                       } 
+  mempty        = Nano mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty 
+  mappend p1 p2 = Nano { code    = (code    p1 ) `mappend` (code    p2 )
+                       , chSpecs = (chSpecs p1 ) `mappend` (chSpecs p2 )
+                       , tAnns   = (tAnns   p1 ) `mappend` (tAnns   p2 )
+                       , specs   = (specs   p1 ) `mappend` (specs   p2 )
+                       , consts  = (consts  p1 ) `mappend` (consts  p2 )
+                       , defs    = (defs    p1 ) `mappend` (defs    p2 )
+                       , tAlias  = (tAlias  p1 ) `mappend` (tAlias  p2 )
+                       , pAlias  = (pAlias  p1 ) `mappend` (pAlias  p2 )
+                       , quals   = (quals   p1 ) `mappend` (quals   p2 )
+                       , invts   = (invts   p1 ) `mappend` (invts   p2 )
+                       }
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }

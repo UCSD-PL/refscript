@@ -31,21 +31,29 @@ ssaTransform = either throw id . execute . ssaNano
 ssaTransform' = execute . ssaNano
 
 
+-- | `ssaNano` Perfroms SSA transformation of the input program. The output
+-- program is patched (annotated per AST) with information about:
+-- ∙ SSA-phi nodes
+-- ∙ Spec annotations (functions, global variable declarations)
+-- ∙ Type annotations (variable declarations (?), class elements)
+--
 ----------------------------------------------------------------------------------
 ssaNano :: F.Reftable r => Nano SourceSpan (RType r) -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
-ssaNano p@(Nano {code = Src fs, specs = anns }) 
+ssaNano p@(Nano { code = Src fs, specs = sp , tAnns = an }) 
   = withMutability ReadOnly ros 
     $ withMutability WriteGlobal wgs 
       $ do (_,fs') <- ssaStmts fs 
            ssaAnns <- getAnns
-           return   $ p {code = Src $ (patch ssaAnns anns' <$>) <$> fs'}
+           return   $ p {code = Src $ (patch [ssaAnns, sp', tAnnFacts] <$>) <$> fs'}
     where
-      anns'         = M.fromList $ mapFst getAnnotation 
-                        <$> (envToList $ envMap (single . TAnnot) anns)
+      tAnnFacts     = M.map (\i -> [TAnnot i]) an 
+      sp'           = M.fromList $ mapFst getAnnotation 
+                        <$> (envToList $ envMap (single . TAnnot) sp)
       ros           = readOnlyVars p
       wgs           = writeGlobalVars p 
-      patch m1 m2 l = Ann l $ M.lookupDefault [] l m1 ++ M.lookupDefault [] l m2
+      patch :: [M.HashMap SourceSpan [Fact r]] -> SourceSpan -> Annot (Fact r) SourceSpan
+      patch ms l    = Ann l $ concatMap (M.lookupDefault [] l) ms
 
 -------------------------------------------------------------------------------------
 ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)
@@ -215,8 +223,8 @@ ssaClassElt (Constructor l is ss) =
   ssaStmts ss >>= return . mapSnd (Constructor l is)
 ssaClassElt (MemberVarDecl l m s vd) = 
   ssaVarDecl vd >>= return . mapSnd (MemberVarDecl l m s)
-ssaClassElt (MemberFuncDecl l m s e i cs) =
-  ssaStmts cs >>= return . mapSnd (MemberFuncDecl l m s e i)
+ssaClassElt (MemberMethDecl l m s e i cs) =
+  ssaStmts cs >>= return . mapSnd (MemberMethDecl l m s e i)
 
 infOp OpAssign         _ _  = id
 infOp OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalExp lv)

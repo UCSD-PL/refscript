@@ -67,7 +67,9 @@ module Language.Nano.Typecheck.TCMonad (
   , addDeadCast 
 
   -- * Get Type Signature 
-  , getDefType 
+  , getSpecOrDie
+  , getSpecM
+  , addSpec
 
   -- * Expression Getter/Setter
   , setExpr
@@ -240,54 +242,6 @@ setTyArgs l ξ βs
 
 
 -------------------------------------------------------------------------------
--- | Field access -------------------------------------------------------------
--------------------------------------------------------------------------------
-
--- Access field @f@ of type @t@, adding a cast if needed to avoid errors.
--------------------------------------------------------------------------------
--- RJ: TODO FIELD safeGetProp :: (Ord r, PP r, F.Reftable r) => IContext -> String -> RType r -> TCM r (RType r)
--- RJ: TODO FIELD -------------------------------------------------------------------------------
--- RJ: TODO FIELD safeGetProp ξ f t = do
--- RJ: TODO FIELD      γ <- getTDefs
--- RJ: TODO FIELD      e <- fromJust <$> getExpr
--- RJ: TODO FIELD      case getProp γ f t of
--- RJ: TODO FIELD        Just (t', tf) -> castM ξ e t t' >> return tf
--- RJ: TODO FIELD        Nothing       -> error "safeGetProp" --TODO: deadcode
- 
--- DEPRECATE:
--- Access index @i@ of type @t@.
--- In JavaScript semantics, all types can be indexed, besides null and undefined. 
--- So we're not gonna cast for those types
--- the accessed type here. Instead
--------------------------------------------------------------------------------
--- safeGetIdx :: (Ord r, PP r, F.Reftable r) => IContext -> Int -> RType r -> TCM r (RType r)
--- -------------------------------------------------------------------------------
--- safeGetIdx ξ f t = do  
---     γ <- getTDefs
---     e <- fromJust <$> getExpr
---     case getIdx γ f t of
---       Just (t',tf) -> castM ξ e t t' >> return tf
---       Nothing      -> error "safeGetIdx" --TODO: deadcode
-
--- Only support indexing in arrays atm. Discharging array bounds checks makes
--- sense only for array types. 
--------------------------------------------------------------------------------
--- RJ: TODO FIELD indexType :: (PP r, Ord r, F.Reftable r) => IContext -> RType r -> TCM r (RType r)
--- RJ: TODO FIELD -------------------------------------------------------------------------------
--- RJ: TODO FIELD indexType _ (TArr t _)        = return t 
--- RJ: TODO FIELD 
--- RJ: TODO FIELD indexType ξ t@(TApp TUn ts _) = do
--- RJ: TODO FIELD     e <- fromJust <$> getExpr
--- RJ: TODO FIELD     castM ξ e t t'
--- RJ: TODO FIELD     mkUnion <$> mapM (indexType ξ) arrs
--- RJ: TODO FIELD   where
--- RJ: TODO FIELD     t'   = mkUnion arrs
--- RJ: TODO FIELD     arrs = filter isArr ts
--- RJ: TODO FIELD 
--- RJ: TODO FIELD indexType _ _                 = errorstar "Unimplemented: indexing type other than array."
-
-
--------------------------------------------------------------------------------
 -- | Managing Annotations: Type Instantiations --------------------------------
 -------------------------------------------------------------------------------
 
@@ -362,13 +316,12 @@ initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss
     tc_this  = [tTop]
 
 
-getDefType f 
-  = do m <- tc_specs <$> get
-       maybe err return $ envFindTy f m 
-    where 
-       err = tcError $ errorMissingSpec l f
-       l   = srcPos f
+getSpecOrDie f = tc_specs <$> get >>= maybe e return . envFindTy f
+  where e = tcError $ errorMissingSpec (srcPos f) f
 
+getSpecM f = tc_specs <$> get >>= return . envFindTy f
+
+addSpec x t = modify $ \st -> st { tc_specs = envAdds [(x,t)] (tc_specs st) } 
 
 -------------------------------------------------------------------------------
 setExpr   :: Maybe (Expression (AnnSSA r)) -> TCM r () 

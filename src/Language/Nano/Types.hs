@@ -256,7 +256,7 @@ instance IsNano (Statement a) where
 
 instance IsNano (ClassElt a) where
   isNano (Constructor _ _ ss)          = all isNano ss
-  isNano (MemberFuncDecl _ _ _ _ _ ss) = all isNano ss
+  isNano (MemberMethDecl _ _ _ _ _ ss) = all isNano ss
   isNano (MemberVarDecl _ _ _ vd)      = isNano vd
 
 instance IsNano a => IsNano (Maybe a) where 
@@ -319,6 +319,7 @@ holdsInit _ [] = True
 holdsInit p xs = all p $ init xs
 
 -- | Trivial Syntax Checking 
+-- TODO: Add check for top-level classes here.
 
 checkTopStmt :: (IsLocated a) => Statement a -> Statement a
 checkTopStmt s | checkBody [s] = s

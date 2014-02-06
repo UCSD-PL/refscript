@@ -75,7 +75,7 @@ verifyFile f = do
                 V.whenLoud  $ putStrLn . render . pp $ p
                 verb       <- V.getVerbosity
                 let annp    = execute verb nanoSsa $ tcNano p
-                r          <- either unsafe safe annp 
+                r          <- either unsafe (safe . (\(a,_,c) -> (a,c))) annp 
                 V.whenLoud  $ donePhase FM.Loud "Typechecking"
                 return      $ (NoAnn, r)
 
@@ -126,26 +126,35 @@ printAllAnns fs
 
 -------------------------------------------------------------------------------------------
 typeCheck :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
-          => V.Verbosity -> (NanoSSAR r) -> Either [Error] (NanoTypeR r)
+          => V.Verbosity -> (NanoSSAR r) -> Either [Error] (ClassInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------------------
-typeCheck verb pgm = fmap snd (execute verb pgm $ tcNano pgm)
+typeCheck verb pgm = fmap (\(_,b,c) -> (b,c)) (execute verb pgm $ tcNano pgm)
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
--- tcNano :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
---            => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
+tcNano :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
+            => NanoSSAR r -> TCM r (AnnInfo r, ClassInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do checkTypeDefs p
-       (fs', _) <- tcInScope γ $ tcStmts γ fs
-       m        <- concatMaps <$> getAllAnns
-       θ        <- getSubst
-       let p'    = p {code = (patchAnn m . apply θ) <$> Src fs'}
-       whenLoud  $ (traceCodePP p' m θ)
-       return (m, p')
+       (fs', γo) <- tcInScope γ $ tcStmts γ fs
+       m         <- concatMaps <$> getAllAnns
+       θ         <- getSubst
+       let p'     = p {code = (patchAnn m . apply θ) <$> Src fs'}
+       whenLoud   $ (traceCodePP p' m θ)
+       case γo of 
+         Just γ'  -> do  mc    <- mCls $ envIds $ tce_cls γ'
+                         return $ (m, mc, p')
+         Nothing  -> error "BUG:tcNano should end with an environment"
     where
        γ         = initEnv p
+       -- A mapping from class names to the recovered types.
+       mCls ks   = envFromList . catMaybes <$> mapM gs ks
+       gs k      =  do  s <- getSpecM k 
+                        case s of 
+                          Just t  -> return $ Just (k,t)
+                          Nothing -> return $ Nothing
 
 patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs 
   where
@@ -180,12 +189,10 @@ checkTypeDefs pgm = reportAll $ grep
     ts        = defs pgm
     reportAll = mapM_ report
     report t  = tcError $ errorUnboundType (srcPos t) t
-
     -- There should be no undefined type constructors
     grep :: [Id SourceSpan]        = everything (++) ([] `mkQ` g) ds
     g (TDef i) | not $ envMem i ts = [i]
     g _                            = [ ]
-  
     -- TODO: Also add check for free top-level type variables, i.e. make sure 
     -- all type variables used are bound. Use something like:
     -- @everythingWithContext@
@@ -203,9 +210,11 @@ checkTypeDefs pgm = reportAll $ grep
 
 
 data TCEnv r  = TCE { tce_env  :: Env (RType r)
-                    , tce_spec :: Env (RType r)               -- ^ Program specs
+                    -- ^ Program specs. Includes functions and class types
+                    -- _after_ they have been computed.
+                    , tce_spec :: Env (RType r)               
                     , tce_cls  :: Env (Statement (AnnSSA r))  -- ^ Class definitions
-                    , tce_this ::     [RType r]
+                    , tce_this ::     [RType r]               -- ^ Stack holding the latest type for "this"
                     , tce_ctx  :: !IContext 
                     }
 
@@ -454,9 +463,9 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
   = tcFun γ s
 
 tcStmt γ c@(ClassStmt l i e is ce)
-  = do  t <- tracePP ("Inferred type for: " ++ ppshow i) <$> classType γ c
-        ce' <- mapM (tcClassElt γ i) ce
-        return $ (ClassStmt l i e is ce', Just γ) 
+  = do  t     <- classType γ c
+        ce'   <- mapM (tcClassElt γ i) ce
+        return $ (ClassStmt l i e is ce', Just γ)
 
 -- OTHER (Not handled)
 tcStmt _ s 
@@ -475,8 +484,8 @@ classType γ (ClassStmt l id (Just parent) _ cs) =
     -- Try to find the parent class in the env. If this fails, 
     -- compute it on the fly
     TObj bs _ <- findClassSpec γ parent
-    bs' <- foldM (addField θ) bs $ classEltType γ <$> cs
-    return $ TObj bs' fTop
+    bs' <- foldM (addField θ) bs $ classEltType <$> cs
+    addCTToSpec id $ TObj bs' fTop
   where
     addField θ bs (B s t) = 
       let m = M.fromList (p <$> bs) in
@@ -488,8 +497,10 @@ classType γ (ClassStmt l id (Just parent) _ cs) =
     p  (B s t)    = (s, t)
     u  (s, t)     = B s t
 
-classType γ (ClassStmt l id Nothing _ cs) =
-  return $ TObj (classEltType γ <$> cs) fTop
+classType _ (ClassStmt l id Nothing _ cs) =
+  addCTToSpec id $ TObj (classEltType <$> cs) fTop
+
+addCTToSpec i t = addSpec i t >> return t
 
 -- There are two ways to get a class spec (type):
 -- ∙ Look in tc_spec (part fo the TCM state)
@@ -504,21 +515,22 @@ findClassSpec γ x =
         Just t  -> return t
         Nothing -> 
           do  t <- classType γ (tcEnvFindClsOrDie x γ)
-              addSpec x t
+          -- Keep the result around for later
               return t
 
 ---------------------------------------------------------------------------------------
-classEltType :: (Ord r, PP r, F.Reftable r) => TCEnv r -> ClassElt (AnnSSA r) -> Bind r
+classEltType :: (Ord r, PP r, F.Reftable r) => ClassElt (AnnSSA r) -> Bind r
 ---------------------------------------------------------------------------------------
-classEltType γ (Constructor l _ _ )                   = classEltToBind l "constructor"
-classEltType γ (MemberVarDecl _ _ _ (VarDecl l v _))  = classEltToBind l v
-classEltType γ (MemberMethDecl  l _ _ i _ _ )         = classEltToBind l i
+classEltType (Constructor l _ _ )                   = classEltToBind l "constructor"
+classEltType (MemberVarDecl _ _ _ (VarDecl l v _))  = classEltToBind l v
+classEltType (MemberMethDecl  l _ _ i _ _ )         = classEltToBind l i
 
 classEltToBind l s = 
   case [ t | TAnnot t <- ann_fact l ] of 
     [ ] -> error "classEltType:no-type-annotation"
     [t] -> B (F.symbol s) t
     _   -> error "classEltType:non-singleton type"
+
 
 ---------------------------------------------------------------------------------------
 tcVarDecl :: (Ord r, PP r, F.Reftable r) 

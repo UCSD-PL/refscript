@@ -10,7 +10,7 @@ class Greeter {
   
   private static e /*@ { } */ = { };
 
-  /*@ (message: string) => void */
+  /*@ (message: { string | v = "a" } ) => void */
   constructor(message) { }
   /*@ () => void */
   private greet1() { }

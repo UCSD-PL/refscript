@@ -44,7 +44,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -64,8 +64,8 @@ verifyFile f
                 Right p2 -> 
                     let p3 = expandAliases $ patchTypeAnnots p2 in
                     case typeCheck verb p3 of
-                      Left errs -> return $ (A.NoAnn, F.Unsafe errs)
-                      Right p4  -> reftypeCheck cfg f p4
+                      Left errs    -> return $ (A.NoAnn, F.Unsafe errs)
+                      Right (c4,p4) -> reftypeCheck cfg f (trace ("Classes: " ++ ppshow c4) p4)
 
 --------------------------------------------------------------------------------
 reftypeCheck :: Config -> FilePath -> NanoRefType -> 

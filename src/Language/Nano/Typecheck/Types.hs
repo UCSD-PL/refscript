@@ -91,6 +91,7 @@ module Language.Nano.Typecheck.Types (
   , Cast(..)
   -- , varDeclAnnot
   , phiVarsAnnot
+  , ClassInfo
 
   -- * Aliases for annotated Source 
   , AnnBare, UAnnBare
@@ -690,6 +691,7 @@ type AnnSSA  r = Annot (Fact r) SourceSpan -- Phi facts
 type AnnTSSA r = Annot (Fact r) SourceSpan -- Phi + t. annot. facts
 type AnnType r = Annot (Fact r) SourceSpan -- Phi + t. annot. + Cast facts
 type AnnInfo r = M.HashMap SourceSpan [Fact r] 
+type ClassInfo r = Env (RType r)
 
 type UAnnBare = AnnBare () 
 type UAnnSSA  = AnnSSA  ()

@@ -221,8 +221,8 @@ ssaStmt s
 
 ssaClassElt (Constructor l is ss) = 
   ssaStmts ss >>= return . mapSnd (Constructor l is)
-ssaClassElt (MemberVarDecl l m s vd) = 
-  ssaVarDecl vd >>= return . mapSnd (MemberVarDecl l m s)
+-- Class fields are considered immutable.
+ssaClassElt v@(MemberVarDecl _ _ _ _ ) = return (True, v)
 ssaClassElt (MemberMethDecl l m s e i cs) =
   ssaStmts cs >>= return . mapSnd (MemberMethDecl l m s e i)
 

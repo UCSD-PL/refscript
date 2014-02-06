@@ -315,9 +315,7 @@ tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
 
 
 tcClass γ (ClassStmt l id ext imps cs) =
-  do
-    a <- mapM (tcClassElt γ' id) cs
-    return (ClassStmt l id ext imps cs)
+    mapM (tcClassElt γ' id) cs >>= return . ClassStmt l id ext imps
   where
     ct = fromJust $ tcEnvFindTy id γ
     γ'  =  tcPushThis ct γ
@@ -326,23 +324,30 @@ tcClass γ (ClassStmt l id ext imps cs) =
 tcClassElt :: (Ord r, PP r, F.Reftable r) 
           => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
-tcClassElt γ id c@(Constructor l xs body) =
+-- TODO: Force void return type for constructor.
+tcClassElt γ id (Constructor l xs body) =
+  let id = Id l "constructor" in
+  tcClassEltAux l id $ 
+    \ft -> do body'  <- foldM (tcFun1 γ l id xs) body =<< tcFunTys l id xs ft
+              return  $ Constructor l xs body'
+-- The type annotation in variable members is in the VarDecl part so we can use
+-- normal tcVarDecl for that part.
+-- TODO: perhaps we don't need private members to be annotated, since they do
+-- not contribute to the type of the class.
+tcClassElt γ id (MemberVarDecl l m s v) =  
+  tcClassEltAux (getAnnotation v) id $ 
+    const $ tcVarDecl γ v >>= return . MemberVarDecl l m s . fst
+
+tcClassElt γ id (MemberMethDecl l m s i xs body) = 
+  tcClassEltAux l i $ 
+    \ft -> do body'  <- foldM (tcFun1 γ l i xs) body =<< tcFunTys l i xs ft
+              return  $ MemberMethDecl l m s i xs body'
+
+tcClassEltAux l id f = 
   case [ t | TAnnot t  <- ann_fact l ] of 
     [  ]  -> tcError    $ errorConstAnnMissing (srcPos l) id
-    [ft]  -> do body'  <- foldM (tcFun2 γ l xs) body =<< tcFunTys l "constructor" xs ft
-                -- TODO: Force void return type for constructor.
-                return  $ Constructor l xs body'
+    [ft]  -> f ft 
     _     -> error      $ "tcclassEltType:multi-type constructor"
-
-tcClassElt γ id c@(MemberVarDecl l _ _ _ ) = error "UNIMPLEMENTED:tcClassElt" 
-tcClassElt γ id c@(MemberMethDecl l _ _ _ _ _ ) = error "UNIMPLEMENTED:tcClassElt" 
-  
--- In contrast with the normal function, the class method does not require that
--- we change the environment with which we typecheck the body, by adding the
--- type for the function itself. Recursion is done through `this` which will
--- already be part of the environment, since we are typechecking a class body.
-tcFun2 γ l xs body (i, (αs,ts,t)) = tcFunBody γ l body t
-
 
 --------------------------------------------------------------------------------
 tcSeq :: (TCEnv r -> a -> TCM r (b, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([b], TCEnvO r)
@@ -502,15 +507,18 @@ findClassSpec γ x =
               addSpec x t
               return t
 
+---------------------------------------------------------------------------------------
 classEltType :: (Ord r, PP r, F.Reftable r) => TCEnv r -> ClassElt (AnnSSA r) -> Bind r
-classEltType γ (Constructor l _ _ ) = 
+---------------------------------------------------------------------------------------
+classEltType γ (Constructor l _ _ )                   = classEltToBind l "constructor"
+classEltType γ (MemberVarDecl _ _ _ (VarDecl l v _))  = classEltToBind l v
+classEltType γ (MemberMethDecl  l _ _ i _ _ )         = classEltToBind l i
+
+classEltToBind l s = 
   case [ t | TAnnot t <- ann_fact l ] of 
     [ ] -> error "classEltType:no-type-annotation"
-    [t] -> B (F.symbol "constructor") t
+    [t] -> B (F.symbol s) t
     _   -> error "classEltType:non-singleton type"
-classEltType γ (MemberVarDecl _ _ _ _ ) = error "UNIMPLEMENTED:classEltType"
-classEltType γ (MemberMethDecl  _ _ _ _ _ _ ) = error "UNIMPLEMENTED:classEltType"
-
 
 ---------------------------------------------------------------------------------------
 tcVarDecl :: (Ord r, PP r, F.Reftable r) 
@@ -520,12 +528,11 @@ tcVarDecl γ v@(VarDecl l x (Just e))
   = do (e', g) <- tcAsgn γ x e
        return (VarDecl l x (Just e'), g)
 
-tcVarDecl γ v@(VarDecl l x Nothing)  
-  = case tcEnvFindSpec x γ of
-      Just  t -> return (v, Just $ tcEnvAdds [(x, t)] γ)
-      Nothing -> errorstar $ printf "Variable definition of " ++ ppshow x  ++ 
-                  "at " ++ ppshow l ++ " with neither type annotation nor " ++
-                  "initialization is not supported."
+tcVarDecl γ v@(VarDecl l x Nothing) =
+  case [ t | TAnnot t <- ann_fact l ] of 
+    [ ] -> tcError $ errorVarDeclAnnot (srcPos l) x 
+    [t] -> return (v, Just $ tcEnvAdds [(x, t)] γ)
+    _   -> error "tcVarDecl:multiple type annotation"
 
 -------------------------------------------------------------------------------
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 

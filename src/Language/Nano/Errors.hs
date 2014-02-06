@@ -132,6 +132,7 @@ errorPropRead  l x1 x2    = mkErr l $ printf "Invalid property read object: %s p
 errorArrayLit     l x     = mkErr l $ printf "Invalid array literal %s" (ppshow x) 
 errorClassExtends l x y s = mkErr l $ printf "Class %s cannot extend class %s: types for property %s are incompatible" (ppshow x) (ppshow y) (ppshow s)
 errorConstAnnMissing l x  = mkErr l $ printf "Class %s is missing a constructor annotation." (ppshow x)
+errorVarDeclAnnot l x     = mkErr l $ printf "Variable definition of %s with neither type annotation nor initialization is not supported." (ppshow x)
 
 
 errorBadPAlias l p nx ne  = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." 

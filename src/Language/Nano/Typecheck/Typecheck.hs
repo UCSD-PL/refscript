@@ -267,8 +267,6 @@ tcInScope γ act = accumAnn annCheck act
 -- | TypeCheck Function -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-
-
 -------------------------------------------------------------------------------
 tcFun :: (Ord r, F.Reftable r, PP r) =>
   TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r), Maybe (TCEnv r))
@@ -286,11 +284,11 @@ tcFun1 ::
   TCEnv r -> a -> t1 -> [Id a1] -> [Statement (AnnSSA r)] -> 
   (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
-tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l f body t
+tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l body t
   where 
     γ'                              = envAddFun f i αs xs ts t γ 
 
-tcFunBody γ l f body t = liftM2 (,) (tcStmts γ body) getTDefs >>= ret
+tcFunBody γ l body t = liftM2 (,) (tcStmts γ body) getTDefs >>= ret
   where
     ret ((_, Just _), d) | not (isSubType d t tVoid) = tcError $ errorMissingReturn (srcPos l)
     ret ((b, _     ), _) | otherwise                 = return b
@@ -318,13 +316,33 @@ tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
 
 tcClass γ (ClassStmt l id ext imps cs) =
   do
-    a <- mapM (tcClassElt γ') cs
+    a <- mapM (tcClassElt γ' id) cs
     return (ClassStmt l id ext imps cs)
   where
     ct = fromJust $ tcEnvFindTy id γ
     γ'  =  tcPushThis ct γ
 
-tcClassElt γ c@(Constructor _ _ _) = return c
+---------------------------------------------------------------------------------------
+tcClassElt :: (Ord r, PP r, F.Reftable r) 
+          => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
+---------------------------------------------------------------------------------------
+tcClassElt γ id c@(Constructor l xs body) =
+  case [ t | TAnnot t  <- ann_fact l ] of 
+    [  ]  -> tcError    $ errorConstAnnMissing (srcPos l) id
+    [ft]  -> do body'  <- foldM (tcFun2 γ l xs) body =<< tcFunTys l "constructor" xs ft
+                -- TODO: Force void return type for constructor.
+                return  $ Constructor l xs body'
+    _     -> error      $ "tcclassEltType:multi-type constructor"
+
+tcClassElt γ id c@(MemberVarDecl l _ _ _ ) = error "UNIMPLEMENTED:tcClassElt" 
+tcClassElt γ id c@(MemberMethDecl l _ _ _ _ _ ) = error "UNIMPLEMENTED:tcClassElt" 
+  
+-- In contrast with the normal function, the class method does not require that
+-- we change the environment with which we typecheck the body, by adding the
+-- type for the function itself. Recursion is done through `this` which will
+-- already be part of the environment, since we are typechecking a class body.
+tcFun2 γ l xs body (i, (αs,ts,t)) = tcFunBody γ l body t
+
 
 --------------------------------------------------------------------------------
 tcSeq :: (TCEnv r -> a -> TCM r (b, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([b], TCEnvO r)
@@ -430,10 +448,10 @@ tcStmt γ (ReturnStmt l eo)
 tcStmt γ s@(FunctionStmt _ _ _ _)
   = tcFun γ s
 
-tcStmt γ c@(ClassStmt _ _ _ _ _)
-  = do  t <- classType γ c
-        return $ error "UNIMPLEMENTED TC CLASS" -- (ppshow $ t)
-
+tcStmt γ c@(ClassStmt l i e is ce)
+  = do  t <- tracePP ("Inferred type for: " ++ ppshow i) <$> classType γ c
+        ce' <- mapM (tcClassElt γ i) ce
+        return $ (ClassStmt l i e is ce', Just γ) 
 
 -- OTHER (Not handled)
 tcStmt _ s 

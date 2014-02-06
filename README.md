@@ -14,7 +14,6 @@
     cd language-ecmascript && cabal install && cd ..
     cd nano-js             && cabal install && cd ..
 
-
 ## Run
 
 To run NanoJS on a single file:
@@ -31,7 +30,18 @@ TypeScript compiler that emits NanoJ-annotated code.
 
 #### Dependencies
 
-TypeScript depends on [Node] (http://nodejs.org/) version > 0.8 and `Jake`. 
+TypeScript depends on
+
++ [node](http://nodejs.org/) version > 0.8 
++ `jake`. 
+
+**Installing Node/Jake on MacOS**
+
+1. Install the [node package](http://nodejs.org/)
+2. `sudo npm install -g jake`
+
+**Installing Node/Jake on Ubuntu/Debian**
+
 Here are some instructions for installation in Ubuntu/Debian:
 
     sudo apt-get install nodejs npm
@@ -59,7 +69,11 @@ To build TstoNanoJS from source:
     cd TStoNanoTS
     jake
 
-The target script will be in `build/local/tsc/js`.
+The target script will be at:
+
++ on ubuntu: `build/local/tsc/js`.
+
++ on macos: `built/local/tsc.js`
 
 
 #### Run

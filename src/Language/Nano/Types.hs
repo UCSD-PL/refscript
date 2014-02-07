@@ -223,6 +223,7 @@ instance IsNano (Expression a) where
   isNano (AssignExpr _ _ l e)    = isNano e && isNano l && isNano e
   isNano (UnaryAssignExpr _ _ l) = isNano l
   isNano (ThisRef _)             = True 
+  isNano (NewExpr _ e es)        = isNano e && all isNano es
   isNano e                       = errortext (text "Not Nano Expression!" <+> pp e)
   -- isNano _                     = False
 

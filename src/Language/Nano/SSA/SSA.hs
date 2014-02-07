@@ -329,6 +329,10 @@ ssaExpr (DotRef l e i)
 ssaExpr (BracketRef l e1 e2) 
   = BracketRef l <$> ssaExpr e1 <*> ssaExpr e2
 
+ssaExpr (NewExpr l e es)
+  -- `e` is the class name - no need to SSA it.
+  = NewExpr l e <$> mapM ssaExpr es
+
 ssaExpr e 
   = convertError "ssaExpr" e
 

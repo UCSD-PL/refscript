@@ -369,6 +369,10 @@ consExpr g e@(ArrayLit l es)
 consExpr g (ObjectLit l ps) 
   = consObjT l g ps Nothing
 
+consExpr g (NewExpr _ _ _ ) 
+--HEREHERE
+  = undefined 
+
 -- not handled
 consExpr _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))

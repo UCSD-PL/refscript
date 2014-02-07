@@ -501,14 +501,9 @@ addCTToSpec i t = addSpec i t >> return t
 ---------------------------------------------------------------------------------------
 findClassSpec :: (Ord r, PP r, F.Reftable r) => TCEnv r -> Id (AnnSSA r) -> TCM r (RType r)  
 ---------------------------------------------------------------------------------------
-findClassSpec γ x = 
-  do  ot <- getSpecM x
-      case ot of
-        Just t  -> return t
-        Nothing -> 
-          do  t <- classType γ (tcEnvFindClsOrDie x γ)
-          -- Keep the result around for later
-              return t
+findClassSpec γ x = getSpecM x >>= go
+  where go (Just t) = return t
+        go Nothing  = classType γ (tcEnvFindClsOrDie x γ)
 
 ---------------------------------------------------------------------------------------
 classEltType :: (Ord r, PP r, F.Reftable r) => ClassElt (AnnSSA r) -> Bind r
@@ -633,6 +628,10 @@ tcExpr γ e@(BracketRef _ _ _)
 tcExpr γ e@(AssignExpr _ OpAssign (LBracket _ _ _) _)
   = tcCall γ e
 
+-- new C(e, ...)
+-- C is required to be a class name
+tcExpr γ e@(NewExpr _ _ _) 
+  = tcCall γ e
 
 tcExpr _ e 
   = convertError "tcExpr" e
@@ -686,6 +685,18 @@ tcCall γ ex@(ArrayLit l es)
          Just (es', t)             -> return (ArrayLit l es', t)
          Nothing                   -> tcError $ errorArrayLit (srcPos l) ex
 
+tcCall γ ex@(NewExpr l (VarRef lv id) es)
+  = do  t     <- findClassSpec γ id
+        tdefs <- getTDefs 
+        return undefined
+        case getProp l (tce_env γ) tdefs "constructor" t of
+          Just (_,tc)  -> do
+            when (not $ isTFun tc) $ tcError $ errorConstNonFunc (srcPos l) id 
+            z <- tcCallMatch γ l "constructor" es tc
+            case z of
+              Just (es', t) -> return (NewExpr l (VarRef lv id) es', t) 
+              -- Constructor's return type is void - instead return the class type
+              Nothing              -> deadCast (srcPos l) γ ex 
 
 tcCall γ e
   = die $ bug (srcPos e) $ "tcCall: cannot handle" ++ ppshow e        

@@ -21,6 +21,12 @@ JS Features
       returns an array of undefined, but this is not very helpful since it will 
       not be able to be updated to anything useful.
 
+  - CLASSES:
+      Nominal or structural subtyping?
+      var a /*@ A */ = new A();
+
+      var a /*@ { ... the actual fields of A or less ... } */ = new A();
+
   - PROTOTYPES:
     - Add formal description of language, translation and discharge of constraints.
 
@@ -31,7 +37,12 @@ JS Features
 
 Tool/Implementation
 -------------------
-  - Force Class definitions to be at top-level
+
+  - Force Class definitions to be at top-level.
+
+  - Add resolved class types to the defined data type environment (tDefs).
+
+  - Add check so that each object field is defined once.
 
   - Pay attention to capital first letter at function/class defs.
 

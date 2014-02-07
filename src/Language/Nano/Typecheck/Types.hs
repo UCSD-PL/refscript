@@ -76,6 +76,7 @@ module Language.Nano.Typecheck.Types (
   , tAnd
   , isTVar
   , isArr
+  , isTFun
   , fTop
 
   -- * Operator Types
@@ -764,6 +765,11 @@ tArr    = (`TArr` fTop)
 
 isArr (TArr _ _ ) = True
 isArr _           = False
+
+isTFun (TFun _ _ _) = True
+isTFun (TAnd ts)    = all isTFun ts
+isTFun (TAll _ t)   = isTFun t
+isTFun _            = False
 
 
 -----------------------------------------------------------------------

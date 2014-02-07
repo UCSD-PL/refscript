@@ -18,9 +18,6 @@ module Language.Nano.Liquid.CGMonad (
   -- * Get Defined Function Type Signature
   , getDefType
 
-  -- * Get Defined Types
-  , getTDefs
-
   -- * Throw Errors
   , cgError      
 
@@ -76,7 +73,8 @@ module Language.Nano.Liquid.CGMonad (
   , cgFunTys
 
   -- * This
-  , peekThis
+  , cgPeekThis
+  , cgPushThis
 
   ) where
 
@@ -150,7 +148,7 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnTypeR RefType -> CGState
-initState c pgm = CGS F.emptyBindEnv (specs pgm) (defs pgm) [] [] 0 mempty invs c [this] 
+initState c pgm = CGS F.emptyBindEnv (specs pgm) [] [] 0 mempty invs c [this] 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts pgm]  
     this        = tTop
@@ -175,36 +173,9 @@ cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
                 }
 
 patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
-    
----------------------------------------------------------------------------------------
-getTDefs :: CGM (E.Env RefType)
----------------------------------------------------------------------------------------
-getTDefs  = cg_tdefs <$> get
-
 
 
 -- | Get binding from object type
-
--- Access field @f@ of type @t@, adding a cast if needed to avoid errors.
--- -------------------------------------------------------------------------------
--- safeGetProp :: String -> RefType -> CGM RefType
--- -------------------------------------------------------------------------------
--- safeGetProp f t
---   = do  γ <- getTDefs
---         case getProp γ f t of
---           Just (_,tf) -> return tf
---           Nothing      -> error "safeGetProp" --TODO: deadcode
- 
--- DEPRECATE
--- Access index @i@ of type @t@, adding a cast if needed to avoid errors.
--- -------------------------------------------------------------------------------
--- safeGetIdx :: Int -> RefType -> CGM RefType
--- -------------------------------------------------------------------------------
--- safeGetIdx i t
---   = do  γ <- getTDefs
---         case getIdx γ i t of
---           Just (_,tf) -> return tf
---           Nothing     -> error "CGM:safeGetIdx" --TODO: deadcode
 
 -- Only support indexing in arrays atm. Discharging array bounds checks makes
 -- sense only for array types. 
@@ -231,7 +202,6 @@ measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts
 data CGState 
   = CGS { binds    :: F.BindEnv            -- ^ global list of fixpoint binders
         , cg_defs  :: !(E.Env RefType)     -- ^ type sigs for all defined functions
-        , cg_tdefs :: !(E.Env RefType)     -- ^ type definitions
         , cs       :: ![SubC]              -- ^ subtyping constraints
         , ws       :: ![WfC]               -- ^ well-formedness constraints
         , count    :: !Integer             -- ^ freshness counter
@@ -454,19 +424,18 @@ subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 subType l g t1 t2 =
   do tt1   <- addInvariant t1
      tt2   <- addInvariant t2
-     tdefs <- getTDefs
      -- TODO: Make this more efficient - only introduce new bindings
      g'    <- envAdds [(symbolId l x, t) | (x, Just t) <- relNames tt1 ++ relNames tt2 ] g
-     s     <- checkTypes tdefs tt1 tt2
+     s     <- checkTypes (tenv g) tt1 tt2
      modify $ \st -> st {cs = c g' s : (cs st)}
   where
     c g    = uncurry $ Sub g (ci l)
-    checkTypes tdefs t1 t2
-      | equivWUnions tdefs t1 t2 = return    $ (t1, t2)
+    checkTypes tds t1 t2
+      | equivWUnions tds t1 t2 = return    $ (t1, t2)
     checkTypes _ _  t2
-      | isTop t2                 = return    $ (t1, t2)
+      | isTop t2               = return    $ (t1, t2)
     checkTypes  _    t1 t2
-      | otherwise                = cgError l $ bugMalignedSubtype (srcPos l) t1 t2
+      | otherwise              = cgError l $ bugMalignedSubtype (srcPos l) t1 t2
 
     relNames t = (\n -> (n, n `E.envFindTy` renv g)) <$> names t
 
@@ -489,7 +458,7 @@ equivWUnions γ t1@(TApp TUn _ _) t2@(TApp TUn _ _) =
     _           -> False
 equivWUnions γ t t' = equiv γ t t'
 
-equivWUnionsM t t' = getTDefs >>= \γ -> return $ equivWUnions γ t t'
+equivWUnionsM γ t t' = return $ equivWUnions γ t t'
 
 -- | Subtyping container contents: unions, objects. Includes top-level
 
@@ -517,28 +486,28 @@ subTypeContainers msg l g t1 t2 = subType l g t1 t2
 
 
 -------------------------------------------------------------------------------
-alignTsM :: RefType -> RefType -> CGM (RefType, RefType)
+alignTsM :: CGEnv -> RefType -> RefType -> CGM (RefType, RefType)
 -------------------------------------------------------------------------------
-alignTsM t t' = getTDefs >>= \g -> return $ alignTs g t t'
+alignTsM g t t' = return $ alignTs (tenv g) t t'
 
 
 -------------------------------------------------------------------------------
-withAlignedM :: (RefType -> RefType -> CGM a) -> RefType -> RefType -> CGM a
+withAlignedM :: CGEnv -> (RefType -> RefType -> CGM a) -> RefType -> RefType -> CGM a
 -------------------------------------------------------------------------------
-withAlignedM f t t' = alignTsM t t' >>= uncurry f 
--- withAlignedM f = f 
+withAlignedM g f t t' = alignTsM g t t' >>= uncurry f 
+
 
 -- | Monadic unfolding
 -------------------------------------------------------------------------------
-unfoldFirstCG :: RefType -> CGM RefType
+unfoldFirstCG :: CGEnv -> RefType -> CGM RefType
 -------------------------------------------------------------------------------
-unfoldFirstCG t = getTDefs >>= \γ -> return $ unfoldFirst γ t
+unfoldFirstCG g t = return $ unfoldFirst (tenv g) t
 
 
 -------------------------------------------------------------------------------
-unfoldSafeCG :: RefType -> CGM RefType
+unfoldSafeCG :: CGEnv -> RefType -> CGM RefType
 -------------------------------------------------------------------------------
-unfoldSafeCG   t = getTDefs >>= \γ -> return $ unfoldSafe γ t
+unfoldSafeCG g t  = return $ unfoldSafe (tenv g) t
 
 
 ---------------------------------------------------------------------------------------
@@ -657,7 +626,7 @@ splitC' (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
 -- dealt with separately
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TApp TUn t1s r1) t2@(TApp TUn t2s r2)) =
-  ifM (equivWUnionsM t1 t2) 
+  ifM (equivWUnionsM (tenv g) t1 t2) 
     (do  cs      <- bsplitC g i t1 t2
          -- constructor parameters are covariant
          let t1s' = (`strengthen` r1) <$> t1s
@@ -685,10 +654,10 @@ splitC' (Sub _ _ (TApp (TDef _) _ _) (TApp (TDef _) _ _))
   = errorstar "Unimplemented: Check type definition cycles"
   
 splitC' (Sub g i t1@(TApp (TDef _) _ _ ) t2) = 
-  unfoldSafeCG t1 >>= \t1' -> splitC' $ Sub g i t1' t2
+  unfoldSafeCG g t1 >>= \t1' -> splitC' $ Sub g i t1' t2
 
 splitC' (Sub g i  t1 t2@(TApp (TDef _) _ _)) = 
-  unfoldSafeCG t2 >>= \t2' -> splitC' $ Sub g i t1 t2'
+  unfoldSafeCG g t2 >>= \t2' -> splitC' $ Sub g i t1 t2'
 
 ---------------------------------------------------------------------------------------
 -- | Rest of TApp
@@ -875,5 +844,7 @@ cgFunTys l f xs ft =
 
 -- | `this`
 
-peekThis = safeHead "get 'this'" <$> (cg_this <$> get)
+cgPeekThis = safeHead "get 'this'" <$> (cg_this <$> get)
+
+cgPushThis t = modify $ \st -> st { cg_this = t : cg_this st } 
 

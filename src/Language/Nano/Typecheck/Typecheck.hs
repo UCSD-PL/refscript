@@ -75,7 +75,7 @@ verifyFile f = do
                 V.whenLoud  $ putStrLn . render . pp $ p
                 verb       <- V.getVerbosity
                 let annp    = execute verb nanoSsa $ tcNano p
-                r          <- either unsafe (safe . (\(a,_,c) -> (a,c))) annp 
+                r          <- either unsafe safe annp 
                 V.whenLoud  $ donePhase FM.Loud "Typechecking"
                 return      $ (NoAnn, r)
 
@@ -126,26 +126,27 @@ printAllAnns fs
 
 -------------------------------------------------------------------------------------------
 typeCheck :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
-          => V.Verbosity -> (NanoSSAR r) -> Either [Error] (ClassInfo r, NanoTypeR r)
+          => V.Verbosity -> (NanoSSAR r) -> Either [Error] (NanoTypeR r)
 -------------------------------------------------------------------------------------------
-typeCheck verb pgm = fmap (\(_,b,c) -> (b,c)) (execute verb pgm $ tcNano pgm)
+typeCheck verb pgm = fmap snd (execute verb pgm $ tcNano pgm)
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------
 -------------------------------------------------------------------------------
 tcNano :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
-            => NanoSSAR r -> TCM r (AnnInfo r, ClassInfo r, NanoTypeR r)
+            => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do checkTypeDefs p
        (fs', γo) <- tcInScope γ $ tcStmts γ fs
        m         <- concatMaps <$> getAllAnns
        θ         <- getSubst
-       let p'     = p {code = (patchAnn m . apply θ) <$> Src fs'}
-       whenLoud   $ (traceCodePP p' m θ)
+       let p1     = p {code = (patchAnn m . apply θ) <$> Src fs'}
+       whenLoud   $ (traceCodePP p1 m θ)
        case γo of 
          Just γ'  -> do  mc    <- mCls $ envIds $ tce_cls γ'
-                         return $ (m, mc, p')
+                         let p2 = p1 { chSpecs = envUnion mc (chSpecs p1) }
+                         return $ (m, p2)
          Nothing  -> error "BUG:tcNano should end with an environment"
     where
        γ         = initEnv p
@@ -323,12 +324,6 @@ validInst γ (l, ts)
 tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a   
 
 
-tcClass γ (ClassStmt l id ext imps cs) =
-    mapM (tcClassElt γ' id) cs >>= return . ClassStmt l id ext imps
-  where
-    ct = fromJust $ tcEnvFindTy id γ
-    γ'  =  tcPushThis ct γ
-
 ---------------------------------------------------------------------------------------
 tcClassElt :: (Ord r, PP r, F.Reftable r) 
           => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
@@ -462,9 +457,11 @@ tcStmt γ (ReturnStmt l eo)
 tcStmt γ s@(FunctionStmt _ _ _ _)
   = tcFun γ s
 
+-- class A [extends B] [implements I,J,...] { ... }
 tcStmt γ c@(ClassStmt l i e is ce)
   = do  t     <- classType γ c
-        ce'   <- mapM (tcClassElt γ i) ce
+        let γ' =  tcPushThis t γ
+        ce'   <- mapM (tcClassElt γ' i) ce
         return $ (ClassStmt l i e is ce', Just γ)
 
 -- OTHER (Not handled)

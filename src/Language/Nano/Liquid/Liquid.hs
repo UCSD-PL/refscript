@@ -64,8 +64,8 @@ verifyFile f
                 Right p2 -> 
                     let p3 = expandAliases $ patchTypeAnnots p2 in
                     case typeCheck verb p3 of
-                      Left errs    -> return $ (A.NoAnn, F.Unsafe errs)
-                      Right (c4,p4) -> reftypeCheck cfg f (trace ("Classes: " ++ ppshow c4) p4)
+                      Left errs -> return $ (A.NoAnn, F.Unsafe errs)
+                      Right p4  -> reftypeCheck cfg f p4
 
 --------------------------------------------------------------------------------
 reftypeCheck :: Config -> FilePath -> NanoRefType -> 
@@ -102,14 +102,13 @@ consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) = consStmts (initCGEnv pgm) fs >> return ()
 
-initCGEnv pgm = CGE (specs pgm) F.emptyIBindEnv [] emptyContext (chSpecs pgm)
+initCGEnv pgm = CGE (specs pgm) (defs pgm) F.emptyIBindEnv [] emptyContext (chSpecs pgm)
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = do cgFunTys l f xs (envFindTy f g) >>= mapM (consFun1 l g f xs body)
-       return g
+  = cgFunTys l f xs (envFindTy f g) >>= mapM_ (consFun1 l g f xs body) >> return g
        
 consFun _ s 
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
@@ -217,6 +216,18 @@ consStmt _ (ReturnStmt _ Nothing)
 consStmt g s@(FunctionStmt _ _ _ _)
   = Just <$> consFun g s
 
+-- class A [extends B] [implements I,J,...] { ... }
+consStmt g c@(ClassStmt l i e is ce)
+  = case clsTOpt of
+      Just clsT -> do
+        cgPushThis clsT
+        mapM_ (consClassElt g) ce
+        return $ Just g
+        --  error $ "consStmt type for class " ++ ppshow i ++ " :: " ++ ppshow clsT
+      Nothing   -> error $ "BUG:consStmt could not find type for defined class"
+  where 
+    clsTOpt = envFindSpec i g
+
 -- OTHER (Not handled)
 consStmt _ s 
   = errorstar $ "consStmt: not handled " ++ ppshow s
@@ -234,6 +245,21 @@ consVarDecl g (VarDecl l x Nothing)
       Nothing -> errorstar $ printf "Variable definition of " ++ ppshow x  ++ 
                   "at " ++ ppshow l ++ " with neither type annotation nor " ++
                   "initialization is not supported."
+
+------------------------------------------------------------------------------------
+consClassElt :: CGEnv -> ClassElt AnnTypeR -> CGM ()
+------------------------------------------------------------------------------------
+consClassElt g (Constructor l xs body) = do  
+    tThis <- cgPeekThis
+    case getProp l (renv g) (tenv g) "constructor" tThis of
+      Just (_,t) -> cgFunTys l f xs t >>= mapM_ (consFun1 l g f xs body)
+      Nothing    -> error $ "BUG:consClassElt could not find type for constructor in defined class"
+  where
+    f = Id l "constructor"
+
+consClassElt g (MemberVarDecl l m s v) = undefined
+consClassElt g (MemberMethDecl l m s i xs body) = undefined 
+
 
 ------------------------------------------------------------------------------------
 consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
@@ -298,7 +324,7 @@ consExpr g (NullLit l)
   = envAddFresh "consExpr:NullLit" l tNull g
 
 consExpr g (ThisRef l)
-  = peekThis >>= \t -> envAddFresh "consExpr:ThisRef" l t g
+  = cgPeekThis >>= \t -> envAddFresh "consExpr:ThisRef" l t g
 
 consExpr g (VarRef i x)
   = do addAnnot l x t
@@ -361,18 +387,15 @@ consCast g a e
 
 ---------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------
-consUpCast g l x t 
-  = do γ      <- getTDefs
-       let tx' = fst $ alignTs γ (envFindTy x g) t
-       let tx  = (`strengthen` (F.symbolReft x)) $ tx' 
-       envAddFresh "consUpCast" l tx g
+consUpCast g l x t =
+  envAddFresh "consUpCast" l 
+    ((`strengthen` (F.symbolReft x)) $ fst $ alignTs (tenv g) (envFindTy x g) t) g
 
 ---------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------
 consDownCast g l x t = 
-  do γ   <- getTDefs
-     tc  <- castTo l γ tx (toType t) 
-     withAlignedM (subTypeContainers "Downcast" l g) tx tc
+  do tc  <- castTo l (tenv g) tx (toType t) 
+     withAlignedM g (subTypeContainers "Downcast" l g) tx tc
      g'  <- envAdds [(x, tc)] g
      return (x, g')
   where 
@@ -473,10 +496,9 @@ consObjT l g pe to
 consPropRead getter g l e fld
   = do 
       (x, g')        <- consExpr g e
-      tdefs          <- getTDefs 
       let tx          = envFindTy x g'
       (this, g'')    <- envAddFresh "this" l tx g
-      case getter l (renv g'') tdefs fld tx of
+      case getter l (renv g'') (tenv g) fld tx of
         Just (tObj, tf) -> 
           do
             let tf'   = F.substa (sf (F.symbol "this") (F.symbol this)) tf
@@ -573,11 +595,10 @@ envJoinExt l g g1 g2
             t1s  = (`envFindTy` g1) <$> xs 
             t2s  = (`envFindTy` g2) <$> xs
         when (length t1s /= length t2s) $ cgError l (bugBadPhi (srcPos l) t1s t2s)
-        γ       <- getTDefs
         -- To facilitate the sort check t1s and t2s need to change to their
         -- equivalents that have the same sort with the joined types (ts) 
         -- (with the added False's to make the types equivalent)
-        let t4   = zipWith (compareTs γ) t1s t2s
+        let t4   = zipWith (compareTs $ tenv g) t1s t2s
         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst4 <$> t4
         return     (g', xs, snd4 <$> t4, thd4 <$> t4, ts)
 

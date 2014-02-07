@@ -439,6 +439,7 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
 
 data Nano a t = Nano { code   :: !(Source a)               -- ^ Code to check
                      , specs  :: !(Env t)                  -- ^ Imported (unchecked) specifications
+                                                           -- ^ After TC will also include class types
                      , chSpecs:: !(Env t)                  -- ^ Checked specifications (signatures and annotations)
                      , tAnns  :: !(M.HashMap SourceSpan t) -- ^ Mapping from source positions to annotations
                      , consts :: !(Env t)                  -- ^ Measure Signatures

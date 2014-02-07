@@ -240,25 +240,34 @@ consVarDecl g v@(VarDecl l x (Just e))
   = consAsgn g l x e
 
 consVarDecl g (VarDecl l x Nothing)
-  = case envFindAnnot x g of
+  = case envFindAnnot l x g of
       Just  t -> Just <$> envAdds [(x, t)] g
-      Nothing -> errorstar $ printf "Variable definition of " ++ ppshow x  ++ 
-                  "at " ++ ppshow l ++ " with neither type annotation nor " ++
-                  "initialization is not supported."
+      Nothing -> cgError l $ errorVarDeclAnnot (srcPos l) x
 
 ------------------------------------------------------------------------------------
 consClassElt :: CGEnv -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElt g (Constructor l xs body) = do  
-    tThis <- cgPeekThis
-    case getProp l (renv g) (tenv g) "constructor" tThis of
-      Just (_,t) -> cgFunTys l f xs t >>= mapM_ (consFun1 l g f xs body)
-      Nothing    -> error $ "BUG:consClassElt could not find type for constructor in defined class"
+    consClassEltAux l f $
+      \ft -> cgFunTys l f xs ft >>= mapM_ (consFun1 l g f xs body)
   where
     f = Id l "constructor"
 
-consClassElt g (MemberVarDecl l m s v) = undefined
-consClassElt g (MemberMethDecl l m s i xs body) = undefined 
+consClassElt g (MemberVarDecl l m s v) = 
+  -- We can still use the class type annotation for this field.
+  -- This should be annotating `v`.
+  void $ consVarDecl g v
+  
+consClassElt g (MemberMethDecl l m s i xs body) = do
+    consClassEltAux l i $
+      \ft -> cgFunTys l i xs ft >>= mapM_ (consFun1 l g i xs body)
+
+consClassEltAux :: AnnTypeR -> Id AnnTypeR -> (RefType -> CGM ()) -> CGM ()
+consClassEltAux l id f = 
+  case [ t | TAnnot t  <- ann_fact l ] of 
+    [  ]  -> cgError    l (errorConstAnnMissing (srcPos l) id)
+    [ft]  -> f ft 
+    _     -> error      $ "consClassEltType:multi-type constructor"
 
 
 ------------------------------------------------------------------------------------
@@ -292,10 +301,10 @@ consExprT g e to
        l = getAnnotation e
 
 ------------------------------------------------------------------------------------
--- consAsgn :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
+consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consAsgn g l x e 
-  = do t <- case envFindAnnot x g of
+  = do t <- case envFindAnnot l x g of
               Just t  -> Just <$> freshTyVar g l t
               Nothing -> return $ Nothing
        (x', g') <- consExprT g e t

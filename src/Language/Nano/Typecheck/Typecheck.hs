@@ -340,7 +340,7 @@ tcClassElt γ id (Constructor l xs body) =
 -- not contribute to the type of the class.
 tcClassElt γ id (MemberVarDecl l m s v) =  
   tcClassEltAux (getAnnotation v) id $ 
-    const $ tcVarDecl γ v >>= return . MemberVarDecl l m s . fst
+    \_ -> tcVarDecl γ v >>= return . MemberVarDecl l m s . fst
 
 tcClassElt γ id (MemberMethDecl l m s i xs body) = 
   tcClassEltAux l i $ 
@@ -351,7 +351,7 @@ tcClassEltAux l id f =
   case [ t | TAnnot t  <- ann_fact l ] of 
     [  ]  -> tcError    $ errorConstAnnMissing (srcPos l) id
     [ft]  -> f ft 
-    _     -> error      $ "tcclassEltType:multi-type constructor"
+    _     -> error      $ "tcClassEltType:multi-type constructor"
 
 --------------------------------------------------------------------------------
 tcSeq :: (TCEnv r -> a -> TCM r (b, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([b], TCEnvO r)
@@ -389,7 +389,7 @@ tcStmt γ s@(EmptyStmt _)
 
 -- x = e
 tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))   
-  = do (e', g) <- tcAsgn γ (Id lx x) e
+  = do (e', g) <- tcAsgn l1 γ (Id lx x) e
        return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
 -- e1.fld = e2
@@ -534,7 +534,7 @@ tcVarDecl :: (Ord r, PP r, F.Reftable r)
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e)) 
-  = do (e', g) <- tcAsgn γ x e
+  = do (e', g) <- tcAsgn l γ x e
        return (VarDecl l x (Just e'), g)
 
 tcVarDecl γ v@(VarDecl l x Nothing) =
@@ -545,13 +545,16 @@ tcVarDecl γ v@(VarDecl l x Nothing) =
 
 -------------------------------------------------------------------------------
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
-  TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
+  AnnSSA r -> TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 -------------------------------------------------------------------------------
-tcAsgn γ x e
+tcAsgn l γ x e
   = do (e' , t) <- tcExprT γ e rhsT
        return      (e', Just $ tcEnvAdds [(x, t)] γ)
     where
-       rhsT      = tcEnvFindSpecOrTy x γ
+    -- Where to look for an annotation?
+    -- ∙ At the current AST node (for VarDecl)
+    -- ∙ The spec environment - for annotated declared variables.
+       rhsT      = msum [tcEnvFindSpecOrTy x γ, listToMaybe [ t | TAnnot t <- ann_fact l ]]
 
 
 -------------------------------------------------------------------------------

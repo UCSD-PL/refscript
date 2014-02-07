@@ -12,6 +12,9 @@ class BankAccount {
   constructor(a) {
 
     assert( a + 1 == 2);
+
+    assert(this.b == "a");
+
   
   }
 

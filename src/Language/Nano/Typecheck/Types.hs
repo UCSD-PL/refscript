@@ -245,11 +245,11 @@ funTys l f xs ft
   = case bkFuns ft of
       Nothing -> Left $ errorNonFunction (srcPos l) f ft 
       Just ts -> 
-        case partitionEithers [funTy l f xs t | t <- ts] of 
+        case partitionEithers [funTy l xs t | t <- ts] of 
           ([], fts) -> Right $ zip ([0..] :: [Int]) fts
           (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
 
-funTy l f xs (αs, yts, t) 
+funTy l xs (αs, yts, t) 
   | eqLen xs yts = let (su, ts') = renameBinds yts xs 
                    in  Right (αs, ts', F.subst su t)    
   | otherwise    = Left $ errorArgMismatch (srcPos l)

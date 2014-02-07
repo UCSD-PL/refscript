@@ -118,9 +118,6 @@ consFun1 l g' f xs body (i, ft)
        gm  <- consStmts g'' body
        maybe (return ()) (\g -> subTypeContainers "return void" l g tVoid (envFindReturn g'')) gm
 
------------------------------------------------------------------------------------
--- envAddFun :: AnnTypeR -> CGEnv -> Id AnnTypeR -> [Id AnnTypeR] -> RefType -> CGM CGEnv
------------------------------------------------------------------------------------
 envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g) 
                                    >>= (return . envAddReturn f t' ) 
                                    >>= envAdds (varBinds xs ts')
@@ -136,10 +133,8 @@ consStmts g stmts
   = do g' <- addStatementFunBinds g stmts 
        consSeq consStmt g' stmts
 
-addStatementFunBinds g stmts 
-  = do let fs  = concatMap getFunctionStatements stmts
-       fts    <- forM fs $ \(FunctionStmt l f _ _) -> (f,) <$> (freshTyFun g l f =<< getDefType f)
-       envAdds fts g
+addStatementFunBinds g stmts = (mapM go $ concatMap getFunctionStatements stmts) >>= (`envAdds` g)
+  where  go (FunctionStmt l f _ _) = (f,) <$> (freshTyFun g l f =<< getDefType f)
 
 --------------------------------------------------------------------------------
 consStmt :: CGEnv -> Statement AnnTypeR -> CGM (Maybe CGEnv) 
@@ -247,22 +242,21 @@ consVarDecl g (VarDecl l x Nothing)
 ------------------------------------------------------------------------------------
 consClassElt :: CGEnv -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
-consClassElt g (Constructor l xs body) = do  
-    consClassEltAux l f $
-      \ft -> cgFunTys l f xs ft >>= mapM_ (consFun1 l g f xs body)
-  where
-    f = Id l "constructor"
+consClassElt g (Constructor l xs body) = consClassEltAux l i f
+  where i    = Id l "constructor"
+        f ft = cgFunTys l i xs ft >>= mapM_ (consFun1 l g i xs body)
 
 consClassElt g (MemberVarDecl l m s v) = 
   -- We can still use the class type annotation for this field.
   -- This should be annotating `v`.
   void $ consVarDecl g v
   
-consClassElt g (MemberMethDecl l m s i xs body) = do
-    consClassEltAux l i $
-      \ft -> cgFunTys l i xs ft >>= mapM_ (consFun1 l g i xs body)
+consClassElt g (MemberMethDecl l m s i xs body) = consClassEltAux l i f
+    where f ft = cgFunTys l i xs ft >>= mapM_ (consFun1 l g i xs body)
 
+------------------------------------------------------------------------------------
 consClassEltAux :: AnnTypeR -> Id AnnTypeR -> (RefType -> CGM ()) -> CGM ()
+------------------------------------------------------------------------------------
 consClassEltAux l id f = 
   case [ t | TAnnot t  <- ann_fact l ] of 
     [  ]  -> cgError    l (errorConstAnnMissing (srcPos l) id)

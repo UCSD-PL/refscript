@@ -215,8 +215,7 @@ consStmt g s@(FunctionStmt _ _ _ _)
 consStmt g c@(ClassStmt l i e is ce)
   = case clsTOpt of
       Just clsT -> do
-        cgPushThis clsT
-        mapM_ (consClassElt g) ce
+        cgWithThis clsT $ mapM_ (consClassElt g) ce
         return $ Just g
         --  error $ "consStmt type for class " ++ ppshow i ++ " :: " ++ ppshow clsT
       Nothing   -> error $ "BUG:consStmt could not find type for defined class"

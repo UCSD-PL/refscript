@@ -36,8 +36,8 @@ import           Text.Printf
 -- ∙ The type the corresponds to the access of exactly that type that does not
 --   throw an error.
 -------------------------------------------------------------------------------
-getProp ::  (IsLocated l, Ord r, PP r, F.Reftable r) => 
-  l -> Env (RType r) -> Env (RType r) -> String -> RType r -> Maybe (RType r, RType r)
+getProp ::  (IsLocated l, Ord r, PP r, F.Reftable r, F.Symbolic s) => 
+  l -> Env (RType r) -> Env (RType r) -> s -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 getProp l specs defs s t@(TObj bs _) = 
   do  case find (match $ F.symbol s) bs of
@@ -54,8 +54,8 @@ getProp l _     _    _ t               = die $ bug (srcPos l) $ "getProp: " ++ (
 
 
 -------------------------------------------------------------------------------
-lookupProto :: (Ord r, PP r, F.Reftable r, IsLocated a) =>
-  a -> Env (RType r) -> Env (RType r) -> String -> RType r -> Maybe (RType r, RType r)
+lookupProto :: (Ord r, PP r, F.Reftable r, IsLocated a, F.Symbolic s) =>
+  a -> Env (RType r) -> Env (RType r) -> s -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 lookupProto l specs defs s t@(TObj bs _) = 
     case find (match $ F.stringSymbol "__proto__") bs of
@@ -68,8 +68,8 @@ lookupProto l _ _ _ _ = die $ bug (srcPos l)
 -- Access the property from the relevant ambient object but return the 
 -- original accessed type instead of the type of the ambient object. 
 -------------------------------------------------------------------------------
-lookupAmbientVar :: (Ord r, F.Reftable r, PP r, IsLocated l) =>
-  l -> Env (RType r) -> Env (RType r) -> String -> String -> RType r -> Maybe (RType r, RType r)
+lookupAmbientVar :: (Ord r, F.Reftable r, PP r, IsLocated l, F.Symbolic s) =>
+  l -> Env (RType r) -> Env (RType r) -> s -> String -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 lookupAmbientVar l specs defs s amb t = 
       envFindTy amb specs
@@ -108,8 +108,8 @@ getPropArr l specs defs s a@(TArr t _) =
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
-getPropUnion :: (IsLocated l, Ord r, PP r, F.Reftable r) 
-             => l -> Env (RType r) -> Env (RType r) -> String -> [RType r] -> Maybe (RType r, RType r)
+getPropUnion :: (IsLocated l, Ord r, PP r, F.Reftable r, F.Symbolic s) 
+             => l -> Env (RType r) -> Env (RType r) -> s -> [RType r] -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 getPropUnion l specs defs f ts = 
   -- Gather all the types that do not throw errors, and the type of 

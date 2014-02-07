@@ -78,7 +78,7 @@ module Language.Nano.Liquid.CGMonad (
 
   ) where
 
-import           Data.Maybe                     (fromMaybe, catMaybes, isJust)
+import           Data.Maybe                     (fromMaybe, catMaybes, isJust, listToMaybe)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 
@@ -334,10 +334,10 @@ envFindSpec     :: (IsLocated x, F.Symbolic x) => x -> CGEnv -> Maybe RefType
 ---------------------------------------------------------------------------------------
 envFindSpec x g = E.envFindTy x $ cge_spec g
 
----------------------------------------------------------------------------------------
-envFindAnnot x g = msum [tAnn, tEnv] 
----------------------------------------------------------------------------------------
+envFindAnnot l x g = msum [tAnn, tEnv, annot] 
   where
+
+    annot        = listToMaybe [ t | TAnnot t <- ann_fact l ]
     tAnn         = E.envFindTy x $ cge_spec g
     tEnv         = E.envFindTy x $ renv     g
 

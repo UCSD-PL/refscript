@@ -4,6 +4,8 @@ var a /*@ { number | v > 0 } */ = 1;
 function foo() {}
 
 class BankAccount { 
+
+  public a /*@ { number | v > 0 }  */ = 0;
   
   /*@ (a: { number | v = 1} ) => void */
   constructor(a) {

@@ -9,24 +9,15 @@ class Greeter {
   public  d /*@ number */;
   
   private static e /*@ { } */ = { };
-
   
   /*@ (message: string) => void */
-  constructor(message) {
-    //this.greeting = message;
-  }
+  constructor(message) { }
   /*@ () => void */
-  private greet1() {
-    //return "Hello, " + this.greeting;
-  }
+  private greet1() { }
 
   /*@ () => void */
-  greet2() {
-    //return "Hello, " + this.greeting;
-  }
+  greet2() { }
 
   /*@ () => void */
-  public greet3() {
-    //return "Hello, " + this.greeting;
-  }
+  public greet3() { }
 }

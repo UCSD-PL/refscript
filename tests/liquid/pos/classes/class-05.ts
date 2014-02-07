@@ -3,13 +3,11 @@ class A {
   /*@ () => void */
   constructor() { }
 
-  /*@    a :: { number | v > 0 } */
-  public a = 1;
+  public a /*@ { number | v > 0 } */ = 1;
 
-  /*@    b :: { number | v = 1 } */
-  public b = 1;
+  public b /*@ { number | v = 1 } */ = 1;
 
-  /*@ foo :: () => { number | v > 1 } */
+  /*@ () => { number | v > 1 } */
   public foo() {
     return 2;  
   }
@@ -21,10 +19,9 @@ class B extends A {
   /*@ () => void */
   constructor() { }
 
-  /*@    a :: { number | v > 5 } */
-  public a = 10;
+  public a /*@  { number | v > 5 } */ = 10;
 
-  /*@ foo :: () => { number | v > 5 } */
+  /*@ () => { number | v > 5 } */
   public foo() {
     return 10;  
   }

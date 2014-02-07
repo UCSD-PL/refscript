@@ -329,18 +329,18 @@ tcClassElt :: (Ord r, PP r, F.Reftable r)
           => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
 -- TODO: Force void return type for constructor.
-tcClassElt γ id (Constructor l xs body) =
-  let id = Id l "constructor" in
-  tcClassEltAux l id $ 
-    \ft -> do body'  <- foldM (tcFun1 γ l id xs) body =<< tcFunTys l id xs ft
-              return  $ Constructor l xs body'
+tcClassElt γ id (Constructor l xs body) = tcClassEltAux l id f 
+  where f ft  =     tcFunTys l id xs ft 
+                >>= foldM (tcFun1 γ l id xs) body 
+                >>= return . Constructor l xs
+        id    = Id l "constructor"
+
 -- The type annotation in variable members is in the VarDecl part so we can use
 -- normal tcVarDecl for that part.
 -- TODO: perhaps we don't need private members to be annotated, since they do
 -- not contribute to the type of the class.
-tcClassElt γ id (MemberVarDecl l m s v) =  
-  tcClassEltAux (getAnnotation v) id $ 
-    \_ -> tcVarDecl γ v >>= return . MemberVarDecl l m s . fst
+tcClassElt γ id (MemberVarDecl l m s v) = tcClassEltAux (getAnnotation v) id f
+    where f _ = tcVarDecl γ v >>= return . MemberVarDecl l m s . fst
 
 tcClassElt γ id (MemberMethDecl l m s i xs body) = 
   tcClassEltAux l i $ 

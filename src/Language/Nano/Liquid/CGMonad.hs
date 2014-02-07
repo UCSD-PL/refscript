@@ -74,7 +74,7 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * This
   , cgPeekThis
-  , cgPushThis
+  , cgWithThis
 
   ) where
 
@@ -847,4 +847,8 @@ cgFunTys l f xs ft =
 cgPeekThis = safeHead "get 'this'" <$> (cg_this <$> get)
 
 cgPushThis t = modify $ \st -> st { cg_this = t : cg_this st } 
+
+cgPopThis    = modify $ \st -> st { cg_this = tail $ cg_this st } 
+
+cgWithThis t p = do { cgPushThis t; a <- p; cgPopThis; return a } 
 

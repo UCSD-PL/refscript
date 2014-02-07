@@ -84,7 +84,8 @@ module Language.Nano.Typecheck.TCMonad (
   , whenQuiet', whenQuiet
 
   -- * This
-  , peekThis
+  , tcPeekThis
+  , tcWithThis
 
   )  where 
 
@@ -487,4 +488,11 @@ tcFunTys l f xs ft =
 
 -- | `this`
 
-peekThis = safeHead "get 'this'" <$> (tc_this <$> get)
+tcPeekThis     = safeHead "get 'this'" <$> (tc_this <$> get)
+
+tcPushThis t   = modify $ \st -> st { tc_this = t : tc_this st } 
+
+tcPopThis      = modify $ \st -> st { tc_this = tail $ tc_this st } 
+
+tcWithThis t p = do { tcPushThis t; a <- p; tcPopThis; return a } 
+

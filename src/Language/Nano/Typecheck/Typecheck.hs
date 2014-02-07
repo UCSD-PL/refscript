@@ -164,7 +164,7 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs
 
 -- Initalize the environment with all the available specs!
 initEnv pgm           = TCE (envUnion (specs pgm) (chSpecs pgm)) (chSpecs pgm) 
-                            classEnv [tTop] emptyContext
+                            classEnv emptyContext
   where classEnv      = envFromList [ (s, ClassStmt l s e i b) | let Src ss = code pgm
                                                                , ClassStmt l s e i b <- ss ]
 
@@ -215,26 +215,23 @@ data TCEnv r  = TCE { tce_env  :: Env (RType r)
                     -- _after_ they have been computed.
                     , tce_spec :: Env (RType r)               
                     , tce_cls  :: Env (Statement (AnnSSA r))  -- ^ Class definitions
-                    , tce_this ::     [RType r]               -- ^ Stack holding the latest type for "this"
                     , tce_ctx  :: !IContext 
                     }
 
 type TCEnvO r = Maybe (TCEnv r)
 
 instance (PP r, F.Reftable r) => Substitutable r (TCEnv r) where 
-  apply θ (TCE m sp cl th c) = TCE (apply θ m) (apply θ sp) cl (apply θ th) c 
+  apply θ (TCE m sp cl c) = TCE (apply θ m) (apply θ sp) cl c 
   -- Not doing the application on the class env
 
 instance (PP r, F.Reftable r) => PP (TCEnv r) where
   pp = ppTCEnv
 
-ppTCEnv (TCE env spc _ th ctx) 
+ppTCEnv (TCE env spc _ ctx) 
   =   text "******************** Environment ************************"
   $+$ pp env
   $+$ text "******************** Specifications *********************"
   $+$ pp spc 
-  $+$ text "******************** \"this\" stack *********************"
-  $+$ pp th
   $+$ text "******************** Call Context ***********************"
   $+$ pp ctx
 
@@ -263,7 +260,6 @@ tcEnvFindClsOrDie x          = fromMaybe ugh              . tcEnvFindCls x
 
 tcEnvFindTyOrDie l x         = fromMaybe ugh . tcEnvFindTy (stripSSAId x)  where ugh = die $ errorUnboundId (ann l) x
 
-tcPushThis t γ               = γ { tce_this = t : tce_this γ } 
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Scoped Block in Environment ------------------------------------
@@ -460,8 +456,7 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 -- class A [extends B] [implements I,J,...] { ... }
 tcStmt γ c@(ClassStmt l i e is ce)
   = do  t     <- classType γ c
-        let γ' =  tcPushThis t γ
-        ce'   <- mapM (tcClassElt γ' i) ce
+        ce'   <- tcWithThis t $ mapM (tcClassElt γ i) ce
         return $ (ClassStmt l i e is ce', Just γ)
 
 -- OTHER (Not handled)
@@ -585,7 +580,7 @@ tcExpr _ e@(NullLit _)
   = return (e, tNull)
 
 tcExpr _ e@(ThisRef _)
-  = (e,) <$> peekThis
+  = (e,) <$> tcPeekThis
 
 tcExpr γ e@(VarRef l x)
   = return (e, tcEnvFindTyOrDie l x γ) 
@@ -777,21 +772,12 @@ undefType l γ
     where 
       ut       = builtinOpTy l BIUndefined $ tce_env γ
              
-tcPropRead getter γ l e fld
-  = do  (e', te)   <- tcExpr γ e
-        tdefs      <- getTDefs 
-        withThis γ te $ 
-          \γ -> 
-            case getter l (tce_env γ) tdefs fld te of
-              Nothing         -> tcError $  errorPropRead (srcPos l) e fld
-              Just (te', tf)  -> (, tf) <$> castM (tce_ctx γ) e' te te'
-
-
-----------------------------------------------------------------------------------
-withThis :: F.Reftable r => TCEnv r -> RType r -> (TCEnv r -> t) -> t
-----------------------------------------------------------------------------------
-withThis γ t p = p $ tcPushThis t γ  
-
+tcPropRead getter γ l e fld = do  
+  (e', te)   <- tcExpr γ e
+  tdefs      <- getTDefs 
+  case getter l (tce_env γ) tdefs fld te of
+    Nothing         -> tcError $  errorPropRead (srcPos l) e fld
+    Just (te', tf)  -> tcWithThis te $ (, tf) <$> castM (tce_ctx γ) e' te te'
 
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, F.Reftable r, PP r) =>

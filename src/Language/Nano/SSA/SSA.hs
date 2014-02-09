@@ -219,10 +219,16 @@ ssaStmt s@(ClassStmt l n e is bd) =
 ssaStmt s 
   = convertError "ssaStmt" s
 
-ssaClassElt (Constructor l is ss) = 
-  ssaStmts ss >>= return . mapSnd (Constructor l is)
+ssaClassElt (Constructor l xs body)
+  = do θ <- getSsaEnv
+       withMutability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
+         do setSsaEnv     $ extSsaEnv xs θ                   -- Extend SsaEnv with formal binders
+            (_, body')   <- ssaStmts body                    -- Transform function
+            setSsaEnv θ                                      -- Restore Outer SsaEnv
+            return        $ (True, Constructor l xs body')
+
 -- Class fields are considered immutable.
-ssaClassElt v@(MemberVarDecl _ _ _ _ ) = return (True, v)
+ssaClassElt v@(MemberVarDecl _ _ _ _ )    = return (True, v)
 ssaClassElt (MemberMethDecl l m s e i cs) =
   ssaStmts cs >>= return . mapSnd (MemberMethDecl l m s e i)
 

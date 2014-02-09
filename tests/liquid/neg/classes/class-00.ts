@@ -1,22 +1,20 @@
-var a /*@ { number | v > 0 } */ = 1;
 
 /*@ foo :: () => void */
 function foo() {}
 
 class BankAccount { 
 
-  public a /*@ { number | v > 0 }  */ = 1;
+  public f /*@ { number | v > 0 }  */ = 1;
   
-  public b /*@ { string | v = "a" } */ = "a";
+  public g /*@ { string | v = "a" } */ = "a";
   
-  /*@ (a: { number | v = 1} ) => void */
-  constructor(a) {
-
-    assert( a + 1 == 1);
-
-    assert(this.b == "b");
-  
+  /*@ (x: { string | v = "a"} ) => void */
+  constructor(x) {
+    this.g = x;  
   }
-
  
 } 
+
+var ba = new BankAccount("a");
+
+ba.g = "b";

@@ -50,7 +50,7 @@ getProp l specs defs s t@(TObj bs _) =
 getProp l specs defs s t@(TApp _ _ _)  = getPropApp l specs defs s t
 getProp _ _     _    _ t@(TFun _ _ _ ) = Nothing
 getProp l specs defs s a@(TArr _ _)    = getPropArr l specs defs s a
-getProp l _     _    _ t               = die $ bug (srcPos l) $ "getProp: " ++ (show $ toType t) 
+getProp l _     _    _ t               = die $ bug (srcPos l) $ "Using getProp on type: " ++ (show $ toType t) 
 
 
 -------------------------------------------------------------------------------

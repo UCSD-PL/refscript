@@ -695,7 +695,7 @@ tcCall γ ex@(NewExpr l (VarRef lv id) es)
             when (not $ isTFun tc) $ tcError $ errorConstNonFunc (srcPos l) id 
             z <- tcCallMatch γ l "constructor" es tc
             case z of
-              Just (es', t) -> return (NewExpr l (VarRef lv id) es', t) 
+              Just (es', _) -> return (NewExpr l (VarRef lv id) es', t)
               -- Constructor's return type is void - instead return the class type
               Nothing              -> deadCast (srcPos l) γ ex 
 

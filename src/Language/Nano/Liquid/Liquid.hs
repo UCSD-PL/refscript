@@ -369,9 +369,16 @@ consExpr g e@(ArrayLit l es)
 consExpr g (ObjectLit l ps) 
   = consObjT l g ps Nothing
 
-consExpr g (NewExpr _ _ _ ) 
---HEREHERE
-  = undefined 
+-- new C(e, ...)
+consExpr g (NewExpr l (VarRef _ (Id _ s)) es)
+-- TODO: Polymorphic instantiations - We should be getting that for free since
+-- we're using a variant of consCall, which substitutes to the class type.
+  = case envFindAnnot l s g of 
+      Just tCls ->
+        case getProp l (renv g) (tenv g) "constructor" tCls of
+          Just (_,tCnst) -> consCallConstructor g l es tCnst tCls
+          Nothing        -> cgError l $ bugMissingClsMethAnn (srcPos l) "constructor"
+      Nothing -> cgError l $ bugMissingClsType (srcPos l) s
 
 -- not handled
 consExpr _ e 
@@ -465,6 +472,18 @@ instantiate l g fn ft
     where 
        err = cgError l $ errorNonFunction (srcPos l) fn ft  
     {-msg           = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)-}
+
+consCallConstructor g l es ft0 ct
+  = do (xes, g')    <- consScan consExpr g es
+       let ts        = [envFindTy x g' | x <- xes]
+       let ft        = fromMaybe (fromMaybe (err ts ft0) (overload l)) (calleeType l ts ft0)
+       (_,its,_)    <- instantiate l g "constructor" ft
+       let (su, ts') = renameBinds its xes
+       zipWithM_ (subTypeContainers "Call" l g') [envFindTy x g' | x <- xes] ts'
+       envAddFresh "consCallConstructor" l (F.subst su ct) g'
+    where
+       overload l    = listToMaybe [ t | Overload (Just t) <- ann_fact l ]
+       err ts ft0    = die $ errorNoMatchCallee (srcPos l) ts ft0 
 
 
 ---------------------------------------------------------------------------------

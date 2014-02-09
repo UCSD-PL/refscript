@@ -79,6 +79,7 @@ bugBadFunction l          = mkErr l $ printf "BUG: No function expression was fo
 bugUnknown l thing x      = mkErr l $ printf "BUG: Cannot find %s %s" thing (ppshow x) 
 
 bugMissingClsMethAnn l x  = mkErr l $ printf "BUG: Cannot find type for %s in defined class" (ppshow x)
+bugMissingClsType    l x  = mkErr l $ printf "BUG: Cannot find type for class %s" (ppshow x)
 
 errorCyclicDefs l x stk   = mkErr l $ printf "Cyclic definitions: %s in %s" (ppshow x) (ppshow stk)
 errorArgName l x y        = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  

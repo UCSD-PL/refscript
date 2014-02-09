@@ -630,6 +630,7 @@ tcExpr γ e@(AssignExpr _ OpAssign (LBracket _ _ _) _)
 
 -- new C(e, ...)
 -- C is required to be a class name
+-- TODO: Polymorphic instantiations!!!
 tcExpr γ e@(NewExpr _ _ _) 
   = tcCall γ e
 

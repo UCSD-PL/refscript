@@ -9,12 +9,12 @@ class BankAccount {
 
   public b /*@ { string | v = "a" } */ = "a";
   
-  /*@ (a: { number | v = 1} ) => void */
+  /*@ (a: { number | v > 0 } ) => void */
   constructor(a) {
-    assert( a + 1 == 2);
+    assert( a > 0 );
     assert(this.b == "a");
   }
 
 }
 
-var ba = new BankAccount(100);
+var ba = new BankAccount(1);

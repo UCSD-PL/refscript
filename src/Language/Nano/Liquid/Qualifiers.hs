@@ -8,7 +8,6 @@ import Language.Nano.Env
 import Language.Nano.Errors
 import Language.Nano.Types
 import Language.ECMAScript3.Syntax
-import Control.Applicative      ((<$>))
 import Data.List                (delete, nub)
 import Data.Maybe               (fromMaybe)
 

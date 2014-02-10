@@ -5,25 +5,17 @@
 
 module Language.Nano.Typecheck.Unfold (unfoldFirst, unfoldMaybe, unfoldSafe) where 
 
-import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Nano.Types
 import           Language.Nano.Errors 
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
-import           Language.Fixpoint.Parse as P
 
 import           Control.Exception   (throw)
 import           Control.Applicative ((<$>))
-import qualified Data.HashSet as S
-import           Data.List                      (find)
-import qualified Data.HashMap.Strict as M 
-import           Data.Monoid
-import           Text.Parsec
 
 import           Text.Printf 
 
@@ -49,6 +41,7 @@ unfoldFirst env t = go t
     go (TApp c a r)            = TApp c (go <$> a) r
     go (TArr t r)              = TArr (go t) r
     go t@(TVar _ _ )           = t
+    go (TExp _)                = error "unfoldFirst should not be applied to TExp" 
     appTBi f (B s t)           = B s $ f t
 
 

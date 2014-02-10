@@ -8,21 +8,18 @@
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck, patchTypeAnnots) where 
 
-import           Control.Exception                  (throw)
 import           Control.Applicative                ((<$>))
 import           Control.Monad                
 
 import qualified Data.HashSet                       as HS 
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.Traversable                   as T
-import qualified Data.Either                        as E
 import           Data.Monoid
-import qualified Data.Foldable                      as FL
 import qualified Data.List                          as L
-import           Data.Maybe                         (catMaybes, isJust, fromJust, fromMaybe, listToMaybe, maybeToList)
+import           Data.Maybe                         (catMaybes,  fromMaybe, listToMaybe, maybeToList)
 import           Data.Generics                   
 
-import           Text.PrettyPrint.HughesPJ          (text, render, vcat, ($+$), (<+>))
+import           Text.PrettyPrint.HughesPJ          (text, render, ($+$))
 import           Text.Printf                        (printf)
 
 import           Language.Nano.CmdLine              (getOpts)
@@ -37,7 +34,6 @@ import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Lookup
-import           Language.Nano.Typecheck.Unfold
 import           Language.Nano.Typecheck.Unify
 import           Language.Nano.SSA.SSA
 
@@ -47,7 +43,6 @@ import           Language.Fixpoint.Misc             as FM
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Parser.Type  (SourceSpan (..))
 import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
@@ -171,18 +166,16 @@ initEnv pgm           = TCE (envUnion (specs pgm) (chSpecs pgm))
   where classEnv      = envFromList [ (s, ClassStmt l s e i b) | let Src ss = code pgm
                                                                , ClassStmt l s e i b <- ss ]
 
-traceCodePP p m s     = trace (render $ {- codePP p m s -} pp p) $ return ()
+traceCodePP p {-m s-} _ _ = trace (render $ {- codePP p m s -} pp p) $ return ()
       
-codePP (Nano {code = Src src}) anns sub 
-  =   text "*************************** CODE ****************************************"
-  $+$ pp src
-  $+$ text "*************************** SUBSTITUTIONS *******************************"
-  $+$ pp sub
-  $+$ text "*************************** ANNOTATIONS **********************************"
-  $+$ vcat (pp <$> {- annotCasts -} M.toList anns )
-  $+$ text "*************************************************************************"
-
-annotCasts anns = [ (l, f) | (l, fs) <- M.toList anns, f@(TCast _ _) <- fs]
+{-codePP (Nano {code = Src src}) anns sub -}
+{-  =   text "*************************** CODE ****************************************"-}
+{-  $+$ pp src-}
+{-  $+$ text "*************************** SUBSTITUTIONS *******************************"-}
+{-  $+$ pp sub-}
+{-  $+$ text "*************************** ANNOTATIONS **********************************"-}
+{-  $+$ vcat (pp <$> [> annotCasts <] M.toList anns )-}
+{-  $+$ text "*************************************************************************"-}
 
 -------------------------------------------------------------------------------
 checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano (AnnSSA r) (RType r) -> TCM r ()
@@ -257,8 +250,6 @@ tcEnvFindReturn              = envFindReturn              . tce_env
 
 tcEnvFindSpec x              = envFindTy (stripSSAId x)   . tce_spec 
 tcEnvFindSpecOrTy x γ        = msum [tcEnvFindTy x γ, tcEnvFindSpec x γ]
-tcEnvFindSpecOrDie x         = fromMaybe ugh              . tcEnvFindSpec x  
-  where ugh                  = die $ errorUnboundId (ann $ getAnnotation x) x
 
 tcEnvFindCls x               = envFindTy x                . tce_cls
 tcEnvFindClsOrDie x          = fromMaybe ugh              . tcEnvFindCls x  
@@ -332,7 +323,7 @@ tcClassElt :: (Ord r, PP r, F.Reftable r)
           => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
 -- TODO: Force void return type for constructor.
-tcClassElt γ id (Constructor l xs body) = tcClassEltAux l id f 
+tcClassElt γ _ (Constructor l xs body) = tcClassEltAux l id f 
   where f ft  =     tcFunTys l id xs ft 
                 >>= foldM (tcFun1 γ l id xs) body 
                 >>= return . Constructor l xs
@@ -345,7 +336,7 @@ tcClassElt γ id (Constructor l xs body) = tcClassEltAux l id f
 tcClassElt γ id (MemberVarDecl l m s v) = tcClassEltAux (getAnnotation v) id f
     where f _ = tcVarDecl γ v >>= return . MemberVarDecl l m s . fst
 
-tcClassElt γ id (MemberMethDecl l m s i xs body) = 
+tcClassElt γ _ (MemberMethDecl l m s i xs body) = 
   tcClassEltAux l i $ 
     \ft -> do body'  <- foldM (tcFun1 γ l i xs) body =<< tcFunTys l i xs ft
               return  $ MemberMethDecl l m s i xs body'
@@ -478,23 +469,26 @@ classType :: (Ord r, PP r, F.Reftable r)
           => TCEnv r -> Statement (AnnSSA r) -> TCM r (RType r)
 ---------------------------------------------------------------------------------------
 classType γ (ClassStmt l id (Just parent) _ cs) =
-  do  TObj bs _     <- findClassSpec γ parent
-      bs'           <- foldM addField bs $ classEltType <$> cs
-      addCTToSpec id $ TObj bs' fTop
+  do  t           <- findClassSpec γ parent
+      case t of
+        TObj bs _ -> do bs' <- foldM addField bs $ classEltType <$> cs
+                        addCTToSpec id $ TObj bs' fTop
+        _         -> errorstar "IMPOSSIBLE:classType"
   where
     θ             = tce_defs γ
     addField bs (_,B s t) = 
       let m = M.fromList (p <$> bs) in
       case M.lookup s m of
         Just t0 | equiv θ t0 t -> return  $ u <$> M.toList (M.insert s t m)
-        Just t0 | otherwise    -> tcError $ errorClassExtends (srcPos l) id parent s
+        Just _  | otherwise    -> tcError $ errorClassExtends (srcPos l) id parent s
         Nothing                -> return   $ u <$> M.toList (M.insert s t m)
-    es (B s _) s' = s == s'
     p  (B s t)    = (s, t)
     u  (s, t)     = B s t
 
-classType _ (ClassStmt l id Nothing _ cs) =
+classType _ (ClassStmt _ id Nothing _ cs) =
   addCTToSpec id $ TObj (snd . classEltType <$> cs) fTop
+
+classType _ _ = errorstar "classType should only be called with ClassStmt"
 
 addCTToSpec i t = addSpec i t >> return t
 
@@ -530,7 +524,7 @@ classEltToBind l s =
 tcVarDecl :: (Ord r, PP r, F.Reftable r) 
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
-tcVarDecl γ v@(VarDecl l x (Just e)) 
+tcVarDecl γ (VarDecl l x (Just e)) 
   = do (e', g) <- tcAsgn l γ x e
        return (VarDecl l x (Just e'), g)
 
@@ -618,7 +612,7 @@ tcExpr γ (Cast l@(Ann loc fs) e)
          _                    -> return (Cast l e', t)
 
 -- e.f
-tcExpr γ e1@(DotRef l e fld) 
+tcExpr γ (DotRef l e fld) 
   = do (e', t) <- tcPropRead getProp γ l e (unId fld)
        return     (DotRef l e' fld, t)
         
@@ -653,6 +647,7 @@ tcCall γ ex@(PrefixExpr l o e)
   = do z                      <- tcCallMatch γ l o [e] (prefixOpTy o $ tce_env γ) 
        case z of
          Just ([e'], t)       -> return (PrefixExpr l o e', t)
+         Just _               -> error "IMPOSSIBLE:tcCall:PrefixExpr"
          Nothing              -> deadCast (srcPos l) γ ex 
 
 -- | `e1 o e2`
@@ -660,6 +655,7 @@ tcCall γ ex@(InfixExpr l o e1 e2)
   = do z                      <- tcCallMatch γ l o [e1, e2] (infixOpTy o $ tce_env γ) 
        case z of
          Just ([e1', e2'], t) -> return (InfixExpr l o e1' e2', t)
+         Just _               -> error "IMPOSSIBLE:tcCall:InfixExpr"
          Nothing              -> deadCast (srcPos l) γ ex 
          
 -- | `e(e1,...,en)`
@@ -671,10 +667,11 @@ tcCall γ ex@(CallExpr l e es)
          Nothing              -> deadCast (srcPos l) γ ex
 
 -- | `e1[e2]`
-tcCall γ ex@(BracketRef l e1 e2)
+tcCall γ (BracketRef l e1 e2)
   = do z                      <- tcCallMatch γ l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ tce_env γ 
        case z of
          Just ([e1', e2'], t) -> return (BracketRef l e1' e2', t)
+         Just _               -> error "IMPOSSIBLE:tcCall:BracketRef"
          Nothing              -> tcError $ errorPropRead (srcPos l) e1 e2 
                                  -- deadCast (srcPos l) γ ex 
    
@@ -684,6 +681,7 @@ tcCall γ ex@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
   = do z                           <- tcCallMatch γ l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ tce_env γ
        case z of
          Just ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
+         Just _                    -> error "IMPOSSIBLE:tcCall:AssignExpr"
          Nothing                   -> tcError $ errorBracketAssign (srcPos l) ex 
 
 
@@ -704,8 +702,9 @@ tcCall γ ex@(NewExpr l (VarRef lv id) es)
               Just (es', _) -> return (NewExpr l (VarRef lv id) es', t)
               -- Constructor's return type is void - instead return the class type
               Nothing              -> deadCast (srcPos l) γ ex 
+          Nothing      -> tcError $ errorConstMissing (srcPos l) id
 
-tcCall γ e
+tcCall _ e
   = die $ bug (srcPos e) $ "tcCall: cannot handle" ++ ppshow e        
 
 
@@ -732,21 +731,15 @@ resolveOverload γ l fn es ts ft =
     valid _                 = False
     shd []                  = Nothing
     shd xs                  = Just $ head xs
-    isRight (Right _)       = True
-    isRight (Left _ )       = False
     eqLenSigs               = mkFun <$> L.filter (eqLen es . snd3) sigs
     sigs                    = catMaybes (bkFun <$> bkAnd ft)
 
 eqLen xs ys       = length xs == length ys 
 
-sameLengthArgs :: [t] -> RType r -> Bool
-sameLengthArgs args f = FL.or (bkFun f >>= \(_,bs,_) -> return $ eqLen args bs)
-      
-
-tcCallCaseTry γ l fn es' ts ft
+tcCallCaseTry γ l fn _ ts ft
   = do let ξ          = tce_ctx γ
        -- Generate fresh type parameters
-       (_,ibs,ot)    <- instantiate l ξ fn ft
+       (_,ibs,_)    <- instantiate l ξ fn ft
        let its        = b_type <$> ibs
        θ             <- getSubst 
        --HACK - erase latest annotation on l

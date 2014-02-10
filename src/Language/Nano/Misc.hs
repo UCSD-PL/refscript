@@ -83,8 +83,6 @@ unique :: (Eq a) => [a] -> Bool
 -------------------------------------------------------------------------------
 unique xs = length xs == length (L.nub xs)
 
-uncurry3 f (x, y, z) = f x y z
-
 fst4 (a,_,_,_) = a
 snd4 (_,b,_,_) = b
 thd4 (_,_,c,_) = c

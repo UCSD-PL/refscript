@@ -60,8 +60,6 @@ module Language.Nano.Typecheck.TCMonad (
   , addSpec
 
   -- * Expression Getter/Setter
-  , setExpr
-  -- , getExpr
   -- , withExpr
 
   -- * Patch the program with assertions
@@ -87,28 +85,20 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 
 import           Language.Nano.Env
-import           Language.Nano.Misc             (unique, everywhereM', zipWith3M_, fth4)
+import           Language.Nano.Misc             (unique, fth4)
 
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Typecheck.Compare
-import           Language.Nano.Typecheck.Unfold
 import           Language.Nano.Errors
 import           Data.Monoid                  
 import qualified Data.HashMap.Strict            as HM
-import qualified Data.Map                       as M
-import           Data.Generics                  (Data(..))
-import           Data.Maybe                     (fromJust)
-import           Data.Generics.Aliases
-import           Data.Typeable                  (Typeable (..))
-import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
--- import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
-import           Debug.Trace                      (trace)
+-- import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity as V
 
 -------------------------------------------------------------------------------
@@ -125,8 +115,6 @@ data TCState r = TCS {
                    , tc_annss :: [AnnInfo r]
                    -- Function definitions
                    , tc_specs  :: !(Env (RType r))
-                   -- The currently typed expression 
-                   , tc_expr  :: Maybe (Expression (AnnSSA r))
                    -- Verbosity
                    , tc_verb  :: V.Verbosity
                    -- This stack
@@ -211,14 +199,13 @@ freshSubst l ξ αs
        return     $ fromList $ zip αs (tVar <$> βs)
 
 setTyArgs l ξ βs
-  = do  m <- tc_anns <$> get
+  = do  {-m <- tc_anns <$> get-}
         {-when (hasTI l m) $ tcError $ errorMultipleTypeArgs l-}
         case map tVar βs of 
           [] -> return ()
           vs -> addAnn l $ TypInst ξ vs
-    where
-       hasTI l m  = not $ null [ i | i@(TypInst _ _) <- HM.lookupDefault [] l m ]
-       msg        = printf "setTyArgs: l = %s ξ = %s" (ppshow l) (ppshow ξ) 
+    {-where-}
+    {-   hasTI l m  = not $ null [ i | i@(TypInst _ _) <- HM.lookupDefault [] l m ]-}
 
 
 -------------------------------------------------------------------------------
@@ -246,9 +233,9 @@ remAnn l   = modify $ \st -> st { tc_anns = delLst l (tc_anns st) }
   where
     delLst k m | not (HM.member k m)                  = m
     delLst k m | null (stl $ HM.lookupDefault [] k m) = HM.delete k m
-    delLst _ m | otherwise                            = errorstar "BUG remAnn"
+    delLst _ _ | otherwise                            = errorstar "BUG remAnn"
     stl []     = []
-    stl (x:xs) = xs
+    stl (_:xs) = xs
 
 -------------------------------------------------------------------------------
 getAllAnns :: TCM r [AnnInfo r]  
@@ -282,7 +269,7 @@ execute verb pgm act
 
 initState ::  (PP r, F.Reftable r) => V.Verbosity -> Nano z (RType r) -> TCState r
 initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss 
-                          tc_specs tc_expr tc_verb tc_this
+                          tc_specs tc_verb tc_this
   where
     tc_errss = []
     tc_subst = mempty 
@@ -290,7 +277,6 @@ initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss
     tc_anns  = HM.empty
     tc_annss = []
     tc_specs = specs pgm
-    tc_expr  = Nothing
     tc_verb  = verb
     tc_this  = [tTop]
 
@@ -302,16 +288,6 @@ getSpecM f = tc_specs <$> get >>= return . envFindTy f
 
 addSpec x t = modify $ \st -> st { tc_specs = envAdds [(x,t)] (tc_specs st) } 
 
--------------------------------------------------------------------------------
-setExpr   :: Maybe (Expression (AnnSSA r)) -> TCM r () 
--------------------------------------------------------------------------------
-setExpr eo = modify $ \st -> st { tc_expr = eo }
-
-
--------------------------------------------------------------------------------
-getExpr   :: TCM r (Maybe (Expression (AnnSSA r)))
--------------------------------------------------------------------------------
-getExpr = tc_expr <$> get
 
 --------------------------------------------------------------------------
 -- | Generating Fresh Values ---------------------------------------------

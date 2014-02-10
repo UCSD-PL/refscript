@@ -37,7 +37,6 @@ module Language.Nano.SSA.SSAMonad (
    ) where 
 
 import           Control.Applicative                ((<$>))
-import           Control.Monad                
 import           Control.Monad.State                
 import           Control.Monad.Error hiding (Error)
 
@@ -48,7 +47,6 @@ import           Language.Nano.Env
 import           Language.Nano.Types                
 import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Parser.Type   (SourceSpan (..))
 import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Fixpoint.Errors

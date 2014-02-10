@@ -71,7 +71,7 @@ import           Data.Text                          (splitOn, unpack, pack)
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.Monoid                        (Monoid (..))
-import           Data.Maybe                         (maybe, catMaybes)
+import           Data.Maybe                         (catMaybes)
 import           Data.List                          (stripPrefix)
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.Syntax.Annotations
@@ -85,7 +85,6 @@ import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Misc
 import           Language.Nano.Errors
 import           Text.PrettyPrint.HughesPJ
-import           Text.Parsec                        
 import           Text.Parsec.Pos                    (initialPos)
 import           Text.Printf                        (printf)
 
@@ -199,9 +198,6 @@ instance IsNano (LValue a) where
   isNano (LVar _ _)        = True
   isNano (LDot _ e _)      = isNano e
   isNano (LBracket _ e e') = isNano e && isNano e'
-  -- isNano (LBracket _ e (IntLit _ _)) = isNano e
-  isNano e                 = errortext (text "Not Nano LValue!" <+> pp e)
-  -- isNano _          = False
 
 instance IsNano (VarDecl a) where
   isNano (VarDecl _ _ (Just e)) = isNano e
@@ -311,8 +307,6 @@ instance IsNano [(CaseClause a)] where
     where
       defaultC (CaseClause _ _ _) = False
       defaultC (CaseDefault _ _ ) = True
-  isNano xs | otherwise           
-            = errortext (text "Not Nano [CaseClause]!" <+> pp xs)
 
 -- | Check if `p` hold for all xs but the last one.  
 holdsInit :: (a -> Bool) -> [a] -> Bool

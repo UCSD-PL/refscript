@@ -18,7 +18,6 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors 
 import           Language.Nano.Errors 
-import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Unfold
@@ -27,7 +26,6 @@ import           Language.Nano.Typecheck.Compare
 
 import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
 import           Control.Applicative ((<$>))
-import           Control.Exception   (throw)
 -- import           Control.Monad
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
@@ -94,7 +92,7 @@ unify l γ θ   (TObj bs1 _           )    (TObj bs2 _            )
 unify l γ θ   (TArr t _             )    (TArr t' _                )    
   = unify l γ θ t t'
 
-unify l _ θ t                         t'
+unify _ _ θ _                         _
   = return θ
 
 

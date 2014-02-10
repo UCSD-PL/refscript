@@ -59,7 +59,6 @@ import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Parser.Type  (SourceSpan (..))
 
 import           Language.Nano.Errors
 import           Language.Nano.Types

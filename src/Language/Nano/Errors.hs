@@ -122,7 +122,7 @@ errorUniqueTypeParams l   = mkErr l $ printf "Only unique type paramteres are al
 errorBracketAccess l t f  = mkErr l $ printf "Cannot access field \"%s\" of type: %s" (ppshow f) (ppshow t)
 errorAnnotation l e t ta  = mkErr l $ printf "Type %s does not satisfy annotation %s at expression %s." (ppshow t) (ppshow ta) (ppshow e)
 errorMissingAnnot l s     = mkErr l $ printf "Missing type annotation for %s" s
-errorBadAnnot l s1 s2     = mkErr l $ printf "Type annotation for %s needs to be of %s type"
+errorBadAnnot l s1 s2     = mkErr l $ printf "Type annotation for %s needs to be of %s type" (ppshow s1) (ppshow s2)
 errorLiquid l             = mkErr l $ printf "Liquid Type Error at %s" (ppshow l)
 errorESC l                = mkErr l $ printf "ESC Error at %s" (ppshow l)
 errorMultipleTypeArgs l   = mkErr l $ printf "Multiple Type Args"
@@ -136,6 +136,7 @@ errorClassExtends l x y s = mkErr l $ printf "Class %s cannot extend class %s: t
 errorConstAnnMissing l x  = mkErr l $ printf "Class %s is missing a constructor annotation." (ppshow x)
 errorVarDeclAnnot l x     = mkErr l $ printf "Variable definition of '%s' with neither type annotation nor initialization is not supported." (ppshow x)
 errorConstNonFunc l x     = mkErr l $ printf "Constructor for class '%s' does not have a function type." (ppshow x)
+errorConstMissing l x     = mkErr l $ printf "Constructor for class '%s' does is missing." (ppshow x)
 
 
 errorBadPAlias l p nx ne  = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." 

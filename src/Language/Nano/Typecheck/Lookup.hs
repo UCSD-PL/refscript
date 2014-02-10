@@ -5,12 +5,10 @@
 
 module Language.Nano.Typecheck.Lookup (getProp, getIdx) where 
 
-import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Parse as P
 import           Language.Nano.Types
 import           Language.Nano.Errors 
 import           Language.Nano.Env
@@ -18,15 +16,9 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Unfold
 import qualified Language.Nano.Typecheck.Subst as SU
 
-import           Control.Exception   (throw)
 import           Control.Applicative ((<$>))
-import qualified Data.HashSet as S
 import           Data.List                      (find)
-import qualified Data.HashMap.Strict as M 
-import           Data.Monoid
-import           Text.Parsec
 
-import           Text.Printf 
 -- import           Debug.Trace
 -- import           Language.Nano.Misc (mkEither)
 
@@ -48,7 +40,7 @@ getProp l specs defs s t@(TObj bs _) =
   where match s (B f _)  = s == f
 
 getProp l specs defs s t@(TApp _ _ _)  = getPropApp l specs defs s t
-getProp _ _     _    _ t@(TFun _ _ _ ) = Nothing
+getProp _ _     _    _   (TFun _ _ _ ) = Nothing
 getProp l specs defs s a@(TArr _ _)    = getPropArr l specs defs s a
 getProp l _     _    _ t               = die $ bug (srcPos l) $ "Using getProp on type: " ++ (show $ toType t) 
 
@@ -57,7 +49,7 @@ getProp l _     _    _ t               = die $ bug (srcPos l) $ "Using getProp o
 lookupProto :: (Ord r, PP r, F.Reftable r, IsLocated a, F.Symbolic s) =>
   a -> Env (RType r) -> TDefEnv r -> s -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-lookupProto l specs defs s t@(TObj bs _) = 
+lookupProto l specs defs s (TObj bs _) = 
     case find (match $ F.stringSymbol "__proto__") bs of
       Just (B _ t) -> getProp l specs defs s t
       Nothing -> Nothing -- Just (t, tUndef)
@@ -88,6 +80,7 @@ getPropApp l specs defs s t@(TApp c ts _)
       (TDef _) -> getProp l specs defs s $ unfoldSafe defs t
       TTop     -> die $ bug (srcPos l) "getProp top"
       TVoid    -> die $ bug (srcPos l) "getProp void"
+getPropApp _ _ _ _ _ = error "getPropArr should only be applied to TApp"
 
 getPropArr l specs defs s a@(TArr t _) = 
         envFindTy "Array" defs
@@ -96,6 +89,8 @@ getPropArr l specs defs s a@(TArr t _) =
   where
     su s (TD _ [v] tdef _) = SU.apply (SU.fromList [(v, s)]) tdef
     su _ _                 = die $ bug (srcPos l) "Array needs to be defined as a generic type in prelude.js"
+
+getPropArr _ _ _ _ _ = error "getPropArr should only be applied to arrays"
  
   -- Array has been defined as a generic data type
 

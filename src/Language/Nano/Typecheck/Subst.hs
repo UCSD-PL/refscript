@@ -22,23 +22,15 @@ module Language.Nano.Typecheck.Subst (
 import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc
-import           Language.Nano.Types
-import           Language.Nano.Errors 
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 
-import           Control.Exception   (throw)
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
-import           Data.List                      (find)
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
 
-import           Text.Printf 
 -- import           Debug.Trace
--- import           Language.Nano.Misc (mkEither)
 
 ---------------------------------------------------------------------------
 -- | Substitutions --------------------------------------------------------
@@ -108,6 +100,7 @@ instance Free (RType r) where
   free (TAll α t)           = S.delete α $ free t 
   free (TObj bs _)          = S.unions   $ free <$> b_type <$> bs
   free (TAnd ts)            = S.unions   $ free <$> ts 
+  free (TExp _)             = error "free should not be applied to TExp"
 
 instance (PP r, F.Reftable r) => Substitutable r (Cast (RType r)) where
   apply θ c = c { castTarget = apply θ (castTarget c) }
@@ -147,4 +140,5 @@ appTy (Su m) t@(TVar α r)        = (M.lookupDefault t α m) `strengthen` r
 appTy θ (TFun ts t r)            = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m) (TAll α t)          = TAll α $ apply (Su $ M.delete α m) t             -- oh, god! DO NOT DROP TAll here.  
 appTy θ (TArr t r)               = TArr (apply θ t) r
+appTy _ (TExp _)                 = error "appTy should not be applied to TExp"
 

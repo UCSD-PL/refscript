@@ -37,7 +37,7 @@ import           Text.Printf
 --   throw an error.
 -------------------------------------------------------------------------------
 getProp ::  (IsLocated l, Ord r, PP r, F.Reftable r, F.Symbolic s) => 
-  l -> Env (RType r) -> Env (RType r) -> s -> RType r -> Maybe (RType r, RType r)
+  l -> Env (RType r) -> TDefEnv r -> s -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 getProp l specs defs s t@(TObj bs _) = 
   do  case find (match $ F.symbol s) bs of
@@ -55,7 +55,7 @@ getProp l _     _    _ t               = die $ bug (srcPos l) $ "Using getProp o
 
 -------------------------------------------------------------------------------
 lookupProto :: (Ord r, PP r, F.Reftable r, IsLocated a, F.Symbolic s) =>
-  a -> Env (RType r) -> Env (RType r) -> s -> RType r -> Maybe (RType r, RType r)
+  a -> Env (RType r) -> TDefEnv r -> s -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 lookupProto l specs defs s t@(TObj bs _) = 
     case find (match $ F.stringSymbol "__proto__") bs of
@@ -69,17 +69,13 @@ lookupProto l _ _ _ _ = die $ bug (srcPos l)
 -- original accessed type instead of the type of the ambient object. 
 -------------------------------------------------------------------------------
 lookupAmbientVar :: (Ord r, F.Reftable r, PP r, IsLocated l, F.Symbolic s) =>
-  l -> Env (RType r) -> Env (RType r) -> s -> String -> RType r -> Maybe (RType r, RType r)
+  l -> Env (RType r) -> TDefEnv r -> s -> String -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 lookupAmbientVar l specs defs s amb t = 
       envFindTy amb specs
   >>= getProp l specs defs s 
   >>= return . mapFst (const t)
 
-lookupAmbientType l specs defs s amb t = 
-      envFindTy amb defs
-  >>= getProp l specs defs s 
-  >>= return . mapFst (const t)
 
 getPropApp l specs defs s t@(TApp c ts _) 
   = case c of 
@@ -98,8 +94,8 @@ getPropArr l specs defs s a@(TArr t _) =
     >>= \to -> (getProp l specs defs s (su t to)) 
     >>= \tr -> return ((mapFst (const a) tr))
   where
-    su s (TBd (TD _ [v] tdef _)) = SU.apply (SU.fromList [(v, s)]) tdef
-    su _ _                       = die $ bug (srcPos l) "Array needs to be defined as a generic type in prelude.js"
+    su s (TD _ [v] tdef _) = SU.apply (SU.fromList [(v, s)]) tdef
+    su _ _                 = die $ bug (srcPos l) "Array needs to be defined as a generic type in prelude.js"
  
   -- Array has been defined as a generic data type
 
@@ -109,7 +105,7 @@ getPropArr l specs defs s a@(TArr t _) =
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
 getPropUnion :: (IsLocated l, Ord r, PP r, F.Reftable r, F.Symbolic s) 
-             => l -> Env (RType r) -> Env (RType r) -> s -> [RType r] -> Maybe (RType r, RType r)
+             => l -> Env (RType r) -> TDefEnv r -> s -> [RType r] -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 getPropUnion l specs defs f ts = 
   -- Gather all the types that do not throw errors, and the type of 
@@ -121,7 +117,7 @@ getPropUnion l specs defs f ts =
 
 -------------------------------------------------------------------------------
 getIdx ::  (IsLocated l, Ord r, PP r, F.Reftable r) => 
-  l -> Env (RType r) -> Env (RType r) -> Int -> RType r -> Maybe (RType r, RType r)
+  l -> Env (RType r) -> TDefEnv r -> Int -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 getIdx _ _ _ _ a@(TArr t _)  = Just (a,t)
 getIdx l specs defs i t             = getProp l specs defs (show i) t 

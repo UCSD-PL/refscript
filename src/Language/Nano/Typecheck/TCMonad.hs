@@ -28,14 +28,6 @@ module Language.Nano.Typecheck.TCMonad (
   , freshTyArgs
   -- , freshTArray
 
-  -- * Dot Access
-  -- , safeGetProp
-  -- , safeGetIdx
-  -- , indexType
-
-  -- * Type definitions
-  , getTDefs
-
   -- * Substitutions
   , getSubst
   , setSubst
@@ -48,10 +40,6 @@ module Language.Nano.Typecheck.TCMonad (
   , accumAnn
   , getAllAnns
   , remAnn
-
-  -- * Unfolding
-  , unfoldFirstTC
-  , unfoldSafeTC
 
   -- * Subtyping
   , subTypeM  , subTypeM'
@@ -99,7 +87,7 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 
 import           Language.Nano.Env
-import           Language.Nano.Misc             (unique, everywhereM', zipWith3M_)
+import           Language.Nano.Misc             (unique, everywhereM', zipWith3M_, fth4)
 
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
@@ -119,7 +107,6 @@ import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
 -- import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
-import           Language.Fixpoint.Misc
 
 import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity as V
@@ -138,8 +125,6 @@ data TCState r = TCS {
                    , tc_annss :: [AnnInfo r]
                    -- Function definitions
                    , tc_specs  :: !(Env (RType r))
-                   -- Type definitions
-                   , tc_tdefs :: !(Env (RType r))
                    -- The currently typed expression 
                    , tc_expr  :: Maybe (Expression (AnnSSA r))
                    -- Verbosity
@@ -177,12 +162,6 @@ whenQuiet' quiet other = do  v <- tc_verb <$> get
                                V.Quiet -> quiet
                                _       -> other
 
-
-
--------------------------------------------------------------------------------
-getTDefs :: TCM r (Env (RType r))
--------------------------------------------------------------------------------
-getTDefs = tc_tdefs <$> get 
 
 -------------------------------------------------------------------------------
 getSubst :: TCM r (RSubst r)
@@ -303,15 +282,14 @@ execute verb pgm act
 
 initState ::  (PP r, F.Reftable r) => V.Verbosity -> Nano z (RType r) -> TCState r
 initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss 
-                       tc_specs tc_tdefs tc_expr tc_verb tc_this
+                          tc_specs tc_expr tc_verb tc_this
   where
     tc_errss = []
     tc_subst = mempty 
     tc_cnt   = 0
     tc_anns  = HM.empty
     tc_annss = []
-    tc_specs  = specs pgm
-    tc_tdefs = defs pgm
+    tc_specs = specs pgm
     tc_expr  = Nothing
     tc_verb  = verb
     tc_this  = [tTop]
@@ -357,72 +335,55 @@ instance Freshable a => Freshable [a] where
 freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
 
 
--- | Monadic unfolding
--------------------------------------------------------------------------------
-unfoldFirstTC :: (PP r, F.Reftable r) => RType r -> TCM r (RType r)
--------------------------------------------------------------------------------
-unfoldFirstTC t = getTDefs >>= \γ -> return $ unfoldFirst γ t
-
-
--------------------------------------------------------------------------------
-unfoldSafeTC :: (PP r, F.Reftable r) => RType r -> TCM r (RType r)
--------------------------------------------------------------------------------
-unfoldSafeTC   t = getTDefs >>= \γ -> return $ unfoldSafe γ t
-
-
-
 --------------------------------------------------------------------------------
 --  Unification and Subtyping --------------------------------------------------
 --------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------
 unifyTypesM :: (Ord r, PP r, F.Reftable r) => 
-  SourceSpan -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
+  TDefEnv r -> SourceSpan -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
-unifyTypesM l msg t1s t2s
+unifyTypesM γ l msg t1s t2s
   -- TODO: This check might be done multiple times
   | length t1s /= length t2s = tcError $ errorArgMismatch l 
   | otherwise                = do θ <- getSubst 
-                                  γ <- getTDefs
                                   case unifys l γ θ t1s t2s of
                                     Left err' -> tcError $ catMessage err' msg 
                                     Right θ'  -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------
 unifyTypeM :: (Ord r, PrintfArg t1, PP r, PP a, F.Reftable r) =>
-  SourceSpan -> t1 -> a -> RType r -> RType r -> TCM r (RSubst r)
+  TDefEnv r -> SourceSpan -> t1 -> a -> RType r -> RType r -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
-unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
+unifyTypeM γ l m e t t' = unifyTypesM γ l msg [t] [t']
   where 
     msg               = ppshow $ errorWrongType l m e t t'
 
 
 ----------------------------------------------------------------------------------
-subTypeM :: (Ord r, PP r, F.Reftable r) => RType r -> RType r -> TCM r SubDirection
+subTypeM :: (Ord r, PP r, F.Reftable r) => 
+  TDefEnv r -> RType r -> RType r -> TCM r SubDirection
 ----------------------------------------------------------------------------------
-subTypeM t t' 
-  = do  θ            <- getTDefs 
-        -- let (_,_,_,d) = compareTs θ (trace ("CompareTs:\n" ++ ppshow t ++ "\nvs\n" ++ ppshow t' ++ "\n") t) t'
-        -- let (_,_,_,d) = tracePP ("CompareTs " ++ ppshow t ++ " : " ++ ppshow t') $ compareTs θ t t'
-        let (_,_,_,d) = compareTs θ t t'
-        return d
+subTypeM γ t t' = return $ fth4 (compareTs γ t t')
 
 ----------------------------------------------------------------------------------
-subTypeM' :: (IsLocated l, Ord r, PP r, F.Reftable r) => l -> RType r -> RType r -> TCM r ()
+subTypeM' :: (IsLocated l, Ord r, PP r, F.Reftable r) => 
+  TDefEnv r -> l -> RType r -> RType r -> TCM r ()
 ----------------------------------------------------------------------------------
 subTypeM' _ _ _  = error "unimplemented: subTypeM\'"
  
 ----------------------------------------------------------------------------------
-subTypesM :: (Ord r, PP r, F.Reftable r) => [RType r] -> [RType r] -> TCM r [SubDirection]
+subTypesM :: (Ord r, PP r, F.Reftable r) => 
+  TDefEnv r -> [RType r] -> [RType r] -> TCM r [SubDirection]
 ----------------------------------------------------------------------------------
-subTypesM ts ts' = zipWithM subTypeM ts ts'
+subTypesM γ ts ts' = zipWithM (subTypeM γ) ts ts'
 
 ----------------------------------------------------------------------------------
 checkAnnotation :: (F.Reftable r, PP r, Ord r) => 
-  String -> Expression (AnnSSA r) -> RType r -> RType r ->  TCM r (RType r) 
+  TDefEnv r -> String -> Expression (AnnSSA r) -> RType r -> RType r ->  TCM r (RType r) 
 ----------------------------------------------------------------------------------
-checkAnnotation msg e t ta = do
-    subTypeM t ta >>= sub
+checkAnnotation γ msg e t ta = do
+    subTypeM γ t ta >>= sub
   where
     sub SubT = return ta 
     sub EqT  = return ta
@@ -434,32 +395,22 @@ checkAnnotation msg e t ta = do
 --  Cast Helpers ---------------------------------------------------------------
 --------------------------------------------------------------------------------
 
------------------------------------------------------------------------------
--- withExpr  :: Maybe (Expression (AnnSSA r)) -> TCM r a -> TCM r a
--- -----------------------------------------------------------------------------
--- withExpr e action = 
---   do  eold  <- getExpr 
---       setExpr  e 
---       r     <- action 
---       setExpr  eold
---       return $ r
-
-
 -- | For the expression @e@, check the subtyping relation between the type @t@
 -- which is the actual type for @e@ and @t'@ which is the desired (cast) type
 -- and insert the right kind of cast. 
 --------------------------------------------------------------------------------
 castM :: (Ord r, PP r, F.Reftable r) => 
-           IContext -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
+  TDefEnv r -> IContext -> Expression (AnnSSA r) -> RType r -> RType r 
+    -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 -- Special case casting for objects 
-castM ξ e fromT toT | any isObj [fromT, toT] = subTypeM fromT toT >>= go
+castM γ ξ e fromT toT | any isObj [fromT, toT] = subTypeM γ fromT toT >>= go
   where
     go EqT          = return e
     go SubT         = addUpCast   ξ e toT
     go _            = addDeadCast ξ e toT
 
-castM ξ e fromT toT = subTypeM fromT toT >>= go
+castM γ ξ e fromT toT = subTypeM γ fromT toT >>= go
   where 
     go SupT         = addDownCast ξ e toT    
     go Rel          = addDownCast ξ e toT   

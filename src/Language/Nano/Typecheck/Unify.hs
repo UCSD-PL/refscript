@@ -46,7 +46,7 @@ import           Text.Printf
 -- definition environment @env@.
 -----------------------------------------------------------------------------
 unify :: (PP r, F.Reftable r, Ord r) => 
-  SourceSpan -> Env (RType r) -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
+  SourceSpan -> TDefEnv r -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 
 unify _ _ θ t@(TApp _ _ _           ) t'@(TApp _ _ _            )       
@@ -81,11 +81,6 @@ unify l γ θ t                         t'
   | any isUnion [t,t']
   = (uncurry $ unifys l γ θ) $ unzip $ fst3 $ unionPartsWithEq (unifEq γ) t t'
 
-unify l _ _   (TBd _                ) _                                 
-  = throw $ bugTBodiesOccur l "unify"
-unify l _ _ _                            (TBd _                 )       
-  = throw $ bugTBodiesOccur l "unify"
-
 unify l γ θ   (TObj bs1 _           )    (TObj bs2 _            )       
   | s1s == s2s        
   = unifys l γ θ (b_type <$> L.sortBy ord bs1) (b_type <$> L.sortBy ord bs2)
@@ -115,7 +110,7 @@ unifEq γ t t'                     = equiv γ t t'
 
 -----------------------------------------------------------------------------
 unifys ::  (PP r, F.Reftable r, Ord r) =>  
-  SourceSpan -> Env (RType r) -> RSubst r -> [RType r] -> [RType r] -> Either Error (RSubst r)
+  SourceSpan -> TDefEnv r -> RSubst r -> [RType r] -> [RType r] -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 unifys loc env θ xs ys = {- tracePP msg $ -} unifys' loc env θ xs ys 
    {-where -}

@@ -1,11 +1,14 @@
-class A {
+class Foo<A { 
 
-  /*@    a :: { number | v > 0 } */
-  public a = 10;
-
-  /*@ () => { number | v > 1 } */
-  public foo() {
-    return 2;  
+  public f /*@ A */ = 1;
+  
+  /*@ (x:A) => void */
+  constructor(x) {
+    this.f = x;
   }
 
 }
+
+var a = new Foo(1);
+
+assert(a.f == 1);

@@ -60,6 +60,8 @@ module Language.Nano.Typecheck.Types (
   , TyDef (..)
   , TVar (..)
   , TCon (..)
+  , RClass
+  , RClsElt(..)
 
   -- * Primitive Types
   , tInt
@@ -93,7 +95,6 @@ module Language.Nano.Typecheck.Types (
   , UFact
   , Fact (..)
   , Cast(..)
-  -- , varDeclAnnot
   , phiVarsAnnot
   , ClassInfo
 
@@ -102,7 +103,6 @@ module Language.Nano.Typecheck.Types (
   , AnnSSA , UAnnSSA
   , AnnType, UAnnType
   , AnnInfo, UAnnInfo
---  , SST
 
   -- * Contexts
   , CallSite (..)
@@ -117,8 +117,8 @@ module Language.Nano.Typecheck.Types (
 
   -- * Aliases
   , Alias (..)
-  , TAlias (..)
-  , PAlias (..)
+  , TAlias
+  , PAlias
   , PAliasEnv
   , TAliasEnv
 
@@ -129,7 +129,7 @@ module Language.Nano.Typecheck.Types (
 import           Text.Printf
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
-import           Data.Maybe                     (fromMaybe, listToMaybe)
+import           Data.Maybe                     (fromMaybe)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.List                      as L
 import qualified Data.HashMap.Strict            as M
@@ -138,7 +138,6 @@ import           Data.Typeable                  ()
 import           Language.ECMAScript3.Syntax    hiding (Cast)
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Parser.Type  (SourceSpan (..))
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
@@ -215,12 +214,11 @@ data RType r
 
 type RClass r = [ RClsElt r] 
 
-data RClsElt r 
-  = CB  { f_sym  :: F.Symbol      -- ^ Binding's symbol
-        , f_acc  :: Bool          -- ^ Access (public: true, private: false)
-        , f_sta  :: Bool          -- ^ Static or non-static
-        , f_type :: !(RType r)    -- ^ Field type
-        }
+data RClsElt r = CB  { f_sym  :: F.Symbol      -- ^ Binding's symbol
+                     , f_acc  :: Bool          -- ^ Access (public: true, private: false)
+                     , f_sta  :: Bool          -- ^ Static or non-static
+                     , f_type :: !(RType r)    -- ^ Field type
+                     }
 
 data Bind r
   = B { b_sym  :: F.Symbol      -- ^ Binding's symbol
@@ -246,8 +244,8 @@ ofType = fmap (const fTop)
 -- | `calleeType` uses the types at the callsite to extract the appropriate
 --   conjunct from an intersection.
 
-calleeType l ts ft@(TAnd fts) = L.find (argsMatch ts) fts
-calleeType _ _ ft             = Just ft
+calleeType _ ts (TAnd fts) = L.find (argsMatch ts) fts
+calleeType _ _ ft          = Just ft
 
 -- | `argsMatch ts ft` holds iff the arg-types in `ft` are identical to `ts` ... 
 argsMatch :: [RType a] -> RType b -> Bool
@@ -384,7 +382,7 @@ isUnion _              = False
 -- Get the top-level refinement for unions - use Top (True) otherwise
 rUnion               :: F.Reftable r => RType r -> r
 rUnion (TApp TUn _ r) = r
-rUnion t              = fTop
+rUnion _              = fTop
 
 -- Get the top-level refinement 
 rTypeR               :: RType r -> r
@@ -879,5 +877,5 @@ instance IsLocated (Alias a s t) where
   srcPos = srcPos . al_name
 
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
-  pp (Alias n αs πs body) = text "alias" <+> pp n <+> text "=" <+> pp body 
+  pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body 
 

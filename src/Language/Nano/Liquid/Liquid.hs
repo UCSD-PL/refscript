@@ -10,19 +10,16 @@ import           Text.Printf                        (printf)
 import           Control.Monad
 import           Control.Applicative                ((<$>))
 
-import qualified Data.ByteString.Lazy               as B
 import qualified Data.HashMap.Strict                as M
-import           Data.Maybe                         (isJust, fromMaybe, listToMaybe)
+import           Data.Maybe                         (fromMaybe, listToMaybe)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Parser.Type  (SourceSpan (..))
 
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
-import           Language.Fixpoint.Files
 import           Language.Fixpoint.Interface        (solve)
 
 import           Language.Nano.CmdLine              (getOpts)
@@ -30,13 +27,11 @@ import           Language.Nano.Errors
 import           Language.Nano.Misc
 import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
-import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck, patchTypeAnnots) 
 import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Typecheck.Lookup
-import           Language.Nano.Typecheck.Unfold
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Alias
@@ -44,7 +39,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -135,6 +130,7 @@ consStmts g stmts
 
 addStatementFunBinds g stmts = (mapM go $ concatMap getFunctionStatements stmts) >>= (`envAdds` g)
   where  go (FunctionStmt l f _ _) = (f,) <$> (freshTyFun g l f =<< getDefType f)
+         go _                      = error "addStatementFunBinds: Only function statements should be here"
 
 --------------------------------------------------------------------------------
 consStmt :: CGEnv -> Statement AnnTypeR -> CGM (Maybe CGEnv) 
@@ -153,7 +149,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
   = consAsgn g l (Id lx x) e
 
 -- e1.fld = e2
-consStmt g (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
+consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
   = do (tfld, _) <- consPropRead getProp g l1 e1 fld
        (x2,  g') <- consExpr  g  e2
        let t2     = envFindTy x2 g'
@@ -212,7 +208,7 @@ consStmt g s@(FunctionStmt _ _ _ _)
   = Just <$> consFun g s
 
 -- class A [extends B] [implements I,J,...] { ... }
-consStmt g c@(ClassStmt l i e is ce)
+consStmt g (ClassStmt _ i _ _ ce)
   = case clsTOpt of
       Just clsT -> do
         cgWithThis clsT $ mapM_ (consClassElt g) ce
@@ -230,7 +226,7 @@ consStmt _ s
 ------------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
-consVarDecl g v@(VarDecl l x (Just e)) 
+consVarDecl g (VarDecl l x (Just e)) 
   = consAsgn g l x e
 
 consVarDecl g (VarDecl l x Nothing)
@@ -245,12 +241,12 @@ consClassElt g (Constructor l xs body) = consClassEltAux l i f
   where i    = Id l "constructor"
         f ft = cgFunTys l i xs ft >>= mapM_ (consFun1 l g i xs body)
 
-consClassElt g (MemberVarDecl l m s v) = 
+consClassElt g (MemberVarDecl _ _ _ v) = 
   -- We can still use the class type annotation for this field.
   -- This should be annotating `v`.
   void $ consVarDecl g v
   
-consClassElt g (MemberMethDecl l m s i xs body) = consClassEltAux l i f
+consClassElt g (MemberMethDecl l _ _ i xs body) = consClassEltAux l i f
     where f ft = cgFunTys l i xs ft >>= mapM_ (consFun1 l g i xs body)
 
 ------------------------------------------------------------------------------------
@@ -269,7 +265,7 @@ consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, 
 consExprT g (ObjectLit l ps) to
   = consObjT l g ps to
 
-consExprT g e@(ArrayLit l es) (Just t)
+consExprT g e@(ArrayLit l _) (Just t)
   = do (x, g')  <- consExpr g e
        let te    = envFindTy x g'
        subTypeContainers "consExprT" l g' te t
@@ -358,11 +354,11 @@ consExpr g (BracketRef l e1 e2)
   = consCall g l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ renv g 
 
 -- e1[e2] = e3
-consExpr g (AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
+consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3)
   = consCall g l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ renv g
 
 -- [e1,...,en]
-consExpr g e@(ArrayLit l es)
+consExpr g (ArrayLit l es)
   = consCall g l BIArrayLit es $ arrayLitTy l (length es) $ renv g
 
 -- {f1:e1,...,fn:en}
@@ -395,6 +391,7 @@ consCast g a e
                           Nothing        -> return (x, g')
                           Just (UCST t)  -> consUpCast   g' l x t
                           Just (DCST t)  -> consDownCast g' l x t
+                          _              -> error "consCast:This shouldn't happen"
     where 
       l              = srcPos a
 
@@ -524,7 +521,7 @@ consPropRead getter g l e fld
       let tx          = envFindTy x g'
       (this, g'')    <- envAddFresh "this" l tx g
       case getter l (renv g'') (tenv g) fld tx of
-        Just (tObj, tf) -> 
+        Just (_, tf) -> 
           do
             let tf'   = F.substa (sf (F.symbol "this") (F.symbol this)) tf
             g'''     <- envAddFresh "consPropRead" l tf' g''

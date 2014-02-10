@@ -42,13 +42,9 @@ import           Data.Monoid
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Errors
-import           Language.Nano.Env
 import           Language.Nano.Misc
-import           Language.Nano.Types                (IsLocated(..))
 import           Language.Nano.Typecheck.Types
-import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Unfold
-import           Language.Nano.Liquid.Types
 
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types            as F
@@ -504,15 +500,8 @@ meetBinds b1s b2s = M.toList $ M.intersectionWith (,) (bindsMap b1s) (bindsMap b
 
 -- | `bkPaddedObject` breaks one level of padded objects
 
-bkPaddedObject l t1@(TObj xt1s _) t2@(TObj xt2s _) 
-  = snd <$> cmn
-  {-| n == n1 && n == n2 = snd <$> cmn-}
-  {-| otherwise          = die $ bugMalignedFields l t1 t2-}
-    where
-      cmn              = meetBinds xt1s xt2s
-      n                = length cmn
-      n1               = length xt1s
-      n2               = length xt2s
+bkPaddedObject _ (TObj xt1s _) (TObj xt2s _) = snd <$> cmn
+  where cmn              = meetBinds xt1s xt2s
 
 bkPaddedObject l _ _   = die $ bug l $ "bkPaddedObject: can only break objects"
 
@@ -598,10 +587,7 @@ zipType2 γ f (TFun xts t r) (TFun xts' t' r') =
   TFun (safeZipWith "zipType2:TFun" (zipBind2 γ f) xts xts') (zipType2 γ f t t') $ f r r'
 
 zipType2 γ f (TObj bs r) (TObj bs' r') = TObj mbs $ f r r'
-  where
-    _   = safeZipWith "zipType2:TObj" (zipBind2 γ f) (L.sortBy compB bs) (L.sortBy compB bs')
-    mbs = (\(s,(t,t')) -> B s $ zipType2 γ f t t') <$> meetBinds bs bs' 
-    compB (B s _) (B s' _) = compare s s'
+  where mbs = (\(s,(t,t')) -> B s $ zipType2 γ f t t') <$> meetBinds bs bs' 
 
 zipType2 γ f (TArr t r) (TArr t' r') = TArr (zipType2 γ f t t') $ f r r'
 

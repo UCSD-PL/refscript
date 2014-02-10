@@ -78,7 +78,7 @@ module Language.Nano.Liquid.CGMonad (
 
   ) where
 
-import           Data.Maybe                     (fromMaybe, catMaybes, isJust, listToMaybe)
+import           Data.Maybe                     (fromMaybe, listToMaybe)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 
@@ -89,7 +89,6 @@ import           Language.Nano.Types
 import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
 import qualified Language.Nano.Env              as E
-import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types 
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Unfold
@@ -110,10 +109,9 @@ import           Control.Monad.Error hiding (Error)
 import           Text.Printf 
 
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Parser.Type   (SourceSpan (..))
 import           Language.ECMAScript3.PrettyPrint
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation ----------------------
@@ -176,19 +174,6 @@ patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
 
 
 -- | Get binding from object type
-
--- Only support indexing in arrays atm. Discharging array bounds checks makes
--- sense only for array types. 
--------------------------------------------------------------------------------
-indexType :: RefType -> CGM RefType
--------------------------------------------------------------------------------
-indexType (TArr t _) = return t
-indexType t@(TApp TUn ts r) = do
-    ts' <- mapM indexType ts
-    return $ TApp TUn ts' fTop
-indexType _          = errorstar "Unimplemented: indexing type other than array."
-
-
 
 ---------------------------------------------------------------------------------------
 measureEnv   ::  Nano a (RType F.Reft) -> F.SEnv F.SortedReft
@@ -409,16 +394,6 @@ freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-subTypes :: (IsLocated x, F.Expression x, F.Symbolic x) 
-         => AnnTypeR -> CGEnv -> [x] -> [RefType] -> CGM ()
----------------------------------------------------------------------------------------
-subTypes l g xs ts      = zipWithM_ (subType l g)      [envFindTy x g | x <- xs] ts
-
-
-subTypes' msg l g xs ts = zipWithM_ (subType' msg l g) [envFindTy x g | x <- xs] ts
-
--- | Subtyping
----------------------------------------------------------------------------------------
 subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 =
@@ -445,8 +420,8 @@ subType l g t1 t2 =
     
     
 -- A more verbose version
-subType' msg l g t1 t2 = 
-  subType l g (trace (printf "SubType[%s]:\n\t%s\n\t%s" msg (ppshow t1) (ppshow t2)) t1) t2
+-- subType' msg l g t1 t2 = 
+--   subType l g (trace (printf "SubType[%s]:\n\t%s\n\t%s" msg (ppshow t1) (ppshow t2)) t1) t2
 
 -------------------------------------------------------------------------------
 equivWUnions :: E.Env (TyDef RefType) -> RefType -> RefType -> Bool
@@ -478,11 +453,11 @@ equivWUnionsM γ t t' = return $ equivWUnions γ t t'
 -------------------------------------------------------------------------------
 subTypeContainers :: (IsLocated l) => String -> l -> CGEnv -> RefType -> RefType -> CGM ()
 -------------------------------------------------------------------------------
-subTypeContainers msg l g t1 t2 = subType l g t1 t2
-    where 
-      msg'                      = render $ text "subTypeContainers:" 
-                                           $+$ text "  t1 =" <+> pp t1
-                                           $+$ text "  t2 =" <+> pp t2
+subTypeContainers {- msg -} _ l g t1 t2 = subType l g t1 t2
+    {-where -}
+    {-  msg'                      = render $ text "subTypeContainers:" -}
+    {-                                       $+$ text "  t1 =" <+> pp t1-}
+    {-                                       $+$ text "  t2 =" <+> pp t2-}
 
 
 -------------------------------------------------------------------------------

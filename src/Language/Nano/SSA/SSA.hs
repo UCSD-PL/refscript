@@ -16,11 +16,8 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.SSA.SSAMonad
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
-import           Language.ECMAScript3.Parser.Type   (SourceSpan (..))
-import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc             
 import qualified Language.Fixpoint.Types            as F
-import           Text.Printf                        (printf)
 -- import           Debug.Trace                        hiding (traceShow)
 
 ----------------------------------------------------------------------------------
@@ -194,7 +191,7 @@ ssaStmt s@(FunctionStmt _ _ _ _)
   = (True,) <$> ssaFun s
 
 -- switch (e) { ... }
-ssaStmt s@(SwitchStmt l e xs) 
+ssaStmt (SwitchStmt l e xs) 
   = do
       id <- updSsaEnv (an e) (Id (an e) "__switchVar")
       let go (l, e, s) i = IfStmt (an s) (InfixExpr l OpStrictEq (VarRef l id) e) s i
@@ -212,7 +209,7 @@ ssaStmt s@(SwitchStmt l e xs)
       headWithDefault _ xs = head xs
 
 -- class A extends B implements I,J,... { ... }
-ssaStmt s@(ClassStmt l n e is bd) =  
+ssaStmt (ClassStmt l n e is bd) =  
   ssaSeq ssaClassElt bd >>= return . mapSnd (ClassStmt l n e is)
 
 -- OTHER (Not handled)

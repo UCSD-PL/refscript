@@ -11,24 +11,19 @@ module Language.Nano.Typecheck.Parse (
   ) where
 
 import           Data.List (sort)
-import qualified Data.Foldable                      as F
-import           Data.Maybe (fromMaybe, maybeToList)
+import           Data.Maybe (maybeToList)
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import qualified Data.HashMap.Strict                as M 
 import           Data.Data
-import           Data.Typeable
 import           Control.Monad
-import           Control.Exception (throw)
 import           Text.Parsec
 import           Text.PrettyPrint.HughesPJ          (text, (<+>))
 import qualified Text.Parsec.Token as Token
-import           Control.Applicative ((<$>), (<*), (<*>))
-import           Control.Monad.Identity
-import           Data.Char (toLower, isLower, isSpace) 
-import           Data.Monoid (Monoid, mappend, mconcat, mempty)
+import           Control.Applicative ((<$>), (<*>))
+import           Data.Char (isLower, isSpace) 
+import           Data.Monoid (Monoid, mconcat)
 
-import           Language.Fixpoint.Names (propConName)
 import           Language.Fixpoint.Types hiding (quals, Loc)
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Parse 
@@ -43,16 +38,13 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
 
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Syntax.Annotations   (getAnnotation)
-import           Language.ECMAScript3.Parser        ( parseJavaScriptFromFile',
-                                                      initialParserState )
-import           Language.ECMAScript3.Parser.Type   ( SourceSpan (..))
+import           Language.ECMAScript3.Parser        ( parseJavaScriptFromFile')
 import           Language.ECMAScript3.Parser.Type hiding (Parser)
 
 import           Language.ECMAScript3.PrettyPrint
 
 
-import           Debug.Trace                        (trace, traceShow)
+-- import           Debug.Trace                        (trace, traceShow)
 
 dot        = Token.dot        lexer
 plus       = Token.symbol     lexer "+"
@@ -133,8 +125,8 @@ rUnP      = mkUn <$> bareTypeNoUnionP `sepBy1` plus
 
 bUnP      = bareTypeNoUnionP `sepBy1` plus >>= ifSingle return (\xs -> TApp TUn xs <$> topP)
   where
-    ifSingle f g [x] = f x
-    ifSingle f g xs  = g xs
+    ifSingle f _ [x] = f x
+    ifSingle _ g xs  = g xs
 
 mkUn [a] = strengthen a
 mkUn ts  = TApp TUn (sort ts)
@@ -149,7 +141,6 @@ funcSigP          =
   <|> try bareFun1P
   <|>     (intersectP bareFun1P)
 
-wAndP p           = try p                 <|> intersectP p
 intersectP p      = tAnd <$> many1 (reserved "/\\" >> p)
 
 -- | `bareFun1P` parses a single function type
@@ -287,26 +278,6 @@ binderP = try (stringSymbol <$> idP badc)
 -- grabs p = try (liftM2 (:) p (grabs p)) 
 --        <|> return []
 
----------------------------------------------------------------------
------------- Interacting with Fixpoint ------------------------------
----------------------------------------------------------------------
-
-grabUpto p  
-  =  try (lookAhead p >>= return . Just)
- <|> try (eof         >> return Nothing)
- <|> (anyChar >> grabUpto p)
-
-betweenMany leftP rightP p 
-  = do z <- grabUpto leftP
-       case z of
-         Just _  -> liftM2 (:) (between leftP rightP p) (betweenMany leftP rightP p)
-         Nothing -> return []
-
-specWraps :: Parser a -> Parser [a] 
-specWraps = betweenMany start stop
-  where 
-    start = string "/*@" >> spaces
-    stop  = spaces >> string "*/"
 
 ---------------------------------------------------------------------------------
 -- | Specifications
@@ -333,10 +304,10 @@ specP
   <|>     (reserved "extern"    >> (Extern <$> idBindP    ))
 
 instance (PP l, PP t) => PP (PSpec l t) where
-  pp (Meas (i, t))   = text "measure: " <+> pp i
+  pp (Meas (i, _))   = text "measure: " <+> pp i
   pp (Bind (i, t))   = text "bind: " <+>  pp i <+> text " :: " <+> pp t
   pp (Extern (i, t)) = text "extern: " <+>  pp i <+> text " :: " <+> pp t
-  pp (Type (i, t))   = text "Type:TODO"
+  pp (Type _)        = text "Type:TODO"
   pp (Talias _)      = text "Talias:TODO"
   pp (Palias _)      = text "Palias:TODO"
   pp (Qual _)        = text "Qual:TODO"
@@ -466,12 +437,6 @@ definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
   where 
     fromFunction (FunctionStmt _ x _ _) = [x] 
     fromFunction _                      = []
-
-definedVars          :: [Statement SourceSpan] -> [Id SourceSpan]
-definedVars stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
-  where 
-    fromVarDecl (VarDeclStmt _ ds) = [x | VarDecl _ x (Just _) <- ds]
-    fromVarDecl _                  = []
 
 varDeclStmts         :: [Statement SourceSpan] -> [Statement SourceSpan]
 varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts

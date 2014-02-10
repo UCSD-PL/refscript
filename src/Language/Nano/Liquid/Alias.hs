@@ -7,8 +7,6 @@ import           Data.Generics.Schemes
 import           Control.Applicative ((<$>))
 import           Control.Monad
 import           Control.Monad.State
-import           Control.Monad.Error hiding (Error)
-import           Text.Printf 
 
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types as F

@@ -31,7 +31,6 @@ import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc             (inserts)
 import qualified Language.Fixpoint.Types    as F
 import           Language.ECMAScript3.PrettyPrint   
-import           Language.ECMAScript3.Parser.Type   (SourceSpan (..))
 import           Text.Parsec.Pos                   
 import           Language.Nano.Types
 import           Language.Nano.Errors

@@ -57,7 +57,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Regular Types
   , Type
-  , TBody (..)
+  , TyDef (..)
   , TVar (..)
   , TCon (..)
 
@@ -78,6 +78,9 @@ module Language.Nano.Typecheck.Types (
   , isArr
   , isTFun
   , fTop
+
+  -- * Environment Alias
+  , TDefEnv
 
   -- * Operator Types
   , infixOpTy
@@ -176,12 +179,14 @@ instance F.Symbolic a => F.Symbolic (Located a) where
   symbol = F.symbol . val
 
 -- | Constructed Type Bodies
-data TBody r 
-   = TD { td_con  :: !TCon          -- TDef name ...
-        , td_args :: ![TVar]        -- Type variables
-        , td_body :: !(RType r)     -- int or bool or fun or object ...
-        , td_pos  :: !SourceSpan    -- Source position
-        } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+data TyDef t = TD { td_con  :: !(Id SourceSpan) -- TDef name ...
+                  , td_args :: ![TVar]          -- Type variables
+                  , td_body :: t                -- int or bool or fun or object ...
+                  , td_pos  :: !SourceSpan      -- Source position
+                  } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+
+type TDefEnv r  = Env (TyDef (RType r))
+                
 
 -- | Type Constructors
 data TCon 
@@ -203,15 +208,23 @@ data RType r
   | TFun [Bind r] (RType r) r   -- ^ (x1:T1,...,xn:Tn) => T
   | TObj [Bind r]           r   -- ^ {f1:T1,...,fn:Tn} 
   | TArr (RType r)          r   -- ^ [T] 
-  | TBd  (TBody r)              -- ^ ???
   | TAll TVar (RType r)         -- ^ forall A. T
   | TAnd [RType r]              -- ^ (T1..) => T1' /\ ... /\ (Tn..) => Tn' 
   | TExp F.Expr                 -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
     deriving (Ord, Show, Functor, Data, Typeable)
 
+type RClass r = [ RClsElt r] 
+
+data RClsElt r 
+  = CB  { f_sym  :: F.Symbol      -- ^ Binding's symbol
+        , f_acc  :: Bool          -- ^ Access (public: true, private: false)
+        , f_sta  :: Bool          -- ^ Static or non-static
+        , f_type :: !(RType r)    -- ^ Field type
+        }
+
 data Bind r
-  = B { b_sym  :: F.Symbol
-      , b_type :: !(RType r)
+  = B { b_sym  :: F.Symbol      -- ^ Binding's symbol
+      , b_type :: !(RType r)    -- ^ Field type
       } 
     deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
@@ -380,7 +393,7 @@ rTypeR (TVar _ r   ) = r
 rTypeR (TFun _ _ r ) = r
 rTypeR (TObj _ r   ) = r
 rTypeR (TArr _ r   ) = r
-rTypeR (TBd  _     ) = errorstar "Unimplemented: rTypeR - TBd"
+-- rTypeR (TBd  _     ) = errorstar "Unimplemented: rTypeR - TBd"
 rTypeR (TAll _ _   ) = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )     = errorstar "Unimplemented: rTypeR - TAnd"
 rTypeR (TExp _)      = errorstar "Unimplemented: rTypeR - TExp"
@@ -402,7 +415,6 @@ noUnion (TApp _  rs _)  = and $ map noUnion rs
 noUnion (TFun bs rt _)  = and $ map noUnion $ rt : (map b_type bs)
 noUnion (TObj bs    _)  = and $ map noUnion $ map b_type bs
 noUnion (TArr t     _)  = noUnion t
-noUnion (TBd  _      )  = error "noUnion: cannot have TBodies here"
 noUnion (TAll _ t    )  = noUnion t
 noUnion _               = True
 
@@ -429,7 +441,6 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
   TFun b1 t1 r1       == TFun b2 t2 r2       = (b1, t1, r1)   == (b2, t2, r2)
   TObj b1 r1          == TObj b2 r2          = (null $ b1 L.\\ b2) && (null $ b2 L.\\ b1) && r1 == r2
   TArr t1 r1          == TArr t2 r2          = t1 == t2 && r1 == r2
-  TBd (TD c1 a1 b1 _) == TBd (TD c2 a2 b2 _) = (c1, a1, b1)   == (c2, a2, b2)
   TAll v1 t1          == TAll v2 t2          = v1 == v2 && t1 == t2   -- Very strict Eq here
   _                   == _                   = False
 
@@ -444,7 +455,7 @@ data Nano a t = Nano { code   :: !(Source a)               -- ^ Code to check
                      , chSpecs:: !(Env t)                  -- ^ Checked specifications (signatures and annotations)
                      , tAnns  :: !(M.HashMap SourceSpan t) -- ^ Mapping from source positions to annotations
                      , consts :: !(Env t)                  -- ^ Measure Signatures
-                     , defs   :: !(Env t)                  -- ^ Type definitions
+                     , defs   :: !(Env (TyDef t))          -- ^ Type definitions
 							       , tAlias :: !(TAliasEnv t)            -- ^ Type aliases
                      , pAlias :: !(PAliasEnv)              -- ^ Predicate aliases
                      , quals  :: ![F.Qualifier]            -- ^ Qualifiers
@@ -483,7 +494,7 @@ instance Monoid (Source a) where
 instance Functor Source where 
   fmap f (Src zs) = Src (map (fmap f) zs)
 
-instance (PP t, PP F.Reft) => PP (Nano a t) where
+instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
   pp pgm@(Nano {code = (Src s) }) 
     =   text "******************* Code **********************"
     $+$ pp s
@@ -493,8 +504,8 @@ instance (PP t, PP F.Reft) => PP (Nano a t) where
     $+$ pp (chSpecs pgm)
     $+$ text "******************* Constants *****************"
     $+$ pp (consts pgm) 
-    $+$ text "******************* Type Definitions **********"
-    $+$ pp (defs  pgm)
+    {-$+$ text "******************* Type Definitions **********"-}
+    {-$+$ pp (defs  pgm)-}
     $+$ text "******************* Predicate Aliases *********"
     $+$ pp (pAlias pgm)
     $+$ text "******************* Type Aliases **************"
@@ -504,6 +515,9 @@ instance (PP t, PP F.Reft) => PP (Nano a t) where
     $+$ text "******************* Invariants ****************"
     $+$ pp (invts pgm) 
     $+$ text "***********************************************"
+
+{-instance (PP r) => PP (TyDef r) where-}
+{-  pp (TD id v r _) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r-}
     
 instance Monoid (Nano a t) where 
   mempty        = Nano mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty 
@@ -579,8 +593,6 @@ instance F.Reftable r => PP (RType r) where
   pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
   pp (TArr t r)                 = F.ppTy r $ brackets (pp t)  
   pp (TObj bs r )               = F.ppTy r $ ppArgs braces comma bs
-  pp (TBd (TD (TDef id) v r _)) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r
-  pp (TBd _)                    = error "This is not an acceptable form for TBody" 
 
 instance PP TCon where
   pp TInt             = text "Int"
@@ -605,7 +617,7 @@ instance Hashable TCon where
   hashWithSalt s (TDef z)    = hashWithSalt s (8 :: Int) + hashWithSalt s z
 
 instance F.Reftable r => PP (Bind r) where 
-  pp (B x t)        = pp x <> colon <> pp t 
+  pp (B x t)          = pp x <> colon <> pp t 
 
 ppArgs p sep          = p . intersperse sep . map pp
 ppTC TInt             = text "Int"

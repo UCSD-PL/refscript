@@ -449,7 +449,7 @@ subType' msg l g t1 t2 =
   subType l g (trace (printf "SubType[%s]:\n\t%s\n\t%s" msg (ppshow t1) (ppshow t2)) t1) t2
 
 -------------------------------------------------------------------------------
-equivWUnions :: E.Env RefType -> RefType -> RefType -> Bool
+equivWUnions :: E.Env (TyDef RefType) -> RefType -> RefType -> Bool
 -------------------------------------------------------------------------------
 equivWUnions γ t1@(TApp TUn _ _) t2@(TApp TUn _ _) = 
   {-let msg = printf "In equivWUnions:\n%s - \n%s" (ppshow t1) (ppshow t2) in -}

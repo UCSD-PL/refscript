@@ -76,7 +76,7 @@ class Equivalent e a where
 instance Equivalent e a => Equivalent e [a] where
   equiv γ a b = and $ zipWith (equiv γ) a b 
 
-instance (PP r, F.Reftable r) => Equivalent (Env (RType r)) (RType r) where 
+instance (PP r, F.Reftable r) => Equivalent (TDefEnv r) (RType r) where 
 
   equiv _ t t'  | toType t == toType t'               = True
   
@@ -99,13 +99,11 @@ instance (PP r, F.Reftable r) => Equivalent (Env (RType r)) (RType r) where
   -- Any two objects can be combined - so they should be equivalent
   equiv _ (TObj _ _  )         (TObj _ _   )          = True
   
-  equiv _ (TBd _     )         (TBd _      )          = errorstar "equiv: no type bodies"
-  
   equiv _ (TAll _ _   )        (TAll _ _ )            = error "equiv-tall"
     -- t `equiv` apply (fromList [(v',tVar v)]) t'
   equiv _ _                    _                      = False
 
-instance (PP r, F.Reftable r) => Equivalent (Env (RType r)) (Bind r) where 
+instance (PP r, F.Reftable r) => Equivalent (TDefEnv r) (Bind r) where 
   equiv γ (B s t) (B s' t') = s == s' && equiv γ t t' 
 
 instance Equivalent e (Id a) where 
@@ -203,11 +201,11 @@ arrDir Nth  = Nth
 ---------------------------------------------------------------------------------
 -- SubType API ------------------------------------------------------------------
 ---------------------------------------------------------------------------------
-isSubType :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r -> Bool
+isSubType :: (F.Reftable r, Ord r, PP r) => TDefEnv r -> RType r -> RType r -> Bool
 isSubType γ t1 t2 = (fth4 $ compareTs γ t1 t2) `elem` [EqT, SubT]
 
 
-eqType :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r -> Bool
+eqType :: (F.Reftable r, Ord r, PP r) => TDefEnv r -> RType r -> RType r -> Bool
 eqType γ t1 t2 = (fth4 $ compareTs γ t1 t2) == EqT
 
 
@@ -228,7 +226,7 @@ alignTs γ t1 t2     = (t1', t2')
 --
 -- Padding the input types gives them the same sort, i.e. makes them compatible. 
 ---------------------------------------------------------------------------------------
-compareTs :: (F.Reftable r, Ord r, PP r) => Env (RType r) -> RType r -> RType r -> 
+compareTs :: (F.Reftable r, Ord r, PP r) => TDefEnv r -> RType r -> RType r -> 
                                   (RType r, RType r, RType r, SubDirection)
 ---------------------------------------------------------------------------------------
 -- Deal with some standard cases of subtyping, e.g.: Top, Null, Undefined ...
@@ -279,7 +277,7 @@ compareTs' γ (TApp d1@(TDef _) t1s r1) (TApp d2@(TDef _) t2s r2) | d1 == d2 =
 
 compareTs' γ t1@(TApp (TDef _) _ _) t2       = compareTs γ (unfoldSafe γ t1) t2
 compareTs' γ t1 t2@(TApp (TDef _) _ _)       = compareTs γ t1 (unfoldSafe γ t2)
-
+ 
 -- | Everything else in TApp besides unions and defined types
 compareTs' _ t1@(TApp _ _ _) t2@(TApp _ _ _) = padSimple t1 t2 
 
@@ -294,10 +292,6 @@ compareTs' _ _               (TFun _ _ _)    = error "Unimplemented compareTs-2"
 -- | TAll
 compareTs' _ (TAll _ _  ) _                  = error "Unimplemented: compareTs-3"
 compareTs' _ _            (TAll _ _  )       = error "Unimplemented: compareTs-4"
-
--- | TBd
-compareTs' _ _            (TBd  _    )       = error "Unimplemented: compareTs-5"
-compareTs' _ (TBd  _    ) _                  = error "Unimplemented: compareTs-6"
 
 -- | Rest of cases
 
@@ -344,7 +338,7 @@ padVar t1 t2 = errorstar $ printf "padVar: cannot compare %s and %s" (ppshow t1)
 --                              unrelated )
 --------------------------------------------------------------------------------
 padUnion ::  (Eq r, Ord r, F.Reftable r, PP r) => 
-             Env (RType r)    -- Type defs
+             TDefEnv r    -- Type defs
           -> RType r          -- LHS
           -> RType r          -- RHS
           -> (  RType r,        -- The join of the two types
@@ -392,7 +386,7 @@ padUnion env t1 t2 =
 
 --------------------------------------------------------------------------------
 bkPaddedUnion :: (Eq r, Ord r, F.Reftable r, PP r) => 
-  String -> Env (RType r) -> RType r -> RType r -> [(RType r, RType r)]
+  String -> TDefEnv r -> RType r -> RType r -> [(RType r, RType r)]
 --------------------------------------------------------------------------------
 bkPaddedUnion msg γ t1 t2 =
   zipWith check (bkUnion t1) (bkUnion t2)
@@ -410,8 +404,7 @@ bkPaddedUnion msg γ t1 t2 =
 -- equivalence relation.
 --------------------------------------------------------------------------------
 unionParts ::  (Eq r, Ord r, F.Reftable r, PP r) => 
-            Env (RType r) -> RType r -> RType r 
-          -> ([(RType r, RType r)], [RType r], [RType r])
+  TDefEnv r -> RType r -> RType r -> ([(RType r, RType r)], [RType r], [RType r])
 --------------------------------------------------------------------------------
 
 unionParts = unionPartsWithEq . equiv
@@ -472,7 +465,7 @@ unionPartsWithEq equal t1 t2 = (common t1s t2s, d1s, d2s)
 --                                  :> )                              
 --------------------------------------------------------------------------------
 padObject :: (Eq r, Ord r, F.Reftable r, PP r) => 
-             Env (RType r) -> RType r -> RType r -> 
+             TDefEnv r -> RType r -> RType r -> 
                (RType r, RType r, RType r, SubDirection)
 --------------------------------------------------------------------------------
 
@@ -576,7 +569,7 @@ zipType1 γ f t1 t2 = zipType2 γ f t2 t1
 -- output as the resulting refinement. 
 -- The shape of @t2@ is preserved in the output.
 --------------------------------------------------------------------------------
-zipType2 :: (PP r, F.Reftable r) => Env (RType r) -> (r -> r -> r) ->  RType r -> RType r -> RType r
+zipType2 :: (PP r, F.Reftable r) => TDefEnv r -> (r -> r -> r) ->  RType r -> RType r -> RType r
 --------------------------------------------------------------------------------
 zipType2 γ f (TApp TUn ts r) (TApp TUn ts' r')  = 
   TApp TUn (zipTypes γ f ts <$> ts') $ f r r'

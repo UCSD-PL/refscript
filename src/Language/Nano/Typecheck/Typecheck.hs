@@ -163,8 +163,11 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs
     fs''              = [f | f@(Overload (Just _)) <- M.lookupDefault [] l m]
 
 -- Initalize the environment with all the available specs!
-initEnv pgm           = TCE (envUnion (specs pgm) (chSpecs pgm)) (chSpecs pgm) 
-                            classEnv emptyContext
+initEnv pgm           = TCE (envUnion (specs pgm) (chSpecs pgm)) 
+                            (defs pgm)
+                            (chSpecs pgm) 
+                            classEnv 
+                            emptyContext
   where classEnv      = envFromList [ (s, ClassStmt l s e i b) | let Src ss = code pgm
                                                                , ClassStmt l s e i b <- ss ]
 
@@ -211,23 +214,26 @@ checkTypeDefs pgm = reportAll $ grep
 
 
 data TCEnv r  = TCE { tce_env  :: Env (RType r)
-                    -- ^ Program specs. Includes functions and class types
-                    -- _after_ they have been computed.
-                    , tce_spec :: Env (RType r)               
+                    , tce_defs :: TDefEnv r                   -- ^ (Data) Type definitions
+                    , tce_spec :: Env (RType r)               -- ^ Program specs. Includes:
+                                                              --    * functions 
+                                                              --    * class types (after being computed)
                     , tce_cls  :: Env (Statement (AnnSSA r))  -- ^ Class definitions
                     , tce_ctx  :: !IContext 
                     }
 
 type TCEnvO r = Maybe (TCEnv r)
 
+instance (PP r, F.Reftable r) => Substitutable r (TyDef (RType r)) where
+  apply θ (TD c v t s) = TD c v (apply θ t) s
+
 instance (PP r, F.Reftable r) => Substitutable r (TCEnv r) where 
-  apply θ (TCE m sp cl c) = TCE (apply θ m) (apply θ sp) cl c 
-  -- Not doing the application on the class env
+  apply θ (TCE m d sp cl c) = TCE (apply θ m) (apply θ d) (apply θ sp) cl c 
 
 instance (PP r, F.Reftable r) => PP (TCEnv r) where
   pp = ppTCEnv
 
-ppTCEnv (TCE env spc _ ctx) 
+ppTCEnv (TCE env _ spc _ ctx) 
   =   text "******************** Environment ************************"
   $+$ pp env
   $+$ text "******************** Specifications *********************"
@@ -294,10 +300,11 @@ tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l body t
   where 
     γ'                              = envAddFun f i αs xs ts t γ 
 
-tcFunBody γ l body t = liftM2 (,) (tcStmts γ body) getTDefs >>= ret
-  where
-    ret ((_, Just _), d) | not (isSubType d t tVoid) = tcError $ errorMissingReturn (srcPos l)
-    ret ((b, _     ), _) | otherwise                 = return b
+tcFunBody γ l body t = tcStmts γ body >>= go
+  where go (_, Just _) | not (isSubType (tce_defs γ) t tVoid) 
+                       = tcError $ errorMissingReturn (srcPos l)
+        go (b, _     ) | otherwise                        
+                       = return b
 
 -------------------------------------------------------------------------------
 envAddFun :: (F.Reftable r, IsLocated c, IsLocated a, CallSite b) =>
@@ -392,7 +399,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
   = do (e1', tfld) <- tcPropRead getProp γ l e1 fld
        (e2', t2)   <- tcExpr γ $ e2                    
-       e2''        <- castM  ξ e2' t2 tfld
+       e2''        <- castM (tce_defs γ) ξ e2' t2 tfld
        return         (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' fld) e2''), Just γ)
     where
        ξ            = tce_ctx γ
@@ -414,7 +421,7 @@ tcStmt γ (IfSingleStmt l b s)
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
   = do (e', t)   <- tcExpr γ e 
-       unifyTypeM (srcPos l) "If condition" e t tBool
+       unifyTypeM (tce_defs γ) (srcPos l) "If condition" e t tBool
        (s1', γ1) <- tcStmt γ s1
        (s2', γ2) <- tcStmt γ s2
        z         <- envJoin l γ γ1 γ2
@@ -423,7 +430,7 @@ tcStmt γ (IfStmt l e s1 s2)
 -- while c { b } ; exit environment is entry as may skip. SSA adds phi-asgn prior to while.
 tcStmt γ (WhileStmt l c b) 
   = do (c', t)   <- tcExpr γ c
-       unifyTypeM (srcPos l) "While condition" c t tBool
+       unifyTypeM (tce_defs γ) (srcPos l) "While condition" c t tBool
        (b', _)   <- tcStmt γ' b
        return       (WhileStmt l c' b', Just γ)  
     where 
@@ -441,13 +448,13 @@ tcStmt γ (ReturnStmt l eo)
                          Nothing -> return (Nothing, tVoid)
                          Just e  -> mapFst Just <$>  tcExpr γ e
         let rt       = tcEnvFindReturn γ 
-        θ           <- unifyTypeM (srcPos l) "Return" eo t rt
+        θ           <- unifyTypeM (tce_defs γ) (srcPos l) "Return" eo t rt
         -- Apply the substitution
         let (rt',t') = mapPair (apply θ) (rt,t)
         -- Subtype the arguments against the formals and cast using subtyping result
         eo''        <- case eo' of
                         Nothing -> return Nothing
-                        Just e' -> Just <$> castM (tce_ctx γ) e' t' rt'
+                        Just e' -> Just <$> castM (tce_defs γ) (tce_ctx γ) e' t' rt'
         return (ReturnStmt l eo'', Nothing)
 
 tcStmt γ s@(FunctionStmt _ _ _ _)
@@ -471,15 +478,12 @@ classType :: (Ord r, PP r, F.Reftable r)
           => TCEnv r -> Statement (AnnSSA r) -> TCM r (RType r)
 ---------------------------------------------------------------------------------------
 classType γ (ClassStmt l id (Just parent) _ cs) =
-  do
-    θ   <- getTDefs
-    -- Try to find the parent class in the env. If this fails, 
-    -- compute it on the fly
-    TObj bs _ <- findClassSpec γ parent
-    bs' <- foldM (addField θ) bs $ classEltType <$> cs
-    addCTToSpec id $ TObj bs' fTop
+  do  TObj bs _     <- findClassSpec γ parent
+      bs'           <- foldM addField bs $ classEltType <$> cs
+      addCTToSpec id $ TObj bs' fTop
   where
-    addField θ bs (B s t) = 
+    θ             = tce_defs γ
+    addField bs (_,B s t) = 
       let m = M.fromList (p <$> bs) in
       case M.lookup s m of
         Just t0 | equiv θ t0 t -> return  $ u <$> M.toList (M.insert s t m)
@@ -490,7 +494,7 @@ classType γ (ClassStmt l id (Just parent) _ cs) =
     u  (s, t)     = B s t
 
 classType _ (ClassStmt l id Nothing _ cs) =
-  addCTToSpec id $ TObj (classEltType <$> cs) fTop
+  addCTToSpec id $ TObj (snd . classEltType <$> cs) fTop
 
 addCTToSpec i t = addSpec i t >> return t
 
@@ -505,12 +509,15 @@ findClassSpec γ x = getSpecM x >>= go
   where go (Just t) = return t
         go Nothing  = classType γ (tcEnvFindClsOrDie x γ)
 
+-- `classEltType` returns a tuple:
+-- * True if public, false if private
+-- * Binding
 ---------------------------------------------------------------------------------------
-classEltType :: (Ord r, PP r, F.Reftable r) => ClassElt (AnnSSA r) -> Bind r
+classEltType :: (Ord r, PP r, F.Reftable r) => ClassElt (AnnSSA r) -> (Bool, Bind r)
 ---------------------------------------------------------------------------------------
-classEltType (Constructor l _ _ )                   = classEltToBind l "constructor"
-classEltType (MemberVarDecl _ _ _ (VarDecl l v _))  = classEltToBind l v
-classEltType (MemberMethDecl  l _ _ i _ _ )         = classEltToBind l i
+classEltType (Constructor l _ _ )                   = (True, classEltToBind l "constructor")
+classEltType (MemberVarDecl _ m _ (VarDecl l v _))  = (m, classEltToBind l v)
+classEltType (MemberMethDecl  l m _ i _ _ )         = (m, classEltToBind l i)
 
 classEltToBind l s = 
   case [ t | TAnnot t <- ann_fact l ] of 
@@ -555,7 +562,7 @@ tcExprT γ e to
   = do (e', t)    <- tcExpr γ e
        (e'', te)  <- case to of
                        Nothing -> return (e', t)
-                       Just ta -> (,ta) <$> castM (tce_ctx γ) e t ta
+                       Just ta -> (,ta) <$> castM (tce_defs γ) (tce_ctx γ) e t ta
                     {-Just ta -> checkAnnotation "tcExprT" e t ta-}
        return     (e'', te)
 
@@ -688,9 +695,8 @@ tcCall γ ex@(ArrayLit l es)
 
 tcCall γ ex@(NewExpr l (VarRef lv id) es)
   = do  t     <- findClassSpec γ id
-        tdefs <- getTDefs 
         return undefined
-        case getProp l (tce_env γ) tdefs "constructor" t of
+        case getProp l (tce_env γ) (tce_defs γ) "constructor" t of
           Just (_,tc)  -> do
             when (not $ isTFun tc) $ tcError $ errorConstNonFunc (srcPos l) id 
             z <- tcCallMatch γ l "constructor" es tc
@@ -743,10 +749,9 @@ tcCallCaseTry γ l fn es' ts ft
        (_,ibs,ot)    <- instantiate l ξ fn ft
        let its        = b_type <$> ibs
        θ             <- getSubst 
-       defs          <- getTDefs
        --HACK - erase latest annotation on l
        remAnn         $ (srcPos l)
-       return         $ unifys (ann l) defs θ ts its
+       return         $ unifys (ann l) (tce_defs γ) θ ts its
 
 tcCallCase γ l fn es' ts ft 
   = do let ξ          = tce_ctx γ
@@ -754,11 +759,11 @@ tcCallCase γ l fn es' ts ft
        (_,ibs,ot)    <- instantiate l ξ fn ft
        let its        = b_type <$> ibs
        -- Unify with formal parameter types
-       θ             <- unifyTypesM (srcPos l) "tcCall" ts its
+       θ             <- unifyTypesM (tce_defs γ) (srcPos l) "tcCall" ts its
        -- Apply substitution
        let (ts',its') = mapPair (apply θ) (ts, its)
        -- Subtype the arguments against the formals and up/down cast if needed 
-       es''          <- zipWith3M (castM ξ) es' ts' its'
+       es''          <- zipWith3M (castM (tce_defs γ) ξ) es' ts' its'
        return           (es'', apply θ ot)
 
 instantiate l ξ fn ft 
@@ -786,10 +791,9 @@ undefType l γ
              
 tcPropRead getter γ l e fld = do  
   (e', te)   <- tcExpr γ e
-  tdefs      <- getTDefs 
-  case getter l (tce_env γ) tdefs fld te of
+  case getter l (tce_env γ) (tce_defs γ) fld te of
     Nothing         -> tcError $  errorPropRead (srcPos l) e fld
-    Just (te', tf)  -> tcWithThis te $ (, tf) <$> castM (tce_ctx γ) e' te te'
+    Just (te', tf)  -> tcWithThis te $ (, tf) <$> castM (tce_defs γ) (tce_ctx γ) e' te te'
 
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, F.Reftable r, PP r) =>
@@ -815,8 +819,7 @@ getPhiType ::  (Ord r, F.Reftable r, PP r) =>
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (tcEnvFindTy x γ1, tcEnvFindTy x γ2) of
-    (Just t1, Just t2) -> do  env <- getTDefs
-                              return $ fst4 $ compareTs env t1 t2
+    (Just t1, Just t2) -> do  return $ fst4 $ compareTs (tce_defs γ1) t1 t2
     (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
                             then tcError $ bug loc "Oh no, the HashMap GREMLIN is back...1"
                             else tcError $ bugUnboundPhiVar loc x

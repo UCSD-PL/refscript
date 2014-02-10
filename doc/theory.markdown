@@ -346,45 +346,23 @@ G' is G extended with **new bindings** for assigments in `s`
 
 #Subtyping
 
-##Light Subtyping
-
-    G, θ |- S <: T : θ'
-
+    ------
+    T <: T 
 
 
-###Reflective
+    ∀i ∃j . Si <: Tj
+    --------------------------------
+    U Si <: U Tj 
 
-    ___________________ [S-Refl]
-    G, θ |- T <: T : θ
+    S <: top
 
+    undefined <: null
 
-
-###Unions
-
-
-    ∀i∈[1..n] ∃j∈[1..m] . G, θ |- Si <: Ti : θi'
-
-    θ' = join({θi'})
-    ______________________________________________[S-Union]
-    G, θ |- S1 | ... | Sn <: T1 | ... | Tm : θt
-
-
-
-###Top
-    
-    _________________ [S-Top]
-    G, θ |- S <: top : θ
-
-
-
-###Undefined
-    
-    ___________________________________ [S-Undef-2]
-    G, θ |- undefined <: null : θ
-
-
-###Defined Type
-
+    T < T'
+    --------------------------------------------  Depth
+    { F, s:T; M } < { F, s:T'; M }
+     
+    { F, s:T; M } < { F; M }          [Width]
 
 
 

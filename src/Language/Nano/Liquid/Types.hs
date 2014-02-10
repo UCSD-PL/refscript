@@ -76,7 +76,7 @@ import           Control.Applicative
 
 type RefType     = RType F.Reft
 type REnv        = Env RefType
-type TEnv        = Env RefType
+type TEnv        = TDefEnv F.Reft
 
 type NanoRefType = Nano (AnnType F.Reft) RefType 
 
@@ -293,7 +293,7 @@ mapReftM f (TArr t r)      = TArr   <$> (mapReftM f t) <*> f r
 mapReftM f (TAnd ts)       = TAnd   <$> mapM (mapReftM f) ts
 mapReftM _ t               = error   $ render $ text "Not supported in mapReftM: " <+> pp t 
 
-mapReftBindM f (B x t)     = B x <$> mapReftM f t
+mapReftBindM f (B x t)    = B x     <$> mapReftM f t
 
 ------------------------------------------------------------------------------------------
 -- | fold over @RType@ -------------------------------------------------------------------

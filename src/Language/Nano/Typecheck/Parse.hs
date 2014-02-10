@@ -96,12 +96,12 @@ aliasVarT (l, x)
   | isTvar x  = Left  $ tvar l x
   | otherwise = Right $ stringSymbol x 
 
-tBodyP :: Parser (Id SourceSpan, RType Reft)
-tBodyP = do  id    <- identifierP 
-             tv    <- option [] tParP
+tBodyP :: Parser (Id SourceSpan, TyDef RefType)
+tBodyP = do  id     <- identifierP 
+             tv     <- option [] tParP
              reservedOp "="
-             tb    <- bareTypeP
-             return $ (id, TBd $ TD (TDef id) tv tb (idLoc id))
+             tb     <- bareTypeP
+             return  $ (id, TD id tv tb (idLoc id))
 
 -- [A,B,C...]
 tParP = brackets $ sepBy tvarP comma
@@ -315,7 +315,7 @@ data PSpec l t
   = Meas   (Id l, t)
   | Bind   (Id l, t) 
   | Extern (Id l, t)
-  | Type   (Id l, t)
+  | Type   (Id l, TyDef t)
   | Talias (Id l, TAlias t)
   | Palias (Id l, PAlias) 
   | Qual    Qualifier

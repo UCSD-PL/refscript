@@ -96,7 +96,7 @@ instance (PP r, F.Reftable r) => Substitutable r (RType r) where
 instance (PP r, F.Reftable r) => Substitutable r (Bind r) where 
   apply θ (B z t) = B z $ appTy θ t
 
-instance (PP r, F.Reftable r) => Substitutable r (Env (RType r)) where 
+instance (PP r, F.Reftable r, Substitutable r t) => Substitutable r (Env t) where 
   apply = envMap . apply
 
 
@@ -107,7 +107,6 @@ instance Free (RType r) where
   free (TFun xts t _)       = S.unions   $ free <$> t:ts where ts = b_type <$> xts
   free (TAll α t)           = S.delete α $ free t 
   free (TObj bs _)          = S.unions   $ free <$> b_type <$> bs
-  free (TBd (TD _ α t _ ))  = foldr S.delete (free t) α
   free (TAnd ts)            = S.unions   $ free <$> ts 
 
 instance (PP r, F.Reftable r) => Substitutable r (Cast (RType r)) where
@@ -148,5 +147,4 @@ appTy (Su m) t@(TVar α r)        = (M.lookupDefault t α m) `strengthen` r
 appTy θ (TFun ts t r)            = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m) (TAll α t)          = TAll α $ apply (Su $ M.delete α m) t             -- oh, god! DO NOT DROP TAll here.  
 appTy θ (TArr t r)               = TArr (apply θ t) r
-appTy (Su m) (TBd (TD c α t s))  = TBd $ TD c α (apply (Su $ foldr M.delete m α) t) s
 

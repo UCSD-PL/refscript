@@ -38,7 +38,7 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
 
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Parser        ( parseJavaScriptFromFile')
+import           Language.ECMAScript3.Parser        ( parseJavaScriptFromFile', parseScriptFromJSON)
 import           Language.ECMAScript3.Parser.Type hiding (Parser)
 
 import           Language.ECMAScript3.PrettyPrint
@@ -411,12 +411,14 @@ mkCode (ss, m) =  do
 
 parseNanoFromFile :: FilePath-> IO (Either Error (Nano SourceSpan RefType))
 parseNanoFromFile f 
-  = do spec <- parseCodeFromFile =<< getPreludePath
-       code <- parseCodeFromFile f
-       case (spec, code) of 
-        (Right s, Right c) -> return $ catSpecDefs $ mconcat [s, c]
-        (Left  e, _      ) -> return $ Left e
-        (_      , Left  e) -> return $ Left e
+  = do  s <-  parseScriptFromJSON f 
+        error $ ppshow $ s
+  {-= do spec <- parseCodeFromFile =<< getPreludePath-}
+  {-     code <- parseCodeFromFile f-}
+  {-     case (spec, code) of -}
+  {-      (Right s, Right c) -> return $ catSpecDefs $ mconcat [s, c]-}
+  {-      (Left  e, _      ) -> return $ Left e-}
+  {-      (_      , Left  e) -> return $ Left e-}
 
 catSpecDefs :: PP t => Nano SourceSpan t -> Either Error (Nano SourceSpan t)
 catSpecDefs pgm = do

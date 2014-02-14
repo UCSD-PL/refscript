@@ -2,7 +2,6 @@
 echo "These files are going to be deleted:"
 
 find .  -name "*.css"   -o \
-        -name "*.json"  -o \
         -name "*.md"    -o \
         -name "*.vc"    -o \
         -name "*.hi"    -o \
@@ -21,7 +20,6 @@ while true; do
   read -p "Do you wish to delete the above files? " yn
   case $yn in
     [Yy]* ) find .  -name "*.css"   -o \
-                    -name "*.json"  -o \
                     -name "*.md"    -o \
                     -name "*.vc"    -o \
                     -name "*.hi"    -o \

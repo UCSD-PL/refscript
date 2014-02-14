@@ -15,6 +15,7 @@ import           Data.Maybe (maybeToList)
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import qualified Data.HashMap.Strict                as M 
+import           Data.Aeson   (encode)
 import           Data.Data
 import           Control.Monad
 import           Text.Parsec
@@ -43,8 +44,10 @@ import           Language.ECMAScript3.Parser.Type hiding (Parser)
 
 import           Language.ECMAScript3.PrettyPrint
 
+import qualified Data.ByteString.Lazy.Char8 as B
+import qualified Data.Generics.Text as G
 
--- import           Debug.Trace                        (trace, traceShow)
+import           Debug.Trace                        (trace, traceShow)
 
 dot        = Token.dot        lexer
 plus       = Token.symbol     lexer "+"
@@ -411,14 +414,20 @@ mkCode (ss, m) =  do
 
 parseNanoFromFile :: FilePath-> IO (Either Error (Nano SourceSpan RefType))
 parseNanoFromFile f 
-  = do  s <-  parseScriptFromJSON f 
-        error $ ppshow $ s
-  {-= do spec <- parseCodeFromFile =<< getPreludePath-}
-  {-     code <- parseCodeFromFile f-}
-  {-     case (spec, code) of -}
-  {-      (Right s, Right c) -> return $ catSpecDefs $ mconcat [s, c]-}
-  {-      (Left  e, _      ) -> return $ Left e-}
-  {-      (_      , Left  e) -> return $ Left e-}
+  {-= do  s <-  parseScriptFromJSON f -}
+  {-      error $ ppshow $ s-}
+  = do spec <- parseCodeFromFile =<< getPreludePath
+       code <- parseCodeFromFile f
+       case (spec, code) of 
+        (Right s, Right c) -> 
+          do  print $ clean c
+              return $ catSpecDefs $ mconcat [s, c]
+        (Left  e, _      ) -> return $ Left e
+        (_      , Left  e) -> return $ Left e
+
+clean pgm = 
+  let Src ss = code pgm
+  in encode ss
 
 catSpecDefs :: PP t => Nano SourceSpan t -> Either Error (Nano SourceSpan t)
 catSpecDefs pgm = do

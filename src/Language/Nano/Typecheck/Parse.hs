@@ -11,18 +11,23 @@ module Language.Nano.Typecheck.Parse (
   ) where
 
 import           Data.List (sort)
-import           Data.Maybe (maybeToList)
+import           Data.Maybe (maybeToList, fromJust)
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
+import           Data.Traversable           (mapM, mapAccumL)
 import qualified Data.HashMap.Strict                as M 
 import           Data.Aeson   (encode)
 import           Data.Data
-import           Control.Monad
-import           Text.Parsec
+import qualified Data.Foldable as FO
+import           Prelude          hiding (mapM)
+import           Control.Monad    hiding (mapM)
+import           Text.Parsec      hiding (parse)
 import           Text.PrettyPrint.HughesPJ          (text, (<+>))
 import qualified Text.Parsec.Token as Token
 import           Control.Applicative ((<$>), (<*>))
 import           Data.Char (isLower, isSpace) 
+
+import Control.Monad.Identity
 import           Data.Monoid (Monoid, mconcat)
 
 import           Language.Fixpoint.Types hiding (quals, Loc)
@@ -414,20 +419,35 @@ mkCode (ss, m) =  do
 
 parseNanoFromFile :: FilePath-> IO (Either Error (Nano SourceSpan RefType))
 parseNanoFromFile f 
-  {-= do  s <-  parseScriptFromJSON f -}
-  {-      error $ ppshow $ s-}
-  = do spec <- parseCodeFromFile =<< getPreludePath
-       code <- parseCodeFromFile f
-       case (spec, code) of 
-        (Right s, Right c) -> 
-          do  print $ clean c
-              return $ catSpecDefs $ mconcat [s, c]
-        (Left  e, _      ) -> return $ Left e
-        (_      , Left  e) -> return $ Left e
+  = do  s <-  parseScriptFromJSON f 
+        let ts = fillTypes $ tracePP "parseScriptFromJSON" s
+        error $ "parseNanoFromFile:\n" ++ ppshow (collectTypes ts)
 
-clean pgm = 
-  let Src ss = code pgm
-  in encode ss
+  {-= do spec <- parseCodeFromFile =<< getPreludePath-}
+  {-     code <- parseCodeFromFile f-}
+  {-     case (spec, code) of -}
+  {-      (Right s, Right c) -> return $ catSpecDefs $ mconcat [s, c]-}
+  {-      (Left  e, _      ) -> return $ Left e-}
+  {-      (_      , Left  e) -> return $ Left e-}
+
+
+collectTypes :: [Statement (SourceSpan, Maybe RefType)] -> [RefType]
+collectTypes = concatMap $ FO.foldr (\s -> (++) (maybeToList $ snd s)) []
+
+fillTypes :: [Statement (SourceSpan, Maybe String)] -> [Statement (SourceSpan, Maybe RefType)]
+fillTypes = snd . mapAccumL (mapAccumL (parse "")) 0
+
+parse :: SourceName -> Integer -> (SourceSpan, Maybe String) -> (Integer, (SourceSpan, Maybe RefType))
+parse f st (ss,c) = maybe (st, (ss,Nothing)) (\t -> failLeft (runParser pp st f (tracePP "String to parse" t))) c
+  where pp = liftM2 (,) getState ((ss,) <$> (Just <$> tracePP "bareTypeP" <$> bareTypeP))
+        failLeft (Left s) = error $ show s
+        failLeft (Right r) = r
+
+
+parseNanoFromJSON f 
+  = do  s <- parseScriptFromJSON f
+        return $ undefined
+
 
 catSpecDefs :: PP t => Nano SourceSpan t -> Either Error (Nano SourceSpan t)
 catSpecDefs pgm = do

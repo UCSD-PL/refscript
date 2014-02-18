@@ -14,7 +14,7 @@ module Language.Nano.Typecheck.Types (
   -- * Programs
     Nano (..)
   , NanoBare
-  , NanoSSA, NanoSSAR, NanoTSSAR, NanoTypeR 
+  , NanoSSA, NanoBareR, NanoSSAR, NanoTSSAR, NanoTypeR 
   , NanoType
   , ExprSSAR, StmtSSAR
   , Source (..)

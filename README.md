@@ -88,14 +88,14 @@ And then to enable it:
 ### Build dependencies
 
     cd liquid-fixpoint     && cabal install && cd ..
-    cd language-ecmascript && cabal install && cd ..
+    cd language-ecmascript && git checkout heapless_parse_json && cabal install && cd ..
     cd typescript          && jake
 
 
     
 ### Build NanoJS
 
-    cd nano-js             && cabal install && cd ..
+    cd nano-js             && git checkout heapless_parse_json && cabal install && cd ..
 
 
 

@@ -5,46 +5,51 @@
 {-# LANGUAGE TypeSynonymInstances      #-} 
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE DeriveGeneric             #-}
 
 module Language.Nano.Typecheck.Parse (
     parseNanoFromFile 
   ) where
 
-import           Data.List (sort)
-import           Data.Maybe (maybeToList)
-import           Data.Generics.Aliases
-import           Data.Generics.Schemes
-import qualified Data.HashMap.Strict                as M 
-import           Data.Data
-import           Control.Monad
-import           Text.Parsec
-import           Text.PrettyPrint.HughesPJ          (text, (<+>))
-import qualified Text.Parsec.Token as Token
-import           Control.Applicative ((<$>), (<*>))
-import           Data.Char (isLower, isSpace) 
-import           Data.Monoid (Monoid, mconcat)
+import           Prelude                          hiding ( mapM)
 
-import           Language.Fixpoint.Types hiding (quals, Loc)
-import qualified Language.Fixpoint.Types        as F
-import           Language.Fixpoint.Parse 
+import           Data.Aeson                              ( eitherDecode)
+import           Data.Aeson.Types                 hiding ( Parser, Error, parse)
+import qualified Data.Aeson.Types                 as     AI
+import qualified Data.ByteString.Lazy.Char8       as     B
+import           Data.Char                               ( isLower, isSpace)
+import qualified Data.List                        as     L
+import           Data.Generics.Aliases                   ( mkQ)
+import           Data.Generics.Schemes
+import           Data.Traversable                        ( mapAccumL)
+import           Data.Data
+import qualified Data.Foldable                    as     FO
+import           Data.Vector                             ((!))
+
+import           Control.Monad                    hiding ( mapM)
+import           Control.Monad.Trans                     ( MonadIO,liftIO)
+import           Control.Applicative                     ( (<$>), ( <*>))
+
+import           Language.Fixpoint.Types          hiding ( quals, Loc, Expression)
+import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc (mapEither)
-import           Language.Nano.Misc     (maybeToEither)
+import           Language.Fixpoint.Misc                  ( mapEither, mapSnd)
+import           Language.Nano.Misc                      ( maybeToEither)
 import           Language.Nano.Errors
-import           Language.Nano.Files
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
 
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Parser        ( parseJavaScriptFromFile')
-import           Language.ECMAScript3.Parser.Type hiding (Parser)
 
-import           Language.ECMAScript3.PrettyPrint
+import           Text.Parsec                      hiding ( parse)
+import           Text.Parsec.Pos                         ( newPos)
+import qualified Text.Parsec.Token                as     Token
 
+import           GHC.Generics
 
--- import           Debug.Trace                        (trace, traceShow)
+-- import           Debug.Trace                             ( trace, traceShow)
 
 dot        = Token.dot        lexer
 plus       = Token.symbol     lexer "+"
@@ -56,9 +61,6 @@ star       = Token.symbol     lexer "*"
 
 idBindP :: Parser (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
-
-fdBindP :: Parser (Id SourceSpan, RefType)
-fdBindP = xyP identifierP dcolon funcSigP
 
 identifierP :: Parser (Id SourceSpan)
 identifierP =   try (withSpan Id upperIdP)
@@ -129,7 +131,7 @@ bUnP      = bareTypeNoUnionP `sepBy1` plus >>= ifSingle return (\xs -> TApp TUn 
     ifSingle _ g xs  = g xs
 
 mkUn [a] = strengthen a
-mkUn ts  = TApp TUn (sort ts)
+mkUn ts  = TApp TUn (L.sort ts)
 
 -- | `bareTypeNoUnionP` parses a type that does not contain a union at the top-level.
 bareTypeNoUnionP  = try funcSigP          <|> (bareAtomP bbaseP)
@@ -156,9 +158,7 @@ bareArgP
  <|>  (argBind <$> try (bareTypeP))
 
 boundTypeP = do s <- symbolP 
-                spaces
-                colon
-                spaces
+                withinSpacesP colon
                 B s <$> bareTypeP
 
 argBind t = B (rTypeValueVar t) t
@@ -227,9 +227,7 @@ bindsP
 
 bareBindP 
   = do  s <- binderP
-        spaces      --ugly
-        colon
-        spaces
+        withinSpacesP colon
         t <- bareTypeP
         return $ B s t 
 
@@ -253,18 +251,6 @@ xrefP kindP
 refasP :: Parser [Refa]
 refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi)) 
        <|> liftM ((:[]) . RConc) predP
-
-------------------------------------------------------------------------
------------------------ Wrapped Constructors ---------------------------
-------------------------------------------------------------------------
-
--- filePathP :: Parser FilePath
--- filePathP = angles $ many1 pathCharP
---   where pathCharP = choice $ char <$> pathChars 
---         pathChars = ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ ['.', '/']
--- 
--- 
--- embedP     = xyP upperIdP (reserved "as") fTyConP
  
 binderP :: Parser Symbol
 binderP = try (stringSymbol <$> idP badc)
@@ -274,151 +260,178 @@ binderP = try (stringSymbol <$> idP badc)
             badc c = (c == ':') ||  bad c
             bad c  = isSpace c || c `elem` "()"
             pwr s  = stringSymbol $ "(" ++ s ++ ")" 
-              
--- grabs p = try (liftM2 (:) p (grabs p)) 
---        <|> return []
 
+withinSpacesP :: Parser a -> Parser a
+withinSpacesP p = do { spaces; a <- p; spaces; return a } 
+             
 
 ---------------------------------------------------------------------------------
 -- | Specifications
 ---------------------------------------------------------------------------------
+
+data RawSpec
+  = RawMeas   String
+  | RawBind   String
+  | RawExtern String
+  | RawType   String
+  | RawTAlias String
+  | RawPAlias String
+  | RawQual   String 
+  | RawInvt   String
+  deriving (Show,Eq,Ord,Data,Typeable,Generic)
+
 data PSpec l t 
   = Meas   (Id l, t)
   | Bind   (Id l, t) 
   | Extern (Id l, t)
   | Type   (Id l, TyDef t)
-  | Talias (Id l, TAlias t)
-  | Palias (Id l, PAlias) 
-  | Qual    Qualifier
+  | TAlias (Id l, TAlias t)
+  | PAlias (Id l, PAlias) 
+  | Qual   Qualifier
   | Invt   l t 
   deriving (Eq, Ord, Show, Data, Typeable)
 
-specP :: Parser (PSpec SourceSpan RefType)
-specP 
-  =   try (reserved "measure"   >> (Meas   <$> idBindP    ))
-  <|> try (reserved "qualif"    >> (Qual   <$> qualifierP ))
-  <|> try (reserved "type"      >> (Type   <$> tBodyP     )) 
-  <|> try (reserved "alias"     >> (Talias <$> tAliasP    ))
-  <|> try (reserved "predicate" >> (Palias <$> pAliasP    ))
-  <|> try (reserved "invariant" >> (withSpan Invt bareTypeP))
-  <|>     (reserved "extern"    >> (Extern <$> idBindP    ))
+type Spec = PSpec SourceSpan RefType
 
-instance (PP l, PP t) => PP (PSpec l t) where
-  pp (Meas (i, _))   = text "measure: " <+> pp i
-  pp (Bind (i, t))   = text "bind: " <+>  pp i <+> text " :: " <+> pp t
-  pp (Extern (i, t)) = text "extern: " <+>  pp i <+> text " :: " <+> pp t
-  pp (Type _)        = text "Type:TODO"
-  pp (Talias _)      = text "Talias:TODO"
-  pp (Palias _)      = text "Palias:TODO"
-  pp (Qual _)        = text "Qual:TODO"
-  pp (Invt _ _)      = text "Invt:TODO"
+parseAnnot :: SourceSpan -> RawSpec -> Parser Spec
+parseAnnot ss (RawMeas   _) = Meas   <$> patch ss <$> idBindP
+parseAnnot ss (RawBind   _) = Bind   <$> patch ss <$> idBindP
+parseAnnot ss (RawExtern _) = Extern <$> patch ss <$> idBindP
+parseAnnot ss (RawType   _) = Type   <$> patch ss <$> tBodyP
+parseAnnot ss (RawTAlias _) = TAlias <$> patch ss <$> tAliasP
+parseAnnot ss (RawPAlias _) = PAlias <$> patch ss <$> pAliasP
+parseAnnot _  (RawQual   _) = Qual   <$>              qualifierP
+parseAnnot ss (RawInvt   _) = Invt             ss <$> bareTypeP
 
--- | `AnnToken`: Elements that can are parsed along the source as annotations.
+patch ss (id, t) = (fmap (const ss) id , t)
 
-data AnnToken r 
-  = TBind (Id SourceSpan, RType r)          -- ^ Function signature binding
-  | TType (RType r)                         -- ^ Type annotation
-  | TSpec (PSpec SourceSpan (RType r))      -- ^ Specs: qualifiers, measures, type defs, etc.
-  | EmptyToken                              -- ^ Dummy empty token
-  deriving (Eq, Ord, Show, Data, Typeable)
+getSpecString :: RawSpec -> String 
+getSpecString (RawMeas   s) = s  
+getSpecString (RawBind   s) = s
+getSpecString (RawExtern s) = s 
+getSpecString (RawType   s) = s 
+getSpecString (RawTAlias s) = s 
+getSpecString (RawPAlias s) = s 
+getSpecString (RawQual   s) = s 
+getSpecString (RawInvt   s) = s 
 
-instance (PP r, F.Reftable r) => PP (AnnToken r) where
-  pp (TBind (id,t)) = pp id <+> text " :: " <+> pp t
-  pp (TType t)      = pp t
-  pp (TSpec s)      = pp s
-  pp EmptyToken     = text "<empyt>"
+instance FromJSON SourcePos where
+  parseJSON (Array v) = do
+    v0 <- parseJSON (v!0) :: AI.Parser String 
+    v1 <- parseJSON (v!1) :: AI.Parser Int
+    v2 <- parseJSON (v!2) :: AI.Parser Int
+    return $ newPos v0 v1 v2
+  parseJSON _ = error "SourcePos should only be an A.Array" 
 
---------------------------------------------------------------------------------------
-tAnnotP :: ParserState String (AnnToken Reft) -> ExternP String (AnnToken Reft)
---------------------------------------------------------------------------------------
-tAnnotP stIn = EP typeP bFSigP bTypeP tLevP
-  where
-    typeP  = TType    <$> changeState fwd bwd bareTypeP
-    bFSigP = TBind    <$> changeState fwd bwd fdBindP
-    bTypeP = TBind    <$> changeState fwd bwd idBindP
-    tLevP  = TSpec    <$> changeState fwd bwd specP
-    fwd _  = stIn  -- NOTE: need to keep the state of the language-ecmascript parser!!!
-    bwd _  = 0     -- TODO: Is this adequate???
-
--- `changeState` taken from here:
--- http://stackoverflow.com/questions/17968784/an-easy-way-to-change-the-type-of-parsec-user-state
---------------------------------------------------------------------------------------
-changeState :: forall m s u v a . (Functor m, Monad m) => 
-  (u -> v) -> (v -> u) -> ParsecT s u m a -> ParsecT s v m a
---------------------------------------------------------------------------------------
-changeState forward backward = mkPT . transform . runParsecT
-  where
-    mapState :: forall u v . (u -> v) -> State s u -> State s v
-    mapState f st = st { stateUser = f (stateUser st) }
-
-    mapReply :: forall u v . (u -> v) -> Reply s u a -> Reply s v a
-    mapReply f (Ok a st err) = Ok a (mapState f st) err
-    mapReply _ (Error e) = Error e
-
-    fmap3 = fmap . fmap . fmap
-
-    transform
-      :: (State s u -> m (Consumed (m (Reply s u a))))
-      -> (State s v -> m (Consumed (m (Reply s v a))))
-    transform p st = fmap3 (mapReply forward) (p (mapState backward st))
-
-
--- | Parse Code along with type annotations
-
---------------------------------------------------------------------------------------
-parseCodeFromFile :: FilePath -> IO (Either Error (Nano SourceSpan RefType))
---------------------------------------------------------------------------------------
-parseCodeFromFile fp = parseJavaScriptFromFile' tAnnotP fp >>= return . mkCode
-
---------------------------------------------------------------------------------------
-mkCode :: ([Statement SourceSpan], M.HashMap SourceSpan [AnnToken Reft]) -> 
-  Either Error (Nano SourceSpan RefType)
---------------------------------------------------------------------------------------
-mkCode (ss, m) =  do
-    tas   <- annots
-    return $ Nano { 
-        code    = Src (checkTopStmt <$> ss)
-      , specs   = envFromList ([ a | TSpec (Extern a) <- list ] ++ [ a | TBind a <- list ])
-      , chSpecs = envFromList tas -- populated further with functions later
-      , tAnns   = M.fromList $ annT $ M.toList m
-      , consts  = envFromList  [ a | TSpec (Meas   a) <- list ] 
-      , defs    = envFromList  [ a | TSpec (Type   a) <- list ] 
-      , tAlias  = envFromList  [ a | TSpec (Talias a) <- list ]
-      , pAlias  = envFromList  [ p | TSpec (Palias p) <- list ]
-      , quals   =              [ q | TSpec (Qual   q) <- list ]
-      , invts   = [Loc l' t        | TSpec (Invt l t) <- list, let l' = srcPos l]
-    } 
-  where
-    list        = concat $ M.elems m
-    vds         = varDeclStmts ss
-    prefixed    = [ a     | VarDeclStmt l _  <- vds
-                          , ts               <- maybeToList (M.lookup l m)
-                          , TBind a <- ts ]
-    varDeclAnns = [ (i,t) | VarDeclStmt _ ds <- vds
-                          , VarDecl l i _    <- ds
-                          , ts               <- maybeToList (M.lookup l m)
-                          , TType t          <- ts ]
-    annT xs     = [ (ss, t) | (ss, tt) <- xs , TType t <- tt ]
-    doubleTyped = [ (l1,s1) | (Id l1 s1, _)  <- prefixed, (Id _ s2, _) <- varDeclAnns, s1 == s2 ]
-    annots      | null doubleTyped = Right    $ prefixed ++ varDeclAnns
-                | otherwise        = Left     $ errors
-    errors      = foldl1 catError $ (uncurry bugMultipleAnnots) <$> doubleTyped 
+instance FromJSON (Expression (SourceSpan, [RawSpec]))
+instance FromJSON (Statement (SourceSpan, [RawSpec]))
+instance FromJSON (LValue (SourceSpan, [RawSpec]))
+instance FromJSON (JavaScript (SourceSpan, [RawSpec]))
+instance FromJSON (ClassElt (SourceSpan, [RawSpec]))
+instance FromJSON (CaseClause (SourceSpan, [RawSpec]))
+instance FromJSON (CatchClause (SourceSpan, [RawSpec]))
+instance FromJSON (ForInit (SourceSpan, [RawSpec]))
+instance FromJSON (ForInInit (SourceSpan, [RawSpec]))
+instance FromJSON (VarDecl (SourceSpan, [RawSpec]))
+instance FromJSON (Id (SourceSpan, [RawSpec]))
+instance FromJSON (Prop (SourceSpan, [RawSpec]))
+instance FromJSON (SourceSpan, [RawSpec])
+instance FromJSON InfixOp
+instance FromJSON AssignOp
+instance FromJSON PrefixOp
+instance FromJSON UnaryAssignOp
+instance FromJSON SourceSpan
+instance FromJSON RawSpec
 
 
 -------------------------------------------------------------------------------
 -- | Parse File and Type Signatures -------------------------------------------
 -------------------------------------------------------------------------------
 
-parseNanoFromFile :: FilePath-> IO (Either Error (Nano SourceSpan RefType))
+-------------------------------------------------------------------------------
+parseNanoFromFile :: FilePath-> IO (Either Error (NanoBareR Reft))
+-------------------------------------------------------------------------------
 parseNanoFromFile f 
-  = do spec <- parseCodeFromFile =<< getPreludePath
-       code <- parseCodeFromFile f
-       case (spec, code) of 
-        (Right s, Right c) -> return $ catSpecDefs $ mconcat [s, c]
-        (Left  e, _      ) -> return $ Left e
-        (_      , Left  e) -> return $ Left e
+  = do  -- spec <- parseCodeFromFile =<< getPreludePath
+        code <- parseCodeFromFile f
+        case msum [{-spec,-} code] of 
+          Right s -> return $ catSpecDefs s
+          Left  e -> return $ Left e
 
-catSpecDefs :: PP t => Nano SourceSpan t -> Either Error (Nano SourceSpan t)
+-------------------------------------------------------------------------------
+-- collectTypes :: [Statement (SourceSpan, Maybe RefType)] -> [RefType]
+-------------------------------------------------------------------------------
+-- collectTypes = concatMap $ FO.foldr (\s -> (++) (maybeToList $ snd s)) []
+
+
+getJSON :: MonadIO m => FilePath -> m B.ByteString
+getJSON = liftIO . B.readFile
+
+--------------------------------------------------------------------------------------
+parseScriptFromJSON :: FilePath -> IO ([Statement (SourceSpan, [RawSpec])])
+--------------------------------------------------------------------------------------
+parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
+  where 
+    decodeOrDie s =
+      case eitherDecode s :: Either String [Statement (SourceSpan, [RawSpec])] of
+        Left msg -> error $ "JSON decode error:\n" ++ msg
+        Right p  -> p
+
+--------------------------------------------------------------------------------------
+parseCodeFromFile :: FilePath -> IO (Either Error (NanoBareR Reft))
+--------------------------------------------------------------------------------------
+parseCodeFromFile fp = parseScriptFromJSON fp >>= return . mkCode . expandAnnots
+
+--------------------------------------------------------------------------------------
+mkCode :: [Statement (SourceSpan, [Spec])] ->  Either Error (NanoBareR Reft)
+--------------------------------------------------------------------------------------
+mkCode ss =  do
+    return $ Nano { 
+        code    = Src (checkTopStmt <$> ss')
+      , specs   = envFromList $ [ t | Extern t <- anns ] 
+                             ++ [ t | Bind   t <- anns ] -- externs and binds
+      , chSpecs = envFromList   [ t | Bind   t <- concatMap (FO.foldMap snd) vds ]
+      , consts  = envFromList   [ t | Meas   t <- anns ] 
+      , defs    = envFromList   [ t | Type   t <- anns ] 
+      , tAlias  = envFromList   [ t | TAlias t <- anns ] 
+      , pAlias  = envFromList   [ t | PAlias t <- anns ] 
+      , quals   =               [ t | Qual   t <- anns ] 
+      , invts   = [Loc (srcPos l) t | Invt l t <- anns ]
+    } 
+  where
+    toBare     :: (SourceSpan, [Spec]) -> AnnBare Reft 
+    toBare p    = Ann (fst p) [TAnnot t | Bind (_,t) <- snd p ]
+    ss'         = (toBare <$>) <$> ss
+    anns        = concatMap (FO.foldMap snd) ss
+    -- ssAnns      = concatMap (FO.foldMap (\(s,l) -> (s,) <$> l)) ss
+    vds         = varDeclStmts ss
+
+
+-- TODO: Is there any chance we can keep the Either Monad here?
+--
+-- In the following `a` is meant to be Spec + RefType (the type specs for
+-- functions etc.). 
+type PState = Integer
+
+--------------------------------------------------------------------------------------
+expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> [Statement (SourceSpan, [Spec])]
+--------------------------------------------------------------------------------------
+expandAnnots = snd . mapAccumL (mapAccumL f) 0
+  where f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
+
+--------------------------------------------------------------------------------------
+parse :: SourceSpan -> PState -> RawSpec -> (PState, Spec)
+--------------------------------------------------------------------------------------
+parse ss st c = foo c
+  where foo s = failLeft $ runParser (liftM2 (,) getState (parseAnnot ss s)) st f (getSpecString s)
+        failLeft (Left s) = error $ show s
+        failLeft (Right r) = r
+        f = sourceName $ sp_begin ss
+
+
+--------------------------------------------------------------------------------------
+catSpecDefs :: NanoBareR Reft -> Either Error (NanoBareR Reft)
+--------------------------------------------------------------------------------------
 catSpecDefs pgm = do
     defL  <- sequence [ (x,) <$> lookupTy x (specs pgm) | x <- fs ]
     return $ pgm { chSpecs = envUnion (envFromList defL) (chSpecs pgm) }
@@ -432,13 +445,17 @@ lookupTy x γ   = maybeToEither err $ envFindTy x γ
 
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
-definedFuns       :: [Statement SourceSpan] -> [Id SourceSpan]
+--------------------------------------------------------------------------------------
+definedFuns       :: [Statement (AnnBare Reft)] -> [Id (AnnBare Reft)]
+--------------------------------------------------------------------------------------
 definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
   where 
     fromFunction (FunctionStmt _ x _ _) = [x] 
     fromFunction _                      = []
 
-varDeclStmts         :: [Statement SourceSpan] -> [Statement SourceSpan]
+--------------------------------------------------------------------------------------
+varDeclStmts         :: (Data a, Typeable a) => [Statement a] -> [Statement a]
+--------------------------------------------------------------------------------------
 varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
   where 
     fromVarDecl s@(VarDeclStmt _ _) = [s]

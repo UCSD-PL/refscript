@@ -7,6 +7,7 @@ module Language.Nano.SSA.SSA (ssaTransform, ssaTransform') where
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
 import           Control.Exception                  (throw)
+import qualified Data.Foldable                    as     FO
 import qualified Data.HashMap.Strict as M 
 import           Language.Nano.Types
 import           Language.Nano.Errors
@@ -21,7 +22,7 @@ import qualified Language.Fixpoint.Types            as F
 -- import           Debug.Trace                        hiding (traceShow)
 
 ----------------------------------------------------------------------------------
-ssaTransform :: (F.Reftable r) => Nano SourceSpan (RType r) -> NanoSSAR r
+ssaTransform :: (F.Reftable r) => NanoBareR r -> NanoSSAR r
 ----------------------------------------------------------------------------------
 ssaTransform = either throw id . execute . ssaNano 
 
@@ -35,17 +36,18 @@ ssaTransform' = execute . ssaNano
 -- ∙ Type annotations (variable declarations (?), class elements)
 --
 ----------------------------------------------------------------------------------
-ssaNano :: F.Reftable r => Nano SourceSpan (RType r) -> SSAM r (NanoSSAR r)
+ssaNano :: F.Reftable r => NanoBareR r -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
-ssaNano p@(Nano { code = Src fs, specs = sp , tAnns = an }) 
+ssaNano p@(Nano { code = Src fs, specs = sp }) 
   = withMutability ReadOnly ros 
     $ withMutability WriteGlobal wgs 
-      $ do (_,fs') <- ssaStmts fs 
+      $ do (_,fs') <- ssaStmts (map (ann <$>) fs)
            ssaAnns <- getAnns
-           return   $ p {code = Src $ (patch [ssaAnns, sp', tAnnFacts] <$>) <$> fs'}
+           return   $ p {code = Src $ (patch [ssaAnns, specAnns, typeAnns] <$>) <$> fs'}
     where
-      tAnnFacts     = M.map (\i -> [TAnnot i]) an 
-      sp'           = M.fromList $ mapFst getAnnotation 
+      typeAnns      = M.fromList $ concatMap 
+                        (FO.concatMap (\(Ann l an) -> (l,) <$> single <$> an)) fs
+      specAnns      = M.fromList $ mapFst getAnnotation 
                         <$> (envToList $ envMap (single . TAnnot) sp)
       ros           = readOnlyVars p
       wgs           = writeGlobalVars p 

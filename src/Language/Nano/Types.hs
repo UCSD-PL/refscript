@@ -93,10 +93,7 @@ import           Text.Printf                        (printf)
 ---------------------------------------------------------------------
 
 data Config 
-  = Esc    { files       :: [FilePath]     -- ^ source files to check
-           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
-           }
-  | TC     { files       :: [FilePath]     -- ^ source files to check
+  = TC     { files       :: [FilePath]     -- ^ source files to check
            , incdirs     :: [FilePath]     -- ^ path to directory for include specs
            , noFailCasts :: Bool           -- ^ fail typecheck when casts are inserted
            }

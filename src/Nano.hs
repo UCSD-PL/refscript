@@ -1,8 +1,6 @@
-
-import qualified Language.Nano.ESC.ESC              as ESC
 import qualified Language.Nano.Typecheck.Typecheck  as TC 
-import qualified Language.Nano.Liquid.Liquid        as Liquid 
--- import qualified Language.TypeScript.Parse          as TS 
+import qualified Language.Nano.Liquid.Liquid        as LQ
+import qualified Language.Nano.Liquid.Types         as L 
 
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
@@ -10,7 +8,9 @@ import           Language.Nano.Types
 import           Language.Nano.Annots
 import           Control.Exception                  (catch)
 import           Data.Monoid
-import           System.Exit                        (exitWith)
+import           System.Exit
+import           System.Process
+import           System.FilePath.Posix
 import           Language.Fixpoint.Interface        (resultExit)
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc             
@@ -25,13 +25,18 @@ main = do cfg  <- getOpts
           run (verifier cfg) cfg
     
 -------------------------------------------------------------------------------
--- verifier           :: Config -> FilePath -> IO (F.FixResult Error)  
+verifier           :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)
 -------------------------------------------------------------------------------
-verifier (Esc    {} ) = ESC.verifyFile 
-verifier (TC     {} ) = TC.verifyFile
-verifier (Liquid {} ) = Liquid.verifyFile
--- verifier (TS {})      = tsVerifyFile
+verifier (TC     {} ) f = TC.verifyFile =<< json f
+verifier (Liquid {} ) f = LQ.verifyFile =<< json f
 
+json :: FilePath -> IO FilePath
+json f | ext == ".json" = return f
+       | ext == ".ts"   = execCmd  (tsCmd ++ f) >> return (toJSONExt f)
+       | otherwise      = error $ "Unsupported input file format: " ++ ext
+  where ext             = takeExtension f
+        toJSONExt       = (`addExtension` ".json") . dropExtension
+        tsCmd           = "tsc --nano "
 
 run verifyFile cfg 
   = do rs   <- mapM (runOne verifyFile) $ files cfg
@@ -45,6 +50,11 @@ runOne verifyFile f
        return r
     where
        handler e = return (NoAnn, F.Crash [e] "") 
+
+execCmd cmd               = putStrLn ("EXEC: " ++ cmd) >> system cmd >>= check
+  where 
+    check (ExitSuccess)   = return ()
+    check (ExitFailure n) = error $ "cmd: " ++ cmd ++ " failure code " ++ show n 
 
 ----------------------------------------------------------------------------------
 renderAnnotations :: (PP t) => FilePath -> F.FixResult Error -> UAnnSol t -> IO () 
@@ -67,12 +77,3 @@ renderAnnotations srcFile res (SomeAnn ann sol)
        annFile  = extFileName Annot srcFile
        ann'     = sol ann
 
-----------------------------------------------------------------------------------
--- tsVerifyFile :: Config -> FilePath -> IO (F.FixResult Error)  
-----------------------------------------------------------------------------------
--- tsVerifyFile f 
---   = do pgm <- TS.parseTypeScript f
---        putStrLn $ "******************* Converted TS TO ***************************"
---        putStrLn $ render $ javaScript pgm
---        putStrLn $ "***************************************************************"
---        return (NoAnn, F.Safe)

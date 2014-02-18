@@ -1,48 +1,39 @@
-#### Language for experimenting with verification algorithms
+### Language for experimenting with verification algorithms
 
-## Install
+## Dependencies
 
-### Dependencies
+NanoJS depends on the following projects:
 
-    git clone git@github.com:ucsd-progsys/liquid-fixpoint.git 
-    git clone git@github.com:UCSD-PL/language-ecmascript.git
-    git clone git@github.com:UCSD-PL/nano-js.git
-
-### Build
-
-    cd liquid-fixpoint     && cabal install && cd ..
-    cd language-ecmascript && cabal install && cd ..
-    cd nano-js             && cabal install && cd ..
-
-## Run
-
-To run NanoJS on a single file:
-
-    nanojs liquid /path_to_JS_file/input.js
+ * Haskell compiler
+ * Ocaml Compiler
+ * [Node.js](http://nodejs.org/) and [Jake](https://github.com/mde/jake)
+ * [Liquid-fixpont](https://github.com/ucsd-progsys/liquid-fixpoint): Haskell Interface for Back-End Implication / Horn Clause Constraint Solving for Liquid Types.
+ * [Language Ecmascript] (https://github.com/UCSD-PL/language-ecmascript): JavaScript Syntax writen in Haskell.
+ * [TypeScript](https://github.com/panagosg7/typescript): TypeScript compiler, used as front-end.
 
 
-## TypeScript to NanoJS translation
 
-You can translate annotated [TypeScript](http://www.typescriptlang.org/)
-programs to NanoJS by using
-[TStoNanoJS](https://github.com/panagosg7/TStoNanoJS), a fork of the
-TypeScript compiler that emits NanoJ-annotated code.
+## Installation
 
-#### Dependencies
+The following instructions have been tested on Ubuntu >= 12.04. 
 
-TypeScript depends on
+We assume that the requirements regarding the Haskell and Ocaml compiler are met.
 
-+ [node](http://nodejs.org/) version > 0.8 
-+ `jake`. 
 
-**Installing Node/Jake on MacOS**
+### Installing Node.js and Jake 
+
+TypeScript depends on:
+
++ [node.js](http://nodejs.org/) version > 0.8 
++ [jake](https://github.com/mde/jake)
+
+
+#### Installing Node/Jake on MacOS
 
 1. Install the [node package](http://nodejs.org/)
 2. `sudo npm install -g jake`
 
-**Installing Node/Jake on Ubuntu/Debian**
-
-Here are some instructions for installation in Ubuntu/Debian:
+#### Installing Node/Jake on Ubuntu/Debian
 
     sudo apt-get install nodejs npm
 
@@ -61,31 +52,59 @@ or, if this fails:
 
     sudo npm install -g jake --registry http://registry.npmjs.org/
 
-#### Build
-
-To build TstoNanoJS from source:
-
-    git clone https://github.com/panagosg7/TStoNanoJS
-    cd TStoNanoTS
-    jake
-
-The target script will be at:
-
-+ on ubuntu: `build/local/tsc/js`.
-
-+ on macos: `built/local/tsc.js`
 
 
-#### Run
+### Get source code
 
-To run the translator:
+Clone all dependencies and NanoJS in the same directory `ROOT`:
 
-    node build/local/tsc.js /path_to_TS_file/input.ts
+    git clone https://github.com/ucsd-progsys/liquid-fixpoint
+    git clone https://github.com/UCSD-PL/language-ecmascript
+    git clone https://github.com/panagosg7/typescript
+    git clone https://github.com/UCSD-PL/nano-js
 
-This will produce an output in the same folder with the input, the same name,
-but a JavaScript instead of a TypeScript extention.
+After acquiring the code you should be presented with the following file structure:
 
-You can find a suite of examples in `tests/nanojs/misc/pass`.
+```
+ROOT
+  ├── language-ecmascript
+  ├── liquid-fixpoint
+  ├── nano-js
+  └── typescript
+```
+    
+### Create Virtual Haskell Environment (Optional)
+
+It is recommended to use an isolated Haskell environment (https://github.com/Paczesiowa/hsenv). Create one using version 7.6.3 of the GHC Haskell compiler (available [here](https://www.haskell.org/ghc/download_ghc_7_6_3)):
+
+    hsenv --ghc=/PATH/TO/GHC/ghc-7.6.3-x86_64-unknown-linux.tar
+    
+And then to enable it:
+
+    source .hsenv/bin/activate
+    
+    
+
+### Build dependencies
+
+    cd liquid-fixpoint     && cabal install && cd ..
+    cd language-ecmascript && git checkout heapless_parse_json && cabal install && cd ..
+    cd typescript          && jake
+
+
+    
+### Build NanoJS
+
+    cd nano-js             && git checkout heapless_parse_json && cabal install && cd ..
+
+
+
+## Usage
+
+To run NanoJS on a single TypeScript file:
+
+    nanojs liquid /path_to_JS_file/file.ts
+
 
 
 

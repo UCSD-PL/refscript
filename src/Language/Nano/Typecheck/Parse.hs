@@ -13,20 +13,18 @@ module Language.Nano.Typecheck.Parse (
 
 import           Prelude                          hiding ( mapM)
 
-import           Data.Aeson                              ( decode, encode, eitherDecode)
+import           Data.Aeson                              ( eitherDecode)
 import           Data.Aeson.Types                 hiding ( Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               ( isLower, isSpace)
 import qualified Data.List                        as     L
-import           Data.Maybe                              ( maybeToList)
 import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
 import           Data.Traversable                        ( mapAccumL)
 import           Data.Data
 import qualified Data.Foldable                    as     FO
-import           Data.Monoid                             ( mconcat)
-import           Data.Vector                             ((!), fromList)
+import           Data.Vector                             ((!))
 
 import           Control.Monad                    hiding ( mapM)
 import           Control.Monad.Trans                     ( MonadIO,liftIO)
@@ -38,7 +36,6 @@ import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc                  ( mapEither, mapSnd)
 import           Language.Nano.Misc                      ( maybeToEither)
 import           Language.Nano.Errors
-import           Language.Nano.Files
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
@@ -162,9 +159,7 @@ bareArgP
  <|>  (argBind <$> try (bareTypeP))
 
 boundTypeP = do s <- symbolP 
-                spaces
-                colon
-                spaces
+                withinSpacesP colon
                 B s <$> bareTypeP
 
 argBind t = B (rTypeValueVar t) t
@@ -233,9 +228,7 @@ bindsP
 
 bareBindP 
   = do  s <- binderP
-        spaces      --ugly
-        colon
-        spaces
+        withinSpacesP colon
         t <- bareTypeP
         return $ B s t 
 
@@ -259,18 +252,6 @@ xrefP kindP
 refasP :: Parser [Refa]
 refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi)) 
        <|> liftM ((:[]) . RConc) predP
-
-------------------------------------------------------------------------
------------------------ Wrapped Constructors ---------------------------
-------------------------------------------------------------------------
-
--- filePathP :: Parser FilePath
--- filePathP = angles $ many1 pathCharP
---   where pathCharP = choice $ char <$> pathChars 
---         pathChars = ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ ['.', '/']
--- 
--- 
--- embedP     = xyP upperIdP (reserved "as") fTyConP
  
 binderP :: Parser Symbol
 binderP = try (stringSymbol <$> idP badc)
@@ -280,6 +261,9 @@ binderP = try (stringSymbol <$> idP badc)
             badc c = (c == ':') ||  bad c
             bad c  = isSpace c || c `elem` "()"
             pwr s  = stringSymbol $ "(" ++ s ++ ")" 
+
+withinSpacesP :: Parser a -> Parser a
+withinSpacesP p = do { spaces; a <- p; spaces; return a } 
              
 
 ---------------------------------------------------------------------------------
@@ -317,7 +301,7 @@ parseAnnot ss (RawExtern _) = Extern <$> patch ss <$> idBindP
 parseAnnot ss (RawType   _) = Type   <$> patch ss <$> tBodyP
 parseAnnot ss (RawTAlias _) = TAlias <$> patch ss <$> tAliasP
 parseAnnot ss (RawPAlias _) = PAlias <$> patch ss <$> pAliasP
-parseAnnot ss (RawQual   _) = Qual   <$>              qualifierP
+parseAnnot _  (RawQual   _) = Qual   <$>              qualifierP
 parseAnnot ss (RawInvt   _) = Invt             ss <$> bareTypeP
 
 patch ss (id, t) = (fmap (const ss) id , t)
@@ -340,27 +324,6 @@ instance FromJSON SourcePos where
     return $ newPos v0 v1 v2
   parseJSON _ = error "SourcePos should only be an A.Array" 
 
-
--------------------------------------------------------------------------------
--- | Parse File and Type Signatures -------------------------------------------
--------------------------------------------------------------------------------
-
--------------------------------------------------------------------------------
-parseNanoFromFile :: FilePath-> IO (Either Error (Nano SourceSpan RefType))
--------------------------------------------------------------------------------
-parseNanoFromFile f 
-  = do  -- spec <- parseCodeFromFile =<< getPreludePath
-        code <- parseCodeFromFile f
-        case msum [{-spec,-} code] of 
-          Right s -> return $ catSpecDefs s
-          Left  e -> return $ Left e
-
--------------------------------------------------------------------------------
-collectTypes :: [Statement (SourceSpan, Maybe RefType)] -> [RefType]
--------------------------------------------------------------------------------
-collectTypes = concatMap $ FO.foldr (\s -> (++) (maybeToList $ snd s)) []
-
-
 instance FromJSON (Expression (SourceSpan, [RawSpec]))
 instance FromJSON (Statement (SourceSpan, [RawSpec]))
 instance FromJSON (LValue (SourceSpan, [RawSpec]))
@@ -380,6 +343,26 @@ instance FromJSON PrefixOp
 instance FromJSON UnaryAssignOp
 instance FromJSON SourceSpan
 instance FromJSON RawSpec
+
+
+-------------------------------------------------------------------------------
+-- | Parse File and Type Signatures -------------------------------------------
+-------------------------------------------------------------------------------
+
+-------------------------------------------------------------------------------
+parseNanoFromFile :: FilePath-> IO (Either Error (Nano SourceSpan RefType))
+-------------------------------------------------------------------------------
+parseNanoFromFile f 
+  = do  -- spec <- parseCodeFromFile =<< getPreludePath
+        code <- parseCodeFromFile f
+        case msum [{-spec,-} code] of 
+          Right s -> return $ catSpecDefs s
+          Left  e -> return $ Left e
+
+-------------------------------------------------------------------------------
+-- collectTypes :: [Statement (SourceSpan, Maybe RefType)] -> [RefType]
+-------------------------------------------------------------------------------
+-- collectTypes = concatMap $ FO.foldr (\s -> (++) (maybeToList $ snd s)) []
 
 
 getJSON :: MonadIO m => FilePath -> m B.ByteString
@@ -419,7 +402,7 @@ mkCode1 ss =  do
   where
     ss'         = fmap fst <$> ss
     anns        = concatMap (FO.foldMap snd) ss
-    ssAnns      = concatMap (FO.foldMap (\(s,l) -> (s,) <$> l)) ss
+    -- ssAnns      = concatMap (FO.foldMap (\(s,l) -> (s,) <$> l)) ss
     vds         = varDeclStmts ss
 
 

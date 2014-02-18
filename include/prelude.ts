@@ -416,4 +416,4 @@
 
 /*@ extern top_level :: () => void */
 
-null; //IMPORTANT: This needs to be here so that there is at least one node in the Typescript AST !!!
+var __dummy__ = null; //IMPORTANT: This needs to be here so that there is at least one node in the Typescript AST !!!

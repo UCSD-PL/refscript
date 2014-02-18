@@ -10,16 +10,6 @@ import System.Console.CmdArgs
 -- | Parsing Command Line -------------------------------------------------------
 ---------------------------------------------------------------------------------
 
-esc = Esc { 
-   files   = def  &= typ "TARGET"
-                  &= args
-                  &= typFile
-
- , incdirs = def  &= typDir
-                  &= help "Paths to Spec Include Directory "
-
- } &= help    "Extended Static Checker for Nano" 
-
 tc = TC { 
    files        = def   &= typ "TARGET"
                         &= args
@@ -47,8 +37,7 @@ liquid = Liquid {
 
 
 
-config = modes [ esc
-               , tc
+config = modes [ tc
                , liquid &= auto 
                ] 
             &= help    "nanojs is a suite of toy program verifiers"

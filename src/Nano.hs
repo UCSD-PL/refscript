@@ -1,5 +1,3 @@
-
-import qualified Language.Nano.ESC.ESC              as ESC
 import qualified Language.Nano.Typecheck.Typecheck  as TC 
 import qualified Language.Nano.Liquid.Liquid        as Liquid 
 -- import qualified Language.TypeScript.Parse          as TS 
@@ -27,7 +25,6 @@ main = do cfg  <- getOpts
 -------------------------------------------------------------------------------
 -- verifier           :: Config -> FilePath -> IO (F.FixResult Error)  
 -------------------------------------------------------------------------------
-verifier (Esc    {} ) = ESC.verifyFile 
 verifier (TC     {} ) = TC.verifyFile
 verifier (Liquid {} ) = Liquid.verifyFile
 -- verifier (TS {})      = tsVerifyFile

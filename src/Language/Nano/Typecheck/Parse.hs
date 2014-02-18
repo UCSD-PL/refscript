@@ -42,7 +42,6 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
 
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.PrettyPrint
 
 import           Text.Parsec                      hiding ( parse)
 import           Text.Parsec.Pos                         ( newPos)

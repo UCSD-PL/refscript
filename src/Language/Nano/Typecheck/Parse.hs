@@ -350,7 +350,7 @@ instance FromJSON RawSpec
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-parseNanoFromFile :: FilePath-> IO (Either Error (Nano SourceSpan RefType))
+parseNanoFromFile :: FilePath-> IO (Either Error (NanoBareR Reft))
 -------------------------------------------------------------------------------
 parseNanoFromFile f 
   = do  -- spec <- parseCodeFromFile =<< getPreludePath
@@ -379,14 +379,14 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
         Right p  -> p
 
 --------------------------------------------------------------------------------------
-parseCodeFromFile :: FilePath -> IO (Either Error (Nano SourceSpan RefType))
+parseCodeFromFile :: FilePath -> IO (Either Error (NanoBareR Reft))
 --------------------------------------------------------------------------------------
-parseCodeFromFile fp = parseScriptFromJSON fp >>= return . mkCode1 . expandAnnots
+parseCodeFromFile fp = parseScriptFromJSON fp >>= return . mkCode . expandAnnots
 
 --------------------------------------------------------------------------------------
-mkCode1 :: [Statement (SourceSpan, [Spec])] ->  Either Error (Nano SourceSpan RefType)
+mkCode :: [Statement (SourceSpan, [Spec])] ->  Either Error (NanoBareR Reft)
 --------------------------------------------------------------------------------------
-mkCode1 ss =  do
+mkCode ss =  do
     return $ Nano { 
         code    = Src (checkTopStmt <$> ss')
       , specs   = envFromList $ [ t | Extern t <- anns ] 
@@ -400,7 +400,9 @@ mkCode1 ss =  do
       , invts   = [Loc (srcPos l) t | Invt l t <- anns ]
     } 
   where
-    ss'         = fmap fst <$> ss
+    toBare     :: (SourceSpan, [Spec]) -> AnnBare Reft 
+    toBare p    = Ann (fst p) [TAnnot t | Bind (_,t) <- snd p ]
+    ss'         = (toBare <$>) <$> ss
     anns        = concatMap (FO.foldMap snd) ss
     -- ssAnns      = concatMap (FO.foldMap (\(s,l) -> (s,) <$> l)) ss
     vds         = varDeclStmts ss
@@ -429,7 +431,7 @@ parse ss st c = foo c
 
 
 --------------------------------------------------------------------------------------
-catSpecDefs :: PP t => Nano SourceSpan t -> Either Error (Nano SourceSpan t)
+catSpecDefs :: NanoBareR Reft -> Either Error (NanoBareR Reft)
 --------------------------------------------------------------------------------------
 catSpecDefs pgm = do
     defL  <- sequence [ (x,) <$> lookupTy x (specs pgm) | x <- fs ]
@@ -445,7 +447,7 @@ lookupTy x γ   = maybeToEither err $ envFindTy x γ
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
 --------------------------------------------------------------------------------------
-definedFuns       :: [Statement SourceSpan] -> [Id SourceSpan]
+definedFuns       :: [Statement (AnnBare Reft)] -> [Id (AnnBare Reft)]
 --------------------------------------------------------------------------------------
 definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
   where 

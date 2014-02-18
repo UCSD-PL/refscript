@@ -95,7 +95,7 @@ And then to enable it:
     
 ### Build NanoJS
 
-    cd nano-js             && git checkout heapless_parse_json && cabal install && cd ..
+    cd nano-js             && git checkout heapless_classes && cabal install && cd ..
 
 
 

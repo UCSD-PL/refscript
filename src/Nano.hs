@@ -36,7 +36,7 @@ json f | ext == ".json" = return f
        | otherwise      = error $ "Unsupported input file format: " ++ ext
   where ext             = takeExtension f
         toJSONExt       = (`addExtension` ".json") . dropExtension
-        tsCmd           = "node ../typescript/built/local/tsc.js --nano "
+        tsCmd           = "tsc --nano "
 
 run verifyFile cfg 
   = do rs   <- mapM (runOne verifyFile) $ files cfg

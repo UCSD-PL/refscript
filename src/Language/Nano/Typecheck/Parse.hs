@@ -40,6 +40,7 @@ import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
+import           Language.Nano.Files
 
 import           Language.ECMAScript3.Syntax
 
@@ -352,19 +353,15 @@ instance FromJSON RawSpec
 parseNanoFromFile :: FilePath-> IO (Either Error (NanoBareR Reft))
 -------------------------------------------------------------------------------
 parseNanoFromFile f 
-  = do  -- spec <- parseCodeFromFile =<< getPreludePath
+  = do  spec <- parseCodeFromFile =<< tracePP "Prelude path" <$> getPreludePath
         code <- parseCodeFromFile f
-        case msum [{-spec,-} code] of 
+        case msum [spec, code] of 
           Right s -> return $ catSpecDefs s
           Left  e -> return $ Left e
 
--------------------------------------------------------------------------------
--- collectTypes :: [Statement (SourceSpan, Maybe RefType)] -> [RefType]
--------------------------------------------------------------------------------
--- collectTypes = concatMap $ FO.foldr (\s -> (++) (maybeToList $ snd s)) []
-
-
+--------------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString
+--------------------------------------------------------------------------------------
 getJSON = liftIO . B.readFile
 
 --------------------------------------------------------------------------------------

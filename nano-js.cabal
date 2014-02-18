@@ -10,10 +10,10 @@ category:            Language
 build-type:          Custom
 cabal-version:       >=1.8
 extra-source-files:  README.md, 
-                     include/prelude.js
+                     include/prelude.ts
 
 data-files:          README.md, 
-                     include/prelude.js
+                     include/prelude.ts
 
 Executable nanojs
   build-depends:       base, containers, 

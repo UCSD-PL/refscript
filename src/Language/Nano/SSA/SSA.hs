@@ -37,14 +37,20 @@ ssaTransform' = execute . ssaNano
 ----------------------------------------------------------------------------------
 ssaNano :: F.Reftable r => Nano SourceSpan (RType r) -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
-ssaNano p@(Nano { code = Src fs, specs = sp , tAnns = an }) 
+ssaNano p@(Nano { code = Src fs, specs = sp }) 
+-- TODO !!! 
+--
+-- We don't need to be patching the AST - we can just keep the annotations
+-- around from the parsing stage.
+-- SEE what's missing here.
+--
   = withMutability ReadOnly ros 
     $ withMutability WriteGlobal wgs 
       $ do (_,fs') <- ssaStmts fs 
            ssaAnns <- getAnns
-           return   $ p {code = Src $ (patch [ssaAnns, sp', tAnnFacts] <$>) <$> fs'}
+           return   $ p {code = Src $ (patch [ssaAnns, sp' {-, tAnnFacts-}] <$>) <$> fs'}
     where
-      tAnnFacts     = M.map (\i -> [TAnnot i]) an 
+      -- tAnnFacts     = M.map (\i -> [TAnnot i]) an 
       sp'           = M.fromList $ mapFst getAnnotation 
                         <$> (envToList $ envMap (single . TAnnot) sp)
       ros           = readOnlyVars p

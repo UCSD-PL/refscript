@@ -86,11 +86,11 @@ safe (_, Nano {code = Src fs})
 
 -- | Inline type annotations
 patchTypeAnnots :: (PP r, F.Reftable r) => NanoSSAR r -> NanoTSSAR r
-patchTypeAnnots p@(Nano {code = Src fs, specs = m, chSpecs = cm }) = 
+patchTypeAnnots p@(Nano {code = Src fs, chSpecs = cm }) = 
     p {code = Src $ (patchAnn <$>) <$> fs}
   where
     patchAnn (Ann l bs) = Ann l $ (TAnnot <$> (maybeToList $ M.lookup l mm)) ++ bs
-    mm = M.fromList (mapFst getAnnotation <$> envToList m ++ envToList cm)
+    mm = M.fromList (mapFst getAnnotation <$> envToList cm)
 
 
 -- | Cast manipulation
@@ -345,7 +345,8 @@ tcClassEltAux l id f =
   case [ t | TAnnot t  <- ann_fact l ] of 
     [  ]  -> tcError    $ errorConstAnnMissing (srcPos l) id
     [ft]  -> f ft 
-    _     -> error      $ "tcClassEltType:multi-type constructor"
+    ts    -> error      $  "tcClassEltType:multi-type constructors " 
+                        ++ ppshow l
 
 --------------------------------------------------------------------------------
 tcSeq :: (TCEnv r -> a -> TCM r (b, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([b], TCEnvO r)

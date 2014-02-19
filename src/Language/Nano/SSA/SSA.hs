@@ -16,13 +16,14 @@ import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.SSA.SSAMonad
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.Fixpoint.Misc             
 import qualified Language.Fixpoint.Types            as F
 -- import           Debug.Trace                        hiding (traceShow)
 
 ----------------------------------------------------------------------------------
-ssaTransform :: (F.Reftable r) => NanoBareR r -> NanoSSAR r
+ssaTransform :: (PP r, F.Reftable r) => NanoBareR r -> NanoSSAR r
 ----------------------------------------------------------------------------------
 ssaTransform = either throw id . execute . ssaNano 
 
@@ -36,22 +37,22 @@ ssaTransform' = execute . ssaNano
 -- ∙ Type annotations (variable declarations (?), class elements)
 --
 ----------------------------------------------------------------------------------
-ssaNano :: F.Reftable r => NanoBareR r -> SSAM r (NanoSSAR r)
+ssaNano :: (PP r, F.Reftable r) => NanoBareR r -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano { code = Src fs, specs = sp }) 
   = withMutability ReadOnly ros 
     $ withMutability WriteGlobal wgs 
       $ do (_,fs') <- ssaStmts (map (ann <$>) fs)
            ssaAnns <- getAnns
-           return   $ p {code = Src $ (patch [ssaAnns, specAnns, typeAnns] <$>) <$> fs'}
+           return   $ p {code = Src $ map (fmap (patch [tracePP "ssaAnns" ssaAnns, {- specAnns,-} tracePP "typeAnns" typeAnns])) fs' }
     where
       typeAnns      = M.fromList $ concatMap 
                         (FO.concatMap (\(Ann l an) -> (l,) <$> single <$> an)) fs
-      specAnns      = M.fromList $ mapFst getAnnotation 
-                        <$> (envToList $ envMap (single . TAnnot) sp)
+      {-specAnns      = tracePP "specAnns" $ M.fromList $ mapFst getAnnotation -}
+      {-                  <$> (envToList $ envMap (single . TAnnot) sp)-}
       ros           = readOnlyVars p
       wgs           = writeGlobalVars p 
-      patch :: [M.HashMap SourceSpan [Fact r]] -> SourceSpan -> Annot (Fact r) SourceSpan
+      patch        :: [M.HashMap SourceSpan [Fact r]] -> SourceSpan -> Annot (Fact r) SourceSpan
       patch ms l    = Ann l $ concatMap (M.lookupDefault [] l) ms
 
 -------------------------------------------------------------------------------------
@@ -211,8 +212,9 @@ ssaStmt (SwitchStmt l e xs)
       headWithDefault _ xs = head xs
 
 -- class A extends B implements I,J,... { ... }
-ssaStmt (ClassStmt l n e is bd) =  
-  ssaSeq ssaClassElt bd >>= return . mapSnd (ClassStmt l n e is)
+ssaStmt (ClassStmt l n e is bd) = do 
+  bd' <- mapM ssaClassElt bd 
+  return (True, ClassStmt l n e is bd')
 
 -- OTHER (Not handled)
 ssaStmt s 
@@ -224,12 +226,12 @@ ssaClassElt (Constructor l xs body)
          do setSsaEnv     $ extSsaEnv xs θ                   -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
-            return        $ (True, Constructor l xs body')
+            return        $ Constructor l xs body'
 
 -- Class fields are considered immutable.
-ssaClassElt v@(MemberVarDecl _ _ _ _ )    = return (True, v)
+ssaClassElt v@(MemberVarDecl _ _ _ _ )    = return v
 ssaClassElt (MemberMethDecl l m s e i cs) =
-  ssaStmts cs >>= return . mapSnd (MemberMethDecl l m s e i)
+  ssaStmts cs >>= return . MemberMethDecl l m s e i . snd
 
 infOp OpAssign         _ _  = id
 infOp OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalExp lv)

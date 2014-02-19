@@ -23,6 +23,7 @@ import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
 import           Data.Traversable                        ( mapAccumL)
 import           Data.Data
+import           Data.Monoid                             (mconcat)
 import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
 
@@ -353,11 +354,12 @@ instance FromJSON RawSpec
 parseNanoFromFile :: FilePath-> IO (Either Error (NanoBareR Reft))
 -------------------------------------------------------------------------------
 parseNanoFromFile f 
-  = do  spec <- parseCodeFromFile =<< tracePP "Prelude path" <$> getPreludePath
+  = do  spec <- parseCodeFromFile =<< getPreludePath
         code <- parseCodeFromFile f
-        case msum [spec, code] of 
-          Right s -> return $ catSpecDefs s
-          Left  e -> return $ Left e
+        case (spec, code) of 
+          (Right s, Right c) -> return $ catSpecDefs $ mconcat [s, c]
+          (Left  e, _      ) -> return $ Left e
+          (_      , Left  e) -> return $ Left e
 
 --------------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString

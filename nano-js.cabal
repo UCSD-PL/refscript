@@ -7,15 +7,15 @@ license-file:        LICENSE
 author:              Ranjit Jhala
 maintainer:          jhala@cs.ucsd.edu
 category:            Language
-build-type:          Simple
+build-type:          Custom
 cabal-version:       >=1.8
 extra-source-files:  README.md, 
-                     include/prelude.js
+                     include/prelude.ts
 
 data-files:          README.md, 
-                     include/prelude.js
+                     include/prelude.ts
 
-executable nanojs
+Executable nanojs
   build-depends:       base, containers, 
                        pretty, 
                        vector, bytestring, text, aeson, 
@@ -79,9 +79,6 @@ Library
 --                        Language.Nano.Typecheck.Unfold
 --                        Language.Nano.Typecheck.Lookup
 --                        Language.Nano.Typecheck.Typecheck
---                        Language.Nano.ESC.Types
---                        Language.Nano.ESC.ESC
---                        Language.Nano.ESC.VCMonad
 --                        Language.Nano.Liquid.Liquid
 --                        Language.Nano.Liquid.Types
 --                        Language.Nano.Liquid.CGMonad

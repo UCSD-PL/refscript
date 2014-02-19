@@ -38,6 +38,8 @@ JS Features
 Tool/Implementation
 -------------------
 
+  - Add prelude via JSON.
+
   - Force Class definitions to be at top-level.
 
   - Add resolved class types to the defined data type environment (tDefs).

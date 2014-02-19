@@ -14,7 +14,7 @@ module Language.Nano.Typecheck.Types (
   -- * Programs
     Nano (..)
   , NanoBare
-  , NanoSSA, NanoSSAR, NanoTSSAR, NanoTypeR 
+  , NanoSSA, NanoBareR, NanoSSAR, NanoTSSAR, NanoTypeR 
   , NanoType
   , ExprSSAR, StmtSSAR
   , Source (..)
@@ -448,10 +448,10 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
 ---------------------------------------------------------------------------------
 
 data Nano a t = Nano { code   :: !(Source a)               -- ^ Code to check
-                     , specs  :: !(Env t)                  -- ^ Imported (unchecked) specifications
+                     , externs:: !(Env t)                  -- ^ Imported (unchecked) specifications 
+                     , specs  :: !(Env t)                  -- ^ Function specs and 
                                                            -- ^ After TC will also include class types
-                     , chSpecs:: !(Env t)                  -- ^ Checked specifications (signatures and annotations)
-                     , tAnns  :: !(M.HashMap SourceSpan t) -- ^ Mapping from source positions to annotations
+                     , glVars :: !(Env t)                  -- ^ Global (annotated) vars
                      , consts :: !(Env t)                  -- ^ Measure Signatures
                      , defs   :: !(Env (TyDef t))          -- ^ Type definitions
 							       , tAlias :: !(TAliasEnv t)            -- ^ Type aliases
@@ -496,14 +496,16 @@ instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
   pp pgm@(Nano {code = (Src s) }) 
     =   text "******************* Code **********************"
     $+$ pp s
-    $+$ text "******************* Specifications ************"
+    $+$ text "******************* Imported specs ************"
+    $+$ pp (externs pgm)
+    $+$ text "******************* Checked fun sigs **********"
     $+$ pp (specs pgm)
-    $+$ text "******************* Checked specifications ****"
-    $+$ pp (chSpecs pgm)
+    $+$ text "******************* Global vars ***************"
+    $+$ pp (glVars pgm)
     $+$ text "******************* Constants *****************"
     $+$ pp (consts pgm) 
-    {-$+$ text "******************* Type Definitions **********"-}
-    {-$+$ pp (defs  pgm)-}
+    $+$ text "******************* Type Definitions **********"
+    $+$ pp (defs  pgm)
     $+$ text "******************* Predicate Aliases *********"
     $+$ pp (pAlias pgm)
     $+$ text "******************* Type Aliases **************"
@@ -514,15 +516,15 @@ instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
     $+$ pp (invts pgm) 
     $+$ text "***********************************************"
 
-{-instance (PP r) => PP (TyDef r) where-}
-{-  pp (TD id v r _) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r-}
+instance (PP r, F.Reftable r) => PP (TyDef (RType r)) where
+  pp (TD id v r _) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r
     
 instance Monoid (Nano a t) where 
   mempty        = Nano mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty 
   mappend p1 p2 = Nano { code    = (code    p1 ) `mappend` (code    p2 )
-                       , chSpecs = (chSpecs p1 ) `mappend` (chSpecs p2 )
-                       , tAnns   = (tAnns   p1 ) `mappend` (tAnns   p2 )
+                       , externs = (externs p1 ) `mappend` (externs p2 )
                        , specs   = (specs   p1 ) `mappend` (specs   p2 )
+                       , glVars  = (glVars  p1 ) `mappend` (glVars  p2 )
                        , consts  = (consts  p1 ) `mappend` (consts  p2 )
                        , defs    = (defs    p1 ) `mappend` (defs    p2 )
                        , tAlias  = (tAlias  p1 ) `mappend` (tAlias  p2 )
@@ -553,17 +555,17 @@ data Mutability
 writeGlobalVars   :: PP t => Nano a t -> [Id SourceSpan] 
 writeGlobalVars p = envIds mGnty 
   where
-    mGnty         = foldl1 envUnion [specs p, chSpecs p]  -- guarantees
+    mGnty         = glVars p  -- guarantees
 
 -- | `immutableVars p` returns symbols that must-not be re-assigned and hence
 --    * can appear in refinements
 
-readOnlyVars   :: Nano a t -> [Id SourceSpan] 
-readOnlyVars p = envIds $ mAssm `envUnion` mMeas
+readOnlyVars   :: (IsLocated a, Data a, Typeable a) => Nano a t -> [Id SourceSpan] 
+readOnlyVars p = envIds $ mAssm `envUnion` mMeas `envUnion` mExtr
   where 
-    mAssm      = specs p   -- assumes
-    mMeas      = consts p  -- measures
-
+    mMeas      = consts p     -- measures
+    mAssm      = specs  p     -- assumes                      
+    mExtr      = externs p    -- externs
 
 
 ---------------------------------------------------------------------------

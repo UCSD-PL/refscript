@@ -35,8 +35,6 @@ import           Language.Fixpoint.Types          hiding ( quals, Loc, Expressio
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc                  ( mapEither, mapSnd)
-import           Language.Nano.Misc                      ( maybeToEither)
-import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
@@ -357,7 +355,7 @@ parseNanoFromFile f
   = do  spec <- parseCodeFromFile =<< getPreludePath
         code <- parseCodeFromFile f
         case (spec, code) of 
-          (Right s, Right c) -> return $ catSpecDefs $ mconcat [s, c]
+          (Right s, Right c) -> return $ Right $ mconcat [s, c]
           (Left  e, _      ) -> return $ Left e
           (_      , Left  e) -> return $ Left e
 
@@ -387,9 +385,9 @@ mkCode :: [Statement (SourceSpan, [Spec])] ->  Either Error (NanoBareR Reft)
 mkCode ss =  do
     return $ Nano { 
         code    = Src (checkTopStmt <$> ss')
-      , specs   = envFromList $ [ t | Extern t <- anns ] 
-                             ++ [ t | Bind   t <- anns ] -- externs and binds
-      , chSpecs = envFromList   [ t | Bind   t <- concatMap (FO.foldMap snd) vds ]
+      , externs = envFromList   [ t | Extern t <- anns ] -- externs
+      , specs   = catFunSpecDefs ss                      -- function sigs
+      , glVars  = catVarSpecDefs ss                      -- variables
       , consts  = envFromList   [ t | Meas   t <- anns ] 
       , defs    = envFromList   [ t | Type   t <- anns ] 
       , tAlias  = envFromList   [ t | TAlias t <- anns ] 
@@ -402,14 +400,9 @@ mkCode ss =  do
     toBare p    = Ann (fst p) [TAnnot t | Bind (_,t) <- snd p ]
     ss'         = (toBare <$>) <$> ss
     anns        = concatMap (FO.foldMap snd) ss
-    -- ssAnns      = concatMap (FO.foldMap (\(s,l) -> (s,) <$> l)) ss
-    vds         = varDeclStmts ss
 
 
 -- TODO: Is there any chance we can keep the Either Monad here?
---
--- In the following `a` is meant to be Spec + RefType (the type specs for
--- functions etc.). 
 type PState = Integer
 
 --------------------------------------------------------------------------------------
@@ -429,34 +422,32 @@ parse ss st c = foo c
 
 
 --------------------------------------------------------------------------------------
-catSpecDefs :: NanoBareR Reft -> Either Error (NanoBareR Reft)
+catFunSpecDefs :: [Statement (SourceSpan, [Spec])] -> Env RefType
 --------------------------------------------------------------------------------------
-catSpecDefs pgm = do
-    defL  <- sequence [ (x,) <$> lookupTy x (specs pgm) | x <- fs ]
-    return $ pgm { chSpecs = envUnion (envFromList defL) (chSpecs pgm) }
-  where 
-    fs          = definedFuns stmts 
-    Src stmts   = code pgm
+catFunSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
+  where ds     = definedFuns ss
 
-lookupTy x γ   = maybeToEither err $ envFindTy x γ 
-  where 
-    err        = bugUnboundFunction γ (srcPos x) x
+--------------------------------------------------------------------------------------
+catVarSpecDefs :: [Statement (SourceSpan, [Spec])] -> Env RefType
+--------------------------------------------------------------------------------------
+catVarSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
+  where ds     = varDeclStmts ss
+
 
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
 --------------------------------------------------------------------------------------
-definedFuns       :: [Statement (AnnBare Reft)] -> [Id (AnnBare Reft)]
+definedFuns       :: (Data a, Typeable a) => [Statement a] -> [a]
 --------------------------------------------------------------------------------------
 definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
   where 
-    fromFunction (FunctionStmt _ x _ _) = [x] 
+    fromFunction (FunctionStmt l _ _ _) = [l] 
     fromFunction _                      = []
 
 --------------------------------------------------------------------------------------
-varDeclStmts         :: (Data a, Typeable a) => [Statement a] -> [Statement a]
+varDeclStmts         :: (Data a, Typeable a) => [Statement a] -> [a]
 --------------------------------------------------------------------------------------
 varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
   where 
-    fromVarDecl s@(VarDeclStmt _ _) = [s]
-    fromVarDecl _                   = []
+    fromVarDecl (VarDecl l _ _) = [l]
 

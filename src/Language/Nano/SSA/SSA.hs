@@ -1,6 +1,7 @@
 
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
 
 module Language.Nano.SSA.SSA (ssaTransform, ssaTransform') where 
 
@@ -9,6 +10,8 @@ import           Control.Monad
 import           Control.Exception                  (throw)
 import qualified Data.Foldable                    as     FO
 import qualified Data.HashMap.Strict as M 
+import           Data.Typeable
+import           Data.Data
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
@@ -23,7 +26,7 @@ import qualified Language.Fixpoint.Types            as F
 -- import           Debug.Trace                        hiding (traceShow)
 
 ----------------------------------------------------------------------------------
-ssaTransform :: (PP r, F.Reftable r) => NanoBareR r -> NanoSSAR r
+ssaTransform :: (PP r, F.Reftable r, Data r, Typeable r) => NanoBareR r -> NanoSSAR r
 ----------------------------------------------------------------------------------
 ssaTransform = either throw id . execute . ssaNano 
 
@@ -37,14 +40,14 @@ ssaTransform' = execute . ssaNano
 -- ∙ Type annotations (variable declarations (?), class elements)
 --
 ----------------------------------------------------------------------------------
-ssaNano :: (PP r, F.Reftable r) => NanoBareR r -> SSAM r (NanoSSAR r)
+ssaNano :: (PP r, F.Reftable r, Data r, Typeable r) => NanoBareR r -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
-ssaNano p@(Nano { code = Src fs, specs = sp }) 
+ssaNano p@(Nano { code = Src fs }) 
   = withMutability ReadOnly ros 
     $ withMutability WriteGlobal wgs 
       $ do (_,fs') <- ssaStmts (map (ann <$>) fs)
            ssaAnns <- getAnns
-           return   $ p {code = Src $ map (fmap (patch [tracePP "ssaAnns" ssaAnns, {- specAnns,-} tracePP "typeAnns" typeAnns])) fs' }
+           return   $ p {code = Src $ map (fmap (patch [ssaAnns, typeAnns])) fs' }
     where
       typeAnns      = M.fromList $ concatMap 
                         (FO.concatMap (\(Ann l an) -> (l,) <$> single <$> an)) fs

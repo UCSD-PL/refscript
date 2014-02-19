@@ -25,11 +25,12 @@ import           Language.Fixpoint.Interface        (solve)
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Misc
+import           Language.Nano.Env                  (envUnion)
 import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
-import           Language.Nano.Typecheck.Typecheck  (typeCheck, patchTypeAnnots) 
+import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
 import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.SSA.SSA
@@ -57,7 +58,7 @@ verifyFile f
               case ssaTransform' p1 of 
                 Left err -> return (A.NoAnn, F.Unsafe [err])
                 Right p2 -> 
-                    let p3 = expandAliases $ patchTypeAnnots p2 in
+                    let p3 = expandAliases p2 in
                     case typeCheck verb p3 of
                       Left errs -> return $ (A.NoAnn, F.Unsafe errs)
                       Right p4  -> reftypeCheck cfg f p4
@@ -97,7 +98,9 @@ consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) = consStmts (initCGEnv pgm) fs >> return ()
 
-initCGEnv pgm = CGE (specs pgm) (defs pgm) F.emptyIBindEnv [] emptyContext (chSpecs pgm)
+initCGEnv pgm = CGE (envUnion (specs pgm) (externs pgm)) 
+                    (defs pgm) F.emptyIBindEnv [] emptyContext 
+                    (envUnion (specs pgm) (glVars pgm))
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv

@@ -6,7 +6,7 @@
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck, patchTypeAnnots) where 
+module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
 
 import           Control.Applicative                ((<$>))
 import           Control.Monad                
@@ -16,7 +16,7 @@ import qualified Data.HashMap.Strict                as M
 import qualified Data.Traversable                   as T
 import           Data.Monoid
 import qualified Data.List                          as L
-import           Data.Maybe                         (catMaybes,  fromMaybe, listToMaybe, maybeToList)
+import           Data.Maybe                         (catMaybes,  fromMaybe)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, render, ($+$))
@@ -63,13 +63,12 @@ verifyFile f = do
           V.whenLoud $ putStrLn . render . pp $ nano
           case ssaTransform' nano of 
             Left err -> return (NoAnn, F.Unsafe [err])
-            Right p  -> 
+            Right nanoSsa -> 
               do 
-                let nanoSsa = patchTypeAnnots p
                 V.whenLoud  $ donePhase FM.Loud "SSA Transform"
-                V.whenLoud  $ putStrLn . render . pp $ p
+                V.whenLoud  $ putStrLn . render . pp $ nanoSsa
                 verb       <- V.getVerbosity
-                let annp    = execute verb nanoSsa $ tcNano p
+                let annp    = execute verb nanoSsa $ tcNano nanoSsa
                 r          <- either unsafe safe annp 
                 V.whenLoud  $ donePhase FM.Loud "Typechecking"
                 return      $ (NoAnn, r)
@@ -82,15 +81,6 @@ safe (_, Nano {code = Src fs})
   = do V.whenLoud $ printAllAnns fs 
        nfc       <- noFailCasts <$> getOpts
        return     $ F.Safe `mappend` failCasts nfc fs 
-
-
--- | Inline type annotations
-patchTypeAnnots :: (PP r, F.Reftable r) => NanoSSAR r -> NanoTSSAR r
-patchTypeAnnots p@(Nano {code = Src fs, specs = m, chSpecs = cm }) = 
-    p {code = Src $ (patchAnn <$>) <$> fs}
-  where
-    patchAnn (Ann l bs) = Ann l $ (TAnnot <$> (maybeToList $ M.lookup l mm)) ++ bs
-    mm = M.fromList (mapFst getAnnotation <$> envToList m ++ envToList cm)
 
 
 -- | Cast manipulation
@@ -140,7 +130,7 @@ tcNano p@(Nano {code = Src fs})
        whenLoud   $ (traceCodePP p1 m θ)
        case γo of 
          Just γ'  -> do  mc    <- mCls $ envIds $ tce_cls γ'
-                         let p2 = p1 { chSpecs = envUnion mc (chSpecs p1) }
+                         let p2 = p1 {- { chSpecs = envUnion mc (chSpecs p1) }-}
                          return $ (m, p2)
          Nothing  -> error "BUG:tcNano should end with an environment"
     where
@@ -157,14 +147,12 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs
     fs'               = [f | f@(TypInst _ _) <- M.lookupDefault [] l m]
     fs''              = [f | f@(Overload (Just _)) <- M.lookupDefault [] l m]
 
--- Initalize the environment with all the available specs!
-initEnv pgm           = TCE (envUnion (specs pgm) (chSpecs pgm)) 
-                            (defs pgm)
-                            (chSpecs pgm) 
-                            classEnv 
-                            emptyContext
+initEnv pgm           = TCE (envUnion (specs pgm) (externs pgm)) (defs pgm) (specs pgm)
+                            classEnv emptyContext
   where classEnv      = envFromList [ (s, ClassStmt l s e i b) | let Src ss = code pgm
                                                                , ClassStmt l s e i b <- ss ]
+        allSpecs      = specs pgm `envUnion` externs pgm
+
 
 traceCodePP p {-m s-} _ _ = trace (render $ {- codePP p m s -} pp p) $ return ()
       
@@ -206,11 +194,14 @@ checkTypeDefs pgm = reportAll $ grep
 --   @Just γ'@ means environment extended with statement binders
 
 
-data TCEnv r  = TCE { tce_env  :: Env (RType r)
-                    , tce_defs :: TDefEnv r                   -- ^ (Data) Type definitions
-                    , tce_spec :: Env (RType r)               -- ^ Program specs. Includes:
-                                                              --    * functions 
-                                                              --    * class types (after being computed)
+data TCEnv r  = TCE { tce_env  :: Env (RType r)  -- ^ This starts off the same
+                                                 --   as tce_spec, but grows with
+                                                 --   typechecking
+                    , tce_defs :: TDefEnv r      -- ^ Data type definitions
+                    , tce_spec :: Env (RType r)  -- ^ Program specs. Includes:
+                                                 --    * functions 
+                                                 --    * variable annotations
+                                                 --    * class types (after being computed)
                     , tce_cls  :: Env (Statement (AnnSSA r))  -- ^ Class definitions
                     , tce_ctx  :: !IContext 
                     }
@@ -249,7 +240,7 @@ tcEnvFindTy x                = envFindTy (stripSSAId x)   . tce_env
 tcEnvFindReturn              = envFindReturn              . tce_env
 
 tcEnvFindSpec x              = envFindTy (stripSSAId x)   . tce_spec 
-tcEnvFindSpecOrTy x γ        = msum [tcEnvFindTy x γ, tcEnvFindSpec x γ]
+tcEnvFindSpecOrTy x γ        = msum [tcEnvFindSpec x γ, tcEnvFindTy x γ]
 
 tcEnvFindCls x               = envFindTy x                . tce_cls
 tcEnvFindClsOrDie x          = fromMaybe ugh              . tcEnvFindCls x  
@@ -345,7 +336,8 @@ tcClassEltAux l id f =
   case [ t | TAnnot t  <- ann_fact l ] of 
     [  ]  -> tcError    $ errorConstAnnMissing (srcPos l) id
     [ft]  -> f ft 
-    _     -> error      $ "tcClassEltType:multi-type constructor"
+    ts    -> error      $  "tcClassEltType:multi-type constructors " 
+                        ++ ppshow l
 
 --------------------------------------------------------------------------------
 tcSeq :: (TCEnv r -> a -> TCM r (b, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([b], TCEnvO r)
@@ -542,10 +534,9 @@ tcAsgn l γ x e
   = do (e' , t) <- tcExprT γ e rhsT
        return      (e', Just $ tcEnvAdds [(x, t)] γ)
     where
-    -- Where to look for an annotation?
-    -- ∙ At the current AST node (for VarDecl)
-    -- ∙ The spec environment - for annotated declared variables.
-       rhsT      = msum [tcEnvFindSpecOrTy x γ, listToMaybe [ t | TAnnot t <- ann_fact l ]]
+    -- Every variable has a single raw type, whether it has been annotated with
+    -- it at declaration or through initialization.
+       rhsT      = tcEnvFindSpecOrTy x γ
 
 
 -------------------------------------------------------------------------------

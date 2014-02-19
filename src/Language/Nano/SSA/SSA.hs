@@ -1,13 +1,17 @@
 
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
 
 module Language.Nano.SSA.SSA (ssaTransform, ssaTransform') where 
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
 import           Control.Exception                  (throw)
+import qualified Data.Foldable                    as     FO
 import qualified Data.HashMap.Strict as M 
+import           Data.Typeable
+import           Data.Data
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
@@ -15,13 +19,14 @@ import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.SSA.SSAMonad
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.Fixpoint.Misc             
 import qualified Language.Fixpoint.Types            as F
 -- import           Debug.Trace                        hiding (traceShow)
 
 ----------------------------------------------------------------------------------
-ssaTransform :: (F.Reftable r) => Nano SourceSpan (RType r) -> NanoSSAR r
+ssaTransform :: (PP r, F.Reftable r, Data r, Typeable r) => NanoBareR r -> NanoSSAR r
 ----------------------------------------------------------------------------------
 ssaTransform = either throw id . execute . ssaNano 
 
@@ -35,21 +40,22 @@ ssaTransform' = execute . ssaNano
 -- ∙ Type annotations (variable declarations (?), class elements)
 --
 ----------------------------------------------------------------------------------
-ssaNano :: F.Reftable r => Nano SourceSpan (RType r) -> SSAM r (NanoSSAR r)
+ssaNano :: (PP r, F.Reftable r, Data r, Typeable r) => NanoBareR r -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
-ssaNano p@(Nano { code = Src fs, specs = sp , tAnns = an }) 
+ssaNano p@(Nano { code = Src fs }) 
   = withMutability ReadOnly ros 
     $ withMutability WriteGlobal wgs 
-      $ do (_,fs') <- ssaStmts fs 
+      $ do (_,fs') <- ssaStmts (map (ann <$>) fs)
            ssaAnns <- getAnns
-           return   $ p {code = Src $ (patch [ssaAnns, sp', tAnnFacts] <$>) <$> fs'}
+           return   $ p {code = Src $ map (fmap (patch [ssaAnns, typeAnns])) fs' }
     where
-      tAnnFacts     = M.map (\i -> [TAnnot i]) an 
-      sp'           = M.fromList $ mapFst getAnnotation 
-                        <$> (envToList $ envMap (single . TAnnot) sp)
+      typeAnns      = M.fromList $ concatMap 
+                        (FO.concatMap (\(Ann l an) -> (l,) <$> single <$> an)) fs
+      {-specAnns      = tracePP "specAnns" $ M.fromList $ mapFst getAnnotation -}
+      {-                  <$> (envToList $ envMap (single . TAnnot) sp)-}
       ros           = readOnlyVars p
       wgs           = writeGlobalVars p 
-      patch :: [M.HashMap SourceSpan [Fact r]] -> SourceSpan -> Annot (Fact r) SourceSpan
+      patch        :: [M.HashMap SourceSpan [Fact r]] -> SourceSpan -> Annot (Fact r) SourceSpan
       patch ms l    = Ann l $ concatMap (M.lookupDefault [] l) ms
 
 -------------------------------------------------------------------------------------
@@ -209,8 +215,9 @@ ssaStmt (SwitchStmt l e xs)
       headWithDefault _ xs = head xs
 
 -- class A extends B implements I,J,... { ... }
-ssaStmt (ClassStmt l n e is bd) =  
-  ssaSeq ssaClassElt bd >>= return . mapSnd (ClassStmt l n e is)
+ssaStmt (ClassStmt l n e is bd) = do 
+  bd' <- mapM ssaClassElt bd 
+  return (True, ClassStmt l n e is bd')
 
 -- OTHER (Not handled)
 ssaStmt s 
@@ -222,12 +229,12 @@ ssaClassElt (Constructor l xs body)
          do setSsaEnv     $ extSsaEnv xs θ                   -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
-            return        $ (True, Constructor l xs body')
+            return        $ Constructor l xs body'
 
 -- Class fields are considered immutable.
-ssaClassElt v@(MemberVarDecl _ _ _ _ )    = return (True, v)
+ssaClassElt v@(MemberVarDecl _ _ _ _ )    = return v
 ssaClassElt (MemberMethDecl l m s e i cs) =
-  ssaStmts cs >>= return . mapSnd (MemberMethDecl l m s e i)
+  ssaStmts cs >>= return . MemberMethDecl l m s e i . snd
 
 infOp OpAssign         _ _  = id
 infOp OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalExp lv)

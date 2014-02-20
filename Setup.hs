@@ -7,9 +7,6 @@ import Distribution.Simple.Setup
 import System.Posix.Env
 import System.Process
 import System.Exit
-import Paths_nano_js 
-
-getPreludePath = getDataFileName "include/prelude.json" 
 
 main         = defaultMainWithHooks fixHooks 
   where 
@@ -22,13 +19,14 @@ buildAndCopyFixpoint _ _ pkg lbi
        mapM_ executeShellCommand (map cpFile tscBins)
   -- Compile and copy TypeScript the prelude
        executeShellCommand $ "tsc --nano " ++ preludeSrc
-       getPreludePath >>= \p -> executeShellCommand ("cp " ++ preludeTgt ++ " " ++ p)
+       executeShellCommand ("cp " ++ preludeTgt ++ " " ++ dataDir)
   where 
     allDirs     = absoluteInstallDirs pkg lbi NoCopyDest
     withSpaces  = concatMap $ (++) " "
     binDir      = bindir allDirs ++ "/"
+    dataDir     = datadir allDirs ++ "/"
+
     cpFile f    = withSpaces ["cp", f, binDir]
-    _           = getDataFileName
     tscBins     = [ "../typescript/bin/tsc",
                     "../typescript/built/local/tsc.js",
                     "../typescript/typings/lib.d.ts",

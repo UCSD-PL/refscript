@@ -17,7 +17,7 @@ import           Data.Aeson                              ( eitherDecode)
 import           Data.Aeson.Types                 hiding ( Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
-import           Data.Char                               ( isLower, isSpace)
+import           Data.Char                               ( isLower, isSpace, ord)
 import qualified Data.List                        as     L
 import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
@@ -36,6 +36,7 @@ import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc                  ( mapEither, mapSnd)
 import           Language.Nano.Types
+import           Language.Nano.Errors
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
@@ -307,7 +308,7 @@ patch ss (id, t) = (fmap (const ss) id , t)
 
 getSpecString :: RawSpec -> String 
 getSpecString (RawMeas   s) = s  
-getSpecString (RawBind   s) = s
+getSpecString (RawBind   s) = s -- tracePP (ppshow $ map ord s) s
 getSpecString (RawExtern s) = s 
 getSpecString (RawType   s) = s 
 getSpecString (RawTAlias s) = s 

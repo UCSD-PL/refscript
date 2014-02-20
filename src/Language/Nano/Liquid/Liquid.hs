@@ -217,7 +217,7 @@ consStmt g (ClassStmt _ i _ _ ce)
         cgWithThis clsT $ mapM_ (consClassElt g) ce
         return $ Just g
         --  error $ "consStmt type for class " ++ ppshow i ++ " :: " ++ ppshow clsT
-      Nothing   -> error $ "BUG:consStmt could not find type for defined class"
+      Nothing   -> error $ "BUG:consStmt could not find type for defined class: " ++ ppshow i
   where 
     clsTOpt = envFindSpec i g
 

@@ -130,7 +130,7 @@ tcNano p@(Nano {code = Src fs})
        whenLoud   $ (traceCodePP p1 m θ)
        case γo of 
          Just γ'  -> do  mc    <- mCls $ envIds $ tce_cls γ'
-                         let p2 = p1 {- { chSpecs = envUnion mc (chSpecs p1) }-}
+                         let p2 = p1 { specs = envUnion mc (specs p1) }
                          return $ (m, p2)
          Nothing  -> error "BUG:tcNano should end with an environment"
     where
@@ -464,7 +464,7 @@ classType γ (ClassStmt l id (Just parent) _ cs) =
   do  t           <- findClassSpec γ parent
       case t of
         TObj bs _ -> do bs' <- foldM addField bs $ classEltType <$> cs
-                        addCTToSpec id $ TObj bs' fTop
+                        addCTToSpec id $ tracePP ("Adding to spec: " ++ ppshow id) $ TObj bs' fTop
         _         -> errorstar "IMPOSSIBLE:classType"
   where
     θ             = tce_defs γ

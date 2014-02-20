@@ -336,8 +336,7 @@ tcClassEltAux l id f =
   case [ t | TAnnot t  <- ann_fact l ] of 
     [  ]  -> tcError    $ errorConstAnnMissing (srcPos l) id
     [ft]  -> f ft 
-    ts    -> error      $  "tcClassEltType:multi-type constructors " 
-                        ++ ppshow l
+    _     -> error      $  "tcClassEltType:multi-type constructors " ++ ppshow l
 
 --------------------------------------------------------------------------------
 tcSeq :: (TCEnv r -> a -> TCM r (b, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([b], TCEnvO r)
@@ -530,7 +529,7 @@ tcVarDecl γ v@(VarDecl l x Nothing) =
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
   AnnSSA r -> TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 -------------------------------------------------------------------------------
-tcAsgn l γ x e
+tcAsgn _ γ x e
   = do (e' , t) <- tcExprT γ e rhsT
        return      (e', Just $ tcEnvAdds [(x, t)] γ)
     where

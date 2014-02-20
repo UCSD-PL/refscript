@@ -307,14 +307,14 @@ parseAnnot ss (RawInvt   _) = Invt             ss <$> bareTypeP
 patch ss (id, t) = (fmap (const ss) id , t)
 
 getSpecString :: RawSpec -> String 
-getSpecString (RawMeas   s) = s  
-getSpecString (RawBind   s) = s -- tracePP (ppshow $ map ord s) s
-getSpecString (RawExtern s) = s 
-getSpecString (RawType   s) = s 
-getSpecString (RawTAlias s) = s 
-getSpecString (RawPAlias s) = s 
-getSpecString (RawQual   s) = s 
-getSpecString (RawInvt   s) = s 
+getSpecString (RawMeas   s) = s 
+getSpecString (RawBind   s) = s 
+getSpecString (RawExtern s) = s  
+getSpecString (RawType   s) = s  
+getSpecString (RawTAlias s) = s  
+getSpecString (RawPAlias s) = s  
+getSpecString (RawQual   s) = s  
+getSpecString (RawInvt   s) = s  
 
 instance FromJSON SourcePos where
   parseJSON (Array v) = do

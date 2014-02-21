@@ -19,7 +19,7 @@ buildAndCopyFixpoint _ _ pkg lbi
        mapM_ executeShellCommand (map cpFile tscBins)
   -- Compile and copy TypeScript the prelude
        executeShellCommand $ "tsc --nano " ++ preludeSrc
-       executeShellCommand ("cp " ++ preludeTgt ++ " " ++ dataDir)
+       executeShellCommand ("cp " ++ preludeTgt ++ " " ++ dataDir ++ preludeTgt)
   where 
     allDirs     = absoluteInstallDirs pkg lbi NoCopyDest
     withSpaces  = concatMap $ (++) " "

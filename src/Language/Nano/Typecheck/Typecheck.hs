@@ -151,7 +151,6 @@ initEnv pgm           = TCE (envUnion (specs pgm) (externs pgm)) (defs pgm) (spe
                             classEnv emptyContext
   where classEnv      = envFromList [ (s, ClassStmt l s e i b) | let Src ss = code pgm
                                                                , ClassStmt l s e i b <- ss ]
-        allSpecs      = specs pgm `envUnion` externs pgm
 
 
 traceCodePP p {-m s-} _ _ = trace (render $ {- codePP p m s -} pp p) $ return ()
@@ -322,8 +321,6 @@ tcClassElt γ _ (Constructor l xs body) = tcClassEltAux l id f
 
 -- The type annotation in variable members is in the VarDecl part so we can use
 -- normal tcVarDecl for that part.
--- TODO: perhaps we don't need private members to be annotated, since they do
--- not contribute to the type of the class.
 tcClassElt γ id (MemberVarDecl l m s v) = tcClassEltAux (getAnnotation v) id f
     where f _ = tcVarDecl γ v >>= return . MemberVarDecl l m s . fst
 
@@ -334,7 +331,7 @@ tcClassElt γ _ (MemberMethDecl l m s i xs body) =
 
 tcClassEltAux l id f = 
   case [ t | TAnnot t  <- ann_fact l ] of 
-    [  ]  -> tcError    $ errorConstAnnMissing (srcPos l) id
+    [  ]  -> tcError    $ errorClEltAnnMissing (srcPos l) id
     [ft]  -> f ft 
     _     -> error      $  "tcClassEltType:multi-type constructors " ++ ppshow l
 

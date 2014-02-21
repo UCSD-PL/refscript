@@ -233,8 +233,14 @@ ssaClassElt (Constructor l xs body)
 
 -- Class fields are considered immutable.
 ssaClassElt v@(MemberVarDecl _ _ _ _ )    = return v
-ssaClassElt (MemberMethDecl l m s e i cs) =
-  ssaStmts cs >>= return . MemberMethDecl l m s e i . snd
+
+ssaClassElt (MemberMethDecl l m s e xs body)
+  = do θ <- getSsaEnv  
+       withMutability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
+         do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
+            (_, body')   <- ssaStmts body                    -- Transform function
+            setSsaEnv θ                                      -- Restore Outer SsaEnv
+            return        $ MemberMethDecl l m s e xs body'
 
 infOp OpAssign         _ _  = id
 infOp OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalExp lv)

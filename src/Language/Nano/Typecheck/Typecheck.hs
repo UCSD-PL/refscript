@@ -130,7 +130,7 @@ tcNano p@(Nano {code = Src fs})
        whenLoud   $ (traceCodePP p1 m θ)
        case γo of 
          Just γ'  -> do  mc    <- mCls $ envIds $ tce_cls γ'
-                         let p2 = p1 {- { chSpecs = envUnion mc (chSpecs p1) }-}
+                         let p2 = p1 { specs = envUnion mc (specs p1) }
                          return $ (m, p2)
          Nothing  -> error "BUG:tcNano should end with an environment"
     where
@@ -336,8 +336,7 @@ tcClassEltAux l id f =
   case [ t | TAnnot t  <- ann_fact l ] of 
     [  ]  -> tcError    $ errorConstAnnMissing (srcPos l) id
     [ft]  -> f ft 
-    ts    -> error      $  "tcClassEltType:multi-type constructors " 
-                        ++ ppshow l
+    _     -> error      $  "tcClassEltType:multi-type constructors " ++ ppshow l
 
 --------------------------------------------------------------------------------
 tcSeq :: (TCEnv r -> a -> TCM r (b, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([b], TCEnvO r)
@@ -464,7 +463,7 @@ classType γ (ClassStmt l id (Just parent) _ cs) =
   do  t           <- findClassSpec γ parent
       case t of
         TObj bs _ -> do bs' <- foldM addField bs $ classEltType <$> cs
-                        addCTToSpec id $ TObj bs' fTop
+                        addCTToSpec id $ tracePP ("Adding to spec: " ++ ppshow id) $ TObj bs' fTop
         _         -> errorstar "IMPOSSIBLE:classType"
   where
     θ             = tce_defs γ
@@ -530,7 +529,7 @@ tcVarDecl γ v@(VarDecl l x Nothing) =
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
   AnnSSA r -> TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 -------------------------------------------------------------------------------
-tcAsgn l γ x e
+tcAsgn _ γ x e
   = do (e' , t) <- tcExprT γ e rhsT
        return      (e', Just $ tcEnvAdds [(x, t)] γ)
     where

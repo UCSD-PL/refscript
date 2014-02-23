@@ -13,7 +13,7 @@ var gobj
 };
 
 /*@ foo :: ({ number | true } ) => { n:number } */
-function foo (n) {
+function foo (n:number):Object {
   return gobj.oo;
 }
 

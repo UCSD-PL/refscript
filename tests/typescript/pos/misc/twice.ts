@@ -1,23 +1,23 @@
 
 /*@ twice :: forall A. ((A) => A, A) => A */
-function twice(f, x0){
-  var x1 = f(x0);
-  var x1 = f(x1);
-  return x1;
+function twice(f:(any)=>any, x0:any):any{
+	var x1 :any= f(x0);
+	var x1 :any= f(x1);
+	return x1;
 }
 
 /*@ foo :: (x:number) => {v:number | v >= x} */
-function foo(x){
-  var z  = 0;
+function foo(x:number){
+	var z  :number= 0;
   if (random() > 0) {
     z = 10;
   }
-  var r = x + z;
+	var r :number= x + z;
   assert(r >= x);
   return r;
 }
  
 /*@ main :: (x:number) => {v:number |v >= x} */
-function main(x){
+function main(x:number):number{
   return twice(foo, x);
 }

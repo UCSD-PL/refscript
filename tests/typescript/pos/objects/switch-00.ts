@@ -12,7 +12,7 @@
 /*@ extern fifthBand  :: band */
 
 /*@ buttonStrs :: {[string] | (len v) = 16} */ 
-var buttonStrs = [ "0black"
+var buttonStrs :string[]= [ "0black"
                  , "1brown"
                  , "2red"
                  , "3orange"
@@ -31,10 +31,10 @@ var buttonStrs = [ "0black"
 
 
 /*@ currentBandIndex :: {number | (0 <= v && v <= 3)} */ 
-var currentBandIndex = 0;
+var currentBandIndex:number = 0;
 
 /*@ drawNewColorBand :: (color) => void */
-function drawNewColorBand(color) {
+function drawNewColorBand(color:number):void {
 
     switch (currentBandIndex) {
     case 0:

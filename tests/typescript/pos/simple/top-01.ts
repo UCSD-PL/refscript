@@ -1,14 +1,14 @@
 
 /*@ resistance :: number */
-var resistance = 1000;
+var resistance :number = 1000;
 
 /*@ makeNum :: (x: top) => number */ 
-function makeNum(x) {
+function makeNum(x):number {
   return 1;
 }
 
 
 /*@ doCalculateResistance :: () => void */
-function doCalculateResistance() {
+function doCalculateResistance():void {
   resistance = makeNum(1) ;
 }

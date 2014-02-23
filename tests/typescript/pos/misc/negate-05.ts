@@ -2,7 +2,7 @@
               /\ (x:boolean) => {boolean | true}
  */
 
-function negate(x) {
+function negate(x):any {
   if (typeof(x) == "number") {
     return 0 - x;
   } else {
@@ -11,8 +11,8 @@ function negate(x) {
 }
 
 /*@ main :: () => void */
-function main(){
-  var a = negate(10);
-  var b = negate(true);
-  return;
+function main():void{
+	var a:number = negate(10);
+	var b:boolean = negate(true);
+	return;
 }

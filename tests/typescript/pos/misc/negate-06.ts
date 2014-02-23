@@ -5,7 +5,7 @@
 
 
 
-function negate(x) {
+function negate(x) :any{
   if (typeof(x) == "number") {
     return x + 1;
   } else {
@@ -16,8 +16,8 @@ function negate(x) {
 
 
 /*@ main :: () => void */
-function main(){
-  var a = negate(10);
-  var b = negate(true);
-  return;
+function main():void{
+	var a:number = negate(10);
+	var b:boolean = negate(true);
+	return;
 }

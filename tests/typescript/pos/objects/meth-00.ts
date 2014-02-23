@@ -1,10 +1,10 @@
 
 /*@ mkArray :: (number) => [{number | 0 <= v}] */
-function mkArray(n){
-  var i = 0;
-  var a = [];
-  while (i < n){
-    a.push(i);
-  }
-  return a;
+function mkArray(n:number):number[]{
+	var i:number = 0;
+	var a :number[] = [];
+	while (i < n){
+		a.push(i);
+	}
+	return a;
 }

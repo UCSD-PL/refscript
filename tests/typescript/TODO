@@ -33,52 +33,6 @@ declare function f : type UNIMPLEMENTED
 		nanojs: cmd: tsc --nano pos/arrays/arr-10.ts failure code 8
 
 
-
-typeof() not suported
-		pos/misc/intersect-dead-00.ts
-		pos/misc/negate-0{0,1,2,3,4,5,6}.ts
-		pos/operators/tags.ts
-		pos/unions/union-00.ts
-
-		EXEC: tsc --nano pos/misc/intersect-dead-00.ts
-
-	    /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29971
-	              throw e;
-                  		^
-	 	Error: UnaryExpression:toNanoExp nodetype not supported: TypeOfExpression
-      	at UnaryExpression.toNanoExp (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55205:27)
-      	at BinaryExpression.toNanoExp (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55471:205)
-      	at IfStatement.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56658:115)
-      	at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54888:26
-      	at Array.map (native)
-      	at ASTList.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54887:60)
-      	at Block.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56498:114)
-      	at FunctionDeclaration.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55941:170)
-      	at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54888:26
-   	  	at Array.map (native)
-	  	nanojs: cmd: tsc --nano pos/misc/intersect-dead-00.ts failure code 8
-
-Operator != UNIMPLEMENTED
-		pos/misc/locks-02.ts
-		pos/misc/locks-cond.ts
-		EXEC: tsc --nano pos/misc/locks-02.ts
-		
-		/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29971
-		            throw e;
-       			          ^
-		Error: UNIMMPLEMENTED:BinaryExpression:toNanoExp:Expression for : NotEqualsWithTypeConversionExpression
-		at BinaryExpression.toNanoExp (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55480:27)
-    	at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54882:26
-    	at Array.map (native)
-    	at ASTList.toNanoExp (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54881:60)
-    	at InvocationExpression.toNanoExp (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55264:137)
-    	at ExpressionStatement.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56268:113)
-    	at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54888:26
-    	at Array.map (native)
-    	at ASTList.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54887:60)
-    	at Block.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56498:114)
-		nanojs: cmd: tsc --nano pos/misc/locks-02.ts failure code 8
-
 SwitchStatement UNIMPLEMENTED
 		/pos/objects/switch-00.ts
 		/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29971
@@ -211,7 +165,7 @@ Bad nano-js binder (several of them, different:)
 
 
 ##Others:
-pos/opertors/str.ts doesnt't typecheck... Don't see why
+pos/opertors/str.ts doesnt't typecheck... I don't see why
 
 pos/proto/proto-lookup8.ts makes nanojs crash
 						   **** DONE:  Crash!: (FixConstraint.BadConstraint(_)) ***************************

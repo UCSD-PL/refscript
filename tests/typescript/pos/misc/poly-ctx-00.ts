@@ -1,5 +1,5 @@
 /*@ id :: forall A. (A) => A */
-function id(x){
+function id(x:any):any{
   return x;
 }
 

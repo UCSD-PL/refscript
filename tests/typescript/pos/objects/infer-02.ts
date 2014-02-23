@@ -1,4 +1,4 @@
-var gobj = {
+var gobj= {
   a: 5,
   b: "String",
   oo: { n: 6 }
@@ -6,7 +6,7 @@ var gobj = {
 
 
 /*@ foo :: ({ number | true } ) => { n:number } */
-function foo (n) {
+function foo (n:Object) :Object{
   return gobj.oo;
 }
 

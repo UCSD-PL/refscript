@@ -1,5 +1,5 @@
 /*@ foo :: () => { v: number + boolean | ttag(v) = "number" } */
-function foo () {
+function foo ():number {
   return 1;
 }
 

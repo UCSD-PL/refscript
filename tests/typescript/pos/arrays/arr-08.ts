@@ -1,6 +1,6 @@
 
 /*@ arr :: [string] */ 
-var arr : string[]= [ "a" ];
+var arr : string[] = [ "a" ];
 
 /*@ baz :: () => {v: string | true } */
 function baz() : string{  

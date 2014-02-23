@@ -8,12 +8,12 @@ var gobj = {
 }
 
 /*@ foo :: ({number | true}) => {n: number} */
-function foo (n) {
+function foo (n:number) :Object{
   return gobj.oo;
 }
 
 /*@ bar :: () => { } */
-function bar(){
-  var z = {bogzert : 100};
-  return z;
+function bar():Object{
+	var z :Object= {bogzert : 100};
+	return z;
 }

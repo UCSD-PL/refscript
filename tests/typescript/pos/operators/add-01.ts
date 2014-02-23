@@ -1,10 +1,10 @@
 /*@ foo :: () => number */
-function foo()
+function foo():number
 {
-  var x = 0;
-  var y = x + 1;
-  assert(0 < y);
-  return y
+	var x:number = 0;
+	var y:number = x + 1;
+	assert(0 < y);
+	return y
 }
 
 

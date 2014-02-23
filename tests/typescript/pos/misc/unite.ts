@@ -1,6 +1,6 @@
 
 /*@ foo :: forall A. (A, A) => A */
-function foo(x, y) {
+function foo(x:any, y:any):any {
   if (x == y) {
     return x;
   } else {
@@ -9,6 +9,6 @@ function foo(x, y) {
 }
 
 /*@ bar :: forall A. (A, A) => A */
-function bar(x,y) {
+function bar(x:any,y:any):any {
   return foo(x,y);
 }

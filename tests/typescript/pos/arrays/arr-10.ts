@@ -1,3 +1,4 @@
+declare function NumberC (x : string) : number; 
 
 /*@ toNumber :: (x: string) => { number | 0 <= v }*/
 function toNumber(x : string) : number {

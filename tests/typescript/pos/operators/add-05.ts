@@ -10,21 +10,21 @@ function myPlusOk(x, y){
 
 
 /*@ num_num :: (a:number, b:number) => {number | v = a + b } */
-function num_num(a, b){
-  var d = myPlusOk(a, b);
-  return d; 
+function num_num(a:number, b:number){
+	var d :number= myPlusOk(a, b);
+	return d; 
 }
 
 /*@ str_str :: (string) => {string | true } */
-function str_str(a){
-  var b = "dog";
-  return  myPlusOk(a, b); 
+function str_str(a:string):string{
+	var b:string = "dog";
+	return  myPlusOk(a, b); 
 }
 
 /*@ num_str :: (number) => {string | true } */
-function num_str(a){
-  var b = "dog";
-  return myPlusOk(a, b); 
+function num_str(a:number):string{
+	var b:string = "dog";
+	return myPlusOk(a, b); 
 }
 
 

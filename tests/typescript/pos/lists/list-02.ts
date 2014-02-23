@@ -1,4 +1,4 @@
-declare function empty (a:any[]):bool;
+declare function empty (a:any[]):boolean;
 
 /*@ qualif G10(v:number)   : v > 10    */
 

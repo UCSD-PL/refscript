@@ -1,11 +1,10 @@
-problem with declare var arr : string[];
-		pos/arrays/arr-09.ts
+The keyword 'extern' in nanojs?
 		pos/simple/extern-00.ts
+		EXEC: tsc --nano pos/simple/extern-00.ts
+		/home/ddeunagomez/CSE199/nano-js/tests/typescript/pos/simple/extern-00.ts: (2, 13) - (2, 32)
+		Ambient variable declarator for 'ext_array' needs to have exactly one type annotation.
+		nanojs: cmd: tsc --nano pos/simple/extern-00.ts failure code 1
 
-		EXEC: tsc --nano pos/arrays/arr-09.ts
-		/home/ddeunagomez/CSE199/nano-js/tests/typescript/pos/arrays/arr-09.ts: (1, 13) - (1, 27)
-		Ambient variable declarator for 'arr' needs to have exactly one type annotation.
-		nanojs: cmd: tsc --nano pos/arrays/arr-09.ts failure code 1
 
 
 declare function f : type UNIMPLEMENTED
@@ -15,7 +14,6 @@ declare function f : type UNIMPLEMENTED
 		pos/operators/{inc-00,int-01,inc-02,pos,sum-00,sum-01,sum-02,sum-infer-00,sum-infer-01}.ts
 
 		EXEC: tsc --nano pos/arrays/arr-10.ts
-		
 		/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29971
 				    throw e;
             		      ^
@@ -163,10 +161,19 @@ Bad nano-js binder (several of them, different:)
 		nanojs: cmd: tsc --nano pos/classes/class-05.ts failure code 8
 
 
+##Unsafe:
+	pos/arrays/safemap.ts #correctly unsafe
+	pos/objects/meth-00.ts
+	pos/objects/obj-01.ts
+	pos/opertors/str.ts
+	pos/simple/glob-02.ts	#corretly unsafe
+	pos/simple/extern-00.ts	#corretly unsafe
+	pos/proto/proto-lookup4.ts
+	pos/proto/proto-lookup6.ts
+
+
 
 ##Others:
-pos/opertors/str.ts doesnt't typecheck... I don't see why
-
 pos/proto/proto-lookup8.ts makes nanojs crash
 						   **** DONE:  Crash!: (FixConstraint.BadConstraint(_)) ***************************
 						   ****  **************************************************************************
@@ -227,7 +234,7 @@ I have no idea what this means.
 						   **** ERROR *********************************************************************
 
 
-Problem with typescript language: var a = 9; a = true; i snot valid, so the compiler complains and nanojs doesn't even run.
+Problem with typescript language: var a = 9; a = true; is not valid, so the compiler complains and nanojs doesn't even run.
 			 			   EXEC: tsc --nano pos/unions/union-01.ts
 						   /home/ddeunagomez/CSE199/nano-js/tests/typescript/pos/unions/union-01.ts(11,3): error TS2011: Cannot convert 'boolean' to 'number'.
 						   Emitting AST in JSON in: /home/ddeunagomez/CSE199/nano-js/tests/typescript/pos/unions/union-01.json

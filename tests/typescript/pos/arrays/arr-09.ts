@@ -1,7 +1,5 @@
+/*@ arr :: { [string] | (len v) = 1 } */ 
 declare var arr : string[]; 
-
-/*@ extern arr :: { [string] | (len v) = 1 } */ 
-
 
 /*@ baz :: () => {v: string | true } */
 function baz() : string{  

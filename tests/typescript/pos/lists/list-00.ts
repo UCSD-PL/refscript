@@ -1,4 +1,4 @@
-declare function empty (a : any[]) : bool;
+declare function empty (a : any[]) : boolean;
 declare function head (a : any[]) : any;
 
 /*@ hop :: (list [{v:number| 0 <= v}] + null) => void */

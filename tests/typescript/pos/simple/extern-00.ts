@@ -1,5 +1,5 @@
-declare var ext_arr: string[];
 /*@ extern ext_array :: { [string] | (len v) = 1 } */
+declare var ext_array: string[];
 
 /*@ extern ext_fun :: () => { [string] | (len v) = 1 } */
 

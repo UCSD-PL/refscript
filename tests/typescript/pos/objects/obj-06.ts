@@ -1,7 +1,7 @@
 /*@ bar :: () => {v: {} | true} */
-function bar(){
-  var z = { bogzert : 100 };
+function bar():Object{
+	var z :Object= { bogzert : 100 };
   
   
-  return z;
+	return z;
 }

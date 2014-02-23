@@ -2,10 +2,10 @@
 
 
 /*@ a :: { number | true } */
-var a  = 1;
+var a : number  = 1;
 
 /*@ b :: string */
-var b  = "a";
+var b : string = "a";
 
 /*@ c :: { number + boolean | true} */
 var c  = 1;

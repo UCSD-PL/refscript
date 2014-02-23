@@ -1,5 +1,8 @@
+declare function empty (a : any[]) : bool;
+declare function head (a : any[]) : any;
+
 /*@ hop :: (list [{v:number| 0 <= v}] + null) => void */
-function hop(as){
+function hop(as : number[]) : void {
   if (empty(as)) {
     return;
   }

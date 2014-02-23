@@ -1,7 +1,7 @@
 var garr : number[] = [1,2,3,4];
 
 /*@ foo :: () => void */
-function foo(){
+function foo() : void{
   garr[2] = 10;
 }
 

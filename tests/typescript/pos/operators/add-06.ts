@@ -9,12 +9,12 @@ function myPlusOk(x, y){
 }
 
 /*@ assertEqual :: (x:number, y:number) => void */ 
-function assertEqual(x, y) {
+function assertEqual(x:number, y:number) {
   assert(x==y);
 }
 
 /*@ num_one :: (a:number) => {void | true} */
-function num_one(a){
+function num_one(a:number):void{
   var d = myPlusOk(0, 1);
   assertEqual(d, 1);
   return; 

@@ -1,6 +1,6 @@
 /*@ foo :: () => top */
 
-function foo () {
+function foo ():number {
   
   return 1;
 }

@@ -1,9 +1,9 @@
 /*@ foo :: ({number | true}) => number */
-function foo(x) { 
+function foo(x:number):number { 
   return x; 
 }
 
 /*@ bar :: () => void */
-function bar() { 
+function bar():void { 
   foo(10);
 }

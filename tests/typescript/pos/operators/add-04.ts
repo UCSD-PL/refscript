@@ -4,8 +4,8 @@ function bog(x){
 }
 
 /*@ gloop :: (number) => number */
-function gloop(y){
-  var z = bog(y);
+function gloop(y:number):number{
+	var z:number = bog(y);
   return z;
 }
 

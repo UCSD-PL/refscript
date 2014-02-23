@@ -1,4 +1,4 @@
-class Foo<A { 
+class Foo<A> { 
 
   public f /*@ A */ = 1;
   

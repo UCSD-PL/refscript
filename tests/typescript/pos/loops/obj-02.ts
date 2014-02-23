@@ -6,13 +6,13 @@
 
 
 /*@ foo :: () => { a: { number | 4 = v } } */ 
-function foo() {
-  var x = { a: (-1) }; //need silly singleton v = -1 qualifier as we generate a template for this x. Ugh.
+function foo() : Object {
+	var x : Object = { a: (-1) }; //need silly singleton v = -1 qualifier as we generate a template for this x. Ugh.
 
-  for (var i = 0; i < 5; i++) {
-     x = { a: i };
-  }
-
-  return x;
+	for (var i = 0; i < 5; i++) {
+      x = { a: i };
+	}
+	
+	return x;
 }
 

@@ -1,17 +1,17 @@
 /*@ idt :: forall A. (A) => A */
-function idt(x) { return x;}
+function idt(x:any):any { return x;}
 
 
 /*@ idbool :: (boolean) => boolean */
-function idbool(x) { return idt(x); }
+function idbool(x:boolean):boolean { return idt(x); }
 
 /*@ main :: ({x:number|true}, boolean) => { v:number |v >= x} */
-function main(x, y){
-  var yr = idt(y);
-  var xr = idt(x);
-  var z  = 0;
-  if (yr) {
-    z = 10;
-  }
-  return xr + z;
+function main(x:number, y:boolean):number{
+	var yr:boolean = idt(y);
+	var xr:number = idt(x);
+	var z:number  = 0;
+	if (yr) {
+		z = 10;
+	}
+	return xr + z;
 }

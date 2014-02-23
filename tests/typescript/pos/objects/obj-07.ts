@@ -1,5 +1,5 @@
 
 /*@ a :: { d: { number | v > 0 } } */
-var a  = { d : 1   };
+var a:Object  = { d : 1   };
 
 

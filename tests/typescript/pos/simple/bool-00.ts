@@ -1,6 +1,6 @@
 
 /*@ simple :: () => { v:boolean | ((? Prop([v]))) } */
-function simple() {
+function simple():boolean {
 
   return (0 < 1);
 

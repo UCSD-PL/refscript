@@ -2,7 +2,7 @@
 /*@ qualif Eq5(v:number): v = 5                    */
 
 /*@ inc :: (number) => number  */
-function inc(n) {
+function inc(n:number) :number{
   return n + 1;
 }
 
@@ -13,11 +13,11 @@ var gobj = {
 };
 
 /*@ foo :: () => { number | v = 6 } */
-function foo () {
+function foo ():number {
  
-  // gobj.a = 120;
+	// gobj.a = 120;
 
-  var ff = gobj.f;
-  return ff(gobj.a);
+	var ff :(number)=>number = gobj.f;
+	return ff(gobj.a);
 
 }

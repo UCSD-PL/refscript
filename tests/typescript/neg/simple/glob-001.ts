@@ -1,2 +1,3 @@
-var glob /*@ { number | v > 10 } */ = true;
+/*@ glob :: { number | v > 10 } */
+var glob = true;
 

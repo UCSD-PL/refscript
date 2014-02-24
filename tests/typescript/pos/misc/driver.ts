@@ -1,4 +1,3 @@
-declare function pos();
 /*@ qualif Locked(v:number): v != 0   */    
 /*@ qualif Unlocked(v:number): v = 0  */    
 /*@ qualif CondLock2(v:number,x:number,y:number): ((x != y) <=> (v = 0))  */    

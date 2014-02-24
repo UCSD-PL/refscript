@@ -1,5 +1,5 @@
 /*@ qualif PLusOne(v:number, w: number)     : v = w + 1                            */
-/*@ inc :: (number) => number  */
+/*@ inc :: (n : number) => {number | v = n+1}  */
 function inc(n:number):number {
     return n + 1;
 }

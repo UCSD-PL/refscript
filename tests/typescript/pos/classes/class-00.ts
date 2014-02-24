@@ -1,10 +1,10 @@
 class BankAccount { 
-
-	public f : number /*@ { number | v > 0 } */ = 1;
-
-	public g : string /*@ { string | v = "a" } */ = "a";
+	/*@ f :: { number | v > 0 } */ 
+	public f : number = 1;
+	/*@ g :: { string | v = "a" } */
+	public g : string = "a";
   
-	/*@ (x: { number | v > 0 } ) => void */
+	/*@ constructor :: (x: { number | v > 0 } ) => void */
 	constructor(x : number) {
 		assert( x > 0 );
 		assert(this.g == "a");

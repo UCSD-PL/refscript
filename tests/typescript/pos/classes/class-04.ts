@@ -1,11 +1,12 @@
 class A {
 
-	/*@ () => void */
+	/*@ constructor :: () => void */
 	constructor() { }
 
-	public a /*@ { number | v > 0 } */ = 10;
+	/*@ a :: { number | v > 0 } */
+	public a = 10;
 
-	/*@ () => { number | v > 1 } */
+	/*@ foo :: () => { number | v > 1 } */
 	public foo() {
 		return 2;  
 	}
@@ -14,12 +15,13 @@ class A {
 
 class B extends A {
 
-	/*@ () => void */
+	/*@ constructor :: () => void */
 	constructor() {super(); }
 
-	public b /*@ { number | v > 5 } */ = 10;
+	/*@ b ::{ number | v > 5 } */
+	public b = 10;
 
-	/*@ ( ) => { number | v > 5 } */
+	/*@ foo :: () => { number | v > 5 } */
 	public foo() {
 		return 10;  
 	}

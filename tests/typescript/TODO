@@ -1,36 +1,3 @@
-The keyword 'extern' in nanojs?
-		pos/simple/extern-00.ts
-		EXEC: tsc --nano pos/simple/extern-00.ts
-		/home/ddeunagomez/CSE199/nano-js/tests/typescript/pos/simple/extern-00.ts: (2, 13) - (2, 32)
-		Ambient variable declarator for 'ext_array' needs to have exactly one type annotation.
-		nanojs: cmd: tsc --nano pos/simple/extern-00.ts failure code 1
-
-
-
-declare function f : type UNIMPLEMENTED
-		pos/arrays/arr-10.ts
-		pos/lists/*.ts (except list-01.ts)
-		pos/misc/{cousot-01,cousot,driver,intersect-dead-00,locks-01,locks-02}.ts
-		pos/operators/{inc-00,int-01,inc-02,pos,sum-00,sum-01,sum-02,sum-infer-00,sum-infer-01}.ts
-
-		EXEC: tsc --nano pos/arrays/arr-10.ts
-		/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29971
-				    throw e;
-            		      ^
-		Error: UNIMPLEMENTED:FunctionDeclaration.toNanoStmt:No Block
-    	at FunctionDeclaration.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55919:23)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54888:26
-    	at Array.map (native)
-    	at ASTList.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54887:60)
-    	at Script.toNanoAST (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56005:47)
-    	at Emitter.emitJSON (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29652:50)
-    	at TypeScriptCompiler.emitJSON (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:53602:25)
-    	at TypeScriptCompiler.emitAll (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:53630:58)
-    	at BatchCompiler.compile (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:58192:48)
-    	at BatchCompiler.batchCompile (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:58052:26)
-		nanojs: cmd: tsc --nano pos/arrays/arr-10.ts failure code 8
-
-
 SwitchStatement UNIMPLEMENTED
 		/pos/objects/switch-00.ts
 		/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29971
@@ -49,128 +16,42 @@ SwitchStatement UNIMPLEMENTED
 		at Script.toNanoAST (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56005:47)
 		nanojs: cmd: tsc --nano pos/objects/switch-00.ts failure code 8
 
-Bad nano-js binder (several of them, different:)
-		pos/simple/glob-03.ts
-		EXEC: tsc --nano pos/simple/glob-03.ts
 
-		/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29971
-        throw e;
-        ^
-		Error: bad nano-js binder(0): g1 :: { number | v > 0 }, g2 :: string
-		at NanoBindAnnotation.getBinderName (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:48622:19)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56327:44
-		at Array.forEach (native)
-		at VariableDeclaration.sanityCheck (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56326:22)
-		at VariableDeclaration.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56400:18)
-		at VariableStatement.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56459:37)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54888:26
-		at Array.map (native)
-		at ASTList.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54887:60)
-		at Script.toNanoAST (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56005:47)
-		nanojs: cmd: tsc --nano pos/simple/glob-03.ts failure code 8
-
-		pos/classes/class-00.ts
-		EXEC: tsc --nano pos/classes/class-00.ts
-		/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29971
-        throw e;
-        ^
-		Error: bad nano-js binder(0): (x: { number | v > 0 } ) => void
-		at NanoBindAnnotation.getBinderName (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:48622:19)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55954:28
-		at Array.map (native)
-		at FunctionDeclaration.toNanoClassElt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55953:41)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54900:26
-		at Array.map (native)
-		at ASTList.toNanoClassElt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54899:60)
-		at ClassDeclaration.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56175:223)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54888:26
-		at Array.map (native)
-		nanojs: cmd: tsc --nano pos/classes/class-00.ts failure code 8
-
-		pos/classes/class-01.ts
-		EXEC: tsc --nano pos/classes/class-01.ts
-		/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29971
-        throw e;
-        ^
-		Error: bad nano-js binder(0): (message: string) => void
-		at NanoBindAnnotation.getBinderName (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:48622:19)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55954:28
-		at Array.map (native)
-		at FunctionDeclaration.toNanoClassElt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55953:41)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54900:26
-		at Array.map (native)
-		at ASTList.toNanoClassElt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54899:60)
-		at ClassDeclaration.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56175:223)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54888:26
-		at Array.map (native)
-		nanojs: cmd: tsc --nano pos/classes/class-01.ts failure code 8
-
-		pos/classes/class-03.ts
-		EXEC: tsc --nano pos/classes/class-03.ts
-
-		/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29971
-        throw e;
-        ^
-		Error: bad nano-js binder(0): (x:A) => void
-		at NanoBindAnnotation.getBinderName (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:48622:19)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55954:28
-		at Array.map (native)
-		at FunctionDeclaration.toNanoClassElt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55953:41)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54900:26
-		at Array.map (native)
-		at ASTList.toNanoClassElt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54899:60)
-		at ClassDeclaration.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56175:223)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54888:26
-		at Array.map (native)
-		nanojs: cmd: tsc --nano pos/classes/class-03.ts failure code 8
-
-		pos/classes/class-04.ts
-		EXEC: tsc --nano pos/classes/class-04.ts
-		/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29971
-        throw e;
-        ^
-		Error: bad nano-js binder(0): () => void
-		at NanoBindAnnotation.getBinderName (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:48622:19)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55954:28
-		at Array.map (native)
-		at FunctionDeclaration.toNanoClassElt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55953:41)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54900:26
-		at Array.map (native)
-		at ASTList.toNanoClassElt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54899:60)
-		at ClassDeclaration.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56175:223)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54888:26
-		at Array.map (native)
-		nanojs: cmd: tsc --nano pos/classes/class-04.ts failure code 8
-
+Key SuperRef not found (tsc, when constructor calls super();):
+ 		pos/classes/class-04.ts
+		Emitting AST in JSON in: /home/ddeunagomez/CSE199/nano-js/tests/typescript/pos/classes/class-04.json
+		nanojs: JSON decode error:
+		The key "SuperRef" was not found
+		
 		pos/classes/class-05.ts
-		EXEC: tsc --nano pos/classes/class-05.ts
-		/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29971
-        throw e;
-        ^
-		Error: bad nano-js binder(0): () => void
-		at NanoBindAnnotation.getBinderName (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:48622:19)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55954:28
-		at Array.map (native)
-		at FunctionDeclaration.toNanoClassElt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:55953:41)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54900:26
-		at Array.map (native)
-		at ASTList.toNanoClassElt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54899:60)
-		at ClassDeclaration.toNanoStmt (/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:56175:223)
-		at /home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:54888:26
-		at Array.map (native)
-		nanojs: cmd: tsc --nano pos/classes/class-05.ts failure code 8
+		Emitting AST in JSON in: /home/ddeunagomez/CSE199/nano-js/tests/typescript/pos/classes/class-05.json
+		nanojs: JSON decode error:
+		The key "SuperRef" was not found
+
+
+Unimplemented padFun in nanojs.
+		pos/misc/abs-hof-crash.ts
+		EXEC: tsc --nano pos/misc/abs-hof-crash.ts
+		Emitting AST in JSON in: /home/ddeunagomez/CSE199/nano-js/tests/typescript/pos/misc/abs-hof-crash.json
+		nanojs: Unimplemented: padFun - combining functions with different types
+
+
+Unimplemented compareTs-Arr-Obj in nanojs:
+		EXEC: tsc --nano pos/arrays/safemap.ts
+		Emitting AST in JSON in: /home/ddeunagomez/CSE199/nano-js/tests/typescript/pos/arrays/safemap.json
+		nanojs: Unimplemented compareTs-Arr-Obj:
+			{v : [A] | (0 <= len([v]))}
+			{data:T1, next:list [T1]+ Null}
+
 
 
 ##Unsafe:
 	pos/arrays/safemap.ts #correctly unsafe
 	pos/objects/meth-00.ts
 	pos/objects/obj-01.ts
-	pos/opertors/str.ts
-	pos/simple/glob-02.ts	#corretly unsafe
-	pos/simple/extern-00.ts	#corretly unsafe
 	pos/proto/proto-lookup4.ts
 	pos/proto/proto-lookup6.ts
-
+	pos/classes/class-03.ts (problem with generics/templates)
 
 
 ##Others:

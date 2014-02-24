@@ -1,14 +1,15 @@
 class Foo<A> { 
 
-  public f /*@ A */ = 1;
+	/*@ f :: A */ 
+	public f;
   
-  /*@ (x:A) => void */
-  constructor(x) {
-    this.f = x;
-  }
-
+	/*@ constructor :: (x:A) => void */
+	constructor(x) {
+		this.f = x;
+	}
+	
 }
 
-var a = new Foo(1);
+var a :Foo<number>= new Foo<number>(1);
 
 assert(a.f == 1);

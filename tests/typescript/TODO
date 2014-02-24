@@ -44,6 +44,21 @@ Unimplemented compareTs-Arr-Obj in nanojs:
 			{v : [A] | (0 <= len([v]))}
 			{data:T1, next:list [T1]+ Null}
 
+
+nanojs splitC "should have been broken down earlier"
+	   neg/lists/list-05.ts
+	   EXEC: tsc --nano neg/lists/list-05.ts
+	   Emitting AST in JSON in: /home/ddeunagomez/CSE199/nano-js/tests/typescript/neg/lists/list-05.json
+	   nanojs: splitC - should have been broken down earlier:
+	   {VV : Null | (VV = lq_tmp_nano15),(VV = lq_tmp_nano14),false} <: {data:{VV#0 : Int | (10 < VV#0)}, next:list [{VV#1 : Int | (10 < VV#1)}]+ Null}
+
+	   neg/lists/list-06.ts
+	   EXEC: tsc --nano neg/lists/list-06.ts
+	   Emitting AST in JSON in: /home/ddeunagomez/CSE199/nano-js/tests/typescript/neg/lists/list-06.json
+	   nanojs: splitC - should have been broken down earlier:
+	   {VV : Null | (VV = lq_tmp_nano17),(VV = lq_tmp_nano16),false} <: {data:{VV#0 : Int | (10 < VV#0)}, next:list [{VV#1 : Int | (10 < VV#1)}]+ Null}
+
+
 Nanojs crashes in the line where the type error is.
 	   neg/classes/class-01.ts
 	   neg/simple/parse-01.ts
@@ -150,3 +165,6 @@ This tests doesn't pass because of tsc, not because of nanojs. What should I cha
 	  /home/ddeunagomez/CSE199/nano-js/tests/typescript/neg/operators/stmt-01.ts(7,14): error TS2095: Could not find symbol 'z'.
 	  Emitting AST in JSON in: /home/ddeunagomez/CSE199/nano-js/tests/typescript/neg/operators/stmt-01.json
 	  nanojs: cmd: tsc --nano neg/operators/stmt-01.ts failure code 1
+
+
+

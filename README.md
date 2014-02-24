@@ -110,9 +110,75 @@ To run NanoJS on a single TypeScript file:
 
 ## Specifications
 
+All specifications are added in comments of the following form:
+
+    /*@ <specification> */
+
+Nano-js currently allows the following forms of specifications:
+
+
+
+
+
 ### Signatures
 
-TODO
+Every function, class method and class constructor needs to be annotated with a signature:
+
+    /*@ Id :: σ */
+    function Id (Args...) { Body }
+
+The form of the function signature `σ` is described later.
+
+For example:
+
+    /*@ pos :: (n: number) => boolean */
+    function pos(n) {
+        return n > 0;
+    }
+
+Similarly for constructors and class methods:
+
+    /*@ Id :: σ */
+    public Id (Args...) { Body }
+    
+    /*@ constructor :: σ */
+    constructor (Args...) { Body }
+
+
+
+### Type Annotations
+
+Type anntoations `t ` (defined later) can also be added to variable declarations, for example:
+
+    /*@ a :: { number | v > 0 } */
+    /*@ b :: string */
+    var a = 1,
+        b = "foo",
+        c = { f: "bar" };
+
+Type annotations in variable declaration groups like the one above are optional, as opposed to ambient declarations:
+
+    /*@ a :: number */
+    declare var a: number;
+
+
+Also, type annotations are necessary for class members:
+
+    class A {
+        /*@ a :: { number | v > 0} */
+        public a: number;
+        ...
+    }
+
+
+
+### Type Qualifiers
+
+You can write type qualifiers like this:
+
+    /*@ qualif CmpZ(v:number) : v > 0 */
+    
+Several more examples can be found in `include/prelude.ts`.
 
 
 ### Type Invariants
@@ -129,6 +195,7 @@ You can write type-invariants like:
 
 These invariants are automatically used to strengthen the refinements
 for values of the relevant types.
+
 
 ### Aliases
 
@@ -163,9 +230,117 @@ and now use `nat` as an alias for: `{number | v >= 0}`
     /*@ z :: nat */
     var z = 12;
 
-### Data Type Declarations
+
+### Data Type Definitions
 
 You can write data type declarations in the follownig way:
 
     /*@ type list[A]       = { data: A, next: list[A] } */
+
+
+
+
+## Grammar
+
+
+### Unrefined (Raw) Types
+
+#### Primitive Types
+
+    B ::= number                                // Number
+        | boolean                               // Boolean
+        | string                                // String
+        | void                                  // Void
+        | top                                   // Τop type
+        | null                                  // Null
+        | undefined                             // Undefined
+
+
+#### Refineable Types
+
+    τ ::= B                                     // Base type
+        | A                                     // Type variable
+        | {f1: rt1, f2: rt2, ...}               // Object type
+        | [ rt ]                                // Array type
+        | rt + rt + ...                         // Union type
+
+
+#### Annotation Types
+
+    t ::= τ                                     // Refineable type
+        | σ                                     // Function type
+
+
+#### Function Types    
+
+    σ  ::= (x1: rt1, x2: rt2, ...) => rt        // Function type 
+         | forall A B ... . σ                   // Parametric function type
+         | σ /\ σ /\ ...                        // Overloaded function type 
+    
+
+
+### Refined Types
+
+    rt ::= τ
+         | { v: τ }
+         | { τ | p }
+         | { v: τ | p }
+    
+
+
+### Predicates
+
+    p ::= true                                  // true
+        | false                                 // false
+        | p && p                                // Conjunction
+        | P || p                                // Disjunction
+        | ~ p                                   // Negation
+        | p => p                                // Implication
+        | p <=> p                               // Equivalenc
+        | E bRel E                              // Binary relation
+
+#### Binary relations
+
+    bRel ::= =                                  // Equality
+           | !=                                 // Inequality
+           | ~~                                 // Unary equality   (???)
+           | !~                                 //                  (???)
+           | <                                  // Less than
+           | <=                                 // Less than or equal
+           | >                                  // Greater than
+           | >=                                 // Greater than or equal
+
+    
+#### Expressions
+
+    E ::= 1   | 2   ...                         // Integer constants
+        | "a" | "b" ...                         // String constants
+        | V                                     // Variables
+        | ???                                   // ELit             (???)
+        | E E                                   // Application
+        | E bOp E                               // Binary operation
+        | if E then E else E                    // If-then-else
+        
+TODO: some stuff is missing here. Do we even use that?
+
+
+#### Binary operations
+
+    bOp ::= +                                   // Plus
+          | -                                   // Minus
+          | *                                   // Multiplication
+          | /                                   // Division
+          | mod                                 // Modulo
+          
+          
+#### Variables
+
+    V ::= v | w | z ...
+
+
+
+
+
+
+
 

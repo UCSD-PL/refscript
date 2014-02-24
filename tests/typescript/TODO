@@ -1,5 +1,6 @@
 SwitchStatement UNIMPLEMENTED
 		/pos/objects/switch-00.ts
+		neg/objects/switch-00.ts
 		/home/ddeunagomez/CSE199/.hsenv/cabal/bin/tsc.js:29971
        	     throw e;
        		            ^
@@ -43,15 +44,28 @@ Unimplemented compareTs-Arr-Obj in nanojs:
 			{v : [A] | (0 <= len([v]))}
 			{data:T1, next:list [T1]+ Null}
 
+Nanojs crashes in the line where the type error is.
+	   neg/classes/class-01.ts
+	   neg/simple/parse-01.ts
+	   neg/simple/glob-001.ts
 
 
-##Unsafe:
+
+
+##Unsafe that should be safe:
 	pos/arrays/safemap.ts #correctly unsafe
 	pos/objects/meth-00.ts
 	pos/objects/obj-01.ts
 	pos/proto/proto-lookup4.ts
 	pos/proto/proto-lookup6.ts
 	pos/classes/class-03.ts (problem with generics/templates)
+
+
+##Safe that should be unsafe:
+	neg/objects/obj-07.ts  #the object doesn't containe what is specified
+	neg/objects/obj-07-hide.ts #the object conteains more thanit should based in the function signature
+	neg/simple/this-00.ts #correctly safe
+	
 
 
 ##Others:
@@ -116,9 +130,23 @@ I have no idea what this means.
 
 
 Problem with typescript language: var a = 9; a = true; is not valid, so the compiler complains and nanojs doesn't even run.
-			 			   EXEC: tsc --nano pos/unions/union-01.ts
-						   /home/ddeunagomez/CSE199/nano-js/tests/typescript/pos/unions/union-01.ts(11,3): error TS2011: Cannot convert 'boolean' to 'number'.
-						   Emitting AST in JSON in: /home/ddeunagomez/CSE199/nano-js/tests/typescript/pos/unions/union-01.json
-						   nanojs: cmd: tsc --nano pos/unions/union-01.ts failure code 1
+	pos/unions/union-01.ts
+	neg/simple/asgn-00.ts
+	neg/loops/while-04.ts
+	neg/loops/while-06.ts
+	neg/misc/abs-join-00.ts
+	neg/simple/glob-000.ts
 
+Don't know what to do with that  "$result". TSC doesn't find tat symbol, but I don't know what that should be (design by contract??):
+	  neg/misc/driver-numargs.ts
+	  neg/operators/sum-join-unbound.ts
+	  neg/operators/sum-return-missing.ts
+	  neg/unions/union-00.ts
+	  neg/unions/union-01.ts
 
+This tests doesn't pass because of tsc, not because of nanojs. What should I change? I guess the code is wrong in purpose...
+	  neg/operators/stmt-01.ts
+	  EXEC: tsc --nano neg/operators/stmt-01.ts
+	  /home/ddeunagomez/CSE199/nano-js/tests/typescript/neg/operators/stmt-01.ts(7,14): error TS2095: Could not find symbol 'z'.
+	  Emitting AST in JSON in: /home/ddeunagomez/CSE199/nano-js/tests/typescript/neg/operators/stmt-01.json
+	  nanojs: cmd: tsc --nano neg/operators/stmt-01.ts failure code 1

@@ -1,4 +1,5 @@
 /*@ predicate gt x y   = x >= y                */
 /*@ alias gArray[x]    = [{number | gt(v, x)}] */
 
-var ga /*@ gArray[1] */ = [0,0,0,0];
+/*@ ga :: gArray[1] */
+var ga = [0,0,0,0];

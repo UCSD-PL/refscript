@@ -1,5 +1,5 @@
 
 /*@ foo :: ({ x: { number | v = 3 }, *: boolean }) => number */
-function foo () {
+function foo (x) {
   return x.a;
 }

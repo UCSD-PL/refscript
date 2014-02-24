@@ -1,23 +1,28 @@
 class Greeter {
-  
-  a /*@ string */;
+	/*@ a :: string */
+	a;
 
-  private b /*@ number */;
-  
-  private c /*@ string */ = 1;
-  
-  public  d /*@ number */;
-  
-  private static e /*@ { } */ = { };
+	/*@ b :: number */
+	private b;
+	
+	/*@ c :: string */ 
+	private c = 1;
+	
+	/*@ d :: number */
+	public  d ;
+	
+	/*@ e :: { } */
+	private static e = { };
 
-  /*@ (message: { string | v = "a" } ) => void */
-  constructor(message) { }
-  /*@ () => void */
-  private greet1() { }
+	/*@ constructor :: (message: { string | v = "a" } ) => void */
+	constructor(message) { }
 
-  /*@ () => void */
-  greet2() {  }
+	/*@ greet1 :: () => void */
+	private greet1():void { }
 
-  /*@ () => void */
-  public greet3() { }
+	/*@ greet2 :: () => void */
+	greet2() : void {  }
+
+	/*@ greet3 :: () => void */
+	public greet3() :void { }
 }

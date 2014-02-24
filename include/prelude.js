@@ -325,4 +325,5 @@ length: number,
 /* qualif Add(v:number,x:number,y:number): v = x + y           */
 /* qualif Sub(v:number,x:number,y:number): v = x - y           */
 /*@ extern top_level :: () => void */
+/*@ extern alert :: (string) => void */
 var __dummy__ = null;

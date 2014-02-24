@@ -1,4 +1,5 @@
-var glob :number/*@ { number | v > 0 } */ = 4;
+/*@ glob :: { number | v > 0 } */
+var glob :number = 4;
 
 /*@ bar :: () => {void | true} */
 function bar():void{

@@ -1,0 +1,7 @@
+
+
+/*@ foo :: () => void */
+function foo () {
+
+
+}

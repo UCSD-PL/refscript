@@ -398,9 +398,9 @@ mkCode ss =  do
     } 
   where
     toBare     :: (SourceSpan, [Spec]) -> AnnBare Reft 
-    toBare p    = Ann (fst p) [TAnnot t | Bind (_,t) <- snd p ]
-    ss'         = (toBare <$>) <$> ss
-    anns        = concatMap (FO.foldMap snd) ss
+    toBare (l,αs) = Ann l [TAnnot t | Bind (_,t) <- αs ]
+    ss'           = (toBare <$>) <$> ss
+    anns          = concatMap (FO.foldMap snd) ss
 
 
 -- TODO: Is there any chance we can keep the Either Monad here?

@@ -51,8 +51,9 @@ verifyFile f
   = do  p0 <- parseNanoFromFile f
         case p0 of 
           Left err -> return (A.NoAnn, F.Unsafe [err]) 
-          Right p1 ->
+          Right p1 {-@(Nano { code = Src ss}) -} ->
             do
+              -- print $ pp ss
               cfg   <- getOpts 
               verb  <- V.getVerbosity
               case ssaTransform' p1 of 
@@ -257,7 +258,7 @@ consClassEltAux :: AnnTypeR -> Id AnnTypeR -> (RefType -> CGM ()) -> CGM ()
 ------------------------------------------------------------------------------------
 consClassEltAux l id f = 
   case [ t | TAnnot t  <- ann_fact l ] of 
-    [  ]  -> cgError    l (errorConstAnnMissing (srcPos l) id)
+    [  ]  -> cgError    l (errorClEltAnnMissing (srcPos l) id)
     [ft]  -> f ft 
     _     -> error      $ "consClassEltType:multi-type constructor"
 

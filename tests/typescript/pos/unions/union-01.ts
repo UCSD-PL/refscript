@@ -2,7 +2,7 @@
 /*@ foo ::  (x: {v:  number | true } ) => { number | v = 1 } + boolean  */
 
 function foo(x) {
-	var r /*@ number + boolean */ = 1;
+	/*@ r :: number + boolean */
 	var r = 1;
 	if (x > 0) {
 		r = 1;  

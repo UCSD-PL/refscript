@@ -1,7 +1,7 @@
 
 /*@ foo :: () => {top | (v > 0)}*/ 
 
-function foo(){
+function foo():number{
   return head({data: 1, next: null});
 }
 

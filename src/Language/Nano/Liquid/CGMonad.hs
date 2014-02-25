@@ -54,17 +54,9 @@ module Language.Nano.Liquid.CGMonad (
   -- , alignTsM
   , withAlignedM
   , wellFormed
-
-  , addInvariant
   
   -- * Add Type Annotations
   , addAnnot
-
-  -- * Access container types
-  -- , safeGetIdx
-  -- , safeGetProp
-  -- , indexType
-
 
   -- * Unfolding
   , unfoldSafeCG, unfoldFirstCG
@@ -81,6 +73,7 @@ module Language.Nano.Liquid.CGMonad (
 import           Data.Maybe                     (fromMaybe, listToMaybe)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
+import qualified Data.List                      as L
 
 -- import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
@@ -111,7 +104,7 @@ import           Text.Printf
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation ----------------------
@@ -280,8 +273,13 @@ addInvariant   :: RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
 addInvariant t           = ((`tx` t) . invs) <$> get
   where 
-    tx i t@(TApp tc _ _) = maybe t (strengthen t . rTypeReft . val) $ M.lookup tc i
+    tx i t@(TApp tc _ o) = maybe t (\i -> strengthenOp t o $ rTypeReft $ val i) $ {- trace ("addInvariant on: " ++ ppshow o) $ -} M.lookup tc i
     tx _ t               = t 
+
+    strengthenOp t o r   | L.elem r (ofRef o) = t
+    strengthenOp t o r   | otherwise          = strengthen t r
+
+    ofRef (F.Reft (s, as)) = (F.Reft . (s,) . single) <$> as
 
 
 ---------------------------------------------------------------------------------------
@@ -679,8 +677,8 @@ splitC' x
 ---------------------------------------------------------------------------------------
 bsplitC g ci t1 t2
   = bsplitC' g ci <$> addInvariant t1 <*> addInvariant t2
-  -- = do t1'   <- tracePP "addInv1: " <$> addInvariant t1
-  --      t2'   <- tracePP "addInv2: " <$> addInvariant t2
+  -- = do t1'   <- tracePP "addInv1" <$> addInvariant t1
+  --      t2'   <- tracePP "addInv2" <$> addInvariant t2
   --      return $ bsplitC' g ci t1' t2'
 
 bsplitC' g ci t1 t2

@@ -17,7 +17,7 @@ import           Data.Aeson                              ( eitherDecode)
 import           Data.Aeson.Types                 hiding ( Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
-import           Data.Char                               ( isLower, isSpace, ord)
+import           Data.Char                               ( isLower, isSpace)
 import qualified Data.List                        as     L
 import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
@@ -36,7 +36,7 @@ import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc                  ( mapEither, mapSnd)
 import           Language.Nano.Types
-import           Language.Nano.Errors
+-- import           Language.Nano.Errors
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
@@ -378,15 +378,14 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 --------------------------------------------------------------------------------------
 parseCodeFromFile :: FilePath -> IO (Either Error (NanoBareR Reft))
 --------------------------------------------------------------------------------------
-parseCodeFromFile fp = parseScriptFromJSON fp >>= return . mkCode fp . expandAnnots
+parseCodeFromFile fp = parseScriptFromJSON fp >>= return . mkCode . expandAnnots
 
 --------------------------------------------------------------------------------------
-mkCode :: FilePath -> [Statement (SourceSpan, [Spec])] ->  Either Error (NanoBareR Reft)
+mkCode :: [Statement (SourceSpan, [Spec])] ->  Either Error (NanoBareR Reft)
 --------------------------------------------------------------------------------------
-mkCode fp ss =  do
+mkCode ss =  do
     return $ Nano {
-        file    = fp
-      , code    = Src (checkTopStmt <$> ss')
+        code    = Src (checkTopStmt <$> ss')
       , externs = envFromList   [ t | Extern t <- anns ] -- externs
       , specs   = catFunSpecDefs ss                      -- function sigs
       , glVars  = catVarSpecDefs ss                      -- variables

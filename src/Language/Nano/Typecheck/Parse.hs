@@ -378,14 +378,15 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 --------------------------------------------------------------------------------------
 parseCodeFromFile :: FilePath -> IO (Either Error (NanoBareR Reft))
 --------------------------------------------------------------------------------------
-parseCodeFromFile fp = parseScriptFromJSON fp >>= return . mkCode . expandAnnots
+parseCodeFromFile fp = parseScriptFromJSON fp >>= return . mkCode fp . expandAnnots
 
 --------------------------------------------------------------------------------------
-mkCode :: [Statement (SourceSpan, [Spec])] ->  Either Error (NanoBareR Reft)
+mkCode :: FilePath -> [Statement (SourceSpan, [Spec])] ->  Either Error (NanoBareR Reft)
 --------------------------------------------------------------------------------------
-mkCode ss =  do
-    return $ Nano { 
-        code    = Src (checkTopStmt <$> ss')
+mkCode fp ss =  do
+    return $ Nano {
+        file    = fp
+      , code    = Src (checkTopStmt <$> ss')
       , externs = envFromList   [ t | Extern t <- anns ] -- externs
       , specs   = catFunSpecDefs ss                      -- function sigs
       , glVars  = catVarSpecDefs ss                      -- variables

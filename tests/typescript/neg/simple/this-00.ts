@@ -1,7 +1,7 @@
 
 
 /*@ foo :: () => void */
-function foo () {
+function foo ():void {
 
 
 }

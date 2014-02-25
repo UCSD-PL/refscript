@@ -54,33 +54,22 @@ import qualified System.Console.CmdArgs.Verbosity as V
 --------------------------------------------------------------------------------
 verifyFile :: FilePath -> IO (UAnnSol a, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile f = do 
-  p <- parseNanoFromFile f
-  case p of 
-    Left err -> return (NoAnn, F.Unsafe [err]) 
-    Right nano -> 
-      do  V.whenLoud $ donePhase FM.Loud "Parse"
-          V.whenLoud $ putStrLn . render . pp $ nano
-          case ssaTransform' nano of 
-            Left err -> return (NoAnn, F.Unsafe [err])
-            Right nanoSsa -> 
-              do 
-                V.whenLoud  $ donePhase FM.Loud "SSA Transform"
-                V.whenLoud  $ putStrLn . render . pp $ nanoSsa
-                verb       <- V.getVerbosity
-                let annp    = execute verb nanoSsa $ tcNano nanoSsa
-                r          <- either unsafe safe annp 
-                V.whenLoud  $ donePhase FM.Loud "Typechecking"
-                return      $ (NoAnn, r)
+verifyFile f = parse f $ ssa $ tc
+
+parse f next  = parseNanoFromFile f >>= either (lerror . single) next
+ssa   next p  = ssaTransform p      >>= either (lerror . single) next
+tc    p       = typeCheck p         >>= either unsafe safe
+
+lerror        = return . (NoAnn,) . F.Unsafe
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppshow) 
-                 return $ F.Unsafe errs
+                 return $ (NoAnn, F.Unsafe errs)
 
-safe (_, Nano {code = Src fs})
+safe (Nano {code = Src fs})
   = do V.whenLoud $ printAllAnns fs 
        nfc       <- noFailCasts <$> getOpts
-       return     $ F.Safe `mappend` failCasts nfc fs 
+       return     $ (NoAnn, failCasts nfc fs)
 
 
 -- | Cast manipulation
@@ -95,7 +84,9 @@ getCasts stmts   = everything (++) ([] `mkQ` f) stmts
     f (Cast a _) = [a]
     f _          = [] 
 
--- castErrors :: (F.Reftable r) => AnnType r -> [Error] 
+-------------------------------------------------------------------------------------------
+castErrors :: (F.Reftable r) => AnnType r -> [Error] 
+-------------------------------------------------------------------------------------------
 castErrors (Ann l facts) = downErrors ++ deadErrors
   where 
     downErrors           = [errorDownCast l t | TCast _ (DCST t) <- facts]
@@ -110,10 +101,11 @@ printAllAnns fs
 
 
 -------------------------------------------------------------------------------------------
-typeCheck :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
-          => V.Verbosity -> (NanoSSAR r) -> Either [Error] (NanoTypeR r)
+typeCheck :: (Ord r, PP r, F.Reftable r) 
+          => NanoSSAR r -> IO (Either [Error] (NanoTypeR r))
 -------------------------------------------------------------------------------------------
-typeCheck verb pgm = fmap snd (execute verb pgm $ tcNano pgm)
+typeCheck pgm = V.getVerbosity >>= \v -> return $ fmap snd (execute v pgm $ tcNano pgm)
+
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------

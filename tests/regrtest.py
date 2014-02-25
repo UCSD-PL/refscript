@@ -25,6 +25,8 @@ import rtest as rtest
 
 # solve      = "nanojs".split()
 
+inputFileExt = "ts"
+
 null       = open("/dev/null", "w")
 now	       = (time.asctime(time.localtime(time.time()))).replace(" ","_")
 logdir     = "../tests/logs"
@@ -72,14 +74,14 @@ class Config (rtest.TestConfig):
 
   def run_test (self, file):
     os.environ['LCCFLAGS'] = self.dargs
-    if file.endswith(".js"):
+    if file.endswith("." + inputFileExt):
       fargs = getfileargs(file)
       return solve_quals(self.solver, file, True, False, True, fargs, self.dargs)
     elif file.endswith(".sh"):
       return run_script(file, True)
 
   def is_test (self, file):
-    return file.endswith(".js")
+    return file.endswith("." + inputFileExt)
 
 #####################################################################################
 
@@ -105,8 +107,12 @@ options, args = parser.parse_args()
 #runner.run ()
 
 # liquid Tests
-testdirs  = [ ("liquid/neg", 1), ("liquid/pos", 0) ]
-runner    = rtest.TestRunner (Config ("nanojs liquid -q", options.opts, testdirs, logfile, options.threadcount))
+#testdirs  = [ ("liquid/neg", 1), ("liquid/pos", 0) ]
+#runner    = rtest.TestRunner (Config ("nanojs liquid", options.opts, testdirs, logfile, options.threadcount))
+#runner.run ()
+
+testdirs  = [ ("typescript/neg", 1), ("typescript/pos", 0) ]
+runner    = rtest.TestRunner (Config ("nanojs liquid", options.opts, testdirs, logfile, options.threadcount))
 runner.run ()
 
 # testdirs  = [ ("liquid/pos", 0) ]

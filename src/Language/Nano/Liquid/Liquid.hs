@@ -42,34 +42,18 @@ import           System.Console.CmdArgs.Default
 
 -- import           Debug.Trace                        (trace)
 
-import qualified System.Console.CmdArgs.Verbosity as V
+--------------------------------------------------------------------------------
+verifyFile    :: FilePath -> IO (A.UAnnSol RefType, F.FixResult Error)
+--------------------------------------------------------------------------------
+verifyFile f = parse f $ ssa $ tc $ refTc
 
---------------------------------------------------------------------------------
-verifyFile       :: FilePath -> IO (A.UAnnSol RefType, F.FixResult Error)
---------------------------------------------------------------------------------
-verifyFile f 
-  = do  p0 <- parseNanoFromFile f
-        case p0 of 
-          Left err -> return (A.NoAnn, F.Unsafe [err]) 
-          Right p1 {-@(Nano { code = Src ss}) -} ->
-            do
-              -- print $ pp ss
-              cfg   <- getOpts 
-              verb  <- V.getVerbosity
-              case ssaTransform' p1 of 
-                Left err -> return (A.NoAnn, F.Unsafe [err])
-                Right p2 -> 
-                    let p3 = expandAliases p2 in
-                    case typeCheck verb p3 of
-                      Left errs -> return $ (A.NoAnn, F.Unsafe errs)
-                      Right p4  -> reftypeCheck cfg f p4
+parse f next = parseNanoFromFile f         >>= either (lerror . single) next
+ssa   next p = ssaTransform p              >>= either (lerror . single) next
+tc    next p = typeCheck (expandAliases p) >>= either lerror next
+refTc      p = getOpts >>= solveConstraints (file p) . (`generateConstraints` p) 
 
---------------------------------------------------------------------------------
-reftypeCheck :: Config -> FilePath -> NanoRefType -> 
-  IO (A.UAnnSol RefType, F.FixResult Error)
---------------------------------------------------------------------------------
-reftypeCheck cfg f = solveConstraints f . generateConstraints cfg
-
+lerror       = return . (A.NoAnn,) . F.Unsafe
+         
 --------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (A.UAnnSol RefType, F.FixResult Error) 
 --------------------------------------------------------------------------------

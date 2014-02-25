@@ -1,5 +1,3 @@
-/// <reference path="../../env/prelude.d.ts" />
-
 /*@ abs :: ( f: ( number: top ) => number, x: number ) => number */
 function abs(f, x) {
     var r = x;

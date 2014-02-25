@@ -22,15 +22,17 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.Fixpoint.Misc             
+import qualified Language.Fixpoint.Errors           as E
 import qualified Language.Fixpoint.Types            as F
 -- import           Debug.Trace                        hiding (traceShow)
 
-----------------------------------------------------------------------------------
-ssaTransform :: (PP r, F.Reftable r, Data r, Typeable r) => NanoBareR r -> NanoSSAR r
-----------------------------------------------------------------------------------
-ssaTransform = either throw id . execute . ssaNano 
-
 ssaTransform' = execute . ssaNano
+
+----------------------------------------------------------------------------------
+ssaTransform :: (PP r, F.Reftable r, Data r, Typeable r) => 
+  NanoBareR r -> IO (Either E.Error (NanoSSAR r))
+----------------------------------------------------------------------------------
+ssaTransform = return . ssaTransform' 
 
 
 -- | `ssaNano` Perfroms SSA transformation of the input program. The output

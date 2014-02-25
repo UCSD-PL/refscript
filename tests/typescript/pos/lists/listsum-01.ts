@@ -1,12 +1,12 @@
 /*@ sum :: (list [{v:number| 0 <= v}]) => number */
-function sum(xs){
-  if (empty(xs)) {
-    return 0;
-  }
-  var h = head(xs);
-  var t = tail(xs);
-  var z = sum(xs);
+function sum(xs : number[]) : number{
+	if (empty(xs)) {
+		return 0;
+	}
+	var h : number   = head(xs);
+	var t : number[] = tail(xs);
+	var z : number   = sum(xs);
 
-  return 10; // h + sum(t);
+	return 10; // h + sum(t);
 }
 

@@ -7,7 +7,6 @@ module Language.Nano.SSA.SSA (ssaTransform, ssaTransform') where
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
-import           Control.Exception                  (throw)
 import qualified Data.Foldable                    as     FO
 import qualified Data.HashMap.Strict as M 
 import           Data.Typeable

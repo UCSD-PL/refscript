@@ -277,7 +277,7 @@ addInvariant t           = ((`tx` t) . invs) <$> get
     tx _ t               = t 
 
     strengthenOp t o r   | L.elem r (ofRef o) = t
-    strengthenOp t o r   | otherwise          = strengthen t r
+    strengthenOp t _ r   | otherwise          = strengthen t r
 
     ofRef (F.Reft (s, as)) = (F.Reft . (s,) . single) <$> as
 

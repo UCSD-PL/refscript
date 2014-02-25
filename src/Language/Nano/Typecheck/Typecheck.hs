@@ -14,7 +14,6 @@ import           Control.Monad
 import qualified Data.HashSet                       as HS 
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.Traversable                   as T
-import           Data.Monoid
 import qualified Data.List                          as L
 import           Data.Maybe                         (catMaybes,  fromMaybe)
 import           Data.Generics                   

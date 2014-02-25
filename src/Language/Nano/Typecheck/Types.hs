@@ -447,7 +447,8 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-data Nano a t = Nano { code   :: !(Source a)               -- ^ Code to check
+data Nano a t = Nano { file   :: !(FilePath)               -- ^ Filename
+                     , code   :: !(Source a)               -- ^ Code to check
                      , externs:: !(Env t)                  -- ^ Imported (unchecked) specifications 
                      , specs  :: !(Env t)                  -- ^ Function specs and 
                                                            -- ^ After TC will also include class types
@@ -494,7 +495,9 @@ instance Functor Source where
 
 instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
   pp pgm@(Nano {code = (Src s) }) 
-    =   text "******************* Code **********************"
+    =   text "******************* Filename ******************"
+    $+$ pp (file pgm)
+    $+$ text "******************* Code **********************"
     $+$ pp s
     $+$ text "******************* Imported specs ************"
     $+$ pp (externs pgm)
@@ -520,8 +523,9 @@ instance (PP r, F.Reftable r) => PP (TyDef (RType r)) where
   pp (TD id v r _) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r
     
 instance Monoid (Nano a t) where 
-  mempty        = Nano mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty 
-  mappend p1 p2 = Nano { code    = (code    p1 ) `mappend` (code    p2 )
+  mempty        = Nano "" mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty 
+  mappend p1 p2 = Nano { file    = same (file p1) (file p2)
+                       , code    = (code    p1 ) `mappend` (code    p2 )
                        , externs = (externs p1 ) `mappend` (externs p2 )
                        , specs   = (specs   p1 ) `mappend` (specs   p2 )
                        , glVars  = (glVars  p1 ) `mappend` (glVars  p2 )
@@ -532,6 +536,9 @@ instance Monoid (Nano a t) where
                        , quals   = (quals   p1 ) `mappend` (quals   p2 )
                        , invts   = (invts   p1 ) `mappend` (invts   p2 )
                        }
+
+same a b | a == b = a
+same _ _ | otherwise = error "BUG: Filenames shoud be the same here"
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }

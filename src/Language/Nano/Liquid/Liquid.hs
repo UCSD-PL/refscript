@@ -43,24 +43,17 @@ import           System.Console.CmdArgs.Default
 -- import           Debug.Trace                        (trace)
 
 --------------------------------------------------------------------------------
-verifyFile       :: FilePath -> IO (A.UAnnSol RefType, F.FixResult Error)
+verifyFile    :: FilePath -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile f = f `onParse` (`onSSA` (`onTC` (reftypeCheck f)))
+verifyFile f = parse f $ ssa $ tc $ refTc
 
+parse f next = parseNanoFromFile f         >>= either (lerror . single) next
+ssa   next p = ssaTransform p              >>= either (lerror . single) next
+tc    next p = typeCheck (expandAliases p) >>= either lerror next
+refTc      p = getOpts >>= solveConstraints (file p) . (`generateConstraints` p) 
 
-onParse f next  =   parseNanoFromFile f >>= withEither (lerror . single) next
-onSSA   p next  =   ssaTransform p >>= withEither (lerror . single) next
-onTC    p next  =   typeCheck (expandAliases p) >>= withEither lerror next
-
-lerror                      = return . (A.NoAnn,) . F.Unsafe
-withEither err _ (Left e)   = err e
-withEither _   f (Right p)  = f p
+lerror       = return . (A.NoAnn,) . F.Unsafe
          
---------------------------------------------------------------------------------
-reftypeCheck :: FilePath -> NanoRefType -> IO (A.UAnnSol RefType, F.FixResult Error)
---------------------------------------------------------------------------------
-reftypeCheck f p = getOpts >>= solveConstraints f . (`generateConstraints` p) 
-
 --------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (A.UAnnSol RefType, F.FixResult Error) 
 --------------------------------------------------------------------------------

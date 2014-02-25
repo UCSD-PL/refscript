@@ -111,9 +111,10 @@ printAllAnns fs
 
 -------------------------------------------------------------------------------------------
 typeCheck :: (Data r, Ord r, PP r, F.Reftable r, Substitutable r (Fact r), Free (Fact r)) 
-          => V.Verbosity -> (NanoSSAR r) -> Either [Error] (NanoTypeR r)
+          => NanoSSAR r -> IO (Either [Error] (NanoTypeR r))
 -------------------------------------------------------------------------------------------
-typeCheck verb pgm = fmap snd (execute verb pgm $ tcNano pgm)
+typeCheck pgm = V.getVerbosity >>= \v -> return $ fmap snd (execute v pgm $ tcNano pgm)
+
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program ---------------------------------------------------

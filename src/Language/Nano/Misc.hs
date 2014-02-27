@@ -32,12 +32,9 @@ module Language.Nano.Misc (
 -- import           Control.Applicative                ((<$>))
 import           Control.Monad                        (liftM2)
 import           Data.Data
-import qualified Data.Set                             as S
 import qualified Data.List                            as L
 import qualified Language.Fixpoint.Types              as F
-import           Language.ECMAScript3.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
-import           Language.Nano.Typecheck.Types        ()
 
 import           Data.Generics.Aliases
 
@@ -97,16 +94,6 @@ appFst4 (a,b,c,d) f = (f a,b,c,d)
 appSnd4 (a,b,c,d) f = (a,f b,c,d)
 appThd4 (a,b,c,d) f = (a,b,f c,d)
 appFth4 (a,b,c,d) f = (a,b,c,f d)
-
-instance PP Bool where 
-  pp True  = text "true"
-  pp False = text "false"
-
-instance PP a => PP (S.Set a) where
-  pp = pp . S.toList
-
-instance PP Char where
-  pp = char
 
 instance F.Fixpoint Char where
   toFix = char

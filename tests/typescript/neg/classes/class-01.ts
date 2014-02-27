@@ -18,7 +18,9 @@ class Greeter {
 	constructor(message) { }
 
 	/*@ greet1 :: () => void */
-	private greet1():void { }
+	private greet1():void { 
+    this.c = 1;
+  }
 
 	/*@ greet2 :: () => void */
 	greet2() : void {  }

@@ -385,15 +385,16 @@ consCast g a e
 
 ---------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------
-consUpCast g l x t =
-  envAddFresh "consUpCast" l 
-    ((`strengthen` (F.symbolReft x)) $ fst $ alignTs (tenv g) (envFindTy x g) t) g
+consUpCast g l x t = undefined 
+-- TODO: This should be aligned !!!
+--   envAddFresh "consUpCast" l 
+--     ((`strengthen` (F.symbolReft x)) $ fst $ alignTs (tenv g) (envFindTy x g) t) g
 
 ---------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------
 consDownCast g l x t = 
   do tc  <- castTo l (tenv g) tx (toType t) 
-     withAlignedM g (subTypeContainers "Downcast" l g) tx tc
+     {- withAlignedM -} g (subTypeContainers "Downcast" l g) tx tc
      g'  <- envAdds [(x, tc)] g
      return (x, g')
   where 

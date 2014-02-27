@@ -208,7 +208,6 @@ rTypeSort (TVar α _)       = F.FObj $ F.symbol α
 rTypeSort t@(TAll _ _)     = rTypeSortForAll t 
 rTypeSort (TFun xts t _)   = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
-rTypeSort (TObj _ _)       = F.FApp (rawStringFTycon "object") []
 rTypeSort (TArr _ _)       = F.FApp (rawStringFTycon "array") []
 rTypeSort (TAnd (t:_))     = rTypeSort t
 rTypeSort t                = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
@@ -220,7 +219,7 @@ rTypeSortApp c ts    = F.FApp (tconFTycon c) (rTypeSort <$> ts)
 tconFTycon TInt      = F.intFTyCon
 tconFTycon TBool     = rawStringFTycon "boolean"
 tconFTycon TVoid     = rawStringFTycon "void"
-tconFTycon (TDef s)  = F.stringFTycon $ F.Loc (sourcePos s) (unId s)
+tconFTycon (TRef s)  = F.stringFTycon $ F.Loc (sourcePos s) (unId s)
 tconFTycon TUn       = rawStringFTycon "union"
 tconFTycon TString   = F.strFTyCon -- F.stringFTycon "string"
 tconFTycon TTop      = rawStringFTycon "top"
@@ -243,7 +242,6 @@ stripRTypeBase :: RType r -> Maybe r
 stripRTypeBase (TApp _ _ r) = Just r
 stripRTypeBase (TVar _ r)   = Just r
 stripRTypeBase (TFun _ _ r) = Just r
-stripRTypeBase (TObj _ r)   = Just r
 stripRTypeBase (TArr _ r)   = Just r
 stripRTypeBase _            = Nothing
  
@@ -272,9 +270,6 @@ emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts) (emapReft f γ'
   where 
     γ'                      = (b_sym <$> xts) ++ γ 
     -- ts                      = b_type <$> xts 
-emapReft f γ (TObj bs r)    = TObj (emapReftBind f γ' <$> bs) (f γ r)
-  where 
-    γ'                      = (b_sym <$> bs) ++ γ 
 emapReft f γ (TArr t r)     = TArr (emapReft f γ t) (f γ r)
 emapReft _ _ _              = error "Not supported in emapReft"
 
@@ -287,7 +282,6 @@ mapReftM f (TVar α r)      = TVar α <$> f r
 mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> f r
 mapReftM f (TFun xts t r)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return $ F.top r) --f r 
 mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
-mapReftM f (TObj bs r)     = TObj   <$> mapM (mapReftBindM f) bs <*> f r
 mapReftM f (TArr t r)      = TArr   <$> (mapReftM f t) <*> f r
 mapReftM f (TAnd ts)       = TAnd   <$> mapM (mapReftM f) ts
 mapReftM _ t               = error   $ render $ text "Not supported in mapReftM: " <+> pp t 
@@ -312,7 +306,6 @@ efoldReft g f = go
     go γ z t@(TApp _ ts r)  = f γ r $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
     go γ z (TAll _ t)       = go γ z t
     go γ z (TFun xts t r)   = f γ r $ go γ' (gos γ' z (b_type <$> xts)) t  where γ' = foldr (efoldExt g) γ xts
-    go γ z (TObj xts r)     = f γ r $ (gos γ' z (b_type <$> xts))      where γ' = foldr (efoldExt g) γ xts
     go γ z (TArr t r)       = f γ r $ go γ z t    
     go γ z (TAnd ts)        = gos γ z ts 
     go _ _ t                = error $ "Not supported in efoldReft: " ++ ppshow t
@@ -330,7 +323,6 @@ efoldRType g f               = go
     go γ z t@(TApp _ ts _)   = f γ t $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
     go γ z t@(TAll _ t1)     = f γ t $ go γ z t1
     go γ z t@(TFun xts t1 _) = f γ t $ go γ' (gos γ' z (b_type <$> xts)) t1  where γ' = foldr (efoldExt g) γ xts
-    go γ z t@(TObj xts _)    = f γ t $ (gos γ' z (b_type <$> xts))           where γ' = foldr (efoldExt g) γ xts
     go γ z t@(TArr t1 _)     = f γ t $ go γ z t1    
     go γ z   (TAnd ts)       = gos γ z ts 
     go _ _ t                 = error $ "Not supported in efoldRType: " ++ ppshow t

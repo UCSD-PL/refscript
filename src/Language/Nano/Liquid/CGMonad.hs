@@ -85,7 +85,7 @@ import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types 
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Unfold
-import           Language.Nano.Typecheck.Compare
+-- import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Qualifiers
 
@@ -422,7 +422,7 @@ subType l g t1 t2 =
 --   subType l g (trace (printf "SubType[%s]:\n\t%s\n\t%s" msg (ppshow t1) (ppshow t2)) t1) t2
 
 -------------------------------------------------------------------------------
-equivWUnions :: E.Env (TyDef RefType) -> RefType -> RefType -> Bool
+equivWUnions :: E.Env (TDef RefType) -> RefType -> RefType -> Bool
 -------------------------------------------------------------------------------
 equivWUnions γ t1@(TApp TUn _ _) t2@(TApp TUn _ _) = 
   {-let msg = printf "In equivWUnions:\n%s - \n%s" (ppshow t1) (ppshow t2) in -}
@@ -458,16 +458,16 @@ subTypeContainers {- msg -} _ l g t1 t2 = subType l g t1 t2
     {-                                       $+$ text "  t2 =" <+> pp t2-}
 
 
--------------------------------------------------------------------------------
-alignTsM :: CGEnv -> RefType -> RefType -> CGM (RefType, RefType)
--------------------------------------------------------------------------------
-alignTsM g t t' = return $ alignTs (tenv g) t t'
+{---------------------------------------------------------------------------------}
+{-alignTsM :: CGEnv -> RefType -> RefType -> CGM (RefType, RefType)-}
+{---------------------------------------------------------------------------------}
+{-alignTsM g t t' = return $ alignTs (tenv g) t t'-}
 
 
--------------------------------------------------------------------------------
-withAlignedM :: CGEnv -> (RefType -> RefType -> CGM a) -> RefType -> RefType -> CGM a
--------------------------------------------------------------------------------
-withAlignedM g f t t' = alignTsM g t t' >>= uncurry f 
+{---------------------------------------------------------------------------------}
+{-withAlignedM :: CGEnv -> (RefType -> RefType -> CGM a) -> RefType -> RefType -> CGM a-}
+{---------------------------------------------------------------------------------}
+{-withAlignedM g f t t' = alignTsM g t t' >>= uncurry f -}
 
 
 -- | Monadic unfolding
@@ -604,7 +604,7 @@ splitC' (Sub g i t1@(TApp TUn t1s r1) t2@(TApp TUn t2s r2)) =
          -- constructor parameters are covariant
          let t1s' = (`strengthen` r1) <$> t1s
          let t2s' = (`strengthen` r2) <$> t2s
-         cs'     <- concatMapM splitC $ safeZipWith "splitcTDef" (Sub g i) t1s' t2s'
+         cs'     <- concatMapM splitC $ safeZipWith "splitcTRef" (Sub g i) t1s' t2s'
          return   $ cs ++ cs'
     )
     (errorstar $ printf "Unequal unions in splitC: %s - %s" (ppshow $ toType t1) (ppshow $ toType t2))
@@ -617,19 +617,19 @@ splitC' (Sub _ _ t1 t2@(TApp TUn _ _)) =
 ---------------------------------------------------------------------------------------
 -- |Type definitions
 ---------------------------------------------------------------------------------------
-splitC' (Sub g i t1@(TApp d1@(TDef _) t1s _) t2@(TApp d2@(TDef _) t2s _)) | d1 == d2
+splitC' (Sub g i t1@(TApp d1@(TRef _) t1s _) t2@(TApp d2@(TRef _) t2s _)) | d1 == d2
   = do  cs    <- bsplitC g i t1 t2
         -- constructor parameters are covariant
-        cs'   <- concatMapM splitC $ safeZipWith "splitcTDef" (Sub g i) t1s t2s
+        cs'   <- concatMapM splitC $ safeZipWith "splitcTRef" (Sub g i) t1s t2s
         return $ cs ++ cs' 
 
-splitC' (Sub _ _ (TApp (TDef _) _ _) (TApp (TDef _) _ _))
+splitC' (Sub _ _ (TApp (TRef _) _ _) (TApp (TRef _) _ _))
   = errorstar "Unimplemented: Check type definition cycles"
   
-splitC' (Sub g i t1@(TApp (TDef _) _ _ ) t2) = 
+splitC' (Sub g i t1@(TApp (TRef _) _ _ ) t2) = 
   unfoldSafeCG g t1 >>= \t1' -> splitC' $ Sub g i t1' t2
 
-splitC' (Sub g i  t1 t2@(TApp (TDef _) _ _)) = 
+splitC' (Sub g i  t1 t2@(TApp (TRef _) _ _)) = 
   unfoldSafeCG g t2 >>= \t2' -> splitC' $ Sub g i t1 t2'
 
 ---------------------------------------------------------------------------------------
@@ -645,19 +645,19 @@ splitC' (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
 ---------------------------------------------------------------------------------------
 -- | Objects
 ---------------------------------------------------------------------------------------
-splitC' (Sub g i t1@(TObj _ _) t2@(TObj _ _ ))
-  = do cs    <- bsplitC g i t1 t2
-       -- RJ: not strengthening with top-level reft because not sure we need it...
-       cs'   <- concatMapM splitC [Sub g i t1' t2' | (t1',t2') <- bkPaddedObject (srcPos i) t1 t2]
-       return $ cs ++ cs' 
+{-splitC' (Sub g i t1@(TObj _ _) t2@(TObj _ _ ))-}
+{-  = do cs    <- bsplitC g i t1 t2-}
+{-       -- RJ: not strengthening with top-level reft because not sure we need it...-}
+{-       cs'   <- concatMapM splitC [Sub g i t1' t2' | (t1',t2') <- bkPaddedObject (srcPos i) t1 t2]-}
+{-       return $ cs ++ cs' -}
 
-splitC' (Sub _ _ t1 t2@(TObj _ _ ))
-  = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" 
-            (ppshow t1) (ppshow t2)
+{-splitC' (Sub _ _ t1 t2@(TObj _ _ ))-}
+{-  = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" -}
+{-            (ppshow t1) (ppshow t2)-}
 
-splitC' (Sub _ _ t1@(TObj _ _ ) t2)
-  = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" 
-            (ppshow t1) (ppshow t2)
+{-splitC' (Sub _ _ t1@(TObj _ _ ) t2)-}
+{-  = error $ printf "splitC - should have been broken down earlier:\n%s <: %s" -}
+{-            (ppshow t1) (ppshow t2)-}
 
 
 ---------------------------------------------------------------------------------------
@@ -724,11 +724,11 @@ splitW (W g i t@(TArr t' _))
         ws'   <- splitW (W g i t')
         return $ ws ++ ws'
 
-splitW (W g i t@(TObj ts _ ))
-  = do  g'    <- envTyAdds i ts g
-        let bs = bsplitW g t i
-        ws    <- concatMapM splitW [W g' i ti | B _ ti <- ts]
-        return $ bs ++ ws
+{-splitW (W g i t@(TObj ts _ ))-}
+{-  = do  g'    <- envTyAdds i ts g-}
+{-        let bs = bsplitW g t i-}
+{-        ws    <- concatMapM splitW [W g' i ti | B _ ti <- ts]-}
+{-        return $ bs ++ ws-}
 
 splitW (W g i (TAnd ts))
   = concatMapM splitW [W g i t | t <- ts]

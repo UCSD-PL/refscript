@@ -33,7 +33,6 @@ module Language.Nano.Typecheck.Types (
   , isNull
   , isVoid
   , isUndefined
-  , isObj
   , isUnion
 
   -- * Constructing Types
@@ -57,11 +56,10 @@ module Language.Nano.Typecheck.Types (
 
   -- * Regular Types
   , Type
-  , TyDef (..)
+  , TDef (..)
   , TVar (..)
   , TCon (..)
-  , RClass
-  , RClsElt(..)
+  , TElt (..)
 
   -- * Primitive Types
   , tInt
@@ -132,6 +130,7 @@ import           Data.Either                    (partitionEithers)
 import           Data.Maybe                     (fromMaybe)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.List                      as L
+import qualified Data.Set                       as S
 import qualified Data.HashMap.Strict            as M
 import           Data.Generics                   
 import           Data.Typeable                  ()
@@ -177,14 +176,18 @@ instance PP TVar where
 instance F.Symbolic a => F.Symbolic (Located a) where 
   symbol = F.symbol . val
 
--- | Constructed Type Bodies
-data TyDef t = TD { td_con  :: !(Id SourceSpan) -- TDef name ...
-                  , td_args :: ![TVar]          -- Type variables
-                  , td_body :: t                -- int or bool or fun or object ...
-                  , td_pos  :: !SourceSpan      -- Source position
+
+-- | Data types 
+data TDef t  = TD { t_args :: ![TVar]           -- ^ Type variables
+                  , t_elts :: ![TElt t]         -- ^ List of data type elts 
                   } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
-type TDefEnv r  = Env (TyDef (RType r))
+data TElt t  = TE { f_sym  :: F.Symbol          -- ^ Symbol
+                  , f_acc  :: Bool              -- ^ Access modifier (public: true, private: false)
+                  , f_type :: t                 -- ^ Type
+                  } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+
+type TDefEnv t  = Env (TDef t)
                 
 
 -- | Type Constructors
@@ -194,7 +197,7 @@ data TCon
   | TString
   | TVoid              
   | TTop
-  | TDef  (Id SourceSpan)
+  | TRef  (Id SourceSpan)
   | TUn
   | TNull
   | TUndef
@@ -205,26 +208,34 @@ data RType r
   = TApp TCon [RType r]     r   -- ^ C T1,...,Tn
   | TVar TVar               r   -- ^ A
   | TFun [Bind r] (RType r) r   -- ^ (x1:T1,...,xn:Tn) => T
-  | TObj [Bind r]           r   -- ^ {f1:T1,...,fn:Tn} 
   | TArr (RType r)          r   -- ^ [T] 
   | TAll TVar (RType r)         -- ^ forall A. T
   | TAnd [RType r]              -- ^ (T1..) => T1' /\ ... /\ (Tn..) => Tn' 
   | TExp F.Expr                 -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
     deriving (Ord, Show, Functor, Data, Typeable)
 
-type RClass r = [ RClsElt r] 
-
-data RClsElt r = CB  { f_sym  :: F.Symbol      -- ^ Binding's symbol
-                     , f_acc  :: Bool          -- ^ Access (public: true, private: false)
-                     , f_sta  :: Bool          -- ^ Static or non-static
-                     , f_type :: !(RType r)    -- ^ Field type
-                     }
-
 data Bind r
   = B { b_sym  :: F.Symbol      -- ^ Binding's symbol
       , b_type :: !(RType r)    -- ^ Field type
       } 
     deriving (Eq, Ord, Show, Functor, Data, Typeable)
+
+-- | An extended version of type tags
+data Tag 
+  = TagSimple TCon
+  | TagVar TVar
+  | TagFun
+  | TagArr Tag
+  | TagAll TVar Tag
+
+toTag :: RType r -> Tag 
+toTag (TApp c _ _) = TagSimple c
+toTag (TVar v _  ) = TagVar v
+toTag (TFun _ _ _) = TagFun
+toTag (TArr t _  ) = TagArr $ toTag t
+toTag (TAll v t  ) = TagAll v $ toTag t
+toTag (TAnd _    ) = TagFun
+toTag _            = errorstar "toTag: Unsupported"
 
 -- | "pure" top-refinement
 fTop :: (F.Reftable r) => r
@@ -371,10 +382,6 @@ isVoid :: RType r -> Bool
 isVoid (TApp TVoid _ _)   = True 
 isVoid _                  = False
 
-isObj :: RType r -> Bool
-isObj (TObj _ _)        = True
-isObj _                 = False
-
 isUnion :: RType r -> Bool
 isUnion (TApp TUn _ _) = True           -- top-level union
 isUnion _              = False
@@ -389,9 +396,7 @@ rTypeR               :: RType r -> r
 rTypeR (TApp _ _ r ) = r
 rTypeR (TVar _ r   ) = r
 rTypeR (TFun _ _ r ) = r
-rTypeR (TObj _ r   ) = r
 rTypeR (TArr _ r   ) = r
--- rTypeR (TBd  _     ) = errorstar "Unimplemented: rTypeR - TBd"
 rTypeR (TAll _ _   ) = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )     = errorstar "Unimplemented: rTypeR - TAnd"
 rTypeR (TExp _)      = errorstar "Unimplemented: rTypeR - TExp"
@@ -401,7 +406,6 @@ setRTypeR :: RType r -> r -> RType r
 setRTypeR (TApp c ts _   ) r = TApp c ts r
 setRTypeR (TVar v _      ) r = TVar v r
 setRTypeR (TFun xts ot _ ) r = TFun xts ot r
-setRTypeR (TObj xts _    ) r = TObj xts r
 setRTypeR (TArr t _      ) r = TArr t r
 setRTypeR t                _ = t
 
@@ -411,7 +415,6 @@ noUnion :: (F.Reftable r) => RType r -> Bool
 noUnion (TApp TUn _ _)  = False
 noUnion (TApp _  rs _)  = and $ map noUnion rs
 noUnion (TFun bs rt _)  = and $ map noUnion $ rt : (map b_type bs)
-noUnion (TObj bs    _)  = and $ map noUnion $ map b_type bs
 noUnion (TArr t     _)  = noUnion t
 noUnion (TAll _ t    )  = noUnion t
 noUnion _               = True
@@ -426,7 +429,7 @@ instance Eq TCon where
   TString == TString = True
   TVoid   == TVoid   = True         
   TTop    == TTop    = True
-  TDef i1 == TDef i2 = F.symbol i1 == F.symbol i2
+  TRef i1 == TRef i2 = F.symbol i1 == F.symbol i2
   TUn     == TUn     = True
   TNull   == TNull   = True
   TUndef  == TUndef  = True
@@ -437,7 +440,6 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
   TApp c1 t1s r1      == TApp c2 t2s r2      = (c1, t1s, r1)  == (c2, t2s, r2)
   TVar v1 r1          == TVar v2 r2          = (v1, r1)       == (v2, r2)
   TFun b1 t1 r1       == TFun b2 t2 r2       = (b1, t1, r1)   == (b2, t2, r2)
-  TObj b1 r1          == TObj b2 r2          = (null $ b1 L.\\ b2) && (null $ b2 L.\\ b1) && r1 == r2
   TArr t1 r1          == TArr t2 r2          = t1 == t2 && r1 == r2
   TAll v1 t1          == TAll v2 t2          = v1 == v2 && t1 == t2   -- Very strict Eq here
   _                   == _                   = False
@@ -453,7 +455,7 @@ data Nano a t = Nano { code   :: !(Source a)               -- ^ Code to check
                                                            -- ^ After TC will also include class types
                      , glVars :: !(Env t)                  -- ^ Global (annotated) vars
                      , consts :: !(Env t)                  -- ^ Measure Signatures
-                     , defs   :: !(Env (TyDef t))          -- ^ Type definitions
+                     , defs   :: !(Env (TDef t))          -- ^ Type definitions
 							       , tAlias :: !(TAliasEnv t)            -- ^ Type aliases
                      , pAlias :: !(PAliasEnv)              -- ^ Predicate aliases
                      , quals  :: ![F.Qualifier]            -- ^ Qualifiers
@@ -516,8 +518,15 @@ instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
     $+$ pp (invts pgm) 
     $+$ text "***********************************************"
 
-instance (PP r, F.Reftable r) => PP (TyDef (RType r)) where
-  pp (TD id v r _) = pp (F.symbol id) <+> ppArgs brackets comma v <+> pp r
+instance (PP t) => PP (TDef t) where
+  pp (TD vs ts) = ppArgs brackets comma vs <+> ppArgs braces comma ts
+
+instance (PP t) => PP (TElt t) where
+  pp (TE s b t) = pp (F.symbol s) <+> pp b <+> text "::" <+> pp t
+
+instance PP Bool where
+  pp True   = text "True"
+  pp False  = text "False"
     
 instance Monoid (Nano a t) where 
   mempty        = Nano mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty 
@@ -581,6 +590,13 @@ instance PP a => PP [a] where
 instance PP a => PP (Maybe a) where 
   pp = maybe (text "Nothing") pp 
 
+instance PP a => PP (S.Set a) where
+  pp = pp . S.toList
+
+instance PP Char where
+  pp = char
+
+
 instance F.Reftable r => PP (RType r) where
   pp (TVar α r)                 = F.ppTy r $ pp α 
   pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
@@ -588,11 +604,10 @@ instance F.Reftable r => PP (RType r) where
   pp (TAnd ts)                  = hsep [text "/\\" <+> pp t | t <- ts]
   pp (TExp e)                   = pprint e 
   pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "+") ts 
-  pp (TApp d@(TDef _)ts r)      = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
+  pp (TApp d@(TRef _)ts r)      = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 
   pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
   pp (TArr t r)                 = F.ppTy r $ brackets (pp t)  
-  pp (TObj bs r )               = F.ppTy r $ ppArgs braces comma bs
 
 instance PP TCon where
   pp TInt             = text "Int"
@@ -601,7 +616,7 @@ instance PP TCon where
   pp TVoid            = text "Void"
   pp TTop             = text "Top"
   pp TUn              = text "Union:"
-  pp (TDef x)         = pprint (F.symbol x)
+  pp (TRef x)         = pprint (F.symbol x)
   pp TNull            = text "Null"
   pp TUndef           = text "Undefined"
 
@@ -614,7 +629,7 @@ instance Hashable TCon where
   hashWithSalt s TUn         = hashWithSalt s (5 :: Int)
   hashWithSalt s TNull       = hashWithSalt s (6 :: Int)
   hashWithSalt s TUndef      = hashWithSalt s (7 :: Int)
-  hashWithSalt s (TDef z)    = hashWithSalt s (8 :: Int) + hashWithSalt s z
+  hashWithSalt s (TRef z)    = hashWithSalt s (8 :: Int) + hashWithSalt s z
 
 instance F.Reftable r => PP (Bind r) where 
   pp (B x t)          = pp x <> colon <> pp t 
@@ -626,7 +641,7 @@ ppTC TString          = text "String"
 ppTC TVoid            = text "Void"
 ppTC TTop             = text "Top"
 ppTC TUn              = text "Union:"
-ppTC (TDef x)         = pprint (F.symbol x)
+ppTC (TRef x)         = pprint (F.symbol x)
 ppTC TNull            = text "Null"
 ppTC TUndef           = text "Undefined"
 
@@ -726,7 +741,7 @@ instance IsLocated (Annot a SourceSpan) where
   srcPos = ann
 
 instance IsLocated TCon where
-  srcPos (TDef z) = srcPos z
+  srcPos (TRef z) = srcPos z
   srcPos _        = srcPos dummySpan
 
 instance (F.Reftable r, PP r) => PP (Fact r) where

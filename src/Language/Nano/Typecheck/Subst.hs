@@ -98,7 +98,6 @@ instance Free (RType r) where
   free (TVar α _)           = S.singleton α 
   free (TFun xts t _)       = S.unions   $ free <$> t:ts where ts = b_type <$> xts
   free (TAll α t)           = S.delete α $ free t 
-  free (TObj bs _)          = S.unions   $ free <$> b_type <$> bs
   free (TAnd ts)            = S.unions   $ free <$> ts 
   free (TExp _)             = error "free should not be applied to TExp"
 
@@ -133,12 +132,11 @@ instance Free a => Free (Maybe a) where
 ------------------------------------------------------------------------
 appTy :: (PP r, F.Reftable r) => RSubst r -> RType r -> RType r
 ------------------------------------------------------------------------
-appTy θ (TApp c ts z)            = TApp c (apply θ ts) z 
-appTy θ (TAnd ts)                = TAnd (apply θ ts) 
-appTy θ (TObj bs z)              = TObj ((\b -> b { b_type = appTy θ $ b_type b}) <$> bs) z
-appTy (Su m) t@(TVar α r)        = (M.lookupDefault t α m) `strengthen` r
-appTy θ (TFun ts t r)            = TFun  (apply θ ts) (apply θ t) r
-appTy (Su m) (TAll α t)          = TAll α $ apply (Su $ M.delete α m) t             -- oh, god! DO NOT DROP TAll here.  
-appTy θ (TArr t r)               = TArr (apply θ t) r
-appTy _ (TExp _)                 = error "appTy should not be applied to TExp"
+appTy θ        (TApp c ts r) = TApp c (apply θ ts) r
+appTy θ        (TAnd ts)     = TAnd (apply θ ts) 
+appTy (Su m) t@(TVar α r)    = (M.lookupDefault t α m) `strengthen` r
+appTy θ        (TFun ts t r) = TFun  (apply θ ts) (apply θ t) r
+appTy (Su m)   (TAll α t)    = TAll α $ apply (Su $ M.delete α m) t
+appTy θ        (TArr t r)    = TArr (apply θ t) r
+appTy _        (TExp _)      = error "appTy should not be applied to TExp"
 

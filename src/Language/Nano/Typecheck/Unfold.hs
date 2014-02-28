@@ -23,27 +23,6 @@ import           Text.Printf
 -- Unfolding ----------------------------------------------------------------
 -----------------------------------------------------------------------------
 
--- | Unfold the FIRST TDef at any part of the type @t@.
--------------------------------------------------------------------------------
-unfoldFirst :: (PP r, F.Reftable r) => TDefEnv (RType r) -> RType r -> RType r
--------------------------------------------------------------------------------
-unfoldFirst env = go
-  where 
-    go (TFun its ot r)         = TFun (appTBi go <$> its) (go ot) r
-    go (TAnd _)                = errorstar "BUG: unfoldFirst: cannot unfold intersection"
-    go (TAll v t)              = TAll v $ go t
-    go (TApp (TRef i) ts _)    = undefined 
-    -- TODO: This is not ready !!!
-      {-case envFindTy (F.symbol i) env of-}
-      {-  Just (TD n vs es)     -> apply (fromList $ zip vs ts) es    -}
-      {-  _                     -> throw $ errorUnboundId (srcPos id) id-}
-    go (TApp c a r)            = TApp c (go <$> a) r
-    go (TArr t r)              = TArr (go t) r
-    go t@(TVar _ _ )           = t
-    go (TExp _)                = error "unfoldFirst should not be applied to TExp" 
-    appTBi f (B s t)           = B s $ f t
-
-
 -- | Unfold a top-level type definition once. 
 -- Return @Right t@, where @t@ is the unfolded type if the unfolding is succesful.
 -- This includes the case where the input type @t@ is not a type definition in
@@ -55,10 +34,10 @@ unfoldFirst env = go
 -------------------------------------------------------------------------------
 unfoldMaybe :: (PP r, F.Reftable r) => TDefEnv (RType r) -> RType r -> Either String (RType r)
 -------------------------------------------------------------------------------
-unfoldMaybe env t@(TApp (TRef id) acts _) = undefined 
-  {-case envFindTy (F.symbol id) env of-}
-  {-  Just (TD _ vs bd _ ) -> Right $ apply (fromList $ zip vs acts) bd-}
-  {-  _                    -> Left  $ (printf "Failed unfolding: %s" $ ppshow t)-}
+unfoldMaybe env t@(TApp (TRef id) acts _) =
+  case envFindTy (F.symbol id) env of
+    Just (TD vs ts) -> Right $ apply (fromList $ zip vs acts) ts
+    _               -> Left  $ printf "Failed unfolding: %s" (ppshow t)
 -- The only thing that is unfoldable is a TRef.
 -- The rest are just returned as they are.
 unfoldMaybe _ t                           = Right t

@@ -91,6 +91,8 @@ instance (PP r, F.Reftable r) => Substitutable r (Bind r) where
 instance (PP r, F.Reftable r, Substitutable r t) => Substitutable r (Env t) where 
   apply = envMap . apply
 
+instance (PP r, F.Reftable r, Substitutable r t) => Substitutable r (TElt t) where 
+  apply θ (TE s b t) = TE s b $ apply θ t
 
 instance Free (RType r) where
   free (TApp _ ts _)        = S.unions   $ free <$> ts

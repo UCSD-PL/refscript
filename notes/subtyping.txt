@@ -1,0 +1,75 @@
+
+
+Raw Type
+--------
+
+t ::= number | string | boolean
+    | null | undefined
+    | void | top
+
+    | (xi:ti) => t                        (function type)
+    | tr                                  (type reference)
+    | t[]                                 (array type)
+    | \/ ti                               (union type)
+    | forall v. t                         (quantified (function) type)
+    | /\ ti                               (intersection (function) type)
+
+G ::= tr -> (vi, fj)
+
+F ::= { si: (bi, ti) } 
+
+
+
+NOTES:
+
+- Union (\/) refers to more that one types.
+
+
+Coercive subtyping
+==================
+
+Notation:
+---------
+∙t: means that the type is falsified in the refinement
+
+
+G |- t1 <: t2 ~> (t', t1', t2')
+
+
+t1, t2 in {number, string, boolean}
+----------------------------------------------
+G |- t <: t ~> (_, _, _)
+
+
+G |- t <: any ~> (t\/any, t\/∙any, ∙t\/any)       [S-any]
+
+
+G |- undefined <: t ~> (t, t, t)                  [S-Undef]
+
+
+t != undefined 
+------------------------------------------------- [S-Null]
+G |- null <: t ~> (t, t, t)
+
+
+G(r1) = (v1i, f1j)
+G(r2) = (v2i, f2j)
+t1 = apply(v1s/ts1, f1j)
+t2 = apply(v2s/ts2, f2j)
+{fi:ti,gj:tj} = t1
+{fi:ti} = t2
+------------------------------------------------- [S-Ref-Width]
+G |- r1[ts1] <: r2[ts2] ~> (r1[ts1]  )
+
+
+d1 = \/t1s - \/t2s  (difference based on type equality)
+d2 = \/t2s - \/t1s
+--------------------------------------------------------------------- [S-Union]
+G |- \/t1s <: \/t2s ~> (\/(t1s U t2s), \/(t1s U ∙d2), \/(t2s U ∙d1))
+
+
+G |- ti' <: ti ~> 
+-------------------------------------------------
+G |- (xi:ti)=>t  (xi:ti')=>t' ~> 
+
+

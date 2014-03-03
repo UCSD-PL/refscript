@@ -2,42 +2,46 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE Rank2Types             #-} 
 
-
-
 module Language.Nano.Misc (
   -- * Helper functions
 
-    mapFstM
-  , mapSndM
-  , mapPairM
-  , mkEither
-  , either2Bool
-  , maybeM
-  , maybeM_
+  -- Either
+    mkEither, either2Bool
+
+  -- List
   , unique
 
-  , fst4, snd4, thd4, fth4  
+  -- Tuples
+  , fst4, snd4, thd4, fth4
+  , mapFstM, mapSndM, mapPairM
+  , setFst3, setSnd3, setThd3
+  , appFst3, appSnd3, appThd3
   , setFst4, setSnd4, setThd4, setFth4
   , appFst4, appSnd4, appThd4, appFth4
 
+  -- SYB
   , everywhereM'
-
+  
+  -- Zip
   , zipWith3M, zipWith3M_
   , unzip4
 
-  , fromJust'
-  , maybeToEither
+  -- Maybe
+  , maybeM, maybeM_, fromJust', maybeToEither
+
+  -- HashSet operations
+  , isProperSubsetOf, isEqualSet
 ) where
 
 -- import           Control.Applicative                ((<$>))
 import           Control.Monad                        (liftM2)
 import           Data.Data
+import           Data.Generics.Aliases
+import           Data.HashSet
+import           Data.Hashable
 import qualified Data.List                            as L
 import qualified Language.Fixpoint.Types              as F
 import           Text.PrettyPrint.HughesPJ
-
-import           Data.Generics.Aliases
-
 
 -------------------------------------------------------------------------------
 mapFstM :: (Functor m, Monad m) => (a -> m c) -> (a, b) -> m (c, b)
@@ -80,6 +84,16 @@ unique :: (Eq a) => [a] -> Bool
 -------------------------------------------------------------------------------
 unique xs = length xs == length (L.nub xs)
 
+
+setFst3 (_,b,c) a' = (a',b,c)
+setSnd3 (a,_,c) b' = (a,b',c)
+setThd3 (a,b,_) c' = (a,b,c')
+
+appFst3 (a,b,c) f = (f a,b,c)
+appSnd3 (a,b,c) f = (a,f b,c)
+appThd3 (a,b,c) f = (a,b,f c)
+appFth3 (a,b,c) f = (a,b,c,f)
+
 fst4 (a,_,_,_) = a
 snd4 (_,b,_,_) = b
 thd4 (_,_,c,_) = c
@@ -119,7 +133,7 @@ zipWith3M_ f xs ys zs =  sequence_ (zipWith3 f xs ys zs)
 --------------------------------------------------------------------------------
 unzip4   :: [(a,b,c,d)] -> ([a],[b],[c],[d])
 --------------------------------------------------------------------------------
-unzip4   =  foldr (\(a,b,c,d) ~(as,bs,cs,ds) -> (a:as,b:bs,c:cs,d:ds))
+unzip4   =  L.foldr (\(a,b,c,d) ~(as,bs,cs,ds) -> (a:as,b:bs,c:cs,d:ds))
                   ([],[],[],[])
 
 
@@ -128,3 +142,15 @@ fromJust' s _        = error s
 
 maybeToEither _ (Just a) = Right a
 maybeToEither e Nothing  = Left e
+
+
+isProperSubsetOf :: (Eq a, Hashable a) => HashSet a -> HashSet a -> Bool
+isProperSubsetOf s1 s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) > 0  
+
+isEqualSet :: (Eq a, Hashable a) => HashSet a -> HashSet a -> Bool
+isEqualSet s1 s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) == 0  
+
+(\\) :: (Eq a, Hashable a) => HashSet a -> HashSet a -> HashSet a
+(\\) = difference
+
+

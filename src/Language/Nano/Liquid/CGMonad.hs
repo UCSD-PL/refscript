@@ -58,8 +58,6 @@ module Language.Nano.Liquid.CGMonad (
   -- * Add Type Annotations
   , addAnnot
 
-  -- * Unfolding
-  , unfoldSafeCG, unfoldFirstCG
 
   -- * Function Types
   , cgFunTys
@@ -84,8 +82,7 @@ import qualified Language.Nano.Annots           as A
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types 
 import           Language.Nano.Typecheck.Subst
-import           Language.Nano.Typecheck.Unfold
--- import           Language.Nano.Typecheck.Compare
+import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Qualifiers
 
@@ -426,7 +423,7 @@ equivWUnions :: E.Env (TDef RefType) -> RefType -> RefType -> Bool
 -------------------------------------------------------------------------------
 equivWUnions γ t1@(TApp TUn _ _) t2@(TApp TUn _ _) = 
   {-let msg = printf "In equivWUnions:\n%s - \n%s" (ppshow t1) (ppshow t2) in -}
-  case unionPartsWithEq (equiv γ) t1 t2 of 
+  case unionParts t1 t2 of 
     (ts,[],[])  -> and $ uncurry (safeZipWith "equivWUnions" $ equivWUnions γ) (unzip ts)
     _           -> False
 equivWUnions γ t t' = equiv γ t t'
@@ -469,18 +466,6 @@ subTypeContainers {- msg -} _ l g t1 t2 = subType l g t1 t2
 {---------------------------------------------------------------------------------}
 {-withAlignedM g f t t' = alignTsM g t t' >>= uncurry f -}
 
-
--- | Monadic unfolding
--------------------------------------------------------------------------------
-unfoldFirstCG :: CGEnv -> RefType -> CGM RefType
--------------------------------------------------------------------------------
-unfoldFirstCG g t = return $ unfoldFirst (tenv g) t
-
-
--------------------------------------------------------------------------------
-unfoldSafeCG :: CGEnv -> RefType -> CGM RefType
--------------------------------------------------------------------------------
-unfoldSafeCG g t  = return $ unfoldSafe (tenv g) t
 
 
 ---------------------------------------------------------------------------------------
@@ -626,11 +611,12 @@ splitC' (Sub g i t1@(TApp d1@(TRef _) t1s _) t2@(TApp d2@(TRef _) t2s _)) | d1 =
 splitC' (Sub _ _ (TApp (TRef _) _ _) (TApp (TRef _) _ _))
   = errorstar "Unimplemented: Check type definition cycles"
   
-splitC' (Sub g i t1@(TApp (TRef _) _ _ ) t2) = 
-  unfoldSafeCG g t1 >>= \t1' -> splitC' $ Sub g i t1' t2
+-- TODO: FIXME
+{-splitC' (Sub g i t1@(TApp (TRef _) _ _ ) t2) = -}
+{-  unfoldSafeCG g t1 >>= \t1' -> splitC' $ Sub g i t1' t2-}
 
-splitC' (Sub g i  t1 t2@(TApp (TRef _) _ _)) = 
-  unfoldSafeCG g t2 >>= \t2' -> splitC' $ Sub g i t1 t2'
+{-splitC' (Sub g i  t1 t2@(TApp (TRef _) _ _)) = -}
+{-  unfoldSafeCG g t2 >>= \t2' -> splitC' $ Sub g i t1 t2'-}
 
 ---------------------------------------------------------------------------------------
 -- | Rest of TApp

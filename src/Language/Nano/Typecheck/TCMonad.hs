@@ -100,6 +100,9 @@ import           Language.ECMAScript3.Syntax.Annotations
 -- import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity   as V
 
+type PPR r = (PP r, F.Reftable r)
+
+
 -------------------------------------------------------------------------------
 -- | Typechecking monad -------------------------------------------------------
 -------------------------------------------------------------------------------
@@ -351,9 +354,8 @@ unifyTypeM γ l m e t t' = unifyTypesM γ l msg [t] [t']
 -- which is the actual type for @e@ and @t'@ which is the desired (cast) type
 -- and insert the right kind of cast. 
 --------------------------------------------------------------------------------
-castM :: (Ord r, PP r, F.Reftable r) => 
-  TDefEnv r -> IContext -> Expression (AnnSSA r) -> RType r -> RType r 
-    -> TCM r (Expression (AnnSSA r))
+castM :: (PPR r) => TDefEnv (RType r) -> IContext -> Expression (AnnSSA r) 
+  -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 -- Special case casting for objects 
 -- castM γ ξ e fromT toT | any isObj [fromT, toT] = subTypeM γ fromT toT >>= go
@@ -362,14 +364,13 @@ castM :: (Ord r, PP r, F.Reftable r) =>
 --     go SubT         = addUpCast   ξ e toT
 --     go _            = addDeadCast ξ e toT
 
-castM γ ξ e fromT toT = do
-    (_,_,_,d) <- compareTs fromT toT
-    case d of 
-      SupT -> addDownCast ξ e toT    
-      Rel  -> addDownCast ξ e toT   
-      SubT -> addUpCast   ξ e toT   
-      Nth  -> addDeadCast ξ e toT   
-      EqT  -> return e 
+castM γ ξ e fromT toT =
+  case thd4 $ compareTs γ fromT toT of 
+    SupT -> addDownCast ξ e toT    
+    Rel  -> addDownCast ξ e toT   
+    SubT -> addUpCast   ξ e toT   
+    Nth  -> addDeadCast ξ e toT   
+    EqT  -> return e 
 
 
 

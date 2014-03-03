@@ -784,19 +784,15 @@ tcPropRead getter γ l e fld = do
     Just (te', tf)  -> tcWithThis te $ (, tf) <$> castM (tce_defs γ) (tce_ctx γ) e' te te'
 
 ----------------------------------------------------------------------------------
-envJoin :: (Ord r, F.Reftable r, PP r) =>
-  (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)
+envJoin :: (Ord r, PPR r) => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)
 ----------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
 envJoin l γ (Just γ1) (Just γ2) = envJoin' l γ γ1 γ2 
 
 envJoin' l γ γ1 γ2
-  = do let xs = phiVarsAnnot l -- concat [x | PhiVar x <- ann_fact l]
+  = do let xs = phiVarsAnnot l
        ts    <- mapM (getPhiType l γ1 γ2) xs
-       -- NOTE: Instantiation on arrays could have happened in the branches and
-       -- then lost if the variables are no Phi. So replay the application of
-       -- the instantiations on γ
        θ     <- getSubst
        return $ Just $ tcEnvAdds (zip xs ts) (apply θ γ)
   
@@ -807,6 +803,9 @@ getPhiType ::  (Ord r, F.Reftable r, PP r) =>
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (tcEnvFindTy x γ1, tcEnvFindTy x γ2) of
+  -- TODO: FIX THIS !!!
+  -- These two should really be the same type... cause we don't allow strong
+  -- updates on the raw type, even on local vars (that are SSAed)
     (Just t1, Just t2) -> do  return $ fst4 $ compareTs (tce_defs γ1) t1 t2
     (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
                             then tcError $ bug loc "Oh no, the HashMap GREMLIN is back...1"

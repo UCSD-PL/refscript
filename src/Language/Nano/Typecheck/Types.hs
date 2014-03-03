@@ -26,13 +26,14 @@ module Language.Nano.Typecheck.Types (
   , Bind (..)
   , toType
   , ofType
+  , rTop
   , strengthen 
 
   -- * Predicates on Types 
   , isTop
   , isNull
   , isVoid
-  , isUndefined
+  , isUndef
   , isUnion
 
   -- * Constructing Types
@@ -76,11 +77,19 @@ module Language.Nano.Typecheck.Types (
   , tAnd
   , isTVar
   , isArr
+  , isTRef
   , isTFun
   , fTop
 
-  -- * Environment Alias
+  -- * Type definition env
+  , TyID
   , TDefEnv
+  , addTySym      -- Add symbol with type definition
+  , addSym        -- Add symbol without type definition
+  , addObjLitTy   -- Add an object literal type
+  , findTySym, findTySymOrDie
+  , findTyId, findTyIdOrDie
+  , sortTDef
 
   -- * Operator Types
   , infixOpTy
@@ -129,7 +138,9 @@ import           Data.Hashable
 import           Data.Either                    (partitionEithers)
 import           Data.Maybe                     (fromMaybe)
 import           Data.Monoid                    hiding ((<>))            
+import           Data.List.Split                (splitOn)
 import qualified Data.List                      as L
+import qualified Data.IntMap                    as I
 import qualified Data.Set                       as S
 import qualified Data.HashMap.Strict            as M
 import           Data.Generics                   
@@ -140,6 +151,8 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
+
+import           GHC.Exts
 
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Misc
@@ -178,26 +191,106 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 
 
 -- | Data types 
-data TDef t  = TD { t_args :: ![TVar]           -- ^ Type variables
-                  , t_elts :: ![TElt t]         -- ^ List of data type elts 
-                  } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
-data TElt t  = TE { f_sym  :: F.Symbol          -- ^ Symbol
-                  , f_acc  :: Bool              -- ^ Access modifier (public: true, private: false)
-                  , f_type :: t                 -- ^ Type
-                  } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+type TyID      = Int
 
-type TDefEnv t  = Env (TDef t)
-                
+data TDef t    = TD { t_name  :: !(Maybe (Id SourceSpan))   -- ^ Name (possibly no name)
+                    , t_args  :: ![TVar]            -- ^ Type variables
+                    , t_proto :: !(Maybe F.Symbol)  -- ^ Parent type symbol
+                    , t_elts  :: ![TElt t]          -- ^ List of data type elts 
+                    } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+
+data TElt t    = TE { f_sym   :: F.Symbol           -- ^ Symbol
+                    , f_acc   :: Bool               -- ^ Access modifier (public: true, private: false)
+                    , f_type  :: t                  -- ^ Type
+                    } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+
+
+-- | Type definition environment
+
+data TDefEnv t = G  { size    :: Int                -- ^ Size of the `env`
+                    , env     :: I.IntMap (TDef t)  -- ^ Type def env (includes object types)
+                    , names   :: F.SEnv TyID          -- ^ Named types - mapping to env
+                    } deriving (Show, Functor, Data, Typeable)
+
+-- TODO: consider changing names and adding description
+
+---------------------------------------------------------------------------------
+addTySym :: F.Symbol -> TDef t -> TDefEnv t -> (TDefEnv t, TyID)
+---------------------------------------------------------------------------------
+addTySym s t (G sz γ c) = (G sz' γ' c', id)
+  where
+    sz' = sz + 1
+    id  = sz + 1
+    γ'  = I.insert id t γ
+    c'  = F.insertSEnv s id c  
+
+---------------------------------------------------------------------------------
+addSym :: F.Symbol -> TDefEnv t -> (TDefEnv t, TyID)
+---------------------------------------------------------------------------------
+addSym s g@(G sz γ c) = maybe f (g,) (F.lookupSEnv s c)
+  where
+    f   = (G sz' γ c', id)
+    sz' = sz + 1
+    id  = sz + 1
+    c'  = F.insertSEnv s id c 
+
+---------------------------------------------------------------------------------
+addObjLitTy :: TDef t -> TDefEnv t -> (TDefEnv t, TyID)
+---------------------------------------------------------------------------------
+addObjLitTy t (G sz γ c) = (G sz' γ' c, id)
+  where
+    sz' = sz + 1
+    id  = sz + 1
+    γ'  = I.insert id t γ
+
+---------------------------------------------------------------------------------
+findTySym :: F.Symbol -> TDefEnv t -> Maybe (TDef t)
+---------------------------------------------------------------------------------
+findTySym s (G _ γ c) = F.lookupSEnv s c >>= (`I.lookup` γ)
+
+---------------------------------------------------------------------------------
+findTySymOrDie :: F.Symbol -> TDefEnv t -> TDef t
+---------------------------------------------------------------------------------
+findTySymOrDie s γ = fromMaybe (error "findTySymOrDie") $ findTySym s γ 
+
+---------------------------------------------------------------------------------
+findTyId :: TyID -> TDefEnv t -> Maybe (TDef t)
+---------------------------------------------------------------------------------
+findTyId i (G _ γ _) = I.lookup i γ
+
+---------------------------------------------------------------------------------
+findTyIdOrDie :: TyID -> TDefEnv t -> TDef t
+---------------------------------------------------------------------------------
+findTyIdOrDie i γ = fromMaybe (error "findTyIdOrDie") $ findTyId i γ 
+
+-- TODO: this can be fixed a little better.
+instance Monoid (TDefEnv t) where
+  mempty = G 0 I.empty F.emptySEnv
+  mappend (G s1 γ1 c1) (G s2 γ2 c2) =  
+    G (s1+s2) (I.unionWithKey err γ1 γ2) (F.unionWithKeySEnv undefined c1 c2)
+    where 
+      err k t1 t2 = error $ "Key " ++ ppshow k ++ " is bound twice." 
+
+
+
+
+-- | Sort the fields of a TDef 
+---------------------------------------------------------------------------------
+sortTDef:: TDef t -> TDef t
+---------------------------------------------------------------------------------
+sortTDef (TD nm vs p elts) = TD nm vs p $ sortWith f_sym elts
+
+
 
 -- | Type Constructors
-data TCon 
-  = TInt                   
-  | TBool                
+data TCon
+  = TInt
+  | TBool
   | TString
-  | TVoid              
+  | TVoid
   | TTop
-  | TRef  (Id SourceSpan)
+  | TRef  TyID -- (Id SourceSpan)
   | TUn
   | TNull
   | TUndef
@@ -251,6 +344,9 @@ toType = fmap (const ())
 -- | Adding in Refinements
 ofType :: (F.Reftable r) => Type -> RType r
 ofType = fmap (const fTop)
+
+-- | Top-up refinemnt
+rTop = ofType . toType
 
 -- | `calleeType` uses the types at the callsite to extract the appropriate
 --   conjunct from an intersection.
@@ -316,21 +412,23 @@ bkAnd (TAnd ts)      = ts
 bkAnd t              = [t]
 
 ---------------------------------------------------------------------------------
-mkUnion :: (Ord r, Eq r, F.Reftable r) => [RType r] -> RType r
+mkUnion :: (F.Reftable r) => [RType r] -> RType r
 ---------------------------------------------------------------------------------
 mkUnion = mkUnionR fTop 
 
 
 ---------------------------------------------------------------------------------
-mkUnionR :: (Ord r, Eq r, F.Reftable r) => r -> [RType r] -> RType r
+mkUnionR :: (F.Reftable r) => r -> [RType r] -> RType r
 ---------------------------------------------------------------------------------
-mkUnionR _ [ ]     = tErr
-mkUnionR r [t]     = strengthen t r
-mkUnionR r ts  
-  | length ts' > 1 = TApp TUn ts' r
-  | otherwise      = strengthen (head ts') r
-  where 
-    ts'            = L.sort $ L.nub ts
+mkUnionR _ [ ] = tErr
+mkUnionR r [t] = strengthen t r
+mkUnionR r ts  = TApp TUn ts r 
+
+-- mkUnionR r ts  
+--   | length ts' > 1 = TApp TUn ts' r
+--   | otherwise      = strengthen (head ts') r
+--   where 
+--     ts'            = L.sort $ L.nub ts
 
 
 ---------------------------------------------------------------------------------
@@ -370,9 +468,9 @@ isTop (TApp TTop _ _)   = True
 isTop (TApp TUn  ts _ ) = any isTop ts
 isTop _                 = False
 
-isUndefined :: RType r -> Bool
-isUndefined (TApp TUndef _ _)   = True 
-isUndefined _                   = False
+isUndef :: RType r -> Bool
+isUndef (TApp TUndef _ _)   = True 
+isUndef _                   = False
 
 isNull :: RType r -> Bool
 isNull (TApp TNull _ _)   = True 
@@ -381,6 +479,9 @@ isNull _                  = False
 isVoid :: RType r -> Bool
 isVoid (TApp TVoid _ _)   = True 
 isVoid _                  = False
+
+isTRef (TApp (TRef _) _ _) = True
+isTRef (TApp (TRef _) _ _) = False
 
 isUnion :: RType r -> Bool
 isUnion (TApp TUn _ _) = True           -- top-level union
@@ -429,7 +530,7 @@ instance Eq TCon where
   TString == TString = True
   TVoid   == TVoid   = True         
   TTop    == TTop    = True
-  TRef i1 == TRef i2 = F.symbol i1 == F.symbol i2
+  TRef i1 == TRef i2 = i1 == i2
   TUn     == TUn     = True
   TNull   == TNull   = True
   TUndef  == TUndef  = True
@@ -455,7 +556,7 @@ data Nano a t = Nano { code   :: !(Source a)               -- ^ Code to check
                                                            -- ^ After TC will also include class types
                      , glVars :: !(Env t)                  -- ^ Global (annotated) vars
                      , consts :: !(Env t)                  -- ^ Measure Signatures
-                     , defs   :: !(Env (TDef t))          -- ^ Type definitions
+                     , defs   :: !(TDefEnv t)              -- ^ Type definitions
 							       , tAlias :: !(TAliasEnv t)            -- ^ Type aliases
                      , pAlias :: !(PAliasEnv)              -- ^ Predicate aliases
                      , quals  :: ![F.Qualifier]            -- ^ Qualifiers
@@ -518,8 +619,21 @@ instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
     $+$ pp (invts pgm) 
     $+$ text "***********************************************"
 
+
+instance PP t => PP (TDefEnv t) where
+  pp (G _ γ c) = text "Type definitions:"  $$ pp γ 
+              <+> text "Named types: "     $$ pp c
+
+instance PP t => PP (I.IntMap t) where
+  pp m = cat $ pp <$> I.toList m
+
+instance PP t => PP (F.SEnv t) where
+  pp m = cat $ pp <$> F.toListSEnv m
+  
+
 instance (PP t) => PP (TDef t) where
-  pp (TD vs ts) = ppArgs brackets comma vs <+> ppArgs braces comma ts
+  pp (TD nm vs p ts) = pp nm <+> ppArgs brackets comma vs 
+                   <+> text "extends" <+> pp p <+> ppArgs braces comma ts
 
 instance (PP t) => PP (TElt t) where
   pp (TE s b t) = pp (F.symbol s) <+> pp b <+> text "::" <+> pp t
@@ -616,7 +730,7 @@ instance PP TCon where
   pp TVoid            = text "Void"
   pp TTop             = text "Top"
   pp TUn              = text "Union:"
-  pp (TRef x)         = pprint (F.symbol x)
+  pp (TRef x)         = int x -- pprint (F.symbol x)
   pp TNull            = text "Null"
   pp TUndef           = text "Undefined"
 
@@ -641,7 +755,7 @@ ppTC TString          = text "String"
 ppTC TVoid            = text "Void"
 ppTC TTop             = text "Top"
 ppTC TUn              = text "Union:"
-ppTC (TRef x)         = pprint (F.symbol x)
+ppTC (TRef x)         = int x -- pprint (F.symbol x)
 ppTC TNull            = text "Null"
 ppTC TUndef           = text "Undefined"
 
@@ -740,9 +854,9 @@ instance Eq (Annot a SourceSpan) where
 instance IsLocated (Annot a SourceSpan) where 
   srcPos = ann
 
-instance IsLocated TCon where
-  srcPos (TRef z) = srcPos z
-  srcPos _        = srcPos dummySpan
+-- instance IsLocated TCon where
+--  srcPos (TRef z) = srcPos z
+--  srcPos _        = srcPos dummySpan
 
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)       = text "phi"  <+> pp x

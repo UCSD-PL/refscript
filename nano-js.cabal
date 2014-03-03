@@ -18,6 +18,7 @@ data-files:          README.md,
 Executable nanojs
   build-depends:       base, containers, 
                        pretty, 
+                       split,
                        vector, bytestring, text,
                        aeson <= 0.6.1.0,
                        hashable < 1.2, 
@@ -41,6 +42,7 @@ Executable nanojs
 Library
   build-depends:       base, containers, 
                        pretty, 
+                       split,
                        vector, bytestring, text,
                        aeson <= 0.6.1.0,
                        hashable < 1.2, 
@@ -78,7 +80,6 @@ Library
 --                        Language.Nano.Typecheck.TCMonad
 --                        Language.Nano.Typecheck.Compare
 --                        Language.Nano.Typecheck.Subst
---                        Language.Nano.Typecheck.Unfold
 --                        Language.Nano.Typecheck.Lookup
 --                        Language.Nano.Typecheck.Typecheck
 --                        Language.Nano.Liquid.Liquid

@@ -11,6 +11,8 @@ import           Control.Monad.State
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types as F
 
+import           Language.ECMAScript3.Syntax.Annotations
+
 import           Language.Nano.Env
 import           Language.Nano.Errors
 import           Language.Nano.Types
@@ -19,11 +21,11 @@ import qualified Language.Nano.Typecheck.Subst as S
 import           Language.Nano.Liquid.Types
 
 expandAliases   :: NanoRefType -> NanoRefType
-expandAliases p = expandPred pe' <$> expandRefType te' <$> p' 
+expandAliases p = expandPred pe' <$> expandRefType (defs p) te' <$> p' 
   where
     p'          = p { pAlias = pe' } {tAlias = te'}
-    pe'         = expandPAliasEnv $ pAlias p
-    te'         = expandTAliasEnv $ tAlias p
+    pe'         = expandPAliasEnv (pAlias p)
+    te'         = expandTAliasEnv (defs p) (tAlias p)
 
 ------------------------------------------------------------------------------
 -- | One-shot expansion for @PAlias@ -----------------------------------------
@@ -68,32 +70,33 @@ applyPAlias p f es a
 -- | One-shot expansion for @TAlias@ -----------------------------------------
 ------------------------------------------------------------------------------
 
-expandTAliasEnv    :: TAliasEnv RefType -> TAliasEnv RefType 
-expandTAliasEnv te = solve te support expandTAlias 
+expandTAliasEnv    :: TDefEnv RefType -> TAliasEnv RefType -> TAliasEnv RefType 
+expandTAliasEnv γ te = solve te support $ expandTAlias γ
   where
-    support        = filter (`envMem` te) . getTApps . al_body
+    support        = filter (`envMem` te) . getTApps γ . al_body
 
-getTApps    :: RefType -> [F.Symbol]
-getTApps    = everything (++) ([] `mkQ` fromT) 
+getTApps    :: TDefEnv RefType -> RefType -> [F.Symbol]
+getTApps γ  = everything (++) ([] `mkQ` fromT) 
   where
     fromT   :: RefType -> [F.Symbol]
-    fromT (TApp (TDef c) _ _) 
-            = [F.symbol c]
+    fromT (TApp (TRef c) _ _) 
+            = maybeToList $ findTyId c γ >>= liftM F.symbol . t_name
     fromT _ = []
 
-expandTAlias  :: TAliasEnv RefType -> TAlias RefType -> TAlias RefType
-expandTAlias te a = a {al_body = expandRefType te $ al_body a}
+expandTAlias  :: TDefEnv RefType -> TAliasEnv RefType -> TAlias RefType -> TAlias RefType
+expandTAlias γ te a = a {al_body = expandRefType γ te $ al_body a}
 
-expandRefType :: TAliasEnv RefType -> RefType -> RefType  
-expandRefType te = everywhere $ mkT $ tx
+expandRefType :: TDefEnv RefType -> TAliasEnv RefType -> RefType -> RefType  
+expandRefType γ te = everywhere $ mkT $ tx
   where
-    tx t@(TApp (TDef c) ts r) 
-                 = maybe t (applyTAlias t c ts r) $ envFindTy c te
-    tx t         = t
+    tx t@(TApp (TRef i) ts r) = maybe t (applyTAlias t (pos i) ts r) $ al i
+    tx t  = t
+    al i  = findTyId i γ >>= liftM F.symbol . t_name >>= (`envFindTy` te)
+    pos i = getAnnotation $ fromJust $ t_name $ findTyIdOrDie i γ -- This shouldn't fail
 
-applyTAlias t c ts_ r a 
+applyTAlias t ss ts_ r a 
   | (nt, ne) == (nα, nx) = (F.subst su $ S.apply θ $ al_body a) `strengthen` r
-  | otherwise            = die $ errorBadTAlias (srcPos c) t nt ne nα nx
+  | otherwise            = die $ errorBadTAlias ss t nt ne nα nx
   where 
     xs                   = al_syvars a
     αs                   = al_tyvars a
@@ -110,6 +113,7 @@ splitTsEs ts       = (ts', [e | TExp e <- es'])
     (ts', es')     = break isExp ts
     isExp (TExp _) = True
     isExp _        = False 
+
 -----------------------------------------------------------------------------
 -- | A Generic Solver for Expanding Definitions -----------------------------
 -----------------------------------------------------------------------------

@@ -8,13 +8,13 @@
 {-# LANGUAGE DeriveGeneric             #-}
 
 module Language.Nano.Typecheck.Parse (
-    parseNanoFromFile 
+    parseNanoFromFile, verifyFile
   ) where
 
 import           Prelude                          hiding ( mapM)
 
 import           Data.Aeson                              ( eitherDecode)
-import           Data.Aeson.Types                 hiding ( Parser, Error, parse)
+import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               ( isLower, isSpace)
@@ -23,7 +23,7 @@ import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
 import           Data.Traversable                        ( mapAccumL)
 import           Data.Data
-import           Data.Monoid                             (mconcat)
+import           Data.Monoid                             (mconcat, mempty)
 import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
 
@@ -56,18 +56,21 @@ dot        = Token.dot        lexer
 plus       = Token.symbol     lexer "+"
 star       = Token.symbol     lexer "*"
 
+
+type ParserS a = Parser (TDefEnv RefType, Integer) a 
+
 ----------------------------------------------------------------------------------
 -- | Type Binders ----------------------------------------------------------------
 ----------------------------------------------------------------------------------
 
-idBindP :: Parser (Id SourceSpan, RefType)
+idBindP :: ParserS (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
 
-identifierP :: Parser (Id SourceSpan)
+identifierP :: ParserS (Id SourceSpan)
 identifierP =   try (withSpan Id upperIdP)
            <|>      (withSpan Id lowerIdP)
 
-pAliasP :: Parser (Id SourceSpan, PAlias) 
+pAliasP :: ParserS (Id SourceSpan, PAlias) 
 pAliasP = do name <- identifierP
              πs   <- pAliasVarsP -- many symbolP 
              reservedOp "="
@@ -77,7 +80,7 @@ pAliasP = do name <- identifierP
 pAliasVarsP = try (parens $ sepBy symbolP comma)
            <|> many symbolP
 
-tAliasP :: Parser (Id SourceSpan, TAlias RefType) 
+tAliasP :: ParserS (Id SourceSpan, TAlias RefType) 
 tAliasP = do name      <- identifierP
              (αs, πs)  <- mapEither aliasVarT <$> aliasVarsP 
              reservedOp "="
@@ -91,12 +94,12 @@ aliasVarT (l, x)
   | isTvar x  = Left  $ tvar l x
   | otherwise = Right $ stringSymbol x 
 
-tBodyP :: Parser (Id SourceSpan, TyDef RefType)
+tBodyP :: ParserS (Id SourceSpan, TDef RefType)
 tBodyP = do  id     <- identifierP 
              tv     <- option [] tParP
              reservedOp "="
              tb     <- bareTypeP
-             return  $ (id, TD id tv tb (idLoc id))
+             return  $ (id, TD (Just id) tv Nothing []) -- (idLoc id))
 
 -- [A,B,C...]
 tParP = brackets $ sepBy tvarP comma
@@ -118,7 +121,7 @@ xyP lP sepP rP
 -- | `bareTypeP` parses top-level "bare" types. If no refinements are supplied, 
 -- then "top" refinement is used.
 
-bareTypeP :: Parser RefType 
+bareTypeP :: ParserS RefType 
 bareTypeP =       
       try bUnP
   <|> try (refP rUnP)
@@ -169,20 +172,30 @@ bareAtomP p
  <|> try (refP p)
  <|>     (dummyP p)
 
-bbaseP :: Parser (Reft -> RefType)
+bbaseP :: ParserS (Reft -> RefType)
 bbaseP 
   =  try (TVar <$> tvarP)                  -- A
- <|> try (TObj <$> (braces $ bindsP) )     -- { f1: T1, ... , fn: Tn} 
- <|> try (TObj <$> arrayBindsP)            -- { i1: T1, ... , in: Tn}
+ <|> try objLitP                           -- {f1: T1, ... , fn: Tn} 
  <|> try (TArr <$> arrayP)                 -- [T]
  <|> try (TApp <$> tConP <*> bareTyArgsP)  -- list[A], tree[A,B] etc...
+
+objLitP :: ParserS (Reft -> RefType)
+objLitP = do 
+  bs          <- braces $ bindsP
+  -- all fields are public 
+  let d        = TD Nothing [] Nothing [ TE s True t | B s t <- bs ]
+  (u, n)      <- getState
+  let (u', id) = addObjLitTy d u 
+  putState     $ (u', n)                -- update the type definitions environment
+  return       $ TApp (TRef id) []      -- no type vars 
+
 
 bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
 
 bareTyArgP  = try bareTypeP 
            <|> (TExp <$> exprP)
 
-tvarP    :: Parser TVar
+tvarP    :: ParserS TVar
 tvarP    = withSpan tvar $ wordP isTvar                  -- = withSpan {- (\l x -> TV x l) -} (flip TV) (stringSymbol <$> upperWordP)
 
 tvar l x = TV (stringSymbol x) l
@@ -193,7 +206,7 @@ wordP p  = condIdP ok p
   where 
     ok   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
-tConP :: Parser TCon
+tConP :: ParserS TCon
 tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "boolean"   >> return TBool)
      <|> try (reserved "undefined" >> return TUndef)
@@ -201,7 +214,14 @@ tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
-     <|>     (TDef <$> identifierP)
+     <|>     (identifierP          >>= idToTRefP)
+
+idToTRefP :: Id SourceSpan -> ParserS TCon
+idToTRefP (Id ss s) = do
+  (u, n)      <- getState
+  let (u', id) = addSym (symbol s) u 
+  putState     $ (u', n)
+  return       $ TRef id
 
 bareAll1P 
   = do reserved "forall"
@@ -212,7 +232,7 @@ bareAll1P
 
 arrayP = brackets bareTypeP
 
-
+-- XXX: This is not used -- do we need this???
 arrayBindsP 
   = do reserved "[|"
        ts    <- sepBy bareTypeP comma
@@ -233,15 +253,22 @@ bareBindP
         return $ B s t 
 
  
-dummyP ::  Parser (Reft -> b) -> Parser b
+dummyP ::  ParserS (Reft -> b) -> ParserS b
 dummyP fm = fm `ap` topP 
 
-topP   :: Parser Reft
-topP   = (Reft . (, []) . vv . Just) <$> freshIntP
+topP   :: ParserS Reft
+topP   = (Reft . (, []) . vv . Just) <$> freshIntP'
+
+-- Using a slightly changed version of `freshIntP`
+freshIntP' :: ParserS Integer
+freshIntP' = do (u,n) <- stateUser <$> getParserState
+                putState $ (u, n+1)
+                return n
+
 
 
 -- | Parses refined types of the form: `{ kind | refinement }`
-xrefP :: Parser (Reft -> a) -> Parser a
+xrefP :: ParserS (Reft -> a) -> ParserS a
 xrefP kindP
   = braces $ do
       t   <- kindP
@@ -249,11 +276,11 @@ xrefP kindP
       ras <- refasP 
       return $ t (Reft (stringSymbol "v", ras))
 
-refasP :: Parser [Refa]
+refasP :: ParserS [Refa]
 refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi)) 
        <|> liftM ((:[]) . RConc) predP
  
-binderP :: Parser Symbol
+binderP :: ParserS Symbol
 binderP = try (stringSymbol <$> idP badc)
       <|> try (star >> return (stringSymbol "*"))
       <|> liftM pwr (parens (idP bad))
@@ -262,7 +289,7 @@ binderP = try (stringSymbol <$> idP badc)
             bad c  = isSpace c || c `elem` "()"
             pwr s  = stringSymbol $ "(" ++ s ++ ")" 
 
-withinSpacesP :: Parser a -> Parser a
+withinSpacesP :: ParserS a -> ParserS a
 withinSpacesP p = do { spaces; a <- p; spaces; return a } 
              
 
@@ -285,7 +312,7 @@ data PSpec l t
   = Meas   (Id l, t)
   | Bind   (Id l, t) 
   | Extern (Id l, t)
-  | Type   (Id l, TyDef t)
+  | IFace  (Id l, TDef t)
   | TAlias (Id l, TAlias t)
   | PAlias (Id l, PAlias) 
   | Qual   Qualifier
@@ -294,11 +321,11 @@ data PSpec l t
 
 type Spec = PSpec SourceSpan RefType
 
-parseAnnot :: SourceSpan -> RawSpec -> Parser Spec
+parseAnnot :: SourceSpan -> RawSpec -> ParserS Spec
 parseAnnot ss (RawMeas   _) = Meas   <$> patch ss <$> idBindP
 parseAnnot ss (RawBind   _) = Bind   <$> patch ss <$> idBindP
 parseAnnot ss (RawExtern _) = Extern <$> patch ss <$> idBindP
-parseAnnot ss (RawType   _) = Type   <$> patch ss <$> tBodyP
+parseAnnot ss (RawType   _) = IFace  <$> patch ss <$> tBodyP
 parseAnnot ss (RawTAlias _) = TAlias <$> patch ss <$> tAliasP
 parseAnnot ss (RawPAlias _) = PAlias <$> patch ss <$> pAliasP
 parseAnnot _  (RawQual   _) = Qual   <$>              qualifierP
@@ -366,7 +393,7 @@ getJSON :: MonadIO m => FilePath -> m B.ByteString
 getJSON = liftIO . B.readFile
 
 --------------------------------------------------------------------------------------
-parseScriptFromJSON :: FilePath -> IO ([Statement (SourceSpan, [RawSpec])])
+parseScriptFromJSON :: FilePath -> IO [Statement (SourceSpan, [RawSpec])]
 --------------------------------------------------------------------------------------
 parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
   where 
@@ -381,16 +408,16 @@ parseCodeFromFile :: FilePath -> IO (Either Error (NanoBareR Reft))
 parseCodeFromFile fp = parseScriptFromJSON fp >>= return . mkCode . expandAnnots
 
 --------------------------------------------------------------------------------------
-mkCode :: [Statement (SourceSpan, [Spec])] ->  Either Error (NanoBareR Reft)
+mkCode :: (PState, [Statement (SourceSpan, [Spec])]) ->  Either Error (NanoBareR Reft)
 --------------------------------------------------------------------------------------
-mkCode ss =  do
+mkCode (u, ss) =  do
     return $ Nano {
         code    = Src (checkTopStmt <$> ss')
       , externs = envFromList   [ t | Extern t <- anns ] -- externs
       , specs   = catFunSpecDefs ss                      -- function sigs
       , glVars  = catVarSpecDefs ss                      -- variables
       , consts  = envFromList   [ t | Meas   t <- anns ] 
-      , defs    = envFromList   [ t | Type   t <- anns ] 
+      , defs    = foldr ff (fst u) [ t | IFace  t <- anns ] 
       , tAlias  = envFromList   [ t | TAlias t <- anns ] 
       , pAlias  = envFromList   [ t | PAlias t <- anns ] 
       , quals   =               [ t | Qual   t <- anns ] 
@@ -401,15 +428,16 @@ mkCode ss =  do
     toBare (l,αs) = Ann l [TAnnot t | Bind (_,t) <- αs ]
     ss'           = (toBare <$>) <$> ss
     anns          = concatMap (FO.foldMap snd) ss
+    -- Add all the defined symbols to the TDefEnv
+    ff (s,t)      = fst . addTySym (symbol s) t
 
 
--- TODO: Is there any chance we can keep the Either Monad here?
-type PState = Integer
+type PState = (TDefEnv RefType, Integer)
 
 --------------------------------------------------------------------------------------
-expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> [Statement (SourceSpan, [Spec])]
+expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> (PState, [Statement (SourceSpan, [Spec])])
 --------------------------------------------------------------------------------------
-expandAnnots = snd . mapAccumL (mapAccumL f) 0
+expandAnnots = mapAccumL (mapAccumL f) (mempty, 0)
   where f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
 
 --------------------------------------------------------------------------------------
@@ -451,4 +479,11 @@ varDeclStmts         :: (Data a, Typeable a) => [Statement a] -> [a]
 varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
   where 
     fromVarDecl (VarDecl l _ _) = [l]
+
+
+
+--------------------------------------------------------------------------------
+verifyFile :: FilePath -> IO (Either Error (NanoBareR Reft))
+--------------------------------------------------------------------------------
+verifyFile f = parseNanoFromFile f
 

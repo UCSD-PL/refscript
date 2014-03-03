@@ -1,4 +1,5 @@
 import qualified Language.Nano.Typecheck.Typecheck  as TC 
+import qualified Language.Nano.Typecheck.Parse      as P 
 import qualified Language.Nano.Liquid.Liquid        as LQ
 import qualified Language.Nano.Liquid.Types         as L 
 
@@ -29,6 +30,8 @@ verifier           :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult E
 -------------------------------------------------------------------------------
 verifier (TC     {} ) f = TC.verifyFile =<< json f
 verifier (Liquid {} ) f = LQ.verifyFile =<< json f
+-- DEBUG
+verifier (Parse  {} ) f = P.verifyFile  =<< json f
 
 json :: FilePath -> IO FilePath
 json f | ext == ".json" = return f

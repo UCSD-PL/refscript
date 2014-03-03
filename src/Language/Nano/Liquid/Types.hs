@@ -216,10 +216,11 @@ rTypeSortApp TInt [] = F.FInt
 rTypeSortApp TUn  _  = F.FApp (tconFTycon TUn) [] -- simplifying union sorts, the checks will have been done earlier
 rTypeSortApp c ts    = F.FApp (tconFTycon c) (rTypeSort <$> ts) 
 
+tconFTycon :: TCon -> F.FTycon 
 tconFTycon TInt      = F.intFTyCon
 tconFTycon TBool     = rawStringFTycon "boolean"
 tconFTycon TVoid     = rawStringFTycon "void"
-tconFTycon (TRef s)  = F.stringFTycon $ F.Loc (sourcePos s) (unId s)
+tconFTycon (TRef i)  = rawStringFTycon $ show i -- F.stringFTycon $ F.Loc (sourcePos s) (unId s)
 tconFTycon TUn       = rawStringFTycon "union"
 tconFTycon TString   = F.strFTyCon -- F.stringFTycon "string"
 tconFTycon TTop      = rawStringFTycon "top"

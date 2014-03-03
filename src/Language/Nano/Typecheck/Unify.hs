@@ -1,5 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
@@ -14,6 +15,7 @@ module Language.Nano.Typecheck.Unify (
 
 -- import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Syntax
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors 
@@ -21,7 +23,6 @@ import           Language.Nano.Errors
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Typecheck.Subst
-import           Language.Nano.Typecheck.Unfold
 
 
 import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
@@ -36,6 +37,8 @@ import           Text.Printf
 -- import           Language.Nano.Misc (mkEither)
 
 
+type PPR r = (PP r, F.Reftable r)
+
 -----------------------------------------------------------------------------
 -- Unification --------------------------------------------------------------
 -----------------------------------------------------------------------------
@@ -47,64 +50,36 @@ unify :: (PP r, F.Reftable r, Ord r) =>
   SourceSpan -> TDefEnv (RType r) -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 
-unify _ _ θ t@(TApp _ _ _           ) t'@(TApp _ _ _            )       
-  | any isTop [t,t']  
-  = Right $ θ
+unify _ _ θ t@(TApp _ _ _) t'@(TApp _ _ _) | any isTop [t,t'] = Right $ θ
 
-unify l γ θ   (TFun xts t _         )    (TFun xts' t' _        )       
+unify l γ θ (TFun xts t _) (TFun xts' t' _)
   = unifys l γ θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
 
--- TODO: Cycles
-unify l γ θ   (TApp d@(TRef _) ts _ )    (TApp d'@(TRef _) ts' _)       
-  | d == d'           
-  = unifys l γ θ ts ts'
+unify l _ θ (TVar α _) (TVar β _) = varEql l θ α β 
+unify l _ θ (TVar α _) t' = varAsn l θ α t'
+unify l _ θ t (TVar α _)  = varAsn l θ α t
 
-unify l _ θ   (TVar α _             )    (TVar β _)                     
-  = varEql l θ α β 
-unify l _ θ   (TVar α _)              t'                                
-  = varAsn l θ α t'
-unify l _ θ t                            (TVar α _              )       
-  = varAsn l θ α t
+unify l γ θ (TApp (TRef i) ts _) (TApp (TRef i') ts' _) = 
+  unifys l γ θ  
+    (f_type <$> (t_elts (sortTDef $ findAndApply i  ts  γ)))
+    (f_type <$> (t_elts (sortTDef $ findAndApply i' ts' γ)))
 
-unify l γ θ t@(TApp (TRef _) _ _    ) t'                                
-  = unify l γ θ (unfoldSafe γ t) t'
-unify l γ θ t                         t'@(TApp (TRef _) _ _     )       
-  = unify l γ θ t (unfoldSafe γ t')
+unify l γ θ t t' | any isUnion [t,t'] 
+ = uncurry (unifys l γ θ) . unzip . fst3 $ unionParts t t'
 
--- List[A] + Null `unif` List[T0] + Null => A `unif` T0
--- TODO: make sure other nothing weird is going on with TVars,
--- e.g.  List[A] + B `unif` ... => this should not even be allowed!!!
+unify l γ θ (TArr t _) (TArr t' _) = unify l γ θ t t'
 
-unify l γ θ t                         t'                                
-  | any isUnion [t,t']
-  = (uncurry $ unifys l γ θ) $ unzip $ fst3 $ unionPartsWithEq (unifEq γ) t t'
-
--- unify l γ θ   (TObj bs1 _           )    (TObj bs2 _            )       
---   | s1s == s2s        
---   = unifys l γ θ (b_type <$> L.sortBy ord bs1) (b_type <$> L.sortBy ord bs2)
---   | otherwise         
---   = return θ
---     where
---       s1s = L.sort $ b_sym <$> bs1 
---       s2s = L.sort $ b_sym <$> bs2
---       ord b b' = compare (b_sym b) (b_sym b')
-
-unify l γ θ   (TArr t _             )    (TArr t' _                )    
-  = unify l γ θ t t'
-
-unify _ _ θ _                         _
-  = return θ
+-- The rest of the cases do not cause any unification.
+unify _ _ θ _  _ = return θ
 
 
-{-unify' γ θ t t' = unify γ θ (trace (printf "unify: %s - %s" (ppshow t) (ppshow t')) t) t' -}
-
--- TODO: cycles
-unifEq _ (TApp d@(TRef _) _ _) (TApp d'@(TRef _) _ _) | d == d' = True
-unifEq γ t@(TApp (TRef _) _ _) t' = unifEq γ (unfoldSafe γ t) t'
-unifEq γ t t'@(TApp (TRef _) _ _) = unifEq γ t (unfoldSafe γ t')
-unifEq γ t t'                     = equiv γ t t'
-  
-
+-----------------------------------------------------------------------------
+findAndApply :: PPR r => TyID -> [RType r] -> TDefEnv (RType r) -> TDef (RType r)
+-----------------------------------------------------------------------------
+findAndApply i ts γ = TD n [] p $ apply (fromList (zip vs ts)) <$> elts
+-- FIXME: apply to p ???
+  where TD n vs p elts = findTyIdOrDie i γ 
+                
 
 -----------------------------------------------------------------------------
 unifys ::  (PP r, F.Reftable r, Ord r) =>  
@@ -170,5 +145,4 @@ varAsn l θ α t
   | otherwise              = Left  $ errorRigidUnify l α t
   
 unassigned α (Su m) = M.lookup α m == Just (tVar α)
-
 

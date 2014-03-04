@@ -8,7 +8,7 @@
 {-# LANGUAGE DeriveGeneric             #-}
 
 module Language.Nano.Typecheck.Parse (
-    parseNanoFromFile, verifyFile
+    parseNanoFromFile, printFile
   ) where
 
 import           Prelude                          hiding ( mapM)
@@ -492,7 +492,7 @@ varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
 
 
 --------------------------------------------------------------------------------
-verifyFile :: FilePath -> IO () -- Either Error (NanoBareR Reft))
+printFile :: FilePath -> IO () -- Either Error (NanoBareR Reft))
 --------------------------------------------------------------------------------
-verifyFile f = parseNanoFromFile f >>= putStr . ppshow
+printFile f = parseNanoFromFile f >>= putStr . ppshow
 

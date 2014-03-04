@@ -92,8 +92,9 @@ errorNoMatchCallee l ts t = mkErr l $ render $   text "No matching callee type!"
                                              $+$ text "Function Type : " <+> pp t
 errorMissingReturn l      = mkErr l $ printf "BUG: Missing Return statement at %s" (ppshow l)
 
-errorNonFunction l f t    = mkErr l $ render $ text "Non-function type " 
-                                                 $+$ pp f <+> text "::" <+> pp t
+errorNonFunction l f t    = mkErr l $ render $ text "Non-function type " $+$ pp f <+> text "::" <+> pp t
+
+errorEnvJoin l x t1 t2    = mkErr l $ printf "Variable '%s' has different types ('%s' and '%s') when joining environments." (ppshow x) (ppshow t1) (ppshow t2)
 
 errorUnboundId l x        = mkErr l $ printf "Identifier %s unbound" (ppshow x) 
 errorUnboundType l x      = mkErr l $ printf "Type identifier \'%s\' unbound" (ppshow x)
@@ -106,7 +107,6 @@ errorBoundTyVar l a t     = mkErr l $ printf "Cannot unify bound type parameter 
 errorFreeTyVar l t        = mkErr l $ printf "Type not fully instantiated: %s" (ppshow t)
 errorWriteImmutable l x   = mkErr l $ render $ text "Cannot write variable outside local-scope" <+> pp x
                                              $+$ text "Add type annotation to indicate it is globally writable"
-
 
 errorInvalidTopStmt l x   = mkErr l $ printf "Invalid top-level statement: %s" (ppshow x) 
 errorOccursCheck l a t    = mkErr l $ printf "Occurs check fails: %s in %s" (ppshow a) (ppshow t)
@@ -137,12 +137,7 @@ errorClEltAnnMissing l x  = mkErr l $ printf "Class %s is missing a constructor 
 errorVarDeclAnnot l x     = mkErr l $ printf "Variable definition of '%s' with neither type annotation nor initialization is not supported." (ppshow x)
 errorConstNonFunc l x     = mkErr l $ printf "Constructor for class '%s' does not have a function type." (ppshow x)
 errorConstMissing l x     = mkErr l $ printf "Constructor for class '%s' does is missing." (ppshow x)
-
-
-errorBadPAlias l p nx ne  = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." 
-                                       (ppshow p) nx ne 
-
+errorBadPAlias l p nx ne  = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne 
 errorBadTAlias l t nt ne nα nx  
                           = mkErr l $ printf "Invalid type alias application: %s \nExpected %d type, %d value arguments, but got %d and %d" (ppshow t) nα nx nt ne  
-
 

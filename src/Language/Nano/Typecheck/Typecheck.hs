@@ -56,8 +56,9 @@ import qualified System.Console.CmdArgs.Verbosity as V
 verifyFile :: FilePath -> IO (UAnnSol a, F.FixResult Error)
 --------------------------------------------------------------------------------
 verifyFile f = parse f $ ssa $ tc
+-- FIXME: Add expandAliases
 
-parse f next  = parseNanoFromFile f >>= either (lerror . single) next
+parse f next  = parseNanoFromFile f >>= next
 ssa   next p  = ssaTransform p      >>= either (lerror . single) next
 tc    p       = typeCheck p         >>= either unsafe safe
 
@@ -114,7 +115,7 @@ typeCheck pgm = V.getVerbosity >>= \v -> return $ fmap snd (execute v pgm $ tcNa
 tcNano :: (Data r, Ord r, PPRSF r) => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
-  = do checkTypeDefs p
+  = do -- checkTypeDefs p
        (fs', γo) <- tcInScope γ $ tcStmts γ fs
        m         <- concatMaps <$> getAllAnns
        θ         <- getSubst
@@ -126,22 +127,22 @@ tcNano p@(Nano {code = Src fs})
                          return $ (m, p2)
          Nothing  -> error "BUG:tcNano should end with an environment"
     where
-       γ         = initEnv p
+       γ       = initEnv p
        -- A mapping from class names to the recovered types.
-       mCls ks   = envFromList . catMaybes <$> mapM gs ks
-       gs k      =  do  s <- getSpecM k 
-                        case s of 
-                          Just t  -> return $ Just (k,t)
-                          Nothing -> return $ Nothing
+       mCls ks = envFromList . catMaybes <$> mapM gs ks
+       gs k    =  do  s <- getSpecM k 
+                      case s of 
+                        Just t  -> return $ Just (k,t)
+                        Nothing -> return $ Nothing
 
 patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs 
   where
-    fs'               = [f | f@(TypInst _ _) <- M.lookupDefault [] l m]
-    fs''              = [f | f@(Overload (Just _)) <- M.lookupDefault [] l m]
+    fs'          = [f | f@(TypInst _ _) <- M.lookupDefault [] l m]
+    fs''         = [f | f@(Overload (Just _)) <- M.lookupDefault [] l m]
 
-initEnv pgm           = TCE (envUnion (specs pgm) (externs pgm)) (defs pgm) (specs pgm)
-                            classEnv emptyContext
-  where classEnv      = envFromList [ (s, ClassStmt l s e i b) | let Src ss = code pgm
+initEnv pgm      = TCE (envUnion (specs pgm) (externs pgm)) (defs pgm) (specs pgm)
+                       classEnv emptyContext
+  where classEnv = envFromList [ (s, ClassStmt l s e i b) | let Src ss = code pgm
                                                                , ClassStmt l s e i b <- ss ]
 
 
@@ -156,22 +157,22 @@ traceCodePP p {-m s-} _ _ = trace (render $ {- codePP p m s -} pp p) $ return ()
 {-  $+$ vcat (pp <$> [> annotCasts <] M.toList anns )-}
 {-  $+$ text "*************************************************************************"-}
 
--------------------------------------------------------------------------------
-checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano (AnnSSA r) (RType r) -> TCM r ()
--------------------------------------------------------------------------------
-checkTypeDefs pgm = reportAll $ grep
-  where 
-    ds        = specs pgm 
-    ts        = defs pgm
-    reportAll = mapM_ report
-    report t  = tcError $ errorUnboundType (srcPos t) t
-    -- There should be no undefined type constructors
-    grep :: [Id SourceSpan]        = everything (++) ([] `mkQ` g) ds
-    g (TDef i) | not $ envMem i ts = [i]
-    g _                            = [ ]
-    -- TODO: Also add check for free top-level type variables, i.e. make sure 
-    -- all type variables used are bound. Use something like:
-    -- @everythingWithContext@
+-- -------------------------------------------------------------------------------
+-- checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano (AnnSSA r) (RType r) -> TCM r ()
+-- -------------------------------------------------------------------------------
+-- checkTypeDefs pgm = reportAll $ grep
+--   where 
+--     ds        = specs pgm 
+--     ts        = defs pgm
+--     reportAll = mapM_ report
+--     report t  = tcError $ errorUnboundType (srcPos t) t
+--     -- There should be no undefined type constructors
+--     grep :: [Id SourceSpan]        = everything (++) ([] `mkQ` g) ds
+--     g (TRef i) | not $ envMem i ts = [i]
+--     g _                            = [ ]
+--     -- TODO: Also add check for free top-level type variables, i.e. make sure 
+--     -- all type variables used are bound. Use something like:
+--     -- @everythingWithContext@
 
 
 
@@ -185,25 +186,25 @@ checkTypeDefs pgm = reportAll $ grep
 --   @Just γ'@ means environment extended with statement binders
 
 
-data TCEnv r  = TCE { tce_env  :: Env (RType r)  -- ^ This starts off the same
-                                                 --   as tce_spec, but grows with
-                                                 --   typechecking
-                    , tce_defs :: TDefEnv r      -- ^ Data type definitions
-                    , tce_spec :: Env (RType r)  -- ^ Program specs. Includes:
-                                                 --    * functions 
-                                                 --    * variable annotations
-                                                 --    * class types (after being computed)
-                    , tce_cls  :: Env (Statement (AnnSSA r))  -- ^ Class definitions
-                    , tce_ctx  :: !IContext 
-                    }
+data TCEnv r  = TCE { 
+    tce_env  :: Env (RType r)               -- ^ This starts off the same
+                                            --   as tce_spec, but grows with
+                                            --   typechecking
+  , tce_defs :: TDefEnv (RType r)           -- ^ Data type definitions
+  , tce_spec :: Env (RType r)               -- ^ Program specs. Includes:
+                                            --    * functions 
+                                            --    * variable annotations
+                                            --    * ambient variable declarations
+                                            --    * class types (after being computed)
+  , tce_cls  :: Env (Statement (AnnSSA r))  -- ^ Class definitions
+  , tce_ctx  :: !IContext 
+  }
 
 type TCEnvO r = Maybe (TCEnv r)
 
-instance PPR r => Substitutable r (TyDef (RType r)) where
-  apply θ (TD c v t s) = TD c v (apply θ t) s
-
-instance PPR r => Substitutable r (TCEnv r) where 
-  apply θ (TCE m d sp cl c) = TCE (apply θ m) (apply θ d) (apply θ sp) cl c 
+-- XXX: Who needs this?
+-- instance PPR r => Substitutable r (TCEnv r) where 
+--   apply θ (TCE m d sp cl c) = TCE (apply θ m) (apply θ d) (apply θ sp) cl c 
 
 instance PPR r => PP (TCEnv r) where
   pp = ppTCEnv
@@ -272,7 +273,7 @@ tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
 -------------------------------------------------------------------------------
 tcFun1 ::
-  (Ord r, F.Reftable r, PP r, IsLocated a1, IsLocated t1, IsLocated a, CallSite t) =>
+  (Ord r, PPR r, IsLocated a1, IsLocated t1, IsLocated a, CallSite t) =>
   TCEnv r -> a -> t1 -> [Id a1] -> [Statement (AnnSSA r)] -> 
   (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
@@ -281,7 +282,7 @@ tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l body t
     γ'                              = envAddFun f i αs xs ts t γ 
 
 tcFunBody γ l body t = tcStmts γ body >>= go
-  where go (_, Just _) | not (equiv (tce_defs γ) t tVoid) 
+  where go (_, Just _) | not (equiv t tVoid) 
                        = tcError $ errorMissingReturn (srcPos l)
         go (b, _     ) | otherwise                        
                        = return b
@@ -375,7 +376,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 
 -- e1.fld = e2
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
-  = do (e1', tfld) <- tcPropRead getProp γ l e1 fld
+  = do (e1', tfld) <- tcPropRead getProp γ l e1 (F.symbol fld)
        (e2', t2)   <- tcExpr γ $ e2                    
        e2''        <- castM (tce_defs γ) ξ e2' t2 tfld
        return         (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' fld) e2''), Just γ)
@@ -458,22 +459,23 @@ classType :: (Ord r, PPR r)
 classType γ (ClassStmt l id (Just parent) _ cs) =
   do  t           <- findClassSpec {- TODO -} True γ parent
       case t of
-        TObj bs _ -> do bs' <- foldM addField bs $ classEltType <$> cs
-                        addCTToSpec id $ tracePP ("Adding to spec: " ++ ppshow id) $ TObj bs' fTop
+      -- FIXME: get the right tdef for class.
+        {-TObj bs _ -> do bs' <- foldM addField bs $ classEltType <$> cs-}
+        {-                addCTToSpec id $ tracePP ("Adding to spec: " ++ ppshow id) $ TObj bs' fTop-}
         _         -> errorstar "IMPOSSIBLE:classType"
   where
-    θ             = tce_defs γ
     addField bs (_,B s t) = 
       let m = M.fromList (p <$> bs) in
       case M.lookup s m of
-        Just t0 | equiv θ t0 t -> return  $ u <$> M.toList (M.insert s t m)
-        Just _  | otherwise    -> tcError $ errorClassExtends (srcPos l) id parent s
-        Nothing                -> return   $ u <$> M.toList (M.insert s t m)
+        Just t0 | equiv t0 t -> return  $ u <$> M.toList (M.insert s t m)
+        Just _  | otherwise  -> tcError $ errorClassExtends (srcPos l) id parent s
+        Nothing              -> return   $ u <$> M.toList (M.insert s t m)
     p  (B s t)    = (s, t)
     u  (s, t)     = B s t
 
-classType _ (ClassStmt _ id Nothing _ cs) =
-  addCTToSpec id $ TObj (snd . classEltType <$> cs) fTop
+-- FIXME
+-- classType _ (ClassStmt _ id Nothing _ cs) =
+--   addCTToSpec id $ TObj (snd . classEltType <$> cs) fTop
 
 classType _ _ = errorstar "classType should only be called with ClassStmt"
 
@@ -598,7 +600,8 @@ tcExpr γ (ObjectLit l bs)
        ets          <- mapM (tcExpr γ) es
        let (es', ts) = unzip ets
        let bts       = zipWith B (F.symbol <$> ps) ts
-       return (ObjectLit l (zip ps es'), TObj bts fTop)
+       -- FIXME
+       return (ObjectLit l (zip ps es'), undefined {- TObj bts fTop-})
 
 tcExpr γ (Cast l@(Ann loc fs) e)
   = do (e', t) <- tcExpr γ e
@@ -608,12 +611,12 @@ tcExpr γ (Cast l@(Ann loc fs) e)
 
 -- e.f
 tcExpr γ (DotRef l e fld) 
-  = do (e', t) <- tcPropRead getProp γ l e (unId fld)
+  = do (e', t) <- tcPropRead getProp γ l e (F.symbol $ unId fld)
        return     (DotRef l e' fld, t)
         
 -- e["f"]
 tcExpr γ (BracketRef l e fld@(StringLit _ s)) 
-  = do (e', t) <- tcPropRead getProp γ l e s
+  = do (e', t) <- tcPropRead getProp γ l e $ F.symbol s
        return     (BracketRef l e' fld, t)
  
 -- e1[e2]
@@ -689,7 +692,7 @@ tcCall γ ex@(ArrayLit l es)
 tcCall γ ex@(NewExpr l (VarRef lv id) es)
   = do  t     <- findClassSpec False γ id
         return undefined
-        case getProp l (tce_env γ) (tce_defs γ) "constructor" t of
+        case getProp l (tce_env γ) (tce_defs γ) (F.symbol "constructor") t of
           Just (_,tc)  -> do
             when (not $ isTFun tc) $ tcError $ errorConstNonFunc (srcPos l) id 
             z <- tcCallMatch γ l "constructor" es tc

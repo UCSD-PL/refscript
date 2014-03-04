@@ -194,16 +194,18 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 
 type TyID      = Int
 
-data TDef t    = TD { t_name  :: !(Maybe (Id SourceSpan))   -- ^ Name (possibly no name)
-                    , t_args  :: ![TVar]            -- ^ Type variables
-                    , t_proto :: !(Maybe F.Symbol)  -- ^ Parent type symbol
-                    , t_elts  :: ![TElt t]          -- ^ List of data type elts 
-                    } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+data TDef t    = TD { 
+        t_name  :: !(Maybe (Id SourceSpan))   -- ^ Name (possibly no name)
+      , t_args  :: ![TVar]                    -- ^ Type variables
+      , t_proto :: !(Maybe (TyID, [t]))        -- ^ Parent type symbol
+      , t_elts  :: ![TElt t]                  -- ^ List of data type elts 
+      } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
-data TElt t    = TE { f_sym   :: F.Symbol           -- ^ Symbol
-                    , f_acc   :: Bool               -- ^ Access modifier (public: true, private: false)
-                    , f_type  :: t                  -- ^ Type
-                    } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+data TElt t    = TE { 
+        f_sym   :: F.Symbol                   -- ^ Symbol
+      , f_acc   :: Bool                       -- ^ Access modifier (public: true, private: false)
+      , f_type  :: t                          -- ^ Type
+      } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 
 -- | Type definition environment
@@ -635,17 +637,26 @@ instance PP t => PP (F.SEnv t) where
 
 instance (PP t) => PP (TDef t) where
     pp (TD (Just nm) vs Nothing ts) = 
-      pp nm <+> ppArgs brackets comma vs 
-            <+> braces (text " " 
-                <+> (vcat $ (\t -> pp t <> text ";") <$> ts) <+> text " ")
+          pp nm 
+      <+> ppArgs brackets comma vs 
+      <+> braces (
+            text " " 
+        <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
+        <+> text " ")
     pp (TD (Just nm) vs (Just p) ts) = 
-      pp nm <+> ppArgs brackets comma vs 
-            <+> text "extends" <+> pp p 
-            <+> braces (text " " 
-                  <+> (vcat $ (\t -> pp t <> text ";") <$> ts) <+> text " ")
+          pp nm 
+      <+> ppArgs brackets comma vs 
+      <+> text "extends" <+> pp p 
+      <+> braces (
+            text " " 
+        <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
+        <+> text " ")
     pp (TD Nothing vs Nothing ts) = 
-      pp "<anonymous>" <+> braces (text " " 
-        <+> (vcat $ (\t -> pp t <> text ";") <$> ts) <+> text " ")
+          pp "<anonymous>" 
+      <+> braces (
+            text " " 
+        <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
+        <+> text " ")
     pp _ = error "PP TDEF: case not possible"
 
 
@@ -657,20 +668,6 @@ instance PP Bool where
   pp True   = text "True"
   pp False  = text "False"
     
-instance Monoid (Nano a t) where 
-  mempty        = Nano mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty 
-  mappend p1 p2 = error "mappend" 
---                   Nano { code    = (code    p1 ) `mappend` (code    p2 )
---                        , externs = (externs p1 ) `mappend` (externs p2 )
---                        , specs   = (specs   p1 ) `mappend` (specs   p2 )
---                        , glVars  = (glVars  p1 ) `mappend` (glVars  p2 )
---                        , consts  = (consts  p1 ) `mappend` (consts  p2 )
---                        , defs    = (defs    p1 ) `mappend` (defs    p2 )
---                        , tAlias  = (tAlias  p1 ) `mappend` (tAlias  p2 )
---                        , pAlias  = (pAlias  p1 ) `mappend` (pAlias  p2 )
---                        , quals   = (quals   p1 ) `mappend` (quals   p2 )
---                        , invts   = (invts   p1 ) `mappend` (invts   p2 )
---                        }
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }

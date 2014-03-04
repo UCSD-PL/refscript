@@ -374,7 +374,7 @@
 /*@ invariant {v:boolean   | ttag(v) = "boolean"  } */ 
 /*@ invariant {v:number    | ttag(v) = "number"   } */
 /*@ invariant {v:string    | ttag(v) = "string"   } */
-/*@ invariant {v:object    | ttag(v) = "object"   } */
+/*@ invariant {v:{}        | ttag(v) = "object"   } */
 
 
 /*************************************************************************/

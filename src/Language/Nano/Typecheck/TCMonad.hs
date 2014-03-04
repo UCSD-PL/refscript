@@ -118,7 +118,7 @@ data TCState r = TCS {
                    -- Function definitions
                    , tc_specs  :: !(Env (RType r))
                    -- Defined types
-                   , tc_tdefs  :: !(TDefEnv (RType r))
+                   , tc_defs  :: !(TDefEnv (RType r))
                    -- Verbosity
                    , tc_verb  :: V.Verbosity
                    -- This stack
@@ -173,9 +173,9 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ')
     θ'      = fromList $ zip βs (tVar <$> βs)
 
 -------------------------------------------------------------------------------
-getTDef  :: TCM r (TDefEnv (RType r)) 
+getDef  :: TCM r (TDefEnv (RType r)) 
 -------------------------------------------------------------------------------
-getTDef = tc_tdefs <$> get
+getDef = tc_defs <$> get
 
 -------------------------------------------------------------------------------
 tcError     :: Error -> TCM r a
@@ -277,7 +277,7 @@ execute verb pgm act
 
 initState ::  (PP r, F.Reftable r) => V.Verbosity -> Nano z (RType r) -> TCState r
 initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss 
-                          tc_specs tc_tdefs tc_verb tc_this
+                          tc_specs tc_defs tc_verb tc_this
   where
     tc_errss = []
     tc_subst = mempty 
@@ -285,7 +285,7 @@ initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss
     tc_anns  = HM.empty
     tc_annss = []
     tc_specs = specs pgm
-    tc_tdefs = mempty
+    tc_defs  = mempty
     tc_verb  = verb
     tc_this  = [tTop]
 

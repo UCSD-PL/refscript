@@ -1,7 +1,8 @@
 -- | Code for Saving and Rendering Annotations
 
-{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances    #-}
 
 
 module Language.Nano.Annots (

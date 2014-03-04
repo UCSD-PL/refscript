@@ -36,13 +36,14 @@ import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc                  ( mapEither, mapSnd)
 import           Language.Nano.Types
--- import           Language.Nano.Errors
+import           Language.Nano.Errors
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
 import           Language.Nano.Files
 
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.PrettyPrint
 
 import           Text.Parsec                      hiding ( parse)
 import           Text.Parsec.Pos                         ( newPos)
@@ -50,7 +51,7 @@ import qualified Text.Parsec.Token                as     Token
 
 import           GHC.Generics
 
--- import           Debug.Trace                             ( trace, traceShow)
+import           Debug.Trace                             ( trace, traceShow)
 
 dot        = Token.dot        lexer
 plus       = Token.symbol     lexer "+"
@@ -96,10 +97,13 @@ aliasVarT (l, x)
 
 tBodyP :: ParserS (Id SourceSpan, TDef RefType)
 tBodyP = do  id     <- identifierP 
-             tv     <- option [] tParP
+             vs     <- option [] tParP
              reservedOp "="
-             tb     <- bareTypeP
-             return  $ (id, TD (Just id) tv Nothing []) -- (idLoc id))
+             -- FIXME: add bindings for new(Ts) and call(Ts):T
+             bs     <- braces $ bindsP
+             -- FIXME: proto ...
+             return (id, TD (Just id) vs Nothing 
+                            [ TE s True t | B s t <- bs ])
 
 -- [A,B,C...]
 tParP = brackets $ sepBy tvarP comma
@@ -220,7 +224,7 @@ idToTRefP :: Id SourceSpan -> ParserS TCon
 idToTRefP (Id ss s) = do
   (u, n)      <- getState
   let (u', id) = addSym (symbol s) u 
-  putState     $ (u', n)
+  modifyState  $ \(u,n) -> (u', n)
   return       $ TRef id
 
 bareAll1P 
@@ -325,11 +329,20 @@ parseAnnot :: SourceSpan -> RawSpec -> ParserS Spec
 parseAnnot ss (RawMeas   _) = Meas   <$> patch ss <$> idBindP
 parseAnnot ss (RawBind   _) = Bind   <$> patch ss <$> idBindP
 parseAnnot ss (RawExtern _) = Extern <$> patch ss <$> idBindP
-parseAnnot ss (RawType   _) = IFace  <$> patch ss <$> tBodyP
+parseAnnot ss (RawType   _) = IFace  <$> patch ss <$> tBodyP >>= registerIface
 parseAnnot ss (RawTAlias _) = TAlias <$> patch ss <$> tAliasP
 parseAnnot ss (RawPAlias _) = PAlias <$> patch ss <$> pAliasP
 parseAnnot _  (RawQual   _) = Qual   <$>              qualifierP
 parseAnnot ss (RawInvt   _) = Invt             ss <$> bareTypeP
+
+registerIface :: Spec -> ParserS Spec
+registerIface (IFace (s, t)) = do
+  (u, n)  <- getState
+  -- XXX: losing the SourceSpan on s here.
+  let (u',id) = addTySym (symbol s) t u
+  putState $ (u', n)
+  return $ IFace (s,t) 
+
 
 patch ss (id, t) = (fmap (const ss) id , t)
 
@@ -380,12 +393,10 @@ instance FromJSON RawSpec
 parseNanoFromFile :: FilePath-> IO (Either Error (NanoBareR Reft))
 -------------------------------------------------------------------------------
 parseNanoFromFile f 
-  = do  spec <- parseCodeFromFile =<< getPreludePath
-        code <- parseCodeFromFile f
-        case (spec, code) of 
-          (Right s, Right c) -> return $ Right $ mconcat [s, c]
-          (Left  e, _      ) -> return $ Left e
-          (_      , Left  e) -> return $ Left e
+  = do  ssP   <- parseScriptFromJSON =<< getPreludePath
+        ssF   <- parseScriptFromJSON f 
+        -- Concat the programs at the JSON level
+        return $ mkCode $ expandAnnots $ ssP ++ ssF
 
 --------------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString
@@ -401,11 +412,6 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
       case eitherDecode s :: Either String [Statement (SourceSpan, [RawSpec])] of
         Left msg -> error $ "JSON decode error:\n" ++ msg
         Right p  -> p
-
---------------------------------------------------------------------------------------
-parseCodeFromFile :: FilePath -> IO (Either Error (NanoBareR Reft))
---------------------------------------------------------------------------------------
-parseCodeFromFile fp = parseScriptFromJSON fp >>= return . mkCode . expandAnnots
 
 --------------------------------------------------------------------------------------
 mkCode :: (PState, [Statement (SourceSpan, [Spec])]) ->  Either Error (NanoBareR Reft)
@@ -434,6 +440,10 @@ mkCode (u, ss) =  do
 
 type PState = (TDefEnv RefType, Integer)
 
+
+instance PP Integer where
+  pp = pp . show
+
 --------------------------------------------------------------------------------------
 expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> (PState, [Statement (SourceSpan, [Spec])])
 --------------------------------------------------------------------------------------
@@ -444,7 +454,11 @@ expandAnnots = mapAccumL (mapAccumL f) (mempty, 0)
 parse :: SourceSpan -> PState -> RawSpec -> (PState, Spec)
 --------------------------------------------------------------------------------------
 parse ss st c = foo c
-  where foo s = failLeft $ runParser (liftM2 (,) getState (parseAnnot ss s)) st f (getSpecString s)
+  where foo s = failLeft $ runParser 
+                  (do a <- parseAnnot ss s
+                      st <- getState
+                      return (st, a)) 
+                  st f (getSpecString s)
         failLeft (Left s) = error $ show s
         failLeft (Right r) = r
         f = sourceName $ sp_begin ss
@@ -461,7 +475,6 @@ catVarSpecDefs :: [Statement (SourceSpan, [Spec])] -> Env RefType
 --------------------------------------------------------------------------------------
 catVarSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
   where ds     = varDeclStmts ss
-
 
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
@@ -483,7 +496,10 @@ varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
 
 
 --------------------------------------------------------------------------------
-verifyFile :: FilePath -> IO (Either Error (NanoBareR Reft))
+verifyFile :: FilePath -> IO () -- Either Error (NanoBareR Reft))
 --------------------------------------------------------------------------------
-verifyFile f = parseNanoFromFile f
+verifyFile f = parseNanoFromFile f >>= go
+  where go (Left err) = print err
+        go (Right p ) = putStr $ ppshow p
+
 

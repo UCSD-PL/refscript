@@ -3,12 +3,14 @@
 function inc(n:number):number {
     return n + 1;
 }
+/*@ gobj :: { a: number, b: string, c: (number)=>number } */
+var gobj= { a: 5, b: "String", f: inc };
 
-var gobj= {
-    a: 5,
-    b: "String",
-    f: inc
-};
+/*@ gobj1 :: { a: number, b: string } */
+var gobj1= { a: 5, b: "String", f: inc };
+
+/*@ gobj2 :: { a: number } */
+var gobj2= { a: 5, b: "String", f: inc };
 
 /*@ foo :: () => { number | v = 6 } */
 function foo() :number{

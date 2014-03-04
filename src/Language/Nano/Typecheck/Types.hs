@@ -210,7 +210,7 @@ data TElt t    = TE { f_sym   :: F.Symbol           -- ^ Symbol
 
 data TDefEnv t = G  { size    :: Int                -- ^ Size of the `env`
                     , env     :: I.IntMap (TDef t)  -- ^ Type def env (includes object types)
-                    , names   :: F.SEnv TyID          -- ^ Named types - mapping to env
+                    , names   :: F.SEnv TyID        -- ^ Named types - mapping to env
                     } deriving (Show, Functor, Data, Typeable)
 
 -- TODO: consider changing names and adding description
@@ -221,7 +221,7 @@ addTySym :: F.Symbol -> TDef t -> TDefEnv t -> (TDefEnv t, TyID)
 addTySym s t (G sz γ c) = (G sz' γ' c', id)
   where
     sz' = sz + 1
-    id  = sz + 1
+    id  = sz'
     γ'  = I.insert id t γ
     c'  = F.insertSEnv s id c  
 
@@ -230,8 +230,8 @@ addSym :: F.Symbol -> TDefEnv t -> (TDefEnv t, TyID)
 ---------------------------------------------------------------------------------
 addSym s g@(G sz γ c) = maybe f (g,) (F.lookupSEnv s c)
   where
-    f   = (G sz' γ c', id)
-    sz' = sz + 1
+    f   = (G sz γ c', id)
+    -- sz' = sz + 1
     id  = sz + 1
     c'  = F.insertSEnv s id c 
 
@@ -481,7 +481,7 @@ isVoid (TApp TVoid _ _)   = True
 isVoid _                  = False
 
 isTRef (TApp (TRef _) _ _) = True
-isTRef (TApp (TRef _) _ _) = False
+isTRef t                   = False
 
 isUnion :: RType r -> Bool
 isUnion (TApp TUn _ _) = True           -- top-level union
@@ -597,46 +597,61 @@ instance Functor Source where
 
 instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
   pp pgm@(Nano {code = (Src s) }) 
-    =   text "******************* Code **********************"
+    =   text "\n******************* Code **********************"
     $+$ pp s
-    $+$ text "******************* Imported specs ************"
-    $+$ pp (externs pgm)
-    $+$ text "******************* Checked fun sigs **********"
+--     $+$ text "\n******************* Imported specs ************"
+--     $+$ ppEnv (externs pgm)
+    $+$ text "\n******************* Checked fun sigs **********"
     $+$ pp (specs pgm)
-    $+$ text "******************* Global vars ***************"
+    $+$ text "\n******************* Global vars ***************"
     $+$ pp (glVars pgm)
-    $+$ text "******************* Constants *****************"
+    $+$ text "\n******************* Constants *****************"
     $+$ pp (consts pgm) 
-    $+$ text "******************* Type Definitions **********"
+    $+$ text "\n******************* Type Definitions **********"
     $+$ pp (defs  pgm)
-    $+$ text "******************* Predicate Aliases *********"
+    $+$ text "\n******************* Predicate Aliases *********"
     $+$ pp (pAlias pgm)
-    $+$ text "******************* Type Aliases **************"
+    $+$ text "\n******************* Type Aliases **************"
     $+$ pp (tAlias pgm)
-    $+$ text "******************* Qualifiers ****************"
-    $+$ F.toFix (quals  pgm) 
-    $+$ text "******************* Invariants ****************"
-    $+$ pp (invts pgm) 
-    $+$ text "***********************************************"
+    $+$ text "\n******************* Qualifiers ****************"
+    $+$ vcat (F.toFix <$> (take 3 $ quals pgm))
+    $+$ text "..."
+--     $+$ text "\n******************* Invariants ****************"
+--     $+$ vcat (pp <$> (invts pgm))
+    $+$ text "\n***********************************************\n"
 
+ppEnv env = vcat [ pp id <+> text "::" <+> pp t <+> text"\n" | (id, t) <- envToList env]
 
 instance PP t => PP (TDefEnv t) where
-  pp (G _ γ c) = text "Type definitions:"  $$ pp γ 
-              <+> text "Named types: "     $$ pp c
+  pp (G s γ c) =  (text "Size:" <+> text (show s))  $$ text "" $$
+                  (text "Type definitions:"  $$ nest 2 (pp γ)) $$ text "" $$
+                  (text "Named types:"       $$ nest 2 (pp c))
 
 instance PP t => PP (I.IntMap t) where
-  pp m = cat $ pp <$> I.toList m
+  pp m = vcat (pp <$> I.toList m)
 
 instance PP t => PP (F.SEnv t) where
-  pp m = cat $ pp <$> F.toListSEnv m
-  
+  pp m = vcat $ pp <$> F.toListSEnv m
 
 instance (PP t) => PP (TDef t) where
-  pp (TD nm vs p ts) = pp nm <+> ppArgs brackets comma vs 
-                   <+> text "extends" <+> pp p <+> ppArgs braces comma ts
+    pp (TD (Just nm) vs Nothing ts) = 
+      pp nm <+> ppArgs brackets comma vs 
+            <+> braces (text " " 
+                <+> (vcat $ (\t -> pp t <> text ";") <$> ts) <+> text " ")
+    pp (TD (Just nm) vs (Just p) ts) = 
+      pp nm <+> ppArgs brackets comma vs 
+            <+> text "extends" <+> pp p 
+            <+> braces (text " " 
+                  <+> (vcat $ (\t -> pp t <> text ";") <$> ts) <+> text " ")
+    pp (TD Nothing vs Nothing ts) = 
+      pp "<anonymous>" <+> braces (text " " 
+        <+> (vcat $ (\t -> pp t <> text ";") <$> ts) <+> text " ")
+    pp _ = error "PP TDEF: case not possible"
+
 
 instance (PP t) => PP (TElt t) where
-  pp (TE s b t) = pp (F.symbol s) <+> pp b <+> text "::" <+> pp t
+  pp (TE s True t) = pp (F.symbol s) <+> text ":" <+> pp t
+  pp (TE s False t) = text "private" <+> pp (F.symbol s) <+> text ":" <+> pp t
 
 instance PP Bool where
   pp True   = text "True"
@@ -644,17 +659,18 @@ instance PP Bool where
     
 instance Monoid (Nano a t) where 
   mempty        = Nano mempty mempty mempty mempty mempty mempty mempty mempty mempty mempty 
-  mappend p1 p2 = Nano { code    = (code    p1 ) `mappend` (code    p2 )
-                       , externs = (externs p1 ) `mappend` (externs p2 )
-                       , specs   = (specs   p1 ) `mappend` (specs   p2 )
-                       , glVars  = (glVars  p1 ) `mappend` (glVars  p2 )
-                       , consts  = (consts  p1 ) `mappend` (consts  p2 )
-                       , defs    = (defs    p1 ) `mappend` (defs    p2 )
-                       , tAlias  = (tAlias  p1 ) `mappend` (tAlias  p2 )
-                       , pAlias  = (pAlias  p1 ) `mappend` (pAlias  p2 )
-                       , quals   = (quals   p1 ) `mappend` (quals   p2 )
-                       , invts   = (invts   p1 ) `mappend` (invts   p2 )
-                       }
+  mappend p1 p2 = error "mappend" 
+--                   Nano { code    = (code    p1 ) `mappend` (code    p2 )
+--                        , externs = (externs p1 ) `mappend` (externs p2 )
+--                        , specs   = (specs   p1 ) `mappend` (specs   p2 )
+--                        , glVars  = (glVars  p1 ) `mappend` (glVars  p2 )
+--                        , consts  = (consts  p1 ) `mappend` (consts  p2 )
+--                        , defs    = (defs    p1 ) `mappend` (defs    p2 )
+--                        , tAlias  = (tAlias  p1 ) `mappend` (tAlias  p2 )
+--                        , pAlias  = (pAlias  p1 ) `mappend` (pAlias  p2 )
+--                        , quals   = (quals   p1 ) `mappend` (quals   p2 )
+--                        , invts   = (invts   p1 ) `mappend` (invts   p2 )
+--                        }
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }
@@ -715,10 +731,10 @@ instance F.Reftable r => PP (RType r) where
   pp (TVar α r)                 = F.ppTy r $ pp α 
   pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
-  pp (TAnd ts)                  = hsep [text "/\\" <+> pp t | t <- ts]
+  pp (TAnd ts)                  = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TExp e)                   = pprint e 
-  pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text "+") ts 
-  pp (TApp d@(TRef _)ts r)      = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
+  pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text " +") ts 
+  pp (TApp d@(TRef _) ts r)     = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
   pp (TApp c [] r)              = F.ppTy r $ ppTC c 
   pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
   pp (TArr t r)                 = F.ppTy r $ brackets (pp t)  
@@ -730,7 +746,7 @@ instance PP TCon where
   pp TVoid            = text "Void"
   pp TTop             = text "Top"
   pp TUn              = text "Union:"
-  pp (TRef x)         = int x -- pprint (F.symbol x)
+  pp (TRef x)         = text "REF#" <> int x
   pp TNull            = text "Null"
   pp TUndef           = text "Undefined"
 
@@ -749,13 +765,14 @@ instance F.Reftable r => PP (Bind r) where
   pp (B x t)          = pp x <> colon <> pp t 
 
 ppArgs p sep          = p . intersperse sep . map pp
+
 ppTC TInt             = text "Int"
 ppTC TBool            = text "Boolean"
 ppTC TString          = text "String"
 ppTC TVoid            = text "Void"
 ppTC TTop             = text "Top"
 ppTC TUn              = text "Union:"
-ppTC (TRef x)         = int x -- pprint (F.symbol x)
+ppTC (TRef x)         = text "REF#" <> int x
 ppTC TNull            = text "Null"
 ppTC TUndef           = text "Undefined"
 

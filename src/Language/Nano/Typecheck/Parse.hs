@@ -390,7 +390,7 @@ instance FromJSON RawSpec
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-parseNanoFromFile :: FilePath-> IO (Either Error (NanoBareR Reft))
+parseNanoFromFile :: FilePath-> IO (NanoBareR Reft)
 -------------------------------------------------------------------------------
 parseNanoFromFile f 
   = do  ssP   <- parseScriptFromJSON =<< getPreludePath
@@ -414,16 +414,15 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
         Right p  -> p
 
 --------------------------------------------------------------------------------------
-mkCode :: (PState, [Statement (SourceSpan, [Spec])]) ->  Either Error (NanoBareR Reft)
+mkCode :: (PState, [Statement (SourceSpan, [Spec])]) -> NanoBareR Reft
 --------------------------------------------------------------------------------------
-mkCode (u, ss) =  do
-    return $ Nano {
+mkCode (u, ss) =  Nano {
         code    = Src (checkTopStmt <$> ss')
       , externs = envFromList   [ t | Extern t <- anns ] -- externs
       , specs   = catFunSpecDefs ss                      -- function sigs
       , glVars  = catVarSpecDefs ss                      -- variables
       , consts  = envFromList   [ t | Meas   t <- anns ] 
-      , defs    = foldr ff (fst u) [ t | IFace  t <- anns ] 
+      , defs    = fst u
       , tAlias  = envFromList   [ t | TAlias t <- anns ] 
       , pAlias  = envFromList   [ t | PAlias t <- anns ] 
       , quals   =               [ t | Qual   t <- anns ] 
@@ -434,8 +433,6 @@ mkCode (u, ss) =  do
     toBare (l,αs) = Ann l [TAnnot t | Bind (_,t) <- αs ]
     ss'           = (toBare <$>) <$> ss
     anns          = concatMap (FO.foldMap snd) ss
-    -- Add all the defined symbols to the TDefEnv
-    ff (s,t)      = fst . addTySym (symbol s) t
 
 
 type PState = (TDefEnv RefType, Integer)
@@ -494,12 +491,8 @@ varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
     fromVarDecl (VarDecl l _ _) = [l]
 
 
-
 --------------------------------------------------------------------------------
 verifyFile :: FilePath -> IO () -- Either Error (NanoBareR Reft))
 --------------------------------------------------------------------------------
-verifyFile f = parseNanoFromFile f >>= go
-  where go (Left err) = print err
-        go (Right p ) = putStr $ ppshow p
-
+verifyFile f = parseNanoFromFile f >>= putStr . ppshow
 

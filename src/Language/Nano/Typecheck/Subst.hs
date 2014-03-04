@@ -1,4 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE UndecidableInstances  #-}
@@ -31,6 +32,8 @@ import qualified Data.HashMap.Strict as M
 import           Data.Monoid
 
 -- import           Debug.Trace
+
+type PPR r = (PP r, F.Reftable r)
 
 ---------------------------------------------------------------------------
 -- | Substitutions --------------------------------------------------------
@@ -119,6 +122,10 @@ instance (PP r, F.Reftable r) => Substitutable r (Annot (Fact r) z) where
 
 instance Free (Cast (RType r)) where
   free = free . castTarget 
+
+instance (PPR r) => Substitutable r (TDef (RType r)) where
+  apply θ t@(TD nm vs pro es) = TD nm vs pro $ apply θ es
+
 
 instance Free (Fact r) where
   free (PhiVar _)       = S.empty

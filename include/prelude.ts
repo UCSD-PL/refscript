@@ -154,7 +154,7 @@
 
 
 //XXX: Is there an issue with keeping this with a capital P???
-/*@ measure Prop        :: (boolean) => bool                              */
+/*@ measure Prop        :: (boolean) => boolean                              */
 
 
 
@@ -383,7 +383,7 @@
 
 /*@ qualif Bot(v:a)       : 0 = 1                               */
 /*@ qualif Bot(v:obj)     : 0 = 1                               */
-/*@ qualif Bot(v:bool)    : 0 = 1                               */
+/*@ qualif Bot(v:boolean)    : 0 = 1                               */
 /*@ qualif Bot(v:number)     : 0 = 1                            */
 /*@ qualif CmpZ(v:number)    : v < 0                            */
 /*@ qualif CmpZ(v:number)    : v <= 0                           */
@@ -400,8 +400,8 @@
 /*@ qualif Cmp(v:a,x:a)   : v =  x                              */
 /*@ qualif Cmp(v:a,x:a)   : v != x                              */
 /*@ qualif One(v:number)     : v = 1                            */
-/*@ qualif True(v:bool)   : (? v)                               */
-/*@ qualif False(v:bool)  : not (? v)                           */
+/*@ qualif True(v:Bool)   : (? v)                               */
+/*@ qualif False(v:Bool)  : not (? v)                           */
 /*@ qualif True1(v:Bool)  : (Prop v)                            */
 /*@ qualif False1(v:Bool) : not (Prop v)                        */
 

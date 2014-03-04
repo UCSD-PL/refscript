@@ -184,6 +184,7 @@ traceCodePP p {-m s-} _ _ = trace (render $ {- codePP p m s -} pp p) $ return ()
 --   that can create or affect binders (e.g. @VarDecl@ or @Statement@)
 --   @Nothing@ means if we definitely hit a "return" 
 --   @Just γ'@ means environment extended with statement binders
+type TCEnvO r = Maybe (TCEnv r)
 
 
 data TCEnv r  = TCE { 
@@ -200,11 +201,9 @@ data TCEnv r  = TCE {
   , tce_ctx  :: !IContext 
   }
 
-type TCEnvO r = Maybe (TCEnv r)
-
 -- XXX: Who needs this?
--- instance PPR r => Substitutable r (TCEnv r) where 
---   apply θ (TCE m d sp cl c) = TCE (apply θ m) (apply θ d) (apply θ sp) cl c 
+instance PPR r => Substitutable r (TCEnv r) where 
+  apply θ (TCE m d sp cl c) = TCE (apply θ m) d (apply θ sp) cl c 
 
 instance PPR r => PP (TCEnv r) where
   pp = ppTCEnv
@@ -791,30 +790,27 @@ envJoin :: (Ord r, PPR r) => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TC
 ----------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
-envJoin l γ (Just γ1) (Just γ2) = envJoin' l γ γ1 γ2 
-
-envJoin' l γ γ1 γ2
-  = do let xs = phiVarsAnnot l
-       ts    <- mapM (getPhiType l γ1 γ2) xs
-       θ     <- getSubst
-       return $ Just $ tcEnvAdds (zip xs ts) (apply θ γ)
-  
+envJoin l γ (Just γ1) (Just γ2) = 
+  do let xs = phiVarsAnnot l
+     ts    <- mapM (getPhiType l γ1 γ2) xs
+     θ     <- getSubst
+     return $ Just $ tcEnvAdds (zip xs ts) (apply θ γ)
 
 ----------------------------------------------------------------------------------
-getPhiType ::  (Ord r, F.Reftable r, PP r) => 
-  Annot b SourceSpan -> TCEnv r -> TCEnv r -> Id SourceSpan-> TCM r (RType r)
+getPhiType ::  (Ord r, PPR r) => 
+  (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan-> TCM r (RType r)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (tcEnvFindTy x γ1, tcEnvFindTy x γ2) of
-  -- TODO: FIX THIS !!!
   -- These two should really be the same type... cause we don't allow strong
   -- updates on the raw type, even on local vars (that are SSAed)
-    (Just t1, Just t2) -> do  return $ fst4 $ compareTs (tce_defs γ1) t1 t2
+    (Just t1, Just t2) -> 
+      do  when (not $ t1 `equiv` t2) (tcError $ errorEnvJoin (ann l) x t1 t2)
+          return t1
     (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
-                            then tcError $ bug loc "Oh no, the HashMap GREMLIN is back...1"
+                            then tcError $ bug loc "Oh no, the HashMap GREMLIN is back..."
                             else tcError $ bugUnboundPhiVar loc x
                           where loc = srcPos $ ann l
 
-forceCheck x γ 
-  = elem x $ fst <$> envToList (tce_env γ)
+forceCheck x γ = elem x $ fst <$> envToList (tce_env γ)
 

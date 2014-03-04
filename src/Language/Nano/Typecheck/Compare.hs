@@ -76,6 +76,13 @@ instance Equivalent a => Equivalent [a] where
 instance Equivalent (RType r) where 
   equiv t t'  | toType t == toType t' = True
   equiv t t'  | any isUnion [t,t'] = 
+  -- FIXME: 
+  --
+  --  ∀j. ∃i. Si ~ Tj  
+  --  ∀i. ∃j. Si ~ Tj  
+  -- -----------------
+  --  \/ Si ~ \/ Tj
+  --
     errorstar (printf "equiv: no unions: %s\n\t\t%s" 
     (ppshow $ toType t) (ppshow $ toType t'))
   equiv (TApp c ts _) (TApp c' ts' _) = c `equiv` c' && ts `equiv` ts'
@@ -158,24 +165,24 @@ mconcatS   :: Monoid (Sum t) => [t] -> t
 mconcatS xs = getSum $ mconcat (Sum <$> xs)
 
 
--- Product: Strict version (To be used in objects)
-instance Monoid (Product SubDirection) where
-  mempty = Product EqT
-
-  Product d    `mappend` Product d'   | d == d' = Product d
-  
-  Product Nth  `mappend` Product _              = Product Nth
-  Product _    `mappend` Product Nth            = Product Nth
-
-  Product EqT  `mappend` Product d              = Product d
-  Product d    `mappend` Product EqT            = Product d
-  
-  Product _    `mappend` Product _              = Product Nth
-
-
-
-(&*&)   :: Monoid (Product t) => t -> t -> t 
-a &*& b = getProduct $ mappend (Product a) (Product b)
+-- -- Product: Strict version (To be used in objects)
+-- instance Monoid (Product SubDirection) where
+--   mempty = Product EqT
+-- 
+--   Product d    `mappend` Product d'   | d == d' = Product d
+--   
+--   Product Nth  `mappend` Product _              = Product Nth
+--   Product _    `mappend` Product Nth            = Product Nth
+-- 
+--   Product EqT  `mappend` Product d              = Product d
+--   Product d    `mappend` Product EqT            = Product d
+--   
+--   Product _    `mappend` Product _              = Product Nth
+-- 
+-- 
+-- 
+-- (&*&)   :: Monoid (Product t) => t -> t -> t 
+-- a &*& b = getProduct $ mappend (Product a) (Product b)
 
 mconcatP   :: Monoid (Product t) => [t] -> t
 mconcatP xs = getProduct $ mconcat (Product <$> xs)

@@ -23,8 +23,16 @@ import           Data.List                      (find)
 -- import           Debug.Trace
 
 type PPR r = (PP r, F.Reftable r)
+
 type TDR r = TDefEnv (RType r)
 type TER r = Env (RType r)
+
+-- Naming convention for the following:
+--
+--  α: the variable declaration environment
+--
+--  γ: the type definition environment
+--
 
 -- Given an environment @γ@, a (string) field @s@ and a type @t@, `getProp` 
 -- returns a tuple with elements:

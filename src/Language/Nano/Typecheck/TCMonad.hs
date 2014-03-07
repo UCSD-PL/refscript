@@ -41,6 +41,10 @@ module Language.Nano.Typecheck.TCMonad (
   , accumAnn
   , getAllAnns
   , remAnn
+  , getDef
+  , setDef
+  , getExts
+  , getClasses
 
   -- * Unification
   , unifyTypeM
@@ -108,22 +112,33 @@ type PPR r = (PP r, F.Reftable r)
 -------------------------------------------------------------------------------
 
 data TCState r = TCS {
-                   -- Errors
-                     tc_errss :: ![Error]
-                   , tc_subst :: !(RSubst r)
-                   , tc_cnt   :: !Int
-                   -- Annotations
-                   , tc_anns  :: AnnInfo r
-                   , tc_annss :: [AnnInfo r]
-                   -- Function definitions
-                   , tc_specs  :: !(Env (RType r))
-                   -- Defined types
-                   , tc_defs  :: !(TDefEnv (RType r))
-                   -- Verbosity
-                   , tc_verb  :: V.Verbosity
-                   -- This stack
-                   , tc_this  :: ![RType r]
-                   }
+  -- Errors
+    tc_errss :: ![Error]
+  , tc_subst :: !(RSubst r)
+  , tc_cnt   :: !Int
+
+  -- Annotations
+  , tc_anns  :: AnnInfo r
+  , tc_annss :: [AnnInfo r]
+
+  -- Function definitions
+  , tc_specs :: !(Env (RType r))
+
+  -- Defined types
+  , tc_defs  :: !(TDefEnv (RType r))
+
+  -- Extern (unchecked) declarations
+  , tc_ext   :: !(Env (RType r))
+
+  -- Class definitions
+  , tc_cls   :: Env (Statement (AnnSSA r))
+
+  -- Verbosity
+  , tc_verb  :: V.Verbosity
+
+  -- This stack: if empty, assume top
+  , tc_this  :: ![RType r]
+  }
 
 type TCM r     = ErrorT Error (State (TCState r))
 
@@ -176,6 +191,21 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ')
 getDef  :: TCM r (TDefEnv (RType r)) 
 -------------------------------------------------------------------------------
 getDef = tc_defs <$> get
+
+-------------------------------------------------------------------------------
+getExts  :: TCM r (Env (RType r)) 
+-------------------------------------------------------------------------------
+getExts = tc_ext <$> get
+
+-------------------------------------------------------------------------------
+getClasses  :: TCM r (Env (Statement (AnnSSA r)))
+-------------------------------------------------------------------------------
+getClasses = tc_cls <$> get
+
+-------------------------------------------------------------------------------
+setDef  :: TDefEnv (RType r) -> TCM r ()
+-------------------------------------------------------------------------------
+setDef γ = modify $ \u -> u { tc_defs = γ } 
 
 -------------------------------------------------------------------------------
 tcError     :: Error -> TCM r a
@@ -253,7 +283,7 @@ getAllAnns = tc_annss <$> get
 
 -------------------------------------------------------------------------------
 accumAnn :: (Ord r, F.Reftable r, Substitutable r (Fact r)) =>
-  (AnnInfo r -> [Error]) -> TCM r a -> TCM r a
+  (TDefEnv (RType r) => AnnInfo r -> [Error]) -> TCM r a -> TCM r a
 -------------------------------------------------------------------------------
 -- RJ: this function is gross. Why is it being used? why are anns not just
 -- accumulated monotonically?
@@ -262,22 +292,24 @@ accumAnn check act
        modify $ \st -> st {tc_anns = HM.empty}
        z     <- act
        m'    <- getAnns
-       forM_ (check m') (`logError` ())
+       δ     <- getDef
+       forM_ (check δ m') (`logError` ())
        modify $ \st -> st {tc_anns = m} {tc_annss = m' : tc_annss st}
        return z
+
 -------------------------------------------------------------------------------
-execute     ::  (PP r, F.Reftable r) => 
-  V.Verbosity -> Nano z (RType r) -> TCM r a -> Either [Error] a
+execute ::  PPR r => V.Verbosity -> NanoSSAR r -> TCM r a -> Either [Error] a
 -------------------------------------------------------------------------------
 execute verb pgm act 
   = case runState (runErrorT act) $ initState verb pgm of 
       (Left err, _) -> Left [err]
       (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errss st)
 
-
-initState ::  (PP r, F.Reftable r) => V.Verbosity -> Nano z (RType r) -> TCState r
+-------------------------------------------------------------------------------
+initState :: PPR r => V.Verbosity -> NanoSSAR r -> TCState r
+-------------------------------------------------------------------------------
 initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss 
-                          tc_specs tc_defs tc_verb tc_this
+                          tc_specs tc_defs tc_exts tc_class tc_verb tc_this
   where
     tc_errss = []
     tc_subst = mempty 
@@ -285,9 +317,12 @@ initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss
     tc_anns  = HM.empty
     tc_annss = []
     tc_specs = specs pgm
+    tc_exts  = externs pgm
     tc_defs  = mempty
     tc_verb  = verb
-    tc_this  = [tTop]
+    tc_this  = []
+    tc_class = envFromList [ (s, ClassStmt l s e i b) | let Src ss = code pgm
+                                                      , ClassStmt l s e i b <- ss ]
 
 
 getSpecOrDie f = tc_specs <$> get >>= maybe e return . envFindTy f

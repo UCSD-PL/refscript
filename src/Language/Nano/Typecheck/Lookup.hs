@@ -2,6 +2,7 @@
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
 module Language.Nano.Typecheck.Lookup (getProp) where 
@@ -85,8 +86,8 @@ getPropTDef :: (PPR r) =>
 -------------------------------------------------------------------------------
 getPropTDef l α γ f ts (TD nm vs pro elts) = 
     case [ p | TE s _ p <- elts, s == f ] of
-      [ ] -> do (pid, pts) <- pro
-                ptd        <- findTyId pid γ
+      [ ] -> do (psy, pts) <- pro
+                ptd        <- findTySym psy γ
                 t          <- getPropTDef l α γ f pts ptd
                 return      $ S.apply θ t
       [p] -> Just $ S.apply θ p                               -- found binding

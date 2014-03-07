@@ -88,7 +88,10 @@ module Language.Nano.Typecheck.Types (
   , addSym        -- Add symbol without type definition
   , addObjLitTy   -- Add an object literal type
   , findTySym, findTySymOrDie
+  , findTySymWithId
   , findTyId, findTyIdOrDie
+  , findEltWithDefault
+  , symTDefMem
   , sortTDef
 
   -- * Operator Types
@@ -197,7 +200,7 @@ type TyID      = Int
 data TDef t    = TD { 
         t_name  :: !(Maybe (Id SourceSpan))   -- ^ Name (possibly no name)
       , t_args  :: ![TVar]                    -- ^ Type variables
-      , t_proto :: !(Maybe (TyID, [t]))        -- ^ Parent type symbol
+      , t_proto :: !(Maybe (F.Symbol, [t]))   -- ^ Parent type symbol
       , t_elts  :: ![TElt t]                  -- ^ List of data type elts 
       } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
@@ -252,6 +255,13 @@ findTySym :: F.Symbol -> TDefEnv t -> Maybe (TDef t)
 findTySym s (G _ γ c) = F.lookupSEnv s c >>= (`I.lookup` γ)
 
 ---------------------------------------------------------------------------------
+findTySymWithId :: F.Symbol -> TDefEnv t -> Maybe (TyID, TDef t)
+---------------------------------------------------------------------------------
+findTySymWithId s (G _ γ c) = F.lookupSEnv s c 
+                          >>= \i -> (I.lookup i γ) 
+                          >>= return . (i,)
+
+---------------------------------------------------------------------------------
 findTySymOrDie :: F.Symbol -> TDefEnv t -> TDef t
 ---------------------------------------------------------------------------------
 findTySymOrDie s γ = fromMaybe (error "findTySymOrDie") $ findTySym s γ 
@@ -274,6 +284,17 @@ instance Monoid (TDefEnv t) where
     where 
       err k t1 t2 = error $ "Key " ++ ppshow k ++ " is bound twice." 
 
+
+---------------------------------------------------------------------------------
+findEltWithDefault :: F.Symbol -> t -> [TElt t] -> t
+---------------------------------------------------------------------------------
+findEltWithDefault s t elts = 
+  maybe t f_type $ L.find ((== s) . f_sym) elts
+
+---------------------------------------------------------------------------------
+symTDefMem :: F.Symbol -> TDefEnv t -> Bool
+---------------------------------------------------------------------------------
+symTDefMem s = F.memberSEnv s . names
 
 
 
@@ -555,10 +576,10 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
 data Nano a t = Nano { code   :: !(Source a)               -- ^ Code to check
                      , externs:: !(Env t)                  -- ^ Imported (unchecked) specifications 
                      , specs  :: !(Env t)                  -- ^ Function specs and 
-                                                           -- ^ After TC will also include class types
                      , glVars :: !(Env t)                  -- ^ Global (annotated) vars
                      , consts :: !(Env t)                  -- ^ Measure Signatures
                      , defs   :: !(TDefEnv t)              -- ^ Type definitions
+                                                           -- ^ After TC will also include class types
 							       , tAlias :: !(TAliasEnv t)            -- ^ Type aliases
                      , pAlias :: !(PAliasEnv)              -- ^ Predicate aliases
                      , quals  :: ![F.Qualifier]            -- ^ Qualifiers
@@ -601,8 +622,8 @@ instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
   pp pgm@(Nano {code = (Src s) }) 
     =   text "\n******************* Code **********************"
     $+$ pp s
---     $+$ text "\n******************* Imported specs ************"
---     $+$ ppEnv (externs pgm)
+    {-$+$ text "\n******************* Imported specs ************"-}
+    {-$+$ ppEnv (externs pgm)-}
     $+$ text "\n******************* Checked fun sigs **********"
     $+$ pp (specs pgm)
     $+$ text "\n******************* Global vars ***************"
@@ -829,15 +850,16 @@ instance (PP a) => PP (Cast a) where
 -----------------------------------------------------------------------------
 
 -- | Annotations: Extra-code decorations needed for Refinement Type Checking
---   Ideally, we'd have "room" for these inside the @Statement@ and
---   @Expression@ type, but are tucking them in using the @a@ parameter.
 
 data Fact r
   = PhiVar      ![(Id SourceSpan)]
   | TypInst     !IContext ![RType r]
   | Overload    !(Maybe (RType r))
   | TCast       !IContext !(Cast (RType r))
+  -- Type annotations
   | TAnnot      !(RType r)
+  -- Class annotation
+  | CAnnot      !([TVar], Maybe (Id SourceSpan,[RType r]))
     deriving (Eq, Ord, Show, Data, Typeable)
 
 type UFact = Fact ()

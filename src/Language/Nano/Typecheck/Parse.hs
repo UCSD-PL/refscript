@@ -296,27 +296,47 @@ binderP = try (stringSymbol <$> idP badc)
 withinSpacesP :: ParserS a -> ParserS a
 withinSpacesP p = do { spaces; a <- p; spaces; return a } 
              
+classDeclP :: ParserS (Id SourceSpan, ([TVar], Maybe (Id SourceSpan, [RefType])))
+classDeclP = do
+  reserved "class"
+  id <- identifierP 
+  vs <- option [] $ angles $ sepBy tvarP comma
+  pr <- optionMaybe $ 
+          do  reserved "extends"
+              pId <- identifierP
+              ts  <- option [] $ angles $ sepBy bareTypeP comma
+              return (pId, ts)
+  return (id, (vs, pr))
+
 
 ---------------------------------------------------------------------------------
 -- | Specifications
 ---------------------------------------------------------------------------------
 
 data RawSpec
-  = RawMeas   String
-  | RawBind   String
-  | RawExtern String
-  | RawType   String
-  | RawTAlias String
-  | RawPAlias String
-  | RawQual   String 
-  | RawInvt   String
+  = RawMeas   String   -- Measure
+  | RawBind   String   -- Function bindings
+  | RawExtern String   -- Extern declarations
+  | RawType   String   -- Variable declaration annotations
+  | RawClass  String   -- Class annots
+  | RawField  String   -- Field annots
+  | RawMethod String   -- Method annots
+  | RawConstr String   -- Constructor annots
+  | RawTAlias String   -- Type aliases
+  | RawPAlias String   -- Predicate aliases
+  | RawQual   String   -- Qualifiers
+  | RawInvt   String   -- Invariants
   deriving (Show,Eq,Ord,Data,Typeable,Generic)
 
 data PSpec l t 
   = Meas   (Id l, t)
   | Bind   (Id l, t) 
+  | Field  (Id l, t) 
+  | Constr (Id l, t)
+  | Method (Id l, t)
   | Extern (Id l, t)
   | IFace  (Id l, TDef t)
+  | Class  (Id l, ([TVar], Maybe (Id l,[t])))
   | TAlias (Id l, TAlias t)
   | PAlias (Id l, PAlias) 
   | Qual   Qualifier
@@ -328,8 +348,12 @@ type Spec = PSpec SourceSpan RefType
 parseAnnot :: SourceSpan -> RawSpec -> ParserS Spec
 parseAnnot ss (RawMeas   _) = Meas   <$> patch ss <$> idBindP
 parseAnnot ss (RawBind   _) = Bind   <$> patch ss <$> idBindP
+parseAnnot ss (RawField  _) = Field  <$> patch ss <$> idBindP
+parseAnnot ss (RawMethod _) = Method <$> patch ss <$> idBindP
+parseAnnot ss (RawConstr _) = Constr <$> patch ss <$> idBindP
 parseAnnot ss (RawExtern _) = Extern <$> patch ss <$> idBindP
 parseAnnot ss (RawType   _) = IFace  <$> patch ss <$> tBodyP >>= registerIface
+parseAnnot ss (RawClass  _) = Class  <$> patch ss <$> classDeclP 
 parseAnnot ss (RawTAlias _) = TAlias <$> patch ss <$> tAliasP
 parseAnnot ss (RawPAlias _) = PAlias <$> patch ss <$> pAliasP
 parseAnnot _  (RawQual   _) = Qual   <$>              qualifierP
@@ -351,6 +375,10 @@ getSpecString (RawMeas   s) = s
 getSpecString (RawBind   s) = s 
 getSpecString (RawExtern s) = s  
 getSpecString (RawType   s) = s  
+getSpecString (RawField  s) = s  
+getSpecString (RawMethod s) = s  
+getSpecString (RawConstr s) = s  
+getSpecString (RawClass  s) = s  
 getSpecString (RawTAlias s) = s  
 getSpecString (RawPAlias s) = s  
 getSpecString (RawQual   s) = s  
@@ -419,7 +447,8 @@ mkCode :: (PState, [Statement (SourceSpan, [Spec])]) -> NanoBareR Reft
 mkCode (u, ss) =  Nano {
         code    = Src (checkTopStmt <$> ss')
       , externs = envFromList   [ t | Extern t <- anns ] -- externs
-      , specs   = catFunSpecDefs ss                      -- function sigs
+      -- FIXME: same name methods in different classes.
+      , specs   = catFunSpecDefs ss                      -- function sigs (no methods...)
       , glVars  = catVarSpecDefs ss                      -- variables
       , consts  = envFromList   [ t | Meas   t <- anns ] 
       , defs    = fst u
@@ -430,7 +459,11 @@ mkCode (u, ss) =  Nano {
     } 
   where
     toBare     :: (SourceSpan, [Spec]) -> AnnBare Reft 
-    toBare (l,αs) = Ann l [TAnnot t | Bind (_,t) <- αs ]
+    toBare (l,αs) = Ann l $ [TAnnot t | Bind   (_,t) <- αs ]
+                         ++ [TAnnot t | Constr (_,t) <- αs ]
+                         ++ [TAnnot t | Field  (_,t) <- αs ]
+                         ++ [TAnnot t | Method (_,t) <- αs ]
+                         ++ [CAnnot t | Class  (_,t) <- αs ]
     ss'           = (toBare <$>) <$> ss
     anns          = concatMap (FO.foldMap snd) ss
 

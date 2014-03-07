@@ -133,10 +133,11 @@ errorBracketAssign l x    = mkErr l $ printf "Invalid bracket assignment %s" (pp
 errorPropRead  l x1 x2    = mkErr l $ printf "Invalid property read object: %s property: %s" (ppshow x1) (ppshow x2) 
 errorArrayLit     l x     = mkErr l $ printf "Invalid array literal %s" (ppshow x) 
 errorClassExtends l x y s = mkErr l $ printf "Class %s cannot extend class %s: types for property %s are incompatible" (ppshow x) (ppshow y) (ppshow s)
-errorClEltAnnMissing l x  = mkErr l $ printf "Class %s is missing a constructor annotation." (ppshow x)
+errorClEltAnMissing l c   = mkErr l $ printf "Class %s is missing an annotation for element." (ppshow c)
 errorVarDeclAnnot l x     = mkErr l $ printf "Variable definition of '%s' with neither type annotation nor initialization is not supported." (ppshow x)
 errorConstNonFunc l x     = mkErr l $ printf "Constructor for class '%s' does not have a function type." (ppshow x)
 errorConstMissing l x     = mkErr l $ printf "Constructor for class '%s' does is missing." (ppshow x)
+errorClassMissing l x     = mkErr l $ printf "Cannot call 'new' on non-existing class '%s'." (ppshow x)
 errorBadPAlias l p nx ne  = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne 
 errorBadTAlias l t nt ne nα nx  
                           = mkErr l $ printf "Invalid type alias application: %s \nExpected %d type, %d value arguments, but got %d and %d" (ppshow t) nα nx nt ne  

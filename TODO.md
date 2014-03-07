@@ -37,14 +37,10 @@ JS Features
 
 Tool/Implementation
 -------------------
-
-  - Add prelude via JSON.
-
-  - Force Class definitions to be at top-level.
+  
+  - Optionally print all the inferred types.
 
   - Add resolved class types to the defined data type environment (tDefs).
-
-  - Add check so that each object field is defined once.
 
   - Pay attention to capital first letter at function/class defs.
 

@@ -311,7 +311,10 @@ ssaExpr e@(StringLit _ _)
 ssaExpr e@(NullLit _)               
   = return e 
 
-ssaExpr e@(ThisRef _)               
+ssaExpr e@(ThisRef _)
+  = return e 
+
+ssaExpr e@(SuperRef _)
   = return e 
 
 ssaExpr   (ArrayLit l es)

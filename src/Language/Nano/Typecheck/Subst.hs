@@ -21,7 +21,9 @@ module Language.Nano.Typecheck.Subst (
   ) where 
 
 import           Text.PrettyPrint.HughesPJ
+import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Parser.Type
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
@@ -115,10 +117,17 @@ instance (PP r, F.Reftable r) => Substitutable r (Fact r) where
   apply θ (Overload t)   = Overload (apply θ <$> t)
   apply θ (TCast   ξ c)  = TCast   ξ $ apply θ c
   apply θ (TAnnot t)     = TAnnot  $ apply θ t
+  apply θ (CAnnot (c, t))= CAnnot  (c, apply θ t)
 
+instance (PP r, F.Reftable r, Substitutable r a) => Substitutable r (Maybe a) where
+  apply θ (Just a)       = Just $ apply θ a
+  apply _ Nothing        = Nothing
+
+instance (PP r, F.Reftable r) => Substitutable r (Id a) where
+  apply θ i              = i
 
 instance (PP r, F.Reftable r) => Substitutable r (Annot (Fact r) z) where
-  apply θ (Ann z fs)       = Ann z $ apply θ fs
+  apply θ (Ann z fs)     = Ann z $ apply θ fs
 
 instance Free (Cast (RType r)) where
   free = free . castTarget 

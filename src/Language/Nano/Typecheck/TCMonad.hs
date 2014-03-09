@@ -43,6 +43,7 @@ module Language.Nano.Typecheck.TCMonad (
   , remAnn
   , getDef
   , setDef
+  , addObjLitTyM
   , getExts
   , getClasses
 
@@ -207,6 +208,15 @@ getClasses = tc_cls <$> get
 setDef  :: TDefEnv (RType r) -> TCM r ()
 -------------------------------------------------------------------------------
 setDef γ = modify $ \u -> u { tc_defs = γ } 
+
+-------------------------------------------------------------------------------
+addObjLitTyM :: TDef (RType r) -> TCM r TyID
+-------------------------------------------------------------------------------
+addObjLitTyM t = do
+  δ <- getDef
+  let (δ', i) = addObjLitTy t δ
+  setDef δ'
+  return i
 
 -------------------------------------------------------------------------------
 tcError     :: Error -> TCM r a
@@ -388,7 +398,7 @@ unifyTypeM γ l m e t t' = unifyTypesM γ l msg [t] [t']
 -- which is the actual type for @e@ and @t'@ which is the desired (cast) type
 -- and insert the right kind of cast. 
 --------------------------------------------------------------------------------
-castM :: (PPR r) => TDefEnv (RType r) -> IContext -> Expression (AnnSSA r) 
+castM :: (PPR r) => IContext -> Expression (AnnSSA r) 
   -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 -- Special case casting for objects 
@@ -398,10 +408,10 @@ castM :: (PPR r) => TDefEnv (RType r) -> IContext -> Expression (AnnSSA r)
 --     go SubT         = addUpCast   ξ e toT
 --     go _            = addDeadCast ξ e toT
 
-castM γ ξ e fromT toT =
-  case thd4 $ compareTs γ fromT toT of 
+castM ξ e fromT toT = do
+  δ <- getDef
+  case thd4 $ compareTs δ fromT toT of 
     SupT -> addDownCast ξ e toT    
-    Rel  -> addDownCast ξ e toT   
     SubT -> addUpCast   ξ e toT   
     Nth  -> addDeadCast ξ e toT   
     EqT  -> return e 

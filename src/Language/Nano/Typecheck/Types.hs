@@ -84,6 +84,7 @@ module Language.Nano.Typecheck.Types (
   -- * Type definition env
   , TyID
   , TDefEnv
+  , tDefEmpty
   , addTySym      -- Add symbol with type definition
   , addSym        -- Add symbol without type definition
   , addObjLitTy   -- Add an object literal type
@@ -220,7 +221,7 @@ data TDefEnv t = G  { size    :: Int                -- ^ Size of the `env`
                     , names   :: F.SEnv TyID        -- ^ Named types - mapping to env
                     } deriving (Show, Functor, Data, Typeable)
 
--- TODO: consider changing names and adding description
+tDefEmpty = G 0 I.empty F.emptySEnv
 
 getDefNames (G _ _ n) = fst <$> F.toListSEnv n
 
@@ -281,20 +282,14 @@ findTyId :: TyID -> TDefEnv t -> Maybe (TDef t)
 findTyId i (G _ γ _) = I.lookup i γ
 
 ---------------------------------------------------------------------------------
--- findTyIdOrDie :: TyID -> TDefEnv t -> TDef t
+findTyIdOrDie :: TyID -> TDefEnv t -> TDef t
 ---------------------------------------------------------------------------------
 findTyIdOrDie i γ = fromMaybe (error $ "findTyIdOrDie") $ findTyId i γ 
 
+---------------------------------------------------------------------------------
+findTyIdOrDie' :: String -> TyID -> TDefEnv t -> TDef t
+---------------------------------------------------------------------------------
 findTyIdOrDie' msg i γ = fromMaybe (error $ "findTyIdOrDie:" ++ msg) $ findTyId i γ 
-
--- TODO: this can be fixed a little better.
-instance Monoid (TDefEnv t) where
-  mempty = G 0 I.empty F.emptySEnv
-  mappend (G s1 γ1 c1) (G s2 γ2 c2) =  
-    G (s1+s2) (I.unionWithKey err γ1 γ2) (F.unionWithKeySEnv undefined c1 c2)
-    where 
-      err k t1 t2 = error $ "Key " ++ ppshow k ++ " is bound twice." 
-
 
 ---------------------------------------------------------------------------------
 findEltWithDefault :: F.Symbol -> t -> [TElt t] -> t

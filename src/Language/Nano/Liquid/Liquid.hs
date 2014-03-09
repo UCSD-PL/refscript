@@ -609,7 +609,8 @@ envJoinExt l g g1 g2
         -- To facilitate the sort check t1s and t2s need to change to their
         -- equivalents that have the same sort with the joined types (ts) 
         -- (with the added False's to make the types equivalent)
-        let t4   = zipWith (compareTs $ tenv g) t1s t2s
+        -- FIXME 
+        let t4   = undefined -- zipWith (c ompareTs $ tenv g) t1s t2s
         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst4 <$> t4
         return     (g', xs, snd4 <$> t4, thd4 <$> t4, ts)
 

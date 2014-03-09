@@ -838,8 +838,7 @@ instance (PP t) => PP (TDef t) where
         <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
         <+> text " ")
     pp (TD Nothing vs Nothing ts) = 
-          pp "<anonymous>" 
-      <+> braces (
+            braces (
             text " " 
         <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
         <+> text " ")

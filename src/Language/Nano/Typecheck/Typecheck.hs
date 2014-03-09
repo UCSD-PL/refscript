@@ -125,7 +125,7 @@ tcNano p@(Nano {code = Src fs})
   = do -- checkTypeDefs p -- FIXME: restore this???
        setDef     $ defs p
        (fs', γo) <- tcInScope γ $ tcStmts γ fs
-       m         <- tracePP "All Anns" <$> concatMaps <$> getAllAnns
+       m         <- concatMaps <$> getAllAnns
        θ         <- getSubst
        let p1     = p {code = (patchAnn m . apply θ) <$> Src fs'}
        case γo of 
@@ -292,7 +292,7 @@ envAddFun f i αs xs ts t = tcEnvAdds tyBinds
     varBinds               = zip
     
 validInst γ (l, ts)
-  = case [β | β <- tracePP "FREE" $ HS.toList $ free ts, not $ tVarId β `tcEnvMem` γ] of
+  = case [β | β <- HS.toList $ free ts, not $ tVarId β `tcEnvMem` γ] of
       [] -> Nothing
       βs -> Just $ errorFreeTyVar l βs
 
@@ -371,7 +371,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
   = do (e1', tfld) <- tcPropRead getProp γ l e1 (F.symbol fld)
        (e2', t2)   <- tcExpr γ $ e2                    
-       e2''        <- castM ξ e2' t2 tfld
+       e2''        <- castM l ξ e2' t2 tfld
        return         (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' fld) e2''), Just γ)
     where
        ξ            = tce_ctx γ
@@ -426,7 +426,7 @@ tcStmt γ (ReturnStmt l eo)
         -- Subtype the arguments against the formals and cast using subtyping result
         eo''        <- case eo' of
                         Nothing -> return Nothing
-                        Just e' -> Just <$> castM (tce_ctx γ) e' t' rt'
+                        Just e' -> Just <$> castM l (tce_ctx γ) e' t' rt'
         return (ReturnStmt l eo'', Nothing)
 
 tcStmt γ s@(FunctionStmt _ _ _ _)
@@ -527,7 +527,7 @@ tcVarDecl :: (Ord r, PPR r)
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ (VarDecl l x (Just e)) 
-  = do (e' , t) <- tcExprT γ e $ listToMaybe [ t | TAnnot t <- ann_fact l ]
+  = do (e' , t) <- tcExprT l γ e $ listToMaybe [ t | TAnnot t <- ann_fact l ]
        return (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
 
 tcVarDecl γ v@(VarDecl l x Nothing) =
@@ -539,8 +539,8 @@ tcVarDecl γ v@(VarDecl l x Nothing) =
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
   AnnSSA r -> TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 -------------------------------------------------------------------------------
-tcAsgn _ γ x e
-  = do (e' , t) <- tcExprT γ e rhsT
+tcAsgn l γ x e
+  = do (e' , t) <- tcExprT l γ e rhsT
        return      (e', Just $ tcEnvAdds [(x, t)] γ)
     where
     -- Every variable has a single raw type, whether it has been annotated with
@@ -549,14 +549,14 @@ tcAsgn _ γ x e
 
 
 -------------------------------------------------------------------------------
-tcExprT :: (Ord r, PPR r)
-       => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
+-- tcExprT :: (Ord r, PPR r)
+--        => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
-tcExprT γ e to 
+tcExprT l γ e to 
   = do (e', t)    <- tcExpr γ e
        (e'', te)  <- case to of
                        Nothing -> return (e', t)
-                       Just ta -> (,ta) <$> castM (tce_ctx γ) e t ta
+                       Just ta -> (,ta) <$> castM l (tce_ctx γ) e t ta
        return     (e'', te)
 
 ----------------------------------------------------------------------------------------------
@@ -765,7 +765,7 @@ tcCallCase γ l fn es' ts ft
        -- Apply substitution
        let (ts',its') = mapPair (apply θ) (ts, its)
        -- Subtype the arguments against the formals and up/down cast if needed 
-       es''          <- zipWith3M (castM ξ) es' ts' its'
+       es''          <- zipWith3M (castM l ξ) es' ts' its'
        return           (es'', apply θ ot)
 
 instantiate l ξ fn ft 
@@ -800,7 +800,7 @@ tcPropRead getter γ l e fld = do
 -- TODO
 -- NOTE: Is this going to be enough ???
 -- Maybe we need a separate statement for e.m(es)
-    Just (te', tf)  -> tcWithThis te $ (, tf) <$> castM (tce_ctx γ) e' te te'
+    Just (te', tf)  -> tcWithThis te $ (, tf) <$> castM l (tce_ctx γ) e' te te'
 
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, PPR r) => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)

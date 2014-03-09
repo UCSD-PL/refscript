@@ -477,7 +477,7 @@ instance PP Integer where
 --------------------------------------------------------------------------------------
 expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> (PState, [Statement (SourceSpan, [Spec])])
 --------------------------------------------------------------------------------------
-expandAnnots = mapAccumL (mapAccumL f) (mempty, 0)
+expandAnnots = mapAccumL (mapAccumL f) (tDefEmpty, 0)
   where f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
 
 --------------------------------------------------------------------------------------

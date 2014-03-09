@@ -390,10 +390,10 @@ unifyTypeM γ l m e t t' = unifyTypesM γ l msg [t] [t']
 -- which is the actual type for @e@ and @t'@ which is the desired (cast) type
 -- and insert the right kind of cast. 
 --------------------------------------------------------------------------------
-castM :: (PPR r) => IContext -> Expression (AnnSSA r) 
+castM :: (PPR r) => AnnSSA r -> IContext -> Expression (AnnSSA r) 
   -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-castM ξ e fromT toT = go =<< thd3 <$> compareTs fromT toT
+castM l ξ e fromT toT = go =<< thd3 <$> convert (ann l) fromT toT
   where go SupT = addDownCast ξ e toT    
         go SubT = addUpCast   ξ e toT   
         go Nth  = addDeadCast ξ e toT   
@@ -411,62 +411,65 @@ findTyIdOrDieM' :: String -> TyID -> TCM r (TDef (RType r))
 findTyIdOrDieM' m i = findTyIdOrDie' m i <$> getDef
 
 
--- | `compareTs` returns:
+-- | `convert` returns:
 -- * An equivalent version of @t1@ that has the same sort as the second (RJ: first?) output
 -- * An equivalent version of @t2@ that has the same sort as the first output
 -- * A subtyping direction between @t1@ and @t2@
--- * The update type definition environment
 --
 -- Padding the input types gives them the same sort, i.e. makes them compatible. 
 ---------------------------------------------------------------------------------------
-compareTs :: (PPR r) => RType r -> RType r -> TCM r (RType r, RType r, SubDirection)
+convert :: (PPR r) => 
+  SourceSpan -> RType r -> RType r -> TCM r (RType r, RType r, SubDirection)
 ---------------------------------------------------------------------------------------
 
-compareTs t1 t2 | t1 `equiv` t2        = return $ (t1, t2, EqT)
+convert _ t1 t2 | t1 `equiv` t2        = return $ (t1, t2, EqT)
 
-compareTs t1 t2 | isUndef t1           = (`setThd3` SubT) <$> compareUnion t1 t2
+convert l t1 t2 | isUndef t1           = (`setThd3` SubT) <$> convertUnion l t1 t2
 
-compareTs t1 t2 | isNull t1 &&  
-                  not (isUndef t2)     = (`setThd3` SubT) <$> compareUnion t1 t2
+convert l t1 t2 | isNull t1 &&  
+                    not (isUndef t2)     = (`setThd3` SubT) <$> convertUnion l t1 t2
 
-compareTs t1 t2 | isTop t2             = (`setThd3` SubT) <$> compareUnion t1 t2
+convert l t1 t2 | isTop t2             = (`setThd3` SubT) <$> convertUnion l t1 t2
 
-compareTs t1 t2 | any isUnion [t1,t2]  = compareUnion t1 t2
+convert l t1 t2 | any isUnion [t1,t2]  = convertUnion l t1 t2
 
-compareTs t1 t2 | all isArr   [t1,t2]  = compareArray t1 t2
+convert l t1 t2 | all isArr   [t1,t2]  = convertArray l t1 t2
 
-compareTs t1 t2 | all isTRef  [t1,t2]  = compareTRefs t1 t2
+convert l t1 t2 | all isTRef  [t1,t2]  = convertTRefs l t1 t2
 
-compareTs t1 t2 | all isTFun  [t1, t2] = compareFun t1 t2
-compareTs (TFun _ _ _)    _            = error "Unimplemented compareTs-1"
-compareTs _               (TFun _ _ _) = error "Unimplemented compareTs-2"
+convert l t1 t2 | all isTFun  [t1, t2] = convertFun l t1 t2
+convert _ (TFun _ _ _)    _            = error "Unimplemented convert-1"
+convert _ _               (TFun _ _ _) = error "Unimplemented convert-2"
 
-compareTs (TAll _ _  ) _               = error "Unimplemented: compareTs-3"
-compareTs _            (TAll _ _  )    = error "Unimplemented: compareTs-4"
+convert _ (TAll _ _  ) _               = error "Unimplemented: convert-3"
+convert _ _            (TAll _ _  )    = error "Unimplemented: convert-4"
 
-compareTs t1           t2              = compareSimple t1 t2 
+convert _ t1           t2              = convertSimple t1 t2 
 
 
--- | `compareTRefs`
---
--- Compare defined types by width (only).
+-- | `convertTRefs`
 -- 
 --------------------------------------------------------------------------------
-compareTRefs :: (PPR r) => RType r -> RType r -> TCM r (RType r, RType r, SubDirection)
+convertTRefs :: (PPR r) => 
+  SourceSpan -> RType r -> RType r -> TCM r (RType r, RType r, SubDirection)
 --------------------------------------------------------------------------------
-compareTRefs t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
+convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
   -- Same exact type name
-  | i1 == i2          = return (t1, t2, parEq)
-  | otherwise = do
+  | i1 == i2 = 
+      if parEq then
+        return (t1, t2, EqT)
+      else
+        tcError $ errorConvDefInvar l t1 t2
 
+  | otherwise = do
       -- Get the type definitions
-      TD n1 v1s pro1 _ <- findTyIdOrDieM' "compareTRefs" i1
-      TD n2 v2s pro2 _ <- findTyIdOrDieM' "compareTRefs" i2
+      d1@(TD n1 v1s pro1 _) <- findTyIdOrDieM' "convertTRefs" i1
+      d2@(TD n2 v2s pro2 _) <- findTyIdOrDieM' "convertTRefs" i2
 
       δ <- getDef
       -- Gather all fields from current and parent classes
-      e1s <- allFlds t1s =<< findTyIdOrDieM' "compareTRefs" i1
-      e2s <- allFlds t2s =<< findTyIdOrDieM' "compareTRefs" i2
+      e1s <- allFlds t1s =<< findTyIdOrDieM' "convertTRefs" i1
+      e2s <- allFlds t2s =<< findTyIdOrDieM' "convertTRefs" i2
     
       -- Field keys
       let ks1 = ks e1s
@@ -482,36 +485,35 @@ compareTRefs t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2)
           cmnTs = (\k -> (k `lkp` toMap e1s, k `lkp` toMap e2s)) <$> cmnKs
           cmnEq = all (uncurry depthEq) cmnTs
 
-      if widthEq && cmnEq then  
-        -- Different type name but structurally equal types
-        return (t1, t2, EqT)
+      if cmnEq then           -- Equal common types
+        if widthEq then           -- Structurally equal types
+          return (t1, t2, EqT)
 
-      else if widthSup && cmnEq then
-        -- UPCAST: Restrict A<S1...> to the fields of B<T1...>
-        -- Here we are using a flat (object literal) type in place 
-        -- of could have been a class type (part of hiararchy). This 
-        -- should be fine since this type will only be used locally 
-        -- for the constraint generation.
-        do
-          let e1s' = filter (\e -> S.member (f_sym e) ks2) e1s
-          i1' <- addObjLitTyM (TD n2 v1s pro2 e1s')
-          return (TApp (TRef i1') t1s r1, t2, SupT)
+        else if widthSup then     -- t1 :> t2
+          -- UPCAST: Restrict A<S1...> to the fields of B<T1...>
+          -- Here we are using a flat (object literal) type in place 
+          -- of could have been a class type (part of hiararchy). This 
+          -- should be fine since this type will only be used locally 
+          -- for the constraint generation.
+          do
+            let e1s' = filter (\e -> S.member (f_sym e) ks2) e1s
+            i1' <- addObjLitTyM (TD n2 v1s pro2 e1s')
+            return (TApp (TRef i1') t1s r1, t2, SupT)
+      
+        else if widthSub then    -- t1 <: t2
+          tcError $ errorMissFlds l d1 d2 (S.toList $ S.difference ks2 ks1)
+        else
+          tcError $ errorConvDef l d1 d2
 
-      else
-        -- Downcast: A<S> :> B<T> or no relation
-        -- FIXME: Instead of using the trivial - and useless most of the times -
-        -- union type here - we can just reject these cases:
-        compareSimple t1 t2
+      else                        -- No depth subtyping
+          tcError $ errorConvDefDepth l d1 d2
 
   where
-      parEq | and (zipWith equiv t1s t2s) = EqT
-            | otherwise                   = Nth -- FIXME ???
-
-      -- Use B<T1...> 's name and prototype.
       -- Aux funcs
-      toMap      = M.fromList . ((\(TE s b t) -> (s, (b,t))) <$>)
-      ks         = S.fromList . (f_sym <$>)
-      lkp k      = fromJust . M.lookup k 
+      parEq   = and (zipWith equiv t1s t2s) 
+      toMap   = M.fromList . ((\(TE s b t) -> (s, (b,t))) <$>)
+      ks      = S.fromList . (f_sym <$>)
+      lkp k   = fromJust . M.lookup k 
 
 
 -- Get all recursively inherited fields for a TDef
@@ -540,34 +542,34 @@ depthEq (b1,t1) (b2, t2) | b1 == b2   = t1 `equiv` t2
 depthEq _       _        | otherwise  = False 
 
 
--- | `compareFun`
+-- | `convertFun`
 
-compareFun (TFun b1s o1 r1) (TFun b2s o2 r2) = do
-  (t1s',t2s',bds) <- unzip3 <$> zipWithM compareTs (b_type <$> b1s) (b_type <$> b2s)
-  (o1',o2',od)  <- compareTs o1 o2
+convertFun l (TFun b1s o1 r1) (TFun b2s o2 r2) = do
+  (t1s',t2s',bds) <- unzip3 <$> zipWithM (convert l) (b_type <$> b1s) (b_type <$> b2s)
+  (o1',o2',od)  <- convert l o1 o2
   let updTs        = zipWith (\b t -> b { b_type = t })
   if length b1s == length b2s && all (== EqT)(od:bds) then
     let t1'        = TFun (updTs b1s t1s') o1' r1
         t2'        = TFun (updTs b2s t2s') o2' r2 in
     return (t1', t2', EqT)
   else 
-    error "[Unimplemented] compareFun with different types"
+    error "[Unimplemented] convertFun with different types"
 
-compareFun _ _ = error "compareFun: no other cases supported"
+convertFun _ _ _ = error "convertFun: no other cases supported"
 
 
--- | `compareSimple`
+-- | `convertSimple`
 --------------------------------------------------------------------------------
-compareSimple :: (PPR r) => RType r -> RType r -> TCM r (RType r, RType r, SubDirection)
+convertSimple :: (PPR r) => RType r -> RType r -> TCM r (RType r, RType r, SubDirection)
 --------------------------------------------------------------------------------
-compareSimple t1 t2
+convertSimple t1 t2
   | t1 `equiv` t2 = return (t1, t2, EqT)
   | otherwise     = return (t1', t2', Nth)
     where t1'     = mkUnion [t1, fmap F.bot t2]  -- Toplevel refs?
           t2'     = mkUnion [fmap F.bot t1, t2]
 
 
--- | `compareUnion`
+-- | `convertUnion`
 
 -- Produces an equivalent type for @t1@ (resp. @t2@) that is extended with 
 -- the missing type terms to the common upper bound of @t1@ and @t2@. The extra
@@ -579,14 +581,15 @@ compareSimple t1 t2
 --  * adjusted type for @t2@ to be sort compatible
 --  * a subtyping direction
 --------------------------------------------------------------------------------
-compareUnion :: (PPR r) => RType r -> RType r -> TCM r (RType r, RType r, SubDirection)   
+convertUnion :: (PPR r) => 
+  SourceSpan -> RType r -> RType r -> TCM r (RType r, RType r, SubDirection)   
 --------------------------------------------------------------------------------
-compareUnion t1 t2 | all (not . isUnion) [t1, t2] = compareSimple t1 t2
-compareUnion t1 t2 | otherwise = do
+convertUnion l t1 t2 | all (not . isUnion) [t1, t2] = convertSimple t1 t2
+convertUnion l t1 t2 | otherwise = do
      
-    -- * The common types (recursively call `compareTs` to compare the types
+    -- * The common types (recursively call `convert` to convert the types
     --   of the parts and join the subtyping relations)
-    (cmn1, cmn2, dirs) <- unzip3 <$> mapM (uncurry compareTs) cmnPs
+    (cmn1, cmn2, dirs) <- unzip3 <$> mapM (uncurry $ convert l) cmnPs
                      
     let t1s' = cmn1 ++ d1s ++ (fmap F.bot <$> d2s)
     let t2s' = cmn2 ++ (fmap F.bot <$> d1s) ++ d2s
@@ -613,11 +616,11 @@ compareUnion t1 t2 | otherwise = do
                   (_ , _ ) -> Nth -- no relation
 
 
--- | `compareArray`
-compareArray (TArr t1 r1) (TArr t2 r2) = do
-  (t1', t2', ad) <- compareTs t1 t2
+-- | `convertArray`
+convertArray l (TArr t1 r1) (TArr t2 r2) = do
+  (t1', t2', ad) <- convert l t1 t2
   return (TArr t1' r1, TArr t2' r2, arrDir ad)
-compareArray _ _ = errorstar "BUG: compareArray can only pad Arrays"
+convertArray _ _ _ = errorstar "BUG: convertArray can only pad Arrays"
 
 
 addUpCast   ξ e t = addCast ξ e (UCST t)

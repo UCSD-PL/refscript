@@ -1,7 +1,7 @@
-class AAAAA {
+class A {
 
 }
 
-/*@ a :: AAAAA */
-var a : AAAAA = new AAAAA();
+/*@ a :: #A */
+var a : A = new A();
 

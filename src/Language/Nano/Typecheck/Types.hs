@@ -92,6 +92,7 @@ module Language.Nano.Typecheck.Types (
   , findTyId, findTyIdOrDie
   , findEltWithDefault
   , symTDefMem
+  , getDefNames
   , sortTDef
 
   -- * Operator Types
@@ -219,6 +220,8 @@ data TDefEnv t = G  { size    :: Int                -- ^ Size of the `env`
                     } deriving (Show, Functor, Data, Typeable)
 
 -- TODO: consider changing names and adding description
+
+getDefNames (G _ _ n) = fst <$> F.toListSEnv n
 
 ---------------------------------------------------------------------------------
 addTySym :: F.Symbol -> TDef t -> TDefEnv t -> (TDefEnv t, TyID)

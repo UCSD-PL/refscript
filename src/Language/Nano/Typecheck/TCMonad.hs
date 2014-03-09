@@ -105,6 +105,7 @@ import           Language.ECMAScript3.Syntax.Annotations
 import qualified System.Console.CmdArgs.Verbosity   as V
 
 type PPR r = (PP r, F.Reftable r)
+type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
 
 
 -------------------------------------------------------------------------------
@@ -282,8 +283,7 @@ getAllAnns = tc_annss <$> get
 
 
 -------------------------------------------------------------------------------
-accumAnn :: (Ord r, F.Reftable r, Substitutable r (Fact r)) =>
-  (TDefEnv (RType r) => AnnInfo r -> [Error]) -> TCM r a -> TCM r a
+accumAnn :: (Ord r, PPRSF r) => (AnnInfo r -> [Error]) -> TCM r a -> TCM r a
 -------------------------------------------------------------------------------
 -- RJ: this function is gross. Why is it being used? why are anns not just
 -- accumulated monotonically?
@@ -292,8 +292,7 @@ accumAnn check act
        modify $ \st -> st {tc_anns = HM.empty}
        z     <- act
        m'    <- getAnns
-       δ     <- getDef
-       forM_ (check δ m') (`logError` ())
+       forM_ (check m') (`logError` ())
        modify $ \st -> st {tc_anns = m} {tc_annss = m' : tc_annss st}
        return z
 

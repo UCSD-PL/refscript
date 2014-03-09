@@ -17,7 +17,7 @@ import qualified Data.HashSet                       as HS
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.Traversable                   as T
 import qualified Data.List                          as L
-import           Data.Maybe                         (catMaybes,  fromMaybe, listToMaybe)
+import           Data.Maybe                         (catMaybes,  fromMaybe, listToMaybe, fromJust)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, render, ($+$), vcat)
@@ -63,13 +63,13 @@ ssa   next p  = ssaTransform p >>= either (lerror . single) (next . expandAliase
 tc    p       = typeCheck p    >>= either unsafe safe
 
 
------------------
+--------------------------------------------------------------------------------
 testFile f = parseNanoFromFile f 
          >>= ssaTransform  
-         >>= either print (\ p -> 
+         >>= either (print . pp) (\ p -> 
                   typeCheck p  
               >>= either (print . vcat . (pp <$>)) (print . pp))
-
+--------------------------------------------------------------------------------
 
 lerror        = return . (NoAnn,) . F.Unsafe
 
@@ -78,8 +78,7 @@ unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n"
                  return $ (NoAnn, F.Unsafe errs)
 
 safe (Nano {code = Src fs})
-  = do V.whenLoud $ printAllAnns fs 
-       nfc       <- noFailCasts <$> getOpts
+  = do nfc       <- noFailCasts <$> getOpts
        return     $ (NoAnn, failCasts nfc fs)
 
 
@@ -105,13 +104,6 @@ castErrors (Ann l facts) = downErrors ++ deadErrors
     downErrors           = [errorDownCast l t | TCast _ (DCST t) <- facts]
     deadErrors           = [errorDeadCast l   | TCast _ (DC _)   <- facts]
 
-printAllAnns fs 
-  = do putStrLn "********************** ALL ANNOTATIONS **********************"
-       forM_ fs $ T.mapM printAnn 
-    where 
-       printAnn (Ann _ []) = return () 
-       printAnn (Ann l fs) = putStrLn $ printf "At %s: %s" (ppshow l) (ppshow fs)
-
 
 -------------------------------------------------------------------------------------------
 typeCheck :: (Data r, Ord r, PPR r) 
@@ -129,10 +121,9 @@ tcNano p@(Nano {code = Src fs})
   = do -- checkTypeDefs p
        setDef     $ defs p
        (fs', γo) <- tcInScope γ $ tcStmts γ fs
-       m         <- concatMaps <$> getAllAnns
+       m         <- tracePP "All Anns" <$> concatMaps <$> getAllAnns
        θ         <- getSubst
        let p1     = p {code = (patchAnn m . apply θ) <$> Src fs'}
-       whenLoud   $ (traceCodePP p1 m θ)
        case γo of 
          Just γ'  -> do  d     <- getDef
                          let p2 = p1 { defs  = d }
@@ -150,34 +141,24 @@ initEnv pgm      = TCE (envUnion (specs pgm) (externs pgm)) (defs pgm) (specs pg
                        emptyContext
 
 
-traceCodePP p {-m s-} _ _ = trace (render $ {- codePP p m s -} pp p) $ return ()
-      
-{-codePP (Nano {code = Src src}) anns sub -}
-{-  =   text "*************************** CODE ****************************************"-}
-{-  $+$ pp src-}
-{-  $+$ text "*************************** SUBSTITUTIONS *******************************"-}
-{-  $+$ pp sub-}
-{-  $+$ text "*************************** ANNOTATIONS **********************************"-}
-{-  $+$ vcat (pp <$> [> annotCasts <] M.toList anns )-}
-{-  $+$ text "*************************************************************************"-}
-
--- -------------------------------------------------------------------------------
--- checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano (AnnSSA r) (RType r) -> TCM r ()
--- -------------------------------------------------------------------------------
--- checkTypeDefs pgm = reportAll $ grep
---   where 
---     ds        = specs pgm 
---     ts        = defs pgm
---     reportAll = mapM_ report
---     report t  = tcError $ errorUnboundType (srcPos t) t
---     -- There should be no undefined type constructors
---     grep :: [Id SourceSpan]        = everything (++) ([] `mkQ` g) ds
---     g (TRef i) | not $ envMem i ts = [i]
---     g _                            = [ ]
---     -- TODO: Also add check for free top-level type variables, i.e. make sure 
---     -- all type variables used are bound. Use something like:
---     -- @everythingWithContext@
-
+{-
+-------------------------------------------------------------------------------
+checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano (AnnSSA r) (RType r) -> TCM r ()
+-------------------------------------------------------------------------------
+checkTypeDefs pgm = reportAll $ grep
+  where 
+    ds        = specs pgm 
+    ts        = defs pgm
+    reportAll = mapM_ report
+    report t  = tcError $ errorUnboundType (srcPos t) t
+    -- There should be no undefined type constructors
+    grep :: [Id SourceSpan]        = everything (++) ([] `mkQ` g) ds
+    g (TRef i) | not $ envMem i ts = [i]
+    g _                            = [ ]
+    -- TODO: Also add check for free top-level type variables, i.e. make sure 
+    -- all type variables used are bound. Use something like:
+    -- @everythingWithContext@
+-}
 
 
 -------------------------------------------------------------------------------
@@ -251,11 +232,10 @@ type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r))
 -- | TypeCheck Scoped Block in Environment ------------------------------------
 -------------------------------------------------------------------------------
 
-tcInScope γ act = do
-    accumAnn annCheck act
+tcInScope γ act = accumAnn annCheck act
   where
     -- Adding type def environment in what is checked in valid
-    annCheck δ  = catMaybes . map (validInst γ δ) . M.toList
+    annCheck = catMaybes . map (validInst γ) . M.toList
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Function -------------------------------------------------------
@@ -274,8 +254,8 @@ tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
 -------------------------------------------------------------------------------
 tcFun1 ::
-  (Ord r, PPR r, IsLocated a1, IsLocated t1, IsLocated a, CallSite t) =>
-  TCEnv r -> a -> t1 -> [Id a1] -> [Statement (AnnSSA r)] -> 
+  (Ord r, PPR r, IsLocated b, IsLocated l, IsLocated a, CallSite t) =>
+  TCEnv r -> a -> l -> [Id b] -> [Statement (AnnSSA r)] -> 
   (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
 tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l body t
@@ -300,9 +280,8 @@ envAddFun f i αs xs ts t = tcEnvAdds tyBinds
     tyBinds                = [(tVarId α, tVar α) | α <- αs]
     varBinds               = zip
     
-validInst γ δ (l, ts)
-  = case [β | β <-  tracePP "free" $ HS.toList $ free ts, not ((tVarId β) `tcEnvMem` γ)
-                                                        , not (F.symbol β `symTDefMem` (tracePP "δ" δ))] of
+validInst γ (l, ts)
+  = case [β | β <- HS.toList $ free ts, not $ tVarId β `tcEnvMem` γ] of
       [] -> Nothing
       βs -> Just $ errorFreeTyVar l βs
 
@@ -315,7 +294,7 @@ tcClassElt :: (Ord r, PPR r)
           => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
 -- FIXME: check for void return type for constructor
-tcClassElt γ cid (Constructor l xs body) = tcClassEltAux l cid f
+tcClassElt γ cid (Constructor l xs body) = tcClassEltAux "constructor" l cid f
   where f ft  =     tcFunTys l id xs ft 
                 >>= foldM (tcFun1 γ l id xs) body 
                 >>= return . Constructor l xs
@@ -323,19 +302,20 @@ tcClassElt γ cid (Constructor l xs body) = tcClassEltAux l cid f
 
 -- The type annotation in variable members is in the VarDecl part so we can use
 -- normal tcVarDecl for that part.
-tcClassElt γ cid (MemberVarDecl l m s v) = tcClassEltAux (getAnnotation v) cid f
+tcClassElt γ cid (MemberVarDecl l m s v) = tcClassEltAux n (getAnnotation v) cid f
     where f _ = tcVarDecl γ v >>= return . MemberVarDecl l m s . fst
+          VarDecl _ n _ = v
 
 tcClassElt γ cid (MemberMethDecl l m s i xs body) = 
-  tcClassEltAux l cid $ 
+  tcClassEltAux i l cid $ 
     \ft -> do body'  <- foldM (tcFun1 γ l i xs) body =<< tcFunTys l i xs ft
               return  $ MemberMethDecl l m s i xs body'
 
-tcClassEltAux l id f = 
+tcClassEltAux s l id f = 
   case [ t | TAnnot t  <- ann_fact l ] of 
-    [  ]  -> tcError    $ errorClEltAnMissing (srcPos l) id
+    [  ]  -> tcError    $ errorClEltAnMissing (srcPos l) id s
     [ft]  -> f ft 
-    _     -> error      $  "tcClassEltType:multi-type constructors " ++ ppshow l
+    _     -> error      $ "tcClassEltType:multi-type constructors " ++ ppshow l
 
 --------------------------------------------------------------------------------
 tcSeq :: (TCEnv r -> a -> TCM r (b, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([b], TCEnvO r)
@@ -459,8 +439,7 @@ tcStmt γ c@(ClassStmt l i e is ce) = do
     let TD _ αs _  _ = findTyIdOrDie cid δ
     let γ'           = tcEnvAdds (tyBinds αs) γ
     let thisT        = TApp (TRef cid) (tVars αs) fTop  
--- FIXME: we need tcInScope here 
-    ce'             <- tcWithThis thisT $ mapM (tcClassElt γ' i) ce
+    ce'             <- tcInScope γ' $ tcWithThis thisT $ mapM (tcClassElt γ' i) ce
     return             (ClassStmt l i e is ce', Just γ)
   where
     tVars   αs       = [ tVar   α | α <- αs ] 
@@ -733,7 +712,7 @@ tcCallMatch γ l fn es ft0
   = do  (es', ts)     <- unzip <$> mapM (tcExpr γ) es
         case calleeType l ts ft0 of 
           -- Try to match it with a non-generic type
-          Just t -> call es' (tracePP "ts" ts) (tracePP "call" t)
+          Just t -> call es' ts t
           -- If this fails, try to instantiate possible generic types found
           -- in the function signature.
           Nothing ->

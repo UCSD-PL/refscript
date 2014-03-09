@@ -78,7 +78,6 @@ Library
 --                        Language.Nano.Typecheck.Types
 --                        Language.Nano.Typecheck.Parse
 --                        Language.Nano.Typecheck.TCMonad
---                        Language.Nano.Typecheck.Compare
 --                        Language.Nano.Typecheck.Subst
 --                        Language.Nano.Typecheck.Lookup
 --                        Language.Nano.Typecheck.Typecheck

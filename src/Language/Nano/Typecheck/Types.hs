@@ -1,142 +1,86 @@
 -- | Global type definitions for Refinement Type Checker
 
-{-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE DeriveFunctor        #-}
-{-# LANGUAGE TupleSections        #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverlappingInstances #-}
-{-# LANGUAGE DeriveDataTypeable   #-}
-{-# LANGUAGE NoMonomorphismRestriction   #-}
+{-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE DeriveDataTypeable        #-}
+{-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 module Language.Nano.Typecheck.Types (
 
   -- * Programs
     Nano (..)
-  , NanoBare
-  , NanoSSA, NanoBareR, NanoSSAR, NanoTSSAR, NanoTypeR 
-  , NanoType
-  , ExprSSAR, StmtSSAR
+  , NanoBare, NanoSSA, NanoBareR, NanoSSAR, NanoTSSAR, NanoTypeR, NanoType, ExprSSAR, StmtSSAR
   , Source (..)
   , FunctionStatement
   , mapCode
 
   -- * (Refinement) Types
-  , RType (..)
-  , Bind (..)
-  , toType
-  , ofType
-  , rTop
-  , strengthen 
+  , RType (..), Bind (..), toType, ofType, rTop, strengthen 
 
   -- * Predicates on Types 
-  , isTop
-  , isNull
-  , isVoid
-  , isUndef
-  , isUnion
+  , isTop, isNull, isVoid, isUndef, isUnion
 
   -- * Constructing Types
-  , mkUnion
-  , mkUnionR
-  , mkFun
-  , mkAll
+  , mkUnion, mkUnionR, mkFun, mkAll
 
   -- * Deconstructing Types
-  , bkFun
-  , bkFuns
-  , bkAll
-  , bkAnd
-  , bkUnion, rUnion
-  , rTypeR, setRTypeR
-  , noUnion
-  , unionCheck
-  , funTys
-  , renameBinds 
+  , bkFun, bkFuns, bkAll, bkAnd, bkUnion, bkPaddedUnion, unionParts, unionParts', funTys
+  
+  -- Union ops
+  , rUnion, rTypeR, setRTypeR, noUnion, unionCheck
+
+  -- Zip types
+  , zipType1, zipType2
+  
+  , renameBinds
   , calleeType
 
   -- * Regular Types
-  , Type
-  , TDef (..)
-  , TVar (..)
-  , TCon (..)
-  , TElt (..)
+  , Type, TDef (..), TVar (..), TCon (..), TElt (..)
 
   -- * Primitive Types
-  , tInt
-  , tBool
-  , tString
-  , tTop
-  , tVoid
-  , tErr
-  , tFunErr
-  , tVar
-  , tArr
-  , tUndef
-  , tNull
-  , tAnd
-  , isTVar
-  , isArr
-  , isTRef
-  , isTFun
-  , fTop
+  , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, tUndef, tNull
+  , tAnd, isTVar, isArr, isTRef, isTFun, fTop
+
+  -- * Type comparison/joining/subtyping
+  , Equivalent
+  , equiv
+  , SubDirection (..), arrDir
 
   -- * Type definition env
   , TyID
-  , TDefEnv
-  , tDefEmpty
-  , addTySym      -- Add symbol with type definition
-  , addSym        -- Add symbol without type definition
-  , addObjLitTy   -- Add an object literal type
-  , findTySym, findTySymOrDie
-  , findTySymWithId
-  , findTyId, findTyIdOrDie
-  , findTyIdOrDie'
-  , findEltWithDefault
-  , symTDefMem
+  , TDefEnv, tDefEmpty
+  , addTySym, addSym, addObjLitTy
+  , findTySym, findTySymOrDie, findTySymWithId, findTyId, findTyIdOrDie
+  , findTyIdOrDie', findEltWithDefault, symTDefMem
   , getDefNames
   , sortTDef
 
   -- * Operator Types
-  , infixOpTy
-  , prefixOpTy 
-  , builtinOpTy
-  , arrayLitTy
+  , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy
 
   -- * Annotations
-  , Annot (..)
-  , UFact
-  , Fact (..)
-  , Cast(..)
-  , phiVarsAnnot
-  , ClassInfo
+  , Annot (..), UFact, Fact (..), Cast(..), phiVarsAnnot, ClassInfo
 
   -- * Aliases for annotated Source 
-  , AnnBare, UAnnBare
-  , AnnSSA , UAnnSSA
-  , AnnType, UAnnType
-  , AnnInfo, UAnnInfo
+  , AnnBare, UAnnBare, AnnSSA , UAnnSSA
+  , AnnType, UAnnType, AnnInfo, UAnnInfo
 
   -- * Contexts
-  , CallSite (..)
-  , IContext
-  , emptyContext
-  , pushContext
+  , CallSite (..), IContext, emptyContext, pushContext
 
   -- * Mutability 
-  , Mutability (..)
-  , writeGlobalVars  
-  , readOnlyVars  
+  , Mutability (..), writeGlobalVars, readOnlyVars  
 
   -- * Aliases
-  , Alias (..)
-  , TAlias
-  , PAlias
-  , PAliasEnv
-  , TAliasEnv
+  , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
 
-  -- * Keywords
-  , thisId
   ) where 
 
 import           Text.Printf
@@ -465,6 +409,221 @@ bkUnion :: RType r -> [RType r]
 ---------------------------------------------------------------------------------
 bkUnion (TApp TUn xs _) = xs
 bkUnion t               = [t]
+
+
+
+type PPR r = (PP r, F.Reftable r)
+
+-- | Type equivalence: This is equality on the raw type level, 
+--  excluding union types.
+
+class Equivalent a where 
+  equiv :: a -> a -> Bool
+
+instance Equivalent a => Equivalent [a] where
+  equiv a b = and $ zipWith equiv a b 
+
+instance Equivalent (RType r) where 
+  equiv t t'  | toType t == toType t' = True
+  equiv t t'  | any isUnion [t,t'] = 
+  -- FIXME: 
+  --
+  --  ∀j. ∃i. Si ~ Tj  
+  --  ∀i. ∃j. Si ~ Tj  
+  -- -----------------
+  --  \/ Si ~ \/ Tj
+  --
+    errorstar (printf "equiv: no unions: %s\n\t\t%s" 
+    (ppshow $ toType t) (ppshow $ toType t'))
+  equiv (TApp c ts _) (TApp c' ts' _) = c `equiv` c' && ts `equiv` ts'
+  equiv (TVar v _   ) (TVar v' _    ) = v == v'
+  equiv (TFun b o _ ) (TFun b' o' _ ) = 
+    (b_type <$> b) `equiv` (b_type <$> b') && o `equiv` o' 
+  equiv (TAll _ _   ) (TAll _ _     ) = error "equiv-tall"
+  equiv _             _               = False
+
+instance Equivalent TCon where
+  equiv (TRef i) (TRef i')  = i == i'
+  equiv c        c'         = c == c'
+
+instance PPR r => Equivalent (TElt (RType r)) where 
+  equiv (TE _ b1 t1) (TE _ b2 t2) = b1 == b2 && equiv t1 t2
+
+instance Equivalent (Bind r) where 
+  equiv (B s t) (B s' t') = s == s' && equiv t t' 
+
+instance Equivalent (Id a) where 
+  equiv i i' = F.symbol i == F.symbol i'
+
+
+---------------------------------------------------------------------------------------
+-- Subtyping direction ----------------------------------------------------------------
+---------------------------------------------------------------------------------------
+
+-- | Subtyping directions
+data SubDirection = SubT    -- Subtype
+                  | SupT    -- Supertype
+                  | EqT     -- Same type
+                  | Nth     -- No relation
+                  deriving (Eq, Show)
+
+instance PP SubDirection where 
+  pp SubT = text "<:"
+  pp SupT = text ":>"
+  pp EqT  = text "≈"
+  pp Nth  = text "≠"
+
+-- The Subtyping directions form a monoid both as a `sum` and as a `product`, 
+-- cause they are combined in different ways when used in unions and object (the
+-- two places where subtyping occurs).
+
+-- Sum: Relaxed version (To be used in unions)
+instance Monoid SubDirection where
+  mempty = EqT
+  d    `mappend` d'   | d == d' = d
+  -- We know nothing about the types so far (Nth), but we can use the other part
+  -- to make any assumptions, that's why @d@ is propagated.
+  Nth  `mappend` _              = Nth
+  _    `mappend` Nth            = Nth
+  EqT  `mappend` d              = d
+  d    `mappend` EqT            = d
+  _    `mappend` _              = Nth
+
+arrDir     :: SubDirection -> SubDirection
+arrDir EqT = EqT
+arrDir _   = Nth
+
+
+--------------------------------------------------------------------------------
+bkPaddedUnion :: String -> RType r -> RType r -> [(RType r, RType r)]
+--------------------------------------------------------------------------------
+bkPaddedUnion msg t1 t2 =
+  zipWith check (bkUnion t1) (bkUnion t2)
+  where check t t' | equiv t t' = (t,t')
+                   | otherwise  = 
+                   errorstar $ printf "bkPaddedUnion[%s]\n\t%s\nand\n\t%s" 
+                     msg (ppshow $ toType t1) (ppshow $ toType t2) 
+
+
+-- | `unionParts`
+
+-- Special case of `unionParts'` that uses `Equivalent` as the type
+-- equivalence relation.
+--------------------------------------------------------------------------------
+unionParts ::  RType r -> RType r -> ([(RType r, RType r)], [RType r], [RType r])
+--------------------------------------------------------------------------------
+unionParts = unionParts' equiv
+
+
+-- General purpose function that pairs up the components of the two union typed
+-- inputs @t1@ and @t2@, based on the Equivalence relation @eq@.
+-- Top-level refinements are lost here - use `compareUnion` to preserve them.
+-- The output consists of 
+-- * The paired-up types (common as per @eq@)
+-- * The types appearing just in @t1@
+-- * The types appearing just in @t2@
+--------------------------------------------------------------------------------
+unionParts' :: (RType r -> RType r -> Bool) -> RType r -> RType r 
+          -> ([(RType r, RType r)], [RType r], [RType r])
+--------------------------------------------------------------------------------
+unionParts' eq t1 t2 = (common t1s t2s, d1s, d2s)
+  where
+    (t1s, t2s) = sanityCheck $ mapPair bkUnion (t1, t2)
+    (d1s, d2s) = distinct t1s t2s
+    -- Compare the types based on the Equivalence relation and pair them up into
+    -- 1. type structures that are common in both sides, and
+    common xs ys | any null [xs,ys] = []
+    common xs ys | otherwise        = [(x,y) | x <- xs, y <- ys, x `eq` y ]
+    -- 2. type structures that are distinct in the two sides
+    distinct xs [] = ([], xs)
+    distinct [] ys = (ys, [])
+    distinct xs ys = ([x | x <- xs, not $ any (x `eq`) ys ],
+                      [y | y <- ys, not $ any (y `eq`) xs ])
+
+    sanityCheck ([ ],[ ]) = errorstar "unionParts', called on too small input"
+    sanityCheck ([_],[ ]) = errorstar "unionParts', called on too small input"
+    sanityCheck ([ ],[_]) = errorstar "unionParts', called on too small input"
+    sanityCheck ([_],[_]) = errorstar "unionParts', called on too small input"
+    sanityCheck p         = p
+
+
+
+distinctBs b1 [] = (b_sym <$> b1, []          )
+distinctBs [] b2 = ([]          , b_sym <$> b2)
+distinctBs b1 b2 = (diff m1 m2  , diff m2 m1  )
+  where
+    m1           = bindsMap b1
+    m2           = bindsMap b2
+    diff m m'    = M.keys $ M.difference m m'
+
+bindsMap bs      = M.fromList [(s, t) | B s t <- bs]
+
+-- Direction from distinct keys
+distDir xs ys 
+  | null (xs ++ ys) = EqT
+  | null xs         = SupT
+  | null ys         = SubT
+  | otherwise       = Nth
+
+meetBinds b1s b2s = M.toList $ M.intersectionWith (,) (bindsMap b1s) (bindsMap b2s)
+
+-- | Helper
+instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
+  pp (a,b,c,d) = pp a <+>  pp b <+> pp c <+> pp d
+
+
+-- | `zipType1` matches structurally equivalent parts of types @t1@ and @t2@:
+-- * Keeping the the structure of @t1@
+-- * Applying f on the respective refinements 
+-- * f is commutative
+-- 
+-- E.g. zipType1 (number + { boolean | p } ) { number | v > 0 } meet = 
+--        { number | v > 0 } + { boolean | p } 
+zipType1 δ f t1 t2 = zipType2 δ f t2 t1
+
+
+-- | `zipType2` walks through the equivalent parts of types @t1@ and @t2@. It 
+-- applies function $f$ on the refinements of the equivalent parts and keeps the
+-- output as the resulting refinement. 
+-- The shape of @t2@ is preserved in the output.
+--------------------------------------------------------------------------------
+zipType2 :: (PP r, F.Reftable r) => TDefEnv (RType r) -> (r -> r -> r) ->  RType r -> RType r -> RType r
+--------------------------------------------------------------------------------
+zipType2 δ f (TApp TUn ts r) (TApp TUn ts' r')  = 
+  TApp TUn (zipTypes δ f ts <$> ts') $ f r r'
+
+zipType2 δ f (TApp TUn ts _) t =  
+  zipTypes δ f ts t
+
+zipType2 δ f t (TApp TUn ts' r') =  
+  TApp TUn (zipTypes δ f [t] <$> ts') r'        -- The top-level refinement for t' should remain
+
+zipType2 δ f (TApp d@(TRef _) ts r) (TApp d'@(TRef _) ts' r') | d == d' =
+  TApp d' (zipWith (zipType2 δ f) ts ts') $ f r r'
+
+zipType2 _ f (TApp c [] r) (TApp c' [] r')    | c == c' = 
+  TApp c [] $ f r r'
+
+zipType2 _ f (TVar v r) (TVar v' r') | v == v' = TVar v $ f r r'
+
+zipType2 δ f (TFun xts t r) (TFun xts' t' r') = 
+  TFun (safeZipWith "zipType2:TFun" (zipBind2 δ f) xts xts') (zipType2 δ f t t') $ f r r'
+
+zipType2 δ f (TArr t r) (TArr t' r') = TArr (zipType2 δ f t t') $ f r r'
+
+zipType2 _ _ t t' = 
+  errorstar $ printf "BUG[zipType2]: mis-aligned types:\n\t%s\nand\n\t%s" (ppshow t) (ppshow t')
+
+zipTypes δ f ts t = 
+  case filter (equiv t) ts of
+    [  ] -> t
+    [t'] -> zipType2 δ f t' t
+    _    -> errorstar "BUG[zipType]: multiple equivalent types" 
+  
+
+zipBind2 δ f (B s t) (B s' t') | s == s' = B s $ zipType2 δ f t t' 
+zipBind2 _ _ _       _                   = errorstar "BUG[zipBind2]: mis-matching binders"
+
 
 
 -- | Strengthen the top-level refinement
@@ -1027,8 +1186,6 @@ prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
 
 
 builtinId       = mkId . ("builtin_" ++)
-
-thisId          = mkId "__this__" 
 
 -----------------------------------------------------------------------
 -- Type and Predicate Aliases -----------------------------------------

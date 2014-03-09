@@ -362,21 +362,22 @@ freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
 
 ----------------------------------------------------------------------------------
 unifyTypesM :: (Ord r, PP r, F.Reftable r) => 
-  TDefEnv (RType r) -> SourceSpan -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
+  SourceSpan -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
-unifyTypesM γ l msg t1s t2s
+unifyTypesM l msg t1s t2s
   -- TODO: This check might be done multiple times
   | length t1s /= length t2s = tcError $ errorArgMismatch l 
   | otherwise                = do θ <- getSubst 
-                                  case unifys l γ θ t1s t2s of
+                                  δ <- getDef
+                                  case unifys l δ θ t1s t2s of
                                     Left err' -> tcError $ catMessage err' msg 
                                     Right θ'  -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------
 unifyTypeM :: (Ord r, PrintfArg t1, PP r, PP a, F.Reftable r) =>
-  TDefEnv (RType r) -> SourceSpan -> t1 -> a -> RType r -> RType r -> TCM r (RSubst r)
+  SourceSpan -> t1 -> a -> RType r -> RType r -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
-unifyTypeM γ l m e t t' = unifyTypesM γ l msg [t] [t']
+unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
   where 
     msg               = ppshow $ errorWrongType l m e t t'
 

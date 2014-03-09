@@ -97,7 +97,6 @@ import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Unify
-import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Errors
 import           Data.Monoid                  
 import qualified Data.HashMap.Strict                as M

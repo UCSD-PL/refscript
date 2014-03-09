@@ -29,7 +29,6 @@ import           Language.Nano.Types
 import           Language.Nano.Annots
 import           Language.Nano.Env
 import           Language.Nano.Misc
-import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad

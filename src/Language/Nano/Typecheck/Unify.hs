@@ -21,7 +21,6 @@ import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors 
 import           Language.Nano.Errors 
 import           Language.Nano.Typecheck.Types
-import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Typecheck.Subst
 
 

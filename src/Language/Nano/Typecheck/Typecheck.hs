@@ -141,7 +141,7 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs
     fs'          = [f | f@(TypInst _ _) <- M.lookupDefault [] l m]
     fs''         = [f | f@(Overload (Just _)) <- M.lookupDefault [] l m]
 
-initEnv pgm      = TCE (envUnion (specs pgm) (externs pgm)) (defs pgm) (specs pgm)
+initEnv pgm      = TCE (envUnion (specs pgm) (externs pgm)) (specs pgm)
                        emptyContext
 
 
@@ -180,10 +180,6 @@ data TCEnv r  = TCE {
     tce_env  :: Env (RType r)               -- ^ This starts off the same
                                             --   as tce_spec, but grows with
                                             --   typechecking
-  -- FIXME: keep tce_defs here?
-  -- This will cause problems cause this env will not be appropriately updated
-  -- We SHOULD really be using the monad state version !!!
-  , tce_defs :: TDefEnv (RType r)           -- ^ Data type definitions
   , tce_spec :: Env (RType r)               -- ^ Program specs. Includes:
                                             --    * functions 
                                             --    * variable annotations
@@ -194,12 +190,12 @@ data TCEnv r  = TCE {
 
 -- XXX: Who needs this?
 instance PPR r => Substitutable r (TCEnv r) where 
-  apply θ (TCE m d sp c) = TCE (apply θ m) d (apply θ sp) c 
+  apply θ (TCE m sp c) = TCE (apply θ m) (apply θ sp) c 
 
 instance PPR r => PP (TCEnv r) where
   pp = ppTCEnv
 
-ppTCEnv (TCE env _ spc ctx) 
+ppTCEnv (TCE env spc ctx) 
   =   text "******************** Environment ************************"
   $+$ pp env
   $+$ text "******************** Specifications *********************"
@@ -393,7 +389,7 @@ tcStmt γ (IfSingleStmt l b s)
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
   = do (e', t)   <- tcExpr γ e 
-       unifyTypeM (tce_defs γ) (srcPos l) "If condition" e t tBool
+       unifyTypeM (srcPos l) "If condition" e t tBool
        (s1', γ1) <- tcStmt γ s1
        (s2', γ2) <- tcStmt γ s2
        z         <- envJoin l γ γ1 γ2
@@ -402,7 +398,7 @@ tcStmt γ (IfStmt l e s1 s2)
 -- while c { b } ; exit environment is entry as may skip. SSA adds phi-asgn prior to while.
 tcStmt γ (WhileStmt l c b) 
   = do (c', t)   <- tcExpr γ c
-       unifyTypeM (tce_defs γ) (srcPos l) "While condition" c t tBool
+       unifyTypeM (srcPos l) "While condition" c t tBool
        (b', _)   <- tcStmt γ' b
        return       (WhileStmt l c' b', Just γ)  
     where 
@@ -420,7 +416,7 @@ tcStmt γ (ReturnStmt l eo)
                          Nothing -> return (Nothing, tVoid)
                          Just e  -> mapFst Just <$>  tcExpr γ e
         let rt       = tcEnvFindReturn γ 
-        θ           <- unifyTypeM (tce_defs γ) (srcPos l) "Return" eo t rt
+        θ           <- unifyTypeM (srcPos l) "Return" eo t rt
         -- Apply the substitution
         let (rt',t') = mapPair (apply θ) (rt,t)
         -- Subtype the arguments against the formals and cast using subtyping result
@@ -753,7 +749,8 @@ tcCallCaseTry γ l fn _ ts ft
        θ             <- getSubst 
        --HACK - erase latest annotation on l
        remAnn         $ (srcPos l)
-       return         $ unifys (ann l) (tce_defs γ) θ ts its
+       δ             <- getDef
+       return         $ unifys (ann l) δ θ ts its
 
 tcCallCase γ l fn es' ts ft 
   = do let ξ          = tce_ctx γ
@@ -761,7 +758,7 @@ tcCallCase γ l fn es' ts ft
        (_,ibs,ot)    <- instantiate l ξ fn ft
        let its        = b_type <$> ibs
        -- Unify with formal parameter types
-       θ             <- unifyTypesM (tce_defs γ) (srcPos l) "tcCall" ts its
+       θ             <- unifyTypesM (srcPos l) "tcCall" ts its
        -- Apply substitution
        let (ts',its') = mapPair (apply θ) (ts, its)
        -- Subtype the arguments against the formals and up/down cast if needed 

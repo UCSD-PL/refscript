@@ -21,7 +21,7 @@ module Language.Nano.Typecheck.Compare (
   , unionParts, unionParts'
   , bkPaddedUnion
 
-  , (&+&), mconcatS, arrDir
+  , arrDir
   
   -- * Casting
   , compareTs
@@ -123,18 +123,13 @@ type Casts_ r = M.HashMap (Expression (AnnSSA r)) (Cast (RType r))
 data SubDirection = SubT    -- Subtype
                   | SupT    -- Supertype
                   | EqT     -- Same type
-                  --TODO: is Rel necessary ???
-                  | Rel     -- Relatable type: can be thought of in terms of 
-                            -- unions as a non-empty intersection of two types,
-                            -- but not strong enough to be SubT, SupT, ot EqT
-                  | Nth     -- No relation between two types is known
+                  | Nth     -- No relation
                   deriving (Eq, Show)
 
 instance PP SubDirection where 
   pp SubT = text "<:"
   pp SupT = text ":>"
   pp EqT  = text "≈"
-  pp Rel  = text "⨝"
   pp Nth  = text "≠"
 
 -- The Subtyping directions form a monoid both as a `sum` and as a `product`, 
@@ -142,50 +137,17 @@ instance PP SubDirection where
 -- two places where subtyping occurs).
 
 -- Sum: Relaxed version (To be used in unions)
-instance Monoid (Sum SubDirection) where
-  mempty = Sum EqT
-
-  Sum d    `mappend` Sum d'   | d == d' = Sum d
-  
+instance Monoid SubDirection where
+  mempty = EqT
+  d    `mappend` d'   | d == d' = d
   -- We know nothing about the types so far (Nth), but we can use the other part
   -- to make any assumptions, that's why @d@ is propagated.
-  Sum Nth  `mappend` Sum _              = Sum Rel
-  Sum _    `mappend` Sum Nth            = Sum Rel
+  Nth  `mappend` _              = Nth
+  _    `mappend` Nth            = Nth
+  EqT  `mappend` d              = d
+  d    `mappend` EqT            = d
+  _    `mappend` _              = Nth
 
-  Sum EqT  `mappend` Sum d              = Sum d
-  Sum d    `mappend` Sum EqT            = Sum d
-  
-  Sum _    `mappend` Sum _              = Sum Rel
-
-
-(&+&)   :: Monoid (Sum t) => t -> t -> t
-a &+& b = getSum $ mappend (Sum a) (Sum b)
-
-mconcatS   :: Monoid (Sum t) => [t] -> t
-mconcatS xs = getSum $ mconcat (Sum <$> xs)
-
-
--- -- Product: Strict version (To be used in objects)
--- instance Monoid (Product SubDirection) where
---   mempty = Product EqT
--- 
---   Product d    `mappend` Product d'   | d == d' = Product d
---   
---   Product Nth  `mappend` Product _              = Product Nth
---   Product _    `mappend` Product Nth            = Product Nth
--- 
---   Product EqT  `mappend` Product d              = Product d
---   Product d    `mappend` Product EqT            = Product d
---   
---   Product _    `mappend` Product _              = Product Nth
--- 
--- 
--- 
--- (&*&)   :: Monoid (Product t) => t -> t -> t 
--- a &*& b = getProduct $ mappend (Product a) (Product b)
-
-mconcatP   :: Monoid (Product t) => [t] -> t
-mconcatP xs = getProduct $ mconcat (Product <$> xs)
 
 arrDir     :: SubDirection -> SubDirection
 arrDir EqT = EqT
@@ -196,12 +158,12 @@ arrDir _   = Nth
 -- SubType API ------------------------------------------------------------------
 ---------------------------------------------------------------------------------
 -- isSubType :: (F.Reftable r, Ord r, PP r) => TDefEnv (RType r) -> RType r -> RType r -> Bool
--- isSubType γ t1 t2 = (fth4 $ compareTs γ t1 t2) `elem` [EqT, SubT]
+-- isSubType δ t1 t2 = (fth4 $ compareTs δ t1 t2) `elem` [EqT, SubT]
 
 -- | `alignTs`
--- alignTs γ t1 t2     = (t1', t2')
+-- alignTs δ t1 t2     = (t1', t2')
 --   where 
---     (_,t1', t2', _) = compareTs γ t1 t2
+--     (_,t1', t2', _) = compareTs δ t1 t2
 
 
 --------------------------------------------------------------------------------
@@ -291,30 +253,30 @@ compareTs :: (PPR r) => TDefEnv (RType r) -> RType r -> RType r
   -> (RType r, RType r, SubDirection, TDefEnv (RType r))
 ---------------------------------------------------------------------------------------
 
-compareTs γ t1 t2 | t1 `equiv` t2        = (t1, t2, EqT, γ)
+compareTs δ t1 t2 | t1 `equiv` t2        = (t1, t2, EqT, δ)
 
-compareTs γ t1 t2 | isUndef t1           = setThd4 (compareUnion γ t1 t2) SubT
+compareTs δ t1 t2 | isUndef t1           = setThd4 (compareUnion δ t1 t2) SubT
 
-compareTs γ t1 t2 | isNull t1 &&  
-                    not (isUndef t2)     = setThd4 (compareUnion γ t1 t2) SubT
+compareTs δ t1 t2 | isNull t1 &&  
+                    not (isUndef t2)     = setThd4 (compareUnion δ t1 t2) SubT
 
-compareTs γ t1 t2 | isTop t2             = setThd4 (compareUnion γ t1 t2) SubT
+compareTs δ t1 t2 | isTop t2             = setThd4 (compareUnion δ t1 t2) SubT
 
-compareTs γ t1 t2 | any isUnion [t1,t2]  = compareUnion γ t1 t2
+compareTs δ t1 t2 | any isUnion [t1,t2]  = compareUnion δ t1 t2
 
-compareTs γ t1 t2 | all isArr   [t1,t2]  = compareArray γ t1 t2
+compareTs δ t1 t2 | all isArr   [t1,t2]  = compareArray δ t1 t2
 
 -- FIX: This should be updating the result with the new env
-compareTs γ t1 t2 | all isTRef  [t1,t2]  = compareTRefs γ t1 t2
+compareTs δ t1 t2 | all isTRef  [t1,t2]  = compareTRefs δ t1 t2
 
-compareTs γ t1 t2 | all isTFun  [t1, t2] = compareFun γ t1 t2
+compareTs δ t1 t2 | all isTFun  [t1, t2] = compareFun δ t1 t2
 compareTs _ (TFun _ _ _)    _            = error "Unimplemented compareTs-1"
 compareTs _ _               (TFun _ _ _) = error "Unimplemented compareTs-2"
 
 compareTs _ (TAll _ _  ) _               = error "Unimplemented: compareTs-3"
 compareTs _ _            (TAll _ _  )    = error "Unimplemented: compareTs-4"
 
-compareTs γ t1           t2              = compareSimple γ t1 t2 
+compareTs δ t1           t2              = compareSimple δ t1 t2 
 
 
 
@@ -328,24 +290,24 @@ compareTs γ t1           t2              = compareSimple γ t1 t2
 compareTRefs :: (PPR r) => TDefEnv (RType r) -> RType r -> RType r 
     -> (RType r, RType r, SubDirection, TDefEnv (RType r))
 --------------------------------------------------------------------------------
-compareTRefs γ t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
+compareTRefs δ t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
   -- Same exact type name
-  | i1 == i2          = (t1, t2, parEq, γ)
+  | i1 == i2          = (t1, t2, parEq, δ)
   -- Difference type name but equal types
-  | cmnEq && widthEq  = (t1, t2, EqT, γ)
+  | cmnEq && widthEq  = (t1, t2, EqT, δ)
   -- Upcast  : A<S> <: B<T>
-  | cmnEq && widthSup = (TApp (TRef i1') t1s r1, t2, SupT, γ')
+  | cmnEq && widthSup = (TApp (TRef i1') t1s r1, t2, SupT, δ')
   -- Downcast: A<S> :> B<T>
-  | cmnEq && widthSub = compareSimple γ t1 t2
+  | cmnEq && widthSub = compareSimple δ t1 t2
   -- No relation
-  | otherwise         = compareSimple γ t1 t2
+  | otherwise         = compareSimple δ t1 t2
   where
     parEq | and (zipWith equiv t1s t2s) = EqT
           | otherwise                   = Nth
     -- Restrict A<S1...> to the fields of B<T1...>,
     e1s''      = filter (\e -> S.member (f_sym e) ks2) e1s
     -- Use B<T1...> 's name and prototype.
-    (γ', i1')  = addObjLitTy (TD n2 v1s pro2 e1s'') γ   
+    (δ', i1')  = addObjLitTy (TD n2 v1s pro2 e1s'') δ   
     -- Equal types at the common fields
     cmnEq      = all (uncurry depthEq) cmnTs
     cmnTs      = (\k -> (k `lkp` toMap e1s', k `lkp` toMap e2s')) <$> cmnKs
@@ -358,8 +320,8 @@ compareTRefs γ t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2)
     e1s'       = apply (fromList $ zip v1s t1s) e1s
     e2s'       = apply (fromList $ zip v2s t2s) e2s
     -- Get the type definitions
-    TD n1 v1s pro1 e1s = findTyIdOrDie i1 γ 
-    TD n2 v2s pro2 e2s = findTyIdOrDie i2 γ
+    TD n1 v1s pro1 e1s = findTyIdOrDie' "compareTRefs" i1 δ 
+    TD n2 v2s pro2 e2s = findTyIdOrDie' "compareTRefs" i2 δ
     -- Field keys
     ks1        = ks e1s
     ks2        = ks e2s
@@ -381,13 +343,13 @@ depthEq _       _        | otherwise  = False
 
 -- | `compareFun`
 
-compareFun γ (TFun b1s o1 r1) (TFun b2s o2 r2) 
-  | length b1s == length b2s && sameTypes = (t1', t2', EqT, γ)
+compareFun δ (TFun b1s o1 r1) (TFun b2s o2 r2) 
+  | length b1s == length b2s && sameTypes = (t1', t2', EqT, δ)
   | otherwise = error "[Unimplemented] compareFun with different types"
     where
       sameTypes         = all (== EqT) $ od:bds
-      (t1s',t2s',bds,_) = unzip4 $ zipWith (compareTs γ) (b_type <$> b1s) (b_type <$> b2s)
-      (o1',o2',od,_)    = compareTs γ o1 o2
+      (t1s',t2s',bds,_) = unzip4 $ zipWith (compareTs δ) (b_type <$> b1s) (b_type <$> b2s)
+      (o1',o2',od,_)    = compareTs δ o1 o2
       t1'               = TFun (updTs b1s t1s') o1' r1
       t2'               = TFun (updTs b2s t2s') o2' r2
       updTs             = zipWith (\b t -> b { b_type = t })
@@ -400,9 +362,9 @@ compareFun _ _ _ = error "compareFun: no other cases supported"
 compareSimple :: (PPR r) => TDefEnv (RType r) -> RType r -> RType r 
   -> (RType r, RType r, SubDirection, TDefEnv (RType r))
 --------------------------------------------------------------------------------
-compareSimple γ t1 t2
-  | t1 `equiv` t2 = (t1, t2, EqT, γ)
-  | otherwise     = (t1', t2', Nth, γ)
+compareSimple δ t1 t2
+  | t1 `equiv` t2 = (t1, t2, EqT, δ)
+  | otherwise     = (t1', t2', Nth, δ)
     where t1'     = mkUnion [t1, fmap F.bot t2]  -- Toplevel refs?
           t2'     = mkUnion [fmap F.bot t1, t2]
 
@@ -430,10 +392,10 @@ compareUnion ::  (PPR r) =>
                 SubDirection,   -- Subtyping relation between LHS and RHS
                 TDefEnv (RType r))
 --------------------------------------------------------------------------------
-compareUnion γ t1 t2 | all (not . isUnion) [t1, t2] 
-                     = compareSimple γ t1 t2
-compareUnion γ t1 t2 | otherwise                    
-                     = (mkUnionR r1 $ t1s, mkUnionR r2 $ t2s, direction, γ)
+compareUnion δ t1 t2 | all (not . isUnion) [t1, t2] 
+                     = compareSimple δ t1 t2
+compareUnion δ t1 t2 | otherwise                    
+                     = (mkUnionR r1 $ t1s, mkUnionR r2 $ t2s, direction, δ)
   where
     -- Extract top-level refinements
     (r1, r2) = mapPair rUnion (t1, t2)
@@ -443,9 +405,9 @@ compareUnion γ t1 t2 | otherwise
     t2s'       = commonT2s ++ (fmap F.bot <$> d1s) ++ d2s
     commonT1s  = fst4 <$> commonTs
     commonT2s  = snd4 <$> commonTs
-    commonTs = map (uncurry $ compareTs γ) cmnPs
+    commonTs = map (uncurry $ compareTs δ) cmnPs
     -- To figure out the direction of the subtyping, we must take into account:
-    direction  = distSub &+& comSub
+    direction  = distSub `mappend` comSub
     -- * The distinct types (the one that has more is a supertype)
     distSub   = case (d1s, d2s) of
                   ([], []) -> EqT
@@ -454,13 +416,13 @@ compareUnion γ t1 t2 | otherwise
                   (_ , _ ) -> Nth -- no relation
     -- * The common types (recursively call `compareTs` to compare the types
     --   of the parts and join the subtyping relations)
-    comSub     = mconcatS $ thd4 <$> commonTs
+    comSub     = mconcat $ thd4 <$> commonTs
     (cmnPs, d1s, d2s) = unionParts t1 t2
 
 
 -- | `compareArray`
-compareArray γ (TArr t1 r1) (TArr t2 r2) = (TArr t1' r1, TArr t2' r2, arrDir ad, γ)
-  where (t1', t2', ad, _) = compareTs γ t1 t2
+compareArray δ (TArr t1 r1) (TArr t2 r2) = (TArr t1' r1, TArr t2' r2, arrDir ad, δ)
+  where (t1', t2', ad, _) = compareTs δ t1 t2
 compareArray _ _ _ = errorstar "BUG: compareArray can only pad Arrays"     
 
 
@@ -476,7 +438,7 @@ instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
 -- 
 -- E.g. zipType1 (number + { boolean | p } ) { number | v > 0 } meet = 
 --        { number | v > 0 } + { boolean | p } 
-zipType1 γ f t1 t2 = zipType2 γ f t2 t1
+zipType1 δ f t1 t2 = zipType2 δ f t2 t1
 
 
 -- | `zipType2` walks through the equivalent parts of types @t1@ and @t2@. It 
@@ -486,38 +448,38 @@ zipType1 γ f t1 t2 = zipType2 γ f t2 t1
 --------------------------------------------------------------------------------
 zipType2 :: (PP r, F.Reftable r) => TDefEnv (RType r) -> (r -> r -> r) ->  RType r -> RType r -> RType r
 --------------------------------------------------------------------------------
-zipType2 γ f (TApp TUn ts r) (TApp TUn ts' r')  = 
-  TApp TUn (zipTypes γ f ts <$> ts') $ f r r'
+zipType2 δ f (TApp TUn ts r) (TApp TUn ts' r')  = 
+  TApp TUn (zipTypes δ f ts <$> ts') $ f r r'
 
-zipType2 γ f (TApp TUn ts _) t =  
-  zipTypes γ f ts t
+zipType2 δ f (TApp TUn ts _) t =  
+  zipTypes δ f ts t
 
-zipType2 γ f t (TApp TUn ts' r') =  
-  TApp TUn (zipTypes γ f [t] <$> ts') r'        -- The top-level refinement for t' should remain
+zipType2 δ f t (TApp TUn ts' r') =  
+  TApp TUn (zipTypes δ f [t] <$> ts') r'        -- The top-level refinement for t' should remain
 
-zipType2 γ f (TApp d@(TRef _) ts r) (TApp d'@(TRef _) ts' r') | d == d' =
-  TApp d' (zipWith (zipType2 γ f) ts ts') $ f r r'
+zipType2 δ f (TApp d@(TRef _) ts r) (TApp d'@(TRef _) ts' r') | d == d' =
+  TApp d' (zipWith (zipType2 δ f) ts ts') $ f r r'
 
 zipType2 _ f (TApp c [] r) (TApp c' [] r')    | c == c' = 
   TApp c [] $ f r r'
 
 zipType2 _ f (TVar v r) (TVar v' r') | v == v' = TVar v $ f r r'
 
-zipType2 γ f (TFun xts t r) (TFun xts' t' r') = 
-  TFun (safeZipWith "zipType2:TFun" (zipBind2 γ f) xts xts') (zipType2 γ f t t') $ f r r'
+zipType2 δ f (TFun xts t r) (TFun xts' t' r') = 
+  TFun (safeZipWith "zipType2:TFun" (zipBind2 δ f) xts xts') (zipType2 δ f t t') $ f r r'
 
-zipType2 γ f (TArr t r) (TArr t' r') = TArr (zipType2 γ f t t') $ f r r'
+zipType2 δ f (TArr t r) (TArr t' r') = TArr (zipType2 δ f t t') $ f r r'
 
 zipType2 _ _ t t' = 
   errorstar $ printf "BUG[zipType2]: mis-aligned types:\n\t%s\nand\n\t%s" (ppshow t) (ppshow t')
 
-zipTypes γ f ts t = 
+zipTypes δ f ts t = 
   case filter (equiv t) ts of
     [  ] -> t
-    [t'] -> zipType2 γ f t' t
+    [t'] -> zipType2 δ f t' t
     _    -> errorstar "BUG[zipType]: multiple equivalent types" 
   
 
-zipBind2 γ f (B s t) (B s' t') | s == s' = B s $ zipType2 γ f t t' 
+zipBind2 δ f (B s t) (B s' t') | s == s' = B s $ zipType2 δ f t t' 
 zipBind2 _ _ _       _                   = errorstar "BUG[zipBind2]: mis-matching binders"
 

@@ -66,9 +66,13 @@ tc    p       = typeCheck p    >>= either unsafe safe
 --------------------------------------------------------------------------------
 testFile f = parseNanoFromFile f 
          >>= ssaTransform  
-         >>= either (print . pp) (\ p -> 
-                  typeCheck p  
-              >>= either (print . vcat . (pp <$>)) (print . pp))
+         >>= either (print . pp) (\p -> 
+             typeCheck p  
+         >>= either (print . vcat . (pp <$>)) 
+                    (\p'@(Nano {code=Src ss}) -> 
+                          print (pp p')
+                      >>  print "Casts:"
+                      >> print (pp $ getCasts ss)))
 --------------------------------------------------------------------------------
 
 lerror        = return . (NoAnn,) . F.Unsafe
@@ -87,29 +91,30 @@ safe (Nano {code = Src fs})
 failCasts True  _  = F.Safe
 failCasts False fs = applyNonNull F.Safe F.Unsafe $ concatMap castErrors $ getCasts fs 
 
--------------------------------------------------------------------------------------------
-getCasts         :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r)]
--------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+getCasts         :: (Data r, Typeable r) => [Statement (AnnType r)] -> [AnnType r]
+-------------------------------------------------------------------------------
 getCasts stmts   = everything (++) ([] `mkQ` f) stmts
   where 
     f            :: Expression (AnnType r) -> [(AnnType r)]
     f (Cast a _) = [a]
     f _          = [] 
 
--------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 castErrors :: (F.Reftable r) => AnnType r -> [Error] 
--------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 castErrors (Ann l facts) = downErrors ++ deadErrors
   where 
     downErrors           = [errorDownCast l t | TCast _ (DCST t) <- facts]
     deadErrors           = [errorDeadCast l   | TCast _ (DC _)   <- facts]
 
 
--------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 typeCheck :: (Data r, Ord r, PPR r) 
           => NanoSSAR r -> IO (Either [Error] (NanoTypeR r))
--------------------------------------------------------------------------------------------
-typeCheck pgm = V.getVerbosity >>= \v -> return $ fmap snd (execute v pgm $ tcNano pgm)
+-------------------------------------------------------------------------------
+typeCheck pgm = V.getVerbosity >>= \v -> 
+  return $ fmap snd (execute v pgm $ tcNano pgm)
 
 
 -------------------------------------------------------------------------------
@@ -118,7 +123,7 @@ typeCheck pgm = V.getVerbosity >>= \v -> return $ fmap snd (execute v pgm $ tcNa
 tcNano :: (Data r, Ord r, PPRSF r) => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
-  = do -- checkTypeDefs p
+  = do -- checkTypeDefs p -- FIXME: restore this???
        setDef     $ defs p
        (fs', γo) <- tcInScope γ $ tcStmts γ fs
        m         <- tracePP "All Anns" <$> concatMaps <$> getAllAnns
@@ -177,6 +182,8 @@ data TCEnv r  = TCE {
                                             --   as tce_spec, but grows with
                                             --   typechecking
   -- FIXME: keep tce_defs here?
+  -- This will cause problems cause this env will not be appropriately updated
+  -- We SHOULD really be using the monad state version !!!
   , tce_defs :: TDefEnv (RType r)           -- ^ Data type definitions
   , tce_spec :: Env (RType r)               -- ^ Program specs. Includes:
                                             --    * functions 
@@ -232,6 +239,11 @@ type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r))
 -- | TypeCheck Scoped Block in Environment ------------------------------------
 -------------------------------------------------------------------------------
 
+-- NOTE: The types that are going to be checked in `validInst` are just the ones
+-- that end up in `tc_anns`. This means that in the case of function, these
+-- functions will have to be called. In the case of unbound type variables, this
+-- will manifest as a "rigid variable unification" error.
+
 tcInScope γ act = accumAnn annCheck act
   where
     -- Adding type def environment in what is checked in valid
@@ -281,7 +293,7 @@ envAddFun f i αs xs ts t = tcEnvAdds tyBinds
     varBinds               = zip
     
 validInst γ (l, ts)
-  = case [β | β <- HS.toList $ free ts, not $ tVarId β `tcEnvMem` γ] of
+  = case [β | β <- tracePP "FREE" $ HS.toList $ free ts, not $ tVarId β `tcEnvMem` γ] of
       [] -> Nothing
       βs -> Just $ errorFreeTyVar l βs
 
@@ -360,7 +372,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
   = do (e1', tfld) <- tcPropRead getProp γ l e1 (F.symbol fld)
        (e2', t2)   <- tcExpr γ $ e2                    
-       e2''        <- castM (tce_defs γ) ξ e2' t2 tfld
+       e2''        <- castM ξ e2' t2 tfld
        return         (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' fld) e2''), Just γ)
     where
        ξ            = tce_ctx γ
@@ -415,7 +427,7 @@ tcStmt γ (ReturnStmt l eo)
         -- Subtype the arguments against the formals and cast using subtyping result
         eo''        <- case eo' of
                         Nothing -> return Nothing
-                        Just e' -> Just <$> castM (tce_defs γ) (tce_ctx γ) e' t' rt'
+                        Just e' -> Just <$> castM (tce_ctx γ) e' t' rt'
         return (ReturnStmt l eo'', Nothing)
 
 tcStmt γ s@(FunctionStmt _ _ _ _)
@@ -436,7 +448,7 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 tcStmt γ c@(ClassStmt l i e is ce) = do  
     cid             <- classId c
     δ               <- getDef
-    let TD _ αs _  _ = findTyIdOrDie cid δ
+    let TD _ αs _  _ = findTyIdOrDie' "tcStmt" cid δ
     let γ'           = tcEnvAdds (tyBinds αs) γ
     let thisT        = TApp (TRef cid) (tVars αs) fTop  
     ce'             <- tcInScope γ' $ tcWithThis thisT $ mapM (tcClassElt γ' i) ce
@@ -479,8 +491,8 @@ classDef :: (Ord r, PPR r) => Statement (AnnSSA r) -> TCM r (TyID, TDef (RType r
 ---------------------------------------------------------------------------------------
 classDef  c = do
   id <- classId c
-  γ  <- getDef
-  return $ (id,) $ findTyIdOrDie id γ 
+  δ  <- getDef 
+  return $ (id,) $ findTyIdOrDie' "classDef" id δ
 
 ---------------------------------------------------------------------------------------
 findOrCrateClassDef :: (Ord r, PPR r) => Id (AnnSSA r) -> TCM r (TyID, TDef (RType r)) 
@@ -491,16 +503,12 @@ findOrCrateClassDef (Id l s) = do
     classDef (envFindTy (F.symbol s) γ)
   
 
--- FIXME: better error messages
 ---------------------------------------------------------------------------------------
 classAnnot :: Annot (Fact t) a -> ([TVar], Maybe (Id SourceSpan, [RType t]))
 ---------------------------------------------------------------------------------------
 classAnnot l = safeHead "classAnnot" [ t | CAnnot t <- ann_fact l ]
 
 
--- `classEltType` returns a tuple:
--- * True if public, false if private
--- * Binding
 ---------------------------------------------------------------------------------------
 classEltType :: (Ord r, PPR r) => ClassElt (AnnSSA r) -> TElt (RType r)
 ---------------------------------------------------------------------------------------
@@ -549,7 +557,7 @@ tcExprT γ e to
   = do (e', t)    <- tcExpr γ e
        (e'', te)  <- case to of
                        Nothing -> return (e', t)
-                       Just ta -> (,ta) <$> castM (tce_defs γ) (tce_ctx γ) e t ta
+                       Just ta -> (,ta) <$> castM (tce_ctx γ) e t ta
        return     (e'', te)
 
 ----------------------------------------------------------------------------------------------
@@ -594,9 +602,11 @@ tcExpr γ (ObjectLit l bs)
   = do let (ps, es)  = unzip bs
        ets          <- mapM (tcExpr γ) es
        let (es', ts) = unzip ets
-       let bts       = zipWith B (F.symbol <$> ps) ts
-       -- FIXME
-       return (ObjectLit l (zip ps es'), undefined {- TObj bts fTop-})
+       i <- addObjLitTyM $ TD Nothing [] Nothing $ zipWith mkElt (F.symbol <$> ps) ts
+       return (ObjectLit l (zip ps es'), TApp (TRef i) [] fTop)
+    where
+       mkElt s t = TE s True t
+
 
 tcExpr γ (Cast l@(Ann loc fs) e)
   = do (e', t) <- tcExpr γ e
@@ -756,7 +766,7 @@ tcCallCase γ l fn es' ts ft
        -- Apply substitution
        let (ts',its') = mapPair (apply θ) (ts, its)
        -- Subtype the arguments against the formals and up/down cast if needed 
-       es''          <- zipWith3M (castM (tce_defs γ) ξ) es' ts' its'
+       es''          <- zipWith3M (castM ξ) es' ts' its'
        return           (es'', apply θ ot)
 
 instantiate l ξ fn ft 
@@ -791,7 +801,7 @@ tcPropRead getter γ l e fld = do
 -- TODO
 -- NOTE: Is this going to be enough ???
 -- Maybe we need a separate statement for e.m(es)
-    Just (te', tf)  -> tcWithThis te $ (, tf) <$> castM (tce_defs γ) (tce_ctx γ) e' te te'
+    Just (te', tf)  -> tcWithThis te $ (, tf) <$> castM (tce_ctx γ) e' te te'
 
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, PPR r) => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)

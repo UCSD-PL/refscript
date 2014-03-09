@@ -90,6 +90,7 @@ module Language.Nano.Typecheck.Types (
   , findTySym, findTySymOrDie
   , findTySymWithId
   , findTyId, findTyIdOrDie
+  , findTyIdOrDie'
   , findEltWithDefault
   , symTDefMem
   , getDefNames
@@ -226,20 +227,25 @@ getDefNames (G _ _ n) = fst <$> F.toListSEnv n
 ---------------------------------------------------------------------------------
 addTySym :: F.Symbol -> TDef t -> TDefEnv t -> (TDefEnv t, TyID)
 ---------------------------------------------------------------------------------
-addTySym s t (G sz γ c) = (G sz' γ' c', id)
+addTySym s t (G sz γ c) =
+  case F.lookupSEnv s c of 
+    -- Bind existing in the names env - update the TDef env
+    Just tid -> (G sz  (I.insert tid t γ) c , tid )
+    -- Bind fresh in names env - update both envs
+    Nothing  -> (G sz' (I.insert sz' t γ) c', tid')
   where
-    sz' = sz + 1
-    id  = sz'
-    γ'  = I.insert id t γ
-    c'  = F.insertSEnv s id c  
+    sz'  = sz + 1
+    tid' = sz'
+    c'  = F.insertSEnv s tid' c  
 
 ---------------------------------------------------------------------------------
 addSym :: F.Symbol -> TDefEnv t -> (TDefEnv t, TyID)
 ---------------------------------------------------------------------------------
 addSym s g@(G sz γ c) = maybe f (g,) (F.lookupSEnv s c)
   where
-    f   = (G sz γ c', id)
-    -- sz' = sz + 1
+    f   = (G sz' γ c', id)
+    sz' = sz + 1    -- Update the size of the env even though the 
+                    -- new sym is not bound to an actual TDef
     id  = sz + 1
     c'  = F.insertSEnv s id c 
 
@@ -275,9 +281,11 @@ findTyId :: TyID -> TDefEnv t -> Maybe (TDef t)
 findTyId i (G _ γ _) = I.lookup i γ
 
 ---------------------------------------------------------------------------------
-findTyIdOrDie :: TyID -> TDefEnv t -> TDef t
+-- findTyIdOrDie :: TyID -> TDefEnv t -> TDef t
 ---------------------------------------------------------------------------------
-findTyIdOrDie i γ = fromMaybe (error "findTyIdOrDie") $ findTyId i γ 
+findTyIdOrDie i γ = fromMaybe (error $ "findTyIdOrDie") $ findTyId i γ 
+
+findTyIdOrDie' msg i γ = fromMaybe (error $ "findTyIdOrDie:" ++ msg) $ findTyId i γ 
 
 -- TODO: this can be fixed a little better.
 instance Monoid (TDefEnv t) where

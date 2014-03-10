@@ -25,7 +25,6 @@ import           Language.Fixpoint.Interface        (solve)
 
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
-import           Language.Nano.Misc
 import           Language.Nano.Env                  (envUnion)
 import           Language.Nano.Types
 import qualified Language.Nano.Annots               as A
@@ -249,26 +248,31 @@ consClassElt g (MemberMethDecl l _ _ i xs body)
   = do  ts <- cgFunTys l i xs $ pickElt l
         mapM_ (consFun1 l g i xs body) ts
 
+pickElt :: AnnTypeR -> RefType
 pickElt l = head [ t | TAnnot t <- ann_fact l ]
+
 
 ------------------------------------------------------------------------------------
 consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
 ------------------------------------------------------------------------------------
-consExprT g (ObjectLit l ps) to
-  = consObjT l g ps to
-
-consExprT g e@(ArrayLit l _) (Just t)
-  = do (x, g')  <- consExpr g e
-       let te    = envFindTy x g'
-       subTypeContainers "consExprT" l g' te t
-       let t' = t `strengthen` F.substa (sf (rv te) (rv t)) (rTypeReft te)
-       g'' <- envAdds [(x, t')] g'
-       return (x, g'')
-    where
-       rv         = rTypeValueVar
-       sf s1 s2 s | s == s1   = s2
-                  | otherwise = s
-
+-- XXX: There are no annotations on boject or array literals directly - just on
+-- variable declarations
+-- 
+-- consExprT g o@(ObjectLit _ _) to
+--   = consObjT g o to
+-- 
+-- consExprT g e@(ArrayLit l _) (Just t)
+--   = do (x, g')  <- consExpr g e
+--        let te    = envFindTy x g'
+--        subTypeContainers "consExprT" l g' te t
+--        let t' = t `strengthen` F.substa (sf (rv te) (rv t)) (rTypeReft te)
+--        g'' <- envAdds [(x, t')] g'
+--        return (x, g'')
+--     where
+--        rv         = rTypeValueVar
+--        sf s1 s2 s | s == s1   = s2
+--                   | otherwise = s
+ 
 consExprT g e to 
   = do (x, g') <- consExpr g e
        let te   = envFindTy x g'
@@ -279,7 +283,7 @@ consExprT g e to
                        return (x, g'')
     where
        l = getAnnotation e
-
+ 
 
 ------------------------------------------------------------------------------------
 consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
@@ -354,12 +358,20 @@ consExpr g (ArrayLit l es)
   = consCall g l BIArrayLit es $ arrayLitTy l (length es) $ renv g
 
 -- {f1:e1,...,fn:en}
-consExpr g (ObjectLit l ps) 
-  = consObjT l g ps Nothing
+consExpr g (ObjectLit l bs) 
+  = do  let (ps, es) = unzip bs
+        (xes, g')   <- consScan consExpr g es
+        let elts = zipWith mkElt (F.symbol <$> ps) ((`envFindTy` g') <$> xes)
+        let d = TD Nothing [] Nothing elts
+        -- NOTE: Should we get a new type here? Or reuse the existing type from TC?
+        i <- addObjLitTyM d
+        envAddFresh "consObj" l (TApp (TRef i) [] fTop) g'
+    where
+        mkElt s t = TE s True t 
 
 -- new C(e, ...)
-consExpr g (NewExpr l (VarRef lv i) es)
-  = do  (tid, t@(TD _ vs _ elts)) <- findTySymWithIdOrDieM $ F.symbol i
+consExpr g (NewExpr l (VarRef _ i) es)
+  = do  (tid, t@(TD _ vs _ _)) <- findTySymWithIdOrDieM $ F.symbol i
         tConst0 <- getPropTDefM l "constructor" t (tVar <$> vs)
         let tConstr = fix tid vs $ fromMaybe def tConst0
         consCall g l "constructor" es tConstr
@@ -389,18 +401,18 @@ consCast g a e
     where 
       l              = srcPos a
 
----------------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------------
-consUpCast g l x t = undefined 
+
+-- FIXME
+consUpCast _ _ _ _  = error "consUpCast"
+-- consUpCast g l x t = error "consUpCast"
 -- TODO: This should be aligned !!!
 --   envAddFresh "consUpCast" l 
 --     ((`strengthen` (F.symbolReft x)) $ fst $ alignTs (tenv g) (envFindTy x g) t) g
 
----------------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------------
 consDownCast g l x t = 
   do δ   <- getDef
      tc  <- castTo l δ tx (toType t) 
+     -- FIXME: are the types aligned ???
      (subTypeContainers "Downcast" l g) tx tc {- withAlignedM -} 
      g'  <- envAdds [(x, tc)] g
      return (x, g')
@@ -420,8 +432,6 @@ castStrengthen t1 t2
   | isUnion t1 && not (isUnion t2) = t2 `strengthen` (rTypeReft t1)
   | otherwise                      = t2
 
----------------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------------
 consDeadCast g l t 
   = do subTypeContainers "DeadCast" l g tru fls
        envAddFresh "consDeadCast" l t' g
@@ -466,18 +476,6 @@ instantiate l g fn ft
        err = cgError l $ errorNonFunction (srcPos l) fn ft  
     {-msg           = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)-}
 
-consCallConstructor g l es ft0 ct
-  = do (xes, g')    <- consScan consExpr g es
-       let ts        = [envFindTy x g' | x <- xes]
-       let ft        = fromMaybe (fromMaybe (err ts ft0) (overload l)) (calleeType l ts ft0)
-       (_,its,_)    <- instantiate l g "constructor" ft
-       let (su, ts') = renameBinds its xes
-       zipWithM_ (subTypeContainers "Call" l g') [envFindTy x g' | x <- xes] ts'
-       envAddFresh "consCallConstructor" l (F.subst su ct) g'
-    where
-       overload l    = listToMaybe [ t | Overload (Just t) <- ann_fact l ]
-       err ts ft0    = die $ errorNoMatchCallee (srcPos l) ts ft0 
-
 
 ---------------------------------------------------------------------------------
 consScan :: (CGEnv -> a -> CGM (b, CGEnv)) -> CGEnv -> [a] -> CGM ([b], CGEnv)
@@ -495,21 +493,6 @@ consSeq f           = foldM step . Just
   where 
     step Nothing _  = return Nothing
     step (Just g) x = f g x
-
-
----------------------------------------------------------------------------------
--- consObjT :: AnnTypeR -> CGEnv -> [(Prop AnnTypeR, Expression AnnTypeR)] -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv)
----------------------------------------------------------------------------------
-
--- Generate a fresh template for each literal to not over-specialize.
-consObjT l g pe to 
-  = do let (ps, es) = unzip pe
-       (xes, g')   <- consScan consExpr g es
-       -- FIXME
-       let tLit     = undefined -- (`TObj` fTop) $ zipWith B (F.symbol <$> ps) ((`envFindTy` g') <$> xes)
-       t           <- maybe (freshTyObj l g tLit) return to
-       subTypeContainers "object literal" l g' tLit t
-       envAddFresh "consObj" l t g'
 
 
 consPropRead getter g l e fld
@@ -561,14 +544,16 @@ consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> C
       }
 
  -}
--- FIXME !!!
 consWhile g l cond body 
-  = do (gI, xs, _, _, tIs) <- undefined -- envJoinExt l g g g                      -- (a), (b)
-       -- _                   <- consWhileBase l xs tIs g                -- (c)
-       (xc, gI')           <- consExpr gI cond                        -- (d)
-       z                   <- consStmt (envAddGuard xc True gI') body -- (e)
-       -- whenJustM z          $ consWhileStep l xs tIs                  -- (f) 
-       return               $ envAddGuard xc False gI'
+  = do  (gI,tIs)            <- freshTyPhis (srcPos l) g xs $ toType <$> ts  -- (a) (b) 
+        _                   <- consWhileBase l xs tIs g                     -- (c)
+        (xc, gI')           <- consExpr gI cond                             -- (d)
+        z                   <- consStmt (envAddGuard xc True gI') body      -- (e)
+        whenJustM z          $ consWhileStep l xs tIs                       -- (f) 
+        return               $ envAddGuard xc False gI'
+    where
+        xs                   = concat [xs | PhiVar xs <- ann_fact l]
+        ts                   = (`envFindTy` g) <$> xs 
 
 consWhileBase l xs tIs g    = zipWithM_ (subTypeContainers "WhileBase" l g) xts_base tIs      -- (c)
   where 
@@ -595,31 +580,27 @@ envJoin l g (Just g1) (Just g2) = Just <$> envJoin' l g g1 g2
 envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 ----------------------------------------------------------------------------------
 
--- HINT: 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
---       2. use @freshTyPhis@ to generate fresh types (and an extended environment with 
---          the fresh-type bindings) for all the phi-vars using the unrefined types 
---          from step 1.
---       3. generate subtyping constraints between the types from step 1 and the fresh types
---       4. return the extended environment.
+-- 1. use @envFindTy@ to get types for the phi-var x in environments g1 AND g2
+-- 2. use @freshTyPhis@ to generate fresh types (and an extended environment with 
+--    the fresh-type bindings) for all the phi-vars using the unrefined types 
+--    from step 1.
+-- 3. generate subtyping constraints between the types from step 1 and the fresh types
+-- 4. return the extended environment.
 
 envJoin' l g g1 g2
-  = do (g', xs, t1s', t2s', ts) <- envJoinExt l g g1 g2 
-       g1' <- envAdds (zip xs t1s') g1 
-       g2' <- envAdds (zip xs t2s') g2
-       zipWithM_ (subTypeContainers "envJoin 1" l g1') [envFindTy x g1' | x <- xs] ts
-       zipWithM_ (subTypeContainers "envJoin 2" l g2') [envFindTy x g2' | x <- xs] ts
-       return g'
-
-envJoinExt l g g1 g2 
-  = do  let xs   = concat [xs | PhiVar xs <- ann_fact l] 
-            t1s  = (`envFindTy` g1) <$> xs 
-            t2s  = (`envFindTy` g2) <$> xs
-        when (length t1s /= length t2s) $ cgError l (bugBadPhi (srcPos l) t1s t2s)
-        -- To facilitate the sort check t1s and t2s need to change to their
-        -- equivalents that have the same sort with the joined types (ts) 
-        -- (with the added False's to make the types equivalent)
-        -- FIXME 
-        let t4   = undefined -- zipWith (c ompareTs $ tenv g) t1s t2s
-        (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> fst4 <$> t4
-        return     (g', xs, snd4 <$> t4, thd4 <$> t4, ts)
+  = do  g1' <- envAdds (zip xs t1s) g1 
+        g2' <- envAdds (zip xs t2s) g2
+        -- t1s and t2s should have the same raw type, otherwise they wouldn't
+        -- pass TC (we don't need to pad / fix them before joining).
+        -- So we can use the raw type from one of the two branches and freshen
+        -- up that one.
+        -- TODO: Add a raw type check on t1 and t2
+        (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> t1s
+        zipWithM_ (subTypeContainers "envJoin 1" l g1') [envFindTy x g1' | x <- xs] ts
+        zipWithM_ (subTypeContainers "envJoin 2" l g2') [envFindTy x g2' | x <- xs] ts
+        return g'
+    where
+        xs   = concat [xs | PhiVar xs <- ann_fact l] 
+        t1s  = (`envFindTy` g1) <$> xs 
+        t2s  = (`envFindTy` g2) <$> xs
 

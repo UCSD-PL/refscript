@@ -90,13 +90,6 @@ data CGEnv
         , cge_spec :: !(Env RefType)      -- ^ specifications for defined functions
         }
 
-
-instance PP CGEnv where
-  pp (CGE  re _ gs ctx sp) = vcat [                  pp re , 
-                                   text "---------", pp gs , 
-                                   text "---------", pp ctx, 
-                                   text "---------", pp sp ] 
-
 ----------------------------------------------------------------------------
 -- | Constraint Information ------------------------------------------------
 ----------------------------------------------------------------------------

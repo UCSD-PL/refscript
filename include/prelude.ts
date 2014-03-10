@@ -39,23 +39,23 @@
 /***************** Types for list Operators ******************************/
 /*************************************************************************/
 
-/*@ type list[A] = {  data : A, next : list[A] + null }                                                        */
+/*@ type list[A] = {  data : A, next : #list[A] + null }                                                        */
 
-/*@ measure len :: forall A. (list [A]) => number                                                             */
+/*@ measure len :: forall A. (#list [A]) => number                                                             */
 
-/*@ extern cons  :: forall A. (A, xs:list[A] + null) => {list[A] | (len v) = 1 + (len xs)}                    */
+/*@ extern cons  :: forall A. (A, xs:#list[A] + null) => {#list[A] | (len v) = 1 + (len xs)}                    */
 /*@ extern nil   :: () => { null | (len v) = 0}                                                               */
-/*@ extern head  :: forall A. (xs:list[A]) => A                                                               */
-/*@ extern tail  :: forall A. (xs:list [A]) => list [A] + null                                                */
-/*@ extern nth   :: forall A. (xs:list [A], {i:number| ((0 <= i) && i < (len xs))}) => A                      */
-/*@ extern empty :: forall A. (xango: list[A] + null ) =>
+/*@ extern head  :: forall A. (xs:#list[A]) => A                                                               */
+/*@ extern tail  :: forall A. (xs:#list [A]) => #list [A] + null                                                */
+/*@ extern nth   :: forall A. (xs:#list [A], {i:number| ((0 <= i) && i < (len xs))}) => A                      */
+/*@ extern empty :: forall A. (xango: #list[A] + null ) =>
                         {v: boolean | (((Prop v) <=> len(xango) = 0) && ((Prop v) <=> ttag(xango) = "null"))} */
 /*@ extern emptyPoly :: forall A. (x:A) => {v: boolean | ((Prop v) <=> ((ttag x) = "null"))}                  */
 
-/*@ extern mylength   :: forall A. (xs:list[A] + null) => {v:number | ((v >= 0) && v = (len xs))}             */
+/*@ extern mylength   :: forall A. (xs:#list[A] + null) => {v:number | ((v >= 0) && v = (len xs))}             */
 
-/*@ extern safehead :: forall A. (list[A]) => A                                                               */
-/*@ extern safetail :: forall A. (xs:list[A]) => {v:list[A] + null | (len v) = (len xs) - 1}                  */
+/*@ extern safehead :: forall A. (#list[A]) => A                                                               */
+/*@ extern safetail :: forall A. (xs:#list[A]) => {v:#list[A] + null | (len v) = (len xs) - 1}                  */
 
 /* extern Array    :: (n : { v: number | 0 <= v } ) => { v: [ undefined ] | (len v) = n }                    */
 

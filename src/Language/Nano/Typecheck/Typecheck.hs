@@ -17,7 +17,7 @@ import qualified Data.HashSet                       as HS
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.Traversable                   as T
 import qualified Data.List                          as L
-import           Data.Maybe                         (catMaybes,  fromMaybe, listToMaybe, fromJust)
+import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, render, ($+$), vcat)
@@ -119,7 +119,7 @@ typeCheck pgm = do
 
 
 -------------------------------------------------------------------------------
--- | TypeCheck Nano Program ---------------------------------------------------
+-- | TypeCheck Nano Program
 -------------------------------------------------------------------------------
 tcNano :: (Data r, Ord r, PPRSF r) => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------

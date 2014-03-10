@@ -8,7 +8,6 @@
 module Language.Nano.Typecheck.Lookup (getProp, getPropTDef) where 
 
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Syntax
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
@@ -17,9 +16,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 import qualified Language.Nano.Typecheck.Subst as S
-
 import           Control.Applicative ((<$>))
-import           Data.List                      (find)
 
 -- import           Debug.Trace
 
@@ -45,7 +42,7 @@ getProp ::  (IsLocated l, PPR r) =>
 -------------------------------------------------------------------------------
 getProp l α γ s t@(TApp _ _ _)  = getPropApp l α γ s t 
 getProp _ _ _ _   (TFun _ _ _ ) = Nothing     -- FIXME
-getProp l α γ s a@(TArr _ _)    = undefined -- getPropArr l γ s a
+getProp l α γ s a@(TArr _ _)    = (a,) <$> getPropArr l α γ s a
 getProp l _ _ _ t               = die $ bug (srcPos l) 
                                     $ "Using getProp on type: " 
                                       ++ (show $ toType t) 
@@ -84,7 +81,7 @@ lookupAmbientVar l α γ s amb t =
 getPropTDef :: (PPR r) =>
   t -> TER r -> TDR r -> F.Symbol -> [RType r] -> TDef (RType r) -> Maybe (RType r)
 -------------------------------------------------------------------------------
-getPropTDef l α γ f ts (TD nm vs pro elts) = 
+getPropTDef l α γ f ts (TD _ vs pro elts) = 
     case [ p | TE s _ p <- elts, s == f ] of
       [ ] -> do (psy, pts) <- pro
                 ptd        <- findTySym psy γ
@@ -94,14 +91,13 @@ getPropTDef l α γ f ts (TD nm vs pro elts) =
       _   -> error $ "BUG: multiple field binding in TDef"
   where
     θ = S.fromList $ zip vs ts
-    proto (Just (id, ts')) = findTyId id γ 
 
 
 -------------------------------------------------------------------------------
 getPropArr :: (PPR r, IsLocated a) => 
   a -> TER r -> TDR r -> F.Symbol -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-getPropArr l α γ s a@(TArr t _) =
+getPropArr l α γ s (TArr t _) =
 -- NOTE: Array has been declared as a type declaration so 
 -- it should reside in γ, and we can just getPropTDef on it,
 -- using type t as teh single type parameter to it.

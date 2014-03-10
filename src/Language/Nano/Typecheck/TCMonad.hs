@@ -1,7 +1,3 @@
-{- LANGUAGE TypeSynonymInstances       #-}
-{- LANGUAGE FlexibleInstances          #-}
-{- LANGUAGE NoMonomorphismRestriction  #-}
-{- LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ConstraintKinds           #-}
@@ -88,7 +84,8 @@ import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>))
 import qualified Data.HashSet                       as S
 import qualified Data.List                          as L
-import           Data.Maybe                         (fromJust, fromMaybe)
+import           Data.Maybe                         (fromMaybe)
+import           Data.Function                      (on)
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)
 import           Language.Fixpoint.Errors
@@ -480,10 +477,9 @@ convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2)
       d1@(TD n1 v1s pro1 _) <- findTyIdOrDieM' "convertTRefs" i1
       d2@(TD n2 v2s pro2 _) <- findTyIdOrDieM' "convertTRefs" i2
 
-      δ <- getDef
       -- Gather all fields from current and parent classes
-      e1s <- allFlds t1s =<< findTyIdOrDieM' "convertTRefs" i1
-      e2s <- allFlds t2s =<< findTyIdOrDieM' "convertTRefs" i2
+      e1s <- getDef >>= return . apply (fromList $ zip v1s t1s) . flatten d1
+      e2s <- getDef >>= return . apply (fromList $ zip v2s t2s) . flatten d2
     
       -- Field keys
       let ks1 = ks e1s
@@ -495,79 +491,54 @@ convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2)
           widthSup   = isProperSubsetOf ks2 ks1
 
       -- Equal types at the common fields
-          cmnKs = S.toList $ S.intersection ks1 ks2
-          cmnTs = (\k -> (k `lkp` toMap e1s, k `lkp` toMap e2s)) <$> cmnKs
-          cmnEq = all (uncurry depthEq) cmnTs
+          cmnKs = S.intersection ks1 ks2
+          e1s'  = ord $ filter ((`S.member` cmnKs) . f_sym) e1s 
+          e2s'  = ord $ filter ((`S.member` cmnKs) . f_sym) e2s 
+          -- e1s' and e2s' should have the same length
+          cmnEq = and $ zipWith depthEq e1s' e2s' 
 
-      if cmnEq then           -- Equal common types
-        if widthEq then           -- Structurally equal types
-          return (t1, t2, EqT)
-
-        else if widthSup then     -- t1 :> t2
+      case (cmnEq, widthEq, widthSup, widthSub) of
+        (True, True, _  , _   ) -> return (t1, t2, EqT)
+        (True, _,   True, _   ) -> do
           -- UPCAST: Restrict A<S1...> to the fields of B<T1...>
           -- Here we are using a flat (object literal) type in place 
           -- of could have been a class type (part of hiararchy). This 
           -- should be fine since this type will only be used locally 
           -- for the constraint generation.
-          do
             let e1s' = filter (\e -> S.member (f_sym e) ks2) e1s
             i1' <- addObjLitTyM (TD n2 v1s pro2 e1s')
             return (TApp (TRef i1') t1s r1, t2, SupT)
-      
-        else if widthSub then    -- t1 <: t2
-          tcError $ errorMissFlds l d1 d2 (S.toList $ S.difference ks2 ks1)
-        else
-          tcError $ errorConvDef l d1 d2
-
-      else                        -- No depth subtyping
-          tcError $ errorConvDefDepth l d1 d2
-
+        (True, _   , _  , True) -> tcError $ errorMissFlds l d1 d2 (S.toList $ S.difference ks2 ks1)
+        (True, _   , _  , _   ) -> tcError $ errorConvDef l d1 d2
+        (_   , _   , _  , _   ) -> tcError $ errorConvDefDepth l d1 d2
   where
       -- Aux funcs
+
+      ord     = L.sortBy (compare `on` f_sym)
       parEq   = and (zipWith equiv t1s t2s) 
       toMap   = M.fromList . ((\(TE s b t) -> (s, (b,t))) <$>)
       ks      = S.fromList . (f_sym <$>)
-      lkp k   = fromJust . M.lookup k 
-
-
--- Get all recursively inherited fields for a TDef
--- Takes care of type parameters
---------------------------------------------------------------------------------
-allFlds :: PPR r => [RType r] -> TDef (RType r) -> TCM r [TElt (RType r)]
---------------------------------------------------------------------------------
-allFlds ts d = allFldsAux ts d <$> getDef
-    
-allFldsAux ts (TD _ vs pro elts) δ = 
-  apply (sub vs ts) $ elts ++ flt (fromMaybe [] (f pro))
-  where
-    f t             = t >>= \(s,ts) -> findTySym s δ >>= g . (,ts)
-    g (def, ts)     = return $ allFldsAux ts def δ
-    sub a b         = fromList $ zip a b
-    -- Filter out the fields that exist on current class
-    flt             = crop $ (`elem` (f_sym <$> elts)) . f_sym
-    crop  f         = filter (not . f)
 
 
 -- | depthEq: The input pairs are (access modifier, type)
 --------------------------------------------------------------------------------
-depthEq :: (Bool, RType r) -> (Bool, RType r) -> Bool
+depthEq :: (TElt (RType r)) -> (TElt (RType r)) -> Bool
 --------------------------------------------------------------------------------
-depthEq (b1,t1) (b2, t2) | b1 == b2   = t1 `equiv` t2
-depthEq _       _        | otherwise  = False 
+depthEq (TE _ b1 t1) (TE _ b2 t2) | b1 == b2   = t1 `equiv` t2
+depthEq _       _                 | otherwise  = False 
 
 
 -- | `convertFun`
 
 convertFun l (TFun b1s o1 r1) (TFun b2s o2 r2) = do
-  (t1s',t2s',bds) <- unzip3 <$> zipWithM (convert l) (b_type <$> b1s) (b_type <$> b2s)
-  (o1',o2',od)  <- convert l o1 o2
-  let updTs        = zipWith (\b t -> b { b_type = t })
-  if length b1s == length b2s && all (== EqT)(od:bds) then
-    let t1'        = TFun (updTs b1s t1s') o1' r1
-        t2'        = TFun (updTs b2s t2s') o2' r2 in
-    return (t1', t2', EqT)
-  else 
-    error "[Unimplemented] convertFun with different types"
+    (t1s',t2s',bds) <- unzip3 <$> zipWithM (convert l) (b_type <$> b1s) (b_type <$> b2s)
+    (o1',o2',od)  <- convert l o1 o2
+    let updTs        = zipWith (\b t -> b { b_type = t })
+    case length b1s == length b2s && all (== EqT)(od:bds) of
+      True  -> let t1'  = TFun (updTs b1s t1s') o1' r1
+                   t2'  = TFun (updTs b2s t2s') o2' r2 in
+                return (t1', t2', EqT)
+      False -> error "[Unimplemented] convertFun with different types"
 
 convertFun _ _ _ = error "convertFun: no other cases supported"
 

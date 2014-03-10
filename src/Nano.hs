@@ -1,5 +1,6 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 import qualified Language.Nano.Typecheck.Typecheck  as TC 
-import qualified Language.Nano.Typecheck.Parse      as P 
 import qualified Language.Nano.Liquid.Liquid        as LQ
 import qualified Language.Nano.Liquid.Types         as L 
 

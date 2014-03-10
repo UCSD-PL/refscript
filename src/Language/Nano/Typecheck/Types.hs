@@ -436,17 +436,19 @@ instance Equivalent (RType r) where
     errorstar (printf "equiv: no unions: %s\n\t\t%s" 
     (ppshow $ toType t) (ppshow $ toType t'))
   equiv (TApp c ts _) (TApp c' ts' _) = c `equiv` c' && ts `equiv` ts'
+  equiv (TArr t _   ) (TArr t' _    ) = t `equiv` t'
   equiv (TVar v _   ) (TVar v' _    ) = v == v'
   equiv (TFun b o _ ) (TFun b' o' _ ) = 
     (b_type <$> b) `equiv` (b_type <$> b') && o `equiv` o' 
   equiv (TAll _ _   ) (TAll _ _     ) = error "equiv-tall"
+  equiv (TExp _     ) (TExp   _     ) = error "equiv-texp"
   equiv _             _               = False
 
 instance Equivalent TCon where
   equiv (TRef i) (TRef i')  = i == i'
   equiv c        c'         = c == c'
 
-instance PPR r => Equivalent (TElt (RType r)) where 
+instance Equivalent (TElt (RType r)) where 
   equiv (TE _ b1 t1) (TE _ b2 t2) = b1 == b2 && equiv t1 t2
 
 instance Equivalent (Bind r) where 
@@ -916,27 +918,27 @@ instance F.Reftable r => PP (RType r) where
   pp (TAnd ts)                  = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TExp e)                   = pprint e 
   pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text " +") ts 
-  pp (TApp d@(TRef _) ts r)     = F.ppTy r $ ppTC d <+> ppArgs brackets comma ts 
-  pp (TApp c [] r)              = F.ppTy r $ ppTC c 
-  pp (TApp c ts r)              = F.ppTy r $ parens (ppTC c <+> ppArgs id space ts)  
+  pp (TApp d@(TRef _) ts r)     = F.ppTy r $ pp d <+> ppArgs brackets comma ts 
+  pp (TApp c [] r)              = F.ppTy r $ pp c 
+  pp (TApp c ts r)              = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
   pp (TArr t r)                 = F.ppTy r $ brackets (pp t)  
 
 instance PP TCon where
-  pp TInt             = text "Int"
-  pp TBool            = text "Boolean"
-  pp TString          = text "String"
-  pp TVoid            = text "Void"
-  pp TTop             = text "Top"
-  pp TUn              = text "Union:"
+  pp TInt             = text "number"
+  pp TBool            = text "boolean"
+  pp TString          = text "string"
+  pp TVoid            = text "void"
+  pp TTop             = text "top"
+  pp TUn              = text "union:"
   pp (TRef x)         = text "REF#" <> int x
-  pp TNull            = text "Null"
-  pp TUndef           = text "Undefined"
+  pp TNull            = text "null"
+  pp TUndef           = text "undefined"
 
 instance Hashable TCon where
   hashWithSalt s TInt        = hashWithSalt s (0 :: Int)
   hashWithSalt s TBool       = hashWithSalt s (1 :: Int)
   hashWithSalt s TString     = hashWithSalt s (2 :: Int)
-  hashWithSalt s TVoid       = hashWithSalt s (3:: Int)
+  hashWithSalt s TVoid       = hashWithSalt s (3 :: Int)
   hashWithSalt s TTop        = hashWithSalt s (4 :: Int)
   hashWithSalt s TUn         = hashWithSalt s (5 :: Int)
   hashWithSalt s TNull       = hashWithSalt s (6 :: Int)
@@ -947,17 +949,6 @@ instance F.Reftable r => PP (Bind r) where
   pp (B x t)          = pp x <> colon <> pp t 
 
 ppArgs p sep          = p . intersperse sep . map pp
-
-ppTC TInt             = text "Int"
-ppTC TBool            = text "Boolean"
-ppTC TString          = text "String"
-ppTC TVoid            = text "Void"
-ppTC TTop             = text "Top"
-ppTC TUn              = text "Union:"
-ppTC (TRef x)         = text "REF#" <> int x
-ppTC TNull            = text "Null"
-ppTC TUndef           = text "Undefined"
-
 
 instance (PP s, PP t) => PP (M.HashMap s t) where
   pp m = vcat $ pp <$> M.toList m

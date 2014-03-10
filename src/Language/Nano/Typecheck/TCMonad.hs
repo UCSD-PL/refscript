@@ -56,6 +56,10 @@ module Language.Nano.Typecheck.TCMonad (
   , castM
   , addDeadCast 
 
+  -- * TDefEnv
+  , findTyIdOrDieM, findTyIdOrDieM'
+  , findTySymM, findTySymOrDieM
+
   -- * Get Type Signature 
   , getSpecOrDie
   , getSpecM
@@ -74,6 +78,8 @@ module Language.Nano.Typecheck.TCMonad (
   -- * This
   , tcPeekThis
   , tcWithThis
+
+  , getPropM, getPropTDefM
 
   )  where 
 
@@ -95,6 +101,7 @@ import           Language.Nano.Misc                 (unique, snd4, thd4, fst4, f
 import           Language.Nano.Types
 import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Errors
@@ -411,6 +418,11 @@ addObjLitTyM    = updTDefEnv . addObjLitTy
 findTyIdOrDieM' :: String -> TyID -> TCM r (TDef (RType r))
 findTyIdOrDieM' m i = findTyIdOrDie' m i <$> getDef
 
+findTyIdOrDieM i = findTyIdOrDie i <$> getDef
+
+findTySymM i = findTySym i <$> getDef
+findTySymOrDieM i = findTySymOrDie i <$> getDef
+
 
 -- | `convert` returns:
 -- * An equivalent version of @t1@ that has the same sort as the second (RJ: first?) output
@@ -652,4 +664,18 @@ tcPushThis t   = modify $ \st -> st { tc_this = t : tc_this st }
 tcPopThis      = modify $ \st -> st { tc_this = tail $ tc_this st } 
 
 tcWithThis t p = do { tcPushThis t; a <- p; tcPopThis; return a } 
+
+
+
+
+getPropM l s t = do
+  ε <- getExts
+  δ <- getDef 
+  return $ getProp l ε δ (F.symbol s) t
+
+getPropTDefM l s t ts = do 
+  ε <- getExts
+  δ <- getDef 
+  return $ getPropTDef l ε δ (F.symbol s) ts t
+
 

@@ -5,7 +5,7 @@
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
-module Language.Nano.Typecheck.Lookup (getProp) where 
+module Language.Nano.Typecheck.Lookup (getProp, getPropTDef) where 
 
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax

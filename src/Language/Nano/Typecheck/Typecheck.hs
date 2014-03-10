@@ -122,8 +122,7 @@ typeCheck pgm = V.getVerbosity >>= \v ->
 tcNano :: (Data r, Ord r, PPRSF r) => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
-  = do -- checkTypeDefs p -- FIXME: restore this???
-       setDef     $ defs p
+  = do setDef     $ defs p
        (fs', γo) <- tcInScope γ $ tcStmts γ fs
        m         <- concatMaps <$> getAllAnns
        θ         <- getSubst
@@ -143,26 +142,6 @@ patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs
 
 initEnv pgm      = TCE (envUnion (specs pgm) (externs pgm)) (specs pgm)
                        emptyContext
-
-
-{-
--------------------------------------------------------------------------------
-checkTypeDefs :: (Data r, Typeable r, F.Reftable r) => Nano (AnnSSA r) (RType r) -> TCM r ()
--------------------------------------------------------------------------------
-checkTypeDefs pgm = reportAll $ grep
-  where 
-    ds        = specs pgm 
-    ts        = defs pgm
-    reportAll = mapM_ report
-    report t  = tcError $ errorUnboundType (srcPos t) t
-    -- There should be no undefined type constructors
-    grep :: [Id SourceSpan]        = everything (++) ([] `mkQ` g) ds
-    g (TRef i) | not $ envMem i ts = [i]
-    g _                            = [ ]
-    -- TODO: Also add check for free top-level type variables, i.e. make sure 
-    -- all type variables used are bound. Use something like:
-    -- @everythingWithContext@
--}
 
 
 -------------------------------------------------------------------------------
@@ -571,7 +550,7 @@ tcExpr _ e@(NullLit _)
   = return (e, tNull)
 
 tcExpr _ e@(ThisRef _)
-  = undefined (e,) <$> tcPeekThis
+  = (e,) <$> tcPeekThis
 
 tcExpr γ e@(VarRef l x)
   = return (e, tcEnvFindTyOrDie l x γ) 
@@ -654,6 +633,28 @@ tcCall γ ex@(InfixExpr l o e1 e2)
          Just _               -> error "IMPOSSIBLE:tcCall:InfixExpr"
          Nothing              -> deadCast (srcPos l) γ ex 
          
+-- | `super(e1,...,en)`
+-- This is where we expect typescript to have done a context check:
+-- super should ony be called whithin a constructor.
+tcCall γ ex@(CallExpr l e@(SuperRef _)  es) = do
+    TD _ _ pro _ <- findTyIdOrDieM =<< fromType <$> tcPeekThis
+    case pro of 
+      Just (s, ts) -> do 
+        -- Search for a constructor in the parent
+        t <- findTySymOrDieM s
+        tConstr <- fromMaybe def <$> getPropTDefM l "constructor" t ts
+        z <- tcCallMatch γ l "constructor" es tConstr
+        case z of
+          Just (es', t) -> return (CallExpr l e es', t)
+          Nothing       -> error "super() - 1"
+      Nothing -> error $ "super() - 2" 
+  where
+    fromType (TApp (TRef i) ts _) = i
+    fromType _ = error "BUG: 'This' should have type 'TApp (TRef _) _ _'"
+    def :: (PPR r) => RType r
+    def = TFun [] tVoid fTop
+    
+
 -- | `e(e1,...,en)`
 tcCall γ ex@(CallExpr l e es)
   = do (e', ft0)              <- tcExpr γ e
@@ -694,20 +695,26 @@ tcCall γ ex@(ArrayLit l es)
 --    ∀ Vs . (xs: Ts) => void
 --
 tcCall γ ex@(NewExpr l (VarRef lv i) es)
-  = do  (tid, TD _ vs _ elts) <- findOrCrateClassDef i
-        
-        let tConstr = mkAll vs $ findEltWithDefault (F.symbol "constructor") def elts
+  = do  (tid, t@(TD _ vs _ elts)) <- findOrCrateClassDef i
+        -- Get the constructor type by looking up the parent chain and then
+        -- using the type variables of the current class,
+        -- or just use the default type
+        -- Make this type return the type of the class, so that they get 
+        -- instantiated and assigned to the left hand side when we do the call.
+        tConstr <- fix tid vs <$> fromMaybe def <$> getPropTDefM l "constructor" t (tVar <$> vs)
         when (not $ isTFun tConstr) $ tcError $ errorConstNonFunc (srcPos l) i
         z <- tcCallMatch γ l "constructor" es tConstr
         case z of
           -- Constructor's return type is void - instead return the class type
           -- FIXME: type parameters in returned type: inferred ... or provided !!! 
-          Just (es', _) -> 
-            return (NewExpr l (VarRef lv i) es', TApp (TRef tid) [] fTop)
+          Just (es', t) -> 
+            return (NewExpr l (VarRef lv i) es', t)
           Nothing       -> error "No matching constructor"
     where
     -- A default type for the constructor
       def = TFun [] tVoid fTop
+      fix tid vs (TFun ts _ r) = mkAll vs $ TFun ts (TApp (TRef tid) (tVar <$> vs) fTop) r
+      fix _ _ t = error $ "BUG:tcCall NewExpr - not supported type for constructor: " ++ ppshow t
 
 tcCall _ e
   = die $ bug (srcPos e) $ "tcCall: cannot handle" ++ ppshow e        

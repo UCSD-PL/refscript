@@ -68,7 +68,7 @@ testFile f = parseNanoFromFile f
          >>= either (print . pp) (\p -> 
              typeCheck p  
          >>= either (print . vcat . (pp <$>)) 
-                    (\p'@(Nano {code=Src ss}) -> 
+                    (\p'@(Nano {code = Src ss}) -> 
                           print (pp p')
                       >>  print "Casts:"
                       >> print (pp $ getCasts ss)))
@@ -112,8 +112,10 @@ castErrors (Ann l facts) = downErrors ++ deadErrors
 typeCheck :: (Data r, Ord r, PPR r) 
           => NanoSSAR r -> IO (Either [Error] (NanoTypeR r))
 -------------------------------------------------------------------------------
-typeCheck pgm = V.getVerbosity >>= \v -> 
-  return $ fmap snd (execute v pgm $ tcNano pgm)
+typeCheck pgm = do 
+  v <- V.getVerbosity
+  let r = execute v pgm $ tcNano pgm 
+  return $ snd <$> r
 
 
 -------------------------------------------------------------------------------
@@ -129,6 +131,7 @@ tcNano p@(Nano {code = Src fs})
        let p1     = p {code = (patchAnn m . apply θ) <$> Src fs'}
        case γo of 
          Just γ'  -> do  d     <- getDef
+                         -- Update TDefEnv before exiting
                          let p2 = p1 { defs  = d }
                          return $ (m, p2)
          Nothing  -> error "BUG:tcNano should end with an environment"
@@ -408,28 +411,23 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
   = tcFun γ s
 
 -- class A<S...> [extends B<T...>] [implements I,J,...] { ... }
---
--- Typechecking the class body is similar to typechecking a parametric function.
--- * Compute / get the class type 
--- * Add the type vars in the environment
--- * Come up with a type for "this" and add that to the env as well
---   - This type uses the classes type variables as type parameters.
---   - For the moment this type does not have a refinement. Maybe use
---     invariants to add some.
---  
--- * Typecheck the class elements in this extended environment.
---
 tcStmt γ c@(ClassStmt l i e is ce) = do  
-    cid             <- classId c
-    δ               <- getDef
-    let TD _ αs _  _ = findTyIdOrDie' "tcStmt" cid δ
-    let γ'           = tcEnvAdds (tyBinds αs) γ
-    let thisT        = TApp (TRef cid) (tVars αs) fTop  
-    ce'             <- tcInScope γ' $ tcWithThis thisT $ mapM (tcClassElt γ' i) ce
-    return             (ClassStmt l i e is ce', Just γ)
+    -- * Compute / get the class type 
+    cid          <- classId c
+    TD _ αs _  _ <- findTyIdOrDieM' "tcStmt" cid
+    -- * Add the type vars in the environment
+    let γ'        = tcEnvAdds (tyBinds αs) γ
+    -- * Compute type for "this" and add that to the env as well
+    --   - This type uses the classes type variables as type parameters.
+    --   - For the moment this type does not have a refinement. Maybe use
+    --     invariants to add some.
+    let thisT     = TApp (TRef cid) (tVars αs) fTop  
+    -- * Typecheck the class elements in this extended environment.
+    ce'          <- tcInScope γ' $ tcWithThis thisT $ mapM (tcClassElt γ' i) ce
+    return          (ClassStmt l i e is ce', Just γ)
   where
-    tVars   αs       = [ tVar   α | α <- αs ] 
-    tyBinds αs       = [(tVarId α, tVar α) | α <- αs]
+    tVars   αs    = [ tVar   α | α <- αs ] 
+    tyBinds αs    = [(tVarId α, tVar α) | α <- αs]
 
 -- OTHER (Not handled)
 tcStmt _ s 
@@ -701,7 +699,8 @@ tcCall γ ex@(NewExpr l (VarRef lv i) es)
         -- or just use the default type
         -- Make this type return the type of the class, so that they get 
         -- instantiated and assigned to the left hand side when we do the call.
-        tConstr <- fix tid vs <$> fromMaybe def <$> getPropTDefM l "constructor" t (tVar <$> vs)
+        tConst0 <- getPropTDefM l "constructor" t (tVar <$> vs)
+        let tConstr = fix tid vs $ fromMaybe def tConst0
         when (not $ isTFun tConstr) $ tcError $ errorConstNonFunc (srcPos l) i
         z <- tcCallMatch γ l "constructor" es tConstr
         case z of

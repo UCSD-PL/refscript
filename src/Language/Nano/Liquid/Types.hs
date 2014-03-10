@@ -75,9 +75,6 @@ import           Control.Applicative
 
 type RefType     = RType F.Reft
 type REnv        = Env RefType
-type TEnv        = TDefEnv F.Reft
-
-type NanoRefType = Nano (AnnType F.Reft) RefType 
 
 type AnnTypeR    = AnnType F.Reft
 
@@ -86,20 +83,19 @@ type AnnTypeR    = AnnType F.Reft
 -------------------------------------------------------------------------------------
 
 data CGEnv   
-  = CGE { renv     :: !REnv          -- ^ bindings in scope 
-        , tenv     :: !TEnv          -- ^ data type definition
-        , fenv     :: F.IBindEnv     -- ^ fixpoint bindings
-        , guards   :: ![F.Pred]      -- ^ branch target conditions  
-        , cge_ctx  :: !IContext      -- ^ intersection-type context 
-        , cge_spec :: !(Env RefType) -- ^ specifications for defined functions
+  = CGE { renv     :: !REnv               -- ^ bindings in scope 
+        , fenv     :: F.IBindEnv          -- ^ fixpoint bindings
+        , guards   :: ![F.Pred]           -- ^ branch target conditions  
+        , cge_ctx  :: !IContext           -- ^ intersection-type context 
+        , cge_spec :: !(Env RefType)      -- ^ specifications for defined functions
         }
 
 
 instance PP CGEnv where
-  pp (CGE  re _ _ gs ctx sp) = vcat [                  pp re , 
-                                     text "---------", pp gs , 
-                                     text "---------", pp ctx, 
-                                     text "---------", pp sp ] 
+  pp (CGE  re _ gs ctx sp) = vcat [                  pp re , 
+                                   text "---------", pp gs , 
+                                   text "---------", pp ctx, 
+                                   text "---------", pp sp ] 
 
 ----------------------------------------------------------------------------
 -- | Constraint Information ------------------------------------------------

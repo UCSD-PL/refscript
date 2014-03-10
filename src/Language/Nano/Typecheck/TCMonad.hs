@@ -152,6 +152,7 @@ data TCState r = TCS {
 
 type TCM r     = ErrorT Error (State (TCState r))
 
+-- type TCME r    = ErrorT Error (StateT (TCState r) (State (TDefEnv (RType r))))
 
 -------------------------------------------------------------------------------
 whenLoud :: TCM r () -> TCM r ()
@@ -440,7 +441,7 @@ convert _ t1 t2 | t1 `equiv` t2        = return $ (t1, t2, EqT)
 convert l t1 t2 | isUndef t1           = (`setThd3` SubT) <$> convertUnion l t1 t2
 
 convert l t1 t2 | isNull t1 &&  
-                    not (isUndef t2)     = (`setThd3` SubT) <$> convertUnion l t1 t2
+                  not (isUndef t2)     = (`setThd3` SubT) <$> convertUnion l t1 t2
 
 convert l t1 t2 | isTop t2             = (`setThd3` SubT) <$> convertUnion l t1 t2
 

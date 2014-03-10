@@ -18,6 +18,9 @@ module Language.Nano.Liquid.CGMonad (
   -- * Get Defined Function Type Signature
   , getDefType
 
+  , getDef
+  , getPropTDefM
+
   -- * Throw Errors
   , cgError      
 
@@ -47,12 +50,15 @@ module Language.Nano.Liquid.CGMonad (
   , envGetContextCast
   , envGetContextTypArgs
 
+  , findTySymOrDieM
+  , findTySymWithIdOrDieM
+
   -- * Add Subtyping Constraints
   , subTypeContainers
 
   -- RJ: all alignment should already be done in TC why again?
   -- , alignTsM
-  , withAlignedM
+  {-, withAlignedM-}
   , wellFormed
   
   -- * Add Type Annotations
@@ -81,8 +87,8 @@ import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Typecheck.Types 
+import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.Typecheck.Subst
-import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Qualifiers
 
@@ -136,13 +142,13 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnTypeR RefType -> CGState
-initState c pgm = CGS F.emptyBindEnv (specs pgm) [] [] 0 mempty invs c [this] 
+initState c p = CGS F.emptyBindEnv (specs p) (defs p) [] [] 0 mempty invs c [this] 
   where 
-    invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts pgm]  
+    invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
     this        = tTop
 
 getDefType f 
-  = do m <- cg_defs <$> get
+  = do m <- cg_sigs <$> get
        maybe err return $ E.envFindTy f m 
     where 
        err = cgError l $ errorMissingSpec l f
@@ -176,7 +182,8 @@ measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts
 
 data CGState 
   = CGS { binds    :: F.BindEnv            -- ^ global list of fixpoint binders
-        , cg_defs  :: !(E.Env RefType)     -- ^ type sigs for all defined functions
+        , cg_sigs  :: !(E.Env RefType)     -- ^ type sigs for all defined functions
+        , cg_defs  :: !(TDefEnv RefType)   -- ^ defined types 
         , cs       :: ![SubC]              -- ^ subtyping constraints
         , ws       :: ![WfC]               -- ^ well-formedness constraints
         , count    :: !Integer             -- ^ freshness counter
@@ -194,6 +201,16 @@ type TConInv = M.HashMap TCon (Located RefType)
 -- cgError :: (IsLocated l) => l -> String -> CGM a 
 -- ---------------------------------------------------------------------------------------
 -- cgError l msg = throwError $ printf "CG-ERROR at %s : %s" (ppshow $ srcPos l) msg
+
+getDef = cg_defs <$> get
+
+getPropTDefM l s t ts = do 
+-- FIXME
+  ε <- undefined -- getExts
+  δ <- getDef 
+  return $ getPropTDef l ε δ (F.symbol s) ts t
+
+
 
 ---------------------------------------------------------------------------------------
 cgError     :: a -> Error -> CGM b 
@@ -316,7 +333,6 @@ envFindSpec x g = E.envFindTy x $ cge_spec g
 
 envFindAnnot l x g = msum [tAnn, tEnv, annot] 
   where
-
     annot        = listToMaybe [ t | TAnnot t <- ann_fact l ]
     tAnn         = E.envFindTy x $ cge_spec g
     tEnv         = E.envFindTy x $ renv     g
@@ -331,6 +347,11 @@ envToList g = E.envToList $ renv g
 envFindReturn :: CGEnv -> RefType 
 ---------------------------------------------------------------------------------------
 envFindReturn = E.envFindReturn . renv
+
+
+
+findTySymOrDieM i = findTySymOrDie i <$> getDef
+findTySymWithIdOrDieM i = findTySymWithIdOrDie i <$> getDef
 
 
 ---------------------------------------------------------------------------------------
@@ -396,7 +417,8 @@ subType l g t1 t2 =
      tt2   <- addInvariant t2
      -- TODO: Make this more efficient - only introduce new bindings
      g'    <- envAdds [(symbolId l x, t) | (x, Just t) <- relNames tt1 ++ relNames tt2 ] g
-     s     <- checkTypes (tenv g) tt1 tt2
+     -- FIXME: Why is this needed ???
+     s     <- undefined -- checkTypes (tenv g) tt1 tt2
      modify $ \st -> st {cs = c g' s : (cs st)}
   where
     c g    = uncurry $ Sub g (ci l)
@@ -419,16 +441,17 @@ subType l g t1 t2 =
 --   subType l g (trace (printf "SubType[%s]:\n\t%s\n\t%s" msg (ppshow t1) (ppshow t2)) t1) t2
 
 -------------------------------------------------------------------------------
-equivWUnions :: E.Env (TDef RefType) -> RefType -> RefType -> Bool
+equivWUnions :: TDefEnv RefType -> RefType -> RefType -> Bool
 -------------------------------------------------------------------------------
-equivWUnions γ t1@(TApp TUn _ _) t2@(TApp TUn _ _) = 
+equivWUnions δ t1@(TApp TUn _ _) t2@(TApp TUn _ _) = 
   {-let msg = printf "In equivWUnions:\n%s - \n%s" (ppshow t1) (ppshow t2) in -}
   case unionParts t1 t2 of 
-    (ts,[],[])  -> and $ uncurry (safeZipWith "equivWUnions" $ equivWUnions γ) (unzip ts)
+    (ts,[],[])  -> and $ uncurry (safeZipWith "equivWUnions" $ equivWUnions δ) (unzip ts)
     _           -> False
-equivWUnions γ t t' = equiv γ t t'
+equivWUnions δ t t' = equiv t t'
 
-equivWUnionsM γ t t' = return $ equivWUnions γ t t'
+equivWUnionsM t t' = getDef >>= \δ -> return (equivWUnions δ t t')
+
 
 -- | Subtyping container contents: unions, objects. Includes top-level
 
@@ -584,7 +607,7 @@ splitC' (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
 -- dealt with separately
 ---------------------------------------------------------------------------------------
 splitC' (Sub g i t1@(TApp TUn t1s r1) t2@(TApp TUn t2s r2)) =
-  ifM (equivWUnionsM (tenv g) t1 t2) 
+  ifM (equivWUnionsM t1 t2) 
     (do  cs      <- bsplitC g i t1 t2
          -- constructor parameters are covariant
          let t1s' = (`strengthen` r1) <$> t1s

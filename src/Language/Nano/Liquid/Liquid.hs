@@ -1,5 +1,6 @@
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE ConstraintKinds      #-}
 {-# LANGUAGE TupleSections        #-}
 
 -- | Top Level for Refinement Type checker
@@ -31,7 +32,6 @@ import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
-import           Language.Nano.Typecheck.Compare
 import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
@@ -42,12 +42,14 @@ import           System.Console.CmdArgs.Default
 
 -- import           Debug.Trace                        (trace)
 
+type PPR r = (PP r, F.Reftable r)
+
 --------------------------------------------------------------------------------
 verifyFile    :: FilePath -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
 verifyFile f = parse f $ ssa $ tc $ refTc
 
-parse f next = parseNanoFromFile f         >>= either (lerror . single) next
+parse f next = parseNanoFromFile f         >>= next
 ssa   next p = ssaTransform p              >>= either (lerror . single) next
 tc    next p = typeCheck (expandAliases p) >>= either lerror next
 refTc      p = getOpts >>= solveConstraints "" . (`generateConstraints` p) 
@@ -84,7 +86,9 @@ consNano     :: NanoRefType -> CGM ()
 consNano pgm@(Nano {code = Src fs}) = consStmts (initCGEnv pgm) fs >> return ()
 
 initCGEnv pgm = CGE (envUnion (specs pgm) (externs pgm)) 
-                    (defs pgm) F.emptyIBindEnv [] emptyContext 
+                    F.emptyIBindEnv 
+                    [] 
+                    emptyContext 
                     (envUnion (specs pgm) (glVars pgm))
 
 --------------------------------------------------------------------------------
@@ -138,7 +142,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 
 -- e1.fld = e2
 consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
-  = do (tfld, _) <- consPropRead getProp g l1 e1 fld
+  = do (tfld, _) <- consPropRead getProp g l1 e1 $ F.symbol fld
        (x2,  g') <- consExpr  g  e2
        let t2     = envFindTy x2 g'
        subTypeContainers "field-assignment" l2 g' t2 tfld
@@ -195,16 +199,20 @@ consStmt _ (ReturnStmt _ Nothing)
 consStmt g s@(FunctionStmt _ _ _ _)
   = Just <$> consFun g s
 
--- class A [extends B] [implements I,J,...] { ... }
-consStmt g (ClassStmt _ i _ _ ce)
-  = case clsTOpt of
-      Just clsT -> do
-        cgWithThis clsT $ mapM_ (consClassElt g) ce
-        return $ Just g
-        --  error $ "consStmt type for class " ++ ppshow i ++ " :: " ++ ppshow clsT
-      Nothing   -> error $ "BUG:consStmt could not find type for defined class: " ++ ppshow i
-  where 
-    clsTOpt = envFindSpec i g
+-- class A<S...> [extends B<T...>] [implements I,J,...] { ... }
+consStmt g (ClassStmt l i _ _ ce) = do  
+    -- * Compute / get the class type 
+    (cid, TD _ αs _ _) <- findTySymWithIdOrDieM $ F.symbol i
+    let tyBinds = [(Loc (srcPos l) α, tVar α) | α <- αs]
+    -- * Add the type vars in the environment
+    g' <- envAdds tyBinds g
+    -- * Compute type for "this" and add that to the env as well
+    --   - This type uses the classes type variables as type parameters.
+    --   - For the moment this type does not have a refinement. Maybe use
+    --     invariants to add some.
+    let thisT = TApp (TRef cid) (tVar <$> αs) fTop  
+    cgWithThis thisT $ mapM_ (consClassElt g') ce
+    return $ Just g
 
 -- OTHER (Not handled)
 consStmt _ s 
@@ -222,30 +230,26 @@ consVarDecl g (VarDecl l x Nothing)
       Just  t -> Just <$> envAdds [(x, t)] g
       Nothing -> cgError l $ errorVarDeclAnnot (srcPos l) x
 
+
 ------------------------------------------------------------------------------------
 consClassElt :: CGEnv -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
-consClassElt g (Constructor l xs body) = consClassEltAux l i f
-  where i    = Id l "constructor"
-        f ft = cgFunTys l i xs ft >>= mapM_ (consFun1 l g i xs body)
+consClassElt g (Constructor l xs body) 
+  = do  t <- cgFunTys l i xs $ pickElt l
+        -- Typecheck over all possible constructor signatures
+        mapM_ (consFun1 l g i xs body) t
+  where 
+        i = Id l "constructor"
 
-consClassElt g (MemberVarDecl _ _ _ v) = 
-  -- We can still use the class type annotation for this field.
-  -- This should be annotating `v`.
-  void $ consVarDecl g v
+  -- Annotation will be included in `v`
+consClassElt g (MemberVarDecl _ _ _ v) 
+  = void $ consVarDecl g v
   
-consClassElt g (MemberMethDecl l _ _ i xs body) = consClassEltAux l i f
-    where f ft = cgFunTys l i xs ft >>= mapM_ (consFun1 l g i xs body)
+consClassElt g (MemberMethDecl l _ _ i xs body) 
+  = do  ts <- cgFunTys l i xs $ pickElt l
+        mapM_ (consFun1 l g i xs body) ts
 
-------------------------------------------------------------------------------------
-consClassEltAux :: AnnTypeR -> Id AnnTypeR -> (RefType -> CGM ()) -> CGM ()
-------------------------------------------------------------------------------------
-consClassEltAux l id f = 
-  case [ t | TAnnot t  <- ann_fact l ] of 
-    [  ]  -> cgError    l (errorClEltAnnMissing (srcPos l) id)
-    [ft]  -> f ft 
-    _     -> error      $ "consClassEltType:multi-type constructor"
-
+pickElt l = head [ t | TAnnot t <- ann_fact l ]
 
 ------------------------------------------------------------------------------------
 consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
@@ -257,14 +261,13 @@ consExprT g e@(ArrayLit l _) (Just t)
   = do (x, g')  <- consExpr g e
        let te    = envFindTy x g'
        subTypeContainers "consExprT" l g' te t
-        
        let t' = t `strengthen` F.substa (sf (rv te) (rv t)) (rTypeReft te)
        g'' <- envAdds [(x, t')] g'
        return (x, g'')
     where
-       rv                   = rTypeValueVar
-       sf s1 s2 = \s -> if s == s1 then s2
-                                   else s
+       rv         = rTypeValueVar
+       sf s1 s2 s | s == s1   = s2
+                  | otherwise = s
 
 consExprT g e to 
   = do (x, g') <- consExpr g e
@@ -276,6 +279,7 @@ consExprT g e to
                        return (x, g'')
     where
        l = getAnnotation e
+
 
 ------------------------------------------------------------------------------------
 consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
@@ -331,11 +335,11 @@ consExpr g (CallExpr l e es)
 
 -- e.f
 consExpr g (DotRef l e (Id _ fld))
-  = snd <$> consPropRead getProp g l e fld 
+  = snd <$> consPropRead getProp g l e (F.symbol fld) 
 
 -- e["f"]
 consExpr g (BracketRef l e (StringLit _ fld)) 
-  = snd <$> consPropRead getProp g l e fld
+  = snd <$> consPropRead getProp g l e (F.symbol fld)
 
 -- e1[e2]
 consExpr g (BracketRef l e1 e2) 
@@ -354,19 +358,21 @@ consExpr g (ObjectLit l ps)
   = consObjT l g ps Nothing
 
 -- new C(e, ...)
-consExpr g (NewExpr l (VarRef _ (Id _ s)) es)
--- TODO: Polymorphic instantiations - We should be getting that for free since
--- we're using a variant of consCall, which substitutes to the class type.
-  = case envFindAnnot l s g of 
-      Just tCls ->
-        case getProp l (renv g) (tenv g) "constructor" tCls of
-          Just (_,tCnst) -> consCallConstructor g l es tCnst tCls
-          Nothing        -> cgError l $ bugMissingClsMethAnn (srcPos l) "constructor"
-      Nothing -> cgError l $ bugMissingClsType (srcPos l) s
+consExpr g (NewExpr l (VarRef lv i) es)
+  = do  (tid, t@(TD _ vs _ elts)) <- findTySymWithIdOrDieM $ F.symbol i
+        tConst0 <- getPropTDefM l "constructor" t (tVar <$> vs)
+        let tConstr = fix tid vs $ fromMaybe def tConst0
+        consCall g l "constructor" es tConstr
+    where
+        fix tid vs (TFun ts _ r) = mkAll vs $ TFun ts (TApp (TRef tid) (tVar <$> vs) fTop) r
+        fix _ _ t = error $ "BUG:consExpr NewExpr - not supported type for constructor: " ++ ppshow t
+        def :: (PPR r) => RType r
+        def = TFun [] tVoid fTop
 
 -- not handled
 consExpr _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))
+
 
 -------------------------------------------------------------------------------------------------
 consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
@@ -393,8 +399,9 @@ consUpCast g l x t = undefined
 ---------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------
 consDownCast g l x t = 
-  do tc  <- castTo l (tenv g) tx (toType t) 
-     {- withAlignedM -} g (subTypeContainers "Downcast" l g) tx tc
+  do δ   <- getDef
+     tc  <- castTo l δ tx (toType t) 
+     (subTypeContainers "Downcast" l g) tx tc {- withAlignedM -} 
      g'  <- envAdds [(x, tc)] g
      return (x, g')
   where 
@@ -498,7 +505,8 @@ consSeq f           = foldM step . Just
 consObjT l g pe to 
   = do let (ps, es) = unzip pe
        (xes, g')   <- consScan consExpr g es
-       let tLit     = (`TObj` fTop) $ zipWith B (F.symbol <$> ps) ((`envFindTy` g') <$> xes)
+       -- FIXME
+       let tLit     = undefined -- (`TObj` fTop) $ zipWith B (F.symbol <$> ps) ((`envFindTy` g') <$> xes)
        t           <- maybe (freshTyObj l g tLit) return to
        subTypeContainers "object literal" l g' tLit t
        envAddFresh "consObj" l t g'
@@ -509,7 +517,8 @@ consPropRead getter g l e fld
       (x, g')        <- consExpr g e
       let tx          = envFindTy x g'
       (this, g'')    <- envAddFresh "this" l tx g
-      case getter l (renv g'') (tenv g) fld tx of
+      δ              <- getDef
+      case getter l (renv g'') δ fld tx of
         Just (_, tf) -> 
           do
             let tf'   = F.substa (sf (F.symbol "this") (F.symbol this)) tf
@@ -552,13 +561,13 @@ consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> C
       }
 
  -}
-
+-- FIXME !!!
 consWhile g l cond body 
-  = do (gI, xs, _, _, tIs) <- envJoinExt l g g g                      -- (a), (b)
-       _                   <- consWhileBase l xs tIs g                -- (c)
+  = do (gI, xs, _, _, tIs) <- undefined -- envJoinExt l g g g                      -- (a), (b)
+       -- _                   <- consWhileBase l xs tIs g                -- (c)
        (xc, gI')           <- consExpr gI cond                        -- (d)
        z                   <- consStmt (envAddGuard xc True gI') body -- (e)
-       whenJustM z          $ consWhileStep l xs tIs                  -- (f) 
+       -- whenJustM z          $ consWhileStep l xs tIs                  -- (f) 
        return               $ envAddGuard xc False gI'
 
 consWhileBase l xs tIs g    = zipWithM_ (subTypeContainers "WhileBase" l g) xts_base tIs      -- (c)

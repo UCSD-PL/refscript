@@ -15,7 +15,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Programs
     Nano (..)
-  , NanoBare, NanoSSA, NanoBareR, NanoSSAR, NanoTSSAR, NanoTypeR, NanoType, ExprSSAR, StmtSSAR
+  , NanoBare, NanoSSA, NanoBareR, NanoSSAR, NanoRefType, NanoTypeR, NanoType, ExprSSAR, StmtSSAR
   , Source (..)
   , FunctionStatement
   , mapCode
@@ -57,7 +57,7 @@ module Language.Nano.Typecheck.Types (
   , TyID
   , TDefEnv, tDefEmpty
   , addTySym, addSym, addObjLitTy
-  , findTySym, findTySymOrDie, findTySymWithId, findTyId, findTyIdOrDie
+  , findTySym, findTySymOrDie, findTySymWithId, findTySymWithIdOrDie, findTyId, findTyIdOrDie
   , findTyIdOrDie', findEltWithDefault, symTDefMem
   , getDefNames
   , sortTDef
@@ -214,6 +214,11 @@ findTySymWithId :: F.Symbol -> TDefEnv t -> Maybe (TyID, TDef t)
 findTySymWithId s (G _ γ c) = F.lookupSEnv s c 
                           >>= \i -> (I.lookup i γ) 
                           >>= return . (i,)
+
+---------------------------------------------------------------------------------
+findTySymWithIdOrDie:: F.Symbol -> TDefEnv t -> (TyID, TDef t)
+---------------------------------------------------------------------------------
+findTySymWithIdOrDie s γ = fromMaybe (error "findTySymWithIdOrDie") $ findTySymWithId s γ 
 
 ---------------------------------------------------------------------------------
 findTySymOrDie :: F.Symbol -> TDefEnv t -> TDef t
@@ -753,10 +758,10 @@ data Nano a t = Nano { code   :: !(Source a)               -- ^ Code to check
                      , invts  :: ![Located t]              -- ^ Type Invariants
                      } deriving (Functor, Data, Typeable)
 
-type NanoBareR r   = Nano (AnnBare r) (RType r)
-type NanoSSAR r    = Nano (AnnSSA  r) (RType r)
-type NanoTSSAR r   = Nano (AnnTSSA r) (RType r)
-type NanoTypeR r   = Nano (AnnType r) (RType r)
+type NanoBareR r   = Nano (AnnBare r) (RType r)     -- ^ After Parse
+type NanoSSAR r    = Nano (AnnSSA  r) (RType r)     -- ^ After SSA  
+type NanoTypeR r   = Nano (AnnType r) (RType r)     -- ^ After TC: Contains an updated TDefEnv
+type NanoRefType   = Nano (AnnType F.Reft) (RType F.Reft) -- ^ After Liquid
 
 type ExprSSAR r    = Expression (AnnSSA r)
 type StmtSSAR r    = Statement  (AnnSSA r)

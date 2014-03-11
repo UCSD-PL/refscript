@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE ConstraintKinds      #-}
 {-# LANGUAGE FlexibleInstances    #-}
 
 -- | Module pertaining to Refinement Type descriptions and conversions
@@ -52,9 +53,10 @@ module Language.Nano.Liquid.Types (
 
   -- * Raw low-level Location-less constructors
   , rawStringSymbol 
+
   ) where
 
-import           Data.Maybe             (fromMaybe) -- (catMaybes, , isJust)
+import           Data.Maybe             (fromMaybe)
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 import           Language.ECMAScript3.Syntax
@@ -64,13 +66,17 @@ import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Subst
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.Misc
 import           Text.PrettyPrint.HughesPJ
+import           Text.Printf
 import           Control.Applicative 
   
+
 -------------------------------------------------------------------------------------
------ | Refinement Types and Environments -------------------------------------------
+-- | Refinement Types and Environments
 -------------------------------------------------------------------------------------
 
 type RefType     = RType F.Reft
@@ -79,7 +85,7 @@ type REnv        = Env RefType
 type AnnTypeR    = AnnType F.Reft
 
 -------------------------------------------------------------------------------------
--- | Constraint Generation Environment  ---------------------------------------------
+-- | Constraint Generation Environment 
 -------------------------------------------------------------------------------------
 
 data CGEnv   
@@ -91,7 +97,7 @@ data CGEnv
         }
 
 ----------------------------------------------------------------------------
--- | Constraint Information ------------------------------------------------
+-- | Constraint Information 
 ----------------------------------------------------------------------------
 
 newtype Cinfo = Ci SourceSpan deriving (Eq, Ord, Show) 
@@ -111,7 +117,7 @@ instance F.Fixpoint Cinfo where
   toFix = pp
 
 ----------------------------------------------------------------------------
--- | Constraints -----------------------------------------------------------
+-- | Constraints 
 ----------------------------------------------------------------------------
 
 -- | Subtyping Constraints
@@ -156,7 +162,7 @@ type FixSubC = F.SubC Cinfo
 type FixWfC  = F.WfC  Cinfo
 
 ------------------------------------------------------------------------
--- | Embedding Values as RefTypes --------------------------------------
+-- | Embedding Values as RefTypes
 ------------------------------------------------------------------------
 
 class RefTypable a where
@@ -175,7 +181,7 @@ pSingleton      :: (F.Predicate p) => RefType -> p -> RefType
 pSingleton t p  = t `strengthen` (F.propReft p)
 
 ------------------------------------------------------------------------------
--- | Converting RType to Fixpoint --------------------------------------------
+-- | Converting RType to Fixpoint
 ------------------------------------------------------------------------------
 
 rTypeSortedReft   ::  (F.Reftable r) => RType r -> F.SortedReft
@@ -236,7 +242,7 @@ stripRTypeBase (TArr _ r)   = Just r
 stripRTypeBase _            = Nothing
  
 ------------------------------------------------------------------------------------------
--- | Substitutions -----------------------------------------------------------------------
+-- | Substitutions
 ------------------------------------------------------------------------------------------
 
 instance (F.Reftable r, F.Subable r) => F.Subable (RType r) where
@@ -247,7 +253,7 @@ instance (F.Reftable r, F.Subable r) => F.Subable (RType r) where
   subst1 t su = emapReft (\xs r -> F.subst1Except xs r su) [] t
 
 ------------------------------------------------------------------------------------------
--- | Traversals over @RType@ -------------------------------------------------------------
+-- | Traversals over @RType@ 
 ------------------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------------------
@@ -279,7 +285,7 @@ mapReftM _ t               = error   $ render $ text "Not supported in mapReftM:
 mapReftBindM f (B x t)    = B x     <$> mapReftM f t
 
 ------------------------------------------------------------------------------------------
--- | fold over @RType@ -------------------------------------------------------------------
+-- | fold over @RType@ 
 ------------------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------------------
@@ -346,3 +352,5 @@ infixOpRTy o g = infixOpTy o $ renv g
 
 rawStringSymbol            = F.Loc F.dummyPos . F.stringSymbol
 rawStringFTycon            = F.stringFTycon . F.Loc F.dummyPos 
+
+

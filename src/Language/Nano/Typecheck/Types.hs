@@ -34,9 +34,6 @@ module Language.Nano.Typecheck.Types (
   
   -- Union ops
   , rUnion, rTypeR, setRTypeR, noUnion, unionCheck
-
-  -- Zip types
-  , zipType1, zipType2
   
   , renameBinds
   , calleeType
@@ -55,7 +52,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Type definition env
   , TyID
-  , TDefEnv, tDefEmpty
+  , TDefEnv (..), tDefEmpty
   , addTySym, addSym, addObjLitTy
   , findTySym, findTySymOrDie, findTySymWithId, findTySymWithIdOrDie, findTyId, findTyIdOrDie
   , findTyIdOrDie', findEltWithDefault, symTDefMem
@@ -88,7 +85,6 @@ import           Data.Hashable
 import           Data.Either                    (partitionEithers)
 import           Data.Maybe                     (fromMaybe)
 import           Data.Monoid                    hiding ((<>))            
-import           Data.List.Split                (splitOn)
 import qualified Data.List                      as L
 import qualified Data.IntMap                    as I
 import qualified Data.Set                       as S
@@ -160,9 +156,10 @@ data TElt t    = TE {
 
 -- | Type definition environment
 
-data TDefEnv t = G  { size    :: Int                -- ^ Size of the `env`
-                    , env     :: I.IntMap (TDef t)  -- ^ Type def env (includes object types)
-                    , names   :: F.SEnv TyID        -- ^ Named types - mapping to env
+data TDefEnv t = G  { 
+        g_size    :: Int                -- ^ Size of the `env`
+      , g_env     :: I.IntMap (TDef t)  -- ^ Type def env (includes object types)
+      , g_names   :: F.SEnv TyID        -- ^ Named types - mapping to env
                     } deriving (Show, Functor, Data, Typeable)
 
 tDefEmpty = G 0 I.empty F.emptySEnv
@@ -249,7 +246,7 @@ findEltWithDefault s t elts =
 ---------------------------------------------------------------------------------
 symTDefMem :: F.Symbol -> TDefEnv t -> Bool
 ---------------------------------------------------------------------------------
-symTDefMem s = F.memberSEnv s . names
+symTDefMem s = F.memberSEnv s . g_names
 
 
 
@@ -290,23 +287,6 @@ data Bind r
       , b_type :: !(RType r)    -- ^ Field type
       } 
     deriving (Eq, Ord, Show, Functor, Data, Typeable)
-
--- | An extended version of type tags
-data Tag 
-  = TagSimple TCon
-  | TagVar TVar
-  | TagFun
-  | TagArr Tag
-  | TagAll TVar Tag
-
-toTag :: RType r -> Tag 
-toTag (TApp c _ _) = TagSimple c
-toTag (TVar v _  ) = TagVar v
-toTag (TFun _ _ _) = TagFun
-toTag (TArr t _  ) = TagArr $ toTag t
-toTag (TAll v t  ) = TagAll v $ toTag t
-toTag (TAnd _    ) = TagFun
-toTag _            = errorstar "toTag: Unsupported"
 
 -- | "pure" top-refinement
 fTop :: (F.Reftable r) => r
@@ -417,8 +397,6 @@ bkUnion t               = [t]
 
 
 
-type PPR r = (PP r, F.Reftable r)
-
 -- | Type equivalence: This is equality on the raw type level, 
 --  excluding union types.
 
@@ -477,7 +455,7 @@ data SubDirection = SubT    -- Subtype
 instance PP SubDirection where 
   pp SubT = text "<:"
   pp SupT = text ":>"
-  pp EqT  = text "≈"
+  pp EqT  = text "="
   pp Nth  = text "≠"
 
 -- The Subtyping directions form a monoid both as a `sum` and as a `product`, 
@@ -555,81 +533,11 @@ unionParts' eq t1 t2 = (common t1s t2s, d1s, d2s)
 
 
 
-distinctBs b1 [] = (b_sym <$> b1, []          )
-distinctBs [] b2 = ([]          , b_sym <$> b2)
-distinctBs b1 b2 = (diff m1 m2  , diff m2 m1  )
-  where
-    m1           = bindsMap b1
-    m2           = bindsMap b2
-    diff m m'    = M.keys $ M.difference m m'
-
-bindsMap bs      = M.fromList [(s, t) | B s t <- bs]
-
--- Direction from distinct keys
-distDir xs ys 
-  | null (xs ++ ys) = EqT
-  | null xs         = SupT
-  | null ys         = SubT
-  | otherwise       = Nth
-
-meetBinds b1s b2s = M.toList $ M.intersectionWith (,) (bindsMap b1s) (bindsMap b2s)
 
 -- | Helper
 instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
   pp (a,b,c,d) = pp a <+>  pp b <+> pp c <+> pp d
 
-
--- | `zipType1` matches structurally equivalent parts of types @t1@ and @t2@:
--- * Keeping the the structure of @t1@
--- * Applying f on the respective refinements 
--- * f is commutative
--- 
--- E.g. zipType1 (number + { boolean | p } ) { number | v > 0 } meet = 
---        { number | v > 0 } + { boolean | p } 
-zipType1 δ f t1 t2 = zipType2 δ f t2 t1
-
-
--- | `zipType2` walks through the equivalent parts of types @t1@ and @t2@. It 
--- applies function $f$ on the refinements of the equivalent parts and keeps the
--- output as the resulting refinement. 
--- The shape of @t2@ is preserved in the output.
---------------------------------------------------------------------------------
-zipType2 :: (PP r, F.Reftable r) => TDefEnv (RType r) -> (r -> r -> r) ->  RType r -> RType r -> RType r
---------------------------------------------------------------------------------
-zipType2 δ f (TApp TUn ts r) (TApp TUn ts' r')  = 
-  TApp TUn (zipTypes δ f ts <$> ts') $ f r r'
-
-zipType2 δ f (TApp TUn ts _) t =  
-  zipTypes δ f ts t
-
-zipType2 δ f t (TApp TUn ts' r') =  
-  TApp TUn (zipTypes δ f [t] <$> ts') r'        -- The top-level refinement for t' should remain
-
-zipType2 δ f (TApp d@(TRef _) ts r) (TApp d'@(TRef _) ts' r') | d == d' =
-  TApp d' (zipWith (zipType2 δ f) ts ts') $ f r r'
-
-zipType2 _ f (TApp c [] r) (TApp c' [] r')    | c == c' = 
-  TApp c [] $ f r r'
-
-zipType2 _ f (TVar v r) (TVar v' r') | v == v' = TVar v $ f r r'
-
-zipType2 δ f (TFun xts t r) (TFun xts' t' r') = 
-  TFun (safeZipWith "zipType2:TFun" (zipBind2 δ f) xts xts') (zipType2 δ f t t') $ f r r'
-
-zipType2 δ f (TArr t r) (TArr t' r') = TArr (zipType2 δ f t t') $ f r r'
-
-zipType2 _ _ t t' = 
-  errorstar $ printf "BUG[zipType2]: mis-aligned types:\n\t%s\nand\n\t%s" (ppshow t) (ppshow t')
-
-zipTypes δ f ts t = 
-  case filter (equiv t) ts of
-    [  ] -> t
-    [t'] -> zipType2 δ f t' t
-    _    -> errorstar "BUG[zipType]: multiple equivalent types" 
-  
-
-zipBind2 δ f (B s t) (B s' t') | s == s' = B s $ zipType2 δ f t t' 
-zipBind2 _ _ _       _                   = errorstar "BUG[zipBind2]: mis-matching binders"
 
 
 
@@ -676,7 +584,7 @@ isVoid (TApp TVoid _ _)   = True
 isVoid _                  = False
 
 isTRef (TApp (TRef _) _ _) = True
-isTRef t                   = False
+isTRef _                   = False
 
 isUnion :: RType r -> Bool
 isUnion (TApp TUn _ _) = True           -- top-level union
@@ -815,7 +723,7 @@ instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
 --     $+$ vcat (pp <$> (invts pgm))
     $+$ text "\n***********************************************\n"
 
-ppEnv env = vcat [ pp id <+> text "::" <+> pp t <+> text"\n" | (id, t) <- envToList env]
+-- ppEnv env = vcat [ pp id <+> text "::" <+> pp t <+> text"\n" | (id, t) <- envToList env]
 
 instance PP t => PP (TDefEnv t) where
   pp (G s γ c) =  (text "Size:" <+> text (show s))  $$ text "" $$
@@ -844,7 +752,7 @@ instance (PP t) => PP (TDef t) where
             text " " 
         <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
         <+> text " ")
-    pp (TD Nothing vs Nothing ts) = 
+    pp (TD Nothing _ Nothing ts) = 
             braces (
             text " " 
         <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
@@ -995,15 +903,15 @@ pushContext s (IC c) = IC ((siteIndex s) : c)
 -- | Casts ------------------------------------------------------------------
 -----------------------------------------------------------------------------
 
-data Cast t  = UCST {castTarget :: t } -- ^ up-cast
+data Cast t  = UCST {castOrigin :: t, castTarget :: t } -- ^ up-cast
              | DCST {castTarget :: t } -- ^ down-cast 
              | DC   {castTarget :: t } -- ^ dead-cast
              deriving (Eq, Ord, Show, Data, Typeable)
 
 instance (PP a) => PP (Cast a) where
-  pp (UCST t) = text "Upcast  : " <+> pp t
-  pp (DCST t) = text "Downcast: " <+> pp t
-  pp (DC   t) = text "Deadcast: " <+> pp t
+  pp (UCST t1 t2) = text "Upcast  : " <+> pp t1 <+> text " => " <+> pp t2
+  pp (DCST t)     = text "Downcast: " <+> pp t
+  pp (DC   t)     = text "Deadcast: " <+> pp t
 
 -----------------------------------------------------------------------------
 -- | Annotations ------------------------------------------------------------
@@ -1027,7 +935,6 @@ type UFact = Fact ()
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show, Data, Typeable)
 type AnnBare r = Annot (Fact r) SourceSpan -- NO facts
 type AnnSSA  r = Annot (Fact r) SourceSpan -- Phi facts
-type AnnTSSA r = Annot (Fact r) SourceSpan -- Phi + t. annot. facts
 type AnnType r = Annot (Fact r) SourceSpan -- Phi + t. annot. + Cast facts
 type AnnInfo r = M.HashMap SourceSpan [Fact r] 
 type ClassInfo r = Env (RType r)
@@ -1060,6 +967,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (Overload i)     = text "overload" <+> pp i
   pp (TCast  ξ c)     = text "cast" <+> pp ξ <+> pp c
   pp (TAnnot t)       = text "annotation" <+> pp t
+  pp (CAnnot _)       = error "UNIMPLEMENTED:pp:CAnnot"
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . M.toList 

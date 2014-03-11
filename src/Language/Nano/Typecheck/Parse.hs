@@ -23,7 +23,6 @@ import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
 import           Data.Traversable                        ( mapAccumL)
 import           Data.Data
-import           Data.Monoid                             (mconcat, mempty)
 import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
 
@@ -33,7 +32,6 @@ import           Control.Applicative                     ( (<$>), ( <*>))
 
 import           Language.Fixpoint.Types          hiding ( quals, Loc, Expression)
 import           Language.Fixpoint.Parse
-import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc                  ( mapEither, mapSnd)
 import           Language.Nano.Types
 import           Language.Nano.Errors
@@ -51,7 +49,7 @@ import qualified Text.Parsec.Token                as     Token
 
 import           GHC.Generics
 
-import           Debug.Trace                             ( trace, traceShow)
+-- import           Debug.Trace                             ( trace, traceShow)
 
 dot        = Token.dot        lexer
 plus       = Token.symbol     lexer "+"
@@ -221,10 +219,10 @@ tConP =  try (reserved "number"    >> return TInt)
      <|>     (withinSpacesP (char '#') >> identifierP >>= idToTRefP)
 
 idToTRefP :: Id SourceSpan -> ParserS TCon
-idToTRefP (Id ss s) = do
-  (u, n)      <- getState
+idToTRefP (Id _ s) = do
+  (u, _)      <- getState
   let (u', id) = addSym (symbol s) u 
-  modifyState  $ \(u,n) -> (u', n)
+  modifyState  $ \(_,n) -> (u', n)
   return       $ TRef id
 
 bareAll1P 
@@ -235,15 +233,6 @@ bareAll1P
        return $ foldr TAll t αs
 
 arrayP = brackets bareTypeP
-
--- XXX: This is not used -- do we need this???
-arrayBindsP 
-  = do reserved "[|"
-       ts    <- sepBy bareTypeP comma
-       reserved "|]"
-       return $ zipWith B (symbol . show <$> [0..]) ts ++ [len ts]
-    where
-      len ts = B (symbol "length") (eSingleton tInt $ length ts)
 
 
 bindsP 
@@ -363,9 +352,9 @@ registerIface :: Spec -> ParserS Spec
 registerIface (IFace (s, t)) = do
   (u, n)  <- getState
   -- XXX: losing the SourceSpan on s here.
-  let (u',id) = addTySym (symbol s) t u
-  putState $ (u', n)
+  putState $ (fst $ addTySym (symbol s) t u, n)
   return $ IFace (s,t) 
+registerIface _ = error "BUG:registerIface"
 
 
 patch ss (id, t) = (fmap (const ss) id , t)

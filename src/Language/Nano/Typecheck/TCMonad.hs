@@ -107,7 +107,7 @@ import qualified Data.HashMap.Strict                as M
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 
--- import           Debug.Trace                      (trace)
+import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity   as V
 
 type PPR r = (PP r, F.Reftable r)
@@ -392,18 +392,20 @@ unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
 --  Cast Helpers ---------------------------------------------------------------
 --------------------------------------------------------------------------------
 
--- | For the expression @e@, check the subtyping relation between the type @t@
--- which is the actual type for @e@ and @t'@ which is the desired (cast) type
--- and insert the right kind of cast. 
+-- | For the expression @e@, check the subtyping relation between the type @t1@
+-- which is the actual type for @e@ and @t2@ which is the desired (cast) type
+-- and insert the right kind of cast.
 --------------------------------------------------------------------------------
 castM :: (PPR r) => AnnSSA r -> IContext -> Expression (AnnSSA r) 
   -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-castM l ξ e fromT toT = go =<< thd3 <$> convert (ann l) fromT toT
-  where go SupT = addDownCast ξ e toT    
-        go SubT = addUpCast   ξ e toT   
-        go Nth  = addDeadCast ξ e toT   
-        go EqT  = return e 
+castM l ξ e t1 t2 = do
+  (t1',t2',d) <- convert (ann l) t1 t2
+  case (trace ("< " ++ ppshow t1 ++ " => " ++ ppshow t2 ++ ">  :: " ++ ppshow t1' ++ " " ++ ppshow d ++ " " ++ ppshow t2') d) of
+    SupT -> addDownCast ξ e t2
+    SubT -> addUpCast   ξ e t1' t2
+    Nth  -> addDeadCast ξ e t2   
+    EqT  -> return e 
 
 
 -- | Monad versions of TDefEnv operations
@@ -423,8 +425,8 @@ findTySymOrDieM i = findTySymOrDie i <$> getDef
 
 
 -- | `convert` returns:
--- * An equivalent version of @t1@ that has the same sort as the second (RJ: first?) output
--- * An equivalent version of @t2@ that has the same sort as the first output
+-- * An equivalent version of @t1@ that has the same sort as the first input type
+-- * An equivalent version of @t2@ that has the same sort as the second input type
 -- * A subtyping direction between @t1@ and @t2@
 --
 -- Padding the input types gives them the same sort, i.e. makes them compatible. 
@@ -486,9 +488,9 @@ convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2)
           ks2 = ks e2s
 
       -- Width eq/sub/super-type
-          widthEq    = isEqualSet ks1 ks2
-          widthSub   = isProperSubsetOf ks1 ks2
-          widthSup   = isProperSubsetOf ks2 ks1
+          equal     = isEqualSet ks1 ks2
+          supertype = isProperSubsetOf ks1 ks2
+          subtype   = isProperSubsetOf ks2 ks1
 
       -- Equal types at the common fields
           cmnKs = S.intersection ks1 ks2
@@ -497,7 +499,7 @@ convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2)
           -- e1s' and e2s' should have the same length
           cmnEq = and $ zipWith depthEq e1s' e2s' 
 
-      case (cmnEq, widthEq, widthSup, widthSub) of
+      case (cmnEq, equal, subtype, supertype) of
         (True, True, _  , _   ) -> return (t1, t2, EqT)
         (True, _,   True, _   ) -> do
           -- UPCAST: Restrict A<S1...> to the fields of B<T1...>
@@ -507,7 +509,7 @@ convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2)
           -- for the constraint generation.
             let e1s' = filter (\e -> S.member (f_sym e) ks2) e1s
             i1' <- addObjLitTyM (TD n2 v1s pro2 e1s')
-            return (TApp (TRef i1') t1s r1, t2, SupT)
+            return (TApp (TRef i1') t1s r1, t2, SubT)
         (True, _   , _  , True) -> tcError $ errorMissFlds l d1 d2 (S.toList $ S.difference ks2 ks1)
         (True, _   , _  , _   ) -> tcError $ errorConvDef l d1 d2
         (_   , _   , _  , _   ) -> tcError $ errorConvDefDepth l d1 d2
@@ -608,7 +610,7 @@ convertArray l (TArr t1 r1) (TArr t2 r2) = do
 convertArray _ _ _ = errorstar "BUG: convertArray can only pad Arrays"
 
 
-addUpCast   ξ e t = addCast ξ e (UCST t)
+addUpCast   ξ e t1 t2 = addCast ξ e (UCST t1 t2)
 addDownCast ξ e t = addCast ξ e (DCST t) 
 addDeadCast ξ e t = addCast ξ e (DC t)
 

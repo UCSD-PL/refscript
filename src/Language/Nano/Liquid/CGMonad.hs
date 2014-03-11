@@ -1,4 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
@@ -74,9 +76,13 @@ module Language.Nano.Liquid.CGMonad (
   , cgPeekThis
   , cgWithThis
 
+  -- Zip types
+  , zipType1, zipType2
+
+
   ) where
 
-import           Data.Maybe                     (fromMaybe, listToMaybe)
+import           Data.Maybe                     (fromMaybe, listToMaybe, maybeToList)
 import           Data.Monoid                    (mempty)
 import           Data.Function                  (on)
 import qualified Data.HashMap.Strict            as M
@@ -128,6 +134,8 @@ instance PP (F.SubC c) where
   pp s = pp (F.lhsCs s) <+> text " <: " <+> pp (F.rhsCs s)
 
 
+type PPR r = (PP r, F.Reftable r)
+type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
 
 -------------------------------------------------------------------------------
 getCGInfo :: Config -> NanoRefType -> CGM a -> CGInfo
@@ -364,6 +372,7 @@ updTDefEnv f = f <$> getDef >>= \(δ', a) -> setDef δ' >> return a
 addObjLitTyM            = updTDefEnv . addObjLitTy
 findTySymOrDieM i       = findTySymOrDie i <$> getDef
 findTySymWithIdOrDieM i = findTySymWithIdOrDie i <$> getDef
+findTyIdOrDieM :: TyID -> CGM (TDef RefType)
 findTyIdOrDieM i        = findTyIdOrDie i <$> getDef
 
 
@@ -606,7 +615,8 @@ splitC (Sub g i t1@(TApp TUn t1s r1) t2@(TApp TUn t2s r2)) =
          cs'     <- concatMapM splitC $ safeZipWith "splitcTRef" (Sub g i) t1s' t2s'
          return   $ cs ++ cs'
     )
-    (errorstar $ printf "Unequal unions in splitC: %s - %s" (ppshow $ toType t1) (ppshow $ toType t2))
+    (errorstar $ printf "Unequal unions in splitC: %s - %s" 
+      (ppshow $ toType t1) (ppshow $ toType t2))
 
 splitC (Sub _ _ t1@(TApp TUn _ _) t2) = 
   errorstar $ printf "Unions in splitC: %s - %s" (ppshow t1) (ppshow t2)
@@ -624,13 +634,12 @@ splitC (Sub g i t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _))
                                   ++ safeZipWith "splitcTRef" (Sub g i) t2s t1s
         return $ cs ++ cs' 
   | otherwise 
-  = do  cs    <- bsplitC g i t1 t2
-        --XXX: Does bsplitC remain the same?
+  = do  cs    <- bsplitC g i t1 t2        --XXX: Does bsplitC remain the same?
         d1@(TD _ v1s _ _) <- findTyIdOrDieM i1
         d2@(TD _ v2s _ _) <- findTyIdOrDieM i2
-        e1s <- getDef >>= return . apply (fromList $ zip v1s t1s) . tracePP ("flatten1 " ++ ppshow d1) . flatten d1
-        e2s <- getDef >>= return . apply (fromList $ zip v2s t2s) . tracePP ("flatten2 " ++ ppshow d2) . flatten d2
-        cs' <- tracePP "TDEF CONS" <$> splitE g i e1s e2s
+        e1s <- getDef >>= return . apply (fromList $ zip v1s t1s) . flatten d1
+        e2s <- getDef >>= return . apply (fromList $ zip v2s t2s) . flatten d2
+        cs' <- splitE g i e1s e2s
         return $ cs ++ cs'
 
 splitC (Sub _ _ (TApp (TRef _) _ _) _)
@@ -817,4 +826,88 @@ cgPushThis t = modify $ \st -> st { cg_this = t : cg_this st }
 cgPopThis    = modify $ \st -> st { cg_this = tail $ cg_this st } 
 
 cgWithThis t p = do { cgPushThis t; a <- p; cgPopThis; return a } 
+
+
+-- | `zipType1` matches structurally equivalent parts of types @t1@ and @t2@:
+-- * Keeping the structure of @t1@
+-- * Applying f on the respective refinements 
+-- * f is commutative
+-- 
+-- E.g. zipType1 (number + { boolean | p } ) { number | v > 0 } meet = 
+--        { number | v > 0 } + { boolean | p } 
+zipType1 f t1 t2 = zipType2 f t2 t1
+
+
+-- | `zipType2` 
+-- * walks through the equivalent parts of types @t1@ and @t2@
+-- * applies function @f@ on the refinements of the equivalent parts 
+-- * keeps the output as the resulting refinement
+-- * preserves the shape of @t2@
+--------------------------------------------------------------------------------
+zipType2 :: (F.Reft -> F.Reft -> F.Reft) ->  RefType -> RefType -> CGM RefType
+--------------------------------------------------------------------------------
+zipType2 f (TApp TUn t1s r1) (TApp TUn t2s r2)  = do
+  ts <- mapM (zipTypes f t1s) t2s 
+  return $ TApp TUn ts $ f r1 r2
+
+zipType2 f (TApp TUn ts _) t =  
+  zipTypes f ts t
+
+zipType2 f t (TApp TUn ts' r') = do
+  ts <- mapM (zipTypes f [t]) ts'
+  return $ TApp TUn ts r'                 -- The top-level refinement for t' should remain
+
+zipType2 f (TApp (TRef i1) t1s r1) (TApp (TRef i2) t2s r2) 
+  | i1 == i2  = do  ts <- zipWithM (zipType2 f) t1s t2s
+                    return $ TApp (TRef i1) ts $ f r1 r2
+  | otherwise = do  d1@(TD _ v1s _ _) <- findTyIdOrDieM i1
+                    d2@(TD _ v2s _ _) <- findTyIdOrDieM i2
+                    e1s <- apply (fromList $ zip v1s t1s) <$> flattenM d1
+                    e2s <- apply (fromList $ zip v2s t2s) <$> flattenM d2 
+                    let (e1s', e2s') = unzip [ (e1, e2) | e2 <- e2s, e1 <- maybeToList $ L.find (same e2) e1s]   
+                    es <- zipWithM (zipElt2 f) e1s' e2s'
+                    i  <- addObjLitTyM $ TD Nothing [] Nothing es
+                    return $ TApp (TRef i) [] $ f r1 r2
+  where
+    same (TE s1 b1 _) (TE s2 b2 _) = s1 == s2 && b1 == b2
+    
+zipType2 f (TApp c [] r) (TApp c' [] r')    | c == c' = 
+  return $ TApp c [] $ f r r'
+
+zipType2 f (TVar v r) (TVar v' r') | v == v' = 
+  return $ TVar v $ f r r'
+
+zipType2 f (TFun x1s t1 r1) (TFun x2s t2 r2) = do
+  xs <- zipWithM (zipBind2 f) x1s x2s 
+  y  <- zipType2 f t1 t2
+  return $ TFun xs y $ f r1 r2
+
+zipType2 f (TArr t1 r1) (TArr t2 r2) = do
+  t <- zipType2 f t1 t2
+  return $ TArr t $ f r1 r2
+
+zipType2 _ t1 t2 = 
+  errorstar $ printf "BUG[zipType2]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
+
+zipTypes f ts t = 
+  case filter (equiv t) ts of
+    [  ] -> return t
+    [t'] -> zipType2 f t' t
+    _    -> errorstar "BUG[zipType]: multiple equivalent types" 
+  
+
+zipBind2 f (B s1 t1) (B s2 t2) 
+  | s1 == s2 = B s1 <$> zipType2 f t1 t2 
+zipBind2 _ _       _           
+  = errorstar "BUG[zipBind2]: mis-matching binders"
+
+zipElt2 f (TE s1 b1 t1) (TE s2 b2 t2) 
+  | s1 == s2 && b1 == b2 = TE s1 b1 <$> zipType2 f t1 t2 
+zipElt2 _ _       _                
+  = errorstar "BUG[zipElt2]: mis-matching elements"
+
+--------------------------------------------------------------------------------
+flattenM :: TDef RefType -> CGM [TElt RefType]
+--------------------------------------------------------------------------------
+flattenM d = flatten d <$> getDef
 

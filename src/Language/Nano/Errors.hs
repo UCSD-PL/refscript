@@ -4,16 +4,11 @@
 
 module Language.Nano.Errors where
 
--- import Data.Typeable                      (Typeable)
--- import Control.Exception.Base
--- import qualified Control.Monad.Error as E
 import Debug.Trace
 import Text.Printf 
 import Text.PrettyPrint.HughesPJ
 import Language.ECMAScript3.PrettyPrint
--- import Text.Parsec.Pos                   
 import Language.ECMAScript3.Parser.Type      (SourceSpan (..))
--- import qualified Language.Fixpoint.Types as F
 import Language.Fixpoint.Errors
 import Language.Fixpoint.PrettyPrint
 
@@ -142,8 +137,8 @@ errorBadPAlias l p nx ne  = mkErr l $ printf "Invalid predicate alias applicatio
 errorBadTAlias l t nt ne nα nx  
                           = mkErr l $ printf "Invalid type alias application: %s \nExpected %d type, %d value arguments, but got %d and %d" (ppshow t) nα nx nt ne  
 
-errorConvDef l t1 t2      = mkErr l $ printf "Cannot compare types: '%s' and '%s'" (ppshow t1) (ppshow t2)
+errorConvDef l t1 t2      = mkErr l $ printf "Cannot convert types:\n%s\nand\n%s" (ppshow t1) (ppshow t2)
 errorConvDefDepth l t1 t2 = mkErr l $ printf "No deep subtyping: '%s' and '%s'" (ppshow t1) (ppshow t2)
-errorConvDefInvar l t1 t2 = mkErr l $ printf "Only invariant interface subtyping: '%s' and '%s'" (ppshow t1) (ppshow t2)
-errorMissFlds l t1 t2 x   = mkErr l $ printf "Cannot comvert: '%s' to '%s'. Type '%s' is missing fields %s." 
+errorConvDefInvar l t1 t2 = mkErr l $ printf "Only invariant interface subtyping:\n%s\nand\n%s" (ppshow t1) (ppshow t2)
+errorMissFlds l t1 t2 x   = mkErr l $ printf "Cannot convert:\n%s\n\nto\n\n%s\n\nType\n%s\nis missing fields %s." 
                                                   (ppshow t1) (ppshow t2) (ppshow t1) (ppshow x)

@@ -39,7 +39,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
 
@@ -285,9 +285,9 @@ consExprT g e to
        l = getAnnotation e
  
 
-------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
-------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 consAsgn g l x e 
   = do t <- case envFindAnnot l x g of
               Just t  -> Just <$> freshTyVar g l t
@@ -386,29 +386,25 @@ consExpr _ e
   = error $ (printf "consExpr: not handled %s" (ppshow e))
 
 
--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 consCast g a e
   = case envGetContextCast g a of
       Just (DC t) -> consDeadCast g l t
       z           -> do (x, g') <- consExpr g e
                         case z of
-                          Nothing        -> return (x, g')
-                          Just (UCST t)  -> consUpCast   g' l x t
-                          Just (DCST t)  -> consDownCast g' l x t
-                          _              -> error "consCast:This shouldn't happen"
+                          Nothing           -> return (x, g')
+                          Just (UCST t1 t2) -> consUpCast   g' l x t1
+                          Just (DCST t)     -> consDownCast g' l x t
+                          _                 -> error "consCast:This shouldn't happen"
     where 
       l              = srcPos a
 
+-- | Upcast
+consUpCast g l x t = envAddFresh "consUpCast" l t g
 
--- FIXME
-consUpCast _ _ _ _  = error "consUpCast"
--- consUpCast g l x t = error "consUpCast"
--- TODO: This should be aligned !!!
---   envAddFresh "consUpCast" l 
---     ((`strengthen` (F.symbolReft x)) $ fst $ alignTs (tenv g) (envFindTy x g) t) g
-
+-- | Downcast
 consDownCast g l x t = 
   do δ   <- getDef
      tc  <- castTo l δ tx (toType t) 
@@ -419,14 +415,15 @@ consDownCast g l x t =
   where 
      tx   = envFindTy x g
 
-castTo l γ t τ       = castStrengthen t . zipType2 γ botJoin t <$> bottify τ 
+castTo l γ t τ       = castStrengthen t <$> (zipType2 botJoin t =<< bottify τ)
   where 
-    bottify          = fmap (fmap F.bot) . true . rType 
+  -- Bottify does not descend into TDefEnv
+    bottify t        = tracePP "Bottified" <$> fmap (fmap F.bot) (true (rType t))
     botJoin r1 r2 
       | F.isFalse r1 = r2
       | F.isFalse r2 = r1
       | otherwise    = die $ bug (srcPos l) msg
-    msg              = printf "botJoin: t = %s τ = %s" (ppshow (t :: RefType)) (ppshow (τ :: Type))
+    msg              = printf "botJoin: t1 = %s t2 = %s" (ppshow t) (ppshow τ)
 
 castStrengthen t1 t2 
   | isUnion t1 && not (isUnion t2) = t2 `strengthen` (rTypeReft t1)
@@ -441,10 +438,10 @@ consDeadCast g l t
        t'  = t    `strengthen` F.predReft F.PFalse
 
 
----------------------------------------------------------------------------------------------
-consCall :: (PP a) 
-         => CGEnv -> AnnTypeR -> a -> [Expression AnnTypeR] -> RefType -> CGM (Id AnnTypeR, CGEnv)
----------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+consCall :: (PP a) => 
+  CGEnv -> AnnTypeR -> a -> [Expression AnnTypeR] -> RefType -> CGM (Id AnnTypeR, CGEnv)
+--------------------------------------------------------------------------------
 
 --   1. Fill in @instantiate@ to get a monomorphic instance of @ft@ 
 --      i.e. the callee's RefType, at this call-site (You may want 

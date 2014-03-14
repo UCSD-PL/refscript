@@ -141,16 +141,16 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 type TyID      = Int
 
 data TDef t    = TD { 
-        t_name  :: !(Maybe (Id SourceSpan))   -- ^ Name (possibly no name)
-      , t_args  :: ![TVar]                    -- ^ Type variables
-      , t_proto :: !(Maybe (F.Symbol, [t]))   -- ^ Parent type symbol
-      , t_elts  :: ![TElt t]                  -- ^ List of data type elts 
+        t_name  :: !(Maybe (Id SourceSpan))       -- ^ Name (possibly no name)
+      , t_args  :: ![TVar]                        -- ^ Type variables
+      , t_proto :: !(Maybe (Id SourceSpan, [t]))  -- ^ Parent type symbol
+      , t_elts  :: ![TElt t]                      -- ^ List of data type elts 
       } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 data TElt t    = TE { 
-        f_sym   :: F.Symbol                   -- ^ Symbol
-      , f_acc   :: Bool                       -- ^ Access modifier (public: true, private: false)
-      , f_type  :: t                          -- ^ Type
+        f_sym   :: F.Symbol                       -- ^ Symbol
+      , f_acc   :: Bool                           -- ^ Access modifier (public: true, private: false)
+      , f_type  :: t                              -- ^ Type
       } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 
@@ -201,9 +201,9 @@ addObjLitTy t (G sz γ c) = (G sz' γ' c, id)
     γ'  = I.insert id t γ
 
 ---------------------------------------------------------------------------------
-findTySym :: F.Symbol -> TDefEnv t -> Maybe (TDef t)
+findTySym :: F.Symbolic s => s -> TDefEnv t -> Maybe (TDef t)
 ---------------------------------------------------------------------------------
-findTySym s (G _ γ c) = F.lookupSEnv s c >>= (`I.lookup` γ)
+findTySym s (G _ γ c) = F.lookupSEnv (F.symbol s) c >>= (`I.lookup` γ)
 
 ---------------------------------------------------------------------------------
 findTySymWithId :: F.Symbol -> TDefEnv t -> Maybe (TyID, TDef t)
@@ -218,7 +218,7 @@ findTySymWithIdOrDie:: F.Symbol -> TDefEnv t -> (TyID, TDef t)
 findTySymWithIdOrDie s γ = fromMaybe (error "findTySymWithIdOrDie") $ findTySymWithId s γ 
 
 ---------------------------------------------------------------------------------
-findTySymOrDie :: F.Symbol -> TDefEnv t -> TDef t
+findTySymOrDie :: F.Symbolic s => s -> TDefEnv t -> TDef t
 ---------------------------------------------------------------------------------
 findTySymOrDie s γ = fromMaybe (error "findTySymOrDie") $ findTySym s γ 
 
@@ -265,7 +265,7 @@ data TCon
   | TString
   | TVoid
   | TTop
-  | TRef  TyID -- (Id SourceSpan)
+  | TRef  TyID
   | TUn
   | TNull
   | TUndef
@@ -279,7 +279,14 @@ data RType r
   | TArr (RType r)          r   -- ^ [T] 
   | TAll TVar (RType r)         -- ^ forall A. T
   | TAnd [RType r]              -- ^ (T1..) => T1' /\ ... /\ (Tn..) => Tn' 
+
   | TExp F.Expr                 -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
+
+  | TCons [Bind r]          r   -- ^ Flattened version of an object type 
+                                --   To be used right before getting the
+                                --   constraints for containers, to avoid 
+                                --   having type references when needing to
+                                --   bottify or k-var
     deriving (Ord, Show, Functor, Data, Typeable)
 
 data Bind r
@@ -327,11 +334,9 @@ funTys l f xs ft
           (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
 
 funTy l xs (αs, yts, t) 
-  | eqLen xs yts = let (su, ts') = renameBinds yts xs 
-                   in  Right (αs, ts', F.subst su t)    
-  | otherwise    = Left $ errorArgMismatch (srcPos l)
-
-eqLen xs ys       = length xs == length ys 
+  | length xs == length yts = let (su, ts') = renameBinds yts xs 
+                              in  Right (αs, ts', F.subst su t)    
+  | otherwise               = Left $ errorArgMismatch (srcPos l)
 
 renameBinds yts xs    = (su, [F.subst su ty | B _ ty <- yts])
   where 
@@ -601,6 +606,7 @@ rTypeR (TApp _ _ r ) = r
 rTypeR (TVar _ r   ) = r
 rTypeR (TFun _ _ r ) = r
 rTypeR (TArr _ r   ) = r
+rTypeR (TCons _ r  ) = r
 rTypeR (TAll _ _   ) = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )     = errorstar "Unimplemented: rTypeR - TAnd"
 rTypeR (TExp _)      = errorstar "Unimplemented: rTypeR - TExp"
@@ -744,10 +750,10 @@ instance (PP t) => PP (TDef t) where
             text " " 
         <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
         <+> text " ")
-    pp (TD (Just nm) vs (Just p) ts) = 
+    pp (TD (Just nm) vs (Just (p,ps)) ts) = 
           pp nm 
       <+> ppArgs brackets comma vs 
-      <+> text "extends" <+> pp p 
+      <+> text "extends" <+> pp p <+> pp ps
       <+> braces (
             text " " 
         <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
@@ -835,6 +841,7 @@ instance F.Reftable r => PP (RType r) where
   pp (TApp c [] r)              = F.ppTy r $ pp c 
   pp (TApp c ts r)              = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
   pp (TArr t r)                 = F.ppTy r $ brackets (pp t)  
+  pp (TCons bs r)               = F.ppTy r $ ppArgs braces comma bs
 
 instance PP TCon where
   pp TInt             = text "number"

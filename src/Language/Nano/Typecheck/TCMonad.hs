@@ -84,7 +84,6 @@ import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>))
 import qualified Data.HashSet                       as S
 import qualified Data.List                          as L
-import           Data.Maybe                         (fromMaybe)
 import           Data.Function                      (on)
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)
@@ -93,8 +92,6 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types            as F
 
 import           Language.Nano.Env
-import           Language.Nano.Misc                 (unique, snd4, thd4, fst4, fth4, setFth4)
-
 import           Language.Nano.Types
 import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
@@ -105,7 +102,6 @@ import           Language.Nano.Errors
 import           Data.Monoid                  
 import qualified Data.HashMap.Strict                as M
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Syntax.Annotations
 
 import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity   as V
@@ -115,7 +111,7 @@ type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r))
 
 
 -------------------------------------------------------------------------------
--- | Typechecking monad -------------------------------------------------------
+-- | Typechecking monad 
 -------------------------------------------------------------------------------
 
 data TCState r = TCS {
@@ -255,7 +251,7 @@ setTyArgs l ξ βs
 
 
 -------------------------------------------------------------------------------
--- | Managing Annotations: Type Instantiations --------------------------------
+-- | Managing Annotations: Type Instantiations
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
@@ -340,7 +336,7 @@ addSpec x t = modify $ \st -> st { tc_specs = envAdds [(x,t)] (tc_specs st) }
 
 
 --------------------------------------------------------------------------
--- | Generating Fresh Values ---------------------------------------------
+-- | Generating Fresh Values 
 --------------------------------------------------------------------------
 
 tick :: TCM r Int
@@ -362,7 +358,7 @@ freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
 
 
 --------------------------------------------------------------------------------
---  Unification and Subtyping --------------------------------------------------
+-- | Unification and Subtyping
 --------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------
@@ -393,15 +389,15 @@ unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
 --------------------------------------------------------------------------------
 
 -- | For the expression @e@, check the subtyping relation between the type @t1@
--- which is the actual type for @e@ and @t2@ which is the desired (cast) type
--- and insert the right kind of cast.
+--   which is the actual type for @e@ and @t2@ which is the desired (cast) type
+--   and insert the right kind of cast.
 --------------------------------------------------------------------------------
 castM :: (PPR r) => AnnSSA r -> IContext -> Expression (AnnSSA r) 
   -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 castM l ξ e t1 t2 = do
   (t1',t2',d) <- convert (ann l) t1 t2
-  case (trace ("< " ++ ppshow t1 ++ " => " ++ ppshow t2 ++ ">  :: " ++ ppshow t1' ++ " " ++ ppshow d ++ " " ++ ppshow t2') d) of
+  case d of
     SupT -> addDownCast ξ e t2
     SubT -> addUpCast   ξ e t1' t2
     Nth  -> addDeadCast ξ e t2   
@@ -412,7 +408,6 @@ castM l ξ e t1 t2 = do
 
 updTDefEnv f = f <$> getDef >>= \(δ', a) -> setDef δ' >> return a
 
-addSymM         = updTDefEnv . addSym
 addObjLitTyM    = updTDefEnv . addObjLitTy
 
 findTyIdOrDieM' :: String -> TyID -> TCM r (TDef (RType r))
@@ -424,12 +419,13 @@ findTySymM i = findTySym i <$> getDef
 findTySymOrDieM i = findTySymOrDie i <$> getDef
 
 
--- | `convert` returns:
--- * An equivalent version of @t1@ that has the same sort as the first input type
--- * An equivalent version of @t2@ that has the same sort as the second input type
--- * A subtyping direction between @t1@ and @t2@
+-- | @convert@ returns:
 --
--- Padding the input types gives them the same sort, i.e. makes them compatible. 
+--   * An equivalent version of @t1@ that has the same sort as the first input type
+--   * An equivalent version of @t2@ that has the same sort as the second input type
+--   * A subtyping direction between @t1@ and @t2@
+--  
+--   Padding the input types gives them the same sort, i.e. makes them compatible. 
 ---------------------------------------------------------------------------------------
 convert :: (PPR r) => 
   SourceSpan -> RType r -> RType r -> TCM r (RType r, RType r, SubDirection)
@@ -461,12 +457,11 @@ convert _ t1           t2              = convertSimple t1 t2
 
 
 -- | `convertTRefs`
--- 
 --------------------------------------------------------------------------------
 convertTRefs :: (PPR r) => 
   SourceSpan -> RType r -> RType r -> TCM r (RType r, RType r, SubDirection)
 --------------------------------------------------------------------------------
-convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
+convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s _) 
   -- Same exact type name
   | i1 == i2 = 
       if parEq then
@@ -476,8 +471,8 @@ convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2)
 
   | otherwise = do
       -- Get the type definitions
-      d1@(TD n1 v1s pro1 _) <- findTyIdOrDieM' "convertTRefs" i1
-      d2@(TD n2 v2s pro2 _) <- findTyIdOrDieM' "convertTRefs" i2
+      d1@(TD _ v1s _ _) <- findTyIdOrDieM' "convertTRefs" i1
+      d2@(TD _ v2s _ _) <- findTyIdOrDieM' "convertTRefs" i2
 
       -- Gather all fields from current and parent classes
       e1s <- getDef >>= return . apply (fromList $ zip v1s t1s) . flatten d1
@@ -502,13 +497,15 @@ convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2)
       case (cmnEq, equal, subtype, supertype) of
         (True, True, _  , _   ) -> return (t1, t2, EqT)
         (True, _,   True, _   ) -> do
-          -- UPCAST: Restrict A<S1...> to the fields of B<T1...>
-          -- Here we are using a flat (object literal) type in place 
-          -- of could have been a class type (part of hiararchy). This 
-          -- should be fine since this type will only be used locally 
-          -- for the constraint generation.
+            -- UPCAST: Restrict A<S1...> to the fields of B<T1...>
+            -- Here we are using a flat (object literal) type in place 
+            -- of could have been a class type (part of hiararchy). This 
+            -- should be fine since this type will only be used locally 
+            -- for the constraint generation.
             let e1s' = filter (\e -> S.member (f_sym e) ks2) e1s
-            i1' <- addObjLitTyM (TD n2 v1s pro2 e1s')
+            -- This object has been flattened so we don't really need names and
+            -- prototypes here.
+            i1' <- addObjLitTyM (TD Nothing v1s Nothing e1s')
             return (TApp (TRef i1') t1s r1, t2, SubT)
         (True, _   , _  , True) -> tcError $ errorMissFlds l d1 d2 (S.toList $ S.difference ks2 ks1)
         (True, _   , _  , _   ) -> tcError $ errorConvDef l d1 d2
@@ -518,8 +515,9 @@ convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2)
 
       ord     = L.sortBy (compare `on` f_sym)
       parEq   = and (zipWith equiv t1s t2s) 
-      toMap   = M.fromList . ((\(TE s b t) -> (s, (b,t))) <$>)
       ks      = S.fromList . (f_sym <$>)
+
+convertTRefs _ _ _ =  error "BUG: Case not supported in convertTRefs"
 
 
 -- | depthEq: The input pairs are (access modifier, type)
@@ -556,22 +554,22 @@ convertSimple t1 t2
           t2'     = mkUnion [fmap F.bot t1, t2]
 
 
--- | `convertUnion`
-
--- Produces an equivalent type for @t1@ (resp. @t2@) that is extended with 
--- the missing type terms to the common upper bound of @t1@ and @t2@. The extra
--- type terms that are added in the union are refined with False to keep them
--- equivalent with the input types.
+-- | @convertUnion@
 --
--- The output is the following tuple:
---  * adjusted type for @t1@ to be sort compatible,
---  * adjusted type for @t2@ to be sort compatible
---  * a subtyping direction
+--   Produces an equivalent type for @t1@ (resp. @t2@) that is extended with 
+--   the missing type terms to the common upper bound of @t1@ and @t2@. The extra
+--   type terms that are added in the union are refined with False to keep them
+--   equivalent with the input types.
+--
+--   The output is the following tuple:
+--    * adjusted type for @t1@ to be sort compatible,
+--    * adjusted type for @t2@ to be sort compatible
+--    * a subtyping direction
 --------------------------------------------------------------------------------
 convertUnion :: (PPR r) => 
   SourceSpan -> RType r -> RType r -> TCM r (RType r, RType r, SubDirection)   
 --------------------------------------------------------------------------------
-convertUnion l t1 t2 | all (not . isUnion) [t1, t2] = convertSimple t1 t2
+convertUnion _ t1 t2 | all (not . isUnion) [t1, t2] = convertSimple t1 t2
 convertUnion l t1 t2 | otherwise = do
      
     -- * The common types (recursively call `convert` to convert the types

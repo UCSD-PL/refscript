@@ -15,7 +15,6 @@ module Language.Nano.Typecheck.Unify (
 
 -- import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Syntax
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors 
@@ -30,16 +29,14 @@ import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
-import qualified Data.List           as L
 import           Text.Printf 
 -- import           Debug.Trace
--- import           Language.Nano.Misc (mkEither)
 
 
 type PPR r = (PP r, F.Reftable r)
 
 -----------------------------------------------------------------------------
--- Unification --------------------------------------------------------------
+-- | Unification
 -----------------------------------------------------------------------------
 
 -- | Unify types @t@ and @t'@, in substitution environment @θ@ and type
@@ -126,7 +123,7 @@ varEql l θ α β =
     Left  s1 -> 
       case varAsn l θ β $ tVar α of
         Right θ'' -> Right θ''
-        Left  s2  -> Left $ catMessage s1 (errMsg s2) -- s1 { errMsg = (errMsg s1 ++ "\n OR \n" ++ show s2) }
+        Left  s2  -> Left $ catMessage s1 (errMsg s2) 
 
 
 -----------------------------------------------------------------------------

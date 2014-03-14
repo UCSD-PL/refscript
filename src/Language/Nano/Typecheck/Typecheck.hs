@@ -8,20 +8,18 @@
 {-# LANGUAGE ConstraintKinds        #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 
-module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
+module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck, testFile) where 
 
 import           Control.Applicative                ((<$>))
 import           Control.Monad                
 
 import qualified Data.HashSet                       as HS 
 import qualified Data.HashMap.Strict                as M 
-import qualified Data.Traversable                   as T
 import qualified Data.List                          as L
 import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe)
 import           Data.Generics                   
 
-import           Text.PrettyPrint.HughesPJ          (text, render, ($+$), vcat)
-import           Text.Printf                        (printf)
+import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat)
 
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
@@ -44,7 +42,7 @@ import           Language.Fixpoint.Misc             as FM
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
-import           Debug.Trace                        hiding (traceShow)
+-- import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -130,11 +128,11 @@ tcNano p@(Nano {code = Src fs})
        θ         <- getSubst
        let p1     = p {code = (patchAnn m . apply θ) <$> Src fs'}
        case γo of 
-         Just γ'  -> do  d     <- getDef
-                         -- Update TDefEnv before exiting
-                         let p2 = p1 { defs  = d }
-                         return $ (m, p2)
-         Nothing  -> error "BUG:tcNano should end with an environment"
+         Just _  -> do  d <- getDef
+                        -- Update TDefEnv before exiting
+                        let p2 = p1 { defs  = d }
+                        return $ (m, p2)
+         Nothing -> error "BUG:tcNano should end with an environment"
     where
        γ       = initEnv p
 
@@ -206,14 +204,14 @@ tcEnvFindTyOrDie l x         = fromMaybe ugh . tcEnvFindTy (stripSSAId x)  where
 
 
 -------------------------------------------------------------------------------
--- | Shorthand aliases --------------------------------------------------------
+-- | Shorthand aliases 
 -------------------------------------------------------------------------------
 type PPR r = (PP r, F.Reftable r)
 type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
 
 
 -------------------------------------------------------------------------------
--- | TypeCheck Scoped Block in Environment ------------------------------------
+-- | TypeCheck Scoped Block in Environment
 -------------------------------------------------------------------------------
 
 -- NOTE: The types that are going to be checked in `validInst` are just the ones
@@ -227,7 +225,7 @@ tcInScope γ act = accumAnn annCheck act
     annCheck = catMaybes . map (validInst γ) . M.toList
 
 -------------------------------------------------------------------------------
--- | TypeCheck Function -------------------------------------------------------
+-- | TypeCheck Function 
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
@@ -444,17 +442,16 @@ classId :: (Ord r, PPR r) => Statement (AnnSSA r) -> TCM r TyID
 classId (ClassStmt l id _ _ cs) =
   do  γ <- getDef
       case findTySymWithId sym γ of
-        Just (i, d) -> return i   -- if already computed
+        Just (i, _) -> return i   -- if already computed
         Nothing ->  
           do  let (γ', i) = addTySym sym freshD γ
               setDef γ'
               return i
   where
     sym      = F.symbol id
-    (vs, mp) = classAnnot l
-    proto    = mapFst F.symbol <$> mp
+    (vs, p)  = classAnnot l
     elts     = classEltType <$> cs
-    freshD   = TD (Just $ fmap ann id) vs proto elts
+    freshD   = TD (Just $ fmap ann id) vs p elts
 
 classId _ = errorstar "classId should only be called with ClassStmt"
 
@@ -634,7 +631,7 @@ tcCall γ ex@(InfixExpr l o e1 e2)
 -- | `super(e1,...,en)`
 -- This is where we expect typescript to have done a context check:
 -- super should ony be called whithin a constructor.
-tcCall γ ex@(CallExpr l e@(SuperRef _)  es) = do
+tcCall γ (CallExpr l e@(SuperRef _)  es) = do
     TD _ _ pro _ <- findTyIdOrDieM =<< fromType <$> tcPeekThis
     case pro of 
       Just (s, ts) -> do 
@@ -647,7 +644,7 @@ tcCall γ ex@(CallExpr l e@(SuperRef _)  es) = do
           Nothing       -> error "super() - 1"
       Nothing -> error $ "super() - 2" 
   where
-    fromType (TApp (TRef i) ts _) = i
+    fromType (TApp (TRef i) _ _) = i
     fromType _ = error "BUG: 'This' should have type 'TApp (TRef _) _ _'"
     def :: (PPR r) => RType r
     def = TFun [] tVoid fTop
@@ -692,8 +689,8 @@ tcCall γ ex@(ArrayLit l es)
 --  Type for constructor outside the scope of the class: 
 --    ∀ Vs . (xs: Ts) => void
 --
-tcCall γ ex@(NewExpr l (VarRef lv i) es)
-  = do  (tid, t@(TD _ vs _ elts)) <- findOrCrateClassDef i
+tcCall γ (NewExpr l (VarRef lv i) es)
+  = do  (tid, t@(TD _ vs _ _)) <- findOrCrateClassDef i
         -- Get the constructor type by looking up the parent chain and then
         -- using the type variables of the current class,
         -- or just use the default type

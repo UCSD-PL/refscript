@@ -66,12 +66,9 @@ import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
-import           Language.Nano.Typecheck.Subst
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
-import           Language.Fixpoint.Misc
 import           Text.PrettyPrint.HughesPJ
-import           Text.Printf
 import           Control.Applicative 
   
 
@@ -205,6 +202,7 @@ rTypeSort (TFun xts t _)   = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
 rTypeSort (TArr _ _)       = F.FApp (rawStringFTycon "array") []
 rTypeSort (TAnd (t:_))     = rTypeSort t
+rTypeSort (TCons _ _ )     = F.FObj $ F.symbol "cons"
 rTypeSort t                = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
 
 rTypeSortApp TInt [] = F.FInt
@@ -280,6 +278,7 @@ mapReftM f (TFun xts t r)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f
 mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
 mapReftM f (TArr t r)      = TArr   <$> (mapReftM f t) <*> f r
 mapReftM f (TAnd ts)       = TAnd   <$> mapM (mapReftM f) ts
+mapReftM f (TCons bs r)    = TCons  <$> mapM (mapReftBindM f) bs <*> f r
 mapReftM _ t               = error   $ render $ text "Not supported in mapReftM: " <+> pp t 
 
 mapReftBindM f (B x t)    = B x     <$> mapReftM f t
@@ -304,6 +303,7 @@ efoldReft g f = go
     go γ z (TFun xts t r)   = f γ r $ go γ' (gos γ' z (b_type <$> xts)) t  where γ' = foldr (efoldExt g) γ xts
     go γ z (TArr t r)       = f γ r $ go γ z t    
     go γ z (TAnd ts)        = gos γ z ts 
+    go γ z (TCons bs r)     = f γ' r $ gos γ z (b_type <$> bs) where γ' = foldr (efoldExt g) γ bs
     go _ _ t                = error $ "Not supported in efoldReft: " ++ ppshow t
 
     gos γ z ts              = L.foldl' (go γ) z ts

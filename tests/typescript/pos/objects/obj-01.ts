@@ -3,7 +3,8 @@
 function inc(n:number):number {
     return n + 1;
 }
-/*@ gobj :: { a: { number | v = 5 } , b: string, f: (number) => number } */
+
+/*@ gobj :: { a: { v: number | v = 5 } , b: string, f: (number) => number } */
 var gobj= { a: 5, b: "String", f: inc };
 
 /*@ gobj1 :: { a: number, b: string } */

@@ -1,81 +1,225 @@
 
+GRAMMAR
+=======
 
-Raw Type
---------
+P   ::= Ci s                                  (Program)
 
-t ::= number | string | boolean
-    | null | undefined
-    | void | top
+C   ::= class A<Vi> extends A'<ti> { Md; Fd } (Class declarations)
 
-    | (xi:ti) => t                        (function type)
-    | tr                                  (type reference)
-    | t[]                                 (array type)
-    | \/ ti                               (union type)
-    | forall v. t                         (quantified (function) type)
-    | /\ ti                               (intersection (function) type)
+N   ::=                                       (Named Types)
+      | class A<Vi> extends A'<ti> { Md; Fd }   (class definitions)
+      | interface I<Vi> extends Ii<ti>          (interface)
+      | enum { fi }                             (enumeration)
 
-G ::= tr -> (vi, fj)
 
-F ::= { si: (bi, ti) } 
+I   ::=                                       (Interface)
+      | interface I<Vi> { Md; Fd }              (interface definitions)
+
+
+s   ::=                                       (Statements)
+      | s; s                                    (sequence)
+      | fun f(xi):sig { s }                     (function decalration)
+      | var x[: t] = e                          (variable definition)
+      | x := e                                  (assignment)
+      | e.f := e                                (static field update)
+      | e[e] := e                               (dynamic field update)
+      | return [e]                              (return)
+      | while(e) { s }                          (while loop)
+      | if(e) { s1 } else { s2 }                (if-then-else)
+
+
+e   ::=                                       (Expressions)
+      | 1 | 2 | ...                             (numeric literal)
+      | "a" | ...                               (string literal)
+      | true | false                            (boolean literal)
+      | op1 e                                   (unary operation) 
+      | e op2 e                                 (binary operation)
+      | { FD; MD }                              (object literal)
+      | new C(ei)                               (class constructor)
+      | [ei]                                    (array literal)
+      | e.m(ei)                                 (method call)
+      | f(ei)                                   (function call)
+      | e.f                                     (static field access)
+      | e1[e1]                                  (dynamic field access)
+//Only in target language 
+      | c e                                     (cast)
+
+
+MD  ::=                                       (Callable class elements)
+      | mod m(xi): sig { s }                    (method)
+      | new (xi): sig { s }                     (constructor)
+
+
+mod ::=                                       (Access modifier)
+      | public 
+      | private
+      
+
+FD  ::= f: e
+      | F; F
+
+
+-------------------------------------------------------------------------------
+
+t   ::=        | { v: b | p }                            (refined type)
+
+
+p   ::= ...                                   (Predicates)
+
+
+b   ::=                                       (Base types)
+      | number | string | boolean               (primitive)
+      | null                                    (null)
+      | V                                       (type variable)
+      | N[ti]                                   (Type reference)
+      | { Fd; Md }                              (object type)
+      | [t]                                     (array type)
+      | t1 \/ t2                                (union type)
+      | top                                     (top)
+
+
+sig ::=                                       (Type signature)
+      | (xi:ti)=>t                              (arrow type)
+      | ∀V.sig                                  (quantified type)    
+
+
+ς   ::=                                       (Function specification)
+      | sig                                     (function signature)
+      | ς1 /\ ς2                                (signature intersection)
+
+
+Fd  ::= { si: mi, ti }                        (Field declaration)
+
+
+Md  ::= { mi: ςi }                            (Method declarations)
+
+
+mi  ::=                                       (Field mutability modifier) 
+      | m                                       (mutable)
+      | i                                       (immutable)
+
+
+c   ::=                                       (Casts)
+      | .                                       (no cast - or upcast ?)
+      | [ t \/ ts => ts ]                       (downcast)
+
+-------------------------------------------------------------------------------
+
+G   ::=                                       (Typing environment)
+
+
+S   ::=                                       (Class environment)
+
 
 
 
 NOTES:
 
-- Union (\/) refers to more that one types.
+  1. Function types are considered object types with a single field called
+     "call".
+
+
 
 
 Coercive subtyping
 ==================
 
-Notation:
----------
-∙t: means that the type is falsified in the refinement
+ _______________________
+|                       |
+|   S |- t1 <: t2 ~> c  |         Subtyping jugdement
+|_______________________|
 
 
-G |- t1 <: t2 ~> (t', t1', t2')
+    G |- t <: t ~> .                                  [S-Id]
 
 
-t1, t2 in {number, string, boolean}
-----------------------------------------------
-G |- t <: t ~> (_, _, _)
+    G |- t <: top ~> .                                [S-top]
 
 
-G |- t <: any ~> (t\/any, t\/∙any, ∙t\/any)       [S-any]
+    ------------------------------------------------- [S-Union-Up]
+    G |- t <: t\/ti ~> .
 
 
-G |- undefined <: t ~> (t, t, t)                  [S-Undef]
+    
+    ------------------------------------------------- [S-Union-Down]
+    G |- t\/ti <: ti ~> [ t\/ti => ti ]
 
 
-t != undefined 
-------------------------------------------------- [S-Null]
-G |- null <: t ~> (t, t, t)
+    G |- ti' <: ti ~> .
+    G |- t <: t' ~> .
+    ------------------------------------------------- [S-Func]
+    G |- (xi:ti)=>t <: (xi:ti')=>t' ~> .
 
 
-G(r1) = (v1i, f1j)
-G(r2) = (v2i, f2j)
-t1 = apply(v1s/ts1, f1j)
-t2 = apply(v2s/ts2, f2j)
-{fi:ti,gj:tj} = t1
-{fi:ti} = t2
-------------------------------------------------- [S-Ref-Width]
-G |- r1[ts1] <: r2[ts2] ~> (r1[ts1]  )
+    t1 <: t2 ~> .          t2 <: t1 ~> .
+    ------------------------------------------------- [S-Array]
+    G |- [t1] <: [t2]
 
 
-d1 = \/t1s - \/t2s  (difference based on type equality)
-d2 = \/t2s - \/t1s
---------------------------------------------------------------------- [S-Union]
-G |- \/t1s <: \/t2s ~> (\/(t1s U t2s), \/(t1s U ∙d2), \/(t2s U ∙d1))
+    t1 <: t2 ~> .          t2 <: t1 ~> .
+    ------------------------------------------------- [S-Interface]
+    G |- I[t1] <: I[t2]
+
+This needs to be invariant Unless we dig deep into I and prove that wherever the
+As of I[A] appear, the mutability modifier is `im`.
 
 
-G |- ti' <: ti ~> 
-------------------------------------------------- [S-Func]
-G |- (xi:ti)=>t  (xi:ti')=>t' ~> 
+    t <: t' ~> .
+    ------------------------------------------------- [S-Field-D1]
+    { f: _,t; Fd } <: { f: i,t'; Fd } ~> .
 
 
-t1 <: t2 
-t2 <: t1
-------------------------------------------------- [S-Arr]
-G |- I[t1] <: I[t2]
+    t <: t' ~> .           t' <: t ~> .
+    ------------------------------------------------- [S-Field-D2]
+    { f: m,t; Fd } <: { f: m,t'; Fd } ~> .
 
 
+    S(B) = class B extends B' { Md'; Fd' }
+    {Md''; Fd''} <: B'
+    ------------------------------------------------- [S-Field-D2]
+    { Md; Fd } <: class B<> extends B' ~> .
+
+    
+
+
+ _____________________
+|                     |
+|   G; S |- s ~> s'   |         Raw Statement Typing Jugdement
+|_____________________|
+
+
+    G; S |-* e : t' ~> c
+    ------------------------------------------------- [S-Field-DM]
+    G; S |- var x: t = e ~> c
+
+
+
+ _________________________
+|                         |
+|   G; S |- e : t ~> e'   |     Raw Expression Typing Jugdement
+|_________________________|
+
+
+NOTES: Union types are never inferred.
+
+
+
+
+ ______________________
+|                      |
+|   G; S |- s ~> G'    |     Liquid Statement Typing Jugdement
+|______________________|
+
+
+
+ _____________________________
+|                             |
+|   G; S |- e : t ~> G', v    |     Liquid Statement Typing Jugdement
+|_____________________________|
+
+
+
+    t\p <: t\False
+    ti\pi <: ti\qi
+    ------------------------------------------------- [L-Cast]
+    G; S |- [ t\p \/ ti\pi => ti\pi ] e ~> G', v 

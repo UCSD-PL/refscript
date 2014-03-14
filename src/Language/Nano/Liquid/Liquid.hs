@@ -383,6 +383,20 @@ consExpr g (NewExpr l (VarRef _ i) es)
         def :: (PPR r) => RType r
         def = TFun [] tVoid fTop
 
+consExpr g (SuperRef l) 
+  = do  thisT <- cgPeekThis
+        case thisT of
+          TApp (TRef i) ts _ -> do
+            TD _ vs pro _ <- findTyIdOrDieM i 
+            case pro of 
+              Just (p, ps) -> do
+                let θ = fromList $ zip vs ts
+                d <- fst <$> findTySymWithIdOrDieM p
+                envAddFresh "consExpr:SuperRef" l (apply θ $ TApp (TRef d) ps fTop) g
+              Nothing -> cgError l $ errorSuper (srcPos l) 
+          _                  -> cgError l $ errorSuper (srcPos l) 
+
+
 -- not handled
 consExpr _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))

@@ -21,7 +21,6 @@ class B<S,R> extends A<R> {
 
 class C <M,L,K> extends B<M,K> {
 
-
   /*@ cgo :: (x:M, y:L, z:K )=> void */
   public cgo(x:M, y:L, z:K) {
     super.bgo(x,z);

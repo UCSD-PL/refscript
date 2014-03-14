@@ -615,7 +615,6 @@ tcExpr γ e@(SuperRef l)
               Just (p, ps) -> do
                 let θ = fromList $ zip vs ts
                 d <- fst <$> findTySymWithIdOrDieM p
-                δ <- getDef
                 return $ (e, apply θ $ TApp (TRef d) ps fTop)
               Nothing -> tcError $ errorSuper (srcPos l) 
           _                  -> tcError $ errorSuper (srcPos l) 

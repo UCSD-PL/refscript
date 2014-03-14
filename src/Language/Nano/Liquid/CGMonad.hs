@@ -56,6 +56,7 @@ module Language.Nano.Liquid.CGMonad (
   , addObjLitTyM
   , findTySymOrDieM
   , findTySymWithIdOrDieM
+  , findTyIdOrDieM
 
   -- * Add Subtyping Constraints
   , subTypeContainers

@@ -20,7 +20,7 @@ module Language.Nano.Typecheck.Subst (
   , Substitutable (..)
 
   -- * Flatten a type definition applying subs
-  , flatten
+  , flatten, flattenType
   ) where 
 
 import           Text.PrettyPrint.HughesPJ
@@ -111,6 +111,7 @@ instance Free (RType r) where
   free (TAll α t)           = S.delete α $ free t 
   free (TAnd ts)            = S.unions   $ free <$> ts 
   free (TExp _)             = error "free should not be applied to TExp"
+  free (TCons _ _)          = error "free should not be applied to TCons"
 
 instance (PP r, F.Reftable r) => Substitutable r (Cast (RType r)) where
   apply θ c = c { castTarget = apply θ (castTarget c) }
@@ -165,10 +166,12 @@ appTy θ        (TFun ts t r) = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m)   (TAll α t)    = TAll α $ apply (Su $ M.delete α m) t
 appTy θ        (TArr t r)    = TArr (apply θ t) r
 appTy _        (TExp _)      = error "appTy should not be applied to TExp"
+appTy _        (TCons _ _)   = error "appTy should not be applied to TCons"
 
----------------------------------------------------------------------------------------
-flatten :: PPR r => TDef (RType r) -> TDefEnv (RType r)-> [TElt (RType r)]
----------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+flatten :: PPR r => TDef (RType r) -> TDefEnv (RType r) -> [TElt (RType r)]
+------------------------------------------------------------------------
 flatten (TD _ vs pro elts) δ = 
   -- NOTE: unionBy favors elts (as it should)
   L.unionBy name elts $ fromMaybe [] base 
@@ -177,3 +180,25 @@ flatten (TD _ vs pro elts) δ =
     base       = pro >>= act >>= return . t_elts
     act (n,ts) = apply (fromList $ zip vs ts) (findTySym n δ) 
 
+
+-- | Flatten types that contain references to types with flat objects
+------------------------------------------------------------------------
+flattenType :: PPR r => TDefEnv (RType r) -> RType r -> RType r
+------------------------------------------------------------------------
+flattenType δ (TApp (TRef n) ts r) 
+                            = TCons bs r
+  where d@(TD _ vs _ _)     = findTyIdOrDie n δ
+        bs                  = bind <$> apply θ (flatten d δ)
+        θ                   = fromList $ zip vs ts
+        bind (TE s _ t)     = B s $ flattenType δ t
+flattenType δ (TApp c ts r) = TApp c (flattenType δ <$> ts) r
+flattenType _ (TVar v r)    = TVar v r
+flattenType δ (TFun bs t r) = TFun (f <$> bs) (flattenType δ t) r
+  where f (B s t)           = B s $ flattenType δ t
+flattenType δ (TArr t r)    = TArr (flattenType δ t) r
+flattenType δ (TAll v t)    = TAll v $ flattenType δ t
+flattenType δ (TAnd ts)     = TAnd $ flattenType δ <$> ts
+flattenType δ (TCons ts r)  = TCons (flattenBind δ <$> ts) r
+flattenType _ _             = error "TExp should not appear here"
+
+flattenBind δ (B s t)         = B s $ flattenType δ t 

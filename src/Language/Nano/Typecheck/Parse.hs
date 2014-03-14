@@ -22,6 +22,7 @@ import qualified Data.List                        as     L
 import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
 import           Data.Traversable                        ( mapAccumL)
+import           Text.PrettyPrint.HughesPJ               (text)
 import           Data.Data
 import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
@@ -95,16 +96,24 @@ aliasVarT (l, x)
 
 tBodyP :: ParserS (Id SourceSpan, TDef RefType)
 tBodyP = do  id     <- identifierP 
-             vs     <- option [] tParP
-             reservedOp "="
+             vs     <- option [] tParP'
              -- FIXME: add bindings for new(Ts) and call(Ts):T
+             ext    <- optionMaybe extendsP
              bs     <- braces $ bindsP
-             -- FIXME: proto ...
-             return (id, TD (Just id) vs Nothing 
-                            [ TE s True t | B s t <- bs ])
+             return (id, TD (Just id) vs ext [ TE s True t | B s t <- bs ])
+
+
+extendsP = do reserved "extends"
+              pId <- identifierP
+              ts  <- option [] $ angles $ sepBy bareTypeP comma
+              return (pId, ts)
+               
+
 
 -- [A,B,C...]
 tParP = brackets $ sepBy tvarP comma
+
+tParP' = angles $ sepBy tvarP comma
 
 withSpan f p = do pos   <- getPosition
                   x     <- p
@@ -290,11 +299,7 @@ classDeclP = do
   reserved "class"
   id <- identifierP 
   vs <- option [] $ angles $ sepBy tvarP comma
-  pr <- optionMaybe $ 
-          do  reserved "extends"
-              pId <- identifierP
-              ts  <- option [] $ angles $ sepBy bareTypeP comma
-              return (pId, ts)
+  pr <- optionMaybe extendsP 
   return (id, (vs, pr))
 
 
@@ -481,6 +486,9 @@ parse ss st c = foo c
         failLeft (Left s) = error $ show s
         failLeft (Right r) = r
         f = sourceName $ sp_begin ss
+
+instance PP (RawSpec) where
+  pp = text . getSpecString
 
 
 --------------------------------------------------------------------------------------

@@ -134,9 +134,6 @@ instance PP (F.SubC c) where
   pp s = pp (F.lhsCs s) <+> text " <: " <+> pp (F.rhsCs s)
 
 
-type PPR r = (PP r, F.Reftable r)
-type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
-
 -------------------------------------------------------------------------------
 getCGInfo :: Config -> NanoRefType -> CGM a -> CGInfo
 -------------------------------------------------------------------------------
@@ -484,8 +481,10 @@ equivWUnionsM t t' = getDef >>= \δ -> return (equivWUnions δ t t')
 -------------------------------------------------------------------------------
 subTypeContainers :: (IsLocated l) => String -> l -> CGEnv -> RefType -> RefType -> CGM ()
 -------------------------------------------------------------------------------
-subTypeContainers {- msg -} _ l g t1 t2 = subType l g t1 t2
-    {-where -}
+subTypeContainers {- msg -} _ l g t1 t2 = do
+    δ <- getDef 
+    subType l g (flattenType δ t1) (flattenType δ t2)
+  {-where -}
     {-  msg'                      = render $ text "subTypeContainers:" -}
     {-                                       $+$ text "  t1 =" <+> pp t1-}
     {-                                       $+$ text "  t2 =" <+> pp t2-}
@@ -525,8 +524,11 @@ instance Freshable F.Symbol where
 instance Freshable String where
   fresh = F.symbolString <$> fresh
 
+-- | Freshen up and while flattening a type
 freshTy :: RefTypable a => s -> a -> CGM RefType
-freshTy _ τ = refresh $ rType τ
+freshTy _ τ = do
+    δ <- getDef 
+    refresh $ rType $ flattenType δ $ rType τ
 
 instance Freshable F.Refa where
   fresh = (`F.RKvar` mempty) <$> (F.intKvar <$> fresh)
@@ -666,10 +668,24 @@ splitC (Sub g i t1@(TArr t1v _ ) t2@(TArr t2v _ ))
        cs''  <- splitC (Sub g i t2v t1v) -- CONTRA-VARIANCE 
        return $ cs ++ cs' ++ cs''
 
+---------------------------------------------------------------------------------------
+-- | TCons
+---------------------------------------------------------------------------------------
+splitC (Sub g i t1@(TCons b1s _ ) t2@(TCons b2s _ ))
+  = do cs    <- bsplitC g i t1 t2
+       when (or $ zipWith ((/=) `on` b_sym) b1s' b2s') $ error "splitC on non aligned TCons"
+       --FIXME: add other bindings in env (like function)? Perhaps through "this"
+       cs'   <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t1s t2s -- CO-VARIANCE
+       cs''  <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t2s t1s -- CONTRA-VARIANCE
+       return $ cs ++ cs' ++ cs''
+    where
+       b1s' = L.sortBy (compare `on` b_sym) b1s
+       b2s' = L.sortBy (compare `on` b_sym) b2s
+       t1s  = b_type <$> b1s'
+       t2s  = b_type <$> b2s'
+
 splitC x 
   = cgError l $ bugBadSubtypes l x where l = srcPos x
-
-
 
 
 ---------------------------------------------------------------------------------------
@@ -684,8 +700,6 @@ splitE g i e1s e2s
     l   = srcPos i
     t1s = f_type <$> L.sortBy (compare `on` f_sym) e1s  
     t2s = f_type <$> L.sortBy (compare `on` f_sym) e2s
-
-
 
 
 ---------------------------------------------------------------------------------------
@@ -739,6 +753,12 @@ splitW (W g i t@(TArr t' _))
 
 splitW (W g i (TAnd ts))
   = concatMapM splitW [W g i t | t <- ts]
+
+splitW (W g i t@(TCons bs _))
+  = do let bws = bsplitW g t i
+       -- FIXME: add field bindings in g?
+       ws     <- concatMapM splitW [W g i ti | B _ ti <- bs]
+       return  $ bws ++ ws
 
 splitW (W _ _ t) = error $ render $ text "Not supported in splitW: " <+> pp t
 

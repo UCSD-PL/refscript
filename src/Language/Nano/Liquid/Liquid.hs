@@ -27,6 +27,7 @@ import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Env                  (envUnion)
 import           Language.Nano.Types
+import           Language.Nano.Typecheck.Subst
 import qualified Language.Nano.Annots               as A
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
@@ -39,7 +40,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+--import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
 
@@ -289,11 +290,13 @@ consExprT g e to
 consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
 --------------------------------------------------------------------------------
 consAsgn g l x e 
-  = do t <- case envFindAnnot l x g of
-              Just t  -> Just <$> freshTyVar g l t
-              Nothing -> return $ Nothing
-       (x', g') <- consExprT g e t
-       Just <$> envAdds [(x, envFindTy x' g')] g'
+  = do  δ <- getDef
+        t <- case envFindAnnot l x g of
+        -- XXX: Flatten before applying freshTVar
+               Just t  -> Just <$> tracePP "The freshed flattened type" <$> freshTyVar g l (flattenType δ t)
+               Nothing -> return $ Nothing
+        (x', g') <- consExprT g e t
+        Just <$> envAdds [(x, envFindTy x' g')] g'
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh, 
@@ -361,9 +364,8 @@ consExpr g (ArrayLit l es)
 consExpr g (ObjectLit l bs) 
   = do  let (ps, es) = unzip bs
         (xes, g')   <- consScan consExpr g es
-        let elts = zipWith mkElt (F.symbol <$> ps) ((`envFindTy` g') <$> xes)
+        let elts = zipWith mkElt (F.symbol <$> ps) (tracePP ("ObjLit types: " ++ ppshow xes) $ (`envFindTy` g') <$> xes)
         let d = TD Nothing [] Nothing elts
-        -- NOTE: Should we get a new type here? Or reuse the existing type from TC?
         i <- addObjLitTyM d
         envAddFresh "consObj" l (TApp (TRef i) [] fTop) g'
     where
@@ -394,31 +396,31 @@ consCast g a e
       Just (DC t) -> consDeadCast g l t
       z           -> do (x, g') <- consExpr g e
                         case z of
-                          Nothing           -> return (x, g')
-                          Just (UCST t1 t2) -> consUpCast   g' l x t1
-                          Just (DCST t)     -> consDownCast g' l x t
-                          _                 -> error "consCast:This shouldn't happen"
+                          Nothing          -> return (x, g')
+                          Just (UCST t1 _) -> consUpCast   g' l x t1
+                          Just (DCST t)    -> consDownCast g' l x t
+                          _                -> error "consCast:This shouldn't happen"
     where 
       l              = srcPos a
 
 -- | Upcast
-consUpCast g l x t = envAddFresh "consUpCast" l t g
+consUpCast g l _ t = envAddFresh "consUpCast" l t g
 
 -- | Downcast
 consDownCast g l x t = 
   do δ   <- getDef
-     tc  <- castTo l δ tx (toType t) 
-     -- FIXME: are the types aligned ???
+     -- NOTE: types should be aligned
+     tc  <- castTo δ l tx (toType t) 
      (subTypeContainers "Downcast" l g) tx tc {- withAlignedM -} 
      g'  <- envAdds [(x, tc)] g
      return (x, g')
   where 
      tx   = envFindTy x g
 
-castTo l γ t τ       = castStrengthen t <$> (zipType2 botJoin t =<< bottify τ)
+castTo δ l t τ       = castStrengthen t <$> (zipType2 botJoin t =<< bottify τ)
   where 
-  -- Bottify does not descend into TDefEnv
-    bottify t        = tracePP "Bottified" <$> fmap (fmap F.bot) (true (rType t))
+  -- Bottify does not descend into TDefs - so we need to flatten 
+    bottify          = fmap (fmap F.bot) . true . flattenType δ . rType
     botJoin r1 r2 
       | F.isFalse r1 = r2
       | F.isFalse r2 = r1
@@ -465,13 +467,14 @@ consCall g l fn es ft0
 -- instantiate :: AnnTypeR -> CGEnv -> RefType -> CGM RefType
 instantiate l g fn ft 
   = do let (αs, t)      = bkAll ft
-  --TODO: There is a TypInst missing here!!!
+       --TODO: There is a TypInst missing here!!!
        let ts           = envGetContextTypArgs g l αs
+       -- NOTE: Do we need to flatten here?
        t'              <- freshTyInst l g αs ts t
        maybe err return $ bkFun t' 
     where 
        err = cgError l $ errorNonFunction (srcPos l) fn ft  
-    {-msg           = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)-}
+       {-msg = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)-}
 
 
 ---------------------------------------------------------------------------------

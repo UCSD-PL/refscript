@@ -37,5 +37,6 @@ class Horse extends Animal {
 var sam = new Snake("Sammy the Python")
 var tom: Animal = new Horse("Tommy the Palomino")
 
-sam.move()
+sam.move();
+//XXX: Weirdness in parameters
 tom.move(34)

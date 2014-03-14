@@ -55,6 +55,7 @@ module Language.Nano.Typecheck.TCMonad (
   -- * TDefEnv
   , findTyIdOrDieM, findTyIdOrDieM'
   , findTySymM, findTySymOrDieM
+  , findTySymWithIdOrDieM
 
   -- * Get Type Signature 
   , getSpecOrDie
@@ -417,6 +418,8 @@ findTyIdOrDieM i = findTyIdOrDie i <$> getDef
 
 findTySymM i = findTySym i <$> getDef
 findTySymOrDieM i = findTySymOrDie i <$> getDef
+
+findTySymWithIdOrDieM i = findTySymWithIdOrDie i <$> getDef
 
 
 -- | @convert@ returns:

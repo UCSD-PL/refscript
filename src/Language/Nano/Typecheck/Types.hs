@@ -206,14 +206,14 @@ findTySym :: F.Symbolic s => s -> TDefEnv t -> Maybe (TDef t)
 findTySym s (G _ γ c) = F.lookupSEnv (F.symbol s) c >>= (`I.lookup` γ)
 
 ---------------------------------------------------------------------------------
-findTySymWithId :: F.Symbol -> TDefEnv t -> Maybe (TyID, TDef t)
+findTySymWithId :: F.Symbolic s => s -> TDefEnv t -> Maybe (TyID, TDef t)
 ---------------------------------------------------------------------------------
-findTySymWithId s (G _ γ c) = F.lookupSEnv s c 
+findTySymWithId s (G _ γ c) = F.lookupSEnv (F.symbol s) c 
                           >>= \i -> (I.lookup i γ) 
                           >>= return . (i,)
 
 ---------------------------------------------------------------------------------
-findTySymWithIdOrDie:: F.Symbol -> TDefEnv t -> (TyID, TDef t)
+findTySymWithIdOrDie:: F.Symbolic s => s -> TDefEnv t -> (TyID, TDef t)
 ---------------------------------------------------------------------------------
 findTySymWithIdOrDie s γ = fromMaybe (error "findTySymWithIdOrDie") $ findTySymWithId s γ 
 

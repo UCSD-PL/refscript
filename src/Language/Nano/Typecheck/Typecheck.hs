@@ -605,6 +605,21 @@ tcExpr γ e@(AssignExpr _ OpAssign (LBracket _ _ _) _)
 tcExpr γ e@(NewExpr _ _ _) 
   = tcCall γ e
 
+-- super
+tcExpr γ e@(SuperRef l) 
+  = do  thisT <- tcPeekThis
+        case thisT of
+          TApp (TRef i) ts _ -> do
+            TD _ vs pro _ <- findTyIdOrDieM i 
+            case pro of 
+              Just (p, ps) -> do
+                let θ = fromList $ zip vs ts
+                d <- fst <$> findTySymWithIdOrDieM p
+                δ <- getDef
+                return $ (e, apply θ $ TApp (TRef d) ps fTop)
+              Nothing -> tcError $ errorSuper (srcPos l) 
+          _                  -> tcError $ errorSuper (srcPos l) 
+
 tcExpr _ e 
   = convertError "tcExpr" e
 

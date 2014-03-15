@@ -367,7 +367,7 @@ consExpr g (ObjectLit l bs)
         let elts = zipWith mkElt (F.symbol <$> ps) (tracePP ("ObjLit types: " ++ ppshow xes) $ (`envFindTy` g') <$> xes)
         let d = TD Nothing [] Nothing elts
         i <- addObjLitTyM d
-        envAddFresh "consObj" l (TApp (TRef i) [] fTop) g'
+        envAddFresh "consExpr:ObjectLit" l (TApp (TRef i) [] fTop) g'
     where
         mkElt s t = TE s True t 
 
@@ -383,6 +383,7 @@ consExpr g (NewExpr l (VarRef _ i) es)
         def :: (PPR r) => RType r
         def = TFun [] tVoid fTop
 
+-- super
 consExpr g (SuperRef l) 
   = do  thisT <- cgPeekThis
         case thisT of
@@ -513,13 +514,13 @@ consPropRead getter g l e fld
   = do 
       (x, g')        <- consExpr g e
       let tx          = envFindTy x g'
-      (this, g'')    <- envAddFresh "this" l tx g
+      (this, g'')    <- envAddFresh "consPropRead:this" l tx g'
       δ              <- getDef
       case getter l (renv g'') δ fld tx of
         Just (_, tf) -> 
           do
             let tf'   = F.substa (sf (F.symbol "this") (F.symbol this)) tf
-            g'''     <- envAddFresh "consPropRead" l tf' g''
+            g'''     <- envAddFresh "consPropRead:field" l tf' g''
             return    $ (tf', g''')
         Nothing         -> die $  errorPropRead (srcPos l) e fld
     where  

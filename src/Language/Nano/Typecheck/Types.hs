@@ -659,7 +659,8 @@ instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-data Nano a t = Nano { code   :: !(Source a)               -- ^ Code to check
+data Nano a t = Nano { fp     :: FilePath                  -- ^ FilePath
+                     , code   :: !(Source a)               -- ^ Code to check
                      , externs:: !(Env t)                  -- ^ Imported (unchecked) specifications 
                      , specs  :: !(Env t)                  -- ^ Function specs and 
                      , glVars :: !(Env t)                  -- ^ Global (annotated) vars

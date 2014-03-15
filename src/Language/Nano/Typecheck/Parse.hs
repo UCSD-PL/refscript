@@ -418,7 +418,7 @@ parseNanoFromFile f
   = do  ssP   <- parseScriptFromJSON =<< getPreludePath
         ssF   <- parseScriptFromJSON f 
         -- Concat the programs at the JSON level
-        return $ mkCode $ expandAnnots $ ssP ++ ssF
+        return $ mkCode f $ expandAnnots $ ssP ++ ssF
 
 --------------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString
@@ -436,10 +436,11 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
         Right p  -> p
 
 --------------------------------------------------------------------------------------
-mkCode :: (PState, [Statement (SourceSpan, [Spec])]) -> NanoBareR Reft
+mkCode :: FilePath -> (PState, [Statement (SourceSpan, [Spec])]) -> NanoBareR Reft
 --------------------------------------------------------------------------------------
-mkCode (u, ss) =  Nano {
-        code    = Src (checkTopStmt <$> ss')
+mkCode f (u, ss) =  Nano {
+        fp      = f
+      , code    = Src (checkTopStmt <$> ss')
       , externs = envFromList   [ t | Extern t <- anns ] -- externs
       -- FIXME: same name methods in different classes.
       , specs   = catFunSpecDefs ss                      -- function sigs (no methods...)

@@ -52,7 +52,7 @@ verifyFile f = parse f $ ssa $ tc $ refTc
 parse f next = parseNanoFromFile f         >>= next
 ssa   next p = ssaTransform p              >>= either (lerror . single) next
 tc    next p = typeCheck (expandAliases p) >>= either lerror next
-refTc      p = getOpts >>= solveConstraints "" . (`generateConstraints` p) 
+refTc      p = getOpts >>= solveConstraints (fp p) . (`generateConstraints` p) 
 
 lerror       = return . (A.NoAnn,) . F.Unsafe
          
@@ -293,7 +293,7 @@ consAsgn g l x e
   = do  δ <- getDef
         t <- case envFindAnnot l x g of
         -- XXX: Flatten before applying freshTVar
-               Just t  -> Just <$> tracePP "The freshed flattened type" <$> freshTyVar g l (flattenType δ t)
+               Just t  -> Just <$> freshTyVar g l (flattenType δ t)
                Nothing -> return $ Nothing
         (x', g') <- consExprT g e t
         Just <$> envAdds [(x, envFindTy x' g')] g'

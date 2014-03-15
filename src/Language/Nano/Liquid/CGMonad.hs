@@ -151,7 +151,7 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnTypeR RefType -> CGState
-initState c p = CGS F.emptyBindEnv (specs p) (defs p) [] [] 0 mempty invs c [this] 
+initState c p = CGS F.emptyBindEnv (specs p) (defs p) (externs p) [] [] 0 mempty invs c [this] 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
     this        = tTop
@@ -193,6 +193,7 @@ data CGState
   = CGS { binds    :: F.BindEnv            -- ^ global list of fixpoint binders
         , cg_sigs  :: !(E.Env RefType)     -- ^ type sigs for all defined functions
         , cg_defs  :: !(TDefEnv RefType)   -- ^ defined types 
+        , cg_ext   :: !(E.Env RefType)     -- ^ Extern (unchecked) declarations
         , cs       :: ![SubC]              -- ^ subtyping constraints
         , ws       :: ![WfC]               -- ^ well-formedness constraints
         , count    :: !Integer             -- ^ freshness counter
@@ -213,14 +214,19 @@ getDef  :: CGM (TDefEnv RefType)
 getDef = cg_defs <$> get
 
 -------------------------------------------------------------------------------
+getExts  :: CGM (E.Env RefType)
+-------------------------------------------------------------------------------
+getExts = cg_ext <$> get
+
+
+-------------------------------------------------------------------------------
 setDef  :: TDefEnv RefType -> CGM ()
 -------------------------------------------------------------------------------
 setDef γ = modify $ \u -> u { cg_defs = γ } 
 
 
 getPropTDefM l s t ts = do 
--- FIXME
-  ε <- undefined -- getExts
+  ε <- getExts
   δ <- getDef 
   return $ getPropTDef l ε δ (F.symbol s) ts t
 
@@ -266,8 +272,8 @@ envGetContextTypArgs g a αs
 ---------------------------------------------------------------------------------------
 envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 
 ---------------------------------------------------------------------------------------
-envAddFresh _ l t g 
-  = do x  <- freshId loc
+envAddFresh {-caller-} _ l t g 
+  = do x  <- {- tracePP caller <$> -} freshId loc
        g' <- envAdds [(x, t)] g
        return (x, g')
     where loc = srcPos l

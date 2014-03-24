@@ -16,9 +16,11 @@ module Language.Nano.Annots (
 
     -- * Rendering Annotations
   , annotByteString 
+  , annotVimString 
   ) where
 
 import qualified Data.List              as L
+import           Data.List.Split
 import qualified Data.ByteString.Lazy   as B
 import qualified Data.Vector            as V
 import qualified Data.Text              as T
@@ -90,6 +92,9 @@ addAnnot l x t (AI m) = AI (inserts l (AnnBind (F.symbol x) t) m)
 annotByteString       :: (PP t) => F.FixResult Error -> UAnnInfo t -> B.ByteString
 annotByteString res a = encode $ mkAnnMap res a
 
+annotVimString        :: PP a => F.FixResult Error -> UAnnInfo a -> String
+annotVimString res a  = toVim $ mkAnnMap res a  
+
 ------------------------------------------------------------------------------
 -- | Type Representing Inferred Annotations ----------------------------------
 ------------------------------------------------------------------------------
@@ -144,7 +149,7 @@ data Annot1    = A1 String String Int Int
                     --  }
 
 ------------------------------------------------------------------------
--- | JSON Instances ----------------------------------------------------
+-- | JSON Instances 
 ------------------------------------------------------------------------
 
 instance ToJSON Annot1 where 
@@ -187,12 +192,33 @@ annTypes a          = grp [(l, c, ann1 l c x s) | (l, c, x, s) <- binders]
     grp             = L.foldl' (\m (r,c,x) -> ins r c x m) (Asc M.empty)
     binders         = map binder $ M.toList $ types a
 
-binder (sp, (x, s)) = (srcSpanStartLine sp, srcSpanStartCol sp, x, s)
+binder (sp, (x, s)) = (srcSpanStartLine sp, srcSpanStartCol sp, killSSA x, s)
+  where 
+    killSSA         = head . splitOn "_SSA_"
+
+binder1 (sp, (x,s)) = (srcSpanStartLine sp, srcSpanStartCol sp, 
+                        srcSpanEndLine sp, srcSpanEndCol sp, killSSA x, s)
+  where 
+    killSSA         = head . splitOn "_SSA_"
 
 ins r c x (Asc m)   = Asc (M.insert r (Asc (M.insert c x rm)) m)
   where 
     Asc rm          = M.lookupDefault (Asc M.empty) r m
 
------------------------------------------------------------------------------
 
+
+------------------------------------------------------------------------
+-- | VIM interface
+------------------------------------------------------------------------
+
+
+toVim :: AnnMap -> String
+toVim (Ann _ ty _) = unwords $ L.intersperse "\n" $ ss <$> lines
+  where
+    lines = map binder1 $ M.toList ty 
+    ss (l1,c1, l2, c2, i,s) = show l1 ++ ":" 
+                           ++ show c1 ++ "-"
+                           ++ show l2 ++ ":" 
+                           ++ show c2 ++ "::" 
+                           ++ show s
 

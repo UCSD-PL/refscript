@@ -63,9 +63,11 @@ renderAnnotations :: (PP t) => FilePath -> F.FixResult Error -> UAnnSol t -> IO 
 ----------------------------------------------------------------------------------
 
 renderAnnotations srcFile res (NoAnn :: UAnnSol t)
-  = B.writeFile jsonFile    $ annotByteString res (mempty :: UAnnInfo t) 
+  = do B.writeFile jsonFile    $ annotByteString res (mempty :: UAnnInfo t) 
+       writeFile   vimFile     $ annotVimString res (mempty :: UAnnInfo t) 
     where 
        jsonFile = extFileName Json  srcFile
+       vimFile  = extFileName Annot (srcFile ++ ".vim")
     
 renderAnnotations srcFile res (SomeAnn ann sol)
   = do writeFile   annFile  $ wrapStars "Constraint Templates" ++ "\n" 
@@ -73,9 +75,11 @@ renderAnnotations srcFile res (SomeAnn ann sol)
        appendFile  annFile  $ wrapStars "Inferred Types"       ++ "\n" 
        appendFile  annFile  $ ppshow ann'
        B.writeFile jsonFile $ annotByteString res ann' 
+       writeFile   vimFile  $ annotVimString res ann'
        donePhase Loud "Written Inferred Annotations"
     where 
        jsonFile = extFileName Json  srcFile
+       vimFile  = extFileName Annot (srcFile ++ ".vim")
        annFile  = extFileName Annot srcFile
        ann'     = sol ann
 

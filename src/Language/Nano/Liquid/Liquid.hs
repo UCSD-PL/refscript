@@ -364,7 +364,9 @@ consExpr g (ArrayLit l es)
 consExpr g (ObjectLit l bs) 
   = do  let (ps, es) = unzip bs
         (xes, g')   <- consScan consExpr g es
-        let elts = zipWith mkElt (F.symbol <$> ps) (tracePP ("ObjLit types: " ++ ppshow xes) $ (`envFindTy` g') <$> xes)
+        let elts = zipWith mkElt (F.symbol <$> ps) (
+          -- tracePP ("ObjLit types: " ++ ppshow xes) $ 
+              (`envFindTy` g') <$> xes)
         let d = TD Nothing [] Nothing elts
         i <- addObjLitTyM d
         envAddFresh "consExpr:ObjectLit" l (TApp (TRef i) [] fTop) g'

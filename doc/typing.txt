@@ -18,7 +18,7 @@ I   ::=                                       (Interface)
 
 s   ::=                                       (Statements)
       | s; s                                    (sequence)
-      | fun f(xi):sig { s }                     (function decalration)
+      | fun f(xi):ς { s }                     (function decalration)
       | var x[: t] = e                          (variable definition)
       | x := e                                  (assignment)
       | e.f := e                                (static field update)
@@ -41,7 +41,8 @@ e   ::=                                       (Expressions)
       | f(ei)                                   (function call)
       | e.f                                     (static field access)
       | e1[e1]                                  (dynamic field access)
-//Only in target language 
+
+-- Only in target language 
       | c e                                     (cast)
 
 
@@ -88,20 +89,24 @@ sig ::=                                       (Type signature)
       | ς1 /\ ς2                                (signature intersection)
 
 
-Fd  ::= { si: mi, ti }                        (Field declaration)
+Fd  ::= f: (Mi,t)                             (Field declaration)
+      | Fd, Fd
 
 
-Md  ::= { mi: ςi }                            (Method declarations)
+Md  ::= m: ς                                  (Method declarations)
+      | Md, Md
 
 
-mi  ::=                                       (Field mutability modifier) 
-      | m                                       (mutable)
-      | i                                       (immutable)
+Mi  ::=                                       (Field mutability modifier) 
+      | mut                                     (mutable)
+      | imm                                     (immutable)
 
 
 c   ::=                                       (Casts)
       | .                                       (no cast - or upcast ?)
       | [ t \/ ts => ts ]                       (downcast)
+
+
 
 -------------------------------------------------------------------------------
 
@@ -124,73 +129,185 @@ NOTES:
 Coercive subtyping
 ==================
 
- _______________________
-|                       |
-|   S |- t1 <: t2 ~> c  |         Subtyping jugdement
-|_______________________|
+ __________________
+|                  |
+|   t1 <: t2 ~> c  |         Subtyping jugdement
+|__________________|
 
 
-    G |- t <: t ~> .                                  [S-Id]
+    t <: t ~> .                                  [S-Id]
 
 
-    G |- t <: top ~> .                                [S-top]
+    t <: top ~> .                                [S-top]
 
 
-    ------------------------------------------------- [S-Union-Up]
-    G |- t <: t\/ti ~> .
+    -------------------------------------------- [S-Union-Up]
+    t <: t\/ti ~> .
 
 
     
-    ------------------------------------------------- [S-Union-Down]
-    G |- t\/ti <: ti ~> [ t\/ti => ti ]
+    -------------------------------------------- [S-Union-Down]
+    t\/ti <: ti ~> [ t\/ti => ti ]
 
 
-    G |- ti' <: ti ~> .
-    G |- t <: t' ~> .
-    ------------------------------------------------- [S-Func]
-    G |- (xi:ti)=>t <: (xi:ti')=>t' ~> .
-
-
-    t1 <: t2 ~> .          t2 <: t1 ~> .
-    ------------------------------------------------- [S-Array]
-    G |- [t1] <: [t2]
-
-
-    t1 <: t2 ~> .          t2 <: t1 ~> .
-    ------------------------------------------------- [S-Interface]
-    G |- I[t1] <: I[t2]
-
-This needs to be invariant Unless we dig deep into I and prove that wherever the
-As of I[A] appear, the mutability modifier is `im`.
-
-
+    ti' <: ti ~> .
     t <: t' ~> .
-    ------------------------------------------------- [S-Field-D1]
-    { f: _,t; Fd } <: { f: i,t'; Fd } ~> .
+    -------------------------------------------- [S-Func]
+    (xi:ti)=>t <: (xi:ti')=>t' ~> .
 
 
-    t <: t' ~> .           t' <: t ~> .
-    ------------------------------------------------- [S-Field-D2]
-    { f: m,t; Fd } <: { f: m,t'; Fd } ~> .
+    t1 <: t2 ~> .          t2 <: t1 ~> .
+    -------------------------------------------- [S-Array]
+    [t1] <: [t2]
+
+
+    t1 <: t2 ~> .          t2 <: t1 ~> .
+    -------------------------------------------- [S-Interface]
+    I[t1] <: I[t2]
+
+
+
+    f: M,t <: f: M',t'
+    -------------------------------------------- [S-Struct]
+    { f: (M,t), Fd } <: { f: M',t'; Fd } ~> .
 
 
     S(B) = class B extends B' { Md'; Fd' }
-    {Md''; Fd''} <: B'
-    ------------------------------------------------- [S-Field-D2]
-    { Md; Fd } <: class B<> extends B' ~> .
+    {Md''; Fd''} = unfold(B') 
+    {Md; Fd} <: { Md', Md''; Fd', Fd''}
+    -------------------------------------------- [S-Class-1]
+    { Md; Fd } <: class B extends B' ~> .
+
+
+    S(B) = class B extends B' { Md'; Fd' }
+    {Md''; Fd''} = unfold(B') 
+    { Md', Md''; Fd', Fd''} <: {Md; Fd}
+    -------------------------------------------- [S-Class-2]
+    class B extends B' <: {Md; Fd}~> .
+
+
+ ______________
+|              |
+|   Fd <: Fd'  |         Field subtyping jugdement
+|______________|
+
+
+    t <: t' ~> .      t' <: t ~> .
+    -------------------------------------------- [S-Fld-Deep-1]
+    f: (_,t) <: f: (mut,t')
+
+
+    t <: t' ~> .
+    -------------------------------------------- [S-Fld-Deep-1]
+    f: (imm,t) <: f: (_,t')
+
+
+ ______________
+|              |
+|   Md <: Md'  |         method subtyping jugdement
+|______________|
+
+
+    t <: t' ~> .      t' <: t ~> .
+    -------------------------------------------- [S-Fld-Deep-1]
+    m: (_,t) <: f: (mut,t')
+
+
+    t <: t' ~> .
+    -------------------------------------------- [S-Fld-Deep-1]
+    f: (imm,t) <: f: (_,t')
+
+
+
+
+
+NOTES:
+
+* [S-interface] This needs to be invariant Unless we dig deep into I and prove
+that wherever the As of I[A] appear, the mutability modifier is `im`.
+
+* Upcasts are treated as "no-coercion". We might need to make that more 
+explicit.
+
+
+
+
+ ______________________
+|                      |
+|   G |- s ~> s', G'   |         Raw Statement Typing Jugdement
+|______________________|
 
     
+    G  |- s1 ~> s1', G'
+    G' |- s2 ~> s2', G''
+    ------------------------------------------------- [S-Seq]
+    G  |- s1; s2 ~> s1'; s2', G''
 
 
- _____________________
-|                     |
-|   G; S |- s ~> s'   |         Raw Statement Typing Jugdement
-|_____________________|
+    ft = LUB(sig_i)
+    G  |- fun f(xi):ft { s } ~> fun f(xi): ft { s' }, G'
+    ------------------------------------------------------------------- [S-Func]
+    G  |- fun f(xi):/\ sig_i { s } ~> fun f(xi): /\ sig_i { s' }, G'
 
 
-    G; S |-* e : t' ~> c
+    G |-* e : t' ~> c
+    x not in dom(G)
+    G' = G[x -> t]
     ------------------------------------------------- [S-Field-DM]
-    G; S |- var x: t = e ~> c
+    G |- var x: t = e ~> var x: t = e', G'
+
+
+    G(x) = t
+    G |- e : t' -> e'
+    t' <: t ~> c
+    ------------------------------------------------- [S-Asgn]
+    G |- x := e ~> x = c e', G
+
+
+    G |- ei : t1 -> ei'
+    t1 = { f: (mut,t); _ } 
+    t2 <: t ~> c
+    ------------------------------------------------- [S-Upd]
+    G |- e1.f := e2 ~> e1'.f := c e2', G
+
+
+    TODO
+    ------------------------------------------------- [S-DUpd]
+    G |- e1[e2] := e3 ~> ..., G'
+
+
+
+    G(return) = t
+    G |- e: t' ~> e'
+    t' <: t ~> c
+    ------------------------------------------------- [S-Ret]
+    G |- return e ~> return c e', .
+
+
+    G |- s ~> s', G'
+    G |- e: _ ~> e'
+    ------------------------------------------------------------- [S-If]
+    G |- while(e) {s} ~> while(e'){s'}, G
+
+
+    G |- si ~> si', Gi
+    G |- e: _ ~> e'
+    ------------------------------------------------------------- [S-If]
+    G |- if(e) {s1} else {s2} ~> if(e') {s1'} else {s2'}, G
+
+
+NOTES:
+
+* Scoping: how do we scope function declarations [S-Func]
+
+* Object declaration typing: make a special typing judgement
+
+* Define LUB
+
+* The bindings in the the two branches of if-statements or the block of the
+while statement shall not escape the scope.
+
+
 
 
 

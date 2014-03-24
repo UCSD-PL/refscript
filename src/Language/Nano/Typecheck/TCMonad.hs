@@ -16,66 +16,41 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Execute 
   , execute
 
-  -- * Log Errors
-  , logError
-  
-  -- * Error Action
-  , tcError
+  -- * Errors
+  , logError, tcError
 
   -- * Freshness
   , freshTyArgs
-  -- , freshTArray
 
   -- * Substitutions
-  , getSubst
-  , setSubst
+  , getSubst, setSubst
 
   -- * Function Types
   , tcFunTys
 
   -- * Annotations
-  , addAnn    -- TEMP
-  , accumAnn
-  , getAllAnns
-  , remAnn
-  , getDef
-  , setDef
-  , addObjLitTyM
-  , getExts
-  , getClasses
+  , addAnn {-TEMP-}, accumAnn, getAllAnns, remAnn, getDef, setDef, addObjLitTyM
+  , getExts, getClasses
 
   -- * Unification
-  , unifyTypeM
-  , unifyTypesM
+  , unifyTypeM, unifyTypesM
 
   -- * Casts
-  , castM
-  , addDeadCast 
+  , castM, addDeadCast 
 
   -- * TDefEnv
-  , findTyIdOrDieM, findTyIdOrDieM'
-  , findTySymM, findTySymOrDieM
-  , findTySymWithIdOrDieM
+  , findTyIdOrDieM, findTyIdOrDieM', findTySymM, findTySymOrDieM, findTySymWithIdOrDieM
 
   -- * Get Type Signature 
-  , getSpecOrDie
-  , getSpecM
-  , addSpec
-
-  -- * Expression Getter/Setter
-  -- , withExpr
-
-  -- * Patch the program with assertions
-  -- , patchPgmM
+  , getSpecOrDie, getSpecM, addSpec
 
   -- * Verbosity
-  , whenLoud', whenLoud
-  , whenQuiet', whenQuiet
-
+  , whenLoud', whenLoud, whenQuiet', whenQuiet
+  
   -- * This
-  , tcPeekThis
-  , tcWithThis
+  , tcPeekThis, tcWithThis
 
+  -- * Prop
   , getPropM, getPropTDefM
 
   )  where 

@@ -20,7 +20,7 @@ module Language.Nano.Typecheck.Subst (
   , Substitutable (..)
 
   -- * Flatten a type definition applying subs
-  , flatten, flattenType
+  , flatten, flattenTRef, flattenType
   ) where 
 
 import           Text.PrettyPrint.HughesPJ
@@ -29,6 +29,7 @@ import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
+import           Language.Fixpoint.Misc (mapSnd)
 
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
@@ -113,8 +114,12 @@ instance Free (RType r) where
   free (TExp _)             = error "free should not be applied to TExp"
   free (TCons _ _)          = error "free should not be applied to TCons"
 
-instance (PP r, F.Reftable r) => Substitutable r (Cast (RType r)) where
-  apply θ c = c { castTarget = apply θ (castTarget c) }
+instance (PP r, F.Reftable r) => Substitutable r (Cast r) where
+  apply _ CNo        = CNo
+  apply θ (CUp t t') = CUp (apply θ t) (apply θ t')
+  apply θ (CDn t t') = CDn (apply θ t) (apply θ t')
+  apply θ (CFn cs c) = CFn (mapSnd (apply θ) <$> cs) (apply θ c)
+  apply θ (CCs cs  ) = CCs $ mapSnd (apply θ) <$> cs
 
 instance (PP r, F.Reftable r) => Substitutable r (Fact r) where
   apply _ x@(PhiVar _)   = x
@@ -134,8 +139,12 @@ instance (PP r, F.Reftable r) => Substitutable r (Id a) where
 instance (PP r, F.Reftable r) => Substitutable r (Annot (Fact r) z) where
   apply θ (Ann z fs)     = Ann z $ apply θ fs
 
-instance Free (Cast (RType r)) where
-  free = free . castTarget 
+instance Free (Cast r) where
+  free CNo        = S.empty
+  free (CUp t t') = S.union (free t) (free t')
+  free (CDn t t') = S.union (free t) (free t')
+  free (CFn cs c) = S.unions $ free <$> c:cs' where cs' = snd <$> cs
+  free (CCs cs  ) = S.unions $ (free . snd) <$> cs
 
 instance (PPR r) => Substitutable r (TDef (RType r)) where
   apply θ (TD n v p e)   = TD n v p $ apply θ e
@@ -170,9 +179,9 @@ appTy _        (TCons _ _)   = error "appTy should not be applied to TCons"
 
 
 ------------------------------------------------------------------------
-flatten :: PPR r => TDef (RType r) -> TDefEnv (RType r) -> [TElt (RType r)]
+flatten :: PPR r => TDefEnv (RType r) -> TDef (RType r) -> [TElt (RType r)]
 ------------------------------------------------------------------------
-flatten (TD _ vs pro elts) δ = 
+flatten δ (TD _ vs pro elts) = 
   -- NOTE: unionBy favors elts (as it should)
   L.unionBy name elts $ fromMaybe [] base 
   where
@@ -180,17 +189,23 @@ flatten (TD _ vs pro elts) δ =
     base       = pro >>= act >>= return . t_elts
     act (n,ts) = apply (fromList $ zip vs ts) (findTySym n δ) 
 
+------------------------------------------------------------------------
+flattenTRef :: PPR r => TDefEnv (RType r) -> RType r -> [TElt (RType r)]
+------------------------------------------------------------------------
+flattenTRef δ (TApp (TRef n) ts _) 
+                            = apply θ (flatten δ d)
+  where d@(TD _ vs _ _)     = findTyIdOrDie n δ
+        θ                   = fromList $ zip vs ts
+flattenTRef _ _ = error "Applying flattenTRef on non-tref"
+
 
 -- | Flatten types that contain references to types with flat objects
 ------------------------------------------------------------------------
 flattenType :: PPR r => TDefEnv (RType r) -> RType r -> RType r
 ------------------------------------------------------------------------
-flattenType δ (TApp (TRef n) ts r) 
-                            = TCons bs r
-  where d@(TD _ vs _ _)     = findTyIdOrDie n δ
-        bs                  = bind <$> apply θ (flatten d δ)
-        θ                   = fromList $ zip vs ts
-        bind (TE s _ t)     = B s $ flattenType δ t
+flattenType δ t@(TApp (TRef n) ts r) 
+                            = TCons (bind <$> flattenTRef δ t) r
+  where bind (TE s _ t)     = B s $ flattenType δ t
 flattenType δ (TApp c ts r) = TApp c (flattenType δ <$> ts) r
 flattenType _ (TVar v r)    = TVar v r
 flattenType δ (TFun bs t r) = TFun (f <$> bs) (flattenType δ t) r

@@ -78,7 +78,7 @@ module Language.Nano.Liquid.CGMonad (
   , cgWithThis
 
   -- Zip types
-  , zipType1, zipType2
+  , zipType
 
 
   ) where
@@ -92,6 +92,7 @@ import qualified Data.List                      as L
 -- import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 
+import           Language.Nano.Misc
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
@@ -117,7 +118,7 @@ import           Text.Printf
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -247,12 +248,12 @@ envPushContext :: (CallSite a) => a -> CGEnv -> CGEnv
 envPushContext c g = g {cge_ctx = pushContext c (cge_ctx g)}
 
 ---------------------------------------------------------------------------------------
-envGetContextCast :: CGEnv -> AnnTypeR -> Maybe (Cast RefType)
+envGetContextCast :: CGEnv -> AnnTypeR -> Cast F.Reft
 ---------------------------------------------------------------------------------------
 envGetContextCast g a 
   = case [c | TCast cx c <- ann_fact a, cx == cge_ctx g] of
-      [ ] -> Nothing
-      [c] -> Just c
+      [ ] -> CNo
+      [c] -> c
       cs  -> die $ errorMultipleCasts (srcPos a) cs
 
 ---------------------------------------------------------------------------------------
@@ -428,7 +429,7 @@ freshTyPhisWhile l g xs τs
 -- | Fresh Object Type
 ---------------------------------------------------------------------------------------
 freshTyObj :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType 
--- ---------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------
 freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g 
 
 ---------------------------------------------------------------------------------------
@@ -443,8 +444,6 @@ subType l g t1 t2 =
      t2'   <- addInvariant t2
      -- TODO: Make this more efficient - only introduce new bindings
      g'    <- envAdds [(symbolId l x, t) | (x, Just t) <- rNms t1' ++ rNms t2' ] g
-     -- FIXME: check for rawtype compatibility
-     -- Using something like equivWUnionsM
      modify $ \st -> st {cs = c g' (t1', t2') : (cs st)}
   where
     c g     = uncurry $ Sub g (ci l)
@@ -452,67 +451,30 @@ subType l g t1 t2 =
     names   = foldReft rr []
     rr r xs = F.syms r ++ xs
     
-    
--- A more verbose version
--- subType' msg l g t1 t2 = 
---   subType l g (trace (printf "SubType[%s]:\n\t%s\n\t%s" msg (ppshow t1) (ppshow t2)) t1) t2
 
--------------------------------------------------------------------------------
-equivWUnions :: TDefEnv RefType -> RefType -> RefType -> Bool
--------------------------------------------------------------------------------
-equivWUnions δ t1@(TApp TUn _ _) t2@(TApp TUn _ _) = 
-  {-let msg = printf "In equivWUnions:\n%s - \n%s" (ppshow t1) (ppshow t2) in -}
-  case unionParts t1 t2 of 
-    (ts,[],[])  -> and $ uncurry (safeZipWith "equivWUnions" $ equivWUnions δ) (unzip ts)
-    _           -> False
-equivWUnions _ t t' = equiv t t'
-
-equivWUnionsM t t' = getDef >>= \δ -> return (equivWUnions δ t t')
-
-
--- | Subtyping container contents: unions, objects. Includes top-level
-
--- `subTypeContainers'` breaks down container types (unions and objects) to their
--- sub-parts and recursively creates subtyping constraints for these parts. 
--- It returns simple subtyping for the rest of the cases (non-container types).
---
--- The top-level refinements of the container types strengthen the parts.
---
---      Γ |- {v:T1 | P1 ∧ P3}       <: { v:T1 | P1' ∧ P3'}
---      Γ |- {v:T2 | P2 ∧ P3}       <: { v:T2 | P2' ∧ P3'}
---      −−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−−   
---      Γ |- {v:T1/P1 + T2/P2 | P3} <: {v:T1/P1' + T2/P2' | P3'}
---
---
--- TODO: Will loop infinitely for cycles in type definitions
 -------------------------------------------------------------------------------
 subTypeContainers :: (IsLocated l) => String -> l -> CGEnv -> RefType -> RefType -> CGM ()
 -------------------------------------------------------------------------------
-subTypeContainers {- msg -} _ l g t1 t2 = do
-    δ <- getDef 
-    subType l g (flattenType δ t1) (flattenType δ t2)
-  {-where -}
-    {-  msg'                      = render $ text "subTypeContainers:" -}
-    {-                                       $+$ text "  t1 =" <+> pp t1-}
-    {-                                       $+$ text "  t2 =" <+> pp t2-}
+subTypeContainers {- msg -} _ l g t1 t2 =  ss =<< getDef 
+    where ss δ = subType l g (flattenType δ t1) (flattenType δ t2)
 
 
 
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Adding Well-Formedness Constraints
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 wellFormed       :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType  
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 wellFormed l g t = do modify $ \st -> st { ws = (W g (ci l) t) : ws st }
                       return t
 
 
 
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- | Generating Fresh Values 
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 class Freshable a where
   fresh   :: CGM a
@@ -565,17 +527,15 @@ trueRefType    = mapReftM true
 refreshRefType :: RefType -> CGM RefType
 refreshRefType = mapReftM refresh
 
----------------------------------------------------------------------------------------
--- | Splitting Subtyping Constraints --------------------------------------------------
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- | Splitting Subtyping Constraints 
+--------------------------------------------------------------------------------
 
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 splitC :: SubC -> CGM [FixSubC]
----------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
----------------------------------------------------------------------------------------
 -- | Function types
----------------------------------------------------------------------------------------
 splitC (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
   = do bcs       <- bsplitC g i tf1 tf2
        g'        <- envTyAdds i xt2s g 
@@ -588,9 +548,7 @@ splitC (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
        su         = F.mkSubst $ safeZipWith "splitC2" bSub xt1s xt2s
        bSub b1 b2 = (b_sym b1, F.eVar $ b_sym b2)
 
----------------------------------------------------------------------------------------
 -- | TAlls
----------------------------------------------------------------------------------------
 splitC (Sub g i (TAll α1 t1) (TAll α2 t2))
   | α1 == α2 
   = splitC $ Sub g i t1 t2
@@ -600,54 +558,37 @@ splitC (Sub g i (TAll α1 t1) (TAll α2 t2))
     θ   = fromList [(α2, tVar α1 :: RefType)]
     t2' = apply θ t2
 
----------------------------------------------------------------------------------------
 -- | TVars
----------------------------------------------------------------------------------------
 splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _)) 
   | α1 == α2
   = bsplitC g i t1 t2
   | otherwise
   = errorstar "UNEXPECTED CRASH in splitC"
 
----------------------------------------------------------------------------------------
--- | Unions:
--- We need to get the bsplitC for the top level refinements 
--- Nothing more should be added, the internal subtyping constraints have been
--- dealt with separately
----------------------------------------------------------------------------------------
-splitC (Sub g i t1@(TApp TUn t1s r1) t2@(TApp TUn t2s r2)) =
-  ifM (equivWUnionsM t1 t2) 
-    (do  cs      <- bsplitC g i t1 t2
-         -- constructor parameters are covariant
-         let t1s' = (`strengthen` r1) <$> t1s
-         let t2s' = (`strengthen` r2) <$> t2s
-         cs'     <- concatMapM splitC $ safeZipWith "splitcTRef" (Sub g i) t1s' t2s'
-         return   $ cs ++ cs'
-    )
-    (errorstar $ printf "Unequal unions in splitC: %s - %s" 
-      (ppshow $ toType t1) (ppshow $ toType t2))
+-- | Unions
+splitC (Sub g i t1@(TApp TUn t1s r1) t2@(TApp TUn t2s r2)) 
+  = do  cs      <- bsplitC g i t1 t2
+        -- NOTE: hopefully this should align them...
+        let t1s' = L.sortBy (compare `on` toType) $ (`strengthen` r1) <$> t1s
+        let t2s' = L.sortBy (compare `on` toType) $ (`strengthen` r2) <$> t2s
+        cs'     <- concatMapM splitC $ safeZipWith "splitC-Unions" (Sub g i) t1s' t2s'
+        return   $ cs ++ cs'
 
-splitC (Sub _ _ t1@(TApp TUn _ _) t2) = 
-  errorstar $ printf "Unions in splitC: %s - %s" (ppshow t1) (ppshow t2)
-splitC (Sub _ _ t1 t2@(TApp TUn _ _)) = 
-  errorstar $ printf "Unions in splitC: %s - %s" (ppshow t1) (ppshow t2)
+splitC (Sub _ _ t1 t2) 
+  | any isUnion [t1,t2] = errorstar $ printf "Uneven unions in splitC: %s - %s" (ppshow t1) (ppshow t2)
 
----------------------------------------------------------------------------------------
--- |Type definitions
----------------------------------------------------------------------------------------
+-- |Type references
 splitC (Sub g i t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _)) 
   | i1 == i2
   = do  cs    <- bsplitC g i t1 t2
         -- Invariant type parameters
-        cs'   <- concatMapM splitC $ safeZipWith "splitcTRef" (Sub g i) t1s t2s
-                                  ++ safeZipWith "splitcTRef" (Sub g i) t2s t1s
+        cs'   <- concatMapM splitC $ safeZipWith "splitC-TRef" (Sub g i) t1s t2s
+                                  ++ safeZipWith "splitC-TRef" (Sub g i) t2s t1s
         return $ cs ++ cs' 
   | otherwise 
   = do  cs    <- bsplitC g i t1 t2        --XXX: Does bsplitC remain the same?
-        d1@(TD _ v1s _ _) <- findTyIdOrDieM i1
-        d2@(TD _ v2s _ _) <- findTyIdOrDieM i2
-        e1s <- getDef >>= return . apply (fromList $ zip v1s t1s) . flatten d1
-        e2s <- getDef >>= return . apply (fromList $ zip v2s t2s) . flatten d2
+        e1s <- (`flattenTRef` t1) <$> getDef
+        e2s <- (`flattenTRef` t2) <$> getDef
         cs' <- splitE g i e1s e2s
         return $ cs ++ cs'
 
@@ -656,9 +597,7 @@ splitC (Sub _ _ (TApp (TRef _) _ _) _)
 splitC (Sub _ _ _ (TApp (TRef _) _ _))
   = errorstar "UNEXPECTED CRASH in splitC:TApp-TRef"
 
----------------------------------------------------------------------------------------
 -- | Rest of TApp
----------------------------------------------------------------------------------------
 splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
   = do cs    <- bsplitC g i t1 t2
        cs'   <- concatMapM splitC $ safeZipWith 
@@ -855,86 +794,79 @@ cgPopThis    = modify $ \st -> st { cg_this = tail $ cg_this st }
 cgWithThis t p = do { cgPushThis t; a <- p; cgPopThis; return a } 
 
 
--- | `zipType1` matches structurally equivalent parts of types @t1@ and @t2@:
--- * Keeping the structure of @t1@
--- * Applying f on the respective refinements 
--- * f is commutative
--- 
--- E.g. zipType1 (number + { boolean | p } ) { number | v > 0 } meet = 
---        { number | v > 0 } + { boolean | p } 
-zipType1 f t1 t2 = zipType2 f t2 t1
-
-
--- | `zipType2` 
--- * walks through the equivalent parts of types @t1@ and @t2@
--- * applies function @f@ on the refinements of the equivalent parts 
--- * keeps the output as the resulting refinement
--- * preserves the shape of @t2@
+-- | `zipType` pairs up equivalent parts of types @t1@ and @t2@, preserving the
+-- type structure of @t2@, and applying @f@ whenever refinements are present on 
+-- both sides and @g@ whenever the respective part in type @t2@ is missing.
 --------------------------------------------------------------------------------
-zipType2 :: (F.Reft -> F.Reft -> F.Reft) ->  RefType -> RefType -> CGM RefType
+zipType :: TDefEnv RefType -> 
+  (F.Reft -> F.Reft -> F.Reft) ->   -- applied to refs that are present on both sides
+  (F.Reft -> F.Reft) ->             -- applied when pred is absent on the LHS
+  RefType -> RefType -> RefType
 --------------------------------------------------------------------------------
-zipType2 f (TApp TUn t1s r1) (TApp TUn t2s r2)  = do
-  ts <- mapM (zipTypes f t1s) t2s 
-  return $ TApp TUn ts $ f r1 r2
-
-zipType2 f (TApp TUn ts _) t =  
-  zipTypes f ts t
-
-zipType2 f t (TApp TUn ts' r') = do
-  ts <- mapM (zipTypes f [t]) ts'
-  return $ TApp TUn ts r'                 -- The top-level refinement for t' should remain
-
-zipType2 f (TApp (TRef i1) t1s r1) (TApp (TRef i2) t2s r2) 
-  | i1 == i2  = do  ts <- zipWithM (zipType2 f) t1s t2s
-                    return $ TApp (TRef i1) ts $ f r1 r2
-  | otherwise = do  d1@(TD _ v1s _ _) <- findTyIdOrDieM i1
-                    d2@(TD _ v2s _ _) <- findTyIdOrDieM i2
-                    e1s <- apply (fromList $ zip v1s t1s) <$> flattenM d1
-                    e2s <- apply (fromList $ zip v2s t2s) <$> flattenM d2 
-                    let (e1s', e2s') = unzip [ (e1, e2) | e2 <- e2s, e1 <- maybeToList $ L.find (same e2) e1s]   
-                    es <- zipWithM (zipElt2 f) e1s' e2s'
-                    i  <- addObjLitTyM $ TD Nothing [] Nothing es
-                    return $ TApp (TRef i) [] $ f r1 r2
+--
+--                                | t1|_t1' \/ .. tm|_tm' \/ .. tn|g
+--                                |         , if n > m, ti ~ ti'
+-- t1 \/ .. tn |_ t1' \/ .. tm' = |
+--                                | t1|_t1' \/ .. tm|_tm'              
+--                                |         , if n <= m, ti ~ ti'
+--
+zipType δ f g t1 t2 
+  | any isUnion [t1, t2]
+  = mkUnionR (f r1 r2) $ cmn ++ snd
   where
-    same (TE s1 b1 _) (TE s2 b2 _) = s1 == s2 && b1 == b2
-    
-zipType2 f (TApp c [] r) (TApp c' [] r')    | c == c' = 
-  return $ TApp c [] $ f r r'
+    (r1, r2)   = mapPair rTypeR (t1, t2) 
+    (t1s, t2s) = mapPair bkUnion (t1, t2) 
+    cmn        = [ zipType δ f g τ1 τ2 | τ2 <- t2s, τ1 <- maybeToList $ L.find (equiv τ2) t1s ]
+    snd        = fmap g <$> [ t | t <- t2s, not $ exists (equiv t) t1s ]
 
-zipType2 f (TVar v r) (TVar v' r') | v == v' = 
-  return $ TVar v $ f r r'
+zipType δ f g t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
+  | i1 == i2  
+  = TApp (TRef i1) (zipWith (zipType δ f g) t1s t2s) $ f r1 r2
+  | otherwise 
+  = on (zipType δ f g) (flattenType δ) t1 t2 
+ 
+zipType _ f _ (TApp c [] r) (TApp c' [] r') 
+  | c == c' = TApp c [] $ f r r'
 
-zipType2 f (TFun x1s t1 r1) (TFun x2s t2 r2) = do
-  xs <- zipWithM (zipBind2 f) x1s x2s 
-  y  <- zipType2 f t1 t2
-  return $ TFun xs y $ f r1 r2
+zipType _ f _ (TVar v r) (TVar v' r') 
+  | v == v' = TVar v $ f r r'
 
-zipType2 f (TArr t1 r1) (TArr t2 r2) = do
-  t <- zipType2 f t1 t2
-  return $ TArr t $ f r1 r2
+zipType δ f g (TFun x1s t1 r1) (TFun x2s t2 r2) 
+  = TFun xs y $ f r1 r2
+  where
+    xs = zipWith (zipBind δ f g) x1s x2s
+    y  = zipType δ f g t1 t2
 
-zipType2 _ t1 t2 = 
-  errorstar $ printf "BUG[zipType2]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
+zipType δ f g (TArr t1 r1) (TArr t2 r2) 
+  = TArr (zipType δ f g t1 t2) $ f r1 r2
 
-zipTypes f ts t = 
+zipType δ f g (TCons b1s r1) (TCons b2s r2) 
+  = TCons (cmn ++ snd) (f r1 r2)
+  where 
+    cmn = [ B s1 (zipType δ f g t1 t2) | B s1 t1 <- b2s, B s2 t2 <- b2s, s1 == s2 ]
+    -- FIXME: Should we apply g here as well?
+    -- This won't really happen cause we only use it for downcast, so
+    -- the snd list will be empty
+    snd = [ B s t | B s t <- b2s, not $ exists ((== s) . b_sym) b2s ]
+
+zipType _ _ _ t1 t2 = 
+  errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
+
+
+zipTypes δ f g ts t = 
   case filter (equiv t) ts of
-    [  ] -> return t
-    [t'] -> zipType2 f t' t
+    [  ] -> t
+    [t'] -> zipType δ f g t' t
     _    -> errorstar "BUG[zipType]: multiple equivalent types" 
   
 
-zipBind2 f (B s1 t1) (B s2 t2) 
-  | s1 == s2 = B s1 <$> zipType2 f t1 t2 
-zipBind2 _ _       _           
-  = errorstar "BUG[zipBind2]: mis-matching binders"
+zipBind δ f g (B s1 t1) (B s2 t2) 
+  | s1 == s2 = B s1 $ zipType δ f g t1 t2 
+zipBind _ _ _ _       _           
+  = errorstar "BUG[zipBind]: mis-matching binders"
 
-zipElt2 f (TE s1 b1 t1) (TE s2 b2 t2) 
-  | s1 == s2 && b1 == b2 = TE s1 b1 <$> zipType2 f t1 t2 
-zipElt2 _ _       _                
-  = errorstar "BUG[zipElt2]: mis-matching elements"
-
---------------------------------------------------------------------------------
-flattenM :: TDef RefType -> CGM [TElt RefType]
---------------------------------------------------------------------------------
-flattenM d = flatten d <$> getDef
+zipElt δ f g (TE s1 b1 t1) (TE s2 b2 t2) 
+  | s1 == s2 && b1 == b2 = TE s1 b1 <$> zipType δ f g t1 t2 
+zipElt _ _ _ _       _
+  = errorstar "BUG[zipElt]: mis-matching elements"
 

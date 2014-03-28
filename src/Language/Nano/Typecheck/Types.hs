@@ -48,7 +48,6 @@ module Language.Nano.Typecheck.Types (
   -- * Type comparison/joining/subtyping
   , Equivalent
   , equiv
-  , SubDirection (..), arrDir
 
   -- * Type definition env
   , TyID
@@ -63,7 +62,10 @@ module Language.Nano.Typecheck.Types (
   , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy
 
   -- * Annotations
-  , Annot (..), UFact, Fact (..), Cast(..), phiVarsAnnot, ClassInfo
+  , Annot (..), UFact, Fact (..), phiVarsAnnot, ClassInfo
+  
+  -- * Casts
+  , Cast(..), noCast
 
   -- * Aliases for annotated Source 
   , AnnBare, UAnnBare, AnnSSA , UAnnSSA
@@ -83,6 +85,7 @@ module Language.Nano.Typecheck.Types (
 import           Text.Printf
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
+import           Data.Function                  (on)
 import           Data.Maybe                     (fromMaybe)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.List                      as L
@@ -387,13 +390,6 @@ mkUnionR _ [ ] = tErr
 mkUnionR r [t] = strengthen t r
 mkUnionR r ts  = TApp TUn ts r 
 
--- mkUnionR r ts  
---   | length ts' > 1 = TApp TUn ts' r
---   | otherwise      = strengthen (head ts') r
---   where 
---     ts'            = L.sort $ L.nub ts
-
-
 ---------------------------------------------------------------------------------
 bkUnion :: RType r -> [RType r]
 ---------------------------------------------------------------------------------
@@ -401,10 +397,11 @@ bkUnion (TApp TUn xs _) = xs
 bkUnion t               = [t]
 
 
-
--- | Type equivalence: This is equality on the raw type level, 
---  excluding union types.
-
+-- | Type equivalence
+--
+--   This relation corresponds to equality on the raw type level, modulo
+--   reordering on the parts of union types.
+--
 class Equivalent a where 
   equiv :: a -> a -> Bool
 
@@ -412,17 +409,15 @@ instance Equivalent a => Equivalent [a] where
   equiv a b = and $ zipWith equiv a b 
 
 instance Equivalent (RType r) where 
-  equiv t t'  | toType t == toType t' = True
-  equiv t t'  | any isUnion [t,t'] = 
-  -- FIXME: 
-  --
-  --  ∀j. ∃i. Si ~ Tj  
-  --  ∀i. ∃j. Si ~ Tj  
-  -- -----------------
-  --  \/ Si ~ \/ Tj
-  --
-    errorstar (printf "equiv: no unions: %s\n\t\t%s" 
-    (ppshow $ toType t) (ppshow $ toType t'))
+  equiv t t'   | toType t == toType t' = True
+  equiv t t'   | any isUnion [t,t'] = uncurry go $ mapPair srt (t, t')
+    where
+      srt      = L.sortBy (compare `on` toType) . bkUnion -- sort on raw part
+      go (t:ts) (t':ts')  
+               = equiv t t' && go ts ts'
+      go [] [] = True
+      go [] _  = False
+      go _ []  = False
   equiv (TApp c ts _) (TApp c' ts' _) = c `equiv` c' && ts `equiv` ts'
   equiv (TArr t _   ) (TArr t' _    ) = t `equiv` t'
   equiv (TVar v _   ) (TVar v' _    ) = v == v'
@@ -446,44 +441,6 @@ instance Equivalent (Id a) where
   equiv i i' = F.symbol i == F.symbol i'
 
 
----------------------------------------------------------------------------------------
--- Subtyping direction ----------------------------------------------------------------
----------------------------------------------------------------------------------------
-
--- | Subtyping directions
-data SubDirection = SubT    -- Subtype
-                  | SupT    -- Supertype
-                  | EqT     -- Same type
-                  | Nth     -- No relation
-                  deriving (Eq, Show)
-
-instance PP SubDirection where 
-  pp SubT = text "<:"
-  pp SupT = text ":>"
-  pp EqT  = text "="
-  pp Nth  = text "≠"
-
--- The Subtyping directions form a monoid both as a `sum` and as a `product`, 
--- cause they are combined in different ways when used in unions and object (the
--- two places where subtyping occurs).
-
--- Sum: Relaxed version (To be used in unions)
-instance Monoid SubDirection where
-  mempty = EqT
-  d    `mappend` d'   | d == d' = d
-  -- We know nothing about the types so far (Nth), but we can use the other part
-  -- to make any assumptions, that's why @d@ is propagated.
-  Nth  `mappend` _              = Nth
-  _    `mappend` Nth            = Nth
-  EqT  `mappend` d              = d
-  d    `mappend` EqT            = d
-  _    `mappend` _              = Nth
-
-arrDir     :: SubDirection -> SubDirection
-arrDir EqT = EqT
-arrDir _   = Nth
-
-
 --------------------------------------------------------------------------------
 bkPaddedUnion :: String -> RType r -> RType r -> [(RType r, RType r)]
 --------------------------------------------------------------------------------
@@ -495,10 +452,8 @@ bkPaddedUnion msg t1 t2 =
                      msg (ppshow $ toType t1) (ppshow $ toType t2) 
 
 
--- | `unionParts`
-
--- Special case of `unionParts'` that uses `Equivalent` as the type
--- equivalence relation.
+-- | `unionParts` is a special case of `unionParts'` that uses Equivalent as 
+-- the type equivalence relation.
 --------------------------------------------------------------------------------
 unionParts ::  RType r -> RType r -> ([(RType r, RType r)], [RType r], [RType r])
 --------------------------------------------------------------------------------
@@ -529,7 +484,6 @@ unionParts' eq t1 t2 = (common t1s t2s, d1s, d2s)
     distinct [] ys = (ys, [])
     distinct xs ys = ([x | x <- xs, not $ any (x `eq`) ys ],
                       [y | y <- ys, not $ any (y `eq`) xs ])
-
     sanityCheck ([ ],[ ]) = errorstar "unionParts', called on too small input"
     sanityCheck ([_],[ ]) = errorstar "unionParts', called on too small input"
     sanityCheck ([ ],[_]) = errorstar "unionParts', called on too small input"
@@ -537,17 +491,7 @@ unionParts' eq t1 t2 = (common t1s t2s, d1s, d2s)
     sanityCheck p         = p
 
 
-
-
--- | Helper
-instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
-  pp (a,b,c,d) = pp a <+>  pp b <+> pp c <+> pp d
-
-
-
-
 -- | Strengthen the top-level refinement
-
 ---------------------------------------------------------------------------------
 strengthen                   :: F.Reftable r => RType r -> r -> RType r
 ---------------------------------------------------------------------------------
@@ -812,7 +756,7 @@ readOnlyVars p = envIds $ mAssm `envUnion` mMeas `envUnion` mExtr
 
 
 ---------------------------------------------------------------------------
--- | Pretty Printer Instances ---------------------------------------------
+-- | Pretty Printer Instances
 ---------------------------------------------------------------------------
 
 instance PP () where 
@@ -876,7 +820,7 @@ instance (PP s, PP t) => PP (M.HashMap s t) where
 
 
 -----------------------------------------------------------------------------
--- | IContext keeps track of context of intersection-type cases -------------
+-- | IContext keeps track of context of intersection-type cases
 -----------------------------------------------------------------------------
 
 -- | Keeps track of intersection-type context, to allow casts to be guarded by
@@ -908,21 +852,30 @@ pushContext          :: (CallSite a) => a -> IContext -> IContext
 pushContext s (IC c) = IC ((siteIndex s) : c) 
 
 -----------------------------------------------------------------------------
--- | Casts ------------------------------------------------------------------
+-- | Casts 
 -----------------------------------------------------------------------------
+data Cast r  = CNo                                    -- .
+             | CUp { org :: RType r, tgt :: RType r } -- <t1 UP t2>
+             | CDn { org :: RType r, tgt :: RType r } -- <t1 DN t2>
 
-data Cast t  = UCST {castOrigin :: t, castTarget :: t } -- ^ up-cast
-             | DCST {castTarget :: t } -- ^ down-cast 
-             | DC   {castTarget :: t } -- ^ dead-cast
+             | CFn [(F.Symbol, Cast r)] (Cast r)      -- (fi:ci)=>c
+             | CCs [(F.Symbol, Cast r)]               -- {fi:ci}
              deriving (Eq, Ord, Show, Data, Typeable)
 
-instance (PP a) => PP (Cast a) where
-  pp (UCST t1 t2) = text "Upcast  : " <+> pp t1 <+> text " => " <+> pp t2
-  pp (DCST t)     = text "Downcast: " <+> pp t
-  pp (DC   t)     = text "Deadcast: " <+> pp t
+instance (PP r, F.Reftable r) => PP (Cast r) where
+  pp CNo         = text "No cast"
+  pp (CUp t1 t2) = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
+  pp (CDn t1 t2) = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
+  pp (CFn cs c)  = ppArgs parens comma cs <+> text "=>" <+> pp c
+  pp (CCs cs)    = ppArgs braces comma cs
+
+
+noCast CNo = True
+noCast _   = False
+
 
 -----------------------------------------------------------------------------
--- | Annotations ------------------------------------------------------------
+-- | Annotations
 -----------------------------------------------------------------------------
 
 -- | Annotations: Extra-code decorations needed for Refinement Type Checking
@@ -931,7 +884,7 @@ data Fact r
   = PhiVar      ![(Id SourceSpan)]
   | TypInst     !IContext ![RType r]
   | Overload    !(Maybe (RType r))
-  | TCast       !IContext !(Cast (RType r))
+  | TCast       !IContext !(Cast r)
   -- Type annotations
   | TAnnot      !(RType r)
   -- Class annotation
@@ -1026,7 +979,7 @@ isTFun _            = False
 
 
 -----------------------------------------------------------------------
--- | Operator Types ---------------------------------------------------
+-- | Operator Types
 -----------------------------------------------------------------------
 
 -----------------------------------------------------------------------
@@ -1099,7 +1052,7 @@ prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
 builtinId       = mkId . ("builtin_" ++)
 
 -----------------------------------------------------------------------
--- Type and Predicate Aliases -----------------------------------------
+-- Type and Predicate Aliases
 -----------------------------------------------------------------------
 
 data Alias a s t = Alias {

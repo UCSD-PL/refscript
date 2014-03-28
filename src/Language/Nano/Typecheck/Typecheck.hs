@@ -100,10 +100,9 @@ getCasts stmts   = everything (++) ([] `mkQ` f) stmts
 -------------------------------------------------------------------------------
 castErrors :: (F.Reftable r) => AnnType r -> [Error] 
 -------------------------------------------------------------------------------
-castErrors (Ann l facts) = downErrors ++ deadErrors
+castErrors (Ann l facts) = downErrors
   where 
-    downErrors           = [errorDownCast l t | TCast _ (DCST t) <- facts]
-    deadErrors           = [errorDeadCast l   | TCast _ (DC _)   <- facts]
+    downErrors           = [errorDownCast l t1 t2 | TCast _ (CDn t1 t2) <- facts]
 
 
 -------------------------------------------------------------------------------
@@ -632,7 +631,7 @@ tcCall γ ex@(PrefixExpr l o e)
        case z of
          Just ([e'], t)       -> return (PrefixExpr l o e', t)
          Just _               -> error "IMPOSSIBLE:tcCall:PrefixExpr"
-         Nothing              -> deadCast (srcPos l) γ ex 
+         Nothing              -> error "UNIMPLMENTED: former deadcast" 
 
 -- | `e1 o e2`
 tcCall γ ex@(InfixExpr l o e1 e2)        
@@ -640,7 +639,7 @@ tcCall γ ex@(InfixExpr l o e1 e2)
        case z of
          Just ([e1', e2'], t) -> return (InfixExpr l o e1' e2', t)
          Just _               -> error "IMPOSSIBLE:tcCall:InfixExpr"
-         Nothing              -> deadCast (srcPos l) γ ex 
+         Nothing              -> error "UNIMPLMENTED: former deadcast" 
          
 -- | `super(e1,...,en)`
 -- This is where we expect typescript to have done a context check:
@@ -670,7 +669,7 @@ tcCall γ ex@(CallExpr l e es)
        z                      <- tcCallMatch γ l e es ft0
        case z of
          Just (es', t)        -> return (CallExpr l e' es', t)
-         Nothing              -> deadCast (srcPos l) γ ex
+         Nothing              -> error "UNIMPLMENTED: former deadcast" 
 
 -- | `e1[e2]`
 tcCall γ (BracketRef l e1 e2)
@@ -679,7 +678,6 @@ tcCall γ (BracketRef l e1 e2)
          Just ([e1', e2'], t) -> return (BracketRef l e1' e2', t)
          Just _               -> error "IMPOSSIBLE:tcCall:BracketRef"
          Nothing              -> tcError $ errorPropRead (srcPos l) e1 e2 
-                                 -- deadCast (srcPos l) γ ex 
    
 
 -- | `e1[e2] = e3`
@@ -789,14 +787,6 @@ instantiate l ξ fn ft
     where
        err = tcError   $ errorNonFunction (ann l) fn ft
 
-
-deadCast l γ e 
-  = do t'    <- freshTyArgs (srcPos l) ξ [α] t 
-       e'    <- addDeadCast ξ e t'
-       return   (e', t') 
-    where 
-      (α, t)  = undefType l γ
-      ξ       = tce_ctx γ
 
 undefType l γ 
   = case bkAll $ ut of

@@ -467,21 +467,21 @@ convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s _)
       let e2s = flattenTRef δ t2
 
       let m1  = M.fromList [ (s, t) | TE s _ t <- e1s ]
-      let m2  = M.fromList [ (s, t) | TE s _ t <- e1s ]
+      let m2  = M.fromList [ (s, t) | TE s _ t <- e2s ]
     
       let (ks1, ks2) = mapPair (S.fromList . (f_sym <$>)) (e1s, e2s)
           cmnKs = S.toList $ S.intersection ks1 ks2
           t1s = fromJust . (`M.lookup` m1) <$> cmnKs
           t2s = fromJust . (`M.lookup` m2) <$> cmnKs
 
-      if equalKeys m1 m2 || isProperSubmapOf m2 m1 then
+      if m1 `equalKeys` m2 || m2 `isProperSubmapOf` m1 then
         do  cs <- zipWithM (convert l) t1s t2s
-            if all noCast cs then
+            if noCast `all` cs then
               return CNo
             else
               return $ CCs $ zip cmnKs cs
 
-      else if isProperSubmapOf m1 m2 then 
+      else if m1 `isProperSubmapOf` m2 then 
         tcError $ errorMissFlds l d1 d2 (S.toList $ S.difference ks2 ks1)
 
       else 

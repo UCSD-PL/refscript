@@ -409,52 +409,63 @@ consExpr _ e
 consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 --------------------------------------------------------------------------------
 consCast g a e
-  = case envGetContextCast g a of
-      Just (DC t) -> consDeadCast g l t
-      z           -> do (x, g') <- consExpr g e
-                        case z of
-                          Nothing          -> return (x, g')
-                          Just (UCST t1 _) -> consUpCast   g' l x t1
-                          Just (DCST t)    -> consDownCast g' l x t
-                          _                -> error "consCast:This shouldn't happen"
-    where 
-      l              = srcPos a
+  = do  (x,g) <- consExpr g e 
+        case envGetContextCast g a of
+          CNo       -> return (x,g)
+          CUp t t'  -> consUpCast g l x t t'
+          CDn t t'  -> consDownCast g l x t t'
+
+          -- FIXME: TODO
+          -- CFn t t'  -> return undefined
+          -- CCs t t'  -> return undefined
+    where  
+      l = srcPos a
 
 -- | Upcast
-consUpCast g l _ t = envAddFresh "consUpCast" l t g
+consUpCast g l x fromT toT = 
+  do δ <- getDef
+     let toT' = zipType δ (\p _ -> p) F.bot xT toT
+     envAddFresh "consUpCast" l toT' g
+  where 
+     xT = envFindTy x g
 
 -- | Downcast
-consDownCast g l x t = 
-  do δ   <- getDef
-     -- NOTE: types should be aligned
-     tc  <- castTo δ l tx (toType t) 
-     (subTypeContainers "Downcast" l g) tx tc {- withAlignedM -} 
-     g'  <- envAdds [(x, tc)] g
-     return (x, g')
+consDownCast g l x fromT toT =
+  do δ      <- getDef
+     let (lhs, rhs) = (xT, zipType δ (\_ q -> q) F.bot toT xT)
+     subTypeContainers "consDownCast" l g lhs rhs
+     -- NOTE: The F.bot in the following should not really mattter
+     let toT' = zipType δ (\p _ -> p) F.bot xT toT
+     g'     <- envAdds [(x, toT')] g
+     return  $ (x, g')
   where 
-     tx   = envFindTy x g
+     xT      = envFindTy x g
 
-castTo δ l t τ       = castStrengthen t <$> (zipType2 botJoin t =<< bottify τ)
-  where 
-  -- Bottify does not descend into TDefs - so we need to flatten 
-    bottify          = fmap (fmap F.bot) . true . flattenType δ . rType
-    botJoin r1 r2 
-      | F.isFalse r1 = r2
-      | F.isFalse r2 = r1
-      | otherwise    = die $ bug (srcPos l) msg
-    msg              = printf "botJoin: t1 = %s t2 = %s" (ppshow t) (ppshow τ)
 
-castStrengthen t1 t2 
-  | isUnion t1 && not (isUnion t2) = t2 `strengthen` (rTypeReft t1)
-  | otherwise                      = t2
 
-consDeadCast g l t 
-  = do subTypeContainers "DeadCast" l g tru fls
-       envAddFresh "consDeadCast" l t' g
-    where
-       tru = tTop
-       fls = tTop `strengthen` F.predReft F.PFalse
-       t'  = t    `strengthen` F.predReft F.PFalse
+-- -- Types carried over from Raw-Typechecking may lack some refinements introduced
+-- -- at liquid. So we patch them here.
+-- enhance δ l lq raw   = castStrengthen lq <$> (zipType2 botJoin lq =<< bottify raw)
+--   where 
+--   -- Bottify does not descend into TDefs - so we need to flatten 
+--     bottify          = fmap (fmap F.bot) . true . flattenType δ . rType
+--     botJoin r1 r2 
+--       | F.isFalse r1 = r2
+--       | F.isFalse r2 = r1
+--       | otherwise    = die $ bug (srcPos l) msg
+--     msg              = printf "botJoin: t1 = %s t2 = %s" (ppshow lq) (ppshow raw)
+-- 
+-- castStrengthen t1 t2 
+--   | isUnion t1 && not (isUnion t2) = t2 `strengthen` (rTypeReft t1)
+--   | otherwise                      = t2
+-- 
+-- consDeadCast g l t 
+--   = do subTypeContainers "DeadCast" l g tru fls
+--        envAddFresh "consDeadCast" l t' g
+--     where
+--        tru = tTop
+--        fls = tTop `strengthen` F.predReft F.PFalse
+--        t'  = t    `strengthen` F.predReft F.PFalse
 
 
 --------------------------------------------------------------------------------

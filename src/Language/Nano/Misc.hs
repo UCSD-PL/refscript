@@ -9,7 +9,7 @@ module Language.Nano.Misc (
     mkEither, either2Bool
 
   -- List
-  , unique
+  , unique, exists
 
   -- Tuples
   , fst4, snd4, thd4, fth4
@@ -29,16 +29,20 @@ module Language.Nano.Misc (
   -- Maybe
   , maybeM, maybeM_, fromJust', maybeToEither
 
-  -- HashSet operations
-  , isProperSubsetOf, isEqualSet
+  -- Container operations
+  , isProperSubsetOf, isEqualSet, isProperSubmapOf
+  , equalKeys
 ) where
 
 -- import           Control.Applicative                ((<$>))
 import           Control.Monad                        (liftM2)
 import           Data.Data
+import           Data.Maybe                           (isJust)
 import           Data.Generics.Aliases
 import           Data.HashSet
+import           Data.Function                        (on)
 import           Data.Hashable
+import qualified Data.HashMap.Strict                  as M
 import qualified Data.List                            as L
 import qualified Language.Fixpoint.Types              as F
 import           Text.PrettyPrint.HughesPJ
@@ -84,6 +88,10 @@ unique :: (Eq a) => [a] -> Bool
 -------------------------------------------------------------------------------
 unique xs = length xs == length (L.nub xs)
 
+-------------------------------------------------------------------------------
+exists :: (a -> Bool) -> [a] -> Bool
+-------------------------------------------------------------------------------
+exists f = isJust . L.find f
 
 setFst3 (_,b,c) a' = (a',b,c)
 setSnd3 (a,_,c) b' = (a,b',c)
@@ -153,4 +161,8 @@ isEqualSet s1 s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) == 0
 (\\) :: (Eq a, Hashable a) => HashSet a -> HashSet a -> HashSet a
 (\\) = difference
 
+isProperSubmapOf :: (Eq a, Hashable a) => M.HashMap a b -> M.HashMap a b -> Bool
+isProperSubmapOf = isProperSubsetOf `on` (fromList . M.keys) 
 
+equalKeys :: (Eq a, Ord a, Hashable a) => M.HashMap a b -> M.HashMap a b -> Bool
+equalKeys =  (==) `on` (L.sort . M.keys)

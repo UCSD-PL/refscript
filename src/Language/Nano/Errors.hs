@@ -108,7 +108,6 @@ errorOccursCheck l a t    = mkErr l $ printf "Occurs check fails: %s in %s" (pps
 errorRigidUnify l a t     = mkErr l $ printf "Cannot unify rigid variable %s with %s" (ppshow a) (ppshow t) 
 errorSubType l m t t'     = mkErr l $ printf "%s -- Type %s is not a subtype of %s" m (ppshow t) (ppshow t')
 errorCast l m e t         = mkErr l $ printf "%s -- Cannot cast non-variable expression: %s to %s" m (ppshow e) (ppshow t)
-errorObjSubtyping l t t'  = mkErr l $ printf "Object type: %s is not a subtype of %s" (ppshow t) (ppshow t')
 errorObjectAccess l e t   = mkErr l $ printf "Dot notation on non object expression %s :: %s" (ppshow e) (ppshow t)
 errorObjectTAccess l t    = mkErr l $ printf "Dot notation not permitted on expressions of type %s" (ppshow t)
 errorObjectBinding l      = mkErr l $ printf "Field does not exist in object" 
@@ -121,7 +120,7 @@ errorBadAnnot l s1 s2     = mkErr l $ printf "Type annotation for %s needs to be
 errorLiquid l             = mkErr l $ printf "Liquid Type Error at %s" (ppshow l)
 errorESC l                = mkErr l $ printf "ESC Error at %s" (ppshow l)
 errorMultipleTypeArgs l   = mkErr l $ printf "Multiple Type Args"
-errorDownCast l t         = mkErr l $ printf "Downcast: %s" (ppshow t) 
+errorDownCast l t1 t2     = mkErr l $ printf "Downcast: %s => %s" (ppshow t1) (ppshow t2)
 errorDeadCast l           = mkErr l $ printf "Deadcast"
 errorTypeAssign l t1 t2   = mkErr l $ printf "Cannot assign type %s to %s" (ppshow t1) (ppshow t2)
 errorBracketAssign l x    = mkErr l $ printf "Invalid bracket assignment %s" (ppshow x) 
@@ -144,3 +143,9 @@ errorMissFlds l t1 t2 x   = mkErr l $ printf "Cannot convert:\n%s\n\nto\n\n%s\n\
                                                   (ppshow t1) (ppshow t2) (ppshow t1) (ppshow x)
 errorSuper l              = mkErr l $ printf "Cannot resolve reference to super." 
 errorSuperParentMissing l = mkErr l $ printf "Calling super when parent class missing." 
+
+errorSimpleSubtype l t t' = mkErr l $ printf "Type: %s is not a subtype of %s" (ppshow t) (ppshow t')
+errorObjSubtype l t t'    = mkErr l $ printf "Object type: %s is not a subtype of %s" (ppshow t) (ppshow t')
+errorFuncSubtype l t t'   = mkErr l $ printf "Function type: %s is not a subtype of %s" (ppshow t) (ppshow t')
+errorUnionSubtype l t t'  = mkErr l $ printf "Union type: %s is not a subtype of %s" (ppshow t) (ppshow t')
+errorArraySubtype l t t'  = mkErr l $ printf "Array type: %s is not a subtype of %s" (ppshow t) (ppshow t')

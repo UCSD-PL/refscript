@@ -116,6 +116,7 @@ instance Free (RType r) where
 
 instance (PP r, F.Reftable r) => Substitutable r (Cast r) where
   apply _ CNo        = CNo
+  apply _ CDead      = CDead
   apply θ (CUp t t') = CUp (apply θ t) (apply θ t')
   apply θ (CDn t t') = CDn (apply θ t) (apply θ t')
   apply θ (CFn cs c) = CFn (mapSnd (apply θ) <$> cs) (apply θ c)
@@ -141,6 +142,7 @@ instance (PP r, F.Reftable r) => Substitutable r (Annot (Fact r) z) where
 
 instance Free (Cast r) where
   free CNo        = S.empty
+  free CDead      = S.empty
   free (CUp t t') = S.union (free t) (free t')
   free (CDn t t') = S.union (free t) (free t')
   free (CFn cs c) = S.unions $ free <$> c:cs' where cs' = snd <$> cs

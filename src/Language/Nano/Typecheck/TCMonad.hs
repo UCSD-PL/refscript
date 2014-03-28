@@ -511,7 +511,7 @@ convertSimple :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
 convertSimple l t1 t2
   | t1 `equiv` t2 = return CNo
-  | otherwise     = tcError $ errorSimpleSubtype l t1 t2
+  | otherwise     = return CDead
 
 
 -- | `convertUnion`

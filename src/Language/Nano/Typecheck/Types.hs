@@ -152,7 +152,7 @@ data TDef t    = TD {
 
 data TElt t    = TE { 
         f_sym   :: F.Symbol                       -- ^ Symbol
-      , f_acc   :: Bool                           -- ^ Access modifier (public: true, private: false)
+      , f_mut   :: Bool                           -- ^ Mutability modifier (mutable:true)
       , f_type  :: t                              -- ^ Type
       } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
@@ -397,11 +397,8 @@ bkUnion (TApp TUn xs _) = xs
 bkUnion t               = [t]
 
 
--- | Type equivalence
---
---   This relation corresponds to equality on the raw type level, modulo
---   reordering on the parts of union types.
---
+-- | Type equivalence: This relation corresponds to equality on the raw type
+-- level, modulo reordering on the parts of union types.
 class Equivalent a where 
   equiv :: a -> a -> Bool
 
@@ -432,7 +429,7 @@ instance Equivalent TCon where
   equiv c        c'         = c == c'
 
 instance Equivalent (TElt (RType r)) where 
-  equiv (TE _ b1 t1) (TE _ b2 t2) = b1 == b2 && equiv t1 t2
+  equiv (TE _ m1 t1) (TE _ m2 t2) = m1 == m2 && equiv t1 t2
 
 instance Equivalent (Bind r) where 
   equiv (B s t) (B s' t') = s == s' && equiv t t' 
@@ -712,8 +709,8 @@ instance (PP t) => PP (TDef t) where
 
 
 instance (PP t) => PP (TElt t) where
-  pp (TE s True t) = pp (F.symbol s) <+> text ":" <+> pp t
-  pp (TE s False t) = text "private" <+> pp (F.symbol s) <+> text ":" <+> pp t
+  pp (TE s True t ) = pp (F.symbol s) <+> text ":*" <+> pp t
+  pp (TE s False t) = pp (F.symbol s) <+> text ":"  <+> pp t
 
 instance PP Bool where
   pp True   = text "True"
@@ -880,17 +877,18 @@ noCast _   = False
 -- | Annotations
 -----------------------------------------------------------------------------
 
--- | Annotations: Extra-code decorations needed for Refinement Type Checking
-
 data Fact r
   = PhiVar      ![(Id SourceSpan)]
   | TypInst     !IContext ![RType r]
   | Overload    !(Maybe (RType r))
   | TCast       !IContext !(Cast r)
   -- Type annotations
-  | TAnnot      !(RType r)
+  | VarAnn      !(RType r)
+  | FieldAnn    !(Bool, RType r)      -- (mutability, type)
+  | MethAnn     !(RType r)            -- type
+  | ConsAnn     !(RType r)            -- type
   -- Class annotation
-  | CAnnot      !([TVar], Maybe (Id SourceSpan,[RType r]))
+  | ClassAnn      !([TVar], Maybe (Id SourceSpan,[RType r]))
     deriving (Eq, Ord, Show, Data, Typeable)
 
 type UFact = Fact ()
@@ -929,8 +927,11 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (TypInst ξ ts)   = text "inst" <+> pp ξ <+> pp ts 
   pp (Overload i)     = text "overload" <+> pp i
   pp (TCast  ξ c)     = text "cast" <+> pp ξ <+> pp c
-  pp (TAnnot t)       = text "annotation" <+> pp t
-  pp (CAnnot _)       = error "UNIMPLEMENTED:pp:CAnnot"
+  pp (VarAnn t)       = text "Var Annotation" <+> pp t
+  pp (ConsAnn t)      = text "Constructor Annotation" <+> pp t
+  pp (FieldAnn (_,t)) = text "Field Annotation" <+> pp t
+  pp (MethAnn t)      = text "Method Annotation" <+> pp t
+  pp (ClassAnn _)     = error "UNIMPLEMENTED:pp:ClassAnn"
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . M.toList 
@@ -939,8 +940,6 @@ instance (F.Reftable r, PP r) => PP (AnnInfo r) where
 
 instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
-
--- varDeclAnnot v = listToMaybe [ t | TAnnot t <- ann_fact $ getAnnotation v]
 
 phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
 

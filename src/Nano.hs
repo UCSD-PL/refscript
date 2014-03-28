@@ -43,7 +43,7 @@ json f | ext == ".json" = return f
 run verifyFile cfg 
   = do rs   <- mapM (runOne verifyFile) $ files cfg
        let r = mconcat rs
-       donePhase (F.colorResult r) (render $ pp r) 
+       donePhase False (F.colorResult r) (render $ pp r) 
        exitWith (resultExit r)
 
 runOne verifyFile f 
@@ -70,13 +70,13 @@ renderAnnotations srcFile res (NoAnn :: UAnnSol t)
        vimFile  = extFileName Annot (srcFile ++ ".vim")
     
 renderAnnotations srcFile res (SomeAnn ann sol)
-  = do writeFile   annFile  $ wrapStars "Constraint Templates" ++ "\n" 
+  = do writeFile   annFile  $ wrapStars False "Constraint Templates" ++ "\n" 
        appendFile  annFile  $ ppshow ann
-       appendFile  annFile  $ wrapStars "Inferred Types"       ++ "\n" 
+       appendFile  annFile  $ wrapStars False "Inferred Types"       ++ "\n" 
        appendFile  annFile  $ ppshow ann'
        B.writeFile jsonFile $ annotByteString res ann' 
        writeFile   vimFile  $ annotVimString res ann'
-       donePhase Loud "Written Inferred Annotations"
+       donePhase False Loud "Written Inferred Annotations"
     where 
        jsonFile = extFileName Json  srcFile
        vimFile  = extFileName Annot (srcFile ++ ".vim")

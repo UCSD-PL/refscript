@@ -153,10 +153,10 @@ maybeToEither e Nothing  = Left e
 
 
 isProperSubsetOf :: (Eq a, Hashable a) => HashSet a -> HashSet a -> Bool
-isProperSubsetOf s1 s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) > 0  
+s1 `isProperSubsetOf` s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) > 0  
 
 isEqualSet :: (Eq a, Hashable a) => HashSet a -> HashSet a -> Bool
-isEqualSet s1 s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) == 0  
+s1 `isEqualSet` s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) == 0  
 
 (\\) :: (Eq a, Hashable a) => HashSet a -> HashSet a -> HashSet a
 (\\) = difference

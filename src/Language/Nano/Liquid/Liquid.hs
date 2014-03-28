@@ -235,22 +235,22 @@ consVarDecl g (VarDecl l x Nothing)
 consClassElt :: CGEnv -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElt g (Constructor l xs body) 
-  = do  t <- cgFunTys l i xs $ pickElt l
+  = do  t <- cgFunTys l i xs $ head [ t | ConsAnn t <- ann_fact l ]
         -- Typecheck over all possible constructor signatures
         mapM_ (consFun1 l g i xs body) t
   where 
         i = Id l "constructor"
 
   -- Annotation will be included in `v`
-consClassElt g (MemberVarDecl _ _ _ v) 
+consClassElt g (MemberVarDecl _ _ v) 
   = void $ consVarDecl g v
   
-consClassElt g (MemberMethDecl l _ _ i xs body) 
+consClassElt g (MemberMethDecl l _ i xs body) 
   = do  ts <- cgFunTys l i xs $ pickElt l
         mapM_ (consFun1 l g i xs body) ts
 
 pickElt :: AnnTypeR -> RefType
-pickElt l = head [ t | TAnnot t <- ann_fact l ]
+pickElt l = head [ t | VarAnn t <- ann_fact l ]
 
 
 ------------------------------------------------------------------------------------

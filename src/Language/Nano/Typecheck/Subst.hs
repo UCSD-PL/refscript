@@ -127,8 +127,8 @@ instance (PP r, F.Reftable r) => Substitutable r (Fact r) where
   apply θ (TypInst ξ ts) = TypInst ξ $ apply θ ts
   apply θ (Overload t)   = Overload (apply θ <$> t)
   apply θ (TCast   ξ c)  = TCast   ξ $ apply θ c
-  apply θ (TAnnot t)     = TAnnot  $ apply θ t
-  apply θ (CAnnot (c, t))= CAnnot  (c, apply θ t)
+  apply θ (VarAnn t)     = VarAnn  $ apply θ t
+  apply θ (ClassAnn (c, t))= ClassAnn  (c, apply θ t)
 
 instance (PP r, F.Reftable r, Substitutable r a) => Substitutable r (Maybe a) where
   apply θ (Just a)       = Just $ apply θ a
@@ -157,8 +157,8 @@ instance Free (Fact r) where
   free (TypInst _ ts)    = free ts
   free (Overload t)      = free t
   free (TCast _ c)       = free c
-  free (TAnnot t)        = free t
-  free (CAnnot (vs,m))   = foldr S.delete (free m) vs
+  free (VarAnn t)        = free t
+  free (ClassAnn (vs,m))   = foldr S.delete (free m) vs
 
 instance Free a => Free (Id b, a) where
   free (_, a)            = free a

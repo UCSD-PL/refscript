@@ -10,7 +10,7 @@
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck, testFile) where 
 
-import           Control.Applicative                ((<$>))
+import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
 
 import qualified Data.HashSet                       as HS 
@@ -280,28 +280,25 @@ tcClassElt :: (Ord r, PPR r)
           => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
 -- FIXME: check for void return type for constructor
-tcClassElt γ cid (Constructor l xs body) = tcClassEltAux "constructor" l cid f
-  where f ft  =     tcFunTys l id xs ft 
-                >>= foldM (tcFun1 γ l id xs) body 
-                >>= return . Constructor l xs
-        id    = Id l "constructor"
+tcClassElt γ cid (Constructor l xs body) 
+  = case [ t | ConsAnn t  <- ann_fact l ] of
+      [  ]  -> tcError    $ errorClEltAnMissing (srcPos l) cid l
+      [ft]  -> Constructor l xs <$> (foldM (tcFun1 γ l id xs) body =<< tcFunTys l id xs ft)
+      _     -> error      $ "[tcClassElt] Multiple-type constructor: " ++ ppshow l
+  where id   = Id l "constructor"
 
--- The type annotation in variable members is in the VarDecl part so we can use
--- normal tcVarDecl for that part.
-tcClassElt γ cid (MemberVarDecl l m s v) = tcClassEltAux n (getAnnotation v) cid f
-    where f _ = tcVarDecl γ v >>= return . MemberVarDecl l m s . fst
-          VarDecl _ n _ = v
+tcClassElt γ cid (MemberVarDecl _ s v@(VarDecl l n _))
+  = case [ t | FieldAnn (m,t)  <- ann_fact l ] of 
+      [  ]  -> tcError    $ errorClEltAnMissing (srcPos l) cid s
+      [ft]  -> MemberVarDecl l s <$> (fst <$> tcVarDecl γ v)
+      _     -> error      $ "tcClassEltType:multi-type variable: " ++ ppshow l
 
-tcClassElt γ cid (MemberMethDecl l m s i xs body) = 
-  tcClassEltAux i l cid $ 
-    \ft -> do body'  <- foldM (tcFun1 γ l i xs) body =<< tcFunTys l i xs ft
-              return  $ MemberMethDecl l m s i xs body'
+tcClassElt γ cid (MemberMethDecl l s i xs body) = 
+  case [ t | MethAnn t  <- ann_fact l ] of 
+    [  ]  -> tcError    $ errorClEltAnMissing (srcPos l) cid s
+    [ft]  -> MemberMethDecl l s i xs <$> (foldM (tcFun1 γ l i xs) body =<< tcFunTys l i xs ft)
+    _     -> error      $ "tcClassEltType:multi-type method: " ++ ppshow l
 
-tcClassEltAux s l id f = 
-  case [ t | TAnnot t  <- ann_fact l ] of 
-    [  ]  -> tcError    $ errorClEltAnMissing (srcPos l) id s
-    [ft]  -> f ft 
-    _     -> error      $ "tcClassEltType:multi-type constructors " ++ ppshow l
 
 --------------------------------------------------------------------------------
 tcSeq :: (TCEnv r -> a -> TCM r (b, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([b], TCEnvO r)
@@ -474,20 +471,20 @@ findOrCrateClassDef (Id l s) = do
 ---------------------------------------------------------------------------------------
 classAnnot :: Annot (Fact t) a -> ([TVar], Maybe (Id SourceSpan, [RType t]))
 ---------------------------------------------------------------------------------------
-classAnnot l = safeHead "classAnnot" [ t | CAnnot t <- ann_fact l ]
+classAnnot l = safeHead "classAnnot" [ t | ClassAnn t <- ann_fact l ]
 
 
 ---------------------------------------------------------------------------------------
 classEltType :: (Ord r, PPR r) => ClassElt (AnnSSA r) -> TElt (RType r)
 ---------------------------------------------------------------------------------------
 classEltType (Constructor l _ _ ) = TE (F.symbol "constructor") True ann
-  where ann = safeHead "BUG: constructor annotation" [ t | TAnnot t <- ann_fact l ]
+  where ann = safeHead "BUG: constructor annotation" [ κ | ConsAnn κ <- ann_fact l ]
 
-classEltType (MemberVarDecl _ m _ (VarDecl l v _)) = TE (F.symbol v) m ann
-  where ann = safeHead "BUG: variable decl annotation" [ t | TAnnot t <- ann_fact l ]
+classEltType (MemberVarDecl _ _ (VarDecl l v _)) = TE (F.symbol v) m t
+  where (m,t) = safeHead "BUG: variable decl annotation" [ φ | FieldAnn φ <- ann_fact l ]
 
-classEltType (MemberMethDecl  l m _ f _ _ ) = TE (F.symbol f) m ann 
-  where ann = safeHead "BUG: member meth decl" [ t | TAnnot t <- ann_fact l ]
+classEltType (MemberMethDecl  l _ f _ _ ) = TE (F.symbol f) False t
+  where t = safeHead "BUG: method decl annotation" [ μ | MethAnn μ <- ann_fact l ]
 
 
 -- Variable declarations should have the type annotations available locally
@@ -496,13 +493,16 @@ tcVarDecl :: (Ord r, PPR r)
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ (VarDecl l x (Just e)) 
-  = do (e' , t) <- tcExprT l γ e $ listToMaybe [ t | TAnnot t <- ann_fact l ]
+  -- FIXME: ann contains mutability information as well.
+  = do (e' , t) <- tcExprT l γ e ann
        return (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
+    where
+      ann = listToMaybe $ [ t | VarAnn t <- ann_fact l ] ++ [ t | FieldAnn (_,t) <- ann_fact l ] 
 
-tcVarDecl γ v@(VarDecl l x Nothing) =
-  maybe (tcError $ errorVarDeclAnnot (srcPos l) x)
-        (\t -> return (v, Just $ tcEnvAdds [(x, t)] γ))
-        (listToMaybe [ t | TAnnot t <- ann_fact l ])
+tcVarDecl γ v@(VarDecl l x Nothing) 
+  = case [ t | VarAnn t <- ann_fact l ] ++ [ t | FieldAnn (_,t) <- ann_fact l ] of
+      [t] -> return (v, Just $ tcEnvAdds [(x, t)] γ)
+      _   -> tcError $ errorVarDeclAnnot (srcPos l) x
 
 -------------------------------------------------------------------------------
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
@@ -518,8 +518,7 @@ tcAsgn l γ x e
 
 
 -------------------------------------------------------------------------------
--- tcExprT :: (Ord r, PPR r)
---        => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
+tcExprT :: (Ord r, PPR r) => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
 tcExprT l γ e to 
   = do (e', t)    <- tcExpr γ e
@@ -528,9 +527,9 @@ tcExprT l γ e to
                        Just ta -> (,ta) <$> castM l (tce_ctx γ) e t ta
        return     (e'', te)
 
-----------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 tcExpr :: (Ord r, PPR r) => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
-----------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 tcExpr _ e@(IntLit _ _)
   = return (e, tInt)
 

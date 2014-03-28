@@ -354,7 +354,7 @@ envFindSpec x g = E.envFindTy x $ cge_spec g
 
 envFindAnnot l x g = msum [tAnn, tEnv, annot] 
   where
-    annot        = listToMaybe [ t | TAnnot t <- ann_fact l ]
+    annot        = listToMaybe [ t | VarAnn t <- ann_fact l ]
     tAnn         = E.envFindTy x $ cge_spec g
     tEnv         = E.envFindTy x $ renv     g
 

@@ -13,27 +13,28 @@ module Language.Nano.Typecheck.Parse (
 
 import           Prelude                          hiding ( mapM)
 
-import           Data.Aeson                              ( eitherDecode)
+import           Data.Aeson                              (eitherDecode)
 import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
-import           Data.Char                               ( isLower, isSpace)
+import           Data.Char                               (isLower, isSpace)
+import           Data.Maybe                              (isJust)
 import qualified Data.List                        as     L
 import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
-import           Data.Traversable                        ( mapAccumL)
+import           Data.Traversable                        (mapAccumL)
 import           Text.PrettyPrint.HughesPJ               (text)
 import           Data.Data
 import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
 
-import           Control.Monad                    hiding ( mapM)
-import           Control.Monad.Trans                     ( MonadIO,liftIO)
-import           Control.Applicative                     ( (<$>), ( <*>))
+import           Control.Monad                    hiding (mapM)
+import           Control.Monad.Trans                     (MonadIO,liftIO)
+import           Control.Applicative                     ((<$>), ( <*>))
 
-import           Language.Fixpoint.Types          hiding ( quals, Loc, Expression)
+import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
 import           Language.Fixpoint.Parse
-import           Language.Fixpoint.Misc                  ( mapEither, mapSnd)
+import           Language.Fixpoint.Misc                  (mapEither, mapSnd)
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Typecheck.Types
@@ -44,8 +45,8 @@ import           Language.Nano.Files
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
-import           Text.Parsec                      hiding ( parse)
-import           Text.Parsec.Pos                         ( newPos)
+import           Text.Parsec                      hiding (parse)
+import           Text.Parsec.Pos                         (newPos)
 import qualified Text.Parsec.Token                as     Token
 
 import           GHC.Generics
@@ -65,6 +66,8 @@ type ParserS a = Parser (TDefEnv RefType, Integer) a
 
 idBindP :: ParserS (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
+
+idFieldP = xyzP identifierP dcolon bareTypeP
 
 identifierP :: ParserS (Id SourceSpan)
 identifierP =   try (withSpan Id upperIdP)
@@ -99,8 +102,8 @@ tBodyP = do  id     <- identifierP
              vs     <- option [] tParP'
              -- FIXME: add bindings for new(Ts) and call(Ts):T
              ext    <- optionMaybe extendsP
-             bs     <- braces $ bindsP
-             return (id, TD (Just id) vs ext [ TE s True t | B s t <- bs ])
+             es     <- braces $ eltsP
+             return (id, TD (Just id) vs ext es)
 
 
 extendsP = do reserved "extends"
@@ -124,6 +127,11 @@ withSpan f p = do pos   <- getPosition
 xyP lP sepP rP
   = (\x _ y -> (x, y)) <$> lP <*> (spaces >> sepP) <*> rP
 
+xyzP lP sepP rP
+  = (\x _ y z -> (x, y, z)) <$> lP 
+                            <*> (spaces >> sepP) 
+                            <*> (isJust <$> optionMaybe star) 
+                            <*> rP
 
 ----------------------------------------------------------------------------------
 -- | RefTypes --------------------------------------------------------------------
@@ -243,16 +251,28 @@ bareAll1P
 
 arrayP = brackets bareTypeP
 
-
+-- | f1: t1, f2: t2, ..., fn: tn
 bindsP 
   =  try (sepBy1 bareBindP comma)
  <|> (spaces >> return [])
 
-bareBindP 
-  = do  s <- binderP
-        withinSpacesP colon
-        t <- bareTypeP
-        return $ B s t 
+-- | f : type 
+bareBindP = do s <- binderP
+               withinSpacesP colon
+               t <- bareTypeP
+               return $ B s t 
+
+-- | f1:[*] t1, f2:[*] t2, ..., fn:[*] tn
+eltsP 
+  =  try (sepBy1 bareEltP comma)
+ <|> (spaces >> return [])
+
+-- | f :[*] type 
+bareEltP = do s <- binderP
+              withinSpacesP colon
+              mut <- isJust <$> optionMaybe star
+              t <- bareTypeP
+              return $ TE s mut t 
 
  
 dummyP ::  ParserS (Reft -> b) -> ParserS b
@@ -325,7 +345,7 @@ data RawSpec
 data PSpec l t 
   = Meas   (Id l, t)
   | Bind   (Id l, t) 
-  | Field  (Id l, t) 
+  | Field  (Id l, Bool, t) 
   | Constr (Id l, t)
   | Method (Id l, t)
   | Extern (Id l, t)
@@ -340,16 +360,16 @@ data PSpec l t
 type Spec = PSpec SourceSpan RefType
 
 parseAnnot :: SourceSpan -> RawSpec -> ParserS Spec
-parseAnnot ss (RawMeas   _) = Meas   <$> patch ss <$> idBindP
-parseAnnot ss (RawBind   _) = Bind   <$> patch ss <$> idBindP
-parseAnnot ss (RawField  _) = Field  <$> patch ss <$> idBindP
-parseAnnot ss (RawMethod _) = Method <$> patch ss <$> idBindP
-parseAnnot ss (RawConstr _) = Constr <$> patch ss <$> idBindP
-parseAnnot ss (RawExtern _) = Extern <$> patch ss <$> idBindP
-parseAnnot ss (RawType   _) = IFace  <$> patch ss <$> tBodyP >>= registerIface
-parseAnnot ss (RawClass  _) = Class  <$> patch ss <$> classDeclP 
-parseAnnot ss (RawTAlias _) = TAlias <$> patch ss <$> tAliasP
-parseAnnot ss (RawPAlias _) = PAlias <$> patch ss <$> pAliasP
+parseAnnot ss (RawMeas   _) = Meas   <$> patch2 ss <$> idBindP
+parseAnnot ss (RawBind   _) = Bind   <$> patch2 ss <$> idBindP
+parseAnnot ss (RawField  _) = Field  <$> patch3 ss <$> idFieldP
+parseAnnot ss (RawMethod _) = Method <$> patch2 ss <$> idBindP
+parseAnnot ss (RawConstr _) = Constr <$> patch2 ss <$> idBindP
+parseAnnot ss (RawExtern _) = Extern <$> patch2 ss <$> idBindP
+parseAnnot ss (RawType   _) = IFace  <$> patch2 ss <$> tBodyP >>= registerIface
+parseAnnot ss (RawClass  _) = Class  <$> patch2 ss <$> classDeclP 
+parseAnnot ss (RawTAlias _) = TAlias <$> patch2 ss <$> tAliasP
+parseAnnot ss (RawPAlias _) = PAlias <$> patch2 ss <$> pAliasP
 parseAnnot _  (RawQual   _) = Qual   <$>              qualifierP
 parseAnnot ss (RawInvt   _) = Invt             ss <$> bareTypeP
 
@@ -362,7 +382,8 @@ registerIface (IFace (s, t)) = do
 registerIface _ = error "BUG:registerIface"
 
 
-patch ss (id, t) = (fmap (const ss) id , t)
+patch2 ss (id, t)    = (fmap (const ss) id , t)
+patch3 ss (id, m, t) = (fmap (const ss) id , m, t)
 
 getSpecString :: RawSpec -> String 
 getSpecString (RawMeas   s) = s 
@@ -454,11 +475,11 @@ mkCode f (u, ss) =  Nano {
     } 
   where
     toBare     :: (SourceSpan, [Spec]) -> AnnBare Reft 
-    toBare (l,αs) = Ann l $ [TAnnot t | Bind   (_,t) <- αs ]
-                         ++ [TAnnot t | Constr (_,t) <- αs ]
-                         ++ [TAnnot t | Field  (_,t) <- αs ]
-                         ++ [TAnnot t | Method (_,t) <- αs ]
-                         ++ [CAnnot t | Class  (_,t) <- αs ]
+    toBare (l,αs) = Ann l $ [VarAnn t       | Bind   (_,t) <- αs ]
+                         ++ [ConsAnn t      | Constr (_,t) <- αs ]
+                         ++ [FieldAnn (m,t) | Field  (_,m,t) <- αs ]
+                         ++ [MethAnn t      | Method (_,t) <- αs ]
+                         ++ [ClassAnn t     | Class  (_,t) <- αs ]
     ss'           = (toBare <$>) <$> ss
     anns          = concatMap (FO.foldMap snd) ss
 

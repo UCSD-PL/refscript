@@ -250,9 +250,9 @@ instance IsNano (Statement a) where
   isNano e                        = errortext (text "Not Nano Statement!" <+> pp e)
 
 instance IsNano (ClassElt a) where
-  isNano (Constructor _ _ ss)          = all isNano ss
-  isNano (MemberMethDecl _ _ _ _ _ ss) = all isNano ss
-  isNano (MemberVarDecl _ _ _ vd)      = isNano vd
+  isNano (Constructor _ _ ss)        = all isNano ss
+  isNano (MemberMethDecl _ _ _ _ ss) = all isNano ss
+  isNano (MemberVarDecl _ _ vd)      = isNano vd
 
 instance IsNano a => IsNano (Maybe a) where 
   isNano (Just x) = isNano x

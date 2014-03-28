@@ -1,5 +1,5 @@
 
-/*@ a :: { { d: { number + boolean | true }  } | true } */
-var a  = {    };
+/*@ a :: { d: { number | v > 0 } } */
+var a  = { };
 
 

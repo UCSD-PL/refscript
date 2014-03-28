@@ -53,7 +53,7 @@ ssaNano p@(Nano { code = Src fs })
       typeAnns      = M.fromList $ concatMap 
                         (FO.concatMap (\(Ann l an) -> (l,) <$> single <$> an)) fs
       {-specAnns      = tracePP "specAnns" $ M.fromList $ mapFst getAnnotation -}
-      {-                  <$> (envToList $ envMap (single . TAnnot) sp)-}
+      {-                  <$> (envToList $ envMap (single . VarAnn) sp)-}
       ros           = readOnlyVars p
       wgs           = writeGlobalVars p 
       patch        :: [M.HashMap SourceSpan [Fact r]] -> SourceSpan -> Annot (Fact r) SourceSpan
@@ -233,15 +233,15 @@ ssaClassElt (Constructor l xs body)
             return        $ Constructor l xs body'
 
 -- Class fields are considered immutable.
-ssaClassElt v@(MemberVarDecl _ _ _ _ )    = return v
+ssaClassElt v@(MemberVarDecl _ _ _ )    = return v
 
-ssaClassElt (MemberMethDecl l m s e xs body)
+ssaClassElt (MemberMethDecl l s e xs body)
   = do θ <- getSsaEnv  
        withMutability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
          do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
-            return        $ MemberMethDecl l m s e xs body'
+            return        $ MemberMethDecl l s e xs body'
 
 infOp OpAssign         _ _  = id
 infOp OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalExp lv)

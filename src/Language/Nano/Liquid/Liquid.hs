@@ -412,6 +412,7 @@ consCast g a e
   = do  (x,g) <- consExpr g e 
         case envGetContextCast g a of
           CNo       -> return (x,g)
+          CDead     -> consDeadCode g l x
           CUp t t'  -> consUpCast g l x t t'
           CDn t t'  -> consDownCast g l x t t'
 
@@ -420,6 +421,15 @@ consCast g a e
           -- CCs t t'  -> return undefined
     where  
       l = srcPos a
+
+-- | Dead code 
+consDeadCode g l x =
+  do δ <- getDef
+     let xBot = zipType δ (\_ -> F.bot) id xT xT  
+     subTypeContainers "consDeadCode" l g xT xBot
+     return (x, g)
+  where 
+     xT      = envFindTy x g
 
 -- | Upcast
 consUpCast g l x fromT toT = 
@@ -442,18 +452,12 @@ consDownCast g l x fromT toT =
      xT      = envFindTy x g
 
 
-
 -- -- Types carried over from Raw-Typechecking may lack some refinements introduced
 -- -- at liquid. So we patch them here.
 -- enhance δ l lq raw   = castStrengthen lq <$> (zipType2 botJoin lq =<< bottify raw)
 --   where 
 --   -- Bottify does not descend into TDefs - so we need to flatten 
 --     bottify          = fmap (fmap F.bot) . true . flattenType δ . rType
---     botJoin r1 r2 
---       | F.isFalse r1 = r2
---       | F.isFalse r2 = r1
---       | otherwise    = die $ bug (srcPos l) msg
---     msg              = printf "botJoin: t1 = %s t2 = %s" (ppshow lq) (ppshow raw)
 -- 
 -- castStrengthen t1 t2 
 --   | isUnion t1 && not (isUnion t2) = t2 `strengthen` (rTypeReft t1)

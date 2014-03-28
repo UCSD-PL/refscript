@@ -855,6 +855,7 @@ pushContext s (IC c) = IC ((siteIndex s) : c)
 -- | Casts 
 -----------------------------------------------------------------------------
 data Cast r  = CNo                                    -- .
+             | CDead                                  -- |dead code|
              | CUp { org :: RType r, tgt :: RType r } -- <t1 UP t2>
              | CDn { org :: RType r, tgt :: RType r } -- <t1 DN t2>
 
@@ -864,6 +865,7 @@ data Cast r  = CNo                                    -- .
 
 instance (PP r, F.Reftable r) => PP (Cast r) where
   pp CNo         = text "No cast"
+  pp CDead       = text "Dead code"
   pp (CUp t1 t2) = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
   pp (CDn t1 t2) = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
   pp (CFn cs c)  = ppArgs parens comma cs <+> text "=>" <+> pp c

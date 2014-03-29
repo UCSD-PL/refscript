@@ -1,5 +1,6 @@
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ConstraintKinds      #-}
 {-# LANGUAGE TupleSections        #-}
 
@@ -40,9 +41,10 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
---import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
+type PPRS r = (PPR r, Substitutable r (Fact r)) 
 
 --------------------------------------------------------------------------------
 verifyFile    :: FilePath -> IO (A.UAnnSol RefType, F.FixResult Error)
@@ -103,7 +105,7 @@ consFun _ s
 consFun1 l g' f xs body (i, ft) 
   = do g'' <- envAddFun l f i xs ft g'
        gm  <- consStmts g'' body
-       maybe (return ()) (\g -> subTypeContainers "return void" l g tVoid (envFindReturn g'')) gm
+       maybe (return ()) (\g -> subTypeContainers' "return void" l g tVoid (envFindReturn g'')) gm
 
 envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g) 
                                    >>= (return . envAddReturn f t' ) 
@@ -145,6 +147,7 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
   = do (tfld, _) <- consPropRead getProp g l1 e1 $ F.symbol fld
        (x2,  g') <- consExpr  g  e2
        let t2     = envFindTy x2 g'
+       -- FIXME: how to we keep the unfolded types around?
        subTypeContainers "field-assignment" l2 g' t2 tfld
        return     $ Just g'
 
@@ -186,9 +189,10 @@ consStmt g (ReturnStmt l (Just e))
   = do  (xe, g') <- consExpr g e
         let te    = envFindTy xe g'
             rt    = envFindReturn g'
+        -- subTypeContainers does not need to return the unfolded types
         if isTop rt
-          then (subTypeContainers "ReturnTop" l g') te (setRTypeR te (rTypeR rt))
-          else (subTypeContainers "Return" l g') te rt
+          then (subTypeContainers' "ReturnTop" l g') te (setRTypeR te (rTypeR rt))
+          else (subTypeContainers' "Return" l g') te rt
         return Nothing
 
 -- return
@@ -279,6 +283,7 @@ consExprT g e to
        let te   = envFindTy x g'
        case to of
          Nothing -> return (x, g')
+         -- FIXME: subTypeContainers
          Just t  -> do subTypeContainers "consExprT" l g' te t 
                        g'' <- envAdds [(x, t)] g'
                        return (x, g'')
@@ -290,18 +295,17 @@ consExprT g e to
 consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
 --------------------------------------------------------------------------------
 consAsgn g l x e 
-  = do  δ <- getDef
-        t <- case envFindAnnot l x g of
-        -- XXX: Flatten before applying freshTVar
-               Just t  -> Just <$> freshTyVar g l (flattenType δ t)
-               Nothing -> return $ Nothing
-        (x', g') <- consExprT g e t
-        Just <$> envAdds [(x, envFindTy x' g')] g'
+  = do t <- case envFindAnnot l x g of
+       -- XXX: Flatten before applying freshTVar
+              Just t  -> Just <$> freshTyVar g l t
+              Nothing -> return $ Nothing
+       (x', g') <- consExprT g e t
+       Just <$> envAdds [(x, envFindTy x' g')] g'
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh, 
---   temporary (A-Normalized) variable holding the value of `e`,
---   g' is g extended with a binding for x' (and other temps required for `e`)
+-- temporary (A-Normalized) variable holding the value of `e`,
+-- g' is g extended with a binding for x' (and other temps required for `e`)
 ------------------------------------------------------------------------------------
 consExpr :: CGEnv -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 ------------------------------------------------------------------------------------
@@ -365,7 +369,6 @@ consExpr g (ObjectLit l bs)
   = do  let (ps, es) = unzip bs
         (xes, g')   <- consScan consExpr g es
         let elts = zipWith mkElt (F.symbol <$> ps) (
-          -- tracePP ("ObjLit types: " ++ ppshow xes) $ 
               (`envFindTy` g') <$> xes)
         let d = TD Nothing [] Nothing elts
         i <- addObjLitTyM d
@@ -452,26 +455,6 @@ consDownCast g l x fromT toT =
      xT      = envFindTy x g
 
 
--- -- Types carried over from Raw-Typechecking may lack some refinements introduced
--- -- at liquid. So we patch them here.
--- enhance δ l lq raw   = castStrengthen lq <$> (zipType2 botJoin lq =<< bottify raw)
---   where 
---   -- Bottify does not descend into TDefs - so we need to flatten 
---     bottify          = fmap (fmap F.bot) . true . flattenType δ . rType
--- 
--- castStrengthen t1 t2 
---   | isUnion t1 && not (isUnion t2) = t2 `strengthen` (rTypeReft t1)
---   | otherwise                      = t2
--- 
--- consDeadCast g l t 
---   = do subTypeContainers "DeadCast" l g tru fls
---        envAddFresh "consDeadCast" l t' g
---     where
---        tru = tTop
---        fls = tTop `strengthen` F.predReft F.PFalse
---        t'  = t    `strengthen` F.predReft F.PFalse
-
-
 --------------------------------------------------------------------------------
 consCall :: (PP a) => 
   CGEnv -> AnnTypeR -> a -> [Expression AnnTypeR] -> RefType -> CGM (Id AnnTypeR, CGEnv)
@@ -496,7 +479,10 @@ consCall g l fn es ft0
        overload l    = listToMaybe [ t | Overload (Just t) <- ann_fact l ]
        err ts ft0    = die $ errorNoMatchCallee (srcPos l) ts ft0 
 
--- instantiate :: AnnTypeR -> CGEnv -> RefType -> CGM RefType
+---------------------------------------------------------------------------------
+instantiate :: (PP a, PPRS F.Reft) => 
+  AnnTypeR -> CGEnv -> a -> RefType -> CGM  ([TVar], [Bind F.Reft], RefType)
+---------------------------------------------------------------------------------
 instantiate l g fn ft 
   = do let (αs, t)      = bkAll ft
        --TODO: There is a TypInst missing here!!!

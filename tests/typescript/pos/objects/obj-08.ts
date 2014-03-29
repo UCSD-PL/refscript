@@ -1,9 +1,4 @@
 
-/*@ a :: { b: { c: { number | true } } } */
-var a  = { 
-  b : {
-    c: 3
-  }   
-};
-
+/*@ a :: { b: { c: number } } */
+var a  = { b : { c: 3 } };
 

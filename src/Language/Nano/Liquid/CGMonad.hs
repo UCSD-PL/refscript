@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE DoAndIfThenElse           #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
 -- | Operations pertaining to Constraint Generation
@@ -59,11 +60,7 @@ module Language.Nano.Liquid.CGMonad (
   , findTyIdOrDieM
 
   -- * Add Subtyping Constraints
-  , subTypeContainers
-
-  -- RJ: all alignment should already be done in TC why again?
-  -- , alignTsM
-  {-, withAlignedM-}
+  , subTypeContainers, subTypeContainers'
   , wellFormed
   
   -- * Add Type Annotations
@@ -399,6 +396,8 @@ freshTyVar g l t
   | isTrivialRefType t = freshTy "freshTyVar" (toType t) >>= wellFormed l g
   | otherwise          = return t
 
+freshTElt g l (TE s m t) = TE s m <$> freshTyVar g l t
+
 -- | Instantiate Fresh Type (at Call-site)
 
 freshTyInst l g αs τs tbody
@@ -451,13 +450,60 @@ subType l g t1 t2 =
     names   = foldReft rr []
     rr r xs = F.syms r ++ xs
     
-
+-- | subTypeContainers: Prep container types for subtyping.
+--
+-- * Unfolding of the type definitions needs to happen here because of recursive
+--   type structures. K-vared top-level type references cause the parts of the
+--   unfolded type to be K-vared as well (which needs to happen in the liquid
+--   monad).
+--
+-- * Union types will be broken up in splitC later. 
+--
 -------------------------------------------------------------------------------
-subTypeContainers :: (IsLocated l) => String -> l -> CGEnv -> RefType -> RefType -> CGM ()
+subTypeContainers :: (IsLocated l) => 
+  String -> l -> CGEnv -> RefType -> RefType -> CGM (RefType, RefType)
 -------------------------------------------------------------------------------
-subTypeContainers {- msg -} _ l g t1 t2 =  ss =<< getDef 
-    where ss δ = subType l g (flattenType δ t1) (flattenType δ t2)
+subTypeContainers s l g t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
+  | i1 == i2 
+  = -- TODO:
+    -- FIXME: contra-variance 
+    -- addInvariant ???
+    do subType l g t1 t2
+       (t1s', t2s') <- unzip <$> zipWithM (subTypeContainers s l g) t1s t2s
+       subType l g t1 t2    -- top-level
+       return (TApp (TRef i1) t1s' r1, TApp (TRef i2) t2s' r2)
 
+  | otherwise 
+  = do δ <- getDef
+       e1s <- flt δ t1
+       e2s <- flt δ t2
+       let (s1s, t1s) = unzip $ split <$> L.sortBy (compare `on` f_sym) e1s  
+       let (s2s, t2s) = unzip $ split <$> L.sortBy (compare `on` f_sym) e2s
+       if s1s == s2s then 
+         do (t1s', t2s') <- unzip <$> zipWithM (subTypeContainers s l g) t1s t2s
+            subType l g t1 t2    -- top-level
+            let b1s = zipWith B s1s t1s'
+            let b2s = zipWith B s2s t2s'
+            return (TCons b1s r1, TCons b2s r2)
+       else 
+            cgError ll $ bugMalignedFields ll e1s e2s 
+    where
+      split (TE s _ t) = (s,t) 
+      ll = srcPos l
+      kvared t = not $ null [s | let F.Reft r = rTypeReft t, F.RKvar s _ <- snd r]
+      -- If the top-level is fresh, then freshen the components as well.
+      flt δ t | kvared t = mapM (freshTElt g l) $ flattenTRef δ t
+      flt δ t | otherwise = return $ flattenTRef δ t
+
+subTypeContainers _ _ _ (TApp (TRef _) _ _) _ = error "subTypeContainers-1"
+subTypeContainers _ _ _ _ (TApp (TRef _) _ _) = error "subTypeContainers-2"
+subTypeContainers _ _ _ (TCons _ _) _         = error "subTypeContainers-3"
+subTypeContainers _ _ _ _ (TCons _ _)         = error "subTypeContainers-4"
+
+subTypeContainers s l g t1 t2 = subType l g t1 t2 >> return (t1, t2) 
+
+-- | subTypeContainers': void returning version of subTypeContainers
+subTypeContainers' s l g t1 t2 = void (subTypeContainers s l g t1 t2)
 
 
 --------------------------------------------------------------------------------
@@ -469,7 +515,6 @@ wellFormed       :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
 wellFormed l g t = do modify $ \st -> st { ws = (W g (ci l) t) : ws st }
                       return t
-
 
 
 --------------------------------------------------------------------------------
@@ -493,11 +538,9 @@ instance Freshable F.Symbol where
 instance Freshable String where
   fresh = F.symbolString <$> fresh
 
--- | Freshen up and while flattening a type
+-- | Freshen up
 freshTy :: RefTypable a => s -> a -> CGM RefType
-freshTy _ τ = do
-    δ <- getDef 
-    refresh $ rType $ flattenType δ $ rType τ
+freshTy _ τ = refresh $ rType τ
 
 instance Freshable F.Refa where
   fresh = (`F.RKvar` mempty) <$> (F.intKvar <$> fresh)
@@ -605,18 +648,14 @@ splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
                                     (Sub g i) t1s t2s
        return $ cs ++ cs'
 
----------------------------------------------------------------------------------------
 -- | TArr
----------------------------------------------------------------------------------------
 splitC (Sub g i t1@(TArr t1v _ ) t2@(TArr t2v _ ))
   = do cs    <- bsplitC g i t1 t2
        cs'   <- splitC (Sub g i t1v t2v) -- CO-VARIANCE 
        cs''  <- splitC (Sub g i t2v t1v) -- CONTRA-VARIANCE 
        return $ cs ++ cs' ++ cs''
 
----------------------------------------------------------------------------------------
 -- | TCons
----------------------------------------------------------------------------------------
 splitC (Sub g i t1@(TCons b1s _ ) t2@(TCons b2s _ ))
   = do cs    <- bsplitC g i t1 t2
        when (or $ zipWith ((/=) `on` b_sym) b1s' b2s') $ error "splitC on non aligned TCons"

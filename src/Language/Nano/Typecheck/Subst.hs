@@ -36,7 +36,8 @@ import qualified Data.HashSet as S
 import qualified Data.List as L
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
-import           Data.Maybe (fromMaybe)
+import           Data.Function (fix, on)
+import           Data.Maybe (fromMaybe, fromJust)
 
 -- import           Debug.Trace
 
@@ -183,13 +184,15 @@ appTy _        (TCons _ _)   = error "appTy should not be applied to TCons"
 ------------------------------------------------------------------------
 flatten :: PPR r => TDefEnv (RType r) -> TDef (RType r) -> [TElt (RType r)]
 ------------------------------------------------------------------------
-flatten δ (TD _ vs pro elts) = 
-  -- NOTE: unionBy favors elts (as it should)
-  L.unionBy name elts $ fromMaybe [] base 
+flatten δ = fix ff
   where
-    name e1 e2 = f_sym e1 == f_sym e2
-    base       = pro >>= act >>= return . t_elts
-    act (n,ts) = apply (fromList $ zip vs ts) (findTySym n δ) 
+    ff r (TD _ vs (Just (i, ts)) es) 
+      = L.unionBy nm es 
+      $ r 
+      $ fromJust 
+      $ apply (fromList $ zip vs ts) (findTySym i δ)
+    ff _ (TD _ _ _ es) = es
+    nm = (==) `on` f_sym
 
 ------------------------------------------------------------------------
 flattenTRef :: PPR r => TDefEnv (RType r) -> RType r -> [TElt (RType r)]
@@ -201,21 +204,22 @@ flattenTRef δ (TApp (TRef n) ts _)
 flattenTRef _ _ = error "Applying flattenTRef on non-tref"
 
 
--- | Flatten types that contain references to types with flat objects
+-- | Single level of flattenning types that contain references to types 
+-- with flat objects
 ------------------------------------------------------------------------
 flattenType :: PPR r => TDefEnv (RType r) -> RType r -> RType r
 ------------------------------------------------------------------------
 flattenType δ t@(TApp (TRef n) ts r) 
-                            = TCons (bind <$> flattenTRef δ t) r
-  where bind (TE s _ t)     = B s $ flattenType δ t
-flattenType δ (TApp c ts r) = TApp c (flattenType δ <$> ts) r
-flattenType _ (TVar v r)    = TVar v r
-flattenType δ (TFun bs t r) = TFun (f <$> bs) (flattenType δ t) r
-  where f (B s t)           = B s $ flattenType δ t
-flattenType δ (TArr t r)    = TArr (flattenType δ t) r
-flattenType δ (TAll v t)    = TAll v $ flattenType δ t
-flattenType δ (TAnd ts)     = TAnd $ flattenType δ <$> ts
-flattenType δ (TCons ts r)  = TCons (flattenBind δ <$> ts) r
-flattenType _ _             = error "TExp should not appear here"
+                             = TCons (bind <$> flattenTRef δ t) r
+                               where bind (TE s _ t) = B s t
+flattenType δ (TApp c ts r)  = TApp c (flattenType δ <$> ts) r
+flattenType _ (TVar v r)     = TVar v r
+flattenType δ (TFun ts to r) = TFun (f <$> ts) (flattenType δ to) r
+                               where f (B s t) = B s $ flattenType δ t
+flattenType δ (TArr t r)     = TArr (flattenType δ t) r
+flattenType δ (TAll v t)     = TAll v $ flattenType δ t
+flattenType δ (TAnd ts)      = TAnd $ flattenType δ <$> ts
+flattenType δ (TCons ts r)   = TCons ts r
+flattenType _ _              = error "TExp should not appear here"
 
-flattenBind δ (B s t)         = B s $ flattenType δ t 
+flattenBind δ (B s t)        = B s $ flattenType δ t 

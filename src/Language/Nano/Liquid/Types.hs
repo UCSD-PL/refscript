@@ -261,10 +261,10 @@ emapReft f γ (TVar α r)     = TVar α (f γ r)
 emapReft f γ (TApp c ts r)  = TApp c (emapReft f γ <$> ts) (f γ r)
 emapReft f γ (TAll α t)     = TAll α (emapReft f γ t)
 emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts) (emapReft f γ' t) (f γ r) 
-  where 
-    γ'                      = (b_sym <$> xts) ++ γ 
-    -- ts                      = b_type <$> xts 
+  where    γ'               = (b_sym <$> xts) ++ γ 
 emapReft f γ (TArr t r)     = TArr (emapReft f γ t) (f γ r)
+emapReft f γ (TCons xts r)  = TCons (emapReftBind f γ' <$> xts) (f γ r)
+  where    γ'               = (b_sym <$> xts) ++ γ 
 emapReft _ _ _              = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)    = B x $ emapReft f γ t

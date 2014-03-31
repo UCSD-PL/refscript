@@ -398,16 +398,7 @@ findTySymWithIdOrDieM i = findTySymWithIdOrDie i <$> getDef
 --------------------------------------------------------------------------------
 subtype :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r Bool
 --------------------------------------------------------------------------------
-subtype l t1 t2 = subCast <$> convert l t1 t2
-
---------------------------------------------------------------------------------
-subCast :: Cast r -> Bool
---------------------------------------------------------------------------------
-subCast CNo        = True
-subCast (CUp _ _)  = True
-subCast (CDn _ _)  = False
-subCast (CFn cs c) = all (not . subCast . snd) cs && subCast c
-subCast (CCs cs)   = all (subCast . snd) cs       -- Assuming covariance
+subtype l t1 t2 = upCast <$> convert l t1 t2
 
 
 -- | @convert@ returns:
@@ -474,13 +465,23 @@ convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s _)
           t1s = fromJust . (`M.lookup` m1) <$> cmnKs
           t2s = fromJust . (`M.lookup` m2) <$> cmnKs
 
-      if m1 `equalKeys` m2 || m2 `isProperSubmapOf` m1 then
-        do  cs <- zipWithM (convert l) t1s t2s
-            if noCast `all` cs then
-              return CNo
-            else
-              return $ CCs $ zip cmnKs cs
+      cs <- zipWithM (convert l) t1s t2s
 
+      if m1 `equalKeys` m2 then 
+        if      all noCast cs then return $ CNo
+        else if all upCast cs then return $ CUp t1 t2
+        -- NOTE: Assuming covariance here!!!
+        else if all dnCast cs then return $ CDn t1 t2
+        else if any ddCast cs then return $ CDead t2
+        else tcError $ errorConvDef l d1 d2
+
+      -- LHS has more fields than RHS
+      else if m2 `isProperSubmapOf` m1 then
+        if      all noCast cs then return $ CUp t1 t2
+        else if all upCast cs then return $ CUp t2 t2
+        else tcError $ errorConvDef l d1 d2
+
+      -- LHS has fewer fields than RHS
       else if m1 `isProperSubmapOf` m2 then 
         tcError $ errorMissFlds l d1 d2 (S.toList $ S.difference ks2 ks1)
 
@@ -491,16 +492,18 @@ convertTRefs _ _ _ =  error "BUG: Case not supported in convertTRefs"
 
 
 -- | `convertFun`
+--
+-- TODO: add arg length check
+--
 --------------------------------------------------------------------------------
 convertFun :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
 convertFun l t1@(TFun b1s o1 _) t2@(TFun b2s o2 _) = do
-    -- FIXME: add arg length check
-    cs <- zipWithM (convert l) (b_type <$> b1s) (b_type <$> b2s)
+    cs <- zipWithM (convert l) (b_type <$> b2s) (b_type <$> b1s)
     co <- convert l o1 o2
-    let c = CFn (zip (b_sym <$> b1s) cs) co
-    if subCast c  then return c
-                  else tcError $ errorFuncSubtype l t1 t2
+    if      all noCast cs && noCast co then return $ CNo
+    else if all dnCast cs && upCast co then return $ CUp t1 t2
+    else tcError $ errorFuncSubtype l t1 t2
 
 convertFun _ _ _ = error "convertFun: no other cases supported"
 
@@ -511,7 +514,7 @@ convertSimple :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
 convertSimple l t1 t2
   | t1 `equiv` t2 = return CNo
-  | otherwise     = return CDead
+  | otherwise     = return $ CDead t2
 
 
 -- | `convertUnion`
@@ -524,8 +527,6 @@ convertUnion l t1 t2 = parts   $ unionParts t1 t2
     parts (_,[],_ )  = return  $ CUp t1 t2
     parts (_,_ ,[])  = return  $ CDn t1 t2
     parts (_, _ ,_)  = tcError $ errorUnionSubtype l t1 t2
-
-convertUnion l t1 t2 | otherwise = convertSimple l t1 t2
 
 
 -- | `convertArray`

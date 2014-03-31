@@ -60,8 +60,7 @@ module Language.Nano.Liquid.CGMonad (
   , findTyIdOrDieM
 
   -- * Add Subtyping Constraints
-  , subTypeContainers, subTypeContainers'
-  , wellFormed
+  , subType, wellFormed
   
   -- * Add Type Annotations
   , addAnnot
@@ -74,17 +73,14 @@ module Language.Nano.Liquid.CGMonad (
   , cgPeekThis
   , cgWithThis
 
-  -- Zip types
-  , zipType
-
 
   ) where
 
 import           Data.Maybe                     (fromMaybe, listToMaybe, maybeToList)
 import           Data.Monoid                    (mempty)
-import           Data.Function                  (on)
 import qualified Data.HashMap.Strict            as M
 import qualified Data.List                      as L
+import           Data.Function                  (on)
 
 -- import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
@@ -270,8 +266,8 @@ envGetContextTypArgs g a αs
 ---------------------------------------------------------------------------------------
 envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 
 ---------------------------------------------------------------------------------------
-envAddFresh {-caller-} _ l t g 
-  = do x  <- {- tracePP caller <$> -} freshId loc
+envAddFresh _ l t g 
+  = do x  <- freshId loc
        g' <- envAdds [(x, t)] g
        return (x, g')
     where loc = srcPos l
@@ -394,9 +390,12 @@ freshTyFun' g l _ t b
   | b && isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g
   | otherwise               = return t
 
-freshTyVar g l t 
-  | isTrivialRefType t = freshTy "freshTyVar" (toType t) >>= wellFormed l g
-  | otherwise          = return t
+freshTyVar g l t@(TApp (TRef i) ts r) 
+  | isTrivialRefType t      
+  = do ts' <- mapM (freshTy "freshTyVar") (toType <$> ts)
+       mapM_ (wellFormed l g) ts'
+       return $ TApp (TRef i) ts' r
+freshTyVar g l t            = return t
 
 freshTElt g l (TE s m t) = TE s m <$> freshTyVar g l t
 
@@ -451,61 +450,6 @@ subType l g t1 t2 =
     rNms t  = (\n -> (n, n `E.envFindTy` renv g)) <$> names t
     names   = foldReft rr []
     rr r xs = F.syms r ++ xs
-    
--- | subTypeContainers: Prep container types for subtyping.
---
--- * Unfolding of the type definitions needs to happen here because of recursive
---   type structures. K-vared top-level type references cause the parts of the
---   unfolded type to be K-vared as well (which needs to happen in the liquid
---   monad).
---
--- * Union types will be broken up in splitC later. 
---
--------------------------------------------------------------------------------
-subTypeContainers :: (IsLocated l) => 
-  String -> l -> CGEnv -> RefType -> RefType -> CGM (RefType, RefType)
--------------------------------------------------------------------------------
-subTypeContainers s l g t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
-  | i1 == i2 
-  = -- TODO:
-    -- FIXME: contra-variance 
-    -- addInvariant ???
-    do subType l g t1 t2
-       (t1s', t2s') <- unzip <$> zipWithM (subTypeContainers s l g) t1s t2s
-       subType l g t1 t2    -- top-level
-       return (TApp (TRef i1) t1s' r1, TApp (TRef i2) t2s' r2)
-
-  | otherwise 
-  = do δ <- getDef
-       e1s <- flt δ t1
-       e2s <- flt δ t2
-       let (s1s, t1s) = unzip $ split <$> L.sortBy (compare `on` f_sym) e1s  
-       let (s2s, t2s) = unzip $ split <$> L.sortBy (compare `on` f_sym) e2s
-       if s1s == s2s then 
-         do (t1s', t2s') <- unzip <$> zipWithM (subTypeContainers s l g) t1s t2s
-            subType l g t1 t2    -- top-level
-            let b1s = zipWith B s1s t1s'
-            let b2s = zipWith B s2s t2s'
-            return (TCons b1s r1, TCons b2s r2)
-       else 
-            cgError ll $ bugMalignedFields ll e1s e2s 
-    where
-      split (TE s _ t) = (s,t) 
-      ll = srcPos l
-      kvared t = not $ null [s | let F.Reft r = rTypeReft t, F.RKvar s _ <- snd r]
-      -- If the top-level is fresh, then freshen the components as well.
-      flt δ t | kvared t = mapM (freshTElt g l) $ flattenTRef δ t
-      flt δ t | otherwise = return $ flattenTRef δ t
-
-subTypeContainers _ _ _ (TApp (TRef _) _ _) _ = error "subTypeContainers-1"
-subTypeContainers _ _ _ _ (TApp (TRef _) _ _) = error "subTypeContainers-2"
-subTypeContainers _ _ _ (TCons _ _) _         = error "subTypeContainers-3"
-subTypeContainers _ _ _ _ (TCons _ _)         = error "subTypeContainers-4"
-
-subTypeContainers s l g t1 t2 = subType l g t1 t2 >> return (t1, t2) 
-
--- | subTypeContainers': void returning version of subTypeContainers
-subTypeContainers' s l g t1 t2 = void (subTypeContainers s l g t1 t2)
 
 
 --------------------------------------------------------------------------------
@@ -626,21 +570,37 @@ splitC (Sub _ _ t1 t2)
 splitC (Sub g i t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _)) 
   | i1 == i2
   = do  cs    <- bsplitC g i t1 t2
-        -- Invariant type parameters
+        -- FIXME: Invariant type parameters
         cs'   <- concatMapM splitC $ safeZipWith "splitC-TRef" (Sub g i) t1s t2s
                                   ++ safeZipWith "splitC-TRef" (Sub g i) t2s t1s
         return $ cs ++ cs' 
   | otherwise 
-  = do  cs    <- bsplitC g i t1 t2        --XXX: Does bsplitC remain the same?
+  = do  cs    <- bsplitC g i t1 t2
         e1s <- (`flattenTRef` t1) <$> getDef
         e2s <- (`flattenTRef` t2) <$> getDef
         cs' <- splitE g i e1s e2s
         return $ cs ++ cs'
 
-splitC (Sub _ _ (TApp (TRef _) _ _) _)
-  = errorstar "UNEXPECTED CRASH in splitC:TApp-TRef"
-splitC (Sub _ _ _ (TApp (TRef _) _ _))
-  = errorstar "UNEXPECTED CRASH in splitC:TApp-TRef"
+-- FIXME: Add constraint for null
+splitC (Sub g i (TApp (TRef _) _ _) (TApp TNull _ _)) 
+  = return []
+
+splitC (Sub g i (TApp TNull _ _) (TApp (TRef _) _ _)) 
+  = return []
+
+splitC (Sub g i t1@(TApp (TRef _) _ _) t2@(TCons _ _))
+  = do t1' <- (`flattenType` t1) <$> getDef
+       splitC (Sub g i t1' t2)
+
+splitC (Sub g i t1@(TCons _ _) t2@(TApp (TRef _) _ _))
+  = do t2' <- (`flattenType` t2) <$> getDef
+       splitC (Sub g i t1 t2')
+
+splitC (Sub _ _ t1@(TApp (TRef _) _ _) t2)
+  = errorstar $ "UNEXPECTED CRASH in splitC: " ++ ppshow t1 ++ " vs " ++ ppshow t2
+
+splitC (Sub _ _ t1 t2@(TApp (TRef _) _ _))
+  = errorstar $ "UNEXPECTED CRASH in splitC: " ++ ppshow t1 ++ " vs " ++ ppshow t2
 
 -- | Rest of TApp
 splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
@@ -659,12 +619,12 @@ splitC (Sub g i t1@(TArr t1v _ ) t2@(TArr t2v _ ))
 
 -- | TCons
 splitC (Sub g i t1@(TCons b1s _ ) t2@(TCons b2s _ ))
-  = do cs    <- bsplitC g i t1 t2
+  = do cs    <- trace ("splitC:TCons" ++ ppshow t1 ++ " - " ++ ppshow t2) <$> bsplitC g i t1 t2
        when (or $ zipWith ((/=) `on` b_sym) b1s' b2s') $ error "splitC on non aligned TCons"
        --FIXME: add other bindings in env (like function)? Perhaps through "this"
        cs'   <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t1s t2s -- CO-VARIANCE
-       cs''  <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t2s t1s -- CONTRA-VARIANCE
-       return $ cs ++ cs' ++ cs''
+       -- cs''  <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t2s t1s -- CONTRA-VARIANCE
+       return $ cs ++ cs' -- ++ cs''
     where
        b1s' = L.sortBy (compare `on` b_sym) b1s
        b2s' = L.sortBy (compare `on` b_sym) b2s
@@ -833,81 +793,4 @@ cgPushThis t = modify $ \st -> st { cg_this = t : cg_this st }
 cgPopThis    = modify $ \st -> st { cg_this = tail $ cg_this st } 
 
 cgWithThis t p = do { cgPushThis t; a <- p; cgPopThis; return a } 
-
-
--- | `zipType` pairs up equivalent parts of types @t1@ and @t2@, preserving the
--- type structure of @t2@, and applying @f@ whenever refinements are present on 
--- both sides and @g@ whenever the respective part in type @t2@ is missing.
---------------------------------------------------------------------------------
-zipType :: TDefEnv RefType -> 
-  (F.Reft -> F.Reft -> F.Reft) ->   -- applied to refs that are present on both sides
-  (F.Reft -> F.Reft) ->             -- applied when pred is absent on the LHS
-  RefType -> RefType -> RefType
---------------------------------------------------------------------------------
---
---                                | t1|_t1' \/ .. tm|_tm' \/ .. tn|g
---                                |         , if n > m, ti ~ ti'
--- t1 \/ .. tn |_ t1' \/ .. tm' = |
---                                | t1|_t1' \/ .. tm|_tm'              
---                                |         , if n <= m, ti ~ ti'
---
-zipType δ f g t1 t2 
-  | any isUnion [t1, t2]
-  = mkUnionR (f r1 r2) $ cmn ++ snd
-  where
-    (r1, r2)   = mapPair rTypeR (t1, t2) 
-    (t1s, t2s) = mapPair bkUnion (t1, t2) 
-    cmn        = [ zipType δ f g τ1 τ2 | τ2 <- t2s, τ1 <- maybeToList $ L.find (equiv τ2) t1s ]
-    snd        = fmap g <$> [ t | t <- t2s, not $ exists (equiv t) t1s ]
-
-zipType δ f g t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
-  | i1 == i2  
-  = TApp (TRef i1) (zipWith (zipType δ f g) t1s t2s) $ f r1 r2
-  | otherwise 
-  = on (zipType δ f g) (flattenType δ) t1 t2 
- 
-zipType _ f _ (TApp c [] r) (TApp c' [] r') 
-  | c == c' = TApp c [] $ f r r'
-
-zipType _ f _ (TVar v r) (TVar v' r') 
-  | v == v' = TVar v $ f r r'
-
-zipType δ f g (TFun x1s t1 r1) (TFun x2s t2 r2) 
-  = TFun xs y $ f r1 r2
-  where
-    xs = zipWith (zipBind δ f g) x1s x2s
-    y  = zipType δ f g t1 t2
-
-zipType δ f g (TArr t1 r1) (TArr t2 r2) 
-  = TArr (zipType δ f g t1 t2) $ f r1 r2
-
-zipType δ f g (TCons b1s r1) (TCons b2s r2) 
-  = TCons (cmn ++ snd) (f r1 r2)
-  where 
-    cmn = [ B s1 (zipType δ f g t1 t2) | B s1 t1 <- b2s, B s2 t2 <- b2s, s1 == s2 ]
-    -- FIXME: Should we apply g here as well?
-    -- This won't really happen cause we only use it for downcast, so
-    -- the snd list will be empty
-    snd = [ B s t | B s t <- b2s, not $ exists ((== s) . b_sym) b2s ]
-
-zipType _ _ _ t1 t2 = 
-  errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
-
-
-zipTypes δ f g ts t = 
-  case filter (equiv t) ts of
-    [  ] -> t
-    [t'] -> zipType δ f g t' t
-    _    -> errorstar "BUG[zipType]: multiple equivalent types" 
-  
-
-zipBind δ f g (B s1 t1) (B s2 t2) 
-  | s1 == s2 = B s1 $ zipType δ f g t1 t2 
-zipBind _ _ _ _       _           
-  = errorstar "BUG[zipBind]: mis-matching binders"
-
-zipElt δ f g (TE s1 b1 t1) (TE s2 b2 t2) 
-  | s1 == s2 && b1 == b2 = TE s1 b1 <$> zipType δ f g t1 t2 
-zipElt _ _ _ _       _
-  = errorstar "BUG[zipElt]: mis-matching elements"
 

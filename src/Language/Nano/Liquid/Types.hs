@@ -54,22 +54,31 @@ module Language.Nano.Liquid.Types (
   -- * Raw low-level Location-less constructors
   , rawStringSymbol 
 
+  -- Zip types
+  , zipType
+
+
   ) where
 
-import           Data.Maybe             (fromMaybe)
+import           Data.Maybe             (fromMaybe, maybeToList)
 import qualified Data.List               as L
+import           Data.Function                  (on)
 import qualified Data.HashMap.Strict     as M
+import           Text.PrettyPrint.HughesPJ
+import           Text.Printf 
+import           Control.Applicative 
+
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
-
 import           Language.Nano.Errors
 import           Language.Nano.Types
+import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Env
+import           Language.Nano.Misc
+import           Language.Fixpoint.Misc
 import           Language.Nano.Typecheck.Types
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
-import           Text.PrettyPrint.HughesPJ
-import           Control.Applicative 
   
 
 -------------------------------------------------------------------------------------
@@ -353,4 +362,80 @@ infixOpRTy o g = infixOpTy o $ renv g
 rawStringSymbol            = F.Loc F.dummyPos . F.stringSymbol
 rawStringFTycon            = F.stringFTycon . F.Loc F.dummyPos 
 
+
+-- | `zipType` pairs up equivalent parts of types @t1@ and @t2@, preserving the
+-- type structure of @t2@, and applying @f@ whenever refinements are present on 
+-- both sides and @g@ whenever the respective part in type @t2@ is missing.
+--------------------------------------------------------------------------------
+zipType :: TDefEnv RefType -> 
+  (F.Reft -> F.Reft -> F.Reft) ->   -- applied to refs that are present on both sides
+  (F.Reft -> F.Reft) ->             -- applied when pred is absent on the LHS
+  RefType -> RefType -> RefType
+--------------------------------------------------------------------------------
+--
+--                                | t1|_t1' \/ .. tm|_tm' \/ .. tn|g
+--                                |         , if n > m, ti ~ ti'
+-- t1 \/ .. tn |_ t1' \/ .. tm' = |
+--                                | t1|_t1' \/ .. tm|_tm'              
+--                                |         , if n <= m, ti ~ ti'
+--
+zipType δ f g t1 t2 
+  | any isUnion [t1, t2]
+  = mkUnionR (f r1 r2) $ cmn ++ snd
+  where
+    (r1, r2)   = mapPair rTypeR (t1, t2) 
+    (t1s, t2s) = mapPair bkUnion (t1, t2) 
+    cmn        = [ zipType δ f g τ1 τ2 | τ2 <- t2s, τ1 <- maybeToList $ L.find (equiv τ2) t1s ]
+    snd        = fmap g <$> [ t | t <- t2s, not $ exists (equiv t) t1s ]
+
+zipType δ f g t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
+  | i1 == i2  
+  = TApp (TRef i1) (zipWith (zipType δ f g) t1s t2s) $ f r1 r2
+  | otherwise 
+  = on (zipType δ f g) (flattenType δ) t1 t2 
+ 
+zipType _ f _ (TApp c [] r) (TApp c' [] r') 
+  | c == c' = TApp c [] $ f r r'
+
+zipType _ f _ (TVar v r) (TVar v' r') 
+  | v == v' = TVar v $ f r r'
+
+zipType δ f g (TFun x1s t1 r1) (TFun x2s t2 r2) 
+  = TFun xs y $ f r1 r2
+  where
+    xs = zipWith (zipBind δ f g) x1s x2s
+    y  = zipType δ f g t1 t2
+
+zipType δ f g (TArr t1 r1) (TArr t2 r2) 
+  = TArr (zipType δ f g t1 t2) $ f r1 r2
+
+zipType δ f g (TCons b1s r1) (TCons b2s r2) 
+  = TCons (cmn ++ snd) (f r1 r2)
+  where 
+    cmn = [ B s1 (zipType δ f g t1 t2) | B s1 t1 <- b2s, B s2 t2 <- b2s, s1 == s2 ]
+    -- FIXME: Should we apply g here as well?
+    -- This won't really happen cause we only use it for downcast, so
+    -- the snd list will be empty
+    snd = [ B s t | B s t <- b2s, not $ exists ((== s) . b_sym) b2s ]
+
+zipType _ _ _ t1 t2 = 
+  errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
+
+
+zipTypes δ f g ts t = 
+  case filter (equiv t) ts of
+    [  ] -> t
+    [t'] -> zipType δ f g t' t
+    _    -> errorstar "BUG[zipType]: multiple equivalent types" 
+  
+
+zipBind δ f g (B s1 t1) (B s2 t2) 
+  | s1 == s2 = B s1 $ zipType δ f g t1 t2 
+zipBind _ _ _ _       _           
+  = errorstar "BUG[zipBind]: mis-matching binders"
+
+zipElt δ f g (TE s1 b1 t1) (TE s2 b2 t2) 
+  | s1 == s2 && b1 == b2 = TE s1 b1 <$> zipType δ f g t1 t2 
+zipElt _ _ _ _       _
+  = errorstar "BUG[zipElt]: mis-matching elements"
 

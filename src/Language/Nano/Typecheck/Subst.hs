@@ -117,11 +117,9 @@ instance Free (RType r) where
 
 instance (PP r, F.Reftable r) => Substitutable r (Cast r) where
   apply _ CNo        = CNo
-  apply _ CDead      = CDead
+  apply θ (CDead t)  = CDead (apply θ t)
   apply θ (CUp t t') = CUp (apply θ t) (apply θ t')
   apply θ (CDn t t') = CDn (apply θ t) (apply θ t')
-  apply θ (CFn cs c) = CFn (mapSnd (apply θ) <$> cs) (apply θ c)
-  apply θ (CCs cs  ) = CCs $ mapSnd (apply θ) <$> cs
 
 instance (PP r, F.Reftable r) => Substitutable r (Fact r) where
   apply _ x@(PhiVar _)   = x
@@ -143,11 +141,11 @@ instance (PP r, F.Reftable r) => Substitutable r (Annot (Fact r) z) where
 
 instance Free (Cast r) where
   free CNo        = S.empty
-  free CDead      = S.empty
+  free (CDead t)  = free t
   free (CUp t t') = S.union (free t) (free t')
   free (CDn t t') = S.union (free t) (free t')
-  free (CFn cs c) = S.unions $ free <$> c:cs' where cs' = snd <$> cs
-  free (CCs cs  ) = S.unions $ (free . snd) <$> cs
+ -- free (CFn cs c) = S.unions $ free <$> c:cs' where cs' = snd <$> cs
+ -- free (CCs cs  ) = S.unions $ (free . snd) <$> cs
 
 instance (PPR r) => Substitutable r (TDef (RType r)) where
   apply θ (TD n v p e)   = TD n v p $ apply θ e
@@ -181,6 +179,8 @@ appTy _        (TExp _)      = error "appTy should not be applied to TExp"
 appTy _        (TCons _ _)   = error "appTy should not be applied to TCons"
 
 
+-- | `flatten`: Unfolds one level of the input type, flattening all the fields
+-- inherited by possible parent classes.
 ------------------------------------------------------------------------
 flatten :: PPR r => TDefEnv (RType r) -> TDef (RType r) -> [TElt (RType r)]
 ------------------------------------------------------------------------
@@ -223,3 +223,4 @@ flattenType δ (TCons ts r)   = TCons ts r
 flattenType _ _              = error "TExp should not appear here"
 
 flattenBind δ (B s t)        = B s $ flattenType δ t 
+

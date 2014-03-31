@@ -23,10 +23,10 @@
 /*************************************************************************/
 /***************** Types for list Operators ******************************/
 /*************************************************************************/
-/*@ interface list <A> {  data : A, next : #list[A] + null }                                                   */
+/*@ interface list <A> {  data : A, next : #list[A] + null }                                                  */
 /*@ measure len :: forall A. (#list [A]) => number                                                            */
 /*@ extern cons  :: forall A. (A, xs:#list[A] + null) => {#list[A] | (len v) = 1 + (len xs)}                  */
-/*@ extern nil   :: () => { null | (len v) = 0}                                                               */
+/*@ extern nil   ::           () => { null | (len v) = 0}                                                     */
 /*@ extern head  :: forall A. (xs:#list[A]) => A                                                              */
 /*@ extern tail  :: forall A. (xs:#list [A]) => #list [A] + null                                              */
 /*@ extern nth   :: forall A. (xs:#list [A], {i:number| ((0 <= i) && i < (len xs))}) => A                     */

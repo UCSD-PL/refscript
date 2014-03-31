@@ -105,7 +105,7 @@ consFun _ s
 consFun1 l g' f xs body (i, ft) 
   = do g'' <- envAddFun l f i xs ft g'
        gm  <- consStmts g'' body
-       maybe (return ()) (\g -> subTypeContainers' "return void" l g tVoid (envFindReturn g'')) gm
+       maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
 
 envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g) 
                                    >>= (return . envAddReturn f t' ) 
@@ -148,7 +148,7 @@ consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
        (x2,  g') <- consExpr  g  e2
        let t2     = envFindTy x2 g'
        -- FIXME: how to we keep the unfolded types around?
-       subTypeContainers "field-assignment" l2 g' t2 tfld
+       subType l2 g' t2 tfld
        return     $ Just g'
 
 -- e
@@ -189,10 +189,10 @@ consStmt g (ReturnStmt l (Just e))
   = do  (xe, g') <- consExpr g e
         let te    = envFindTy xe g'
             rt    = envFindReturn g'
-        -- subTypeContainers does not need to return the unfolded types
+        -- subType does not need to return the unfolded types
         if isTop rt
-          then (subTypeContainers' "ReturnTop" l g') te (setRTypeR te (rTypeR rt))
-          else (subTypeContainers' "Return" l g') te rt
+          then (subType l g') te (setRTypeR te (rTypeR rt))
+          else (subType l g') te rt
         return Nothing
 
 -- return
@@ -245,7 +245,6 @@ consClassElt g (Constructor l xs body)
   where 
         i = Id l "constructor"
 
-  -- Annotation will be included in `v`
 consClassElt g (MemberVarDecl _ _ v) 
   = void $ consVarDecl g v
   
@@ -260,33 +259,12 @@ pickElt l = head [ t | VarAnn t <- ann_fact l ]
 ------------------------------------------------------------------------------------
 consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
 ------------------------------------------------------------------------------------
--- XXX: There are no annotations on boject or array literals directly - just on
--- variable declarations
--- 
--- consExprT g o@(ObjectLit _ _) to
---   = consObjT g o to
--- 
--- consExprT g e@(ArrayLit l _) (Just t)
---   = do (x, g')  <- consExpr g e
---        let te    = envFindTy x g'
---        subTypeContainers "consExprT" l g' te t
---        let t' = t `strengthen` F.substa (sf (rv te) (rv t)) (rTypeReft te)
---        g'' <- envAdds [(x, t')] g'
---        return (x, g'')
---     where
---        rv         = rTypeValueVar
---        sf s1 s2 s | s == s1   = s2
---                   | otherwise = s
- 
 consExprT g e to 
   = do (x, g') <- consExpr g e
        let te   = envFindTy x g'
        case to of
          Nothing -> return (x, g')
-         -- FIXME: subTypeContainers
-         Just t  -> do subTypeContainers "consExprT" l g' te t 
-                       g'' <- envAdds [(x, t)] g'
-                       return (x, g'')
+         Just t  -> subType l g' te t >> (x,) <$> envAdds [(x, t)] g'
     where
        l = getAnnotation e
  
@@ -296,7 +274,6 @@ consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Mayb
 --------------------------------------------------------------------------------
 consAsgn g l x e 
   = do t <- case envFindAnnot l x g of
-       -- XXX: Flatten before applying freshTVar
               Just t  -> Just <$> freshTyVar g l t
               Nothing -> return $ Nothing
        (x', g') <- consExprT g e t
@@ -368,8 +345,7 @@ consExpr g (ArrayLit l es)
 consExpr g (ObjectLit l bs) 
   = do  let (ps, es) = unzip bs
         (xes, g')   <- consScan consExpr g es
-        let elts = zipWith mkElt (F.symbol <$> ps) (
-              (`envFindTy` g') <$> xes)
+        let elts = zipWith mkElt (F.symbol <$> ps) $ (`envFindTy` g') <$> xes
         let d = TD Nothing [] Nothing elts
         i <- addObjLitTyM d
         envAddFresh "consExpr:ObjectLit" l (TApp (TRef i) [] fTop) g'
@@ -415,22 +391,20 @@ consCast g a e
   = do  (x,g) <- consExpr g e 
         case envGetContextCast g a of
           CNo       -> return (x,g)
-          CDead     -> consDeadCode g l x
+          CDead t   -> consDeadCode g l x t
           CUp t t'  -> consUpCast g l x t t'
           CDn t t'  -> consDownCast g l x t t'
-
-          -- FIXME: TODO
-          -- CFn t t'  -> return undefined
-          -- CCs t t'  -> return undefined
     where  
       l = srcPos a
 
 -- | Dead code 
-consDeadCode g l x =
+consDeadCode g l x t =
   do δ <- getDef
      let xBot = zipType δ (\_ -> F.bot) id xT xT  
-     subTypeContainers "consDeadCode" l g xT xBot
-     return (x, g)
+     let tBot = zipType δ (\_ -> F.bot) id t  t
+     subType l g xT xBot
+     -- NOTE: return the target type (falsified)
+     envAddFresh "consUpCast" l tBot g
   where 
      xT      = envFindTy x g
 
@@ -446,7 +420,7 @@ consUpCast g l x fromT toT =
 consDownCast g l x fromT toT =
   do δ      <- getDef
      let (lhs, rhs) = (xT, zipType δ (\_ q -> q) F.bot toT xT)
-     subTypeContainers "consDownCast" l g lhs rhs
+     subType l g lhs rhs
      -- NOTE: The F.bot in the following should not really mattter
      let toT' = zipType δ (\p _ -> p) F.bot xT toT
      g'     <- envAdds [(x, toT')] g
@@ -473,7 +447,7 @@ consCall g l fn es ft0
        let ft        = fromMaybe (fromMaybe (err ts ft0) (overload l)) (calleeType l ts ft0)
        (_,its,ot)   <- instantiate l g fn ft
        let (su, ts') = renameBinds its xes
-       zipWithM_ (subTypeContainers "Call" l g') [envFindTy x g' | x <- xes] ts'
+       zipWithM_ (subType l g') [envFindTy x g' | x <- xes] ts'
        envAddFresh "consCall" l (F.subst su ot) g'
     where
        overload l    = listToMaybe [ t | Overload (Just t) <- ann_fact l ]
@@ -487,7 +461,6 @@ instantiate l g fn ft
   = do let (αs, t)      = bkAll ft
        --TODO: There is a TypInst missing here!!!
        let ts           = envGetContextTypArgs g l αs
-       -- NOTE: Do we need to flatten here?
        t'              <- freshTyInst l g αs ts t
        maybe err return $ bkFun t' 
     where 
@@ -573,11 +546,11 @@ consWhile g l cond body
         xs                   = concat [xs | PhiVar xs <- ann_fact l]
         ts                   = (`envFindTy` g) <$> xs 
 
-consWhileBase l xs tIs g    = zipWithM_ (subTypeContainers "WhileBase" l g) xts_base tIs      -- (c)
+consWhileBase l xs tIs g    = zipWithM_ (subType l g) xts_base tIs      -- (c)
   where 
    xts_base                 = (`envFindTy` g) <$> xs
  
-consWhileStep l xs tIs gI'' = zipWithM_ (subTypeContainers "WhileStep" l gI'') xts_step tIs'  -- (f)
+consWhileStep l xs tIs gI'' = zipWithM_ (subType l gI'') xts_step tIs'  -- (f)
   where 
     xts_step                = (`envFindTy` gI'') <$> xs'
     tIs'                    = F.subst su <$> tIs
@@ -614,8 +587,8 @@ envJoin' l g g1 g2
         -- up that one.
         -- TODO: Add a raw type check on t1 and t2
         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> t1s
-        zipWithM_ (subTypeContainers "envJoin 1" l g1') [envFindTy x g1' | x <- xs] ts
-        zipWithM_ (subTypeContainers "envJoin 2" l g2') [envFindTy x g2' | x <- xs] ts
+        zipWithM_ (subType l g1') [envFindTy x g1' | x <- xs] ts
+        zipWithM_ (subType l g2') [envFindTy x g2' | x <- xs] ts
         return g'
     where
         xs   = concat [xs | PhiVar xs <- ann_fact l] 

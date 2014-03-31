@@ -233,7 +233,7 @@ tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
-     <|>     (withinSpacesP (char '#') >> identifierP >>= idToTRefP)
+     <|>     (withinSpacesP $ char '#' >> identifierP >>= idToTRefP)
 
 idToTRefP :: Id SourceSpan -> ParserS TCon
 idToTRefP (Id _ s) = do

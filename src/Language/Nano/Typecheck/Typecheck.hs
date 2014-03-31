@@ -492,17 +492,17 @@ classEltType (MemberMethDecl  l _ f _ _ ) = TE (F.symbol f) False t
 tcVarDecl :: (Ord r, PPR r) 
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
-tcVarDecl γ (VarDecl l x (Just e)) 
+tcVarDecl γ v@(VarDecl l x (Just e)) 
   -- FIXME: ann contains mutability information as well.
-  = do (e' , t) <- tcExprT l γ e ann
+  = do ann <- listToMaybe <$> scrapeVarDecl v  
+       (e' , t) <- tcExprT l γ e ann
        return (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
-    where
-      ann = listToMaybe $ [ t | VarAnn t <- ann_fact l ] ++ [ t | FieldAnn (_,t) <- ann_fact l ] 
 
 tcVarDecl γ v@(VarDecl l x Nothing) 
-  = case [ t | VarAnn t <- ann_fact l ] ++ [ t | FieldAnn (_,t) <- ann_fact l ] of
-      [t] -> return (v, Just $ tcEnvAdds [(x, t)] γ)
-      _   -> tcError $ errorVarDeclAnnot (srcPos l) x
+  = do ann <- scrapeVarDecl v
+       case ann of
+         [t] -> return (v, Just $ tcEnvAdds [(x, t)] γ)
+         _   -> tcError $ errorVarDeclAnnot (srcPos l) x
 
 -------------------------------------------------------------------------------
 tcAsgn :: (PP r, Ord r, F.Reftable r) => 
@@ -833,4 +833,20 @@ getPhiType l γ1 γ2 x =
                           where loc = srcPos $ ann l
 
 forceCheck x γ = elem x $ fst <$> envToList (tce_env γ)
+
+
+-- | scrapeVarDecl: Scrape a variable declaration for annotations
+----------------------------------------------------------------------------------
+scrapeVarDecl :: VarDecl (AnnSSA r) -> TCM r [RType r]
+----------------------------------------------------------------------------------
+scrapeVarDecl (VarDecl l _ _) = 
+  mapM (sanity $ srcPos l) $ [ t | VarAnn t <- ann_fact l ] ++ [ t | FieldAnn (_,t) <- ann_fact l ]
+
+sanity l t@(TApp (TRef i) ts _) = 
+  do δ <- getDef 
+     case findTyId i δ of
+       Just (TD _ αs _ _) | length αs == length ts -> return t 
+       Just (TD n αs _ _) | otherwise              -> 
+         tcError $ errorTypeArgsNum l n (length αs) (length ts)
+sanity _ t = return t
 

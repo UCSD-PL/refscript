@@ -292,7 +292,9 @@ envAdds xts' g
        (xs,ts) = unzip xts'
 
 
+---------------------------------------------------------------------------------------
 addFixpointBind :: (F.Symbolic x) => (x, RefType) -> CGM F.BindId
+---------------------------------------------------------------------------------------
 addFixpointBind (x, t) 
   = do let s     = F.symbol x
        let r     = rTypeSortedReft t
@@ -305,7 +307,7 @@ addInvariant   :: RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
 addInvariant t           = ((`tx` t) . invs) <$> get
   where 
-    tx i t@(TApp tc _ o) = maybe t (\i -> strengthenOp t o $ rTypeReft $ val i) $ {- trace ("addInvariant on: " ++ ppshow o) $ -} M.lookup tc i
+    tx i t@(TApp tc _ o) = maybe t (\i -> strengthenOp t o $ rTypeReft $ val i) $ M.lookup tc i
     tx _ t               = t 
 
     strengthenOp t o r   | L.elem r (ofRef o) = t

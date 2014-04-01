@@ -473,20 +473,20 @@ convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s _)
         -- NOTE: Assuming covariance here!!!
         else if all dnCast cs then return $ CDn t1 t2
         else if any ddCast cs then return $ CDead t2
-        else tcError $ errorConvDef l d1 d2
+        else tcError $ errorConvDef l (pp' δ t1) (pp' δ t2)
 
       -- LHS has more fields than RHS
       else if m2 `isProperSubmapOf` m1 then
         if      all noCast cs then return $ CUp t1 t2
-        else if all upCast cs then return $ CUp t2 t2
-        else tcError $ errorConvDef l d1 d2
+        else if all upCast cs then return $ CUp t1 t2
+        else tcError $ errorConvDef l (pp' δ t1) (pp' δ t2)
 
       -- LHS has fewer fields than RHS
       else if m1 `isProperSubmapOf` m2 then 
-        tcError $ errorMissFlds l d1 d2 (S.toList $ S.difference ks2 ks1)
+        tcError $ errorMissFlds l (pp' δ t1) (pp' δ t2) (S.toList $ S.difference ks2 ks1)
 
       else 
-        tcError $ errorConvDef l d1 d2
+        tcError $ errorConvDef l (pp' δ t1) (pp' δ t2)
 
 convertTRefs _ _ _ =  error "BUG: Case not supported in convertTRefs"
 

@@ -45,6 +45,9 @@ module Language.Nano.Typecheck.Types (
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, tUndef, tNull
   , tAnd, isTVar, isArr, isTRef, isTFun, fTop
 
+  -- * Print Types
+  , ppArgs
+
   -- * Type comparison/joining/subtyping
   , Equivalent
   , equiv
@@ -54,7 +57,7 @@ module Language.Nano.Typecheck.Types (
   , TDefEnv (..), tDefEmpty
   , addTySym, addSym, addObjLitTy
   , findTySym, findTySymOrDie, findTySymWithId, findTySymWithIdOrDie, findTyId, findTyIdOrDie
-  , findTyIdOrDie', findEltWithDefault, symTDefMem
+  , findTyIdOrDie', findEltWithDefault, symTDefMem, getTDefName
   , getDefNames
   , sortTDef
 
@@ -251,6 +254,8 @@ symTDefMem :: F.Symbol -> TDefEnv t -> Bool
 ---------------------------------------------------------------------------------
 symTDefMem s = F.memberSEnv s . g_names
 
+
+getTDefName δ i = findTyId i δ >>= t_name  
 
 
 -- | Sort the fields of a TDef 
@@ -866,12 +871,12 @@ instance (PP r, F.Reftable r) => PP (Cast r) where
 noCast CNo = True
 noCast _   = False
 
-upCast (CDead _)  = True
+upCast (CDead _)  = False
 upCast CNo        = True
 upCast (CUp _ _)  = True
 upCast (CDn _ _)  = False
 
-dnCast (CDead _)  = True
+dnCast (CDead _)  = False
 dnCast CNo        = True
 dnCast (CUp _ _)  = False
 dnCast (CDn _ _)  = True

@@ -21,6 +21,9 @@ module Language.Nano.Typecheck.Subst (
 
   -- * Flatten a type definition applying subs
   , flatten, flattenTRef, flattenType
+
+  -- * Print
+  , pp'
   ) where 
 
 import           Text.PrettyPrint.HughesPJ
@@ -29,13 +32,14 @@ import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
-import           Language.Fixpoint.Misc (mapSnd)
+import           Language.Fixpoint.Misc (mapSnd, intersperse)
 
+import           Language.Fixpoint.PrettyPrint
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
 import qualified Data.List as L
 import qualified Data.HashMap.Strict as M 
-import           Data.Monoid
+import           Data.Monoid hiding ((<>))
 import           Data.Function (fix, on)
 import           Data.Maybe (fromMaybe, fromJust)
 
@@ -175,52 +179,99 @@ appTy (Su m) t@(TVar α r)    = (M.lookupDefault t α m) `strengthen` r
 appTy θ        (TFun ts t r) = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m)   (TAll α t)    = TAll α $ apply (Su $ M.delete α m) t
 appTy θ        (TArr t r)    = TArr (apply θ t) r
+appTy θ        (TCons ts r)  = TCons (apply θ ts) r
 appTy _        (TExp _)      = error "appTy should not be applied to TExp"
-appTy _        (TCons _ _)   = error "appTy should not be applied to TCons"
 
 
 -- | `flatten`: Unfolds one level of the input type, flattening all the fields
 -- inherited by possible parent classes.
+
 ------------------------------------------------------------------------
 flatten :: PPR r => TDefEnv (RType r) -> TDef (RType r) -> [TElt (RType r)]
 ------------------------------------------------------------------------
-flatten δ = fix ff
-  where
-    ff r (TD _ vs (Just (i, ts)) es) 
-      = L.unionBy nm es 
-      $ r 
-      $ fromJust 
-      $ apply (fromList $ zip vs ts) (findTySym i δ)
-    ff _ (TD _ _ _ es) = es
-    nm = (==) `on` f_sym
+flatten = flatten' False
+
+------------------------------------------------------------------------
+flattenType :: PPR r => TDefEnv (RType r) -> RType r -> RType r
+------------------------------------------------------------------------
+flattenType = flattenType' False
 
 ------------------------------------------------------------------------
 flattenTRef :: PPR r => TDefEnv (RType r) -> RType r -> [TElt (RType r)]
 ------------------------------------------------------------------------
-flattenTRef δ (TApp (TRef n) ts _) 
-                            = apply θ (flatten δ d)
+flattenTRef = flattenTRef' False
+
+
+-- WARNING: Calling the following with True for @b@ may cause infinite loop for
+-- recursive types.
+
+flatten' b δ = fix ff
+  where
+    ff r (TD _ vs (Just (i, ts)) es)
+      = L.unionBy nm (ee es) 
+      $ r 
+      $ fromJust 
+      $ apply (fromList $ zip vs (tt ts)) (findTySym i δ)
+
+    ff _ (TD _ _ _ es) = ee es
+
+    nm = (==) `on` f_sym
+
+    ee es | b         = flattenElt' b δ <$> es
+          | otherwise = es
+
+    tt ts | b         = flattenType' b δ <$> ts
+          | otherwise = ts
+
+
+flattenElt' b δ (TE s m t) = TE s m $ flattenType' b δ t
+
+flattenTRef' b δ (TApp (TRef n) ts _) 
+                            = apply θ (flatten' b δ d)
   where d@(TD _ vs _ _)     = findTyIdOrDie n δ
         θ                   = fromList $ zip vs ts
-flattenTRef _ _ = error "Applying flattenTRef on non-tref"
+flattenTRef' _ _ _ = error "Applying flattenTRef on non-tref"
 
 
 -- | Single level of flattenning types that contain references to types 
 -- with flat objects
-------------------------------------------------------------------------
-flattenType :: PPR r => TDefEnv (RType r) -> RType r -> RType r
-------------------------------------------------------------------------
-flattenType δ t@(TApp (TRef n) ts r) 
-                             = TCons (bind <$> flattenTRef δ t) r
-                               where bind (TE s _ t) = B s t
-flattenType δ (TApp c ts r)  = TApp c (flattenType δ <$> ts) r
-flattenType _ (TVar v r)     = TVar v r
-flattenType δ (TFun ts to r) = TFun (f <$> ts) (flattenType δ to) r
-                               where f (B s t) = B s $ flattenType δ t
-flattenType δ (TArr t r)     = TArr (flattenType δ t) r
-flattenType δ (TAll v t)     = TAll v $ flattenType δ t
-flattenType δ (TAnd ts)      = TAnd $ flattenType δ <$> ts
-flattenType δ (TCons ts r)   = TCons ts r
-flattenType _ _              = error "TExp should not appear here"
+flattenType' b δ t@(TApp (TRef n) ts r) 
+                                = TCons (bind <$> flattenTRef' b δ t) r
+                                    where bind (TE s _ t) = B s t
+flattenType' b δ (TApp c ts r)  = TApp c (flattenType' b δ <$> ts) r
+flattenType' _ _ (TVar v r)     = TVar v r
+flattenType' b δ (TFun ts to r) = TFun (f <$> ts) (flattenType' b δ to) r
+                                    where f (B s t) = B s $ flattenType' b δ t
+flattenType' b δ (TArr t r)     = TArr (flattenType' b δ t) r
+flattenType' b δ (TAll v t)     = TAll v $ flattenType' b δ t
+flattenType' b δ (TAnd ts)      = TAnd $ flattenType' b δ <$> ts
+flattenType' b δ (TCons ts r)   = TCons (flattenBind' b δ <$> ts) r
+flattenType' _ _ _              = error "TExp should not appear here"
 
-flattenBind δ (B s t)        = B s $ flattenType δ t 
+flattenBind' b δ (B s t)        = B s $ flattenType' b δ t 
+
+
+
+-- | pp': Print expanded types
+-----------------------------------------------------------------------------
+pp' :: (F.Reftable r, PP r) => TDefEnv (RType r) -> RType r -> Doc
+-----------------------------------------------------------------------------
+pp' δ t@(TVar α r)           = F.ppTy r $ pp α 
+pp' δ t@(TFun xts t' _)      = ppBinds' δ parens comma xts <+> text "=>" <+> pp' δ t' 
+pp' δ t@(TAll _ _)           = text "forall" <+> ppArgs id space αs <> text "." <+> pp' δ t' where (αs, t') = bkAll t
+pp' δ t@(TAnd ts)            = vcat [text "/\\" <+> pp' δ t | t <- ts]
+pp' δ t@(TExp e)             = pprint e
+pp' δ t@(TApp TUn ts r)      = F.ppTy r $ ppArgs' δ id (text " +") ts 
+pp' δ t@(TApp (TRef i) ts r) = F.ppTy r $ maybe (anonym t) named (getTDefName δ i)
+  where anonym t             = pp $ flattenType' True δ t
+        named  t             = pp t <+> ppArgs' δ brackets comma ts
+pp' δ t@(TApp c [] r)        = F.ppTy r $ pp c 
+pp' δ t@(TApp c ts r)        = F.ppTy r $ parens (pp c <+> ppArgs' δ id space ts)  
+pp' δ t@(TArr t' r)          = F.ppTy r $ brackets (pp' δ t')
+pp' δ t@(TCons bs r)         = F.ppTy r $ ppBinds' δ braces comma bs
+
+ppArgs' δ p sep              = p . intersperse sep . map (pp' δ)
+ppBinds' δ p sep             = p . intersperse sep . map (ppBind' δ)
+
+ppBind' δ (B x t)            = pp x <> colon <> pp' δ t 
 

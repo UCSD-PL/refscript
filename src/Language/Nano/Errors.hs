@@ -136,11 +136,11 @@ errorBadPAlias l p nx ne  = mkErr l $ printf "Invalid predicate alias applicatio
 errorBadTAlias l t nt ne nα nx  
                           = mkErr l $ printf "Invalid type alias application: %s \nExpected %d type, %d value arguments, but got %d and %d" (ppshow t) nα nx nt ne  
 
-errorConvDef l t1 t2      = mkErr l $ printf "Cannot convert types:\n%s\nand\n%s" (ppshow t1) (ppshow t2)
+errorConvDef l pp1 pp2    = mkErr l $ printf "Cannot convert types:\n%s\nand\n%s" (show pp1) (show pp2)
 errorConvDefDepth l t1 t2 = mkErr l $ printf "No deep subtyping: '%s' and '%s'" (ppshow t1) (ppshow t2)
 errorConvDefInvar l t1 t2 = mkErr l $ printf "Only invariant interface subtyping:\n%s\nand\n%s" (ppshow t1) (ppshow t2)
 errorMissFlds l t1 t2 x   = mkErr l $ printf "Cannot convert: %s to %s. Type %s is missing fields %s." 
-                                                  (ppshow t1) (ppshow t2) (ppshow t1) (ppshow x)
+                                                  (show t1) (show t2) (show t1) (ppshow x)
 errorSuper l              = mkErr l $ printf "Cannot resolve reference to super." 
 errorSuperParentMissing l = mkErr l $ printf "Calling super when parent class missing." 
 

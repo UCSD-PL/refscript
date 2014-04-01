@@ -5,7 +5,6 @@
                      , i: { number | ((0 <= v) && (v < (len idxArr)))}) 
                      => number */
 function indirectIndex(dataArr : number[], idxArr:number[], i:number) : number {
-	var j : number= idxArr[i];
+	var j = idxArr[i];
 	return dataArr[j];
-
 }

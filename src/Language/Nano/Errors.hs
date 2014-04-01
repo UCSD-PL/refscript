@@ -147,7 +147,7 @@ errorSuperParentMissing l = mkErr l $ printf "Calling super when parent class mi
 errorSimpleSubtype l t t' = mkErr l $ printf "Type: %s is not a subtype of %s" (ppshow t) (ppshow t')
 errorObjSubtype l t t'    = mkErr l $ printf "Object type: %s is not a subtype of %s" (ppshow t) (ppshow t')
 errorFuncSubtype l t t'   = mkErr l $ printf "Function type: %s is not a subtype of %s" (ppshow t) (ppshow t')
-errorUnionSubtype l t t'  = mkErr l $ printf "Union type: %s is not a subtype of %s" (ppshow t) (ppshow t')
+errorUnionSubtype l t t'  = mkErr l $ printf "Union type: %s is not a subtype of %s" (show t) (show t')
 errorArraySubtype l t t'  = mkErr l $ printf "Array type: %s is not a subtype of %s" (ppshow t) (ppshow t')
 
 errorTypeArgsNum l n p q  = mkErr l $ printf "Type %s expects %s arguments but %s were provided" (ppshow n) (ppshow p) (ppshow q)

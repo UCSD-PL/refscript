@@ -1,10 +1,10 @@
 
-/*@ foo :: (x:number) => [{number | v=x}]  */
+/*@ foo :: (x: number) => [{ number | v = x }]  */
 function foo(x : number) : number[] {
   return [x];
 }
 
-/*@ bar :: (cat:number) => [{number | v=cat}]  */
+/*@ bar :: (y: number) => [{ number | v = y }]  */
 function bar(y : number) : number[] {
   return foo(y);
 }

@@ -9,3 +9,4 @@ function bar(y) {
   return foo(y);
 }
 
+bar(10);

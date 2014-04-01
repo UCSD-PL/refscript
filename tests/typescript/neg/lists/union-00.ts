@@ -1,7 +1,7 @@
 /*@ qualif Len1(v:a)               : 0 <= (len xs)                 */
 /*@ qualif Len2(v:a)               : 0 <  (len xs)                 */
 
-/*@ foo :: forall A. (list[A] + null) => number */
+/*@ foo :: forall A. (#list[A] + null) => number */
 function foo(xs){
     assert(0 == 1);
     var zs = xs;

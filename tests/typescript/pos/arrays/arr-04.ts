@@ -6,8 +6,8 @@ function indirectIndex(a : number[], b : number[], i : number) : number {
 
 }
 
-/*@ writeIndex :: (a:[number], i:{ number | (0 <= v && v < (len a)) }) => void */
-function writeIndex(a : number[], i : number) : void {
-  a[i] = 10;
+/*@ writeIndex :: (a:[number], i:{ number | (0 <= v && v < (len a)) }, v: number) => void */
+function writeIndex(a : number[], i : number, v: number) : void {
+  a[i] = v;
   return;
 }

@@ -526,7 +526,9 @@ convertUnion l t1 t2 = parts   $ unionParts t1 t2
     parts (_,[],[])  = return  $ CNo
     parts (_,[],_ )  = return  $ CUp t1 t2
     parts (_,_ ,[])  = return  $ CDn t1 t2
-    parts (_, _ ,_)  = tcError $ errorUnionSubtype l t1 t2
+    parts (_, _ ,_)  = do p1 <- (`pp'` t1) <$> getDef
+                          p2 <- (`pp'` t2) <$> getDef
+                          tcError $ errorUnionSubtype l p1 p2
 
 
 -- | `convertArray`

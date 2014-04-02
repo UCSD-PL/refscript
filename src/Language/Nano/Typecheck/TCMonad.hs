@@ -447,14 +447,12 @@ convertTRefs l t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _)
   = do
       -- Get the type definitions
       δ   <- getDef 
-      let e1s = flattenTRef δ t1
-      let e2s = flattenTRef δ t2
-
-      -- Take all elements into account, excluding constructors.
-      let m1  = M.fromList [ (s, t) | TE s _ t <- e1s, s /= F.symbol "constructor" ]
-      let m2  = M.fromList [ (s, t) | TE s _ t <- e2s, s /= F.symbol "constructor" ]
-    
-      let (ks1, ks2) = mapPair (S.fromList . (f_sym <$>)) (e1s, e2s)
+      let (e1s, e2s) = mapPair (flattenTRef δ) (t1, t2)
+                       -- Take all elements into account, excluding constructors.
+          (l1, l2)   = mapPair (\es -> [ (s, t) | TE s _ t <- es
+                                                , s /= F.symbol "constructor" ]) (e1s, e2s)
+          (m1, m2)   = mapPair M.fromList (l1, l2)
+          (ks1, ks2) = mapPair (S.fromList . map fst) (l1, l2)
           cmnKs      = S.toList $ S.intersection ks1 ks2
           t1s        = fromJust . (`M.lookup` m1) <$> cmnKs
           t2s        = fromJust . (`M.lookup` m2) <$> cmnKs

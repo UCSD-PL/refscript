@@ -20,44 +20,24 @@ module Language.Nano.Liquid.CGMonad (
   , getCGInfo 
 
   -- * Get Defined Function Type Signature
-  , getDefType
-
-  , getDef
-  , getPropTDefM
+  , getDefType, getDef, getPropTDefM
 
   -- * Throw Errors
   , cgError      
 
   -- * Fresh Templates for Unknown Refinement Types 
-  , freshTyFun
-  , freshTyVar
-  , freshTyInst
-  , freshTyPhis
-  , freshTyPhisWhile
-  , freshTyObj
+  , freshTyFun, freshTyVar, freshTyInst, freshTyPhis
+  , freshTyPhisWhile, freshTyObj
 
   -- * Freshable
   , Freshable (..)
 
   -- * Environment API
-  , envAddFresh
-  , envAdds
-  , envAddReturn
-  , envAddGuard
-  , envFindTy
-  , envFindSpec
-  , envFindAnnot
-  , envToList
-  , envFindReturn
-  -- , envJoin
-  , envPushContext
-  , envGetContextCast
+  , envAddFresh, envAdds, envAddReturn, envAddGuard, envFindTy, envFindSpec
+  , envFindAnnot, envToList, envFindReturn, envPushContext, envGetContextCast
   , envGetContextTypArgs
 
-  , addObjLitTyM
-  , findTySymOrDieM
-  , findTySymWithIdOrDieM
-  , findTyIdOrDieM
+  , addObjLitTyM, findTySymOrDieM, findTySymWithIdOrDieM, findTyIdOrDieM
 
   -- * Add Subtyping Constraints
   , subType, wellFormed
@@ -70,8 +50,10 @@ module Language.Nano.Liquid.CGMonad (
   , cgFunTys
 
   -- * This
-  , cgPeekThis
-  , cgWithThis
+  , cgPeekThis, cgWithThis
+
+  -- * Super 
+  , getSuperM, getSuperDefM
 
 
   ) where
@@ -349,7 +331,7 @@ envFindSpec x g = E.envFindTy x $ cge_spec g
 
 envFindAnnot l x g = msum [tAnn, tEnv, annot] 
   where
-    annot        = listToMaybe [ t | VarAnn t <- ann_fact l ]
+    annot        = listToMaybe $ [ t | VarAnn t <- ann_fact l ] ++ [ t | FieldAnn (_,t) <- ann_fact l]
     tAnn         = E.envFindTy x $ cge_spec g
     tEnv         = E.envFindTy x $ renv     g
 
@@ -793,4 +775,29 @@ cgPushThis t = modify $ \st -> st { cg_this = t : cg_this st }
 cgPopThis    = modify $ \st -> st { cg_this = tail $ cg_this st } 
 
 cgWithThis t p = do { cgPushThis t; a <- p; cgPopThis; return a } 
+
+
+--------------------------------------------------------------------------------
+getSuperM :: IsLocated a => a -> RefType -> CGM RefType
+--------------------------------------------------------------------------------
+getSuperM l (TApp (TRef i) ts _) = fromTdef ts =<< findTyIdOrDieM i
+  where 
+    fromTdef ts (TD _ vs (Just (p,ps)) _) = do
+      let θ = fromList $ zip vs ts
+      d <- fst <$> findTySymWithIdOrDieM p
+      return $ apply θ $ TApp (TRef d) ps fTop
+    fromTdef ts (TD _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
+getSuperM l _  = cgError l $ errorSuper (srcPos l) 
+
+
+--------------------------------------------------------------------------------
+getSuperDefM :: IsLocated a => a -> RefType -> CGM (TDef RefType)
+--------------------------------------------------------------------------------
+getSuperDefM l (TApp (TRef i) ts _) = fromTdef ts =<< findTyIdOrDieM i
+  where 
+    fromTdef ts (TD _ vs (Just (p,ps)) _) = do
+      let θ = fromList $ zip vs ts
+      snd <$> findTySymWithIdOrDieM p
+    fromTdef ts (TD _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
+getSuperDefM l _  = cgError l $ errorSuper (srcPos l)
 

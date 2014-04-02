@@ -16,7 +16,7 @@ import           Control.Monad
 import qualified Data.HashSet                       as HS 
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.List                          as L
-import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe)
+import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe, fromJust)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat)
@@ -439,15 +439,25 @@ classId (ClassStmt l id _ _ cs) =
   do  γ <- getDef
       case findTySymWithId sym γ of
         Just (i, _) -> return i   -- if already computed
-        Nothing ->  
-          do  let (γ', i) = addTySym sym freshD γ
-              setDef γ'
-              return i
+        Nothing -> do let elts  = classEltType <$> cs
+                      constrL  <- constrT elts
+                      let elts' = elts ++ constrL            
+                      let freshD  = TD (Just $ fmap ann id) vs p elts'
+                      let (γ', i) = addTySym sym freshD γ
+                      setDef γ'
+                      return i
   where
     sym      = F.symbol id
     (vs, p)  = classAnnot l
-    elts     = classEltType <$> cs
-    freshD   = TD (Just $ fmap ann id) vs p elts
+    -- If a constructor is missing, either compute it or import it from the
+    -- parent class.
+    constrT es = 
+      case ([ t | TE s _ t <- es, s == F.symbol "constructor"], p) of
+        ([t], _)            -> return []
+        (_  , Just (i, ts)) -> single . getCons . t_elts <$> findTySymOrDieM (F.symbol i)
+        (_  , Nothing)      -> return $ [TE (F.symbol "constructor") True $ TFun [] tVoid fTop]
+    tVoid :: PPR r => RType r
+    tVoid = TApp TVoid [] fTop
 
 classId _ = errorstar "classId should only be called with ClassStmt"
 
@@ -604,18 +614,7 @@ tcExpr γ e@(NewExpr _ _ _)
   = tcCall γ e
 
 -- super
-tcExpr γ e@(SuperRef l) 
-  = do  thisT <- tcPeekThis
-        case thisT of
-          TApp (TRef i) ts _ -> do
-            TD _ vs pro _ <- findTyIdOrDieM i 
-            case pro of 
-              Just (p, ps) -> do
-                let θ = fromList $ zip vs ts
-                d <- fst <$> findTySymWithIdOrDieM p
-                return $ (e, apply θ $ TApp (TRef d) ps fTop)
-              Nothing -> tcError $ errorSuper (srcPos l) 
-          _                  -> tcError $ errorSuper (srcPos l) 
+tcExpr γ e@(SuperRef l) = (e,) <$> (getSuperM l =<< tcPeekThis)
 
 tcExpr _ e 
   = convertError "tcExpr" e
@@ -640,28 +639,15 @@ tcCall γ ex@(InfixExpr l o e1 e2)
          Just _               -> error "IMPOSSIBLE:tcCall:InfixExpr"
          Nothing              -> error "UNIMPLMENTED: former deadcast" 
          
--- | `super(e1,...,en)`
--- This is where we expect typescript to have done a context check:
--- super should ony be called whithin a constructor.
+-- | `super(e1,...,en)`: TSC will already have checked that `super` is only
+-- called whithin the constructor.
 tcCall γ (CallExpr l e@(SuperRef _)  es) = do
-    TD _ _ pro _ <- findTyIdOrDieM =<< fromType <$> tcPeekThis
-    case pro of 
-      Just (s, ts) -> do 
-        -- Search for a constructor in the parent
-        t <- findTySymOrDieM s
-        tConstr <- fromMaybe def <$> getPropTDefM l "constructor" t ts
-        z <- tcCallMatch γ l "constructor" es tConstr
-        case z of
-          Just (es', t) -> return (CallExpr l e es', t)
-          Nothing       -> error "super() - 1"
-      Nothing -> error $ "super() - 2" 
-  where
-    fromType (TApp (TRef i) _ _) = i
-    fromType _ = error "BUG: 'This' should have type 'TApp (TRef _) _ _'"
-    def :: (PPR r) => RType r
-    def = TFun [] tVoid fTop
-    
-
+    t <- f_type . getCons . t_elts <$> (getSuperDefM l =<< tcPeekThis)
+    z <- tcCallMatch γ l "constructor" es t
+    case z of
+      Just (es', t') -> return (CallExpr l e es', t')
+      Nothing        -> error "super()"
+   
 -- | `e(e1,...,en)`
 tcCall γ ex@(CallExpr l e es)
   = do (e', ft0)              <- tcExpr γ e

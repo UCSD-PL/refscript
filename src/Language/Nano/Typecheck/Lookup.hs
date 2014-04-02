@@ -44,7 +44,7 @@ getProp ::  (IsLocated l, PPR r) =>
 getProp l α γ s t@(TApp _ _ _)  = getPropApp l α γ s t 
 getProp _ _ _ _   (TFun _ _ _ ) = Nothing
 getProp l α γ s a@(TArr _ _)    = (a,) <$> getPropArr l α γ s a
-getProp l α γ s a@(TCons _ _)   = (a,) <$> getPropCons s a
+getProp _ _ _ s a@(TCons _ _)   = (a,) <$> getPropCons s a
 getProp l _ _ _ t               = die $ bug (srcPos l) 
                                     $ "Using getProp on type: " 
                                       ++ (show $ toType t) 
@@ -68,8 +68,7 @@ getPropApp l α γ s t@(TApp c ts _) =
 
 getPropApp _ _ _ _ _ = error "getPropArr should only be applied to TApp"
 
-getPropCons s t@(TCons bs _) = 
-  b_type <$> find ((s ==) . b_sym) bs
+getPropCons s (TCons bs _) = b_type <$> find ((s ==) . b_sym) bs
 getPropCons _ _ = error "BUG: Cannot call getPropCons on non TCons"
 
 -- Access the property from the relevant ambient object but return the 

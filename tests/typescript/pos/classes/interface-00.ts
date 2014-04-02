@@ -11,9 +11,3 @@ interface C<T> extends A<number> {
   g: T;
 }
 
-
-class B {
-
-  public a: number;
-
-}

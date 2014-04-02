@@ -97,24 +97,21 @@ aliasVarT (l, x)
   | isTvar x  = Left  $ tvar l x
   | otherwise = Right $ stringSymbol x 
 
-tBodyP :: ParserS (Id SourceSpan, TDef RefType)
-tBodyP = do  id     <- identifierP 
-             vs     <- option [] tParP'
-             -- FIXME: add bindings for new(Ts) and call(Ts):T
-             ext    <- optionMaybe extendsP
-             es     <- braces $ eltsP
-             return (id, TD (Just id) vs ext es)
+iFaceP   :: ParserS (Id SourceSpan, TDef RefType)
+iFaceP   = do id     <- identifierP 
+              vs     <- option [] tParP
+              ext    <- optionMaybe extendsP
+              es     <- braces $ eltsP
+              return (id, TD (Just id) vs ext es)
 
 extendsP = do reserved "extends"
               pId <- (char '#' >> identifierP)
-              ts  <- option [] $ angles $ sepBy bareTypeP comma
+              ts  <- option [] $ brackets $ sepBy bareTypeP comma
               return (pId, ts)
                
 
 -- [A,B,C...]
-tParP = brackets $ sepBy tvarP comma
-
-tParP' = angles $ sepBy tvarP comma
+tParP    = angles $ sepBy tvarP comma
 
 withSpan f p = do pos   <- getPosition
                   x     <- p
@@ -364,7 +361,7 @@ parseAnnot ss (RawField  _) = Field  <$> patch3 ss <$> idFieldP
 parseAnnot ss (RawMethod _) = Method <$> patch2 ss <$> idBindP
 parseAnnot ss (RawConstr _) = Constr <$> patch2 ss <$> idBindP
 parseAnnot ss (RawExtern _) = Extern <$> patch2 ss <$> idBindP
-parseAnnot ss (RawType   _) = IFace  <$> patch2 ss <$> tBodyP >>= registerIface
+parseAnnot ss (RawType   _) = IFace  <$> patch2 ss <$> iFaceP >>= registerIface
 parseAnnot ss (RawClass  _) = Class  <$> patch2 ss <$> classDeclP 
 parseAnnot ss (RawTAlias _) = TAlias <$> patch2 ss <$> tAliasP
 parseAnnot ss (RawPAlias _) = PAlias <$> patch2 ss <$> pAliasP

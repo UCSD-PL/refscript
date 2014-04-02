@@ -385,8 +385,10 @@ zipType δ f g t1 t2
   where
     (r1, r2)   = mapPair rTypeR (t1, t2) 
     (t1s, t2s) = mapPair bkUnion (t1, t2) 
-    cmn        = [ zipType δ f g τ1 τ2 | τ2 <- t2s, τ1 <- maybeToList $ L.find (equiv τ2) t1s ]
-    snd        = fmap g <$> [ t | t <- t2s, not $ exists (equiv t) t1s ]
+    cmn        = [ zipType δ f g τ1 τ2 | τ2 <- t2s
+                                       , τ1 <- maybeToList $ L.find (equiv τ2) t1s ]
+    snd        = fmap g <$> [ t        | t <- t2s
+                                       , not $ exists (equiv t) t1s ]
 
 zipType δ f g t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
   | i1 == i2  
@@ -412,30 +414,21 @@ zipType δ f g (TArr t1 r1) (TArr t2 r2)
 zipType δ f g (TCons b1s r1) (TCons b2s r2) 
   = TCons (cmn ++ snd) (f r1 r2)
   where 
-    cmn = [ B s1 (zipType δ f g t1 t2) | B s1 t1 <- b2s, B s2 t2 <- b2s, s1 == s2 ]
+    cmn = [ B s1 (zipType δ f g t1 t2) | B s1 t1 <- b1s
+                                       , B s2 t2 <- b2s
+                                       , s1 == s2 ]
     -- FIXME: Should we apply g here as well?
     -- This won't really happen cause we only use it for downcast, so
     -- the snd list will be empty
-    snd = [ B s t | B s t <- b2s, not $ exists ((== s) . b_sym) b2s ]
+    snd = [ B s t | B s t <- b2s
+                  , not $ exists ((== s) . b_sym) b1s ]
 
 zipType _ _ _ t1 t2 = 
   errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
 
 
-zipTypes δ f g ts t = 
-  case filter (equiv t) ts of
-    [  ] -> t
-    [t'] -> zipType δ f g t' t
-    _    -> errorstar "BUG[zipType]: multiple equivalent types" 
-  
-
 zipBind δ f g (B s1 t1) (B s2 t2) 
   | s1 == s2 = B s1 $ zipType δ f g t1 t2 
 zipBind _ _ _ _       _           
   = errorstar "BUG[zipBind]: mis-matching binders"
-
-zipElt δ f g (TE s1 b1 t1) (TE s2 b2 t2) 
-  | s1 == s2 && b1 == b2 = TE s1 b1 <$> zipType δ f g t1 t2 
-zipElt _ _ _ _       _
-  = errorstar "BUG[zipElt]: mis-matching elements"
 

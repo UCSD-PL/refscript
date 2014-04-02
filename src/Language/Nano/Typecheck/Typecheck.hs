@@ -10,13 +10,13 @@
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck, testFile) where 
 
-import           Control.Applicative                ((<$>), (<*>))
+import           Control.Applicative                ((<$>))
 import           Control.Monad                
 
 import qualified Data.HashSet                       as HS 
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.List                          as L
-import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe, fromJust)
+import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat)
@@ -40,7 +40,6 @@ import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc             as FM 
 import           Language.ECMAScript3.Syntax
-import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 -- import           Debug.Trace                        hiding (traceShow)
 
@@ -282,20 +281,20 @@ tcClassElt :: (Ord r, PPR r)
 -- FIXME: check for void return type for constructor
 tcClassElt γ cid (Constructor l xs body) 
   = case [ t | ConsAnn t  <- ann_fact l ] of
-      [  ]  -> tcError    $ errorClEltAnMissing (srcPos l) cid l
+      [  ]  -> tcError    $ errorClEltAnMissing (srcPos l) cid "constructor"
       [ft]  -> Constructor l xs <$> (foldM (tcFun1 γ l id xs) body =<< tcFunTys l id xs ft)
       _     -> error      $ "[tcClassElt] Multiple-type constructor: " ++ ppshow l
   where id   = Id l "constructor"
 
-tcClassElt γ cid (MemberVarDecl _ s v@(VarDecl l n _))
-  = case [ t | FieldAnn (m,t)  <- ann_fact l ] of 
-      [  ]  -> tcError    $ errorClEltAnMissing (srcPos l) cid s
-      [ft]  -> MemberVarDecl l s <$> (fst <$> tcVarDecl γ v)
-      _     -> error      $ "tcClassEltType:multi-type variable: " ++ ppshow l
+tcClassElt γ cid (MemberVarDecl _ s v@(VarDecl l x _))
+  = case [ t | FieldAnn (_,t)  <- ann_fact l ] of 
+      [ ]  -> tcError    $ errorClEltAnMissing (srcPos l) cid x
+      [_]  -> MemberVarDecl l s <$> (fst <$> tcVarDecl γ v)
+      _    -> error      $ "tcClassEltType:multi-type variable: " ++ ppshow l
 
 tcClassElt γ cid (MemberMethDecl l s i xs body) = 
   case [ t | MethAnn t  <- ann_fact l ] of 
-    [  ]  -> tcError    $ errorClEltAnMissing (srcPos l) cid s
+    [  ]  -> tcError    $ errorClEltAnMissing (srcPos l) cid i
     [ft]  -> MemberMethDecl l s i xs <$> (foldM (tcFun1 γ l i xs) body =<< tcFunTys l i xs ft)
     _     -> error      $ "tcClassEltType:multi-type method: " ++ ppshow l
 
@@ -453,9 +452,16 @@ classId (ClassStmt l id _ _ cs) =
     -- parent class.
     constrT es = 
       case ([ t | TE s _ t <- es, s == F.symbol "constructor"], p) of
-        ([t], _)            -> return []
-        (_  , Just (i, ts)) -> single . getCons . t_elts <$> findTySymOrDieM (F.symbol i)
-        (_  , Nothing)      -> return $ [TE (F.symbol "constructor") True $ TFun [] tVoid fTop]
+      -- FIXME: add check that current constructor is compatible 
+      -- with the one imported from the parent class
+        -- 1. Constructor is defined in class
+        ([_], _)            -> return []  
+        -- 2. Get constructor from parent class
+        (_  , Just (i, ts)) -> 
+            do  TD _ vs _ es <- findTySymOrDieM (F.symbol i)
+                return [getCons $ apply (fromList $ zip vs ts) es]
+        -- 3. No parent class around. Just infer a default type 
+        (_  , Nothing)      -> return [TE (F.symbol "constructor") True $ TFun [] tVoid fTop]
     tVoid :: PPR r => RType r
     tVoid = TApp TVoid [] fTop
 
@@ -614,7 +620,7 @@ tcExpr γ e@(NewExpr _ _ _)
   = tcCall γ e
 
 -- super
-tcExpr γ e@(SuperRef l) = (e,) <$> (getSuperM l =<< tcPeekThis)
+tcExpr _ e@(SuperRef l) = (e,) <$> (getSuperM l =<< tcPeekThis)
 
 tcExpr _ e 
   = convertError "tcExpr" e
@@ -624,7 +630,7 @@ tcCall :: (Ord r, F.Reftable r, PP r) => TCEnv r -> ExprSSAR r -> TCM r (ExprSSA
 ---------------------------------------------------------------------------------------
 
 -- | `o e`
-tcCall γ ex@(PrefixExpr l o e)        
+tcCall γ (PrefixExpr l o e)        
   = do z                      <- tcCallMatch γ l o [e] (prefixOpTy o $ tce_env γ) 
        case z of
          Just ([e'], t)       -> return (PrefixExpr l o e', t)
@@ -632,7 +638,7 @@ tcCall γ ex@(PrefixExpr l o e)
          Nothing              -> error "UNIMPLMENTED: former deadcast" 
 
 -- | `e1 o e2`
-tcCall γ ex@(InfixExpr l o e1 e2)        
+tcCall γ (InfixExpr l o e1 e2)        
   = do z                      <- tcCallMatch γ l o [e1, e2] (infixOpTy o $ tce_env γ) 
        case z of
          Just ([e1', e2'], t) -> return (InfixExpr l o e1' e2', t)
@@ -649,7 +655,7 @@ tcCall γ (CallExpr l e@(SuperRef _)  es) = do
       Nothing        -> error "super()"
    
 -- | `e(e1,...,en)`
-tcCall γ ex@(CallExpr l e es)
+tcCall γ (CallExpr l e es)
   = do (e', ft0)              <- tcExpr γ e
        z                      <- tcCallMatch γ l e es ft0
        case z of
@@ -772,13 +778,6 @@ instantiate l ξ fn ft
     where
        err = tcError   $ errorNonFunction (ann l) fn ft
 
-
-undefType l γ 
-  = case bkAll $ ut of
-      ([α], t) -> (α, t)
-      _        -> die $ bug (srcPos l) $ "Malformed type --" ++ ppshow ut ++ "-- for BIUndefined in prelude.js"
-    where 
-      ut       = builtinOpTy l BIUndefined $ tce_env γ
              
 tcPropRead getter γ l e fld = do  
   (e', te) <- tcExpr γ e
@@ -790,6 +789,7 @@ tcPropRead getter γ l e fld = do
 -- NOTE: Is this going to be enough ???
 -- Maybe we need a separate statement for e.m(es)
     Just (te', tf)  -> tcWithThis te $ (, tf) <$> castM l (tce_ctx γ) e' te te'
+
 
 ----------------------------------------------------------------------------------
 envJoin :: (Ord r, PPR r) => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)
@@ -831,8 +831,10 @@ scrapeVarDecl (VarDecl l _ _) =
 sanity l t@(TApp (TRef i) ts _) = 
   do δ <- getDef 
      case findTyId i δ of
-       Just (TD _ αs _ _) | length αs == length ts -> return t 
-       Just (TD n αs _ _) | otherwise              -> 
-         tcError $ errorTypeArgsNum l n (length αs) (length ts)
+       Just (TD _ αs _ _) 
+         | length αs == length ts -> return t 
+       Just (TD n αs _ _) 
+         | otherwise -> tcError $ errorTypeArgsNum l n (length αs) (length ts)
+       Nothing -> error "Typecheck:sanity: this shouldn't happen"
 sanity _ t = return t
 

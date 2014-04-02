@@ -32,7 +32,7 @@ import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
-import           Language.Fixpoint.Misc (mapSnd, intersperse)
+import           Language.Fixpoint.Misc (intersperse)
 
 import           Language.Fixpoint.PrettyPrint
 import           Control.Applicative ((<$>))
@@ -41,7 +41,7 @@ import qualified Data.List as L
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid hiding ((<>))
 import           Data.Function (fix, on)
-import           Data.Maybe (fromMaybe, fromJust)
+import           Data.Maybe (fromJust)
 
 -- import           Debug.Trace
 
@@ -151,11 +151,9 @@ instance Free (Cast r) where
   free (CDead t)  = free t
   free (CUp t t') = S.union (free t) (free t')
   free (CDn t t') = S.union (free t) (free t')
- -- free (CFn cs c) = S.unions $ free <$> c:cs' where cs' = snd <$> cs
- -- free (CCs cs  ) = S.unions $ (free . snd) <$> cs
 
 instance (PPR r) => Substitutable r (TDef (RType r)) where
-  apply θ (TD n v p e)   = TD n v p $ apply θ e
+  apply θ (TD n v p e)   = TD n v (apply θ p) (apply θ e)
 
 
 instance Free (Fact r) where
@@ -164,7 +162,10 @@ instance Free (Fact r) where
   free (Overload t)      = free t
   free (TCast _ c)       = free c
   free (VarAnn t)        = free t
-  free (ClassAnn (vs,m))   = foldr S.delete (free m) vs
+  free (FieldAnn (_,t))  = free t
+  free (MethAnn t)       = free t
+  free (ConsAnn t)       = free t
+  free (ClassAnn (vs,m)) = foldr S.delete (free m) vs
 
 instance Free a => Free (Id b, a) where
   free (_, a)            = free a
@@ -238,9 +239,11 @@ flattenTRef' _ _ _ = error "Applying flattenTRef on non-tref"
 
 -- | Single level of flattenning types that contain references to types 
 -- with flat objects
-flattenType' b δ t@(TApp (TRef n) ts r) 
+flattenType' b δ t@(TApp (TRef _) [] r) 
                                 = TCons (bind <$> flattenTRef' b δ t) r
                                     where bind (TE s _ t) = B s t
+flattenType' _ _  (TApp (TRef _) _ _) 
+                                = error "[BUG] flattenType'"
 flattenType' b δ (TApp c ts r)  = TApp c (flattenType' b δ <$> ts) r
 flattenType' _ _ (TVar v r)     = TVar v r
 flattenType' b δ (TFun ts to r) = TFun (f <$> ts) (flattenType' b δ to) r
@@ -259,19 +262,19 @@ flattenBind' b δ (B s t)        = B s $ flattenType' b δ t
 -----------------------------------------------------------------------------
 pp' :: (F.Reftable r, PP r) => TDefEnv (RType r) -> RType r -> Doc
 -----------------------------------------------------------------------------
-pp' δ t@(TVar α r)           = F.ppTy r $ pp α 
-pp' δ t@(TFun xts t' _)      = ppBinds' δ parens comma xts <+> text "=>" <+> pp' δ t' 
+pp' _   (TVar α r)           = F.ppTy r $ pp α 
+pp' δ   (TFun xts t' _)      = ppBinds' δ parens comma xts <+> text "=>" <+> pp' δ t' 
 pp' δ t@(TAll _ _)           = text "forall" <+> ppArgs id space αs <> text "." <+> pp' δ t' where (αs, t') = bkAll t
-pp' δ t@(TAnd ts)            = vcat [text "/\\" <+> pp' δ t | t <- ts]
-pp' δ t@(TExp e)             = pprint e
-pp' δ t@(TApp TUn ts r)      = F.ppTy r $ ppArgs' δ id (text " +") ts 
+pp' δ   (TAnd ts)            = vcat [text "/\\" <+> pp' δ t | t <- ts]
+pp' _   (TExp e)             = pprint e
+pp' δ   (TApp TUn ts r)      = F.ppTy r $ ppArgs' δ id (text " +") ts 
 pp' δ t@(TApp (TRef i) ts r) = F.ppTy r $ maybe (anonym t) named (getTDefName δ i)
   where anonym t             = pp $ flattenType' True δ t
         named  t             = pp t <+> ppArgs' δ brackets comma ts
-pp' δ t@(TApp c [] r)        = F.ppTy r $ pp c 
-pp' δ t@(TApp c ts r)        = F.ppTy r $ parens (pp c <+> ppArgs' δ id space ts)  
-pp' δ t@(TArr t' r)          = F.ppTy r $ brackets (pp' δ t')
-pp' δ t@(TCons bs r)         = F.ppTy r $ ppBinds' δ braces comma bs
+pp' _   (TApp c [] r)        = F.ppTy r $ pp c 
+pp' δ   (TApp c ts r)        = F.ppTy r $ parens (pp c <+> ppArgs' δ id space ts)  
+pp' δ   (TArr t' r)          = F.ppTy r $ brackets (pp' δ t')
+pp' δ   (TCons bs r)         = F.ppTy r $ ppBinds' δ braces comma bs
 
 ppArgs' δ p sep              = p . intersperse sep . map (pp' δ)
 ppBinds' δ p sep             = p . intersperse sep . map (ppBind' δ)

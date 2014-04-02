@@ -216,7 +216,7 @@ toVim :: AnnMap -> String
 toVim (Ann _ ty _) = unwords $ L.intersperse "\n" $ ss <$> lines
   where
     lines = map binder1 $ M.toList ty 
-    ss (l1,c1, l2, c2, i,s) = show l1 ++ ":" 
+    ss (l1,c1, l2, c2, _,s) = show l1 ++ ":" 
                            ++ show c1 ++ "-"
                            ++ show l2 ++ ":" 
                            ++ show c2 ++ "::" 

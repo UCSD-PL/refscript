@@ -100,7 +100,6 @@ setThd3 (a,b,_) c' = (a,b,c')
 appFst3 (a,b,c) f = (f a,b,c)
 appSnd3 (a,b,c) f = (a,f b,c)
 appThd3 (a,b,c) f = (a,b,f c)
-appFth3 (a,b,c) f = (a,b,c,f)
 
 fst4 (a,_,_,_) = a
 snd4 (_,b,_,_) = b

@@ -41,7 +41,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -315,7 +315,7 @@ consExpr g (InfixExpr l o e1 e2)
   = consCall g l o [e1, e2] (infixOpTy o $ renv g)
 
 -- super(e1,..,en)
-consExpr g (CallExpr l e@(SuperRef l') es) 
+consExpr g (CallExpr l e@(SuperRef _) es) 
   = do t <- f_type . getCons . t_elts <$> (getSuperDefM l =<< cgPeekThis)
        consCall g l e es t
 
@@ -411,7 +411,7 @@ consDeadCode g l x t =
      xT      = envFindTy x g
 
 -- | Upcast
-consUpCast g l x fromT toT = 
+consUpCast g l x _ toT = 
   do δ <- getDef
      let toT' = zipType δ (\p _ -> p) F.bot xT toT
      envAddFresh "consUpCast" l toT' g
@@ -419,16 +419,16 @@ consUpCast g l x fromT toT =
      xT = envFindTy x g
 
 -- | Downcast
-consDownCast g l x fromT toT =
-  do δ      <- getDef
-     let (lhs, rhs) = (xT, zipType δ (\_ q -> q) F.bot toT xT)
-     subType l g lhs rhs
+consDownCast g l x _ toT =
+  do δ          <- getDef
+     let (lh,rh) = (xT, zipType δ (\_ q -> q) F.bot toT xT)
+     subType l g lh rh
      -- NOTE: The F.bot in the following should not really mattter
-     let toT' = zipType δ (\p _ -> p) F.bot xT toT
-     g'     <- envAdds [(x, toT')] g
-     return  $ (x, g')
+     let toT'    = zipType δ (\p _ -> p) F.bot xT toT
+     g'         <- envAdds [(x, toT')] g
+     return      $ (x, g')
   where 
-     xT      = envFindTy x g
+     xT          = envFindTy x g
 
 
 --------------------------------------------------------------------------------

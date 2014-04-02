@@ -867,7 +867,7 @@ data Cast r  = CNo                                      -- .
 
 instance (PP r, F.Reftable r) => PP (Cast r) where
   pp CNo         = text "No cast"
-  pp (CDead t)   = text "Dead code"
+  pp (CDead _)   = text "Dead code"
   pp (CUp t1 t2) = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
   pp (CDn t1 t2) = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
 

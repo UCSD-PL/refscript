@@ -64,8 +64,6 @@ import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>))
 import qualified Data.HashSet                       as S
 import           Data.Maybe                         (fromJust)
-import qualified Data.List                          as L
-import           Data.Function                      (on)
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)
 import           Language.Fixpoint.Errors
@@ -84,7 +82,7 @@ import           Data.Monoid
 import qualified Data.HashMap.Strict                as M
 import           Language.ECMAScript3.Syntax
 
-import           Debug.Trace                      (trace)
+-- import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity   as V
 
 type PPR r = (PP r, F.Reftable r)
@@ -398,11 +396,6 @@ findTySymOrDieM i = findTySymOrDie i <$> getDef
 findTySymWithIdOrDieM i = findTySymWithIdOrDie i <$> getDef
 
 
---------------------------------------------------------------------------------
-subtype :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r Bool
---------------------------------------------------------------------------------
-subtype l t1 t2 = upCast <$> convert l t1 t2
-
 
 -- | @convert@ returns:
 -- * An equivalent version of @t1@ that has the same sort as the first input type
@@ -416,12 +409,12 @@ convert :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 
 convert _ t1 t2 | t1 `equiv` t2        = return CNo
 
-convert l t1 t2 | isUndef t1           = return CNo
+convert _ t1 _  | isUndef t1           = return CNo
 
-convert l t1 t2 | isNull t1 &&  
+convert _ t1 t2 | isNull t1 &&  
                   not (isUndef t2)     = return CNo
 
-convert l t1 t2 | isTop t2             = return CNo
+convert _ _  t2 | isTop t2             = return CNo
 
 convert l t1 t2 | any isUnion [t1,t2]  = convertUnion l t1 t2
 
@@ -443,7 +436,7 @@ convert l t1           t2              = convertSimple l t1 t2
 --------------------------------------------------------------------------------
 convertTRefs :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
-convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s _) 
+convertTRefs l t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _) 
   -- Same exact type name
   | i1 == i2 && and (zipWith equiv t1s t2s) 
   = return CNo
@@ -453,9 +446,6 @@ convertTRefs l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s _)
   | otherwise  
   = do
       -- Get the type definitions
-      d1@(TD _ v1s _ _) <- findTyIdOrDieM' "convertTRefs" i1
-      d2@(TD _ v2s _ _) <- findTyIdOrDieM' "convertTRefs" i2
-
       δ   <- getDef 
       let e1s = flattenTRef δ t1
       let e2s = flattenTRef δ t2
@@ -515,7 +505,7 @@ convertFun _ _ _ = error "convertFun: no other cases supported"
 --------------------------------------------------------------------------------
 convertSimple :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
-convertSimple l t1 t2
+convertSimple _ t1 t2
   | t1 `equiv` t2 = return CNo
   | otherwise     = return $ CDead t2
 
@@ -583,24 +573,25 @@ getPropTDefM l s t ts = do
 --------------------------------------------------------------------------------
 getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
 --------------------------------------------------------------------------------
-getSuperM l (TApp (TRef i) ts _) = fromTdef ts =<< findTyIdOrDieM i
-  where 
-    fromTdef ts (TD _ vs (Just (p,ps)) _) = do
-      let θ = fromList $ zip vs ts
-      d <- fst <$> findTySymWithIdOrDieM p
-      return $ apply θ $ TApp (TRef d) ps fTop
-    fromTdef ts (TD _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
+getSuperM l (TApp (TRef i) ts _) = fromTdef =<< findTyIdOrDieM i
+  where fromTdef (TD _ vs (Just (p,ps)) _) = do
+          (d, _) <- findTySymWithIdOrDieM p
+          return  $ apply (fromList $ zip vs ts) 
+                  $ TApp (TRef d) ps fTop
+        fromTdef (TD _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
 getSuperM l _  = tcError $ errorSuper (srcPos l) 
 
 
 --------------------------------------------------------------------------------
 getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (TDef (RType r))
 --------------------------------------------------------------------------------
-getSuperDefM l (TApp (TRef i) ts _) = fromTdef ts =<< findTyIdOrDieM i
+getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findTyIdOrDieM i
   where 
-    fromTdef ts (TD _ vs (Just (p,ps)) _) = do
-      let θ = fromList $ zip vs ts
-      snd <$> findTySymWithIdOrDieM p
-    fromTdef ts (TD _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
+    fromTdef (TD _ vs (Just (p,ps)) _) = 
+      do (_, TD n ws pp ee) <- findTySymWithIdOrDieM p
+         return  $ apply (fromList $ zip vs ts) 
+                 $ apply (fromList $ zip ws ps)
+                 $ TD n [] pp ee
+    fromTdef (TD _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
 getSuperDefM l _  = tcError $ errorSuper (srcPos l)
 

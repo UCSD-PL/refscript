@@ -58,7 +58,7 @@ module Language.Nano.Liquid.CGMonad (
 
   ) where
 
-import           Data.Maybe                     (fromMaybe, listToMaybe, maybeToList)
+import           Data.Maybe                     (fromMaybe, listToMaybe)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 import qualified Data.List                      as L
@@ -67,7 +67,6 @@ import           Data.Function                  (on)
 -- import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 
-import           Language.Nano.Misc
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
@@ -93,7 +92,7 @@ import           Text.Printf
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -377,12 +376,9 @@ freshTyVar g l t@(TApp (TRef i) ts r)
   = do ts' <- mapM (freshTy "freshTyVar") (toType <$> ts)
        mapM_ (wellFormed l g) ts'
        return $ TApp (TRef i) ts' r
-freshTyVar g l t            = return t
-
-freshTElt g l (TE s m t) = TE s m <$> freshTyVar g l t
+freshTyVar _ _ t            = return t
 
 -- | Instantiate Fresh Type (at Call-site)
-
 freshTyInst l g αs τs tbody
   = do ts    <- mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
@@ -564,10 +560,10 @@ splitC (Sub g i t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _))
         return $ cs ++ cs'
 
 -- FIXME: Add constraint for null
-splitC (Sub g i (TApp (TRef _) _ _) (TApp TNull _ _)) 
+splitC (Sub _ _ (TApp (TRef _) _ _) (TApp TNull _ _)) 
   = return []
 
-splitC (Sub g i (TApp TNull _ _) (TApp (TRef _) _ _)) 
+splitC (Sub _ _ (TApp TNull _ _) (TApp (TRef _) _ _)) 
   = return []
 
 splitC (Sub g i t1@(TApp (TRef _) _ _) t2@(TCons _ _))
@@ -780,24 +776,25 @@ cgWithThis t p = do { cgPushThis t; a <- p; cgPopThis; return a }
 --------------------------------------------------------------------------------
 getSuperM :: IsLocated a => a -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-getSuperM l (TApp (TRef i) ts _) = fromTdef ts =<< findTyIdOrDieM i
-  where 
-    fromTdef ts (TD _ vs (Just (p,ps)) _) = do
-      let θ = fromList $ zip vs ts
-      d <- fst <$> findTySymWithIdOrDieM p
-      return $ apply θ $ TApp (TRef d) ps fTop
-    fromTdef ts (TD _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
+getSuperM l (TApp (TRef i) ts _) = fromTdef =<< findTyIdOrDieM i
+  where fromTdef (TD _ vs (Just (p,ps)) _) = do
+          (d, _) <- findTySymWithIdOrDieM p
+          return  $ apply (fromList $ zip vs ts) 
+                  $ TApp (TRef d) ps fTop
+        fromTdef (TD _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
 getSuperM l _  = cgError l $ errorSuper (srcPos l) 
 
 
 --------------------------------------------------------------------------------
 getSuperDefM :: IsLocated a => a -> RefType -> CGM (TDef RefType)
 --------------------------------------------------------------------------------
-getSuperDefM l (TApp (TRef i) ts _) = fromTdef ts =<< findTyIdOrDieM i
+getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findTyIdOrDieM i
   where 
-    fromTdef ts (TD _ vs (Just (p,ps)) _) = do
-      let θ = fromList $ zip vs ts
-      snd <$> findTySymWithIdOrDieM p
-    fromTdef ts (TD _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
+    fromTdef (TD _ vs (Just (p,ps)) _) = 
+      do (_, TD n ws pp ee) <- findTySymWithIdOrDieM p
+         return  $ apply (fromList $ zip vs ts) 
+                 $ apply (fromList $ zip ws ps)
+                 $ TD n [] pp ee
+    fromTdef (TD _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
 getSuperDefM l _  = cgError l $ errorSuper (srcPos l)
 

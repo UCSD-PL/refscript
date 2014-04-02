@@ -450,13 +450,14 @@ convertTRefs l t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _)
       let e1s = flattenTRef δ t1
       let e2s = flattenTRef δ t2
 
-      let m1  = M.fromList [ (s, t) | TE s _ t <- e1s ]
-      let m2  = M.fromList [ (s, t) | TE s _ t <- e2s ]
+      -- Take all elements into account, excluding constructors.
+      let m1  = M.fromList [ (s, t) | TE s _ t <- e1s, s /= F.symbol "constructor" ]
+      let m2  = M.fromList [ (s, t) | TE s _ t <- e2s, s /= F.symbol "constructor" ]
     
       let (ks1, ks2) = mapPair (S.fromList . (f_sym <$>)) (e1s, e2s)
-          cmnKs = S.toList $ S.intersection ks1 ks2
-          t1s = fromJust . (`M.lookup` m1) <$> cmnKs
-          t2s = fromJust . (`M.lookup` m2) <$> cmnKs
+          cmnKs      = S.toList $ S.intersection ks1 ks2
+          t1s        = fromJust . (`M.lookup` m1) <$> cmnKs
+          t2s        = fromJust . (`M.lookup` m2) <$> cmnKs
 
       cs <- zipWithM (convert l) t1s t2s
 
@@ -483,6 +484,9 @@ convertTRefs l t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _)
 
 convertTRefs _ _ _ =  error "BUG: Case not supported in convertTRefs"
 
+
+instance PP (S.HashSet F.Symbol) where
+  pp = pp . S.toList 
 
 -- | `convertFun`
 --

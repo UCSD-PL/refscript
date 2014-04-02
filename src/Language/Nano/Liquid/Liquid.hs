@@ -249,11 +249,8 @@ consClassElt g (MemberVarDecl _ _ v)
   = void $ consVarDecl g v
   
 consClassElt g (MemberMethDecl l _ i xs body) 
-  = do  ts <- cgFunTys l i xs $ pickElt l
+  = do  ts <- cgFunTys l i xs $ safeHead "consClassElt" [ t | MethAnn t <- ann_fact l]
         mapM_ (consFun1 l g i xs body) ts
-
-pickElt :: AnnTypeR -> RefType
-pickElt l = head [ t | VarAnn t <- ann_fact l ]
 
 
 ------------------------------------------------------------------------------------
@@ -316,6 +313,11 @@ consExpr g (PrefixExpr l o e)
 
 consExpr g (InfixExpr l o e1 e2)        
   = consCall g l o [e1, e2] (infixOpTy o $ renv g)
+
+-- super(e1,..,en)
+consExpr g (CallExpr l e@(SuperRef l') es) 
+  = do t <- f_type . getCons . t_elts <$> (getSuperDefM l =<< cgPeekThis)
+       consCall g l e es t
 
 consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 

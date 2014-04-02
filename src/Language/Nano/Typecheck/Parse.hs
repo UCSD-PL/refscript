@@ -105,13 +105,11 @@ tBodyP = do  id     <- identifierP
              es     <- braces $ eltsP
              return (id, TD (Just id) vs ext es)
 
-
 extendsP = do reserved "extends"
-              pId <- identifierP
+              pId <- (char '#' >> identifierP)
               ts  <- option [] $ angles $ sepBy bareTypeP comma
               return (pId, ts)
                
-
 
 -- [A,B,C...]
 tParP = brackets $ sepBy tvarP comma
@@ -319,7 +317,7 @@ classDeclP = do
   reserved "class"
   id <- identifierP 
   vs <- option [] $ angles $ sepBy tvarP comma
-  pr <- optionMaybe extendsP 
+  pr <- optionMaybe extendsP
   return (id, (vs, pr))
 
 

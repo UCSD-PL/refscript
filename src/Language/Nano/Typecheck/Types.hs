@@ -60,6 +60,7 @@ module Language.Nano.Typecheck.Types (
   , findTyIdOrDie', findEltWithDefault, symTDefMem, getTDefName
   , getDefNames
   , sortTDef
+  , getCons
 
   -- * Operator Types
   , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy
@@ -89,7 +90,7 @@ import           Text.Printf
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
 import           Data.Function                  (on)
-import           Data.Maybe                     (fromMaybe)
+import           Data.Maybe                     (fromMaybe, fromJust)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.List                      as L
 import qualified Data.IntMap                    as I
@@ -264,6 +265,8 @@ sortTDef:: TDef t -> TDef t
 ---------------------------------------------------------------------------------
 sortTDef (TD nm vs p elts) = TD nm vs p $ sortWith f_sym elts
 
+
+getCons = fromJust . L.find ((== F.symbol "constructor") . f_sym)
 
 
 -- | Type Constructors

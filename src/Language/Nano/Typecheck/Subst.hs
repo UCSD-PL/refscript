@@ -126,12 +126,15 @@ instance (PP r, F.Reftable r) => Substitutable r (Cast r) where
   apply θ (CDn t t') = CDn (apply θ t) (apply θ t')
 
 instance (PP r, F.Reftable r) => Substitutable r (Fact r) where
-  apply _ x@(PhiVar _)   = x
-  apply θ (TypInst ξ ts) = TypInst ξ $ apply θ ts
-  apply θ (Overload t)   = Overload (apply θ <$> t)
-  apply θ (TCast   ξ c)  = TCast   ξ $ apply θ c
-  apply θ (VarAnn t)     = VarAnn  $ apply θ t
-  apply θ (ClassAnn (c, t))= ClassAnn  (c, apply θ t)
+  apply _ x@(PhiVar _)      = x
+  apply θ (TypInst ξ ts)    = TypInst ξ $ apply θ ts
+  apply θ (Overload t)      = Overload (apply θ <$> t)
+  apply θ (TCast   ξ c)     = TCast ξ $ apply θ c
+  apply θ (VarAnn t)        = VarAnn $ apply θ t
+  apply θ (FieldAnn (m,t))  = FieldAnn (m,apply θ t)
+  apply θ (MethAnn t)       = MethAnn $ apply θ t
+  apply θ (ConsAnn t)       = ConsAnn $ apply θ t
+  apply θ (ClassAnn (c, t)) = ClassAnn (c, apply θ t)
 
 instance (PP r, F.Reftable r, Substitutable r a) => Substitutable r (Maybe a) where
   apply θ (Just a)       = Just $ apply θ a

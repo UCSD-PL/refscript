@@ -87,7 +87,7 @@ errorNoMatchCallee l ts t = mkErr l $ render $   text "No matching callee type!"
                                              $+$ text "Function Type : " <+> pp t
 errorMissingReturn l      = mkErr l $ printf "BUG: Missing Return statement at %s" (ppshow l)
 
-errorNonFunction l f t    = mkErr l $ render $ text "Non-function type " $+$ pp f <+> text "::" <+> pp t
+errorNonFunction l f t    = mkErr l $ printf "Non-function type: %s :: %s " (ppshow f) (ppshow t)
 
 errorEnvJoin l x t1 t2    = mkErr l $ printf "Variable '%s' has different types ('%s' and '%s') when joining environments." (ppshow x) (ppshow t1) (ppshow t2)
 

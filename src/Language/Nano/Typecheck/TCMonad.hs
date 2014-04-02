@@ -51,6 +51,9 @@ module Language.Nano.Typecheck.TCMonad (
   -- * This
   , tcPeekThis, tcWithThis
 
+  -- * Super
+  , getSuperM, getSuperDefM
+
   -- * Prop
   , getPropM, getPropTDefM
 
@@ -575,4 +578,29 @@ getPropTDefM l s t ts = do
   ε <- getExts
   δ <- getDef 
   return $ getPropTDef l ε δ (F.symbol s) ts t
+
+
+--------------------------------------------------------------------------------
+getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
+--------------------------------------------------------------------------------
+getSuperM l (TApp (TRef i) ts _) = fromTdef ts =<< findTyIdOrDieM i
+  where 
+    fromTdef ts (TD _ vs (Just (p,ps)) _) = do
+      let θ = fromList $ zip vs ts
+      d <- fst <$> findTySymWithIdOrDieM p
+      return $ apply θ $ TApp (TRef d) ps fTop
+    fromTdef ts (TD _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
+getSuperM l _  = tcError $ errorSuper (srcPos l) 
+
+
+--------------------------------------------------------------------------------
+getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (TDef (RType r))
+--------------------------------------------------------------------------------
+getSuperDefM l (TApp (TRef i) ts _) = fromTdef ts =<< findTyIdOrDieM i
+  where 
+    fromTdef ts (TD _ vs (Just (p,ps)) _) = do
+      let θ = fromList $ zip vs ts
+      snd <$> findTySymWithIdOrDieM p
+    fromTdef ts (TD _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
+getSuperDefM l _  = tcError $ errorSuper (srcPos l)
 

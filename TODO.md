@@ -20,6 +20,9 @@ JS Features
 
   - CLASSES:
 
+  - INTERFACES:
+    - Covariant/Contravariant type parameter positions
+
   - TRUTHY:
     - Encoding truthy, falsy, undefined, null etc.
       Eg: tc/pos/obj02.js, tc/pos/union05.js

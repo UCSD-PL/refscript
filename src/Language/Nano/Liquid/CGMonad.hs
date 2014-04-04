@@ -296,7 +296,9 @@ addInvariant t           = ((`tx` t) . invs) <$> get
 ---------------------------------------------------------------------------------------
 addAnnot       :: (F.Symbolic x) => SourceSpan -> x -> RefType -> CGM () 
 ---------------------------------------------------------------------------------------
-addAnnot l x t = modify $ \st -> st {cg_ann = A.addAnnot l x t (cg_ann st)}
+addAnnot l x t = 
+  do  δ <- getDef
+      modify $ \st -> st {cg_ann = A.addAnnot l x t δ (cg_ann st)}
 
 ---------------------------------------------------------------------------------------
 envAddReturn        :: (IsLocated f)  => f -> RefType -> CGEnv -> CGEnv 

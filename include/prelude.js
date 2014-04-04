@@ -250,17 +250,17 @@ reduceRight    :  /\ (callbackfn: (previousValue: T, currentValue: T, currentInd
 /*************************************************************************/
 /************** Run-Time Tags ********************************************/
 /*************************************************************************/
-/*@ measure ttag :: forall A. (A) => string                              */
-/*@ measure TRU :: forall A . (A) => Prop                                */
+/*@ measure ttag :: forall A. (A) => string                                   */
+/*@ measure TRU :: forall A . (A) => Prop                                     */
 /*@ extern builtin_PrefixTypeof :: forall A. (x:A)
-=> {v:string | (ttag x) = v }        */
+=> {v:string | (ttag x) = v }             */
 /*@ extern builtin_BITruthy :: forall A. (x:A)
-=> { v:boolean | ((Prop v) <=> TRU(x)) } */
+=> { v:boolean | ((Prop v) <=> TRU(x)) }    */
 /*@ invariant {v:undefined | [(ttag(v) = "undefined"); (TRU(v) <=> false  )]} */
 /*@ invariant {v:null      | [(ttag(v) = "null"     ); (TRU(v) <=> false  )]} */
 /*@ invariant {v:boolean   | [(ttag(v) = "boolean"  ); (TRU(v) <=> Prop(v))]} */ /*@ invariant {v:number    | [(ttag(v) = "number"   ); (TRU(v) <=> v /= 0 )]} */
 /*@ invariant {v:string    | [(ttag(v) = "string"   ); (TRU(v) <=> v /= "")]} */
-/*@ invariant {v:{}        | ttag(v) = "object"   } */
+/*@ invariant {v:{}        | ttag(v) = "object"   }                           */
 /*************************************************************************/
 /************** Pre-Loaded Qualifiers ************************************/
 /*************************************************************************/

@@ -29,6 +29,8 @@ import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
+import           Data.Function                  (on)
+import qualified Data.List                      as L
 import           Text.Printf 
 -- import           Debug.Trace
 
@@ -42,68 +44,71 @@ type PPR r = (PP r, F.Reftable r)
 -- | Unify types @t@ and @t'@, in substitution environment @θ@ and type
 -- definition environment @env@.
 -----------------------------------------------------------------------------
-unify :: (PP r, F.Reftable r, Ord r) => 
-  SourceSpan -> TDefEnv (RType r) -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
+unify :: (PP r, F.Reftable r, Ord r) => SourceSpan -> TDefEnv (RType r) 
+  -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
-
 unify _ _ θ t@(TApp _ _ _) t'@(TApp _ _ _) | any isTop [t,t'] = Right $ θ
 
-unify l γ θ (TFun xts t _) (TFun xts' t' _)
-  = unifys l γ θ (t: (b_type <$> xts)) (t': (b_type <$> xts'))
+unify l δ θ (TFun xts t _) (TFun xts' t' _)
+  = unifys l δ θ (t: map b_type xts) (t': map b_type xts')
 
 unify l _ θ (TVar α _) (TVar β _) = varEql l θ α β 
 unify l _ θ (TVar α _) t' = varAsn l θ α t'
 unify l _ θ t (TVar α _)  = varAsn l θ α t
 
-unify l γ θ (TApp (TRef i) ts _) (TApp (TRef i') ts' _) = 
-  unifys l γ θ  
-    (f_type <$> (t_elts (sortTDef $ findAndApply i  ts  γ)))
-    (f_type <$> (t_elts (sortTDef $ findAndApply i' ts' γ)))
+unify l δ θ t1@(TApp (TRef i) ts _) t2@(TApp (TRef i') ts' _) 
+  | i == i'   = unifys l δ θ ts ts'
+  | otherwise = unify l δ θ (flattenType δ t1) (flattenType δ t2)  
 
-unify l γ θ t t' | any isUnion [t,t'] 
- = uncurry (unifys l γ θ) . unzip . fst3 $ unionParts t t'
+unify l δ θ t t' | any isUnion [t,t']
+ = let (ts, _, _) = unionParts' unifEquiv t t' in
+   let (t1s, t2s) = unzip ts in
+   unifys l δ θ t1s t2s
 
-unify l γ θ (TArr t _) (TArr t' _) = unify l γ θ t t'
+unify l δ θ (TArr t _) (TArr t' _) = unify l δ θ t t'
+
+unify l δ θ (TCons b1s _) (TCons b2s _) = 
+  on (unifys l δ θ) (b_type <$>) b1s b2s
 
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ
 
 
------------------------------------------------------------------------------
-findAndApply :: PPR r => TyID -> [RType r] -> TDefEnv (RType r) -> TDef (RType r)
------------------------------------------------------------------------------
-findAndApply i ts γ = TD n [] p $ apply (fromList (zip vs ts)) <$> elts
--- FIXME: apply to p ???
-  where TD n vs p elts = findTyIdOrDie i γ 
-                
+unifEquiv t t' | toType t == toType t' 
+               = True
+unifEquiv t t' | any isUnion [t,t'] 
+               = error "No nested unions"
+unifEquiv (TApp c ts _) (TApp c' ts' _) = c `equiv` c'  -- Interfaces appear once only on top-level unions
+unifEquiv (TArr t _   ) (TArr t' _    ) = True          -- Arras are really interfaces
+unifEquiv (TVar v _   ) (TVar v' _    ) = v == v'
+unifEquiv (TFun b o _ ) (TFun b' o' _ ) = True          -- Functions as well ... 
+unifEquiv (TAll _ _   ) (TAll _ _     ) = error "unifEquiv-tall"
+unifEquiv (TExp _     ) (TExp   _     ) = error "unifEquiv-texp"
+unifEquiv _             _               = False
 
------------------------------------------------------------------------------
-unifys ::  (PP r, F.Reftable r, Ord r) =>  
-  SourceSpan -> TDefEnv (RType r) -> RSubst r -> [RType r] -> [RType r] -> Either Error (RSubst r)
------------------------------------------------------------------------------
-unifys loc env θ xs ys = {- tracePP msg $ -} unifys' loc env θ xs ys 
-   {-where -}
-   {-  msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)-}
 
-unifysV loc env θ xs ys = tracePP msg <$> unifys' loc env θ (tracePP "xs" xs) (tracePP "ys" ys)
+unifysV loc env θ xs ys = tracePP msg <$> unifys loc env θ (tracePP "xs" xs) (tracePP "ys" ys)
   where 
     msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
 
-unifys' loc env θ ts ts' 
-  | nTs == nTs' = go env θ ts ts'
-  | otherwise   = Left $ errorUnification loc ts ts'
+-----------------------------------------------------------------------------
+unifys ::  (PP r, F.Reftable r, Ord r) => SourceSpan -> TDefEnv (RType r) 
+  -> RSubst r -> [RType r] -> [RType r] -> Either Error (RSubst r)
+-----------------------------------------------------------------------------
+unifys loc env θ ts ts'  | nTs == nTs'         
+                         = go env θ ts ts'
+                         | otherwise           
+                         = Left $ errorUnification loc ts ts'
   where 
-    nTs           = length ts
-    nTs'          = length ts'
-    go γ θ ts ts' = foldl safeJoin (Right $ θ) $ zipWith (unify loc γ θ) ts ts'
-    -- Only allow joining unifications where the common keys map to identical
-    -- types
+    (nTs, nTs')          = mapPair length (ts, ts')
+    go γ θ (s:ss) (t:tt) = either Left (\θ -> go γ θ ss tt) $ unify loc γ θ s t
+    go _ θ []     []     = Right θ
     safeJoin (Right θ@(Su m)) (Right θ'@(Su m'))
-      | check m m'                                = Right $ mappend θ θ'
-      | otherwise                                 = Left  $ errorJoinSubsts loc θ θ' 
-    safeJoin (Left l        ) _                   = Left l
-    safeJoin _                (Left l        )    = Left l
+      | check m m'       = Right $ mappend θ θ'
+      | otherwise        = Left  $ errorJoinSubsts loc θ θ' 
+    safeJoin (Left l) _  = Left l
+    safeJoin _ (Left l)  = Left l
                                
 
 check m m' = vs == vs'

@@ -372,7 +372,7 @@ tcStmt γ (IfStmt l e s1 s2)
            (s2', γ2) <- tcStmt γ s2
            z         <- envJoin l γ γ1 γ2
            return       (IfStmt l e' s1' s2', z)
-         Nothing      -> error "BUG: tcStmt - If then else"
+         _              -> error "BUG: tcStmt - If then else"
 
 -- while c { b } ; exit environment is entry as may skip. SSA adds phi-asgn prior to while.
 tcStmt γ (WhileStmt l c b) 

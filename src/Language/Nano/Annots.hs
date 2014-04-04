@@ -37,23 +37,29 @@ import           Language.ECMAScript3.PrettyPrint
 import           Text.Parsec.Pos                   
 import           Language.Nano.Types
 import           Language.Nano.Errors
-import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat, nest, (<+>), punctuate)
+import           Language.Nano.Typecheck.Types      (TDefEnv)
+import           Language.Nano.Typecheck.Subst      (PP'(..))
+import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat, nest, (<+>), punctuate, render)
 import           Control.Applicative                ((<$>))
 
 ------------------------------------------------------------------------------
 -- | Type Definitions For Annotations ----------------------------------------
 ------------------------------------------------------------------------------
 
-data Annot t        = AnnBind { ann_bind :: F.Symbol, ann_type :: t }
+data Annot t        = AnnBind { ann_bind :: F.Symbol, 
+                                ann_type :: t,
+                                ann_tdef :: TDefEnv t
+                              }
 
 {-@ type NonNull a = {v: [a] | 0 < (len v)} @-}
-type NonEmpty a     = [a] 
+type    NonEmpty a  = [a] 
 newtype UAnnInfo a  = AI (M.HashMap SourceSpan (NonEmpty (Annot a)))
-data UAnnSol a      = NoAnn | SomeAnn (UAnnInfo a) (UAnnInfo a -> UAnnInfo a)
+data    UAnnSol  a  = NoAnn 
+                    | SomeAnn (UAnnInfo a) (UAnnInfo a -> UAnnInfo a)
 
 
 instance Functor Annot where 
-  fmap f (AnnBind x t) = AnnBind x (f t)
+  fmap f (AnnBind x t δ) = AnnBind x (f t) (fmap f δ)
 
 instance Functor UAnnInfo where 
   fmap f (AI m) = AI (fmap (fmap (fmap f)) m)
@@ -66,10 +72,10 @@ instance Monoid (UAnnInfo a) where
 -- | PP Instance -------------------------------------------------------
 ------------------------------------------------------------------------
 
-instance PP a => PP (UAnnInfo a) where 
+instance (PP' a, PP a) => PP (UAnnInfo a) where 
   pp (AI m)  = vcatLn [pp sp $+$ nest 4 (vcatLn $ map ppB bs) | (sp, bs) <- M.toList m]
     where 
-      ppB a  = pp (ann_bind a) <+> text "::" <+> pp (ann_type a)
+      ppB a  = pp (ann_bind a) <+> text "::" <+> pp' (ann_tdef a) (ann_type a)
       vcatLn = vcat . punctuate nl 
       nl     = text "\n"
 
@@ -77,8 +83,8 @@ instance PP a => PP (UAnnInfo a) where
 -- | Adding New Annotations --------------------------------------------------
 ------------------------------------------------------------------------------
 
-addAnnot :: (F.Symbolic x) => SourceSpan -> x -> a -> UAnnInfo a -> UAnnInfo a
-addAnnot l x t (AI m) = AI (inserts l (AnnBind (F.symbol x) t) m)
+addAnnot :: (F.Symbolic x) => SourceSpan -> x -> a -> TDefEnv a -> UAnnInfo a -> UAnnInfo a
+addAnnot l x t δ (AI m) = AI (inserts l (AnnBind (F.symbol x) t δ) m)
 
 ------------------------------------------------------------------------------
 -- | Dumping Annotations To Disk ---------------------------------------------
@@ -89,10 +95,10 @@ addAnnot l x t (AI m) = AI (inserts l (AnnBind (F.symbol x) t) m)
 --   where  
 --     annJson              = encode $ mkAnnMap res a
 
-annotByteString       :: (PP t) => F.FixResult Error -> UAnnInfo t -> B.ByteString
+annotByteString       :: (PP t, PP' t) => F.FixResult Error -> UAnnInfo t -> B.ByteString
 annotByteString res a = encode $ mkAnnMap res a
 
-annotVimString        :: PP a => F.FixResult Error -> UAnnInfo a -> String
+annotVimString        :: (PP' a, PP a) => F.FixResult Error -> UAnnInfo a -> String
 annotVimString res a  = toVim $ mkAnnMap res a  
 
 ------------------------------------------------------------------------------
@@ -121,7 +127,7 @@ eInfo msg err                     = (srcPos $ errLoc err', errMsg err')
     err'                          = catMessage err msg
 
 mkAnnMapTyp (AI m) 
-  = M.map (\a -> (F.symbolString $ ann_bind a, ppshow $ ann_type a))
+  = M.map (\a -> (F.symbolString $ ann_bind a, render $ pp' (ann_tdef a) (ann_type a)))
   $ M.fromList
   $ map (head . sortWith (srcSpanEndCol . fst)) 
   $ groupWith (lineCol . fst) 

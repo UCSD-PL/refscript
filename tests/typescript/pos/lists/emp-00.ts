@@ -1,5 +1,6 @@
-/*@ boop :: (list [number]) => {v:boolean | true} */
+
+/*@ boop :: (#List[number]) => {v:boolean | true} */
 function boop(xs : number[]) : boolean{
-	var zogbert : boolean = empty(xs);
-	return zogbert;
+	var r = empty(xs);
+	return r;
 }

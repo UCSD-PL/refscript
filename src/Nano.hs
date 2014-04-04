@@ -7,6 +7,7 @@ import qualified Language.Nano.Liquid.Types         as L
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Types
+import           Language.Nano.Typecheck.Subst      (PP'(..))
 import           Language.Nano.Annots
 import           Control.Exception                  (catch)
 import           Data.Monoid
@@ -59,7 +60,7 @@ execCmd cmd               = putStrLn ("EXEC: " ++ cmd) >> system cmd >>= check
     check (ExitFailure n) = error $ "cmd: " ++ cmd ++ " failure code " ++ show n 
 
 ----------------------------------------------------------------------------------
-renderAnnotations :: (PP t) => FilePath -> F.FixResult Error -> UAnnSol t -> IO () 
+renderAnnotations :: (PP t, PP' t) => FilePath -> F.FixResult Error -> UAnnSol t -> IO () 
 ----------------------------------------------------------------------------------
 
 renderAnnotations srcFile res (NoAnn :: UAnnSol t)

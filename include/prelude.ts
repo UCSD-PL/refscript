@@ -121,9 +121,9 @@ interface List<A> {
 
 /*@ extern builtin_OpNEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */
 
-/*@ extern builtin_OpLAnd      :: (x: top, y: top)       => {v:top     | ((Prop v) <=> (if (TRU(x,v)) then (v = y) else (v = x) ))} */
+/*@ extern builtin_OpLAnd      :: (x:top, y:top)         => {v:top     | ((Prop v) <=> (if (TRU(x)) then (v = y) else (v = x) ))} */
 
-/*@ extern builtin_OpLOr       :: (x:top, y:top)         => {v:top     | ((Prop v) <=> (if (FLS(x,v)) then (v = y) else (v = x) ))} */
+/*@ extern builtin_OpLOr       :: (x:top, y:top)         => {v:top     | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))} */
 /*  OLDER VERSION: */
 /*  extern builtin_OpLOr       :: (x:boolean, y:boolean) => {v:boolean | ((Prop v) <=> ((Prop x) || (Prop y)))}                  */
 
@@ -348,35 +348,23 @@ interface List<A> {
 /************** Run-Time Tags ********************************************/
 /*************************************************************************/
 
-/*@ measure ttag :: forall A. (A) => string                        */
+/*@ measure ttag :: forall A. (A) => string                                   */
+
+/*@ measure TRU :: forall A . (A) => Prop                                     */
 
 /*@ extern builtin_PrefixTypeof :: forall A. (x:A) 
-                                    => {v:string | (ttag x) = v }  */
+                                    => {v:string | (ttag x) = v }             */
 
-/*@ invariant {v:undefined | ttag(v) = "undefined"} */
-/*@ invariant {v:null      | ttag(v) = "null"     } */
-/*@ invariant {v:boolean   | ttag(v) = "boolean"  } */ 
-/*@ invariant {v:number    | ttag(v) = "number"   } */
-/*@ invariant {v:string    | ttag(v) = "string"   } */
-/*@ invariant {v:{}        | ttag(v) = "object"   } */
+/*@ extern builtin_BITruthy :: forall A. (x:A) 
+                                  => { v:boolean | ((Prop v) <=> TRU(x)) }    */
 
+/*@ invariant {v:undefined | [(ttag(v) = "undefined"); (TRU(v) <=> false  )]} */
+/*@ invariant {v:null      | [(ttag(v) = "null"     ); (TRU(v) <=> false  )]} */
+/*@ invariant {v:boolean   | [(ttag(v) = "boolean"  ); (TRU(v) <=> Prop(v))]} */ 
+/*@ invariant {v:number    | [(ttag(v) = "number"   ); (TRU(v) <=> v /= 0 )]} */
+/*@ invariant {v:string    | [(ttag(v) = "string"   ); (TRU(v) <=> v /= "")]} */
+/*@ invariant {v:{}        | ttag(v) = "object"   }                           */
 
-
-/*************************************************************************/
-/************** Truthy / Falsy *******************************************/
-/*************************************************************************/
-
-/*@ predicate TRU(x,v) = (
-                         (ttag x) /= "null"                 ||
-                         (ttag x) /= "undefined"            ||
-                         ((ttag x) = "number"  => v = 0 )   ||
-                         ((ttag x) = "string"  => v = "")   ||
-                         ((ttag x) = "boolean" => Prop(v))
-                         )                                             */
-
-/*@ predicate FLS(x,v) = not (TRU(x,v))                                */   
-
-/*@ extern builtin_Truthy :: (x:Top) => { v:boolean | Prop(TRU(x,v)) } */
 
 
 /*************************************************************************/

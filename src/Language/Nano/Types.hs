@@ -541,6 +541,7 @@ data BuiltinOp = BIUndefined
                | BIBracketAssign
                | BIArrayLit
                | BINumArgs
+               | BITruthy
                  deriving (Eq, Ord, Show)
 
 instance PP BuiltinOp where

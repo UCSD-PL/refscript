@@ -1011,6 +1011,7 @@ builtinOpId BIBracketRef    = builtinId "BIBracketRef"
 builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
 builtinOpId BIArrayLit      = builtinId "BIArrayLit"
 builtinOpId BINumArgs       = builtinId "BINumArgs"
+builtinOpId BITruthy        = builtinId "BITruthy"
 
 -- arrayLitTy :: (IsLocated l) => l -> Int -> Env t -> t
 arrayLitTy l n g 

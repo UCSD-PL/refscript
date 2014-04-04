@@ -753,7 +753,7 @@ instance ClearSorts (F.FInfo a) where
          quals
 
 clearProp (sy, F.RR so re) 
-  | F.symbolString sy == "Prop" 
+  | F.symbolString sy `elem` ["Prop", "TRU"] 
   = (sy, F.RR (F.FFunc 2 [F.FInt, F.FApp F.boolFTyCon []]) re)
   | otherwise                   
   = (clear sy, clear $ F.RR so re)

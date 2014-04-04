@@ -363,12 +363,16 @@ tcStmt γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
-  = do (e', t)   <- tcExpr γ e 
-       unifyTypeM (srcPos l) "If condition" e t tBool
-       (s1', γ1) <- tcStmt γ s1
-       (s2', γ2) <- tcStmt γ s2
-       z         <- envJoin l γ γ1 γ2
-       return       (IfStmt l e' s1' s2', z)
+  = do 
+       cOpt      <- tcCallMatch γ l BIBracketRef [e] $ builtinOpTy l BITruthy $ tce_env γ 
+       case cOpt of 
+         Just ([e'], t) -> do  
+           -- unifyTypeM (srcPos l) "If condition" e t tBool
+           (s1', γ1) <- tcStmt γ s1
+           (s2', γ2) <- tcStmt γ s2
+           z         <- envJoin l γ γ1 γ2
+           return       (IfStmt l e' s1' s2', z)
+         Nothing      -> error "BUG: tcStmt - If then else"
 
 -- while c { b } ; exit environment is entry as may skip. SSA adds phi-asgn prior to while.
 tcStmt γ (WhileStmt l c b) 

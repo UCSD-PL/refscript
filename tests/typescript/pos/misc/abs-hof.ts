@@ -1,9 +1,4 @@
 
-
-// BUG: Why is it not inferring the type?
-
-/* abs :: (({z:number| z >= 0}) => {v:number | v >= 0}, number) => {v:number|v >= 0} */ 
-
 /*@ abs :: ((number) => number, number) => number */ 
 function abs(f, x){
   var r = x;

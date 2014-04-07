@@ -193,15 +193,24 @@ bbaseP
  <|> try (TArr <$> arrayP)                 -- [T]
  <|> try (TApp <$> tConP <*> bareTyArgsP)  -- list[A], tree[A,B] etc...
 
+-- DEPRECATING:
+--
+-- Structural types shall be just a TCons.
+--
+-- objLitP :: ParserS (Reft -> RefType)
+-- objLitP = do 
+--   bs          <- braces $ bindsP
+--   -- all fields are public 
+--   let d        = TD Nothing [] Nothing [ TE s True t | B s t <- bs ]
+--   (u, n)      <- getState
+--   let (u', id) = addObjLitTy d u 
+--   putState     $ (u', n)                -- update the type definitions environment
+--   return       $ TApp (TRef id) []      -- no type vars 
+ 
 objLitP :: ParserS (Reft -> RefType)
 objLitP = do 
-  bs          <- braces $ bindsP
-  -- all fields are public 
-  let d        = TD Nothing [] Nothing [ TE s True t | B s t <- bs ]
-  (u, n)      <- getState
-  let (u', id) = addObjLitTy d u 
-  putState     $ (u', n)                -- update the type definitions environment
-  return       $ TApp (TRef id) []      -- no type vars 
+  bs    <- braces $ bindsP
+  return $ TCons [ TE s True t | B s t <- bs ]
 
 
 bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []

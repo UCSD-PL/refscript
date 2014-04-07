@@ -27,6 +27,7 @@ import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
 import           Control.Applicative ((<$>))
 -- import           Control.Monad
 import qualified Data.HashSet as S
+import           Text.PrettyPrint.HughesPJ          (render)
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
 import           Data.Function                  (on)
@@ -58,17 +59,22 @@ unify l _ θ t (TVar α _)  = varAsn l θ α t
 
 unify l δ θ t1@(TApp (TRef i) ts _) t2@(TApp (TRef i') ts' _) 
   | i == i'   = unifys l δ θ ts ts'
-  | otherwise = unify l δ θ (flattenType δ t1) (flattenType δ t2)  
+
+unify l δ θ t1@(TApp (TRef i) ts _) t2
+  = unify l δ θ (flattenType δ t1) t2
+
+unify l δ θ t1 t2@(TApp (TRef i) ts _)
+  = unify l δ θ t1 (flattenType δ t2)
 
 unify l δ θ t t' | any isUnion [t,t']
- = let (ts, _, _) = unionParts' unifEquiv t t' in
-   let (t1s, t2s) = unzip ts in
-   unifys l δ θ t1s t2s
+  = let (ts, _, _) = unionParts' unifEquiv t t' in
+    let (t1s, t2s) = unzip ts in
+    unifys l δ θ t1s t2s
 
 unify l δ θ (TArr t _) (TArr t' _) = unify l δ θ t t'
 
-unify l δ θ (TCons b1s _) (TCons b2s _) = 
-  on (unifys l δ θ) (b_type <$>) b1s b2s
+unify l δ θ (TCons e1s _) (TCons e2s _) = 
+  on (unifys l δ θ) (f_type <$>) e1s e2s
 
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ
@@ -94,7 +100,7 @@ unifysV loc env θ xs ys = tracePP msg <$> unifys loc env θ (tracePP "xs" xs) (
 
 -----------------------------------------------------------------------------
 unifys ::  (PP r, F.Reftable r, Ord r) => SourceSpan -> TDefEnv (RType r) 
-  -> RSubst r -> [RType r] -> [RType r] -> Either Error (RSubst r)
+            -> RSubst r -> [RType r] -> [RType r] -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 unifys loc env θ ts ts'  | nTs == nTs'         
                          = go env θ ts ts'
@@ -102,7 +108,7 @@ unifys loc env θ ts ts'  | nTs == nTs'
                          = Left $ errorUnification loc ts ts'
   where 
     (nTs, nTs')          = mapPair length (ts, ts')
-    go γ θ (s:ss) (t:tt) = either Left (\θ -> go γ θ ss tt) $ unify loc γ θ s t
+    go γ θ (s:ss) (t:tt) = either Left (\θ' -> go γ θ' ss tt) $ unify loc γ θ s t
     go _ θ []     []     = Right θ
     safeJoin (Right θ@(Su m)) (Right θ'@(Su m'))
       | check m m'       = Right $ mappend θ θ'

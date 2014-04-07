@@ -37,7 +37,7 @@ module Language.Nano.Liquid.CGMonad (
   , envFindAnnot, envToList, envFindReturn, envPushContext, envGetContextCast
   , envGetContextTypArgs
 
-  , addObjLitTyM, findTySymOrDieM, findTySymWithIdOrDieM, findTyIdOrDieM
+  , findTySymOrDieM, findTySymWithIdOrDieM, findTyIdOrDieM
 
   -- * Add Subtyping Constraints
   , subType, wellFormed
@@ -352,7 +352,6 @@ envFindReturn = E.envFindReturn . renv
 
 updTDefEnv f = f <$> getDef >>= \(δ', a) -> setDef δ' >> return a
 
-addObjLitTyM            = updTDefEnv . addObjLitTy
 findTySymOrDieM i       = findTySymOrDie i <$> getDef
 findTySymWithIdOrDieM i = findTySymWithIdOrDie i <$> getDef
 findTyIdOrDieM :: TyID -> CGM (TDef RefType)
@@ -373,19 +372,19 @@ freshTyFun' g l _ t b
   | b && isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g
   | otherwise               = return t
 
-freshTyVar g l t@(TApp (TRef i) ts r) 
-  | isTrivialRefType t      
-  = do ts' <- mapM (freshTy "freshTyVar") (toType <$> ts)
-       mapM_ (wellFormed l g) ts'
-       return $ TApp (TRef i) ts' r
-freshTyVar _ _ t            = return t
+freshTyVar g l t 
+  | isTrivialRefType t      = freshTy "freshTyVar" (toType t) >>= wellFormed l g
+                              -- do ts' <- mapM (freshTy "freshTyVar") (toType <$> ts)
+                              --    mapM_ (wellFormed l g) ts'
+                              --    return $ TApp (TRef i) ts' r
+  | otherwise               = return t
 
 -- | Instantiate Fresh Type (at Call-site)
 freshTyInst l g αs τs tbody
-  = do ts    <- mapM (freshTy "freshTyInst") τs
+  = do δ     <- getDef
+       ts    <- mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
-       let θ  = fromList $ zip αs ts
-       return $ apply θ tbody
+       return $ apply (fromList $ zip αs ts) tbody
 
 -- | Instantiate Fresh Type (at Phi-site) 
 ---------------------------------------------------------------------------------------
@@ -602,16 +601,16 @@ splitC (Sub g i t1@(TArr t1v _ ) t2@(TArr t2v _ ))
 -- | TCons
 splitC (Sub g i t1@(TCons b1s _ ) t2@(TCons b2s _ ))
   = do cs    <- bsplitC g i t1 t2
-       when (or $ zipWith ((/=) `on` b_sym) b1s' b2s') $ error "splitC on non aligned TCons"
+       when (or $ zipWith ((/=) `on` f_sym) b1s' b2s') $ error "splitC on non aligned TCons"
        --FIXME: add other bindings in env (like function)? Perhaps through "this"
        cs'   <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t1s t2s -- CO-VARIANCE
        -- cs''  <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t2s t1s -- CONTRA-VARIANCE
        return $ cs ++ cs' -- ++ cs''
     where
-       b1s' = L.sortBy (compare `on` b_sym) b1s
-       b2s' = L.sortBy (compare `on` b_sym) b2s
-       t1s  = b_type <$> b1s'
-       t2s  = b_type <$> b2s'
+       b1s' = L.sortBy (compare `on` f_sym) b1s
+       b2s' = L.sortBy (compare `on` f_sym) b2s
+       t1s  = f_type <$> b1s'
+       t2s  = f_type <$> b2s'
 
 splitC x 
   = cgError l $ bugBadSubtypes l x where l = srcPos x
@@ -683,10 +682,10 @@ splitW (W g i t@(TArr t' _))
 splitW (W g i (TAnd ts))
   = concatMapM splitW [W g i t | t <- ts]
 
-splitW (W g i t@(TCons bs _))
+splitW (W g i t@(TCons es _))
   = do let bws = bsplitW g t i
        -- FIXME: add field bindings in g?
-       ws     <- concatMapM splitW [W g i ti | B _ ti <- bs]
+       ws     <- concatMapM splitW [W g i ti | TE _ _ ti <- es]
        return  $ bws ++ ws
 
 splitW (W _ _ t) = error $ render $ text "Not supported in splitW: " <+> pp t

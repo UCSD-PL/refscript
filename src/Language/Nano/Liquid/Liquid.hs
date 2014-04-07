@@ -347,10 +347,8 @@ consExpr g (ArrayLit l es)
 consExpr g (ObjectLit l bs) 
   = do  let (ps, es) = unzip bs
         (xes, g')   <- consScan consExpr g es
-        let elts = zipWith mkElt (F.symbol <$> ps) $ (`envFindTy` g') <$> xes
-        let d = TD Nothing [] Nothing elts
-        i <- addObjLitTyM d
-        envAddFresh "consExpr:ObjectLit" l (TApp (TRef i) [] fTop) g'
+        let tCons    = TCons (zipWith mkElt (F.symbol <$> ps) $ (`envFindTy` g') <$> xes) fTop
+        envAddFresh "consExpr:ObjectLit" l tCons g'
     where
         mkElt s t = TE s True t 
 
@@ -461,13 +459,11 @@ instantiate :: (PP a, PPRS F.Reft) =>
 ---------------------------------------------------------------------------------
 instantiate l g fn ft 
   = do let (αs, t)      = bkAll ft
-       --TODO: There is a TypInst missing here!!!
        let ts           = envGetContextTypArgs g l αs
        t'              <- freshTyInst l g αs ts t
        maybe err return $ bkFun t' 
     where 
        err = cgError l $ errorNonFunction (srcPos l) fn ft  
-       {-msg = printf "instantiate [%s] %s %s" (ppshow $ ann l) (ppshow αs) (ppshow tbody)-}
 
 
 ---------------------------------------------------------------------------------

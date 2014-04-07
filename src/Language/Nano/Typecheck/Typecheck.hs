@@ -19,7 +19,7 @@ import qualified Data.List                          as L
 import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe)
 import           Data.Generics                   
 
-import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat)
+import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat, render, hcat)
 
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
@@ -97,7 +97,7 @@ getCasts stmts   = everything (++) ([] `mkQ` f) stmts
     f _          = [] 
 
 -------------------------------------------------------------------------------
-castErrors :: (F.Reftable r) => AnnType r -> [Error] 
+castErrors :: PPR r => AnnType r -> [Error] 
 -------------------------------------------------------------------------------
 castErrors (Ann l facts) = downErrors
   where 
@@ -589,8 +589,8 @@ tcExpr γ (ObjectLit l bs)
   = do let (ps, es)  = unzip bs
        ets          <- mapM (tcExpr γ) es
        let (es', ts) = unzip ets
-       i <- addObjLitTyM $ TD Nothing [] Nothing $ zipWith mkElt (F.symbol <$> ps) ts
-       return (ObjectLit l (zip ps es'), TApp (TRef i) [] fTop)
+       let tCons     = TCons (zipWith mkElt (F.symbol <$> ps) ts) fTop
+       return (ObjectLit l (zip ps es'), tCons)
     where
        mkElt s t = TE s True t
 
@@ -768,8 +768,9 @@ tcCallCase γ l fn es' ts ft
        (_,ibs,ot)    <- instantiate l ξ fn ft
        let its        = b_type <$> ibs
        -- Unify with formal parameter types
-       θ             <- unifyTypesM (srcPos l) "tcCall" ts its
        -- Apply substitution
+       δ             <- getDef
+       θ             <- unifyTypesM (srcPos l) "tcCall" ts its
        let (ts',its') = mapPair (apply θ) (ts, its)
        -- Subtype the arguments against the formals and up/down cast if needed 
        es''          <- zipWith3M (castM l ξ) es' ts' its'

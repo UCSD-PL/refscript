@@ -30,7 +30,7 @@ module Language.Nano.Typecheck.TCMonad (
   , tcFunTys
 
   -- * Annotations
-  , addAnn {-TEMP-}, accumAnn, getAllAnns, remAnn, getDef, setDef, addObjLitTyM
+  , addAnn {-TEMP-}, accumAnn, getAllAnns, remAnn, getDef, setDef
   , getExts, getClasses
 
   -- * Unification
@@ -62,6 +62,7 @@ module Language.Nano.Typecheck.TCMonad (
 import           Text.Printf
 import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>))
+import           Data.Function                      (on)
 import qualified Data.HashSet                       as S
 import           Data.Maybe                         (fromJust)
 import           Control.Monad.State
@@ -166,9 +167,11 @@ setSubst θ = modify $ \st -> st { tc_subst = θ }
 -------------------------------------------------------------------------------
 extSubst :: (F.Reftable r, PP r) => [TVar] -> TCM r ()
 -------------------------------------------------------------------------------
-extSubst βs = getSubst >>= setSubst . (`mappend` θ')
+extSubst βs = getSubst >>= setSubst . (`mappend` θ)
   where 
-    θ'      = fromList $ zip βs (tVar <$> βs)
+    θ       = fromList $ zip βs (tVar <$> βs)
+
+addSubst θ  = getSubst >>= setSubst . (`mappend` θ)
 
 -------------------------------------------------------------------------------
 getDef  :: TCM r (TDefEnv (RType r)) 
@@ -217,7 +220,9 @@ freshSubst l ξ αs
        βs        <- mapM (freshTVar l) αs
        setTyArgs l ξ βs
        extSubst   $ βs 
-       return     $ fromList $ zip αs (tVar <$> βs)
+       let θ      = fromList $ zip αs (tVar <$> βs)
+       addSubst   $ θ 
+       return θ
 
 setTyArgs l ξ βs
   = do  {-m <- tc_anns <$> get-}
@@ -345,13 +350,12 @@ unifyTypesM :: (Ord r, PP r, F.Reftable r) =>
   SourceSpan -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
 unifyTypesM l msg t1s t2s
-  -- TODO: This check might be done multiple times
-  | length t1s /= length t2s = tcError $ errorArgMismatch l 
-  | otherwise                = do θ <- getSubst 
-                                  δ <- getDef
-                                  case unifys l δ θ t1s t2s of
-                                    Left err' -> tcError $ catMessage err' msg 
-                                    Right θ'  -> setSubst θ' >> return θ' 
+  | on (/=) length t1s t2s = tcError $ errorArgMismatch l 
+  | otherwise              = do θ <- getSubst 
+                                δ <- getDef
+                                case unifys l δ θ t1s t2s of
+                                  Left err' -> tcError $ catMessage err' msg 
+                                  Right θ'  -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------
 unifyTypeM :: (Ord r, PrintfArg t1, PP r, PP a, F.Reftable r) =>
@@ -382,8 +386,6 @@ castM l ξ e t1 t2 = convert (ann l) t1 t2 >>= patch
 -- | Monad versions of TDefEnv operations
 
 updTDefEnv f = f <$> getDef >>= \(δ', a) -> setDef δ' >> return a
-
-addObjLitTyM    = updTDefEnv . addObjLitTy
 
 findTyIdOrDieM' :: String -> TyID -> TCM r (TDef (RType r))
 findTyIdOrDieM' m i = findTyIdOrDie' m i <$> getDef
@@ -420,9 +422,10 @@ convert l t1 t2 | any isUnion [t1,t2]  = convertUnion l t1 t2
 
 convert l t1 t2 | all isArr   [t1,t2]  = convertArray l t1 t2
 
-convert l t1 t2 | all isTRef  [t1,t2]  = convertTRefs l t1 t2
+convert l t1 t2 | all isTCons [t1,t2]  = convertCons l t1 t2
 
 convert l t1 t2 | all isTFun  [t1, t2] = convertFun l t1 t2
+
 convert _ (TFun _ _ _)    _            = error "Unimplemented convert-1"
 convert _ _               (TFun _ _ _) = error "Unimplemented convert-2"
 
@@ -432,24 +435,15 @@ convert _ _            (TAll _ _  )    = error "Unimplemented: convert-4"
 convert l t1           t2              = convertSimple l t1 t2 
 
 
--- | `convertTRefs`
+-- | `convertCons`
 --------------------------------------------------------------------------------
-convertTRefs :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
+convertCons :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
-convertTRefs l t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _) 
-  -- Same exact type name
-  | i1 == i2 && and (zipWith equiv t1s t2s) 
-  = return CNo
-  -- Same type - incompatible arguments
-  | i1 == i2   
-  = tcError $ errorConvDefInvar l t1 t2
-  | otherwise  
+convertCons l t1@(TCons e1s _) t2@(TCons e2s _)
   = do
-      -- Get the type definitions
-      δ   <- getDef 
-      let (e1s, e2s) = mapPair (flattenTRef δ) (t1, t2)
-                       -- Take all elements into account, excluding constructors.
-          (l1, l2)   = mapPair (\es -> [ (s, t) | TE s _ t <- es
+      δ <- getDef
+          -- Take all elements into account, excluding constructors.
+      let (l1, l2)   = mapPair (\es -> [ (s, t) | TE s _ t <- es
                                                 , s /= F.symbol "constructor" ]) (e1s, e2s)
           (m1, m2)   = mapPair M.fromList (l1, l2)
           (ks1, ks2) = mapPair (S.fromList . map fst) (l1, l2)
@@ -480,10 +474,32 @@ convertTRefs l t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _)
       else 
         tcError $ errorConvDef l (pp' δ t1) (pp' δ t2)
 
-convertTRefs _ _ _ =  error "BUG: Case not supported in convertTRefs"
+convertCons l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
+  -- FIXME: type argument subtyping
+  -- Same exact type name
+  | i1 == i2 && and (zipWith equiv t1s t2s) 
+  = return CNo
+  -- Same type - incompatible arguments
+  | i1 == i2   
+  = tcError $ errorConvDefInvar l t1 t2
+  | otherwise  
+  = do δ <- getDef
+       let c1 = TCons (flattenTRef δ t1) r1
+       let c2 = TCons (flattenTRef δ t2) r2
+       convertCons l c1 c2  
+
+convertCons l t1@(TApp (TRef _) _ _) t2 
+  = do δ <- getDef 
+       convertCons l (flattenType δ t1) t2
+
+convertCons l t1 t2@(TApp (TRef _) _ _)
+  = do δ <- getDef
+       convertCons l t1 (flattenType δ t2) 
+
+convertCons _ _ _ =  error "BUG: Case not supported in convertCons"
 
 
-instance PP (S.HashSet F.Symbol) where
+instance PP a => PP (S.HashSet a) where
   pp = pp . S.toList 
 
 -- | `convertFun`

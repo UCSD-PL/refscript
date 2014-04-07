@@ -43,7 +43,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, tUndef, tNull
-  , tAnd, isTVar, isArr, isTRef, isTFun, fTop
+  , tAnd, isTVar, isArr, isTCons, isTFun, fTop
 
   -- * Print Types
   , ppArgs
@@ -57,7 +57,7 @@ module Language.Nano.Typecheck.Types (
   , TDefEnv (..), tDefEmpty
   , addTySym, addSym, addObjLitTy
   , findTySym, findTySymOrDie, findTySymWithId, findTySymWithIdOrDie, findTyId, findTyIdOrDie
-  , findTyIdOrDie', findEltWithDefault, symTDefMem, getTDefName
+  , findTyIdOrDie', findEltWithDefault, symTDefMem, getTDefName, isNamedType
   , getDefNames
   , sortTDef
   , getCons
@@ -90,7 +90,7 @@ import           Text.Printf
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
 import           Data.Function                  (on)
-import           Data.Maybe                     (fromMaybe, fromJust)
+import           Data.Maybe                     (fromMaybe, fromJust, isJust)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.List                      as L
 import qualified Data.IntMap                    as I
@@ -235,6 +235,11 @@ findTyId :: TyID -> TDefEnv t -> Maybe (TDef t)
 findTyId i (G _ γ _) = I.lookup i γ
 
 ---------------------------------------------------------------------------------
+isNamedType :: TyID -> TDefEnv t -> Bool
+---------------------------------------------------------------------------------
+isNamedType i (G _ γ _) = isJust (I.lookup i γ >>= t_name)
+
+---------------------------------------------------------------------------------
 findTyIdOrDie :: TyID -> TDefEnv t -> TDef t
 ---------------------------------------------------------------------------------
 findTyIdOrDie i γ = fromMaybe (error $ "findTyIdOrDie") $ findTyId i γ 
@@ -293,7 +298,7 @@ data RType r
 
   | TExp F.Expr                 -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
 
-  | TCons [Bind r]          r   -- ^ Flattened version of an object type 
+  | TCons [TElt (RType r)]  r   -- ^ Flattened version of an object type 
                                 --   To be used right before getting the
                                 --   constraints for containers, to avoid 
                                 --   having type references when needing to
@@ -537,8 +542,9 @@ isVoid :: RType r -> Bool
 isVoid (TApp TVoid _ _)   = True 
 isVoid _                  = False
 
-isTRef (TApp (TRef _) _ _) = True
-isTRef _                   = False
+isTCons (TApp (TRef _) _ _) = True
+isTCons (TCons _ _)         = True
+isTCons _                   = False
 
 isUnion :: RType r -> Bool
 isUnion (TApp TUn _ _) = True           -- top-level union
@@ -780,7 +786,7 @@ instance PP Char where
   pp = char
 
 
-instance F.Reftable r => PP (RType r) where
+instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TVar α r)                 = F.ppTy r $ pp α 
   pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
@@ -791,7 +797,7 @@ instance F.Reftable r => PP (RType r) where
   pp (TApp c [] r)              = F.ppTy r $ pp c 
   pp (TApp c ts r)              = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
   pp (TArr t r)                 = F.ppTy r $ brackets (pp t)  
-  pp (TCons bs r)               = F.ppTy r $ ppArgs braces comma bs
+  pp (TCons es r)               = F.ppTy r $ ppArgs braces semi es
 
 instance PP TCon where
   pp TInt             = text "number"
@@ -815,7 +821,7 @@ instance Hashable TCon where
   hashWithSalt s TUndef      = hashWithSalt s (7 :: Int)
   hashWithSalt s (TRef z)    = hashWithSalt s (8 :: Int) + hashWithSalt s z
 
-instance F.Reftable r => PP (Bind r) where 
+instance (PP r, F.Reftable r) => PP (Bind r) where 
   pp (B x t)          = pp x <> colon <> pp t 
 
 ppArgs p sep          = p . intersperse sep . map pp

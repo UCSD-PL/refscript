@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ConstraintKinds      #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
 
 -- | Module pertaining to Refinement Type descriptions and conversions
@@ -80,6 +81,8 @@ import           Language.Nano.Typecheck.Types
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
   
+
+type PPR r = (PP r, F.Reftable r)
 
 -------------------------------------------------------------------------------------
 -- | Refinement Types and Environments
@@ -190,7 +193,7 @@ pSingleton t p  = t `strengthen` (F.propReft p)
 -- | Converting RType to Fixpoint
 ------------------------------------------------------------------------------
 
-rTypeSortedReft   ::  (F.Reftable r) => RType r -> F.SortedReft
+rTypeSortedReft   ::  PPR r => RType r -> F.SortedReft
 rTypeSortedReft t = F.RR (rTypeSort t) (rTypeReft t)
 
 rTypeReft         :: (F.Reftable r) => RType r -> F.Reft
@@ -200,10 +203,8 @@ rTypeValueVar     :: (F.Reftable r) => RType r -> F.Symbol
 rTypeValueVar t   = vv where F.Reft (vv,_) = rTypeReft t 
 
 ------------------------------------------------------------------------------------------
-rTypeSort :: (F.Reftable r) => RType r -> F.Sort
+rTypeSort :: (PPR r) => RType r -> F.Sort
 ------------------------------------------------------------------------------------------
-
-
 rTypeSort (TApp TInt [] _) = F.FInt
 rTypeSort (TVar α _)       = F.FObj $ F.symbol α 
 rTypeSort t@(TAll _ _)     = rTypeSortForAll t 
@@ -252,7 +253,7 @@ stripRTypeBase _            = Nothing
 -- | Substitutions
 ------------------------------------------------------------------------------------------
 
-instance (F.Reftable r, F.Subable r) => F.Subable (RType r) where
+instance (PPR r, F.Subable r) => F.Subable (RType r) where
   syms        = foldReft (\r acc -> F.syms r ++ acc) [] 
   substa      = fmap . F.substa 
   substf f    = emapReft (F.substf . F.substfExcept f) [] 
@@ -264,7 +265,7 @@ instance (F.Reftable r, F.Subable r) => F.Subable (RType r) where
 ------------------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------------------
-emapReft  :: (F.Reftable a) => ([F.Symbol] -> a -> b) -> [F.Symbol] -> RType a -> RType b
+emapReft  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> RType a -> RType b
 ------------------------------------------------------------------------------------------
 emapReft f γ (TVar α r)     = TVar α (f γ r)
 emapReft f γ (TApp c ts r)  = TApp c (emapReft f γ <$> ts) (f γ r)
@@ -272,11 +273,13 @@ emapReft f γ (TAll α t)     = TAll α (emapReft f γ t)
 emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts) (emapReft f γ' t) (f γ r) 
   where    γ'               = (b_sym <$> xts) ++ γ 
 emapReft f γ (TArr t r)     = TArr (emapReft f γ t) (f γ r)
-emapReft f γ (TCons xts r)  = TCons (emapReftBind f γ' <$> xts) (f γ r)
-  where    γ'               = (b_sym <$> xts) ++ γ 
+emapReft f γ (TCons xts r)  = TCons (emapReftElt f γ' <$> xts) (f γ r)
+  where    γ'               = (f_sym <$> xts) ++ γ 
 emapReft _ _ _              = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)    = B x $ emapReft f γ t
+
+emapReftElt f γ (TE x m t)  = TE x m $ emapReft f γ t
 
 ------------------------------------------------------------------------------------------
 -- mapReftM :: (PP a, F.Reftable b, Monad m, Applicative m) => (a -> m b) -> RType a -> m (RType b)
@@ -287,22 +290,23 @@ mapReftM f (TFun xts t r)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f
 mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
 mapReftM f (TArr t r)      = TArr   <$> (mapReftM f t) <*> f r
 mapReftM f (TAnd ts)       = TAnd   <$> mapM (mapReftM f) ts
-mapReftM f (TCons bs r)    = TCons  <$> mapM (mapReftBindM f) bs <*> f r
+mapReftM f (TCons bs r)    = TCons  <$> mapM (mapReftEltM f) bs <*> f r
 mapReftM _ t               = error   $ render $ text "Not supported in mapReftM: " <+> pp t 
 
 mapReftBindM f (B x t)    = B x     <$> mapReftM f t
+mapReftEltM f (TE x m t)  = TE x m  <$> mapReftM f t
 
 ------------------------------------------------------------------------------------------
 -- | fold over @RType@ 
 ------------------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------------------
-foldReft  :: (F.Reftable r) => (r -> a -> a) -> a -> RType r -> a
+foldReft  :: PPR r => (r -> a -> a) -> a -> RType r -> a
 ------------------------------------------------------------------------------------------
 foldReft  f = efoldReft (\_ -> ()) (\_ -> f) F.emptySEnv 
 
 ------------------------------------------------------------------------------------------
-efoldReft :: (F.Reftable r) => (RType r -> b) -> (F.SEnv b -> r -> a -> a) -> F.SEnv b -> a -> RType r -> a
+efoldReft :: PPR r => (RType r -> b) -> (F.SEnv b -> r -> a -> a) -> F.SEnv b -> a -> RType r -> a
 ------------------------------------------------------------------------------------------
 efoldReft g f = go 
   where 
@@ -312,15 +316,16 @@ efoldReft g f = go
     go γ z (TFun xts t r)   = f γ r $ go γ' (gos γ' z (b_type <$> xts)) t  where γ' = foldr (efoldExt g) γ xts
     go γ z (TArr t r)       = f γ r $ go γ z t    
     go γ z (TAnd ts)        = gos γ z ts 
-    go γ z (TCons bs r)     = f γ' r $ gos γ z (b_type <$> bs) where γ' = foldr (efoldExt g) γ bs
+    go γ z (TCons bs r)     = f γ' r $ gos γ z (f_type <$> bs) where γ' = foldr (efoldExt' g) γ bs
     go _ _ t                = error $ "Not supported in efoldReft: " ++ ppshow t
 
     gos γ z ts              = L.foldl' (go γ) z ts
 
 efoldExt g xt γ             = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
+efoldExt' g xt γ            = F.insertSEnv (f_sym xt) (g $ f_type xt) γ
 
 ------------------------------------------------------------------------------------------
-efoldRType :: (F.Reftable r) => (RType r -> b) -> (F.SEnv b -> RType r -> a -> a) -> F.SEnv b -> a -> RType r -> a
+efoldRType :: PPR r => (RType r -> b) -> (F.SEnv b -> RType r -> a -> a) -> F.SEnv b -> a -> RType r -> a
 ------------------------------------------------------------------------------------------
 efoldRType g f               = go
   where 
@@ -330,6 +335,7 @@ efoldRType g f               = go
     go γ z t@(TFun xts t1 _) = f γ t $ go γ' (gos γ' z (b_type <$> xts)) t1  where γ' = foldr (efoldExt g) γ xts
     go γ z t@(TArr t1 _)     = f γ t $ go γ z t1    
     go γ z   (TAnd ts)       = gos γ z ts 
+    go γ z t@(TCons xts _)   = f γ t $ gos γ' z (f_type <$> xts) where γ' = foldr (efoldExt' g) γ xts
     go _ _ t                 = error $ "Not supported in efoldRType: " ++ ppshow t
     gos γ z ts               = L.foldl' (go γ) z ts
 
@@ -411,17 +417,18 @@ zipType δ f g (TFun x1s t1 r1) (TFun x2s t2 r2)
 zipType δ f g (TArr t1 r1) (TArr t2 r2) 
   = TArr (zipType δ f g t1 t2) $ f r1 r2
 
-zipType δ f g (TCons b1s r1) (TCons b2s r2) 
+zipType δ f g (TCons e1s r1) (TCons e2s r2) 
   = TCons (cmn ++ snd) (f r1 r2)
   where 
-    cmn = [ B s1 (zipType δ f g t1 t2) | B s1 t1 <- b1s
-                                       , B s2 t2 <- b2s
-                                       , s1 == s2 ]
+  -- FIXME: m1 `mconcat` m2
+    cmn = [ TE s1 m1 (zipType δ f g t1 t2) | TE s1 m1 t1 <- e1s
+                                           , TE s2 m2 t2 <- e2s
+                                           , s1 == s2 ]
     -- FIXME: Should we apply g here as well?
     -- This won't really happen cause we only use it for downcast, so
     -- the snd list will be empty
-    snd = [ B s t | B s t <- b2s
-                  , not $ exists ((== s) . b_sym) b1s ]
+    snd = [ TE s m t | TE s m t <- e2s
+                     , not $ exists ((== s) . f_sym) e1s ]
 
 zipType _ _ _ t1 t2 = 
   errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)

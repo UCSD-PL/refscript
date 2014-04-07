@@ -220,9 +220,7 @@ freshSubst l ξ αs
        βs        <- mapM (freshTVar l) αs
        setTyArgs l ξ βs
        extSubst   $ βs 
-       let θ      = fromList $ zip αs (tVar <$> βs)
-       addSubst   $ θ 
-       return θ
+       return     $ fromList $ zip αs (tVar <$> βs)
 
 setTyArgs l ξ βs
   = do  {-m <- tc_anns <$> get-}

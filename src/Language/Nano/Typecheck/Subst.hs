@@ -304,6 +304,6 @@ ppBind'  δ (B x t)             = pp x <> colon <> pp' δ t
 ppElt'   δ (TE x _ t)          = pp x <> colon <> pp' δ t
 
 ppBinds1' δ ts                 = lbrace $+$ nest 2 (fcat $ map (ppBind' δ) ts) $+$ rbrace
--- ppElts1'  δ ts                 = lbrace $+$ nest 2 (fcat $ map (ppElt' δ) ts) $+$ rbrace
-ppElts1'  δ ts                 = braces (hsep $ map (ppElt' δ) ts)
+ppElts1'  δ ts                 = lbrace $+$ nest 2 (fcat $ map (ppElt' δ) ts) $+$ rbrace
+-- ppElts1'  δ ts                 = braces (hsep $ map (ppElt' δ) ts)
 

@@ -1,11 +1,11 @@
-/*@ hop :: (list [{v:number| 0 <= v}] + null) => void */
+/*@ hop :: (#List [{v:number| 0 <= v}] + null) => void */
 function hop(as : number[]) : void {
   if (empty(as)) {
     return;
   }
   var h = head(as);
-  //assert(0 <= h);
-  // var t = tail(xs);
-  // return hop(t);
+  assert(0 <= h);
+  var t = tail(as);
+  return hop(t);
 }
 

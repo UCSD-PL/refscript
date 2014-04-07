@@ -105,7 +105,7 @@ errorWriteImmutable l x   = mkErr l $ render $ text "Cannot write variable outsi
 
 errorInvalidTopStmt l x   = mkErr l $ printf "Invalid top-level statement: %s" (ppshow x) 
 errorOccursCheck l a t    = mkErr l $ printf "Occurs check fails: %s in %s" (ppshow a) (ppshow t)
-errorRigidUnify l a t     = mkErr l $ printf "Cannot unify rigid variable %s with %s" (ppshow a) (ppshow t) 
+errorRigidUnify l a t θ   = mkErr l $ printf "Cannot unify rigid variable %s with %s in %s" (ppshow a) (ppshow t) (ppshow θ)
 errorSubType l m t t'     = mkErr l $ printf "%s -- Type %s is not a subtype of %s" m (ppshow t) (ppshow t')
 errorCast l m e t         = mkErr l $ printf "%s -- Cannot cast non-variable expression: %s to %s" m (ppshow e) (ppshow t)
 errorObjectAccess l e t   = mkErr l $ printf "Dot notation on non object expression %s :: %s" (ppshow e) (ppshow t)

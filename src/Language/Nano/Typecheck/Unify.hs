@@ -43,11 +43,17 @@ type PPR r = (PP r, F.Reftable r)
 -----------------------------------------------------------------------------
 
 -- | Unify types @t@ and @t'@, in substitution environment @θ@ and type
--- definition environment @env@.
+-- definition environment @δ@.
 -----------------------------------------------------------------------------
 unify :: (PP r, F.Reftable r, Ord r) => SourceSpan -> TDefEnv (RType r) 
   -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
+-- XXX: keep the union case first (i.e. before unfolding) 
+unify l δ θ t t' | any isUnion [t,t']
+  = let (ts, _, _) = unionParts' unifEquiv t t' in
+    let (t1s, t2s) = unzip ts in
+    unifys l δ θ t1s t2s
+
 unify _ _ θ t@(TApp _ _ _) t'@(TApp _ _ _) | any isTop [t,t'] = Right $ θ
 
 unify l δ θ (TFun xts t _) (TFun xts' t' _)
@@ -66,11 +72,6 @@ unify l δ θ t1@(TApp (TRef i) ts _) t2
 unify l δ θ t1 t2@(TApp (TRef i) ts _)
   = unify l δ θ t1 (flattenType δ t2)
 
-unify l δ θ t t' | any isUnion [t,t']
-  = let (ts, _, _) = unionParts' unifEquiv t t' in
-    let (t1s, t2s) = unzip ts in
-    unifys l δ θ t1s t2s
-
 unify l δ θ (TArr t _) (TArr t' _) = unify l δ θ t t'
 
 unify l δ θ (TCons e1s _) (TCons e2s _) = 
@@ -84,8 +85,8 @@ unifEquiv t t' | toType t == toType t'
                = True
 unifEquiv t t' | any isUnion [t,t'] 
                = error "No nested unions"
-unifEquiv (TApp c ts _) (TApp c' ts' _) = c `equiv` c'  -- Interfaces appear once only on top-level unions
-unifEquiv (TArr t _   ) (TArr t' _    ) = True          -- Arras are really interfaces
+unifEquiv (TApp c _ _ ) (TApp c' _ _  ) = c `equiv` c'  -- Interfaces appear once only on top-level unions
+unifEquiv (TArr _ _   ) (TArr _ _     ) = True          -- Arras are really interfaces
 unifEquiv (TVar v _   ) (TVar v' _    ) = v == v'
 unifEquiv (TFun b o _ ) (TFun b' o' _ ) = True          -- Functions as well ... 
 unifEquiv (TAll _ _   ) (TAll _ _     ) = error "unifEquiv-tall"
@@ -142,14 +143,11 @@ varAsn ::  (PP r, F.Reftable r, Ord r) =>
   SourceSpan -> RSubst r -> TVar -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 varAsn l θ α t 
-  -- Check if previous substs are sufficient 
-  | t == apply θ (tVar α)  = Right $ θ 
-  -- We are not even checking if t is a subtype of `tVar α`, i.e.:
-  -- unifying A with A + B will fail!
-  | t == tVar α            = Right $ θ 
-  | α `S.member` free t    = Left  $ errorOccursCheck l α t 
-  | unassigned α θ         = Right $ θ `mappend` (Su $ M.singleton α t)
-  | otherwise              = Left  $ errorRigidUnify l α t
+  | on (==) toType t (apply θ (tVar α)) = Right $ θ 
+  | on (==) toType t (tVar α)           = Right $ θ 
+  | α `S.member` free t                 = Left  $ errorOccursCheck l α t 
+  | unassigned α θ                      = Right $ θ `mappend` (Su $ M.singleton α t)
+  | otherwise                           = Left  $ errorRigidUnify l α t θ
   
 unassigned α (Su m) = M.lookup α m == Just (tVar α)
 

@@ -1,4 +1,4 @@
-/*@ hop :: (#List [{v:number| 0 <= v}] + null) => void */
+/*@ hop :: (#List [{v:number| 0 <= v}]?) => void */
 function hop(as : number[]) : void {
   if (empty(as)) {
     return;

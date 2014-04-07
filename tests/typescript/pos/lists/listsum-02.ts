@@ -1,4 +1,4 @@
-/*@ listsum :: (#List [{v:number | 0 <= v}] + null) => {v:number | 0 <= v} */
+/*@ listsum :: (#List [{ number | 0 <= v }]?) => { number | 0 <= v } */
 function listsum(xs : number[]) : number{
 	if (empty(xs)) {
 		return 0;

@@ -35,7 +35,8 @@ Tool/Implementation
   
   - Fix scoping for functions and variables
 
-  - addInvariant: restrain use
+  - Add sanity check for types: each sort should be represented at most once at
+    a union type top-level.
 
   - Fix hacky qualifier parse-translation e.g. tests/liquid/pos/arrays/arr-03.js
         

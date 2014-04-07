@@ -56,6 +56,7 @@ import           GHC.Generics
 dot        = Token.dot        lexer
 plus       = Token.symbol     lexer "+"
 star       = Token.symbol     lexer "*"
+question   = Token.symbol     lexer "?"
 
 
 type ParserS a = Parser (TDefEnv RefType, Integer) a 
@@ -128,34 +129,44 @@ xyzP lP sepP rP
                             <*> (isJust <$> optionMaybe star) 
                             <*> rP
 
+postP p post 
+  = (\x _ -> x) <$> p <*> post
+
 ----------------------------------------------------------------------------------
 -- | RefTypes 
 ----------------------------------------------------------------------------------
 
 -- | `bareTypeP` parses top-level "bare" types. If no refinements are supplied, 
 -- then "top" refinement is used.
-
+----------------------------------------------------------------------------------
 bareTypeP :: ParserS RefType 
+----------------------------------------------------------------------------------
 bareTypeP =       
       try bUnP
   <|> try (refP rUnP)
   <|>     (xrefP rUnP)
 
-rUnP      = mkUn <$> bareTypeNoUnionP `sepBy1` plus
-
-bUnP      = bareTypeNoUnionP `sepBy1` plus >>= ifSingle return (\xs -> TApp TUn xs <$> topP)
+rUnP        = mkU <$> parenNullP (bareTypeNoUnionP `sepBy1` plus) toN
   where
-    ifSingle f _ [x] = f x
-    ifSingle _ g xs  = g xs
+    mkU [x] = strengthen x
+    mkU xs  = TApp TUn (L.sort xs)
+    toN     = (tNull:)
 
-mkUn [a] = strengthen a
-mkUn ts  = TApp TUn (L.sort ts)
+bUnP        = parenNullP (bareTypeNoUnionP `sepBy1` plus) toN >>= mkU
+  where
+    mkU [x] = return x
+    mkU xs  = TApp TUn xs <$> topP
+    toN     = (tNull:)
+
 
 -- | `bareTypeNoUnionP` parses a type that does not contain a union at the top-level.
-bareTypeNoUnionP  = try funcSigP          <|> (bareAtomP bbaseP)
+bareTypeNoUnionP = try funcSigP <|> (bareAtomP bbaseP)
+
+-- | `optNullP` optianlly parses "( `a` )?", where `a` is parsed by the input parser @pr@.
+parenNullP p f =  try (f <$> postP p question) <|> p
 
 -- | `funcSigP` parses a function type that is possibly generic and/or an intersection.
-funcSigP          = 
+funcSigP = 
       try bareAll1P
   <|> try (intersectP bareAll1P) 
   <|> try bareFun1P
@@ -186,28 +197,18 @@ bareAtomP p
  <|> try (refP p)
  <|>     (dummyP p)
 
+----------------------------------------------------------------------------------
 bbaseP :: ParserS (Reft -> RefType)
+----------------------------------------------------------------------------------
 bbaseP 
   =  try (TVar <$> tvarP)                  -- A
  <|> try objLitP                           -- {f1: T1, ... , fn: Tn} 
  <|> try (TArr <$> arrayP)                 -- [T]
  <|> try (TApp <$> tConP <*> bareTyArgsP)  -- list[A], tree[A,B] etc...
-
--- DEPRECATING:
---
--- Structural types shall be just a TCons.
---
--- objLitP :: ParserS (Reft -> RefType)
--- objLitP = do 
---   bs          <- braces $ bindsP
---   -- all fields are public 
---   let d        = TD Nothing [] Nothing [ TE s True t | B s t <- bs ]
---   (u, n)      <- getState
---   let (u', id) = addObjLitTy d u 
---   putState     $ (u', n)                -- update the type definitions environment
---   return       $ TApp (TRef id) []      -- no type vars 
  
+----------------------------------------------------------------------------------
 objLitP :: ParserS (Reft -> RefType)
+----------------------------------------------------------------------------------
 objLitP = do 
   bs    <- braces $ bindsP
   return $ TCons [ TE s True t | B s t <- bs ]
@@ -218,8 +219,10 @@ bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
 bareTyArgP  = try bareTypeP 
            <|> (TExp <$> exprP)
 
+----------------------------------------------------------------------------------
 tvarP    :: ParserS TVar
-tvarP    = withSpan tvar $ wordP isTvar                  -- = withSpan {- (\l x -> TV x l) -} (flip TV) (stringSymbol <$> upperWordP)
+----------------------------------------------------------------------------------
+tvarP    = withSpan tvar $ wordP isTvar 
 
 tvar l x = TV (stringSymbol x) l
 
@@ -229,7 +232,9 @@ wordP p  = condIdP ok p
   where 
     ok   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
+----------------------------------------------------------------------------------
 tConP :: ParserS TCon
+----------------------------------------------------------------------------------
 tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "boolean"   >> return TBool)
      <|> try (reserved "undefined" >> return TUndef)
@@ -239,7 +244,9 @@ tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "null"      >> return TNull)
      <|>     (withinSpacesP $ char '#' >> identifierP >>= idToTRefP)
 
+----------------------------------------------------------------------------------
 idToTRefP :: Id SourceSpan -> ParserS TCon
+----------------------------------------------------------------------------------
 idToTRefP (Id _ s) = do
   (u, _)      <- getState
   let (u', id) = addSym (symbol s) u 
@@ -279,21 +286,28 @@ bareEltP = do s <- binderP
               return $ TE s mut t 
 
  
+----------------------------------------------------------------------------------
 dummyP ::  ParserS (Reft -> b) -> ParserS b
+----------------------------------------------------------------------------------
 dummyP fm = fm `ap` topP 
 
+----------------------------------------------------------------------------------
 topP   :: ParserS Reft
+----------------------------------------------------------------------------------
 topP   = (Reft . (, []) . vv . Just) <$> freshIntP'
 
 -- Using a slightly changed version of `freshIntP`
+----------------------------------------------------------------------------------
 freshIntP' :: ParserS Integer
+----------------------------------------------------------------------------------
 freshIntP' = do (u,n) <- stateUser <$> getParserState
                 putState $ (u, n+1)
                 return n
 
 
-
+----------------------------------------------------------------------------------
 -- | Parses refined types of the form: `{ kind | refinement }`
+----------------------------------------------------------------------------------
 xrefP :: ParserS (Reft -> a) -> ParserS a
 xrefP kindP
   = braces $ do
@@ -302,11 +316,15 @@ xrefP kindP
       ras <- refasP 
       return $ t (Reft (stringSymbol "v", ras))
 
+----------------------------------------------------------------------------------
 refasP :: ParserS [Refa]
+----------------------------------------------------------------------------------
 refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi)) 
        <|> liftM ((:[]) . RConc) predP
  
+----------------------------------------------------------------------------------
 binderP :: ParserS Symbol
+----------------------------------------------------------------------------------
 binderP = try (stringSymbol <$> idP badc)
       <|> try (star >> return (stringSymbol "*"))
       <|> liftM pwr (parens (idP bad))
@@ -315,10 +333,14 @@ binderP = try (stringSymbol <$> idP badc)
             bad c  = isSpace c || c `elem` "()"
             pwr s  = stringSymbol $ "(" ++ s ++ ")" 
 
+----------------------------------------------------------------------------------
 withinSpacesP :: ParserS a -> ParserS a
+----------------------------------------------------------------------------------
 withinSpacesP p = do { spaces; a <- p; spaces; return a } 
              
+----------------------------------------------------------------------------------
 classDeclP :: ParserS (Id SourceSpan, ([TVar], Maybe (Id SourceSpan, [RefType])))
+----------------------------------------------------------------------------------
 classDeclP = do
   reserved "class"
   id <- identifierP 
@@ -377,7 +399,9 @@ parseAnnot ss (RawPAlias _) = PAlias <$> patch2 ss <$> pAliasP
 parseAnnot _  (RawQual   _) = Qual   <$>              qualifierP
 parseAnnot ss (RawInvt   _) = Invt             ss <$> bareTypeP
 
+----------------------------------------------------------------------------------
 registerIface :: Spec -> ParserS Spec
+----------------------------------------------------------------------------------
 registerIface (IFace (s, t)) = do
   (u, n)  <- getState
   -- XXX: losing the SourceSpan on s here.

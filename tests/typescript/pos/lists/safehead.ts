@@ -1,6 +1,6 @@
 
 
-/*@ getHead :: (list[number] + null) => {number | true} */
+/*@ getHead :: (#List[number]?) => { number | true } */
 function getHead(xs){
   if (empty(xs)) {
     return 1;

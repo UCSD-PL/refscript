@@ -92,7 +92,7 @@ import           Text.Printf
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -421,7 +421,7 @@ subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 subType l g t1 t2 =
   do t1'   <- addInvariant t1
      t2'   <- addInvariant t2
-     -- TODO: Make this more efficient - only introduce new bindings
+     δ     <- getDef
      g'    <- envAdds [(symbolId l x, t) | (x, Just t) <- rNms t1' ++ rNms t2' ] g
      modify $ \st -> st {cs = c g' (t1', t2') : (cs st)}
   where
@@ -534,24 +534,26 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   = errorstar "UNEXPECTED CRASH in splitC"
 
 -- | Unions
-splitC (Sub g i t1@(TApp TUn t1s r1) t2@(TApp TUn t2s r2)) 
-  = do  cs      <- bsplitC g i t1 t2
-        -- NOTE: hopefully this should align them...
+-- FIXME: Uneven unions
+splitC (Sub g i t1 t2)
+  | any isUnion [t1, t2]
+  = getDef >>= \δ -> match t1 (zipType δ (\p _ -> p) F.bot t2 t1)
+    where 
+      match t1@(TApp TUn t1s r1) t2@(TApp TUn t2s r2) = do
+        cs      <- bsplitC g i t1 t2
         let t1s' = L.sortBy (compare `on` toType) $ (`strengthen` r1) <$> t1s
         let t2s' = L.sortBy (compare `on` toType) $ (`strengthen` r2) <$> t2s
         cs'     <- concatMapM splitC $ safeZipWith "splitC-Unions" (Sub g i) t1s' t2s'
         return   $ cs ++ cs'
-
-splitC (Sub _ _ t1 t2) 
-  | any isUnion [t1,t2] = errorstar $ printf "Uneven unions in splitC: %s - %s" (ppshow t1) (ppshow t2)
+      match t1' t2' = splitC (Sub g i t1' t2')
 
 -- |Type references
 splitC (Sub g i t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _)) 
   | i1 == i2
   = do  cs    <- bsplitC g i t1 t2
-        -- FIXME: Invariant type parameters
+        -- FIXME: Variance !!!
         cs'   <- concatMapM splitC $ safeZipWith "splitC-TRef" (Sub g i) t1s t2s
-                                  ++ safeZipWith "splitC-TRef" (Sub g i) t2s t1s
+                                  -- ++ safeZipWith "splitC-TRef" (Sub g i) t2s t1s
         return $ cs ++ cs' 
   | otherwise 
   = do  cs    <- bsplitC g i t1 t2
@@ -595,8 +597,9 @@ splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
 splitC (Sub g i t1@(TArr t1v _ ) t2@(TArr t2v _ ))
   = do cs    <- bsplitC g i t1 t2
        cs'   <- splitC (Sub g i t1v t2v) -- CO-VARIANCE 
-       cs''  <- splitC (Sub g i t2v t1v) -- CONTRA-VARIANCE 
-       return $ cs ++ cs' ++ cs''
+       -- FIXME: Variance !!!
+       -- cs''  <- splitC (Sub g i t2v t1v) -- CONTRA-VARIANCE 
+       return $ cs ++ cs' -- ++ cs''
 
 -- | TCons
 splitC (Sub g i t1@(TCons b1s _ ) t2@(TCons b2s _ ))
@@ -604,6 +607,7 @@ splitC (Sub g i t1@(TCons b1s _ ) t2@(TCons b2s _ ))
        when (or $ zipWith ((/=) `on` f_sym) b1s' b2s') $ error "splitC on non aligned TCons"
        --FIXME: add other bindings in env (like function)? Perhaps through "this"
        cs'   <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t1s t2s -- CO-VARIANCE
+       -- FIXME: Variance !!!
        -- cs''  <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t2s t1s -- CONTRA-VARIANCE
        return $ cs ++ cs' -- ++ cs''
     where
@@ -634,7 +638,9 @@ splitE g i e1s e2s
 bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 ---------------------------------------------------------------------------------------
 bsplitC g ci t1 t2
-  = bsplitC' g ci <$> addInvariant t1 <*> addInvariant t2
+  = do δ <- getDef 
+       {- trace ("BSPLIT: " ++ render (pp' δ t1) ++ "\n\n" ++ render (pp' δ t2)) <$> -} 
+       bsplitC' g ci <$> addInvariant t1 <*> addInvariant t2
 
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2

@@ -15,10 +15,12 @@ function release(l){
   return 0;
 }
 
-/*@ driver :: (number, number) => number */ 
+/*@ driver :: (number, number, number) => number */ 
 function driver(l0, newCount0, oldCount0){
-  requires(((newCount0 != oldCount0) && (l0 == 0)) || ((newCount0 == oldCount0) && (l0 == 1)));
-  ensures($result == 1);
+  
+  requires( (newCount0 !== oldCount0 && l0 === 0) || (newCount0 === oldCount0 && l0 === 1));
+  
+  //ensures($result == 1);
   var l        = l0;
   var newCount = newCount0;
   var oldCount = oldCount0;

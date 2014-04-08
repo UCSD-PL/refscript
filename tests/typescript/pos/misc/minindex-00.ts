@@ -1,6 +1,6 @@
 /*@ qualif UBound(v:number, x:a) : v < (len x) */
 
-/*@ loop :: (list [number], number, number) => number */ 
+/*@ loop :: (#List[number], number, number) => number */ 
 function loop(b:number[], min:number, i:number):number{
 	if (i < mylength(b)) {
 		var min_:number = min;
@@ -13,7 +13,7 @@ function loop(b:number[], min:number, i:number):number{
 	return min;
 }
 
-/*@ minIndex :: ({a:list [number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a))} */ 
+/*@ minIndex :: ({a: #List[number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a))} */ 
 function minIndex(a){
 	var r :number= loop(a, 0, 0);
 	return r;

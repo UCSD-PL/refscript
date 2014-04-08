@@ -7,9 +7,7 @@
 module Language.Nano.Typecheck.Unify ( 
   
   -- * Unification 
-  --   unify
-  -- , 
-  unifys, unifysV
+  unifys
 
   ) where 
 
@@ -48,11 +46,6 @@ type PPR r = (PP r, F.Reftable r)
 unify :: (PP r, F.Reftable r, Ord r) => SourceSpan -> TDefEnv (RType r) 
   -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
--- XXX: keep the union case first (i.e. before unfolding) 
-unify l δ θ t t' | any isUnion [t,t']
-  = let (ts, _, _) = unionParts' unifEquiv t t' in
-    let (t1s, t2s) = unzip ts in
-    unifys l δ θ t1s t2s
 
 unify _ _ θ t@(TApp _ _ _) t'@(TApp _ _ _) | any isTop [t,t'] = Right $ θ
 
@@ -62,6 +55,13 @@ unify l δ θ (TFun xts t _) (TFun xts' t' _)
 unify l _ θ (TVar α _) (TVar β _) = varEql l θ α β 
 unify l _ θ (TVar α _) t' = varAsn l θ α t'
 unify l _ θ t (TVar α _)  = varAsn l θ α t
+
+-- XXX: ORDERING IMPORTANT HERE
+-- Keep the union case before unfolding, but after type variables
+unify l δ θ t t' | any isUnion [t,t']
+  = let (ts, _, _) = unionParts' unifEquiv t t' in
+    let (t1s, t2s) = unzip ts in
+    unifys l δ θ t1s t2s
 
 unify l δ θ t1@(TApp (TRef i) ts _) t2@(TApp (TRef i') ts' _) 
   | i == i'   = unifys l δ θ ts ts'
@@ -86,17 +86,13 @@ unifEquiv t t' | toType t == toType t'
 unifEquiv t t' | any isUnion [t,t'] 
                = error "No nested unions"
 unifEquiv (TApp c _ _ ) (TApp c' _ _  ) = c `equiv` c'  -- Interfaces appear once only on top-level unions
-unifEquiv (TArr _ _   ) (TArr _ _     ) = True          -- Arras are really interfaces
+unifEquiv (TArr _ _   ) (TArr _ _     ) = True          -- Arrays are really interfaces
+unifEquiv (TCons _ _  ) (TCons _ _    ) = True
 unifEquiv (TVar v _   ) (TVar v' _    ) = v == v'
 unifEquiv (TFun b o _ ) (TFun b' o' _ ) = True          -- Functions as well ... 
 unifEquiv (TAll _ _   ) (TAll _ _     ) = error "unifEquiv-tall"
 unifEquiv (TExp _     ) (TExp   _     ) = error "unifEquiv-texp"
 unifEquiv _             _               = False
-
-
-unifysV loc env θ xs ys = tracePP msg <$> unifys loc env θ (tracePP "xs" xs) (tracePP "ys" ys)
-  where 
-    msg      = printf "unifys: [xs = %s] [ys = %s]"  (ppshow xs) (ppshow ys)
 
 
 -----------------------------------------------------------------------------

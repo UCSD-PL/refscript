@@ -9,7 +9,7 @@ function forloop(lo:number, hi:number, body:(number,any)=>any, accum:any):any{
 	return accum;
 }
 
-/*@ minIndex :: ({a:list [number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a))} */ 
+/*@ minIndex :: ({a: #List[number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a))} */ 
 function minIndex(a:number[]):number{
 	
 	/*@ step :: (number, number) => number */

@@ -14,9 +14,9 @@ var gobj1= { a: 5, b: "String", f: inc };
 var gobj2= { a: 5, b: "String", f: inc };
 
 /*@ foo :: () => { number | v = 6 } */
-function foo() :number{
+function foo() :number {
 
-    var ff : (number) => number= gobj.f;
+    var ff = gobj.f;
   
     return ff(gobj.a);
 }

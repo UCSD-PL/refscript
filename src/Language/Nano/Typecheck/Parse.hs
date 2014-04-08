@@ -326,7 +326,7 @@ refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi))
 binderP :: ParserS Symbol
 ----------------------------------------------------------------------------------
 binderP = try (stringSymbol <$> idP badc)
-      <|> try (star >> return (stringSymbol "*"))
+      -- <|> try (star >> return (stringSymbol "*")) -- disabling this
       <|> liftM pwr (parens (idP bad))
       where idP p  = many1 (satisfy (not . p))
             badc c = (c == ':') ||  bad c

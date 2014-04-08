@@ -57,7 +57,7 @@ module Language.Nano.Typecheck.Types (
   , TDefEnv (..), tDefEmpty
   , addTySym, addSym, addObjLitTy
   , findTySym, findTySymOrDie, findTySymWithId, findTySymWithIdOrDie, findTyId, findTyIdOrDie
-  , findTyIdOrDie', findEltWithDefault, symTDefMem, getTDefName, isNamedType
+  , findTyIdOrDie', findEltWithDefault, symTDefMem, getTDefName, getTDefNameOrDie, isNamedType
   , getDefNames
   , sortTDef
   , getCons
@@ -262,6 +262,8 @@ symTDefMem s = F.memberSEnv s . g_names
 
 
 getTDefName δ i = findTyId i δ >>= t_name  
+
+getTDefNameOrDie δ i = fromJust $ getTDefName δ i 
 
 
 -- | Sort the fields of a TDef 

@@ -604,7 +604,9 @@ splitC (Sub g i t1@(TArr t1v _ ) t2@(TArr t2v _ ))
 -- | TCons
 splitC (Sub g i t1@(TCons b1s _ ) t2@(TCons b2s _ ))
   = do cs    <- bsplitC g i t1 t2
-       when (or $ zipWith ((/=) `on` f_sym) b1s' b2s') $ error "splitC on non aligned TCons"
+       δ     <- getDef
+       when (or $ zipWith ((/=) `on` f_sym) b1s' b2s') 
+         $ error $ "splitC on non aligned TCons: " ++ render (pp' δ t1) ++ "\n" ++ render (pp' δ t2)
        --FIXME: add other bindings in env (like function)? Perhaps through "this"
        cs'   <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t1s t2s -- CO-VARIANCE
        -- FIXME: Variance !!!

@@ -395,13 +395,13 @@ interface List<A> {
 /*@ qualif True1(v:Bool)             : (Prop v)                 */
 /*@ qualif False1(v:Bool)            : not (Prop v)             */
 
-/*@ qualif Len(v:number, n: number)  : (len v) = n              */
-
 
 // Somewhat more controversial qualifiers (i.e. "expensive"...)
 
 /*  qualif Add(v:number,x:number,y:number): v = x + y           */
 /*  qualif Sub(v:number,x:number,y:number): v = x - y           */
+
+/*  qualif Len(v:number, n: number)  : n < (len v)              */
 
 
 var __dummy__ = null; //IMPORTANT: This needs to be here so that there is at least one node in the Typescript AST !!!

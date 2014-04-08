@@ -227,7 +227,12 @@ consStmt _ s
 consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consVarDecl g (VarDecl l x (Just e)) 
-  = consAsgn g l x e
+  = do t <- case envFindAnnot l x g of
+              Just t  -> Just <$> freshTyVar g l t
+              Nothing -> return $ Nothing
+       (x', g') <- consExprT g e t
+       Just <$> envAdds [(x, envFindTy x' g')] g'
+
 
 consVarDecl g (VarDecl l x Nothing)
   = case envFindAnnot l x g of
@@ -252,7 +257,20 @@ consClassElt g (MemberMethDecl l _ i xs body)
   = do  ts <- cgFunTys l i xs $ safeHead "consClassElt" [ t | MethAnn t <- ann_fact l]
         mapM_ (consFun1 l g i xs body) ts
 
--- | consExprT: typecheck expression @e@ under (optional) contextual type @to@.
+------------------------------------------------------------------------------------
+consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
+------------------------------------------------------------------------------------
+consExprT g e to 
+  = do (x, g') <- consExpr g e
+       let te   = envFindTy x g'
+       case to of
+         Nothing -> return (x, g')
+         Just t  -> subType l g' te t >> (x,) <$> envAdds [(x, t)] g'
+    where
+       l = getAnnotation e
+ 
+
+-- | consExprT': typecheck expression @e@ under (optional) contextual type @to@.
 --
 --   G |- e :: Te 
 --  
@@ -267,25 +285,27 @@ consClassElt g (MemberMethDecl l _ i xs body)
 --   [ . ] : optional annotation
 --  
 ------------------------------------------------------------------------------------
-consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
+consExprT' :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
 ------------------------------------------------------------------------------------
-consExprT g e to 
+consExprT' g e to 
   = do (x, g') <- consExpr g e
        let te   = envFindTy x g'
        δ <- getDef
        t <- case to of 
               {-Nothing -> tracePP "freshed-te" <$> (freshTyVar g' l $ rType $ tracePP "te" te)-}
               Nothing -> freshTyVar g' l $ rType te
-              {-Just tA -> do tK <- tracePP "freshed-t0" <$> (freshTyVar g' l $ rType $ tracePP "t0" tA)-}
-              Just tA -> do tK <- freshTyVar g' l $ rType tA
-                            subType l g' tK tA
-                            return tK 
-       subType l g' te t 
-       {-subType l g' (tracePP ("B." ++ ppshow te ++ " <: " ++ ppshow t) te) t-}
+              Just tA | isTrivialRefType tA -> 
+                do tK <- tracePP "freshed-t0" <$> (freshTyVar g' l $ rType $ tracePP "t0" tA)
+                   {-subType l g' tK tA-}
+                   subType l g' (trace ("A." ++ ppshow tK ++ " <: " ++ ppshow tA) tK) tA
+                   return tK 
+              Just tA | otherwise -> return tA 
+                
+       subType l g' (trace ("B." ++ ppshow te ++ " <: " ++ ppshow t) te) t
        (x,) <$> envAdds [(x, t)] g'
     where
        l = getAnnotation e
- 
+
 
 --------------------------------------------------------------------------------
 consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
@@ -553,7 +573,7 @@ consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> C
         i_2' = i_1;
       }
 
- -}
+-}
 consWhile g l cond body 
   = do  (gI,tIs)            <- freshTyPhis (srcPos l) g xs $ toType <$> ts  -- (a) (b) 
         _                   <- consWhileBase l xs tIs g                     -- (c)

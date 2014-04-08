@@ -55,7 +55,8 @@ module Language.Nano.Typecheck.Types (
   -- * Type definition env
   , TyID
   , TDefEnv (..), tDefEmpty
-  , addTySym, addSym, addObjLitTy
+  , addTySym, addSym 
+  --, addObjLitTy
   , findTySym, findTySymOrDie, findTySymWithId, findTySymWithIdOrDie, findTyId, findTyIdOrDie
   , findTyIdOrDie', findEltWithDefault, symTDefMem, getTDefName, getTDefNameOrDie, isNamedType
   , getDefNames
@@ -198,15 +199,15 @@ addSym s g@(G sz γ c) = maybe f (g,) (F.lookupSEnv s c)
     id  = sz + 1
     c'  = F.insertSEnv s id c 
 
----------------------------------------------------------------------------------
-addObjLitTy :: TDef t -> TDefEnv t -> (TDefEnv t, TyID)
----------------------------------------------------------------------------------
-addObjLitTy t (G sz γ c) = (G sz' γ' c, id)
-  where
-    sz' = sz + 1
-    id  = sz + 1
-    γ'  = I.insert id t γ
-
+-- ---------------------------------------------------------------------------------
+-- addObjLitTy :: TDef t -> TDefEnv t -> (TDefEnv t, TyID)
+-- ---------------------------------------------------------------------------------
+-- addObjLitTy t (G sz γ c) = (G sz' γ' c, id)
+--   where
+--     sz' = sz + 1
+--     id  = sz + 1
+--     γ'  = I.insert id t γ
+-- 
 ---------------------------------------------------------------------------------
 findTySym :: F.Symbolic s => s -> TDefEnv t -> Maybe (TDef t)
 ---------------------------------------------------------------------------------

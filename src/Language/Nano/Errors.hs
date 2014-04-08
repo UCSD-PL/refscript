@@ -152,3 +152,4 @@ errorArraySubtype l t t'  = mkErr l $ printf "Array type: %s is not a subtype of
 
 errorTypeArgsNum l n p q  = mkErr l $ printf "Type %s expects %s arguments but %s were provided" (ppshow n) (ppshow p) (ppshow q)
 
+errorSigNotFound l e es   = mkErr l $ printf "Could not find a matching signature for call to %s with arguments %s" (ppshow e) (ppshow es)

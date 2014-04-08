@@ -204,7 +204,7 @@ bbaseP
   =  try (TVar <$> tvarP)                  -- A
  <|> try objLitP                           -- {f1: T1, ... , fn: Tn} 
  <|> try (TArr <$> arrayP)                 -- [T]
- <|> try (TApp <$> tConP <*> bareTyArgsP)  -- list[A], tree[A,B] etc...
+ <|> try (TApp <$> tConP <*> bareTyArgsP)  -- #List[A], #Tree[A,B] etc...
  
 ----------------------------------------------------------------------------------
 objLitP :: ParserS (Reft -> RefType)

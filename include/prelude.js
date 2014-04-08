@@ -285,7 +285,7 @@ reduceRight    :  /\ (callbackfn: (previousValue: T, currentValue: T, currentInd
 /*@ qualif False(v:Bool)             : not (? v)                */
 /*@ qualif True1(v:Bool)             : (Prop v)                 */
 /*@ qualif False1(v:Bool)            : not (Prop v)             */
-/*@ qualif Len(v:number, n: number)  : (len v) = n              */
+/*@ qualif Len(v:number, n: number)  : n < (len v)              */
 // Somewhat more controversial qualifiers (i.e. "expensive"...)
 /*  qualif Add(v:number,x:number,y:number): v = x + y           */
 /*  qualif Sub(v:number,x:number,y:number): v = x - y           */

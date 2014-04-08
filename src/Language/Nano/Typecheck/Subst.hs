@@ -33,6 +33,7 @@ import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
+import           Language.Nano.Errors
 import           Language.Fixpoint.Misc (intersperse)
 
 import           Language.Fixpoint.PrettyPrint
@@ -266,7 +267,7 @@ flattenType' _ _ _              = error "TExp should not appear here"
 --
 -- Useful for: unification
 ---------------------------------------------------------------------------------
-unfoldType :: TDefEnv (RType r) -> RType r -> RType r
+unfoldType :: PPR r => TDefEnv (RType r) -> RType r -> RType r
 ---------------------------------------------------------------------------------
 unfoldType δ t@(TApp (TRef i) ts r) 
   | isNamedType i δ 
@@ -274,7 +275,7 @@ unfoldType δ t@(TApp (TRef i) ts r)
   | null ts
   = TCons [TE s m (unfoldType δ τ) | TE s m τ <- t_elts $ findTyIdOrDie i δ] r
   | otherwise 
-  = error "IMPOSSIBLE:unfoldType"
+  = error $ "IMPOSSIBLE:unfoldType: " ++ ppshow t 
 unfoldType δ (TApp c ts r)  = TApp c (unfoldType δ <$> ts) r
 unfoldType _ (TVar v r)     = TVar v r
 unfoldType δ (TFun ts to r) = TFun (f <$> ts) (unfoldType δ to) r

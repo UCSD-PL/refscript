@@ -1,4 +1,5 @@
-var x /*@  { f: { number | v > 0 } } */ = { f: 1 };
+/*@ x :: { f: { number | v > 0 } } */ 
+var x = { f: 1 };
  
  
 /*@ foo :: () => {void | true } */

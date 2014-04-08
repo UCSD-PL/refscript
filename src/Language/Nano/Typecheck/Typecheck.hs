@@ -667,7 +667,7 @@ tcCall γ (CallExpr l e es)
        z                      <- tcCallMatch γ l e es ft0
        case z of
          Just (es', t)        -> return (CallExpr l e' es', t)
-         Nothing              -> error "UNIMPLMENTED: former deadcast" 
+         Nothing              -> tcError $ errorSigNotFound (srcPos l) e es
 
 -- | `e1[e2]`
 tcCall γ (BracketRef l e1 e2)

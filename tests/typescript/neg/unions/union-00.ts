@@ -1,7 +1,8 @@
 
 /*@ foo ::  (number) => { number | v = 2 } + boolean  */
 function foo(x) {
-  var r = 1;
+  /*@ r :: number + boolean */
+  var r: any = 1;
   if (x > 0) {
     r = 1;  
   }

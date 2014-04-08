@@ -3,7 +3,7 @@
 
 function foo(x) {
 	/*@ r :: number + boolean */
-	var r = 1;
+	var r: any = 1;
 	if (x > 0) {
 		r = 1;  
 	}

@@ -1,8 +1,11 @@
 
+// THIS WILL PROBABLY NOT BE SUPPORTED EVER 
+
+
 /*@ foo ::  (number + boolean) => number + { string | true } */
 function foo(x) {
 
-  if (typeof x == "number") 
+  if (typeof x === "number") 
     return x;
   return "a";
 }

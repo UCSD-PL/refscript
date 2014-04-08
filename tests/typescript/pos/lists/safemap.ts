@@ -1,7 +1,7 @@
 
 
 
-/*@ map :: forall A B. ((A) => B, xs:list[A] + null) => {v:list[B] + null | (len v) = (len xs)} */
+/*@ map :: forall A B. ((A) => B, xs: #List[A]?) => {v: #List[B]? | (len v) = (len xs)} */
 function map(f, xs){
   if (empty(xs)) {
     return nil();

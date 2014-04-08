@@ -8,7 +8,7 @@
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
 import           Text.Printf                        (printf)
--- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
+import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
 import           Control.Applicative                ((<$>))
 
@@ -40,7 +40,7 @@ import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
-
+-- 
 -- import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
@@ -259,6 +259,7 @@ consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, 
 consExprT g e to 
   = do (x, g') <- consExpr g e
        let te   = envFindTy x g'
+       δ <- getDef
        case to of
          Nothing -> return (x, g')
          Just t  -> subType l g' te t >> (x,) <$> envAdds [(x, t)] g'

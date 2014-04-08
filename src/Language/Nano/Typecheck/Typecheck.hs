@@ -542,6 +542,7 @@ tcExprT :: (Ord r, PPR r) => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r
 -------------------------------------------------------------------------------
 tcExprT l γ e to 
   = do (e', t)    <- tcExpr γ e
+       δ          <- getDef
        (e'', te)  <- case to of
                        Nothing -> return (e', t)
                        Just ta -> (,ta) <$> castM l (tce_ctx γ) e t ta
@@ -590,7 +591,7 @@ tcExpr γ (ObjectLit l bs)
        ets          <- mapM (tcExpr γ) es
        let (es', ts) = unzip ets
        let tCons     = TCons (zipWith mkElt (F.symbol <$> ps) ts) fTop
-       return (ObjectLit l (zip ps es'), tCons)
+       return $ (ObjectLit l (zip ps es'), tCons)
     where
        mkElt s t = TE s True t
 

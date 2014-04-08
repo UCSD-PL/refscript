@@ -38,6 +38,8 @@ Tool/Implementation
   - Add sanity check for types: each sort should be represented at most once at
     a union type top-level.
 
+  - Add check for missing type definition
+
   - Fix hacky qualifier parse-translation e.g. tests/liquid/pos/arrays/arr-03.js
         
           /* qualif OkLen(v:number, arr:a): v < (len arr) */

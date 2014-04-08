@@ -2,16 +2,15 @@
 /*@ qualif EqLen(v:a, xs:b)       : (len v) = (len xs)            */
 /*@ qualif SumLen(v:a, xs:b, ys:c): (len v) = (len xs) + (len ys) */
 
-/*@ map :: forall A B. ((A) => B, xs: #List[A] + null) => #List[B] + null */
+/*@ map :: forall A B. ((A) => B, xs: #List[A]?) => #List[B]? */
 function map(f, xs){
   if (empty(xs)) {
     return nil();
-  } 
+  }
   return cons(f(safehead(xs)), map(f, safetail(xs)));
 }
 
-/*@ append :: forall A. (xs: #List[A] + null, ys:#List[A] + null) => {v : list[A] + null | (len v) = (len xs) + (len ys)} */
-/* append :: forall A. (list[A] + null, list[A] + null) => list[A] + null */
+/*@ append :: forall A. (xs: #List[A]?, ys:#List[A]?) => {v : #List[A]? | (len v) = (len xs) + (len ys)} */
 function append(xs, ys){
   if (empty(xs)) {
     return ys;
@@ -22,10 +21,10 @@ function append(xs, ys){
   }
 }
 
-/*@ reverse :: forall A. (list [A] + null) => list [A] + null */
+/*@ reverse :: forall A. (#List [A]?) => #List [A]? */
 function reverse(xs){
 
-  /*@ go :: (list[A] + null, list[A] + null) => list[A] + null */ 
+  /*@ go :: (#List[A]?, #List[A]?) => #List[A]? */ 
   function go(acc, ys){
     if (empty(ys)){
       return acc;
@@ -40,7 +39,7 @@ function reverse(xs){
 }
 
 
-/*@ makeList :: (number) => list[number] + null */
+/*@ makeList :: (number) => #List[number]? */
 function makeList(n){
   if (n <= 0){
     return nil();
@@ -72,5 +71,4 @@ function main(n){
   var cs = append(xs, ys);
   assert(mylength(cs) == (mylength(xs) + mylength(bs)));
 }
-  
 

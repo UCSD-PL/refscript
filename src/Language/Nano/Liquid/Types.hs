@@ -247,6 +247,7 @@ stripRTypeBase (TApp _ _ r) = Just r
 stripRTypeBase (TVar _ r)   = Just r
 stripRTypeBase (TFun _ _ r) = Just r
 stripRTypeBase (TArr _ r)   = Just r
+stripRTypeBase (TCons _ r)  = Just r
 stripRTypeBase _            = Nothing
  
 ------------------------------------------------------------------------------------------

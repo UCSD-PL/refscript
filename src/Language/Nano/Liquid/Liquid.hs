@@ -53,7 +53,7 @@ verifyFile f = parse f $ ssa $ tc $ refTc
 
 parse f next = parseNanoFromFile f         >>= next
 ssa   next p = ssaTransform p              >>= either (lerror . single) next
-tc    next p = typeCheck (expandAliases p) >>= either lerror next
+tc    next p = typeCheck (tracePP "PROG" $ expandAliases p) >>= either lerror next
 refTc      p = getOpts >>= solveConstraints (fp p) . (`generateConstraints` p) 
 
 lerror       = return . (A.NoAnn,) . F.Unsafe

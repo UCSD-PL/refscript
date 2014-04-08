@@ -35,6 +35,8 @@ Tool/Implementation
   
   - Fix scoping for functions and variables
 
+  - Revisit overload resolution.
+
   - Add sanity check for types: each sort should be represented at most once at
     a union type top-level.
 
@@ -45,8 +47,6 @@ Tool/Implementation
           /* qualif OkLen(v:number, arr:a): v < (len arr) */
 
     Note use of lower-case which gets translated into tyvars in fixpoint. sigh.
-
-  - Null type: only use internally (?)
 
   - Array literal checks are quite slow.
       E.g.: liquid/pos/arrays/arr-07.js

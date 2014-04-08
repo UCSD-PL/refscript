@@ -17,6 +17,7 @@ import qualified Data.HashSet                       as HS
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.List                          as L
 import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe)
+import           Data.Either                        (rights)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat, render, hcat)
@@ -697,60 +698,61 @@ tcCall γ ex@(ArrayLit l es)
 --  Type for constructor outside the scope of the class: 
 --    ∀ Vs . (xs: Ts) => void
 --
-tcCall γ (NewExpr l (VarRef lv i) es)
-  = do  (tid, t@(TD _ vs _ _)) <- findOrCrateClassDef i
-        -- Get the constructor type by looking up the parent chain and then
-        -- using the type variables of the current class,
-        -- or just use the default type
-        -- Make this type return the type of the class, so that they get 
-        -- instantiated and assigned to the left hand side when we do the call.
-        tConst0 <- getPropTDefM l "constructor" t (tVar <$> vs)
-        let tConstr = fix tid vs $ fromMaybe def tConst0
-        when (not $ isTFun tConstr) $ tcError $ errorConstNonFunc (srcPos l) i
-        z <- tcCallMatch γ l "constructor" es tConstr
-        case z of
-          -- Constructor's return type is void - instead return the class type
-          -- FIXME: type parameters in returned type: inferred ... or provided !!! 
-          Just (es', t) -> 
-            return (NewExpr l (VarRef lv i) es', t)
-          Nothing       -> error "No matching constructor"
-    where
+tcCall γ (NewExpr l (VarRef lv i) es) = do  
+    (tid, t@(TD _ vs _ _)) <- findOrCrateClassDef i
+    -- Get the constructor type by looking up the parent chain and then
+    -- using the type variables of the current class,
+    -- or just use the default type
+    -- Make this type return the type of the class, so that they get 
+    -- instantiated and assigned to the left hand side when we do the call.
+    tConst0 <- getPropTDefM l "constructor" t (tVar <$> vs)
+    let tConstr = fix tid vs $ fromMaybe def tConst0
+    when (not $ isTFun tConstr) $ tcError $ errorConstNonFunc (srcPos l) i
+    z <- tcCallMatch γ l "constructor" es tConstr
+    case z of
+      -- Constructor's return type is void - instead return the class type
+      -- FIXME: type parameters in returned type: inferred ... or provided !!! 
+      Just (es', t) -> 
+        return (NewExpr l (VarRef lv i) es', t)
+      Nothing       -> error "No matching constructor"
+  where
     -- A default type for the constructor
-      def = TFun [] tVoid fTop
-      fix tid vs (TFun ts _ r) = mkAll vs $ TFun ts (TApp (TRef tid) (tVar <$> vs) fTop) r
-      fix _ _ t = error $ "BUG:tcCall NewExpr - not supported type for constructor: " ++ ppshow t
+    def = TFun [] tVoid fTop
+    fix tid vs (TFun ts _ r) = mkAll vs $ TFun ts (TApp (TRef tid) (tVar <$> vs) fTop) r
+    fix _ _ t = error $ "BUG:tcCall NewExpr - not supported type for constructor: " ++ ppshow t
 
 tcCall _ e
   = die $ bug (srcPos e) $ "tcCall: cannot handle" ++ ppshow e        
 
 
-tcCallMatch γ l fn es ft0
-  = do  (es', ts)     <- unzip <$> mapM (tcExpr γ) es
-        case calleeType l ts ft0 of 
-          -- Try to match it with a non-generic type
-          Just t -> call es' ts t
-          -- If this fails, try to instantiate possible generic types found
-          -- in the function signature.
-          Nothing ->
-            do  mType <- resolveOverload γ l fn es' ts ft0
-                addAnn (srcPos l) (Overload mType)
-                maybe (return Nothing) (call es' ts) mType
-    where
-      call es' ts t = fmap Just $ tcCallCase γ l fn es' ts t
-
-
-resolveOverload γ l fn es ts ft =
-  shd <$> filterM (\t -> valid <$> tcCallCaseTry γ l fn es ts t) eqLenSigs
+tcCallMatch γ l fn es ft0 = do  
+    (es', ts)     <- unzip <$> mapM (tcExpr γ) es
+    case calleeType l ts ft0 of 
+      -- Try to match it with a non-generic type
+      Just t -> call es' ts t
+      -- If this fails, try to instantiate possible generic 
+      -- types found in the function signature.
+      Nothing ->
+        do  mType <- resolveOverload γ l fn es' ts ft0
+            addAnn (srcPos l) (Overload mType)
+            maybe (return Nothing) (call es' ts) mType
   where
-    valid (Right (Su m) )   | not (M.null m) 
-                            = True
-    valid _                 = False
-    shd []                  = Nothing
-    shd xs                  = Just $ head xs
-    eqLenSigs               = mkFun <$> L.filter (eqLen es . snd3) sigs
-    sigs                    = catMaybes (bkFun <$> bkAnd ft)
+    call es' ts t = fmap Just $ tcCallCase γ l fn es' ts t
 
-eqLen xs ys       = length xs == length ys 
+
+resolveOverload γ l fn es ts ft = do  
+    tas   <- mapM (\t -> (t,) <$> tcCallCaseTry γ l fn es ts t) fts
+    return $ listToMaybe [ apply θ t | (t, Right θ) <- tas ]
+  where
+    valid (Su m) | not (M.null m) 
+                 = True
+    valid _      = False
+    shd []       = Nothing
+    shd xs       = Just $ head xs
+    fts          = [ mkFun (vs, ts,t) | (vs, ts, t) <- sigs
+                                      , length ts == length es ]
+    sigs         = catMaybes (bkFun <$> bkAnd ft)
+
 
 tcCallCaseTry γ l fn _ ts ft
   = do let ξ          = tce_ctx γ

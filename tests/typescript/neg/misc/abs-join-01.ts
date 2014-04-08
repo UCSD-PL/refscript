@@ -1,12 +1,4 @@
-/*@ abs :: (   { } + {a:number} ) => {number | true} */ 
-function abs(x){
-  var res = true; //0;
-  if (x > 0) {
-    res = x;
-  }
-  //else {
-  //  res = (x > 99);
-  //};
-  //assert(res >= 0);
-  return res;
+/*@ abs :: ({ } + number) => { boolean | true } */ 
+function abs(x: any) {
+  return x > 0;
 }

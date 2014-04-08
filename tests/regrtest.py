@@ -91,36 +91,20 @@ parser.add_option("-o", "--opts", dest="opts", default="", type=str, help="addit
 parser.disable_interspersed_args()
 options, args = parser.parse_args()
 
-## esc Tests
-#testdirs  = [ ("esc/pos", 0), ("esc/neg", 1)]
-#runner    = rtest.TestRunner (Config ("nanojs esc", options.opts, testdirs, logfile, options.threadcount))
-#runner.run ()
+testDir   = "typescript"
 
+testSign  = [("pos", 0), ("neg", 1)]
 
-## tc Tests
-#testdirs  = [ ("tc/pos", 0) ]
-#runner    = rtest.TestRunner (Config ("nanojs tc -q", options.opts + "nofailcasts", testdirs, logfile, options.threadcount))
-#runner.run ()
+#testCategories = ["arrays", "classes", "lists", "loops", "misc", "objects",
+#                  "operators", "simple", "typealias", "unions"]
+## not included: ["proto"]
 
-#testdirs  = [ ("tc/neg", 1) ]
-#runner    = rtest.TestRunner (Config ("nanojs tc -q", options.opts, testdirs, logfile, options.threadcount))
-#runner.run ()
+testCategories = ["typealias"]
 
-# liquid Tests
-#testdirs  = [ ("liquid/neg", 1), ("liquid/pos", 0) ]
-#runner    = rtest.TestRunner (Config ("nanojs liquid", options.opts, testdirs, logfile, options.threadcount))
-#runner.run ()
+testdirs = [("/".join([testDir, s, c]), p) for (s, p) in testSign 
+                                           for c      in testCategories ]
 
-#testdirs  = [ ("typescript/neg/lists", 1), ("typescript/pos/lists", 0) ]
-#runner    = rtest.TestRunner (Config ("nanojs liquid", options.opts, testdirs, logfile, options.threadcount))
-#runner.run ()
-
-testdirs  = [ ("typescript/neg/objects", 1), ("typescript/pos/objects", 0) ]
 runner    = rtest.TestRunner (Config ("nanojs liquid", options.opts, testdirs, logfile, options.threadcount))
 runner.run ()
-
-# testdirs  = [ ("liquid/pos", 0) ]
-# runner    = rtest.TestRunner (Config ("nanojs liquid -q", options.opts, testdirs, logfile, options.threadcount))
-# runner.run ()
 
 # [os.system(("cd %s; ../../cleanup; cd ../" % d)) for (d,_) in testdirs]  

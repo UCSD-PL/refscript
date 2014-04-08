@@ -395,6 +395,8 @@ interface List<A> {
 /*@ qualif True1(v:Bool)             : (Prop v)                 */
 /*@ qualif False1(v:Bool)            : not (Prop v)             */
 
+/*@ qualif Len(v:number, n: number)  : (len v) = n              */
+
 
 // Somewhat more controversial qualifiers (i.e. "expensive"...)
 

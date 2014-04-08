@@ -64,7 +64,7 @@ tc    p       = typeCheck p    >>= either unsafe safe
 testFile f = parseNanoFromFile f 
          >>= ssaTransform  
          >>= either (print . pp) (\p -> 
-             typeCheck p  
+             typeCheck (expandAliases p)  
          >>= either (print . vcat . (pp <$>)) 
                     (\p'@(Nano {code = Src ss}) -> 
                           print (pp p')
@@ -842,6 +842,6 @@ sanity l t@(TApp (TRef i) ts _) =
          | length αs == length ts -> return t 
        Just (TD n αs _ _) 
          | otherwise -> tcError $ errorTypeArgsNum l n (length αs) (length ts)
-       Nothing -> error "Typecheck:sanity: this shouldn't happen"
+       Nothing -> error $ "BUG: Id: " ++ ppshow i ++ " was not found in env." 
 sanity _ t = return t
 

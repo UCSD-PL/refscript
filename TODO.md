@@ -42,6 +42,10 @@ Tool/Implementation
 
   - Add check for missing type definition
 
+  - Fix type aliases
+
+  - Merge pp' with pp - should be the same now that Object types are TCons.
+
   - Fix hacky qualifier parse-translation e.g. tests/liquid/pos/arrays/arr-03.js
         
           /* qualif OkLen(v:number, arr:a): v < (len arr) */

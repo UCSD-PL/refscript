@@ -1,4 +1,6 @@
-/*@ type nat = {number | 0 <= v } */
+/*@ alias nat = { number | 0 <= v } */
 
-var z :number/*@  nat */ = 12;
+
+/*@ z :: #nat */
+var z :number = 12;
 

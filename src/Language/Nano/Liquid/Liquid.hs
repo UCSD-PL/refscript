@@ -252,7 +252,20 @@ consClassElt g (MemberMethDecl l _ i xs body)
   = do  ts <- cgFunTys l i xs $ safeHead "consClassElt" [ t | MethAnn t <- ann_fact l]
         mapM_ (consFun1 l g i xs body) ts
 
-
+-- | consExprT: typecheck expression @e@ under (optional) contextual type @to@.
+--
+--   G |- e :: Te 
+--  
+--   Tk = freshen(Te)  
+--   
+--   Te <: Tk
+--  
+--   [ Tk <: Ta ]
+--   --------------------------------------
+--   G |- /* [ Ta ] */ e : Tk 
+--  
+--   [ . ] : optional annotation
+--  
 ------------------------------------------------------------------------------------
 consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
 ------------------------------------------------------------------------------------
@@ -261,11 +274,14 @@ consExprT g e to
        let te   = envFindTy x g'
        δ <- getDef
        t <- case to of 
+              {-Nothing -> tracePP "freshed-te" <$> (freshTyVar g' l $ rType $ tracePP "te" te)-}
               Nothing -> freshTyVar g' l $ rType te
-              Just t  -> freshTyVar g' l $ rType t
-              {-Nothing -> tracePP "freshed-te" <$> (freshTyVar g' l $ tracePP "rType te" $ rType $ tracePP "te" te)-}
-              {-Just t  -> tracePP "freshed-t0" <$> (freshTyVar g' l $ tracePP "rType t0" $ rType $ tracePP "t0" t)-}
+              {-Just tA -> do tK <- tracePP "freshed-t0" <$> (freshTyVar g' l $ rType $ tracePP "t0" tA)-}
+              Just tA -> do tK <- freshTyVar g' l $ rType tA
+                            subType l g' tK tA
+                            return tK 
        subType l g' te t 
+       {-subType l g' (tracePP ("B." ++ ppshow te ++ " <: " ++ ppshow t) te) t-}
        (x,) <$> envAdds [(x, t)] g'
     where
        l = getAnnotation e

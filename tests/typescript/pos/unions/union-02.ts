@@ -1,6 +1,4 @@
 
-
-
 /*@ a :: { number | true } */
 var a : number  = 1;
 

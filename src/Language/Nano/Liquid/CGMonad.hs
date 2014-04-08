@@ -92,7 +92,7 @@ import           Text.Printf
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -639,7 +639,8 @@ bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 ---------------------------------------------------------------------------------------
 bsplitC g ci t1 t2
   = do δ <- getDef 
-       {- trace ("BSPLIT: " ++ render (pp' δ t1) ++ "\n\n" ++ render (pp' δ t2)) <$> -} 
+  -- FIXME: BSPLIT DOES NOT WORK RIGHT FOR: neg/lists/unfold-list-00.ts
+       {- tracePP ("BSPLIT: " ++ render (pp' δ t1) ++ "\n\n" ++ render (pp' δ t2)) <$> -}
        bsplitC' g ci <$> addInvariant t1 <*> addInvariant t2
 
 bsplitC' g ci t1 t2
@@ -654,6 +655,8 @@ bsplitC' g ci t1 t2
     r1 = rTypeSortedReft t1
     r2 = rTypeSortedReft t2
 
+instance PP (F.SortedReft) where
+  pp (F.RR _ b) = pp b
 
 ---------------------------------------------------------------------------------------
 -- | Splitting Well-Formedness Constraints

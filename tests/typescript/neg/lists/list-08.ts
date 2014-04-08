@@ -1,4 +1,4 @@
-/*@ hop :: (list [{v:number| 0 < v}] + null) => list [{v:number| 10 < v}] */
+/*@ hop :: (#List[{v:number| 0 < v}]?) => #List[{v:number| 10 < v}] */
 function hop(xs){
   if (! empty(xs)) {
     return xs;

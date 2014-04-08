@@ -115,7 +115,7 @@ options, args = parser.parse_args()
 #runner    = rtest.TestRunner (Config ("nanojs liquid", options.opts, testdirs, logfile, options.threadcount))
 #runner.run ()
 
-testdirs  = [ ("typescript/neg/misc", 1), ("typescript/pos/misc", 0) ]
+testdirs  = [ ("typescript/neg/objects", 1), ("typescript/pos/objects", 0) ]
 runner    = rtest.TestRunner (Config ("nanojs liquid", options.opts, testdirs, logfile, options.threadcount))
 runner.run ()
 

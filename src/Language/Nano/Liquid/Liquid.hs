@@ -41,7 +41,7 @@ import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
 -- 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -260,9 +260,13 @@ consExprT g e to
   = do (x, g') <- consExpr g e
        let te   = envFindTy x g'
        δ <- getDef
-       case to of
-         Nothing -> return (x, g')
-         Just t  -> subType l g' te t >> (x,) <$> envAdds [(x, t)] g'
+       t <- case to of 
+              Nothing -> freshTyVar g' l $ rType te
+              Just t  -> freshTyVar g' l $ rType t
+              {-Nothing -> tracePP "freshed-te" <$> (freshTyVar g' l $ tracePP "rType te" $ rType $ tracePP "te" te)-}
+              {-Just t  -> tracePP "freshed-t0" <$> (freshTyVar g' l $ tracePP "rType t0" $ rType $ tracePP "t0" t)-}
+       subType l g' te t 
+       (x,) <$> envAdds [(x, t)] g'
     where
        l = getAnnotation e
  

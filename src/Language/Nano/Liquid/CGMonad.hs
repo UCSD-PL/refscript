@@ -374,9 +374,6 @@ freshTyFun' g l _ t b
 
 freshTyVar g l t 
   | isTrivialRefType t      = freshTy "freshTyVar" (toType t) >>= wellFormed l g
-                              -- do ts' <- mapM (freshTy "freshTyVar") (toType <$> ts)
-                              --    mapM_ (wellFormed l g) ts'
-                              --    return $ TApp (TRef i) ts' r
   | otherwise               = return t
 
 -- | Instantiate Fresh Type (at Call-site)

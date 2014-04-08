@@ -1,5 +1,6 @@
+
 var gobj = {
-	a: 5,
+	a: -10,
 	b: "glorp",
 };
 
@@ -13,7 +14,7 @@ function foo():void {
 function moo():void{
 	foo();
 	var z:number = gobj.a;
-	assert(z > 0);
+	assert(z > -11);
 	return;
 }
 

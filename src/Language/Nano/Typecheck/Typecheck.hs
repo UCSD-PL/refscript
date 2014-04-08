@@ -539,7 +539,8 @@ tcAsgn l γ x e
 
 
 -------------------------------------------------------------------------------
-tcExprT :: (Ord r, PPR r) => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
+tcExprT :: (Ord r, PPR r) => 
+  AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
 tcExprT l γ e to 
   = do (e', t)    <- tcExpr γ e
@@ -747,8 +748,6 @@ resolveOverload γ l fn es ts ft = do
     valid (Su m) | not (M.null m) 
                  = True
     valid _      = False
-    shd []       = Nothing
-    shd xs       = Just $ head xs
     fts          = [ mkFun (vs, ts,t) | (vs, ts, t) <- sigs
                                       , length ts == length es ]
     sigs         = catMaybes (bkFun <$> bkAnd ft)

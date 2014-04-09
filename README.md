@@ -54,16 +54,16 @@ or, if this fails:
 
 
 
-### Get source code
+### Getting source code
 
 Clone all dependencies and NanoJS in the same directory `ROOT`:
 
-    git clone https://github.com/ucsd-progsys/liquid-fixpoint
-    git clone https://github.com/UCSD-PL/language-ecmascript
+    git clone https://github.com/panagosg7/liquid-fixpoint
+    git clone https://github.com/panagosg7/language-ecmascript
     git clone https://github.com/panagosg7/typescript
     git clone https://github.com/UCSD-PL/nano-js
 
-After acquiring the code you should be presented with the following file structure:
+After acquiring the code you should have the following file structure:
 
 ```
 ROOT
@@ -72,7 +72,8 @@ ROOT
   ├── nano-js
   └── typescript
 ```
-    
+
+
 ### Create Virtual Haskell Environment (Optional)
 
 It is recommended to use an isolated Haskell environment (https://github.com/Paczesiowa/hsenv). Create one using version 7.6.3 of the GHC Haskell compiler (available [here](https://www.haskell.org/ghc/download_ghc_7_6_3)):
@@ -117,15 +118,12 @@ All specifications are added in comments of the following form:
 Nano-js currently allows the following forms of specifications:
 
 
-
-
-
 ### Signatures
 
 Every function, class method and class constructor needs to be annotated with a signature:
 
-    /*@ Id :: σ */
-    function Id (Args...) { Body }
+    /*@ <id> :: σ */
+    function <id> (args...) { Body }
 
 The form of the function signature `σ` is described later.
 
@@ -138,17 +136,22 @@ For example:
 
 Similarly for constructors and class methods:
 
-    /*@ Id :: σ */
-    public Id (Args...) { Body }
+    /*@ <id> :: σ */
+    public <id> (args...) { Body }
     
     /*@ constructor :: σ */
-    constructor (Args...) { Body }
+    constructor (args...) { Body }
 
 
 
 ### Type Annotations
 
-Type anntoations `t ` (defined later) can also be added to variable declarations, for example:
+Type anntoations on variables are of the form: 
+
+    /*@ <id> :: t */
+    var <id> [= <exp>];
+    
+For example:
 
     /*@ a :: { number | v > 0 } */
     /*@ b :: string */
@@ -181,20 +184,17 @@ You can write type qualifiers like this:
 Several more examples can be found in `include/prelude.ts`.
 
 
+
 ### Type Invariants
 
-You can write type-invariants like:
+Type *invariants* are predicates that are automatically added to the 
+refinement part of types of certain raw type. For example you can specify
+the following:
 
     invariant {v:number    | ttag(v) = "number"   }
-    invariant {v:number    | ttag(v) = "number"   }
-    invariant {v:undefined | ttag(v) = "undefined"}
-    invariant {v:null      | ttag(v) = "object"   }
     invariant {v:boolean   | ttag(v) = "boolean"  }  
-    invariant {v:number    | ttag(v) = "number"   } 
     invariant {v:string    | ttag(v) = "string"   } 
 
-These invariants are automatically used to strengthen the refinements
-for values of the relevant types.
 
 
 ### Aliases
@@ -243,49 +243,49 @@ You can write data type declarations in the follownig way:
 ## Grammar
 
 
-### Unrefined (Raw) Types
-
 #### Primitive Types
 
-    B ::= number                                // Number
+    π ::= number                                // Number
         | boolean                               // Boolean
         | string                                // String
         | void                                  // Void
         | top                                   // Τop type
         | null                                  // Null
         | undefined                             // Undefined
+        
 
+#### Base Types
 
-#### Refineable Types
-
-    τ ::= B                                     // Base type
+    b ::= π                                     // Primitive type
         | A                                     // Type variable
-        | {f1: rt1, f2: rt2, ...}               // Object type
-        | [ rt ]                                // Array type
-        | rt + rt + ...                         // Union type
+        | #<id>[t, ... ]                        // Named type
+        | {f1: t1, f2: t2, ...}                 // Object type
+        | [ t ]                                 // Array type
+        | t + t + ...                           // Union type
+        | b ?                                   // Optionally null type
+
+The shorthand `t?` stands in for `t + null`.
 
 
-#### Annotation Types
+#### Refined Types
 
-    t ::= τ                                     // Refineable type
-        | σ                                     // Function type
+    τ ::=  b
+        | { b | p }
+        | { v: b }
+        | { v: b | p }
+         
 
+#### Function Types (signatures)
 
-#### Function Types    
-
-    σ  ::= (x1: rt1, x2: rt2, ...) => rt        // Function type 
+    σ  ::= (x1: t1, x2: t2, ...) => t           // Function type
          | forall A B ... . σ                   // Parametric function type
-         | σ /\ σ /\ ...                        // Overloaded function type 
-    
+         | /\ σ /\ σ ...                        // Overloaded function type
 
 
-### Refined Types
+#### Types
 
-    rt ::= τ
-         | { v: τ }
-         | { τ | p }
-         | { v: τ | p }
-    
+    t  ::= τ
+         | σ
 
 
 ### Predicates

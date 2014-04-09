@@ -1,4 +1,7 @@
-### Language for experimenting with verification algorithms
+# RefScript
+
+Refinement type checker for a TypeScript-like language
+
 
 ## Dependencies
 

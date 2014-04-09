@@ -40,7 +40,7 @@ module Language.Nano.Typecheck.TCMonad (
   , castM
 
   -- * TDefEnv
-  , findTyIdOrDieM, findTyIdOrDieM', findTySymM, findTySymOrDieM, findTySymWithIdOrDieM
+  , findSymM, findSymOrDieM
 
   -- * Get Type Signature 
   , getSpecOrDie, getSpecM, addSpec
@@ -385,15 +385,8 @@ castM l ξ e t1 t2 = convert (ann l) t1 t2 >>= patch
 
 updTDefEnv f = f <$> getDef >>= \(δ', a) -> setDef δ' >> return a
 
-findTyIdOrDieM' :: String -> TyID -> TCM r (TDef (RType r))
-findTyIdOrDieM' m i = findTyIdOrDie' m i <$> getDef
-
-findTyIdOrDieM i = findTyIdOrDie i <$> getDef
-
-findTySymM i = findTySym i <$> getDef
-findTySymOrDieM i = findTySymOrDie i <$> getDef
-
-findTySymWithIdOrDieM i = findTySymWithIdOrDie i <$> getDef
+findSymM i = findSym i <$> getDef
+findSymOrDieM i = findSymOrDie i <$> getDef
 
 
 
@@ -457,20 +450,20 @@ convertCons l t1@(TCons e1s _) t2@(TCons e2s _)
         -- NOTE: Assuming covariance here!!!
         else if all dnCast cs then return $ CDn t1 t2
         else if any ddCast cs then return $ CDead t2
-        else tcError $ errorConvDef l (pp' δ t1) (pp' δ t2)
+        else tcError $ errorConvDef l t1 t2
 
       -- LHS has more fields than RHS
       else if m2 `isProperSubmapOf` m1 then
         if      all noCast cs then return $ CUp t1 t2
         else if all upCast cs then return $ CUp t1 t2
-        else tcError $ errorConvDef l (pp' δ t1) (pp' δ t2)
+        else tcError $ errorConvDef l t1 t2
 
       -- LHS has fewer fields than RHS
       else if m1 `isProperSubmapOf` m2 then 
-        tcError $ errorMissFlds l (pp' δ t1) (pp' δ t2) (S.toList $ S.difference ks2 ks1)
+        tcError $ errorMissFlds l t1 t2 (S.toList $ S.difference ks2 ks1)
 
       else 
-        tcError $ errorConvDef l (pp' δ t1) (pp' δ t2)
+        tcError $ errorConvDef l t1 t2
 
 convertCons l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
   -- FIXME: type argument subtyping
@@ -535,9 +528,7 @@ convertUnion l t1 t2 = parts   $ unionParts t1 t2
     parts (_,[],[])  = return  $ CNo
     parts (_,[],_ )  = return  $ CUp t1 t2
     parts (_,_ ,[])  = return  $ CDn t1 t2
-    parts (_, _ ,_)  = do p1 <- (`pp'` t1) <$> getDef
-                          p2 <- (`pp'` t2) <$> getDef
-                          tcError $ errorUnionSubtype l p1 p2
+    parts (_, _ ,_)  = tcError $ errorUnionSubtype l t1 t2
 
 
 -- | `convertArray`
@@ -589,11 +580,10 @@ getPropTDefM l s t ts = do
 --------------------------------------------------------------------------------
 getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
 --------------------------------------------------------------------------------
-getSuperM l (TApp (TRef i) ts _) = fromTdef =<< findTyIdOrDieM i
+getSuperM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
   where fromTdef (TD _ vs (Just (p,ps)) _) = do
-          (d, _) <- findTySymWithIdOrDieM p
           return  $ apply (fromList $ zip vs ts) 
-                  $ TApp (TRef d) ps fTop
+                  $ TApp (TRef $ F.symbol p) ps fTop
         fromTdef (TD _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
 getSuperM l _  = tcError $ errorSuper (srcPos l) 
 
@@ -601,10 +591,10 @@ getSuperM l _  = tcError $ errorSuper (srcPos l)
 --------------------------------------------------------------------------------
 getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (TDef (RType r))
 --------------------------------------------------------------------------------
-getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findTyIdOrDieM i
+getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
   where 
     fromTdef (TD _ vs (Just (p,ps)) _) = 
-      do (_, TD n ws pp ee) <- findTySymWithIdOrDieM p
+      do TD n ws pp ee <- findSymOrDieM p
          return  $ apply (fromList $ zip vs ts) 
                  $ apply (fromList $ zip ws ps)
                  $ TD n [] pp ee

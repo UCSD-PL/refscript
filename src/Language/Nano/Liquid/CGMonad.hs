@@ -37,7 +37,7 @@ module Language.Nano.Liquid.CGMonad (
   , envFindAnnot, envToList, envFindReturn, envPushContext, envGetContextCast
   , envGetContextTypArgs
 
-  , findTySymOrDieM, findTySymWithIdOrDieM, findTyIdOrDieM
+  , findSymOrDieM
 
   -- * Add Subtyping Constraints
   , subType, wellFormed
@@ -352,10 +352,7 @@ envFindReturn = E.envFindReturn . renv
 
 updTDefEnv f = f <$> getDef >>= \(δ', a) -> setDef δ' >> return a
 
-findTySymOrDieM i       = findTySymOrDie i <$> getDef
-findTySymWithIdOrDieM i = findTySymWithIdOrDie i <$> getDef
-findTyIdOrDieM :: TyID -> CGM (TDef RefType)
-findTyIdOrDieM i        = findTyIdOrDie i <$> getDef
+findSymOrDieM i       = findSymOrDie i <$> getDef
 
 
 ---------------------------------------------------------------------------------------
@@ -603,7 +600,7 @@ splitC (Sub g i t1@(TCons b1s _ ) t2@(TCons b2s _ ))
   = do cs    <- bsplitC g i t1 t2
        δ     <- getDef
        when (or $ zipWith ((/=) `on` f_sym) b1s' b2s') 
-         $ error $ "splitC on non aligned TCons: " ++ render (pp' δ t1) ++ "\n" ++ render (pp' δ t2)
+         $ error $ "splitC on non aligned TCons: " ++ ppshow t1 ++ "\n" ++ ppshow t2
        --FIXME: add other bindings in env (like function)? Perhaps through "this"
        cs'   <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t1s t2s -- CO-VARIANCE
        -- FIXME: Variance !!!
@@ -787,22 +784,20 @@ cgWithThis t p = do { cgPushThis t; a <- p; cgPopThis; return a }
 --------------------------------------------------------------------------------
 getSuperM :: IsLocated a => a -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-getSuperM l (TApp (TRef i) ts _) = fromTdef =<< findTyIdOrDieM i
+getSuperM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
   where fromTdef (TD _ vs (Just (p,ps)) _) = do
-          (d, _) <- findTySymWithIdOrDieM p
           return  $ apply (fromList $ zip vs ts) 
-                  $ TApp (TRef d) ps fTop
+                  $ TApp (TRef $ F.symbol p) ps fTop
         fromTdef (TD _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
 getSuperM l _  = cgError l $ errorSuper (srcPos l) 
-
 
 --------------------------------------------------------------------------------
 getSuperDefM :: IsLocated a => a -> RefType -> CGM (TDef RefType)
 --------------------------------------------------------------------------------
-getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findTyIdOrDieM i
+getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
   where 
     fromTdef (TD _ vs (Just (p,ps)) _) = 
-      do (_, TD n ws pp ee) <- findTySymWithIdOrDieM p
+      do TD n ws pp ee <- findSymOrDieM p
          return  $ apply (fromList $ zip vs ts) 
                  $ apply (fromList $ zip ws ps)
                  $ TD n [] pp ee

@@ -53,7 +53,7 @@ verifyFile f = parse f $ ssa $ tc $ refTc
 
 parse f next = parseNanoFromFile f         >>= next
 ssa   next p = ssaTransform p              >>= either (lerror . single) next
-tc    next p = typeCheck (tracePP "PROG" $ expandAliases p) >>= either lerror next
+tc    next p = typeCheck (expandAliases p) >>= either lerror next
 refTc      p = getOpts >>= solveConstraints (fp p) . (`generateConstraints` p) 
 
 lerror       = return . (A.NoAnn,) . F.Unsafe
@@ -206,7 +206,7 @@ consStmt g s@(FunctionStmt _ _ _ _)
 -- class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 consStmt g (ClassStmt l i _ _ ce) = do  
     -- * Compute / get the class type 
-    (cid, TD _ αs _ _) <- findTySymWithIdOrDieM $ F.symbol i
+    TD _ αs _ _ <- findSymOrDieM i
     let tyBinds = [(Loc (srcPos l) α, tVar α) | α <- αs]
     -- * Add the type vars in the environment
     g' <- envAdds tyBinds g
@@ -214,7 +214,7 @@ consStmt g (ClassStmt l i _ _ ce) = do
     --   - This type uses the classes type variables as type parameters.
     --   - For the moment this type does not have a refinement. Maybe use
     --     invariants to add some.
-    let thisT = TApp (TRef cid) (tVar <$> αs) fTop  
+    let thisT = TApp (TRef $ F.symbol i) (tVar <$> αs) fTop  
     cgWithThis thisT $ mapM_ (consClassElt g') ce
     return $ Just g
 
@@ -395,12 +395,12 @@ consExpr g (ObjectLit l bs)
 
 -- new C(e, ...)
 consExpr g (NewExpr l (VarRef _ i) es)
-  = do  (tid, t@(TD _ vs _ _)) <- findTySymWithIdOrDieM $ F.symbol i
+  = do  t@(TD _ vs _ _) <- findSymOrDieM i
         tConst0 <- getPropTDefM l "constructor" t (tVar <$> vs)
-        let tConstr = fix tid vs $ fromMaybe def tConst0
+        let tConstr = fix (F.symbol i) vs $ fromMaybe def tConst0
         consCall g l "constructor" es tConstr
     where
-        fix tid vs (TFun ts _ r) = mkAll vs $ TFun ts (TApp (TRef tid) (tVar <$> vs) fTop) r
+        fix nm vs (TFun ts _ r) = mkAll vs $ TFun ts (TApp (TRef nm) (tVar <$> vs) fTop) r
         fix _ _ t = error $ "BUG:consExpr NewExpr - not supported type for constructor: " ++ ppshow t
         def :: (PPR r) => RType r
         def = TFun [] tVoid fTop
@@ -410,12 +410,11 @@ consExpr g (SuperRef l)
   = do  thisT <- cgPeekThis
         case thisT of
           TApp (TRef i) ts _ -> do
-            TD _ vs pro _ <- findTyIdOrDieM i 
+            TD _ vs pro _ <- findSymOrDieM i 
             case pro of 
               Just (p, ps) -> do
                 let θ = fromList $ zip vs ts
-                d <- fst <$> findTySymWithIdOrDieM p
-                envAddFresh "consExpr:SuperRef" l (apply θ $ TApp (TRef d) ps fTop) g
+                envAddFresh "consExpr:SuperRef" l (apply θ $ TApp (TRef $ F.symbol p) ps fTop) g
               Nothing -> cgError l $ errorSuper (srcPos l) 
           _                  -> cgError l $ errorSuper (srcPos l) 
 

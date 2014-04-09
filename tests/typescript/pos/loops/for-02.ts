@@ -5,7 +5,7 @@
 function loop() : number{  
 	var x :number = 1;
   
-	for(var x : number = 1; x <= 5; x += 1) {
+	for(var x = 1; x <= 5; x += 1) {
 	}
 
 	return x;

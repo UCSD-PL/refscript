@@ -53,12 +53,10 @@ module Language.Nano.Typecheck.Types (
   , equiv
 
   -- * Type definition env
-  , TyID
   , TDefEnv (..), tDefEmpty
-  , addTySym, addSym 
+  , addSym, findSym, findSymOrDie
   --, addObjLitTy
-  , findTySym, findTySymOrDie, findTySymWithId, findTySymWithIdOrDie, findTyId, findTyIdOrDie
-  , findTyIdOrDie', findEltWithDefault, symTDefMem, getTDefName, getTDefNameOrDie, isNamedType
+  , findEltWithDefault
   , getDefNames
   , sortTDef
   , getCons
@@ -146,10 +144,8 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 
 -- | Data types 
 
-type TyID      = Int
-
 data TDef t    = TD { 
-        t_name  :: !(Maybe (Id SourceSpan))       -- ^ Name (possibly no name)
+        t_name  :: !(Id SourceSpan)               -- ^ Name (possibly no name)
       , t_args  :: ![TVar]                        -- ^ Type variables
       , t_proto :: !(Maybe (Id SourceSpan, [t]))  -- ^ Parent type symbol
       , t_elts  :: ![TElt t]                      -- ^ List of data type elts 
@@ -165,39 +161,29 @@ data TElt t    = TE {
 -- | Type definition environment
 
 data TDefEnv t = G  { 
-        g_size    :: Int                -- ^ Size of the `env`
-      , g_env     :: I.IntMap (TDef t)  -- ^ Type def env (includes object types)
-      , g_names   :: F.SEnv TyID        -- ^ Named types - mapping to env
+        g_size  :: Int                            -- ^ Size of the `env`
+      , g_env   :: F.SEnv (TDef t)                -- ^ Named types - mapping to env
                     } deriving (Show, Functor, Data, Typeable)
 
-tDefEmpty = G 0 I.empty F.emptySEnv
+instance F.Fixpoint t => F.Fixpoint (TDef t) where
+  toFix (TD n v p es) = F.toFix $ F.symbol n
 
-getDefNames (G _ _ n) = fst <$> F.toListSEnv n
 
+tDefEmpty = G 0 F.emptySEnv
+
+getDefNames (G _ n) = fst <$> F.toListSEnv n
+
+-- XXX: Already existing name?
 ---------------------------------------------------------------------------------
-addTySym :: F.Symbol -> TDef t -> TDefEnv t -> (TDefEnv t, TyID)
+addSym :: F.Symbolic s => s -> TDef t -> TDefEnv t -> TDefEnv t
 ---------------------------------------------------------------------------------
-addTySym s t (G sz γ c) =
-  case F.lookupSEnv s c of 
-    -- Bind existing in the names env - update the TDef env
-    Just tid -> (G sz  (I.insert tid t γ) c , tid )
-    -- Bind fresh in names env - update both envs
-    Nothing  -> (G sz' (I.insert sz' t γ) c', tid')
+addSym c t (G sz γ) =
+  case F.lookupSEnv s γ of 
+    Just tid -> G sz γ
+    Nothing  -> G sz' (F.insertSEnv s t γ)
   where
+    s    = F.symbol c
     sz'  = sz + 1
-    tid' = sz'
-    c'  = F.insertSEnv s tid' c  
-
----------------------------------------------------------------------------------
-addSym :: F.Symbol -> TDefEnv t -> (TDefEnv t, TyID)
----------------------------------------------------------------------------------
-addSym s g@(G sz γ c) = maybe f (g,) (F.lookupSEnv s c)
-  where
-    f   = (G sz' γ c', id)
-    sz' = sz + 1    -- Update the size of the env even though the 
-                    -- new sym is not bound to an actual TDef
-    id  = sz + 1
-    c'  = F.insertSEnv s id c 
 
 -- ---------------------------------------------------------------------------------
 -- addObjLitTy :: TDef t -> TDefEnv t -> (TDefEnv t, TyID)
@@ -209,46 +195,14 @@ addSym s g@(G sz γ c) = maybe f (g,) (F.lookupSEnv s c)
 --     γ'  = I.insert id t γ
 -- 
 ---------------------------------------------------------------------------------
-findTySym :: F.Symbolic s => s -> TDefEnv t -> Maybe (TDef t)
+findSym :: F.Symbolic s => s -> TDefEnv t -> Maybe (TDef t)
 ---------------------------------------------------------------------------------
-findTySym s (G _ γ c) = F.lookupSEnv (F.symbol s) c >>= (`I.lookup` γ)
+findSym s (G _ γ) = F.lookupSEnv (F.symbol s) γ
 
 ---------------------------------------------------------------------------------
-findTySymWithId :: F.Symbolic s => s -> TDefEnv t -> Maybe (TyID, TDef t)
+findSymOrDie:: F.Symbolic s => s -> TDefEnv t -> TDef t
 ---------------------------------------------------------------------------------
-findTySymWithId s (G _ γ c) = F.lookupSEnv (F.symbol s) c 
-                          >>= \i -> (I.lookup i γ) 
-                          >>= return . (i,)
-
----------------------------------------------------------------------------------
-findTySymWithIdOrDie:: F.Symbolic s => s -> TDefEnv t -> (TyID, TDef t)
----------------------------------------------------------------------------------
-findTySymWithIdOrDie s γ = fromMaybe (error "findTySymWithIdOrDie") $ findTySymWithId s γ 
-
----------------------------------------------------------------------------------
-findTySymOrDie :: F.Symbolic s => s -> TDefEnv t -> TDef t
----------------------------------------------------------------------------------
-findTySymOrDie s γ = fromMaybe (error "findTySymOrDie") $ findTySym s γ 
-
----------------------------------------------------------------------------------
-findTyId :: TyID -> TDefEnv t -> Maybe (TDef t)
----------------------------------------------------------------------------------
-findTyId i (G _ γ _) = I.lookup i γ
-
----------------------------------------------------------------------------------
-isNamedType :: TyID -> TDefEnv t -> Bool
----------------------------------------------------------------------------------
-isNamedType i (G _ γ _) = isJust (I.lookup i γ >>= t_name)
-
----------------------------------------------------------------------------------
-findTyIdOrDie :: TyID -> TDefEnv t -> TDef t
----------------------------------------------------------------------------------
-findTyIdOrDie i γ = fromMaybe (error $ "findTyIdOrDie") $ findTyId i γ 
-
----------------------------------------------------------------------------------
-findTyIdOrDie' :: String -> TyID -> TDefEnv t -> TDef t
----------------------------------------------------------------------------------
-findTyIdOrDie' msg i γ = fromMaybe (error $ "findTyIdOrDie:" ++ msg) $ findTyId i γ 
+findSymOrDie s γ = fromMaybe (error "findTySymWithIdOrDie") $ findSym s γ 
 
 ---------------------------------------------------------------------------------
 findEltWithDefault :: F.Symbol -> t -> [TElt t] -> t
@@ -257,14 +211,9 @@ findEltWithDefault s t elts =
   maybe t f_type $ L.find ((== s) . f_sym) elts
 
 ---------------------------------------------------------------------------------
-symTDefMem :: F.Symbol -> TDefEnv t -> Bool
+symMem :: F.Symbol -> TDefEnv t -> Bool
 ---------------------------------------------------------------------------------
-symTDefMem s = F.memberSEnv s . g_names
-
-
-getTDefName δ i = findTyId i δ >>= t_name  
-
-getTDefNameOrDie δ i = fromJust $ getTDefName δ i 
+symMem s = F.memberSEnv s . g_env
 
 
 -- | Sort the fields of a TDef 
@@ -284,7 +233,7 @@ data TCon
   | TString
   | TVoid
   | TTop
-  | TRef  TyID
+  | TRef F.Symbol
   | TUn
   | TNull
   | TUndef
@@ -631,10 +580,10 @@ data Nano a t = Nano { fp     :: FilePath                  -- ^ FilePath
                      , invts  :: ![Located t]              -- ^ Type Invariants
                      } deriving (Functor, Data, Typeable)
 
-type NanoBareR r   = Nano (AnnBare r) (RType r)     -- ^ After Parse
-type NanoSSAR r    = Nano (AnnSSA  r) (RType r)     -- ^ After SSA  
-type NanoTypeR r   = Nano (AnnType r) (RType r)     -- ^ After TC: Contains an updated TDefEnv
-type NanoRefType   = Nano (AnnType F.Reft) (RType F.Reft) -- ^ After Liquid
+type NanoBareR r   = Nano (AnnBare r) (RType r)            -- ^ After Parse
+type NanoSSAR r    = Nano (AnnSSA  r) (RType r)            -- ^ After SSA  
+type NanoTypeR r   = Nano (AnnType r) (RType r)            -- ^ After TC: Contains an updated TDefEnv
+type NanoRefType   = Nano (AnnType F.Reft) (RType F.Reft)  -- ^ After Liquid
 
 type ExprSSAR r    = Expression (AnnSSA r)
 type StmtSSAR r    = Statement  (AnnSSA r)
@@ -691,9 +640,8 @@ instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
 -- ppEnv env = vcat [ pp id <+> text "::" <+> pp t <+> text"\n" | (id, t) <- envToList env]
 
 instance PP t => PP (TDefEnv t) where
-  pp (G s γ c) =  (text "Size:" <+> text (show s))  $$ text "" $$
-                  (text "Type definitions:"  $$ nest 2 (pp γ)) $$ text "" $$
-                  (text "Named types:"       $$ nest 2 (pp c))
+  pp (G s γ) =  (text "Size:" <+> text (show s))  $$ text "" $$
+                (text "Type definitions:"  $$ nest 2 (pp γ))
 
 instance PP t => PP (I.IntMap t) where
   pp m = vcat (pp <$> I.toList m)
@@ -702,14 +650,14 @@ instance PP t => PP (F.SEnv t) where
   pp m = vcat $ pp <$> F.toListSEnv m
 
 instance (PP t) => PP (TDef t) where
-    pp (TD (Just nm) vs Nothing ts) = 
+    pp (TD nm vs Nothing ts) = 
           pp nm 
       <+> ppArgs brackets comma vs 
       <+> braces (
             text " " 
         <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
         <+> text " ")
-    pp (TD (Just nm) vs (Just (p,ps)) ts) = 
+    pp (TD nm vs (Just (p,ps)) ts) = 
           pp nm 
       <+> ppArgs brackets comma vs 
       <+> text "extends" <+> pp p <+> pp ps
@@ -717,17 +665,11 @@ instance (PP t) => PP (TDef t) where
             text " " 
         <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
         <+> text " ")
-    pp (TD Nothing _ Nothing ts) = 
-            braces (
-            text " " 
-        <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
-        <+> text " ")
-    pp _ = error "PP TDEF: case not possible"
 
 
 instance (PP t) => PP (TElt t) where
-  pp (TE s True t ) = pp (F.symbol s) <+> text ":*" <+> pp t
-  pp (TE s False t) = pp (F.symbol s) <+> text ":"  <+> pp t
+  pp (TE x True t)  = pp x <> text ":"  <> pp t
+  pp (TE x False t) = pp x <> text ":*" <> pp t
 
 instance PP Bool where
   pp True   = text "True"
@@ -790,17 +732,17 @@ instance PP Char where
 
 
 instance (PP r, F.Reftable r) => PP (RType r) where
-  pp (TVar α r)                 = F.ppTy r $ pp α 
-  pp (TFun xts t _)             = ppArgs parens comma xts <+> text "=>" <+> pp t 
-  pp t@(TAll _ _)               = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
-  pp (TAnd ts)                  = vcat [text "/\\" <+> pp t | t <- ts]
-  pp (TExp e)                   = pprint e 
-  pp (TApp TUn ts r)            = F.ppTy r $ ppArgs id (text " +") ts 
-  pp (TApp d@(TRef _) ts r)     = F.ppTy r $ pp d <+> ppArgs brackets comma ts 
-  pp (TApp c [] r)              = F.ppTy r $ pp c 
-  pp (TApp c ts r)              = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
-  pp (TArr t r)                 = F.ppTy r $ brackets (pp t)  
-  pp (TCons es r)               = F.ppTy r $ ppArgs braces semi es
+  pp (TVar α r)             = F.ppTy r $ pp α 
+  pp (TFun xts t _)         = ppArgs parens comma xts <+> text "=>" <+> pp t 
+  pp t@(TAll _ _)           = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
+  pp (TAnd ts)              = vcat [text "/\\" <+> pp t | t <- ts]
+  pp (TExp e)               = pprint e 
+  pp (TApp TUn ts r)        = F.ppTy r $ ppArgs id (text " +") ts 
+  pp (TApp d@(TRef _) ts r) = F.ppTy r $ pp d <+> ppArgs brackets comma ts 
+  pp (TApp c [] r)          = F.ppTy r $ pp c 
+  pp (TApp c ts r)          = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
+  pp (TArr t r)             = F.ppTy r $ brackets (pp t)  
+  pp (TCons bs r)           = F.ppTy r $ lbrace $+$ nest 2 (vcat $ map pp bs) $+$ rbrace
 
 instance PP TCon where
   pp TInt             = text "number"
@@ -809,7 +751,7 @@ instance PP TCon where
   pp TVoid            = text "void"
   pp TTop             = text "top"
   pp TUn              = text "union:"
-  pp (TRef x)         = text "REF#" <> int x
+  pp (TRef x)         = text "#" <> text (F.symbolString x)
   pp TNull            = text "null"
   pp TUndef           = text "undefined"
 
@@ -941,10 +883,6 @@ instance Eq (Annot a SourceSpan) where
 
 instance IsLocated (Annot a SourceSpan) where 
   srcPos = ann
-
--- instance IsLocated TCon where
---  srcPos (TRef z) = srcPos z
---  srcPos _        = srcPos dummySpan
 
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)       = text "phi"  <+> pp x

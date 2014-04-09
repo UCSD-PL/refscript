@@ -63,13 +63,10 @@ tc    p       = typeCheck p    >>= either unsafe safe
 --------------------------------------------------------------------------------
 testFile f = parseNanoFromFile f 
          >>= ssaTransform  
-         >>= either (print . pp) (\p -> 
-             typeCheck (expandAliases p)  
+         >>= either (print . pp) (\p -> typeCheck (tracePP "PORRRRR" $ expandAliases p)
          >>= either (print . vcat . (pp <$>)) 
                     (\p'@(Nano {code = Src ss}) -> 
-                          print (pp p')
-                      >>  print "Casts:"
-                      >> print (pp $ getCasts ss)))
+                          print (pp p') >>  print "Casts:" >> print (pp $ getCasts ss)))
 --------------------------------------------------------------------------------
 
 lerror        = return . (NoAnn,) . F.Unsafe
@@ -411,15 +408,14 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 -- class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 tcStmt γ c@(ClassStmt l i e is ce) = do  
     -- * Compute / get the class type 
-    cid          <- classId c
-    TD _ αs _  _ <- findTyIdOrDieM' "tcStmt" cid
+    TD _ αs _  _ <- classDef c
     -- * Add the type vars in the environment
     let γ'        = tcEnvAdds (tyBinds αs) γ
     -- * Compute type for "this" and add that to the env as well
     --   - This type uses the classes type variables as type parameters.
     --   - For the moment this type does not have a refinement. Maybe use
     --     invariants to add some.
-    let thisT     = TApp (TRef cid) (tVars αs) fTop  
+    let thisT     = TApp (TRef $ F.symbol i) (tVars αs) fTop  
     -- * Typecheck the class elements in this extended environment.
     ce'          <- tcInScope γ' $ tcWithThis thisT $ mapM (tcClassElt γ' i) ce
     return          (ClassStmt l i e is ce', Just γ)
@@ -432,24 +428,23 @@ tcStmt _ s
   = convertError "tcStmt" s
 
 
--- Get the type id of a class from its name using:
+-- Get the id of a class from its name using:
 --  * the top-level class annotation
 --  * the annotations of the class fields
 -- NOTE: we are not checking if the class has a parent or not.
 ---------------------------------------------------------------------------------------
-classId :: (Ord r, PPR r) => Statement (AnnSSA r) -> TCM r TyID
+classDef :: (Ord r, PPR r) => Statement (AnnSSA r) -> TCM r (TDef (RType r))
 ---------------------------------------------------------------------------------------
-classId (ClassStmt l id _ _ cs) =
+classDef (ClassStmt l id _ _ cs) =
   do  γ <- getDef
-      case findTySymWithId sym γ of
-        Just (i, _) -> return i   -- if already computed
-        Nothing -> do let elts  = classEltType <$> cs
-                      constrL  <- constrT elts
-                      let elts' = elts ++ constrL            
-                      let freshD  = TD (Just $ fmap ann id) vs p elts'
-                      let (γ', i) = addTySym sym freshD γ
-                      setDef γ'
-                      return i
+      case findSym sym γ of
+        Just d -> return d   -- if already computed
+        Nothing -> do let elts   = classEltType <$> cs
+                      constrL   <- constrT elts
+                      let elts'  = elts ++ constrL            
+                      let freshD = TD (fmap ann id) vs p elts'
+                      setDef     $ addSym sym freshD γ
+                      return     $ freshD
   where
     sym      = F.symbol id
     (vs, p)  = classAnnot l
@@ -463,30 +458,22 @@ classId (ClassStmt l id _ _ cs) =
         ([_], _)            -> return []  
         -- 2. Get constructor from parent class
         (_  , Just (i, ts)) -> 
-            do  TD _ vs _ es <- findTySymOrDieM (F.symbol i)
+            do  TD _ vs _ es <- findSymOrDieM i
                 return [getCons $ apply (fromList $ zip vs ts) es]
         -- 3. No parent class around. Just infer a default type 
         (_  , Nothing)      -> return [TE (F.symbol "constructor") True $ TFun [] tVoid fTop]
     tVoid :: PPR r => RType r
     tVoid = TApp TVoid [] fTop
 
-classId _ = errorstar "classId should only be called with ClassStmt"
+classDef _ = errorstar "classId should only be called with ClassStmt"
+
 
 ---------------------------------------------------------------------------------------
-classDef :: (Ord r, PPR r) => Statement (AnnSSA r) -> TCM r (TyID, TDef (RType r))
----------------------------------------------------------------------------------------
-classDef  c = do
-  id <- classId c
-  δ  <- getDef 
-  return $ (id,) $ findTyIdOrDie' "classDef" id δ
-
----------------------------------------------------------------------------------------
-findOrCrateClassDef :: (Ord r, PPR r) => Id (AnnSSA r) -> TCM r (TyID, TDef (RType r)) 
+findOrCrateClassDef :: (Ord r, PPR r) => Id (AnnSSA r) -> TCM r (TDef (RType r)) 
 ---------------------------------------------------------------------------------------
 findOrCrateClassDef (Id l s) = do 
   γ <- getClasses
-  maybe (tcError $ errorClassMissing (srcPos l) s) 
-    classDef (envFindTy (F.symbol s) γ)
+  maybe (tcError $ errorClassMissing (srcPos l) s) classDef (envFindTy (F.symbol s) γ)
   
 
 ---------------------------------------------------------------------------------------
@@ -700,16 +687,11 @@ tcCall γ ex@(ArrayLit l es)
 --    ∀ Vs . (xs: Ts) => void
 --
 tcCall γ (NewExpr l (VarRef lv i) es) = do  
-    (tid, t@(TD _ vs _ _)) <- findOrCrateClassDef i
-    -- Get the constructor type by looking up the parent chain and then
-    -- using the type variables of the current class,
-    -- or just use the default type
-    -- Make this type return the type of the class, so that they get 
-    -- instantiated and assigned to the left hand side when we do the call.
-    tConst0 <- getPropTDefM l "constructor" t (tVar <$> vs)
-    let tConstr = fix tid vs $ fromMaybe def tConst0
+    t@(TD _ vs _ _) <- findOrCrateClassDef i
+    tConst0         <- getPropTDefM l "constructor" t (tVar <$> vs)
+    let tConstr      = fix (F.symbol i) vs $ fromMaybe def tConst0
     when (not $ isTFun tConstr) $ tcError $ errorConstNonFunc (srcPos l) i
-    z <- tcCallMatch γ l "constructor" es tConstr
+    z               <- tcCallMatch γ l "constructor" es tConstr
     case z of
       -- Constructor's return type is void - instead return the class type
       -- FIXME: type parameters in returned type: inferred ... or provided !!! 
@@ -719,7 +701,7 @@ tcCall γ (NewExpr l (VarRef lv i) es) = do
   where
     -- A default type for the constructor
     def = TFun [] tVoid fTop
-    fix tid vs (TFun ts _ r) = mkAll vs $ TFun ts (TApp (TRef tid) (tVar <$> vs) fTop) r
+    fix nm vs (TFun ts _ r) = mkAll vs $ TFun ts (TApp (TRef nm) (tVar <$> vs) fTop) r
     fix _ _ t = error $ "BUG:tcCall NewExpr - not supported type for constructor: " ++ ppshow t
 
 tcCall _ e
@@ -837,11 +819,11 @@ scrapeVarDecl (VarDecl l _ _) =
 
 sanity l t@(TApp (TRef i) ts _) = 
   do δ <- getDef 
-     case findTyId i δ of
+     case findSym i δ of
        Just (TD _ αs _ _) 
          | length αs == length ts -> return t 
        Just (TD n αs _ _) 
          | otherwise -> tcError $ errorTypeArgsNum l n (length αs) (length ts)
-       Nothing -> error $ "BUG: Id: " ++ ppshow i ++ " was not found in env." 
+       Nothing -> error $ "BUG: Id: " ++ ppshow i ++ " was not found in env at " ++ ppshow (srcPos l) 
 sanity _ t = return t
 

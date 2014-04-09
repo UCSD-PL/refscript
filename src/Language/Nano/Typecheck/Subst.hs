@@ -21,10 +21,7 @@ module Language.Nano.Typecheck.Subst (
 
   -- * Flatten a type definition applying subs
   , flatten, flattenTRef, flattenType
-  -- , unfoldType
 
-  -- * Print
-  , PP'(..)
   ) where 
 
 import           Text.PrettyPrint.HughesPJ
@@ -212,7 +209,7 @@ flatten' b δ = fix ff
       $ L.unionBy nm (ee es)
       $ r 
       $ fromJust 
-      $ apply (fromList $ zip vs (tt ts)) (findTySym i δ)
+      $ apply (fromList $ zip vs (tt ts)) (findSym i δ)
 
     ff _ (TD _ _ _ es) = ee es
 
@@ -237,7 +234,7 @@ flattenElt' b δ (TE s m t) = TE s m $ flattenType' b δ t
 
 flattenTRef' b δ (TApp (TRef n) ts _) 
                             = apply θ (flatten' b δ d)
-  where d@(TD _ vs _ _)     = findTyIdOrDie n δ
+  where d@(TD _ vs _ _)     = findSymOrDie n δ
         θ                   = fromList $ zip vs ts
 flattenTRef' _ _ _ = error "Applying flattenTRef on non-tref"
 
@@ -257,63 +254,58 @@ flattenType' b δ (TCons ts r)   = TCons (flattenElt' b δ <$> ts) r
 flattenType' _ _ _              = error "TExp should not appear here"
 
 
--- | unfoldType: Unfold all parts of a type that will not be recursive (i.e.
--- named types are excluded). Anonymous object types (that are naturally
--- non-recursive) will be unfolded. So this process is expected to terminate
--- always. 
---
--- Also, no substitutions need to take place here, but the top-level one, 
--- cause tha anonymous types are not parametric.
---
--- Useful for: unification
----------------------------------------------------------------------------------
-unfoldType :: PPR r => TDefEnv (RType r) -> RType r -> RType r
----------------------------------------------------------------------------------
-unfoldType δ t@(TApp (TRef i) ts r) 
-  | isNamedType i δ 
-  = t
-  | null ts
-  = TCons [TE s m (unfoldType δ τ) | TE s m τ <- t_elts $ findTyIdOrDie i δ] r
-  | otherwise 
-  = error $ "IMPOSSIBLE:unfoldType: " ++ ppshow t 
-unfoldType δ (TApp c ts r)  = TApp c (unfoldType δ <$> ts) r
-unfoldType _ (TVar v r)     = TVar v r
-unfoldType δ (TFun ts to r) = TFun (f <$> ts) (unfoldType δ to) r
-                                  where f (B s t) = B s $ unfoldType δ t
-unfoldType δ (TArr t r)     = TArr (unfoldType δ t) r
-unfoldType δ (TAll v t)     = TAll v $ unfoldType δ t
-unfoldType δ (TAnd ts)      = TAnd $ unfoldType δ <$> ts
-unfoldType δ (TCons ts r)   = TCons (fmap (unfoldType δ) <$> ts) r
-unfoldType _ _              = error "TExp should not appear here"
+-- -- | unfoldType: Unfold all parts of a type that will not be recursive (i.e.
+-- -- named types are excluded). Anonymous object types (that are naturally
+-- -- non-recursive) will be unfolded. So this process is expected to terminate
+-- -- always. 
+-- --
+-- -- Also, no substitutions need to take place here, but the top-level one, 
+-- -- cause tha anonymous types are not parametric.
+-- --
+-- -- Useful for: unification
+-- ---------------------------------------------------------------------------------
+-- unfoldType :: PPR r => TDefEnv (RType r) -> RType r -> RType r
+-- ---------------------------------------------------------------------------------
+-- unfoldType δ t@(TApp (TRef i) ts r)  
+--                             = t
+-- unfoldType δ (TApp c ts r)  = TApp c (unfoldType δ <$> ts) r
+-- unfoldType _ (TVar v r)     = TVar v r
+-- unfoldType δ (TFun ts to r) = TFun (f <$> ts) (unfoldType δ to) r
+--                                   where f (B s t) = B s $ unfoldType δ t
+-- unfoldType δ (TArr t r)     = TArr (unfoldType δ t) r
+-- unfoldType δ (TAll v t)     = TAll v $ unfoldType δ t
+-- unfoldType δ (TAnd ts)      = TAnd $ unfoldType δ <$> ts
+-- unfoldType δ (TCons ts r)   = TCons (fmap (unfoldType δ) <$> ts) r
+-- unfoldType _ _              = error "TExp should not appear here"
 
 
 
--- | pp': Print expanded types
-
-class PP' a where
-  pp' :: TDefEnv a -> a -> Doc
-
-instance (F.Reftable r, PP r) => PP' (RType r) where
-  pp' _   (TVar α r)           = F.ppTy r $ pp α 
-  pp' δ   (TFun xts t' _)      = ppBinds' δ parens comma xts <+> text "=>" <+> pp' δ t' 
-  pp' δ t@(TAll _ _)           = text "forall" <+> ppArgs id space αs <> text "." <+> pp' δ t' where (αs, t') = bkAll t
-  pp' δ   (TAnd ts)            = vcat [text "/\\" <+> pp' δ t | t <- ts]
-  pp' _   (TExp e)             = pprint e
-  pp' δ   (TApp TUn ts r)      = F.ppTy r $ ppArgs' δ id (text " +") ts 
-  pp' δ t@(TApp (TRef i) ts r) | isNamedType i δ
-                               = F.ppTy r $ pp (getTDefNameOrDie δ i) <+> ppArgs' δ brackets comma ts
-                               | otherwise
-                               = pp' δ $ unfoldType δ t
-  pp' _   (TApp c [] r)        = F.ppTy r $ pp c 
-  pp' δ   (TApp c ts r)        = F.ppTy r $ parens (pp c <+> ppArgs' δ id space ts)  
-  pp' δ   (TArr t' r)          = F.ppTy r $ brackets (pp' δ t')
-  pp' δ   (TCons bs r)         = F.ppTy r $ ppElts1' δ bs
-
-ppArgs'  δ p sep               = p . intersperse sep . map (pp' δ)
-ppBinds' δ p sep               = p . intersperse sep . map (ppBind' δ)
-ppBind'  δ (B x t)             = pp x <> colon <> pp' δ t
-ppElt'   δ (TE x _ t)          = pp x <> colon <> pp' δ t
-
-ppElts1'  δ ts                 = lbrace $+$ nest 2 (vcat $ map (ppElt' δ) ts) $+$ rbrace
--- ppElts1'  δ ts                 = braces (hsep $ map (ppElt' δ) ts)
-
+-- -- | pp': Print expanded types
+-- 
+-- class PP' a where
+--   pp' :: TDefEnv a -> a -> Doc
+-- 
+-- instance (F.Reftable r, PP r) => PP' (RType r) where
+--   pp' _   (TVar α r)           = F.ppTy r $ pp α 
+--   pp' δ   (TFun xts t' _)      = ppBinds' δ parens comma xts <+> text "=>" <+> pp' δ t' 
+--   pp' δ t@(TAll _ _)           = text "forall" <+> ppArgs id space αs <> text "." <+> pp' δ t' where (αs, t') = bkAll t
+--   pp' δ   (TAnd ts)            = vcat [text "/\\" <+> pp' δ t | t <- ts]
+--   pp' _   (TExp e)             = pprint e
+--   pp' δ   (TApp TUn ts r)      = F.ppTy r $ ppArgs' δ id (text " +") ts 
+--   pp' δ t@(TApp (TRef i) ts r) | isNamedType i δ
+--                                = F.ppTy r $ pp (getTDefNameOrDie δ i) <+> ppArgs' δ brackets comma ts
+--                                | otherwise
+--                                = pp' δ $ unfoldType δ t
+--   pp' _   (TApp c [] r)        = F.ppTy r $ pp c 
+--   pp' δ   (TApp c ts r)        = F.ppTy r $ parens (pp c <+> ppArgs' δ id space ts)  
+--   pp' δ   (TArr t' r)          = F.ppTy r $ brackets (pp' δ t')
+--   pp' δ   (TCons bs r)         = F.ppTy r $ ppElts1' δ bs
+-- 
+-- ppArgs'  δ p sep               = p . intersperse sep . map (pp' δ)
+-- ppBinds' δ p sep               = p . intersperse sep . map (ppBind' δ)
+-- ppBind'  δ (B x t)             = pp x <> colon <> pp' δ t
+-- ppElt'   δ (TE x _ t)          = pp x <> colon <> pp' δ t
+-- 
+-- ppElts1'  δ ts                 = lbrace $+$ nest 2 (vcat $ map (ppElt' δ) ts) $+$ rbrace
+-- -- ppElts1'  δ ts                 = braces (hsep $ map (ppElt' δ) ts)
+-- 

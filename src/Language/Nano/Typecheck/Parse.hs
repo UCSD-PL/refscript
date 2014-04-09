@@ -103,7 +103,7 @@ iFaceP   = do id     <- identifierP
               vs     <- option [] tParP
               ext    <- optionMaybe extendsP
               es     <- braces $ eltsP
-              return (id, TD (Just id) vs ext es)
+              return (id, TD id vs ext es)
 
 extendsP = do reserved "extends"
               pId <- (char '#' >> identifierP)
@@ -248,10 +248,10 @@ tConP =  try (reserved "number"    >> return TInt)
 idToTRefP :: Id SourceSpan -> ParserS TCon
 ----------------------------------------------------------------------------------
 idToTRefP (Id _ s) = do
-  (u, _)      <- getState
-  let (u', id) = addSym (symbol s) u 
-  modifyState  $ \(_,n) -> (u', n)
-  return       $ TRef id
+--   (u, _)     <- getState
+--   let u'      = addSym s u 
+--   modifyState $ \(_,n) -> (u', n)
+  return      $ TRef $ symbol s
 
 bareAll1P 
   = do reserved "forall"
@@ -404,8 +404,7 @@ registerIface :: Spec -> ParserS Spec
 ----------------------------------------------------------------------------------
 registerIface (IFace (s, t)) = do
   (u, n)  <- getState
-  -- XXX: losing the SourceSpan on s here.
-  putState $ (fst $ addTySym (symbol s) t u, n)
+  putState (addSym s t u, n)
   return $ IFace (s,t) 
 registerIface _ = error "BUG:registerIface"
 

@@ -47,8 +47,7 @@ getProp _ _ _ _   (TFun _ _ _ ) = Nothing
 getProp l α γ s a@(TArr _ _)    = (a,) <$> getPropArr l α γ s a
 getProp _ _ _ s a@(TCons _ _)   = (a,) <$> getPropCons s a
 getProp l _ γ _ t               = die $ bug (srcPos l) 
-                                    $ "Using getProp on type: " 
-                                      ++ (render $ S.pp' γ t) 
+                                      $ "Using getProp on type: " ++ ppshow t 
 
 
 -------------------------------------------------------------------------------
@@ -63,7 +62,7 @@ getPropApp l α γ s t@(TApp c ts _) =
     TUn     -> getPropUnion l α γ s ts
     TInt    -> lookupAmbientVar l α γ s "Number" t
     TString -> lookupAmbientVar l α γ s "String" t
-    TRef i  -> findTyId i γ >>= getPropTDef l α γ s ts >>= return . (t,)
+    TRef i  -> findSym i γ >>= getPropTDef l α γ s ts >>= return . (t,)
     TTop    -> die $ bug (srcPos l) "getProp top"
     TVoid   -> die $ bug (srcPos l) "getProp void"
 
@@ -89,7 +88,7 @@ getPropTDef :: (PPR r) =>
 getPropTDef l α γ f ts (TD _ vs pro elts) = 
     case [ p | TE s _ p <- elts, s == f ] of
       [ ] -> do (psy, pts) <- pro
-                ptd        <- findTySym psy γ
+                ptd        <- findSym psy γ
                 t          <- getPropTDef l α γ f pts ptd
                 return      $ S.apply θ t
       [p] -> Just $ S.apply θ p                               -- found binding
@@ -106,7 +105,7 @@ getPropArr l α γ s (TArr t _) =
 -- NOTE: Array has been declared as a type declaration so 
 -- it should reside in γ, and we can just getPropTDef on it,
 -- using type t as teh single type parameter to it.
-  findTySym (F.symbol "Array") γ >>= getPropTDef l α γ s [t]
+  findSym "Array" γ >>= getPropTDef l α γ s [t]
 
 getPropArr _ _ _ _ _ = error "getPropArr should only be applied to arrays"
 

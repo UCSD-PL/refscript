@@ -1,0 +1,212 @@
+
+metavar x, y, V, z, C, I, v,  _ ::=
+indexvar i, j, k, l, n ::=
+
+grammar
+
+formula :: 'formula_' ::=
+  | judgement   :: :: judgement  
+  | t in ts     :: :: type_in {{ tex [[ t ]] \in \{ [[ ts ]] \} }}
+
+grammar
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%                                                                         %%%
+%%%                               Grammar                                   %%%  
+%%%                                                                         %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Defining some terminal symbols useful for automatic typesetting
+terminals :: termi_ ::=
+  |  <<         :: :: langle   {{ tex \langle }} {{ com left angle }}
+  |  >>         :: :: rangle   {{ tex \rangle }} {{ com right angle }}
+  |  =>         :: :: arrow    {{ tex \Rightarrow }}
+
+
+A {{ tex A }}   :: 'A_'  ::= {{ com Type Variable }}
+
+
+b              :: 'b_'   ::= {{ com Base type }}
+  | number                                  ::   :: t_number
+  | string                                  ::   :: t_string
+  | bool                                    ::   :: t_bool
+  | void                                    ::   :: t_void
+  | top                                     ::   :: t_top {{ tex \top }}
+  | null                                    ::   :: t_null
+
+  %% XXX: should we keep undefined type?
+  | undefined                               :: M :: t_undefined
+  | A                                       ::   :: t_var
+  | tname  << </ ti // i />  >>             ::   :: t_named
+  | { F }                                   ::   :: t_object
+  | [ t ]                                   ::   :: t_array
+  | t1 + t2                                 ::   :: t_union   
+
+
+tname {{ tex T }}  ::  'tname_' ::= {{ com Named type }} 
+  | C                                       ::   :: t_C {{ tex C }} 
+  | I                                       ::   :: t_I {{ tex I }} 
+
+
+fld {{ tex f }}    :: 'fld_'  ::= {{ com Field identifier }} 
+mth {{ tex m }}    :: 'mth_'  ::= {{ com Method identifier }} 
+
+
+t               :: 't_'  ::= {{ com Type }}
+  | { b | p }                               ::   :: t_ref {{ tex \{\ [[ b ]]\ |\ [[ p ]]\ \} }}
+  | b                                       :: M :: t_base
+  | ( </ xi : ti // i /> ) => t             ::   :: t_fun
+
+
+ts              :: 'ts_' ::= {{ com Types }}
+  | t                                       :: M :: t_single
+  | t , ts                                  :: M :: t_list
+
+p               :: 'p_'  ::= {{ com Predicate }} 
+  | true                                    ::    :: p_true
+%% TODO 
+
+
+c {{ tex c }}   :: 'c_'  ::= {{ com Coercion }} 
+  | cemp                                    ::    :: no_coercion {{ tex \cdot }}  
+  | cdie t                                  ::    :: die_coercion {{ tex \bigotimes [[ t ]] }}
+  | cast t1 t2                              ::    :: coercion {{ tex \langle [[ t1 ]] \Rightarrow [[ t2 ]] \rangle }}
+
+  | cdown                                   ::    :: down_cast {{ tex \Downarrow  }}
+  | cup                                     ::    :: up_cast {{ tex  \Uparrow }}
+
+
+
+
+%% TODO: Add type name: N
+
+ID {{ tex ID }} :: 'ID_' ::= {{ com Interface Declaration }}
+  | interface I << </ Ai // i /> >> extends I' << </ tj // j /> >> { F }   
+                                            ::    :: interface_sig 
+
+
+CD              :: 'CD_' ::= {{ com Class Declaration }}
+  | class C << </ Ai // i /> >> extends C' << </ tj // j /> >> 
+    { F ; K MD }                            ::   :: class_sig 
+
+
+K {{ tex K }}   :: 'K_'  ::= {{ com Contructor }} 
+  | constructor ( </ xi : ti // i /> )
+                                            ::   :: constructor 
+  
+  %% { super( </ xj // j /> ) ; </ this. xk // k /> } 
+
+
+e {{ tex e }}   :: 'e_'  ::= {{ com Expression }}
+  | x                                       ::   :: variable
+  | true                                    ::   :: true
+  | false                                   ::   :: false
+  | cst                                     ::   :: constant {{ tex c }} 
+  | this                                    ::   :: this
+  | e ( </ ei // i /> )                     ::   :: application
+  | { FD }                                  ::   :: object_literal
+  | new C << </ ti // i /> >> ( </ ej // j /> )   
+                                            ::   :: call_new
+  | [ </ ei // i /> ]                       ::   :: array_literal
+  | e.m( </ ei // i /> )                    ::   :: method_call
+  | e( </ ei // i /> )                      ::   :: function_call
+  | e.f                                     ::   :: field_access
+  | e1 [ e2 ]                               ::   :: dyn_field_access
+  | fun ( </ xi // i /> ) { s }             ::   :: lambda
+  | c e                                     ::   :: coerced_exp
+
+eopt {{ tex e_{opt} }} :: 'e_'  ::= {{ com Optional expression }}
+
+
+s {{ tex s }}   :: 's_' ::= {{ com Statement }} 
+  | skip                                    ::   :: skip 
+  | s1 ; s2                                 ::   :: seq
+  | fun f ( </ xi // i /> ) { s }           ::   :: function
+  | var x: t := e                           ::   :: var_decl 
+  | e1 := e2                                ::   :: assignment
+  | e1 [ e2 ] := e3                         ::   :: dyn_update
+  | return eopt                             ::   :: return
+  | while( e ) { s }                        ::   :: while
+  | if ( e ) { s1 } else { s2 }             ::   :: if_stmt 
+
+%% For the moment use a unified representation for fields and methods
+
+F               :: 'F_' ::= {{ com Field signature }}
+  | fld : fm : t                            ::   :: field_t {{ tex [[ fld ]]:_[[ fm ]] [[ t ]] }}
+  | F, F                                    ::   :: mult_field_t
+
+
+FD              :: 'FD_' ::= {{ com Field declaration }}
+  | fld := e                                ::   :: field_dc
+  | FD, FD                                  ::   :: mult_field_dc
+
+
+
+fm {{ tex m }}  :: 'fm_' ::= {{ com Field mutability (mut/imm) }}
+  | mut                                     ::   :: mutable   {{ tex \circ }} 
+  | imm                                     ::   :: immutable {{ tex \bullet }}
+
+
+MD              :: 'MD_' ::= {{ com Method declaration }} 
+  | mth (  </ xi : ti // i />  ): t { s }   ::   :: method
+
+
+M               :: 'M_' ::= {{ com Member signature }}
+  | mth (  </ xi : ti // i /> ): t          ::   :: method_sig
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%                                                                         %%%
+%%%                             Subtyping                                   %%%  
+%%%                                                                         %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+defns
+JSubtyping :: '' ::=
+
+
+defn
+t1 <: t2 ~> c
+:: :: subtyping :: 's_'
+{{ com Subtyping }}
+{{ tex [[t1]] [[<:]] [[t2]] \rightsquigarrow [[c]]}}
+by
+
+------------------ :: refl
+t <: t ~> cemp
+
+%% TODO: Dead cast ??? 
+
+------------------ :: top
+t <: top ~> cemp 
+
+
+ti in t1, t2
+------------------------------------ :: uniond
+t1 + t2 <: ti ~> cast t1 + t2  ti
+
+
+ti in t1, t2
+------------------------------------ :: unionu
+ti <: t1 + t2 ~> cemp
+
+
+ti' <: ti' ~> cemp
+t <: t' ~> cemp
+----------------------------------------------------------------------- :: func
+( </ xi : ti // i /> ) => t <: ( </ xi : ti' // i /> ) => t' ~> cemp
+
+
+----------------------------------------------------------- :: width
+{ F, F' }  <:   { F  }   ~> cemp 
+
+
+t1 <: t2 ~> cdown
+----------------------------------------------------------- :: depth
+{ F, fld : mut : t1 }  <:   { F, fld : mut :t2  }   ~> cemp 
+
+
+

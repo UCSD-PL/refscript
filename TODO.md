@@ -33,7 +33,9 @@ JS Features
 Tool/Implementation
 -------------------
   
-  - Fix scoping for functions and variables
+  - Fix scoping for functions and variables.
+
+  - Test infinite loops.
 
   - Revisit overload resolution.
 

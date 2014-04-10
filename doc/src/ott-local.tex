@@ -1,0 +1,17 @@
+%XXX: Why is this necessary ?
+\renewcommand{\ottcom}[1]{#1}
+
+%XXX: Change standard OTT grammars formatting
+\renewcommand{\ottprodline}[6]{\ifthenelse{\equal{#3}{} }{ $\mid$~\hbox{$#2$}}{}}
+\renewcommand{\ottfirstprodline}[6]{$ #2$}
+
+\newcommand{\ottbeginprodlines}{}
+\newcommand{\ottendprodlines}{}
+
+
+\renewcommand{\ottmetavartabular}[1]{(ottmetavartabular \begin{supertabular}{ll}#1\end{supertabular})
+}
+\renewcommand{\ottrulehead}[3]{#3 & $#1$ & $#2$ & \ottbeginprodlines}
+
+%XXX: Change list comprehension, no superscript
+\renewcommand{\ottcomp}[2]{\overline{#1}}

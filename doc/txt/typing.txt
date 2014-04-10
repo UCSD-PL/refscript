@@ -41,6 +41,7 @@ e   ::=                                       (Expressions)
       | f(ei)                                   (function call)
       | e.f                                     (static field access)
       | e1[e1]                                  (dynamic field access)
+      | fun(xi) { s }                           (lamda)
 
 -- Only in target language 
       | c e                                     (cast)
@@ -51,9 +52,9 @@ MD  ::=                                       (Callable class elements)
       | new (xi): sig { s }                     (constructor)
 
 
-mod ::=                                       (Access modifier)
-      | public 
-      | private
+// mod ::=                                       (Access modifier)
+//       | public 
+//       | private
       
 
 FD  ::= f: e

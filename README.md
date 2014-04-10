@@ -245,10 +245,6 @@ You can write data type declarations in the follownig way:
 
 ## Grammar
 
-
-#### Primitive Types
-
-
 #### Base Types
 
     b ::= number                                // Number

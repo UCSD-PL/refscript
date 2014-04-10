@@ -248,18 +248,16 @@ You can write data type declarations in the follownig way:
 
 #### Primitive Types
 
-    π ::= number                                // Number
+
+#### Base Types
+
+    b ::= number                                // Number
         | boolean                               // Boolean
         | string                                // String
         | void                                  // Void
         | top                                   // Τop type
         | null                                  // Null
         | undefined                             // Undefined
-        
-
-#### Base Types
-
-    b ::= π                                     // Primitive type
         | A                                     // Type variable
         | #<id>[t, ... ]                        // Named type
         | {f1: t1, f2: t2, ...}                 // Object type

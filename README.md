@@ -1,11 +1,11 @@
 # RefScript
 
-Refinement type checker for a TypeScript-like language
+Refinement Types for Scripting Languages
 
 
 ## Dependencies
 
-NanoJS depends on the following projects:
+RefScript depends on the following projects:
 
  * Haskell compiler
  * Ocaml Compiler
@@ -59,12 +59,12 @@ or, if this fails:
 
 ### Getting source code
 
-Clone all dependencies and NanoJS in the same directory `ROOT`:
+Clone all dependencies and RefScript in the same directory `ROOT`:
 
     git clone https://github.com/panagosg7/liquid-fixpoint
     git clone https://github.com/panagosg7/language-ecmascript
     git clone https://github.com/panagosg7/typescript
-    git clone https://github.com/UCSD-PL/nano-js
+    git clone https://github.com/UCSD-PL/RefScript
 
 After acquiring the code you should have the following file structure:
 
@@ -72,7 +72,7 @@ After acquiring the code you should have the following file structure:
 ROOT
   ├── language-ecmascript
   ├── liquid-fixpoint
-  ├── nano-js
+  ├── RefScript
   └── typescript
 ```
 
@@ -97,15 +97,15 @@ And then to enable it:
 
 
     
-### Build NanoJS
+### Build RefScript
 
-    cd nano-js             && git checkout heapless_classes && cabal install && cd ..
+    cd RefScript           && git checkout heapless_classes && cabal install && cd ..
 
 
 
 ## Usage
 
-To run NanoJS on a single TypeScript file:
+To run RefScript on a single TypeScript file:
 
     nanojs liquid /path_to_JS_file/file.ts
 
@@ -118,7 +118,7 @@ All specifications are added in comments of the following form:
 
     /*@ <specification> */
 
-Nano-js currently allows the following forms of specifications:
+RefScript currently allows the following forms of specifications:
 
 
 ### Signatures

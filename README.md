@@ -177,6 +177,16 @@ Also, type annotations are necessary for class members:
     }
 
 
+Define interfaces in a similar way:
+
+    interface IA {
+        /*@ a :: { number | v > 0} */
+        a: number;
+        ...
+    }
+
+
+
 
 ### Type Qualifiers
 
@@ -232,13 +242,6 @@ and now use `nat` as an alias for: `{number | v >= 0}`
 
     /*@ z :: nat */
     var z = 12;
-
-
-### Data Type Definitions
-
-You can write data type declarations in the follownig way:
-
-    /*@ type list[A]       = { data: A, next: list[A] } */
 
 
 

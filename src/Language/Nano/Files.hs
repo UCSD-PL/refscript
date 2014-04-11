@@ -10,6 +10,6 @@ module Language.Nano.Files (
   ) 
   where
 
-import Paths_nano_js 
+import Paths_RefScript
 
 getPreludePath = getDataFileName "include/prelude.json" 

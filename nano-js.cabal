@@ -1,7 +1,7 @@
-name:                nano-js
+name:                RefScript
 version:             0.1.0.0
-synopsis:            Small Language for Implementing Verification Algorithms
-homepage:            https://github.com/UCSD-PL/nano-js
+synopsis:            Refinement Types for Scripting Languages
+homepage:            https://github.com/UCSD-PL/RefScript
 license:             BSD3
 license-file:        LICENSE
 author:              Ranjit Jhala
@@ -64,7 +64,7 @@ Library
  
  
   hs-source-dirs:      src
-  Exposed-Modules:     Paths_nano_js
+  Exposed-Modules:     Paths_RefScript
 --                        Language.Nano.Errors
 --                        Language.Nano.Files
 --                        Language.Nano.Types

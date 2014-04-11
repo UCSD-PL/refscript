@@ -1,113 +1,113 @@
 
 GRAMMAR
 =======
-
-P   ::= Ci s                                  (Program)
-
-C   ::= class A<Vi> extends A'<ti> { Md; Fd } (Class declarations)
-
-N   ::=                                       (Named Types)
-      | class A<Vi> extends A'<ti> { Md; Fd }   (class definitions)
-      | interface I<Vi> extends Ii<ti>          (interface)
-      | enum { fi }                             (enumeration)
-
-
-I   ::=                                       (Interface)
-      | interface I<Vi> { Md; Fd }              (interface definitions)
-
-
-s   ::=                                       (Statements)
-      | s; s                                    (sequence)
-      | fun f(xi):ς { s }                     (function decalration)
-      | var x[: t] = e                          (variable definition)
-      | x := e                                  (assignment)
-      | e.f := e                                (static field update)
-      | e[e] := e                               (dynamic field update)
-      | return [e]                              (return)
-      | while(e) { s }                          (while loop)
-      | if(e) { s1 } else { s2 }                (if-then-else)
-
-
-e   ::=                                       (Expressions)
-      | 1 | 2 | ...                             (numeric literal)
-      | "a" | ...                               (string literal)
-      | true | false                            (boolean literal)
-      | op1 e                                   (unary operation) 
-      | e op2 e                                 (binary operation)
-      | { FD; MD }                              (object literal)
-      | new C(ei)                               (class constructor)
-      | [ei]                                    (array literal)
-      | e.m(ei)                                 (method call)
-      | f(ei)                                   (function call)
-      | e.f                                     (static field access)
-      | e1[e1]                                  (dynamic field access)
-      | fun(xi) { s }                           (lamda)
-
--- Only in target language 
-      | c e                                     (cast)
-
-
-MD  ::=                                       (Callable class elements)
-      | mod m(xi): sig { s }                    (method)
-      | new (xi): sig { s }                     (constructor)
-
-
-// mod ::=                                       (Access modifier)
-//       | public 
-//       | private
-      
-
-FD  ::= f: e
-      | F; F
-
-
--------------------------------------------------------------------------------
-
-t   ::=        | { v: b | p }                            (refined type)
-
-
-p   ::= ...                                   (Predicates)
-
-
-b   ::=                                       (Base types)
-      | number | string | boolean               (primitive)
-      | null                                    (null)
-      | V                                       (type variable)
-      | N[ti]                                   (Type reference)
-      | { Fd; Md }                              (object type)
-      | [t]                                     (array type)
-      | t1 \/ t2                                (union type)
-      | top                                     (top)
-
-
-sig ::=                                       (Type signature)
-      | (xi:ti)=>t                              (arrow type)
-      | ∀V.sig                                  (quantified type)    
-
-
-ς   ::=                                       (Function specification)
-      | sig                                     (function signature)
-      | ς1 /\ ς2                                (signature intersection)
-
-
-Fd  ::= f: (Mi,t)                             (Field declaration)
-      | Fd, Fd
-
-
-Md  ::= m: ς                                  (Method declarations)
-      | Md, Md
-
-
-Mi  ::=                                       (Field mutability modifier) 
-      | mut                                     (mutable)
-      | imm                                     (immutable)
-
-
-c   ::=                                       (Casts)
-      | .                                       (no cast - or upcast ?)
-      | [ t \/ ts => ts ]                       (downcast)
-
-
+// 
+// P   ::= Ci s                                  (Program)
+// 
+// C   ::= class A<Vi> extends A'<ti> { Md; Fd } (Class declarations)
+// 
+// N   ::=                                       (Named Types)
+//       | class A<Vi> extends A'<ti> { Md; Fd }   (class definitions)
+//       | interface I<Vi> extends Ii<ti>          (interface)
+//       | enum { fi }                             (enumeration)
+// 
+// 
+// I   ::=                                       (Interface)
+//       | interface I<Vi> { Md; Fd }              (interface definitions)
+// 
+// 
+// s   ::=                                       (Statements)
+//       | s; s                                    (sequence)
+//       | fun f(xi):ς { s }                     (function decalration)
+//       | var x[: t] = e                          (variable definition)
+//       | x := e                                  (assignment)
+//       | e.f := e                                (static field update)
+//       | e[e] := e                               (dynamic field update)
+//       | return [e]                              (return)
+//       | while(e) { s }                          (while loop)
+//       | if(e) { s1 } else { s2 }                (if-then-else)
+// 
+// 
+// e   ::=                                       (Expressions)
+//       | 1 | 2 | ...                             (numeric literal)
+//       | "a" | ...                               (string literal)
+//       | true | false                            (boolean literal)
+//       | op1 e                                   (unary operation) 
+//       | e op2 e                                 (binary operation)
+//       | { FD; MD }                              (object literal)
+//       | new C(ei)                               (class constructor)
+//       | [ei]                                    (array literal)
+//       | e.m(ei)                                 (method call)
+//       | f(ei)                                   (function call)
+//       | e.f                                     (static field access)
+//       | e1[e1]                                  (dynamic field access)
+//       | fun(xi) { s }                           (lamda)
+// 
+// -- Only in target language 
+//       | c e                                     (cast)
+// 
+// 
+// MD  ::=                                       (Callable class elements)
+//       | mod m(xi): sig { s }                    (method)
+//       | new (xi): sig { s }                     (constructor)
+// 
+// 
+// // mod ::=                                       (Access modifier)
+// //       | public 
+// //       | private
+//       
+// 
+// FD  ::= f: e
+//       | F; F
+// 
+// 
+// -------------------------------------------------------------------------------
+// 
+// t   ::=        | { v: b | p }                            (refined type)
+// 
+// 
+// p   ::= ...                                   (Predicates)
+// 
+// 
+// b   ::=                                       (Base types)
+//       | number | string | boolean               (primitive)
+//       | null                                    (null)
+//       | V                                       (type variable)
+//       | N[ti]                                   (Type reference)
+//       | { Fd; Md }                              (object type)
+//       | [t]                                     (array type)
+//       | t1 \/ t2                                (union type)
+//       | top                                     (top)
+// 
+// 
+// sig ::=                                       (Type signature)
+//       | (xi:ti)=>t                              (arrow type)
+//       | ∀V.sig                                  (quantified type)    
+// 
+// 
+// ς   ::=                                       (Function specification)
+//       | sig                                     (function signature)
+//       | ς1 /\ ς2                                (signature intersection)
+// 
+// 
+// Fd  ::= f: (Mi,t)                             (Field declaration)
+//       | Fd, Fd
+// 
+// 
+// Md  ::= m: ς                                  (Method declarations)
+//       | Md, Md
+// 
+// 
+// Mi  ::=                                       (Field mutability modifier) 
+//       | mut                                     (mutable)
+//       | imm                                     (immutable)
+// 
+// 
+// c   ::=                                       (Casts)
+//       | .                                       (no cast - or upcast ?)
+//       | [ t \/ ts => ts ]                       (downcast)
+// 
+// 
 
 -------------------------------------------------------------------------------
 
@@ -135,90 +135,90 @@ Coercive subtyping
 |   t1 <: t2 ~> c  |         Subtyping jugdement
 |__________________|
 
-
-    t <: t ~> .                                  [S-Id]
-
-
-    t <: top ~> .                                [S-top]
-
-
-    -------------------------------------------- [S-Union-Up]
-    t <: t\/ti ~> .
-
-
-    
-    -------------------------------------------- [S-Union-Down]
-    t\/ti <: ti ~> [ t\/ti => ti ]
-
-
-    ti' <: ti ~> .
-    t <: t' ~> .
-    -------------------------------------------- [S-Func]
-    (xi:ti)=>t <: (xi:ti')=>t' ~> .
-
-
-    t1 <: t2 ~> .          t2 <: t1 ~> .
-    -------------------------------------------- [S-Array]
-    [t1] <: [t2]
-
+// 
+//     t <: t ~> .                                  [S-Id]
+// 
+// 
+//     t <: top ~> .                                [S-top]
+// 
+// 
+//     -------------------------------------------- [S-Union-Up]
+//     t <: t\/ti ~> .
+// 
+// 
+//     
+//     -------------------------------------------- [S-Union-Down]
+//     t\/ti <: ti ~> [ t\/ti => ti ]
+// 
+// 
+//     ti' <: ti ~> .
+//     t <: t' ~> .
+//     -------------------------------------------- [S-Func]
+//     (xi:ti)=>t <: (xi:ti')=>t' ~> .
+// 
+// 
+//     t1 <: t2 ~> .          t2 <: t1 ~> .
+//     -------------------------------------------- [S-Array]
+//     [t1] <: [t2]
+// 
 
     t1 <: t2 ~> .          t2 <: t1 ~> .
     -------------------------------------------- [S-Interface]
     I[t1] <: I[t2]
 
 
-
-    f: M,t <: f: M',t'
-    -------------------------------------------- [S-Struct]
-    { f: (M,t), Fd } <: { f: M',t'; Fd } ~> .
-
-
-    S(B) = class B extends B' { Md'; Fd' }
-    {Md''; Fd''} = unfold(B') 
-    {Md; Fd} <: { Md', Md''; Fd', Fd''}
-    -------------------------------------------- [S-Class-1]
-    { Md; Fd } <: class B extends B' ~> .
-
-
-    S(B) = class B extends B' { Md'; Fd' }
-    {Md''; Fd''} = unfold(B') 
-    { Md', Md''; Fd', Fd''} <: {Md; Fd}
-    -------------------------------------------- [S-Class-2]
-    class B extends B' <: {Md; Fd}~> .
-
-
- ______________
-|              |
-|   Fd <: Fd'  |         Field subtyping jugdement
-|______________|
-
-
-    t <: t' ~> .      t' <: t ~> .
-    -------------------------------------------- [S-Fld-Deep-1]
-    f: (_,t) <: f: (mut,t')
-
-
-    t <: t' ~> .
-    -------------------------------------------- [S-Fld-Deep-1]
-    f: (imm,t) <: f: (_,t')
-
-
- ______________
-|              |
-|   Md <: Md'  |         method subtyping jugdement
-|______________|
-
-
-    t <: t' ~> .      t' <: t ~> .
-    -------------------------------------------- [S-Fld-Deep-1]
-    m: (_,t) <: f: (mut,t')
-
-
-    t <: t' ~> .
-    -------------------------------------------- [S-Fld-Deep-1]
-    f: (imm,t) <: f: (_,t')
-
-
+// 
+//     f: M,t <: f: M',t'
+//     -------------------------------------------- [S-Struct]
+//     { f: (M,t), Fd } <: { f: M',t'; Fd } ~> .
+// 
+// 
+//     S(B) = class B extends B' { Md'; Fd' }
+//     {Md''; Fd''} = unfold(B') 
+//     {Md; Fd} <: { Md', Md''; Fd', Fd''}
+//     -------------------------------------------- [S-Class-1]
+//     { Md; Fd } <: class B extends B' ~> .
+// 
+// 
+//     S(B) = class B extends B' { Md'; Fd' }
+//     {Md''; Fd''} = unfold(B') 
+//     { Md', Md''; Fd', Fd''} <: {Md; Fd}
+//     -------------------------------------------- [S-Class-2]
+//     class B extends B' <: {Md; Fd}~> .
+// 
+// 
+//  ______________
+// |              |
+// |   Fd <: Fd'  |         Field subtyping jugdement
+// |______________|
+// 
+// 
+//     t <: t' ~> .      t' <: t ~> .
+//     -------------------------------------------- [S-Fld-Deep-1]
+//     f: (_,t) <: f: (mut,t')
+// 
+// 
+//     t <: t' ~> .
+//     -------------------------------------------- [S-Fld-Deep-1]
+//     f: (imm,t) <: f: (_,t')
+// 
+// 
+//  ______________
+// |              |
+// |   Md <: Md'  |         method subtyping jugdement
+// |______________|
+// 
+// 
+//     t <: t' ~> .      t' <: t ~> .
+//     -------------------------------------------- [S-Fld-Deep-1]
+//     m: (_,t) <: f: (mut,t')
+// 
+// 
+//     t <: t' ~> .
+//     -------------------------------------------- [S-Fld-Deep-1]
+//     f: (imm,t) <: f: (_,t')
+// 
+// 
 
 
 

@@ -1,12 +1,21 @@
 
-metavar x, y, V, z, C, I, v,  _ ::=
+metavar x, y, V, z, v,  _ ::=
 indexvar i, j, k, l, n ::=
 
 grammar
 
 formula :: 'formula_' ::=
-  | judgement   :: :: judgement  
-  | t in ts     :: :: type_in {{ tex [[ t ]] \in \{ [[ ts ]] \} }}
+  | judgement                     :: :: judgement  
+  | t in ts                       :: :: type_in {{ tex [[ t ]] \in \{ [[ ts ]] \} }}
+  | CD1 in CD2                    :: :: class_in {{ tex [[ CD1 ]] \in [[ CD2 ]] }} 
+  | ID1 in ID2                    :: :: iface_in {{ tex [[ ID1 ]] \in [[ ID2 ]] }} 
+  | MD1 in MD2                    :: :: md_in {{ tex [[ MD1 ]] \in [[ MD2 ]] }} 
+  | tflds ( TN ) = F              :: :: tflds {{ tex \mathsf{tflds}( [[ TN ]] ) = [[ F ]] }}
+  | tmeths ( TN ) = M             :: :: tmeths {{ tex \mathsf{tmeths}( [[ TN ]] ) = [[ M ]] }}
+  | formula for i 1 n             :: :: for1n {{ tex [[ formula ]] ,\ i \in \{ 1 \dots n \}  }}
+  | let formula1 for formula2     :: :: forall {{ tex \ottkw{let}\ [[formula1]]\ \ottkw{for}\ [[formula2]] }}
+
+  | M1 = M2                       :: :: Meq
 
 grammar
 
@@ -33,24 +42,32 @@ b              :: 'b_'   ::= {{ com Base type }}
   | bool                                    ::   :: t_bool
   | void                                    ::   :: t_void
   | top                                     ::   :: t_top {{ tex \top }}
-  | null                                    ::   :: t_null
+  | bot                                     ::   :: t_bot {{ tex \bot }}
 
   %% XXX: should we keep undefined type?
   | undefined                               :: M :: t_undefined
-  | A                                       ::   :: t_var
-  | tname  << </ ti // i />  >>             ::   :: t_named
-  | { F }                                   ::   :: t_object
+  | TN                                ::   :: t_named
+  | { F ; M }                               ::   :: t_object
   | [ t ]                                   ::   :: t_array
   | t1 + t2                                 ::   :: t_union   
+  
+  %% | A                                       ::   :: t_var
+  %% | TN  << </ ti // i />  >>          ::   :: t_named
 
 
-tname {{ tex T }}  ::  'tname_' ::= {{ com Named type }} 
-  | C                                       ::   :: t_C {{ tex C }} 
-  | I                                       ::   :: t_I {{ tex I }} 
+
+I {{ tex I }}  ::  'iname_' ::= {{ com Interface name }} 
+
+C {{ tex C }}  ::  'cname_' ::= {{ com Class name }} 
+
+TN  {{ tex T }}  ::  'tname_' ::= {{ com Type name }}
+  | C                                       ::   :: t_Cl
+  | I                                       ::   :: t_If
 
 
-fld {{ tex f }}    :: 'fld_'  ::= {{ com Field identifier }} 
-mth {{ tex m }}    :: 'mth_'  ::= {{ com Method identifier }} 
+fld {{ tex f }} :: 'fld_'  ::= {{ com Field identifier }} 
+
+mth {{ tex m }} :: 'mth_'  ::= {{ com Method identifier }} 
 
 
 t               :: 't_'  ::= {{ com Type }}
@@ -70,30 +87,35 @@ p               :: 'p_'  ::= {{ com Predicate }}
 
 c {{ tex c }}   :: 'c_'  ::= {{ com Coercion }} 
   | cemp                                    ::    :: no_coercion {{ tex \cdot }}  
-  | cdie t                                  ::    :: die_coercion {{ tex \bigotimes [[ t ]] }}
   | cast t1 t2                              ::    :: coercion {{ tex \langle [[ t1 ]] \Rightarrow [[ t2 ]] \rangle }}
-
-  | cdown                                   ::    :: down_cast {{ tex \Downarrow  }}
-  | cup                                     ::    :: up_cast {{ tex  \Uparrow }}
-
-
+%%   | cup                                     ::    :: up_cast {{ tex  \Uparrow }}
+%%   | cdown                                   ::    :: down_cast {{ tex \Downarrow  }}
+%%   | cdie t                                  ::    :: die_coercion {{ tex \bigotimes [[ t ]] }}
 
 
-%% TODO: Add type name: N
+
+P               :: 'P_'  ::= {{ com Program }} 
+  | ID , CD , s                             ::    :: prog
 
 ID {{ tex ID }} :: 'ID_' ::= {{ com Interface Declaration }}
-  | interface I << </ Ai // i /> >> extends I' << </ tj // j /> >> { F }   
+  | interface I extends </ Ii // i /> { F; M }         
                                             ::    :: interface_sig 
+  | ID1 , ID2                               ::    :: mult_iface
+
+  %% | interface I << </ Ai // i /> >> extends I' << </ tj // j /> >> { F }   
+  %%                                           ::    :: interface_sig 
 
 
 CD              :: 'CD_' ::= {{ com Class Declaration }}
-  | class C << </ Ai // i /> >> extends C' << </ tj // j /> >> 
-    { F ; K MD }                            ::   :: class_sig 
+  | class C extends C' { F ; K, MD }        ::   :: class_sig 
+  | CD1 , CD2                               ::   :: mult_class
+
+  %% | class C << </ Ai // i /> >> extends C' << </ tj // j /> >> 
+  %%   { F ; K, MD }                           ::   :: class_sig 
 
 
 K {{ tex K }}   :: 'K_'  ::= {{ com Contructor }} 
-  | constructor ( </ xi : ti // i /> )
-                                            ::   :: constructor 
+  | constructor ( </ xi : ti // i /> )      ::   :: constructor 
   
   %% { super( </ xj // j /> ) ; </ this. xk // k /> } 
 
@@ -105,7 +127,7 @@ e {{ tex e }}   :: 'e_'  ::= {{ com Expression }}
   | cst                                     ::   :: constant {{ tex c }} 
   | this                                    ::   :: this
   | e ( </ ei // i /> )                     ::   :: application
-  | { FD }                                  ::   :: object_literal
+  | { FD; MD }                              ::   :: object_literal
   | new C << </ ti // i /> >> ( </ ej // j /> )   
                                             ::   :: call_new
   | [ </ ei // i /> ]                       ::   :: array_literal
@@ -127,34 +149,55 @@ s {{ tex s }}   :: 's_' ::= {{ com Statement }}
   | e1 := e2                                ::   :: assignment
   | e1 [ e2 ] := e3                         ::   :: dyn_update
   | return eopt                             ::   :: return
-  | while( e ) { s }                        ::   :: while
+  | while ( e ) { s }                       ::   :: while
   | if ( e ) { s1 } else { s2 }             ::   :: if_stmt 
 
-%% For the moment use a unified representation for fields and methods
-
-F               :: 'F_' ::= {{ com Field signature }}
-  | fld : fm : t                            ::   :: field_t {{ tex [[ fld ]]:_[[ fm ]] [[ t ]] }}
-  | F, F                                    ::   :: mult_field_t
 
 
-FD              :: 'FD_' ::= {{ com Field declaration }}
+mtb {{ tex \mu }}       :: 'mtb_' ::= {{ com Field mutability (mut/imm) }}
+  | mut                                     ::   :: mutable   {{ tex _M }} 
+  | imm                                     ::   :: immutable {{ tex _I }}
+  | whateverm                               :: M :: whateverm {{ tex \_ }}
+
+
+MKEY {{ tex m: _{\mu} }} :: 'KEY_' ::= 
+  | mth : mtb                               :: M :: mkey {{ tex [[ mth ]]: _{ [[ mtb ]] } }}
+
+
+FKEY {{ tex f: _{\mu} }} :: 'KEY_' ::= 
+  | fld : mtb                               :: M :: fkey {{ tex [[ fld ]]: _{ [[ mtb ]] } }}
+
+
+F                       :: 'F_' ::= {{ com Field signature }}
+  | FKEY t                                  ::   :: field_t 
+  | F1 , F2                                 ::   :: mult_field_t1
+  | F1 ,.., Fi                              ::   :: mult_field_t2
+
+FD                      :: 'FD_' ::= {{ com Field declaration }}
   | fld := e                                ::   :: field_dc
-  | FD, FD                                  ::   :: mult_field_dc
+  | FD1 , FD2                               ::   :: mult_field_dc
+
+
+M                       :: 'M_' ::= {{ com Member signature }}
+  | MKEY (  </ xi : ti // i /> ): t         ::   :: meth_sig
+  | MKEY t                                  :: M :: meth_t
+  | M1 , M2                                 ::   :: mult_meth_t1
+  | mtype MD                                :: M :: mtype
+  | M1 ,.., Mi                              ::   :: mult_meth_t2
+
+%%   | </ Mi // i />                           :: M :: mtypes
+
+
+MD                      :: 'MD_' ::= {{ com Method declaration }} 
+  | mth : (  </ xi : ti // i />  ): t { s } ::   :: meth
+  | MD1 , MD2                               ::   :: mult_meth_dc
 
 
 
-fm {{ tex m }}  :: 'fm_' ::= {{ com Field mutability (mut/imm) }}
-  | mut                                     ::   :: mutable   {{ tex \circ }} 
-  | imm                                     ::   :: immutable {{ tex \bullet }}
 
-
-MD              :: 'MD_' ::= {{ com Method declaration }} 
-  | mth (  </ xi : ti // i />  ): t { s }   ::   :: method
-
-
-M               :: 'M_' ::= {{ com Member signature }}
-  | mth (  </ xi : ti // i /> ): t          ::   :: method_sig
-
+G {{ tex \Gamma }}      :: 'G_' ::= {{ com Environment }} 
+  | gemp                                    ::   :: gemp {{ tex \cdot }} 
+  | x : t , G                               ::   :: env 
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -170,7 +213,7 @@ JSubtyping :: '' ::=
 
 defn
 t1 <: t2 ~> c
-:: :: subtyping :: 's_'
+:: :: subtyping :: 'S_'
 {{ com Subtyping }}
 {{ tex [[t1]] [[<:]] [[t2]] \rightsquigarrow [[c]]}}
 by
@@ -178,10 +221,13 @@ by
 ------------------ :: refl
 t <: t ~> cemp
 
-%% TODO: Dead cast ??? 
 
 ------------------ :: top
 t <: top ~> cemp 
+
+
+------------------ :: bot
+bot <: t ~> cemp 
 
 
 ti in t1, t2
@@ -196,17 +242,183 @@ ti <: t1 + t2 ~> cemp
 
 ti' <: ti' ~> cemp
 t <: t' ~> cemp
------------------------------------------------------------------------ :: func
+--------------------------------------------------------------------- :: Func
 ( </ xi : ti // i /> ) => t <: ( </ xi : ti' // i /> ) => t' ~> cemp
 
 
------------------------------------------------------------ :: width
-{ F, F' }  <:   { F  }   ~> cemp 
+--------------------------------------------------------------------- :: Width
+{ F,F'; M } <: { F; M  } ~> cemp 
 
 
-t1 <: t2 ~> cdown
------------------------------------------------------------ :: depth
-{ F, fld : mut : t1 }  <:   { F, fld : mut :t2  }   ~> cemp 
+F1 <: F2 ~> cemp
+--------------------------------------------------------------------- :: DepthF
+{ F, F1; M } <: { F, F2; M } ~> cemp 
 
+
+ mth: mtb t <: mth: mtb' t' ~> cemp
+--------------------------------------------------------------------- :: DepthM
+{ F; M , mth: mtb t } <: { F; M, mth: mtb' t' } ~> cemp
+
+
+class C extends C' { F; K, MD } in CD
+--------------------------------------------------------------------- :: Class
+C <: C'  ~> cemp
+
+
+interface I extends </ Ii // i /> { F; M } in ID 
+--------------------------------------------------------------------- :: IFace
+I <: I' ~> cemp
+
+
+tflds ( TN ) = F
+tmeths ( TN ) = M
+t <: { F; M } ~> c
+--------------------------------------------------------------------- :: TNamed1
+t <: TN ~> c
+
+
+tflds ( TN ) = F
+tmeths ( TN ) = M
+{ F; M } <: t ~> c
+--------------------------------------------------------------------- :: TNamed2
+TN <: t ~> c
+
+
+t1 <: t2 ~> cemp
+t2 <: t1 ~> cemp
+--------------------------------------------------------------------- :: TArray
+[ t1 ] <: [ t2 ] ~> cemp
+
+
+defn
+F1 <: F2 ~> c
+:: :: fsubtyping :: 'FS_'
+{{ com Field subtyping }}
+{{ tex [[F1]] [[<:]] [[F2]] \rightsquigarrow [[c]]}}
+by
+
+t <: t' ~> cemp
+t' <: t ~> cemp
+--------------------------------------------------------------------- :: FldDeepM
+fld: whateverm t <: fld: mut t' ~> cemp
+
+
+t <: t' ~> cemp
+--------------------------------------------------------------------- :: FldDeepI
+fld: imm t <: fld: whateverm t' ~> cemp
+
+
+
+
+defn
+M1 <: M2 ~> c
+:: :: msubtyping :: 'MS_'
+{{ com Method subtyping }}
+{{ tex [[M1]] [[<:]] [[M2]] \rightsquigarrow [[c]]}}
+by
+
+t <: t' ~> cemp
+t' <: t ~> cemp
+--------------------------------------------------------------------- :: MthDeepM
+mth: whateverm t <: mth: mut t' ~> cemp
+
+
+t <: t' ~> cemp
+--------------------------------------------------------------------- :: MthDeepI
+mth: imm t <: mth : whateverm t' ~> cemp
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%                                                                         %%%
+%%%                             Members                                     %%%  
+%%%                                                                         %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+defns
+JLookup :: '' ::=
+
+
+defn
+tflds ( TN ) = F 
+:: :: tflds :: 'F_'
+{{ com Retrieve named type fields}}
+{{ tex \mathsf{tflds}( [[ TN ]] ) = [[ F ]] }}
+by
+
+class C extends C' { F; K, MD } in CD
+tflds ( C' ) = F'
+--------------------------------------------------------------------- :: Class
+tflds ( C ) = F, F'
+
+
+interface I extends </ Ii // i /> { F; M } in ID
+tflds ( Ii ) = Fi for i 1 n 
+--------------------------------------------------------------------- :: Iface
+tflds ( I ) = F, F1,..,Fn
+
+
+
+
+defn
+tmeths ( TN ) = M
+:: :: tmeths :: 'M_'
+{{ com Retrieve named type fields }}
+{{ tex \mathsf{tmeths}( [[ TN ]] ) = [[ M ]] }}
+by
+
+class C extends C' { F; K, MD } in CD
+tmeths ( C' ) = M
+let Mi = mth: imm (</ xi : ti // i />): t for MDi in MD
+--------------------------------------------------------------------- :: Class
+tmeths ( C ) = M , M1,..,Mn
+
+
+interface I extends </ Ii // i /> { F; M } in ID
+tmeths ( Ii ) = Mi for i 1 n 
+--------------------------------------------------------------------- :: Iface
+tmeths ( I ) = M, M1,..,Mn
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%                                                                         %%%
+%%%                               Typing                                    %%%  
+%%%                                                                         %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+defns
+JExpressionTyping :: '' ::=
+
+
+defn
+G |- e : t ~> e' 
+:: :: expr_typing :: 'S_'
+{{ com Expression Typing }}
+{{ tex [[ G ]] \vdash [[ e ]] : [[ t ]] \rightsquigarrow [[ e' ]] }}
+by
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%                                                                         %%%
+%%%                           Auxiliary Functions                           %%%  
+%%%                                                                         %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%% funs
+%% FAux ::=
+%% 
+%% fun
+%%   mtype MD :: M :: extract_method {{ tex \mathsf{mtype}([[ MD ]]) }} {{ com Extract method type }}
+%% by
+%%   mtype mth : ( </ xi : ti // i /> ): t { s } === mth: imm ( </ xi : ti // i /> ): t
+%% 
 
 

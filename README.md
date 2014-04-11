@@ -99,7 +99,7 @@ And then to enable it:
     
 ### Build RefScript
 
-    cd RefScript           && git checkout heapless_classes && cabal install && cd ..
+    cd RefScript           && cabal install
 
 
 

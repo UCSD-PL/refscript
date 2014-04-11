@@ -8,35 +8,31 @@ Refinement Types for Scripting Languages
 RefScript depends on the following projects:
 
  * Haskell compiler
+ * [hsenv](https://github.com/Paczesiowa/hsenv) (optional)
  * Ocaml Compiler
- * [Node.js](http://nodejs.org/) and [Jake](https://github.com/mde/jake)
- * [Liquid-fixpont](https://github.com/ucsd-progsys/liquid-fixpoint): Haskell Interface for Back-End Implication / Horn Clause Constraint Solving for Liquid Types.
- * [Language Ecmascript] (https://github.com/UCSD-PL/language-ecmascript): JavaScript Syntax writen in Haskell.
- * [TypeScript](https://github.com/panagosg7/typescript): TypeScript compiler, used as front-end.
+ * [Node.js](http://nodejs.org/) and (optionally) [Jake](https://github.com/mde/jake)
+ * [TypeScript](https://github.com/panagosg7/typescript): TypeScript compiler, used as front-end
+ * [Liquid-fixpont](https://github.com/ucsd-progsys/liquid-fixpoint): Haskell Interface for Back-End Implication / Horn Clause Constraint Solving for Liquid Types
+ * [Language Ecmascript](https://github.com/UCSD-PL/language-ecmascript): JavaScript Syntax writen in Haskell
 
 
 
-## Installation
+
+## Installing dependencies
 
 The following instructions have been tested on Ubuntu >= 12.04. 
 
 We assume that the requirements regarding the Haskell and Ocaml compiler are met.
 
-
-### Installing Node.js and Jake 
-
-TypeScript depends on:
-
-+ [node.js](http://nodejs.org/) version > 0.8 
-+ [jake](https://github.com/mde/jake)
+TypeScript depends on [node.js](http://nodejs.org/) version > 0.8 
 
 
-#### Installing Node/Jake on MacOS
+#### Installing Node on MacOS
 
-1. Install the [node package](http://nodejs.org/)
-2. `sudo npm install -g jake`
+Install the [node package](http://nodejs.org/download/)
 
-#### Installing Node/Jake on Ubuntu/Debian
+
+#### Installing Node on Ubuntu/Debian
 
     sudo apt-get install nodejs npm
 
@@ -45,9 +41,86 @@ install a newer version from the following PPA:
 
     sudo add-apt-repository ppa:chris-lea/node.js
     sudo apt-get update
-    sudo apt-get install nodejs
+    sudo apt-get install nodejs npm
 
-Then:
+
+### Create Virtual Haskell Environment (Optional)
+
+It is recommended to use an isolated Haskell environment
+([hsenv](https://github.com/Paczesiowa/hsenv)). 
+Create one using version 7.6.3 of the GHC Haskell compiler (available
+[here](https://www.haskell.org/ghc/download_ghc_7_6_3)):
+
+    hsenv --ghc=/PATH/TO/GHC/ghc-7.6.3-x86_64-unknown-linux.tar
+    
+And then to enable it:
+
+    source .hsenv/bin/activate
+
+
+
+
+## Getting the source code
+
+Clone all dependencies and RefScript in the same directory `ROOT`:
+
+    git clone https://github.com/panagosg7/liquid-fixpoint
+    git clone https://github.com/UCSD-PL/language-ecmascript
+    git clone https://github.com/UCSD-PL/RefScript
+
+After acquiring the code you should have the following folder structure:
+
+    ROOT
+      ├── language-ecmascript
+      ├── liquid-fixpoint
+      └── RefScript
+
+
+You can **optionally** get the latest version of our TypeScript to RefScript
+translation phase, as an alternative to using the precompiled scripts in
+`RefScript/ext/tsc-bin`. In this case you will have to get the sources:
+
+    git clone https://github.com/panagosg7/typescript
+
+After acquiring the code you should have the following folder structure:
+
+    ROOT
+      ├── language-ecmascript
+      ├── liquid-fixpoint
+      ├── RefScript
+      └── typescript
+
+
+
+
+## Building the project
+
+
+### Building dependencies
+
+    cd liquid-fixpoint     && cabal install && cd ..
+    cd language-ecmascript && git checkout RefScript && cabal install && cd ..
+
+
+### Building typescript (optional) 
+
+If you downloaded the TypeScript to RefScript translation, you can now build it: 
+
+    cd typescript          && jake
+
+To use this version of `tsc` later on, make sure that tye `./typescript`
+directory is in the environment under `TSC_ROOT`. You can can achieve this with:
+
+    export TSC_ROOT=$PWD
+
+Then head back to the ROOT directory:
+
+    cd ..
+
+
+Building `tsc` requires [jake](https://github.com/mde/jake). In case jake is not
+available with your nodejs installation, you can install it in the following
+way:
 
     sudo npm install -g jake
 
@@ -57,49 +130,10 @@ or, if this fails:
 
 
 
-### Getting source code
-
-Clone all dependencies and RefScript in the same directory `ROOT`:
-
-    git clone https://github.com/panagosg7/liquid-fixpoint
-    git clone https://github.com/panagosg7/language-ecmascript
-    git clone https://github.com/panagosg7/typescript
-    git clone https://github.com/UCSD-PL/RefScript
-
-After acquiring the code you should have the following file structure:
-
-```
-ROOT
-  ├── language-ecmascript
-  ├── liquid-fixpoint
-  ├── RefScript
-  └── typescript
-```
-
-
-### Create Virtual Haskell Environment (Optional)
-
-It is recommended to use an isolated Haskell environment (https://github.com/Paczesiowa/hsenv). Create one using version 7.6.3 of the GHC Haskell compiler (available [here](https://www.haskell.org/ghc/download_ghc_7_6_3)):
-
-    hsenv --ghc=/PATH/TO/GHC/ghc-7.6.3-x86_64-unknown-linux.tar
-    
-And then to enable it:
-
-    source .hsenv/bin/activate
-    
-    
-
-### Build dependencies
-
-    cd liquid-fixpoint     && cabal install && cd ..
-    cd language-ecmascript && git checkout heapless && cabal install && cd ..
-    cd typescript          && jake
-
-
-    
-### Build RefScript
+### Building RefScript
 
     cd RefScript           && cabal install
+
 
 
 

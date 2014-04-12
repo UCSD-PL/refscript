@@ -633,17 +633,17 @@ splitE g i e1s e2s
 ---------------------------------------------------------------------------------------
 bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 ---------------------------------------------------------------------------------------
-bsplitC g ci t1 t2
-  = do δ <- getDef 
+bsplitC g ci t1 t2 = 
+   do δ <- getDef 
   -- FIXME: BSPLIT DOES NOT WORK RIGHT FOR: neg/lists/unfold-list-00.ts
        {- tracePP ("BSPLIT: " ++ render (pp' δ t1) ++ "\n\n" ++ render (pp' δ t2)) <$> -}
-       bsplitC' g ci <$> addInvariant t1 <*> addInvariant t2
+      bsplitC' g ci <$> addInvariant t1 <*> addInvariant t2
 
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2
-  = [F.subC (fenv g) F.PTrue (r1 {F.sr_reft = fTop}) r2 Nothing [] ci]
+  = F.subC (fenv g) F.PTrue (r1 {F.sr_reft = fTop}) r2 Nothing [] ci
   | F.isNonTrivialSortedReft r2
-  = [F.subC (fenv g) p r1 r2 Nothing [] ci]
+  = F.subC (fenv g) p r1 r2 Nothing [] ci
   | otherwise
   = []
   where

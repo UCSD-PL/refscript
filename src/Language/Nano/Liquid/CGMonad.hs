@@ -194,12 +194,6 @@ getExts  :: CGM (E.Env RefType)
 getExts = cg_ext <$> get
 
 
--------------------------------------------------------------------------------
-setDef  :: TDefEnv RefType -> CGM ()
--------------------------------------------------------------------------------
-setDef γ = modify $ \u -> u { cg_defs = γ } 
-
-
 getPropTDefM l s t ts = do 
   ε <- getExts
   δ <- getDef 
@@ -296,9 +290,7 @@ addInvariant t           = ((`tx` t) . invs) <$> get
 ---------------------------------------------------------------------------------------
 addAnnot       :: (F.Symbolic x) => SourceSpan -> x -> RefType -> CGM () 
 ---------------------------------------------------------------------------------------
-addAnnot l x t = 
-  do  δ <- getDef
-      modify $ \st -> st {cg_ann = A.addAnnot l x t δ (cg_ann st)}
+addAnnot l x t = modify $ \st -> st {cg_ann = A.addAnnot l x t (cg_ann st)}
 
 ---------------------------------------------------------------------------------------
 envAddReturn        :: (IsLocated f)  => f -> RefType -> CGEnv -> CGEnv 
@@ -349,9 +341,6 @@ envFindReturn = E.envFindReturn . renv
 
 
 -- | Monad versions of TDefEnv operations
-
-updTDefEnv f = f <$> getDef >>= \(δ', a) -> setDef δ' >> return a
-
 findSymOrDieM i       = findSymOrDie i <$> getDef
 
 
@@ -375,8 +364,7 @@ freshTyVar g l t
 
 -- | Instantiate Fresh Type (at Call-site)
 freshTyInst l g αs τs tbody
-  = do δ     <- getDef
-       ts    <- mapM (freshTy "freshTyInst") τs
+  = do ts    <- mapM (freshTy "freshTyInst") τs
        _     <- mapM (wellFormed l g) ts
        return $ apply (fromList $ zip αs ts) tbody
 
@@ -415,7 +403,6 @@ subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 subType l g t1 t2 =
   do t1'   <- addInvariant t1
      t2'   <- addInvariant t2
-     δ     <- getDef
      g'    <- envAdds [(symbolId l x, t) | (x, Just t) <- rNms t1' ++ rNms t2' ] g
      modify $ \st -> st {cs = c g' (t1', t2') : (cs st)}
   where
@@ -598,7 +585,6 @@ splitC (Sub g i t1@(TArr t1v _ ) t2@(TArr t2v _ ))
 -- | TCons
 splitC (Sub g i t1@(TCons b1s _ ) t2@(TCons b2s _ ))
   = do cs    <- bsplitC g i t1 t2
-       δ     <- getDef
        when (or $ zipWith ((/=) `on` f_sym) b1s' b2s') 
          $ error $ "splitC on non aligned TCons: " ++ ppshow t1 ++ "\n" ++ ppshow t2
        --FIXME: add other bindings in env (like function)? Perhaps through "this"
@@ -633,11 +619,7 @@ splitE g i e1s e2s
 ---------------------------------------------------------------------------------------
 bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 ---------------------------------------------------------------------------------------
-bsplitC g ci t1 t2 = 
-   do δ <- getDef 
-  -- FIXME: BSPLIT DOES NOT WORK RIGHT FOR: neg/lists/unfold-list-00.ts
-       {- tracePP ("BSPLIT: " ++ render (pp' δ t1) ++ "\n\n" ++ render (pp' δ t2)) <$> -}
-      bsplitC' g ci <$> addInvariant t1 <*> addInvariant t2
+bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant t1 <*> addInvariant t2
 
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2

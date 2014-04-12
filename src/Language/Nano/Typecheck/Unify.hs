@@ -22,19 +22,12 @@ import           Language.Nano.Typecheck.Subst
 
 
 import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
-import           Control.Applicative ((<$>))
--- import           Control.Monad
 import qualified Data.HashSet as S
-import           Text.PrettyPrint.HughesPJ          (render)
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
 import           Data.Function                  (on)
-import qualified Data.List                      as L
-import           Text.Printf 
 -- import           Debug.Trace
 
-
-type PPR r = (PP r, F.Reftable r)
 
 -----------------------------------------------------------------------------
 -- | Unification
@@ -63,13 +56,13 @@ unify l δ θ t t' | any isUnion [t,t']
     let (t1s, t2s) = unzip ts in
     unifys l δ θ t1s t2s
 
-unify l δ θ t1@(TApp (TRef i) ts _) t2@(TApp (TRef i') ts' _) 
+unify l δ θ (TApp (TRef i) ts _) (TApp (TRef i') ts' _) 
   | i == i'   = unifys l δ θ ts ts'
 
-unify l δ θ t1@(TApp (TRef i) ts _) t2
+unify l δ θ t1@(TApp (TRef _) _ _) t2
   = unify l δ θ (flattenType δ t1) t2
 
-unify l δ θ t1 t2@(TApp (TRef i) ts _)
+unify l δ θ t1 t2@(TApp (TRef _) _ _)
   = unify l δ θ t1 (flattenType δ t2)
 
 unify l δ θ (TArr t _) (TArr t' _) = unify l δ θ t t'
@@ -77,9 +70,9 @@ unify l δ θ (TArr t _) (TArr t' _) = unify l δ θ t t'
 unify l δ θ (TCons e1s _) (TCons e2s _)
   = unifys l δ θ t1s t2s
   where 
-    (t1s, t2s) = unzip [ (t1, t2) | TE s1 m1 t1 <- e1s
-                                      , TE s2 m2 t2 <- e2s
-                                      , s1 == s2 ]
+    (t1s, t2s) = unzip [ (t1, t2) | TE s1 _ t1 <- e1s
+                                  , TE s2 _ t2 <- e2s
+                                  , s1 == s2 ]
 
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ
@@ -93,7 +86,7 @@ unifEquiv (TApp c _ _ ) (TApp c' _ _  ) = c `equiv` c'  -- Interfaces appear onc
 unifEquiv (TArr _ _   ) (TArr _ _     ) = True          -- Arrays are really interfaces
 unifEquiv (TCons _ _  ) (TCons _ _    ) = True
 unifEquiv (TVar v _   ) (TVar v' _    ) = v == v'
-unifEquiv (TFun b o _ ) (TFun b' o' _ ) = True          -- Functions as well ... 
+unifEquiv (TFun _ _ _ ) (TFun _ _ _   ) = True          -- Functions as well ... 
 unifEquiv (TAll _ _   ) (TAll _ _     ) = error "unifEquiv-tall"
 unifEquiv (TExp _     ) (TExp   _     ) = error "unifEquiv-texp"
 unifEquiv _             _               = False
@@ -111,18 +104,19 @@ unifys loc env θ ts ts'  | nTs == nTs'
     (nTs, nTs')          = mapPair length (ts, ts')
     go γ θ (s:ss) (t:tt) = either Left (\θ' -> go γ θ' ss tt) $ unify loc γ θ s t
     go _ θ []     []     = Right θ
-    safeJoin (Right θ@(Su m)) (Right θ'@(Su m'))
-      | check m m'       = Right $ mappend θ θ'
-      | otherwise        = Left  $ errorJoinSubsts loc θ θ' 
-    safeJoin (Left l) _  = Left l
-    safeJoin _ (Left l)  = Left l
+    go _ _ _      _      = Left $ errorUnification loc ts ts'
+--     safeJoin (Right θ@(Su m)) (Right θ'@(Su m'))
+--       | check m m'       = Right $ mappend θ θ'
+--       | otherwise        = Left  $ errorJoinSubsts loc θ θ' 
+--     safeJoin (Left l) _  = Left l
+--     safeJoin _ (Left l)  = Left l
                                
-
-check m m' = vs == vs'
-  where vs  = map (toType <$>) $ (`M.lookup` m ) <$> ks
-        vs' = map (toType <$>) $ (`M.lookup` m') <$> ks
-        ks  = M.keys $ M.intersection (clr m) (clr m')
-        clr = M.filterWithKey (\k v -> tVar k /= v)
+-- 
+-- check m m' = vs == vs'
+--   where vs  = map (toType <$>) $ (`M.lookup` m ) <$> ks
+--         vs' = map (toType <$>) $ (`M.lookup` m') <$> ks
+--         ks  = M.keys $ M.intersection (clr m) (clr m')
+--         clr = M.filterWithKey (\k v -> tVar k /= v)
 
 
 -----------------------------------------------------------------------------

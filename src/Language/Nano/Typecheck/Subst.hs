@@ -30,10 +30,8 @@ import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
-import           Language.Nano.Errors
 import           Language.Fixpoint.Misc (intersperse)
 
-import           Language.Fixpoint.PrettyPrint
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
 import qualified Data.List as L

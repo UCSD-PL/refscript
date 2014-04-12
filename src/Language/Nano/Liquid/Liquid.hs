@@ -8,7 +8,6 @@
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
 import           Text.Printf                        (printf)
-import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
 import           Control.Monad
 import           Control.Applicative                ((<$>))
 
@@ -40,8 +39,7 @@ import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
--- 
-import           Debug.Trace                        (trace)
+--  import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -266,43 +264,6 @@ consExprT g e to
        case to of
          Nothing -> return (x, g')
          Just t  -> subType l g' te t >> (x,) <$> envAdds [(x, t)] g'
-    where
-       l = getAnnotation e
- 
-
--- | consExprT': typecheck expression @e@ under (optional) contextual type @to@.
---
---   G |- e :: Te 
---  
---   Tk = freshen(Te)  
---   
---   Te <: Tk
---  
---   [ Tk <: Ta ]
---   --------------------------------------
---   G |- /* [ Ta ] */ e : Tk 
---  
---   [ . ] : optional annotation
---  
-------------------------------------------------------------------------------------
-consExprT' :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
-------------------------------------------------------------------------------------
-consExprT' g e to 
-  = do (x, g') <- consExpr g e
-       let te   = envFindTy x g'
-       δ <- getDef
-       t <- case to of 
-              {-Nothing -> tracePP "freshed-te" <$> (freshTyVar g' l $ rType $ tracePP "te" te)-}
-              Nothing -> freshTyVar g' l $ rType te
-              Just tA | isTrivialRefType tA -> 
-                do tK <- tracePP "freshed-t0" <$> (freshTyVar g' l $ rType $ tracePP "t0" tA)
-                   {-subType l g' tK tA-}
-                   subType l g' (trace ("A." ++ ppshow tK ++ " <: " ++ ppshow tA) tK) tA
-                   return tK 
-              Just tA | otherwise -> return tA 
-                
-       subType l g' (trace ("B." ++ ppshow te ++ " <: " ++ ppshow t) te) t
-       (x,) <$> envAdds [(x, t)] g'
     where
        l = getAnnotation e
 

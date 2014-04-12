@@ -15,12 +15,10 @@ import           Control.Monad
 
 import qualified Data.HashSet                       as HS 
 import qualified Data.HashMap.Strict                as M 
-import qualified Data.List                          as L
 import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe)
-import           Data.Either                        (rights)
 import           Data.Generics                   
 
-import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat, render, hcat)
+import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat)
 
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
@@ -63,7 +61,7 @@ tc    p       = typeCheck p    >>= either unsafe safe
 --------------------------------------------------------------------------------
 testFile f = parseNanoFromFile f 
          >>= ssaTransform  
-         >>= either (print . pp) (\p -> typeCheck (tracePP "PORRRRR" $ expandAliases p)
+         >>= either (print . pp) (\p -> typeCheck (expandAliases p)
          >>= either (print . vcat . (pp <$>)) 
                     (\p'@(Nano {code = Src ss}) -> 
                           print (pp p') >>  print "Casts:" >> print (pp $ getCasts ss)))
@@ -364,7 +362,7 @@ tcStmt γ (IfStmt l e s1 s2)
   = do 
        cOpt      <- tcCallMatch γ l BIBracketRef [e] $ builtinOpTy l BITruthy $ tce_env γ 
        case cOpt of 
-         Just ([e'], t) -> do  
+         Just ([e'], _) -> do  
            -- unifyTypeM (srcPos l) "If condition" e t tBool
            (s1', γ1) <- tcStmt γ s1
            (s2', γ2) <- tcStmt γ s2
@@ -531,7 +529,6 @@ tcExprT :: (Ord r, PPR r) =>
 -------------------------------------------------------------------------------
 tcExprT l γ e to 
   = do (e', t)    <- tcExpr γ e
-       δ          <- getDef
        (e'', te)  <- case to of
                        Nothing -> return (e', t)
                        Just ta -> (,ta) <$> castM l (tce_ctx γ) e t ta
@@ -727,9 +724,6 @@ resolveOverload γ l fn es ts ft = do
     tas   <- mapM (\t -> (t,) <$> tcCallCaseTry γ l fn es ts t) fts
     return $ listToMaybe [ apply θ t | (t, Right θ) <- tas ]
   where
-    valid (Su m) | not (M.null m) 
-                 = True
-    valid _      = False
     fts          = [ mkFun (vs, ts,t) | (vs, ts, t) <- sigs
                                       , length ts == length es ]
     sigs         = catMaybes (bkFun <$> bkAnd ft)
@@ -753,7 +747,6 @@ tcCallCase γ l fn es' ts ft
        let its        = b_type <$> ibs
        -- Unify with formal parameter types
        -- Apply substitution
-       δ             <- getDef
        θ             <- unifyTypesM (srcPos l) "tcCall" ts its
        let (ts',its') = mapPair (apply θ) (ts, its)
        -- Subtype the arguments against the formals and up/down cast if needed 
@@ -826,4 +819,5 @@ sanity l t@(TApp (TRef i) ts _) =
          | otherwise -> tcError $ errorTypeArgsNum l n (length αs) (length ts)
        Nothing -> error $ "BUG: Id: " ++ ppshow i ++ " was not found in env at " ++ ppshow (srcPos l) 
 sanity _ t = return t
+
 

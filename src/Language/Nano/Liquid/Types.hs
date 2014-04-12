@@ -423,7 +423,7 @@ zipType δ f g (TCons e1s r1) (TCons e2s r2)
   where 
   -- FIXME: m1 `mconcat` m2
     cmn = [ TE s1 m1 (zipType δ f g t1 t2) | TE s1 m1 t1 <- e1s
-                                           , TE s2 m2 t2 <- e2s
+                                           , TE s2 _  t2 <- e2s
                                            , s1 == s2 ]
     -- FIXME: Should we apply g here as well?
     -- This won't really happen cause we only use it for downcast, so

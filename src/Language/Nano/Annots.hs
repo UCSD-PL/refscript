@@ -37,7 +37,6 @@ import           Language.ECMAScript3.PrettyPrint
 import           Text.Parsec.Pos                   
 import           Language.Nano.Types
 import           Language.Nano.Errors
-import           Language.Nano.Typecheck.Types      (TDefEnv)
 import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat, nest, (<+>), punctuate, render)
 import           Control.Applicative                ((<$>))
 
@@ -46,9 +45,7 @@ import           Control.Applicative                ((<$>))
 ------------------------------------------------------------------------------
 
 data Annot t        = AnnBind { ann_bind :: F.Symbol, 
-                                ann_type :: t,
-                                ann_tdef :: TDefEnv t
-                              }
+                                ann_type :: t }
 
 {-@ type NonNull a = {v: [a] | 0 < (len v)} @-}
 type    NonEmpty a  = [a] 
@@ -58,7 +55,7 @@ data    UAnnSol  a  = NoAnn
 
 
 instance Functor Annot where 
-  fmap f (AnnBind x t δ) = AnnBind x (f t) (fmap f δ)
+  fmap f (AnnBind x t) = AnnBind x (f t)
 
 instance Functor UAnnInfo where 
   fmap f (AI m) = AI (fmap (fmap (fmap f)) m)
@@ -82,8 +79,8 @@ instance PP a => PP (UAnnInfo a) where
 -- | Adding New Annotations --------------------------------------------------
 ------------------------------------------------------------------------------
 
-addAnnot :: (F.Symbolic x) => SourceSpan -> x -> a -> TDefEnv a -> UAnnInfo a -> UAnnInfo a
-addAnnot l x t δ (AI m) = AI (inserts l (AnnBind (F.symbol x) t δ) m)
+addAnnot :: (F.Symbolic x) => SourceSpan -> x -> a -> UAnnInfo a -> UAnnInfo a
+addAnnot l x t (AI m) = AI (inserts l (AnnBind (F.symbol x) t) m)
 
 ------------------------------------------------------------------------------
 -- | Dumping Annotations To Disk ---------------------------------------------

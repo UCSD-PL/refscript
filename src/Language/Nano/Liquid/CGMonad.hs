@@ -113,7 +113,7 @@ instance PP (F.SubC c) where
 -------------------------------------------------------------------------------
 getCGInfo :: Config -> NanoRefType -> CGM a -> CGInfo
 -------------------------------------------------------------------------------
-getCGInfo cfg pgm = clear . cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
+getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
   where 
     fixCWs       = (,) <$> fixCs <*> fixWs
     fixCs        = get >>= concatMapM splitC . cs
@@ -126,7 +126,7 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnTypeR RefType -> CGState
-initState c p = CGS F.emptyBindEnv (specs p) (defs p) (externs p) [] [] 0 mempty invs c [this] 
+initState c p   = CGS F.emptyBindEnv (specs p) (defs p) (externs p) [] [] 0 mempty invs c [this] 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
     this        = tTop
@@ -143,14 +143,14 @@ cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
   where 
     fi   = F.FI { F.cm    = M.fromList $ F.addIds fcs  
                 , F.ws    = fws
-                , F.bs    = binds cg
-                , F.gs    = measureEnv pgm 
+                , F.bs    = clear $ binds cg
+                , F.gs    = clear $ measureEnv pgm
                 , F.lits  = []
                 , F.kuts  = F.ksEmpty
-                , F.quals = nanoQualifiers pgm 
+                , F.quals = clear $ nanoQualifiers pgm 
                 }
 
-patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
+patchSymLits fi = fi { F.lits = clear $ F.symConstLits fi ++ F.lits fi }
 
 
 -- | Get binding from object type
@@ -304,14 +304,13 @@ envAddGuard x b g = g { guards = guard b x : guards g }
   where 
     guard True    = F.eProp 
     guard False   = F.PNot . F.eProp
-                    
+
+
+-- | A helper that returns the actual @RefType@ of the expression by looking up
+-- the environment with the name, strengthening with singleton for base-types.
 ---------------------------------------------------------------------------------------
 envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
 ---------------------------------------------------------------------------------------
--- | A helper that returns the actual @RefType@ of the expression by
---     looking up the environment with the name, strengthening with
---     singleton for base-types.
-
 envFindTy x g = (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
   where 
     err       = throw $ bugUnboundVariable (srcPos x) (F.symbol x)
@@ -630,8 +629,8 @@ bsplitC' g ci t1 t2
   = []
   where
     p  = F.pAnd $ guards g
-    r1 = rTypeSortedReft t1
-    r2 = rTypeSortedReft t2
+    r1 = clear $ rTypeSortedReft t1
+    r2 = clear $ rTypeSortedReft t2
 
 instance PP (F.SortedReft) where
   pp (F.RR _ b) = pp b
@@ -679,7 +678,7 @@ splitW (W _ _ t) = error $ render $ text "Not supported in splitW: " <+> pp t
 
 bsplitW g t i 
   | F.isNonTrivialSortedReft r'
-  = [F.wfC (fenv g) r' Nothing i] 
+  = [F.wfC (fenv g) (clear r') Nothing i] 
   | otherwise
   = []
   where r' = rTypeSortedReft t
@@ -693,17 +692,12 @@ envTyAdds l xts = envAdds [(symbolId l x, t) | B x t <- xts]
 
 class ClearSorts a where
   clear :: a -> a
-  clearM :: a -> CGM a 
-  clearM = return . clear
 
 instance ClearSorts F.BindEnv where
   clear = F.mapBindEnv (mapSnd clear)
 
 instance (ClearSorts a, ClearSorts b) => ClearSorts (a,b) where
   clear (a,b) = (clear a, clear b)
-                 
-instance ClearSorts (F.SubC a) where
-  clear (F.SubC e g l r i t ii) = F.SubC e g (clear l) (clear r) i t ii
 
 instance ClearSorts a => ClearSorts [a] where
   clear xs = clear <$> xs
@@ -722,23 +716,11 @@ instance ClearSorts F.Sort where
 instance ClearSorts F.Symbol where
   clear = id
 
-instance ClearSorts (F.WfC a) where
-  clear (F.WfC e r i ii) = F.WfC e (clear r) i ii 
+instance ClearSorts F.Qualifier where
+  clear (F.Q n p b)   = F.Q n (clear p) b 
 
-instance ClearSorts CGInfo where
-  clear (CGI f a) = CGI (clear f) a
-
-instance ClearSorts (F.FInfo a) where
-  clear (F.FI cm ws bs gs lits kuts quals) =
-    {-let msg = printf "\nGS: %s\n\n" (render $ F.toFix $ F.toListSEnv gs) in-}
-    F.FI (M.map clear cm)
-         (clear ws)
-         (clear bs)
-         -- XXX: Special treatment for Prop
-         (F.mapSEnvWithKey clearProp {- $ trace msg -} gs)
-         (clear lits)
-         kuts
-         quals
+instance ClearSorts (F.SEnv F.SortedReft) where
+  clear = F.mapSEnvWithKey clearProp
 
 clearProp (sy, F.RR so re) 
   | F.symbolString sy `elem` ["Prop", "TRU"] 
@@ -752,6 +734,8 @@ cgFunTys l f xs ft =
     Right a -> return a
 
 
+
+--------------------------------------------------------------------------------
 -- | `this`
 
 cgPeekThis = safeHead "get 'this'" <$> (cg_this <$> get)

@@ -4,7 +4,9 @@ function inc(n:number):number {
     return n + 1;
 }
 
-/*@ gobj :: { a: { v: number | v = 5 } , b: string, f: (number) => number } */
+/*@ gobj :: { a: { v: number | v = 5 } 
+            , b: string
+            , f: (n:number) => { number | v = n + 1 } } */
 var gobj= { a: 5, b: "String", f: inc };
 
 /*@ gobj1 :: { a: number, b: string } */

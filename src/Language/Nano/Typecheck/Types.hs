@@ -53,7 +53,7 @@ module Language.Nano.Typecheck.Types (
   , equiv
 
   -- * Type definition env
-  , TDefEnv (..), tDefEmpty
+  , TDefEnv (..), tDefEmpty, tDefFromList
   , addSym, findSym, findSymOrDie
   --, addObjLitTy
   , findEltWithDefault
@@ -171,9 +171,15 @@ instance F.Fixpoint t => F.Fixpoint (TDef t) where
 
 tDefEmpty = G 0 F.emptySEnv
 
+---------------------------------------------------------------------------------
+tDefFromList :: F.Symbolic s => [(s, TDef t)] -> TDefEnv t
+---------------------------------------------------------------------------------
+tDefFromList = foldr (uncurry addSym) tDefEmpty 
+
 getDefNames (G _ n) = fst <$> F.toListSEnv n
 
--- XXX: Already existing name?
+
+-- FIXME: Check fro already existing name?
 ---------------------------------------------------------------------------------
 addSym :: F.Symbolic s => s -> TDef t -> TDefEnv t -> TDefEnv t
 ---------------------------------------------------------------------------------
@@ -185,15 +191,6 @@ addSym c t (G sz γ) =
     s    = F.symbol c
     sz'  = sz + 1
 
--- ---------------------------------------------------------------------------------
--- addObjLitTy :: TDef t -> TDefEnv t -> (TDefEnv t, TyID)
--- ---------------------------------------------------------------------------------
--- addObjLitTy t (G sz γ c) = (G sz' γ' c, id)
---   where
---     sz' = sz + 1
---     id  = sz + 1
---     γ'  = I.insert id t γ
--- 
 ---------------------------------------------------------------------------------
 findSym :: F.Symbolic s => s -> TDefEnv t -> Maybe (TDef t)
 ---------------------------------------------------------------------------------

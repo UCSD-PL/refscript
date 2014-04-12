@@ -59,22 +59,22 @@ star       = Token.symbol     lexer "*"
 question   = Token.symbol     lexer "?"
 
 
-type ParserS a = Parser (TDefEnv RefType, Integer) a 
+-- type ParserS a = Parser (TDefEnv RefType, Integer) a 
 
 ----------------------------------------------------------------------------------
 -- | Type Binders 
 ----------------------------------------------------------------------------------
 
-idBindP :: ParserS (Id SourceSpan, RefType)
+idBindP :: Parser (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
 
 idFieldP = xyzP identifierP dcolon bareTypeP
 
-identifierP :: ParserS (Id SourceSpan)
+identifierP :: Parser (Id SourceSpan)
 identifierP =   try (withSpan Id upperIdP)
            <|>      (withSpan Id lowerIdP)
 
-pAliasP :: ParserS (Id SourceSpan, PAlias) 
+pAliasP :: Parser (Id SourceSpan, PAlias) 
 pAliasP = do name <- identifierP
              πs   <- pAliasVarsP -- many symbolP 
              reservedOp "="
@@ -84,7 +84,7 @@ pAliasP = do name <- identifierP
 pAliasVarsP = try (parens $ sepBy symbolP comma)
            <|> many symbolP
 
-tAliasP :: ParserS (Id SourceSpan, TAlias RefType) 
+tAliasP :: Parser (Id SourceSpan, TAlias RefType) 
 tAliasP = do name      <- identifierP
              (αs, πs)  <- mapEither aliasVarT <$> aliasVarsP 
              reservedOp "="
@@ -98,7 +98,7 @@ aliasVarT (l, x)
   | isTvar x  = Left  $ tvar l x
   | otherwise = Right $ stringSymbol x 
 
-iFaceP   :: ParserS (Id SourceSpan, TDef RefType)
+iFaceP   :: Parser (Id SourceSpan, TDef RefType)
 iFaceP   = do id     <- identifierP 
               vs     <- option [] tParP
               ext    <- optionMaybe extendsP
@@ -139,7 +139,7 @@ postP p post
 -- | `bareTypeP` parses top-level "bare" types. If no refinements are supplied, 
 -- then "top" refinement is used.
 ----------------------------------------------------------------------------------
-bareTypeP :: ParserS RefType 
+bareTypeP :: Parser RefType 
 ----------------------------------------------------------------------------------
 bareTypeP =       
       try bUnP
@@ -198,7 +198,7 @@ bareAtomP p
  <|>     (dummyP p)
 
 ----------------------------------------------------------------------------------
-bbaseP :: ParserS (Reft -> RefType)
+bbaseP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
 bbaseP 
   =  try (TVar <$> tvarP)                  -- A
@@ -207,7 +207,7 @@ bbaseP
  <|> try (TApp <$> tConP <*> bareTyArgsP)  -- #List[A], #Tree[A,B] etc...
  
 ----------------------------------------------------------------------------------
-objLitP :: ParserS (Reft -> RefType)
+objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
 objLitP = do 
   bs    <- braces $ bindsP
@@ -220,7 +220,7 @@ bareTyArgP  = try bareTypeP
            <|> (TExp <$> exprP)
 
 ----------------------------------------------------------------------------------
-tvarP    :: ParserS TVar
+tvarP    :: Parser TVar
 ----------------------------------------------------------------------------------
 tvarP    = withSpan tvar $ wordP isTvar 
 
@@ -233,7 +233,7 @@ wordP p  = condIdP ok p
     ok   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
 ----------------------------------------------------------------------------------
-tConP :: ParserS TCon
+tConP :: Parser TCon
 ----------------------------------------------------------------------------------
 tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "boolean"   >> return TBool)
@@ -245,7 +245,7 @@ tConP =  try (reserved "number"    >> return TInt)
      <|>     (withinSpacesP $ char '#' >> identifierP >>= idToTRefP)
 
 ----------------------------------------------------------------------------------
-idToTRefP :: Id SourceSpan -> ParserS TCon
+idToTRefP :: Id SourceSpan -> Parser TCon
 ----------------------------------------------------------------------------------
 idToTRefP (Id _ s) = do
 --   (u, _)     <- getState
@@ -287,28 +287,28 @@ bareEltP = do s <- binderP
 
  
 ----------------------------------------------------------------------------------
-dummyP ::  ParserS (Reft -> b) -> ParserS b
+dummyP ::  Parser (Reft -> b) -> Parser b
 ----------------------------------------------------------------------------------
 dummyP fm = fm `ap` topP 
 
 ----------------------------------------------------------------------------------
-topP   :: ParserS Reft
+topP   :: Parser Reft
 ----------------------------------------------------------------------------------
 topP   = (Reft . (, []) . vv . Just) <$> freshIntP'
 
 -- Using a slightly changed version of `freshIntP`
 ----------------------------------------------------------------------------------
-freshIntP' :: ParserS Integer
+freshIntP' :: Parser Integer
 ----------------------------------------------------------------------------------
-freshIntP' = do (u,n) <- stateUser <$> getParserState
-                putState $ (u, n+1)
+freshIntP' = do n <- stateUser <$> getParserState
+                putState $ n+1
                 return n
 
 
 ----------------------------------------------------------------------------------
 -- | Parses refined types of the form: `{ kind | refinement }`
 ----------------------------------------------------------------------------------
-xrefP :: ParserS (Reft -> a) -> ParserS a
+xrefP :: Parser (Reft -> a) -> Parser a
 xrefP kindP
   = braces $ do
       t   <- kindP
@@ -317,13 +317,13 @@ xrefP kindP
       return $ t (Reft (stringSymbol "v", ras))
 
 ----------------------------------------------------------------------------------
-refasP :: ParserS [Refa]
+refasP :: Parser [Refa]
 ----------------------------------------------------------------------------------
 refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi)) 
        <|> liftM ((:[]) . RConc) predP
  
 ----------------------------------------------------------------------------------
-binderP :: ParserS Symbol
+binderP :: Parser Symbol
 ----------------------------------------------------------------------------------
 binderP = try (stringSymbol <$> idP badc)
       -- <|> try (star >> return (stringSymbol "*")) -- disabling this
@@ -334,12 +334,12 @@ binderP = try (stringSymbol <$> idP badc)
             pwr s  = stringSymbol $ "(" ++ s ++ ")" 
 
 ----------------------------------------------------------------------------------
-withinSpacesP :: ParserS a -> ParserS a
+withinSpacesP :: Parser a -> Parser a
 ----------------------------------------------------------------------------------
 withinSpacesP p = do { spaces; a <- p; spaces; return a } 
              
 ----------------------------------------------------------------------------------
-classDeclP :: ParserS (Id SourceSpan, ([TVar], Maybe (Id SourceSpan, [RefType])))
+classDeclP :: Parser (Id SourceSpan, ([TVar], Maybe (Id SourceSpan, [RefType])))
 ----------------------------------------------------------------------------------
 classDeclP = do
   reserved "class"
@@ -385,28 +385,19 @@ data PSpec l t
 
 type Spec = PSpec SourceSpan RefType
 
-parseAnnot :: SourceSpan -> RawSpec -> ParserS Spec
+parseAnnot :: SourceSpan -> RawSpec -> Parser Spec
 parseAnnot ss (RawMeas   _) = Meas   <$> patch2 ss <$> idBindP
 parseAnnot ss (RawBind   _) = Bind   <$> patch2 ss <$> idBindP
 parseAnnot ss (RawField  _) = Field  <$> patch3 ss <$> idFieldP
 parseAnnot ss (RawMethod _) = Method <$> patch2 ss <$> idBindP
 parseAnnot ss (RawConstr _) = Constr <$> patch2 ss <$> idBindP
 parseAnnot ss (RawExtern _) = Extern <$> patch2 ss <$> idBindP
-parseAnnot ss (RawType   _) = IFace  <$> patch2 ss <$> iFaceP >>= registerIface
+parseAnnot ss (RawType   _) = IFace  <$> patch2 ss <$> iFaceP
 parseAnnot ss (RawClass  _) = Class  <$> patch2 ss <$> classDeclP 
 parseAnnot ss (RawTAlias _) = TAlias <$> patch2 ss <$> tAliasP
 parseAnnot ss (RawPAlias _) = PAlias <$> patch2 ss <$> pAliasP
 parseAnnot _  (RawQual   _) = Qual   <$>              qualifierP
 parseAnnot ss (RawInvt   _) = Invt             ss <$> bareTypeP
-
-----------------------------------------------------------------------------------
-registerIface :: Spec -> ParserS Spec
-----------------------------------------------------------------------------------
-registerIface (IFace (s, t)) = do
-  (u, n)  <- getState
-  putState (addSym s t u, n)
-  return $ IFace (s,t) 
-registerIface _ = error "BUG:registerIface"
 
 
 patch2 ss (id, t)    = (fmap (const ss) id , t)
@@ -494,7 +485,7 @@ mkCode f (u, ss) =  Nano {
       , specs   = catFunSpecDefs ss                      -- function sigs (no methods...)
       , glVars  = catVarSpecDefs ss                      -- variables
       , consts  = envFromList   [ t | Meas   t <- anns ] 
-      , defs    = fst u
+      , defs    = tDefFromList  [ t | IFace  t <- anns ] 
       , tAlias  = envFromList   [ t | TAlias t <- anns ] 
       , pAlias  = envFromList   [ t | PAlias t <- anns ] 
       , quals   =               [ t | Qual   t <- anns ] 
@@ -511,7 +502,7 @@ mkCode f (u, ss) =  Nano {
     anns          = concatMap (FO.foldMap snd) ss
 
 
-type PState = (TDefEnv RefType, Integer)
+type PState = Integer
 
 
 instance PP Integer where
@@ -520,7 +511,7 @@ instance PP Integer where
 --------------------------------------------------------------------------------------
 expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> (PState, [Statement (SourceSpan, [Spec])])
 --------------------------------------------------------------------------------------
-expandAnnots = mapAccumL (mapAccumL f) (tDefEmpty, 0)
+expandAnnots = mapAccumL (mapAccumL f) 0
   where f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
 
 --------------------------------------------------------------------------------------
@@ -568,7 +559,6 @@ varDeclStmts         :: (Data a, Typeable a) => [Statement a] -> [a]
 varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
   where 
     fromVarDecl (VarDecl l _ _) = [l]
-
 
 --------------------------------------------------------------------------------
 printFile :: FilePath -> IO () -- Either Error (NanoBareR Reft))

@@ -89,7 +89,7 @@ import           Text.Printf
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
 import           Data.Function                  (on)
-import           Data.Maybe                     (fromMaybe, fromJust, isJust)
+import           Data.Maybe                     (fromMaybe, fromJust)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.List                      as L
 import qualified Data.IntMap                    as I
@@ -166,7 +166,7 @@ data TDefEnv t = G  {
                     } deriving (Show, Functor, Data, Typeable)
 
 instance F.Fixpoint t => F.Fixpoint (TDef t) where
-  toFix (TD n v p es) = F.toFix $ F.symbol n
+  toFix (TD n _ _ _) = F.toFix $ F.symbol n
 
 
 tDefEmpty = G 0 F.emptySEnv
@@ -185,8 +185,8 @@ addSym :: F.Symbolic s => s -> TDef t -> TDefEnv t -> TDefEnv t
 ---------------------------------------------------------------------------------
 addSym c t (G sz γ) =
   case F.lookupSEnv s γ of 
-    Just tid -> G sz γ
-    Nothing  -> G sz' (F.insertSEnv s t γ)
+    Just _  -> G sz γ
+    Nothing -> G sz' (F.insertSEnv s t γ)
   where
     s    = F.symbol c
     sz'  = sz + 1
@@ -206,11 +206,6 @@ findEltWithDefault :: F.Symbol -> t -> [TElt t] -> t
 ---------------------------------------------------------------------------------
 findEltWithDefault s t elts = 
   maybe t f_type $ L.find ((== s) . f_sym) elts
-
----------------------------------------------------------------------------------
-symMem :: F.Symbol -> TDefEnv t -> Bool
----------------------------------------------------------------------------------
-symMem s = F.memberSEnv s . g_env
 
 
 -- | Sort the fields of a TDef 

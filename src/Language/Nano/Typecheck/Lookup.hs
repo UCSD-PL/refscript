@@ -8,7 +8,6 @@
 module Language.Nano.Typecheck.Lookup (getProp, getPropTDef) where 
 
 import           Data.List (find)
-import           Text.PrettyPrint.HughesPJ          (render)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors
@@ -46,7 +45,7 @@ getProp l α γ s t@(TApp _ _ _)  = getPropApp l α γ s t
 getProp _ _ _ _   (TFun _ _ _ ) = Nothing
 getProp l α γ s a@(TArr _ _)    = (a,) <$> getPropArr l α γ s a
 getProp _ _ _ s a@(TCons _ _)   = (a,) <$> getPropCons s a
-getProp l _ γ _ t               = die $ bug (srcPos l) 
+getProp l _ _ _ t               = die $ bug (srcPos l) 
                                       $ "Using getProp on type: " ++ ppshow t 
 
 

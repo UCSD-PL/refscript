@@ -171,7 +171,7 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ)
   where 
     θ       = fromList $ zip βs (tVar <$> βs)
 
-addSubst θ  = getSubst >>= setSubst . (`mappend` θ)
+-- addSubst θ  = getSubst >>= setSubst . (`mappend` θ)
 
 -------------------------------------------------------------------------------
 getDef  :: TCM r (TDefEnv (RType r)) 
@@ -383,8 +383,6 @@ castM l ξ e t1 t2 = convert (ann l) t1 t2 >>= patch
 
 -- | Monad versions of TDefEnv operations
 
-updTDefEnv f = f <$> getDef >>= \(δ', a) -> setDef δ' >> return a
-
 findSymM i = findSym i <$> getDef
 findSymOrDieM i = findSymOrDie i <$> getDef
 
@@ -432,8 +430,7 @@ convertCons :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
 convertCons l t1@(TCons e1s _) t2@(TCons e2s _)
   = do
-      δ <- getDef
-          -- Take all elements into account, excluding constructors.
+      -- Take all elements into account, excluding constructors.
       let (l1, l2)   = mapPair (\es -> [ (s, t) | TE s _ t <- es
                                                 , s /= F.symbol "constructor" ]) (e1s, e2s)
           (m1, m2)   = mapPair M.fromList (l1, l2)

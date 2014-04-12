@@ -475,9 +475,9 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
         Right p  -> p
 
 --------------------------------------------------------------------------------------
-mkCode :: FilePath -> (PState, [Statement (SourceSpan, [Spec])]) -> NanoBareR Reft
+mkCode :: FilePath -> [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
-mkCode f (u, ss) =  Nano {
+mkCode f ss =  Nano {
         fp      = f
       , code    = Src (checkTopStmt <$> ss')
       , externs = envFromList   [ t | Extern t <- anns ] -- externs
@@ -509,9 +509,9 @@ instance PP Integer where
   pp = pp . show
 
 --------------------------------------------------------------------------------------
-expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> (PState, [Statement (SourceSpan, [Spec])])
+expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> [Statement (SourceSpan, [Spec])]
 --------------------------------------------------------------------------------------
-expandAnnots = mapAccumL (mapAccumL f) 0
+expandAnnots = snd <$> mapAccumL (mapAccumL f) 0
   where f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
 
 --------------------------------------------------------------------------------------

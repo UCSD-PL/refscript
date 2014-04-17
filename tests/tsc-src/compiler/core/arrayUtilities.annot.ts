@@ -8,9 +8,13 @@
 
         assignable <: final
 
+        In effect assignability permits statements of the form: x := e
+
     Mutability modifier: readonly (default) Vs mutable
 
         mutable <: raedonly
+        
+        In effect mutability permits statements of the form: x.f := e
 
 
     Methods can have a modifier that determines if `this` is going to be 

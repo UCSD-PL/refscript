@@ -242,11 +242,7 @@ data RType r
 
   | TExp F.Expr                 -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
 
-  | TCons [TElt (RType r)]  r   -- ^ Flattened version of an object type 
-                                --   To be used right before getting the
-                                --   constraints for containers, to avoid 
-                                --   having type references when needing to
-                                --   bottify or k-var
+  | TCons [TElt (RType r)]  r   -- ^ Flat object type
     deriving (Ord, Show, Functor, Data, Typeable)
 
 data Bind r

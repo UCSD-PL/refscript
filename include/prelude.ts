@@ -113,28 +113,29 @@ interface List<A> {
 
 /*@ extern builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v = (0 - x)}                 */
 
-// == 
-/*@ extern builtin_OpEq        :: forall A.   (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }   */
+/*@ extern builtin_OpEq        :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x = y)) }   */
 
-// === 
-/*  extern builtin_OpSEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x = y)) }   */
-
-/*@ extern builtin_OpSEq       :: /\ forall A   . (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }   
-                                  /\ forall A B . (x:A, y:B) => {v:boolean | not (Prop v) }         */
+/*@ extern builtin_OpSEq       :: /\ forall A  . (x:A,    y: null) => {v:boolean | ((Prop v) <=> (ttag(x) = "null")) }  
+                                  /\ forall A  . (x:null, y:A)     => {v:boolean | ((Prop v) <=> (ttag(y) = "null")) }  
+                                  /\ forall A B. (x:A,    y:B)     => {v:boolean | ((Prop v) <=> ((ttag(x) = ttag(y)) && (x = y))) } */
 
 /*@ extern builtin_OpNEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */
 
+/*@ extern builtin_OpSNEq      :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */
+
+// FIXME: the two version of inequality should not be the same...
+
 /*@ extern builtin_OpLAnd      :: (x:top, y:top)         => {v:top     | ((Prop v) <=> (if (TRU(x)) then (v = y) else (v = x) ))} */
 
-/*@ extern builtin_OpLOr       :: (x:top, y:top)         => {v:top     | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))} */
+/*@ extern builtin_OpLOr       :: /\ forall A   . (x:A, y:A)  => {v:A    | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))}
+                                  /\ forall A B . (x:A, y:B)  => {v:top  | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))} */
+
 /*  OLDER VERSION: */
 /*  extern builtin_OpLOr       :: (x:boolean, y:boolean) => {v:boolean | ((Prop v) <=> ((Prop x) || (Prop y)))}                  */
 
 /*@ extern builtin_PrefixLNot  :: (x:boolean)            => {v:boolean | ((Prop v) <=> not (Prop x))}                            */
 
 
-
-//XXX: Is there an issue with keeping this with a capital P???
 /*@ measure Prop        :: (boolean) => boolean                              */
 
 
@@ -143,10 +144,14 @@ interface List<A> {
 /************* Ambient Definitions ***************************************/
 /*************************************************************************/
 
-/*************************************************************************/
-/** Taken from here: *****************************************************/   
-/** http://typescript.codeplex.com/SourceControl/latest#typings/lib.d.ts */
-/*************************************************************************/
+/**************************************************************************
+
+  Taken from here: 
+
+  http://typescript.codeplex.com/SourceControl/latest#typings/lib.d.ts
+
+**************************************************************************/
+
 
 /*** Number **************************************************************/
 
@@ -355,18 +360,24 @@ interface List<A> {
 
 /*@ measure TRU :: forall A . (A) => Prop                                     */
 
+/*@ measure FLS :: forall A . (A) => Prop                                     */
+
 /*@ extern builtin_PrefixTypeof :: forall A. (x:A) 
                                     => {v:string | (ttag x) = v }             */
 
 /*@ extern builtin_BITruthy :: forall A. (x:A) 
                                   => { v:boolean | ((Prop v) <=> TRU(x)) }    */
 
-/*@ invariant {v:undefined | [(ttag(v) = "undefined"); (TRU(v) <=> false  )]} */
-/*@ invariant {v:null      | [(ttag(v) = "null"     ); (TRU(v) <=> false  )]} */
-/*@ invariant {v:boolean   | [(ttag(v) = "boolean"  ); (TRU(v) <=> Prop(v))]} */ 
-/*@ invariant {v:number    | [(ttag(v) = "number"   ); (TRU(v) <=> v /= 0 )]} */
-/*@ invariant {v:string    | [(ttag(v) = "string"   ); (TRU(v) <=> v /= "")]} */
-/*@ invariant {v:{}        | ttag(v) = "object"   }                           */
+/*@ extern builtin_BIFalsy :: forall A. (x:A) 
+                                  => { v:boolean | ((Prop v) <=> FLS(x)) }    */
+
+/*@ invariant           {v:undefined | [(ttag(v) = "undefined"); not (TRU(v))        ]} */
+/*@ invariant           {v:null      | [(ttag(v) = "null"     ); not (TRU(v))        ]} */
+/*@ invariant           {v:boolean   | [(ttag(v) = "boolean"  ); (TRU(v) <=> Prop(v))]} */ 
+/*@ invariant           {v:number    | [(ttag(v) = "number"   ); (TRU(v) <=> v /= 0 )]} */
+/*@ invariant           {v:string    | [(ttag(v) = "string"   ); (TRU(v) <=> v /= "")]} */
+/*@ invariant forall A. {v:[A]       |   ttag(v) = "object"                           } */
+/*@ invariant           {v:{}        |   ttag(v) = "object"                           } */
 
 
 

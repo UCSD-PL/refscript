@@ -38,7 +38,7 @@ json f | ext == ".json" = return f
        | otherwise      = error $ "Unsupported input file format: " ++ ext
   where ext             = takeExtension f
         toJSONExt       = (`addExtension` ".json") . dropExtension
-        tsCmd           = "tsc --nano "
+        tsCmd           = "tsc --refscript "
 
 run verifyFile cfg 
   = do rs   <- mapM (runOne verifyFile) $ files cfg

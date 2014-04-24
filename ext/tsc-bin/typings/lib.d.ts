@@ -1126,3 +1126,24 @@ declare var Array: {
     isArray(arg: any): boolean;
     prototype: Array<any>;
 }
+
+/////////////////////////////
+/// RefScript
+/////////////////////////////
+
+declare function assert(cond: boolean): boolean;
+declare function NumberC (x : string) : number;
+declare function empty (a : any[]) : boolean;
+declare function head (a : any) : any;
+declare function tail (a : any[]) : any[];
+declare function safehead (a : any[]) : any;
+declare function safetail (a : any[]) : any[];
+declare function mylength (a : any[]) : number;
+declare function emptyPoly(xs: any[]):boolean;
+declare function nil() : any[];
+declare function random() : number;
+declare function pos() : number;
+declare function nth(b:any[],i:number):any;
+declare function cons(hd:any,tl:any[]):any[];
+declare function requires(b: boolean): void;
+declare function ensures(b: boolean): void;

@@ -1,5 +1,5 @@
 
-/*@ sequenceEquals :: forall T . (a1: [T], a2: [T], (T,T)=>boolean) => boolean */
+/*@ sequenceEquals :: forall T . (array1: [T], array2: [T], equals: (T,T) => boolean) => boolean */
 function sequenceEquals<T>(array1: T[], array2: T[], equals: (v1: T, v2: T) => boolean) {
     if (array1 === array2) {
         return true;

@@ -499,9 +499,10 @@ tcVarDecl :: (Ord r, PPR r)
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e)) 
-  -- FIXME: ann contains mutability information as well.
   = do ann <- listToMaybe <$> scrapeVarDecl v  
        (e' , t) <- tcExprT l γ e ann
+       
+
        return (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
 
 tcVarDecl γ v@(VarDecl l x Nothing) 
@@ -531,7 +532,9 @@ tcExprT l γ e to
   = do (e', t)    <- tcExpr γ e
        (e'', te)  <- case to of
                        Nothing -> return (e', t)
-                       Just ta -> (,ta) <$> castM l (tce_ctx γ) e t ta
+                       Just ta -> do θ <- unifyTypeM (srcPos l) "tcExprT" e t ta
+                                     let t' = apply θ t
+                                     (,ta) <$> castM l (tce_ctx γ) e t' ta
        return     (e'', te)
 
 -------------------------------------------------------------------------------
@@ -713,7 +716,7 @@ tcCallMatch γ l fn es ft0 = do
       -- If this fails, try to instantiate possible generic 
       -- types found in the function signature.
       Nothing ->
-        do  mType <- resolveOverload γ l fn es' ts ft0
+        do  mType <- tracePP "resolved" <$> resolveOverload γ l fn es' ts ft0
             addAnn (srcPos l) (Overload mType)
             maybe (return Nothing) (call es' ts) mType
   where

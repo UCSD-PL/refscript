@@ -156,7 +156,7 @@ findSsaEnv x
   = do θ  <- names <$> get 
        case envFindTy x θ of 
          Just (SI i) -> return $ Just i 
-         Nothing     -> return Nothing 
+         Nothing     -> return $ Nothing 
 
 -- allNames = do xs <- map fst . envToList . names      <$> get
 --               ys <- map fst . envToList . immutables <$> get

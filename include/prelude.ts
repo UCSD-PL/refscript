@@ -113,11 +113,14 @@ interface List<A> {
 
 /*@ extern builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v = (0 - x)}                 */
 
-//PV: @==@ and @===@ could be handled more precisely
-
+// == 
 /*@ extern builtin_OpEq        :: forall A.   (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }   */
 
-/*@ extern builtin_OpSEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x = y)) }   */
+// === 
+/*  extern builtin_OpSEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x = y)) }   */
+
+/*@ extern builtin_OpSEq       :: /\ forall A   . (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }   
+                                  /\ forall A B . (x:A, y:B) => {v:boolean | not (Prop v) }         */
 
 /*@ extern builtin_OpNEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */
 

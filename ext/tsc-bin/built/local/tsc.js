@@ -1,3 +1,18 @@
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation. All rights reserved. 
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at http://www.apache.org/licenses/LICENSE-2.0  
+ 
+THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
+WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, 
+MERCHANTABLITY OR NON-INFRINGEMENT. 
+ 
+See the Apache Version 2.0 License for specific language governing permissions
+and limitations under the License.
+***************************************************************************** */
+
 var TypeScript;
 (function (TypeScript) {
     TypeScript.DiagnosticCode = {
@@ -9748,7 +9763,7 @@ var TypeScript;
             var annotStr = "";
 
             if (headerAnnots.length === 0) {
-                annotStr += "interface " + this.identifier.fullText() + " ";
+                annotStr += this.identifier.fullText() + " ";
 
                 if (this.typeParameterList) {
                     var typeParams = this.typeParameterList.typeParameters;
@@ -12769,6 +12784,7 @@ var TypeScript;
                 case 187 /* LogicalOrExpression */:
                 case 188 /* LogicalAndExpression */:
                 case 193 /* NotEqualsWithTypeConversionExpression */:
+                case 195 /* NotEqualsExpression */:
                 case 202 /* LeftShiftExpression */:
                 case 203 /* SignedRightShiftExpression */:
                 case 204 /* UnsignedRightShiftExpression */:
@@ -18031,7 +18047,7 @@ var TypeScript;
         function toRsExp(token, helper) {
             switch (token.kind()) {
                 case 11 /* IdentifierName */:
-                    return new TypeScript.RsVarRef(helper.getSourceSpan(token), [], token.toRsAST(helper));
+                    return new TypeScript.RsVarRef(helper.getSourceSpan(token), [], token.toRsId(helper));
 
                 case 13 /* NumericLiteral */:
                     if (token.text().indexOf(".") === -1) {
@@ -58796,7 +58812,7 @@ var TypeScript;
                     return 7 /* OpNEq */;
                 case "===":
                     return 8 /* OpStrictEq */;
-                case "!===":
+                case "!==":
                     return 9 /* OpStrictNEq */;
                 case "&&":
                     return 10 /* OpLAnd */;
@@ -59729,10 +59745,7 @@ var TypeScript;
                     [this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
                         })],
-                    this.cond.toObject(),
-                    this.s1.toObject(),
-                    this.s2.toObject()
-                ]
+                    this.cond.toObject(), this.s1.toObject(), this.s2.toObject()]
             };
         };
         return RsIfStmt;
@@ -59754,9 +59767,7 @@ var TypeScript;
                     [this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
                         })],
-                    this.cond.toObject(),
-                    this.s.toObject()
-                ]
+                    this.cond.toObject(), this.s.toObject()]
             };
         };
         return RsIfSingleStmt;

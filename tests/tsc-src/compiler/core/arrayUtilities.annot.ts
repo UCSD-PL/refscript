@@ -1,4 +1,4 @@
-///<reference path='references.ts' />
+// ///<reference path='references.ts' />
 
 /*
     JAVARI
@@ -18,9 +18,19 @@
 
 */
 
+//PV: modules not supported
+//module TypeScript {
 
-module TypeScript {
-    export class ArrayUtilities1 {
+	// IMPORTS BEGIN
+
+    interface IIndexable<T> {
+		[s: string]: T;
+	}
+
+	// IMPORTS END
+
+    //export class ArrayUtilities1 {
+    class ArrayUtilities1 {
         public static isArray(value: any): boolean {
             return Object.prototype.toString.apply(value, []) === '[object Array]';
         }
@@ -149,8 +159,10 @@ module TypeScript {
         }
 
         public static last<T>(array: T[]): T {
-            if (array.length === 0) {
-                throw Errors.argumentOutOfRange('array');
+			if (array.length === 0) {
+				//PV 
+				//throw Errors.argumentOutOfRange('array');
+				return null;
             }
 
             return array[array.length - 1];
@@ -184,9 +196,11 @@ module TypeScript {
                 if (!func || func(value, i)) {
                     return value;
                 }
-            }
+			}
 
-            throw Errors.invalidOperation();
+			//PV
+			//throw Errors.invalidOperation();
+			return null;
         }
 
         public static sum<T>(array: T[], func: (v: T) => number): number {
@@ -299,4 +313,4 @@ module TypeScript {
             return -1;
         }
     }
-}
+//}

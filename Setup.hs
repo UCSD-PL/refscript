@@ -20,7 +20,7 @@ copyExts _ _ pkg lbi
        let tscR = fromMaybe lTscRoot $ fmap snd $ find ((== "TSC_ROOT") . fst) env
        putStrLn $ "Using '" ++ tscR ++ "' for `tsc` sources." 
        -- Compile and copy TypeScript executables
-       executeShellCommand   "chmod a+x ../typescript/bin/tsc"
+       executeShellCommand $ "chmod a+x " ++ tscR ++ "/bin/tsc"
        mapM_ executeShellCommand (map cpFile $ tscBins tscR)
        -- Compile and copy TypeScript's prelude
        executeShellCommand $ "tsc --refscript " ++ preludeSrc

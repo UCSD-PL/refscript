@@ -1,5 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
@@ -16,6 +17,7 @@ module Language.Nano.Typecheck.TCMonad (
  
   -- * Execute 
   , execute
+  , runFailM, runMaybeM
 
   -- * Errors
   , logError, tcError
@@ -35,6 +37,9 @@ module Language.Nano.Typecheck.TCMonad (
 
   -- * Unification
   , unifyTypeM, unifyTypesM
+
+  -- * Subtyping
+  , subtypeM
 
   -- * Casts
   , castM
@@ -61,7 +66,7 @@ module Language.Nano.Typecheck.TCMonad (
 
 import           Text.Printf
 import           Language.ECMAScript3.PrettyPrint
-import           Control.Applicative                ((<$>))
+import           Control.Applicative                ((<$>), (<*>))
 import           Data.Function                      (on)
 import qualified Data.HashSet                       as S
 import           Data.Maybe                         (fromJust)
@@ -148,8 +153,7 @@ whenQuiet  act = whenQuiet' act $ return ()
 -------------------------------------------------------------------------------
 whenQuiet' :: TCM r a -> TCM r a -> TCM r a
 -------------------------------------------------------------------------------
-whenQuiet' quiet other = do  v <- tc_verb <$> get
-                             case v of
+whenQuiet' quiet other = do  tc_verb <$> get >>= \case 
                                V.Quiet -> quiet
                                _       -> other
 
@@ -344,24 +348,21 @@ freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
 --------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------
-unifyTypesM :: (Ord r, PP r, F.Reftable r) => 
-  SourceSpan -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
+unifyTypesM :: PPR r => SourceSpan -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
 unifyTypesM l msg t1s t2s
   | on (/=) length t1s t2s = tcError $ errorArgMismatch l 
-  | otherwise              = do θ <- getSubst 
-                                δ <- getDef
+  | otherwise              = do (δ, θ) <- (,) <$> getDef <*> getSubst 
                                 case unifys l δ θ t1s t2s of
                                   Left err' -> tcError $ catMessage err' msg 
                                   Right θ'  -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------
-unifyTypeM :: (Ord r, PrintfArg t1, PP r, PP a, F.Reftable r) =>
-  SourceSpan -> t1 -> a -> RType r -> RType r -> TCM r (RSubst r)
+unifyTypeM :: PPR r => SourceSpan -> RType r -> RType r -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
-unifyTypeM l m e t t' = unifyTypesM l msg [t] [t']
+unifyTypeM l t t' = unifyTypesM l msg [t] [t']
   where 
-    msg               = ppshow $ errorWrongType l m e t t'
+    msg               = ppshow $ "errorWrongType l m e t t'"
 
 
 
@@ -386,6 +387,39 @@ castM l ξ e t1 t2 = convert (ann l) t1 t2 >>= patch
 findSymM i = findSym i <$> getDef
 findSymOrDieM i = findSymOrDie i <$> getDef
 
+
+-- | Run the monad `a` in the current state. This action will not alter the
+-- state.
+--------------------------------------------------------------------------------
+runFailM :: (PPR r) => TCM r a -> TCM r (Either Error a)
+--------------------------------------------------------------------------------
+runFailM a = fst . runState (runErrorT a) <$> get
+
+
+--------------------------------------------------------------------------------
+runMaybeM :: (PPR r) => TCM r a -> TCM r (Maybe a)
+--------------------------------------------------------------------------------
+runMaybeM a = runFailM a >>= \case 
+                Right rr -> return $ Just rr
+                Left _   -> return $ Nothing
+
+
+--------------------------------------------------------------------------------
+runFail :: (PPR r) => TCM r a -> TCState r -> Either Error a
+--------------------------------------------------------------------------------
+runFail a = fst . runState (runErrorT a)
+
+
+-- FIXME: it is debatable whether we want to allow CDn here.
+-- | subTypeM will throw error if subtyping fails
+--------------------------------------------------------------------------------
+subtypeM :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r ()
+--------------------------------------------------------------------------------
+subtypeM l t1 t2 = convert l t1 t2 >>= \case
+  CNo       -> return ()
+  (CDn _ _) -> return ()
+  (CUp _ _) -> return ()
+  _         -> tcError $ errorStrictSubtype l
 
 
 -- | @convert@ returns:
@@ -533,10 +567,8 @@ convertUnion l t1 t2 = parts   $ unionParts t1 t2
 convertArray :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
 convertArray l t1@(TArr τ1 _) t2@(TArr τ2 _) = do
-  c1 <- convert l τ1 τ2
-  c2 <- convert l τ2 τ1
   -- FIXME: Too Strict
-  case (c1, c2) of
+  (,) <$> (convert l τ1 τ2) <*> (convert l τ2 τ1) >>= \case
     (CNo, CNo) -> return CNo
     _          -> tcError $ errorArraySubtype l t1 t2 
 convertArray _ _ _ = errorstar "BUG: convertArray can only pad Arrays"

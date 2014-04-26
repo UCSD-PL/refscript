@@ -172,24 +172,24 @@ class IsNano a where
 
 
 instance IsNano InfixOp where
-  isNano OpLT       = True --  @<@
-  isNano OpLEq      = True --  @<=@
-  isNano OpGT       = True --  @>@
-  isNano OpGEq      = True --  @>=@
-  isNano OpEq       = True --  @==@
-  -- PV adding @===@
-  isNano OpStrictEq = True --  @===@
-  isNano OpNEq      = True --  @!=@
+  isNano OpLT        = True --  @<@
+  isNano OpLEq       = True --  @<=@
+  isNano OpGT        = True --  @>@
+  isNano OpGEq       = True --  @>=@
+  isNano OpEq        = True --  @==@
+  isNano OpStrictEq  = True --  @===@
+  isNano OpNEq       = True --  @!=@
+  isNano OpStrictNEq = True --  @!==@
 
-  isNano OpLAnd     = True --  @&&@
-  isNano OpLOr      = True --  @||@
+  isNano OpLAnd      = True --  @&&@
+  isNano OpLOr       = True --  @||@
 
-  isNano OpSub      = True --  @-@
-  isNano OpAdd      = True --  @+@
-  isNano OpMul      = True --  @*@
-  isNano OpDiv      = True --  @/@
-  isNano OpMod      = True --  @%@
-  isNano e          = errortext (text "Not Nano InfixOp!" <+> pp e)
+  isNano OpSub       = True --  @-@
+  isNano OpAdd       = True --  @+@
+  isNano OpMul       = True --  @*@
+  isNano OpDiv       = True --  @/@
+  isNano OpMod       = True --  @%@
+  isNano e           = errortext (text "Not Nano InfixOp!" <+> pp e)
 
 instance IsNano (LValue a) where 
   isNano (LVar _ _)        = True

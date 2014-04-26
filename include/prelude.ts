@@ -117,6 +117,7 @@ interface List<A> {
 
 /*@ extern builtin_OpSEq       :: /\ forall A  . (x:A,    y: null) => {v:boolean | ((Prop v) <=> (ttag(x) = "null")) }  
                                   /\ forall A  . (x:null, y:A)     => {v:boolean | ((Prop v) <=> (ttag(y) = "null")) }  
+                                  /\ forall A  . (x:A,    y:A)     => {v:boolean | ((Prop v) <=> (x = y)) }
                                   /\ forall A B. (x:A,    y:B)     => {v:boolean | ((Prop v) <=> ((ttag(x) = ttag(y)) && (x = y))) } */
 
 /*@ extern builtin_OpNEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */

@@ -28,6 +28,7 @@ import           Data.Monoid
 import           Data.Function                  (on)
 -- import           Debug.Trace
 
+type PPR r = (PP r, F.Reftable r)
 
 -----------------------------------------------------------------------------
 -- | Unification
@@ -36,7 +37,7 @@ import           Data.Function                  (on)
 -- | Unify types @t@ and @t'@, in substitution environment @θ@ and type
 -- definition environment @δ@.
 -----------------------------------------------------------------------------
-unify :: (PP r, F.Reftable r, Ord r) => SourceSpan -> TDefEnv (RType r) 
+unify :: PPR r => SourceSpan -> TDefEnv (RType r) 
   -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 
@@ -93,7 +94,7 @@ unifEquiv _             _               = False
 
 
 -----------------------------------------------------------------------------
-unifys ::  (PP r, F.Reftable r, Ord r) => SourceSpan -> TDefEnv (RType r) 
+unifys ::  PPR r => SourceSpan -> TDefEnv (RType r) 
             -> RSubst r -> [RType r] -> [RType r] -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 unifys loc env θ ts ts'  | nTs == nTs'         
@@ -120,8 +121,7 @@ unifys loc env θ ts ts'  | nTs == nTs'
 
 
 -----------------------------------------------------------------------------
-varEql :: (PP r, F.Reftable r, Ord r) => 
-  SourceSpan -> RSubst r -> TVar -> TVar -> Either Error (RSubst r)
+varEql :: PPR r => SourceSpan -> RSubst r -> TVar -> TVar -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 varEql l θ α β =  
   case varAsn l θ α $ tVar β of
@@ -133,8 +133,7 @@ varEql l θ α β =
 
 
 -----------------------------------------------------------------------------
-varAsn ::  (PP r, F.Reftable r, Ord r) => 
-  SourceSpan -> RSubst r -> TVar -> RType r -> Either Error (RSubst r)
+varAsn ::  PPR r => SourceSpan -> RSubst r -> TVar -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 varAsn l θ α t 
   | on (==) toType t (apply θ (tVar α)) = Right $ θ 

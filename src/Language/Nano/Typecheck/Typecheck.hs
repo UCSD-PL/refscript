@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE UndecidableInstances   #-}
 {-# LANGUAGE DeriveDataTypeable     #-}
+{-# LANGUAGE LambdaCase             #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE TupleSections          #-}
@@ -31,7 +32,6 @@ import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Lookup
-import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Liquid.Alias
 import           Language.Nano.SSA.SSA
 
@@ -359,9 +359,7 @@ tcStmt γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
-  = do 
-       cOpt      <- tcCallMatch γ l BIBracketRef [e] $ builtinOpTy l BITruthy $ tce_env γ 
-       case cOpt of 
+  = do tcCallMatch γ l BIBracketRef [e] (builtinOpTy l BITruthy (tce_env γ)) >>= \case
          Just ([e'], _) -> do  
            -- unifyTypeM (srcPos l) "If condition" e t tBool
            (s1', γ1) <- tcStmt γ s1
@@ -373,7 +371,7 @@ tcStmt γ (IfStmt l e s1 s2)
 -- while c { b } ; exit environment is entry as may skip. SSA adds phi-asgn prior to while.
 tcStmt γ (WhileStmt l c b) 
   = do (c', t)   <- tcExpr γ c
-       unifyTypeM (srcPos l) "While condition" c t tBool
+       unifyTypeM (srcPos l) t tBool
        (b', _)   <- tcStmt γ' b
        return       (WhileStmt l c' b', Just γ)  
     where 
@@ -391,7 +389,7 @@ tcStmt γ (ReturnStmt l eo)
                          Nothing -> return (Nothing, tVoid)
                          Just e  -> mapFst Just <$>  tcExpr γ e
         let rt       = tcEnvFindReturn γ 
-        θ           <- unifyTypeM (srcPos l) "Return" eo t rt
+        θ           <- unifyTypeM (srcPos l) t rt
         -- Apply the substitution
         let (rt',t') = mapPair (apply θ) (rt,t)
         -- Subtype the arguments against the formals and cast using subtyping result
@@ -532,7 +530,7 @@ tcExprT l γ e to
   = do (e', t)    <- tcExpr γ e
        (e'', te)  <- case to of
                        Nothing -> return (e', t)
-                       Just ta -> do θ <- unifyTypeM (srcPos l) "tcExprT" e t ta
+                       Just ta -> do θ <- unifyTypeM (srcPos l) t ta
                                      let t' = apply θ t
                                      (,ta) <$> castM l (tce_ctx γ) e t' ta
        return     (e'', te)
@@ -716,7 +714,8 @@ tcCallMatch γ l fn es ft0 = do
       -- If this fails, try to instantiate possible generic 
       -- types found in the function signature.
       Nothing ->
-        do  mType <- tracePP "resolved" <$> resolveOverload γ l fn es' ts ft0
+        -- do  mType <- tracePP "resolved" <$> resolveOverload γ l fn es' ts ft0
+        do  mType <- tracePP ("resolved overload " ++ ppshow fn) <$> resolveOverload γ l fn es' (tracePP "es" ts) ft0
             addAnn (srcPos l) (Overload mType)
             maybe (return Nothing) (call es' ts) mType
   where
@@ -724,24 +723,34 @@ tcCallMatch γ l fn es ft0 = do
 
 
 resolveOverload γ l fn es ts ft = do  
-    tas   <- mapM (\t -> (t,) <$> tcCallCaseTry γ l fn es ts t) fts
-    return $ listToMaybe [ apply θ t | (t, Right θ) <- tas ]
+    θs    <- mapM (tcCallCaseTry γ l fn ts) fts
+    return $ listToMaybe [ apply (tracePP "FINAL" θ) t | (t, Just θ) <- zip fts θs ]
   where
-    fts          = [ mkFun (vs, ts,t) | (vs, ts, t) <- sigs
-                                      , length ts == length es ]
-    sigs         = catMaybes (bkFun <$> bkAnd ft)
+    sigs   = catMaybes (bkFun <$> bkAnd ft)
+    fts    = [ mkFun (vs, ts,t) | (vs, ts, t) <- sigs
+                                , length ts == length es ]
 
 
-tcCallCaseTry γ l fn _ ts ft
-  = do let ξ          = tce_ctx γ
-       -- Generate fresh type parameters
-       (_,ibs,_)    <- instantiate l ξ fn ft
-       let its        = b_type <$> ibs
-       θ             <- getSubst 
-       --HACK - erase latest annotation on l
-       remAnn         $ (srcPos l)
-       δ             <- getDef
-       return         $ unifys (ann l) δ θ ts its
+-- | A successful pairing of formal to actual parameters will return `Just θ`,
+-- where θ is the corresponding substitution. If the types are not
+-- acceptable this will return `Nothing`.
+-- In this case successful means:
+--  * Unifying without errors.
+--  * Passing the subtyping test.
+--
+-- The monad state is completely reversed after this function returns, thanks to
+-- `runMaybeM`. We don't need to reverse the action of `instantiate`.
+---------------------------------------------------------------------------------------
+tcCallCaseTry :: (PPR r, PP a) => 
+  TCEnv r -> Annot b SourceSpan -> a -> [RType r] -> RType r -> TCM r (Maybe (RSubst r))
+---------------------------------------------------------------------------------------
+tcCallCaseTry γ l fn ts ft = runMaybeM $ 
+  do (_,ibs,_) <- instantiate l (tce_ctx γ) fn ft
+     let its    = b_type <$> ibs
+     θ'        <- tracePP "TENTATIVE" <$> unifyTypesM (ann l) "tcCallCaseTryAux" ts its
+     zipWithM_    (subtypeM (ann l)) (apply θ' ts) (apply θ' its)
+     return θ'
+
 
 tcCallCase γ l fn es' ts ft 
   = do let ξ          = tce_ctx γ

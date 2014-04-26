@@ -714,8 +714,8 @@ tcCallMatch γ l fn es ft0 = do
       -- If this fails, try to instantiate possible generic 
       -- types found in the function signature.
       Nothing ->
-        -- do  mType <- tracePP "resolved" <$> resolveOverload γ l fn es' ts ft0
-        do  mType <- tracePP ("resolved overload " ++ ppshow fn) <$> resolveOverload γ l fn es' (tracePP "es" ts) ft0
+        do  mType <- resolveOverload γ l fn es' ts ft0
+        -- do  mType <- tracePP ("resolved overload " ++ ppshow fn) <$> resolveOverload γ l fn es' (tracePP "es" ts) ft0
             addAnn (srcPos l) (Overload mType)
             maybe (return Nothing) (call es' ts) mType
   where
@@ -724,7 +724,7 @@ tcCallMatch γ l fn es ft0 = do
 
 resolveOverload γ l fn es ts ft = do  
     θs    <- mapM (tcCallCaseTry γ l fn ts) fts
-    return $ listToMaybe [ apply (tracePP "FINAL" θ) t | (t, Just θ) <- zip fts θs ]
+    return $ listToMaybe [ apply θ t | (t, Just θ) <- zip fts θs ]
   where
     sigs   = catMaybes (bkFun <$> bkAnd ft)
     fts    = [ mkFun (vs, ts,t) | (vs, ts, t) <- sigs
@@ -747,7 +747,7 @@ tcCallCaseTry :: (PPR r, PP a) =>
 tcCallCaseTry γ l fn ts ft = runMaybeM $ 
   do (_,ibs,_) <- instantiate l (tce_ctx γ) fn ft
      let its    = b_type <$> ibs
-     θ'        <- tracePP "TENTATIVE" <$> unifyTypesM (ann l) "tcCallCaseTryAux" ts its
+     θ'        <- unifyTypesM (ann l) "tcCallCaseTryAux" ts its
      zipWithM_    (subtypeM (ann l)) (apply θ' ts) (apply θ' its)
      return θ'
 

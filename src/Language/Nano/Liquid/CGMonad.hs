@@ -723,7 +723,7 @@ instance ClearSorts (F.SEnv F.SortedReft) where
   clear = F.mapSEnvWithKey clearProp
 
 clearProp (sy, F.RR so re) 
-  | F.symbolString sy `elem` ["Prop", "TRU"] 
+  | F.symbolString sy `elem` ["Prop", "TRU", "FLS"] 
   = (sy, F.RR (F.FFunc 2 [F.FInt, F.FApp F.boolFTyCon []]) re)
   | otherwise                   
   = (clear sy, clear $ F.RR so re)

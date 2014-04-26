@@ -544,14 +544,16 @@ instance Eq TCon where
   TUndef  == TUndef  = True
   _       == _       = False
  
-instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
-  TApp TUn t1 _       == TApp TUn t2 _       = (null $ t1 L.\\ t2) && (null $ t2 L.\\ t1)
-  TApp c1 t1s r1      == TApp c2 t2s r2      = (c1, t1s, r1)  == (c2, t2s, r2)
-  TVar v1 r1          == TVar v2 r2          = (v1, r1)       == (v2, r2)
-  TFun b1 t1 r1       == TFun b2 t2 r2       = (b1, t1, r1)   == (b2, t2, r2)
-  TArr t1 r1          == TArr t2 r2          = t1 == t2 && r1 == r2
-  TAll v1 t1          == TAll v2 t2          = v1 == v2 && t1 == t2   -- Very strict Eq here
-  _                   == _                   = False
+-- This is not about the refinements - I'm stripping all the refinement 
+-- equality checks from here.
+instance Eq (RType r) where
+  TApp TUn t1 _ == TApp TUn t2 _  = (null $ t1 L.\\ t2) && (null $ t2 L.\\ t1)
+  TApp c1 t1s _ == TApp c2 t2s _  = (c1, t1s) == (c2, t2s)
+  TVar v1 _     == TVar v2 _      = v1        == v2
+  TFun b1 t1 _  == TFun b2 t2 _   = (b1, t1)  == (b2, t2)
+  TArr t1 _     == TArr t2 _      = t1 == t2
+  TAll v1 t1    == TAll v2 t2     = v1 == v2 && t1 == t2   -- Very strict Eq here
+  _             == _              = False
 
 
 ---------------------------------------------------------------------------------
@@ -976,21 +978,22 @@ infixOpTy o g = fromMaybe err $ envFindTy ox g
     err       = errorstar $ printf "Cannot find infixOpTy %s" (ppshow ox) -- (ppshow g)
     ox        = infixOpId o
 
-infixOpId OpLT       = builtinId "OpLT"
-infixOpId OpLEq      = builtinId "OpLEq"
-infixOpId OpGT       = builtinId "OpGT"
-infixOpId OpGEq      = builtinId "OpGEq"
-infixOpId OpEq       = builtinId "OpEq"
-infixOpId OpStrictEq = builtinId "OpSEq"
-infixOpId OpNEq      = builtinId "OpNEq"
-infixOpId OpLAnd     = builtinId "OpLAnd"
-infixOpId OpLOr      = builtinId "OpLOr"
-infixOpId OpSub      = builtinId "OpSub"
-infixOpId OpAdd      = builtinId "OpAdd"
-infixOpId OpMul      = builtinId "OpMul"
-infixOpId OpDiv      = builtinId "OpDiv"
-infixOpId OpMod      = builtinId "OpMod"
-infixOpId o          = errorstar $ "Cannot handle: infixOpId " ++ ppshow o
+infixOpId OpLT        = builtinId "OpLT"
+infixOpId OpLEq       = builtinId "OpLEq"
+infixOpId OpGT        = builtinId "OpGT"
+infixOpId OpGEq       = builtinId "OpGEq"
+infixOpId OpEq        = builtinId "OpEq"
+infixOpId OpStrictEq  = builtinId "OpSEq"
+infixOpId OpNEq       = builtinId "OpNEq"
+infixOpId OpStrictNEq = builtinId "OpSNEq"
+infixOpId OpLAnd      = builtinId "OpLAnd"
+infixOpId OpLOr       = builtinId "OpLOr"
+infixOpId OpSub       = builtinId "OpSub"
+infixOpId OpAdd       = builtinId "OpAdd"
+infixOpId OpMul       = builtinId "OpMul"
+infixOpId OpDiv       = builtinId "OpDiv"
+infixOpId OpMod       = builtinId "OpMod"
+infixOpId o           = errorstar $ "Cannot handle: infixOpId " ++ ppshow o
 
 -----------------------------------------------------------------------
 prefixOpTy :: PrefixOp -> Env t -> t 

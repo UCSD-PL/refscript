@@ -327,7 +327,9 @@ consExpr g (CallExpr l e es)
 
 -- e.f
 consExpr g (DotRef l e (Id _ fld))
-  = snd <$> consPropRead getProp g l e (F.symbol fld) 
+  = do (_, (x,g')) <- consPropRead getProp g l e (F.symbol fld)
+       addAnnot (srcPos l) x (envFindTy x g')
+       return (x,g')
 
 -- e["f"]
 consExpr g (BracketRef l e (StringLit _ fld)) 

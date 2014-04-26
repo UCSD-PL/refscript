@@ -39,7 +39,7 @@ import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
 
 import           System.Console.CmdArgs.Default
---  import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -142,12 +142,11 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 
 -- e1.fld = e2
 consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
-  = do (tfld, _) <- consPropRead getProp g l1 e1 $ F.symbol fld
-       (x2,  g') <- consExpr  g  e2
+  = do (xf, g' ) <- consPropRead getProp g l1 e1 $ F.symbol fld
+       (x2, g'') <- consExpr g'  e2
        let t2     = envFindTy x2 g'
-       -- FIXME: how to we keep the unfolded types around?
-       subType l2 g' t2 tfld
-       return     $ Just g'
+       subType l2 g'' (envFindTy x2 g'') (envFindTy xf g')
+       return     $ Just g''
 
 -- e
 consStmt g (ExprStmt _ e) 
@@ -327,13 +326,13 @@ consExpr g (CallExpr l e es)
 
 -- e.f
 consExpr g (DotRef l e (Id _ fld))
-  = do (_, (x,g')) <- consPropRead getProp g l e (F.symbol fld)
+  = do (x,g') <- consPropRead getProp g l e (F.symbol fld)
        addAnnot (srcPos l) x (envFindTy x g')
-       return (x,g')
+       return  $ (x,g')
 
 -- e["f"]
 consExpr g (BracketRef l e (StringLit _ fld)) 
-  = snd <$> consPropRead getProp g l e (F.symbol fld)
+  = consPropRead getProp g l e (F.symbol fld)
 
 -- e1[e2]
 consExpr g (BracketRef l e1 e2) 
@@ -487,26 +486,24 @@ consSeq f           = foldM step . Just
     step (Just g) x = f g x
 
 
+-- | consPropRead reads field `fld` from objet `e`. This function does the late
+-- binding of "this" to the value in the left hand side.
 consPropRead getter g l e fld
-  = do 
-      (x, g')        <- consExpr g e
-      let tx          = envFindTy x g'
-      (this, g'')    <- envAddFresh "consPropRead:this" l tx g'
-      δ              <- getDef
-      case getter l (renv g'') δ fld tx of
-        Just (_, tf) -> 
-          do
-            let tf'   = F.substa (sf (F.symbol "this") (F.symbol this)) tf
-            g'''     <- envAddFresh "consPropRead:field" l tf' g''
-            return    $ (tf', g''')
-        Nothing         -> die $  errorPropRead (srcPos l) e fld
+  = do (this, g')     <- consExpr g e
+       let tx          = envFindTy this g'
+       δ              <- getDef
+       case getter l (renv g') δ fld tx of
+         Just (_, tf) -> 
+           do let tf'   = F.substa (sf (F.symbol "this") (F.symbol this)) tf
+              envAddFresh "consPropRead:field" l tf' g'
+         Nothing         -> die $  errorPropRead (srcPos l) e fld
     where  
        sf s1 s2 = \s -> if s == s1 then s2
                                    else s
 
----------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> CGM CGEnv
----------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 {- Typing Rule for `while (cond) {body}`
    

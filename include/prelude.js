@@ -1,8 +1,6 @@
 /*************************************************************************/
 /*********** General purpose auxiliary functions *************************/
 /*************************************************************************/
-/*@ type #List[A] { data: A, next: #List[A] } */
-
 
 /*@ measure len      :: forall A. (#List [A])          => number                                            */
 /*@ extern cons      :: forall A. (A, xs:#List[A]?)
@@ -55,23 +53,28 @@
 /*@ extern builtin_OpDiv       :: (number,  number)  => number                                      */
 /*@ extern builtin_OpMod       :: (number,  number)  => number                                      */
 /*@ extern builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v = (0 - x)}                 */
-//PV: @==@ and @===@ could be handled more precisely
-/*@ extern builtin_OpEq        :: forall A.   (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }   */
-/*@ extern builtin_OpSEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x = y)) }   */
+/*@ extern builtin_OpEq        :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x = y)) }   */
+/*@ extern builtin_OpSEq       :: /\ forall A  . (x:A,    y: null) => {v:boolean | ((Prop v) <=> (ttag(x) = "null")) }
+/\ forall A  . (x:null, y:A)     => {v:boolean | ((Prop v) <=> (ttag(y) = "null")) }
+/\ forall A  . (x:A,    y:A)     => {v:boolean | ((Prop v) <=> (x = y)) }
+/\ forall A B. (x:A,    y:B)     => {v:boolean | ((Prop v) <=> ((ttag(x) = ttag(y)) && (x = y))) } */
 /*@ extern builtin_OpNEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */
+/*@ extern builtin_OpSNEq      :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */
+// FIXME: the two version of inequality should not be the same...
 /*@ extern builtin_OpLAnd      :: (x:top, y:top)         => {v:top     | ((Prop v) <=> (if (TRU(x)) then (v = y) else (v = x) ))} */
-/*@ extern builtin_OpLOr       :: (x:top, y:top)         => {v:top     | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))} */
+/*@ extern builtin_OpLOr       :: /\ forall A   . (x:A, y:A)  => {v:A    | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))}
+/\ forall A B . (x:A, y:B)  => {v:top  | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))} */
 /*  OLDER VERSION: */
 /*  extern builtin_OpLOr       :: (x:boolean, y:boolean) => {v:boolean | ((Prop v) <=> ((Prop x) || (Prop y)))}                  */
 /*@ extern builtin_PrefixLNot  :: (x:boolean)            => {v:boolean | ((Prop v) <=> not (Prop x))}                            */
-//XXX: Is there an issue with keeping this with a capital P???
 /*@ measure Prop        :: (boolean) => boolean                              */
 /*************************************************************************/
 /************* Ambient Definitions ***************************************/
 /*************************************************************************/
-/*************************************************************************/
-/** Taken from here: *****************************************************/ /** http://typescript.codeplex.com/SourceControl/latest#typings/lib.d.ts */
-/*************************************************************************/
+/**************************************************************************
+Taken from here:
+http://typescript.codeplex.com/SourceControl/latest#typings/lib.d.ts
+**************************************************************************/
 /*** Number **************************************************************/
 /*@ extern NumberC :: (x: top) => number */
 /*** Math ****************************************************************/
@@ -123,9 +126,7 @@ toLocaleLowerCase : () => string,
 toUpperCase       : () => string,
 toLocaleUpperCase : () => string,
 trim              : () => string,
-
 length            : number,
-
 substr            : (from: number, length: number) => string
 } */
 // Typescript Definition:
@@ -189,7 +190,6 @@ sort           : (compareFn: (a: T, b: T) => number) => [T],
 splice         :  /\ (start: number) => [T]
 /\ (start: number, deleteCount: number, items: [T]) => [T],
 unshift        : (items: [T]) => number,
-
 indexOf        : (searchElement: T, fromIndex: number) => number,
 lastIndexOf    : (searchElement: T, fromIndex: number) => number,
 every          : (callbackfn: (value: T, index: number, array: [T]) => boolean) => boolean,
@@ -197,11 +197,8 @@ some           : (callbackfn: (value: T, index: number, array: [T]) => boolean) 
 forEach        : (callbackfn: (value: T, index: number, array: [T]) => void) => void,
 map            : forall U . (callbackfn: (value: T) => U) => [U],
 filter         : (callbackfn: (value: T, index: number, array: [T]) => boolean) => [T],
-
 reduce         : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T,
-
 reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T,
-
 length         : { v: number | v = (len this) }
 }
 */
@@ -209,7 +206,6 @@ length         : { v: number | v = (len this) }
 //TODO
 reduce         :  /\ (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T
 /\ forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U,
-
 reduceRight    :  /\ (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T
 /\ forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U,
 */
@@ -252,15 +248,19 @@ reduceRight    :  /\ (callbackfn: (previousValue: T, currentValue: T, currentInd
 /*************************************************************************/
 /*@ measure ttag :: forall A. (A) => string                                   */
 /*@ measure TRU :: forall A . (A) => Prop                                     */
+/*@ measure FLS :: forall A . (A) => Prop                                     */
 /*@ extern builtin_PrefixTypeof :: forall A. (x:A)
 => {v:string | (ttag x) = v }             */
 /*@ extern builtin_BITruthy :: forall A. (x:A)
 => { v:boolean | ((Prop v) <=> TRU(x)) }    */
-/*@ invariant {v:undefined | [(ttag(v) = "undefined"); (TRU(v) <=> false  )]} */
-/*@ invariant {v:null      | [(ttag(v) = "null"     ); (TRU(v) <=> false  )]} */
-/*@ invariant {v:boolean   | [(ttag(v) = "boolean"  ); (TRU(v) <=> Prop(v))]} */ /*@ invariant {v:number    | [(ttag(v) = "number"   ); (TRU(v) <=> v /= 0 )]} */
-/*@ invariant {v:string    | [(ttag(v) = "string"   ); (TRU(v) <=> v /= "")]} */
-/*@ invariant {v:{}        | ttag(v) = "object"   }                           */
+/*@ extern builtin_BIFalsy :: forall A. (x:A)
+=> { v:boolean | ((Prop v) <=> FLS(x)) }    */
+/*@ invariant           {v:undefined | [(ttag(v) = "undefined"); not (TRU(v))        ]} */
+/*@ invariant           {v:null      | [(ttag(v) = "null"     ); not (TRU(v))        ]} */
+/*@ invariant           {v:boolean   | [(ttag(v) = "boolean"  ); (TRU(v) <=> Prop(v))]} */ /*@ invariant           {v:number    | [(ttag(v) = "number"   ); (TRU(v) <=> v /= 0 )]} */
+/*@ invariant           {v:string    | [(ttag(v) = "string"   ); (TRU(v) <=> v /= "")]} */
+/*@ invariant forall A. {v:[A]       |   ttag(v) = "object"                           } */
+/*@ invariant           {v:{}        |   ttag(v) = "object"                           } */
 /*************************************************************************/
 /************** Pre-Loaded Qualifiers ************************************/
 /*************************************************************************/

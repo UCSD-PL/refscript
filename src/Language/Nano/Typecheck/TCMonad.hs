@@ -64,7 +64,6 @@ module Language.Nano.Typecheck.TCMonad (
 
   )  where 
 
-import           Text.Printf
 import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>), (<*>))
 import           Data.Function                      (on)
@@ -402,12 +401,6 @@ runMaybeM :: (PPR r) => TCM r a -> TCM r (Maybe a)
 runMaybeM a = runFailM a >>= \case 
                 Right rr -> return $ Just rr
                 Left _   -> return $ Nothing
-
-
---------------------------------------------------------------------------------
-runFail :: (PPR r) => TCM r a -> TCState r -> Either Error a
---------------------------------------------------------------------------------
-runFail a = fst . runState (runErrorT a)
 
 
 -- FIXME: it is debatable whether we want to allow CDn here.

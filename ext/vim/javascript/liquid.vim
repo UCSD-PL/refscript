@@ -5,16 +5,16 @@
 "License:     BSD
 "============================================================================
 
-if exists('g:loaded_syntastic_typescript_liquid_checker')
+if exists('g:loaded_syntastic_javascript_liquid_checker')
     finish
 endif
-let g:loaded_syntastic_typescript_liquid_checker = 1
+let g:loaded_syntastic_javascript_liquid_checker = 1
 
 
 let s:save_cpo = &cpo
 set cpo&vim
 
-function! SyntaxCheckers_typescript_liquid_GetLocList() dict
+function! SyntaxCheckers_javascript_liquid_GetLocList() dict
     let makeprg = self.makeprgBuild({
         \ 'exe_after': 'liquid',
         \ 'fname'    : syntastic#util#shexpand('%:p')})
@@ -39,7 +39,7 @@ function! SyntaxCheckers_typescript_liquid_GetLocList() dict
 endfunction
 
 call g:SyntasticRegistry.CreateAndRegisterChecker({
-    \ 'filetype': 'typescript',
+    \ 'filetype': 'javascript',
     \ 'name': 'nanojs'})
 
 let &cpo = s:save_cpo

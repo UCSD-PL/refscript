@@ -117,8 +117,8 @@ errorBracketAccess l t f  = mkErr l $ printf "Cannot access field \"%s\" of type
 errorAnnotation l e t ta  = mkErr l $ printf "Type %s does not satisfy annotation %s at expression %s." (ppshow t) (ppshow ta) (ppshow e)
 errorMissingAnnot l s     = mkErr l $ printf "Missing type annotation for %s" s
 errorBadAnnot l s1 s2     = mkErr l $ printf "Type annotation for %s needs to be of %s type" (ppshow s1) (ppshow s2)
-errorLiquid l             = mkErr l $ printf "Liquid Type Error at %s" (ppshow l)
-errorESC l                = mkErr l $ printf "ESC Error at %s" (ppshow l)
+errorLiquid l             = mkErr l $ printf "Liquid Type Error" 
+errorESC l                = mkErr l $ printf "ESC Error"
 errorMultipleTypeArgs l   = mkErr l $ printf "Multiple Type Args"
 errorDownCast l t1 t2     = mkErr l $ printf "Downcast: %s => %s" (ppshow t1) (ppshow t2)
 errorDeadCast l           = mkErr l $ printf "Deadcast"

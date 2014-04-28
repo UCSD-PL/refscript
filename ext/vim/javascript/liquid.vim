@@ -1,21 +1,22 @@
 "============================================================================
 "File:        liquid.vim
-"Description: LiquidHaskell checking plugin for syntastic.vim
+"Description: nanojs checking plugin for syntastic.vim
 "Maintainer:  Ranjit Jhala <jhala at cs dot ucsd dot edu>
 "License:     BSD
 "============================================================================
 
-if exists('g:loaded_syntastic_haskell_liquid_checker')
+if exists('g:loaded_syntastic_typescript_liquid_checker')
     finish
 endif
-let g:loaded_syntastic_haskell_liquid_checker = 1
+let g:loaded_syntastic_typescript_liquid_checker = 1
 
 
 let s:save_cpo = &cpo
 set cpo&vim
 
-function! SyntaxCheckers_haskell_liquid_GetLocList() dict
+function! SyntaxCheckers_typescript_liquid_GetLocList() dict
     let makeprg = self.makeprgBuild({
+        \ 'exe_after': 'liquid',
         \ 'fname'    : syntastic#util#shexpand('%:p')})
 
     let errorformat =
@@ -38,8 +39,8 @@ function! SyntaxCheckers_haskell_liquid_GetLocList() dict
 endfunction
 
 call g:SyntasticRegistry.CreateAndRegisterChecker({
-    \ 'filetype': 'haskell',
-    \ 'name': 'liquid'})
+    \ 'filetype': 'typescript',
+    \ 'name': 'nanojs'})
 
 let &cpo = s:save_cpo
 unlet s:save_cpo

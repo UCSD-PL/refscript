@@ -1,4 +1,4 @@
-/*@ ab :: (number) => {res: number | res >= 0} */
+/*@ ab :: (number) => {res: number | res >= 10} */
 
 function ab(x:number):number{
 	var r = x;

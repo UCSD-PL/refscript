@@ -20,8 +20,8 @@ function! SyntaxCheckers_typescript_nanojs_GetLocList() dict
         \ 'fname'    : syntastic#util#shexpand('%:p')})
 
     let errorformat =
-        \ '%E%f:%l:%v: Error: %m,' .
-        \ '%E%f:%l:%c-%*[0-9]: Error: %m,' .
+        \ '%E%f:%l:%c: Error: %m,' .
+        \ '%E%f:%l:%c-%*[0-9]:%*[0-9]: Error: %m,' .
         \ '%W%f:%l:%v: Warning: %m,' .
         \ '%C%m'
 

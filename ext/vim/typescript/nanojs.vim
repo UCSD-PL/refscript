@@ -1,22 +1,22 @@
 "============================================================================
-"File:        liquid.vim
+"File:        nanojs.vim
 "Description: nanojs checking plugin for syntastic.vim
 "Maintainer:  Ranjit Jhala <jhala at cs dot ucsd dot edu>
 "License:     BSD
 "============================================================================
 
-if exists('g:loaded_syntastic_typescript_liquid_checker')
+if exists('g:loaded_syntastic_typescript_nanojs_checker')
     finish
 endif
-let g:loaded_syntastic_typescript_liquid_checker = 1
+let g:loaded_syntastic_typescript_nanojs_checker = 1
 
 
 let s:save_cpo = &cpo
 set cpo&vim
 
-function! SyntaxCheckers_typescript_liquid_GetLocList() dict
+function! SyntaxCheckers_typescript_nanojs_GetLocList() dict
     let makeprg = self.makeprgBuild({
-        \ 'exe_after': 'liquid',
+        \ 'args_after': 'liquid',
         \ 'fname'    : syntastic#util#shexpand('%:p')})
 
     let errorformat =

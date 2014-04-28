@@ -392,8 +392,8 @@ Currently, only support for Vim, *sorry!* (Feel free to submit a PR for emacs).
 
 2. Copy the following files
 
-    cp ext/vim/typescript/liquid.vim  ~/.vimrc/bundle/syntastic/syntax_checkers/typescript/liquid.vim
-    cp ext/vim/javascript/liquid.vim  ~/.vimrc/bundle/syntastic/syntax_checkers/javascript/liquid.vim
+    cp ext/vim/typescript/nanojs.vim  ~/.vimrc/bundle/syntastic/syntax_checkers/typescript/nanojs.vim
+    cp ext/vim/javascript/nanojs.vim  ~/.vimrc/bundle/syntastic/syntax_checkers/javascript/nanojs.vim
 
 **Run**
 

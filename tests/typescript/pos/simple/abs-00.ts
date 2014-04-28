@@ -1,4 +1,5 @@
 /*@ ab :: (number) => {res: number | res >= 0} */
+
 function ab(x:number):number{
 	var r = x;
 	if (x > 0) {

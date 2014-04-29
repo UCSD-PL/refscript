@@ -20,8 +20,6 @@ function first<T>(array: T[], func /*?*/: (v: T, index: number) => boolean): T {
 		}
 	}
 
-	//PV
-	//throw Errors.invalidOperation();
-	return null;
+	throw Errors.invalidOperation();
 }
 

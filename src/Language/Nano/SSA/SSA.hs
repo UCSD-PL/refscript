@@ -193,6 +193,12 @@ ssaStmt (ReturnStmt l (Just e)) = do
     e' <- ssaExpr e
     return (False, ReturnStmt l (Just e'))
 
+-- throw e 
+ssaStmt (ThrowStmt l e) = do 
+    e' <- ssaExpr e
+    return (False, ThrowStmt l e')
+
+
 -- function f(...){ s }
 ssaStmt s@(FunctionStmt _ _ _ _)
   = (True,) <$> ssaFun s

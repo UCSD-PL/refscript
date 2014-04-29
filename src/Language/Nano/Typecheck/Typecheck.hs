@@ -398,6 +398,11 @@ tcStmt γ (ReturnStmt l eo)
                         Just e' -> Just <$> castM l (tce_ctx γ) e' t' rt'
         return (ReturnStmt l eo'', Nothing)
 
+-- throw e 
+tcStmt γ (ThrowStmt l e) 
+  = (,Nothing) . ThrowStmt l . fst <$> tcExpr γ e
+
+
 tcStmt γ s@(FunctionStmt _ _ _ _)
   = tcFun γ s
 

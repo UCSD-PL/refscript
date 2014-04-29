@@ -47,16 +47,17 @@ import           Language.ECMAScript3.PrettyPrint
 
 import           Text.Parsec                      hiding (parse)
 import           Text.Parsec.Pos                         (newPos)
-import qualified Text.Parsec.Token                as     Token
+import qualified Text.Parsec.Token                as     T
 
 import           GHC.Generics
 
 -- import           Debug.Trace                             ( trace, traceShow)
 
-dot        = Token.dot        lexer
-plus       = Token.symbol     lexer "+"
-star       = Token.symbol     lexer "*"
-question   = Token.symbol     lexer "?"
+dot        = T.dot        lexer
+plus       = T.symbol     lexer "+"
+star       = T.symbol     lexer "*"
+question   = T.symbol     lexer "?"
+
 
 
 -- type ParserS a = Parser (TDefEnv RefType, Integer) a 
@@ -102,7 +103,7 @@ iFaceP   :: Parser (Id SourceSpan, TDef RefType)
 iFaceP   = do id     <- identifierP 
               vs     <- option [] tParP
               ext    <- optionMaybe extendsP
-              es     <- braces $ eltsP
+              es     <- braces fieldBindP
               return (id, TD id vs ext es)
 
 extendsP = do reserved "extends"
@@ -166,13 +167,12 @@ bareTypeNoUnionP = try funcSigP <|> (bareAtomP bbaseP)
 parenNullP p f =  try (f <$> postP p question) <|> p
 
 -- | `funcSigP` parses a function type that is possibly generic and/or an intersection.
-funcSigP = 
-      try bareAll1P
-  <|> try (intersectP bareAll1P) 
-  <|> try bareFun1P
-  <|>     (intersectP bareFun1P)
-
-intersectP p      = tAnd <$> many1 (reserved "/\\" >> p)
+funcSigP =  try bareAll1P
+        <|> try (intersectP bareAll1P) 
+        <|> try bareFun1P
+        <|>     (intersectP bareFun1P)
+  where
+    intersectP p = tAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
 
 -- | `bareFun1P` parses a single function type
 bareFun1P
@@ -209,9 +209,7 @@ bbaseP
 ----------------------------------------------------------------------------------
 objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
-objLitP = do 
-  bs    <- braces $ bindsP
-  return $ TCons [ TE s True t | B s t <- bs ]
+objLitP = TCons <$> braces fieldBindP
 
 
 bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
@@ -262,28 +260,24 @@ bareAll1P
 
 arrayP = brackets bareTypeP
 
--- | f1: t1, f2: t2, ..., fn: tn
-bindsP 
-  =  try (sepBy1 bareBindP comma)
- <|> (spaces >> return [])
+-- | Parses lists of "f1: t1", "[x:string]: t", or "[x:number]: t"
+-- separated by semicolon.
+fieldBindP =  sepEndBy (try indBindP <|> bareBindP) semi
 
--- | f : type 
-bareBindP = do s <- binderP
-               withinSpacesP colon
-               t <- bareTypeP
-               return $ B s t 
+-- | f : t
+bareBindP = do (s,t) <- xyP sp colon bareTypeP
+               return $ TE s True t 
+  where 
+    sp = withinSpacesP (stringSymbol <$> ((try lowerIdP) <|> upperIdP))
 
--- | f1:[*] t1, f2:[*] t2, ..., fn:[*] tn
-eltsP 
-  =  try (sepBy1 bareEltP comma)
- <|> (spaces >> return [])
+indexP = xyP id colon sn
+  where
+    id = symbol <$> (try lowerIdP <|> upperIdP)
+    sn = withinSpacesP (string "string" <|> string "number")
 
--- | f :[*] type 
-bareEltP = do s <- binderP
-              withinSpacesP colon
-              mut <- isJust <$> optionMaybe star
-              t <- bareTypeP
-              return $ TE s mut t 
+-- |  [f: string/number]: t
+indBindP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
+              return $ TI x it t
 
  
 ----------------------------------------------------------------------------------
@@ -322,16 +316,16 @@ refasP :: Parser [Refa]
 refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi)) 
        <|> liftM ((:[]) . RConc) predP
  
-----------------------------------------------------------------------------------
-binderP :: Parser Symbol
-----------------------------------------------------------------------------------
-binderP = try (stringSymbol <$> idP badc)
-      -- <|> try (star >> return (stringSymbol "*")) -- disabling this
-      <|> liftM pwr (parens (idP bad))
-      where idP p  = many1 (satisfy (not . p))
-            badc c = (c == ':') ||  bad c
-            bad c  = isSpace c || c `elem` "()"
-            pwr s  = stringSymbol $ "(" ++ s ++ ")" 
+
+-- ----------------------------------------------------------------------------------
+-- binderP :: Parser Symbol
+-- ----------------------------------------------------------------------------------
+-- binderP = (stringSymbol <$> idP badc)
+--        <|> liftM pwr (parens (idP bad))
+--       where idP p  = many1 (satisfy (not . p))
+--             badc c = (c == ':') ||  bad c
+--             bad c  = isSpace c || c `elem` "()[]"
+--             pwr s  = stringSymbol $ "(" ++ s ++ ")" 
 
 ----------------------------------------------------------------------------------
 withinSpacesP :: Parser a -> Parser a
@@ -480,12 +474,12 @@ mkCode :: FilePath -> [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 mkCode f ss =  Nano {
         fp      = f
       , code    = Src (checkTopStmt <$> ss')
-      , externs = envFromList   [ t | Extern t <- anns ] -- externs
+      , externs = envFromList   [ tracePP "extern" t | Extern t <- anns ] -- externs
       -- FIXME: same name methods in different classes.
       , specs   = catFunSpecDefs ss                      -- function sigs (no methods...)
       , glVars  = catVarSpecDefs ss                      -- variables
       , consts  = envFromList   [ t | Meas   t <- anns ] 
-      , defs    = tDefFromList  [ t | IFace  t <- anns ] 
+      , defs    = tDefFromList  [ checkIF t | IFace  t <- anns ] 
       , tAlias  = envFromList   [ t | TAlias t <- anns ] 
       , pAlias  = envFromList   [ t | PAlias t <- anns ] 
       , quals   =               [ t | Qual   t <- anns ] 
@@ -500,6 +494,19 @@ mkCode f ss =  Nano {
                          ++ [ClassAnn t     | Class  (_,t) <- αs ]
     ss'           = (toBare <$>) <$> ss
     anns          = concatMap (FO.foldMap snd) ss
+
+-- | At the moment we only support a single index signature with no other
+-- elements, or (normally) bound types without index signature.
+checkIF t@(_,TD _ _ _ elts) 
+  | nTi == 0  = t
+  | nTi == 1 && nTe == 0 && nTn == 0 = t
+  | otherwise = error $ "[UNIMPLEMENTED] Object types " ++ 
+                                   "can only have a single indexable " ++
+                                   "signature and no other elements."
+  where 
+    nTn = length [ () | TI _ "number" _ <- elts ]
+    nTi = length [ () | TI _ _ _ <- elts ]
+    nTe = length [ () | TE _ _ _ <- elts ]
 
 
 type PState = Integer

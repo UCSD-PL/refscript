@@ -583,6 +583,8 @@ splitC (Sub g i t1@(TArr t1v _ ) t2@(TArr t2v _ ))
 
 -- | TCons
 splitC (Sub g i t1@(TCons b1s _ ) t2@(TCons b2s _ ))
+  -- LHS and RHS are object literal types
+  | all (not . isIndSig) [t1,t2]  
   = do cs    <- bsplitC g i t1 t2
        when (or $ zipWith ((/=) `on` f_sym) b1s' b2s') 
          $ error $ "splitC on non aligned TCons: " ++ ppshow t1 ++ "\n" ++ ppshow t2
@@ -591,11 +593,28 @@ splitC (Sub g i t1@(TCons b1s _ ) t2@(TCons b2s _ ))
        -- FIXME: Variance !!!
        -- cs''  <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t2s t1s -- CONTRA-VARIANCE
        return $ cs ++ cs' -- ++ cs''
-    where
-       b1s' = L.sortBy (compare `on` f_sym) b1s
-       b2s' = L.sortBy (compare `on` f_sym) b2s
-       t1s  = f_type <$> b1s'
-       t2s  = f_type <$> b2s'
+
+  -- LHS and RHS are index signatures
+  | all isIndSig [t1,t2]          
+  = do c1 <- bsplitC g i t1 t2
+       --c2 <- splitC $ Sub g i (ti b1s) (ti b2s)
+       return $ c1 -- ++ c2
+
+  -- RHS is index signature (only at init)
+  | isIndSig t2
+  = do c1 <- bsplitC g i t1 t2 
+       c2 <- concatMapM splitC $ zipWith (Sub g i) (ts b1s) (repeat $ ti b2s)
+       return $ c1 ++ c2
+  | otherwise 
+  = error "BUG:splitC:TCons"
+
+  where
+    b1s'  = L.sortBy (compare `on` f_sym) b1s
+    b2s'  = L.sortBy (compare `on` f_sym) b2s
+    t1s   = f_type <$> b1s'
+    t2s   = f_type <$> b2s'
+    ti es = safeHead "convertCons" [ t | TI _ _ t <- es ]
+    ts es      = [ t | TE _ _ t <- es ]
 
 splitC x 
   = cgError l $ bugBadSubtypes l x where l = srcPos x

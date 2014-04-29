@@ -9834,7 +9834,7 @@ var TypeScript;
                 }
             });
 
-            annotStr += "{" + members.join(", ") + "}";
+            annotStr += "{" + members.join("; ") + "}";
             restAnnots.push(new TypeScript.RsBindAnnotation(3 /* RawType */, annotStr));
             return new TypeScript.RsEmptyStmt(helper.getSourceSpan(this), restAnnots);
         };

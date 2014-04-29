@@ -43,7 +43,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, tUndef, tNull
-  , tAnd, isTVar, isArr, isTCons, isTFun, fTop
+  , tAnd, isTVar, isArr, isTCons, isIndSig, isTFun, fTop, orNull
 
   -- * Print Types
   , ppArgs
@@ -56,7 +56,6 @@ module Language.Nano.Typecheck.Types (
   , TDefEnv (..), tDefEmpty, tDefFromList
   , addSym, findSym, findSymOrDie
   --, addObjLitTy
-  , findEltWithDefault
   , getDefNames
   , sortTDef
   , getCons
@@ -151,19 +150,17 @@ data TDef t    = TD {
       , t_elts  :: ![TElt t]                      -- ^ List of data type elts 
       } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
-data TElt t    = TE { 
-        f_sym   :: F.Symbol                       -- ^ Symbol
-      , f_mut   :: Bool                           -- ^ Mutability modifier (mutable:true)
-      , f_type  :: t                              -- ^ Type
-      } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+-- | An object can only have a list of TE or TI, but not both.
+data TElt t    = TE { f_sym :: F.Symbol, f_mut :: Bool  , f_type :: t } 
+               | TI { f_sym :: F.Symbol, f_ind :: String, f_type :: t }
+               -- F_ind in TI should be in { "string", "number" }
+  deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 
 -- | Type definition environment
 
-data TDefEnv t = G  { 
-        g_size  :: Int                            -- ^ Size of the `env`
-      , g_env   :: F.SEnv (TDef t)                -- ^ Named types - mapping to env
-                    } deriving (Show, Functor, Data, Typeable)
+data TDefEnv t = G  { g_size  :: Int, g_env   :: F.SEnv (TDef t) } 
+  deriving (Show, Functor, Data, Typeable)
 
 instance F.Fixpoint t => F.Fixpoint (TDef t) where
   toFix (TD n _ _ _) = F.toFix $ F.symbol n
@@ -200,12 +197,6 @@ findSym s (G _ γ) = F.lookupSEnv (F.symbol s) γ
 findSymOrDie:: F.Symbolic s => s -> TDefEnv t -> TDef t
 ---------------------------------------------------------------------------------
 findSymOrDie s γ = fromMaybe (error "findTySymWithIdOrDie") $ findSym s γ 
-
----------------------------------------------------------------------------------
-findEltWithDefault :: F.Symbol -> t -> [TElt t] -> t
----------------------------------------------------------------------------------
-findEltWithDefault s t elts = 
-  maybe t f_type $ L.find ((== s) . f_sym) elts
 
 
 -- | Sort the fields of a TDef 
@@ -386,7 +377,9 @@ instance Equivalent TCon where
   equiv c        c'         = c == c'
 
 instance Equivalent (TElt (RType r)) where 
-  equiv (TE _ m1 t1) (TE _ m2 t2) = m1 == m2 && equiv t1 t2
+  equiv (TE s1 m1 t1) (TE s2 m2 t2) = s1 == s2 && m1 == m2 && equiv t1 t2
+  equiv (TI s1 i1 t1) (TI s2 i2 t2) = s1 == s2 && i1 == i2 && equiv t1 t2
+  equiv _             _             = False
 
 instance Equivalent (Bind r) where 
   equiv (B s t) (B s' t') = s == s' && equiv t t' 
@@ -489,6 +482,9 @@ isVoid _                  = False
 isTCons (TApp (TRef _) _ _) = True
 isTCons (TCons _ _)         = True
 isTCons _                   = False
+
+isIndSig (TCons es _) | not (null [ () | TI _ _ _ <- es ]) = True
+isIndSig _            = False
 
 isUnion :: RType r -> Bool
 isUnion (TApp TUn _ _) = True           -- top-level union
@@ -664,6 +660,7 @@ instance (PP t) => PP (TDef t) where
 instance (PP t) => PP (TElt t) where
   pp (TE x True t)  = pp x <> text ":"  <> pp t
   pp (TE x False t) = pp x <> text ":*" <> pp t
+  pp (TI x sn t)    = brackets (pp x <> text ":" <> pp sn) <> text ":" <> pp t
 
 instance PP Bool where
   pp True   = text "True"
@@ -933,6 +930,13 @@ isTFun (TFun _ _ _) = True
 isTFun (TAnd ts)    = all isTFun ts
 isTFun (TAll _ t)   = isTFun t
 isTFun _            = False
+
+
+orNull t@(TApp TUn ts r) | any isNull ts = t
+orNull t@(TApp TUn ts r) | otherwise     = TApp TUn (tNull:ts) r
+orNull t                 | isNull t      = t
+orNull t                 | otherwise     = TApp TUn [tNull,t] fTop
+
 
 
 -----------------------------------------------------------------------

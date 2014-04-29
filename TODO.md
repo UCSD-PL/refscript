@@ -35,7 +35,9 @@ Tool/Implementation
   
   - Fix scoping for functions and variables.
 
-  - Test infinite loops.
+  - Arguments cannot be named: "func"
+
+  - Test examples with infinite loops.
 
   - Revisit overload resolution.
 

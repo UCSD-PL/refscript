@@ -8,6 +8,7 @@
 module Language.Nano.Typecheck.Lookup (getProp, getPropTDef) where 
 
 import           Data.List (find)
+import           Data.Maybe (listToMaybe)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors
@@ -67,7 +68,11 @@ getPropApp l α γ s t@(TApp c ts _) =
 
 getPropApp _ _ _ _ _ = error "getPropArr should only be applied to TApp"
 
-getPropCons s (TCons bs _) = f_type <$> find ((s ==) . f_sym) bs
+getPropCons s t@(TCons bs _) 
+  | isIndSig t 
+  = listToMaybe [ {- orNull -} t | TI _ _ t <- bs]   
+  | otherwise 
+  = f_type <$> find ((s ==) . f_sym) bs
 getPropCons _ _ = error "BUG: Cannot call getPropCons on non TCons"
 
 -- Access the property from the relevant ambient object but return the 

@@ -32,7 +32,7 @@ module Language.Nano.Typecheck.TCMonad (
   , tcFunTys
 
   -- * Annotations
-  , addAnn {-TEMP-}, accumAnn, getAllAnns, remAnn, getDef, setDef
+  , addAnn {-TEMP-}, accumAnn, getAllAnns, getDef, setDef
   , getExts, getClasses
 
   -- * Unification
@@ -254,17 +254,6 @@ addAnn :: (F.Reftable r) => SourceSpan -> Fact r -> TCM r ()
 addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
 
 -------------------------------------------------------------------------------
--- remAnn :: (F.Reftable r) => SourceSpan -> TCM r () 
--------------------------------------------------------------------------------
-remAnn l   = modify $ \st -> st { tc_anns = delLst l (tc_anns st) } 
-  where
-    delLst k m | not (M.member k m)                  = m
-    delLst k m | null (stl $ M.lookupDefault [] k m) = M.delete k m
-    delLst _ _ | otherwise                            = errorstar "BUG remAnn"
-    stl []     = []
-    stl (_:xs) = xs
-
--------------------------------------------------------------------------------
 getAllAnns :: TCM r [AnnInfo r]  
 -------------------------------------------------------------------------------
 getAllAnns = tc_annss <$> get
@@ -351,17 +340,17 @@ unifyTypesM :: PPR r => SourceSpan -> String -> [RType r] -> [RType r] -> TCM r 
 ----------------------------------------------------------------------------------
 unifyTypesM l msg t1s t2s
   | on (/=) length t1s t2s = tcError $ errorArgMismatch l 
-  | otherwise              = do (δ, θ) <- (,) <$> getDef <*> getSubst 
-                                case unifys l δ θ t1s t2s of
-                                  Left err' -> tcError $ catMessage err' msg 
-                                  Right θ'  -> setSubst θ' >> return θ' 
+  | otherwise = do (δ, θ) <- (,) <$> getDef <*> getSubst
+                   case unifys l δ θ t1s t2s of
+                     Left err -> tcError $ catMessage err msg
+                     Right θ' -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------
 unifyTypeM :: PPR r => SourceSpan -> RType r -> RType r -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
 unifyTypeM l t t' = unifyTypesM l msg [t] [t']
   where 
-    msg               = ppshow $ "errorWrongType l m e t t'"
+    msg           = ppshow ""
 
 
 
@@ -456,38 +445,53 @@ convert l t1           t2              = convertSimple l t1 t2
 convertCons :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
 convertCons l t1@(TCons e1s _) t2@(TCons e2s _)
-  = do
-      -- Take all elements into account, excluding constructors.
-      let (l1, l2)   = mapPair (\es -> [ (s, t) | TE s _ t <- es
-                                                , s /= F.symbol "constructor" ]) (e1s, e2s)
-          (m1, m2)   = mapPair M.fromList (l1, l2)
-          (ks1, ks2) = mapPair (S.fromList . map fst) (l1, l2)
-          cmnKs      = S.toList $ S.intersection ks1 ks2
-          t1s        = fromJust . (`M.lookup` m1) <$> cmnKs
-          t2s        = fromJust . (`M.lookup` m2) <$> cmnKs
+  -- LHS and RHS are object literal types
+  | all (not . isIndSig) [t1,t2] = zipWithM (convert l) t1s t2s >>= g0
+  -- LHS and RHS are index signatures
+  | all isIndSig [t1,t2] = mapM (uncurry $ convert l) ind >>= g2
+  -- RHS is index signature (only at init):
+  -- Here we assume all fields are string-indexed and so fall under the 
+  -- string index signature (which is the only one supported anyway).
+  | isIndSig t2          = zipWithM (convert l) (ts e1s) (repeat $ ti e2s) >>= g2
+  | otherwise            = g4 
+  where
+    ts es      = [ t | TE _ _ t <- es ]
+    ti es      = safeHead "convertCons" [ t | TI _ _ t <- es ]
+    
+    -- Take all elements into account, excluding constructors.
+    (l1, l2)   = mapPair (\es -> [ (s, t) | TE s _ t <- es
+                                          , s /= F.symbol "constructor" ]) (e1s, e2s)
+    (m1, m2)   = mapPair M.fromList (l1, l2)
+    (ks1, ks2) = mapPair (S.fromList . map fst) (l1, l2)
+    cmnKs      = S.toList $ S.intersection ks1 ks2
+    t1s        = fromJust . (`M.lookup` m1) <$> cmnKs
+    t2s        = fromJust . (`M.lookup` m2) <$> cmnKs
 
-      cs <- zipWithM (convert l) t1s t2s
+    ind   = [ (t1, t2) | TI _ s1 t1 <- e1s, TI _ s2 t2 <- e2s, s1 == s2 ]
 
-      if m1 `equalKeys` m2 then 
-        if      all noCast cs then return $ CNo
-        else if all upCast cs then return $ CUp t1 t2
-        -- NOTE: Assuming covariance here!!!
-        else if all dnCast cs then return $ CDn t1 t2
-        else if any ddCast cs then return $ CDead t2
-        else tcError $ errorConvDef l t1 t2
+    g0 cs | m1 `equalKeys` m2        = g1 cs 
+          -- LHS has more fields than RHS
+          | m2 `isProperSubmapOf` m1 = g2 cs
+          -- LHS has fewer fields than RHS
+          | m1 `isProperSubmapOf` m2 = g3
+          | otherwise                = g4
 
-      -- LHS has more fields than RHS
-      else if m2 `isProperSubmapOf` m1 then
-        if      all noCast cs then return $ CUp t1 t2
-        else if all upCast cs then return $ CUp t1 t2
-        else tcError $ errorConvDef l t1 t2
+    g1 cs | all noCast cs = return   $ CNo
+          | all upCast cs = return   $ CUp t1 t2
+          -- NOTE: Assuming covariance here!!!
+          | all dnCast cs = return   $ CDn t1 t2
+          -- TOGGLE dead-code
+          -- | any ddCast cs = return   $ CDead t2
+          | otherwise     = tcError  $ errorConvDef l t1 t2
 
-      -- LHS has fewer fields than RHS
-      else if m1 `isProperSubmapOf` m2 then 
-        tcError $ errorMissFlds l t1 t2 (S.toList $ S.difference ks2 ks1)
+    g2 cs | all noCast cs = return   $ CNo
+          | all upCast cs = return   $ CUp t1 t2
+          | otherwise     = tcError  $ errorConvDef l t1 t2
 
-      else 
-        tcError $ errorConvDef l t1 t2
+    g3    = tcError $ errorMissFlds l t1 t2 (S.toList $ S.difference ks2 ks1)
+    g4    = tcError $ errorConvDef l t1 t2
+
+
 
 convertCons l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
   -- FIXME: type argument subtyping
@@ -538,9 +542,11 @@ convertFun _ _ _ = error "convertFun: no other cases supported"
 --------------------------------------------------------------------------------
 convertSimple :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
-convertSimple _ t1 t2
+convertSimple l t1 t2
   | t1 `equiv` t2 = return CNo
-  | otherwise     = return $ CDead t2
+  -- TOGGLE dead-code
+  -- | otherwise     = return $ CDead t2
+  | otherwise     = tcError  $ errorConvDef l t1 t2
 
 
 -- | `convertUnion`
@@ -589,13 +595,11 @@ tcWithThis t p = do { tcPushThis t; a <- p; tcPopThis; return a }
 
 
 getPropM l s t = do
-  ε <- getExts
-  δ <- getDef 
+  (δ,ε) <- (,) <$> getDef <*> getExts
   return $ getProp l ε δ (F.symbol s) t
 
 getPropTDefM l s t ts = do 
-  ε <- getExts
-  δ <- getDef 
+  (δ,ε) <- (,) <$> getDef <*> getExts
   return $ getPropTDef l ε δ (F.symbol s) ts t
 
 

@@ -11,7 +11,7 @@
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck, testFile) where 
 
-import           Control.Applicative                ((<$>))
+import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
 
 import qualified Data.HashSet                       as HS 
@@ -64,7 +64,7 @@ testFile f = parseNanoFromFile f
          >>= either (print . pp) (\p -> typeCheck (expandAliases p)
          >>= either (print . vcat . (pp <$>)) 
                     (\p'@(Nano {code = Src ss}) -> 
-                          print (pp p') >>  print "Casts:" >> print (pp $ getCasts ss)))
+                          {- print (pp p') >> -} print "Casts:" >> print (pp $ getCasts ss)))
 --------------------------------------------------------------------------------
 
 lerror        = return . (NoAnn,) . F.Unsafe
@@ -497,11 +497,9 @@ tcVarDecl :: (Ord r, PPR r)
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e)) 
-  = do ann <- listToMaybe <$> scrapeVarDecl v  
-       (e' , t) <- tcExprT l γ e ann
-       
-
-       return (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
+  = do ann     <- listToMaybe <$> scrapeVarDecl v  
+       (e', t) <- tcExprT l γ e ann
+       return   $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
 
 tcVarDecl γ v@(VarDecl l x Nothing) 
   = do ann <- scrapeVarDecl v
@@ -510,8 +508,9 @@ tcVarDecl γ v@(VarDecl l x Nothing)
          _   -> tcError $ errorVarDeclAnnot (srcPos l) x
 
 -------------------------------------------------------------------------------
-tcAsgn :: (PP r, Ord r, F.Reftable r) => 
-  AnnSSA r -> TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
+tcAsgn :: (PP r, Ord r, F.Reftable r) 
+       => AnnSSA r -> TCEnv r -> Id (AnnSSA r) -> ExprSSAR r 
+       -> TCM r (ExprSSAR r, TCEnvO r)
 -------------------------------------------------------------------------------
 tcAsgn l γ x e
   = do (e' , t) <- tcExprT l γ e rhsT
@@ -521,19 +520,19 @@ tcAsgn l γ x e
     -- it at declaration or through initialization.
        rhsT      = tcEnvFindSpecOrTy x γ
 
-
+-- | There are two versions for `tcExprT`. If `init` is True then this is the 
+-- variable initialization phase, otherwise any other assignment.
 -------------------------------------------------------------------------------
-tcExprT :: (Ord r, PPR r) => 
-  AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
+tcExprT :: (Ord r, PPR r) 
+        => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) 
+        -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
 tcExprT l γ e to 
   = do (e', t)    <- tcExpr γ e
-       (e'', te)  <- case to of
-                       Nothing -> return (e', t)
-                       Just ta -> do θ <- unifyTypeM (srcPos l) t ta
-                                     let t' = apply θ t
-                                     (,ta) <$> castM l (tce_ctx γ) e t' ta
-       return     (e'', te)
+       case to of
+         Nothing -> return (e', t)
+         Just ta -> do θ <- unifyTypeM (srcPos l) t ta
+                       (,ta) <$> castM l (tce_ctx γ) e (apply θ t) ta
 
 -------------------------------------------------------------------------------
 tcExpr :: (Ord r, PPR r) => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
@@ -672,7 +671,8 @@ tcCall γ ex@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
          Nothing                   -> tcError $ errorBracketAssign (srcPos l) ex 
 
 
-tcCall γ ex@(ArrayLit l es) 
+-- | `[e1,...,en]`
+tcCall γ ex@(ArrayLit l es)
   = do z                           <- tcCallMatch γ l BIArrayLit es $ arrayLitTy l (length es) $ tce_env γ
        case z of
          Just (es', t)             -> return (ArrayLit l es', t)
@@ -715,7 +715,7 @@ tcCallMatch γ l fn es ft0 = do
       -- types found in the function signature.
       Nothing ->
         do  mType <- resolveOverload γ l fn es' ts ft0
-        -- do  mType <- tracePP ("resolved overload " ++ ppshow fn) <$> resolveOverload γ l fn es' (tracePP "es" ts) ft0
+        -- do  mType <- tracePP ("resolved overload " ++ ppshow fn) <$> resolveOverload γ l fn es' ts ft0
             addAnn (srcPos l) (Overload mType)
             maybe (return Nothing) (call es' ts) mType
   where
@@ -749,7 +749,7 @@ tcCallCaseTry γ l fn ts ft = runMaybeM $
      let its    = b_type <$> ibs
      θ'        <- unifyTypesM (ann l) "tcCallCaseTryAux" ts its
      zipWithM_    (subtypeM (ann l)) (apply θ' ts) (apply θ' its)
-     return θ'
+     return     $ θ'
 
 
 tcCallCase γ l fn es' ts ft 
@@ -775,13 +775,9 @@ instantiate l ξ fn ft
              
 tcPropRead getter γ l e fld = do  
   (e', te) <- tcExpr γ e
-  ε        <- getExts
-  δ        <- getDef
+  (δ, ε  ) <- (,) <$> getDef <*> getExts
   case getter l ε δ fld te of
     Nothing         -> tcError $  errorPropRead (srcPos l) e fld
--- TODO
--- NOTE: Is this going to be enough ???
--- Maybe we need a separate statement for e.m(es)
     Just (te', tf)  -> tcWithThis te $ (, tf) <$> castM l (tce_ctx γ) e' te te'
 
 

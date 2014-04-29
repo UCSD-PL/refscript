@@ -474,7 +474,7 @@ mkCode :: FilePath -> [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 mkCode f ss =  Nano {
         fp      = f
       , code    = Src (checkTopStmt <$> ss')
-      , externs = envFromList   [ tracePP "extern" t | Extern t <- anns ] -- externs
+      , externs = envFromList   [ t | Extern t <- anns ] -- externs
       -- FIXME: same name methods in different classes.
       , specs   = catFunSpecDefs ss                      -- function sigs (no methods...)
       , glVars  = catVarSpecDefs ss                      -- variables

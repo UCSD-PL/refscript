@@ -25,6 +25,7 @@ import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
+import           Control.Monad  (foldM)
 import           Data.Function                  (on)
 -- import           Debug.Trace
 
@@ -96,27 +97,12 @@ unifEquiv _             _               = False
 unifys ::  PPR r => SourceSpan -> TDefEnv (RType r) 
             -> RSubst r -> [RType r] -> [RType r] -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
-unifys loc env θ ts ts'  | nTs == nTs'         
-                         = go env θ ts ts'
-                         | otherwise           
-                         = Left $ errorUnification loc ts ts'
+unifys loc γ θ ts ts'  
+  | nTs == nTs' = foldM foo θ $ zip ts ts'
+  | otherwise   = Left $ errorUnification loc ts ts'
   where 
-    (nTs, nTs')          = mapPair length (ts, ts')
-    go γ θ (s:ss) (t:tt) = either Left (\θ' -> go γ θ' ss tt) $ unify loc γ θ s t
-    go _ θ []     []     = Right θ
-    go _ _ _      _      = Left $ errorUnification loc ts ts'
---     safeJoin (Right θ@(Su m)) (Right θ'@(Su m'))
---       | check m m'       = Right $ mappend θ θ'
---       | otherwise        = Left  $ errorJoinSubsts loc θ θ' 
---     safeJoin (Left l) _  = Left l
---     safeJoin _ (Left l)  = Left l
-                               
--- 
--- check m m' = vs == vs'
---   where vs  = map (toType <$>) $ (`M.lookup` m ) <$> ks
---         vs' = map (toType <$>) $ (`M.lookup` m') <$> ks
---         ks  = M.keys $ M.intersection (clr m) (clr m')
---         clr = M.filterWithKey (\k v -> tVar k /= v)
+    (nTs, nTs') = mapPair length (ts, ts')
+    foo θ       = uncurry $ on (unify loc γ θ) (apply θ)
 
 
 -----------------------------------------------------------------------------

@@ -8,20 +8,20 @@ interface Indexable<T> {
 // IMPORTS END
 
 
-/*@ groupBy :: forall T . (a: [T], func: (T)=>string) => IIndexable<[T]> */
-function groupBy<T>(array: T[], func: (v: T) => string): any {
-	/*@ result :: IIndexable<[T]> */
+/*@ groupBy :: forall T . (rray: [T], f: (T)=>string) => { #Indexable[[T]] | true }*/
+function groupBy<T>(array: T[], f: (v: T) => string): any {
+  /*@ result :: #Indexable[[T]] */
 	var result: Indexable<T[]> = {};
 
-	for (var i = 0, n = array.length; i < n; i++) {
-		var v: any = array[i];
-		var k = func(v);
+  for (var i = 0, n = array.length; i < n; i++) {
+    var v = array[i];
+    var k = f(v);
 
-		/*@ list :: [T] */
-		var list: T[] = result[k] || [];
-		list.push(v);
-		result[k] = list;
-	}
+    /* list :: [T] */
+    var list: T[] = result[k] || [];
+    list.push(v);
+    result[k] = list;
+  }
 
 	return result;
 }

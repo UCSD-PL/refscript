@@ -144,7 +144,6 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
   = do (xf, g' ) <- consPropRead getProp g l1 e1 $ F.symbol fld
        (x2, g'') <- consExpr g'  e2
-       let t2     = envFindTy x2 g'
        subType l2 g'' (envFindTy x2 g'') (envFindTy xf g')
        return     $ Just g''
 

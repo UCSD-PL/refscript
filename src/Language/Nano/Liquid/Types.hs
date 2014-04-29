@@ -281,6 +281,7 @@ emapReft _ _ _              = error "Not supported in emapReft"
 emapReftBind f γ (B x t)    = B x $ emapReft f γ t
 
 emapReftElt f γ (TE x m t)  = TE x m $ emapReft f γ t
+emapReftElt f γ (TI x s t)  = TI x s $ emapReft f γ t
 
 ------------------------------------------------------------------------------------------
 -- mapReftM :: (PP a, F.Reftable b, Monad m, Applicative m) => (a -> m b) -> RType a -> m (RType b)
@@ -296,6 +297,7 @@ mapReftM _ t               = error   $ render $ text "Not supported in mapReftM:
 
 mapReftBindM f (B x t)    = B x     <$> mapReftM f t
 mapReftEltM f (TE x m t)  = TE x m  <$> mapReftM f t
+mapReftEltM f (TI x s t)  = TI x s  <$> mapReftM f t
 
 ------------------------------------------------------------------------------------------
 -- | fold over @RType@ 

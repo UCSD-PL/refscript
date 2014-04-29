@@ -12467,7 +12467,7 @@ var TypeScript;
         };
 
         ElementAccessExpressionSyntax.prototype.toRsLValue = function (helper) {
-            return new TypeScript.RsBracketRef(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.expression.toRsExp(helper), this.argumentExpression.toRsExp(helper));
+            return new TypeScript.RsLBracket(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.expression.toRsExp(helper), this.argumentExpression.toRsExp(helper));
         };
 
         ElementAccessExpressionSyntax.prototype.toRsExp = function (helper) {

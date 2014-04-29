@@ -419,4 +419,46 @@ interface List<A> {
 /*  qualif Len(v:number, n: number)  : n < (len v)              */
 
 
+
+/*************************************************************************/
+/*************  Error handling   *****************************************/
+/*************************************************************************/
+
+class Error { 
+  constructor(msg: string) { }
+}
+
+class Errors {
+
+  /*@ argument :: (argument: string, message: string) => #Error */
+  public static argument(argument: string, message: string): Error {
+    return new Error("Invalid argument: " + argument + ". " + message);
+  }
+
+  /*@ argumentOutOfRange :: (argument: string) => #Error */
+  public static argumentOutOfRange(argument: string): Error {
+    return new Error("Argument out of range: " + argument);
+  }
+
+  /*@ argumentNull :: (argument: string) => #Error */
+  public static argumentNull(argument: string): Error {
+    return new Error("Argument null: " + argument);
+  }
+
+  /*@ abstract :: () => #Error */
+  public static abstract(): Error {
+    return new Error("Operation not implemented properly by subclass.");
+  }
+
+  /*@ notYetImplemented :: () => #Error */
+  public static notYetImplemented(): Error {
+    return new Error("Not yet implemented.");
+  }
+
+  /*@ invalidOperation :: (message: string) => #Error */
+  public static invalidOperation(message?: string): Error {
+    return new Error("Invalid operation: " + message);
+  }
+}
+
 var __dummy__ = null; //IMPORTANT: This needs to be here so that there is at least one node in the Typescript AST !!!

@@ -195,6 +195,11 @@ consStmt g (ReturnStmt l (Just e))
 consStmt _ (ReturnStmt _ Nothing)
   = return Nothing 
 
+-- throw e 
+consStmt g (ThrowStmt l e)
+  = consExpr g e >> return Nothing
+
+
 -- function f(x1...xn){ s }
 consStmt g s@(FunctionStmt _ _ _ _)
   = Just <$> consFun g s

@@ -247,6 +247,7 @@ instance IsNano (Statement a) where
   isNano (FunctionStmt _ _ _ b)   = isNano b
   isNano (SwitchStmt _ e cs)      = isNano e && not (null cs) && isNano cs
   isNano (ClassStmt _ _ _ _  bd)  = all isNano bd
+  isNano (ThrowStmt _ e)          = isNano e
   isNano e                        = errortext (text "Not Nano Statement!" <+> pp e)
 
 instance IsNano (ClassElt a) where

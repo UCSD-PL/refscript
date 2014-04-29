@@ -17,7 +17,6 @@ function groupBy<T>(array: T[], f: (v: T) => string): any {
     var v = array[i];
     var k = f(v);
 
-    /* list :: [T] */
     var list: T[] = result[k] || [];
     list.push(v);
     result[k] = list;

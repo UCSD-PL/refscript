@@ -424,7 +424,8 @@ interface List<A> {
 /*************  Error handling   *****************************************/
 /*************************************************************************/
 
-class Error { 
+class Error {
+  /*@ constructor :: (msg: string) => void */
   constructor(msg: string) { }
 }
 

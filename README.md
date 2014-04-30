@@ -377,4 +377,53 @@ TODO: some stuff is missing here. Do we even use that?
 
 
 
+## Editor Integration
 
+Currently, only support for Vim, *sorry!* (Feel free to submit a PR for emacs).
+
+### Vim
+
+**Install**
+
+1. Add the following to your `.vimrc`
+
+~~~~~
+Bundle 'scrooloose/syntastic'
+Bundle 'panagosg7/vim-annotations'
+~~~~~
+
+2. Copy the following files
+
+~~~~~
+cp ext/vim/typescript/nanojs.vim  ~/.vimrc/bundle/syntastic/syntax_checkers/typescript/nanojs.vim
+cp ext/vim/javascript/nanojs.vim  ~/.vimrc/bundle/syntastic/syntax_checkers/javascript/nanojs.vim
+~~~~~
+
+**Run**
+
++ `:SyntasticCheck liquid` runs `nanojs` on the current buffer.
+
+**View**
+
+1. **Warnings** will be displayed in the usual error buffer.
+
+2. **Inferred Types** will be displayed when `<F1>` is pressed over an identifier.
+
+
+**Options**
+
+You can configure the checker in various ways in your `.vimrc`.
+
++ To run after **each save**, for *all* Haskell files, add:
+
+~~~~~
+let g:syntastic_mode_map = { 'mode': 'active' }
+let g:syntastic_typescript_checkers += ['liquid']
+let g:syntastic_javascript_checkers += ['liquid']
+~~~~~
+
++ To pass extra options to `nanojs` add: 
+
+~~~~~
+let g:syntastic_typescript_liquid_args = '...'
+~~~~~

@@ -1,4 +1,4 @@
-// ///<reference path='references.ts' />
+///<reference path='references.ts' />
 
 /*
     JAVARI
@@ -8,9 +8,13 @@
 
         assignable <: final
 
+        In effect assignability permits statements of the form: x := e
+
     Mutability modifier: readonly (default) Vs mutable
 
-        mutable <: raedonly
+        mutable <: readonly
+        
+        In effect mutability permits statements of the form: x.f := e
 
 
     Methods can have a modifier that determines if `this` is going to be 
@@ -18,19 +22,9 @@
 
 */
 
-//PV: modules not supported
-//module TypeScript {
 
-	// IMPORTS BEGIN
-
-    interface IIndexable<T> {
-		[s: string]: T;
-	}
-
-	// IMPORTS END
-
-    //export class ArrayUtilities1 {
-    class ArrayUtilities1 {
+module TypeScript {
+    export class ArrayUtilities1 {
         public static isArray(value: any): boolean {
             return Object.prototype.toString.apply(value, []) === '[object Array]';
         }
@@ -159,10 +153,8 @@
         }
 
         public static last<T>(array: T[]): T {
-			if (array.length === 0) {
-				//PV 
-				//throw Errors.argumentOutOfRange('array');
-				return null;
+            if (array.length === 0) {
+                throw Errors.argumentOutOfRange('array');
             }
 
             return array[array.length - 1];
@@ -196,11 +188,9 @@
                 if (!func || func(value, i)) {
                     return value;
                 }
-			}
+            }
 
-			//PV
-			//throw Errors.invalidOperation();
-			return null;
+            throw Errors.invalidOperation();
         }
 
         public static sum<T>(array: T[], func: (v: T) => number): number {
@@ -313,4 +303,4 @@
             return -1;
         }
     }
-//}
+}

@@ -9,7 +9,9 @@ import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Annots
 import           Control.Exception                  (catch)
+import           Control.Monad                      
 import           Data.Monoid
+import           Data.List                          (sort, nub)
 import           System.Exit
 import           System.Directory                   (createDirectoryIfMissing)
 import           System.Process
@@ -19,8 +21,7 @@ import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc             
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Files
--- import           Text.PrettyPrint.HughesPJ          (Doc, text, render, ($+$), (<+>))
-import           Text.PrettyPrint.HughesPJ          (render)
+import           Text.PrettyPrint.HughesPJ          
 import           Language.ECMAScript3.PrettyPrint
 import qualified Data.ByteString.Lazy               as B
 
@@ -45,7 +46,8 @@ run verifyFile cfg
   = do mapM_ (createDirectoryIfMissing False) $ map tmpDir $ files cfg
        rs   <- mapM (runOne verifyFile) $ files cfg
        let r = mconcat rs
-       donePhaseWithOptStars False (F.colorResult r) (render $ pp r) 
+       -- donePhaseWithOptStars False (F.colorResult r) (render $ pp r) 
+       writeResult r
        exitWith (resultExit r)
     where
        tmpDir    = tempDirectory
@@ -63,6 +65,30 @@ execCmd cmd               = putStrLn ("EXEC: " ++ cmd) >> system cmd >>= check
   where 
     check (ExitSuccess)   = return ()
     check (ExitFailure n) = error $ "cmd: " ++ cmd ++ " failure code " ++ show n 
+
+-- donePhaseWithOptStars False (F.colorResult r) (render $ pp r) 
+
+-------------------------------------------------------------------------------
+writeResult :: (Ord a, PP a) => F.FixResult a -> IO ()
+-------------------------------------------------------------------------------
+writeResult r            = mapM_ (writeDoc c) $ zip [0..] $ resDocs r
+  where 
+    c                    = F.colorResult r
+    writeDoc c (i, d)    = writeBlock c i $ lines $ render d
+    writeBlock _ _ []    = return ()
+    writeBlock c 0 ss    = forM_ ss (colorPhaseLn c "")
+    writeBlock _ _ ss    = forM_ ("\n" : ss) putStrLn
+
+resDocs F.Safe             = [text "SAFE"]
+resDocs (F.Crash xs s)     = text ("CRASH: " ++ s) : pprManyOrdered xs
+resDocs (F.Unsafe xs)      = text "UNSAFE"         : pprManyOrdered (nub xs)
+resDocs (F.UnknownError d) = [text "PANIC: Unexpected Error: " <+> d, reportUrl]
+reportUrl                  = text "Please submit a bug report at: https://github.com/ucsd-pl/RefScript"
+
+pprManyOrdered = map pp . sort 
+
+
+
 
 ----------------------------------------------------------------------------------
 renderAnnotations :: PP t => FilePath -> F.FixResult Error -> UAnnSol t -> IO () 

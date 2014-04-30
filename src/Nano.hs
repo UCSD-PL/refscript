@@ -11,6 +11,7 @@ import           Language.Nano.Annots
 import           Control.Exception                  (catch)
 import           Data.Monoid
 import           System.Exit
+import           System.Directory                   (createDirectoryIfMissing)
 import           System.Process
 import           System.FilePath.Posix
 import           Language.Fixpoint.Interface        (resultExit)
@@ -41,17 +42,22 @@ json f | ext == ".json" = return f
         tsCmd           = "tsc --refscript "
 
 run verifyFile cfg 
-  = do rs   <- mapM (runOne verifyFile) $ files cfg
+  = do mapM_ (createDirectoryIfMissing False) $ map tmpDir $ files cfg
+       rs   <- mapM (runOne verifyFile) $ files cfg
        let r = mconcat rs
        donePhaseWithOptStars False (F.colorResult r) (render $ pp r) 
        exitWith (resultExit r)
+    where
+       tmpDir    = tempDirectory
 
 runOne verifyFile f 
-  = do (u, r) <- verifyFile f `catch` handler 
+  = do createDirectoryIfMissing False tmpDir
+       (u, r) <- verifyFile f `catch` handler 
        renderAnnotations f r u
        return r
     where
        handler e = return (NoAnn, F.Crash [e] "") 
+       tmpDir    = tempDirectory f
 
 execCmd cmd               = putStrLn ("EXEC: " ++ cmd) >> system cmd >>= check
   where 

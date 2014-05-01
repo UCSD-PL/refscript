@@ -195,9 +195,8 @@ getExts = cg_ext <$> get
 
 
 getPropTDefM l s t ts = do 
-  ε <- getExts
   δ <- getDef 
-  return $ getPropTDef l ε δ (F.symbol s) ts t
+  return $ getPropTDef l δ (F.symbol s) ts t
 
 
 
@@ -542,7 +541,7 @@ splitC (Sub g i t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _))
         cs' <- splitE g i (remCons e1s) (remCons e2s)
         return $ cs ++ cs'
     where
-        remCons es = [ TE s m t | TE s m t <- es, s /= F.symbol "constructor" ]
+        remCons es = [ e | e <- es, not (isConstr e) ]
 
 -- FIXME: Add constraint for null
 splitC (Sub _ _ (TApp (TRef _) _ _) (TApp TNull _ _)) 
@@ -597,24 +596,29 @@ splitC (Sub g i t1@(TCons b1s _ ) t2@(TCons b2s _ ))
   -- LHS and RHS are index signatures
   | all isIndSig [t1,t2]          
   = do c1 <- bsplitC g i t1 t2
-       --c2 <- splitC $ Sub g i (ti b1s) (ti b2s)
-       return $ c1 -- ++ c2
-
-  -- RHS is index signature (only at init)
-  | isIndSig t2
-  = do c1 <- bsplitC g i t1 t2 
-       c2 <- concatMapM splitC $ zipWith (Sub g i) (ts b1s) (repeat $ ti b2s)
+       c2 <- splitC $ Sub g i (ti b1s) (ti b2s)
        return $ c1 ++ c2
+
   | otherwise 
   = error "BUG:splitC:TCons"
 
   where
+    -- Sanity check:
+
+    sss   = [ mapPair (fst .eltToPair) (b1, b2) | b1 <- b1s
+                                                , b2 <- b2s
+                                                , b1 `sameBinder` b2 ]
+    
+
+    tts   = [ (eltType b1, eltType b2) | b1 <- b1s
+                                       , b2 <- b2s
+                                       , b1 `sameBinder` b2 ]
+
     b1s'  = L.sortBy (compare `on` f_sym) b1s
     b2s'  = L.sortBy (compare `on` f_sym) b2s
     t1s   = f_type <$> b1s'
     t2s   = f_type <$> b2s'
-    ti es = safeHead "convertCons" [ t | TI _ _ t <- es ]
-    ts es      = [ t | TE _ _ t <- es ]
+    ti es = safeHead "convertCons" [ t | IndexSig _ _ t <- es ]
 
 splitC x 
   = cgError l $ bugBadSubtypes l x where l = srcPos x
@@ -690,7 +694,7 @@ splitW (W g i (TAnd ts))
 splitW (W g i t@(TCons es _))
   = do let bws = bsplitW g t i
        -- FIXME: add field bindings in g?
-       ws     <- concatMapM splitW [W g i ti | TE _ _ ti <- es]
+       ws     <- concatMapM splitW [ W g i $ eltType e | e <- es ]
        return  $ bws ++ ws
 
 splitW (W _ _ t) = error $ render $ text "Not supported in splitW: " <+> pp t

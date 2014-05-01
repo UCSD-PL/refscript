@@ -68,6 +68,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>), (<*>))
 import           Data.Function                      (on)
 import qualified Data.HashSet                       as S
+import           Data.Hashable                      
 import           Data.Maybe                         (fromJust)
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)
@@ -455,19 +456,26 @@ convertCons l t1@(TCons e1s _) t2@(TCons e2s _)
   | isIndSig t2          = zipWithM (convert l) (ts e1s) (repeat $ ti e2s) >>= g2
   | otherwise            = g4 
   where
-    ts es      = [ t | TE _ _ t <- es ]
-    ti es      = safeHead "convertCons" [ t | TI _ _ t <- es ]
+    -- Index signature checks:
+    ts es      = [ t | PropSig _ _ t <- es ] ++ [ t | MethSig _ t <- es ]
+    ti es      = safeHead "convertCons" [ t | IndexSig _ _ t <- es ]
     
-    -- Take all elements into account, excluding constructors.
-    (l1, l2)   = mapPair (\es -> [ (s, t) | TE s _ t <- es
-                                          , s /= F.symbol "constructor" ]) (e1s, e2s)
-    (m1, m2)   = mapPair M.fromList (l1, l2)
-    (ks1, ks2) = mapPair (S.fromList . map fst) (l1, l2)
+    -- FIXME: Takes all properties into account (no constructors). Need to 
+    -- also take into account call signature.
+    ls         = mapPair (\es -> [ (s, t) | PropSig s _ t <- es ]) (e1s, e2s)
+    ee es      = [ (s, t) | PropSig s _ t <- es ]
+    
+    als         = mapPair (\es -> [ (s, t) | PropSig s _ t <- es ]) (e1s, e2s)
+    _          = mapPair M.fromList als
+    
+    
+    (m1, m2)   = mapPair M.fromList ls
+    (ks1, ks2) = mapPair (S.fromList . map fst) ls
     cmnKs      = S.toList $ S.intersection ks1 ks2
     t1s        = fromJust . (`M.lookup` m1) <$> cmnKs
     t2s        = fromJust . (`M.lookup` m2) <$> cmnKs
 
-    ind   = [ (t1, t2) | TI _ s1 t1 <- e1s, TI _ s2 t2 <- e2s, s1 == s2 ]
+    ind   = [ (t1, t2) | IndexSig _ s1 t1 <- e1s, IndexSig _ s2 t2 <- e2s, s1 == s2 ]
 
     g0 cs | m1 `equalKeys` m2        = g1 cs 
           -- LHS has more fields than RHS
@@ -599,8 +607,8 @@ getPropM l s t = do
   return $ getProp l ε δ (F.symbol s) t
 
 getPropTDefM l s t ts = do 
-  (δ,ε) <- (,) <$> getDef <*> getExts
-  return $ getPropTDef l ε δ (F.symbol s) ts t
+  δ <- getDef
+  return $ getPropTDef l δ (F.symbol s) ts t
 
 
 --------------------------------------------------------------------------------

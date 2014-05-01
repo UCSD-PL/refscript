@@ -1,8 +1,10 @@
+ 
+///<reference path='../../../../../include/prelude.ts' />
 
 /*@ last :: forall T . (array: [T]) => { T | true } */
 function last<T>(array: T[]): T {
 	if (array.length === 0) {
-		throw /*Errors.*/argumentOutOfRange('array');
+		throw Errors.argumentOutOfRange('array');
 	}
 
 	return array[array.length - 1];

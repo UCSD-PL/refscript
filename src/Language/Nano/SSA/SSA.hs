@@ -44,11 +44,13 @@ ssaTransform = return . ssaTransform'
 ssaNano :: (PP r, F.Reftable r, Data r, Typeable r) => NanoBareR r -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano { code = Src fs }) 
-  = withMutability ReadOnly ros 
-    $ withMutability WriteGlobal wgs 
-      $ do (_,fs') <- ssaStmts (map (ann <$>) fs)
-           ssaAnns <- getAnns
-           return   $ p {code = Src $ map (fmap (patch [ssaAnns, typeAnns])) fs' }
+  = do θ <- getSsaEnv 
+       setSsaEnv $ extSsaEnv classes θ
+       withMutability ReadOnly ros 
+          $ withMutability WriteGlobal wgs 
+            $ do (_,fs') <- ssaStmts (map (ann <$>) fs)
+                 ssaAnns <- getAnns
+                 return   $ p {code = Src $ map (fmap (patch [ssaAnns, typeAnns])) fs' }
     where
       typeAnns      = M.fromList $ concatMap 
                         (FO.concatMap (\(Ann l an) -> (l,) <$> single <$> an)) fs
@@ -58,6 +60,7 @@ ssaNano p@(Nano { code = Src fs })
       wgs           = writeGlobalVars p 
       patch        :: [M.HashMap SourceSpan [Fact r]] -> SourceSpan -> Annot (Fact r) SourceSpan
       patch ms l    = Ann l $ concatMap (M.lookupDefault [] l) ms
+      classes       = [ fmap ann i | ClassStmt _ i _ _ _ <- fs]
 
 -------------------------------------------------------------------------------------
 ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)

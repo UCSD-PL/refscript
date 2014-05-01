@@ -44,7 +44,7 @@ getProp ::  (IsLocated l, PPR r) =>
 -------------------------------------------------------------------------------
 getProp l α γ s t@(TApp _ _ _)  = getPropApp l α γ s t 
 getProp _ _ _ _   (TFun _ _ _ ) = Nothing
-getProp l α γ s a@(TArr _ _)    = (a,) <$> getPropArr l α γ s a
+getProp l _ γ s a@(TArr _ _)    = (a,) <$> getPropArr l γ s a
 getProp _ _ _ s a@(TCons _ _)   = (a,) <$> getPropCons s a
 getProp l _ _ _ t               = die $ bug (srcPos l) 
                                       $ "Using getProp on type: " ++ ppshow t 
@@ -62,17 +62,18 @@ getPropApp l α γ s t@(TApp c ts _) =
     TUn     -> getPropUnion l α γ s ts
     TInt    -> lookupAmbientVar l α γ s "Number" t
     TString -> lookupAmbientVar l α γ s "String" t
-    TRef i  -> findSym i γ >>= getPropTDef l α γ s ts >>= return . (t,)
+    TRef i  -> findSym i γ >>= getPropTDef l γ s ts >>= return . (t,)
     TTop    -> die $ bug (srcPos l) "getProp top"
     TVoid   -> die $ bug (srcPos l) "getProp void"
 
 getPropApp _ _ _ _ _ = error "getPropArr should only be applied to TApp"
 
+-- FIXME: IndexSig access could return null.
 getPropCons s t@(TCons bs _) 
-  | isIndSig t 
-  = listToMaybe [ {- orNull -} t | TI _ _ t <- bs]   
-  | otherwise 
-  = f_type <$> find ((s ==) . f_sym) bs
+  | isIndSig t  = listToMaybe   [ {- orNull -} t | IndexSig _ _ t <- bs]   
+  | otherwise   = listToMaybe $ [ t | PropSig f m t <- bs , f == s ] ++ 
+                                [ t | MethSig f   t <- bs , f == s ]
+
 getPropCons _ _ = error "BUG: Cannot call getPropCons on non TCons"
 
 -- Access the property from the relevant ambient object but return the 
@@ -85,33 +86,27 @@ lookupAmbientVar l α γ s amb t =
   envFindTy amb α >>= getProp l α γ s >>= return . (t,) . snd
 
 
+-- FIXME: flatten the class type ...
 -------------------------------------------------------------------------------
 getPropTDef :: (PPR r) =>
-  t -> TER r -> TDR r -> F.Symbol -> [RType r] -> TDef (RType r) -> Maybe (RType r)
+  t -> TDR r -> F.Symbol -> [RType r] -> TDef (RType r) -> Maybe (RType r)
 -------------------------------------------------------------------------------
-getPropTDef l α γ f ts (TD _ vs pro elts) = 
-    case [ p | TE s _ p <- elts, s == f ] of
-      [ ] -> do (psy, pts) <- pro
-                ptd        <- findSym psy γ
-                t          <- getPropTDef l α γ f pts ptd
-                return      $ S.apply θ t
-      [p] -> Just $ S.apply θ p                               -- found binding
-      _   -> error $ "BUG: multiple field binding in TDef"
+getPropTDef l γ f ts d = getPropCons f t
   where
-    θ = S.fromList $ zip vs ts
+    t = TCons (S.flatten γ (d,ts)) fTop
 
 
 -------------------------------------------------------------------------------
-getPropArr :: (PPR r, IsLocated a) => 
-  a -> TER r -> TDR r -> F.Symbol -> RType r -> Maybe (RType r)
+getPropArr :: (PPR r, IsLocated a) 
+           => a -> TDR r -> F.Symbol -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-getPropArr l α γ s (TArr t _) =
+getPropArr l γ s (TArr t _) =
 -- NOTE: Array has been declared as a type declaration so 
 -- it should reside in γ, and we can just getPropTDef on it,
 -- using type t as teh single type parameter to it.
-  findSym "Array" γ >>= getPropTDef l α γ s [t]
+  findSym "Array" γ >>= getPropTDef l γ s [t]
 
-getPropArr _ _ _ _ _ = error "getPropArr should only be applied to arrays"
+getPropArr _ _ _ _ = error "getPropArr should only be applied to arrays"
 
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns

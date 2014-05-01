@@ -63,7 +63,7 @@ testFile f = parseNanoFromFile f
          >>= ssaTransform  
          >>= either (print . pp) (\p -> typeCheck (expandAliases p)
          >>= either (print . vcat . (pp <$>)) 
-                    (\p'@(Nano {code = Src ss}) -> 
+                    (\(Nano {code = Src ss}) -> 
                           {- print (pp p') >> -} print "Casts:" >> print (pp $ getCasts ss)))
 --------------------------------------------------------------------------------
 
@@ -443,7 +443,7 @@ classDef (ClassStmt l id _ _ cs) =
         Nothing -> do let elts   = classEltType <$> cs
                       constrL   <- constrT elts
                       let elts'  = elts ++ constrL            
-                      let freshD = TD (fmap ann id) vs p elts'
+                      let freshD = tracePP (ppshow id) $ TD (fmap ann id) vs p elts'
                       setDef     $ addSym sym freshD γ
                       return     $ freshD
   where
@@ -452,7 +452,7 @@ classDef (ClassStmt l id _ _ cs) =
     -- If a constructor is missing, either compute it or import it from the
     -- parent class.
     constrT es = 
-      case ([ t | TE s _ t <- es, s == F.symbol "constructor"], p) of
+      case ([ t | ConsSig t <- es ], p) of
       -- FIXME: add check that current constructor is compatible 
       -- with the one imported from the parent class
         -- 1. Constructor is defined in class
@@ -462,7 +462,7 @@ classDef (ClassStmt l id _ _ cs) =
             do  TD _ vs _ es <- findSymOrDieM i
                 return [getCons $ apply (fromList $ zip vs ts) es]
         -- 3. No parent class around. Just infer a default type 
-        (_  , Nothing)      -> return [TE (F.symbol "constructor") True $ TFun [] tVoid fTop]
+        (_  , Nothing)      -> return [ ConsSig $ TFun [] tVoid fTop ]
     tVoid :: PPR r => RType r
     tVoid = TApp TVoid [] fTop
 
@@ -486,14 +486,14 @@ classAnnot l = safeHead "classAnnot" [ t | ClassAnn t <- ann_fact l ]
 ---------------------------------------------------------------------------------------
 classEltType :: (Ord r, PPR r) => ClassElt (AnnSSA r) -> TElt (RType r)
 ---------------------------------------------------------------------------------------
-classEltType (Constructor l _ _ ) = TE (F.symbol "constructor") True ann
+classEltType (Constructor l _ _ ) = ConsSig ann
   where ann = safeHead "BUG: constructor annotation" [ κ | ConsAnn κ <- ann_fact l ]
 
-classEltType (MemberVarDecl _ _ (VarDecl l v _)) = TE (F.symbol v) m t
+classEltType (MemberVarDecl _ _ (VarDecl l v _)) = PropSig (F.symbol v) m t
   where (m,t) = safeHead "BUG: variable decl annotation" [ φ | FieldAnn φ <- ann_fact l ]
 
-classEltType (MemberMethDecl  l _ f _ _ ) = TE (F.symbol f) False t
-  where t = safeHead "BUG: method decl annotation" [ μ | MethAnn μ <- ann_fact l ]
+classEltType (MemberMethDecl  l _ f _ _ ) = MethSig (F.symbol f) t
+  where t = safeHead ("Method " ++ ppshow f ++ " has no annotation.") [ μ | MethAnn μ <- ann_fact l ]
 
 
 -- Variable declarations should have the type annotations available locally
@@ -584,7 +584,8 @@ tcExpr γ (ObjectLit l bs)
        let tCons     = TCons (zipWith mkElt (F.symbol <$> ps) ts) fTop
        return $ (ObjectLit l (zip ps es'), tCons)
     where
-       mkElt s t = TE s True t
+       mkElt s t | isTFun t  = MethSig s t
+       mkElt s t | otherwise = PropSig s True t 
 
 
 tcExpr γ (Cast l@(Ann loc fs) e)

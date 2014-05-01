@@ -43,14 +43,15 @@ module Language.Nano.Typecheck.Types (
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, tUndef, tNull
-  , tAnd, isTVar, isArr, isTCons, isIndSig, isTFun, fTop, orNull
+  , tAnd, isTVar, isArr, isTCons, isIndSig, isConstr, isTFun, fTop, orNull
 
   -- * Print Types
   , ppArgs
 
-  -- * Type comparison/joining/subtyping
+  -- * Type comparison
   , Equivalent
   , equiv
+  , sameBinder, eltType, eltToPair
 
   -- * Type definition env
   , TDefEnv (..), tDefEmpty, tDefFromList
@@ -150,10 +151,12 @@ data TDef t    = TD {
       , t_elts  :: ![TElt t]                      -- ^ List of data type elts 
       } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
--- | An object can only have a list of TE or TI, but not both.
-data TElt t    = TE { f_sym :: F.Symbol, f_mut :: Bool  , f_type :: t } 
-               | TI { f_sym :: F.Symbol, f_ind :: String, f_type :: t }
-               -- F_ind in TI should be in { "string", "number" }
+-- | Mutability is ingored atm.
+data TElt t    = PropSig  { f_sym :: F.Symbol, f_mut :: Bool, f_type :: t }     -- Property Signature
+               | CallSig  {                                   f_type :: t }     -- Call Signature
+               | ConsSig  {                                   f_type :: t }     -- Constructor Signature               
+               | IndexSig { f_sym :: F.Symbol, f_key :: Bool, f_type :: t }     -- Index Signature (T/F=string/number)
+               | MethSig  { f_sym :: F.Symbol,                f_type :: t }     -- Method Signature
   deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 
@@ -165,7 +168,6 @@ data TDefEnv t = G  { g_size  :: Int, g_env   :: F.SEnv (TDef t) }
 instance F.Fixpoint t => F.Fixpoint (TDef t) where
   toFix (TD n _ _ _) = F.toFix $ F.symbol n
 
-
 tDefEmpty = G 0 F.emptySEnv
 
 ---------------------------------------------------------------------------------
@@ -176,7 +178,6 @@ tDefFromList = foldr (uncurry addSym) tDefEmpty
 getDefNames (G _ n) = fst <$> F.toListSEnv n
 
 
--- FIXME: Check fro already existing name?
 ---------------------------------------------------------------------------------
 addSym :: F.Symbolic s => s -> TDef t -> TDefEnv t -> TDefEnv t
 ---------------------------------------------------------------------------------
@@ -373,9 +374,13 @@ instance Equivalent TCon where
   equiv c        c'         = c == c'
 
 instance Equivalent (TElt (RType r)) where 
-  equiv (TE s1 m1 t1) (TE s2 m2 t2) = s1 == s2 && m1 == m2 && equiv t1 t2
-  equiv (TI s1 i1 t1) (TI s2 i2 t2) = s1 == s2 && i1 == i2 && equiv t1 t2
-  equiv _             _             = False
+  equiv (PropSig s1 m1 t1) (PropSig s2 m2 t2) = s1 == s2 && m1 == m2 && equiv t1 t2
+  equiv (CallSig t1)       (CallSig t2)       = equiv t1 t2
+  equiv (ConsSig t1)       (ConsSig t2)       = equiv t1 t2
+  equiv (IndexSig _ b1 t1) (IndexSig _ b2 t2) = b1 == b2 && equiv t1 t2
+  equiv (MethSig s1 t1)    (MethSig s2 t2)    = s1 == s2 && equiv t1 t2
+  equiv _                  _                  = False
+ 
 
 instance Equivalent (Bind r) where 
   equiv (B s t) (B s' t') = s == s' && equiv t t' 
@@ -479,8 +484,11 @@ isTCons (TApp (TRef _) _ _) = True
 isTCons (TCons _ _)         = True
 isTCons _                   = False
 
-isIndSig (TCons es _) | not (null [ () | TI _ _ _ <- es ]) = True
+isIndSig (TCons es _) | not (null [ () | IndexSig _ _ _ <- es ]) = True
 isIndSig _            = False
+
+isConstr (ConsSig _)  = True
+isConstr _            = False
 
 isUnion :: RType r -> Bool
 isUnion (TApp TUn _ _) = True           -- top-level union
@@ -654,14 +662,39 @@ instance (PP t) => PP (TDef t) where
 
 
 instance (PP t) => PP (TElt t) where
-  pp (TE x True t)  = pp x <> text ":"  <> pp t
-  pp (TE x False t) = pp x <> text ":*" <> pp t
-  pp (TI x sn t)    = brackets (pp x <> text ":" <> pp sn) <> text ":" <> pp t
+  pp (PropSig x True t)   = pp x <> text ":"  <> pp t
+  pp (PropSig x _ t)      = pp x <> text ":" <> pp t
+  pp (CallSig t)          = text "call: " <> pp t 
+  pp (ConsSig t)          = text "new: " <> pp t
+  pp (IndexSig x True t)  = brackets (pp x <> text ": string") <> text ":" <> pp t
+  pp (IndexSig x False t) = brackets (pp x <> text ": number") <> text ":" <> pp t
+  pp (MethSig x t)        = pp x <> text ":" <> pp t 
 
 instance PP Bool where
   pp True   = text "True"
   pp False  = text "False"
     
+sameBinder (PropSig s1 _ _ ) (PropSig s2 _ _ ) = s1 == s2
+sameBinder (CallSig _)        (CallSig _)      = True
+sameBinder (ConsSig _)        (ConsSig _)      = True
+sameBinder (IndexSig _ b1 _) (IndexSig _ b2 _) = b1 == b2
+sameBinder (MethSig s1 _)    (MethSig s2 _)    = s1 == s2
+sameBinder _                  _                = False
+
+eltType (PropSig _ _ t)  = t
+eltType (MethSig _   t)  = t
+eltType (ConsSig     t)  = t
+eltType (CallSig     t)  = t
+eltType (IndexSig _ _ t) = t
+
+eltToPair (PropSig s _ t)  = (s, t)
+eltToPair (MethSig s   t)  = (s, t)
+eltToPair (ConsSig     t)  = (F.stringSymbol "__constructor__", t)
+eltToPair (CallSig     t)  = (F.stringSymbol "__call__", t)
+eltToPair (IndexSig _ True t) = (F.stringSymbol "__string__index__", t)
+eltToPair (IndexSig _ False t) = (F.stringSymbol "__numeric__index__", t)
+
+
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }

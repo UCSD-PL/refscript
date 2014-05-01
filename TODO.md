@@ -35,11 +35,11 @@ Tool/Implementation
   
   - Fix scoping for functions and variables.
 
+  - Add check for types of extended classes.
+
   - Arguments cannot be named: "func"
 
   - Test examples with infinite loops.
-
-  - Revisit overload resolution.
 
   - Add sanity check for types: each sort should be represented at most once at
     a union type top-level.
@@ -55,7 +55,7 @@ Tool/Implementation
     Note use of lower-case which gets translated into tyvars in fixpoint. sigh.
 
   - Array literal checks are quite slow.
-      E.g.: liquid/pos/arrays/arr-07.js
+      E.g.: typescript/pos/arrays/arr-07.js
 
 
 Failing Tests 

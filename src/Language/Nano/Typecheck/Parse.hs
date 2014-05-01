@@ -17,7 +17,7 @@ import           Data.Aeson                              (eitherDecode)
 import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
-import           Data.Char                               (isLower, isSpace)
+import           Data.Char                               (isLower)
 import           Data.Maybe                              (isJust)
 import qualified Data.List                        as     L
 import           Data.Generics.Aliases                   ( mkQ)
@@ -266,9 +266,11 @@ fieldBindP =  sepEndBy (try indBindP <|> bareBindP) semi
 
 -- | f : t
 bareBindP = do (s,t) <- xyP sp colon bareTypeP
-               return $ TE s True t 
+               case isTFun t of
+                 True  -> return $ MethSig s t 
+                 False -> return $ PropSig s True t
   where 
-    sp = withinSpacesP (stringSymbol <$> ((try lowerIdP) <|> upperIdP))
+    sp = withinSpacesP (stringSymbol <$> ((try lowerIdP) <|> upperIdP))    
 
 indexP = xyP id colon sn
   where
@@ -277,7 +279,11 @@ indexP = xyP id colon sn
 
 -- |  [f: string/number]: t
 indBindP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
-              return $ TI x it t
+              case it of 
+                "number" -> return $ IndexSig x False t
+                "string" -> return $ IndexSig x True t
+                _        -> error $ "Index signature can only have " ++
+                                    "string or number as index." 
 
  
 ----------------------------------------------------------------------------------
@@ -504,9 +510,9 @@ checkIF t@(_,TD _ _ _ elts)
                                    "can only have a single indexable " ++
                                    "signature and no other elements."
   where 
-    nTn = length [ () | TI _ "number" _ <- elts ]
-    nTi = length [ () | TI _ _ _ <- elts ]
-    nTe = length [ () | TE _ _ _ <- elts ]
+    nTn = length [ () | IndexSig _ False _ <- elts ]
+    nTi = length [ () | IndexSig _ _ _ <- elts ]
+    nTe = length [ () | PropSig _ _ _ <- elts ]
 
 
 type PState = Integer

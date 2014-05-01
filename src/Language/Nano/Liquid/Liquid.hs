@@ -357,7 +357,8 @@ consExpr g (ObjectLit l bs)
         let tCons    = TCons (zipWith mkElt (F.symbol <$> ps) $ (`envFindTy` g') <$> xes) fTop
         envAddFresh "consExpr:ObjectLit" l tCons g'
     where
-        mkElt s t = TE s True t 
+        mkElt s t | isTFun t  = MethSig s t
+        mkElt s t | otherwise = PropSig s True t 
 
 -- new C(e, ...)
 consExpr g (NewExpr l (VarRef _ i) es)

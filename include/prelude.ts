@@ -424,26 +424,31 @@ interface List<A> {
 /*************  Error handling   *****************************************/
 /*************************************************************************/
 
-class Error {
-  /*@ constructor :: (msg: string) => void */
-  constructor(msg: string) { }
-}
+// NOTE: types that are defined in lib.d.ts need to be in comment to pass
+// through the TS compilation phase.
+
+/*@ interface Error {  
+  constructor: (msg: string) => void;
+} */
+
+
+
 
 class Errors {
 
   /*@ argument :: (argument: string, message: string) => #Error */
-  public static argument(argument: string, message: string): Error {
-    return new Error("Invalid argument: " + argument + ". " + message);
+  public static argument(arg: string, message: string): Error {
+    return new Error("Invalid argument: " + arg + ". " + message);
   }
 
-  /*@ argumentOutOfRange :: (argument: string) => #Error */
-  public static argumentOutOfRange(argument: string): Error {
-    return new Error("Argument out of range: " + argument);
+  /*@ argumentOutOfRange :: (arg: string) => #Error */
+  public static argumentOutOfRange(arg: string): Error {
+    return new Error("Argument out of range: " + arg);
   }
 
-  /*@ argumentNull :: (argument: string) => #Error */
-  public static argumentNull(argument: string): Error {
-    return new Error("Argument null: " + argument);
+  /*@ argumentNull :: (arg: string) => #Error */
+  public static argumentNull(arg: string): Error {
+    return new Error("Argument null: " + arg);
   }
 
   /*@ abstract :: () => #Error */

@@ -72,8 +72,9 @@ unify l δ θ (TArr t _) (TArr t' _) = unify l δ θ t t'
 unify l δ θ (TCons e1s _) (TCons e2s _)
   = unifys l δ θ t1s t2s
   where 
-    (t1s, t2s) = unzip $ [ (t1, t2) | TE s1 _ t1 <- e1s, TE s2 _ t2 <- e2s, s1 == s2 ] ++
-                         [ (t1, t2) | TI _ s1 t1 <- e1s, TI _ s2 t2 <- e2s, s1 == s2 ]
+    (t1s, t2s) = unzip $ [ (eltType e1, eltType e2) | e1 <- e1s
+                                                    , e2 <- e2s
+                                                    , e1 `sameBinder` e2 ]
 
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ

@@ -280,8 +280,8 @@ emapReft _ _ _              = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)    = B x $ emapReft f γ t
 
-emapReftElt f γ (TE x m t)  = TE x m $ emapReft f γ t
-emapReftElt f γ (TI x s t)  = TI x s $ emapReft f γ t
+emapReftElt  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> TElt (RType a) -> TElt (RType b)
+emapReftElt f γ e            = fmap (emapReft f γ) e
 
 ------------------------------------------------------------------------------------------
 -- mapReftM :: (PP a, F.Reftable b, Monad m, Applicative m) => (a -> m b) -> RType a -> m (RType b)
@@ -296,8 +296,13 @@ mapReftM f (TCons bs r)    = TCons  <$> mapM (mapReftEltM f) bs <*> f r
 mapReftM _ t               = error   $ render $ text "Not supported in mapReftM: " <+> pp t 
 
 mapReftBindM f (B x t)    = B x     <$> mapReftM f t
-mapReftEltM f (TE x m t)  = TE x m  <$> mapReftM f t
-mapReftEltM f (TI x s t)  = TI x s  <$> mapReftM f t
+
+mapReftEltM f (PropSig x m t)  = PropSig x m  <$> mapReftM f t
+mapReftEltM f (MethSig x   t)  = MethSig x    <$> mapReftM f t
+mapReftEltM f (CallSig t)      = CallSig      <$> mapReftM f t
+mapReftEltM f (ConsSig  t)     = ConsSig      <$> mapReftM f t
+mapReftEltM f (IndexSig x b t) = IndexSig x b <$> mapReftM f t
+
 
 ------------------------------------------------------------------------------------------
 -- | fold over @RType@ 
@@ -424,14 +429,14 @@ zipType δ f g (TCons e1s r1) (TCons e2s r2)
   = TCons (cmn ++ snd) (f r1 r2)
   where 
   -- FIXME: m1 `mconcat` m2
-    cmn = [ TE s1 m1 (zipType δ f g t1 t2) | TE s1 m1 t1 <- e1s
-                                           , TE s2 _  t2 <- e2s
-                                           , s1 == s2 ]
+    cmn = [ PropSig s1 m1 (zipType δ f g t1 t2) | PropSig s1 m1 t1 <- e1s
+                                                , PropSig s2 _  t2 <- e2s
+                                                , s1 == s2 ]
     -- FIXME: Should we apply g here as well?
     -- This won't really happen cause we only use it for downcast, so
     -- the snd list will be empty
-    snd = [ TE s m t | TE s m t <- e2s
-                     , not $ exists ((== s) . f_sym) e1s ]
+    snd = [ PropSig s m t | PropSig s m t <- e2s
+                          , not $ exists ((== s) . f_sym) e1s ]
 
 zipType _ _ _ t1 t2 = 
   errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)

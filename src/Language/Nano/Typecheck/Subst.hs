@@ -136,8 +136,11 @@ instance (Substitutable r t) => Substitutable r (Env t) where
   apply = envMap . apply
 
 instance Substitutable r t => Substitutable r (TElt t) where 
-  apply θ (TE s b t) = TE s b $ apply θ t
-  apply θ (TI x s t) = TI x s $ apply θ t
+  apply θ (PropSig x m t)   = PropSig x m $ apply θ t
+  apply θ (CallSig t)       = CallSig $ apply θ t
+  apply θ (ConsSig t)       = ConsSig $ apply θ t     
+  apply θ (IndexSig x b t)  = IndexSig x b $ apply θ t
+  apply θ (MethSig x t)     = MethSig x $ apply θ t
 
 instance F.Reftable r => Substitutable r (Cast r) where
   apply _ CNo        = CNo
@@ -183,76 +186,33 @@ appTy θ        (TCons es r)  = TCons (apply θ es) r
 appTy _        (TExp _)      = error "appTy should not be applied to TExp"
 
 
--- | flatten: Unfolds one level of the input type, flattening all the fields
--- inherited by possible parent classes.
---
--- Useful for: structural subtyping
-
-flatten :: PPR r => TDefEnv (RType r) -> TDef (RType r) -> [TElt (RType r)]
-flatten = flatten' False
-
-flattenType :: PPR r => TDefEnv (RType r) -> RType r -> RType r
-flattenType = flattenType' False
-
-flattenTRef :: PPR r => TDefEnv (RType r) -> RType r -> [TElt (RType r)]
-flattenTRef = flattenTRef' False
-
-
--- WARNING: Calling the following with True for @b@ may cause infinite loop for
--- recursive types.
-
-flatten' b δ = fix ff
+-- | flatten: Close over all fields inherited by ancestors.
+---------------------------------------------------------------------------
+flatten :: PPR r 
+        => TDefEnv (RType r) -> (TDef (RType r),[RType r]) -> [TElt (RType r)]
+---------------------------------------------------------------------------
+flatten δ = fix ff
   where
-    ff r (TD _ vs (Just (i, ts)) es)
-      = fl 
-      $ L.unionBy nm (ee es)
-      $ r 
-      $ fromJust 
-      $ apply (fromList $ zip vs (tt ts)) (findSym i δ)
+    ff r (TD _ vs (Just (i, ts')) es, ts)
+      = apply (fromList $ zip vs ts) . fl . L.unionBy sameBinder es 
+      $ r (findSymOrDie i δ, ts')
+    ff _ (TD _ vs _ es, ts)  = apply (fromList $ zip vs ts) es
+    -- NOTE: Special case for constructor: does not appear in flat version
+    fl = filter (not . isConstr)
 
-    ff _ (TD _ _ _ es) = ee es
-
-    nm = (==) `on` f_sym
-
-    ee es | b         
-          = [ TE s m $ flattenType' b δ t | TE s m t <- es] ++
-            [ TI x s $ flattenType' b δ t | TI x s t <- es]
-          | otherwise 
-          = es
-
-    -- When flattening a nominal type to a TCons, do not take the constructor
-    -- binding into account.
-    fl es = [ TE s m t | TE s m t <- es, s /= F.symbol "constructor" ] ++
-            [ TI x s t | TI x s t <- es ]
-
-    tt ts | b         
-          = flattenType' b δ <$> ts
-          | otherwise
-          = ts
+flattenTRef δ (TApp (TRef n) ts _) = flatten δ (findSymOrDie n δ, ts)
+flattenTRef _ _                    = error "Applying flattenTRef on non-tref"
 
 
-flattenElt' b δ (TE s m t) = TE s m $ flattenType' b δ t
-flattenElt' b δ (TI x s t) = TI x s $ flattenType' b δ t
+flattenType δ t@(TApp (TRef _) _ r) 
+                             = TCons (flattenTRef δ t) r
+flattenType δ (TApp c ts r)  = TApp c (flattenType δ <$> ts) r
+flattenType _ (TVar v r)     = TVar v r
+flattenType δ (TFun ts to r) = TFun (f <$> ts) (flattenType δ to) r
+                                    where f (B s t) = B s $ flattenType δ t
+flattenType δ (TArr t r)     = TArr (flattenType δ t) r
+flattenType δ (TAll v t)     = TAll v $ flattenType δ t
+flattenType δ (TAnd ts)      = TAnd $ flattenType δ <$> ts
+flattenType δ (TCons ts r)   = TCons ((flattenType δ <$>) <$> ts) r
+flattenType _ _              = error "TExp should not appear here"
 
-flattenTRef' b δ (TApp (TRef n) ts _) 
-                            = apply θ (flatten' b δ d)
-  where d@(TD _ vs _ _)     = findSymOrDie n δ
-        θ                   = fromList $ zip vs ts
-flattenTRef' _ _ _ = error "Applying flattenTRef on non-tref"
-
-
--- | flattenType True : unfolds the input type deeply (may hang)
---   flattenType False: unfolds the input type once
-flattenType' b δ t@(TApp (TRef _) _ r) 
-                                = TCons (flattenTRef' b δ t) r
-flattenType' b δ (TApp c ts r)  = TApp c (flattenType' b δ <$> ts) r
-flattenType' _ _ (TVar v r)     = TVar v r
-flattenType' b δ (TFun ts to r) = TFun (f <$> ts) (flattenType' b δ to) r
-                                    where f (B s t) = B s $ flattenType' b δ t
-flattenType' b δ (TArr t r)     = TArr (flattenType' b δ t) r
-flattenType' b δ (TAll v t)     = TAll v $ flattenType' b δ t
-flattenType' b δ (TAnd ts)      = TAnd $ flattenType' b δ <$> ts
-flattenType' b δ (TCons ts r)   = TCons (flattenElt' b δ <$> ts) r
-flattenType' _ _ _              = error "TExp should not appear here"
-
- 

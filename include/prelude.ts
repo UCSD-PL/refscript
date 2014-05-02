@@ -130,14 +130,12 @@ interface List<A> {
 
 // FIXME: the two version of inequality should not be the same...
 
-/*@ extern builtin_OpLAnd      :: (x:top, y:top)         => {v:top     | ((Prop v) <=> (if (TRU(x)) then (v = y) else (v = x) ))}     */
+/*@ extern builtin_OpLAnd      :: (x:top, y:top)         => {v:top | ((Prop v) <=> (if (TRU(x)) then (v = y) else (v = x) ))}     */
 
-/*@ extern builtin_OpLOr       :: /\ forall A  . (x:A, y:A)  => {v:A   | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))}     */
+/*@ extern builtin_OpLOr       :: forall A . (x:A, y:A)  => {v:A   | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))}     */
 
-/*@ extern builtin_PrefixLNot  :: (x:boolean)            => {v:boolean | ((Prop v) <=> not (Prop x))}                                 */
+/*@ extern builtin_PrefixLNot  :: forall A . (x: A)      => {v:boolean | ((Prop v) <=> FLS(x))}     */
 
-
-/*@ measure Prop        :: (boolean) => boolean                              */
 
 
 
@@ -359,9 +357,13 @@ interface List<A> {
 
 /*@ measure ttag :: forall A. (A) => string                                   */
 
-/*@ measure TRU :: forall A . (A) => Prop                                     */
+/*@ measure TRU  :: forall A . (A) => boolean                                 */
 
-/*@ measure FLS :: forall A . (A) => Prop                                     */
+/*@ measure FLS  :: forall A . (A) => boolean                                 */
+
+/*@ measure Prop :: forall A . (A) => boolean                                 */
+
+
 
 /*@ extern builtin_PrefixTypeof :: forall A. (x:A) 
                                     => {v:string | (ttag x) = v }             */

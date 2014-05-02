@@ -1,11 +1,12 @@
 
-/*@ sum :: forall T . (array: [T], func: (T) => number) => bumber */
+/*@ sum :: forall T . (array: [T], f: (T) => number) => { number | true } */
 
-function sum<T>(array: T[], func: (v: T) => number): number {
+function sum<T>(array: T[], f: (v: T) => number): number {
 	var result = 0;
 
 	for (var i = 0, n = array.length; i < n; i++) {
-		result += func(array[i]);
+		result = result + f(array[i]);
+		//result += f(array[i]);
 	}
 
 	return result;

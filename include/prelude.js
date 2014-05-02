@@ -25,10 +25,11 @@
 /************** Types for Builtin Operators ******************************/
 /*************************************************************************/
 /*@ extern builtin_BIBracketRef     :: /\ forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}) => A
-/\ forall A. ({[y: string]: A }, x: string) => A */
-/*@ extern builtin_BIBracketAssign  :: forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}, val:A) => void */
-/*@ extern builtin_BIArrayLit       :: forall A. (A) => {v:[A] | (len v) = builtin_BINumArgs}                           */
-/*@ extern builtin_BIUndefined      :: forall A. {A | false}                                                            */
+/\ forall A. ({[y: string]: A }, x: string) => A            */
+/*@ extern builtin_BIBracketAssign  :: /\ forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
+/\ forall A. ({[y: string]: A }, x: string, val: A) => void */
+/*@ extern builtin_BIArrayLit       :: forall A. (A) => {v:[A] | (len v) = builtin_BINumArgs}      */
+/*@ extern builtin_BIUndefined      :: forall A. {A | false}                                       */
 /*@ extern builtin_OpLT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
 /\ (x:string, y:number) => boolean
 /\ (x:number, y:number) => boolean
@@ -62,14 +63,11 @@
 /*@ extern builtin_OpNEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */
 /*@ extern builtin_OpSNEq      :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */
 // FIXME: the two version of inequality should not be the same...
-/*@ extern builtin_OpLAnd      :: (x:top, y:top)         => {v:top     | ((Prop v) <=> (if (TRU(x)) then (v = y) else (v = x) ))}     */
-/*@ extern builtin_OpLOr       :: /\ forall A  . (x:A, y:A)  => {v:A   | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))}     */
-/*@ extern builtin_PrefixLNot  :: (x:boolean)            => {v:boolean | ((Prop v) <=> not (Prop x))}                                 */
-/*@ measure Prop        :: (boolean) => boolean                              */
-/*************************************************************************/
-/****************  Ambient Definitions  **********************************/
-/*************************************************************************/
-/**************************************************************************
+/*@ extern builtin_OpLAnd      :: (x:top, y:top)         => {v:top | ((Prop v) <=> (if (TRU(x)) then (v = y) else (v = x) ))}     */
+/*@ extern builtin_OpLOr       :: forall A . (x:A, y:A)  => {v:A   | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))}     */
+/*@ extern builtin_PrefixLNot  :: forall A . (x: A)      => {v:boolean | ((Prop v) <=> FLS(x))}     */
+/*************************************************************************
+Ambient Definitions
 Taken from here:
 http://typescript.codeplex.com/SourceControl/latest#typings/lib.d.ts
 **************************************************************************/
@@ -124,40 +122,9 @@ toLocaleLowerCase : () => string;
 toUpperCase       : () => string;
 toLocaleUpperCase : () => string;
 trim              : () => string;
-length            : number;
+length            : { number | v >= 0 };
 substr            : (from: number, length: number) => string
 } */
-// Typescript Definition:
-// extern String     : {
-//     toString          : () => string;
-//     charAt            : (pos: number) => string;
-//     charCodeAt        : (index: number) => number;
-//     concat            : (...strings: [string]) => string;
-//     indexOf           : (searchString: string, position?: number) => number;
-//     lastIndexOf       : (searchString: string, position?: number) => number;
-//     localeCompare     : (that: string) => number;
-//     match             : (regexp: string) => [string];
-//     match             : (regexp: RegExp) => [string];
-//     replace           : (searchValue: string, replaceValue: string) => string;
-//     replace           : (searchValue: string, replaceValue: (substring: string, ...args: [top]) => string) => string;
-//     replace           : (searchValue: RegExp, replaceValue: string) => string;
-//     replace           : (searchValue: RegExp, replaceValue: (substring: string, ...args: [top]) => string) => string;
-//     search            : (regexp: string) => number;
-//     search            : (regexp: RegExp) => number;
-//     slice             : (start: number, end?: number) => string;
-//     split             : (separator: string, limit?: number) => [string];
-//     split             : (separator: RegExp, limit?: number) => [string];
-//     substring         : (start: number, end?: number) => string;
-//     toLowerCase       : () => string;
-//     toLocaleLowerCase : () => string;
-//     toUpperCase       : () => string;
-//     toLocaleUpperCase : () => string;
-//     trim              : () => string;
-//
-//     length: number;
-//
-//     substr            : (from: number, length?: number) => string;
-// }
 /*** Number **************************************************************/
 /*@ extern Number :: {
 toString        :  /\ (radix: number) => string
@@ -166,13 +133,6 @@ toFixed         : (fractionDigits: number) => string;
 toExponential   : (fractionDigits: number) => string;
 toPrecision     : (precision: number) => string
 } */
-// Typescript Definition:
-// extern Number : {
-//     toString        : (radix?: number) => string;
-//     toFixed         : (fractionDigits?: number) => string;
-//     toExponential   : (fractionDigits?: number) => string;
-//     toPrecision     : (precision: number) => string;
-// }
 /*** Array ***************************************************************/
 /*@ interface Array<T> {
 toString       : () => string;
@@ -197,7 +157,7 @@ map            : forall U . (callbackfn: (value: T) => U) => [U];
 filter         : (callbackfn: (value: T, index: number, array: [T]) => boolean) => [T];
 reduce         : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T;
 reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T;
-length         : { v: number | v = (len this) }
+length         : { v: number | (v = (len this) && v >= 0) }
 }
 */
 /*
@@ -206,47 +166,15 @@ reduce         :  /\ (callbackfn: (previousValue: T, currentValue: T, currentInd
 /\ forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U;
 reduceRight    :  /\ (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T
 /\ forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U;
+[x: number]    : T;
 */
-// Typescript Definition:
-//  interface Array[T] =
-//   {
-//     toString              :: () => string,
-//     toLocaleString        :: () => string,
-//     concat<U extends T[]> :: (...items: [U]) => [T],
-//     concat                :: (...items: [T]) => [T],
-//     join                  :: (separator?: string) => string,
-//     pop                   :: () => T,
-//     push                  :: (...items: [T]) => number,
-//     reverse               :: () => [T],
-//     shift                 :: () => T,
-//     slice                 :: (start: number, end?: number) => [T],
-//     sort                  :: (compareFn?: (a: T, b: T) => number) => [T],
-//     splice                :: (start: number) => [T],
-//     splice                :: (start: number, deleteCount: number, ...items: [T]) => [T],
-//     unshift               :: (...items: [T]) => number,
-//
-//     indexOf               :: (searchElement: T, fromIndex?: number) => number,
-//     lastIndexOf           :: (searchElement: T, fromIndex?: number) => number,
-//     every                 :: (callbackfn: (value: T, index: number, array: [T]) => boolean, thisArg?: any) => boolean,
-//     some                  :: (callbackfn: (value: T, index: number, array: [T]) => boolean, thisArg?: any) => boolean,
-//     forEach               :: (callbackfn: (value: T, index: number, array: [T]) => void, thisArg?: any) => void,
-//     map<U>                :: (callbackfn: (value: T, index: number, array: [T]) => U, thisArg?: any) => [U],
-//     filter                :: (callbackfn: (value: T, index: number, array: [T]) => boolean, thisArg?: any) => [T],
-//     reduce                :: (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue?: T) => T,
-//     reduce<U>             :: (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U,
-//     reduceRight           :: (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue?: T) => T,
-//     reduceRight<U>        :: (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U,
-//
-//     length: number,
-//
-//     [n: number]: T,
-//   }
 /*************************************************************************/
 /************** Run-Time Tags ********************************************/
 /*************************************************************************/
 /*@ measure ttag :: forall A. (A) => string                                   */
-/*@ measure TRU :: forall A . (A) => Prop                                     */
-/*@ measure FLS :: forall A . (A) => Prop                                     */
+/*@ measure TRU  :: forall A . (A) => boolean                                 */
+/*@ measure FLS  :: forall A . (A) => boolean                                 */
+/*@ measure Prop :: forall A . (A) => boolean                                 */
 /*@ extern builtin_PrefixTypeof :: forall A. (x:A)
 => {v:string | (ttag x) = v }             */
 /*@ extern builtin_BITruthy :: forall A. (x:A)
@@ -287,4 +215,52 @@ reduceRight    :  /\ (callbackfn: (previousValue: T, currentValue: T, currentInd
 /*  qualif Add(v:number,x:number,y:number): v = x + y           */
 /*  qualif Sub(v:number,x:number,y:number): v = x - y           */
 /*  qualif Len(v:number, n: number)  : n < (len v)              */
+/*************************************************************************/
+/*************  Error handling   *****************************************/
+/*************************************************************************/
+// NOTE: types that are defined in lib.d.ts need to be in comment to pass
+// through the TS compilation phase.
+/*@ interface Error {
+name: string;
+message: string;
+} */
+/*@ extern Error :: {new(message:string):#Error;     (message: string): #Error;     prototype: #Error;  } */ /*@ interface Error1 {
+new (message: string) => #Error;
+prototype: #Error;
+} */
+var Errors = (function () {
+    function Errors() {
+    }
+    /*@ argument :: (argument: string, message: string) => #Error */
+    Errors.argument = function (arg, message) {
+        return new Error("Invalid argument: " + arg + ". " + message);
+    };
+
+    /*@ argumentOutOfRange :: (arg: string) => #Error */
+    Errors.argumentOutOfRange = function (arg) {
+        return new Error("Argument out of range: " + arg);
+    };
+
+    /*@ argumentNull :: (arg: string) => #Error */
+    Errors.argumentNull = function (arg) {
+        return new Error("Argument null: " + arg);
+    };
+
+    /*@ abstract :: () => #Error */
+    Errors.abstract = function () {
+        return new Error("Operation not implemented properly by subclass.");
+    };
+
+    /*@ notYetImplemented :: () => #Error */
+    Errors.notYetImplemented = function () {
+        return new Error("Not yet implemented.");
+    };
+
+    /*@ invalidOperation :: (message: string) => #Error */
+    Errors.invalidOperation = function (message) {
+        return new Error("Invalid operation: " + message);
+    };
+    return Errors;
+})();
+
 var __dummy__ = null;

@@ -55,26 +55,25 @@ instance PP Error where
 
 bug' l s                  = err   l $ "BUG: " ++ s 
 bug l s                   = mkErr l $ "BUG: " ++ s 
-bugBadPhi l t1s t2s       = mkErr l $ printf "BUG: Unbalanced Phi at %s \n %s \n %s" (ppshow l) (ppshow t1s) (ppshow t2s)
-bugBadSubtypes l x        = mkErr l $ printf "BUG: Unexpected Subtyping Constraint \n %s" (ppshow x)
-bugMalignedFields l s s'  = mkErr l $ printf "BUG: [%s] \n CGMonad: fields not aligned: '%s' and '%s'" (ppshow l) (ppshow s) (ppshow s')
+bugBadPhi l t1s t2s       = mkErr l $ printf "Unbalanced Phi at %s \n %s \n %s" (ppshow l) (ppshow t1s) (ppshow t2s)
+bugBadSubtypes l x        = mkErr l $ printf "Unexpected Subtyping Constraint \n %s" (ppshow x)
+bugMalignedFields l s s'  = mkErr l $ printf "[%s] \n CGMonad: fields not aligned: '%s' and '%s'" (ppshow l) (ppshow s) (ppshow s')
 bugMalignedFields' l t t' = mkErr l $ render $ text "Misaligned Fields:"
                                              $+$ text "  t1 =" <+> pp t
                                              $+$ text "  t2 =" <+> pp t'
 
-bugUnknownAlias l x       = mkErr l $ printf "BUG: Unknown definition for alias %s" (ppshow x)
-bugUnboundPhiVar l x      = mkErr l $ printf "BUG: Phi Variable %s is unbound" (ppshow x)
-bugUnboundVariable l x    = mkErr l $ printf "BUG: Variable %s is unbound in environment at %s" (ppshow x) (ppshow l)
-bugUnboundFunction γ l x  = mkErr l $ printf "BUG: Function %s is unbound in environment %s at %s" (ppshow x) (ppshow γ) (ppshow l)
-bugMultipleAnnots l x     = mkErr l $ printf "BUG: Multiple variable annotations for: %s" (ppshow x)
-bugMissingTypeArgs l      = mkErr l $ printf "BUG: Missing Type Arguments at %s" (ppshow l)
-bugTBodiesOccur l s       = mkErr l $ printf "BUG: There should be no TBodies herie %s" s
-bugBadUnions l s          = mkErr l $ printf "BUG: No unions should be found here (%s)" s
-bugBadFunction l          = mkErr l $ printf "BUG: No function expression was found"
-bugUnknown l thing x      = mkErr l $ printf "BUG: Cannot find %s %s" thing (ppshow x) 
+bugUnknownAlias l x       = mkErr l $ printf "Unknown definition for alias %s" (ppshow x)
+bugUnboundPhiVar l x      = mkErr l $ printf "Phi Variable %s is unbound" (ppshow x)
+bugUnboundVariable l x    = mkErr l $ printf "Variable '%s' is unbound." (ppshow x)
+bugMultipleAnnots l x     = mkErr l $ printf "Multiple variable annotations for: %s" (ppshow x)
+bugMissingTypeArgs l      = mkErr l $ printf "Missing Type Arguments at %s" (ppshow l)
+bugTBodiesOccur l s       = mkErr l $ printf "There should be no TBodies herie %s" s
+bugBadUnions l s          = mkErr l $ printf "No unions should be found here (%s)" s
+bugBadFunction l          = mkErr l $ printf "No function expression was found"
+bugUnknown l thing x      = mkErr l $ printf "Cannot find %s %s" thing (ppshow x) 
 
-bugMissingClsMethAnn l x  = mkErr l $ printf "BUG: Cannot find type for %s in defined class" (ppshow x)
-bugMissingClsType    l x  = mkErr l $ printf "BUG: Cannot find type for class %s" (ppshow x)
+bugMissingClsMethAnn l x  = mkErr l $ printf "Cannot find type for %s in defined class" (ppshow x)
+bugMissingClsType    l x  = mkErr l $ printf "Cannot find type for class %s" (ppshow x)
 
 errorCyclicDefs l x stk   = mkErr l $ printf "Cyclic definitions: %s in %s" (ppshow x) (ppshow stk)
 errorArgName l x y        = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
@@ -85,7 +84,7 @@ errorMultipleCasts l cs   = mkErr l $ render $ text "Multiple Casts: " <+> (vcat
 errorNoMatchCallee l ts t = mkErr l $ render $   text "No matching callee type!" 
                                              $+$ text "Argument Types: " <+> pp ts 
                                              $+$ text "Function Type : " <+> pp t
-errorMissingReturn l      = mkErr l $ printf "BUG: Missing Return statement at %s" (ppshow l)
+errorMissingReturn l      = mkErr l $ printf "Missing Return statement."
 
 errorNonFunction l f t    = mkErr l $ printf "Non-function type: %s :: %s " (ppshow f) (ppshow t)
 
@@ -118,13 +117,12 @@ errorAnnotation l e t ta  = mkErr l $ printf "Type %s does not satisfy annotatio
 errorMissingAnnot l s     = mkErr l $ printf "Missing type annotation for %s" s
 errorBadAnnot l s1 s2     = mkErr l $ printf "Type annotation for %s needs to be of %s type" (ppshow s1) (ppshow s2)
 errorLiquid l             = mkErr l $ printf "Liquid Type Error" 
-errorESC l                = mkErr l $ printf "ESC Error"
 errorMultipleTypeArgs l   = mkErr l $ printf "Multiple Type Args"
 errorDownCast l t1 t2     = mkErr l $ printf "Downcast: %s => %s" (ppshow t1) (ppshow t2)
 errorDeadCast l           = mkErr l $ printf "Deadcast"
 errorTypeAssign l t1 t2   = mkErr l $ printf "Cannot assign type %s to %s" (ppshow t1) (ppshow t2)
 errorBracketAssign l x    = mkErr l $ printf "Invalid bracket assignment %s" (ppshow x) 
-errorPropRead  l x1 x2    = mkErr l $ printf "Invalid property read object: %s property: %s" (ppshow x1) (ppshow x2) 
+errorPropRead  l x1 x2    = mkErr l $ printf "Cannot read property '%s' from object reference '%s'." (ppshow x2) (ppshow x1) 
 errorArrayLit     l x     = mkErr l $ printf "Invalid array literal %s" (ppshow x) 
 errorClassExtends l x y s = mkErr l $ printf "Class %s cannot extend class %s: types for property %s are incompatible" (ppshow x) (ppshow y) (ppshow s)
 errorClEltAnMissing l c s = mkErr l $ printf "Class '%s' is missing an annotation for element '%s'." (ppshow c) (ppshow s)

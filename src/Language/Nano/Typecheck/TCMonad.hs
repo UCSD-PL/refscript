@@ -60,7 +60,7 @@ module Language.Nano.Typecheck.TCMonad (
   , getSuperM, getSuperDefM
 
   -- * Prop
-  , getPropM, getPropTDefM
+  , getPropTDefM
 
   )  where 
 
@@ -68,7 +68,6 @@ import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>), (<*>))
 import           Data.Function                      (on)
 import qualified Data.HashSet                       as S
-import           Data.Hashable                      
 import           Data.Maybe                         (fromJust)
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)
@@ -241,7 +240,7 @@ setTyArgs l ξ βs
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-getAnns :: (Ord r, F.Reftable r, Substitutable r (Fact r)) => TCM r (AnnInfo r)
+getAnns :: (F.Reftable r, Substitutable r (Fact r)) => TCM r (AnnInfo r)
 -------------------------------------------------------------------------------
 getAnns = do θ     <- tc_subst <$> get
              m     <- tc_anns  <$> get
@@ -250,7 +249,7 @@ getAnns = do θ     <- tc_subst <$> get
              return m' 
 
 -------------------------------------------------------------------------------
-addAnn :: (F.Reftable r) => SourceSpan -> Fact r -> TCM r () 
+addAnn :: (PPR r, F.Reftable r) => SourceSpan -> Fact r -> TCM r () 
 -------------------------------------------------------------------------------
 addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
 
@@ -261,7 +260,7 @@ getAllAnns = tc_annss <$> get
 
 
 -------------------------------------------------------------------------------
-accumAnn :: (Ord r, PPRSF r) => (AnnInfo r -> [Error]) -> TCM r a -> TCM r a
+accumAnn :: PPRSF r => (AnnInfo r -> [Error]) -> TCM r a -> TCM r a
 -------------------------------------------------------------------------------
 -- RJ: this function is gross. Why is it being used? why are anns not just
 -- accumulated monotonically?
@@ -349,10 +348,7 @@ unifyTypesM l msg t1s t2s
 ----------------------------------------------------------------------------------
 unifyTypeM :: PPR r => SourceSpan -> RType r -> RType r -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
-unifyTypeM l t t' = unifyTypesM l msg [t] [t']
-  where 
-    msg           = ppshow ""
-
+unifyTypeM l t t' = unifyTypesM l (ppshow "") [t] [t']
 
 
 --------------------------------------------------------------------------------
@@ -366,7 +362,7 @@ unifyTypeM l t t' = unifyTypesM l msg [t] [t']
 castM :: (PPR r) => AnnSSA r -> IContext -> Expression (AnnSSA r) 
   -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-castM l ξ e t1 t2 = convert (ann l) t1 t2 >>= patch 
+castM l ξ e t1 t2 = convert (ann l) t1 t2 >>= patch
   where patch CNo = return e
         patch c   = addCast ξ e c
 
@@ -447,44 +443,42 @@ convertCons :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
 convertCons l t1@(TCons e1s _) t2@(TCons e2s _)
   -- LHS and RHS are object literal types
-  | all (not . isIndSig) [t1,t2] = zipWithM (convert l) t1s t2s >>= g0
+  | all (not . isIndSig) [t1,t2] = zipWithM (convert l) t1s t2s >>= kk
   -- LHS and RHS are index signatures
-  | all isIndSig [t1,t2] = mapM (uncurry $ convert l) ind >>= g2
-  -- RHS is index signature (only at init):
-  -- Here we assume all fields are string-indexed and so fall under the 
+  | all isIndSig [t1,t2] = mapM (uncurry $ convert l) ind >>= nc
+  -- RHS is index signature:
+  -- We ASSUME all fields are string-indexed and so fall under the 
   -- string index signature (which is the only one supported anyway).
-  | isIndSig t2          = zipWithM (convert l) (ts e1s) (repeat $ ti e2s) >>= g2
+  | isIndSig t2          = zipWithM (convert l) (ts e1s) (repeat $ ti e2s) >>= nc
+  | isIndSig t1          = zipWithM (convert l) (repeat $ ti e1s) (ts e2s) >>= nc
   | otherwise            = g4 
   where
-    -- Index signature checks:
-    ts es      = [ t | PropSig _ _ t <- es ] ++ [ t | MethSig _ t <- es ]
+    -- Only consider non-static properties
+    ts es      = [ eltType e | e <- es, nonStaticElt e ]
     ti es      = safeHead "convertCons" [ t | IndexSig _ _ t <- es ]
     
-    -- FIXME: Takes all properties into account (no constructors). Need to 
-    -- also take into account call signature.
-    ls         = mapPair (\es -> [ (s, t) | PropSig s _ t <- es ]) (e1s, e2s)
-    ee es      = [ (s, t) | PropSig s _ t <- es ]
+    -- NOT: Take all (non-static) properties into account. 
+    p1s        = [ eltToPair e | e <- e1s, nonStaticElt e ]
+    p2s        = [ eltToPair e | e <- e2s, nonStaticElt e ]
     
-    als         = mapPair (\es -> [ (s, t) | PropSig s _ t <- es ]) (e1s, e2s)
-    _          = mapPair M.fromList als
-    
-    
-    (m1, m2)   = mapPair M.fromList ls
-    (ks1, ks2) = mapPair (S.fromList . map fst) ls
+    (m1, m2)   = mapPair M.fromList (p1s, p2s)
+    (ks1, ks2) = mapPair (S.fromList . map fst) (p1s, p2s)
     cmnKs      = S.toList $ S.intersection ks1 ks2
     t1s        = fromJust . (`M.lookup` m1) <$> cmnKs
     t2s        = fromJust . (`M.lookup` m2) <$> cmnKs
 
-    ind   = [ (t1, t2) | IndexSig _ s1 t1 <- e1s, IndexSig _ s2 t2 <- e2s, s1 == s2 ]
+    ind   = [ (t1, t2) | IndexSig _ s1 t1 <- e1s
+                       , IndexSig _ s2 t2 <- e2s
+                       , s1 == s2 ]
 
-    g0 cs | m1 `equalKeys` m2        = g1 cs 
+    kk cs | m1 `equalKeys` m2        = cc cs 
           -- LHS has more fields than RHS
-          | m2 `isProperSubmapOf` m1 = g2 cs
+          | m2 `isProperSubmapOf` m1 = nc cs
           -- LHS has fewer fields than RHS
           | m1 `isProperSubmapOf` m2 = g3
           | otherwise                = g4
 
-    g1 cs | all noCast cs = return   $ CNo
+    cc cs | all noCast cs = return   $ CNo
           | all upCast cs = return   $ CUp t1 t2
           -- NOTE: Assuming covariance here!!!
           | all dnCast cs = return   $ CDn t1 t2
@@ -492,7 +486,7 @@ convertCons l t1@(TCons e1s _) t2@(TCons e2s _)
           -- | any ddCast cs = return   $ CDead t2
           | otherwise     = tcError  $ errorConvDef l t1 t2
 
-    g2 cs | all noCast cs = return   $ CNo
+    nc cs | all noCast cs = return   $ CNo
           | all upCast cs = return   $ CUp t1 t2
           | otherwise     = tcError  $ errorConvDef l t1 t2
 
@@ -601,31 +595,25 @@ tcPushThis t   = modify $ \st -> st { tc_this = t : tc_this st }
 tcPopThis      = modify $ \st -> st { tc_this = tail $ tc_this st } 
 tcWithThis t p = do { tcPushThis t; a <- p; tcPopThis; return a } 
 
-
-getPropM l s t = do
-  (δ,ε) <- (,) <$> getDef <*> getExts
-  return $ getProp l ε δ (F.symbol s) t
-
-getPropTDefM l s t ts = do 
+getPropTDefM b l s t ts = do 
   δ <- getDef
-  return $ getPropTDef l δ (F.symbol s) ts t
+  return $ getPropTDef b l δ (F.symbol s) ts t
 
 
 --------------------------------------------------------------------------------
 getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
 --------------------------------------------------------------------------------
-getSuperM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
+getSuperM l (TApp (TRef (i, s)) ts _) = fromTdef =<< findSymOrDieM i
   where fromTdef (TD _ vs (Just (p,ps)) _) = do
           return  $ apply (fromList $ zip vs ts) 
-                  $ TApp (TRef $ F.symbol p) ps fTop
+                  $ TApp (TRef (F.symbol p,s)) ps fTop
         fromTdef (TD _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
 getSuperM l _  = tcError $ errorSuper (srcPos l) 
-
 
 --------------------------------------------------------------------------------
 getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (TDef (RType r))
 --------------------------------------------------------------------------------
-getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
+getSuperDefM l (TApp (TRef (i,_)) ts _) = fromTdef =<< findSymOrDieM i
   where 
     fromTdef (TD _ vs (Just (p,ps)) _) = 
       do TD n ws pp ee <- findSymOrDieM p

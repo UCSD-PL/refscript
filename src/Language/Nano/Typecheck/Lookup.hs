@@ -7,7 +7,6 @@
 
 module Language.Nano.Typecheck.Lookup (getProp, getPropTDef) where 
 
-import           Data.List (find)
 import           Data.Maybe (listToMaybe)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
@@ -45,36 +44,35 @@ getProp ::  (IsLocated l, PPR r) =>
 getProp l α γ s t@(TApp _ _ _)  = getPropApp l α γ s t 
 getProp _ _ _ _   (TFun _ _ _ ) = Nothing
 getProp l _ γ s a@(TArr _ _)    = (a,) <$> getPropArr l γ s a
-getProp _ _ _ s a@(TCons _ _)   = (a,) <$> getPropCons s a
+getProp _ _ _ s a@(TCons _ _)   = (a,) <$> getPropCons False s a
 getProp l _ _ _ t               = die $ bug (srcPos l) 
                                       $ "Using getProp on type: " ++ ppshow t 
 
 
 -------------------------------------------------------------------------------
-getPropApp :: (PPR r, IsLocated a) =>
-  a -> TER r -> TDR r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
+getPropApp :: (PPR r, IsLocated a) 
+           => a -> TER r -> TDR r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 getPropApp l α γ s t@(TApp c ts _) = 
   case c of 
-    TBool   -> Nothing
-    TUndef  -> Nothing
-    TNull   -> Nothing
-    TUn     -> getPropUnion l α γ s ts
-    TInt    -> lookupAmbientVar l α γ s "Number" t
-    TString -> lookupAmbientVar l α γ s "String" t
-    TRef i  -> findSym i γ >>= getPropTDef l γ s ts >>= return . (t,)
-    TTop    -> die $ bug (srcPos l) "getProp top"
-    TVoid   -> die $ bug (srcPos l) "getProp void"
+    TBool      -> Nothing
+    TUndef     -> Nothing
+    TNull      -> Nothing
+    TUn        -> getPropUnion l α γ s ts
+    TInt       -> lookupAmbientVar l α γ s "Number" t
+    TString    -> lookupAmbientVar l α γ s "String" t
+    TRef (i,b) -> findSym i γ >>= getPropTDef b l γ s ts >>= return . (t,)
+    TTop       -> die $ bug (srcPos l) "getProp top"
+    TVoid      -> die $ bug (srcPos l) "getProp void"
 
 getPropApp _ _ _ _ _ = error "getPropArr should only be applied to TApp"
 
 -- FIXME: IndexSig access could return null.
-getPropCons s t@(TCons bs _) 
-  | isIndSig t  = listToMaybe   [ {- orNull -} t | IndexSig _ _ t <- bs]   
-  | otherwise   = listToMaybe $ [ t | PropSig f m t <- bs , f == s ] ++ 
-                                [ t | MethSig f   t <- bs , f == s ]
+getPropCons b s t@(TCons es _) 
+  | isIndSig t  = listToMaybe   [ {- orNull -} t | IndexSig _ _ t <- es]   
+  | otherwise   = listToMaybe $ [ eltType e | e <- es, isStaticElt e == b, eltSym e == s ]
 
-getPropCons _ _ = error "BUG: Cannot call getPropCons on non TCons"
+getPropCons _ _ _ = error "BUG: Cannot call getPropCons on non TCons"
 
 -- Access the property from the relevant ambient object but return the 
 -- original accessed type instead of the type of the ambient object. 
@@ -86,12 +84,11 @@ lookupAmbientVar l α γ s amb t =
   envFindTy amb α >>= getProp l α γ s >>= return . (t,) . snd
 
 
--- FIXME: flatten the class type ...
 -------------------------------------------------------------------------------
 getPropTDef :: (PPR r) =>
-  t -> TDR r -> F.Symbol -> [RType r] -> TDef (RType r) -> Maybe (RType r)
+  Bool -> t -> TDR r -> F.Symbol -> [RType r] -> TDef (RType r) -> Maybe (RType r)
 -------------------------------------------------------------------------------
-getPropTDef l γ f ts d = getPropCons f t
+getPropTDef b _ γ f ts d = getPropCons b f t
   where
     t = TCons (S.flatten γ (d,ts)) fTop
 
@@ -104,7 +101,8 @@ getPropArr l γ s (TArr t _) =
 -- NOTE: Array has been declared as a type declaration so 
 -- it should reside in γ, and we can just getPropTDef on it,
 -- using type t as teh single type parameter to it.
-  findSym "Array" γ >>= getPropTDef l γ s [t]
+-- This Array reference is not static.
+  findSym "Array" γ >>= getPropTDef False l γ s [t]
 
 getPropArr _ _ _ _ = error "getPropArr should only be applied to arrays"
 

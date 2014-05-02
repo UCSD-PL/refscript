@@ -245,11 +245,7 @@ tConP =  try (reserved "number"    >> return TInt)
 ----------------------------------------------------------------------------------
 idToTRefP :: Id SourceSpan -> Parser TCon
 ----------------------------------------------------------------------------------
-idToTRefP (Id _ s) = do
---   (u, _)     <- getState
---   let u'      = addSym s u 
---   modifyState $ \(_,n) -> (u', n)
-  return      $ TRef $ symbol s
+idToTRefP (Id _ s) = return $ TRef (symbol s, False) -- default: non-static class ref
 
 bareAll1P 
   = do reserved "forall"
@@ -265,10 +261,11 @@ arrayP = brackets bareTypeP
 fieldBindP =  sepEndBy (try indBindP <|> bareBindP) semi
 
 -- | f : t
-bareBindP = do (s,t) <- xyP sp colon bareTypeP
+bareBindP = do s     <- option False (try (reserved "static" >> return True))
+               (x,t) <- xyP sp colon bareTypeP
                case isTFun t of
-                 True  -> return $ MethSig s t 
-                 False -> return $ PropSig s True t
+                 True  -> return $ MethSig x      s t 
+                 False -> return $ PropSig x True s t
   where 
     sp = withinSpacesP (stringSymbol <$> ((try lowerIdP) <|> upperIdP))    
 
@@ -512,7 +509,7 @@ checkIF t@(_,TD _ _ _ elts)
   where 
     nTn = length [ () | IndexSig _ False _ <- elts ]
     nTi = length [ () | IndexSig _ _ _ <- elts ]
-    nTe = length [ () | PropSig _ _ _ <- elts ]
+    nTe = length [ () | PropSig _ _ _ _ <- elts ]
 
 
 type PState = Integer

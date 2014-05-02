@@ -1,6 +1,7 @@
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE LambdaCase           #-}
+{-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE ConstraintKinds      #-}
 {-# LANGUAGE TupleSections        #-}
 
@@ -90,6 +91,7 @@ initCGEnv pgm = CGE (envUnion (specs pgm) (externs pgm))
                     [] 
                     emptyContext 
                     (envUnion (specs pgm) (glVars pgm))
+                    (defs pgm)
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
@@ -196,7 +198,7 @@ consStmt _ (ReturnStmt _ Nothing)
   = return Nothing 
 
 -- throw e 
-consStmt g (ThrowStmt l e)
+consStmt g (ThrowStmt _ e)
   = consExpr g e >> return Nothing
 
 
@@ -215,7 +217,7 @@ consStmt g (ClassStmt l i _ _ ce) = do
     --   - This type uses the classes type variables as type parameters.
     --   - For the moment this type does not have a refinement. Maybe use
     --     invariants to add some.
-    let thisT = TApp (TRef $ F.symbol i) (tVar <$> αs) fTop  
+    let thisT = TApp (TRef (F.symbol i, False)) (tVar <$> αs) fTop  
     cgWithThis thisT $ mapM_ (consClassElt g') ce
     return $ Just g
 
@@ -357,14 +359,14 @@ consExpr g (ObjectLit l bs)
         let tCons    = TCons (zipWith mkElt (F.symbol <$> ps) $ (`envFindTy` g') <$> xes) fTop
         envAddFresh "consExpr:ObjectLit" l tCons g'
     where
-        mkElt s t | isTFun t  = MethSig s t
-        mkElt s t | otherwise = PropSig s True t 
+        mkElt s t | isTFun t  = MethSig s False t
+        mkElt s t | otherwise = PropSig s True False t 
 
 -- new C(e, ...)
 consExpr g (NewExpr l (VarRef _ i) es)
   = do  t@(TD _ vs _ _) <- findSymOrDieM i
-        tConst0 <- getPropTDefM l "constructor" t (tVar <$> vs)
-        let tConstr = fix (F.symbol i) vs $ fromMaybe def tConst0
+        tConst0 <- getPropTDefM False l "constructor" t (tVar <$> vs)
+        let tConstr = fix (F.symbol i, False) vs $ fromMaybe def tConst0
         consCall g l "constructor" es tConstr
     where
         fix nm vs (TFun ts _ r) = mkAll vs $ TFun ts (TApp (TRef nm) (tVar <$> vs) fTop) r
@@ -376,15 +378,14 @@ consExpr g (NewExpr l (VarRef _ i) es)
 consExpr g (SuperRef l) 
   = do  thisT <- cgPeekThis
         case thisT of
-          TApp (TRef i) ts _ -> do
+          TApp (TRef (i,s)) ts _ -> do
             TD _ vs pro _ <- findSymOrDieM i 
             case pro of 
               Just (p, ps) -> do
                 let θ = fromList $ zip vs ts
-                envAddFresh "consExpr:SuperRef" l (apply θ $ TApp (TRef $ F.symbol p) ps fTop) g
+                envAddFresh "consExpr:SuperRef" l (apply θ $ TApp (TRef (F.symbol p, s)) ps fTop) g
               Nothing -> cgError l $ errorSuper (srcPos l) 
           _                  -> cgError l $ errorSuper (srcPos l) 
-
 
 -- not handled
 consExpr _ e 

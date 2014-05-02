@@ -7961,7 +7961,9 @@ var TypeScript;
         }
 
         function toRsClassElt(list, helper, anns) {
-            throw new Error("toRsClassElt not implemented for " + TypeScript.SyntaxKind[list.kind()]);
+            return new TypeScript.RsASTList(list.toArray().map(function (m) {
+                return m.toRsClassElt(helper);
+            }));
         }
 
         function toRsForInit(list, helper, anns) {
@@ -9076,7 +9078,8 @@ var TypeScript;
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
 (function (TypeScript) {
-    function tokenAnnots(token) {
+    function tokenAnnots(token, context) {
+        var ctx = (context !== undefined) ? context : 3 /* OtherContext */;
         return token.leadingTrivia().toArray().filter(function (t) {
             return t.kind() === 6 /* MultiLineCommentTrivia */;
         }).map(function (t) {
@@ -9085,7 +9088,7 @@ var TypeScript;
         }).filter(function (t) {
             return t !== null;
         }).map(function (t) {
-            return TypeScript.RsAnnotation.createAnnotation(t, 3 /* OtherContext */);
+            return TypeScript.RsAnnotation.createAnnotation(t, ctx);
         });
     }
 
@@ -9638,6 +9641,69 @@ var TypeScript;
         ClassDeclarationSyntax.prototype.isTypeScriptSpecific = function () {
             return true;
         };
+
+        ClassDeclarationSyntax.prototype.headerAnnotation = function (helper, anns) {
+            if (anns.length === 0) {
+                var typeParams = this.typeParameterList ? this.typeParameterList.typeParameters.toNonSeparatorArray() : [];
+
+                var extendsHeritage = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
+                    return t.toRsHeritage(helper, 48 /* ExtendsKeyword */);
+                }).filter(function (t) {
+                    return t !== null;
+                }));
+                if (extendsHeritage) {
+                    switch (extendsHeritage.length) {
+                        case 0:
+                            var extendsSerial = null;
+                            break;
+                        case 1:
+                            var extendsSerial = extendsHeritage[0];
+                            break;
+                        default:
+                            console.log(extendsHeritage.toString());
+                            throw new Error("BUG: class '" + this.identifier.fullText() + "' can only extend a single class.");
+                    }
+                } else {
+                    var extendsSerial = null;
+                }
+
+                var implementsHeritage = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
+                    return t.toRsHeritage(helper, 51 /* ImplementsKeyword */);
+                }).filter(function (t) {
+                    return t !== null;
+                }));
+                return new TypeScript.RsInferredClassAnnotation(this.identifier, typeParams, extendsSerial, implementsHeritage);
+            } else if (anns.length === 1) {
+                return anns[0];
+            } else {
+                console.log(helper.getSourceSpan(this).toString());
+                console.log("Class '" + this.identifier.fullText() + "' has multiple class annoatations.");
+                process.exit(1);
+            }
+        };
+
+        ClassDeclarationSyntax.prototype.toRsStmt = function (helper) {
+            var originalAnnots = tokenAnnots(this.firstToken());
+
+            var restAnnots = originalAnnots.filter(function (a) {
+                return a.kind() !== 4 /* RawClass */;
+            });
+
+            var classAnnots = originalAnnots.filter(function (a) {
+                return a.kind() === 4 /* RawClass */;
+            });
+
+            restAnnots.push(this.headerAnnotation(helper, classAnnots));
+
+            var ext = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
+                return t.toRsHeritageIds(helper, 48 /* ExtendsKeyword */);
+            }));
+            var imp = new TypeScript.RsASTList(TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
+                return t.toRsHeritageIds(helper, 51 /* ImplementsKeyword */);
+            })));
+
+            return new TypeScript.RsClassStmt(helper.getSourceSpan(this), restAnnots, this.identifier.toRsId(helper), (ext && ext.length > 0) ? ext[0] : null, imp, this.classElements.toRsClassElt(helper));
+        };
         return ClassDeclarationSyntax;
     })(TypeScript.SyntaxNode);
     TypeScript.ClassDeclarationSyntax = ClassDeclarationSyntax;
@@ -9751,7 +9817,7 @@ var TypeScript;
         };
 
         InterfaceDeclarationSyntax.prototype.toRsStmt = function (helper) {
-            var originalAnnots = tokenAnnots(this.interfaceKeyword);
+            var originalAnnots = tokenAnnots(this.firstToken());
 
             var headerAnnots = originalAnnots.filter(function (a) {
                 return a.kind() === 3 /* RawType */;
@@ -9775,14 +9841,13 @@ var TypeScript;
                     return p.identifier.text();
                 }).join(", ") + "> ") : " ";
 
-                var heritage = this.heritageClauses.toArray().map(function (t) {
-                    return t.toRsHeritage(helper);
-                });
-                var extendsClause = TypeScript.ArrayUtilities.firstOrDefault(heritage, function (h) {
-                    return h.fst() === 230 /* ExtendsHeritageClause */;
-                });
-                if (extendsClause) {
-                    annotStr += "extends " + extendsClause.snd().map(function (h) {
+                var extendsHeritage = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
+                    return t.toRsHeritage(helper, 48 /* ExtendsKeyword */);
+                }).filter(function (t) {
+                    return t !== null;
+                }));
+                if (extendsHeritage && extendsHeritage.length > 0) {
+                    annotStr += "extends " + extendsHeritage.map(function (h) {
                         return h.toString();
                     }).join(", ") + " ";
                 }
@@ -9911,17 +9976,35 @@ var TypeScript;
             return true;
         };
 
-        HeritageClauseSyntax.prototype.toRsHeritage = function (helper) {
-            return new TypeScript.Pair(this.kind(), this.typeNames.toNonSeparatorArray().map(function (t) {
-                switch (t.kind()) {
-                    case 11 /* IdentifierName */:
-                    case 126 /* GenericType */:
-                        var baseSymbol = helper.getSymbolForAST(t);
-                        return baseSymbol.type.toRsType();
-                    default:
-                        throw new Error("UNIMPLEMENTED: heritageClauses toRs " + TypeScript.SyntaxKind[t.kind()]);
-                }
-            }));
+        HeritageClauseSyntax.prototype.toRsHeritage = function (helper, extendsOrImplements) {
+            if (this.extendsOrImplementsKeyword.kind() === extendsOrImplements) {
+                return this.typeNames.toNonSeparatorArray().map(function (t) {
+                    switch (t.kind()) {
+                        case 11 /* IdentifierName */:
+                        case 126 /* GenericType */:
+                            var baseSymbol = helper.getSymbolForAST(t);
+                            return baseSymbol.type.toRsType();
+                        default:
+                            throw new Error("UNIMPLEMENTED: heritageClauses toRs " + TypeScript.SyntaxKind[t.kind()]);
+                    }
+                });
+            }
+            return null;
+        };
+
+        HeritageClauseSyntax.prototype.toRsHeritageIds = function (helper, extendsOrImplements) {
+            if (this.extendsOrImplementsKeyword.kind() === extendsOrImplements) {
+                return this.typeNames.toNonSeparatorArray().map(function (t) {
+                    switch (t.kind()) {
+                        case 11 /* IdentifierName */:
+                        case 126 /* GenericType */:
+                            return t.toRsId(helper);
+                        default:
+                            throw new Error("UNIMPLEMENTED: heritageClauses toRs " + TypeScript.SyntaxKind[t.kind()]);
+                    }
+                });
+            }
+            return [];
         };
         return HeritageClauseSyntax;
     })(TypeScript.SyntaxNode);
@@ -10167,12 +10250,8 @@ var TypeScript;
                 throw new Error("UNIMPLEMENTED:FunctionDeclaration.toRsStmt:No Block");
             }
 
-            function arrays_equal(a, b) {
-                return !(a < b || b < a);
-            }
-
             var name = this.identifier.text();
-            var anns = this.getRsAnnotations(3 /* OtherContext */);
+            var anns = tokenAnnots(this.firstToken());
             var bindAnns = anns.filter(function (a) {
                 return a.kind() === 1 /* RawBind */;
             });
@@ -10180,7 +10259,7 @@ var TypeScript;
                 return a.getBinderName();
             });
 
-            if (bindAnnNames.length > 0 && !arrays_equal(bindAnnNames, [name])) {
+            if (bindAnnNames.length !== 1 || bindAnnNames[0] !== name) {
                 console.log(helper.getSourceSpan(this).toString());
                 console.log("Function '" + name + "' should have a single annotation.");
                 process.exit(1);
@@ -12137,6 +12216,10 @@ var TypeScript;
         ParameterSyntax.prototype.toRsAST = function (helper) {
             return this.identifier.toRsAST(helper);
         };
+
+        ParameterSyntax.prototype.toRsId = function (helper) {
+            return this.identifier.toRsId(helper);
+        };
         return ParameterSyntax;
     })(TypeScript.SyntaxNode);
     TypeScript.ParameterSyntax = ParameterSyntax;
@@ -14004,6 +14087,23 @@ var TypeScript;
         ConstructorDeclarationSyntax.prototype.isTypeScriptSpecific = function () {
             return true;
         };
+
+        ConstructorDeclarationSyntax.prototype.toRsClassElt = function (helper) {
+            var annKind = 2 /* ClassContructorContext */;
+            var anns = tokenAnnots(this.firstToken(), 2 /* ClassContructorContext */);
+            var bindAnns = anns.filter(function (a) {
+                return a.kind() === 1 /* RawBind */;
+            });
+            var bindAnnNames = bindAnns.map(function (a) {
+                return a.getBinderName();
+            });
+            if (bindAnnNames.length !== 1 && bindAnnNames[0] !== name) {
+                throw new Error("Constructors should have a single annotation.");
+            }
+            return new TypeScript.RsConstructor(helper.getSourceSpan(this), anns, new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
+                return t.toRsId(helper);
+            })), new TypeScript.RsASTList([this.block.toRsStmt(helper)]));
+        };
         return ConstructorDeclarationSyntax;
     })(TypeScript.SyntaxNode);
     TypeScript.ConstructorDeclarationSyntax = ConstructorDeclarationSyntax;
@@ -14107,6 +14207,27 @@ var TypeScript;
 
         MemberFunctionDeclarationSyntax.prototype.isTypeScriptSpecific = function () {
             return true;
+        };
+
+        MemberFunctionDeclarationSyntax.prototype.toRsClassElt = function (helper) {
+            var name = this.propertyName.fullText();
+            var anns = tokenAnnots(this.firstToken(), 0 /* ClassMethodContext */);
+            var bindAnns = anns.filter(function (a) {
+                return a.kind() === 6 /* RawMethod */;
+            });
+            var bindAnnNames = bindAnns.map(function (a) {
+                return a.getBinderName();
+            });
+
+            if (bindAnnNames.length !== 1 || bindAnnNames[0] !== name) {
+                throw new Error("Method '" + name + "' should have a single annotation.");
+            }
+
+            return new TypeScript.RsMemberMethDecl(helper.getSourceSpan(this), anns, TypeScript.ArrayUtilities.firstOrDefault(this.modifiers.toArray(), function (t, i) {
+                return t.kind() === 58 /* StaticKeyword */;
+            }) !== null, this.propertyName.toRsId(helper), new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
+                return t.toRsId(helper);
+            })), new TypeScript.RsASTList([this.block.toRsStmt(helper)]));
         };
         return MemberFunctionDeclarationSyntax;
     })(TypeScript.SyntaxNode);
@@ -14603,6 +14724,11 @@ var TypeScript;
                 return true;
             }
             return false;
+        };
+
+        ThrowStatementSyntax.prototype.toRsStmt = function (helper) {
+            var ret = this.expression.toRsExp(helper);
+            return new TypeScript.RsThrowStatement(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), ret);
         };
         return ThrowStatementSyntax;
     })(TypeScript.SyntaxNode);
@@ -18055,6 +18181,9 @@ var TypeScript;
                     } else {
                         return new TypeScript.RsNumLit(helper.getSourceSpan(token), [], token.value());
                     }
+
+                case 14 /* StringLiteral */:
+                    return new TypeScript.RsStringLit(helper.getSourceSpan(token), [], token.value());
 
                 case 24 /* FalseKeyword */:
                 case 37 /* TrueKeyword */:
@@ -58334,7 +58463,7 @@ var TypeScript;
                         case 3 /* OtherContext */:
                             return new RsBindAnnotation(pair.fst(), pair.snd());
                         default:
-                            throw new Error("BUG: there is not default context");
+                            throw new Error("BUG: there is no default context");
                     }
                 }
                 case 4 /* RawClass */:
@@ -58451,11 +58580,12 @@ var TypeScript;
 
     var RsInferredClassAnnotation = (function (_super) {
         __extends(RsInferredClassAnnotation, _super);
-        function RsInferredClassAnnotation(_className, _typeParams, _parent) {
+        function RsInferredClassAnnotation(_className, _typeParams, _extends, _implements) {
             _super.call(this, 4 /* RawClass */);
             this._className = _className;
             this._typeParams = _typeParams;
-            this._parent = _parent;
+            this._extends = _extends;
+            this._implements = _implements;
         }
         RsInferredClassAnnotation.prototype.isGlob = function () {
             return false;
@@ -58472,9 +58602,15 @@ var TypeScript;
                 }).join(", ");
                 r += ">";
             }
-            if (this._parent) {
+            if (this._extends) {
                 r += " extends ";
-                r += this._parent.toString();
+                r += this._extends.toString();
+            }
+            if (this._implements && this._implements.length > 0) {
+                r += " implements ";
+                r += this._implements.map(function (t) {
+                    return t.toString();
+                }).join(", ");
             }
             return r;
         };
@@ -59354,9 +59490,7 @@ var TypeScript;
                     [this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
                         })],
-                    this.e.toObject(),
-                    this.es.toObject()
-                ]
+                    this.e.toObject(), this.es.toObject()]
             };
         };
         return RsNewExpr;
@@ -59455,9 +59589,7 @@ var TypeScript;
                     [this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
                         })],
-                    (this.args) ? this.args.toObject() : null,
-                    this.body.toObject()
-                ]
+                    (this.args) ? this.args.toObject() : null, this.body.toObject()]
             };
         };
         return RsConstructor;
@@ -59479,9 +59611,7 @@ var TypeScript;
                     [this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
                         })],
-                    this.sta,
-                    this.vardecl.toObject()
-                ]
+                    this.sta, this.vardecl.toObject()]
             };
         };
         return RsMemberVarDecl;
@@ -59523,6 +59653,7 @@ var TypeScript;
         return RsStatement;
     })(RsAnnotatedAST);
     TypeScript.RsStatement = RsStatement;
+
     var RsEmptyStmt = (function (_super) {
         __extends(RsEmptyStmt, _super);
         function RsEmptyStmt(span, ann) {
@@ -59553,8 +59684,7 @@ var TypeScript;
                     [this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
                         })],
-                    this.exp.toObject()
-                ]
+                    this.exp.toObject()]
             };
         };
         return RsExprStmt;
@@ -59575,8 +59705,7 @@ var TypeScript;
                     [this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
                         })],
-                    this.varDecls.toObject()
-                ]
+                    this.varDecls.toObject()]
             };
         };
         return RsVarDeclStmt;
@@ -59620,8 +59749,7 @@ var TypeScript;
                     [this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
                         })],
-                    (this.expression) ? this.expression.toObject() : null
-                ]
+                    (this.expression) ? this.expression.toObject() : null]
             };
         };
         return RsReturnStmt;
@@ -59642,8 +59770,7 @@ var TypeScript;
                     [this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
                         })],
-                    this.body.toObject()
-                ]
+                    this.body.toObject()]
             };
         };
         return RsBlockStmt;
@@ -59670,8 +59797,7 @@ var TypeScript;
                     this.id.toObject(),
                     (this.extendsClass) ? this.extendsClass.toObject() : null,
                     this.implementsInterfaces.toObject(),
-                    this.body.toObject()
-                ]
+                    this.body.toObject()]
             };
         };
         return RsClassStmt;
@@ -59693,9 +59819,7 @@ var TypeScript;
                     [this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
                         })],
-                    this.exp.toObject(),
-                    this.body.toObject()
-                ]
+                    this.exp.toObject(), this.body.toObject()]
             };
         };
         return RsWhileStmt;
@@ -59773,6 +59897,27 @@ var TypeScript;
         return RsIfSingleStmt;
     })(RsStatement);
     TypeScript.RsIfSingleStmt = RsIfSingleStmt;
+
+    var RsThrowStatement = (function (_super) {
+        __extends(RsThrowStatement, _super);
+        function RsThrowStatement(span, ann, expression) {
+            _super.call(this, ann);
+            this.span = span;
+            this.ann = ann;
+            this.expression = expression;
+        }
+        RsThrowStatement.prototype.toObject = function () {
+            return {
+                ThrowStmt: [
+                    [this.span.toObject(), this.mapAnn(function (a) {
+                            return a.toObject();
+                        })],
+                    this.expression.toObject()]
+            };
+        };
+        return RsThrowStatement;
+    })(RsStatement);
+    TypeScript.RsThrowStatement = RsThrowStatement;
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
 (function (TypeScript) {

@@ -428,7 +428,7 @@ convert l t1 t2 | all isTCons [t1,t2]  = convertCons l t1 t2
 
 convert l t1 t2 | all isTFun  [t1, t2] = convertFun l t1 t2
 
-convert _ (TFun _ _ _)    _            = error "Unimplemented convert-1"
+convert _ t1@(TFun _ _ _)    t2        = error $ "Unimplemented convert-1: " ++ ppshow t1 ++ " ~ " ++ ppshow t2
 convert _ _               (TFun _ _ _) = error "Unimplemented convert-2"
 
 convert _ (TAll _ _  ) _               = error "Unimplemented: convert-3"

@@ -728,12 +728,12 @@ instance ClearSorts F.SortedReft where
   clear (F.RR s r) = F.RR (clear s) r
 
 instance ClearSorts F.Sort where 
-  clear F.FInt        = F.FInt
-  clear F.FNum        = F.FInt
-  clear (F.FObj _)    = F.FInt
-  clear (F.FVar _)    = F.FInt
-  clear (F.FFunc i s) = F.FFunc i $ clear <$> s
-  clear (F.FApp _ _ ) = F.FInt -- F.FApp  c $ clear s
+  clear t@F.FInt        = F.FInt
+  clear t@F.FNum        = F.FInt
+  clear t@(F.FObj _)    = F.FInt
+  clear t@(F.FVar _)    = F.FInt
+  clear t@(F.FFunc i s) = F.FFunc i $ clear <$> s
+  clear t@(F.FApp _ _ ) = F.FInt -- F.FApp  c $ clear s
 
 instance ClearSorts F.Symbol where
   clear = id
@@ -745,8 +745,8 @@ instance ClearSorts (F.SEnv F.SortedReft) where
   clear = F.mapSEnvWithKey clearProp
 
 clearProp (sy, F.RR so re) 
-  | F.symbolString sy `elem` ["Prop", "TRU", "FLS"] 
-  = (sy, F.RR (F.FFunc 2 [F.FInt, F.FApp F.boolFTyCon []]) re)
+  | F.symbolString sy `elem` ["TRU", "FLS", "Prop"] 
+  = (sy, F.RR so re)
   | otherwise                   
   = (clear sy, clear $ F.RR so re)
 

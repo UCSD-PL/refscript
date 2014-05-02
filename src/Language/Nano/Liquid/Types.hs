@@ -81,6 +81,7 @@ import           Language.Nano.Typecheck.Types
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
   
+-- import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
 
@@ -210,6 +211,10 @@ rTypeSort (TApp TInt [] _) = F.FInt
 rTypeSort (TVar α _)       = F.FObj $ F.symbol α 
 rTypeSort t@(TAll _ _)     = rTypeSortForAll t 
 rTypeSort (TFun xts t _)   = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
+-- rTypeSort t@(TAll _ _)     = let s = rTypeSortForAll t in 
+--                              trace (ppshow t ++ " --> " ++ show (F.toFix s)) s
+-- rTypeSort f@(TFun xts t _) = let s = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t] in 
+--                              trace (ppshow f ++ " --> " ++ show (F.toFix s)) s
 rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
 rTypeSort (TArr _ _)       = F.FApp (rawStringFTycon "array") []
 rTypeSort (TAnd (t:_))     = rTypeSort t
@@ -222,11 +227,11 @@ rTypeSortApp c ts    = F.FApp (tconFTycon c) (rTypeSort <$> ts)
 
 tconFTycon :: TCon -> F.FTycon 
 tconFTycon TInt      = F.intFTyCon
-tconFTycon TBool     = rawStringFTycon "boolean"
+tconFTycon TBool     = F.boolFTyCon
 tconFTycon TVoid     = rawStringFTycon "void"
 tconFTycon (TRef i)  = rawStringFTycon $ show i -- F.stringFTycon $ F.Loc (sourcePos s) (unId s)
 tconFTycon TUn       = rawStringFTycon "union"
-tconFTycon TString   = F.strFTyCon -- F.stringFTycon "string"
+tconFTycon TString   = F.strFTyCon 
 tconFTycon TTop      = rawStringFTycon "top"
 tconFTycon TNull     = rawStringFTycon "null"
 tconFTycon TUndef    = rawStringFTycon "undefined"

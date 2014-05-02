@@ -472,23 +472,15 @@ classFromStmt _ = errorstar "classId should only be called with ClassStmt"
 findClass :: (PPR r, PP s, F.Symbolic s, IsLocated s) 
           => s -> TCM r (Maybe (TDef (RType r)))
 ---------------------------------------------------------------------------------------
-findClass s = do 
-  -- Check to see if this is a class
-  γ <- getClasses
-  case envFindTy (F.symbol s) γ of
-    Just t  -> Just <$> classFromStmt t
-    -- Otherwise look it up in the interface environment
-    Nothing -> findSym (F.symbol s) <$> getDef
+findClass s = envFindTy (F.symbol s) <$> getClasses 
+          >>= maybe (return Nothing) ((Just <$>) . classFromStmt) 
 
 ---------------------------------------------------------------------------------------
 findClassOrDie :: (PPR r, PP s, F.Symbolic s, IsLocated s) 
                => s -> TCM r (TDef (RType r))
 ---------------------------------------------------------------------------------------
-findClassOrDie s = 
-  findClass s >>= \case 
-    Just t  -> return t
-    Nothing -> tcError $ errorClassMissing (srcPos s) s
-
+findClassOrDie s = findClass s 
+               >>= maybe (tcError $ errorClassMissing (srcPos s) s) return
 
 ---------------------------------------------------------------------------------------
 classAnnot :: Annot (Fact t) a -> ([TVar], Maybe (Id SourceSpan, [RType t]))

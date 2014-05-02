@@ -58,10 +58,6 @@ plus       = T.symbol     lexer "+"
 star       = T.symbol     lexer "*"
 question   = T.symbol     lexer "?"
 
-
-
--- type ParserS a = Parser (TDefEnv RefType, Integer) a 
-
 ----------------------------------------------------------------------------------
 -- | Type Binders 
 ----------------------------------------------------------------------------------
@@ -142,7 +138,7 @@ postP p post
 ----------------------------------------------------------------------------------
 bareTypeP :: Parser RefType 
 ----------------------------------------------------------------------------------
-bareTypeP =       
+bareTypeP = bareAllP $ 
       try bUnP
   <|> try (refP rUnP)
   <|>     (xrefP rUnP)
@@ -161,21 +157,19 @@ bUnP        = parenNullP (bareTypeNoUnionP `sepBy1` plus) toN >>= mkU
 
 
 -- | `bareTypeNoUnionP` parses a type that does not contain a union at the top-level.
-bareTypeNoUnionP = try funcSigP <|> (bareAtomP bbaseP)
+bareTypeNoUnionP = try funcSigP <|> (bareAllP $ bareAtomP bbaseP)
 
--- | `optNullP` optianlly parses "( `a` )?", where `a` is parsed by the input parser @pr@.
+-- | `optNullP` optionally parses "( `a` )?", where `a` is parsed by the input parser @pr@.
 parenNullP p f =  try (f <$> postP p question) <|> p
 
 -- | `funcSigP` parses a function type that is possibly generic and/or an intersection.
-funcSigP =  try bareAll1P
-        <|> try (intersectP bareAll1P) 
-        <|> try bareFun1P
-        <|>     (intersectP bareFun1P)
+funcSigP =  try (bareAllP bareFunP)
+        <|> try (intersectP $ bareAllP bareFunP) 
   where
     intersectP p = tAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
 
--- | `bareFun1P` parses a single function type
-bareFun1P
+-- | `bareFunP` parses a single function type
+bareFunP
   = do args   <- parens $ sepBy bareArgP comma
        reserved "=>" 
        ret    <- bareTypeP 
@@ -247,25 +241,33 @@ idToTRefP :: Id SourceSpan -> Parser TCon
 ----------------------------------------------------------------------------------
 idToTRefP (Id _ s) = return $ TRef (symbol s, False) -- default: non-static class ref
 
-bareAll1P 
+bareAll1P p
   = do reserved "forall"
        αs <- many1 tvarP
        dot
-       t  <- bareTypeP
+       t  <- p
        return $ foldr TAll t αs
+
+bareAllP p =  try p 
+          <|> bareAll1P p
 
 arrayP = brackets bareTypeP
 
 -- | Parses lists of "f1: t1", "[x:string]: t", or "[x:number]: t"
 -- separated by semicolon.
-fieldBindP =  sepEndBy (try indBindP <|> bareBindP) semi
+fieldBindP =  sepEndBy (
+              try indexSigP 
+          <|> try propMethSigP
+          <|> try callSigP
+          <|> try consSigP
+              ) semi
 
 -- | f : t
-bareBindP = do s     <- option False (try (reserved "static" >> return True))
-               (x,t) <- xyP sp colon bareTypeP
-               case isTFun t of
-                 True  -> return $ MethSig x      s t 
-                 False -> return $ PropSig x True s t
+propMethSigP = do s     <- option False (try (reserved "static" >> return True))
+                  (x,t) <- xyP sp colon bareTypeP
+                  case isTFun t of
+                    True  -> return $ MethSig x      s t 
+                    False -> return $ PropSig x True s t
   where 
     sp = withinSpacesP (stringSymbol <$> ((try lowerIdP) <|> upperIdP))    
 
@@ -274,13 +276,19 @@ indexP = xyP id colon sn
     id = symbol <$> (try lowerIdP <|> upperIdP)
     sn = withinSpacesP (string "string" <|> string "number")
 
--- |  [f: string/number]: t
-indBindP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
-              case it of 
-                "number" -> return $ IndexSig x False t
-                "string" -> return $ IndexSig x True t
-                _        -> error $ "Index signature can only have " ++
-                                    "string or number as index." 
+-- | [f: string/number]: t
+indexSigP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
+               case it of 
+                 "number" -> return $ IndexSig x False t
+                 "string" -> return $ IndexSig x True t
+                 _        -> error $ "Index signature can only have " ++
+                                     "string or number as index." 
+
+-- | [forall A . ] (t...) => t
+callSigP = CallSig <$> withinSpacesP bareFunP 
+
+-- | new [forall A . ] (t...) => t
+consSigP = withinSpacesP (string "new") >> ConsSig <$> withinSpacesP bareFunP 
 
  
 ----------------------------------------------------------------------------------
@@ -393,8 +401,8 @@ parseAnnot ss (RawType   _) = IFace  <$> patch2 ss <$> iFaceP
 parseAnnot ss (RawClass  _) = Class  <$> patch2 ss <$> classDeclP 
 parseAnnot ss (RawTAlias _) = TAlias <$> patch2 ss <$> tAliasP
 parseAnnot ss (RawPAlias _) = PAlias <$> patch2 ss <$> pAliasP
-parseAnnot _  (RawQual   _) = Qual   <$>              qualifierP
-parseAnnot ss (RawInvt   _) = Invt             ss <$> bareTypeP
+parseAnnot _  (RawQual   _) = Qual   <$>               qualifierP
+parseAnnot ss (RawInvt   _) = Invt              ss <$> bareTypeP
 
 
 patch2 ss (id, t)    = (fmap (const ss) id , t)
@@ -444,7 +452,7 @@ instance FromJSON RawSpec
 
 
 -------------------------------------------------------------------------------
--- | Parse File and Type Signatures -------------------------------------------
+-- | Parse File and Type Signatures 
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
@@ -533,7 +541,7 @@ parse ss st c = foo c
                       st <- getState
                       return (st, a)) 
                   st f (getSpecString s)
-        failLeft (Left s) = error $ show s
+        failLeft (Left s) = error $ "Error parsing: " ++ show c ++ "\n" ++ show s
         failLeft (Right r) = r
         f = sourceName $ sp_begin ss
 

@@ -1,12 +1,12 @@
 
-/*@ select :: forall T S . (values: [T], func: (T)=>S) => [S] */
+/*@ select :: forall T S . (values: [T], f: (T)=>S) => { [S] | true } */
 
-function select<T, S>(values: T[], func: (v: T) => S): S[] {
+function select<T, S>(values: T[], f: (v: T) => S): S[] {
 	/*@ result :: [S] */
 	var result: S[] = new Array<S>(values.length);
 
 	for (var i = 0; i < values.length; i++) {
-		result[i] = func(values[i]);
+		result[i] = f(values[i]);
 	}
 
 	return result;

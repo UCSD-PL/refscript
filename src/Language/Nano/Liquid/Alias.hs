@@ -85,7 +85,7 @@ getTApps    :: RefType -> [F.Symbol]
 getTApps    = everything (++) ([] `mkQ` fromT) 
   where
     fromT   :: RefType -> [F.Symbol]
-    fromT (TApp (TRef c) _ _) 
+    fromT (TApp (TRef (c,_)) _ _) 
             = [F.symbol c]
     fromT _ = []
 
@@ -95,7 +95,7 @@ expandTAlias te a = a {al_body = expandRefType te $ al_body a}
 expandRefType :: Data a => TAliasEnv RefType -> a -> a
 expandRefType te = everywhere $ mkT $ tx
   where
-    tx t@(TApp (TRef c) ts r) 
+    tx t@(TApp (TRef (c,_)) ts r) 
                  = maybe t (applyTAlias t c ts r) $ envFindTy c te
     tx t         = t
 

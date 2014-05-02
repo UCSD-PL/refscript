@@ -37,7 +37,7 @@ module Language.Nano.Liquid.CGMonad (
   , envFindAnnot, envToList, envFindReturn, envPushContext, envGetContextCast
   , envGetContextTypArgs
 
-  , findSymOrDieM
+  , findSymM, findSymOrDieM
 
   -- * Add Subtyping Constraints
   , subType, wellFormed
@@ -63,10 +63,7 @@ import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 import qualified Data.List                      as L
 import           Data.Function                  (on)
-
--- import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
-
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
@@ -188,16 +185,16 @@ getDef  :: CGM (TDefEnv RefType)
 -------------------------------------------------------------------------------
 getDef = cg_defs <$> get
 
+-- XXX: This is not really used 
 -------------------------------------------------------------------------------
 getExts  :: CGM (E.Env RefType)
 -------------------------------------------------------------------------------
 getExts = cg_ext <$> get
 
 
-getPropTDefM l s t ts = do 
+getPropTDefM b l s t ts = do 
   δ <- getDef 
-  return $ getPropTDef l δ (F.symbol s) ts t
-
+  return $ getPropTDef b l δ (F.symbol s) ts t
 
 
 ---------------------------------------------------------------------------------------
@@ -310,7 +307,10 @@ envAddGuard x b g = g { guards = guard b x : guards g }
 ---------------------------------------------------------------------------------------
 envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
 ---------------------------------------------------------------------------------------
-envFindTy x g = (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
+envFindTy x g = 
+    case findSym x $ cge_defs g of
+      Just _  -> TApp (TRef (F.symbol x, True)) [] fTop
+      Nothing -> (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
   where 
     err       = throw $ bugUnboundVariable (srcPos x) (F.symbol x)
 
@@ -339,7 +339,9 @@ envFindReturn = E.envFindReturn . renv
 
 
 -- | Monad versions of TDefEnv operations
-findSymOrDieM i       = findSymOrDie i <$> getDef
+findSymOrDieM i = findSymOrDie i <$> getDef
+findSymM i      = findSym i      <$> getDef
+
 
 
 ---------------------------------------------------------------------------------------
@@ -581,45 +583,42 @@ splitC (Sub g i t1@(TArr t1v _ ) t2@(TArr t2v _ ))
        return $ cs ++ cs' -- ++ cs''
 
 -- | TCons
-splitC (Sub g i t1@(TCons b1s _ ) t2@(TCons b2s _ ))
+-- FIXME: Variance !!!
+splitC (Sub g i t1@(TCons e1s _ ) t2@(TCons e2s _ ))
   -- LHS and RHS are object literal types
   | all (not . isIndSig) [t1,t2]  
   = do cs    <- bsplitC g i t1 t2
-       when (or $ zipWith ((/=) `on` f_sym) b1s' b2s') 
+       when (length t1s /= length t2s) 
          $ error $ "splitC on non aligned TCons: " ++ ppshow t1 ++ "\n" ++ ppshow t2
-       --FIXME: add other bindings in env (like function)? Perhaps through "this"
        cs'   <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t1s t2s -- CO-VARIANCE
-       -- FIXME: Variance !!!
-       -- cs''  <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t2s t1s -- CONTRA-VARIANCE
-       return $ cs ++ cs' -- ++ cs''
+       return $ cs ++ cs'
 
   -- LHS and RHS are index signatures
   | all isIndSig [t1,t2]          
   = do c1 <- bsplitC g i t1 t2
-       c2 <- splitC $ Sub g i (ti b1s) (ti b2s)
+       c2 <- splitC $ Sub g i (ti e1s) (ti e2s)
        return $ c1 ++ c2
 
+  -- One of the sides is an index signature
+  | isIndSig t2 
+  = do c1 <- bsplitC g i t1 t2
+       c2 <- concatMapM splitC $ zipWith (Sub g i) (ts e1s) (repeat $ ti e2s)
+       return $ c1 ++ c2
+
+  | isIndSig t1
+  = do c1 <- bsplitC g i t1 t2
+       c2 <- concatMapM splitC $ zipWith (Sub g i) (repeat $ ti e1s) (ts e2s)
+       return $ c1 ++ c2
+  
   | otherwise 
   = error "BUG:splitC:TCons"
 
   where
-    -- Sanity check:
-
-    sss   = [ mapPair (fst .eltToPair) (b1, b2) | b1 <- b1s
-                                                , b2 <- b2s
-                                                , b1 `sameBinder` b2 ]
-    
-
-    tts   = [ (eltType b1, eltType b2) | b1 <- b1s
-                                       , b2 <- b2s
-                                       , b1 `sameBinder` b2 ]
-
-    b1s'  = L.sortBy (compare `on` f_sym) b1s
-    b2s'  = L.sortBy (compare `on` f_sym) b2s
-    t1s   = f_type <$> b1s'
-    t2s   = f_type <$> b2s'
+    ts es = [ eltType e | e <- es, nonStaticElt e ]
     ti es = safeHead "convertCons" [ t | IndexSig _ _ t <- es ]
-
+    t1s   = [ eltType e | e <- e1s, nonStaticElt e ]
+    t2s   = [ eltType e | e <- e2s, nonStaticElt e ]
+  
 splitC x 
   = cgError l $ bugBadSubtypes l x where l = srcPos x
 
@@ -773,17 +772,17 @@ cgWithThis t p = do { cgPushThis t; a <- p; cgPopThis; return a }
 --------------------------------------------------------------------------------
 getSuperM :: IsLocated a => a -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-getSuperM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
+getSuperM l (TApp (TRef (i,s)) ts _) = fromTdef =<< findSymOrDieM i
   where fromTdef (TD _ vs (Just (p,ps)) _) = do
           return  $ apply (fromList $ zip vs ts) 
-                  $ TApp (TRef $ F.symbol p) ps fTop
+                  $ TApp (TRef (F.symbol p,s)) ps fTop
         fromTdef (TD _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
 getSuperM l _  = cgError l $ errorSuper (srcPos l) 
 
 --------------------------------------------------------------------------------
 getSuperDefM :: IsLocated a => a -> RefType -> CGM (TDef RefType)
 --------------------------------------------------------------------------------
-getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
+getSuperDefM l (TApp (TRef (i,_)) ts _) = fromTdef =<< findSymOrDieM i
   where 
     fromTdef (TD _ vs (Just (p,ps)) _) = 
       do TD n ws pp ee <- findSymOrDieM p

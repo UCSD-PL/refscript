@@ -101,8 +101,7 @@ castErrors (Ann l facts) = downErrors
 
 
 -------------------------------------------------------------------------------
-typeCheck :: (Data r, Ord r, PPR r) 
-          => NanoSSAR r -> IO (Either [Error] (NanoTypeR r))
+typeCheck :: (Data r, PPR r) => NanoSSAR r -> IO (Either [Error] (NanoTypeR r))
 -------------------------------------------------------------------------------
 typeCheck pgm = do 
   v <- V.getVerbosity
@@ -113,7 +112,7 @@ typeCheck pgm = do
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program
 -------------------------------------------------------------------------------
-tcNano :: (Data r, Ord r, PPRSF r) => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
+tcNano :: (Data r, PPRSF r) => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do setDef     $ defs p
@@ -216,14 +215,14 @@ type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r))
 tcInScope γ act = accumAnn annCheck act
   where
     -- Adding type def environment in what is checked in valid
-    annCheck = catMaybes . map (validInst γ) . M.toList
+    annCheck m  = catMaybes $ validInst γ <$> M.toList m
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Function 
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-tcFun :: (Ord r, F.Reftable r, PP r) =>
+tcFun :: PPR r =>
   TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r), Maybe (TCEnv r))
 -------------------------------------------------------------------------------
 tcFun γ (FunctionStmt l f xs body)
@@ -235,7 +234,7 @@ tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
 -------------------------------------------------------------------------------
 tcFun1 ::
-  (Ord r, PPR r, IsLocated b, IsLocated l, IsLocated a, CallSite t) =>
+  (PPR r, IsLocated b, IsLocated l, IsLocated a, CallSite t) =>
   TCEnv r -> a -> l -> [Id b] -> [Statement (AnnSSA r)] -> 
   (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
@@ -271,7 +270,7 @@ tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
 
 
 ---------------------------------------------------------------------------------------
-tcClassElt :: (Ord r, PPR r) 
+tcClassElt :: PPR r 
           => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
 -- FIXME: check for void return type for constructor
@@ -307,7 +306,7 @@ tcSeq f             = go []
                            Just γ' -> go (y:acc) γ' xs
 
 --------------------------------------------------------------------------------
-tcStmts :: (Ord r, PPRSF r) => 
+tcStmts :: PPRSF r => 
   TCEnv r -> [Statement (AnnSSA r)] -> TCM r ([Statement (AnnSSA r)], TCEnvO r)
 --------------------------------------------------------------------------------
 tcStmts γ stmts 
@@ -322,7 +321,7 @@ addStatementFunBinds γ stmts
        fns = [f | FunctionStmt _ f _ _ <- fs]
 
 -------------------------------------------------------------------------------
-tcStmt  :: (Ord r, PPRSF r) =>
+tcStmt  :: PPRSF r =>
   TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r), TCEnvO r)
 -------------------------------------------------------------------------------
 -- skip
@@ -330,7 +329,7 @@ tcStmt γ s@(EmptyStmt _)
   = return (s, Just γ)
 
 -- x = e
-tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))   
+tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
   = do (e', g) <- tcAsgn l1 γ (Id lx x) e
        return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
@@ -409,14 +408,14 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 -- class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 tcStmt γ c@(ClassStmt l i e is ce) = do  
     -- * Compute / get the class type 
-    TD _ αs _  _ <- classDef c
+    TD _ αs _  _ <- classFromStmt c
     -- * Add the type vars in the environment
     let γ'        = tcEnvAdds (tyBinds αs) γ
     -- * Compute type for "this" and add that to the env as well
     --   - This type uses the classes type variables as type parameters.
     --   - For the moment this type does not have a refinement. Maybe use
     --     invariants to add some.
-    let thisT     = TApp (TRef $ F.symbol i) (tVars αs) fTop  
+    let thisT     = TApp (TRef (F.symbol i, False)) (tVars αs) fTop  
     -- * Typecheck the class elements in this extended environment.
     ce'          <- tcInScope γ' $ tcWithThis thisT $ mapM (tcClassElt γ' i) ce
     return          (ClassStmt l i e is ce', Just γ)
@@ -434,16 +433,16 @@ tcStmt _ s
 --  * the annotations of the class fields
 -- NOTE: we are not checking if the class has a parent or not.
 ---------------------------------------------------------------------------------------
-classDef :: (Ord r, PPR r) => Statement (AnnSSA r) -> TCM r (TDef (RType r))
+classFromStmt :: PPR r => Statement (AnnSSA r) -> TCM r (TDef (RType r))
 ---------------------------------------------------------------------------------------
-classDef (ClassStmt l id _ _ cs) =
+classFromStmt (ClassStmt l id _ _ cs) =
   do  γ <- getDef
       case findSym sym γ of
         Just d -> return d   -- if already computed
         Nothing -> do let elts   = classEltType <$> cs
                       constrL   <- constrT elts
                       let elts'  = elts ++ constrL            
-                      let freshD = tracePP (ppshow id) $ TD (fmap ann id) vs p elts'
+                      let freshD = TD (fmap ann id) vs p elts'
                       setDef     $ addSym sym freshD γ
                       return     $ freshD
   where
@@ -466,16 +465,30 @@ classDef (ClassStmt l id _ _ cs) =
     tVoid :: PPR r => RType r
     tVoid = TApp TVoid [] fTop
 
-classDef _ = errorstar "classId should only be called with ClassStmt"
+classFromStmt _ = errorstar "classId should only be called with ClassStmt"
 
 
 ---------------------------------------------------------------------------------------
-findOrCrateClassDef :: (Ord r, PPR r) => Id (AnnSSA r) -> TCM r (TDef (RType r)) 
+findClass :: (PPR r, PP s, F.Symbolic s, IsLocated s) 
+          => s -> TCM r (Maybe (TDef (RType r)))
 ---------------------------------------------------------------------------------------
-findOrCrateClassDef (Id l s) = do 
+findClass s = do 
+  -- Check to see if this is a class
   γ <- getClasses
-  maybe (tcError $ errorClassMissing (srcPos l) s) classDef (envFindTy (F.symbol s) γ)
-  
+  case envFindTy (F.symbol s) γ of
+    Just t  -> Just <$> classFromStmt t
+    -- Otherwise look it up in the interface environment
+    Nothing -> findSym (F.symbol s) <$> getDef
+
+---------------------------------------------------------------------------------------
+findClassOrDie :: (PPR r, PP s, F.Symbolic s, IsLocated s) 
+               => s -> TCM r (TDef (RType r))
+---------------------------------------------------------------------------------------
+findClassOrDie s = 
+  findClass s >>= \case 
+    Just t  -> return t
+    Nothing -> tcError $ errorClassMissing (srcPos s) s
+
 
 ---------------------------------------------------------------------------------------
 classAnnot :: Annot (Fact t) a -> ([TVar], Maybe (Id SourceSpan, [RType t]))
@@ -484,21 +497,21 @@ classAnnot l = safeHead "classAnnot" [ t | ClassAnn t <- ann_fact l ]
 
 
 ---------------------------------------------------------------------------------------
-classEltType :: (Ord r, PPR r) => ClassElt (AnnSSA r) -> TElt (RType r)
+classEltType :: PPR r => ClassElt (AnnSSA r) -> TElt (RType r)
 ---------------------------------------------------------------------------------------
 classEltType (Constructor l _ _ ) = ConsSig ann
   where ann = safeHead "BUG: constructor annotation" [ κ | ConsAnn κ <- ann_fact l ]
 
-classEltType (MemberVarDecl _ _ (VarDecl l v _)) = PropSig (F.symbol v) m t
+classEltType (MemberVarDecl _ s (VarDecl l v _)) = PropSig (F.symbol v) m s t
   where (m,t) = safeHead "BUG: variable decl annotation" [ φ | FieldAnn φ <- ann_fact l ]
 
-classEltType (MemberMethDecl  l _ f _ _ ) = MethSig (F.symbol f) t
+classEltType (MemberMethDecl  l s f _ _ ) = MethSig (F.symbol f) s t
   where t = safeHead ("Method " ++ ppshow f ++ " has no annotation.") [ μ | MethAnn μ <- ann_fact l ]
 
 
 -- Variable declarations should have the type annotations available locally
 ---------------------------------------------------------------------------------------
-tcVarDecl :: (Ord r, PPR r) 
+tcVarDecl ::  PPR r 
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e)) 
@@ -513,9 +526,8 @@ tcVarDecl γ v@(VarDecl l x Nothing)
          _   -> tcError $ errorVarDeclAnnot (srcPos l) x
 
 -------------------------------------------------------------------------------
-tcAsgn :: (PP r, Ord r, F.Reftable r) 
-       => AnnSSA r -> TCEnv r -> Id (AnnSSA r) -> ExprSSAR r 
-       -> TCM r (ExprSSAR r, TCEnvO r)
+tcAsgn :: PPR r 
+       => AnnSSA r -> TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 -------------------------------------------------------------------------------
 tcAsgn l γ x e
   = do (e' , t) <- tcExprT l γ e rhsT
@@ -528,7 +540,7 @@ tcAsgn l γ x e
 -- | There are two versions for `tcExprT`. If `init` is True then this is the 
 -- variable initialization phase, otherwise any other assignment.
 -------------------------------------------------------------------------------
-tcExprT :: (Ord r, PPR r) 
+tcExprT :: PPR r 
         => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) 
         -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
@@ -540,7 +552,7 @@ tcExprT l γ e to
                        (,ta) <$> castM l (tce_ctx γ) e (apply θ t) ta
 
 -------------------------------------------------------------------------------
-tcExpr :: (Ord r, PPR r) => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
+tcExpr :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
 tcExpr _ e@(IntLit _ _)
   = return (e, tInt)
@@ -558,13 +570,12 @@ tcExpr _ e@(ThisRef _)
   = (e,) <$> tcPeekThis
 
 tcExpr γ e@(VarRef l x)
-  = return (e, tcEnvFindTyOrDie l x γ) 
-  
-  -- case tcEnvFindTy x γ of 
-  --     -- Nothing -> die $ errorUnboundId (ann l) x
-  --     Nothing -> die $ errorUnboundIdEnv (ann l) x (tce_env γ)
-  --     Just z  -> return $ (e, z)
-
+  = case tcEnvFindTy x γ of
+      Just t  -> return (e,t)
+      Nothing -> findClass x >>= \case
+        Just (TD s _ _ _) -> return (e, TApp (TRef (F.symbol s, True)) [] fTop)
+        Nothing -> tcError $ errorUnboundId (ann l) x
+ 
 tcExpr γ e@(PrefixExpr _ _ _)
   = tcCall γ e 
 
@@ -584,8 +595,9 @@ tcExpr γ (ObjectLit l bs)
        let tCons     = TCons (zipWith mkElt (F.symbol <$> ps) ts) fTop
        return $ (ObjectLit l (zip ps es'), tCons)
     where
-       mkElt s t | isTFun t  = MethSig s t
-       mkElt s t | otherwise = PropSig s True t 
+    -- Object elements are non-static
+       mkElt s t | isTFun t  = MethSig s False t
+       mkElt s t | otherwise = PropSig s True False t 
 
 
 tcExpr γ (Cast l@(Ann loc fs) e)
@@ -623,7 +635,7 @@ tcExpr _ e
   = convertError "tcExpr" e
 
 ---------------------------------------------------------------------------------------
-tcCall :: (Ord r, F.Reftable r, PP r) => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
+tcCall :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 ---------------------------------------------------------------------------------------
 
 -- | `o e`
@@ -691,9 +703,10 @@ tcCall γ ex@(ArrayLit l es)
 --    ∀ Vs . (xs: Ts) => void
 --
 tcCall γ (NewExpr l (VarRef lv i) es) = do  
-    t@(TD _ vs _ _) <- findOrCrateClassDef i
-    tConst0         <- getPropTDefM l "constructor" t (tVar <$> vs)
-    let tConstr      = fix (F.symbol i) vs $ fromMaybe def tConst0
+    t@(TD _ vs _ _) <- findClassOrDie i
+    -- Constructor is non-static
+    tConst0         <- getPropTDefM False l "constructor" t (tVar <$> vs)
+    let tConstr      = fix (F.symbol i, False) vs $ fromMaybe def tConst0
     when (not $ isTFun tConstr) $ tcError $ errorConstNonFunc (srcPos l) i
     z               <- tcCallMatch γ l "constructor" es tConstr
     case z of
@@ -788,7 +801,7 @@ tcPropRead getter γ l e fld = do
 
 
 ----------------------------------------------------------------------------------
-envJoin :: (Ord r, PPR r) => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)
+envJoin :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)
 ----------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
@@ -799,8 +812,8 @@ envJoin l γ (Just γ1) (Just γ2) =
      return $ Just $ tcEnvAdds (zip xs ts) (apply θ γ)
 
 ----------------------------------------------------------------------------------
-getPhiType ::  (Ord r, PPR r) => 
-  (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan-> TCM r (RType r)
+getPhiType :: PPR r 
+           => (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan-> TCM r (RType r)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (tcEnvFindTy x γ1, tcEnvFindTy x γ2) of
@@ -824,7 +837,7 @@ scrapeVarDecl :: VarDecl (AnnSSA r) -> TCM r [RType r]
 scrapeVarDecl (VarDecl l _ _) = 
   mapM (sanity $ srcPos l) $ [ t | VarAnn t <- ann_fact l ] ++ [ t | FieldAnn (_,t) <- ann_fact l ]
 
-sanity l t@(TApp (TRef i) ts _) = 
+sanity l t@(TApp (TRef (i,_)) ts _) = 
   do δ <- getDef 
      case findSym i δ of
        Just (TD _ αs _ _) 

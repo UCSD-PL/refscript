@@ -20,7 +20,7 @@ module Language.Nano.Typecheck.Subst (
   , Substitutable (..)
 
   -- * Flatten a type definition applying subs
-  , flatten, flattenTRef, flattenType
+  , flatten, flatten', flattenTRef, flattenType
 
   ) where 
 
@@ -37,8 +37,7 @@ import qualified Data.HashSet as S
 import qualified Data.List as L
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid hiding ((<>))
-import           Data.Function (fix, on)
-import           Data.Maybe (fromJust)
+import           Data.Function (fix)
 
 -- import           Debug.Trace
 
@@ -87,7 +86,7 @@ instance Free (RType r) where
   free (TAll α t)           = S.delete α $ free t 
   free (TAnd ts)            = free ts 
   free (TExp _)             = error "free should not be applied to TExp"
-  free (TCons xts _)        = free (f_type <$> xts)
+  free (TCons xts _)        = free (eltType <$> xts)
 
 instance Free a => Free [a] where 
   free = S.unions . map free
@@ -136,11 +135,11 @@ instance (Substitutable r t) => Substitutable r (Env t) where
   apply = envMap . apply
 
 instance Substitutable r t => Substitutable r (TElt t) where 
-  apply θ (PropSig x m t)   = PropSig x m $ apply θ t
-  apply θ (CallSig t)       = CallSig $ apply θ t
-  apply θ (ConsSig t)       = ConsSig $ apply θ t     
-  apply θ (IndexSig x b t)  = IndexSig x b $ apply θ t
-  apply θ (MethSig x t)     = MethSig x $ apply θ t
+  apply θ (PropSig x m s t) = PropSig x m s $ apply θ t
+  apply θ (CallSig t)       = CallSig       $ apply θ t
+  apply θ (ConsSig t)       = ConsSig       $ apply θ t
+  apply θ (IndexSig x b t)  = IndexSig x b  $ apply θ t
+  apply θ (MethSig x s t)   = MethSig x s   $ apply θ t
 
 instance F.Reftable r => Substitutable r (Cast r) where
   apply _ CNo        = CNo
@@ -194,14 +193,18 @@ flatten :: PPR r
 flatten δ = fix ff
   where
     ff r (TD _ vs (Just (i, ts')) es, ts)
-      = apply (fromList $ zip vs ts) . fl . L.unionBy sameBinder es 
+      = apply (fromList $ zip vs ts) . fl . L.unionBy sameBinder es
       $ r (findSymOrDie i δ, ts')
     ff _ (TD _ vs _ es, ts)  = apply (fromList $ zip vs ts) es
     -- NOTE: Special case for constructor: does not appear in flat version
     fl = filter (not . isConstr)
 
-flattenTRef δ (TApp (TRef n) ts _) = flatten δ (findSymOrDie n δ, ts)
-flattenTRef _ _                    = error "Applying flattenTRef on non-tref"
+-- | flatten' does not apply the top-level type substitution
+flatten' δ d@(TD _ vs _ _) = flatten δ (d, tVar <$> vs)
+
+
+flattenTRef δ (TApp (TRef (n,_)) ts _) = flatten δ (findSymOrDie n δ, ts)
+flattenTRef _ _                        = error "Applying flattenTRef on non-tref"
 
 
 flattenType δ t@(TApp (TRef _) _ r) 

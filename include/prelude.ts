@@ -215,7 +215,7 @@ interface List<A> {
     toLocaleUpperCase : () => string;
     trim              : () => string;
 
-    length            : number;
+    length            : { number | v >= 0 };
 
     substr            : (from: number, length: number) => string
 } */
@@ -303,7 +303,7 @@ interface List<A> {
 
       reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T;
 
-      length         : { v: number | v = (len this) }
+      length         : { v: number | (v = (len this) && v >= 0) }
     }
 */
 

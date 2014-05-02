@@ -103,6 +103,7 @@ data CGEnv
         , guards   :: ![F.Pred]           -- ^ branch target conditions  
         , cge_ctx  :: !IContext           -- ^ intersection-type context 
         , cge_spec :: !(Env RefType)      -- ^ specifications for defined functions
+        , cge_defs :: !(TDefEnv RefType)  -- ^ type definitions
         }
 
 ----------------------------------------------------------------------------
@@ -297,11 +298,11 @@ mapReftM _ t               = error   $ render $ text "Not supported in mapReftM:
 
 mapReftBindM f (B x t)    = B x     <$> mapReftM f t
 
-mapReftEltM f (PropSig x m t)  = PropSig x m  <$> mapReftM f t
-mapReftEltM f (MethSig x   t)  = MethSig x    <$> mapReftM f t
-mapReftEltM f (CallSig t)      = CallSig      <$> mapReftM f t
-mapReftEltM f (ConsSig  t)     = ConsSig      <$> mapReftM f t
-mapReftEltM f (IndexSig x b t) = IndexSig x b <$> mapReftM f t
+mapReftEltM f (PropSig x m s t) = PropSig x m s <$> mapReftM f t
+mapReftEltM f (MethSig x   s t) = MethSig x   s <$> mapReftM f t
+mapReftEltM f (CallSig t)       = CallSig       <$> mapReftM f t
+mapReftEltM f (ConsSig  t)      = ConsSig       <$> mapReftM f t
+mapReftEltM f (IndexSig x b t)  = IndexSig x b  <$> mapReftM f t
 
 
 ------------------------------------------------------------------------------------------
@@ -428,15 +429,10 @@ zipType δ f g (TArr t1 r1) (TArr t2 r2)
 zipType δ f g (TCons e1s r1) (TCons e2s r2) 
   = TCons (cmn ++ snd) (f r1 r2)
   where 
-  -- FIXME: m1 `mconcat` m2
-    cmn = [ PropSig s1 m1 (zipType δ f g t1 t2) | PropSig s1 m1 t1 <- e1s
-                                                , PropSig s2 _  t2 <- e2s
-                                                , s1 == s2 ]
-    -- FIXME: Should we apply g here as well?
-    -- This won't really happen cause we only use it for downcast, so
-    -- the snd list will be empty
-    snd = [ PropSig s m t | PropSig s m t <- e2s
-                          , not $ exists ((== s) . f_sym) e1s ]
+    -- FIXME: mutabilities? m1 `mconcat` m2
+    cmn = [ zipElts (zipType δ f g) e1 e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ] 
+    snd = [ e | e <- e2s, not (eltSym e `elem` ks1) ]
+    ks1 = [ fst $ eltToPair e | e <- e1s ]
 
 zipType _ _ _ t1 t2 = 
   errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)

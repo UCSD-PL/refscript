@@ -1,11 +1,13 @@
 
-/*@ indexOf :: (array: [T], predicate (T) => boolean): boolean */
+/*@ indexOf :: forall T . (array: [T], predicate: (T) => boolean) 
+  => { number | (0 <= v && v < (len array)) } */
 function indexOf<T>(array: T[], predicate: (v: T) => boolean): number {
 	for (var i = 0, n = array.length; i < n; i++) {
 		if (predicate(array[i])) {
 			return i;
 		}
 	}
-	return -1;
+  throw new Error("Not found");
+	//return -1;
 }
 

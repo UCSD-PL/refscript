@@ -1,10 +1,6 @@
 
-
-/*  binarySearch :: (array: [number], value: number) => 
-    { v: number | ((0 <= v) && (v < (len array))) */
-
-/*@ binarySearch :: (array: [number], value: number) => { number | true } */
-
+/*@ binarySearch :: (array: [number], value: number) => 
+    { v: number | (0 <= v && (v < (len array)))} */
 function binarySearch(array: number[], value: number): number {
 	var low = 0;
 	var high = array.length - 1;
@@ -25,6 +21,7 @@ function binarySearch(array: number[], value: number): number {
 		}
 	}
 
-	return ~low;
+  //PV 
+  throw new Error("Number not found");
+	//return low;
 }
-

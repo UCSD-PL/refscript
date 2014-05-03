@@ -111,7 +111,12 @@ interface List<A> {
 
 /*@ extern builtin_OpMul       :: (number,  number)  => number                                      */
 
-/*@ extern builtin_OpDiv       :: (number,  number)  => number                                      */
+/*@ extern builtin_OpDiv       :: (x: number, y: { v: number | v != 0 }) 
+    => { v:number | (    ((x>0 && y>0) => v>0) 
+                      && (x=0 <=> v=0) 
+                      && ((x>0 && y>1) => v<x) 
+                   )} 
+ */
 
 /*@ extern builtin_OpMod       :: (number,  number)  => number                                      */
 
@@ -135,6 +140,8 @@ interface List<A> {
 /*@ extern builtin_OpLOr       :: forall A . (x:A, y:A)  => {v:A   | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))}     */
 
 /*@ extern builtin_PrefixLNot  :: forall A . (x: A)      => {v:boolean | ((Prop v) <=> FLS(x))}     */
+
+/*@ extern builtin_PrefixBNot  :: (x: number)            => {v:number | v = 0 - (x + 1) }           */
 
 
 

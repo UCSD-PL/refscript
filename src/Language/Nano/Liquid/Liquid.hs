@@ -209,7 +209,7 @@ consStmt g s@(FunctionStmt _ _ _ _)
 -- class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 consStmt g (ClassStmt l i _ _ ce) = do  
     -- * Compute / get the class type 
-    TD _ αs _ _ <- findSymOrDieM i
+    TD _ _ αs _ _ <- findSymOrDieM i
     let tyBinds = [(Loc (srcPos l) α, tVar α) | α <- αs]
     -- * Add the type vars in the environment
     g' <- envAdds tyBinds g
@@ -364,9 +364,7 @@ consExpr g (ObjectLit l bs)
 
 -- new C(e, ...)
 consExpr g (NewExpr l (VarRef _ i) es)
-  = do  t@(TD _ vs _ _) <- findSymOrDieM i
-        tConst0 <- getPropTDefM False l "constructor" t (tVar <$> vs)
-        let tConstr = fix (F.symbol i, False) vs $ fromMaybe def tConst0
+  = do  tConstr <- getConstr (srcPos l) g i
         consCall g l "constructor" es tConstr
     where
         fix nm vs (TFun ts _ r) = mkAll vs $ TFun ts (TApp (TRef nm) (tVar <$> vs) fTop) r
@@ -376,20 +374,47 @@ consExpr g (NewExpr l (VarRef _ i) es)
 
 -- super
 consExpr g (SuperRef l) 
-  = do  thisT <- cgPeekThis
-        case thisT of
-          TApp (TRef (i,s)) ts _ -> do
-            TD _ vs pro _ <- findSymOrDieM i 
-            case pro of 
-              Just (p, ps) -> do
-                let θ = fromList $ zip vs ts
-                envAddFresh "consExpr:SuperRef" l (apply θ $ TApp (TRef (F.symbol p, s)) ps fTop) g
-              Nothing -> cgError l $ errorSuper (srcPos l) 
-          _                  -> cgError l $ errorSuper (srcPos l) 
+  = cgPeekThis >>= \case 
+      TApp (TRef (i,s)) ts _ ->
+        findSymOrDieM i >>= \case 
+          TD _ _ vs (Just (p, ps)) _ ->
+            envAddFresh "consExpr:SuperRef" l 
+              (apply (fromList $ zip vs ts) $ TApp (TRef (F.symbol p, s)) ps fTop) g
+          _ -> cgError l $ errorSuper (srcPos l) 
+      _ -> cgError l $ errorSuper (srcPos l) 
 
 -- not handled
 consExpr _ e 
   = error $ (printf "consExpr: not handled %s" (ppshow e))
+
+
+-- | `getConstr` first checks whether input @s@ is a class, in which case it
+-- tries to retrieve a constructor binding, using a default one if that fails.
+-- Otherwise, it tries to retrieve an object with the same name from the
+-- environment that has a constructor property.
+--
+-- FIXME: Do not lookup the constructor by string. We have a special struct for
+-- that.
+----------------------------------------------------------------------------------
+getConstr :: IsLocated a => SourceSpan -> CGEnv -> Id a -> CGM RefType
+----------------------------------------------------------------------------------
+getConstr l g s = 
+    case findSym s (cge_defs g) of
+      Just t | t_class t ->       -- This needs to be a class
+        getPropTDefM False l "__constructor__" t (tVar <$> t_args t) >>= \case
+          Just (TFun bs _ r) -> return $ TFun bs (retT t) r
+          Just _             -> error  $ "Unsupported constructor type"
+          Nothing            -> return $ TFun [] (retT t) fTop
+      _ -> 
+      -- HEREHERE: FIXME : envFindTy get the WRONG binding because it also
+      -- searches through types !!!
+        getPropM False l "__constructor__" (envFindTy s g) >>= \case
+          Just t  -> return t
+          Nothing -> cgError l $ errorConsSigMissing (srcPos l) s
+  where
+    -- Constructor's return type is void - instead return the class type
+    -- FIXME: type parameters in returned type: inferred ... or provided !!! 
+    retT t = TApp (TRef (F.symbol s, False)) (tVar <$> t_args t) fTop
 
 
 --------------------------------------------------------------------------------

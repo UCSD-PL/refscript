@@ -64,7 +64,7 @@ bugMalignedFields' l t t' = mkErr l $ render $ text "Misaligned Fields:"
 
 bugUnknownAlias l x       = mkErr l $ printf "Unknown definition for alias %s" (ppshow x)
 bugUnboundPhiVar l x      = mkErr l $ printf "Phi Variable %s is unbound" (ppshow x)
-bugUnboundVariable l x    = mkErr l $ printf "Variable '%s' is unbound." (ppshow x)
+bugUnboundVariable l x g  = mkErr l $ printf "Variable '%s' is unbound in %s" (ppshow x) (ppshow g)
 bugMultipleAnnots l x     = mkErr l $ printf "Multiple variable annotations for: %s" (ppshow x)
 bugMissingTypeArgs l      = mkErr l $ printf "Missing Type Arguments at %s" (ppshow l)
 bugTBodiesOccur l s       = mkErr l $ printf "There should be no TBodies herie %s" s
@@ -128,8 +128,8 @@ errorClassExtends l x y s = mkErr l $ printf "Class %s cannot extend class %s: t
 errorClEltAnMissing l c s = mkErr l $ printf "Class '%s' is missing an annotation for element '%s'." (ppshow c) (ppshow s)
 errorVarDeclAnnot l x     = mkErr l $ printf "Variable definition of '%s' with neither type annotation nor initialization is not supported." (ppshow x)
 errorConstNonFunc l x     = mkErr l $ printf "Constructor for class '%s' does not have a function type." (ppshow x)
-errorConstMissing l x     = mkErr l $ printf "Constructor for class '%s' does is missing." (ppshow x)
 errorClassMissing l x     = mkErr l $ printf "Cannot call 'new' on non-existing class '%s'." (ppshow x)
+errorConsSigMissing l x   = mkErr l $ printf "Object '%s' is missing a constructor signature." (ppshow x)
 errorBadPAlias l p nx ne  = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne 
 errorBadTAlias l t nt ne nα nx  
                           = mkErr l $ printf "Invalid type alias application: %s \nExpected %d type, %d value arguments, but got %d and %d" (ppshow t) nα nx nt ne  

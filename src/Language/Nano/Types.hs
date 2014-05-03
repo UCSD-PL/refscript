@@ -231,6 +231,7 @@ instance IsNano PrefixOp where
   isNano PrefixLNot   = True
   isNano PrefixMinus  = True 
   isNano PrefixTypeof = True 
+  isNano PrefixBNot   = True 
   isNano e            = errortext (text "Not Nano PrefixOp!" <+> pp e)
   -- isNano _            = False
 

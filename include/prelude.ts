@@ -274,7 +274,18 @@ interface List<A> {
     [x: number]    : T;
 */
 
+/*@ extern Array :: {
+      new forall T . (arrayLength: number) => { v: [T] | (len v) = arrayLength } ;
+      forall T . (arrayLength: number) => { v: [T] | (len v) = arrayLength } ;
 
+      isArray  : /\ forall T . (arg: [T]) => { v: boolean | Prop(v) }
+                 /\ forall A . (arg: A)   => boolean ;
+  } */
+
+/*
+//TODO
+      prototype: Array<any>;
+*/
 
 /*************************************************************************/
 /************** Run-Time Tags ********************************************/
@@ -364,11 +375,6 @@ interface List<A> {
       (message: string) => #Error;
       prototype: #Error;
   } */ 
-
-/*@ interface Error1 {
-      new (message: string) => #Error;
-      prototype: #Error;
-  } */
 
 
 class Errors {

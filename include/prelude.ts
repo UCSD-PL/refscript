@@ -152,9 +152,51 @@ interface List<A> {
 
   Taken from here: 
 
-  http://typescript.codeplex.com/SourceControl/latest#typings/lib.d.ts
+  http://typescript.codeplex.com/sourcecontrol/latest#typings/core.d.ts
 
 **************************************************************************/
+
+
+/*** Object **************************************************************/
+
+
+/*@ interface Object {
+      toString            : () => string;
+      toLocaleString      : () => string;
+      valueOf             : () => #Object;
+      hasOwnProperty      : (v: string) => boolean;
+      isPrototypeOf       : forall A . (v: A) => boolean;
+      propertyIsEnumerable: (v: string) => boolean;
+    } */
+
+/*  TODO:
+    constructor: Function;
+
+*/
+
+/*@ extern Object :: {
+      new forall A . (value: A) => #Object;
+      forall A .     (value: A) => top;
+      prototype           : #Object;
+      getPrototypeOf      : forall A . (o: A) => top;
+      getOwnPropertyNames : forall A . (o: A) => [string];
+      keys                : forall A . (o: A) => [string];
+    } */
+
+/*  TODO: 
+    (): any;
+    getOwnPropertyDescriptor(o: any, p: string): PropertyDescriptor;
+    create(o: any, properties?: PropertyDescriptorMap): any;
+    defineProperty(o: any, p: string, attributes: PropertyDescriptor): any;
+    defineProperties(o: any, properties: PropertyDescriptorMap): any;
+    seal(o: any): any;
+    freeze(o: any): any;
+    preventExtensions(o: any): any;
+    isSealed(o: any): boolean;
+    isFrozen(o: any): boolean;
+    isExtensible(o: any): boolean;
+*/
+
 
 
 /*** Number **************************************************************/

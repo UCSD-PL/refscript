@@ -1,11 +1,11 @@
 
-/*@ where :: forall T . (values: [T], func: (T) => boolean) => [T] */
+/*@ where :: forall T . (values: [T], f: (T) => boolean) => { [T] | true } */
 
-function where<T>(values: T[], func: (v: T) => boolean): T[] {
-	var result = new Array<T>();
+function where<T>(values: T[], f: (v: T) => boolean): T[] {
+	var result = new Array<T>(0);
 
 	for (var i = 0; i < values.length; i++) {
-		if (func(values[i])) {
+		if (f(values[i])) {
 			result.push(values[i]);
 		}
 	}

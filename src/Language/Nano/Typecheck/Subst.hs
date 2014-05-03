@@ -169,7 +169,7 @@ instance F.Reftable r => Substitutable r (Annot (Fact r) z) where
   apply θ (Ann z fs)     = Ann z $ apply θ fs
 
 instance F.Reftable r => Substitutable r (TDef (RType r)) where
-  apply θ (TD n v p e)   = TD n v (apply θ p) (apply θ e)
+  apply θ (TD c n v p e) = TD c n v (apply θ p) (apply θ e)
 
  
 ---------------------------------------------------------------------------------
@@ -192,15 +192,15 @@ flatten :: PPR r
 ---------------------------------------------------------------------------
 flatten δ = fix ff
   where
-    ff r (TD _ vs (Just (i, ts')) es, ts)
+    ff r (TD _ _ vs (Just (i, ts')) es, ts)
       = apply (fromList $ zip vs ts) . fl . L.unionBy sameBinder es
       $ r (findSymOrDie i δ, ts')
-    ff _ (TD _ vs _ es, ts)  = apply (fromList $ zip vs ts) es
+    ff _ (TD _ _ vs _ es, ts)  = apply (fromList $ zip vs ts) es
     -- NOTE: Special case for constructor: does not appear in flat version
     fl = filter (not . isConstr)
 
 -- | flatten' does not apply the top-level type substitution
-flatten' δ d@(TD _ vs _ _) = flatten δ (d, tVar <$> vs)
+flatten' δ d@(TD _ _ vs _ _) = flatten δ (d, tVar <$> vs)
 
 
 flattenTRef δ (TApp (TRef (n,_)) ts _) = flatten δ (findSymOrDie n δ, ts)

@@ -408,7 +408,7 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 -- class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 tcStmt γ c@(ClassStmt l i e is ce) = do  
     -- * Compute / get the class type 
-    TD _ αs _  _ <- classFromStmt c
+    TD _ _ αs _ _ <- classFromStmt c
     -- * Add the type vars in the environment
     let γ'        = tcEnvAdds (tyBinds αs) γ
     -- * Compute type for "this" and add that to the env as well
@@ -442,7 +442,7 @@ classFromStmt (ClassStmt l id _ _ cs) =
         Nothing -> do let elts   = classEltType <$> cs
                       constrL   <- constrT elts
                       let elts'  = elts ++ constrL            
-                      let freshD = TD (fmap ann id) vs p elts'
+                      let freshD = TD True (fmap ann id) vs p elts'
                       setDef     $ addSym sym freshD γ
                       return     $ freshD
   where
@@ -458,7 +458,7 @@ classFromStmt (ClassStmt l id _ _ cs) =
         ([_], _)            -> return []  
         -- 2. Get constructor from parent class
         (_  , Just (i, ts)) -> 
-            do  TD _ vs _ es <- findSymOrDieM i
+            do  TD _ _ vs _ es <- findSymOrDieM i
                 return [getCons $ apply (fromList $ zip vs ts) es]
         -- 3. No parent class around. Just infer a default type 
         (_  , Nothing)      -> return [ ConsSig $ TFun [] tVoid fTop ]
@@ -474,13 +474,6 @@ findClass :: (PPR r, PP s, F.Symbolic s, IsLocated s)
 ---------------------------------------------------------------------------------------
 findClass s = envFindTy (F.symbol s) <$> getClasses 
           >>= maybe (return Nothing) ((Just <$>) . classFromStmt) 
-
----------------------------------------------------------------------------------------
-findClassOrDie :: (PPR r, PP s, F.Symbolic s, IsLocated s) 
-               => s -> TCM r (TDef (RType r))
----------------------------------------------------------------------------------------
-findClassOrDie s = findClass s 
-               >>= maybe (tcError $ errorClassMissing (srcPos s) s) return
 
 ---------------------------------------------------------------------------------------
 classAnnot :: Annot (Fact t) a -> ([TVar], Maybe (Id SourceSpan, [RType t]))
@@ -565,7 +558,7 @@ tcExpr γ e@(VarRef l x)
   = case tcEnvFindTy x γ of
       Just t  -> return (e,t)
       Nothing -> findClass x >>= \case
-        Just (TD s _ _ _) -> return (e, TApp (TRef (F.symbol s, True)) [] fTop)
+        Just (TD _ s _ _ _) -> return (e, TApp (TRef (F.symbol s, True)) [] fTop)
         Nothing -> tcError $ errorUnboundId (ann l) x
  
 tcExpr γ e@(PrefixExpr _ _ _)
@@ -671,7 +664,6 @@ tcCall γ (BracketRef l e1 e2)
          Just _               -> error "IMPOSSIBLE:tcCall:BracketRef"
          Nothing              -> tcError $ errorPropRead (srcPos l) e1 e2 
    
-
 -- | `e1[e2] = e3`
 tcCall γ ex@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
   = do z                           <- tcCallMatch γ l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ tce_env γ
@@ -680,7 +672,6 @@ tcCall γ ex@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
          Just _                    -> error "IMPOSSIBLE:tcCall:AssignExpr"
          Nothing                   -> tcError $ errorBracketAssign (srcPos l) ex 
 
-
 -- | `[e1,...,en]`
 tcCall γ ex@(ArrayLit l es)
   = do z                           <- tcCallMatch γ l BIArrayLit es $ arrayLitTy l (length es) $ tce_env γ
@@ -688,34 +679,47 @@ tcCall γ ex@(ArrayLit l es)
          Just (es', t)             -> return (ArrayLit l es', t)
          Nothing                   -> tcError $ errorArrayLit (srcPos l) ex
 
--- | `new C(e1,...,en)`
---
---  class A<Vs> [extends ...] { constructor :: (xs:Ts) => void; }
---  Type for constructor outside the scope of the class: 
---    ∀ Vs . (xs: Ts) => void
---
+-- | `new e(e1,...,en)`
 tcCall γ (NewExpr l (VarRef lv i) es) = do  
-    t@(TD _ vs _ _) <- findClassOrDie i
-    -- Constructor is non-static
-    tConst0         <- getPropTDefM False l "constructor" t (tVar <$> vs)
-    let tConstr      = fix (F.symbol i, False) vs $ fromMaybe def tConst0
+    tConstr <- getConstr (srcPos l) γ i
     when (not $ isTFun tConstr) $ tcError $ errorConstNonFunc (srcPos l) i
-    z               <- tcCallMatch γ l "constructor" es tConstr
-    case z of
-      -- Constructor's return type is void - instead return the class type
-      -- FIXME: type parameters in returned type: inferred ... or provided !!! 
-      Just (es', t) -> 
-        return (NewExpr l (VarRef lv i) es', t)
+    tcCallMatch γ l "constructor" es tConstr >>= \case 
+      Just (es', t) -> return (NewExpr l (VarRef lv i) es', t)
       Nothing       -> error "No matching constructor"
-  where
-    -- A default type for the constructor
-    def = TFun [] tVoid fTop
-    fix nm vs (TFun ts _ r) = mkAll vs $ TFun ts (TApp (TRef nm) (tVar <$> vs) fTop) r
-    fix _ _ t = error $ "BUG:tcCall NewExpr - not supported type for constructor: " ++ ppshow t
 
 tcCall _ e
   = die $ bug (srcPos e) $ "tcCall: cannot handle" ++ ppshow e        
 
+
+-- | `getConstr` first checks whether input @s@ is a class, in which case it
+-- tries to retrieve a constructor binding, using a default one if that fails.
+-- Otherwise, it tries to retrieve an object with the same name from the
+-- environment that has a constructor property.
+--
+-- FIXME: Do not lookup the constructor by string. We have a special struct for
+-- that.
+----------------------------------------------------------------------------------
+getConstr :: (PPR r, IsLocated a) 
+          => SourceSpan -> TCEnv r -> Id a -> TCM r (RType r)
+----------------------------------------------------------------------------------
+getConstr l γ s = 
+    findClass s >>= \case 
+      Just t  -> getPropTDefM False l "__constructor__" t (tVar <$> t_args t) >>= \case
+                   Just (TFun bs _ r) -> return $ TFun bs (retT t) r
+                   Just _             -> error  $ "Unsupported constructor type"
+                   Nothing            -> return $ TFun [] (retT t) fTop
+      Nothing -> case tcEnvFindTy s γ of
+                   Just t  -> getPropM False l "__constructor__" t >>= \case
+                                Just t  -> return t
+                                Nothing -> tcError $ errorConsSigMissing (srcPos l) s
+                   Nothing -> tcError $ errorClassMissing (srcPos l) s
+  where
+    -- Constructor's return type is void - instead return the class type
+    -- FIXME: type parameters in returned type: inferred ... or provided !!! 
+    retT t = TApp (TRef (F.symbol s, False)) (tVar <$> t_args t) fTop
+
+
+-- | Signature resolution
 
 tcCallMatch γ l fn es ft0 = do  
     (es', ts)     <- unzip <$> mapM (tcExpr γ) es
@@ -751,10 +755,11 @@ resolveOverload γ l fn es ts ft = do
 --
 -- The monad state is completely reversed after this function returns, thanks to
 -- `runMaybeM`. We don't need to reverse the action of `instantiate`.
----------------------------------------------------------------------------------------
-tcCallCaseTry :: (PPR r, PP a) => 
-  TCEnv r -> Annot b SourceSpan -> a -> [RType r] -> RType r -> TCM r (Maybe (RSubst r))
----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+tcCallCaseTry :: (PPR r, PP a) 
+              => TCEnv r -> Annot b SourceSpan -> a -> [RType r] -> RType r 
+              -> TCM r (Maybe (RSubst r))
+----------------------------------------------------------------------------------
 tcCallCaseTry γ l fn ts ft = runMaybeM $ 
   do (_,ibs,_) <- instantiate l (tce_ctx γ) fn ft
      let its    = b_type <$> ibs
@@ -832,9 +837,9 @@ scrapeVarDecl (VarDecl l _ _) =
 sanity l t@(TApp (TRef (i,_)) ts _) = 
   do δ <- getDef 
      case findSym i δ of
-       Just (TD _ αs _ _) 
+       Just (TD _ _ αs _ _) 
          | length αs == length ts -> return t 
-       Just (TD n αs _ _) 
+       Just (TD _ n αs _ _) 
          | otherwise -> tcError $ errorTypeArgsNum l n (length αs) (length ts)
        Nothing -> error $ "BUG: Id: " ++ ppshow i ++ " was not found in env at " ++ ppshow (srcPos l) 
 sanity _ t = return t

@@ -100,7 +100,7 @@ iFaceP   = do id     <- identifierP
               vs     <- option [] tParP
               ext    <- optionMaybe extendsP
               es     <- braces fieldBindP
-              return (id, TD id vs ext es)
+              return (id, TD False id vs ext es)
 
 extendsP = do reserved "extends"
               pId <- (char '#' >> identifierP)
@@ -285,10 +285,11 @@ indexSigP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
                                      "string or number as index." 
 
 -- | [forall A . ] (t...) => t
-callSigP = CallSig <$> withinSpacesP bareFunP 
+callSigP = CallSig <$> withinSpacesP (bareAllP bareFunP)
 
 -- | new [forall A . ] (t...) => t
-consSigP = withinSpacesP (string "new") >> ConsSig <$> withinSpacesP bareFunP 
+consSigP = withinSpacesP (string "new") 
+        >> ConsSig <$> withinSpacesP (bareAllP bareFunP)
 
  
 ----------------------------------------------------------------------------------
@@ -508,7 +509,7 @@ mkCode f ss =  Nano {
 
 -- | At the moment we only support a single index signature with no other
 -- elements, or (normally) bound types without index signature.
-checkIF t@(_,TD _ _ _ elts) 
+checkIF t@(_,TD _ _ _ _ elts) 
   | nTi == 0  = t
   | nTi == 1 && nTe == 0 && nTn == 0 = t
   | otherwise = error $ "[UNIMPLEMENTED] Object types " ++ 

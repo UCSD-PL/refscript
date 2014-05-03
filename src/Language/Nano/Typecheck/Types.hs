@@ -145,7 +145,8 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 -- | Data types 
 
 data TDef t    = TD { 
-        t_name  :: !(Id SourceSpan)               -- ^ Name (possibly no name)
+        t_class :: Bool                           -- ^ Is this a class or interface type
+      , t_name  :: !(Id SourceSpan)               -- ^ Name (possibly no name)
       , t_args  :: ![TVar]                        -- ^ Type variables
       , t_proto :: !(Maybe (Id SourceSpan, [t]))  -- ^ Parent type symbol
       , t_elts  :: ![TElt t]                      -- ^ List of data type elts 
@@ -166,7 +167,7 @@ data TDefEnv t = G  { g_size  :: Int, g_env   :: F.SEnv (TDef t) }
   deriving (Show, Functor, Data, Typeable)
 
 instance F.Fixpoint t => F.Fixpoint (TDef t) where
-  toFix (TD n _ _ _) = F.toFix $ F.symbol n
+  toFix (TD _ n _ _ _) = F.toFix $ F.symbol n
 
 tDefEmpty = G 0 F.emptySEnv
 
@@ -204,7 +205,7 @@ findSymOrDie s γ = fromMaybe (error "findTySymWithIdOrDie") $ findSym s γ
 ---------------------------------------------------------------------------------
 sortTDef:: TDef t -> TDef t
 ---------------------------------------------------------------------------------
-sortTDef (TD nm vs p elts) = TD nm vs p $ sortWith f_sym elts
+sortTDef (TD c nm vs p elts) = TD c nm vs p $ sortWith f_sym elts
 
 
 getCons = fromJust . L.find ((== F.symbol "constructor") . f_sym)
@@ -644,15 +645,17 @@ instance PP t => PP (F.SEnv t) where
   pp m = vcat $ pp <$> F.toListSEnv m
 
 instance (PP t) => PP (TDef t) where
-    pp (TD nm vs Nothing ts) = 
-          pp nm 
+    pp (TD c nm vs Nothing ts) = 
+          pp (if c then "class" else "interface")
+      <+> pp nm 
       <+> ppArgs brackets comma vs 
       <+> braces (
             text " " 
         <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
         <+> text " ")
-    pp (TD nm vs (Just (p,ps)) ts) = 
-          pp nm 
+    pp (TD c nm vs (Just (p,ps)) ts) = 
+          pp (if c then "class" else "interface")
+      <+> pp nm 
       <+> ppArgs brackets comma vs 
       <+> text "extends" <+> pp p <+> pp ps
       <+> braces (
@@ -1067,7 +1070,7 @@ infixOpId OpAdd       = builtinId "OpAdd"
 infixOpId OpMul       = builtinId "OpMul"
 infixOpId OpDiv       = builtinId "OpDiv"
 infixOpId OpMod       = builtinId "OpMod"
-infixOpId o           = errorstar $ "Cannot handle: infixOpId " ++ ppshow o
+infixOpId o           = errorstar $ "infixOpId: Cannot handle: " ++ ppshow o
 
 -----------------------------------------------------------------------
 prefixOpTy :: PrefixOp -> Env t -> t 
@@ -1079,7 +1082,8 @@ prefixOpTy o g = fromMaybe err $ envFindTy (prefixOpId o) g
 prefixOpId PrefixMinus  = builtinId "PrefixMinus"
 prefixOpId PrefixLNot   = builtinId "PrefixLNot"
 prefixOpId PrefixTypeof = builtinId "PrefixTypeof"
-prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
+prefixOpId PrefixBNot   = builtinId "PrefixBNot"
+prefixOpId o            = errorstar $ "prefixOpId: Cannot handle: " ++ ppshow o
 
 
 builtinId       = mkId . ("builtin_" ++)

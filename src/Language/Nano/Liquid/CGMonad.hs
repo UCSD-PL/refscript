@@ -20,7 +20,7 @@ module Language.Nano.Liquid.CGMonad (
   , getCGInfo 
 
   -- * Get Defined Function Type Signature
-  , getDefType, getDef, getPropTDefM
+  , getDefType, getDef, getPropTDefM, getPropM
 
   -- * Throw Errors
   , cgError      
@@ -196,6 +196,9 @@ getPropTDefM b l s t ts = do
   δ <- getDef 
   return $ getPropTDef b l δ (F.symbol s) ts t
 
+getPropM b l s t = do 
+  (δ, ε) <- (,) <$> getDef <*> getExts
+  return  $ snd <$> getProp l ε δ (F.symbol s) t
 
 ---------------------------------------------------------------------------------------
 cgError     :: a -> Error -> CGM b 
@@ -304,15 +307,16 @@ envAddGuard x b g = g { guards = guard b x : guards g }
 
 -- | A helper that returns the actual @RefType@ of the expression by looking up
 -- the environment with the name, strengthening with singleton for base-types.
+-- The search includes classes, as they might contain static fields.
 ---------------------------------------------------------------------------------------
 envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
 ---------------------------------------------------------------------------------------
 envFindTy x g = 
     case findSym x $ cge_defs g of
-      Just _  -> TApp (TRef (F.symbol x, True)) [] fTop
-      Nothing -> (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
+      Just t  | t_class t -> TApp (TRef (F.symbol x, True)) [] fTop
+      _ -> (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
   where 
-    err       = throw $ bugUnboundVariable (srcPos x) (F.symbol x)
+    err       = throw $ bugUnboundVariable (srcPos x) (F.symbol x) (renv g)
 
 
 ---------------------------------------------------------------------------------------
@@ -773,10 +777,10 @@ cgWithThis t p = do { cgPushThis t; a <- p; cgPopThis; return a }
 getSuperM :: IsLocated a => a -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
 getSuperM l (TApp (TRef (i,s)) ts _) = fromTdef =<< findSymOrDieM i
-  where fromTdef (TD _ vs (Just (p,ps)) _) = do
+  where fromTdef (TD _ _ vs (Just (p,ps)) _) = do
           return  $ apply (fromList $ zip vs ts) 
                   $ TApp (TRef (F.symbol p,s)) ps fTop
-        fromTdef (TD _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
+        fromTdef (TD _ _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
 getSuperM l _  = cgError l $ errorSuper (srcPos l) 
 
 --------------------------------------------------------------------------------
@@ -784,11 +788,11 @@ getSuperDefM :: IsLocated a => a -> RefType -> CGM (TDef RefType)
 --------------------------------------------------------------------------------
 getSuperDefM l (TApp (TRef (i,_)) ts _) = fromTdef =<< findSymOrDieM i
   where 
-    fromTdef (TD _ vs (Just (p,ps)) _) = 
-      do TD n ws pp ee <- findSymOrDieM p
+    fromTdef (TD _ _ vs (Just (p,ps)) _) = 
+      do TD c n ws pp ee <- findSymOrDieM p
          return  $ apply (fromList $ zip vs ts) 
                  $ apply (fromList $ zip ws ps)
-                 $ TD n [] pp ee
-    fromTdef (TD _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
+                 $ TD c n [] pp ee
+    fromTdef (TD _ _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
 getSuperDefM l _  = cgError l $ errorSuper (srcPos l)
 

@@ -1,9 +1,9 @@
 
-/*@ any :: forall T . (array: [T], func (T) => boolean) => boolean */
+/*@ any :: forall T . (array: [T], f: (T) => boolean) => { boolean | true } */
 
-function any<T>(array: T[], func: (v: T) => boolean): boolean {
+function any<T>(array: T[], f: (v: T) => boolean): boolean {
 	for (var i = 0, n = array.length; i < n; i++) {
-		if (func(array[i])) {
+		if (f(array[i])) {
 			return true;
 		}
 	}

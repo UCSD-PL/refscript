@@ -60,7 +60,7 @@ module Language.Nano.Typecheck.TCMonad (
   , getSuperM, getSuperDefM
 
   -- * Prop
-  , getPropTDefM
+  , getPropTDefM, getPropM
 
   )  where 
 
@@ -599,15 +599,18 @@ getPropTDefM b l s t ts = do
   δ <- getDef
   return $ getPropTDef b l δ (F.symbol s) ts t
 
+getPropM b l s t = do 
+  (δ, ε) <- (,) <$> getDef <*> getExts
+  return  $ snd <$> getProp l ε δ (F.symbol s) t
 
 --------------------------------------------------------------------------------
 getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
 --------------------------------------------------------------------------------
 getSuperM l (TApp (TRef (i, s)) ts _) = fromTdef =<< findSymOrDieM i
-  where fromTdef (TD _ vs (Just (p,ps)) _) = do
+  where fromTdef (TD _ _ vs (Just (p,ps)) _) = do
           return  $ apply (fromList $ zip vs ts) 
                   $ TApp (TRef (F.symbol p,s)) ps fTop
-        fromTdef (TD _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
+        fromTdef (TD _ _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
 getSuperM l _  = tcError $ errorSuper (srcPos l) 
 
 --------------------------------------------------------------------------------
@@ -615,11 +618,11 @@ getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (TDef (RType r))
 --------------------------------------------------------------------------------
 getSuperDefM l (TApp (TRef (i,_)) ts _) = fromTdef =<< findSymOrDieM i
   where 
-    fromTdef (TD _ vs (Just (p,ps)) _) = 
-      do TD n ws pp ee <- findSymOrDieM p
+    fromTdef (TD _ _ vs (Just (p,ps)) _) = 
+      do TD c n ws pp ee <- findSymOrDieM p
          return  $ apply (fromList $ zip vs ts) 
                  $ apply (fromList $ zip ws ps)
-                 $ TD n [] pp ee
-    fromTdef (TD _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
+                 $ TD c n [] pp ee
+    fromTdef (TD _ _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
 getSuperDefM l _  = tcError $ errorSuper (srcPos l)
 

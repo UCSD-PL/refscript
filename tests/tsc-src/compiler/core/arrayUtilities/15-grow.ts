@@ -1,5 +1,5 @@
 
-/*@ grow :: forall T . (array [T], length number, defaultValue: T) => void */
+/*@ grow :: forall T . (array: [T], length: number, defaultValue: T) => { void | true } */
 
 function grow<T>(array: T[], length: number, defaultValue: T): void {
 	var count = length - array.length;

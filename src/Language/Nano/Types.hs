@@ -403,11 +403,6 @@ getFunctionStatements s = [fs | fs@(FunctionStmt _ _ _ _) <- flattenStmt s]
 getFunctionIds :: Statement a -> [Id a]
 getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
 
--- getFunctionStatements s@(FunctionStmt _ _ _ _) = [s] 
--- getFunctionStatements (BlockStmt _ ss)         = concatMap getFunctionStatements ss
--- getFunctionStatements _                        = []
-
-
 
 ------------------------------------------------------------------
 -- | Converting `ECMAScript3` values into `Fixpoint` values, 

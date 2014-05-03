@@ -23,5 +23,5 @@ function binarySearch(array: number[], value: number): number {
 
   //PV 
   throw new Error("Number not found");
-	//return low;
+	//return ~low;
 }

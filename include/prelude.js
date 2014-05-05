@@ -52,7 +52,12 @@
 /\ (x:string, y:string) => string                                 */
 /*@ extern builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v = x - y} */
 /*@ extern builtin_OpMul       :: (number,  number)  => number                                      */
-/*@ extern builtin_OpDiv       :: (number,  number)  => number                                      */
+/*@ extern builtin_OpDiv       :: (x: number, y: { v: number | v != 0 })
+=> { v:number | (    ((x>0 && y>0) => v>0)
+&& (x=0 <=> v=0)
+&& ((x>0 && y>1) => v<x)
+)}
+*/
 /*@ extern builtin_OpMod       :: (number,  number)  => number                                      */
 /*@ extern builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v = (0 - x)}                 */
 /*@ extern builtin_OpEq        :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x = y)) }   */
@@ -66,11 +71,45 @@
 /*@ extern builtin_OpLAnd      :: (x:top, y:top)         => {v:top | ((Prop v) <=> (if (TRU(x)) then (v = y) else (v = x) ))}     */
 /*@ extern builtin_OpLOr       :: forall A . (x:A, y:A)  => {v:A   | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))}     */
 /*@ extern builtin_PrefixLNot  :: forall A . (x: A)      => {v:boolean | ((Prop v) <=> FLS(x))}     */
+/*@ extern builtin_PrefixBNot  :: (x: number)            => {v:number | v = 0 - (x + 1) }           */
 /*************************************************************************
 Ambient Definitions
 Taken from here:
-http://typescript.codeplex.com/SourceControl/latest#typings/lib.d.ts
+http://typescript.codeplex.com/sourcecontrol/latest#typings/core.d.ts
 **************************************************************************/
+/*** Object **************************************************************/
+/*@ interface Object {
+toString            : () => string;
+toLocaleString      : () => string;
+valueOf             : () => #Object;
+hasOwnProperty      : (v: string) => boolean;
+isPrototypeOf       : forall A . (v: A) => boolean;
+propertyIsEnumerable: (v: string) => boolean;
+} */
+/*  TODO:
+constructor: Function;
+*/
+/*@ extern Object :: {
+new forall A . (value: A) => #Object;
+forall A .     (value: A) => top;
+prototype           : #Object;
+getPrototypeOf      : forall A . (o: A) => top;
+getOwnPropertyNames : forall A . (o: A) => [string];
+keys                : forall A . (o: A) => [string];
+} */
+/*  TODO:
+(): any;
+getOwnPropertyDescriptor(o: any, p: string): PropertyDescriptor;
+create(o: any, properties?: PropertyDescriptorMap): any;
+defineProperty(o: any, p: string, attributes: PropertyDescriptor): any;
+defineProperties(o: any, properties: PropertyDescriptorMap): any;
+seal(o: any): any;
+freeze(o: any): any;
+preventExtensions(o: any): any;
+isSealed(o: any): boolean;
+isFrozen(o: any): boolean;
+isExtensible(o: any): boolean;
+*/
 /*** Number **************************************************************/
 /*@ extern NumberC :: (x: top) => number */
 /*** Math ****************************************************************/
@@ -137,7 +176,7 @@ toPrecision     : (precision: number) => string
 /*@ interface Array<T> {
 toString       : () => string;
 toLocaleString : () => string;
-concat         : (items: [T]) => [T];
+concat         : (items: [T]) => { [T] | (len v) = (len this) + (len items) } ;
 join           : (separator: string) => string;
 pop            : () => T;
 push           : (items: T) => number;
@@ -167,6 +206,16 @@ reduce         :  /\ (callbackfn: (previousValue: T, currentValue: T, currentInd
 reduceRight    :  /\ (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T
 /\ forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U;
 [x: number]    : T;
+*/
+/*@ extern Array :: {
+new forall T . (arrayLength: number) => { v: [T] | (len v) = arrayLength } ;
+forall T . (arrayLength: number) => { v: [T] | (len v) = arrayLength } ;
+isArray  : /\ forall T . (arg: [T]) => { v: boolean | Prop(v) }
+/\ forall A . (arg: A)   => boolean ;
+} */
+/*
+//TODO
+prototype: Array<any>;
 */
 /*************************************************************************/
 /************** Run-Time Tags ********************************************/
@@ -224,8 +273,9 @@ reduceRight    :  /\ (callbackfn: (previousValue: T, currentValue: T, currentInd
 name: string;
 message: string;
 } */
-/*@ extern Error :: {new(message:string):#Error;     (message: string): #Error;     prototype: #Error;  } */ /*@ interface Error1 {
+/*@ extern Error :: {
 new (message: string) => #Error;
+(message: string) => #Error;
 prototype: #Error;
 } */
 var Errors = (function () {

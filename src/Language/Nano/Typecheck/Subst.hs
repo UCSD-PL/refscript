@@ -80,7 +80,6 @@ class Free a where
 
 instance Free (RType r) where
   free (TApp _ ts _)        = free ts
-  free (TArr t _)           = free t
   free (TVar α _)           = S.singleton α 
   free (TFun xts t _)       = free $ t:(b_type <$> xts)
   free (TAll α t)           = S.delete α $ free t 
@@ -180,7 +179,6 @@ appTy θ        (TAnd ts)     = TAnd (apply θ ts)
 appTy (Su m) t@(TVar α r)    = (M.lookupDefault t α m) `strengthen` r
 appTy θ        (TFun ts t r) = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m)   (TAll α t)    = TAll α $ apply (Su $ M.delete α m) t
-appTy θ        (TArr t r)    = TArr (apply θ t) r
 appTy θ        (TCons es r)  = TCons (apply θ es) r
 appTy _        (TExp _)      = error "appTy should not be applied to TExp"
 
@@ -213,7 +211,6 @@ flattenType δ (TApp c ts r)  = TApp c (flattenType δ <$> ts) r
 flattenType _ (TVar v r)     = TVar v r
 flattenType δ (TFun ts to r) = TFun (f <$> ts) (flattenType δ to) r
                                     where f (B s t) = B s $ flattenType δ t
-flattenType δ (TArr t r)     = TArr (flattenType δ t) r
 flattenType δ (TAll v t)     = TAll v $ flattenType δ t
 flattenType δ (TAnd ts)      = TAnd $ flattenType δ <$> ts
 flattenType δ (TCons ts r)   = TCons ((flattenType δ <$>) <$> ts) r

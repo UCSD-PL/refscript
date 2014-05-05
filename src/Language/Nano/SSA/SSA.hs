@@ -46,8 +46,8 @@ ssaNano :: (PP r, F.Reftable r, Data r, Typeable r) => NanoBareR r -> SSAM r (Na
 ssaNano p@(Nano { code = Src fs }) 
   = do θ <- getSsaEnv 
        setSsaEnv $ extSsaEnv classes θ
-       withMutability ReadOnly ros 
-          $ withMutability WriteGlobal wgs 
+       withAssignability ReadOnly ros 
+          $ withAssignability WriteGlobal wgs 
             $ do (_,fs') <- ssaStmts (map (ann <$>) fs)
                  ssaAnns <- getAnns
                  return   $ p {code = Src $ map (fmap (patch [ssaAnns, typeAnns])) fs' }
@@ -67,7 +67,7 @@ ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatem
 -------------------------------------------------------------------------------------
 ssaFun (FunctionStmt l f xs body) 
   = do θ <- getSsaEnv  
-       withMutability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
+       withAssignability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
          do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
@@ -235,7 +235,7 @@ ssaStmt s
 
 ssaClassElt (Constructor l xs body)
   = do θ <- getSsaEnv
-       withMutability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
+       withAssignability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
          do setSsaEnv     $ extSsaEnv xs θ                   -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
@@ -246,7 +246,7 @@ ssaClassElt v@(MemberVarDecl _ _ _ )    = return v
 
 ssaClassElt (MemberMethDecl l s e xs body)
   = do θ <- getSsaEnv  
-       withMutability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
+       withAssignability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
          do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
@@ -330,7 +330,7 @@ ssaExpr   (ArrayLit l es)
   = ArrayLit l <$> (mapM ssaExpr es)
 
 ssaExpr e@(VarRef l x) 
-  = do mut <- getMutability x
+  = do mut <- getAssignability x
        case mut of
          WriteGlobal -> return e
          ReadOnly    -> maybe e   (VarRef l) <$> findSsaEnv x

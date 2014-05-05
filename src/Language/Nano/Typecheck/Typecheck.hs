@@ -629,7 +629,7 @@ tcCall γ (PrefixExpr l o e)
        case z of
          Just ([e'], t)       -> return (PrefixExpr l o e', t)
          Just _               -> error "IMPOSSIBLE:tcCall:PrefixExpr"
-         Nothing              -> error "UNIMPLMENTED: former deadcast" 
+         Nothing              -> tcError $ errorCallNotSup (srcPos l) o e
 
 -- | `e1 o e2`
 tcCall γ (InfixExpr l o e1 e2)        
@@ -637,7 +637,7 @@ tcCall γ (InfixExpr l o e1 e2)
        case z of
          Just ([e1', e2'], t) -> return (InfixExpr l o e1' e2', t)
          Just _               -> error "IMPOSSIBLE:tcCall:InfixExpr"
-         Nothing              -> error "UNIMPLMENTED: former deadcast" 
+         Nothing              -> tcError $ errorCallNotSup (srcPos l) o [e1,e2]
          
 -- | `super(e1,...,en)`: TSC will already have checked that `super` is only
 -- called whithin the constructor.
@@ -661,7 +661,7 @@ tcCall γ (BracketRef l e1 e2)
   = do z                      <- tcCallMatch γ l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ tce_env γ 
        case z of
          Just ([e1', e2'], t) -> return (BracketRef l e1' e2', t)
-         Just _               -> error "IMPOSSIBLE:tcCall:BracketRef"
+         Just _               -> error "BUG: tcCall BracketRef"
          Nothing              -> tcError $ errorPropRead (srcPos l) e1 e2 
    
 -- | `e1[e2] = e3`
@@ -669,7 +669,7 @@ tcCall γ ex@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
   = do z                           <- tcCallMatch γ l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ tce_env γ
        case z of
          Just ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
-         Just _                    -> error "IMPOSSIBLE:tcCall:AssignExpr"
+         Just _                    -> error "BUG: tcCall AssignExpr"
          Nothing                   -> tcError $ errorBracketAssign (srcPos l) ex 
 
 -- | `[e1,...,en]`
@@ -764,7 +764,9 @@ tcCallCaseTry γ l fn ts ft = runMaybeM $
   do (_,ibs,_) <- instantiate l (tce_ctx γ) fn ft
      let its    = b_type <$> ibs
      θ'        <- unifyTypesM (ann l) "tcCallCaseTryAux" ts its
-     zipWithM_    (subtypeM (ann l)) (apply θ' ts) (apply θ' its)
+     let t1     = apply θ' ts
+     let t2     = apply θ' its
+     zipWithM_    (subtypeM (ann l)) t1 t2
      return     $ θ'
 
 

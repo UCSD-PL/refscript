@@ -1,5 +1,5 @@
 
-/*@ any :: forall T . (array: [T], f: (T) => boolean) => { boolean | true } */
+/*@ any :: forall T . (array: #Array[#Immutable,T], f: (T) => boolean) => { boolean | true } */
 
 function any<T>(array: T[], f: (v: T) => boolean): boolean {
 	for (var i = 0, n = array.length; i < n; i++) {

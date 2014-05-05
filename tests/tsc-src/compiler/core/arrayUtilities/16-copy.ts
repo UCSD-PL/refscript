@@ -1,8 +1,8 @@
 
 /*@ copy :: forall T . 
-      (sourceArray: [T] ,
+      (sourceArray: #Array[#Immutable,T] ,
        sourceIndex: { number | 0 <= v } , 
-       destinationArray: [T], 
+       destinationArray: #Array[#Immutable,T], 
        destinationIndex: { number | 0 <= v } , 
        length: { v:number | ((sourceIndex      + v < (len sourceArray)) 
                           && (destinationIndex + v < (len destinationArray)))}) 

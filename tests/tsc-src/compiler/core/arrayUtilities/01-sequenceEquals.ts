@@ -2,7 +2,9 @@
 // TODO: The version with the ...? does not work yet.
 /*  sequenceEquals :: forall T . (array1: [T]?, array2: [T]?, equals: (T,T) => boolean) => { boolean | true } */
 
-/*@ sequenceEquals :: forall T . (array1: [T], array2: [T], equals: (T,T) => boolean) => { v: boolean | true } */
+/*@ sequenceEquals :: forall T . ( array1: #Array[#Immutable,T]
+                                 , array2: #Array[#Immutable,T]
+                                 , equals: (T,T) => boolean ) => { v: boolean | true } */
 
 function sequenceEquals<T>(array1: T[], array2: T[], equals: (v1: T, v2: T) => boolean) {
     if (array1 === array2) {

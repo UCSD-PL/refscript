@@ -1,5 +1,5 @@
 
-/*@ where :: forall T . (values: [T], f: (T) => boolean) => { [T] | true } */
+/*@ where :: forall T . (values: #Array[#Immutable,T], f: (T) => boolean) => { #Array[#Immutable,T] | true } */
 
 function where<T>(values: T[], f: (v: T) => boolean): T[] {
 	var result = new Array<T>(0);

@@ -1,7 +1,8 @@
 
 // Gets unique element array
 
-/*@ distinct :: forall T . (array: [T], equalsFn: (T,T) => string) => { [T] | true } */
+/*@ distinct :: forall T . (array: #Array[#Immutable,T], equalsFn: (T,T) => string) 
+             => { #Array[#Immutable,T] | true } */
 function distinct<T>(array: T[], equalsFn?: (a: T, b: T) => boolean): T[] {
 	var result: T[] = [];
 

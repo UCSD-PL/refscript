@@ -243,6 +243,7 @@ envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id AnnTy
 envAddFresh _ l t g 
   = do x  <- freshId loc
        g' <- envAdds [(x, t)] g
+       addAnnot (srcPos l) x t
        return (x, g')
     where loc = srcPos l
    

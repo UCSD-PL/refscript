@@ -1,7 +1,7 @@
  
 ///<reference path='../../../../../include/prelude.ts' />
 
-/*@ last :: forall T . (array: [T]) => { T | true } */
+/*@ last :: forall T . (array: #Array[#Immutable,T]) => { T | true } */
 function last<T>(array: T[]): T {
 	if (array.length === 0) {
 		throw Errors.argumentOutOfRange('array');
@@ -10,7 +10,7 @@ function last<T>(array: T[]): T {
 	return array[array.length - 1];
 }
 
-/*@ lastOrDefault :: forall T . (array: [T], (v:T, index: number) => boolean) => { T | true }  */
+/*@ lastOrDefault :: forall T . (array: #Array[#Immutable,T], (v:T, index: number) => boolean) => { T | true }  */
 function lastOrDefault<T>(array: T[], predicate: (v: T, index: number) => boolean): T {
   for (var i = array.length - 1; i >= 0; i--) {
     var v = array[i];

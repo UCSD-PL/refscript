@@ -77,8 +77,8 @@ module Language.Nano.Typecheck.Types (
   -- * Contexts
   , CallSite (..), IContext, emptyContext, pushContext
 
-  -- * Mutability 
-  , Mutability (..), writeGlobalVars, readOnlyVars  
+  -- * Assignability 
+  , Assignability (..), writeGlobalVars, readOnlyVars  
 
   -- * Aliases
   , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
@@ -152,7 +152,7 @@ data TDef t    = TD {
       , t_elts  :: ![TElt t]                      -- ^ List of data type elts 
       } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
--- | Mutability is ingored atm.
+-- | Assignability is ingored atm.
 data TElt t    = PropSig  { f_sym :: F.Symbol, f_sta :: Bool, f_mut :: Bool, f_type :: t }     -- Property Signature
                | CallSig  {                                                  f_type :: t }     -- Call Signature
                | ConsSig  {                                                  f_type :: t }     -- Constructor Signature               
@@ -712,10 +712,10 @@ mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }
 
 ------------------------------------------------------------------------------------------
--- | Mutability 
+-- | Assignability 
 ------------------------------------------------------------------------------------------
 
-data Mutability 
+data Assignability 
   = ReadOnly    -- ^ import,  cannot be modified, can appear in refinements
   | WriteLocal  -- ^ written in local-scope, can be SSA-ed, can appear in refinements
   | WriteGlobal -- ^ written in non-local-scope, cannot do SSA, cannot appear in refinements
@@ -882,7 +882,7 @@ data Fact r
   | TCast       !IContext !(Cast r)
   -- Type annotations
   | VarAnn      !(RType r)
-  | FieldAnn    !(Bool, RType r)      -- (mutability, type)
+  | FieldAnn    !(Bool, RType r)      -- (Assignability, type)
   | MethAnn     !(RType r)            -- type
   | ConsAnn     !(RType r)            -- type
   -- Class annotation

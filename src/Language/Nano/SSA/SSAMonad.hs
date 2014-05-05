@@ -30,9 +30,9 @@ module Language.Nano.SSA.SSAMonad (
    , addAnn
    , getAnns
 
-   -- * Tracking Mutability
-   , getMutability
-   , withMutability
+   -- * Tracking Assignability
+   , getAssignability
+   , withAssignability
 
    ) where 
 
@@ -58,10 +58,10 @@ import qualified Language.Fixpoint.Types            as F
 
 type SSAM r     = ErrorT Error (State (SsaState r))
 
-data SsaState r = SsaST { mutability  :: Env Mutability -- ^ mutability status 
-                        , names       :: SsaEnv         -- ^ current SSA names 
-                        , count       :: !Int           -- ^ fresh index
-                        , anns        :: !(AnnInfo r)   -- ^ built up map of annots 
+data SsaState r = SsaST { assign      :: Env Assignability -- ^ assignability status 
+                        , names       :: SsaEnv            -- ^ current SSA names 
+                        , count       :: !Int              -- ^ fresh index
+                        , anns        :: !(AnnInfo r)      -- ^ built up map of annots 
                         }
 
 type SsaEnv     = Env SsaInfo 
@@ -99,21 +99,21 @@ setSsaEnv θ = modify $ \st -> st { names = θ }
 
 
 -------------------------------------------------------------------------------------
-withMutability :: Mutability -> [Id SourceSpan] -> SSAM r a -> SSAM r a 
+withAssignability :: Assignability -> [Id SourceSpan] -> SSAM r a -> SSAM r a 
 -------------------------------------------------------------------------------------
-withMutability m xs act
-  = do zOld  <- mutability <$> get
-       modify $ \st -> st { mutability = zNew `envUnion` zOld } 
+withAssignability m xs act
+  = do zOld  <- assign <$> get
+       modify $ \st -> st { assign = zNew `envUnion` zOld } 
        ret   <- act
-       modify $ \st -> st { mutability = zOld }
+       modify $ \st -> st { assign = zOld }
        return $ ret
     where 
        zNew   = envFromList $ (, m) <$> xs 
 
 ---------------------------------------------------------------------------------
-getMutability :: Id SourceSpan -> SSAM r Mutability 
+getAssignability :: Id SourceSpan -> SSAM r Assignability 
 ---------------------------------------------------------------------------------
-getMutability x = (fromMaybe WriteLocal . envFindTy x . mutability) <$> get
+getAssignability x = (fromMaybe WriteLocal . envFindTy x . assign) <$> get
 
 
 -- -------------------------------------------------------------------------------------
@@ -137,7 +137,7 @@ getMutability x = (fromMaybe WriteLocal . envFindTy x . mutability) <$> get
 updSsaEnv   :: SourceSpan -> Id SourceSpan -> SSAM r (Id SourceSpan) 
 -------------------------------------------------------------------------------------
 updSsaEnv l x 
-  = do mut <- getMutability x
+  = do mut <- getAssignability x
        case mut of
          WriteLocal  -> updSsaEnvLocal l x
          WriteGlobal -> return x

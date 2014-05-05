@@ -1,7 +1,7 @@
 
 ///<reference path='../../../../../include/prelude.ts' />
 
-/*@ firstOrDefault :: forall T . (array: [T], f : (v: T, index: number) => boolean) => { T | true } */
+/*@ firstOrDefault :: forall T . (array: #Array[#Immutable,T], f : (v: T, index: number) => boolean) => { T | true } */
 function firstOrDefault<T>(array: T[], f: (v: T, index: number) => boolean): T {
   for (var i = 0, n = array.length; i < n; i++) {
     var value = array[i];
@@ -15,7 +15,7 @@ function firstOrDefault<T>(array: T[], f: (v: T, index: number) => boolean): T {
   return null;
 }
  
-/*@ first :: forall T . (array: [T], f: (v: T, index: number) => boolean) => { T | true } */
+/*@ first :: forall T . (array: #Array[#Immutable,T], f: (v: T, index: number) => boolean) => { T | true } */
 //function first<T>(array: T[], f /* ? */: (v: T, index: number) => boolean): T {
 function first<T>(array: T[], f: (v: T, index: number) => boolean): T {
  	for (var i = 0, n = array.length; i < n; i++) {

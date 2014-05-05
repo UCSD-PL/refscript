@@ -2,7 +2,7 @@
 //PV:
 //changed local variables `min` and `max` to `min_` and `max_`.
 
-/*@ min :: forall T . (array: { [T] | (len v) > 0 } , f: (T)=>number) => number */
+/*@ min :: forall T . (array: { #Array[#Immutable,T] | (len v) > 0 } , f: (T)=>number) => number */
 function min<T>(array: T[], f: (v: T) => number): number {
 	/*Debug.*/assert(array.length > 0);
 	var min_ = f(array[0]);
@@ -17,7 +17,7 @@ function min<T>(array: T[], f: (v: T) => number): number {
 	return min_;
 }
 
-/*@ max :: forall T . (array: { [T] | (len v) > 0 }, f: (T)=>number) => number */
+/*@ max :: forall T . (array: { #Array[#Immutable,T] | (len v) > 0 }, f: (T)=>number) => number */
 function max<T>(array: T[], f: (v: T) => number): number {
    /*debug.*/assert(array.length > 0);
   var max_ = f(array[0]);

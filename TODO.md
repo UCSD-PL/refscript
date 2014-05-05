@@ -7,25 +7,8 @@ Benchmarks
 JS Features
 -----------
 
-  - FIELDS
-    - Implement mutability field
-
   - METHODS:
     - typescript/pos/objects/meth-00.js
-
-  - DYNAMIC WRITES `e1[e2] = e3` 
-    - where: `e2` is a `string`
-
-  - CONSTRUCTORS: 
-
-  - CLASSES:
-
-  - INTERFACES:
-    - Covariant/Contravariant type parameter positions
-
-  - TRUTHY:
-    - Encoding truthy, falsy, undefined, null etc.
-      Eg: tc/pos/obj02.js, tc/pos/union05.js
 
   - Do we need dead code cast?
 
@@ -33,6 +16,11 @@ JS Features
 Tool/Implementation
 -------------------
   
+  - Check that the first argument of a generic type is in { ReadOnly, Immutable,
+    AssignFields, Mutable }.
+
+  - Check number of arguments at generic instantiations.
+
   - Fix scoping for functions and variables.
 
   - Add check for types of extended classes.

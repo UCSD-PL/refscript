@@ -1,5 +1,5 @@
 
-/*@ indexOf :: forall T . (array: [T], predicate: (T) => boolean) 
+/*@ indexOf :: forall T . (array: #Array[#Immutable,T], predicate: (T) => boolean) 
   => { number | (0 <= v && v < (len array)) } */
 function indexOf<T>(array: T[], predicate: (v: T) => boolean): number {
 	for (var i = 0, n = array.length; i < n; i++) {

@@ -394,7 +394,7 @@ subtypeM :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 subtypeM l t1 t2 = convert l t1 t2 >>= \case
   CNo       -> return ()
-  (CDn _ _) -> return ()
+--  (CDn _ _) -> return ()
   (CUp _ _) -> return ()
   _         -> tcError $ errorStrictSubtype l
 

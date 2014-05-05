@@ -6,6 +6,7 @@
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE OverlappingInstances      #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE UndecidableInstances      #-}
@@ -782,7 +783,7 @@ instance PP TCon where
   pp TVoid            = text "void"
   pp TTop             = text "top"
   pp TUn              = text "union:"
-  pp (TRef (x,True))  = text "#(ST)" <> text (F.symbolString $ x)
+  pp (TRef (x,True))  = text "#(static)" <> text (F.symbolString $ x)
   pp (TRef (x,_   ))  = text "#" <> text (F.symbolString $ x)
   pp TNull            = text "null"
   pp TUndef           = text "undefined"
@@ -1025,10 +1026,14 @@ builtinOpId BIArrayLit      = builtinId "BIArrayLit"
 builtinOpId BINumArgs       = builtinId "BINumArgs"
 builtinOpId BITruthy        = builtinId "BITruthy"
 
--- arrayLitTy :: (IsLocated l) => l -> Int -> Env t -> t
+
+-----------------------------------------------------------------------
+arrayLitTy :: (F.Subable (RType r), IsLocated a) 
+           => a -> Int -> Env (RType r) -> RType r
+-----------------------------------------------------------------------
 arrayLitTy l n g 
   = case ty of 
-      TAll α (TFun [xt] t r) -> TAll α $ TFun (arrayLitBinds n xt) (arrayLitOut n t) r
+      TAll μ (TAll α (TFun [xt] t r)) -> TAll μ $ TAll α $ TFun (arrayLitBinds n xt) (arrayLitOut n t) r
       _                      -> err 
     where
       ty                     = builtinOpTy l BIArrayLit g

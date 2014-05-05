@@ -1,5 +1,5 @@
 
-/*@ sum :: forall T . (array: [T], f: (T) => number) => { number | true } */
+/*@ sum :: forall T . (array: #Array[#Immutable,T], f: (T) => number) => { number | true } */
 
 function sum<T>(array: T[], f: (v: T) => number): number {
 	var result = 0;

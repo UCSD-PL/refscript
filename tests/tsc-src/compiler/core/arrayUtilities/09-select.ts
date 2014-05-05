@@ -1,5 +1,5 @@
 
-/*@ select :: forall T S . (values: [T], f: (T) => S) => { [S] | true } */
+/*@ select :: forall T S . (values: #Array[#Immutable,T], f: (T) => S) => { #Array[#Immutable,S] | true } */
 
 function select<T, S>(values: T[], f: (v: T) => S): S[] {
 	var result: S[] = new Array<S>(values.length);

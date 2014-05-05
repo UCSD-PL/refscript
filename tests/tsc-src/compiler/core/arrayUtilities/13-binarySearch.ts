@@ -1,5 +1,5 @@
 
-/*@ binarySearch :: (array: [number], value: number) => 
+/*@ binarySearch :: (array: #Array[#Immutable,number], value: number) => 
     { v: number | (0 <= v && (v < (len array)))} */
 function binarySearch(array: number[], value: number): number {
 	var low = 0;

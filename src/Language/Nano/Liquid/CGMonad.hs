@@ -578,14 +578,6 @@ splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
                                     (Sub g i) t1s t2s
        return $ cs ++ cs'
 
--- | TArr
-splitC (Sub g i t1@(TArr t1v _ ) t2@(TArr t2v _ ))
-  = do cs    <- bsplitC g i t1 t2
-       cs'   <- splitC (Sub g i t1v t2v) -- CO-VARIANCE 
-       -- FIXME: Variance !!!
-       -- cs''  <- splitC (Sub g i t2v t1v) -- CONTRA-VARIANCE 
-       return $ cs ++ cs' -- ++ cs''
-
 -- | TCons
 -- FIXME: Variance !!!
 splitC (Sub g i t1@(TCons e1s _ ) t2@(TCons e2s _ ))
@@ -684,11 +676,6 @@ splitW (W g i t@(TVar _ _))
 splitW (W g i t@(TApp _ ts _))
   =  do let ws = bsplitW g t i
         ws'   <- concatMapM splitW [W g i ti | ti <- ts]
-        return $ ws ++ ws'
-
-splitW (W g i t@(TArr t' _))
-  =  do let ws = bsplitW g t i
-        ws'   <- splitW (W g i t')
         return $ ws ++ ws'
 
 splitW (W g i (TAnd ts))

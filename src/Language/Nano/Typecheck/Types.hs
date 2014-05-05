@@ -42,7 +42,7 @@ module Language.Nano.Typecheck.Types (
   , Type, TDef (..), TVar (..), TCon (..), TElt (..)
 
   -- * Primitive Types
-  , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, tUndef, tNull
+  , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, rtArr, tUndef, tNull
   , tAnd, isTVar, isArr, isTCons, isIndSig, isConstr, isTFun, fTop, orNull
 
   -- * Print Types
@@ -229,13 +229,12 @@ data RType r
   = TApp TCon [RType r]     r   -- ^ C T1,...,Tn
   | TVar TVar               r   -- ^ A
   | TFun [Bind r] (RType r) r   -- ^ (x1:T1,...,xn:Tn) => T
-  | TArr (RType r)          r   -- ^ [T] 
+  | TCons [TElt (RType r)]  r   -- ^ Flat object type
   | TAll TVar (RType r)         -- ^ forall A. T
   | TAnd [RType r]              -- ^ (T1..) => T1' /\ ... /\ (Tn..) => Tn' 
 
   | TExp F.Expr                 -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
 
-  | TCons [TElt (RType r)]  r   -- ^ Flat object type
     deriving (Ord, Show, Functor, Data, Typeable)
 
 data Bind r
@@ -362,7 +361,6 @@ instance Equivalent (RType r) where
       go [] _  = False
       go _ []  = False
   equiv (TApp c ts _) (TApp c' ts' _) = c `equiv` c' && ts `equiv` ts'
-  equiv (TArr t _   ) (TArr t' _    ) = t `equiv` t'
   equiv (TVar v _   ) (TVar v' _    ) = v == v'
   equiv (TFun b o _ ) (TFun b' o' _ ) = 
     (b_type <$> b) `equiv` (b_type <$> b') && o `equiv` o' 
@@ -446,7 +444,6 @@ strengthen                   :: F.Reftable r => RType r -> r -> RType r
 ---------------------------------------------------------------------------------
 strengthen (TApp c ts r) r'  = TApp c ts $ r' `F.meet` r 
 strengthen (TVar α r)    r'  = TVar α    $ r' `F.meet` r 
-strengthen (TArr t r)    r'  = TArr t    $ r' `F.meet` r
 strengthen t _               = t                         
 
 -- NOTE: r' is the OLD refinement. 
@@ -505,7 +502,6 @@ rTypeR               :: RType r -> r
 rTypeR (TApp _ _ r ) = r
 rTypeR (TVar _ r   ) = r
 rTypeR (TFun _ _ r ) = r
-rTypeR (TArr _ r   ) = r
 rTypeR (TCons _ r  ) = r
 rTypeR (TAll _ _   ) = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )     = errorstar "Unimplemented: rTypeR - TAnd"
@@ -516,7 +512,6 @@ setRTypeR :: RType r -> r -> RType r
 setRTypeR (TApp c ts _   ) r = TApp c ts r
 setRTypeR (TVar v _      ) r = TVar v r
 setRTypeR (TFun xts ot _ ) r = TFun xts ot r
-setRTypeR (TArr t _      ) r = TArr t r
 setRTypeR t                _ = t
 
 ---------------------------------------------------------------------------------------
@@ -525,7 +520,6 @@ noUnion :: (F.Reftable r) => RType r -> Bool
 noUnion (TApp TUn _ _)  = False
 noUnion (TApp _  rs _)  = and $ map noUnion rs
 noUnion (TFun bs rt _)  = and $ map noUnion $ rt : (map b_type bs)
-noUnion (TArr t     _)  = noUnion t
 noUnion (TAll _ t    )  = noUnion t
 noUnion _               = True
 
@@ -552,7 +546,6 @@ instance Eq (RType r) where
   TApp c1 t1s _ == TApp c2 t2s _  = (c1, t1s) == (c2, t2s)
   TVar v1 _     == TVar v2 _      = v1        == v2
   TFun b1 t1 _  == TFun b2 t2 _   = (b1, t1)  == (b2, t2)
-  TArr t1 _     == TArr t2 _      = t1 == t2
   TAll v1 t1    == TAll v2 t2     = v1 == v2 && t1 == t2   -- Very strict Eq here
   _             == _              = False
 
@@ -780,7 +773,6 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TApp d@(TRef _) ts r) = F.ppTy r $ pp d <+> ppArgs brackets comma ts 
   pp (TApp c [] r)          = F.ppTy r $ pp c 
   pp (TApp c ts r)          = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
-  pp (TArr t r)             = F.ppTy r $ brackets (pp t)  
   pp (TCons bs r)           = F.ppTy r $ lbrace $+$ nest 2 (vcat $ map pp bs) $+$ rbrace
 
 instance PP TCon where
@@ -994,10 +986,12 @@ tAnd ts  = case ts of
              [t] -> t
              _   -> TAnd ts
 
-tArr    = (`TArr` fTop)
+tArr t   = TApp (TRef (F.symbol "Array", False)) [t] fTop
 
-isArr (TArr _ _ ) = True
-isArr _           = False
+rtArr t   = TApp (TRef (F.symbol "Array", False)) [t] 
+
+isArr (TApp (TRef (s,_)) _ _ ) | s == F.symbol "Array" = True
+isArr _                        = False
 
 isTFun (TFun _ _ _) = True
 isTFun (TAnd ts)    = all isTFun ts

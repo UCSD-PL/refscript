@@ -197,7 +197,7 @@ bbaseP :: Parser (Reft -> RefType)
 bbaseP 
   =  try (TVar <$> tvarP)                  -- A
  <|> try objLitP                           -- {f1: T1, ... , fn: Tn} 
- <|> try (TArr <$> arrayP)                 -- [T]
+ <|> try (rtArr <$> arrayP)                -- Array<T>
  <|> try (TApp <$> tConP <*> bareTyArgsP)  -- #List[A], #Tree[A,B] etc...
  
 ----------------------------------------------------------------------------------

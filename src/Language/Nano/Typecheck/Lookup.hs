@@ -43,7 +43,6 @@ getProp ::  (IsLocated l, PPR r) =>
 -------------------------------------------------------------------------------
 getProp l α γ s t@(TApp _ _ _)  = getPropApp l α γ s t 
 getProp _ _ _ _   (TFun _ _ _ ) = Nothing
-getProp l _ γ s a@(TArr _ _)    = (a,) <$> getPropArr l γ s a
 getProp _ _ _ s a@(TCons _ _)   = (a,) <$> getPropCons False s a
 getProp l _ _ _ t               = die $ bug (srcPos l) 
                                       $ "Using getProp on type: " ++ ppshow t 
@@ -65,7 +64,7 @@ getPropApp l α γ s t@(TApp c ts _) =
     TTop       -> die $ bug (srcPos l) "getProp top"
     TVoid      -> die $ bug (srcPos l) "getProp void"
 
-getPropApp _ _ _ _ _ = error "getPropArr should only be applied to TApp"
+getPropApp _ _ _ _ _ = error "getPropApp should only be applied to TApp"
 
 -- FIXME: IndexSig access could return null.
 getPropCons b s t@(TCons es _) 
@@ -91,20 +90,6 @@ getPropTDef :: (PPR r) =>
 getPropTDef b _ γ f ts d = getPropCons b f t
   where
     t = TCons (S.flatten γ (d,ts)) fTop
-
-
--------------------------------------------------------------------------------
-getPropArr :: (PPR r, IsLocated a) 
-           => a -> TDR r -> F.Symbol -> RType r -> Maybe (RType r)
--------------------------------------------------------------------------------
-getPropArr l γ s (TArr t _) =
--- NOTE: Array has been declared as a type declaration so 
--- it should reside in γ, and we can just getPropTDef on it,
--- using type t as teh single type parameter to it.
--- This Array reference is not static.
-  findSym "Array" γ >>= getPropTDef False l γ s [t]
-
-getPropArr _ _ _ _ = error "getPropArr should only be applied to arrays"
 
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns

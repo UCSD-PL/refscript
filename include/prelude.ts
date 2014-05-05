@@ -57,8 +57,6 @@ interface List<A> {
 
 /*@ extern safetail  :: forall A. (xs:#List[A])        => {v:#List[A]? | (len v) = (len xs) - 1}            */
 
-/* extern Array      :: (n : { v: number | 0 <= v } ) => { v: [ undefined ] | (len v) = n }                 */
-
 
 
 /*************************************************************************/
@@ -72,14 +70,14 @@ interface List<A> {
 /************** Types for Builtin Operators ******************************/
 /*************************************************************************/
 
-/*@ extern builtin_BIBracketRef     :: /\ forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}) => A 
-                                       /\ forall A. ({[y: string]: A }, x: string) => A            */
+/*@ extern builtin_BIBracketRef     :: /\ forall A. (arr: [A], {idx:number | (0 <= idx && idx < (len arr))}) => A 
+                                       /\ forall A. ({[y: string]: A }, x: string) => A             */
 
 /*@ extern builtin_BIBracketAssign  :: /\ forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
-                                       /\ forall A. ({[y: string]: A }, x: string, val: A) => void */
+                                       /\ forall A. ({[y: string]: A }, x: string, val: A) => void  */
 
-/*@ extern builtin_BIArrayLit       :: forall A. (A) => {v:[A] | (len v) = builtin_BINumArgs}      */
-/*@ extern builtin_BIUndefined      :: forall A. {A | false}                                       */
+/*@ extern builtin_BIArrayLit       :: forall A. (A) => {v:[A] | (len v) = builtin_BINumArgs}       */
+/*@ extern builtin_BIUndefined      :: forall A. {A | false}                                        */
 
 
 /*@ extern builtin_OpLT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
@@ -111,6 +109,7 @@ interface List<A> {
 
 /*@ extern builtin_OpMul       :: (number,  number)  => number                                      */
 
+//FIXME: This is not correct. Add definition for: >>  
 /*@ extern builtin_OpDiv       :: (x: number, y: { v: number | v != 0 }) 
     => { v:number | (    ((x>0 && y>0) => v>0) 
                       && (x=0 <=> v=0) 
@@ -284,7 +283,7 @@ interface List<A> {
 /*@ interface Array<T> {
       toString       : () => string;
       toLocaleString : () => string;
-      concat         : (items: [T]) => [T];
+      concat         : (items: [T]) => { [T] | (len v) = (len this) + (len items) } ;
       join           : (separator: string) => string;
       pop            : () => T;
       push           : (items: T) => number;

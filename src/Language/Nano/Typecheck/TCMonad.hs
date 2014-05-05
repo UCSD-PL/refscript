@@ -174,8 +174,6 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ)
   where 
     θ       = fromList $ zip βs (tVar <$> βs)
 
--- addSubst θ  = getSubst >>= setSubst . (`mappend` θ)
-
 -------------------------------------------------------------------------------
 getDef  :: TCM r (TDefEnv (RType r)) 
 -------------------------------------------------------------------------------
@@ -422,19 +420,11 @@ convert _ _  t2 | isTop t2             = return CNo
 
 convert l t1 t2 | any isUnion [t1,t2]  = convertUnion l t1 t2
 
-convert l t1 t2 | all isArr   [t1,t2]  = convertArray l t1 t2
-
 convert l t1 t2 | all isTCons [t1,t2]  = convertCons l t1 t2
 
 convert l t1 t2 | all isTFun  [t1, t2] = convertFun l t1 t2
 
-convert _ t1@(TFun _ _ _)    t2        = error $ "Unimplemented convert-1: " ++ ppshow t1 ++ " ~ " ++ ppshow t2
-convert _ _               (TFun _ _ _) = error "Unimplemented convert-2"
-
-convert _ (TAll _ _  ) _               = error "Unimplemented: convert-3"
-convert _ _            (TAll _ _  )    = error "Unimplemented: convert-4"
-
-convert l t1           t2              = convertSimple l t1 t2 
+convert l t1 t2                        = convertSimple l t1 t2 
 
 
 -- | `convertCons`
@@ -561,18 +551,6 @@ convertUnion l t1 t2 = parts   $ unionParts t1 t2
     parts (_,[],_ )  = return  $ CUp t1 t2
     parts (_,_ ,[])  = return  $ CDn t1 t2
     parts (_, _ ,_)  = tcError $ errorUnionSubtype l t1 t2
-
-
--- | `convertArray`
---------------------------------------------------------------------------------
-convertArray :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
---------------------------------------------------------------------------------
-convertArray l t1@(TArr τ1 _) t2@(TArr τ2 _) = do
-  -- FIXME: Too Strict
-  (,) <$> (convert l τ1 τ2) <*> (convert l τ2 τ1) >>= \case
-    (CNo, CNo) -> return CNo
-    _          -> tcError $ errorArraySubtype l t1 t2 
-convertArray _ _ _ = errorstar "BUG: convertArray can only pad Arrays"
 
 
 addCast     ξ e c = addAnn loc fact >> return (wrapCast loc fact e)

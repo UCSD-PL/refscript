@@ -67,8 +67,6 @@ unify l δ θ t1@(TApp (TRef _) _ _) t2
 unify l δ θ t1 t2@(TApp (TRef _) _ _)
   = unify l δ θ t1 (flattenType δ t2)
 
-unify l δ θ (TArr t _) (TArr t' _) = unify l δ θ t t'
-
 unify l δ θ (TCons e1s _) (TCons e2s _)
   = unifys l δ θ t1s t2s
   where 
@@ -85,7 +83,6 @@ unifEquiv t t' | toType t == toType t'
 unifEquiv t t' | any isUnion [t,t'] 
                = error "No nested unions"
 unifEquiv (TApp c _ _ ) (TApp c' _ _  ) = c `equiv` c'  -- Interfaces appear once only on top-level unions
-unifEquiv (TArr _ _   ) (TArr _ _     ) = True          -- Arrays are really interfaces
 unifEquiv (TCons _ _  ) (TCons _ _    ) = True
 unifEquiv (TVar v _   ) (TVar v' _    ) = v == v'
 unifEquiv (TFun _ _ _ ) (TFun _ _ _   ) = True          -- Functions as well ... 

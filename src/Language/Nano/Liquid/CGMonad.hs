@@ -33,14 +33,14 @@ module Language.Nano.Liquid.CGMonad (
   , Freshable (..)
 
   -- * Environment API
-  , envAddFresh, envAdds, envAddReturn, envAddGuard, envFindTy, envFindSpec
-  , envFindAnnot, envToList, envFindReturn, envPushContext, envGetContextCast
-  , envGetContextTypArgs
+  , envAddFresh, envAdds, envAddReturn, envAddGuard, envFindTy, envFindAnnot
+  , envRemSpec, isGlobalVar, envToList, envFindReturn, envPushContext
+  , envGetContextCast, envGetContextTypArgs
 
   , findSymM, findSymOrDieM
 
   -- * Add Subtyping Constraints
-  , subType, wellFormed
+  , subType, subTypeVD, wellFormed
   
   -- * Add Type Annotations
   , addAnnot
@@ -307,29 +307,45 @@ envAddGuard x b g = g { guards = guard b x : guards g }
 
 
 -- | A helper that returns the actual @RefType@ of the expression by looking up
--- the environment with the name, strengthening with singleton for base-types.
--- The search includes classes, as they might contain static fields.
+--   the environment with the name. Interstring cases:
+--   
+--   * Global variables (that can still be assigned) should not be strengthened
+--     with single.
+--   * The search includes classes, as they might contain static fields.
+--   * Local (non-assignable) variables are strengthened with singleton for 
+--     base-types.
 ---------------------------------------------------------------------------------------
 envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
 ---------------------------------------------------------------------------------------
 envFindTy x g = 
-    case findSym x $ cge_defs g of
-      Just t  | t_class t -> TApp (TRef (F.symbol x, True)) [] fTop
-      _ -> (`eSingleton` x) $ fromMaybe err $ E.envFindTy x $ renv g
+  case E.envFindTy x $ cge_spec g of    -- Check for global spec
+    Just t  -> fromMaybe err $ E.envFindTy x $ renv g
+    Nothing -> 
+      case findSym x $ cge_defs g of    -- Check for static fields
+        Just t  | t_class t -> TApp (TRef (F.symbol x, True)) [] fTop
+        _                   -> (`eSingleton` x) $ fromMaybe err 
+                                              $ E.envFindTy x 
+                                              $ renv g
   where 
     err       = throw $ bugUnboundVariable (srcPos x) (F.symbol x) (renv g)
 
 
----------------------------------------------------------------------------------------
-envFindSpec     :: (IsLocated x, F.Symbolic x) => x -> CGEnv -> Maybe RefType 
----------------------------------------------------------------------------------------
-envFindSpec x g = E.envFindTy x $ cge_spec g
+envFindAnnot l x g = E.envFindTy x $ renv g
 
-envFindAnnot l x g = msum [tAnn, tEnv, annot] 
-  where
-    annot        = listToMaybe $ [ t | VarAnn t <- ann_fact l ] ++ [ t | FieldAnn (_,t) <- ann_fact l]
-    tAnn         = E.envFindTy x $ cge_spec g
-    tEnv         = E.envFindTy x $ renv     g
+envRemSpec     :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) => x -> CGEnv -> CGM CGEnv
+envRemSpec x g = do 
+      ids <- F.lookupBindEnv x <$> binds <$> get 
+      return $ g { cge_spec = E.envDel x $ cge_spec g 
+                 , renv     = E.envDel x $ renv     g
+                 , fenv     = foldr F.deleteIBindEnv (fenv g) ids }
+
+
+-- | A global variable should have an entry in `cge_spec`.
+---------------------------------------------------------------------------------------
+isGlobalVar :: F.Symbolic x => x -> CGEnv -> Bool
+---------------------------------------------------------------------------------------
+isGlobalVar x g = E.envMem x $ cge_spec g
+    
 
 ---------------------------------------------------------------------------------------
 envToList     ::  CGEnv -> [(Id SourceSpan, RefType)]
@@ -409,6 +425,20 @@ subType l g t1 t2 =
   do t1'   <- addInvariant t1
      t2'   <- addInvariant t2
      g'    <- envAdds [(symbolId l x, t) | (x, Just t) <- rNms t1' ++ rNms t2' ] g
+     modify $ \st -> st {cs = c g' (t1', t2') : (cs st)}
+  where
+    c g     = uncurry $ Sub g (ci l)
+    rNms t  = (\n -> (n, n `E.envFindTy` renv g)) <$> names t
+    names   = foldReft rr []
+    rr r xs = F.syms r ++ xs
+
+---------------------------------------------------------------------------------------
+subTypeVD :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
+---------------------------------------------------------------------------------------
+subTypeVD l g t1 t2 =
+  do t1'   <- addInvariant t1
+     t2'   <- addInvariant t2
+     g'    <- envAdds [ (symbolId l x, t) | (x, Just t) <- rNms t1' ++ rNms t2' ] g
      modify $ \st -> st {cs = c g' (t1', t2') : (cs st)}
   where
     c g     = uncurry $ Sub g (ci l)

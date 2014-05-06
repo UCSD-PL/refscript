@@ -16,8 +16,6 @@
 
 /*@ extern pos       :: ()                     => {v:number | v > 0} */
 
-/*@ extern top_level :: ()                     => void               */
-
 /*@ extern alert     :: (string)               => void               */
 
 
@@ -72,7 +70,7 @@ interface List<M,A> {
 
 /*@ extern builtin_BIBracketRef     :: 
     /\ forall A. (arr: #Array[#Immutable,A], {idx:number | (0 <= idx && idx < (len arr))}) => A 
-    /\ forall A. (arr: #Array[#ReadOnly, A],  idx:number                                 ) => A? 
+    /\ forall A. (arr: #Array[#Mutable, A],  idx:number                                 ) => A? 
     /\ forall A. ({[y: string]: A }       ,    x:string                                  ) => A      */
 
 /*@ extern builtin_BIBracketAssign  :: 
@@ -292,7 +290,7 @@ interface List<M,A> {
 /*@ interface Array<M,T> {
       toString       : () => string;
       toLocaleString : () => string;
-      concat         : (items: #Array#Array[#Immutable,T]) => { #Array[#Immutable,T] | (len v) = (len this) + (len items) } ;
+      concat         : (items: #Array[#Immutable,T]) => { #Array[#Immutable,T] | (len v) = (len this) + (len items) } ;
       join           : (separator: string) => string;
       pop            : () => T;
       push           : (items: T) => number;

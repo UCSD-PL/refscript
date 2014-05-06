@@ -10,7 +10,7 @@ module Language.Nano.Liquid.Liquid (verifyFile) where
 
 import           Text.Printf                        (printf)
 import           Control.Monad
-import           Control.Applicative                ((<$>))
+import           Control.Applicative                ((<$>), (<*>))
 
 import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (fromMaybe, listToMaybe)
@@ -38,6 +38,11 @@ import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
+
+import           Data.Data
+import           GHC.Generics
+import           Data.Generics.Aliases                   ( mkQ)
+import           Data.Generics.Schemes
 
 import           System.Console.CmdArgs.Default
 -- import           Debug.Trace                        (trace)
@@ -119,12 +124,32 @@ envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g)
 consStmts :: CGEnv -> [Statement AnnTypeR]  -> CGM (Maybe CGEnv) 
 --------------------------------------------------------------------------------
 consStmts g stmts 
-  = do g' <- addStatementFunBinds g stmts 
+  = do g' <- addFunAndGlobs g stmts     -- K-Var functions and globals 
        consSeq consStmt g' stmts
 
-addStatementFunBinds g stmts = (mapM go $ concatMap getFunctionStatements stmts) >>= (`envAdds` g)
-  where  go (FunctionStmt l f _ _) = (f,) <$> (freshTyFun g l f =<< getDefType f)
-         go _                      = error "addStatementFunBinds: Only function statements should be here"
+addFunAndGlobs g stmts = (++) <$> mapM ff funs <*> mapM vv globs >>= (`envAdds` g)
+  where  ff (l,f)   = (f,) <$> (freshTyFun g l f =<< getDefType f)
+         ff _       = error "addFunAndGlobs-funs"
+         vv (l,x,t) = (x,) <$> freshTyVar g l t
+         vv _       = error "addFunAndGlobs-globs"
+         funs       = definedFuns stmts 
+         globs      = definedGlobs stmts 
+
+definedFuns       :: (Data a, Typeable a) => [Statement a] -> [(a,Id a)]
+definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
+  where 
+    fromFunction (FunctionStmt l f _ _) = [(l,f)]
+    fromFunction _                      = []
+
+definedGlobs       :: [Statement AnnTypeR] -> [(AnnTypeR, Id AnnTypeR, RefType)]
+definedGlobs stmts = everything (++) ([] `mkQ` fromVarDecl) stmts
+  where 
+    fromVarDecl (VarDecl l x _) =
+      case listToMaybe $ [ t | VarAnn t <- ann_fact l ] ++ [ t | FieldAnn (_,t) <- ann_fact l ] of
+        Just t  -> [(l,x,t)]
+        Nothing -> []
+    fromVarDecl _               = []
+ 
 
 --------------------------------------------------------------------------------
 consStmt :: CGEnv -> Statement AnnTypeR -> CGM (Maybe CGEnv) 
@@ -230,12 +255,13 @@ consStmt _ s
 consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consVarDecl g (VarDecl l x (Just e)) 
-  = do t <- case envFindAnnot l x g of
-              Just t  -> Just <$> freshTyVar g l t
-              Nothing -> return $ Nothing
-       (x', g') <- consExprT g e t
-       Just <$> envAdds [(x, envFindTy x' g')] g'
-
+  = do (y, gy) <- consExpr g e
+       let ty   = envFindTy y gy
+       case envFindAnnot l x g of
+         Nothing -> return $ Just gy
+         -- Temporarily remove the binding to the global before typechecking this
+         Just ta -> do gy' <- envRemSpec x gy
+                       subTypeVD l gy' ty ta >> return (Just gy)
 
 consVarDecl g (VarDecl l x Nothing)
   = case envFindAnnot l x g of
@@ -260,6 +286,7 @@ consClassElt g (MemberMethDecl l _ i xs body)
   = do  ts <- cgFunTys l i xs $ safeHead "consClassElt" [ t | MethAnn t <- ann_fact l]
         mapM_ (consFun1 l g i xs body) ts
 
+
 ------------------------------------------------------------------------------------
 consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, CGEnv) 
 ------------------------------------------------------------------------------------
@@ -268,7 +295,8 @@ consExprT g e to
        let te   = envFindTy x g'
        case to of
          Nothing -> return (x, g')
-         Just t  -> subType l g' te t >> (x,) <$> envAdds [(x, t)] g'
+         Just t  -> do subType l g' te t 
+                       (x,) <$> envAdds [(x, t)] g'
     where
        l = getAnnotation e
 
@@ -277,11 +305,10 @@ consExprT g e to
 consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
 --------------------------------------------------------------------------------
 consAsgn g l x e 
-  = do t <- case envFindAnnot l x g of
-              Just t  -> Just <$> freshTyVar g l t
-              Nothing -> return $ Nothing
-       (x', g') <- consExprT g e t
-       Just <$> envAdds [(x, envFindTy x' g')] g'
+  = do (x', g') <- consExprT g e $ envFindAnnot l x g
+       if isGlobalVar x g 
+         then return $ Just g'
+         else Just <$> envAdds [(x, envFindTy x' g')] g'
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh, 

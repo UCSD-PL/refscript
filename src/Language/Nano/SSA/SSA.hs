@@ -1,4 +1,4 @@
-
+{-# LANGUAGE LambdaCase           #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE DeriveDataTypeable   #-}
@@ -36,17 +36,16 @@ ssaTransform = return . ssaTransform'
 
 -- | `ssaNano` Perfroms SSA transformation of the input program. The output
 -- program is patched (annotated per AST) with information about:
--- ∙ SSA-phi nodes
--- ∙ Spec annotations (functions, global variable declarations)
--- ∙ Type annotations (variable declarations (?), class elements)
---
+-- * SSA-phi nodes
+-- * Spec annotations (functions, global variable declarations)
+-- * Type annotations (variable declarations (?), class elements)
 ----------------------------------------------------------------------------------
 ssaNano :: (PP r, F.Reftable r, Data r, Typeable r) => NanoBareR r -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano { code = Src fs }) 
   = do θ <- getSsaEnv 
        setSsaEnv $ extSsaEnv classes θ
-       withAssignability ReadOnly ros 
+       withAssignability ReadOnly ros
           $ withAssignability WriteGlobal wgs 
             $ do (_,fs') <- ssaStmts (map (ann <$>) fs)
                  ssaAnns <- getAnns
@@ -54,8 +53,6 @@ ssaNano p@(Nano { code = Src fs })
     where
       typeAnns      = M.fromList $ concatMap 
                         (FO.concatMap (\(Ann l an) -> (l,) <$> single <$> an)) fs
-      {-specAnns      = tracePP "specAnns" $ M.fromList $ mapFst getAnnotation -}
-      {-                  <$> (envToList $ envMap (single . VarAnn) sp)-}
       ros           = readOnlyVars p
       wgs           = writeGlobalVars p 
       patch        :: [M.HashMap SourceSpan [Fact r]] -> SourceSpan -> Annot (Fact r) SourceSpan
@@ -67,7 +64,7 @@ ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatem
 -------------------------------------------------------------------------------------
 ssaFun (FunctionStmt l f xs body) 
   = do θ <- getSsaEnv  
-       withAssignability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
+       withAssignability ReadOnly (envIds θ) $               -- Variables from OUTER scope are UNASSIGNABLE
          do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
@@ -235,18 +232,18 @@ ssaStmt s
 
 ssaClassElt (Constructor l xs body)
   = do θ <- getSsaEnv
-       withAssignability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
+       withAssignability ReadOnly (envIds θ) $               -- Variables from OUTER scope are NON-ASSIGNABLE
          do setSsaEnv     $ extSsaEnv xs θ                   -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
             return        $ Constructor l xs body'
 
--- Class fields are considered immutable.
+-- Class fields are considered non-assignable
 ssaClassElt v@(MemberVarDecl _ _ _ )    = return v
 
 ssaClassElt (MemberMethDecl l s e xs body)
   = do θ <- getSsaEnv  
-       withAssignability ReadOnly (envIds θ) $                  -- Variables from OUTER scope are IMMUTABLE
+       withAssignability ReadOnly (envIds θ) $               -- Variables from OUTER scope are NON-ASSIGNABLE
          do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
@@ -330,15 +327,12 @@ ssaExpr   (ArrayLit l es)
   = ArrayLit l <$> (mapM ssaExpr es)
 
 ssaExpr e@(VarRef l x) 
-  = do mut <- getAssignability x
-       case mut of
+  = do getAssignability x >>= \case
          WriteGlobal -> return e
          ReadOnly    -> maybe e   (VarRef l) <$> findSsaEnv x
-         WriteLocal  -> 
-           do opX <- findSsaEnv x 
-              case opX of
-                Just t  -> return   $ VarRef l t
-                Nothing -> ssaError $ errorUnboundId (srcPos x) x
+         WriteLocal  -> findSsaEnv x >>= \case
+             Just t  -> return   $ VarRef l t
+             Nothing -> ssaError $ errorSSAUnboundId (srcPos x) x
 
 ssaExpr (PrefixExpr l o e)
   = PrefixExpr l o <$> ssaExpr e

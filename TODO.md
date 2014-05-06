@@ -16,6 +16,12 @@ JS Features
 Tool/Implementation
 -------------------
   
+  - Class hierarchy checks
+  
+  - Encode method mutability
+  
+  - Unify T ~ T? 
+  
   - Check that the first argument of a generic type is in { ReadOnly, Immutable,
     AssignFields, Mutable }.
 

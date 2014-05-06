@@ -90,9 +90,10 @@ errorNonFunction l f t    = mkErr l $ printf "Non-function type: %s :: %s " (pps
 
 errorEnvJoin l x t1 t2    = mkErr l $ printf "Variable '%s' has different types ('%s' and '%s') when joining environments." (ppshow x) (ppshow t1) (ppshow t2)
 
-errorUnboundId l x        = mkErr l $ printf "Identifier %s unbound" (ppshow x) 
-errorUnboundType l x      = mkErr l $ printf "Type identifier \'%s\' unbound" (ppshow x)
-errorUnboundIdEnv l x t   = mkErr l $ printf "ZOGBERT Identifier %s unbound in %s" (ppshow x) (ppshow t)
+errorUnboundId l x        = mkErr l $ printf "Identifier '%s' unbound" (ppshow x) 
+errorSSAUnboundId l x     = mkErr l $ printf "SSA: Identifier '%s' unbound" (ppshow x) 
+errorUnboundType l x      = mkErr l $ printf "Type identifier '%s' unbound" (ppshow x)
+errorUnboundIdEnv l x t   = mkErr l $ printf "ZOGBERT Identifier '%s' unbound in %s" (ppshow x) (ppshow t)
 errorWrongType l m e t t' = mkErr l $ printf "%s -- unexpected type for %s :: %s expected %s" m (ppshow e) (ppshow t) (ppshow t')
 errorJoin l x t t'        = mkErr l $ printf "Conflicting join for %s \n   %s\n   %s" (ppshow x) (ppshow t) (ppshow t') 
 errorJoinSubsts l θ θ'    = mkErr l $ printf "Cannot join substs: %s\nand\n%s" (ppshow θ) (ppshow θ')

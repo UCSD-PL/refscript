@@ -489,7 +489,7 @@ mkCode f ss =  Nano {
       , externs = envFromList   [ t | Extern t <- anns ] -- externs
       -- FIXME: same name methods in different classes.
       , specs   = catFunSpecDefs ss                      -- function sigs (no methods...)
-      , glVars  = catVarSpecDefs ss                      -- variables
+      , glVars  = tracePP "glvars" $ catVarSpecDefs ss                      -- variables
       , consts  = envFromList   [ t | Meas   t <- anns ] 
       , defs    = tDefFromList  [ checkIF t | IFace  t <- anns ] 
       , tAlias  = envFromList   [ t | TAlias t <- anns ] 
@@ -560,7 +560,7 @@ catFunSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
 catVarSpecDefs :: [Statement (SourceSpan, [Spec])] -> Env RefType
 --------------------------------------------------------------------------------------
 catVarSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
-  where ds     = varDeclStmts ss
+  where ds        = varDeclStmts ss
 
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite

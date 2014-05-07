@@ -40,7 +40,7 @@ module Language.Nano.Liquid.CGMonad (
   , findSymM, findSymOrDieM
 
   -- * Add Subtyping Constraints
-  , subType, subTypeVD, wellFormed
+  , subType, wellFormed
   
   -- * Add Type Annotations
   , addAnnot
@@ -58,7 +58,7 @@ module Language.Nano.Liquid.CGMonad (
 
   ) where
 
-import           Data.Maybe                     (fromMaybe, listToMaybe)
+import           Data.Maybe                     (fromMaybe, listToMaybe, catMaybes, isJust)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 import qualified Data.List                      as L
@@ -315,19 +315,20 @@ envAddGuard x b g = g { guards = guard b x : guards g }
 --   * Local (non-assignable) variables are strengthened with singleton for 
 --     base-types.
 ---------------------------------------------------------------------------------------
-envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
+-- envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
 ---------------------------------------------------------------------------------------
-envFindTy x g = 
-  case E.envFindTy x $ cge_spec g of    -- Check for global spec
-    Just t  -> fromMaybe err $ E.envFindTy x $ renv g
-    Nothing -> 
-      case findSym x $ cge_defs g of    -- Check for static fields
-        Just t  | t_class t -> TApp (TRef (F.symbol x, True)) [] fTop
-        _                   -> (`eSingleton` x) $ fromMaybe err 
-                                              $ E.envFindTy x 
-                                              $ renv g
+envFindTy msg x g = fromMaybe err $ listToMaybe $ catMaybes [globalSpec, staticField, local]
   where 
-    err       = throw $ bugUnboundVariable (srcPos x) (F.symbol x) (renv g)
+    -- Check for global spec
+    globalSpec  | isJust $ E.envFindTy x $ cge_spec g = E.envFindTy x $ renv g
+                | otherwise                           = Nothing
+    -- Check for static fields
+    staticField = case findSym x $ cge_defs g of    
+        Just t  | t_class t -> Just $ TApp (TRef (F.symbol x, True)) [] fTop
+        _                   -> Nothing 
+    -- Check for local variable
+    local       = fmap (`eSingleton` x) $ E.envFindTy x $ renv g
+    err         = throw $ bugUnboundVariable (srcPos x) msg (F.symbol x) 
 
 
 envFindAnnot l x g = E.envFindTy x $ renv g
@@ -425,20 +426,6 @@ subType l g t1 t2 =
   do t1'   <- addInvariant t1
      t2'   <- addInvariant t2
      g'    <- envAdds [(symbolId l x, t) | (x, Just t) <- rNms t1' ++ rNms t2' ] g
-     modify $ \st -> st {cs = c g' (t1', t2') : (cs st)}
-  where
-    c g     = uncurry $ Sub g (ci l)
-    rNms t  = (\n -> (n, n `E.envFindTy` renv g)) <$> names t
-    names   = foldReft rr []
-    rr r xs = F.syms r ++ xs
-
----------------------------------------------------------------------------------------
-subTypeVD :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
----------------------------------------------------------------------------------------
-subTypeVD l g t1 t2 =
-  do t1'   <- addInvariant t1
-     t2'   <- addInvariant t2
-     g'    <- envAdds [ (symbolId l x, t) | (x, Just t) <- rNms t1' ++ rNms t2' ] g
      modify $ \st -> st {cs = c g' (t1', t2') : (cs st)}
   where
     c g     = uncurry $ Sub g (ci l)

@@ -20,16 +20,10 @@ Tool/Implementation
   
   - Encode method mutability
   
-  - Unify T ~ T? 
-  
   - Check that the first argument of a generic type is in { ReadOnly, Immutable,
     AssignFields, Mutable }.
 
   - Check number of arguments at generic instantiations.
-
-  - Fix scoping for functions and variables.
-
-  - Add check for types of extended classes.
 
   - Arguments cannot be named: "func"
 
@@ -39,8 +33,6 @@ Tool/Implementation
     a union type top-level.
 
   - Add check for missing type definition
-
-  - Merge pp' with pp - should be the same now that Object types are TCons.
 
   - Fix hacky qualifier parse-translation e.g. tests/liquid/pos/arrays/arr-03.js
         

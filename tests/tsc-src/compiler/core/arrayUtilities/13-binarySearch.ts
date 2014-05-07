@@ -8,7 +8,7 @@ function binarySearch(array: number[], value: number): number {
 	while (low <= high) {
 		//var middle = low + ((high - low) >> 1);
 		var middle = low + ((high - low) / 2);
-		var midValue = array[middle+1];
+		var midValue = array[middle];
 
 		if (midValue === value) {
 			return middle;

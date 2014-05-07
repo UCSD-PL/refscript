@@ -44,12 +44,6 @@ unify :: PPR r => SourceSpan -> TDefEnv (RType r)
 
 unify _ _ θ t@(TApp _ _ _) t'@(TApp _ _ _) | any isTop [t,t'] = Right $ θ
 
-unify l δ θ t t' | any isUnion [t,t']
-  = uncurry (unifys l δ θ) $ unzip $ fst3 $ unionParts' ee t t'
-  where 
-    ee (TVar _ _) (TVar _ _) = True 
-    ee t          t'         = equiv t t'
-
 unify l δ θ (TFun xts t _) (TFun xts' t' _)
   = unifys l δ θ (t: map b_type xts) (t': map b_type xts')
 
@@ -125,11 +119,11 @@ varEql l θ α β =
 varAsn ::  PPR r => SourceSpan -> RSubst r -> TVar -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 varAsn l θ α t 
-  | on (==) toType t (apply θ (tVar α)) = Right $ θ 
-  | on (==) toType t (tVar α)           = Right $ θ 
-  | α `S.member` free t                 = Left  $ errorOccursCheck l α t 
-  | unassigned α θ                      = Right $ θ `mappend` (Su $ M.singleton α t)
-  | otherwise                           = Left  $ errorRigidUnify l α t θ
+  | on (==) toType t (apply θ (tVar α))       = Right $ θ 
+  | any (on (==) toType (tVar α)) (bkUnion t) = Right $ θ 
+  | α `S.member` free t                       = Left  $ errorOccursCheck l α t 
+  | unassigned α θ                            = Right $ θ `mappend` (Su $ M.singleton α t)
+  | otherwise                                 = Left  $ errorRigidUnify l α t θ
   
 unassigned α (Su m) = M.lookup α m == Just (tVar α)
 

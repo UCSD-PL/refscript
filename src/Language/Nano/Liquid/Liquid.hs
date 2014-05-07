@@ -102,7 +102,7 @@ initCGEnv pgm = CGE (envUnion (specs pgm) (externs pgm))
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = cgFunTys l f xs (envFindTy f g) >>= mapM_ (consFun1 l g f xs body) >> return g
+  = cgFunTys l f xs (envFindTy "consFun" f g) >>= mapM_ (consFun1 l g f xs body) >> return g
        
 consFun _ s 
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
@@ -171,7 +171,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
   = do (xf, g' ) <- consPropRead getProp g l1 e1 $ F.symbol fld
        (x2, g'') <- consExpr g'  e2
-       subType l2 g'' (envFindTy x2 g'') (envFindTy xf g')
+       subType l2 g'' (envFindTy "consStmt-ExprStmt-1" x2 g'') (envFindTy "consStmt-ExprStmt-2" xf g')
        return     $ Just g''
 
 -- e
@@ -210,7 +210,7 @@ consStmt g (VarDeclStmt _ ds)
 -- return e 
 consStmt g (ReturnStmt l (Just e))
   = do  (xe, g') <- consExpr g e
-        let te    = envFindTy xe g'
+        let te    = envFindTy "consStmt-ReturnStmt" xe g'
             rt    = envFindReturn g'
         -- subType does not need to return the unfolded types
         if isTop rt
@@ -255,13 +255,15 @@ consStmt _ s
 consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consVarDecl g (VarDecl l x (Just e)) 
-  = do (y, gy) <- consExpr g e
-       let ty   = envFindTy y gy
-       case envFindAnnot l x g of
-         Nothing -> return $ Just gy
-         -- Temporarily remove the binding to the global before typechecking this
-         Just ta -> do gy' <- envRemSpec x gy
-                       subTypeVD l gy' ty ta >> return (Just gy)
+  = case envFindAnnot l x g of
+      -- Global variable (Non-SSA)
+      Just ta -> do (y, gy) <- consExpr g e
+                    gy'     <- envRemSpec x gy
+                    subType l gy' (envFindTy "consVarDecl" y gy) ta 
+                    return (Just gy)
+      -- Local variable (SSA)
+      Nothing -> consAsgn g l x e
+ 
 
 consVarDecl g (VarDecl l x Nothing)
   = case envFindAnnot l x g of
@@ -292,7 +294,7 @@ consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Id AnnTypeR, 
 ------------------------------------------------------------------------------------
 consExprT g e to 
   = do (x, g') <- consExpr g e
-       let te   = envFindTy x g'
+       let te   = envFindTy "consExprT" x g'
        case to of
          Nothing -> return (x, g')
          Just t  -> do subType l g' te t 
@@ -308,7 +310,7 @@ consAsgn g l x e
   = do (x', g') <- consExprT g e $ envFindAnnot l x g
        if isGlobalVar x g 
          then return $ Just g'
-         else Just <$> envAdds [(x, envFindTy x' g')] g'
+         else Just <$> envAdds [(x, envFindTy "consAsgn" x' g')] g'
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh, 
@@ -339,7 +341,7 @@ consExpr g (VarRef i x)
   = do addAnnot l x t
        return (x, g) 
     where 
-       t   = envFindTy x g
+       t   = envFindTy "consExpr-VarRef" x g
        l   = srcPos i
 
 consExpr g (PrefixExpr l o e)
@@ -355,12 +357,12 @@ consExpr g (CallExpr l e@(SuperRef _) es)
 
 consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 
-       consCall g' l e es $ envFindTy x g'
+       consCall g' l e es $ envFindTy "consExpr-CallExpr" x g'
 
 -- e.f
 consExpr g (DotRef l e (Id _ fld))
   = do (x,g') <- consPropRead getProp g l e (F.symbol fld)
-       addAnnot (srcPos l) x (envFindTy x g')
+       addAnnot (srcPos l) x (envFindTy "consExpr-DotRef" x g')
        return  $ (x,g')
 
 -- e["f"]
@@ -383,7 +385,7 @@ consExpr g (ArrayLit l es)
 consExpr g (ObjectLit l bs) 
   = do  let (ps, es) = unzip bs
         (xes, g')   <- consScan consExpr g es
-        let tCons    = TCons (zipWith mkElt (F.symbol <$> ps) $ (`envFindTy` g') <$> xes) fTop
+        let tCons    = TCons (zipWith mkElt (F.symbol <$> ps) $ (\t -> envFindTy "consExpr-ObjectLit" t g') <$> xes) fTop
         envAddFresh "consExpr:ObjectLit" l tCons g'
     where
         mkElt s t | isTFun t  = MethSig s False t
@@ -433,9 +435,7 @@ getConstr l g s =
           Just _             -> error  $ "Unsupported constructor type"
           Nothing            -> return $ TFun [] (retT t) fTop
       _ -> 
-      -- HEREHERE: FIXME : envFindTy get the WRONG binding because it also
-      -- searches through types !!!
-        getPropM False l "__constructor__" (envFindTy s g) >>= \case
+        getPropM False l "__constructor__" (envFindTy "getConstr" s g) >>= \case
           Just t  -> return t
           Nothing -> cgError l $ errorConsSigMissing (srcPos l) s
   where
@@ -466,7 +466,7 @@ consDeadCode g l x t =
      -- NOTE: return the target type (falsified)
      envAddFresh "consUpCast" l tBot g
   where 
-     xT      = envFindTy x g
+     xT      = envFindTy "consDeadCode" x g
 
 -- | Upcast
 consUpCast g l x _ toT = 
@@ -474,7 +474,7 @@ consUpCast g l x _ toT =
      let toT' = zipType δ (\p _ -> p) F.bot xT toT
      envAddFresh "consUpCast" l toT' g
   where 
-     xT = envFindTy x g
+     xT = envFindTy "consUpCast" x g
 
 -- | Downcast
 consDownCast g l x _ toT =
@@ -486,7 +486,7 @@ consDownCast g l x _ toT =
      g'         <- envAdds [(x, toT')] g
      return      $ (x, g')
   where 
-     xT          = envFindTy x g
+     xT          = envFindTy "consDownCast" x g
 
 
 --------------------------------------------------------------------------------
@@ -503,11 +503,11 @@ consCall :: (PP a) =>
 
 consCall g l fn es ft0 
   = do (xes, g')    <- consScan consExpr g es
-       let ts        = [envFindTy x g' | x <- xes]
+       let ts        = [envFindTy "consCall-1" x g' | x <- xes]
        let ft        = fromMaybe (fromMaybe (err ts ft0) (overload l)) (calleeType l ts ft0)
        (_,its,ot)   <- instantiate l g fn ft
        let (su, ts') = renameBinds its xes
-       zipWithM_ (subType l g') [envFindTy x g' | x <- xes] ts'
+       zipWithM_ (subType l g') [envFindTy "consCall-2" x g' | x <- xes] ts'
        envAddFresh "consCall" l (F.subst su ot) g'
     where
        overload l    = listToMaybe [ t | Overload (Just t) <- ann_fact l ]
@@ -548,7 +548,7 @@ consSeq f           = foldM step . Just
 -- binding of "this" to the value in the left hand side.
 consPropRead getter g l e fld
   = do (this, g')     <- consExpr g e
-       let tx          = envFindTy this g'
+       let tx          = envFindTy "consPropRead" this g'
        δ              <- getDef
        case getter l (renv g') δ fld tx of
          Just (_, tf) -> 
@@ -600,15 +600,15 @@ consWhile g l cond body
         return               $ envAddGuard xc False gI'
     where
         xs                   = concat [xs | PhiVar xs <- ann_fact l]
-        ts                   = (`envFindTy` g) <$> xs 
+        ts                   = (\t -> envFindTy "consWhile" t g) <$> xs 
 
 consWhileBase l xs tIs g    = zipWithM_ (subType l g) xts_base tIs      -- (c)
   where 
-   xts_base                 = (`envFindTy` g) <$> xs
+   xts_base                 = (\t -> envFindTy "consWhileBase" t g) <$> xs
  
 consWhileStep l xs tIs gI'' = zipWithM_ (subType l gI'') xts_step tIs'  -- (f)
   where 
-    xts_step                = (`envFindTy` gI'') <$> xs'
+    xts_step                = (\t -> envFindTy "consWhileStep" t gI'') <$> xs'
     tIs'                    = F.subst su <$> tIs
     xs'                     = mkNextId   <$> xs
     su                      = F.mkSubst   $  safeZip "consWhileStep" (F.symbol <$> xs) (F.eVar <$> xs')
@@ -643,11 +643,11 @@ envJoin' l g g1 g2
         -- up that one.
         -- TODO: Add a raw type check on t1 and t2
         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> t1s
-        zipWithM_ (subType l g1') [envFindTy x g1' | x <- xs] ts
-        zipWithM_ (subType l g2') [envFindTy x g2' | x <- xs] ts
+        zipWithM_ (subType l g1') [envFindTy "envJoin-1" x g1' | x <- xs] ts
+        zipWithM_ (subType l g2') [envFindTy "envJoin-2" x g2' | x <- xs] ts
         return g'
     where
         xs   = concat [xs | PhiVar xs <- ann_fact l] 
-        t1s  = (`envFindTy` g1) <$> xs 
-        t2s  = (`envFindTy` g2) <$> xs
+        t1s  = (\t -> envFindTy "envJoin-3" t g1) <$> xs 
+        t2s  = (\t -> envFindTy "envJoin-4" t g2) <$> xs
 

@@ -31,7 +31,7 @@ module Language.Nano.Typecheck.Types (
   , mkUnion, mkUnionR, mkFun, mkAll
 
   -- * Deconstructing Types
-  , bkFun, bkFuns, bkAll, bkAnd, bkUnion, bkPaddedUnion, unionParts, unionParts', funTys
+  , bkFun, bkFuns, bkAll, bkAnd, bkUnion, unionParts, unionParts', funTys
   
   -- Union ops
   , rUnion, rTypeR, setRTypeR, noUnion, unionCheck
@@ -388,16 +388,6 @@ instance Equivalent (Bind r) where
 instance Equivalent (Id a) where 
   equiv i i' = F.symbol i == F.symbol i'
 
-
---------------------------------------------------------------------------------
-bkPaddedUnion :: String -> RType r -> RType r -> [(RType r, RType r)]
---------------------------------------------------------------------------------
-bkPaddedUnion msg t1 t2 =
-  zipWith check (bkUnion t1) (bkUnion t2)
-  where check t t' | equiv t t' = (t,t')
-                   | otherwise  = 
-                   errorstar $ printf "bkPaddedUnion[%s]\n\t%s\nand\n\t%s" 
-                     msg (ppshow $ toType t1) (ppshow $ toType t2) 
 
 
 -- | `unionParts` is a special case of `unionParts'` that uses Equivalent as 

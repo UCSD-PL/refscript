@@ -116,7 +116,7 @@ tcNano :: (Data r, PPRSF r) => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do setDef     $ defs p
-       (fs', γo) <- tcInScope γ $ tcStmts γ fs
+       (fs', γo) <- tcInScope γ $ tcStmts γ $ fs
        m         <- concatMaps <$> getAllAnns
        θ         <- getSubst
        let p1     = p {code = (patchAnn m . apply θ) <$> Src fs'}
@@ -182,18 +182,34 @@ tcEnvPushSite i γ            = γ { tce_ctx = pushContext i    $ tce_ctx γ }
 -- Since we assume the raw types should be the same among the various SSA 
 -- variants, we should only be adding bindings for the non-SSA version of the 
 -- variable, to be able to retrieve it correctly later on.
+-- NO !!! We are ony storing SSAed vars here so we better keep them as they are. 
+--
+-- tcEnvAdds                   :: (IsLocated a, F.Reftable r) => [(Id a, RType r)] -> TCEnv r -> TCEnv r
+-- tcEnvAdds     x γ            = γ { tce_env = envAdds (mapFst stripSSAId <$> x)        $ tce_env γ }
+-- 
+-- tcEnvAddReturn x t γ         = γ { tce_env = envAddReturn x t $ tce_env γ }
+-- tcEnvMem x                   = envMem (stripSSAId x)      . tce_env 
+-- tcEnvFindTy x                = envFindTy (stripSSAId x)   . tce_env
+-- tcEnvFindReturn              = envFindReturn              . tce_env
+-- 
+-- tcEnvFindSpec x              = envFindTy (stripSSAId x)   . tce_spec 
+-- tcEnvFindSpecOrTy x γ        = msum [tcEnvFindSpec x γ, tcEnvFindTy x γ]
+-- 
+-- tcEnvFindTyOrDie l x         = fromMaybe ugh . tcEnvFindTy (stripSSAId x)  where ugh = die $ errorUnboundId (ann l) x
+-- 
+
 tcEnvAdds                   :: (IsLocated a, F.Reftable r) => [(Id a, RType r)] -> TCEnv r -> TCEnv r
-tcEnvAdds     x γ            = γ { tce_env = envAdds (mapFst stripSSAId <$> x)        $ tce_env γ }
+tcEnvAdds     x γ            = γ { tce_env = envAdds x $ tce_env γ }
 
 tcEnvAddReturn x t γ         = γ { tce_env = envAddReturn x t $ tce_env γ }
-tcEnvMem x                   = envMem (stripSSAId x)      . tce_env 
-tcEnvFindTy x                = envFindTy (stripSSAId x)   . tce_env
-tcEnvFindReturn              = envFindReturn              . tce_env
+tcEnvMem x                   = envMem x      . tce_env 
+tcEnvFindTy x                = envFindTy x   . tce_env
+tcEnvFindReturn              = envFindReturn . tce_env
 
-tcEnvFindSpec x              = envFindTy (stripSSAId x)   . tce_spec 
+tcEnvFindSpec x              = envFindTy x   . tce_spec 
 tcEnvFindSpecOrTy x γ        = msum [tcEnvFindSpec x γ, tcEnvFindTy x γ]
 
-tcEnvFindTyOrDie l x         = fromMaybe ugh . tcEnvFindTy (stripSSAId x)  where ugh = die $ errorUnboundId (ann l) x
+tcEnvFindTyOrDie l x         = fromMaybe ugh . tcEnvFindTy x  where ugh = die $ errorUnboundId (ann l) x
 
 
 -------------------------------------------------------------------------------

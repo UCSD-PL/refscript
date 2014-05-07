@@ -577,7 +577,7 @@ getPropTDefM b l s t ts = do
   δ <- getDef
   return $ getPropTDef b l δ (F.symbol s) ts t
 
-getPropM b l s t = do 
+getPropM _ l s t = do 
   (δ, ε) <- (,) <$> getDef <*> getExts
   return  $ snd <$> getProp l ε δ (F.symbol s) t
 

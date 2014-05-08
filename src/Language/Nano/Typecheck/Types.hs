@@ -55,10 +55,8 @@ module Language.Nano.Typecheck.Types (
   , sameBinder, eltType, eltToPair, eltSym, zipElts, isStaticElt, nonStaticElt
 
   -- * Type definition env
-  , TDefEnv (..), tDefEmpty, tDefFromList
+  , TDefEnv (..), tDefEmpty, tDefFromList, tDefToList
   , addSym, findSym, findSymOrDie
-  --, addObjLitTy
-  , getDefNames
 
   -- * Operator Types
   , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy
@@ -173,7 +171,11 @@ tDefFromList :: F.Symbolic s => [(s, TDef t)] -> TDefEnv t
 ---------------------------------------------------------------------------------
 tDefFromList = foldr (uncurry addSym) tDefEmpty 
 
-getDefNames (G _ n) = fst <$> F.toListSEnv n
+
+---------------------------------------------------------------------------------
+tDefToList :: TDefEnv t -> [TDef t]
+---------------------------------------------------------------------------------
+tDefToList (G _ m) = snd <$> F.toListSEnv m 
 
 
 ---------------------------------------------------------------------------------

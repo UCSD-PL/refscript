@@ -118,6 +118,7 @@ tcNano :: (Data r, PPRSF r) => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do setDef     $ defs p
+       checkInterfaces p
        (fs', γo) <- tcInScope γ $ tcStmts γ $ fs
        m         <- concatMaps <$> getAllAnns
        θ         <- getSubst
@@ -130,6 +131,12 @@ tcNano p@(Nano {code = Src fs})
          Nothing -> error "BUG:tcNano should end with an environment"
     where
        γ       = initEnv p
+
+checkInterfaces p = 
+  mapM_ (safeExtends isSubtypeM tcError l (defs p)) is
+  where 
+    l  = srcPos dummySpan
+    is = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
 
 patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs 
   where

@@ -89,14 +89,29 @@ generateConstraints cfg pgm = getCGInfo cfg pgm $ consNano pgm
 --------------------------------------------------------------------------------
 consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
-consNano pgm@(Nano {code = Src fs}) = consStmts (initCGEnv pgm) fs >> return ()
+consNano pgm@(Nano {code = Src fs}) 
+  = do  checkInterfaces pgm g
+        consStmts g fs 
+        return ()
+    where
+      g = initCGEnv pgm 
+
+-- TODO: Add correct source position 
+checkInterfaces p g = 
+  mapM_ (safeExtends sub (cgError l) l (defs p)) is
+  where 
+    l  = srcPos dummySpan
+    is = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
+    sub l t1 t2 = do  δ <- getDef
+                      uncurry (subType l g) $ intersect δ t1 t2
+                      return True
 
 initCGEnv pgm = CGE (envUnion (specs pgm) (externs pgm)) 
                     F.emptyIBindEnv 
                     [] 
                     emptyContext 
                     (envUnion (specs pgm) (glVars pgm))
-                    (tracePP "defs" $ defs pgm)
+                    (defs pgm)
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
@@ -277,7 +292,7 @@ consClassElts l g d ce
         -- There are no casts here, so we need to align the 
         -- types before doing subtyping on them.
         sub l t1 t2 = do  δ <- getDef
-                          uncurry (subType l g) $ tracePP (ppshow t1 ++ " inter " ++ ppshow t2 ) $ intersect δ t1 t2
+                          uncurry (subType l g) $ intersect δ t1 t2
                           return True
 
 
@@ -296,9 +311,9 @@ consClassElt g (MemberVarDecl _ _ (VarDecl l x (Just e)))
       Just tf -> void $ consExprT g e (Just tf)
       Nothing -> cgError l $ errorVarDeclAnnot (srcPos l) x
 
-consClassElt g (MemberVarDecl _ _ (VarDecl l x Nothing))
+consClassElt _ (MemberVarDecl _ _ (VarDecl l x Nothing))
   = case envFieldAnnot l of 
-      Just tf -> return ()
+      Just _  -> return ()
       Nothing -> cgError l $ errorVarDeclAnnot (srcPos l) x
   
 consClassElt g (MemberMethDecl l _ i xs body) 
@@ -416,9 +431,6 @@ consExpr g (ObjectLit l bs)
 consExpr g (NewExpr l (VarRef _ i) es)
   = do  tConstr <- getConstr (srcPos l) g i
         consCall g l "constructor" es tConstr
-    where
-        def :: (PPR r) => RType r
-        def = TFun [] tVoid fTop
 
 -- super
 consExpr g (SuperRef l) 

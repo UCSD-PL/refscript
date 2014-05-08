@@ -39,7 +39,7 @@ module Language.Nano.Typecheck.TCMonad (
   , unifyTypeM, unifyTypesM
 
   -- * Subtyping
-  , subtypeM
+  , subtypeM, isSubtypeM
 
   -- * Casts
   , castM
@@ -387,16 +387,18 @@ runMaybeM a = runFailM a >>= \case
                 Left _   -> return $ Nothing
 
 
--- FIXME: it is debatable whether we want to allow CDn here.
+isSubtypeM l t1 t2 = runFailM (subtypeM l t1 t2) >>= \case
+                        Right _ -> return True
+                        Left  _ -> return False
+
 -- | subTypeM will throw error if subtyping fails
 --------------------------------------------------------------------------------
 subtypeM :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 subtypeM l t1 t2 = convert l t1 t2 >>= \case
   CNo       -> return ()
---  (CDn _ _) -> return ()
   (CUp _ _) -> return ()
-  _         -> tcError $ errorStrictSubtype l
+  _         -> tcError $ errorStrictSubtype l -- No casts allowed
 
 
 -- | @convert@ returns:

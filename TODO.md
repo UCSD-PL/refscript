@@ -15,6 +15,10 @@ JS Features
 
 Tool/Implementation
 -------------------
+
+  - Multiple constructors
+
+  - Type aliases as top-level types
   
   - Class hierarchy checks
   

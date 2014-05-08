@@ -126,12 +126,14 @@ errorTypeAssign l t1 t2   = mkErr l $ printf "Cannot assign type %s to %s" (ppsh
 errorBracketAssign l x    = mkErr l $ printf "Invalid bracket assignment %s" (ppshow x) 
 errorPropRead  l x1 x2    = mkErr l $ printf "Cannot read property '%s' from object reference '%s'." (ppshow x2) (ppshow x1) 
 errorArrayLit     l x     = mkErr l $ printf "Invalid array literal %s" (ppshow x) 
-errorClassExtends l x y s = mkErr l $ printf "Class %s cannot extend class %s: types for property %s are incompatible" (ppshow x) (ppshow y) (ppshow s)
+errorClassExtends l x y s tx ty 
+                          = mkErr l $ printf "Type '%s' cannot extend type '%s'.\nProperty '%s' has type '%s' in '%s', and type '%s' in '%s'."   
+                                               (ppshow x) (ppshow y) (ppshow s) (ppshow tx) (ppshow x) (ppshow ty) (ppshow y)
 errorClEltAnMissing l c s = mkErr l $ printf "Class '%s' is missing an annotation for element '%s'." (ppshow c) (ppshow s)
 errorVarDeclAnnot l x     = mkErr l $ printf "Variable definition of '%s' with neither type annotation nor initialization is not supported." (ppshow x)
 errorConstNonFunc l x     = mkErr l $ printf "Constructor for class '%s' does not have a function type." (ppshow x)
 errorClassMissing l x     = mkErr l $ printf "Cannot call 'new' on non-existing class '%s'." (ppshow x)
-errorConsSigMissing l x   = mkErr l $ printf "Object '%s' is missing a constructor signature." (ppshow x)
+errorConsSigMissing l x   = mkErr l $ printf "Object '%s' does not have exactly one constructor signature." (ppshow x)
 errorBadPAlias l p nx ne  = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne 
 errorBadTAlias l t nt ne nα nx  
                           = mkErr l $ printf "Invalid type alias application: %s \nExpected %d type, %d value arguments, but got %d and %d" (ppshow t) nα nx nt ne  

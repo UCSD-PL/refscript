@@ -16,7 +16,8 @@ import           Control.Monad
 
 import qualified Data.HashSet                       as HS 
 import qualified Data.HashMap.Strict                as M 
-import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe)
+import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe, fromJust)
+import           Data.List                          (find)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat)
@@ -27,6 +28,7 @@ import           Language.Nano.Types
 import           Language.Nano.Annots
 import           Language.Nano.Env
 import           Language.Nano.Misc
+import           Language.Nano.Common.Typecheck     (safeExtends)
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
 import           Language.Nano.Typecheck.TCMonad
@@ -452,32 +454,33 @@ tcStmt _ s
 classFromStmt :: PPR r => Statement (AnnSSA r) -> TCM r (TDef (RType r))
 ---------------------------------------------------------------------------------------
 classFromStmt (ClassStmt l id _ _ cs) =
-  do  γ <- getDef
-      case findSym sym γ of
+  do  δ <- getDef
+      case findSym sym δ of
         Just d -> return d   -- if already computed
-        Nothing -> do let elts   = classEltType <$> cs
-                      constrL   <- constrT elts
-                      let elts'  = elts ++ constrL            
-                      let freshD = TD True (fmap ann id) vs p elts'
-                      setDef     $ addSym sym freshD γ
+        Nothing -> do let elts   = addConstr δ $ classEltType <$> cs
+                      let freshD = TD True (fmap ann id) vs p elts
+                      safeExtends isSubtypeM tcError (srcPos l) δ freshD
+                      setDef     $ addSym sym freshD δ
                       return     $ freshD
   where
     sym      = F.symbol id
     (vs, p)  = classAnnot l
-    -- If a constructor is missing, either compute it or import it from the
-    -- parent class.
-    constrT es = 
-      case ([ t | ConsSig t <- es ], p) of
-      -- FIXME: add check that current constructor is compatible 
-      -- with the one imported from the parent class
-        -- 1. Constructor is defined in class
-        ([_], _)            -> return []  
-        -- 2. Get constructor from parent class
-        (_  , Just (i, ts)) -> 
-            do  TD _ _ vs _ es <- findSymOrDieM i
-                return [getCons $ apply (fromList $ zip vs ts) es]
-        -- 3. No parent class around. Just infer a default type 
-        (_  , Nothing)      -> return [ ConsSig $ TFun [] tVoid fTop ]
+
+    addConstr δ es = 
+      case [ t | ConsSig t <- es ] of
+        -- Constructor is defined in class
+        [_] -> es
+        -- Get constructor from parent class
+        [ ] -> parConstr δ : es 
+        _   -> error "Cannot have more than one constructors."
+        
+    parConstr δ = 
+      case p of 
+        Just (i, ts) -> let TD _ _ vs' _ es' = findSymOrDie i δ in
+                        fromJust $ find isConstr $ apply (fromList $ zip vs' ts) es'
+        -- No parent class around - infer a default type
+        Nothing      -> ConsSig $ TFun [] tVoid fTop
+
     tVoid :: PPR r => RType r
     tVoid = TApp TVoid [] fTop
 
@@ -658,11 +661,13 @@ tcCall γ (InfixExpr l o e1 e2)
 -- | `super(e1,...,en)`: TSC will already have checked that `super` is only
 -- called whithin the constructor.
 tcCall γ (CallExpr l e@(SuperRef _)  es) = do
-    t <- f_type . getCons . t_elts <$> (getSuperDefM l =<< tcPeekThis)
-    z <- tcCallMatch γ l "constructor" es t
-    case z of
+    elts <- t_elts <$> (getSuperDefM l =<< tcPeekThis)
+    go [ t | ConsSig t <- elts ]
+  where
+    go [t] = tcCallMatch γ l "constructor" es t >>= \case
       Just (es', t') -> return (CallExpr l e es', t')
       Nothing        -> error "super()"
+    go _   = tcError $ errorConsSigMissing (srcPos l) e   
    
 -- | `e(e1,...,en)`
 tcCall γ (CallExpr l e es)

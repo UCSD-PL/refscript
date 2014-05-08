@@ -20,17 +20,21 @@ module Language.Nano.Typecheck.Subst (
   , Substitutable (..)
 
   -- * Flatten a type definition applying subs
-  , flatten, flatten', flattenTRef, flattenType
+  , flatten, flatten', flattenTRef, flattenType, intersect
 
   ) where 
 
+import           Data.Maybe (maybeToList)
+import           Data.Function (on)
 import           Text.PrettyPrint.HughesPJ
+import           Text.Printf
+import           Language.Nano.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
-import           Language.Fixpoint.Misc (intersperse)
+import           Language.Fixpoint.Misc (intersperse, mapPair)
 
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
@@ -215,4 +219,53 @@ flattenType δ (TAll v t)     = TAll v $ flattenType δ t
 flattenType δ (TAnd ts)      = TAnd $ flattenType δ <$> ts
 flattenType δ (TCons ts r)   = TCons ((flattenType δ <$>) <$> ts) r
 flattenType _ _              = error "TExp should not appear here"
+
+
+-- | `intersect` returns the intersection of the raw parts of two type trees 
+-- @t1@ and @t2@ adjusted with the respective refinements.
+--------------------------------------------------------------------------------
+intersect :: PPR r => TDefEnv (RType r) -> RType r -> RType r -> (RType r, RType r)
+--------------------------------------------------------------------------------
+intersect δ t1 t2 
+  | any isUnion [t1, t2] = (mkUnionR r1 cmn1, mkUnionR r2 cmn2) 
+  where
+    (r1, r2)        = mapPair rTypeR (t1, t2) 
+    (t1s, t2s)      = mapPair bkUnion (t1, t2) 
+    (cmn1, cmn2)    = unzip [ intersect δ τ1 τ2 | τ2 <- t2s, τ1 <- maybeToList $ L.find (equiv τ2) t1s ]
+
+intersect δ t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
+  | i1 == i2  
+  = (TApp (TRef i1) (fst <$> zipWith (intersect δ) t1s t2s) r1
+    ,TApp (TRef i2) (snd <$> zipWith (intersect δ) t1s t2s) r2)
+  | otherwise 
+  = on (intersect δ) (flattenType δ) t1 t2 
+ 
+intersect _  (TApp c [] r) (TApp c' [] r') 
+  | c == c' = (TApp c [] r, TApp c [] r')
+
+intersect _ (TVar v r) (TVar v' r') 
+  | v == v' = (TVar v r, TVar v' r')
+
+intersect δ (TFun x1s t1 r1) (TFun x2s t2 r2) 
+  = (TFun xs1 y1 r1, TFun xs2 y2 r2)
+  where
+    (xs1, xs2) = unzip $ zipWith (intersectBind δ) x1s x2s
+    (y1 , y2 ) = intersect δ t1 t2
+
+intersect δ (TCons e1s r1) (TCons e2s r2) 
+  = (TCons cmn1 r1, TCons cmn2 r2)
+  where 
+    -- FIXME: mutabilities? m1 `mconcat` m2
+    cmn1 = fmap fst <$> cmn
+    cmn2 = fmap snd <$> cmn
+    cmn  = [ zipElts (intersect δ) e1 e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ] 
+
+intersect _ t1 t2 = 
+  error $ printf "BUG[intersect]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
+
+
+intersectBind δ (B s1 t1) (B s2 t2) 
+  | s1 == s2 = (B s1 t1', B s2 t2') where (t1', t2') = intersect δ t1 t2
+intersectBind _  _       _           
+  = error "BUG[intersectBind]: mis-matching binders"
 

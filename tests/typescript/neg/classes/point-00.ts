@@ -32,6 +32,6 @@ class Color {
 
 // In TS casting succeeds when subtyping succeeds either way.
 
-/*@ a :: #RedPoint */
-var a : RedPoint = <RedPoint> { c: "red" };
+// /*@ a :: #RedPoint */
+// var a : RedPoint = <RedPoint> { c: "red" };
 

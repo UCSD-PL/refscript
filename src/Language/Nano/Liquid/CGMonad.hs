@@ -33,7 +33,7 @@ module Language.Nano.Liquid.CGMonad (
   , Freshable (..)
 
   -- * Environment API
-  , envAddFresh, envAdds, envAddReturn, envAddGuard, envFindTy, envFindAnnot
+  , envAddFresh, envAdds, envAddReturn, envAddGuard, envFindTy, envGlobAnnot, envFieldAnnot
   , envRemSpec, isGlobalVar, envToList, envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
 
@@ -306,24 +306,23 @@ envAddGuard x b g = g { guards = guard b x : guards g }
     guard False   = F.PNot . F.eProp
 
 
--- | A helper that returns the actual @RefType@ of the expression by looking up
---   the environment with the name. Interstring cases:
+-- | A helper that returns the actual @RefType@ of variable @x@. Interstring cases:
 --   
 --   * Global variables (that can still be assigned) should not be strengthened
---     with single.
---   * The search includes classes, as they might contain static fields.
---   * Local (non-assignable) variables are strengthened with singleton for 
---     base-types.
+--     with single
+--   * Class names (they might contain static fields)
+--   * Local (non-assignable) variables (strengthened with singleton for base-types)
 ---------------------------------------------------------------------------------------
--- envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
+envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) 
+              => String -> x -> CGEnv -> RefType 
 ---------------------------------------------------------------------------------------
-envFindTy msg x g = fromMaybe err $ listToMaybe $ catMaybes [globalSpec, staticField, local]
+envFindTy msg x g = fromMaybe err $ listToMaybe $ catMaybes [globalSpec, className, local]
   where 
     -- Check for global spec
     globalSpec  | isJust $ E.envFindTy x $ cge_spec g = E.envFindTy x $ renv g
                 | otherwise                           = Nothing
     -- Check for static fields
-    staticField = case findSym x $ cge_defs g of    
+    className   = case findSym x $ cge_defs g of    
         Just t  | t_class t -> Just $ TApp (TRef (F.symbol x, True)) [] fTop
         _                   -> Nothing 
     -- Check for local variable
@@ -331,7 +330,9 @@ envFindTy msg x g = fromMaybe err $ listToMaybe $ catMaybes [globalSpec, staticF
     err         = throw $ bugUnboundVariable (srcPos x) msg (F.symbol x) 
 
 
-envFindAnnot l x g = E.envFindTy x $ renv g
+envGlobAnnot l x g = E.envFindTy x $ renv g
+
+envFieldAnnot l    =  listToMaybe [ t | FieldAnn (b,t) <- ann_fact l ]
 
 envRemSpec     :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) => x -> CGEnv -> CGM CGEnv
 envRemSpec x g = do 
@@ -647,8 +648,8 @@ splitE g i e1s e2s
     = cgError l $ bugMalignedFields l e1s e2s 
   where
     l   = srcPos i
-    t1s = f_type <$> L.sortBy (compare `on` f_sym) e1s  
-    t2s = f_type <$> L.sortBy (compare `on` f_sym) e2s
+    t1s = f_type <$> L.sortBy (compare `on` eltSym) e1s
+    t2s = f_type <$> L.sortBy (compare `on` eltSym) e2s
 
 
 ---------------------------------------------------------------------------------------

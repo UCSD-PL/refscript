@@ -381,9 +381,9 @@ rawStringFTycon            = F.stringFTycon . F.Loc F.dummyPos
 -- type structure of @t2@, and applying @f@ whenever refinements are present on 
 -- both sides and @g@ whenever the respective part in type @t2@ is missing.
 --------------------------------------------------------------------------------
-zipType :: TDefEnv RefType -> 
+zipType :: TDefEnv RefType     -> 
   (F.Reft -> F.Reft -> F.Reft) ->   -- applied to refs that are present on both sides
-  (F.Reft -> F.Reft) ->             -- applied when pred is absent on the LHS
+  (F.Reft -> F.Reft)           ->   -- applied when pred is absent on the LHS
   RefType -> RefType -> RefType
 --------------------------------------------------------------------------------
 --
@@ -427,8 +427,8 @@ zipType δ f g (TCons e1s r1) (TCons e2s r2)
   where 
     -- FIXME: mutabilities? m1 `mconcat` m2
     cmn = [ zipElts (zipType δ f g) e1 e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ] 
-    snd = [ e | e <- e2s, not (eltSym e `elem` ks1) ]
-    ks1 = [ fst $ eltToPair e | e <- e1s ]
+    snd = [ e        | e <- e2s , not (eltSym e `elem` ks1) ]
+    ks1 = [ eltSym e | e <- e1s ]
 
 zipType _ _ _ t1 t2 = 
   errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)

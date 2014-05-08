@@ -9661,7 +9661,7 @@ var TypeScript;
                             break;
                         default:
                             console.log(extendsHeritage.toString());
-                            throw new Error("BUG: class '" + this.identifier.fullText() + "' can only extend a single class.");
+                            throw new Error("BUG: class '" + this.identifier.text() + "' can only extend a single class.");
                     }
                 } else {
                     var extendsSerial = null;
@@ -9677,7 +9677,7 @@ var TypeScript;
                 return anns[0];
             } else {
                 console.log(helper.getSourceSpan(this).toString());
-                console.log("Class '" + this.identifier.fullText() + "' has multiple class annoatations.");
+                console.log("Class '" + this.identifier.text() + "' has multiple class annoatations.");
                 process.exit(1);
             }
         };
@@ -9829,7 +9829,7 @@ var TypeScript;
             var annotStr = "";
 
             if (headerAnnots.length === 0) {
-                annotStr += this.identifier.fullText() + " ";
+                annotStr += this.identifier.text() + " ";
 
                 if (this.typeParameterList) {
                     var typeParams = this.typeParameterList.typeParameters;
@@ -9868,8 +9868,6 @@ var TypeScript;
                         var symb = helper.getSymbolForAST(m);
                         if (symb instanceof TypeScript.PullSignatureSymbol) {
                             var ssymb = symb;
-                            console.log(ssymb.parameters.toString());
-                            console.log(ssymb.returnType.toString());
                         }
                         break;
                     case 141 /* PropertySignature */:
@@ -11858,6 +11856,10 @@ var TypeScript;
 
         GenericTypeSyntax.prototype.isTypeScriptSpecific = function () {
             return true;
+        };
+
+        GenericTypeSyntax.prototype.toRsId = function (helper) {
+            return new TypeScript.RsId(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.name.fullText());
         };
         return GenericTypeSyntax;
     })(TypeScript.SyntaxNode);
@@ -14089,16 +14091,12 @@ var TypeScript;
         };
 
         ConstructorDeclarationSyntax.prototype.toRsClassElt = function (helper) {
-            var annKind = 2 /* ClassContructorContext */;
             var anns = tokenAnnots(this.firstToken(), 2 /* ClassContructorContext */);
             var bindAnns = anns.filter(function (a) {
-                return a.kind() === 1 /* RawBind */;
+                return a.kind() === 7 /* RawConstr */;
             });
-            var bindAnnNames = bindAnns.map(function (a) {
-                return a.getBinderName();
-            });
-            if (bindAnnNames.length !== 1 && bindAnnNames[0] !== name) {
-                throw new Error("Constructors should have a single annotation.");
+            if (bindAnns.length !== 1) {
+                throw new Error("Constructors should have exactly one annotation.");
             }
             return new TypeScript.RsConstructor(helper.getSourceSpan(this), anns, new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
                 return t.toRsId(helper);
@@ -14210,7 +14208,7 @@ var TypeScript;
         };
 
         MemberFunctionDeclarationSyntax.prototype.toRsClassElt = function (helper) {
-            var name = this.propertyName.fullText();
+            var methodName = this.propertyName.text();
             var anns = tokenAnnots(this.firstToken(), 0 /* ClassMethodContext */);
             var bindAnns = anns.filter(function (a) {
                 return a.kind() === 6 /* RawMethod */;
@@ -14218,11 +14216,9 @@ var TypeScript;
             var bindAnnNames = bindAnns.map(function (a) {
                 return a.getBinderName();
             });
-
-            if (bindAnnNames.length !== 1 || bindAnnNames[0] !== name) {
-                throw new Error("Method '" + name + "' should have a single annotation.");
+            if (bindAnnNames.length !== 1 || bindAnnNames[0] !== methodName) {
+                throw new Error("Method '" + methodName + "' should have a single annotation.");
             }
-
             return new TypeScript.RsMemberMethDecl(helper.getSourceSpan(this), anns, TypeScript.ArrayUtilities.firstOrDefault(this.modifiers.toArray(), function (t, i) {
                 return t.kind() === 58 /* StaticKeyword */;
             }) !== null, this.propertyName.toRsId(helper), new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
@@ -14553,6 +14549,17 @@ var TypeScript;
 
         MemberVariableDeclarationSyntax.prototype.isTypeScriptSpecific = function () {
             return true;
+        };
+
+        MemberVariableDeclarationSyntax.prototype.toRsClassElt = function (helper) {
+            var anns = tokenAnnots(this.firstToken(), 1 /* ClassFieldContext */);
+            var binderNames = anns.filter(function (b) {
+                return b.kind() === 5 /* RawField */;
+            });
+
+            return new TypeScript.RsMemberVarDecl(helper.getSourceSpan(this), [], this.modifiers.toArray().some(function (m) {
+                return m.kind() === 58 /* StaticKeyword */;
+            }), this.variableDeclarator.toRsVarDecl(helper, binderNames));
         };
         return MemberVariableDeclarationSyntax;
     })(TypeScript.SyntaxNode);
@@ -15593,7 +15600,6 @@ var TypeScript;
             }).map(function (t) {
                 return TypeScript.RsAnnotation.createAnnotation(t, 3 /* OtherContext */);
             });
-
             return new TypeScript.RsForStmt(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.variableDeclaration.toRsForInit(helper, anns), this.condition.toRsExp(helper), this.incrementor.toRsExp(helper), this.statement.toRsStmt(helper));
         };
         return ForStatementSyntax;
@@ -18191,6 +18197,12 @@ var TypeScript;
 
                 case 32 /* NullKeyword */:
                     return new TypeScript.RsNullLit(helper.getSourceSpan(token), []);
+
+                case 35 /* ThisKeyword */:
+                    return new TypeScript.RsThisRef(helper.getSourceSpan(token), []);
+
+                case 50 /* LastFutureReservedKeyword */:
+                    return new TypeScript.RsSuperRef(helper.getSourceSpan(token), []);
 
                 default:
                     throw new Error("NEW: toRsExp not implemented for " + TypeScript.SyntaxKind[token.kind()]);

@@ -59,8 +59,6 @@ module Language.Nano.Typecheck.Types (
   , addSym, findSym, findSymOrDie
   --, addObjLitTy
   , getDefNames
-  , sortTDef
-  , getCons
 
   -- * Operator Types
   , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy
@@ -90,7 +88,7 @@ import           Text.Printf
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
 import           Data.Function                  (on)
-import           Data.Maybe                     (fromMaybe, fromJust)
+import           Data.Maybe                     (fromMaybe, maybeToList)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.List                      as L
 import qualified Data.IntMap                    as I
@@ -104,8 +102,6 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
-
-import           GHC.Exts
 
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Misc
@@ -149,7 +145,7 @@ data TDef t    = TD {
         t_class :: Bool                           -- ^ Is this a class or interface type
       , t_name  :: !(Id SourceSpan)               -- ^ Name (possibly no name)
       , t_args  :: ![TVar]                        -- ^ Type variables
-      , t_proto :: !(Maybe (Id SourceSpan, [t]))  -- ^ Parent type symbol
+      , t_proto :: !(Maybe (Id SourceSpan, [t]))  -- ^ Heritage
       , t_elts  :: ![TElt t]                      -- ^ List of data type elts 
       } deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
@@ -199,17 +195,8 @@ findSym s (G _ γ) = F.lookupSEnv (F.symbol s) γ
 ---------------------------------------------------------------------------------
 findSymOrDie:: F.Symbolic s => s -> TDefEnv t -> TDef t
 ---------------------------------------------------------------------------------
-findSymOrDie s γ = fromMaybe (error "findTySymWithIdOrDie") $ findSym s γ 
-
-
--- | Sort the fields of a TDef 
----------------------------------------------------------------------------------
-sortTDef:: TDef t -> TDef t
----------------------------------------------------------------------------------
-sortTDef (TD c nm vs p elts) = TD c nm vs p $ sortWith f_sym elts
-
-
-getCons = fromJust . L.find ((== F.symbol "constructor") . f_sym)
+findSymOrDie s γ = fromMaybe (error msg) $ findSym s γ 
+  where msg = "findSymOrDie failed on: " ++ F.symbolString (F.symbol s)
 
 
 -- | Type Constructors

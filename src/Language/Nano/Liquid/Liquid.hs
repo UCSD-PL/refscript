@@ -117,7 +117,7 @@ initCGEnv pgm
       fx t    | isRigid t = freshTyVar g0 l t
       fx t    | otherwise = return t
       l       = srcPos dummySpan -- FIXME
-      g0      = CGE r f g cc cs cd
+      g0      = CGE r f g cc cs cd 
       r       = envUnion (specs pgm) (externs pgm)
       f       = F.emptyIBindEnv 
       g       = [] 
@@ -154,11 +154,14 @@ consStmts g stmts
   = do g' <- addFunAndGlobs g stmts     -- K-Var functions and globals 
        consSeq consStmt g' stmts
 
-addFunAndGlobs g stmts = (++) <$> mapM ff funs <*> mapM vv globs >>= (`envAdds` g)
-  where  ff (l,f)   = (f,) <$> (freshTyFun g l =<< getDefType f)
-         vv (l,x,t) = (x,) <$> freshTyVar g l t
-         funs       = definedFuns stmts 
-         globs      = definedGlobs stmts 
+addFunAndGlobs g stmts 
+  = do   g1 <- (`envAdds`     g ) =<< mapM ff funs 
+         g2 <- (`envAddGlobs` g1) =<< mapM vv globs 
+         return g2
+  where  ff (l,f)      = (f,) <$> (freshTyFun g l =<< getDefType f)
+         vv (l,x,t)    = (x,) <$> freshTyVar g l t
+         funs          = definedFuns stmts 
+         globs         = definedGlobs stmts 
 
 definedFuns       :: (Data a, Typeable a) => [Statement a] -> [(a,Id a)]
 definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
@@ -170,7 +173,7 @@ definedGlobs       :: [Statement AnnTypeR] -> [(AnnTypeR, Id AnnTypeR, RefType)]
 definedGlobs stmts = everything (++) ([] `mkQ` fromVarDecl) stmts
   where 
     fromVarDecl (VarDecl l x _) =
-      case listToMaybe $ [ t | VarAnn t <- ann_fact l ] {- ++ [ t | FieldAnn (_,t) <- ann_fact l ] -} of
+      case listToMaybe $ [ t | VarAnn t <- ann_fact l ] of
         Just t                 -> [(l,x,t)]
         Nothing                -> []
  
@@ -442,9 +445,6 @@ consExpr g (ObjectLit l bs)
 -- new C(e, ...)
 consExpr g (NewExpr l (VarRef _ i) es)
   = getConstr (srcPos l) g i >>= consCall g l "constructor" es
-    {-= getConstr (srcPos l) (\s -> envFindTy "getConstr" s g) -}
-    {-                       (\s -> return . findSym s (cge_defs g)) -}
-    {-                       i getPropTDefM getPropM (cgError l) -}
 
 -- super
 consExpr g (SuperRef l) 

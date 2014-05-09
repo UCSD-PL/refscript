@@ -2,6 +2,8 @@
 
 {-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE DeriveTraversable         #-}
+{-# LANGUAGE DeriveFoldable            #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
@@ -44,7 +46,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, rtArr, tUndef, tNull
-  , tAnd, isTVar, isArr, isTCons, isIndSig, isConstr, isTFun, fTop, orNull
+  , tAnd, isTVar, isRigid, isArr, isTCons, isIndSig, isConstr, isTFun, fTop, orNull
 
   -- * Print Types
   , ppArgs
@@ -86,7 +88,9 @@ import           Text.Printf
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
 import           Data.Function                  (on)
-import           Data.Maybe                     (fromMaybe, maybeToList)
+import           Data.Maybe                     (fromMaybe)
+import           Data.Traversable               hiding (sequence) 
+import           Data.Foldable                  (Foldable()) 
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.List                      as L
 import qualified Data.IntMap                    as I
@@ -145,7 +149,7 @@ data TDef t    = TD {
       , t_args  :: ![TVar]                        -- ^ Type variables
       , t_proto :: !(Maybe (Id SourceSpan, [t]))  -- ^ Heritage
       , t_elts  :: ![TElt t]                      -- ^ List of data type elts 
-      } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+      } deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 -- | Assignability is ingored atm.
 data TElt t    = PropSig  { f_sym :: F.Symbol, f_sta :: Bool, f_mut :: Bool, f_type :: t }     -- Property Signature
@@ -153,13 +157,13 @@ data TElt t    = PropSig  { f_sym :: F.Symbol, f_sta :: Bool, f_mut :: Bool, f_t
                | ConsSig  {                                                  f_type :: t }     -- Constructor Signature               
                | IndexSig { f_sym :: F.Symbol, f_key :: Bool,                f_type :: t }     -- Index Signature (T/F=string/number)
                | MethSig  { f_sym :: F.Symbol, f_sta :: Bool,                f_type :: t }     -- Method Signature
-  deriving (Eq, Ord, Show, Functor, Data, Typeable)
+  deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
 -- | Type definition environment
 
 data TDefEnv t = G  { g_size  :: Int, g_env   :: F.SEnv (TDef t) } 
-  deriving (Show, Functor, Data, Typeable)
+  deriving (Show, Functor, Data, Typeable, Foldable, Traversable)
 
 instance F.Fixpoint t => F.Fixpoint (TDef t) where
   toFix (TD _ n _ _ _) = F.toFix $ F.symbol n
@@ -950,6 +954,8 @@ tVar   = (`TVar` fTop)
 
 isTVar (TVar _ _) = True
 isTVar _          = False
+
+isRigid = not . isTVar
 
 tInt, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RType r
 tInt     = TApp TInt     [] fTop 

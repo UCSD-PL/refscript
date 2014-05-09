@@ -20,7 +20,7 @@ module Language.Nano.Liquid.CGMonad (
   , getCGInfo 
 
   -- * Get Defined Function Type Signature
-  , getDefType, getDef, getPropTDefM, getPropM
+  , getDefType, getDef, setDef, getPropTDefM, getPropM
 
   -- * Throw Errors
   , cgError      
@@ -183,7 +183,9 @@ type TConInv = M.HashMap TCon (Located RefType)
 -------------------------------------------------------------------------------
 getDef  :: CGM (TDefEnv RefType)
 -------------------------------------------------------------------------------
-getDef = cg_defs <$> get
+getDef   = cg_defs <$> get
+
+setDef d = modify $ \st -> st { cg_defs  = d } 
 
 -- XXX: This is not really used 
 -------------------------------------------------------------------------------
@@ -196,7 +198,7 @@ getPropTDefM b l s t ts = do
   δ <- getDef 
   return $ getPropTDef b l δ (F.symbol s) ts t
 
-getPropM b l s t = do 
+getPropM l s t = do 
   (δ, ε) <- (,) <$> getDef <*> getExts
   return  $ snd <$> getProp l ε δ (F.symbol s) t
 
@@ -330,9 +332,9 @@ envFindTy msg x g = fromMaybe err $ listToMaybe $ catMaybes [globalSpec, classNa
     err         = throw $ bugUnboundVariable (srcPos x) msg (F.symbol x) 
 
 
-envGlobAnnot l x g = E.envFindTy x $ renv g
+envGlobAnnot _ x g = E.envFindTy x $ renv g
 
-envFieldAnnot l    =  listToMaybe [ t | FieldAnn (b,t) <- ann_fact l ]
+envFieldAnnot l    =  listToMaybe [ t | FieldAnn (_,t) <- ann_fact l ]
 
 envRemSpec     :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) => x -> CGEnv -> CGM CGEnv
 envRemSpec x g = do 
@@ -373,11 +375,11 @@ findSymM i      = findSym i      <$> getDef
 
 -- | Instantiate Fresh Type (at Function-site)
 ---------------------------------------------------------------------------------------
-freshTyFun :: (IsLocated l) => CGEnv -> l -> Id AnnTypeR -> RefType -> CGM RefType 
+freshTyFun :: (IsLocated l) => CGEnv -> l -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
-freshTyFun g l f t = freshTyFun' g l f t . kVarInst . cg_opts =<< get  
+freshTyFun g l t = freshTyFun' g l t . kVarInst . cg_opts =<< get  
 
-freshTyFun' g l _ t b
+freshTyFun' g l t b
   | b && isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g
   | otherwise               = return t
 
@@ -603,9 +605,7 @@ splitC (Sub g i t1@(TCons e1s _ ) t2@(TCons e2s _ ))
   -- LHS and RHS are object literal types
   | all (not . isIndSig) [t1,t2]  
   = do cs    <- bsplitC g i t1 t2
-       when (length t1s /= length t2s) 
-         $ error $ "splitC on non aligned TCons: " ++ ppshow t1 ++ "\n" ++ ppshow t2
-       cs'   <- concatMapM splitC $ safeZipWith "splitC1" (Sub g i) t1s t2s -- CO-VARIANCE
+       cs'   <- splitE g i e1s e2s
        return $ cs ++ cs'
 
   -- LHS and RHS are index signatures
@@ -738,12 +738,12 @@ instance ClearSorts F.SortedReft where
   clear (F.RR s r) = F.RR (clear s) r
 
 instance ClearSorts F.Sort where 
-  clear t@F.FInt        = F.FInt
-  clear t@F.FNum        = F.FInt
-  clear t@(F.FObj _)    = F.FInt
-  clear t@(F.FVar _)    = F.FInt
-  clear t@(F.FFunc i s) = F.FFunc i $ clear <$> s
-  clear t@(F.FApp _ _ ) = F.FInt -- F.FApp  c $ clear s
+  clear {-t@-}F.FInt        = F.FInt
+  clear {-t@-}F.FNum        = F.FInt
+  clear {-t@-}(F.FObj _)    = F.FInt
+  clear {-t@-}(F.FVar _)    = F.FInt
+  clear {-t@-}(F.FFunc i s) = F.FFunc i $ clear <$> s
+  clear {-t@-}(F.FApp _ _ ) = F.FInt -- F.FApp  c $ clear s
 
 instance ClearSorts F.Symbol where
   clear = id

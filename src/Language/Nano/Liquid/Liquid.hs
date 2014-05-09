@@ -14,6 +14,7 @@ import           Control.Applicative                ((<$>), (<*>))
 
 import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (fromMaybe, listToMaybe)
+import qualified Data.Traversable                   as T 
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -30,7 +31,7 @@ import           Language.Nano.Env                  (envUnion)
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Subst
 import qualified Language.Nano.Annots               as A
-import           Language.Nano.Common.Typecheck     (safeExtends)
+import           Language.Nano.Common.Typecheck     (safeExtends {- , getConstr -} )
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
@@ -45,7 +46,7 @@ import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
 
 import           System.Console.CmdArgs.Default
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -90,28 +91,39 @@ generateConstraints cfg pgm = getCGInfo cfg pgm $ consNano pgm
 consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) 
-  = do  checkInterfaces pgm g
+  = do  g <- initCGEnv pgm
+        checkInterfaces pgm g
         consStmts g fs 
         return ()
-    where
-      g = initCGEnv pgm 
 
--- TODO: Add correct source position 
 checkInterfaces p g = 
   mapM_ (safeExtends sub (cgError l) l (defs p)) is
   where 
-    l  = srcPos dummySpan
+    l  = srcPos dummySpan   -- FIXME  
     is = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
     sub l t1 t2 = do  δ <- getDef
                       uncurry (subType l g) $ intersect δ t1 t2
                       return True
 
-initCGEnv pgm = CGE (envUnion (specs pgm) (externs pgm)) 
-                    F.emptyIBindEnv 
-                    [] 
-                    emptyContext 
-                    (envUnion (specs pgm) (glVars pgm))
-                    (defs pgm)
+--------------------------------------------------------------------------------
+initCGEnv :: NanoRefType -> CGM CGEnv
+--------------------------------------------------------------------------------
+initCGEnv pgm 
+  = do  cd'   <- T.mapM fx cd
+        setDef $ cd' 
+        return $ CGE r f g cc cs cd'
+  where 
+      fx t    | isTFun t  = return t -- freshTyFun g0 l t -- Do just the fields for the moment
+      fx t    | isRigid t = freshTyVar g0 l t
+      fx t    | otherwise = return t
+      l       = srcPos dummySpan -- FIXME
+      g0      = CGE r f g cc cs cd
+      r       = envUnion (specs pgm) (externs pgm)
+      f       = F.emptyIBindEnv 
+      g       = [] 
+      cc      = emptyContext 
+      cs      = envUnion (specs pgm) (glVars pgm)
+      cd      = defs pgm
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
@@ -143,7 +155,7 @@ consStmts g stmts
        consSeq consStmt g' stmts
 
 addFunAndGlobs g stmts = (++) <$> mapM ff funs <*> mapM vv globs >>= (`envAdds` g)
-  where  ff (l,f)   = (f,) <$> (freshTyFun g l f =<< getDefType f)
+  where  ff (l,f)   = (f,) <$> (freshTyFun g l =<< getDefType f)
          vv (l,x,t) = (x,) <$> freshTyVar g l t
          funs       = definedFuns stmts 
          globs      = definedGlobs stmts 
@@ -158,7 +170,7 @@ definedGlobs       :: [Statement AnnTypeR] -> [(AnnTypeR, Id AnnTypeR, RefType)]
 definedGlobs stmts = everything (++) ([] `mkQ` fromVarDecl) stmts
   where 
     fromVarDecl (VarDecl l x _) =
-      case listToMaybe $ [ t | VarAnn t <- ann_fact l ] of
+      case listToMaybe $ [ t | VarAnn t <- ann_fact l ] {- ++ [ t | FieldAnn (_,t) <- ann_fact l ] -} of
         Just t                 -> [(l,x,t)]
         Nothing                -> []
  
@@ -181,9 +193,9 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 
 -- e1.fld = e2
 consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
-  = do (xf, g' ) <- consPropRead getProp g l1 e1 $ F.symbol fld
+  = do (t1, g')  <- consPropReadLhs getProp g l1 e1 $ F.symbol fld
        (x2, g'') <- consExpr g'  e2
-       subType l2 g'' (envFindTy "consStmt-ExprStmt-1" x2 g'') (envFindTy "consStmt-ExprStmt-2" xf g')
+       subType l2 g'' (envFindTy "consStmt-ExprStmt-2" x2 g'') t1
        return     $ Just g''
 
 -- e
@@ -271,7 +283,7 @@ consVarDecl g (VarDecl l x (Just e))
       -- Global variable (Non-SSA)
       Just ta -> do (y, gy) <- consExpr g e
                     gy'     <- envRemSpec x gy
-                    subType l gy' (envFindTy "consVarDecl" y gy) ta 
+                    subType l gy' (envFindTy "consVarDecl" y gy) ta
                     return (Just gy)
       Nothing -> consAsgn g l x e
  
@@ -308,7 +320,7 @@ consClassElt g (Constructor l xs body)
 
 consClassElt g (MemberVarDecl _ _ (VarDecl l x (Just e))) 
   = case envFieldAnnot l of 
-      Just tf -> void $ consExprT g e (Just tf)
+      Just tf -> void $  consExprT g e (Just tf)
       Nothing -> cgError l $ errorVarDeclAnnot (srcPos l) x
 
 consClassElt _ (MemberVarDecl _ _ (VarDecl l x Nothing))
@@ -329,7 +341,7 @@ consExprT g e to
        let te   = envFindTy "consExprT" x g'
        case to of
          Nothing -> return (x, g')
-         Just t  -> do subType l g' te t 
+         Just t  -> do subType l g' te t
                        (x,) <$> envAdds [(x, t)] g'
     where
        l = getAnnotation e
@@ -429,8 +441,10 @@ consExpr g (ObjectLit l bs)
 
 -- new C(e, ...)
 consExpr g (NewExpr l (VarRef _ i) es)
-  = do  tConstr <- getConstr (srcPos l) g i
-        consCall g l "constructor" es tConstr
+  = getConstr (srcPos l) g i >>= consCall g l "constructor" es
+    {-= getConstr (srcPos l) (\s -> envFindTy "getConstr" s g) -}
+    {-                       (\s -> return . findSym s (cge_defs g)) -}
+    {-                       i getPropTDefM getPropM (cgError l) -}
 
 -- super
 consExpr g (SuperRef l) 
@@ -462,17 +476,19 @@ getConstr l g s =
     case findSym s (cge_defs g) of
       Just t | t_class t ->       -- This needs to be a class
         getPropTDefM False l "__constructor__" t (tVar <$> t_args t) >>= \case
-          Just (TFun bs _ r) -> return $ TFun bs (retT t) r
+          Just (TFun bs _ r) -> return $ abs (t_args t) $ TFun bs (retT t) r
           Just _             -> error  $ "Unsupported constructor type"
-          Nothing            -> return $ TFun [] (retT t) fTop
+          Nothing            -> return $ abs (t_args t) $ TFun [] (retT t) fTop
       _ -> 
-        getPropM False l "__constructor__" (envFindTy "getConstr" s g) >>= \case
+        getPropM l "__constructor__" (envFindTy "getConstr" s g) >>= \case
           Just t  -> return t
           Nothing -> cgError l $ errorConsSigMissing (srcPos l) s
   where
     -- Constructor's return type is void - instead return the class type
     -- FIXME: type parameters in returned type: inferred ... or provided !!! 
     retT t = TApp (TRef (F.symbol s, False)) (tVar <$> t_args t) fTop
+    abs [] t = t
+    abs vs t = foldr TAll t vs
 
 
 --------------------------------------------------------------------------------
@@ -578,17 +594,29 @@ consSeq f           = foldM step . Just
 -- | consPropRead reads field `fld` from objet `e`. This function does the late
 -- binding of "this" to the value in the left hand side.
 consPropRead getter g l e fld
-  = do (this, g')     <- consExpr g e
-       let tx          = envFindTy "consPropRead" this g'
-       δ              <- getDef
-       case getter l (renv g') δ fld tx of
-         Just (_, tf) -> 
-           do let tf'   = F.substa (sf (F.symbol "this") (F.symbol this)) tf
-              envAddFresh "consPropRead:field" l tf' g'
-         Nothing         -> die $  errorPropRead (srcPos l) e fld
+  = do  (this, g')     <- consExpr g e
+        let tx          = envFindTy "consPropRead" this g'
+        δ              <- getDef
+        case getter l (renv g') δ fld tx of
+          Just (_, tf) -> 
+            let tf'   = F.substa (sf $ F.symbol this) tf in
+            envAddFresh "consPropRead" l tf' g'
+          Nothing         -> die $  errorPropRead (srcPos l) e fld
     where  
-       sf s1 s2 = \s -> if s == s1 then s2
-                                   else s
+        sf t s | s == F.symbol "this" = t
+               | otherwise            = s
+
+consPropReadLhs getter g l e fld
+  = do  (this, g')     <- consExpr g e
+        let tx          = envFindTy "consPropReadLhs" this g'
+        δ              <- getDef
+        case getter l (renv g') δ fld tx of
+          Just (_, tf) -> return $ (F.substa (sf $ F.symbol this) tf, g')
+          Nothing      -> die $  errorPropRead (srcPos l) e fld
+    where  
+        sf t s | s == F.symbol "this" = t
+               | otherwise            = s
+
 
 ---------------------------------------------------------------------------------
 consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> CGM CGEnv

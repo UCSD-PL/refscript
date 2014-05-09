@@ -67,7 +67,6 @@ import           Control.Exception                  (throw)
 import           Control.Applicative                ((<$>))
 -- import qualified Data.HashMap.Strict as M
 import           Data.Hashable
-import           Data.Text                          (splitOn, unpack, pack)
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.Monoid                        (Monoid (..))

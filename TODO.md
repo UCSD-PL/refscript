@@ -20,8 +20,6 @@ Tool/Implementation
 
   - Type aliases as top-level types
   
-  - Class hierarchy checks
-  
   - Encode method mutability
   
   - Check that the first argument of a generic type is in { ReadOnly, Immutable,

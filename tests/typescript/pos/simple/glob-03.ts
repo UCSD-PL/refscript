@@ -1,4 +1,4 @@
-/*@ g1 :: { number | v > 0 }*/
+/*@ g1 :: number */
 /*@ g2 :: string */ 
 var g1 : number = 4,
     g2 : string = "AAA";

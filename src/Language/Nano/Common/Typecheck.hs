@@ -5,14 +5,10 @@
 
 module Language.Nano.Common.Typecheck (safeExtends) where 
 
-import           Control.Applicative                ((<$>), (<*>))
-
 import           Language.Nano.Errors
 import           Language.Nano.Types
-import           Language.Nano.Annots
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
-import           Language.Nano.Typecheck.Lookup
 
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types            as F
@@ -30,7 +26,7 @@ safeExtends :: (Monad m, PPR r) =>
   -> TDef (RType r)                                 -- Type definition 
   -> m ()
 -------------------------------------------------------------------------------
-safeExtends subtype err l δ (TD _ c vs (Just (p, ts)) es) =
+safeExtends subtype err l δ (TD _ c _ (Just (p, ts)) es) =
   mapM_ sub [ (eltSym ee, eltType ee, eltType pe) | pe <- flatten δ (findSymOrDie p δ,ts)
                                                   , ee <- es, sameBinder pe ee ]
   where
@@ -38,4 +34,6 @@ safeExtends subtype err l δ (TD _ c vs (Just (p, ts)) es) =
       True  -> return ()
       False -> err $ errorClassExtends l c p s t1 t2
 
-safeExtends _ _ l δ (TD _ _ _ Nothing _) = return ()
+safeExtends _ _ _ _ (TD _ _ _ Nothing _) = return ()
+
+

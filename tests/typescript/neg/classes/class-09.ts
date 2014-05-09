@@ -1,8 +1,7 @@
-
-/*@ alias nat    = {v: number | v >= 0 }  */
-
 interface IPoint {
+  /*@ x :: { number | true } */
   x: number;
+  /*@ y :: { number | true } */
   y: number;
 }
 
@@ -13,37 +12,27 @@ interface INatPoint {
   y: number;
 }
 
-
 interface IColorPoint extends IPoint {
   c: string;
 }
 
-
 class A {
-
   /*@ a :: { number | v > 0 } */
-  a: number; 
-
+  a: number;
 	/*@ foo :: () => void */
 	private foo(): void {  }
-
-	/*@ bar :: (x: #IColorPoint) => void */
+	/*@ bar :: (x: #IPoint) => void */
 	bar(x: IColorPoint): void {  }
-
-	/*@ baz :: (x: #INatPoint) => void */
+	/*@ baz :: (x: #IPoint) => { void | true } */
 	baz(x: INatPoint): void {  }
 }
 
+class B extends A { }
 
-class B extends A {
-
+class C extends B {
   /*@ a :: number */
   a: number; 
-
-	/*@ bar :: (x: #IPoint) => void */
-	bar(x: IPoint): void {  }
-
-	/*@ baz :: (x: #IPoint) => void */
+	/*@ baz :: (x: #INatPoint) => void */
 	baz(x: IPoint): void {  }
-
 }
+

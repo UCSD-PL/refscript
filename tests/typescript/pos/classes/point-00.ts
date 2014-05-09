@@ -27,6 +27,4 @@ class RedPoint extends ColorPoint {
 /*@ a :: #RedPoint */
 var a : RedPoint = { x: 1, y: 2, c: "red" };
 
-/*@ b :: { x: number, y: number, c: string } */
-var b :  { x: number; y: number; c: string } = new RedPoint();
 

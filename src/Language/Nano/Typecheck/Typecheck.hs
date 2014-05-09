@@ -709,9 +709,11 @@ tcCall γ ex@(ArrayLit l es)
 
 -- | `new e(e1,...,en)`
 tcCall γ (NewExpr l (VarRef lv i) es) = do  
-    tConstr <- getConstr (srcPos l) γ i
-    when (not $ isTFun tConstr) $ tcError $ errorConstNonFunc (srcPos l) i
-    tcCallMatch γ l "constructor" es tConstr >>= \case 
+    -- FIXME: the folllowing is kinda ugly ... needed a unified way to 
+    -- get the constructor at tc and liquid.
+    tc <- getConstr (srcPos l) γ i
+    when (not $ isTFun tc) $ tcError $ errorConstNonFunc (srcPos l) i
+    tcCallMatch γ l "constructor" es tc >>= \case 
       Just (es', t) -> return (NewExpr l (VarRef lv i) es', t)
       Nothing       -> error "No matching constructor"
 
@@ -733,9 +735,9 @@ getConstr :: (PPR r, IsLocated a)
 getConstr l γ s = 
     findClass s >>= \case 
       Just t  -> getPropTDefM False l "__constructor__" t (tVar <$> t_args t) >>= \case
-                   Just (TFun bs _ r) -> return $ TFun bs (retT t) r
+                   Just (TFun bs _ r) -> return $ abs (t_args t) $ TFun bs (retT t) r
                    Just _             -> error  $ "Unsupported constructor type"
-                   Nothing            -> return $ TFun [] (retT t) fTop
+                   Nothing            -> return $ abs (t_args t) $ TFun [] (retT t) fTop
       Nothing -> case tcEnvFindTy s γ of
                    Just t  -> getPropM False l "__constructor__" t >>= \case
                                 Just t  -> return t
@@ -744,7 +746,9 @@ getConstr l γ s =
   where
     -- Constructor's return type is void - instead return the class type
     -- FIXME: type parameters in returned type: inferred ... or provided !!! 
-    retT t = TApp (TRef (F.symbol s, False)) (tVar <$> t_args t) fTop
+    retT t   = TApp (TRef (F.symbol s, False)) (tVar <$> t_args t) fTop
+    abs [] t = t
+    abs vs t = foldr TAll t vs
 
 
 -- | Signature resolution

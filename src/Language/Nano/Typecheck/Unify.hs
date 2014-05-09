@@ -123,7 +123,7 @@ varAsn l θ α t
   | any (on (==) toType (tVar α)) (bkUnion t) = Right $ θ 
   | α `S.member` free t                       = Left  $ errorOccursCheck l α t 
   | unassigned α θ                            = Right $ θ `mappend` (Su $ M.singleton α t)
-  | otherwise                                 = Left  $ errorRigidUnify l α t θ
+  | otherwise                                 = Left  $ errorRigidUnify l α t
   
 unassigned α (Su m) = M.lookup α m == Just (tVar α)
 

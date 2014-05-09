@@ -16422,7 +16422,9 @@ var TypeScript;
 
         SimplePropertyAssignmentSyntax.prototype.toRsMemList = function (helper) {
             var pName = this.propertyName;
-            return new TypeScript.RsASTList([new TypeScript.RsPropId(helper.getSourceSpan(pName), [], this.propertyName.toRsId(helper))]);
+            return new TypeScript.RsASTList([
+                new TypeScript.RsPropId(helper.getSourceSpan(pName), [], this.propertyName.toRsId(helper)),
+                this.expression.toRsExp(helper)]);
         };
         return SimplePropertyAssignmentSyntax;
     })(TypeScript.SyntaxNode);

@@ -33,7 +33,7 @@ module Language.Nano.Liquid.CGMonad (
   , Freshable (..)
 
   -- * Environment API
-  , envAddFresh, envAdds, envAddReturn, envAddGuard, envFindTy, envGlobAnnot, envFieldAnnot
+  , envAddFresh, envAdds, envAddGlobs, envAddReturn, envAddGuard, envFindTy, envGlobAnnot, envFieldAnnot
   , envRemSpec, isGlobalVar, envToList, envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
 
@@ -58,7 +58,7 @@ module Language.Nano.Liquid.CGMonad (
 
   ) where
 
-import           Data.Maybe                     (fromMaybe, listToMaybe, catMaybes, isJust)
+import           Data.Maybe                     (fromMaybe, listToMaybe, catMaybes, isJust, maybeToList)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 import qualified Data.List                      as L
@@ -123,7 +123,7 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnTypeR RefType -> CGState
-initState c p   = CGS F.emptyBindEnv (specs p) (defs p) (externs p) [] [] 0 mempty invs c [this] 
+initState c p   = CGS F.emptyBindEnv (specs p) (defs p) (externs p) [] [] 0 mempty invs c [this] M.empty
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
     this        = tTop
@@ -173,12 +173,14 @@ data CGState
         , invs     :: TConInv              -- ^ type constructor invariants
         , cg_opts  :: Config               -- ^ configuration options
         , cg_this  :: ![RefType]           -- ^ a stack holding types for 'this' 
+        , globs    :: !GlobEnv             -- ^ bindings of globals
         }
 
 type CGM     = ErrorT Error (State CGState)
 
 type TConInv = M.HashMap TCon (Located RefType)
 
+type GlobEnv = M.HashMap F.Symbol [F.BindId]
 
 -------------------------------------------------------------------------------
 getDef  :: CGM (TDefEnv RefType)
@@ -259,11 +261,39 @@ envAdds xts' g
   = do xts    <- zip xs  <$> mapM addInvariant ts
        is     <- forM xts $  addFixpointBind 
        _      <- forM xts $  \(x, t) -> addAnnot (srcPos x) x t
-       return  $ g { renv = E.envAdds xts        (renv g) } 
-                   { fenv = F.insertsIBindEnv is (fenv g) }
+       return  $ g { renv  = E.envAdds xts        (renv g) } 
+                   { fenv  = F.insertsIBindEnv is (fenv g) }
     where 
        (xs,ts) = unzip xts'
 
+
+---------------------------------------------------------------------------------------
+envAddGlobs  :: (F.Symbolic x, IsLocated x) => [(x, RefType)] -> CGEnv -> CGM CGEnv
+---------------------------------------------------------------------------------------
+envAddGlobs xts' g
+  = do xts    <- zip xs  <$> mapM addInvariant ts
+       is     <- forM xts $  addFixpointBind 
+       _      <- forM xts $  \(x, t) -> addAnnot (srcPos x) x t
+       _      <- forM (zip xs is) addGlobBind
+       return  $ g { renv  = E.envAdds xts        (renv g) } 
+                   { fenv  = F.insertsIBindEnv is (fenv g) }
+--                   { globs = tracePP "globs" $ M.fromList . batch . L.groupBy (on (==) fst) $ zip ss is }
+    where 
+       (xs,ts) = unzip xts'
+       ss      = F.symbol <$> xs
+       batch   = map $ \l -> (fst (head l), snd <$> l)
+
+
+---------------------------------------------------------------------------------------
+addGlobBind :: (F.Symbolic x) => (x, F.BindId) -> CGM ()
+---------------------------------------------------------------------------------------
+addGlobBind (x,i) 
+  = do let s     = F.symbol x
+       modify    $ \st -> st { globs = upd s i (globs st) }
+    where
+       upd s i m = case M.lookup s m of
+           Just is -> M.insert s (i:is) m
+           Nothing -> M.insert s [i] m
 
 ---------------------------------------------------------------------------------------
 addFixpointBind :: (F.Symbolic x) => (x, RefType) -> CGM F.BindId
@@ -336,12 +366,16 @@ envGlobAnnot _ x g = E.envFindTy x $ renv g
 
 envFieldAnnot l    =  listToMaybe [ t | FieldAnn (_,t) <- ann_fact l ]
 
-envRemSpec     :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) => x -> CGEnv -> CGM CGEnv
+
+---------------------------------------------------------------------------------------
+envRemSpec     :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) 
+               => x -> CGEnv -> CGM CGEnv
+---------------------------------------------------------------------------------------
 envRemSpec x g = do 
-      ids <- F.lookupBindEnv x <$> binds <$> get 
+      gls   <- concat . maybeToList . M.lookup (F.symbol x) . globs <$> get
       return $ g { cge_spec = E.envDel x $ cge_spec g 
                  , renv     = E.envDel x $ renv     g
-                 , fenv     = foldr F.deleteIBindEnv (fenv g) ids }
+                 , fenv     = foldr F.deleteIBindEnv (fenv g) gls }
 
 
 -- | A global variable should have an entry in `cge_spec`.
@@ -631,8 +665,6 @@ splitC (Sub g i t1@(TCons e1s _ ) t2@(TCons e2s _ ))
   where
     ts es = [ eltType e | e <- es, nonStaticElt e ]
     ti es = safeHead "convertCons" [ t | IndexSig _ _ t <- es ]
-    t1s   = [ eltType e | e <- e1s, nonStaticElt e ]
-    t2s   = [ eltType e | e <- e2s, nonStaticElt e ]
   
 splitC x 
   = cgError l $ bugBadSubtypes l x where l = srcPos x

@@ -46,8 +46,3 @@ Tool/Implementation
       E.g.: typescript/pos/arrays/arr-07.js
 
 
-Failing Tests 
--------------
-
-  TBD
-

@@ -16,20 +16,22 @@
 /*@ extern mylength  :: forall A. (xs:#List[A]?) => {v:number | ((v >= 0) && v = (len xs))}                 */
 /*@ extern safehead  :: forall A. (#List[A])           => A                                                 */
 /*@ extern safetail  :: forall A. (xs:#List[A])        => {v:#List[A]? | (len v) = (len xs) - 1}            */
-/* extern Array      :: (n : { v: number | 0 <= v } ) => { v: [ undefined ] | (len v) = n }                 */
-/*************************************************************************/
-/************************* Type Conversions ******************************/
-/*************************************************************************/
-/*@ extern sstring  :: forall A. (x: A) => string                               */
 /*************************************************************************/
 /************** Types for Builtin Operators ******************************/
 /*************************************************************************/
-/*@ extern builtin_BIBracketRef     :: /\ forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}) => A
-/\ forall A. ({[y: string]: A }, x: string) => A            */
-/*@ extern builtin_BIBracketAssign  :: /\ forall A. (arr:[A], {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
-/\ forall A. ({[y: string]: A }, x: string, val: A) => void */
-/*@ extern builtin_BIArrayLit       :: forall A. (A) => {v:[A] | (len v) = builtin_BINumArgs}      */
-/*@ extern builtin_BIUndefined      :: forall A. {A | false}                                       */
+/*@ extern builtin_BIBracketRef     ::
+/\ forall A. (arr: #Array[#Immutable,A], {idx:number | (0 <= idx && idx < (len arr))}) => A
+/\ forall A. (arr: #Array[#Mutable, A],  idx:number                                 ) => A?
+/\ forall A. ({[y: string]: A }       ,    x:string                                  ) => A      */
+/*@ extern builtin_BIBracketAssign  ::
+/\ forall A. (arr: #Array[#Immutable, A], {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
+/\ forall A. (arr: #Array[#ReadOnly , A],  idx:number                                 , val: A) => void
+/\ forall A. ({[y: string]: A },            x:string                                  , val: A) => void
+*/
+//FIXME: the 'len' property is invalid if M != Immutable
+/*@ extern builtin_BIArrayLit  :: forall M  A . (A)
+=> {v: #Array[M,A] | (len v) = builtin_BINumArgs}                    */
+/*@ extern builtin_BIUndefined :: forall A. {A | false}                                             */
 /*@ extern builtin_OpLT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
 /\ (x:string, y:number) => boolean
 /\ (x:number, y:number) => boolean
@@ -52,6 +54,7 @@
 /\ (x:string, y:string) => string                                 */
 /*@ extern builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v = x - y} */
 /*@ extern builtin_OpMul       :: (number,  number)  => number                                      */
+//FIXME: This is not correct. Add definition for: >>
 /*@ extern builtin_OpDiv       :: (x: number, y: { v: number | v != 0 })
 => { v:number | (    ((x>0 && y>0) => v>0)
 && (x=0 <=> v=0)
@@ -78,7 +81,7 @@ Taken from here:
 http://typescript.codeplex.com/sourcecontrol/latest#typings/core.d.ts
 **************************************************************************/
 /*** Object **************************************************************/
-/*@ interface Object {
+/*@ interface Object<M> {
 toString            : () => string;
 toLocaleString      : () => string;
 valueOf             : () => #Object;
@@ -173,29 +176,29 @@ toExponential   : (fractionDigits: number) => string;
 toPrecision     : (precision: number) => string
 } */
 /*** Array ***************************************************************/
-/*@ interface Array<T> {
+/*@ interface Array<M,T> {
 toString       : () => string;
 toLocaleString : () => string;
-concat         : (items: [T]) => { [T] | (len v) = (len this) + (len items) } ;
+concat         : (items: #Array[#Immutable,T]) => { #Array[#Immutable,T] | (len v) = (len this) + (len items) } ;
 join           : (separator: string) => string;
 pop            : () => T;
 push           : (items: T) => number;
-reverse        : () => [T];
+reverse        : () => #Array[#Immutable,T];
 shift          : () => T;
-slice          : (start: number, end: number) => [T];
-sort           : (compareFn: (a: T, b: T) => number) => [T];
-splice         :  /\ (start: number) => [T]
-/\ (start: number, deleteCount: number, items: [T]) => [T];
-unshift        : (items: [T]) => number;
+slice          : (start: number, end: number) => #Array[#Immutable,T];
+sort           : (compareFn: (a: T, b: T) => number) => #Array[#Immutable,T];
+splice         :  /\ (start: number) => #Array[#Immutable,T]
+/\ (start: number, deleteCount: number, items: #Array[#Immutable,T]) => #Array[#Immutable,T];
+unshift        : (items: #Array[#Immutable,T]) => number;
 indexOf        : (searchElement: T, fromIndex: number) => number;
 lastIndexOf    : (searchElement: T, fromIndex: number) => number;
-every          : (callbackfn: (value: T, index: number, array: [T]) => boolean) => boolean;
-some           : (callbackfn: (value: T, index: number, array: [T]) => boolean) => boolean;
-forEach        : (callbackfn: (value: T, index: number, array: [T]) => void) => void;
+every          : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => boolean) => boolean;
+some           : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => boolean) => boolean;
+forEach        : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => void) => void;
 map            : forall U . (callbackfn: (value: T) => U) => [U];
-filter         : (callbackfn: (value: T, index: number, array: [T]) => boolean) => [T];
-reduce         : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T;
-reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T;
+filter         : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => boolean) => #Array[#Immutable,T];
+reduce         : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: #Array[#Immutable,T]) => T, initialValue: T) => T;
+reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: #Array[#Immutable,T]) => T, initialValue: T) => T;
 length         : { v: number | (v = (len this) && v >= 0) }
 }
 */
@@ -208,10 +211,10 @@ reduceRight    :  /\ (callbackfn: (previousValue: T, currentValue: T, currentInd
 [x: number]    : T;
 */
 /*@ extern Array :: {
-new forall T . (arrayLength: number) => { v: [T] | (len v) = arrayLength } ;
-forall T . (arrayLength: number) => { v: [T] | (len v) = arrayLength } ;
-isArray  : /\ forall T . (arg: [T]) => { v: boolean | Prop(v) }
-/\ forall A . (arg: A)   => boolean ;
+new forall M T . (arrayLength: number) => { v: #Array[M,T] | (len v) = arrayLength } ;
+forall M T     . (arrayLength: number) => { v: #Array[M,T] | (len v) = arrayLength } ;
+isArray  : /\ forall M T . (arg: #Array[M,T]) => { v: boolean | Prop(v) }
+/\ forall A   . (arg: A)           => boolean ;
 } */
 /*
 //TODO
@@ -269,7 +272,7 @@ prototype: Array<any>;
 /*************************************************************************/
 // NOTE: types that are defined in lib.d.ts need to be in comment to pass
 // through the TS compilation phase.
-/*@ interface Error {
+/*@ interface Error<M> {
 name: string;
 message: string;
 } */
@@ -312,5 +315,6 @@ var Errors = (function () {
     };
     return Errors;
 })();
+
 
 var __dummy__ = null;

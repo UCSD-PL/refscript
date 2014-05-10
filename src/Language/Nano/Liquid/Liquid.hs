@@ -10,7 +10,7 @@ module Language.Nano.Liquid.Liquid (verifyFile) where
 
 import           Text.Printf                        (printf)
 import           Control.Monad
-import           Control.Applicative                ((<$>), (<*>))
+import           Control.Applicative                ((<$>))
 
 import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (fromMaybe, listToMaybe)

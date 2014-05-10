@@ -429,7 +429,8 @@ consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3)
 
 -- [e1,...,en]
 consExpr g (ArrayLit l es)
-  = consCall g l BIArrayLit es $ arrayLitTy l (length es) $ renv g
+  = do  t <- arrayQualifiers $ arrayLitTy l (length es) $ renv g
+        consCall g l BIArrayLit es t
 
 -- {f1:e1,...,fn:en}
 consExpr g (ObjectLit l bs) 

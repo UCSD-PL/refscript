@@ -33,9 +33,10 @@ module Language.Nano.Liquid.CGMonad (
   , Freshable (..)
 
   -- * Environment API
-  , envAddFresh, envAdds, envAddGlobs, envAddReturn, envAddGuard, envFindTy, envGlobAnnot, envFieldAnnot
+  , envAddFresh, envAdds, envAddGlobs, envAddReturn, envAddGuard, envFindTy
+  , envGlobAnnot, envFieldAnnot
   , envRemSpec, isGlobalVar, envToList, envFindReturn, envPushContext
-  , envGetContextCast, envGetContextTypArgs
+  , envGetContextCast, envGetContextTypArgs, arrayQualifiers
 
   , findSymM, findSymOrDieM
 
@@ -58,7 +59,7 @@ module Language.Nano.Liquid.CGMonad (
 
   ) where
 
-import           Data.Maybe                     (fromMaybe, listToMaybe, catMaybes, isJust, maybeToList)
+import           Data.Maybe                     (fromMaybe, listToMaybe, catMaybes, isJust)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 import qualified Data.List                      as L
@@ -68,7 +69,7 @@ import           Language.Nano.Types
 import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
 import qualified Language.Nano.Env              as E
-import           Language.Nano.Typecheck.Types 
+import           Language.Nano.Typecheck.Types  hiding (quals)
 import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Liquid.Types
@@ -123,7 +124,8 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
 initState       :: Config -> Nano AnnTypeR RefType -> CGState
-initState c p   = CGS F.emptyBindEnv (specs p) (defs p) (externs p) [] [] 0 mempty invs c [this] M.empty
+initState c p   = CGS F.emptyBindEnv (specs p) (defs p) (externs p)
+                    [] [] 0 mempty invs c [this] M.empty []
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
     this        = tTop
@@ -144,7 +146,7 @@ cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
                 , F.gs    = clear $ measureEnv pgm
                 , F.lits  = []
                 , F.kuts  = F.ksEmpty
-                , F.quals = clear $ nanoQualifiers pgm 
+                , F.quals = clear $ nanoQualifiers pgm ++ quals cg
                 }
 
 patchSymLits fi = fi { F.lits = clear $ F.symConstLits fi ++ F.lits fi }
@@ -174,6 +176,7 @@ data CGState
         , cg_opts  :: Config               -- ^ configuration options
         , cg_this  :: ![RefType]           -- ^ a stack holding types for 'this' 
         , globs    :: !GlobEnv             -- ^ bindings of globals
+        , quals    :: ![F.Qualifier]       -- ^ qualifiers that arise at typechecking
         }
 
 type CGM     = ErrorT Error (State CGState)
@@ -314,6 +317,38 @@ addInvariant t           = ((`tx` t) . invs) <$> get
     strengthenOp t _ r   | otherwise          = strengthen t r
 
     ofRef (F.Reft (s, as)) = (F.Reft . (s,) . single) <$> as
+
+
+---------------------------------------------------------------------------------------
+arrayQualifiers    :: RefType -> CGM RefType -- [F.Qualifier]
+---------------------------------------------------------------------------------------
+arrayQualifiers t   = do 
+    modify $ \st -> st { quals = qs ++ quals st }
+    return t 
+   where
+     qs             = concatMap (refTypeQualifiers γ0) $ [t]
+     γ0             = E.envEmpty :: F.SEnv F.Sort 
+
+
+refTypeQualifiers γ0 t = efoldRType rTypeSort addQs γ0 [] t 
+  where addQs γ t qs   = (mkQuals γ t) ++ qs
+
+mkQuals γ t      = [ mkQual γ v so pa | let (F.RR so (F.Reft (v, ras))) = rTypeSortedReft t 
+                                      , F.RConc p                    <- ras                 
+                                      , pa                         <- atoms p
+                   ]
+
+mkQual γ v so p = F.Q "Auto" [(v, so)] $ F.subst θ p
+  where 
+    θ             = F.mkSubst [(x, F.eVar y)   | (x, y) <- xys]
+    xys           = zipWith (\x i -> (x, F.stringSymbol ("~A" ++ show i))) xs [0..] 
+    xs            = L.delete v $ orderedFreeVars γ p
+
+
+orderedFreeVars γ = L.nub . filter (`F.memberSEnv` γ) . F.syms 
+
+atoms (F.PAnd ps)   = concatMap atoms ps
+atoms p           = [p]
 
 
 ---------------------------------------------------------------------------------------

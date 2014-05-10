@@ -1,4 +1,4 @@
-/*@ foo :: ({ [number] | (len v) < 10 } ) => number */
+/*@ foo :: ({ #Array[#Immutable,number] | (len v) < 10 } ) => number */
 function foo(a) {
 
   return a[9];

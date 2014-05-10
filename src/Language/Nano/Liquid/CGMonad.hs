@@ -277,11 +277,8 @@ envAddGlobs xts' g
        _      <- forM (zip xs is) addGlobBind
        return  $ g { renv  = E.envAdds xts        (renv g) } 
                    { fenv  = F.insertsIBindEnv is (fenv g) }
---                   { globs = tracePP "globs" $ M.fromList . batch . L.groupBy (on (==) fst) $ zip ss is }
     where 
        (xs,ts) = unzip xts'
-       ss      = F.symbol <$> xs
-       batch   = map $ \l -> (fst (head l), snd <$> l)
 
 
 ---------------------------------------------------------------------------------------
@@ -372,7 +369,8 @@ envRemSpec     :: (IsLocated x, F.Symbolic x, F.Expression x, PP x)
                => x -> CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 envRemSpec x g = do 
-      gls   <- concat . maybeToList . M.lookup (F.symbol x) . globs <$> get
+      -- gls   <- concat . maybeToList . M.lookup (F.symbol x) . globs <$> get
+      gls   <- concat . M.elems . globs <$> get
       return $ g { cge_spec = E.envDel x $ cge_spec g 
                  , renv     = E.envDel x $ renv     g
                  , fenv     = foldr F.deleteIBindEnv (fenv g) gls }

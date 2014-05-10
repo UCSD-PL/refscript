@@ -16,6 +16,12 @@ JS Features
 Tool/Implementation
 -------------------
 
+  - Add check for number of parameters passed to generic type
+
+  - Add single place (perhaps in parser) where all input types are checked.
+
+  - Add mutability in tsc
+
   - Multiple constructors
 
   - Type aliases as top-level types

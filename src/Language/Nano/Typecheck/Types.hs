@@ -726,6 +726,10 @@ readOnlyVars p = envIds $ mAssm `envUnion` mMeas `envUnion` mExtr
     mAssm      = specs  p     -- assumes                      
     mExtr      = externs p    -- externs
 
+instance PP Assignability where
+  pp ReadOnly    = text "ReadOnly"
+  pp WriteLocal  = text "WriteLocal"
+  pp WriteGlobal = text "WriteGlobal"
 
 ---------------------------------------------------------------------------
 -- | Pretty Printer Instances

@@ -300,7 +300,11 @@ mapReftM _ t               = error   $ render $ text "Not supported in mapReftM:
 mapReftBindM f (B x t)    = B x     <$> mapReftM f t
 
 mapReftEltM f (PropSig x m s t) = PropSig x m s <$> mapReftM f t
-mapReftEltM f (MethSig x   s t) = MethSig x   s <$> mapReftM f t
+mapReftEltM f (MethSig x s (Just τ) t) 
+  = do  τ' <-mapReftM f τ
+        t' <-mapReftM f t
+        return $ MethSig x s (Just τ') t'
+mapReftEltM f (MethSig x m Nothing t) = MethSig x m Nothing <$> mapReftM f t
 mapReftEltM f (CallSig t)       = CallSig       <$> mapReftM f t
 mapReftEltM f (ConsSig  t)      = ConsSig       <$> mapReftM f t
 mapReftEltM f (IndexSig x b t)  = IndexSig x b  <$> mapReftM f t

@@ -46,7 +46,7 @@ import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
 
 import           System.Console.CmdArgs.Default
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -405,7 +405,8 @@ consExpr g (CallExpr l e@(SuperRef _) es)
     go [t] = consCall g l e es t
     go _   = cgError l $ errorConsSigMissing (srcPos l) e   
 
-consExpr g (CallExpr l e es)
+-- e(es)
+consExpr g c@(CallExpr l e es)
   = do (x, g') <- consExpr g e 
        consCall g' l e es $ envFindTy "consExpr-CallExpr" x g'
 
@@ -440,7 +441,8 @@ consExpr g (ObjectLit l bs)
                               (\t -> envFindTy "consExpr-ObjectLit" t g') <$> xes) fTop
         envAddFresh "consExpr:ObjectLit" l tCons g'
     where
-        mkElt s t | isTFun t  = MethSig s False t
+    -- TODO: add "this" as first argument
+        mkElt s t | isTFun t  = MethSig s False Nothing t
         mkElt s t | otherwise = PropSig s True False t 
 
 -- new C(e, ...)

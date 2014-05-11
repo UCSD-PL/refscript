@@ -5,7 +5,7 @@
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
-module Language.Nano.Typecheck.Lookup (getProp, getPropTDef) where 
+module Language.Nano.Typecheck.Lookup (getProp, getElt, getPropTDef) where 
 
 import           Data.Maybe (listToMaybe)
 import           Language.ECMAScript3.PrettyPrint
@@ -48,6 +48,17 @@ getProp l _ _ _ t               = die $ bug (srcPos l)
                                       $ "Using getProp on type: " ++ ppshow t 
 
 
+-- | getElt could return multiple bindgins
+-------------------------------------------------------------------------------
+getElt :: (PPR r, IsLocated l) 
+       => l -> TDR r -> F.Symbol -> RType r -> [(RType r, TElt (RType r))]
+-------------------------------------------------------------------------------
+getElt l γ s t@(TApp _ _ _)  = getEltApp l γ s t 
+getElt _ _ s t@(TCons _ _)   = (t,) <$> getEltCons False s t
+getElt l _ _ t               = die $ bug (srcPos l) 
+                                     $ "Using getElt on type: " ++ ppshow t 
+
+
 -------------------------------------------------------------------------------
 getPropApp :: (PPR r, IsLocated a) 
            => a -> TER r -> TDR r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
@@ -63,13 +74,35 @@ getPropApp l α γ s t@(TApp c ts _) =
     TRef (i,b) -> findSym i γ >>= getPropTDef b l γ s ts >>= return . (t,)
     TTop       -> die $ bug (srcPos l) "getProp top"
     TVoid      -> die $ bug (srcPos l) "getProp void"
-
 getPropApp _ _ _ _ _ = error "getPropApp should only be applied to TApp"
+
+
+getEltApp l γ s t@(TApp c ts _) = 
+  case c of 
+    TRef (i,b) -> case findSym i γ of
+                    Just d  -> (t,) <$> getEltTDef b l γ s ts d
+                    Nothing -> []
+    _          -> []
+getEltApp _ _ _ _ = error "getEltApp should only be applied to TApp"
+
+
+getEltTDef b _ γ f ts d = getEltCons b f t
+  where
+    t = TCons (S.flatten γ (d,ts)) fTop
+
+
+getEltCons b  s (TCons es _) = [ e | e             <- es
+                                   , eltSym e      == s
+                                   , isStaticElt e == b ]
+getEltCons _ _ _            = error $ "Cannot call getEltCons on non TCons"
+
 
 -- FIXME: IndexSig access could return null.
 getPropCons b s t@(TCons es _) 
-  | isIndSig t  = listToMaybe   [ {- orNull -} t | IndexSig _ _ t <- es]   
-  | otherwise   = listToMaybe $ [ eltType e | e <- es, isStaticElt e == b, eltSym e == s ]
+  | isIndSig t  = listToMaybe [ {-nil-} t | IndexSig _ _ t <- es]   
+  | otherwise   = listToMaybe [ eltType e | e              <- es
+                                          , isStaticElt e  == b
+                                          , eltSym e       == s ]
 
 getPropCons _ _ _ = error "BUG: Cannot call getPropCons on non TCons"
 

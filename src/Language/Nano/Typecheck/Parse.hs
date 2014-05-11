@@ -257,19 +257,33 @@ arrayP = brackets bareTypeP
 -- separated by semicolon.
 fieldBindP =  sepEndBy (
               try indexSigP 
-          <|> try propMethSigP
+          <|> try fieldSigP
           <|> try callSigP
           <|> try consSigP
               ) semi
 
--- | f : t
-propMethSigP = do s     <- option False (try (reserved "static" >> return True))
-                  (x,t) <- xyP sp colon bareTypeP
-                  case isTFun t of
-                    True  -> return $ MethSig x      s t 
-                    False -> return $ PropSig x True s t
+-- | f [ <type> ] : t
+--
+-- The type in the brackets is the type for `this` (optional).
+-- This means that for the same field with different bindings for `this` there
+-- will be separate elements. 
+----------------------------------------------------------------------------------
+fieldSigP :: Parser (TElt RefType)
+----------------------------------------------------------------------------------
+fieldSigP = do 
+    s          <- option False $ try $ reserved "static" >> return True
+    ((x,tt),t) <- xyP sp colon bareTypeP
+    case isTFun t of 
+      True  -> return $ MethSig x s tt t
+      False -> return $ PropSig x True s t
+--     case bkFun t of 
+--       Just (vs, (B σ τ : bs), t) | σ == symbol "this" -> return $ MethSig x s (Just τ) $ mkFun (vs,bs,t)
+--       Just (vs, bs, t)          -> return $ MethSig x s Nothing $ mkFun (vs,bs,t)
+--       Nothing                   -> return $ PropSig x True s t
   where 
-    sp = withinSpacesP (stringSymbol <$> ((try lowerIdP) <|> upperIdP))    
+    sp = do x <- withinSpacesP (stringSymbol <$> ((try lowerIdP) <|> upperIdP))    
+            t <- optionMaybe $ withinSpacesP $ brackets bareTypeP
+            return (x,t)
 
 indexP = xyP id colon sn
   where

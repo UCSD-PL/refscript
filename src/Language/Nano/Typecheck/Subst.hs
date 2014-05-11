@@ -22,6 +22,9 @@ module Language.Nano.Typecheck.Subst (
   -- * Flatten a type definition applying subs
   , flatten, flatten', flattenTRef, flattenType, intersect
 
+  -- * Ancestors
+  , weaken
+
   ) where 
 
 import           Data.Maybe (maybeToList)
@@ -142,7 +145,7 @@ instance Substitutable r t => Substitutable r (TElt t) where
   apply θ (CallSig t)       = CallSig       $ apply θ t
   apply θ (ConsSig t)       = ConsSig       $ apply θ t
   apply θ (IndexSig x b t)  = IndexSig x b  $ apply θ t
-  apply θ (MethSig x s t)   = MethSig x s   $ apply θ t
+  apply θ (MethSig x s τ t) = MethSig x s   (apply θ τ) (apply θ t)
 
 instance F.Reftable r => Substitutable r (Cast r) where
   apply _ CNo        = CNo
@@ -219,6 +222,27 @@ flattenType δ (TAll v t)     = TAll v $ flattenType δ t
 flattenType δ (TAnd ts)      = TAnd $ flattenType δ <$> ts
 flattenType δ (TCons ts r)   = TCons ((flattenType δ <$>) <$> ts) r
 flattenType _ _              = error "TExp should not appear here"
+
+
+-- | Weaken a named type, by moving upwards in the class hierarchy. This
+-- function does the necessary type argument substitutions. 
+--
+-- FIXME: Works for classes, but interfaces could have multiple ancestors.
+-- FIXME: What about common elements in parent class?
+---------------------------------------------------------------------------
+weaken :: PPR r => TDefEnv (RType r) -> (TDef (RType r), [RType r]) 
+                   -> F.Symbol -> Maybe (TDef (RType r), [RType r])
+---------------------------------------------------------------------------
+weaken δ dt@(TD _ s vs (Just (p,ps)) _, ts) t 
+  | ss /= t = weaken δ (apply θ $ findSymOrDie p δ, apply θ ps) t
+  | ss == t = Just dt
+  where θ   = fromList $ zip vs ts
+        ss  = F.symbol s 
+
+weaken δ dt@(TD _ s vs Nothing _, ts) t
+  | ss /= t = Nothing
+  | ss == t = Just dt
+  where ss  = F.symbol s 
 
 
 -- | `intersect` returns the intersection of the raw parts of two type trees 

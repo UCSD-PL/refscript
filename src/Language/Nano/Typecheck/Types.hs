@@ -46,7 +46,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, rtArr, tUndef, tNull
-  , tAnd, isTVar, isRigid, isArr, isTCons, isIndSig, isConstr, isTFun, fTop, orNull
+  , tAnd, isTVar, isRigid, isArr, isTObj, isIndSig, isConstr, isTFun, fTop, orNull
 
   -- * Print Types
   , ppArgs
@@ -156,7 +156,13 @@ data TElt t    = PropSig  { f_sym :: F.Symbol, f_sta :: Bool, f_mut :: Bool, f_t
                | CallSig  {                                                  f_type :: t }     -- Call Signature
                | ConsSig  {                                                  f_type :: t }     -- Constructor Signature               
                | IndexSig { f_sym :: F.Symbol, f_key :: Bool,                f_type :: t }     -- Index Signature (T/F=string/number)
-               | MethSig  { f_sym :: F.Symbol, f_sta :: Bool,                f_type :: t }     -- Method Signature
+
+               | MethSig  { f_sym :: F.Symbol   -- Name
+                          , f_sta :: Bool       -- Static or not
+                          , f_this :: Maybe t   -- Require the enclosing object to be 
+                                                -- of a certain type
+                          , f_type :: t }       -- Method Signature
+
   deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
@@ -371,7 +377,10 @@ instance Equivalent (TElt (RType r)) where
   equiv (CallSig t1)          (CallSig t2)          = equiv t1 t2
   equiv (ConsSig t1)          (ConsSig t2)          = equiv t1 t2
   equiv (IndexSig _ b1 t1)    (IndexSig _ b2 t2)    = b1 == b2 && equiv t1 t2
-  equiv (MethSig f1 s1 t1)    (MethSig f2 s2 t2)    = (f1,s1) == (f2,s2) && equiv t1 t2
+  equiv (MethSig f1 s1 τ1 t1) (MethSig f2 s2 τ2 t2) = (f1,s1) == (f2,s2) && equiv t1 t2 && f τ1 τ2 
+    where f (Just τ1) (Just τ2) = equiv τ1 τ2
+          f Nothing   Nothing   = True
+          f _         _         = False
   equiv _                     _                     = False
  
 
@@ -462,9 +471,9 @@ isVoid :: RType r -> Bool
 isVoid (TApp TVoid _ _)   = True 
 isVoid _                  = False
 
-isTCons (TApp (TRef _) _ _) = True
-isTCons (TCons _ _)         = True
-isTCons _                   = False
+isTObj (TApp (TRef _) _ _) = True
+isTObj (TCons _ _)         = True
+isTObj _                   = False
 
 isIndSig (TCons es _) | not (null [ () | IndexSig _ _ _ <- es ]) = True
 isIndSig _            = False
@@ -648,8 +657,11 @@ instance (PP t) => PP (TElt t) where
   pp (ConsSig t)          = text "new" <+> pp t
   pp (IndexSig x True t)  = brackets (pp x <> text ": string") <> text ":" <> pp t
   pp (IndexSig x False t) = brackets (pp x <> text ": number") <> text ":" <> pp t
-  pp (MethSig x True t)   = text "static meth" <+> pp x <> text ":" <> pp t 
-  pp (MethSig x _ t)      = pp x <> text ":" <> pp t 
+  pp (MethSig x True _ t) = text "static meth" <+> pp x <> text ":" <> pp t 
+  pp (MethSig x _ (Just τ) t) 
+                          = pp x <> text ": [this: " <> pp τ <> text " ]" <> pp t 
+  pp (MethSig x _ Nothing t) 
+                          = pp x <> text ":" <> pp t 
 
 instance PP Bool where
   pp True   = text "True"
@@ -659,33 +671,37 @@ sameBinder (PropSig x1 _ s1 _) (PropSig x2 _ s2 _) = x1 == x2 && s1 == s2
 sameBinder (CallSig _)         (CallSig _)         = True
 sameBinder (ConsSig _)         (ConsSig _)         = True
 sameBinder (IndexSig _ b1 _)   (IndexSig _ b2 _)   = b1 == b2
-sameBinder (MethSig x1 s1 _)   (MethSig x2 s2 _)   = x1 == x2 && s1 == s2
+sameBinder (MethSig x1 s1 _ _) (MethSig x2 s2 _ _) = x1 == x2 && s1 == s2
 sameBinder _                   _                   = False
 
 zipElts f e1@(PropSig x1 m1 s1 t1) e2@(PropSig _ _ _ t2) | sameBinder e1 e2 = PropSig x1 m1 s1 $ f t1 t2 
 zipElts f e1@(CallSig t1)          e2@(CallSig t2)       | sameBinder e1 e2 = CallSig $ f t1 t2 
 zipElts f e1@(ConsSig t1)          e2@(ConsSig t2)       | sameBinder e1 e2 = ConsSig $ f t1 t2 
 zipElts f e1@(IndexSig x b1 t1)    e2@(IndexSig _ _ t2)  | sameBinder e1 e2 = IndexSig x b1 $ f t1 t2
-zipElts f e1@(MethSig x1 s1 t1)    e2@(MethSig _ _ t2)   | sameBinder e1 e2 = MethSig x1 s1 $ f t1 t2
+zipElts f e1@(MethSig x1 s1 (Just τ1) t1) e2@(MethSig _ _ (Just τ2) t2)
+                                                         | sameBinder e1 e2 = MethSig x1 s1 (Just $ f τ1 τ2) $ f t1 t2
 zipElts _ e1 e2 = error $ "Cannot zip: " ++ ppshow e1 ++ " and " ++ ppshow e2 
 
 
 eltType (PropSig _ _ _ t) = t
-eltType (MethSig _ _   t) = t
+eltType (MethSig _ _ _ t) = t
 eltType (ConsSig       t) = t
 eltType (CallSig       t) = t
 eltType (IndexSig _ _  t) = t
 
-eltToPair (PropSig s _ _ t)    = (s, t)
-eltToPair (MethSig s   _ t)    = (s, t)
-eltToPair (ConsSig       t)    = (F.stringSymbol "__constructor__", t)
-eltToPair (CallSig       t)    = (F.stringSymbol "__call__", t)
-eltToPair (IndexSig _ True t)  = (F.stringSymbol "__string__index__", t)
-eltToPair (IndexSig _ False t) = (F.stringSymbol "__numeric__index__", t)
+eltToPair (PropSig s _ _ t)         = (s, t)
+eltToPair (MethSig s   _ Nothing t) = (s, t)
+-- TODO: what do we do with the `this` type?
+-- eltToPair m@(MethSig s   _ _ _t)    = error $ "Cannot call eltToPair on: " ++ ppshow m
+eltToPair (MethSig s  _ (Just _) t) = (s, t)
+eltToPair (ConsSig       t)         = (F.stringSymbol "__constructor__", t)
+eltToPair (CallSig       t)         = (F.stringSymbol "__call__", t)
+eltToPair (IndexSig _ True t)       = (F.stringSymbol "__string__index__", t)
+eltToPair (IndexSig _ False t)      = (F.stringSymbol "__numeric__index__", t)
 
-isStaticElt (PropSig _ _ True _) = True
-isStaticElt (MethSig _   True _) = True
-isStaticElt _                    = False
+isStaticElt (PropSig _ _ True _  ) = True
+isStaticElt (MethSig _   True _ _) = True
+isStaticElt _                      = False
 
 nonStaticElt = not . isStaticElt
 

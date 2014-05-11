@@ -146,7 +146,7 @@ errorMissFlds l t1 t2 x   = mkErr l $ printf "Cannot convert: %s to %s. Type %s 
 errorSuper l              = mkErr l $ printf "Cannot resolve reference to super." 
 errorSuperParentMissing l = mkErr l $ printf "Calling super when parent class missing." 
 
-errorSimpleSubtype l t t' = mkErr l $ printf "Type: %s is not a subtype of %s" (ppshow t) (ppshow t')
+errorSimpleSubtype l t t' = mkErr l $ printf "Type '%s' is not a subtype of '%s'." (ppshow t) (ppshow t')
 errorObjSubtype l t t'    = mkErr l $ printf "Object type: %s is not a subtype of %s" (ppshow t) (ppshow t')
 errorFuncSubtype l t t'   = mkErr l $ printf "Function type: %s is not a subtype of %s" (ppshow t) (ppshow t')
 errorUnionSubtype l t t'  = mkErr l $ printf "Union type: %s is not a subtype of %s" (ppshow t) (ppshow t')
@@ -158,3 +158,5 @@ errorTypeArgsNum l n p q  = mkErr l $ printf "Type %s expects %s arguments but %
 
 errorSigNotFound l e es   = mkErr l $ printf "Could not find a matching signature for call to %s with arguments %s" (ppshow e) (ppshow es)
 errorCallNotSup l fn es   = mkErr l $ printf "Cannot call '%s' with argument(s): %s" (ppshow fn) (ppshow es)
+
+errorThisDeref l p o t    = mkErr l $ printf "Cannot dereference property '%s' from object '%s' with type '%s'." (ppshow p) (ppshow o) (ppshow t) 

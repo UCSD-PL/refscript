@@ -26,7 +26,7 @@ module Language.Nano.Typecheck.TCMonad (
   , freshTyArgs
 
   -- * Substitutions
-  , getSubst, setSubst
+  , getSubst, setSubst, addSubst
 
   -- * Function Types
   , tcFunTys
@@ -69,6 +69,7 @@ import           Control.Applicative                ((<$>), (<*>))
 import           Data.Function                      (on)
 import qualified Data.HashSet                       as S
 import           Data.Maybe                         (fromJust)
+import           Data.List                          (elem)
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)
 import           Language.Fixpoint.Errors
@@ -168,6 +169,11 @@ setSubst   :: RSubst r -> TCM r ()
 setSubst θ = modify $ \st -> st { tc_subst = θ }
 
 -------------------------------------------------------------------------------
+addSubst :: (F.Reftable r, PP r) => RSubst r -> TCM r ()
+-------------------------------------------------------------------------------
+addSubst θ = getSubst >>= setSubst . (`mappend` θ)
+
+-------------------------------------------------------------------------------
 extSubst :: (F.Reftable r, PP r) => [TVar] -> TCM r ()
 -------------------------------------------------------------------------------
 extSubst βs = getSubst >>= setSubst . (`mappend` θ)
@@ -258,7 +264,7 @@ getAllAnns = tc_annss <$> get
 
 
 -------------------------------------------------------------------------------
-accumAnn :: PPRSF r => (AnnInfo r -> [Error]) -> TCM r a -> TCM r a
+accumAnn :: (PP a, PPRSF r) => (AnnInfo r -> [Error]) -> TCM r a -> TCM r a
 -------------------------------------------------------------------------------
 -- RJ: this function is gross. Why is it being used? why are anns not just
 -- accumulated monotonically?
@@ -422,18 +428,18 @@ convert _ _  t2 | isTop t2             = return CNo
 
 convert l t1 t2 | any isUnion [t1,t2]  = convertUnion l t1 t2
 
-convert l t1 t2 | all isTCons [t1,t2]  = convertCons l t1 t2
+convert l t1 t2 | all isTObj  [t1,t2]  = convertObj l t1 t2
 
 convert l t1 t2 | all isTFun  [t1, t2] = convertFun l t1 t2
 
 convert l t1 t2                        = convertSimple l t1 t2 
 
 
--- | `convertCons`
+-- | `convertObj`
 --------------------------------------------------------------------------------
-convertCons :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
+convertObj :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
-convertCons l t1@(TCons e1s _) t2@(TCons e2s _)
+convertObj l t1@(TCons e1s _) t2@(TCons e2s _)
   -- LHS and RHS are object literal types
   | all (not . isIndSig) [t1,t2] = zipWithM (convert l) t1s t2s >>= kk
   -- LHS and RHS are index signatures
@@ -447,7 +453,7 @@ convertCons l t1@(TCons e1s _) t2@(TCons e2s _)
   where
     -- Only consider non-static properties
     ts es      = [ eltType e | e <- es, nonStaticElt e ]
-    ti es      = safeHead "convertCons" [ t | IndexSig _ _ t <- es ]
+    ti es      = safeHead "convertObj" [ t | IndexSig _ _ t <- es ]
     
     -- NOT: Take all (non-static) properties into account. 
     p1s        = [ eltToPair e | e <- e1s, nonStaticElt e ]
@@ -462,14 +468,12 @@ convertCons l t1@(TCons e1s _) t2@(TCons e2s _)
     ind   = [ (t1, t2) | IndexSig _ s1 t1 <- e1s
                        , IndexSig _ s2 t2 <- e2s
                        , s1 == s2 ]
-
     kk cs | m1 `equalKeys` m2        = cc cs 
           -- LHS has more fields than RHS
           | m2 `isProperSubmapOf` m1 = nc cs
           -- LHS has fewer fields than RHS
           | m1 `isProperSubmapOf` m2 = g3
           | otherwise                = g4
-
     cc cs | all noCast cs = return   $ CNo
           | all upCast cs = return   $ CUp t1 t2
           -- NOTE: Assuming covariance here!!!
@@ -477,43 +481,43 @@ convertCons l t1@(TCons e1s _) t2@(TCons e2s _)
           -- TOGGLE dead-code
           -- | any ddCast cs = return   $ CDead t2
           | otherwise     = tcError  $ errorConvDef l t1 t2
-
     nc cs | all noCast cs = return   $ CNo
           | all upCast cs = return   $ CUp t1 t2
           | otherwise     = tcError  $ errorConvDef l t1 t2
-
     g3    = tcError $ errorMissFlds l t1 t2 (S.toList $ S.difference ks2 ks1)
     g4    = tcError $ errorConvDef l t1 t2
 
-
-
-convertCons l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
-  -- FIXME: type argument subtyping
-  -- Same exact type name
-  | i1 == i2 && and (zipWith equiv t1s t2s) 
-  = return CNo
-  -- Same type - incompatible arguments
-  | i1 == i2   
-  = tcError $ errorConvDefInvar l t1 t2
-  | otherwise  
-  = do δ <- getDef
-       let c1 = TCons (flattenTRef δ t1) r1
-       let c2 = TCons (flattenTRef δ t2) r2
-       convertCons l c1 c2  
-
-convertCons l t1@(TApp (TRef _) _ _) t2 
+convertObj l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
+  | i1 == i2 
+  = do -- FIXME: Using covariance here !!!
+       bs <- zipWithM (isSubtypeM l) t1s t2s 
+       if and bs then return CNo
+                 else tcError $ errorSimpleSubtype l t1 t2
+  | (s1,b1) /= (s2,b2)
+  = do δ  <- getDef 
+       case weaken δ (findSymOrDie s1 δ,t1s) s2 of
+         Just (_, t1s') -> return $ CUp (TApp (TRef (s2,b1)) t1s' r1) t2
+         Nothing        -> convertObj l (c1 δ) (c2 δ)
+  where
+    (s1,b1) = i1
+    (s2,b2) = i2
+    c1 δ    = TCons (flattenTRef δ t1) r1
+    c2 δ    = TCons (flattenTRef δ t2) r2
+                          
+convertObj l t1@(TApp (TRef _) _ _) t2 
   = do δ <- getDef 
-       convertCons l (flattenType δ t1) t2
+       convertObj l (flattenType δ t1) t2
 
-convertCons l t1 t2@(TApp (TRef _) _ _)
+convertObj l t1 t2@(TApp (TRef _) _ _)
   = do δ <- getDef
-       convertCons l t1 (flattenType δ t2) 
+       convertObj l t1 (flattenType δ t2) 
 
-convertCons _ _ _ =  error "BUG: Case not supported in convertCons"
+convertObj _ _ _ =  error "BUG: Case not supported in convertObj"
 
 
 instance PP a => PP (S.HashSet a) where
   pp = pp . S.toList 
+
 
 -- | `convertFun`
 --
@@ -540,7 +544,7 @@ convertSimple l t1 t2
   | t1 `equiv` t2 = return CNo
   -- TOGGLE dead-code
   -- | otherwise     = return $ CDead t2
-  | otherwise     = tcError  $ errorConvDef l t1 t2
+  | otherwise     = tcError  $ errorSigNotFound l t1 t2
 
 
 -- | `convertUnion`

@@ -18173,7 +18173,7 @@ var TypeScript;
     (function (Syntax) {
         function toRsAST(token, helper) {
             if (token.kind() === 11 /* IdentifierName */) {
-                return new TypeScript.RsId(helper.getSourceSpan(token), [], token.fullText());
+                return new TypeScript.RsId(helper.getSourceSpan(token), [], token.text());
             }
             throw new Error("toRsAST not implemented for " + TypeScript.SyntaxKind[token.kind()]);
         }

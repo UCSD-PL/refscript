@@ -19,6 +19,7 @@ import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe, fromJust)
 import           Data.List                          (find)
 import           Data.Generics                   
+import           Data.Monoid
 
 import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat)
 
@@ -188,25 +189,6 @@ ppTCEnv (TCE env spc ctx)
 
 tcEnvPushSite i γ            = γ { tce_ctx = pushContext i    $ tce_ctx γ }
 
--- Since we assume the raw types should be the same among the various SSA 
--- variants, we should only be adding bindings for the non-SSA version of the 
--- variable, to be able to retrieve it correctly later on.
--- NO !!! We are ony storing SSAed vars here so we better keep them as they are. 
---
--- tcEnvAdds                   :: (IsLocated a, F.Reftable r) => [(Id a, RType r)] -> TCEnv r -> TCEnv r
--- tcEnvAdds     x γ            = γ { tce_env = envAdds (mapFst stripSSAId <$> x)        $ tce_env γ }
--- 
--- tcEnvAddReturn x t γ         = γ { tce_env = envAddReturn x t $ tce_env γ }
--- tcEnvMem x                   = envMem (stripSSAId x)      . tce_env 
--- tcEnvFindTy x                = envFindTy (stripSSAId x)   . tce_env
--- tcEnvFindReturn              = envFindReturn              . tce_env
--- 
--- tcEnvFindSpec x              = envFindTy (stripSSAId x)   . tce_spec 
--- tcEnvFindSpecOrTy x γ        = msum [tcEnvFindSpec x γ, tcEnvFindTy x γ]
--- 
--- tcEnvFindTyOrDie l x         = fromMaybe ugh . tcEnvFindTy (stripSSAId x)  where ugh = die $ errorUnboundId (ann l) x
--- 
-
 tcEnvAdds                   :: (IsLocated a, F.Reftable r) => [(Id a, RType r)] -> TCEnv r -> TCEnv r
 tcEnvAdds     x γ            = γ { tce_env = envAdds x $ tce_env γ }
 
@@ -232,14 +214,8 @@ type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r))
 -- | TypeCheck Scoped Block in Environment
 -------------------------------------------------------------------------------
 
--- NOTE: The types that are going to be checked in `validInst` are just the ones
--- that end up in `tc_anns`. This means that in the case of function, these
--- functions will have to be called. In the case of unbound type variables, this
--- will manifest as a "rigid variable unification" error.
-
 tcInScope γ act = accumAnn annCheck act
   where
-    -- Adding type def environment in what is checked in valid
     annCheck m  = catMaybes $ validInst γ <$> M.toList m
 
 -------------------------------------------------------------------------------
@@ -258,10 +234,9 @@ tcFun γ (FunctionStmt l f xs body)
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
 -------------------------------------------------------------------------------
-tcFun1 ::
-  (PPR r, IsLocated b, IsLocated l, IsLocated a, CallSite t) =>
-  TCEnv r -> a -> l -> [Id b] -> [Statement (AnnSSA r)] -> 
-  (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
+tcFun1 :: (PPR r, IsLocated b, IsLocated l, IsLocated a, CallSite t) 
+       => TCEnv r -> a -> l -> [Id b] -> [Statement (AnnSSA r)] -> 
+            (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
 tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l body t
   where 
@@ -285,8 +260,11 @@ envAddFun f i αs xs ts t = tcEnvAdds tyBinds
     tyBinds                = [(tVarId α, tVar α) | α <- αs]
     varBinds               = zip
     
+-------------------------------------------------------------------------------
+validInst :: (PP a, Free a) => TCEnv r -> (SourceSpan, a) -> Maybe Error
+-------------------------------------------------------------------------------
 validInst γ (l, ts)
-  = case [β | β <- HS.toList $ free ts, not $ tVarId β `tcEnvMem` γ] of
+  = case [β | β <- HS.toList $ free $ ts, not $ tVarId β `tcEnvMem` γ] of
       [] -> Nothing
       βs -> Just $ errorFreeTyVar l βs
 
@@ -385,7 +363,6 @@ tcStmt γ (IfSingleStmt l b s)
 tcStmt γ (IfStmt l e s1 s2)
   = do tcCallMatch γ l BIBracketRef [e] (builtinOpTy l BITruthy (tce_env γ)) >>= \case
          Just ([e'], _) -> do  
-           -- unifyTypeM (srcPos l) "If condition" e t tBool
            (s1', γ1) <- tcStmt γ s1
            (s2', γ2) <- tcStmt γ s2
            z         <- envJoin l γ γ1 γ2
@@ -516,7 +493,8 @@ classEltType (Constructor l _ _ ) = ConsSig ann
 classEltType (MemberVarDecl _ s (VarDecl l v _)) = PropSig (F.symbol v) m s t
   where (m,t) = safeHead "BUG: variable decl annotation" [ φ | FieldAnn φ <- ann_fact l ]
 
-classEltType (MemberMethDecl  l s f _ _ ) = MethSig (F.symbol f) s t
+-- TODO: add "this" as first parameter
+classEltType (MemberMethDecl  l s f _ _ ) = MethSig (F.symbol f) s Nothing t
   where t = safeHead ("Method " ++ ppshow f ++ " has no annotation.") [ μ | MethAnn μ <- ann_fact l ]
 
 
@@ -604,11 +582,12 @@ tcExpr γ (ObjectLit l bs)
        ets          <- mapM (tcExpr γ) es
        let (es', ts) = unzip ets
        let tCons     = TCons (zipWith mkElt (F.symbol <$> ps) ts) fTop
-       return $ (ObjectLit l (zip ps es'), tCons)
+       return          (ObjectLit l (zip ps es'), tCons)
     where
     -- Object elements are non-static
-       mkElt s t | isTFun t  = MethSig s False t
-       mkElt s t | otherwise = PropSig s True False t 
+    -- TODO: add "this" as first argument
+       mkElt s t     | isTFun t  = MethSig s False Nothing t
+       mkElt s t     | otherwise = PropSig s True False t 
 
 
 tcExpr γ (Cast l@(Ann loc fs) e)
@@ -618,9 +597,31 @@ tcExpr γ (Cast l@(Ann loc fs) e)
          _                    -> return (Cast l e', t)
 
 -- e.f
-tcExpr γ (DotRef l e fld) 
-  = do (e', t) <- tcPropRead getProp γ l e (F.symbol $ unId fld)
-       return     (DotRef l e' fld, t)
+-- 
+-- Careful here! Unification is happening in `runMaybeM` so won't be effective
+-- outside unless we explicitly add the substitution to the environment. That's
+-- why `addSubst` is there for.
+tcExpr γ (DotRef l e f) 
+  = do δ        <- getDef
+       (e', te) <- tcExpr γ e
+       ets      <- catMaybes <$> mapM (runMaybeM . eltToType e' te) (getElt l δ fs te)
+       case ets of 
+         (e,t,θ):_ -> addSubst θ >> return (e,t)
+         _         -> tcError $ errorThisDeref (srcPos l) e f te  
+    where
+       fs = F.symbol f
+       thisArg l f to τ ft 
+         = do  θ <- unifyTypeM (srcPos l) to τ
+               subtypeM (srcPos l) (apply θ to) (apply θ τ) 
+               return (θ, apply θ ft)
+       eltToType e te (te', MethSig s False (Just τ) ft) =
+         tcWithThis te' $ do e''    <- castM l (tce_ctx γ) e te te'
+                             (θ,t)  <- thisArg l f te τ ft
+                             return (DotRef l e'' f, t, θ)
+       eltToType e te (te', elt) = 
+         tcWithThis te' $ do e'' <- castM l (tce_ctx γ) e te te'
+                             return (DotRef l e'' f, eltType elt, fromList [])
+
         
 -- e["f"]
 tcExpr γ (BracketRef l e fld@(StringLit _ s)) 
@@ -644,6 +645,9 @@ tcExpr _ e@(SuperRef l) = (e,) <$> (getSuperM l =<< tcPeekThis)
 
 tcExpr _ e 
   = convertError "tcExpr" e
+
+
+
 
 ---------------------------------------------------------------------------------------
 tcCall :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
@@ -676,7 +680,7 @@ tcCall γ (CallExpr l e@(SuperRef _)  es) = do
       Nothing        -> error "super()"
     go _   = tcError $ errorConsSigMissing (srcPos l) e   
    
--- | `e(e1,...,en)`
+-- | `e(es)`
 tcCall γ (CallExpr l e es)
   = do (e', ft0)              <- tcExpr γ e
        z                      <- tcCallMatch γ l e es ft0
@@ -807,11 +811,8 @@ tcCallCase γ l fn es' ts ft
        -- Generate fresh type parameters
        (_,ibs,ot)    <- instantiate l ξ fn ft
        let its        = b_type <$> ibs
-       -- Unify with formal parameter types
-       -- Apply substitution
        θ             <- unifyTypesM (srcPos l) "tcCall" ts its
        let (ts',its') = mapPair (apply θ) (ts, its)
-       -- Subtype the arguments against the formals and up/down cast if needed 
        es''          <- zipWith3M (castM l ξ) es' ts' its'
        return           (es'', apply θ ot)
 

@@ -283,10 +283,19 @@ interface List<M,A> {
 /*@ interface Array<M,T> {
       toString       : () => string;
       toLocaleString : () => string;
-      concat         : (items: #Array[#Immutable,T]) => { #Array[#Immutable,T] | (len v) = (len this) + (len items) } ;
+
+      concat [#Array[#Immutable,T]] : /\ (items: #Array[#Immutable,T]) => { #Array[#Immutable,T] | (len v) = (len this) + (len items) }
+                                      /\ forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
+
+      concat [#Array[#Mutable  ,T]] :    forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
+
+      concat [#Array[#ReadOnly ,T]] :    forall N1 N2 . (items: #Array[N1,T]) => #Array[N2,T];
+
       join           : (separator: string) => string;
-      pop            : () => T;
-      push           : (items: T) => number;
+
+      pop    [#Array[#Mutable,  T]] : () => T;
+      push   [#Array[#Mutable,  T]] : (items: T) => number;
+      
       reverse        : () => #Array[#Immutable,T];
       shift          : () => T;
       slice          : (start: number, end: number) => #Array[#Immutable,T];

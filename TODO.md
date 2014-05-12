@@ -16,6 +16,9 @@ JS Features
 Tool/Implementation
 -------------------
 
+  - Enforce invariant that overloaded functions have signatures with
+    non-overlapping signatures.
+
   - Add check for number of parameters passed to generic type
 
   - Add single place (perhaps in parser) where all input types are checked.

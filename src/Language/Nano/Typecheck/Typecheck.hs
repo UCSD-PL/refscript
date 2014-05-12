@@ -139,10 +139,11 @@ checkInterfaces p =
     l  = srcPos dummySpan
     is = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
 
-patchAnn m (Ann l fs) = Ann l $ sortNub $ fs'' ++ fs' ++ fs 
+patchAnn m (Ann l fs) = Ann l $ sortNub $ eo ++ fo ++ ti ++ fs 
   where
-    fs'          = [f | f@(TypInst _ _) <- M.lookupDefault [] l m]
-    fs''         = [f | f@(Overload (Just _)) <- M.lookupDefault [] l m]
+    ti                = [f | f@(TypInst _ _      ) <- M.lookupDefault [] l m]
+    fo                = [f | f@(Overload (Just _)) <- M.lookupDefault [] l m]
+    eo                = [f | f@(EltOverload _    ) <- M.lookupDefault [] l m]
 
 initEnv pgm      = TCE (envUnion (specs pgm) (externs pgm)) (specs pgm)
                        emptyContext
@@ -604,9 +605,11 @@ tcExpr γ (Cast l@(Ann loc fs) e)
 tcExpr γ (DotRef l e f) 
   = do δ        <- getDef
        (e', te) <- tcExpr γ e
-       ets      <- catMaybes <$> mapM (runMaybeM . eltToType e' te) (getElt l δ fs te)
-       case ets of 
-         (e,t,θ):_ -> addSubst θ >> return (e,t)
+       ets      <- catMaybes <$> mapM (runMaybeM . checkElt e' te) (getElt l δ fs te)
+       case tracePP "successful overloads" ets of 
+         (e,t,θ):_ -> do addSubst θ
+                         addAnn (srcPos l) (EltOverload t)
+                         return (e, eltType t)
          _         -> tcError $ errorThisDeref (srcPos l) e f te  
     where
        fs = F.symbol f
@@ -614,19 +617,19 @@ tcExpr γ (DotRef l e f)
          = do  θ <- unifyTypeM (srcPos l) to τ
                subtypeM (srcPos l) (apply θ to) (apply θ τ) 
                return (θ, apply θ ft)
-       eltToType e te (te', MethSig s False (Just τ) ft) =
+       checkElt e te (te', m@(MethSig s False (Just τ) ft)) =
          tcWithThis te' $ do e''    <- castM l (tce_ctx γ) e te te'
                              (θ,t)  <- thisArg l f te τ ft
-                             return (DotRef l e'' f, t, θ)
-       eltToType e te (te', elt) = 
+                             return (DotRef l e'' f, m, θ)
+       checkElt e te (te', elt) = 
          tcWithThis te' $ do e'' <- castM l (tce_ctx γ) e te te'
-                             return (DotRef l e'' f, eltType elt, fromList [])
+                             return (DotRef l e'' f, elt, fromList [])
 
         
--- e["f"]
-tcExpr γ (BracketRef l e fld@(StringLit _ s)) 
-  = do (e', t) <- tcPropRead getProp γ l e $ F.symbol s
-       return     (BracketRef l e' fld, t)
+-- -- e["f"]
+-- tcExpr γ (BracketRef l e fld@(StringLit _ s)) 
+--   = do (e', t) <- tcPropRead getProp γ l e $ F.symbol s
+--        return     (BracketRef l e' fld, t)
  
 -- e1[e2]
 tcExpr γ e@(BracketRef _ _ _) 

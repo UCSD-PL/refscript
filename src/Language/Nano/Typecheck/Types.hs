@@ -540,6 +540,7 @@ instance Eq (RType r) where
   TVar v1 _     == TVar v2 _      = v1        == v2
   TFun b1 t1 _  == TFun b2 t2 _   = (b1, t1)  == (b2, t2)
   TAll v1 t1    == TAll v2 t2     = v1 == v2 && t1 == t2   -- Very strict Eq here
+  TAnd t1s      == TAnd t2s       = t1s == t2s
   _             == _              = False
 
 

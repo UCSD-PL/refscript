@@ -152,15 +152,20 @@ data TDef t    = TD {
       } deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 -- | Assignability is ingored atm.
-data TElt t    = PropSig  { f_sym :: F.Symbol, f_sta :: Bool, f_mut :: Bool, f_type :: t }     -- Property Signature
-               | CallSig  {                                                  f_type :: t }     -- Call Signature
+data TElt t    = CallSig  {                                                  f_type :: t }     -- Call Signature
                | ConsSig  {                                                  f_type :: t }     -- Constructor Signature               
                | IndexSig { f_sym :: F.Symbol, f_key :: Bool,                f_type :: t }     -- Index Signature (T/F=string/number)
+              
+               | PropSig  { f_sym  :: F.Symbol, -- Name  
+                            f_sta  :: Bool,     -- Static or not
+                            f_mut  :: Bool,     -- Mutability (NOT WORKING YET !!!) 
+                            f_this :: Maybe t,  -- Required object type
+                            f_type :: t }       -- Property type
 
-               | MethSig  { f_sym :: F.Symbol   -- Name
-                          , f_sta :: Bool       -- Static or not
-                          , f_this :: Maybe t   -- Require the enclosing object to be 
-                                                -- of a certain type
+
+               | MethSig  { f_sym  :: F.Symbol  -- Name
+                          , f_sta  :: Bool      -- Static or not
+                          , f_this :: Maybe t   -- Required object type
                           , f_type :: t }       -- Method Signature
 
   deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
@@ -373,16 +378,18 @@ instance Equivalent TCon where
   equiv c        c'         = c == c'
 
 instance Equivalent (TElt (RType r)) where 
-  equiv (PropSig f1 m1 s1 t1) (PropSig f2 m2 s2 t2) = (f1,m1,s1) == (f2,m2,s2) && equiv t1 t2
+  equiv (PropSig f1 s1 m1 τ1 t1) (PropSig f2 s2 m2 τ2 t2) = 
+    (f1,m1,s1) == (f2,m2,s2) && equiv t1 t2 && equiv t1 t2
   equiv (CallSig t1)          (CallSig t2)          = equiv t1 t2
   equiv (ConsSig t1)          (ConsSig t2)          = equiv t1 t2
   equiv (IndexSig _ b1 t1)    (IndexSig _ b2 t2)    = b1 == b2 && equiv t1 t2
-  equiv (MethSig f1 s1 τ1 t1) (MethSig f2 s2 τ2 t2) = (f1,s1) == (f2,s2) && equiv t1 t2 && f τ1 τ2 
-    where f (Just τ1) (Just τ2) = equiv τ1 τ2
-          f Nothing   Nothing   = True
-          f _         _         = False
+  equiv (MethSig f1 s1 τ1 t1) (MethSig f2 s2 τ2 t2) = (f1,s1) == (f2,s2) && equiv t1 t2 && equiv τ1 τ2 
   equiv _                     _                     = False
  
+instance Equivalent t => Equivalent (Maybe t) where 
+  equiv (Just τ1) (Just τ2) = equiv τ1 τ2
+  equiv Nothing   Nothing   = True
+  equiv _         _         = False
 
 instance Equivalent (Bind r) where 
   equiv (B s t) (B s' t') = s == s' && equiv t t' 
@@ -652,45 +659,60 @@ instance (PP t) => PP (TDef t) where
 
 
 instance (PP t) => PP (TElt t) where
-  pp (PropSig x _ True t) = text "static" <> pp x <> text ":"  <> pp t
-  pp (PropSig x _ _ t)    = pp x <> text ":" <> pp t
+  pp (PropSig x s _ τ t)  =  bStr s "static"
+                         <+> pp x 
+                         <+> mStr (brackets . pp <$> τ)
+                         <+> text ":"  
+                         <+> pp t
   pp (CallSig t)          = text "call" <+> pp t 
   pp (ConsSig t)          = text "new" <+> pp t
   pp (IndexSig x True t)  = brackets (pp x <> text ": string") <> text ":" <> pp t
   pp (IndexSig x False t) = brackets (pp x <> text ": number") <> text ":" <> pp t
-  pp (MethSig x True _ t) = text "static meth" <+> pp x <> text ":" <> pp t 
-  pp (MethSig x _ (Just τ) t) 
-                          = pp x <> text ": [this: " <> pp τ <> text " ]" <> pp t 
-  pp (MethSig x _ Nothing t) 
-                          = pp x <> text ":" <> pp t 
+
+  pp (MethSig x s τ t)    =  bStr s "static" 
+                         <+> pp x 
+                         <+> mStr (brackets . pp <$> τ)
+                         <+> text ":" 
+                         <+> pp t 
+
+bStr True  s = text s
+bStr False _ = text ""
+
+mStr (Just s) = s
+mStr _        = text ""
 
 instance PP Bool where
   pp True   = text "True"
   pp False  = text "False"
     
-sameBinder (PropSig x1 _ s1 _) (PropSig x2 _ s2 _) = x1 == x2 && s1 == s2
-sameBinder (CallSig _)         (CallSig _)         = True
-sameBinder (ConsSig _)         (ConsSig _)         = True
-sameBinder (IndexSig _ b1 _)   (IndexSig _ b2 _)   = b1 == b2
-sameBinder (MethSig x1 s1 _ _) (MethSig x2 s2 _ _) = x1 == x2 && s1 == s2
-sameBinder _                   _                   = False
+sameBinder (PropSig x1 _ s1 _ _) (PropSig x2 _ s2 _ _) = x1 == x2 && s1 == s2
+sameBinder (CallSig _)         (CallSig _)             = True
+sameBinder (ConsSig _)         (ConsSig _)             = True
+sameBinder (IndexSig _ b1 _)   (IndexSig _ b2 _)       = b1 == b2
+sameBinder (MethSig x1 s1 _ _) (MethSig x2 s2 _ _)     = x1 == x2 && s1 == s2
+sameBinder _                   _                       = False
 
-zipElts f e1@(PropSig x1 m1 s1 t1) e2@(PropSig _ _ _ t2) | sameBinder e1 e2 = PropSig x1 m1 s1 $ f t1 t2 
+zipElts f e1@(PropSig x1 s1 m1 (Just τ1) t1) e2@(PropSig _ _ _ (Just τ2) t2) 
+                                                         | sameBinder e1 e2 = PropSig x1 s1 m1 (Just $ f τ1 τ2) $ f t1 t2 
+zipElts f e1@(PropSig x1 s1 m1 Nothing t1) e2@(PropSig _ _ _ Nothing t2)
+                                                         | sameBinder e1 e2 = PropSig x1 s1 m1 Nothing $ f t1 t2
 zipElts f e1@(CallSig t1)          e2@(CallSig t2)       | sameBinder e1 e2 = CallSig $ f t1 t2 
 zipElts f e1@(ConsSig t1)          e2@(ConsSig t2)       | sameBinder e1 e2 = ConsSig $ f t1 t2 
 zipElts f e1@(IndexSig x b1 t1)    e2@(IndexSig _ _ t2)  | sameBinder e1 e2 = IndexSig x b1 $ f t1 t2
 zipElts f e1@(MethSig x1 s1 (Just τ1) t1) e2@(MethSig _ _ (Just τ2) t2)
                                                          | sameBinder e1 e2 = MethSig x1 s1 (Just $ f τ1 τ2) $ f t1 t2
+zipElts f e1@(MethSig x1 s1 Nothing t1) e2@(MethSig _ _ Nothing t2)
+                                                         | sameBinder e1 e2 = MethSig x1 s1 Nothing $ f t1 t2
 zipElts _ e1 e2 = error $ "Cannot zip: " ++ ppshow e1 ++ " and " ++ ppshow e2 
 
 
-eltType (PropSig _ _ _ t) = t
-eltType (MethSig _ _ _ t) = t
-eltType (ConsSig       t) = t
-eltType (CallSig       t) = t
-eltType (IndexSig _ _  t) = t
+eltType (PropSig _ _ _ _ t) = t
+eltType (MethSig _ _ _ t  ) = t
+eltType (ConsSig       t  ) = t
+eltType (CallSig       t  ) = t
+eltType (IndexSig _ _  t  ) = t
 
-eltToPair (PropSig s _ _ t)         = (s, t)
+eltToPair (PropSig s _ _ _ t)       = (s, t)
 eltToPair (MethSig s   _ Nothing t) = (s, t)
 -- TODO: what do we do with the `this` type?
 -- eltToPair m@(MethSig s   _ _ _t)    = error $ "Cannot call eltToPair on: " ++ ppshow m
@@ -700,8 +722,8 @@ eltToPair (CallSig       t)         = (F.stringSymbol "__call__", t)
 eltToPair (IndexSig _ True t)       = (F.stringSymbol "__string__index__", t)
 eltToPair (IndexSig _ False t)      = (F.stringSymbol "__numeric__index__", t)
 
-isStaticElt (PropSig _ _ True _  ) = True
-isStaticElt (MethSig _   True _ _) = True
+isStaticElt (PropSig _ True _ _ _) = True
+isStaticElt (MethSig _ True _ _  ) = True
 isStaticElt _                      = False
 
 nonStaticElt = not . isStaticElt
@@ -885,7 +907,7 @@ data Fact r
   | TypInst     !IContext ![RType r]
   -- Overloading
   | EltOverload !(TElt (RType r))
-  | Overload    !(Maybe (RType r))
+  | Overload    !(RType r)
   | TCast       !IContext !(Cast r)
   -- Type annotations
   | VarAnn      !(RType r)
@@ -922,7 +944,7 @@ instance Ord (Fact r) where
   compare (PhiVar i1       ) (PhiVar i2       ) = compare i1 i2
   compare (TypInst c1 t1   ) (TypInst c2 t2   ) = compare (c1,toType <$> t1) (c2,toType <$> t2)
   compare (EltOverload t1  ) (EltOverload t2  ) = on compare (toType <$>) t1 t2
-  compare (Overload t1     ) (Overload t2     ) = on compare (toType <$>) t1 t2
+  compare (Overload t1     ) (Overload t2     ) = on compare toType t1 t2
   compare (TCast c1 _      ) (TCast c2 _      ) = compare c1 c2
   compare (VarAnn t1       ) (VarAnn t2       ) = on compare toType t1 t2
   compare (FieldAnn (b1,t1)) (FieldAnn (b2,t2)) = compare (b1, toType t1) (b2, toType t2)

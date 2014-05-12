@@ -48,7 +48,7 @@ import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
 
 import           System.Console.CmdArgs.Default
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -420,16 +420,19 @@ consExpr g (DotRef l e f)
   = do (xe, g')  <- consExpr g e
        let tx     = envFindTy "consPropRead" xe g'
        δ         <- getDef
-       case find typesMatch $ eltType . snd <$> getElt l δ fs tx of 
-         Just tf -> do let tf'   = F.substa (sf $ F.symbol xe) tf
+       case find (eltMatch elt) $ snd <$> getElt l δ fs tx of 
+         Just tf -> do let tf'   = F.substa (sf $ F.symbol xe) $ eltType tf
                        (x, g'') <- envAddFresh "consPropRead" l tf' g'
                        addAnnot (srcPos l) x (envFindTy "consExpr-DotRef" x g'')
                        return    $ (x, g'')
          Nothing -> die $ errorPropRead (srcPos l) e fs
     where
-       elt        = fromJust $ listToMaybe [ eltType e | EltOverload e <- ann_fact l]
+       elt        = fromJust $ listToMaybe [ e | EltOverload e <- ann_fact l]
        fs         = F.symbol f
-       typesMatch = on (==) toType elt
+       {-eltMatch = undefined -}
+       eltMatch (PropSig _ _ _ τ1 t1) (PropSig _ _ _ τ2 t2) = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
+       eltMatch (MethSig _ _   τ1 t1) (MethSig _ _   τ2 t2) = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
+       eltMatch e1                    e2                    = on (==) (toType . eltType) e1 e2
        sf t s     | s == F.symbol "this" = t
                   | otherwise            = s
 
@@ -460,7 +463,7 @@ consExpr g (ObjectLit l bs)
     where
     -- TODO: add "this" as first argument
         mkElt s t | isTFun t  = MethSig s False Nothing t
-        mkElt s t | otherwise = PropSig s True False t 
+        mkElt s t | otherwise = PropSig s True False Nothing t 
 
 -- new C(e, ...)
 consExpr g (NewExpr l (VarRef _ i) es)
@@ -579,7 +582,7 @@ consCall g l fn es ft0
        zipWithM_ (subType l g') [envFindTy "consCall-2" x g' | x <- xes] ts'
        envAddFresh "consCall" l (F.subst su ot) g'
     where
-       overload l    = listToMaybe [ t | Overload (Just t) <- ann_fact l ]
+       overload l    = listToMaybe [ t | Overload t <- ann_fact l ]
        err ts ft0    = die $ errorNoMatchCallee (srcPos l) ts ft0 
 
 ---------------------------------------------------------------------------------

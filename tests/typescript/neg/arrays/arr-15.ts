@@ -1,7 +1,6 @@
 
 
-/*@ revInc :: forall M . (a: #Array[#Immutable,number]) 
-           => { #Array[#Immutable,number] | (len v) = (len a) } */
+/*@ revInc :: forall M . (#Array[#Mutable,number]) => { #Array[#Immutable,number] | true } */
 function revInc(a: number[]) {
 
   a.reverse();

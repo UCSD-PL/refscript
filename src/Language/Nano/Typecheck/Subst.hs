@@ -116,11 +116,11 @@ instance Free (Fact r) where
   free (ClassAnn (vs,m)) = foldr S.delete (free m) vs
 
 instance Free (TElt (RType r)) where
-  free (PropSig _ _ _ t) = free t
-  free (CallSig t)       = free t
-  free (ConsSig t)       = free t
-  free (IndexSig _ _ t)  = free t
-  free (MethSig _ _ τ t) = free τ `mappend` free t 
+  free (PropSig _ _ _ τ t) = free τ `mappend` free t
+  free (CallSig t)         = free t
+  free (ConsSig t)         = free t
+  free (IndexSig _ _ t)    = free t
+  free (MethSig _ _ τ t)   = free τ `mappend` free t 
 
 instance Free a => Free (Id b, a) where
   free (_, a)            = free a
@@ -149,11 +149,11 @@ instance (Substitutable r t) => Substitutable r (Env t) where
   apply = envMap . apply
 
 instance Substitutable r t => Substitutable r (TElt t) where 
-  apply θ (PropSig x m s t) = PropSig x m s $ apply θ t
-  apply θ (CallSig t)       = CallSig       $ apply θ t
-  apply θ (ConsSig t)       = ConsSig       $ apply θ t
-  apply θ (IndexSig x b t)  = IndexSig x b  $ apply θ t
-  apply θ (MethSig x s τ t) = MethSig x s   (apply θ τ) (apply θ t)
+  apply θ (PropSig x m s τ t) = PropSig x m s (apply θ τ) (apply θ t)
+  apply θ (CallSig t)         = CallSig       $ apply θ t
+  apply θ (ConsSig t)         = ConsSig       $ apply θ t
+  apply θ (IndexSig x b t)    = IndexSig x b  $ apply θ t
+  apply θ (MethSig x s τ t)   = MethSig x s   (apply θ τ) (apply θ t)
 
 instance F.Reftable r => Substitutable r (Cast r) where
   apply _ CNo        = CNo
@@ -164,8 +164,8 @@ instance F.Reftable r => Substitutable r (Cast r) where
 instance F.Reftable r => Substitutable r (Fact r) where
   apply _ x@(PhiVar _)      = x
   apply θ (TypInst ξ ts)    = TypInst ξ $ apply θ ts
-  apply θ (Overload t)      = Overload (apply θ <$> t)
-  apply θ (EltOverload t)   = EltOverload (apply θ <$> t)
+  apply θ (Overload t)      = Overload (apply θ t)
+  apply θ (EltOverload t)   = EltOverload (apply θ t)
   apply θ (TCast   ξ c)     = TCast ξ $ apply θ c
   apply θ (VarAnn t)        = VarAnn $ apply θ t
   apply θ (FieldAnn (m,t))  = FieldAnn (m,apply θ t)

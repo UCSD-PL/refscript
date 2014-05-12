@@ -328,7 +328,8 @@ interface List<M,A> {
 
       reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: #Array[#Immutable,T]) => T, initialValue: T) => T;
 
-      length         : { v: number | (v = (len this) && v >= 0) };
+      length [#Array[#Immutable,T]] : { v: number | (v = (len this) && v >= 0) };
+      length         : { v: number | (v >= 0) };
     }
 */
 

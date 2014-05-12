@@ -286,9 +286,6 @@ emapReftBind f γ (B x t)    = B x $ emapReft f γ t
 emapReftElt  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> TElt (RType a) -> TElt (RType b)
 emapReftElt f γ e            = fmap (emapReft f γ) e
 
-------------------------------------------------------------------------------------------
--- mapReftM :: (PP a, F.Reftable b, Monad m, Applicative m) => (a -> m b) -> RType a -> m (RType b)
-------------------------------------------------------------------------------------------
 mapReftM f (TVar α r)      = TVar α <$> f r
 mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> f r
 mapReftM f (TFun xts t r)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return $ F.top r) --f r 
@@ -299,15 +296,14 @@ mapReftM _ t               = error   $ render $ text "Not supported in mapReftM:
 
 mapReftBindM f (B x t)    = B x     <$> mapReftM f t
 
-mapReftEltM f (PropSig x m s t) = PropSig x m s <$> mapReftM f t
-mapReftEltM f (MethSig x s (Just τ) t) 
-  = do  τ' <-mapReftM f τ
-        t' <-mapReftM f t
-        return $ MethSig x s (Just τ') t'
-mapReftEltM f (MethSig x m Nothing t) = MethSig x m Nothing <$> mapReftM f t
-mapReftEltM f (CallSig t)       = CallSig       <$> mapReftM f t
-mapReftEltM f (ConsSig  t)      = ConsSig       <$> mapReftM f t
-mapReftEltM f (IndexSig x b t)  = IndexSig x b  <$> mapReftM f t
+mapReftEltM f (PropSig x m s τ t) = PropSig x s m <$> mapReftMaybeM f τ <*> mapReftM f t
+mapReftEltM f (MethSig x s τ t)   = MethSig x s   <$> mapReftMaybeM f τ <*> mapReftM f t
+mapReftEltM f (CallSig t)         = CallSig       <$> mapReftM f t
+mapReftEltM f (ConsSig  t)        = ConsSig       <$> mapReftM f t
+mapReftEltM f (IndexSig x b t)    = IndexSig x b  <$> mapReftM f t
+
+mapReftMaybeM f (Just t) = Just <$> mapReftM f t
+mapReftMaybeM _ _        = return Nothing
 
 
 ------------------------------------------------------------------------------------------

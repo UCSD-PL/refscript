@@ -10,6 +10,7 @@ function revInc(a: number[]) {
     a[i] = a[i] + 1; 
   
   }
+  a.push(1);
 
   return a;
 

@@ -141,9 +141,9 @@ checkInterfaces p =
 
 patchAnn m (Ann l fs) = Ann l $ sortNub $ eo ++ fo ++ ti ++ fs 
   where
-    ti                = [f | f@(TypInst _ _      ) <- M.lookupDefault [] l m]
-    fo                = [f | f@(Overload (Just _)) <- M.lookupDefault [] l m]
-    eo                = [f | f@(EltOverload _    ) <- M.lookupDefault [] l m]
+    ti                = [f | f@(TypInst _ _  ) <- M.lookupDefault [] l m]
+    fo                = [f | f@(Overload _   ) <- M.lookupDefault [] l m]
+    eo                = [f | f@(EltOverload _) <- M.lookupDefault [] l m]
 
 initEnv pgm      = TCE (envUnion (specs pgm) (externs pgm)) (specs pgm)
                        emptyContext
@@ -491,7 +491,7 @@ classEltType :: PPR r => ClassElt (AnnSSA r) -> TElt (RType r)
 classEltType (Constructor l _ _ ) = ConsSig ann
   where ann = safeHead "BUG: constructor annotation" [ κ | ConsAnn κ <- ann_fact l ]
 
-classEltType (MemberVarDecl _ s (VarDecl l v _)) = PropSig (F.symbol v) m s t
+classEltType (MemberVarDecl _ s (VarDecl l v _)) = PropSig (F.symbol v) m s Nothing t
   where (m,t) = safeHead "BUG: variable decl annotation" [ φ | FieldAnn φ <- ann_fact l ]
 
 -- TODO: add "this" as first parameter
@@ -588,7 +588,7 @@ tcExpr γ (ObjectLit l bs)
     -- Object elements are non-static
     -- TODO: add "this" as first argument
        mkElt s t     | isTFun t  = MethSig s False Nothing t
-       mkElt s t     | otherwise = PropSig s True False t 
+       mkElt s t     | otherwise = PropSig s False True Nothing t 
 
 
 tcExpr γ (Cast l@(Ann loc fs) e)
@@ -606,7 +606,7 @@ tcExpr γ (DotRef l e f)
   = do δ        <- getDef
        (e', te) <- tcExpr γ e
        ets      <- catMaybes <$> mapM (runMaybeM . checkElt e' te) (getElt l δ fs te)
-       case tracePP "successful overloads" ets of 
+       case ets of 
          (e,t,θ):_ -> do addSubst θ
                          addAnn (srcPos l) (EltOverload t)
                          return (e, eltType t)
@@ -618,6 +618,10 @@ tcExpr γ (DotRef l e f)
                subtypeM (srcPos l) (apply θ to) (apply θ τ) 
                return (θ, apply θ ft)
        checkElt e te (te', m@(MethSig s False (Just τ) ft)) =
+         tcWithThis te' $ do e''    <- castM l (tce_ctx γ) e te te'
+                             (θ,t)  <- thisArg l f te τ ft
+                             return (DotRef l e'' f, m, θ)
+       checkElt e te (te', m@(PropSig s False _ (Just τ) ft)) =
          tcWithThis te' $ do e''    <- castM l (tce_ctx γ) e te te'
                              (θ,t)  <- thisArg l f te τ ft
                              return (DotRef l e'' f, m, θ)
@@ -767,11 +771,9 @@ tcCallMatch γ l fn es ft0 = do
       Just t -> call es' ts t
       -- If this fails, try to instantiate possible generic 
       -- types found in the function signature.
-      Nothing ->
-        do  mType <- resolveOverload γ l fn es' ts ft0
-        -- do  mType <- tracePP ("resolved overload " ++ ppshow fn) <$> resolveOverload γ l fn es' ts ft0
-            addAnn (srcPos l) (Overload mType)
-            maybe (return Nothing) (call es' ts) mType
+      Nothing -> resolveOverload γ l fn es' ts ft0 >>= \case 
+                   Just ft -> addAnn (srcPos l) (Overload ft) >> call es' ts ft
+                   Nothing -> tcError $ errorCallMatch (srcPos l) fn ts 
   where
     call es' ts t = fmap Just $ tcCallCase γ l fn es' ts t
 

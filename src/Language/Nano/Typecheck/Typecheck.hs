@@ -610,7 +610,7 @@ tcExpr γ (DotRef l e f)
          (e,t,θ):_ -> do addSubst θ
                          addAnn (srcPos l) (EltOverload t)
                          return (e, eltType t)
-         _         -> tcError $ errorThisDeref (srcPos l) e f te  
+         _         -> tcError $ errorThisDeref (srcPos l) f e te  
     where
        fs = F.symbol f
        thisArg l f to τ ft 

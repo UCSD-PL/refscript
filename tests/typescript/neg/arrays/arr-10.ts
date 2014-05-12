@@ -1,6 +1,6 @@
 
 /*@ where :: forall T . (values: #Array[#Immutable,T], f: (T) => boolean) 
-          => { #Array[#ReadOnly,T] | true } */
+          => { #Array[#ReadOnly,T] | (len v) = 0 } */
 
 function where<T>(values: T[], f: (v: T) => boolean): T[] {
 	var result = new Array<T>(0);

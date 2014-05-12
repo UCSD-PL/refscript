@@ -632,10 +632,9 @@ splitC (Sub g i t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _))
   = do  cs    <- bsplitC g i t1 t2
         e1s <- (`flattenTRef` t1) <$> getDef
         e2s <- (`flattenTRef` t2) <$> getDef
-        cs' <- splitE g i (remCons e1s) (remCons e2s)
+        let (e1s', e2s') = unzip [ (e1,e2) | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ]
+        cs' <- splitE g i e1s' e2s' 
         return $ cs ++ cs'
-    where
-        remCons es = [ e | e <- es, not (isConstr e) ]
 
 -- FIXME: Add constraint for null
 splitC (Sub _ _ (TApp (TRef _) _ _) (TApp TNull _ _)) 

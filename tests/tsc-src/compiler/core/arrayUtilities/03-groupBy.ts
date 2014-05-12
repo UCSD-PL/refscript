@@ -9,9 +9,9 @@ interface Indexable<T> {
 
 
 /*@ groupBy :: forall T . (array: #Array[#Immutable,T], f: (T)=>string) 
-            => { #Indexable[ #Array[#Immutable,T] ] | true } */
+            => { #Indexable[ #Array[#Mutable,T] ] | true } */
 function groupBy<T>(array: T[], f: (v: T) => string): any {
-  /*@ result :: #Indexable[ #Array[#Immutable,T] ] */
+  /*@ result :: #Indexable[ #Array[#Mutable,T] ] */
 	var result: Indexable<T[]> = {};
 
   for (var i = 0, n = array.length; i < n; i++) {

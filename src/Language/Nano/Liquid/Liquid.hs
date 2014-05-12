@@ -13,7 +13,9 @@ import           Control.Monad
 import           Control.Applicative                ((<$>))
 
 import qualified Data.HashMap.Strict                as M
-import           Data.Maybe                         (fromMaybe, listToMaybe)
+import           Data.Maybe                         (fromMaybe, listToMaybe, fromJust)
+import           Data.List                          (find)
+import           Data.Function                      (on)
 import qualified Data.Traversable                   as T 
 
 import           Language.ECMAScript3.Syntax
@@ -410,15 +412,30 @@ consExpr g c@(CallExpr l e es)
   = do (x, g') <- consExpr g e 
        consCall g' l e es $ envFindTy "consExpr-CallExpr" x g'
 
--- e.f
-consExpr g (DotRef l e (Id _ fld))
-  = do (x,g') <- consPropRead getProp g l e (F.symbol fld)
-       addAnnot (srcPos l) x (envFindTy "consExpr-DotRef" x g')
-       return  $ (x,g')
+-- | e.f
+-- 
+-- This function does the late binding of `this` to `e`.
+--
+consExpr g (DotRef l e f)
+  = do (xe, g')  <- consExpr g e
+       let tx     = envFindTy "consPropRead" xe g'
+       δ         <- getDef
+       case find typesMatch $ eltType . snd <$> getElt l δ fs tx of 
+         Just tf -> do let tf'   = F.substa (sf $ F.symbol xe) tf
+                       (x, g'') <- envAddFresh "consPropRead" l tf' g'
+                       addAnnot (srcPos l) x (envFindTy "consExpr-DotRef" x g'')
+                       return    $ (x, g'')
+         Nothing -> die $ errorPropRead (srcPos l) e fs
+    where
+       elt        = fromJust $ listToMaybe [ eltType e | EltOverload e <- ann_fact l]
+       fs         = F.symbol f
+       typesMatch = on (==) toType elt
+       sf t s     | s == F.symbol "this" = t
+                  | otherwise            = s
 
--- e["f"]
-consExpr g (BracketRef l e (StringLit _ fld)) 
-  = consPropRead getProp g l e (F.symbol fld)
+-- -- e["f"]
+-- consExpr g (BracketRef l e (StringLit _ fld)) 
+--   = consPropRead getProp g l e (F.symbol fld)
 
 -- e1[e2]
 consExpr g (BracketRef l e1 e2) 
@@ -554,6 +571,8 @@ consCall :: (PP a) =>
 consCall g l fn es ft0 
   = do (xes, g')    <- consScan consExpr g es
        let ts        = [envFindTy "consCall-1" x g' | x <- xes]
+       -- let ft        = fromMaybe (fromMaybe (err ts ft0) (overload l)) (calleeType l ts ft0)
+       -- We should have resolved the right overload from the raw stage!
        let ft        = fromMaybe (fromMaybe (err ts ft0) (overload l)) (calleeType l ts ft0)
        (_,its,ot)   <- instantiate l g fn ft
        let (su, ts') = renameBinds its xes
@@ -594,27 +613,12 @@ consSeq f           = foldM step . Just
     step (Just g) x = f g x
 
 
--- | consPropRead reads field `fld` from objet `e`. This function does the late
--- binding of "this" to the value in the left hand side.
-consPropRead getter g l e fld
-  = do  (this, g')     <- consExpr g e
-        let tx          = envFindTy "consPropRead" this g'
-        δ              <- getDef
-        case getter l (renv g') δ fld tx of
-          Just (_, tf) -> 
-            let tf'   = F.substa (sf $ F.symbol this) tf in
-            envAddFresh "consPropRead" l tf' g'
-          Nothing         -> die $  errorPropRead (srcPos l) e fld
-    where  
-        sf t s | s == F.symbol "this" = t
-               | otherwise            = s
-
 consPropReadLhs getter g l e fld
-  = do  (this, g')     <- consExpr g e
-        let tx          = envFindTy "consPropReadLhs" this g'
+  = do  (xe, g')     <- consExpr g e
+        let tx          = envFindTy "consPropReadLhs" xe g'
         δ              <- getDef
         case getter l (renv g') δ fld tx of
-          Just (_, tf) -> return $ (F.substa (sf $ F.symbol this) tf, g')
+          Just (_, tf) -> return $ (F.substa (sf $ F.symbol xe) tf, g')
           Nothing      -> die $  errorPropRead (srcPos l) e fld
     where  
         sf t s | s == F.symbol "this" = t

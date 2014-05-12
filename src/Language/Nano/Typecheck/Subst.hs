@@ -107,6 +107,7 @@ instance Free (Fact r) where
   free (PhiVar _)        = S.empty
   free (TypInst _ ts)    = free ts
   free (Overload t)      = free t
+  free (EltOverload t)   = free t
   free (TCast _ c)       = free c
   free (VarAnn t)        = free t
   free (FieldAnn (_,t))  = free t
@@ -114,9 +115,16 @@ instance Free (Fact r) where
   free (ConsAnn t)       = free t
   free (ClassAnn (vs,m)) = foldr S.delete (free m) vs
 
+instance Free (TElt (RType r)) where
+  free (PropSig _ _ _ t) = free t
+  free (CallSig t)       = free t
+  free (ConsSig t)       = free t
+  free (IndexSig _ _ t)  = free t
+  free (MethSig _ _ τ t) = free τ `mappend` free t 
+
 instance Free a => Free (Id b, a) where
   free (_, a)            = free a
- 
+
 instance Free a => Free (Maybe a) where
   free Nothing  = S.empty
   free (Just a) = free a
@@ -157,6 +165,7 @@ instance F.Reftable r => Substitutable r (Fact r) where
   apply _ x@(PhiVar _)      = x
   apply θ (TypInst ξ ts)    = TypInst ξ $ apply θ ts
   apply θ (Overload t)      = Overload (apply θ <$> t)
+  apply θ (EltOverload t)   = EltOverload (apply θ <$> t)
   apply θ (TCast   ξ c)     = TCast ξ $ apply θ c
   apply θ (VarAnn t)        = VarAnn $ apply θ t
   apply θ (FieldAnn (m,t))  = FieldAnn (m,apply θ t)

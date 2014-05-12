@@ -281,42 +281,54 @@ interface List<M,A> {
 /*** Array ***************************************************************/
 
 /*@ interface Array<M,T> {
+      
       toString       : () => string;
+
       toLocaleString : () => string;
 
       concat [#Array[#Immutable,T]] : /\ (items: #Array[#Immutable,T]) => { #Array[#Immutable,T] | (len v) = (len this) + (len items) }
                                       /\ forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
-
-      concat [#Array[#Mutable  ,T]] :    forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
-
-      concat [#Array[#ReadOnly ,T]] :    forall N1 N2 . (items: #Array[N1,T]) => #Array[N2,T];
+      concat [#Array[#ReadOnly ,T]] :    forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
 
       join           : (separator: string) => string;
 
       pop    [#Array[#Mutable,  T]] : () => T;
+      
       push   [#Array[#Mutable,  T]] : (items: T) => number;
       
-      reverse        : () => #Array[#Immutable,T];
+      reverse[#Array[M,T]]          : () => #Array[M,T];
+      
       shift          : () => T;
-      slice          : (start: number, end: number) => #Array[#Immutable,T];
-      sort           : (compareFn: (a: T, b: T) => number) => #Array[#Immutable,T];
+      
+      slice          : /\ forall N . (start: number)              => #Array[N,T]
+                       /\ forall N . (start: number, end: number) => #Array[N,T];
+      
+      sort   [#Array[#Mutable,  T]] : (compareFn: (a: T, b: T) => number) => #Array[#Immutable,T];
+      
       splice         :  /\ (start: number) => #Array[#Immutable,T]
                         /\ (start: number, deleteCount: number, items: #Array[#Immutable,T]) => #Array[#Immutable,T];
+      
       unshift        : (items: #Array[#Immutable,T]) => number;
 
       indexOf        : (searchElement: T, fromIndex: number) => number;
+      
       lastIndexOf    : (searchElement: T, fromIndex: number) => number;
+      
       every          : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => boolean) => boolean;
+      
       some           : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => boolean) => boolean;
+      
       forEach        : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => void) => void;
+      
       map            : forall U . (callbackfn: (value: T) => U) => [U];
+      
       filter         : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => boolean) => #Array[#Immutable,T];
 
       reduce         : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: #Array[#Immutable,T]) => T, initialValue: T) => T;
 
       reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: #Array[#Immutable,T]) => T, initialValue: T) => T;
 
-      length         : { v: number | (v = (len this) && v >= 0) }
+      length         : { v: number | (v = (len this) && v >= 0) };
     }
 */
 

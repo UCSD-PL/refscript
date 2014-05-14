@@ -11,6 +11,7 @@ import qualified Data.Foldable                    as     FO
 import qualified Data.HashMap.Strict as M 
 import           Data.Typeable
 import           Data.Data
+import           Data.Maybe                         (isJust)
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
@@ -44,9 +45,9 @@ ssaNano :: (PP r, F.Reftable r, Data r, Typeable r) => NanoBareR r -> SSAM r (Na
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano { code = Src fs }) 
   = do θ <- getSsaEnv 
+       setGlobs $ M.fromList $ (\(l,i,_) -> (srcPos l,fmap srcPos i)) <$> definedGlobs fs
        setSsaEnv $ extSsaEnv classes θ
        withAssignability ReadOnly ros
-          $ withAssignability WriteGlobal wgs 
             $ do (_,fs') <- ssaStmts (map (ann <$>) fs)
                  ssaAnns <- getAnns
                  return   $ p {code = Src $ map (fmap (patch [ssaAnns, typeAnns])) fs' }
@@ -54,7 +55,6 @@ ssaNano p@(Nano { code = Src fs })
       typeAnns      = M.fromList $ concatMap 
                         (FO.concatMap (\(Ann l an) -> (l,) <$> single <$> an)) fs
       ros           = readOnlyVars p
-      wgs           = writeGlobalVars p 
       patch        :: [M.HashMap SourceSpan [Fact r]] -> SourceSpan -> Annot (Fact r) SourceSpan
       patch ms l    = Ann l $ concatMap (M.lookupDefault [] l) ms
       classes       = [ fmap ann i | ClassStmt _ i _ _ _ <- fs]
@@ -83,10 +83,17 @@ ssaSeq f            = go True
                          (b', ys) <- go b xs
                          return      (b', y:ys)
 
+-- | ssaStmts: Global variables are added in scope on a block basis
 -------------------------------------------------------------------------------------
 ssaStmts :: F.Reftable r => [Statement SourceSpan] -> SSAM r (Bool, [Statement SourceSpan])
 -------------------------------------------------------------------------------------
-ssaStmts ss = mapSnd flattenBlock <$> ssaSeq ssaStmt ss
+ssaStmts ss
+  = do  αs <- getGlobs
+        withAssignability WriteGlobal (wgs αs) $ mapSnd flattenBlock <$> ssaSeq ssaStmt ss
+  where wgs αs = [ x | VarDeclStmt _ vd <- ss
+                     , VarDecl l x _    <- vd
+                     , isJust $ M.lookup l αs ] 
+  
 
 -------------------------------------------------------------------------------------
 ssaStmt :: F.Reftable r => Statement SourceSpan -> SSAM r (Bool, Statement SourceSpan)

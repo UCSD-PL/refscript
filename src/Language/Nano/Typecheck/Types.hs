@@ -77,7 +77,7 @@ module Language.Nano.Typecheck.Types (
   , CallSite (..), IContext, emptyContext, pushContext
 
   -- * Assignability 
-  , Assignability (..), writeGlobalVars, readOnlyVars  
+  , Assignability (..), definedGlobs,  writeGlobalVars, readOnlyVars  
 
   -- * Aliases
   , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
@@ -88,7 +88,7 @@ import           Text.Printf
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
 import           Data.Function                  (on)
-import           Data.Maybe                     (fromMaybe)
+import           Data.Maybe                     (fromMaybe, listToMaybe)
 import           Data.Traversable               hiding (sequence) 
 import           Data.Foldable                  (Foldable()) 
 import           Data.Monoid                    hiding ((<>))            
@@ -559,7 +559,7 @@ data Nano a t = Nano { fp     :: FilePath                  -- ^ FilePath
                      , code   :: !(Source a)               -- ^ Code to check
                      , externs:: !(Env t)                  -- ^ Imported (unchecked) specifications 
                      , specs  :: !(Env t)                  -- ^ Function specs and 
-                     , glVars :: !(Env t)                  -- ^ Global (annotated) vars
+                     -- , glVars :: !(Env t)                  -- ^ Global (annotated) vars
                      , consts :: !(Env t)                  -- ^ Measure Signatures
                      , defs   :: !(TDefEnv t)              -- ^ Type definitions
                                                            -- ^ After TC will also include class types
@@ -609,8 +609,8 @@ instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
     {-$+$ ppEnv (externs pgm)-}
     $+$ text "\n******************* Checked fun sigs **********"
     $+$ pp (specs pgm)
-    $+$ text "\n******************* Global vars ***************"
-    $+$ pp (glVars pgm)
+--     $+$ text "\n******************* Global vars ***************"
+--     $+$ pp (glVars pgm)
     $+$ text "\n******************* Constants *****************"
     $+$ pp (consts pgm) 
     $+$ text "\n******************* Type Definitions **********"
@@ -753,7 +753,17 @@ data Assignability
 writeGlobalVars   :: PP t => Nano a t -> [Id SourceSpan] 
 writeGlobalVars p = envIds mGnty 
   where
-    mGnty         = glVars p  -- guarantees
+    mGnty         = undefined -- glVars p  -- guarantees
+
+
+definedGlobs       :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r, Id (AnnType r), RType r)]
+definedGlobs stmts = everything (++) ([] `mkQ` fromVarDecl) stmts
+  where 
+    fromVarDecl (VarDecl l x _) =
+      case listToMaybe $ [ t | VarAnn t <- ann_fact l ] of
+        Just t                 -> [(l,x,t)]
+        Nothing                -> []
+
 
 -- | `immutableVars p` returns symbols that must-not be re-assigned and hence
 --    * can appear in refinements

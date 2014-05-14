@@ -548,7 +548,7 @@ instance PP BuiltinOp where
 -- | Manipulating SSA Ids ------------------------------------------------------
 --------------------------------------------------------------------------------
 
-mkSSAId :: SourceSpan -> Id SourceSpan -> Int -> Id SourceSpan 
+mkSSAId :: IsLocated a => a -> Id a -> Int -> Id a
 mkSSAId l (Id _ x) n = Id l (x ++ ssaStr ++ show n)  
 
 -- Returns the identifier as is if this is not an SSAed name.

@@ -498,7 +498,7 @@ mkCode f ss =  Nano {
       , externs = envFromList   [ t | Extern t <- anns ] -- externs
       -- FIXME: same name methods in different classes.
       , specs   = catFunSpecDefs ss                      -- function sigs (no methods...)
-      , glVars  = catVarSpecDefs ss                      -- variables
+      -- , glVars  = catVarSpecDefs ss                      -- variables
       , consts  = envFromList   [ t | Meas   t <- anns ] 
       , defs    = tDefFromList  [ checkIF t | IFace  t <- anns ] 
       , tAlias  = envFromList   [ t | TAlias t <- anns ] 

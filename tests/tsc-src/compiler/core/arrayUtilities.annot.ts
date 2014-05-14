@@ -17,6 +17,7 @@ interface IIndexable<T> {
 //module TypeScript {
     /*export */class ArrayUtilities1 {
 
+        //XXX: Not supported yet
         ///*@ isArray :: forall A . (value: A) => { boolean | true } */
         //public static isArray(value: any): boolean {
         //    return Object.prototype.toString.apply(value, []) === '[object Array]';
@@ -58,26 +59,24 @@ interface IIndexable<T> {
             return false;
         }
 
-//// TODO: Uncommenting groupBy causes unsoundness
+        /*@ groupBy :: forall T . (array: #Array[#Immutable,T], f: (T)=>string) 
+                    => { #IIndexable[ #Array[#Mutable,T] ] | true } */
+        public static groupBy<T>(array: T[], f: (v: T) => string): any {
 
-//        /*@ groupBy :: forall T . (array: #Array[#Immutable,T], f: (T)=>string) 
-//                    => { #IIndexable[ #Array[#Mutable,T] ] | true } */
-//        public static groupBy<T>(array: T[], f: (v: T) => string): any {
-//
-//          /*@ result_ :: #IIndexable[ #Array[#Mutable,T] ] */
-//          var result_: IIndexable<T[]> = {};
-//
-//          for (var i = 0, n = array.length; i < n; i++) {
-//                var v: any = array[i];
-//                var k = f(v);
-//
-//                var list: T[] = result_[k] || [];
-//                list.push(v);
-//                result_[k] = list;
-//            }
-//
-//            return result_;
-//        }
+          /*@ result_ :: #IIndexable[ #Array[#Mutable,T] ] */
+          var result_: IIndexable<T[]> = {};
+
+          for (var i = 0, n = array.length; i < n; i++) {
+                var v: any = array[i];
+                var k = f(v);
+
+                var list: T[] = result_[k] || [];
+                list.push(v);
+                result_[k] = list;
+            }
+
+            return result_;
+        }
 
 
         // XXX: Not supported

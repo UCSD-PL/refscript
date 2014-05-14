@@ -172,10 +172,10 @@ data TCEnv r  = TCE {
   , tce_ctx  :: !IContext 
   }
 
--- XXX: Who needs this?
-instance PPR r => Substitutable r (TCEnv r) where 
-  apply θ (TCE m sp c) = TCE (apply θ m) (apply θ sp) c 
-
+-- -- XXX: Who needs this?
+-- instance PPR r => Substitutable r (TCEnv r) where 
+--   apply θ (TCE m sp c) = TCE (apply θ m) (apply θ sp) c 
+-- 
 instance PPR r => PP (TCEnv r) where
   pp = ppTCEnv
 
@@ -561,8 +561,8 @@ tcExpr _ e@(ThisRef _)
 
 tcExpr γ e@(VarRef l x)
   = case tcEnvFindTy x γ of
-      Just t  -> return (e,t)
-      Nothing -> findClass x >>= \case
+      Just t  -> return (e,t)           -- Global or local reference
+      Nothing -> findClass x >>= \case  -- Static reference
         Just (TD _ s _ _ _) -> return (e, TApp (TRef (F.symbol s, True)) [] fTop)
         Nothing -> tcError $ errorUnboundId (ann l) x
  
@@ -846,7 +846,9 @@ envJoin l γ (Just γ1) (Just γ2) =
   do let xs = phiVarsAnnot l
      ts    <- mapM (getPhiType l γ1 γ2) xs
      θ     <- getSubst
-     return $ Just $ tcEnvAdds (zip xs ts) (apply θ γ)
+     return $ Just $ tcEnvAdds (zip xs ts) γ
+     -- return $ Just $ tcEnvAdds (zip xs ts) (apply θ γ)
+     -- XXX: Tentatively removing `apply θ` here
 
 ----------------------------------------------------------------------------------
 getPhiType :: PPR r 

@@ -27,8 +27,8 @@ module Language.Nano.SSA.SSAMonad (
    , getSsaEnv
  
    -- * Access Annotations
-   , addAnn
-   , getAnns
+   , addAnn, getAnns
+   , setGlobs, getGlobs
 
    -- * Tracking Assignability
    , getAssignability
@@ -52,7 +52,6 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc             
 import qualified Language.Fixpoint.Types            as F
--- import           Text.Printf                        (printf)
 
 -- import           Debug.Trace                        (trace)
 
@@ -62,6 +61,7 @@ data SsaState r = SsaST { assign      :: Env Assignability -- ^ assignability st
                         , names       :: SsaEnv            -- ^ current SSA names 
                         , count       :: !Int              -- ^ fresh index
                         , anns        :: !(AnnInfo r)      -- ^ built up map of annots 
+                        , globs       :: !(M.HashMap SourceSpan (Id SourceSpan))                         
                         }
 
 type SsaEnv     = Env SsaInfo 
@@ -94,9 +94,8 @@ getSsaEnv   = names <$> get
 
 -------------------------------------------------------------------------------------
 setSsaEnv    :: SsaEnv -> SSAM r () 
--------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------
 setSsaEnv θ = modify $ \st -> st { names = θ } 
-
 
 -------------------------------------------------------------------------------------
 withAssignability :: Assignability -> [Id SourceSpan] -> SSAM r a -> SSAM r a 
@@ -115,23 +114,6 @@ getAssignability :: Id SourceSpan -> SSAM r Assignability
 ---------------------------------------------------------------------------------
 getAssignability x = (fromMaybe WriteLocal . envFindTy x . assign) <$> get
 
-
--- -------------------------------------------------------------------------------------
--- addImmutables   :: (F.Reftable r) => Env r -> SSAM r ()
--- -------------------------------------------------------------------------------------
--- addImmutables z = modify $ \st -> st { immutables = envExt z (immutables st) } 
---   where
---     envExt x y  = envFromList $ (envToList x ++ envToList y)
--- 
--- -------------------------------------------------------------------------------------
--- setImmutables   :: Env r -> SSAM r ()
--- -------------------------------------------------------------------------------------
--- setImmutables z = modify $ \st -> st { immutables = z } 
--- 
--- -------------------------------------------------------------------------------------
--- getImmutables   :: (F.Reftable r) => SSAM r (Env r) 
--- -------------------------------------------------------------------------------------
--- getImmutables   = immutables <$> get
 
 -------------------------------------------------------------------------------------
 updSsaEnv   :: SourceSpan -> Id SourceSpan -> SSAM r (Id SourceSpan) 
@@ -158,20 +140,12 @@ findSsaEnv x
          Just (SI i) -> return $ Just i 
          Nothing     -> return $ Nothing 
 
--- allNames = do xs <- map fst . envToList . names      <$> get
---               ys <- map fst . envToList . immutables <$> get
---               return $ xs ++ ys
 
--------------------------------------------------------------------------------
-addAnn     :: SourceSpan -> Fact r -> SSAM r ()
--------------------------------------------------------------------------------
 addAnn l f = modify $ \st -> st { anns = inserts l f (anns st) }
-
-
--------------------------------------------------------------------------------
-getAnns    :: (F.Reftable r) => SSAM r (AnnInfo r)
--------------------------------------------------------------------------------
 getAnns    = anns <$> get
+
+setGlobs g = modify $ \st -> st { globs = g } 
+getGlobs   = globs <$> get
 
 
 -------------------------------------------------------------------------------
@@ -197,5 +171,5 @@ execute act
 tryAction act = get >>= return . runState (runErrorT act)
 
 initState :: SsaState r
-initState = SsaST envEmpty envEmpty 0 M.empty
+initState = SsaST envEmpty envEmpty 0 M.empty M.empty
 

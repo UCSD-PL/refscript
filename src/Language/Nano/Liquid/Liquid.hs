@@ -124,7 +124,7 @@ initCGEnv pgm
       f       = F.emptyIBindEnv 
       g       = [] 
       cc      = emptyContext 
-      cs      = envUnion (specs pgm) (glVars pgm)
+      cs      = specs pgm
       cd      = defs pgm
 
 --------------------------------------------------------------------------------
@@ -163,7 +163,8 @@ addFunAndGlobs g stmts
   where  ff (l,f)      = (f,) <$> (freshTyFun g l =<< getDefType f)
          vv (l,x,t)    = (x,) <$> freshTyVar g l t
          funs          = definedFuns stmts 
-         globs         = definedGlobs stmts 
+         globs         = globsInScope stmts 
+         -- globs         = definedGlobs stmts 
 
 definedFuns       :: (Data a, Typeable a) => [Statement a] -> [(a,Id a)]
 definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
@@ -171,13 +172,10 @@ definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
     fromFunction (FunctionStmt l f _ _) = [(l,f)]
     fromFunction _                      = []
 
-definedGlobs       :: [Statement AnnTypeR] -> [(AnnTypeR, Id AnnTypeR, RefType)]
-definedGlobs stmts = everything (++) ([] `mkQ` fromVarDecl) stmts
-  where 
-    fromVarDecl (VarDecl l x _) =
-      case listToMaybe $ [ t | VarAnn t <- ann_fact l ] of
-        Just t                 -> [(l,x,t)]
-        Nothing                -> []
+globsInScope :: [Statement AnnTypeR] -> [(AnnTypeR, Id AnnTypeR, RefType)]
+globsInScope stmts = [ (l,x,t) | VarDeclStmt _ vd <- stmts
+                               , VarDecl l x _    <- vd
+                               , VarAnn t         <- ann_fact l ] 
  
 
 --------------------------------------------------------------------------------

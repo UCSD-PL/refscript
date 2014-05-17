@@ -1,11 +1,11 @@
 
-/*@ negate :: (x: {number | v > 0} + boolean) =>  { v: number | v > 0 } + boolean */
+/*@ negate :: (xxx: {number | v > 0} + boolean) =>  { v: number | v < 0 } + boolean */
 
-function negate(x):any {
-  if (typeof(x) == "number") {
-    return x;
+function negate(xxx):any {
+  if (typeof(xxx) == "number") {
+    return 0 - xxx;
   } 
-  return 1;
+  return 0 - 1;
   
 }
 

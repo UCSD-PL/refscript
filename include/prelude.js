@@ -52,7 +52,7 @@
 /\ (x:number, y:string) => string
 /\ (x:string, y:number) => string
 /\ (x:string, y:string) => string                                 */
-/*@ extern builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v = x - y} */
+/*@ extern builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v ~~ x - y} */
 /*@ extern builtin_OpMul       :: (number,  number)  => number                                      */
 //FIXME: This is not correct. Add definition for: >>
 /*@ extern builtin_OpDiv       :: (x: number, y: { v: number | v != 0 })
@@ -62,7 +62,7 @@
 )}
 */
 /*@ extern builtin_OpMod       :: (number,  number)  => number                                      */
-/*@ extern builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v = (0 - x)}                 */
+/*@ extern builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v ~~ (0 - x)}                 */
 /*@ extern builtin_OpEq        :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x = y)) }   */
 /*@ extern builtin_OpSEq       :: /\ forall A  . (x:A,    y: null) => {v:boolean | ((Prop v) <=> (ttag(x) = "null")) }
 /\ forall A  . (x:null, y:A)     => {v:boolean | ((Prop v) <=> (ttag(y) = "null")) }
@@ -73,7 +73,7 @@
 // FIXME: the two version of inequality should not be the same...
 /*@ extern builtin_OpLAnd      :: (x:top, y:top)         => {v:top | ((Prop v) <=> (if (TRU(x)) then (v = y) else (v = x) ))}     */
 /*@ extern builtin_OpLOr       :: forall A . (x:A, y:A)  => {v:A   | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))}     */
-/*@ extern builtin_PrefixLNot  :: forall A . (x: A)      => {v:boolean | ((Prop v) <=> FLS(x))}     */
+/*@ extern builtin_PrefixLNot  :: forall A . (x: A)      => {v:boolean | (((Prop v) <=> not TRU(x)) && ((Prop v) <=> FLS(x)))}     */
 /*@ extern builtin_PrefixBNot  :: (x: number)            => {v:number | v = 0 - (x + 1) }           */
 /*************************************************************************
 Ambient Definitions
@@ -179,14 +179,17 @@ toPrecision     : (precision: number) => string
 /*@ interface Array<M,T> {
 toString       : () => string;
 toLocaleString : () => string;
-concat         : (items: #Array[#Immutable,T]) => { #Array[#Immutable,T] | (len v) = (len this) + (len items) } ;
+concat [#Array[#Immutable,T]] : /\ (items: #Array[#Immutable,T]) => { #Array[#Immutable,T] | (len v) = (len this) + (len items) }
+/\ forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
+concat [#Array[#ReadOnly ,T]] :    forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
 join           : (separator: string) => string;
-pop            : () => T;
-push           : (items: T) => number;
-reverse        : () => #Array[#Immutable,T];
+pop    [#Array[#Mutable,  T]] : () => T;
+push   [#Array[#Mutable,  T]] : (items: T) => number;
+reverse[#Array[M,T]]          : () => #Array[M,T];
 shift          : () => T;
-slice          : (start: number, end: number) => #Array[#Immutable,T];
-sort           : (compareFn: (a: T, b: T) => number) => #Array[#Immutable,T];
+slice          : /\ forall N . (start: number)              => #Array[N,T]
+/\ forall N . (start: number, end: number) => #Array[N,T];
+sort   [#Array[#Mutable,  T]] : (compareFn: (a: T, b: T) => number) => #Array[#Immutable,T];
 splice         :  /\ (start: number) => #Array[#Immutable,T]
 /\ (start: number, deleteCount: number, items: #Array[#Immutable,T]) => #Array[#Immutable,T];
 unshift        : (items: #Array[#Immutable,T]) => number;
@@ -199,7 +202,8 @@ map            : forall U . (callbackfn: (value: T) => U) => [U];
 filter         : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => boolean) => #Array[#Immutable,T];
 reduce         : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: #Array[#Immutable,T]) => T, initialValue: T) => T;
 reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: #Array[#Immutable,T]) => T, initialValue: T) => T;
-length         : { v: number | (v = (len this) && v >= 0) }
+length [#Array[#Immutable,T]] : { v: number | (v = (len this) && v >= 0) };
+length         : { v: number | (v >= 0) };
 }
 */
 /*
@@ -224,21 +228,21 @@ prototype: Array<any>;
 /************** Run-Time Tags ********************************************/
 /*************************************************************************/
 /*@ measure ttag :: forall A. (A) => string                                   */
-/*@ measure TRU  :: forall A . (A) => boolean                                 */
-/*@ measure FLS  :: forall A . (A) => boolean                                 */
-/*@ measure Prop :: forall A . (A) => boolean                                 */
+/*@ measure TRU  :: forall A . (A) => bool                                    */
+/*@ measure FLS  :: forall A . (A) => bool                                    */
+/*@ measure Prop :: forall A . (A) => bool                                    */
 /*@ extern builtin_PrefixTypeof :: forall A. (x:A)
 => {v:string | (ttag x) = v }             */
 /*@ extern builtin_BITruthy :: forall A. (x:A)
 => { v:boolean | ((Prop v) <=> TRU(x)) }    */
 /*@ extern builtin_BIFalsy :: forall A. (x:A)
 => { v:boolean | ((Prop v) <=> FLS(x)) }    */
-/*@ invariant           {v:undefined | [(ttag(v) = "undefined"); not (TRU(v))        ]} */
-/*@ invariant           {v:null      | [(ttag(v) = "null"     ); not (TRU(v))        ]} */
-/*@ invariant           {v:boolean   | [(ttag(v) = "boolean"  ); (TRU(v) <=> Prop(v))]} */ /*@ invariant           {v:number    | [(ttag(v) = "number"   ); (TRU(v) <=> v /= 0 )]} */
-/*@ invariant           {v:string    | [(ttag(v) = "string"   ); (TRU(v) <=> v /= "")]} */
-/*@ invariant forall A. {v:[A]       |   ttag(v) = "object"                           } */
-/*@ invariant           {v:{}        |   ttag(v) = "object"                           } */
+/*@ invariant           {v:undefined | [not (TRU(v))        ]} */
+/*@ invariant           {v:null      | [not (TRU(v))        ]} */
+/*@ invariant           {v:boolean   | [(TRU(v) <=> Prop(v))]} */ /*@ invariant           {v:number    | [(TRU(v) <=> v /= 0 )]} */
+/*@ invariant           {v:string    | [(TRU(v) <=> v /= "")]} */
+/*  invariant forall A. {v:[A]       |                       } */
+/*  invariant           {v:{}        |                       } */
 /*************************************************************************/
 /************** Pre-Loaded Qualifiers ************************************/
 /*************************************************************************/
@@ -259,10 +263,10 @@ prototype: Array<any>;
 /*@ qualif Cmp(v:a,x:a)              : v =  x                   */
 /*@ qualif Cmp(v:a,x:a)              : v != x                   */
 /*@ qualif One(v:number)             : v = 1                    */
-/*@ qualif True(v:Bool)              : (? v)                    */
-/*@ qualif False(v:Bool)             : not (? v)                */
-/*@ qualif True1(v:Bool)             : (Prop v)                 */
-/*@ qualif False1(v:Bool)            : not (Prop v)             */
+/*@ qualif True(v:boolean)           : (? v)                    */
+/*@ qualif False(v:boolean)          : not (? v)                */
+/*@ qualif True1(v:boolean)          : (Prop v)                 */
+/*@ qualif False1(v:boolean)         : not (Prop v)             */
 // Somewhat more controversial qualifiers (i.e. "expensive"...)
 /*  qualif Add(v:number,x:number,y:number): v = x + y           */
 /*  qualif Sub(v:number,x:number,y:number): v = x - y           */
@@ -281,40 +285,7 @@ new (message: string) => #Error;
 (message: string) => #Error;
 prototype: #Error;
 } */
-var Errors = (function () {
-    function Errors() {
-    }
-    /*@ argument :: (argument: string, message: string) => #Error */
-    Errors.argument = function (arg, message) {
-        return new Error("Invalid argument: " + arg + ". " + message);
-    };
-
-    /*@ argumentOutOfRange :: (arg: string) => #Error */
-    Errors.argumentOutOfRange = function (arg) {
-        return new Error("Argument out of range: " + arg);
-    };
-
-    /*@ argumentNull :: (arg: string) => #Error */
-    Errors.argumentNull = function (arg) {
-        return new Error("Argument null: " + arg);
-    };
-
-    /*@ abstract :: () => #Error */
-    Errors.abstract = function () {
-        return new Error("Operation not implemented properly by subclass.");
-    };
-
-    /*@ notYetImplemented :: () => #Error */
-    Errors.notYetImplemented = function () {
-        return new Error("Not yet implemented.");
-    };
-
-    /*@ invalidOperation :: (message: string) => #Error */
-    Errors.invalidOperation = function (message) {
-        return new Error("Invalid operation: " + message);
-    };
-    return Errors;
-})();
+var __ddd = 1;
 
 
 var __dummy__ = null;

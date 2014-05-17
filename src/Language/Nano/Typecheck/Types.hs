@@ -27,10 +27,10 @@ module Language.Nano.Typecheck.Types (
   , RType (..), Bind (..), toType, ofType, rTop, strengthen 
 
   -- * Predicates on Types 
-  , isTop, isNull, isVoid, isUndef, isUnion
+  , isTop, isNull, isVoid, isTNum, isUndef, isUnion
 
   -- * Constructing Types
-  , mkUnion, mkUnionR, mkFun, mkAll
+  , mkUnion, mkFun, mkAll
 
   -- * Deconstructing Types
   , bkFun, bkFuns, bkAll, bkAnd, bkUnion, unionParts, unionParts', funTys
@@ -227,6 +227,8 @@ data TCon
   | TUn
   | TNull
   | TUndef
+
+  | TFPBool
     deriving (Ord, Show, Data, Typeable)
 
 -- | (Raw) Refined Types 
@@ -330,15 +332,9 @@ bkAnd t              = [t]
 ---------------------------------------------------------------------------------
 mkUnion :: (F.Reftable r) => [RType r] -> RType r
 ---------------------------------------------------------------------------------
-mkUnion = mkUnionR fTop 
-
-
----------------------------------------------------------------------------------
-mkUnionR :: (F.Reftable r) => r -> [RType r] -> RType r
----------------------------------------------------------------------------------
-mkUnionR _ [ ] = tErr
-mkUnionR r [t] = strengthen t r
-mkUnionR r ts  = TApp TUn ts r 
+mkUnion [ ] = tErr
+mkUnion [t] = t             
+mkUnion ts  = TApp TUn ts fTop
 
 ---------------------------------------------------------------------------------
 bkUnion :: RType r -> [RType r]
@@ -481,6 +477,9 @@ isVoid _                  = False
 isTObj (TApp (TRef _) _ _) = True
 isTObj (TCons _ _)         = True
 isTObj _                   = False
+
+isTNum (TApp TInt _ _ )    = True
+isTNum _                   = False
 
 isIndSig (TCons es _) | not (null [ () | IndexSig _ _ _ <- es ]) = True
 isIndSig _            = False

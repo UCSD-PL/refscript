@@ -234,6 +234,7 @@ tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
+     <|> try (reserved "bool"      >> return TFPBool)
      <|>     (withinSpacesP $ char '#' >> identifierP >>= idToTRefP)
 
 ----------------------------------------------------------------------------------

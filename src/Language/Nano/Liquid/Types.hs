@@ -58,10 +58,13 @@ module Language.Nano.Liquid.Types (
   -- Zip types
   , zipType
 
+  -- Tag 
+  , tagR
+
 
   ) where
 
-import           Data.Maybe             (fromMaybe, maybeToList)
+import           Data.Maybe             (fromMaybe, maybeToList, fromJust)
 import qualified Data.List               as L
 import           Data.Function                  (on)
 import qualified Data.HashMap.Strict     as M
@@ -186,7 +189,9 @@ instance RefTypable RefType where
   rType = ofType . toType           -- removes all refinements
 
 eSingleton      :: (F.Expression e) => RefType -> e -> RefType 
-eSingleton t e  = t `strengthen` (F.exprReft e)
+eSingleton t e  = t `strengthen` (F.uexprReft e)
+{-eSingleton t e  | isUnion t = t `strengthen` (F.uexprReft e)-}
+{-                | otherwise = t `strengthen` (F.uexprReft e)-}
 
 pSingleton      :: (F.Predicate p) => RefType -> p -> RefType 
 pSingleton t p  = t `strengthen` (F.propReft p)
@@ -226,14 +231,15 @@ rTypeSortApp c ts    = F.FApp (tconFTycon c) (rTypeSort <$> ts)
 
 tconFTycon :: TCon -> F.FTycon 
 tconFTycon TInt      = F.intFTyCon
-tconFTycon TBool     = F.boolFTyCon
-tconFTycon TVoid     = rawStringFTycon "void"
+tconFTycon TBool     = rawStringFTycon "Boolean"
+tconFTycon TFPBool   = F.boolFTyCon
+tconFTycon TVoid     = rawStringFTycon "Void"
 tconFTycon (TRef i)  = rawStringFTycon $ show i -- F.stringFTycon $ F.Loc (sourcePos s) (unId s)
-tconFTycon TUn       = rawStringFTycon "union"
+tconFTycon TUn       = rawStringFTycon "Union"
 tconFTycon TString   = F.strFTyCon 
-tconFTycon TTop      = rawStringFTycon "top"
-tconFTycon TNull     = rawStringFTycon "null"
-tconFTycon TUndef    = rawStringFTycon "undefined"
+tconFTycon TTop      = rawStringFTycon "Top"
+tconFTycon TNull     = rawStringFTycon "Null"
+tconFTycon TUndef    = rawStringFTycon "Undefined"
 
 
 rTypeSortForAll t    = genSort n θ $ rTypeSort tbody
@@ -393,16 +399,20 @@ zipType :: TDefEnv RefType     ->
 --                                | t1|_t1' \/ .. tm|_tm'              
 --                                |         , if n <= m, ti ~ ti'
 --
-zipType δ f g t1 t2 
-  | any isUnion [t1, t2]
-  = mkUnionR (f r1 r2) $ cmn ++ snd
+zipType δ f g (TApp TUn t1s r1) (TApp TUn t2s r2) 
+  = TApp TUn (cmn ++ snd) $ f r1 r2
   where
-    (r1, r2)   = mapPair rTypeR (t1, t2) 
-    (t1s, t2s) = mapPair bkUnion (t1, t2) 
     cmn        = [ zipType δ f g τ1 τ2 | τ2 <- t2s
                                        , τ1 <- maybeToList $ L.find (equiv τ2) t1s ]
     snd        = fmap g <$> [ t        | t <- t2s
                                        , not $ exists (equiv t) t1s ]
+zipType δ f g t1 t2@(TApp TUn _ _ ) 
+  = zipType δ f g (TApp TUn [t1] fTop) t2
+  -- = zipType δ f g (TApp TUn [t1] $ rTypeReft t1) t2
+
+zipType δ f g (TApp TUn t1s r1) t2 
+  = zipType δ f g ((fromJust $ L.find (equiv t2) t1s) `strengthen` r1) t2
+                                       
 
 zipType δ f g t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
   | i1 == i2  
@@ -438,4 +448,29 @@ zipBind δ f g (B s1 t1) (B s2 t2)
   | s1 == s2 = B s1 $ zipType δ f g t1 t2 
 zipBind _ _ _ _       _           
   = errorstar "BUG[zipBind]: mis-matching binders"
+
+
+-- | Tags 
+--------------------------------------------------------------------------------
+tagR                        :: RType F.Reft -> F.Reft
+--------------------------------------------------------------------------------
+tagR t                       = predReft (rTypeValueVar t) $ F.pOr ps
+  where
+    predReft v p             = F.Reft (v, [F.RConc $ F.prop p])
+    ps                       = F.PAtom F.Eq tagCall <$> tagStrs
+    tagCall                  = F.EApp tagSym [v]
+    v                        = F.EVar $ rTypeValueVar t
+    tagStrs                  = F.expr . F.symbol . ("lit#" ++) <$> tof t
+    tagSym                   = F.Loc F.dummyPos (F.symbol "ttag")
+    tof                     :: RefType -> [String]
+    tof t | isTFun t         = ["function"]
+    tof (TApp TInt _ _)      = ["number"]
+    tof (TApp TBool _ _)     = ["boolean"]
+    tof (TApp TString _ _)   = ["string"]
+    tof (TApp TNull _ _)     = ["object"]
+    tof (TApp (TRef _ ) _ _) = ["object"]
+    tof (TApp TUn ts _)      = concatMap tof ts
+    tof (TApp _ _ _ )        = ["undefined"]
+    tof (TCons _   _ )       = ["object"]
+    tof _                    = []
 

@@ -22,6 +22,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 
+import qualified Language.Fixpoint.Config           as C
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
@@ -65,11 +66,13 @@ refTc      p = getOpts >>= solveConstraints (fp p) . (`generateConstraints` p)
 
 lerror       = return . (A.NoAnn,) . F.Unsafe
          
+-- | solveConstraints
+-- Call solve with `ueqAllSorts` enabled.
 --------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (A.UAnnSol RefType, F.FixResult Error) 
 --------------------------------------------------------------------------------
 solveConstraints f cgi 
-  = do (r, s)  <- solve def f [] $ cgi_finfo cgi
+  = do (r, s)  <- solve (C.withUEqAllSorts def True) f [] $ cgi_finfo cgi
        let r'   = fmap (errorLiquid . srcPos . F.sinfo) r
        let ann  = cgi_annot cgi
        let sol  = applySolution s 

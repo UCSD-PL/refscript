@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 import qualified Language.Nano.Typecheck.Typecheck  as TC 
 import qualified Language.Nano.Liquid.Liquid        as LQ

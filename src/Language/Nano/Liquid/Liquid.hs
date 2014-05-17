@@ -536,25 +536,22 @@ consDeadCode g l x t =
   where 
      xT       = envFindTy "consDeadCode" x g
 
--- | Upcast
-consUpCast g l x _ toT = 
+-- | UpCast(x, t1 => t2)
+consUpCast g l x t1 t2 = 
   do δ <- getDef
-     let toT' = zipType δ (\p _ -> p) F.bot xT toT
-     envAddFresh "consUpCast" l toT' g
+     let tx' = zipType δ (\p _ -> p) F.bot tx t2 `strengthen` tagR t1
+     envAddFresh "consUpCast" l tx' g
   where 
-     xT = envFindTy "consUpCast" x g
+     tx = envFindTy "consUpCast" x g
 
--- | Downcast
-consDownCast g l x _ toT =
-  do δ          <- getDef
-     let (lh,rh) = (xT, zipType δ (\_ q -> q) F.bot toT xT)
-     subType l g lh rh
-     -- NOTE: The F.bot in the following should not really mattter
-     let toT'    = zipType δ (\p _ -> p) F.bot xT toT
-     g'         <- envAdds [(x, toT')] g
-     return      $ (x, g')
+-- | DownCast(x, t1 => t2)
+consDownCast g l x t1 t2 =
+  do δ      <- getDef
+     _      <- subType l g tx $ zipType δ (\_ q -> q) F.bot t2 tx
+     g'     <- envAdds [(x, zipType δ (\p _ -> p) F.bot tx t2)] g
+     return  $ (x, g')
   where 
-     xT          = envFindTy "consDownCast" x g
+     tx      = envFindTy "consDownCast" x g
 
 
 --------------------------------------------------------------------------------

@@ -16225,6 +16225,10 @@ var TypeScript;
         CastExpressionSyntax.prototype.isTypeScriptSpecific = function () {
             return true;
         };
+
+        CastExpressionSyntax.prototype.toRsExp = function (helper) {
+            return this.expression.toRsExp(helper);
+        };
         return CastExpressionSyntax;
     })(TypeScript.SyntaxNode);
     TypeScript.CastExpressionSyntax = CastExpressionSyntax;
@@ -17252,6 +17256,10 @@ var TypeScript;
                 return true;
             }
             return false;
+        };
+
+        TypeOfExpressionSyntax.prototype.toRsExp = function (helper) {
+            return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), tokenAnnots(this.firstToken()), new TypeScript.RsPrefixOp(4 /* PrefixTypeof */), this.expression.toRsExp(helper));
         };
         return TypeOfExpressionSyntax;
     })(TypeScript.SyntaxNode);

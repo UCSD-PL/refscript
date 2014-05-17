@@ -259,12 +259,16 @@ weaken δ dt@(TD _ s vs Nothing _, ts) t
 --------------------------------------------------------------------------------
 intersect :: PPR r => TDefEnv (RType r) -> RType r -> RType r -> (RType r, RType r)
 --------------------------------------------------------------------------------
-intersect δ t1 t2 
-  | any isUnion [t1, t2] = (mkUnionR r1 cmn1, mkUnionR r2 cmn2) 
+intersect δ (TApp TUn t1s r1) (TApp TUn t2s r2) 
+  = (TApp TUn cmn1 r1, TApp TUn cmn2 r2)
   where
-    (r1, r2)        = mapPair rTypeR (t1, t2) 
-    (t1s, t2s)      = mapPair bkUnion (t1, t2) 
     (cmn1, cmn2)    = unzip [ intersect δ τ1 τ2 | τ2 <- t2s, τ1 <- maybeToList $ L.find (equiv τ2) t1s ]
+    
+intersect δ t1 t2@(TApp TUn _ _ ) 
+  = intersect δ (TApp TUn [t1] fTop) t2
+
+intersect δ t1@(TApp TUn _ _ ) t2
+  = intersect δ t1 (TApp TUn [t2] fTop)
 
 intersect δ t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
   | i1 == i2  

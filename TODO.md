@@ -15,6 +15,8 @@ JS Features
 
 Tool/Implementation
 -------------------
+  
+  - Do co/contra-variant checks depending on mutability.
 
   - Enforce invariant that overloaded functions have signatures with
     non-overlapping signatures.

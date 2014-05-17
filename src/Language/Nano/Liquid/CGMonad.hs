@@ -59,7 +59,7 @@ module Language.Nano.Liquid.CGMonad (
 
   ) where
 
-import           Data.Maybe                     (fromMaybe, listToMaybe, catMaybes, isJust)
+import           Data.Maybe                     (fromMaybe, listToMaybe, catMaybes, isJust, fromJust)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 import qualified Data.List                      as L
@@ -90,7 +90,7 @@ import           Text.Printf
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -306,17 +306,16 @@ addFixpointBind (x, t)
        return    $ i
 
 ---------------------------------------------------------------------------------------
-addInvariant   :: RefType -> CGM RefType
+addInvariant              :: RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
-addInvariant t           = ((`tx` t) . invs) <$> get
+addInvariant t             = tagStrn <$> ((`tx` t) . invs) <$> get
   where 
-    tx i t@(TApp tc _ o) = maybe t (\i -> strengthenOp t o $ rTypeReft $ val i) $ M.lookup tc i
-    tx _ t               = t 
-
-    strengthenOp t o r   | L.elem r (ofRef o) = t
-    strengthenOp t _ r   | otherwise          = strengthen t r
-
+    tx i t@(TApp tc _ o)   = maybe t (\i -> strengthenOp t o $ rTypeReft $ val i) $ M.lookup tc i
+    tx _ t                 = t 
+    strengthenOp t o r     | L.elem r (ofRef o) = t
+    strengthenOp t _ r     | otherwise          = strengthen t r
     ofRef (F.Reft (s, as)) = (F.Reft . (s,) . single) <$> as
+    tagStrn t              = t `strengthen` (tagR t)
 
 
 ---------------------------------------------------------------------------------------
@@ -549,7 +548,7 @@ instance Freshable [F.Refa] where
 instance Freshable F.Reft where
   fresh                  = errorstar "fresh Reft"
   true    (F.Reft (v,_)) = return $ F.Reft (v, []) 
-  refresh (F.Reft (_,_)) = curry F.Reft <$> ({-tracePP "freshVV" <$> -}freshVV) <*> fresh
+  refresh (F.Reft (_,_)) = curry F.Reft <$> freshVV <*> fresh
     where freshVV        = F.vv . Just  <$> fresh
 
 instance Freshable F.SortedReft where
@@ -614,11 +613,15 @@ splitC (Sub g i t1 t2)
     where 
       match t1@(TApp TUn t1s r1) t2@(TApp TUn t2s r2) = do
         cs      <- bsplitC g i t1 t2
-        let t1s' = L.sortBy (compare `on` toType) $ (`strengthen` r1) <$> t1s
-        let t2s' = L.sortBy (compare `on` toType) $ (`strengthen` r2) <$> t2s
+        let t1s' = L.sortBy (compare `on` toType) $ (`str` r1) <$> t1s
+        let t2s' = L.sortBy (compare `on` toType) $ (`str` r2) <$> t2s
         cs'     <- concatMapM splitC $ safeZipWith "splitC-Unions" (Sub g i) t1s' t2s'
         return   $ cs ++ cs'
       match t1' t2' = splitC (Sub g i t1' t2')
+
+      str t _ | isBotR (rTypeReft t) = t
+      str t r | otherwise            = t `strengthen` r
+      isBotR (F.Reft (_,ra))         = F.RConc F.PFalse `elem` ra
 
 -- |Type references
 splitC (Sub g i t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _)) 
@@ -652,10 +655,10 @@ splitC (Sub g i t1@(TCons _ _) t2@(TApp (TRef _) _ _))
        splitC (Sub g i t1 t2')
 
 splitC (Sub _ _ t1@(TApp (TRef _) _ _) t2)
-  = errorstar $ "UNEXPECTED CRASH in splitC: " ++ ppshow t1 ++ " vs " ++ ppshow t2
+  = errorstar $ "splitC: " ++ ppshow t1 ++ " vs " ++ ppshow t2
 
 splitC (Sub _ _ t1 t2@(TApp (TRef _) _ _))
-  = errorstar $ "UNEXPECTED CRASH in splitC: " ++ ppshow t1 ++ " vs " ++ ppshow t2
+  = errorstar $ "splitC: " ++ ppshow t1 ++ " vs " ++ ppshow t2
 
 -- | Rest of TApp
 splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
@@ -790,33 +793,40 @@ class ClearSorts a where
   clear :: a -> a
 
 instance ClearSorts F.BindEnv where
-  clear = F.mapBindEnv (mapSnd clear)
+  {-clear = F.mapBindEnv (mapSnd clear)-}
+  clear = id
 
 instance (ClearSorts a, ClearSorts b) => ClearSorts (a,b) where
-  clear (a,b) = (clear a, clear b)
+  {-clear (a,b) = (clear a, clear b)-}
+  clear = id
 
 instance ClearSorts a => ClearSorts [a] where
-  clear xs = clear <$> xs
+  {-clear xs = clear <$> xs-}
+  clear = id
 
 instance ClearSorts F.SortedReft where
-  clear (F.RR s r) = F.RR (clear s) r
+  {-clear (F.RR s r) = F.RR (clear s) r-}
+  clear = id
 
 instance ClearSorts F.Sort where 
-  clear {-t@-}F.FInt        = F.FInt
-  clear {-t@-}F.FNum        = F.FInt
-  clear {-t@-}(F.FObj _)    = F.FInt
-  clear {-t@-}(F.FVar _)    = F.FInt
-  clear {-t@-}(F.FFunc i s) = F.FFunc i $ clear <$> s
-  clear {-t@-}(F.FApp _ _ ) = F.FInt -- F.FApp  c $ clear s
+  {-clear [>t@<]F.FInt        = F.FInt-}
+  {-clear [>t@<]F.FNum        = F.FInt-}
+  {-clear [>t@<](F.FObj _)    = F.FInt-}
+  {-clear [>t@<](F.FVar _)    = F.FInt-}
+  {-clear [>t@<](F.FFunc i s) = F.FFunc i $ clear <$> s-}
+  {-clear [>t@<](F.FApp _ _ ) = F.FInt -- F.FApp  c $ clear s-}
+  clear = id
 
 instance ClearSorts F.Symbol where
   clear = id
 
 instance ClearSorts F.Qualifier where
-  clear (F.Q n p b)   = F.Q n (clear p) b 
+  {-clear (F.Q n p b)   = F.Q n (clear p) b -}
+  clear = id
 
 instance ClearSorts (F.SEnv F.SortedReft) where
-  clear = F.mapSEnvWithKey clearProp
+  {-clear = F.mapSEnvWithKey clearProp-}
+  clear = id
 
 clearProp (sy, F.RR so re) 
   | F.symbolString sy `elem` ["TRU", "FLS", "Prop"] 

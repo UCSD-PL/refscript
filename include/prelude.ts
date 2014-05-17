@@ -105,7 +105,7 @@ interface List<M,A> {
                                   /\ (x:string, y:number) => string
                                   /\ (x:string, y:string) => string                                 */
 
-/*@ extern builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v = x - y} */
+/*@ extern builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v ~~ x - y} */
 
 /*@ extern builtin_OpMul       :: (number,  number)  => number                                      */
 
@@ -119,7 +119,7 @@ interface List<M,A> {
 
 /*@ extern builtin_OpMod       :: (number,  number)  => number                                      */
 
-/*@ extern builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v = (0 - x)}                 */
+/*@ extern builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v ~~ (0 - x)}                 */
 
 /*@ extern builtin_OpEq        :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x = y)) }   */
 
@@ -138,7 +138,7 @@ interface List<M,A> {
 
 /*@ extern builtin_OpLOr       :: forall A . (x:A, y:A)  => {v:A   | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))}     */
 
-/*@ extern builtin_PrefixLNot  :: forall A . (x: A)      => {v:boolean | ((Prop v) <=> FLS(x))}     */
+/*@ extern builtin_PrefixLNot  :: forall A . (x: A)      => {v:boolean | (((Prop v) <=> not TRU(x)) && ((Prop v) <=> FLS(x)))}     */
 
 /*@ extern builtin_PrefixBNot  :: (x: number)            => {v:number | v = 0 - (x + 1) }           */
 
@@ -363,11 +363,11 @@ interface List<M,A> {
 
 /*@ measure ttag :: forall A. (A) => string                                   */
 
-/*@ measure TRU  :: forall A . (A) => boolean                                 */
+/*@ measure TRU  :: forall A . (A) => bool                                    */
 
-/*@ measure FLS  :: forall A . (A) => boolean                                 */
+/*@ measure FLS  :: forall A . (A) => bool                                    */
 
-/*@ measure Prop :: forall A . (A) => boolean                                 */
+/*@ measure Prop :: forall A . (A) => bool                                    */
 
 
 
@@ -380,13 +380,13 @@ interface List<M,A> {
 /*@ extern builtin_BIFalsy :: forall A. (x:A) 
                                   => { v:boolean | ((Prop v) <=> FLS(x)) }    */
 
-/*@ invariant           {v:undefined | [(ttag(v) = "undefined"); not (TRU(v))        ]} */
-/*@ invariant           {v:null      | [(ttag(v) = "null"     ); not (TRU(v))        ]} */
-/*@ invariant           {v:boolean   | [(ttag(v) = "boolean"  ); (TRU(v) <=> Prop(v))]} */ 
-/*@ invariant           {v:number    | [(ttag(v) = "number"   ); (TRU(v) <=> v /= 0 )]} */
-/*@ invariant           {v:string    | [(ttag(v) = "string"   ); (TRU(v) <=> v /= "")]} */
-/*@ invariant forall A. {v:[A]       |   ttag(v) = "object"                           } */
-/*@ invariant           {v:{}        |   ttag(v) = "object"                           } */
+/*@ invariant           {v:undefined | [not (TRU(v))        ]} */
+/*@ invariant           {v:null      | [not (TRU(v))        ]} */
+/*@ invariant           {v:boolean   | [(TRU(v) <=> Prop(v))]} */ 
+/*@ invariant           {v:number    | [(TRU(v) <=> v /= 0 )]} */
+/*@ invariant           {v:string    | [(TRU(v) <=> v /= "")]} */
+/*  invariant forall A. {v:[A]       |                       } */
+/*  invariant           {v:{}        |                       } */
 
 
 
@@ -413,10 +413,10 @@ interface List<M,A> {
 /*@ qualif Cmp(v:a,x:a)              : v =  x                   */
 /*@ qualif Cmp(v:a,x:a)              : v != x                   */
 /*@ qualif One(v:number)             : v = 1                    */
-/*@ qualif True(v:Bool)              : (? v)                    */
-/*@ qualif False(v:Bool)             : not (? v)                */
-/*@ qualif True1(v:Bool)             : (Prop v)                 */
-/*@ qualif False1(v:Bool)            : not (Prop v)             */
+/*@ qualif True(v:boolean)           : (? v)                    */
+/*@ qualif False(v:boolean)          : not (? v)                */
+/*@ qualif True1(v:boolean)          : (Prop v)                 */
+/*@ qualif False1(v:boolean)         : not (Prop v)             */
 
 
 // Somewhat more controversial qualifiers (i.e. "expensive"...)
@@ -445,42 +445,43 @@ interface List<M,A> {
       (message: string) => #Error;
       prototype: #Error;
   } */ 
+var  __ddd = 1;
 
-
-class Errors<M> {
-
-  /*@ argument :: (argument: string, message: string) => #Error */
-  public static argument(arg: string, message: string): Error {
-    return new Error("Invalid argument: " + arg + ". " + message);
-  }
-
-  /*@ argumentOutOfRange :: (arg: string) => #Error */
-  public static argumentOutOfRange(arg: string): Error {
-    return new Error("Argument out of range: " + arg);
-  }
-
-  /*@ argumentNull :: (arg: string) => #Error */
-  public static argumentNull(arg: string): Error {
-    return new Error("Argument null: " + arg);
-  }
-
-  /*@ abstract :: () => #Error */
-  public static abstract(): Error {
-    return new Error("Operation not implemented properly by subclass.");
-  }
-
-  /*@ notYetImplemented :: () => #Error */
-  public static notYetImplemented(): Error {
-    return new Error("Not yet implemented.");
-  }
-
-  /*@ invalidOperation :: (message: string) => #Error */
-  public static invalidOperation(message?: string): Error {
-    return new Error("Invalid operation: " + message);
-  }
-}
-
-
+//
+//class Errors<M> {
+//
+//  /*@ argument :: (argument: string, message: string) => #Error */
+//  public static argument(arg: string, message: string): Error {
+//    return new Error("Invalid argument: " + arg + ". " + message);
+//  }
+//
+//  /*@ argumentOutOfRange :: (arg: string) => #Error */
+//  public static argumentOutOfRange(arg: string): Error {
+//    return new Error("Argument out of range: " + arg);
+//  }
+//
+//  /*@ argumentNull :: (arg: string) => #Error */
+//  public static argumentNull(arg: string): Error {
+//    return new Error("Argument null: " + arg);
+//  }
+//
+//  /*@ abstract :: () => #Error */
+//  public static abstract(): Error {
+//    return new Error("Operation not implemented properly by subclass.");
+//  }
+//
+//  /*@ notYetImplemented :: () => #Error */
+//  public static notYetImplemented(): Error {
+//    return new Error("Not yet implemented.");
+//  }
+//
+//  /*@ invalidOperation :: (message: string) => #Error */
+//  public static invalidOperation(message?: string): Error {
+//    return new Error("Invalid operation: " + message);
+//  }
+//}
+//
+//
 /*************************************************************************/
 /******************  Mutability  *****************************************/
 /*************************************************************************/

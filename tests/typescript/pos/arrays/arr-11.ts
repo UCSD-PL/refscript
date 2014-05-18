@@ -1,5 +1,7 @@
-/*@ foo :: (x: { number | v > 122 }) => void */
-function foo (x: number) {}
+
+
+//XXX: WORKS with this line - some qualifier scraping is missing...
+/*  qualif Length(v:number): (len v) = 3 */
 
 /*@ a :: #Array[#Immutable, number] */
 var a : number[] = [1,2,3];

@@ -76,7 +76,7 @@ instance (F.Reftable r, Substitutable r (RType r)) => Monoid (RSubst r) where
 
 instance (F.Reftable r, PP r) => PP (RSubst r) where 
   pp (Su m) = if M.null m then text "empty" 
-              else if M.size m < 5 then intersperse comma $ (ppBind <$>) $ M.toList m 
+              else if M.size m < 10 then intersperse comma $ (ppBind <$>) $ M.toList m 
               else vcat $ (ppBind <$>) $ M.toList m 
 
 ppBind (x, t) = pp x <+> text ":=" <+> pp t

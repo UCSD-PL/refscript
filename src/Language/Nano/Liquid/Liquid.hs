@@ -578,11 +578,9 @@ consCall g l fn es ft0
                            let (su, ts') = renameBinds its xes
                            zipWithM_ (subType l g') [envFindTy "consCall-2" x g' | x <- xes] ts'
                            envAddFresh "consCall" l (F.subst su ot) g'
-         Nothing    -> cgError l $ errorNoMatchCallee (srcPos l) ts ft0 
+         Nothing    -> cgError l $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> getCallable δ ft0) 
     where
-       overload δ l  = listToMaybe [ lt | Overload t <- ann_fact l 
-                                        , lt         <- getCallable δ ft0
-                                        , toType t   == toType lt  ]
+       overload δ l  = listToMaybe [ t | Overload t <- ann_fact l ]
 
 ---------------------------------------------------------------------------------
 instantiate :: (PP a, PPRS F.Reft) => 

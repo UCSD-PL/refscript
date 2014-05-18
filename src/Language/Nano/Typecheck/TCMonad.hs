@@ -247,13 +247,9 @@ freshSubst l ξ αs
        return     $ fromList $ zip αs (tVar <$> βs)
 
 setTyArgs l ξ βs
-  = do  {-m <- tc_anns <$> get-}
-        {-when (hasTI l m) $ tcError $ errorMultipleTypeArgs l-}
-        case map tVar βs of 
-          [] -> return ()
-          vs -> addAnn l $ TypInst ξ vs
-    {-where-}
-    {-   hasTI l m  = not $ null [ i | i@(TypInst _ _) <- M.lookupDefault [] l m ]-}
+  = case map tVar βs of 
+      [] -> return ()
+      vs -> addAnn l $ TypInst ξ vs
 
 
 -------------------------------------------------------------------------------

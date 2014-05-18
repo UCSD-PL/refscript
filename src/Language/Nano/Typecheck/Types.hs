@@ -796,7 +796,8 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TApp d@(TRef _) ts r) = F.ppTy r $ pp d <+> ppArgs brackets comma ts 
   pp (TApp c [] r)          = F.ppTy r $ pp c 
   pp (TApp c ts r)          = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
-  pp (TCons bs r)           = F.ppTy r $ lbrace $+$ nest 2 (vcat $ map pp bs) $+$ rbrace
+  pp (TCons bs r)           = F.ppTy r $ lbrace <+> vcat (map pp bs) <+> rbrace
+  -- pp (TCons bs r)           = F.ppTy r $ lbrace $+$ nest 2 (cat $ map pp bs) $+$ rbrace
 
 instance PP TCon where
   pp TInt             = text "number"

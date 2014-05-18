@@ -82,9 +82,8 @@ errorMissingSpec l f      = mkErr l $ printf "Missing Signature For %s defined a
 errorDuplicate i l l'     = mkErr l $ printf "Duplicate Specification for %s:\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
 errorArgMismatch l        = mkErr l $ printf "Mismatch in Number of Args in Call" 
 errorMultipleCasts l cs   = mkErr l $ render $ text "Multiple Casts: " <+> (vcat (map pp cs)) 
-errorNoMatchCallee l ts t = mkErr l $ render $   text "No matching callee type!" 
-                                             $+$ text "Argument Types: " <+> pp ts 
-                                             $+$ text "Function Type : " <+> pp t
+errorNoMatchCallee l fn ts t 
+                          = mkErr l $ printf "No matching callee type for %s!\nArgument Types: %s\nFunction Type: %s" (ppshow fn) (ppshow ts) (ppshow t)
 errorMissingReturn l      = mkErr l $ printf "Missing Return statement."
 
 errorNonFunction l f t    = mkErr l $ printf "Non-function type: %s :: %s " (ppshow f) (ppshow t)

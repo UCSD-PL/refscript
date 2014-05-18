@@ -365,7 +365,6 @@ unifyTypesM l msg t1s t2s
                    case unifys l δ θ t1s t2s of
                      Left err -> tcError $ catMessage err msg
                      Right θ' -> setSubst θ' >> return θ' 
-                     -- Right θ' -> setSubst (tracePP (ppshow θ ++ " ===> " ++ ppshow t1s ++ " ~ " ++ ppshow t2s) θ') >> return θ' 
 
 ----------------------------------------------------------------------------------
 unifyTypeM :: PPR r => SourceSpan -> RType r -> RType r -> TCM r (RSubst r)

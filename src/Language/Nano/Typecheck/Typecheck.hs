@@ -28,7 +28,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Annots
 import           Language.Nano.Env
-import           Language.Nano.Misc
+import qualified Language.Nano.Misc                 as NM
 import           Language.Nano.Common.Typecheck     (safeExtends)
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
@@ -172,10 +172,16 @@ data TCEnv r  = TCE {
   , tce_ctx  :: !IContext 
   }
 
--- -- XXX: Who needs this?
--- instance PPR r => Substitutable r (TCEnv r) where 
---   apply θ (TCE m sp c) = TCE (apply θ m) (apply θ sp) c 
--- 
+
+-- Q: Who needs this?
+-- A: Unification is not local any more. For example an empty array may be
+--    created and its type can be instantiated only after a use of it which can 
+--    be arbitrarily far from creation point. At that point we need to update
+--    the current environment by applying the substitution.
+--
+instance PPR r => Substitutable r (TCEnv r) where 
+  apply θ γ = γ { tce_env = apply θ (tce_env γ) }
+
 instance PPR r => PP (TCEnv r) where
   pp = ppTCEnv
 
@@ -310,6 +316,16 @@ tcSeq f             = go []
                            Just γ' -> go (y:acc) γ' xs
 
 --------------------------------------------------------------------------------
+tcSeq' :: (TCEnv r -> a -> TCM r (a, b, TCEnv r)) -> TCEnv r -> [a] -> TCM r ([a], [b], TCEnv r)
+--------------------------------------------------------------------------------
+tcSeq' f             = go []
+  where
+    go acc γ []     = return (as, bs, γ) where (as, bs) = unzip (reverse acc)
+    go acc γ (x:xs) = do (x', y, γ) <- f γ x
+                         go ((x',y):acc) γ xs
+
+
+--------------------------------------------------------------------------------
 tcStmts :: PPRSF r => 
   TCEnv r -> [Statement (AnnSSA r)] -> TCM r ([Statement (AnnSSA r)], TCEnvO r)
 --------------------------------------------------------------------------------
@@ -339,22 +355,20 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 
 -- e1.fld = e2
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
-  = do (e1', tfld) <- tcPropRead getProp γ l e1 (F.symbol fld)
-       (e2', t2)   <- tcExpr γ $ e2                    
-       e2''        <- castM l ξ e2' t2 tfld
-       return         (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' fld) e2''), Just γ)
-    where
-       ξ            = tce_ctx γ
+  = do (e1', tfld)   <- tcPropRead getProp γ l e1 (F.symbol fld)
+       (e2', t2, γ1) <- tcExpr γ $ e2                    
+       e2''          <- castM l (tce_ctx γ1) e2' t2 tfld
+       return           (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' fld) e2''), Just γ1)
 
 -- e
 tcStmt γ (ExprStmt l e)   
-  = do (e', _) <- tcExpr γ e 
-       return (ExprStmt l e', Just γ) 
+  = do (e', _, γ1) <- tcExpr γ e 
+       return (ExprStmt l e', Just γ1) 
 
 -- s1;s2;...;sn
 tcStmt γ (BlockStmt l stmts) 
-  = do (stmts', z) <- tcStmts γ stmts
-       return (BlockStmt l stmts', z)
+  = do (stmts', g) <- tcStmts γ stmts
+       return (BlockStmt l stmts', g)
 
 -- if b { s1 }
 tcStmt γ (IfSingleStmt l b s)
@@ -362,23 +376,23 @@ tcStmt γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
-  = do tcCallMatch γ l BIBracketRef [e] (builtinOpTy l BITruthy (tce_env γ)) >>= \case
-         Just ([e'], _) -> do  
-           (s1', γ1) <- tcStmt γ s1
-           (s2', γ2) <- tcStmt γ s2
-           z         <- envJoin l γ γ1 γ2
-           return       (IfStmt l e' s1' s2', z)
+  = do z <- tcCallMatch γ l BITruthy [e] $ builtinOpTy l BITruthy (tce_env γ)
+       case z of 
+         Just ([e'], _, γ1) -> do (s1', γ2) <- tcStmt γ1 s1
+                                  (s2', γ3) <- tcStmt γ1 s2
+                                  γ4        <- envJoin l γ1 γ2 γ3
+                                  return       (IfStmt l e' s1' s2', γ4)
          _              -> error "BUG: tcStmt - If then else"
 
 -- while c { b } ; exit environment is entry as may skip. SSA adds phi-asgn prior to while.
 tcStmt γ (WhileStmt l c b) 
-  = do (c', t)   <- tcExpr γ c
-       unifyTypeM (srcPos l) t tBool
-       (b', _)   <- tcStmt γ' b
-       return       (WhileStmt l c' b', Just γ)  
+  = do (c', t, γ1) <- tcExpr γ c
+       unifyTypeM     (srcPos l) t tBool
+       let xts      = [(mkNextId x, tcEnvFindTyOrDie l x γ1) | x <- phiVarsAnnot l]
+       let γ2       = tcEnvAdds xts γ1
+       (b', γ3)    <- tcStmt γ2 b
+       return         (WhileStmt l c' b', γ3)  
     where 
-       xts'       = [(mkNextId x, tcEnvFindTyOrDie l x γ) | x <- phiVarsAnnot l]
-       γ'         = tcEnvAdds xts' γ
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt l ds)
@@ -387,22 +401,23 @@ tcStmt γ (VarDeclStmt l ds)
 
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
-  = do  (eo', t)    <- case eo of 
-                         Nothing -> return (Nothing, tVoid)
-                         Just e  -> mapFst Just <$>  tcExpr γ e
-        let rt       = tcEnvFindReturn γ 
-        θ           <- unifyTypeM (srcPos l) t rt
+  = do  (eo', t, γ1) <- case eo of 
+                          Nothing -> return (Nothing, tVoid, γ)
+                          Just e  -> mapFst3 Just <$> tcExpr γ e
+        let rt        = tcEnvFindReturn γ 
+        θ            <- unifyTypeM (srcPos l) t rt
         -- Apply the substitution
-        let (rt',t') = mapPair (apply θ) (rt,t)
+        let (rt',t')  = mapPair (apply θ) (rt,t)
         -- Subtype the arguments against the formals and cast using subtyping result
-        eo''        <- case eo' of
-                        Nothing -> return Nothing
-                        Just e' -> Just <$> castM l (tce_ctx γ) e' t' rt'
-        return (ReturnStmt l eo'', Nothing)
+        eo''         <- case eo' of
+                         Nothing -> return Nothing
+                         Just e' -> Just <$> castM l (tce_ctx γ) e' t' rt'
+        return        $ (ReturnStmt l eo'', Nothing)
 
 -- throw e 
 tcStmt γ (ThrowStmt l e) 
-  = (,Nothing) . ThrowStmt l . fst <$> tcExpr γ e
+  = do  (e', _, _) <- tcExpr γ e
+        return      $ (ThrowStmt l e', Nothing)
 
 
 tcStmt γ s@(FunctionStmt _ _ _ _)
@@ -505,9 +520,9 @@ tcVarDecl ::  PPR r
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e)) 
-  = do ann     <- listToMaybe <$> scrapeVarDecl v  
-       (e', t) <- tcExprT l γ e ann
-       return   $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
+  = do ann         <- listToMaybe <$> scrapeVarDecl v  
+       (e', t, γ1) <- tcExprT l γ e ann
+       return       $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ1)
 
 tcVarDecl γ v@(VarDecl l x Nothing) 
   = do ann <- scrapeVarDecl v
@@ -520,8 +535,8 @@ tcAsgn :: PPR r
        => AnnSSA r -> TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 -------------------------------------------------------------------------------
 tcAsgn l γ x e
-  = do (e' , t) <- tcExprT l γ e rhsT
-       return      (e', Just $ tcEnvAdds [(x, t)] γ)
+  = do (e', t, γ1) <- tcExprT l γ e rhsT
+       return         (e', Just $ tcEnvAdds [(x, t)] γ1)
     where
     -- Every variable has a single raw type, whether it has been annotated with
     -- it at declaration or through initialization.
@@ -532,38 +547,38 @@ tcAsgn l γ x e
 -------------------------------------------------------------------------------
 tcExprT :: PPR r 
         => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) 
-        -> TCM r (ExprSSAR r, RType r)
+        -> TCM r (ExprSSAR r, RType r, TCEnv r)
 -------------------------------------------------------------------------------
 tcExprT l γ e to 
-  = do (e', t)    <- tcExpr γ e
+  = do (e', t, γ1) <- tcExpr γ e
        case to of
-         Nothing -> return (e', t)
-         Just ta -> do θ <- unifyTypeM (srcPos l) t ta
-                       (,ta) <$> castM l (tce_ctx γ) e (apply θ t) ta
+         Nothing   -> return (e', t, γ1)
+         Just ta   -> do θ <- unifyTypeM (srcPos l) t ta
+                         (,ta,γ1) <$> castM l (tce_ctx γ1) e (apply θ t) ta
 
 -------------------------------------------------------------------------------
-tcExpr :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
+tcExpr :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r, TCEnv r)
 -------------------------------------------------------------------------------
-tcExpr _ e@(IntLit _ _)
-  = return (e, tInt)
+tcExpr γ e@(IntLit _ _)
+  = return (e, tInt, γ)
 
-tcExpr _ e@(BoolLit _ _)
-  = return (e, tBool)
+tcExpr γ e@(BoolLit _ _)
+  = return (e, tBool, γ)
 
-tcExpr _ e@(StringLit _ _)
-  = return (e, tString)
+tcExpr γ e@(StringLit _ _)
+  = return (e, tString, γ)
 
-tcExpr _ e@(NullLit _)
-  = return (e, tNull)
+tcExpr γ e@(NullLit _)
+  = return (e, tNull, γ)
 
-tcExpr _ e@(ThisRef _)
-  = (e,) <$> tcPeekThis
+tcExpr γ e@(ThisRef _)
+  = (e,,γ) <$> tcPeekThis
 
 tcExpr γ e@(VarRef l x)
   = case tcEnvFindTy x γ of
-      Just t  -> return (e,t)           -- Global or local reference
+      Just t  -> return (e,t,γ)         -- Global or local reference
       Nothing -> findClass x >>= \case  -- Static reference
-        Just (TD _ s _ _ _) -> return (e, TApp (TRef (F.symbol s, True)) [] fTop)
+        Just (TD _ s _ _ _) -> return (e, TApp (TRef (F.symbol s, True)) [] fTop, γ)
         Nothing -> tcError $ errorUnboundId (ann l) x
  
 tcExpr γ e@(PrefixExpr _ _ _)
@@ -578,13 +593,17 @@ tcExpr γ e@(CallExpr _ _ _)
 tcExpr γ e@(ArrayLit _ _)
   = tcCall γ e 
 
+-- TODO: add `this` in scope ...
 tcExpr γ (ObjectLit l bs) 
   = do let (ps, es)  = unzip bs
-       ets          <- mapM (tcExpr γ) es
+       (ets, γ1)    <- go γ [] es
        let (es', ts) = unzip ets
        let tCons     = TCons (zipWith mkElt (F.symbol <$> ps) ts) fTop
-       return          (ObjectLit l (zip ps es'), tCons)
+       return          (ObjectLit l (zip ps es'), tCons, γ1)
     where
+       go γ es' (e:es) = do (e',t, γ') <- tcExpr γ e
+                            go γ' ((e',t):es') es
+       go γ es' []     = return (es', γ)
     -- Object elements are non-static
     -- TODO: add "this" as first argument
        mkElt s t     | isTFun t  = MethSig s False Nothing t
@@ -592,25 +611,25 @@ tcExpr γ (ObjectLit l bs)
 
 
 tcExpr γ (Cast l@(Ann loc fs) e)
-  = do (e', t) <- tcExpr γ e
+  = do (e', t, γ1) <- tcExpr γ e
        case e' of
-         Cast (Ann _ fs') e'' -> return (Cast (Ann loc (fs ++ fs')) e'', t)
-         _                    -> return (Cast l e', t)
+         Cast (Ann _ fs') e'' -> return (Cast (Ann loc (fs ++ fs')) e'', t, γ1)
+         _                    -> return (Cast l e', t, γ1)
 
 -- e.f
 -- 
 -- Careful here! Unification is happening in `runMaybeM` so won't be effective
 -- outside unless we explicitly add the substitution to the environment. That's
--- why `addSubst` is there for.
+-- what `addSubst` is there for.
 tcExpr γ (DotRef l e f) 
-  = do δ        <- getDef
-       (e', te) <- tcExpr γ e
-       ets      <- catMaybes <$> mapM (runMaybeM . checkElt e' te) (getElt l δ fs te)
-       case ets of 
-         (e,t,θ):_ -> do addSubst θ
-                         addAnn (srcPos l) (EltOverload t)
-                         return (e, eltType t)
-         _         -> tcError $ errorThisDeref (srcPos l) f e te  
+  = do δ            <- getDef
+       (e', te, γ1) <- tcExpr γ e
+       z            <- catMaybes <$> mapM (runMaybeM . checkElt e' te) (getElt l δ fs te)
+       case z of 
+         (dr,t,θ):_  -> do addSubst l θ
+                           addAnn (srcPos l) (EltOverload t)
+                           return (dr, eltType t, apply θ γ1)
+         _           -> tcError $ errorThisDeref (srcPos l) f e te
     where
        fs = F.symbol f
        thisArg l f to τ ft 
@@ -628,12 +647,6 @@ tcExpr γ (DotRef l e f)
        checkElt e te (te', elt) = 
          tcWithThis te' $ do e'' <- castM l (tce_ctx γ) e te te'
                              return (DotRef l e'' f, elt, fromList [])
-
-        
--- -- e["f"]
--- tcExpr γ (BracketRef l e fld@(StringLit _ s)) 
---   = do (e', t) <- tcPropRead getProp γ l e $ F.symbol s
---        return     (BracketRef l e' fld, t)
  
 -- e1[e2]
 tcExpr γ e@(BracketRef _ _ _) 
@@ -648,66 +661,65 @@ tcExpr γ e@(NewExpr _ _ _)
   = tcCall γ e
 
 -- super
-tcExpr _ e@(SuperRef l) = (e,) <$> (getSuperM l =<< tcPeekThis)
+tcExpr γ e@(SuperRef l) = (e,,γ) <$> (getSuperM l =<< tcPeekThis)
 
 tcExpr _ e 
   = convertError "tcExpr" e
 
 
-
-
 ---------------------------------------------------------------------------------------
-tcCall :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
+tcCall :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r, TCEnv r)
 ---------------------------------------------------------------------------------------
 
 -- | `o e`
 tcCall γ (PrefixExpr l o e)        
-  = do z                      <- tcCallMatch γ l o [e] (prefixOpTy o $ tce_env γ) 
+  = do z                          <- tcCallMatch γ l o [e] (prefixOpTy o $ tce_env γ) 
        case z of
-         Just ([e'], t)       -> return (PrefixExpr l o e', t)
-         Just _               -> error "IMPOSSIBLE:tcCall:PrefixExpr"
-         Nothing              -> tcError $ errorCallNotSup (srcPos l) o e
+         Just ([e'], t, γ1)       -> return (PrefixExpr l o e', t, γ1)
+         Just _                   -> error "IMPOSSIBLE:tcCall:PrefixExpr"
+         Nothing                  -> tcError $ errorCallNotSup (srcPos l) o e
 
 -- | `e1 o e2`
 tcCall γ (InfixExpr l o e1 e2)        
-  = do z                      <- tcCallMatch γ l o [e1, e2] (infixOpTy o $ tce_env γ) 
+  = do z                          <- tcCallMatch γ l o [e1, e2] (infixOpTy o $ tce_env γ) 
        case z of
-         Just ([e1', e2'], t) -> return (InfixExpr l o e1' e2', t)
-         Just _               -> error "IMPOSSIBLE:tcCall:InfixExpr"
-         Nothing              -> tcError $ errorCallNotSup (srcPos l) o [e1,e2]
+         Just ([e1', e2'], t, γ1) -> return (InfixExpr l o e1' e2', t, γ1)
+         Just _                   -> error "IMPOSSIBLE:tcCall:InfixExpr"
+         Nothing                  -> tcError $ errorCallNotSup (srcPos l) o [e1,e2]
          
--- | `super(e1,...,en)`: TSC will already have checked that `super` is only
--- called whithin the constructor.
-tcCall γ (CallExpr l e@(SuperRef _)  es) = do
-    elts <- t_elts <$> (getSuperDefM l =<< tcPeekThis)
-    go [ t | ConsSig t <- elts ]
+-- | `super(e1,...,en)`
+-- TSC will already have checked that `super` is only called whithin the constructor.
+tcCall γ (CallExpr l e@(SuperRef _)  es) 
+  = do elts <- t_elts <$> (getSuperDefM l =<< tcPeekThis)
+       go [ t | ConsSig t <- elts ]
   where
-    go [t] = tcCallMatch γ l "constructor" es t >>= \case
-      Just (es', t') -> return (CallExpr l e es', t')
-      Nothing        -> error "super()"
-    go _   = tcError $ errorConsSigMissing (srcPos l) e   
+       go [t] = tcCallMatch γ l "constructor" es t >>= \case
+         Just (es', t',γ1) -> return (CallExpr l e es', t', γ1)
+         Nothing           -> error "super()"
+       go _   = tcError $ errorConsSigMissing (srcPos l) e   
    
 -- | `e(es)`
 tcCall γ (CallExpr l e es)
-  = do (e', ft0)              <- tcExpr γ e
-       z                      <- tcCallMatch γ l e es ft0
+  = do (e', ft0, γ1)              <- tcExpr γ e
+       z                          <- tcCallMatch γ1 l e es ft0
        case z of
-         Just (es', t)        -> return (CallExpr l e' es', t)
-         Nothing              -> tcError $ errorSigNotFound (srcPos l) e es
+         Just (es', t, γ2)        -> return (CallExpr l e' es', t, γ2)
+         Nothing                  -> tcError $ errorSigNotFound (srcPos l) e es
 
 -- | `e1[e2]`
 tcCall γ (BracketRef l e1 e2)
-  = do z                      <- tcCallMatch γ l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ tce_env γ 
+  = do z                          <- tcCallMatch γ l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ tce_env γ 
        case z of
-         Just ([e1', e2'], t) -> return (BracketRef l e1' e2', t)
-         Just _               -> error "BUG: tcCall BracketRef"
-         Nothing              -> tcError $ errorPropRead (srcPos l) e1 e2 
+         Just ([e1', e2'], t, γ1) -> return (BracketRef l e1' e2', t, γ1)
+         Just _                   -> error "BUG: tcCall BracketRef"
+         Nothing                  -> tcError $ errorPropRead (srcPos l) e1 e2 
    
 -- | `e1[e2] = e3`
 tcCall γ ex@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
   = do z                           <- tcCallMatch γ l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ tce_env γ
        case z of
-         Just ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
+         Just ([e1', e2', e3'], t, γ1) 
+                                   -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t, γ1)
          Just _                    -> error "BUG: tcCall AssignExpr"
          Nothing                   -> tcError $ errorBracketAssign (srcPos l) ex 
 
@@ -715,18 +727,20 @@ tcCall γ ex@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
 tcCall γ ex@(ArrayLit l es)
   = do z                           <- tcCallMatch γ l BIArrayLit es $ arrayLitTy l (length es) $ tce_env γ
        case z of
-         Just (es', t)             -> return (ArrayLit l es', t)
+         Just (es', t, γ1)         -> return (ArrayLit l es', t, γ1)
          Nothing                   -> tcError $ errorArrayLit (srcPos l) ex
 
 -- | `new e(e1,...,en)`
-tcCall γ (NewExpr l (VarRef lv i) es) = do  
-    -- FIXME: the folllowing is kinda ugly ... needed a unified way to 
-    -- get the constructor at tc and liquid.
-    tc <- getConstr (srcPos l) γ i
-    when (not $ isTFun tc) $ tcError $ errorConstNonFunc (srcPos l) i
-    tcCallMatch γ l "constructor" es tc >>= \case 
-      Just (es', t) -> return (NewExpr l (VarRef lv i) es', t)
-      Nothing       -> error "No matching constructor"
+-- FIXME: the folllowing is kinda ugly ... needed a unified way to 
+-- get the constructor at tc and liquid.
+tcCall γ (NewExpr l (VarRef lv i) es) 
+  = do tc                          <- getConstr (srcPos l) γ i
+       when                           (not $ isTFun tc) 
+                                    $ tcError $ errorConstNonFunc (srcPos l) i
+       z                           <- tcCallMatch γ l "constructor" es tc
+       case z of 
+         Just (es', t, γ1)         -> return (NewExpr l (VarRef lv i) es', t, γ1)
+         Nothing                   -> error "No matching constructor"
 
 tcCall _ e
   = die $ bug (srcPos e) $ "tcCall: cannot handle" ++ ppshow e        
@@ -764,27 +778,24 @@ getConstr l γ s =
 
 -- | Signature resolution
 
-tcCallMatch γ l fn es ft0 = do  
-    (es', ts)     <- unzip <$> mapM (tcExpr γ) es
-    case calleeType l ts ft0 of 
-      -- Try to match it with a non-generic type
-      Just t -> call es' ts t
-      -- If this fails, try to instantiate possible generic 
-      -- types found in the function signature.
-      Nothing -> resolveOverload γ l fn es' ts ft0 >>= \case 
-                   Just ft -> addAnn (srcPos l) (Overload ft) >> call es' ts ft
-                   Nothing -> tcError $ errorCallMatch (srcPos l) fn ts 
-  where
-    call es' ts t = fmap Just $ tcCallCase γ l fn es' ts t
+tcCallMatch γ l fn es ft0 
+  = do (es', ts, γ1)  <- tcSeq' tcExpr γ es
+       z              <- resolveOverload γ l fn es' ts ft0
+       case z of 
+         Just (θ, ft) -> do addAnn (srcPos l) (Overload ft) 
+                            addSubst l θ
+                            (es'', ot, θ') <- tcCallCase γ l fn es' ts ft
+                            return          $ Just (es'', ot, apply θ' γ)
+         Nothing      -> return Nothing
 
 
-resolveOverload γ l fn es ts ft = do  
-    θs    <- mapM (tcCallCaseTry γ l fn ts) fts
-    return $ listToMaybe [ apply θ t | (t, Just θ) <- zip fts θs ]
-  where
-    sigs   = catMaybes (bkFun <$> bkAnd ft)
-    fts    = [ mkFun (vs, ts,t) | (vs, ts, t) <- sigs
-                                , length ts == length es ]
+resolveOverload γ l fn es ts ft 
+  = do δ       <- getDef
+       let sigs = catMaybes (bkFun <$> getCallable δ ft)
+       let fts  = [ mkFun (vs, ts,t) | (vs, ts, t) <- sigs
+                                     , length ts == length es ]
+       θs      <- mapM (tcCallCaseTry γ l fn ts) fts
+       return   $ listToMaybe [ (θ, apply θ t) | (t, Just θ) <- zip fts θs ]
 
 
 -- | A successful pairing of formal to actual parameters will return `Just θ`,
@@ -812,29 +823,29 @@ tcCallCaseTry γ l fn ts ft = runMaybeM $
 
 
 tcCallCase γ l fn es' ts ft 
-  = do let ξ          = tce_ctx γ
+  = do let ξ            = tce_ctx γ
        -- Generate fresh type parameters
-       (_,ibs,ot)    <- instantiate l ξ fn ft
-       let its        = b_type <$> ibs
-       θ             <- unifyTypesM (srcPos l) "tcCall" ts its
-       let (ts',its') = mapPair (apply θ) (ts, its)
-       es''          <- zipWith3M (castM l ξ) es' ts' its'
-       return           (es'', apply θ ot)
+       (_,ibs,ot)      <- instantiate l ξ fn ft
+       let its          = b_type <$> ibs
+       θ               <- unifyTypesM (srcPos l) "tcCall" ts its
+       let (ts',its')   = mapPair (apply θ) (ts, its)
+       es''            <- NM.zipWith3M (castM l ξ) es' ts' its'
+       return             (es'', apply θ ot, θ)
 
 instantiate l ξ fn ft 
-  = do let (αs, t) = bkAll ft
-       t'         <- freshTyArgs (srcPos l) ξ αs t 
+  = do t'              <- freshTyArgs (srcPos l) ξ αs t 
        maybe err return $ bkFun t'
     where
-       err = tcError   $ errorNonFunction (ann l) fn ft
+       (αs, t)          = bkAll ft
+       err = tcError    $ errorNonFunction (ann l) fn ft
 
              
-tcPropRead getter γ l e fld = do  
-  (e', te) <- tcExpr γ e
-  (δ, ε  ) <- (,) <$> getDef <*> getExts
-  case getter l ε δ fld te of
-    Nothing         -> tcError $  errorPropRead (srcPos l) e fld
-    Just (te', tf)  -> tcWithThis te $ (, tf) <$> castM l (tce_ctx γ) e' te te'
+tcPropRead getter γ l e fld 
+  = do (e', te, γ1)     <- tcExpr γ e
+       (δ, ε)           <- (,) <$> getDef <*> getExts
+       case getter l ε δ fld te of
+         Nothing        -> tcError $  errorPropRead (srcPos l) e fld
+         Just (te', tf) -> tcWithThis te $ (, tf) <$> castM l (tce_ctx γ) e' te te'
 
 
 ----------------------------------------------------------------------------------
@@ -846,9 +857,8 @@ envJoin l γ (Just γ1) (Just γ2) =
   do let xs = phiVarsAnnot l
      ts    <- mapM (getPhiType l γ1 γ2) xs
      θ     <- getSubst
-     return $ Just $ tcEnvAdds (zip xs ts) γ
-     -- return $ Just $ tcEnvAdds (zip xs ts) (apply θ γ)
-     -- XXX: Tentatively removing `apply θ` here
+     -- Applying the accummulated substitutions here
+     return $ Just $ tcEnvAdds (zip xs ts) (apply θ γ)
 
 ----------------------------------------------------------------------------------
 getPhiType :: PPR r 

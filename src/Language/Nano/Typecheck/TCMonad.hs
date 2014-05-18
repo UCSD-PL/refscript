@@ -68,7 +68,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>), (<*>))
 import           Data.Function                      (on)
 import qualified Data.HashSet                       as S
-import           Data.Maybe                         (fromJust)
+import           Data.Maybe                         (fromJust, catMaybes)
 import           Data.List                          (elem)
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)
@@ -168,10 +168,27 @@ setSubst   :: RSubst r -> TCM r ()
 -------------------------------------------------------------------------------
 setSubst θ = modify $ \st -> st { tc_subst = θ }
 
+
+-- Q: Do we need this anymore?
+-- A: Yes! 
 -------------------------------------------------------------------------------
-addSubst :: (F.Reftable r, PP r) => RSubst r -> TCM r ()
+addSubst :: (PPR r, IsLocated a) => a -> RSubst r -> TCM r ()
 -------------------------------------------------------------------------------
-addSubst θ = getSubst >>= setSubst . (`mappend` θ)
+addSubst l θ 
+  = do θ0 <- getSubst 
+       case checkSubst θ0 θ of 
+         [] -> return ()
+         ts -> forM_ ts $ (\(t1,t2) -> tcError $ errorUnification (srcPos l) t1 t2)
+       setSubst $ θ0 `mappend` θ
+  where
+    checkSubst (Su m) (Su m') = checkIntersection m m' 
+    checkIntersection m n     = catMaybes $ check <$> (M.toList $ M.intersectionWith (,) m n)
+    check (k, (t,t'))         | uninstantiated k t = Nothing
+                              | eqT t t'           = Nothing
+                              | otherwise          = Just (t,t')
+    eqT                       = on (==) toType
+    uninstantiated k t        = eqT (tVar k) t
+
 
 -------------------------------------------------------------------------------
 extSubst :: (F.Reftable r, PP r) => [TVar] -> TCM r ()
@@ -348,6 +365,7 @@ unifyTypesM l msg t1s t2s
                    case unifys l δ θ t1s t2s of
                      Left err -> tcError $ catMessage err msg
                      Right θ' -> setSubst θ' >> return θ' 
+                     -- Right θ' -> setSubst (tracePP (ppshow θ ++ " ===> " ++ ppshow t1s ++ " ~ " ++ ppshow t2s) θ') >> return θ' 
 
 ----------------------------------------------------------------------------------
 unifyTypeM :: PPR r => SourceSpan -> RType r -> RType r -> TCM r (RSubst r)

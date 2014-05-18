@@ -572,16 +572,14 @@ consCall :: (PP a) =>
 consCall g l fn es ft0 
   = do (xes, g')    <- consScan consExpr g es
        let ts        = [envFindTy "consCall-1" x g' | x <- xes]
-       -- let ft        = fromMaybe (fromMaybe (err ts ft0) (overload l)) (calleeType l ts ft0)
-       -- We should have resolved the right overload from the raw stage!
-       let ft        = fromMaybe (fromMaybe (err ts ft0) (overload l)) (calleeType l ts ft0)
-       (_,its,ot)   <- instantiate l g fn ft
-       let (su, ts') = renameBinds its xes
-       zipWithM_ (subType l g') [envFindTy "consCall-2" x g' | x <- xes] ts'
-       envAddFresh "consCall" l (F.subst su ot) g'
+       case overload l of
+         Just ft -> do  (_,its,ot)   <- instantiate l g fn ft
+                        let (su, ts') = renameBinds its xes
+                        zipWithM_ (subType l g') [envFindTy "consCall-2" x g' | x <- xes] ts'
+                        envAddFresh "consCall" l (F.subst su ot) g'
+         Nothing -> cgError l $ errorNoMatchCallee (srcPos l) ts ft0 
     where
        overload l    = listToMaybe [ t | Overload t <- ann_fact l ]
-       err ts ft0    = die $ errorNoMatchCallee (srcPos l) ts ft0 
 
 ---------------------------------------------------------------------------------
 instantiate :: (PP a, PPRS F.Reft) => 

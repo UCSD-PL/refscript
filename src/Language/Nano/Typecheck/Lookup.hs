@@ -5,7 +5,7 @@
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
-module Language.Nano.Typecheck.Lookup (getProp, getElt, getPropTDef) where 
+module Language.Nano.Typecheck.Lookup (getProp, getElt, getCallable, getPropTDef) where 
 
 import           Data.Maybe (listToMaybe)
 import           Language.ECMAScript3.PrettyPrint
@@ -56,7 +56,23 @@ getElt :: (PPR r, IsLocated l)
 getElt l γ s t@(TApp _ _ _)  = getEltApp l γ s t 
 getElt _ _ s t@(TCons _ _)   = (t,) <$> getEltCons False s t
 getElt l _ _ t               = die $ bug (srcPos l) 
-                                     $ "Using getElt on type: " ++ ppshow t 
+                                   $ "Using getElt on type: " ++ ppshow t 
+
+
+-------------------------------------------------------------------------------
+getCallable :: PPR r => TDefEnv (RType r) -> RType r -> [RType r]
+-------------------------------------------------------------------------------
+getCallable δ t           = uncurry mkAll <$> foo [] t
+  where
+    foo αs t@(TFun _ _ _) = [(αs, t)]
+    foo αs   (TAnd ts)    = concatMap (foo αs) ts 
+    foo αs   (TAll α t)   = foo (αs ++ [α]) t
+    foo αs   (TApp (TRef (s, False)) _ _ )
+                          = case findSym s δ of 
+                              Just d  -> [ (αs, t) | CallSig t <- t_elts d ]
+                              Nothing -> []
+    foo αs   (TCons es _) = [ (αs, t) | CallSig t <- es  ]
+    foo _    t            = error $ "getCallable: " ++ ppshow t
 
 
 -------------------------------------------------------------------------------

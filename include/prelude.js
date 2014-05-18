@@ -1,21 +1,14 @@
 /*************************************************************************/
 /*********** General purpose auxiliary functions *************************/
 /*************************************************************************/
-
-/*@ measure len      :: forall A. (#List [A])          => number                                            */
-/*@ extern cons      :: forall A. (A, xs:#List[A]?)
-=> {#List[A] | (len v) = 1 + (len xs)}               */
-/*@ extern nil       ::           ()                   => { null | (len v) = 0}                             */
-/*@ extern head      :: forall A. (xs:#List[A])        => A                                                 */
-/*@ extern tail      :: forall A. (xs:#List [A])       => #List[A]?                                         */
-/*@ extern nth       :: forall A. (xs:#List [A], {i:number| ((0 <= i) && i < (len xs))})
-=> A                                                 */
-/*@ extern empty     :: forall A. (x: #List[A]?) =>
-{v: boolean | (((Prop v) <=> len(x) = 0) && ((Prop v) <=> ttag(x) = "null"))}       */
-/*@ extern emptyPoly :: forall A. (x:A)                => {v: boolean | ((Prop v) <=> ((ttag x) = "null"))} */
-/*@ extern mylength  :: forall A. (xs:#List[A]?) => {v:number | ((v >= 0) && v = (len xs))}                 */
-/*@ extern safehead  :: forall A. (#List[A])           => A                                                 */
-/*@ extern safetail  :: forall A. (xs:#List[A])        => {v:#List[A]? | (len v) = (len xs) - 1}            */
+/*@ extern crash     :: forall A.()            => A                  */
+/*@ extern assume    :: (boolean)              => void               */
+/*@ extern assert    :: ({x:boolean|(Prop x)}) => void               */
+/*@ extern requires  :: (boolean)              => void               */
+/*@ extern ensures   :: (boolean)              => void               */
+/*@ extern random    :: ()                     => number             */
+/*@ extern pos       :: ()                     => {v:number | v > 0} */
+/*@ extern alert     :: (string)               => void               */
 /*************************************************************************/
 /************** Types for Builtin Operators ******************************/
 /*************************************************************************/
@@ -176,6 +169,7 @@ toExponential   : (fractionDigits: number) => string;
 toPrecision     : (precision: number) => string
 } */
 /*** Array ***************************************************************/
+/*@ measure len      :: forall M A . (#Array[M,A]) => number             */
 /*@ interface Array<M,T> {
 toString       : () => string;
 toLocaleString : () => string;

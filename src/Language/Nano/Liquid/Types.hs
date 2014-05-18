@@ -212,34 +212,29 @@ rTypeValueVar t   = vv where F.Reft (vv,_) = rTypeReft t
 ------------------------------------------------------------------------------------------
 rTypeSort :: (PPR r) => RType r -> F.Sort
 ------------------------------------------------------------------------------------------
-rTypeSort (TApp TInt [] _) = F.FInt
-rTypeSort (TVar α _)       = F.FObj $ F.symbol α 
+rTypeSort   (TVar α _)     = F.FObj $ F.symbol α 
 rTypeSort t@(TAll _ _)     = rTypeSortForAll t 
-rTypeSort (TFun xts t _)   = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
--- rTypeSort t@(TAll _ _)     = let s = rTypeSortForAll t in 
---                              trace (ppshow t ++ " --> " ++ show (F.toFix s)) s
--- rTypeSort f@(TFun xts t _) = let s = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t] in 
---                              trace (ppshow f ++ " --> " ++ show (F.toFix s)) s
-rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
-rTypeSort (TAnd (t:_))     = rTypeSort t
-rTypeSort (TCons _ _ )     = F.FObj $ F.symbol "cons"
+rTypeSort   (TFun xts t _) = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
+rTypeSort   (TApp c ts _)  = rTypeSortApp c ts 
+rTypeSort   (TAnd (t:_))   = rTypeSort t
+rTypeSort   (TCons _ _ )   = F.FObj $ F.symbol "cons"
 rTypeSort t                = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
 
-rTypeSortApp TInt [] = F.FInt
+rTypeSortApp TInt _  = F.FInt
 rTypeSortApp TUn  _  = F.FApp (tconFTycon TUn) [] -- simplifying union sorts, the checks will have been done earlier
 rTypeSortApp c ts    = F.FApp (tconFTycon c) (rTypeSort <$> ts) 
 
 tconFTycon :: TCon -> F.FTycon 
-tconFTycon TInt      = F.intFTyCon
-tconFTycon TBool     = rawStringFTycon "Boolean"
-tconFTycon TFPBool   = F.boolFTyCon
-tconFTycon TVoid     = rawStringFTycon "Void"
-tconFTycon (TRef i)  = rawStringFTycon $ show i -- F.stringFTycon $ F.Loc (sourcePos s) (unId s)
-tconFTycon TUn       = rawStringFTycon "Union"
-tconFTycon TString   = F.strFTyCon 
-tconFTycon TTop      = rawStringFTycon "Top"
-tconFTycon TNull     = rawStringFTycon "Null"
-tconFTycon TUndef    = rawStringFTycon "Undefined"
+tconFTycon TInt         = F.intFTyCon
+tconFTycon TBool        = rawStringFTycon "Boolean"
+tconFTycon TFPBool      = F.boolFTyCon
+tconFTycon TVoid        = rawStringFTycon "Void"
+tconFTycon (TRef (s,_)) = rawStringFTycon $ F.symbolString s
+tconFTycon TUn          = rawStringFTycon "Union"
+tconFTycon TString      = F.strFTyCon
+tconFTycon TTop         = rawStringFTycon "Top"
+tconFTycon TNull        = rawStringFTycon "Null"
+tconFTycon TUndef       = rawStringFTycon "Undefined"
 
 
 rTypeSortForAll t    = genSort n θ $ rTypeSort tbody

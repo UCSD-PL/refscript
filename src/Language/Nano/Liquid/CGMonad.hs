@@ -142,14 +142,14 @@ cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
   where 
     fi   = F.FI { F.cm    = M.fromList $ F.addIds fcs  
                 , F.ws    = fws
-                , F.bs    = clear $ binds cg
-                , F.gs    = clear $ measureEnv pgm
+                , F.bs    = binds cg
+                , F.gs    = measureEnv pgm
                 , F.lits  = []
                 , F.kuts  = F.ksEmpty
-                , F.quals = clear $ nanoQualifiers pgm ++ quals cg
+                , F.quals = nanoQualifiers pgm ++ quals cg
                 }
 
-patchSymLits fi = fi { F.lits = clear $ F.symConstLits fi ++ F.lits fi }
+patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
 
 
 -- | Get binding from object type
@@ -733,8 +733,8 @@ bsplitC' g ci t1 t2
   = []
   where
     p  = F.pAnd $ guards g
-    r1 = clear $ rTypeSortedReft t1
-    r2 = clear $ rTypeSortedReft t2
+    r1 = rTypeSortedReft t1
+    r2 = rTypeSortedReft t2
 
 instance PP (F.SortedReft) where
   pp (F.RR _ b) = pp b
@@ -777,68 +777,17 @@ splitW (W _ _ t) = error $ render $ text "Not supported in splitW: " <+> pp t
 
 bsplitW g t i 
   | F.isNonTrivialSortedReft r'
-  = [F.wfC (fenv g) (clear r') Nothing i] 
+  = [F.wfC (fenv g) r' Nothing i] 
   | otherwise
   = []
   where r' = rTypeSortedReft t
 
 envTyAdds l xts = envAdds [(symbolId l x, t) | B x t <- xts]
 
-
----------------------------------------------------------------------------------------
--- | Replace all sorts with FInt
-
-
-class ClearSorts a where
-  clear :: a -> a
-
-instance ClearSorts F.BindEnv where
-  {-clear = F.mapBindEnv (mapSnd clear)-}
-  clear = id
-
-instance (ClearSorts a, ClearSorts b) => ClearSorts (a,b) where
-  {-clear (a,b) = (clear a, clear b)-}
-  clear = id
-
-instance ClearSorts a => ClearSorts [a] where
-  {-clear xs = clear <$> xs-}
-  clear = id
-
-instance ClearSorts F.SortedReft where
-  {-clear (F.RR s r) = F.RR (clear s) r-}
-  clear = id
-
-instance ClearSorts F.Sort where 
-  {-clear [>t@<]F.FInt        = F.FInt-}
-  {-clear [>t@<]F.FNum        = F.FInt-}
-  {-clear [>t@<](F.FObj _)    = F.FInt-}
-  {-clear [>t@<](F.FVar _)    = F.FInt-}
-  {-clear [>t@<](F.FFunc i s) = F.FFunc i $ clear <$> s-}
-  {-clear [>t@<](F.FApp _ _ ) = F.FInt -- F.FApp  c $ clear s-}
-  clear = id
-
-instance ClearSorts F.Symbol where
-  clear = id
-
-instance ClearSorts F.Qualifier where
-  {-clear (F.Q n p b)   = F.Q n (clear p) b -}
-  clear = id
-
-instance ClearSorts (F.SEnv F.SortedReft) where
-  {-clear = F.mapSEnvWithKey clearProp-}
-  clear = id
-
-clearProp (sy, F.RR so re) 
-  | F.symbolString sy `elem` ["TRU", "FLS", "Prop"] 
-  = (sy, F.RR so re)
-  | otherwise                   
-  = (clear sy, clear $ F.RR so re)
-
 cgFunTys l f xs ft = 
   case funTys l f xs ft of 
     Left e  -> cgError l e 
     Right a -> return a
-
 
 
 --------------------------------------------------------------------------------

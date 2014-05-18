@@ -91,18 +91,18 @@ parser.add_option("-o", "--opts", dest="opts", default="", type=str, help="addit
 parser.disable_interspersed_args()
 options, args = parser.parse_args()
 
-testDir   = "typescript"
-#testDir   = "tsc-src/compiler/core/arrayUtilities"
+#testDir   = "typescript"
+testDir   = "tsc-src/compiler/core/arrayUtilities"
 
-testSign  = [("pos", 0), ("neg", 1)]
-#testSign  = [(".", 0)]
+#testSign  = [("pos", 0), ("neg", 1)]
+testSign  = [(".", 0)]
 
 #testCategories = ["arrays", "classes", "lists", "loops", "misc", "objects",
 #                  "operators", "simple", "unions"]
 ## not included: ["proto", "typealias"]
 
-testCategories = ["arrays"]
-#testCategories = ["."]
+#testCategories = ["arrays"]
+testCategories = ["."]
 
 testdirs = [("/".join([testDir, s, c]), p) for (s, p) in testSign 
                                            for c      in testCategories ]

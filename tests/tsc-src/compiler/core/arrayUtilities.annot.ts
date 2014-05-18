@@ -2,10 +2,6 @@
 
 ///<reference path='../../../../include/prelude.ts' />
 
-/*
-   func --> f
-*/
-
 // IMPORTS BEGIN
 interface IIndexable<T> {
 	[s: string]: T;

@@ -90,7 +90,7 @@ import           Text.Printf
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -631,6 +631,7 @@ splitC (Sub g i t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _))
         cs'   <- concatMapM splitC $ safeZipWith "splitC-TRef" (Sub g i) t1s t2s
                                   -- ++ safeZipWith "splitC-TRef" (Sub g i) t2s t1s
         return $ cs ++ cs' 
+  -- TODO: Add case where i1 <: i2, this extends the above case.
   | otherwise 
   = do  cs    <- bsplitC g i t1 t2
         e1s <- (`flattenTRef` t1) <$> getDef
@@ -733,8 +734,12 @@ bsplitC' g ci t1 t2
   = []
   where
     p  = F.pAnd $ guards g
-    r1 = rTypeSortedReft t1
-    r2 = rTypeSortedReft t2
+    -- Use common sort for named type
+    (r1,r2) = sorts t1 t2
+    sorts (TApp (TRef _) _ _ ) t2@(TApp (TRef _) _ _ ) 
+      = (rTypeSortedReft t2, rTypeSortedReft t2)
+    sorts t1 t2
+      = (rTypeSortedReft t1, rTypeSortedReft t2)
 
 instance PP (F.SortedReft) where
   pp (F.RR _ b) = pp b

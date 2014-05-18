@@ -425,41 +425,41 @@
   } */ 
 var  __ddd = 1;
 
-//
-//class Errors<M> {
-//
-//  /*@ argument :: (argument: string, message: string) => #Error */
-//  public static argument(arg: string, message: string): Error {
-//    return new Error("Invalid argument: " + arg + ". " + message);
-//  }
-//
-//  /*@ argumentOutOfRange :: (arg: string) => #Error */
-//  public static argumentOutOfRange(arg: string): Error {
-//    return new Error("Argument out of range: " + arg);
-//  }
-//
-//  /*@ argumentNull :: (arg: string) => #Error */
-//  public static argumentNull(arg: string): Error {
-//    return new Error("Argument null: " + arg);
-//  }
-//
-//  /*@ abstract :: () => #Error */
-//  public static abstract(): Error {
-//    return new Error("Operation not implemented properly by subclass.");
-//  }
-//
-//  /*@ notYetImplemented :: () => #Error */
-//  public static notYetImplemented(): Error {
-//    return new Error("Not yet implemented.");
-//  }
-//
-//  /*@ invalidOperation :: (message: string) => #Error */
-//  public static invalidOperation(message?: string): Error {
-//    return new Error("Invalid operation: " + message);
-//  }
-//}
-//
-//
+
+class Errors<M> {
+
+  /*@ argument :: (argument: string, message: string) => #Error */
+  public static argument(arg: string, message: string): Error {
+    return new Error("Invalid argument: " + arg + ". " + message);
+  }
+
+  /*@ argumentOutOfRange :: (arg: string) => #Error */
+  public static argumentOutOfRange(arg: string): Error {
+    return new Error("Argument out of range: " + arg);
+  }
+
+  /*@ argumentNull :: (arg: string) => #Error */
+  public static argumentNull(arg: string): Error {
+    return new Error("Argument null: " + arg);
+  }
+
+  /*@ abstract :: () => #Error */
+  public static abstract(): Error {
+    return new Error("Operation not implemented properly by subclass.");
+  }
+
+  /*@ notYetImplemented :: () => #Error */
+  public static notYetImplemented(): Error {
+    return new Error("Not yet implemented.");
+  }
+
+  /*@ invalidOperation :: (message: string) => #Error */
+  public static invalidOperation(message?: string): Error {
+    return new Error("Invalid operation: " + message);
+  }
+}
+
+
 /*************************************************************************/
 /******************  Mutability  *****************************************/
 /*************************************************************************/

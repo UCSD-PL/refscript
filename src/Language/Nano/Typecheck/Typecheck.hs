@@ -157,6 +157,7 @@ initEnv pgm      = TCE (envUnion (specs pgm) (externs pgm)) (specs pgm)
 --   that can create or affect binders (e.g. @VarDecl@ or @Statement@)
 --   @Nothing@ means if we definitely hit a "return" 
 --   @Just γ'@ means environment extended with statement binders
+
 type TCEnvO r = Maybe (TCEnv r)
 
 

@@ -169,18 +169,17 @@ setSubst   :: RSubst r -> TCM r ()
 setSubst θ = modify $ \st -> st { tc_subst = θ }
 
 
--- Q: Do we need this anymore?
--- A: Yes! 
 -------------------------------------------------------------------------------
 addSubst :: (PPR r, IsLocated a) => a -> RSubst r -> TCM r ()
 -------------------------------------------------------------------------------
 addSubst l θ 
-  = do θ0 <- getSubst 
+  = do θ0 <- appSu θ <$> getSubst 
        case checkSubst θ0 θ of 
          [] -> return ()
          ts -> forM_ ts $ (\(t1,t2) -> tcError $ errorUnification (srcPos l) t1 t2)
        setSubst $ θ0 `mappend` θ
   where
+    appSu θ                   = fromList . (mapSnd (apply θ) <$>) . toList 
     checkSubst (Su m) (Su m') = checkIntersection m m' 
     checkIntersection m n     = catMaybes $ check <$> (M.toList $ M.intersectionWith (,) m n)
     check (k, (t,t'))         | uninstantiated k t = Nothing

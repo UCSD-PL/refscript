@@ -18,7 +18,7 @@ function distinct<T>(array: T[], equalsFn?: (a: T, b: T) => boolean): T[] {
 		}
 
 		if (j === result.length) {
-			result.push(current);
+      result.push(current);
 		}
 	}
 

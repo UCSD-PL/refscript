@@ -608,7 +608,7 @@ tcExpr γ (Cast l@(Ann loc fs) e)
 -- 
 -- Careful here! Unification is happening in `runMaybeM` so won't be effective
 -- outside unless we explicitly add the substitution to the environment. That's
--- what `addSubst` is there for.
+-- why we're adding the substitution.
 tcExpr γ (DotRef l e f) 
   = do δ            <- getDef
        (e', te)     <- tcExpr γ e

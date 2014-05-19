@@ -576,7 +576,7 @@ consCall g l fn es ft0
        case overload δ l of
          Just ft    -> do  (_,its,ot)   <- instantiate l g fn ft
                            let (su, ts') = renameBinds its xes
-                           zipWithM_ (subType l g') [envFindTy "consCall-2" x g' | x <- xes] ts'
+                           zipWithM_ (subType l g') ts ts'
                            envAddFresh "consCall" l (F.subst su ot) g'
          Nothing    -> cgError l $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> getCallable δ ft0) 
     where

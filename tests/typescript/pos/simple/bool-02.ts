@@ -1,6 +1,6 @@
 /*@ foo :: () => { void | true } */
 function foo() {
-  if ( true && true ) {
+  if ( true && false ) {
     
     assert(false);
   

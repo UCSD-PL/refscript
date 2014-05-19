@@ -90,7 +90,7 @@ import           Text.Printf
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -734,8 +734,10 @@ bsplitC' g ci t1 t2
   = []
   where
     p  = F.pAnd $ guards g
-    -- Use common sort for named type
+    -- Use common sort for top or named type
     (r1,r2) = sorts t1 t2
+    sorts t1 t2@(TApp TTop _ _ )
+      = (rTypeSortedReft t2, rTypeSortedReft t2)
     sorts (TApp (TRef _) _ _ ) t2@(TApp (TRef _) _ _ ) 
       = (rTypeSortedReft t2, rTypeSortedReft t2)
     sorts t1 t2

@@ -523,15 +523,16 @@ instance Eq TCon where
   TUn     == TUn     = True
   TNull   == TNull   = True
   TUndef  == TUndef  = True
+  TFPBool == TFPBool = True
   _       == _       = False
  
--- This is not about the refinements - I'm stripping all the refinement 
+-- This is not about the refinements - stripping all the refinement 
 -- equality checks from here.
 instance Eq (RType r) where
   TApp TUn t1 _ == TApp TUn t2 _  = (null $ t1 L.\\ t2) && (null $ t2 L.\\ t1)
   TApp c1 t1s _ == TApp c2 t2s _  = (c1, t1s) == (c2, t2s)
   TVar v1 _     == TVar v2 _      = v1        == v2
-  TFun b1 t1 _  == TFun b2 t2 _   = (b1, t1)  == (b2, t2)
+  TFun b1 t1 _  == TFun b2 t2 _   = (b_type <$> b1, t1)  == (b_type <$> b2, t2)
   TAll v1 t1    == TAll v2 t2     = v1 == v2 && t1 == t2   -- Very strict Eq here
   TAnd t1s      == TAnd t2s       = t1s == t2s
   _             == _              = False

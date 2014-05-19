@@ -426,6 +426,7 @@ unionParts' eq t1 t2 = (common t1s t2s, d1s, d2s)
 strengthen                   :: F.Reftable r => RType r -> r -> RType r
 ---------------------------------------------------------------------------------
 strengthen (TApp c ts r) r'  = TApp c ts $ r' `F.meet` r 
+strengthen (TCons ts r)  r'  = TCons ts  $ r' `F.meet` r 
 strengthen (TVar α r)    r'  = TVar α    $ r' `F.meet` r 
 strengthen t _               = t                         
 

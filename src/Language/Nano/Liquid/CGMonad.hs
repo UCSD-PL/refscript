@@ -315,7 +315,7 @@ addInvariant t             = tagStrn <$> ((`tx` t) . invs) <$> get
     strengthenOp t o r     | L.elem r (ofRef o) = t
     strengthenOp t _ r     | otherwise          = strengthen t r
     ofRef (F.Reft (s, as)) = (F.Reft . (s,) . single) <$> as
-    tagStrn t              = t `strengthen` (tagR t)
+    tagStrn t              = t `strengthen` tagR t
 
 
 ---------------------------------------------------------------------------------------

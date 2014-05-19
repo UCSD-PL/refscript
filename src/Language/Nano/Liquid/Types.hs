@@ -449,7 +449,7 @@ zipBind _ _ _ _       _
 --------------------------------------------------------------------------------
 tagR                        :: RType F.Reft -> F.Reft
 --------------------------------------------------------------------------------
-tagR t                       = predReft (rTypeValueVar t) $ por ps
+tagR t                       = predReft (rTypeValueVar t) $ F.pOr ps -- por ps
   where
     por []                   = F.PTrue
     por [p]                  = p

@@ -1,12 +1,9 @@
 
 // IMPORTS BEGIN
-
 interface Indexable<T> {
 	[s: string]: T;
 }
-
 // IMPORTS END
-
 
 /*@ groupBy :: forall T . (array: #Array[#Immutable,T], f: (T)=>string) 
             => { #Indexable[ #Array[#Mutable,T] ] | true } */

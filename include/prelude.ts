@@ -97,11 +97,13 @@
 
 // FIXME: the two version of inequality should not be the same...
 
-/*@ extern builtin_OpLAnd      :: (x:top, y:top)         => {v:top | ((Prop v) <=> (if (TRU(x)) then (v = y) else (v = x) ))}     */
+/*@ extern builtin_OpLAnd      :: /\ forall A   . (x:A, y:A)  => { v:A   | (if (Prop(x)) then (v = y) else (v = x)) }
+                                  /\ forall A B . (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) && Prop(y))) } */
+      
+/*@ extern builtin_OpLOr       :: /\ forall A   . (x:A, y:A)  => { v:A   | (if (FLS(x)) then (v = y) else (v = x)) } 
+                                  /\ forall A B . (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) || Prop(y))) } */
 
-/*@ extern builtin_OpLOr       :: forall A . (x:A, y:A)  => {v:A   | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))}     */
-
-/*@ extern builtin_PrefixLNot  :: forall A . (x: A)      => {v:boolean | (((Prop v) <=> not TRU(x)) && ((Prop v) <=> FLS(x)))}     */
+/*@ extern builtin_PrefixLNot  :: forall A . (x: A)      => {v:boolean | (((Prop v) <=> not Prop(x)) && ((Prop v) <=> FLS(x)))} */
 
 /*@ extern builtin_PrefixBNot  :: (x: number)            => {v:number | v = 0 - (x + 1) }           */
 
@@ -341,30 +343,26 @@
 
 /*@ measure ttag :: forall A . (A) => string                             */
 
-/*@ measure TRU  :: forall A . (A) => bool                               */
-
 /*@ measure FLS  :: forall A . (A) => bool                               */
 
 /*@ measure Prop :: forall A . (A) => bool                               */
 
 
-
 /*@ extern builtin_PrefixTypeof :: forall A. (x:A) 
-                                    => {v:string | (ttag x) = v }             */
+                                => {v:string | (ttag x) = v }            */
 
 /*@ extern builtin_BITruthy :: forall A. (x:A) 
-                                  => { v:boolean | ((Prop v) <=> TRU(x)) }    */
+                            => { v:boolean | ((Prop v) <=> Prop(x)) }    */
 
 /*@ extern builtin_BIFalsy :: forall A. (x:A) 
-                                  => { v:boolean | ((Prop v) <=> FLS(x)) }    */
+                           => { v:boolean | ((Prop v) <=> FLS(x)) }      */
 
-/*@ invariant           {v:undefined | [not (TRU(v))        ]} */
-/*@ invariant           {v:null      | [not (TRU(v))        ]} */
-/*@ invariant           {v:boolean   | [(TRU(v) <=> Prop(v))]} */ 
-/*@ invariant           {v:number    | [(TRU(v) <=> v /= 0 )]} */
-/*@ invariant           {v:string    | [(TRU(v) <=> v /= "")]} */
-/*  invariant forall A. {v:[A]       |                       } */
-/*  invariant           {v:{}        |                       } */
+/*@ invariant           {v:undefined | [not (Prop(v))        ]}          */
+/*@ invariant           {v:null      | [not (Prop(v))        ]}          */
+/*  invariant           {v:boolean   | [(Prop(v) <=> Prop(v))]}          */ 
+/*@ invariant           {v:number    | [((Prop(v) <=> v /= 0) 
+                                     &&  (FLS(v)  <=> v  = 0))]}         */
+/*@ invariant           {v:string    | [(Prop(v) <=> v /= "")]}          */
 
 
 

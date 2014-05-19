@@ -14,8 +14,8 @@
 /*************************************************************************/
 /*@ extern builtin_BIBracketRef     ::
 /\ forall A. (arr: #Array[#Immutable,A], {idx:number | (0 <= idx && idx < (len arr))}) => A
-/\ forall A. (arr: #Array[#Mutable, A],  idx:number                                 ) => A?
-/\ forall A. ({[y: string]: A }       ,    x:string                                  ) => A      */
+/\ forall A. (arr: #Array[#Mutable, A ],  idx:number                                 ) => A?
+/\ forall A. ({[y: string]: A }        ,   x:string                                  ) => A      */
 /*@ extern builtin_BIBracketAssign  ::
 /\ forall A. (arr: #Array[#Immutable, A], {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
 /\ forall A. (arr: #Array[#ReadOnly , A],  idx:number                                 , val: A) => void
@@ -64,9 +64,10 @@
 /*@ extern builtin_OpNEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */
 /*@ extern builtin_OpSNEq      :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */
 // FIXME: the two version of inequality should not be the same...
-/*@ extern builtin_OpLAnd      :: (x:top, y:top)         => {v:top | ((Prop v) <=> (if (TRU(x)) then (v = y) else (v = x) ))}     */
-/*@ extern builtin_OpLOr       :: forall A . (x:A, y:A)  => {v:A   | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))}     */
-/*@ extern builtin_PrefixLNot  :: forall A . (x: A)      => {v:boolean | (((Prop v) <=> not TRU(x)) && ((Prop v) <=> FLS(x)))}     */
+/*@ extern builtin_OpLAnd      :: /\ forall A   . (x:A, y:A)  => {v:A   | (if (TRU(x)) then (v = y) else (v = x)) }
+/\ forall A B . (x:A, y:B)  => top  */
+/*@ extern builtin_OpLOr       :: forall A . (x:A, y:A)  => {v:A | ((Prop v) <=> (if (FLS(x)) then (v = y) else (v = x) ))} */
+/*@ extern builtin_PrefixLNot  :: forall A . (x: A)      => {v:boolean | (((Prop v) <=> not TRU(x)) && ((Prop v) <=> FLS(x)))} */
 /*@ extern builtin_PrefixBNot  :: (x: number)            => {v:number | v = 0 - (x + 1) }           */
 /*************************************************************************
 Ambient Definitions
@@ -82,9 +83,8 @@ hasOwnProperty      : (v: string) => boolean;
 isPrototypeOf       : forall A . (v: A) => boolean;
 propertyIsEnumerable: (v: string) => boolean;
 } */
-/*  TODO:
-constructor: Function;
-*/
+////TODO:
+//constructor: Function;
 /*@ extern Object :: {
 new forall A . (value: A) => #Object;
 forall A .     (value: A) => top;
@@ -93,21 +93,37 @@ getPrototypeOf      : forall A . (o: A) => top;
 getOwnPropertyNames : forall A . (o: A) => [string];
 keys                : forall A . (o: A) => [string];
 } */
-/*  TODO:
-(): any;
-getOwnPropertyDescriptor(o: any, p: string): PropertyDescriptor;
-create(o: any, properties?: PropertyDescriptorMap): any;
-defineProperty(o: any, p: string, attributes: PropertyDescriptor): any;
-defineProperties(o: any, properties: PropertyDescriptorMap): any;
-seal(o: any): any;
-freeze(o: any): any;
-preventExtensions(o: any): any;
-isSealed(o: any): boolean;
-isFrozen(o: any): boolean;
-isExtensible(o: any): boolean;
-*/
+////TODO:
+//(): any;
+//getOwnPropertyDescriptor(o: any, p: string): PropertyDescriptor;
+//create(o: any, properties?: PropertyDescriptorMap): any;
+//defineProperty(o: any, p: string, attributes: PropertyDescriptor): any;
+//defineProperties(o: any, properties: PropertyDescriptorMap): any;
+//seal(o: any): any;
+//freeze(o: any): any;
+//preventExtensions(o: any): any;
+//isSealed(o: any): boolean;
+//isFrozen(o: any): boolean;
+//isExtensible(o: any): boolean;
 /*** Number **************************************************************/
-/*@ extern NumberC :: (x: top) => number */
+// TODO: create special constant values for NaN, MIN_VALUE, etc...
+/*@ extern Number :: {
+new forall A . (value: A) => #Number;
+forall A . (value: A) => number;
+prototype        : #Number;
+MAX_VALUE        : number;
+MIN_VALUE        : number;
+NaN              : number;
+NEGATIVE_INFINITY: number;
+POSITIVE_INFINITY: number;
+} */
+/*@ interface Number {
+toString        : /\ (radix: number) => string
+/\ () => string;
+toFixed         : (fractionDigits: number) => string;
+toExponential   : (fractionDigits: number) => string;
+toPrecision     : (precision: number) => string
+} */
 /*** Math ****************************************************************/
 /*@ extern Math :: {
 E       : number;
@@ -160,30 +176,28 @@ trim              : () => string;
 length            : { number | v >= 0 };
 substr            : (from: number, length: number) => string
 } */
-/*** Number **************************************************************/
-/*@ extern Number :: {
-toString        :  /\ (radix: number) => string
-/\ () => string;
-toFixed         : (fractionDigits: number) => string;
-toExponential   : (fractionDigits: number) => string;
-toPrecision     : (precision: number) => string
-} */
 /*** Array ***************************************************************/
 /*@ measure len      :: forall M A . (#Array[M,A]) => number             */
 /*@ interface Array<M,T> {
 toString       : () => string;
 toLocaleString : () => string;
-concat [#Array[#Immutable,T]] : /\ (items: #Array[#Immutable,T]) => { #Array[#Immutable,T] | (len v) = (len this) + (len items) }
+concat  [#Array[#Immutable,T]]
+: /\ (items: #Array[#Immutable,T]) => { #Array[#Immutable,T] | (len v) = (len this) + (len items) }
 /\ forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
-concat [#Array[#ReadOnly ,T]] :    forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
+concat  [#Array[#ReadOnly ,T]]
+: forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
 join           : (separator: string) => string;
-pop    [#Array[#Mutable,  T]] : () => T;
-push   [#Array[#Mutable,  T]] : (items: T) => number;
-reverse[#Array[M,T]]          : () => #Array[M,T];
+pop     [#Array[#Mutable,  T]]
+: () => T;
+push    [#Array[#Mutable,  T]]
+: (items: T) => number;
+reverse [#Array[M,T]]
+: () => #Array[M,T];
 shift          : () => T;
 slice          : /\ forall N . (start: number)              => #Array[N,T]
 /\ forall N . (start: number, end: number) => #Array[N,T];
-sort   [#Array[#Mutable,  T]] : (compareFn: (a: T, b: T) => number) => #Array[#Immutable,T];
+sort    [#Array[#Mutable,  T]]
+: (compareFn: (a: T, b: T) => number) => #Array[#Immutable,T];
 splice         :  /\ (start: number) => #Array[#Immutable,T]
 /\ (start: number, deleteCount: number, items: #Array[#Immutable,T]) => #Array[#Immutable,T];
 unshift        : (items: #Array[#Immutable,T]) => number;
@@ -192,39 +206,35 @@ lastIndexOf    : (searchElement: T, fromIndex: number) => number;
 every          : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => boolean) => boolean;
 some           : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => boolean) => boolean;
 forEach        : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => void) => void;
-map            : forall U . (callbackfn: (value: T) => U) => [U];
+map            : forall U . (callbackfn: (value: T) => U) => #Array[#Immutable, U];
 filter         : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => boolean) => #Array[#Immutable,T];
 reduce         : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: #Array[#Immutable,T]) => T, initialValue: T) => T;
 reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: #Array[#Immutable,T]) => T, initialValue: T) => T;
-length [#Array[#Immutable,T]] : { v: number | (v = (len this) && v >= 0) };
+length  [#Array[#Immutable,T]]
+: { v: number | (v = (len this) && v >= 0) };
 length         : { v: number | (v >= 0) };
-}
-*/
-/*
-//TODO
-reduce         :  /\ (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T
-/\ forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U;
-reduceRight    :  /\ (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T
-/\ forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U;
-[x: number]    : T;
-*/
+} */
+////TODO
+//reduce         :  /\ (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T
+//                  /\ forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U;
+//reduceRight    :  /\ (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T
+//                  /\ forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U;
+//[x: number]    : T;
 /*@ extern Array :: {
 new forall M T . (arrayLength: number) => { v: #Array[M,T] | (len v) = arrayLength } ;
 forall M T     . (arrayLength: number) => { v: #Array[M,T] | (len v) = arrayLength } ;
 isArray  : /\ forall M T . (arg: #Array[M,T]) => { v: boolean | Prop(v) }
 /\ forall A   . (arg: A)           => boolean ;
 } */
-/*
-//TODO
-prototype: Array<any>;
-*/
+////TODO
+//prototype: Array<any>;
 /*************************************************************************/
 /************** Run-Time Tags ********************************************/
 /*************************************************************************/
-/*@ measure ttag :: forall A. (A) => string                                   */
-/*@ measure TRU  :: forall A . (A) => bool                                    */
-/*@ measure FLS  :: forall A . (A) => bool                                    */
-/*@ measure Prop :: forall A . (A) => bool                                    */
+/*@ measure ttag :: forall A . (A) => string                             */
+/*@ measure TRU  :: forall A . (A) => bool                               */
+/*@ measure FLS  :: forall A . (A) => bool                               */
+/*@ measure Prop :: forall A . (A) => bool                               */
 /*@ extern builtin_PrefixTypeof :: forall A. (x:A)
 => {v:string | (ttag x) = v }             */
 /*@ extern builtin_BITruthy :: forall A. (x:A)
@@ -280,6 +290,41 @@ new (message: string) => #Error;
 prototype: #Error;
 } */
 var __ddd = 1;
+
+var Errors = (function () {
+    function Errors() {
+    }
+    /*@ argument :: (argument: string, message: string) => #Error */
+    Errors.argument = function (arg, message) {
+        return new Error("Invalid argument: " + arg + ". " + message);
+    };
+
+    /*@ argumentOutOfRange :: (arg: string) => #Error */
+    Errors.argumentOutOfRange = function (arg) {
+        return new Error("Argument out of range: " + arg);
+    };
+
+    /*@ argumentNull :: (arg: string) => #Error */
+    Errors.argumentNull = function (arg) {
+        return new Error("Argument null: " + arg);
+    };
+
+    /*@ abstract :: () => #Error */
+    Errors.abstract = function () {
+        return new Error("Operation not implemented properly by subclass.");
+    };
+
+    /*@ notYetImplemented :: () => #Error */
+    Errors.notYetImplemented = function () {
+        return new Error("Not yet implemented.");
+    };
+
+    /*@ invalidOperation :: (message: string) => #Error */
+    Errors.invalidOperation = function (message) {
+        return new Error("Invalid operation: " + message);
+    };
+    return Errors;
+})();
 
 
 var __dummy__ = null;

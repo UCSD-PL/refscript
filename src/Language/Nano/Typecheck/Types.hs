@@ -167,7 +167,7 @@ data TElt t    = CallSig  {                                                  f_t
                           , f_this :: Maybe t   -- Required object type
                           , f_type :: t }       -- Method Signature
 
-  deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+  deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
 -- | Type definition environment
@@ -330,6 +330,9 @@ bkUnion (TApp TUn xs _) = xs
 bkUnion t               = [t]
 
 
+-- XXX: Is this really necessary anymore ???
+
+
 -- | Type equivalence: This relation corresponds to equality on the raw type
 -- level, modulo reordering on the parts of union types.
 class Equivalent a where 
@@ -350,8 +353,7 @@ instance Equivalent (RType r) where
       go _ []  = False
   equiv (TApp c ts _) (TApp c' ts' _) = c `equiv` c' && ts `equiv` ts'
   equiv (TVar v _   ) (TVar v' _    ) = v == v'
-  equiv (TFun b o _ ) (TFun b' o' _ ) = 
-    (b_type <$> b) `equiv` (b_type <$> b') && o `equiv` o' 
+  equiv (TFun b o _ ) (TFun b' o' _ ) = on equiv (b_type <$>) b b' && o `equiv` o' 
   equiv (TAll _ _   ) (TAll _ _     ) = error "equiv-tall"
   equiv (TExp _     ) (TExp   _     ) = error "equiv-texp"
   equiv _             _               = False
@@ -362,7 +364,7 @@ instance Equivalent TCon where
 
 instance Equivalent (TElt (RType r)) where 
   equiv (PropSig f1 s1 m1 τ1 t1) (PropSig f2 s2 m2 τ2 t2) = 
-    (f1,m1,s1) == (f2,m2,s2) && equiv t1 t2 && equiv t1 t2
+    (f1,m1,s1) == (f2,m2,s2) && equiv τ1 τ2 && equiv t1 t2
   equiv (CallSig t1)          (CallSig t2)          = equiv t1 t2
   equiv (ConsSig t1)          (ConsSig t2)          = equiv t1 t2
   equiv (IndexSig _ b1 t1)    (IndexSig _ b2 t2)    = b1 == b2 && equiv t1 t2
@@ -527,8 +529,8 @@ instance Eq TCon where
   TFPBool == TFPBool = True
   _       == _       = False
  
--- This is not about the refinements - stripping all the refinement 
--- equality checks from here.
+
+-- Ignoring refinements in equality check
 instance Eq (RType r) where
   TApp TUn t1 _ == TApp TUn t2 _  = (null $ t1 L.\\ t2) && (null $ t2 L.\\ t1)
   TApp c1 t1s _ == TApp c2 t2s _  = (c1, t1s) == (c2, t2s)
@@ -536,7 +538,18 @@ instance Eq (RType r) where
   TFun b1 t1 _  == TFun b2 t2 _   = (b_type <$> b1, t1)  == (b_type <$> b2, t2)
   TAll v1 t1    == TAll v2 t2     = v1 == v2 && t1 == t2   -- Very strict Eq here
   TAnd t1s      == TAnd t2s       = t1s == t2s
+  TCons e1s _   == TCons e2s _    = and [ e1 == e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ]
   _             == _              = False
+
+
+instance Eq t => Eq (TElt t) where 
+  PropSig f1 s1 m1 τ1 t1 == PropSig f2 s2 m2 τ2 t2 = (f1,m1,s1,τ1,t1) == (f2,m2,s2,τ2,t2)
+  CallSig t1             == CallSig t2             = t1 == t2
+  ConsSig t1             == ConsSig t2             = t1 == t2
+  IndexSig _ b1 t1       == IndexSig _ b2 t2       = (b1,t1) == (b2,t2)
+  MethSig f1 s1 τ1 t1    == MethSig f2 s2 τ2 t2    = (f1,s1,τ1,t1) == (f2,s2,τ2,t2)
+  _                      == _                      = False
+ 
 
 
 ---------------------------------------------------------------------------------

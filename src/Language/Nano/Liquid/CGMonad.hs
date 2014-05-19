@@ -403,7 +403,6 @@ envRemSpec     :: (IsLocated x, F.Symbolic x, F.Expression x, PP x)
                => x -> CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 envRemSpec x g = do 
-      -- gls   <- concat . maybeToList . M.lookup (F.symbol x) . globs <$> get
       gls   <- concat . M.elems . globs <$> get
       return $ g { cge_spec = E.envDel x $ cge_spec g 
                  , renv     = E.envDel x $ renv     g
@@ -736,10 +735,12 @@ bsplitC' g ci t1 t2
     p  = F.pAnd $ guards g
     -- Use common sort for top or named type
     (r1,r2) = sorts t1 t2
-    sorts t1 t2@(TApp TTop _ _ )
-      = (rTypeSortedReft t2, rTypeSortedReft t2)
-    sorts (TApp (TRef _) _ _ ) t2@(TApp (TRef _) _ _ ) 
-      = (rTypeSortedReft t2, rTypeSortedReft t2)
+
+-- BUGGY!!!
+--     sorts t1 t2@(TApp TTop _ _ )
+--       = (rTypeSortedReft t2, rTypeSortedReft t2)
+--     sorts (TApp (TRef _) _ _ ) t2@(TApp (TRef _) _ _ ) 
+--       = (rTypeSortedReft t2, rTypeSortedReft t2)
     sorts t1 t2
       = (rTypeSortedReft t1, rTypeSortedReft t2)
 

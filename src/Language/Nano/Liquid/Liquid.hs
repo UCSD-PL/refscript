@@ -580,7 +580,9 @@ consCall g l fn es ft0
                            envAddFresh "consCall" l (F.subst su ot) g'
          Nothing    -> cgError l $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> getCallable δ ft0) 
     where
-       overload δ l  = listToMaybe [ t | Overload t <- ann_fact l ]
+       overload δ l  = listToMaybe [ lt | Overload t <- ann_fact l 
+                                        , lt         <- getCallable δ ft0
+                                        , on (==) toType t lt ]
 
 ---------------------------------------------------------------------------------
 instantiate :: (PP a, PPRS F.Reft) => 

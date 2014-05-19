@@ -452,7 +452,8 @@ tagR                        :: RType F.Reft -> F.Reft
 tagR t                       = predReft (rTypeValueVar t) $ por ps
   where
     por []                   = F.PTrue
-    por ps                   = F.pOr ps
+    por [p]                  = p
+    por ps                   = F.POr ps
     predReft v p             = F.Reft (v, [F.RConc $ F.prop p])
     ps                       = F.PAtom F.Eq tagCall <$> tagStrs
     tagCall                  = F.EApp tagSym [v]
@@ -466,8 +467,8 @@ tagR t                       = predReft (rTypeValueVar t) $ por ps
     tof (TApp TString _ _)   = ["string"]
     tof (TApp TNull _ _)     = ["object"]
     tof (TApp (TRef _ ) _ _) = ["object"]
+    tof (TCons _   _ )       = ["object"]
     tof (TApp TUn ts _)      = [] -- concatMap tof ts
     tof (TApp TUndef _ _ )   = ["undefined"]
-    tof (TCons _   _ )       = ["object"]
     tof _                    = []
 

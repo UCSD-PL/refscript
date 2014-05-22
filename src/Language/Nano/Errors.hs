@@ -155,7 +155,7 @@ errorStrictSubtype l      = mkErr l $ printf "Strict subtyping needed"
 
 errorTypeArgsNum l n p q  = mkErr l $ printf "Type %s expects %s arguments but %s were provided" (ppshow n) (ppshow p) (ppshow q)
 
-errorSigNotFound l e es   = mkErr l $ printf "Could not find a matching signature for call to %s with arguments %s" (ppshow e) (ppshow es)
+errorSigNotFound l e es   = mkErr l $ printf "Could not find a matching signature for call to '%s' with arguments '%s'" (ppshow e) (ppshow es)
 errorCallNotSup l fn es   = mkErr l $ printf "Cannot call '%s' with argument(s): %s" (ppshow fn) (ppshow es)
 errorCallMatch l fn ts    = mkErr l $ printf "Could not match call to '%s' to a particular signature. Argument(s) with types '%s' are invalid." (ppshow fn) (ppshow ts)
 

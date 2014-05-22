@@ -776,13 +776,18 @@ tcCallMatch γ l fn es ft0
          Nothing      -> return Nothing
 
 
+-- When resolving an overload there are two prossible cases:
+--   * There is only a single signature available: then return just this
+--     signature regardless of subtyping constraints
+--   * There are more than one signature available: return all that pass the
+--     subtype check (this is what tcCallCaseTry does).
 resolveOverload γ l fn es ts ft 
   = do δ       <- getDef
        let sigs = catMaybes (bkFun <$> getCallable δ ft)
-       let fts  = [ mkFun (vs, ts,t) | (vs, ts, t) <- sigs
-                                     , length ts == length es ]
-       θs      <- mapM (tcCallCaseTry γ l fn ts) fts
-       return   $ listToMaybe [ (θ, apply θ t) | (t, Just θ) <- zip fts θs ]
+       case [ mkFun (vs, ts,t) | (vs, ts, t) <- sigs, length ts == length es ] of
+         [t] -> getSubst >>= return  . Just . (,t)
+         fts -> do θs    <- mapM (tcCallCaseTry γ l fn ts) fts
+                   return $ listToMaybe [ (θ, apply θ t) | (t, Just θ) <- zip fts θs ]
 
 
 -- | A successful pairing of formal to actual parameters will return `Just θ`,

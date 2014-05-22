@@ -59,7 +59,7 @@ module Language.Nano.Liquid.Types (
   , zipType
 
   -- Tag 
-  , tagR
+  -- , tagR
 
 
   ) where
@@ -446,29 +446,29 @@ zipBind _ _ _ _       _
 
 
 -- | Tags 
---------------------------------------------------------------------------------
-tagR                        :: RType F.Reft -> F.Reft
---------------------------------------------------------------------------------
-tagR t                       = predReft (rTypeValueVar t) $ F.pOr ps -- por ps
-  where
-    por []                   = F.PTrue
-    por [p]                  = p
-    por ps                   = F.POr ps
-    predReft v p             = F.Reft (v, [F.RConc $ F.prop p])
-    ps                       = F.PAtom F.Eq tagCall <$> tagStrs
-    tagCall                  = F.EApp tagSym [v]
-    v                        = F.EVar $ rTypeValueVar t
-    tagStrs                  = F.expr . F.symbol . ("lit#" ++) <$> tof t
-    tagSym                   = F.Loc F.dummyPos (F.symbol "ttag")
-    tof                     :: RefType -> [String]
-    tof t | isTFun t         = ["function"]
-    tof (TApp TInt _ _)      = ["number"]
-    tof (TApp TBool _ _)     = ["boolean"]
-    tof (TApp TString _ _)   = ["string"]
-    tof (TApp TNull _ _)     = ["object"]
-    tof (TApp (TRef _ ) _ _) = ["object"]
-    tof (TCons _   _ )       = ["object"]
-    tof (TApp TUn ts _)      = [] -- concatMap tof ts
-    tof (TApp TUndef _ _ )   = ["undefined"]
-    tof _                    = []
-
+-- --------------------------------------------------------------------------------
+-- tagR                        :: RType F.Reft -> F.Reft
+-- --------------------------------------------------------------------------------
+-- tagR t                       = predReft (rTypeValueVar t) $ F.pOr ps -- por ps
+--   where
+--     por []                   = F.PTrue
+--     por [p]                  = p
+--     por ps                   = F.POr ps
+--     predReft v p             = F.Reft (v, [F.RConc $ F.prop p])
+--     ps                       = F.PAtom F.Eq tagCall <$> tagStrs
+--     tagCall                  = F.EApp tagSym [v]
+--     v                        = F.EVar $ rTypeValueVar t
+--     tagStrs                  = F.expr . F.symbol . ("lit#" ++) <$> tof t
+--     tagSym                   = F.Loc F.dummyPos (F.symbol "ttag")
+--     tof                     :: RefType -> [String]
+--     tof t | isTFun t         = ["function"]
+--     tof (TApp TInt _ _)      = ["number"]
+--     tof (TApp TBool _ _)     = ["boolean"]
+--     tof (TApp TString _ _)   = ["string"]
+--     tof (TApp TNull _ _)     = ["object"]
+--     tof (TApp (TRef _ ) _ _) = ["object"]
+--     tof (TCons _   _ )       = ["object"]
+--     tof (TApp TUn ts _)      = [] -- concatMap tof ts
+--     tof (TApp TUndef _ _ )   = ["undefined"]
+--     tof _                    = []
+-- 

@@ -30,10 +30,10 @@ module Language.Nano.Liquid.CGMonad (
   , freshTyPhisWhile, freshTyObj
 
   -- * Freshable
-  , Freshable (..)
+  , Freshable (..), refreshValueVar
 
   -- * Environment API
-  , envAddFresh, envAdds, envAddGlobs, envAddReturn, envAddGuard, envFindTy
+  , envAddFresh, envAdds, envAddReturn, envAddGuard, envFindTy
   , envGlobAnnot, envFieldAnnot
   , envRemSpec, isGlobalVar, envToList, envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs, arrayQualifiers
@@ -65,6 +65,7 @@ import qualified Data.HashMap.Strict            as M
 import qualified Data.List                      as L
 import           Data.Function                  (on)
 import           Text.PrettyPrint.HughesPJ
+import qualified Data.Traversable                   as T 
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import qualified Language.Nano.Annots           as A
@@ -245,11 +246,11 @@ envGetContextTypArgs g a αs
 
 
 ---------------------------------------------------------------------------------------
-envAddFresh :: (IsLocated l) => String -> l -> RefType -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 
+envAddFresh :: (IsLocated l) => l -> RefType -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 
 ---------------------------------------------------------------------------------------
-envAddFresh _ l t g 
+envAddFresh l t g 
   = do x  <- freshId loc
-       g' <- envAdds [(x, t)] g
+       g' <- envAdds False [(x, t)] g
        addAnnot (srcPos l) x t
        return (x, g')
     where loc = srcPos l
@@ -258,30 +259,20 @@ freshId l = Id (Ann l []) <$> fresh
 
 
 ---------------------------------------------------------------------------------------
-envAdds      :: (F.Symbolic x, IsLocated x) => [(x, RefType)] -> CGEnv -> CGM CGEnv
+envAdds      :: (PP x, F.Symbolic x, IsLocated x) => Bool -> [(x, RefType)] -> CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAdds xts' g
-  = do xts    <- zip xs  <$> mapM addInvariant ts
-       is     <- forM xts $  addFixpointBind 
-       _      <- forM xts $  \(x, t) -> addAnnot (srcPos x) x t
-       return  $ g { renv  = E.envAdds xts        (renv g) } 
-                   { fenv  = F.insertsIBindEnv is (fenv g) }
+envAdds glob xts' g
+  = do xts      <- zip xs  <$> mapM addInvariant ts
+      -- (tracePP (concat $ map (\x -> ppshow x ++ " E:" ++ ppshow (exists x g) ++ " ") xs) ts)
+       is       <- forM xts $  addFixpointBind 
+       _        <- forM xts $  \(x, t) -> addAnnot (srcPos x) x t
+       when glob $ forM_ (zip xs is) addGlobBind
+
+       return    $ g { renv  = E.envAdds xts        (renv g) } 
+                     { fenv  = F.insertsIBindEnv is (fenv g) }
     where 
        (xs,ts) = unzip xts'
-
-
----------------------------------------------------------------------------------------
-envAddGlobs  :: (F.Symbolic x, IsLocated x) => [(x, RefType)] -> CGEnv -> CGM CGEnv
----------------------------------------------------------------------------------------
-envAddGlobs xts' g
-  = do xts    <- zip xs  <$> mapM addInvariant ts
-       is     <- forM xts $  addFixpointBind 
-       _      <- forM xts $  \(x, t) -> addAnnot (srcPos x) x t
-       _      <- forM (zip xs is) addGlobBind
-       return  $ g { renv  = E.envAdds xts        (renv g) } 
-                   { fenv  = F.insertsIBindEnv is (fenv g) }
-    where 
-       (xs,ts) = unzip xts'
+       exists x g = E.envMem x (renv g) 
 
 
 ---------------------------------------------------------------------------------------
@@ -308,14 +299,14 @@ addFixpointBind (x, t)
 ---------------------------------------------------------------------------------------
 addInvariant              :: RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
-addInvariant t             = tagStrn <$> ((`tx` t) . invs) <$> get
+addInvariant t             = {- tagStrn <$> -} ((`tx` t) . invs) <$> get
   where 
     tx i t@(TApp tc _ o)   = maybe t (\i -> strengthenOp t o $ rTypeReft $ val i) $ M.lookup tc i
     tx _ t                 = t 
     strengthenOp t o r     | L.elem r (ofRef o) = t
     strengthenOp t _ r     | otherwise          = strengthen t r
     ofRef (F.Reft (s, as)) = (F.Reft . (s,) . single) <$> as
-    tagStrn t              = t `strengthen` tagR t
+    -- tagStrn t              = t `strengthen` tagR t
 
 
 ---------------------------------------------------------------------------------------
@@ -376,10 +367,9 @@ envAddGuard x b g = g { guards = guard b x : guards g }
 --   * Class names (they might contain static fields)
 --   * Local (non-assignable) variables (strengthened with singleton for base-types)
 ---------------------------------------------------------------------------------------
-envFindTy     :: (IsLocated x, F.Symbolic x, F.Expression x) 
-              => String -> x -> CGEnv -> RefType 
+envFindTy :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
 ---------------------------------------------------------------------------------------
-envFindTy msg x g = fromMaybe err $ listToMaybe $ catMaybes [globalSpec, className, local]
+envFindTy x g = fromMaybe err $ listToMaybe $ catMaybes [globalSpec, className, local]
   where 
     -- Check for global spec
     globalSpec  | isJust $ E.envFindTy x $ cge_spec g = E.envFindTy x $ renv g
@@ -390,7 +380,7 @@ envFindTy msg x g = fromMaybe err $ listToMaybe $ catMaybes [globalSpec, classNa
         _                   -> Nothing 
     -- Check for local variable
     local       = fmap (`eSingleton` x) $ E.envFindTy x $ renv g
-    err         = throw $ bugUnboundVariable (srcPos x) msg (F.symbol x) 
+    err         = throw $ bugUnboundVariable (srcPos x) (F.symbol x) 
 
 
 envGlobAnnot _ x g = E.envFindTy x $ renv g
@@ -464,7 +454,7 @@ freshTyPhis :: (PP l, IsLocated l) => l -> CGEnv -> [Id l] -> [Type] -> CGM (CGE
 ---------------------------------------------------------------------------------------
 freshTyPhis l g xs τs 
   = do ts <- mapM    (freshTy "freshTyPhis")  τs
-       g' <- envAdds (safeZip "freshTyPhis" xs ts) g
+       g' <- envAdds False (safeZip "freshTyPhis" xs ts) g
        _  <- mapM    (wellFormed l g') ts
        return (g', ts)
 
@@ -473,7 +463,7 @@ freshTyPhisWhile :: (PP l, IsLocated l) => l -> CGEnv -> [Id l] -> [Type] -> CGM
 ---------------------------------------------------------------------------------------
 freshTyPhisWhile l g xs τs 
   = do ts <- mapM    (freshTy "freshTyPhis")  τs
-       g' <- envAdds (safeZip "freshTyPhis" xs ts) g
+       g' <- envAdds False (safeZip "freshTyPhis" xs ts) g
        _  <- mapM    (wellFormed l g) ts
        return (g', ts)
 
@@ -491,10 +481,9 @@ freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g
 subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 =
-  do t1'   <- addInvariant t1
-     t2'   <- addInvariant t2
-     g'    <- envAdds [(symbolId l x, t) | (x, Just t) <- rNms t1' ++ rNms t2' ] g
-     modify $ \st -> st {cs = c g' (t1', t2') : (cs st)}
+  do t1'   <- addInvariant t1  -- enhance LHS with invariants
+     g'    <- envAdds False [(symbolId l x, t) | (x, Just t) <- rNms t1' ++ rNms t2 ] g
+     modify $ \st -> st {cs = c g' (t1', t2) : (cs st)}
   where
     c g     = uncurry $ Sub g (ci l)
     rNms t  = (\n -> (n, n `E.envFindTy` renv g)) <$> names t
@@ -565,6 +554,16 @@ trueRefType    = mapReftM true
 
 refreshRefType :: RefType -> CGM RefType
 refreshRefType = mapReftM refresh
+
+refreshValueVar :: RefType -> CGM RefType
+refreshValueVar t = T.mapM freshR t
+  where 
+    freshR (F.Reft (v,r)) = do 
+      v' <- freshVV
+      return $ F.Reft (v', F.substa (ss v v') r)
+    freshVV = F.vv . Just  <$> fresh
+    ss old new w | F.symbol old == F.symbol w = new
+                 | otherwise                  = w
 
 --------------------------------------------------------------------------------
 -- | Splitting Subtyping Constraints 
@@ -722,7 +721,8 @@ splitE g i e1s e2s
 ---------------------------------------------------------------------------------------
 bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 ---------------------------------------------------------------------------------------
-bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant t1 <*> addInvariant t2
+-- NOTE: removing addInvariant from RHS
+bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant t1 <*> return t2
 
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2
@@ -790,7 +790,7 @@ bsplitW g t i
   = []
   where r' = rTypeSortedReft t
 
-envTyAdds l xts = envAdds [(symbolId l x, t) | B x t <- xts]
+envTyAdds l xts = envAdds False [(symbolId l x, t) | B x t <- xts]
 
 cgFunTys l f xs ft = 
   case funTys l f xs ft of 

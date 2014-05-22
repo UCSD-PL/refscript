@@ -9,15 +9,15 @@ function forloop(lo:number, hi:number, body:(number,any)=>any, accum:any):any{
 	return accum;
 }
 
-/*@ minIndex :: ({a: #List[number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a))} */ 
+/*@ minIndex :: ({a: #Array[#Immutable, number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a))} */ 
 function minIndex(a:number[]):number{
 	
 	/*@ step :: (number, number) => number */
 	function step(i:number, min:number):number{
-		if (nth(a, i) < nth(a, min)) { 
+		if (a[i] < a[min]) { 
 			return i;
 		} 
 		return min; 
 	};
-	return forloop(0, mylength(a), step, 0);
+	return forloop(0, a.length, step, 0);
 }

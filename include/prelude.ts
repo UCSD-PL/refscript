@@ -357,13 +357,18 @@
 /*@ extern builtin_BIFalsy :: forall A. (x:A) 
                            => { v:boolean | ((Prop v) <=> FLS(x)) }      */
 
-/*@ invariant           {v:undefined | [not (Prop(v))        ]}          */
-/*@ invariant           {v:null      | [not (Prop(v))        ]}          */
-/*  invariant           {v:boolean   | [(Prop(v) <=> Prop(v))]}          */ 
-/*@ invariant           {v:number    | [((Prop(v) <=> v /= 0) 
-                                     &&  (FLS(v)  <=> v  = 0))]}         */
-/*@ invariant           {v:string    | [(Prop(v) <=> v /= "")]}          */
+/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (TRU(v))]}    */
+/*@ invariant {v:null      | [(ttag(v) = "object"); not (TRU(v))]}       */
+/*@ invariant {v:boolean   | [(ttag(v) = "boolean")]}                    */ 
 
+/*@ invariant {v:string    | [(ttag(v) = "string"   ); 
+                              (Prop(v) <=> v /= ""  )]}                  */
+
+/*@ invariant {v:number    | [((ttag(v) = "number") &&
+                               (Prop(v) <=> v /= 0) &&
+                               (FLS(v)  <=> v  = 0))]}                   */
+
+//TODO: ttag = "object" for named types, arrays ... 
 
 
 /*************************************************************************/
@@ -421,41 +426,42 @@
       (message: string) => #Error;
       prototype: #Error;
   } */ 
-var  __ddd = 1;
+; // XXX: IMPORTANT  -- keep the empty statement here !
 
 
-class Errors<M> {
 
-  /*@ argument :: (argument: string, message: string) => #Error */
-  public static argument(arg: string, message: string): Error {
-    return new Error("Invalid argument: " + arg + ". " + message);
-  }
+//class Errors<M> {
 
-  /*@ argumentOutOfRange :: (arg: string) => #Error */
-  public static argumentOutOfRange(arg: string): Error {
-    return new Error("Argument out of range: " + arg);
-  }
+//  /*@ argument :: (argument: string, message: string) => #Error */
+//  public static argument(arg: string, message: string): Error {
+//    return new Error("Invalid argument: " + arg + ". " + message);
+//  }
 
-  /*@ argumentNull :: (arg: string) => #Error */
-  public static argumentNull(arg: string): Error {
-    return new Error("Argument null: " + arg);
-  }
+//  /*@ argumentOutOfRange :: (arg: string) => #Error */
+//  public static argumentOutOfRange(arg: string): Error {
+//    return new Error("Argument out of range: " + arg);
+//  }
 
-  /*@ abstract :: () => #Error */
-  public static abstract(): Error {
-    return new Error("Operation not implemented properly by subclass.");
-  }
+//  /*@ argumentNull :: (arg: string) => #Error */
+//  public static argumentNull(arg: string): Error {
+//    return new Error("Argument null: " + arg);
+//  }
 
-  /*@ notYetImplemented :: () => #Error */
-  public static notYetImplemented(): Error {
-    return new Error("Not yet implemented.");
-  }
+//  /*@ abstract :: () => #Error */
+//  public static abstract(): Error {
+//    return new Error("Operation not implemented properly by subclass.");
+//  }
 
-  /*@ invalidOperation :: (message: string) => #Error */
-  public static invalidOperation(message?: string): Error {
-    return new Error("Invalid operation: " + message);
-  }
-}
+//  /*@ notYetImplemented :: () => #Error */
+//  public static notYetImplemented(): Error {
+//    return new Error("Not yet implemented.");
+//  }
+
+//  /*@ invalidOperation :: (message: string) => #Error */
+//  public static invalidOperation(message?: string): Error {
+//    return new Error("Invalid operation: " + message);
+//  }
+//}
 
 
 /*************************************************************************/
@@ -470,6 +476,3 @@ interface AssignFields extends ReadOnly { assignFields__: void; }
 
 interface Mutable      extends ReadOnly { mutable__     : void; } 
 
-
-
-var __dummy__ = null; //IMPORTANT: This needs to be here so that there is at least one node in the Typescript AST !!!

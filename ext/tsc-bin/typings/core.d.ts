@@ -1132,6 +1132,7 @@ declare var Array: {
 /////////////////////////////
 
 declare function assert(cond: boolean): boolean;
+declare function alert(msg: string): boolean;
 declare function NumberC (x : string) : number;
 declare function empty (a : any[]) : boolean;
 declare function head (a : any) : any;

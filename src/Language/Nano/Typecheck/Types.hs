@@ -241,13 +241,13 @@ data RType r
 
   | TExp F.Expr                 -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
 
-    deriving (Ord, Show, Functor, Data, Typeable)
+    deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 data Bind r
   = B { b_sym  :: F.Symbol      -- ^ Binding's symbol
       , b_type :: !(RType r)    -- ^ Field type
       } 
-    deriving (Eq, Ord, Show, Functor, Data, Typeable)
+    deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 -- | "pure" top-refinement
 fTop :: (F.Reftable r) => r

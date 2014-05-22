@@ -35,7 +35,7 @@ copyExts _ _ pkg lbi
     lTscRoot    = "ext/tsc-bin"
     tscBins r   = map (r ++) ["/bin/tsc",
                               "/built/local/tsc.js",
-                              "/typings/core.d.ts",
+                              "/built/local/lib.d.ts",
                               "/typings/jquery.d.ts",
                               "/typings/winjs.d.ts",
                               "/typings/winrt.d.ts" ]

@@ -64,7 +64,7 @@ bugMalignedFields' l t t' = mkErr l $ render $ text "Misaligned Fields:"
 
 bugUnknownAlias l x       = mkErr l $ printf "Unknown definition for alias %s" (ppshow x)
 bugUnboundPhiVar l x      = mkErr l $ printf "Phi Variable %s is unbound" (ppshow x)
-bugUnboundVariable l m x  = mkErr l $ printf "%s: Variable '%s' is unbound" (ppshow m) (ppshow x)
+bugUnboundVariable l   x  = mkErr l $ printf "Variable '%s' is unbound" (ppshow x)
 bugUnboundVariableL l x   = mkErr l $ printf "Liquid- Variable '%s' is unbound." (ppshow x)
 bugMultipleAnnots l x     = mkErr l $ printf "Multiple variable annotations for: %s" (ppshow x)
 bugMissingTypeArgs l      = mkErr l $ printf "Missing Type Arguments at %s" (ppshow l)

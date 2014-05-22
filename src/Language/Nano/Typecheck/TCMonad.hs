@@ -556,7 +556,7 @@ convertSimple l t1 t2
   | t1 `equiv` t2 = return CNo
   -- TOGGLE dead-code
   -- | otherwise     = return $ CDead t2
-  | otherwise     = tcError  $ errorSigNotFound l t1 t2
+  | otherwise     = tcError  $ errorSimpleSubtype l t1 t2
 
 
 -- | `convertUnion`

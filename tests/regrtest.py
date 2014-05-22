@@ -101,7 +101,7 @@ testSign  = [("pos", 0), ("neg", 1)]
 #                  "operators", "simple", "unions"]
 ## not included: ["proto", "typealias"]
 
-testCategories = ["misc"]
+testCategories = ["loops"]
 #testCategories = ["."]
 
 testdirs = [("/".join([testDir, s, c]), p) for (s, p) in testSign 

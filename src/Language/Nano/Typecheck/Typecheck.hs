@@ -120,7 +120,7 @@ tcNano :: (Data r, PPRSF r) => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
 tcNano p@(Nano {code = Src fs})
   = do setDef     $ defs p
        checkInterfaces p
-       (fs', γo) <- tcInScope γ $ tcStmts γ $ fs
+       (fs', γo) <- tcInScope γ $ tcStmts γ fs
        m         <- concatMaps <$> getAllAnns
        θ         <- getSubst
        let p1     = p {code = (patchAnn m . apply θ) <$> Src fs'}
@@ -376,12 +376,14 @@ tcStmt γ (IfStmt l e s1 s2)
                               return       (IfStmt l e' s1' s2', γ3)
          _              -> error "BUG: tcStmt - If then else"
 
--- while c { b } ; exit environment is entry as may skip. SSA adds phi-asgn prior to while.
+-- while c { b } 
 tcStmt γ (WhileStmt l c b) 
   = do (c', t)   <- tcExpr γ c
        unifyTypeM (srcPos l) t tBool
-       (b', _)   <- tcStmt γ' b
-       return       (WhileStmt l c' b', Just γ)  
+       (b', γl)  <- tcStmt γ' b
+
+       γout      <- envLoopJoin l γ γl
+       return       (WhileStmt l c' b', γout)  
     where 
        xts'       = [(mkNextId x, tcEnvFindTyOrDie l x γ) | x <- phiVarsAnnot l]
        γ'         = tcEnvAdds xts' γ
@@ -849,17 +851,27 @@ envJoin l γ (Just γ1) (Just γ2) =
   do let xs = phiVarsAnnot l
      ts    <- mapM (getPhiType l γ1 γ2) xs
      θ     <- getSubst
-     -- Applying the accummulated substitutions here
      return $ Just $ tcEnvAdds (zip xs ts) (apply θ γ)
 
+
+----------------------------------------------------------------------------------
+envLoopJoin :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
+----------------------------------------------------------------------------------
+envLoopJoin _ γ Nothing   = return $ Just γ
+envLoopJoin l γ (Just γl) = 
+  do let xs = phiVarsAnnot l 
+     ts    <- mapM (getLoopNextPhiType l γ γl) xs
+     θ     <- getSubst
+     return $ Just $ tcEnvAdds (zip xs ts) (apply θ γ)
+ 
 ----------------------------------------------------------------------------------
 getPhiType :: PPR r 
            => (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan-> TCM r (RType r)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (tcEnvFindTy x γ1, tcEnvFindTy x γ2) of
-  -- These two should really be the same type... cause we don't allow strong
-  -- updates on the raw type, even on local vars (that are SSAed)
+    -- These two should really be the same type... cause we don't allow strong
+    -- updates on the raw type, even on local vars (that are SSAed)
     (Just t1, Just t2) -> 
       do  when (not $ t1 `equiv` t2) (tcError $ errorEnvJoin (ann l) x t1 t2)
           return t1
@@ -867,6 +879,19 @@ getPhiType l γ1 γ2 x =
                             then tcError $ bug loc "Oh no, the HashMap GREMLIN is back..."
                             else tcError $ bugUnboundPhiVar loc x
                           where loc = srcPos $ ann l
+
+----------------------------------------------------------------------------------
+getLoopNextPhiType :: PPR r 
+           => (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan-> TCM r (RType r)
+----------------------------------------------------------------------------------
+getLoopNextPhiType l γ γl x =
+  case (tcEnvFindTy x γ, tcEnvFindTy (mkNextId x) γl) of 
+    (Just t1, Just t2) -> 
+      do  when (not $ t1 `equiv` t2) (tcError $ errorEnvJoin (ann l) x t1 t2)
+          return t1
+    (_      , _      ) -> 
+      tcError $ bugUnboundPhiVar loc x where loc = srcPos $ ann l
+
 
 forceCheck x γ = elem x $ fst <$> envToList (tce_env γ)
 

@@ -431,7 +431,6 @@ consExpr g (DotRef l e f)
     where
        elt        = fromJust $ listToMaybe [ e | EltOverload e <- ann_fact l]
        fs         = F.symbol f
-       {-eltMatch = undefined -}
        eltMatch (PropSig _ _ _ τ1 t1) (PropSig _ _ _ τ2 t2) = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
        eltMatch (MethSig _ _   τ1 t1) (MethSig _ _   τ2 t2) = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
        eltMatch e1                    e2                    = on (==) (toType . eltType) e1 e2
@@ -465,7 +464,7 @@ consExpr g (ObjectLit l bs)
     where
     -- TODO: add "this" as first argument
         mkElt s t | isTFun t  = MethSig s False Nothing t
-        mkElt s t | otherwise = PropSig s True False Nothing t 
+        mkElt s t | otherwise = PropSig s False True Nothing t 
 
 -- new C(e, ...)
 consExpr g (NewExpr l (VarRef _ i) es)
@@ -617,7 +616,7 @@ consSeq f           = foldM step . Just
 
 
 consPropReadLhs getter g l e fld
-  = do  (xe, g')     <- consExpr g e
+  = do  (xe, g')       <- consExpr g e
         let tx          = envFindTy xe g'
         δ              <- getDef
         case getter l (renv g') δ fld tx of

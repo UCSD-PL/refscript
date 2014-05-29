@@ -1,6 +1,6 @@
 /*@ qualif PLusOne(v:number, w: number)     : v = w + 1   */
 
-/*@ gobj :: { a: number, b: string, oo: { n : number } }  */
+/*@ gobj :: { a: number; b: string; oo: { n : number } }  */
 var gobj = {
   a: 5,
   b: "String",

@@ -17,7 +17,7 @@ class Animal {
 
 }
 
-
+/*@ class Snake extends #Animal */
 class Snake extends Animal {
   /*@ move :: () => void */  
   move() {
@@ -27,9 +27,11 @@ class Snake extends Animal {
 
 }
 
+
+/*@ class Snake extends #Animal */
 class Horse extends Animal {
-  /*@ move :: () => void */
-  move() {
+  /*@ move :: (meters: number) => void */
+  move(meters) {
     alert("Galloping...");
     super.move(45);
   }
@@ -37,6 +39,8 @@ class Horse extends Animal {
 }
 
 var sam = new Snake("Sammy the Python")
+
+/*@ tom :: #Animal */
 var tom: Animal = new Horse("Tommy the Palomino")
 
 sam.move();

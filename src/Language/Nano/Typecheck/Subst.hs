@@ -204,14 +204,14 @@ appTy _        (TExp _)      = error "appTy should not be applied to TExp"
 flatten :: PPR r 
         => TDefEnv (RType r) -> (TDef (RType r),[RType r]) -> [TElt (RType r)]
 ---------------------------------------------------------------------------
-flatten δ = fix ff
-  where
-    ff r (TD _ _ vs (Just (i, ts')) es, ts)
-      = apply (fromList $ zip vs ts) . fl . L.unionBy sameBinder es
-      $ r (findSymOrDie i δ, ts')
-    ff _ (TD _ _ vs _ es, ts)  = apply (fromList $ zip vs ts) es
-    -- NOTE: Special case for constructor: does not appear in flat version
-    fl = filter (not . isConstr)
+flatten = fix . ff
+
+
+ff δ r (TD _ _ vs (Just (i, ts')) es, ts)
+          = apply θ  . L.unionBy sameBinder es $ r (findSymOrDie i δ, ts')
+  where θ = fromList $ zip vs ts
+
+ff _ _ (TD _ _ vs _ es, ts)  = apply (fromList $ zip vs ts) es
 
 -- | flatten' does not apply the top-level type substitution
 flatten' δ d@(TD _ _ vs _ _) = flatten δ (d, tVar <$> vs)
@@ -301,8 +301,5 @@ intersect _ t1 t2 =
   error $ printf "BUG[intersect]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
 
 
-intersectBind δ (B s1 t1) (B s2 t2) 
-  | s1 == s2 = (B s1 t1', B s2 t2') where (t1', t2') = intersect δ t1 t2
-intersectBind _  _       _           
-  = error "BUG[intersectBind]: mis-matching binders"
+intersectBind δ (B s1 t1) (B s2 t2) = (B s1 t1', B s2 t2') where (t1', t2') = intersect δ t1 t2
 

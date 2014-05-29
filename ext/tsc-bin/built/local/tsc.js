@@ -16697,6 +16697,10 @@ var TypeScript;
         EmptyStatementSyntax.prototype.isTypeScriptSpecific = function () {
             return false;
         };
+
+        EmptyStatementSyntax.prototype.toRsStmt = function (helper) {
+            return new TypeScript.RsEmptyStmt(helper.getSourceSpan(this), tokenAnnots(this.semicolonToken));
+        };
         return EmptyStatementSyntax;
     })(TypeScript.SyntaxNode);
     TypeScript.EmptyStatementSyntax = EmptyStatementSyntax;

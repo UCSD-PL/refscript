@@ -151,9 +151,11 @@ data TDef t    = TD {
       } deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 -- | Assignability is ingored atm.
-data TElt t    = CallSig  {                                                  f_type :: t }     -- Call Signature
-               | ConsSig  {                                                  f_type :: t }     -- Constructor Signature               
-               | IndexSig { f_sym :: F.Symbol, f_key :: Bool,                f_type :: t }     -- Index Signature (T/F=string/number)
+data TElt t    = CallSig  { f_type :: t }       -- Call Signature
+               | ConsSig  { f_type :: t }       -- Constructor Signature               
+               | IndexSig { f_sym :: F.Symbol
+                          , f_key :: Bool
+                          , f_type :: t }       -- Index Signature (T/F=string/number)
               
                | PropSig  { f_sym  :: F.Symbol, -- Name  
                             f_sta  :: Bool,     -- Static or not
@@ -538,7 +540,9 @@ instance Eq (RType r) where
   TFun b1 t1 _  == TFun b2 t2 _   = (b_type <$> b1, t1)  == (b_type <$> b2, t2)
   TAll v1 t1    == TAll v2 t2     = v1 == v2 && t1 == t2   -- Very strict Eq here
   TAnd t1s      == TAnd t2s       = t1s == t2s
-  TCons e1s _   == TCons e2s _    = and [ e1 == e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ]
+  TCons e1s _   == TCons e2s _    = length e1s == length e2s && and (zipWith (==) e1s' e2s')
+    where
+      (e1s', e2s') = mapPair (L.sortBy (compare `on` eltSym)) (e1s, e2s)
   _             == _              = False
 
 

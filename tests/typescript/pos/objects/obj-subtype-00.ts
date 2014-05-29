@@ -1,4 +1,4 @@
-/*@ foo:: ({o : number}) => {o : number + boolean }  */ 
+/*@ foo:: ( { x: number; } ) => { x: number + boolean }  */ 
 function foo(o) 
 {
     return o;

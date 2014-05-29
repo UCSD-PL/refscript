@@ -39,7 +39,7 @@ module Language.Nano.Typecheck.TCMonad (
   , unifyTypeM, unifyTypesM
 
   -- * Subtyping
-  , subtypeM, isSubtypeM
+  , subtypeM, isSubtype
 
   -- * Casts
   , castM
@@ -69,7 +69,7 @@ import           Control.Applicative                ((<$>), (<*>))
 import           Data.Function                      (on)
 import qualified Data.HashSet                       as S
 import           Data.Maybe                         (fromJust, catMaybes)
-import           Data.List                          (elem)
+import           Data.List                          (elem, groupBy, sort, nub, (\\))
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)
 import           Language.Fixpoint.Errors
@@ -88,7 +88,7 @@ import           Data.Monoid
 import qualified Data.HashMap.Strict                as M
 import           Language.ECMAScript3.Syntax
 
--- import           Debug.Trace                      (trace)
+import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity   as V
 
 type PPR r = (PP r, F.Reftable r)
@@ -405,7 +405,7 @@ runMaybeM a = runFailM a >>= \case
                 Left _   -> return $ Nothing
 
 
-isSubtypeM l t1 t2 = runFailM (subtypeM l t1 t2) >>= \case
+isSubtype l t1 t2 = runFailM (subtypeM l t1 t2) >>= \case
                         Right _ -> return True
                         Left  _ -> return False
 
@@ -429,7 +429,7 @@ subtypeM l t1 t2 = convert l t1 t2 >>= \case
 convert :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
 
-convert _ t1 t2 | t1 `equiv` t2        = return CNo
+convert l t1 t2 | on (==) toType t1 t2 = return CNo
 
 convert _ t1 _  | isUndef t1           = return CNo
 
@@ -451,58 +451,52 @@ convert l t1 t2                        = convertSimple l t1 t2
 --------------------------------------------------------------------------------
 convertObj :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
-convertObj l t1@(TCons e1s _) t2@(TCons e2s _)
-  -- LHS and RHS are object literal types
-  | all (not . isIndSig) [t1,t2] = zipWithM (convert l) t1s t2s >>= kk
-  -- LHS and RHS are index signatures
-  | all isIndSig [t1,t2] = mapM (uncurry $ convert l) ind >>= nc
-  -- RHS is index signature:
-  -- We ASSUME all fields are string-indexed and so fall under the 
-  -- string index signature (which is the only one supported anyway).
-  | isIndSig t2          = zipWithM (convert l) (ts e1s) (repeat $ ti e2s) >>= nc
-  | isIndSig t1          = zipWithM (convert l) (repeat $ ti e1s) (ts e2s) >>= nc
-  | otherwise            = g4 
-  where
-    -- Only consider non-static properties
-    ts es      = [ eltType e | e <- es, nonStaticElt e ]
-    ti es      = safeHead "convertObj" [ t | IndexSig _ _ t <- es ]
-    
-    -- NOT: Take all (non-static) properties into account. 
-    p1s        = [ eltToPair e | e <- e1s, nonStaticElt e ]
-    p2s        = [ eltToPair e | e <- e2s, nonStaticElt e ]
-    
-    (m1, m2)   = mapPair M.fromList (p1s, p2s)
-    (ks1, ks2) = mapPair (S.fromList . map fst) (p1s, p2s)
-    cmnKs      = S.toList $ S.intersection ks1 ks2
-    t1s        = fromJust . (`M.lookup` m1) <$> cmnKs
-    t2s        = fromJust . (`M.lookup` m2) <$> cmnKs
+convertObj l t1@(TCons e1s r1) t2@(TCons e2s r2)
 
-    ind   = [ (t1, t2) | IndexSig _ s1 t1 <- e1s
-                       , IndexSig _ s2 t2 <- e2s
-                       , s1 == s2 ]
-    kk cs | m1 `equalKeys` m2        = cc cs 
-          -- LHS has more fields than RHS
-          | m2 `isProperSubmapOf` m1 = nc cs
-          -- LHS has fewer fields than RHS
-          | m1 `isProperSubmapOf` m2 = g3
-          | otherwise                = g4
-    cc cs | all noCast cs = return   $ CNo
-          | all upCast cs = return   $ CUp t1 t2
-          -- NOTE: Assuming covariance here!!!
-          | all dnCast cs = return   $ CDn t1 t2
-          -- TOGGLE dead-code
-          -- | any ddCast cs = return   $ CDead t2
-          | otherwise     = tcError  $ errorConvDef l t1 t2
-    nc cs | all noCast cs = return   $ CNo
-          | all upCast cs = return   $ CUp t1 t2
-          | otherwise     = tcError  $ errorConvDef l t1 t2
-    g3    = tcError $ errorMissFlds l t1 t2 (S.toList $ S.difference ks2 ks1)
-    g4    = tcError $ errorConvDef l t1 t2
+  -- { f1:t1,..,fn:tn } vs { f1:t1',..fn:tn' }
+  | s1l == s2l 
+  = deeps l cmnBinds >>= \case
+      True  -> return  $ CNo
+      False -> tcError $ errorSimpleSubtype l t1 t2
+
+  -- { f1:t1,..,fn:tn } vs { f1:t1',..,fn:tn',..,fm:tm' }
+  | not (S.null df21) 
+  = tcError $ errorMissFlds l t1 t2 df21
+   
+  -- { f1:t1,..,fn:tn,..,fm:tm } vs { f1:t1',..,fn:tn' }
+  | otherwise               
+  = do _      <- convertObj l (TCons e1s' r1) (TCons e2s r2)
+       return  $ CUp t1 t2
+  where
+    -- All the bound elements that correspond to each binder 
+    -- Map : symbol -> [ elements ]
+    (m1,m2)    = mapPair toMap (e1s, e2s)
+    toMap      = foldr mi M.empty . filter nonStaticElt
+    mi e       = M.insertWith (++) (eltSym e) [e]
+
+    -- Binders for each element
+    (s1s,s2s)  = mapPair (S.fromList . M.keys) (m1,m2)
+    (s1l,s2l)  = mapPair (sort       . M.keys) (m1,m2)
+    
+    cs         = S.intersection s1s s2s
+
+    -- Join elements on common binder
+    cmnBinds   = idxMap (\s -> (f s m1, f s m2)) (S.toList cs) where f s = fromJust . M.lookup s
+    idxMap f   = map $ \x -> (x, f x)
+
+    -- Difference and intersection of keys
+    df21       = s2s `S.difference` s1s
+    in12       = s1s `S.intersection` s2s
+
+    e1s'       = concat [ fromJust $ M.lookup s m1 | s <- S.toList in12 ]
+
+    group1     = [ (eltSym $ head g1s, g1s) | g1s <- groupBy sameBinder e1s ]
+    group2     = [ (eltSym $ head g2s, g2s) | g2s <- groupBy sameBinder e2s ]
 
 convertObj l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
   | i1 == i2 
   = do -- FIXME: Using covariance here !!!
-       bs <- zipWithM (isSubtypeM l) t1s t2s 
+       bs <- zipWithM (isSubtype l) t1s t2s 
        if and bs then return CNo
                  else tcError $ errorSimpleSubtype l t1 t2
   | (s1,b1) /= (s2,b2)
@@ -525,6 +519,55 @@ convertObj l t1 t2@(TApp (TRef _) _ _)
        convertObj l t1 (flattenType δ t2) 
 
 convertObj _ _ _ =  error "BUG: Case not supported in convertObj"
+
+
+-- | Deep subtyping for object type members
+--
+--   TODO: Doing covariant subtyping here !!!
+
+deeps l ss = and <$> mapM (deep l) ss
+
+-- | Treat the parts of `e1s` and `e2s` that correspond to the same binder 
+--   as intersection types.
+
+-- |   exists i s.t. si <: t
+-- | ------------------------
+-- |    s1 /\ ... /\ sn <: t
+deep l (s, (e1s, e2s)) = or <$> mapM (\e1 -> deep1 l e1 e2s) e1s
+
+-- |  s1 <: t1  ...  s <: tn
+-- | ------------------------
+-- |   s <: t1 /\ ... /\ tn
+deep1 l e es = and <$> mapM (isSubtypeElt l e) es
+
+-- | { (ts)=>t } <: { (ts')=>t' } 
+isSubtypeElt l (CallSig t1) (CallSig t2)  
+  = isSubtype l t1 t2
+
+-- | { f[τ]:t } <: { f[τ']:t' } 
+isSubtypeElt l (PropSig _ _ _ τ1 t1) (PropSig _ _ _ τ2 t2)
+  = (&&) <$> isSubtypeOpt l τ1 τ2 <*> isSubtype l t1 t2
+
+-- | { f: (ts)=>() } <: { f: (ts')=>() } 
+isSubtypeElt l (ConsSig t1) (ConsSig t2)
+  = isSubtype l t1 t2  
+
+-- | { [x:τ]: t } <: { [x:τ']: t' }
+isSubtypeElt l (IndexSig _ b1 t1) (IndexSig _ b2 t2)
+  = (&&) <$> return (b1 == b2) <*> isSubtype l t1 t2
+
+-- | { f[τ]:(ts)=>t } <: { f[τ']:(ts')=>t' }
+isSubtypeElt l (MethSig f1 s1 τ1 t1) (MethSig f2 s2 τ2 t2) 
+  = (&&) <$> isSubtypeOpt l τ2 τ1 <*> isSubtype l t1 t2
+
+-- | otherwise fail
+isSubtypeElt _ _ _ = return False
+
+
+isSubtypeOpt l (Just t1) (Just t2) = isSubtype l t2 t1
+isSubtypeOpt l Nothing   (Just t2) = isSubtype l tTop t2
+isSubtypeOpt l (Just t1) Nothing   = isSubtype l t1 tTop
+isSubtypeOpt _ _         _         = return True
 
 
 instance PP a => PP (S.HashSet a) where

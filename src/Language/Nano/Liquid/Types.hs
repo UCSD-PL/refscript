@@ -297,7 +297,7 @@ mapReftM _ t               = error   $ render $ text "Not supported in mapReftM:
 
 mapReftBindM f (B x t)    = B x     <$> mapReftM f t
 
-mapReftEltM f (PropSig x m s τ t) = PropSig x s m <$> mapReftMaybeM f τ <*> mapReftM f t
+mapReftEltM f (PropSig x s m τ t) = PropSig x s m <$> mapReftMaybeM f τ <*> mapReftM f t
 mapReftEltM f (MethSig x s τ t)   = MethSig x s   <$> mapReftMaybeM f τ <*> mapReftM f t
 mapReftEltM f (CallSig t)         = CallSig       <$> mapReftM f t
 mapReftEltM f (ConsSig  t)        = ConsSig       <$> mapReftM f t

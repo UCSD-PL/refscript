@@ -134,7 +134,7 @@ tcNano p@(Nano {code = Src fs})
        γ       = initEnv p
 
 checkInterfaces p = 
-  mapM_ (safeExtends isSubtypeM tcError l (defs p)) is
+  mapM_ (safeExtends isSubtype tcError l (defs p)) is
   where 
     l  = srcPos dummySpan
     is = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
@@ -452,7 +452,7 @@ classFromStmt (ClassStmt l id _ _ cs) =
         Just d -> return d   -- if already computed
         Nothing -> do let elts   = addConstr δ $ classEltType <$> cs
                       let freshD = TD True (fmap ann id) vs p elts
-                      safeExtends isSubtypeM tcError (srcPos l) δ freshD
+                      safeExtends isSubtype tcError (srcPos l) δ freshD
                       setDef     $ addSym sym freshD δ
                       return     $ freshD
   where
@@ -499,7 +499,7 @@ classEltType :: PPR r => ClassElt (AnnSSA r) -> TElt (RType r)
 classEltType (Constructor l _ _ ) = ConsSig ann
   where ann = safeHead "BUG: constructor annotation" [ κ | ConsAnn κ <- ann_fact l ]
 
-classEltType (MemberVarDecl _ s (VarDecl l v _)) = PropSig (F.symbol v) m s Nothing t
+classEltType (MemberVarDecl _ s (VarDecl l v _)) = PropSig (F.symbol v) s m Nothing t
   where (m,t) = safeHead "BUG: variable decl annotation" [ φ | FieldAnn φ <- ann_fact l ]
 
 -- TODO: add "this" as first parameter
@@ -513,7 +513,7 @@ tcVarDecl ::  PPR r
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e)) 
-  = do ann         <- listToMaybe <$> scrapeVarDecl v  
+  = do ann         <- listToMaybe <$> scrapeVarDecl v
        (e', t)     <- tcExprT l γ e ann
        return       $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
 

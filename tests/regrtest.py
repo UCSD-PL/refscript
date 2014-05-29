@@ -97,11 +97,12 @@ testDir   = "typescript"
 testSign  = [("pos", 0), ("neg", 1)]
 #testSign  = [(".", 0)]
 
-#testCategories = ["arrays", "classes", "lists", "loops", "misc", "objects",
+#testCategories = ["arrays", "classes", "loops", "misc", "objects",
 #                  "operators", "simple", "unions"]
-## not included: ["proto", "typealias"]
 
-testCategories = ["loops"]
+## not supported: ["proto", "typealias", "lists"]
+
+testCategories = ["objects"]
 #testCategories = ["."]
 
 testdirs = [("/".join([testDir, s, c]), p) for (s, p) in testSign 

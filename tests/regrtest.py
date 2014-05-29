@@ -102,7 +102,7 @@ testSign  = [("pos", 0), ("neg", 1)]
 
 ## not supported: ["proto", "typealias", "lists"]
 
-testCategories = ["objects"]
+testCategories = ["objects", "arrays", "classes"]
 #testCategories = ["."]
 
 testdirs = [("/".join([testDir, s, c]), p) for (s, p) in testSign 

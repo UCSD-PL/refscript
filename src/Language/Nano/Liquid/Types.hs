@@ -439,10 +439,7 @@ zipType _ _ _ t1 t2 =
   errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
 
 
-zipBind δ f g (B s1 t1) (B s2 t2) 
-  | s1 == s2 = B s1 $ zipType δ f g t1 t2 
-zipBind _ _ _ _       _           
-  = errorstar "BUG[zipBind]: mis-matching binders"
+zipBind δ f g (B s1 t1) (B s2 t2) = B s2 $ zipType δ f g t1 t2 
 
 
 -- | Tags 

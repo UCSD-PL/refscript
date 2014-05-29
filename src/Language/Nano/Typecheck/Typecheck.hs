@@ -729,7 +729,7 @@ tcCall γ (NewExpr l (VarRef lv i) es)
        z                           <- tcCallMatch γ l "constructor" es tc
        case z of 
          Just (es', t)             -> return (NewExpr l (VarRef lv i) es', t)
-         Nothing                   -> error "No matching constructor"
+         Nothing                   -> tcError $ bug (srcPos l) "No matching constructor"
 
 tcCall _ e
   = die $ bug (srcPos e) $ "tcCall: cannot handle" ++ ppshow e        
@@ -769,7 +769,7 @@ getConstr l γ s =
 
 tcCallMatch γ l fn es ft0 
   = do (es', ts)      <- unzip <$> mapM (tcExpr γ) es
-       z              <- resolveOverload γ l fn es' ts ft0
+       z              <- tracePP ("resolveOverload " ++ ppshow l) <$> resolveOverload γ l fn es' ts ft0
        case z of 
          Just (θ, ft) -> do addAnn (srcPos l) (Overload ft) 
                             addSubst l θ

@@ -136,9 +136,8 @@ lookupAmbientVar l α γ s amb t =
 getPropTDef :: (PPR r) =>
   Bool -> t -> TDR r -> F.Symbol -> [RType r] -> TDef (RType r) -> Maybe (RType r)
 -------------------------------------------------------------------------------
-getPropTDef b _ γ f ts d = getPropCons b f t
-  where
-    t = TCons (S.flatten γ (d,ts)) fTop
+getPropTDef b _ γ f ts d = getPropCons b f t  
+  where t = TCons (S.flatten γ (d,ts)) fTop
 
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns

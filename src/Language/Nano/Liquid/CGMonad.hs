@@ -263,7 +263,6 @@ envAdds      :: (PP x, F.Symbolic x, IsLocated x) => Bool -> [(x, RefType)] -> C
 ---------------------------------------------------------------------------------------
 envAdds glob xts' g
   = do xts      <- zip xs  <$> mapM addInvariant ts
-      -- (tracePP (concat $ map (\x -> ppshow x ++ " E:" ++ ppshow (exists x g) ++ " ") xs) ts)
        is       <- forM xts $  addFixpointBind 
        _        <- forM xts $  \(x, t) -> addAnnot (srcPos x) x t
        when glob $ forM_ (zip xs is) addGlobBind

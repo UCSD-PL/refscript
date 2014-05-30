@@ -175,7 +175,7 @@ instance IsNano InfixOp where
   isNano OpLEq       = True --  @<=@
   isNano OpGT        = True --  @>@
   isNano OpGEq       = True --  @>=@
-  isNano OpEq        = True --  @==@
+  -- isNano OpEq        = True --  @==@
   isNano OpStrictEq  = True --  @===@
   isNano OpNEq       = True --  @!=@
   isNano OpStrictNEq = True --  @!==@

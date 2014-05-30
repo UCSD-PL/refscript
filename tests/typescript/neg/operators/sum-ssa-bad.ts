@@ -12,5 +12,5 @@ function sumLoop(acc, i){
 function main(){
   var n = pos();
   var m = sumLoop(0, n);
-  assert(m == n);
+  assert(m === n);
 }

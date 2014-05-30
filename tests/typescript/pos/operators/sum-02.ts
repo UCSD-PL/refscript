@@ -14,5 +14,5 @@ function sumLoop(acc:number, i:number):number{
 function main():void{
 	var n:number = pos();
 	var m:number = sumLoop(0, n);
-	assert(m == n);
+	assert(m === n);
 }

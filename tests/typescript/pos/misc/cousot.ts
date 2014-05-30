@@ -9,8 +9,8 @@
 
 function loop(n : number, m : number){
 	
-	if (n == 0) {
-		assert (m == 0);
+	if (n === 0) {
+		assert (m === 0);
 		return;
 	}
   

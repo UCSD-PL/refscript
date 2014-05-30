@@ -1,4 +1,5 @@
-/*@ bog :: (xag:{number | true} + {string | false}) => {number | v=xag} + {string | false} */
+/*@ bog :: /\ (xag: number) => {number | v=xag} 
+           /\ (xag: { string | false } ) => string */ 
 function bog(x){
   return x;
 }

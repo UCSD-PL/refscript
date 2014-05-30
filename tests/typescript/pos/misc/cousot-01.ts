@@ -11,7 +11,7 @@ function loop(n:number, m:number) :void{
 		m = 0;
 	}
 	
-	assert(m == n);
+	assert(m === n);
 	
 	return;
 }

@@ -8,7 +8,7 @@ function create():number{
 
 /*@ acquire :: (number) => number */
 function acquire(l:number):number{
-  assert(l == 0);
+  assert(l === 0);
   return 1;
 }
 
@@ -43,6 +43,6 @@ function loop(n:number, l:number) {
 function main(n){
 	var l :number= create();
 	loop(n, l);
-	assert(l == 0);
+	assert(l === 0);
 }
 

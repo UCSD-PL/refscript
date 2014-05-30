@@ -13,7 +13,7 @@ function create():number{
 
 /*@ acquire :: (number) => number */
 function acquire(l:number):number{
-  assert(l == 0);
+  assert(l === 0);
   return 1;
 }
 
@@ -43,6 +43,6 @@ function main(n:number):void{
 	var flag :number= random();
 	var l:number= create();
 	loop(n, l);
-	assert(l == 0);
+	assert(l === 0);
 }
 

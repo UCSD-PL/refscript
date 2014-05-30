@@ -62,7 +62,7 @@ verifyFile f = parse f $ ssa $ tc $ refTc
 parse f next = parseNanoFromFile f         >>= next
 ssa   next p = ssaTransform p              >>= either (lerror . single) next
 tc    next p = typeCheck (expandAliases p) >>= either lerror next
-refTc      p = getOpts >>= solveConstraints (fp p) . (`generateConstraints` p) 
+refTc      p = getOpts >>= solveConstraints (fp p) . (`generateConstraints` p)
 
 lerror       = return . (A.NoAnn,) . F.Unsafe
          
@@ -240,12 +240,7 @@ consStmt g (VarDeclStmt _ ds)
 -- return e 
 consStmt g (ReturnStmt l (Just e))
   = do  (xe, g') <- consExpr g e
-        let te    = envFindTy xe g'
-            rt    = envFindReturn g'
-        -- subType does not need to return the unfolded types
-        if isTop rt
-          then (subType l g') te (setRTypeR te (rTypeR rt))
-          else (subType l g') te rt
+        subType l g' (envFindTy xe g') (envFindReturn g')
         return Nothing
 
 -- return
@@ -429,7 +424,7 @@ consExpr g (DotRef l e f)
                        return    $ (x, g'')
          Nothing -> die $ errorPropRead (srcPos l) e fs
     where
-       elt        = fromJust $ listToMaybe [ e | EltOverload e <- ann_fact l]
+       elt        = fromJust $ listToMaybe [ e | EltOverload cx e <- ann_fact l, cge_ctx g == cx ]
        fs         = F.symbol f
        eltMatch (PropSig _ _ _ τ1 t1) (PropSig _ _ _ τ2 t2) = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
        eltMatch (MethSig _ _   τ1 t1) (MethSig _ _   τ2 t2) = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
@@ -580,7 +575,8 @@ consCall g l fn es ft0
                            envAddFresh l (F.subst su ot) g'
          Nothing    -> cgError l $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> getCallable δ ft0) 
     where
-       overload δ l  = listToMaybe [ lt | Overload t <- ann_fact l 
+       overload δ l  = listToMaybe [ lt | Overload cx t <- ann_fact l 
+                                        , cge_ctx g == cx
                                         , lt         <- getCallable δ ft0
                                         , on (==) toType t lt ]
 

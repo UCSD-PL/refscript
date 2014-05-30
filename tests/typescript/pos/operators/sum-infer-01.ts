@@ -12,9 +12,9 @@ function sumLoop(acc:number, i:number){
 	return r;
 }
 
-/*@ main :: () => void */
+/*@ main :: () => { void | true } */
 function main(){
 	var n:number = pos();
 	var m:number = sumLoop(0, n);
-	assert(m == n);
+	assert(m === n);
 }

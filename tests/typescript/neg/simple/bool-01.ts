@@ -1,6 +1,6 @@
 
-/*@ emp :: [number] */
+/*@ emp :: #Array[#Immutable, number] */
 var emp = [];
 
-assert(emp === null));
+assert(emp === null);
 

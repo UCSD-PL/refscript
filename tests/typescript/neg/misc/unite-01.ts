@@ -1,7 +1,7 @@
 
 /*@ foo :: forall A. (A, A) => A */
 function foo(x, y) {
-  if (x == y) {
+  if (x === y) {
     return x;
   } else {
     return y;

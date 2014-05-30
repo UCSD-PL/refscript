@@ -1,10 +1,7 @@
 
 
-/*@ myPlusOk :: (x:number + string, y:number + string) 
-  => {v:number + string | (if ((ttag x) = "number" && (ttag y) = "number") 
-  then ((ttag v) = "number" && v = x + y) 
-  else (ttag v) = "string")} 
-*/
+/*@ myPlusOk :: /\ (x: number, y: number) => { number | v = x + y }  
+                /\ (x: number + string, y: number + string) => string */
 function myPlusOk(x, y){
     return myPlusOk(x,y);
 }

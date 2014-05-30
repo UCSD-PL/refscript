@@ -20,10 +20,10 @@ copyExts _ _ pkg lbi
        let tscR = fromMaybe lTscRoot $ fmap snd $ find ((== "TSC_ROOT") . fst) env
        putStrLn $ "Using '" ++ tscR ++ "' for `tsc` sources." 
        -- Compile and copy TypeScript executables
-       executeShellCommand   "chmod a+x ../typescript/bin/tsc"
+       executeShellCommand $ "chmod a+x " ++ tscR ++ "/bin/tsc"
        mapM_ executeShellCommand (map cpFile $ tscBins tscR)
        -- Compile and copy TypeScript's prelude
-       executeShellCommand $ "tsc --nano " ++ preludeSrc
+       executeShellCommand $ "tsc --refscript " ++ preludeSrc
        executeShellCommand $ "cp " ++ preludeTgt ++ " " ++ dataDir ++ preludeTgt
   where 
     allDirs     = absoluteInstallDirs pkg lbi NoCopyDest
@@ -35,7 +35,7 @@ copyExts _ _ pkg lbi
     lTscRoot    = "ext/tsc-bin"
     tscBins r   = map (r ++) ["/bin/tsc",
                               "/built/local/tsc.js",
-                              "/typings/lib.d.ts",
+                              "/built/local/lib.d.ts",
                               "/typings/jquery.d.ts",
                               "/typings/winjs.d.ts",
                               "/typings/winrt.d.ts" ]

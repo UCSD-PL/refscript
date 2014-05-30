@@ -1,9 +1,6 @@
 
-/*@ myPlusOk :: (x:number + string, y:number + string) 
-             => {number | ((ttag x) = "number" && (ttag y) = "number" && v = x + y) } + 
-                {string | ((ttag x) = "string" || (ttag y) = "string") } 
-                      
-  */
+/*@ myPlusOk :: /\ (x: number, y: number) => { number | v = x + y }  
+                /\ (x: number + string, y: number + string) => string */
 function myPlusOk(x, y){
     return myPlusOk(x,y);    
 }

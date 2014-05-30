@@ -15,7 +15,6 @@ module Language.Nano.Misc (
   , fst4, snd4, thd4, fth4
   , mapFstM, mapSndM, mapPairM
   , setFst3, setSnd3, setThd3
-  , appFst3, appSnd3, appThd3
   , setFst4, setSnd4, setThd4, setFth4
   , appFst4, appSnd4, appThd4, appFth4
 
@@ -96,10 +95,6 @@ exists f = isJust . L.find f
 setFst3 (_,b,c) a' = (a',b,c)
 setSnd3 (a,_,c) b' = (a,b',c)
 setThd3 (a,b,_) c' = (a,b,c')
-
-appFst3 (a,b,c) f = (f a,b,c)
-appSnd3 (a,b,c) f = (a,f b,c)
-appThd3 (a,b,c) f = (a,b,f c)
 
 fst4 (a,_,_,_) = a
 snd4 (_,b,_,_) = b

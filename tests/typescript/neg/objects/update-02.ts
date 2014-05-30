@@ -1,5 +1,5 @@
 
-/*@ foo :: ({x: number, *: string}) => { void | true } */ 
+/*@ foo :: ({x: number}) => { void | true } */ 
 function foo(o) {
   o.y = 10;
 }

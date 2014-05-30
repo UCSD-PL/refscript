@@ -11,7 +11,7 @@ function toNumber(x) {
 }
 
 
-/*@ foo :: ([string]) => [ { number | 0 < v } ] */
+/*@ foo :: (#Array[#Immutable, string]) => #Array[#Immutable,{ number | 0 < v } ] */
 function foo(arr) {
   return arr.map(toNumber);
 }

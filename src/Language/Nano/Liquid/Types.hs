@@ -58,10 +58,13 @@ module Language.Nano.Liquid.Types (
   -- Zip types
   , zipType
 
+  -- Tag 
+  -- , tagR
+
 
   ) where
 
-import           Data.Maybe             (fromMaybe, maybeToList)
+import           Data.Maybe             (fromMaybe, maybeToList, fromJust)
 import qualified Data.List               as L
 import           Data.Function                  (on)
 import qualified Data.HashMap.Strict     as M
@@ -81,6 +84,7 @@ import           Language.Nano.Typecheck.Types
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
   
+-- import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
 
@@ -103,6 +107,7 @@ data CGEnv
         , guards   :: ![F.Pred]           -- ^ branch target conditions  
         , cge_ctx  :: !IContext           -- ^ intersection-type context 
         , cge_spec :: !(Env RefType)      -- ^ specifications for defined functions
+        , cge_defs :: !(TDefEnv RefType)  -- ^ type definitions
         }
 
 ----------------------------------------------------------------------------
@@ -184,7 +189,9 @@ instance RefTypable RefType where
   rType = ofType . toType           -- removes all refinements
 
 eSingleton      :: (F.Expression e) => RefType -> e -> RefType 
-eSingleton t e  = t `strengthen` (F.exprReft e)
+eSingleton t e  = t `strengthen` (F.uexprReft e)
+{-eSingleton t e  | isUnion t = t `strengthen` (F.uexprReft e)-}
+{-                | otherwise = t `strengthen` (F.uexprReft e)-}
 
 pSingleton      :: (F.Predicate p) => RefType -> p -> RefType 
 pSingleton t p  = t `strengthen` (F.propReft p)
@@ -205,30 +212,29 @@ rTypeValueVar t   = vv where F.Reft (vv,_) = rTypeReft t
 ------------------------------------------------------------------------------------------
 rTypeSort :: (PPR r) => RType r -> F.Sort
 ------------------------------------------------------------------------------------------
-rTypeSort (TApp TInt [] _) = F.FInt
-rTypeSort (TVar α _)       = F.FObj $ F.symbol α 
+rTypeSort   (TVar α _)     = F.FObj $ F.symbol α 
 rTypeSort t@(TAll _ _)     = rTypeSortForAll t 
-rTypeSort (TFun xts t _)   = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
-rTypeSort (TApp c ts _)    = rTypeSortApp c ts 
-rTypeSort (TArr _ _)       = F.FApp (rawStringFTycon "array") []
-rTypeSort (TAnd (t:_))     = rTypeSort t
-rTypeSort (TCons _ _ )     = F.FObj $ F.symbol "cons"
+rTypeSort   (TFun xts t _) = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
+rTypeSort   (TApp c ts _)  = rTypeSortApp c ts 
+rTypeSort   (TAnd (t:_))   = rTypeSort t
+rTypeSort   (TCons _ _ )   = F.FObj $ F.symbol "cons"
 rTypeSort t                = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
 
-rTypeSortApp TInt [] = F.FInt
+rTypeSortApp TInt _  = F.FInt
 rTypeSortApp TUn  _  = F.FApp (tconFTycon TUn) [] -- simplifying union sorts, the checks will have been done earlier
 rTypeSortApp c ts    = F.FApp (tconFTycon c) (rTypeSort <$> ts) 
 
 tconFTycon :: TCon -> F.FTycon 
-tconFTycon TInt      = F.intFTyCon
-tconFTycon TBool     = rawStringFTycon "boolean"
-tconFTycon TVoid     = rawStringFTycon "void"
-tconFTycon (TRef i)  = rawStringFTycon $ show i -- F.stringFTycon $ F.Loc (sourcePos s) (unId s)
-tconFTycon TUn       = rawStringFTycon "union"
-tconFTycon TString   = F.strFTyCon -- F.stringFTycon "string"
-tconFTycon TTop      = rawStringFTycon "top"
-tconFTycon TNull     = rawStringFTycon "null"
-tconFTycon TUndef    = rawStringFTycon "undefined"
+tconFTycon TInt         = F.intFTyCon
+tconFTycon TBool        = rawStringFTycon "Boolean"
+tconFTycon TFPBool      = F.boolFTyCon
+tconFTycon TVoid        = rawStringFTycon "Void"
+tconFTycon (TRef (s,_)) = rawStringFTycon $ F.symbolString s
+tconFTycon TUn          = rawStringFTycon "Union"
+tconFTycon TString      = F.strFTyCon
+tconFTycon TTop         = rawStringFTycon "Top"
+tconFTycon TNull        = rawStringFTycon "Null"
+tconFTycon TUndef       = rawStringFTycon "Undefined"
 
 
 rTypeSortForAll t    = genSort n θ $ rTypeSort tbody
@@ -246,7 +252,6 @@ stripRTypeBase :: RType r -> Maybe r
 stripRTypeBase (TApp _ _ r) = Just r
 stripRTypeBase (TVar _ r)   = Just r
 stripRTypeBase (TFun _ _ r) = Just r
-stripRTypeBase (TArr _ r)   = Just r
 stripRTypeBase (TCons _ r)  = Just r
 stripRTypeBase _            = Nothing
  
@@ -273,29 +278,34 @@ emapReft f γ (TApp c ts r)  = TApp c (emapReft f γ <$> ts) (f γ r)
 emapReft f γ (TAll α t)     = TAll α (emapReft f γ t)
 emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts) (emapReft f γ' t) (f γ r) 
   where    γ'               = (b_sym <$> xts) ++ γ 
-emapReft f γ (TArr t r)     = TArr (emapReft f γ t) (f γ r)
 emapReft f γ (TCons xts r)  = TCons (emapReftElt f γ' <$> xts) (f γ r)
   where    γ'               = (f_sym <$> xts) ++ γ 
 emapReft _ _ _              = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)    = B x $ emapReft f γ t
 
-emapReftElt f γ (TE x m t)  = TE x m $ emapReft f γ t
+emapReftElt  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> TElt (RType a) -> TElt (RType b)
+emapReftElt f γ e            = fmap (emapReft f γ) e
 
-------------------------------------------------------------------------------------------
--- mapReftM :: (PP a, F.Reftable b, Monad m, Applicative m) => (a -> m b) -> RType a -> m (RType b)
-------------------------------------------------------------------------------------------
 mapReftM f (TVar α r)      = TVar α <$> f r
 mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> f r
 mapReftM f (TFun xts t r)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return $ F.top r) --f r 
 mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
-mapReftM f (TArr t r)      = TArr   <$> (mapReftM f t) <*> f r
 mapReftM f (TAnd ts)       = TAnd   <$> mapM (mapReftM f) ts
 mapReftM f (TCons bs r)    = TCons  <$> mapM (mapReftEltM f) bs <*> f r
 mapReftM _ t               = error   $ render $ text "Not supported in mapReftM: " <+> pp t 
 
 mapReftBindM f (B x t)    = B x     <$> mapReftM f t
-mapReftEltM f (TE x m t)  = TE x m  <$> mapReftM f t
+
+mapReftEltM f (PropSig x s m τ t) = PropSig x s m <$> mapReftMaybeM f τ <*> mapReftM f t
+mapReftEltM f (MethSig x s τ t)   = MethSig x s   <$> mapReftMaybeM f τ <*> mapReftM f t
+mapReftEltM f (CallSig t)         = CallSig       <$> mapReftM f t
+mapReftEltM f (ConsSig  t)        = ConsSig       <$> mapReftM f t
+mapReftEltM f (IndexSig x b t)    = IndexSig x b  <$> mapReftM f t
+
+mapReftMaybeM f (Just t) = Just <$> mapReftM f t
+mapReftMaybeM _ _        = return Nothing
+
 
 ------------------------------------------------------------------------------------------
 -- | fold over @RType@ 
@@ -315,7 +325,6 @@ efoldReft g f = go
     go γ z t@(TApp _ ts r)  = f γ r $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
     go γ z (TAll _ t)       = go γ z t
     go γ z (TFun xts t r)   = f γ r $ go γ' (gos γ' z (b_type <$> xts)) t  where γ' = foldr (efoldExt g) γ xts
-    go γ z (TArr t r)       = f γ r $ go γ z t    
     go γ z (TAnd ts)        = gos γ z ts 
     go γ z (TCons bs r)     = f γ' r $ gos γ z (f_type <$> bs) where γ' = foldr (efoldExt' g) γ bs
     go _ _ t                = error $ "Not supported in efoldReft: " ++ ppshow t
@@ -334,7 +343,6 @@ efoldRType g f               = go
     go γ z t@(TApp _ ts _)   = f γ t $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
     go γ z t@(TAll _ t1)     = f γ t $ go γ z t1
     go γ z t@(TFun xts t1 _) = f γ t $ go γ' (gos γ' z (b_type <$> xts)) t1  where γ' = foldr (efoldExt g) γ xts
-    go γ z t@(TArr t1 _)     = f γ t $ go γ z t1    
     go γ z   (TAnd ts)       = gos γ z ts 
     go γ z t@(TCons xts _)   = f γ t $ gos γ' z (f_type <$> xts) where γ' = foldr (efoldExt' g) γ xts
     go _ _ t                 = error $ "Not supported in efoldRType: " ++ ppshow t
@@ -374,9 +382,9 @@ rawStringFTycon            = F.stringFTycon . F.Loc F.dummyPos
 -- type structure of @t2@, and applying @f@ whenever refinements are present on 
 -- both sides and @g@ whenever the respective part in type @t2@ is missing.
 --------------------------------------------------------------------------------
-zipType :: TDefEnv RefType -> 
+zipType :: TDefEnv RefType     -> 
   (F.Reft -> F.Reft -> F.Reft) ->   -- applied to refs that are present on both sides
-  (F.Reft -> F.Reft) ->             -- applied when pred is absent on the LHS
+  (F.Reft -> F.Reft)           ->   -- applied when pred is absent on the LHS
   RefType -> RefType -> RefType
 --------------------------------------------------------------------------------
 --
@@ -386,16 +394,20 @@ zipType :: TDefEnv RefType ->
 --                                | t1|_t1' \/ .. tm|_tm'              
 --                                |         , if n <= m, ti ~ ti'
 --
-zipType δ f g t1 t2 
-  | any isUnion [t1, t2]
-  = mkUnionR (f r1 r2) $ cmn ++ snd
+zipType δ f g (TApp TUn t1s r1) (TApp TUn t2s r2) 
+  = TApp TUn (cmn ++ snd) $ f r1 r2
   where
-    (r1, r2)   = mapPair rTypeR (t1, t2) 
-    (t1s, t2s) = mapPair bkUnion (t1, t2) 
     cmn        = [ zipType δ f g τ1 τ2 | τ2 <- t2s
                                        , τ1 <- maybeToList $ L.find (equiv τ2) t1s ]
     snd        = fmap g <$> [ t        | t <- t2s
                                        , not $ exists (equiv t) t1s ]
+zipType δ f g t1 t2@(TApp TUn _ _ ) 
+  = zipType δ f g (TApp TUn [t1] fTop) t2
+  -- = zipType δ f g (TApp TUn [t1] $ rTypeReft t1) t2
+
+zipType δ f g (TApp TUn t1s r1) t2 
+  = zipType δ f g ((fromJust $ L.find (equiv t2) t1s) `strengthen` r1) t2
+                                       
 
 zipType δ f g t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
   | i1 == i2  
@@ -406,6 +418,9 @@ zipType δ f g t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2)
 zipType _ f _ (TApp c [] r) (TApp c' [] r') 
   | c == c' = TApp c [] $ f r r'
 
+zipType _ _ _ _ t2@(TApp TTop _ _ ) 
+  = t2
+
 zipType _ f _ (TVar v r) (TVar v' r') 
   | v == v' = TVar v $ f r r'
 
@@ -415,28 +430,45 @@ zipType δ f g (TFun x1s t1 r1) (TFun x2s t2 r2)
     xs = zipWith (zipBind δ f g) x1s x2s
     y  = zipType δ f g t1 t2
 
-zipType δ f g (TArr t1 r1) (TArr t2 r2) 
-  = TArr (zipType δ f g t1 t2) $ f r1 r2
-
 zipType δ f g (TCons e1s r1) (TCons e2s r2) 
   = TCons (cmn ++ snd) (f r1 r2)
   where 
-  -- FIXME: m1 `mconcat` m2
-    cmn = [ TE s1 m1 (zipType δ f g t1 t2) | TE s1 m1 t1 <- e1s
-                                           , TE s2 _  t2 <- e2s
-                                           , s1 == s2 ]
-    -- FIXME: Should we apply g here as well?
-    -- This won't really happen cause we only use it for downcast, so
-    -- the snd list will be empty
-    snd = [ TE s m t | TE s m t <- e2s
-                     , not $ exists ((== s) . f_sym) e1s ]
+    -- FIXME: mutabilities? m1 `mconcat` m2
+    cmn = [ zipElts (zipType δ f g) e1 e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ] 
+    snd = [ e        | e <- e2s , not (eltSym e `elem` ks1) ]
+    ks1 = [ eltSym e | e <- e1s ]
 
 zipType _ _ _ t1 t2 = 
   errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
 
 
-zipBind δ f g (B s1 t1) (B s2 t2) 
-  | s1 == s2 = B s1 $ zipType δ f g t1 t2 
-zipBind _ _ _ _       _           
-  = errorstar "BUG[zipBind]: mis-matching binders"
+zipBind δ f g (B s1 t1) (B s2 t2) = B s2 $ zipType δ f g t1 t2 
 
+
+-- | Tags 
+-- --------------------------------------------------------------------------------
+-- tagR                        :: RType F.Reft -> F.Reft
+-- --------------------------------------------------------------------------------
+-- tagR t                       = predReft (rTypeValueVar t) $ F.pOr ps -- por ps
+--   where
+--     por []                   = F.PTrue
+--     por [p]                  = p
+--     por ps                   = F.POr ps
+--     predReft v p             = F.Reft (v, [F.RConc $ F.prop p])
+--     ps                       = F.PAtom F.Eq tagCall <$> tagStrs
+--     tagCall                  = F.EApp tagSym [v]
+--     v                        = F.EVar $ rTypeValueVar t
+--     tagStrs                  = F.expr . F.symbol . ("lit#" ++) <$> tof t
+--     tagSym                   = F.Loc F.dummyPos (F.symbol "ttag")
+--     tof                     :: RefType -> [String]
+--     tof t | isTFun t         = ["function"]
+--     tof (TApp TInt _ _)      = ["number"]
+--     tof (TApp TBool _ _)     = ["boolean"]
+--     tof (TApp TString _ _)   = ["string"]
+--     tof (TApp TNull _ _)     = ["object"]
+--     tof (TApp (TRef _ ) _ _) = ["object"]
+--     tof (TCons _   _ )       = ["object"]
+--     tof (TApp TUn ts _)      = [] -- concatMap tof ts
+--     tof (TApp TUndef _ _ )   = ["undefined"]
+--     tof _                    = []
+-- 

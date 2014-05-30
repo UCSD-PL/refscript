@@ -92,14 +92,17 @@ parser.disable_interspersed_args()
 options, args = parser.parse_args()
 
 testDir   = "typescript"
+#testDir   = "tsc-src/compiler/core/arrayUtilities"
 
 testSign  = [("pos", 0), ("neg", 1)]
+#testSign  = [(".", 0)]
 
-#testCategories = ["arrays", "classes", "lists", "loops", "misc", "objects",
-#                  "operators", "simple", "unions"]
-## not included: ["proto", "typealias"]
+#testCategories = ["operators", "simple", "unions"]
 
-testCategories = ["objects"]
+## not supported: ["proto", "typealias", "lists"]
+
+testCategories = ["objects", "arrays", "classes", "loops", "misc", "operators", "simple", "unions"]
+#testCategories = ["."]
 
 testdirs = [("/".join([testDir, s, c]), p) for (s, p) in testSign 
                                            for c      in testCategories ]

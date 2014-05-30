@@ -15,7 +15,7 @@ function myPlusOk(x, y){
 /*@ one :: () => {number | v = 1} */
 function one(){
   var d = myPlusOk(0, 1);
-  assert (d == 2);
+  assert (d === 2);
   return d; 
 }
 

@@ -5,9 +5,9 @@
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
-module Language.Nano.Typecheck.Lookup (getProp, getPropTDef) where 
+module Language.Nano.Typecheck.Lookup (getProp, getElt, getCallable, getPropTDef) where 
 
-import           Data.List (find)
+import           Data.Maybe (listToMaybe)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors
@@ -43,32 +43,84 @@ getProp ::  (IsLocated l, PPR r) =>
 -------------------------------------------------------------------------------
 getProp l α γ s t@(TApp _ _ _)  = getPropApp l α γ s t 
 getProp _ _ _ _   (TFun _ _ _ ) = Nothing
-getProp l α γ s a@(TArr _ _)    = (a,) <$> getPropArr l α γ s a
-getProp _ _ _ s a@(TCons _ _)   = (a,) <$> getPropCons s a
+getProp _ _ _ s a@(TCons _ _)   = (a,) <$> getPropCons False s a
 getProp l _ _ _ t               = die $ bug (srcPos l) 
                                       $ "Using getProp on type: " ++ ppshow t 
 
 
+-- | getElt could return multiple bindgins
 -------------------------------------------------------------------------------
-getPropApp :: (PPR r, IsLocated a) =>
-  a -> TER r -> TDR r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
+getElt :: (PPR r, IsLocated l) 
+       => l -> TDR r -> F.Symbol -> RType r -> [(RType r, TElt (RType r))]
+-------------------------------------------------------------------------------
+getElt l γ s t@(TApp _ _ _)  = getEltApp l γ s t 
+getElt _ _ s t@(TCons _ _)   = (t,) <$> getEltCons False s t
+getElt l _ _ t               = die $ bug (srcPos l) 
+                                   $ "Using getElt on type: " ++ ppshow t 
+
+
+-------------------------------------------------------------------------------
+getCallable :: PPR r => TDefEnv (RType r) -> RType r -> [RType r]
+-------------------------------------------------------------------------------
+getCallable δ t           = uncurry mkAll <$> foo [] t
+  where
+    foo αs t@(TFun _ _ _) = [(αs, t)]
+    foo αs   (TAnd ts)    = concatMap (foo αs) ts 
+    foo αs   (TAll α t)   = foo (αs ++ [α]) t
+    foo αs   (TApp (TRef (s, False)) _ _ )
+                          = case findSym s δ of 
+                              Just d  -> [ (αs, t) | CallSig t <- t_elts d ]
+                              Nothing -> []
+    foo αs   (TCons es _) = [ (αs, t) | CallSig t <- es  ]
+    foo _    t            = error $ "getCallable: " ++ ppshow t
+
+
+-------------------------------------------------------------------------------
+getPropApp :: (PPR r, IsLocated a) 
+           => a -> TER r -> TDR r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 getPropApp l α γ s t@(TApp c ts _) = 
   case c of 
-    TBool   -> Nothing
-    TUndef  -> Nothing
-    TNull   -> Nothing
-    TUn     -> getPropUnion l α γ s ts
-    TInt    -> lookupAmbientVar l α γ s "Number" t
-    TString -> lookupAmbientVar l α γ s "String" t
-    TRef i  -> findSym i γ >>= getPropTDef l α γ s ts >>= return . (t,)
-    TTop    -> die $ bug (srcPos l) "getProp top"
-    TVoid   -> die $ bug (srcPos l) "getProp void"
+    TBool      -> Nothing
+    TUndef     -> Nothing
+    TNull      -> Nothing
+    TUn        -> getPropUnion l α γ s ts
+    TInt       -> lookupAmbientVar l α γ s "Number" t
+    TString    -> lookupAmbientVar l α γ s "String" t
+    TRef (i,b) -> findSym i γ >>= getPropTDef b l γ s ts >>= return . (t,)
+    TTop       -> die $ bug (srcPos l) "getProp top"
+    TVoid      -> die $ bug (srcPos l) "getProp void"
+getPropApp _ _ _ _ _ = error "getPropApp should only be applied to TApp"
 
-getPropApp _ _ _ _ _ = error "getPropArr should only be applied to TApp"
 
-getPropCons s (TCons bs _) = f_type <$> find ((s ==) . f_sym) bs
-getPropCons _ _ = error "BUG: Cannot call getPropCons on non TCons"
+getEltApp l γ s t@(TApp c ts _) = 
+  case c of 
+    TRef (i,b) -> case findSym i γ of
+                    Just d  -> (t,) <$> getEltTDef b l γ s ts d
+                    Nothing -> []
+    _          -> []
+getEltApp _ _ _ _ = error "getEltApp should only be applied to TApp"
+
+
+getEltTDef b _ γ f ts d = getEltCons b f t
+  where
+    t = TCons (S.flatten γ (d,ts)) fTop
+
+
+getEltCons b  s (TCons es _) = [ e | e             <- es
+                                   , eltSym e      == s
+                                   , isStaticElt e == b ]
+getEltCons _ _ _            = error $ "Cannot call getEltCons on non TCons"
+
+
+-- FIXME: IndexSig access could return null.
+getPropCons b s t@(TCons es _) 
+  | isIndSig t  = listToMaybe [ {-nil-} t | IndexSig _ _ t <- es]   
+  | otherwise   = listToMaybe [ eltType e | e              <- es
+                                          , isStaticElt e  == b
+                                          , eltSym e       == s ]
+
+getPropCons _ _ _ = error "BUG: Cannot call getPropCons on non TCons"
 
 -- Access the property from the relevant ambient object but return the 
 -- original accessed type instead of the type of the ambient object. 
@@ -82,31 +134,10 @@ lookupAmbientVar l α γ s amb t =
 
 -------------------------------------------------------------------------------
 getPropTDef :: (PPR r) =>
-  t -> TER r -> TDR r -> F.Symbol -> [RType r] -> TDef (RType r) -> Maybe (RType r)
+  Bool -> t -> TDR r -> F.Symbol -> [RType r] -> TDef (RType r) -> Maybe (RType r)
 -------------------------------------------------------------------------------
-getPropTDef l α γ f ts (TD _ vs pro elts) = 
-    case [ p | TE s _ p <- elts, s == f ] of
-      [ ] -> do (psy, pts) <- pro
-                ptd        <- findSym psy γ
-                t          <- getPropTDef l α γ f pts ptd
-                return      $ S.apply θ t
-      [p] -> Just $ S.apply θ p                               -- found binding
-      _   -> error $ "BUG: multiple field binding in TDef"
-  where
-    θ = S.fromList $ zip vs ts
-
-
--------------------------------------------------------------------------------
-getPropArr :: (PPR r, IsLocated a) => 
-  a -> TER r -> TDR r -> F.Symbol -> RType r -> Maybe (RType r)
--------------------------------------------------------------------------------
-getPropArr l α γ s (TArr t _) =
--- NOTE: Array has been declared as a type declaration so 
--- it should reside in γ, and we can just getPropTDef on it,
--- using type t as teh single type parameter to it.
-  findSym "Array" γ >>= getPropTDef l α γ s [t]
-
-getPropArr _ _ _ _ _ = error "getPropArr should only be applied to arrays"
+getPropTDef b _ γ f ts d = getPropCons b f t  
+  where t = TCons (S.flatten γ (d,ts)) fTop
 
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns

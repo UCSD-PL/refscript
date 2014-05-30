@@ -2,10 +2,13 @@
 
 {-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE DeriveTraversable         #-}
+{-# LANGUAGE DeriveFoldable            #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE OverlappingInstances      #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE UndecidableInstances      #-}
@@ -24,42 +27,37 @@ module Language.Nano.Typecheck.Types (
   , RType (..), Bind (..), toType, ofType, rTop, strengthen 
 
   -- * Predicates on Types 
-  , isTop, isNull, isVoid, isUndef, isUnion
+  , isTop, isNull, isVoid, isTNum, isUndef, isUnion
 
   -- * Constructing Types
-  , mkUnion, mkUnionR, mkFun, mkAll
+  , mkUnion, mkFun, mkAll
 
   -- * Deconstructing Types
-  , bkFun, bkFuns, bkAll, bkAnd, bkUnion, bkPaddedUnion, unionParts, unionParts', funTys
+  , bkFun, bkFuns, bkAll, bkAnd, bkUnion, unionParts, unionParts', funTys
   
   -- Union ops
   , rUnion, rTypeR, setRTypeR, noUnion, unionCheck
   
   , renameBinds
-  , calleeType
 
   -- * Regular Types
   , Type, TDef (..), TVar (..), TCon (..), TElt (..)
 
   -- * Primitive Types
-  , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, tUndef, tNull
-  , tAnd, isTVar, isArr, isTCons, isTFun, fTop
+  , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, rtArr, tUndef, tNull
+  , tAnd, isTVar, isRigid, isArr, isTObj, isIndSig, isConstr, isTFun, fTop, orNull
 
   -- * Print Types
   , ppArgs
 
-  -- * Type comparison/joining/subtyping
+  -- * Type comparison
   , Equivalent
   , equiv
+  , sameBinder, eltType, eltToPair, eltSym, zipElts, isStaticElt, nonStaticElt, nonConstrElt
 
   -- * Type definition env
-  , TDefEnv (..), tDefEmpty, tDefFromList
+  , TDefEnv (..), tDefEmpty, tDefFromList, tDefToList
   , addSym, findSym, findSymOrDie
-  --, addObjLitTy
-  , findEltWithDefault
-  , getDefNames
-  , sortTDef
-  , getCons
 
   -- * Operator Types
   , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy
@@ -77,8 +75,8 @@ module Language.Nano.Typecheck.Types (
   -- * Contexts
   , CallSite (..), IContext, emptyContext, pushContext
 
-  -- * Mutability 
-  , Mutability (..), writeGlobalVars, readOnlyVars  
+  -- * Assignability 
+  , Assignability (..), definedGlobs,  writeGlobalVars, readOnlyVars  
 
   -- * Aliases
   , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
@@ -89,7 +87,9 @@ import           Text.Printf
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
 import           Data.Function                  (on)
-import           Data.Maybe                     (fromMaybe, fromJust)
+import           Data.Maybe                     (fromMaybe, listToMaybe)
+import           Data.Traversable               hiding (sequence) 
+import           Data.Foldable                  (Foldable()) 
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.List                      as L
 import qualified Data.IntMap                    as I
@@ -103,8 +103,6 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
-
-import           GHC.Exts
 
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Misc
@@ -145,29 +143,42 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 -- | Data types 
 
 data TDef t    = TD { 
-        t_name  :: !(Id SourceSpan)               -- ^ Name (possibly no name)
+        t_class :: Bool                           -- ^ Is this a class or interface type
+      , t_name  :: !(Id SourceSpan)               -- ^ Name (possibly no name)
       , t_args  :: ![TVar]                        -- ^ Type variables
-      , t_proto :: !(Maybe (Id SourceSpan, [t]))  -- ^ Parent type symbol
+      , t_proto :: !(Maybe (Id SourceSpan, [t]))  -- ^ Heritage
       , t_elts  :: ![TElt t]                      -- ^ List of data type elts 
-      } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+      } deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
-data TElt t    = TE { 
-        f_sym   :: F.Symbol                       -- ^ Symbol
-      , f_mut   :: Bool                           -- ^ Mutability modifier (mutable:true)
-      , f_type  :: t                              -- ^ Type
-      } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+-- | Assignability is ingored atm.
+data TElt t    = CallSig  { f_type :: t }       -- Call Signature
+               | ConsSig  { f_type :: t }       -- Constructor Signature               
+               | IndexSig { f_sym :: F.Symbol
+                          , f_key :: Bool
+                          , f_type :: t }       -- Index Signature (T/F=string/number)
+              
+               | PropSig  { f_sym  :: F.Symbol, -- Name  
+                            f_sta  :: Bool,     -- Static or not
+                            f_mut  :: Bool,     -- Mutability (NOT WORKING YET !!!) 
+                            f_this :: Maybe t,  -- Required object type
+                            f_type :: t }       -- Property type
+
+
+               | MethSig  { f_sym  :: F.Symbol  -- Name
+                          , f_sta  :: Bool      -- Static or not
+                          , f_this :: Maybe t   -- Required object type
+                          , f_type :: t }       -- Method Signature
+
+  deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
 -- | Type definition environment
 
-data TDefEnv t = G  { 
-        g_size  :: Int                            -- ^ Size of the `env`
-      , g_env   :: F.SEnv (TDef t)                -- ^ Named types - mapping to env
-                    } deriving (Show, Functor, Data, Typeable)
+data TDefEnv t = G  { g_size  :: Int, g_env   :: F.SEnv (TDef t) } 
+  deriving (Show, Functor, Data, Typeable, Foldable, Traversable)
 
 instance F.Fixpoint t => F.Fixpoint (TDef t) where
-  toFix (TD n _ _ _) = F.toFix $ F.symbol n
-
+  toFix (TD _ n _ _ _) = F.toFix $ F.symbol n
 
 tDefEmpty = G 0 F.emptySEnv
 
@@ -176,10 +187,13 @@ tDefFromList :: F.Symbolic s => [(s, TDef t)] -> TDefEnv t
 ---------------------------------------------------------------------------------
 tDefFromList = foldr (uncurry addSym) tDefEmpty 
 
-getDefNames (G _ n) = fst <$> F.toListSEnv n
+
+---------------------------------------------------------------------------------
+tDefToList :: TDefEnv t -> [TDef t]
+---------------------------------------------------------------------------------
+tDefToList (G _ m) = snd <$> F.toListSEnv m 
 
 
--- FIXME: Check fro already existing name?
 ---------------------------------------------------------------------------------
 addSym :: F.Symbolic s => s -> TDef t -> TDefEnv t -> TDefEnv t
 ---------------------------------------------------------------------------------
@@ -199,23 +213,8 @@ findSym s (G _ γ) = F.lookupSEnv (F.symbol s) γ
 ---------------------------------------------------------------------------------
 findSymOrDie:: F.Symbolic s => s -> TDefEnv t -> TDef t
 ---------------------------------------------------------------------------------
-findSymOrDie s γ = fromMaybe (error "findTySymWithIdOrDie") $ findSym s γ 
-
----------------------------------------------------------------------------------
-findEltWithDefault :: F.Symbol -> t -> [TElt t] -> t
----------------------------------------------------------------------------------
-findEltWithDefault s t elts = 
-  maybe t f_type $ L.find ((== s) . f_sym) elts
-
-
--- | Sort the fields of a TDef 
----------------------------------------------------------------------------------
-sortTDef:: TDef t -> TDef t
----------------------------------------------------------------------------------
-sortTDef (TD nm vs p elts) = TD nm vs p $ sortWith f_sym elts
-
-
-getCons = fromJust . L.find ((== F.symbol "constructor") . f_sym)
+findSymOrDie s γ = fromMaybe (error msg) $ findSym s γ 
+  where msg = "findSymOrDie failed on: " ++ F.symbolString (F.symbol s)
 
 
 -- | Type Constructors
@@ -225,10 +224,12 @@ data TCon
   | TString
   | TVoid
   | TTop
-  | TRef F.Symbol
+  | TRef (F.Symbol, Bool) -- The boolean is for static (T/F)
   | TUn
   | TNull
   | TUndef
+
+  | TFPBool
     deriving (Ord, Show, Data, Typeable)
 
 -- | (Raw) Refined Types 
@@ -236,20 +237,19 @@ data RType r
   = TApp TCon [RType r]     r   -- ^ C T1,...,Tn
   | TVar TVar               r   -- ^ A
   | TFun [Bind r] (RType r) r   -- ^ (x1:T1,...,xn:Tn) => T
-  | TArr (RType r)          r   -- ^ [T] 
+  | TCons [TElt (RType r)]  r   -- ^ Flat object type
   | TAll TVar (RType r)         -- ^ forall A. T
   | TAnd [RType r]              -- ^ (T1..) => T1' /\ ... /\ (Tn..) => Tn' 
 
   | TExp F.Expr                 -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
 
-  | TCons [TElt (RType r)]  r   -- ^ Flat object type
-    deriving (Ord, Show, Functor, Data, Typeable)
+    deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 data Bind r
   = B { b_sym  :: F.Symbol      -- ^ Binding's symbol
       , b_type :: !(RType r)    -- ^ Field type
       } 
-    deriving (Eq, Ord, Show, Functor, Data, Typeable)
+    deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 -- | "pure" top-refinement
 fTop :: (F.Reftable r) => r
@@ -268,18 +268,6 @@ ofType = fmap (const fTop)
 
 -- | Top-up refinemnt
 rTop = ofType . toType
-
--- | `calleeType` uses the types at the callsite to extract the appropriate
---   conjunct from an intersection.
-
-calleeType _ ts (TAnd fts) = L.find (argsMatch ts) fts
-calleeType _ _ ft          = Just ft
-
--- | `argsMatch ts ft` holds iff the arg-types in `ft` are identical to `ts` ... 
-argsMatch :: [RType a] -> RType b -> Bool
-argsMatch ts ft = case bkFun ft of 
-                    Nothing        -> False
-                    Just (_,xts,_) -> (toType <$> ts) == ((toType . b_type) <$> xts)
 
 funTys l f xs ft 
   = case bkFuns ft of
@@ -333,21 +321,18 @@ bkAnd t              = [t]
 ---------------------------------------------------------------------------------
 mkUnion :: (F.Reftable r) => [RType r] -> RType r
 ---------------------------------------------------------------------------------
-mkUnion = mkUnionR fTop 
-
-
----------------------------------------------------------------------------------
-mkUnionR :: (F.Reftable r) => r -> [RType r] -> RType r
----------------------------------------------------------------------------------
-mkUnionR _ [ ] = tErr
-mkUnionR r [t] = strengthen t r
-mkUnionR r ts  = TApp TUn ts r 
+mkUnion [ ] = tErr
+mkUnion [t] = t             
+mkUnion ts  = TApp TUn ts fTop
 
 ---------------------------------------------------------------------------------
 bkUnion :: RType r -> [RType r]
 ---------------------------------------------------------------------------------
 bkUnion (TApp TUn xs _) = xs
 bkUnion t               = [t]
+
+
+-- XXX: Is this really necessary anymore ???
 
 
 -- | Type equivalence: This relation corresponds to equality on the raw type
@@ -369,10 +354,8 @@ instance Equivalent (RType r) where
       go [] _  = False
       go _ []  = False
   equiv (TApp c ts _) (TApp c' ts' _) = c `equiv` c' && ts `equiv` ts'
-  equiv (TArr t _   ) (TArr t' _    ) = t `equiv` t'
   equiv (TVar v _   ) (TVar v' _    ) = v == v'
-  equiv (TFun b o _ ) (TFun b' o' _ ) = 
-    (b_type <$> b) `equiv` (b_type <$> b') && o `equiv` o' 
+  equiv (TFun b o _ ) (TFun b' o' _ ) = on equiv (b_type <$>) b b' && o `equiv` o' 
   equiv (TAll _ _   ) (TAll _ _     ) = error "equiv-tall"
   equiv (TExp _     ) (TExp   _     ) = error "equiv-texp"
   equiv _             _               = False
@@ -382,7 +365,18 @@ instance Equivalent TCon where
   equiv c        c'         = c == c'
 
 instance Equivalent (TElt (RType r)) where 
-  equiv (TE _ m1 t1) (TE _ m2 t2) = m1 == m2 && equiv t1 t2
+  equiv (PropSig f1 s1 m1 τ1 t1) (PropSig f2 s2 m2 τ2 t2) = 
+    (f1,m1,s1) == (f2,m2,s2) && equiv τ1 τ2 && equiv t1 t2
+  equiv (CallSig t1)          (CallSig t2)          = equiv t1 t2
+  equiv (ConsSig t1)          (ConsSig t2)          = equiv t1 t2
+  equiv (IndexSig _ b1 t1)    (IndexSig _ b2 t2)    = b1 == b2 && equiv t1 t2
+  equiv (MethSig f1 s1 τ1 t1) (MethSig f2 s2 τ2 t2) = (f1,s1) == (f2,s2) && equiv t1 t2 && equiv τ1 τ2 
+  equiv _                     _                     = False
+ 
+instance Equivalent t => Equivalent (Maybe t) where 
+  equiv (Just τ1) (Just τ2) = equiv τ1 τ2
+  equiv Nothing   Nothing   = True
+  equiv _         _         = False
 
 instance Equivalent (Bind r) where 
   equiv (B s t) (B s' t') = s == s' && equiv t t' 
@@ -390,16 +384,6 @@ instance Equivalent (Bind r) where
 instance Equivalent (Id a) where 
   equiv i i' = F.symbol i == F.symbol i'
 
-
---------------------------------------------------------------------------------
-bkPaddedUnion :: String -> RType r -> RType r -> [(RType r, RType r)]
---------------------------------------------------------------------------------
-bkPaddedUnion msg t1 t2 =
-  zipWith check (bkUnion t1) (bkUnion t2)
-  where check t t' | equiv t t' = (t,t')
-                   | otherwise  = 
-                   errorstar $ printf "bkPaddedUnion[%s]\n\t%s\nand\n\t%s" 
-                     msg (ppshow $ toType t1) (ppshow $ toType t2) 
 
 
 -- | `unionParts` is a special case of `unionParts'` that uses Equivalent as 
@@ -446,8 +430,8 @@ unionParts' eq t1 t2 = (common t1s t2s, d1s, d2s)
 strengthen                   :: F.Reftable r => RType r -> r -> RType r
 ---------------------------------------------------------------------------------
 strengthen (TApp c ts r) r'  = TApp c ts $ r' `F.meet` r 
+strengthen (TCons ts r)  r'  = TCons ts  $ r' `F.meet` r 
 strengthen (TVar α r)    r'  = TVar α    $ r' `F.meet` r 
-strengthen (TArr t r)    r'  = TArr t    $ r' `F.meet` r
 strengthen t _               = t                         
 
 -- NOTE: r' is the OLD refinement. 
@@ -482,9 +466,18 @@ isVoid :: RType r -> Bool
 isVoid (TApp TVoid _ _)   = True 
 isVoid _                  = False
 
-isTCons (TApp (TRef _) _ _) = True
-isTCons (TCons _ _)         = True
-isTCons _                   = False
+isTObj (TApp (TRef _) _ _) = True
+isTObj (TCons _ _)         = True
+isTObj _                   = False
+
+isTNum (TApp TInt _ _ )    = True
+isTNum _                   = False
+
+isIndSig (TCons es _) | not (null [ () | IndexSig _ _ _ <- es ]) = True
+isIndSig _            = False
+
+isConstr (ConsSig _)  = True
+isConstr _            = False
 
 isUnion :: RType r -> Bool
 isUnion (TApp TUn _ _) = True           -- top-level union
@@ -500,7 +493,6 @@ rTypeR               :: RType r -> r
 rTypeR (TApp _ _ r ) = r
 rTypeR (TVar _ r   ) = r
 rTypeR (TFun _ _ r ) = r
-rTypeR (TArr _ r   ) = r
 rTypeR (TCons _ r  ) = r
 rTypeR (TAll _ _   ) = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )     = errorstar "Unimplemented: rTypeR - TAnd"
@@ -511,7 +503,6 @@ setRTypeR :: RType r -> r -> RType r
 setRTypeR (TApp c ts _   ) r = TApp c ts r
 setRTypeR (TVar v _      ) r = TVar v r
 setRTypeR (TFun xts ot _ ) r = TFun xts ot r
-setRTypeR (TArr t _      ) r = TArr t r
 setRTypeR t                _ = t
 
 ---------------------------------------------------------------------------------------
@@ -520,7 +511,6 @@ noUnion :: (F.Reftable r) => RType r -> Bool
 noUnion (TApp TUn _ _)  = False
 noUnion (TApp _  rs _)  = and $ map noUnion rs
 noUnion (TFun bs rt _)  = and $ map noUnion $ rt : (map b_type bs)
-noUnion (TArr t     _)  = noUnion t
 noUnion (TAll _ t    )  = noUnion t
 noUnion _               = True
 
@@ -538,16 +528,32 @@ instance Eq TCon where
   TUn     == TUn     = True
   TNull   == TNull   = True
   TUndef  == TUndef  = True
+  TFPBool == TFPBool = True
   _       == _       = False
  
-instance (Eq r, Ord r, F.Reftable r) => Eq (RType r) where
-  TApp TUn t1 _       == TApp TUn t2 _       = (null $ t1 L.\\ t2) && (null $ t2 L.\\ t1)
-  TApp c1 t1s r1      == TApp c2 t2s r2      = (c1, t1s, r1)  == (c2, t2s, r2)
-  TVar v1 r1          == TVar v2 r2          = (v1, r1)       == (v2, r2)
-  TFun b1 t1 r1       == TFun b2 t2 r2       = (b1, t1, r1)   == (b2, t2, r2)
-  TArr t1 r1          == TArr t2 r2          = t1 == t2 && r1 == r2
-  TAll v1 t1          == TAll v2 t2          = v1 == v2 && t1 == t2   -- Very strict Eq here
-  _                   == _                   = False
+
+-- Ignoring refinements in equality check
+instance Eq (RType r) where
+  TApp TUn t1 _ == TApp TUn t2 _  = (null $ t1 L.\\ t2) && (null $ t2 L.\\ t1)
+  TApp c1 t1s _ == TApp c2 t2s _  = (c1, t1s) == (c2, t2s)
+  TVar v1 _     == TVar v2 _      = v1        == v2
+  TFun b1 t1 _  == TFun b2 t2 _   = (b_type <$> b1, t1)  == (b_type <$> b2, t2)
+  TAll v1 t1    == TAll v2 t2     = v1 == v2 && t1 == t2   -- Very strict Eq here
+  TAnd t1s      == TAnd t2s       = t1s == t2s
+  TCons e1s _   == TCons e2s _    = length e1s == length e2s && and (zipWith (==) e1s' e2s')
+    where
+      (e1s', e2s') = mapPair (L.sortBy (compare `on` eltSym)) (e1s, e2s)
+  _             == _              = False
+
+
+instance Eq t => Eq (TElt t) where 
+  PropSig f1 s1 m1 τ1 t1 == PropSig f2 s2 m2 τ2 t2 = (f1,m1,s1,τ1,t1) == (f2,m2,s2,τ2,t2)
+  CallSig t1             == CallSig t2             = t1 == t2
+  ConsSig t1             == ConsSig t2             = t1 == t2
+  IndexSig _ b1 t1       == IndexSig _ b2 t2       = (b1,t1) == (b2,t2)
+  MethSig f1 s1 τ1 t1    == MethSig f2 s2 τ2 t2    = (f1,s1,τ1,t1) == (f2,s2,τ2,t2)
+  _                      == _                      = False
+ 
 
 
 ---------------------------------------------------------------------------------
@@ -558,7 +564,7 @@ data Nano a t = Nano { fp     :: FilePath                  -- ^ FilePath
                      , code   :: !(Source a)               -- ^ Code to check
                      , externs:: !(Env t)                  -- ^ Imported (unchecked) specifications 
                      , specs  :: !(Env t)                  -- ^ Function specs and 
-                     , glVars :: !(Env t)                  -- ^ Global (annotated) vars
+                     -- , glVars :: !(Env t)                  -- ^ Global (annotated) vars
                      , consts :: !(Env t)                  -- ^ Measure Signatures
                      , defs   :: !(TDefEnv t)              -- ^ Type definitions
                                                            -- ^ After TC will also include class types
@@ -608,8 +614,8 @@ instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
     {-$+$ ppEnv (externs pgm)-}
     $+$ text "\n******************* Checked fun sigs **********"
     $+$ pp (specs pgm)
-    $+$ text "\n******************* Global vars ***************"
-    $+$ pp (glVars pgm)
+--     $+$ text "\n******************* Global vars ***************"
+--     $+$ pp (glVars pgm)
     $+$ text "\n******************* Constants *****************"
     $+$ pp (consts pgm) 
     $+$ text "\n******************* Type Definitions **********"
@@ -638,15 +644,17 @@ instance PP t => PP (F.SEnv t) where
   pp m = vcat $ pp <$> F.toListSEnv m
 
 instance (PP t) => PP (TDef t) where
-    pp (TD nm vs Nothing ts) = 
-          pp nm 
+    pp (TD c nm vs Nothing ts) = 
+          pp (if c then "class" else "interface")
+      <+> pp nm 
       <+> ppArgs brackets comma vs 
       <+> braces (
             text " " 
         <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
         <+> text " ")
-    pp (TD nm vs (Just (p,ps)) ts) = 
-          pp nm 
+    pp (TD c nm vs (Just (p,ps)) ts) = 
+          pp (if c then "class" else "interface")
+      <+> pp nm 
       <+> ppArgs brackets comma vs 
       <+> text "extends" <+> pp p <+> pp ps
       <+> braces (
@@ -656,22 +664,88 @@ instance (PP t) => PP (TDef t) where
 
 
 instance (PP t) => PP (TElt t) where
-  pp (TE x True t)  = pp x <> text ":"  <> pp t
-  pp (TE x False t) = pp x <> text ":*" <> pp t
+  pp (PropSig x s _ τ t)  =  bStr s "static"
+                         <+> pp x 
+                         <+> mStr (brackets . pp <$> τ)
+                         <>  text ":"  
+                         <+> pp t
+  pp (CallSig t)          = text "call" <+> pp t 
+  pp (ConsSig t)          = text "new" <+> pp t
+  pp (IndexSig x True t)  = brackets (pp x <> text ": string") <> text ":" <> pp t
+  pp (IndexSig x False t) = brackets (pp x <> text ": number") <> text ":" <> pp t
+
+  pp (MethSig x s τ t)    =  bStr s "static" 
+                         <+> pp x 
+                         <+> mStr (brackets . pp <$> τ)
+                         <+> text ":" 
+                         <+> pp t 
+
+bStr True  s = text s
+bStr False _ = text ""
+
+mStr (Just s) = s
+mStr _        = text ""
 
 instance PP Bool where
   pp True   = text "True"
   pp False  = text "False"
     
+sameBinder (PropSig x1 _ s1 _ _) (PropSig x2 _ s2 _ _) = x1 == x2 && s1 == s2
+sameBinder (CallSig _)         (CallSig _)             = True
+sameBinder (ConsSig _)         (ConsSig _)             = True
+sameBinder (IndexSig _ b1 _)   (IndexSig _ b2 _)       = b1 == b2
+sameBinder (MethSig x1 s1 _ _) (MethSig x2 s2 _ _)     = x1 == x2 && s1 == s2
+sameBinder _                   _                       = False
+
+zipElts f e1@(PropSig x1 s1 m1 (Just τ1) t1) e2@(PropSig _ _ _ (Just τ2) t2) 
+                                                         | sameBinder e1 e2 = PropSig x1 s1 m1 (Just $ f τ1 τ2) $ f t1 t2 
+zipElts f e1@(PropSig x1 s1 m1 Nothing t1) e2@(PropSig _ _ _ Nothing t2)
+                                                         | sameBinder e1 e2 = PropSig x1 s1 m1 Nothing $ f t1 t2
+zipElts f e1@(CallSig t1)          e2@(CallSig t2)       | sameBinder e1 e2 = CallSig $ f t1 t2 
+zipElts f e1@(ConsSig t1)          e2@(ConsSig t2)       | sameBinder e1 e2 = ConsSig $ f t1 t2 
+zipElts f e1@(IndexSig x b1 t1)    e2@(IndexSig _ _ t2)  | sameBinder e1 e2 = IndexSig x b1 $ f t1 t2
+zipElts f e1@(MethSig x1 s1 (Just τ1) t1) e2@(MethSig _ _ (Just τ2) t2)
+                                                         | sameBinder e1 e2 = MethSig x1 s1 (Just $ f τ1 τ2) $ f t1 t2
+zipElts f e1@(MethSig x1 s1 Nothing t1) e2@(MethSig _ _ Nothing t2)
+                                                         | sameBinder e1 e2 = MethSig x1 s1 Nothing $ f t1 t2
+zipElts _ e1 e2 = error $ "Cannot zip: " ++ ppshow e1 ++ " and " ++ ppshow e2 
+
+
+eltType (PropSig _ _ _ _ t) = t
+eltType (MethSig _ _ _ t  ) = t
+eltType (ConsSig       t  ) = t
+eltType (CallSig       t  ) = t
+eltType (IndexSig _ _  t  ) = t
+
+eltToPair (PropSig s _ _ _ t)       = (s, t)
+eltToPair (MethSig s   _ Nothing t) = (s, t)
+-- TODO: what do we do with the `this` type?
+-- eltToPair m@(MethSig s   _ _ _t)    = error $ "Cannot call eltToPair on: " ++ ppshow m
+eltToPair (MethSig s  _ (Just _) t) = (s, t)
+eltToPair (ConsSig       t)         = (F.stringSymbol "__constructor__", t)
+eltToPair (CallSig       t)         = (F.stringSymbol "__call__", t)
+eltToPair (IndexSig _ True t)       = (F.stringSymbol "__string__index__", t)
+eltToPair (IndexSig _ False t)      = (F.stringSymbol "__numeric__index__", t)
+
+isStaticElt (PropSig _ True _ _ _) = True
+isStaticElt (MethSig _ True _ _  ) = True
+isStaticElt _                      = False
+
+
+nonStaticElt = not . isStaticElt
+nonConstrElt = not . isConstr
+
+eltSym = fst . eltToPair
+
 
 mapCode :: (a -> b) -> Nano a t -> Nano b t
 mapCode f n = n { code = fmap f (code n) }
 
 ------------------------------------------------------------------------------------------
--- | Mutability 
+-- | Assignability 
 ------------------------------------------------------------------------------------------
 
-data Mutability 
+data Assignability 
   = ReadOnly    -- ^ import,  cannot be modified, can appear in refinements
   | WriteLocal  -- ^ written in local-scope, can be SSA-ed, can appear in refinements
   | WriteGlobal -- ^ written in non-local-scope, cannot do SSA, cannot appear in refinements
@@ -686,7 +760,17 @@ data Mutability
 writeGlobalVars   :: PP t => Nano a t -> [Id SourceSpan] 
 writeGlobalVars p = envIds mGnty 
   where
-    mGnty         = glVars p  -- guarantees
+    mGnty         = undefined -- glVars p  -- guarantees
+
+
+definedGlobs       :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r, Id (AnnType r), RType r)]
+definedGlobs stmts = everything (++) ([] `mkQ` fromVarDecl) stmts
+  where 
+    fromVarDecl (VarDecl l x _) =
+      case listToMaybe $ [ t | VarAnn t <- ann_fact l ] of
+        Just t                 -> [(l,x,t)]
+        Nothing                -> []
+
 
 -- | `immutableVars p` returns symbols that must-not be re-assigned and hence
 --    * can appear in refinements
@@ -698,6 +782,10 @@ readOnlyVars p = envIds $ mAssm `envUnion` mMeas `envUnion` mExtr
     mAssm      = specs  p     -- assumes                      
     mExtr      = externs p    -- externs
 
+instance PP Assignability where
+  pp ReadOnly    = text "ReadOnly"
+  pp WriteLocal  = text "WriteLocal"
+  pp WriteGlobal = text "WriteGlobal"
 
 ---------------------------------------------------------------------------
 -- | Pretty Printer Instances
@@ -729,8 +817,8 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TApp d@(TRef _) ts r) = F.ppTy r $ pp d <+> ppArgs brackets comma ts 
   pp (TApp c [] r)          = F.ppTy r $ pp c 
   pp (TApp c ts r)          = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
-  pp (TArr t r)             = F.ppTy r $ brackets (pp t)  
-  pp (TCons bs r)           = F.ppTy r $ lbrace $+$ nest 2 (vcat $ map pp bs) $+$ rbrace
+  pp (TCons bs r)           = F.ppTy r $ lbrace <+> intersperse semi (map pp bs) <+> rbrace
+  -- pp (TCons bs r)           = F.ppTy r $ lbrace $+$ nest 2 (cat $ map pp bs) $+$ rbrace
 
 instance PP TCon where
   pp TInt             = text "number"
@@ -739,9 +827,11 @@ instance PP TCon where
   pp TVoid            = text "void"
   pp TTop             = text "top"
   pp TUn              = text "union:"
-  pp (TRef x)         = text "#" <> text (F.symbolString x)
+  pp (TRef (x,True))  = text "#(static)" <> text (F.symbolString $ x)
+  pp (TRef (x,_   ))  = text "#" <> text (F.symbolString $ x)
   pp TNull            = text "null"
   pp TUndef           = text "undefined"
+  pp TFPBool          = text "bool"
 
 instance Hashable TCon where
   hashWithSalt s TInt        = hashWithSalt s (0 :: Int)
@@ -802,7 +892,7 @@ data Cast r  = CNo                                      -- .
              | CDead {                 tgt :: RType r } -- |dead code|
              | CUp   { org :: RType r, tgt :: RType r } -- <t1 UP t2>
              | CDn   { org :: RType r, tgt :: RType r } -- <t1 DN t2>
-             deriving (Eq, Ord, Show, Data, Typeable)
+             deriving (Eq, Ord, Show, Data, Typeable, Functor)
 
 instance (PP r, F.Reftable r) => PP (Cast r) where
   pp CNo         = text "No cast"
@@ -834,16 +924,18 @@ ddCast _          = False
 data Fact r
   = PhiVar      ![(Id SourceSpan)]
   | TypInst     !IContext ![RType r]
-  | Overload    !(Maybe (RType r))
+  -- Overloading
+  | EltOverload !IContext  !(TElt (RType r))
+  | Overload    !IContext  !(RType r)
   | TCast       !IContext !(Cast r)
   -- Type annotations
   | VarAnn      !(RType r)
-  | FieldAnn    !(Bool, RType r)      -- (mutability, type)
+  | FieldAnn    !(Bool, RType r)      -- (Assignability, type)
   | MethAnn     !(RType r)            -- type
   | ConsAnn     !(RType r)            -- type
   -- Class annotation
   | ClassAnn      !([TVar], Maybe (Id SourceSpan,[RType r]))
-    deriving (Eq, Ord, Show, Data, Typeable)
+    deriving (Eq, Show, Data, Typeable, Functor)
 
 type UFact = Fact ()
 
@@ -866,6 +958,32 @@ instance HasAnnotation (Annot b) where
 instance Ord (AnnSSA  r) where 
   compare (Ann s1 _) (Ann s2 _) = compare s1 s2
 
+-- XXX: This shouldn't have to be that hard...
+instance Ord (Fact r) where
+  compare (PhiVar i1       ) (PhiVar i2       )   = compare i1 i2
+  compare (TypInst c1 t1   ) (TypInst c2 t2   )   = compare (c1,toType <$> t1) (c2,toType <$> t2)
+  compare (EltOverload c1 t1) (EltOverload c2 t2) = compare (c1, toType <$> t1) (c2, toType <$> t2)
+  compare (Overload c1 t1  ) (Overload c2 t2  )   = compare (c1, toType t1) (c2, toType t2)
+  compare (TCast c1 _      ) (TCast c2 _      )   = compare c1 c2
+  compare (VarAnn t1       ) (VarAnn t2       )   = on compare toType t1 t2
+  compare (FieldAnn (b1,t1)) (FieldAnn (b2,t2))   = compare (b1, toType t1) (b2, toType t2)
+  compare (MethAnn t1      ) (MethAnn t2      )   = on compare toType t1 t2
+  compare (ConsAnn t1      ) (ConsAnn t2      )   = on compare toType t1 t2
+  compare (ClassAnn (_,m1) ) (ClassAnn (_,m2) )   = on compare (fst <$>) m1 m2
+  compare f1 f2                                   = on compare factToNum f1 f2
+
+factToNum (PhiVar _        ) = 0
+factToNum (TypInst _ _     ) = 1
+factToNum (EltOverload _ _ ) = 2
+factToNum (Overload _  _   ) = 3
+factToNum (TCast _ _       ) = 4
+factToNum (VarAnn _        ) = 5
+factToNum (FieldAnn _      ) = 6
+factToNum (MethAnn _       ) = 7
+factToNum (ConsAnn _       ) = 8
+factToNum (ClassAnn _      ) = 9
+
+
 instance Eq (Annot a SourceSpan) where 
   (Ann s1 _) == (Ann s2 _) = s1 == s2
 
@@ -875,7 +993,8 @@ instance IsLocated (Annot a SourceSpan) where
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)       = text "phi"  <+> pp x
   pp (TypInst ξ ts)   = text "inst" <+> pp ξ <+> pp ts 
-  pp (Overload i)     = text "overload" <+> pp i
+  pp (Overload ξ i)   = text "overload" <+> pp ξ <+> pp i
+  pp (EltOverload ξ i)= text "elt_overload" <+> pp ξ <+> pp i
   pp (TCast  ξ c)     = text "cast" <+> pp ξ <+> pp c
   pp (VarAnn t)       = text "Var Annotation" <+> pp t
   pp (ConsAnn t)      = text "Constructor Annotation" <+> pp t
@@ -903,6 +1022,8 @@ tVar   = (`TVar` fTop)
 isTVar (TVar _ _) = True
 isTVar _          = False
 
+isRigid = not . isTVar
+
 tInt, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RType r
 tInt     = TApp TInt     [] fTop 
 tBool    = TApp TBool    [] fTop
@@ -918,15 +1039,24 @@ tAnd ts  = case ts of
              [t] -> t
              _   -> TAnd ts
 
-tArr    = (`TArr` fTop)
+tArr t   = TApp (TRef (F.symbol "Array", False)) [t] fTop
 
-isArr (TArr _ _ ) = True
-isArr _           = False
+rtArr t   = TApp (TRef (F.symbol "Array", False)) [t] 
+
+isArr (TApp (TRef (s,_)) _ _ ) | s == F.symbol "Array" = True
+isArr _                        = False
 
 isTFun (TFun _ _ _) = True
 isTFun (TAnd ts)    = all isTFun ts
 isTFun (TAll _ t)   = isTFun t
 isTFun _            = False
+
+
+orNull t@(TApp TUn ts _) | any isNull ts = t
+orNull   (TApp TUn ts r) | otherwise     = TApp TUn (tNull:ts) r
+orNull t                 | isNull t      = t
+orNull t                 | otherwise     = TApp TUn [tNull,t] fTop
+
 
 
 -----------------------------------------------------------------------
@@ -948,10 +1078,14 @@ builtinOpId BIArrayLit      = builtinId "BIArrayLit"
 builtinOpId BINumArgs       = builtinId "BINumArgs"
 builtinOpId BITruthy        = builtinId "BITruthy"
 
--- arrayLitTy :: (IsLocated l) => l -> Int -> Env t -> t
+
+-----------------------------------------------------------------------
+arrayLitTy :: (F.Subable (RType r), IsLocated a) 
+           => a -> Int -> Env (RType r) -> RType r
+-----------------------------------------------------------------------
 arrayLitTy l n g 
   = case ty of 
-      TAll α (TFun [xt] t r) -> TAll α $ TFun (arrayLitBinds n xt) (arrayLitOut n t) r
+      TAll μ (TAll α (TFun [xt] t r)) -> TAll μ $ TAll α $ TFun (arrayLitBinds n xt) (arrayLitOut n t) r
       _                      -> err 
     where
       ty                     = builtinOpTy l BIArrayLit g
@@ -972,21 +1106,22 @@ infixOpTy o g = fromMaybe err $ envFindTy ox g
     err       = errorstar $ printf "Cannot find infixOpTy %s" (ppshow ox) -- (ppshow g)
     ox        = infixOpId o
 
-infixOpId OpLT       = builtinId "OpLT"
-infixOpId OpLEq      = builtinId "OpLEq"
-infixOpId OpGT       = builtinId "OpGT"
-infixOpId OpGEq      = builtinId "OpGEq"
-infixOpId OpEq       = builtinId "OpEq"
-infixOpId OpStrictEq = builtinId "OpSEq"
-infixOpId OpNEq      = builtinId "OpNEq"
-infixOpId OpLAnd     = builtinId "OpLAnd"
-infixOpId OpLOr      = builtinId "OpLOr"
-infixOpId OpSub      = builtinId "OpSub"
-infixOpId OpAdd      = builtinId "OpAdd"
-infixOpId OpMul      = builtinId "OpMul"
-infixOpId OpDiv      = builtinId "OpDiv"
-infixOpId OpMod      = builtinId "OpMod"
-infixOpId o          = errorstar $ "Cannot handle: infixOpId " ++ ppshow o
+infixOpId OpLT        = builtinId "OpLT"
+infixOpId OpLEq       = builtinId "OpLEq"
+infixOpId OpGT        = builtinId "OpGT"
+infixOpId OpGEq       = builtinId "OpGEq"
+infixOpId OpEq        = builtinId "OpEq"
+infixOpId OpStrictEq  = builtinId "OpSEq"
+infixOpId OpNEq       = builtinId "OpNEq"
+infixOpId OpStrictNEq = builtinId "OpSNEq"
+infixOpId OpLAnd      = builtinId "OpLAnd"
+infixOpId OpLOr       = builtinId "OpLOr"
+infixOpId OpSub       = builtinId "OpSub"
+infixOpId OpAdd       = builtinId "OpAdd"
+infixOpId OpMul       = builtinId "OpMul"
+infixOpId OpDiv       = builtinId "OpDiv"
+infixOpId OpMod       = builtinId "OpMod"
+infixOpId o           = errorstar $ "infixOpId: Cannot handle: " ++ ppshow o
 
 -----------------------------------------------------------------------
 prefixOpTy :: PrefixOp -> Env t -> t 
@@ -998,7 +1133,8 @@ prefixOpTy o g = fromMaybe err $ envFindTy (prefixOpId o) g
 prefixOpId PrefixMinus  = builtinId "PrefixMinus"
 prefixOpId PrefixLNot   = builtinId "PrefixLNot"
 prefixOpId PrefixTypeof = builtinId "PrefixTypeof"
-prefixOpId o            = errorstar $ "Cannot handle: prefixOpId " ++ ppshow o
+prefixOpId PrefixBNot   = builtinId "PrefixBNot"
+prefixOpId o            = errorstar $ "prefixOpId: Cannot handle: " ++ ppshow o
 
 
 builtinId       = mkId . ("builtin_" ++)

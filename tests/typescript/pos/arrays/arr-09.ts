@@ -1,4 +1,4 @@
-/*@ arr :: { [string] | (len v) = 1 } */ 
+/*@ arr :: { #Array[#Immutable,string] | (len v) = 1 } */ 
 declare var arr : string[]; 
 
 /*@ baz :: () => {v: string | true } */

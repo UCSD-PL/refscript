@@ -20,25 +20,31 @@ module Language.Nano.Typecheck.Subst (
   , Substitutable (..)
 
   -- * Flatten a type definition applying subs
-  , flatten, flattenTRef, flattenType
+  , flatten, flatten', flattenTRef, flattenType, intersect
+
+  -- * Ancestors
+  , weaken
 
   ) where 
 
+import           Data.Maybe (maybeToList)
+import           Data.Function (on)
 import           Text.PrettyPrint.HughesPJ
+import           Text.Printf
+import           Language.Nano.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
-import           Language.Fixpoint.Misc (intersperse)
+import           Language.Fixpoint.Misc (intersperse, mapPair)
 
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
 import qualified Data.List as L
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid hiding ((<>))
-import           Data.Function (fix, on)
-import           Data.Maybe (fromJust)
+import           Data.Function (fix)
 
 -- import           Debug.Trace
 
@@ -70,7 +76,7 @@ instance (F.Reftable r, Substitutable r (RType r)) => Monoid (RSubst r) where
 
 instance (F.Reftable r, PP r) => PP (RSubst r) where 
   pp (Su m) = if M.null m then text "empty" 
-              else if M.size m < 5 then intersperse comma $ (ppBind <$>) $ M.toList m 
+              else if M.size m < 10 then intersperse comma $ (ppBind <$>) $ M.toList m 
               else vcat $ (ppBind <$>) $ M.toList m 
 
 ppBind (x, t) = pp x <+> text ":=" <+> pp t
@@ -81,13 +87,12 @@ class Free a where
 
 instance Free (RType r) where
   free (TApp _ ts _)        = free ts
-  free (TArr t _)           = free t
   free (TVar α _)           = S.singleton α 
   free (TFun xts t _)       = free $ t:(b_type <$> xts)
   free (TAll α t)           = S.delete α $ free t 
   free (TAnd ts)            = free ts 
   free (TExp _)             = error "free should not be applied to TExp"
-  free (TCons xts _)        = free (f_type <$> xts)
+  free (TCons xts _)        = free (eltType <$> xts)
 
 instance Free a => Free [a] where 
   free = S.unions . map free
@@ -101,7 +106,8 @@ instance Free (Cast r) where
 instance Free (Fact r) where
   free (PhiVar _)        = S.empty
   free (TypInst _ ts)    = free ts
-  free (Overload t)      = free t
+  free (Overload _ t)    = free t
+  free (EltOverload _ t) = free t
   free (TCast _ c)       = free c
   free (VarAnn t)        = free t
   free (FieldAnn (_,t))  = free t
@@ -109,9 +115,16 @@ instance Free (Fact r) where
   free (ConsAnn t)       = free t
   free (ClassAnn (vs,m)) = foldr S.delete (free m) vs
 
+instance Free (TElt (RType r)) where
+  free (PropSig _ _ _ τ t) = free τ `mappend` free t
+  free (CallSig t)         = free t
+  free (ConsSig t)         = free t
+  free (IndexSig _ _ t)    = free t
+  free (MethSig _ _ τ t)   = free τ `mappend` free t 
+
 instance Free a => Free (Id b, a) where
   free (_, a)            = free a
- 
+
 instance Free a => Free (Maybe a) where
   free Nothing  = S.empty
   free (Just a) = free a
@@ -136,7 +149,11 @@ instance (Substitutable r t) => Substitutable r (Env t) where
   apply = envMap . apply
 
 instance Substitutable r t => Substitutable r (TElt t) where 
-  apply θ (TE s b t) = TE s b $ apply θ t
+  apply θ (PropSig x m s τ t) = PropSig x m s (apply θ τ) (apply θ t)
+  apply θ (CallSig t)         = CallSig       $ apply θ t
+  apply θ (ConsSig t)         = ConsSig       $ apply θ t
+  apply θ (IndexSig x b t)    = IndexSig x b  $ apply θ t
+  apply θ (MethSig x s τ t)   = MethSig x s   (apply θ τ) (apply θ t)
 
 instance F.Reftable r => Substitutable r (Cast r) where
   apply _ CNo        = CNo
@@ -147,7 +164,8 @@ instance F.Reftable r => Substitutable r (Cast r) where
 instance F.Reftable r => Substitutable r (Fact r) where
   apply _ x@(PhiVar _)      = x
   apply θ (TypInst ξ ts)    = TypInst ξ $ apply θ ts
-  apply θ (Overload t)      = Overload (apply θ <$> t)
+  apply θ (Overload ξ t)    = Overload ξ (apply θ t)
+  apply θ (EltOverload ξ t) = EltOverload ξ (apply θ t)
   apply θ (TCast   ξ c)     = TCast ξ $ apply θ c
   apply θ (VarAnn t)        = VarAnn $ apply θ t
   apply θ (FieldAnn (m,t))  = FieldAnn (m,apply θ t)
@@ -166,7 +184,7 @@ instance F.Reftable r => Substitutable r (Annot (Fact r) z) where
   apply θ (Ann z fs)     = Ann z $ apply θ fs
 
 instance F.Reftable r => Substitutable r (TDef (RType r)) where
-  apply θ (TD n v p e)   = TD n v (apply θ p) (apply θ e)
+  apply θ (TD c n v p e) = TD c n v (apply θ p) (apply θ e)
 
  
 ---------------------------------------------------------------------------------
@@ -177,133 +195,111 @@ appTy θ        (TAnd ts)     = TAnd (apply θ ts)
 appTy (Su m) t@(TVar α r)    = (M.lookupDefault t α m) `strengthen` r
 appTy θ        (TFun ts t r) = TFun  (apply θ ts) (apply θ t) r
 appTy (Su m)   (TAll α t)    = TAll α $ apply (Su $ M.delete α m) t
-appTy θ        (TArr t r)    = TArr (apply θ t) r
 appTy θ        (TCons es r)  = TCons (apply θ es) r
 appTy _        (TExp _)      = error "appTy should not be applied to TExp"
 
 
--- | flatten: Unfolds one level of the input type, flattening all the fields
--- inherited by possible parent classes.
+-- | flatten: Close over all fields inherited by ancestors.
+---------------------------------------------------------------------------
+flatten :: PPR r 
+        => TDefEnv (RType r) -> (TDef (RType r),[RType r]) -> [TElt (RType r)]
+---------------------------------------------------------------------------
+flatten = fix . ff
+
+
+ff δ r (TD _ _ vs (Just (i, ts')) es, ts)
+          = apply θ  . L.unionBy sameBinder es $ r (findSymOrDie i δ, ts')
+  where θ = fromList $ zip vs ts
+
+ff _ _ (TD _ _ vs _ es, ts)  = apply (fromList $ zip vs ts) es
+
+-- | flatten' does not apply the top-level type substitution
+flatten' δ d@(TD _ _ vs _ _) = flatten δ (d, tVar <$> vs)
+
+
+flattenTRef δ (TApp (TRef (n,_)) ts _) = flatten δ (findSymOrDie n δ, ts)
+flattenTRef _ _                        = error "Applying flattenTRef on non-tref"
+
+
+flattenType δ t@(TApp (TRef _) _ r) 
+                             = TCons (flattenTRef δ t) r
+flattenType δ (TApp c ts r)  = TApp c (flattenType δ <$> ts) r
+flattenType _ (TVar v r)     = TVar v r
+flattenType δ (TFun ts to r) = TFun (f <$> ts) (flattenType δ to) r
+                                    where f (B s t) = B s $ flattenType δ t
+flattenType δ (TAll v t)     = TAll v $ flattenType δ t
+flattenType δ (TAnd ts)      = TAnd $ flattenType δ <$> ts
+flattenType δ (TCons ts r)   = TCons ((flattenType δ <$>) <$> ts) r
+flattenType _ _              = error "TExp should not appear here"
+
+
+-- | Weaken a named type, by moving upwards in the class hierarchy. This
+-- function does the necessary type argument substitutions. 
 --
--- Useful for: structural subtyping
+-- FIXME: Works for classes, but interfaces could have multiple ancestors.
+-- FIXME: What about common elements in parent class?
+---------------------------------------------------------------------------
+weaken :: PPR r => TDefEnv (RType r) -> (TDef (RType r), [RType r]) 
+                   -> F.Symbol -> Maybe (TDef (RType r), [RType r])
+---------------------------------------------------------------------------
+weaken δ dt@(TD _ s vs (Just (p,ps)) _, ts) t 
+  | ss /= t = weaken δ (apply θ $ findSymOrDie p δ, apply θ ps) t
+  | ss == t = Just dt
+  where θ   = fromList $ zip vs ts
+        ss  = F.symbol s 
 
-flatten :: PPR r => TDefEnv (RType r) -> TDef (RType r) -> [TElt (RType r)]
-flatten = flatten' False
-
-flattenType :: PPR r => TDefEnv (RType r) -> RType r -> RType r
-flattenType = flattenType' False
-
-flattenTRef :: PPR r => TDefEnv (RType r) -> RType r -> [TElt (RType r)]
-flattenTRef = flattenTRef' False
+weaken δ dt@(TD _ s vs Nothing _, ts) t
+  | ss /= t = Nothing
+  | ss == t = Just dt
+  where ss  = F.symbol s 
 
 
--- WARNING: Calling the following with True for @b@ may cause infinite loop for
--- recursive types.
-
-flatten' b δ = fix ff
+-- | `intersect` returns the intersection of the raw parts of two type trees 
+-- @t1@ and @t2@ adjusted with the respective refinements.
+--------------------------------------------------------------------------------
+intersect :: PPR r => TDefEnv (RType r) -> RType r -> RType r -> (RType r, RType r)
+--------------------------------------------------------------------------------
+intersect δ (TApp TUn t1s r1) (TApp TUn t2s r2) 
+  = (TApp TUn cmn1 r1, TApp TUn cmn2 r2)
   where
-    ff r (TD _ vs (Just (i, ts)) es)
-      = fl 
-      $ L.unionBy nm (ee es)
-      $ r 
-      $ fromJust 
-      $ apply (fromList $ zip vs (tt ts)) (findSym i δ)
+    (cmn1, cmn2)    = unzip [ intersect δ τ1 τ2 | τ2 <- t2s, τ1 <- maybeToList $ L.find (equiv τ2) t1s ]
+    
+intersect δ t1 t2@(TApp TUn _ _ ) 
+  = intersect δ (TApp TUn [t1] fTop) t2
 
-    ff _ (TD _ _ _ es) = ee es
+intersect δ t1@(TApp TUn _ _ ) t2
+  = intersect δ t1 (TApp TUn [t2] fTop)
 
-    nm = (==) `on` f_sym
+intersect δ t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
+  | i1 == i2  
+  = (TApp (TRef i1) (fst <$> zipWith (intersect δ) t1s t2s) r1
+    ,TApp (TRef i2) (snd <$> zipWith (intersect δ) t1s t2s) r2)
+  | otherwise 
+  = on (intersect δ) (flattenType δ) t1 t2 
+ 
+intersect _  (TApp c [] r) (TApp c' [] r') 
+  | c == c' = (TApp c [] r, TApp c [] r')
 
-    ee es | b         
-          = [ TE s m $ flattenType' b δ t | TE s m t <- es]
-          | otherwise 
-          = es
+intersect _ (TVar v r) (TVar v' r') 
+  | v == v' = (TVar v r, TVar v' r')
 
-    -- When flattening a nominal type to a TCons, do not take the constructor
-    -- binding into account.
-    fl es = [ TE s m t | TE s m t <- es, s /= F.symbol "constructor" ]
+intersect δ (TFun x1s t1 r1) (TFun x2s t2 r2) 
+  = (TFun xs1 y1 r1, TFun xs2 y2 r2)
+  where
+    (xs1, xs2) = unzip $ zipWith (intersectBind δ) x1s x2s
+    (y1 , y2 ) = intersect δ t1 t2
 
-    tt ts | b         
-          = flattenType' b δ <$> ts
-          | otherwise
-          = ts
+intersect δ (TCons e1s r1) (TCons e2s r2) 
+  = (TCons cmn1 r1, TCons cmn2 r2)
+  where 
+    -- FIXME: mutabilities? m1 `mconcat` m2
+    cmn1 = fmap fst <$> cmn
+    cmn2 = fmap snd <$> cmn
+    cmn  = [ zipElts (intersect δ) e1 e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ] 
 
-
-flattenElt' b δ (TE s m t) = TE s m $ flattenType' b δ t
-
-flattenTRef' b δ (TApp (TRef n) ts _) 
-                            = apply θ (flatten' b δ d)
-  where d@(TD _ vs _ _)     = findSymOrDie n δ
-        θ                   = fromList $ zip vs ts
-flattenTRef' _ _ _ = error "Applying flattenTRef on non-tref"
-
-
--- | flattenType True : unfolds the input type deeply (may hang)
---   flattenType False: unfolds the input type once
-flattenType' b δ t@(TApp (TRef _) _ r) 
-                                = TCons (flattenTRef' b δ t) r
-flattenType' b δ (TApp c ts r)  = TApp c (flattenType' b δ <$> ts) r
-flattenType' _ _ (TVar v r)     = TVar v r
-flattenType' b δ (TFun ts to r) = TFun (f <$> ts) (flattenType' b δ to) r
-                                    where f (B s t) = B s $ flattenType' b δ t
-flattenType' b δ (TArr t r)     = TArr (flattenType' b δ t) r
-flattenType' b δ (TAll v t)     = TAll v $ flattenType' b δ t
-flattenType' b δ (TAnd ts)      = TAnd $ flattenType' b δ <$> ts
-flattenType' b δ (TCons ts r)   = TCons (flattenElt' b δ <$> ts) r
-flattenType' _ _ _              = error "TExp should not appear here"
+intersect _ t1 t2 = 
+  error $ printf "BUG[intersect]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
 
 
--- -- | unfoldType: Unfold all parts of a type that will not be recursive (i.e.
--- -- named types are excluded). Anonymous object types (that are naturally
--- -- non-recursive) will be unfolded. So this process is expected to terminate
--- -- always. 
--- --
--- -- Also, no substitutions need to take place here, but the top-level one, 
--- -- cause tha anonymous types are not parametric.
--- --
--- -- Useful for: unification
--- ---------------------------------------------------------------------------------
--- unfoldType :: PPR r => TDefEnv (RType r) -> RType r -> RType r
--- ---------------------------------------------------------------------------------
--- unfoldType δ t@(TApp (TRef i) ts r)  
---                             = t
--- unfoldType δ (TApp c ts r)  = TApp c (unfoldType δ <$> ts) r
--- unfoldType _ (TVar v r)     = TVar v r
--- unfoldType δ (TFun ts to r) = TFun (f <$> ts) (unfoldType δ to) r
---                                   where f (B s t) = B s $ unfoldType δ t
--- unfoldType δ (TArr t r)     = TArr (unfoldType δ t) r
--- unfoldType δ (TAll v t)     = TAll v $ unfoldType δ t
--- unfoldType δ (TAnd ts)      = TAnd $ unfoldType δ <$> ts
--- unfoldType δ (TCons ts r)   = TCons (fmap (unfoldType δ) <$> ts) r
--- unfoldType _ _              = error "TExp should not appear here"
+intersectBind δ (B s1 t1) (B s2 t2) = (B s1 t1', B s2 t2') where (t1', t2') = intersect δ t1 t2
 
-
-
--- -- | pp': Print expanded types
--- 
--- class PP' a where
---   pp' :: TDefEnv a -> a -> Doc
--- 
--- instance (F.Reftable r, PP r) => PP' (RType r) where
---   pp' _   (TVar α r)           = F.ppTy r $ pp α 
---   pp' δ   (TFun xts t' _)      = ppBinds' δ parens comma xts <+> text "=>" <+> pp' δ t' 
---   pp' δ t@(TAll _ _)           = text "forall" <+> ppArgs id space αs <> text "." <+> pp' δ t' where (αs, t') = bkAll t
---   pp' δ   (TAnd ts)            = vcat [text "/\\" <+> pp' δ t | t <- ts]
---   pp' _   (TExp e)             = pprint e
---   pp' δ   (TApp TUn ts r)      = F.ppTy r $ ppArgs' δ id (text " +") ts 
---   pp' δ t@(TApp (TRef i) ts r) | isNamedType i δ
---                                = F.ppTy r $ pp (getTDefNameOrDie δ i) <+> ppArgs' δ brackets comma ts
---                                | otherwise
---                                = pp' δ $ unfoldType δ t
---   pp' _   (TApp c [] r)        = F.ppTy r $ pp c 
---   pp' δ   (TApp c ts r)        = F.ppTy r $ parens (pp c <+> ppArgs' δ id space ts)  
---   pp' δ   (TArr t' r)          = F.ppTy r $ brackets (pp' δ t')
---   pp' δ   (TCons bs r)         = F.ppTy r $ ppElts1' δ bs
--- 
--- ppArgs'  δ p sep               = p . intersperse sep . map (pp' δ)
--- ppBinds' δ p sep               = p . intersperse sep . map (ppBind' δ)
--- ppBind'  δ (B x t)             = pp x <> colon <> pp' δ t
--- ppElt'   δ (TE x _ t)          = pp x <> colon <> pp' δ t
--- 
--- ppElts1'  δ ts                 = lbrace $+$ nest 2 (vcat $ map (ppElt' δ) ts) $+$ rbrace
--- -- ppElts1'  δ ts                 = braces (hsep $ map (ppElt' δ) ts)
--- 

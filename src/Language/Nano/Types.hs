@@ -40,7 +40,7 @@ module Language.Nano.Types (
   , mkNextId
   , isNextId
   , mkSSAId
-  , stripSSAId
+  -- , stripSSAId
 
   -- * Error message
   , convertError
@@ -67,7 +67,6 @@ import           Control.Exception                  (throw)
 import           Control.Applicative                ((<$>))
 -- import qualified Data.HashMap.Strict as M
 import           Data.Hashable
-import           Data.Text                          (splitOn, unpack, pack)
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.Monoid                        (Monoid (..))
@@ -172,24 +171,24 @@ class IsNano a where
 
 
 instance IsNano InfixOp where
-  isNano OpLT       = True --  @<@
-  isNano OpLEq      = True --  @<=@
-  isNano OpGT       = True --  @>@
-  isNano OpGEq      = True --  @>=@
-  isNano OpEq       = True --  @==@
-  -- PV adding @===@
-  isNano OpStrictEq = True --  @===@
-  isNano OpNEq      = True --  @!=@
+  isNano OpLT        = True --  @<@
+  isNano OpLEq       = True --  @<=@
+  isNano OpGT        = True --  @>@
+  isNano OpGEq       = True --  @>=@
+  -- isNano OpEq        = True --  @==@
+  isNano OpStrictEq  = True --  @===@
+  isNano OpNEq       = True --  @!=@
+  isNano OpStrictNEq = True --  @!==@
 
-  isNano OpLAnd     = True --  @&&@
-  isNano OpLOr      = True --  @||@
+  isNano OpLAnd      = True --  @&&@
+  isNano OpLOr       = True --  @||@
 
-  isNano OpSub      = True --  @-@
-  isNano OpAdd      = True --  @+@
-  isNano OpMul      = True --  @*@
-  isNano OpDiv      = True --  @/@
-  isNano OpMod      = True --  @%@
-  isNano e          = errortext (text "Not Nano InfixOp!" <+> pp e)
+  isNano OpSub       = True --  @-@
+  isNano OpAdd       = True --  @+@
+  isNano OpMul       = True --  @*@
+  isNano OpDiv       = True --  @/@
+  isNano OpMod       = True --  @%@
+  isNano e           = errortext (text "Not Nano InfixOp!" <+> pp e)
 
 instance IsNano (LValue a) where 
   isNano (LVar _ _)        = True
@@ -231,6 +230,7 @@ instance IsNano PrefixOp where
   isNano PrefixLNot   = True
   isNano PrefixMinus  = True 
   isNano PrefixTypeof = True 
+  isNano PrefixBNot   = True 
   isNano e            = errortext (text "Not Nano PrefixOp!" <+> pp e)
   -- isNano _            = False
 
@@ -247,6 +247,7 @@ instance IsNano (Statement a) where
   isNano (FunctionStmt _ _ _ b)   = isNano b
   isNano (SwitchStmt _ e cs)      = isNano e && not (null cs) && isNano cs
   isNano (ClassStmt _ _ _ _  bd)  = all isNano bd
+  isNano (ThrowStmt _ e)          = isNano e
   isNano e                        = errortext (text "Not Nano Statement!" <+> pp e)
 
 instance IsNano (ClassElt a) where
@@ -401,11 +402,6 @@ getFunctionStatements s = [fs | fs@(FunctionStmt _ _ _ _) <- flattenStmt s]
 getFunctionIds :: Statement a -> [Id a]
 getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
 
--- getFunctionStatements s@(FunctionStmt _ _ _ _) = [s] 
--- getFunctionStatements (BlockStmt _ ss)         = concatMap getFunctionStatements ss
--- getFunctionStatements _                        = []
-
-
 
 ------------------------------------------------------------------
 -- | Converting `ECMAScript3` values into `Fixpoint` values, 
@@ -552,12 +548,12 @@ instance PP BuiltinOp where
 -- | Manipulating SSA Ids ------------------------------------------------------
 --------------------------------------------------------------------------------
 
-mkSSAId :: SourceSpan -> Id SourceSpan -> Int -> Id SourceSpan 
+mkSSAId :: IsLocated a => a -> Id a -> Int -> Id a
 mkSSAId l (Id _ x) n = Id l (x ++ ssaStr ++ show n)  
 
 -- Returns the identifier as is if this is not an SSAed name.
-stripSSAId :: Id a -> Id a
-stripSSAId (Id l x) = Id l (unpack $ head $ splitOn (pack ssaStr) (pack x))
+-- stripSSAId :: Id a -> Id a
+-- stripSSAId (Id l x) = Id l (unpack $ head $ splitOn (pack ssaStr) (pack x))
 
 mkNextId :: Id a -> Id a
 mkNextId (Id a x) =  Id a $ nextStr ++ x

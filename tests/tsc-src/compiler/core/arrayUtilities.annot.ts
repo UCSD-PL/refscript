@@ -1,35 +1,27 @@
-///<reference path='references.ts' />
+// ///<reference path='references.ts' />
 
-/*
-    JAVARI
-    ======
+///<reference path='../../../../include/prelude.ts' />
 
-    Assignability modifier: final (default) Vs assignable 
-
-        assignable <: final
-
-        In effect assignability permits statements of the form: x := e
-
-    Mutability modifier: readonly (default) Vs mutable
-
-        mutable <: raedonly
-        
-        In effect mutability permits statements of the form: x.f := e
+// IMPORTS BEGIN
+interface IIndexable<T> {
+	[s: string]: T;
+}
+// IMPORTS END
 
 
-    Methods can have a modifier that determines if `this` is going to be 
-    mutable or readonly.
 
-*/
+//module TypeScript {
+    /*export */class ArrayUtilities1 {
 
+        //XXX: Not supported yet
+        ///*@ isArray :: forall A . (value: A) => { boolean | true } */
+        //public static isArray(value: any): boolean {
+        //    return Object.prototype.toString.apply(value, []) === '[object Array]';
+        //}
 
-module TypeScript {
-    export class ArrayUtilities1 {
-        public static isArray(value: any): boolean {
-            return Object.prototype.toString.apply(value, []) === '[object Array]';
-        }
-
-        /*@ sequenceEquals :: forall T . (a1: [T], a2: [T], (T,T)=>boolean) => boolean */
+        /*@ sequenceEquals :: forall T . ( array1: #Array[#Immutable,T]
+                                 , array2: #Array[#Immutable,T]
+                                 , equals: (T,T) => boolean ) => { v: boolean | true } */
         public static sequenceEquals<T>(array1: T[], array2: T[], equals: (v1: T, v2: T) => boolean) {
             if (array1 === array2) {
                 return true;
@@ -52,7 +44,7 @@ module TypeScript {
             return true;
         }
 
-        /*@ contains :: forall T . (a: [T]) => boolean */
+        /*@ contains :: forall T . (a: #Array[#Immutable,T], value: T) => { boolean | true } */
         public static contains<T>(array: T[], value: T): boolean {
             for (var i = 0; i < array.length; i++) {
                 if (array[i] === value) {
@@ -63,95 +55,81 @@ module TypeScript {
             return false;
         }
 
-        /*@ groupBy :: forall T . (a: [T], func: (T)=>string) => IIndexable<[T]> */
-        public static groupBy<T>(array: T[], func: (v: T) => string): any {
+        /*@ groupBy :: forall T . (array: #Array[#Immutable,T], f: (T)=>string) 
+                    => { #IIndexable[ #Array[#Mutable,T] ] | true } */
+        public static groupBy<T>(array: T[], f: (v: T) => string): any {
 
-          /*
-              As in Javari:
+          /*@ result_ :: #IIndexable[ #Array[#Mutable,T] ] */
+          var result_: IIndexable<T[]> = {};
 
-              Two levels of mutability here:
-
-              - At the object level:
-                  result = {}
-                  result = {}
-
-              - At the content level (only as far as the type parameter is concerned.
-
-              `result` only needs the second one. We assume that initialization doesn't count.
-
-              IIndexable is treated as an array indexed by a string, whose length is arbitrary.              
-
-          */
-
-          /*@ result: mutable IIndexable<[T]> */
-          var result: IIndexable<T[]> = {};
-
-            for (var i = 0, n = array.length; i < n; i++) {
+          for (var i = 0, n = array.length; i < n; i++) {
                 var v: any = array[i];
-                var k = func(v);
+                var k = f(v);
 
-                /*@ list: mutable [T] */
-                var list: T[] = result[k] || [];
+                var list: T[] = result_[k] || [];
                 list.push(v);
-                result[k] = list;
+                result_[k] = list;
             }
 
-            return result;
+            return result_;
         }
 
 
-        // Gets unique element array
-        /*@ distinct :: forall T . (a: [T], func: (T)=>string) => IIndexable<[T]> */
-        public static distinct<T>(array: T[], equalsFn?: (a: T, b: T) => boolean): T[] {
-            /*@ result: mutable [T] */
-            var result: T[] = [];
+        // XXX: Not supported
+        //// Gets unique element array
+        ///*@ distinct :: forall T . (a: [T], f: (T)=>string) => IIndexable<[T]> */
+        //public static distinct<T>(array: T[], equalsFn?: (a: T, b: T) => boolean): T[] {
+        //    /*@ result: mutable [T] */
+        //    var result: T[] = [];
 
-            // TODO: use map when available
-            for (var i = 0, n = array.length; i < n; i++) {
-                var current = array[i];
-                for (var j = 0; j < result.length; j++) {
-                    if (equalsFn(result[j], current)) {
-                        break;
-                    }
-                }
+        //    // TODO: use map when available
+        //    for (var i = 0, n = array.length; i < n; i++) {
+        //        var current = array[i];
+        //        for (var j = 0; j < result.length; j++) {
+        //            if (equalsFn(result[j], current)) {
+        //                break;
+        //            }
+        //        }
 
-                if (j === result.length) {
-                    result.push(current);
-                }
-            }
+        //        if (j === result.length) {
+        //            result.push(current);
+        //        }
+        //    }
 
-            return result;
-        }
+        //    return result;
+        //}
 
-        /*@ min :: forall T . (array: [T], func: (T)=>number) => number */
-        public static min<T>(array: T[], func: (v: T) => number): number {
+        /*@ min :: forall T . (array: { #Array[#Immutable,T] | (len v) > 0 } , f: (T)=>number) => number */
+        public static min<T>(array: T[], f: (v: T) => number): number {
             // Debug.assert(array.length > 0);
-            var min = func(array[0]);
+            var min_ = f(array[0]);
 
             for (var i = 1; i < array.length; i++) {
-                var next = func(array[i]);
-                if (next < min) {
-                    min = next;
+                var next = f(array[i]);
+                if (next < min_) {
+                    min_ = next;
                 }
             }
 
-            return min;
+            return min_;
         }
 
-        public static max<T>(array: T[], func: (v: T) => number): number {
+        /*@ max :: forall T . (array: { #Array[#Immutable,T] | (len v) > 0 }, f: (T)=>number) => number */
+        public static max<T>(array: T[], f: (v: T) => number): number {
             // Debug.assert(array.length > 0);
-            var max = func(array[0]);
+            var max_ = f(array[0]);
 
             for (var i = 1; i < array.length; i++) {
-                var next = func(array[i]);
-                if (next > max) {
-                    max = next;
+                var next = f(array[i]);
+                if (next > max_) {
+                    max_ = next;
                 }
             }
 
-            return max;
+            return max_;
         }
 
+        /*@ last :: forall T . (array: #Array[#Immutable,T]) => { T | true } */
         public static last<T>(array: T[]): T {
             if (array.length === 0) {
                 throw Errors.argumentOutOfRange('array');
@@ -160,6 +138,7 @@ module TypeScript {
             return array[array.length - 1];
         }
 
+        /*@ lastOrDefault :: forall T . (array: #Array[#Immutable,T], (v:T, index: number) => boolean) => { T | true }  */
         public static lastOrDefault<T>(array: T[], predicate: (v: T, index: number) => boolean): T {
             for (var i = array.length - 1; i >= 0; i--) {
                 var v = array[i];
@@ -168,58 +147,67 @@ module TypeScript {
                 }
             }
 
+            //PV
+            throw new Error("Cannot unify null with T.")
             return null;
         }
 
-        public static firstOrDefault<T>(array: T[], func: (v: T, index: number) => boolean): T {
+        /*@ firstOrDefault :: forall T . (array: #Array[#Immutable,T], f : (v: T, index: number) => boolean) => { T | true } */
+        public static firstOrDefault<T>(array: T[], f: (v: T, index: number) => boolean): T {
             for (var i = 0, n = array.length; i < n; i++) {
                 var value = array[i];
-                if (func(value, i)) {
+                if (f(value, i)) {
                     return value;
                 }
             }
 
+            //PV
+            throw new Error("Cannot unify null with T.")
             return null;
         }
 
-        public static first<T>(array: T[], func?: (v: T, index: number) => boolean): T {
+        /*@ first :: forall T . (array: #Array[#Immutable,T], f: (v: T, index: number) => boolean) => { T | true } */
+        public static first<T>(array: T[], f/*?*/: (v: T, index: number) => boolean): T {
             for (var i = 0, n = array.length; i < n; i++) {
                 var value = array[i];
-                if (!func || func(value, i)) {
+                if (!f || f(value, i)) {
                     return value;
                 }
             }
 
-            throw Errors.invalidOperation();
+            throw Errors.invalidOperation("");
         }
 
-        public static sum<T>(array: T[], func: (v: T) => number): number {
+        /*@ sum :: forall T . (array: #Array[#Immutable,T], f: (T) => number) => { number | true } */
+        public static sum<T>(array: T[], f: (v: T) => number): number {
             var result = 0;
 
             for (var i = 0, n = array.length; i < n; i++) {
-                result += func(array[i]);
+		            result = result + f(array[i]);
+                //result += f(array[i]);
             }
 
             return result;
         }
 
-        /*@ select :: forall T S . (values: [T], func: (T)=>S) => [S] */
-        public static select<T, S>(values: T[], func: (v: T) => S): S[]{
-            /*@ result: mutable [S] */
+        /*@ select :: forall T S . (values: #Array[#Immutable,T], f: (T) => S) => { #Array[#Immutable,S] | true } */
+        public static select<T, S>(values: T[], f: (v: T) => S): S[]{
             var result: S[] = new Array<S>(values.length);
 
             for (var i = 0; i < values.length; i++) {
-                result[i] = func(values[i]);
+                result[i] = f(values[i]);
             }
 
             return result;
         }
 
-        public static where<T>(values: T[], func: (v: T) => boolean): T[] {
-            var result = new Array<T>();
+        /*@ where :: forall T . (values: #Array[#Immutable,T], f: (T) => boolean) 
+                  => { #Array[#ReadOnly,T] | true } */
+        public static where<T>(values: T[], f: (v: T) => boolean): T[] {
+            var result = new Array<T>(0); //PV added 0
 
             for (var i = 0; i < values.length; i++) {
-                if (func(values[i])) {
+                if (f(values[i])) {
                     result.push(values[i]);
                 }
             }
@@ -227,9 +215,10 @@ module TypeScript {
             return result;
         }
 
-        public static any<T>(array: T[], func: (v: T) => boolean): boolean {
+        /*@ any :: forall T . (array: #Array[#Immutable,T], f: (T) => boolean) => { boolean | true } */
+        public static any<T>(array: T[], f: (v: T) => boolean): boolean {
             for (var i = 0, n = array.length; i < n; i++) {
-                if (func(array[i])) {
+                if (f(array[i])) {
                     return true;
                 }
             }
@@ -237,9 +226,10 @@ module TypeScript {
             return false;
         }
 
-        public static all<T>(array: T[], func: (v: T) => boolean): boolean {
+        /*@ all :: forall T . (array: #Array[#Immutable,T], f: (T) => boolean) => { boolean | true } */
+        public static all<T>(array: T[], f: (v: T) => boolean): boolean {
             for (var i = 0, n = array.length; i < n; i++) {
-                if (!func(array[i])) {
+                if (!f(array[i])) {
                     return false;
                 }
             }
@@ -247,12 +237,15 @@ module TypeScript {
             return true;
         }
 
+        /*@ binarySearch :: (array: #Array[#Immutable,number], value: number) 
+                         => { v: number | (0 <= v && (v < (len array)))} */
         public static binarySearch(array: number[], value: number): number {
             var low = 0;
             var high = array.length - 1;
 
             while (low <= high) {
-                var middle = low + ((high - low) >> 1);
+		            //var miGddle = low + ((high - low) >> 1);
+		            var middle = low + ((high - low) / 2);
                 var midValue = array[middle];
 
                 if (midValue === value) {
@@ -266,12 +259,13 @@ module TypeScript {
                 }
             }
 
-            return ~low;
+            //PV 
+            throw new Error("Number not found");
+          	//return ~low;
         }
 
-        /*@ createArray :: forall T . (length: number, defaultValue: top): [T] */
+        /*@ createArray :: forall T . (length: number, defaultValue: T) => { #Array[#Immutable,T] | true } */
         public static createArray<T>(length: number, defaultValue: any): T[]{
-            /*@ result : mutable [T] */
             var result = new Array<T>(length);
             for (var i = 0; i < length; i++) {
                 result[i] = defaultValue;
@@ -280,6 +274,7 @@ module TypeScript {
             return result;
         }
 
+        /*@ grow :: forall T . (array: #Array[#Mutable,T], length: number, defaultValue: T) => { void | true } */
         public static grow<T>(array: T[], length: number, defaultValue: T): void {
             var count = length - array.length;
             for (var i = 0; i < count; i++) {
@@ -287,20 +282,30 @@ module TypeScript {
             }
         }
 
+        /*@ copy :: forall T . 
+              (sourceArray: #Array[#Immutable,T] ,
+              sourceIndex: { number | 0 <= v } , 
+              destinationArray: #Array[#Immutable,T], 
+              destinationIndex: { number | 0 <= v } , 
+              length: { v:number | ((sourceIndex      + v <= (len sourceArray)) 
+                                  && (destinationIndex + v <= (len destinationArray)))}) 
+            => void */
         public static copy<T>(sourceArray: T[], sourceIndex: number, destinationArray: T[], destinationIndex: number, length: number): void {
             for (var i = 0; i < length; i++) {
                 destinationArray[destinationIndex + i] = sourceArray[sourceIndex + i];
             }
         }
 
+        /*@ indexOf :: forall T . (array: #Array[#Immutable,T], predicate: (T) => boolean) 
+                    => { number | (0 <= v && v < (len array)) } */
         public static indexOf<T>(array: T[], predicate: (v: T) => boolean): number {
             for (var i = 0, n = array.length; i < n; i++) {
                 if (predicate(array[i])) {
                     return i;
                 }
             }
-
-            return -1;
+            throw new Error("Not found");
+          	//return -1;
         }
     }
-}
+//}

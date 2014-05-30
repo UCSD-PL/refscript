@@ -1,6 +1,6 @@
-/*@ gobj :: { a: number 
-            , b: string
-            , oo: { m : number }
+/*@ gobj :: { a: number;
+              b: string;
+              oo: { m : number };
             } 
  */
 var gobj = {

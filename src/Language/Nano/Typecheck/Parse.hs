@@ -17,7 +17,7 @@ import           Data.Aeson                              (eitherDecode)
 import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
-import           Data.Char                               (isLower, isSpace)
+import           Data.Char                               (isLower)
 import           Data.Maybe                              (isJust)
 import qualified Data.List                        as     L
 import           Data.Generics.Aliases                   ( mkQ)
@@ -47,19 +47,16 @@ import           Language.ECMAScript3.PrettyPrint
 
 import           Text.Parsec                      hiding (parse)
 import           Text.Parsec.Pos                         (newPos)
-import qualified Text.Parsec.Token                as     Token
+import qualified Text.Parsec.Token                as     T
 
 import           GHC.Generics
 
 -- import           Debug.Trace                             ( trace, traceShow)
 
-dot        = Token.dot        lexer
-plus       = Token.symbol     lexer "+"
-star       = Token.symbol     lexer "*"
-question   = Token.symbol     lexer "?"
-
-
--- type ParserS a = Parser (TDefEnv RefType, Integer) a 
+dot        = T.dot        lexer
+plus       = T.symbol     lexer "+"
+star       = T.symbol     lexer "*"
+question   = T.symbol     lexer "?"
 
 ----------------------------------------------------------------------------------
 -- | Type Binders 
@@ -102,8 +99,8 @@ iFaceP   :: Parser (Id SourceSpan, TDef RefType)
 iFaceP   = do id     <- identifierP 
               vs     <- option [] tParP
               ext    <- optionMaybe extendsP
-              es     <- braces $ eltsP
-              return (id, TD id vs ext es)
+              es     <- braces fieldBindP
+              return (id, TD False id vs ext es)
 
 extendsP = do reserved "extends"
               pId <- (char '#' >> identifierP)
@@ -141,7 +138,7 @@ postP p post
 ----------------------------------------------------------------------------------
 bareTypeP :: Parser RefType 
 ----------------------------------------------------------------------------------
-bareTypeP =       
+bareTypeP = bareAllP $ 
       try bUnP
   <|> try (refP rUnP)
   <|>     (xrefP rUnP)
@@ -160,22 +157,19 @@ bUnP        = parenNullP (bareTypeNoUnionP `sepBy1` plus) toN >>= mkU
 
 
 -- | `bareTypeNoUnionP` parses a type that does not contain a union at the top-level.
-bareTypeNoUnionP = try funcSigP <|> (bareAtomP bbaseP)
+bareTypeNoUnionP = try funcSigP <|> (bareAllP $ bareAtomP bbaseP)
 
--- | `optNullP` optianlly parses "( `a` )?", where `a` is parsed by the input parser @pr@.
+-- | `optNullP` optionally parses "( `a` )?", where `a` is parsed by the input parser @pr@.
 parenNullP p f =  try (f <$> postP p question) <|> p
 
 -- | `funcSigP` parses a function type that is possibly generic and/or an intersection.
-funcSigP = 
-      try bareAll1P
-  <|> try (intersectP bareAll1P) 
-  <|> try bareFun1P
-  <|>     (intersectP bareFun1P)
+funcSigP =  try (bareAllP bareFunP)
+        <|> try (intersectP $ bareAllP bareFunP) 
+  where
+    intersectP p = tAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
 
-intersectP p      = tAnd <$> many1 (reserved "/\\" >> p)
-
--- | `bareFun1P` parses a single function type
-bareFun1P
+-- | `bareFunP` parses a single function type
+bareFunP
   = do args   <- parens $ sepBy bareArgP comma
        reserved "=>" 
        ret    <- bareTypeP 
@@ -202,16 +196,14 @@ bbaseP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
 bbaseP 
   =  try (TVar <$> tvarP)                  -- A
- <|> try objLitP                           -- {f1: T1, ... , fn: Tn} 
- <|> try (TArr <$> arrayP)                 -- [T]
+ <|> try objLitP                           -- {f1: T1; ... ; fn: Tn} 
+ <|> try (rtArr <$> arrayP)                -- Array<T>
  <|> try (TApp <$> tConP <*> bareTyArgsP)  -- #List[A], #Tree[A,B] etc...
  
 ----------------------------------------------------------------------------------
 objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
-objLitP = do 
-  bs    <- braces $ bindsP
-  return $ TCons [ TE s True t | B s t <- bs ]
+objLitP = TCons <$> braces fieldBindP
 
 
 bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
@@ -242,48 +234,72 @@ tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
+     <|> try (reserved "bool"      >> return TFPBool)
      <|>     (withinSpacesP $ char '#' >> identifierP >>= idToTRefP)
 
 ----------------------------------------------------------------------------------
 idToTRefP :: Id SourceSpan -> Parser TCon
 ----------------------------------------------------------------------------------
-idToTRefP (Id _ s) = do
---   (u, _)     <- getState
---   let u'      = addSym s u 
---   modifyState $ \(_,n) -> (u', n)
-  return      $ TRef $ symbol s
+idToTRefP (Id _ s) = return $ TRef (symbol s, False) -- default: non-static class ref
 
-bareAll1P 
+bareAll1P p
   = do reserved "forall"
        αs <- many1 tvarP
        dot
-       t  <- bareTypeP
+       t  <- p
        return $ foldr TAll t αs
+
+bareAllP p =  try p 
+          <|> bareAll1P p
 
 arrayP = brackets bareTypeP
 
--- | f1: t1, f2: t2, ..., fn: tn
-bindsP 
-  =  try (sepBy1 bareBindP comma)
- <|> (spaces >> return [])
+-- | Parses lists of "f1: t1", "[x:string]: t", or "[x:number]: t"
+-- separated by semicolon.
+fieldBindP =  sepEndBy (
+              try indexSigP 
+          <|> try fieldSigP
+          <|> try callSigP
+          <|> try consSigP
+              ) semi
 
--- | f : type 
-bareBindP = do s <- binderP
-               withinSpacesP colon
-               t <- bareTypeP
-               return $ B s t 
+-- | f [ <type> ] : t
+--
+-- The type in the brackets is the type for `this` (optional).
+-- This means that for the same field with different bindings for `this` there
+-- will be separate elements. 
+----------------------------------------------------------------------------------
+fieldSigP :: Parser (TElt RefType)
+----------------------------------------------------------------------------------
+fieldSigP = do 
+    s          <- option False $ try $ reserved "static" >> return True
+    ((x,tt),t) <- xyP sp colon bareTypeP
+    return      $ if isTFun t then MethSig x s tt t
+                              else PropSig x s True tt t
+  where 
+    sp = do x <- withinSpacesP (stringSymbol <$> ((try lowerIdP) <|> upperIdP))    
+            t <- optionMaybe $ withinSpacesP $ brackets bareTypeP
+            return (x,t)
 
--- | f1:[*] t1, f2:[*] t2, ..., fn:[*] tn
-eltsP 
-  =  try (sepBy1 bareEltP comma)
- <|> (spaces >> return [])
+indexP = xyP id colon sn
+  where
+    id = symbol <$> (try lowerIdP <|> upperIdP)
+    sn = withinSpacesP (string "string" <|> string "number")
 
--- | f :[*] type 
-bareEltP = do s <- binderP
-              withinSpacesP colon
-              mut <- isJust <$> optionMaybe star
-              t <- bareTypeP
-              return $ TE s mut t 
+-- | [f: string/number]: t
+indexSigP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
+               case it of 
+                 "number" -> return $ IndexSig x False t
+                 "string" -> return $ IndexSig x True t
+                 _        -> error $ "Index signature can only have " ++
+                                     "string or number as index." 
+
+-- | [forall A . ] (t...) => t
+callSigP = CallSig <$> withinSpacesP (bareAllP bareFunP)
+
+-- | new [forall A . ] (t...) => t
+consSigP = withinSpacesP (string "new") 
+        >> ConsSig <$> withinSpacesP (bareAllP bareFunP)
 
  
 ----------------------------------------------------------------------------------
@@ -322,16 +338,16 @@ refasP :: Parser [Refa]
 refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi)) 
        <|> liftM ((:[]) . RConc) predP
  
-----------------------------------------------------------------------------------
-binderP :: Parser Symbol
-----------------------------------------------------------------------------------
-binderP = try (stringSymbol <$> idP badc)
-      -- <|> try (star >> return (stringSymbol "*")) -- disabling this
-      <|> liftM pwr (parens (idP bad))
-      where idP p  = many1 (satisfy (not . p))
-            badc c = (c == ':') ||  bad c
-            bad c  = isSpace c || c `elem` "()"
-            pwr s  = stringSymbol $ "(" ++ s ++ ")" 
+
+-- ----------------------------------------------------------------------------------
+-- binderP :: Parser Symbol
+-- ----------------------------------------------------------------------------------
+-- binderP = (stringSymbol <$> idP badc)
+--        <|> liftM pwr (parens (idP bad))
+--       where idP p  = many1 (satisfy (not . p))
+--             badc c = (c == ':') ||  bad c
+--             bad c  = isSpace c || c `elem` "()[]"
+--             pwr s  = stringSymbol $ "(" ++ s ++ ")" 
 
 ----------------------------------------------------------------------------------
 withinSpacesP :: Parser a -> Parser a
@@ -396,8 +412,8 @@ parseAnnot ss (RawType   _) = IFace  <$> patch2 ss <$> iFaceP
 parseAnnot ss (RawClass  _) = Class  <$> patch2 ss <$> classDeclP 
 parseAnnot ss (RawTAlias _) = TAlias <$> patch2 ss <$> tAliasP
 parseAnnot ss (RawPAlias _) = PAlias <$> patch2 ss <$> pAliasP
-parseAnnot _  (RawQual   _) = Qual   <$>              qualifierP
-parseAnnot ss (RawInvt   _) = Invt             ss <$> bareTypeP
+parseAnnot _  (RawQual   _) = Qual   <$>               qualifierP
+parseAnnot ss (RawInvt   _) = Invt              ss <$> bareTypeP
 
 
 patch2 ss (id, t)    = (fmap (const ss) id , t)
@@ -447,7 +463,7 @@ instance FromJSON RawSpec
 
 
 -------------------------------------------------------------------------------
--- | Parse File and Type Signatures -------------------------------------------
+-- | Parse File and Type Signatures 
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
@@ -483,9 +499,9 @@ mkCode f ss =  Nano {
       , externs = envFromList   [ t | Extern t <- anns ] -- externs
       -- FIXME: same name methods in different classes.
       , specs   = catFunSpecDefs ss                      -- function sigs (no methods...)
-      , glVars  = catVarSpecDefs ss                      -- variables
+      -- , glVars  = catVarSpecDefs ss                      -- variables
       , consts  = envFromList   [ t | Meas   t <- anns ] 
-      , defs    = tDefFromList  [ t | IFace  t <- anns ] 
+      , defs    = tDefFromList  [ checkIF t | IFace  t <- anns ] 
       , tAlias  = envFromList   [ t | TAlias t <- anns ] 
       , pAlias  = envFromList   [ t | PAlias t <- anns ] 
       , quals   =               [ t | Qual   t <- anns ] 
@@ -500,6 +516,19 @@ mkCode f ss =  Nano {
                          ++ [ClassAnn t     | Class  (_,t) <- αs ]
     ss'           = (toBare <$>) <$> ss
     anns          = concatMap (FO.foldMap snd) ss
+
+-- | At the moment we only support a single index signature with no other
+-- elements, or (normally) bound types without index signature.
+checkIF t@(_,TD _ _ _ _ elts) 
+  | nTi == 0  = t
+  | nTi == 1 && nTe == 0 && nTn == 0 = t
+  | otherwise = error $ "[UNIMPLEMENTED] Object types " ++ 
+                                   "can only have a single indexable " ++
+                                   "signature and no other elements."
+  where 
+    nTn = length [ () | IndexSig _ False _ <- elts ]
+    nTi = length [ () | IndexSig _ _ _     <- elts ]
+    nTe = length [ () | PropSig _ _ _ _ _  <- elts ]
 
 
 type PState = Integer
@@ -523,7 +552,7 @@ parse ss st c = foo c
                       st <- getState
                       return (st, a)) 
                   st f (getSpecString s)
-        failLeft (Left s) = error $ show s
+        failLeft (Left s) = error $ "Error parsing: " ++ show c ++ "\n" ++ show s
         failLeft (Right r) = r
         f = sourceName $ sp_begin ss
 
@@ -541,7 +570,7 @@ catFunSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
 catVarSpecDefs :: [Statement (SourceSpan, [Spec])] -> Env RefType
 --------------------------------------------------------------------------------------
 catVarSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
-  where ds     = varDeclStmts ss
+  where ds        = varDeclStmts ss
 
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite

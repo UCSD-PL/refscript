@@ -1,5 +1,8 @@
 
-/*@ x :: { f: { number | v > 0 } } */ 
+/*@ y :: { } */
+declare var y; 
+
+/*@ x :: { f: { number | v > 0 } } */                           // dsklaj ldah lah 
 var x = { f: 1 };
  
 /*@ foo :: () => {void | true } */

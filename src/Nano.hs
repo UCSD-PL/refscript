@@ -83,7 +83,7 @@ writeResult r            = mapM_ (writeDoc c) $ zip [0..] $ resDocs r
 resDocs F.Safe             = [text "SAFE"]
 resDocs (F.Crash xs s)     = text ("CRASH: " ++ s) : pprManyOrdered xs
 resDocs (F.Unsafe xs)      = text "UNSAFE"         : pprManyOrdered (nub xs)
-resDocs (F.UnknownError d) = [text "PANIC: Unexpected Error: " <+> d, reportUrl]
+resDocs (F.UnknownError d) = [text "PANIC: Unexpected Error: " <+> text d, reportUrl]
 reportUrl                  = text "Please submit a bug report at: https://github.com/ucsd-pl/RefScript"
 
 pprManyOrdered = map pp . sort 

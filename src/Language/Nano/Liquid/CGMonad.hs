@@ -231,6 +231,14 @@ envGetContextCast g a
       [c] -> c
       cs  -> die $ errorMultipleCasts (srcPos a) cs
 
+
+---------------------------------------------------------------------------------------
+envGetContextOverload :: CGEnv -> AnnTypeR -> [RefType]
+---------------------------------------------------------------------------------------
+envGetContextOverload g a 
+  = [t | Overload cx t <- ann_fact a, cx == cge_ctx g] 
+
+
 ---------------------------------------------------------------------------------------
 envGetContextTypArgs :: CGEnv -> AnnTypeR -> [TVar] -> [RefType]
 ---------------------------------------------------------------------------------------
@@ -649,7 +657,8 @@ splitC (Sub g i t1@(TApp (TRef _) _ _) t2@(TCons _ _))
        splitC (Sub g i t1' t2)
 
 splitC (Sub g i t1@(TCons _ _) t2@(TApp (TRef _) _ _))
-  = do t2' <- (`flattenType` t2) <$> getDef
+  = do δ    <- getDef
+       let t2' = flattenType δ t2
        splitC (Sub g i t1 t2')
 
 splitC (Sub _ _ t1@(TApp (TRef _) _ _) t2)
@@ -707,14 +716,15 @@ splitC x
 splitE :: CGEnv -> Cinfo -> [TElt RefType] -> [TElt RefType] -> CGM [FixSubC]
 ---------------------------------------------------------------------------------------
 splitE g i e1s e2s
-    | length e1s == length e2s 
-    = concatMapM splitC $ zipWith (Sub g i) t1s t2s
-    | otherwise
-    = cgError l $ bugMalignedFields l e1s e2s 
+          | length t1s == length t2s 
+          = concatMapM splitC $ zipWith (Sub g i) t1s t2s
+          | otherwise
+          = cgError l $ bugMalignedFields l e1s e2s 
   where
-    l   = srcPos i
-    t1s = f_type <$> L.sortBy (compare `on` eltSym) e1s
-    t2s = f_type <$> L.sortBy (compare `on` eltSym) e2s
+    l     = srcPos i
+    t1s   = f_type <$> L.sortBy (compare `on` eltSym) (filter flt e1s)
+    t2s   = f_type <$> L.sortBy (compare `on` eltSym) (filter flt e2s)
+    flt x = nonStaticElt x && nonConstrElt x
 
 
 ---------------------------------------------------------------------------------------

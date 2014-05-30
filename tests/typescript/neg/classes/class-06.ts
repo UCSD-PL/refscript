@@ -15,4 +15,4 @@ class Foo<A> {
 
 var a :Foo<number>= new Foo<number>(1);
 
-assert(a.f == 2);
+assert(a.f === 2);

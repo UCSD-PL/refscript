@@ -13,5 +13,5 @@ function loop(x : number) : number{
 /*@ main :: () => void */
 function main() : void {
   var x = loop(0);
-  assert(x == 6);
+  assert(x === 6);
 }

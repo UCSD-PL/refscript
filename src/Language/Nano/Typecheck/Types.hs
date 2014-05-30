@@ -53,7 +53,7 @@ module Language.Nano.Typecheck.Types (
   -- * Type comparison
   , Equivalent
   , equiv
-  , sameBinder, eltType, eltToPair, eltSym, zipElts, isStaticElt, nonStaticElt
+  , sameBinder, eltType, eltToPair, eltSym, zipElts, isStaticElt, nonStaticElt, nonConstrElt
 
   -- * Type definition env
   , TDefEnv (..), tDefEmpty, tDefFromList, tDefToList
@@ -667,7 +667,7 @@ instance (PP t) => PP (TElt t) where
   pp (PropSig x s _ τ t)  =  bStr s "static"
                          <+> pp x 
                          <+> mStr (brackets . pp <$> τ)
-                         <+> text ":"  
+                         <>  text ":"  
                          <+> pp t
   pp (CallSig t)          = text "call" <+> pp t 
   pp (ConsSig t)          = text "new" <+> pp t
@@ -731,7 +731,9 @@ isStaticElt (PropSig _ True _ _ _) = True
 isStaticElt (MethSig _ True _ _  ) = True
 isStaticElt _                      = False
 
+
 nonStaticElt = not . isStaticElt
+nonConstrElt = not . isConstr
 
 eltSym = fst . eltToPair
 
@@ -815,7 +817,7 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TApp d@(TRef _) ts r) = F.ppTy r $ pp d <+> ppArgs brackets comma ts 
   pp (TApp c [] r)          = F.ppTy r $ pp c 
   pp (TApp c ts r)          = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
-  pp (TCons bs r)           = F.ppTy r $ lbrace <+> vcat (map pp bs) <+> rbrace
+  pp (TCons bs r)           = F.ppTy r $ lbrace <+> intersperse semi (map pp bs) <+> rbrace
   -- pp (TCons bs r)           = F.ppTy r $ lbrace $+$ nest 2 (cat $ map pp bs) $+$ rbrace
 
 instance PP TCon where
@@ -829,6 +831,7 @@ instance PP TCon where
   pp (TRef (x,_   ))  = text "#" <> text (F.symbolString $ x)
   pp TNull            = text "null"
   pp TUndef           = text "undefined"
+  pp TFPBool          = text "bool"
 
 instance Hashable TCon where
   hashWithSalt s TInt        = hashWithSalt s (0 :: Int)
@@ -922,8 +925,8 @@ data Fact r
   = PhiVar      ![(Id SourceSpan)]
   | TypInst     !IContext ![RType r]
   -- Overloading
-  | EltOverload !(TElt (RType r))
-  | Overload    !(RType r)
+  | EltOverload !IContext  !(TElt (RType r))
+  | Overload    !IContext  !(RType r)
   | TCast       !IContext !(Cast r)
   -- Type annotations
   | VarAnn      !(RType r)
@@ -957,28 +960,28 @@ instance Ord (AnnSSA  r) where
 
 -- XXX: This shouldn't have to be that hard...
 instance Ord (Fact r) where
-  compare (PhiVar i1       ) (PhiVar i2       ) = compare i1 i2
-  compare (TypInst c1 t1   ) (TypInst c2 t2   ) = compare (c1,toType <$> t1) (c2,toType <$> t2)
-  compare (EltOverload t1  ) (EltOverload t2  ) = on compare (toType <$>) t1 t2
-  compare (Overload t1     ) (Overload t2     ) = on compare toType t1 t2
-  compare (TCast c1 _      ) (TCast c2 _      ) = compare c1 c2
-  compare (VarAnn t1       ) (VarAnn t2       ) = on compare toType t1 t2
-  compare (FieldAnn (b1,t1)) (FieldAnn (b2,t2)) = compare (b1, toType t1) (b2, toType t2)
-  compare (MethAnn t1      ) (MethAnn t2      ) = on compare toType t1 t2
-  compare (ConsAnn t1      ) (ConsAnn t2      ) = on compare toType t1 t2
-  compare (ClassAnn (_,m1) ) (ClassAnn (_,m2) ) = on compare (fst <$>) m1 m2
-  compare f1 f2 = on compare factToNum f1 f2 
+  compare (PhiVar i1       ) (PhiVar i2       )   = compare i1 i2
+  compare (TypInst c1 t1   ) (TypInst c2 t2   )   = compare (c1,toType <$> t1) (c2,toType <$> t2)
+  compare (EltOverload c1 t1) (EltOverload c2 t2) = compare (c1, toType <$> t1) (c2, toType <$> t2)
+  compare (Overload c1 t1  ) (Overload c2 t2  )   = compare (c1, toType t1) (c2, toType t2)
+  compare (TCast c1 _      ) (TCast c2 _      )   = compare c1 c2
+  compare (VarAnn t1       ) (VarAnn t2       )   = on compare toType t1 t2
+  compare (FieldAnn (b1,t1)) (FieldAnn (b2,t2))   = compare (b1, toType t1) (b2, toType t2)
+  compare (MethAnn t1      ) (MethAnn t2      )   = on compare toType t1 t2
+  compare (ConsAnn t1      ) (ConsAnn t2      )   = on compare toType t1 t2
+  compare (ClassAnn (_,m1) ) (ClassAnn (_,m2) )   = on compare (fst <$>) m1 m2
+  compare f1 f2                                   = on compare factToNum f1 f2
 
-factToNum (PhiVar _      ) = 0
-factToNum (TypInst _ _   ) = 1
-factToNum (EltOverload _ ) = 2
-factToNum (Overload _    ) = 3
-factToNum (TCast _ _     ) = 4
-factToNum (VarAnn _      ) = 5
-factToNum (FieldAnn _    ) = 6 
-factToNum (MethAnn _     ) = 7
-factToNum (ConsAnn _     ) = 8
-factToNum (ClassAnn _    ) = 9
+factToNum (PhiVar _        ) = 0
+factToNum (TypInst _ _     ) = 1
+factToNum (EltOverload _ _ ) = 2
+factToNum (Overload _  _   ) = 3
+factToNum (TCast _ _       ) = 4
+factToNum (VarAnn _        ) = 5
+factToNum (FieldAnn _      ) = 6
+factToNum (MethAnn _       ) = 7
+factToNum (ConsAnn _       ) = 8
+factToNum (ClassAnn _      ) = 9
 
 
 instance Eq (Annot a SourceSpan) where 
@@ -990,8 +993,8 @@ instance IsLocated (Annot a SourceSpan) where
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)       = text "phi"  <+> pp x
   pp (TypInst ξ ts)   = text "inst" <+> pp ξ <+> pp ts 
-  pp (Overload i)     = text "overload" <+> pp i
-  pp (EltOverload i)  = text "elt_overload" <+> pp i
+  pp (Overload ξ i)   = text "overload" <+> pp ξ <+> pp i
+  pp (EltOverload ξ i)= text "elt_overload" <+> pp ξ <+> pp i
   pp (TCast  ξ c)     = text "cast" <+> pp ξ <+> pp c
   pp (VarAnn t)       = text "Var Annotation" <+> pp t
   pp (ConsAnn t)      = text "Constructor Annotation" <+> pp t

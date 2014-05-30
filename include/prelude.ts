@@ -38,7 +38,7 @@
 
 //FIXME: the 'len' property is invalid if M != Immutable
 /*@ extern builtin_BIArrayLit  :: forall M  A . (A) 
-                               => {v: #Array[M,A] | (len v) = builtin_BINumArgs}                    */
+                               => {v: #Array[M,A] | [ (len v) = builtin_BINumArgs; not (null v) ] } */
 
 /*@ extern builtin_BIUndefined :: forall A. {A | false}                                             */
 
@@ -53,15 +53,9 @@
                                   /\ (x:number, y:number) => boolean
                                   /\ (x:string, y:string) => boolean                                */
 
-/*@ extern builtin_OpGT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) } 
-                                  /\ (x:string, y:number) => boolean
-                                  /\ (x:number, y:number) => boolean
-                                  /\ (x:string, y:string) => boolean                                */
+/*@ extern builtin_OpGT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) } */
 
-/*@ extern builtin_OpGEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >= y)) }
-                                  /\ (x:string, y:number) => boolean
-                                  /\ (x:number, y:number) => boolean
-                                  /\ (x:string, y:string) => boolean                                */
+/*@ extern builtin_OpGEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >= y)) } */
 
 /*@ extern builtin_OpAdd       :: /\ (x:number, y:number) => {number | v = x + y}
                                   /\ (x:number, y:string) => string
@@ -84,12 +78,10 @@
 
 /*@ extern builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v ~~ (0 - x)}                 */
 
-/*@ extern builtin_OpEq        :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x = y)) }   */
+/*  extern builtin_OpEq        :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) }   */
 
-/*@ extern builtin_OpSEq       :: /\ forall A  . (x:A,    y: null) => {v:boolean | ((Prop v) <=> (ttag(x) = "null")) }  
-                                  /\ forall A  . (x:null, y:A)     => {v:boolean | ((Prop v) <=> (ttag(y) = "null")) }  
-                                  /\ forall A  . (x:A,    y:A)     => {v:boolean | ((Prop v) <=> (x = y)) }
-                                  /\ forall A B. (x:A,    y:B)     => {v:boolean | ((Prop v) <=> ((ttag(x) = ttag(y)) && (x = y))) }  */
+/*@ extern builtin_OpSEq       :: /\ forall A  . (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }
+                                  /\ forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) }  */
 
 /*@ extern builtin_OpNEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */
 
@@ -325,9 +317,9 @@
 
 /*@ extern Array :: {
 
-      new forall M T . (arrayLength: number) => { v: #Array[M,T] | (len v) = arrayLength } ;
+      new forall M T . (arrayLength: number) => { v: #Array[M,T] | [ (len v) = arrayLength; not (null v) ] } ;
   
-      forall M T     . (arrayLength: number) => { v: #Array[M,T] | (len v) = arrayLength } ;
+      forall M T     . (arrayLength: number) => { v: #Array[M,T] | [ (len v) = arrayLength; not (null v) ] } ;
 
       isArray  : /\ forall M T . (arg: #Array[M,T]) => { v: boolean | Prop(v) }
                  /\ forall A   . (arg: A)           => boolean ;
@@ -347,6 +339,7 @@
 
 /*@ measure Prop :: forall A . (A) => bool                               */
 
+/*@ measure null :: forall A . (A) => bool                               */
 
 /*@ extern builtin_PrefixTypeof :: forall A. (x:A) 
                                 => {v:string | (ttag x) = v }            */
@@ -357,8 +350,8 @@
 /*@ extern builtin_BIFalsy :: forall A. (x:A) 
                            => { v:boolean | ((Prop v) <=> FLS(x)) }      */
 
-/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (TRU(v))]}    */
-/*@ invariant {v:null      | [(ttag(v) = "object"); not (TRU(v))]}       */
+/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]}    */
+/*@ invariant {v:null      | [(ttag(v) = "object"); not (Prop(v)); null(v) ]}       */
 /*@ invariant {v:boolean   | [(ttag(v) = "boolean")]}                    */ 
 
 /*@ invariant {v:string    | [(ttag(v) = "string"   ); 
@@ -367,6 +360,9 @@
 /*@ invariant {v:number    | [((ttag(v) = "number") &&
                                (Prop(v) <=> v /= 0) &&
                                (FLS(v)  <=> v  = 0))]}                   */
+
+
+
 
 //TODO: ttag = "object" for named types, arrays ... 
 

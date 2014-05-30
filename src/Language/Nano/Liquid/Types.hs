@@ -418,6 +418,9 @@ zipType δ f g t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2)
 zipType _ f _ (TApp c [] r) (TApp c' [] r') 
   | c == c' = TApp c [] $ f r r'
 
+zipType _ _ _ _ t2@(TApp TTop _ _ ) 
+  = t2
+
 zipType _ f _ (TVar v r) (TVar v' r') 
   | v == v' = TVar v $ f r r'
 

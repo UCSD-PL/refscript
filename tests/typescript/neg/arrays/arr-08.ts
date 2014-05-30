@@ -9,4 +9,4 @@ var a  = [0,0,0];
 /*@ b :: #Array[#Immutable, number] */
 var b  = [0,0,0,0];
 
-assert(a.length + b.length == 8);
+assert(a.length + b.length === 8);

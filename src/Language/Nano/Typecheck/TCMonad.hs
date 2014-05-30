@@ -431,12 +431,13 @@ convert :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 
 convert l t1 t2 | on (==) toType t1 t2 = return CNo
 
-convert _ t1 _  | isUndef t1           = return CNo
+-- convert _ t1 _  | isUndef t1           = return CNo
 
-convert _ t1 t2 | isNull t1 &&  
-                  not (isUndef t2)     = return CNo
+-- convert _ t1 t2 | isNull t1 &&  
+--                   not (isUndef t2)     = return CNo
 
-convert _ _  t2 | isTop t2             = return CNo
+convert _ t1 t2 | not (isTop t1) && 
+                  isTop t2             = return $ CUp t1 t2
 
 convert l t1 t2 | any isUnion [t1,t2]  = convertUnion l t1 t2
 
@@ -471,7 +472,7 @@ convertObj l t1@(TCons e1s r1) t2@(TCons e2s r2)
     -- All the bound elements that correspond to each binder 
     -- Map : symbol -> [ elements ]
     (m1,m2)    = mapPair toMap (e1s, e2s)
-    toMap      = foldr mi M.empty . filter nonStaticElt
+    toMap      = foldr mi M.empty . filter (\x -> nonStaticElt x && nonConstrElt x)
     mi e       = M.insertWith (++) (eltSym e) [e]
 
     -- Binders for each element

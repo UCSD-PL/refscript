@@ -9,7 +9,7 @@ function inc(x:number):number{
 function main():void{
 	var a :number= pos();
 	var b :number= inc(a);
-	assert (b == (a + 1));
+	assert (b === (a + 1));
 	assert(b > 0);
 }
 

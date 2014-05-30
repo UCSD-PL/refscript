@@ -7,11 +7,11 @@ class BankAccount {
 	/*@ constructor :: (x: { number | v > 0 } ) => void */
 	constructor(x : number) {
 		assert( x > 0 );
-		assert(this.g == "a");
+		assert(this.g === "a");
 	}
 
 }
 
 var ba : BankAccount = new BankAccount(1);
 
-assert(ba.g == "a");
+assert(ba.g === "a");

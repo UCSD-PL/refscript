@@ -5,7 +5,6 @@
 /* junk :: { number | (0 < v && v < 40) } */
 var junk = 0;
 
-/*@ arr :: [ number ] */
 var arr =  [1, 2];
 
 /*@ foo :: () => { number | v < 4 } */

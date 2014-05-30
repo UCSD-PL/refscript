@@ -1,7 +1,7 @@
 /*@ negate :: /\ ({number | v > 0}) => {number  | v < 0 }  
               /\ (x:boolean)        => {boolean | true  } */
-function negate(x):any {
-  if (typeof(x) == "number") {
+function negate(x): any {
+  if (typeof(x) === "number") {
     return 0 - x;
   } 
   else {

@@ -1,7 +1,7 @@
 /*@ foo :: () => { number | true } */
 function foo() {
   var i = 0; 
-  var z = 10;
+  var z : any = 10;
 
   while (i < 5) {
      i = i + 1; 

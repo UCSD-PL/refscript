@@ -33,4 +33,4 @@ var b = new B();
 
 assert(b.a > 5);
 
-assert(b.b == 1);
+assert(b.b === 1);

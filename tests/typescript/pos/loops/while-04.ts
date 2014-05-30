@@ -5,14 +5,14 @@
 function foo() : number{
 	var x : number = 0;
 	var i : number = 1; 
-	assert(x == i - 1); // NOT OK, WTF?
+	assert(x === i - 1); // NOT OK, WTF?
 	while (i < 5) {
       x = i;
 		i = i + 1; 
 		// assert(x == i - 1);
 	}
-	assert(i == 5);     // OK
+	assert(i === 5);     // OK
 	assert(x < i);      // NOT OK, WTF?
-	assert(x == i - 1); // NOT OK, WTF?
+	assert(x === i - 1); // NOT OK, WTF?
 	return x;
 }

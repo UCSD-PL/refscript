@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 import qualified Language.Nano.Typecheck.Typecheck  as TC 
 import qualified Language.Nano.Liquid.Liquid        as LQ
@@ -40,7 +41,7 @@ json f | ext == ".json" = return f
        | otherwise      = error $ "Unsupported input file format: " ++ ext
   where ext             = takeExtension f
         toJSONExt       = (`addExtension` ".json") . dropExtension
-        tsCmd           = "tsc --nano "
+        tsCmd           = "tsc --refscript "
 
 run verifyFile cfg 
   = do mapM_ (createDirectoryIfMissing False) $ map tmpDir $ files cfg
@@ -82,7 +83,7 @@ writeResult r            = mapM_ (writeDoc c) $ zip [0..] $ resDocs r
 resDocs F.Safe             = [text "SAFE"]
 resDocs (F.Crash xs s)     = text ("CRASH: " ++ s) : pprManyOrdered xs
 resDocs (F.Unsafe xs)      = text "UNSAFE"         : pprManyOrdered (nub xs)
-resDocs (F.UnknownError d) = [text "PANIC: Unexpected Error: " <+> d, reportUrl]
+resDocs (F.UnknownError d) = [text "PANIC: Unexpected Error: " <+> text d, reportUrl]
 reportUrl                  = text "Please submit a bug report at: https://github.com/ucsd-pl/RefScript"
 
 pprManyOrdered = map pp . sort 

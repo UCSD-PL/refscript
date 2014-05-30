@@ -1,5 +1,5 @@
 
-/*@ foo :: (x: { a: number, b: string }) => { number | v > 5 } */ 
+/*@ foo :: (x: { a: number; b: string }) => { number | v > 5 } */ 
 
 function foo(x) {
 

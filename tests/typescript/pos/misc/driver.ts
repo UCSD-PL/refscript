@@ -13,7 +13,7 @@ function create() : number{
 
 /*@ acquire :: (number) => number */
 function acquire(l:number):number{
-  assert(l == 0);
+  assert(l === 0);
   return 1;
 }
 

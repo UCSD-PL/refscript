@@ -1,5 +1,5 @@
 
-/*@ mkArray :: (number) => [{number | 0 <= v}] */
+/*@ mkArray :: (number) => #Array[#Mutable, { number | 0 <= v} ] */
 function mkArray(n: number): number[] {
 	var i = 0;
 	var a = [];

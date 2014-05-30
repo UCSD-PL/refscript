@@ -3,21 +3,21 @@
 
 /*@ create :: () => number */
 function create(){
-  //ensures($result == 0);
+  //ensures($result === 0);
   return 0;
 }
 
 /*@ acquire :: (number) => number */
 function acquire(l){
-  //requires(l == 0);
-  //ensures($result == 1);
+  //requires(l === 0);
+  //ensures($result === 1);
   return 1;
 }
 
 /*@ release :: (number) => number */
 function release(l){
-  //requires(l == 1);
-  //ensures($result == 0);
+  //requires(l === 1);
+  //ensures($result === 0);
   return 0;
 }
 
@@ -29,6 +29,6 @@ function main(){
   var l = create();
   if (0 <= x){ l = acquire(l); }
   if (0 < x){ l = release(l); }
-  assert(l == 0);
+  assert(l === 0);
 }
 

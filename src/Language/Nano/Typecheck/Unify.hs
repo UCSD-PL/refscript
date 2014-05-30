@@ -25,9 +25,11 @@ import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
+import           Control.Monad  (foldM)
 import           Data.Function                  (on)
 -- import           Debug.Trace
 
+type PPR r = (PP r, F.Reftable r)
 
 -----------------------------------------------------------------------------
 -- | Unification
@@ -36,7 +38,7 @@ import           Data.Function                  (on)
 -- | Unify types @t@ and @t'@, in substitution environment @θ@ and type
 -- definition environment @δ@.
 -----------------------------------------------------------------------------
-unify :: (PP r, F.Reftable r, Ord r) => SourceSpan -> TDefEnv (RType r) 
+unify :: PPR r => SourceSpan -> TDefEnv (RType r) 
   -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 
@@ -65,14 +67,12 @@ unify l δ θ t1@(TApp (TRef _) _ _) t2
 unify l δ θ t1 t2@(TApp (TRef _) _ _)
   = unify l δ θ t1 (flattenType δ t2)
 
-unify l δ θ (TArr t _) (TArr t' _) = unify l δ θ t t'
-
 unify l δ θ (TCons e1s _) (TCons e2s _)
   = unifys l δ θ t1s t2s
   where 
-    (t1s, t2s) = unzip [ (t1, t2) | TE s1 _ t1 <- e1s
-                                  , TE s2 _ t2 <- e2s
-                                  , s1 == s2 ]
+    (t1s, t2s) = unzip $ [ (eltType e1, eltType e2) | e1 <- e1s
+                                                    , e2 <- e2s
+                                                    , e1 `sameBinder` e2 ]
 
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ
@@ -83,7 +83,6 @@ unifEquiv t t' | toType t == toType t'
 unifEquiv t t' | any isUnion [t,t'] 
                = error "No nested unions"
 unifEquiv (TApp c _ _ ) (TApp c' _ _  ) = c `equiv` c'  -- Interfaces appear once only on top-level unions
-unifEquiv (TArr _ _   ) (TArr _ _     ) = True          -- Arrays are really interfaces
 unifEquiv (TCons _ _  ) (TCons _ _    ) = True
 unifEquiv (TVar v _   ) (TVar v' _    ) = v == v'
 unifEquiv (TFun _ _ _ ) (TFun _ _ _   ) = True          -- Functions as well ... 
@@ -93,35 +92,19 @@ unifEquiv _             _               = False
 
 
 -----------------------------------------------------------------------------
-unifys ::  (PP r, F.Reftable r, Ord r) => SourceSpan -> TDefEnv (RType r) 
+unifys ::  PPR r => SourceSpan -> TDefEnv (RType r) 
             -> RSubst r -> [RType r] -> [RType r] -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
-unifys loc env θ ts ts'  | nTs == nTs'         
-                         = go env θ ts ts'
-                         | otherwise           
-                         = Left $ errorUnification loc ts ts'
+unifys loc γ θ ts ts'  
+  | nTs == nTs' = foldM foo θ $ zip ts ts'
+  | otherwise   = Left $ errorUnification loc ts ts'
   where 
-    (nTs, nTs')          = mapPair length (ts, ts')
-    go γ θ (s:ss) (t:tt) = either Left (\θ' -> go γ θ' ss tt) $ unify loc γ θ s t
-    go _ θ []     []     = Right θ
-    go _ _ _      _      = Left $ errorUnification loc ts ts'
---     safeJoin (Right θ@(Su m)) (Right θ'@(Su m'))
---       | check m m'       = Right $ mappend θ θ'
---       | otherwise        = Left  $ errorJoinSubsts loc θ θ' 
---     safeJoin (Left l) _  = Left l
---     safeJoin _ (Left l)  = Left l
-                               
--- 
--- check m m' = vs == vs'
---   where vs  = map (toType <$>) $ (`M.lookup` m ) <$> ks
---         vs' = map (toType <$>) $ (`M.lookup` m') <$> ks
---         ks  = M.keys $ M.intersection (clr m) (clr m')
---         clr = M.filterWithKey (\k v -> tVar k /= v)
+    (nTs, nTs') = mapPair length (ts, ts')
+    foo θ       = uncurry $ on (unify loc γ θ) (apply θ)
 
 
 -----------------------------------------------------------------------------
-varEql :: (PP r, F.Reftable r, Ord r) => 
-  SourceSpan -> RSubst r -> TVar -> TVar -> Either Error (RSubst r)
+varEql :: PPR r => SourceSpan -> RSubst r -> TVar -> TVar -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 varEql l θ α β =  
   case varAsn l θ α $ tVar β of
@@ -133,15 +116,14 @@ varEql l θ α β =
 
 
 -----------------------------------------------------------------------------
-varAsn ::  (PP r, F.Reftable r, Ord r) => 
-  SourceSpan -> RSubst r -> TVar -> RType r -> Either Error (RSubst r)
+varAsn ::  PPR r => SourceSpan -> RSubst r -> TVar -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 varAsn l θ α t 
-  | on (==) toType t (apply θ (tVar α)) = Right $ θ 
-  | on (==) toType t (tVar α)           = Right $ θ 
-  | α `S.member` free t                 = Left  $ errorOccursCheck l α t 
-  | unassigned α θ                      = Right $ θ `mappend` (Su $ M.singleton α t)
-  | otherwise                           = Left  $ errorRigidUnify l α t θ
+  | on (==) toType t (apply θ (tVar α))       = Right $ θ 
+  | any (on (==) toType (tVar α)) (bkUnion t) = Right $ θ 
+  | α `S.member` free t                       = Left  $ errorOccursCheck l α t 
+  | unassigned α θ                            = Right $ θ `mappend` (Su $ M.singleton α t)
+  | otherwise                                 = Left  $ errorRigidUnify l α t
   
 unassigned α (Su m) = M.lookup α m == Just (tVar α)
 

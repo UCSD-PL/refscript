@@ -5,13 +5,13 @@ function create(){
 
 /*@ acquire :: (number) => number */
 function acquire(l){
-  assert(l == 0);
+  assert(l === 0);
   return 1;
 }
 
 /*@ release :: (number) => number */
 function release(l){
-  assert(l == 1);
+  assert(l === 1);
   return 0;
 }
 
@@ -20,7 +20,7 @@ function driver(l0, newCount0, oldCount0){
   
   requires( (newCount0 !== oldCount0 && l0 === 0) || (newCount0 === oldCount0 && l0 === 1));
   
-  //ensures($result == 1);
+  //ensures($result === 1);
   var l        = l0;
   var newCount = newCount0;
   var oldCount = oldCount0;

@@ -449,10 +449,13 @@ convert l t1 t2                        = convertSimple l t1 t2
 
 
 -- | `convertObj`
+--
+-- FIXME: Mutability ???
+--
 --------------------------------------------------------------------------------
 convertObj :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
-convertObj l t1@(TCons e1s r1) t2@(TCons e2s r2)
+convertObj l t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
 
   -- { f1:t1,..,fn:tn } vs { f1:t1',..fn:tn' }
   | s1l == s2l 
@@ -466,14 +469,14 @@ convertObj l t1@(TCons e1s r1) t2@(TCons e2s r2)
    
   -- { f1:t1,..,fn:tn,..,fm:tm } vs { f1:t1',..,fn:tn' }
   | otherwise               
-  = do _      <- convertObj l (TCons e1s' r1) (TCons e2s r2)
+  = do _      <- convertObj l (TCons e1s' μ1 r1) (TCons e2s μ2 r2)
        return  $ CUp t1 t2
   where
     -- All the bound elements that correspond to each binder 
     -- Map : symbol -> [ elements ]
     (m1,m2)    = mapPair toMap (e1s, e2s)
     toMap      = foldr mi M.empty . filter (\x -> nonStaticElt x && nonConstrElt x)
-    mi e       = M.insertWith (++) (eltSym e) [e]
+    mi e       = M.insertWith (++) (F.symbol e) [e]
 
     -- Binders for each element
     (s1s,s2s)  = mapPair (S.fromList . M.keys) (m1,m2)
@@ -491,9 +494,11 @@ convertObj l t1@(TCons e1s r1) t2@(TCons e2s r2)
 
     e1s'       = concat [ fromJust $ M.lookup s m1 | s <- S.toList in12 ]
 
-    group1     = [ (eltSym $ head g1s, g1s) | g1s <- groupBy sameBinder e1s ]
-    group2     = [ (eltSym $ head g2s, g2s) | g2s <- groupBy sameBinder e2s ]
+    group1     = [ (F.symbol $ head g1s, g1s) | g1s <- groupBy sameBinder e1s ]
+    group2     = [ (F.symbol $ head g2s, g2s) | g2s <- groupBy sameBinder e2s ]
 
+-- FIXME !!!!!!!!
+-- Do nominal subtyping and fall back to structural if the former fails.
 convertObj l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
   | i1 == i2 
   = do -- FIXME: Using covariance here !!!
@@ -504,12 +509,10 @@ convertObj l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2)
   = do δ  <- getDef 
        case weaken δ (findSymOrDie s1 δ,t1s) s2 of
          Just (_, t1s') -> return $ CUp (TApp (TRef (s2,b1)) t1s' r1) t2
-         Nothing        -> convertObj l (c1 δ) (c2 δ)
+         Nothing        -> convertObj l (flattenType δ t1) (flattenType δ t2)
   where
     (s1,b1) = i1
     (s2,b2) = i2
-    c1 δ    = TCons (flattenTRef δ t1) r1
-    c2 δ    = TCons (flattenTRef δ t2) r2
                           
 convertObj l t1@(TApp (TRef _) _ _) t2 
   = do δ <- getDef 
@@ -524,7 +527,7 @@ convertObj _ _ _ =  error "BUG: Case not supported in convertObj"
 
 -- | Deep subtyping for object type members
 --
---   TODO: Doing covariant subtyping here !!!
+--   FIXME: Doing covariant subtyping here !!!
 
 deeps l ss = and <$> mapM (deep l) ss
 
@@ -545,8 +548,11 @@ deep1 l e es = and <$> mapM (isSubtypeElt l e) es
 isSubtypeElt l (CallSig t1) (CallSig t2)  
   = isSubtype l t1 t2
 
+
+-- FIXME: include Mutability check
+--
 -- | { f[τ]:t } <: { f[τ']:t' } 
-isSubtypeElt l (PropSig _ _ _ τ1 t1) (PropSig _ _ _ τ2 t2)
+isSubtypeElt l (FieldSig _ _ _ τ1 t1) (FieldSig _ _ _ τ2 t2)
   = (&&) <$> isSubtypeOpt l τ1 τ2 <*> isSubtype l t1 t2
 
 -- | { f: (ts)=>() } <: { f: (ts')=>() } 
@@ -556,10 +562,6 @@ isSubtypeElt l (ConsSig t1) (ConsSig t2)
 -- | { [x:τ]: t } <: { [x:τ']: t' }
 isSubtypeElt l (IndexSig _ b1 t1) (IndexSig _ b2 t2)
   = (&&) <$> return (b1 == b2) <*> isSubtype l t1 t2
-
--- | { f[τ]:(ts)=>t } <: { f[τ']:(ts')=>t' }
-isSubtypeElt l (MethSig f1 s1 τ1 t1) (MethSig f2 s2 τ2 t2) 
-  = (&&) <$> isSubtypeOpt l τ2 τ1 <*> isSubtype l t1 t2
 
 -- | otherwise fail
 isSubtypeElt _ _ _ = return False
@@ -577,7 +579,7 @@ instance PP a => PP (S.HashSet a) where
 
 -- | `convertFun`
 --
--- TODO: add arg length check
+-- FIXME: add arg length check
 --
 --------------------------------------------------------------------------------
 convertFun :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
@@ -597,9 +599,9 @@ convertFun _ _ _ = error "convertFun: no other cases supported"
 convertSimple :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
 convertSimple l t1 t2
-  | t1 `equiv` t2 = return CNo
+  | t1 == t2  = return CNo
   -- TOGGLE dead-code
-  | otherwise     = return $ CDead t2
+  | otherwise = return $ CDead t2
  --  | otherwise     = tcError  $ errorSimpleSubtype l t1 t2
 
 

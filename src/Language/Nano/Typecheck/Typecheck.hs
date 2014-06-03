@@ -222,9 +222,10 @@ type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r))
 -- | TypeCheck Scoped Block in Environment
 -------------------------------------------------------------------------------
 
+-- XXX: What could go wrong by removing this check?
 tcInScope γ act = accumAnn annCheck act
   where
-    annCheck m  = catMaybes $ validInst γ <$> M.toList m
+    annCheck m  = [] -- catMaybes $ validInst γ <$> M.toList m
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Function 
@@ -251,7 +252,7 @@ tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l body t
     γ'                              = envAddFun f i αs xs ts t γ 
 
 tcFunBody γ l body t = tcStmts γ body >>= go
-  where go (_, Just _) | not (equiv t tVoid) 
+  where go (_, Just _) | t /= tVoid
                        = tcError $ errorMissingReturn (srcPos l)
         go (b, _     ) | otherwise                        
                        = return b
@@ -497,14 +498,20 @@ classAnnot l = safeHead "classAnnot" [ t | ClassAnn t <- ann_fact l ]
 classEltType :: PPR r => ClassElt (AnnSSA r) -> TElt (RType r)
 ---------------------------------------------------------------------------------------
 classEltType (Constructor l _ _ ) = ConsSig ann
-  where ann = safeHead "BUG: constructor annotation" [ κ | ConsAnn κ <- ann_fact l ]
+  where 
+    ann = safeHead "BUG:classEltType-1" [ κ | ConsAnn κ <- ann_fact l ]
 
-classEltType (MemberVarDecl _ s (VarDecl l v _)) = PropSig (F.symbol v) s m Nothing t
-  where (m,t) = safeHead "BUG: variable decl annotation" [ φ | FieldAnn φ <- ann_fact l ]
+-- FIXME: Mutability ???
+classEltType (MemberVarDecl _ s (VarDecl l v _)) = 
+    FieldSig (F.symbol v) s undefined Nothing t
+  where 
+    (m,t) = safeHead "BUG:classEltType-2" [ φ | FieldAnn φ <- ann_fact l ]
 
--- TODO: add "this" as first parameter
-classEltType (MemberMethDecl  l s f _ _ ) = MethSig (F.symbol f) s Nothing t
-  where t = safeHead ("Method " ++ ppshow f ++ " has no annotation.") [ μ | MethAnn μ <- ann_fact l ]
+-- FIXME: add "this" as first parameter
+classEltType (MemberMethDecl  l s f _ _ ) = 
+    FieldSig (F.symbol f) s undefined Nothing t
+  where 
+    t = safeHead "BUG:classEltType-3" [ μ | MethAnn μ <- ann_fact l ]
 
 
 -- Variable declarations should have the type annotations available locally
@@ -586,19 +593,8 @@ tcExpr γ e@(CallExpr _ _ _)
 tcExpr γ e@(ArrayLit _ _)
   = tcCall γ e 
 
--- TODO: add `this` in scope ...
-tcExpr γ (ObjectLit l bs) 
-  = do let (ps, es)  = unzip bs
-       ets          <- mapM (tcExpr γ) es
-       let (es', ts) = unzip ets
-       let tCons     = TCons (zipWith mkElt (F.symbol <$> ps) ts) fTop
-       return          (ObjectLit l (zip ps es'), tCons)
-    where
-    -- Object elements are non-static
-    -- TODO: add "this" as first argument
-       mkElt s t     | isTFun t  = MethSig s False Nothing t
-       mkElt s t     | otherwise = PropSig s False True Nothing t 
-
+tcExpr γ e@(ObjectLit _ _) 
+  = tcCall γ e
 
 tcExpr γ (Cast l@(Ann loc fs) e)
   = do (e', t) <- tcExpr γ e
@@ -611,11 +607,15 @@ tcExpr γ (Cast l@(Ann loc fs) e)
 -- Careful here! Unification is happening in `runMaybeM` so won't be effective
 -- outside unless we explicitly add the substitution to the environment. That's
 -- why we're adding the substitution.
+--
+-- FIXME: use tcCall here !!!
+--
 tcExpr γ (DotRef l e f) 
   = do δ            <- getDef
        (e', te)     <- tcExpr γ e
-       z            <- catMaybes <$> mapM (runMaybeM . checkElt e' te) (getElt l δ fs te)
-       case z of 
+       let es        = getElt δ fs te
+       z            <- catMaybes <$> mapM (runMaybeM . checkElt e' te) es
+       case undefined of 
          (dr,t,θ):_  -> do addSubst l θ
                            addAnn (srcPos l) (EltOverload (tce_ctx γ) t)
                            return (dr, eltType t)
@@ -626,17 +626,14 @@ tcExpr γ (DotRef l e f)
          = do  θ <- unifyTypeM (srcPos l) to τ
                subtypeM (srcPos l) (apply θ to) (apply θ τ) 
                return (θ, apply θ ft)
-       checkElt e te (te', m@(MethSig s False (Just τ) ft)) =
-         tcWithThis te' $ do e''    <- castM l (tce_ctx γ) e te te'
-                             (θ,t)  <- thisArg l f te τ ft
-                             return (DotRef l e'' f, m, θ)
-       checkElt e te (te', m@(PropSig s False _ (Just τ) ft)) =
-         tcWithThis te' $ do e''    <- castM l (tce_ctx γ) e te te'
-                             (θ,t)  <- thisArg l f te τ ft
-                             return (DotRef l e'' f, m, θ)
-       checkElt e te (te', elt) = 
-         tcWithThis te' $ do e'' <- castM l (tce_ctx γ) e te te'
-                             return (DotRef l e'' f, elt, fromList [])
+
+       checkElt e te m@(FieldSig s False _ (Just τ) ft) =
+         tcWithThis te $ do --  e'    <- castM l (tce_ctx γ) e te te'
+                            (θ, t) <- thisArg l f te τ ft
+                            return (DotRef l e f, m, θ)
+       checkElt e te elt = 
+         tcWithThis te $ do -- e' <- castM l (tce_ctx γ) e te te'
+                            return (DotRef l e f, elt, fromList [])
  
 -- e1[e2]
 tcExpr γ e@(BracketRef _ _ _) 
@@ -711,8 +708,18 @@ tcCall γ ex@(ArrayLit l es)
   = do (es', t)               <- tcCallMatch γ l BIArrayLit es $ arrayLitTy l (length es) $ tce_env γ
        return                  $ (ArrayLit l es', t)
 
+-- | `{ f1:t1,...,fn:tn }`
+--
+-- FIXME: track `this`
+--
+tcCall γ ex@(ObjectLit l bs) 
+  = do (es', t)               <- tcCallMatch γ l "ObjectLit" es $ objLitTy l ps 
+       return                  $ (ObjectLit l (zip ps es'), t)
+  where
+    (ps,es) = unzip bs
+
 -- | `new e(e1,...,en)`
--- FIXME: the folllowing is kinda ugly ... needed a unified way to 
+-- :FIXME: the folllowing is kinda ugly ... needed a unified way to 
 -- get the constructor at tc and liquid.
 tcCall γ (NewExpr l (VarRef lv i) es) 
   = do tc                     <- getConstr (srcPos l) γ i
@@ -761,7 +768,7 @@ tcCallMatch γ l fn es ft0
   = do (es', ts)      <- unzip <$> mapM (tcExpr γ) es
        z              <- resolveOverload γ l fn es' ts ft0
        case z of 
-         Just (θ, ft) -> do addAnn (srcPos l) (Overload (tce_ctx γ) ft) 
+         Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
                             (es'', ot, θ') <- tcCallCase γ l fn es' ts ft
                             return          $ (es'', ot)
@@ -863,7 +870,7 @@ getPhiType l γ1 γ2 x =
     -- These two should really be the same type... cause we don't allow strong
     -- updates on the raw type, even on local vars (that are SSAed)
     (Just t1, Just t2) -> 
-      do  when (not $ t1 `equiv` t2) (tcError $ errorEnvJoin (ann l) x t1 t2)
+      do  when (t1 /= t2) (tcError $ errorEnvJoin (ann l) x t1 t2)
           return t1
     (_      , _      ) -> if forceCheck x γ1 && forceCheck x γ2 
                             then tcError $ bug loc "Oh no, the HashMap GREMLIN is back..."
@@ -877,7 +884,7 @@ getLoopNextPhiType :: PPR r
 getLoopNextPhiType l γ γl x =
   case (tcEnvFindTy x γ, tcEnvFindTy (mkNextId x) γl) of 
     (Just t1, Just t2) -> 
-      do  when (not $ t1 `equiv` t2) (tcError $ errorEnvJoin (ann l) x t1 t2)
+      do  when (t1 /= t2) (tcError $ errorEnvJoin (ann l) x t1 t2)
           return t1
     (_      , _      ) -> 
       tcError $ bugUnboundPhiVar loc x where loc = srcPos $ ann l

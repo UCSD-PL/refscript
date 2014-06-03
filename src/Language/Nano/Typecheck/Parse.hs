@@ -32,7 +32,8 @@ import           Control.Monad                    hiding (mapM)
 import           Control.Monad.Trans                     (MonadIO,liftIO)
 import           Control.Applicative                     ((<$>), ( <*>))
 
-import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
+import           Language.Fixpoint.Types          hiding (quals, Loc, Expression, dummySpan)
+import           Language.Fixpoint.Errors                (dummySpan)
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Misc                  (mapEither, mapSnd)
 import           Language.Nano.Types
@@ -203,7 +204,22 @@ bbaseP
 ----------------------------------------------------------------------------------
 objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
-objLitP = TCons <$> braces fieldBindP
+objLitP 
+  = do m     <- option defMut mutP
+       bs    <- braces fieldBindP
+       return $ TCons bs m
+  
+mutP :: Parser Mutability
+mutP = choice $ map mut validMut
+  where mut s = reserved s >> return (mkMut s)
+
+defMut  = mkMut "Mutable"
+mkMut s = TApp (TRef (symbol s, False)) [] fTop
+
+validMut = ["Mutable", "ReadOnly", "Immutable"]
+
+mutFromStr s | s `elem` validMut = mkMut s
+mutFromStr s | otherwise         = error $ "Valid mutabilities: " ++ unwords validMut
 
 
 bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
@@ -240,7 +256,8 @@ tConP =  try (reserved "number"    >> return TInt)
 ----------------------------------------------------------------------------------
 idToTRefP :: Id SourceSpan -> Parser TCon
 ----------------------------------------------------------------------------------
-idToTRefP (Id _ s) = return $ TRef (symbol s, False) -- default: non-static class ref
+idToTRefP (Id _ s) = return $ TRef (symbol s, False)
+-- default: non-static class ref
 
 bareAll1P p
   = do reserved "forall"
@@ -254,8 +271,6 @@ bareAllP p =  try p
 
 arrayP = brackets bareTypeP
 
--- | Parses lists of "f1: t1", "[x:string]: t", or "[x:number]: t"
--- separated by semicolon.
 fieldBindP =  sepEndBy (
               try indexSigP 
           <|> try fieldSigP
@@ -273,9 +288,9 @@ fieldSigP :: Parser (TElt RefType)
 ----------------------------------------------------------------------------------
 fieldSigP = do 
     s          <- option False $ try $ reserved "static" >> return True
+    m          <- option defMut mutP
     ((x,tt),t) <- xyP sp colon bareTypeP
-    return      $ if isTFun t then MethSig x s tt t
-                              else PropSig x s True tt t
+    return      $ FieldSig x s m tt t
   where 
     sp = do x <- withinSpacesP (stringSymbol <$> ((try lowerIdP) <|> upperIdP))    
             t <- optionMaybe $ withinSpacesP $ brackets bareTypeP
@@ -523,12 +538,12 @@ checkIF t@(_,TD _ _ _ _ elts)
   | nTi == 0  = t
   | nTi == 1 && nTe == 0 && nTn == 0 = t
   | otherwise = error $ "[UNIMPLEMENTED] Object types " ++ 
-                                   "can only have a single indexable " ++
-                                   "signature and no other elements."
+                        "can only have a single indexable " ++
+                        "signature and no other elements."
   where 
     nTn = length [ () | IndexSig _ False _ <- elts ]
     nTi = length [ () | IndexSig _ _ _     <- elts ]
-    nTe = length [ () | PropSig _ _ _ _ _  <- elts ]
+    nTe = length [ () | FieldSig _ _ _ _ _ <- elts ]
 
 
 type PState = Integer
@@ -536,6 +551,8 @@ type PState = Integer
 
 instance PP Integer where
   pp = pp . show
+
+
 
 --------------------------------------------------------------------------------------
 expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> [Statement (SourceSpan, [Spec])]

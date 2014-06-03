@@ -217,7 +217,7 @@ rTypeSort t@(TAll _ _)     = rTypeSortForAll t
 rTypeSort   (TFun xts t _) = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort   (TApp c ts _)  = rTypeSortApp c ts 
 rTypeSort   (TAnd (t:_))   = rTypeSort t
-rTypeSort   (TCons _ _ )   = F.FObj $ F.symbol "cons"
+rTypeSort   (TCons _ _ _ ) = F.FObj $ F.symbol "cons"
 rTypeSort t                = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
 
 rTypeSortApp TInt _  = F.FInt
@@ -249,12 +249,12 @@ genSort n θ t              = F.FFunc n [F.sortSubst θ t]
 ------------------------------------------------------------------------------------------
 stripRTypeBase :: RType r -> Maybe r 
 ------------------------------------------------------------------------------------------
-stripRTypeBase (TApp _ _ r) = Just r
-stripRTypeBase (TVar _ r)   = Just r
-stripRTypeBase (TFun _ _ r) = Just r
-stripRTypeBase (TCons _ r)  = Just r
-stripRTypeBase _            = Nothing
- 
+stripRTypeBase (TApp _ _ r)  = Just r
+stripRTypeBase (TVar _ r)    = Just r
+stripRTypeBase (TFun _ _ r)  = Just r
+stripRTypeBase (TCons _ _ r) = Just r
+stripRTypeBase _             = Nothing
+
 ------------------------------------------------------------------------------------------
 -- | Substitutions
 ------------------------------------------------------------------------------------------
@@ -273,35 +273,34 @@ instance (PPR r, F.Subable r) => F.Subable (RType r) where
 ------------------------------------------------------------------------------------------
 emapReft  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> RType a -> RType b
 ------------------------------------------------------------------------------------------
-emapReft f γ (TVar α r)     = TVar α (f γ r)
-emapReft f γ (TApp c ts r)  = TApp c (emapReft f γ <$> ts) (f γ r)
-emapReft f γ (TAll α t)     = TAll α (emapReft f γ t)
-emapReft f γ (TFun xts t r) = TFun (emapReftBind f γ' <$> xts) (emapReft f γ' t) (f γ r) 
-  where    γ'               = (b_sym <$> xts) ++ γ 
-emapReft f γ (TCons xts r)  = TCons (emapReftElt f γ' <$> xts) (f γ r)
-  where    γ'               = (f_sym <$> xts) ++ γ 
-emapReft _ _ _              = error "Not supported in emapReft"
+emapReft f γ (TVar α r)      = TVar α (f γ r)
+emapReft f γ (TApp c ts r)   = TApp c (emapReft f γ <$> ts) (f γ r)
+emapReft f γ (TAll α t)      = TAll α (emapReft f γ t)
+emapReft f γ (TFun xts t r)  = TFun (emapReftBind f γ' <$> xts) (emapReft f γ' t) (f γ r)
+  where    γ'                = (b_sym <$> xts) ++ γ
+emapReft f γ (TCons xts m r) = TCons (emapReftElt f γ' <$> xts) m (f γ r)
+  where    γ'                = (f_sym <$> xts) ++ γ
+emapReft _ _ _               = error "Not supported in emapReft"
 
-emapReftBind f γ (B x t)    = B x $ emapReft f γ t
+emapReftBind f γ (B x t)     = B x $ emapReft f γ t
 
 emapReftElt  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> TElt (RType a) -> TElt (RType b)
 emapReftElt f γ e            = fmap (emapReft f γ) e
 
-mapReftM f (TVar α r)      = TVar α <$> f r
-mapReftM f (TApp c ts r)   = TApp c <$> mapM (mapReftM f) ts <*> f r
-mapReftM f (TFun xts t r)  = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return $ F.top r) --f r 
-mapReftM f (TAll α t)      = TAll α <$> mapReftM f t
-mapReftM f (TAnd ts)       = TAnd   <$> mapM (mapReftM f) ts
-mapReftM f (TCons bs r)    = TCons  <$> mapM (mapReftEltM f) bs <*> f r
-mapReftM _ t               = error   $ render $ text "Not supported in mapReftM: " <+> pp t 
+mapReftM f (TVar α r)        = TVar α <$> f r
+mapReftM f (TApp c ts r)     = TApp c <$> mapM (mapReftM f) ts <*> f r
+mapReftM f (TFun xts t r)    = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return $ F.top r) --f r 
+mapReftM f (TAll α t)        = TAll α <$> mapReftM f t
+mapReftM f (TAnd ts)         = TAnd   <$> mapM (mapReftM f) ts
+mapReftM f (TCons bs m r)    = TCons  <$> mapM (mapReftEltM f) bs <*> return m <*> f r
+mapReftM _ t                 = error   $ render $ text "Not supported in mapReftM: " <+> pp t 
 
-mapReftBindM f (B x t)    = B x     <$> mapReftM f t
+mapReftBindM f (B x t)       = B x     <$> mapReftM f t
 
-mapReftEltM f (PropSig x s m τ t) = PropSig x s m <$> mapReftMaybeM f τ <*> mapReftM f t
-mapReftEltM f (MethSig x s τ t)   = MethSig x s   <$> mapReftMaybeM f τ <*> mapReftM f t
-mapReftEltM f (CallSig t)         = CallSig       <$> mapReftM f t
-mapReftEltM f (ConsSig  t)        = ConsSig       <$> mapReftM f t
-mapReftEltM f (IndexSig x b t)    = IndexSig x b  <$> mapReftM f t
+mapReftEltM f (FieldSig x s m τ t) = FieldSig x s m <$> mapReftMaybeM f τ <*> mapReftM f t
+mapReftEltM f (CallSig t)          = CallSig        <$> mapReftM f t
+mapReftEltM f (ConsSig  t)         = ConsSig        <$> mapReftM f t
+mapReftEltM f (IndexSig x b t)     = IndexSig x b   <$> mapReftM f t
 
 mapReftMaybeM f (Just t) = Just <$> mapReftM f t
 mapReftMaybeM _ _        = return Nothing
@@ -326,7 +325,7 @@ efoldReft g f = go
     go γ z (TAll _ t)       = go γ z t
     go γ z (TFun xts t r)   = f γ r $ go γ' (gos γ' z (b_type <$> xts)) t  where γ' = foldr (efoldExt g) γ xts
     go γ z (TAnd ts)        = gos γ z ts 
-    go γ z (TCons bs r)     = f γ' r $ gos γ z (f_type <$> bs) where γ' = foldr (efoldExt' g) γ bs
+    go γ z (TCons bs _ r)   = f γ' r $ gos γ z (f_type <$> bs) where γ' = foldr (efoldExt' g) γ bs
     go _ _ t                = error $ "Not supported in efoldReft: " ++ ppshow t
 
     gos γ z ts              = L.foldl' (go γ) z ts
@@ -344,7 +343,7 @@ efoldRType g f               = go
     go γ z t@(TAll _ t1)     = f γ t $ go γ z t1
     go γ z t@(TFun xts t1 _) = f γ t $ go γ' (gos γ' z (b_type <$> xts)) t1  where γ' = foldr (efoldExt g) γ xts
     go γ z   (TAnd ts)       = gos γ z ts 
-    go γ z t@(TCons xts _)   = f γ t $ gos γ' z (f_type <$> xts) where γ' = foldr (efoldExt' g) γ xts
+    go γ z t@(TCons xts _ _) = f γ t $ gos γ' z (f_type <$> xts) where γ' = foldr (efoldExt' g) γ xts
     go _ _ t                 = error $ "Not supported in efoldRType: " ++ ppshow t
     gos γ z ts               = L.foldl' (go γ) z ts
 
@@ -398,15 +397,15 @@ zipType δ f g (TApp TUn t1s r1) (TApp TUn t2s r2)
   = TApp TUn (cmn ++ snd) $ f r1 r2
   where
     cmn        = [ zipType δ f g τ1 τ2 | τ2 <- t2s
-                                       , τ1 <- maybeToList $ L.find (equiv τ2) t1s ]
+                                       , τ1 <- maybeToList $ L.find ((==) τ2) t1s ]
     snd        = fmap g <$> [ t        | t <- t2s
-                                       , not $ exists (equiv t) t1s ]
+                                       , not $ exists ((==) t) t1s ]
 zipType δ f g t1 t2@(TApp TUn _ _ ) 
   = zipType δ f g (TApp TUn [t1] fTop) t2
   -- = zipType δ f g (TApp TUn [t1] $ rTypeReft t1) t2
 
 zipType δ f g (TApp TUn t1s r1) t2 
-  = zipType δ f g ((fromJust $ L.find (equiv t2) t1s) `strengthen` r1) t2
+  = zipType δ f g ((fromJust $ L.find ((==) t2) t1s) `strengthen` r1) t2
                                        
 
 zipType δ f g t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
@@ -430,13 +429,14 @@ zipType δ f g (TFun x1s t1 r1) (TFun x2s t2 r2)
     xs = zipWith (zipBind δ f g) x1s x2s
     y  = zipType δ f g t1 t2
 
-zipType δ f g (TCons e1s r1) (TCons e2s r2) 
-  = TCons (cmn ++ snd) (f r1 r2)
+-- FIXME: what mutability should be preserved?
+zipType δ f g (TCons e1s m1 r1) (TCons e2s _ r2) 
+  = TCons (cmn ++ snd) m1 (f r1 r2)
   where 
     -- FIXME: mutabilities? m1 `mconcat` m2
     cmn = [ zipElts (zipType δ f g) e1 e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ] 
-    snd = [ e        | e <- e2s , not (eltSym e `elem` ks1) ]
-    ks1 = [ eltSym e | e <- e1s ]
+    snd = [ e          | e <- e2s , not (F.symbol e `elem` ks1) ]
+    ks1 = [ F.symbol e | e <- e1s ]
 
 zipType _ _ _ t1 t2 = 
   errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
@@ -444,31 +444,3 @@ zipType _ _ _ t1 t2 =
 
 zipBind δ f g (B s1 t1) (B s2 t2) = B s2 $ zipType δ f g t1 t2 
 
-
--- | Tags 
--- --------------------------------------------------------------------------------
--- tagR                        :: RType F.Reft -> F.Reft
--- --------------------------------------------------------------------------------
--- tagR t                       = predReft (rTypeValueVar t) $ F.pOr ps -- por ps
---   where
---     por []                   = F.PTrue
---     por [p]                  = p
---     por ps                   = F.POr ps
---     predReft v p             = F.Reft (v, [F.RConc $ F.prop p])
---     ps                       = F.PAtom F.Eq tagCall <$> tagStrs
---     tagCall                  = F.EApp tagSym [v]
---     v                        = F.EVar $ rTypeValueVar t
---     tagStrs                  = F.expr . F.symbol . ("lit#" ++) <$> tof t
---     tagSym                   = F.Loc F.dummyPos (F.symbol "ttag")
---     tof                     :: RefType -> [String]
---     tof t | isTFun t         = ["function"]
---     tof (TApp TInt _ _)      = ["number"]
---     tof (TApp TBool _ _)     = ["boolean"]
---     tof (TApp TString _ _)   = ["string"]
---     tof (TApp TNull _ _)     = ["object"]
---     tof (TApp (TRef _ ) _ _) = ["object"]
---     tof (TCons _   _ )       = ["object"]
---     tof (TApp TUn ts _)      = [] -- concatMap tof ts
---     tof (TApp TUndef _ _ )   = ["undefined"]
---     tof _                    = []
--- 

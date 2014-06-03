@@ -417,7 +417,7 @@ consExpr g (DotRef l e f)
   = do (xe, g')  <- consExpr g e
        let tx     = envFindTy xe g'
        δ         <- getDef
-       case find (eltMatch elt) $ snd <$> getElt l δ fs tx of 
+       case find (eltMatch elt) $ getElt δ fs tx of 
          Just tf -> do let tf'   = F.substa (sf $ F.symbol xe) $ eltType tf
                        (x, g'') <- envAddFresh l tf' g'
                        addAnnot (srcPos l) x (envFindTy x g'')
@@ -426,9 +426,10 @@ consExpr g (DotRef l e f)
     where
        elt        = fromJust $ listToMaybe [ e | EltOverload cx e <- ann_fact l, cge_ctx g == cx ]
        fs         = F.symbol f
-       eltMatch (PropSig _ _ _ τ1 t1) (PropSig _ _ _ τ2 t2) = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
-       eltMatch (MethSig _ _   τ1 t1) (MethSig _ _   τ2 t2) = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
-       eltMatch e1                    e2                    = on (==) (toType . eltType) e1 e2
+       eltMatch (FieldSig _ _ _ τ1 t1) (FieldSig _ _ _ τ2 t2) 
+                  = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
+       eltMatch e1 e2                    
+                  = on (==) (toType . eltType) e1 e2
        sf t s     | s == F.symbol "this" = t
                   | otherwise            = s
 
@@ -451,15 +452,10 @@ consExpr g (ArrayLit l es)
 
 -- {f1:e1,...,fn:en}
 consExpr g (ObjectLit l bs) 
-  = do  let (ps, es) = unzip bs
-        (xes, g')   <- consScan consExpr g es
-        let tCons    = TCons (zipWith mkElt (F.symbol <$> ps) $ 
-                              (\t -> envFindTy t g') <$> xes) fTop
-        envAddFresh l tCons g'
-    where
-    -- TODO: add "this" as first argument
-        mkElt s t | isTFun t  = MethSig s False Nothing t
-        mkElt s t | otherwise = PropSig s False True Nothing t 
+  = consCall g l "ObjectLit" es $ objLitTy l ps
+  where
+    (ps,es) = unzip bs
+    
 
 -- new C(e, ...)
 consExpr g (NewExpr l (VarRef _ i) es)
@@ -576,9 +572,9 @@ consCall g l fn es ft0
          Nothing    -> cgError l $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> getCallable δ ft0) 
     where
        overload δ l  = listToMaybe [ lt | Overload cx t <- ann_fact l 
-                                        , cge_ctx g == cx
-                                        , lt         <- getCallable δ ft0
-                                        , on (==) toType t lt ]
+                                        , cge_ctx g     == cx
+                                        , lt            <- getCallable δ ft0
+                                        , toType t      == toType lt ]
 
 ---------------------------------------------------------------------------------
 instantiate :: (PP a, PPRS F.Reft) => 
@@ -705,7 +701,7 @@ envJoin' l g g1 g2
         -- pass TC (we don't need to pad / fix them before joining).
         -- So we can use the raw type from one of the two branches and freshen
         -- up that one.
-        -- TODO: Add a raw type check on t1 and t2
+        -- FIXME: Add a raw type check on t1 and t2
         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> t1s
         zipWithM_ (subType l g1') [envFindTy x g1' | x <- xs] ts
         zipWithM_ (subType l g2') [envFindTy x g2' | x <- xs] ts

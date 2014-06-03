@@ -205,21 +205,15 @@ bbaseP
 objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
 objLitP 
-  = do m     <- option defMut mutP
+  = do m     <- option defMut (toType <$> mutP)
        bs    <- braces fieldBindP
        return $ TCons bs m
-  
-mutP :: Parser Mutability
-mutP = choice $ map mut validMut
-  where mut s = reserved s >> return (mkMut s)
+ 
+mutP =  try (TVar <$> brackets tvarP <*> return ()) 
+    <|> try (TApp <$> brackets tConP <*> return [] <*> return ())
 
 defMut  = mkMut "Mutable"
 mkMut s = TApp (TRef (symbol s, False)) [] fTop
-
-validMut = ["Mutable", "ReadOnly", "Immutable"]
-
-mutFromStr s | s `elem` validMut = mkMut s
-mutFromStr s | otherwise         = error $ "Valid mutabilities: " ++ unwords validMut
 
 
 bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
@@ -288,7 +282,7 @@ fieldSigP :: Parser (TElt RefType)
 ----------------------------------------------------------------------------------
 fieldSigP = do 
     s          <- option False $ try $ reserved "static" >> return True
-    m          <- option defMut mutP
+    m          <- option defMut (toType <$> mutP)
     ((x,tt),t) <- xyP sp colon bareTypeP
     return      $ FieldSig x s m tt t
   where 

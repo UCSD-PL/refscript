@@ -35,6 +35,11 @@
     /\ forall A. ({[y: string]: A },            x:string                                  , val: A) => void  
                                                                                                     */
 
+/*@ extern builtin_BISetProp ::
+    /\ forall A B M . ([   M    ] { [#Mutable]f: A }, B) => { #Pair[A,B] | true }                              
+    /\ forall A B M . ([#Mutable] { [M]       f: A }, B) => { #Pair[A,B] | true }                   */
+  
+
 
 //FIXME: the 'len' property is invalid if M != Immutable
 /*@ extern builtin_BIArrayLit  :: forall M  A . (A) 
@@ -379,6 +384,7 @@
 /*@ qualif CmpZ(v:number)            : v < 0                    */
 /*@ qualif CmpZ(v:number)            : v <= 0                   */
 /*@ qualif CmpZ(v:number)            : v >  0                   */
+/*@ qualif CmpO(v:number)            : v >  1                   */
 /*@ qualif CmpZ(v:number)            : v >= 0                   */
 /*@ qualif CmpZ(v:number)            : v =  0                   */
 /*@ qualif CmpZ(v:number)            : v != 0                   */
@@ -459,6 +465,12 @@
 //    return new Error("Invalid operation: " + message);
 //  }
 //}
+
+
+/*************************************************************************/
+/*******************  Auxilliary *****************************************/
+/*************************************************************************/
+interface Pair<A,B> { }
 
 
 /*************************************************************************/

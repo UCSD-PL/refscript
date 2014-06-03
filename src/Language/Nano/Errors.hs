@@ -159,4 +159,4 @@ errorSigNotFound l e es   = mkErr l $ printf "Could not find a matching signatur
 errorCallNotSup l fn es ts= mkErr l $ printf "Cannot call '%s' with argument(s): %s and types '%s'" (ppshow fn) (ppshow es) (ppshow ts)
 errorCallMatch l fn ts    = mkErr l $ printf "Could not match call to '%s' to a particular signature. Argument(s) with types '%s' are invalid." (ppshow fn) (ppshow ts)
 
-errorThisDeref l p o t    = mkErr l $ printf "Cannot access property '%s' on '%s' with type '%s'." (ppshow p) (ppshow o) (ppshow t) 
+errorDeref l p o t        = mkErr l $ printf "Cannot access property '%s' on '%s' with type '%s'." (ppshow p) (ppshow o) (ppshow t) 

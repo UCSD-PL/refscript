@@ -42,8 +42,9 @@ import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc             as FM 
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
--- import           Debug.Trace                        hiding (traceShow)
+import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -346,12 +347,17 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
   = do (e', g) <- tcAsgn l1 γ (Id lx x) e
        return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
--- e1.fld = e2
-tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
-  = do (e1', tfld)   <- tcPropRead getProp γ l e1 (F.symbol fld)
-       (e2', t2)     <- tcExpr γ $ e2                    
-       e2''          <- castM l (tce_ctx γ) e2' t2 tfld
-       return           (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1' fld) e2''), Just γ)
+-- e1.f = e2
+tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
+  = do z             <- tcCallMatch γ l BISetProp [e1,e2] $ setPropTy (F.symbol f) l1 $ tce_env γ 
+       case z of 
+         ([e1',e2'], TApp (TRef _) [t1,t2] _) 
+                     -> do  e2'' <- castM le2 (tce_ctx γ) e2' t2 t1
+                            return (exp e1' e2'', Just γ)
+         (e,t)       -> error $ "BUG: tcStmt - e.f = e : " ++ ppshow e ++ "\n" ++ ppshow t
+    where
+       le2            = getAnnotation e2
+       exp ε1 ε2      = ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 ε1 f) ε2
 
 -- e
 tcStmt γ (ExprStmt l e)   
@@ -607,33 +613,28 @@ tcExpr γ (Cast l@(Ann loc fs) e)
 -- Careful here! Unification is happening in `runMaybeM` so won't be effective
 -- outside unless we explicitly add the substitution to the environment. That's
 -- why we're adding the substitution.
---
--- FIXME: use tcCall here !!!
---
 tcExpr γ (DotRef l e f) 
-  = do δ            <- getDef
-       (e', te)     <- tcExpr γ e
-       let es        = getElt δ fs te
-       z            <- catMaybes <$> mapM (runMaybeM . checkElt e' te) es
-       case undefined of 
-         (dr,t,θ):_  -> do addSubst l θ
-                           addAnn (srcPos l) (EltOverload (tce_ctx γ) t)
-                           return (dr, eltType t)
-         _           -> tcError $ errorThisDeref (srcPos l) f e te
+  = do δ                  <- getDef
+       (e', te)           <- tcExpr γ e
+       let es              = getElt δ fs te
+       z                  <- catMaybes <$> mapM (runMaybeM . checkElt e' te) es
+       case z of 
+         -- Get the first matching element
+         (dr,t,θ):_       -> do addSubst l θ
+                                addAnn (srcPos l) (EltOverload (tce_ctx γ) t)
+                                return (dr, eltType t)
+         _                -> tcError $ errorDeref (srcPos l) f e te
     where
-       fs = F.symbol f
-       thisArg l f to τ ft 
-         = do  θ <- unifyTypeM (srcPos l) to τ
-               subtypeM (srcPos l) (apply θ to) (apply θ τ) 
-               return (θ, apply θ ft)
+       fs                  = F.symbol f
+       thisArg l f to τ ft = 
+         do  θ            <- unifyTypeM (srcPos l) to τ
+             subtypeM        (srcPos l) (apply θ to) (apply θ τ) 
+             return        $ (θ, apply θ ft)
 
-       checkElt e te m@(FieldSig s False _ (Just τ) ft) =
-         tcWithThis te $ do --  e'    <- castM l (tce_ctx γ) e te te'
-                            (θ, t) <- thisArg l f te τ ft
-                            return (DotRef l e f, m, θ)
-       checkElt e te elt = 
-         tcWithThis te $ do -- e' <- castM l (tce_ctx γ) e te te'
-                            return (DotRef l e f, elt, fromList [])
+       checkElt e te m@(FieldSig s False _ (Just τ) ft) 
+                           = tcWithThis te $ do (θ, t) <- thisArg l f te τ ft
+                                                return (DotRef l e f, m, θ)
+       checkElt e te elt   = tcWithThis te $ return (DotRef l e f, elt, fromList [])
  
 -- e1[e2]
 tcExpr γ e@(BracketRef _ _ _) 
@@ -737,8 +738,7 @@ tcCall _ e
 -- Otherwise, it tries to retrieve an object with the same name from the
 -- environment that has a constructor property.
 --
--- FIXME: Do not lookup the constructor by string. We have a special struct for
--- that.
+-- FIXME: Constructor lookup is done by string - we have a special term for that
 ----------------------------------------------------------------------------------
 getConstr :: (PPR r, IsLocated a) 
           => SourceSpan -> TCEnv r -> Id a -> TCM r (RType r)

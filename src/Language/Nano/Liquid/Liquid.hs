@@ -197,9 +197,22 @@ consStmt g (EmptyStmt _)
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))   
   = consAsgn g l (Id lx x) e
 
--- e1.fld = e2
-consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
-  = do (t1, g')  <- consPropReadLhs getProp g l1 e1 $ F.symbol fld
+-- e1.f = e2
+--
+-- NOTE:
+-- Not using the setPropTy call here ... we don't really need it cause its main 
+-- use is inferring mutability which has been done already. Besides this doesn't 
+-- work atm :(
+--
+consStmt g (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
+--   = do  (x,g') <- consCall g l BISetProp [e1,e2] $ tracePP "setPropTy" $ setPropTy (F.symbol f) l1 $ renv g
+--         case envFindTy x g' of
+--           TApp (TRef _) [t1,t2] _ -> do subType l g' (tracePP (ppshow (srcPos l) ++ " v") t2) 
+--                                                      (tracePP (ppshow (srcPos l) ++ " x.f") t1) 
+--                                         return $ Just g'
+--           t                        -> error $ "BUG: consStmt - e.f = e : " ++ "\n" ++ ppshow t
+
+  = do (t1, g')  <- consPropReadLhs getProp g l1 e1 $ F.symbol f
        (x2, g'') <- consExpr g'  e2
        subType l2 g'' (envFindTy x2 g'') t1
        return     $ Just g''
@@ -424,7 +437,8 @@ consExpr g (DotRef l e f)
                        return    $ (x, g'')
          Nothing -> die $ errorPropRead (srcPos l) e fs
     where
-       elt        = fromJust $ listToMaybe [ e | EltOverload cx e <- ann_fact l, cge_ctx g == cx ]
+       elt        = fromJust $ listToMaybe [ e | EltOverload cx e <- ann_fact l
+                                               , cge_ctx g == cx ]
        fs         = F.symbol f
        eltMatch (FieldSig _ _ _ τ1 t1) (FieldSig _ _ _ τ2 t2) 
                   = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 

@@ -67,8 +67,8 @@ unify l δ θ t1@(TApp (TRef _) _ _) t2
 unify l δ θ t1 t2@(TApp (TRef _) _ _)
   = unify l δ θ t1 (flattenType δ t2)
 
-unify l δ θ (TCons e1s _) (TCons e2s _)
-  = unifys l δ θ t1s t2s
+unify l δ θ (TCons e1s m1 _) (TCons e2s m2 _)
+  = unifys l δ θ (ofType m1:t1s) (ofType m2:t2s)
   where 
     (t1s, t2s) = unzip $ [ (eltType e1, eltType e2) | e1 <- e1s
                                                     , e2 <- e2s
@@ -81,9 +81,10 @@ unify _ _ θ _  _ = return θ
 unifEquiv t t' | toType t == toType t' 
                = True
 unifEquiv t t' | any isUnion [t,t'] 
-               = error "No nested unions"
-unifEquiv (TApp c _ _ ) (TApp c' _ _  ) = c `equiv` c'  -- Interfaces appear once only on top-level unions
-unifEquiv (TCons _ _  ) (TCons _ _    ) = True
+               = error "unifEquiv: no nested unions"
+-- FIXME: TApp TRef ... 
+unifEquiv (TApp c _ _ ) (TApp c' _ _  ) = c == c'       -- Interfaces appear once only on top-level unions
+unifEquiv (TCons _ _ _) (TCons _ _ _  ) = True
 unifEquiv (TVar v _   ) (TVar v' _    ) = v == v'
 unifEquiv (TFun _ _ _ ) (TFun _ _ _   ) = True          -- Functions as well ... 
 unifEquiv (TAll _ _   ) (TAll _ _     ) = error "unifEquiv-tall"

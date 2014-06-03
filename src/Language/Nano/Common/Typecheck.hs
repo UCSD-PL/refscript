@@ -27,7 +27,7 @@ safeExtends :: (Monad m, PPR r) =>
   -> m ()
 -------------------------------------------------------------------------------
 safeExtends subtype err l δ (TD _ c _ (Just (p, ts)) es) =
-  mapM_ sub [ (eltSym ee, eltType ee, eltType pe) | pe <- flatten δ (findSymOrDie p δ,ts)
+  mapM_ sub [ (F.symbol ee, eltType ee, eltType pe) | pe <- flatten δ (findSymOrDie p δ,ts)
                                                   , ee <- es, sameBinder pe ee ]
   where
     sub (s,t1,t2) = subtype l t1 t2 >>= \case 

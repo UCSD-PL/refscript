@@ -636,14 +636,15 @@ splitC (Sub g i t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _))
         cs'   <- concatMapM splitC $ safeZipWith "splitC-TRef" (Sub g i) t1s t2s
                                   -- ++ safeZipWith "splitC-TRef" (Sub g i) t2s t1s
         return $ cs ++ cs' 
-  -- TODO: Add case where i1 <: i2, this extends the above case.
+  -- FIXME: Add case where i1 <: i2, this extends the above case.
   | otherwise 
-  = do  cs    <- bsplitC g i t1 t2
-        e1s <- (`flattenTRef` t1) <$> getDef
-        e2s <- (`flattenTRef` t2) <$> getDef
-        let (e1s', e2s') = unzip [ (e1,e2) | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ]
-        cs' <- splitE g i e1s' e2s' 
-        return $ cs ++ cs'
+  = do  cs               <- bsplitC g i t1 t2
+        δ                <- getDef
+        let TCons e1s _ _ = flattenType δ t1
+        let TCons e2s _ _ = flattenType δ t2
+        let (e1s', e2s')  = unzip [ (e1,e2) | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ]
+        cs'              <- splitE g i e1s' e2s' 
+        return            $ cs ++ cs'
 
 -- FIXME: Add constraint for null
 splitC (Sub _ _ (TApp (TRef _) _ _) (TApp TNull _ _)) 
@@ -652,11 +653,11 @@ splitC (Sub _ _ (TApp (TRef _) _ _) (TApp TNull _ _))
 splitC (Sub _ _ (TApp TNull _ _) (TApp (TRef _) _ _)) 
   = return []
 
-splitC (Sub g i t1@(TApp (TRef _) _ _) t2@(TCons _ _))
+splitC (Sub g i t1@(TApp (TRef _) _ _) t2@(TCons _ _ _))
   = do t1' <- (`flattenType` t1) <$> getDef
        splitC (Sub g i t1' t2)
 
-splitC (Sub g i t1@(TCons _ _) t2@(TApp (TRef _) _ _))
+splitC (Sub g i t1@(TCons _ _ _) t2@(TApp (TRef _) _ _))
   = do δ    <- getDef
        let t2' = flattenType δ t2
        splitC (Sub g i t1 t2')
@@ -676,33 +677,36 @@ splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
        return $ cs ++ cs'
 
 -- | TCons
--- FIXME: Variance !!!
-splitC (Sub g i t1@(TCons e1s _ ) t2@(TCons e2s _ ))
+-- 
+-- FIXME: * Variance
+--        * Index signatures
+--
+splitC (Sub g i t1@(TCons e1s _ _ ) t2@(TCons e2s _ _ ))
   -- LHS and RHS are object literal types
-  | all (not . isIndSig) [t1,t2]  
+  --  | all (not . isIndSig) [t1,t2]  
   = do cs    <- bsplitC g i t1 t2
        cs'   <- splitE g i e1s e2s
        return $ cs ++ cs'
 
-  -- LHS and RHS are index signatures
-  | all isIndSig [t1,t2]          
-  = do c1 <- bsplitC g i t1 t2
-       c2 <- splitC $ Sub g i (ti e1s) (ti e2s)
-       return $ c1 ++ c2
-
-  -- One of the sides is an index signature
-  | isIndSig t2 
-  = do c1 <- bsplitC g i t1 t2
-       c2 <- concatMapM splitC $ zipWith (Sub g i) (ts e1s) (repeat $ ti e2s)
-       return $ c1 ++ c2
-
-  | isIndSig t1
-  = do c1 <- bsplitC g i t1 t2
-       c2 <- concatMapM splitC $ zipWith (Sub g i) (repeat $ ti e1s) (ts e2s)
-       return $ c1 ++ c2
+--   -- LHS and RHS are index signatures
+--   | all isIndSig [t1,t2]          
+--   = do c1 <- bsplitC g i t1 t2
+--        c2 <- splitC $ Sub g i (ti e1s) (ti e2s)
+--        return $ c1 ++ c2
+-- 
+--   -- One of the sides is an index signature
+--   | isIndSig t2 
+--   = do c1 <- bsplitC g i t1 t2
+--        c2 <- concatMapM splitC $ zipWith (Sub g i) (ts e1s) (repeat $ ti e2s)
+--        return $ c1 ++ c2
+-- 
+--   | isIndSig t1
+--   = do c1 <- bsplitC g i t1 t2
+--        c2 <- concatMapM splitC $ zipWith (Sub g i) (repeat $ ti e1s) (ts e2s)
+--        return $ c1 ++ c2
   
-  | otherwise 
-  = error "BUG:splitC:TCons"
+--   | otherwise 
+--   = error "BUG:splitC:TCons"
 
   where
     ts es = [ eltType e | e <- es, nonStaticElt e ]
@@ -722,8 +726,8 @@ splitE g i e1s e2s
           = cgError l $ bugMalignedFields l e1s e2s 
   where
     l     = srcPos i
-    t1s   = f_type <$> L.sortBy (compare `on` eltSym) (filter flt e1s)
-    t2s   = f_type <$> L.sortBy (compare `on` eltSym) (filter flt e2s)
+    t1s   = f_type <$> L.sortBy (compare `on` F.symbol) (filter flt e1s)
+    t2s   = f_type <$> L.sortBy (compare `on` F.symbol) (filter flt e2s)
     flt x = nonStaticElt x && nonConstrElt x
 
 
@@ -784,7 +788,7 @@ splitW (W g i t@(TApp _ ts _))
 splitW (W g i (TAnd ts))
   = concatMapM splitW [W g i t | t <- ts]
 
-splitW (W g i t@(TCons es _))
+splitW (W g i t@(TCons es _ _))
   = do let bws = bsplitW g t i
        -- FIXME: add field bindings in g?
        ws     <- concatMapM splitW [ W g i $ eltType e | e <- es ]

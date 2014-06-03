@@ -20,7 +20,7 @@ module Language.Nano.Typecheck.Subst (
   , Substitutable (..)
 
   -- * Flatten a type definition applying subs
-  , flatten, flatten', flattenTRef, flattenType, intersect
+  , flatten, flatten', flattenType, intersect
 
   -- * Ancestors
   , weaken
@@ -92,7 +92,7 @@ instance Free (RType r) where
   free (TAll α t)           = S.delete α $ free t 
   free (TAnd ts)            = free ts 
   free (TExp _)             = error "free should not be applied to TExp"
-  free (TCons xts _)        = free (eltType <$> xts)
+  free (TCons xts m _)      = free (eltType <$> xts) `mappend` free m
 
 instance Free a => Free [a] where 
   free = S.unions . map free
@@ -116,11 +116,10 @@ instance Free (Fact r) where
   free (ClassAnn (vs,m)) = foldr S.delete (free m) vs
 
 instance Free (TElt (RType r)) where
-  free (PropSig _ _ _ τ t) = free τ `mappend` free t
-  free (CallSig t)         = free t
-  free (ConsSig t)         = free t
-  free (IndexSig _ _ t)    = free t
-  free (MethSig _ _ τ t)   = free τ `mappend` free t 
+  free (FieldSig _ _ m τ t) = free m `mappend` free τ `mappend` free t
+  free (CallSig t)          = free t
+  free (ConsSig t)          = free t
+  free (IndexSig _ _ t)     = free t
 
 instance Free a => Free (Id b, a) where
   free (_, a)            = free a
@@ -149,11 +148,10 @@ instance (Substitutable r t) => Substitutable r (Env t) where
   apply = envMap . apply
 
 instance Substitutable r t => Substitutable r (TElt t) where 
-  apply θ (PropSig x m s τ t) = PropSig x m s (apply θ τ) (apply θ t)
-  apply θ (CallSig t)         = CallSig       $ apply θ t
-  apply θ (ConsSig t)         = ConsSig       $ apply θ t
-  apply θ (IndexSig x b t)    = IndexSig x b  $ apply θ t
-  apply θ (MethSig x s τ t)   = MethSig x s   (apply θ τ) (apply θ t)
+  apply θ (FieldSig x s m τ t) = FieldSig x s  (appTy (toSubst θ) m) (apply θ τ) (apply θ t)
+  apply θ (CallSig t)          = CallSig      (apply θ t)
+  apply θ (ConsSig t)          = ConsSig      (apply θ t)
+  apply θ (IndexSig x b t)     = IndexSig x b (apply θ t)
 
 instance F.Reftable r => Substitutable r (Cast r) where
   apply _ CNo        = CNo
@@ -190,47 +188,37 @@ instance F.Reftable r => Substitutable r (TDef (RType r)) where
 ---------------------------------------------------------------------------------
 appTy :: F.Reftable r => RSubst r -> RType r -> RType r
 ---------------------------------------------------------------------------------
-appTy θ        (TApp c ts r) = TApp c (apply θ ts) r
-appTy θ        (TAnd ts)     = TAnd (apply θ ts) 
-appTy (Su m) t@(TVar α r)    = (M.lookupDefault t α m) `strengthen` r
-appTy θ        (TFun ts t r) = TFun  (apply θ ts) (apply θ t) r
-appTy (Su m)   (TAll α t)    = TAll α $ apply (Su $ M.delete α m) t
-appTy θ        (TCons es r)  = TCons (apply θ es) r
-appTy _        (TExp _)      = error "appTy should not be applied to TExp"
+appTy θ        (TApp c ts r)  = TApp c (apply θ ts) r
+appTy θ        (TAnd ts)      = TAnd (apply θ ts) 
+appTy (Su m) t@(TVar α r)     = (M.lookupDefault t α m) `strengthen` r
+appTy θ        (TFun ts t r)  = TFun  (apply θ ts) (apply θ t) r
+appTy (Su m)   (TAll α t)     = TAll α $ apply (Su $ M.delete α m) t
+appTy θ        (TCons es m r) = TCons (apply θ es) (appTy (toSubst θ) m) r
+appTy _        (TExp _)       = error "appTy should not be applied to TExp"
 
 
--- | flatten: Close over all fields inherited by ancestors.
+-- | flatten: include all fields inherited by ancestors
 ---------------------------------------------------------------------------
 flatten :: PPR r 
         => TDefEnv (RType r) -> (TDef (RType r),[RType r]) -> [TElt (RType r)]
 ---------------------------------------------------------------------------
 flatten = fix . ff
 
-
 ff δ r (TD _ _ vs (Just (i, ts')) es, ts)
-          = apply θ  . L.unionBy sameBinder es $ r (findSymOrDie i δ, ts')
-  where θ = fromList $ zip vs ts
+        = apply θ  . L.unionBy sameBinder es $ r (findSymOrDie i δ, ts')
+  where 
+      θ = fromList $ zip vs ts
 
 ff _ _ (TD _ _ vs _ es, ts)  = apply (fromList $ zip vs ts) es
 
 -- | flatten' does not apply the top-level type substitution
 flatten' δ d@(TD _ _ vs _ _) = flatten δ (d, tVar <$> vs)
 
-
-flattenTRef δ (TApp (TRef (n,_)) ts _) = flatten δ (findSymOrDie n δ, ts)
-flattenTRef _ _                        = error "Applying flattenTRef on non-tref"
-
-
-flattenType δ t@(TApp (TRef _) _ r) 
-                             = TCons (flattenTRef δ t) r
-flattenType δ (TApp c ts r)  = TApp c (flattenType δ <$> ts) r
-flattenType _ (TVar v r)     = TVar v r
-flattenType δ (TFun ts to r) = TFun (f <$> ts) (flattenType δ to) r
-                                    where f (B s t) = B s $ flattenType δ t
-flattenType δ (TAll v t)     = TAll v $ flattenType δ t
-flattenType δ (TAnd ts)      = TAnd $ flattenType δ <$> ts
-flattenType δ (TCons ts r)   = TCons ((flattenType δ <$>) <$> ts) r
-flattenType _ _              = error "TExp should not appear here"
+-- NOTE: only this case used
+flattenType δ (TApp (TRef (x,False)) ts r) = TCons es mut r
+  where es                                 = flatten δ (findSymOrDie x δ, ts)
+        mut                                = toType $ head ts
+flattenType _ t                            = t
 
 
 -- | Weaken a named type, by moving upwards in the class hierarchy. This
@@ -262,7 +250,7 @@ intersect :: PPR r => TDefEnv (RType r) -> RType r -> RType r -> (RType r, RType
 intersect δ (TApp TUn t1s r1) (TApp TUn t2s r2) 
   = (TApp TUn cmn1 r1, TApp TUn cmn2 r2)
   where
-    (cmn1, cmn2)    = unzip [ intersect δ τ1 τ2 | τ2 <- t2s, τ1 <- maybeToList $ L.find (equiv τ2) t1s ]
+    (cmn1, cmn2)    = unzip [ intersect δ τ1 τ2 | τ2 <- t2s, τ1 <- maybeToList $ L.find (== τ2) t1s ]
     
 intersect δ t1 t2@(TApp TUn _ _ ) 
   = intersect δ (TApp TUn [t1] fTop) t2
@@ -289,13 +277,13 @@ intersect δ (TFun x1s t1 r1) (TFun x2s t2 r2)
     (xs1, xs2) = unzip $ zipWith (intersectBind δ) x1s x2s
     (y1 , y2 ) = intersect δ t1 t2
 
-intersect δ (TCons e1s r1) (TCons e2s r2) 
-  = (TCons cmn1 r1, TCons cmn2 r2)
+intersect δ (TCons e1s m1 r1) (TCons e2s m2 r2) 
+  = (TCons cmn1 m1 r1, TCons cmn2 m2 r2)
   where 
-    -- FIXME: mutabilities? m1 `mconcat` m2
     cmn1 = fmap fst <$> cmn
     cmn2 = fmap snd <$> cmn
-    cmn  = [ zipElts (intersect δ) e1 e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ] 
+    cmn  = undefined 
+    -- cmn  = [ zipElts (intersect δ) e1 e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ] 
 
 intersect _ t1 t2 = 
   error $ printf "BUG[intersect]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)

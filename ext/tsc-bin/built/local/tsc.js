@@ -9642,9 +9642,25 @@ var TypeScript;
             return true;
         };
 
+        ClassDeclarationSyntax.prototype.makeid = function (length) {
+            var text = "";
+            var possible = "0123456789";
+
+            return text;
+        };
+
         ClassDeclarationSyntax.prototype.headerAnnotation = function (helper, anns) {
             if (anns.length === 0) {
-                var typeParams = this.typeParameterList ? this.typeParameterList.typeParameters.toNonSeparatorArray() : [];
+                var typeParams = (this.typeParameterList ? this.typeParameterList.typeParameters.toNonSeparatorArray() : []).map(function (t) {
+                    return t.identifier.text();
+                });
+
+                var mutParam = 'M';
+                while (typeParams.indexOf(mutParam) !== -1) {
+                    var possible = "0123456789";
+                    mutParam += possible.charAt(Math.floor(Math.random() * possible.length));
+                }
+                typeParams.unshift(mutParam);
 
                 var extendsHeritage = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
                     return t.toRsHeritage(helper, 48 /* ExtendsKeyword */);
@@ -58443,6 +58459,13 @@ var TypeScript;
     })();
     TypeScript.Triple = Triple;
 
+    (function (MutabilityModifiers) {
+        MutabilityModifiers[MutabilityModifiers["ReadOnly"] = 0] = "ReadOnly";
+        MutabilityModifiers[MutabilityModifiers["Mutable"] = 1] = "Mutable";
+        MutabilityModifiers[MutabilityModifiers["Immutable"] = 2] = "Immutable";
+    })(TypeScript.MutabilityModifiers || (TypeScript.MutabilityModifiers = {}));
+    var MutabilityModifiers = TypeScript.MutabilityModifiers;
+
     (function (AnnotKind) {
         AnnotKind[AnnotKind["RawMeas"] = 0] = "RawMeas";
         AnnotKind[AnnotKind["RawBind"] = 1] = "RawBind";
@@ -58578,8 +58601,13 @@ var TypeScript;
                 var lhss = bs[0].split(" ").filter(function (s) {
                     return s.length > 0;
                 });
-                if (lhss && lhss.length == 1) {
+                if (lhss && lhss.length === 1) {
                     this._binderName = lhss[0];
+                    return this._binderName;
+                }
+
+                if (lhss && lhss.length === 2) {
+                    this._binderName = lhss[1];
                     return this._binderName;
                 }
             }
@@ -58623,9 +58651,7 @@ var TypeScript;
             r += this._className.text();
             if (this._typeParams && this._typeParams.length > 0) {
                 r += " <";
-                r += this._typeParams.map(function (t) {
-                    return t.identifier.text();
-                }).join(", ");
+                r += this._typeParams.join(", ");
                 r += ">";
             }
             if (this._extends) {

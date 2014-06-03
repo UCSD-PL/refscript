@@ -67,12 +67,16 @@ unify l δ θ t1@(TApp (TRef _) _ _) t2
 unify l δ θ t1 t2@(TApp (TRef _) _ _)
   = unify l δ θ t1 (flattenType δ t2)
 
+-- FIXME: AARGHH ... How do we unify overloaded bindings?
 unify l δ θ (TCons e1s m1 _) (TCons e2s m2 _)
   = unifys l δ θ (ofType m1:t1s) (ofType m2:t2s)
   where 
-    (t1s, t2s) = unzip $ [ (eltType e1, eltType e2) | e1 <- e1s
-                                                    , e2 <- e2s
-                                                    , e1 `sameBinder` e2 ]
+    (t1s, t2s) = unzip $ map tt es ++ concatMap mm es
+    es         = [ (e1, e2) | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ]
+    tt         = mapPair eltType
+    mm (e1,e2) = case (mutability e1, mutability e2) of 
+                  (Just m1, Just m2) -> [(ofType m1, ofType m2)]
+                  _                  -> []
 
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ

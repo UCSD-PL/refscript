@@ -4,13 +4,13 @@
 {-# LANGUAGE DeriveFunctor             #-}
 {-# LANGUAGE DeriveTraversable         #-}
 {-# LANGUAGE DeriveFoldable            #-}
+{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE OverlappingInstances      #-}
-{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE UndecidableInstances      #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
@@ -55,14 +55,14 @@ module Language.Nano.Typecheck.Types (
   -- * Type comparison
 --   , Equivalent
 --   , equiv
-  , sameBinder, eltType, zipElts, isStaticElt, nonStaticElt, nonConstrElt
+  , sameBinder, eltType, zipElts, isStaticElt, nonStaticElt, nonConstrElt, mutability
 
   -- * Type definition env
   , TDefEnv (..), tDefEmpty, tDefFromList, tDefToList
   , addSym, findSym, findSymOrDie
 
   -- * Operator Types
-  , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy, objLitTy
+  , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy, objLitTy, setPropTy
 
   -- * Annotations
   , Annot (..), UFact, Fact (..), phiVarsAnnot, ClassInfo
@@ -173,8 +173,6 @@ data TElt t    = CallSig  { f_type :: t }         -- Call Signature
                           , f_mut  :: Mutability  -- Mutability
                           , f_this :: Maybe t     -- Required object type
                           , f_type :: t }         -- Property type
-
-
   deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
@@ -337,60 +335,6 @@ bkUnion :: RType r -> [RType r]
 ---------------------------------------------------------------------------------
 bkUnion (TApp TUn xs _) = xs
 bkUnion t               = [t]
-
-
--- XXX: Is this really necessary anymore ???
-
--- 
--- -- | Type equivalence: This relation corresponds to equality on the raw type
--- -- level, modulo reordering on the parts of union types.
--- class Equivalent a where 
---   equiv :: a -> a -> Bool
--- 
--- instance Equivalent a => Equivalent [a] where
---   equiv a b = and $ zipWith equiv a b 
--- 
--- instance Equivalent (RType r) where 
---   equiv t t'   | toType t == toType t' = True
---   equiv t t'   | any isUnion [t,t'] = uncurry go $ mapPair srt (t, t')
---     where
---       srt      = L.sortBy (compare `on` toType) . bkUnion -- sort on raw part
---       go (t:ts) (t':ts')  
---                = equiv t t' && go ts ts'
---       go [] [] = True
---       go [] _  = False
---       go _ []  = False
---   equiv (TApp c ts _) (TApp c' ts' _) = c `equiv` c' && ts `equiv` ts'
---   equiv (TVar v _   ) (TVar v' _    ) = v == v'
---   equiv (TFun b o _ ) (TFun b' o' _ ) = on equiv (b_type <$>) b b' && o `equiv` o' 
---   equiv (TAll _ _   ) (TAll _ _     ) = error "equiv-tall"
---   equiv (TExp _     ) (TExp   _     ) = error "equiv-texp"
---   equiv _             _               = False
--- 
--- instance Equivalent TCon where
---   equiv (TRef i) (TRef i')  = i == i'
---   equiv c        c'         = c == c'
--- 
--- instance Equivalent (TElt (RType r)) where 
---   equiv (PropSig f1 s1 m1 τ1 t1)  (PropSig f2 s2 m2 τ2 t2) = 
---     (f1,m1,s1) == (f2,m2,s2) && equiv τ1 τ2 && equiv t1 t2
---   equiv (CallSig t1)              (CallSig t2)          = equiv t1 t2
---   equiv (ConsSig t1)              (ConsSig t2)          = equiv t1 t2
---   equiv (IndexSig _ b1 t1)        (IndexSig _ b2 t2)    = b1 == b2 && equiv t1 t2
---   equiv (FieldSig f1 s1 m1 τ1 t1)  (FieldSig f2 s2 m2 τ2 t2) = 
---     (f1,s1) == (f2,s2) && equiv t1 t2 && equiv τ1 τ2 
---   equiv _                     _                     = False
---  
--- instance Equivalent t => Equivalent (Maybe t) where 
---   equiv (Just τ1) (Just τ2) = equiv τ1 τ2
---   equiv Nothing   Nothing   = True
---   equiv _         _         = False
--- 
--- instance Equivalent (Bind r) where 
---   equiv (B s t) (B s' t') = s == s' && equiv t t' 
--- 
--- instance Equivalent (Id a) where 
---   equiv i i' = F.symbol i == F.symbol i'
 
 
 
@@ -691,6 +635,13 @@ sameBinder (ConsSig _)            (ConsSig _)             = True
 sameBinder (IndexSig _ b1 _)      (IndexSig _ b2 _)       = b1 == b2
 sameBinder (FieldSig x1 s1 _ _ _) (FieldSig x2 s2 m2 _ _) = x1 == x2 && s1 == s2
 sameBinder _                      _                       = False
+
+mutability (CallSig _) = Nothing
+mutability (ConsSig _) = Nothing  
+mutability (IndexSig _ _ _) = Nothing  
+mutability (FieldSig _ _ m  _ _) = Just m
+
+
 
 {-zipElts :: (PP r, F.Reftable r) => -}
 {-  (RType r -> RType r-> RType r) -> TElt (RType r) -> TElt (RType r) -> TElt (RType r)-}
@@ -1067,6 +1018,7 @@ builtinOpId BIUndefined     = builtinId "BIUndefined"
 builtinOpId BIBracketRef    = builtinId "BIBracketRef"
 builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
 builtinOpId BIArrayLit      = builtinId "BIArrayLit"
+builtinOpId BISetProp       = builtinId "BISetProp"
 builtinOpId BINumArgs       = builtinId "BINumArgs"
 builtinOpId BITruthy        = builtinId "BITruthy"
 
@@ -1121,6 +1073,25 @@ objLitTy l ps     = mkFun (vs, bs, rt)
     bs            = [ B s (ofType a) | (s,a) <- zip ss ats ]
     elts          = [ FieldSig s False m Nothing (ofType a) | (s,m,a) <- zip3 ss mts ats ] 
     rt            = TCons elts mt fTop
+ 
+ 
+--------------------------------------------------------------------------
+setPropTy :: (PP r, F.Reftable r, IsLocated l) 
+          => F.Symbol -> l -> F.SEnv (Located (RType r)) -> RType r
+--------------------------------------------------------------------------
+setPropTy f l g =
+    case ty of 
+      TAnd [TAll α1 (TAll β1 (TAll μ1 (TFun [xt1,a1] rt1 r1))) ,
+            TAll α2 (TAll β2 (TAll μ2 (TFun [xt2,a2] rt2 r2))) ] -> 
+        TAnd [TAll α1 (TAll β1 (TAll μ1 (TFun [tr xt1,a1] rt1 r1))) ,
+              TAll α2 (TAll β2 (TAll μ2 (TFun [tr xt2,a2] rt2 r2))) ]
+      _ -> error $ "setPropTy " ++ ppshow ty
+  where
+    tr (B n (TCons [FieldSig x s μx τ t] μ r)) 
+       | x == F.symbol "f"
+       = B n (TCons [FieldSig f s μx τ t] μ r)
+    tr t = error $ "setPropTy:tr " ++ ppshow t
+    ty = builtinOpTy l BISetProp g
 
 
 -----------------------------------------------------------------------

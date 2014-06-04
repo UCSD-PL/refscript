@@ -477,11 +477,11 @@ interface Pair<A,B> { }
 /******************  Mutability  *****************************************/
 /*************************************************************************/
 
-interface ReadOnly                       {                      }
+interface ReadOnly                        {                      }
 
-interface Immutable    extends ReadOnly { immutable__   : void; } 
+interface Immutable      extends ReadOnly { immutable__   : void; } 
 
-interface AssignFields extends ReadOnly { assignFields__: void; } 
+interface Mutable        extends ReadOnly { mutable__     : void; } 
 
-interface Mutable      extends ReadOnly { mutable__     : void; } 
+interface DefaultMutable extends ReadOnly { defaultMut__  : void; } 
 

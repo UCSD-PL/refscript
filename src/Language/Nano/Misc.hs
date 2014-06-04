@@ -44,7 +44,9 @@ import           Data.Hashable
 import qualified Data.HashMap.Strict                  as M
 import qualified Data.List                            as L
 import qualified Language.Fixpoint.Types              as F
+import           Language.Fixpoint.Misc
 import           Text.PrettyPrint.HughesPJ
+import           Language.ECMAScript3.PrettyPrint
 
 -------------------------------------------------------------------------------
 mapFstM :: (Functor m, Monad m) => (a -> m c) -> (a, b) -> m (c, b)
@@ -145,6 +147,7 @@ fromJust' s _        = error s
 maybeToEither _ (Just a) = Right a
 maybeToEither e Nothing  = Left e
 
+-- | Sets / maps
 
 isProperSubsetOf :: (Eq a, Hashable a) => HashSet a -> HashSet a -> Bool
 s1 `isProperSubsetOf` s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) > 0  
@@ -160,3 +163,6 @@ isProperSubmapOf = isProperSubsetOf `on` (fromList . M.keys)
 
 equalKeys :: (Eq a, Ord a, Hashable a) => M.HashMap a b -> M.HashMap a b -> Bool
 equalKeys =  (==) `on` (L.sort . M.keys)
+
+
+

@@ -37,7 +37,7 @@ import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
-import           Language.Fixpoint.Misc (intersperse, mapPair)
+import           Language.Fixpoint.Misc (intersperse, mapPair, safeHead)
 
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
@@ -214,11 +214,17 @@ ff _ _ (TD _ _ vs _ es, ts)  = apply (fromList $ zip vs ts) es
 -- | flatten' does not apply the top-level type substitution
 flatten' δ d@(TD _ _ vs _ _) = flatten δ (d, tVar <$> vs)
 
--- NOTE: only this case used
-flattenType δ (TApp (TRef (x,False)) ts r) = TCons es mut r
-  where es                                 = flatten δ (findSymOrDie x δ, ts)
-        mut                                = toType $ head ts
-flattenType _ t                            = t
+
+flattenType δ t@(TApp (TRef (x,False)) ts r) = TCons es mut r
+  where 
+    es      = flatten δ (findSymOrDie x δ, ts)
+    -- Be careful with the mutability classes themselves
+    -- Do not set this to another mutability type cause, or you'll
+    -- end up with infinite recursion
+    mut     | isMutabilityType t = tTop
+            | otherwise          = toType $ safeHead "flattenType" ts
+
+flattenType _ t = t
 
 
 -- | Weaken a named type, by moving upwards in the class hierarchy. This

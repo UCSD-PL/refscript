@@ -52,7 +52,7 @@ import qualified Text.Parsec.Token                as     T
 
 import           GHC.Generics
 
--- import           Debug.Trace                             ( trace, traceShow)
+import           Debug.Trace                             ( trace, traceShow)
 
 dot        = T.dot        lexer
 plus       = T.symbol     lexer "+"
@@ -205,15 +205,12 @@ bbaseP
 objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
 objLitP 
-  = do m     <- option defMut (toType <$> mutP)
+  = do m     <- option mutableM (toType <$> mutP)
        bs    <- braces fieldBindP
        return $ TCons bs m
  
 mutP =  try (TVar <$> brackets tvarP <*> return ()) 
     <|> try (TApp <$> brackets tConP <*> return [] <*> return ())
-
-defMut  = mkMut "Mutable"
-mkMut s = TApp (TRef (symbol s, False)) [] fTop
 
 
 bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
@@ -282,7 +279,7 @@ fieldSigP :: Parser (TElt RefType)
 ----------------------------------------------------------------------------------
 fieldSigP = do 
     s          <- option False $ try $ reserved "static" >> return True
-    m          <- option defMut (toType <$> mutP)
+    m          <- option defaultM (toType <$> mutP)
     ((x,tt),t) <- xyP sp colon bareTypeP
     return      $ FieldSig x s m tt t
   where 
@@ -347,16 +344,6 @@ refasP :: Parser [Refa]
 refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi)) 
        <|> liftM ((:[]) . RConc) predP
  
-
--- ----------------------------------------------------------------------------------
--- binderP :: Parser Symbol
--- ----------------------------------------------------------------------------------
--- binderP = (stringSymbol <$> idP badc)
---        <|> liftM pwr (parens (idP bad))
---       where idP p  = many1 (satisfy (not . p))
---             badc c = (c == ':') ||  bad c
---             bad c  = isSpace c || c `elem` "()[]"
---             pwr s  = stringSymbol $ "(" ++ s ++ ")" 
 
 ----------------------------------------------------------------------------------
 withinSpacesP :: Parser a -> Parser a
@@ -558,11 +545,14 @@ expandAnnots = snd <$> mapAccumL (mapAccumL f) 0
 parse :: SourceSpan -> PState -> RawSpec -> (PState, Spec)
 --------------------------------------------------------------------------------------
 parse ss st c = foo c
-  where foo s = failLeft $ runParser 
-                  (do a <- parseAnnot ss s
+  where foo s    = failLeft $ runParser (parser s) st f (getSpecString s)
+        parser s = do a <- parseAnnot ss s
                       st <- getState
-                      return (st, a)) 
-                  st f (getSpecString s)
+                      it <- getInput
+                      if it /= "" 
+                        then unexpected $ "trailing input: " ++ it
+                        else return $ (st, a) 
+
         failLeft (Left s) = error $ "Error parsing: " ++ show c ++ "\n" ++ show s
         failLeft (Right r) = r
         f = sourceName $ sp_begin ss

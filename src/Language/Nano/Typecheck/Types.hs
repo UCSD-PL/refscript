@@ -43,7 +43,7 @@ module Language.Nano.Typecheck.Types (
   , Type, TDef (..), TVar (..), TCon (..), TElt (..)
 
   -- * Mutability
-  , Mutability
+  , Mutability, defaultM, mutableM, combMut, isMutable, isImmutable, isMutabilityType
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, rtArr, tUndef, tNull
@@ -95,7 +95,6 @@ import           Data.Foldable                  (Foldable())
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.List                      as L
 import qualified Data.IntMap                    as I
-import qualified Data.Set                       as S
 import qualified Data.HashMap.Strict            as M
 import           Data.Generics                   
 import           Data.Typeable                  ()
@@ -135,22 +134,47 @@ instance Hashable TVar where
 instance F.Symbolic TVar where
   symbol = tv_sym 
 
-instance PP TVar where 
-  pp     = pprint . F.symbol
-
 instance F.Symbolic a => F.Symbolic (Located a) where 
   symbol = F.symbol . val
 
 
+---------------------------------------------------------------------------------
 -- | Mutability
---
--- We only care for the base type here. 
--- Valid values: #ReadOnly, #Mutable, #Immutable 
---
+---------------------------------------------------------------------------------
+
 type Mutability = Type 
 
+validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable"]
 
+mkMut :: String -> Mutability
+mkMut s = TApp (TRef (F.symbol s, False)) [] ()
+
+defaultM  = mkMut "DefaultMutable"
+mutableM  = mkMut "Mutable"
+
+
+isMutabilityType (TApp (TRef (s,False)) _ _) = s `elem` validMutNames
+isMutable _                                  = False
+
+isMutable        (TApp (TRef (s,False)) _ _) = s == F.symbol "Mutable"
+isMutable _                                  = False
+
+isImmutable      (TApp (TRef (s,False)) _ _) = s == F.symbol "Immutable"
+isImmutable _                                = False
+
+-- isDefaultMut (TApp (TRef (s,False)) _ _) 
+--   | s == F.symbol "DefaultMutable" = True 
+-- isDefaultMut _ = False
+
+combMut _ μf | isMutable μf    = μf
+combMut μ _  | otherwise       = μ
+
+
+
+
+---------------------------------------------------------------------------------
 -- | Data types 
+---------------------------------------------------------------------------------
 
 data TDef t    = TD { 
         t_class :: Bool                           -- ^ Is this a class or interface type
@@ -617,10 +641,6 @@ bStr False _ = text ""
 mStr (Just s) = s
 mStr _        = text ""
 
-instance PP Bool where
-  pp True   = text "True"
-  pp False  = text "False"
-
 
 instance F.Symbolic (TElt t) where
   symbol (FieldSig s _ _ _ _) = s
@@ -729,9 +749,16 @@ instance PP Assignability where
   pp WriteLocal  = text "WriteLocal"
   pp WriteGlobal = text "WriteGlobal"
 
+
+
 ---------------------------------------------------------------------------
 -- | Pretty Printer Instances
 ---------------------------------------------------------------------------
+
+
+instance PP Bool where
+  pp True   = text "True"
+  pp False  = text "False"
 
 instance PP () where 
   pp _ = text ""
@@ -741,9 +768,6 @@ instance PP a => PP [a] where
 
 instance PP a => PP (Maybe a) where 
   pp = maybe (text "Nothing") pp 
-
-instance PP a => PP (S.Set a) where
-  pp = pp . S.toList
 
 instance PP Char where
   pp = char
@@ -761,6 +785,11 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TApp c ts r)          = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
   pp (TCons bs m r)         = F.ppTy r $ lbrace <+> intersperse semi (map pp bs) <+> rbrace <+> pp m
   -- pp (TCons bs r)           = F.ppTy r $ lbrace $+$ nest 2 (cat $ map pp bs) $+$ rbrace
+
+
+instance PP TVar where 
+  pp     = pprint . F.symbol
+
 
 instance PP TCon where
   pp TInt             = text "number"

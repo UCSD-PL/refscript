@@ -151,6 +151,9 @@ errorFuncSubtype l t t'   = mkErr l $ printf "Function type: %s is not a subtype
 errorUnionSubtype l t t'  = mkErr l $ printf "Union type: %s is not a subtype of %s" (ppshow t) (ppshow t')
 errorArraySubtype l t t'  = mkErr l $ printf "Array type: %s is not a subtype of %s" (ppshow t) (ppshow t')
 
+errorIncompMutTy l t t'   = mkErr l $ printf "Types '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
+errorIncompMutElt l t t'  = mkErr l $ printf "Elements '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
+
 errorStrictSubtype l      = mkErr l $ printf "Strict subtyping needed"
 
 errorTypeArgsNum l n p q  = mkErr l $ printf "Type %s expects %s arguments but %s were provided" (ppshow n) (ppshow p) (ppshow q)

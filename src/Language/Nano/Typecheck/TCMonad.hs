@@ -88,7 +88,7 @@ import           Data.Monoid
 import qualified Data.HashMap.Strict                as M
 import           Language.ECMAScript3.Syntax
 
-import           Debug.Trace                      (trace)
+-- import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity   as V
 
 type PPR r = (PP r, F.Reftable r)
@@ -449,9 +449,7 @@ convert l t1 t2                        = convertSimple l t1 t2
 
 
 -- | `convertObj`
---
--- FIXME: Mutability ???
---
+
 --------------------------------------------------------------------------------
 convertObj :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
@@ -459,16 +457,23 @@ convertObj l t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
 
   -- { f1:t1,..,fn:tn } vs { f1:t1',..fn:tn' }
   | s1l == s2l 
-  = deeps l cmnBinds >>= \case
-      True  -> return  $ CNo
-      False -> tcError $ errorSimpleSubtype l t1 t2
+  = do  z <- isSubtype l (ofType μ1) (ofType μ2)
+        if z then 
+          let m = μ1 in
+          do  y <- deeps l μ1 μ2 cmnBinds
+              if y then 
+                return  $ CNo
+              else 
+                tcError $ errorSimpleSubtype l t1 t2
+        else
+          tcError $ errorIncompMutTy l t1 t2      
 
   -- { f1:t1,..,fn:tn } vs { f1:t1',..,fn:tn',..,fm:tm' }
   | not (S.null df21) 
   = tcError $ errorMissFlds l t1 t2 df21
    
   -- { f1:t1,..,fn:tn,..,fm:tm } vs { f1:t1',..,fn:tn' }
-  | otherwise               
+  | otherwise
   = do _      <- convertObj l (TCons e1s' μ1 r1) (TCons e2s μ2 r2)
        return  $ CUp t1 t2
   where
@@ -494,18 +499,19 @@ convertObj l t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
 
     e1s'       = concat [ fromJust $ M.lookup s m1 | s <- S.toList in12 ]
 
-    group1     = [ (F.symbol $ head g1s, g1s) | g1s <- groupBy sameBinder e1s ]
-    group2     = [ (F.symbol $ head g2s, g2s) | g2s <- groupBy sameBinder e2s ]
+    group1     = [ (F.symbol $ safeHead "convertObj-1" g1s, g1s) | g1s <- groupBy sameBinder e1s ]
+    group2     = [ (F.symbol $ safeHead "convertObj-2" g2s, g2s) | g2s <- groupBy sameBinder e2s ]
+
 
 -- FIXME !!!!!!!!
 -- Do nominal subtyping and fall back to structural if the former fails.
 convertObj l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
-  | i1 == i2 
+  | i1 == i2
   = do -- FIXME: Using covariance here !!!
-       bs <- zipWithM (isSubtype l) t1s t2s 
-       if and bs then return CNo
+       bs <- zipWithM (isSubtype l) t1s t2s
+       if and bs then return  $ CNo
                  else tcError $ errorSimpleSubtype l t1 t2
-  | (s1,b1) /= (s2,b2)
+  | otherwise
   = do δ  <- getDef 
        case weaken δ (findSymOrDie s1 δ,t1s) s2 of
          Just (_, t1s') -> return $ CUp (TApp (TRef (s2,b1)) t1s' r1) t2
@@ -525,11 +531,9 @@ convertObj l t1 t2@(TApp (TRef _) _ _)
 convertObj _ _ _ =  error "BUG: Case not supported in convertObj"
 
 
--- | Deep subtyping for object type members
---
---   FIXME: Doing covariant subtyping here !!!
+-- | Deep subtyping for object members
 
-deeps l ss = and <$> mapM (deep l) ss
+deeps l μ1 μ2 ss = and <$> mapM (deep l μ1 μ2) ss
 
 -- | Treat the parts of `e1s` and `e2s` that correspond to the same binder 
 --   as intersection types.
@@ -537,34 +541,75 @@ deeps l ss = and <$> mapM (deep l) ss
 -- |   exists i s.t. si <: t
 -- | ------------------------
 -- |    s1 /\ ... /\ sn <: t
-deep l (s, (e1s, e2s)) = or <$> mapM (\e1 -> deep1 l e1 e2s) e1s
+deep l μ1 μ2 (s, (e1s, e2s)) = or <$> mapM (\e1 -> deep1 l μ1 μ2 e1 e2s) e1s
 
 -- |  s1 <: t1  ...  s <: tn
 -- | ------------------------
 -- |   s <: t1 /\ ... /\ tn
-deep1 l e es = and <$> mapM (isSubtypeElt l e) es
+deep1 l μ1 μ2 e es = and <$> mapM (isSubtypeElt l μ1 μ2 e) es
 
--- | { (ts)=>t } <: { (ts')=>t' } 
-isSubtypeElt l (CallSig t1) (CallSig t2)  
+
+isSubtypeElt :: PPR r => SourceSpan -> Mutability -> Mutability -> TElt (RType r) -> TElt (RType r) -> TCM r Bool
+
+-- | Call Signatures 
+--    
+--    ts'<:ts  t<:t' 
+--  ---------------------------------------
+--    { (ts)=>t } <: { (ts')=>t' } 
+--
+isSubtypeElt l _ _ (CallSig t1) (CallSig t2)
   = isSubtype l t1 t2
 
-
--- FIXME: include Mutability check
+-- | Field signatures
 --
--- | { f[τ]:t } <: { f[τ']:t' } 
-isSubtypeElt l (FieldSig _ _ _ τ1 t1) (FieldSig _ _ _ τ2 t2)
-  = (&&) <$> isSubtypeOpt l τ1 τ2 <*> isSubtype l t1 t2
+--  { μ f[τ]: t } <: { μ' f[τ']: t' }
+--
+-- NO :   { mutable f: PosInt  } <: { immutable f: int }
+--
+-- NO :   { mutable f: PosInt  } <: { mutable f: int }
+--
+-- NO :   { readonly f: PosInt  } <: { readonly f: int }
 
--- | { f: (ts)=>() } <: { f: (ts')=>() } 
-isSubtypeElt l (ConsSig t1) (ConsSig t2)
+isSubtypeElt l μ1 μ2 f1@(FieldSig _ _ μf1 τ1 t1) f2@(FieldSig _ _ μf2 τ2 t2)
+  = do  let m1 = combMut μ1 μf1
+        let m2 = combMut μ2 μf2
+        z <- isSubtype l (ofType m1) (ofType m2)
+        if z then 
+          if isImmutable m2 then
+            --  t<:t'  τ'<:τ
+            -- ------------------------------------------
+            --  { immut f[τ]: t } <: { immut f[τ']: t' }
+            and <$> sequence [ isSubtypeOpt l τ2 τ1, isSubtype l t1 t2 ]
+          else 
+            --  μ,μ' =/= Mutable
+            --  t<:t'  t'<:t  τ<:τ'  τ'<:τ
+            -- ----------------------------------
+            --  { μ f[τ]: t } <: { μ' f[τ']: t' }
+            and <$> sequence [ isSubtypeOpt l τ1 τ2, isSubtype l t1 t2,
+                               isSubtypeOpt l τ2 τ1, isSubtype l t2 t1 ]
+        else
+          tcError $ errorIncompMutElt l f1 f2
+      
+
+-- | Constructor signatures
+--
+-- { f: (ts)=>() } <: { f: (ts')=>() } 
+--
+isSubtypeElt l _ _ (ConsSig t1) (ConsSig t2)
   = isSubtype l t1 t2  
 
--- | { [x:τ]: t } <: { [x:τ']: t' }
-isSubtypeElt l (IndexSig _ b1 t1) (IndexSig _ b2 t2)
-  = (&&) <$> return (b1 == b2) <*> isSubtype l t1 t2
+-- | Index signatures
+--
+--    τ = τ'  t<:t'  t'<:t
+--  -----------------------------------
+--    { [x:τ]: t } <: { [x:τ']: t' }
+--
+isSubtypeElt l _ _ (IndexSig _ b1 t1) (IndexSig _ b2 t2)
+  | b1 == b2 
+  = isSubtype l t1 t2
 
 -- | otherwise fail
-isSubtypeElt _ _ _ = return False
+isSubtypeElt _ _ _ _ _ = return False
 
 
 isSubtypeOpt l (Just t1) (Just t2) = isSubtype l t2 t1

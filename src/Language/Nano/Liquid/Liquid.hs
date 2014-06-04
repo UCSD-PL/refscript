@@ -326,7 +326,7 @@ consClassElts l g d ce
 consClassElt :: CGEnv -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElt g (Constructor l xs body) 
-  = do  t <- cgFunTys l i xs $ head [ t | ConsAnn t <- ann_fact l ]
+  = do  t <- cgFunTys l i xs $ safeHead "consClassElt" [ t | ConsAnn t <- ann_fact l ]
         -- Typecheck over all possible constructor signatures
         mapM_ (consFun1 l g i xs body) t
   where 

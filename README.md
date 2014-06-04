@@ -395,8 +395,8 @@ Bundle 'panagosg7/vim-annotations'
 2. Copy the following files
 
 ~~~~~
-cp ext/vim/typescript/nanojs.vim  ~/.vimrc/bundle/syntastic/syntax_checkers/typescript/nanojs.vim
-cp ext/vim/javascript/nanojs.vim  ~/.vimrc/bundle/syntastic/syntax_checkers/javascript/nanojs.vim
+cp ext/vim/typescript/nanojs.vim  ~/.vim/bundle/syntastic/syntax_checkers/typescript/nanojs.vim
+cp ext/vim/typescript/nanojs.vim  ~/.vim/bundle/syntastic/syntax_checkers/typescript/nanojs.vim
 ~~~~~
 
 **Run**

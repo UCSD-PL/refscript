@@ -9847,15 +9847,21 @@ var TypeScript;
             if (headerAnnots.length === 0) {
                 annotStr += this.identifier.text() + " ";
 
+                var typeParams = [];
                 if (this.typeParameterList) {
-                    var typeParams = this.typeParameterList.typeParameters;
-                } else {
-                    var emp = [];
-                    var typeParams = TypeScript.Syntax.separatedList(emp);
+                    typeParams = this.typeParameterList.typeParameters.toNonSeparatorArray().map(function (p) {
+                        return p.identifier.text();
+                    });
                 }
-                annotStr += (typeParams.toNonSeparatorArray().length > 0) ? ("<" + typeParams.toNonSeparatorArray().map(function (p) {
-                    return p.identifier.text();
-                }).join(", ") + "> ") : " ";
+
+                var mutParam = 'M';
+                while (typeParams.indexOf(mutParam) !== -1) {
+                    var possible = "0123456789";
+                    mutParam += possible.charAt(Math.floor(Math.random() * possible.length));
+                }
+                typeParams.unshift(mutParam);
+
+                annotStr += (typeParams.length > 0) ? ("<" + typeParams.join(", ") + "> ") : " ";
 
                 var extendsHeritage = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
                     return t.toRsHeritage(helper, 48 /* ExtendsKeyword */);

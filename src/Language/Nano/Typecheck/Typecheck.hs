@@ -134,6 +134,8 @@ tcNano p@(Nano {code = Src fs})
     where
        γ       = initEnv p
 
+
+-- FIXME: check for mutability parameter
 checkInterfaces p = 
   mapM_ (safeExtends isSubtype tcError l (defs p)) is
   where 
@@ -351,7 +353,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do z             <- tcCallMatch γ l BISetProp [e1,e2] $ setPropTy (F.symbol f) l1 $ tce_env γ 
        case z of 
-         ([e1',e2'], TApp (TRef _) [t1,t2] _) 
+         ([e1',e2'], TApp (TRef _ _) [t1,t2] _) 
                      -> do  e2'' <- castM le2 (tce_ctx γ) e2' t2 t1
                             return (exp e1' e2'', Just γ)
          (e,t)       -> error $ "BUG: tcStmt - e.f = e : " ++ ppshow e ++ "\n" ++ ppshow t
@@ -433,7 +435,7 @@ tcStmt γ c@(ClassStmt l i e is ce) = do
     --   - This type uses the classes type variables as type parameters.
     --   - For the moment this type does not have a refinement. Maybe use
     --     invariants to add some.
-    let thisT     = TApp (TRef (F.symbol i, False)) (tVars αs) fTop  
+    let thisT     = TApp (TRef (F.symbol i) False) (tVars αs) fTop  
     -- * Typecheck the class elements in this extended environment.
     ce'          <- tcInScope γ' $ tcWithThis thisT $ mapM (tcClassElt γ' i) ce
     return          (ClassStmt l i e is ce', Just γ)
@@ -584,7 +586,7 @@ tcExpr γ e@(VarRef l x)
   = case tcEnvFindTy x γ of
       Just t  -> return (e,t)           -- Global or local reference
       Nothing -> findClass x >>= \case  -- Static reference
-        Just (TD _ s _ _ _) -> return (e, TApp (TRef (F.symbol s, True)) [] fTop)
+        Just (TD _ s _ _ _) -> return (e, TApp (TRef (F.symbol s) True) [] fTop)
         Nothing -> tcError $ errorUnboundId (ann l) x
  
 tcExpr γ e@(PrefixExpr _ _ _)
@@ -613,6 +615,9 @@ tcExpr γ (Cast l@(Ann loc fs) e)
 -- Careful here! Unification is happening in `runMaybeM` so won't be effective
 -- outside unless we explicitly add the substitution to the environment. That's
 -- why we're adding the substitution.
+--
+--FIXME: this can probably be done with a call as well...
+--
 tcExpr γ (DotRef l e f) 
   = do δ                  <- getDef
        (e', te)           <- tcExpr γ e
@@ -757,7 +762,7 @@ getConstr l γ s =
   where
     -- Constructor's return type is void - instead return the class type
     -- FIXME: type parameters in returned type: inferred ... or provided !!! 
-    retT t   = TApp (TRef (F.symbol s, False)) (tVar <$> t_args t) fTop
+    retT t   = TApp (TRef (F.symbol s) False) (tVar <$> t_args t) fTop
     abs [] t = t
     abs vs t = foldr TAll t vs
 
@@ -900,7 +905,7 @@ scrapeVarDecl :: VarDecl (AnnSSA r) -> TCM r [RType r]
 scrapeVarDecl (VarDecl l _ _) = 
   mapM (sanity $ srcPos l) $ [ t | VarAnn t <- ann_fact l ] ++ [ t | FieldAnn (_,t) <- ann_fact l ]
 
-sanity l t@(TApp (TRef (i,_)) ts _) = 
+sanity l t@(TApp (TRef i _) ts _) = 
   do δ <- getDef 
      case findSym i δ of
        Just (TD _ _ αs _ _) 

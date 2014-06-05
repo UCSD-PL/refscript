@@ -197,7 +197,12 @@ appTy θ        (TCons es m r) = TCons (apply θ es) (appTy (toSubst θ) m) r
 appTy _        (TExp _)       = error "appTy should not be applied to TExp"
 
 
--- | flatten: include all fields inherited by ancestors
+-- | flattening types
+--
+-- Include all fields inherited by ancestors
+--
+-- minor FIXME: this should be moved somewhere else eventually.
+--
 ---------------------------------------------------------------------------
 flatten :: PPR r 
         => TDefEnv (RType r) -> (TDef (RType r),[RType r]) -> [TElt (RType r)]
@@ -215,7 +220,7 @@ ff _ _ (TD _ _ vs _ es, ts)  = apply (fromList $ zip vs ts) es
 flatten' δ d@(TD _ _ vs _ _) = flatten δ (d, tVar <$> vs)
 
 
-flattenType δ t@(TApp (TRef (x,False)) ts r) = TCons es mut r
+flattenType δ t@(TApp (TRef x False) ts r) = TCons es mut r
   where 
     es      = flatten δ (findSymOrDie x δ, ts)
     -- Be careful with the mutability classes themselves
@@ -264,10 +269,10 @@ intersect δ t1 t2@(TApp TUn _ _ )
 intersect δ t1@(TApp TUn _ _ ) t2
   = intersect δ t1 (TApp TUn [t2] fTop)
 
-intersect δ t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
-  | i1 == i2  
-  = (TApp (TRef i1) (fst <$> zipWith (intersect δ) t1s t2s) r1
-    ,TApp (TRef i2) (snd <$> zipWith (intersect δ) t1s t2s) r2)
+intersect δ t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2) 
+  | (x1,s1) == (x2,s2)
+  = (TApp (TRef x1 s1) (fst <$> zipWith (intersect δ) t1s t2s) r1
+    ,TApp (TRef x2 s2) (snd <$> zipWith (intersect δ) t1s t2s) r2)
   | otherwise 
   = on (intersect δ) (flattenType δ) t1 t2 
  

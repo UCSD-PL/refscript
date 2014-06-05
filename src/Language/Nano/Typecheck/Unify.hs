@@ -58,13 +58,13 @@ unify l δ θ t t' | any isUnion [t,t']
     let (t1s, t2s) = unzip ts in
     unifys l δ θ t1s t2s
 
-unify l δ θ (TApp (TRef i) ts _) (TApp (TRef i') ts' _) 
-  | i == i'   = unifys l δ θ ts ts'
+unify l δ θ (TApp (TRef x s) ts _) (TApp (TRef x' s') ts' _) 
+  | (x,s) == (x',s')   = unifys l δ θ ts ts'
 
-unify l δ θ t1@(TApp (TRef _) _ _) t2
+unify l δ θ t1@(TApp (TRef _ _) _ _) t2
   = unify l δ θ (flattenType δ t1) t2
 
-unify l δ θ t1 t2@(TApp (TRef _) _ _)
+unify l δ θ t1 t2@(TApp (TRef _ _) _ _)
   = unify l δ θ t1 (flattenType δ t2)
 
 -- FIXME: AARGHH ... How do we unify overloaded bindings?
@@ -75,8 +75,8 @@ unify l δ θ (TCons e1s m1 _) (TCons e2s m2 _)
     es         = [ (e1, e2) | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ]
     tt         = mapPair eltType
     mm (e1,e2) = case (mutability e1, mutability e2) of 
-                  (Just m1, Just m2) -> [(ofType m1, ofType m2)]
-                  _                  -> []
+                   (Just m1, Just m2) -> [(ofType m1, ofType m2)]
+                   _                  -> []
 
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ

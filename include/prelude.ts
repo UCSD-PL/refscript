@@ -25,38 +25,43 @@
 /*************************************************************************/
 
 /*@ extern builtin_BIBracketRef     :: 
-    /\ forall A. (arr: #Array[#Immutable,A], {idx:number | (0 <= idx && idx < (len arr))}) => A 
-    /\ forall A. (arr: #Array[#Mutable, A ],  idx:number                                 ) => A? 
-    /\ forall A. ({[y: string]: A }        ,   x:string                                  ) => A      */
+    /\ forall A. (arr: #Array[#Immutable,A]   , {idx:number | (0 <= idx && idx < (len arr))}) => A 
+    /\ forall A. (arr: #Array[#Mutable, A ]   , idx:number                                  ) => A? 
+    /\ forall A. ([#ReadOnly]{[y: string]: A }, x:string                                    ) => A      
+*/
 
 /*@ extern builtin_BIBracketAssign  :: 
-    /\ forall A. (arr: #Array[#Immutable, A], {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
-    /\ forall A. (arr: #Array[#ReadOnly , A],  idx:number                                 , val: A) => void
-    /\ forall A. ({[y: string]: A },            x:string                                  , val: A) => void  
-                                                                                                    */
+    /\ forall A  . (arr: #Array[#Immutable, A] , {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
+    /\ forall A  . (arr: #Array[#ReadOnly , A] ,  idx:number                                 , val: A) => void
+    /\ forall A M. ([#Mutable]{[y: string]: A },    x:string                                 , val: A) => void  
+*/
 
 /*@ extern builtin_BISetProp ::
     /\ forall A B M . ([   M    ] { [#Mutable]f: A }, B) => { #Pair[A,B] | true }                              
-    /\ forall A B M . ([#Mutable] { [M]       f: A }, B) => { #Pair[A,B] | true }                   */
+    /\ forall A B M . ([#Mutable] { [M]       f: A }, B) => { #Pair[A,B] | true }                   
+*/
   
 
 
 //FIXME: the 'len' property is invalid if M != Immutable
 /*@ extern builtin_BIArrayLit  :: forall M  A . (A) 
-                               => {v: #Array[M,A] | [ (len v) = builtin_BINumArgs; not (null v) ] } */
+                               => {v: #Array[M,A] | [ (len v) = builtin_BINumArgs; not (null v) ] } 
+*/
 
-/*@ extern builtin_BIUndefined :: forall A. {A | false}                                             */
+/*@ extern builtin_BIUndefined :: forall A. {A | false} */
 
 
 /*@ extern builtin_OpLT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
                                   /\ (x:string, y:number) => boolean
                                   /\ (x:number, y:number) => boolean
-                                  /\ (x:string, y:string) => boolean                                */
+                                  /\ (x:string, y:string) => boolean                                
+*/
 
 /*@ extern builtin_OpLEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <= y)) } 
                                   /\ (x:string, y:number) => boolean
                                   /\ (x:number, y:number) => boolean
-                                  /\ (x:string, y:string) => boolean                                */
+                                  /\ (x:string, y:string) => boolean                                
+*/
 
 /*@ extern builtin_OpGT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) } */
 
@@ -66,11 +71,12 @@
                                   /\ (x:number, y:string) => string
                                   /\ (x:string, y:number) => string
                                   /\ (x:string, y:string) => string           
-                                  /\ (x:{top|false}, y:{top|false}) => top                          */
+                                  /\ (x:{top|false}, y:{top|false}) => top                          
+ */
 
 /*@ extern builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v ~~ x - y} */
 
-/*@ extern builtin_OpMul       :: (number,  number)  => number                                      */
+/*@ extern builtin_OpMul       :: (number,  number)  => number */
 
 //FIXME: This is not correct. Add definition for: >>  
 /*@ extern builtin_OpDiv       :: (x: number, y: { v: number | v != 0 }) 
@@ -80,30 +86,32 @@
                    )} 
  */
 
-/*@ extern builtin_OpMod       :: (number,  number)  => number                                      */
+/*@ extern builtin_OpMod       :: (number,  number)  => number */
 
-/*@ extern builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v ~~ (0 - x)}                 */
+/*@ extern builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v ~~ (0 - x)} */
 
-/*  extern builtin_OpEq        :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) }   */
+/*  extern builtin_OpEq        :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } */
 
 /*@ extern builtin_OpSEq       :: /\ forall A  . (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }
-                                  /\ forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) }  */
+                                  /\ forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } */
 
-/*@ extern builtin_OpNEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */
+/*@ extern builtin_OpNEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) } */
 
-/*@ extern builtin_OpSNEq      :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) }  */
+/*@ extern builtin_OpSNEq      :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) } */
 
 // FIXME: the two version of inequality should not be the same...
 
 /*@ extern builtin_OpLAnd      :: /\ forall A   . (x:A, y:A)  => { v:A   | (if (Prop(x)) then (v = y) else (v = x)) }
-                                  /\ forall A B . (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) && Prop(y))) } */
+                                  /\ forall A B . (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) && Prop(y))) } 
+*/
       
 /*@ extern builtin_OpLOr       :: /\ forall A   . (x:A, y:A)  => { v:A   | (if (FLS(x)) then (v = y) else (v = x)) } 
-                                  /\ forall A B . (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) || Prop(y))) } */
+                                  /\ forall A B . (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) || Prop(y))) }
+*/
 
-/*@ extern builtin_PrefixLNot  :: forall A . (x: A)      => {v:boolean | (((Prop v) <=> not Prop(x)) && ((Prop v) <=> FLS(x)))} */
+/*@ extern builtin_PrefixLNot  :: forall A . (x: A) => {v:boolean | (((Prop v) <=> not Prop(x)) && ((Prop v) <=> FLS(x)))} */
 
-/*@ extern builtin_PrefixBNot  :: (x: number)            => {v:number | v = 0 - (x + 1) }           */
+/*@ extern builtin_PrefixBNot  :: (x: number) => {v:number | v = 0 - (x + 1) } */
 
 
 
@@ -141,8 +149,8 @@
       forall A .     (value: A) => top;
       prototype           : #Object;
       getPrototypeOf      : forall A . (o: A) => top;
-      getOwnPropertyNames : forall A . (o: A) => [string];
-      keys                : forall A . (o: A) => [string];
+      getOwnPropertyNames : forall A . (o: A) => #Array[#Immutable,string];
+      keys                : forall A . (o: A) => #Array[#Immutable,string];
     } */
 
       ////TODO: 
@@ -208,8 +216,8 @@
       exp     : (x: number) => number;
       floor   : (x: number) => number;
       log     : (x: number) => number;
-      max     : (values: [number]) => number;
-      min     : (values: [number]) => number;
+      max     : (values: #Array[#ReadOnly,number]) => number;
+      min     : (values: #Array[#ReadOnly,number]) => number;
       pow     : (x: number, y: number) => number;
       random  : () =>  number;
       round   : (x: number) => number;
@@ -226,15 +234,15 @@
       toString          : () => string;
       charAt            : (pos: number) => string;
       charCodeAt        : (index: number) => number;
-      concat            : (strings: [string]) => string;
+      concat            : (strings: #Array[#ReadOnly,string]) => string;
       indexOf           : (searchString: string, position: number) => number;
       lastIndexOf       : (searchString: string, position: number) => number;
       localeCompare     : (that: string) => number;
-      match             : (regexp: string) => [string];
+      match             : forall M . (regexp: string) => #Array[M, string];
       replace           : (searchValue: string, replaceValue: string) => string;
       search            : (regexp: string) => number;
       slice             : (start: number, end: number) => string;
-      split             : (separator: string, limit: number) => [string];
+      split             : forall M . (separator: string, limit: number) => #Array[M, string];
       substring         : (start: number, end: number) => string;
       toLowerCase       : () => string;
       toLocaleLowerCase : () => string;
@@ -259,33 +267,27 @@
 
       toLocaleString : () => string;
 
-      concat  [#Array[#Immutable,T]] 
-                     : /\ (items: #Array[#Immutable,T]) => { #Array[#Immutable,T] | (len v) = (len this) + (len items) }
-                       /\ forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
-      concat  [#Array[#ReadOnly ,T]] 
-                     : forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
+      concat  [#Array[#Immutable,T]]: /\ (items: #Array[#Immutable,T]) => { #Array[#Immutable,T] | (len v) = (len this) + (len items) }
+                                      /\ forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
+      concat  [#Array[#ReadOnly ,T]]: forall M1 M2 . (items: #Array[M1,T]) => #Array[M2,T];
 
       join           : (separator: string) => string;
 
-      pop     [#Array[#Mutable,  T]] 
-                     : () => T;
+      pop     [#Array[#Mutable,  T]]: () => T;
       
-      push    [#Array[#Mutable,  T]] 
-                     : (items: T) => number;
+      push    [#Array[#Mutable,  T]]: (items: T) => number;
       
-      reverse [#Array[M,T]]          
-                     : () => #Array[M,T];
+      reverse [#Array[M,T]]: () => #Array[M,T];
       
       shift          : () => T;
       
       slice          : /\ forall N . (start: number)              => #Array[N,T]
                        /\ forall N . (start: number, end: number) => #Array[N,T];
       
-      sort    [#Array[#Mutable,  T]] 
-                     : (compareFn: (a: T, b: T) => number) => #Array[#Immutable,T];
+      sort    [#Array[#Mutable,  T]]: (compareFn: (a: T, b: T) => number) => #Array[#Immutable,T];
       
-      splice         :  /\ (start: number) => #Array[#Immutable,T]
-                        /\ (start: number, deleteCount: number, items: #Array[#Immutable,T]) => #Array[#Immutable,T];
+      splice         : /\ (start: number) => #Array[#Immutable,T]
+                       /\ (start: number, deleteCount: number, items: #Array[#Immutable,T]) => #Array[#Immutable,T];
       
       unshift        : (items: #Array[#Immutable,T]) => number;
 
@@ -307,8 +309,7 @@
 
       reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: #Array[#Immutable,T]) => T, initialValue: T) => T;
 
-      length  [#Array[#Immutable,T]] 
-                     : { v: number | (v = (len this) && v >= 0) };
+      length  [#Array[#Immutable,T]]: { v: number | (v = (len this) && v >= 0) };
       length         : { v: number | (v >= 0) };
 
     } */

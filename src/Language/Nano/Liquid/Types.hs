@@ -229,7 +229,7 @@ tconFTycon TInt         = F.intFTyCon
 tconFTycon TBool        = rawStringFTycon "Boolean"
 tconFTycon TFPBool      = F.boolFTyCon
 tconFTycon TVoid        = rawStringFTycon "Void"
-tconFTycon (TRef (s,_)) = rawStringFTycon $ F.symbolString s
+tconFTycon (TRef s _)   = rawStringFTycon $ F.symbolString s
 tconFTycon TUn          = rawStringFTycon "Union"
 tconFTycon TString      = F.strFTyCon
 tconFTycon TTop         = rawStringFTycon "Top"
@@ -408,9 +408,9 @@ zipType δ f g (TApp TUn t1s r1) t2
   = zipType δ f g ((fromJust $ L.find ((==) t2) t1s) `strengthen` r1) t2
                                        
 
-zipType δ f g t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
-  | i1 == i2  
-  = TApp (TRef i1) (zipWith (zipType δ f g) t1s t2s) $ f r1 r2
+zipType δ f g t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2) 
+  | (x1,s1) == (x2,s2)
+  = TApp (TRef x1 s1) (zipWith (zipType δ f g) t1s t2s) $ f r1 r2
   | otherwise 
   = on (zipType δ f g) (flattenType δ) t1 t2 
  

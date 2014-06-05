@@ -280,7 +280,7 @@ consStmt g (ClassStmt l i _ _ ce) = do
     --   - This type uses the classes type variables as type parameters.
     --   - For the moment this type does not have a refinement. Maybe use
     --     invariants to add some.
-    let thisT = TApp (TRef (F.symbol i, False)) (tVar <$> αs) fTop  
+    let thisT = TApp (TRef (F.symbol i) False) (tVar <$> αs) fTop  
     cgWithThis thisT $ consClassElts (srcPos l) g' d ce
     return $ Just g
 
@@ -478,11 +478,11 @@ consExpr g (NewExpr l (VarRef _ i) es)
 -- super
 consExpr g (SuperRef l) 
   = cgPeekThis >>= \case 
-      TApp (TRef (i,s)) ts _ ->
+      TApp (TRef i s) ts _ ->
         findSymOrDieM i >>= \case 
           TD _ _ vs (Just (p, ps)) _ ->
             envAddFresh l 
-              (apply (fromList $ zip vs ts) $ TApp (TRef (F.symbol p, s)) ps fTop) g
+              (apply (fromList $ zip vs ts) $ TApp (TRef (F.symbol p) s) ps fTop) g
           _ -> cgError l $ errorSuper (srcPos l) 
       _ -> cgError l $ errorSuper (srcPos l) 
 
@@ -515,7 +515,7 @@ getConstr l g s =
   where
     -- Constructor's return type is void - instead return the class type
     -- FIXME: type parameters in returned type: inferred ... or provided !!! 
-    retT t = TApp (TRef (F.symbol s, False)) (tVar <$> t_args t) fTop
+    retT t = TApp (TRef (F.symbol s) False) (tVar <$> t_args t) fTop
     abs [] t = t
     abs vs t = foldr TAll t vs
 

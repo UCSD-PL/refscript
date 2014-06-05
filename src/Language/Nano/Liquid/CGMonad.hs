@@ -383,7 +383,7 @@ envFindTy x g = fromMaybe err $ listToMaybe $ catMaybes [globalSpec, className, 
                 | otherwise                           = Nothing
     -- Check for static fields
     className   = case findSym x $ cge_defs g of    
-        Just t  | t_class t -> Just $ TApp (TRef (F.symbol x, True)) [] fTop
+        Just t  | t_class t -> Just $ TApp (TRef (F.symbol x) True) [] fTop
         _                   -> Nothing 
     -- Check for local variable
     local       = fmap (`eSingleton` x) $ E.envFindTy x $ renv g
@@ -629,8 +629,8 @@ splitC (Sub g i t1 t2)
       isBotR (F.Reft (_,ra))         = F.RConc F.PFalse `elem` ra
 
 -- |Type references
-splitC (Sub g i t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _)) 
-  | i1 == i2
+splitC (Sub g i t1@(TApp (TRef x1 s1) t1s _) t2@(TApp (TRef x2 i2) t2s _)) 
+  | (x1,s1) == (x2,i2)
   = do  cs    <- bsplitC g i t1 t2
         -- FIXME: Variance !!!
         cs'   <- concatMapM splitC $ safeZipWith "splitC-TRef" (Sub g i) t1s t2s
@@ -647,25 +647,25 @@ splitC (Sub g i t1@(TApp (TRef i1) t1s _) t2@(TApp (TRef i2) t2s _))
         return            $ cs ++ cs'
 
 -- FIXME: Add constraint for null
-splitC (Sub _ _ (TApp (TRef _) _ _) (TApp TNull _ _)) 
+splitC (Sub _ _ (TApp (TRef _ _) _ _) (TApp TNull _ _)) 
   = return []
 
-splitC (Sub _ _ (TApp TNull _ _) (TApp (TRef _) _ _)) 
+splitC (Sub _ _ (TApp TNull _ _) (TApp (TRef _ _) _ _)) 
   = return []
 
-splitC (Sub g i t1@(TApp (TRef _) _ _) t2@(TCons _ _ _))
+splitC (Sub g i t1@(TApp (TRef _ _) _ _) t2@(TCons _ _ _))
   = do t1' <- (`flattenType` t1) <$> getDef
        splitC (Sub g i t1' t2)
 
-splitC (Sub g i t1@(TCons _ _ _) t2@(TApp (TRef _) _ _))
+splitC (Sub g i t1@(TCons _ _ _) t2@(TApp (TRef _ _) _ _))
   = do δ    <- getDef
        let t2' = flattenType δ t2
        splitC (Sub g i t1 t2')
 
-splitC (Sub _ _ t1@(TApp (TRef _) _ _) t2)
+splitC (Sub _ _ t1@(TApp (TRef _ _) _ _) t2)
   = errorstar $ "splitC: " ++ ppshow t1 ++ " vs " ++ ppshow t2
 
-splitC (Sub _ _ t1 t2@(TApp (TRef _) _ _))
+splitC (Sub _ _ t1 t2@(TApp (TRef _ _) _ _))
   = errorstar $ "splitC: " ++ ppshow t1 ++ " vs " ++ ppshow t2
 
 -- | Rest of TApp
@@ -826,17 +826,17 @@ cgWithThis t p = do { cgPushThis t; a <- p; cgPopThis; return a }
 --------------------------------------------------------------------------------
 getSuperM :: IsLocated a => a -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-getSuperM l (TApp (TRef (i,s)) ts _) = fromTdef =<< findSymOrDieM i
+getSuperM l (TApp (TRef i s) ts _) = fromTdef =<< findSymOrDieM i
   where fromTdef (TD _ _ vs (Just (p,ps)) _) = do
           return  $ apply (fromList $ zip vs ts) 
-                  $ TApp (TRef (F.symbol p,s)) ps fTop
+                  $ TApp (TRef (F.symbol p) s) ps fTop
         fromTdef (TD _ _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
 getSuperM l _  = cgError l $ errorSuper (srcPos l) 
 
 --------------------------------------------------------------------------------
 getSuperDefM :: IsLocated a => a -> RefType -> CGM (TDef RefType)
 --------------------------------------------------------------------------------
-getSuperDefM l (TApp (TRef (i,_)) ts _) = fromTdef =<< findSymOrDieM i
+getSuperDefM l (TApp (TRef i _) ts _) = fromTdef =<< findSymOrDieM i
   where 
     fromTdef (TD _ _ vs (Just (p,ps)) _) = 
       do TD c n ws pp ee <- findSymOrDieM p

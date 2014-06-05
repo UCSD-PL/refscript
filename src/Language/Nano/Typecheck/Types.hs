@@ -144,25 +144,25 @@ instance F.Symbolic a => F.Symbolic (Located a) where
 
 type Mutability = Type 
 
-validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable"]
+validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable", "DefaultMutable"]
 
 mkMut :: String -> Mutability
-mkMut s = TApp (TRef (F.symbol s, False)) [] ()
+mkMut s = TApp (TRef (F.symbol s) False) [] ()
 
 defaultM  = mkMut "DefaultMutable"
 mutableM  = mkMut "Mutable"
 
 
-isMutabilityType (TApp (TRef (s,False)) _ _) = s `elem` validMutNames
-isMutable _                                  = False
+isMutabilityType (TApp (TRef s False) _ _) = s `elem` validMutNames
+isMutabilityType _                         = False
 
-isMutable        (TApp (TRef (s,False)) _ _) = s == F.symbol "Mutable"
-isMutable _                                  = False
+isMutable        (TApp (TRef s False) _ _) = s == F.symbol "Mutable"
+isMutable _                                = False
 
-isImmutable      (TApp (TRef (s,False)) _ _) = s == F.symbol "Immutable"
-isImmutable _                                = False
+isImmutable      (TApp (TRef s False) _ _) = s == F.symbol "Immutable"
+isImmutable _                              = False
 
--- isDefaultMut (TApp (TRef (s,False)) _ _) 
+-- isDefaultMut (TApp (TRef s False) _ _) 
 --   | s == F.symbol "DefaultMutable" = True 
 -- isDefaultMut _ = False
 
@@ -252,7 +252,7 @@ data TCon
   | TString
   | TVoid
   | TTop
-  | TRef (F.Symbol, Bool) -- The boolean is for static (T/F)
+  | TRef F.Symbol Bool   -- The boolean is for static (T/F)
   | TUn
   | TNull
   | TUndef
@@ -441,7 +441,7 @@ isVoid :: RType r -> Bool
 isVoid (TApp TVoid _ _)   = True 
 isVoid _                  = False
 
-isTObj (TApp (TRef _) _ _) = True
+isTObj (TApp (TRef _ _) _ _) = True
 isTObj (TCons _ _ _)       = True
 isTObj _                   = False
 
@@ -484,7 +484,7 @@ instance Eq TCon where
   TString == TString = True
   TVoid   == TVoid   = True         
   TTop    == TTop    = True
-  TRef i1 == TRef i2 = i1 == i2
+  TRef x1 s1 == TRef x2 s2 = (x1,s1) == (x2,s2)
   TUn     == TUn     = True
   TNull   == TNull   = True
   TUndef  == TUndef  = True
@@ -629,10 +629,10 @@ instance (PP t) => PP (TElt t) where
   pp (IndexSig x False t) = brackets (pp x <> text ": number") <> text ":" <> pp t
 
   pp (FieldSig x s m τ t) =  bStr s "static" 
-                         <+> pp m
+                         <+> brackets (pp m)
                          <+> pp x 
-                         <+> mStr (brackets . pp <$> τ)
-                         <+> text ":" 
+                         <>  mStr ((text "" <+>) . brackets . pp <$> τ)
+                         <>  text ":" 
                          <+> pp t 
 
 bStr True  s = text s
@@ -774,16 +774,16 @@ instance PP Char where
 
 
 instance (PP r, F.Reftable r) => PP (RType r) where
-  pp (TVar α r)             = F.ppTy r $ pp α 
-  pp (TFun xts t _)         = ppArgs parens comma xts <+> text "=>" <+> pp t 
-  pp t@(TAll _ _)           = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
-  pp (TAnd ts)              = vcat [text "/\\" <+> pp t | t <- ts]
-  pp (TExp e)               = pprint e 
-  pp (TApp TUn ts r)        = F.ppTy r $ ppArgs id (text " +") ts 
-  pp (TApp d@(TRef _) ts r) = F.ppTy r $ pp d <+> ppArgs brackets comma ts 
-  pp (TApp c [] r)          = F.ppTy r $ pp c 
-  pp (TApp c ts r)          = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
-  pp (TCons bs m r)         = F.ppTy r $ lbrace <+> intersperse semi (map pp bs) <+> rbrace <+> pp m
+  pp (TVar α r)               = F.ppTy r $ pp α 
+  pp (TFun xts t _)           = ppArgs parens comma xts <+> text "=>" <+> pp t 
+  pp t@(TAll _ _)             = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
+  pp (TAnd ts)                = vcat [text "/\\" <+> pp t | t <- ts]
+  pp (TExp e)                 = pprint e 
+  pp (TApp TUn ts r)          = F.ppTy r $ ppArgs id (text " +") ts 
+  pp (TApp d@(TRef _ _) ts r) = F.ppTy r $ pp d <> ppArgs brackets comma ts 
+  pp (TApp c [] r)            = F.ppTy r $ pp c 
+  pp (TApp c ts r)            = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
+  pp (TCons bs m r)           = F.ppTy r $ brackets (pp m) <+> braces (intersperse semi $ map pp bs)
   -- pp (TCons bs r)           = F.ppTy r $ lbrace $+$ nest 2 (cat $ map pp bs) $+$ rbrace
 
 
@@ -798,8 +798,8 @@ instance PP TCon where
   pp TVoid            = text "void"
   pp TTop             = text "top"
   pp TUn              = text "union:"
-  pp (TRef (x,True))  = text "#(static)" <> text (F.symbolString $ x)
-  pp (TRef (x,_ ))    = text "#" <> text (F.symbolString $ x)
+  pp (TRef x True)    = text "(static)" <> text (F.symbolString $ x)
+  pp (TRef x _   )    = text (F.symbolString $ x)
   pp TNull            = text "null"
   pp TUndef           = text "undefined"
   pp TFPBool          = text "bool"
@@ -813,12 +813,13 @@ instance Hashable TCon where
   hashWithSalt s TUn          = hashWithSalt s (5 :: Int)
   hashWithSalt s TNull        = hashWithSalt s (6 :: Int)
   hashWithSalt s TUndef       = hashWithSalt s (7 :: Int)
-  hashWithSalt s (TRef (z,_)) = hashWithSalt s (8 :: Int) + hashWithSalt s z
+  hashWithSalt s (TRef z _)   = hashWithSalt s (8 :: Int) + hashWithSalt s z
 
 instance (PP r, F.Reftable r) => PP (Bind r) where 
   pp (B x t)          = pp x <> colon <> pp t 
 
-ppArgs p sep          = p . intersperse sep . map pp
+ppArgs _  _ [] = text ""
+ppArgs p sep l = p $ intersperse sep $ map pp l
 
 instance (PP s, PP t) => PP (M.HashMap s t) where
   pp m = vcat $ pp <$> M.toList m
@@ -1011,11 +1012,11 @@ tAnd ts  = case ts of
              _   -> TAnd ts
 
 -- FIXME
-tArr t   = TApp (TRef (F.symbol "Array", False)) [t] fTop
+tArr t   = TApp (TRef (F.symbol "Array") False) [t] fTop
 
-rtArr t   = TApp (TRef (F.symbol "Array", False)) [t] 
+rtArr t   = TApp (TRef (F.symbol "Array") False) [t] 
 
-isArr (TApp (TRef (s,_)) _ _ ) | s == F.symbol "Array" = True
+isArr (TApp (TRef s _) _ _ ) | s == F.symbol "Array" = True
 isArr _                          = False
 
 isTFun (TFun _ _ _) = True

@@ -1,7 +1,7 @@
 
 interface FooT {
-  /*@ f:: /\ forall U . ((U) => U) => [U] 
-          /\ forall V . ((V,V) => V) => [V] */
+  /*@ f:: /\ forall U . ((U) => U) => #Array[#Immutable,U] 
+          /\ forall V . ((V,V) => V) => #Array[#Immutable,V] */
   f: (x:any) => any;
 }
 
@@ -15,7 +15,7 @@ function f2(x:number, y:number):number {
   return x;
 }
 
-/*@ foo :: (#FooT) => [{ number | true } ] */
+/*@ foo :: (#FooT[#Immutable]) => #Array[#Immutable, number] */
 function foo(x) {
 
   var c = x.f(f1);
@@ -26,7 +26,7 @@ function foo(x) {
 }
 
 
-/*@ a :: #FooT */
+/*@ a :: #FooT[#Immutable] */
 declare var a: FooT;
 
 foo(a);

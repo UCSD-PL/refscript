@@ -69,7 +69,7 @@ getCallable δ t             = uncurry mkAll <$> foo [] t
     foo αs t@(TFun _ _ _)   = [(αs, t)]
     foo αs   (TAnd ts)      = concatMap (foo αs) ts 
     foo αs   (TAll α t)     = foo (αs ++ [α]) t
-    foo αs   (TApp (TRef (s, False)) _ _ )
+    foo αs   (TApp (TRef s False) _ _ )
                             = case findSym s δ of 
                                 Just d  -> [ (αs, t) | CallSig t <- t_elts d ]
                                 Nothing -> []
@@ -83,15 +83,15 @@ getPropApp :: (PPR r, IsLocated a)
 -------------------------------------------------------------------------------
 getPropApp l α γ s t@(TApp c ts _) = 
   case c of 
-    TBool      -> Nothing
-    TUndef     -> Nothing
-    TNull      -> Nothing
-    TUn        -> getPropUnion l α γ s ts
-    TInt       -> lookupAmbientVar l α γ s "Number" t
-    TString    -> lookupAmbientVar l α γ s "String" t
-    TRef (i,b) -> findSym i γ >>= getPropTDef b l γ s ts >>= return . (t,)
-    TTop       -> Nothing
-    TVoid      -> Nothing
+    TBool    -> Nothing
+    TUndef   -> Nothing
+    TNull    -> Nothing
+    TUn      -> getPropUnion l α γ s ts
+    TInt     -> lookupAmbientVar l α γ s "Number" t
+    TString  -> lookupAmbientVar l α γ s "String" t
+    TRef i b -> findSym i γ >>= getPropTDef b l γ s ts >>= return . (t,)
+    TTop     -> Nothing
+    TVoid    -> Nothing
 getPropApp _ _ _ _ _ = error "getPropApp should only be applied to TApp"
 
 

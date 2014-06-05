@@ -18,7 +18,7 @@ import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
-import           Data.Maybe                              (isJust)
+import           Data.Maybe                              (isJust, isNothing)
 import qualified Data.List                        as     L
 import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
@@ -46,6 +46,7 @@ import           Language.Nano.Files
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
+import           Text.Printf 
 import           Text.Parsec                      hiding (parse)
 import           Text.Parsec.Pos                         (newPos)
 import qualified Text.Parsec.Token                as     T
@@ -198,7 +199,9 @@ bbaseP :: Parser (Reft -> RefType)
 bbaseP 
   =  try (TVar <$> tvarP)                  -- A
  <|> try objLitP                           -- {f1: T1; ... ; fn: Tn} 
- <|> try (rtArr <$> arrayP)                -- Array<T>
+ -- FIXME
+ -- Disabling array in this form cause there is no room for mutability ...
+ -- <|> try (rtArr <$> arrayP)                -- Array<T>
  <|> try (TApp <$> tConP <*> bareTyArgsP)  -- #List[A], #Tree[A,B] etc...
  
 ----------------------------------------------------------------------------------
@@ -247,7 +250,7 @@ tConP =  try (reserved "number"    >> return TInt)
 ----------------------------------------------------------------------------------
 idToTRefP :: Id SourceSpan -> Parser TCon
 ----------------------------------------------------------------------------------
-idToTRefP (Id _ s) = return $ TRef (symbol s, False)
+idToTRefP (Id _ s) = return $ TRef (symbol s) False
 -- default: non-static class ref
 
 bareAll1P p
@@ -492,18 +495,19 @@ mkCode :: FilePath -> [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 mkCode f ss =  Nano {
         fp      = f
       , code    = Src (checkTopStmt <$> ss')
-      , externs = envFromList   [ t | Extern t <- anns ] -- externs
+      , externs = envFromList   [ t | Extern t <- anns ]          -- externs
       -- FIXME: same name methods in different classes.
-      , specs   = catFunSpecDefs ss                      -- function sigs (no methods...)
-      -- , glVars  = catVarSpecDefs ss                      -- variables
+      , specs   = catFunSpecDefs δ ss                               -- function sigs (no methods...)
+      -- , glVars  = catVarSpecDefs ss                            -- variables
       , consts  = envFromList   [ t | Meas   t <- anns ] 
-      , defs    = tDefFromList  [ checkIF t | IFace  t <- anns ] 
+      , defs    = δ
       , tAlias  = envFromList   [ t | TAlias t <- anns ] 
       , pAlias  = envFromList   [ t | PAlias t <- anns ] 
       , quals   =               [ t | Qual   t <- anns ] 
       , invts   = [Loc (srcPos l) t | Invt l t <- anns ]
     } 
   where
+    δ             = tDefFromList [ checkIF t | IFace  t <- anns ] 
     toBare     :: (SourceSpan, [Spec]) -> AnnBare Reft 
     toBare (l,αs) = Ann l $ [VarAnn t       | Bind   (_,t) <- αs ]
                          ++ [ConsAnn t      | Constr (_,t) <- αs ]
@@ -562,9 +566,9 @@ instance PP (RawSpec) where
 
 
 --------------------------------------------------------------------------------------
-catFunSpecDefs :: [Statement (SourceSpan, [Spec])] -> Env RefType
+catFunSpecDefs :: TDefEnv RefType -> [Statement (SourceSpan, [Spec])] -> Env RefType
 --------------------------------------------------------------------------------------
-catFunSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
+catFunSpecDefs δ ss = envFromList [ (i, checkType δ t) | l <- ds , Bind (i,t) <- snd l ]
   where ds     = definedFuns ss
 
 --------------------------------------------------------------------------------------
@@ -594,4 +598,40 @@ varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
 printFile :: FilePath -> IO () -- Either Error (NanoBareR Reft))
 --------------------------------------------------------------------------------
 printFile f = parseNanoFromFile f >>= putStr . ppshow
+
+
+
+--------------------------------------------------------------------------------
+-- | Sanity checks on types
+--------------------------------------------------------------------------------
+--
+-- Perhaps move these to typechecking
+--
+
+data TypeError = NameNotFound Symbol
+               | InvalidMutability Symbol
+  deriving (Data, Typeable)
+
+instance Show TypeError where
+  show (NameNotFound s)      = printf "Type '%s' is unbound" (ppshow s)
+  show (InvalidMutability s) = "Invalid mutability symbol '" 
+                            ++ ppshow s 
+                            ++ "'. "
+                            ++ "Possible fix: "
+                            ++ "add a mutability modifier as the first type argument"
+
+
+checkType :: TDefEnv RefType -> RefType -> RefType
+checkType δ typ = 
+    case everything (++) ([] `mkQ` fromType) typ of
+      [] -> typ
+      es -> error $ show es 
+  where 
+    fromType :: RefType -> [TypeError]
+    fromType (TApp (TRef x s) (m:_) _) | isNothing (findSym x δ) = [NameNotFound x] 
+                                       | not (validMutability m) = [InvalidMutability x]
+    fromType _                         = []
+
+    validMutability (TVar _ _)         = True
+    validMutability t                  = isMutabilityType t
 

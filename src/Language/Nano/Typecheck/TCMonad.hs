@@ -355,11 +355,13 @@ freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
 unifyTypesM :: PPR r => SourceSpan -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
 unifyTypesM l msg t1s t2s
-  | on (/=) length t1s t2s = tcError $ errorArgMismatch l 
-  | otherwise = do (δ, θ) <- (,) <$> getDef <*> getSubst
-                   case unifys l δ θ t1s t2s of
-                     Left err -> tcError $ catMessage err msg
-                     Right θ' -> setSubst θ' >> return θ' 
+  | length t1s /= length t2s 
+  = tcError $ errorArgMismatch l 
+  | otherwise 
+  = do  (δ, θ) <- (,) <$> getDef <*> getSubst
+        case unifys l δ θ t1s t2s of
+          Left err -> tcError $ catMessage err msg
+          Right θ' -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------
 unifyTypeM :: PPR r => SourceSpan -> RType r -> RType r -> TCM r (RSubst r)
@@ -454,25 +456,28 @@ convert l t1 t2                        = convertSimple l t1 t2
 convertObj :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
 convertObj l t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
-
-  -- { f1:t1,..,fn:tn } vs { f1:t1',..fn:tn' }
+  --
+  --                       μ <: μ'
+  --  ∀i . [comb(μ,μi)]fi:ti <: [comb(μ',μi')]fi:ti'
+  -- ------------------------------------------------
+  --        [μ]{ [μi]fi:ti } <: [μ']{ [μi']fi:ti' }
+  --
   | s1l == s2l 
-  = do  z <- isSubtype l (ofType μ1) (ofType μ2)
-        if z then 
-          let m = μ1 in
-          do  y <- deeps l μ1 μ2 cmnBinds
-              if y then 
-                return  $ CNo
-              else 
-                tcError $ errorSimpleSubtype l t1 t2
-        else
-          tcError $ errorIncompMutTy l t1 t2      
-
-  -- { f1:t1,..,fn:tn } vs { f1:t1',..,fn:tn',..,fm:tm' }
+  = isSubtype l (ofType μ1) (ofType μ2) >>= \case
+        True -> deeps l μ1 μ2 cmnBinds >>= \case 
+                    True  -> return  $ CNo
+                    False -> tcError $ errorSimpleSubtype l t1 t2
+        False -> tcError $ errorIncompMutTy l t1 t2      
+  -- 
+  -- NO: { f1:t1,..,fn:tn } <: { f1:t1',..,fn:tn',..,fm:tm' }
+  --
   | not (S.null df21) 
   = tcError $ errorMissFlds l t1 t2 df21
-   
-  -- { f1:t1,..,fn:tn,..,fm:tm } vs { f1:t1',..,fn:tn' }
+  -- 
+  --  [μ]{ f1:t1,..,fn:tn } <: [μ']{ f1:t1',..,fn:tn' }
+  -- ------------------------------------------------------------
+  --  [μ]{ f1:t1,..,fn:tn,..,fm:tm } <: [μ']{ f1:t1',..,fn:tn' }
+  --
   | otherwise
   = do _      <- convertObj l (TCons e1s' μ1 r1) (TCons e2s μ2 r2)
        return  $ CUp t1 t2
@@ -505,26 +510,23 @@ convertObj l t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
 
 -- FIXME !!!!!!!!
 -- Do nominal subtyping and fall back to structural if the former fails.
-convertObj l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
-  | i1 == i2
+convertObj l t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2)
+  | (x1,s1) == (x2,s2)
   = do -- FIXME: Using covariance here !!!
        bs <- zipWithM (isSubtype l) t1s t2s
        if and bs then return  $ CNo
                  else tcError $ errorSimpleSubtype l t1 t2
   | otherwise
   = do δ  <- getDef 
-       case weaken δ (findSymOrDie s1 δ,t1s) s2 of
-         Just (_, t1s') -> return $ CUp (TApp (TRef (s2,b1)) t1s' r1) t2
+       case weaken δ (findSymOrDie x1 δ,t1s) x2 of
+         Just (_, t1s') -> return $ CUp (TApp (TRef x2 s1) t1s' r1) t2
          Nothing        -> convertObj l (flattenType δ t1) (flattenType δ t2)
-  where
-    (s1,b1) = i1
-    (s2,b2) = i2
                           
-convertObj l t1@(TApp (TRef _) _ _) t2 
+convertObj l t1@(TApp (TRef _ _) _ _) t2 
   = do δ <- getDef 
        convertObj l (flattenType δ t1) t2
 
-convertObj l t1 t2@(TApp (TRef _) _ _)
+convertObj l t1 t2@(TApp (TRef _ _) _ _)
   = do δ <- getDef
        convertObj l t1 (flattenType δ t2) 
 
@@ -537,19 +539,22 @@ deeps l μ1 μ2 ss = and <$> mapM (deep l μ1 μ2) ss
 
 -- | Treat the parts of `e1s` and `e2s` that correspond to the same binder 
 --   as intersection types.
-
+--
 -- |   exists i s.t. si <: t
 -- | ------------------------
 -- |    s1 /\ ... /\ sn <: t
+--
 deep l μ1 μ2 (s, (e1s, e2s)) = or <$> mapM (\e1 -> deep1 l μ1 μ2 e1 e2s) e1s
 
+--
 -- |  s1 <: t1  ...  s <: tn
 -- | ------------------------
 -- |   s <: t1 /\ ... /\ tn
-deep1 l μ1 μ2 e es = and <$> mapM (isSubtypeElt l μ1 μ2 e) es
+--
+deep1 l μ1 μ2 e es = and <$> mapM (subElt l μ1 μ2 e) es
 
 
-isSubtypeElt :: PPR r => SourceSpan -> Mutability -> Mutability -> TElt (RType r) -> TElt (RType r) -> TCM r Bool
+subElt :: PPR r => SourceSpan -> Mutability -> Mutability -> TElt (RType r) -> TElt (RType r) -> TCM r Bool
 
 -- | Call Signatures 
 --    
@@ -557,7 +562,7 @@ isSubtypeElt :: PPR r => SourceSpan -> Mutability -> Mutability -> TElt (RType r
 --  ---------------------------------------
 --    { (ts)=>t } <: { (ts')=>t' } 
 --
-isSubtypeElt l _ _ (CallSig t1) (CallSig t2)
+subElt l _ _ (CallSig t1) (CallSig t2)
   = isSubtype l t1 t2
 
 -- | Field signatures
@@ -569,22 +574,26 @@ isSubtypeElt l _ _ (CallSig t1) (CallSig t2)
 -- NO :   { mutable f: PosInt  } <: { mutable f: int }
 --
 -- NO :   { readonly f: PosInt  } <: { readonly f: int }
-
-isSubtypeElt l μ1 μ2 f1@(FieldSig _ _ μf1 τ1 t1) f2@(FieldSig _ _ μf2 τ2 t2)
+--
+subElt l μ1 μ2 f1@(FieldSig _ _ μf1 τ1 t1) f2@(FieldSig _ _ μf2 τ2 t2)
   = do  let m1 = combMut μ1 μf1
         let m2 = combMut μ2 μf2
         z <- isSubtype l (ofType m1) (ofType m2)
         if z then 
           if isImmutable m2 then
+            -- 
             --  t<:t'  τ'<:τ
             -- ------------------------------------------
             --  { immut f[τ]: t } <: { immut f[τ']: t' }
+            --
             and <$> sequence [ isSubtypeOpt l τ2 τ1, isSubtype l t1 t2 ]
           else 
-            --  μ,μ' =/= Mutable
+            --  
+            --  μ,μ' =/= Immutable
             --  t<:t'  t'<:t  τ<:τ'  τ'<:τ
             -- ----------------------------------
             --  { μ f[τ]: t } <: { μ' f[τ']: t' }
+            --
             and <$> sequence [ isSubtypeOpt l τ1 τ2, isSubtype l t1 t2,
                                isSubtypeOpt l τ2 τ1, isSubtype l t2 t1 ]
         else
@@ -595,7 +604,7 @@ isSubtypeElt l μ1 μ2 f1@(FieldSig _ _ μf1 τ1 t1) f2@(FieldSig _ _ μf2 τ2 t
 --
 -- { f: (ts)=>() } <: { f: (ts')=>() } 
 --
-isSubtypeElt l _ _ (ConsSig t1) (ConsSig t2)
+subElt l _ _ (ConsSig t1) (ConsSig t2)
   = isSubtype l t1 t2  
 
 -- | Index signatures
@@ -604,12 +613,12 @@ isSubtypeElt l _ _ (ConsSig t1) (ConsSig t2)
 --  -----------------------------------
 --    { [x:τ]: t } <: { [x:τ']: t' }
 --
-isSubtypeElt l _ _ (IndexSig _ b1 t1) (IndexSig _ b2 t2)
+subElt l _ _ (IndexSig _ b1 t1) (IndexSig _ b2 t2)
   | b1 == b2 
   = isSubtype l t1 t2
 
 -- | otherwise fail
-isSubtypeElt _ _ _ _ _ = return False
+subElt _ _ _ _ _ = return False
 
 
 isSubtypeOpt l (Just t1) (Just t2) = isSubtype l t2 t1
@@ -623,18 +632,22 @@ instance PP a => PP (S.HashSet a) where
 
 
 -- | `convertFun`
---
--- FIXME: add arg length check
---
 --------------------------------------------------------------------------------
 convertFun :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 --------------------------------------------------------------------------------
-convertFun l t1@(TFun b1s o1 _) t2@(TFun b2s o2 _) = do
-    cs <- zipWithM (convert l) (b_type <$> b2s) (b_type <$> b1s)
-    co <- convert l o1 o2
-    if      all noCast cs && noCast co then return $ CNo
-    else if all dnCast cs && upCast co then return $ CUp t1 t2
-    else tcError $ errorFuncSubtype l t1 t2
+convertFun l t1@(TFun b1s o1 _) t2@(TFun b2s o2 _) =
+    if length b1s /= length b2s then 
+      do  cs <- zipWithM (convert l) (b_type <$> b2s) (b_type <$> b1s)
+          co <- convert l o1 o2
+          if all noCast cs && noCast co then 
+            return $ CNo
+          else if all dnCast cs && upCast co then 
+            return $ CUp t1 t2
+          else 
+            tcError $ errorFuncSubtype l t1 t2
+    else 
+      tcError $ errorFuncSubtype l t1 t2
+
 
 convertFun _ _ _ = error "convertFun: no other cases supported"
 
@@ -646,8 +659,8 @@ convertSimple :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
 convertSimple l t1 t2
   | t1 == t2  = return CNo
   -- TOGGLE dead-code
-  | otherwise = return $ CDead t2
- --  | otherwise     = tcError  $ errorSimpleSubtype l t1 t2
+--   | otherwise = return $ CDead t2
+  | otherwise     = tcError  $ errorSimpleSubtype l t1 t2
 
 
 -- | `convertUnion`
@@ -693,17 +706,21 @@ getPropM _ l s t = do
 --------------------------------------------------------------------------------
 getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
 --------------------------------------------------------------------------------
-getSuperM l (TApp (TRef (i, s)) ts _) = fromTdef =<< findSymOrDieM i
-  where fromTdef (TD _ _ vs (Just (p,ps)) _) = do
-          return  $ apply (fromList $ zip vs ts) 
-                  $ TApp (TRef (F.symbol p,s)) ps fTop
-        fromTdef (TD _ _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
-getSuperM l _  = tcError $ errorSuper (srcPos l) 
+getSuperM l (TApp (TRef i s) ts _) = 
+    fromTdef =<< findSymOrDieM i
+  where 
+    fromTdef (TD _ _ vs (Just (p,ps)) _) = return  
+                                         $ apply (fromList $ zip vs ts) 
+                                         $ TApp (TRef (F.symbol p) s) ps fTop
+    fromTdef (TD _ _ _ Nothing _)        = tcError 
+                                         $ errorSuper (srcPos l) 
+getSuperM l _                            = tcError 
+                                         $ errorSuper (srcPos l) 
 
 --------------------------------------------------------------------------------
 getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (TDef (RType r))
 --------------------------------------------------------------------------------
-getSuperDefM l (TApp (TRef (i,_)) ts _) = fromTdef =<< findSymOrDieM i
+getSuperDefM l (TApp (TRef i _) ts _) = fromTdef =<< findSymOrDieM i
   where 
     fromTdef (TD _ _ vs (Just (p,ps)) _) = 
       do TD c n ws pp ee <- findSymOrDieM p

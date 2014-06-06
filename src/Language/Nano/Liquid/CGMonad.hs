@@ -41,7 +41,7 @@ module Language.Nano.Liquid.CGMonad (
   , findSymM, findSymOrDieM
 
   -- * Add Subtyping Constraints
-  , subType, wellFormed
+  , subType, wellFormed, safeExtends
   
   -- * Add Type Annotations
   , addAnnot
@@ -480,6 +480,8 @@ freshTyObj :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
 freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g 
 
+
+
 ---------------------------------------------------------------------------------------
 -- | Adding Subtyping Constraints
 ---------------------------------------------------------------------------------------
@@ -496,6 +498,16 @@ subType l g t1 t2 =
     rNms t  = (\n -> (n, n `E.envFindTy` renv g)) <$> names t
     names   = foldReft rr []
     rr r xs = F.syms r ++ xs
+
+
+safeExtends sub δ (TD _ c _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
+  where
+    (t1s, t2s) = unzip [ (t1,t2) | pe <- flatten δ (findSymOrDie p δ, ts)
+                                 , ee <- undefined
+                                 , sameBinder pe ee 
+                                 , let t1 = eltType ee
+                                 , let t2 = eltType pe ]
+
 
 
 --------------------------------------------------------------------------------
@@ -638,13 +650,13 @@ splitC (Sub g i t1@(TApp (TRef x1 s1) t1s _) t2@(TApp (TRef x2 i2) t2s _))
         return $ cs ++ cs' 
   -- FIXME: Add case where i1 <: i2, this extends the above case.
   | otherwise 
-  = do  cs               <- bsplitC g i t1 t2
-        δ                <- getDef
-        let TCons e1s _ _ = flattenType δ t1
-        let TCons e2s _ _ = flattenType δ t2
-        let (e1s', e2s')  = unzip [ (e1,e2) | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ]
-        cs'              <- splitE g i e1s' e2s' 
-        return            $ cs ++ cs'
+  = do  cs                <- bsplitC g i t1 t2
+        δ                 <- getDef
+        let TCons e1s μ1 _ = flattenType δ t1
+        let TCons e2s μ2 _ = flattenType δ t2
+        let (e1s', e2s')   = unzip [ (e1,e2) | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ]
+        cs'               <- splitEs g i μ1 μ2 e1s' e2s' 
+        return             $ cs ++ cs'
 
 -- FIXME: Add constraint for null
 splitC (Sub _ _ (TApp (TRef _ _) _ _) (TApp TNull _ _)) 
@@ -681,11 +693,11 @@ splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
 -- FIXME: * Variance
 --        * Index signatures
 --
-splitC (Sub g i t1@(TCons e1s _ _ ) t2@(TCons e2s _ _ ))
+splitC (Sub g i t1@(TCons e1s μ1 _ ) t2@(TCons e2s μ2 _ ))
   -- LHS and RHS are object literal types
   --  | all (not . isIndSig) [t1,t2]  
   = do cs    <- bsplitC g i t1 t2
-       cs'   <- splitE g i e1s e2s
+       cs'   <- splitEs g i μ1 μ2 e1s e2s
        return $ cs ++ cs'
 
 --   -- LHS and RHS are index signatures
@@ -717,18 +729,22 @@ splitC x
 
 
 ---------------------------------------------------------------------------------------
-splitE :: CGEnv -> Cinfo -> [TElt RefType] -> [TElt RefType] -> CGM [FixSubC]
+-- splitEs :: CGEnv -> Cinfo -> [TElt RefType] -> [TElt RefType] -> CGM [FixSubC]
 ---------------------------------------------------------------------------------------
-splitE g i e1s e2s
-          | length t1s == length t2s 
-          = concatMapM splitC $ zipWith (Sub g i) t1s t2s
-          | otherwise
-          = cgError l $ bugMalignedFields l e1s e2s 
+splitEs g i μ1 μ2 e1s e2s
+  | length t1s == length t2s 
+  = concatMapM splitC $ zipWith (Sub g i) t1s t2s
+  | otherwise
+  = cgError l $ bugMalignedFields l e1s e2s 
   where
     l     = srcPos i
     t1s   = f_type <$> L.sortBy (compare `on` F.symbol) (filter flt e1s)
     t2s   = f_type <$> L.sortBy (compare `on` F.symbol) (filter flt e2s)
     flt x = nonStaticElt x && nonConstrElt x
+
+
+-- splitE g i μ1 μ2 e1 e2 
+
 
 
 ---------------------------------------------------------------------------------------

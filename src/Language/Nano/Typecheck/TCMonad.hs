@@ -82,6 +82,7 @@ import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Errors
 import           Data.Monoid                  
@@ -380,9 +381,12 @@ unifyTypeM l t t' = unifyTypesM l (ppshow "") [t] [t']
 castM :: (PPR r) => AnnSSA r -> IContext -> Expression (AnnSSA r) 
   -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-castM l ξ e t1 t2 = convert (ann l) t1 t2 >>= patch
-  where patch CNo = return e
-        patch c   = addCast ξ e c
+castM l ξ e t1 t2 
+  = do  δ <- getDef 
+        case convert (ann l) δ t1 t2 of
+          Left  e   -> tcError e
+          Right CNo -> return e
+          Right c   -> addCast ξ e c
 
 
 -- | Monad versions of TDefEnv operations
@@ -407,272 +411,21 @@ runMaybeM a = runFailM a >>= \case
                 Left _   -> return $ Nothing
 
 
-isSubtype l t1 t2 = runFailM (subtypeM l t1 t2) >>= \case
-                        Right _ -> return True
-                        Left  _ -> return False
-
 -- | subTypeM will throw error if subtyping fails
 --------------------------------------------------------------------------------
 subtypeM :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
-subtypeM l t1 t2 = convert l t1 t2 >>= \case
-  CNo       -> return ()
-  (CUp _ _) -> return ()
-  _         -> tcError $ errorStrictSubtype l -- No casts allowed
+subtypeM l t1 t2 
+  = do  δ <- getDef 
+        case convert l δ t1 t2 of
+          Left e          -> tcError e
+          Right CNo       -> return  ()
+          Right (CUp _ _) -> return  ()
 
 
--- | @convert@ returns:
--- * An equivalent version of @t1@ that has the same sort as the first input type
--- * An equivalent version of @t2@ that has the same sort as the second input type
--- * A subtyping direction between @t1@ and @t2@
---  
--- Padding the input types gives them the same sort, i.e. makes them compatible. 
---------------------------------------------------------------------------------
-convert :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
---------------------------------------------------------------------------------
+isSubtype' :: (PPR r) => SourceSpan -> TDefEnv (RType r) -> RType r -> RType r -> Bool
+isSubtype' _ _ _ _ = undefined
 
-convert l t1 t2 | on (==) toType t1 t2 = return CNo
-
--- convert _ t1 _  | isUndef t1           = return CNo
-
--- convert _ t1 t2 | isNull t1 &&  
---                   not (isUndef t2)     = return CNo
-
-convert _ t1 t2 | not (isTop t1) && 
-                  isTop t2             = return $ CUp t1 t2
-
-convert l t1 t2 | any isUnion [t1,t2]  = convertUnion l t1 t2
-
-convert l t1 t2 | all isTObj  [t1,t2]  = convertObj l t1 t2
-
-convert l t1 t2 | all isTFun  [t1, t2] = convertFun l t1 t2
-
-convert l t1 t2                        = convertSimple l t1 t2 
-
-
--- | `convertObj`
-
---------------------------------------------------------------------------------
-convertObj :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
---------------------------------------------------------------------------------
-convertObj l t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
-  --
-  --                       μ <: μ'
-  --  ∀i . [comb(μ,μi)]fi:ti <: [comb(μ',μi')]fi:ti'
-  -- ------------------------------------------------
-  --        [μ]{ [μi]fi:ti } <: [μ']{ [μi']fi:ti' }
-  --
-  | s1l == s2l 
-  = isSubtype l (ofType μ1) (ofType μ2) >>= \case
-        True -> deeps l μ1 μ2 cmnBinds >>= \case 
-                    True  -> return  $ CNo
-                    False -> tcError $ errorSimpleSubtype l t1 t2
-        False -> tcError $ errorIncompMutTy l t1 t2      
-  -- 
-  -- NO: { f1:t1,..,fn:tn } <: { f1:t1',..,fn:tn',..,fm:tm' }
-  --
-  | not (S.null df21) 
-  = tcError $ errorMissFlds l t1 t2 df21
-  -- 
-  --  [μ]{ f1:t1,..,fn:tn } <: [μ']{ f1:t1',..,fn:tn' }
-  -- ------------------------------------------------------------
-  --  [μ]{ f1:t1,..,fn:tn,..,fm:tm } <: [μ']{ f1:t1',..,fn:tn' }
-  --
-  | otherwise
-  = do _      <- convertObj l (TCons e1s' μ1 r1) (TCons e2s μ2 r2)
-       return  $ CUp t1 t2
-  where
-    -- All the bound elements that correspond to each binder 
-    -- Map : symbol -> [ elements ]
-    (m1,m2)    = mapPair toMap (e1s, e2s)
-    toMap      = foldr mi M.empty . filter (\x -> nonStaticElt x && nonConstrElt x)
-    mi e       = M.insertWith (++) (F.symbol e) [e]
-
-    -- Binders for each element
-    (s1s,s2s)  = mapPair (S.fromList . M.keys) (m1,m2)
-    (s1l,s2l)  = mapPair (sort       . M.keys) (m1,m2)
-    
-    cs         = S.intersection s1s s2s
-
-    -- Join elements on common binder
-    cmnBinds   = idxMap (\s -> (f s m1, f s m2)) (S.toList cs) where f s = fromJust . M.lookup s
-    idxMap f   = map $ \x -> (x, f x)
-
-    -- Difference and intersection of keys
-    df21       = s2s `S.difference` s1s
-    in12       = s1s `S.intersection` s2s
-
-    e1s'       = concat [ fromJust $ M.lookup s m1 | s <- S.toList in12 ]
-
-    group1     = [ (F.symbol $ safeHead "convertObj-1" g1s, g1s) | g1s <- groupBy sameBinder e1s ]
-    group2     = [ (F.symbol $ safeHead "convertObj-2" g2s, g2s) | g2s <- groupBy sameBinder e2s ]
-
-
--- FIXME !!!!!!!!
--- Do nominal subtyping and fall back to structural if the former fails.
-convertObj l t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2)
-  | (x1,s1) == (x2,s2)
-  = do -- FIXME: Using covariance here !!!
-       bs <- zipWithM (isSubtype l) t1s t2s
-       if and bs then return  $ CNo
-                 else tcError $ errorSimpleSubtype l t1 t2
-  | otherwise
-  = do δ  <- getDef 
-       case weaken δ (findSymOrDie x1 δ,t1s) x2 of
-         Just (_, t1s') -> return $ CUp (TApp (TRef x2 s1) t1s' r1) t2
-         Nothing        -> convertObj l (flattenType δ t1) (flattenType δ t2)
-                          
-convertObj l t1@(TApp (TRef _ _) _ _) t2 
-  = do δ <- getDef 
-       convertObj l (flattenType δ t1) t2
-
-convertObj l t1 t2@(TApp (TRef _ _) _ _)
-  = do δ <- getDef
-       convertObj l t1 (flattenType δ t2) 
-
-convertObj _ _ _ =  error "BUG: Case not supported in convertObj"
-
-
--- | Deep subtyping for object members
-
-deeps l μ1 μ2 ss = and <$> mapM (deep l μ1 μ2) ss
-
--- | Treat the parts of `e1s` and `e2s` that correspond to the same binder 
---   as intersection types.
---
--- |   exists i s.t. si <: t
--- | ------------------------
--- |    s1 /\ ... /\ sn <: t
---
-deep l μ1 μ2 (s, (e1s, e2s)) = or <$> mapM (\e1 -> deep1 l μ1 μ2 e1 e2s) e1s
-
---
--- |  s1 <: t1  ...  s <: tn
--- | ------------------------
--- |   s <: t1 /\ ... /\ tn
---
-deep1 l μ1 μ2 e es = and <$> mapM (subElt l μ1 μ2 e) es
-
-
-subElt :: PPR r => SourceSpan -> Mutability -> Mutability -> TElt (RType r) -> TElt (RType r) -> TCM r Bool
-
--- | Call Signatures 
---    
---    ts'<:ts  t<:t' 
---  ---------------------------------------
---    { (ts)=>t } <: { (ts')=>t' } 
---
-subElt l _ _ (CallSig t1) (CallSig t2)
-  = isSubtype l t1 t2
-
--- | Field signatures
---
---  { μ f[τ]: t } <: { μ' f[τ']: t' }
---
--- NO :   { mutable f: PosInt  } <: { immutable f: int }
---
--- NO :   { mutable f: PosInt  } <: { mutable f: int }
---
--- NO :   { readonly f: PosInt  } <: { readonly f: int }
---
-subElt l μ1 μ2 f1@(FieldSig _ _ μf1 τ1 t1) f2@(FieldSig _ _ μf2 τ2 t2)
-  = do  let m1 = combMut μ1 μf1
-        let m2 = combMut μ2 μf2
-        z <- isSubtype l (ofType m1) (ofType m2)
-        if z then 
-          if isImmutable m2 then
-            -- 
-            --  t<:t'  τ'<:τ
-            -- ------------------------------------------
-            --  { immut f[τ]: t } <: { immut f[τ']: t' }
-            --
-            and <$> sequence [ isSubtypeOpt l τ2 τ1, isSubtype l t1 t2 ]
-          else 
-            --  
-            --  μ,μ' =/= Immutable
-            --  t<:t'  t'<:t  τ<:τ'  τ'<:τ
-            -- ----------------------------------
-            --  { μ f[τ]: t } <: { μ' f[τ']: t' }
-            --
-            and <$> sequence [ isSubtypeOpt l τ1 τ2, isSubtype l t1 t2,
-                               isSubtypeOpt l τ2 τ1, isSubtype l t2 t1 ]
-        else
-          tcError $ errorIncompMutElt l f1 f2
-      
-
--- | Constructor signatures
---
--- { f: (ts)=>() } <: { f: (ts')=>() } 
---
-subElt l _ _ (ConsSig t1) (ConsSig t2)
-  = isSubtype l t1 t2  
-
--- | Index signatures
---
---    τ = τ'  t<:t'  t'<:t
---  -----------------------------------
---    { [x:τ]: t } <: { [x:τ']: t' }
---
-subElt l _ _ (IndexSig _ b1 t1) (IndexSig _ b2 t2)
-  | b1 == b2 
-  = isSubtype l t1 t2
-
--- | otherwise fail
-subElt _ _ _ _ _ = return False
-
-
-isSubtypeOpt l (Just t1) (Just t2) = isSubtype l t2 t1
-isSubtypeOpt l Nothing   (Just t2) = isSubtype l tTop t2
-isSubtypeOpt l (Just t1) Nothing   = isSubtype l t1 tTop
-isSubtypeOpt _ _         _         = return True
-
-
-instance PP a => PP (S.HashSet a) where
-  pp = pp . S.toList 
-
-
--- | `convertFun`
---------------------------------------------------------------------------------
-convertFun :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
---------------------------------------------------------------------------------
-convertFun l t1@(TFun b1s o1 _) t2@(TFun b2s o2 _) =
-    if length b1s /= length b2s then 
-      do  cs <- zipWithM (convert l) (b_type <$> b2s) (b_type <$> b1s)
-          co <- convert l o1 o2
-          if all noCast cs && noCast co then 
-            return $ CNo
-          else if all dnCast cs && upCast co then 
-            return $ CUp t1 t2
-          else 
-            tcError $ errorFuncSubtype l t1 t2
-    else 
-      tcError $ errorFuncSubtype l t1 t2
-
-
-convertFun _ _ _ = error "convertFun: no other cases supported"
-
-
--- | `convertSimple`
---------------------------------------------------------------------------------
-convertSimple :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
---------------------------------------------------------------------------------
-convertSimple l t1 t2
-  | t1 == t2  = return CNo
-  -- TOGGLE dead-code
---   | otherwise = return $ CDead t2
-  | otherwise     = tcError  $ errorSimpleSubtype l t1 t2
-
-
--- | `convertUnion`
---------------------------------------------------------------------------------
-convertUnion :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
---------------------------------------------------------------------------------
-convertUnion l t1 t2 = parts   $ unionParts t1 t2
-  where 
-    parts (_,[],[])  = return  $ CNo
-    parts (_,[],_ )  = return  $ CUp t1 t2
-    parts (_,_ ,[])  = return  $ CDn t1 t2
-    parts (_, _ ,_)  = tcError $ errorUnionSubtype l t1 t2
 
 
 addCast     ξ e c = addAnn loc fact >> return (wrapCast loc fact e)

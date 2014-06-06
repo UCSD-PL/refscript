@@ -87,9 +87,10 @@ module Language.Nano.Typecheck.Types (
 
 import           Text.Printf
 import           Data.Hashable
+import qualified Data.HashSet                   as S
 import           Data.Either                    (partitionEithers)
 import           Data.Function                  (on)
-import           Data.Maybe                     (fromMaybe, listToMaybe)
+import           Data.Maybe                     (fromMaybe, listToMaybe, fromJust)
 import           Data.Traversable               hiding (sequence) 
 import           Data.Foldable                  (Foldable()) 
 import           Data.Monoid                    hiding ((<>))            
@@ -1186,4 +1187,6 @@ instance IsLocated (Alias a s t) where
 
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body 
+
+
 

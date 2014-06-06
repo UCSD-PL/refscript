@@ -29,9 +29,9 @@ import           Language.Nano.Types
 import           Language.Nano.Annots
 import           Language.Nano.Env
 import qualified Language.Nano.Misc                 as NM
-import           Language.Nano.Common.Typecheck     (safeExtends)
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse 
+import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Lookup
@@ -137,7 +137,7 @@ tcNano p@(Nano {code = Src fs})
 
 -- FIXME: check for mutability parameter
 checkInterfaces p = 
-  mapM_ (safeExtends isSubtype tcError l (defs p)) is
+    forM_ (concatMap (safeExtends l (defs p)) is) tcError
   where 
     l  = srcPos dummySpan
     is = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
@@ -458,12 +458,12 @@ classFromStmt :: PPR r => Statement (AnnSSA r) -> TCM r (TDef (RType r))
 classFromStmt (ClassStmt l id _ _ cs) =
   do  δ <- getDef
       case findSym sym δ of
-        Just d -> return d   -- if already computed
-        Nothing -> do let elts   = addConstr δ $ classEltType <$> cs
-                      let freshD = TD True (fmap ann id) vs p elts
-                      safeExtends isSubtype tcError (srcPos l) δ freshD
-                      setDef     $ addSym sym freshD δ
-                      return     $ freshD
+        Just d  -> return d   -- if already computed
+        Nothing -> do let elts      = addConstr δ $ classEltType <$> cs
+                      let freshD    = TD True (fmap ann id) vs p elts
+                      mapM_ tcError $ safeExtends (srcPos l) δ freshD
+                      setDef        $ addSym sym freshD δ
+                      return        $ freshD
   where
     sym      = F.symbol id
     (vs, p)  = classAnnot l

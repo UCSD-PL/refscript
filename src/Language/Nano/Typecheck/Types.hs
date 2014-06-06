@@ -32,7 +32,7 @@ module Language.Nano.Typecheck.Types (
   , mkUnion, mkFun, mkAll
 
   -- * Deconstructing Types
-  , bkFun, bkFuns, bkAll, bkAnd, bkUnion, unionParts, unionParts', funTys
+  , bkFun, bkFuns, bkAll, bkAnd, bkUnion, {- unionParts, unionParts',-} funTys
   
   -- Union ops
   , rUnion, rTypeR, setRTypeR
@@ -362,44 +362,42 @@ bkUnion (TApp TUn xs _) = xs
 bkUnion t               = [t]
 
 
+-- 
+-- -- | `unionParts` is a special case of `unionParts'` that uses Equivalent as 
+-- -- the type equivalence relation.
+-- --------------------------------------------------------------------------------
+-- unionParts ::  RType r -> RType r -> ([(RType r, RType r)], [RType r], [RType r])
+-- --------------------------------------------------------------------------------
+-- unionParts = unionParts' (==)
+-- 
 
--- | `unionParts` is a special case of `unionParts'` that uses Equivalent as 
--- the type equivalence relation.
---------------------------------------------------------------------------------
-unionParts ::  RType r -> RType r -> ([(RType r, RType r)], [RType r], [RType r])
---------------------------------------------------------------------------------
-unionParts = unionParts' (==)
-
-
--- General purpose function that pairs up the components of the two union typed
--- inputs @t1@ and @t2@, based on the Equivalence relation @eq@.
--- Top-level refinements are lost here - use `compareUnion` to preserve them.
--- The output consists of 
--- * The paired-up types (common as per @eq@)
--- * The types appearing just in @t1@
--- * The types appearing just in @t2@
---------------------------------------------------------------------------------
-unionParts' :: (RType r -> RType r -> Bool) -> RType r -> RType r 
-          -> ([(RType r, RType r)], [RType r], [RType r])
---------------------------------------------------------------------------------
-unionParts' eq t1 t2 = (common t1s t2s, d1s, d2s)
-  where
-    (t1s, t2s) = sanityCheck $ mapPair bkUnion (t1, t2)
-    (d1s, d2s) = distinct t1s t2s
-    -- Compare the types based on the Equivalence relation and pair them up into
-    -- 1. type structures that are common in both sides, and
-    common xs ys | any null [xs,ys] = []
-    common xs ys | otherwise        = [(x,y) | x <- xs, y <- ys, x `eq` y ]
-    -- 2. type structures that are distinct in the two sides
-    distinct xs [] = ([], xs)
-    distinct [] ys = (ys, [])
-    distinct xs ys = ([x | x <- xs, not $ any (x `eq`) ys ],
-                      [y | y <- ys, not $ any (y `eq`) xs ])
-    sanityCheck ([ ],[ ]) = errorstar "unionParts', called on too small input"
-    sanityCheck ([_],[ ]) = errorstar "unionParts', called on too small input"
-    sanityCheck ([ ],[_]) = errorstar "unionParts', called on too small input"
-    sanityCheck ([_],[_]) = errorstar "unionParts', called on too small input"
-    sanityCheck p         = p
+-- -- General purpose function that pairs up the components of the two union typed
+-- -- inputs @t1@ and @t2@, based on the Equivalence relation @eq@.
+-- -- Top-level refinements are lost here - use `compareUnion` to preserve them.
+-- -- The output consists of 
+-- -- * The paired-up types (common as per @eq@)
+-- -- * The types appearing just in @t1@
+-- -- * The types appearing just in @t2@
+-- --------------------------------------------------------------------------------
+-- unionParts' :: (RType r -> RType r -> Bool) -> RType r -> RType r 
+--           -> ([(RType r, RType r)], [RType r], [RType r])
+-- --------------------------------------------------------------------------------
+-- unionParts' eq t1 t2 = (common t1s t2s, d1s, d2s)
+--   where
+--     (t1s, t2s) = sanityCheck $ mapPair bkUnion (t1, t2)
+--     (d1s, d2s) = distinct t1s t2s
+--     -- Compare the types based on the Equivalence relation and pair them up into
+--     -- 1. type structures that are common in both sides, and
+--     common xs ys | any null [xs,ys] = []
+--     common xs ys | otherwise        = [(x,y) | x <- xs, y <- ys, x `eq` y ]
+--     -- 2. type structures that are distinct in the two sides
+--     distinct xs ys = ([x | x <- xs, not $ any (x `eq`) ys ],
+--                       [y | y <- ys, not $ any (y `eq`) xs ])
+--     sanityCheck ([ ],[ ]) = errorstar "unionParts', called on too small input"
+--     sanityCheck ([_],[ ]) = errorstar "unionParts', called on too small input"
+--     sanityCheck ([ ],[_]) = errorstar "unionParts', called on too small input"
+--     sanityCheck ([_],[_]) = errorstar "unionParts', called on too small input"
+--     sanityCheck p         = p
 
 
 -- | Strengthen the top-level refinement

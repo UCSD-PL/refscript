@@ -118,51 +118,43 @@ convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
   = case convertObj l δ (TCons e1s μ1 r1) (TCons e2s μ2 r2) of
       Left l  -> Left  $ l
       Right _ -> Right $ CUp t1 t2
-
     where
        -- All the bound elements that correspond to each binder 
        -- Map : symbol -> [ elements ]
        (m1,m2)    = mapPair toMap (e1s, e2s)
        toMap      = foldr mi M.empty . filter (\x -> nonStaticElt x && nonConstrElt x)
        mi e       = M.insertWith (++) (F.symbol e) [e]
-
        -- Binders for each element
        (s1s,s2s)  = mapPair (S.fromList . M.keys) (m1,m2)
        (s1l,s2l)  = mapPair (sort     . M.keys) (m1,m2)
-       
        cs         = S.toList $ S.intersection s1s s2s
-
        -- Join elements on common binder
-       -- cmnBinds   = idxMap (\s -> (lkp s m1, lkp s m2)) cs where lkp s = fromJust . M.lookup s
-       -- idxMap f   = map $ \x -> (x, f x)
-       
        b1s        = map (`lkp` m1) cs 
        b2s        = map (`lkp` m2) cs 
-
        lkp s      = fromJust . M.lookup s
-
        -- Difference and intersection of keys
        df21       = s2s `S.difference` s1s
        in12       = s1s `S.intersection` s2s
-
        e1s       = concat [ fromJust $ M.lookup s m1 | s <- S.toList in12 ]
 
-       group1     = [ (F.symbol $ safeHead "convertObj-1" g1s, g1s) | g1s <- groupBy sameBinder e1s ]
-       group2     = [ (F.symbol $ safeHead "convertObj-2" g2s, g2s) | g2s <- groupBy sameBinder e2s ]
-
-
--- FIXME !!!!!!!!
--- Do nominal subtyping and fall back to structural if the former fails.
 convertObj l δ t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2)
   | (x1,s1) == (x2,s2)
-  = do -- FIXME: Using covariance here !!!
-       let bs = zipWith (isSubtype l δ) t1s t2s
-       if and bs then Right $ CNo
-                 else Left  $ errorSimpleSubtype l t1 t2
+    -- FIXME: Using covariance here !!!
+  = if all (uncurry $ isSubtype l δ) $ zip t1s t2s 
+      then Right $ CNo
+      else Left  $ errorSimpleSubtype l t1 t2
   | otherwise
+
+    -- Check type hierarchy
   = case weaken δ (findSymOrDie x1 δ,t1s) x2 of
-      Just (_, t1s) -> Right $ CUp (TApp (TRef x2 s1) t1s r1) t2
-      Nothing        -> convertObj l δ (flattenType δ t1) (flattenType δ t2)
+      -- Adjusting the child class to the parent
+      Just (_, t1s) -> 
+          if all (uncurry $ isSubtype l δ) $ zip t1s t2s 
+            then Right $ CUp (TApp (TRef x2 s1) t1s r1) t2
+            else Left  $ errorSimpleSubtype l t1 t2
+      
+      -- Structural subtyping
+      Nothing       -> convertObj l δ (flattenType δ t1) (flattenType δ t2)
                           
 convertObj l δ t1@(TApp (TRef _ _) _ _) t2 
   = convertObj l δ (flattenType δ t1) t2
@@ -209,16 +201,12 @@ subElt l δ _ _ (CallSig t1) (CallSig t2)
 --
 --  { μ f[τ]: t } <: { μ f[τ]: t }
 --
--- NO :   { mutable f: PosInt  } <: { immutable f: int }
---
--- NO :   { mutable f: PosInt  } <: { mutable f: int }
---
--- NO :   { readonly f: PosInt  } <: { readonly f: int }
+-- NO :   { mutable  f: PosInt  } <: { immutable f: int }
+-- NO :   { mutable  f: PosInt  } <: { mutable   f: int }
+-- NO :   { readonly f: PosInt  } <: { readonly  f: int }
 --
 subElt l δ μ1 μ2 f1@(FieldSig _ _ μf1 τ1 t1) f2@(FieldSig _ _ μf2 τ2 t2)
-  = let m1 = combMut μ1 μf1 in
-    let m2 = combMut μ2 μf2 in
-    if isSubtype l δ (ofType m1) (ofType m2) then 
+  | isSubtype l δ (ofType m1) (ofType m2) =
       if isImmutable m2 then
         -- 
         --  t<:t  τ<:τ
@@ -235,9 +223,11 @@ subElt l δ μ1 μ2 f1@(FieldSig _ _ μf1 τ1 t1) f2@(FieldSig _ _ μf2 τ2 t2)
         --
         and [ isSubtypeOpt l δ τ1 τ2, isSubtype l δ t1 t2,
               isSubtypeOpt l δ τ2 τ1, isSubtype l δ t2 t1 ]
-    else
-      False 
-      -- Left $ errorIncompMutElt l f1 f2
+
+  | otherwise = False 
+  where
+    m1 = combMut μ1 μf1
+    m2 = combMut μ2 μf2
   
 
 -- | Constructor signatures
@@ -271,19 +261,28 @@ isSubtypeOpt _ _ _         _         = True
 --------------------------------------------------------------------------------
 convertFun :: PPR r => SourceSpan -> TDR r -> RType r -> RType r -> Either Error (Cast r)
 --------------------------------------------------------------------------------
-convertFun l δ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _) =
-    if length b1s /= length b2s then 
-      do  cs <- zipWithM (convert l δ) (b_type <$> b2s) (b_type <$> b1s)
-          co <- convert l δ o1 o2
-          if all noCast cs && noCast co then 
-            Right $ CNo
-          else if all dnCast cs && upCast co then 
-            Right $ CUp t1 t2
-          else 
-            Left $ errorFuncSubtype l t1 t2
-    else 
-      Left $ errorFuncSubtype l t1 t2
+convertFun l δ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _) 
+  | length b1s /= length b2s 
+  = do  cs <- zipWithM (convert l δ) (b_type <$> b2s) (b_type <$> b1s)
+        co <- convert l δ o1 o2
+        if all noCast cs && noCast co then 
+          Right $ CNo
+        else if all dnCast cs && upCast co then 
+          Right $ CUp t1 t2
+        else 
+          Left $ errorFuncSubtype l t1 t2
+  | otherwise 
+  = Left $ errorFuncSubtype l t1 t2
 
+convertFun l δ t1@(TAnd t1s) t2@(TAnd t2s) = 
+  if and $ isSubtype l δ t1 <$> t2s then Right $ CUp t1 t2
+                                    else Left  $ errorFuncSubtype l t1 t2
+
+convertFun l δ t1@(TAnd t1s) t2 = 
+  let f t1 = isSubtype l δ t1 t2 in 
+  if or $ f <$> t1s then Right $ CUp t1 t2
+                    else Left  $ errorFuncSubtype l t1 t2
+  
 
 convertFun _ _ _ _ = error "convertFun: no other cases supported"
 
@@ -303,12 +302,25 @@ convertSimple l _ t1 t2
 --------------------------------------------------------------------------------
 convertUnion :: PPR  r => SourceSpan -> TDR r -> RType r -> RType r -> Either Error (Cast r)
 --------------------------------------------------------------------------------
-convertUnion l _ t1 t2 = parts   $ unionParts t1 t2
+convertUnion l δ t1 t2 = 
+    case distinct of
+      ([],[])  | length t1s == length t2s -> Right $ CNo
+               | otherwise                -> error "convertUnion - impossible"
+      ([],_ )                             -> Right $ CUp t1 t2
+      (_ ,[])                             -> Right $ CDn t1 t2
+      ( _ ,_)                             -> Left  $ errorUnionSubtype l t1 t2
+  
   where 
-    parts (_,[],[])  = Right $ CNo
-    parts (_,[],_ )  = Right $ CUp t1 t2
-    parts (_,_ ,[])  = Right $ CDn t1 t2
-    parts (_, _ ,_)  = Left  $ errorUnionSubtype l t1 t2
+
+    (t1s, t2s)            = sanityCheck $ mapPair bkUnion (t1, t2)
+    sanityCheck ([ ],[ ]) = errorstar "unionParts', called on too small input"
+    sanityCheck ([_],[ ]) = errorstar "unionParts', called on too small input"
+    sanityCheck ([ ],[_]) = errorstar "unionParts', called on too small input"
+    sanityCheck ([_],[_]) = errorstar "unionParts', called on too small input"
+    sanityCheck p         = p
+    distinct              = ([x | x <- t1s, not $ any (\y -> isSubtype l δ x y) t2s ],
+                             [y | y <- t2s, not $ any (\x -> isSubtype l δ x y) t1s ])
+
 
 
 --------------------------------------------------------------------------------

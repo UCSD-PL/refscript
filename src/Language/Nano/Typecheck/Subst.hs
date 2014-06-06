@@ -231,6 +231,18 @@ flattenType δ t@(TApp (TRef x False) ts r) = TCons es mut r
 
 flattenType _ t = t
 
+-- | `isAncestor s1 s2` returns True if s1 is an ancestor of s2
+---------------------------------------------------------------------------
+isAncestor :: TDefEnv t -> F.Symbol -> F.Symbol -> Bool
+---------------------------------------------------------------------------
+isAncestor δ s1 s2 
+  | s1 == s2 = True
+  | otherwise 
+  = case t_proto $ findSymOrDie s2 δ of 
+      Just (p,_) -> isAncestor δ s1 (F.symbol p)
+      Nothing    -> False
+  
+
 
 -- | Weaken a named type, by moving upwards in the class hierarchy. This
 -- function does the necessary type argument substitutions. 

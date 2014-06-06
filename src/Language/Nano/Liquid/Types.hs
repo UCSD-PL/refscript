@@ -438,6 +438,8 @@ zipType δ f g (TCons e1s m1 r1) (TCons e2s _ r2)
     snd = [ e          | e <- e2s , not (F.symbol e `elem` ks1) ]
     ks1 = [ F.symbol e | e <- e1s ]
 
+zipType δ f g (TAnd _) (TAnd _) = error "FIXME: zipType:TAnd"
+
 zipType _ _ _ t1 t2 = 
   errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
 

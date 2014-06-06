@@ -34,7 +34,6 @@ import           Language.Nano.Env                  (envUnion)
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Subst
 import qualified Language.Nano.Annots               as A
-import           Language.Nano.Common.Typecheck     (safeExtends {- , getConstr -} )
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
@@ -102,13 +101,12 @@ consNano pgm@(Nano {code = Src fs})
         return ()
 
 checkInterfaces p g = 
-  mapM_ (safeExtends sub (cgError l) l (defs p)) is
-  where 
-    l  = srcPos dummySpan   -- FIXME  
-    is = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
-    sub l t1 t2 = do  δ <- getDef
-                      uncurry (subType l g) $ intersect δ t1 t2
-                      return True
+     mapM_ (safeExtends (sub l) δ) is
+   where 
+     δ           = defs p
+     l           = srcPos dummySpan   -- FIXME  
+     is          = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
+     sub l t1 t2 = uncurry (subType l g) $ intersect δ t1 t2
 
 --------------------------------------------------------------------------------
 initCGEnv :: NanoRefType -> CGM CGEnv
@@ -307,19 +305,20 @@ consVarDecl g (VarDecl l x Nothing)
       Nothing -> cgError l $ errorVarDeclAnnot (srcPos l) x
 
 
+   
+
 ------------------------------------------------------------------------------------
 consClassElts :: SourceSpan -> CGEnv -> TDef RefType -> [ClassElt AnnTypeR] -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElts l g d ce 
-  = do  δ <- getDef
-        safeExtends sub (cgError l) l δ d
-        mapM_ (consClassElt g) ce
-    where
-        -- There are no casts here, so we need to align the 
-        -- types before doing subtyping on them.
-        sub l t1 t2 = do  δ <- getDef
-                          uncurry (subType l g) $ intersect δ t1 t2
-                          return True
+   = do  δ <- getDef
+         safeExtends (sub δ l) δ d 
+         mapM_ (consClassElt g) ce
+     where
+         -- FIXME: if zipType changes, we might have to change this as well
+         -- There are no casts here, so we need to align the 
+         -- types before doing subtyping on them.
+         sub δ l t1 t2 = uncurry (subType l g) $ intersect δ t1 t2
 
 
 ------------------------------------------------------------------------------------

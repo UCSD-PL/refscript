@@ -402,11 +402,9 @@ zipType δ f g (TApp TUn t1s r1) (TApp TUn t2s r2)
                                        , not $ exists ((==) t) t1s ]
 zipType δ f g t1 t2@(TApp TUn _ _ ) 
   = zipType δ f g (TApp TUn [t1] fTop) t2
-  -- = zipType δ f g (TApp TUn [t1] $ rTypeReft t1) t2
 
 zipType δ f g (TApp TUn t1s r1) t2 
   = zipType δ f g ((fromJust $ L.find ((==) t2) t1s) `strengthen` r1) t2
-                                       
 
 zipType δ f g t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2) 
   | (x1,s1) == (x2,s2)

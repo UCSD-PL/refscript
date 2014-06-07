@@ -508,6 +508,7 @@ safeExtends sub δ (TD _ c _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
                                  , let t1 = eltType ee
                                  , let t2 = eltType pe ]
 
+safeExtends _ _ (TD _ _ _ Nothing _) = return ()
 
 
 --------------------------------------------------------------------------------
@@ -724,8 +725,8 @@ splitC (Sub g i t1@(TCons e1s μ1 _ ) t2@(TCons e2s μ2 _ ))
     ts es = [ eltType e | e <- es, nonStaticElt e ]
     ti es = safeHead "convertCons" [ t | IndexSig _ _ t <- es ]
   
-splitC x 
-  = cgError l $ bugBadSubtypes l x where l = srcPos x
+splitC x@(Sub g i t1 t2)
+  = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos x
 
 
 ---------------------------------------------------------------------------------------

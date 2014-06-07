@@ -81,6 +81,7 @@ import           Language.Nano.Env
 import           Language.Nano.Misc
 import           Language.Fixpoint.Misc
 import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Sub
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
   
@@ -393,25 +394,40 @@ zipType :: TDefEnv RefType     ->
 --                                | t1|_t1' \/ .. tm|_tm'              
 --                                |         , if n <= m, ti ~ ti'
 --
-zipType δ f g (TApp TUn t1s r1) (TApp TUn t2s r2) 
-  = TApp TUn (cmn ++ snd) $ f r1 r2
+zipType δ f g (TApp TUn t1s r1) (TApp TUn t2s r2) =
+    TApp TUn τs  $ f r1 r2
   where
-    cmn        = [ zipType δ f g τ1 τ2 | τ2 <- t2s
-                                       , τ1 <- maybeToList $ L.find ((==) τ2) t1s ]
-    snd        = fmap g <$> [ t        | t <- t2s
-                                       , not $ exists ((==) t) t1s ]
+    τs           = [ zipType δ f g (rf τ2) τ2 | τ2 <- t2s ]
+    rf τ         = findDef (g <$> τ) (`sub` τ) t1s
+    -- Invariant: this should return at most one type
+    findDef a f  = fromMaybe a . L.find f
+    sub          = isSubtype δ
+
 zipType δ f g t1 t2@(TApp TUn _ _ ) 
   = zipType δ f g (TApp TUn [t1] fTop) t2
 
 zipType δ f g (TApp TUn t1s r1) t2 
-  = zipType δ f g ((fromJust $ L.find ((==) t2) t1s) `strengthen` r1) t2
+  = zipType δ f g ((fromJust $ L.find (`sub` t2) t1s) `strengthen` r1) t2
+  where
+    sub = isSubtype δ
 
 zipType δ f g t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2) 
   | (x1,s1) == (x2,s2)
   = TApp (TRef x1 s1) (zipWith (zipType δ f g) t1s t2s) $ f r1 r2
   | otherwise 
-  = on (zipType δ f g) (flattenType δ) t1 t2 
+  = case weaken δ (findSymOrDie x1 δ, t1s) x2 of
+      -- Try to move along the class hierarchy
+      Just (_, t1s') -> zipType δ f g (TApp (TRef x2 s1) t1s' r1) t2 
+      -- Unfold structures
+      Nothing        -> zipType δ f g (flattenType δ t1) (flattenType δ t2)
+
+zipType δ f g t1@(TApp (TRef _ _) _ _) t2
+  = zipType δ f g (flattenType δ t1) t2
+
+zipType δ f g t1 t2@(TApp (TRef _ _) _ _)
+  = zipType δ f g t1 (flattenType δ t2)
  
+
 zipType _ f _ (TApp c [] r) (TApp c' [] r') 
   | c == c' = TApp c [] $ f r r'
 
@@ -427,16 +443,15 @@ zipType δ f g (TFun x1s t1 r1) (TFun x2s t2 r2)
     xs = zipWith (zipBind δ f g) x1s x2s
     y  = zipType δ f g t1 t2
 
--- FIXME: what mutability should be preserved?
 zipType δ f g (TCons e1s m1 r1) (TCons e2s _ r2) 
   = TCons (cmn ++ snd) m1 (f r1 r2)
   where 
-    -- FIXME: mutabilities? m1 `mconcat` m2
     cmn = [ zipElts (zipType δ f g) e1 e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ] 
     snd = [ e          | e <- e2s , not (F.symbol e `elem` ks1) ]
     ks1 = [ F.symbol e | e <- e1s ]
 
-zipType δ f g (TAnd _) (TAnd _) = error "FIXME: zipType:TAnd"
+zipType δ f g _ (TAnd _) = error "FIXME: zipType:TAnd"
+zipType δ f g (TAnd _) _ = error "FIXME: zipType:TAnd"
 
 zipType _ _ _ t1 t2 = 
   errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)

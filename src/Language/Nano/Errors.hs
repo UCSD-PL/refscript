@@ -56,7 +56,7 @@ instance PP Error where
 bug' l s                  = err   l $ "BUG: " ++ s 
 bug l s                   = mkErr l $ "BUG: " ++ s 
 bugBadPhi l t1s t2s       = mkErr l $ printf "Unbalanced Phi at %s \n %s \n %s" (ppshow l) (ppshow t1s) (ppshow t2s)
-bugBadSubtypes l x        = mkErr l $ printf "Unexpected Subtyping Constraint \n %s" (ppshow x)
+bugBadSubtypes l t1 t2    = mkErr l $ printf "Unexpected Subtyping Constraint\n%s <: %s" (ppshow t1) (ppshow t2)
 bugMalignedFields l s s'  = mkErr l $ printf "[%s] \n CGMonad: fields not aligned: '%s' and '%s'" (ppshow l) (ppshow s) (ppshow s')
 bugMalignedFields' l t t' = mkErr l $ render $ text "Misaligned Fields:"
                                              $+$ text "  t1 =" <+> pp t

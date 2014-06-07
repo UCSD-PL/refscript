@@ -50,9 +50,11 @@ instance PP a => PP (S.HashSet a) where
   pp = pp . S.toList 
 
 
-isSubtype :: (PPR r) => SourceSpan -> TDR r -> RType r -> RType r -> Bool
-isSubtype l δ t1 t2 =
-  case convert l δ t1 t2 of
+--------------------------------------------------------------------------------
+isSubtype :: (PPR r) => TDR r -> RType r -> RType r -> Bool
+--------------------------------------------------------------------------------
+isSubtype δ t1 t2 =
+  case convert (srcPos dummySpan) δ t1 t2 of
     Right CNo       -> True
     Right (CUp _ _) -> True
     _               -> False
@@ -89,19 +91,19 @@ convert l δ t1 t2                        = convertSimple l δ t1 t2
 convertObj :: (PPR r) => SourceSpan -> TDR r -> RType r -> RType r -> Either Error (Cast r)
 --------------------------------------------------------------------------------
 convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
+
   --
   --                       μ <: μ
   --  ∀i . [comb(μ,μi)]fi:ti <: [comb(μ,μi)]fi:ti
   -- ------------------------------------------------
   --        [μ]{ [μi]fi:ti } <: [μ]{ [μi]fi:ti }
   --
-  | s1l == s2l 
-
-  = if isSubtype l δ (ofType μ1) (ofType μ2) then 
+  | s1l == s2l
+  = if isSubtype δ (ofType μ1) (ofType μ2) then 
       if deeps l δ μ1 μ2 b1s b2s then  
-        Right $ CNo
+        Right $ CUp t1 t2
       else 
-        Left $ errorSimpleSubtype l t1 t2
+       Left $ errorSimpleSubtype l t1 t2
     else 
       Left $ errorIncompMutTy l t1 t2      
   -- 
@@ -109,15 +111,14 @@ convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
   --
   | not (S.null df21) 
   = Left $ errorMissFlds l t1 t2 df21
+
   -- 
   --  [μ]{ f1:t1,..,fn:tn } <: [μ]{ f1:t1,..,fn:tn }
   -- ------------------------------------------------------------
   --  [μ]{ f1:t1,..,fn:tn,..,fm:tm } <: [μ]{ f1:t1,..,fn:tn }
   --
   | otherwise
-  = case convertObj l δ (TCons e1s μ1 r1) (TCons e2s μ2 r2) of
-      Left l  -> Left  $ l
-      Right _ -> Right $ CUp t1 t2
+  = convertObj l δ (TCons e1s' μ1 r1) (TCons e2s μ2 r2)
     where
        -- All the bound elements that correspond to each binder 
        -- Map : symbol -> [ elements ]
@@ -135,12 +136,12 @@ convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
        -- Difference and intersection of keys
        df21       = s2s `S.difference` s1s
        in12       = s1s `S.intersection` s2s
-       e1s       = concat [ fromJust $ M.lookup s m1 | s <- S.toList in12 ]
-
+       e1s'       = concat [ fromJust $ M.lookup s m1 | s <- S.toList in12 ]
+ 
 convertObj l δ t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2)
   | (x1,s1) == (x2,s2)
     -- FIXME: Using covariance here !!!
-  = if all (uncurry $ isSubtype l δ) $ zip t1s t2s 
+  = if all (uncurry $ isSubtype δ) $ zip t1s t2s 
       then Right $ CNo
       else Left  $ errorSimpleSubtype l t1 t2
   | otherwise
@@ -149,7 +150,7 @@ convertObj l δ t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2)
   = case weaken δ (findSymOrDie x1 δ,t1s) x2 of
       -- Adjusting the child class to the parent
       Just (_, t1s) -> 
-          if all (uncurry $ isSubtype l δ) $ zip t1s t2s 
+          if all (uncurry $ isSubtype δ) $ zip t1s t2s 
             then Right $ CUp (TApp (TRef x2 s1) t1s r1) t2
             else Left  $ errorSimpleSubtype l t1 t2
       
@@ -195,7 +196,7 @@ deep1 l δ μ1 μ2 e es = and $ map (subElt l δ μ1 μ2 e) es
 --    { (ts)=>t } <: { (ts)=>t } 
 --
 subElt l δ _ _ (CallSig t1) (CallSig t2)
-  = isSubtype l δ t1 t2
+  = isSubtype δ t1 t2
 
 -- | Field signatures
 --
@@ -206,14 +207,14 @@ subElt l δ _ _ (CallSig t1) (CallSig t2)
 -- NO :   { readonly f: PosInt  } <: { readonly  f: int }
 --
 subElt l δ μ1 μ2 f1@(FieldSig _ _ μf1 τ1 t1) f2@(FieldSig _ _ μf2 τ2 t2)
-  | isSubtype l δ (ofType m1) (ofType m2) =
+  | isSubtype δ (ofType m1) (ofType m2) =
       if isImmutable m2 then
         -- 
         --  t<:t  τ<:τ
         -- ------------------------------------------
         --  { immut f[τ]: t } <: { immut f[τ]: t }
         --
-        and [ isSubtypeOpt l δ τ2 τ1, isSubtype l δ t1 t2 ]
+        and [ isSubtypeOpt l δ τ2 τ1, isSubtype δ t1 t2 ]
       else 
         --  
         --  μ,μ =/= Immutable
@@ -221,8 +222,8 @@ subElt l δ μ1 μ2 f1@(FieldSig _ _ μf1 τ1 t1) f2@(FieldSig _ _ μf2 τ2 t2)
         -- ----------------------------------
         --  { μ f[τ]: t } <: { μ f[τ]: t }
         --
-        and [ isSubtypeOpt l δ τ1 τ2, isSubtype l δ t1 t2,
-              isSubtypeOpt l δ τ2 τ1, isSubtype l δ t2 t1 ]
+        and [ isSubtypeOpt l δ τ1 τ2, isSubtype δ t1 t2,
+              isSubtypeOpt l δ τ2 τ1, isSubtype δ t2 t1 ]
 
   | otherwise = False 
   where
@@ -235,7 +236,7 @@ subElt l δ μ1 μ2 f1@(FieldSig _ _ μf1 τ1 t1) f2@(FieldSig _ _ μf2 τ2 t2)
 -- { new (ts)=>() } <: { new (ts)=>() } 
 --
 subElt l δ _ _ (ConsSig t1) (ConsSig t2)
-  = isSubtype l δ t1 t2 
+  = isSubtype δ t1 t2 
 
 -- | Index signatures
 --
@@ -245,15 +246,15 @@ subElt l δ _ _ (ConsSig t1) (ConsSig t2)
 --
 subElt l δ _ _ (IndexSig _ b1 t1) (IndexSig _ b2 t2)
   | b1 == b2 
-  = and [ isSubtype l δ t1 t2, isSubtype l δ t2 t2 ]
+  = and [ isSubtype δ t1 t2, isSubtype δ t2 t2 ]
 
 -- | otherwise fail
 subElt _ _ _ _ _ _ = False
 
 
-isSubtypeOpt l δ (Just t1) (Just t2) = isSubtype l δ t2 t1
-isSubtypeOpt l δ Nothing   (Just t2) = isSubtype l δ tTop t2
-isSubtypeOpt l δ (Just t1) Nothing   = isSubtype l δ t1 tTop
+isSubtypeOpt l δ (Just t1) (Just t2) = isSubtype δ t2 t1
+isSubtypeOpt l δ Nothing   (Just t2) = isSubtype δ tTop t2
+isSubtypeOpt l δ (Just t1) Nothing   = isSubtype δ t1 tTop
 isSubtypeOpt _ _ _         _         = True
 
 
@@ -275,15 +276,15 @@ convertFun l δ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _)
   = Left $ errorFuncSubtype l t1 t2
 
 convertFun l δ t1@(TAnd t1s) t2@(TAnd t2s) = 
-  if and $ isSubtype l δ t1 <$> t2s then Right $ CUp t1 t2
-                                    else Left  $ errorFuncSubtype l t1 t2
+  if and $ isSubtype δ t1 <$> t2s then Right $ CUp t1 t2
+                                  else Left  $ errorFuncSubtype l t1 t2
 
 convertFun l δ t1@(TAnd t1s) t2 = 
-  let f t1 = isSubtype l δ t1 t2 in 
+  let f t1 = isSubtype δ t1 t2 in 
   if or $ f <$> t1s then Right $ CUp t1 t2
                     else Left  $ errorFuncSubtype l t1 t2
   
-
+ 
 convertFun _ _ _ _ = error "convertFun: no other cases supported"
 
 
@@ -309,17 +310,15 @@ convertUnion l δ t1 t2 =
       ([],_ )                             -> Right $ CUp t1 t2
       (_ ,[])                             -> Right $ CDn t1 t2
       ( _ ,_)                             -> Left  $ errorUnionSubtype l t1 t2
-  
   where 
-
     (t1s, t2s)            = sanityCheck $ mapPair bkUnion (t1, t2)
     sanityCheck ([ ],[ ]) = errorstar "unionParts', called on too small input"
     sanityCheck ([_],[ ]) = errorstar "unionParts', called on too small input"
     sanityCheck ([ ],[_]) = errorstar "unionParts', called on too small input"
     sanityCheck ([_],[_]) = errorstar "unionParts', called on too small input"
     sanityCheck p         = p
-    distinct              = ([x | x <- t1s, not $ any (\y -> isSubtype l δ x y) t2s ],
-                             [y | y <- t2s, not $ any (\x -> isSubtype l δ x y) t1s ])
+    distinct              = ([x | x <- t1s, not $ any (\y -> isSubtype δ x y) t2s ],
+                             [y | y <- t2s, not $ any (\x -> isSubtype δ x y) t1s ])
 
 
 
@@ -331,6 +330,6 @@ safeExtends l δ (TD _ c _ (Just (p, ts)) es) =
                                       , ee <- es, sameBinder pe ee 
                                       , let t1 = eltType ee
                                       , let t2 = eltType pe
-                                      , not (isSubtype l δ t1 t2) ]
+                                      , not (isSubtype δ t1 t2) ]
 safeExtends _ _ (TD _ _ _ Nothing _)  = []
 

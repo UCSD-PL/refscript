@@ -547,7 +547,7 @@ consDeadCode δ g l x t
 consUpCast δ g l x t1 t2 = envAddFresh l stx g
     where
         tx   = envFindTy x g
-        ztx  = zipType δ (\p _ -> p) F.bot tx t2
+        ztx  = tracePP ("consUpCast " ++ ppshow tx ++ " `zip`" ++ ppshow t2) $ zipType δ (\p _ -> p) F.bot tx t2
         stx  = ztx `eSingleton` x
     
 -- | DownCast(x, t1 => t2)

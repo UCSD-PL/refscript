@@ -229,6 +229,11 @@ subElt l δ μ1 μ2 f1@(FieldSig _ _ μf1 τ1 t1) f2@(FieldSig _ _ μf2 τ2 t2)
   where
     m1 = combMut μ1 μf1
     m2 = combMut μ2 μf2
+
+-- | Methods
+-- 
+subElt l δ μ1 μ2 f1@(MethSig _ _ μf1 τ1 t1) f2@(MethSig _ _ μf2 τ2 t2) =
+  and [ isSubtypeOpt l δ τ2 τ1, isSubtype δ t1 t2 ]
   
 
 -- | Constructor signatures

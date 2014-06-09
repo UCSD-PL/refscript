@@ -610,7 +610,14 @@ tcExpr γ (Cast l@(Ann loc fs) e)
          Cast (Ann _ fs') e'' -> return (Cast (Ann loc (fs ++ fs')) e'', t)
          _                    -> return (Cast l e', t)
 
--- e.f
+
+-- | e.m(e1,e2,...)
+
+
+
+
+
+-- | e.f
 -- 
 -- Careful here! Unification is happening in `runMaybeM` so won't be effective
 -- outside unless we explicitly add the substitution to the environment. That's
@@ -619,41 +626,22 @@ tcExpr γ (Cast l@(Ann loc fs) e)
 --FIXME: this can probably be done with a call as well...
 --
 tcExpr γ (DotRef l e f) 
-  = do δ                  <- getDef
-       (e', te)           <- tcExpr γ e
-       let es              = getElt δ fs te
-       z                  <- catMaybes <$> mapM (runMaybeM . checkElt e' te) es
-       case z of 
-         -- Get the first matching element
-         (dr,t,θ):_       -> do addSubst l θ
-                                addAnn (srcPos l) (EltOverload (tce_ctx γ) t)
-                                return (dr, eltType t)
-         _                -> tcError $ errorDeref (srcPos l) f e te
-    where
-       fs                  = F.symbol f
-       thisArg l f to τ ft = 
-         do  θ            <- unifyTypeM (srcPos l) to τ
-             subtypeM        (srcPos l) (apply θ to) (apply θ τ) 
-             return        $ (θ, apply θ ft)
+  = tcCall γ e
 
-       checkElt e te m@(FieldSig s False _ (Just τ) ft) 
-                           = tcWithThis te $ do (θ, t) <- thisArg l f te τ ft
-                                                return (DotRef l e f, m, θ)
-       checkElt e te elt   = tcWithThis te $ return (DotRef l e f, elt, fromList [])
  
--- e1[e2]
+-- | e1[e2]
 tcExpr γ e@(BracketRef _ _ _) 
   = tcCall γ e
 
--- e1[e2] = e3
+-- | e1[e2] = e3
 tcExpr γ e@(AssignExpr _ OpAssign (LBracket _ _ _) _)
   = tcCall γ e
 
--- new C(e, ...)
+-- | new C(e, ...)
 tcExpr γ e@(NewExpr _ _ _) 
   = tcCall γ e
 
--- super
+-- | super
 tcExpr _ e@(SuperRef l) = (e,) <$> (getSuperM l =<< tcPeekThis)
 
 tcExpr _ e 
@@ -733,6 +721,50 @@ tcCall γ (NewExpr l (VarRef lv i) es)
                                $ tcError $ errorConstNonFunc (srcPos l) i
        (es', t)               <- tcCallMatch γ l "constructor" es tc
        return                  $ (NewExpr l (VarRef lv i) es', t)
+
+
+
+tcCall γ (DotRef l e f)
+  = do δ                  <- getDef
+       -- (e', te)           <- tcExpr γ e
+       (es', t)           <- undefined -- tcCallMatch γ l DotRef [e] $ TAnd $ eltSig <$> getElt δ f te
+       z                  <- undefined -- catMaybes <$> mapM (runMaybeM . checkElt e' te) undefined
+       return undefined
+--        case z of 
+--          -- Get the first matching element
+--          (dr,t,θ):_       -> do addSubst l θ
+--                                 addAnn (srcPos l) (EltOverload (tce_ctx γ) t)
+--                                 return (dr, eltType t)
+--          _                -> tcError $ errorDeref (srcPos l) f e te
+    where
+       eltSig (FieldSig x _ μ (Just τ) t) = mkFun ([], [B (F.symbol "this") τ], t)
+       eltSig (FieldSig x _ μ Nothing t ) = mkFun ([], [B (F.symbol "this") tTop], t)
+       eltSig _                           = error "tcExpr-DotRef"
+-- 
+--        fs                  = F.symbol f
+--        thisArg l f to τ ft = 
+--          do  θ            <- unifyTypeM (srcPos l) to τ
+--              subtypeM        (srcPos l) (apply θ to) (apply θ τ) 
+--              return        $ (θ, apply θ ft)
+-- 
+--        checkElt e te m@(FieldSig s False _ (Just τ) ft) 
+--                            = tcWithThis te $ do (θ, t) <- thisArg l f te τ ft
+--                                                 return (DotRef l e f, m, θ)
+--        checkElt e te elt   = tcWithThis te $ return (DotRef l e f, elt, fromList [])
+-- 
+-- -----------------------------------------------------
+--   = do z             <- tcCallMatch γ l BISetProp [e1,e2] $ setPropTy (F.symbol f) l1 $ tce_env γ 
+--        case z of 
+--          ([e1',e2'], TApp (TRef _ _) [t1,t2] _) 
+--                      -> do  e2'' <- castM le2 (tce_ctx γ) e2' t2 t1
+--                             return (exp e1' e2'', Just γ)
+--          (e,t)       -> error $ "BUG: tcStmt - e.f = e : " ++ ppshow e ++ "\n" ++ ppshow t
+--     where
+--        le2            = getAnnotation e2
+--        exp ε1 ε2      = ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 ε1 f) ε2
+
+
+
 
 tcCall _ e
   = die $ bug (srcPos e) $ "tcCall: cannot handle" ++ ppshow e        
@@ -818,15 +850,15 @@ tcCallCaseTry γ l fn ts ft = runMaybeM $
      return     $ θ'
 
 
-tcCallCase γ l fn es' ts ft 
+tcCallCase γ l fn es ts ft 
   = do let ξ            = tce_ctx γ
        -- Generate fresh type parameters
        (_,ibs,ot)      <- instantiate l ξ fn ft
        let its          = b_type <$> ibs
        θ               <- unifyTypesM (srcPos l) "tcCall" ts its
        let (ts',its')   = mapPair (apply θ) (ts, its)
-       es''            <- NM.zipWith3M (castM l ξ) es' ts' its'
-       return             (es'', apply θ ot, θ)
+       es'             <- NM.zipWith3M (castM l ξ) es ts' its'
+       return             (es', apply θ ot, θ)
 
 instantiate l ξ fn ft 
   = do t'              <- freshTyArgs (srcPos l) ξ αs t 
@@ -835,14 +867,14 @@ instantiate l ξ fn ft
        (αs, t)          = bkAll ft
        err = tcError    $ errorNonFunction (ann l) fn ft
 
-             
-tcPropRead getter γ l e fld 
-  = do (e', te)         <- tcExpr γ e
-       (δ, ε)           <- (,) <$> getDef <*> getExts
-       case getter l ε δ fld te of
-         Nothing        -> tcError $  errorPropRead (srcPos l) e fld
-         Just (te', tf) -> tcWithThis te $ (, tf) <$> castM l (tce_ctx γ) e' te te'
-
+--              
+-- tcPropRead getter γ l e fld 
+--   = do (e', te)         <- tcExpr γ e
+--        (δ, ε)           <- (,) <$> getDef <*> getExts
+--        case getter l ε δ fld te of
+--          Nothing        -> tcError $  errorPropRead (srcPos l) e fld
+--          Just (te', tf) -> tcWithThis te $ (, tf) <$> castM l (tce_ctx γ) e' te te'
+-- 
 
 ----------------------------------------------------------------------------------
 envJoin :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)

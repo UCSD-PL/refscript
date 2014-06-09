@@ -163,9 +163,11 @@ isMutable _                                = False
 isImmutable      (TApp (TRef s False) _ _) = s == F.symbol "Immutable"
 isImmutable _                              = False
 
--- isDefaultMut (TApp (TRef s False) _ _) 
---   | s == F.symbol "DefaultMutable" = True 
--- isDefaultMut _ = False
+isDefaultMut (TApp (TRef s False) _ _)     = s == F.symbol "DefaultMutable"
+isDefaultMut _                             = False
+
+isReadOnly (TApp (TRef s False) _ _)     = s == F.symbol "ReadOnly"
+isReadOnly _                             = False
 
 combMut _ μf | isMutable μf    = μf
 combMut μ _  | otherwise       = μ
@@ -196,8 +198,15 @@ data TElt t    = CallSig  { f_type :: t }         -- Call Signature
                | FieldSig { f_sym  :: F.Symbol    -- Name  
                           , f_sta  :: Bool        -- Static or not
                           , f_mut  :: Mutability  -- Mutability
-                          , f_this :: Maybe t     -- Required object type
-                          , f_type :: t }         -- Property type
+                          , f_this :: Maybe t     -- Constraint on enclosing object
+                          , f_type :: t }         -- Property type (could be function)
+
+               | MethSig  { f_sym  :: F.Symbol    -- Name  
+                          , f_sta  :: Bool        -- Static or not
+                          , f_mut  :: Mutability  -- Mutability
+                          , f_this :: Maybe t     -- Constraint on enclosing object
+                          , f_type :: t }         -- Property type (could be function)
+
   deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
@@ -347,6 +356,7 @@ bkAll t              = go [] t
 bkAnd                :: RType r -> [RType r]
 bkAnd (TAnd ts)      = ts
 bkAnd t              = [t]
+
 
 ---------------------------------------------------------------------------------
 mkUnion :: (F.Reftable r) => [RType r] -> RType r
@@ -510,6 +520,7 @@ instance Eq t => Eq (TElt t) where
   ConsSig t1              == ConsSig t2              = t1 == t2
   IndexSig _ b1 t1        == IndexSig _ b2 t2        = (b1,t1) == (b2,t2)
   FieldSig f1 s1 m1 τ1 t1 == FieldSig f2 s2 m2 τ2 t2 = (f1,s1,m1,τ1,t1) == (f2,s2,m2,τ2,t2)
+  MethSig  f1 s1 m1 τ1 t1 == MethSig f2 s2 m2 τ2 t2  = (f1,s1,m1,τ1,t1) == (f2,s2,m2,τ2,t2)
   _                       == _                       = False
  
 
@@ -591,7 +602,7 @@ instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
 
 -- ppEnv env = vcat [ pp id <+> text "::" <+> pp t <+> text"\n" | (id, t) <- envToList env]
 
-instance PP t => PP (TDefEnv t) where
+instance (PP r, F.Reftable r) => PP (TDefEnv (RType r)) where
   pp (G s γ) =  (text "Size:" <+> text (show s))  $$ text "" $$
                 (text "Type definitions:"  $$ nest 2 (pp γ))
 
@@ -601,8 +612,8 @@ instance PP t => PP (I.IntMap t) where
 instance PP t => PP (F.SEnv t) where
   pp m = vcat $ pp <$> F.toListSEnv m
 
-instance (PP t) => PP (TDef t) where
-    pp (TD c nm vs Nothing ts) = 
+instance (PP r, F.Reftable r) => PP (TDef (RType r)) where
+    pp (TD c nm vs Nothing ts) =  
           pp (if c then "class" else "interface")
       <+> pp nm 
       <+> ppArgs brackets comma vs 
@@ -621,18 +632,36 @@ instance (PP t) => PP (TDef t) where
         <+> text " ")
 
 
-instance (PP t) => PP (TElt t) where
+instance (PP r, F.Reftable r) => PP (TElt (RType r)) where
   pp (CallSig t)          = text "call" <+> pp t 
   pp (ConsSig t)          = text "new" <+> pp t
   pp (IndexSig x True t)  = brackets (pp x <> text ": string") <> text ":" <> pp t
   pp (IndexSig x False t) = brackets (pp x <> text ": number") <> text ":" <> pp t
 
-  pp (FieldSig x s m τ t) =  bStr s "static" 
-                         <+> brackets (pp m)
+  pp (FieldSig x s m τ t) =  bStr s "static " 
+                         <>  ppMut m
                          <+> pp x 
-                         <>  mStr ((text "" <+>) . brackets . pp <$> τ)
+                         <>  maybe (pp "") (brackets . pp) τ
                          <>  text ":" 
                          <+> pp t 
+
+  pp (MethSig x s m τ t)  =  bStr s "static " 
+                         <>  ppMut m
+                         <+> pp x 
+                         <>  maybe (pp "") (brackets . pp) τ
+                         <>  ppArgs parens comma xts
+                         <>  text ":" 
+                         <+> pp ot
+    where
+      Just (αs,xts,ot)    =  bkFun t
+
+
+ppMut t | isMutable t    = brackets $ pp "mut"
+        | isDefaultMut t = pp ""
+        | isReadOnly t   = brackets $ pp "ro"
+        | isImmutable t  = brackets $ pp "imm"
+   
+
 
 bStr True  s = text s
 bStr False _ = text ""
@@ -643,6 +672,7 @@ mStr _        = text ""
 
 instance F.Symbolic (TElt t) where
   symbol (FieldSig s _ _ _ _) = s
+  symbol (MethSig  s _ _ _ _) = s
   symbol (ConsSig       _)    = F.stringSymbol "__constructor__"
   symbol (CallSig       _)    = F.stringSymbol "__call__"
   symbol (IndexSig _ True _)  = F.stringSymbol "__string__index__"
@@ -653,12 +683,14 @@ sameBinder (CallSig _)            (CallSig _)             = True
 sameBinder (ConsSig _)            (ConsSig _)             = True
 sameBinder (IndexSig _ b1 _)      (IndexSig _ b2 _)       = b1 == b2
 sameBinder (FieldSig x1 s1 _ _ _) (FieldSig x2 s2 m2 _ _) = x1 == x2 && s1 == s2
-sameBinder _                      _                       = False
+sameBinder (MethSig x1 s1 _ _ _)  (MethSig x2 s2 m2 _ _)  = x1 == x2 && s1 == s2
+sameBinder _                       _                      = False
 
-mutability (CallSig _) = Nothing
-mutability (ConsSig _) = Nothing  
-mutability (IndexSig _ _ _) = Nothing  
+mutability (CallSig _)           = Nothing
+mutability (ConsSig _)           = Nothing  
+mutability (IndexSig _ _ _)      = Nothing  
 mutability (FieldSig _ _ m  _ _) = Just m
+mutability (MethSig _ _ m  _ _)  = Just m
 
 
 
@@ -675,26 +707,36 @@ zipElts f e1@(IndexSig x b1 t1) e2@(IndexSig _ _ t2)
   | sameBinder e1 e2 
   = IndexSig x b1 $ f t1 t2
 
+
+-- FIXME
 zipElts f e1@(FieldSig x1 s1 m1 (Just τ1) t1) e2@(FieldSig _ _ m2 (Just τ2) t2)
   | sameBinder e1 e2 
   = FieldSig x1 s1 m1 (Just $ f τ1 τ2) $ f t1 t2
-  {-where ff t1 t2 = mapPair toType $ f (ofType t1) (ofType t2)-}
 zipElts f e1@(FieldSig x1 s1 m1 Nothing t1) e2@(FieldSig _ _ m2 Nothing t2)
   | sameBinder e1 e2
   = FieldSig x1 s1 m1 Nothing $ f t1 t2
-  {-where ff t1 t2 = mapPair toType $ f (ofType t1) (ofType t2)-}
+
+zipElts f e1@(MethSig x1 s1 m1 (Just τ1) t1) e2@(MethSig _ _ m2 (Just τ2) t2)
+  | sameBinder e1 e2 
+  = MethSig x1 s1 m1 (Just $ f τ1 τ2) $ f t1 t2
+zipElts f e1@(MethSig x1 s1 m1 Nothing t1) e2@(MethSig _ _ m2 Nothing t2)
+  | sameBinder e1 e2
+  = MethSig x1 s1 m1 Nothing $ f t1 t2
 
 zipElts _ e1 e2
   = error $ "Cannot zip: " ++ ppshow e1 ++ " and " ++ ppshow e2
 
+
 -- FIXME: get rid of this
 eltType (FieldSig _ _ _ _ t) = t
-eltType (ConsSig       t  ) = t
-eltType (CallSig       t  ) = t
-eltType (IndexSig _ _  t  ) = t
+eltType (MethSig _ _ _ _  t) = t
+eltType (ConsSig       t  )  = t
+eltType (CallSig       t  )  = t
+eltType (IndexSig _ _  t  )  = t
 
 
 isStaticElt (FieldSig _ True _ _ _  ) = True
+isStaticElt (MethSig _ True _ _ _   ) = True
 isStaticElt _                         = False
 
 
@@ -775,7 +817,7 @@ instance PP Char where
 instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TVar α r)               = F.ppTy r $ pp α 
   pp (TFun xts t _)           = ppArgs parens comma xts <+> text "=>" <+> pp t 
-  pp t@(TAll _ _)             = text "forall" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
+  pp t@(TAll _ _)             = text "∀" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
   pp (TAnd ts)                = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TExp e)                 = pprint e 
   pp (TApp TUn ts r)          = F.ppTy r $ ppArgs id (text " +") ts 

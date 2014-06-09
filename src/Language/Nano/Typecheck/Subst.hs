@@ -117,6 +117,7 @@ instance Free (Fact r) where
 
 instance Free (TElt (RType r)) where
   free (FieldSig _ _ m τ t) = free m `mappend` free τ `mappend` free t
+  free (MethSig  _ _ m τ t) = free m `mappend` free τ `mappend` free t
   free (CallSig t)          = free t
   free (ConsSig t)          = free t
   free (IndexSig _ _ t)     = free t
@@ -148,7 +149,8 @@ instance (Substitutable r t) => Substitutable r (Env t) where
   apply = envMap . apply
 
 instance Substitutable r t => Substitutable r (TElt t) where 
-  apply θ (FieldSig x s m τ t) = FieldSig x s  (appTy (toSubst θ) m) (apply θ τ) (apply θ t)
+  apply θ (FieldSig x s m τ t) = FieldSig x s (appTy (toSubst θ) m) (apply θ τ) (apply θ t)
+  apply θ (MethSig  x s m τ t) = MethSig  x s (appTy (toSubst θ) m) (apply θ τ) (apply θ t)
   apply θ (CallSig t)          = CallSig      (apply θ t)
   apply θ (ConsSig t)          = ConsSig      (apply θ t)
   apply θ (IndexSig x b t)     = IndexSig x b (apply θ t)

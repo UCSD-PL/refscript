@@ -51,11 +51,11 @@ getProp l _ _ _ t                = die $ bug (srcPos l)
 -- | `getElt`: return elements associated with a symbol @s@. The return list 
 -- is empty if the binding was not found or @t@ is an invalid type.
 -------------------------------------------------------------------------------
-getElt :: PPR r => TDR r -> F.Symbol -> RType r -> [TElt (RType r)]
+getElt :: (F.Symbolic s, PPR r) => TDR r -> s -> RType r -> [TElt (RType r)]
 -------------------------------------------------------------------------------
 getElt δ s t                = fromCons $ S.flattenType δ t
   where   
-    fromCons (TCons es _ _) = [ e | e <- es, F.symbol e == s, nonStaticElt e ]
+    fromCons (TCons es _ _) = [ e | e <- es, F.symbol e == F.symbol s, nonStaticElt e ]
     fromCons _              = []
 
 getElt _ _ t                = [] 

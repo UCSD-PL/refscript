@@ -36,11 +36,14 @@
     /\ forall A M. ([#Mutable]{[y: string]: A },    x:string                                 , val: A) => void  
 */
 
+
 /*@ extern builtin_BISetProp ::
-    /\ forall A B M . ([   M    ] { [#Mutable]f: A }, B) => { #Pair[A,B] | true }                              
-    /\ forall A B M . ([#Mutable] { [M]       f: A }, B) => { #Pair[A,B] | true }                   
+    /\ forall A M . ([M] { [#Mutable]f: A }, A) => A
+    /\ forall A M . ([#Mutable] { [M]f: A }, A) => A
 */
-  
+
+
+/*@ extern builtin_BIGetProp :: forall T A M Mf . (T, [M] { [Mf] f [T]: A }) => A */
 
 
 //FIXME: the 'len' property is invalid if M != Immutable
@@ -231,24 +234,24 @@
 /*** String **************************************************************/
 
 /*@ extern String     :: {
-      toString          : () => string;
-      charAt            : (pos: number) => string;
-      charCodeAt        : (index: number) => number;
-      concat            : (strings: #Array[#ReadOnly,string]) => string;
-      indexOf           : (searchString: string, position: number) => number;
-      lastIndexOf       : (searchString: string, position: number) => number;
-      localeCompare     : (that: string) => number;
-      match             : forall M . (regexp: string) => #Array[M, string];
-      replace           : (searchValue: string, replaceValue: string) => string;
-      search            : (regexp: string) => number;
-      slice             : (start: number, end: number) => string;
-      split             : forall M . (separator: string, limit: number) => #Array[M, string];
-      substring         : (start: number, end: number) => string;
-      toLowerCase       : () => string;
-      toLocaleLowerCase : () => string;
-      toUpperCase       : () => string;
-      toLocaleUpperCase : () => string;
-      trim              : () => string;
+      toString          : (): string;
+      charAt            : (pos: number): string;
+      charCodeAt        : (index: number): number;
+      concat            : (strings: #Array[#ReadOnly,string]): string;
+      indexOf           : (searchString: string, position: number): number;
+      lastIndexOf       : (searchString: string, position: number): number;
+      localeCompare     : (that: string): number;
+      match             : forall M . (regexp: string): #Array[M, string];
+      replace           : (searchValue: string, replaceValue: string): string;
+      search            : (regexp: string): number;
+      slice             : (start: number, end: number): string;
+      split             : forall M . (separator: string, limit: number): #Array[M, string];
+      substring         : (start: number, end: number): string;
+      toLowerCase       : (): string;
+      toLocaleLowerCase : (): string;
+      toUpperCase       : (): string;
+      toLocaleUpperCase : (): string;
+      trim              : (): string;
 
       length            : { number | v >= 0 };
 

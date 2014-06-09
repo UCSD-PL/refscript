@@ -378,9 +378,16 @@ rawStringSymbol            = F.Loc F.dummyPos . F.stringSymbol
 rawStringFTycon            = F.stringFTycon . F.Loc F.dummyPos 
 
 
--- | `zipType` pairs up equivalent parts of types @t1@ and @t2@, preserving the
--- type structure of @t2@, and applying @f@ whenever refinements are present on 
--- both sides and @g@ whenever the respective part in type @t2@ is missing.
+-- | `zipType`
+--
+--  * pairs up equivalent parts of types @t1@ and @t2@
+--  * preserves the type structure of @t2@
+--  * applys @f@ whenever refinements are present on both sides
+--  * applys @g@ whenever the respective part in type @t2@ is missing
+--
+--  FIXME: perhaps replace sub with rel:
+--  rel t1 t2 = sub t1 t2 || sub t2 t1
+--
 --------------------------------------------------------------------------------
 zipType :: TDefEnv RefType     -> 
   (F.Reft -> F.Reft -> F.Reft) ->   -- applied to refs that are present on both sides
@@ -421,37 +428,50 @@ zipType δ f g t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2)
       -- Unfold structures
       Nothing        -> zipType δ f g (flattenType δ t1) (flattenType δ t2)
 
-zipType δ f g t1@(TApp (TRef _ _) _ _) t2
-  = zipType δ f g (flattenType δ t1) t2
+zipType δ f g t1@(TApp (TRef _ _) _ _) t2 = 
+  zipType δ f g (flattenType δ t1) t2
 
-zipType δ f g t1 t2@(TApp (TRef _ _) _ _)
-  = zipType δ f g t1 (flattenType δ t2)
+zipType δ f g t1 t2@(TApp (TRef _ _) _ _) = 
+  zipType δ f g t1 (flattenType δ t2)
  
 
 zipType _ f _ (TApp c [] r) (TApp c' [] r') 
   | c == c' = TApp c [] $ f r r'
 
-zipType _ _ _ _ t2@(TApp TTop _ _ ) 
-  = t2
+zipType _ _ _ _ t2@(TApp TTop _ _ ) = t2
 
 zipType _ f _ (TVar v r) (TVar v' r') 
   | v == v' = TVar v $ f r r'
 
-zipType δ f g (TFun x1s t1 r1) (TFun x2s t2 r2) 
-  = TFun xs y $ f r1 r2
+zipType δ f g (TFun x1s t1 r1) (TFun x2s t2 r2) = 
+    TFun xs y $ f r1 r2
   where
     xs = zipWith (zipBind δ f g) x1s x2s
     y  = zipType δ f g t1 t2
 
-zipType δ f g (TCons e1s m1 r1) (TCons e2s _ r2) 
-  = TCons (cmn ++ snd) m1 (f r1 r2)
+zipType δ f g (TCons e1s m1 r1) (TCons e2s _ r2) = 
+    TCons (cmn ++ snd) m1 (f r1 r2)
   where 
     cmn = [ zipElts (zipType δ f g) e1 e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ] 
     snd = [ e          | e <- e2s , not (F.symbol e `elem` ks1) ]
     ks1 = [ F.symbol e | e <- e1s ]
 
-zipType δ f g _ (TAnd _) = error "FIXME: zipType:TAnd"
-zipType δ f g (TAnd _) _ = error "FIXME: zipType:TAnd"
+-- | Intersection types
+
+zipType δ f g (TAnd t1s) (TAnd t2s) = 
+    case [ zipType δ f g (rf t2) t2 | t2 <- t2s ] of
+      [ ] -> error $ "ziptype with incompatible intersection types: " 
+                 ++ ppshow (TAnd t1s) ++ " and " ++ ppshow (TAnd t2s)
+      [t] -> t
+      ts  -> TAnd ts
+  where
+    rf t        = fromJust $ L.find (`sub` t) t1s
+    -- rf t         = findDef (g <$> t) (`sub` t) t1s
+    -- findDef a f  = fromMaybe a . L.find f
+    sub          = isSubtype δ
+
+zipType δ f g t1 (TAnd t2s) = zipType δ f g (TAnd [t1]) (TAnd t2s)
+zipType δ f g (TAnd t1s) t2 = zipType δ f g (TAnd t1s) (TAnd [t2])
 
 zipType _ _ _ t1 t2 = 
   errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)

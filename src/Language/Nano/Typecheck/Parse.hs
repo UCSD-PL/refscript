@@ -101,7 +101,7 @@ iFaceP   :: Parser (Id SourceSpan, TDef RefType)
 iFaceP   = do id     <- identifierP 
               vs     <- option [] tParP
               ext    <- optionMaybe extendsP
-              es     <- braces fieldBindP
+              es     <- braces propBindP
               return (id, TD False id vs ext es)
 
 extendsP = do reserved "extends"
@@ -171,12 +171,25 @@ funcSigP =  try (bareAllP bareFunP)
     intersectP p = tAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
 
 -- | `bareFunP` parses a single function type
+--
+--  (x:t, ...) => t
+--
 bareFunP
   = do args   <- parens $ sepBy bareArgP comma
        reserved "=>" 
        ret    <- bareTypeP 
        r      <- topP
        return $ TFun args ret r
+
+
+--  (x:t, ...): t
+bareMethP
+  = do args   <- parens $ sepBy bareArgP comma
+       colon
+       ret    <- bareTypeP 
+       r      <- topP
+       return $ TFun args ret r
+
 
 bareArgP 
   =   (try boundTypeP)
@@ -209,7 +222,7 @@ objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
 objLitP 
   = do m     <- option mutableM (toType <$> mutP)
-       bs    <- braces fieldBindP
+       bs    <- braces propBindP
        return $ TCons bs m
  
 mutP =  try (TVar <$> brackets tvarP <*> return ()) 
@@ -265,37 +278,18 @@ bareAllP p =  try p
 
 arrayP = brackets bareTypeP
 
-fieldBindP =  sepEndBy (
+propBindP =  sepEndBy (
               try indexSigP 
           <|> try fieldSigP
+          <|> try methSigP
           <|> try callSigP
           <|> try consSigP
               ) semi
 
--- | f [ <type> ] : t
---
--- The type in the brackets is the type for `this` (optional).
--- This means that for the same field with different bindings for `this` there
--- will be separate elements. 
-----------------------------------------------------------------------------------
-fieldSigP :: Parser (TElt RefType)
-----------------------------------------------------------------------------------
-fieldSigP = do 
-    s          <- option False $ try $ reserved "static" >> return True
-    m          <- option defaultM (toType <$> mutP)
-    ((x,tt),t) <- xyP sp colon bareTypeP
-    return      $ FieldSig x s m tt t
-  where 
-    sp = do x <- withinSpacesP (stringSymbol <$> ((try lowerIdP) <|> upperIdP))    
-            t <- optionMaybe $ withinSpacesP $ brackets bareTypeP
-            return (x,t)
 
-indexP = xyP id colon sn
-  where
-    id = symbol <$> (try lowerIdP <|> upperIdP)
-    sn = withinSpacesP (string "string" <|> string "number")
+-- | [f: string]: t
+-- | [f: number]: t
 
--- | [f: string/number]: t
 indexSigP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
                case it of 
                  "number" -> return $ IndexSig x False t
@@ -303,10 +297,44 @@ indexSigP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
                  _        -> error $ "Index signature can only have " ++
                                      "string or number as index." 
 
--- | [forall A . ] (t...) => t
+indexP = xyP id colon sn
+  where
+    id = symbol <$> (try lowerIdP <|> upperIdP)
+    sn = withinSpacesP (string "string" <|> string "number")
+
+
+-- | <static> <[mut]> f<[τ]>: t
+
+fieldSigP = do 
+    s          <- option False $ try $ reserved "static" >> return True
+    m          <- option defaultM (toType <$> mutP)
+    ((x,τ), t) <- xyP sp colon bareTypeP
+    return      $ FieldSig x s m τ t
+  where 
+    sp = do x <- withinSpacesP (stringSymbol <$> ((try lowerIdP) <|> upperIdP))    
+            t <- optionMaybe $ withinSpacesP $ brackets bareTypeP
+            return (x,t)
+
+
+-- | <static> <[mut]> m<[τ]>(ts): t
+
+methSigP = do
+    s          <- option False $ try $ reserved "static" >> return True
+    m          <- option defaultM (toType <$> mutP)
+    x          <- symbolP 
+    _          <- colon
+    τ          <- optionMaybe $ withinSpacesP $ brackets bareTypeP
+    t          <- bareAllP bareMethP
+    return      $ MethSig x s m τ t
+
+
+-- | <forall A .> (t...) => t
+
 callSigP = CallSig <$> withinSpacesP (bareAllP bareFunP)
 
--- | new [forall A . ] (t...) => t
+
+-- | new <forall A .> (t...) => t
+
 consSigP = withinSpacesP (string "new") 
         >> ConsSig <$> withinSpacesP (bareAllP bareFunP)
 

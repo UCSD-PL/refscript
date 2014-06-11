@@ -43,8 +43,9 @@ json f
   | otherwise      = error $ "Unsupported input file format: " ++ ext
   where 
     ext            = takeExtension f
-    toJSONExt      = (`addExtension` ".json") . dropExtension
-    tsCmd          = "tsc --refscript "
+    toJSONExt      = extFileName Json . dropExtension
+    -- toJSONExt      = (`addExtension` ".json") . dropExtension
+    tsCmd          = "tsc --outDir " ++ tempDirectory f ++ " --refscript "
     oks            = [".ts", ".js"]
 
 

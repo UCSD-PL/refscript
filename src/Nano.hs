@@ -39,12 +39,14 @@ verifier (Liquid {} ) f = LQ.verifyFile =<< json f
 json :: FilePath -> IO FilePath
 json f 
   | ext == ".json" = return f
-  | ext == ".ts"   = execCmd  (tsCmd ++ f) >> return (toJSONExt f)
+  | ext `elem` oks = execCmd  (tsCmd ++ f) >> return (toJSONExt f)
   | otherwise      = error $ "Unsupported input file format: " ++ ext
   where 
     ext            = takeExtension f
     toJSONExt      = (`addExtension` ".json") . dropExtension
     tsCmd          = "tsc --refscript "
+    oks            = [".ts", ".js"]
+
 
 run verifyFile cfg 
   = do mapM_ (createDirectoryIfMissing False. tmpDir) (files cfg)

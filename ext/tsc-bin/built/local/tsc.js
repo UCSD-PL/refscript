@@ -9642,9 +9642,25 @@ var TypeScript;
             return true;
         };
 
+        ClassDeclarationSyntax.prototype.makeid = function (length) {
+            var text = "";
+            var possible = "0123456789";
+
+            return text;
+        };
+
         ClassDeclarationSyntax.prototype.headerAnnotation = function (helper, anns) {
             if (anns.length === 0) {
-                var typeParams = this.typeParameterList ? this.typeParameterList.typeParameters.toNonSeparatorArray() : [];
+                var typeParams = (this.typeParameterList ? this.typeParameterList.typeParameters.toNonSeparatorArray() : []).map(function (t) {
+                    return t.identifier.text();
+                });
+
+                var mutParam = 'M';
+                while (typeParams.indexOf(mutParam) !== -1) {
+                    var possible = "0123456789";
+                    mutParam += possible.charAt(Math.floor(Math.random() * possible.length));
+                }
+                typeParams.unshift(mutParam);
 
                 var extendsHeritage = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
                     return t.toRsHeritage(helper, 48 /* ExtendsKeyword */);
@@ -9831,15 +9847,21 @@ var TypeScript;
             if (headerAnnots.length === 0) {
                 annotStr += this.identifier.text() + " ";
 
+                var typeParams = [];
                 if (this.typeParameterList) {
-                    var typeParams = this.typeParameterList.typeParameters;
-                } else {
-                    var emp = [];
-                    var typeParams = TypeScript.Syntax.separatedList(emp);
+                    typeParams = this.typeParameterList.typeParameters.toNonSeparatorArray().map(function (p) {
+                        return p.identifier.text();
+                    });
                 }
-                annotStr += (typeParams.toNonSeparatorArray().length > 0) ? ("<" + typeParams.toNonSeparatorArray().map(function (p) {
-                    return p.identifier.text();
-                }).join(", ") + "> ") : " ";
+
+                var mutParam = 'M';
+                while (typeParams.indexOf(mutParam) !== -1) {
+                    var possible = "0123456789";
+                    mutParam += possible.charAt(Math.floor(Math.random() * possible.length));
+                }
+                typeParams.unshift(mutParam);
+
+                annotStr += (typeParams.length > 0) ? ("<" + typeParams.join(", ") + "> ") : " ";
 
                 var extendsHeritage = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
                     return t.toRsHeritage(helper, 48 /* ExtendsKeyword */);
@@ -34210,6 +34232,11 @@ var TypeScript;
     }
     TypeScript.isTSFile = isTSFile;
 
+    function isJSFile(fname) {
+        return isFileOfExtension(fname, ".js");
+    }
+    TypeScript.isJSFile = isJSFile;
+
     function isDTSFile(fname) {
         return isFileOfExtension(fname, ".d.ts");
     }
@@ -34563,7 +34590,7 @@ var TypeScript;
                 return normalizedPath;
             }
 
-            if (!TypeScript.isTSFile(normalizedPath) && !TypeScript.isDTSFile(normalizedPath)) {
+            if (!TypeScript.isTSFile(normalizedPath) && !TypeScript.isDTSFile(normalizedPath) && !TypeScript.isJSFile(normalizedPath)) {
                 var dtsFile = normalizedPath + ".d.ts";
                 var tsFile = normalizedPath + ".ts";
 
@@ -56593,6 +56620,10 @@ var TypeScript;
             return TypeScriptCompiler.mapToFileNameExtension(".js", fileName, wholeFileNameReplaced);
         };
 
+        TypeScriptCompiler.mapToSeparateJSFileName = function (fileName, wholeFileNameReplaced) {
+            return TypeScriptCompiler.mapToFileNameExtension(".out.js", fileName, wholeFileNameReplaced);
+        };
+
         TypeScriptCompiler.mapToJSONFileName = function (fileName, wholeFileNameReplaced) {
             return TypeScriptCompiler.mapToFileNameExtension(".json", fileName, wholeFileNameReplaced);
         };
@@ -56603,7 +56634,7 @@ var TypeScript;
 
             var typeScriptFileName = document.fileName;
             if (!emitter) {
-                var javaScriptFileName = this.mapOutputFileName(document, emitOptions, TypeScriptCompiler.mapToJSFileName);
+                var javaScriptFileName = this.mapOutputFileName(document, emitOptions, TypeScriptCompiler.mapToSeparateJSFileName);
                 var outFile = new TypeScript.TextWriter(javaScriptFileName, this.writeByteOrderMarkForDocument(document), 0 /* JavaScript */);
 
                 emitter = new TypeScript.Emitter(javaScriptFileName, outFile, emitOptions, this.semanticInfoChain);
@@ -58443,6 +58474,13 @@ var TypeScript;
     })();
     TypeScript.Triple = Triple;
 
+    (function (MutabilityModifiers) {
+        MutabilityModifiers[MutabilityModifiers["ReadOnly"] = 0] = "ReadOnly";
+        MutabilityModifiers[MutabilityModifiers["Mutable"] = 1] = "Mutable";
+        MutabilityModifiers[MutabilityModifiers["Immutable"] = 2] = "Immutable";
+    })(TypeScript.MutabilityModifiers || (TypeScript.MutabilityModifiers = {}));
+    var MutabilityModifiers = TypeScript.MutabilityModifiers;
+
     (function (AnnotKind) {
         AnnotKind[AnnotKind["RawMeas"] = 0] = "RawMeas";
         AnnotKind[AnnotKind["RawBind"] = 1] = "RawBind";
@@ -58578,8 +58616,13 @@ var TypeScript;
                 var lhss = bs[0].split(" ").filter(function (s) {
                     return s.length > 0;
                 });
-                if (lhss && lhss.length == 1) {
+                if (lhss && lhss.length === 1) {
                     this._binderName = lhss[0];
+                    return this._binderName;
+                }
+
+                if (lhss && lhss.length === 2) {
+                    this._binderName = lhss[1];
                     return this._binderName;
                 }
             }
@@ -58623,9 +58666,7 @@ var TypeScript;
             r += this._className.text();
             if (this._typeParams && this._typeParams.length > 0) {
                 r += " <";
-                r += this._typeParams.map(function (t) {
-                    return t.identifier.text();
-                }).join(", ");
+                r += this._typeParams.join(", ");
                 r += ">";
             }
             if (this._extends) {

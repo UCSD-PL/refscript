@@ -26,25 +26,28 @@ import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
 import qualified Data.ByteString.Lazy               as B
 
+
 main = do cfg  <- getOpts
           run (verifier cfg) cfg
     
 -------------------------------------------------------------------------------
-verifier           :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)
+verifier :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)
 -------------------------------------------------------------------------------
 verifier (TC     {} ) f = TC.verifyFile =<< json f
 verifier (Liquid {} ) f = LQ.verifyFile =<< json f
 
 json :: FilePath -> IO FilePath
-json f | ext == ".json" = return f
-       | ext == ".ts"   = execCmd  (tsCmd ++ f) >> return (toJSONExt f)
-       | otherwise      = error $ "Unsupported input file format: " ++ ext
-  where ext             = takeExtension f
-        toJSONExt       = (`addExtension` ".json") . dropExtension
-        tsCmd           = "tsc --refscript "
+json f 
+  | ext == ".json" = return f
+  | ext == ".ts"   = execCmd  (tsCmd ++ f) >> return (toJSONExt f)
+  | otherwise      = error $ "Unsupported input file format: " ++ ext
+  where 
+    ext            = takeExtension f
+    toJSONExt      = (`addExtension` ".json") . dropExtension
+    tsCmd          = "tsc --refscript "
 
 run verifyFile cfg 
-  = do mapM_ (createDirectoryIfMissing False) $ map tmpDir $ files cfg
+  = do mapM_ (createDirectoryIfMissing False. tmpDir) (files cfg)
        rs   <- mapM (runOne verifyFile) $ files cfg
        let r = mconcat rs
        -- donePhaseWithOptStars False (F.colorResult r) (render $ pp r) 

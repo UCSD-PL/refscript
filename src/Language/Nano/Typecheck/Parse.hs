@@ -308,7 +308,10 @@ indexP = xyP id colon sn
 fieldSigP = do 
     s          <- option False $ try $ reserved "static" >> return True
     m          <- option defaultM (toType <$> mutP)
-    ((x,τ), t) <- xyP sp colon bareTypeP
+    x          <- symbolP 
+    _          <- colon
+    τ          <- optionMaybe $ withinSpacesP $ brackets bareTypeP
+    t          <- bareTypeP
     return      $ FieldSig x s m τ t
   where 
     sp = do x <- withinSpacesP (stringSymbol <$> ((try lowerIdP) <|> upperIdP))    
@@ -335,8 +338,9 @@ callSigP = CallSig <$> withinSpacesP (bareAllP bareFunP)
 
 -- | new <forall A .> (t...) => t
 
-consSigP = withinSpacesP (string "new") 
-        >> ConsSig <$> withinSpacesP (bareAllP bareFunP)
+consSigP = do
+    try      $  reserved "new"
+    ConsSig <$> withinSpacesP (bareAllP bareFunP)
 
  
 ----------------------------------------------------------------------------------

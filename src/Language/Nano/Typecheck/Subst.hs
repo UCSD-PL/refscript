@@ -92,7 +92,7 @@ instance Free (RType r) where
   free (TAll α t)           = S.delete α $ free t 
   free (TAnd ts)            = free ts 
   free (TExp _)             = error "free should not be applied to TExp"
-  free (TCons xts m _)      = free (eltType <$> xts) `mappend` free m
+  free (TCons xts m _)      = free xts `mappend` free m
 
 instance Free a => Free [a] where 
   free = S.unions . map free
@@ -308,7 +308,6 @@ intersect δ (TCons e1s m1 r1) (TCons e2s m2 r2)
     cmn1 = fmap fst <$> cmn
     cmn2 = fmap snd <$> cmn
     cmn  = undefined 
-    -- cmn  = [ zipElts (intersect δ) e1 e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ] 
 
 intersect _ t1 t2 = 
   error $ printf "BUG[intersect]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)

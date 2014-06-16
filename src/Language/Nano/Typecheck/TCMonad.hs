@@ -68,7 +68,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>), (<*>))
 import           Data.Function                      (on)
 import qualified Data.HashSet                       as S
-import           Data.Maybe                         (fromJust, catMaybes)
+import           Data.Maybe                         (catMaybes)
 import           Data.List                          (elem, groupBy, sort, nub, (\\))
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)

@@ -47,7 +47,10 @@ def solve_quals(solve, file, bare, time, quiet, flags, dargs):
   if dargs: dargs = ["--" + " --".join(dargs.split())]
   else: dargs = []
   hygiene_flags = []
-  out = open(file + ".log", "w")
+  import os.path
+  dirname = os.path.dirname(file)
+  basename = os.path.basename(file)
+  out = open(dirname + "/.liquid/" + basename + ".log", "w")
   rv  = logged_sys_call(time + solve.split() + flags + dargs + hygiene_flags + [file], out)
   out.close()
   return rv
@@ -96,6 +99,8 @@ testDir   = "typescript"
 
 testSign  = [("pos", 0), ("neg", 1)]
 #testSign  = [(".", 0)]
+
+#testCategories = ["operators", "simple", "unions"]
 
 ## not supported: ["proto", "typealias", "lists"]
 

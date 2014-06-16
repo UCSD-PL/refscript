@@ -36,18 +36,23 @@ verifier (TC     {} ) f = TC.verifyFile =<< json f
 verifier (Liquid {} ) f = LQ.verifyFile =<< json f
 
 json :: FilePath -> IO FilePath
-json f | ext == ".json" = return f
-       | ext == ".ts"   = execCmd  (tsCmd ++ f) >> return (toJSONExt f)
-       | otherwise      = error $ "Unsupported input file format: " ++ ext
-  where ext             = takeExtension f
-        toJSONExt       = (`addExtension` ".json") . dropExtension
-        tsCmd           = "tsc --refscript "
+json f 
+  | ext == ".json" = return f
+  | ext `elem` oks = execCmd  (tsCmd ++ f) >> return (toJSONExt f)
+  | otherwise      = error $ "Unsupported input file format: " ++ ext
+  where 
+    ext            = takeExtension f
+    toJSONExt      = extFileName Json . dropExtension
+    -- toJSONExt      = (`addExtension` ".json") . dropExtension
+    tsCmd          = "tsc --outDir " ++ tempDirectory f ++ " --refscript "
+    oks            = [".ts", ".js"]
 
-run verifyFile cfg
-  = do mapM_ (createDirectoryIfMissing False) $ map tmpDir $ files cfg
+
+run verifyFile cfg 
+  = do mapM_ (createDirectoryIfMissing False. tmpDir) (files cfg)
        rs   <- mapM (runOne verifyFile) $ files cfg
        let r = mconcat rs
-       -- donePhaseWithOptStars False (F.colorResult r) (render $ pp r)
+       -- donePhaseWithOptStars False (F.colorResult r) (render $ pp r) 
        writeResult r
        exitWith (resultExit r)
     where
@@ -63,17 +68,17 @@ runOne verifyFile f
        tmpDir    = tempDirectory f
 
 execCmd cmd               = putStrLn ("EXEC: " ++ cmd) >> system cmd >>= check
-  where
+  where 
     check (ExitSuccess)   = return ()
-    check (ExitFailure n) = error $ "cmd: " ++ cmd ++ " failure code " ++ show n
+    check (ExitFailure n) = error $ "cmd: " ++ cmd ++ " failure code " ++ show n 
 
--- donePhaseWithOptStars False (F.colorResult r) (render $ pp r)
+-- donePhaseWithOptStars False (F.colorResult r) (render $ pp r) 
 
 -------------------------------------------------------------------------------
 writeResult :: (Ord a, PP a) => F.FixResult a -> IO ()
 -------------------------------------------------------------------------------
 writeResult r            = mapM_ (writeDoc c) $ zip [0..] $ resDocs r
-  where
+  where 
     c                    = F.colorResult r
     writeDoc c (i, d)    = writeBlock c i $ lines $ render d
     writeBlock _ _ []    = return ()
@@ -114,3 +119,4 @@ renderAnnotations srcFile res (SomeAnn ann sol)
        vimFile  = extFileName Annot (srcFile ++ ".vim")
        annFile  = extFileName Annot srcFile
        ann'     = sol ann
+

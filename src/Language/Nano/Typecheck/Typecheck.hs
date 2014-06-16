@@ -453,7 +453,7 @@ tcStmt _ s
 --  * the annotations of the class fields
 -- NOTE: we are not checking if the class has a parent or not.
 ---------------------------------------------------------------------------------------
-classFromStmt :: PPR r => Statement (AnnSSA r) -> TCM r (TDef (RType r))
+classFromStmt :: PPR r => Statement (AnnSSA r) -> TCM r (TDef r)
 ---------------------------------------------------------------------------------------
 classFromStmt (ClassStmt l id _ _ cs) =
   do  δ <- getDef
@@ -491,7 +491,7 @@ classFromStmt _ = errorstar "classId should only be called with ClassStmt"
 
 ---------------------------------------------------------------------------------------
 findClass :: (PPR r, PP s, F.Symbolic s, IsLocated s) 
-          => s -> TCM r (Maybe (TDef (RType r)))
+          => s -> TCM r (Maybe (TDef r))
 ---------------------------------------------------------------------------------------
 findClass s = envFindTy (F.symbol s) <$> getClasses 
           >>= maybe (return Nothing) ((Just <$>) . classFromStmt) 
@@ -503,7 +503,7 @@ classAnnot l = safeHead "classAnnot" [ t | ClassAnn t <- ann_fact l ]
 
 
 ---------------------------------------------------------------------------------------
-classEltType :: PPR r => ClassElt (AnnSSA r) -> TElt (RType r)
+classEltType :: PPR r => ClassElt (AnnSSA r) -> TElt r
 ---------------------------------------------------------------------------------------
 classEltType (Constructor l _ _ ) = ConsSig ann
   where 

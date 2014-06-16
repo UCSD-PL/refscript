@@ -114,7 +114,7 @@ data TCState r = TCS {
   , tc_specs :: !(Env (RType r))
 
   -- Defined types
-  , tc_defs  :: !(TDefEnv (RType r))
+  , tc_defs  :: !(TDefEnv r)
 
   -- Extern (unchecked) declarations
   , tc_ext   :: !(Env (RType r))
@@ -130,8 +130,6 @@ data TCState r = TCS {
   }
 
 type TCM r     = ErrorT Error (State (TCState r))
-
--- type TCME r    = ErrorT Error (StateT (TCState r) (State (TDefEnv (RType r))))
 
 -------------------------------------------------------------------------------
 whenLoud :: TCM r () -> TCM r ()
@@ -198,7 +196,7 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ)
     θ       = fromList $ zip βs (tVar <$> βs)
 
 -------------------------------------------------------------------------------
-getDef  :: TCM r (TDefEnv (RType r)) 
+getDef  :: TCM r (TDefEnv r) 
 -------------------------------------------------------------------------------
 getDef = tc_defs <$> get
 
@@ -213,7 +211,7 @@ getClasses  :: TCM r (Env (Statement (AnnSSA r)))
 getClasses = tc_cls <$> get
 
 -------------------------------------------------------------------------------
-setDef  :: TDefEnv (RType r) -> TCM r ()
+setDef  :: TDefEnv r -> TCM r ()
 -------------------------------------------------------------------------------
 setDef γ = modify $ \u -> u { tc_defs = γ } 
 
@@ -466,7 +464,7 @@ getSuperM l _                            = tcError
                                          $ errorSuper (srcPos l) 
 
 --------------------------------------------------------------------------------
-getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (TDef (RType r))
+getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (TDef r)
 --------------------------------------------------------------------------------
 getSuperDefM l (TApp (TRef i _) ts _) = fromTdef =<< findSymOrDieM i
   where 

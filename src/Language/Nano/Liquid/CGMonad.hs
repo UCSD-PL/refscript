@@ -501,15 +501,18 @@ subType l g t1 t2 =
     rr r xs = F.syms r ++ xs
 
 
-safeExtends sub δ (TD _ c _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
+---------------------------------------------------------------------------------------
+safeExtends :: SourceSpan -> CGEnv -> TDefEnv RefType -> TDef RefType -> CGM ()
+---------------------------------------------------------------------------------------
+safeExtends l g δ (TD _ c _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
   where
+    sub t1 t2  = subType l g (zipType δ t1 t2) t2
     (t1s, t2s) = unzip [ (t1,t2) | pe <- flatten δ (findSymOrDie p δ, ts)
-                                 , ee <- error "CGMonad-safeExtends"
+                                 , ee <- es 
                                  , sameBinder pe ee 
                                  , let t1 = eltType ee
                                  , let t2 = eltType pe ]
-
-safeExtends _ _ (TD _ _ _ Nothing _) = return ()
+safeExtends _ _ _ (TD _ _ _ Nothing _) = return ()
 
 
 --------------------------------------------------------------------------------

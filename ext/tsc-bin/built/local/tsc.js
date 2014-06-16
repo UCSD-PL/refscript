@@ -9661,9 +9661,10 @@ var TypeScript;
                     mutParam += possible.charAt(Math.floor(Math.random() * possible.length));
                 }
                 typeParams.unshift(mutParam);
+                var mutType = new TypeScript.TTypeReference(mutParam, []);
 
                 var extendsHeritage = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
-                    return t.toRsHeritage(helper, 48 /* ExtendsKeyword */);
+                    return t.toRsHeritage(helper, 48 /* ExtendsKeyword */, mutType);
                 }).filter(function (t) {
                     return t !== null;
                 }));
@@ -9684,7 +9685,7 @@ var TypeScript;
                 }
 
                 var implementsHeritage = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
-                    return t.toRsHeritage(helper, 51 /* ImplementsKeyword */);
+                    return t.toRsHeritage(helper, 51 /* ImplementsKeyword */, mutType);
                 }).filter(function (t) {
                     return t !== null;
                 }));
@@ -9864,7 +9865,7 @@ var TypeScript;
                 annotStr += (typeParams.length > 0) ? ("<" + typeParams.join(", ") + "> ") : " ";
 
                 var extendsHeritage = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
-                    return t.toRsHeritage(helper, 48 /* ExtendsKeyword */);
+                    return t.toRsHeritage(helper, 48 /* ExtendsKeyword */, mutParam);
                 }).filter(function (t) {
                     return t !== null;
                 }));
@@ -9996,18 +9997,19 @@ var TypeScript;
             return true;
         };
 
-        HeritageClauseSyntax.prototype.toRsHeritage = function (helper, extendsOrImplements) {
+        HeritageClauseSyntax.prototype.toRsHeritage = function (helper, extendsOrImplements, mutParam) {
             if (this.extendsOrImplementsKeyword.kind() === extendsOrImplements) {
-                return this.typeNames.toNonSeparatorArray().map(function (t) {
+                var r = this.typeNames.toNonSeparatorArray().map(function (t) {
                     switch (t.kind()) {
                         case 11 /* IdentifierName */:
                         case 126 /* GenericType */:
                             var baseSymbol = helper.getSymbolForAST(t);
-                            return baseSymbol.type.toRsType();
+                            return baseSymbol.type.toRsType(mutParam);
                         default:
                             throw new Error("UNIMPLEMENTED: heritageClauses toRs " + TypeScript.SyntaxKind[t.kind()]);
                     }
                 });
+                return r;
             }
             return null;
         };
@@ -39348,7 +39350,7 @@ var TypeScript;
             return this._widenedType;
         };
 
-        PullTypeSymbol.prototype.toRsType = function () {
+        PullTypeSymbol.prototype.toRsType = function (mut) {
             if (this.toString() === "any") {
                 return TypeScript.TAny;
             }
@@ -39389,10 +39391,13 @@ var TypeScript;
                     tArgs = this.getTypeParameters();
                 }
 
-                var nJSParams = tArgs.map(function (p) {
-                    return p.toRsTypeParameter();
+                var rsTParams = tArgs.map(function (p) {
+                    return p.toRsType();
                 });
-                return new TypeScript.TTypeReference(this.fullName().split("<")[0], nJSParams);
+                if (mut !== undefined) {
+                    rsTParams = [mut].concat(rsTParams);
+                }
+                return new TypeScript.TTypeReference(this.fullName().split("<")[0], rsTParams);
             }
 
             if (this.isFunction()) {

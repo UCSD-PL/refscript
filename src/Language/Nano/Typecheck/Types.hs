@@ -590,19 +590,13 @@ instance (PP r, F.Reftable r) => PP (TDef (RType r)) where
           pp (if c then "class" else "interface")
       <+> pp nm 
       <+> ppArgs brackets comma vs 
-      <+> braces (
-            text " " 
-        <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
-        <+> text " ")
+      <+> braces (intersperse semi $ map pp ts)
     pp (TD c nm vs (Just (p,ps)) ts) = 
           pp (if c then "class" else "interface")
       <+> pp nm 
       <+> ppArgs brackets comma vs 
       <+> text "extends" <+> pp p <+> pp ps
-      <+> braces (
-            text " " 
-        <+> (vcat $ (\t -> pp t <> text ";") <$> ts) 
-        <+> text " ")
+      <+> braces (intersperse semi $ map pp ts)
 
 
 instance (PP r, F.Reftable r) => PP (TElt (RType r)) where
@@ -713,6 +707,7 @@ data Assignability
 writeGlobalVars   :: PP t => Nano a t -> [Id SourceSpan] 
 writeGlobalVars p = envIds mGnty 
   where
+  -- FIXME !!!
     mGnty         = error "writeGlobalVars" -- glVars p  -- guarantees
 
 

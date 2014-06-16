@@ -715,7 +715,7 @@ tcCall γ (NewExpr l (VarRef lv i) es)
 tcCall γ (DotRef l e f)
   = do z                  <- tcMethCall l γ e [] $ getPropTy (F.symbol f) l $ tce_env γ
        case z of 
-         ([e'], t)        -> return (tracePP "DotRef'" $ DotRef l e' f, t)
+         ([e'], t)        -> return (DotRef l e' f, t)
          _                -> error "BUG: tcStmt - If then else"
 
 

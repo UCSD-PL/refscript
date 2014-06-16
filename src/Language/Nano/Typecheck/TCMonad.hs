@@ -423,11 +423,6 @@ subtypeM l t1 t2
           Right (CUp _ _) -> return  ()
 
 
-isSubtype' :: (PPR r) => SourceSpan -> TDefEnv (RType r) -> RType r -> RType r -> Bool
-isSubtype' _ _ _ _ = undefined
-
-
-
 addCast     ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
   where loc       = srcPos e
         fact      = TCast ξ c

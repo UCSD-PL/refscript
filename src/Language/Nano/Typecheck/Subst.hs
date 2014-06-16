@@ -20,7 +20,7 @@ module Language.Nano.Typecheck.Subst (
   , Substitutable (..)
 
   -- * Flatten a type definition applying subs
-  , flatten, flatten', flattenType, intersect
+  , flatten, flatten', flattenType
 
   -- * Ancestors
   , weaken
@@ -265,53 +265,4 @@ weaken δ dt@(TD _ s vs Nothing _, ts) t
   | ss /= t = Nothing
   | ss == t = Just dt
   where ss  = F.symbol s 
-
-
--- | `intersect` returns the intersection of the raw parts of two type trees 
--- @t1@ and @t2@ adjusted with the respective refinements.
---------------------------------------------------------------------------------
-intersect :: PPR r => TDefEnv (RType r) -> RType r -> RType r -> (RType r, RType r)
---------------------------------------------------------------------------------
-intersect δ (TApp TUn t1s r1) (TApp TUn t2s r2) 
-  = (TApp TUn cmn1 r1, TApp TUn cmn2 r2)
-  where
-    (cmn1, cmn2)    = unzip [ intersect δ τ1 τ2 | τ2 <- t2s, τ1 <- maybeToList $ L.find (== τ2) t1s ]
-    
-intersect δ t1 t2@(TApp TUn _ _ ) 
-  = intersect δ (TApp TUn [t1] fTop) t2
-
-intersect δ t1@(TApp TUn _ _ ) t2
-  = intersect δ t1 (TApp TUn [t2] fTop)
-
-intersect δ t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2) 
-  | (x1,s1) == (x2,s2)
-  = (TApp (TRef x1 s1) (fst <$> zipWith (intersect δ) t1s t2s) r1
-    ,TApp (TRef x2 s2) (snd <$> zipWith (intersect δ) t1s t2s) r2)
-  | otherwise 
-  = on (intersect δ) (flattenType δ) t1 t2 
- 
-intersect _  (TApp c [] r) (TApp c' [] r') 
-  | c == c' = (TApp c [] r, TApp c [] r')
-
-intersect _ (TVar v r) (TVar v' r') 
-  | v == v' = (TVar v r, TVar v' r')
-
-intersect δ (TFun x1s t1 r1) (TFun x2s t2 r2) 
-  = (TFun xs1 y1 r1, TFun xs2 y2 r2)
-  where
-    (xs1, xs2) = unzip $ zipWith (intersectBind δ) x1s x2s
-    (y1 , y2 ) = intersect δ t1 t2
-
-intersect δ (TCons e1s m1 r1) (TCons e2s m2 r2) 
-  = (TCons cmn1 m1 r1, TCons cmn2 m2 r2)
-  where 
-    cmn1 = fmap fst <$> cmn
-    cmn2 = fmap snd <$> cmn
-    cmn  = error "intersect" 
-
-intersect _ t1 t2 = 
-  error $ printf "BUG[intersect]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
-
-
-intersectBind δ (B s1 t1) (B s2 t2) = (B s1 t1', B s2 t2') where (t1', t2') = intersect δ t1 t2
 

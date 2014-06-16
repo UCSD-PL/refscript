@@ -101,12 +101,12 @@ consNano pgm@(Nano {code = Src fs})
         return ()
 
 checkInterfaces p g = 
-     mapM_ (safeExtends (sub l) δ) is
+     mapM_ (safeExtends l g δ) is
    where 
      δ           = defs p
      l           = srcPos dummySpan   -- FIXME  
      is          = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
-     sub l t1 t2 = uncurry (subType l g) $ intersect δ t1 t2
+
 
 --------------------------------------------------------------------------------
 initCGEnv :: NanoRefType -> CGM CGEnv
@@ -312,13 +312,12 @@ consClassElts :: SourceSpan -> CGEnv -> TDef RefType -> [ClassElt AnnTypeR] -> C
 ------------------------------------------------------------------------------------
 consClassElts l g d ce 
    = do  δ <- getDef
-         safeExtends (sub δ l) δ d 
-         mapM_ (consClassElt g) ce
-     where
          -- FIXME: 
          -- There are no casts here, so we need to align the 
          -- types before doing subtyping on them.
-         sub δ l t1 t2 = uncurry (subType l g) $ intersect δ t1 t2
+         safeExtends l g δ d 
+         mapM_ (consClassElt g) ce
+     where
 
 
 ------------------------------------------------------------------------------------
@@ -553,9 +552,9 @@ consDeadCode δ g l x t
 -- | UpCast(x, t1 => t2)
 consUpCast δ g l x t1 t2 = envAddFresh l stx g
     where
-        tx   = tracePP "tx" $ envFindTy x g
+        tx   = envFindTy x g
         ztx  = zipType δ (fmap F.bot tx) t2
-        stx  = tracePP "stx" $ ztx `eSingleton` x
+        stx  = ztx `eSingleton` x
     
 -- | DownCast(x, t1 => t2)
 consDownCast δ g l x t1 t2

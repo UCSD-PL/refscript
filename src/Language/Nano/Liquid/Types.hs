@@ -407,49 +407,12 @@ instance Related RefType where
 --   related δ (TFun x1s t1 _) (TFun x2s t2 _) = 
 --       related δ t1 t2 && related δ x1s x2s
 -- 
-  -- | Object types
-  --
-  --  { F1,F2 } | { F1',F3' } = { F1|F1',top(F3) }, where disjoint F2 F3'
-  --
-  related δ (TCons f1s m1 r1) (TCons f2s _ _) = 
-  -- FIXME 
-      True
---     where 
---       common' = (uncurry $ zipElts δ) <$> common
---       disjoint' = (rType <$>) <$> disjoint  -- top
---       (common, disjoint) = partition [] [] f2s
--- 
---       partition g1 g2 [] = (g1, g2)
---       partition g1 g2 (e2:e2s) =
---         case pick e2 of 
---           [  ] -> partition g1 (e2:g2) e2s
---           [ee] -> partition (ee:g1) g2 e2s
---           ees  -> error $ "zipType: " ++ ppshow e2 ++ " got matched with " 
---                                       ++ ppshow ees
--- 
---       pick f =  [ (f1, f) | f1 <- f1s, compatible f1 f ]
---       compatible e e' = sameBinder e e' && related δ e e'
--- 
-
-
-
---     -- | Intersection types
---     --
---     --  s1 /\ s2 .. /\ sn | t1 /\ t2 .. tm = s1'|t1' /\ .. sk'|tk' /\ .. top(tm')
---     --
---     zipType δ (TAnd t1s) (TAnd t2s) =
---       case [ (pick t2, t2) | t2 <- t2s ] of
---         []        -> error $ "ziptype: impossible intersection types" 
---         [(t1,t2)] -> zipType δ t1 t2
---         ts        -> TAnd $ (uncurry $ zipType δ) <$> ts
---     where
---       pick t = case [ t1 | t1 <- t1s, related δ t1 t ] of
---                 [t1] -> t1
---                 _    -> error $ "zipType: cannot match " ++ ppshow t 
---                               ++ " with any part of " ++ ppshow t1s
---  
---   related _ _ _ = True
-
+-- | Object types
+--
+--  { F1,F2 } | { F1',F3' } = { F1|F1',top(F3) }, where disjoint F2 F3'
+--
+-- related δ (TCons f1s m1 r1) (TCons f2s _ _) = 
+--     True
 
 
 instance Related (RType ()) where

@@ -154,8 +154,8 @@ convertObj l δ t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2)
     -- Check type hierarchy
   = case weaken δ (findSymOrDie x1 δ,t1s) x2 of
       -- Adjusting the child class to the parent
-      Just (_, t1s) -> 
-          if all (uncurry $ isSubtype δ) $ zip t1s t2s 
+      Just (_, t1s') -> 
+          if all (uncurry $ isSubtype δ) $ zip t1s' t2s
             then Right $ CUp (TApp (TRef x2 s1) t1s r1) t2
             else Left  $ errorSimpleSubtype l t1 t2
       

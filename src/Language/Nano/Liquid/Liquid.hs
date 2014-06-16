@@ -111,14 +111,16 @@ checkInterfaces p g =
 --------------------------------------------------------------------------------
 initCGEnv :: NanoRefType -> CGM CGEnv
 --------------------------------------------------------------------------------
-initCGEnv pgm 
-  = do  cd'   <- T.mapM fx cd
-        setDef $ cd' 
+initCGEnv pgm  
+  = do  cd'   <- mapTDefEnvM fx cd
+        setDef $ cd
         return $ CGE r f g cc cs cd'
   where 
       fx t    | isTFun t  = return t -- freshTyFun g0 l t -- Do just the fields for the moment
-      fx t    | isRigid t = freshTyVar g0 l t
+      fx t    | not (isTVar t) = freshTyVar g0 l t
       fx t    | otherwise = return t
+      
+
       l       = srcPos dummySpan -- FIXME
       g0      = CGE r f g cc cs cd 
       r       = envUnion (specs pgm) (externs pgm)
@@ -308,7 +310,7 @@ consVarDecl g (VarDecl l x Nothing)
    
 
 ------------------------------------------------------------------------------------
-consClassElts :: SourceSpan -> CGEnv -> TDef RefType -> [ClassElt AnnTypeR] -> CGM ()
+consClassElts :: SourceSpan -> CGEnv -> TDef F.Reft -> [ClassElt AnnTypeR] -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElts l g d ce 
    = do  δ <- getDef
@@ -361,7 +363,7 @@ consExprT g e to
 
 
 --------------------------------------------------------------------------------
-consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
+consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
 consAsgn g l x e 
   = do (x', g') <- consExprT g e $ envGlobAnnot l x g

@@ -125,7 +125,7 @@ execute cfg pgm act
       (Left err, _) -> throw err
       (Right x, st) -> (x, st)  
 
-initState       :: Config -> Nano AnnTypeR RefType -> CGState
+initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
 initState c p   = CGS F.emptyBindEnv (specs p) (defs p) (externs p)
                     [] [] 0 mempty invs c [this] M.empty []
   where 
@@ -157,7 +157,7 @@ patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
 -- | Get binding from object type
 
 ---------------------------------------------------------------------------------------
-measureEnv   ::  Nano a (RType F.Reft) -> F.SEnv F.SortedReft
+measureEnv   ::  Nano a F.Reft -> F.SEnv F.SortedReft
 ---------------------------------------------------------------------------------------
 measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts 
 
@@ -168,7 +168,7 @@ measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts
 data CGState 
   = CGS { binds    :: F.BindEnv            -- ^ global list of fixpoint binders
         , cg_sigs  :: !(E.Env RefType)     -- ^ type sigs for all defined functions
-        , cg_defs  :: !(TDefEnv RefType)   -- ^ defined types 
+        , cg_defs  :: !(TDefEnv F.Reft)    -- ^ defined types 
         , cg_ext   :: !(E.Env RefType)     -- ^ Extern (unchecked) declarations
         , cs       :: ![SubC]              -- ^ subtyping constraints
         , ws       :: ![WfC]               -- ^ well-formedness constraints
@@ -188,7 +188,7 @@ type TConInv = M.HashMap TCon (Located RefType)
 type GlobEnv = M.HashMap F.Symbol [F.BindId]
 
 -------------------------------------------------------------------------------
-getDef  :: CGM (TDefEnv RefType)
+getDef  :: CGM (TDefEnv F.Reft)
 -------------------------------------------------------------------------------
 getDef   = cg_defs <$> get
 
@@ -502,7 +502,7 @@ subType l g t1 t2 =
 
 
 ---------------------------------------------------------------------------------------
-safeExtends :: SourceSpan -> CGEnv -> TDefEnv RefType -> TDef RefType -> CGM ()
+safeExtends :: SourceSpan -> CGEnv -> TDefEnv F.Reft -> TDef F.Reft -> CGM ()
 ---------------------------------------------------------------------------------------
 safeExtends l g δ (TD _ c _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
   where
@@ -558,13 +558,13 @@ instance Freshable [F.Refa] where
   fresh = single <$> fresh
 
 instance Freshable F.Reft where
-  fresh                  = errorstar "fresh Reft"
+  fresh                  = errorstar "fresh F.Reft"
   true    (F.Reft (v,_)) = return $ F.Reft (v, []) 
   refresh (F.Reft (_,_)) = curry F.Reft <$> freshVV <*> fresh
     where freshVV        = F.vv . Just  <$> fresh
 
 instance Freshable F.SortedReft where
-  fresh                  = errorstar "fresh Reft"
+  fresh                  = errorstar "fresh F.Reft"
   true    (F.RR so r)    = F.RR so <$> true r 
   refresh (F.RR so r)    = F.RR so <$> refresh r
 
@@ -804,7 +804,7 @@ getSuperM l (TApp (TRef i s) ts _) = fromTdef =<< findSymOrDieM i
 getSuperM l _  = cgError l $ errorSuper (srcPos l) 
 
 --------------------------------------------------------------------------------
-getSuperDefM :: IsLocated a => a -> RefType -> CGM (TDef RefType)
+getSuperDefM :: IsLocated a => a -> RefType -> CGM (TDef F.Reft)
 --------------------------------------------------------------------------------
 getSuperDefM l (TApp (TRef i _) ts _) = fromTdef =<< findSymOrDieM i
   where 

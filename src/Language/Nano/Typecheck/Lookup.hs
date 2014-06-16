@@ -23,7 +23,7 @@ import           Control.Applicative ((<$>))
 
 type PPR r = (PP r, F.Reftable r)
 
-type TDR r = TDefEnv (RType r)
+type TDR r = TDefEnv r
 type TER r = Env (RType r)
 
 -- Naming convention for the following:
@@ -51,7 +51,7 @@ getProp l _ _ _ t                = die $ bug (srcPos l)
 -- | `getElt`: return elements associated with a symbol @s@. The return list 
 -- is empty if the binding was not found or @t@ is an invalid type.
 -------------------------------------------------------------------------------
-getElt :: (F.Symbolic s, PPR r) => TDR r -> s -> RType r -> [TElt (RType r)]
+getElt :: (F.Symbolic s, PPR r) => TDR r -> s -> RType r -> [TElt r]
 -------------------------------------------------------------------------------
 getElt δ s t                = fromCons $ S.flattenType δ t
   where   
@@ -62,7 +62,7 @@ getElt _ _ t                = []
 
 
 -------------------------------------------------------------------------------
-getCallable :: PPR r => TDefEnv (RType r) -> RType r -> [RType r]
+getCallable :: PPR r => TDefEnv r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
 getCallable δ t             = uncurry mkAll <$> foo [] t
   where
@@ -121,7 +121,7 @@ lookupAmbientVar l α γ s amb t =
 
 -------------------------------------------------------------------------------
 getPropTDef :: (PPR r) =>
-  Bool -> t -> TDR r -> F.Symbol -> [RType r] -> TDef (RType r) -> Maybe (RType r)
+  Bool -> t -> TDR r -> F.Symbol -> [RType r] -> TDef r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 getPropTDef b _ γ f ts d = lookupElt b f $ S.flatten γ (d,ts)
 

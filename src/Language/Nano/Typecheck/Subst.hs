@@ -115,7 +115,7 @@ instance Free (Fact r) where
   free (ConsAnn t)       = free t
   free (ClassAnn (vs,m)) = foldr S.delete (free m) vs
 
-instance Free (TElt (RType r)) where
+instance Free (TElt r) where
   free (FieldSig _ _ m τ t) = free m `mappend` free τ `mappend` free t
   free (MethSig  _ _ m τ t) = free m `mappend` free τ `mappend` free t
   free (CallSig t)          = free t
@@ -148,7 +148,7 @@ instance F.Reftable r => Substitutable r (Bind r) where
 instance (Substitutable r t) => Substitutable r (Env t) where 
   apply = envMap . apply
 
-instance Substitutable r t => Substitutable r (TElt t) where 
+instance F.Reftable r => Substitutable r (TElt r) where 
   apply θ (FieldSig x s m τ t) = FieldSig x s (appTy (toSubst θ) m) (apply θ τ) (apply θ t)
   apply θ (MethSig  x s m τ t) = MethSig  x s (appTy (toSubst θ) m) (apply θ τ) (apply θ t)
   apply θ (CallSig t)          = CallSig      (apply θ t)
@@ -183,7 +183,7 @@ instance Substitutable r (Id a) where
 instance F.Reftable r => Substitutable r (Annot (Fact r) z) where
   apply θ (Ann z fs)     = Ann z $ apply θ fs
 
-instance F.Reftable r => Substitutable r (TDef (RType r)) where
+instance F.Reftable r => Substitutable r (TDef r) where
   apply θ (TD c n v p e) = TD c n v (apply θ p) (apply θ e)
 
  
@@ -206,8 +206,7 @@ appTy _        (TExp _)       = error "appTy should not be applied to TExp"
 -- minor FIXME: this should be moved somewhere else eventually.
 --
 ---------------------------------------------------------------------------
-flatten :: PPR r 
-        => TDefEnv (RType r) -> (TDef (RType r),[RType r]) -> [TElt (RType r)]
+flatten :: PPR r => TDefEnv r -> (TDef r, [RType r]) -> [TElt r]
 ---------------------------------------------------------------------------
 flatten = fix . ff
 
@@ -252,8 +251,7 @@ isAncestor δ s1 s2
 -- FIXME: Works for classes, but interfaces could have multiple ancestors.
 -- FIXME: What about common elements in parent class?
 ---------------------------------------------------------------------------
-weaken :: PPR r => TDefEnv (RType r) -> (TDef (RType r), [RType r]) 
-                   -> F.Symbol -> Maybe (TDef (RType r), [RType r])
+weaken :: PPR r => TDefEnv r -> (TDef r, [RType r]) -> F.Symbol -> Maybe (TDef r, [RType r])
 ---------------------------------------------------------------------------
 weaken δ dt@(TD _ s vs (Just (p,ps)) _, ts) t 
   | ss /= t = weaken δ (apply θ $ findSymOrDie p δ, apply θ ps) t

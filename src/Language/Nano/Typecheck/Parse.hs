@@ -97,7 +97,7 @@ aliasVarT (l, x)
   | isTvar x  = Left  $ tvar l x
   | otherwise = Right $ stringSymbol x 
 
-iFaceP   :: Parser (Id SourceSpan, TDef RefType)
+iFaceP   :: Parser (Id SourceSpan, TDef Reft)
 iFaceP   = do id     <- identifierP 
               vs     <- option [] tParP
               ext    <- optionMaybe extendsP
@@ -415,22 +415,22 @@ data RawSpec
   | RawInvt   String   -- Invariants
   deriving (Show,Eq,Ord,Data,Typeable,Generic)
 
-data PSpec l t 
-  = Meas   (Id l, t)
-  | Bind   (Id l, t) 
-  | Field  (Id l, Bool, t) 
-  | Constr (Id l, t)
-  | Method (Id l, t)
-  | Extern (Id l, t)
-  | IFace  (Id l, TDef t)
-  | Class  (Id l, ([TVar], Maybe (Id l,[t])))
-  | TAlias (Id l, TAlias t)
+data PSpec l r
+  = Meas   (Id l, RType r)
+  | Bind   (Id l, RType r) 
+  | Field  (Id l, Bool, RType r) 
+  | Constr (Id l, RType r)
+  | Method (Id l, RType r)
+  | Extern (Id l, RType r)
+  | IFace  (Id l, TDef r)
+  | Class  (Id l, ([TVar], Maybe (Id l,[RType r])))
+  | TAlias (Id l, TAlias (RType r))
   | PAlias (Id l, PAlias) 
   | Qual   Qualifier
-  | Invt   l t 
+  | Invt   l (RType r) 
   deriving (Eq, Ord, Show, Data, Typeable)
 
-type Spec = PSpec SourceSpan RefType
+type Spec = PSpec SourceSpan Reft
 
 parseAnnot :: SourceSpan -> RawSpec -> Parser Spec
 parseAnnot ss (RawMeas   _) = Meas   <$> patch2 ss <$> idBindP
@@ -598,7 +598,7 @@ instance PP (RawSpec) where
 
 
 --------------------------------------------------------------------------------------
-catFunSpecDefs :: TDefEnv RefType -> [Statement (SourceSpan, [Spec])] -> Env RefType
+catFunSpecDefs :: TDefEnv Reft -> [Statement (SourceSpan, [Spec])] -> Env RefType
 --------------------------------------------------------------------------------------
 catFunSpecDefs δ ss = envFromList [ (i, checkType δ t) | l <- ds , Bind (i,t) <- snd l ]
   where ds     = definedFuns ss
@@ -653,7 +653,7 @@ instance Show TypeError where
                             ++ "add a mutability modifier as the first type argument"
 
 
-checkType :: TDefEnv RefType -> RefType -> RefType
+checkType :: TDefEnv Reft -> RefType -> RefType
 checkType δ typ = 
     case everything (++) ([] `mkQ` fromType) typ of
       [] -> typ

@@ -104,7 +104,7 @@ data CGEnv
         , guards   :: ![F.Pred]           -- ^ branch target conditions  
         , cge_ctx  :: !IContext           -- ^ intersection-type context 
         , cge_spec :: !(Env RefType)      -- ^ specifications for defined functions
-        , cge_defs :: !(TDefEnv RefType)  -- ^ type definitions
+        , cge_defs :: !(TDefEnv F.Reft)   -- ^ type definitions
         }
 
 ----------------------------------------------------------------------------
@@ -279,8 +279,8 @@ emapReft _ _ _               = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)     = B x $ emapReft f γ t
 
-emapReftElt  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> TElt (RType a) -> TElt (RType b)
-emapReftElt f γ e            = fmap (emapReft f γ) e
+emapReftElt  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> TElt a -> TElt b
+emapReftElt f γ e            = fmap (f γ) e
 
 mapReftM f (TVar α r)        = TVar α <$> f r
 mapReftM f (TApp c ts r)     = TApp c <$> mapM (mapReftM f) ts <*> f r
@@ -372,74 +372,6 @@ rawStringSymbol            = F.Loc F.dummyPos . F.stringSymbol
 rawStringFTycon            = F.stringFTycon . F.Loc F.dummyPos 
 
 
--- | Related types ( ~~ ) 
-
-class Related a where
-  related :: TDefEnv RefType -> a -> a -> Bool
-
-instance Related RefType where
-  related δ t t' = isSubtype δ t t' || isSubtype δ t' t
---   
---   related δ (TApp TUn t1s r1) (TApp TUn t2s _) = True
---   related δ _                 (TApp TUn _ _  ) = True
---   related δ (TApp TUn _ _)    _                = True
--- 
---   related δ t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2) 
---     | (x1,s1) == (x2,s2) = related δ t1s t2s
---     | otherwise = 
---         case weaken δ (findSymOrDie x1 δ, t1s) x2 of
---           Just (_, t1s') -> related δ (TApp (TRef x1 s1) t1s' r1) t2
---           Nothing -> 
---             case weaken δ (findSymOrDie x2 δ, t1s) x1 of
---               Just (_, t2s') -> related δ t1 (TApp (TRef x2 s2) t2s' r2)
---               Nothing -> False
--- 
---   related δ t1@(TApp (TRef _ _) _ _) t2 = related δ (flattenType δ t1) t2
---   related δ t1 t2@(TApp (TRef _ _) _ _) = related δ t1 (flattenType δ t2)
--- 
---   related _ (TApp c [] r) (TApp c' [] _) | c == c' = True
--- 
---   -- | Top ??
---   -- related _ _ t2@(TApp TTop _ _ ) = t2
--- 
---   related _ (TVar v r) (TVar v' r') | v == v' = True
--- 
---   related δ (TFun x1s t1 _) (TFun x2s t2 _) = 
---       related δ t1 t2 && related δ x1s x2s
--- 
--- | Object types
---
---  { F1,F2 } | { F1',F3' } = { F1|F1',top(F3) }, where disjoint F2 F3'
---
--- related δ (TCons f1s m1 r1) (TCons f2s _ _) = 
---     True
-
-
-instance Related (RType ()) where
-  related δ t t' = isSubtype δ τ τ' || isSubtype δ τ' τ
-    where
-      τ  = ofType t
-      τ' = ofType t'
-
-instance Related (TElt RefType) where
-  related δ (CallSig t1)            (CallSig t2)            = related δ t1 t2
-  related δ (ConsSig t1)            (ConsSig t2)            = related δ t1 t2
-  related δ (IndexSig _ _ t1)       (IndexSig _ _ t2)       = related δ t1 t2
-  related δ (FieldSig _ _ μ1 τ1 t1) (FieldSig _ _ μ2 τ2 t2) = and [related δ μ1 μ2, related δ τ1 τ2, related δ t1 t2]
-  related δ (MethSig  _ _ μ1 τ1 t1) (MethSig  _ _ μ2 τ2 t2) = and [related δ μ1 μ2, related δ τ1 τ2, related δ t1 t2]
-  related δ _                       _                       = False
-
-instance Related a => Related (Maybe a) where
-  related δ (Just t1) (Just t2) = related δ t1 t2
-  related _ _         _         = True
-
-instance Related a => Related [a] where
-  related δ t1s t2s = and $ zipWith (related δ) t1s t2s
-
-instance Related (RType a) => Related (Bind a) where
-  related δ (B _ t1) (B _ t2) = related δ t1 t2
-
-
 
 -- | `zipType` returns a type that is:
 --
@@ -449,7 +381,7 @@ instance Related (RType a) => Related (Bind a) where
 --  * applys @g@ whenever the respective part in type @t2@ is missing
 --
 --------------------------------------------------------------------------------
-zipType :: TDefEnv RefType -> RefType -> RefType -> RefType
+zipType :: TDefEnv F.Reft -> RefType -> RefType -> RefType
 --------------------------------------------------------------------------------
 --
 --  s1 \/ .. sn | t1 \/ .. tm = s1'|t1' \/ .. tk|tk' \/ .. bot(tm')
@@ -519,7 +451,7 @@ zipType δ (TCons f1s m1 r1) (TCons f2s _ _) =
     TCons (common' ++ disjoint') m1 r1
   where 
     common' = (uncurry $ zipElts δ) <$> common
-    disjoint' = (rType <$>) <$> disjoint  -- top
+    disjoint' = (const fTop <$>) <$> disjoint  -- top
     (common, disjoint) = partition [] [] f2s
 
     partition g1 g2 [] = (g1, g2)

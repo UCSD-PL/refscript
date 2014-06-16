@@ -4,20 +4,22 @@
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE UndecidableInstances      #-}
 {-# LANGUAGE LiberalTypeSynonyms       #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE DoAndIfThenElse           #-}
 
 
-module Language.Nano.Typecheck.Sub (convert, isSubtype, safeExtends) where
+module Language.Nano.Typecheck.Sub (convert, isSubtype, safeExtends, Related (..)) where
 
 import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>), (<*>))
 import           Data.Function                      (on)
 import qualified Data.HashSet                       as S
 import           Data.List                          (elem, groupBy, sort, nub, (\\))
-import           Data.Maybe                         (maybeToList)
+import           Data.Maybe                         (maybeToList, fromMaybe)
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)
 import           Language.Fixpoint.Errors
@@ -30,7 +32,6 @@ import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.Typecheck.Subst
-import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Errors
 import           Data.Monoid                  
 import qualified Data.HashMap.Strict                as M
@@ -43,7 +44,7 @@ import qualified System.Console.CmdArgs.Verbosity   as V
 
 type PPR r = (PP r, F.Reftable r)
    
-type TDR r = TDefEnv (RType r)
+type TDR r = TDefEnv r
 
 
 instance PP a => PP (S.HashSet a) where
@@ -333,7 +334,7 @@ convertUnion l δ t1 t2 =
 
 -- FIXME: replace eltType
 --------------------------------------------------------------------------------
-safeExtends :: PPR r => SourceSpan -> TDR r -> TDef (RType r) -> [Error]
+safeExtends :: PPR r => SourceSpan -> TDR r -> TDef r -> [Error]
 --------------------------------------------------------------------------------
 safeExtends l δ (TD _ c _ (Just (p, ts)) es) =
     [ errorClassExtends l c p δ ee pe | pe <- flatten δ (findSymOrDie p δ,ts)
@@ -343,3 +344,27 @@ safeExtends l δ (TD _ c _ (Just (p, ts)) es) =
                                       , not (isSubtype δ t1 t2) ]
 safeExtends _ _ (TD _ _ _ Nothing _)  = []
 
+
+-- | Related types ( ~~ ) 
+
+class Related t where
+  related :: PPR r => TDefEnv r -> t r -> t r -> Bool
+
+instance Related RType where
+  related δ t t' = isSubtype δ t t' || isSubtype δ t' t
+  
+instance Related TElt where
+  related δ (CallSig t1)            (CallSig t2)            = related δ t1 t2
+  related δ (ConsSig t1)            (ConsSig t2)            = related δ t1 t2
+  related δ (IndexSig _ _ t1)       (IndexSig _ _ t2)       = related δ t1 t2
+  related δ (FieldSig _ _ μ1 τ1 t1) (FieldSig _ _ μ2 τ2 t2) = 
+    and [ related (fmap (const ()) δ) μ1 μ2
+        , fromMaybe False $ related δ <$> τ1 <*> τ2
+        , related δ t1 t2]
+  related δ (MethSig  _ _ μ1 τ1 t1) (MethSig  _ _ μ2 τ2 t2) = 
+    and [ related (fmap (const ()) δ) μ1 μ2
+        , fromMaybe False $ related δ <$> τ1 <*> τ2
+        , related δ t1 t2]
+  related δ _                       _                       = False
+    
+ 

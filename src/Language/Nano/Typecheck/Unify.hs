@@ -19,6 +19,7 @@ import           Language.Fixpoint.Errors
 import           Language.Nano.Errors 
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Sub
 
 
 import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
@@ -39,7 +40,7 @@ type PPR r = (PP r, F.Reftable r)
 -- | Unify types @t@ and @t'@, in substitution environment @θ@ and type
 -- definition environment @δ@.
 -----------------------------------------------------------------------------
-unify :: PPR r => SourceSpan -> TDefEnv (RType r) 
+unify :: PPR r => SourceSpan -> TDefEnv r
   -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 
@@ -55,11 +56,10 @@ unify l _ θ t (TVar α _)  = varAsn l θ α t
 -- XXX: ORDERING IMPORTANT HERE
 -- Keep the union case before unfolding, but after type variables
 
--- FIXME
-unify l δ θ t t' | any isUnion [t,t'] = unifys l δ θ t1s t2s
+unify l δ θ t t' | any isUnion [t,t'] = unifys l δ θ t1s' t2s'
   where
-    (ts, _, _) = error "unify-union" -- unionParts' unifEquiv t t' in
-    (t1s, t2s) = unzip ts
+    (t1s', t2s') = unzip [ (t1, t2) | t1 <- t1s, t2 <- t2s, related δ t1 t2]
+    (t1s , t2s ) = mapPair bkUnion (t,t')
 
 unify l δ θ (TApp (TRef x s) ts _) (TApp (TRef x' s') ts' _) 
   | (x,s) == (x',s')   = unifys l δ θ ts ts'
@@ -106,8 +106,8 @@ unifEquiv _             _               = False
 
 
 -----------------------------------------------------------------------------
-unifys ::  PPR r => SourceSpan -> TDefEnv (RType r) 
-            -> RSubst r -> [RType r] -> [RType r] -> Either Error (RSubst r)
+unifys ::  PPR r => SourceSpan -> TDefEnv r -> RSubst r -> [RType r] 
+                    -> [RType r] -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 unifys loc γ θ ts ts'  
   | nTs == nTs' = foldM foo θ $ zip ts ts'

@@ -47,7 +47,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, rtArr, tUndef, tNull
-  , tAnd, isTVar, isRigid, isArr, isTObj, isConstr, isTFun, fTop, orNull
+  , tAnd, isTVar, isArr, isTObj, isConstr, isTFun, fTop, orNull
 
   -- * Print Types
   , ppArgs
@@ -57,7 +57,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Type definition env
   , TDefEnv (..), tDefEmpty, tDefFromList, tDefToList
-  , addSym, findSym, findSymOrDie
+  , addSym, findSym, findSymOrDie, mapTDefEnv, mapTDefEnvM
 
   -- * Operator Types
   , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy, objLitTy, setPropTy, getPropTy
@@ -89,7 +89,7 @@ import qualified Data.HashSet                   as S
 import           Data.Either                    (partitionEithers)
 import           Data.Function                  (on)
 import           Data.Maybe                     (fromMaybe, listToMaybe)
-import           Data.Traversable               hiding (sequence) 
+import           Data.Traversable               hiding (sequence, mapM) 
 import           Data.Foldable                  (Foldable()) 
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.List                      as L
@@ -100,6 +100,7 @@ import           Data.Typeable                  ()
 import           Language.ECMAScript3.Syntax    hiding (Cast)
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Misc
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
@@ -177,7 +178,7 @@ combMut μ _  | otherwise       = μ
 variance :: TVar -> RType r -> Bool
 variance v t = True
 
-varianceTDef :: TDef (RType r) -> [Bool]
+varianceTDef :: TDef r -> [Bool]
 varianceTDef (TD _ _ vs _ _) = take (length vs) $ repeat True
 
 
@@ -186,33 +187,33 @@ varianceTDef (TD _ _ vs _ _) = take (length vs) $ repeat True
 -- | Data types 
 ---------------------------------------------------------------------------------
 
-data TDef t    = TD { 
-        t_class :: Bool                           -- ^ Is this a class or interface type
-      , t_name  :: !(Id SourceSpan)               -- ^ Name (possibly no name)
-      , t_args  :: ![TVar]                        -- ^ Type variables
-      , t_proto :: !(Maybe (Id SourceSpan, [t]))  -- ^ Heritage
-      , t_elts  :: ![TElt t]                      -- ^ List of data type elts 
+data TDef r    = TD { 
+        t_class :: Bool                                 -- ^ Is this a class or interface type
+      , t_name  :: !(Id SourceSpan)                     -- ^ Name (possibly no name)
+      , t_args  :: ![TVar]                              -- ^ Type variables
+      , t_proto :: !(Maybe (Id SourceSpan, [RType r]))  -- ^ Heritage
+      , t_elts  :: ![TElt r]                            -- ^ List of data type elts 
       } deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 -- | Assignability is ingored atm.
 -- TODO Mutability for CallSig and ConsSig?
-data TElt t    = CallSig  { f_type :: t }         -- Call Signature
-               | ConsSig  { f_type :: t }         -- Constructor Signature               
+data TElt r    = CallSig  { f_type :: RType r }         -- Call Signature
+               | ConsSig  { f_type :: RType r }         -- Constructor Signature               
                | IndexSig { f_sym  :: F.Symbol
-                          , f_key  :: Bool         -- Index Signature (T/F=string/number)
-                          , f_type :: t }         
+                          , f_key  :: Bool              -- Index Signature (T/F=string/number)
+                          , f_type :: RType r }         
               
-               | FieldSig { f_sym  :: F.Symbol    -- Name  
-                          , f_sta  :: Bool        -- Static or not
-                          , f_mut  :: Mutability  -- Mutability
-                          , f_this :: Maybe t     -- Constraint on enclosing object
-                          , f_type :: t }         -- Property type (could be function)
+               | FieldSig { f_sym  :: F.Symbol          -- Name  
+                          , f_sta  :: Bool              -- Static or not
+                          , f_mut  :: Mutability        -- Mutability
+                          , f_this :: Maybe (RType r)   -- Constraint on enclosing object
+                          , f_type :: RType r }         -- Property type (could be function)
 
-               | MethSig  { f_sym  :: F.Symbol    -- Name  
-                          , f_sta  :: Bool        -- Static or not
-                          , f_mut  :: Mutability  -- Mutability
-                          , f_this :: Maybe t     -- Constraint on enclosing object
-                          , f_type :: t }         -- Property type (could be function)
+               | MethSig  { f_sym  :: F.Symbol          -- Name  
+                          , f_sta  :: Bool              -- Static or not
+                          , f_mut  :: Mutability        -- Mutability
+                          , f_this :: Maybe (RType r)   -- Constraint on enclosing object
+                          , f_type :: RType r }         -- Property type (could be function)
 
   deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
@@ -226,6 +227,33 @@ instance F.Fixpoint t => F.Fixpoint (TDef t) where
   toFix (TD _ n _ _ _) = F.toFix $ F.symbol n
 
 tDefEmpty = G 0 F.emptySEnv
+
+
+mapTDefEnv f (G i e) = G i $ F.mapSEnv g e
+  where 
+    g (TD c n αs (Just (p,ps)) es) 
+      = TD c n αs (Just (p, map f ps)) (mapElt f <$> es)
+
+ 
+---------------------------------------------------------------------------------
+mapTDefEnvM :: (Monad m, Applicative m) 
+            => (RType t -> m (RType r)) -> TDefEnv t -> m (TDefEnv r)
+---------------------------------------------------------------------------------
+mapTDefEnvM f (G i e) =
+    G i <$> F.fromListSEnv <$> mapM (mapSndM (mapTDefM f)) (F.toListSEnv e)
+  
+
+---------------------------------------------------------------------------------
+mapTDefM :: (Monad m, Applicative m) =>
+            (RType t -> m (RType r)) -> TDef t -> m (TDef r)
+---------------------------------------------------------------------------------
+mapTDefM f (TD c n αs (Just (p,ps)) es) 
+  = do  ps' <- mapM f ps 
+        es' <- mapM (mapEltM f) es 
+        return $ TD c n αs (Just (p,ps')) es'
+mapTDefM f (TD c n αs Nothing es) = 
+  TD c n αs Nothing <$> mapM (mapEltM f) es
+
 
 ---------------------------------------------------------------------------------
 tDefFromList :: F.Symbolic s => [(s, TDef t)] -> TDefEnv t
@@ -279,15 +307,15 @@ data TCon
 
 -- | (Raw) Refined Types 
 data RType r  
-  = TApp TCon [RType r]     r           -- ^ C T1,...,Tn
-  | TVar TVar               r           -- ^ A
-  | TFun [Bind r] (RType r) r           -- ^ (xi:T1,..,xn:Tn) => T
-  | TCons [TElt (RType r)] Mutability r -- ^ {f1:T1,..,fn:Tn} 
-  | TAll TVar (RType r)                 -- ^ forall A. T
-  | TAnd [RType r]                      -- ^ (T1..) => T1' /\ ... /\ (Tn..) => Tn' 
+  = TApp TCon [RType r]     r   -- ^ C T1,...,Tn
+  | TVar TVar               r   -- ^ A
+  | TFun [Bind r] (RType r) r   -- ^ (xi:T1,..,xn:Tn) => T
+  | TCons [TElt r] Mutability r -- ^ {f1:T1,..,fn:Tn} 
+  | TAll TVar (RType r)         -- ^ forall A. T
+  | TAnd [RType r]              -- ^ (T1..) => T1' /\ ... /\ (Tn..) => Tn' 
 
-  | TExp F.Expr                         -- ^ "Expression" parameters for type-aliases: 
-                                        --   never appear in real/expanded RType
+  | TExp F.Expr                 -- ^ "Expression" parameters for type-aliases: 
+                                --   never appear in real/expanded RType
 
     deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
@@ -488,7 +516,7 @@ instance Eq (RType r) where
   _             == _              = False
 
 
-instance Eq t => Eq (TElt t) where 
+instance Eq (TElt r) where 
   CallSig t1              == CallSig t2              = t1 == t2
   ConsSig t1              == ConsSig t2              = t1 == t2
   IndexSig _ b1 t1        == IndexSig _ b2 t2        = (b1,t1) == (b2,t2)
@@ -497,29 +525,47 @@ instance Eq t => Eq (TElt t) where
   _                       == _                       = False
  
 
+mapElt f (CallSig t) = CallSig (f t)
+mapElt f (ConsSig t) = ConsSig (f t)
+mapElt f (IndexSig i b t) = IndexSig i b ( f t)
+mapElt f (FieldSig x s m τ t) = FieldSig x s m (f <$> τ) (f t)
+mapElt f (MethSig  x s m τ t) = MethSig x s m (f <$> τ) (f t)
+
+mapEltM f (CallSig t) = CallSig <$> f t
+mapEltM f (ConsSig t) = ConsSig <$> f t
+mapEltM f (IndexSig i b t) = IndexSig i b <$> f t
+mapEltM f (FieldSig x s m τ t) = FieldSig x s m <$> (ff τ) <*> f t
+  where ff (Just t) = Just <$> f t
+        ff Nothing  = return Nothing
+mapEltM f (MethSig  x s m τ t) = MethSig x s m <$> (ff τ) <*> f t
+  where ff (Just t) = Just <$> f t
+        ff Nothing  = return Nothing
+  
+
+
 
 ---------------------------------------------------------------------------------
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-data Nano a t = Nano { fp     :: FilePath                  -- ^ FilePath
+data Nano a r = Nano { fp     :: FilePath                  -- ^ FilePath
                      , code   :: !(Source a)               -- ^ Code to check
-                     , externs:: !(Env t)                  -- ^ Imported (unchecked) specifications 
-                     , specs  :: !(Env t)                  -- ^ Function specs and 
+                     , externs:: !(Env (RType r))          -- ^ Imported (unchecked) specifications 
+                     , specs  :: !(Env (RType r))          -- ^ Function specs and 
                      -- , glVars :: !(Env t)                  -- ^ Global (annotated) vars
-                     , consts :: !(Env t)                  -- ^ Measure Signatures
-                     , defs   :: !(TDefEnv t)              -- ^ Type definitions
+                     , consts :: !(Env (RType r))          -- ^ Measure Signatures
+                     , defs   :: !(TDefEnv r)              -- ^ Type definitions
                                                            -- ^ After TC will also include class types
-							       , tAlias :: !(TAliasEnv t)            -- ^ Type aliases
+							       , tAlias :: !(TAliasEnv (RType r))    -- ^ Type aliases
                      , pAlias :: !(PAliasEnv)              -- ^ Predicate aliases
                      , quals  :: ![F.Qualifier]            -- ^ Qualifiers
-                     , invts  :: ![Located t]              -- ^ Type Invariants
+                     , invts  :: ![Located (RType r)]      -- ^ Type Invariants
                      } deriving (Functor, Data, Typeable)
 
-type NanoBareR r   = Nano (AnnBare r) (RType r)            -- ^ After Parse
-type NanoSSAR r    = Nano (AnnSSA  r) (RType r)            -- ^ After SSA  
-type NanoTypeR r   = Nano (AnnType r) (RType r)            -- ^ After TC: Contains an updated TDefEnv
-type NanoRefType   = Nano (AnnType F.Reft) (RType F.Reft)  -- ^ After Liquid
+type NanoBareR r   = Nano (AnnBare r) r                    -- ^ After Parse
+type NanoSSAR r    = Nano (AnnSSA  r) r                    -- ^ After SSA  
+type NanoTypeR r   = Nano (AnnType r) r                    -- ^ After TC: Contains an updated TDefEnv
+type NanoRefType   = NanoTypeR F.Reft                      -- ^ After Liquid
 
 type ExprSSAR r    = Expression (AnnSSA r)
 type StmtSSAR r    = Statement  (AnnSSA r)
@@ -548,7 +594,7 @@ instance Monoid (Source a) where
 instance Functor Source where 
   fmap f (Src zs) = Src (map (fmap f) zs)
 
-instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
+instance (PP r, F.Reftable r) => PP (Nano a r) where
   pp pgm@(Nano {code = (Src s) }) 
     =   text "\n******************* Code **********************"
     $+$ pp s
@@ -575,7 +621,7 @@ instance (PP r, F.Reftable r) => PP (Nano a (RType r)) where
 
 -- ppEnv env = vcat [ pp id <+> text "::" <+> pp t <+> text"\n" | (id, t) <- envToList env]
 
-instance (PP r, F.Reftable r) => PP (TDefEnv (RType r)) where
+instance (PP r, F.Reftable r) => PP (TDefEnv r) where
   pp (G s γ) =  (text "Size:" <+> text (show s))  $$ text "" $$
                 (text "Type definitions:"  $$ nest 2 (pp γ))
 
@@ -585,7 +631,7 @@ instance PP t => PP (I.IntMap t) where
 instance PP t => PP (F.SEnv t) where
   pp m = vcat $ pp <$> F.toListSEnv m
 
-instance (PP r, F.Reftable r) => PP (TDef (RType r)) where
+instance (PP r, F.Reftable r) => PP (TDef r) where
     pp (TD c nm vs Nothing ts) =  
           pp (if c then "class" else "interface")
       <+> pp nm 
@@ -599,7 +645,7 @@ instance (PP r, F.Reftable r) => PP (TDef (RType r)) where
       <+> braces (intersperse semi $ map pp ts)
 
 
-instance (PP r, F.Reftable r) => PP (TElt (RType r)) where
+instance (PP r, F.Reftable r) => PP (TElt r) where
   pp (CallSig t)          = text "call" <+> pp t 
   pp (ConsSig t)          = text "new" <+> pp t
   pp (IndexSig x True t)  = brackets (pp x <> text ": string") <> text ":" <> pp t
@@ -885,7 +931,7 @@ data Fact r
   = PhiVar      ![(Id SourceSpan)]
   | TypInst     !IContext ![RType r]
   -- Overloading
-  | EltOverload !IContext  !(TElt (RType r))
+  | EltOverload !IContext  !(TElt r)
   | Overload    !IContext  !(RType r)
   | TCast       !IContext  !(Cast r)
   -- Type annotations
@@ -922,7 +968,7 @@ instance Ord (AnnSSA  r) where
 instance Ord (Fact r) where
   compare (PhiVar i1       ) (PhiVar i2       )   = compare i1 i2
   compare (TypInst c1 t1   ) (TypInst c2 t2   )   = compare (c1,toType <$> t1) (c2,toType <$> t2)
-  compare (EltOverload c1 t1) (EltOverload c2 t2) = compare (c1, toType <$> t1) (c2, toType <$> t2)
+  compare (EltOverload c1 t1) (EltOverload c2 t2) = compare (c1, const () <$> t1) (c2, const () <$> t2)
   compare (Overload c1 t1  ) (Overload c2 t2  )   = compare (c1, toType t1) (c2, toType t2)
   compare (TCast c1 _      ) (TCast c2 _      )   = compare c1 c2
   compare (VarAnn t1       ) (VarAnn t2       )   = on compare toType t1 t2
@@ -981,8 +1027,6 @@ tVar   = (`TVar` fTop)
 
 isTVar (TVar _ _) = True
 isTVar _          = False
-
-isRigid = not . isTVar
 
 tInt, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RType r
 tInt     = TApp TInt     [] fTop 

@@ -315,7 +315,7 @@ consClassElts l g d ce
          safeExtends (sub δ l) δ d 
          mapM_ (consClassElt g) ce
      where
-         -- FIXME: if zipType changes, we might have to change this as well
+         -- FIXME: 
          -- There are no casts here, so we need to align the 
          -- types before doing subtyping on them.
          sub δ l t1 t2 = uncurry (subType l g) $ intersect δ t1 t2
@@ -424,27 +424,34 @@ consExpr g c@(CallExpr l e es)
 -- | e.f
 -- 
 -- This function does the late binding of `this` to `e`.
---
 consExpr g (DotRef l e f)
-  = do (xe, g')  <- consExpr g e
-       let tx     = envFindTy xe g'
-       δ         <- getDef
-       case find (eltMatch elt) $ getElt δ fs tx of 
-         Just tf -> do let tf'   = F.substa (sf $ F.symbol xe) $ eltType tf
-                       (x, g'') <- envAddFresh l tf' g'
-                       addAnnot (srcPos l) x (envFindTy x g'')
-                       return    $ (x, g'')
-         Nothing -> die $ errorPropRead (srcPos l) e fs
-    where
-       elt        = fromJust $ listToMaybe [ e | EltOverload cx e <- ann_fact l
-                                               , cge_ctx g == cx ]
-       fs         = F.symbol f
-       eltMatch (FieldSig _ _ _ τ1 t1) (FieldSig _ _ _ τ2 t2) 
-                  = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
-       eltMatch e1 e2                    
-                  = on (==) (toType . eltType) e1 e2
-       sf t s     | s == F.symbol "this" = t
-                  | otherwise            = s
+  = do (x,g') <- consExpr g e 
+       consMethCall g' l "DotRef" (envFindTy x g') [] ty 
+  where
+       ty = getPropTy (F.symbol f) l $ renv g 
+       -- ty = tracePP ("getProp_" ++ ppshow f) $ getPropTy (F.symbol f) l $ renv g 
+
+
+--   = do (xe, g')  <- consExpr g e
+--        let tx     = envFindTy xe g'
+--        δ         <- getDef
+--        case find (eltMatch elt) $ getElt δ fs tx of 
+--          Just tf -> do let tf'   = F.substa (sf $ F.symbol xe) $ eltType tf
+--                        (x, g'') <- envAddFresh l tf' g'
+--                        addAnnot (srcPos l) x (envFindTy x g'')
+--                        return    $ (x, g'')
+--          Nothing -> die $ errorPropRead (srcPos l) e fs
+--     where
+--        elt        = fromJust $ listToMaybe [ e | EltOverload cx e <- ann_fact l
+--                                                , cge_ctx g == cx ]
+--        fs         = F.symbol f
+--        eltMatch (FieldSig _ _ _ τ1 t1) (FieldSig _ _ _ τ2 t2) 
+--                   = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
+--        eltMatch e1 e2                    
+--                   = on (==) (toType . eltType) e1 e2
+--        sf t s     | s == F.symbol "this" = t
+--                   | otherwise            = s 
+
 
 -- -- e["f"]
 -- consExpr g (BracketRef l e (StringLit _ fld)) 
@@ -535,20 +542,20 @@ consCast g a e
 
 -- | Dead code 
 consDeadCode δ g l x t
-  = do  subType l g xT xBot
+  = do  subType l g tx xBot
         -- NOTE: return the target type (falsified)
         envAddFresh l tBot g
     where 
-        xBot = zipType δ (\_ -> F.bot) id xT xT  
-        tBot = zipType δ (\_ -> F.bot) id t  t    
-        xT   = envFindTy x g
+        xBot = zipType δ (fmap F.bot tx) tx
+        tBot = zipType δ (fmap F.bot t) t
+        tx   = envFindTy x g
 
 -- | UpCast(x, t1 => t2)
 consUpCast δ g l x t1 t2 = envAddFresh l stx g
     where
-        tx   = envFindTy x g
-        ztx  = zipType δ (\p _ -> p) F.bot tx t2
-        stx  = ztx `eSingleton` x
+        tx   = tracePP "tx" $ envFindTy x g
+        ztx  = zipType δ (fmap F.bot tx) t2
+        stx  = tracePP "stx" $ ztx `eSingleton` x
     
 -- | DownCast(x, t1 => t2)
 consDownCast δ g l x t1 t2
@@ -556,8 +563,10 @@ consDownCast δ g l x t1 t2
         envAddFresh l stx g
     where 
         tx   = envFindTy x g
-        tx2  = zipType δ (\_ q -> q) F.bot t2 tx
-        ztx  = zipType δ (\p _ -> p) F.bot tx t2 
+        tx2  = zipType δ t2 tx
+        ztx  = zipType δ tx t2
+--         tx2  = zipType δ (\_ q -> q) F.bot t2 tx
+--         ztx  = zipType δ (\p _ -> p) F.bot tx t2 
         stx  = ztx `eSingleton` x
 
 
@@ -576,6 +585,7 @@ consCall :: (PP a) =>
 consCall g l fn es ft0 
   = do (xes, g')    <- consScan consExpr g es
        let ts        = [envFindTy x g' | x <- xes]
+       -- let ts        = tracePP (ppshow fn ++ ": param types") [envFindTy x g' | x <- xes]
        δ            <- getDef
        case overload δ l of
          Just ft    -> do  (_,its,ot)   <- instantiate l g fn ft
@@ -588,6 +598,15 @@ consCall g l fn es ft0
                                         , cge_ctx g     == cx
                                         , lt            <- getCallable δ ft0
                                         , toType t      == toType lt ]
+
+
+---------------------------------------------------------------------------------
+consMethCall :: PP a => CGEnv -> AnnTypeR -> a -> RefType -> [Expression AnnTypeR] -> 
+                        RefType -> CGM (Id AnnTypeR, CGEnv)
+---------------------------------------------------------------------------------
+consMethCall g l fn t es ft0 
+  = cgWithThis t $ consCall g l fn (ThisRef l : es) ft0
+
 
 ---------------------------------------------------------------------------------
 instantiate :: (PP a, PPRS F.Reft) => 

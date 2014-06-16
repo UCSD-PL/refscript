@@ -22,6 +22,7 @@ import           Language.Nano.Typecheck.Subst
 
 
 import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
+import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
@@ -61,8 +62,6 @@ unify l δ θ t t' | any isUnion [t,t']
 
 unify l δ θ (TApp (TRef x s) ts _) (TApp (TRef x' s') ts' _) 
   | (x,s) == (x',s')   = unifys l δ θ ts ts'
--- FIXME 
--- case for nominal subtypes ???
 
 unify l δ θ t1@(TApp (TRef _ _) _ _) t2
   = unify l δ θ (flattenType δ t1) t2
@@ -70,13 +69,19 @@ unify l δ θ t1@(TApp (TRef _ _) _ _) t2
 unify l δ θ t1 t2@(TApp (TRef _ _) _ _)
   = unify l δ θ t1 (flattenType δ t2)
 
--- FIXME: AARGHH ... How do we unify overloaded bindings?
 unify l δ θ (TCons e1s m1 _) (TCons e2s m2 _)
   = unifys l δ θ (ofType m1:t1s) (ofType m2:t2s)
   where 
-    (t1s, t2s) = unzip $ map tt es ++ concatMap mm es
-    es         = [ (e1, e2) | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ]
+    (t1s, t2s) = unzip $ map tt es ++ concatMap ττ es ++ concatMap mm es
+    es         = [ (e1, e2) | e1 <- e1s
+                            , e2 <- e2s
+                            , nonStaticElt e1
+                            , nonStaticElt e2
+                            , e1 `sameBinder` e2]
     tt         = mapPair eltType
+    ττ (e1,e2) = case (baseType e1, baseType e2) of 
+                   (Just τ1, Just τ2) -> [(τ1, τ2)]
+                   _                  -> []
     mm (e1,e2) = case (mutability e1, mutability e2) of 
                    (Just m1, Just m2) -> [(ofType m1, ofType m2)]
                    _                  -> []

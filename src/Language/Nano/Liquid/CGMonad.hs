@@ -75,6 +75,7 @@ import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Qualifiers
+import           Language.Nano.Misc
 
 
 import qualified Language.Fixpoint.Types as F
@@ -588,7 +589,11 @@ refreshValueVar t = T.mapM freshR t
 --------------------------------------------------------------------------------
 -- | Splitting Subtyping Constraints 
 --------------------------------------------------------------------------------
-
+--
+-- The types that are split should be aligned by type
+--
+-- Premise: |t1| = |t2| -- raw type equality
+--
 --------------------------------------------------------------------------------
 splitC :: SubC -> CGM [FixSubC]
 --------------------------------------------------------------------------------
@@ -597,13 +602,13 @@ splitC :: SubC -> CGM [FixSubC]
 splitC (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
   = do bcs       <- bsplitC g i tf1 tf2
        g'        <- envTyAdds i xt2s g 
-       cs        <- concatMapM splitC $ safeZipWith "splitC1" (Sub g' i) t2s t1s' 
+       cs        <- concatMapM splitC $ safeZipWith "splitc-1" (Sub g' i) t2s t1s' 
        cs'       <- splitC $ Sub g' i (F.subst su t1) t2      
        return     $ bcs ++ cs ++ cs'
     where 
        t2s        = b_type <$> xt2s
        t1s'       = F.subst su (b_type <$> xt1s)
-       su         = F.mkSubst $ safeZipWith "splitC2" bSub xt1s xt2s
+       su         = F.mkSubst $ safeZipWith "splitc-2" bSub xt1s xt2s
        bSub b1 b2 = (b_sym b1, F.eVar $ b_sym b2)
 
 -- | TAlls
@@ -621,114 +626,63 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   | α1 == α2
   = bsplitC g i t1 t2
   | otherwise
-  = errorstar "UNEXPECTED CRASH in splitC"
+  = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
 
 -- | Unions
--- FIXME: Uneven unions
-splitC (Sub g i t1 t2)
-  | any isUnion [t1, t2]
-  = getDef >>= \δ -> match t1 (zipType δ (\p _ -> p) F.bot t2 t1)
+splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
+  = (++) <$> bsplitC g i t1 t2 
+         <*> concatMapM splitC (safeZipWith "splitc-3" (Sub g i) s1s s2s)
     where 
-      match t1@(TApp TUn t1s r1) t2@(TApp TUn t2s r2) = do
-        cs      <- bsplitC g i t1 t2
-        let t1s' = L.sortBy (compare `on` toType) $ (`str` r1) <$> t1s
-        let t2s' = L.sortBy (compare `on` toType) $ (`str` r2) <$> t2s
-        cs'     <- concatMapM splitC $ safeZipWith "splitC-Unions" (Sub g i) t1s' t2s'
-        return   $ cs ++ cs'
-      match t1' t2' = splitC (Sub g i t1' t2')
-
-      str t _ | isBotR (rTypeReft t) = t
-      str t r | otherwise            = t `strengthen` r
-      isBotR (F.Reft (_,ra))         = F.RConc F.PFalse `elem` ra
+       s1s = L.sortBy (compare `on` toType) t1s
+       s2s = L.sortBy (compare `on` toType) t2s
 
 -- |Type references
-splitC (Sub g i t1@(TApp (TRef x1 s1) t1s _) t2@(TApp (TRef x2 i2) t2s _)) 
-  | (x1,s1) == (x2,i2)
+splitC (Sub g i t1@(TApp (TRef x1 s1) (μ1:t1s) _) t2@(TApp (TRef x2 s2) (μ2:t2s) _)) 
+  | (x1,s1) /= (x2,s2) 
+  = cgError l $ bugBadSubtypes l t1 t2
+  | isImmutable μ2
   = do  cs    <- bsplitC g i t1 t2
-        -- FIXME: Variance !!!
-        cs'   <- concatMapM splitC $ safeZipWith "splitC-TRef" (Sub g i) t1s t2s
-                                  -- ++ safeZipWith "splitC-TRef" (Sub g i) t2s t1s
+        δ     <- getDef
+        cs'   <- splitWithVariance (varianceTDef $ findSymOrDie x1 δ) t1s t2s
         return $ cs ++ cs' 
-  -- FIXME: Add case where i1 <: i2, this extends the above case.
   | otherwise 
-  = do  cs                <- bsplitC g i t1 t2
-        δ                 <- getDef
-        let TCons e1s μ1 _ = flattenType δ t1
-        let TCons e2s μ2 _ = flattenType δ t2
-        let (e1s', e2s')   = unzip [ (e1,e2) | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ]
-        cs'               <- splitEs g i μ1 μ2 e1s' e2s' 
-        return             $ cs ++ cs'
+  = do  cs    <- bsplitC g i t1 t2
+        cs'   <- concatMapM splitC $ safeZipWith "splitc-4" (Sub g i) t1s t2s
+        cs''  <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g i) t2s t1s
+        return $ cs ++ cs' ++ cs''
+  where
+    splitWithVariance vs t1s t2s = concat <$> zipWith3M splitCov vs t1s t2s
+    splitCov True  t1 t2 = splitC (Sub g i t1 t2)
+    splitCov False t1 t2 = splitC (Sub g i t2 t1)
+    l = srcPos i
 
--- FIXME: Add constraint for null
-splitC (Sub _ _ (TApp (TRef _ _) _ _) (TApp TNull _ _)) 
-  = return []
-
-splitC (Sub _ _ (TApp TNull _ _) (TApp (TRef _ _) _ _)) 
-  = return []
-
-splitC (Sub g i t1@(TApp (TRef _ _) _ _) t2@(TCons _ _ _))
-  = do t1' <- (`flattenType` t1) <$> getDef
-       splitC (Sub g i t1' t2)
-
-splitC (Sub g i t1@(TCons _ _ _) t2@(TApp (TRef _ _) _ _))
-  = do δ    <- getDef
-       let t2' = flattenType δ t2
-       splitC (Sub g i t1 t2')
-
-splitC (Sub _ _ t1@(TApp (TRef _ _) _ _) t2)
-  = errorstar $ "splitC: " ++ ppshow t1 ++ " vs " ++ ppshow t2
-
-splitC (Sub _ _ t1 t2@(TApp (TRef _ _) _ _))
-  = errorstar $ "splitC: " ++ ppshow t1 ++ " vs " ++ ppshow t2
+-- -- FIXME: Add constraint for null
+-- splitC (Sub _ _ (TApp (TRef _ _) _ _) (TApp TNull _ _)) 
+--   = return []
+-- 
+-- splitC (Sub _ _ (TApp TNull _ _) (TApp (TRef _ _) _ _)) 
+--   = return []
 
 -- | Rest of TApp
-splitC (Sub g i t1@(TApp _ t1s _) t2@(TApp _ t2s _))
-  = do cs    <- bsplitC g i t1 t2
-       cs'   <- concatMapM splitC $ safeZipWith 
-                                    (printf "splitC4: %s - %s" (ppshow t1) (ppshow t2)) 
-                                    (Sub g i) t1s t2s
-       return $ cs ++ cs'
+splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
+  | c1 == c2  = (++) <$> bsplitC g i t1 t2
+                     <*> concatMapM splitC 
+                           (safeZipWith (printf "splitc-5: %s - %s" (ppshow t1) (ppshow t2)) 
+                             (Sub g i) t1s t2s)
+  | otherwise = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
 
 -- | TCons
--- 
--- FIXME: * Variance
---        * Index signatures
---
 splitC (Sub g i t1@(TCons e1s μ1 _ ) t2@(TCons e2s μ2 _ ))
-  -- LHS and RHS are object literal types
-  --  | all (not . isIndSig) [t1,t2]  
-  = do cs    <- bsplitC g i t1 t2
-       cs'   <- splitEs g i μ1 μ2 e1s e2s
-       return $ cs ++ cs'
-
---   -- LHS and RHS are index signatures
---   | all isIndSig [t1,t2]          
---   = do c1 <- bsplitC g i t1 t2
---        c2 <- splitC $ Sub g i (ti e1s) (ti e2s)
---        return $ c1 ++ c2
--- 
---   -- One of the sides is an index signature
---   | isIndSig t2 
---   = do c1 <- bsplitC g i t1 t2
---        c2 <- concatMapM splitC $ zipWith (Sub g i) (ts e1s) (repeat $ ti e2s)
---        return $ c1 ++ c2
--- 
---   | isIndSig t1
---   = do c1 <- bsplitC g i t1 t2
---        c2 <- concatMapM splitC $ zipWith (Sub g i) (repeat $ ti e1s) (ts e2s)
---        return $ c1 ++ c2
-  
---   | otherwise 
---   = error "BUG:splitC:TCons"
-
-  where
-    ts es = [ eltType e | e <- es, nonStaticElt e ]
-    ti es = safeHead "convertCons" [ t | IndexSig _ _ t <- es ]
+  = (++) <$> bsplitC g i t1 t2
+         <*> splitEs g i μ1 μ2 e1s e2s
   
 splitC x@(Sub g i t1 t2)
   = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos x
 
 
+-- FIXME: 
+--  * Include mutability
+--  * Add special cases: IndexSig ...
 ---------------------------------------------------------------------------------------
 -- splitEs :: CGEnv -> Cinfo -> [TElt RefType] -> [TElt RefType] -> CGM [FixSubC]
 ---------------------------------------------------------------------------------------
@@ -742,10 +696,6 @@ splitEs g i μ1 μ2 e1s e2s
     t1s   = f_type <$> L.sortBy (compare `on` F.symbol) (filter flt e1s)
     t2s   = f_type <$> L.sortBy (compare `on` F.symbol) (filter flt e2s)
     flt x = nonStaticElt x && nonConstrElt x
-
-
--- splitE g i μ1 μ2 e1 e2 
-
 
 
 ---------------------------------------------------------------------------------------

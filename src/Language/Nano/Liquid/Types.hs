@@ -58,13 +58,9 @@ module Language.Nano.Liquid.Types (
   -- Zip types
   , zipType
 
-  -- Tag 
-  -- , tagR
-
-
   ) where
 
-import           Data.Maybe             (fromMaybe, maybeToList, fromJust)
+import           Data.Maybe             (fromMaybe, fromJust)
 import qualified Data.List               as L
 import           Data.Function                  (on)
 import qualified Data.HashMap.Strict     as M
@@ -191,8 +187,6 @@ instance RefTypable RefType where
 
 eSingleton      :: (F.Expression e) => RefType -> e -> RefType 
 eSingleton t e  = t `strengthen` (F.uexprReft e)
-{-eSingleton t e  | isUnion t = t `strengthen` (F.uexprReft e)-}
-{-                | otherwise = t `strengthen` (F.uexprReft e)-}
 
 pSingleton      :: (F.Predicate p) => RefType -> p -> RefType 
 pSingleton t p  = t `strengthen` (F.propReft p)
@@ -378,104 +372,250 @@ rawStringSymbol            = F.Loc F.dummyPos . F.stringSymbol
 rawStringFTycon            = F.stringFTycon . F.Loc F.dummyPos 
 
 
--- | `zipType`
+-- | Related types ( ~~ ) 
+
+class Related a where
+  related :: TDefEnv RefType -> a -> a -> Bool
+
+instance Related RefType where
+  related δ t t' = isSubtype δ t t' || isSubtype δ t' t
+--   
+--   related δ (TApp TUn t1s r1) (TApp TUn t2s _) = True
+--   related δ _                 (TApp TUn _ _  ) = True
+--   related δ (TApp TUn _ _)    _                = True
+-- 
+--   related δ t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2) 
+--     | (x1,s1) == (x2,s2) = related δ t1s t2s
+--     | otherwise = 
+--         case weaken δ (findSymOrDie x1 δ, t1s) x2 of
+--           Just (_, t1s') -> related δ (TApp (TRef x1 s1) t1s' r1) t2
+--           Nothing -> 
+--             case weaken δ (findSymOrDie x2 δ, t1s) x1 of
+--               Just (_, t2s') -> related δ t1 (TApp (TRef x2 s2) t2s' r2)
+--               Nothing -> False
+-- 
+--   related δ t1@(TApp (TRef _ _) _ _) t2 = related δ (flattenType δ t1) t2
+--   related δ t1 t2@(TApp (TRef _ _) _ _) = related δ t1 (flattenType δ t2)
+-- 
+--   related _ (TApp c [] r) (TApp c' [] _) | c == c' = True
+-- 
+--   -- | Top ??
+--   -- related _ _ t2@(TApp TTop _ _ ) = t2
+-- 
+--   related _ (TVar v r) (TVar v' r') | v == v' = True
+-- 
+--   related δ (TFun x1s t1 _) (TFun x2s t2 _) = 
+--       related δ t1 t2 && related δ x1s x2s
+-- 
+  -- | Object types
+  --
+  --  { F1,F2 } | { F1',F3' } = { F1|F1',top(F3) }, where disjoint F2 F3'
+  --
+  related δ (TCons f1s m1 r1) (TCons f2s _ _) = 
+  -- FIXME 
+      True
+--     where 
+--       common' = (uncurry $ zipElts δ) <$> common
+--       disjoint' = (rType <$>) <$> disjoint  -- top
+--       (common, disjoint) = partition [] [] f2s
+-- 
+--       partition g1 g2 [] = (g1, g2)
+--       partition g1 g2 (e2:e2s) =
+--         case pick e2 of 
+--           [  ] -> partition g1 (e2:g2) e2s
+--           [ee] -> partition (ee:g1) g2 e2s
+--           ees  -> error $ "zipType: " ++ ppshow e2 ++ " got matched with " 
+--                                       ++ ppshow ees
+-- 
+--       pick f =  [ (f1, f) | f1 <- f1s, compatible f1 f ]
+--       compatible e e' = sameBinder e e' && related δ e e'
+-- 
+
+
+
+--     -- | Intersection types
+--     --
+--     --  s1 /\ s2 .. /\ sn | t1 /\ t2 .. tm = s1'|t1' /\ .. sk'|tk' /\ .. top(tm')
+--     --
+--     zipType δ (TAnd t1s) (TAnd t2s) =
+--       case [ (pick t2, t2) | t2 <- t2s ] of
+--         []        -> error $ "ziptype: impossible intersection types" 
+--         [(t1,t2)] -> zipType δ t1 t2
+--         ts        -> TAnd $ (uncurry $ zipType δ) <$> ts
+--     where
+--       pick t = case [ t1 | t1 <- t1s, related δ t1 t ] of
+--                 [t1] -> t1
+--                 _    -> error $ "zipType: cannot match " ++ ppshow t 
+--                               ++ " with any part of " ++ ppshow t1s
+--  
+--   related _ _ _ = True
+
+
+
+instance Related (RType ()) where
+  related δ t t' = isSubtype δ τ τ' || isSubtype δ τ' τ
+    where
+      τ  = ofType t
+      τ' = ofType t'
+
+instance Related (TElt RefType) where
+  related δ (CallSig t1)            (CallSig t2)            = related δ t1 t2
+  related δ (ConsSig t1)            (ConsSig t2)            = related δ t1 t2
+  related δ (IndexSig _ _ t1)       (IndexSig _ _ t2)       = related δ t1 t2
+  related δ (FieldSig _ _ μ1 τ1 t1) (FieldSig _ _ μ2 τ2 t2) = and [related δ μ1 μ2, related δ τ1 τ2, related δ t1 t2]
+  related δ (MethSig  _ _ μ1 τ1 t1) (MethSig  _ _ μ2 τ2 t2) = and [related δ μ1 μ2, related δ τ1 τ2, related δ t1 t2]
+  related δ _                       _                       = False
+
+instance Related a => Related (Maybe a) where
+  related δ (Just t1) (Just t2) = related δ t1 t2
+  related _ _         _         = True
+
+instance Related a => Related [a] where
+  related δ t1s t2s = and $ zipWith (related δ) t1s t2s
+
+instance Related (RType a) => Related (Bind a) where
+  related δ (B _ t1) (B _ t2) = related δ t1 t2
+
+
+
+-- | `zipType` returns a type that is:
 --
---  * pairs up equivalent parts of types @t1@ and @t2@
---  * preserves the type structure of @t2@
+--  * structurally equivalent to @t2@
+--  * semantically equivalent to @t1@
 --  * applys @f@ whenever refinements are present on both sides
 --  * applys @g@ whenever the respective part in type @t2@ is missing
 --
---  FIXME: perhaps replace sub with rel:
---  rel t1 t2 = sub t1 t2 || sub t2 t1
---
 --------------------------------------------------------------------------------
-zipType :: TDefEnv RefType     -> 
-  (F.Reft -> F.Reft -> F.Reft) ->   -- applied to refs that are present on both sides
-  (F.Reft -> F.Reft)           ->   -- applied when pred is absent on the LHS
-  RefType -> RefType -> RefType
+zipType :: TDefEnv RefType -> RefType -> RefType -> RefType
 --------------------------------------------------------------------------------
 --
---                                | t1|_t1' \/ .. tm|_tm' \/ .. tn|g
---                                |         , if n > m, ti ~ ti'
--- t1 \/ .. tn |_ t1' \/ .. tm' = |
---                                | t1|_t1' \/ .. tm|_tm'              
---                                |         , if n <= m, ti ~ ti'
+--  s1 \/ .. sn | t1 \/ .. tm = s1'|t1' \/ .. tk|tk' \/ .. bot(tm')
 --
-zipType δ f g (TApp TUn t1s r1) (TApp TUn t2s r2) =
-    TApp TUn τs  $ f r1 r2
+zipType δ (TApp TUn t1s r1) (TApp TUn t2s _) =
+    TApp TUn (pair <$> t2s) r1
   where
-    τs           = [ zipType δ f g (rf τ2) τ2 | τ2 <- t2s ]
-    rf τ         = findDef (g <$> τ) (`sub` τ) t1s
-    -- Invariant: this should return at most one type
-    findDef a f  = fromMaybe a . L.find f
-    sub          = isSubtype δ
+    pair t2 = 
+      case L.find (related δ t2) t1s of
+        Just t1 -> zipType δ t1 t2
+        Nothing -> fmap F.bot t2
 
-zipType δ f g t1 t2@(TApp TUn _ _ ) 
-  = zipType δ f g (TApp TUn [t1] fTop) t2
+zipType δ t1 t2@(TApp TUn _ _) = zipType δ (TApp TUn [t1] fTop) t2
+zipType δ t1@(TApp TUn _ _) t2 = zipType δ t1 (TApp TUn [t2] fTop)
 
-zipType δ f g (TApp TUn t1s r1) t2 
-  = zipType δ f g ((fromJust $ L.find (`sub` t2) t1s) `strengthen` r1) t2
-  where
-    sub = isSubtype δ
-
-zipType δ f g t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2) 
+-- | Class/interface types
+--
+-- 
+--   C<Vi> extends C'<Wi>
+--   --------------------------------
+--   C<Si> || C'<Ti> = C'<Wi[Vi/Si]>
+--   
+--   
+--   C </: C'
+--   ------------------------------------------------------
+--   C<Si> || C'<Ti> = toStruct(C<Si>) || toStruct(C<Ti>)
+--   
+--   
+--   C<Si> || {F;M} = toStruct(C<Si>) || {F;M}
+--   
+zipType δ t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s _) 
   | (x1,s1) == (x2,s2)
-  = TApp (TRef x1 s1) (zipWith (zipType δ f g) t1s t2s) $ f r1 r2
-  | otherwise 
+  = TApp (TRef x1 s1) (zipWith (zipType δ) t1s t2s) r1
+  | otherwise
   = case weaken δ (findSymOrDie x1 δ, t1s) x2 of
       -- Try to move along the class hierarchy
-      Just (_, t1s') -> zipType δ f g (TApp (TRef x2 s1) t1s' r1) t2 
+      Just (_, t1s') -> zipType δ (TApp (TRef x2 s1) t1s' r1) t2
       -- Unfold structures
-      Nothing        -> zipType δ f g (flattenType δ t1) (flattenType δ t2)
+      Nothing        -> zipType δ (flattenType δ t1) (flattenType δ t2)
 
-zipType δ f g t1@(TApp (TRef _ _) _ _) t2 = 
-  zipType δ f g (flattenType δ t1) t2
-
-zipType δ f g t1 t2@(TApp (TRef _ _) _ _) = 
-  zipType δ f g t1 (flattenType δ t2)
+zipType δ t1@(TApp (TRef _ _) _ _) t2 = zipType δ (flattenType δ t1) t2
+zipType δ t1 t2@(TApp (TRef _ _) _ _) = zipType δ t1 (flattenType δ t2)
  
 
-zipType _ f _ (TApp c [] r) (TApp c' [] r') 
-  | c == c' = TApp c [] $ f r r'
+zipType _ (TApp c [] r) (TApp c' [] _) | c == c' = TApp c [] r
 
-zipType _ _ _ _ t2@(TApp TTop _ _ ) = t2
+-- | Top ??
+zipType _ _ t2@(TApp TTop _ _ ) = t2
 
-zipType _ f _ (TVar v r) (TVar v' r') 
-  | v == v' = TVar v $ f r r'
+zipType _ (TVar v r) (TVar v' r') | v == v' = TVar v r
 
-zipType δ f g (TFun x1s t1 r1) (TFun x2s t2 r2) = 
-    TFun xs y $ f r1 r2
+-- | Function types
+--
+--  (Si)=>S || (Ti)=>T = (Si||Ti)=>S||T
+--
+zipType δ (TFun x1s t1 r1) (TFun x2s t2 _) = 
+    TFun xs y r1
   where
-    xs = zipWith (zipBind δ f g) x1s x2s
-    y  = zipType δ f g t1 t2
+    xs = zipWith (zipBind δ) x1s x2s
+    y  = zipType δ t1 t2
 
-zipType δ f g (TCons e1s m1 r1) (TCons e2s _ r2) = 
-    TCons (cmn ++ snd) m1 (f r1 r2)
+-- | Object types
+--
+--  { F1,F2 } | { F1',F3' } = { F1|F1',top(F3) }, where disjoint F2 F3'
+--
+zipType δ (TCons f1s m1 r1) (TCons f2s _ _) = 
+    TCons (common' ++ disjoint') m1 r1
   where 
-    cmn = [ zipElts (zipType δ f g) e1 e2 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ] 
-    snd = [ e          | e <- e2s , not (F.symbol e `elem` ks1) ]
-    ks1 = [ F.symbol e | e <- e1s ]
+    common' = (uncurry $ zipElts δ) <$> common
+    disjoint' = (rType <$>) <$> disjoint  -- top
+    (common, disjoint) = partition [] [] f2s
+
+    partition g1 g2 [] = (g1, g2)
+    partition g1 g2 (e2:e2s) =
+      case pick e2 of 
+        [  ] -> partition g1 (e2:g2) e2s
+        [ee] -> partition (ee:g1) g2 e2s
+        ees  -> error $ "zipType: " ++ ppshow e2 ++ " got matched with " 
+                                    ++ ppshow ees
+
+    pick f =  [ (f1, f) | f1 <- f1s, compatible f1 f ]
+    compatible e e' = sameBinder e e' && related δ e e'
 
 -- | Intersection types
-
-zipType δ f g (TAnd t1s) (TAnd t2s) = 
-    case [ zipType δ f g (rf t2) t2 | t2 <- t2s ] of
-      [ ] -> error $ "ziptype with incompatible intersection types: " 
-                 ++ ppshow (TAnd t1s) ++ " and " ++ ppshow (TAnd t2s)
-      [t] -> t
-      ts  -> TAnd ts
+--
+--  s1 /\ s2 .. /\ sn | t1 /\ t2 .. tm = s1'|t1' /\ .. sk'|tk' /\ .. top(tm')
+--
+zipType δ (TAnd t1s) (TAnd t2s) =
+    case [ (pick t2, t2) | t2 <- t2s ] of
+      []        -> error $ "ziptype: impossible intersection types" 
+      [(t1,t2)] -> zipType δ t1 t2
+      ts        -> TAnd $ (uncurry $ zipType δ) <$> ts
   where
-    rf t        = fromJust $ L.find (`sub` t) t1s
-    -- rf t         = findDef (g <$> t) (`sub` t) t1s
-    -- findDef a f  = fromMaybe a . L.find f
-    sub          = isSubtype δ
+    pick t = case [ t1 | t1 <- t1s, related δ t1 t ] of
+               [t1] -> t1
+               _    -> error $ "zipType: cannot match " ++ ppshow t 
+                            ++ " with any part of " ++ ppshow t1s
 
-zipType δ f g t1 (TAnd t2s) = zipType δ f g (TAnd [t1]) (TAnd t2s)
-zipType δ f g (TAnd t1s) t2 = zipType δ f g (TAnd t1s) (TAnd [t2])
+zipType δ t1 (TAnd t2s) = zipType δ (TAnd [t1]) (TAnd t2s)
+zipType δ (TAnd t1s) t2 = zipType δ (TAnd t1s) (TAnd [t2])
 
-zipType _ _ _ t1 t2 = 
+zipType _ t1 t2 = 
   errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
 
 
-zipBind δ f g (B s1 t1) (B s2 t2) = B s2 $ zipType δ f g t1 t2 
+zipBind δ (B s1 t1) (B s2 t2) = B s2 $ zipType δ t1 t2 
+
+
+zipElts δ (CallSig t1) (CallSig t2)
+  = CallSig $ zipType δ t1 t2 
+
+zipElts δ (ConsSig t1) (ConsSig t2)       
+  = ConsSig $ zipType δ t1 t2 
+
+zipElts δ (IndexSig x1 b1 t1) (IndexSig x2 b2 t2)  
+  = IndexSig x2 b2 $ zipType δ t1 t2 
+
+zipElts δ (FieldSig x1 s1 m1 (Just τ1) t1) (FieldSig x2 s2 m2 (Just τ2) t2)
+  = FieldSig x2 s2 m2 (Just $ zipType δ τ1 τ2) $ zipType δ t1 t2
+
+zipElts δ (FieldSig x1 s1 m1 Nothing t1) (FieldSig x2 s2 m2 Nothing t2)
+  = FieldSig x2 s2 m2 Nothing $ zipType δ t1 t2
+
+zipElts δ (MethSig x1 s1 m1 (Just τ1) t1) (MethSig x2 s2 m2 (Just τ2) t2)
+  = MethSig x2 s2 m2 (Just $ zipType δ τ1 τ2) $ zipType δ t1 t2
+
+zipElts δ (MethSig x1 s1 m1 Nothing t1) (MethSig x2 s2 m2 Nothing t2)
+  = MethSig x2 s2 m2 Nothing $ zipType δ t1 t2
+
+zipElts _ e1 e2
+  = error $ "Cannot zip: " ++ ppshow e1 ++ " and " ++ ppshow e2
 

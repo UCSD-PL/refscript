@@ -16,8 +16,8 @@ import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>), (<*>))
 import           Data.Function                      (on)
 import qualified Data.HashSet                       as S
-import           Data.Maybe                         (fromJust, catMaybes)
 import           Data.List                          (elem, groupBy, sort, nub, (\\))
+import           Data.Maybe                         (maybeToList)
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)
 import           Language.Fixpoint.Errors
@@ -106,6 +106,7 @@ convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
        Left $ errorSimpleSubtype l t1 t2
     else 
       Left $ errorIncompMutTy l t1 t2      
+
   -- 
   -- NO: { f1:t1,..,fn:tn } <: { f1:t1,..,fn:tn,..,fm:tm }
   --
@@ -118,25 +119,29 @@ convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
   --  [μ]{ f1:t1,..,fn:tn,..,fm:tm } <: [μ]{ f1:t1,..,fn:tn }
   --
   | otherwise
-  = convertObj l δ (TCons e1s' μ1 r1) (TCons e2s μ2 r2)
+  =   convertObj l δ (TCons e1s' μ1 r1) (TCons e2s μ2 r2)
     where
+      e1s'       = [ e1 | e1 <- e1s
+                        , F.symbol e1 `M.member` m1  
+                        , F.symbol e1 `M.member` m2 ]
+        
        -- All the bound elements that correspond to each binder 
        -- Map : symbol -> [ elements ]
-       (m1,m2)    = mapPair toMap (e1s, e2s)
-       toMap      = foldr mi M.empty . filter (\x -> nonStaticElt x && nonConstrElt x)
-       mi e       = M.insertWith (++) (F.symbol e) [e]
-       -- Binders for each element
-       (s1s,s2s)  = mapPair (S.fromList . M.keys) (m1,m2)
-       (s1l,s2l)  = mapPair (sort     . M.keys) (m1,m2)
-       cs         = S.toList $ S.intersection s1s s2s
-       -- Join elements on common binder
-       b1s        = map (`lkp` m1) cs 
-       b2s        = map (`lkp` m2) cs 
-       lkp s      = fromJust . M.lookup s
-       -- Difference and intersection of keys
-       df21       = s2s `S.difference` s1s
-       in12       = s1s `S.intersection` s2s
-       e1s'       = concat [ fromJust $ M.lookup s m1 | s <- S.toList in12 ]
+      (m1,m2)    = mapPair toMap (e1s, e2s)
+      toMap      = foldr mi M.empty . filter (\x -> nonStaticElt x && nonConstrElt x)
+      mi e       = M.insertWith (++) (F.symbol e) [e]
+      -- Binders for each element
+      (s1s,s2s)  = mapPair (S.fromList . M.keys) (m1,m2)
+      (s1l,s2l)  = mapPair (sort     . M.keys) (m1,m2)
+      cs         = S.toList $ S.intersection s1s s2s
+      -- Join elements on common binder
+      (b1s,b2s)  = unzip [ (e1,e2) | s  <- S.toList in12 
+                                   , e1 <- maybeToList $ M.lookup s m1 
+                                   , e2 <- maybeToList $ M.lookup s m2 ]
+      -- Difference and intersection of keys
+      df21       = s2s `S.difference` s1s
+      in12       = s1s `S.intersection` s2s
+      -- e1s'       = concat [ fromJust $ M.lookup s m1 | s <- S.toList in12 ]
  
 convertObj l δ t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s r2)
   | (x1,s1) == (x2,s2)
@@ -326,7 +331,7 @@ convertUnion l δ t1 t2 =
                              [y | y <- t2s, not $ any (\x -> isSubtype δ x y) t1s ])
 
 
-
+-- FIXME: replace eltType
 --------------------------------------------------------------------------------
 safeExtends :: PPR r => SourceSpan -> TDR r -> TDef (RType r) -> [Error]
 --------------------------------------------------------------------------------

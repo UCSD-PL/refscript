@@ -29,7 +29,7 @@ module Language.Nano.Typecheck.Types (
   , isTop, isNull, isVoid, isTNum, isUndef, isUnion
 
   -- * Constructing Types
-  , mkUnion, mkFun, mkAll
+  , mkUnion, mkFun, mkAll, mkAnd
 
   -- * Deconstructing Types
   , bkFun, bkFuns, bkAll, bkAnd, bkUnion, {- unionParts, unionParts',-} funTys
@@ -43,7 +43,7 @@ module Language.Nano.Typecheck.Types (
   , Type, TDef (..), TVar (..), TCon (..), TElt (..)
 
   -- * Mutability
-  , Mutability, defaultM, mutableM, combMut, isMutable, isImmutable, isMutabilityType
+  , Mutability, defaultM, mutableM, combMut, isMutable, isImmutable, isMutabilityType, variance, varianceTDef
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, rtArr, tUndef, tNull
@@ -52,17 +52,15 @@ module Language.Nano.Typecheck.Types (
   -- * Print Types
   , ppArgs
 
-  -- * Type comparison
---   , Equivalent
---   , equiv
-  , sameBinder, eltType, zipElts, isStaticElt, nonStaticElt, nonConstrElt, mutability
+  -- * Element ops 
+  , sameBinder, eltType, isStaticElt, nonStaticElt, nonConstrElt, mutability, baseType
 
   -- * Type definition env
   , TDefEnv (..), tDefEmpty, tDefFromList, tDefToList
   , addSym, findSym, findSymOrDie
 
   -- * Operator Types
-  , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy, objLitTy, setPropTy
+  , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy, objLitTy, setPropTy, getPropTy
 
   -- * Annotations
   , Annot (..), UFact, Fact (..), phiVarsAnnot, ClassInfo
@@ -90,7 +88,7 @@ import           Data.Hashable
 import qualified Data.HashSet                   as S
 import           Data.Either                    (partitionEithers)
 import           Data.Function                  (on)
-import           Data.Maybe                     (fromMaybe, listToMaybe, fromJust)
+import           Data.Maybe                     (fromMaybe, listToMaybe)
 import           Data.Traversable               hiding (sequence) 
 import           Data.Foldable                  (Foldable()) 
 import           Data.Monoid                    hiding ((<>))            
@@ -172,6 +170,15 @@ isReadOnly _                             = False
 combMut _ μf | isMutable μf    = μf
 combMut μ _  | otherwise       = μ
 
+-- | Variance: true if v is in a positive position in t
+--
+-- FIXME: implement these
+--
+variance :: TVar -> RType r -> Bool
+variance v t = True
+
+varianceTDef :: TDef (RType r) -> [Bool]
+varianceTDef (TD _ _ vs _ _) = take (length vs) $ repeat True
 
 
 
@@ -191,8 +198,8 @@ data TDef t    = TD {
 -- TODO Mutability for CallSig and ConsSig?
 data TElt t    = CallSig  { f_type :: t }         -- Call Signature
                | ConsSig  { f_type :: t }         -- Constructor Signature               
-               | IndexSig { f_sym :: F.Symbol
-                          , f_key :: Bool         -- Index Signature (T/F=string/number)
+               | IndexSig { f_sym  :: F.Symbol
+                          , f_key  :: Bool         -- Index Signature (T/F=string/number)
                           , f_type :: t }         
               
                | FieldSig { f_sym  :: F.Symbol    -- Name  
@@ -357,6 +364,10 @@ bkAnd                :: RType r -> [RType r]
 bkAnd (TAnd ts)      = ts
 bkAnd t              = [t]
 
+mkAnd [ ]            = Nothing
+mkAnd [t]            = Just t
+mkAnd ts             = Just $ TAnd ts
+
 
 ---------------------------------------------------------------------------------
 mkUnion :: (F.Reftable r) => [RType r] -> RType r
@@ -370,44 +381,6 @@ bkUnion :: RType r -> [RType r]
 ---------------------------------------------------------------------------------
 bkUnion (TApp TUn xs _) = xs
 bkUnion t               = [t]
-
-
--- 
--- -- | `unionParts` is a special case of `unionParts'` that uses Equivalent as 
--- -- the type equivalence relation.
--- --------------------------------------------------------------------------------
--- unionParts ::  RType r -> RType r -> ([(RType r, RType r)], [RType r], [RType r])
--- --------------------------------------------------------------------------------
--- unionParts = unionParts' (==)
--- 
-
--- -- General purpose function that pairs up the components of the two union typed
--- -- inputs @t1@ and @t2@, based on the Equivalence relation @eq@.
--- -- Top-level refinements are lost here - use `compareUnion` to preserve them.
--- -- The output consists of 
--- -- * The paired-up types (common as per @eq@)
--- -- * The types appearing just in @t1@
--- -- * The types appearing just in @t2@
--- --------------------------------------------------------------------------------
--- unionParts' :: (RType r -> RType r -> Bool) -> RType r -> RType r 
---           -> ([(RType r, RType r)], [RType r], [RType r])
--- --------------------------------------------------------------------------------
--- unionParts' eq t1 t2 = (common t1s t2s, d1s, d2s)
---   where
---     (t1s, t2s) = sanityCheck $ mapPair bkUnion (t1, t2)
---     (d1s, d2s) = distinct t1s t2s
---     -- Compare the types based on the Equivalence relation and pair them up into
---     -- 1. type structures that are common in both sides, and
---     common xs ys | any null [xs,ys] = []
---     common xs ys | otherwise        = [(x,y) | x <- xs, y <- ys, x `eq` y ]
---     -- 2. type structures that are distinct in the two sides
---     distinct xs ys = ([x | x <- xs, not $ any (x `eq`) ys ],
---                       [y | y <- ys, not $ any (y `eq`) xs ])
---     sanityCheck ([ ],[ ]) = errorstar "unionParts', called on too small input"
---     sanityCheck ([_],[ ]) = errorstar "unionParts', called on too small input"
---     sanityCheck ([ ],[_]) = errorstar "unionParts', called on too small input"
---     sanityCheck ([_],[_]) = errorstar "unionParts', called on too small input"
---     sanityCheck p         = p
 
 
 -- | Strengthen the top-level refinement
@@ -641,25 +614,30 @@ instance (PP r, F.Reftable r) => PP (TElt (RType r)) where
   pp (FieldSig x s m τ t) =  bStr s "static " 
                          <>  ppMut m
                          <+> pp x 
-                         <>  maybe (pp "") (brackets . pp) τ
                          <>  text ":" 
+                         <>  maybe (pp "") (brackets . pp) τ
                          <+> pp t 
 
   pp (MethSig x s m τ t)  =  bStr s "static " 
                          <>  ppMut m
                          <+> pp x 
+                         <>  text ":" 
+                         <>  (if null αs then pp "" else targs)
                          <>  maybe (pp "") (brackets . pp) τ
                          <>  ppArgs parens comma xts
                          <>  text ":" 
                          <+> pp ot
     where
-      Just (αs,xts,ot)    =  bkFun t
+      targs               = text "∀" <+> ppArgs id space αs <> text "."
+      Just (αs,xts,ot)    = bkFun t
 
 
 ppMut t | isMutable t    = brackets $ pp "mut"
         | isDefaultMut t = pp ""
         | isReadOnly t   = brackets $ pp "ro"
         | isImmutable t  = brackets $ pp "imm"
+        | isTVar t       = brackets $ pp t
+        | otherwise      = error    $ "ppMut: case not covered: " ++ ppshow t
    
 
 
@@ -692,39 +670,11 @@ mutability (IndexSig _ _ _)      = Nothing
 mutability (FieldSig _ _ m  _ _) = Just m
 mutability (MethSig _ _ m  _ _)  = Just m
 
-
-
-{-zipElts :: (PP r, F.Reftable r) => -}
-{-  (RType r -> RType r-> RType r) -> TElt (RType r) -> TElt (RType r) -> TElt (RType r)-}
-
-zipElts f e1@(CallSig t1) e2@(CallSig t2)
-  = CallSig $ f t1 t2 
-
-zipElts f e1@(ConsSig t1) e2@(ConsSig t2)       
-  = ConsSig $ f t1 t2 
-
-zipElts f e1@(IndexSig x b1 t1) e2@(IndexSig _ _ t2)  
-  | sameBinder e1 e2 
-  = IndexSig x b1 $ f t1 t2
-
-
--- FIXME
-zipElts f e1@(FieldSig x1 s1 m1 (Just τ1) t1) e2@(FieldSig _ _ m2 (Just τ2) t2)
-  | sameBinder e1 e2 
-  = FieldSig x1 s1 m1 (Just $ f τ1 τ2) $ f t1 t2
-zipElts f e1@(FieldSig x1 s1 m1 Nothing t1) e2@(FieldSig _ _ m2 Nothing t2)
-  | sameBinder e1 e2
-  = FieldSig x1 s1 m1 Nothing $ f t1 t2
-
-zipElts f e1@(MethSig x1 s1 m1 (Just τ1) t1) e2@(MethSig _ _ m2 (Just τ2) t2)
-  | sameBinder e1 e2 
-  = MethSig x1 s1 m1 (Just $ f τ1 τ2) $ f t1 t2
-zipElts f e1@(MethSig x1 s1 m1 Nothing t1) e2@(MethSig _ _ m2 Nothing t2)
-  | sameBinder e1 e2
-  = MethSig x1 s1 m1 Nothing $ f t1 t2
-
-zipElts _ e1 e2
-  = error $ "Cannot zip: " ++ ppshow e1 ++ " and " ++ ppshow e2
+baseType (CallSig _)          = Nothing
+baseType (ConsSig _)          = Nothing  
+baseType (IndexSig _ _ _)     = Nothing  
+baseType (FieldSig _ _ _ τ _) = τ
+baseType (MethSig _ _ _ τ _)  = τ
 
 
 -- FIXME: get rid of this
@@ -824,8 +774,10 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TApp d@(TRef _ _) ts r) = F.ppTy r $ pp d <> ppArgs brackets comma ts 
   pp (TApp c [] r)            = F.ppTy r $ pp c 
   pp (TApp c ts r)            = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
-  pp (TCons bs m r)           = F.ppTy r $ brackets (pp m) <+> braces (intersperse semi $ map pp bs)
-  -- pp (TCons bs r)           = F.ppTy r $ lbrace $+$ nest 2 (cat $ map pp bs) $+$ rbrace
+  pp (TCons bs m r)           | length bs < 5 
+                              = F.ppTy r $ brackets (pp m) <+> braces (intersperse semi $ map pp bs)
+                              | otherwise
+                              = F.ppTy r $ lbrace $+$ nest 2 (cat $ map pp bs) $+$ rbrace
 
 
 instance PP TVar where 
@@ -940,7 +892,7 @@ data Fact r
   -- Overloading
   | EltOverload !IContext  !(TElt (RType r))
   | Overload    !IContext  !(RType r)
-  | TCast       !IContext !(Cast r)
+  | TCast       !IContext  !(Cast r)
   -- Type annotations
   | VarAnn      !(RType r)
   | FieldAnn    !(Bool, RType r)      -- (Assignability, type)
@@ -1090,6 +1042,7 @@ builtinOpId BIBracketRef    = builtinId "BIBracketRef"
 builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
 builtinOpId BIArrayLit      = builtinId "BIArrayLit"
 builtinOpId BISetProp       = builtinId "BISetProp"
+builtinOpId BIGetProp       = builtinId "BIGetProp"
 builtinOpId BINumArgs       = builtinId "BINumArgs"
 builtinOpId BITruthy        = builtinId "BITruthy"
 
@@ -1163,6 +1116,24 @@ setPropTy f l g =
        = B n (TCons [FieldSig f s μx τ t] μ r)
     tr t = error $ "setPropTy:tr " ++ ppshow t
     ty = builtinOpTy l BISetProp g
+
+
+-- FIXME: static calls?
+--------------------------------------------------------------------------
+getPropTy :: (PP r, F.Reftable r, IsLocated l) 
+          => F.Symbol -> l -> F.SEnv (Located (RType r)) -> RType r
+--------------------------------------------------------------------------
+getPropTy f l g =
+    case ty of 
+      TAll τ (TAll α (TAll μ (TAll μf (TFun [t] rt r)))) -> 
+        TAll τ (TAll α (TAll μ (TAll μf (TFun [tr t] rt r))))
+      _ -> error $ "getPropTy " ++ ppshow ty
+  where
+    tr (B n (TCons [FieldSig x s μx τ t] μ r)) | x == F.symbol "f" 
+      = B n (TCons [FieldSig f s μx τ t] μ r)
+    tr t = error $ "getPropTy:tr " ++ ppshow t
+    ty = builtinOpTy l BIGetProp g
+
 
 
 -----------------------------------------------------------------------

@@ -164,5 +164,3 @@ isProperSubmapOf = isProperSubsetOf `on` (fromList . M.keys)
 equalKeys :: (Eq a, Ord a, Hashable a) => M.HashMap a b -> M.HashMap a b -> Bool
 equalKeys =  (==) `on` (L.sort . M.keys)
 
-
-

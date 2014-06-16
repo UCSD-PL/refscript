@@ -34232,6 +34232,11 @@ var TypeScript;
     }
     TypeScript.isTSFile = isTSFile;
 
+    function isJSFile(fname) {
+        return isFileOfExtension(fname, ".js");
+    }
+    TypeScript.isJSFile = isJSFile;
+
     function isDTSFile(fname) {
         return isFileOfExtension(fname, ".d.ts");
     }
@@ -34585,7 +34590,7 @@ var TypeScript;
                 return normalizedPath;
             }
 
-            if (!TypeScript.isTSFile(normalizedPath) && !TypeScript.isDTSFile(normalizedPath)) {
+            if (!TypeScript.isTSFile(normalizedPath) && !TypeScript.isDTSFile(normalizedPath) && !TypeScript.isJSFile(normalizedPath)) {
                 var dtsFile = normalizedPath + ".d.ts";
                 var tsFile = normalizedPath + ".ts";
 
@@ -56615,6 +56620,10 @@ var TypeScript;
             return TypeScriptCompiler.mapToFileNameExtension(".js", fileName, wholeFileNameReplaced);
         };
 
+        TypeScriptCompiler.mapToSeparateJSFileName = function (fileName, wholeFileNameReplaced) {
+            return TypeScriptCompiler.mapToFileNameExtension(".out.js", fileName, wholeFileNameReplaced);
+        };
+
         TypeScriptCompiler.mapToJSONFileName = function (fileName, wholeFileNameReplaced) {
             return TypeScriptCompiler.mapToFileNameExtension(".json", fileName, wholeFileNameReplaced);
         };
@@ -56625,7 +56634,7 @@ var TypeScript;
 
             var typeScriptFileName = document.fileName;
             if (!emitter) {
-                var javaScriptFileName = this.mapOutputFileName(document, emitOptions, TypeScriptCompiler.mapToJSFileName);
+                var javaScriptFileName = this.mapOutputFileName(document, emitOptions, TypeScriptCompiler.mapToSeparateJSFileName);
                 var outFile = new TypeScript.TextWriter(javaScriptFileName, this.writeByteOrderMarkForDocument(document), 0 /* JavaScript */);
 
                 emitter = new TypeScript.Emitter(javaScriptFileName, outFile, emitOptions, this.semanticInfoChain);

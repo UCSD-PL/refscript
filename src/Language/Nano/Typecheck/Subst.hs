@@ -307,7 +307,7 @@ intersect δ (TCons e1s m1 r1) (TCons e2s m2 r2)
   where 
     cmn1 = fmap fst <$> cmn
     cmn2 = fmap snd <$> cmn
-    cmn  = undefined 
+    cmn  = error "intersect" 
 
 intersect _ t1 t2 = 
   error $ printf "BUG[intersect]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)

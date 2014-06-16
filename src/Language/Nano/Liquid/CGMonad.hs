@@ -504,7 +504,7 @@ subType l g t1 t2 =
 safeExtends sub δ (TD _ c _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
   where
     (t1s, t2s) = unzip [ (t1,t2) | pe <- flatten δ (findSymOrDie p δ, ts)
-                                 , ee <- undefined
+                                 , ee <- error "CGMonad-safeExtends"
                                  , sameBinder pe ee 
                                  , let t1 = eltType ee
                                  , let t2 = eltType pe ]

@@ -713,7 +713,7 @@ data Assignability
 writeGlobalVars   :: PP t => Nano a t -> [Id SourceSpan] 
 writeGlobalVars p = envIds mGnty 
   where
-    mGnty         = undefined -- glVars p  -- guarantees
+    mGnty         = error "writeGlobalVars" -- glVars p  -- guarantees
 
 
 definedGlobs       :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r, Id (AnnType r), RType r)]

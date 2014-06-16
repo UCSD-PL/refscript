@@ -54,11 +54,12 @@ unify l _ θ t (TVar α _)  = varAsn l θ α t
 
 -- XXX: ORDERING IMPORTANT HERE
 -- Keep the union case before unfolding, but after type variables
-unify l δ θ t t' | any isUnion [t,t']
-  -- FIXME
-  = let (ts, _, _) = undefined in -- unionParts' unifEquiv t t' in
-    let (t1s, t2s) = unzip ts in
-    unifys l δ θ t1s t2s
+
+-- FIXME
+unify l δ θ t t' | any isUnion [t,t'] = unifys l δ θ t1s t2s
+  where
+    (ts, _, _) = error "unify-union" -- unionParts' unifEquiv t t' in
+    (t1s, t2s) = unzip ts
 
 unify l δ θ (TApp (TRef x s) ts _) (TApp (TRef x' s') ts' _) 
   | (x,s) == (x',s')   = unifys l δ θ ts ts'

@@ -44,9 +44,7 @@ import           Data.Hashable
 import qualified Data.HashMap.Strict                  as M
 import qualified Data.List                            as L
 import qualified Language.Fixpoint.Types              as F
-import           Language.Fixpoint.Misc
 import           Text.PrettyPrint.HughesPJ
-import           Language.ECMAScript3.PrettyPrint
 
 -------------------------------------------------------------------------------
 mapFstM :: (Functor m, Monad m) => (a -> m c) -> (a, b) -> m (c, b)

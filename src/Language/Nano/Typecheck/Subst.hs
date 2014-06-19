@@ -23,21 +23,17 @@ module Language.Nano.Typecheck.Subst (
   , flatten, flatten', flattenType
 
   -- * Ancestors
-  , weaken
+  , weaken, lineage
 
   ) where 
 
-import           Data.Maybe (maybeToList)
-import           Data.Function (on)
 import           Text.PrettyPrint.HughesPJ
-import           Text.Printf
-import           Language.Nano.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
-import           Language.Fixpoint.Misc (intersperse, mapPair, safeHead)
+import           Language.Fixpoint.Misc (intersperse, safeHead)
 
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
@@ -116,11 +112,12 @@ instance Free (Fact r) where
   free (ClassAnn (vs,m)) = foldr S.delete (free m) vs
 
 instance Free (TElt r) where
-  free (FieldSig _ _ m τ t) = free m `mappend` free τ `mappend` free t
-  free (MethSig  _ _ m τ t) = free m `mappend` free τ `mappend` free t
-  free (CallSig t)          = free t
-  free (ConsSig t)          = free t
-  free (IndexSig _ _ t)     = free t
+  free (FieldSig _ m τ t) = free m `mappend` free τ `mappend` free t
+  free (MethSig  _ m τ t) = free m `mappend` free τ `mappend` free t
+  free (StatSig _ m t)    = free m `mappend` free t
+  free (CallSig t)        = free t
+  free (ConsSig t)        = free t
+  free (IndexSig _ _ t)   = free t
 
 instance Free a => Free (Id b, a) where
   free (_, a)            = free a
@@ -149,11 +146,12 @@ instance (Substitutable r t) => Substitutable r (Env t) where
   apply = envMap . apply
 
 instance F.Reftable r => Substitutable r (TElt r) where 
-  apply θ (FieldSig x s m τ t) = FieldSig x s (appTy (toSubst θ) m) (apply θ τ) (apply θ t)
-  apply θ (MethSig  x s m τ t) = MethSig  x s (appTy (toSubst θ) m) (apply θ τ) (apply θ t)
-  apply θ (CallSig t)          = CallSig      (apply θ t)
-  apply θ (ConsSig t)          = ConsSig      (apply θ t)
-  apply θ (IndexSig x b t)     = IndexSig x b (apply θ t)
+  apply θ (FieldSig x m τ t) = FieldSig x   (appTy (toSubst θ) m) (apply θ τ) (apply θ t)
+  apply θ (StatSig x m t)    = StatSig  x   (appTy (toSubst θ) m) (apply θ t)
+  apply θ (MethSig  x m τ t) = MethSig  x   (appTy (toSubst θ) m) (apply θ τ) (apply θ t)
+  apply θ (CallSig t)        = CallSig      (apply θ t)
+  apply θ (ConsSig t)        = ConsSig      (apply θ t)
+  apply θ (IndexSig x b t)   = IndexSig x b (apply θ t)
 
 instance F.Reftable r => Substitutable r (Cast r) where
   apply _ CNo        = CNo
@@ -199,50 +197,43 @@ appTy θ        (TCons es m r) = TCons (apply θ es) (appTy (toSubst θ) m) r
 appTy _        (TExp _)       = error "appTy should not be applied to TExp"
 
 
--- | flattening types
---
--- Include all fields inherited by ancestors
---
--- minor FIXME: this should be moved somewhere else eventually.
---
+-- | flattening type to include all fields inherited by ancestors
 ---------------------------------------------------------------------------
-flatten :: PPR r => TDefEnv r -> (TDef r, [RType r]) -> [TElt r]
+flatten :: PPR r => Bool -> TDefEnv r -> (TDef r, [RType r]) -> [TElt r]
 ---------------------------------------------------------------------------
-flatten = fix . ff
+flatten st = fix . ff st
 
-ff δ r (TD _ _ vs (Just (i, ts')) es, ts)
-        = apply θ  . L.unionBy sameBinder es $ r (findSymOrDie i δ, ts')
+ff st δ r (TD _ _ vs (Just (i, ts')) es, ts) = 
+    apply θ  . L.unionBy sameBinder (filter flt es) $ r (findSymOrDie i δ, ts')
   where 
-      θ = fromList $ zip vs ts
+    θ = fromList $ zip vs ts
+    flt | st        = isStaticSig 
+        | otherwise = nonStaticSig
 
-ff _ _ (TD _ _ vs _ es, ts)  = apply (fromList $ zip vs ts) es
+ff st _ _ (TD _ _ vs _ es, ts)  = apply θ $ filter flt es
+  where 
+    θ = fromList $ zip vs ts
+    flt | st        = isStaticSig 
+        | otherwise = nonStaticSig
 
 -- | flatten' does not apply the top-level type substitution
-flatten' δ d@(TD _ _ vs _ _) = flatten δ (d, tVar <$> vs)
+flatten' st δ d@(TD _ _ vs _ _) = flatten st δ (d, tVar <$> vs)
 
 
-flattenType δ t@(TApp (TRef x False) ts r) = TCons es mut r
+flattenType δ t@(TApp (TRef x) ts r) = TCons es mut r
   where 
-    es      = flatten δ (findSymOrDie x δ, ts)
+    es      = flatten False δ (findSymOrDie x δ, ts)
     -- Be careful with the mutability classes themselves
     -- Do not set this to another mutability type cause, or you'll
     -- end up with infinite recursion
     mut     | isMutabilityType t = tTop
             | otherwise          = toType $ safeHead "flattenType" ts
 
-flattenType _ t = t
+flattenType δ (TApp (TTyOf x) _ r) = TCons es immutableM r
+  where 
+    es      = flatten' True δ $ findSymOrDie x δ
 
--- | `isAncestor s1 s2` returns True if s1 is an ancestor of s2
----------------------------------------------------------------------------
-isAncestor :: TDefEnv t -> F.Symbol -> F.Symbol -> Bool
----------------------------------------------------------------------------
-isAncestor δ s1 s2 
-  | s1 == s2 = True
-  | otherwise 
-  = case t_proto $ findSymOrDie s2 δ of 
-      Just (p,_) -> isAncestor δ s1 (F.symbol p)
-      Nothing    -> False
-  
+flattenType _ t = t
 
 
 -- | Weaken a named type, by moving upwards in the class hierarchy. This
@@ -254,13 +245,20 @@ isAncestor δ s1 s2
 weaken :: PPR r => TDefEnv r -> (TDef r, [RType r]) -> F.Symbol -> Maybe (TDef r, [RType r])
 ---------------------------------------------------------------------------
 weaken δ dt@(TD _ s vs (Just (p,ps)) _, ts) t 
-  | ss /= t = weaken δ (apply θ $ findSymOrDie p δ, apply θ ps) t
-  | ss == t = Just dt
+  | F.symbol s /= t = weaken δ (apply θ $ findSymOrDie p δ, apply θ ps) t
+  | otherwise       = Just dt
   where θ   = fromList $ zip vs ts
-        ss  = F.symbol s 
 
-weaken δ dt@(TD _ s vs Nothing _, ts) t
-  | ss /= t = Nothing
-  | ss == t = Just dt
-  where ss  = F.symbol s 
+weaken _ dt@(TD _ s _ Nothing _, _) t
+  | F.symbol s /= t = Nothing
+  | otherwise       = Just dt
+
+
+---------------------------------------------------------------------------
+lineage :: TDefEnv t -> TDef t -> [F.Symbol]
+---------------------------------------------------------------------------
+lineage δ (TD _ s _ (Just (p,_)) _) = (F.symbol s):lineage δ (findSymOrDie p δ)
+lineage _ (TD _ s _ Nothing      _) = [F.symbol s]
+
+
 

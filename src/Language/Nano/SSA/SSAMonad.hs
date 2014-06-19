@@ -51,7 +51,6 @@ import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc             
-import qualified Language.Fixpoint.Types            as F
 
 -- import           Debug.Trace                        (trace)
 

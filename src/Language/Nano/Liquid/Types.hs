@@ -60,9 +60,8 @@ module Language.Nano.Liquid.Types (
 
   ) where
 
-import           Data.Maybe             (fromMaybe, fromJust)
+import           Data.Maybe             (fromMaybe)
 import qualified Data.List               as L
-import           Data.Function                  (on)
 import qualified Data.HashMap.Strict     as M
 import           Text.PrettyPrint.HughesPJ
 import           Text.Printf 
@@ -74,7 +73,6 @@ import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Env
-import           Language.Nano.Misc
 import           Language.Fixpoint.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Sub
@@ -224,12 +222,13 @@ tconFTycon TInt         = F.intFTyCon
 tconFTycon TBool        = rawStringFTycon "Boolean"
 tconFTycon TFPBool      = F.boolFTyCon
 tconFTycon TVoid        = rawStringFTycon "Void"
-tconFTycon (TRef s _)   = rawStringFTycon $ F.symbolString s
+tconFTycon (TRef s)     = rawStringFTycon $ F.symbolString s
 tconFTycon TUn          = rawStringFTycon "Union"
 tconFTycon TString      = F.strFTyCon
 tconFTycon TTop         = rawStringFTycon "Top"
 tconFTycon TNull        = rawStringFTycon "Null"
 tconFTycon TUndef       = rawStringFTycon "Undefined"
+tconFTycon (TTyOf s)    = rawStringFTycon ("typeof " ++ show s)
 
 
 rTypeSortForAll t    = genSort n θ $ rTypeSort tbody
@@ -292,10 +291,12 @@ mapReftM _ t                 = error   $ render $ text "Not supported in mapReft
 
 mapReftBindM f (B x t)       = B x     <$> mapReftM f t
 
-mapReftEltM f (FieldSig x s m τ t) = FieldSig x s m <$> mapReftMaybeM f τ <*> mapReftM f t
-mapReftEltM f (CallSig t)          = CallSig        <$> mapReftM f t
-mapReftEltM f (ConsSig  t)         = ConsSig        <$> mapReftM f t
-mapReftEltM f (IndexSig x b t)     = IndexSig x b   <$> mapReftM f t
+mapReftEltM f (FieldSig x m τ t) = FieldSig x m <$> mapReftMaybeM f τ <*> mapReftM f t
+mapReftEltM f (MethSig x m τ t)  = MethSig x m  <$> mapReftMaybeM f τ <*> mapReftM f t
+mapReftEltM f (CallSig t)        = CallSig      <$> mapReftM f t
+mapReftEltM f (StatSig x m t)    = StatSig x m  <$> mapReftM f t
+mapReftEltM f (ConsSig  t)       = ConsSig      <$> mapReftM f t
+mapReftEltM f (IndexSig x b t)   = IndexSig x b <$> mapReftM f t
 
 mapReftMaybeM f (Just t) = Just <$> mapReftM f t
 mapReftMaybeM _ _        = return Nothing
@@ -391,11 +392,17 @@ zipType δ (TApp TUn t1s r1) (TApp TUn t2s _) =
   where
     pair t2 = 
       case L.find (related δ t2) t1s of
-        Just t1 -> zipType δ t1 t2
+        Just t1 -> zipType δ t1 t2 `strengthen` r1
         Nothing -> fmap F.bot t2
 
 zipType δ t1 t2@(TApp TUn _ _) = zipType δ (TApp TUn [t1] fTop) t2
-zipType δ t1@(TApp TUn _ _) t2 = zipType δ t1 (TApp TUn [t2] fTop)
+
+zipType δ (TApp TUn t1s r) t2 = 
+    case L.find (related δ t2) t1s of
+      Just t1 -> zipType δ t1 t2 `strengthen` r
+      Nothing -> fmap F.bot t2
+
+
 
 -- | Class/interface types
 --
@@ -412,18 +419,18 @@ zipType δ t1@(TApp TUn _ _) t2 = zipType δ t1 (TApp TUn [t2] fTop)
 --   
 --   C<Si> || {F;M} = toStruct(C<Si>) || {F;M}
 --   
-zipType δ t1@(TApp (TRef x1 s1) t1s r1) t2@(TApp (TRef x2 s2) t2s _) 
-  | (x1,s1) == (x2,s2)
-  = TApp (TRef x1 s1) (zipWith (zipType δ) t1s t2s) r1
+zipType δ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _) 
+  | x1 == x2
+  = TApp (TRef x1) (zipWith (zipType δ) t1s t2s) r1
   | otherwise
   = case weaken δ (findSymOrDie x1 δ, t1s) x2 of
       -- Try to move along the class hierarchy
-      Just (_, t1s') -> zipType δ (TApp (TRef x2 s1) t1s' r1) t2
+      Just (_, t1s') -> zipType δ (TApp (TRef x2) t1s' r1) t2
       -- Unfold structures
       Nothing        -> zipType δ (flattenType δ t1) (flattenType δ t2)
 
-zipType δ t1@(TApp (TRef _ _) _ _) t2 = zipType δ (flattenType δ t1) t2
-zipType δ t1 t2@(TApp (TRef _ _) _ _) = zipType δ t1 (flattenType δ t2)
+zipType δ t1@(TApp (TRef _) _ _) t2 = zipType δ (flattenType δ t1) t2
+zipType δ t1 t2@(TApp (TRef _) _ _) = zipType δ t1 (flattenType δ t2)
  
 
 zipType _ (TApp c [] r) (TApp c' [] _) | c == c' = TApp c [] r
@@ -431,7 +438,7 @@ zipType _ (TApp c [] r) (TApp c' [] _) | c == c' = TApp c [] r
 -- | Top ??
 zipType _ _ t2@(TApp TTop _ _ ) = t2
 
-zipType _ (TVar v r) (TVar v' r') | v == v' = TVar v r
+zipType _ (TVar v r) (TVar v' _) | v == v' = TVar v r
 
 -- | Function types
 --
@@ -450,20 +457,19 @@ zipType δ (TFun x1s t1 r1) (TFun x2s t2 _) =
 zipType δ (TCons f1s m1 r1) (TCons f2s _ _) = 
     TCons (common' ++ disjoint') m1 r1
   where 
-    common' = (uncurry $ zipElts δ) <$> common
-    disjoint' = (const fTop <$>) <$> disjoint  -- top
-    (common, disjoint) = partition [] [] f2s
+    common'                  = (uncurry $ zipElts δ) <$> common
+    disjoint'                = (const fTop <$>) <$> disjoint  -- top
+    (common, disjoint)       = partition [] [] f2s
 
-    partition g1 g2 [] = (g1, g2)
+    partition g1 g2 []       = (g1, g2)
     partition g1 g2 (e2:e2s) =
       case pick e2 of 
         [  ] -> partition g1 (e2:g2) e2s
         [ee] -> partition (ee:g1) g2 e2s
         ees  -> error $ "zipType: " ++ ppshow e2 ++ " got matched with " 
                                     ++ ppshow ees
-
-    pick f =  [ (f1, f) | f1 <- f1s, compatible f1 f ]
-    compatible e e' = sameBinder e e' && related δ e e'
+    pick f                   = [ (f1, f) | f1 <- f1s, compatible f1 f ]
+    compatible e e'          = sameBinder e e' && related δ e e'
 
 -- | Intersection types
 --
@@ -487,29 +493,21 @@ zipType _ t1 t2 =
   errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
 
 
-zipBind δ (B s1 t1) (B s2 t2) = B s2 $ zipType δ t1 t2 
+zipBind δ (B _ t1) (B s2 t2) = B s2 $ zipType δ t1 t2 
 
 
-zipElts δ (CallSig t1) (CallSig t2)
-  = CallSig $ zipType δ t1 t2 
+zipElts δ (CallSig t1)                  (CallSig t2)                 = CallSig        $ zipType δ t1 t2 
+zipElts δ (ConsSig t1)                  (ConsSig t2)                 = ConsSig        $ zipType δ t1 t2 
+zipElts δ (StatSig _ _  t1)            (StatSig x2 m2 t2)            = StatSig  x2 m2 $ zipType δ t1 t2 
+zipElts δ (IndexSig _ _   t1)           (IndexSig x2 b2 t2)          = IndexSig x2 b2 $ zipType δ t1 t2 
 
-zipElts δ (ConsSig t1) (ConsSig t2)       
-  = ConsSig $ zipType δ t1 t2 
+zipElts δ (FieldSig _  _ (Just τ1) t1) (FieldSig x2 m2 (Just τ2) t2) = FieldSig x2 m2 (Just $ zipType δ τ1 τ2) $ zipType δ t1 t2
+zipElts δ (FieldSig _ _  _        t1)  (FieldSig x2 m2 (Just τ2) t2) = FieldSig x2 m2 (Just τ2) $ zipType δ t1 t2
+zipElts δ (FieldSig _ _  Nothing  t1)  (FieldSig x2 m2 Nothing t2)   = FieldSig x2 m2 Nothing $ zipType δ t1 t2
 
-zipElts δ (IndexSig x1 b1 t1) (IndexSig x2 b2 t2)  
-  = IndexSig x2 b2 $ zipType δ t1 t2 
-
-zipElts δ (FieldSig x1 s1 m1 (Just τ1) t1) (FieldSig x2 s2 m2 (Just τ2) t2)
-  = FieldSig x2 s2 m2 (Just $ zipType δ τ1 τ2) $ zipType δ t1 t2
-
-zipElts δ (FieldSig x1 s1 m1 Nothing t1) (FieldSig x2 s2 m2 Nothing t2)
-  = FieldSig x2 s2 m2 Nothing $ zipType δ t1 t2
-
-zipElts δ (MethSig x1 s1 m1 (Just τ1) t1) (MethSig x2 s2 m2 (Just τ2) t2)
-  = MethSig x2 s2 m2 (Just $ zipType δ τ1 τ2) $ zipType δ t1 t2
-
-zipElts δ (MethSig x1 s1 m1 Nothing t1) (MethSig x2 s2 m2 Nothing t2)
-  = MethSig x2 s2 m2 Nothing $ zipType δ t1 t2
+zipElts δ (MethSig _  _  (Just τ1) t1) (MethSig x2 m2 (Just τ2) t2)  = MethSig x2 m2 (Just $ zipType δ τ1 τ2) $ zipType δ t1 t2
+zipElts δ (MethSig _  _  _         t1) (MethSig x2 m2 (Just τ2) t2)  = MethSig x2 m2 (Just τ2) $ zipType δ t1 t2
+zipElts δ (MethSig _  _  Nothing   t1) (MethSig x2 m2 Nothing t2)    = MethSig x2 m2 Nothing $ zipType δ t1 t2
 
 zipElts _ e1 e2
   = error $ "Cannot zip: " ++ ppshow e1 ++ " and " ++ ppshow e2

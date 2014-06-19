@@ -38,12 +38,9 @@
 
 
 /*@ extern builtin_BISetProp ::
-    /\ forall A M . ([M] { [#Mutable] f: A }, A) => A
-    /\ forall A M . ([#Mutable] { [M] f: A }, A) => A
+    /\ forall A M T . ([M] { [#Mutable] f:[T] A }, A) => A
+    /\ forall A M T . ([#Mutable] { [M] f:[T] A }, A) => A
 */
-
-
-/*@ extern builtin_BIGetProp :: forall T A M Mf . ([M] { [Mf] f: [T] A }) => A */
 
 
 //FIXME: the 'len' property is invalid if M != Immutable

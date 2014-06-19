@@ -43,7 +43,7 @@ getProp ::  (IsLocated l, PPR r) =>
 -------------------------------------------------------------------------------
 getProp l α δ s t@(TApp _ _ _ )  = getPropApp l α δ s t 
 getProp _ _ _ _   (TFun _ _ _  ) = Nothing
-getProp _ _ _ s a@(TCons es _ _) = (a,) <$> lookupElt False s es
+getProp _ _ _ s a@(TCons es _ _) = (a,) <$> lookupElt s es
 getProp l _ _ _ t                = die $ bug (srcPos l) 
                                       $ "Using getProp on type: " ++ ppshow t 
 
@@ -55,10 +55,8 @@ getElt :: (F.Symbolic s, PPR r) => TDR r -> s -> RType r -> [TElt r]
 -------------------------------------------------------------------------------
 getElt δ s t                = fromCons $ S.flattenType δ t
   where   
-    fromCons (TCons es _ _) = [ e | e <- es, F.symbol e == F.symbol s, nonStaticElt e ]
+    fromCons (TCons es _ _) = [ e | e <- es, F.symbol e == F.symbol s ]
     fromCons _              = []
-
-getElt _ _ t                = [] 
 
 
 -------------------------------------------------------------------------------
@@ -69,7 +67,7 @@ getCallable δ t             = uncurry mkAll <$> foo [] t
     foo αs t@(TFun _ _ _)   = [(αs, t)]
     foo αs   (TAnd ts)      = concatMap (foo αs) ts 
     foo αs   (TAll α t)     = foo (αs ++ [α]) t
-    foo αs   (TApp (TRef s False) _ _ )
+    foo αs   (TApp (TRef s) _ _ )
                             = case findSym s δ of 
                                 Just d  -> [ (αs, t) | CallSig t <- t_elts d ]
                                 Nothing -> []
@@ -89,23 +87,27 @@ getPropApp l α γ s t@(TApp c ts _) =
     TUn      -> getPropUnion l α γ s ts
     TInt     -> lookupAmbientVar l α γ s "Number" t
     TString  -> lookupAmbientVar l α γ s "String" t
-    TRef i b -> findSym i γ >>= getPropTDef b l γ s ts >>= return . (t,)
+    TRef x   -> do  d      <- findSym x γ 
+                    p      <- lookupElt s $ S.flatten False γ (d,ts)
+                    return  $ (t,p)
+    TTyOf x  -> do  d      <- findSym x γ 
+                    p      <- lookupElt s $ S.flatten True γ (d,ts)
+                    return  $ (t,p)    
+    TFPBool  -> Nothing
     TTop     -> Nothing
     TVoid    -> Nothing
 getPropApp _ _ _ _ _ = error "getPropApp should only be applied to TApp"
 
 
 
-lookupElt b s es = 
+lookupElt s es = 
     case lookupField of
       Just t  -> Just t
       Nothing -> lookupIndex 
   where
     -- FIXME: for the moment only supporting string index signature
-    lookupField = listToMaybe [ eltType e | e              <- es
-                                          , isStaticElt e  == b
-                                          , F.symbol e     == s ]
-    lookupIndex = listToMaybe [ t | IndexSig _ True t <- es]
+    lookupField = listToMaybe [ eltType e | e <- es, nonStaticSig e, F.symbol e == s ]
+    lookupIndex = listToMaybe [ t         | IndexSig _ True t <- es]
 
 -- getPropCons _ _ _ = error "BUG: Cannot call getPropCons on non TCons"
 
@@ -119,11 +121,11 @@ lookupAmbientVar l α γ s amb t =
   envFindTy amb α >>= getProp l α γ s >>= return . (t,) . snd
 
 
+-- FIXME: Probably should get rid of this and just use getField, etc...
 -------------------------------------------------------------------------------
-getPropTDef :: (PPR r) =>
-  Bool -> t -> TDR r -> F.Symbol -> [RType r] -> TDef r -> Maybe (RType r)
+getPropTDef :: PPR r => t -> TDR r -> F.Symbol -> [RType r] -> TDef r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-getPropTDef b _ γ f ts d = lookupElt b f $ S.flatten γ (d,ts)
+getPropTDef _ γ f ts d = lookupElt f $ S.flatten False γ (d,ts)
 
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns

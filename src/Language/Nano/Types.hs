@@ -539,7 +539,6 @@ data BuiltinOp = BIUndefined
                | BINumArgs
                | BITruthy
                | BISetProp
-               | BIGetProp
                  deriving (Eq, Ord, Show)
 
 instance PP BuiltinOp where

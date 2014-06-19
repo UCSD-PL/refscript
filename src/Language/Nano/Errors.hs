@@ -161,5 +161,6 @@ errorTypeArgsNum l n p q  = mkErr l $ printf "Type %s expects %s arguments but %
 errorSigNotFound l e es   = mkErr l $ printf "Could not find a matching signature for call to '%s' with arguments '%s'" (ppshow e) (ppshow es)
 errorCallNotSup l fn es ts= mkErr l $ printf "Cannot call '%s' with argument(s): %s of type '%s'" (ppshow fn) (ppshow es) (ppshow ts)
 errorCallMatch l fn ts    = mkErr l $ printf "Could not match call to '%s' to a particular signature. Argument(s) with types '%s' are invalid." (ppshow fn) (ppshow ts)
+errorCallReceiver l e f   = mkErr l $ printf "Could not call method '%s' of '%s'." (ppshow f) (ppshow e)
 
 errorDeref l p o t        = mkErr l $ printf "Cannot access property '%s' on '%s' with type '%s'." (ppshow p) (ppshow o) (ppshow t) 

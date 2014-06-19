@@ -1,15 +1,11 @@
 
-/*@ foo :: () => void */
-function foo() {}
+/*@ gobj :: { a: { number | v > 0 } } */
+var gobj = {
+  a: 1
+};
 
-var a = { f1: 1, f2: "s", f3: true, f4: foo };
-
-a.f1 = 1;
-
-
-
-/*@ c :: [#ReadOnly] {  } */
-var c = a;
-
-c.f1 = 1;
+/*@ foo :: () => { void | true } */
+function foo() {
+  gobj.a = gobj.a - 1;
+}
 

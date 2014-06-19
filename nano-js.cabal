@@ -22,6 +22,7 @@ Executable nanojs
                        vector, bytestring, text,
                        aeson <= 0.6.1.0,
                        hashable < 1.2, 
+                       data-default,
                        directory,
                        unordered-containers, 
                        filepath, ansi-terminal, process, mtl, syb, cmdargs,

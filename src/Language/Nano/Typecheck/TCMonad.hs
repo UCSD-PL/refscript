@@ -67,9 +67,7 @@ module Language.Nano.Typecheck.TCMonad (
 import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>), (<*>))
 import           Data.Function                      (on)
-import qualified Data.HashSet                       as S
 import           Data.Maybe                         (catMaybes)
-import           Data.List                          (elem, groupBy, sort, nub, (\\))
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)
 import           Language.Fixpoint.Errors
@@ -419,6 +417,7 @@ subtypeM l t1 t2
           Left e          -> tcError e
           Right CNo       -> return  ()
           Right (CUp _ _) -> return  ()
+          Right _         -> tcError $ errorSubType l "subtypeM" t1 t2
 
 
 addCast     ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
@@ -441,9 +440,9 @@ tcPushThis t   = modify $ \st -> st { tc_this = t : tc_this st }
 tcPopThis      = modify $ \st -> st { tc_this = tail $ tc_this st } 
 tcWithThis t p = do { tcPushThis t; a <- p; tcPopThis; return a } 
 
-getPropTDefM b l s t ts = do 
+getPropTDefM _ l s t ts = do 
   δ <- getDef
-  return $ getPropTDef b l δ (F.symbol s) ts t
+  return $ getPropTDef l δ (F.symbol s) ts t
 
 getPropM _ l s t = do 
   (δ, ε) <- (,) <$> getDef <*> getExts
@@ -452,12 +451,12 @@ getPropM _ l s t = do
 --------------------------------------------------------------------------------
 getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
 --------------------------------------------------------------------------------
-getSuperM l (TApp (TRef i s) ts _) = 
+getSuperM l (TApp (TRef i) ts _) = 
     fromTdef =<< findSymOrDieM i
   where 
     fromTdef (TD _ _ vs (Just (p,ps)) _) = return  
                                          $ apply (fromList $ zip vs ts) 
-                                         $ TApp (TRef (F.symbol p) s) ps fTop
+                                         $ TApp (TRef (F.symbol p)) ps fTop
     fromTdef (TD _ _ _ Nothing _)        = tcError 
                                          $ errorSuper (srcPos l) 
 getSuperM l _                            = tcError 
@@ -466,7 +465,7 @@ getSuperM l _                            = tcError
 --------------------------------------------------------------------------------
 getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (TDef r)
 --------------------------------------------------------------------------------
-getSuperDefM l (TApp (TRef i _) ts _) = fromTdef =<< findSymOrDieM i
+getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
   where 
     fromTdef (TD _ _ vs (Just (p,ps)) _) = 
       do TD c n ws pp ee <- findSymOrDieM p

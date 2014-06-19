@@ -18,6 +18,7 @@ import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
+import           Data.Default
 import           Data.Maybe                              (isJust, isNothing)
 import qualified Data.List                        as     L
 import           Data.Generics.Aliases                   ( mkQ)
@@ -32,8 +33,7 @@ import           Control.Monad                    hiding (mapM)
 import           Control.Monad.Trans                     (MonadIO,liftIO)
 import           Control.Applicative                     ((<$>), ( <*>))
 
-import           Language.Fixpoint.Types          hiding (quals, Loc, Expression, dummySpan)
-import           Language.Fixpoint.Errors                (dummySpan)
+import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Misc                  (mapEither, mapSnd)
 import           Language.Nano.Types
@@ -53,7 +53,7 @@ import qualified Text.Parsec.Token                as     T
 
 import           GHC.Generics
 
-import           Debug.Trace                             ( trace, traceShow)
+-- import           Debug.Trace                             ( trace, traceShow)
 
 dot        = T.dot        lexer
 plus       = T.symbol     lexer "+"
@@ -263,8 +263,7 @@ tConP =  try (reserved "number"    >> return TInt)
 ----------------------------------------------------------------------------------
 idToTRefP :: Id SourceSpan -> Parser TCon
 ----------------------------------------------------------------------------------
-idToTRefP (Id _ s) = return $ TRef (symbol s) False
--- default: non-static class ref
+idToTRefP (Id _ s) = return $ TRef (symbol s)
 
 bareAll1P p
   = do reserved "forall"
@@ -276,11 +275,12 @@ bareAll1P p
 bareAllP p =  try p 
           <|> bareAll1P p
 
-arrayP = brackets bareTypeP
+-- arrayP = brackets bareTypeP
 
 propBindP =  sepEndBy (
               try indexSigP 
           <|> try fieldSigP
+          <|> try statSigP
           <|> try methSigP
           <|> try callSigP
           <|> try consSigP
@@ -303,32 +303,35 @@ indexP = xyP id colon sn
     sn = withinSpacesP (string "string" <|> string "number")
 
 
--- | <static> <[mut]> f<[τ]>: t
-
+-- | <[mut]> f<[τ]>: t
 fieldSigP = do 
-    s          <- option False $ try $ reserved "static" >> return True
-    m          <- option defaultM (toType <$> mutP)
+   --  s          <- option False $ try $ reserved "static" >> return True
+    m          <- option def (toType <$> mutP)
     x          <- symbolP 
     _          <- colon
     τ          <- optionMaybe $ withinSpacesP $ brackets bareTypeP
     t          <- bareTypeP
-    return      $ FieldSig x s m τ t
-  where 
-    sp = do x <- withinSpacesP (stringSymbol <$> ((try lowerIdP) <|> upperIdP))    
-            t <- optionMaybe $ withinSpacesP $ brackets bareTypeP
-            return (x,t)
+    
+    return      $ FieldSig x m τ t
 
+-- | static <[mut]> f: t
+statSigP = do 
+    _          <- reserved "static"
+    m          <- option def (toType <$> mutP)
+    x          <- symbolP 
+    _          <- colon
+    t          <- bareTypeP
+    
+    return      $ StatSig x m t
 
--- | <static> <[mut]> m<[τ]>(ts): t
-
+-- | <[mut]> m<[τ]>(ts): t
 methSigP = do
-    s          <- option False $ try $ reserved "static" >> return True
-    m          <- option defaultM (toType <$> mutP)
+    m          <- option def (toType <$> mutP)
     x          <- symbolP 
     _          <- colon
     τ          <- optionMaybe $ withinSpacesP $ brackets bareTypeP
     t          <- bareAllP bareMethP
-    return      $ MethSig x s m τ t
+    return      $ MethSig x m τ t
 
 
 -- | <forall A .> (t...) => t
@@ -560,7 +563,7 @@ checkIF t@(_,TD _ _ _ _ elts)
   where 
     nTn = length [ () | IndexSig _ False _ <- elts ]
     nTi = length [ () | IndexSig _ _ _     <- elts ]
-    nTe = length [ () | FieldSig _ _ _ _ _ <- elts ]
+    nTe = length [ () | FieldSig _ _ _ _   <- elts ]
 
 
 type PState = Integer
@@ -603,11 +606,11 @@ catFunSpecDefs :: TDefEnv Reft -> [Statement (SourceSpan, [Spec])] -> Env RefTyp
 catFunSpecDefs δ ss = envFromList [ (i, checkType δ t) | l <- ds , Bind (i,t) <- snd l ]
   where ds     = definedFuns ss
 
---------------------------------------------------------------------------------------
-catVarSpecDefs :: [Statement (SourceSpan, [Spec])] -> Env RefType
---------------------------------------------------------------------------------------
-catVarSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
-  where ds        = varDeclStmts ss
+-- --------------------------------------------------------------------------------------
+-- catVarSpecDefs :: [Statement (SourceSpan, [Spec])] -> Env RefType
+-- --------------------------------------------------------------------------------------
+-- catVarSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
+--   where ds        = varDeclStmts ss
 
 
 -- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
@@ -619,12 +622,12 @@ definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
     fromFunction (FunctionStmt l _ _ _) = [l] 
     fromFunction _                      = []
 
---------------------------------------------------------------------------------------
-varDeclStmts         :: (Data a, Typeable a) => [Statement a] -> [a]
---------------------------------------------------------------------------------------
-varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
-  where 
-    fromVarDecl (VarDecl l _ _) = [l]
+-- --------------------------------------------------------------------------------------
+-- varDeclStmts         :: (Data a, Typeable a) => [Statement a] -> [a]
+-- --------------------------------------------------------------------------------------
+-- varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
+--   where 
+--     fromVarDecl (VarDecl l _ _) = [l]
 
 --------------------------------------------------------------------------------
 printFile :: FilePath -> IO () -- Either Error (NanoBareR Reft))
@@ -660,10 +663,10 @@ checkType δ typ =
       es -> error $ show es 
   where 
     fromType :: RefType -> [TypeError]
-    fromType (TApp (TRef x s) (m:_) _) | isNothing (findSym x δ) = [NameNotFound x] 
-                                       | not (validMutability m) = [InvalidMutability x]
-    fromType _                         = []
+    fromType (TApp (TRef x) (m:_) _) | isNothing (findSym x δ) = [NameNotFound x] 
+                                     | not (validMutability m) = [InvalidMutability x]
+    fromType _                       = []
 
-    validMutability (TVar _ _)         = True
-    validMutability t                  = isMutabilityType t
+    validMutability (TVar _ _)       = True
+    validMutability t                = isMutabilityType t
 

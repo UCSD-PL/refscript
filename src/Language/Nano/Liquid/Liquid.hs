@@ -205,18 +205,10 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 -- work atm :(
 --
 consStmt g (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
---   = do  (x,g') <- consCall g l BISetProp [e1,e2] $ tracePP "setPropTy" $ setPropTy (F.symbol f) l1 $ renv g
---         case envFindTy x g' of
---           TApp (TRef _) [t1,t2] _ -> do subType l g' (tracePP (ppshow (srcPos l) ++ " v") t2) 
---                                                      (tracePP (ppshow (srcPos l) ++ " x.f") t1) 
---                                         return $ Just g'
---           t                        -> error $ "BUG: consStmt - e.f = e : " ++ "\n" ++ ppshow t
-
-  = do (t1, g')  <- consPropReadLhs getProp g l1 e1 $ F.symbol f
-       (x2, g'') <- consExpr g'  e2
-       subType l2 g'' (envFindTy x2 g'') t1
-       return     $ Just g''
-
+  = do (x,g1) <- consExpr g e1
+       (_,g2) <- consMethCall g1 l BISetProp (envFindTy x g1) [e2] $ setPropTy (F.symbol f) l $ renv g1 
+       return  $ Just g2
+   
 -- e
 consStmt g (ExprStmt _ e) 
   = consExpr g e >> (return $ Just g)
@@ -280,7 +272,7 @@ consStmt g (ClassStmt l i _ _ ce) = do
     --   - This type uses the classes type variables as type parameters.
     --   - For the moment this type does not have a refinement. Maybe use
     --     invariants to add some.
-    let thisT = TApp (TRef (F.symbol i) False) (tVar <$> αs) fTop  
+    let thisT = TApp (TRef $ F.symbol i) (tVar <$> αs) fTop  
     cgWithThis thisT $ consClassElts (srcPos l) g' d ce
     return $ Just g
 
@@ -394,14 +386,12 @@ consExpr g (NullLit l)
   = envAddFresh l tNull g
 
 consExpr g (ThisRef l)
-  = cgPeekThis >>= \t -> envAddFresh l t g
+  = do t <- cgPeekThis 
+       envAddFresh l t g
 
 consExpr g (VarRef i x)
-  = do addAnnot l x t
+  = do addAnnot (srcPos i) x $ envFindTy x g
        return (x, g) 
-    where 
-       t   = envFindTy x g
-       l   = srcPos i
 
 consExpr g (PrefixExpr l o e)
   = consCall g l o [e] (prefixOpTy o $ renv g)
@@ -427,32 +417,7 @@ consExpr g c@(CallExpr l e es)
 -- This function does the late binding of `this` to `e`.
 consExpr g (DotRef l e f)
   = do (x,g') <- consExpr g e 
-       consMethCall g' l "DotRef" (envFindTy x g') [] ty 
-  where
-       ty = getPropTy (F.symbol f) l $ renv g 
-       -- ty = tracePP ("getProp_" ++ ppshow f) $ getPropTy (F.symbol f) l $ renv g 
-
-
---   = do (xe, g')  <- consExpr g e
---        let tx     = envFindTy xe g'
---        δ         <- getDef
---        case find (eltMatch elt) $ getElt δ fs tx of 
---          Just tf -> do let tf'   = F.substa (sf $ F.symbol xe) $ eltType tf
---                        (x, g'') <- envAddFresh l tf' g'
---                        addAnnot (srcPos l) x (envFindTy x g'')
---                        return    $ (x, g'')
---          Nothing -> die $ errorPropRead (srcPos l) e fs
---     where
---        elt        = fromJust $ listToMaybe [ e | EltOverload cx e <- ann_fact l
---                                                , cge_ctx g == cx ]
---        fs         = F.symbol f
---        eltMatch (FieldSig _ _ _ τ1 t1) (FieldSig _ _ _ τ2 t2) 
---                   = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
---        eltMatch e1 e2                    
---                   = on (==) (toType . eltType) e1 e2
---        sf t s     | s == F.symbol "this" = t
---                   | otherwise            = s 
-
+       consMethCall g' l "DotRef" (envFindTy x g') [] $ getFieldTy (F.symbol f) l
 
 -- -- e["f"]
 -- consExpr g (BracketRef l e (StringLit _ fld)) 
@@ -468,7 +433,7 @@ consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3)
 
 -- [e1,...,en]
 consExpr g (ArrayLit l es)
-  = do  t <- arrayQualifiers $ arrayLitTy l (length es) $ renv g
+  = do  t <- scrapeQualifiers $ arrayLitTy l (length es) $ renv g
         consCall g l BIArrayLit es t
 
 -- {f1:e1,...,fn:en}
@@ -484,14 +449,17 @@ consExpr g (NewExpr l (VarRef _ i) es)
 
 -- super
 consExpr g (SuperRef l) 
-  = cgPeekThis >>= \case 
-      TApp (TRef i s) ts _ ->
-        findSymOrDieM i >>= \case 
-          TD _ _ vs (Just (p, ps)) _ ->
-            envAddFresh l 
-              (apply (fromList $ zip vs ts) $ TApp (TRef (F.symbol p) s) ps fTop) g
+  = do  z <- cgPeekThis 
+        case z of 
+          TApp (TRef i) ts _ -> 
+              do  w <- findSymOrDieM i
+                  case w of 
+                    TD _ _ vs (Just (p, ps)) _ -> 
+                        let θ = fromList $ zip vs ts in
+                        let t = apply θ $ TApp (TRef $ F.symbol p) ps fTop in                        
+                        envAddFresh l t g
+                    _                          -> cgError l $ errorSuper (srcPos l) 
           _ -> cgError l $ errorSuper (srcPos l) 
-      _ -> cgError l $ errorSuper (srcPos l) 
 
 -- not handled
 consExpr _ e 
@@ -511,18 +479,20 @@ getConstr :: IsLocated a => SourceSpan -> CGEnv -> Id a -> CGM RefType
 getConstr l g s = 
     case findSym s (cge_defs g) of
       Just t | t_class t ->       -- This needs to be a class
-        getPropTDefM False l "__constructor__" t (tVar <$> t_args t) >>= \case
-          Just (TFun bs _ r) -> return $ abs (t_args t) $ TFun bs (retT t) r
-          Just _             -> error  $ "Unsupported constructor type"
-          Nothing            -> return $ abs (t_args t) $ TFun [] (retT t) fTop
+        do  z <- getPropTDefM  l "__constructor__" t $ tVar <$> t_args t
+            case z of 
+              Just (TFun bs _ r) -> return $ abs (t_args t) $ TFun bs (retT t) r
+              Just _             -> error  $ "Unsupported constructor type"
+              Nothing            -> return $ abs (t_args t) $ TFun [] (retT t) fTop
       _ -> 
-        getPropM l "__constructor__" (envFindTy s g) >>= \case
-          Just t  -> return t
-          Nothing -> cgError l $ errorConsSigMissing (srcPos l) s
+        do  z <- getPropM l "__constructor__" $ envFindTy s g
+            case z of
+              Just t  -> return t
+              Nothing -> cgError l $ errorConsSigMissing (srcPos l) s
   where
     -- Constructor's return type is void - instead return the class type
     -- FIXME: type parameters in returned type: inferred ... or provided !!! 
-    retT t = TApp (TRef (F.symbol s) False) (tVar <$> t_args t) fTop
+    retT t = TApp (TRef $ F.symbol s) (tVar <$> t_args t) fTop
     abs [] t = t
     abs vs t = foldr TAll t vs
 
@@ -555,20 +525,19 @@ consDeadCode δ g l x t
 consUpCast δ g l x t1 t2 = envAddFresh l stx g
     where
         tx   = envFindTy x g
-        ztx  = zipType δ (fmap F.bot tx) t2
+        ztx  = zipType δ tx t2
         stx  = ztx `eSingleton` x
     
 -- | DownCast(x, t1 => t2)
 consDownCast δ g l x t1 t2
-  = do  subType l g tx tx2
-        envAddFresh l stx g
+  = do  subType l g txx tx2
+        envAddFresh l ztx g
     where 
         tx   = envFindTy x g
+        -- This will drop all top-level refinements from union-level to its parts
+        txx  = zipType δ tx tx 
         tx2  = zipType δ t2 tx
         ztx  = zipType δ tx t2
---         tx2  = zipType δ (\_ q -> q) F.bot t2 tx
---         ztx  = zipType δ (\p _ -> p) F.bot tx t2 
-        stx  = ztx `eSingleton` x
 
 
 --------------------------------------------------------------------------------
@@ -585,8 +554,8 @@ consCall :: (PP a) =>
 
 consCall g l fn es ft0 
   = do (xes, g')    <- consScan consExpr g es
-       let ts        = [envFindTy x g' | x <- xes]
-       -- let ts        = tracePP (ppshow fn ++ ": param types") [envFindTy x g' | x <- xes]
+       -- Attempt to gather qualifiers here -- needed for object literal quals
+       ts           <- mapM scrapeQualifiers [envFindTy x g' | x <- xes]
        δ            <- getDef
        case overload δ l of
          Just ft    -> do  (_,its,ot)   <- instantiate l g fn ft

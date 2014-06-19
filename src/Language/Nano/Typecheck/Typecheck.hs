@@ -14,6 +14,7 @@ module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck, testFile) where
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
 
+import           Data.Default
 import qualified Data.HashSet                       as HS 
 import qualified Data.HashMap.Strict                as M 
 import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe, fromJust)
@@ -44,7 +45,7 @@ import           Language.Fixpoint.Misc             as FM
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
--- import           Debug.Trace                        hiding (traceShow)
+import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -351,15 +352,11 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 
 -- e1.f = e2
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
-  = do z             <- tcCallMatch γ l BISetProp [e1,e2] $ setPropTy (F.symbol f) l1 $ tce_env γ 
+  = do z             <- tcMethCall γ l BISetProp e1 [e2] $ setPropTy (F.symbol f) l $ tce_env γ
        case z of 
-         ([e1',e2'], TApp (TRef _ _) [t1,t2] _) 
-                     -> do  e2'' <- castM le2 (tce_ctx γ) e2' t2 t1
-                            return (exp e1' e2'', Just γ)
+         ([e1',e2'], _)
+                     -> return (ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 e1' f) e2', Just γ)
          (e,t)       -> error $ "BUG: tcStmt - e.f = e : " ++ ppshow e ++ "\n" ++ ppshow t
-    where
-       le2            = getAnnotation e2
-       exp ε1 ε2      = ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 ε1 f) ε2
 
 -- e
 tcStmt γ (ExprStmt l e)   
@@ -377,7 +374,7 @@ tcStmt γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
-  = do z <- tcCallMatch γ l BITruthy [e] $ builtinOpTy l BITruthy (tce_env γ)
+  = do z <- tcNormalCall γ l BITruthy [e] $ builtinOpTy l BITruthy (tce_env γ)
        case z of 
          ([e'], _) -> do (s1', γ1) <- tcStmt γ s1
                          (s2', γ2) <- tcStmt γ s2
@@ -435,7 +432,7 @@ tcStmt γ c@(ClassStmt l i e is ce) = do
     --   - This type uses the classes type variables as type parameters.
     --   - For the moment this type does not have a refinement. Maybe use
     --     invariants to add some.
-    let thisT     = TApp (TRef (F.symbol i) False) (tVars αs) fTop  
+    let thisT     = TApp (TRef $ F.symbol i) (tVars αs) fTop  
     -- * Typecheck the class elements in this extended environment.
     ce'          <- tcInScope γ' $ tcWithThis thisT $ mapM (tcClassElt γ' i) ce
     return          (ClassStmt l i e is ce', Just γ)
@@ -509,15 +506,19 @@ classEltType (Constructor l _ _ ) = ConsSig ann
   where 
     ann = safeHead "BUG:classEltType-1" [ κ | ConsAnn κ <- ann_fact l ]
 
--- FIXME: Mutability ???
-classEltType (MemberVarDecl _ s (VarDecl l v _)) = 
-    FieldSig (F.symbol v) s undefined Nothing t
+-- FIXME: add mutability modifier -- by default it's true here.
+
+classEltType (MemberVarDecl _ s (VarDecl l v _)) 
+    | s         = StatSig (F.symbol v) def t
+    | otherwise = FieldSig (F.symbol v) def Nothing t
   where 
-    (m,t) = safeHead "BUG:classEltType-2" [ φ | FieldAnn φ <- ann_fact l ]
+    (m,t) = safeHead "classEltType-2" [ φ | FieldAnn φ <- ann_fact l ]
 
 -- FIXME: add "this" as first parameter
-classEltType (MemberMethDecl  l s f _ _ ) = 
-    FieldSig (F.symbol f) s undefined Nothing t
+
+classEltType (MemberMethDecl  l s m _ _ )
+    | s         = StatSig (F.symbol m) def t
+    | otherwise = MethSig (F.symbol m) def Nothing t
   where 
     t = safeHead "BUG:classEltType-3" [ μ | MethAnn μ <- ann_fact l ]
 
@@ -585,9 +586,10 @@ tcExpr _ e@(ThisRef _)
 tcExpr γ e@(VarRef l x)
   = case tcEnvFindTy x γ of
       Just t  -> return (e,t)           -- Global or local reference
-      Nothing -> findClass x >>= \case  -- Static reference
-        Just (TD _ s _ _ _) -> return (e, TApp (TRef (F.symbol s) True) [] fTop)
-        Nothing -> tcError $ errorUnboundId (ann l) x
+      Nothing -> do z <- findClass x 
+                    case z of
+                      Just (TD _ s _ _ _) -> return (e, TApp (TTyOf $ F.symbol s) [] fTop) -- Static reference
+                      Nothing             -> tcError $ errorUnboundId (ann l) x
  
 tcExpr γ e@(PrefixExpr _ _ _)
   = tcCall γ e 
@@ -609,13 +611,7 @@ tcExpr γ (Cast l@(Ann loc fs) e)
        case e' of
          Cast (Ann _ fs') e'' -> return (Cast (Ann loc (fs ++ fs')) e'', t)
          _                    -> return (Cast l e', t)
-
-
--- | e.m(e1,e2,...)
---
--- FIXME: method calls 
---
-
+ 
 -- | e.f
 tcExpr γ e@(DotRef _ _ _) 
   = tcCall γ e
@@ -645,60 +641,40 @@ tcCall :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 
 -- | `o e`
 tcCall γ (PrefixExpr l o e)        
-  = do z                      <- tcCallMatch γ l o [e] (prefixOpTy o $ tce_env γ) 
+  = do z                      <- tcNormalCall γ l o [e] (prefixOpTy o $ tce_env γ) 
        case z of
          ([e'], t)            -> return (PrefixExpr l o e', t)
          _                    -> error "IMPOSSIBLE:tcCall:PrefixExpr"
 
 -- | `e1 o e2`
 tcCall γ (InfixExpr l o e1 e2)        
-  = do z                      <- tcCallMatch γ l o [e1, e2] (infixOpTy o $ tce_env γ) 
+  = do z                      <- tcNormalCall γ l o [e1, e2] (infixOpTy o $ tce_env γ) 
        case z of
          ([e1', e2'], t)      -> return (InfixExpr l o e1' e2', t)
          _                    -> error "IMPOSSIBLE:tcCall:InfixExpr"
-         
--- | `super(e1,...,en)`
--- TSC will already have checked that `super` is only called whithin the constructor.
-tcCall γ (CallExpr l e@(SuperRef _)  es) 
-  = do elts                   <- t_elts <$> (getSuperDefM l =<< tcPeekThis)
-       go                        [ t | ConsSig t <- elts ]
-  where
-       go [t]                  = 
-          do (es', t')        <- tcCallMatch γ l "constructor" es t
-             return            $ (CallExpr l e es', t')
-       go _                    = tcError $ errorConsSigMissing (srcPos l) e   
-   
--- | `e(es)`
-tcCall γ (CallExpr l e es)
-  = do (e', ft0)              <- tcExpr γ e
-       (es', t)               <- tcCallMatch γ l e es ft0
-       return                  $ (CallExpr l e' es', t)
 
 -- | `e1[e2]`
 tcCall γ (BracketRef l e1 e2)
-  = do z                      <- tcCallMatch γ l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ tce_env γ 
+  = do z                      <- tcNormalCall γ l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ tce_env γ 
        case z of
          ([e1', e2'], t)      -> return (BracketRef l e1' e2', t)
          _                    -> error "BUG: tcCall BracketRef"
    
 -- | `e1[e2] = e3`
 tcCall γ ex@(AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
-  = do z                      <- tcCallMatch γ l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ tce_env γ
+  = do z                      <- tcNormalCall γ l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ tce_env γ
        case z of
          ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
          _                    -> error "BUG: tcCall AssignExpr"
 
 -- | `[e1,...,en]`
 tcCall γ ex@(ArrayLit l es)
-  = do (es', t)               <- tcCallMatch γ l BIArrayLit es $ arrayLitTy l (length es) $ tce_env γ
+  = do (es', t)               <- tcNormalCall γ l BIArrayLit es $ arrayLitTy l (length es) $ tce_env γ
        return                  $ (ArrayLit l es', t)
 
 -- | `{ f1:t1,...,fn:tn }`
---
--- FIXME: track `this`
---
 tcCall γ ex@(ObjectLit l bs) 
-  = do (es', t)               <- tcCallMatch γ l "ObjectLit" es $ objLitTy l ps 
+  = do (es', t)               <- tcNormalCall γ l "ObjectLit" es $ objLitTy l ps 
        return                  $ (ObjectLit l (zip ps es'), t)
   where
     (ps,es) = unzip bs
@@ -708,29 +684,80 @@ tcCall γ (NewExpr l (VarRef lv i) es)
   = do tc                     <- getConstr (srcPos l) γ i
        when                      (not $ isTFun tc) 
                                $ tcError $ errorConstNonFunc (srcPos l) i
-       (es', t)               <- tcCallMatch γ l "constructor" es tc
+       (es', t)               <- tcNormalCall γ l "constructor" es tc
        return                  $ (NewExpr l (VarRef lv i) es', t)
 
 -- | e.f 
-tcCall γ (DotRef l e f)
-  = do z                  <- tcMethCall l γ e [] $ getPropTy (F.symbol f) l $ tce_env γ
+tcCall γ ef@(DotRef l e f)
+  = do z                  <- tcMethCall γ l (ppshow ef) e [] $ getFieldTy (F.symbol f) l
        case z of 
          ([e'], t)        -> return (DotRef l e' f, t)
-         _                -> error "BUG: tcStmt - If then else"
+         _                -> error "BUG: tcStmt - dotref"
+         
+-- | `super(e1,...,en)`
+--   TSC will already have checked that `super` is only called whithin the constructor.
+tcCall γ ex@(CallExpr l e@(SuperRef _)  es) 
+  = do elts                   <- t_elts <$> (getSuperDefM l =<< tcPeekThis)
+       go                        [ t | ConsSig t <- elts ]
+  where
+       go [t]                  = 
+          do (es', t')        <- tcNormalCall γ l "constructor" es t
+             return            $ (CallExpr l e es', t')
+       go _                    = tcError $ errorConsSigMissing (srcPos l) e   
+   
+-- | `e(es)`
+tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
+  = do z              <- runFailM $ tcExpr γ e
+       case z of 
+         Right (_, t) -> do δ   <- getDef 
+                            tcCallDotRef γ (getElt δ f $ tracePP (ppshow $ srcPos l) t) l em es
+         Left err     -> tcError err
+
+-- | `e(es)`
+tcCall γ (CallExpr l e es)
+  = do (e', ft0)              <- tcExpr γ e
+       (es', t)               <- tcNormalCall γ l e es ft0
+       return                  $ (CallExpr l e' es', t)
 
 
 tcCall _ e
   = die $ bug (srcPos e) $ "tcCall: cannot handle: " ++ ppshow e
 
 
+
+tcCallDotRef γ elts l em@(DotRef l1 e f) es 
+  -- Static call
+  | all isStaticSig (tracePP "elts" elts)
+  = do  (e':_, ft)     <- tcMethCall γ l "resolve static" e [] $ tracePP "getStatTy" $ getStatTy (F.symbol f) l
+        (es' , t )     <- tcNormalCall γ l (ppshow em) es ft
+        return          $ (CallExpr l (DotRef l1 e' f) es', t)
+
+  -- Virual method call
+  | all isMethodSig elts 
+  = do  z              <- runFailM $ tcMethCall γ l "resolve method" e [] $ tracePP "getMethTy" $ getMethTy (F.symbol f) l
+        -- Running with `runFailM` to avoid typechecking `e` twice
+        case z of 
+          Right (_,ft) -> do (e':es',t) <- tcMethCall γ l "methcall" e es ft
+                             return      $ (CallExpr l (DotRef l1 e' f) es', t)
+          Left err     -> tcError err  
+
+  -- Normal function call
+  | all isFieldSig elts 
+  = do  (e':_, ft)     <- tcMethCall γ l "resolve field" e [] $ getFieldTy (F.symbol f) l
+        (es' , t )     <- tcNormalCall γ l (ppshow em) es ft
+        return          $ (CallExpr l (DotRef l1 e' f) es', t)
+  | otherwise
+  = error "unsupported"
+
+
 ----------------------------------------------------------------------------------
-tcMethCall :: PPR r => AnnSSA r -> TCEnv r -> ExprSSAR r -> 
+tcMethCall :: (PP a, PPR r) => TCEnv r -> AnnSSA r -> a -> ExprSSAR r -> 
                        [ExprSSAR r] -> RType r -> TCM r ([ExprSSAR r], RType r)
 ----------------------------------------------------------------------------------
-tcMethCall l γ e es tm 
+tcMethCall γ l fn e es tm 
   = do z                   <- runFailM $ tcExpr γ e
        case z of 
-         Right (e', t)     -> tcWithThis t $ tcCallMatch γ l "tcMethCall" (e:es) tm
+         Right (e', t)     -> tcWithThis t $ tcNormalCall γ l fn (e:es) tm
          Left err          -> tcError err
 
 
@@ -759,14 +786,14 @@ getConstr l γ s =
   where
     -- Constructor's return type is void - instead return the class type
     -- FIXME: type parameters in returned type: inferred ... or provided !!! 
-    retT t   = TApp (TRef (F.symbol s) False) (tVar <$> t_args t) fTop
+    retT t   = TApp (TRef $ F.symbol s) (tVar <$> t_args t) fTop
     abs [] t = t
     abs vs t = foldr TAll t vs
 
 
 -- | Signature resolution
 
-tcCallMatch γ l fn es ft0 
+tcNormalCall γ l fn es ft0 
   = do (es', ts)      <- unzip <$> mapM (tcExpr γ) es
        z              <- resolveOverload γ l fn es' ts ft0
        case z of 
@@ -787,7 +814,7 @@ resolveOverload γ l fn es ts ft
        let sigs = catMaybes (bkFun <$> getCallable δ ft)
        case [ mkFun (vs, τs,τ) | (vs, τs, τ) <- sigs, length τs == length es ] of
          [t] -> getSubst >>= return  . Just . (,t)
-         fts -> do θs    <- mapM (tcCallCaseTry γ l fn ts) fts
+         fts -> do θs    <- mapM (\ft -> tcCallCaseTry γ l fn ts ft) fts
                    return $ listToMaybe [ (θ, apply θ t) | (t, Just θ) <- zip fts θs ]
 
 
@@ -902,7 +929,7 @@ scrapeVarDecl :: VarDecl (AnnSSA r) -> TCM r [RType r]
 scrapeVarDecl (VarDecl l _ _) = 
   mapM (sanity $ srcPos l) $ [ t | VarAnn t <- ann_fact l ] ++ [ t | FieldAnn (_,t) <- ann_fact l ]
 
-sanity l t@(TApp (TRef i _) ts _) = 
+sanity l t@(TApp (TRef i) ts _) = 
   do δ <- getDef 
      case findSym i δ of
        Just (TD _ _ αs _ _) 

@@ -12,7 +12,7 @@
     - Array, object literals
     - First class functions
     - Prototyping (through class inheritance)
-    - Dynamic fields (not really .. for objects)
+    - Dynamic fields (using the TS object map approach)
     - Runtime tag checking
 
   * Subset of TypeScript
@@ -40,12 +40,12 @@
 
 ##3. Base type system 
 
-  * Similar to TypeScript's type system
+  * Comparison to some of TypeScript's type system highlights
     - Signarure overloading / intersection types
     - Excluding dynamic type (any)
     - Avoiding some "known" type holes (covariant function argument subtyping)
 
-  * (untagged) union types
+  * Union types (untagged)
 
   * Named types:
     - Classes, inferfaces (inheriance)
@@ -86,9 +86,9 @@
     - Used to equate base types to enable refinement type checking
     - Addressing the challenge mentioned in (4.)
 
-  * The || operator
-    - Filling up equivalent parts of two input type trees
-    - Structural equality of two sides
+  * The `||` operator
+    - Matching up equivalent parts of two input type trees
+    - Structural equality of the two operands
     - Semanntic equivalence with input types by using appropriate refinements
 
 
@@ -113,31 +113,37 @@
 ##1. Mutability checking / sound array bounds checks
   
   * IGJ style mutability modifiers:
-    - Support for all "object" types (values with typeof(v) === "object")
+  
+    - Support for all "object" types (values with `typeof(v) === "object"`)
     - Retrofiting from classes and generics
 
   * Simple example using arrays:
+  
     - Combining overloading and mutability
     - Inferring the right kind of mutability
     - Soundly checking array bounds
 
   * Perhaps a more complicated example
+  
     - Involving uniqueness and mutability
+    - *unimplemented*
 
   * Benchmark: 
-    - TSC: compiler/core/arrayUtils.ts
+    - TSC: `compiler/core/arrayUtils.ts`
 
 
 
 ##2. Sound overload checking
 
   * TypeScript does not check overloaded signatures
-    - Example:
 
-        createElement(tagName: "div"): HTMLDivElement; 
-        createElement(tagName: "span"): HTMLSpanElement; 
-        createElement(tagName: "canvas"): HTMLCanvasElement; 
-        createElement(tagName: string): HTMLElement;               <--- Actually checked by TS 
+    - Example:
+      ```
+      createElement(tagName: "div"): HTMLDivElement; 
+      createElement(tagName: "span"): HTMLSpanElement; 
+      createElement(tagName: "canvas"): HTMLCanvasElement; 
+      createElement(tagName: string): HTMLElement;          // Actually checked by TS 
+      ```
 
     - Use of precise refinements to capture string constant types
 
@@ -149,17 +155,18 @@
     - Part of them could be discharged soundly based on tag/instanceof
       information
     - Example:
-    
+        ```
         if (ast.kind() === VariableDecl) {
           vdecl = <VariableDecl>cur;
         }
+        ```
 
 
 
 ##4. Use of unions instead of the top type:
 
   * Example from TS compiler:
-
+      ```
       private _textOrWidth: any;
 
       public width(): number { return typeof this._textOrWidth === 'number' ?
@@ -171,4 +178,9 @@
         }
         return this._textOrWidth;
       }
+      ```
 
+
+###5. JQuery (perhaps)
+
+  *Don't think I have the story for that yet*

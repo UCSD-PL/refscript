@@ -30,7 +30,7 @@
     - Allow strong updates
 
   * Globals vars: 
-    - Annotatated
+    - Annotated
     - Infer invariant refinements
     - No strong update
 
@@ -41,14 +41,14 @@
 ##3. Base type system 
 
   * Comparison to some of TypeScript's type system highlights
-    - Signarure overloading / intersection types
+    - Signature overloading / intersection types
     - Excluding dynamic type (any)
     - Avoiding some "known" type holes (covariant function argument subtyping)
 
   * Union types (untagged)
 
   * Named types:
-    - Classes, inferfaces (inheriance)
+    - Classes, interfaces (inheritance)
 
   * Parametric Polymorphism
 
@@ -63,7 +63,7 @@
 
   * Language: equality, arithmetic, uninterpreted predicates
   
-  * Buit on top of base type system
+  * Built on top of base type system
     - Can be applied to any level of a type tree
 
   * Subtyping
@@ -89,7 +89,7 @@
   * The `||` operator
     - Matching up equivalent parts of two input type trees
     - Structural equality of the two operands
-    - Semanntic equivalence with input types by using appropriate refinements
+    - Semantic equivalence with input types by using appropriate refinements
 
 
 
@@ -115,7 +115,7 @@
   * IGJ style mutability modifiers:
   
     - Support for all "object" types (values with `typeof(v) === "object"`)
-    - Retrofiting from classes and generics
+    - Retrofitting from classes and generics
 
   * Simple example using arrays:
   

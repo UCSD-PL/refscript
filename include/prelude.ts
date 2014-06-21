@@ -469,5 +469,5 @@ interface Immutable      extends ReadOnly { immutable__   : void; }
 
 interface Mutable        extends ReadOnly { mutable__     : void; } 
 
-interface DefaultMutable extends ReadOnly { defaultMut__  : void; } 
+interface AnyMutability  extends ReadOnly { defaultMut__  : void; } 
 

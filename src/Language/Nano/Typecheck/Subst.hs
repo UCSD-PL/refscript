@@ -236,7 +236,7 @@ flattenType δ t@(TApp (TRef x) ts r) = TCons es mut r
                 t:_ -> toType t
                 _   -> def
 
-flattenType δ (TApp (TTyOf x) _ r) = TCons es immutableM r
+flattenType δ (TApp (TTyOf x) _ r) = TCons es anyMutability r
   where 
     es      = flatten' True δ $ findSymOrDie x δ
 

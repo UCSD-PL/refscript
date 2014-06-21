@@ -372,14 +372,14 @@ envFindTy :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefTyp
 ---------------------------------------------------------------------------------------
 envFindTy x g = fromMaybe err $ listToMaybe $ catMaybes [globalSpec, className, local]
   where 
-    -- Check for global spec
+    -- globals
     globalSpec  | isJust $ E.envFindTy x $ cge_spec g = E.envFindTy x $ renv g
                 | otherwise                           = Nothing
-    -- Check for static fields
+    -- typeof A
     className   = case findSym x $ cge_defs g of    
-        Just t  | t_class t -> Just $ TApp (TRef $ F.symbol x) [] fTop
+        Just t  | t_class t -> Just $ TApp (TTyOf $ F.symbol x) [] fTop
         _                   -> Nothing 
-    -- Check for local variable
+    -- locals
     local       = fmap (`eSingleton` x) $ E.envFindTy x $ renv g
     err         = throw $ bugUnboundVariable (srcPos x) (F.symbol x) 
 

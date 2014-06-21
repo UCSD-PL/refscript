@@ -13,10 +13,7 @@ import           Control.Monad
 import           Control.Applicative                ((<$>))
 
 import qualified Data.HashMap.Strict                as M
-import           Data.Maybe                         (fromMaybe, listToMaybe, fromJust)
-import           Data.List                          (find)
-import           Data.Function                      (on)
-import qualified Data.Traversable                   as T 
+import           Data.Maybe                         (listToMaybe, catMaybes)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -198,16 +195,9 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
   = consAsgn g l (Id lx x) e
 
 -- e1.f = e2
---
--- NOTE:
--- Not using the setPropTy call here ... we don't really need it cause its main 
--- use is inferring mutability which has been done already. Besides this doesn't 
--- work atm :(
---
-consStmt g (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
-  = do (x,g1) <- consExpr g e1
-       (_,g2) <- consMethCall g1 l BISetProp (envFindTy x g1) [e2] $ setPropTy (F.symbol f) l $ renv g1 
-       return  $ Just g2
+consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
+  = do (_,g') <- consMethCall g l BISetProp e1 [e2] $ setPropTy (F.symbol f) l $ renv g 
+       return  $ Just g'
    
 -- e
 consStmt g (ExprStmt _ e) 
@@ -299,8 +289,6 @@ consVarDecl g (VarDecl l x Nothing)
       Nothing -> cgError l $ errorVarDeclAnnot (srcPos l) x
 
 
-   
-
 ------------------------------------------------------------------------------------
 consClassElts :: SourceSpan -> CGEnv -> TDef F.Reft -> [ClassElt AnnTypeR] -> CGM ()
 ------------------------------------------------------------------------------------
@@ -311,7 +299,6 @@ consClassElts l g d ce
          -- types before doing subtyping on them.
          safeExtends l g δ d 
          mapM_ (consClassElt g) ce
-     where
 
 
 ------------------------------------------------------------------------------------
@@ -407,21 +394,32 @@ consExpr g (CallExpr l e@(SuperRef _) es)
     go [t] = consCall g l e es t
     go _   = cgError l $ errorConsSigMissing (srcPos l) e   
 
+-- e.m(es)
+consExpr g (CallExpr l em@(DotRef _ e f) es)
+  = do  (x,g') <- consExpr g e
+        δ      <- getDef
+        consCallDotRef g' l em (vr x) (elt δ x g') es
+  where
+    -- Add a VarRef so that e is not typechecked again
+    vr          = VarRef $ getAnnotation e
+    elt δ x     = getElt δ f . envFindTy x
+
 -- e(es)
-consExpr g c@(CallExpr l e es)
+consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 
        consCall g' l e es $ envFindTy x g'
 
 -- | e.f
--- 
--- This function does the late binding of `this` to `e`.
 consExpr g (DotRef l e f)
-  = do (x,g') <- consExpr g e 
-       consMethCall g' l "DotRef" (envFindTy x g') [] $ getFieldTy (F.symbol f) l
+  = do  (x,g') <- consExpr g e
+        δ      <- getDef
+        consCallDotRef g' l e (vr x) (elt δ x g') []
+  where
+    -- Add a VarRef so that e is not typechecked again
+    vr          = VarRef $ getAnnotation e
+    elt δ x g   = getElt δ f $ envFindTy x g
 
--- -- e["f"]
--- consExpr g (BracketRef l e (StringLit _ fld)) 
---   = consPropRead getProp g l e (F.symbol fld)
+-- FIXME: e["f"]
 
 -- e1[e2]
 consExpr g (BracketRef l e1 e2) 
@@ -462,8 +460,7 @@ consExpr g (SuperRef l)
           _ -> cgError l $ errorSuper (srcPos l) 
 
 -- not handled
-consExpr _ e 
-  = error $ (printf "consExpr: not handled %s" (ppshow e))
+consExpr _ e = cgError l $ unimplemented l "consExpr" e where l = srcPos  e
 
 
 -- | `getConstr` first checks whether input @s@ is a class, in which case it
@@ -482,7 +479,7 @@ getConstr l g s =
         do  z <- getPropTDefM  l "__constructor__" t $ tVar <$> t_args t
             case z of 
               Just (TFun bs _ r) -> return $ abs (t_args t) $ TFun bs (retT t) r
-              Just _             -> error  $ "Unsupported constructor type"
+              Just t             -> cgError l $ unsupportedConsTy l t
               Nothing            -> return $ abs (t_args t) $ TFun [] (retT t) fTop
       _ -> 
         do  z <- getPropM l "__constructor__" $ envFindTy s g
@@ -492,7 +489,7 @@ getConstr l g s =
   where
     -- Constructor's return type is void - instead return the class type
     -- FIXME: type parameters in returned type: inferred ... or provided !!! 
-    retT t = TApp (TRef $ F.symbol s) (tVar <$> t_args t) fTop
+    retT t   = TApp (TRef $ F.symbol s) (tVar <$> t_args t) fTop
     abs [] t = t
     abs vs t = foldr TAll t vs
 
@@ -522,14 +519,14 @@ consDeadCode δ g l x t
         tx   = envFindTy x g
 
 -- | UpCast(x, t1 => t2)
-consUpCast δ g l x t1 t2 = envAddFresh l stx g
+consUpCast δ g l x _ t2 = envAddFresh l stx g
     where
         tx   = envFindTy x g
         ztx  = zipType δ tx t2
         stx  = ztx `eSingleton` x
     
 -- | DownCast(x, t1 => t2)
-consDownCast δ g l x t1 t2
+consDownCast δ g l x _ t2
   = do  subType l g txx tx2
         envAddFresh l ztx g
     where 
@@ -571,11 +568,48 @@ consCall g l fn es ft0
 
 
 ---------------------------------------------------------------------------------
-consMethCall :: PP a => CGEnv -> AnnTypeR -> a -> RefType -> [Expression AnnTypeR] -> 
-                        RefType -> CGM (Id AnnTypeR, CGEnv)
+consMethCall :: PP a => CGEnv -> AnnTypeR -> a -> Expression AnnTypeR 
+                     -> [Expression AnnTypeR] -> RefType -> CGM (Id AnnTypeR, CGEnv)
 ---------------------------------------------------------------------------------
-consMethCall g l fn t es ft0 
-  = cgWithThis t $ consCall g l fn (ThisRef l : es) ft0
+consMethCall g l fn e es ft0 
+  = do  (x, g') <- consExpr g e 
+        cgWithThis (envFindTy x g') $ consCall g' l fn (ThisRef l : es) ft0
+
+--         (y, g2) <- cgWithThis (envFindTy x g') $ consCall g1 l fn (ThisRef l : es) ft0
+--         envAddFresh "consMethCall" l (subThis y $ envFindTy y g2) g2
+        
+--         let tf'   = F.substa (sf (F.symbol "this") (F.symbol this)) tf
+--         return    $ (tf', g''')
+  where  
+    subThis x t   = F.substa (sf (F.symbol "this") x) t
+    sf s1 s2 s    | s == s1   = s2
+                  | otherwise = s
+
+--   = do  (x, g1) <- consExpr g e 
+--         g2      <- pushThis l $ envFindTy x g'
+--         (y, g3) <- consCall g2 l fn (ThisRef l : es) ft0
+--         g4      <- popThis g3
+--         return   $ (y, g4)    -- not quite  
+
+
+consCallDotRef g l fn v elts es 
+    -- Static call
+    | all isStaticSig elts
+    = consCall g l fn (v:es) $ ft isStaticSig
+
+    -- Virtual method call
+    | all isMethodSig elts 
+    = consMethCall g l fn v es $ ft isMethodSig
+
+    -- Normal function call
+    | all isFieldSig elts 
+    = consCall g l fn (v:es) $ ft isFieldSig
+
+    | otherwise
+    = cgError l $ unsupportedDotRef (srcPos l) fn
+
+  where
+    ft f = mkAnd $ catMaybes $ mkEltFunTy <$> filter f elts
 
 
 ---------------------------------------------------------------------------------
@@ -607,18 +641,6 @@ consSeq f           = foldM step . Just
   where 
     step Nothing _  = return Nothing
     step (Just g) x = f g x
-
-
-consPropReadLhs getter g l e fld
-  = do  (xe, g')       <- consExpr g e
-        let tx          = envFindTy xe g'
-        δ              <- getDef
-        case getter l (renv g') δ fld tx of
-          Just (_, tf) -> return $ (F.substa (sf $ F.symbol xe) tf, g')
-          Nothing      -> die $  errorPropRead (srcPos l) e fld
-    where  
-        sf t s | s == F.symbol "this" = t
-               | otherwise            = s
 
 
 ---------------------------------------------------------------------------------

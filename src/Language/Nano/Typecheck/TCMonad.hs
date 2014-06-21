@@ -371,8 +371,7 @@ unifyTypeM l t t' = unifyTypesM l (ppshow "") [t] [t']
 --------------------------------------------------------------------------------
 
 -- | For the expression @e@, check the subtyping relation between the type @t1@
--- which is the actual type for @e@ and @t2@ which is the desired (cast) type
--- and insert the right kind of cast.
+--   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
 --------------------------------------------------------------------------------
 castM :: (PPR r) => AnnSSA r -> IContext -> Expression (AnnSSA r) 
   -> RType r -> RType r -> TCM r (Expression (AnnSSA r))

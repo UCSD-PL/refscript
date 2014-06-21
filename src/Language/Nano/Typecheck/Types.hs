@@ -29,12 +29,12 @@ module Language.Nano.Typecheck.Types (
   , isTop, isNull, isVoid, isTNum, isUndef, isUnion, isTTyOf
 
   -- * Constructing Types
-  , mkUnion, mkFun, mkAll, mkAnd, mkMethTy
+  , mkUnion, mkFun, mkAll, mkAnd, mkEltFunTy
 
   -- * Deconstructing Types
   , bkFun, bkFuns, bkAll, bkAnd, bkUnion, {- unionParts, unionParts',-} funTys
   
-  -- Union ops
+  -- Type ops
   , rUnion, rTypeR, setRTypeR
   
   , renameBinds
@@ -61,7 +61,8 @@ module Language.Nano.Typecheck.Types (
   , addSym, findSym, findSymOrDie, mapTDefEnv, mapTDefEnvM
 
   -- * Operator Types
-  , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy, objLitTy, setPropTy, getFieldTy, getMethTy, getStatTy
+  , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy, objLitTy, setPropTy
+  -- , getFieldTy, getMethTy, getStatTy
 
   -- * Annotations
   , Annot (..), UFact, Fact (..), phiVarsAnnot, ClassInfo
@@ -299,13 +300,13 @@ findSymOrDie s γ = fromMaybe (error msg) $ findSym s γ
 
 type Mutability = Type 
 
-validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable", "DefaultMutable"]
+validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable"] -- , "DefaultMutable"]
 
 mkMut :: String -> Mutability
 mkMut s = TApp (TRef $ F.symbol s) [] ()
 
 instance Default Mutability where
-  def = mkMut "DefaultMutable"
+  def = mkMut "Mutable"
 
 mutableM    = mkMut "Mutable"
 immutableM  = mkMut "Immutable"
@@ -320,7 +321,7 @@ isMutable _                          = False
 isImmutable      (TApp (TRef s) _ _) = s == F.symbol "Immutable"
 isImmutable _                        = False
 
-isDefaultMut (TApp (TRef s) _ _)     = s == F.symbol "DefaultMutable"
+isDefaultMut (TApp (TRef s) _ _)     = s == F.symbol "Mutable"
 isDefaultMut _                       = False
 
 isReadOnly (TApp (TRef s) _ _)       = s == F.symbol "ReadOnly"
@@ -407,9 +408,8 @@ bkAnd                :: RType r -> [RType r]
 bkAnd (TAnd ts)      = ts
 bkAnd t              = [t]
 
-mkAnd [ ]            = Nothing
-mkAnd [t]            = Just t
-mkAnd ts             = Just $ TAnd ts
+mkAnd [t]            = t
+mkAnd ts             = TAnd ts
 
 
 ---------------------------------------------------------------------------------
@@ -718,6 +718,7 @@ ppMut t | isMutable t    = brackets $ pp "mut"
         | isReadOnly t   = brackets $ pp "ro"
         | isImmutable t  = brackets $ pp "imm"
         | isTVar t       = brackets $ pp t
+        | isTop t        = pp "top" -- FIXME: this should go ...
         | otherwise      = error    $ "ppMut: case not covered: " ++ ppshow t
    
 
@@ -842,9 +843,9 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TApp d@(TRef _ ) ts r)  = F.ppTy r $ pp d <> ppArgs brackets comma ts 
   pp (TApp c [] r)            = F.ppTy r $ pp c 
   pp (TApp c ts r)            = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
-  pp (TCons bs _ r)           -- | length bs < 5 
-                              -- = F.ppTy r $ ppMut m <> braces (intersperse semi $ map pp bs)
-                              -- | otherwise
+  pp (TCons bs m r)           | length bs < 5 
+                              = F.ppTy r $ ppMut m <> braces (intersperse semi $ map pp bs)
+                              | otherwise
                               = F.ppTy r $ lbrace $+$ nest 2 (vcat $ map pp bs) $+$ rbrace
 
 instance PP TVar where 
@@ -1010,11 +1011,11 @@ factToNum (TypInst _ _     ) = 1
 factToNum (EltOverload _ _ ) = 2
 factToNum (Overload _  _   ) = 3
 factToNum (TCast _ _       ) = 4
-factToNum (VarAnn _        ) = 5
-factToNum (FieldAnn _      ) = 6
-factToNum (MethAnn _       ) = 7
-factToNum (ConsAnn _       ) = 8
-factToNum (ClassAnn _      ) = 9
+factToNum (VarAnn _        ) = 6
+factToNum (FieldAnn _      ) = 7
+factToNum (MethAnn _       ) = 8
+factToNum (ConsAnn _       ) = 9
+factToNum (ClassAnn _      ) = 10
 
 
 instance Eq (Annot a SourceSpan) where 
@@ -1181,60 +1182,86 @@ setPropTy f l g =
     ty    = builtinOpTy l BISetProp g
 
 
---------------------------------------------------------------------------
-getFieldTy :: (PP r, F.Reftable r, IsLocated l) => F.Symbol -> l -> RType r
---------------------------------------------------------------------------
-getFieldTy f l = TAll τ (TAll α (TAll μ (TAll μf (TFun [fld] tα fTop))))
+-- --------------------------------------------------------------------------
+-- getFieldTy :: (PP r, F.Reftable r, IsLocated l) => F.Symbol -> l -> RType r
+-- --------------------------------------------------------------------------
+-- getFieldTy f l = mkFun ([τ,μ,μf,α], [bm], tα)
+--   where
+--     bm   = B  (F.symbol "this") (TCons [FieldSig f tμf (Just tτ) tα] tμ fTop)
+--     tτ   = tVar τ
+--     tα   = tVar α
+--     tμ   = tVar μ
+--     tμf  = tVar μf
+--     τ    = TV (F.symbol "τ" ) (srcPos l)
+--     α    = TV (F.symbol "α") (srcPos l)
+--     μ    = TV (F.symbol "μ") (srcPos l)
+--     μf   = TV (F.symbol "μf") (srcPos l)
+-- 
+-- 
+-- 
+-- --------------------------------------------------------------------------
+-- getMethTy :: (PP r, F.Reftable r, IsLocated l) 
+--           => F.Symbol -> l -> Int -> RType r
+-- --------------------------------------------------------------------------
+-- getMethTy f l n = mkFun ([τ,μ,μf,β] ++ αs, bm:bαs, tβ)
+--   where
+--     bm   = B (F.symbol "m") (TCons [MethSig f tμf (Just tτ) $ mkFun ([],bαs,tβ)] tμ fTop)
+--     μf   = TV (F.symbol "μf") (srcPos l)
+--     tμf  = tVar μf
+--     τ    = TV (F.symbol "τ" ) (srcPos l)
+--     tτ   = tVar τ
+--     bαs  = zipWith (\t i -> B (F.symbol $ "x" ++ show i) t) tαs [1..n]
+--     tαs  = map tVar αs
+--     αs   = map (\i -> TV (F.symbol $ "α" ++ show i) (srcPos l)) [1..n]
+--     β    = TV (F.symbol "β" ) (srcPos l)
+--     tβ   = tVar β
+--     μ    = TV (F.symbol "μ" ) (srcPos l)
+--     tμ   = tVar μ
+-- 
+-- 
+-- --------------------------------------------------------------------------
+-- getStatTy :: (PP r, F.Reftable r, IsLocated l) 
+--           => F.Symbol -> l -> Int -> RType r
+-- --------------------------------------------------------------------------
+-- getStatTy f l n = mkFun ([μ,μf,β] ++ αs,bs:bαs,tβ)
+--   where
+--     bs   = B (F.symbol "m") (TCons [StatSig f tμf $ mkFun ([],bαs,tβ)] tμ fTop)
+--     bαs  = zipWith (\t i -> B (F.symbol $ "x" ++ show i) t) tαs [1..n]
+--     tαs  = map tVar αs
+--     αs   = map (\i -> TV (F.symbol $ "α" ++ show i) (srcPos l)) [1..n]
+--     β    = TV (F.symbol "β" ) (srcPos l)
+--     tβ   = tVar β
+--     μ    = TV (F.symbol "μ" ) (srcPos l)
+--     tμ   = tVar μ
+--     μf   = TV (F.symbol "μf") (srcPos l)
+--     tμf   = tVar μf
+-- 
+-- 
+
+mkEltFunTy (MethSig x m τ t) = 
+  do  (vs, bs, ot) <- bkFun t
+      return        $ mkFun (vs, B (F.symbol "this") τ':bs, ot)
   where
-    fld  = B (F.symbol "m") (TCons [FieldSig f tμf (Just tτ) tα] tμ fTop)
-    μf   = TV (F.symbol "μf") (srcPos l)
-    tμf  = TVar μf ()
-    τ    = TV (F.symbol "τ" ) (srcPos l)
-    tτ   = TVar τ fTop
-    α    = TV (F.symbol "α" ) (srcPos l)
-    tα   = TVar α fTop
-    μ    = TV (F.symbol "μ" ) (srcPos l)
-    tμ   = TVar μ ()
+    τ' = fromMaybe (TCons [MethSig x m Nothing t] def fTop) τ
 
-
---------------------------------------------------------------------------
-getMethTy :: (PP r, F.Reftable r, IsLocated l) => F.Symbol -> l -> RType r
---------------------------------------------------------------------------
-getMethTy f l = TAll τ (TAll α (TAll μ (TAll μf (TFun [mth] tα fTop))))
+mkEltFunTy (FieldSig x m τ t) 
+  | isTFun t =
+      do  (vs, bs, ot) <- bkFun t
+          return        $ mkFun (vs, B (F.symbol "this") τ':bs, ot)
+  | otherwise =
+      return            $ mkFun ([], [B (F.symbol "this") τ'], t)
   where
-    mth  = B (F.symbol "m") (TCons [MethSig f tμf (Just tτ) tα] tμ fTop)
-    μf   = TV (F.symbol "μf") (srcPos l)
-    tμf  = TVar μf ()
-    τ    = TV (F.symbol "τ" ) (srcPos l)
-    tτ   = TVar τ fTop
-    α    = TV (F.symbol "α" ) (srcPos l)
-    tα   = TVar α fTop
-    μ    = TV (F.symbol "μ" ) (srcPos l)
-    tμ   = TVar μ ()
+    -- The default type better have the field cause we might be casting
+    -- and the target type will need this field for later.
+    τ' = fromMaybe (TCons [FieldSig x m Nothing t] def fTop) τ
 
-
---------------------------------------------------------------------------
-getStatTy :: (PP r, F.Reftable r, IsLocated l) => F.Symbol -> l -> RType r
---------------------------------------------------------------------------
-getStatTy f l = TAll α (TAll μ (TAll μf (TFun [stProp] tα fTop)))
+mkEltFunTy (StatSig x m t) = 
+  do  (vs, bs, ot) <- bkFun t
+      return        $ mkFun (vs, B (F.symbol "this") τ':bs, ot)
   where
-    stProp = B (F.symbol "s") (TCons [StatSig f tμf tα] tμ fTop)
-    μf     = TV (F.symbol "μf") (srcPos l)
-    tμf    = TVar μf ()
-    α      = TV (F.symbol "α" ) (srcPos l)
-    tα     = TVar α fTop
-    μ      = TV (F.symbol "μ" ) (srcPos l)
-    tμ     = TVar μ ()
+    τ' = TCons [StatSig x m t] def fTop
 
-
-
-mkMethTy (MethSig _ _ τ t) = 
-    case bkFun t of 
-      Just (vs, bs, ot) -> mkFun (vs, B (F.symbol "this") τ':bs, ot)
-      Nothing           -> error "mkMethTy-impossible" 
-  where
-    τ' = fromMaybe (TCons [] def fTop) τ
-mkMethTy _ = error "mkMethTy-impossible" 
+mkEltFunTy _ = Nothing
 
 
 -----------------------------------------------------------------------

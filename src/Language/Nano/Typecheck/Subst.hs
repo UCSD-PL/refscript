@@ -27,13 +27,16 @@ module Language.Nano.Typecheck.Subst (
 
   ) where 
 
+import           Data.Default
 import           Text.PrettyPrint.HughesPJ
+-- import           Text.Printf
+-- import           Language.Nano.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
-import           Language.Fixpoint.Misc (intersperse, safeHead)
+import           Language.Fixpoint.Misc (intersperse)
 
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
@@ -227,7 +230,11 @@ flattenType δ t@(TApp (TRef x) ts r) = TCons es mut r
     -- Do not set this to another mutability type cause, or you'll
     -- end up with infinite recursion
     mut     | isMutabilityType t = tTop
-            | otherwise          = toType $ safeHead "flattenType" ts
+            | otherwise          
+            = case ts of 
+                -- FIXME there should always be a head element
+                t:_ -> toType t
+                _   -> def
 
 flattenType δ (TApp (TTyOf x) _ r) = TCons es immutableM r
   where 

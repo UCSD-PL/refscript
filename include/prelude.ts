@@ -272,9 +272,9 @@
       
       toString       :                        (): string;
       toLocaleString :                        (): string;
-      concat         : [#Array[#Immutable,T]] (items: #Array[#Immutable,T]): { #Array[#Immutable,T] | (len v) = (len this) + (len items) };
-      concat         : [#Array[#Immutable,T]] forall M1 M2 . (items: #Array[M1,T]): #Array[M2,T];
-      concat         : [#Array[#ReadOnly ,T]] forall M1 M2 . (items: #Array[M1,T]): #Array[M2,T];
+      concat         : [#Array[#Immutable,T]] forall M     . (items: #Array[#Immutable,T]): { #Array[M,T] | (len v) = (len this) + (len items) };
+      concat         : [#Array[M,T]]          forall M1 M2 . (items: #Array[M1,T]): #Array[M2,T];
+      concat         : [#Array[M,T]]          forall M1 M2 . (items: #Array[M1,T]): #Array[M2,T];
       join           :                        (separator: string): string;
       pop            : [#Array[#Mutable,  T]] (): T;
       push           : [#Array[#Mutable,  T]] (items: T): number;

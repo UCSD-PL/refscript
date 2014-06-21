@@ -1,11 +1,9 @@
 
-/*@ gobj :: { a: { number | v > 0 } } */
-var gobj = {
-  a: 1
-};
+// TODO : add explicit cast here.
 
-/*@ foo :: () => { void | true } */
-function foo() {
-  gobj.a = gobj.a - 1;
+/*@ foo :: (p: #Point + { x: string } ) => { top | true }  */
+function foo(p: any) {
+
+  return p.x;
+
 }
-

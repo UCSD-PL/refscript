@@ -91,7 +91,7 @@ unify l δ θ (TCons e1s m1 _) (TCons e2s m2 _)
                    (Nothing, Just τ2) -> [(objT, τ2)]
                    _                  -> []
     mm (e1,e2) = case (mutability e1, mutability e2) of 
-                   (Just m1, Just m2) -> tracePP ("unifying muts for " ++ ppshow e1 ++ " and " ++ ppshow e2)  [(ofType m1, ofType m2)]
+                   (Just m1, Just m2) -> [(ofType m1, ofType m2)]
                    _                  -> []
     objT      :: PPR r => RType r 
     objT       = TCons [] def fTop 

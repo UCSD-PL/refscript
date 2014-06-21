@@ -18,6 +18,7 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Execute Action and Get FInfo
   , getCGInfo 
+  , runFailM
 
   -- * Get Defined Function Type Signature
   , getDefType, getDef, setDef, getPropTDefM, getPropM
@@ -46,7 +47,6 @@ module Language.Nano.Liquid.CGMonad (
   -- * Add Type Annotations
   , addAnnot
 
-
   -- * Function Types
   , cgFunTys
 
@@ -59,7 +59,7 @@ module Language.Nano.Liquid.CGMonad (
 
   ) where
 
-import           Data.Maybe                     (fromMaybe, listToMaybe, catMaybes, isJust, fromJust)
+import           Data.Maybe                     (fromMaybe, listToMaybe, catMaybes, isJust)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 import qualified Data.List                      as L
@@ -87,7 +87,6 @@ import           Control.Exception (throw)
 import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Error hiding (Error)
-import           Text.Printf 
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
@@ -124,6 +123,9 @@ execute cfg pgm act
   = case runState (runErrorT act) $ initState cfg pgm of 
       (Left err, _) -> throw err
       (Right x, st) -> (x, st)  
+
+  
+runFailM a = fst . runState (runErrorT a) <$> get
 
 initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
 initState c p   = CGS F.emptyBindEnv (specs p) (defs p) (externs p)
@@ -234,13 +236,6 @@ envGetContextCast g a
 
 
 ---------------------------------------------------------------------------------------
-envGetContextOverload :: CGEnv -> AnnTypeR -> [RefType]
----------------------------------------------------------------------------------------
-envGetContextOverload g a 
-  = [t | Overload cx t <- ann_fact a, cx == cge_ctx g] 
-
-
----------------------------------------------------------------------------------------
 envGetContextTypArgs :: CGEnv -> AnnTypeR -> [TVar] -> [RefType]
 ---------------------------------------------------------------------------------------
 -- NOTE: If we do not need to instantiate any type parameter (i.e. length αs ==
@@ -258,11 +253,10 @@ envGetContextTypArgs g a αs
 envAddFresh :: (IsLocated l) => l -> RefType -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 
 ---------------------------------------------------------------------------------------
 envAddFresh l t g 
-  = do x  <- freshId loc
+  = do x  <- freshId $ srcPos l
        g' <- envAdds False [(x, t)] g
        addAnnot (srcPos l) x t
        return (x, g')
-    where loc = srcPos l
    
 freshId l = Id (Ann l []) <$> fresh
 
@@ -279,8 +273,7 @@ envAdds glob xts' g
        return    $ g { renv  = E.envAdds xts        (renv g) } 
                      { fenv  = F.insertsIBindEnv is (fenv g) }
     where 
-       (xs,ts) = unzip xts'
-       exists x g = E.envMem x (renv g) 
+       (xs,ts)   = unzip xts'
 
 
 ---------------------------------------------------------------------------------------
@@ -504,7 +497,7 @@ subType l g t1 t2 =
 ---------------------------------------------------------------------------------------
 safeExtends :: SourceSpan -> CGEnv -> TDefEnv F.Reft -> TDef F.Reft -> CGM ()
 ---------------------------------------------------------------------------------------
-safeExtends l g δ (TD _ c _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
+safeExtends l g δ (TD _ _ _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
   where
     sub t1 t2  = subType l g (zipType δ t1 t2) t2
     (t1s, t2s) = unzip [ (t1,t2) | pe <- flatten True δ (findSymOrDie p δ, ts)
@@ -640,7 +633,7 @@ splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
        s2s = L.sortBy (compare `on` toType) t2s
 
 -- |Type references
-splitC (Sub g i t1@(TApp (TRef x1) (μ1:t1s) _) t2@(TApp (TRef x2) (μ2:t2s) _)) 
+splitC (Sub g i t1@(TApp (TRef x1) (_:t1s) _) t2@(TApp (TRef x2) (μ2:t2s) _)) 
   | x1 /= x2 
   = cgError l $ bugBadSubtypes l t1 t2
   | isImmutable μ2
@@ -680,7 +673,7 @@ splitC (Sub g i t1@(TCons e1s μ1 _ ) t2@(TCons e2s μ2 _ ))
         cs'   <- splitEs g i μ1 μ2 e1s e2s
         return $ cs ++ cs'
   
-splitC x@(Sub g i t1 t2)
+splitC x@(Sub _ _ t1 t2)
   = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos x
 
 
@@ -703,10 +696,10 @@ splitEs g i μ1 μ2 e1s e2s
     flt x = nonStaticSig x && nonConstrElt x
 
 
-splitE g i μ1 μ2 (CallSig t1) (CallSig t2) = splitC (Sub g i t1 t2)
-splitE g i μ1 μ2 (ConsSig t1) (ConsSig t2) = splitC (Sub g i t1 t2)
+splitE g i _  _ (CallSig t1) (CallSig t2) = splitC (Sub g i t1 t2)
+splitE g i _  _ (ConsSig t1) (ConsSig t2) = splitC (Sub g i t1 t2)
 
-splitE g i μ1 μ2 (IndexSig _ _ t1) (IndexSig _ _ t2) 
+splitE g i _ _   (IndexSig _ _ t1) (IndexSig _ _ t2) 
   = do  cs    <- splitC (Sub g i t1 t2)
         cs'   <- splitC (Sub g i t2 t1)
         return $ cs ++ cs'
@@ -720,7 +713,7 @@ splitE g i μ1 μ2 (MethSig _ μf1 τ1 t1) (MethSig _ μf2 τ2 t2)
 splitE _ _ _ _ _ _ = return []
 
 
-splitWithMut g i μ1 μ2 (μf1,τ1,t1) (μf2,τ2,t2)
+splitWithMut g i _ μ2 (_,τ1,t1) (μf2,τ2,t2)
   | isImmutable m2 
   = do  cs    <- splitMaybe g i τ2 τ1
         cs'   <- splitC (Sub g i t1 t2)
@@ -732,7 +725,6 @@ splitWithMut g i μ1 μ2 (μf1,τ1,t1) (μf2,τ2,t2)
         cs4   <- splitC (Sub g i t2 t1)
         return $ cs1 ++ cs2 ++ cs3 ++ cs4
   where
-    m1 = combMut μ1 μf1
     m2 = combMut μ2 μf2
 
 
@@ -834,23 +826,28 @@ cgWithThis t p = do { cgPushThis t; a <- p; cgPopThis; return a }
 --------------------------------------------------------------------------------
 getSuperM :: IsLocated a => a -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-getSuperM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
-  where fromTdef (TD _ _ vs (Just (p,ps)) _) = do
-          return  $ apply (fromList $ zip vs ts) 
-                  $ TApp (TRef $ F.symbol p) ps fTop
-        fromTdef (TD _ _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
-getSuperM l _  = cgError l $ errorSuper (srcPos l) 
+getSuperM l (TApp (TRef i) ts _) 
+  = do  z    <- findSymOrDieM i
+        case z of 
+          TD _ _ vs (Just (p,ps)) _ -> return  $ apply (fromList $ zip vs ts) 
+                                               $ TApp (TRef $ F.symbol p) ps fTop
+          TD _ _ _ Nothing _        -> cgError l $ errorSuper (srcPos l) 
+
+getSuperM l _  = cgError l $ errorSuper $ srcPos l
+
 
 --------------------------------------------------------------------------------
 getSuperDefM :: IsLocated a => a -> RefType -> CGM (TDef F.Reft)
 --------------------------------------------------------------------------------
-getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
-  where 
-    fromTdef (TD _ _ vs (Just (p,ps)) _) = 
-      do TD c n ws pp ee <- findSymOrDieM p
-         return  $ apply (fromList $ zip vs ts) 
-                 $ apply (fromList $ zip ws ps)
-                 $ TD c n [] pp ee
-    fromTdef (TD _ _ _ Nothing _) = cgError l $ errorSuper (srcPos l) 
-getSuperDefM l _  = cgError l $ errorSuper (srcPos l)
+getSuperDefM l (TApp (TRef i) ts _) 
+  = do  z    <- findSymOrDieM i
+        case z of 
+          TD _ _ vs (Just (p,ps)) _ -> 
+            do TD c n ws pp ee  <- findSymOrDieM p
+               return            $ apply (fromList $ zip vs ts) 
+                                 $ apply (fromList $ zip ws ps)
+                                 $ TD c n [] pp ee
+          TD _ _ _ Nothing _ -> cgError l $ errorSuper (srcPos l) 
+
+getSuperDefM l _  = cgError l $ errorSuper $ srcPos l
 

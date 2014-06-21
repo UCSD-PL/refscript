@@ -496,10 +496,10 @@ zipType _ t1 t2 =
 zipBind δ (B _ t1) (B s2 t2) = B s2 $ zipType δ t1 t2 
 
 
-zipElts δ (CallSig t1)                  (CallSig t2)                 = CallSig        $ zipType δ t1 t2 
-zipElts δ (ConsSig t1)                  (ConsSig t2)                 = ConsSig        $ zipType δ t1 t2 
+zipElts δ (CallSig t1)                 (CallSig t2)                  = CallSig        $ zipType δ t1 t2 
+zipElts δ (ConsSig t1)                 (ConsSig t2)                  = ConsSig        $ zipType δ t1 t2 
 zipElts δ (StatSig _ _  t1)            (StatSig x2 m2 t2)            = StatSig  x2 m2 $ zipType δ t1 t2 
-zipElts δ (IndexSig _ _   t1)           (IndexSig x2 b2 t2)          = IndexSig x2 b2 $ zipType δ t1 t2 
+zipElts δ (IndexSig _ _   t1)          (IndexSig x2 b2 t2)           = IndexSig x2 b2 $ zipType δ t1 t2 
 
 zipElts δ (FieldSig _  _ (Just τ1) t1) (FieldSig x2 m2 (Just τ2) t2) = FieldSig x2 m2 (Just $ zipType δ τ1 τ2) $ zipType δ t1 t2
 zipElts δ (FieldSig _ _  _        t1)  (FieldSig x2 m2 (Just τ2) t2) = FieldSig x2 m2 (Just τ2) $ zipType δ t1 t2

@@ -305,7 +305,7 @@ convertFun l δ t1@(TAnd t1s) t2 =
   if or $ f <$> t1s then Right $ CUp t1 t2
                     else Left  $ errorFuncSubtype l t1 t2
  
-convertFun _ _ _ _ = error "convertFun: no other cases supported"
+convertFun _ _ t1 t2 = error $ "convertFun: no other cases supported " ++ ppshow t1 ++ " with " ++ ppshow t2 
 
 
 -- | `convertTTyOf`
@@ -320,10 +320,10 @@ convertTTyOf l δ t1@(TApp (TTyOf x1) _ _) t2@(TApp (TTyOf x2) _ _)
   | otherwise     = Left  $ errorSimpleSubtype l t1 t2
 
 convertTTyOf l δ t1@(TApp (TTyOf _) _ _) t2 
-  = convertObj l δ (tracePP ("1-flatten " ++ ppshow t1) $ flattenType δ t1) (tracePP "2-flatten" t2)
+  = convertObj l δ (flattenType δ t1) t2
 
 convertTTyOf l δ t1 t2@(TApp (TTyOf _) _ _)
-  = convertObj l δ (tracePP "1-flatten" t1) (tracePP ("2-flatten " ++ ppshow t2) $ flattenType δ t2)
+  = convertObj l δ t1 (flattenType δ t2)
 
 convertTTyOf _ _ _ _ = error "convertTTyOf: no other cases supported"
 

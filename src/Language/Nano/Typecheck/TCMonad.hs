@@ -373,15 +373,14 @@ unifyTypeM l t t' = unifyTypesM l (ppshow "") [t] [t']
 -- | For the expression @e@, check the subtyping relation between the type @t1@
 --   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
 --------------------------------------------------------------------------------
-castM :: (PPR r) => AnnSSA r -> IContext -> Expression (AnnSSA r) 
-  -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
+castM :: (PPR r) => IContext -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-castM l ξ e t1 t2 
+castM ξ e t1 t2 
   = do  δ <- getDef 
-        case convert (ann l) δ t1 t2 of
+        case convert (srcPos e) δ t1 t2 of
           Left  e   -> tcError e
           Right CNo -> return e
-          Right c   -> addCast ξ e c
+          Right c   -> addCast ξ e $ tracePP (ppshow $ srcPos e) c
 
 
 -- | Monad versions of TDefEnv operations

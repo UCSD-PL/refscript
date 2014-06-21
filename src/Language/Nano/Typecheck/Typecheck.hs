@@ -412,7 +412,7 @@ tcStmt γ (ReturnStmt l eo)
         -- Subtype the arguments against the formals and cast using subtyping result
         eo''         <- case eo' of
                          Nothing -> return Nothing
-                         Just e' -> Just <$> castM l (tce_ctx γ) e' t' rt'
+                         Just e' -> Just <$> castM (tce_ctx γ) e' t' rt'
         return        $ (ReturnStmt l eo'', Nothing)
 
 -- throw e 
@@ -564,7 +564,7 @@ tcExprT l γ e to
        case to of
          Nothing -> return (e', t)
          Just ta -> do θ <- unifyTypeM (srcPos l) t ta
-                       (,ta) <$> castM l (tce_ctx γ) e' (apply θ t) ta
+                       (,ta) <$> castM (tce_ctx γ) e' (apply θ t) ta
 
 -------------------------------------------------------------------------------
 tcExpr :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
@@ -852,7 +852,7 @@ tcCallCase γ l fn es ts ft
        let its          = b_type <$> ibs
        θ               <- unifyTypesM (srcPos l) "tcCall" ts its
        let (ts',its')   = mapPair (apply θ) (ts, its)
-       es'             <- NM.zipWith3M (castM l ξ) es ts' its'
+       es'             <- NM.zipWith3M (castM ξ) es ts' its'
        return             (es', apply θ ot, θ)
 
 instantiate l ξ fn ft 

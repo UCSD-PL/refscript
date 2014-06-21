@@ -61,28 +61,34 @@ isSubtype δ t1 t2 =
 --------------------------------------------------------------------------------
 convert :: (PPR r) => SourceSpan -> TDR r -> RType r -> RType r -> Either Error (Cast r)
 --------------------------------------------------------------------------------
+convert l δ t1 t2  
+  =  do c <- convert' l δ t1 t2
+        case c of 
+          CDNo   -> return $ CNo
+          CDUp   -> return $ CUp (rType t1) (rType t2)
+          CDDn   -> return $ CDn (rType t1) (rType t2)
+          CDDead -> return $ CDead (rType t1)
+  where
+    rType = ofType . toType
 
-convert _ _ t1 t2 | toType t1 == toType t2 
-                                       = Right $ CNo
+ 
 
-convert _ _ t1 t2 | not (isTop t1) && 
-                  isTop t2             = Right $ CUp t1 t2
-
-convert l δ t1 t2 | any isUnion [t1,t2]  = convertUnion l δ t1 t2
-
-convert l δ t1 t2 | all isTObj  [t1,t2]  = convertObj l δ t1 t2
-
-convert l δ t1 t2 | all isTFun  [t1, t2] = convertFun l δ t1 t2
-
-convert l δ t1 t2 | any isTTyOf [t1, t2] = convertTTyOf l δ t1 t2
-
-convert l δ t1 t2                        = convertSimple l δ t1 t2 
+--------------------------------------------------------------------------------
+convert' :: (PPR r) => SourceSpan -> TDR r -> RType r -> RType r -> Either Error CastDirection
+--------------------------------------------------------------------------------
+convert' _ _ t1 t2 | toType t1 == toType t2     = Right CDNo
+convert' _ _ t1 t2 | not (isTop t1) && isTop t2 = Right CDUp
+convert' l δ t1 t2 | any isUnion [t1,t2]        = convertUnion l δ t1 t2
+convert' l δ t1 t2 | all isTObj  [t1,t2]        = convertObj l δ t1 t2
+convert' l δ t1 t2 | all isTFun  [t1, t2]       = convertFun l δ t1 t2
+convert' l δ t1 t2 | any isTTyOf [t1, t2]       = convertTTyOf l δ t1 t2
+convert' l δ t1 t2                              = convertSimple l δ t1 t2 
 
 
 -- | `convertObj`
 
 --------------------------------------------------------------------------------
-convertObj :: (PPR r) => SourceSpan -> TDR r -> RType r -> RType r -> Either Error (Cast r)
+convertObj :: (PPR r) => SourceSpan -> TDR r -> RType r -> RType r -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
 
@@ -93,9 +99,9 @@ convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
   --        [μ]{ [μi]fi:ti } <: [μ]{ [μi]fi:ti }
   --
   | s1l == s2l
-  = if isSubtype δ (ofType μ1) (ofType μ2) then 
+  = if isSubtypeMut δ μ1 μ2 then 
       if deeps l δ μ1 μ2 b1s b2s then  
-        Right $ CUp t1 t2
+        Right CDUp
       else 
        Left $ errorSimpleSubtype l t1 t2
     else 
@@ -141,7 +147,7 @@ convertObj l δ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _)
   | x1 == x2
     -- FIXME: Using covariance here !!!
   = if all (uncurry $ isSubtype δ) $ zip t1s t2s 
-      then Right $ CNo
+      then Right $ CDNo
       else Left  $ errorSimpleSubtype l t1 t2
   | otherwise
 
@@ -150,7 +156,7 @@ convertObj l δ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _)
       -- Adjusting the child class to the parent
       Just (_, t1s') -> 
           if all (uncurry $ isSubtype δ) $ zip t1s' t2s
-            then Right $ CUp (TApp (TRef x2) t1s r1) t2
+            then Right CDUp 
             else Left  $ errorSimpleSubtype l t1 t2
       
       -- Structural subtyping
@@ -206,7 +212,7 @@ subElt _ δ _ _ (CallSig t1) (CallSig t2)
 -- NO :   { readonly f: PosInt  } <: { readonly  f: int }
 --
 subElt l δ μ1 μ2 (FieldSig _ μf1 τ1 t1) (FieldSig _ μf2 τ2 t2)
-  | isSubtype δ (ofType m1) (ofType m2) =
+  | isSubtypeMut δ m1 m2 =
       if isImmutable m2 then
         -- 
         --  t<:t  τ<:τ
@@ -255,7 +261,7 @@ subElt _ δ _ _ (IndexSig _ b1 t1) (IndexSig _ b2 t2)
 -- | Static fields
 --
 subElt _ δ μ1 μ2 (StatSig _ μf1 t1) (StatSig _ μf2 t2)
-  | isSubtype δ (ofType m1) (ofType m2) =
+  | isSubtypeMut δ m1 m2 =
       if isImmutable m2 then isSubtype δ t1 t2
                         else and [ isSubtype δ t2 t1, isSubtype δ t1 t2 ]
   | otherwise = False 
@@ -281,28 +287,28 @@ isSubtypeOpt _ _ _         _         = True
 
 -- | `convertFun`
 --------------------------------------------------------------------------------
-convertFun :: PPR r => SourceSpan -> TDR r -> RType r -> RType r -> Either Error (Cast r)
+convertFun :: PPR r => SourceSpan -> TDR r -> RType r -> RType r -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertFun l δ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _) 
   | length b1s /= length b2s 
-  = do  cs <- zipWithM (convert l δ) (b_type <$> b2s) (b_type <$> b1s)
-        co <- convert l δ o1 o2
+  = do  cs <- zipWithM (convert' l δ) (b_type <$> b2s) (b_type <$> b1s)
+        co <- convert' l δ o1 o2
         if all noCast cs && noCast co then 
-          Right $ CNo
+          Right CDNo
         else if all dnCast cs && upCast co then 
-          Right $ CUp t1 t2
+          Right CDUp
         else 
           Left $ errorFuncSubtype l t1 t2
   | otherwise 
   = Left $ errorFuncSubtype l t1 t2
 
 convertFun l δ t1@(TAnd _) t2@(TAnd t2s) = 
-  if and $ isSubtype δ t1 <$> t2s then Right $ CUp t1 t2
+  if and $ isSubtype δ t1 <$> t2s then Right CDUp
                                   else Left  $ errorFuncSubtype l t1 t2
 
 convertFun l δ t1@(TAnd t1s) t2 = 
   let f t1 = isSubtype δ t1 t2 in 
-  if or $ f <$> t1s then Right $ CUp t1 t2
+  if or $ f <$> t1s then Right CDUp
                     else Left  $ errorFuncSubtype l t1 t2
  
 convertFun _ _ t1 t2 = error $ "convertFun: no other cases supported " ++ ppshow t1 ++ " with " ++ ppshow t2 
@@ -310,13 +316,13 @@ convertFun _ _ t1 t2 = error $ "convertFun: no other cases supported " ++ ppshow
 
 -- | `convertTTyOf`
 --------------------------------------------------------------------------------
-convertTTyOf :: PPR r => SourceSpan -> TDR r -> RType r -> RType r -> Either Error (Cast r)
+convertTTyOf :: PPR r => SourceSpan -> TDR r -> RType r -> RType r -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertTTyOf l δ t1@(TApp (TTyOf x1) _ _) t2@(TApp (TTyOf x2) _ _)
   | x1 == x2 
-  = Right CNo  
+  = Right CDNo  
   | x1 `elem` (lineage δ $ findSymOrDie x2 δ)
-  = Right $ CUp t1 t2
+  = Right CDUp
   | otherwise     = Left  $ errorSimpleSubtype l t1 t2
 
 convertTTyOf l δ t1@(TApp (TTyOf _) _ _) t2 
@@ -330,10 +336,10 @@ convertTTyOf _ _ _ _ = error "convertTTyOf: no other cases supported"
 
 -- | `convertSimple`
 --------------------------------------------------------------------------------
-convertSimple :: PPR r => SourceSpan -> TDR r -> RType r -> RType r -> Either Error (Cast r)
+convertSimple :: PPR r => SourceSpan -> TDR r -> RType r -> RType r -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertSimple l _ t1 t2
-  | t1 == t2      = Right $ CNo
+  | t1 == t2      = Right CDNo
   -- TOGGLE dead-code
 --   | otherwise = return $ CDead t2
   | otherwise     = Left  $ errorSimpleSubtype l t1 t2
@@ -341,14 +347,14 @@ convertSimple l _ t1 t2
 
 -- | `convertUnion`
 --------------------------------------------------------------------------------
-convertUnion :: PPR  r => SourceSpan -> TDR r -> RType r -> RType r -> Either Error (Cast r)
+convertUnion :: PPR  r => SourceSpan -> TDR r -> RType r -> RType r -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertUnion l δ t1 t2 = 
     case distinct of
-      ([],[])  | length t1s == length t2s -> Right $ CNo
+      ([],[])  | length t1s == length t2s -> Right CDNo
                | otherwise                -> error "convertUnion - impossible"
-      ([],_ )                             -> Right $ CUp t1 t2
-      (_ ,[])                             -> Right $ CDn t1 t2
+      ([],_ )                             -> Right CDUp 
+      (_ ,[])                             -> Right CDDn 
       ( _ ,_)                             -> Left  $ errorUnionSubtype l t1 t2
   where 
     (t1s, t2s)            = sanityCheck $ mapPair bkUnion (t1, t2)
@@ -372,6 +378,13 @@ safeExtends l δ (TD _ c _ (Just (p, ts)) es) =
                                       , let t2 = eltType pe
                                       , not (isSubtype δ t1 t2) ]
 safeExtends _ _ (TD _ _ _ Nothing _)  = []
+
+
+isSubtypeMut δ μ1 μ2 
+  | isAnyMut μ1 || isAnyMut μ2 = True
+  | otherwise                     
+  = isSubtype δ (ofType μ1) (ofType μ2)
+                    
 
 
 -- | Related types ( ~~ ) 

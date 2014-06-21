@@ -43,7 +43,8 @@ module Language.Nano.Typecheck.Types (
   , Type, TDef (..), TVar (..), TCon (..), TElt (..)
 
   -- * Mutability
-  , Mutability, mutableM, immutableM, combMut, isMutable, isImmutable, isMutabilityType, variance, varianceTDef
+  , Mutability, mutable, immutable, anyMutability, combMut
+  , isMutable, isImmutable, isAnyMut, isMutabilityType, variance, varianceTDef
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, rtArr, tUndef, tNull
@@ -68,7 +69,7 @@ module Language.Nano.Typecheck.Types (
   , Annot (..), UFact, Fact (..), phiVarsAnnot, ClassInfo
   
   -- * Casts
-  , Cast(..), noCast, upCast, dnCast, ddCast
+  , Cast(..), CastDirection(..), noCast, upCast, dnCast, ddCast
 
   -- * Aliases for annotated Source 
   , AnnBare, UAnnBare, AnnSSA , UAnnSSA
@@ -300,7 +301,7 @@ findSymOrDie s γ = fromMaybe (error msg) $ findSym s γ
 
 type Mutability = Type 
 
-validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable"] -- , "DefaultMutable"]
+validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable", "AnyMutability"]
 
 mkMut :: String -> Mutability
 mkMut s = TApp (TRef $ F.symbol s) [] ()
@@ -308,8 +309,9 @@ mkMut s = TApp (TRef $ F.symbol s) [] ()
 instance Default Mutability where
   def = mkMut "Mutable"
 
-mutableM    = mkMut "Mutable"
-immutableM  = mkMut "Immutable"
+mutable       = mkMut "Mutable"
+immutable     = mkMut "Immutable"
+anyMutability = mkMut "AnyMutability"
 
 
 isMutabilityType (TApp (TRef s) _ _) = s `elem` validMutNames
@@ -321,8 +323,8 @@ isMutable _                          = False
 isImmutable      (TApp (TRef s) _ _) = s == F.symbol "Immutable"
 isImmutable _                        = False
 
-isDefaultMut (TApp (TRef s) _ _)     = s == F.symbol "Mutable"
-isDefaultMut _                       = False
+isAnyMut (TApp (TRef s) _ _)         = s == F.symbol "AnyMutability"
+isAnyMut _                           = False
 
 isReadOnly (TApp (TRef s) _ _)       = s == F.symbol "ReadOnly"
 isReadOnly _                         = False
@@ -714,7 +716,7 @@ instance (PP r, F.Reftable r) => PP (TElt r) where
 
 
 ppMut t | isMutable t    = brackets $ pp "mut"
-        | isDefaultMut t = pp ""
+        | isAnyMut t     = pp ""
         | isReadOnly t   = brackets $ pp "ro"
         | isImmutable t  = brackets $ pp "imm"
         | isTVar t       = brackets $ pp t
@@ -859,7 +861,7 @@ instance PP TCon where
   pp TTop      = text "top"
   pp TUn       = text "union:"
   pp (TTyOf s) = text "typeof" <+> pp s
-  pp (TRef x)  = text $ F.symbolString x
+  pp (TRef x)  = pp x
   pp TNull     = text "null"
   pp TUndef    = text "undefined"
   pp TFPBool   = text "bool"
@@ -928,27 +930,34 @@ data Cast r  = CNo                                      -- .
              | CDn   { org :: RType r, tgt :: RType r } -- <t1 DN t2>
              deriving (Eq, Ord, Show, Data, Typeable, Functor)
 
+data CastDirection   = CDNo    -- .
+                     | CDDead  -- |dead code|
+                     | CDUp    -- <UP>
+                     | CDDn    -- <DN>
+             deriving (Eq, Ord, Show, Data, Typeable)
+
+
 instance (PP r, F.Reftable r) => PP (Cast r) where
   pp CNo         = text "No cast"
   pp (CDead _)   = text "Dead code"
   pp (CUp t1 t2) = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
   pp (CDn t1 t2) = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
 
-noCast CNo = True
+noCast CDNo = True
 noCast _   = False
 
-upCast (CDead _)  = False
-upCast CNo        = True
-upCast (CUp _ _)  = True
-upCast (CDn _ _)  = False
+upCast CDDead = False
+upCast CDNo   = True
+upCast CDUp   = True
+upCast CDDn   = False
 
-dnCast (CDead _)  = False
-dnCast CNo        = True
-dnCast (CUp _ _)  = False
-dnCast (CDn _ _)  = True
+dnCast CDDead = False
+dnCast CDNo   = True
+dnCast CDUp   = False
+dnCast CDDn   = True
 
-ddCast (CDead _)  = True
-ddCast _          = False
+ddCast CDDead = True
+ddCast _      = False
 
 
 -----------------------------------------------------------------------------

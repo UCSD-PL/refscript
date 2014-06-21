@@ -221,7 +221,7 @@ bbaseP
 objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
 objLitP 
-  = do m     <- option mutableM (toType <$> mutP)
+  = do m     <- option mutable (toType <$> mutP)
        bs    <- braces propBindP
        return $ TCons bs m
  

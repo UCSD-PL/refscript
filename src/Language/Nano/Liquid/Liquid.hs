@@ -574,23 +574,10 @@ consMethCall :: PP a => CGEnv -> AnnTypeR -> a -> Expression AnnTypeR
 consMethCall g l fn e es ft0 
   = do  (x, g') <- consExpr g e 
         cgWithThis (envFindTy x g') $ consCall g' l fn (ThisRef l : es) ft0
-
---         (y, g2) <- cgWithThis (envFindTy x g') $ consCall g1 l fn (ThisRef l : es) ft0
---         envAddFresh "consMethCall" l (subThis y $ envFindTy y g2) g2
-        
---         let tf'   = F.substa (sf (F.symbol "this") (F.symbol this)) tf
---         return    $ (tf', g''')
   where  
     subThis x t   = F.substa (sf (F.symbol "this") x) t
     sf s1 s2 s    | s == s1   = s2
                   | otherwise = s
-
---   = do  (x, g1) <- consExpr g e 
---         g2      <- pushThis l $ envFindTy x g'
---         (y, g3) <- consCall g2 l fn (ThisRef l : es) ft0
---         g4      <- popThis g3
---         return   $ (y, g4)    -- not quite  
-
 
 consCallDotRef g l fn v elts es 
     -- Static call

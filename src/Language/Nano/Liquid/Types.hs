@@ -431,6 +431,17 @@ zipType δ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _)
 
 zipType δ t1@(TApp (TRef _) _ _) t2 = zipType δ (flattenType δ t1) t2
 zipType δ t1 t2@(TApp (TRef _) _ _) = zipType δ t1 (flattenType δ t2)
+
+
+zipType δ t1@(TApp (TTyOf x1) [] r1) t2@(TApp (TTyOf x2) [] _) 
+  | x2 `elem` lineage δ (findSymOrDie x1 δ)
+  = TApp (TTyOf x2) [] r1
+  | otherwise 
+  = zipType δ (flattenType δ t1) (flattenType δ t2)
+
+zipType δ t1@(TApp (TTyOf _) _ _) t2 = zipType δ (flattenType δ t1) t2
+zipType δ t1 t2@(TApp (TTyOf _) _ _) = zipType δ t1 (flattenType δ t2)
+
  
 
 zipType _ (TApp c [] r) (TApp c' [] _) | c == c' = TApp c [] r
@@ -489,8 +500,7 @@ zipType δ (TAnd t1s) (TAnd t2s) =
 zipType δ t1 (TAnd t2s) = zipType δ (TAnd [t1]) (TAnd t2s)
 zipType δ (TAnd t1s) t2 = zipType δ (TAnd t1s) (TAnd [t2])
 
-zipType _ t1 t2 = 
-  errorstar $ printf "BUG[zipType]: mis-aligned types in:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
+zipType _ t1 t2 = errorstar $ printf "BUG[zipType] Unsupported:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
 
 
 zipBind δ (B _ t1) (B s2 t2) = B s2 $ zipType δ t1 t2 

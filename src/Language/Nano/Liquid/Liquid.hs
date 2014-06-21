@@ -211,11 +211,11 @@ consStmt g (BlockStmt _ stmts)
 consStmt g (IfSingleStmt l b s)
   = consStmt g (IfStmt l b s (EmptyStmt l))
 
--- HINT: 1. Use @envAddGuard True@ and @envAddGuard False@ to add the binder 
---          from the condition expression @e@ into @g@ to obtain the @CGEnv@ 
---          for the "then" and "else" statements @s1@ and @s2 respectively. 
---       2. Recursively constrain @s1@ and @s2@ under the respective environments.
---       3. Combine the resulting environments with @envJoin@ 
+--  1. Use @envAddGuard True@ and @envAddGuard False@ to add the binder 
+--     from the condition expression @e@ into @g@ to obtain the @CGEnv@ 
+--     for the "then" and "else" statements @s1@ and @s2 respectively. 
+--  2. Recursively constrain @s1@ and @s2@ under the respective environments.
+--  3. Combine the resulting environments with @envJoin@ 
 
 -- if e { s1 } else { s2 }
 consStmt g (IfStmt l e s1 s2)

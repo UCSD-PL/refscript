@@ -173,7 +173,7 @@ addSubst l θ
   = do θ0 <- appSu θ <$> getSubst 
        case checkSubst θ0 θ of 
          [] -> return ()
-         ts -> forM_ ts $ (\(t1,t2) -> tcError $ errorUnification (srcPos l) t1 t2)
+         ts -> forM_ ts $ (\(t1,t2) -> tcError $ errorMergeSubst (srcPos l) t1 t2)
        setSubst $ θ0 `mappend` θ
   where
     appSu θ                   = fromList . (mapSnd (apply θ) <$>) . toList 

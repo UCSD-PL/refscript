@@ -380,7 +380,7 @@ castM ξ e t1 t2
         case convert (srcPos e) δ t1 t2 of
           Left  e   -> tcError e
           Right CNo -> return e
-          Right c   -> addCast ξ e $ tracePP (ppshow $ srcPos e) c
+          Right c   -> addCast ξ e c
 
 
 -- | Monad versions of TDefEnv operations

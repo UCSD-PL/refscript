@@ -251,20 +251,20 @@ consStmt g (ThrowStmt _ e)
 consStmt g s@(FunctionStmt _ _ _ _)
   = Just <$> consFun g s
 
+--
 -- class A<S...> [extends B<T...>] [implements I,J,...] { ... }
-consStmt g (ClassStmt l i _ _ ce) = do  
-    -- * Compute / get the class type 
-    d@(TD _ _ αs _ _) <- findSymOrDieM i
-    let tyBinds = [(Loc (srcPos l) α, tVar α) | α <- αs]
-    -- * Add the type vars in the environment
-    g' <- envAdds False tyBinds g
-    -- * Compute type for "this" and add that to the env as well
-    --   - This type uses the classes type variables as type parameters.
-    --   - For the moment this type does not have a refinement. Maybe use
-    --     invariants to add some.
-    let thisT = TApp (TRef $ F.symbol i) (tVar <$> αs) fTop  
-    cgWithThis thisT $ consClassElts (srcPos l) g' d ce
-    return $ Just g
+--
+-- 1. Compute / get the class type 
+-- 2. Add the type vars in the environment
+-- 3. Compute type for "this" and add that to the env as well. This type uses the classes type 
+--    variables as type parameters. 
+--
+consStmt g (ClassStmt l i _ _ ce) 
+  = do  d@(TD _ _ αs _ _) <- findSymOrDieM i
+        g'                <- envAdds False [(Loc (srcPos l) α, tVar α) | α <- αs] g
+        cgWithThis           (TApp (TRef $ F.symbol i) (tVar <$> αs) fTop) $ consClassElts (srcPos l) g' d ce
+        g'                <- envAdds True [(i, TApp (TTyOf $ F.symbol i) [] fTop)] g
+        return             $ Just g'
 
 -- OTHER (Not handled)
 consStmt _ s 

@@ -422,7 +422,7 @@ consExpr g ef@(DotRef l e f)
   = do  (x,g') <- consExpr g e
         δ      <- getDef        
         case getElt δ f $ envFindTy  x g' of 
-          [FieldSig _ _ ft] -> consCall g l ef [vr x] $ mkTy l ft
+          [FieldSig _ _ ft] -> consCall g' l ef [vr x] $ mkTy l ft
           _                 -> cgError l $ errorExtractNonFld (srcPos l) f e 
   where
     -- Add a VarRef so that e is not typechecked again

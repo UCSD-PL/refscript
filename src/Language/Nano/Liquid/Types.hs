@@ -291,15 +291,12 @@ mapReftM _ t                 = error   $ render $ text "Not supported in mapReft
 
 mapReftBindM f (B x t)       = B x     <$> mapReftM f t
 
-mapReftEltM f (FieldSig x m τ t) = FieldSig x m <$> mapReftMaybeM f τ <*> mapReftM f t
-mapReftEltM f (MethSig x m τ t)  = MethSig x m  <$> mapReftMaybeM f τ <*> mapReftM f t
-mapReftEltM f (CallSig t)        = CallSig      <$> mapReftM f t
-mapReftEltM f (StatSig x m t)    = StatSig x m  <$> mapReftM f t
-mapReftEltM f (ConsSig  t)       = ConsSig      <$> mapReftM f t
-mapReftEltM f (IndexSig x b t)   = IndexSig x b <$> mapReftM f t
-
-mapReftMaybeM f (Just t) = Just <$> mapReftM f t
-mapReftMaybeM _ _        = return Nothing
+mapReftEltM f (FieldSig x m t) = FieldSig x m <$> mapReftM f t
+mapReftEltM f (MethSig x m t)  = MethSig x m  <$> mapReftM f t
+mapReftEltM f (CallSig t)      = CallSig      <$> mapReftM f t
+mapReftEltM f (StatSig x m t)  = StatSig x m  <$> mapReftM f t
+mapReftEltM f (ConsSig  t)     = ConsSig      <$> mapReftM f t
+mapReftEltM f (IndexSig x b t) = IndexSig x b <$> mapReftM f t
 
 
 ------------------------------------------------------------------------------------------
@@ -506,19 +503,11 @@ zipType _ t1 t2 = errorstar $ printf "BUG[zipType] Unsupported:\n\t%s\nand\n\t%s
 zipBind δ (B _ t1) (B s2 t2) = B s2 $ zipType δ t1 t2 
 
 
-zipElts δ (CallSig t1)                 (CallSig t2)                  = CallSig        $ zipType δ t1 t2 
-zipElts δ (ConsSig t1)                 (ConsSig t2)                  = ConsSig        $ zipType δ t1 t2 
-zipElts δ (StatSig _ _  t1)            (StatSig x2 m2 t2)            = StatSig  x2 m2 $ zipType δ t1 t2 
-zipElts δ (IndexSig _ _   t1)          (IndexSig x2 b2 t2)           = IndexSig x2 b2 $ zipType δ t1 t2 
-
-zipElts δ (FieldSig _  _ (Just τ1) t1) (FieldSig x2 m2 (Just τ2) t2) = FieldSig x2 m2 (Just $ zipType δ τ1 τ2) $ zipType δ t1 t2
-zipElts δ (FieldSig _ _  _        t1)  (FieldSig x2 m2 (Just τ2) t2) = FieldSig x2 m2 (Just τ2) $ zipType δ t1 t2
-zipElts δ (FieldSig _ _  Nothing  t1)  (FieldSig x2 m2 Nothing t2)   = FieldSig x2 m2 Nothing $ zipType δ t1 t2
-
-zipElts δ (MethSig _  _  (Just τ1) t1) (MethSig x2 m2 (Just τ2) t2)  = MethSig x2 m2 (Just $ zipType δ τ1 τ2) $ zipType δ t1 t2
-zipElts δ (MethSig _  _  _         t1) (MethSig x2 m2 (Just τ2) t2)  = MethSig x2 m2 (Just τ2) $ zipType δ t1 t2
-zipElts δ (MethSig _  _  Nothing   t1) (MethSig x2 m2 Nothing t2)    = MethSig x2 m2 Nothing $ zipType δ t1 t2
-
-zipElts _ e1 e2
-  = error $ "Cannot zip: " ++ ppshow e1 ++ " and " ++ ppshow e2
+zipElts δ (CallSig t1)      (CallSig t2)        = CallSig        $ zipType δ t1 t2 
+zipElts δ (ConsSig t1)      (ConsSig t2)        = ConsSig        $ zipType δ t1 t2 
+zipElts δ (StatSig _ _ t1)  (StatSig x2 m2 t2)  = StatSig  x2 m2 $ zipType δ t1 t2 
+zipElts δ (IndexSig _ _ t1) (IndexSig x2 b2 t2) = IndexSig x2 b2 $ zipType δ t1 t2 
+zipElts δ (FieldSig _ _ t1) (FieldSig x2 m2 t2) = FieldSig x2 m2 $ zipType δ t1 t2
+zipElts δ (MethSig _ _  t1) (MethSig x2 m2 t2)  = MethSig  x2 m2 $ zipType δ t1 t2
+zipElts _ e1 e2 = error $ "Cannot zip: " ++ ppshow e1 ++ " and " ++ ppshow e2
 

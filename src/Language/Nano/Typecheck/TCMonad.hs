@@ -29,7 +29,7 @@ module Language.Nano.Typecheck.TCMonad (
   , getSubst, setSubst, addSubst
 
   -- * Function Types
-  , tcFunTys
+  , tcFunTys, tcMethTys
 
   -- * Annotations
   , addAnn {-TEMP-}, accumAnn, getAllAnns, getDef, setDef
@@ -415,7 +415,7 @@ subtypeM l t1 t2
           Left e          -> tcError e
           Right CNo       -> return  ()
           Right (CUp _ _) -> return  ()
-          Right _         -> tcError $ errorSubType l "subtypeM" t1 t2
+          Right _         -> tcError $ errorSubtype l t1 t2
 
 
 addCast     ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
@@ -426,10 +426,29 @@ wrapCast _ f (Cast (Ann l fs) e) = Cast (Ann l (f:fs)) e
 wrapCast l f e                   = Cast (Ann l [f])    e
 
 
+-- | tcFunTys: "context-sensitive" function signature
+--------------------------------------------------------------------------------
+tcFunTys :: (PPRSF r, F.Subable (RType r), F.Symbolic s, PP a) 
+         => AnnSSA r -> a -> [s] -> RType r -> TCM r [(Int, ([TVar], [RType r], RType r))]
+--------------------------------------------------------------------------------
 tcFunTys l f xs ft = 
   case funTys l f xs ft of 
-    Left e  -> tcError e 
+    Left  e -> tcError e 
     Right a -> return a
+
+
+--------------------------------------------------------------------------------
+tcMethTys :: (PPRSF r, F.Subable (RType r), PP a) 
+          => AnnSSA r -> a -> (Mutability, RType r)
+          -> TCM r [(Int, Mutability, ([TVar], [RType r], RType r))]
+--------------------------------------------------------------------------------
+tcMethTys l f (m,t) 
+  = zip3 [0..] (repeat m) <$> mapM (methTys l f) (bkAnd t)
+       
+methTys l f ft0
+  = case remThisBinding ft0 of
+      Nothing         -> tcError $ errorNonFunction (srcPos l) f ft0 
+      Just (vs,bs,t)  -> return  $ (vs,b_type <$> bs,t)
 
 
 -- | `this`

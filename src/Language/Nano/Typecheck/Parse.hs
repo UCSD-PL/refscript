@@ -19,7 +19,6 @@ import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
 import           Data.Default
-import           Data.Maybe                              (isJust, isNothing)
 import qualified Data.List                        as     L
 import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
@@ -57,7 +56,6 @@ import           GHC.Generics
 
 dot        = T.dot        lexer
 plus       = T.symbol     lexer "+"
-star       = T.symbol     lexer "*"
 question   = T.symbol     lexer "?"
 
 ----------------------------------------------------------------------------------
@@ -66,8 +64,6 @@ question   = T.symbol     lexer "?"
 
 idBindP :: Parser (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
-
-idFieldP = xyzP identifierP dcolon bareTypeP
 
 identifierP :: Parser (Id SourceSpan)
 identifierP =   try (withSpan Id upperIdP)
@@ -122,11 +118,6 @@ withSpan f p = do pos   <- getPosition
 xyP lP sepP rP
   = (\x _ y -> (x, y)) <$> lP <*> (spaces >> sepP) <*> rP
 
-xyzP lP sepP rP
-  = (\x _ y z -> (x, y, z)) <$> lP 
-                            <*> (spaces >> sepP) 
-                            <*> (isJust <$> optionMaybe star) 
-                            <*> rP
 
 postP p post 
   = (\x _ -> x) <$> p <*> post
@@ -170,6 +161,12 @@ funcSigP =  try (bareAllP bareFunP)
   where
     intersectP p = tAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
 
+methSigP =  try (bareAllP bareMethP)
+        <|> try (intersectP $ bareAllP bareMethP) 
+  where
+    intersectP p = tAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
+
+
 -- | `bareFunP` parses a single function type
 --
 --  (x:t, ...) => t
@@ -185,7 +182,7 @@ bareFunP
 --  (x:t, ...): t
 bareMethP
   = do args   <- parens $ sepBy bareArgP comma
-       colon
+       _      <- colon
        ret    <- bareTypeP 
        r      <- topP
        return $ TFun args ret r
@@ -278,19 +275,19 @@ bareAllP p =  try p
 -- arrayP = brackets bareTypeP
 
 propBindP =  sepEndBy (
-              try indexSigP 
-          <|> try fieldSigP
-          <|> try statSigP
-          <|> try methSigP
-          <|> try callSigP
-          <|> try consSigP
+              try indexEltP 
+          <|> try fieldEltP
+          <|> try statEltP
+          <|> try methEltP
+          <|> try callEltP
+          <|> try consEltP
               ) semi
 
 
 -- | [f: string]: t
 -- | [f: number]: t
 
-indexSigP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
+indexEltP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
                case it of 
                  "number" -> return $ IndexSig x False t
                  "string" -> return $ IndexSig x True t
@@ -303,45 +300,46 @@ indexP = xyP id colon sn
     sn = withinSpacesP (string "string" <|> string "number")
 
 
--- | <[mut]> f<[τ]>: t
-fieldSigP = do 
-   --  s          <- option False $ try $ reserved "static" >> return True
-    m          <- option def (toType <$> mutP)
+-- | <[mut]> f: t
+fieldEltP = do 
+    m          <- option inheritedMut (toType <$> mutP)
     x          <- symbolP 
-    _          <- colon
-    τ          <- optionMaybe $ withinSpacesP $ brackets bareTypeP
+    _          <- dcolon
     t          <- bareTypeP
-    
-    return      $ FieldSig x m τ t
+    return      $ FieldSig x m t
 
 -- | static <[mut]> f: t
-statSigP = do 
+statEltP = do 
     _          <- reserved "static"
     m          <- option def (toType <$> mutP)
     x          <- symbolP 
-    _          <- colon
+    _          <- dcolon
     t          <- bareTypeP
-    
     return      $ StatSig x m t
 
--- | <[mut]> m<[τ]>(ts): t
-methSigP = do
+-- | <[mut]> m (ts): t
+methEltP = do
     m          <- option def (toType <$> mutP)
     x          <- symbolP 
-    _          <- colon
-    τ          <- optionMaybe $ withinSpacesP $ brackets bareTypeP
-    t          <- bareAllP bareMethP
-    return      $ MethSig x m τ t
+    _          <- dcolon
+    t          <- methSigP
+    return      $ MethSig x m $ outT t
+  where
+    outT t      =  
+      case bkFun t of 
+        Just (_, (B x _):_,_) | x == symbol "this" -> t
+        Just (vs, bs      ,ot)                     -> mkFun (vs, B (symbol "this") tTop : bs, ot)
+        _                                          -> t
 
 
 -- | <forall A .> (t...) => t
 
-callSigP = CallSig <$> withinSpacesP (bareAllP bareFunP)
+callEltP = CallSig <$> withinSpacesP (bareAllP bareFunP)
 
 
 -- | new <forall A .> (t...) => t
 
-consSigP = do
+consEltP = do
     try      $  reserved "new"
     ConsSig <$> withinSpacesP (bareAllP bareFunP)
 
@@ -421,9 +419,9 @@ data RawSpec
 data PSpec l r
   = Meas   (Id l, RType r)
   | Bind   (Id l, RType r) 
-  | Field  (Id l, Bool, RType r) 
-  | Constr (Id l, RType r)
-  | Method (Id l, RType r)
+  | Field  (TElt r)
+  | Constr (TElt r)
+  | Method (TElt r)
   | Extern (Id l, RType r)
   | IFace  (Id l, TDef r)
   | Class  (Id l, ([TVar], Maybe (Id l,[RType r])))
@@ -438,9 +436,9 @@ type Spec = PSpec SourceSpan Reft
 parseAnnot :: SourceSpan -> RawSpec -> Parser Spec
 parseAnnot ss (RawMeas   _) = Meas   <$> patch2 ss <$> idBindP
 parseAnnot ss (RawBind   _) = Bind   <$> patch2 ss <$> idBindP
-parseAnnot ss (RawField  _) = Field  <$> patch3 ss <$> idFieldP
-parseAnnot ss (RawMethod _) = Method <$> patch2 ss <$> idBindP
-parseAnnot ss (RawConstr _) = Constr <$> patch2 ss <$> idBindP
+parseAnnot _  (RawField  _) = Field  <$>               fieldEltP
+parseAnnot _  (RawMethod _) = Method <$>               methEltP
+parseAnnot _  (RawConstr _) = Constr <$>               consEltP
 parseAnnot ss (RawExtern _) = Extern <$> patch2 ss <$> idBindP
 parseAnnot ss (RawType   _) = IFace  <$> patch2 ss <$> iFaceP
 parseAnnot ss (RawClass  _) = Class  <$> patch2 ss <$> classDeclP 
@@ -451,7 +449,6 @@ parseAnnot ss (RawInvt   _) = Invt              ss <$> bareTypeP
 
 
 patch2 ss (id, t)    = (fmap (const ss) id , t)
-patch3 ss (id, m, t) = (fmap (const ss) id , m, t)
 
 getSpecString :: RawSpec -> String 
 getSpecString (RawMeas   s) = s 
@@ -542,28 +539,36 @@ mkCode f ss =  Nano {
       , invts   = [Loc (srcPos l) t | Invt l t <- anns ]
     } 
   where
-    δ             = tDefFromList [ checkIF t | IFace  t <- anns ] 
+    δ             = tDefFromList [ processInterface t | IFace  t <- anns ] 
     toBare     :: (SourceSpan, [Spec]) -> AnnBare Reft 
-    toBare (l,αs) = Ann l $ [VarAnn t       | Bind   (_,t) <- αs ]
-                         ++ [ConsAnn t      | Constr (_,t) <- αs ]
-                         ++ [FieldAnn (m,t) | Field  (_,m,t) <- αs ]
-                         ++ [MethAnn t      | Method (_,t) <- αs ]
+    toBare (l,αs) = Ann l $ [VarAnn   t     | Bind   (_,t) <- αs ]
+                         ++ [ConsAnn  c     | Constr c     <- αs ]
+                         ++ [FieldAnn f     | Field  f     <- αs ]
+                         ++ [MethAnn  m     | Method m     <- αs ]
                          ++ [ClassAnn t     | Class  (_,t) <- αs ]
     ss'           = (toBare <$>) <$> ss
     anns          = concatMap (FO.foldMap snd) ss
 
 -- | At the moment we only support a single index signature with no other
--- elements, or (normally) bound types without index signature.
-checkIF t@(_,TD _ _ _ _ elts) 
-  | nTi == 0  = t
-  | nTi == 1 && nTe == 0 && nTn == 0 = t
-  | otherwise = error $ "[UNIMPLEMENTED] Object types " ++ 
-                        "can only have a single indexable " ++
-                        "signature and no other elements."
+--   elements, or (normally) bound types without index signature.
+processInterface (t, TD n x vs p elts)
+  | nTi == 0  || (nTi == 1 && nTe == 0 && nTn == 0) 
+  -- Replace the 'this' binding in every method element with the type of the
+  -- interface
+  = (t, TD n x vs p (f <$> elts))
+
+  | otherwise = error   $ "[UNIMPLEMENTED] Object types " ++ 
+                          "can only have a single indexable " ++
+                          "signature and no other elements."
   where 
-    nTn = length [ () | IndexSig _ False _ <- elts ]
-    nTi = length [ () | IndexSig _ _ _     <- elts ]
-    nTe = length [ () | FieldSig _ _ _ _   <- elts ]
+    nTn                 = length [ () | IndexSig _ False _ <- elts ]
+    nTi                 = length [ () | IndexSig _ _ _     <- elts ]
+    nTe                 = length [ () | FieldSig _ _ _     <- elts ]
+
+    tvs v               = TVar v fTop
+    tClass              = TApp (TRef $ symbol x) (tvs <$> vs) fTop
+    f m@(MethSig _ _ _) = setThisBinding m tClass
+    f m                 = m
 
 
 type PState = Integer
@@ -600,10 +605,12 @@ instance PP (RawSpec) where
   pp = text . getSpecString
 
 
+-- FIXME: Disabling the check here
 --------------------------------------------------------------------------------------
 catFunSpecDefs :: TDefEnv Reft -> [Statement (SourceSpan, [Spec])] -> Env RefType
 --------------------------------------------------------------------------------------
-catFunSpecDefs δ ss = envFromList [ (i, checkType δ t) | l <- ds , Bind (i,t) <- snd l ]
+-- catFunSpecDefs δ ss = envFromList [ (i, checkType δ t) | l <- ds , Bind (i,t) <- snd l ]
+catFunSpecDefs _ ss = envFromList [ (i, t) | l <- ds , Bind (i,t) <- snd l ]
   where ds     = definedFuns ss
 
 -- --------------------------------------------------------------------------------------
@@ -656,17 +663,20 @@ instance Show TypeError where
                             ++ "add a mutability modifier as the first type argument"
 
 
-checkType :: TDefEnv Reft -> RefType -> RefType
-checkType δ typ = 
-    case everything (++) ([] `mkQ` fromType) typ of
-      [] -> typ
-      es -> error $ show es 
-  where 
-    fromType :: RefType -> [TypeError]
-    fromType (TApp (TRef x) (m:_) _) | isNothing (findSym x δ) = [NameNotFound x] 
-                                     | not (validMutability m) = [InvalidMutability x]
-    fromType _                       = []
-
-    validMutability (TVar _ _)       = True
-    validMutability t                = isMutabilityType t
-
+-- -- FIXME: This won't work here cause classes have not been included in δ 
+-- --------------------------------------------------------------------------------
+-- checkType :: TDefEnv Reft -> RefType -> RefType
+-- --------------------------------------------------------------------------------
+-- checkType δ typ = 
+--     case everything (++) ([] `mkQ` fromType) typ of
+--       [] -> typ
+--       es -> error $ show es 
+--   where 
+--     fromType :: RefType -> [TypeError]
+--     fromType (TApp (TRef x) (m:_) _) | isNothing (findSym x δ) = [NameNotFound x] 
+--                                      | not (validMutability m) = [InvalidMutability x]
+--     fromType _                       = []
+-- 
+--     validMutability (TVar _ _)       = True
+--     validMutability t                = isMutabilityType t
+-- 

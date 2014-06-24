@@ -268,19 +268,18 @@
 /*@ interface Array<M,T> {
       toString       : (): string;
       toLocaleString : (): string;
-      concat         : (this: #Array[#Immutable,T], items: #Array[#Immutable,T]): { #Array[M,T] | (len v) = (len this) + (len items) };
-      concat         : forall M1 M2 . (items: #Array[M1,T]): #Array[M2,T];
-      concat         : forall M1 M2 . (items: #Array[M1,T]): #Array[M2,T];
+      concat         : /\ forall M0       . (this: #Array[#Immutable,T], items: #Array[#Immutable,T]): { #Array[M0,T] | (len v) = (len this) + (len items) }
+                       /\ forall M0 M1 M2 . (this: M0, items: #Array[M1,T]): #Array[M2,T];
       join           : (separator: string): string;
       pop            : (this: #Array[#Mutable, T]): T;
       push           : (this: #Array[#Mutable,T], items: T): number;
       reverse        : (this: #Array[M,T]): #Array[M,T];
       shift          : (): T;
-      slice          : forall N . (start: number): #Array[N,T];
-      slice          : forall N . (start: number, end: number): #Array[N,T];
+      slice          : /\ forall N . (start: number): #Array[N,T]
+                       /\ forall N . (start: number, end: number): #Array[N,T];
       sort           : (this: #Array[#Mutable,T], compareFn: (a: T, b: T) => number): #Array[#Immutable,T];      
-      splice         : (start: number): #Array[#Immutable,T];
-      splice         : (start: number, deleteCount: number, items: #Array[#Immutable,T]): #Array[#Immutable,T];
+      splice         : /\ (start: number): #Array[#Immutable,T]
+                       /\ (start: number, deleteCount: number, items: #Array[#Immutable,T]): #Array[#Immutable,T];
       unshift        : (items: #Array[#Immutable,T]): number;
       indexOf        : (searchElement: T, fromIndex: number): number;
       lastIndexOf    : (searchElement: T, fromIndex: number): number;      

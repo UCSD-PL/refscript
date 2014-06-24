@@ -1,6 +1,6 @@
 
 interface FooT {
-  /*@ f:: /\ forall M U . ((U) => U) => #Array[M,U] 
+  /*@ f: /\ forall M U . ((U) => U) => #Array[M,U] 
           /\ forall M V . ((V,V) => V) => #Array[M,V] */
   f: (x:any) => any;
 }

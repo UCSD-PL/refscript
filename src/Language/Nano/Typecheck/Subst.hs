@@ -109,14 +109,14 @@ instance Free (Fact r) where
   free (EltOverload _ t) = free t
   free (TCast _ c)       = free c
   free (VarAnn t)        = free t
-  free (FieldAnn (_,t))  = free t
-  free (MethAnn t)       = free t
-  free (ConsAnn t)       = free t
+  free (FieldAnn f)      = free f
+  free (MethAnn m)       = free m
+  free (ConsAnn c)       = free c
   free (ClassAnn (vs,m)) = foldr S.delete (free m) vs
 
 instance Free (TElt r) where
-  free (FieldSig _ m τ t) = free m `mappend` free τ `mappend` free t
-  free (MethSig  _ m τ t) = free m `mappend` free τ `mappend` free t
+  free (FieldSig _ m t)   = free m `mappend` free t
+  free (MethSig  _ m t)   = free m `mappend` free t
   free (StatSig _ m t)    = free m `mappend` free t
   free (CallSig t)        = free t
   free (ConsSig t)        = free t
@@ -149,9 +149,9 @@ instance (Substitutable r t) => Substitutable r (Env t) where
   apply = envMap . apply
 
 instance F.Reftable r => Substitutable r (TElt r) where 
-  apply θ (FieldSig x m τ t) = FieldSig x   (appTy (toSubst θ) m) (apply θ τ) (apply θ t)
+  apply θ (FieldSig x m t)   = FieldSig x   (appTy (toSubst θ) m) (apply θ t)
   apply θ (StatSig x m t)    = StatSig  x   (appTy (toSubst θ) m) (apply θ t)
-  apply θ (MethSig  x m τ t) = MethSig  x   (appTy (toSubst θ) m) (apply θ τ) (apply θ t)
+  apply θ (MethSig  x m t)   = MethSig  x   (appTy (toSubst θ) m) (apply θ t)
   apply θ (CallSig t)        = CallSig      (apply θ t)
   apply θ (ConsSig t)        = ConsSig      (apply θ t)
   apply θ (IndexSig x b t)   = IndexSig x b (apply θ t)
@@ -164,15 +164,15 @@ instance F.Reftable r => Substitutable r (Cast r) where
 
 instance F.Reftable r => Substitutable r (Fact r) where
   apply _ x@(PhiVar _)      = x
-  apply θ (TypInst ξ ts)    = TypInst ξ $ apply θ ts
-  apply θ (Overload ξ t)    = Overload ξ (apply θ t)
-  apply θ (EltOverload ξ t) = EltOverload ξ (apply θ t)
-  apply θ (TCast   ξ c)     = TCast ξ $ apply θ c
-  apply θ (VarAnn t)        = VarAnn $ apply θ t
-  apply θ (FieldAnn (m,t))  = FieldAnn (m,apply θ t)
-  apply θ (MethAnn t)       = MethAnn $ apply θ t
-  apply θ (ConsAnn t)       = ConsAnn $ apply θ t
-  apply θ (ClassAnn (c, t)) = ClassAnn (c, apply θ t)
+  apply θ (TypInst ξ ts)    = TypInst ξ     $ apply θ ts
+  apply θ (Overload ξ t)    = Overload ξ    $ apply θ t
+  apply θ (EltOverload ξ t) = EltOverload ξ $ apply θ t
+  apply θ (TCast   ξ c)     = TCast ξ       $ apply θ c
+  apply θ (VarAnn t)        = VarAnn        $ apply θ t
+  apply θ (FieldAnn f)      = FieldAnn      $ apply θ f
+  apply θ (MethAnn t)       = MethAnn       $ apply θ t
+  apply θ (ConsAnn t)       = ConsAnn       $ apply θ t
+  apply θ (ClassAnn (c, t)) = ClassAnn      $ (c, apply θ t)
 
 instance Substitutable r a => Substitutable r (Maybe a) where
   apply θ (Just a)       = Just $ apply θ a

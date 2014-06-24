@@ -8,12 +8,11 @@
 -- | Top Level for Refinement Type checker
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
-import           Text.Printf                        (printf)
 import           Control.Monad
 import           Control.Applicative                ((<$>))
 
 import qualified Data.HashMap.Strict                as M
-import           Data.Maybe                         (listToMaybe, catMaybes)
+import           Data.Maybe                         (listToMaybe, catMaybes, maybeToList, isJust)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -136,10 +135,17 @@ consFun g (FunctionStmt l f xs body)
 consFun _ s 
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
 
-consFun1 l g' f xs body (i, ft) 
-  = do g'' <- envAddFun l f i xs ft g'
-       gm  <- consStmts g'' body
-       maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
+consFun1 l g f xs body (i, ft) 
+  = envAddFun l f i xs ft g >>= (`consStmts` body)
+
+-- consFun1 l g' f xs body (i, ft) 
+--   = do g'' <- envAddFun l f i xs ft g'
+--        gm  <- consStmts g'' body
+--        maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
+
+
+consMeth1 l g f xs body (i, _, ft) = consFun1 l g f xs body (i,ft)
+
 
 envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g) 
                                    >>= (return . envAddReturn f t' ) 
@@ -196,7 +202,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 
 -- e1.f = e2
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
-  = do (_,g') <- consMethCall g l BISetProp e1 [e2] $ setPropTy (F.symbol f) l $ renv g 
+  = do (_,g') <- consCall g l BISetProp [e1,e2] $ setPropTy (F.symbol f) l $ renv g
        return  $ Just g'
    
 -- e
@@ -233,14 +239,9 @@ consStmt g (VarDeclStmt _ ds)
   = consSeq consVarDecl g ds
 
 -- return e 
-consStmt g (ReturnStmt l (Just e))
-  = do  (xe, g') <- consExpr g e
-        subType l g' (envFindTy xe g') (envFindReturn g')
-        return Nothing
-
--- return
-consStmt _ (ReturnStmt _ Nothing)
-  = return Nothing 
+consStmt g (ReturnStmt l eo)
+  = do  (_,g') <- consCall g l "return" (maybeToList eo) $ returnTy (envFindReturn g) (isJust eo)
+        return  $ Just g'
 
 -- throw e 
 consStmt g (ThrowStmt _ e)
@@ -262,7 +263,7 @@ consStmt g s@(FunctionStmt _ _ _ _)
 consStmt g (ClassStmt l i _ _ ce) 
   = do  d@(TD _ _ αs _ _) <- findSymOrDieM i
         g'                <- envAdds False [(Loc (srcPos l) α, tVar α) | α <- αs] g
-        cgWithThis           (TApp (TRef $ F.symbol i) (tVar <$> αs) fTop) $ consClassElts (srcPos l) g' d ce
+        cgWithThis           (TApp (TRef $ F.symbol i) (tVar <$> αs) fTop) $ consClassElts (srcPos l) g' i d ce
         g'                <- envAdds True [(i, TApp (TTyOf $ F.symbol i) [] fTop)] g
         return             $ Just g'
 
@@ -290,40 +291,42 @@ consVarDecl g (VarDecl l x Nothing)
 
 
 ------------------------------------------------------------------------------------
-consClassElts :: SourceSpan -> CGEnv -> TDef F.Reft -> [ClassElt AnnTypeR] -> CGM ()
+consClassElts :: PP a => SourceSpan -> CGEnv -> a -> TDef F.Reft -> [ClassElt AnnTypeR] -> CGM ()
 ------------------------------------------------------------------------------------
-consClassElts l g d ce 
+consClassElts l g i d ce 
    = do  δ <- getDef
          -- FIXME: 
          -- There are no casts here, so we need to align the 
          -- types before doing subtyping on them.
          safeExtends l g δ d 
-         mapM_ (consClassElt g) ce
+         mapM_ (consClassElt g i) ce
 
 
 ------------------------------------------------------------------------------------
-consClassElt :: CGEnv -> ClassElt AnnTypeR -> CGM ()
+consClassElt :: PP a => CGEnv -> a -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
-consClassElt g (Constructor l xs body) 
-  = do  t <- cgFunTys l i xs $ safeHead "consClassElt" [ t | ConsAnn t <- ann_fact l ]
-        -- Typecheck over all possible constructor signatures
-        mapM_ (consFun1 l g i xs body) t
+consClassElt g _ (Constructor l xs body) 
+  = case [ c | ConsAnn c  <- ann_fact l ] of
+      [ConsSig ft]        -> do t <-    cgFunTys l i xs ft
+                                mapM_ (consFun1 l g i xs body) t
+      _                   -> cgError l $ unsupportedNonSingleConsTy $ srcPos l
   where 
-        i = Id l "constructor"
+    i = Id l "constructor"
 
-consClassElt g (MemberVarDecl _ _ (VarDecl l x (Just e))) 
-  = case envFieldAnnot l of 
-      Just tf -> void $  consExprT g e (Just tf)
-      Nothing -> cgError l $ errorVarDeclAnnot (srcPos l) x
-
-consClassElt _ (MemberVarDecl _ _ (VarDecl l x Nothing))
-  = case envFieldAnnot l of 
-      Just _  -> return ()
-      Nothing -> cgError l $ errorVarDeclAnnot (srcPos l) x
+consClassElt g cid (MemberVarDecl _ _ (VarDecl l1 x eo))
+  = case [ f | FieldAnn f <- ann_fact l1 ] of 
+      []  ->  cgError l1    $ errorClassEltAnnot (srcPos l1) cid x
+      fs  ->  case eo of
+                Just e     -> void <$> consCall g l1 "field init" [e] $ ft fs
+                Nothing    -> return ()
+  where
+    ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> flds
   
-consClassElt g (MemberMethDecl l _ i xs body) 
-  = do  ts <- cgFunTys l i xs $ safeHead "consClassElt" [ t | MethAnn t <- ann_fact l]
-        mapM_ (consFun1 l g i xs body) ts
+consClassElt g cid (MemberMethDecl l _ i xs body) 
+  = case [ (m,t)         | MethAnn (MethSig _ m t)  <- ann_fact l ] of 
+      [mt]  -> do mts   <- cgMethTys l i mt
+                  mapM_    (consMeth1 l g i xs body) mts
+      _    -> cgError l  $ errorClassEltAnnot (srcPos l) cid i
 
 
 ------------------------------------------------------------------------------------
@@ -392,7 +395,7 @@ consExpr g (CallExpr l e@(SuperRef _) es)
        go [ t | ConsSig t <- elts ]
   where
     go [t] = consCall g l e es t
-    go _   = cgError l $ errorConsSigMissing (srcPos l) e   
+    go _   = cgError l $ unsupportedNonSingleConsTy $ srcPos l
 
 -- e.m(es)
 consExpr g (CallExpr l em@(DotRef _ e f) es)
@@ -410,14 +413,18 @@ consExpr g (CallExpr l e es)
        consCall g' l e es $ envFindTy x g'
 
 -- | e.f
-consExpr g (DotRef l e f)
+consExpr g ef@(DotRef l e f)
   = do  (x,g') <- consExpr g e
-        δ      <- getDef
-        consCallDotRef g' l e (vr x) (elt δ x g') []
+        δ      <- getDef        
+        case getElt δ f $ envFindTy  x g' of 
+          [FieldSig _ _ ft] -> consCall g l ef [vr x] $ mkTy l ft
+          _                 -> cgError l $ errorExtractNonFld (srcPos l) f e 
   where
     -- Add a VarRef so that e is not typechecked again
-    vr          = VarRef $ getAnnotation e
-    elt δ x g   = getElt δ f $ envFindTy x g
+    vr       = VarRef $ getAnnotation e
+    mkTy l t = mkFun ([α], [B (F.symbol "this") tα], t) 
+    α        = TV (F.symbol "α" ) (srcPos l)
+    tα       = TVar α fTop
 
 -- FIXME: e["f"]
 
@@ -485,7 +492,7 @@ getConstr l g s =
         do  z <- getPropM l "__constructor__" $ envFindTy s g
             case z of
               Just t  -> return t
-              Nothing -> cgError l $ errorConsSigMissing (srcPos l) s
+              Nothing -> cgError l $ unsupportedNonSingleConsTy $ srcPos l
   where
     -- Constructor's return type is void - instead return the class type
     -- FIXME: type parameters in returned type: inferred ... or provided !!! 
@@ -567,30 +574,18 @@ consCall g l fn es ft0
                                         , toType t      == toType lt ]
 
 
----------------------------------------------------------------------------------
-consMethCall :: PP a => CGEnv -> AnnTypeR -> a -> Expression AnnTypeR 
-                     -> [Expression AnnTypeR] -> RefType -> CGM (Id AnnTypeR, CGEnv)
----------------------------------------------------------------------------------
-consMethCall g l fn e es ft0 
-  = do  (x, g') <- consExpr g e 
-        cgWithThis (envFindTy x g') $ consCall g' l fn (ThisRef l : es) ft0
-  where  
-    subThis x t   = F.substa (sf (F.symbol "this") x) t
-    sf s1 s2 s    | s == s1   = s2
-                  | otherwise = s
-
-consCallDotRef g l fn v elts es 
+consCallDotRef g l fn rcvr elts es 
     -- Static call
     | all isStaticSig elts
-    = consCall g l fn (v:es) $ ft isStaticSig
+    = consCall g l fn es $ ft isStaticSig
 
     -- Virtual method call
     | all isMethodSig elts 
-    = consMethCall g l fn v es $ ft isMethodSig
+    = consCall g l fn (rcvr:es) $ ft isMethodSig
 
     -- Normal function call
     | all isFieldSig elts 
-    = consCall g l fn (v:es) $ ft isFieldSig
+    = consCall g l fn es $ ft isFieldSig
 
     | otherwise
     = cgError l $ unsupportedDotRef (srcPos l) fn
@@ -604,12 +599,12 @@ instantiate :: (PP a, PPRS F.Reft) =>
   AnnTypeR -> CGEnv -> a -> RefType -> CGM  ([TVar], [Bind F.Reft], RefType)
 ---------------------------------------------------------------------------------
 instantiate l g fn ft 
-  = do let (αs, t)      = bkAll ft
-       let ts           = envGetContextTypArgs g l αs
-       t'              <- freshTyInst l g αs ts t
-       maybe err return $ bkFun t' 
+  = do  t'   <- freshTyInst l g αs ts t
+        maybe err return $ bkFun t' 
     where 
-       err = cgError l $ errorNonFunction (srcPos l) fn ft  
+      (αs, t) = bkAll ft
+      ts      = envGetContextTypArgs g l αs
+      err     = cgError l $ errorNonFunction (srcPos l) fn ft  
 
 
 ---------------------------------------------------------------------------------

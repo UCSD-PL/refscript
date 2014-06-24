@@ -48,7 +48,7 @@ module Language.Nano.Liquid.CGMonad (
   , addAnnot
 
   -- * Function Types
-  , cgFunTys
+  , cgFunTys, cgMethTys
 
   -- * This
   , cgPeekThis, cgWithThis
@@ -386,7 +386,7 @@ envFindTy x g = fromMaybe err $ listToMaybe $ catMaybes [globalSpec, className, 
 
 envGlobAnnot _ x g = E.envFindTy x $ renv g
 
-envFieldAnnot l    =  listToMaybe [ t | FieldAnn (_,t) <- ann_fact l ]
+envFieldAnnot l    =  listToMaybe [ t | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
 
 
 ---------------------------------------------------------------------------------------
@@ -667,6 +667,15 @@ splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
         return $ cs ++ cs'
   | otherwise = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
 
+-- These need to be here due to the lack of a folding operation
+splitC (Sub g i t1@(TApp (TRef _) _ _) t2)
+  = do  δ <- getDef
+        splitC (Sub g i (flattenType δ t1) t2)
+
+splitC (Sub g i t1 t2@(TApp (TRef _) _ _))
+  = do  δ <- getDef
+        splitC (Sub g i t1 (flattenType δ t2))
+
 -- | TCons
 splitC (Sub g i t1@(TCons e1s μ1 _ ) t2@(TCons e2s μ2 _ ))
   = do  cs    <- bsplitC g i t1 t2
@@ -704,26 +713,21 @@ splitE g i _ _   (IndexSig _ _ t1) (IndexSig _ _ t2)
         cs'   <- splitC (Sub g i t2 t1)
         return $ cs ++ cs'
 
-splitE g i μ1 μ2 (FieldSig _ μf1 τ1 t1) (FieldSig _ μf2 τ2 t2)
-  = splitWithMut g i μ1 μ2 (μf1,τ1,t1) (μf2,τ2,t2)
+splitE g i μ1 μ2 (FieldSig _ μf1 t1) (FieldSig _ μf2 t2)
+  = splitWithMut g i μ1 μ2 (μf1,t1) (μf2,t2)
 
-splitE g i μ1 μ2 (MethSig _ μf1 τ1 t1) (MethSig _ μf2 τ2 t2)
-  = splitWithMut g i μ1 μ2 (μf1,τ1,t1) (μf2,τ2,t2)
+splitE g i μ1 μ2 (MethSig _ μf1 t1) (MethSig _ μf2 t2)
+  = splitWithMut g i μ1 μ2 (μf1,t1) (μf2,t2)
 
 splitE _ _ _ _ _ _ = return []
 
 
-splitWithMut g i _ μ2 (_,τ1,t1) (μf2,τ2,t2)
+splitWithMut g i _ μ2 (_,t1) (μf2,t2)
   | isImmutable m2 
-  = do  cs    <- splitMaybe g i τ2 τ1
-        cs'   <- splitC (Sub g i t1 t2)
-        return $ cs ++ cs'
+  = splitC (Sub g i t1 t2)
   | otherwise 
-  = do  cs1   <- splitMaybe g i τ2 τ1
-        cs2   <- splitMaybe g i τ1 τ2
-        cs3   <- splitC (Sub g i t1 t2)
-        cs4   <- splitC (Sub g i t2 t1)
-        return $ cs1 ++ cs2 ++ cs3 ++ cs4
+  = (++) <$> splitC (Sub g i t1 t2)
+         <*> splitC (Sub g i t2 t1)
   where
     m2 = combMut μ2 μf2
 
@@ -810,6 +814,26 @@ cgFunTys l f xs ft =
     Left e  -> cgError l e 
     Right a -> return a
 
+
+------------------------------------------------------------------------------
+cgMethTys :: (PP a) => AnnTypeR -> a -> (Mutability, RefType)
+                    -> CGM [(Int, Mutability, ([TVar], [RefType], RefType))]
+------------------------------------------------------------------------------
+cgMethTys l f (m,t) 
+   = zip3 [0..] (repeat m) <$> mapM (methTys l f) (bkAnd t)
+
+methTys l f ft0
+  = case remThisBinding ft0 of
+      Nothing         -> cgError l $ errorNonFunction (srcPos l) f ft0 
+      Just (vs,bs,t)  -> return    $ (vs,b_type <$> bs,t)
+
+--     case aux of
+--       Left  e -> cgError l e
+--       Right a -> return a 
+--   where 
+--     aux = do  fts <-  mapM (methTys l f xs) mfts
+--               return $ concat fts 
+-- 
 
 --------------------------------------------------------------------------------
 -- | `this`

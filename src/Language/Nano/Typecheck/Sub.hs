@@ -14,7 +14,6 @@ module Language.Nano.Typecheck.Sub (convert, isSubtype, safeExtends, Related (..
 
 import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>))
-import           Data.Default
 import qualified Data.HashSet                       as S
 import           Data.List                          (sort)
 import           Data.Maybe                         (maybeToList)
@@ -78,11 +77,11 @@ convert' :: (PPR r) => SourceSpan -> TDR r -> RType r -> RType r -> Either Error
 --------------------------------------------------------------------------------
 convert' _ _ t1 t2 | toType t1 == toType t2     = Right CDNo
 convert' _ _ t1 t2 | not (isTop t1) && isTop t2 = Right CDUp
-convert' l δ t1 t2 | any isUnion [t1,t2]        = convertUnion l δ t1 t2
-convert' l δ t1 t2 | all isTObj  [t1,t2]        = convertObj l δ t1 t2
-convert' l δ t1 t2 | all isTFun  [t1, t2]       = convertFun l δ t1 t2
-convert' l δ t1 t2 | any isTTyOf [t1, t2]       = convertTTyOf l δ t1 t2
-convert' l δ t1 t2                              = convertSimple l δ t1 t2 
+convert' l δ t1 t2 | any isUnion [t1,t2]        = convertUnion l  (fmap (const ()) δ) (toType t1) (toType t2)
+convert' l δ t1 t2 | all isTObj  [t1,t2]        = convertObj l    (fmap (const ()) δ) (toType t1) (toType t2)
+convert' l δ t1 t2 | all isTFun  [t1, t2]       = convertFun l    (fmap (const ()) δ) (toType t1) (toType t2)
+convert' l δ t1 t2 | any isTTyOf [t1, t2]       = convertTTyOf l  (fmap (const ()) δ) (toType t1) (toType t2)
+convert' l δ t1 t2                              = convertSimple l (fmap (const ()) δ) (toType t1) (toType t2)
 
 
 -- | `convertObj`
@@ -103,7 +102,7 @@ convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
       if deeps l δ μ1 μ2 b1s b2s then  
         Right CDUp
       else 
-       Left $ errorSimpleSubtype l t1 t2
+       Left $ errorSubtype l t1 t2
     else 
       Left $ errorIncompMutTy l t1 t2
 
@@ -143,12 +142,12 @@ convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
       in12       = s1s `S.intersection` s2s
       -- e1s'       = concat [ fromJust $ M.lookup s m1 | s <- S.toList in12 ]
  
-convertObj l δ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _)
+convertObj l δ t1@(TApp (TRef x1) t1s _) t2@(TApp (TRef x2) t2s _)
   | x1 == x2
     -- FIXME: Using covariance here !!!
   = if all (uncurry $ isSubtype δ) $ zip t1s t2s 
       then Right $ CDNo
-      else Left  $ errorSimpleSubtype l t1 t2
+      else Left  $ errorSubtype l t1 t2
   | otherwise
 
     -- Check type hierarchy
@@ -157,7 +156,7 @@ convertObj l δ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _)
       Just (_, t1s') -> 
           if all (uncurry $ isSubtype δ) $ zip t1s' t2s
             then Right CDUp 
-            else Left  $ errorSimpleSubtype l t1 t2
+            else Left  $ errorSubtype l t1 t2
       
       -- Structural subtyping
       Nothing       -> convertObj l δ (flattenType δ t1) (flattenType δ t2)
@@ -196,7 +195,7 @@ deep1 l δ μ1 μ2 e es = and $ map (subElt l δ μ1 μ2 e) es
 
 -- | Call Signatures 
 --    
---    ts<:ts  t<:t 
+--       ts<:ts          t<:t 
 --  ---------------------------------------
 --    { (ts)=>t } <: { (ts)=>t } 
 --
@@ -205,30 +204,29 @@ subElt _ δ _ _ (CallSig t1) (CallSig t2)
 
 -- | Field signatures
 --
---  { μ f[τ]: t } <: { μ f[τ]: t }
+--  { μ f: t } <: { μ f: t' }
 --
 -- NO :   { mutable  f: PosInt  } <: { immutable f: int }
 -- NO :   { mutable  f: PosInt  } <: { mutable   f: int }
 -- NO :   { readonly f: PosInt  } <: { readonly  f: int }
 --
-subElt l δ μ1 μ2 (FieldSig _ μf1 τ1 t1) (FieldSig _ μf2 τ2 t2)
+subElt _ δ μ1 μ2 (FieldSig _ μf1 t1) (FieldSig _ μf2 t2)
   | isSubtypeMut δ m1 m2 =
       if isImmutable m2 then
         -- 
-        --  t<:t  τ<:τ
+        --               t <: t'
         -- ------------------------------------------
-        --  { immut f[τ]: t } <: { immut f[τ]: t }
+        --  { immut f: t } <: { immut f: t' }
         --
-        and [ isSubtypeOpt l δ τ2 τ1, isSubtype δ t1 t2 ]
+        isSubtype δ t1 t2
       else 
         --  
         --  μ,μ =/= Immutable
-        --  t<:t  t<:t  τ<:τ  τ<:τ
+        --  t<:t  t<:t
         -- ----------------------------------
-        --  { μ f[τ]: t } <: { μ f[τ]: t }
+        --  { μ f: t } <: { μ f: t }
         --
-        and [ isSubtypeOpt l δ τ1 τ2, isSubtype δ t1 t2,
-              isSubtypeOpt l δ τ2 τ1, isSubtype δ t2 t1 ]
+        and [ isSubtype δ t1 t2, isSubtype δ t2 t1 ]
 
   | otherwise = False 
   where
@@ -237,8 +235,8 @@ subElt l δ μ1 μ2 (FieldSig _ μf1 τ1 t1) (FieldSig _ μf2 τ2 t2)
 
 -- | Methods
 -- 
-subElt l δ _ _ (MethSig _ _ τ1 t1) (MethSig _ _ τ2 t2) =
-  and [ isSubtypeOpt l δ τ2 τ1, isSubtype δ t1 t2 ]
+subElt _ δ _ _ (MethSig _ _ t1) (MethSig _ _ t2) =
+  isSubtype δ t1 t2
   
 
 -- | Constructor signatures
@@ -273,17 +271,6 @@ subElt _ δ μ1 μ2 (StatSig _ μf1 t1) (StatSig _ μf2 t2)
 subElt _ _ _ _ _ _ = False
 
 
-isSubtypeOpt _ δ (Just t1) (Just t2) = isSubtype δ t2 t1
-isSubtypeOpt _ δ Nothing   (Just t2) = isSubtype δ objT t2
-  where
-    objT      :: PPR r => RType r 
-    objT       = TCons [] def fTop 
-isSubtypeOpt _ δ (Just t1) Nothing   = isSubtype δ t1 objT
-  where
-    objT      :: PPR r => RType r 
-    objT       = TCons [] def fTop 
-isSubtypeOpt _ _ _         _         = True
-
 
 -- | `convertFun`
 --------------------------------------------------------------------------------
@@ -311,7 +298,7 @@ convertFun l δ t1@(TAnd t1s) t2 =
   if or $ f <$> t1s then Right CDUp
                     else Left  $ errorFuncSubtype l t1 t2
  
-convertFun _ _ t1 t2 = error $ "convertFun: no other cases supported " ++ ppshow t1 ++ " with " ++ ppshow t2 
+convertFun l _ t1 t2 = Left $ unsupportedConvFun l t1 t2
 
 
 -- | `convertTTyOf`
@@ -323,7 +310,7 @@ convertTTyOf l δ t1@(TApp (TTyOf x1) _ _) t2@(TApp (TTyOf x2) _ _)
   = Right CDNo  
   | x1 `elem` (lineage δ $ findSymOrDie x2 δ)
   = Right CDUp
-  | otherwise     = Left  $ errorSimpleSubtype l t1 t2
+  | otherwise     = Left  $ errorSubtype l t1 t2
 
 convertTTyOf l δ t1@(TApp (TTyOf _) _ _) t2 
   = convertObj l δ (flattenType δ t1) t2
@@ -342,7 +329,7 @@ convertSimple l _ t1 t2
   | t1 == t2      = Right CDNo
   -- TOGGLE dead-code
 --   | otherwise = return $ CDead t2
-  | otherwise     = Left  $ errorSimpleSubtype l t1 t2
+  | otherwise     = Left  $ errorSubtype l t1 t2
 
 
 -- | `convertUnion`
@@ -396,27 +383,12 @@ instance Related RType where
   related δ t t' = isSubtype δ t t' || isSubtype δ t' t
   
 instance Related TElt where
-  related δ (CallSig t1)         (CallSig t2)         = related δ t1 t2
-  related δ (ConsSig t1)         (ConsSig t2)         = related δ t1 t2
-  related δ (IndexSig _ _ t1)    (IndexSig _ _ t2)    = related δ t1 t2
-  related δ (StatSig _ _ t1)     (StatSig _ _ t2)     = related δ t1 t2
-  related δ (FieldSig _ _ τ1 t1) (FieldSig _ _ τ2 t2) = and [rel τ1 τ2, related δ t1 t2]
+  related δ (CallSig t1)      (CallSig t2)      = related δ t1 t2
+  related δ (ConsSig t1)      (ConsSig t2)      = related δ t1 t2
+  related δ (IndexSig _ _ t1) (IndexSig _ _ t2) = related δ t1 t2
+  related δ (StatSig _ _ t1)  (StatSig _ _ t2)  = related δ t1 t2
+  related δ (FieldSig _ _ t1) (FieldSig _ _ t2) = related δ t1 t2
   -- Mutability should have been checked earlier
-    where
-      tdef = TCons [] def fTop 
-      rel (Just t1) (Just t2) = related δ t1 t2
-      rel Nothing   (Just t2) = related δ tdef t2
-      rel (Just t1) Nothing   = related δ t1 tdef
-      rel Nothing   Nothing   = True
-
-  related δ (MethSig  _ _ τ1 t1) (MethSig  _ _ τ2 t2) = and [rel τ1 τ2,related δ t1 t2]
-    where
-      tdef = TCons [] def fTop 
-      rel (Just t1) (Just t2) = related δ t1 t2
-      rel Nothing   (Just t2) = related δ tdef t2
-      rel (Just t1) Nothing   = related δ t1 tdef
-      rel Nothing   Nothing   = True
-
-  related _ _                       _                       = False
-    
+  related δ (MethSig  _ _ t1) (MethSig  _ _ t2) = related δ t1 t2
+  related _ _                       _           = False 
  

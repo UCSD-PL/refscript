@@ -53,7 +53,9 @@ instance PP Error where
 ---------------------------------------------------------------------------
 unimplemented l s x           = mkErr l $ printf "Unimplemented %s: %s" (ppshow s) (ppshow x)
 unsupportedConsTy l t         = mkErr l $ printf "Unsupported constructor type %s" (ppshow t)
+unsupportedNonSingleConsTy l  = mkErr l $ printf "Only a single constructor signature is supported."
 unsupportedDotRef l t         = mkErr l $ printf "Unsupported dot reference %s" (ppshow t)
+unsupportedConvFun l t1 t2    = mkErr l $ printf "Unsupported case in convertFun:\n%s\nvs\n%s" (ppshow t1) (ppshow t2)
 
 bug' l s                      = err   l $ "BUG: " ++ s 
 bug l s                       = mkErr l $ "BUG: " ++ s 
@@ -64,7 +66,8 @@ bugUnknownAlias l x           = mkErr l $ printf "Unknown definition for alias %
 bugUnboundPhiVar l x          = mkErr l $ printf "Phi Variable %s is unbound" (ppshow x)
 bugUnboundVariable l   x      = mkErr l $ printf "Variable '%s' is unbound" (ppshow x)
 bugMissingTypeArgs l          = mkErr l $ printf "Missing Type Arguments at %s" (ppshow l)
-bugUnknown l thing x          = mkErr l $ printf "Cannot find %s %s" thing (ppshow x) 
+bugUnknown l thing x          = mkErr l $ printf "Cannot find '%s' in '%s'" thing (ppshow x) 
+bugCallTo l x es              = mkErr l $ printf "Bug at call to '%s' with args '%s'" (ppshow x) (ppshow es)
 
 
 ---------------------------------------------------------------------------
@@ -91,35 +94,35 @@ errorRigidUnify l a t         = mkErr l $ printf "Cannot unify rigid variable '%
 errorOccursCheck l a t        = mkErr l $ printf "Occurs check fails: %s in %s" (ppshow a) (ppshow t)
 errorFreeTyVar l t            = mkErr l $ printf "Type not fully instantiated: %s" (ppshow t)
 errorUnification l t t'       = mkErr l $ printf "Cannot unify types: %s and %s" (ppshow t) (ppshow t')
-errorMergeSubst l t t'        = mkErr l $ printf "Cannot unify types: %s and %s" (ppshow t) (ppshow t')
+errorMergeSubst l t t'        = mkErr l $ printf "At merging substitutions cannot unify types: %s and %s" (ppshow t) (ppshow t')
 errorUniqueTypeParams l       = mkErr l $ printf "Only unique type paramteres are allowed"
 
 -- Subtyping
-errorSubType l m t t'         = mkErr l $ printf "%s -- Type %s is not a subtype of %s" m (ppshow t) (ppshow t')
 errorDownCast l t1 t2         = mkErr l $ printf "Downcast: %s => %s" (ppshow t1) (ppshow t2)
 errorClassExtends l x y s v w = mkErr l $ printf "Type '%s' cannot extend type '%s'.\nProperty '%s' has type '%s' in '%s', and type '%s' in '%s'."   
                                                    (ppshow x) (ppshow y) (ppshow s) (ppshow v) (ppshow x) (ppshow w) (ppshow y)
 errorIncompMutTy l t t'       = mkErr l $ printf "Types '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
 errorIncompMutElt l t t'      = mkErr l $ printf "Elements '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
 errorConstNonFunc l x         = mkErr l $ printf "Constructor for class '%s' does not have a function type." (ppshow x)
+errorSubtype l t t'           = mkErr l $ printf "Type \n%s\n is not a subtype of\n%s" (ppshow t) (ppshow t')
 errorUnionSubtype l t t'      = mkErr l $ printf "Union type: %s is not a subtype of %s" (ppshow t) (ppshow t')
-errorSimpleSubtype l t t'     = mkErr l $ printf "Type '%s' is not a subtype of '%s'." (ppshow t) (ppshow t')
 errorObjSubtype l t t'        = mkErr l $ printf "Object type: %s is not a subtype of %s" (ppshow t) (ppshow t')
 errorFuncSubtype l t t'       = mkErr l $ printf "Function type: %s is not a subtype of %s" (ppshow t) (ppshow t')
 
 -- Typechecking
-errorCallNotSup l fn es ts    = mkErr l $ printf "Cannot call '%s' with argument(s): %s of type '%s'" (ppshow fn) (ppshow es) (ppshow ts)
+errorCallNotSup l fn es ts    = mkErr l $ printf "Cannot call '%s' with argument(s): %s of type %s" (ppshow fn) (ppshow es) (ppshow ts)
 errorCallMatch l fn ts        = mkErr l $ printf "Could not match call to '%s' to a particular signature. Argument(s) with types '%s' are invalid." (ppshow fn) (ppshow ts)
 errorCallReceiver l e f       = mkErr l $ printf "Could not call method '%s' of '%s'." (ppshow f) (ppshow e)
 errorTypeArgsNum l n p q      = mkErr l $ printf "Type %s expects %s arguments but %s were provided" (ppshow n) (ppshow p) (ppshow q)
 errorClassMissing l x         = mkErr l $ printf "Cannot call 'new' on non-existing class '%s'." (ppshow x)
-errorClEltAnMissing l c s     = mkErr l $ printf "Class '%s' is missing an annotation for element '%s'." (ppshow c) (ppshow s)
+errorClassEltAnnot l c s      = mkErr l $ printf "Class '%s' needs to have a single annotation for element '%s'." (ppshow c) (ppshow s)
 errorUnboundIdEnv l x t       = mkErr l $ printf "ZOGBERT Identifier '%s' unbound in %s" (ppshow x) (ppshow t)
 errorUnboundType l x          = mkErr l $ printf "Type identifier '%s' unbound" (ppshow x)
 errorUnboundId l x            = mkErr l $ printf "Identifier '%s' unbound" (ppshow x) 
 errorEnvJoin l x t1 t2        = mkErr l $ printf "Variable '%s' has different types ('%s' and '%s') when joining environments." (ppshow x) (ppshow t1) (ppshow t2)
-errorArgMismatch l            = mkErr l $ printf "Mismatch in Number of Args in Call" 
+errorArgMismatch l            = mkErr l $ printf "Mismatch in Number of arguments in signature" 
 errorArgName l x y            = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
+errorExtractNonFld l f x      = mkErr l $ printf "Cannot extract non-field '%s' from object '%s'" (ppshow f) (ppshow x)
 
 
 ---------------------------------------------------------------------------
@@ -137,8 +140,7 @@ errorMultipleCasts l cs       = mkErr l $ render $ text "Multiple Casts: " <+> (
 -- | Pervasive (typechecking TC and Liquid)
 ---------------------------------------------------------------------------
 errorSuper l                  = mkErr l $ printf "Cannot resolve reference to super." 
-errorMissFlds l t1 t2 x       = mkErr l $ printf "Cannot convert: %s to %s. Type %s is missing fields %s." 
-errorConsSigMissing l x       = mkErr l $ printf "Object '%s' does not have exactly one constructor signature." (ppshow x)
+errorMissFlds l t1 t2 x       = mkErr l $ printf "Cannot convert: %s to %s. Type %s is missing fields %s." (ppshow t1) (ppshow t2) (ppshow t1) (ppshow x) 
 errorVarDeclAnnot l x         = mkErr l $ printf "Variable definition of '%s' with neither type annotation nor initialization is not supported." (ppshow x)
 errorMissingAnnot l s         = mkErr l $ printf "Missing type annotation for %s" s
 errorNonFunction l f t        = mkErr l $ printf "Non-function type: %s :: %s " (ppshow f) (ppshow t)

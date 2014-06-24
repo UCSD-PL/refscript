@@ -14,9 +14,8 @@ module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck, testFile) where
 import           Control.Applicative                ((<$>))
 import           Control.Monad                
 
-import           Data.Default
 import qualified Data.HashMap.Strict                as M 
-import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe, fromJust)
+import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe, fromJust, maybeToList, isJust)
 import           Data.List                          (find)
 import           Data.Generics                   
 
@@ -242,19 +241,32 @@ tcFun :: PPR r =>
 -------------------------------------------------------------------------------
 tcFun γ (FunctionStmt l f xs body)
   = case tcEnvFindTy f γ of
-      Nothing -> die $ errorMissingSpec (srcPos l) f
-      Just ft -> do body' <- foldM (tcFun1 γ l f xs) body =<< tcFunTys l f xs ft
-                    return   (FunctionStmt l f xs body', Just γ) 
+      Nothing   -> die $ errorMissingSpec (srcPos l) f
+      Just ft   -> do ts    <- tcFunTys l f xs ft
+                      body' <- foldM (tcFun1 γ l f xs) body ts
+                      return $ (FunctionStmt l f xs body', Just γ) 
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
 -------------------------------------------------------------------------------
 tcFun1 :: (PPR r, IsLocated b, IsLocated l, IsLocated a, CallSite t) 
-       => TCEnv r -> a -> l -> [Id b] -> [Statement (AnnSSA r)] -> 
-            (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
+       => TCEnv r -> a -> l -> [Id b] -> [Statement (AnnSSA r)] 
+       -> (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
 tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l body t
   where 
     γ'                              = envAddFun f i αs xs ts t γ 
+
+
+--
+-- FIXME: Check for mutability (the second part in the triplet)
+--        If this argument is "immutable" We will have to check
+--        statements/expressions that operate on "this" and make sure that they
+--        do not mutate it.
+--
+--        For the moment it just does a regular function check
+--        
+tcMeth1 γ l f xs body (i, _,ft) = tcFun1 γ l f xs body (i, ft)
+
 
 tcFunBody γ l body t = tcStmts γ body >>= go
   where go (_, Just _) | t /= tVoid
@@ -290,25 +302,46 @@ tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
 tcClassElt :: PPR r 
           => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
--- FIXME: check for void return type for constructor
-tcClassElt γ cid (Constructor l xs body) 
-  = case [ t | ConsAnn t  <- ann_fact l ] of
-      [  ]  -> tcError    $ errorClEltAnMissing (srcPos l) cid "constructor"
-      [ft]  -> Constructor l xs <$> (foldM (tcFun1 γ l id xs) body =<< tcFunTys l id xs ft)
-      _     -> error      $ "[tcClassElt] Multiple-type constructor: " ++ ppshow l
-  where id   = Id l "constructor"
+--
+-- FIXME: 1. Check for void return type for constructor
+--        2. Use tcMeth1 instead of tcFun1
+--
+tcClassElt γ _ (Constructor l xs body) 
+  = case [ c | ConsAnn c  <- ann_fact l ] of
+      [ConsSig ft]  -> do t        <- tcFunTys l i xs ft
+                          body'    <- foldM (tcFun1 γ l i xs) body t
+                          return    $ Constructor l xs body'
+      _             -> tcError $ unsupportedNonSingleConsTy $ srcPos l
+  where i   = Id l "constructor"
 
-tcClassElt γ cid (MemberVarDecl _ s v@(VarDecl l x _))
-  = case [ t | FieldAnn (_,t)  <- ann_fact l ] of 
-      [ ]  -> tcError    $ errorClEltAnMissing (srcPos l) cid x
-      [_]  -> MemberVarDecl l s <$> (fst <$> tcVarDecl γ v)
-      _    -> error      $ "tcClassEltType:multi-type variable: " ++ ppshow l
+-- Using a function call to "init" to keep track of overloading on field initialization
+--
+-- FIXME: should the rest of the fields be in scope ???
+--
+tcClassElt γ cid (MemberVarDecl l s (VarDecl l1 x eo))
+  = case [ f | FieldAnn f <- ann_fact l1 ] of 
+      []  ->  tcError       $ errorClassEltAnnot (srcPos l1) cid x
+      fs  ->  case eo of
+                Just e     -> do ([e'],_)  <- tcNormalCall γ l1 "field init" [e] $ ft fs
+                                 return     $ (MemberVarDecl l s (VarDecl l1 x $ Just e'))
+                Nothing    -> return        $ (MemberVarDecl l s (VarDecl l1 x Nothing))
+  where
+    ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> flds
 
-tcClassElt γ cid (MemberMethDecl l s i xs body) = 
-  case [ t | MethAnn t  <- ann_fact l ] of 
-    [  ]  -> tcError    $ errorClEltAnMissing (srcPos l) cid i
-    [ft]  -> MemberMethDecl l s i xs <$> (foldM (tcFun1 γ l i xs) body =<< tcFunTys l i xs ft)
-    _     -> error      $ "tcClassEltType:multi-type method: " ++ ppshow l
+--
+--  Currently we allow a single type annotation that can be an overloaded
+--  function though. Proceed as follows:
+--    1. Get all overloads
+--    2. Check the body for each one of them
+--
+--  FIXME: check for mutability (purity)
+--
+tcClassElt γ cid (MemberMethDecl l s i xs body) 
+  = case [ (m, t)         | MethAnn (MethSig _ m t)  <- ann_fact l ] of 
+      [mt]  -> do mts    <- tcMethTys l i mt
+                  body'  <- foldM (tcMeth1 γ l i xs) body mts
+                  return  $ MemberMethDecl l s i xs body'
+      _    -> tcError     $ errorClassEltAnnot (srcPos l) cid i
 
 
 --------------------------------------------------------------------------------
@@ -353,7 +386,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 
 -- e1.f = e2
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
-  = do z             <- tcMethCall γ l BISetProp e1 [e2] $ setPropTy (F.symbol f) l $ tce_env γ
+  = do z             <- tcNormalCall γ l BISetProp [e1,e2] $ setPropTy (F.symbol f) l $ tce_env γ
        case z of 
          ([e1',e2'], _)
                      -> return (ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 e1' f) e2', Just γ)
@@ -385,15 +418,15 @@ tcStmt γ (IfStmt l e s1 s2)
 
 -- while c { b } 
 tcStmt γ (WhileStmt l c b) 
-  = do (c', t)   <- tcExpr γ c
+  = do (c', t)      <- tcExpr γ c
        unifyTypeM (srcPos l) t tBool
-       (b', γl)  <- tcStmt γ' b
+       (b', γl)     <- tcStmt γ' b
 
-       γout      <- envLoopJoin l γ γl
+       γout         <- envLoopJoin l γ γl
        return       (WhileStmt l c' b', γout)  
     where 
-       xts'       = [(mkNextId x, tcEnvFindTyOrDie l x γ) | x <- phiVarsAnnot l]
-       γ'         = tcEnvAdds xts' γ
+       xts'          = [(mkNextId x, tcEnvFindTyOrDie l x γ) | x <- phiVarsAnnot l]
+       γ'            = tcEnvAdds xts' γ
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt l ds)
@@ -402,18 +435,8 @@ tcStmt γ (VarDeclStmt l ds)
 
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
-  = do  (eo', t)    <- case eo of 
-                         Nothing -> return (Nothing, tVoid)
-                         Just e  -> mapFst Just <$>  tcExpr γ e
-        let rt       = tcEnvFindReturn γ 
-        θ           <- unifyTypeM (srcPos l) t rt
-        -- Apply the substitution
-        let (rt',t') = mapPair (apply θ) (rt,t)
-        -- Subtype the arguments against the formals and cast using subtyping result
-        eo''         <- case eo' of
-                         Nothing -> return Nothing
-                         Just e' -> Just <$> castM (tce_ctx γ) e' t' rt'
-        return        $ (ReturnStmt l eo'', Nothing)
+  = do  (es',_) <- tcNormalCall γ l "return" (maybeToList eo) $ returnTy (tcEnvFindReturn γ) (isJust eo)
+        return   $ (ReturnStmt l $ listToMaybe es', Nothing)
 
 -- throw e 
 tcStmt γ (ThrowStmt l e) 
@@ -424,19 +447,21 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
   = tcFun γ s
 
 -- class A<S...> [extends B<T...>] [implements I,J,...] { ... }
-tcStmt γ c@(ClassStmt l i e is ce) = do  
-    -- * Compute / get the class type 
-    TD _ _ αs _ _ <- classFromStmt c
-    -- * Add the type vars in the environment
-    let γ'        = tcEnvAdds (tyBinds αs) γ
-    -- * Compute type for "this" and add that to the env as well
-    --   - This type uses the classes type variables as type parameters.
-    --   - For the moment this type does not have a refinement. Maybe use
-    --     invariants to add some.
-    let thisT     = TApp (TRef $ F.symbol i) (tVars αs) fTop  
-    -- * Typecheck the class elements in this extended environment.
-    ce'          <- tcInScope γ' $ tcWithThis thisT $ mapM (tcClassElt γ' i) ce
-    return          (ClassStmt l i e is ce', Just γ)
+--
+-- 1. Compute / get the class type 
+-- 2. Add the type vars in the environment
+-- 3. Compute type for "this" and add that to the env as well
+--    - This type uses the classes type variables as type parameters.
+--    - For the moment this type does not have a refinement. Maybe use
+--      invariants to add some.
+-- 4. Typecheck the class elements in this extended environment.
+tcStmt γ c@(ClassStmt l i e is ce) 
+  = do  TD _ _ αs _ _ <- classFromStmt c                          -- (1)
+        let γ'        = tcEnvAdds (tyBinds αs) γ                  -- (2)
+        let thisT     = TApp (TRef $ F.symbol i) (tVars αs) fTop  -- (3)
+        ce'          <- tcInScope γ' $ tcWithThis thisT 
+                                     $ mapM (tcClassElt γ' i) ce  -- (4)
+        return          (ClassStmt l i e is ce', Just γ)
   where
     tVars   αs    = [ tVar   α | α <- αs ] 
     tyBinds αs    = [(tVarId α, tVar α) | α <- αs]
@@ -453,19 +478,20 @@ tcStmt _ s
 ---------------------------------------------------------------------------------------
 classFromStmt :: PPR r => Statement (AnnSSA r) -> TCM r (TDef r)
 ---------------------------------------------------------------------------------------
-classFromStmt (ClassStmt l id _ _ cs) =
-  do  δ <- getDef
-      case findSym sym δ of
-        Just d  -> return d   -- if already computed
-        Nothing -> do let elts      = addConstr δ $ classEltType <$> cs
-                      let freshD    = TD True (fmap ann id) vs p elts
-                      mapM_ tcError $ safeExtends (srcPos l) δ freshD
-                      setDef        $ addSym sym freshD δ
-                      return        $ freshD
+classFromStmt (ClassStmt l id _ _ cs) 
+  = do  δ <- getDef
+        case findSym sym δ of
+          Just d  -> return d   -- if already computed
+          Nothing -> do let elts      = addConstr δ $ concatMap (classEltType tClass) cs
+                        let freshD    = TD True (fmap ann id) vs p elts
+                        mapM_ tcError $ safeExtends (srcPos l) δ freshD
+                        setDef        $ addSym sym freshD δ
+                        return        $ freshD
   where
     sym      = F.symbol id
     (vs, p)  = classAnnot l
-
+    tvs v    = TVar v fTop
+    tClass   = TApp (TRef $ F.symbol id) (tvs <$> vs) fTop
     addConstr δ es = 
       case [ t | ConsSig t <- es ] of
         -- Constructor is defined in class
@@ -501,27 +527,17 @@ classAnnot l = safeHead "classAnnot" [ t | ClassAnn t <- ann_fact l ]
 
 
 ---------------------------------------------------------------------------------------
-classEltType :: PPR r => ClassElt (AnnSSA r) -> TElt r
+classEltType :: PPR r => RType r -> ClassElt (AnnSSA r) -> [TElt r]
 ---------------------------------------------------------------------------------------
-classEltType (Constructor l _ _ ) = ConsSig ann
-  where 
-    ann = safeHead "BUG:classEltType-1" [ κ | ConsAnn κ <- ann_fact l ]
+classEltType _ (Constructor l _ _ ) = [ c | ConsAnn c   <- ann_fact l ]
 
--- FIXME: add mutability modifier -- by default it's true here.
+classEltType _ (MemberVarDecl _ static (VarDecl l _ _)) 
+    | static    = [ s | FieldAnn s@(StatSig _ _ _)  <- ann_fact l ]
+    | otherwise = [ f | FieldAnn f@(FieldSig _ _ _) <- ann_fact l ]
 
-classEltType (MemberVarDecl _ s (VarDecl l v _)) 
-    | s         = StatSig (F.symbol v) def t
-    | otherwise = FieldSig (F.symbol v) def Nothing t
-  where 
-    (_,t) = safeHead "classEltType-2" [ φ | FieldAnn φ <- ann_fact l ]
-
--- FIXME: add "this" as first parameter
-
-classEltType (MemberMethDecl  l s m _ _ )
-    | s         = StatSig (F.symbol m) def t
-    | otherwise = MethSig (F.symbol m) def Nothing t
-  where 
-    t = safeHead "BUG:classEltType-3" [ μ | MethAnn μ <- ann_fact l ]
+classEltType t (MemberMethDecl l static _ _ _ )
+    | static    = [ s                  | MethAnn s@(StatSig _ _ _)  <- ann_fact l ]
+    | otherwise = [ setThisBinding m t | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
 
 
 -- Variable declarations should have the type annotations available locally
@@ -690,12 +706,20 @@ tcCall γ (NewExpr l (VarRef lv i) es)
 
 -- | e.f 
 tcCall γ ef@(DotRef l e f)
-  = do z              <- runFailM $ tcExpr γ e
-       case z of
-         Right (_, t) -> do δ           <- getDef 
-                            (ef', _, t) <- tcCallDotRef γ (getElt δ f t) l ef []
-                            return       $ (ef',t)
-         Left err     -> tcError err
+  = do  z              <- runFailM $ tcExpr γ e
+        case z of
+          Right (_, t) -> 
+            do  δ      <- getDef 
+                case getElt δ f t of 
+                  [FieldSig _ _ ft] -> do ([e'], t') <- tcNormalCall γ l ef [e] $ mkTy l ft
+                                          return      $ (DotRef l e' f, t')
+                  _                 -> tcError $ errorExtractNonFld (srcPos l) f e 
+          Left err     -> tcError err
+  where
+    mkTy l t = mkFun ([α], [B (F.symbol "this") tα], t) 
+    α        = TV (F.symbol "α" ) (srcPos l)
+    tα       = TVar α fTop
+
          
 -- | `super(e1,...,en)`
 --   TSC will already have checked that `super` is only called whithin the constructor.
@@ -706,7 +730,7 @@ tcCall γ (CallExpr l e@(SuperRef _)  es)
        go [t]                  = 
           do (es', t')        <- tcNormalCall γ l "constructor" es t
              return            $ (CallExpr l e es', t')
-       go _                    = tcError $ errorConsSigMissing (srcPos l) e   
+       go _                    = error "tcError $ errorConsSigMissing (srcPos l) e"
    
 -- | `e(es)`
 tcCall γ (CallExpr l em@(DotRef _ e f) es)
@@ -729,35 +753,27 @@ tcCall _ e = tcError $ unimplemented (srcPos e) "tcCall" e
 tcCallDotRef γ elts l em@(DotRef l1 e f) es 
     -- Static call
     | all isStaticSig elts
-    = do  (e':es', t)    <- tcNormalCall γ l em (e:es) $ ft isStaticSig
-          return          $ (DotRef l1 e' f, es', t)
+    = do  (e' , _ )   <- tcExpr γ e       -- TC `e` separately
+          (es', t')   <- tcNormalCall γ l em es $ {- tracePP ("statsig " ++ ppshow (srcPos l)) $-} ft isStaticSig
+          return       $ (DotRef l1 e' f, es', t')
 
     -- Virtual method call
     | all isMethodSig elts 
-    = do  (e':es', t)    <- tcMethCall γ l em e es $ ft isMethodSig
-          return          $ (DotRef l1 e' f, es', t)
+    = do  (e':es', t) <- tcNormalCall γ l em (e:es) $ {- tracePP ("methSig " ++ ppshow (srcPos l)) $ -} ft isMethodSig
+          return       $ (DotRef l1 e' f, es', t)
 
     -- Normal function call
-    | all isFieldSig elts 
-    = do  (e':es', t)    <- tcNormalCall γ l em (e:es) $ ft isFieldSig
-          return          $ (DotRef l1 e' f, es', t)
+    | all isFieldSig elts
+    = do  (e' , _ )   <- tcExpr γ e       -- TC `e` separately
+          (es', t')   <- tcNormalCall γ l em es $ {- tracePP ("fieldSig " ++ ppshow (srcPos l)) $ -} ft isFieldSig
+          return       $ (DotRef l1 e' f, es', t')
+
     | otherwise
     = tcError $ unsupportedDotRef (srcPos l) em
   where
     ft f = mkAnd $ catMaybes $ mkEltFunTy <$> filter f elts
 
 tcCallDotRef _ _ _ _ _ = error "tcCallDotRef-unsupported"
-
-
-----------------------------------------------------------------------------------
-tcMethCall :: (PP a, PPR r) => TCEnv r -> AnnSSA r -> a -> ExprSSAR r -> 
-                       [ExprSSAR r] -> RType r -> TCM r ([ExprSSAR r], RType r)
-----------------------------------------------------------------------------------
-tcMethCall γ l fn e es tm 
-  = do z                   <- runFailM $ tcExpr γ e
-       case z of 
-         Right (_ , t)     -> tcWithThis t $ tcNormalCall γ l fn (e:es) tm
-         Left err          -> tcError err
 
 
 
@@ -783,7 +799,7 @@ getConstr l γ s =
                      Just t  -> do p <- getPropM False l "__constructor__" t
                                    case p of 
                                      Just t  -> return t
-                                     Nothing -> tcError $ errorConsSigMissing (srcPos l) s
+                                     Nothing -> error "tcError $ errorConsSigMissing (srcPos l) s"
                      Nothing -> tcError $ errorClassMissing (srcPos l) s
   where
     -- Constructor's return type is void - instead return the class type
@@ -813,11 +829,11 @@ tcNormalCall γ l fn es ft0
 --     subtype check (this is what tcCallCaseTry does).
 resolveOverload γ l fn es ts ft 
   = do δ        <- getDef
-       let sigs = catMaybes (bkFun <$> getCallable δ ft)
+       let sigs  = catMaybes (bkFun <$> getCallable δ ft)
        case [ mkFun (vs, τs,τ) | (vs, τs, τ) <- sigs, length τs == length es ] of
          [t]    -> do θ     <- getSubst 
                       return $ Just (θ,t)
-         fts    -> do θs    <- mapM (tcCallCaseTry γ l fn ts) fts
+         fts    -> do θs    <- mapM (\t -> tcCallCaseTry γ l fn ts t) fts
                       return $ listToMaybe [ (θ, apply θ t) | (t, Just θ) <- zip fts θs ]
 
 
@@ -839,9 +855,7 @@ tcCallCaseTry γ l fn ts ft = runMaybeM $
   do (_,ibs,_) <- instantiate l (tce_ctx γ) fn ft
      let its    = b_type <$> ibs
      θ'        <- unifyTypesM (ann l) "tcCallCaseTryAux" ts its
-     let t1     = apply θ' ts
-     let t2     = apply θ' its
-     zipWithM_    (subtypeM (ann l)) t1 t2
+     zipWithM_    (subtypeM (ann l)) (apply θ' ts) (apply θ' its)
      return     $ θ'
 
 
@@ -930,16 +944,17 @@ forceCheck x γ = elem x $ fst <$> envToList (tce_env γ)
 scrapeVarDecl :: VarDecl (AnnSSA r) -> TCM r [RType r]
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _) = 
-  mapM (sanity $ srcPos l) $ [ t | VarAnn t <- ann_fact l ] ++ [ t | FieldAnn (_,t) <- ann_fact l ]
+  mapM (sanity $ srcPos l) $ [ t | VarAnn                 t  <- ann_fact l ] 
+                          ++ [ t | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
 
-sanity l t@(TApp (TRef i) ts _) = 
-  do δ <- getDef 
-     case findSym i δ of
-       Just (TD _ _ αs _ _) 
-         | length αs == length ts -> return t 
-       Just (TD _ n αs _ _) 
-         | otherwise -> tcError $ errorTypeArgsNum l n (length αs) (length ts)
-       Nothing -> error $ "BUG: Id: " ++ ppshow i ++ " was not found in env at " ++ ppshow (srcPos l) 
+sanity l t@(TApp (TRef i) ts _) 
+  = do  δ       <- getDef 
+        case findSym i δ of
+          Just (TD _ _ αs _ _) | length αs == length ts -> return  $ t 
+          Just (TD _ n αs _ _) | otherwise              -> tcError $ errorTypeArgsNum l n (length αs) (length ts)
+          Nothing                                       -> error   $ "BUG: Id: " ++ ppshow i 
+                                                                  ++ " was not found in env at " 
+                                                                  ++ ppshow (srcPos l) 
 sanity _ t = return t
 
 

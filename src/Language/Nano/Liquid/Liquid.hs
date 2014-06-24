@@ -313,20 +313,25 @@ consClassElt g _ (Constructor l xs body)
   where 
     i = Id l "constructor"
 
-consClassElt g cid (MemberVarDecl _ _ (VarDecl l1 x eo))
-  = case [ f | FieldAnn f <- ann_fact l1 ] of 
+consClassElt g cid (MemberVarDecl _ static (VarDecl l1 x eo))
+  = case anns of 
       []  ->  cgError l1    $ errorClassEltAnnot (srcPos l1) cid x
       fs  ->  case eo of
                 Just e     -> void <$> consCall g l1 "field init" [e] $ ft fs
                 Nothing    -> return ()
   where
+    anns | static    = [ s | StatAnn  s <- ann_fact l1 ]
+         | otherwise = [ f | FieldAnn f <- ann_fact l1 ]
     ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> flds
   
-consClassElt g cid (MemberMethDecl l _ i xs body) 
-  = case [ (m,t)         | MethAnn (MethSig _ m t)  <- ann_fact l ] of 
+consClassElt g cid (MemberMethDecl l static i xs body) 
+  = case anns of
       [mt]  -> do mts   <- cgMethTys l i mt
                   mapM_    (consMeth1 l g i xs body) mts
       _    -> cgError l  $ errorClassEltAnnot (srcPos l) cid i
+  where
+    anns | static    = [ (m, t) | StatAnn (StatSig _ m t)  <- ann_fact l ]
+         | otherwise = [ (m, t) | MethAnn (MethSig _ m t)  <- ann_fact l ]
 
 
 ------------------------------------------------------------------------------------
@@ -405,7 +410,7 @@ consExpr g (CallExpr l em@(DotRef _ e f) es)
   where
     -- Add a VarRef so that e is not typechecked again
     vr          = VarRef $ getAnnotation e
-    elt δ x     = getElt δ f . envFindTy x
+    elt δ x g   = getElt δ f $ envFindTy x g
 
 -- e(es)
 consExpr g (CallExpr l e es)
@@ -568,7 +573,7 @@ consCall g l fn es ft0
                            envAddFresh l (F.subst su ot) g'
          Nothing    -> cgError l $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> getCallable δ ft0) 
     where
-       overload δ l  = listToMaybe [ lt | Overload cx t <- ann_fact l 
+       overload δ l  = listToMaybe [ lt | Overload cx t <-  ann_fact l 
                                         , cge_ctx g     == cx
                                         , lt            <- getCallable δ ft0
                                         , toType t      == toType lt ]

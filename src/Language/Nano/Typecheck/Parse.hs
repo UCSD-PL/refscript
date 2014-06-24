@@ -302,34 +302,37 @@ indexP = xyP id colon sn
 
 -- | <[mut]> f: t
 fieldEltP = do 
-    m          <- option inheritedMut (toType <$> mutP)
     x          <- symbolP 
-    _          <- dcolon
+    _          <- colon
+    m          <- option inheritedMut (toType <$> mutP)
     t          <- bareTypeP
     return      $ FieldSig x m t
 
--- | static <[mut]> f: t
+-- | static <[mut]> f :: t
 statEltP = do 
     _          <- reserved "static"
-    m          <- option def (toType <$> mutP)
     x          <- symbolP 
-    _          <- dcolon
+    _          <- colon
+    m          <- option def (toType <$> mutP)
     t          <- bareTypeP
     return      $ StatSig x m t
 
--- | <[mut]> m (ts): t
+-- | <[mut]> m :: (ts): t
 methEltP = do
-    m          <- option def (toType <$> mutP)
     x          <- symbolP 
-    _          <- dcolon
+    _          <- colon
+    m          <- option def (toType <$> mutP)
     t          <- methSigP
     return      $ MethSig x m $ outT t
   where
     outT t      =  
       case bkFun t of 
         Just (_, (B x _):_,_) | x == symbol "this" -> t
-        Just (vs, bs      ,ot)                     -> mkFun (vs, B (symbol "this") tTop : bs, ot)
+        Just (vs, bs      ,ot)                     -> mkFun (v:vs, B (symbol "this") tv : bs, ot)
         _                                          -> t
+    -- XXX: using _THIS_ as a reserved sting here.
+    v  = TV (symbol "_THIS_") (srcPos dummyPos)
+    tv = TVar v fTop
 
 
 -- | <forall A .> (t...) => t
@@ -409,6 +412,7 @@ data RawSpec
   | RawClass  String   -- Class annots
   | RawField  String   -- Field annots
   | RawMethod String   -- Method annots
+  | RawStatic String   -- Static annots
   | RawConstr String   -- Constructor annots
   | RawTAlias String   -- Type aliases
   | RawPAlias String   -- Predicate aliases
@@ -422,6 +426,7 @@ data PSpec l r
   | Field  (TElt r)
   | Constr (TElt r)
   | Method (TElt r)
+  | Static (TElt r)
   | Extern (Id l, RType r)
   | IFace  (Id l, TDef r)
   | Class  (Id l, ([TVar], Maybe (Id l,[RType r])))
@@ -438,6 +443,7 @@ parseAnnot ss (RawMeas   _) = Meas   <$> patch2 ss <$> idBindP
 parseAnnot ss (RawBind   _) = Bind   <$> patch2 ss <$> idBindP
 parseAnnot _  (RawField  _) = Field  <$>               fieldEltP
 parseAnnot _  (RawMethod _) = Method <$>               methEltP
+parseAnnot _  (RawStatic _) = Static <$>               statEltP
 parseAnnot _  (RawConstr _) = Constr <$>               consEltP
 parseAnnot ss (RawExtern _) = Extern <$> patch2 ss <$> idBindP
 parseAnnot ss (RawType   _) = IFace  <$> patch2 ss <$> iFaceP
@@ -457,6 +463,7 @@ getSpecString (RawExtern s) = s
 getSpecString (RawType   s) = s  
 getSpecString (RawField  s) = s  
 getSpecString (RawMethod s) = s  
+getSpecString (RawStatic s) = s  
 getSpecString (RawConstr s) = s  
 getSpecString (RawClass  s) = s  
 getSpecString (RawTAlias s) = s  
@@ -545,6 +552,7 @@ mkCode f ss =  Nano {
                          ++ [ConsAnn  c     | Constr c     <- αs ]
                          ++ [FieldAnn f     | Field  f     <- αs ]
                          ++ [MethAnn  m     | Method m     <- αs ]
+                         ++ [StatAnn  m     | Static m     <- αs ]
                          ++ [ClassAnn t     | Class  (_,t) <- αs ]
     ss'           = (toBare <$>) <$> ss
     anns          = concatMap (FO.foldMap snd) ss

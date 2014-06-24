@@ -318,14 +318,16 @@ tcClassElt γ _ (Constructor l xs body)
 --
 -- FIXME: should the rest of the fields be in scope ???
 --
-tcClassElt γ cid (MemberVarDecl l s (VarDecl l1 x eo))
-  = case [ f | FieldAnn f <- ann_fact l1 ] of 
+tcClassElt γ cid (MemberVarDecl l static (VarDecl l1 x eo))
+  = case anns of 
       []  ->  tcError       $ errorClassEltAnnot (srcPos l1) cid x
       fs  ->  case eo of
                 Just e     -> do ([e'],_)  <- tcNormalCall γ l1 "field init" [e] $ ft fs
-                                 return     $ (MemberVarDecl l s (VarDecl l1 x $ Just e'))
-                Nothing    -> return        $ (MemberVarDecl l s (VarDecl l1 x Nothing))
+                                 return     $ (MemberVarDecl l static (VarDecl l1 x $ Just e'))
+                Nothing    -> return        $ (MemberVarDecl l static (VarDecl l1 x Nothing))
   where
+    anns | static    = [ s | StatAnn  s <- ann_fact l1 ]
+         | otherwise = [ f | FieldAnn f <- ann_fact l1 ]
     ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> flds
 
 --
@@ -336,12 +338,15 @@ tcClassElt γ cid (MemberVarDecl l s (VarDecl l1 x eo))
 --
 --  FIXME: check for mutability (purity)
 --
-tcClassElt γ cid (MemberMethDecl l s i xs body) 
-  = case [ (m, t)         | MethAnn (MethSig _ m t)  <- ann_fact l ] of 
+tcClassElt γ cid (MemberMethDecl l static i xs body) 
+  = case anns of 
       [mt]  -> do mts    <- tcMethTys l i mt
                   body'  <- foldM (tcMeth1 γ l i xs) body mts
-                  return  $ MemberMethDecl l s i xs body'
+                  return  $ MemberMethDecl l static i xs body'
       _    -> tcError     $ errorClassEltAnnot (srcPos l) cid i
+  where
+    anns | static    = [ (m, t) | StatAnn (StatSig _ m t)  <- ann_fact l ]
+         | otherwise = [ (m, t) | MethAnn (MethSig _ m t)  <- ann_fact l ]
 
 
 --------------------------------------------------------------------------------
@@ -532,11 +537,11 @@ classEltType :: PPR r => RType r -> ClassElt (AnnSSA r) -> [TElt r]
 classEltType _ (Constructor l _ _ ) = [ c | ConsAnn c   <- ann_fact l ]
 
 classEltType _ (MemberVarDecl _ static (VarDecl l _ _)) 
-    | static    = [ s | FieldAnn s@(StatSig _ _ _)  <- ann_fact l ]
+    | static    = [ s | StatAnn  s@(StatSig _ _ _)  <- ann_fact l ]
     | otherwise = [ f | FieldAnn f@(FieldSig _ _ _) <- ann_fact l ]
 
 classEltType t (MemberMethDecl l static _ _ _ )
-    | static    = [ s                  | MethAnn s@(StatSig _ _ _)  <- ann_fact l ]
+    | static    = [ s                  | StatAnn s@(StatSig _ _ _)  <- ann_fact l ]
     | otherwise = [ setThisBinding m t | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
 
 
@@ -754,18 +759,18 @@ tcCallDotRef γ elts l em@(DotRef l1 e f) es
     -- Static call
     | all isStaticSig elts
     = do  (e' , _ )   <- tcExpr γ e       -- TC `e` separately
-          (es', t')   <- tcNormalCall γ l em es $ {- tracePP ("statsig " ++ ppshow (srcPos l)) $-} ft isStaticSig
+          (es', t')   <- tcNormalCall γ l em es {-$ tracePP ("statsig " ++ ppshow (srcPos l)) -} $ ft isStaticSig
           return       $ (DotRef l1 e' f, es', t')
 
     -- Virtual method call
     | all isMethodSig elts 
-    = do  (e':es', t) <- tcNormalCall γ l em (e:es) $ {- tracePP ("methSig " ++ ppshow (srcPos l)) $ -} ft isMethodSig
+    = do  (e':es', t) <- tcNormalCall γ l em (e:es) {-$ tracePP ("methSig " ++ ppshow (srcPos l)) -} $ ft isMethodSig
           return       $ (DotRef l1 e' f, es', t)
 
     -- Normal function call
     | all isFieldSig elts
     = do  (e' , _ )   <- tcExpr γ e       -- TC `e` separately
-          (es', t')   <- tcNormalCall γ l em es $ {- tracePP ("fieldSig " ++ ppshow (srcPos l)) $ -} ft isFieldSig
+          (es', t')   <- tcNormalCall γ l em es {-$ tracePP ("fieldSig " ++ ppshow (srcPos l)) -} $ ft isFieldSig
           return       $ (DotRef l1 e' f, es', t')
 
     | otherwise
@@ -862,9 +867,9 @@ tcCallCaseTry γ l fn ts ft = runMaybeM $
 tcCallCase γ l fn es ts ft 
   = do let ξ            = tce_ctx γ
        -- Generate fresh type parameters
-       (_,ibs,ot)      <- instantiate l ξ fn ft
+       (_,ibs,ot)      <- {- tracePP ("inst " ++ ppshow ft) <$> -} instantiate l ξ fn ft
        let its          = b_type <$> ibs
-       θ               <- unifyTypesM (srcPos l) "tcCall" ts its
+       θ               <- {- tracePP "unif" <$> -} unifyTypesM (srcPos l) "tcCall" ts its
        let (ts',its')   = mapPair (apply θ) (ts, its)
        es'             <- NM.zipWith3M (castM ξ) es ts' its'
        return             (es', apply θ ot, θ)

@@ -132,7 +132,7 @@ errorCyclicDefs l x stk       = mkErr l $ printf "Cyclic definitions: %s in %s" 
 errorBadTAlias l t nt ne a m  = mkErr l $ printf "Invalid type alias application: %s \nExpected %d type, %d value arguments, but got %d and %d" (ppshow t) a m nt ne  
 errorBadPAlias l p nx ne      = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne 
 errorLiquid l                 = mkErr l $ printf "Liquid Type Error" 
-errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for %s!\nArgument Types: %s\nFunction Type: %s" (ppshow fn) (ppshow ts) (ppshow t)
+errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%s'.\nArgument Types: %s\nFunction Type: %s" (ppshow fn) (ppshow ts) (ppshow t)
 errorMultipleCasts l cs       = mkErr l $ render $ text "Multiple Casts: " <+> (vcat (map pp cs)) 
 
  

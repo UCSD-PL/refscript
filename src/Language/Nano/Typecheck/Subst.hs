@@ -30,7 +30,7 @@ module Language.Nano.Typecheck.Subst (
 import           Data.Default
 import           Text.PrettyPrint.HughesPJ
 -- import           Text.Printf
--- import           Language.Nano.Errors
+import           Language.Nano.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
@@ -111,6 +111,7 @@ instance Free (Fact r) where
   free (VarAnn t)        = free t
   free (FieldAnn f)      = free f
   free (MethAnn m)       = free m
+  free (StatAnn m)       = free m
   free (ConsAnn c)       = free c
   free (ClassAnn (vs,m)) = foldr S.delete (free m) vs
 
@@ -171,6 +172,7 @@ instance F.Reftable r => Substitutable r (Fact r) where
   apply θ (VarAnn t)        = VarAnn        $ apply θ t
   apply θ (FieldAnn f)      = FieldAnn      $ apply θ f
   apply θ (MethAnn t)       = MethAnn       $ apply θ t
+  apply θ (StatAnn t)       = StatAnn       $ apply θ t
   apply θ (ConsAnn t)       = ConsAnn       $ apply θ t
   apply θ (ClassAnn (c, t)) = ClassAnn      $ (c, apply θ t)
 
@@ -204,20 +206,17 @@ appTy _        (TExp _)       = error "appTy should not be applied to TExp"
 ---------------------------------------------------------------------------
 flatten :: PPR r => Bool -> TDefEnv r -> (TDef r, [RType r]) -> [TElt r]
 ---------------------------------------------------------------------------
-flatten st = fix . ff st
+flatten True  = fix . ff isStaticSig
+flatten False = fix . ff nonStaticSig
 
-ff st δ r (TD _ _ vs (Just (i, ts')) es, ts) = 
+ff flt δ r (TD _ _ vs (Just (i, ts')) es, ts) = 
     apply θ  . L.unionBy sameBinder (filter flt es) $ r (findSymOrDie i δ, ts')
   where 
-    θ = fromList $ zip vs ts
-    flt | st        = isStaticSig 
-        | otherwise = nonStaticSig
+    θ   = fromList $ zip vs ts
 
-ff st _ _ (TD _ _ vs _ es, ts)  = apply θ $ filter flt es
+ff flt _ _ (TD _ _ vs _ es, ts)  = apply θ $ filter flt es
   where 
     θ = fromList $ zip vs ts
-    flt | st        = isStaticSig 
-        | otherwise = nonStaticSig
 
 -- | flatten' does not apply the top-level type substitution
 flatten' st δ d@(TD _ _ vs _ _) = flatten st δ (d, tVar <$> vs)

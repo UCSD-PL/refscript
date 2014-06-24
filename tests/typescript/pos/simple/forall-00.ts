@@ -1,7 +1,7 @@
 
 class FooT {
-  /*@ fff :: /\ forall U . ((U) => U  ): #Array[#Immutable,U] 
-             /\ forall V . ((V,V) => V): #Array[#Immutable,V] */
+  /*@ fff : /\ forall U . ((U) => U  ): #Array[#Immutable,U] 
+            /\ forall V . ((V,V) => V): #Array[#Immutable,V] */
   public fff(x:any): any {
     return [];
   }

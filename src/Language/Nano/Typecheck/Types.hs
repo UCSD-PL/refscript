@@ -995,6 +995,7 @@ data Fact r
   | VarAnn      !(RType r)
   | FieldAnn    !(TElt r)
   | MethAnn     !(TElt r) 
+  | StatAnn     !(TElt r) 
   | ConsAnn     !(TElt r)
   -- Class annotation
   | ClassAnn      !([TVar], Maybe (Id SourceSpan,[RType r]))
@@ -1031,6 +1032,7 @@ instance Ord (Fact r) where
   compare (VarAnn t1       ) (VarAnn t2       )   = on compare toType t1 t2
   compare (FieldAnn f1     ) (FieldAnn f2     )   = on compare (fmap $ const ()) f1 f2
   compare (MethAnn m1      ) (MethAnn m2      )   = on compare (fmap $ const ()) m1 m2
+  compare (StatAnn s1      ) (StatAnn s2      )   = on compare (fmap $ const ()) s1 s2
   compare (ConsAnn c1      ) (ConsAnn c2      )   = on compare (fmap $ const ()) c1 c2
   compare (ClassAnn (_,m1) ) (ClassAnn (_,m2) )   = on compare (fst <$>) m1 m2
   compare f1 f2                                   = on compare factToNum f1 f2
@@ -1043,8 +1045,9 @@ factToNum (TCast _ _       ) = 4
 factToNum (VarAnn _        ) = 6
 factToNum (FieldAnn _      ) = 7
 factToNum (MethAnn _       ) = 8
-factToNum (ConsAnn _       ) = 9
-factToNum (ClassAnn _      ) = 10
+factToNum (StatAnn _       ) = 9
+factToNum (ConsAnn _       ) = 10
+factToNum (ClassAnn _      ) = 11
 
 
 instance Eq (Annot a SourceSpan) where 
@@ -1063,6 +1066,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (ConsAnn c)      = text "Constructor Annotation" <+> pp c
   pp (FieldAnn f)     = text "Field Annotation"       <+> pp f
   pp (MethAnn m)      = text "Method Annotation"      <+> pp m
+  pp (StatAnn s)      = text "Static Annotation"      <+> pp s
   pp (ClassAnn _)     = error "UNIMPLEMENTED:pp:ClassAnn"
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where

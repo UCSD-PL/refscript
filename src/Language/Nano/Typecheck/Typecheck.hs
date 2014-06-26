@@ -41,6 +41,7 @@ import qualified Language.Fixpoint.Types            as F
 import           Language.Fixpoint.Misc             as FM 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Syntax.Annotations
 -- import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
@@ -322,13 +323,13 @@ tcClassElt γ cid (MemberVarDecl l static (VarDecl l1 x eo))
   = case anns of 
       []  ->  tcError       $ errorClassEltAnnot (srcPos l1) cid x
       fs  ->  case eo of
-                Just e     -> do ([e'],_)  <- tcNormalCall γ l1 "field init" [e] $ ft fs
+                Just e     -> do ([e'],_)  <- tcNormalCall γ l1 "field init" [e] $ tracePP ("initfield " ++ ppshow (srcPos l1)) $ ft fs
                                  return     $ (MemberVarDecl l static (VarDecl l1 x $ Just e'))
                 Nothing    -> return        $ (MemberVarDecl l static (VarDecl l1 x Nothing))
   where
-    anns | static    = [ s | StatAnn  s <- ann_fact l1 ]
+    anns | static    = tracePP "static anno" [ s | StatAnn  s <- ann_fact l1 ]
          | otherwise = [ f | FieldAnn f <- ann_fact l1 ]
-    ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> flds
+    ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> tracePP ("flds " ++ ppshow (srcPos l)) flds
 
 --
 --  Currently we allow a single type annotation that can be an overloaded
@@ -669,6 +670,17 @@ tcCall γ (PrefixExpr l o e)
          _                    -> error "IMPOSSIBLE:tcCall:PrefixExpr"
 
 -- | `e1 o e2`
+tcCall γ (InfixExpr l o@OpInstanceof e1 e2) 
+  = do (e2',t)                <- tcExpr γ e2
+       case t of
+         TApp (TTyOf x) _ _   -> do ([e1',_], t) <- tcNormalCall γ l o
+                                                      [e1, StringLit l2 (tracePP "instanceof" $ F.symbolString x)] 
+                                                      (infixOpTy o $ tce_env γ)
+                                    return        $ (InfixExpr l o e1' e2', t) 
+         _                    -> tcError          $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
+  where
+    l2 = getAnnotation e2
+
 tcCall γ (InfixExpr l o e1 e2)        
   = do z                      <- tcNormalCall γ l o [e1, e2] (infixOpTy o $ tce_env γ) 
        case z of

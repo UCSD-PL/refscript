@@ -335,21 +335,24 @@
 /*@ extern builtin_BIFalsy :: forall A. (x:A) 
                            => { v:boolean | ((Prop v) <=> FLS(x)) }      */
 
-/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]}    */
-/*@ invariant {v:null      | [(ttag(v) = "object"); not (Prop(v)); null(v) ]}       */
-/*@ invariant {v:boolean   | [(ttag(v) = "boolean")]}                    */ 
+/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]}            */
 
-/*@ invariant {v:string    | [(ttag(v) = "string"   ); 
-                              (Prop(v) <=> v /= ""  )]}                  */
+/*@ invariant {v:null      | [(ttag(v) = "object")   ; not (Prop(v)); null(v) ]}  */
 
-/*@ invariant {v:number    | [((ttag(v) = "number") &&
-                               (Prop(v) <=> v /= 0) &&
-                               (FLS(v)  <=> v  = 0))]}                   */
+/*@ invariant {v:boolean   | [(ttag(v) = "boolean")]}                             */ 
+
+/*@ invariant {v:string    | [(ttag(v) = "string"   ); (Prop(v) <=> v /= ""  )]}  */
+
+/*@ invariant {v:number    | [(ttag(v)  =  "number");
+                              (Prop(v) <=> v /= 0  ); 
+                              (FLS(v)  <=> v  = 0  )]} */
 
 
+/*@ measure instanceof :: forall A . (A, string) => bool                          */
 
+/*@ extern builtin_OpInstanceof :: forall A . (x:A, s: string) 
+                                => { v: boolean | (Prop(v) <=> instanceof(x,s)) } */
 
-//TODO: ttag = "object" for named types, arrays ... 
 
 
 /*************************************************************************/

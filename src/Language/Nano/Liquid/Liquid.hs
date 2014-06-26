@@ -391,6 +391,15 @@ consExpr g (VarRef i x)
 consExpr g (PrefixExpr l o e)
   = consCall g l o [e] (prefixOpTy o $ renv g)
 
+consExpr g (InfixExpr l o@OpInstanceof e1 e2)
+  = do (x,g') <- consExpr g e2
+       case envFindTy x g' of
+         TApp (TTyOf x) _ _ -> consCall g l o [e1, StringLit l2 (F.symbolString x)] 
+                                              (infixOpTy o $ renv g')
+         _                  -> cgError l $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
+  where
+    l2 = getAnnotation e2
+
 consExpr g (InfixExpr l o e1 e2)        
   = consCall g l o [e1, e2] (infixOpTy o $ renv g)
 
@@ -544,8 +553,8 @@ consDownCast δ g l x _ t2
     where 
         tx   = envFindTy x g
         -- This will drop all top-level refinements from union-level to its parts
-        txx  = zipType δ tx tx 
-        tx2  = zipType δ t2 tx
+        txx  = tracePP "consDownCast LHS" $ zipType δ tx tx 
+        tx2  = tracePP "consDownCast RHS" $ zipType δ t2 tx
         ztx  = zipType δ tx t2
 
 

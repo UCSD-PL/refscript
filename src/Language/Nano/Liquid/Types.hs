@@ -383,8 +383,43 @@ zipType :: TDefEnv F.Reft -> RefType -> RefType -> RefType
 --------------------------------------------------------------------------------
 --
 --  s1 \/ .. sn | t1 \/ .. tm = s1'|t1' \/ .. tk|tk' \/ .. bot(tm')
+--  
+-- \/{vi:Si|Pi} || \/{wj:Tj|_} = \/{wj: Si||Tj |Qj},
 --
-zipType δ (TApp TUn t1s r1) (TApp TUn t2s _) =
+--    where Qj =  (/\ [ instanceof(wj,Si') => Pi' ])  /\ ( \/ [instanceof(wj,Si')] )
+--    
+--    with  Constr(Si') <: Constr(Tj) 
+--    and   {vi':Si'|Pi'} a permutation of {vi:Si|Pi}
+--
+zipType δ (TApp TUn t1s r1) (TApp TUn t2s _) = 
+  
+
+--   where 
+-- 
+--     foo [ ] t' = fmap F.bot t'
+--     foo [t] t' = zipType δ t t'
+--     foo ts  t' = let _ = rTypeReft <$> ts in
+--               
+--                  undefined
+-- 
+-- 
+--     prem t (F.Reft (v, ra)) = 
+--       case toConstructor t of
+--         Just c -> F.PImp (F.PBexp $ eInsOf v c) 
+--         
+--     eInsOf v c = F.EApp (F.dummyLoc $ F.symbol "instanceof") [F.expr v, F.expr c] -- instanceof(v,"C")
+-- 
+-- 
+--     tt2s   = map (\t2 -> (filter (\t1 -> compatible t1 t2) t1s, t2)) t2s  
+--     compatible t1 t2 = 
+--       case (toConstructor t1, toConstructor t2) of
+--         (Just c1, Just c2) -> isConstSubtype δ c1 c2
+--         (Nothing, Nothing) -> sameTypeof t1 t2
+--         _                  -> False
+-- 
+        
+
+
     TApp TUn (pair <$> t2s) r1
   where
     pair t2 = 

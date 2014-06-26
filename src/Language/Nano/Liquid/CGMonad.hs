@@ -300,14 +300,21 @@ addFixpointBind (x, t)
 ---------------------------------------------------------------------------------------
 addInvariant              :: RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
-addInvariant t             = {- tagStrn <$> -} ((`tx` t) . invs) <$> get
-  where 
-    tx i t@(TApp tc _ o)   = maybe t (\i -> strengthenOp t o $ rTypeReft $ val i) $ M.lookup tc i
-    tx _ t                 = t 
-    strengthenOp t o r     | L.elem r (ofRef o) = t
-    strengthenOp t _ r     | otherwise          = strengthen t r
-    ofRef (F.Reft (s, as)) = (F.Reft . (s,) . single) <$> as
-    -- tagStrn t              = t `strengthen` tagR t
+addInvariant t               = (ty . (`tx` t) . invs) <$> get
+  where
+    tx i t@(TApp tc _ o)     = maybe t (strengthenOp t o . rTypeReft . val) $ M.lookup tc i
+    tx _ t                   = t 
+    strengthenOp t o r       | L.elem r (ofRef o) = t
+    strengthenOp t _ r       | otherwise          = strengthen t r
+    ofRef (F.Reft (s, as))   = (F.Reft . (s,) . single) <$> as
+
+    -- instanceof(v,"C")
+    ty t@(TApp (TRef c) _ _) = t `strengthen` reftIO t c
+    ty t                     = t 
+    reftIO t c               = F.Reft (vv t, [refaIO t c])
+    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr $ F.symbolString c]
+    vv                       = rTypeValueVar
+    sym = F.dummyLoc $ F.symbol "instanceof"
 
 
 ---------------------------------------------------------------------------------------

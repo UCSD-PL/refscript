@@ -84,6 +84,7 @@ module Language.Nano.Typecheck.Types (
   -- * Aliases
   , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
 
+
   ) where 
 
 import           Text.Printf
@@ -963,6 +964,12 @@ instance (PP r, F.Reftable r) => PP (Cast r) where
   pp (CUp t1 t2) = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
   pp (CDn t1 t2) = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
 
+instance PP CastDirection where
+  pp CDNo   = text "="
+  pp CDDead = text "dead"
+  pp CDUp   = text "UP"
+  pp CDDn   = text "DN"
+
 noCast CDNo = True
 noCast _   = False
 
@@ -1238,9 +1245,8 @@ mkEltFunTy _                = Nothing
 mkEltFromType t = fmap mkAnd $ fmap (fmap mkFun) $ sequence $ bkFun <$> bkAnd t
 
 
-
-
 mkInitFldTy (FieldSig _ _ t) = Just $ mkFun ([], [B (F.symbol "f") t], tVoid)
+mkInitFldTy (StatSig  _ _ t) = Just $ mkFun ([], [B (F.symbol "f") t], tVoid)
 mkInitFldTy _                = Nothing
 
 
@@ -1252,22 +1258,23 @@ infixOpTy o g = fromMaybe err $ envFindTy ox g
     err       = errorstar $ printf "Cannot find infixOpTy %s" (ppshow ox) -- (ppshow g)
     ox        = infixOpId o
 
-infixOpId OpLT        = builtinId "OpLT"
-infixOpId OpLEq       = builtinId "OpLEq"
-infixOpId OpGT        = builtinId "OpGT"
-infixOpId OpGEq       = builtinId "OpGEq"
-infixOpId OpEq        = builtinId "OpEq"
-infixOpId OpStrictEq  = builtinId "OpSEq"
-infixOpId OpNEq       = builtinId "OpNEq"
-infixOpId OpStrictNEq = builtinId "OpSNEq"
-infixOpId OpLAnd      = builtinId "OpLAnd"
-infixOpId OpLOr       = builtinId "OpLOr"
-infixOpId OpSub       = builtinId "OpSub"
-infixOpId OpAdd       = builtinId "OpAdd"
-infixOpId OpMul       = builtinId "OpMul"
-infixOpId OpDiv       = builtinId "OpDiv"
-infixOpId OpMod       = builtinId "OpMod"
-infixOpId o           = errorstar $ "infixOpId: Cannot handle: " ++ ppshow o
+infixOpId OpLT         = builtinId "OpLT"
+infixOpId OpLEq        = builtinId "OpLEq"
+infixOpId OpGT         = builtinId "OpGT"
+infixOpId OpGEq        = builtinId "OpGEq"
+infixOpId OpEq         = builtinId "OpEq"
+infixOpId OpStrictEq   = builtinId "OpSEq"
+infixOpId OpNEq        = builtinId "OpNEq"
+infixOpId OpStrictNEq  = builtinId "OpSNEq"
+infixOpId OpLAnd       = builtinId "OpLAnd"
+infixOpId OpLOr        = builtinId "OpLOr"
+infixOpId OpSub        = builtinId "OpSub"
+infixOpId OpAdd        = builtinId "OpAdd"
+infixOpId OpMul        = builtinId "OpMul"
+infixOpId OpDiv        = builtinId "OpDiv"
+infixOpId OpMod        = builtinId "OpMod"
+infixOpId OpInstanceof = builtinId "OpInstanceof"
+infixOpId o            = errorstar $ "infixOpId: Cannot handle: " ++ ppshow o
 
 -----------------------------------------------------------------------
 prefixOpTy :: PrefixOp -> Env t -> t 

@@ -25,10 +25,14 @@ module Language.Nano.Typecheck.Subst (
   -- * Ancestors
   , weaken, lineage
 
+  -- * Constructors
+  , Constructor, toConstructor, isConstSubtype, sameTypeof, getTypeof
+
   ) where 
 
 import           Data.Default
 import           Text.PrettyPrint.HughesPJ
+import           Data.Function                  (on)
 -- import           Text.Printf
 import           Language.Nano.Errors
 import           Language.ECMAScript3.Syntax
@@ -266,5 +270,79 @@ lineage :: TDefEnv t -> TDef t -> [F.Symbol]
 lineage δ (TD _ s _ (Just (p,_)) _) = (F.symbol s):lineage δ (findSymOrDie p δ)
 lineage _ (TD _ s _ Nothing      _) = [F.symbol s]
 
+lineageSymbol δ s = 
+  case findSym s δ of
+    Just d  -> lineage δ d
+    Nothing -> []
 
+
+
+-----------------------------------------------------------------------
+-- Constructors
+-----------------------------------------------------------------------
+
+type Constructor = Type 
+
+funcConstr :: Constructor
+funcConstr = TApp (TRef $ F.symbol "Function") [] ()
+
+isFunctionConst (TApp (TRef s) [] ()) | s == F.symbol "Function" = True
+isFunctionConst _                                                = False
+
+objectConstr :: Constructor
+objectConstr = TApp (TRef $ F.symbol "Object") [] ()
+
+isObjectConstr (TApp (TRef s) [] ()) | s == F.symbol "Object" = True
+isObjectConstr _                                              = False
+
+-- Primitive types don't have constructor
+toConstructor :: RType r -> Maybe Constructor
+toConstructor  (TApp (TRef  x) _ _) = Just $ TApp (TRef  x) [] ()
+toConstructor  (TApp (TTyOf x) _ _) = Just $ funcConstr
+toConstructor  (TFun _ _ _ )        = Just $ funcConstr
+toConstructor  (TCons _ _ _)        = Just $ objectConstr
+toConstructor  (TAnd _)             = Just $ funcConstr 
+toConstructor  _                    = Nothing
+
+instance F.Symbolic Constructor where
+  symbol (TApp (TRef  x) _ _) = x
+  symbol (TApp (TTyOf x) _ _) = F.symbol "Function"
+  symbol (TFun _ _ _ )        = F.symbol "Function"
+  symbol (TCons _ _ _)        = F.symbol "Object"
+  symbol (TAnd _)             = F.symbol "Function"
+  symbol _                    = F.symbol "ConstructorERROR"
+
+instance F.Expression Constructor where
+  expr = F.expr . F.symbol
+
+
+
+isConstSubtype δ c1 c2 
+  | isObjectConstr c2 = True
+  | otherwise         = 
+        case (c1, c2) of
+          (TApp (TRef s1) _ _, TApp (TRef s2) _ _) ->  s2 `elem` lineageSymbol δ s1
+          _                                        -> False
+
+sameTag (TApp TInt _ _   ) (TApp TInt _ _   ) = True
+sameTag (TApp TBool _ _  ) (TApp TBool _ _  ) = True
+sameTag (TApp TString _ _) (TApp TString _ _) = True
+sameTag (TApp TUndef _ _ ) (TApp TUndef _ _ ) = True
+sameTag (TFun _ _ _      ) (TFun _ _ _      ) = True
+sameTag (TCons _ _ _     ) (TCons _ _ _     ) = True
+sameTag (TApp (TRef _) _ _) (TApp (TRef _) _ _) = True
+sameTag (TCons _ _ _) (TApp (TRef _) _ _) = True
+
+getTypeof (TApp TInt _ _     ) = Just "number"
+getTypeof (TApp TBool _ _    ) = Just "boolean"
+getTypeof (TApp TString _ _  ) = Just "string"
+getTypeof (TApp TUndef _ _   ) = Just "undefined"
+getTypeof (TApp TNull  _ _   ) = Just "undefined"
+getTypeof (TFun _ _ _        ) = Just "function"
+getTypeof (TCons _ _ _       ) = Just "object"
+getTypeof (TApp (TRef _) _ _ ) = Just "object"
+getTypeof (TApp (TTyOf _) _ _) = Just "function"
+getTypeof _                    = Nothing
+
+sameTypeof = (==) `on` getTypeof
 

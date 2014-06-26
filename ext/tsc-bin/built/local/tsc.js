@@ -7949,6 +7949,8 @@ var TypeScript;
         function toRsStmt(list, helper, anns) {
             return new TypeScript.RsASTList(list.toArray().map(function (m) {
                 return m.toRsStmt(helper);
+            }).filter(function (e) {
+                return e !== null;
             }));
         }
 
@@ -9079,7 +9081,7 @@ var TypeScript;
 var TypeScript;
 (function (TypeScript) {
     function tokenAnnots(token, context) {
-        var ctx = (context !== undefined) ? context : 3 /* OtherContext */;
+        var ctx = (context !== undefined) ? context : 4 /* OtherContext */;
         return token.leadingTrivia().toArray().filter(function (t) {
             return t.kind() === 6 /* MultiLineCommentTrivia */;
         }).map(function (t) {
@@ -9661,7 +9663,7 @@ var TypeScript;
                     mutParam += possible.charAt(Math.floor(Math.random() * possible.length));
                 }
                 typeParams.unshift(mutParam);
-                var mutType = new TypeScript.TTypeReference(mutParam, []);
+                var mutType = new TypeScript.TTVar(mutParam);
 
                 var extendsHeritage = TypeScript.ArrayUtilities.concat(this.heritageClauses.toArray().map(function (t) {
                     return t.toRsHeritage(helper, 48 /* ExtendsKeyword */, mutType);
@@ -9898,11 +9900,11 @@ var TypeScript;
                         var anns = tokenAnnots(v.propertyName);
                         if (anns.length === 0) {
                             var eltSymbol = helper.getSymbolForAST(v);
-                            return eltSymbol.name + ": " + eltSymbol.type.toRsType().toString();
+                            return [eltSymbol.name + " : " + eltSymbol.type.toRsType().toString()];
                         } else {
-                            var ann = anns[0];
-
-                            return ann.getContent().replace("::", ":");
+                            return anns.map(function (m) {
+                                return m.getContent();
+                            });
                         }
 
                     case 144 /* IndexSignature */:
@@ -9912,7 +9914,7 @@ var TypeScript;
                             var sign = symb;
 
                             if (sign.parameters.length === 1) {
-                                return "[" + sign.parameters.toString() + "]: " + sign.returnType.toRsType().toString();
+                                return ["[" + sign.parameters.toString() + "]: " + sign.returnType.toRsType().toString()];
                             }
                         }
                     default:
@@ -9920,7 +9922,12 @@ var TypeScript;
                 }
             });
 
-            annotStr += "{" + members.join("; ") + "}";
+            var r = [];
+            for (var i = 0; i < members.length; i++) {
+                r = r.concat(members[i]);
+            }
+
+            annotStr += "{" + r.join("; ") + "}";
             restAnnots.push(new TypeScript.RsBindAnnotation(3 /* RawType */, annotStr));
             return new TypeScript.RsEmptyStmt(helper.getSourceSpan(this), restAnnots);
         };
@@ -10269,7 +10276,7 @@ var TypeScript;
 
         FunctionDeclarationSyntax.prototype.toRsStmt = function (helper) {
             if (!this.block) {
-                throw new Error("UNIMPLEMENTED:FunctionDeclaration.toRsStmt:No Block");
+                return null;
             }
 
             var name = this.identifier.text();
@@ -10400,7 +10407,7 @@ var TypeScript;
                 }).filter(function (t) {
                     return t !== null;
                 }).map(function (t) {
-                    return TypeScript.RsAnnotation.createAnnotation(t, 3 /* OtherContext */);
+                    return TypeScript.RsAnnotation.createAnnotation(t, 4 /* OtherContext */);
                 });
             }));
 
@@ -10514,7 +10521,7 @@ var TypeScript;
             }).filter(function (t) {
                 return t !== null;
             }).map(function (t) {
-                return TypeScript.RsAnnotation.createAnnotation(t, 3 /* OtherContext */);
+                return TypeScript.RsAnnotation.createAnnotation(t, 4 /* OtherContext */);
             });
 
             var bindAnns = parentAnns.concat(anns).filter(function (a) {
@@ -10808,27 +10815,27 @@ var TypeScript;
         PrefixUnaryExpressionSyntax.prototype.toRsExp = function (helper) {
             switch (this.kind()) {
                 case 215 /* ObjectLiteralExpression */:
-                    return new TypeScript.RsObjectLit(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.operand.toRsMemList(helper));
+                    return new TypeScript.RsObjectLit(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.operand.toRsMemList(helper));
                 case 210 /* PostIncrementExpression */:
-                    return new TypeScript.RsUnaryAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), new TypeScript.RsUnaryAssignOp(2 /* PostfixInc */), this.operand.toRsLValue(helper));
+                    return new TypeScript.RsUnaryAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsUnaryAssignOp(2 /* PostfixInc */), this.operand.toRsLValue(helper));
                 case 168 /* PreIncrementExpression */:
-                    return new TypeScript.RsUnaryAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), new TypeScript.RsUnaryAssignOp(0 /* PrefixInc */), this.operand.toRsLValue(helper));
+                    return new TypeScript.RsUnaryAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsUnaryAssignOp(0 /* PrefixInc */), this.operand.toRsLValue(helper));
                 case 211 /* PostDecrementExpression */:
-                    return new TypeScript.RsUnaryAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), new TypeScript.RsUnaryAssignOp(3 /* PostfixDec */), this.operand.toRsLValue(helper));
+                    return new TypeScript.RsUnaryAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsUnaryAssignOp(3 /* PostfixDec */), this.operand.toRsLValue(helper));
                 case 169 /* PreDecrementExpression */:
-                    return new TypeScript.RsUnaryAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), new TypeScript.RsUnaryAssignOp(1 /* PrefixDec */), this.operand.toRsLValue(helper));
+                    return new TypeScript.RsUnaryAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsUnaryAssignOp(1 /* PrefixDec */), this.operand.toRsLValue(helper));
 
                 case 165 /* NegateExpression */:
-                    return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), new TypeScript.RsPrefixOp(3 /* PrefixMinus */), this.operand.toRsExp(helper));
+                    return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsPrefixOp(3 /* PrefixMinus */), this.operand.toRsExp(helper));
 
                 case 167 /* LogicalNotExpression */:
-                    return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), new TypeScript.RsPrefixOp(0 /* PrefixLNot */), this.operand.toRsExp(helper));
+                    return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsPrefixOp(0 /* PrefixLNot */), this.operand.toRsExp(helper));
 
                 case 171 /* TypeOfExpression */:
-                    return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), new TypeScript.RsPrefixOp(4 /* PrefixTypeof */), this.operand.toRsExp(helper));
+                    return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsPrefixOp(4 /* PrefixTypeof */), this.operand.toRsExp(helper));
 
                 case 166 /* BitwiseNotExpression */:
-                    return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), new TypeScript.RsPrefixOp(1 /* PrefixBNot */), this.operand.toRsExp(helper));
+                    return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsPrefixOp(1 /* PrefixBNot */), this.operand.toRsExp(helper));
 
                 case 220 /* CastExpression */:
                     return this.operand.toRsExp(helper);
@@ -10947,7 +10954,7 @@ var TypeScript;
         };
 
         ArrayLiteralExpressionSyntax.prototype.toRsExp = function (helper) {
-            return new TypeScript.RsArrayLit(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.expressions.toRsExp(helper));
+            return new TypeScript.RsArrayLit(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.expressions.toRsExp(helper));
         };
         return ArrayLiteralExpressionSyntax;
     })(TypeScript.SyntaxNode);
@@ -11883,7 +11890,7 @@ var TypeScript;
         };
 
         GenericTypeSyntax.prototype.toRsId = function (helper) {
-            return new TypeScript.RsId(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.name.fullText());
+            return new TypeScript.RsId(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.name.fullText());
         };
         return GenericTypeSyntax;
     })(TypeScript.SyntaxNode);
@@ -12118,7 +12125,7 @@ var TypeScript;
         };
 
         BlockSyntax.prototype.toRsStmt = function (helper) {
-            return new TypeScript.RsBlockStmt(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.statements.toRsStmt(helper));
+            return new TypeScript.RsBlockStmt(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.statements.toRsStmt(helper));
         };
         return BlockSyntax;
     })(TypeScript.SyntaxNode);
@@ -12351,7 +12358,7 @@ var TypeScript;
         MemberAccessExpressionSyntax.prototype.toRsLValue = function (helper) {
             switch (this.kind()) {
                 case 212 /* MemberAccessExpression */: {
-                    return new TypeScript.RsLDot(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.expression.toRsExp(helper), this.name.text());
+                    return new TypeScript.RsLDot(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.expression.toRsExp(helper), this.name.text());
                 }
 
                 default: {
@@ -12363,7 +12370,7 @@ var TypeScript;
         MemberAccessExpressionSyntax.prototype.toRsExp = function (helper) {
             switch (this.name.kind()) {
                 case 11 /* IdentifierName */: {
-                    return new TypeScript.RsDotRef(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.expression.toRsExp(helper), this.name.toRsId(helper));
+                    return new TypeScript.RsDotRef(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.expression.toRsExp(helper), this.name.toRsId(helper));
                 }
                 default:
                     throw new Error("UNIMMPLEMENTED:BinaryExpression:toRsExp");
@@ -12456,9 +12463,9 @@ var TypeScript;
         PostfixUnaryExpressionSyntax.prototype.toRsExp = function (helper) {
             switch (this.kind()) {
                 case 210 /* PostIncrementExpression */:
-                    return new TypeScript.RsUnaryAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), new TypeScript.RsUnaryAssignOp(2 /* PostfixInc */), this.operand.toRsLValue(helper));
+                    return new TypeScript.RsUnaryAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsUnaryAssignOp(2 /* PostfixInc */), this.operand.toRsLValue(helper));
                 case 211 /* PostDecrementExpression */:
-                    return new TypeScript.RsUnaryAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), new TypeScript.RsUnaryAssignOp(3 /* PostfixDec */), this.operand.toRsLValue(helper));
+                    return new TypeScript.RsUnaryAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsUnaryAssignOp(3 /* PostfixDec */), this.operand.toRsLValue(helper));
                 default:
                     throw new Error("PostfixUnaryExpression:toRsExp SyntaxKind not supported: " + TypeScript.SyntaxKind[this.kind()]);
             }
@@ -12576,11 +12583,11 @@ var TypeScript;
         };
 
         ElementAccessExpressionSyntax.prototype.toRsLValue = function (helper) {
-            return new TypeScript.RsLBracket(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.expression.toRsExp(helper), this.argumentExpression.toRsExp(helper));
+            return new TypeScript.RsLBracket(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.expression.toRsExp(helper), this.argumentExpression.toRsExp(helper));
         };
 
         ElementAccessExpressionSyntax.prototype.toRsExp = function (helper) {
-            return new TypeScript.RsBracketRef(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.expression.toRsExp(helper), this.argumentExpression.toRsExp(helper));
+            return new TypeScript.RsBracketRef(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.expression.toRsExp(helper), this.argumentExpression.toRsExp(helper));
         };
         return ElementAccessExpressionSyntax;
     })(TypeScript.SyntaxNode);
@@ -12681,7 +12688,7 @@ var TypeScript;
         };
 
         InvocationExpressionSyntax.prototype.toRsExp = function (helper) {
-            return new TypeScript.RsCallExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.expression.toRsExp(helper), this.argumentList.arguments.toRsExp(helper));
+            return new TypeScript.RsCallExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.expression.toRsExp(helper), this.argumentList.arguments.toRsExp(helper));
         };
         return InvocationExpressionSyntax;
     })(TypeScript.SyntaxNode);
@@ -12869,16 +12876,16 @@ var TypeScript;
                 case 212 /* MemberAccessExpression */: {
                     switch (this.right.kind()) {
                         case 11 /* IdentifierName */:
-                            return new TypeScript.RsDotRef(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.left.toRsExp(helper), this.right.toRsAST(helper));
+                            return new TypeScript.RsDotRef(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.left.toRsExp(helper), this.right.toRsAST(helper));
                     }
                     throw new Error("UNIMMPLEMENTED:BinaryExpression:toRsAST:MemberAccessExpression:op2-nonId");
                 }
 
                 case 174 /* AssignmentExpression */:
-                    return new TypeScript.RsAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), new TypeScript.RsAssignOp(this.operatorToken.text()), this.left.toRsLValue(helper), this.right.toRsExp(helper));
+                    return new TypeScript.RsAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsAssignOp(this.operatorToken.text()), this.left.toRsLValue(helper), this.right.toRsExp(helper));
 
                 case 221 /* ElementAccessExpression */:
-                    return new TypeScript.RsBracketRef(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.left.toRsExp(helper), this.right.toRsExp(helper));
+                    return new TypeScript.RsBracketRef(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.left.toRsExp(helper), this.right.toRsExp(helper));
 
                 case 208 /* AddExpression */:
                 case 209 /* SubtractExpression */:
@@ -12897,13 +12904,16 @@ var TypeScript;
                 case 202 /* LeftShiftExpression */:
                 case 203 /* SignedRightShiftExpression */:
                 case 204 /* UnsignedRightShiftExpression */:
-                    return new TypeScript.RsInfixExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), new TypeScript.RsInfixOp(this.operatorToken.text()), this.left.toRsExp(helper), this.right.toRsExp(helper));
+                    return new TypeScript.RsInfixExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsInfixOp(this.operatorToken.text()), this.left.toRsExp(helper), this.right.toRsExp(helper));
 
                 case 175 /* AddAssignmentExpression */:
                 case 176 /* SubtractAssignmentExpression */:
                 case 178 /* DivideAssignmentExpression */:
                 case 177 /* MultiplyAssignmentExpression */:
-                    return new TypeScript.RsAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), new TypeScript.RsAssignOp(this.operatorToken.text()), this.left.toRsLValue(helper), this.right.toRsExp(helper));
+                    return new TypeScript.RsAssignExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsAssignOp(this.operatorToken.text()), this.left.toRsLValue(helper), this.right.toRsExp(helper));
+
+                case 200 /* InstanceOfExpression */:
+                    return new TypeScript.RsInfixExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsInfixOp("instanceof"), this.left.toRsExp(helper), this.right.toRsExp(helper));
 
                 default:
                     throw new Error("UNIMMPLEMENTED:BinaryExpression:toRsExp:Expression for: " + TypeScript.SyntaxKind[this.kind()]);
@@ -13926,9 +13936,9 @@ var TypeScript;
 
         IfStatementSyntax.prototype.toRsStmt = function (helper) {
             if (this.elseClause) {
-                return new TypeScript.RsIfStmt(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.condition.toRsExp(helper), this.statement.toRsStmt(helper), this.elseClause.toRsStmt(helper));
+                return new TypeScript.RsIfStmt(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.condition.toRsExp(helper), this.statement.toRsStmt(helper), this.elseClause.toRsStmt(helper));
             } else {
-                return new TypeScript.RsIfSingleStmt(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.condition.toRsExp(helper), this.statement.toRsStmt(helper));
+                return new TypeScript.RsIfSingleStmt(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.condition.toRsExp(helper), this.statement.toRsStmt(helper));
             }
         };
         return IfStatementSyntax;
@@ -14011,7 +14021,7 @@ var TypeScript;
         };
 
         ExpressionStatementSyntax.prototype.toRsStmt = function (helper) {
-            return new TypeScript.RsExprStmt(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.expression.toRsExp(helper));
+            return new TypeScript.RsExprStmt(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.expression.toRsExp(helper));
         };
         return ExpressionStatementSyntax;
     })(TypeScript.SyntaxNode);
@@ -14115,7 +14125,7 @@ var TypeScript;
         };
 
         ConstructorDeclarationSyntax.prototype.toRsClassElt = function (helper) {
-            var anns = tokenAnnots(this.firstToken(), 2 /* ClassContructorContext */);
+            var anns = tokenAnnots(this.firstToken(), 3 /* ClassContructorContext */);
             var bindAnns = anns.filter(function (a) {
                 return a.kind() === 7 /* RawConstr */;
             });
@@ -14233,19 +14243,31 @@ var TypeScript;
 
         MemberFunctionDeclarationSyntax.prototype.toRsClassElt = function (helper) {
             var methodName = this.propertyName.text();
-            var anns = tokenAnnots(this.firstToken(), 0 /* ClassMethodContext */);
-            var bindAnns = anns.filter(function (a) {
-                return a.kind() === 6 /* RawMethod */;
+            var isStatic = this.modifiers.toArray().some(function (t) {
+                return t.kind() === 58 /* StaticKeyword */;
             });
+
+            var ctx = (isStatic) ? 1 /* ClassStaticContext */ : 0 /* ClassMethodContext */;
+
+            var anns = tokenAnnots(this.firstToken(), ctx);
+
+            if (isStatic) {
+                var bindAnns = anns.filter(function (a) {
+                    return a.kind() === 8 /* RawStatic */;
+                });
+            } else {
+                var bindAnns = anns.filter(function (a) {
+                    return a.kind() === 6 /* RawMethod */;
+                });
+            }
+
             var bindAnnNames = bindAnns.map(function (a) {
                 return a.getBinderName();
             });
-            if (bindAnnNames.length !== 1 || bindAnnNames[0] !== methodName) {
-                throw new Error("Method '" + methodName + "' should have a single annotation.");
+            if (bindAnnNames.length == 0 || bindAnnNames[0] !== methodName) {
+                throw new Error("Method '" + methodName + "' should have at least one annotation.");
             }
-            return new TypeScript.RsMemberMethDecl(helper.getSourceSpan(this), anns, TypeScript.ArrayUtilities.firstOrDefault(this.modifiers.toArray(), function (t, i) {
-                return t.kind() === 58 /* StaticKeyword */;
-            }) !== null, this.propertyName.toRsId(helper), new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
+            return new TypeScript.RsMemberMethDecl(helper.getSourceSpan(this), anns, isStatic, this.propertyName.toRsId(helper), new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (t) {
                 return t.toRsId(helper);
             })), new TypeScript.RsASTList([this.block.toRsStmt(helper)]));
         };
@@ -14576,14 +14598,35 @@ var TypeScript;
         };
 
         MemberVariableDeclarationSyntax.prototype.toRsClassElt = function (helper) {
-            var anns = tokenAnnots(this.firstToken(), 1 /* ClassFieldContext */);
+            var isStatic = this.modifiers.toArray().some(function (t) {
+                return t.kind() === 58 /* StaticKeyword */;
+            });
+            var ctx = (isStatic) ? 1 /* ClassStaticContext */ : 2 /* ClassFieldContext */;
+
+            var anns = tokenAnnots(this.firstToken(), ctx);
+
+            if (isStatic) {
+                var bindAnns = anns.filter(function (a) {
+                    return a.kind() === 8 /* RawStatic */;
+                });
+            } else {
+                var bindAnns = anns.filter(function (a) {
+                    return a.kind() === 5 /* RawField */;
+                });
+            }
+
+            var bindAnnNames = bindAnns.map(function (a) {
+                return a.getBinderName();
+            });
+            if (bindAnnNames.length == 0) {
+                throw new Error("Field should have at least one annotation.");
+            }
+
             var binderNames = anns.filter(function (b) {
-                return b.kind() === 5 /* RawField */;
+                return b.kind() === 5 /* RawField */ || b.kind() === 8 /* RawStatic */;
             });
 
-            return new TypeScript.RsMemberVarDecl(helper.getSourceSpan(this), [], this.modifiers.toArray().some(function (m) {
-                return m.kind() === 58 /* StaticKeyword */;
-            }), this.variableDeclarator.toRsVarDecl(helper, binderNames));
+            return new TypeScript.RsMemberVarDecl(helper.getSourceSpan(this), [], isStatic, this.variableDeclarator.toRsVarDecl(helper, binderNames));
         };
         return MemberVariableDeclarationSyntax;
     })(TypeScript.SyntaxNode);
@@ -14759,7 +14802,7 @@ var TypeScript;
 
         ThrowStatementSyntax.prototype.toRsStmt = function (helper) {
             var ret = this.expression.toRsExp(helper);
-            return new TypeScript.RsThrowStatement(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), ret);
+            return new TypeScript.RsThrowStatement(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), ret);
         };
         return ThrowStatementSyntax;
     })(TypeScript.SyntaxNode);
@@ -14853,7 +14896,7 @@ var TypeScript;
 
         ReturnStatementSyntax.prototype.toRsStmt = function (helper) {
             var ret = this.expression ? this.expression.toRsExp(helper) : null;
-            return new TypeScript.RsReturnStmt(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), ret);
+            return new TypeScript.RsReturnStmt(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), ret);
         };
         return ReturnStatementSyntax;
     })(TypeScript.SyntaxNode);
@@ -14965,7 +15008,7 @@ var TypeScript;
         };
 
         ObjectCreationExpressionSyntax.prototype.toRsExp = function (helper) {
-            return new TypeScript.RsNewExpr(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.expression.toRsExp(helper), this.argumentList.arguments.toRsExp(helper));
+            return new TypeScript.RsNewExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.expression.toRsExp(helper), this.argumentList.arguments.toRsExp(helper));
         };
         return ObjectCreationExpressionSyntax;
     })(TypeScript.SyntaxNode);
@@ -15622,9 +15665,9 @@ var TypeScript;
             }).filter(function (t) {
                 return t !== null;
             }).map(function (t) {
-                return TypeScript.RsAnnotation.createAnnotation(t, 3 /* OtherContext */);
+                return TypeScript.RsAnnotation.createAnnotation(t, 4 /* OtherContext */);
             });
-            return new TypeScript.RsForStmt(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.variableDeclaration.toRsForInit(helper, anns), this.condition.toRsExp(helper), this.incrementor.toRsExp(helper), this.statement.toRsStmt(helper));
+            return new TypeScript.RsForStmt(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.variableDeclaration.toRsForInit(helper, anns), this.condition.toRsExp(helper), this.incrementor.toRsExp(helper), this.statement.toRsStmt(helper));
         };
         return ForStatementSyntax;
     })(TypeScript.SyntaxNode);
@@ -15871,7 +15914,7 @@ var TypeScript;
         };
 
         WhileStatementSyntax.prototype.toRsStmt = function (helper) {
-            return new TypeScript.RsWhileStmt(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.condition.toRsExp(helper), this.statement.toRsStmt(helper));
+            return new TypeScript.RsWhileStmt(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.condition.toRsExp(helper), this.statement.toRsStmt(helper));
         };
         return WhileStatementSyntax;
     })(TypeScript.SyntaxNode);
@@ -16364,7 +16407,7 @@ var TypeScript;
         };
 
         ObjectLiteralExpressionSyntax.prototype.toRsExp = function (helper) {
-            return new TypeScript.RsObjectLit(helper.getSourceSpan(this), this.getRsAnnotations(3 /* OtherContext */), this.propertyAssignments.toRsMemList(helper));
+            return new TypeScript.RsObjectLit(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), this.propertyAssignments.toRsMemList(helper));
         };
         return ObjectLiteralExpressionSyntax;
     })(TypeScript.SyntaxNode);
@@ -58495,18 +58538,20 @@ var TypeScript;
         AnnotKind[AnnotKind["RawField"] = 5] = "RawField";
         AnnotKind[AnnotKind["RawMethod"] = 6] = "RawMethod";
         AnnotKind[AnnotKind["RawConstr"] = 7] = "RawConstr";
-        AnnotKind[AnnotKind["RawTAlias"] = 8] = "RawTAlias";
-        AnnotKind[AnnotKind["RawPAlias"] = 9] = "RawPAlias";
-        AnnotKind[AnnotKind["RawQual"] = 10] = "RawQual";
-        AnnotKind[AnnotKind["RawInvt"] = 11] = "RawInvt";
+        AnnotKind[AnnotKind["RawStatic"] = 8] = "RawStatic";
+        AnnotKind[AnnotKind["RawTAlias"] = 9] = "RawTAlias";
+        AnnotKind[AnnotKind["RawPAlias"] = 10] = "RawPAlias";
+        AnnotKind[AnnotKind["RawQual"] = 11] = "RawQual";
+        AnnotKind[AnnotKind["RawInvt"] = 12] = "RawInvt";
     })(TypeScript.AnnotKind || (TypeScript.AnnotKind = {}));
     var AnnotKind = TypeScript.AnnotKind;
 
     (function (AnnotContext) {
         AnnotContext[AnnotContext["ClassMethodContext"] = 0] = "ClassMethodContext";
-        AnnotContext[AnnotContext["ClassFieldContext"] = 1] = "ClassFieldContext";
-        AnnotContext[AnnotContext["ClassContructorContext"] = 2] = "ClassContructorContext";
-        AnnotContext[AnnotContext["OtherContext"] = 3] = "OtherContext";
+        AnnotContext[AnnotContext["ClassStaticContext"] = 1] = "ClassStaticContext";
+        AnnotContext[AnnotContext["ClassFieldContext"] = 2] = "ClassFieldContext";
+        AnnotContext[AnnotContext["ClassContructorContext"] = 3] = "ClassContructorContext";
+        AnnotContext[AnnotContext["OtherContext"] = 4] = "OtherContext";
     })(TypeScript.AnnotContext || (TypeScript.AnnotContext = {}));
     var AnnotContext = TypeScript.AnnotContext;
 
@@ -58525,11 +58570,13 @@ var TypeScript;
                     switch (ctx) {
                         case 0 /* ClassMethodContext */:
                             return new RsBindAnnotation(6 /* RawMethod */, pair.snd());
-                        case 1 /* ClassFieldContext */:
+                        case 1 /* ClassStaticContext */:
+                            return new RsBindAnnotation(8 /* RawStatic */, pair.snd());
+                        case 2 /* ClassFieldContext */:
                             return new RsBindAnnotation(5 /* RawField */, pair.snd());
-                        case 2 /* ClassContructorContext */:
+                        case 3 /* ClassContructorContext */:
                             return new RsBindAnnotation(7 /* RawConstr */, pair.snd());
-                        case 3 /* OtherContext */:
+                        case 4 /* OtherContext */:
                             return new RsBindAnnotation(pair.fst(), pair.snd());
                         default:
                             throw new Error("BUG: there is no default context");
@@ -58580,17 +58627,17 @@ var TypeScript;
                 case "measure":
                     return 0 /* RawMeas */;
                 case "qualif":
-                    return 10 /* RawQual */;
+                    return 11 /* RawQual */;
                 case "interface":
                     return 3 /* RawType */;
                 case "alias":
-                    return 8 /* RawTAlias */;
+                    return 9 /* RawTAlias */;
                 case "class":
                     return 4 /* RawClass */;
                 case "predicate":
-                    return 9 /* RawPAlias */;
+                    return 10 /* RawPAlias */;
                 case "invariant":
-                    return 11 /* RawInvt */;
+                    return 12 /* RawInvt */;
                 case "extern":
                     return 2 /* RawExtern */;
                 default:
@@ -58616,8 +58663,20 @@ var TypeScript;
             if (this._binderName)
                 return this._binderName;
             var content = this.getContent();
+
             var bs = content.split("::");
-            if (bs && bs.length == 2) {
+            if (bs && bs.length > 1) {
+                var lhss = bs[0].split(" ").filter(function (s) {
+                    return s.length > 0;
+                });
+                if (lhss && lhss.length === 1) {
+                    this._binderName = lhss[0];
+                    return this._binderName;
+                }
+            }
+
+            bs = content.split(":");
+            if (bs && bs.length > 1) {
                 var lhss = bs[0].split(" ").filter(function (s) {
                     return s.length > 0;
                 });
@@ -58631,7 +58690,8 @@ var TypeScript;
                     return this._binderName;
                 }
             }
-            console.log("Invalid nano-js annotation: " + content);
+
+            console.log("Invalid RefScript annotation: " + content);
             console.log("Perhaps you need to replace ':' with '::'.");
             process.exit(1);
         };
@@ -60151,7 +60211,7 @@ var TypeScript;
             var s = "";
             s += "{ ";
             s += this.fields.map(function (f) {
-                return (f.symbol + ": " + f.type.toString());
+                return (f.symbol + " : " + f.type.toString());
             }).join(", ");
             s += " }";
             return s;
@@ -60259,7 +60319,7 @@ var TypeScript;
             this.name = name;
         }
         TTVar.prototype.toString = function () {
-            return name;
+            return this.name;
         };
         return TTVar;
     })(RsType);
@@ -60324,7 +60384,7 @@ var TypeScript;
             this.type = type;
         }
         TElt.prototype.toString = function () {
-            return this.name + ": " + this.type.toString();
+            return this.name + " : " + this.type.toString();
         };
         return TElt;
     })();

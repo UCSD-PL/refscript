@@ -167,7 +167,7 @@ convertObj l δ t1@(TApp (TRef _) _ _) t2
 convertObj l δ t1 t2@(TApp (TRef _) _ _)
   = convertObj l δ t1 (flattenType δ t2) 
 
-convertObj _ _ _ _ =  error "BUG: Case not supported in convertObj"
+convertObj l _ t1 t2 =  Left $ unimplemented l "convertObj" $ ppshow t1 ++ " -- " ++ ppshow t2
 
 
 -- | Deep subtyping for object members
@@ -336,14 +336,25 @@ convertSimple l _ t1 t2
 --------------------------------------------------------------------------------
 convertUnion :: PPR  r => SourceSpan -> TDR r -> RType r -> RType r -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertUnion l δ t1 t2 = 
-    case distinct of
-      ([],[])  | length t1s == length t2s -> Right CDNo
-               | otherwise                -> error "convertUnion - impossible"
-      ([],_ )                             -> Right CDUp 
-      (_ ,[])                             -> Right CDDn 
-      ( _ ,_)                             -> Left  $ errorUnionSubtype l t1 t2
+convertUnion l δ t1 t2  
+
+
+  | upcast    = Right $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) CDUp 
+  | deadcast  = Right $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) CDDead
+  | otherwise = Right $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) CDDn
+
+--     case distinct of
+--       ([],[])  | length t1s == length t2s -> Right $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) CDNo
+--                | otherwise                -> error "convertUnion - impossible"
+--       ([],_ )                             -> Right $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) CDUp 
+--       (_ ,[])                             -> Right $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) CDDn 
+--       ( _ ,_)                             -> Left  $ errorUnionSubtype l t1 t2
   where 
+
+    upcast                = all (\t1 -> any (\t2 -> isSubtype δ t1 t2) t2s) t1s
+    deadcast              = all (\t1 -> not $ any (\t2 -> isSubtype δ t1 t2) t2s) t1s
+  
+
     (t1s, t2s)            = sanityCheck $ mapPair bkUnion (t1, t2)
     sanityCheck ([ ],[ ]) = errorstar "unionParts', called on too small input"
     sanityCheck ([_],[ ]) = errorstar "unionParts', called on too small input"
@@ -359,7 +370,7 @@ convertUnion l δ t1 t2 =
 safeExtends :: PPR r => SourceSpan -> TDR r -> TDef r -> [Error]
 --------------------------------------------------------------------------------
 safeExtends l δ (TD _ c _ (Just (p, ts)) es) =
-    [ errorClassExtends l c p δ ee pe | pe <- flatten False δ (findSymOrDie p δ,ts)
+    [ errorClassExtends l c p (F.symbol ee) ee pe | pe <- flatten False δ (findSymOrDie p δ,ts)
                                       , ee <- es, sameBinder pe ee 
                                       , let t1 = eltType ee
                                       , let t2 = eltType pe

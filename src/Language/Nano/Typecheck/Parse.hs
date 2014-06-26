@@ -218,7 +218,7 @@ bbaseP
 objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
 objLitP 
-  = do m     <- option mutable (toType <$> mutP)
+  = do m     <- option anyMutability (toType <$> mutP)
        bs    <- braces propBindP
        return $ TCons bs m
  
@@ -261,6 +261,11 @@ tConP =  try (reserved "number"    >> return TInt)
 idToTRefP :: Id SourceSpan -> Parser TCon
 ----------------------------------------------------------------------------------
 idToTRefP (Id _ s) = return $ TRef (symbol s)
+
+----------------------------------------------------------------------------------
+idToTTyOfP :: Id SourceSpan -> Parser TCon
+----------------------------------------------------------------------------------
+idToTTyOfP (Id _ s) = return $ TTyOf (symbol s)
 
 bareAll1P p
   = do reserved "forall"
@@ -313,7 +318,7 @@ statEltP = do
     _          <- reserved "static"
     x          <- symbolP 
     _          <- colon
-    m          <- option def (toType <$> mutP)
+    m          <- option anyMutability (toType <$> mutP)
     t          <- bareTypeP
     return      $ StatSig x m t
 
@@ -321,7 +326,7 @@ statEltP = do
 methEltP = do
     x          <- symbolP 
     _          <- colon
-    m          <- option def (toType <$> mutP)
+    m          <- option anyMutability (toType <$> mutP)
     t          <- methSigP
     return      $ MethSig x m $ outT t
   where

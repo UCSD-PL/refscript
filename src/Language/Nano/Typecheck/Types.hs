@@ -1004,6 +1004,7 @@ data Fact r
   | MethAnn     !(TElt r) 
   | StatAnn     !(TElt r) 
   | ConsAnn     !(TElt r)
+  | UserCast     !(RType r)
   -- Class annotation
   | ClassAnn      !([TVar], Maybe (Id SourceSpan,[RType r]))
     deriving (Eq, Show, Data, Typeable, Functor)
@@ -1041,6 +1042,7 @@ instance Ord (Fact r) where
   compare (MethAnn m1      ) (MethAnn m2      )   = on compare (fmap $ const ()) m1 m2
   compare (StatAnn s1      ) (StatAnn s2      )   = on compare (fmap $ const ()) s1 s2
   compare (ConsAnn c1      ) (ConsAnn c2      )   = on compare (fmap $ const ()) c1 c2
+  compare (UserCast c1     ) (UserCast c2     )   = on compare (fmap $ const ()) c1 c2
   compare (ClassAnn (_,m1) ) (ClassAnn (_,m2) )   = on compare (fst <$>) m1 m2
   compare f1 f2                                   = on compare factToNum f1 f2
 
@@ -1054,7 +1056,8 @@ factToNum (FieldAnn _      ) = 7
 factToNum (MethAnn _       ) = 8
 factToNum (StatAnn _       ) = 9
 factToNum (ConsAnn _       ) = 10
-factToNum (ClassAnn _      ) = 11
+factToNum (UserCast _      ) = 11
+factToNum (ClassAnn _      ) = 12
 
 
 instance Eq (Annot a SourceSpan) where 
@@ -1071,6 +1074,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (TCast  ξ c)     = text "cast"                   <+> pp ξ <+> pp c
   pp (VarAnn t)       = text "Var Annotation"         <+> pp t
   pp (ConsAnn c)      = text "Constructor Annotation" <+> pp c
+  pp (UserCast c)      = text "Cast Annotation"        <+> pp c
   pp (FieldAnn f)     = text "Field Annotation"       <+> pp f
   pp (MethAnn m)      = text "Method Annotation"      <+> pp m
   pp (StatAnn s)      = text "Static Annotation"      <+> pp s

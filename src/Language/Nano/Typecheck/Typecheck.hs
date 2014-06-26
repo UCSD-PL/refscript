@@ -17,6 +17,7 @@ import           Control.Monad
 import qualified Data.HashMap.Strict                as M 
 import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe, fromJust, maybeToList, isJust)
 import           Data.List                          (find)
+import           Data.Function                      (on)
 import           Data.Generics                   
 
 import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat)
@@ -323,13 +324,13 @@ tcClassElt γ cid (MemberVarDecl l static (VarDecl l1 x eo))
   = case anns of 
       []  ->  tcError       $ errorClassEltAnnot (srcPos l1) cid x
       fs  ->  case eo of
-                Just e     -> do ([e'],_)  <- tcNormalCall γ l1 "field init" [e] $ tracePP ("initfield " ++ ppshow (srcPos l1)) $ ft fs
+                Just e     -> do ([e'],_)  <- tcNormalCall γ l1 "field init" [e] $ ft fs
                                  return     $ (MemberVarDecl l static (VarDecl l1 x $ Just e'))
                 Nothing    -> return        $ (MemberVarDecl l static (VarDecl l1 x Nothing))
   where
-    anns | static    = tracePP "static anno" [ s | StatAnn  s <- ann_fact l1 ]
+    anns | static    = [ s | StatAnn  s <- ann_fact l1 ]
          | otherwise = [ f | FieldAnn f <- ann_fact l1 ]
-    ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> tracePP ("flds " ++ ppshow (srcPos l)) flds
+    ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> flds
 
 --
 --  Currently we allow a single type annotation that can be an overloaded
@@ -551,7 +552,7 @@ classEltType t (MemberMethDecl l static _ _ _ )
 tcVarDecl ::  PPR r 
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
-tcVarDecl γ v@(VarDecl l x (Just e)) 
+tcVarDecl γ v@(VarDecl l x (Just e))
   = do ann         <- listToMaybe <$> scrapeVarDecl v
        (e', t)     <- tcExprT l γ e ann
        return       $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
@@ -625,15 +626,34 @@ tcExpr γ e@(CallExpr _ _ _)
 
 tcExpr γ e@(ArrayLit _ _)
   = tcCall γ e 
-
+ 
 tcExpr γ e@(ObjectLit _ _) 
   = tcCall γ e
 
-tcExpr γ (Cast l@(Ann loc fs) e)
-  = do (e', t) <- tcExpr γ e
-       case e' of
-         Cast (Ann _ fs') e'' -> return (Cast (Ann loc (fs ++ fs')) e'', t)
-         _                    -> return (Cast l e', t)
+-- FIXME: compound casts ???
+--
+-- | <T>e
+--
+tcExpr γ ex@(Cast l@(Ann loc fs) e)
+  = do  (e', t) <- tcExpr γ  e
+        δ       <- getDef
+        case [ ct | UserCast ct <- fs ] of
+          -- Stuff from before
+          [  ] -> case e' of
+                    Cast (Ann _ fs') e'' -> return (Cast (Ann loc (fs ++ fs')) e'', t)
+                    _                    -> return (Cast l e', t)
+          -- User cast
+          [t1] -> return $ (Cast (mp (rplc δ t) l) e', t1)
+          _    -> tcError $ unimplemented (srcPos l) "Compound casts" $ ppshow ex
+  where
+    mp f (Ann l fs)         = Ann l $ f <$> fs
+    rplc :: PPR r => TDefEnv r -> RType r -> Fact r -> Fact r
+    rplc δ t0 (UserCast t1) | on (==) toType t0 t1  = TCast (tce_ctx γ) $ CNo
+                            | isSubtype δ t0 t1     = TCast (tce_ctx γ) $ CUp t0 t1
+                            | isSubtype δ t1 t0     = TCast (tce_ctx γ) $ CDn t0 t1
+                            | otherwise             = TCast (tce_ctx γ) $ CDead t1
+    rplc _ _  a                                     = a
+    
  
 -- | e.f
 tcExpr γ e@(DotRef _ _ _) 

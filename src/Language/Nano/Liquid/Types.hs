@@ -457,9 +457,15 @@ zipType δ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _)
   | otherwise
   = case weaken δ (findSymOrDie x1 δ, t1s) x2 of
       -- Try to move along the class hierarchy
-      Just (_, t1s') -> zipType δ (TApp (TRef x2) t1s' r1) t2
+      Just (_, t1s') -> zipType δ (TApp (TRef x2) t1s' r1 `strengthen` reftIO t1 x1) t2
       -- Unfold structures
       Nothing        -> zipType δ (flattenType δ t1) (flattenType δ t2)
+  where
+    reftIO t c               = F.Reft (vv t, [refaIO t c])
+    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr $ F.symbolString c]
+    vv                       = rTypeValueVar
+    sym = F.dummyLoc $ F.symbol "instanceof"
+
 
 zipType δ t1@(TApp (TRef _) _ _) t2 = zipType δ (flattenType δ t1) t2
 zipType δ t1 t2@(TApp (TRef _) _ _) = zipType δ t1 (flattenType δ t2)

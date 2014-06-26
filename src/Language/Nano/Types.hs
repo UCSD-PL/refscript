@@ -218,6 +218,7 @@ instance IsNano (Expression a) where
   isNano (ThisRef _)             = True 
   isNano (SuperRef _)            = True 
   isNano (NewExpr _ e es)        = isNano e && all isNano es
+  isNano (Cast _ e)              = isNano e
   isNano e                       = errortext (text "Not Nano Expression!" <+> pp e)
   -- isNano _                     = False
 

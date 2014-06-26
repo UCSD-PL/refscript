@@ -423,6 +423,7 @@ data RawSpec
   | RawPAlias String   -- Predicate aliases
   | RawQual   String   -- Qualifiers
   | RawInvt   String   -- Invariants
+  | RawCast   String   -- Casts
   deriving (Show,Eq,Ord,Data,Typeable,Generic)
 
 data PSpec l r
@@ -439,6 +440,7 @@ data PSpec l r
   | PAlias (Id l, PAlias) 
   | Qual   Qualifier
   | Invt   l (RType r) 
+  | CastSp l (RType r)
   deriving (Eq, Ord, Show, Data, Typeable)
 
 type Spec = PSpec SourceSpan Reft
@@ -457,6 +459,7 @@ parseAnnot ss (RawTAlias _) = TAlias <$> patch2 ss <$> tAliasP
 parseAnnot ss (RawPAlias _) = PAlias <$> patch2 ss <$> pAliasP
 parseAnnot _  (RawQual   _) = Qual   <$>               qualifierP
 parseAnnot ss (RawInvt   _) = Invt              ss <$> bareTypeP
+parseAnnot ss (RawCast   _) = CastSp            ss <$> bareTypeP
 
 
 patch2 ss (id, t)    = (fmap (const ss) id , t)
@@ -475,6 +478,7 @@ getSpecString (RawTAlias s) = s
 getSpecString (RawPAlias s) = s  
 getSpecString (RawQual   s) = s  
 getSpecString (RawInvt   s) = s  
+getSpecString (RawCast   s) = s  
 
 instance FromJSON SourcePos where
   parseJSON (Array v) = do
@@ -559,6 +563,7 @@ mkCode f ss =  Nano {
                          ++ [MethAnn  m     | Method m     <- αs ]
                          ++ [StatAnn  m     | Static m     <- αs ]
                          ++ [ClassAnn t     | Class  (_,t) <- αs ]
+                         ++ [UserCast t     | CastSp _ t   <- αs ]
     ss'           = (toBare <$>) <$> ss
     anns          = concatMap (FO.foldMap snd) ss
 

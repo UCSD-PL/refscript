@@ -553,8 +553,8 @@ consDownCast δ g l x _ t2
     where 
         tx   = envFindTy x g
         -- This will drop all top-level refinements from union-level to its parts
-        txx  = tracePP "consDownCast LHS" $ zipType δ tx tx 
-        tx2  = tracePP "consDownCast RHS" $ zipType δ t2 tx
+        txx  = zipType δ tx tx 
+        tx2  = zipType δ t2 tx
         ztx  = zipType δ tx t2
 
 

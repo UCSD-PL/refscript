@@ -10838,7 +10838,7 @@ var TypeScript;
                     return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), this.getRsAnnotations(4 /* OtherContext */), new TypeScript.RsPrefixOp(1 /* PrefixBNot */), this.operand.toRsExp(helper));
 
                 case 220 /* CastExpression */:
-                    return this.operand.toRsExp(helper);
+                    return this.toRsExp(helper);
                 default:
                     throw new Error("UnaryExpression:toRsExp SyntaxKind not supported: " + TypeScript.SyntaxKind[this.kind()]);
             }
@@ -16294,7 +16294,10 @@ var TypeScript;
         };
 
         CastExpressionSyntax.prototype.toRsExp = function (helper) {
-            return this.expression.toRsExp(helper);
+            var eltSymbol = helper.getSymbolForAST(this.type);
+            var castType = eltSymbol.type.toRsType();
+
+            return new TypeScript.RsCast(helper.getSourceSpan(this), [TypeScript.RsAnnotation.createAnnotation("cast " + castType.toString(), 4 /* OtherContext */)], this.expression.toRsExp(helper));
         };
         return CastExpressionSyntax;
     })(TypeScript.SyntaxNode);
@@ -58543,6 +58546,7 @@ var TypeScript;
         AnnotKind[AnnotKind["RawPAlias"] = 10] = "RawPAlias";
         AnnotKind[AnnotKind["RawQual"] = 11] = "RawQual";
         AnnotKind[AnnotKind["RawInvt"] = 12] = "RawInvt";
+        AnnotKind[AnnotKind["RawCast"] = 13] = "RawCast";
     })(TypeScript.AnnotKind || (TypeScript.AnnotKind = {}));
     var AnnotKind = TypeScript.AnnotKind;
 
@@ -58638,6 +58642,8 @@ var TypeScript;
                     return 10 /* RawPAlias */;
                 case "invariant":
                     return 12 /* RawInvt */;
+                case "cast":
+                    return 13 /* RawCast */;
                 case "extern":
                     return 2 /* RawExtern */;
                 default:
@@ -59693,6 +59699,27 @@ var TypeScript;
         return RsArrayLit;
     })(RsExpression);
     TypeScript.RsArrayLit = RsArrayLit;
+
+    var RsCast = (function (_super) {
+        __extends(RsCast, _super);
+        function RsCast(span, ann, expression) {
+            _super.call(this, ann);
+            this.span = span;
+            this.ann = ann;
+            this.expression = expression;
+        }
+        RsCast.prototype.toObject = function () {
+            return {
+                Cast: [
+                    [this.span.toObject(), this.mapAnn(function (a) {
+                            return a.toObject();
+                        })],
+                    this.expression.toObject()]
+            };
+        };
+        return RsCast;
+    })(RsExpression);
+    TypeScript.RsCast = RsCast;
 
     var RsClassElt = (function (_super) {
         __extends(RsClassElt, _super);

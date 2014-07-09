@@ -15,7 +15,7 @@ extra-source-files:  README.md,
 data-files:          README.md, 
                      include/prelude.ts
 
-Executable nanojs
+Executable rsc 
   build-depends:       base, containers, 
                        pretty, 
                        split,

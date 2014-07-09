@@ -11,7 +11,7 @@ For each directory in:
 get the files to check with 
 
   tsc --noImplicitAny
-  
+
 Using CATS
 ------------
 
@@ -40,5 +40,8 @@ Add the following to package.json
 
     /path/to/Refscript/benchmarks/dummy
 
+**Edit**
+
+    tinker around with it to add bugs and see them get caught.
 
 

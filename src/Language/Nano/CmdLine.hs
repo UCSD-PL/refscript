@@ -19,7 +19,7 @@ tc = TC {
                         &= help "Paths to Spec Include Directory "
  , noFailCasts  = def   &= help "Do not fail typecheck when casts are added"
 
- } &= help    "Type Checker for Nano" 
+ } &= help    "RefScript Type Checker" 
 
 
 liquid = Liquid { 
@@ -32,7 +32,7 @@ liquid = Liquid {
 
  , kVarInst = True &= help "Enable k-var toplevel function type instantiation [default = True]"
    
- } &= help    "Refinement Type Checker for Nano" 
+ } &= help    "RefScript Refinement Type Checker" 
 
 
 
@@ -40,10 +40,9 @@ liquid = Liquid {
 config = modes [ tc
                , liquid &= auto 
                ] 
-            &= help    "nanojs is a suite of toy program verifiers"
-            &= program "nanojs" 
-            &= summary "nanojs © Copyright 2013 Regents of the University of California." 
-            &= verbosity
+            &= help    "rsc is an optional refinement type checker for TypeScript"
+            &= program "rsc" 
+            &= summary "rsc © Copyright 2013-14 Regents of the University of California." 
             &= verbosity
    
 getOpts :: IO Config 
@@ -51,6 +50,6 @@ getOpts = do md <- cmdArgs config
              whenLoud $ putStrLn $ banner md
              return   $ md
 
-banner args =  "nanojs © Copyright 2013 Regents of the University of California.\n" 
+banner args =  "nanojs © Copyright 2013-14 Regents of the University of California.\n" 
             ++ "All Rights Reserved.\n"
             ++ "nanojs" ++ show args ++ "\n" 

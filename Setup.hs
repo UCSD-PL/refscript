@@ -4,11 +4,11 @@ import Distribution.PackageDescription
 import Distribution.Simple
 import Distribution.Simple.LocalBuildInfo
 import Distribution.Simple.Setup
-import System.Posix.Env hiding (getEnvironment)
-import System.Environment (getEnvironment)
+import System.Posix.Env           hiding  (getEnvironment)
+import System.Environment                 (getEnvironment)
 import System.Process
 import System.Exit
-import Data.List (find)
+import Data.List                          (find)
 
 main         = defaultMainWithHooks fixHooks 
   where 

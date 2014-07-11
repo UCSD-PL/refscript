@@ -7,6 +7,8 @@
 ///<reference path='.\underscore3.d.ts' />
 
 //TODO: restore 'guard' internal params to several functions
+//TODO: Functions are currently duplicated instead of overloaded. Ones that are identical up to renaming are marked with //=
+//        Many of these stem from each/eachD and the dictionary dupes are named with a trailing D
 
 module _Implementation {
 
@@ -71,23 +73,23 @@ module _Implementation {
     // --------------------
     
     // Generates lookup iterators.
-    private lookupIterator1<T, TResult>(func: (x: T) => TResult, context: any, argCount?: any): (x: T) => TResult {
+    private lookupIterator1<X, TResult>(func: (x:X) => TResult, context: any): (x:X) => TResult {
       if (func == null) return this.identity;
       return this.createCallback1(func, context);
     }
 
-    private lookupIterator<T, TResult>(func: _.ListIterator<T, TResult>, context: any): _.ListIterator<T, TResult> {
+    private lookupIterator3<X, Y, Z, TResult>(func: (x:X, y:Y, z:Z) => TResult, context: any): (x:X, y:Y, z:Z) => TResult {
       if (func == null) return this.identity;
-      return this.createCallback(func, context);
+      return this.createCallback3(func, context);
     }
 
-    private lookupIteratorM<T, TResult>(func: _.MemoIterator<T, TResult>, context: any): _.MemoIterator<T, TResult> {
+    private lookupIterator4<X, Y, Z, W, TResult>(func: (x:X, y:Y, z:Z, w:W) => TResult, context: any): (x:X, y:Y, z:Z, w:W) => TResult {
       if (func == null) return this.identity;
-      return this.createCallbackM(func, context);
+      return this.createCallback4(func, context);
     }
 
     // Creates a callback bound to its context if supplied
-    private createCallback1<T, TResult>(func: (x: T) => TResult, context: any): (x: T) => TResult {
+    private createCallback1<X, TResult>(func: (x:X) => TResult, context: any): (x:X) => TResult {
       if (context === void 0) return func;
       return function(value) {
           return func.call(context, value);
@@ -98,14 +100,14 @@ module _Implementation {
                     //         return func.call(context, value, other);
                     //       };
 
-    private createCallback<T, TResult>(func: _.ListIterator<T, TResult>, context: any): _.ListIterator<T, TResult> {
+    private createCallback3<X, Y, Z, TResult>(func: (x:X, y:Y, z:Z) => TResult, context: any): (x:X, y:Y, z:Z) => TResult {
       if (context === void 0) return func;   
       return function(value, index, collection) {
         return func.call(context, value, index, collection);
       };
     }
 
-    private createCallbackM<T, TResult>(func: _.MemoIterator<T, TResult>, context: any): _.MemoIterator<T, TResult> {
+    private createCallback4<X, Y, Z, W, TResult>(func: (x:X, y:Y, z:Z, w:W) => TResult, context: any): (x:X, y:Y, z:Z, w:W) => TResult {
       if (context === void 0) return func;
       return function(accumulator, value, index, collection) {
           return func.call(context, accumulator, value, index, collection);
@@ -124,18 +126,21 @@ module _Implementation {
     public each<T>(obj: _.List<T>, iterator: _.ListIterator<T, any>, context?: any): _.List<T> {
       var i, length;
       if (obj == null) return obj;
-      iterator = this.createCallback(iterator, context);
-      if (obj.length === +obj.length) {
-        for (i = 0, length = obj.length; i < length; i++) {
-          if (iterator(obj[i], i, obj) === breaker) break;
-        }
+      iterator = this.createCallback3(iterator, context);
+      for (i = 0, length = obj.length; i < length; i++) {
+        if (iterator(obj[i], i, obj) === breaker) break;
       }
-      // else {
-      //   var keys = _.keys(obj);
-      //   for (i = 0, length = keys.length; i < length; i++) {
-      //     if (iterator(obj[keys[i]], keys[i], obj) === breaker) break;
-      //   }
-      // }
+      return obj;
+    }
+
+    public eachD<T>(obj: _.Dictionary<T>, iterator: _.ObjectIterator<T, any>, context?: any): _.Dictionary<T> {
+      var i, length;
+      if (obj == null) return obj;
+      iterator = this.createCallback3(iterator, context);
+      var keys = this.keys(obj);
+      for (i = 0, length = keys.length; i < length; i++) {
+        if (iterator(obj[keys[i]], keys[i], obj) === breaker) break;
+      }
       return obj;
     }
 
@@ -143,13 +148,26 @@ module _Implementation {
       return this.each(obj, iterator, context);
     }
 
+    public forEachD<T>(obj: _.Dictionary<T>, iterator: _.ObjectIterator<T, any>, context?: any): _.Dictionary<T> {
+      return this.eachD(obj, iterator, context);
+    }
 
     // Return the results of applying the iterator to each element.
     public map<T, TResult>(obj: _.List<T>, iterator: _.ListIterator<T, TResult>, context?: any): TResult[] {
       var results = [];
       if (obj == null) return results;
-      iterator = this.lookupIterator(iterator, context);
+      iterator = this.lookupIterator3(iterator, context);
       this.each(obj, function(value, index, list) {
+        results.push(iterator(value, index, list));
+      });
+      return results;
+    }
+
+    public mapD<T, TResult>(obj: _.Dictionary<T>, iterator: _.ObjectIterator<T, TResult>, context?: any): TResult[] { //=
+      var results = [];
+      if (obj == null) return results;
+      iterator = this.lookupIterator3(iterator, context);
+      this.eachD(obj, function(value, index, list) {
         results.push(iterator(value, index, list));
       });
       return results;
@@ -159,6 +177,10 @@ module _Implementation {
       return this.map(obj, iterator, context);
     }
 
+    public collectD<T, TResult>(obj: _.Dictionary<T>, iterator: _.ObjectIterator<T, TResult>, context?: any): TResult[] {
+      return this.mapD(obj, iterator, context);
+    }
+
     // **Reduce** builds up a single result from a list of values, aka `inject`,
     // or `foldl`.
     public reduce<T, TResult>(obj: _.List<T>, iterator: _.MemoIterator<T, TResult>, memo: TResult, context?: any): TResult;
@@ -166,7 +188,7 @@ module _Implementation {
     public reduce<T>(obj: _.List<T>, iterator: any, memo?: any, context?: any): any {
       var initial = arguments.length > 2;
       if (obj == null) obj = [];
-      iterator = this.createCallbackM(iterator, context);
+      iterator = this.createCallback4(iterator, context);
       this.each(obj, function(value:T, index:number, list:_.List<T>) {
         if (!initial) {
           memo = value;
@@ -191,7 +213,6 @@ module _Implementation {
       return this.reduce(obj, iterator, memo, context);
     }
 
-
     // The right-associative version of reduce, also known as `foldr`.
     public reduceRight<T, TResult>(obj: _.List<T>, iterator: _.MemoIterator<T, TResult>, memo: TResult, context?: any): TResult;
     public reduceRight<T>(obj: _.List<T>, iterator: _.MemoIterator<T, T>, memo?: T, context?: any): T;
@@ -199,7 +220,7 @@ module _Implementation {
       var initial = arguments.length > 2;
       if (obj == null) obj = [];
       var length = obj.length;
-      iterator = this.createCallbackM(iterator, context);
+      iterator = this.createCallback4(iterator, context);
       // if (length !== +length) {
       //   var keys = this.keys(obj);
       //   length = keys.length;
@@ -226,11 +247,21 @@ module _Implementation {
 
     // Return the first value which passes a truth test. Aliased as `detect`.
     public find<T>(list: _.List<T>, predicate: _.ListIterator<T, boolean>, context?: any): T {
-    //public find<T>(object: _.Dictionary<T>, predicate: _.ObjectIterator<T, boolean>, context?: any): T;
-    //public find<T>(obj: any, predicate: any, context?: any): T {
       var result;
-      predicate = this.lookupIterator(predicate, context);
+      predicate = this.lookupIterator3(predicate, context);
       this.some(list, function(value, index, list) {
+        if (predicate(value, index, list)) {
+          result = value;
+          return true;
+        }
+      });
+      return result;
+    }
+
+    public findD<T>(obj: _.Dictionary<T>, predicate: _.ObjectIterator<T, boolean>, context?: any): T { //=
+      var result;
+      predicate = this.lookupIterator3(predicate, context);
+      this.someD(obj, function(value, index, list) {
         if (predicate(value, index, list)) {
           result = value;
           return true;
@@ -243,13 +274,27 @@ module _Implementation {
       return this.find(list, predicate, context);
     }
 
+    public detectD<T>(obj: _.Dictionary<T>, predicate: _.ObjectIterator<T, boolean>, context?: any): T {
+      return this.findD(obj, predicate, context);
+    }
+
     // Return all the elements that pass a truth test.
     // Aliased as `select`.
     public filter<T>(list: _.List<T>, predicate: _.ListIterator<T, boolean>, context?: any): T[] {
       var results = [];
       if (list == null) return results;
-      predicate = this.lookupIterator(predicate, context);
+      predicate = this.lookupIterator3(predicate, context);
       this.each(list, function(value, index, list) {
+        if (predicate(value, index, list)) results.push(value);
+      });
+      return results;
+    }
+
+    public filterD<T>(obj: _.Dictionary<T>, predicate: _.ObjectIterator<T, boolean>, context?: any): T[] { //=
+      var results = [];
+      if (obj == null) return results;
+      predicate = this.lookupIterator3(predicate, context);
+      this.eachD(obj, function(value, index, list) {
         if (predicate(value, index, list)) results.push(value);
       });
       return results;
@@ -259,10 +304,18 @@ module _Implementation {
       return this.filter(list, predicate, context);
     }
 
+    public selectD<T>(obj: _.Dictionary<T>, predicate: _.ObjectIterator<T, boolean>, context?: any): T[] {
+      return this.filterD(obj, predicate, context);
+    }
+
     // Return all the elements for which a truth test fails.
     // TODO: is the 'context' arg I added to lookupIterator here correct?
     public reject<T>(list: _.List<T>, predicate: _.ListIterator<T, boolean>, context?: any): T[] {
-      return this.filter(list, this.negate(this.lookupIterator(predicate, context)), context);
+      return this.filter(list, this.negate(this.lookupIterator3(predicate, context)), context);
+    }
+
+    public rejectD<T>(obj: _.Dictionary<T>, predicate: _.ObjectIterator<T, boolean>, context?: any): T[] { //=
+      return this.filterD(obj, this.negate(this.lookupIterator3(predicate, context)), context);
     }
 
     // Determine whether all of the elements match a truth test.
@@ -270,8 +323,19 @@ module _Implementation {
     public every<T>(list: _.List<T>, predicate?: _.ListIterator<T, boolean>, context?: any): boolean {
       var result = true;
       if (list == null) return result;
-      predicate = this.lookupIterator(predicate, context);
+      predicate = this.lookupIterator3(predicate, context);
       this.each(list, function(value, index, list) {
+        result = predicate(value, index, list);
+        if (!result) return breaker;
+      });
+      return !!result;
+    }
+
+    public everyD<T>(obj: _.Dictionary<T>, predicate?: _.ObjectIterator<T, boolean>, context?: any): boolean {
+      var result = true;
+      if (obj == null) return result;
+      predicate = this.lookupIterator3(predicate, context);
+      this.eachD(obj, function(value, index, list) {
         result = predicate(value, index, list);
         if (!result) return breaker;
       });
@@ -282,13 +346,28 @@ module _Implementation {
       return this.every(list, predicate, context);
     }
 
+    public allD<T>(obj: _.Dictionary<T>, predicate?: _.ObjectIterator<T, boolean>, context?: any): boolean {
+      return this.everyD(obj, predicate, context);
+    }
+
     // Determine if at least one element in the object matches a truth test.
     // Aliased as `any`.
     public some<T>(list: _.List<T>, predicate?: _.ListIterator<T, boolean>, context?: any): boolean {
       var result = false;
       if (list == null) return result;
-      predicate = this.lookupIterator(predicate, context);
+      predicate = this.lookupIterator3(predicate, context);
       this.each(list, function(value, index, list) {
+        result = predicate(value, index, list);
+        if (result) return breaker;
+      });
+      return !!result;
+    }
+
+    public someD<T>(obj: _.Dictionary<T>, predicate?: _.ObjectIterator<T, boolean>, context?: any): boolean { //=
+      var result = false;
+      if (obj == null) return result;
+      predicate = this.lookupIterator3(predicate, context);
+      this.eachD(obj, function(value, index, list) {
         result = predicate(value, index, list);
         if (result) return breaker;
       });
@@ -299,17 +378,28 @@ module _Implementation {
       return this.some(list, predicate, context);
     }
 
+    public anyD<T>(obj: _.Dictionary<T>, predicate?: _.ObjectIterator<T, boolean>, context?: any): boolean {
+      return this.someD(obj, predicate, context);
+    }
 
     // Determine if the array or object contains a given value (using `===`).
     // Aliased as `include`.
     public contains<T>(obj: _.List<T>, value: T): boolean {
       if (obj == null) return false;
-      //if (obj.length !== +obj.length) obj = this.values(obj);
       return this.indexOf(obj, value) >= 0;
+    }
+
+    public containsD<T>(obj: _.Dictionary<T>, value: T): boolean {
+      if (obj == null) return false;
+      return this.contains(this.values(obj), value);
     }
 
     public include<T>(obj: _.List<T>, value: T): boolean {
       return this.contains(obj, value);
+    }
+
+    public includeD<T>(obj: _.Dictionary<T>, value: T): boolean {
+      return this.containsD(obj, value);
     }
 
     // Invoke a method (with arguments) on every item in a collection.
@@ -351,7 +441,7 @@ module _Implementation {
           }
         }
       } else {
-        iterator = this.lookupIterator(iterator, context);
+        iterator = this.lookupIterator3(iterator, context);
         this.each(obj, function(value, index, list) {
           computed = iterator(value, index, list);
           if (computed > lastComputed || computed === -Infinity && result === -Infinity) {
@@ -377,7 +467,7 @@ module _Implementation {
           }
         }
       } else {
-        iterator = this.lookupIterator(iterator, context);
+        iterator = this.lookupIterator3(iterator, context);
         this.each(obj, function(value, index, list) {
           computed = iterator(value, index, list);
           if (computed < lastComputed || computed === Infinity && result === Infinity) {
@@ -420,7 +510,7 @@ module _Implementation {
     public sortBy<T>(list: _.List<T>, iterator?: _.ListIterator<T, any>, context?: any): T[];
     public sortBy<T>(list: _.List<T>, iterator: string, context?: any): T[];
     public sortBy<T>(list: _.List<T>, iterator?: any, context?: any): T[] {
-      iterator = this.lookupIterator(iterator, context);
+      iterator = this.lookupIterator3(iterator, context);
       return this.pluck(this.map(list, function(value, index, list) {
         return {
           value: value,
@@ -442,7 +532,7 @@ module _Implementation {
     private group<T>(behavior) {
       return function(obj, iterator, context) {
         var result: _.Dictionary<T> = {};
-        iterator = this.lookupIterator(iterator, context);
+        iterator = this.lookupIterator3(iterator, context);
         this.each(obj, function(value, index) {
           var key = iterator(value, index, obj);
           behavior(result, value, key);
@@ -508,7 +598,7 @@ module _Implementation {
     // Split a collection into two arrays: one whose elements all satisfy the given
     // predicate, and one whose elements all do not satisfy the predicate.
     partition<T>(array: Array<T>, predicate: _.ListIterator<T, boolean>, context?: any): T[][] {
-      predicate = this.lookupIterator(predicate, context);
+      predicate = this.lookupIterator3(predicate, context);
       var pass = [], fail = [];
       this.each(array, function(value, key, obj) {
         (predicate(value, key, obj) ? pass : fail).push(value);
@@ -623,7 +713,7 @@ module _Implementation {
       if (this.isFunction(isSorted)) { // Turn a call of second overload into a call of first
         return this.uniq(array, false, isSorted, iterator);
       }
-      if (iterator) iterator = this.lookupIterator(iterator, context);
+      if (iterator) iterator = this.lookupIterator3(iterator, context);
       var result = [];
       var prev = null
       var seen = [];
@@ -930,9 +1020,9 @@ module _Implementation {
                     //     return _.partial(wrapper, func);
                     //   };
 
-    // Returns a negated version of the passed-in predicate.
-    public negate<T>(predicate: _.ListIterator<T, boolean>): _.ListIterator<T, boolean> {
-      return function(value: T, index: number, list: _.List<T>) {
+    // Returns a negated version of the passed-in 3-argument predicate.
+    public negate<X, Y, Z>(predicate: (x:X, y:Y, z:Z) => boolean): (x:X, y:Y, z:Z) => boolean {
+      return function(value, index, list) {
         return !predicate.call(this, value, index, list);
       };
     }
@@ -1036,7 +1126,7 @@ module _Implementation {
                     //     var result = {}, key;
                     //     if (obj == null) return result;
                     //     if (_.isFunction(iterator)) {
-                    //       iterator = createCallback(iterator, context);
+                    //       iterator = createCallback3(iterator, context);
                     //       for (key in obj) {
                     //         var value = obj[key];
                     //         if (iterator(value, key, obj)) result[key] = value;

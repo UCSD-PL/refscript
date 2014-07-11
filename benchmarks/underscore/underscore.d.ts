@@ -48,9 +48,9 @@ declare module _ {
 		(value: T, index: number, list: _.List<T>): TResult;
 	}
 
-					// 	interface ObjectIterator<T, TResult> {
-					// 		(element: T, key: string, list: any): TResult;
-					// 	}
+	interface ObjectIterator<T, TResult> {
+		(element: T, key: string, list: any): TResult;
+	}
 
 	interface MemoIterator<T, TResult> {
 		(prev: TResult, curr: T, index: number, list: _.List<T>): TResult;
@@ -96,16 +96,16 @@ interface UnderscoreStatic {
 		iterator: _.ListIterator<T, any>,
 		context?: any): _.List<T>;
 
-					// 	/**
-					// 	* @see _.each
-					// 	* @param object Iterates over properties of this object.
-					// 	* @param iterator Iterator function for each property on `object`.
-					// 	* @param context 'this' object in `iterator`, optional.
-					// 	**/
-					// 	each<T>(
-					// 		object: _.Dictionary<T>,
-					// 		iterator: _.ObjectIterator<T, void>,
-					// 		context?: any): _.Dictionary<T>;
+	/**
+	* @see _.each
+	* @param object Iterates over properties of this object.
+	* @param iterator Iterator function for each property on `object`.
+	* @param context 'this' object in `iterator`, optional.
+	**/
+	eachD<T>(
+		object: _.Dictionary<T>,
+		iterator: _.ObjectIterator<T, any>,
+		context?: any): _.Dictionary<T>;
 
 	/**
 	* @see _.each
@@ -115,13 +115,13 @@ interface UnderscoreStatic {
 		iterator: _.ListIterator<T, void>,
 		context?: any): _.List<T>;
 
-					// 	/**
-					// 	* @see _.each
-					// 	**/
-					// 	forEach<T>(
-					// 		object: _.Dictionary<T>,
-					// 		iterator: _.ObjectIterator<T, void>,
-					// 		context?: any): _.Dictionary<T>;
+	/**
+	* @see _.each
+	**/
+	forEachD<T>(
+		object: _.Dictionary<T>,
+		iterator: _.ObjectIterator<T, void>,
+		context?: any): _.Dictionary<T>;
 
 	/**
 	* Produces a new array of values by mapping each value in list through a transformation function
@@ -137,17 +137,17 @@ interface UnderscoreStatic {
 		iterator: _.ListIterator<T, TResult>,
 		context?: any): TResult[];
 
-					// 	/**
-					// 	* @see _.map
-					// 	* @param object Maps the properties of this object.
-					// 	* @param iterator Map iterator function for each property on `object`.
-					// 	* @param context `this` object in `iterator`, optional.
-					// 	* @return The mapped object result.
-					// 	**/
-					// 	map<T, TResult>(
-					// 		object: _.Dictionary<T>,
-					// 		iterator: _.ObjectIterator<T, TResult>,
-					// 		context?: any): TResult[];
+	/**
+	* @see _.map
+	* @param object Maps the properties of this object.
+	* @param iterator Map iterator function for each property on `object`.
+	* @param context `this` object in `iterator`, optional.
+	* @return The mapped object result.
+	**/
+	mapD<T, TResult>(
+		object: _.Dictionary<T>,
+		iterator: _.ObjectIterator<T, TResult>,
+		context?: any): TResult[];
 
 	/**
 	* @see _.map
@@ -157,13 +157,13 @@ interface UnderscoreStatic {
 		iterator: _.ListIterator<T, TResult>,
 		context?: any): TResult[];
 
-					// 	/**
-					// 	* @see _.map
-					// 	**/
-					// 	collect<T, TResult>(
-					// 		object: _.Dictionary<T>,
-					// 		iterator: _.ObjectIterator<T, TResult>,
-					// 		context?: any): TResult[];
+	/**
+	* @see _.map
+	**/
+	collectD<T, TResult>(
+		object: _.Dictionary<T>,
+		iterator: _.ObjectIterator<T, TResult>,
+		context?: any): TResult[];
 
 	/**
 	* Also known as inject and foldl, reduce boils down a list of values into a single value.
@@ -239,13 +239,13 @@ interface UnderscoreStatic {
 		iterator: _.ListIterator<T, boolean>,
 		context?: any): T;
 
-					// 	/**
-					// 	* @see _.find
-					// 	**/
-					// 	find<T>(
-					// 		object: _.Dictionary<T>,
-					// 		iterator: _.ObjectIterator<T, boolean>,
-					// 		context?: any): T;
+	/**
+	* @see _.find
+	**/
+	findD<T>(
+		object: _.Dictionary<T>,
+		iterator: _.ObjectIterator<T, boolean>,
+		context?: any): T;
 
 	/**
 	* @see _.find
@@ -255,13 +255,13 @@ interface UnderscoreStatic {
 		iterator: _.ListIterator<T, boolean>,
 		context?: any): T;
 
-					// 	/**
-					// 	* @see _.find
-					// 	**/
-					// 	detect<T>(
-					// 		object: _.Dictionary<T>,
-					// 		iterator: _.ObjectIterator<T, boolean>,
-					// 		context?: any): T;
+	/**
+	* @see _.find
+	**/
+	detectD<T>(
+		object: _.Dictionary<T>,
+		iterator: _.ObjectIterator<T, boolean>,
+		context?: any): T;
 
 	/**
 	* Looks through each value in the list, returning an array of all the values that pass a truth
@@ -276,13 +276,13 @@ interface UnderscoreStatic {
 		iterator: _.ListIterator<T, boolean>,
 		context?: any): T[];
 
-					// 	/**
-					// 	* @see _.filter
-					// 	**/
-					// 	filter<T>(
-					// 		object: _.Dictionary<T>,
-					// 		iterator: _.ObjectIterator<T, boolean>,
-					// 		context?: any): T[];
+	/**
+	* @see _.filter
+	**/
+	filterD<T>(
+		object: _.Dictionary<T>,
+		iterator: _.ObjectIterator<T, boolean>,
+		context?: any): T[];
 
 	/**
 	* @see _.filter
@@ -292,13 +292,13 @@ interface UnderscoreStatic {
 		iterator: _.ListIterator<T, boolean>,
 		context?: any): T[];
 
-					// 	/**
-					// 	* @see _.filter
-					// 	**/
-					// 	select<T>(
-					// 		object: _.Dictionary<T>,
-					// 		iterator: _.ObjectIterator<T, boolean>,
-					// 		context?: any): T[];
+	/**
+	* @see _.filter
+	**/
+	selectD<T>(
+		object: _.Dictionary<T>,
+		iterator: _.ObjectIterator<T, boolean>,
+		context?: any): T[];
 
 	/**
 	* Looks through each value in the list, returning an array of all the values that contain all
@@ -335,13 +335,13 @@ interface UnderscoreStatic {
 		iterator: _.ListIterator<T, boolean>,
 		context?: any): T[];
 
-					// 	/**
-					// 	* @see _.reject
-					// 	**/
-					// 	reject<T>(
-					// 		object: _.Dictionary<T>,
-					// 		iterator: _.ObjectIterator<T, boolean>,
-					// 		context?: any): T[];
+	/**
+	* @see _.reject
+	**/
+	rejectD<T>(
+		object: _.Dictionary<T>,
+		iterator: _.ObjectIterator<T, boolean>,
+		context?: any): T[];
 
 	/**
 	* Returns true if all of the values in the list pass the iterator truth test. Delegates to the
@@ -356,13 +356,13 @@ interface UnderscoreStatic {
 		iterator?: _.ListIterator<T, boolean>,
 		context?: any): boolean;
 
-					// 	/**
-					// 	* @see _.every
-					// 	**/
-					// 	every<T>(
-					// 		list: _.Dictionary<T>,
-					// 		iterator?: _.ObjectIterator<T, boolean>,
-					// 		context?: any): boolean;
+	/**
+	* @see _.every
+	**/
+	everyD<T>(
+		list: _.Dictionary<T>,
+		iterator?: _.ObjectIterator<T, boolean>,
+		context?: any): boolean;
 
 	/**
 	* @see _.every
@@ -372,13 +372,13 @@ interface UnderscoreStatic {
 		iterator?: _.ListIterator<T, boolean>,
 		context?: any): boolean;
 
-					// 	/**
-					// 	* @see _.every
-					// 	**/
-					// 	all<T>(
-					// 		list: _.Dictionary<T>,
-					// 		iterator?: _.ObjectIterator<T, boolean>,
-					// 		context?: any): boolean;
+	/**
+	* @see _.every
+	**/
+	allD<T>(
+		list: _.Dictionary<T>,
+		iterator?: _.ObjectIterator<T, boolean>,
+		context?: any): boolean;
 
 	/**
 	* Returns true if any of the values in the list pass the iterator truth test. Short-circuits and
@@ -393,13 +393,13 @@ interface UnderscoreStatic {
 		iterator?: _.ListIterator<T, boolean>,
 		context?: any): boolean;
 
-					// 	/**
-					// 	* @see _.some
-					// 	**/
-					// 	some<T>(
-					// 		object: _.Dictionary<T>,
-					// 		iterator?: _.ObjectIterator<T, boolean>,
-					// 		context?: any): boolean;
+	/**
+	* @see _.some
+	**/
+	someD<T>(
+		object: _.Dictionary<T>,
+		iterator?: _.ObjectIterator<T, boolean>,
+		context?: any): boolean;
 
 	/**
 	* @see _.some
@@ -409,13 +409,13 @@ interface UnderscoreStatic {
 		iterator?: _.ListIterator<T, boolean>,
 		context?: any): boolean;
 
-					// 	/**
-					// 	* @see _.some
-					// 	**/
-					// 	any<T>(
-					// 		object: _.Dictionary<T>,
-					// 		iterator?: _.ObjectIterator<T, boolean>,
-					// 		context?: any): boolean;
+	/**
+	* @see _.some
+	**/
+	anyD<T>(
+		object: _.Dictionary<T>,
+		iterator?: _.ObjectIterator<T, boolean>,
+		context?: any): boolean;
 
 	/**
 	* Returns true if the value is present in the list. Uses indexOf internally,
@@ -428,12 +428,12 @@ interface UnderscoreStatic {
 		list: _.List<T>,
 		value: T): boolean;
 
-					// 	/**
-					// 	* @see _.contains
-					// 	**/
-					// 	contains<T>(
-					// 		object: _.Dictionary<T>,
-					// 		value: T): boolean;
+	/**
+	* @see _.contains
+	**/
+	containsD<T>(
+		object: _.Dictionary<T>,
+		value: T): boolean;
 
 	/**
 	* @see _.contains
@@ -442,12 +442,12 @@ interface UnderscoreStatic {
 		list: _.Collection<T>,
 		value: T): boolean;
 
-					// 	/**
-					// 	* @see _.contains
-					// 	**/
-					// 	include<T>(
-					// 		object: _.Dictionary<T>,
-					// 		value: T): boolean;
+	/**
+	* @see _.contains
+	**/
+	includeD<T>(
+		object: _.Dictionary<T>,
+		value: T): boolean;
 
 	/**
 	* Calls the method named by methodName on each value in the list. Any extra arguments passed to
@@ -1099,7 +1099,7 @@ interface UnderscoreStatic {
 					// 		fn: Function,
 					// 		wrapper: (fn: Function, ...args: any[]) => any): Function;
 
-    negate<T>(predicate: _.ListIterator<T, boolean>): _.ListIterator<T, boolean>;
+	negate<X, Y, Z>(predicate: (x:X, y:Y, z:Z) => boolean): (x:X, y:Y, z:Z) => boolean;
 
 	/**
 	* Returns the composition of a list of functions, where each function consumes the return value of the

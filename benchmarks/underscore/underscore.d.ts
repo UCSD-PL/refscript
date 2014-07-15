@@ -7,42 +7,50 @@
 //TODO: revert some signatures to Collection?
 
 declare module _ {
-					// 	/**
-					// 	* underscore.js _.throttle options.
-					// 	**/
-					// 	interface ThrottleSettings {
+	/**
+	* underscore.js _.throttle options.
+	**/
+	interface ThrottleSettings {
 
-					// 		/**
-					// 		* If you'd like to disable the leading-edge call, pass this as false.
-					// 		**/
-					// 		leading?: boolean;
+		/**
+		* If you'd like to disable the leading-edge call, pass this as false.
+		**/
+		leading?: boolean;
 
-					// 		/**
-					// 		* If you'd like to disable the execution on the trailing-edge, pass false.
-					// 		**/
-					// 		trailing?: boolean;
-					// 	}
+		/**
+		* If you'd like to disable the execution on the trailing-edge, pass false.
+		**/
+		trailing?: boolean;
+	}
 
-					// 	/**
-					// 	* underscore.js template settings, set templateSettings or pass as an argument
-					// 	* to 'template()' to override defaults.
-					// 	**/
-					// 	interface TemplateSettings {
-					// 		/**
-					// 		* Default value is '/<%([\s\S]+?)%>/g'.
-					// 		**/
-					// 		evaluate?: RegExp;
+	interface Template {
+		(...data: any[]): string;
 
-					// 		/**
-					// 		* Default value is '/<%=([\s\S]+?)%>/g'.
-					// 		**/
-					// 		interpolate?: RegExp;
+		source?: string; //TODO: this isn't actually optional; how to initialize one member at a time?
+	}
 
-					// 		/**
-					// 		* Default value is '/<%-([\s\S]+?)%>/g'.
-					// 		**/
-					// 		escape?: RegExp;
-					// 	}
+	/**
+	* underscore.js template settings, set templateSettings or pass as an argument
+	* to 'template()' to override defaults.
+	**/
+	interface TemplateSettings {
+		/**
+		* Default value is '/<%([\s\S]+?)%>/g'.
+		**/
+		evaluate?: RegExp;
+
+		/**
+		* Default value is '/<%=([\s\S]+?)%>/g'.
+		**/
+		interpolate?: RegExp;
+
+		/**
+		* Default value is '/<%-([\s\S]+?)%>/g'.
+		**/
+		escape?: RegExp;
+
+		variable?: any;
+	}
 
 	interface ListIterator<T, TResult> {
 		(value: T, index: number, list: _.List<T>): TResult;
@@ -70,6 +78,8 @@ declare module _ {
 }
 
 interface UnderscoreStatic {
+	VERSION: string;
+
 					// 	/**
 					// 	* Underscore OOP Wrapper, all Underscore functions that take an object
 					// 	* as the first parameter can be invoked through this function.
@@ -838,19 +848,14 @@ interface UnderscoreStatic {
 		context?: any): T[];
 
 
-					// 	/**
-					// 	* Merges together the values of each of the arrays with the values at the corresponding position.
-					// 	* Useful when you have separate data sources that are coordinated through matching array indexes.
-					// 	* If you're working with a matrix of nested arrays, zip.apply can transpose the matrix in a similar fashion.
-					// 	* @param arrays The arrays to merge/zip.
-					// 	* @return Zipped version of `arrays`.
-					// 	**/
-					// 	zip(...arrays: any[][]): any[][];
-
-					// 	/**
-					// 	* @see _.zip
-					// 	**/
-					// 	zip(...arrays: any[]): any[];
+	/**
+	* Merges together the values of each of the arrays with the values at the corresponding position.
+	* Useful when you have separate data sources that are coordinated through matching array indexes.
+	* If you're working with a matrix of nested arrays, zip.apply can transpose the matrix in a similar fashion.
+	* @param arrays The arrays to merge/zip.
+	* @return Zipped version of `arrays`.
+	**/
+	zip(...arrays: _.List<any>[]): any[];
 
 	/**
 	* Converts arrays into objects. Pass either a single list of [key, value] pairs, or a
@@ -973,17 +978,17 @@ interface UnderscoreStatic {
 					// 		object: any,
 					// 		...methodNames: string[]): any;
 
-					// 	/**
-					// 	* Partially apply a function by filling in any number of its arguments, without changing its dynamic this value.
-					// 	* A close cousin of bind.  You may pass _ in your list of arguments to specify an argument that should not be 
-					// 	* pre-filled, but left open to supply at call-time. 
-					// 	* @param fn Function to partially fill in arguments.
-					// 	* @param arguments The partial arguments.
-					// 	* @return `fn` with partially filled in arguments.
-					// 	**/
-					// 	partial(
-					// 		fn: Function,
-					// 		...arguments: any[]): Function;
+	/**
+	* Partially apply a function by filling in any number of its arguments, without changing its dynamic this value.
+	* A close cousin of bind.  You may pass _ in your list of arguments to specify an argument that should not be 
+	* pre-filled, but left open to supply at call-time. 
+	* @param fn Function to partially fill in arguments.
+	* @param arguments The partial arguments.
+	* @return `fn` with partially filled in arguments.
+	**/
+	partial(
+		fn: Function,
+		...arguments: any[]): Function;
 
 	/**
 	* Memoizes a given function by caching the computed result. Useful for speeding up slow-running computations.
@@ -1017,87 +1022,87 @@ interface UnderscoreStatic {
 					// 		func: Function,
 					// 		...arguments: any[]): any;
 
-					// 	/**
-					// 	* Defers invoking the function until the current call stack has cleared, similar to using setTimeout
-					// 	* with a delay of 0. Useful for performing expensive computations or HTML rendering in chunks without
-					// 	* blocking the UI thread from updating. If you pass the optional arguments, they will be forwarded on
-					// 	* to the function when it is invoked.
-					// 	* @param fn The function to defer.
-					// 	* @param arguments Additional arguments to pass to `fn`.
-					// 	**/
-					// 	defer(
-					// 		fn: Function,
-					// 		...arguments: any[]): void;
+	/**
+	* Defers invoking the function until the current call stack has cleared, similar to using setTimeout
+	* with a delay of 0. Useful for performing expensive computations or HTML rendering in chunks without
+	* blocking the UI thread from updating. If you pass the optional arguments, they will be forwarded on
+	* to the function when it is invoked.
+	* @param fn The function to defer.
+	* @param arguments Additional arguments to pass to `fn`.
+	**/
+	defer(
+		fn: Function,
+		...arguments: any[]): void;
 
-					// 	/**
-					// 	* Creates and returns a new, throttled version of the passed function, that, when invoked repeatedly,
-					// 	* will only actually call the original function at most once per every wait milliseconds. Useful for
-					// 	* rate-limiting events that occur faster than you can keep up with.
-					// 	* By default, throttle will execute the function as soon as you call it for the first time, and,
-					// 	* if you call it again any number of times during the wait period, as soon as that period is over.
-					// 	* If you'd like to disable the leading-edge call, pass {leading: false}, and if you'd like to disable
-					// 	* the execution on the trailing-edge, pass {trailing: false}.
-					// 	* @param func Function to throttle `waitMS` ms.
-					// 	* @param wait The number of milliseconds to wait before `fn` can be invoked again.
-					// 	* @param options Allows for disabling execution of the throttled function on either the leading or trailing edge.
-					// 	* @return `fn` with a throttle of `wait`.
-					// 	**/
-					// 	throttle(
-					// 		func: any,
-					// 		wait: number,
-					// 		options?: _.ThrottleSettings): Function;
+	/**
+	* Creates and returns a new, throttled version of the passed function, that, when invoked repeatedly,
+	* will only actually call the original function at most once per every wait milliseconds. Useful for
+	* rate-limiting events that occur faster than you can keep up with.
+	* By default, throttle will execute the function as soon as you call it for the first time, and,
+	* if you call it again any number of times during the wait period, as soon as that period is over.
+	* If you'd like to disable the leading-edge call, pass {leading: false}, and if you'd like to disable
+	* the execution on the trailing-edge, pass {trailing: false}.
+	* @param func Function to throttle `waitMS` ms.
+	* @param wait The number of milliseconds to wait before `fn` can be invoked again.
+	* @param options Allows for disabling execution of the throttled function on either the leading or trailing edge.
+	* @return `fn` with a throttle of `wait`.
+	**/
+	throttle(
+		func: any,
+		wait: number,
+		options?: _.ThrottleSettings): Function;
 
-					// 	/**
-					// 	* Creates and returns a new debounced version of the passed function that will postpone its execution
-					// 	* until after wait milliseconds have elapsed since the last time it was invoked. Useful for implementing
-					// 	* behavior that should only happen after the input has stopped arriving. For example: rendering a preview
-					// 	* of a Markdown comment, recalculating a layout after the window has stopped being resized, and so on.
-					// 	*
-					// 	* Pass true for the immediate parameter to cause debounce to trigger the function on the leading instead
-					// 	* of the trailing edge of the wait interval. Useful in circumstances like preventing accidental double
-					// 	*-clicks on a "submit" button from firing a second time.
-					// 	* @param fn Function to debounce `waitMS` ms.
-					// 	* @param wait The number of milliseconds to wait before `fn` can be invoked again.
-					// 	* @param immediate True if `fn` should be invoked on the leading edge of `waitMS` instead of the trailing edge.
-					// 	* @return Debounced version of `fn` that waits `wait` ms when invoked.
-					// 	**/
-					// 	debounce(
-					// 		fn: Function,
-					// 		wait: number,
-					// 		immediate?: boolean): Function;
+	/**
+	* Creates and returns a new debounced version of the passed function that will postpone its execution
+	* until after wait milliseconds have elapsed since the last time it was invoked. Useful for implementing
+	* behavior that should only happen after the input has stopped arriving. For example: rendering a preview
+	* of a Markdown comment, recalculating a layout after the window has stopped being resized, and so on.
+	*
+	* Pass true for the immediate parameter to cause debounce to trigger the function on the leading instead
+	* of the trailing edge of the wait interval. Useful in circumstances like preventing accidental double
+	*-clicks on a "submit" button from firing a second time.
+	* @param fn Function to debounce `waitMS` ms.
+	* @param wait The number of milliseconds to wait before `fn` can be invoked again.
+	* @param immediate True if `fn` should be invoked on the leading edge of `waitMS` instead of the trailing edge.
+	* @return Debounced version of `fn` that waits `wait` ms when invoked.
+	**/
+	debounce(
+		fn: Function,
+		wait: number,
+		immediate?: boolean): Function;
 
-					// 	/**
-					// 	* Creates a version of the function that can only be called one time. Repeated calls to the modified
-					// 	* function will have no effect, returning the value from the original call. Useful for initialization
-					// 	* functions, instead of having to set a boolean flag and then check it later.
-					// 	* @param fn Function to only execute once.
-					// 	* @return Copy of `fn` that can only be invoked once.
-					// 	**/
-					// 	once(fn: Function): Function;
+	/**
+	* Creates a version of the function that can only be called one time. Repeated calls to the modified
+	* function will have no effect, returning the value from the original call. Useful for initialization
+	* functions, instead of having to set a boolean flag and then check it later.
+	* @param fn Function to only execute once.
+	* @return Copy of `fn` that can only be invoked once.
+	**/
+	once(fn: Function): Function;
 
-					// 	/**
-					// 	* Creates a version of the function that will only be run after first being called count times. Useful
-					// 	* for grouping asynchronous responses, where you want to be sure that all the async calls have finished,
-					// 	* before proceeding.
-					// 	* @param count Number of times to be called before actually executing.
-					// 	* @fn The function to defer execution `count` times.
-					// 	* @return Copy of `fn` that will not execute until it is invoked `count` times.
-					// 	**/
-					// 	after(
-					// 		count: number,
-					// 		fn: Function): Function;
+	/**
+	* Creates a version of the function that will only be run after first being called count times. Useful
+	* for grouping asynchronous responses, where you want to be sure that all the async calls have finished,
+	* before proceeding.
+	* @param count Number of times to be called before actually executing.
+	* @fn The function to defer execution `count` times.
+	* @return Copy of `fn` that will not execute until it is invoked `count` times.
+	**/
+	after(
+		count: number,
+		fn: Function): Function;
 
-					// 	/**
-					// 	* Wraps the first function inside of the wrapper function, passing it as the first argument. This allows
-					// 	* the wrapper to execute code before and after the function runs, adjust the arguments, and execute it
-					// 	* conditionally.
-					// 	* @param fn Function to wrap.
-					// 	* @param wrapper The function that will wrap `fn`.
-					// 	* @return Wrapped version of `fn.
-					// 	**/
-					// 	wrap(
-					// 		fn: Function,
-					// 		wrapper: (fn: Function, ...args: any[]) => any): Function;
+	/**
+	* Wraps the first function inside of the wrapper function, passing it as the first argument. This allows
+	* the wrapper to execute code before and after the function runs, adjust the arguments, and execute it
+	* conditionally.
+	* @param fn Function to wrap.
+	* @param wrapper The function that will wrap `fn`.
+	* @return Wrapped version of `fn.
+	**/
+	wrap(
+		fn: Function,
+		wrapper: (fn: Function, ...args: any[]) => any): Function;
 
 	negate<X, Y, Z>(predicate: (x:X, y:Y, z:Z) => boolean): (x:X, y:Y, z:Z) => boolean;
 
@@ -1167,26 +1172,30 @@ interface UnderscoreStatic {
 		destination: any,
 		...sources: any[]): any;
 
-					// 	*
-					// 	* Return a copy of the object, filtered to only have values for the whitelisted keys
-					// 	* (or array of valid keys).
-					// 	* @param object Object to strip unwanted key/value pairs.
-					// 	* @keys The key/value pairs to keep on `object`.
-					// 	* @return Copy of `object` with only the `keys` properties.
-					// 	*
-					// 	pick(
-					// 		object: any,
-					// 		...keys: string[]): any;
+	/**
+	* Return a copy of the object, filtered to only have values for the whitelisted keys
+	* (or array of valid keys).
+	* @param object Object to strip unwanted key/value pairs.
+	* @keys The key/value pairs to keep on `object`.
+	* @return Copy of `object` with only the `keys` properties.
+	*/
+	pick(
+		object: any,
+		...keys: string[]): any;
 
-					// 	/**
-					// 	* Return a copy of the object, filtered to omit the blacklisted keys (or array of keys).
-					// 	* @param object Object to strip unwanted key/value pairs.
-					// 	* @param keys The key/value pairs to remove on `object`.
-					// 	* @return Copy of `object` without the `keys` properties.
-					// 	**/
-					// 	omit(
-					// 		object: any,
-					// 		...keys: string[]): any;
+	pickD(obj: any, iterator: _.ObjectIterator<any, boolean>, context?: any): any;
+
+	/**
+	* Return a copy of the object, filtered to omit the blacklisted keys (or array of keys).
+	* @param object Object to strip unwanted key/value pairs.
+	* @param keys The key/value pairs to remove on `object`.
+	* @return Copy of `object` without the `keys` properties.
+	**/
+	omit(
+		object: any,
+		...keys: string[]): any;
+
+	omitD(obj: any, iterator: _.ObjectIterator<any, boolean>, context?: any): any;
 
 					// 	/**
 					// 	* @see _.omit
@@ -1390,6 +1399,11 @@ interface UnderscoreStatic {
 	constant<T>(value: T): () => T;
 
 	/**
+	* A function that does nothing.
+	**/
+	noop(): void;
+
+	/**
 	* Invokes the given iterator function n times.
 	* Each invocation of iterator is called with an index argument
 	* @param n Number of times to invoke `iterator`.
@@ -1421,25 +1435,22 @@ interface UnderscoreStatic {
 					// 	**/
 					// 	mixin(object: any): void;
 
-					// 	/**
-					// 	* Generate a globally-unique id for client-side models or DOM elements that need one.
-					// 	* If prefix is passed, the id will be appended to it. Without prefix, returns an integer.
-					// 	* @param prefix A prefix string to start the unique ID with.
-					// 	* @return Unique string ID beginning with `prefix`.
-					// 	**/
-					// 	uniqueId(prefix: string): string;
+	/**
+	* Generate a globally-unique id for client-side models or DOM elements that need one.
+	* If prefix is passed, the id will be appended to it.
+	* @param prefix A prefix string to start the unique ID with.
+	* @return Unique string ID beginning with `prefix`.
+	**/
+	uniqueId(prefix?: string): string;
 
-					// 	/**
-					// 	* @see _.uniqueId
-					// 	**/
-					// 	uniqueId(): number;
+	/**
+	* Escapes a string for insertion into HTML, replacing &, <, >, ", ', and / characters.
+	* @param str Raw string to escape.
+	* @return `str` HTML escaped.
+	**/
+	escape(str: string): string;
 
-					// 	/**
-					// 	* Escapes a string for insertion into HTML, replacing &, <, >, ", ', and / characters.
-					// 	* @param str Raw string to escape.
-					// 	* @return `str` HTML escaped.
-					// 	**/
-					// 	escape(str: string): string;
+	unescape(str: string): string;
 
 	/**
 	* If the value of the named property is a function then invoke it; otherwise, return it.
@@ -1449,28 +1460,28 @@ interface UnderscoreStatic {
 	**/
 	result(object: any, property: string): any;
 
-					// 	/**
-					// 	* Compiles JavaScript templates into functions that can be evaluated for rendering. Useful
-					// 	* for rendering complicated bits of HTML from JSON data sources. Template functions can both
-					// 	* interpolate variables, using <%= ... %>, as well as execute arbitrary JavaScript code, with
-					// 	* <% ... %>. If you wish to interpolate a value, and have it be HTML-escaped, use <%- ... %> When
-					// 	* you evaluate a template function, pass in a data object that has properties corresponding to
-					// 	* the template's free variables. If you're writing a one-off, you can pass the data object as
-					// 	* the second parameter to template in order to render immediately instead of returning a template
-					// 	* function. The settings argument should be a hash containing any _.templateSettings that should
-					// 	* be overridden.
-					// 	* @param templateString Underscore HTML template.
-					// 	* @param data Data to use when compiling `templateString`.
-					// 	* @param settings Settings to use while compiling.
-					// 	* @return Returns the compiled Underscore HTML template.
-					// 	**/
-					// 	template(templateString: string, data?: any, settings?: _.TemplateSettings): (...data: any[]) => string;
+	/**
+	* Compiles JavaScript templates into functions that can be evaluated for rendering. Useful
+	* for rendering complicated bits of HTML from JSON data sources. Template functions can both
+	* interpolate variables, using <%= ... %>, as well as execute arbitrary JavaScript code, with
+	* <% ... %>. If you wish to interpolate a value, and have it be HTML-escaped, use <%- ... %> When
+	* you evaluate a template function, pass in a data object that has properties corresponding to
+	* the template's free variables. If you're writing a one-off, you can pass the data object as
+	* the second parameter to template in order to render immediately instead of returning a template
+	* function. The settings argument should be a hash containing any _.templateSettings that should
+	* be overridden.
+	* @param templateString Underscore HTML template.
+	* @param data Data to use when compiling `templateString`.
+	* @param settings Settings to use while compiling.
+	* @return Returns the compiled Underscore HTML template.
+	**/
+	template(templateString: string, data?: any, settings?: _.TemplateSettings): (...data: any[]) => string;
 
-					// 	/**
-					// 	* By default, Underscore uses ERB-style template delimiters, change the
-					// 	* following template settings to use alternative delimiters.
-					// 	**/
-					// 	templateSettings: _.TemplateSettings;
+	/**
+	* By default, Underscore uses ERB-style template delimiters, change the
+	* following template settings to use alternative delimiters.
+	**/
+	templateSettings: _.TemplateSettings;
 
 	/**
 	* Returns an integer timestamp for the current time, using the fastest method available in the runtime. Useful for implementing timing/animation functions.
@@ -3140,8 +3151,8 @@ interface UnderscoreStatic {
 					// 	flatten(): _Chain<T>;
 					// }
 
-					// declare var _: UnderscoreStatic;
+declare var _: UnderscoreStatic;
 
-					// declare module "underscore" {
-					// 	export = _;
-					// }
+declare module "underscore" {
+	export = _;
+}

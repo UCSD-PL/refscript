@@ -9,6 +9,8 @@
 //TODO: restore 'guard' internal params to several functions
 //TODO: Functions are currently duplicated instead of overloaded. Ones that are identical up to renaming are marked with //=
 //        Many of these stem from each/eachD and the dictionary dupes are named with a trailing D
+//TODO: by defining UnderscoreStatic as an interface, we lose the ability to actually make the methods static
+//Note that member privacy (like typing) is only enforced by the compiler, not the resulting javascript
 
 module _Implementation {
 
@@ -38,7 +40,7 @@ module _Implementation {
   // All **ECMAScript 5** native function implementations that we hope to use
   // are declared here.
   var
-                    //     nativeIsArray      = Array.isArray,
+    nativeIsArray      = Array.isArray,
     nativeKeys         = Object.keys;
                     //     nativeBind         = FuncProto.bind;
 
@@ -62,12 +64,13 @@ module _Implementation {
                     //     root._ = _;
                     //   }
 
-                    //   // Current version.
-                    //   _.VERSION = '1.6.0';
-
-  var reduceError = 'Reduce of empty array with no initial value';
-
   class Underscore implements UnderscoreStatic {
+    // Current version.
+    public VERSION = '1.6.0';
+
+    constructor() {
+      this._entityMap.unescape = this.invert(this._entityMap.escape);
+    }
 
     // Internal Functions
     // --------------------
@@ -96,10 +99,6 @@ module _Implementation {
       };
     }
 
-                    //       case 2: return function(value, other) {
-                    //         return func.call(context, value, other);
-                    //       };
-
     private createCallback3<X, Y, Z, TResult>(func: (x:X, y:Y, z:Z) => TResult, context: any): (x:X, y:Y, z:Z) => TResult {
       if (context === void 0) return func;   
       return function(value, index, collection) {
@@ -113,9 +112,6 @@ module _Implementation {
           return func.call(context, accumulator, value, index, collection);
       };
     }
-                    //     return function() {
-                    //       return func.apply(context, arguments);
-                    //     };
 
     // Collection Functions
     // --------------------
@@ -181,6 +177,8 @@ module _Implementation {
       return this.mapD(obj, iterator, context);
     }
 
+    private reduceError = 'Reduce of empty array with no initial value';
+
     // **Reduce** builds up a single result from a list of values, aka `inject`,
     // or `foldl`.
     public reduce<T, TResult>(obj: _.List<T>, iterator: _.MemoIterator<T, TResult>, memo: TResult, context?: any): TResult;
@@ -197,7 +195,7 @@ module _Implementation {
           memo = iterator(memo, value, index, list);
         }
       });
-      if (!initial) throw TypeError(reduceError);
+      if (!initial) throw TypeError(this.reduceError);
       return memo;
     }
 
@@ -235,7 +233,7 @@ module _Implementation {
           memo = iterator(memo, obj[index], index, list);
         }
       });
-      if (!initial) throw TypeError(reduceError);
+      if (!initial) throw TypeError(this.reduceError);
       return memo;
     }
 
@@ -767,17 +765,17 @@ module _Implementation {
       });
     }
 
-                    //   // Zip together multiple lists into a single array -- elements that share
-                    //   // an index go together.
-                    //   _.zip = function(array) {
-                    //     if (array == null) return [];
-                    //     var length = _.max(arguments, 'length').length;
-                    //     var results = Array(length);
-                    //     for (var i = 0; i < length; i++) {
-                    //       results[i] = _.pluck(arguments, i);
-                    //     }
-                    //     return results;
-                    //   };
+    // Zip together multiple lists into a single array -- elements that share
+    // an index go together.
+    public zip(...array: _.List<any>[]): any[] {
+      if (array == null) return [];
+      var length = _.max(array, function(arg, x, y) { return arg.length }).length; //TODO: this looked nicer when it was just 'length'
+      var results = Array(length);
+      for (var i = 0; i < length; i++) {
+        results[i] = this.map(array, function(x) { return x[i] }); //TODO: nicer with 'pluck'?
+      }
+      return results;
+    }
 
     // Converts lists into objects. Pass either a single array of `[key, value]`
     // pairs, or two parallel arrays of the same length -- one of keys, and one of
@@ -873,21 +871,20 @@ module _Implementation {
                     //     return bound;
                     //   };
 
-                    //   // Partially apply a function by creating a version that has had some of its
-                    //   // arguments pre-filled, without changing its dynamic `this` context. _ acts
-                    //   // as a placeholder, allowing any combination of arguments to be pre-filled.
-                    //   _.partial = function(func) {
-                    //     var boundArgs = slice.call(arguments, 1);
-                    //     return function() {
-                    //       var position = 0;
-                    //       var args = boundArgs.slice();
-                    //       for (var i = 0, length = args.length; i < length; i++) {
-                    //         if (args[i] === _) args[i] = arguments[position++];
-                    //       }
-                    //       while (position < arguments.length) args.push(arguments[position++]);
-                    //       return func.apply(this, args);
-                    //     };
-                    //   };
+    // Partially apply a function by creating a version that has had some of its
+    // arguments pre-filled, without changing its dynamic `this` context. _ acts
+    // as a placeholder, allowing any combination of arguments to be pre-filled.
+    public partial(func: Function, ...boundArgs: any[]): Function {
+      return function() {
+        var position = 0;
+        var args = boundArgs.slice();
+        for (var i = 0, length = args.length; i < length; i++) {
+          if (args[i] === _) args[i] = arguments[position++];
+        }
+        while (position < arguments.length) args.push(arguments[position++]);
+        return func.apply(this, args);
+      };
+    }
 
                     //   // Bind a number of an object's methods to that object. Remaining arguments
                     //   // are the method names to be bound. Useful for ensuring that all callbacks
@@ -923,102 +920,102 @@ module _Implementation {
       }, wait);
     }
 
-                    //   // Defers a function, scheduling it to run after the current call stack has
-                    //   // cleared.
-                    //   _.defer = function(func) {
-                    //     return _.delay.apply(_, [func, 1].concat(slice.call(arguments, 1)));
-                    //   };
+    // Defers a function, scheduling it to run after the current call stack has
+    // cleared.
+    public defer(func: Function, ...args: any[]): void {
+      return this.delay.apply(this, [func, 1].concat(args));
+    }
 
-                    //   // Returns a function, that, when invoked, will only be triggered at most once
-                    //   // during a given window of time. Normally, the throttled function will run
-                    //   // as much as it can, without ever going more than once per `wait` duration;
-                    //   // but if you'd like to disable the execution on the leading edge, pass
-                    //   // `{leading: false}`. To disable execution on the trailing edge, ditto.
-                    //   _.throttle = function(func, wait, options) {
-                    //     var context, args, result;
-                    //     var timeout = null;
-                    //     var previous = 0;
-                    //     if (!options) options = {};
-                    //     var later = function() {
-                    //       previous = options.leading === false ? 0 : _.now();
-                    //       timeout = null;
-                    //       result = func.apply(context, args);
-                    //       if (!timeout) context = args = null;
-                    //     };
-                    //     return function() {
-                    //       var now = _.now();
-                    //       if (!previous && options.leading === false) previous = now;
-                    //       var remaining = wait - (now - previous);
-                    //       context = this;
-                    //       args = arguments;
-                    //       if (remaining <= 0 || remaining > wait) {
-                    //         clearTimeout(timeout);
-                    //         timeout = null;
-                    //         previous = now;
-                    //         result = func.apply(context, args);
-                    //         if (!timeout) context = args = null;
-                    //       } else if (!timeout && options.trailing !== false) {
-                    //         timeout = setTimeout(later, remaining);
-                    //       }
-                    //       return result;
-                    //     };
-                    //   };
+    // Returns a function, that, when invoked, will only be triggered at most once
+    // during a given window of time. Normally, the throttled function will run
+    // as much as it can, without ever going more than once per `wait` duration;
+    // but if you'd like to disable the execution on the leading edge, pass
+    // `{leading: false}`. To disable execution on the trailing edge, ditto.
+    public throttle(func: any, wait: number, options?: _.ThrottleSettings): Function {
+      var context, args, result;
+      var timeout = null;
+      var previous = 0;
+      if (!options) options = {};
+      var later = function() {
+        previous = options.leading === false ? 0 : this.now();
+        timeout = null;
+        result = func.apply(context, args);
+        if (!timeout) context = args = null;
+      };
+      return function() {
+        var now = this.now();
+        if (!previous && options.leading === false) previous = now;
+        var remaining = wait - (now - previous);
+        context = this; //TODO: is 'this' what is intended?
+        args = arguments;
+        if (remaining <= 0 || remaining > wait) {
+          clearTimeout(timeout);
+          timeout = null;
+          previous = now;
+          result = func.apply(context, args);
+          if (!timeout) context = args = null;
+        } else if (!timeout && options.trailing !== false) {
+          timeout = setTimeout(later, remaining);
+        }
+        return result;
+      };
+    }
 
-                    //   // Returns a function, that, as long as it continues to be invoked, will not
-                    //   // be triggered. The function will be called after it stops being called for
-                    //   // N milliseconds. If `immediate` is passed, trigger the function on the
-                    //   // leading edge, instead of the trailing.
-                    //   _.debounce = function(func, wait, immediate) {
-                    //     var timeout, args, context, timestamp, result;
+    // Returns a function, that, as long as it continues to be invoked, will not
+    // be triggered. The function will be called after it stops being called for
+    // N milliseconds. If `immediate` is passed, trigger the function on the
+    // leading edge, instead of the trailing.
+    public debounce(func: Function, wait: number, immediate?: boolean): Function {
+      var timeout, args, context, timestamp, result;
 
-                    //     var later = function() {
-                    //       var last = _.now() - timestamp;
+      var later = function() {
+        var last = this.now() - timestamp;
 
-                    //       if (last < wait && last > 0) {
-                    //         timeout = setTimeout(later, wait - last);
-                    //       } else {
-                    //         timeout = null;
-                    //         if (!immediate) {
-                    //           result = func.apply(context, args);
-                    //           if (!timeout) context = args = null;
-                    //         }
-                    //       }
-                    //     };
+        if (last < wait && last > 0) {
+          timeout = setTimeout(later, wait - last);
+        } else {
+          timeout = null;
+          if (!immediate) {
+            result = func.apply(context, args);
+            if (!timeout) context = args = null;
+          }
+        }
+      };
 
-                    //     return function() {
-                    //       context = this;
-                    //       args = arguments;
-                    //       timestamp = _.now();
-                    //       var callNow = immediate && !timeout;
-                    //       if (!timeout) timeout = setTimeout(later, wait);
-                    //       if (callNow) {
-                    //         result = func.apply(context, args);
-                    //         context = args = null;
-                    //       }
+      return function() {
+        context = this;
+        args = arguments;
+        timestamp = this.now();
+        var callNow = immediate && !timeout;
+        if (!timeout) timeout = setTimeout(later, wait);
+        if (callNow) {
+          result = func.apply(context, args);
+          context = args = null;
+        }
 
-                    //       return result;
-                    //     };
-                    //   };
+        return result;
+      };
+    }
 
-                    //   // Returns a function that will be executed at most one time, no matter how
-                    //   // often you call it. Useful for lazy initialization.
-                    //   _.once = function(func) {
-                    //     var ran = false, memo;
-                    //     return function() {
-                    //       if (ran) return memo;
-                    //       ran = true;
-                    //       memo = func.apply(this, arguments);
-                    //       func = null;
-                    //       return memo;
-                    //     };
-                    //   };
+    // Returns a function that will be executed at most one time, no matter how
+    // often you call it. Useful for lazy initialization.
+    public once(func: Function): Function {
+      var ran = false, memo;
+      return function() {
+        if (ran) return memo;
+        ran = true;
+        memo = func.apply(this, arguments);
+        func = null;
+        return memo;
+      };
+    }
 
-                    //   // Returns the first function passed as an argument to the second,
-                    //   // allowing you to adjust arguments, run code before and after, and
-                    //   // conditionally execute the original function.
-                    //   _.wrap = function(func, wrapper) {
-                    //     return _.partial(wrapper, func);
-                    //   };
+    // Returns the first function passed as an argument to the second,
+    // allowing you to adjust arguments, run code before and after, and
+    // conditionally execute the original function.
+    public wrap(func: Function, wrapper: (fn: Function, ...args: any[]) => any): Function {
+      return this.partial(wrapper, func);
+    }
 
     // Returns a negated version of the passed-in 3-argument predicate.
     public negate<X, Y, Z>(predicate: (x:X, y:Y, z:Z) => boolean): (x:X, y:Y, z:Z) => boolean {
@@ -1040,17 +1037,17 @@ module _Implementation {
       };
     }
 
-                    //   // Returns a function that will only be executed after being called N times.
-                    //   _.after = function(times, func) {
-                    //     return function() {
-                    //       if (--times < 1) {
-                    //         return func.apply(this, arguments);
-                    //       }
-                    //     };
-                    //   };
+    // Returns a function that will only be executed after being called N times.
+    public after(times: number, func: Function): Function {
+      return function() {
+        if (--times < 1) {
+          return func.apply(this, arguments);
+        }
+      };
+    }
 
-                    //   // Object Functions
-                    //   // ----------------
+    // Object Functions
+    // ----------------
 
     // Retrieve the names of an object's properties.
     // Delegates to **ECMAScript 5**'s native `Object.keys`
@@ -1121,39 +1118,41 @@ module _Implementation {
       return obj;
     }
 
-                    //   // Return a copy of the object only containing the whitelisted properties.
-                    //   _.pick = function(obj, iterator, context) {
-                    //     var result = {}, key;
-                    //     if (obj == null) return result;
-                    //     if (_.isFunction(iterator)) {
-                    //       iterator = createCallback3(iterator, context);
-                    //       for (key in obj) {
-                    //         var value = obj[key];
-                    //         if (iterator(value, key, obj)) result[key] = value;
-                    //       }
-                    //     } else {
-                    //       var keys = concat.apply([], slice.call(arguments, 1));
-                    //       obj = Object(obj);
-                    //       for (var i = 0, length = keys.length; i < length; i++) {
-                    //         key = keys[i];
-                    //         if (key in obj) result[key] = obj[key];
-                    //       }
-                    //     }
-                    //     return result;
-                    //   };
+    // Return a copy of the object only containing the whitelisted properties.
+    public pick(obj: any, ...keys: string[]): any {
+      var result = {}, key;
+      if (obj == null) return result;
+      obj = Object(obj);
+      for (var i = 0, length = keys.length; i < length; i++) {
+        key = keys[i];
+        if (key in obj) result[key] = obj[key];
+      }
+      return result;
+    }
 
-                    //    // Return a copy of the object without the blacklisted properties.
-                    //   _.omit = function(obj, iterator, context) {
-                    //     if (_.isFunction(iterator)) {
-                    //       iterator = _.negate(iterator);
-                    //     } else {
-                    //       var keys = _.map(concat.apply([], slice.call(arguments, 1)), String);
-                    //       iterator = function(value, key) {
-                    //         return !_.contains(keys, key);
-                    //       };
-                    //     }
-                    //     return _.pick(obj, iterator, context);
-                    //   };
+    public pickD(obj: any, iterator: _.ObjectIterator<any, boolean>, context?: any): any {
+      var result = {}, key;
+      if (obj == null) return result;
+      iterator = this.createCallback3(iterator, context);
+      for (key in obj) {
+        var value = obj[key];
+        if (iterator(value, key, obj)) result[key] = value;
+      }
+      return result;
+    }
+
+    // Return a copy of the object without the blacklisted properties.
+    public omit(obj: any, ...keys: string[]): any {
+      var iterator = function(value, key) {
+        return !this.contains(keys, key);
+      };
+      return this.pickD(obj, iterator);
+    }
+
+    public omitD(obj: any, iterator: _.ObjectIterator<any, boolean>, context?: any): any {
+      iterator = this.negate(iterator);
+      return this.pickD(obj, iterator, context);
+    }
 
     // Fill in a given object with default properties.
     public defaults(obj: any, ...defaults: any[]): any {
@@ -1167,11 +1166,11 @@ module _Implementation {
       return obj;
     }
 
-                    //   // Create a (shallow-cloned) duplicate of an object.
-                    //   _.clone = function(obj) {
-                    //     if (!_.isObject(obj)) return obj;
-                    //     return _.isArray(obj) ? obj.slice() : _.extend({}, obj);
-                    //   };
+                    // // Create a (shallow-cloned) duplicate of an object.
+                    // public clone<T>(obj: T): T {
+                    //   if (!this.isObject(obj)) return obj;
+                    //   return this.isArray(obj) ? obj.slice() : this.extend({}, obj);
+                    // }
 
     // Invokes interceptor with the obj, and then returns obj.
     // The primary purpose of this method is to "tap into" a method chain, in
@@ -1290,42 +1289,38 @@ module _Implementation {
       return !!(obj && obj.nodeType === 1);
     }
 
-    // Is a given value an array?
-    public isArray(obj: any): boolean {
-      return toString.call(obj) === '[object Array]'
-    }
-                    //   // Delegates to ECMA5's native Array.isArray
-                    //   _.isArray = nativeIsArray || function(obj) {
-                    //     return toString.call(obj) === '[object Array]';
-                    //   };
-
     // Is a given variable an object?
     public isObject(obj: any): boolean {
       return obj === Object(obj);
     }
 
     // some isType methods
-    public isArguments(obj: any): boolean { return toString.call(obj) === '[object Arguments]'; }
-    public isFunction(obj: any): boolean { return toString.call(obj) === '[object Function]'; }
     public isString(obj: any): boolean { return toString.call(obj) === '[object String]'; }
     public isNumber(obj: any): boolean { return toString.call(obj) === '[object Number]'; }
     public isDate(obj: any): boolean { return toString.call(obj) === '[object Date]'; }
     public isRegExp(obj: any): boolean { return toString.call(obj) === '[object RegExp]'; }
 
-                    //   // Define a fallback version of the method in browsers (ahem, IE), where
-                    //   // there isn't any inspectable "Arguments" type.
-                    //   if (!_.isArguments(arguments)) {
-                    //     _.isArguments = function(obj) {
-                    //       return _.has(obj, 'callee');
-                    //     };
-                    //   }
+    //TODO: in JS, this fallback definition, the optimized isFunction below, and the delegation of isArray
+    // outright replace the old function definitions; can we get such behavior in TS?
+    public isArguments(obj: any): boolean { 
+      if (toString.call(arguments) === '[object Arguments]')
+        return toString.call(obj) === '[object Arguments]';
+      else // Define a fallback version of the method in browsers (ahem, IE), where there isn't any inspectable "Arguments" type.
+        return this.has(obj, 'callee');
+    }
 
-                    //   // Optimize `isFunction` if appropriate.
-                    //   if (typeof /./ !== 'function') {
-                    //     _.isFunction = function(obj) {
-                    //       return typeof obj === 'function';
-                    //     };
-                    //   }
+    public isFunction(obj: any): boolean {
+      if (typeof /./ === 'function')
+        return toString.call(obj) === '[object Function]';
+      else // Optimize `isFunction` if appropriate.
+        return typeof obj === 'function';
+    }
+
+    // Is a given value an array?
+    public isArray(obj: any): boolean {
+      if (nativeIsArray) return nativeIsArray(obj);
+      return toString.call(obj) === '[object Array]'
+    }
 
     // Is a given object a finite number?
     public isFinite(obj: any): boolean {
@@ -1379,7 +1374,7 @@ module _Implementation {
       };
     }
 
-                    //   _.noop = function(){};
+    public noop(): void {}
 
     public property(key: string): (object: Object) => any {
       return function(obj) {
@@ -1419,33 +1414,38 @@ module _Implementation {
       return Date.now() || new Date().getTime();
     }
 
-                    //   // List of HTML entities for escaping.
-                    //   var entityMap = {
-                    //     escape: {
-                    //       '&': '&amp;',
-                    //       '<': '&lt;',
-                    //       '>': '&gt;',
-                    //       '"': '&quot;',
-                    //       "'": '&#x27;'
-                    //     }
-                    //   };
-                    //   entityMap.unescape = _.invert(entityMap.escape);
+    // List of HTML entities for escaping.
+    private _entityMap: {escape: {}; unescape: {};} = {
+      escape: {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#x27;'
+      },
+      unescape: null
+    };
 
-                    //   // Regexes containing the keys and values listed immediately above.
-                    //   var entityRegexes = {
-                    //     escape:   RegExp('[' + _.keys(entityMap.escape).join('') + ']', 'g'),
-                    //     unescape: RegExp('(' + _.keys(entityMap.unescape).join('|') + ')', 'g')
-                    //   };
+    // Regexes containing the keys and values listed immediately above.
+    private entityRegexes = {
+      escape:   RegExp('[' + this.keys(this._entityMap.escape).join('') + ']', 'g'),
+      unescape: RegExp('(' + this.keys(this._entityMap.unescape).join('|') + ')', 'g')
+    };
 
-                    //   // Functions for escaping and unescaping strings to/from HTML interpolation.
-                    //   _.each(['escape', 'unescape'], function(method) {
-                    //     _[method] = function(string) {
-                    //       if (string == null) return '';
-                    //       return ('' + string).replace(entityRegexes[method], function(match) {
-                    //         return entityMap[method][match];
-                    //       });
-                    //     };
-                    //   });
+    public escape(str: string): string {
+      return this.escapeOrUnescape(str, "escape");
+    }
+
+    public unescape(str: string): string {
+      return this.escapeOrUnescape(str, "unescape");
+    }
+
+    private escapeOrUnescape(str: string, direction: string): string {
+      if (str == null) return '';
+      return ('' + str).replace(this.entityRegexes[direction], function(match) {
+        return this._entityMap[direction][match];
+      });
+    }
 
     // If the value of the named `property` is a function then invoke it with the
     // `object` as context; otherwise, return it.
@@ -1455,102 +1455,102 @@ module _Implementation {
       return this.isFunction(value) ? object[property]() : value;
     }
 
-                    //   // Generate a unique integer id (unique within the entire client session).
-                    //   // Useful for temporary DOM ids.
-                    //   var idCounter = 0;
-                    //   _.uniqueId = function(prefix) {
-                    //     var id = ++idCounter + '';
-                    //     return prefix ? prefix + id : id;
-                    //   };
+    // Generate a unique integer id (unique within the entire client session).
+    // Useful for temporary DOM ids.
+    private _idCounter = 0;
+    public uniqueId(prefix?: string): string {
+      var id = ++this._idCounter + '';
+      return prefix ? prefix + id : id;
+    }
 
-                    //   // By default, Underscore uses ERB-style template delimiters, change the
-                    //   // following template settings to use alternative delimiters.
-                    //   _.templateSettings = {
-                    //     evaluate    : /<%([\s\S]+?)%>/g,
-                    //     interpolate : /<%=([\s\S]+?)%>/g,
-                    //     escape      : /<%-([\s\S]+?)%>/g
-                    //   };
+    // By default, Underscore uses ERB-style template delimiters, change the
+    // following template settings to use alternative delimiters.
+    public templateSettings: _.TemplateSettings = {
+      evaluate    : /<%([\s\S]+?)%>/g,
+      interpolate : /<%=([\s\S]+?)%>/g,
+      escape      : /<%-([\s\S]+?)%>/g
+    };
 
-                    //   // When customizing `templateSettings`, if you don't want to define an
-                    //   // interpolation, evaluation or escaping regex, we need one that is
-                    //   // guaranteed not to match.
-                    //   var noMatch = /(.)^/;
+    // When customizing `templateSettings`, if you don't want to define an
+    // interpolation, evaluation or escaping regex, we need one that is
+    // guaranteed not to match.
+    private noMatch = /(.)^/;
 
-                    //   // Certain characters need to be escaped so that they can be put into a
-                    //   // string literal.
-                    //   var escapes = {
-                    //     "'":      "'",
-                    //     '\\':     '\\',
-                    //     '\r':     'r',
-                    //     '\n':     'n',
-                    //     '\u2028': 'u2028',
-                    //     '\u2029': 'u2029'
-                    //   };
+    // Certain characters need to be escaped so that they can be put into a
+    // string literal.
+    private escapes = {
+      "'":      "'",
+      '\\':     '\\',
+      '\r':     'r',
+      '\n':     'n',
+      '\u2028': 'u2028',
+      '\u2029': 'u2029'
+    };
 
-                    //   var escaper = /\\|'|\r|\n|\u2028|\u2029/g;
+    private escaper = /\\|'|\r|\n|\u2028|\u2029/g;
 
-                    //   var escapeChar = function(match) {
-                    //     return '\\' + escapes[match];
-                    //   };
+    private escapeChar(match) {
+      return '\\' + this.escapes[match];
+    }
 
-                    //   // JavaScript micro-templating, similar to John Resig's implementation.
-                    //   // Underscore templating handles arbitrary delimiters, preserves whitespace,
-                    //   // and correctly escapes quotes within interpolated code.
-                    //   _.template = function(text, data, settings) {
-                    //     settings = _.defaults({}, settings, _.templateSettings);
+    // JavaScript micro-templating, similar to John Resig's implementation.
+    // Underscore templating handles arbitrary delimiters, preserves whitespace,
+    // and correctly escapes quotes within interpolated code.
+    public template(text: string, data?: any, settings?: _.TemplateSettings): _.Template {
+      settings = _.defaults({}, settings, _.templateSettings);
 
-                    //     // Combine delimiters into one regular expression via alternation.
-                    //     var matcher = RegExp([
-                    //       (settings.escape || noMatch).source,
-                    //       (settings.interpolate || noMatch).source,
-                    //       (settings.evaluate || noMatch).source
-                    //     ].join('|') + '|$', 'g');
+      // Combine delimiters into one regular expression via alternation.
+      var matcher = RegExp([
+        (settings.escape || this.noMatch).source,
+        (settings.interpolate || this.noMatch).source,
+        (settings.evaluate || this.noMatch).source
+      ].join('|') + '|$', 'g');
 
-                    //     // Compile the template source, escaping string literals appropriately.
-                    //     var index = 0;
-                    //     var source = "__p+='";
-                    //     text.replace(matcher, function(match, escape, interpolate, evaluate, offset) {
-                    //       source += text.slice(index, offset).replace(escaper, escapeChar);
-                    //       index = offset + match.length;
+      // Compile the template source, escaping string literals appropriately.
+      var index = 0;
+      var source = "__p+='";
+      text.replace(matcher, function(match, escape, interpolate, evaluate, offset) {
+        source += text.slice(index, offset).replace(this.escaper, this.escapeChar);
+        index = offset + match.length;
 
-                    //       if (escape) {
-                    //         source += "'+\n((__t=(" + escape + "))==null?'':_.escape(__t))+\n'";
-                    //       } else if (interpolate) {
-                    //         source += "'+\n((__t=(" + interpolate + "))==null?'':__t)+\n'";
-                    //       } else if (evaluate) {
-                    //         source += "';\n" + evaluate + "\n__p+='";
-                    //       }
+        if (escape) {
+          source += "'+\n((__t=(" + escape + "))==null?'':_.escape(__t))+\n'";
+        } else if (interpolate) {
+          source += "'+\n((__t=(" + interpolate + "))==null?'':__t)+\n'";
+        } else if (evaluate) {
+          source += "';\n" + evaluate + "\n__p+='";
+        }
 
-                    //       // Adobe VMs need the match returned to produce the correct offest.
-                    //       return match;
-                    //     });
-                    //     source += "';\n";
+        // Adobe VMs need the match returned to produce the correct offest.
+        return match;
+      });
+      source += "';\n";
 
-                    //     // If a variable is not specified, place data values in local scope.
-                    //     if (!settings.variable) source = 'with(obj||{}){\n' + source + '}\n';
+      // If a variable is not specified, place data values in local scope.
+      if (!settings.variable) source = 'with(obj||{}){\n' + source + '}\n';
 
-                    //     source = "var __t,__p='',__j=Array.prototype.join," +
-                    //       "print=function(){__p+=__j.call(arguments,'');};\n" +
-                    //       source + 'return __p;\n';
+      source = "var __t,__p='',__j=Array.prototype.join," +
+        "print=function(){__p+=__j.call(arguments,'');};\n" +
+        source + 'return __p;\n';
 
-                    //     try {
-                    //       var render = Function(settings.variable || 'obj', '_', source);
-                    //     } catch (e) {
-                    //       e.source = source;
-                    //       throw e;
-                    //     }
+      try {
+        var render = Function(settings.variable || 'obj', '_', source);
+      } catch (e) {
+        e.source = source;
+        throw e;
+      }
 
-                    //     if (data) return render(data, _);
-                    //     var template = function(data) {
-                    //       return render.call(this, data, _);
-                    //     };
+      if (data) return render(data, _);
+      var template: _.Template = function(data) {
+        return render.call(this, data, _);
+      };
 
-                    //     // Provide the compiled source as a convenience for precompilation.
-                    //     var argument = settings.variable || 'obj';
-                    //     template.source = 'function(' + argument + '){\n' + source + '}';
+      // Provide the compiled source as a convenience for precompilation.
+      var argument = settings.variable || 'obj';
+      template.source = 'function(' + argument + '){\n' + source + '}';
 
-                    //     return template;
-                    //   };
+      return template;
+    }
 
                     //   // Add a "chain" function. Start chaining a wrapped Underscore object.
                     //   _.chain = function(obj) {

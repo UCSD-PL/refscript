@@ -4,7 +4,7 @@
 // //     (c) 2009-2014 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
 // //     Underscore may be freely distributed under the MIT license.
 
-///<reference path='.\underscore3.d.ts' />
+///<reference path='.\underscore.d.ts' />
 
 //TODO: restore 'guard' internal params to several functions
 //TODO: Functions are currently duplicated instead of overloaded. Ones that are identical up to renaming are marked with //=
@@ -120,7 +120,7 @@ module _Implementation {
     // Handles raw objects in addition to array-likes. Treats all
     // sparse array-likes as if they were dense.
     public each<T>(obj: _.List<T>, iterator: _.ListIterator<T, any>, context?: any): _.List<T> {
-      var i, length;
+      var i:number, length:number;
       if (obj == null) return obj;
       iterator = this.createCallback3(iterator, context);
       for (i = 0, length = obj.length; i < length; i++) {
@@ -130,7 +130,7 @@ module _Implementation {
     }
 
     public eachD<T>(obj: _.Dictionary<T>, iterator: _.ObjectIterator<T, any>, context?: any): _.Dictionary<T> {
-      var i, length;
+      var i:number, length:number;
       if (obj == null) return obj;
       iterator = this.createCallback3(iterator, context);
       var keys = this.keys(obj);
@@ -150,7 +150,7 @@ module _Implementation {
 
     // Return the results of applying the iterator to each element.
     public map<T, TResult>(obj: _.List<T>, iterator: _.ListIterator<T, TResult>, context?: any): TResult[] {
-      var results = [];
+      var results:TResult[] = [];
       if (obj == null) return results;
       iterator = this.lookupIterator3(iterator, context);
       this.each(obj, function(value, index, list) {
@@ -160,7 +160,7 @@ module _Implementation {
     }
 
     public mapD<T, TResult>(obj: _.Dictionary<T>, iterator: _.ObjectIterator<T, TResult>, context?: any): TResult[] { //=
-      var results = [];
+      var results:TResult[] = [];
       if (obj == null) return results;
       iterator = this.lookupIterator3(iterator, context);
       this.eachD(obj, function(value, index, list) {
@@ -245,7 +245,7 @@ module _Implementation {
 
     // Return the first value which passes a truth test. Aliased as `detect`.
     public find<T>(list: _.List<T>, predicate: _.ListIterator<T, boolean>, context?: any): T {
-      var result;
+      var result:T;
       predicate = this.lookupIterator3(predicate, context);
       this.some(list, function(value, index, list) {
         if (predicate(value, index, list)) {
@@ -257,7 +257,7 @@ module _Implementation {
     }
 
     public findD<T>(obj: _.Dictionary<T>, predicate: _.ObjectIterator<T, boolean>, context?: any): T { //=
-      var result;
+      var result:T;
       predicate = this.lookupIterator3(predicate, context);
       this.someD(obj, function(value, index, list) {
         if (predicate(value, index, list)) {
@@ -279,7 +279,7 @@ module _Implementation {
     // Return all the elements that pass a truth test.
     // Aliased as `select`.
     public filter<T>(list: _.List<T>, predicate: _.ListIterator<T, boolean>, context?: any): T[] {
-      var results = [];
+      var results:T[] = [];
       if (list == null) return results;
       predicate = this.lookupIterator3(predicate, context);
       this.each(list, function(value, index, list) {
@@ -289,7 +289,7 @@ module _Implementation {
     }
 
     public filterD<T>(obj: _.Dictionary<T>, predicate: _.ObjectIterator<T, boolean>, context?: any): T[] { //=
-      var results = [];
+      var results:T[] = [];
       if (obj == null) return results;
       predicate = this.lookupIterator3(predicate, context);
       this.eachD(obj, function(value, index, list) {
@@ -403,7 +403,7 @@ module _Implementation {
     // Invoke a method (with arguments) on every item in a collection.
     public invoke<T extends {}>(list: _.List<T>, method: any, ...args: any[]): any {
       var isFunc = this.isFunction(method);
-      return this.map(list, function(value) {
+      return this.map(list, function(value:any) {
         return (isFunc ? method : value[method]).apply(value, args);
       });
     }
@@ -430,7 +430,7 @@ module _Implementation {
     public max<T>(list: _.List<T>, iterator?: _.ListIterator<T, number>, context?: any): T;
     public max<T>(obj: _.List<any>, iterator?: _.ListIterator<T, number>, context?: any): any {
       var result = -Infinity, lastComputed = -Infinity,
-          value, computed;
+          value:number, computed:number;
       if (!iterator && this.isArray(obj)) {
         for (var i = 0, length = obj.length; i < length; i++) {
           value = obj[i];
@@ -456,7 +456,7 @@ module _Implementation {
     public min<T>(list: _.List<T>, iterator?: _.ListIterator<T, number>, context?: any): T;
     public min<T>(obj: _.List<any>, iterator?: _.ListIterator<T, number>, context?: any): any {
       var result = Infinity, lastComputed = Infinity,
-        value, computed;
+        value:number, computed:number;
       if (!iterator && this.isArray(obj)) {
         for (var i = 0, length = obj.length; i < length; i++) {
           value = obj[i];
@@ -480,9 +480,9 @@ module _Implementation {
     // Shuffle an array, using the modern version of the
     // [Fisher-Yates shuffle](http://en.wikipedia.org/wiki/Fisher–Yates_shuffle).
     public shuffle<T>(obj: _.List<T>): T[] {
-      var rand;
+      var rand:number;
       var index = 0;
-      var shuffled = [];
+      var shuffled:T[] = [];
       this.each(obj, function(value) {
         rand = this.random(index++);
         shuffled[index - 1] = shuffled[rand];
@@ -527,11 +527,11 @@ module _Implementation {
     }
 
     // An internal function used for aggregate "group by" operations.
-    private group<T>(behavior) {
-      return function(obj, iterator, context) {
-        var result: _.Dictionary<T> = {};
+    private group<T, TResult>(behavior: (result:_.Dictionary<TResult>, value: T, key:string) => void) {
+      return function(obj: _.List<T>, iterator: _.ListIterator<T, any>, context: any) {
+        var result: _.Dictionary<TResult> = {};
         iterator = this.lookupIterator3(iterator, context);
-        this.each(obj, function(value, index) {
+        this.each(obj, function(value:T, index:number) {
           var key = iterator(value, index, obj);
           behavior(result, value, key);
         });
@@ -542,20 +542,20 @@ module _Implementation {
     // Groups the object's values by a criterion. Pass either a string attribute
     // to group by, or a function that returns the criterion.
     public groupBy<T>(list: _.List<T>, iterator?: _.ListIterator<T, any>, context?: any): _.Dictionary<T[]> {
-      return this.group<T[]>(function(result, value, key) { if (this.has(result, key)) result[key].push(value); else result[key] = [value]; })(list, iterator, context);
+      return this.group<T, T[]>(function(result, value, key) { if (this.has(result, key)) result[key].push(value); else result[key] = [value]; })(list, iterator, context);
     }
 
     // Indexes the object's values by a criterion, similar to `groupBy`, but for
     // when you know that your index values will be unique.
     public indexBy<T>(list: _.List<T>, iterator: _.ListIterator<T, any>, context?: any): _.Dictionary<T> {
-      return this.group<T>(function(result, value, key) { result[key] = value; })(list, iterator, context);
+      return this.group<T, T>(function(result, value, key) { result[key] = value; })(list, iterator, context);
     }
 
     // Counts instances of an object that group by a certain criterion. Pass
     // either a string attribute to count by, or a function that returns the
     // criterion.
     public countBy<T>(list: _.List<T>, iterator?: _.ListIterator<T, any>, context?: any): _.Dictionary<number> {
-      return this.group<number>(function(result, value, key) { if (this.has(result, key)) result[key]++; else result[key] = 1; })(list, iterator, context);
+      return this.group<T, number>(function(result, value, key) { if (this.has(result, key)) result[key]++; else result[key] = 1; })(list, iterator, context);
     }
 
     // TODO: formerly not restricted to comparing numbers; needs Comparable interface?
@@ -597,7 +597,7 @@ module _Implementation {
     // predicate, and one whose elements all do not satisfy the predicate.
     partition<T>(array: Array<T>, predicate: _.ListIterator<T, boolean>, context?: any): T[][] {
       predicate = this.lookupIterator3(predicate, context);
-      var pass = [], fail = [];
+      var pass:T[] = [], fail:T[] = [];
       this.each(array, function(value, key, obj) {
         (predicate(value, key, obj) ? pass : fail).push(value);
       });
@@ -712,9 +712,9 @@ module _Implementation {
         return this.uniq(array, false, isSorted, iterator);
       }
       if (iterator) iterator = this.lookupIterator3(iterator, context);
-      var result = [];
-      var prev = null
-      var seen = [];
+      var result:T[] = [];
+      var prev:T = null
+      var seen:T[] = [];
       for (var i = 0, length = array.length; i < length; i++) {
         var value = array[i];
         if (iterator) value = iterator(value, i, array);
@@ -743,13 +743,14 @@ module _Implementation {
     // passed-in arrays.
     public intersection<T>(...arrays: _.List<T>[]): T[] {
       if (arrays == null) return [];
-      var result = [];
-      var argsLength = arguments.length;
-      for (var i = 0, length = arrays.length; i < length; i++) {
-        var item = arrays[i];
+      var array = arrays[0];
+      var result:T[] = [];
+      var argsLength = arrays.length;
+      for (var i = 0, length = array.length; i < length; i++) {
+        var item = array[i];
         if (this.contains(result, item)) continue;
         for (var j = 1; j < argsLength; j++) {
-          if (!this.contains(arguments[j], item)) break;
+          if (!this.contains(arrays[j], item)) break;
         }
         if (j === argsLength) result.push(item);
       }
@@ -780,17 +781,20 @@ module _Implementation {
     // Converts lists into objects. Pass either a single array of `[key, value]`
     // pairs, or two parallel arrays of the same length -- one of keys, and one of
     // the corresponding values.
-    public object(...keyValuePairs: any[][]): {};
-    public object(list: _.List<string>, values: _.List<any>): {};
-    public object(list: any, values?: _.List<any>): {} {
+    public object(...keyValuePairs: _.KeyValuePair[]): {} {
+      if (keyValuePairs == null) return {};
+      var result:any = {};
+      for (var i = 0, length = keyValuePairs.length; i < length; i++) {
+        result[keyValuePairs[i][0]] = keyValuePairs[i][1];
+      }
+      return result;
+    }
+
+    public objectD(list: _.List<string>, values: _.List<any>): {} {
       if (list == null) return {};
-      var result = {};
+      var result:any = {};
       for (var i = 0, length = list.length; i < length; i++) {
-        if (values) {
-          result[list[i]] = values[i];
-        } else {
-          result[list[i][0]] = list[i][1];
-        }
+        result[list[i]] = values[i];
       }
       return result;
     }
@@ -901,7 +905,7 @@ module _Implementation {
 
     // Memoize an expensive function by storing its results.
     public memoize(func: Function, hashFn?: (...args: any[]) => string): Function {
-      var memoize:any = function(key) { //TODO: how to say that memoize is a Function with a named member var?
+      var memoize:any = function(key:string) { //TODO: how to say that memoize is a Function with a named member var?
         var cache = memoize.cache;
         var address = hashFn ? hashFn.apply(this, arguments) : key;
         if (!this.has(cache, address)) cache[address] = func.apply(this, arguments);
@@ -932,8 +936,8 @@ module _Implementation {
     // but if you'd like to disable the execution on the leading edge, pass
     // `{leading: false}`. To disable execution on the trailing edge, ditto.
     public throttle(func: any, wait: number, options?: _.ThrottleSettings): Function {
-      var context, args, result;
-      var timeout = null;
+      var context:any, args:any, result:Function;
+      var timeout:number = null;
       var previous = 0;
       if (!options) options = {};
       var later = function() {
@@ -966,7 +970,7 @@ module _Implementation {
     // N milliseconds. If `immediate` is passed, trigger the function on the
     // leading edge, instead of the trailing.
     public debounce(func: Function, wait: number, immediate?: boolean): Function {
-      var timeout, args, context, timestamp, result;
+      var timeout:number, args:any, context:any, timestamp:number, result:Function;
 
       var later = function() {
         var last = this.now() - timestamp;
@@ -1000,7 +1004,7 @@ module _Implementation {
     // Returns a function that will be executed at most one time, no matter how
     // often you call it. Useful for lazy initialization.
     public once(func: Function): Function {
-      var ran = false, memo;
+      var ran = false, memo:any;
       return function() {
         if (ran) return memo;
         ran = true;
@@ -1054,7 +1058,7 @@ module _Implementation {
     public keys(obj: any): string[] {
       if (!this.isObject(obj)) return [];
       if (nativeKeys) return nativeKeys(obj);
-      var keys = [];
+      var keys:string[] = [];
       for (var key in obj) if (this.has(obj, key)) keys.push(key);
       return keys;
     }
@@ -1083,7 +1087,7 @@ module _Implementation {
 
     // Invert the keys and values of an object. The values must be serializable.
     public invert(obj: any): any {
-      var result = {};
+      var result:any = {};
       var keys = this.keys(obj);
       for (var i = 0, length = keys.length; i < length; i++) {
         result[obj[keys[i]]] = keys[i];
@@ -1094,7 +1098,7 @@ module _Implementation {
     // Return a sorted list of the function names available on the object.
     // Aliased as `methods`
     public functions(obj: any): string[] {
-      var names = [];
+      var names:string[] = [];
       for (var key in obj) {
         if (this.isFunction(obj[key])) names.push(key);
       }
@@ -1108,7 +1112,7 @@ module _Implementation {
     // Extend a given object with all the properties in passed-in object(s).
     public extend(obj: any, ...sources: any[]): any {
       if (!this.isObject(obj)) return obj;
-      var source, prop;
+      var source:any, prop:any;
       for (var i = 1, length = sources.length; i < length; i++) {
         source = sources[i];
         for (prop in source) {
@@ -1120,7 +1124,7 @@ module _Implementation {
 
     // Return a copy of the object only containing the whitelisted properties.
     public pick(obj: any, ...keys: string[]): any {
-      var result = {}, key;
+      var result:any = {}, key:string;
       if (obj == null) return result;
       obj = Object(obj);
       for (var i = 0, length = keys.length; i < length; i++) {
@@ -1131,7 +1135,7 @@ module _Implementation {
     }
 
     public pickD(obj: any, iterator: _.ObjectIterator<any, boolean>, context?: any): any {
-      var result = {}, key;
+      var result:any = {}, key:any;
       if (obj == null) return result;
       iterator = this.createCallback3(iterator, context);
       for (key in obj) {
@@ -1143,7 +1147,7 @@ module _Implementation {
 
     // Return a copy of the object without the blacklisted properties.
     public omit(obj: any, ...keys: string[]): any {
-      var iterator = function(value, key) {
+      var iterator:_.ObjectIterator<any, boolean> = function(value, key) {
         return !this.contains(keys, key);
       };
       return this.pickD(obj, iterator);
@@ -1181,7 +1185,7 @@ module _Implementation {
     }
 
     // Internal recursive comparison function for `isEqual`.
-    private eq(a, b, aStack, bStack): boolean {
+    private eq(a:any, b:any, aStack:any[], bStack:any[]): boolean {
       // Identical objects are equal. `0 === -0`, but they aren't identical.
       // See the [Harmony `egal` proposal](http://wiki.ecmascript.org/doku.php?id=harmony:egal).
       if (a === b) return a !== 0 || 1 / a === 1 / b;
@@ -1238,7 +1242,7 @@ module _Implementation {
       // Add the first object to the stack of traversed objects.
       aStack.push(a);
       bStack.push(b);
-      var size, result;
+      var size:number, result:boolean;
       // Recursively compare objects and arrays.
       if (className === '[object Array]') {
         // Compare array lengths to determine if a deep comparison is necessary.
@@ -1252,7 +1256,7 @@ module _Implementation {
         }
       } else {
         // Deep compare objects.
-        var keys = this.keys(a), key;
+        var keys = this.keys(a), key:string;
         size = keys.length;
         // Ensure that both objects contain the same number of properties before comparing deep equality.
         result = this.keys(b).length == size;
@@ -1377,7 +1381,7 @@ module _Implementation {
     public noop(): void {}
 
     public property(key: string): (object: Object) => any {
-      return function(obj) {
+      return function(obj:any) {
         return obj[key];
       };
     }
@@ -1427,7 +1431,7 @@ module _Implementation {
     };
 
     // Regexes containing the keys and values listed immediately above.
-    private entityRegexes = {
+    private entityRegexes: {[x:string]:RegExp} = {
       escape:   RegExp('[' + this.keys(this._entityMap.escape).join('') + ']', 'g'),
       unescape: RegExp('(' + this.keys(this._entityMap.unescape).join('|') + ')', 'g')
     };
@@ -1478,7 +1482,7 @@ module _Implementation {
 
     // Certain characters need to be escaped so that they can be put into a
     // string literal.
-    private escapes = {
+    private escapes: { [x:string] : string } = {
       "'":      "'",
       '\\':     '\\',
       '\r':     'r',
@@ -1489,7 +1493,7 @@ module _Implementation {
 
     private escaper = /\\|'|\r|\n|\u2028|\u2029/g;
 
-    private escapeChar(match) {
+    private escapeChar(match:string): string {
       return '\\' + this.escapes[match];
     }
 

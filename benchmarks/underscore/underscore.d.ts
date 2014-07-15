@@ -75,6 +75,11 @@ declare module _ {
 	interface Dictionary<T> extends Collection<T> {
 		[index: string]: T;
 	}
+
+	interface KeyValuePair {
+		0:string;
+		1:any;
+	}
 }
 
 interface UnderscoreStatic {
@@ -863,7 +868,7 @@ interface UnderscoreStatic {
 	* @param keyValuePairs Array of [key, value] pairs.
 	* @return An object containing the `keys` as properties and `values` as the property values.
 	**/
-	object(...keyValuePairs: any[][]): {};
+	object(...keyValuePairs: _.KeyValuePair[]): {};
 
 	/**
 	* @see _.object
@@ -871,7 +876,7 @@ interface UnderscoreStatic {
 	* @param values Value array.
 	* @return An object containing the `keys` as properties and `values` as the property values.
 	**/
-	object(
+	objectD(
 		list: _.List<string>,
 		values: _.List<any>): {};
 

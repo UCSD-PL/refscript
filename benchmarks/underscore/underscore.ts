@@ -8,7 +8,7 @@
 
 //TODO: restore 'guard' internal params to several functions
 //TODO: Functions are currently duplicated instead of overloaded. Ones that are identical up to renaming are marked with //=
-//        Many of these stem from each/eachD and the dictionary dupes are named with a trailing D
+//        Many of these stem from each/eachD and the dictionary dupes (and some other duplicates) are named with a trailing D
 //TODO: by defining UnderscoreStatic as an interface, we lose the ability to actually make the methods static
 //Note that member privacy (like typing) is only enforced by the compiler, not the resulting javascript
 
@@ -576,26 +576,33 @@ module _Implementation {
     }
 
     // Safely create a real, live array from anything iterable.
-    public toArray<T>(list: _.List<T>): T[];
-    public toArray<T>(dict: _.Dictionary<T>): T[];
-    public toArray<T>(obj: any): T[] {
-      if (!obj) return [];
-      if (this.isArray(obj)) return slice.call(obj);
-      if (obj.length === +obj.length) return this.map<T, T>(obj, this.identity);
-      return this.values(obj);
+    public toArray<T>(list: _.List<T>): T[] {
+      if (!list) return [];
+      if (this.isArray(list)) return slice.call(list);
+      return this.map<T, T>(list, this.identity);
+    }
+
+    // Safely create a real, live array from anything iterable.
+    public toArrayD<T>(dict: _.Dictionary<T>): T[] {
+      if (!dict) return [];
+      return this.values(dict);
     }
 
     // Return the number of elements in an object.
-    public size<T>(list: _.List<T>): number;
-    public size<T>(dict: _.Dictionary<T>): number;
-    public size<T>(obj: any): number {
-      if (obj == null) return 0;
-      return obj.length === +obj.length ? obj.length : this.keys(obj).length;
+    public size<T>(list: _.List<T>): number {
+      if (list == null) return 0;
+      return list.length;
+    }
+
+    // Return the number of elements in an object.
+    public sizeD<T>(dict: _.Dictionary<T>): number {
+      if (dict == null) return 0;
+      return this.keys(dict).length;
     }
 
     // Split a collection into two arrays: one whose elements all satisfy the given
     // predicate, and one whose elements all do not satisfy the predicate.
-    partition<T>(array: Array<T>, predicate: _.ListIterator<T, boolean>, context?: any): T[][] {
+    public partition<T>(array: Array<T>, predicate: _.ListIterator<T, boolean>, context?: any): T[][] {
       predicate = this.lookupIterator3(predicate, context);
       var pass:T[] = [], fail:T[] = [];
       this.each(array, function(value, key, obj) {

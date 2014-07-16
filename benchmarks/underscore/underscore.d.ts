@@ -535,7 +535,7 @@ interface UnderscoreStatic {
 	* @param context `this` object in `iterator`, optional.
 	* @return A sorted copy of `list`.
 	**/
-	sortBy<T, TSort>(
+	sortBy<T>(
 		list: _.List<T>,
 		iterator?: _.ListIterator<T, any>,
 		context?: any): T[];
@@ -639,7 +639,7 @@ interface UnderscoreStatic {
 	* @return `list` as an array.
 	**/
 	toArray<T>(list: _.List<T>): T[];
-	toArray<T>(list: _.Dictionary<T>): T[];
+	toArrayD<T>(list: _.Dictionary<T>): T[];
 
 	/**
 	* Return the number of values in the list.
@@ -647,7 +647,7 @@ interface UnderscoreStatic {
 	* @return Number of values in `list`.
 	**/
 	size<T>(list: _.List<T>): number;
-	size<T>(list: _.Dictionary<T>): number;
+	sizeD<T>(list: _.Dictionary<T>): number;
 
 	/**
 	* Split array into two arrays: 
@@ -1019,13 +1019,6 @@ interface UnderscoreStatic {
 		func: Function,
 		wait: number,
 		...arguments: any[]): any;
-
-					// 	/**
-					// 	* @see _delay
-					// 	**/
-					// 	delay(
-					// 		func: Function,
-					// 		...arguments: any[]): any;
 
 	/**
 	* Defers invoking the function until the current call stack has cleared, similar to using setTimeout
@@ -1455,6 +1448,11 @@ interface UnderscoreStatic {
 	**/
 	escape(str: string): string;
 
+	/**
+	* The opposite of escape, replaces &amp;, &lt;, &gt;, &quot;, and &#x27; with their unescaped counterparts.
+	* @param str HTML escaped string.
+	* @return `str` Raw string.
+	**/
 	unescape(str: string): string;
 
 	/**

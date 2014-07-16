@@ -24,8 +24,6 @@ class RedPoint extends ColorPoint {
 
 }
 
-/*@ a :: { v: { x: number; y: number } | instanceof(v, "Point") } */
-var a : Point = new Point(); 
-
-assert(a instanceof Point);
+/*@ a :: #RedPoint[#Mutable] */
+var a : RedPoint = { x: 1, y: 2, c: "red" };
 

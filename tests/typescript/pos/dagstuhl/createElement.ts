@@ -53,6 +53,6 @@ function createElt(tagName: string): HTMLElt {
 
 var elt = createElt("div");
 
-var b = elt instanceof HTMLDivElt;
+assert(elt instanceof HTMLDivElt);
 
 

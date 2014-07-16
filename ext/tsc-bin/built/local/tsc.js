@@ -9895,6 +9895,21 @@ var TypeScript;
                             var ssymb = symb;
                         }
                         break;
+
+                    case 145 /* MethodSignature */:
+                        var v = m;
+                        var anns = tokenAnnots(v.propertyName);
+                        if (anns.length === 0) {
+                            var eltSymbol = helper.getSymbolForAST(v);
+                            return [eltSymbol.toString()];
+                        } else {
+                            return anns.map(function (m) {
+                                return m.getContent();
+                            });
+                        }
+
+                        break;
+
                     case 141 /* PropertySignature */:
                         var v = m;
                         var anns = tokenAnnots(v.propertyName);
@@ -60219,15 +60234,6 @@ var TypeScript;
 
     TypeScript.TVoid = new TVoidC();
 
-    var TField = (function () {
-        function TField(symbol, type) {
-            this.symbol = symbol;
-            this.type = type;
-        }
-        return TField;
-    })();
-    TypeScript.TField = TField;
-
     var TObject = (function (_super) {
         __extends(TObject, _super);
         function TObject(fields) {
@@ -60238,8 +60244,8 @@ var TypeScript;
             var s = "";
             s += "{ ";
             s += this.fields.map(function (f) {
-                return (f.symbol + " : " + f.type.toString());
-            }).join(", ");
+                return f.toString();
+            }).join("; ");
             s += " }";
             return s;
         };
@@ -60404,18 +60410,50 @@ var TypeScript;
     TypeScript.TParentType = TParentType;
 
     var TElt = (function () {
-        function TElt(name, access, mutability, type) {
-            this.name = name;
-            this.access = access;
-            this.mutability = mutability;
-            this.type = type;
+        function TElt() {
         }
-        TElt.prototype.toString = function () {
-            return this.name + " : " + this.type.toString();
+        TElt.createTElt = function (t) {
+            if (t.isMethod()) {
+                console.log("TypeParameters: " + t.getTypeParameters().map(function (t) {
+                    return t.toString();
+                }));
+            }
+            return null;
         };
         return TElt;
     })();
     TypeScript.TElt = TElt;
+
+    var TMeth = (function (_super) {
+        __extends(TMeth, _super);
+        function TMeth(name, args, rt) {
+            _super.call(this);
+            this.name = name;
+            this.args = args;
+            this.rt = rt;
+        }
+        TMeth.prototype.toString = function () {
+            return this.name + ": (" + this.args.map(function (t) {
+                return t.toString();
+            }).join(", ") + "): " + this.rt.toString();
+        };
+        return TMeth;
+    })(TElt);
+    TypeScript.TMeth = TMeth;
+
+    var TField = (function (_super) {
+        __extends(TField, _super);
+        function TField(name, type) {
+            _super.call(this);
+            this.name = name;
+            this.type = type;
+        }
+        TField.prototype.toString = function () {
+            return this.name + ": " + this.type.toString();
+        };
+        return TField;
+    })(TElt);
+    TypeScript.TField = TField;
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
 (function (TypeScript) {

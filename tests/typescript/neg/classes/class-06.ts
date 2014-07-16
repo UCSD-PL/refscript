@@ -1,12 +1,12 @@
 class Foo<A> { 
 
-	/*@ f :: A */ 
+	/*@ f : A */ 
 	public f;
 
-	/*@ g :: A */ 
+	/*@ g : A */ 
 	public g;
   
-	/*@ constructor :: (x:A) => void */
+	/*@ new(x:A) => void */
 	constructor(x: A) {
     this.g = x;
 	}

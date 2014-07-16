@@ -379,8 +379,8 @@
 /*@ qualif Cmp(v:a,x:a)              : v =  x                   */
 /*@ qualif Cmp(v:a,x:a)              : v != x                   */
 /*@ qualif One(v:number)             : v = 1                    */
-/*@ qualif True(v:boolean)           : (? v)                    */
-/*@ qualif False(v:boolean)          : not (? v)                */
+/*  qualif True(v:boolean)           : (? v)                    */
+/*  qualif False(v:boolean)          : not (? v)                */
 /*@ qualif True1(v:boolean)          : (Prop v)                 */
 /*@ qualif False1(v:boolean)         : not (Prop v)             */
 

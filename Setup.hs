@@ -12,8 +12,10 @@ import Data.List                          (find)
 
 main         = defaultMainWithHooks fixHooks 
   where 
-    fixHooks = simpleUserHooks { postInst = copyExts } 
-   
+    fixHooks = simpleUserHooks { postCopy = copyExts 
+                               , postInst = copyExts }
+
+
 copyExts _ _ pkg lbi 
   = do putStrLn $ "Post Install - copy TS binaries into PATH: " ++ show binDir
        env     <- getEnvironment 

@@ -14,5 +14,5 @@ var d  = 1;
 /*@ e :: { {  } | true } */
 var e  = { } ;
 
-/*@ f :: { d: { number + boolean | true }  } */
+/*@ f :: [#Immutable]  { d: number + boolean } */
 var f  = { d: 1 };

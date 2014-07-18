@@ -339,9 +339,9 @@ convertUnion :: PPR  r => SourceSpan -> TDR r -> RType r -> RType r -> Either Er
 convertUnion l δ t1 t2  
 
 
-  | upcast    = Right $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) CDUp 
-  | deadcast  = Right $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) CDDead
-  | otherwise = Right $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) CDDn
+  | upcast    = Right {- $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) -} CDUp 
+  | deadcast  = Right {- $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) -} CDDead
+  | otherwise = Right {- $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) -} CDDn
 
 --     case distinct of
 --       ([],[])  | length t1s == length t2s -> Right $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) CDNo

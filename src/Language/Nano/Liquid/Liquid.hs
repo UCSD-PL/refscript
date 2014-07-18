@@ -240,8 +240,8 @@ consStmt g (VarDeclStmt _ ds)
 
 -- return e 
 consStmt g (ReturnStmt l eo)
-  = do  (_,g') <- consCall g l "return" (maybeToList eo) $ returnTy (envFindReturn g) (isJust eo)
-        return  $ Just g'
+  = do  _ <- consCall g l "return" (maybeToList eo) $ returnTy (envFindReturn g) (isJust eo)
+        return Nothing
 
 -- throw e 
 consStmt g (ThrowStmt _ e)

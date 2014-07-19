@@ -1,6 +1,6 @@
 class A {
 
-	/*@ constructor :: (x: number) => void */
+	/*@ new (x: number) => void */
 	constructor(x: number) { }
 
 }
@@ -11,7 +11,7 @@ class B extends A {
 
 class C extends B {
 
-	/*@ constructor :: () => void */
+	/*@ new () => void */
 	constructor() {
     super(1); 
   }

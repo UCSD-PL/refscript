@@ -23,14 +23,14 @@ import           Control.Applicative ((<$>))
 
 type PPR r = (PP r, F.Reftable r)
 
-type TDR r = TDefEnv (RType r)
+type TDR r = TDefEnv r
 type TER r = Env (RType r)
 
 -- Naming convention for the following:
 --
 --  α: the variable declaration environment
 --
---  γ: the type definition environment
+--  δ: the type definition environment
 --
 
 -- Given an environment @γ@, a (string) field @s@ and a type @t@, `getProp` 
@@ -41,38 +41,38 @@ type TER r = Env (RType r)
 getProp ::  (IsLocated l, PPR r) => 
   l -> TER r -> TDR r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getProp l α γ s t@(TApp _ _ _)  = getPropApp l α γ s t 
-getProp _ _ _ _   (TFun _ _ _ ) = Nothing
-getProp _ _ _ s a@(TCons _ _)   = (a,) <$> getPropCons False s a
-getProp l _ _ _ t               = die $ bug (srcPos l) 
+getProp l α δ s t@(TApp _ _ _ )  = getPropApp l α δ s t 
+getProp _ _ _ _   (TFun _ _ _  ) = Nothing
+getProp _ _ _ s a@(TCons es _ _) = (a,) <$> lookupElt s es
+getProp l _ _ _ t                = die $ bug (srcPos l) 
                                       $ "Using getProp on type: " ++ ppshow t 
 
 
--- | getElt could return multiple bindgins
+-- | `getElt`: return elements associated with a symbol @s@. The return list 
+-- is empty if the binding was not found or @t@ is an invalid type.
 -------------------------------------------------------------------------------
-getElt :: (PPR r, IsLocated l) 
-       => l -> TDR r -> F.Symbol -> RType r -> [(RType r, TElt (RType r))]
+getElt :: (F.Symbolic s, PPR r) => TDR r -> s -> RType r -> [TElt r]
 -------------------------------------------------------------------------------
-getElt l γ s t@(TApp _ _ _)  = getEltApp l γ s t 
-getElt _ _ s t@(TCons _ _)   = (t,) <$> getEltCons False s t
-getElt l _ _ t               = die $ bug (srcPos l) 
-                                   $ "Using getElt on type: " ++ ppshow t 
+getElt δ s t                = fromCons $ S.flattenType δ t
+  where   
+    fromCons (TCons es _ _) = [ e | e <- es, F.symbol e == F.symbol s ]
+    fromCons _              = []
 
 
 -------------------------------------------------------------------------------
-getCallable :: PPR r => TDefEnv (RType r) -> RType r -> [RType r]
+getCallable :: PPR r => TDefEnv r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
-getCallable δ t           = uncurry mkAll <$> foo [] t
+getCallable δ t             = uncurry mkAll <$> foo [] t
   where
-    foo αs t@(TFun _ _ _) = [(αs, t)]
-    foo αs   (TAnd ts)    = concatMap (foo αs) ts 
-    foo αs   (TAll α t)   = foo (αs ++ [α]) t
-    foo αs   (TApp (TRef (s, False)) _ _ )
-                          = case findSym s δ of 
-                              Just d  -> [ (αs, t) | CallSig t <- t_elts d ]
-                              Nothing -> []
-    foo αs   (TCons es _) = [ (αs, t) | CallSig t <- es  ]
-    foo _    t            = error $ "getCallable: " ++ ppshow t
+    foo αs t@(TFun _ _ _)   = [(αs, t)]
+    foo αs   (TAnd ts)      = concatMap (foo αs) ts 
+    foo αs   (TAll α t)     = foo (αs ++ [α]) t
+    foo αs   (TApp (TRef s) _ _ )
+                            = case findSym s δ of 
+                                Just d  -> [ (αs, t) | CallSig t <- t_elts d ]
+                                Nothing -> []
+    foo αs   (TCons es _ _) = [ (αs, t) | CallSig t <- es  ]
+    foo _    t              = error $ "getCallable: " ++ ppshow t
 
 
 -------------------------------------------------------------------------------
@@ -81,46 +81,35 @@ getPropApp :: (PPR r, IsLocated a)
 -------------------------------------------------------------------------------
 getPropApp l α γ s t@(TApp c ts _) = 
   case c of 
-    TBool      -> Nothing
-    TUndef     -> Nothing
-    TNull      -> Nothing
-    TUn        -> getPropUnion l α γ s ts
-    TInt       -> lookupAmbientVar l α γ s "Number" t
-    TString    -> lookupAmbientVar l α γ s "String" t
-    TRef (i,b) -> findSym i γ >>= getPropTDef b l γ s ts >>= return . (t,)
-    TTop       -> die $ bug (srcPos l) "getProp top"
-    TVoid      -> die $ bug (srcPos l) "getProp void"
+    TBool    -> Nothing
+    TUndef   -> Nothing
+    TNull    -> Nothing
+    TUn      -> getPropUnion l α γ s ts
+    TInt     -> lookupAmbientVar l α γ s "Number" t
+    TString  -> lookupAmbientVar l α γ s "String" t
+    TRef x   -> do  d      <- findSym x γ 
+                    p      <- lookupElt s $ S.flatten False γ (d,ts)
+                    return  $ (t,p)
+    TTyOf x  -> do  d      <- findSym x γ 
+                    p      <- lookupElt s $ S.flatten True γ (d,ts)
+                    return  $ (t,p)    
+    TFPBool  -> Nothing
+    TTop     -> Nothing
+    TVoid    -> Nothing
 getPropApp _ _ _ _ _ = error "getPropApp should only be applied to TApp"
 
 
-getEltApp l γ s t@(TApp c ts _) = 
-  case c of 
-    TRef (i,b) -> case findSym i γ of
-                    Just d  -> (t,) <$> getEltTDef b l γ s ts d
-                    Nothing -> []
-    _          -> []
-getEltApp _ _ _ _ = error "getEltApp should only be applied to TApp"
 
-
-getEltTDef b _ γ f ts d = getEltCons b f t
+lookupElt s es = 
+    case lookupField of
+      Just t  -> Just t
+      Nothing -> lookupIndex 
   where
-    t = TCons (S.flatten γ (d,ts)) fTop
+    -- FIXME: for the moment only supporting string index signature
+    lookupField = listToMaybe [ eltType e | e <- es, nonStaticSig e, F.symbol e == s ]
+    lookupIndex = listToMaybe [ t         | IndexSig _ True t <- es]
 
-
-getEltCons b  s (TCons es _) = [ e | e             <- es
-                                   , eltSym e      == s
-                                   , isStaticElt e == b ]
-getEltCons _ _ _            = error $ "Cannot call getEltCons on non TCons"
-
-
--- FIXME: IndexSig access could return null.
-getPropCons b s t@(TCons es _) 
-  | isIndSig t  = listToMaybe [ {-nil-} t | IndexSig _ _ t <- es]   
-  | otherwise   = listToMaybe [ eltType e | e              <- es
-                                          , isStaticElt e  == b
-                                          , eltSym e       == s ]
-
-getPropCons _ _ _ = error "BUG: Cannot call getPropCons on non TCons"
+-- getPropCons _ _ _ = error "BUG: Cannot call getPropCons on non TCons"
 
 -- Access the property from the relevant ambient object but return the 
 -- original accessed type instead of the type of the ambient object. 
@@ -132,12 +121,11 @@ lookupAmbientVar l α γ s amb t =
   envFindTy amb α >>= getProp l α γ s >>= return . (t,) . snd
 
 
+-- FIXME: Probably should get rid of this and just use getField, etc...
 -------------------------------------------------------------------------------
-getPropTDef :: (PPR r) =>
-  Bool -> t -> TDR r -> F.Symbol -> [RType r] -> TDef (RType r) -> Maybe (RType r)
+getPropTDef :: PPR r => t -> TDR r -> F.Symbol -> [RType r] -> TDef r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-getPropTDef b _ γ f ts d = getPropCons b f t  
-  where t = TCons (S.flatten γ (d,ts)) fTop
+getPropTDef _ γ f ts d = lookupElt f $ S.flatten False γ (d,ts)
 
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns

@@ -2,7 +2,7 @@
 interface A<T> {
   f: T;
 
-  /*@ g :: { number | v > 0 } */
+  /*@ g : { number | v > 0 } */
   g: number;
 
 }

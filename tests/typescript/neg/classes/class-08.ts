@@ -1,9 +1,9 @@
 class Foo<A> { 
 
-	/*@ f :: A */ 
+	/*@ f : A */ 
 	public f;
   
-	/*@ constructor :: (x:A) => void */
+	/*@  new(x:A) => void */
 	constructor(x) {
 		this.f = x;
 	}

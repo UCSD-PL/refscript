@@ -1,4 +1,4 @@
-/*@ foo:: ( { x: number; } ) => { x: number + boolean }  */ 
+/*@ foo:: ([#Immutable]{ x: number; } ) => [#Immutable]{ x: number + boolean }  */ 
 function foo(o) 
 {
     return o;

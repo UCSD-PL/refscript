@@ -29,7 +29,7 @@ module Language.Nano.Typecheck.TCMonad (
   , getSubst, setSubst, addSubst
 
   -- * Function Types
-  , tcFunTys
+  , tcFunTys, tcMethTys
 
   -- * Annotations
   , addAnn {-TEMP-}, accumAnn, getAllAnns, getDef, setDef
@@ -67,9 +67,7 @@ module Language.Nano.Typecheck.TCMonad (
 import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>), (<*>))
 import           Data.Function                      (on)
-import qualified Data.HashSet                       as S
-import           Data.Maybe                         (fromJust, catMaybes)
-import           Data.List                          (elem, groupBy, sort, nub, (\\))
+import           Data.Maybe                         (catMaybes)
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)
 import           Language.Fixpoint.Errors
@@ -82,13 +80,14 @@ import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Errors
 import           Data.Monoid                  
 import qualified Data.HashMap.Strict                as M
 import           Language.ECMAScript3.Syntax
 
-import           Debug.Trace                      (trace)
+-- import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity   as V
 
 type PPR r = (PP r, F.Reftable r)
@@ -113,7 +112,7 @@ data TCState r = TCS {
   , tc_specs :: !(Env (RType r))
 
   -- Defined types
-  , tc_defs  :: !(TDefEnv (RType r))
+  , tc_defs  :: !(TDefEnv r)
 
   -- Extern (unchecked) declarations
   , tc_ext   :: !(Env (RType r))
@@ -129,8 +128,6 @@ data TCState r = TCS {
   }
 
 type TCM r     = ErrorT Error (State (TCState r))
-
--- type TCME r    = ErrorT Error (StateT (TCState r) (State (TDefEnv (RType r))))
 
 -------------------------------------------------------------------------------
 whenLoud :: TCM r () -> TCM r ()
@@ -176,7 +173,7 @@ addSubst l θ
   = do θ0 <- appSu θ <$> getSubst 
        case checkSubst θ0 θ of 
          [] -> return ()
-         ts -> forM_ ts $ (\(t1,t2) -> tcError $ errorUnification (srcPos l) t1 t2)
+         ts -> forM_ ts $ (\(t1,t2) -> tcError $ errorMergeSubst (srcPos l) t1 t2)
        setSubst $ θ0 `mappend` θ
   where
     appSu θ                   = fromList . (mapSnd (apply θ) <$>) . toList 
@@ -197,7 +194,7 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ)
     θ       = fromList $ zip βs (tVar <$> βs)
 
 -------------------------------------------------------------------------------
-getDef  :: TCM r (TDefEnv (RType r)) 
+getDef  :: TCM r (TDefEnv r) 
 -------------------------------------------------------------------------------
 getDef = tc_defs <$> get
 
@@ -212,7 +209,7 @@ getClasses  :: TCM r (Env (Statement (AnnSSA r)))
 getClasses = tc_cls <$> get
 
 -------------------------------------------------------------------------------
-setDef  :: TDefEnv (RType r) -> TCM r ()
+setDef  :: TDefEnv r -> TCM r ()
 -------------------------------------------------------------------------------
 setDef γ = modify $ \u -> u { tc_defs = γ } 
 
@@ -355,11 +352,13 @@ freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
 unifyTypesM :: PPR r => SourceSpan -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
 unifyTypesM l msg t1s t2s
-  | on (/=) length t1s t2s = tcError $ errorArgMismatch l 
-  | otherwise = do (δ, θ) <- (,) <$> getDef <*> getSubst
-                   case unifys l δ θ t1s t2s of
-                     Left err -> tcError $ catMessage err msg
-                     Right θ' -> setSubst θ' >> return θ' 
+  | length t1s /= length t2s 
+  = tcError $ errorArgMismatch l 
+  | otherwise 
+  = do  (δ, θ) <- (,) <$> getDef <*> getSubst
+        case unifys l δ θ t1s t2s of
+          Left err -> tcError $ catMessage err msg
+          Right θ' -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------
 unifyTypeM :: PPR r => SourceSpan -> RType r -> RType r -> TCM r (RSubst r)
@@ -372,15 +371,16 @@ unifyTypeM l t t' = unifyTypesM l (ppshow "") [t] [t']
 --------------------------------------------------------------------------------
 
 -- | For the expression @e@, check the subtyping relation between the type @t1@
--- which is the actual type for @e@ and @t2@ which is the desired (cast) type
--- and insert the right kind of cast.
+--   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
 --------------------------------------------------------------------------------
-castM :: (PPR r) => AnnSSA r -> IContext -> Expression (AnnSSA r) 
-  -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
+castM :: (PPR r) => IContext -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-castM l ξ e t1 t2 = convert (ann l) t1 t2 >>= patch
-  where patch CNo = return e
-        patch c   = addCast ξ e c
+castM ξ e t1 t2 
+  = do  δ <- getDef 
+        case convert (srcPos e) δ t1 t2 of
+          Left  e   -> tcError e
+          Right CNo -> return e
+          Right c   -> addCast ξ e c
 
 
 -- | Monad versions of TDefEnv operations
@@ -405,214 +405,17 @@ runMaybeM a = runFailM a >>= \case
                 Left _   -> return $ Nothing
 
 
-isSubtype l t1 t2 = runFailM (subtypeM l t1 t2) >>= \case
-                        Right _ -> return True
-                        Left  _ -> return False
-
 -- | subTypeM will throw error if subtyping fails
 --------------------------------------------------------------------------------
 subtypeM :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
-subtypeM l t1 t2 = convert l t1 t2 >>= \case
-  CNo       -> return ()
-  (CUp _ _) -> return ()
-  _         -> tcError $ errorStrictSubtype l -- No casts allowed
-
-
--- | @convert@ returns:
--- * An equivalent version of @t1@ that has the same sort as the first input type
--- * An equivalent version of @t2@ that has the same sort as the second input type
--- * A subtyping direction between @t1@ and @t2@
---  
--- Padding the input types gives them the same sort, i.e. makes them compatible. 
---------------------------------------------------------------------------------
-convert :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
---------------------------------------------------------------------------------
-
-convert l t1 t2 | on (==) toType t1 t2 = return CNo
-
--- convert _ t1 _  | isUndef t1           = return CNo
-
--- convert _ t1 t2 | isNull t1 &&  
---                   not (isUndef t2)     = return CNo
-
-convert _ t1 t2 | not (isTop t1) && 
-                  isTop t2             = return $ CUp t1 t2
-
-convert l t1 t2 | any isUnion [t1,t2]  = convertUnion l t1 t2
-
-convert l t1 t2 | all isTObj  [t1,t2]  = convertObj l t1 t2
-
-convert l t1 t2 | all isTFun  [t1, t2] = convertFun l t1 t2
-
-convert l t1 t2                        = convertSimple l t1 t2 
-
-
--- | `convertObj`
---------------------------------------------------------------------------------
-convertObj :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
---------------------------------------------------------------------------------
-convertObj l t1@(TCons e1s r1) t2@(TCons e2s r2)
-
-  -- { f1:t1,..,fn:tn } vs { f1:t1',..fn:tn' }
-  | s1l == s2l 
-  = deeps l cmnBinds >>= \case
-      True  -> return  $ CNo
-      False -> tcError $ errorSimpleSubtype l t1 t2
-
-  -- { f1:t1,..,fn:tn } vs { f1:t1',..,fn:tn',..,fm:tm' }
-  | not (S.null df21) 
-  = tcError $ errorMissFlds l t1 t2 df21
-   
-  -- { f1:t1,..,fn:tn,..,fm:tm } vs { f1:t1',..,fn:tn' }
-  | otherwise               
-  = do _      <- convertObj l (TCons e1s' r1) (TCons e2s r2)
-       return  $ CUp t1 t2
-  where
-    -- All the bound elements that correspond to each binder 
-    -- Map : symbol -> [ elements ]
-    (m1,m2)    = mapPair toMap (e1s, e2s)
-    toMap      = foldr mi M.empty . filter (\x -> nonStaticElt x && nonConstrElt x)
-    mi e       = M.insertWith (++) (eltSym e) [e]
-
-    -- Binders for each element
-    (s1s,s2s)  = mapPair (S.fromList . M.keys) (m1,m2)
-    (s1l,s2l)  = mapPair (sort       . M.keys) (m1,m2)
-    
-    cs         = S.intersection s1s s2s
-
-    -- Join elements on common binder
-    cmnBinds   = idxMap (\s -> (f s m1, f s m2)) (S.toList cs) where f s = fromJust . M.lookup s
-    idxMap f   = map $ \x -> (x, f x)
-
-    -- Difference and intersection of keys
-    df21       = s2s `S.difference` s1s
-    in12       = s1s `S.intersection` s2s
-
-    e1s'       = concat [ fromJust $ M.lookup s m1 | s <- S.toList in12 ]
-
-    group1     = [ (eltSym $ head g1s, g1s) | g1s <- groupBy sameBinder e1s ]
-    group2     = [ (eltSym $ head g2s, g2s) | g2s <- groupBy sameBinder e2s ]
-
-convertObj l t1@(TApp (TRef i1) t1s r1) t2@(TApp (TRef i2) t2s r2) 
-  | i1 == i2 
-  = do -- FIXME: Using covariance here !!!
-       bs <- zipWithM (isSubtype l) t1s t2s 
-       if and bs then return CNo
-                 else tcError $ errorSimpleSubtype l t1 t2
-  | (s1,b1) /= (s2,b2)
-  = do δ  <- getDef 
-       case weaken δ (findSymOrDie s1 δ,t1s) s2 of
-         Just (_, t1s') -> return $ CUp (TApp (TRef (s2,b1)) t1s' r1) t2
-         Nothing        -> convertObj l (c1 δ) (c2 δ)
-  where
-    (s1,b1) = i1
-    (s2,b2) = i2
-    c1 δ    = TCons (flattenTRef δ t1) r1
-    c2 δ    = TCons (flattenTRef δ t2) r2
-                          
-convertObj l t1@(TApp (TRef _) _ _) t2 
-  = do δ <- getDef 
-       convertObj l (flattenType δ t1) t2
-
-convertObj l t1 t2@(TApp (TRef _) _ _)
-  = do δ <- getDef
-       convertObj l t1 (flattenType δ t2) 
-
-convertObj _ _ _ =  error "BUG: Case not supported in convertObj"
-
-
--- | Deep subtyping for object type members
---
---   TODO: Doing covariant subtyping here !!!
-
-deeps l ss = and <$> mapM (deep l) ss
-
--- | Treat the parts of `e1s` and `e2s` that correspond to the same binder 
---   as intersection types.
-
--- |   exists i s.t. si <: t
--- | ------------------------
--- |    s1 /\ ... /\ sn <: t
-deep l (s, (e1s, e2s)) = or <$> mapM (\e1 -> deep1 l e1 e2s) e1s
-
--- |  s1 <: t1  ...  s <: tn
--- | ------------------------
--- |   s <: t1 /\ ... /\ tn
-deep1 l e es = and <$> mapM (isSubtypeElt l e) es
-
--- | { (ts)=>t } <: { (ts')=>t' } 
-isSubtypeElt l (CallSig t1) (CallSig t2)  
-  = isSubtype l t1 t2
-
--- | { f[τ]:t } <: { f[τ']:t' } 
-isSubtypeElt l (PropSig _ _ _ τ1 t1) (PropSig _ _ _ τ2 t2)
-  = (&&) <$> isSubtypeOpt l τ1 τ2 <*> isSubtype l t1 t2
-
--- | { f: (ts)=>() } <: { f: (ts')=>() } 
-isSubtypeElt l (ConsSig t1) (ConsSig t2)
-  = isSubtype l t1 t2  
-
--- | { [x:τ]: t } <: { [x:τ']: t' }
-isSubtypeElt l (IndexSig _ b1 t1) (IndexSig _ b2 t2)
-  = (&&) <$> return (b1 == b2) <*> isSubtype l t1 t2
-
--- | { f[τ]:(ts)=>t } <: { f[τ']:(ts')=>t' }
-isSubtypeElt l (MethSig f1 s1 τ1 t1) (MethSig f2 s2 τ2 t2) 
-  = (&&) <$> isSubtypeOpt l τ2 τ1 <*> isSubtype l t1 t2
-
--- | otherwise fail
-isSubtypeElt _ _ _ = return False
-
-
-isSubtypeOpt l (Just t1) (Just t2) = isSubtype l t2 t1
-isSubtypeOpt l Nothing   (Just t2) = isSubtype l tTop t2
-isSubtypeOpt l (Just t1) Nothing   = isSubtype l t1 tTop
-isSubtypeOpt _ _         _         = return True
-
-
-instance PP a => PP (S.HashSet a) where
-  pp = pp . S.toList 
-
-
--- | `convertFun`
---
--- TODO: add arg length check
---
---------------------------------------------------------------------------------
-convertFun :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
---------------------------------------------------------------------------------
-convertFun l t1@(TFun b1s o1 _) t2@(TFun b2s o2 _) = do
-    cs <- zipWithM (convert l) (b_type <$> b2s) (b_type <$> b1s)
-    co <- convert l o1 o2
-    if      all noCast cs && noCast co then return $ CNo
-    else if all dnCast cs && upCast co then return $ CUp t1 t2
-    else tcError $ errorFuncSubtype l t1 t2
-
-convertFun _ _ _ = error "convertFun: no other cases supported"
-
-
--- | `convertSimple`
---------------------------------------------------------------------------------
-convertSimple :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
---------------------------------------------------------------------------------
-convertSimple l t1 t2
-  | t1 `equiv` t2 = return CNo
-  -- TOGGLE dead-code
-  | otherwise     = return $ CDead t2
- --  | otherwise     = tcError  $ errorSimpleSubtype l t1 t2
-
-
--- | `convertUnion`
---------------------------------------------------------------------------------
-convertUnion :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r (Cast r)
---------------------------------------------------------------------------------
-convertUnion l t1 t2 = parts   $ unionParts t1 t2
-  where 
-    parts (_,[],[])  = return  $ CNo
-    parts (_,[],_ )  = return  $ CUp t1 t2
-    parts (_,_ ,[])  = return  $ CDn t1 t2
-    parts (_, _ ,_)  = tcError $ errorUnionSubtype l t1 t2
+subtypeM l t1 t2 
+  = do  δ <- getDef 
+        case convert l δ t1 t2 of
+          Left e          -> tcError e
+          Right CNo       -> return  ()
+          Right (CUp _ _) -> return  ()
+          Right _         -> tcError $ errorSubtype l t1 t2
 
 
 addCast     ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
@@ -623,10 +426,29 @@ wrapCast _ f (Cast (Ann l fs) e) = Cast (Ann l (f:fs)) e
 wrapCast l f e                   = Cast (Ann l [f])    e
 
 
+-- | tcFunTys: "context-sensitive" function signature
+--------------------------------------------------------------------------------
+tcFunTys :: (PPRSF r, F.Subable (RType r), F.Symbolic s, PP a) 
+         => AnnSSA r -> a -> [s] -> RType r -> TCM r [(Int, ([TVar], [RType r], RType r))]
+--------------------------------------------------------------------------------
 tcFunTys l f xs ft = 
   case funTys l f xs ft of 
-    Left e  -> tcError e 
+    Left  e -> tcError e 
     Right a -> return a
+
+
+--------------------------------------------------------------------------------
+tcMethTys :: (PPRSF r, F.Subable (RType r), PP a) 
+          => AnnSSA r -> a -> (Mutability, RType r)
+          -> TCM r [(Int, Mutability, ([TVar], [RType r], RType r))]
+--------------------------------------------------------------------------------
+tcMethTys l f (m,t) 
+  = zip3 [0..] (repeat m) <$> mapM (methTys l f) (bkAnd t)
+       
+methTys l f ft0
+  = case remThisBinding ft0 of
+      Nothing         -> tcError $ errorNonFunction (srcPos l) f ft0 
+      Just (vs,bs,t)  -> return  $ (vs,b_type <$> bs,t)
 
 
 -- | `this`
@@ -635,9 +457,9 @@ tcPushThis t   = modify $ \st -> st { tc_this = t : tc_this st }
 tcPopThis      = modify $ \st -> st { tc_this = tail $ tc_this st } 
 tcWithThis t p = do { tcPushThis t; a <- p; tcPopThis; return a } 
 
-getPropTDefM b l s t ts = do 
+getPropTDefM _ l s t ts = do 
   δ <- getDef
-  return $ getPropTDef b l δ (F.symbol s) ts t
+  return $ getPropTDef l δ (F.symbol s) ts t
 
 getPropM _ l s t = do 
   (δ, ε) <- (,) <$> getDef <*> getExts
@@ -646,17 +468,21 @@ getPropM _ l s t = do
 --------------------------------------------------------------------------------
 getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
 --------------------------------------------------------------------------------
-getSuperM l (TApp (TRef (i, s)) ts _) = fromTdef =<< findSymOrDieM i
-  where fromTdef (TD _ _ vs (Just (p,ps)) _) = do
-          return  $ apply (fromList $ zip vs ts) 
-                  $ TApp (TRef (F.symbol p,s)) ps fTop
-        fromTdef (TD _ _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
-getSuperM l _  = tcError $ errorSuper (srcPos l) 
+getSuperM l (TApp (TRef i) ts _) = 
+    fromTdef =<< findSymOrDieM i
+  where 
+    fromTdef (TD _ _ vs (Just (p,ps)) _) = return  
+                                         $ apply (fromList $ zip vs ts) 
+                                         $ TApp (TRef (F.symbol p)) ps fTop
+    fromTdef (TD _ _ _ Nothing _)        = tcError 
+                                         $ errorSuper (srcPos l) 
+getSuperM l _                            = tcError 
+                                         $ errorSuper (srcPos l) 
 
 --------------------------------------------------------------------------------
-getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (TDef (RType r))
+getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (TDef r)
 --------------------------------------------------------------------------------
-getSuperDefM l (TApp (TRef (i,_)) ts _) = fromTdef =<< findSymOrDieM i
+getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
   where 
     fromTdef (TD _ _ vs (Just (p,ps)) _) = 
       do TD c n ws pp ee <- findSymOrDieM p

@@ -1,9 +1,11 @@
+
+/*@ class Foo<M,A> */
 class Foo<A> { 
 
-	/*@ f :: A */ 
+	/*@ f : [#Mutable] A */ 
 	public f;
   
-	/*@ constructor :: (x:A) => void */
+	/*@ new(x:A) => void */
 	constructor(x) {
 		this.f = x;
 	}

@@ -145,6 +145,7 @@ fromJust' s _        = error s
 maybeToEither _ (Just a) = Right a
 maybeToEither e Nothing  = Left e
 
+-- | Sets / maps
 
 isProperSubsetOf :: (Eq a, Hashable a) => HashSet a -> HashSet a -> Bool
 s1 `isProperSubsetOf` s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) > 0  
@@ -160,3 +161,4 @@ isProperSubmapOf = isProperSubsetOf `on` (fromList . M.keys)
 
 equalKeys :: (Eq a, Ord a, Hashable a) => M.HashMap a b -> M.HashMap a b -> Bool
 equalKeys =  (==) `on` (L.sort . M.keys)
+

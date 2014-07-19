@@ -1,9 +1,9 @@
 
 /*@ qualif G11(v:number)            : v > -11                   */
 
-/*@ gobj :: { a: number } */
+/*@ gobj :: { a: { number | v > 0 } } */
 var gobj = {
-	a: -10,
+	a: 1,
 	b: "glorp",
 };
 

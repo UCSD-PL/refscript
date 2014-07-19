@@ -56,4 +56,16 @@ Tool/Implementation
   - Array literal checks are quite slow.
       E.g.: typescript/pos/arrays/arr-07.js
 
+TS benchmarks
+-------------
 
+underscore    885     641 
+d3            9,225   1,558 
+ace           13,483  615 
+fabricjs      8,584   740 
+jquery        6,043   526
+pixi          5,829   361 
+box2dweb      10,718  1,139 
+leaflet       5,873   707 
+threejs       19,065  2,651 
+sugar         4,133   650

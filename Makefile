@@ -19,7 +19,7 @@ test:
 	cd tests && ./regrtest.py -t $(THREADS) && cd ../
 
 docs:
-	$(CABAL) haddock --executables --internal --hoogle --hyperlink-source #--html-location=http://goto.ucsd.edu/~rjhala/llvm-haskell/
+	$(CABAL) haddock --executables --internal --hoogle --hyperlink-source 
 
 lint:
 	hlint --colour --report .

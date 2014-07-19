@@ -19,12 +19,14 @@ import           Language.Fixpoint.Errors
 import           Language.Nano.Errors 
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Sub
 
 
 import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
+import           Data.Default
 import           Control.Monad  (foldM)
 import           Data.Function                  (on)
 -- import           Debug.Trace
@@ -38,7 +40,7 @@ type PPR r = (PP r, F.Reftable r)
 -- | Unify types @t@ and @t'@, in substitution environment @θ@ and type
 -- definition environment @δ@.
 -----------------------------------------------------------------------------
-unify :: PPR r => SourceSpan -> TDefEnv (RType r) 
+unify :: PPR r => SourceSpan -> TDefEnv r
   -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 
@@ -53,13 +55,14 @@ unify l _ θ t (TVar α _)  = varAsn l θ α t
 
 -- XXX: ORDERING IMPORTANT HERE
 -- Keep the union case before unfolding, but after type variables
-unify l δ θ t t' | any isUnion [t,t']
-  = let (ts, _, _) = unionParts' unifEquiv t t' in
-    let (t1s, t2s) = unzip ts in
-    unifys l δ θ t1s t2s
 
-unify l δ θ (TApp (TRef i) ts _) (TApp (TRef i') ts' _) 
-  | i == i'   = unifys l δ θ ts ts'
+unify l δ θ t t' | any isUnion [t,t'] = unifys l δ θ t1s' t2s'
+  where
+    (t1s', t2s') = unzip [ (t1, t2) | t1 <- t1s, t2 <- t2s, related δ t1 t2]
+    (t1s , t2s ) = mapPair bkUnion (t,t')
+
+unify l δ θ (TApp (TRef x) ts _) (TApp (TRef x') ts' _) 
+  | x == x' = unifys l δ θ ts ts'
 
 unify l δ θ t1@(TApp (TRef _) _ _) t2
   = unify l δ θ (flattenType δ t1) t2
@@ -67,33 +70,41 @@ unify l δ θ t1@(TApp (TRef _) _ _) t2
 unify l δ θ t1 t2@(TApp (TRef _) _ _)
   = unify l δ θ t1 (flattenType δ t2)
 
-unify l δ θ (TCons e1s _) (TCons e2s _)
-  = unifys l δ θ t1s t2s
+unify l δ θ t1@(TApp (TTyOf _) _ _) t2 
+  = unify l δ θ (flattenType δ t1) t2
+
+unify l δ θ t1 t2@(TApp (TTyOf _) _ _)
+  = unify l δ θ t1 (flattenType δ t2)
+
+
+unify l δ θ (TCons e1s m1 _) (TCons e2s m2 _)
+  = unifys l δ θ (ofType m1:t1s) (ofType m2:t2s)
   where 
-    (t1s, t2s) = unzip $ [ (eltType e1, eltType e2) | e1 <- e1s
-                                                    , e2 <- e2s
-                                                    , e1 `sameBinder` e2 ]
+    (t1s, t2s) = unzip $ map tt es ++ concatMap ττ es ++ concatMap mm es
+    es         = [ (e1, e2) | e1 <- e1s
+                            , e2 <- e2s
+                            , e1 `sameBinder` e2]
+    tt         = mapPair eltType
+    ττ (e1,e2) = case (baseType e1, baseType e2) of 
+                   (Just τ1, Just τ2) -> [(τ1, τ2)]
+                   (Just τ1, Nothing) -> [(τ1, objT)]
+                   (Nothing, Just τ2) -> [(objT, τ2)]
+                   _                  -> []
+    mm (e1,e2) = case (mutability e1, mutability e2) of 
+                   (Just m1, Just m2) -> [(ofType m1, ofType m2)]
+                   _                  -> []
+    objT      :: PPR r => RType r 
+    objT       = TCons [] def fTop 
+
+-- FIXME: + TAnd ...
 
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ
 
-
-unifEquiv t t' | toType t == toType t' 
-               = True
-unifEquiv t t' | any isUnion [t,t'] 
-               = error "No nested unions"
-unifEquiv (TApp c _ _ ) (TApp c' _ _  ) = c `equiv` c'  -- Interfaces appear once only on top-level unions
-unifEquiv (TCons _ _  ) (TCons _ _    ) = True
-unifEquiv (TVar v _   ) (TVar v' _    ) = v == v'
-unifEquiv (TFun _ _ _ ) (TFun _ _ _   ) = True          -- Functions as well ... 
-unifEquiv (TAll _ _   ) (TAll _ _     ) = error "unifEquiv-tall"
-unifEquiv (TExp _     ) (TExp   _     ) = error "unifEquiv-texp"
-unifEquiv _             _               = False
-
-
+   
 -----------------------------------------------------------------------------
-unifys ::  PPR r => SourceSpan -> TDefEnv (RType r) 
-            -> RSubst r -> [RType r] -> [RType r] -> Either Error (RSubst r)
+unifys ::  PPR r => SourceSpan -> TDefEnv r -> RSubst r -> [RType r] 
+                    -> [RType r] -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 unifys loc γ θ ts ts'  
   | nTs == nTs' = foldM foo θ $ zip ts ts'

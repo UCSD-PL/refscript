@@ -171,24 +171,25 @@ class IsNano a where
 
 
 instance IsNano InfixOp where
-  isNano OpLT        = True --  @<@
-  isNano OpLEq       = True --  @<=@
-  isNano OpGT        = True --  @>@
-  isNano OpGEq       = True --  @>=@
-  -- isNano OpEq        = True --  @==@
-  isNano OpStrictEq  = True --  @===@
-  isNano OpNEq       = True --  @!=@
-  isNano OpStrictNEq = True --  @!==@
+  isNano OpLT         = True --  @<@
+  isNano OpLEq        = True --  @<=@
+  isNano OpGT         = True --  @>@
+  isNano OpGEq        = True --  @>=@
+  -- isNano OpEq         = True --  @==@
+  isNano OpStrictEq   = True --  @===@
+  isNano OpNEq        = True --  @!=@
+  isNano OpStrictNEq  = True --  @!==@
 
-  isNano OpLAnd      = True --  @&&@
-  isNano OpLOr       = True --  @||@
+  isNano OpLAnd       = True --  @&&@
+  isNano OpLOr        = True --  @||@
 
-  isNano OpSub       = True --  @-@
-  isNano OpAdd       = True --  @+@
-  isNano OpMul       = True --  @*@
-  isNano OpDiv       = True --  @/@
-  isNano OpMod       = True --  @%@
-  isNano e           = errortext (text "Not Nano InfixOp!" <+> pp e)
+  isNano OpSub        = True --  @-@
+  isNano OpAdd        = True --  @+@
+  isNano OpMul        = True --  @*@
+  isNano OpDiv        = True --  @/@
+  isNano OpMod        = True --  @%@
+  isNano OpInstanceof = True --  @instanceof@
+  isNano e            = errortext (text "Not Nano InfixOp!" <+> pp e)
 
 instance IsNano (LValue a) where 
   isNano (LVar _ _)        = True
@@ -217,6 +218,7 @@ instance IsNano (Expression a) where
   isNano (ThisRef _)             = True 
   isNano (SuperRef _)            = True 
   isNano (NewExpr _ e es)        = isNano e && all isNano es
+  isNano (Cast _ e)              = isNano e
   isNano e                       = errortext (text "Not Nano Expression!" <+> pp e)
   -- isNano _                     = False
 
@@ -538,6 +540,7 @@ data BuiltinOp = BIUndefined
                | BIArrayLit
                | BINumArgs
                | BITruthy
+               | BISetProp
                  deriving (Eq, Ord, Show)
 
 instance PP BuiltinOp where

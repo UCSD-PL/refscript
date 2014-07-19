@@ -363,6 +363,9 @@ ssaExpr (NewExpr l e es)
   -- `e` is the class name - no need to SSA it.
   = NewExpr l e <$> mapM ssaExpr es
 
+ssaExpr (Cast l e)
+  = Cast l <$> ssaExpr e
+
 ssaExpr e 
   = convertError "ssaExpr" e
 

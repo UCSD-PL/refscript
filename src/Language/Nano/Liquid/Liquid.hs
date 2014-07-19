@@ -8,15 +8,11 @@
 -- | Top Level for Refinement Type checker
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
-import           Text.Printf                        (printf)
 import           Control.Monad
 import           Control.Applicative                ((<$>))
 
 import qualified Data.HashMap.Strict                as M
-import           Data.Maybe                         (fromMaybe, listToMaybe, fromJust)
-import           Data.List                          (find)
-import           Data.Function                      (on)
-import qualified Data.Traversable                   as T 
+import           Data.Maybe                         (listToMaybe, catMaybes, maybeToList, isJust)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -34,7 +30,6 @@ import           Language.Nano.Env                  (envUnion)
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Subst
 import qualified Language.Nano.Annots               as A
-import           Language.Nano.Common.Typecheck     (safeExtends {- , getConstr -} )
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
@@ -102,25 +97,26 @@ consNano pgm@(Nano {code = Src fs})
         return ()
 
 checkInterfaces p g = 
-  mapM_ (safeExtends sub (cgError l) l (defs p)) is
-  where 
-    l  = srcPos dummySpan   -- FIXME  
-    is = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
-    sub l t1 t2 = do  δ <- getDef
-                      uncurry (subType l g) $ intersect δ t1 t2
-                      return True
+     mapM_ (safeExtends l g δ) is
+   where 
+     δ           = defs p
+     l           = srcPos dummySpan   -- FIXME  
+     is          = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
+
 
 --------------------------------------------------------------------------------
 initCGEnv :: NanoRefType -> CGM CGEnv
 --------------------------------------------------------------------------------
-initCGEnv pgm 
-  = do  cd'   <- T.mapM fx cd
-        setDef $ cd' 
+initCGEnv pgm  
+  = do  cd'   <- mapTDefEnvM fx cd
+        setDef $ cd
         return $ CGE r f g cc cs cd'
   where 
       fx t    | isTFun t  = return t -- freshTyFun g0 l t -- Do just the fields for the moment
-      fx t    | isRigid t = freshTyVar g0 l t
+      fx t    | not (isTVar t) = freshTyVar g0 l t
       fx t    | otherwise = return t
+      
+
       l       = srcPos dummySpan -- FIXME
       g0      = CGE r f g cc cs cd 
       r       = envUnion (specs pgm) (externs pgm)
@@ -139,10 +135,17 @@ consFun g (FunctionStmt l f xs body)
 consFun _ s 
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
 
-consFun1 l g' f xs body (i, ft) 
-  = do g'' <- envAddFun l f i xs ft g'
-       gm  <- consStmts g'' body
-       maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
+consFun1 l g f xs body (i, ft) 
+  = envAddFun l f i xs ft g >>= (`consStmts` body)
+
+-- consFun1 l g' f xs body (i, ft) 
+--   = do g'' <- envAddFun l f i xs ft g'
+--        gm  <- consStmts g'' body
+--        maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
+
+
+consMeth1 l g f xs body (i, _, ft) = consFun1 l g f xs body (i,ft)
+
 
 envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g) 
                                    >>= (return . envAddReturn f t' ) 
@@ -197,13 +200,11 @@ consStmt g (EmptyStmt _)
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))   
   = consAsgn g l (Id lx x) e
 
--- e1.fld = e2
-consStmt g (ExprStmt _ (AssignExpr l2 OpAssign (LDot l1 e1 fld) e2))
-  = do (t1, g')  <- consPropReadLhs getProp g l1 e1 $ F.symbol fld
-       (x2, g'') <- consExpr g'  e2
-       subType l2 g'' (envFindTy x2 g'') t1
-       return     $ Just g''
-
+-- e1.f = e2
+consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
+  = do (_,g') <- consCall g l BISetProp [e1,e2] $ setPropTy (F.symbol f) l $ renv g
+       return  $ Just g'
+   
 -- e
 consStmt g (ExprStmt _ e) 
   = consExpr g e >> (return $ Just g)
@@ -216,11 +217,11 @@ consStmt g (BlockStmt _ stmts)
 consStmt g (IfSingleStmt l b s)
   = consStmt g (IfStmt l b s (EmptyStmt l))
 
--- HINT: 1. Use @envAddGuard True@ and @envAddGuard False@ to add the binder 
---          from the condition expression @e@ into @g@ to obtain the @CGEnv@ 
---          for the "then" and "else" statements @s1@ and @s2 respectively. 
---       2. Recursively constrain @s1@ and @s2@ under the respective environments.
---       3. Combine the resulting environments with @envJoin@ 
+--  1. Use @envAddGuard True@ and @envAddGuard False@ to add the binder 
+--     from the condition expression @e@ into @g@ to obtain the @CGEnv@ 
+--     for the "then" and "else" statements @s1@ and @s2 respectively. 
+--  2. Recursively constrain @s1@ and @s2@ under the respective environments.
+--  3. Combine the resulting environments with @envJoin@ 
 
 -- if e { s1 } else { s2 }
 consStmt g (IfStmt l e s1 s2)
@@ -238,14 +239,9 @@ consStmt g (VarDeclStmt _ ds)
   = consSeq consVarDecl g ds
 
 -- return e 
-consStmt g (ReturnStmt l (Just e))
-  = do  (xe, g') <- consExpr g e
-        subType l g' (envFindTy xe g') (envFindReturn g')
+consStmt g (ReturnStmt l eo)
+  = do  _ <- consCall g l "return" (maybeToList eo) $ returnTy (envFindReturn g) (isJust eo)
         return Nothing
-
--- return
-consStmt _ (ReturnStmt _ Nothing)
-  = return Nothing 
 
 -- throw e 
 consStmt g (ThrowStmt _ e)
@@ -256,20 +252,20 @@ consStmt g (ThrowStmt _ e)
 consStmt g s@(FunctionStmt _ _ _ _)
   = Just <$> consFun g s
 
+--
 -- class A<S...> [extends B<T...>] [implements I,J,...] { ... }
-consStmt g (ClassStmt l i _ _ ce) = do  
-    -- * Compute / get the class type 
-    d@(TD _ _ αs _ _) <- findSymOrDieM i
-    let tyBinds = [(Loc (srcPos l) α, tVar α) | α <- αs]
-    -- * Add the type vars in the environment
-    g' <- envAdds False tyBinds g
-    -- * Compute type for "this" and add that to the env as well
-    --   - This type uses the classes type variables as type parameters.
-    --   - For the moment this type does not have a refinement. Maybe use
-    --     invariants to add some.
-    let thisT = TApp (TRef (F.symbol i, False)) (tVar <$> αs) fTop  
-    cgWithThis thisT $ consClassElts (srcPos l) g' d ce
-    return $ Just g
+--
+-- 1. Compute / get the class type 
+-- 2. Add the type vars in the environment
+-- 3. Compute type for "this" and add that to the env as well. This type uses the classes type 
+--    variables as type parameters. 
+--
+consStmt g (ClassStmt l i _ _ ce) 
+  = do  d@(TD _ _ αs _ _) <- findSymOrDieM i
+        g'                <- envAdds False [(Loc (srcPos l) α, tVar α) | α <- αs] g
+        cgWithThis           (TApp (TRef $ F.symbol i) (tVar <$> αs) fTop) $ consClassElts (srcPos l) g' i d ce
+        g'                <- envAdds True [(i, TApp (TTyOf $ F.symbol i) [] fTop)] g
+        return             $ Just g'
 
 -- OTHER (Not handled)
 consStmt _ s 
@@ -295,43 +291,47 @@ consVarDecl g (VarDecl l x Nothing)
 
 
 ------------------------------------------------------------------------------------
-consClassElts :: SourceSpan -> CGEnv -> TDef RefType -> [ClassElt AnnTypeR] -> CGM ()
+consClassElts :: PP a => SourceSpan -> CGEnv -> a -> TDef F.Reft -> [ClassElt AnnTypeR] -> CGM ()
 ------------------------------------------------------------------------------------
-consClassElts l g d ce 
-  = do  δ <- getDef
-        safeExtends sub (cgError l) l δ d
-        mapM_ (consClassElt g) ce
-    where
-        -- There are no casts here, so we need to align the 
-        -- types before doing subtyping on them.
-        sub l t1 t2 = do  δ <- getDef
-                          uncurry (subType l g) $ intersect δ t1 t2
-                          return True
+consClassElts l g i d ce 
+   = do  δ <- getDef
+         -- FIXME: 
+         -- There are no casts here, so we need to align the 
+         -- types before doing subtyping on them.
+         safeExtends l g δ d 
+         mapM_ (consClassElt g i) ce
 
 
 ------------------------------------------------------------------------------------
-consClassElt :: CGEnv -> ClassElt AnnTypeR -> CGM ()
+consClassElt :: PP a => CGEnv -> a -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
-consClassElt g (Constructor l xs body) 
-  = do  t <- cgFunTys l i xs $ head [ t | ConsAnn t <- ann_fact l ]
-        -- Typecheck over all possible constructor signatures
-        mapM_ (consFun1 l g i xs body) t
+consClassElt g _ (Constructor l xs body) 
+  = case [ c | ConsAnn c  <- ann_fact l ] of
+      [ConsSig ft]        -> do t <-    cgFunTys l i xs ft
+                                mapM_ (consFun1 l g i xs body) t
+      _                   -> cgError l $ unsupportedNonSingleConsTy $ srcPos l
   where 
-        i = Id l "constructor"
+    i = Id l "constructor"
 
-consClassElt g (MemberVarDecl _ _ (VarDecl l x (Just e))) 
-  = case envFieldAnnot l of 
-      Just tf -> void $  consExprT g e (Just tf)
-      Nothing -> cgError l $ errorVarDeclAnnot (srcPos l) x
-
-consClassElt _ (MemberVarDecl _ _ (VarDecl l x Nothing))
-  = case envFieldAnnot l of 
-      Just _  -> return ()
-      Nothing -> cgError l $ errorVarDeclAnnot (srcPos l) x
+consClassElt g cid (MemberVarDecl _ static (VarDecl l1 x eo))
+  = case anns of 
+      []  ->  cgError l1    $ errorClassEltAnnot (srcPos l1) cid x
+      fs  ->  case eo of
+                Just e     -> void <$> consCall g l1 "field init" [e] $ ft fs
+                Nothing    -> return ()
+  where
+    anns | static    = [ s | StatAnn  s <- ann_fact l1 ]
+         | otherwise = [ f | FieldAnn f <- ann_fact l1 ]
+    ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> flds
   
-consClassElt g (MemberMethDecl l _ i xs body) 
-  = do  ts <- cgFunTys l i xs $ safeHead "consClassElt" [ t | MethAnn t <- ann_fact l]
-        mapM_ (consFun1 l g i xs body) ts
+consClassElt g cid (MemberMethDecl l static i xs body) 
+  = case anns of
+      [mt]  -> do mts   <- cgMethTys l i mt
+                  mapM_    (consMeth1 l g i xs body) mts
+      _    -> cgError l  $ errorClassEltAnnot (srcPos l) cid i
+  where
+    anns | static    = [ (m, t) | StatAnn (StatSig _ m t)  <- ann_fact l ]
+         | otherwise = [ (m, t) | MethAnn (MethSig _ m t)  <- ann_fact l ]
 
 
 ------------------------------------------------------------------------------------
@@ -350,7 +350,7 @@ consExprT g e to
 
 
 --------------------------------------------------------------------------------
-consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv) 
+consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
 consAsgn g l x e 
   = do (x', g') <- consExprT g e $ envGlobAnnot l x g
@@ -381,17 +381,24 @@ consExpr g (NullLit l)
   = envAddFresh l tNull g
 
 consExpr g (ThisRef l)
-  = cgPeekThis >>= \t -> envAddFresh l t g
+  = do t <- cgPeekThis 
+       envAddFresh l t g
 
 consExpr g (VarRef i x)
-  = do addAnnot l x t
+  = do addAnnot (srcPos i) x $ envFindTy x g
        return (x, g) 
-    where 
-       t   = envFindTy x g
-       l   = srcPos i
 
 consExpr g (PrefixExpr l o e)
   = consCall g l o [e] (prefixOpTy o $ renv g)
+
+consExpr g (InfixExpr l o@OpInstanceof e1 e2)
+  = do (x,g') <- consExpr g e2
+       case envFindTy x g' of
+         TApp (TTyOf x) _ _ -> consCall g l o [e1, StringLit l2 (F.symbolString x)] 
+                                              (infixOpTy o $ renv g')
+         _                  -> cgError l $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
+  where
+    l2 = getAnnotation e2
 
 consExpr g (InfixExpr l o e1 e2)        
   = consCall g l o [e1, e2] (infixOpTy o $ renv g)
@@ -402,39 +409,38 @@ consExpr g (CallExpr l e@(SuperRef _) es)
        go [ t | ConsSig t <- elts ]
   where
     go [t] = consCall g l e es t
-    go _   = cgError l $ errorConsSigMissing (srcPos l) e   
+    go _   = cgError l $ unsupportedNonSingleConsTy $ srcPos l
+
+-- e.m(es)
+consExpr g (CallExpr l em@(DotRef _ e f) es)
+  = do  (x,g') <- consExpr g e
+        δ      <- getDef
+        consCallDotRef g' l em (vr x) (elt δ x g') es
+  where
+    -- Add a VarRef so that e is not typechecked again
+    vr          = VarRef $ getAnnotation e
+    elt δ x g   = getElt δ f $ envFindTy x g
 
 -- e(es)
-consExpr g c@(CallExpr l e es)
+consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 
        consCall g' l e es $ envFindTy x g'
 
 -- | e.f
--- 
--- This function does the late binding of `this` to `e`.
---
-consExpr g (DotRef l e f)
-  = do (xe, g')  <- consExpr g e
-       let tx     = envFindTy xe g'
-       δ         <- getDef
-       case find (eltMatch elt) $ snd <$> getElt l δ fs tx of 
-         Just tf -> do let tf'   = F.substa (sf $ F.symbol xe) $ eltType tf
-                       (x, g'') <- envAddFresh l tf' g'
-                       addAnnot (srcPos l) x (envFindTy x g'')
-                       return    $ (x, g'')
-         Nothing -> die $ errorPropRead (srcPos l) e fs
-    where
-       elt        = fromJust $ listToMaybe [ e | EltOverload cx e <- ann_fact l, cge_ctx g == cx ]
-       fs         = F.symbol f
-       eltMatch (PropSig _ _ _ τ1 t1) (PropSig _ _ _ τ2 t2) = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
-       eltMatch (MethSig _ _   τ1 t1) (MethSig _ _   τ2 t2) = fmap toType τ1 == fmap toType τ2 && toType t1 == toType t2 
-       eltMatch e1                    e2                    = on (==) (toType . eltType) e1 e2
-       sf t s     | s == F.symbol "this" = t
-                  | otherwise            = s
+consExpr g ef@(DotRef l e f)
+  = do  (x,g') <- consExpr g e
+        δ      <- getDef        
+        case getElt δ f $ envFindTy  x g' of 
+          [FieldSig _ _ ft] -> consCall g' l ef [vr x] $ mkTy l ft
+          _                 -> cgError l $ errorExtractNonFld (srcPos l) f e 
+  where
+    -- Add a VarRef so that e is not typechecked again
+    vr       = VarRef $ getAnnotation e
+    mkTy l t = mkFun ([α], [B (F.symbol "this") tα], t) 
+    α        = TV (F.symbol "α" ) (srcPos l)
+    tα       = TVar α fTop
 
--- -- e["f"]
--- consExpr g (BracketRef l e (StringLit _ fld)) 
---   = consPropRead getProp g l e (F.symbol fld)
+-- FIXME: e["f"]
 
 -- e1[e2]
 consExpr g (BracketRef l e1 e2) 
@@ -446,20 +452,15 @@ consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3)
 
 -- [e1,...,en]
 consExpr g (ArrayLit l es)
-  = do  t <- arrayQualifiers $ arrayLitTy l (length es) $ renv g
+  = do  t <- scrapeQualifiers $ arrayLitTy l (length es) $ renv g
         consCall g l BIArrayLit es t
 
 -- {f1:e1,...,fn:en}
 consExpr g (ObjectLit l bs) 
-  = do  let (ps, es) = unzip bs
-        (xes, g')   <- consScan consExpr g es
-        let tCons    = TCons (zipWith mkElt (F.symbol <$> ps) $ 
-                              (\t -> envFindTy t g') <$> xes) fTop
-        envAddFresh l tCons g'
-    where
-    -- TODO: add "this" as first argument
-        mkElt s t | isTFun t  = MethSig s False Nothing t
-        mkElt s t | otherwise = PropSig s False True Nothing t 
+  = consCall g l "ObjectLit" es $ objLitTy l ps
+  where
+    (ps,es) = unzip bs
+    
 
 -- new C(e, ...)
 consExpr g (NewExpr l (VarRef _ i) es)
@@ -467,18 +468,20 @@ consExpr g (NewExpr l (VarRef _ i) es)
 
 -- super
 consExpr g (SuperRef l) 
-  = cgPeekThis >>= \case 
-      TApp (TRef (i,s)) ts _ ->
-        findSymOrDieM i >>= \case 
-          TD _ _ vs (Just (p, ps)) _ ->
-            envAddFresh l 
-              (apply (fromList $ zip vs ts) $ TApp (TRef (F.symbol p, s)) ps fTop) g
+  = do  z <- cgPeekThis 
+        case z of 
+          TApp (TRef i) ts _ -> 
+              do  w <- findSymOrDieM i
+                  case w of 
+                    TD _ _ vs (Just (p, ps)) _ -> 
+                        let θ = fromList $ zip vs ts in
+                        let t = apply θ $ TApp (TRef $ F.symbol p) ps fTop in                        
+                        envAddFresh l t g
+                    _                          -> cgError l $ errorSuper (srcPos l) 
           _ -> cgError l $ errorSuper (srcPos l) 
-      _ -> cgError l $ errorSuper (srcPos l) 
 
 -- not handled
-consExpr _ e 
-  = error $ (printf "consExpr: not handled %s" (ppshow e))
+consExpr _ e = cgError l $ unimplemented l "consExpr" e where l = srcPos  e
 
 
 -- | `getConstr` first checks whether input @s@ is a class, in which case it
@@ -494,18 +497,20 @@ getConstr :: IsLocated a => SourceSpan -> CGEnv -> Id a -> CGM RefType
 getConstr l g s = 
     case findSym s (cge_defs g) of
       Just t | t_class t ->       -- This needs to be a class
-        getPropTDefM False l "__constructor__" t (tVar <$> t_args t) >>= \case
-          Just (TFun bs _ r) -> return $ abs (t_args t) $ TFun bs (retT t) r
-          Just _             -> error  $ "Unsupported constructor type"
-          Nothing            -> return $ abs (t_args t) $ TFun [] (retT t) fTop
+        do  z <- getPropTDefM  l "__constructor__" t $ tVar <$> t_args t
+            case z of 
+              Just (TFun bs _ r) -> return $ abs (t_args t) $ TFun bs (retT t) r
+              Just t             -> cgError l $ unsupportedConsTy l t
+              Nothing            -> return $ abs (t_args t) $ TFun [] (retT t) fTop
       _ -> 
-        getPropM l "__constructor__" (envFindTy s g) >>= \case
-          Just t  -> return t
-          Nothing -> cgError l $ errorConsSigMissing (srcPos l) s
+        do  z <- getPropM l "__constructor__" $ envFindTy s g
+            case z of
+              Just t  -> return t
+              Nothing -> cgError l $ unsupportedNonSingleConsTy $ srcPos l
   where
     -- Constructor's return type is void - instead return the class type
     -- FIXME: type parameters in returned type: inferred ... or provided !!! 
-    retT t = TApp (TRef (F.symbol s, False)) (tVar <$> t_args t) fTop
+    retT t   = TApp (TRef $ F.symbol s) (tVar <$> t_args t) fTop
     abs [] t = t
     abs vs t = foldr TAll t vs
 
@@ -526,30 +531,31 @@ consCast g a e
 
 -- | Dead code 
 consDeadCode δ g l x t
-  = do  subType l g xT xBot
+  = do  subType l g tx xBot
         -- NOTE: return the target type (falsified)
         envAddFresh l tBot g
     where 
-        xBot = zipType δ (\_ -> F.bot) id xT xT  
-        tBot = zipType δ (\_ -> F.bot) id t  t    
-        xT   = envFindTy x g
+        xBot = zipType δ (fmap F.bot tx) tx
+        tBot = zipType δ (fmap F.bot t) t
+        tx   = envFindTy x g
 
 -- | UpCast(x, t1 => t2)
-consUpCast δ g l x t1 t2 = envAddFresh l stx g
+consUpCast δ g l x _ t2 = envAddFresh l stx g
     where
         tx   = envFindTy x g
-        ztx  = zipType δ (\p _ -> p) F.bot tx t2
+        ztx  = zipType δ tx t2
         stx  = ztx `eSingleton` x
     
 -- | DownCast(x, t1 => t2)
-consDownCast δ g l x t1 t2
-  = do  subType l g tx tx2
-        envAddFresh l stx g
+consDownCast δ g l x _ t2
+  = do  subType l g txx tx2
+        envAddFresh l ztx g
     where 
         tx   = envFindTy x g
-        tx2  = zipType δ (\_ q -> q) F.bot t2 tx
-        ztx  = zipType δ (\p _ -> p) F.bot tx t2 
-        stx  = ztx `eSingleton` x
+        -- This will drop all top-level refinements from union-level to its parts
+        txx  = zipType δ tx tx 
+        tx2  = zipType δ t2 tx
+        ztx  = zipType δ tx t2
 
 
 --------------------------------------------------------------------------------
@@ -566,7 +572,8 @@ consCall :: (PP a) =>
 
 consCall g l fn es ft0 
   = do (xes, g')    <- consScan consExpr g es
-       let ts        = [envFindTy x g' | x <- xes]
+       -- Attempt to gather qualifiers here -- needed for object literal quals
+       ts           <- mapM scrapeQualifiers [envFindTy x g' | x <- xes]
        δ            <- getDef
        case overload δ l of
          Just ft    -> do  (_,its,ot)   <- instantiate l g fn ft
@@ -575,22 +582,43 @@ consCall g l fn es ft0
                            envAddFresh l (F.subst su ot) g'
          Nothing    -> cgError l $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> getCallable δ ft0) 
     where
-       overload δ l  = listToMaybe [ lt | Overload cx t <- ann_fact l 
-                                        , cge_ctx g == cx
-                                        , lt         <- getCallable δ ft0
-                                        , on (==) toType t lt ]
+       overload δ l  = listToMaybe [ lt | Overload cx t <-  ann_fact l 
+                                        , cge_ctx g     == cx
+                                        , lt            <- getCallable δ ft0
+                                        , toType t      == toType lt ]
+
+
+consCallDotRef g l fn rcvr elts es 
+    -- Static call
+    | all isStaticSig elts
+    = consCall g l fn es $ ft isStaticSig
+
+    -- Virtual method call
+    | all isMethodSig elts 
+    = consCall g l fn (rcvr:es) $ ft isMethodSig
+
+    -- Normal function call
+    | all isFieldSig elts 
+    = consCall g l fn es $ ft isFieldSig
+
+    | otherwise
+    = cgError l $ unsupportedDotRef (srcPos l) fn
+
+  where
+    ft f = mkAnd $ catMaybes $ mkEltFunTy <$> filter f elts
+
 
 ---------------------------------------------------------------------------------
 instantiate :: (PP a, PPRS F.Reft) => 
   AnnTypeR -> CGEnv -> a -> RefType -> CGM  ([TVar], [Bind F.Reft], RefType)
 ---------------------------------------------------------------------------------
 instantiate l g fn ft 
-  = do let (αs, t)      = bkAll ft
-       let ts           = envGetContextTypArgs g l αs
-       t'              <- freshTyInst l g αs ts t
-       maybe err return $ bkFun t' 
+  = do  t'   <- freshTyInst l g αs ts t
+        maybe err return $ bkFun t' 
     where 
-       err = cgError l $ errorNonFunction (srcPos l) fn ft  
+      (αs, t) = bkAll ft
+      ts      = envGetContextTypArgs g l αs
+      err     = cgError l $ errorNonFunction (srcPos l) fn ft  
 
 
 ---------------------------------------------------------------------------------
@@ -609,18 +637,6 @@ consSeq f           = foldM step . Just
   where 
     step Nothing _  = return Nothing
     step (Just g) x = f g x
-
-
-consPropReadLhs getter g l e fld
-  = do  (xe, g')       <- consExpr g e
-        let tx          = envFindTy xe g'
-        δ              <- getDef
-        case getter l (renv g') δ fld tx of
-          Just (_, tf) -> return $ (F.substa (sf $ F.symbol xe) tf, g')
-          Nothing      -> die $  errorPropRead (srcPos l) e fld
-    where  
-        sf t s | s == F.symbol "this" = t
-               | otherwise            = s
 
 
 ---------------------------------------------------------------------------------
@@ -705,7 +721,7 @@ envJoin' l g g1 g2
         -- pass TC (we don't need to pad / fix them before joining).
         -- So we can use the raw type from one of the two branches and freshen
         -- up that one.
-        -- TODO: Add a raw type check on t1 and t2
+        -- FIXME: Add a raw type check on t1 and t2
         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> t1s
         zipWithM_ (subType l g1') [envFindTy x g1' | x <- xs] ts
         zipWithM_ (subType l g2') [envFindTy x g2' | x <- xs] ts

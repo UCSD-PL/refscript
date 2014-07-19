@@ -1,9 +1,8 @@
-/*@ x :: { f: { number | v > 0 } } */ 
-var x = { f: 1 };
- 
- 
-/*@ foo :: () => {void | true } */
-function foo():void {
-  x.f = 2;    
-}
+
+
+/*@ inc :: (n : number) => void */
+function inc(n:number) { }
+
+/*@ gobj :: { a : { v: number | v = 5 }; f : (n:number) => void ; } */
+var gobj= { a: 5, f: inc };
 

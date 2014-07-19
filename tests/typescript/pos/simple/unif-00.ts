@@ -5,12 +5,12 @@ interface Pair<A,B> {
   y: B;
 }
 
-/*@ fst :: forall A B . (x: #Pair[A,B]) => A */
+/*@ fst :: forall M A B . (x: #Pair[M,A,B]) => A */
 function fst<A,B>(p: Pair<A,B>): A {
   return p.x;
 }
 
-/*@ snd :: forall A B . (x: #Pair[A,B]) => B */
+/*@ snd :: forall M A B . (x: #Pair[M,A,B]) => B */
 function snd<A,B>(p: Pair<A,B>): B {
   return p.y;
 }

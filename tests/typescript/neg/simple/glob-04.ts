@@ -1,7 +1,8 @@
 /*@ g1 :: { number | v > 0 }*/
+var g1 = 4;
+
 /*@ g2 :: string */ 
-var g1 = 4,
-    g2 = 2;
+var g2 = 2;
 
 /*@ bar :: () => {void | true} */
 function bar(){

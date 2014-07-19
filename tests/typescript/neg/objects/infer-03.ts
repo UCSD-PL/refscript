@@ -1,3 +1,5 @@
+
+/*@ gobj :: { a: { number | v > 0 } } */
 var gobj = {
   a: 5,
   b: "glorp",

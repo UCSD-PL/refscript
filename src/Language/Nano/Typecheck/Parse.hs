@@ -262,11 +262,6 @@ idToTRefP :: Id SourceSpan -> Parser TCon
 ----------------------------------------------------------------------------------
 idToTRefP (Id _ s) = return $ TRef (symbol s)
 
-----------------------------------------------------------------------------------
-idToTTyOfP :: Id SourceSpan -> Parser TCon
-----------------------------------------------------------------------------------
-idToTTyOfP (Id _ s) = return $ TTyOf (symbol s)
-
 bareAll1P p
   = do reserved "forall"
        αs <- many1 tvarP
@@ -410,20 +405,20 @@ classDeclP = do
 ---------------------------------------------------------------------------------
 
 data RawSpec
-  = RawMeas   String   -- Measure
-  | RawBind   String   -- Function bindings
-  | RawExtern String   -- Extern declarations
-  | RawType   String   -- Variable declaration annotations
-  | RawClass  String   -- Class annots
-  | RawField  String   -- Field annots
-  | RawMethod String   -- Method annots
-  | RawStatic String   -- Static annots
-  | RawConstr String   -- Constructor annots
-  | RawTAlias String   -- Type aliases
-  | RawPAlias String   -- Predicate aliases
-  | RawQual   String   -- Qualifiers
-  | RawInvt   String   -- Invariants
-  | RawCast   String   -- Casts
+  = RawMeas   (SourceSpan, String)   -- Measure
+  | RawBind   (SourceSpan, String)   -- Function bindings
+  | RawExtern (SourceSpan, String)   -- Extern declarations
+  | RawType   (SourceSpan, String)   -- Variable declaration annotations
+  | RawClass  (SourceSpan, String)   -- Class annots
+  | RawField  (SourceSpan, String)   -- Field annots
+  | RawMethod (SourceSpan, String)   -- Method annots
+  | RawStatic (SourceSpan, String)   -- Static annots
+  | RawConstr (SourceSpan, String)   -- Constructor annots
+  | RawTAlias (SourceSpan, String)   -- Type aliases
+  | RawPAlias (SourceSpan, String)   -- Predicate aliases
+  | RawQual   (SourceSpan, String)   -- Qualifiers
+  | RawInvt   (SourceSpan, String)   -- Invariants
+  | RawCast   (SourceSpan, String)   -- Casts
   deriving (Show,Eq,Ord,Data,Typeable,Generic)
 
 data PSpec l r
@@ -445,40 +440,57 @@ data PSpec l r
 
 type Spec = PSpec SourceSpan Reft
 
-parseAnnot :: SourceSpan -> RawSpec -> Parser Spec
-parseAnnot ss (RawMeas   _) = Meas   <$> patch2 ss <$> idBindP
-parseAnnot ss (RawBind   _) = Bind   <$> patch2 ss <$> idBindP
-parseAnnot _  (RawField  _) = Field  <$>               fieldEltP
-parseAnnot _  (RawMethod _) = Method <$>               methEltP
-parseAnnot _  (RawStatic _) = Static <$>               statEltP
-parseAnnot _  (RawConstr _) = Constr <$>               consEltP
-parseAnnot ss (RawExtern _) = Extern <$> patch2 ss <$> idBindP
-parseAnnot ss (RawType   _) = IFace  <$> patch2 ss <$> iFaceP
-parseAnnot ss (RawClass  _) = Class  <$> patch2 ss <$> classDeclP 
-parseAnnot ss (RawTAlias _) = TAlias <$> patch2 ss <$> tAliasP
-parseAnnot ss (RawPAlias _) = PAlias <$> patch2 ss <$> pAliasP
-parseAnnot _  (RawQual   _) = Qual   <$>               qualifierP
-parseAnnot ss (RawInvt   _) = Invt              ss <$> bareTypeP
-parseAnnot ss (RawCast   _) = CastSp            ss <$> bareTypeP
+parseAnnot :: RawSpec -> Parser Spec
+parseAnnot (RawMeas   (ss, _)) = Meas   <$> patch2 ss <$> idBindP
+parseAnnot (RawBind   (ss, _)) = Bind   <$> patch2 ss <$> idBindP
+parseAnnot (RawField  (_ , _)) = Field  <$>               fieldEltP
+parseAnnot (RawMethod (_ , _)) = Method <$>               methEltP
+parseAnnot (RawStatic (_ , _)) = Static <$>               statEltP
+parseAnnot (RawConstr (_ , _)) = Constr <$>               consEltP
+parseAnnot (RawExtern (ss, _)) = Extern <$> patch2 ss <$> idBindP
+parseAnnot (RawType   (ss, _)) = IFace  <$> patch2 ss <$> iFaceP
+parseAnnot (RawClass  (ss, _)) = Class  <$> patch2 ss <$> classDeclP 
+parseAnnot (RawTAlias (ss, _)) = TAlias <$> patch2 ss <$> tAliasP
+parseAnnot (RawPAlias (ss, _)) = PAlias <$> patch2 ss <$> pAliasP
+parseAnnot (RawQual   (_ , _)) = Qual   <$>               qualifierP
+parseAnnot (RawInvt   (ss, _)) = Invt              ss <$> bareTypeP
+parseAnnot (RawCast   (ss, _)) = CastSp            ss <$> bareTypeP
 
 
 patch2 ss (id, t)    = (fmap (const ss) id , t)
 
 getSpecString :: RawSpec -> String 
-getSpecString (RawMeas   s) = s 
-getSpecString (RawBind   s) = s 
-getSpecString (RawExtern s) = s  
-getSpecString (RawType   s) = s  
-getSpecString (RawField  s) = s  
-getSpecString (RawMethod s) = s  
-getSpecString (RawStatic s) = s  
-getSpecString (RawConstr s) = s  
-getSpecString (RawClass  s) = s  
-getSpecString (RawTAlias s) = s  
-getSpecString (RawPAlias s) = s  
-getSpecString (RawQual   s) = s  
-getSpecString (RawInvt   s) = s  
-getSpecString (RawCast   s) = s  
+getSpecString (RawMeas   (_, s)) = s 
+getSpecString (RawBind   (_, s)) = s 
+getSpecString (RawExtern (_, s)) = s  
+getSpecString (RawType   (_, s)) = s  
+getSpecString (RawField  (_, s)) = s  
+getSpecString (RawMethod (_, s)) = s  
+getSpecString (RawStatic (_, s)) = s  
+getSpecString (RawConstr (_, s)) = s  
+getSpecString (RawClass  (_, s)) = s  
+getSpecString (RawTAlias (_, s)) = s  
+getSpecString (RawPAlias (_, s)) = s  
+getSpecString (RawQual   (_, s)) = s  
+getSpecString (RawInvt   (_, s)) = s  
+getSpecString (RawCast   (_, s)) = s  
+
+getSpecSourceSpan :: RawSpec -> SourceSpan
+getSpecSourceSpan (RawMeas   (s,_)) = s 
+getSpecSourceSpan (RawBind   (s,_)) = s 
+getSpecSourceSpan (RawExtern (s,_)) = s  
+getSpecSourceSpan (RawType   (s,_)) = s  
+getSpecSourceSpan (RawField  (s,_)) = s  
+getSpecSourceSpan (RawMethod (s,_)) = s  
+getSpecSourceSpan (RawStatic (s,_)) = s  
+getSpecSourceSpan (RawConstr (s,_)) = s  
+getSpecSourceSpan (RawClass  (s,_)) = s  
+getSpecSourceSpan (RawTAlias (s,_)) = s  
+getSpecSourceSpan (RawPAlias (s,_)) = s  
+getSpecSourceSpan (RawQual   (s,_)) = s  
+getSpecSourceSpan (RawInvt   (s,_)) = s  
+getSpecSourceSpan (RawCast   (s,_)) = s  
+
 
 instance FromJSON SourcePos where
   parseJSON (Array v) = do
@@ -608,14 +620,16 @@ parse :: SourceSpan -> PState -> RawSpec -> (PState, Spec)
 --------------------------------------------------------------------------------------
 parse ss st c = foo c
   where foo s    = failLeft $ runParser (parser s) st f (getSpecString s)
-        parser s = do a <- parseAnnot ss s
+        parser s = do a <- parseAnnot s
                       st <- getState
                       it <- getInput
                       if it /= "" 
                         then unexpected $ "trailing input: " ++ it
                         else return $ (st, a) 
-
-        failLeft (Left s) = error $ "Error parsing: " ++ show c ++ "\n" ++ show s
+        failLeft (Left _) = error $ "Error while parsing: " 
+                                  ++ show (getSpecString c) 
+                                  ++ "\nAt position: " 
+                                  ++ ppshow (getSpecSourceSpan c)
         failLeft (Right r) = r
         f = sourceName $ sp_begin ss
 

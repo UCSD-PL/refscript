@@ -341,6 +341,9 @@ ssaExpr e@(VarRef l x)
              Just t  -> return   $ VarRef l t
              Nothing -> ssaError $ errorSSAUnboundId (srcPos x) x
 
+ssaExpr (CondExpr l c e1 e2) 
+  = CondExpr l <$> ssaExpr c <*> ssaExpr e1 <*> ssaExpr e2 
+
 ssaExpr (PrefixExpr l o e)
   = PrefixExpr l o <$> ssaExpr e
 

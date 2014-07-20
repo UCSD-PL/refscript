@@ -1153,6 +1153,7 @@ builtinOpId BIArrayLit      = builtinId "BIArrayLit"
 builtinOpId BISetProp       = builtinId "BISetProp"
 builtinOpId BINumArgs       = builtinId "BINumArgs"
 builtinOpId BITruthy        = builtinId "BITruthy"
+builtinOpId BICondExpr      = builtinId "BICondExpr"
 
 
 --------------------------------------------------------------------------

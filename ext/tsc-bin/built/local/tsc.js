@@ -13006,6 +13006,10 @@ var TypeScript;
             }
             return false;
         };
+
+        ConditionalExpressionSyntax.prototype.toRsExp = function (helper) {
+            return new TypeScript.RsCondExpr(helper.getSourceSpan(this), tokenAnnots(this), this.condition.toRsExp(helper), this.whenTrue.toRsExp(helper), this.whenFalse.toRsExp(helper));
+        };
         return ConditionalExpressionSyntax;
     })(TypeScript.SyntaxNode);
     TypeScript.ConditionalExpressionSyntax = ConditionalExpressionSyntax;
@@ -59282,6 +59286,31 @@ var TypeScript;
         return RsInfixExpr;
     })(RsExpression);
     TypeScript.RsInfixExpr = RsInfixExpr;
+
+    var RsCondExpr = (function (_super) {
+        __extends(RsCondExpr, _super);
+        function RsCondExpr(span, ann, cond, exp1, exp2) {
+            _super.call(this, ann);
+            this.span = span;
+            this.ann = ann;
+            this.cond = cond;
+            this.exp1 = exp1;
+            this.exp2 = exp2;
+        }
+        RsCondExpr.prototype.toObject = function () {
+            return {
+                CondExpr: [
+                    [this.span.toObject(), this.mapAnn(function (a) {
+                            return a.toObject();
+                        })],
+                    this.cond.toObject(),
+                    this.exp1.toObject(),
+                    this.exp2.toObject()]
+            };
+        };
+        return RsCondExpr;
+    })(RsExpression);
+    TypeScript.RsCondExpr = RsCondExpr;
 
     var RsNumLit = (function (_super) {
         __extends(RsNumLit, _super);

@@ -3,14 +3,24 @@ var fs = require('fs');
 var sys = require('sys');
 var readline = require('readline');
 
-var exts=["css", "md", "vc", "hi", "out", /*"js",*/ "json", "fqout",
+var exts=["css", "vc", "hi", "out", "js", "json", "fqout",
           "fq", "o", "err", "annot", "log", "cgi", "smt2", "html"];
+
+var exceptions=["cleanup.js"]
 
 var cmd = "find . " + exts.map(function(e){return '-name "*.' + e + '" '}).join(" -o ");
 
 var exec = require('child_process').exec;
 function puts(error, stdout, stderr) { 
   files = stdout.split("\n").filter(function(s){return s !== ""; });
+
+  //Filter out exceptions
+  exceptions.forEach(function(e) {
+    files = files.filter(function(f){ 
+      return f.indexOf(e) === -1;
+    });
+  });
+
   files.forEach(function(f){console.log(f);});
 
   if (files.length === 0) {

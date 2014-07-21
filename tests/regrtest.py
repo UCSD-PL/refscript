@@ -50,7 +50,11 @@ def solve_quals(solve, file, bare, time, quiet, flags, dargs):
   import os.path
   dirname = os.path.dirname(file)
   basename = os.path.basename(file)
-  out = open(dirname + "/.liquid/" + basename + ".log", "w")
+
+  liquid_dir = dirname + "/.liquid/"
+  if not os.path.exists(liquid_dir):
+    os.makedirs(liquid_dir)
+  out = open(liquid_dir + basename + ".log", "w")
   rv  = logged_sys_call(time + solve.split() + flags + dargs + hygiene_flags + [file], out)
   out.close()
   return rv
@@ -90,27 +94,32 @@ class Config (rtest.TestConfig):
 
 parser = optparse.OptionParser()
 parser.add_option("-t", "--threads", dest="threadcount", default=1, type=int, help="spawn n threads")
-parser.add_option("-o", "--opts", dest="opts", default="", type=str, help="additional arguments to nanojs")
+parser.add_option("-o", "--opts", dest="opts", default="", type=str, help="additional arguments to rsc")
 parser.disable_interspersed_args()
 options, args = parser.parse_args()
 
-testDir   = "typescript"
-#testDir   = "tsc-src/compiler/core/arrayUtilities"
-
 testSign  = [("pos", 0), ("neg", 1)]
-#testSign  = [(".", 0)]
 
-testCategories = ["operators", "simple", "unions"]
+testCategories = [ 
+                   "objects"
+                 , "arrays"
+                 , "classes"
+                 , "loops"
+                 , "misc"
+                 , "operators"
+                 , "simple"
+                 , "unions"
 
-## not supported: ["proto", "typealias", "lists"]
+                 ## not supported:
+                 # , "proto"
+                 # , "typealias"
+                 # , "lists"
 
-#testCategories = ["objects", "arrays", "classes", "loops", "misc", "operators", "simple", "unions"]
-#testCategories = ["."]
+                 ]
 
-testdirs = [("/".join([testDir, s, c]), p) for (s, p) in testSign 
-                                           for c      in testCategories ]
+testdirs = [("/".join([s, c]), p) for (s, p) in testSign 
+                                  for c      in testCategories ]
 
-runner    = rtest.TestRunner (Config ("nanojs liquid", options.opts, testdirs, logfile, options.threadcount))
+runner    = rtest.TestRunner (Config ("rsc liquid", options.opts, testdirs, logfile, options.threadcount))
 runner.run ()
 
-# [os.system(("cd %s; ../../cleanup; cd ../" % d)) for (d,_) in testdirs]  

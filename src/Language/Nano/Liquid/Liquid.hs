@@ -26,7 +26,7 @@ import           Language.Fixpoint.Interface        (solve)
 
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
-import           Language.Nano.Env                  (envUnion)
+import qualified Language.Nano.Env                  as Env --  (envUnion, envToList)
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Subst
 import qualified Language.Nano.Annots               as A
@@ -91,9 +91,10 @@ generateConstraints cfg pgm = getCGInfo cfg pgm $ consNano pgm
 consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano pgm@(Nano {code = Src fs}) 
-  = do  g <- initCGEnv pgm
-        checkInterfaces pgm g
-        consStmts g fs 
+  = do  g   <- initCGEnv pgm
+        g'  <- envAdds True (Env.envToList $ externs pgm) g
+        checkInterfaces pgm g'
+        consStmts g' fs 
         return ()
 
 checkInterfaces p g = 
@@ -119,7 +120,7 @@ initCGEnv pgm
 
       l       = srcPos dummySpan -- FIXME
       g0      = CGE r f g cc cs cd 
-      r       = envUnion (specs pgm) (externs pgm)
+      r       = Env.envUnion (specs pgm) (externs pgm)
       f       = F.emptyIBindEnv 
       g       = [] 
       cc      = emptyContext 
@@ -130,7 +131,9 @@ initCGEnv pgm
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = cgFunTys l f xs (envFindTy f g) >>= mapM_ (consFun1 l g f xs body) >> return g
+  = do  ft        <- cgFunTys l f xs (envFindTy f g) 
+        forM_ ft   $ consFun1 l g f xs body
+        return     $ g
        
 consFun _ s 
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
@@ -401,9 +404,13 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2)
     l2 = getAnnotation e2
 
 consExpr g (InfixExpr l o e1 e2)        
-  = consCall g l o [e1, e2] (infixOpTy o $ renv g)
+  = consCall g l o [e1, e2]  $ infixOpTy o $ renv g
 
--- super(e1,..,en)
+-- | e ? e1 : e2
+consExpr g (CondExpr l e e1 e2)
+  = consCall g l BICondExpr [e,e1,e2] $ builtinOpTy l BICondExpr $ renv g
+
+-- | super(e1,..,en)
 consExpr g (CallExpr l e@(SuperRef _) es) 
   = do elts <- t_elts <$> (getSuperDefM l =<< cgPeekThis)
        go [ t | ConsSig t <- elts ]
@@ -411,7 +418,7 @@ consExpr g (CallExpr l e@(SuperRef _) es)
     go [t] = consCall g l e es t
     go _   = cgError l $ unsupportedNonSingleConsTy $ srcPos l
 
--- e.m(es)
+-- | e.m(es)
 consExpr g (CallExpr l em@(DotRef _ e f) es)
   = do  (x,g') <- consExpr g e
         δ      <- getDef
@@ -421,7 +428,7 @@ consExpr g (CallExpr l em@(DotRef _ e f) es)
     vr          = VarRef $ getAnnotation e
     elt δ x g   = getElt δ f $ envFindTy x g
 
--- e(es)
+-- | e(es)
 consExpr g (CallExpr l e es)
   = do (x, g') <- consExpr g e 
        consCall g' l e es $ envFindTy x g'
@@ -431,42 +438,42 @@ consExpr g ef@(DotRef l e f)
   = do  (x,g') <- consExpr g e
         δ      <- getDef        
         case getElt δ f $ envFindTy  x g' of 
-          [FieldSig _ _ ft] -> consCall g' l ef [vr x] $ mkTy l ft
+          [FieldSig _ _ ft] -> consCall g' l ef [vr x] $ mkTy ft
           _                 -> cgError l $ errorExtractNonFld (srcPos l) f e 
   where
     -- Add a VarRef so that e is not typechecked again
     vr       = VarRef $ getAnnotation e
-    mkTy l t = mkFun ([α], [B (F.symbol "this") tα], t) 
+    mkTy t   = mkFun ([α], [B (F.symbol "this") tα], t) 
     α        = TV (F.symbol "α" ) (srcPos l)
     tα       = TVar α fTop
 
 -- FIXME: e["f"]
 
--- e1[e2]
+-- | e1[e2]
 consExpr g (BracketRef l e1 e2) 
   = consCall g l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ renv g 
 
--- e1[e2] = e3
+-- | e1[e2] = e3
 consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3)
   = consCall g l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ renv g
 
--- [e1,...,en]
+-- | [e1,...,en]
 consExpr g (ArrayLit l es)
   = do  t <- scrapeQualifiers $ arrayLitTy l (length es) $ renv g
         consCall g l BIArrayLit es t
 
--- {f1:e1,...,fn:en}
+-- | {f1:e1,...,fn:en}
 consExpr g (ObjectLit l bs) 
   = consCall g l "ObjectLit" es $ objLitTy l ps
   where
     (ps,es) = unzip bs
     
 
--- new C(e, ...)
+-- | new C(e, ...)
 consExpr g (NewExpr l (VarRef _ i) es)
   = getConstr (srcPos l) g i >>= consCall g l "constructor" es
 
--- super
+-- | super
 consExpr g (SuperRef l) 
   = do  z <- cgPeekThis 
         case z of 
@@ -479,6 +486,18 @@ consExpr g (SuperRef l)
                         envAddFresh l t g
                     _                          -> cgError l $ errorSuper (srcPos l) 
           _ -> cgError l $ errorSuper (srcPos l) 
+
+-- | function(xs) { }
+consExpr g (FuncExpr l fo xs body) 
+  = case anns of 
+      [ft]  -> do fts       <- cgFunTys l f xs ft
+                  forM_ fts  $ consFun1 l g f xs body
+                  envAddFresh  l ft g 
+      _    -> cgError l      $ errorNonSingleFuncAnn $ srcPos l
+  where
+    anns                     = [ t | FuncAnn t <- ann_fact l ]
+    f                        = maybe (F.symbol "<anonymous>") F.symbol fo
+
 
 -- not handled
 consExpr _ e = cgError l $ unimplemented l "consExpr" e where l = srcPos  e

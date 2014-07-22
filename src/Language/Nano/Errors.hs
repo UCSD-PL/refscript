@@ -59,6 +59,7 @@ unsupportedConvFun l t1 t2    = mkErr l $ printf "Unsupported case in convertFun
 
 bug' l s                      = err   l $ "BUG: " ++ s 
 bug l s                       = mkErr l $ "BUG: " ++ s 
+impossible l s                = mkErr l $ "IMPOSSIBLE" ++ s 
 bugBadSubtypes l t1 t2        = mkErr l $ printf "Unexpected Subtyping Constraint\n%s <: %s" (ppshow t1) (ppshow t2)
 bugMalignedFields l s s'      = mkErr l $ printf "[%s] \n CGMonad: fields not aligned: '%s' and '%s'" (ppshow l) (ppshow s) (ppshow s')
 
@@ -123,6 +124,7 @@ errorEnvJoin l x t1 t2        = mkErr l $ printf "Variable '%s' has different ty
 errorArgMismatch l            = mkErr l $ printf "Mismatch in Number of arguments in signature" 
 errorArgName l x y            = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 errorExtractNonFld l f x      = mkErr l $ printf "Cannot extract non-field '%s' from object '%s'" (ppshow f) (ppshow x)
+errorNonSingleFuncAnn l       = mkErr l $ printf "Anonymous functions needs to have exactly one type annotation."
 
 
 ---------------------------------------------------------------------------

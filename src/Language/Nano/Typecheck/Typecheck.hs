@@ -615,6 +615,9 @@ tcExpr γ e@(VarRef l x)
                       Just (TD _ s _ _ _) -> return (e, TApp (TTyOf $ F.symbol s) [] fTop) -- Static reference
                       Nothing             -> tcError $ errorUnboundId (ann l) x
  
+tcExpr γ e@(CondExpr _ _ _ _)
+  = tcCall γ e 
+
 tcExpr γ e@(PrefixExpr _ _ _)
   = tcCall γ e 
 
@@ -674,6 +677,17 @@ tcExpr γ e@(NewExpr _ _ _)
 -- | super
 tcExpr _ e@(SuperRef l) = (e,) <$> (getSuperM l =<< tcPeekThis)
 
+-- | function(xs) { }
+tcExpr γ (FuncExpr l fo xs body)
+  = case anns of 
+      [ft] -> do  ts    <- tcFunTys l f xs ft
+                  body' <- foldM (tcFun1 γ l f xs) body ts
+                  return $ (FuncExpr l fo xs body', ft)
+      _    -> tcError    $ errorNonSingleFuncAnn $ srcPos l
+  where
+    anns    = [ t | FuncAnn t <- ann_fact l ]
+    f       = maybe (F.symbol "<anonymous>") F.symbol fo
+
 tcExpr _ e 
   = convertError "tcExpr" e
 
@@ -687,7 +701,7 @@ tcCall γ (PrefixExpr l o e)
   = do z                      <- tcNormalCall γ l o [e] (prefixOpTy o $ tce_env γ) 
        case z of
          ([e'], t)            -> return (PrefixExpr l o e', t)
-         _                    -> error "IMPOSSIBLE:tcCall:PrefixExpr"
+         _                    -> tcError $ impossible (srcPos l) "tcCall PrefixExpr"
 
 -- | `e1 o e2`
 tcCall γ (InfixExpr l o@OpInstanceof e1 e2) 
@@ -701,25 +715,33 @@ tcCall γ (InfixExpr l o@OpInstanceof e1 e2)
   where
     l2 = getAnnotation e2
 
+-- | e ? e1 : e2
+tcCall γ (CondExpr l e e1 e2)
+  = do z                      <- tcNormalCall γ l BICondExpr [e,e1,e2] (builtinOpTy l BICondExpr $ tce_env γ)
+       case z of
+         ([e',e1',e2'], t)    -> return (CondExpr l e' e1' e2', t)
+         _                    -> tcError $ impossible (srcPos l) "tcCall CondExpr"
+
 tcCall γ (InfixExpr l o e1 e2)        
   = do z                      <- tcNormalCall γ l o [e1, e2] (infixOpTy o $ tce_env γ) 
        case z of
          ([e1', e2'], t)      -> return (InfixExpr l o e1' e2', t)
-         _                    -> error "IMPOSSIBLE:tcCall:InfixExpr"
+         _                    -> tcError $ impossible (srcPos l) "tcCall InfixExpr"
+
 
 -- | `e1[e2]`
 tcCall γ (BracketRef l e1 e2)
   = do z                      <- tcNormalCall γ l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ tce_env γ 
        case z of
          ([e1', e2'], t)      -> return (BracketRef l e1' e2', t)
-         _                    -> error "BUG: tcCall BracketRef"
+         _                    -> tcError $ impossible (srcPos l) "tcCall BracketRef"
    
 -- | `e1[e2] = e3`
 tcCall γ (AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
   = do z                      <- tcNormalCall γ l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ tce_env γ
        case z of
          ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
-         _                    -> error "BUG: tcCall AssignExpr"
+         _                    -> tcError $ impossible (srcPos l) "tcCall AssignExpr"
 
 -- | `[e1,...,en]`
 tcCall γ (ArrayLit l es)
@@ -748,12 +770,12 @@ tcCall γ ef@(DotRef l e f)
           Right (_, t) -> 
             do  δ      <- getDef 
                 case getElt δ f t of 
-                  [FieldSig _ _ ft] -> do ([e'], t') <- tcNormalCall γ l ef [e] $ mkTy l ft
+                  [FieldSig _ _ ft] -> do ([e'], t') <- tcNormalCall γ l ef [e] $ mkTy ft
                                           return      $ (DotRef l e' f, t')
                   _                 -> tcError $ errorExtractNonFld (srcPos l) f e 
           Left err     -> tcError err
   where
-    mkTy l t = mkFun ([α], [B (F.symbol "this") tα], t) 
+    mkTy t   = mkFun ([α], [B (F.symbol "this") tα], t) 
     α        = TV (F.symbol "α" ) (srcPos l)
     tα       = TVar α fTop
 

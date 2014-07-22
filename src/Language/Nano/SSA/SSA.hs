@@ -60,17 +60,19 @@ ssaNano p@(Nano { code = Src fs })
       classes       = [ fmap ann i | ClassStmt _ i _ _ _ <- fs]
 
 -------------------------------------------------------------------------------------
-ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)
+-- ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)
 -------------------------------------------------------------------------------------
-ssaFun (FunctionStmt l f xs body) 
+-- ssaFun (FunctionStmt l f xs body) 
+ssaFun l fo xs body 
   = do θ <- getSsaEnv  
        withAssignability ReadOnly (envIds θ) $               -- Variables from OUTER scope are UNASSIGNABLE
          do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
-            return        $ FunctionStmt l f xs body'
+            return        $ body'
+            -- return        $ FunctionStmt l f xs body'
 
-ssaFun _ = error "Calling ssaFun not with FunctionStmt"
+-- ssaFun _ = error "Calling ssaFun not with FunctionStmt"
 
 -------------------------------------------------------------------------------------
 ssaSeq :: (a -> SSAM r (Bool, a)) -> [a] -> SSAM r (Bool, [a]) 
@@ -207,8 +209,8 @@ ssaStmt (ThrowStmt l e) = do
 
 
 -- function f(...){ s }
-ssaStmt s@(FunctionStmt _ _ _ _)
-  = (True,) <$> ssaFun s
+ssaStmt (FunctionStmt l f xs bd)
+  = (True,) <$> FunctionStmt l f xs <$> (ssaFun l (Just f) xs bd)
 
 -- switch (e) { ... }
 ssaStmt (SwitchStmt l e xs) 
@@ -365,6 +367,9 @@ ssaExpr (BracketRef l e1 e2)
 ssaExpr (NewExpr l e es)
   -- `e` is the class name - no need to SSA it.
   = NewExpr l e <$> mapM ssaExpr es
+
+ssaExpr (FuncExpr l fo xs bd)
+  = FuncExpr l fo xs <$> ssaFun l fo xs bd 
 
 ssaExpr (Cast l e)
   = Cast l <$> ssaExpr e

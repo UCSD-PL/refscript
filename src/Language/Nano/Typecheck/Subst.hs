@@ -117,6 +117,7 @@ instance Free (Fact r) where
   free (MethAnn m)       = free m
   free (StatAnn m)       = free m
   free (ConsAnn c)       = free c
+  free (FuncAnn c)       = free c
   free (ClassAnn (vs,m)) = foldr S.delete (free m) vs
 
 instance Free (TElt r) where
@@ -178,6 +179,7 @@ instance F.Reftable r => Substitutable r (Fact r) where
   apply θ (MethAnn t)       = MethAnn       $ apply θ t
   apply θ (StatAnn t)       = StatAnn       $ apply θ t
   apply θ (ConsAnn t)       = ConsAnn       $ apply θ t
+  apply θ (FuncAnn t)       = FuncAnn       $ apply θ t
   apply θ (ClassAnn (c, t)) = ClassAnn      $ (c, apply θ t)
 
 instance Substitutable r a => Substitutable r (Maybe a) where

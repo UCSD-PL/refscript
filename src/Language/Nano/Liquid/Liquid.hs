@@ -131,7 +131,9 @@ initCGEnv pgm
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
 --------------------------------------------------------------------------------
 consFun g (FunctionStmt l f xs body) 
-  = cgFunTys l f xs (envFindTy f g) >>= mapM_ (consFun1 l g f xs body) >> return g
+  = do  ft        <- cgFunTys l f xs (envFindTy f g) 
+        forM_ ft   $ consFun1 l g f xs body
+        return     $ g
        
 consFun _ s 
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
@@ -436,12 +438,12 @@ consExpr g ef@(DotRef l e f)
   = do  (x,g') <- consExpr g e
         δ      <- getDef        
         case getElt δ f $ envFindTy  x g' of 
-          [FieldSig _ _ ft] -> consCall g' l ef [vr x] $ mkTy l ft
+          [FieldSig _ _ ft] -> consCall g' l ef [vr x] $ mkTy ft
           _                 -> cgError l $ errorExtractNonFld (srcPos l) f e 
   where
     -- Add a VarRef so that e is not typechecked again
     vr       = VarRef $ getAnnotation e
-    mkTy l t = mkFun ([α], [B (F.symbol "this") tα], t) 
+    mkTy t   = mkFun ([α], [B (F.symbol "this") tα], t) 
     α        = TV (F.symbol "α" ) (srcPos l)
     tα       = TVar α fTop
 
@@ -484,6 +486,18 @@ consExpr g (SuperRef l)
                         envAddFresh l t g
                     _                          -> cgError l $ errorSuper (srcPos l) 
           _ -> cgError l $ errorSuper (srcPos l) 
+
+-- | function(xs) { }
+consExpr g (FuncExpr l fo xs body) 
+  = case anns of 
+      [ft]  -> do fts       <- cgFunTys l f xs ft
+                  forM_ fts  $ consFun1 l g f xs body
+                  envAddFresh  l ft g 
+      _    -> cgError l      $ errorNonSingleFuncAnn $ srcPos l
+  where
+    anns                     = [ t | FuncAnn t <- ann_fact l ]
+    f                        = maybe (F.symbol "<anonymous>") F.symbol fo
+
 
 -- not handled
 consExpr _ e = cgError l $ unimplemented l "consExpr" e where l = srcPos  e

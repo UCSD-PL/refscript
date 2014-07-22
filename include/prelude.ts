@@ -43,29 +43,34 @@
 */
 
 
-//FIXME: the 'len' property is invalid if M != Immutable
 /*@ extern builtin_BIArrayLit  :: forall M  A . (A) 
                                => {v: #Array[M,A] | [ (len v) = builtin_BINumArgs; not (null v) ] } 
 */
 
 /*@ extern builtin_BIUndefined :: forall A. {A | false} */
 
+/*@ extern builtin_BICondExpr  :: forall A . (c: boolean, x: A, y: A) 
+                               =>  { v:A | (if (Prop(c)) then (v = x) else (v = y)) } 
+*/
+
 
 /*@ extern builtin_OpLT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
-                                  /\ (x:string, y:number) => boolean
-                                  /\ (x:number, y:number) => boolean
-                                  /\ (x:string, y:string) => boolean                                
+                                  /\ forall T . (x:T, y:T ) => boolean
 */
 
 /*@ extern builtin_OpLEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <= y)) } 
-                                  /\ (x:string, y:number) => boolean
-                                  /\ (x:number, y:number) => boolean
-                                  /\ (x:string, y:string) => boolean                                
+                                  /\ forall T . (x:T, y:T ) => boolean
 */
 
-/*@ extern builtin_OpGT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) } */
+/*@ extern builtin_OpGT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) }
+                                  /\ forall T . (x:T, y:T ) => boolean
+*/
 
-/*@ extern builtin_OpGEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >= y)) } */
+/*@ extern builtin_OpGEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >= y)) }
+                                  /\ forall T . (x:T, y:T ) => boolean
+*/
+
+// FIXME: what is the last line useful for?
 
 /*@ extern builtin_OpAdd       :: /\ (x:number, y:number) => {number | v = x + y}
                                   /\ (x:number, y:string) => string
@@ -78,7 +83,8 @@
 
 /*@ extern builtin_OpMul       :: (number,  number)  => number */
 
-//FIXME: This is not correct. Add definition for: >>  
+// FIXME: This is not correct. Add definition for: >>
+
 /*@ extern builtin_OpDiv       :: (x: number, y: { v: number | v != 0 }) 
                                => { v:number | (((x>0 && y>0) => v>0) && (x=0 <=> v=0) && ((x>0 && y>1) => v<x) )} 
  */
@@ -172,18 +178,30 @@
 
 /*** Number **************************************************************/
 
-// TODO: create special constant values for NaN, MIN_VALUE, etc...
+// FIXME: Be careful in defining equality between NaN values: 
+//        
+//        NaN =/= NaN
+//
+
+/*@ measure numeric_nan               :: number                 */
+/*@ measure numeric_max_value         :: number                 */
+/*@ measure numeric_min_value         :: number                 */
+/*@ measure numeric_negative_infinity :: number                 */
+/*@ measure numeric_positive_infinity :: number                 */
+
+
+/*@ extern  NaN :: { number | v = numeric_nan }   */
 
 /*@ extern Number :: { 
       new forall A . (value: A) => #Number;
       forall A . (value: A) => number;
 
       prototype         : #Number;
-      MAX_VALUE         : number;
-      MIN_VALUE         : number;
-      NaN               : number;
-      NEGATIVE_INFINITY : number;
-      POSITIVE_INFINITY : number;
+      MAX_VALUE         : { number | v = numeric_max_value         };
+      MIN_VALUE         : { number | v = numeric_min_value         };
+      NaN               : { number | v = numeric_nan               };
+      NEGATIVE_INFINITY : { number | v = numeric_negative_infinity };
+      POSITIVE_INFINITY : { number | v = numeric_positive_infinity };
     } */
 
 

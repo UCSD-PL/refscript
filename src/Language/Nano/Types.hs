@@ -206,6 +206,7 @@ instance IsNano (Expression a) where
   isNano (NullLit _ )            = True
   isNano (ArrayLit _ es)         = all isNano es
   isNano (StringLit _ _)         = True
+  isNano (CondExpr _ e1 e2 e3)   = all isNano [e1,e2,e3]
   isNano (VarRef _ _)            = True
   isNano (InfixExpr _ o e1 e2)   = isNano o && isNano e1 && isNano e2
   isNano (PrefixExpr _ o e)      = isNano o && isNano e
@@ -217,6 +218,7 @@ instance IsNano (Expression a) where
   isNano (UnaryAssignExpr _ _ l) = isNano l
   isNano (ThisRef _)             = True 
   isNano (SuperRef _)            = True 
+  isNano (FuncExpr _ _ _ s)      = isNano s
   isNano (NewExpr _ e es)        = isNano e && all isNano es
   isNano (Cast _ e)              = isNano e
   isNano e                       = errortext (text "Not Nano Expression!" <+> pp e)
@@ -541,6 +543,7 @@ data BuiltinOp = BIUndefined
                | BINumArgs
                | BITruthy
                | BISetProp
+               | BICondExpr
                  deriving (Eq, Ord, Show)
 
 instance PP BuiltinOp where

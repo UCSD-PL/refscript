@@ -65,6 +65,9 @@ question   = T.symbol     lexer "?"
 idBindP :: Parser (Id SourceSpan, RefType)
 idBindP = xyP identifierP dcolon bareTypeP
 
+anonFuncP :: Parser RefType
+anonFuncP = funcSigP
+
 identifierP :: Parser (Id SourceSpan)
 identifierP =   try (withSpan Id upperIdP)
            <|>      (withSpan Id lowerIdP)
@@ -407,6 +410,7 @@ classDeclP = do
 data RawSpec
   = RawMeas   (SourceSpan, String)   -- Measure
   | RawBind   (SourceSpan, String)   -- Function bindings
+  | RawFunc   (SourceSpan, String)   -- Anonymouns function type
   | RawExtern (SourceSpan, String)   -- Extern declarations
   | RawType   (SourceSpan, String)   -- Variable declaration annotations
   | RawClass  (SourceSpan, String)   -- Class annots
@@ -424,6 +428,7 @@ data RawSpec
 data PSpec l r
   = Meas   (Id l, RType r)
   | Bind   (Id l, RType r) 
+  | AnFunc (RType r) 
   | Field  (TElt r)
   | Constr (TElt r)
   | Method (TElt r)
@@ -443,6 +448,7 @@ type Spec = PSpec SourceSpan Reft
 parseAnnot :: RawSpec -> Parser Spec
 parseAnnot (RawMeas   (ss, _)) = Meas   <$> patch2 ss <$> idBindP
 parseAnnot (RawBind   (ss, _)) = Bind   <$> patch2 ss <$> idBindP
+parseAnnot (RawFunc   (ss, _)) = AnFunc <$>               anonFuncP
 parseAnnot (RawField  (_ , _)) = Field  <$>               fieldEltP
 parseAnnot (RawMethod (_ , _)) = Method <$>               methEltP
 parseAnnot (RawStatic (_ , _)) = Static <$>               statEltP
@@ -462,6 +468,7 @@ patch2 ss (id, t)    = (fmap (const ss) id , t)
 getSpecString :: RawSpec -> String 
 getSpecString (RawMeas   (_, s)) = s 
 getSpecString (RawBind   (_, s)) = s 
+getSpecString (RawFunc   (_, s)) = s 
 getSpecString (RawExtern (_, s)) = s  
 getSpecString (RawType   (_, s)) = s  
 getSpecString (RawField  (_, s)) = s  
@@ -478,6 +485,7 @@ getSpecString (RawCast   (_, s)) = s
 getSpecSourceSpan :: RawSpec -> SourceSpan
 getSpecSourceSpan (RawMeas   (s,_)) = s 
 getSpecSourceSpan (RawBind   (s,_)) = s 
+getSpecSourceSpan (RawFunc   (s,_)) = s 
 getSpecSourceSpan (RawExtern (s,_)) = s  
 getSpecSourceSpan (RawType   (s,_)) = s  
 getSpecSourceSpan (RawField  (s,_)) = s  
@@ -552,23 +560,23 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 --------------------------------------------------------------------------------------
 mkCode :: FilePath -> [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
-mkCode f ss =  Nano {
-        fp      = f
-      , code    = Src (checkTopStmt <$> ss')
-      , externs = envFromList   [ t | Extern t <- anns ]          -- externs
+mkCode f ss       =  Nano {
+        fp        = f
+      , code      = Src (checkTopStmt <$> ss')
+      , externs   = envFromList   [ t | Extern t <- anns ]       -- externs
       -- FIXME: same name methods in different classes.
-      , specs   = catFunSpecDefs δ ss                               -- function sigs (no methods...)
-      -- , glVars  = catVarSpecDefs ss                            -- variables
-      , consts  = envFromList   [ t | Meas   t <- anns ] 
-      , defs    = δ
-      , tAlias  = envFromList   [ t | TAlias t <- anns ] 
-      , pAlias  = envFromList   [ t | PAlias t <- anns ] 
-      , quals   =               [ t | Qual   t <- anns ] 
-      , invts   = [Loc (srcPos l) t | Invt l t <- anns ]
+      , specs     = catFunSpecDefs δ ss                          -- function sigs (no methods...)
+      -- , glVars = catVarSpecDefs ss                            -- variables
+      , consts    = envFromList   [ t | Meas   t <- anns ] 
+      , defs      = δ
+      , tAlias    = envFromList   [ t | TAlias t <- anns ] 
+      , pAlias    = envFromList   [ t | PAlias t <- anns ] 
+      , quals     =               [ t | Qual   t <- anns ] 
+      , invts     = [Loc (srcPos l) t | Invt l t <- anns ]
     } 
   where
     δ             = tDefFromList [ processInterface t | IFace  t <- anns ] 
-    toBare     :: (SourceSpan, [Spec]) -> AnnBare Reft 
+    toBare       :: (SourceSpan, [Spec]) -> AnnBare Reft 
     toBare (l,αs) = Ann l $ [VarAnn   t     | Bind   (_,t) <- αs ]
                          ++ [ConsAnn  c     | Constr c     <- αs ]
                          ++ [FieldAnn f     | Field  f     <- αs ]
@@ -576,6 +584,7 @@ mkCode f ss =  Nano {
                          ++ [StatAnn  m     | Static m     <- αs ]
                          ++ [ClassAnn t     | Class  (_,t) <- αs ]
                          ++ [UserCast t     | CastSp _ t   <- αs ]
+                         ++ [FuncAnn  t     | AnFunc t     <- αs ]
     ss'           = (toBare <$>) <$> ss
     anns          = concatMap (FO.foldMap snd) ss
 
@@ -583,8 +592,7 @@ mkCode f ss =  Nano {
 --   elements, or (normally) bound types without index signature.
 processInterface (t, TD n x vs p elts)
   | nTi == 0  || (nTi == 1 && nTe == 0 && nTn == 0) 
-  -- Replace the 'this' binding in every method element with the type of the
-  -- interface
+  -- Replace the 'this' binding in every method element with the type of the interface
   = (t, TD n x vs p (f <$> elts))
 
   | otherwise = error   $ "[UNIMPLEMENTED] Object types " ++ 
@@ -603,10 +611,8 @@ processInterface (t, TD n x vs p elts)
 
 type PState = Integer
 
-
 instance PP Integer where
   pp = pp . show
-
 
 
 --------------------------------------------------------------------------------------

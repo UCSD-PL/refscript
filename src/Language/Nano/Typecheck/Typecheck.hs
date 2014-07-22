@@ -677,6 +677,17 @@ tcExpr γ e@(NewExpr _ _ _)
 -- | super
 tcExpr _ e@(SuperRef l) = (e,) <$> (getSuperM l =<< tcPeekThis)
 
+-- | function(xs) { }
+tcExpr γ (FuncExpr l fo xs body)
+  = case anns of 
+      [ft] -> do  ts    <- tcFunTys l f xs ft
+                  body' <- foldM (tcFun1 γ l f xs) body ts
+                  return $ (FuncExpr l fo xs body', ft)
+      _    -> tcError    $ errorNonSingleFuncAnn $ srcPos l
+  where
+    anns    = [ t | FuncAnn t <- ann_fact l ]
+    f       = maybe (F.symbol "<anonymous>") F.symbol fo
+
 tcExpr _ e 
   = convertError "tcExpr" e
 
@@ -759,12 +770,12 @@ tcCall γ ef@(DotRef l e f)
           Right (_, t) -> 
             do  δ      <- getDef 
                 case getElt δ f t of 
-                  [FieldSig _ _ ft] -> do ([e'], t') <- tcNormalCall γ l ef [e] $ mkTy l ft
+                  [FieldSig _ _ ft] -> do ([e'], t') <- tcNormalCall γ l ef [e] $ mkTy ft
                                           return      $ (DotRef l e' f, t')
                   _                 -> tcError $ errorExtractNonFld (srcPos l) f e 
           Left err     -> tcError err
   where
-    mkTy l t = mkFun ([α], [B (F.symbol "this") tα], t) 
+    mkTy t   = mkFun ([α], [B (F.symbol "this") tα], t) 
     α        = TV (F.symbol "α" ) (srcPos l)
     tα       = TVar α fTop
 

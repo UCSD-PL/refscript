@@ -23,19 +23,20 @@ nanoQualifiers' p      = concatMap (refTypeQualifiers γ0) $ envToList $ envs
 
 refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t 
   where
-    addQs γ t qs            = (mkQuals l γ t) ++ qs
+    addQs γ t qs            = mkQuals l γ t ++ qs
 
 mkQuals l γ t      = [ mkQual l γ v so pa | let (RR so (Reft (v, ras))) = rTypeSortedReft t 
                                           , RConc p                    <- ras                 
                                           , pa                         <- atoms p
                      ]
 
-mkQual l γ v so p = Q "Auto" ((v, so) : yts) $ subst θ p
+mkQual l γ v so p = Q "Auto" ((v, so) : yts) (subst θ p) l0 
   where 
     yts           = [(y, lookupSort l x γ) | (x, y) <- xys ]
     θ             = mkSubst [(x, eVar y)   | (x, y) <- xys]
     xys           = zipWith (\x i -> (x, stringSymbol ("~A" ++ show i))) xs [0..] 
     xs            = delete v $ orderedFreeVars γ p
+    l0            = dummyPos "RSC.Qualifiers.mkQual"
 
 lookupSort l  x γ = fromMaybe err $ lookupSEnv x γ 
   where 

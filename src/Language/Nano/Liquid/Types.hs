@@ -363,12 +363,10 @@ prefixOpRTy o g = prefixOpTy o $ renv g
 ------------------------------------------------------------------------------------------
 infixOpRTy :: InfixOp -> CGEnv -> RefType
 ------------------------------------------------------------------------------------------
-infixOpRTy o g = infixOpTy o $ renv g
+infixOpRTy o g  = infixOpTy o $ renv g
 
-
-rawStringSymbol            = F.Loc F.dummyPos . F.stringSymbol
-rawStringFTycon            = F.stringFTycon . F.Loc F.dummyPos 
-
+rawStringSymbol = F.Loc (F.dummyPos "RSC.Types.rawStringSymbol") . F.stringSymbol
+rawStringFTycon = F.stringFTycon . F.Loc (F.dummyPos "RSC.Types.rawStringFTycon")
 
 
 -- | `zipType` returns a type that is:

@@ -187,7 +187,7 @@ Type anntoations on variables are of the form:
 
     /*@ <id> :: t */
     var <id> [= <exp>];
-    
+
 For example:
 
     /*@ a :: { number | v > 0 } */

@@ -37,7 +37,8 @@ module Language.Nano.Liquid.CGMonad (
   , envAddFresh, envAdds, envAddReturn, envAddGuard, envFindTy
   , envGlobAnnot, envFieldAnnot
   , envRemSpec, isGlobalVar, envToList, envFindReturn, envPushContext
-  , envGetContextCast, envGetContextTypArgs, scrapeQualifiers
+  , envGetContextCast, envGetContextTypArgs
+  , scrapeQualifiers
 
   , findSymM, findSymOrDieM
 
@@ -336,11 +337,12 @@ mkQuals γ t      = [ mkQual γ v so pa | let (F.RR so (F.Reft (v, ras))) = rTyp
                                       , pa                         <- atoms p
                    ]
 
-mkQual γ v so p = F.Q "Auto" [(v, so)] $ F.subst θ p
+mkQual γ v so p = F.Q "Auto" [(v, so)] (F.subst θ p) l0
   where 
     θ             = F.mkSubst [(x, F.eVar y)   | (x, y) <- xys]
     xys           = zipWith (\x i -> (x, F.stringSymbol ("~A" ++ show i))) xs [0..] 
     xs            = L.delete v $ orderedFreeVars γ p
+    l0            = F.dummyPos "RSC.CGMonad.mkQual"
 
 
 orderedFreeVars γ = L.nub . filter (`F.memberSEnv` γ) . F.syms 

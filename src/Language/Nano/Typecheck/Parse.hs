@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE DeriveGeneric             #-}
 
+
 module Language.Nano.Typecheck.Parse (
     parseNanoFromFile, printFile
   ) where
@@ -334,7 +335,7 @@ methEltP = do
         Just (vs, bs      ,ot)                     -> mkFun (v:vs, B (symbol "this") tv : bs, ot)
         _                                          -> t
     -- XXX: using _THIS_ as a reserved sting here.
-    v  = TV (symbol "_THIS_") (srcPos dummyPos)
+    v  = TV (symbol "_THIS_") (srcPos (dummyPos "RSC.Parse.methEltP"))
     tv = TVar v fTop
 
 

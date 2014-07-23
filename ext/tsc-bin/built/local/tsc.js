@@ -16731,16 +16731,12 @@ var TypeScript;
         };
 
         FunctionExpressionSyntax.prototype.toRsExp = function (helper) {
-            var _this = this;
             var anns = tokenAnnots(this.block);
-            var bindAnns = anns.filter(function (a) {
-                return a.kind() === 1 /* RawBind */;
-            });
-            var bindAnnNames = bindAnns.map(function (a) {
-                return a.binderName(_this, helper);
+            var funcAnns = anns.filter(function (a) {
+                return a.kind() === 2 /* RawFunc */;
             });
 
-            if (bindAnnNames.length === 0) {
+            if (funcAnns.length === 0) {
                 var type = helper.getDeclForAST(this).getSymbol().type.toRsType();
                 if (type instanceof TypeScript.TError) {
                     var tError = type;
@@ -16748,7 +16744,7 @@ var TypeScript;
                 }
                 var typeStr = type.toString();
                 anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 2 /* RawFunc */, typeStr));
-            } else if (bindAnnNames.length !== 1) {
+            } else if (funcAnns.length !== 1) {
                 helper.postDiagnostic(this, TypeScript.DiagnosticCode.Anonymous_function_cannot_have_more_than_one_type_annotations);
             }
 

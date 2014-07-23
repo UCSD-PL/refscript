@@ -1,12 +1,16 @@
 
+/*@ qualif PlusOne(v:number, x: number): v = x + 1 */
+/*@ qualif PlusTwo(v:number, x: number): v = x + 2 */
+
+
 var bar = function (x: number): number
-/*@ <anonymous> (x:number) => {number | v = x + 1} */
+/* <anonymous> (x:number) => {number | v = x + 1} */
 {
   return x + 1;
 }
 
 var foo = function (x: number): number
-/*@ <anonymous> (x:number) => {number | v = x + 2} */
+/* <anonymous> (x:number) => {number | v = x + 2} */
 {
   var a = bar(x);
   var b = bar(a);
@@ -14,6 +18,7 @@ var foo = function (x: number): number
 }
 
 var baz = foo;
+assert(bar(1) === 2);
 
 
-assert(foo(1) === baz(1));
+//assert(foo(1) === baz(1));

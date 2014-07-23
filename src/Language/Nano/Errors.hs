@@ -124,7 +124,7 @@ errorEnvJoin l x t1 t2        = mkErr l $ printf "Variable '%s' has different ty
 errorArgMismatch l            = mkErr l $ printf "Mismatch in Number of arguments in signature" 
 errorArgName l x y            = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 errorExtractNonFld l f x      = mkErr l $ printf "Cannot extract non-field '%s' from object '%s'" (ppshow f) (ppshow x)
-errorNonSingleFuncAnn l       = mkErr l $ printf "Anonymous functions needs to have exactly one type annotation."
+errorNonSingleFuncAnn l       = mkErr l $ printf "Anonymous function needs to have exactly one type annotation."
 
 
 ---------------------------------------------------------------------------

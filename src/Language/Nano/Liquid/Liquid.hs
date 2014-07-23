@@ -116,7 +116,6 @@ initCGEnv pgm
       fx t    | isTFun t  = return t -- freshTyFun g0 l t -- Do just the fields for the moment
       fx t    | not (isTVar t) = freshTyVar g0 l t
       fx t    | otherwise = return t
-      
 
       l       = srcPos dummySpan -- FIXME
       g0      = CGE r f g cc cs cd 

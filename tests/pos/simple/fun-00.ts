@@ -14,6 +14,7 @@ var foo = function (x: number): number
 }
 
 var baz = foo;
+assert(bar(1) === 2);
 
 
 assert(foo(1) === baz(1));

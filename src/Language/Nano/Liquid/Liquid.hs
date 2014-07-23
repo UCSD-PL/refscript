@@ -116,7 +116,6 @@ initCGEnv pgm
       fx t    | isTFun t  = return t -- freshTyFun g0 l t -- Do just the fields for the moment
       fx t    | not (isTVar t) = freshTyVar g0 l t
       fx t    | otherwise = return t
-      
 
       l       = srcPos dummySpan -- FIXME
       g0      = CGE r f g cc cs cd 
@@ -490,9 +489,10 @@ consExpr g (SuperRef l)
 -- | function(xs) { }
 consExpr g (FuncExpr l fo xs body) 
   = case anns of 
-      [ft]  -> do fts       <- cgFunTys l f xs ft
+      [ft]  -> do kft       <- freshTyFun g l ft
+                  fts       <- cgFunTys l f xs kft
                   forM_ fts  $ consFun1 l g f xs body
-                  envAddFresh  l ft g 
+                  envAddFresh  l kft g 
       _    -> cgError l      $ errorNonSingleFuncAnn $ srcPos l
   where
     anns                     = [ t | FuncAnn t <- ann_fact l ]

@@ -446,7 +446,25 @@ var TypeScript;
         _0_which_lacks_get_accessor_and_parameter_type_annotation_on_set_accessor_implicitly_has_an_any_type: "'{0}', which lacks 'get' accessor and parameter type annotation on 'set' accessor, implicitly has an 'any' type.",
         Index_signature_of_object_type_implicitly_has_an_any_type: "Index signature of object type implicitly has an 'any' type.",
         Object_literal_s_property_0_implicitly_has_an_any_type_from_widening: "Object literal's property '{0}' implicitly has an 'any' type from widening.",
-        Translate_to_RefScript_JSON_format: "Translate to RefScript (JSON format)"
+        Translate_to_RefScript_JSON_format: "Translate to RefScript (JSON format)",
+        Ambient_variable_declarator_for_0_needs_to_have_exactly_one_type_annotation: "Ambient variable declarator for '{0}' needs to have exactly one type annotation.",
+        Variable_declarator_for_0_needs_to_have_at_most_one_type_annotation: "Variable declarator for '{0}' needs to have at most one type annotation.",
+        Class_0_has_multiple_class_annoatations: "Class '{0}' has multiple class annoatations.",
+        Interface_0_has_multiple_interface_annoatations: "Interface '{0}' has multiple interface annoatations.",
+        Function_0_can_have_at_most_one_type_annotation: "Function '{0}' can have at most one type annotation.",
+        Variable_declarations_are_only_supported_in_the_first_part_of_the_loop_in_0: "Variable declarations are only supported in the first part of the loop in '{0}'.",
+        Variable_annotation_binder_for_0_does_not_correspond_to_any_nearby_variable_declaration: "Variable annotation binder for '{0}' does not correspond to any nearby variable declaration.",
+        Duplicate_type_annotation_for_variable_s_0: "Duplicate type annotation for variable(s): '{0}'",
+        Invalid_RefScript_annotation_0_Perhaps_you_need_to_replace_with: "Invalid RefScript annotation '{0}'. Perhaps you need to replace ':' with '::'.",
+        Fields_should_have_at_least_one_annotation: "Fields should have at least one annotation.",
+        For_in_only_non_ambient_variable_declarators_are_allowed_here: "For-in: only non-ambient variable declarators are allowed here.",
+        All_variable_declarators_need_to_be_translated_to_either_RsVarDecls_or_RsEmptyStmts: "All variable declarators need to be translated to either RsVarDecls or RsEmptyStmts",
+        BinaryExpression_toRsLValue: "BinaryExpression toRsLValue",
+        InterfaceDeclaration_member: "InterfaceDeclaration member",
+        HeritageClauses_to_RefScript: "HeritageClauses to RefScript",
+        ForInStatementSyntax_to_RsStatement: "ForInStatementSyntax to RsStatement",
+        Cannot_translate_type_0_into_RefScript_type: "Cannot translate type '{0}' into RefScript type.",
+        Anonymous_function_cannot_have_more_than_one_type_annotations: "Anonymous function cannot have more than one type annotations."
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -2135,6 +2153,9 @@ var TypeScript;
         DiagnosticCategory[DiagnosticCategory["Error"] = 1] = "Error";
         DiagnosticCategory[DiagnosticCategory["Message"] = 2] = "Message";
         DiagnosticCategory[DiagnosticCategory["NoPrefix"] = 3] = "NoPrefix";
+
+        DiagnosticCategory[DiagnosticCategory["Bug"] = 4] = "Bug";
+        DiagnosticCategory[DiagnosticCategory["Unimplemented"] = 5] = "Unimplemented";
     })(TypeScript.DiagnosticCategory || (TypeScript.DiagnosticCategory = {}));
     var DiagnosticCategory = TypeScript.DiagnosticCategory;
 })(TypeScript || (TypeScript = {}));
@@ -2571,7 +2592,25 @@ var TypeScript;
         "'{0}', which lacks 'get' accessor and parameter type annotation on 'set' accessor, implicitly has an 'any' type.": { "code": 7016, "category": 1 /* Error */ },
         "Index signature of object type implicitly has an 'any' type.": { "code": 7017, "category": 1 /* Error */ },
         "Object literal's property '{0}' implicitly has an 'any' type from widening.": { "code": 7018, "category": 1 /* Error */ },
-        "Translate to RefScript (JSON format)": { "code": 8000, "category": 2 /* Message */ }
+        "Translate to RefScript (JSON format)": { "code": 8000, "category": 2 /* Message */ },
+        "Ambient variable declarator for '{0}' needs to have exactly one type annotation.": { "code": 8001, "category": 1 /* Error */ },
+        "Variable declarator for '{0}' needs to have at most one type annotation.": { "code": 8002, "category": 1 /* Error */ },
+        "Class '{0}' has multiple class annoatations.": { "code": 8003, "category": 1 /* Error */ },
+        "Interface '{0}' has multiple interface annoatations.": { "code": 8004, "category": 1 /* Error */ },
+        "Function '{0}' can have at most one type annotation.": { "code": 8005, "category": 1 /* Error */ },
+        "Variable declarations are only supported in the first part of the loop in '{0}'.": { "code": 8006, "category": 1 /* Error */ },
+        "Variable annotation binder for '{0}' does not correspond to any nearby variable declaration.": { "code": 8007, "category": 1 /* Error */ },
+        "Duplicate type annotation for variable(s): '{0}'": { "code": 8008, "category": 1 /* Error */ },
+        "Invalid RefScript annotation '{0}'. Perhaps you need to replace ':' with '::'.": { "code": 8009, "category": 1 /* Error */ },
+        "Fields should have at least one annotation.": { "code": 8010, "category": 1 /* Error */ },
+        "For-in: only non-ambient variable declarators are allowed here.": { "code": 8011, "category": 1 /* Error */ },
+        "All variable declarators need to be translated to either RsVarDecls or RsEmptyStmts": { "code": 8012, "category": 4 /* Bug */ },
+        "BinaryExpression toRsLValue": { "code": 8013, "category": 5 /* Unimplemented */ },
+        "InterfaceDeclaration member": { "code": 8014, "category": 5 /* Unimplemented */ },
+        "HeritageClauses to RefScript": { "code": 8015, "category": 5 /* Unimplemented */ },
+        "ForInStatementSyntax to RsStatement": { "code": 8016, "category": 5 /* Unimplemented */ },
+        "Cannot translate type '{0}' into RefScript type.": { "code": 8017, "category": 5 /* Unimplemented */ },
+        "Anonymous function cannot have more than one type annotations.": { "code": 8018, "category": 1 /* Error */ }
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -9024,15 +9063,13 @@ var TypeScript;
             var definedNames = this.definedNames();
 
             bindAnns.forEach(function (b) {
-                if (definedNames.indexOf(b.binderName()) < 0) {
-                    console.log(helper.getSourceSpan(_this).toString());
-                    console.log("Variable annotation binder for '" + b.binderName() + "' does not correspond to any nearby variable declaration.");
-                    process.exit(1);
+                if (definedNames.indexOf(b.binderName(_this, helper)) < 0) {
+                    helper.postDiagnostic(_this, TypeScript.DiagnosticCode.Variable_annotation_binder_for_0_does_not_correspond_to_any_nearby_variable_declaration, [b.binderName(_this, helper)]);
                 }
             });
 
             var sortedBinds = bindAnns.map(function (b) {
-                return b.binderName();
+                return b.binderName(_this, helper);
             }).sort();
             var results = [];
             for (var i = 0; i < sortedBinds.length - 1; i++) {
@@ -9041,9 +9078,7 @@ var TypeScript;
                 }
             }
             if (results.length > 0) {
-                console.log(helper.getSourceSpan(this).toString());
-                console.log("Duplicate type annotation for variable(s): " + results.join(", "));
-                process.exit(1);
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Duplicate_type_annotation_for_variable_s_0, [results.join(", ")]);
             }
         };
         return SyntaxNode;
@@ -9054,7 +9089,6 @@ var TypeScript;
 (function (TypeScript) {
     function tokenAnnots(token, context) {
         var ctx = (context !== undefined) ? context : 4 /* OtherContext */;
-
         var commentTrivia = token.leadingTrivia().toArray().filter(function (t) {
             return t.kind() === 6 /* MultiLineCommentTrivia */;
         });
@@ -9662,8 +9696,7 @@ var TypeScript;
                             var extendsSerial = extendsHeritage[0];
                             break;
                         default:
-                            console.log(extendsHeritage.toString());
-                            throw new Error("BUG: class '" + this.identifier.text() + "' can only extend a single class.");
+                            helper.postDiagnostic(this, TypeScript.DiagnosticCode.Classes_can_only_extend_a_single_class);
                     }
                 } else {
                     var extendsSerial = null;
@@ -9679,9 +9712,7 @@ var TypeScript;
             } else if (anns.length === 1) {
                 return anns[0];
             } else {
-                console.log(helper.getSourceSpan(this).toString());
-                console.log("Class '" + this.identifier.text() + "' has multiple class annoatations.");
-                process.exit(1);
+                helper.postDiagnostic(this, this.identifier.text());
             }
         };
 
@@ -9820,6 +9851,7 @@ var TypeScript;
         };
 
         InterfaceDeclarationSyntax.prototype.toRsStmt = function (helper) {
+            var _this = this;
             var originalAnnots = tokenAnnots(this.firstToken());
 
             var headerAnnots = originalAnnots.filter(function (a) {
@@ -9864,9 +9896,7 @@ var TypeScript;
                 var headerAnnot = headerAnnots[0];
                 annotStr = headerAnnot.content() + " ";
             } else {
-                console.log(helper.getSourceSpan(this).toString());
-                console.log("Interface '" + this.identifier.text() + "' has multiple interface annoatations.");
-                process.exit(1);
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Interface_0_has_multiple_interface_annoatations, [this.identifier.text()]);
             }
 
             var members = this.body.typeMembers.toNonSeparatorArray().map(function (m) {
@@ -9891,7 +9921,6 @@ var TypeScript;
                                 return m.content();
                             });
                         }
-
                         break;
 
                     case 141 /* PropertySignature */:
@@ -9917,7 +9946,7 @@ var TypeScript;
                             }
                         }
                     default:
-                        throw new Error("[UNIMPLEMENTED/BUG] InterfaceDeclaration member.");
+                        helper.postDiagnostic(_this, TypeScript.DiagnosticCode.InterfaceDeclaration_member);
                 }
             });
 
@@ -10007,15 +10036,15 @@ var TypeScript;
         };
 
         HeritageClauseSyntax.prototype.toRsHeritage = function (helper, extendsOrImplements, mutParam) {
+            var _this = this;
             if (this.extendsOrImplementsKeyword.kind() === extendsOrImplements) {
                 var r = this.typeNames.toNonSeparatorArray().map(function (t) {
                     switch (t.kind()) {
                         case 11 /* IdentifierName */:
                         case 126 /* GenericType */:
-                            var baseSymbol = helper.getSymbolForAST(t);
-                            return baseSymbol.type.toRsType(mutParam);
+                            return helper.getSymbolForAST(t).type.toRsType(mutParam);
                         default:
-                            throw new Error("UNIMPLEMENTED: heritageClauses toRs " + TypeScript.SyntaxKind[t.kind()]);
+                            helper.postDiagnostic(_this, TypeScript.DiagnosticCode.HeritageClauses_to_RefScript);
                     }
                 });
                 return r;
@@ -10024,6 +10053,7 @@ var TypeScript;
         };
 
         HeritageClauseSyntax.prototype.toRsHeritageIds = function (helper, extendsOrImplements) {
+            var _this = this;
             if (this.extendsOrImplementsKeyword.kind() === extendsOrImplements) {
                 return this.typeNames.toNonSeparatorArray().map(function (t) {
                     switch (t.kind()) {
@@ -10031,7 +10061,7 @@ var TypeScript;
                         case 126 /* GenericType */:
                             return t.toRsId(helper);
                         default:
-                            throw new Error("UNIMPLEMENTED: heritageClauses toRs " + TypeScript.SyntaxKind[t.kind()]);
+                            helper.postDiagnostic(_this, TypeScript.DiagnosticCode.HeritageClauses_to_RefScript);
                     }
                 });
             }
@@ -10277,6 +10307,7 @@ var TypeScript;
         };
 
         FunctionDeclarationSyntax.prototype.toRsStmt = function (helper) {
+            var _this = this;
             if (!this.block) {
                 return null;
             }
@@ -10287,15 +10318,21 @@ var TypeScript;
                 return a.kind() === 1 /* RawBind */;
             });
             var bindAnnNames = bindAnns.map(function (a) {
-                return a.binderName();
+                return a.binderName(_this, helper);
             });
 
-            if (bindAnnNames.length !== 1 || bindAnnNames[0] !== name) {
-                console.log(helper.getSourceSpan(this).toString());
-                console.log("Function '" + name + "' should have a single annotation.");
-                process.exit(1);
+            if (bindAnnNames.length === 0) {
+                var type = helper.getDeclForAST(this).getSymbol().type.toRsType();
+                if (type instanceof TypeScript.TError) {
+                    var tError = type;
+                    helper.postDiagnostic(this, TypeScript.DiagnosticCode.Cannot_translate_type_0_into_RefScript_type, [tError.message()]);
+                }
+                var typeStr = type.toString();
+                console.log(this.identifier.text() + " :: " + typeStr);
+                anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 1 /* RawBind */, this.identifier.text() + " :: " + typeStr));
+            } else if (bindAnnNames.length !== 1 || bindAnnNames[0] !== name) {
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Function_0_can_have_at_most_one_type_annotation, [name]);
             }
-
             return new TypeScript.RsFunctionStmt(helper.getSourceSpan(this), anns, this.identifier.toRsId(helper), this.callSignature.parameterList.parameters.toRsAST(helper), new TypeScript.RsASTList([this.block.toRsStmt(helper)]));
         };
         return FunctionDeclarationSyntax;
@@ -10502,7 +10539,7 @@ var TypeScript;
             })) {
                 return new TypeScript.RsVarInit(helper.getSourceSpan(this), noBindAnns, decls);
             }
-            throw new Error("toRsForInit: can only have non-ambient variable declarators here.");
+            helper.postDiagnostic(this, TypeScript.DiagnosticCode.For_in_only_non_ambient_variable_declarators_are_allowed_here);
         };
 
         VariableDeclarationSyntax.prototype.toRsStmt = function (helper, parentAnns) {
@@ -10529,7 +10566,7 @@ var TypeScript;
                 }));
                 return new TypeScript.RsEmptyStmt(helper.getSourceSpan(this), declAnnots);
             } else {
-                throw new Error("VariableDeclaration:toRsStmt: This shouldn't happen.");
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.All_variable_declarators_need_to_be_translated_to_either_RsVarDecls_or_RsEmptyStmts);
             }
         };
         return VariableDeclarationSyntax;
@@ -10621,7 +10658,7 @@ var TypeScript;
             var _this = this;
             if (anns) {
                 var anns1 = anns.filter(function (a) {
-                    return a.binderName() === _this.propertyName.text();
+                    return a.binderName(_this, helper) === _this.propertyName.text();
                 });
 
                 var pullDecl = helper.getDeclForAST(this);
@@ -10629,17 +10666,14 @@ var TypeScript;
                     if (anns1.length === 1) {
                         return new TypeScript.RsEmptyStmt(helper.getSourceSpan(this), anns1);
                     }
-                    console.log(helper.getSourceSpan(this).toString());
-                    console.log("Ambient variable declarator for '" + this.propertyName.text() + "' needs to have exactly one type annotation.");
-                    process.exit(1);
+                    helper.postDiagnostic(this, TypeScript.DiagnosticCode.Ambient_variable_declarator_for_0_needs_to_have_exactly_one_type_annotation, [this.propertyName.text()]);
                 }
 
                 if (anns1.length < 2) {
                     return new TypeScript.RsVarDecl(helper.getSourceSpan(this), anns1, this.propertyName.toRsId(helper), (this.equalsValueClause) ? this.equalsValueClause.toRsExp(helper) : null);
                 }
-                console.log(helper.getSourceSpan(this).toString());
-                console.log("Variable declarator for '" + this.propertyName.text() + "' needs to have at most one type annotation.");
-                process.exit(1);
+
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Variable_declarator_for_0_needs_to_have_at_most_one_type_annotation, [this.propertyName.text()]);
             }
         };
         return VariableDeclaratorSyntax;
@@ -14231,6 +14265,7 @@ var TypeScript;
         };
 
         MemberFunctionDeclarationSyntax.prototype.toRsClassElt = function (helper) {
+            var _this = this;
             var methodName = this.propertyName.text();
             var isStatic = this.modifiers.toArray().some(function (t) {
                 return t.kind() === 58 /* StaticKeyword */;
@@ -14251,7 +14286,7 @@ var TypeScript;
             }
 
             var bindAnnNames = bindAnns.map(function (a) {
-                return a.binderName();
+                return a.binderName(_this, helper);
             });
             if (bindAnnNames.length == 0 || bindAnnNames[0] !== methodName) {
                 throw new Error("Method '" + methodName + "' should have at least one annotation.");
@@ -14587,6 +14622,7 @@ var TypeScript;
         };
 
         MemberVariableDeclarationSyntax.prototype.toRsClassElt = function (helper) {
+            var _this = this;
             var isStatic = this.modifiers.toArray().some(function (t) {
                 return t.kind() === 58 /* StaticKeyword */;
             });
@@ -14605,10 +14641,10 @@ var TypeScript;
             }
 
             var bindAnnNames = bindAnns.map(function (a) {
-                return a.binderName();
+                return a.binderName(_this, helper);
             });
             if (bindAnnNames.length == 0) {
-                throw new Error("Field should have at least one annotation.");
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Fields_should_have_at_least_one_annotation);
             }
 
             var binderNames = anns.filter(function (b) {
@@ -15640,14 +15676,9 @@ var TypeScript;
 
         ForStatementSyntax.prototype.toRsStmt = function (helper) {
             if (this.initializer) {
-                console.log(helper.getSourceSpan(this).toString());
-                console.log("'" + this.initializer.fullText() + "'");
-                console.log("Please only use variable declarations in the first part of the loop.");
-                process.exit(1);
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Variable_declarations_are_only_supported_in_the_first_part_of_the_loop_in_0, [this.initializer.fullText()]);
             }
-
             var anns = tokenAnnots(this.forKeyword);
-
             return new TypeScript.RsForStmt(helper.getSourceSpan(this), tokenAnnots(this), this.variableDeclaration.toRsForInit(helper, anns), this.condition.toRsExp(helper), this.incrementor.toRsExp(helper), this.statement.toRsStmt(helper));
         };
         return ForStatementSyntax;
@@ -15799,7 +15830,7 @@ var TypeScript;
                     var varId = _var.propertyName.toRsId(helper);
                     var rsForInInit = new TypeScript.RsForInVar(varId);
                 } else {
-                    throw new Error("[UNIMPLEMENTED/BUG] ForInStatementSyntax - toRsStmt");
+                    helper.postDiagnostic(this, TypeScript.DiagnosticCode.ForInStatementSyntax_to_RsStatement);
                 }
             }
             return new TypeScript.RsForInStmt(helper.getSourceSpan(this), tokenAnnots(this), rsForInInit, this.expression.toRsExp(helper), this.statement.toRsStmt(helper));
@@ -16700,7 +16731,24 @@ var TypeScript;
         };
 
         FunctionExpressionSyntax.prototype.toRsExp = function (helper) {
-            return new TypeScript.RsFuncExpr(helper.getSourceSpan(this), tokenAnnots(this.block), this.identifier ? this.identifier.toRsId(helper) : null, new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (p) {
+            var anns = tokenAnnots(this.block);
+            var funcAnns = anns.filter(function (a) {
+                return a.kind() === 2 /* RawFunc */;
+            });
+
+            if (funcAnns.length === 0) {
+                var type = helper.getDeclForAST(this).getSymbol().type.toRsType();
+                if (type instanceof TypeScript.TError) {
+                    var tError = type;
+                    helper.postDiagnostic(this, TypeScript.DiagnosticCode.Cannot_translate_type_0_into_RefScript_type, [tError.message()]);
+                }
+                var typeStr = type.toString();
+                anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 2 /* RawFunc */, typeStr));
+            } else if (funcAnns.length !== 1) {
+                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Anonymous_function_cannot_have_more_than_one_type_annotations);
+            }
+
+            return new TypeScript.RsFuncExpr(helper.getSourceSpan(this), anns, this.identifier ? this.identifier.toRsId(helper) : null, new TypeScript.RsASTList(this.callSignature.parameterList.parameters.toNonSeparatorArray().map(function (p) {
                 return p.toRsId(helper);
             })), new TypeScript.RsASTList(this.block.statements.toArray().map(function (s) {
                 return s.toRsStmt(helper);
@@ -32824,9 +32872,7 @@ var TypeScript;
             if (ast === null) {
                 return;
             }
-            var helper = new TypeScript.RsHelper(this.semanticInfoChain);
-            var json = JSON.stringify(ast.toRsAST(helper).toObject(), undefined, 2);
-            this.writeToOutput(json);
+            this.writeToOutput(JSON.stringify(ast.toObject(), undefined, 2));
         };
 
         Emitter.prototype.emitAccessorMemberDeclaration = function (funcDecl, name, className, isProto) {
@@ -39404,8 +39450,8 @@ var TypeScript;
         };
 
         PullTypeSymbol.prototype.toRsType = function (mut) {
-            if (this.toString() === "any") {
-                return TypeScript.TAny;
+            if (this.isAny()) {
+                return TypeScript.TTop;
             }
 
             if (this.isPrimitive()) {
@@ -39420,7 +39466,7 @@ var TypeScript;
                     return TypeScript.TBoolean;
                 if (this.toString() === "void")
                     return TypeScript.TVoid;
-                return new TypeScript.TError("toNJSType:primitive: " + this.toString());
+                return new TypeScript.TError(this.toString());
             }
 
             if (this.isArrayNamedTypeReference()) {
@@ -39474,8 +39520,7 @@ var TypeScript;
                 return new TypeScript.TObject(fields);
             }
 
-            console.log("Not supported in toNJSType[" + TypeScript.PullElementKind[this.kind] + "]: " + this.toString().substring(0, 120));
-            return TypeScript.TAny;
+            return new TypeScript.TError(this.toString());
         };
 
         PullTypeSymbol.prototype.toRsTypeParameter = function () {
@@ -56711,7 +56756,7 @@ var TypeScript;
             return emitter;
         };
 
-        TypeScriptCompiler.prototype.emitJSONWorker = function (document, emitOptions, emitter) {
+        TypeScriptCompiler.prototype.emitJSONWorker = function (document, rsAST, emitOptions, emitter) {
             var sourceUnit = document.sourceUnit();
             TypeScript.Debug.assert(this._shouldEmit(document));
 
@@ -56731,7 +56776,7 @@ var TypeScript;
             }
 
             emitter.setDocument(document);
-            emitter.emitJSON(sourceUnit, false);
+            emitter.emitJSON(rsAST, false);
 
             return emitter;
         };
@@ -56751,18 +56796,11 @@ var TypeScript;
             return sharedEmitter;
         };
 
-        TypeScriptCompiler.prototype._emitJSON = function (document, emitOptions, onSingleFileEmitComplete, sharedEmitter) {
+        TypeScriptCompiler.prototype._emitJSON = function (document, rsAST, emitOptions, onSingleFileEmitComplete, sharedEmitter) {
             if (this._shouldEmit(document)) {
-                if (document.emitToOwnOutputFile()) {
-                    var singleEmitter = this.emitJSONWorker(document, emitOptions);
-                    if (singleEmitter) {
-                        onSingleFileEmitComplete(singleEmitter.getOutputFiles());
-                    }
-                } else {
-                    sharedEmitter = this.emitJSONWorker(document, emitOptions, sharedEmitter);
-                }
+                sharedEmitter = this.emitJSONWorker(document, rsAST, emitOptions, sharedEmitter);
+                onSingleFileEmitComplete(sharedEmitter.getOutputFiles());
             }
-
             return sharedEmitter;
         };
 
@@ -56789,12 +56827,6 @@ var TypeScript;
                 sharedEmitter = this._emitDocument(document, emitOptions, function (files) {
                     return emitOutput.outputFiles.push.apply(emitOutput.outputFiles, files);
                 }, sharedEmitter);
-
-                if (this.compilationSettings().refScript()) {
-                    sharedJSONEmitter = this._emitJSON(document, emitOptions, function (files) {
-                        return emitOutput.outputFiles.push.apply(emitOutput.outputFiles, files);
-                    }, sharedJSONEmitter);
-                }
             }
 
             if (sharedEmitter) {
@@ -56821,13 +56853,6 @@ var TypeScript;
                 this._emitDocument(document, emitOptions, function (files) {
                     return emitOutput.outputFiles.push.apply(emitOutput.outputFiles, files);
                 }, null);
-
-                if (this.compilationSettings().refScript()) {
-                    this._emitJSON(document, emitOptions, function (files) {
-                        return emitOutput.outputFiles.push.apply(emitOutput.outputFiles, files);
-                    }, null);
-                }
-
                 return emitOutput;
             } else {
                 return this.emitAll(resolvePath);
@@ -57383,6 +57408,7 @@ var TypeScript;
         CompilerPhase[CompilerPhase["Syntax"] = 0] = "Syntax";
         CompilerPhase[CompilerPhase["Semantics"] = 1] = "Semantics";
         CompilerPhase[CompilerPhase["EmitOptionsValidation"] = 2] = "EmitOptionsValidation";
+
         CompilerPhase[CompilerPhase["Emit"] = 3] = "Emit";
         CompilerPhase[CompilerPhase["DeclarationEmit"] = 4] = "DeclarationEmit";
     })(CompilerPhase || (CompilerPhase = {}));
@@ -57441,6 +57467,7 @@ var TypeScript;
                     return this.moveNextSemanticsPhase();
                 case 2 /* EmitOptionsValidation */:
                     return this.moveNextEmitOptionsValidationPhase();
+
                 case 3 /* Emit */:
                     return this.moveNextEmitPhase();
                 case 4 /* DeclarationEmit */:
@@ -57532,23 +57559,32 @@ var TypeScript;
                 var fileName = this.fileNames[this.index];
                 var document = this.compiler.getDocument(fileName);
 
-                this._sharedEmitter = this.compiler._emitDocument(document, this._emitOptions, function (outputFiles) {
-                    _this._current = CompileResult.fromOutputFiles(outputFiles);
-                }, this._sharedEmitter);
-
                 if (this.compiler.compilationSettings().refScript()) {
-                    this._sharedJSONEmitter = this.compiler._emitJSON(document, this._emitOptions, function (outputFiles) {
+                    if (this.compiler._shouldEmit(document)) {
+                        var ast = document.sourceUnit();
+                        var helper = new TypeScript.RsHelper(this.compiler.semanticInfoChain, document);
+                        var rsAST = ast.toRsAST(helper);
+                        var diagnostics = helper.diagnostics();
+                        this._current = CompileResult.fromDiagnostics(diagnostics);
+                        if (diagnostics.length === 0) {
+                            this._sharedJSONEmitter = this.compiler._emitJSON(document, rsAST, this._emitOptions, function (outputFiles) {
+                                _this._current = CompileResult.fromOutputFiles(outputFiles);
+                            }, this._sharedJSONEmitter);
+                        }
+                    }
+                } else {
+                    this._sharedEmitter = this.compiler._emitDocument(document, this._emitOptions, function (outputFiles) {
                         _this._current = CompileResult.fromOutputFiles(outputFiles);
-                    }, this._sharedJSONEmitter);
+                    }, this._sharedEmitter);
                 }
-
                 return true;
             }
 
-            if (this.index === this.fileNames.length && this._sharedEmitter) {
-                this._current = CompileResult.fromOutputFiles(this._sharedEmitter.getOutputFiles());
+            if (!this.compiler.compilationSettings().refScript()) {
+                if (this.index === this.fileNames.length && this._sharedEmitter) {
+                    this._current = CompileResult.fromOutputFiles(this._sharedEmitter.getOutputFiles());
+                }
             }
-
             return true;
         };
 
@@ -58680,7 +58716,7 @@ var TypeScript;
             return true;
         };
 
-        RsBindAnnotation.prototype.binderName = function () {
+        RsBindAnnotation.prototype.binderName = function (ast, helper) {
             if (this._binderName)
                 return this._binderName;
             var content = this.content();
@@ -58712,9 +58748,8 @@ var TypeScript;
                 }
             }
 
-            console.log("Invalid RefScript annotation: " + content);
-            console.log("Perhaps you need to replace ':' with '::'.");
-            process.exit(1);
+            helper.postDiagnostic(ast, TypeScript.DiagnosticCode.Invalid_RefScript_annotation_0_Perhaps_you_need_to_replace_with, [content]);
+            return "";
         };
 
         RsBindAnnotation.prototype.content = function () {
@@ -60166,25 +60201,25 @@ var TypeScript;
 var TypeScript;
 (function (TypeScript) {
     var RsHelper = (function () {
-        function RsHelper(_semanticInfoChain) {
+        function RsHelper(_semanticInfoChain, _document) {
             this._semanticInfoChain = _semanticInfoChain;
+            this._document = _document;
+            this._diagnostics = [];
         }
         RsHelper.prototype.getDeclForAST = function (ast) {
-            if (this._semanticInfoChain) {
-                return this._semanticInfoChain.getDeclForAST(ast);
-            }
-            throw new Error("ASTHelper: SeminfoChain has not been initialized.");
+            return this._document._getDeclForAST(ast);
         };
 
         RsHelper.prototype.getSymbolForAST = function (ast) {
-            if (this._semanticInfoChain) {
-                return this._semanticInfoChain.getSymbolForAST(ast);
-            }
-            throw new Error("ASTHelper: SeminfoChain has not been initialized.");
+            return this._semanticInfoChain.getSymbolForAST(ast);
+        };
+
+        RsHelper.prototype.getSymbolForDecl = function (decl) {
+            return this._semanticInfoChain.getSymbolForDecl(decl);
         };
 
         RsHelper.prototype.getSourceSpan = function (ast) {
-            var lineMap = this._semanticInfoChain.lineMap(ast.fileName());
+            var lineMap = this._document.lineMap();
             var startLineAndChar = lineMap.getLineAndCharacterFromPosition(ast.start());
             var stopLineAndChar = lineMap.getLineAndCharacterFromPosition(ast.end());
             return new TypeScript.RsSourceSpan(ast.fileName(), startLineAndChar, stopLineAndChar);
@@ -60192,6 +60227,17 @@ var TypeScript;
 
         RsHelper.prototype.isLibrary = function (ast) {
             return ast.fileName().indexOf("lib.d.ts") === -1;
+        };
+
+        RsHelper.prototype.postDiagnostic = function (ast, diagnosticKey, _arguments, additionalLocations) {
+            if (typeof _arguments === "undefined") { _arguments = null; }
+            if (typeof additionalLocations === "undefined") { additionalLocations = null; }
+            var diagnostic = new TypeScript.Diagnostic(ast.fileName(), this._document.lineMap(), ast.start(), ast.width(), diagnosticKey, _arguments, additionalLocations);
+            this._diagnostics.push(diagnostic);
+        };
+
+        RsHelper.prototype.diagnostics = function () {
+            return this._diagnostics;
         };
         return RsHelper;
     })();
@@ -60230,23 +60276,27 @@ var TypeScript;
         TError.prototype.toString = function () {
             return "Error type: " + this.msg;
         };
+
+        TError.prototype.message = function () {
+            return this.msg;
+        };
         return TError;
     })(RsType);
     TypeScript.TError = TError;
 
-    var TAnyC = (function (_super) {
-        __extends(TAnyC, _super);
-        function TAnyC() {
+    var TTopC = (function (_super) {
+        __extends(TTopC, _super);
+        function TTopC() {
             _super.apply(this, arguments);
         }
-        TAnyC.prototype.toString = function () {
+        TTopC.prototype.toString = function () {
             return "top";
         };
-        return TAnyC;
+        return TTopC;
     })(RsType);
-    TypeScript.TAnyC = TAnyC;
+    TypeScript.TTopC = TTopC;
 
-    TypeScript.TAny = new TAnyC();
+    TypeScript.TTop = new TTopC();
 
     var TNumberC = (function (_super) {
         __extends(TNumberC, _super);

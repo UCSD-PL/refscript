@@ -313,7 +313,7 @@ addInvariant t               = (ty . (`tx` t) . invs) <$> get
     ty t@(TApp (TRef c) _ _) = t `strengthen` reftIO t c
     ty t                     = t 
     reftIO t c               = F.Reft (vv t, [refaIO t c])
-    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr   c]
+    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr   $ F.symbolText c]
     vv                       = rTypeValueVar
     sym = F.dummyLoc $ F.symbol "instanceof"
 

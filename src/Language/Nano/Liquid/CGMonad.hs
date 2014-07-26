@@ -313,7 +313,7 @@ addInvariant t               = (ty . (`tx` t) . invs) <$> get
     ty t@(TApp (TRef c) _ _) = t `strengthen` reftIO t c
     ty t                     = t 
     reftIO t c               = F.Reft (vv t, [refaIO t c])
-    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr $ F.symbolString c]
+    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr   c]
     vv                       = rTypeValueVar
     sym = F.dummyLoc $ F.symbol "instanceof"
 
@@ -337,10 +337,10 @@ mkQuals γ t      = [ mkQual γ v so pa | let (F.RR so (F.Reft (v, ras))) = rTyp
                                       , pa                         <- atoms p
                    ]
 
-mkQual γ v so p = F.Q "Auto" [(v, so)] (F.subst θ p) l0
+mkQual γ v so p = F.Q (F.symbol "Auto") [(v, so)] (F.subst θ p) l0
   where 
     θ             = F.mkSubst [(x, F.eVar y)   | (x, y) <- xys]
-    xys           = zipWith (\x i -> (x, F.stringSymbol ("~A" ++ show i))) xs [0..] 
+    xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show i))) xs [0..] 
     xs            = L.delete v $ orderedFreeVars γ p
     l0            = F.dummyPos "RSC.CGMonad.mkQual"
 
@@ -544,7 +544,7 @@ instance Freshable Integer where
              count <$> get 
 
 instance Freshable F.Symbol where
-  fresh = F.tempSymbol "nano" <$> fresh
+  fresh = F.tempSymbol (F.symbol "nano") <$> fresh
 
 instance Freshable String where
   fresh = F.symbolString <$> fresh

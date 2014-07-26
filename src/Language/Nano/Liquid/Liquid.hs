@@ -39,6 +39,7 @@ import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
 
+import qualified Data.Text                          as T 
 import           Data.Data
 import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
@@ -377,7 +378,7 @@ consExpr g (BoolLit l b)
   = envAddFresh l (pSingleton tBool b) g 
 
 consExpr g (StringLit l s)
-  = envAddFresh l (eSingleton tString s) g
+  = envAddFresh l (eSingleton tString (T.pack s)) g
 
 consExpr g (NullLit l)
   = envAddFresh l tNull g

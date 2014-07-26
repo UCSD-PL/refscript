@@ -70,9 +70,12 @@ anonFuncP :: Parser RefType
 anonFuncP = funcSigP
 
 identifierP :: Parser (Id SourceSpan)
-identifierP =   try (withSpan Id upperIdP)
-           <|>      (withSpan Id lowerIdP)
-
+identifierP =  try (withSpan Id uIdP)
+           <|>     (withSpan Id lIdP)
+  where
+    uIdP    = symbolString <$> upperIdP
+    lIdP    = symbolString <$> lowerIdP
+  
 pAliasP :: Parser (Id SourceSpan, PAlias) 
 pAliasP = do name <- identifierP
              πs   <- pAliasVarsP -- many symbolP 
@@ -93,10 +96,13 @@ tAliasP = do name      <- identifierP
 aliasVarsP    = try (brackets $ sepBy aliasVarP comma) <|> return []
 aliasVarP     = withSpan (,) (wordP $ \_ -> True)
 
+aliasVarT :: (SourceSpan, Symbol) -> Either TVar Symbol
 aliasVarT (l, x)      
-  | isTvar x  = Left  $ tvar l x
-  | otherwise = Right $ stringSymbol x 
-
+  | isTvar x' = Left  $ tvar l x
+  | otherwise = Right $ x 
+  where
+    x'        = symbolString x
+    
 iFaceP   :: Parser (Id SourceSpan, TDef Reft)
 iFaceP   = do id     <- identifierP 
               vs     <- option [] tParP
@@ -240,7 +246,7 @@ tvarP    :: Parser TVar
 ----------------------------------------------------------------------------------
 tvarP    = withSpan tvar $ wordP isTvar 
 
-tvar l x = TV (stringSymbol x) l
+tvar l x = TV x l
 
 isTvar   = not . isLower . head
 
@@ -379,7 +385,7 @@ xrefP kindP
       t   <- kindP
       reserved "|"
       ras <- refasP 
-      return $ t (Reft (stringSymbol "v", ras))
+      return $ t (Reft (symbol "v", ras))
 
 ----------------------------------------------------------------------------------
 refasP :: Parser [Refa]

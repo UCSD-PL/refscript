@@ -2,15 +2,15 @@
 
 class Animal {
   
-  /*@ name :: string */
+  /*@ name : string */
   public name;
 
-  /*@ constructor :: (string) => void */
+  /*@ new (string) => void */
   constructor(name) { 
-    this.name = name;
+    //this.name = name;
   }
 
-  /*@ move :: (number) => void */
+  /*@ move : (number): void */
   move(meters) {
     alert(this.name + " moved " + meters + "m.");
   }
@@ -19,7 +19,7 @@ class Animal {
 
 /*@ class Snake extends #Animal */
 class Snake extends Animal {
-  /*@ move :: () => void */  
+  /*@ move : (): void */
   move() {
     alert("Slithering...");
     super.move(5);
@@ -30,7 +30,7 @@ class Snake extends Animal {
 
 /*@ class Snake extends #Animal */
 class Horse extends Animal {
-  /*@ move :: (meters: number) => void */
+  /*@ move : (meters: number): void */
   move(meters) {
     alert("Galloping...");
     super.move(45);

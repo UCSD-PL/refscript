@@ -363,7 +363,7 @@ returnId   :: a -> Id a
 returnId x = Id x returnName 
 
 returnSymbol :: F.Symbol
-returnSymbol = F.stringSymbol returnName
+returnSymbol = F.symbol returnName
 
 
 

@@ -341,7 +341,7 @@ class Freshable a where
 instance Freshable a => Freshable [a] where 
   fresh = mapM fresh
 
-freshTVar l _ =  ((`TV` l). F.intSymbol "T") <$> tick
+freshTVar l _ =  ((`TV` l). F.intSymbol (F.symbol "T")) <$> tick
 
 
 --------------------------------------------------------------------------------

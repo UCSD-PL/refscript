@@ -30,11 +30,11 @@ mkQuals l γ t      = [ mkQual l γ v so pa | let (RR so (Reft (v, ras))) = rTyp
                                           , pa                         <- atoms p
                      ]
 
-mkQual l γ v so p = Q "Auto" ((v, so) : yts) (subst θ p) l0 
+mkQual l γ v so p = Q (symbol "Auto") ((v, so) : yts) (subst θ p) l0 
   where 
     yts           = [(y, lookupSort l x γ) | (x, y) <- xys ]
     θ             = mkSubst [(x, eVar y)   | (x, y) <- xys]
-    xys           = zipWith (\x i -> (x, stringSymbol ("~A" ++ show i))) xs [0..] 
+    xys           = zipWith (\x i -> (x, symbol ("~A" ++ show i))) xs [0..] 
     xs            = delete v $ orderedFreeVars γ p
     l0            = dummyPos "RSC.Qualifiers.mkQual"
 

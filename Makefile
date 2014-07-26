@@ -1,13 +1,23 @@
+
 THREADS=1
-PROFOPTS="-O2 -rtsopts -prof -auto-all -caf-all -XStandaloneDeriving -XDeriveDataTypeable"
 CABAL=cabal
 CABALP=$(CABAL) install -p
+FASTOPTS="-O0"
+DISTOPTS="-W -O2 -XStandaloneDeriving"
+PROFOPTS="-O2 -rtsopts -prof -auto-all -caf-all -XStandaloneDeriving -XDeriveDataTypeable"
 
-all:
-	$(CABAL) install
+##############################################################################
+##############################################################################
+##############################################################################
 
-build:
-	$(CABAL) build
+fast:
+	$(CABAL) install --ghc-options=$(FASTOPTS) 
+
+dist:
+	$(CABAL) install --ghc-options=$(DISTOPTS) 
+
+prof:
+	$(CABAL) install --enable-executable-profiling --enable-library-profiling --ghc-options=$(PROFOPTS) 
 
 clean:
 	cabal clean
@@ -22,5 +32,5 @@ lint:
 	hlint --colour --report .
 
 tags:
-	hasktags -c src/
+	hasktags -b src/
 

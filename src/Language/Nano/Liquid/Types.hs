@@ -365,9 +365,8 @@ infixOpRTy :: InfixOp -> CGEnv -> RefType
 ------------------------------------------------------------------------------------------
 infixOpRTy o g  = infixOpTy o $ renv g
 
-rawStringSymbol = F.Loc (F.dummyPos "RSC.Types.rawStringSymbol") . F.stringSymbol
-rawStringFTycon = F.stringFTycon . F.Loc (F.dummyPos "RSC.Types.rawStringFTycon")
-
+rawStringSymbol = F.Loc (F.dummyPos "RSC.Types.rawStringSymbol") . F.symbol
+rawStringFTycon = F.symbolFTycon . F.Loc (F.dummyPos "RSC.Types.rawStringFTycon") . F.symbol
 
 -- | `zipType` returns a type that is:
 --
@@ -460,9 +459,9 @@ zipType δ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _)
       Nothing        -> zipType δ (flattenType δ t1) (flattenType δ t2)
   where
     reftIO t c               = F.Reft (vv t, [refaIO t c])
-    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr $ F.symbolString c]
+    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr  $ F.symbolText c]
     vv                       = rTypeValueVar
-    sym = F.dummyLoc $ F.symbol "instanceof"
+    sym                      = F.dummyLoc $ F.symbol "instanceof"
 
 
 zipType δ t1@(TApp (TRef _) _ _) t2 = zipType δ (flattenType δ t1) t2

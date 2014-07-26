@@ -744,10 +744,10 @@ ppMut t | isMutable t      = brackets $ pp "mut"
 instance F.Symbolic (TElt t) where
   symbol (FieldSig s _ _)     = s
   symbol (MethSig  s _ _)     = s
-  symbol (ConsSig       _)    = F.stringSymbol "__constructor__"
-  symbol (CallSig       _)    = F.stringSymbol "__call__"
-  symbol (IndexSig _ True _)  = F.stringSymbol "__string__index__"
-  symbol (IndexSig _ False _) = F.stringSymbol "__numeric__index__"
+  symbol (ConsSig       _)    = F.symbol "__constructor__"
+  symbol (CallSig       _)    = F.symbol "__call__"
+  symbol (IndexSig _ True _)  = F.symbol "__string__index__"
+  symbol (IndexSig _ False _) = F.symbol "__numeric__index__"
   symbol (StatSig s _ _ )     = s
 
     
@@ -1202,16 +1202,17 @@ objLitTy         :: (F.Reftable r, IsLocated a)
 --------------------------------------------------------------------------
 objLitTy l ps     = mkFun (vs, bs, rt)
   where
-    (mv,mt)       = freshTV l "M" 0                             -- obj mutability
-    (mvs,mts)     = unzip $ map (freshTV l "M") [1..length ps]  -- field mutability
-    (avs,ats)     = unzip $ map (freshTV l "A") [1..length ps]  -- field type vars
+    (mv,mt)       = freshTV l mSym 0                             -- obj mutability
+    (mvs,mts)     = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
+    (avs,ats)     = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
     ss            = [ F.symbol p | p <- ps]
     vs            = [mv] ++ mvs ++ avs
     bs            = [ B s (ofType a) | (s,a) <- zip ss ats ]
     elts          = [ FieldSig s m (ofType a) | (s,m,a) <- zip3 ss mts ats ] 
     rt            = TCons elts mt fTop
- 
- 
+    mSym          = F.symbol "M"
+    aSym          = F.symbol "A"
+    
 --------------------------------------------------------------------------
 setPropTy :: (PP r, F.Reftable r, IsLocated l) 
           => F.Symbol -> l -> F.SEnv (Located (RType r)) -> RType r

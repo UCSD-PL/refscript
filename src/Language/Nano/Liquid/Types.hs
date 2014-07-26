@@ -365,7 +365,7 @@ infixOpRTy :: InfixOp -> CGEnv -> RefType
 ------------------------------------------------------------------------------------------
 infixOpRTy o g  = infixOpTy o $ renv g
 
-rawStringSymbol = F.Loc (F.dummyPos "RSC.Types.rawStringSymbol") . F.stringSymbol
+rawStringSymbol = F.Loc (F.dummyPos "RSC.Types.rawStringSymbol") . F.symbol
 rawStringFTycon = F.stringFTycon . F.Loc (F.dummyPos "RSC.Types.rawStringFTycon")
 
 

@@ -459,7 +459,7 @@ zipType δ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _)
       Nothing        -> zipType δ (flattenType δ t1) (flattenType δ t2)
   where
     reftIO t c               = F.Reft (vv t, [refaIO t c])
-    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr  c]
+    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr  $ F.symbolText c]
     vv                       = rTypeValueVar
     sym                      = F.dummyLoc $ F.symbol "instanceof"
 

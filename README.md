@@ -29,14 +29,14 @@ Suppose you want to work in a directory `$ROOT`. First `cd $ROOT`, and then:
 
     git clone https://github.com/panagosg7/liquid-fixpoint
     git clone https://github.com/UCSD-PL/language-ecmascript
-	cd RefScript && git checkout RefScript && cd ..
+    cd RefScript && git checkout RefScript && cd ..
     git clone https://github.com/UCSD-PL/RefScript
-	cd RefScript && git checkout develop && cd ..
+    cd RefScript && git checkout develop && cd ..
     cd RefScript
-	cabal sandbox init
-	cabal sandbox add-source ../liquid-fixpoint
-	cabal sandbox add-source ../language-ecmascript
-	make
+    cabal sandbox init
+    cabal sandbox add-source ../liquid-fixpoint
+    cabal sandbox add-source ../language-ecmascript
+    make
 	
 
 ### Building typescript (optional) 

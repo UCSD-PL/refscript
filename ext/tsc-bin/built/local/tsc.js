@@ -10328,7 +10328,7 @@ var TypeScript;
                     helper.postDiagnostic(this, TypeScript.DiagnosticCode.Cannot_translate_type_0_into_RefScript_type, [tError.message()]);
                 }
                 var typeStr = type.toString();
-                console.log(this.identifier.text() + " :: " + typeStr);
+
                 anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 1 /* RawBind */, this.identifier.text() + " :: " + typeStr));
             } else if (bindAnnNames.length !== 1 || bindAnnNames[0] !== name) {
                 helper.postDiagnostic(this, TypeScript.DiagnosticCode.Function_0_can_have_at_most_one_type_annotation, [name]);
@@ -60242,6 +60242,119 @@ var TypeScript;
         return RsHelper;
     })();
     TypeScript.RsHelper = RsHelper;
+
+    var FixResult = (function () {
+        function FixResult() {
+        }
+        return FixResult;
+    })();
+    TypeScript.FixResult = FixResult;
+
+    var FPSrcPos = (function () {
+        function FPSrcPos(name, line, column) {
+            this.name = name;
+            this.line = line;
+            this.column = column;
+        }
+        FPSrcPos.prototype.toObject = function () {
+            return [this.name, this.line, this.column];
+        };
+        return FPSrcPos;
+    })();
+    TypeScript.FPSrcPos = FPSrcPos;
+
+    var FPSrcSpan = (function () {
+        function FPSrcSpan(sp_start, sp_stop) {
+            this.sp_start = sp_start;
+            this.sp_stop = sp_stop;
+        }
+        FPSrcSpan.prototype.toObject = function () {
+            return {
+                "sp_start": this.sp_start.toObject(),
+                "sp_stop": this.sp_stop.toObject()
+            };
+        };
+        return FPSrcSpan;
+    })();
+    TypeScript.FPSrcSpan = FPSrcSpan;
+
+    var FPError = (function () {
+        function FPError(errMsg, errLoc) {
+            this.errMsg = errMsg;
+            this.errLoc = errLoc;
+        }
+        FPError.mkFixError = function (diagnostic) {
+            var lineMap = diagnostic.lineMap();
+            var startLineAndCharacter = lineMap.getLineAndCharacterFromPosition(diagnostic.start());
+            var stopLineAndCharacter = lineMap.getLineAndCharacterFromPosition(diagnostic.start() + diagnostic.length());
+            return new FPError(diagnostic.text(), new FPSrcSpan(new FPSrcPos(diagnostic.fileName(), startLineAndCharacter.line(), startLineAndCharacter.character()), new FPSrcPos(diagnostic.fileName(), stopLineAndCharacter.line(), stopLineAndCharacter.character())));
+        };
+
+        FPError.prototype.toObject = function () {
+            return {
+                "errMsg": this.errMsg,
+                "errLoc": this.errLoc.toObject()
+            };
+        };
+        return FPError;
+    })();
+    TypeScript.FPError = FPError;
+
+    var FRCrash = (function (_super) {
+        __extends(FRCrash, _super);
+        function FRCrash(errs, msg) {
+            _super.call(this);
+            this.errs = errs;
+            this.msg = msg;
+        }
+        FRCrash.prototype.toObject = function () {
+            return { "Crash": [this.errs.map(function (err) {
+                        return err.toObject();
+                    }), this.msg] };
+        };
+        return FRCrash;
+    })(FixResult);
+    TypeScript.FRCrash = FRCrash;
+
+    var FRSafe = (function (_super) {
+        __extends(FRSafe, _super);
+        function FRSafe() {
+            _super.apply(this, arguments);
+        }
+        FRSafe.prototype.toObject = function () {
+            return { "Safe": [] };
+        };
+        return FRSafe;
+    })(FixResult);
+    TypeScript.FRSafe = FRSafe;
+
+    var FRUnsafe = (function (_super) {
+        __extends(FRUnsafe, _super);
+        function FRUnsafe(errs) {
+            _super.call(this);
+            this.errs = errs;
+        }
+        FRUnsafe.prototype.toObject = function () {
+            return { "Unsafe": this.errs.map(function (err) {
+                    return err.toObject();
+                }) };
+        };
+        return FRUnsafe;
+    })(FixResult);
+    TypeScript.FRUnsafe = FRUnsafe;
+
+    var FRUnknownError = (function (_super) {
+        __extends(FRUnknownError, _super);
+        function FRUnknownError(msg) {
+            _super.call(this);
+            this.msg = msg;
+        }
+        FRUnknownError.prototype.toObject = function () {
+            return { "UnknownError": this.msg };
+        };
+        return FRUnknownError;
+    })(FixResult);
+    TypeScript.FRUnknownError = FRUnknownError;
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
 (function (TypeScript) {
@@ -61271,6 +61384,7 @@ var TypeScript;
             this.hasErrors = false;
             this.logger = null;
             this.fileExistsCache = TypeScript.createIntrinsicsObject();
+            this._refScriptDiagnostics = [];
             this.resolvePathCache = TypeScript.createIntrinsicsObject();
         }
         BatchCompiler.prototype.batchCompile = function () {
@@ -61457,16 +61571,29 @@ var TypeScript;
                 compiler.addFile(resolvedFile.path, sourceFile.scriptSnapshot, sourceFile.byteOrderMark, 0, false, resolvedFile.referencedFiles);
             });
 
-            for (var it = compiler.compile(function (path) {
-                return _this.resolvePath(path);
-            }); it.moveNext();) {
-                var result = it.current();
+            try  {
+                for (var it = compiler.compile(function (path) {
+                    return _this.resolvePath(path);
+                }); it.moveNext();) {
+                    var result = it.current();
 
-                result.diagnostics.forEach(function (d) {
-                    return _this.addDiagnostic(d);
-                });
-                if (!this.tryWriteOutputFiles(result.outputFiles)) {
-                    return;
+                    result.diagnostics.forEach(function (d) {
+                        return _this.addDiagnostic(d);
+                    });
+
+                    if (!this.tryWriteOutputFiles(result.outputFiles)) {
+                        break;
+                    }
+                }
+
+                if (this.compilationSettings.refScript()) {
+                    this.dumpRefScriptDiagnostics();
+                }
+            } catch (e) {
+                if (this.compilationSettings.refScript()) {
+                    this.dumpRefScriptUnknownError(e.stack);
+                } else {
+                    throw e;
                 }
             }
         };
@@ -61929,6 +62056,21 @@ var TypeScript;
             return result;
         };
 
+        BatchCompiler.prototype.dumpRefScriptDiagnostics = function () {
+            if (this._refScriptDiagnostics.length > 0) {
+                var errors = this._refScriptDiagnostics.map(function (d) {
+                    return TypeScript.FPError.mkFixError(d);
+                });
+                var fixResult = new TypeScript.FRUnsafe(errors);
+                this.ioHost.stderr.Write(JSON.stringify(fixResult.toObject(), undefined, 2));
+            }
+        };
+
+        BatchCompiler.prototype.dumpRefScriptUnknownError = function (msg) {
+            var unknownError = new TypeScript.FRUnknownError(msg);
+            this.ioHost.stderr.Write(JSON.stringify(unknownError.toObject(), undefined, 2));
+        };
+
         BatchCompiler.prototype.addDiagnostic = function (diagnostic) {
             var _this = this;
             var diagnosticInfo = diagnostic.info();
@@ -61936,9 +62078,13 @@ var TypeScript;
                 this.hasErrors = true;
             }
 
-            this.ioHost.stderr.Write(TypeScript.TypeScriptCompiler.getFullDiagnosticText(diagnostic, function (path) {
-                return _this.resolvePath(path);
-            }));
+            if (this.compilationSettings.refScript()) {
+                this._refScriptDiagnostics.push(diagnostic);
+            } else {
+                this.ioHost.stderr.Write(TypeScript.TypeScriptCompiler.getFullDiagnosticText(diagnostic, function (path) {
+                    return _this.resolvePath(path);
+                }));
+            }
         };
 
         BatchCompiler.prototype.tryWriteOutputFiles = function (outputFiles) {

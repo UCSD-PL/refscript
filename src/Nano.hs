@@ -1,10 +1,13 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE DeriveGeneric             #-}
 
 import qualified Language.Nano.Typecheck.Typecheck  as TC
 import qualified Language.Nano.Liquid.Liquid        as LQ
 import qualified Language.Nano.Liquid.Types         as L
 
+import           Data.Aeson                         (eitherDecode)
+import           Data.Aeson.Types            hiding (Parser, Error, parse)
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import           Language.Nano.Types
@@ -18,13 +21,14 @@ import           System.Directory                   (createDirectoryIfMissing)
 import           System.Process
 import           System.FilePath.Posix
 import           Language.Fixpoint.Interface        (resultExit)
-import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Types      as    F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Files
 import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
-import qualified Data.ByteString.Lazy               as B
+import qualified Data.ByteString.Lazy.Char8   as    B
+
 
 main = do cfg  <- getOpts
           run (verifier cfg) cfg
@@ -32,20 +36,41 @@ main = do cfg  <- getOpts
 -------------------------------------------------------------------------------
 verifier           :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)
 -------------------------------------------------------------------------------
-verifier (TC     {} ) f = TC.verifyFile =<< json f
-verifier (Liquid {} ) f = LQ.verifyFile =<< json f
+verifier cfg f 
+  = do  z          <- json f
+        case z of
+          Left  e  -> return (NoAnn, e)
+          Right f  -> case cfg of
+                        TC     {} -> TC.verifyFile f
+                        Liquid {} -> LQ.verifyFile f
 
-json :: FilePath -> IO FilePath
+json :: FilePath -> IO (Either (F.FixResult Error) FilePath)
 json f 
-  | ext == ".json" = return f
-  | ext `elem` oks = execCmd  (tsCmd ++ f) >> return (toJSONExt f)
-  | otherwise      = error $ "Unsupported input file format: " ++ ext
+  | ext `elem` oks = do putStrLn $ "EXEC: " ++ tsCmd ++ f
+                        (code, _, stdErr) <- readProcessWithExitCode tsCmd args ""
+                        case code of 
+                          ExitSuccess     -> return $ Right $ toJSONExt f
+                          ExitFailure _   -> case eitherDecode (B.pack stdErr) :: Either String (F.FixResult Error) of
+                                               Left  s -> return $ Left $ F.UnknownError s
+                                               Right e -> return $ Left $ e
+                          
+  | otherwise      = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
   where 
     ext            = takeExtension f
     toJSONExt      = extFileName Json . dropExtension
-    -- toJSONExt      = (`addExtension` ".json") . dropExtension
-    tsCmd          = "tsc --outDir " ++ tempDirectory f ++ " --refscript "
+    tsCmd          = "tsc" 
+    args           = ["--outDir", tempDirectory f, "--refscript", f]
     oks            = [".ts", ".js"]
+
+
+instance FromJSON (F.FixResult Error)
+instance ToJSON (F.FixResult Error)
+
+instance FromJSON Error
+instance ToJSON Error
+
+instance FromJSON SrcSpan
+instance ToJSON SrcSpan
 
 
 run verifyFile cfg 
@@ -67,12 +92,6 @@ runOne verifyFile f
        handler e = return (NoAnn, F.Crash [e] "")
        tmpDir    = tempDirectory f
 
-execCmd cmd               = putStrLn ("EXEC: " ++ cmd) >> system cmd >>= check
-  where 
-    check (ExitSuccess)   = return ()
-    check (ExitFailure n) = error $ "cmd: " ++ cmd ++ " failure code " ++ show n 
-
--- donePhaseWithOptStars False (F.colorResult r) (render $ pp r) 
 
 -------------------------------------------------------------------------------
 writeResult :: (Ord a, PP a) => F.FixResult a -> IO ()
@@ -92,8 +111,6 @@ resDocs (F.UnknownError d) = [text "PANIC: Unexpected Error: " <+> text d, repor
 reportUrl                  = text "Please submit a bug report at: https://github.com/ucsd-pl/RefScript"
 
 pprManyOrdered = map pp . sort
-
-
 
 
 ----------------------------------------------------------------------------------

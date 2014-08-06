@@ -43,7 +43,7 @@ import           Language.Fixpoint.Misc             as FM
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
--- import           Debug.Trace                        hiding (traceShow)
+import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -57,7 +57,9 @@ verifyFile :: [FilePath] -> IO (UAnnSol a, F.FixResult Error)
 verifyFile fs = parse fs $ ssa $ tc
 
 parse fs next = parseNanoFromFiles fs >>= next
+
 ssa   next p  = ssaTransform p >>= either (lerror . single) (next . expandAliases)
+
 tc    p       = typeCheck p    >>= either unsafe safe
 
 
@@ -118,18 +120,14 @@ typeCheck pgm = do
 tcNano :: (Data r, PPRSF r) => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
-  = do setDef     $ defs p
-       checkInterfaces p
-       (fs', γo) <- tcInScope γ $ tcStmts γ fs
-       m         <- concatMaps <$> getAllAnns
-       θ         <- getSubst
-       let p1     = p {code = (patchAnn m . apply θ) <$> Src fs'}
-       case γo of 
-         Just _  -> do  d <- getDef
-                        -- Update TDefEnv before exiting
-                        let p2 = p1 { defs  = d }
-                        return $ (m, p2)
-         Nothing -> error "BUG:tcNano should end with an environment"
+  = do  setDef         $ defs p
+        checkInterfaces p
+        (fs', _)      <- tcStmts γ fs
+        m             <- getAnns 
+        θ             <- getSubst
+        let p1         = p {code = (patchAnn m . apply θ) <$> Src fs'}
+        d             <- getDef
+        return         $ (m, p1 { defs  = d })     -- Update TDefEnv before exiting
     where
        γ       = initEnv p
 
@@ -221,19 +219,6 @@ type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r))
 
 
 -------------------------------------------------------------------------------
--- | TypeCheck Scoped Block in Environment
--------------------------------------------------------------------------------
-
-tcInScope _ act = accumAnn annCheck act
-  where
-    annCheck _  = []
-
--- -- XXX: What could go wrong by removing this check?
--- tcInScope γ act = accumAnn annCheck act
---   where
---     annCheck m  = catMaybes $ validInst γ <$> M.toList m
-
--------------------------------------------------------------------------------
 -- | TypeCheck Function 
 -------------------------------------------------------------------------------
 
@@ -254,7 +239,7 @@ tcFun1 :: (PPR r, IsLocated b, IsLocated l, IsLocated a, CallSite t)
        => TCEnv r -> a -> l -> [Id b] -> [Statement (AnnSSA r)] 
        -> (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
-tcFun1 γ l f xs body (i, (αs,ts,t)) = tcInScope γ' $ tcFunBody γ' l body t
+tcFun1 γ l f xs body (i, (αs,ts,t)) = tcFunBody γ' l body t
   where 
     γ'                              = envAddFun f i αs xs ts t γ 
 
@@ -463,11 +448,10 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 --      invariants to add some.
 -- 4. Typecheck the class elements in this extended environment.
 tcStmt γ c@(ClassStmt l i e is ce) 
-  = do  TD _ _ αs _ _ <- classFromStmt c                          -- (1)
-        let γ'        = tcEnvAdds (tyBinds αs) γ                  -- (2)
-        let thisT     = TApp (TRef $ F.symbol i) (tVars αs) fTop  -- (3)
-        ce'          <- tcInScope γ' $ tcWithThis thisT 
-                                     $ mapM (tcClassElt γ' i) ce  -- (4)
+  = do  TD _ _ αs _ _ <- classFromStmt c                              -- (1)
+        let γ'        = tcEnvAdds (tyBinds αs) γ                      -- (2)
+        let thisT     = TApp (TRef $ F.symbol i) (tVars αs) fTop      -- (3)
+        ce'          <- tcWithThis thisT $ mapM (tcClassElt γ' i) ce  -- (4)
         return          (ClassStmt l i e is ce', Just γ)
   where
     tVars   αs    = [ tVar   α | α <- αs ] 

@@ -623,13 +623,24 @@ remThisBinding t =
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-data Nano a r = Nano { code   :: !(Source a)               -- ^ Code to check
+-- | Liquid types environment
+
+-- data LiquidEnv r     = LEnv                     
+--                      { consts :: !(Env (RType r))          -- ^ Measure Signatures
+-- 							       , tAlias :: !(TAliasEnv (RType r))    -- ^ Type aliases
+--                      , pAlias :: !(PAliasEnv)              -- ^ Predicate aliases
+--                      , quals  :: ![F.Qualifier]            -- ^ Qualifiers
+--                      , invts  :: ![Located (RType r)]      -- ^ Type Invariants
+--                      } deriving (Functor, Data, Typeable)
+
+
+data Nano a r        = Nano 
+                     { code   :: !(Source a)               -- ^ Code to check
                      , externs:: !(Env (RType r))          -- ^ Imported (unchecked) specifications 
                      , specs  :: !(Env (RType r))          -- ^ Function specs and 
-                     -- , glVars :: !(Env t)                  -- ^ Global (annotated) vars
-                     , consts :: !(Env (RType r))          -- ^ Measure Signatures
                      , defs   :: !(TDefEnv r)              -- ^ Type definitions
                                                            -- ^ After TC will also include class types
+                     , consts :: !(Env (RType r))          -- ^ Measure Signatures
 							       , tAlias :: !(TAliasEnv (RType r))    -- ^ Type aliases
                      , pAlias :: !(PAliasEnv)              -- ^ Predicate aliases
                      , quals  :: ![F.Qualifier]            -- ^ Qualifiers
@@ -678,17 +689,17 @@ instance (PP r, F.Reftable r) => PP (Nano a r) where
     $+$ pp (specs pgm)
 --     $+$ text "\n******************* Global vars ***************"
 --     $+$ pp (glVars pgm)
-    $+$ text "\n******************* Constants *****************"
-    $+$ pp (consts pgm) 
-    $+$ text "\n******************* Type Definitions **********"
-    $+$ pp (defs  pgm)
-    $+$ text "\n******************* Predicate Aliases *********"
-    $+$ pp (pAlias pgm)
-    $+$ text "\n******************* Type Aliases **************"
-    $+$ pp (tAlias pgm)
-    $+$ text "\n******************* Qualifiers ****************"
-    $+$ vcat (F.toFix <$> (take 3 $ quals pgm))
-    $+$ text "..."
+--     $+$ text "\n******************* Constants *****************"
+--     $+$ pp (consts pgm) 
+--     $+$ text "\n******************* Type Definitions **********"
+--     $+$ pp (defs  pgm)
+--     $+$ text "\n******************* Predicate Aliases *********"
+--     $+$ pp (pAlias pgm)
+--     $+$ text "\n******************* Type Aliases **************"
+--     $+$ pp (tAlias pgm)
+--     $+$ text "\n******************* Qualifiers ****************"
+--     $+$ vcat (F.toFix <$> (take 3 $ quals pgm))
+--     $+$ text "..."
 --     $+$ text "\n******************* Invariants ****************"
 --     $+$ vcat (pp <$> (invts pgm))
     $+$ text "\n***********************************************\n"
@@ -821,9 +832,9 @@ definedGlobs stmts = everything (++) ([] `mkQ` fromVarDecl) stmts
 readOnlyVars   :: (IsLocated a, Data a, Typeable a) => Nano a t -> [Id SourceSpan] 
 readOnlyVars p = envIds $ mAssm `envUnion` mMeas `envUnion` mExtr
   where 
-    mMeas      = consts p     -- measures
-    mAssm      = specs  p     -- assumes                      
-    mExtr      = externs p    -- externs
+    mMeas      = consts  p     -- measures
+    mAssm      = specs   p     -- assumes                      
+    mExtr      = externs p     -- externs
 
 instance PP Assignability where
   pp ReadOnly    = text "ReadOnly"

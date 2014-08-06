@@ -564,14 +564,12 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
 mkCode ss       =  Nano {
-      --  fp        = undefined
         code      = Src (checkTopStmt <$> ss')
       , externs   = envFromList   [ t | Extern t <- anns ]       -- externs
       -- FIXME: same name methods in different classes.
       , specs     = catFunSpecDefs δ ss                          -- function sigs (no methods...)
-      -- , glVars = catVarSpecDefs ss                            -- variables
-      , consts    = envFromList   [ t | Meas   t <- anns ] 
       , defs      = δ
+      , consts    = envFromList   [ t | Meas   t <- anns ] 
       , tAlias    = envFromList   [ t | TAlias t <- anns ] 
       , pAlias    = envFromList   [ t | PAlias t <- anns ] 
       , quals     =               [ t | Qual   t <- anns ] 
@@ -651,8 +649,7 @@ instance PP (RawSpec) where
 catFunSpecDefs :: TDefEnv Reft -> [Statement (SourceSpan, [Spec])] -> Env RefType
 --------------------------------------------------------------------------------------
 -- catFunSpecDefs δ ss = envFromList [ (i, checkType δ t) | l <- ds , Bind (i,t) <- snd l ]
-catFunSpecDefs _ ss = envFromList [ (i, t) | l <- ds , Bind (i,t) <- snd l ]
-  where ds     = definedFuns ss
+catFunSpecDefs _ ss = envFromList [ (i, t) | (_,l) <- definedFuns ss, Bind (i,t) <- l ]
 
 -- --------------------------------------------------------------------------------------
 -- catVarSpecDefs :: [Statement (SourceSpan, [Spec])] -> Env RefType

@@ -32,7 +32,7 @@ module Language.Nano.Typecheck.TCMonad (
   , tcFunTys, tcMethTys
 
   -- * Annotations
-  , addAnn {-TEMP-}, accumAnn, getAllAnns, getDef, setDef
+  , addAnn {-TEMP-}, getAnns, getDef, setDef
   , getExts, getClasses
 
   -- * Unification
@@ -106,7 +106,6 @@ data TCState r = TCS {
 
   -- Annotations
   , tc_anns  :: AnnInfo r
-  , tc_annss :: [AnnInfo r]
 
   -- Function definitions
   , tc_specs :: !(Env (RType r))
@@ -265,27 +264,7 @@ getAnns = do θ     <- tc_subst <$> get
 addAnn :: (PPR r, F.Reftable r) => SourceSpan -> Fact r -> TCM r () 
 -------------------------------------------------------------------------------
 addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
-
--------------------------------------------------------------------------------
-getAllAnns :: TCM r [AnnInfo r]  
--------------------------------------------------------------------------------
-getAllAnns = tc_annss <$> get
-
-
--------------------------------------------------------------------------------
-accumAnn :: (PP a, PPRSF r) => (AnnInfo r -> [Error]) -> TCM r a -> TCM r a
--------------------------------------------------------------------------------
--- RJ: this function is gross. Why is it being used? why are anns not just
--- accumulated monotonically?
-accumAnn check act 
-  = do m     <- tc_anns <$> get 
-       modify $ \st -> st {tc_anns = M.empty}
-       z     <- act
-       m'    <- getAnns
-       forM_ (check m') (`logError` ())
-       modify $ \st -> st {tc_anns = m} {tc_annss = m' : tc_annss st}
-       return z
-
+ 
 -------------------------------------------------------------------------------
 execute ::  PPR r => V.Verbosity -> NanoSSAR r -> TCM r a -> Either [Error] a
 -------------------------------------------------------------------------------
@@ -297,14 +276,13 @@ execute verb pgm act
 -------------------------------------------------------------------------------
 initState :: PPR r => V.Verbosity -> NanoSSAR r -> TCState r
 -------------------------------------------------------------------------------
-initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns tc_annss 
+initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns 
                           tc_specs tc_defs tc_exts tc_class tc_verb tc_this
   where
     tc_errss = []
     tc_subst = mempty 
     tc_cnt   = 0
     tc_anns  = M.empty
-    tc_annss = []
     tc_specs = specs pgm
     tc_exts  = externs pgm
     tc_defs  = tDefEmpty

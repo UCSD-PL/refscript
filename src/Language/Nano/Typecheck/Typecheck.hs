@@ -9,7 +9,7 @@
 {-# LANGUAGE ConstraintKinds        #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 
-module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck, testFile) where 
+module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck {-, testFile-}) where 
 
 import           Control.Applicative                ((<$>))
 import           Control.Monad                
@@ -20,7 +20,7 @@ import           Data.List                          (find)
 import           Data.Function                      (on)
 import           Data.Generics                   
 
-import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat)
+import           Text.PrettyPrint.HughesPJ          (text, ($+$))
 
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
@@ -52,22 +52,22 @@ import qualified System.Console.CmdArgs.Verbosity as V
 -- | Top-level Verifier 
 
 --------------------------------------------------------------------------------
-verifyFile :: FilePath -> IO (UAnnSol a, F.FixResult Error)
+verifyFile :: [FilePath] -> IO (UAnnSol a, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile f = parse f $ ssa $ tc
+verifyFile fs = parse fs $ ssa $ tc
 
-parse f next  = parseNanoFromFile f >>= next
+parse fs next = parseNanoFromFiles fs >>= next
 ssa   next p  = ssaTransform p >>= either (lerror . single) (next . expandAliases)
 tc    p       = typeCheck p    >>= either unsafe safe
 
 
 --------------------------------------------------------------------------------
-testFile f = parseNanoFromFile f 
-         >>= ssaTransform  
-         >>= either (print . pp) (\p -> typeCheck (expandAliases p)
-         >>= either (print . vcat . (pp <$>)) 
-                    (\(Nano {code = Src ss}) -> 
-                          {- print (pp p') >> -} print "Casts:" >> print (pp $ getCasts ss)))
+-- testFile fs = parseNanoFromFiles fs 
+--           >>= ssaTransform  
+--           >>= either (print . pp) (\p -> typeCheck (expandAliases p)
+--           >>= either (print . vcat . (pp <$>)) 
+--                      (\(Nano {code = Src ss}) -> 
+--                            {- print (pp p') >> -} print "Casts:" >> print (pp $ getCasts ss)))
 --------------------------------------------------------------------------------
 
 lerror        = return . (NoAnn,) . F.Unsafe

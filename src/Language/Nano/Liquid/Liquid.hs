@@ -51,19 +51,19 @@ type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
 
 --------------------------------------------------------------------------------
-verifyFile    :: FilePath -> IO (A.UAnnSol RefType, F.FixResult Error)
+verifyFile    :: FilePath -> [FilePath] -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile f = parse f $ ssa $ tc $ refTc
+verifyFile f fs = parse fs $ ssa $ tc $ refTc f
 
-parse f next = parseNanoFromFile f         >>= next
-ssa   next p = ssaTransform p              >>= either (lerror . single) next
-tc    next p = typeCheck (expandAliases p) >>= either lerror next
-refTc      p = getOpts >>= solveConstraints (fp p) . (`generateConstraints` p)
+parse f next    = parseNanoFromFiles f         >>= next
+ssa   next p    = ssaTransform p              >>= either (lerror . single) next
+tc    next p    = typeCheck (expandAliases p) >>= either lerror next
+refTc f    p    = getOpts >>= solveConstraints f . (`generateConstraints` p)
 
-lerror       = return . (A.NoAnn,) . F.Unsafe
+lerror          = return . (A.NoAnn,) . F.Unsafe
          
 -- | solveConstraints
--- Call solve with `ueqAllSorts` enabled.
+--   Call solve with `ueqAllSorts` enabled.
 --------------------------------------------------------------------------------
 solveConstraints :: FilePath -> CGInfo -> IO (A.UAnnSol RefType, F.FixResult Error) 
 --------------------------------------------------------------------------------

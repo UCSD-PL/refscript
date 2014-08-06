@@ -25,7 +25,7 @@ copyExts _ _ pkg lbi
        executeShellCommand $ "chmod a+x " ++ tscR ++ "/bin/tsc"
        mapM_ executeShellCommand (map cpFile $ tscBins tscR)
        -- Compile and copy TypeScript's prelude
-       executeShellCommand $ "tsc --refscript " ++ preludeSrc
+       executeShellCommand $ "tsc --refscript --noLib " ++ preludeSrc ++ " > /dev/null"
        executeShellCommand $ "cp " ++ preludeTgt ++ " " ++ dataDir ++ preludeTgt
   where 
     allDirs     = absoluteInstallDirs pkg lbi NoCopyDest

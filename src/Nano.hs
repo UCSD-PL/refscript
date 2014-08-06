@@ -29,6 +29,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
 import qualified Data.ByteString.Lazy.Char8   as    B
 
+-- import           Debug.Trace                        (trace)
 
 main = do cfg  <- getOpts
           run (verifier cfg) cfg
@@ -37,24 +38,27 @@ main = do cfg  <- getOpts
 verifier           :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)
 -------------------------------------------------------------------------------
 verifier cfg f 
-  = do  z          <- json f
+  = do  z             <- json f
         case z of
-          Left  e  -> return (NoAnn, e)
-          Right f  -> case cfg of
-                        TC     {} -> TC.verifyFile f
-                        Liquid {} -> LQ.verifyFile f
+          Left  e     -> return (NoAnn, e)
+          Right jsons -> case cfg of
+                        TC     {} -> TC.verifyFile   jsons
+                        Liquid {} -> LQ.verifyFile f jsons
 
-json :: FilePath -> IO (Either (F.FixResult Error) FilePath)
-json f 
-  | ext `elem` oks = do putStrLn $ "EXEC: " ++ tsCmd ++ f
-                        (code, _, stdErr) <- readProcessWithExitCode tsCmd args ""
-                        case code of 
-                          ExitSuccess     -> return $ Right $ toJSONExt f
-                          ExitFailure _   -> case eitherDecode (B.pack stdErr) :: Either String (F.FixResult Error) of
-                                               Left  s -> return $ Left $ F.UnknownError s
-                                               Right e -> return $ Left $ e
-                          
-  | otherwise      = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
+-------------------------------------------------------------------------------
+json :: FilePath -> IO (Either (F.FixResult Error) [FilePath])
+-------------------------------------------------------------------------------
+json f | ext `elem` oks 
+       = do (code, stdOut, stdErr) <- readProcessWithExitCode tsCmd args ""
+            case code of 
+              ExitSuccess          -> case eitherDecode (B.pack stdOut) :: Either String [String] of
+                                        Left  s  -> return $ Left  $ F.UnknownError s
+                                        Right fs -> return $ Right $ map toJSONExt fs
+              ExitFailure _        -> case eitherDecode (B.pack stdErr) :: Either String (F.FixResult Error) of
+                                        Left  s  -> return $ Left $ F.UnknownError s
+                                        Right e  -> return $ Left $ e
+       | otherwise      
+       = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
   where 
     ext            = takeExtension f
     toJSONExt      = extFileName Json . dropExtension

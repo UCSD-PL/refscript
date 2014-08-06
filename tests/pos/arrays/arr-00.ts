@@ -4,7 +4,6 @@
 function foo(a:number[]):number{
   if (a.length > 0) 
   {
-    nar(a);
     return a[0];
   }
   return 0;

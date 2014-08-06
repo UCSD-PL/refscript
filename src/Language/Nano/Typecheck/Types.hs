@@ -116,7 +116,6 @@ import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ 
 
 import           Control.Applicative            hiding (empty)
-import           Control.Monad.Error            ()
 
 -- import           Debug.Trace (trace)
 
@@ -624,8 +623,7 @@ remThisBinding t =
 -- | Nano Program = Code + Types for all function binders
 ---------------------------------------------------------------------------------
 
-data Nano a r = Nano { fp     :: FilePath                  -- ^ FilePath
-                     , code   :: !(Source a)               -- ^ Code to check
+data Nano a r = Nano { code   :: !(Source a)               -- ^ Code to check
                      , externs:: !(Env (RType r))          -- ^ Imported (unchecked) specifications 
                      , specs  :: !(Env (RType r))          -- ^ Function specs and 
                      -- , glVars :: !(Env t)                  -- ^ Global (annotated) vars

@@ -10328,7 +10328,6 @@ var TypeScript;
                     helper.postDiagnostic(this, TypeScript.DiagnosticCode.Cannot_translate_type_0_into_RefScript_type, [tError.message()]);
                 }
                 var typeStr = type.toString();
-
                 anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 1 /* RawBind */, this.identifier.text() + " :: " + typeStr));
             } else if (bindAnnNames.length !== 1 || bindAnnNames[0] !== name) {
                 helper.postDiagnostic(this, TypeScript.DiagnosticCode.Function_0_can_have_at_most_one_type_annotation, [name]);
@@ -28561,6 +28560,10 @@ var TypeScript;
             return TypeScript.isDTSFile(this.fileName);
         };
 
+        Document.prototype.isLibDTSFile = function () {
+            return TypeScript.isLibDTSFile(this.fileName);
+        };
+
         Document.prototype.cacheSyntaxTreeInfo = function (syntaxTree) {
             var start = new Date().getTime();
             this._diagnostics = syntaxTree.diagnostics();
@@ -34342,6 +34345,11 @@ var TypeScript;
         return isFileOfExtension(fname, ".d.ts");
     }
     TypeScript.isDTSFile = isDTSFile;
+
+    function isLibDTSFile(fname) {
+        return isFileOfExtension(fname, "lib.d.ts");
+    }
+    TypeScript.isLibDTSFile = isLibDTSFile;
 
     function getPrettyName(modPath, quote, treatAsFileName) {
         if (typeof quote === "undefined") { quote = true; }
@@ -56611,6 +56619,10 @@ var TypeScript;
             return !document.isDeclareFile();
         };
 
+        TypeScriptCompiler.prototype._shouldEmitJSON = function (document) {
+            return !document.isLibDTSFile();
+        };
+
         TypeScriptCompiler.prototype._shouldEmitDeclarations = function (document) {
             if (!this.compilationSettings().generateDeclarationFiles()) {
                 return false;
@@ -56758,7 +56770,7 @@ var TypeScript;
 
         TypeScriptCompiler.prototype.emitJSONWorker = function (document, rsAST, emitOptions, emitter) {
             var sourceUnit = document.sourceUnit();
-            TypeScript.Debug.assert(this._shouldEmit(document));
+            TypeScript.Debug.assert(this._shouldEmitJSON(document));
 
             var typeScriptFileName = document.fileName;
             if (!emitter) {
@@ -56797,10 +56809,17 @@ var TypeScript;
         };
 
         TypeScriptCompiler.prototype._emitJSON = function (document, rsAST, emitOptions, onSingleFileEmitComplete, sharedEmitter) {
-            if (this._shouldEmit(document)) {
-                sharedEmitter = this.emitJSONWorker(document, rsAST, emitOptions, sharedEmitter);
-                onSingleFileEmitComplete(sharedEmitter.getOutputFiles());
+            if (this._shouldEmitJSON(document)) {
+                if (document.emitToOwnOutputFile()) {
+                    var singleEmitter = this.emitJSONWorker(document, rsAST, emitOptions);
+                    if (singleEmitter) {
+                        onSingleFileEmitComplete(singleEmitter.getOutputFiles());
+                    }
+                } else {
+                    throw new Error("_emitJSON should use multiple files");
+                }
             }
+
             return sharedEmitter;
         };
 
@@ -57467,7 +57486,6 @@ var TypeScript;
                     return this.moveNextSemanticsPhase();
                 case 2 /* EmitOptionsValidation */:
                     return this.moveNextEmitOptionsValidationPhase();
-
                 case 3 /* Emit */:
                     return this.moveNextEmitPhase();
                 case 4 /* DeclarationEmit */:
@@ -57563,9 +57581,10 @@ var TypeScript;
                     if (this.compiler._shouldEmit(document)) {
                         var ast = document.sourceUnit();
                         var helper = new TypeScript.RsHelper(this.compiler.semanticInfoChain, document);
-                        var rsAST = ast.toRsAST(helper);
                         var diagnostics = helper.diagnostics();
+                        var rsAST = ast.toRsAST(helper);
                         this._current = CompileResult.fromDiagnostics(diagnostics);
+
                         if (diagnostics.length === 0) {
                             this._sharedJSONEmitter = this.compiler._emitJSON(document, rsAST, this._emitOptions, function (outputFiles) {
                                 _this._current = CompileResult.fromOutputFiles(outputFiles);
@@ -57577,14 +57596,20 @@ var TypeScript;
                         _this._current = CompileResult.fromOutputFiles(outputFiles);
                     }, this._sharedEmitter);
                 }
+
                 return true;
             }
 
-            if (!this.compiler.compilationSettings().refScript()) {
-                if (this.index === this.fileNames.length && this._sharedEmitter) {
-                    this._current = CompileResult.fromOutputFiles(this._sharedEmitter.getOutputFiles());
-                }
+            if (this.index === this.fileNames.length && this._sharedEmitter) {
+                this._current = CompileResult.fromOutputFiles(this._sharedEmitter.getOutputFiles());
             }
+
+            if (this.index === this.fileNames.length && this._sharedJSONEmitter) {
+                this._sharedJSONEmitter.getOutputFiles().forEach(function (f) {
+                    return console.log(f.name);
+                });
+            }
+
             return true;
         };
 
@@ -61385,6 +61410,7 @@ var TypeScript;
             this.logger = null;
             this.fileExistsCache = TypeScript.createIntrinsicsObject();
             this._refScriptDiagnostics = [];
+            this._refScriptOutputFiles = [];
             this.resolvePathCache = TypeScript.createIntrinsicsObject();
         }
         BatchCompiler.prototype.batchCompile = function () {
@@ -61580,6 +61606,10 @@ var TypeScript;
                     result.diagnostics.forEach(function (d) {
                         return _this.addDiagnostic(d);
                     });
+
+                    if (this.compilationSettings.refScript()) {
+                        this._refScriptOutputFiles = this._refScriptOutputFiles.concat(result.outputFiles);
+                    }
 
                     if (!this.tryWriteOutputFiles(result.outputFiles)) {
                         break;
@@ -62063,6 +62093,10 @@ var TypeScript;
                 });
                 var fixResult = new TypeScript.FRUnsafe(errors);
                 this.ioHost.stderr.Write(JSON.stringify(fixResult.toObject(), undefined, 2));
+            } else {
+                this.ioHost.stdout.Write(JSON.stringify(this._refScriptOutputFiles.map(function (f) {
+                    return f.name;
+                }), undefined, 2));
             }
         };
 

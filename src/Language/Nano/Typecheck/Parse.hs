@@ -8,9 +8,7 @@
 {-# LANGUAGE DeriveGeneric             #-}
 
 
-module Language.Nano.Typecheck.Parse (
-    parseNanoFromFile, printFile
-  ) where
+module Language.Nano.Typecheck.Parse (parseNanoFromFiles) where
 
 import           Prelude                          hiding ( mapM)
 
@@ -19,7 +17,6 @@ import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
-import           Data.Default
 import qualified Data.List                        as     L
 import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
@@ -29,7 +26,7 @@ import           Data.Data
 import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
 
-import           Control.Monad                    hiding (mapM)
+import           Control.Monad
 import           Control.Monad.Trans                     (MonadIO,liftIO)
 import           Control.Applicative                     ((<$>), ( <*>))
 
@@ -455,7 +452,7 @@ type Spec = PSpec SourceSpan Reft
 parseAnnot :: RawSpec -> Parser Spec
 parseAnnot (RawMeas   (ss, _)) = Meas   <$> patch2 ss <$> idBindP
 parseAnnot (RawBind   (ss, _)) = Bind   <$> patch2 ss <$> idBindP
-parseAnnot (RawFunc   (ss, _)) = AnFunc <$>               anonFuncP
+parseAnnot (RawFunc   (_ , _)) = AnFunc <$>               anonFuncP
 parseAnnot (RawField  (_ , _)) = Field  <$>               fieldEltP
 parseAnnot (RawMethod (_ , _)) = Method <$>               methEltP
 parseAnnot (RawStatic (_ , _)) = Static <$>               statEltP
@@ -536,18 +533,17 @@ instance FromJSON SourceSpan
 instance FromJSON RawSpec
 
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------
 -- | Parse File and Type Signatures 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------
 
--------------------------------------------------------------------------------
-parseNanoFromFile :: FilePath-> IO (NanoBareR Reft)
--------------------------------------------------------------------------------
-parseNanoFromFile f 
+--------------------------------------------------------------------------------------
+parseNanoFromFiles :: [FilePath] -> IO (NanoBareR Reft)
+--------------------------------------------------------------------------------------
+parseNanoFromFiles fs 
   = do  ssP   <- parseScriptFromJSON =<< getPreludePath
-        ssF   <- parseScriptFromJSON f 
-        -- Concat the programs at the JSON level
-        return $ mkCode f $ expandAnnots $ ssP ++ ssF
+        ssF   <- concat <$> mapM parseScriptFromJSON fs
+        return $ mkCode $ expandAnnots $ ssP ++ ssF
 
 --------------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString
@@ -565,11 +561,11 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
         Right p  -> p
 
 --------------------------------------------------------------------------------------
-mkCode :: FilePath -> [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
+mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
-mkCode f ss       =  Nano {
-        fp        = f
-      , code      = Src (checkTopStmt <$> ss')
+mkCode ss       =  Nano {
+      --  fp        = undefined
+        code      = Src (checkTopStmt <$> ss')
       , externs   = envFromList   [ t | Extern t <- anns ]       -- externs
       -- FIXME: same name methods in different classes.
       , specs     = catFunSpecDefs δ ss                          -- function sigs (no methods...)
@@ -673,19 +669,6 @@ definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
   where 
     fromFunction (FunctionStmt l _ _ _) = [l] 
     fromFunction _                      = []
-
--- --------------------------------------------------------------------------------------
--- varDeclStmts         :: (Data a, Typeable a) => [Statement a] -> [a]
--- --------------------------------------------------------------------------------------
--- varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
---   where 
---     fromVarDecl (VarDecl l _ _) = [l]
-
---------------------------------------------------------------------------------
-printFile :: FilePath -> IO () -- Either Error (NanoBareR Reft))
---------------------------------------------------------------------------------
-printFile f = parseNanoFromFile f >>= putStr . ppshow
-
 
 
 --------------------------------------------------------------------------------

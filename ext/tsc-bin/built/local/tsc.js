@@ -61622,9 +61622,9 @@ var TypeScript;
             } catch (e) {
                 if (this.compilationSettings.refScript()) {
                     this.dumpRefScriptUnknownError(e.stack);
-                } else {
-                    throw e;
                 }
+
+                throw e;
             }
         };
 
@@ -62092,7 +62092,7 @@ var TypeScript;
                     return TypeScript.FPError.mkFixError(d);
                 });
                 var fixResult = new TypeScript.FRUnsafe(errors);
-                this.ioHost.stderr.Write(JSON.stringify(fixResult.toObject(), undefined, 2));
+                this.ioHost.stdout.Write(JSON.stringify(fixResult.toObject(), undefined, 2));
             } else {
                 this.ioHost.stdout.Write(JSON.stringify(this._refScriptOutputFiles.map(function (f) {
                     return f.name;
@@ -62102,7 +62102,7 @@ var TypeScript;
 
         BatchCompiler.prototype.dumpRefScriptUnknownError = function (msg) {
             var unknownError = new TypeScript.FRUnknownError(msg);
-            this.ioHost.stderr.Write(JSON.stringify(unknownError.toObject(), undefined, 2));
+            this.ioHost.stdout.Write(JSON.stringify(unknownError.toObject(), undefined, 2));
         };
 
         BatchCompiler.prototype.addDiagnostic = function (diagnostic) {

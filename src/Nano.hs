@@ -54,7 +54,7 @@ json f | ext `elem` oks
               ExitSuccess          -> case eitherDecode (B.pack stdOut) :: Either String [String] of
                                         Left  s  -> return $ Left  $ F.UnknownError s
                                         Right fs -> return $ Right $ map toJSONExt fs
-              ExitFailure _        -> case eitherDecode (B.pack stdErr) :: Either String (F.FixResult Error) of
+              ExitFailure _        -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
                                         Left  s  -> return $ Left $ F.UnknownError s
                                         Right e  -> return $ Left $ e
        | otherwise      

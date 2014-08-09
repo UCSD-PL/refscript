@@ -44,7 +44,6 @@ import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 import           Control.Applicative 
-import           Control.Monad.Error ()
 import           Control.Exception (throw)
 
 --------------------------------------------------------------------------

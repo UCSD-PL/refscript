@@ -32,3 +32,6 @@ function foo1( ) : string  {
 
   return bar1();
 }
+
+
+var a: Immutable;

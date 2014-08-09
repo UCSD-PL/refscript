@@ -60,18 +60,19 @@ data SsaState r = SsaST { assign      :: Env Assignability -- ^ assignability st
                         , names       :: SsaEnv            -- ^ current SSA names 
                         , count       :: !Int              -- ^ fresh index
                         , anns        :: !(AnnInfo r)      -- ^ built up map of annots 
-                        , globs       :: !(M.HashMap SourceSpan (Id SourceSpan))                         
+                        , globs       :: ![Var]
+                        -- , globs       :: !(M.HashMap SourceSpan (Var))                         
                         }
 
 type SsaEnv     = Env SsaInfo 
-newtype SsaInfo = SI (Id SourceSpan) deriving (Eq)
+newtype SsaInfo = SI (Var) deriving (Eq)
 
 instance PP SsaInfo where
   pp (SI i) =  pp i
 
 
 -- -------------------------------------------------------------------------------------
--- withExtSsaEnv    :: [Id SourceSpan] -> SSAM r a -> SSAM r a
+-- withExtSsaEnv    :: [Var] -> SSAM r a -> SSAM r a
 -- -------------------------------------------------------------------------------------
 -- withExtSsaEnv xs act 
 --   = do θ      <- getSsaEnv 
@@ -82,7 +83,7 @@ instance PP SsaInfo where
 --        return  r
 
 -------------------------------------------------------------------------------------
-extSsaEnv    :: [Id SourceSpan] -> SsaEnv -> SsaEnv 
+extSsaEnv    :: [Var] -> SsaEnv -> SsaEnv 
 -------------------------------------------------------------------------------------
 extSsaEnv xs = envAdds [(x, SI x) | x <- xs]
 
@@ -97,7 +98,7 @@ setSsaEnv    :: SsaEnv -> SSAM r ()
 setSsaEnv θ = modify $ \st -> st { names = θ } 
 
 -------------------------------------------------------------------------------------
-withAssignability :: Assignability -> [Id SourceSpan] -> SSAM r a -> SSAM r a 
+withAssignability :: Assignability -> [Var] -> SSAM r a -> SSAM r a 
 -------------------------------------------------------------------------------------
 withAssignability m xs act
   = do zOld  <- assign <$> get
@@ -108,14 +109,14 @@ withAssignability m xs act
     where 
        zNew   = envFromList $ (, m) <$> xs 
 
----------------------------------------------------------------------------------
-getAssignability :: Id SourceSpan -> SSAM r Assignability 
----------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+getAssignability :: Var -> SSAM r Assignability 
+-------------------------------------------------------------------------------------
 getAssignability x = (fromMaybe WriteLocal . envFindTy x . assign) <$> get
 
 
 -------------------------------------------------------------------------------------
-updSsaEnv   :: SourceSpan -> Id SourceSpan -> SSAM r (Id SourceSpan) 
+updSsaEnv   :: SourceSpan -> Var -> SSAM r (Var) 
 -------------------------------------------------------------------------------------
 updSsaEnv l x 
   = do mut <- getAssignability x
@@ -130,9 +131,9 @@ updSsaEnvLocal l x
        modify $ \st -> st {names = envAdds [(x, SI x')] (names st)} {count = 1 + n}
        return x'
 
--------------------------------------------------------------------------------
-findSsaEnv   :: Id SourceSpan -> SSAM r (Maybe (Id SourceSpan))
--------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+findSsaEnv   :: Var -> SSAM r (Maybe (Var))
+-------------------------------------------------------------------------------------
 findSsaEnv x 
   = do θ  <- names <$> get 
        case envFindTy x θ of 
@@ -147,19 +148,15 @@ setGlobs g = modify $ \st -> st { globs = g }
 getGlobs   = globs <$> get
 
 
--------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
 ssaError :: Error -> SSAM r a
--------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
 ssaError = throwError
 
--- ssaError e = throwError $ printf "ERROR at %s : %s" (ppshow l) msg
 
-
--- inserts l xs m = M.insert l (xs ++ M.lookupDefault [] l m) m
-
--------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
 execute         :: SSAM r a -> Either Error a 
--------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
 execute act 
   = case runState (runErrorT act) initState of 
       (Left err, _) -> Left err
@@ -170,5 +167,5 @@ execute act
 tryAction act = get >>= return . runState (runErrorT act)
 
 initState :: SsaState r
-initState = SsaST envEmpty envEmpty 0 M.empty M.empty
+initState = SsaST envEmpty envEmpty 0 M.empty []
 

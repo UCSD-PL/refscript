@@ -23,7 +23,7 @@ import           Control.Applicative ((<$>))
 
 type PPR r = (PP r, F.Reftable r)
 
-type TDR r = TDefEnv r
+type TDR r = IfaceEnv r
 type TER r = Env (RType r)
 
 -- Naming convention for the following:
@@ -41,9 +41,12 @@ type TER r = Env (RType r)
 getProp ::  (IsLocated l, PPR r) => 
   l -> TER r -> TDR r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getProp l α δ s t@(TApp _ _ _ )  = getPropApp l α δ s t 
+getProp l α δ s t@(TApp _ _ _  ) = getPropApp l α δ s t 
 getProp _ _ _ _   (TFun _ _ _  ) = Nothing
 getProp _ _ _ s a@(TCons es _ _) = (a,) <$> lookupElt s es
+getProp _ _ δ s t@(TClass c    ) = do d <- findSym c δ 
+                                      p <- lookupElt s $ S.flatten True δ (d,[])
+                                      return (t,p)
 getProp l _ _ _ t                = die $ bug (srcPos l) 
                                       $ "Using getProp on type: " ++ ppshow t 
 
@@ -51,7 +54,7 @@ getProp l _ _ _ t                = die $ bug (srcPos l)
 -- | `getElt`: return elements associated with a symbol @s@. The return list 
 -- is empty if the binding was not found or @t@ is an invalid type.
 -------------------------------------------------------------------------------
-getElt :: (F.Symbolic s, PPR r) => TDR r -> s -> RType r -> [TElt r]
+getElt :: (F.Symbolic s, PPR r) => TDR r -> s -> RType r -> [TypeMember r]
 -------------------------------------------------------------------------------
 getElt δ s t                = fromCons $ S.flattenType δ t
   where   
@@ -60,7 +63,7 @@ getElt δ s t                = fromCons $ S.flattenType δ t
 
 
 -------------------------------------------------------------------------------
-getCallable :: PPR r => TDefEnv r -> RType r -> [RType r]
+getCallable :: PPR r => IfaceEnv r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
 getCallable δ t             = uncurry mkAll <$> foo [] t
   where
@@ -90,12 +93,10 @@ getPropApp l α γ s t@(TApp c ts _) =
     TRef x   -> do  d      <- findSym x γ 
                     p      <- lookupElt s $ S.flatten False γ (d,ts)
                     return  $ (t,p)
-    TTyOf x  -> do  d      <- findSym x γ 
-                    p      <- lookupElt s $ S.flatten True γ (d,ts)
-                    return  $ (t,p)    
     TFPBool  -> Nothing
     TTop     -> Nothing
     TVoid    -> Nothing
+
 getPropApp _ _ _ _ _ = error "getPropApp should only be applied to TApp"
 
 
@@ -123,7 +124,7 @@ lookupAmbientVar l α γ s amb t =
 
 -- FIXME: Probably should get rid of this and just use getField, etc...
 -------------------------------------------------------------------------------
-getPropTDef :: PPR r => t -> TDR r -> F.Symbol -> [RType r] -> TDef r -> Maybe (RType r)
+getPropTDef :: PPR r => t -> TDR r -> F.Symbol -> [RType r] -> InterfaceDefinition r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 getPropTDef _ γ f ts d = lookupElt f $ S.flatten False γ (d,ts)
 

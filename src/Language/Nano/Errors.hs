@@ -106,6 +106,7 @@ errorIncompMutTy l t t'       = mkErr l $ printf "Types '%s' and '%s' have incom
 errorIncompMutElt l t t'      = mkErr l $ printf "Elements '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
 errorConstNonFunc l x         = mkErr l $ printf "Constructor for class '%s' does not have a function type." (ppshow x)
 errorSubtype l t t'           = mkErr l $ printf "Type \n%s\n is not a subtype of\n%s" (ppshow t) (ppshow t')
+errorTClassSubtype l s s'     = mkErr l $ printf "Type 'typeof %s' is not a subtype of 'typeof %s'" (ppshow s) (ppshow s')
 errorUnionSubtype l t t'      = mkErr l $ printf "Union type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 errorObjSubtype l t t'        = mkErr l $ printf "Object type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 errorFuncSubtype l t t'       = mkErr l $ printf "Function type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')

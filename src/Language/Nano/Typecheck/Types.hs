@@ -20,13 +20,12 @@ module Language.Nano.Typecheck.Types (
     Nano (..)
   , NanoBare, NanoSSA, NanoBareR, NanoSSAR, NanoRefType, NanoTypeR, NanoType, ExprSSAR, StmtSSAR
   , Source (..)
-  , FunctionStatement
 
   -- * (Refinement) Types
   , RType (..), Bind (..), toType, ofType, rTop, strengthen 
 
   -- * Predicates on Types 
-  , isTop, isNull, isVoid, isTNum, isUndef, isUnion, isTTyOf
+  , isTop, isNull, isVoid, isTNum, isUndef, isUnion
 
   -- * Constructing Types
   , mkUnion, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy
@@ -40,7 +39,7 @@ module Language.Nano.Typecheck.Types (
   , renameBinds
 
   -- * Regular Types
-  , Type, TDef (..), TVar (..), TCon (..), TElt (..)
+  , Type, InterfaceDefinition (..), TVar (..), TCon (..), TypeMember (..)
 
   -- * Mutability
   , Mutability, mutable, immutable, anyMutability, inheritedMut, combMut
@@ -58,8 +57,10 @@ module Language.Nano.Typecheck.Types (
   , isMethodSig, isFieldSig, setThisBinding, remThisBinding
 
   -- * Type definition env
-  , TDefEnv (..), tDefEmpty, tDefFromList, tDefToList
-  , addSym, findSym, findSymOrDie, mapTDefEnv, mapTDefEnvM
+  , IfaceEnv (..) {-, tDefEmpty, tDefFromList, tDefToList -} 
+  , {- addSym, -} findSym, findSymOrDie, mapTDefEnv, mapTDefEnvM
+
+  , ModuleEnv (..), ModuleDefinition
 
   -- * Operator Types
   , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy, objLitTy, setPropTy, returnTy
@@ -155,7 +156,6 @@ data TCon
   | TVoid             -- void
   | TTop              -- top
   | TRef F.Symbol     -- A
-  | TTyOf F.Symbol    -- typeof A 
   | TUn               -- union
   | TNull             -- null
   | TUndef            -- undefined
@@ -165,130 +165,137 @@ data TCon
 
 -- | (Raw) Refined Types 
 data RType r  
-  = TApp TCon [RType r]     r   -- ^ C T1,...,Tn
-  | TVar TVar               r   -- ^ A
-  | TFun [Bind r] (RType r) r   -- ^ (xi:T1,..,xn:Tn) => T
-  | TCons [TElt r] Mutability r -- ^ {f1:T1,..,fn:Tn} 
-  | TAll TVar (RType r)         -- ^ forall A. T
-  | TAnd [RType r]              -- ^ (T1..) => T1' /\ ... /\ (Tn..) => Tn' 
+  = TApp TCon [RType r]     r                           -- ^ C T1,...,Tn
+  | TVar TVar               r                           -- ^ A
+  | TFun [Bind r] (RType r) r                           -- ^ (xi:T1,..,xn:Tn) => T
+  | TCons [TypeMember r] Mutability r                   -- ^ {f1:T1,..,fn:Tn} 
+  | TAll TVar (RType r)                                 -- ^ forall A. T
+  | TAnd [RType r]                                      -- ^ (T1..) => T1' /\ ... /\ (Tn..) => Tn' 
 
-  | TExp F.Expr                 -- ^ "Expression" parameters for type-aliases: 
-                                --   never appear in real/expanded RType
+  | TClass F.Symbol                                     -- ^ typeof C (class)
+  | TModule [F.Symbol]                                  -- ^ typeof M (module)
 
+  | TExp F.Expr                                         -- ^ "Expression" parameters for type-aliases: 
+                                                        --   never appear in real/expanded RType
     deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
+-- | Type binder
 data Bind r
-  = B { b_sym  :: F.Symbol      -- ^ Binding's symbol
-      , b_type :: !(RType r)    -- ^ Field type
+  = B { b_sym  :: F.Symbol                              -- ^ Binding's symbol
+      , b_type :: !(RType r)                            -- ^ Field type
       } 
     deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
 ---------------------------------------------------------------------------------
--- | Type definitions 
+-- | Interfacce definitions 
 ---------------------------------------------------------------------------------
 
-data TDef r    = TD { 
-        t_class :: Bool                                 -- ^ Is this a class or interface type
-      , t_name  :: !(Id SourceSpan)                     -- ^ Name (possibly no name)
-      , t_args  :: ![TVar]                              -- ^ Type variables
-      , t_proto :: !(Maybe (Id SourceSpan, [RType r]))  -- ^ Heritage
-      , t_elts  :: ![TElt r]                            -- ^ List of data type elts 
-      } deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+data InterfaceDefinition r 
+  = ID { t_class :: Bool                                -- ^ Is this a class or interface type
+       , t_name  :: !(Id SourceSpan)                    -- ^ Name (possibly no name)
+       , t_args  :: ![TVar]                             -- ^ Type variables
+       , t_proto :: !(Maybe (Id SourceSpan, [RType r])) -- ^ Heritage
+       , t_elts  :: ![TypeMember r]                     -- ^ List of data type elts 
+       } 
+     deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
--- | Assignability is ingored atm.
-data TElt r = CallSig  { f_type :: RType r }         -- Call Signature
-            | ConsSig  { f_type :: RType r }         -- Constructor Signature               
-            | IndexSig { f_sym  :: F.Symbol
-                       , f_key  :: Bool              -- Index Signature (T/F=string/number)
-                       , f_type :: RType r }         
-            
-            | FieldSig { f_sym  :: F.Symbol          -- Name  
-                       , f_mut  :: Mutability        -- Mutability
-                       -- , f_this :: Maybe (RType r)   -- Constraint on enclosing object
-                       , f_type :: RType r }         -- Property type (could be function)
+data TypeMember r = CallSig  { f_type :: RType r }      -- ^ Call Signature
+                  | ConsSig  { f_type :: RType r }      -- ^ Constructor Signature               
+                  | IndexSig { f_sym  :: F.Symbol
+                             , f_key  :: Bool           -- ^ Index Signature (T/F=string/number)
+                             , f_type :: RType r }      
+                  
+                  | FieldSig { f_sym  :: F.Symbol       -- ^ Name  
+                             , f_mut  :: Mutability     -- ^ Mutability
+                             , f_type :: RType r }      -- ^ Property type (could be function)
 
-            | MethSig  { f_sym  :: F.Symbol          -- Name  
-                       , f_mut  :: Mutability        -- Mutability
-                       -- , f_this :: Maybe (RType r)   -- Constraint on enclosing object
-                       , f_type :: RType r }         -- Method type
+                  | MethSig  { f_sym  :: F.Symbol       -- ^ Name  
+                             , f_mut  :: Mutability     -- ^ Mutability
+                             , f_type :: RType r }      -- ^ Method type
 
-            | StatSig  { f_sym  :: F.Symbol          -- Name  
-                       , f_mut  :: Mutability        -- Mutability
-                       , f_type :: RType r }         -- Property type (could be function)
-
-
+                  | StatSig  { f_sym  :: F.Symbol       -- ^ Name  
+                             , f_mut  :: Mutability     -- ^ Mutability
+                             , f_type :: RType r }      -- ^ Property type (could be function)
 
   deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
-
--- | Type definition environment
-
-data TDefEnv t = G  { g_size  :: Int, g_env   :: F.SEnv (TDef t) } 
-  deriving (Show, Functor, Data, Typeable, Foldable, Traversable)
-
-instance F.Fixpoint t => F.Fixpoint (TDef t) where
-  toFix (TD _ n _ _ _) = F.toFix $ F.symbol n
-
-tDefEmpty = G 0 F.emptySEnv
+type IfaceEnv r = Env (InterfaceDefinition r) 
 
 
-mapTDefEnv f (G i e) = G i $ F.mapSEnv g e
-  where 
-    g (TD c n αs (Just (p,ps)) es) = TD c n αs (Just (p, map f ps)) (mapElt f <$> es)
-    g (TD c n αs Nothing       es) = TD c n αs Nothing              (mapElt f <$> es)
+---------------------------------------------------------------------------------
+-- | Module definitions 
+---------------------------------------------------------------------------------
+
+-- | Moudle definition: the exported module API
+
+data ModuleDefinition r 
+  = MD { m_name  :: !(Id SourceSpan)
+       , m_elts  :: !(Env (ModuleMember r))
+       }
+
+data ModuleMember r = FuncMem   (RType r)
+                    | IfaceMem  (InterfaceDefinition r)
+                    | ModuleMem (ModuleDefinition r)
+
+type ModuleEnv r = Env (ModuleDefinition r)
+
+
+
+mapTDefEnv f e = F.mapSEnv (fmap f) e
+--   where 
+--     g (ID c n αs (Just (p,ps)) es) = ID c n αs (Just (p, map f ps)) (mapElt f <$> es)
+--     g (ID c n αs Nothing       es) = ID c n αs Nothing              (mapElt f <$> es)
 
  
 ---------------------------------------------------------------------------------
 mapTDefEnvM :: (Monad m, Applicative m) 
-            => (RType t -> m (RType r)) -> TDefEnv t -> m (TDefEnv r)
+            => (RType t -> m (RType r)) -> IfaceEnv t -> m (IfaceEnv r)
 ---------------------------------------------------------------------------------
-mapTDefEnvM f (G i e) =
-    G i <$> F.fromListSEnv <$> mapM (mapSndM (mapTDefM f)) (F.toListSEnv e)
+mapTDefEnvM f e = envFromList <$> mapM (mapSndM (mapTDefM f)) (envToList e)
   
 
 ---------------------------------------------------------------------------------
-mapTDefM :: (Monad m, Applicative m) =>
-            (RType t -> m (RType r)) -> TDef t -> m (TDef r)
+mapTDefM :: (Monad m, Functor m) 
+         => (RType t -> m (RType r)) -> InterfaceDefinition t -> m (InterfaceDefinition r)
 ---------------------------------------------------------------------------------
-mapTDefM f (TD c n αs (Just (p,ps)) es) 
+mapTDefM f (ID c n αs (Just (p,ps)) es) 
   = do  ps' <- mapM f ps 
         es' <- mapM (mapEltM f) es 
-        return $ TD c n αs (Just (p,ps')) es'
-mapTDefM f (TD c n αs Nothing es) = 
-  TD c n αs Nothing <$> mapM (mapEltM f) es
+        return $ ID c n αs (Just (p,ps')) es'
+mapTDefM f (ID c n αs Nothing es) = 
+  ID c n αs Nothing <$> mapM (mapEltM f) es
 
 
 ---------------------------------------------------------------------------------
-tDefFromList :: F.Symbolic s => [(s, TDef t)] -> TDefEnv t
+-- tDefFromList :: F.Symbolic s => [(s, InterfaceDefinition t)] -> IfaceEnv t
 ---------------------------------------------------------------------------------
-tDefFromList = foldr (uncurry addSym) tDefEmpty 
+-- tDefFromList = foldr (uncurry addSym) tDefEmpty 
 
 
----------------------------------------------------------------------------------
-tDefToList :: TDefEnv t -> [TDef t]
----------------------------------------------------------------------------------
-tDefToList (G _ m) = snd <$> F.toListSEnv m 
+-- ---------------------------------------------------------------------------------
+-- tDefToList :: IfaceEnv t -> [InterfaceDefinition t]
+-- ---------------------------------------------------------------------------------
+-- tDefToList e = snd <$> envToList e
 
 
----------------------------------------------------------------------------------
-addSym :: F.Symbolic s => s -> TDef t -> TDefEnv t -> TDefEnv t
----------------------------------------------------------------------------------
-addSym c t (G sz γ) =
-  case F.lookupSEnv s γ of 
-    Just _  -> G sz γ
-    Nothing -> G sz' (F.insertSEnv s t γ)
-  where
-    s    = F.symbol c
-    sz'  = sz + 1
+-- ---------------------------------------------------------------------------------
+-- addSym :: F.Symbolic a => a -> v -> Env v -> Env v
+-- ---------------------------------------------------------------------------------
+-- addSym c t γ = 
+--   case envFindTy s γ of 
+--     Just _  -> γ
+--     Nothing -> envAdd s t γ
+--   where
+--     s    = F.symbol c
 
 ---------------------------------------------------------------------------------
-findSym :: F.Symbolic s => s -> TDefEnv t -> Maybe (TDef t)
+findSym :: F.Symbolic a => a -> Env t -> Maybe t
 ---------------------------------------------------------------------------------
-findSym s (G _ γ) = F.lookupSEnv (F.symbol s) γ
+findSym s γ = envFindTy (F.symbol s) γ
 
 ---------------------------------------------------------------------------------
-findSymOrDie:: F.Symbolic s => s -> TDefEnv t -> TDef t
+findSymOrDie :: F.Symbolic a => a -> Env t -> t
 ---------------------------------------------------------------------------------
 findSymOrDie s γ = fromMaybe (error msg) $ findSym s γ 
   where msg = "findSymOrDie failed on: " ++ F.symbolString (F.symbol s)
@@ -344,8 +351,8 @@ combMut μ _  | otherwise         = μ
 variance :: TVar -> RType r -> Bool
 variance _ _  = True
 
-varianceTDef :: TDef r -> [Bool]
-varianceTDef (TD _ _ vs _ _) = take (length vs) $ repeat True
+varianceTDef :: InterfaceDefinition r -> [Bool]
+varianceTDef (ID _ _ vs _ _) = take (length vs) $ repeat True
 
 
 -- | "pure" top-refinement
@@ -496,9 +503,6 @@ isTObj _                   = False
 isTNum (TApp TInt _ _ )    = True
 isTNum _                   = False
 
-isTTyOf (TApp (TTyOf _) [] _) = True
-isTTyOf _                     = False
-
 isConstr (ConsSig _)  = True
 isConstr _            = False
 
@@ -512,11 +516,13 @@ rUnion (TApp TUn _ r) = r
 rUnion _              = fTop
 
 -- Get the top-level refinement 
-rTypeR               :: RType r -> r
+rTypeR               :: F.Reftable r => RType r -> r
 rTypeR (TApp _ _ r ) = r
 rTypeR (TVar _ r   ) = r
 rTypeR (TFun _ _ r ) = r
 rTypeR (TCons _ _ r) = r
+rTypeR (TModule _  ) = fTop
+rTypeR (TClass _   ) = fTop
 rTypeR (TAll _ _   ) = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )     = errorstar "Unimplemented: rTypeR - TAnd"
 rTypeR (TExp _)      = errorstar "Unimplemented: rTypeR - TExp"
@@ -536,7 +542,6 @@ instance Eq TCon where
   TVoid    == TVoid    = True         
   TTop     == TTop     = True
   TRef x1  == TRef x2  = x1 == x2
-  TTyOf x1 == TTyOf x2 = x1 == x2
   TUn      == TUn      = True
   TNull    == TNull    = True
   TUndef   == TUndef   = True
@@ -556,7 +561,7 @@ instance Eq (RType r) where
   _              == _              = False
 
 
-instance Eq (TElt r) where 
+instance Eq (TypeMember r) where 
   CallSig t1        == CallSig t2        = t1 == t2
   ConsSig t1        == ConsSig t2        = t1 == t2
   IndexSig _ b1 t1  == IndexSig _ b2 t2  = (b1,t1) == (b2,t2)
@@ -566,12 +571,12 @@ instance Eq (TElt r) where
   _                 == _                 = False
  
 
-mapElt f (CallSig t)      = CallSig (f t)
-mapElt f (ConsSig t)      = ConsSig (f t)
-mapElt f (IndexSig i b t) = IndexSig i b ( f t)
-mapElt f (FieldSig x m t) = FieldSig x m (f t)
-mapElt f (MethSig  x m t) = MethSig x m (f t)
-mapElt f (StatSig x m t)  = StatSig x m (f t)
+-- mapElt f (CallSig t)      = CallSig (f t)
+-- mapElt f (ConsSig t)      = ConsSig (f t)
+-- mapElt f (IndexSig i b t) = IndexSig i b ( f t)
+-- mapElt f (FieldSig x m t) = FieldSig x m (f t)
+-- mapElt f (MethSig  x m t) = MethSig x m (f t)
+-- mapElt f (StatSig x m t)  = StatSig x m (f t)
 
 mapEltM f (CallSig t)        = CallSig <$> f t
 mapEltM f (ConsSig t)        = ConsSig <$> f t
@@ -638,7 +643,7 @@ data Nano a r        = Nano
                      { code   :: !(Source a)               -- ^ Code to check
                      , externs:: !(Env (RType r))          -- ^ Imported (unchecked) specifications 
                      , specs  :: !(Env (RType r))          -- ^ Function specs and 
-                     , defs   :: !(TDefEnv r)              -- ^ Type definitions
+                     , defs   :: !(IfaceEnv r)             -- ^ Type definitions
                                                            -- ^ After TC will also include class types
                      , consts :: !(Env (RType r))          -- ^ Measure Signatures
 							       , tAlias :: !(TAliasEnv (RType r))    -- ^ Type aliases
@@ -649,7 +654,7 @@ data Nano a r        = Nano
 
 type NanoBareR r   = Nano (AnnBare r) r                    -- ^ After Parse
 type NanoSSAR r    = Nano (AnnSSA  r) r                    -- ^ After SSA  
-type NanoTypeR r   = Nano (AnnType r) r                    -- ^ After TC: Contains an updated TDefEnv
+type NanoTypeR r   = Nano (AnnType r) r                    -- ^ After TC: Contains an updated IfaceEnv
 type NanoRefType   = NanoTypeR F.Reft                      -- ^ After Liquid
 
 type ExprSSAR r    = Expression (AnnSSA r)
@@ -659,16 +664,7 @@ type NanoBare      = NanoBareR ()
 type NanoSSA       = NanoSSAR ()
 type NanoType      = NanoTypeR ()
 
-{-@ measure isFunctionStatement :: (Statement SourceSpan) -> Prop 
-    isFunctionStatement (FunctionStmt {}) = true
-    isFunctionStatement (_)               = false
-  @-}
 
-{-@ type FunctionStatement = {v:(Statement SourceSpan) | (isFunctionStatement v)} @-}
-type FunctionStatement a = Statement a 
-
-{-@ newtype Source a = Src [FunctionStatement a] @-}
--- newtype Source a = Src [FunctionStatement a]
 newtype Source a = Src [Statement a]
   deriving (Data, Typeable)
 
@@ -706,9 +702,8 @@ instance (PP r, F.Reftable r) => PP (Nano a r) where
 
 -- ppEnv env = vcat [ pp id <+> text "::" <+> pp t <+> text"\n" | (id, t) <- envToList env]
 
-instance (PP r, F.Reftable r) => PP (TDefEnv r) where
-  pp (G s γ) =  (text "Size:" <+> text (show s))  $$ text "" $$
-                (text "Type definitions:"  $$ nest 2 (pp γ))
+instance (PP r, F.Reftable r) => PP (IfaceEnv r) where
+  pp γ = text "Type definitions:"  $$ nest 2 (pp γ)
 
 instance PP t => PP (I.IntMap t) where
   pp m = vcat (pp <$> I.toList m)
@@ -716,13 +711,13 @@ instance PP t => PP (I.IntMap t) where
 instance PP t => PP (F.SEnv t) where
   pp m = vcat $ pp <$> F.toListSEnv m
 
-instance (PP r, F.Reftable r) => PP (TDef r) where
-    pp (TD c nm vs Nothing ts) =  
+instance (PP r, F.Reftable r) => PP (InterfaceDefinition r) where
+    pp (ID c nm vs Nothing ts) =  
           pp (if c then "class" else "interface")
       <+> pp nm 
       <+> ppArgs brackets comma vs 
       <+> braces (intersperse semi $ map pp ts)
-    pp (TD c nm vs (Just (p,ps)) ts) = 
+    pp (ID c nm vs (Just (p,ps)) ts) = 
           pp (if c then "class" else "interface")
       <+> pp nm 
       <+> ppArgs brackets comma vs 
@@ -730,7 +725,7 @@ instance (PP r, F.Reftable r) => PP (TDef r) where
       <+> braces (intersperse semi $ map pp ts)
 
 
-instance (PP r, F.Reftable r) => PP (TElt r) where
+instance (PP r, F.Reftable r) => PP (TypeMember r) where
   pp (CallSig t)          =  text "call" <+> pp t 
   pp (ConsSig t)          =  text "new" <+> pp t
   pp (IndexSig x True t)  =  brackets (pp x <> text ": string") <> text ":" <+> pp t
@@ -750,7 +745,7 @@ ppMut t | isMutable t      = brackets $ pp "mut"
         | otherwise        = error    $ "ppMut: case not covered: " ++ ppshow t
    
 
-instance F.Symbolic (TElt t) where
+instance F.Symbolic (TypeMember t) where
   symbol (FieldSig s _ _)     = s
   symbol (MethSig  s _ _)     = s
   symbol (ConsSig       _)    = F.symbol "__constructor__"
@@ -817,16 +812,45 @@ writeGlobalVars _ = envIds mGnty
     mGnty         = error "writeGlobalVars" -- glVars p  -- guarantees
 
 
-definedGlobs       :: (Data r, Typeable r) => [Statement (AnnType r)] -> [(AnnType r, Id (AnnType r), RType r)]
+-------------------------------------------------------------------------------
+definedGlobs       :: (Data r, Typeable r) => [Statement (AnnType r)] -> [Id (AnnType r)]
+-------------------------------------------------------------------------------
 definedGlobs stmts = everything (++) ([] `mkQ` fromVarDecl) stmts
   where 
-    fromVarDecl (VarDecl l x _) =
-      case listToMaybe $ [ t | VarAnn t <- ann_fact l ] of
-        Just t                 -> [(l,x,t)]
-        Nothing                -> []
+    fromVarDecl (VarDecl l x _) = [ x | VarAnn _ <- ann_fact l ]
 
 
--- | `immutableVars p` returns symbols that must-not be re-assigned and hence
+-- -- CHECK ME !!!
+-- --
+-- --
+-- -- | Find all function definitions/declarations whose scope is hoisted to 
+-- --   the current scope. E.g. declarations in the If-branch of a conditional 
+-- --   expression. Note how declarations do not escape module or function 
+-- --   blocks (isolation).
+-- -------------------------------------------------------------------------------
+-- hoistedGlobs :: (Data a, Typeable a, Typeable r) => [Statement a] -> [(Id (AnnType r), RType r)]
+-- -------------------------------------------------------------------------------
+-- hoistedGlobs stmts = everythingBut (++) (([], False) `mkQ` f) stmts
+--   where
+--     f                               = fromStmt `extQ` fromExp 
+--     fromStmt                        :: Statement (AnnType r) -> ([(Id (AnnType r), RType r)], Bool)
+--     fromStmt (FunctionStmt l n _ _) = ([ ], True)
+--     fromStmt (FunctionDecl l n _  ) = ([ ], True)
+--     fromStmt (ClassStmt {})         = ([ ], True)
+--     fromStmt (ModuleStmt {})        = ([ ], True)
+--     fromStmt _                      = ([ ], False)
+-- 
+--     fromExp                         :: Expression (AnnType r) -> ([(Id (AnnType r), RType r)], Bool)
+--     fromExp (FuncExpr {})           = ([ ], True)
+--     fromExp _                       = ([ ], False)
+-- 
+--     fromVarDecl                     :: VarDecl (AnnType r) -> ([(Id (AnnType r), RType r)], Bool)
+--     fromVarDecl (VarDecl l x _)     = ([(x, t) | VarAnn t <- ann_fact l ], True)
+--     fromVarDecl _                   = ([ ], False)
+-- 
+
+
+-- | `readOnlyVars p` returns symbols that must-not be re-assigned and hence
 --    * can appear in refinements
 
 readOnlyVars   :: (IsLocated a, Data a, Typeable a) => Nano a t -> [Id SourceSpan] 
@@ -879,6 +903,8 @@ instance (PP r, F.Reftable r) => PP (RType r) where
                               = F.ppTy r $ ppMut m <> braces (intersperse semi $ map pp bs)
                               | otherwise
                               = F.ppTy r $ lbrace $+$ nest 2 (vcat $ map pp bs) $+$ rbrace
+  pp (TModule s  )            = text "module" <+> pp s
+  pp (TClass c   )            = text "typeof" <+> pp c
 
 instance PP TVar where 
   pp     = pprint . F.symbol
@@ -890,7 +916,6 @@ instance PP TCon where
   pp TVoid     = text "void"
   pp TTop      = text "top"
   pp TUn       = text "union:"
-  pp (TTyOf s) = text "typeof" <+> pp s
   pp (TRef x)  = pp x
   pp TNull     = text "null"
   pp TUndef    = text "undefined"
@@ -906,7 +931,6 @@ instance Hashable TCon where
   hashWithSalt s TNull        = hashWithSalt s (6 :: Int)
   hashWithSalt s TUndef       = hashWithSalt s (7 :: Int)
   hashWithSalt s TFPBool      = hashWithSalt s (8 :: Int)
-  hashWithSalt s (TTyOf z)    = hashWithSalt s (9 :: Int) + hashWithSalt s z
   hashWithSalt s (TRef z)     = hashWithSalt s (10:: Int) + hashWithSalt s z
 
 instance (PP r, F.Reftable r) => PP (Bind r) where 
@@ -1004,15 +1028,15 @@ data Fact r
   = PhiVar      ![(Id SourceSpan)]
   | TypInst     !IContext ![RType r]
   -- Overloading
-  | EltOverload !IContext  !(TElt r)
+  | EltOverload !IContext  !(TypeMember r)
   | Overload    !IContext  !(RType r)
   | TCast       !IContext  !(Cast r)
   -- Type annotations
   | VarAnn      !(RType r)
-  | FieldAnn    !(TElt r)
-  | MethAnn     !(TElt r) 
-  | StatAnn     !(TElt r) 
-  | ConsAnn     !(TElt r)
+  | FieldAnn    !(TypeMember r)
+  | MethAnn     !(TypeMember r) 
+  | StatAnn     !(TypeMember r) 
+  | ConsAnn     !(TypeMember r)
   | UserCast    !(RType r)
   | FuncAnn     !(RType r)
   -- Class annotation
@@ -1252,7 +1276,7 @@ returnTy _ False = mkFun ([], [], tVoid)
 -- | `mkEltFunTy`: Creates a function type that corresponds to an invocation 
 --   to the input element. 
 --------------------------------------------------------------------------
-mkEltFunTy :: F.Reftable r => TElt r -> Maybe (RType r)
+mkEltFunTy :: F.Reftable r => TypeMember r -> Maybe (RType r)
 --------------------------------------------------------------------------
 -- `τ` is the type for the lately bound object, to be used in the position of 
 -- "this". It will only be used if `m` does not specify it.

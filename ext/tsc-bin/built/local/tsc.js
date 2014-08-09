@@ -447,7 +447,7 @@ var TypeScript;
         Index_signature_of_object_type_implicitly_has_an_any_type: "Index signature of object type implicitly has an 'any' type.",
         Object_literal_s_property_0_implicitly_has_an_any_type_from_widening: "Object literal's property '{0}' implicitly has an 'any' type from widening.",
         Translate_to_RefScript_JSON_format: "Translate to RefScript (JSON format)",
-        Ambient_variable_declarator_for_0_needs_to_have_exactly_one_type_annotation: "Ambient variable declarator for '{0}' needs to have exactly one type annotation.",
+        Ambient_variable_declarator_for_0_needs_to_have_at_least_one_type_annotation: "Ambient variable declarator for '{0}' needs to have at least one type annotation.",
         Variable_declarator_for_0_needs_to_have_at_most_one_type_annotation: "Variable declarator for '{0}' needs to have at most one type annotation.",
         Class_0_has_multiple_class_annoatations: "Class '{0}' has multiple class annoatations.",
         Interface_0_has_multiple_interface_annoatations: "Interface '{0}' has multiple interface annoatations.",
@@ -464,7 +464,8 @@ var TypeScript;
         HeritageClauses_to_RefScript: "HeritageClauses to RefScript",
         ForInStatementSyntax_to_RsStatement: "ForInStatementSyntax to RsStatement",
         Cannot_translate_type_0_into_RefScript_type: "Cannot translate type '{0}' into RefScript type.",
-        Anonymous_function_cannot_have_more_than_one_type_annotations: "Anonymous function cannot have more than one type annotations."
+        Anonymous_function_cannot_have_more_than_one_type_annotations: "Anonymous function cannot have more than one type annotations.",
+        Import_library_only_enabled_with_refscript: "Import library (only enabled with 'refscript')."
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -2593,7 +2594,7 @@ var TypeScript;
         "Index signature of object type implicitly has an 'any' type.": { "code": 7017, "category": 1 /* Error */ },
         "Object literal's property '{0}' implicitly has an 'any' type from widening.": { "code": 7018, "category": 1 /* Error */ },
         "Translate to RefScript (JSON format)": { "code": 8000, "category": 2 /* Message */ },
-        "Ambient variable declarator for '{0}' needs to have exactly one type annotation.": { "code": 8001, "category": 1 /* Error */ },
+        "Ambient variable declarator for '{0}' needs to have at least one type annotation.": { "code": 8001, "category": 1 /* Error */ },
         "Variable declarator for '{0}' needs to have at most one type annotation.": { "code": 8002, "category": 1 /* Error */ },
         "Class '{0}' has multiple class annoatations.": { "code": 8003, "category": 1 /* Error */ },
         "Interface '{0}' has multiple interface annoatations.": { "code": 8004, "category": 1 /* Error */ },
@@ -2610,7 +2611,8 @@ var TypeScript;
         "HeritageClauses to RefScript": { "code": 8015, "category": 5 /* Unimplemented */ },
         "ForInStatementSyntax to RsStatement": { "code": 8016, "category": 5 /* Unimplemented */ },
         "Cannot translate type '{0}' into RefScript type.": { "code": 8017, "category": 5 /* Unimplemented */ },
-        "Anonymous function cannot have more than one type annotations.": { "code": 8018, "category": 1 /* Error */ }
+        "Anonymous function cannot have more than one type annotations.": { "code": 8018, "category": 1 /* Error */ },
+        "Import library (only enabled with 'refscript').": { "code": 8019, "category": 2 /* Message */ }
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -7997,6 +7999,12 @@ var TypeScript;
             throw new Error("toRsMemList not implemented for " + TypeScript.SyntaxKind[list.kind()]);
         }
 
+        function toRsModuleElt(list, helper, anns) {
+            return new TypeScript.RsASTList(list.toArray().map(function (m) {
+                return m.toRsModuleElt(helper);
+            }));
+        }
+
         function toRsLValue(list, helper, anns) {
             throw new Error("toRsLValue not implemented for " + TypeScript.SyntaxKind[list.kind()]);
         }
@@ -8160,6 +8168,9 @@ var TypeScript;
             };
             EmptySyntaxList.prototype.toRsStmt = function (helper, anns) {
                 return toRsStmt(this, helper);
+            };
+            EmptySyntaxList.prototype.toRsModuleElt = function (helper, anns) {
+                return toRsModuleElt(this, helper);
             };
             EmptySyntaxList.prototype.toRsMemList = function (helper, anns) {
                 return toRsMemList(this, helper);
@@ -8345,6 +8356,9 @@ var TypeScript;
             };
             SingletonSyntaxList.prototype.toRsStmt = function (helper, anns) {
                 return toRsStmt(this, helper);
+            };
+            SingletonSyntaxList.prototype.toRsModuleElt = function (helper, anns) {
+                return toRsModuleElt(this, helper);
             };
             SingletonSyntaxList.prototype.toRsMemList = function (helper, anns) {
                 return toRsMemList(this, helper);
@@ -8574,6 +8588,9 @@ var TypeScript;
             };
             NormalSyntaxList.prototype.toRsStmt = function (helper, anns) {
                 return toRsStmt(this, helper);
+            };
+            NormalSyntaxList.prototype.toRsModuleElt = function (helper, anns) {
+                return toRsModuleElt(this, helper);
             };
             NormalSyntaxList.prototype.toRsMemList = function (helper, anns) {
                 return toRsMemList(this, helper);
@@ -9030,6 +9047,10 @@ var TypeScript;
             throw new Error("toRsId not implemented for " + TypeScript.SyntaxKind[this.kind()]);
         };
 
+        SyntaxNode.prototype.toRsModuleElt = function (helper) {
+            throw new Error("toRsModuleElt not implemented for " + TypeScript.SyntaxKind[this.kind()]);
+        };
+
         SyntaxNode.prototype.toRsMemList = function (helper) {
             throw new Error("toRsMemList not implemented for " + TypeScript.SyntaxKind[this.kind()]);
         };
@@ -9095,9 +9116,10 @@ var TypeScript;
 
         var match = commentTrivia.map(function (ct) {
             var cstart = ct.fullStart();
-            var matchStr = ct.fullText().match("/\*@(([^])*)\\*/");
-            if (matchStr && matchStr[1]) {
-                var cstring = matchStr[1];
+            var matchStr = ct.fullText().match(/\/\*@([^]*)\*\//g);
+            if (matchStr && matchStr[0]) {
+                var fullStr = matchStr[0];
+                var cstring = fullStr.substring(3, fullStr.length - 2);
                 var startLineAndChar = ct.syntaxTree().lineMap().getLineAndCharacterFromPosition(cstart);
                 var endLineAndChar = ct.syntaxTree().lineMap().getLineAndCharacterFromPosition(cstart + cstring.length);
                 var ss = new TypeScript.RsSourceSpan(ct.syntaxTree().sourceUnit().fileName(), startLineAndChar, endLineAndChar);
@@ -9720,11 +9742,11 @@ var TypeScript;
             var originalAnnots = tokenAnnots(this.firstToken());
 
             var restAnnots = originalAnnots.filter(function (a) {
-                return a.kind() !== 5 /* RawClass */;
+                return a.kind() !== 4 /* RawClass */;
             });
 
             var classAnnots = originalAnnots.filter(function (a) {
-                return a.kind() === 5 /* RawClass */;
+                return a.kind() === 4 /* RawClass */;
             });
 
             restAnnots.push(this.headerAnnotation(helper, classAnnots));
@@ -9850,17 +9872,23 @@ var TypeScript;
             return true;
         };
 
+        InterfaceDeclarationSyntax.prototype.toRsModuleElt = function (helper) {
+            var exported = this.modifiers.toArray().some(function (m) {
+                return m.tokenKind === 47 /* ExportKeyword */;
+            });
+            return new TypeScript.RsModuleElt(exported, this.toRsStmt(helper));
+        };
+
         InterfaceDeclarationSyntax.prototype.toRsStmt = function (helper) {
             var _this = this;
             var originalAnnots = tokenAnnots(this.firstToken());
 
             var headerAnnots = originalAnnots.filter(function (a) {
-                return a.kind() === 4 /* RawType */;
+                return a.kind() === 3 /* RawIface */;
             });
             var restAnnots = originalAnnots.filter(function (a) {
-                return a.kind() !== 4 /* RawType */;
+                return a.kind() !== 3 /* RawIface */;
             });
-
             var annotStr = "";
 
             if (headerAnnots.length === 0) {
@@ -9901,21 +9929,12 @@ var TypeScript;
 
             var members = this.body.typeMembers.toNonSeparatorArray().map(function (m) {
                 switch (m.kind()) {
-                    case 129 /* FunctionDeclaration */:
-                        var f = m;
-                        var decl = helper.getDeclForAST(m);
-                        var symb = helper.getSymbolForAST(m);
-                        if (symb instanceof TypeScript.PullSignatureSymbol) {
-                            var ssymb = symb;
-                        }
-                        break;
-
                     case 145 /* MethodSignature */:
                         var v = m;
                         var anns = tokenAnnots(v.propertyName);
                         if (anns.length === 0) {
                             var eltSymbol = helper.getSymbolForAST(v);
-                            return [eltSymbol.name + " : " + eltSymbol.toString()];
+                            return [eltSymbol.name + ": " + eltSymbol.toRsType().toString()];
                         } else {
                             return anns.map(function (m) {
                                 return m.content();
@@ -9928,7 +9947,7 @@ var TypeScript;
                         var anns = tokenAnnots(v.propertyName);
                         if (anns.length === 0) {
                             var eltSymbol = helper.getSymbolForAST(v);
-                            return [eltSymbol.name + " : " + eltSymbol.type.toRsType().toString()];
+                            return [eltSymbol.name + ": " + eltSymbol.type.toRsType().toString()];
                         } else {
                             return anns.map(function (m) {
                                 return m.content();
@@ -9959,8 +9978,9 @@ var TypeScript;
 
             var sourceSpan = helper.getSourceSpan(this);
 
-            restAnnots.push(new TypeScript.RsBindAnnotation(sourceSpan, 4 /* RawType */, annotStr));
-            return new TypeScript.RsEmptyStmt(helper.getSourceSpan(this), restAnnots);
+            restAnnots.push(new TypeScript.RsBindAnnotation(sourceSpan, 3 /* RawIface */, annotStr));
+
+            return new TypeScript.RsIfaceStmt(helper.getSourceSpan(this), restAnnots);
         };
         return InterfaceDeclarationSyntax;
     })(TypeScript.SyntaxNode);
@@ -10185,6 +10205,10 @@ var TypeScript;
         ModuleDeclarationSyntax.prototype.isTypeScriptSpecific = function () {
             return true;
         };
+
+        ModuleDeclarationSyntax.prototype.toRsStmt = function (helper) {
+            return new TypeScript.RsModuleStmt(helper.getSourceSpan(this), tokenAnnots(this.moduleKeyword), this.name.toRsId(helper), this.moduleElements.toRsModuleElt(helper, []));
+        };
         return ModuleDeclarationSyntax;
     })(TypeScript.SyntaxNode);
     TypeScript.ModuleDeclarationSyntax = ModuleDeclarationSyntax;
@@ -10308,10 +10332,6 @@ var TypeScript;
 
         FunctionDeclarationSyntax.prototype.toRsStmt = function (helper) {
             var _this = this;
-            if (!this.block) {
-                return null;
-            }
-
             var name = this.identifier.text();
             var anns = tokenAnnots(this.firstToken());
             var bindAnns = anns.filter(function (a) {
@@ -10332,7 +10352,20 @@ var TypeScript;
             } else if (bindAnnNames.length !== 1 || bindAnnNames[0] !== name) {
                 helper.postDiagnostic(this, TypeScript.DiagnosticCode.Function_0_can_have_at_most_one_type_annotation, [name]);
             }
-            return new TypeScript.RsFunctionStmt(helper.getSourceSpan(this), anns, this.identifier.toRsId(helper), this.callSignature.parameterList.parameters.toRsAST(helper), new TypeScript.RsASTList([this.block.toRsStmt(helper)]));
+
+            if (!this.block) {
+                return new TypeScript.RsFunctionDecl(helper.getSourceSpan(this), anns, this.identifier.toRsId(helper), this.callSignature.parameterList.parameters.toRsAST(helper));
+            } else {
+                return new TypeScript.RsFunctionStmt(helper.getSourceSpan(this), anns, this.identifier.toRsId(helper), this.callSignature.parameterList.parameters.toRsAST(helper), new TypeScript.RsASTList([this.block.toRsStmt(helper)]));
+            }
+        };
+
+        FunctionDeclarationSyntax.prototype.toRsModuleElt = function (helper) {
+            var exported = this.modifiers.toArray().some(function (m) {
+                return m.tokenKind === 47 /* ExportKeyword */;
+            });
+
+            return new TypeScript.RsModuleElt(exported, this.toRsStmt(helper));
         };
         return FunctionDeclarationSyntax;
     })(TypeScript.SyntaxNode);
@@ -10433,6 +10466,17 @@ var TypeScript;
 
         VariableStatementSyntax.prototype.toRsAST = function (helper) {
             return this.variableDeclaration.toRsAST(helper);
+        };
+
+        VariableStatementSyntax.prototype.toRsModuleElt = function (helper) {
+            var anns = TypeScript.ArrayUtilities.concat(this.modifiers.toArray().map(function (m) {
+                return tokenAnnots(m);
+            }));
+            var exported = this.modifiers.toArray().some(function (m) {
+                return m.tokenKind === 47 /* ExportKeyword */;
+            });
+
+            return new TypeScript.RsModuleElt(exported, this.variableDeclaration.toRsStmt(helper, anns));
         };
 
         VariableStatementSyntax.prototype.toRsStmt = function (helper) {
@@ -10557,13 +10601,6 @@ var TypeScript;
                 return d instanceof TypeScript.RsVarDecl;
             })) {
                 return new TypeScript.RsVarDeclStmt(helper.getSourceSpan(this), noBindAnns, decls);
-            } else if (decls.members.every(function (d) {
-                return d instanceof TypeScript.RsEmptyStmt;
-            })) {
-                var declAnnots = noBindAnns.concat(bindAnns.map(function (b) {
-                    return new TypeScript.RsGlobalAnnotation(b.sourceSpan(), 3 /* RawExtern */, b.content());
-                }));
-                return new TypeScript.RsEmptyStmt(helper.getSourceSpan(this), declAnnots);
             } else {
                 helper.postDiagnostic(this, TypeScript.DiagnosticCode.All_variable_declarators_need_to_be_translated_to_either_RsVarDecls_or_RsEmptyStmts);
             }
@@ -10659,13 +10696,21 @@ var TypeScript;
                 var anns1 = anns.filter(function (a) {
                     return a.binderName(_this, helper) === _this.propertyName.text();
                 });
-
                 var pullDecl = helper.getDeclForAST(this);
                 if ((pullDecl.flags & 8 /* Ambient */) === 8 /* Ambient */) {
-                    if (anns1.length === 1) {
-                        return new TypeScript.RsEmptyStmt(helper.getSourceSpan(this), anns1);
+                    if (anns1.length === 0) {
+                        var type = helper.getDeclForAST(this).getSymbol().type.toRsType();
+                        if (type instanceof TypeScript.TError) {
+                            var tError = type;
+                            helper.postDiagnostic(this, TypeScript.DiagnosticCode.Cannot_translate_type_0_into_RefScript_type, [tError.message()]);
+                        }
+                        var typeStr = type.toString();
+                        anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 1 /* RawBind */, this.propertyName.text() + " :: " + typeStr));
+                        return new TypeScript.RsVarDecl(helper.getSourceSpan(this), anns, this.propertyName.toRsId(helper), null);
+                    } else if (anns1.length === 1) {
+                        return new TypeScript.RsVarDecl(helper.getSourceSpan(this), anns1, this.propertyName.toRsId(helper), null);
                     }
-                    helper.postDiagnostic(this, TypeScript.DiagnosticCode.Ambient_variable_declarator_for_0_needs_to_have_exactly_one_type_annotation, [this.propertyName.text()]);
+                    helper.postDiagnostic(this, TypeScript.DiagnosticCode.Ambient_variable_declarator_for_0_needs_to_have_at_least_one_type_annotation, [this.propertyName.text()]);
                 }
 
                 if (anns1.length < 2) {
@@ -14149,7 +14194,7 @@ var TypeScript;
         ConstructorDeclarationSyntax.prototype.toRsClassElt = function (helper) {
             var anns = tokenAnnots(this.firstToken(), 3 /* ClassContructorContext */);
             var bindAnns = anns.filter(function (a) {
-                return a.kind() === 8 /* RawConstr */;
+                return a.kind() === 7 /* RawConstr */;
             });
             if (bindAnns.length !== 1) {
                 throw new Error("Constructors should have exactly one annotation.");
@@ -14276,11 +14321,11 @@ var TypeScript;
 
             if (isStatic) {
                 var bindAnns = anns.filter(function (a) {
-                    return a.kind() === 9 /* RawStatic */;
+                    return a.kind() === 8 /* RawStatic */;
                 });
             } else {
                 var bindAnns = anns.filter(function (a) {
-                    return a.kind() === 7 /* RawMethod */;
+                    return a.kind() === 6 /* RawMethod */;
                 });
             }
 
@@ -14631,11 +14676,11 @@ var TypeScript;
 
             if (isStatic) {
                 var bindAnns = anns.filter(function (a) {
-                    return a.kind() === 9 /* RawStatic */;
+                    return a.kind() === 8 /* RawStatic */;
                 });
             } else {
                 var bindAnns = anns.filter(function (a) {
-                    return a.kind() === 6 /* RawField */;
+                    return a.kind() === 5 /* RawField */;
                 });
             }
 
@@ -14647,7 +14692,7 @@ var TypeScript;
             }
 
             var binderNames = anns.filter(function (b) {
-                return b.kind() === 6 /* RawField */ || b.kind() === 9 /* RawStatic */;
+                return b.kind() === 5 /* RawField */ || b.kind() === 8 /* RawStatic */;
             });
 
             return new TypeScript.RsMemberVarDecl(helper.getSourceSpan(this), [], isStatic, this.variableDeclarator.toRsVarDecl(helper, binderNames));
@@ -16325,7 +16370,7 @@ var TypeScript;
             var eltSymbol = helper.getSymbolForAST(this.type);
             var castType = eltSymbol.type.toRsType();
             var sourceSpan = helper.getSourceSpan(this);
-            var castAnn = new TypeScript.RsBindAnnotation(sourceSpan, 14 /* RawCast */, castType.toString());
+            var castAnn = new TypeScript.RsBindAnnotation(sourceSpan, 13 /* RawCast */, castType.toString());
             return new TypeScript.RsCast(helper.getSourceSpan(this), [castAnn], this.expression.toRsExp(helper));
         };
         return CastExpressionSyntax;
@@ -18351,6 +18396,11 @@ var TypeScript;
             throw new Error("toRsStmt not implemented for " + TypeScript.SyntaxKind[token.kind()]);
         }
 
+        function toRsModuleElt(token, helper) {
+            throw new Error("toRsModuleElt not implemented for " + TypeScript.SyntaxKind[token.kind()]);
+        }
+        Syntax.toRsModuleElt = toRsModuleElt;
+
         function toRsId(token, helper) {
             return new TypeScript.RsId(helper.getSourceSpan(token), [], token.text());
         }
@@ -18602,6 +18652,9 @@ var TypeScript;
             VariableWidthTokenWithNoTrivia.prototype.toRsId = function (helper) {
                 return toRsId(this, helper);
             };
+            VariableWidthTokenWithNoTrivia.prototype.toRsModuleElt = function (helper) {
+                return toRsModuleElt(this, helper);
+            };
             VariableWidthTokenWithNoTrivia.prototype.toRsMemList = function (helper) {
                 return toRsMemList(this, helper);
             };
@@ -18848,6 +18901,9 @@ var TypeScript;
             VariableWidthTokenWithLeadingTrivia.prototype.toRsId = function (helper) {
                 return toRsId(this, helper);
             };
+            VariableWidthTokenWithLeadingTrivia.prototype.toRsModuleElt = function (helper) {
+                return toRsModuleElt(this, helper);
+            };
             VariableWidthTokenWithLeadingTrivia.prototype.toRsMemList = function (helper) {
                 return toRsMemList(this, helper);
             };
@@ -19093,6 +19149,9 @@ var TypeScript;
             };
             VariableWidthTokenWithTrailingTrivia.prototype.toRsId = function (helper) {
                 return toRsId(this, helper);
+            };
+            VariableWidthTokenWithTrailingTrivia.prototype.toRsModuleElt = function (helper) {
+                return toRsModuleElt(this, helper);
             };
             VariableWidthTokenWithTrailingTrivia.prototype.toRsMemList = function (helper) {
                 return toRsMemList(this, helper);
@@ -19341,6 +19400,9 @@ var TypeScript;
             VariableWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsId = function (helper) {
                 return toRsId(this, helper);
             };
+            VariableWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsModuleElt = function (helper) {
+                return toRsModuleElt(this, helper);
+            };
             VariableWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsMemList = function (helper) {
                 return toRsMemList(this, helper);
             };
@@ -19574,6 +19636,9 @@ var TypeScript;
             };
             FixedWidthTokenWithNoTrivia.prototype.toRsId = function (helper) {
                 return toRsId(this, helper);
+            };
+            FixedWidthTokenWithNoTrivia.prototype.toRsModuleElt = function (helper) {
+                return toRsModuleElt(this, helper);
             };
             FixedWidthTokenWithNoTrivia.prototype.toRsMemList = function (helper) {
                 return toRsMemList(this, helper);
@@ -19811,6 +19876,9 @@ var TypeScript;
             FixedWidthTokenWithLeadingTrivia.prototype.toRsId = function (helper) {
                 return toRsId(this, helper);
             };
+            FixedWidthTokenWithLeadingTrivia.prototype.toRsModuleElt = function (helper) {
+                return toRsModuleElt(this, helper);
+            };
             FixedWidthTokenWithLeadingTrivia.prototype.toRsMemList = function (helper) {
                 return toRsMemList(this, helper);
             };
@@ -20046,6 +20114,9 @@ var TypeScript;
             };
             FixedWidthTokenWithTrailingTrivia.prototype.toRsId = function (helper) {
                 return toRsId(this, helper);
+            };
+            FixedWidthTokenWithTrailingTrivia.prototype.toRsModuleElt = function (helper) {
+                return toRsModuleElt(this, helper);
             };
             FixedWidthTokenWithTrailingTrivia.prototype.toRsMemList = function (helper) {
                 return toRsMemList(this, helper);
@@ -20283,6 +20354,9 @@ var TypeScript;
             };
             FixedWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsId = function (helper) {
                 return toRsId(this, helper);
+            };
+            FixedWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsModuleElt = function (helper) {
+                return toRsModuleElt(this, helper);
             };
             FixedWidthTokenWithLeadingAndTrailingTrivia.prototype.toRsMemList = function (helper) {
                 return toRsMemList(this, helper);
@@ -20865,6 +20939,10 @@ var TypeScript;
                 throw new Error("toRsId not implemented for " + TypeScript.SyntaxKind[this.kind()]);
             };
 
+            EmptyToken.prototype.toRsModuleElt = function (helper) {
+                throw new Error("toRsModuleElt not implemented for " + TypeScript.SyntaxKind[this.kind()]);
+            };
+
             EmptyToken.prototype.toRsMemList = function (helper) {
                 throw new Error("toRsMemList not implemented for " + TypeScript.SyntaxKind[this.kind()]);
             };
@@ -21139,6 +21217,10 @@ var TypeScript;
 
             RealizedToken.prototype.toRsMemList = function (helper) {
                 throw new Error("RealizedToken toRsMemList not implemented for " + TypeScript.SyntaxKind[this.kind()]);
+            };
+
+            RealizedToken.prototype.toRsModuleElt = function (helper) {
+                throw new Error("RealizedToken toRsModuleElt not implemented for " + TypeScript.SyntaxKind[this.kind()]);
             };
 
             RealizedToken.prototype.toRsLValue = function (helper) {
@@ -36005,6 +36087,7 @@ var TypeScript;
             this.noImplicitAny = false;
             this.noLib = false;
             this.refScript = false;
+            this.refscriptLib = "";
             this.codeGenTarget = 0 /* EcmaScript3 */;
             this.moduleGenTarget = 0 /* Unspecified */;
             this.outFileOption = "";
@@ -36023,7 +36106,7 @@ var TypeScript;
     TypeScript.CompilationSettings = CompilationSettings;
 
     var ImmutableCompilationSettings = (function () {
-        function ImmutableCompilationSettings(propagateEnumConstants, removeComments, watch, noResolve, allowAutomaticSemicolonInsertion, noImplicitAny, noLib, refScript, codeGenTarget, moduleGenTarget, outFileOption, outDirOption, mapSourceFiles, mapRoot, sourceRoot, generateDeclarationFiles, useCaseSensitiveFileResolution, gatherDiagnostics, codepage, createFileLog) {
+        function ImmutableCompilationSettings(propagateEnumConstants, removeComments, watch, noResolve, allowAutomaticSemicolonInsertion, noImplicitAny, noLib, refScript, refScriptLib, codeGenTarget, moduleGenTarget, outFileOption, outDirOption, mapSourceFiles, mapRoot, sourceRoot, generateDeclarationFiles, useCaseSensitiveFileResolution, gatherDiagnostics, codepage, createFileLog) {
             this._propagateEnumConstants = propagateEnumConstants;
             this._removeComments = removeComments;
             this._watch = watch;
@@ -36033,6 +36116,7 @@ var TypeScript;
             this._noLib = noLib;
 
             this._refScript = refScript;
+            this._refScriptLib = refScriptLib;
 
             this._codeGenTarget = codeGenTarget;
             this._moduleGenTarget = moduleGenTarget;
@@ -36071,6 +36155,9 @@ var TypeScript;
 
         ImmutableCompilationSettings.prototype.refScript = function () {
             return this._refScript;
+        };
+        ImmutableCompilationSettings.prototype.refScriptLib = function () {
+            return this._refScriptLib;
         };
 
         ImmutableCompilationSettings.prototype.codeGenTarget = function () {
@@ -36119,7 +36206,7 @@ var TypeScript;
         };
 
         ImmutableCompilationSettings.fromCompilationSettings = function (settings) {
-            return new ImmutableCompilationSettings(settings.propagateEnumConstants, settings.removeComments, settings.watch, settings.noResolve, settings.allowAutomaticSemicolonInsertion, settings.noImplicitAny, settings.noLib, settings.refScript, settings.codeGenTarget, settings.moduleGenTarget, settings.outFileOption, settings.outDirOption, settings.mapSourceFiles, settings.mapRoot, settings.sourceRoot, settings.generateDeclarationFiles, settings.useCaseSensitiveFileResolution, settings.gatherDiagnostics, settings.codepage, settings.createFileLog);
+            return new ImmutableCompilationSettings(settings.propagateEnumConstants, settings.removeComments, settings.watch, settings.noResolve, settings.allowAutomaticSemicolonInsertion, settings.noImplicitAny, settings.noLib, settings.refScript, settings.refscriptLib, settings.codeGenTarget, settings.moduleGenTarget, settings.outFileOption, settings.outDirOption, settings.mapSourceFiles, settings.mapRoot, settings.sourceRoot, settings.generateDeclarationFiles, settings.useCaseSensitiveFileResolution, settings.gatherDiagnostics, settings.codepage, settings.createFileLog);
         };
 
         ImmutableCompilationSettings.prototype.toCompilationSettings = function () {
@@ -37728,6 +37815,28 @@ var TypeScript;
             }
 
             return null;
+        };
+
+        PullSymbol.prototype.toRsType = function () {
+            if (this.isMethod()) {
+                var type = this.type;
+                var sigs = type.getCallSignatures();
+
+                if (sigs.length !== 1) {
+                    return new TypeScript.TError(type.toString());
+                }
+                var sig = sigs[0];
+
+                var methParams = sig.getTypeParameters().map(function (p) {
+                    return p.type.toRsTypeParameter();
+                });
+                var methArgs = sig.parameters.map(function (p) {
+                    return new TypeScript.BoundedRsType(p.name, p.type.toRsType());
+                });
+                var methRetT = sig.returnType.toRsType();
+                return new TypeScript.TMethodSig(methParams, methArgs, methRetT);
+            }
+            throw new Error("UNIMPLEMENTED: PullSymbol.toRsType not supprted for " + this.toString());
         };
         return PullSymbol;
     })();
@@ -39478,7 +39587,8 @@ var TypeScript;
             }
 
             if (this.isArrayNamedTypeReference()) {
-                return new TypeScript.TArray(this.getElementType().toRsType());
+                var mutable = new TypeScript.TTypeReference("Mutable", []);
+                return new TypeScript.TTypeReference("Array", [mutable, this.getElementType().toRsType()]);
             }
 
             if (this.isEnum()) {
@@ -58593,29 +58703,21 @@ var TypeScript;
     })();
     TypeScript.Triple = Triple;
 
-    (function (MutabilityModifiers) {
-        MutabilityModifiers[MutabilityModifiers["ReadOnly"] = 0] = "ReadOnly";
-        MutabilityModifiers[MutabilityModifiers["Mutable"] = 1] = "Mutable";
-        MutabilityModifiers[MutabilityModifiers["Immutable"] = 2] = "Immutable";
-    })(TypeScript.MutabilityModifiers || (TypeScript.MutabilityModifiers = {}));
-    var MutabilityModifiers = TypeScript.MutabilityModifiers;
-
     (function (AnnotKind) {
         AnnotKind[AnnotKind["RawMeas"] = 0] = "RawMeas";
         AnnotKind[AnnotKind["RawBind"] = 1] = "RawBind";
         AnnotKind[AnnotKind["RawFunc"] = 2] = "RawFunc";
-        AnnotKind[AnnotKind["RawExtern"] = 3] = "RawExtern";
-        AnnotKind[AnnotKind["RawType"] = 4] = "RawType";
-        AnnotKind[AnnotKind["RawClass"] = 5] = "RawClass";
-        AnnotKind[AnnotKind["RawField"] = 6] = "RawField";
-        AnnotKind[AnnotKind["RawMethod"] = 7] = "RawMethod";
-        AnnotKind[AnnotKind["RawConstr"] = 8] = "RawConstr";
-        AnnotKind[AnnotKind["RawStatic"] = 9] = "RawStatic";
-        AnnotKind[AnnotKind["RawTAlias"] = 10] = "RawTAlias";
-        AnnotKind[AnnotKind["RawPAlias"] = 11] = "RawPAlias";
-        AnnotKind[AnnotKind["RawQual"] = 12] = "RawQual";
-        AnnotKind[AnnotKind["RawInvt"] = 13] = "RawInvt";
-        AnnotKind[AnnotKind["RawCast"] = 14] = "RawCast";
+        AnnotKind[AnnotKind["RawIface"] = 3] = "RawIface";
+        AnnotKind[AnnotKind["RawClass"] = 4] = "RawClass";
+        AnnotKind[AnnotKind["RawField"] = 5] = "RawField";
+        AnnotKind[AnnotKind["RawMethod"] = 6] = "RawMethod";
+        AnnotKind[AnnotKind["RawConstr"] = 7] = "RawConstr";
+        AnnotKind[AnnotKind["RawStatic"] = 8] = "RawStatic";
+        AnnotKind[AnnotKind["RawTAlias"] = 9] = "RawTAlias";
+        AnnotKind[AnnotKind["RawPAlias"] = 10] = "RawPAlias";
+        AnnotKind[AnnotKind["RawQual"] = 11] = "RawQual";
+        AnnotKind[AnnotKind["RawInvt"] = 12] = "RawInvt";
+        AnnotKind[AnnotKind["RawCast"] = 13] = "RawCast";
     })(TypeScript.AnnotKind || (TypeScript.AnnotKind = {}));
     var AnnotKind = TypeScript.AnnotKind;
 
@@ -58644,21 +58746,23 @@ var TypeScript;
                 case 1 /* RawBind */: {
                     switch (ctx) {
                         case 0 /* ClassMethodContext */:
-                            return new RsBindAnnotation(ss, 7 /* RawMethod */, pair.snd());
+                            return new RsBindAnnotation(ss, 6 /* RawMethod */, pair.snd());
                         case 1 /* ClassStaticContext */:
-                            return new RsBindAnnotation(ss, 9 /* RawStatic */, pair.snd());
+                            return new RsBindAnnotation(ss, 8 /* RawStatic */, pair.snd());
                         case 2 /* ClassFieldContext */:
-                            return new RsBindAnnotation(ss, 6 /* RawField */, pair.snd());
+                            return new RsBindAnnotation(ss, 5 /* RawField */, pair.snd());
                         case 3 /* ClassContructorContext */:
-                            return new RsBindAnnotation(ss, 8 /* RawConstr */, pair.snd());
+                            return new RsBindAnnotation(ss, 7 /* RawConstr */, pair.snd());
                         case 4 /* OtherContext */:
                             return new RsBindAnnotation(ss, pair.fst(), pair.snd());
                         default:
                             throw new Error("BUG: there is no default context");
                     }
                 }
-                case 5 /* RawClass */:
-                    return new RsExplicitNamedTypeAnnotation(ss, pair.snd());
+                case 4 /* RawClass */:
+                    return new RsExplicitClassAnnotation(ss, pair.snd());
+                case 3 /* RawIface */:
+                    return new RsExplicitInterfaceAnnotation(ss, pair.snd());
                 default:
                     return new RsGlobalAnnotation(ss, pair.fst(), pair.snd());
             }
@@ -58706,21 +58810,19 @@ var TypeScript;
                 case "measure":
                     return 0 /* RawMeas */;
                 case "qualif":
-                    return 12 /* RawQual */;
+                    return 11 /* RawQual */;
                 case "interface":
-                    return 4 /* RawType */;
+                    return 3 /* RawIface */;
                 case "alias":
-                    return 10 /* RawTAlias */;
+                    return 9 /* RawTAlias */;
                 case "class":
-                    return 5 /* RawClass */;
+                    return 4 /* RawClass */;
                 case "predicate":
-                    return 11 /* RawPAlias */;
+                    return 10 /* RawPAlias */;
                 case "invariant":
-                    return 13 /* RawInvt */;
+                    return 12 /* RawInvt */;
                 case "cast":
-                    return 14 /* RawCast */;
-                case "extern":
-                    return 3 /* RawExtern */;
+                    return 13 /* RawCast */;
                 case "<anonymous>":
                     return 2 /* RawFunc */;
                 default:
@@ -58796,7 +58898,7 @@ var TypeScript;
     var RsInferredClassAnnotation = (function (_super) {
         __extends(RsInferredClassAnnotation, _super);
         function RsInferredClassAnnotation(sourceSpan, _className, _typeParams, _extends, _implements) {
-            _super.call(this, sourceSpan, 5 /* RawClass */, RsInferredClassAnnotation.toString(_className, _typeParams, _extends, _implements));
+            _super.call(this, sourceSpan, 4 /* RawClass */, RsInferredClassAnnotation.toString(_className, _typeParams, _extends, _implements));
             this._className = _className;
             this._typeParams = _typeParams;
             this._extends = _extends;
@@ -58831,21 +58933,37 @@ var TypeScript;
     })(RsClassAnnotation);
     TypeScript.RsInferredClassAnnotation = RsInferredClassAnnotation;
 
-    var RsExplicitNamedTypeAnnotation = (function (_super) {
-        __extends(RsExplicitNamedTypeAnnotation, _super);
-        function RsExplicitNamedTypeAnnotation(sourceSpan, content) {
-            _super.call(this, sourceSpan, 5 /* RawClass */, content);
+    var RsExplicitClassAnnotation = (function (_super) {
+        __extends(RsExplicitClassAnnotation, _super);
+        function RsExplicitClassAnnotation(sourceSpan, content) {
+            _super.call(this, sourceSpan, 4 /* RawClass */, content);
         }
-        RsExplicitNamedTypeAnnotation.prototype.isGlob = function () {
+        RsExplicitClassAnnotation.prototype.isGlob = function () {
             return false;
         };
 
-        RsExplicitNamedTypeAnnotation.prototype.content = function () {
+        RsExplicitClassAnnotation.prototype.content = function () {
             return "class " + _super.prototype.content.call(this);
         };
-        return RsExplicitNamedTypeAnnotation;
+        return RsExplicitClassAnnotation;
     })(RsClassAnnotation);
-    TypeScript.RsExplicitNamedTypeAnnotation = RsExplicitNamedTypeAnnotation;
+    TypeScript.RsExplicitClassAnnotation = RsExplicitClassAnnotation;
+
+    var RsExplicitInterfaceAnnotation = (function (_super) {
+        __extends(RsExplicitInterfaceAnnotation, _super);
+        function RsExplicitInterfaceAnnotation(sourceSpan, content) {
+            _super.call(this, sourceSpan, 3 /* RawIface */, content);
+        }
+        RsExplicitInterfaceAnnotation.prototype.isGlob = function () {
+            return false;
+        };
+
+        RsExplicitInterfaceAnnotation.prototype.content = function () {
+            return _super.prototype.content.call(this);
+        };
+        return RsExplicitInterfaceAnnotation;
+    })(RsClassAnnotation);
+    TypeScript.RsExplicitInterfaceAnnotation = RsExplicitInterfaceAnnotation;
 
     var RsGlobalAnnotation = (function (_super) {
         __extends(RsGlobalAnnotation, _super);
@@ -60014,6 +60132,28 @@ var TypeScript;
     })(RsStatement);
     TypeScript.RsFunctionStmt = RsFunctionStmt;
 
+    var RsFunctionDecl = (function (_super) {
+        __extends(RsFunctionDecl, _super);
+        function RsFunctionDecl(span, ann, id, args) {
+            _super.call(this, ann);
+            this.span = span;
+            this.ann = ann;
+            this.id = id;
+            this.args = args;
+        }
+        RsFunctionDecl.prototype.toObject = function () {
+            return {
+                FunctionDecl: [
+                    [this.span.toObject(), this.mapAnn(function (a) {
+                            return a.toObject();
+                        })],
+                    this.id.toObject(), this.args.toObject()]
+            };
+        };
+        return RsFunctionDecl;
+    })(RsStatement);
+    TypeScript.RsFunctionDecl = RsFunctionDecl;
+
     var RsReturnStmt = (function (_super) {
         __extends(RsReturnStmt, _super);
         function RsReturnStmt(span, ann, expression) {
@@ -60222,6 +60362,58 @@ var TypeScript;
         return RsThrowStatement;
     })(RsStatement);
     TypeScript.RsThrowStatement = RsThrowStatement;
+
+    var RsModuleStmt = (function (_super) {
+        __extends(RsModuleStmt, _super);
+        function RsModuleStmt(span, ann, name, body) {
+            _super.call(this, ann);
+            this.span = span;
+            this.ann = ann;
+            this.name = name;
+            this.body = body;
+        }
+        RsModuleStmt.prototype.toObject = function () {
+            return {
+                ModuleStmt: [
+                    [this.span.toObject(), this.mapAnn(function (a) {
+                            return a.toObject();
+                        })],
+                    this.body.toObject()]
+            };
+        };
+        return RsModuleStmt;
+    })(RsStatement);
+    TypeScript.RsModuleStmt = RsModuleStmt;
+
+    var RsIfaceStmt = (function (_super) {
+        __extends(RsIfaceStmt, _super);
+        function RsIfaceStmt(span, ann) {
+            _super.call(this, ann);
+            this.span = span;
+            this.ann = ann;
+        }
+        RsIfaceStmt.prototype.toObject = function () {
+            return { IfaceStmt: [this.span.toObject(), this.mapAnn(function (a) {
+                        return a.toObject();
+                    })] };
+        };
+        return RsIfaceStmt;
+    })(RsStatement);
+    TypeScript.RsIfaceStmt = RsIfaceStmt;
+
+    var RsModuleElt = (function (_super) {
+        __extends(RsModuleElt, _super);
+        function RsModuleElt(exported, body) {
+            _super.call(this);
+            this.exported = exported;
+            this.body = body;
+        }
+        RsModuleElt.prototype.toObject = function () {
+            return { ModuleElt: [this.exported, this.body.toObject()] };
+        };
+        return RsModuleElt;
+    })(RsAST);
+    TypeScript.RsModuleElt = RsModuleElt;
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
 (function (TypeScript) {
@@ -60535,6 +60727,31 @@ var TypeScript;
         return TFunctionSigMember;
     })();
     TypeScript.TFunctionSigMember = TFunctionSigMember;
+
+    var TMethodSig = (function () {
+        function TMethodSig(tParams, argTs, returnT) {
+            this.tParams = tParams;
+            this.argTs = argTs;
+            this.returnT = returnT;
+        }
+        TMethodSig.prototype.toString = function () {
+            var s = "";
+            if (this.tParams.length > 0) {
+                s += "forall " + this.tParams.map(function (p) {
+                    return p.toString();
+                }).join(" ") + " . ";
+            }
+            s += "( ";
+            s += this.argTs.map(function (b) {
+                return b.toString();
+            }).join(", ");
+            s += " ): ";
+            s += this.returnT.toString();
+            return s;
+        };
+        return TMethodSig;
+    })();
+    TypeScript.TMethodSig = TMethodSig;
 
     var TFunctionSig = (function (_super) {
         __extends(TFunctionSig, _super);
@@ -61572,14 +61789,28 @@ var TypeScript;
             }
 
             var defaultLibStart = new Date().getTime();
-            if (includeDefaultLibrary) {
-                var libraryResolvedFile = {
-                    path: this.getDefaultLibraryFilePath(),
-                    referencedFiles: [],
-                    importedFiles: []
-                };
 
-                resolvedFiles = [libraryResolvedFile].concat(resolvedFiles);
+            if (this.compilationSettings.refScript()) {
+                var refscriptLib = this.compilationSettings.refScriptLib();
+                if (refscriptLib && refscriptLib !== "") {
+                    var libraryResolvedFile = {
+                        path: this.resolvePath(refscriptLib),
+                        referencedFiles: [],
+                        importedFiles: []
+                    };
+
+                    resolvedFiles = [libraryResolvedFile].concat(resolvedFiles);
+                }
+            } else {
+                if (includeDefaultLibrary) {
+                    var libraryResolvedFile = {
+                        path: this.getDefaultLibraryFilePath(),
+                        referencedFiles: [],
+                        importedFiles: []
+                    };
+
+                    resolvedFiles = [libraryResolvedFile].concat(resolvedFiles);
+                }
             }
             TypeScript.fileResolutionGetDefaultLibraryTime += new Date().getTime() - defaultLibStart;
 
@@ -61652,6 +61883,17 @@ var TypeScript;
                 type: TypeScript.DiagnosticCode.DIRECTORY,
                 set: function (str) {
                     mutableSettings.outDirOption = str;
+                }
+            });
+
+            opts.option('lib', {
+                usage: {
+                    locCode: TypeScript.DiagnosticCode.Import_library_only_enabled_with_refscript,
+                    args: null
+                },
+                type: TypeScript.DiagnosticCode.LOCATION,
+                set: function (str) {
+                    mutableSettings.refscriptLib = str;
                 }
             });
 

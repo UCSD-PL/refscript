@@ -1,7 +1,8 @@
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE ConstraintKinds      #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE NoMonomorphismRestriction  #-}
+{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE FlexibleInstances          #-}
 
 -- | Module pertaining to Refinement Type descriptions and conversions
 --   Likely mergeable with @Language.Nano.Typecheck.Types@
@@ -102,7 +103,7 @@ data CGEnv
         , guards   :: ![F.Pred]           -- ^ branch target conditions  
         , cge_ctx  :: !IContext           -- ^ intersection-type context 
         , cge_spec :: !(Env RefType)      -- ^ specifications for defined functions
-        , cge_defs :: !(TDefEnv F.Reft)   -- ^ type definitions
+        , cge_defs :: !(IfaceEnv F.Reft)   -- ^ type definitions
         }
 
 ----------------------------------------------------------------------------
@@ -228,7 +229,6 @@ tconFTycon TString      = F.strFTyCon
 tconFTycon TTop         = rawStringFTycon "Top"
 tconFTycon TNull        = rawStringFTycon "Null"
 tconFTycon TUndef       = rawStringFTycon "Undefined"
-tconFTycon (TTyOf s)    = rawStringFTycon ("typeof " ++ show s)
 
 
 rTypeSortForAll t    = genSort n θ $ rTypeSort tbody
@@ -278,7 +278,7 @@ emapReft _ _ _               = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)     = B x $ emapReft f γ t
 
-emapReftElt  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> TElt a -> TElt b
+emapReftElt  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> TypeMember a -> TypeMember b
 emapReftElt f γ e            = fmap (f γ) e
 
 mapReftM f (TVar α r)        = TVar α <$> f r
@@ -376,7 +376,7 @@ rawStringFTycon = F.symbolFTycon . F.Loc (F.dummyPos "RSC.Types.rawStringFTycon"
 --  * applys @g@ whenever the respective part in type @t2@ is missing
 --
 --------------------------------------------------------------------------------
-zipType :: TDefEnv F.Reft -> RefType -> RefType -> RefType
+zipType :: IfaceEnv F.Reft -> RefType -> RefType -> RefType
 --------------------------------------------------------------------------------
 --
 --  s1 \/ .. sn | t1 \/ .. tm = s1'|t1' \/ .. tk|tk' \/ .. bot(tm')
@@ -468,14 +468,14 @@ zipType δ t1@(TApp (TRef _) _ _) t2 = zipType δ (flattenType δ t1) t2
 zipType δ t1 t2@(TApp (TRef _) _ _) = zipType δ t1 (flattenType δ t2)
 
 
-zipType δ t1@(TApp (TTyOf x1) [] r1) t2@(TApp (TTyOf x2) [] _) 
+zipType δ t1@(TClass x1) t2@(TClass x2) 
   | x2 `elem` lineage δ (findSymOrDie x1 δ)
-  = TApp (TTyOf x2) [] r1
+  = TClass x2
   | otherwise 
   = zipType δ (flattenType δ t1) (flattenType δ t2)
 
-zipType δ t1@(TApp (TTyOf _) _ _) t2 = zipType δ (flattenType δ t1) t2
-zipType δ t1 t2@(TApp (TTyOf _) _ _) = zipType δ t1 (flattenType δ t2)
+zipType δ t1@(TClass _) t2 = zipType δ (flattenType δ t1) t2
+zipType δ t1 t2@(TClass _) = zipType δ t1 (flattenType δ t2)
 
  
 

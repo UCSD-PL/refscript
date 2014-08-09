@@ -36,33 +36,38 @@ ssaTransform = return . ssaTransform'
 
 
 -- | `ssaNano` Perfroms SSA transformation of the input program. The output
--- program is patched (annotated per AST) with information about:
--- * SSA-phi nodes
--- * Spec annotations (functions, global variable declarations)
--- * Type annotations (variable declarations (?), class elements)
+--   program is patched (annotated per AST) with information about:
+--   * SSA-phi nodes
+--   * Spec annotations (functions, global variable declarations)
+--   * Type annotations (variable declarations (?), class elements)
 ----------------------------------------------------------------------------------
 ssaNano :: (PP r, F.Reftable r, Data r, Typeable r) => NanoBareR r -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano { code = Src fs }) 
-  = do θ <- getSsaEnv 
-       setGlobs $ M.fromList $ (\(l,i,_) -> (srcPos l,fmap srcPos i)) <$> definedGlobs fs
-       setSsaEnv $ extSsaEnv classes θ
+  = do θ         <- getSsaEnv 
+       -- All program globals (Variables with annotations)
+       setGlobs   $ tracePP "definedGlobs" $ fmap srcPos <$> definedGlobs fs
+
+       -- FIXME: Classes? Need to isolate the ones in scope
+       setSsaEnv  $ extSsaEnv classes θ
+
        withAssignability ReadOnly ros
-            $ do (_,fs') <- ssaStmts (map (ann <$>) fs)
-                 ssaAnns <- getAnns
-                 return   $ p {code = Src $ map (fmap (patch [ssaAnns, typeAnns])) fs' }
+                  $ do  (_,fs') <- ssaStmts (map (ann <$>) fs)
+                        ssaAnns <- getAnns
+                        return   $ p {code = Src $ map (fmap (patch [ssaAnns, typeAnns])) fs' }
     where
-      typeAnns      = M.fromList $ concatMap 
+      typeAnns    = M.fromList $ concatMap 
                         (FO.concatMap (\(Ann l an) -> (l,) <$> single <$> an)) fs
-      ros           = readOnlyVars p
-      patch        :: [M.HashMap SourceSpan [Fact r]] -> SourceSpan -> Annot (Fact r) SourceSpan
-      patch ms l    = Ann l $ concatMap (M.lookupDefault [] l) ms
-      classes       = [ fmap ann i | ClassStmt _ i _ _ _ <- fs]
+
+      ros         = readOnlyVars p
+
+      patch ms l  = Ann l $ concatMap (M.lookupDefault [] l) ms
+      classes     = [ fmap ann i | ClassStmt _ i _ _ _ <- fs]
 
 -------------------------------------------------------------------------------------
--- ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)
+ssaFun :: F.Reftable r => SourceSpan -> t -> [Var] 
+                       -> [Statement SourceSpan] -> SSAM r [Statement SourceSpan]
 -------------------------------------------------------------------------------------
--- ssaFun (FunctionStmt l f xs body) 
 ssaFun l fo xs body 
   = do θ <- getSsaEnv  
        withAssignability ReadOnly (envIds θ) $               -- Variables from OUTER scope are UNASSIGNABLE
@@ -70,9 +75,6 @@ ssaFun l fo xs body
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
             return        $ body'
-            -- return        $ FunctionStmt l f xs body'
-
--- ssaFun _ = error "Calling ssaFun not with FunctionStmt"
 
 -------------------------------------------------------------------------------------
 ssaSeq :: (a -> SSAM r (Bool, a)) -> [a] -> SSAM r (Bool, [a]) 
@@ -91,17 +93,21 @@ ssaStmts :: F.Reftable r => [Statement SourceSpan] -> SSAM r (Bool, [Statement S
 -------------------------------------------------------------------------------------
 ssaStmts ss
   = do  αs <- getGlobs
-        withAssignability WriteGlobal (wgs αs) $ mapSnd flattenBlock <$> ssaSeq ssaStmt ss
-  where wgs αs = [ x | VarDeclStmt _ vd <- ss
-                     , VarDecl l x _    <- vd
-                     , isJust $ M.lookup l αs ] 
-  
+        withAssignability WriteGlobal αs $ mapSnd flattenBlock <$> ssaSeq ssaStmt ss
 
 -------------------------------------------------------------------------------------
 ssaStmt :: F.Reftable r => Statement SourceSpan -> SSAM r (Bool, Statement SourceSpan)
 -------------------------------------------------------------------------------------
 -- skip
 ssaStmt s@(EmptyStmt _) 
+  = return (True, s)
+
+-- 
+ssaStmt s@(FunctionDecl _ _ _) 
+  = return (True, s)
+
+-- 
+ssaStmt s@(IfaceStmt _) 
   = return (True, s)
 
 -- x = e

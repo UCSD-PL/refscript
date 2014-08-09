@@ -1,6 +1,6 @@
-/*************************************************************************/
-/*********** General purpose auxiliary functions *************************/
-/*************************************************************************/
+/*****************************************************************************/
+/*********** General purpose auxiliary definitions ***********************/
+/*****************************************************************************/
 
 declare function crash<A>(): A; 
 
@@ -20,11 +20,13 @@ declare function pos(): number;
 
 declare function alert(s: string): void;
 
+interface Pair<A,B> { }
 
 
-/*************************************************************************/
+
+/*****************************************************************************/
 /************** Types for Builtin Operators ******************************/
-/*************************************************************************/
+/*****************************************************************************/
 
 /*@ builtin_BIBracketRef ::
     /\ forall A. (arr: #Array[#Immutable,A], {idx:number | (0 <= idx && idx < (len arr))}) => A
@@ -309,55 +311,30 @@ declare var Number: {
 
 interface Math {
     E: number;
-
     LN10: number;
-
     LN2: number;
-
     LOG2E: number;
-
     LOG10E: number;
-
     PI: number;
-
     SQRT1_2: number;
-
     SQRT2: number;
-
     abs(x: number): number;
-
     acos(x: number): number;
-
     asin(x: number): number;
-
     atan(x: number): number;
-
     atan2(y: number, x: number): number;
-
     ceil(x: number): number;
-
     cos(x: number): number;
-
     exp(x: number): number;
-
     floor(x: number): number;
-
     log(x: number): number;
-    
     // max(...values: number[]): number;
-    
     // min(...values: number[]): number;
-
     pow(x: number, y: number): number;
-
     random(): number;
-
     round(x: number): number;
-
     sin(x: number): number;
-
     sqrt(x: number): number;
-
     tan(x: number): number;
 }
 
@@ -424,7 +401,7 @@ interface String {
 
     substr(from: number, length/*?*/: number): string;
 
-    [index: number]: string;
+    // [index: number]: string;
 }
 
 declare var String: {
@@ -458,7 +435,7 @@ interface Array<T> {
     */
     concat<U extends T[]>(...items: U[]): T[];
     // concat(...items: T[]): T[];
-
+  
     join(separator/*?*/: string): string;
 
     /*@ pop: (this: #Array[#Mutable, T]): T */
@@ -497,15 +474,15 @@ interface Array<T> {
     filter(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): T[];
 
     reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue/*?*/: T): T;
-    reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
+    // reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
     reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue/*?*/: T): T;
-    reduceRight<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
+    // reduceRight<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
     /*@ length: { v: number | (v = (len this) && v >= 0) } */
     length: number;
 
-    [n: number]: T;
+//      // [n: number]: T;
 }
 
 declare var Array: {
@@ -535,89 +512,97 @@ declare var Array: {
 
 
 
-/*************************************************************************/
-/************** Run-Time Tags ********************************************/
-/*************************************************************************/
+/*****************************************************************************/
+/************** Run-Time Tags ************************************************/
+/*****************************************************************************/
 
-/*@ measure ttag :: forall A . (A) => string                             */
+/*@ measure ttag :: forall A . (A) => string                                 */
 
-/*@ measure FLS  :: forall A . (A) => bool                               */
+/*@ measure FLS  :: forall A . (A) => bool                                   */
 
-/*@ measure Prop :: forall A . (A) => bool                               */
+/*@ measure Prop :: forall A . (A) => bool                                   */
 
-/*@ measure null :: forall A . (A) => bool                               */
+/*@ measure null :: forall A . (A) => bool                                   */
 
-/*@ extern builtin_PrefixTypeof :: forall A. (x:A) 
-                                => {v:string | (ttag x) = v }            */
+/*@ builtin_PrefixTypeof :: 
+    forall A. (x:A) => {v:string | (ttag x) = v }                
+ */
+declare function builtin_PrefixTypeof<A>(x: A): string; 
 
-/*@ extern builtin_BITruthy :: forall A. (x:A) 
-                            => { v:boolean | ((Prop v) <=> Prop(x)) }    */
+/*@ builtin_BITruthy :: 
+    forall A. (x:A) => { v:boolean | ((Prop v) <=> Prop(x)) }        
+*/
+declare function builtin_BITruthy<A>(x: A): boolean; 
 
-/*@ extern builtin_BIFalsy :: forall A. (x:A) 
-                           => { v:boolean | ((Prop v) <=> FLS(x)) }      */
+/*@ builtin_BIFalsy :: 
+    forall A. (x:A) => { v:boolean | ((Prop v) <=> FLS(x)) }          
+*/
+declare function builtin_BIFalsy<A>(x: A): boolean; 
 
-/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]}   */
+/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]}       */
 
-/*@ invariant {v:null | [(ttag(v) = "object"); not (Prop(v)); null(v) ]} */
+/*@ invariant {v:null | [(ttag(v) = "object"); not (Prop(v)); null(v) ]}     */
 
-/*@ invariant {v:boolean   | [(ttag(v) = "boolean")]}                    */ 
+/*@ invariant {v:boolean | [(ttag(v) = "boolean")]}                          */ 
 
-/*@ invariant {v:string | [(ttag(v) = "string"); (Prop(v) <=> v /= "" )]}*/
+/*@ invariant {v:string | [(ttag(v) = "string"); (Prop(v) <=> v /= "" )]}    */
 
-/*@ invariant {v:number    | [(ttag(v)  =  "number");
-                              (Prop(v) <=> v /= 0  ); 
-                              (FLS(v)  <=> v  = 0  )]}					 */
-
-
-/*@ measure instanceof :: forall A . (A, string) => bool                 */
-
-/*@ extern builtin_OpInstanceof :: forall A . (x:A, s: string) 
-                       => { v: boolean | (Prop(v) <=> instanceof(x,s)) } */
+/*@ invariant {v:number | [(ttag(v)  =  "number");
+                           (Prop(v) <=> v /= 0  ); 
+                           (FLS(v)  <=> v  = 0  )]}					                 */
 
 
+/*@ measure instanceof :: forall A . (A,string) => bool                      */
 
-/*************************************************************************/
-/************** Pre-Loaded Qualifiers ************************************/
-/*************************************************************************/
+/*@ builtin_OpInstanceof :: 
+    forall A . (x:A, s: string) => { v: boolean | (Prop(v) <=> instanceof(x,s)) }     
+*/
+declare function builtin_OpInstanceof<A>(x: A, s: string): boolean; 
 
-/*@ qualif Bot(v:a)                  : 0 = 1							 */
-/*@ qualif Bot(v:obj)                : 0 = 1                   			 */
-/*@ qualif Bot(v:boolean)            : 0 = 1                   			 */
-/*@ qualif Bot(v:number)             : 0 = 1                   			 */
-/*@ qualif CmpZ(v:number)            : v < 0                   			 */
-/*@ qualif CmpZ(v:number)            : v <= 0                  			 */
-/*@ qualif CmpZ(v:number)            : v >  0                  			 */
-/*@ qualif CmpO(v:number)            : v >  1                  			 */
-/*@ qualif CmpZ(v:number)            : v >= 0                  			 */
-/*@ qualif CmpZ(v:number)            : v =  0                  			 */
-/*@ qualif CmpZ(v:number)            : v != 0                  			 */
 
-/*@ qualif Cmp(v:number, x:number)   : v <  x                  			 */
-/*@ qualif Cmp(v:number, x:number)   : v <= x                  			 */
-/*@ qualif Cmp(v:number, x:number)   : v >  x                  			 */
-/*@ qualif Cmp(v:number, x:number)   : v >= x                  			 */
 
-/*@ qualif Cmp(v:a,x:a)              : v =  x                  			 */
-/*@ qualif Cmp(v:a,x:a)              : v != x                  			 */
-/*@ qualif One(v:number)             : v = 1                   			 */
-/*  qualif True(v:boolean)           : (v)                     			 */
-/*  qualif False(v:boolean)          : (not v)                 			 */
-/*@ qualif True1(v:boolean)          : (Prop v)                			 */
-/*@ qualif False1(v:boolean)         : not (Prop v)            			 */
+/*****************************************************************************/
+/************** Pre-Loaded Qualifiers ****************************************/
+/*****************************************************************************/
+
+/*@ qualif Bot(v:a)                  : 0 = 1							                   */
+/*@ qualif Bot(v:obj)                : 0 = 1                   			         */
+/*@ qualif Bot(v:boolean)            : 0 = 1                   			         */
+/*@ qualif Bot(v:number)             : 0 = 1                   			         */
+/*@ qualif CmpZ(v:number)            : v < 0                   			         */
+/*@ qualif CmpZ(v:number)            : v <= 0                  			         */
+/*@ qualif CmpZ(v:number)            : v >  0                  			         */
+/*@ qualif CmpO(v:number)            : v >  1                  			         */
+/*@ qualif CmpZ(v:number)            : v >= 0                  			         */
+/*@ qualif CmpZ(v:number)            : v =  0                  			         */
+/*@ qualif CmpZ(v:number)            : v != 0                  			         */
+
+/*@ qualif Cmp(v:number, x:number)   : v <  x                  			         */
+/*@ qualif Cmp(v:number, x:number)   : v <= x                  			         */
+/*@ qualif Cmp(v:number, x:number)   : v >  x                  			         */
+/*@ qualif Cmp(v:number, x:number)   : v >= x                  			         */
+
+/*@ qualif Cmp(v:a,x:a)              : v =  x                  			         */
+/*@ qualif Cmp(v:a,x:a)              : v != x                  			         */
+/*@ qualif One(v:number)             : v = 1                   			         */
+/*  qualif True(v:boolean)           : (v)                     			         */
+/*  qualif False(v:boolean)          : (not v)                 			         */
+/*@ qualif True1(v:boolean)          : (Prop v)                			         */
+/*@ qualif False1(v:boolean)         : not (Prop v)            			         */
 
 
 // Somewhat more controversial qualifiers (i.e. "expensive"...)
 
-/*  qualif Add(v:number,x:number,y:number): v = x + y          			 */
-/*  qualif Sub(v:number,x:number,y:number): v = x - y          			 */
+/*  qualif Add(v:number,x:number,y:number): v = x + y          			         */
+/*  qualif Sub(v:number,x:number,y:number): v = x - y          			         */
 
-/*  qualif Len(v:number, n: number)  : n < (len v)             			 */
+/*  qualif Len(v:number, n: number)  : n < (len v)             			         */
 
 
 
-/*************************************************************************/
-/*************  Error handling   *****************************************/
-/*************************************************************************/
+/*****************************************************************************/
+/*************  Error handling   *********************************************/
+/*****************************************************************************/
 
 // NOTE: types that are defined in lib.d.ts need to be in comment to pass
 // through the TS compilation phase.
@@ -665,15 +650,9 @@ declare var Error: {
 
 
 
-/*************************************************************************/
-/*******************  Auxilliary *****************************************/
-/*************************************************************************/
-interface Pair<A,B> { }
-
-
-/*************************************************************************/
-/******************  Mutability  *****************************************/
-/*************************************************************************/
+/*****************************************************************************/
+/******************  Mutability  *********************************************/
+/*****************************************************************************/
 
 interface ReadOnly { }
 

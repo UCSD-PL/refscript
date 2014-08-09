@@ -27,7 +27,7 @@ module Language.Nano.Types (
   , getAssume
   , getAssert
   , getInvariant
-  , getFunctionStatements 
+--   , getFunctionStatements 
   , getFunctionIds
 
   , isSpecification
@@ -252,6 +252,8 @@ instance IsNano (Statement a) where
   isNano (SwitchStmt _ e cs)      = isNano e && not (null cs) && isNano cs
   isNano (ClassStmt _ _ _ _  bd)  = all isNano bd
   isNano (ThrowStmt _ e)          = isNano e
+  isNano (FunctionDecl _ _ _)     = True
+  isNano (IfaceStmt _)            = True
   isNano e                        = errortext (text "Not Nano Statement!" <+> pp e)
 
 instance IsNano (ClassElt a) where
@@ -400,8 +402,8 @@ getStatementPred _ _
 getSpec   :: (Statement a -> Maybe F.Pred) -> [Statement a] -> F.Pred 
 getSpec g = mconcat . catMaybes . map g
 
-getFunctionStatements :: Statement a -> [Statement a]
-getFunctionStatements s = [fs | fs@(FunctionStmt _ _ _ _) <- flattenStmt s]
+-- getFunctionStatements :: Statement a -> [Statement a]
+-- getFunctionStatements s = [fs | fs@(FunctionStmt _ _ _ _) <- flattenStmt s]
 
 getFunctionIds :: Statement a -> [Id a]
 getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]

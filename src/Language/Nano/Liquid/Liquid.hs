@@ -94,16 +94,16 @@ consNano     :: NanoRefType -> CGM ()
 consNano pgm@(Nano {code = Src fs}) 
   = do  g   <- initCGEnv pgm
         g'  <- envAdds True (Env.envToList $ externs pgm) g
-        checkInterfaces pgm g'
+        -- checkInterfaces pgm g'
         consStmts g' fs 
         return ()
 
-checkInterfaces p g = 
-     mapM_ (safeExtends l g δ) is
-   where 
-     δ           = defs p
-     l           = srcPos dummySpan   -- FIXME  
-     is          = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
+-- checkInterfaces p g = 
+--      mapM_ (safeExtends l g δ) is
+--    where 
+--      δ           = defs p
+--      l           = srcPos dummySpan   -- FIXME  
+--      is          = [ d |d@(ID False _ _ _ _) <- envToList $ defs p ]
 
 
 --------------------------------------------------------------------------------
@@ -264,10 +264,10 @@ consStmt g s@(FunctionStmt _ _ _ _)
 --    variables as type parameters. 
 --
 consStmt g (ClassStmt l i _ _ ce) 
-  = do  d@(TD _ _ αs _ _) <- findSymOrDieM i
+  = do  d@(ID _ _ αs _ _) <- findSymOrDieM i
         g'                <- envAdds False [(Loc (srcPos l) α, tVar α) | α <- αs] g
         cgWithThis           (TApp (TRef $ F.symbol i) (tVar <$> αs) fTop) $ consClassElts (srcPos l) g' i d ce
-        g'                <- envAdds True [(i, TApp (TTyOf $ F.symbol i) [] fTop)] g
+        g'                <- envAdds True [(i, TClass $ F.symbol i)] g
         return             $ Just g'
 
 -- OTHER (Not handled)
@@ -294,7 +294,7 @@ consVarDecl g (VarDecl l x Nothing)
 
 
 ------------------------------------------------------------------------------------
-consClassElts :: PP a => SourceSpan -> CGEnv -> a -> TDef F.Reft -> [ClassElt AnnTypeR] -> CGM ()
+consClassElts :: PP a => SourceSpan -> CGEnv -> a -> InterfaceDefinition F.Reft -> [ClassElt AnnTypeR] -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElts l g i d ce 
    = do  δ <- getDef
@@ -395,11 +395,10 @@ consExpr g (PrefixExpr l o e)
   = consCall g l o [e] (prefixOpTy o $ renv g)
 
 consExpr g (InfixExpr l o@OpInstanceof e1 e2)
-  = do (x,g') <- consExpr g e2
+  = do (x,g')       <- consExpr g e2
        case envFindTy x g' of
-         TApp (TTyOf x) _ _ -> consCall g l o [e1, StringLit l2 (F.symbolString x)] 
-                                              (infixOpTy o $ renv g')
-         _                  -> cgError l $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
+         TClass x   -> consCall g l o [e1, StringLit l2 (F.symbolString x)] $ infixOpTy o $ renv g'
+         _          -> cgError l $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
   where
     l2 = getAnnotation e2
 
@@ -480,7 +479,7 @@ consExpr g (SuperRef l)
           TApp (TRef i) ts _ -> 
               do  w <- findSymOrDieM i
                   case w of 
-                    TD _ _ vs (Just (p, ps)) _ -> 
+                    ID _ _ vs (Just (p, ps)) _ -> 
                         let θ = fromList $ zip vs ts in
                         let t = apply θ $ TApp (TRef $ F.symbol p) ps fTop in                        
                         envAddFresh l t g

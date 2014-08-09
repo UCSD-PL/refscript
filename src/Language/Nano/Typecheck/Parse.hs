@@ -100,12 +100,12 @@ aliasVarT (l, x)
   where
     x'        = symbolString x
     
-iFaceP   :: Parser (Id SourceSpan, TDef Reft)
+iFaceP   :: Parser (Id SourceSpan, InterfaceDefinition Reft)
 iFaceP   = do id     <- identifierP 
               vs     <- option [] tParP
               ext    <- optionMaybe extendsP
               es     <- braces propBindP
-              return (id, TD False id vs ext es)
+              return (id, ID False id vs ext es)
 
 extendsP = do reserved "extends"
               pId <- (char '#' >> identifierP)
@@ -415,8 +415,8 @@ data RawSpec
   = RawMeas   (SourceSpan, String)   -- Measure
   | RawBind   (SourceSpan, String)   -- Function bindings
   | RawFunc   (SourceSpan, String)   -- Anonymouns function type
-  | RawExtern (SourceSpan, String)   -- Extern declarations
-  | RawType   (SourceSpan, String)   -- Variable declaration annotations
+  -- | RawExtern (SourceSpan, String)   -- Extern declarations
+  | RawIface  (SourceSpan, String)   -- Variable declaration annotations
   | RawClass  (SourceSpan, String)   -- Class annots
   | RawField  (SourceSpan, String)   -- Field annots
   | RawMethod (SourceSpan, String)   -- Method annots
@@ -433,12 +433,12 @@ data PSpec l r
   = Meas   (Id l, RType r)
   | Bind   (Id l, RType r) 
   | AnFunc (RType r) 
-  | Field  (TElt r)
-  | Constr (TElt r)
-  | Method (TElt r)
-  | Static (TElt r)
-  | Extern (Id l, RType r)
-  | IFace  (Id l, TDef r)
+  | Field  (TypeMember r)
+  | Constr (TypeMember r)
+  | Method (TypeMember r)
+  | Static (TypeMember r)
+--  | Extern (Id l, RType r)
+  | IFace  (Id l, InterfaceDefinition r)
   | Class  (Id l, ([TVar], Maybe (Id l,[RType r])))
   | TAlias (Id l, TAlias (RType r))
   | PAlias (Id l, PAlias) 
@@ -457,8 +457,8 @@ parseAnnot (RawField  (_ , _)) = Field  <$>               fieldEltP
 parseAnnot (RawMethod (_ , _)) = Method <$>               methEltP
 parseAnnot (RawStatic (_ , _)) = Static <$>               statEltP
 parseAnnot (RawConstr (_ , _)) = Constr <$>               consEltP
-parseAnnot (RawExtern (ss, _)) = Extern <$> patch2 ss <$> idBindP
-parseAnnot (RawType   (ss, _)) = IFace  <$> patch2 ss <$> iFaceP
+-- parseAnnot (RawExtern (ss, _)) = Extern <$> patch2 ss <$> idBindP
+parseAnnot (RawIface  (ss, _)) = IFace  <$> patch2 ss <$> iFaceP
 parseAnnot (RawClass  (ss, _)) = Class  <$> patch2 ss <$> classDeclP 
 parseAnnot (RawTAlias (ss, _)) = TAlias <$> patch2 ss <$> tAliasP
 parseAnnot (RawPAlias (ss, _)) = PAlias <$> patch2 ss <$> pAliasP
@@ -473,8 +473,8 @@ getSpecString :: RawSpec -> String
 getSpecString (RawMeas   (_, s)) = s 
 getSpecString (RawBind   (_, s)) = s 
 getSpecString (RawFunc   (_, s)) = s 
-getSpecString (RawExtern (_, s)) = s  
-getSpecString (RawType   (_, s)) = s  
+-- getSpecString (RawExtern (_, s)) = s  
+getSpecString (RawIface  (_, s)) = s  
 getSpecString (RawField  (_, s)) = s  
 getSpecString (RawMethod (_, s)) = s  
 getSpecString (RawStatic (_, s)) = s  
@@ -490,8 +490,8 @@ getSpecSourceSpan :: RawSpec -> SourceSpan
 getSpecSourceSpan (RawMeas   (s,_)) = s 
 getSpecSourceSpan (RawBind   (s,_)) = s 
 getSpecSourceSpan (RawFunc   (s,_)) = s 
-getSpecSourceSpan (RawExtern (s,_)) = s  
-getSpecSourceSpan (RawType   (s,_)) = s  
+-- getSpecSourceSpan (RawExtern (s,_)) = s  
+getSpecSourceSpan (RawIface  (s,_)) = s  
 getSpecSourceSpan (RawField  (s,_)) = s  
 getSpecSourceSpan (RawMethod (s,_)) = s  
 getSpecSourceSpan (RawStatic (s,_)) = s  
@@ -517,6 +517,7 @@ instance FromJSON (Statement (SourceSpan, [RawSpec]))
 instance FromJSON (LValue (SourceSpan, [RawSpec]))
 instance FromJSON (JavaScript (SourceSpan, [RawSpec]))
 instance FromJSON (ClassElt (SourceSpan, [RawSpec]))
+instance FromJSON (ModuleElt (SourceSpan, [RawSpec]))
 instance FromJSON (CaseClause (SourceSpan, [RawSpec]))
 instance FromJSON (CatchClause (SourceSpan, [RawSpec]))
 instance FromJSON (ForInit (SourceSpan, [RawSpec]))
@@ -540,10 +541,7 @@ instance FromJSON RawSpec
 --------------------------------------------------------------------------------------
 parseNanoFromFiles :: [FilePath] -> IO (NanoBareR Reft)
 --------------------------------------------------------------------------------------
-parseNanoFromFiles fs 
-  = do  ssP   <- parseScriptFromJSON =<< getPreludePath
-        ssF   <- concat <$> mapM parseScriptFromJSON fs
-        return $ mkCode $ expandAnnots $ ssP ++ ssF
+parseNanoFromFiles fs = mkCode . expandAnnots . concat <$> mapM parseScriptFromJSON fs
 
 --------------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString
@@ -565,7 +563,7 @@ mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
 mkCode ss       =  Nano {
         code      = Src (checkTopStmt <$> ss')
-      , externs   = envFromList   [ t | Extern t <- anns ]       -- externs
+      , externs   = envEmpty -- envFromList   [ t | Extern t <- anns ]       -- externs
       -- FIXME: same name methods in different classes.
       , specs     = catFunSpecDefs δ ss                          -- function sigs (no methods...)
       , defs      = δ
@@ -576,7 +574,7 @@ mkCode ss       =  Nano {
       , invts     = [Loc (srcPos l) t | Invt l t <- anns ]
     } 
   where
-    δ             = tDefFromList [ processInterface t | IFace  t <- anns ] 
+    δ             = envFromList [ processInterface t | IFace  t <- anns ] 
     toBare       :: (SourceSpan, [Spec]) -> AnnBare Reft 
     toBare (l,αs) = Ann l $ [VarAnn   t     | Bind   (_,t) <- αs ]
                          ++ [ConsAnn  c     | Constr c     <- αs ]
@@ -591,10 +589,10 @@ mkCode ss       =  Nano {
 
 -- | At the moment we only support a single index signature with no other
 --   elements, or (normally) bound types without index signature.
-processInterface (t, TD n x vs p elts)
+processInterface (t, ID n x vs p elts)
   | nTi == 0  || (nTi == 1 && nTe == 0 && nTn == 0) 
   -- Replace the 'this' binding in every method element with the type of the interface
-  = (t, TD n x vs p (f <$> elts))
+  = (t, ID n x vs p (f <$> elts))
 
   | otherwise = error   $ "[UNIMPLEMENTED] Object types " ++ 
                           "can only have a single indexable " ++
@@ -646,7 +644,7 @@ instance PP (RawSpec) where
 
 -- FIXME: Disabling the check here
 --------------------------------------------------------------------------------------
-catFunSpecDefs :: TDefEnv Reft -> [Statement (SourceSpan, [Spec])] -> Env RefType
+catFunSpecDefs :: IfaceEnv Reft -> [Statement (SourceSpan, [Spec])] -> Env RefType
 --------------------------------------------------------------------------------------
 -- catFunSpecDefs δ ss = envFromList [ (i, checkType δ t) | l <- ds , Bind (i,t) <- snd l ]
 catFunSpecDefs _ ss = envFromList [ (i, t) | (_,l) <- definedFuns ss, Bind (i,t) <- l ]
@@ -690,7 +688,7 @@ instance Show TypeError where
 
 -- -- FIXME: This won't work here cause classes have not been included in δ 
 -- --------------------------------------------------------------------------------
--- checkType :: TDefEnv Reft -> RefType -> RefType
+-- checkType :: IfaceEnv Reft -> RefType -> RefType
 -- --------------------------------------------------------------------------------
 -- checkType δ typ = 
 --     case everything (++) ([] `mkQ` fromType) typ of

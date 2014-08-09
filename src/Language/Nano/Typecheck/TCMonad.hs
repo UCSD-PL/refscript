@@ -44,7 +44,7 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Casts
   , castM
 
-  -- * TDefEnv
+  -- * IfaceEnv
   , findSymM, findSymOrDieM
 
   -- * Get Type Signature 
@@ -99,31 +99,16 @@ type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r))
 -------------------------------------------------------------------------------
 
 data TCState r = TCS {
-  -- Errors
-    tc_errss :: ![Error]
-  , tc_subst :: !(RSubst r)
-  , tc_cnt   :: !Int
-
-  -- Annotations
-  , tc_anns  :: AnnInfo r
-
-  -- Function definitions
-  , tc_specs :: !(Env (RType r))
-
-  -- Defined types
-  , tc_defs  :: !(TDefEnv r)
-
-  -- Extern (unchecked) declarations
-  , tc_ext   :: !(Env (RType r))
-
-  -- Class definitions
-  , tc_cls   :: Env (Statement (AnnSSA r))
-
-  -- Verbosity
-  , tc_verb  :: V.Verbosity
-
-  -- This stack: if empty, assume top
-  , tc_this  :: ![RType r]
+    tc_errors   :: ![Error]                       -- Errors
+  , tc_subst    :: !(RSubst r)
+  , tc_cnt      :: !Int
+  , tc_anns     :: AnnInfo r                      -- Annotations
+  , tc_specs    :: !(Env (RType r))               -- Function definitions
+  , tc_defs     :: !(IfaceEnv r)                   -- Defined types
+  , tc_ext      :: !(Env (RType r))               -- Extern (unchecked) declarations
+  , tc_cls      :: Env (Statement (AnnSSA r))     -- Class definitions
+  , tc_verb     :: V.Verbosity                    -- Verbosity
+  , tc_this     :: ![RType r]                     -- This stack: if empty, assume top
   }
 
 type TCM r     = ErrorT Error (State (TCState r))
@@ -193,7 +178,7 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ)
     θ       = fromList $ zip βs (tVar <$> βs)
 
 -------------------------------------------------------------------------------
-getDef  :: TCM r (TDefEnv r) 
+getDef  :: TCM r (IfaceEnv r) 
 -------------------------------------------------------------------------------
 getDef = tc_defs <$> get
 
@@ -208,7 +193,7 @@ getClasses  :: TCM r (Env (Statement (AnnSSA r)))
 getClasses = tc_cls <$> get
 
 -------------------------------------------------------------------------------
-setDef  :: TDefEnv r -> TCM r ()
+setDef  :: IfaceEnv r -> TCM r ()
 -------------------------------------------------------------------------------
 setDef γ = modify $ \u -> u { tc_defs = γ } 
 
@@ -221,7 +206,7 @@ tcError err = throwError $ catMessage err "TC-ERROR "
 -------------------------------------------------------------------------------
 logError   :: Error -> a -> TCM r a
 -------------------------------------------------------------------------------
-logError err x = (modify $ \st -> st { tc_errss = err : tc_errss st}) >> return x
+logError err x = (modify $ \st -> st { tc_errors = err : tc_errors st}) >> return x
 
 
 -------------------------------------------------------------------------------
@@ -271,21 +256,21 @@ execute ::  PPR r => V.Verbosity -> NanoSSAR r -> TCM r a -> Either [Error] a
 execute verb pgm act 
   = case runState (runErrorT act) $ initState verb pgm of 
       (Left err, _) -> Left [err]
-      (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errss st)
+      (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errors st)
 
 -------------------------------------------------------------------------------
 initState :: PPR r => V.Verbosity -> NanoSSAR r -> TCState r
 -------------------------------------------------------------------------------
-initState verb pgm = TCS tc_errss tc_subst tc_cnt tc_anns 
+initState verb pgm = TCS tc_errors tc_subst tc_cnt tc_anns 
                           tc_specs tc_defs tc_exts tc_class tc_verb tc_this
   where
-    tc_errss = []
+    tc_errors = []
     tc_subst = mempty 
     tc_cnt   = 0
     tc_anns  = M.empty
     tc_specs = specs pgm
     tc_exts  = externs pgm
-    tc_defs  = tDefEmpty
+    tc_defs  = envEmpty
     tc_verb  = verb
     tc_this  = []
     tc_class = envFromList [ (s, ClassStmt l s e i b) | let Src ss = code pgm
@@ -361,7 +346,7 @@ castM ξ e t1 t2
           Right c   -> addCast ξ e c
 
 
--- | Monad versions of TDefEnv operations
+-- | Monad versions of IfaceEnv operations
 
 findSymM i = findSym i <$> getDef
 findSymOrDieM i = findSymOrDie i <$> getDef
@@ -446,27 +431,26 @@ getPropM _ l s t = do
 --------------------------------------------------------------------------------
 getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
 --------------------------------------------------------------------------------
-getSuperM l (TApp (TRef i) ts _) = 
-    fromTdef =<< findSymOrDieM i
+getSuperM l (TApp (TRef i) ts _)         = fromTdef =<< findSymOrDieM i
   where 
-    fromTdef (TD _ _ vs (Just (p,ps)) _) = return  
+    fromTdef (ID _ _ vs (Just (p,ps)) _) = return  
                                          $ apply (fromList $ zip vs ts) 
                                          $ TApp (TRef (F.symbol p)) ps fTop
-    fromTdef (TD _ _ _ Nothing _)        = tcError 
+    fromTdef (ID _ _ _ Nothing _)        = tcError 
                                          $ errorSuper (srcPos l) 
 getSuperM l _                            = tcError 
                                          $ errorSuper (srcPos l) 
 
 --------------------------------------------------------------------------------
-getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (TDef r)
+getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (InterfaceDefinition r)
 --------------------------------------------------------------------------------
 getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
   where 
-    fromTdef (TD _ _ vs (Just (p,ps)) _) = 
-      do TD c n ws pp ee <- findSymOrDieM p
+    fromTdef (ID _ _ vs (Just (p,ps)) _) = 
+      do ID c n ws pp ee <- findSymOrDieM p
          return  $ apply (fromList $ zip vs ts) 
                  $ apply (fromList $ zip ws ps)
-                 $ TD c n [] pp ee
-    fromTdef (TD _ _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
+                 $ ID c n [] pp ee
+    fromTdef (ID _ _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
 getSuperDefM l _  = tcError $ errorSuper (srcPos l)
 

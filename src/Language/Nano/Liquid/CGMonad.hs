@@ -171,7 +171,7 @@ measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts
 data CGState 
   = CGS { binds    :: F.BindEnv            -- ^ global list of fixpoint binders
         , cg_sigs  :: !(E.Env RefType)     -- ^ type sigs for all defined functions
-        , cg_defs  :: !(TDefEnv F.Reft)    -- ^ defined types 
+        , cg_defs  :: !(IfaceEnv F.Reft)    -- ^ defined types 
         , cg_ext   :: !(E.Env RefType)     -- ^ Extern (unchecked) declarations
         , cs       :: ![SubC]              -- ^ subtyping constraints
         , ws       :: ![WfC]               -- ^ well-formedness constraints
@@ -191,7 +191,7 @@ type TConInv = M.HashMap TCon (Located RefType)
 type GlobEnv = M.HashMap F.Symbol [F.BindId]
 
 -------------------------------------------------------------------------------
-getDef  :: CGM (TDefEnv F.Reft)
+getDef  :: CGM (IfaceEnv F.Reft)
 -------------------------------------------------------------------------------
 getDef   = cg_defs <$> get
 
@@ -386,7 +386,7 @@ envFindTy x g = fromMaybe err $ listToMaybe $ catMaybes [globalSpec, className, 
                 | otherwise                           = Nothing
     -- typeof A
     className   = case findSym x $ cge_defs g of    
-        Just t  | t_class t -> Just $ TApp (TTyOf $ F.symbol x) [] fTop
+        Just t  | t_class t -> Just $ TClass $ F.symbol x
         _                   -> Nothing 
     -- locals
     local       = fmap (`eSingleton` x) $ E.envFindTy x $ renv g
@@ -428,7 +428,7 @@ envFindReturn :: CGEnv -> RefType
 envFindReturn = E.envFindReturn . renv
 
 
--- | Monad versions of TDefEnv operations
+-- | Monad versions of IfaceEnv operations
 findSymOrDieM i = findSymOrDie i <$> getDef
 findSymM i      = findSym i      <$> getDef
 
@@ -504,9 +504,9 @@ subType l g t1 t2 =
 
 
 ---------------------------------------------------------------------------------------
-safeExtends :: SourceSpan -> CGEnv -> TDefEnv F.Reft -> TDef F.Reft -> CGM ()
+safeExtends :: SourceSpan -> CGEnv -> IfaceEnv F.Reft -> InterfaceDefinition F.Reft -> CGM ()
 ---------------------------------------------------------------------------------------
-safeExtends l g δ (TD _ _ _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
+safeExtends l g δ (ID _ _ _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
   where
     sub t1 t2  = subType l g (zipType δ t1 t2) t2
     (t1s, t2s) = unzip [ (t1,t2) | pe <- flatten True δ (findSymOrDie p δ, ts)
@@ -514,7 +514,7 @@ safeExtends l g δ (TD _ _ _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
                                  , sameBinder pe ee 
                                  , let t1 = eltType ee
                                  , let t2 = eltType pe ]
-safeExtends _ _ _ (TD _ _ _ Nothing _) = return ()
+safeExtends _ _ _ (ID _ _ _ Nothing _) = return ()
 
 
 --------------------------------------------------------------------------------
@@ -699,7 +699,7 @@ splitC x@(Sub _ _ t1 t2)
 --  * Add special cases: IndexSig ...
 ---------------------------------------------------------------------------------------
 splitEs :: CGEnv -> Cinfo -> Mutability -> Mutability 
-            -> [TElt F.Reft] -> [TElt F.Reft] -> CGM [FixSubC]
+            -> [TypeMember F.Reft] -> [TypeMember F.Reft] -> CGM [FixSubC]
 
 ---------------------------------------------------------------------------------------
 splitEs g i μ1 μ2 e1s e2s
@@ -862,25 +862,25 @@ getSuperM :: IsLocated a => a -> RefType -> CGM RefType
 getSuperM l (TApp (TRef i) ts _) 
   = do  z    <- findSymOrDieM i
         case z of 
-          TD _ _ vs (Just (p,ps)) _ -> return  $ apply (fromList $ zip vs ts) 
+          ID _ _ vs (Just (p,ps)) _ -> return  $ apply (fromList $ zip vs ts) 
                                                $ TApp (TRef $ F.symbol p) ps fTop
-          TD _ _ _ Nothing _        -> cgError l $ errorSuper (srcPos l) 
+          ID _ _ _ Nothing _        -> cgError l $ errorSuper (srcPos l) 
 
 getSuperM l _  = cgError l $ errorSuper $ srcPos l
 
 
 --------------------------------------------------------------------------------
-getSuperDefM :: IsLocated a => a -> RefType -> CGM (TDef F.Reft)
+getSuperDefM :: IsLocated a => a -> RefType -> CGM (InterfaceDefinition F.Reft)
 --------------------------------------------------------------------------------
 getSuperDefM l (TApp (TRef i) ts _) 
   = do  z    <- findSymOrDieM i
         case z of 
-          TD _ _ vs (Just (p,ps)) _ -> 
-            do TD c n ws pp ee  <- findSymOrDieM p
+          ID _ _ vs (Just (p,ps)) _ -> 
+            do ID c n ws pp ee  <- findSymOrDieM p
                return            $ apply (fromList $ zip vs ts) 
                                  $ apply (fromList $ zip ws ps)
-                                 $ TD c n [] pp ee
-          TD _ _ _ Nothing _ -> cgError l $ errorSuper (srcPos l) 
+                                 $ ID c n [] pp ee
+          ID _ _ _ Nothing _ -> cgError l $ errorSuper (srcPos l) 
 
 getSuperDefM l _  = cgError l $ errorSuper $ srcPos l
 

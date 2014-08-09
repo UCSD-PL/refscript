@@ -10,6 +10,7 @@ import           Data.Aeson                         (eitherDecode)
 import           Data.Aeson.Types            hiding (Parser, Error, parse)
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
+import           Language.Nano.Files
 import           Language.Nano.Types
 import           Language.Nano.Annots
 import           Control.Exception                  (catch)
@@ -49,21 +50,25 @@ verifier cfg f
 json :: FilePath -> IO (Either (F.FixResult Error) [FilePath])
 -------------------------------------------------------------------------------
 json f | ext `elem` oks 
-       = do (code, stdOut, stdErr) <- readProcessWithExitCode tsCmd args ""
+       = do (code, stdOut, _) <- readProcessWithExitCode tsCmd args ""
             case code of 
-              ExitSuccess          -> case eitherDecode (B.pack stdOut) :: Either String [String] of
-                                        Left  s  -> return $ Left  $ F.UnknownError s
-                                        Right fs -> return $ Right $ map toJSONExt fs
-              ExitFailure _        -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
-                                        Left  s  -> return $ Left $ F.UnknownError s
-                                        Right e  -> return $ Left $ e
+              ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
+                                   Left  s  -> return $ Left  $ F.UnknownError s
+                                   Right fs -> return $ Right $ fs
+              ExitFailure _   -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
+                                   Left  s  -> return $ Left $ F.UnknownError s
+                                   Right e  -> return $ Left $ e
        | otherwise      
        = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
   where 
     ext            = takeExtension f
     toJSONExt      = extFileName Json . dropExtension
     tsCmd          = "tsc" 
-    args           = ["--outDir", tempDirectory f, "--refscript", f]
+    args           = [ "--outDir", tempDirectory f
+                     , "--refscript"
+                     , "--lib", getPreludeTSPath
+                     , f
+                     ]
     oks            = [".ts", ".js"]
 
 
@@ -81,7 +86,6 @@ run verifyFile cfg
   = do mapM_ (createDirectoryIfMissing False. tmpDir) (files cfg)
        rs   <- mapM (runOne verifyFile) $ files cfg
        let r = mconcat rs
-       -- donePhaseWithOptStars False (F.colorResult r) (render $ pp r) 
        writeResult r
        exitWith (resultExit r)
     where

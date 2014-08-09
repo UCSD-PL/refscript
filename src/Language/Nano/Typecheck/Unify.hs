@@ -40,7 +40,7 @@ type PPR r = (PP r, F.Reftable r)
 -- | Unify types @t@ and @t'@, in substitution environment @θ@ and type
 -- definition environment @δ@.
 -----------------------------------------------------------------------------
-unify :: PPR r => SourceSpan -> TDefEnv r
+unify :: PPR r => SourceSpan -> IfaceEnv r
   -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 
@@ -64,17 +64,14 @@ unify l δ θ t t' | any isUnion [t,t'] = unifys l δ θ t1s' t2s'
 unify l δ θ (TApp (TRef x) ts _) (TApp (TRef x') ts' _) 
   | x == x' = unifys l δ θ ts ts'
 
-unify l δ θ t1@(TApp (TRef _) _ _) t2
-  = unify l δ θ (flattenType δ t1) t2
+unify l δ θ t1@(TApp (TRef _) _ _) t2 = unify l δ θ (flattenType δ t1) t2
+unify l δ θ t1 t2@(TApp (TRef _) _ _) = unify l δ θ t1 (flattenType δ t2)
 
-unify l δ θ t1 t2@(TApp (TRef _) _ _)
-  = unify l δ θ t1 (flattenType δ t2)
+unify l δ θ t1@(TClass _) t2          = unify l δ θ (flattenType δ t1) t2
+unify l δ θ t1 t2@(TClass _)          = unify l δ θ t1 (flattenType δ t2)
 
-unify l δ θ t1@(TApp (TTyOf _) _ _) t2 
-  = unify l δ θ (flattenType δ t1) t2
-
-unify l δ θ t1 t2@(TApp (TTyOf _) _ _)
-  = unify l δ θ t1 (flattenType δ t2)
+unify l δ θ t1@(TModule _) t2         = unify l δ θ (flattenType δ t1) t2
+unify l δ θ t1 t2@(TModule _)         = unify l δ θ t1 (flattenType δ t2)
 
 
 unify l δ θ (TCons e1s m1 _) (TCons e2s m2 _)
@@ -103,8 +100,8 @@ unify _ _ θ _  _ = return θ
 
    
 -----------------------------------------------------------------------------
-unifys ::  PPR r => SourceSpan -> TDefEnv r -> RSubst r -> [RType r] 
-                    -> [RType r] -> Either Error (RSubst r)
+unifys ::  PPR r => SourceSpan -> IfaceEnv r -> RSubst r -> [RType r] 
+                 -> [RType r] -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 unifys loc γ θ ts ts'  
   | nTs == nTs' = foldM foo θ $ zip ts ts'

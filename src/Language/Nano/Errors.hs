@@ -81,8 +81,8 @@ errorDuplicate i l l'         = mkErr l $ printf "Duplicate Specification for %s
 ---------------------------------------------------------------------------
 -- | SSA
 ---------------------------------------------------------------------------
-errorWriteImmutable l x       = mkErr l $ render $ text "Cannot write variable outside local-scope" <+> pp x
-                                                 $+$ text "Add type annotation to indicate it is globally writable"
+errorWriteImmutable l x       = mkErr l $ printf "Cannot assign to local variable '%s' outside local-scope. " (ppshow x)
+                                       ++ printf "Add a type annotation to indicate it is globally writable." 
 errorSSAUnboundId l x         = mkErr l $ printf "SSA: Identifier '%s' unbound" (ppshow x) 
 
 
@@ -126,6 +126,8 @@ errorArgMismatch l            = mkErr l $ printf "Mismatch in Number of argument
 errorArgName l x y            = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 errorExtractNonFld l f x      = mkErr l $ printf "Cannot extract non-field '%s' from object '%s'" (ppshow f) (ppshow x)
 errorNonSingleFuncAnn l       = mkErr l $ printf "Anonymous function needs to have exactly one type annotation."
+errorUnresolvedType l t       = mkErr l $ printf "Could not resolve type '%s'." (ppshow t)
+errorUnresolvedTypes l t1 t2  = mkErr l $ printf "Could not resolve types '%s' and '%s'." (ppshow t1) (ppshow t2)
 
 
 ---------------------------------------------------------------------------
@@ -148,5 +150,5 @@ errorVarDeclAnnot l x         = mkErr l $ printf "Variable definition of '%s' wi
 errorMissingAnnot l s         = mkErr l $ printf "Missing type annotation for %s" s
 errorNonFunction l f t        = mkErr l $ printf "Non-function type: %s :: %s " (ppshow f) (ppshow t)
 errorMissingReturn l          = mkErr l $ printf "Missing Return statement."
-errorMissingSpec l f          = mkErr l $ printf "Missing Signature For %s defined at %s" (ppshow f) (ppshow l)
+errorMissingSpec l f          = mkErr l $ printf "Missing signature for '%s'" (ppshow f)
 

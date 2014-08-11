@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveFunctor             #-}
 {-# LANGUAGE DeriveTraversable         #-}
 {-# LANGUAGE DeriveFoldable            #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ConstraintKinds           #-}
@@ -39,7 +40,8 @@ module Language.Nano.Typecheck.Types (
   , renameBinds
 
   -- * Regular Types
-  , Type, InterfaceDefinition (..), TVar (..), TCon (..), TypeMember (..)
+  , NameSpacePath, AbsolutePath, QName (..)
+  , Type, IfaceDef (..), SIfaceDef, TVar (..), TCon (..), TypeMember (..)
 
   -- * Mutability
   , Mutability, mutable, immutable, anyMutability, inheritedMut, combMut
@@ -56,11 +58,18 @@ module Language.Nano.Typecheck.Types (
   , sameBinder, eltType, isStaticSig, nonStaticSig, nonConstrElt, mutability, baseType
   , isMethodSig, isFieldSig, setThisBinding, remThisBinding
 
-  -- * Type definition env
-  , IfaceEnv (..) {-, tDefEmpty, tDefFromList, tDefToList -} 
-  , {- addSym, -} findSym, findSymOrDie, mapTDefEnv, mapTDefEnvM
 
-  , ModuleEnv (..), ModuleDefinition
+  -- * Environments
+  , TCEnv (..), TCEnvO, EnvLike (..)
+
+  -- Namespaces
+  -- , NameSpaceMove, NameSpaceStep (..)
+
+  -- * Type definition env
+  , IfaceEnv {-, tDefEmpty, tDefFromList, tDefToList -} 
+  , {- addSym, findSym, findSymOrDie, mapTDefEnv, -} mapIfaceEnvM
+
+  -- , ModuleExports
 
   -- * Operator Types
   , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy, objLitTy, setPropTy, returnTy
@@ -82,6 +91,8 @@ module Language.Nano.Typecheck.Types (
   -- * Assignability 
   , Assignability (..), definedGlobs,  writeGlobalVars, readOnlyVars  
 
+  , hoistFuncDecls, hoistAnns
+
   -- * Aliases
   , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
 
@@ -93,7 +104,7 @@ import           Data.Default
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
 import           Data.Function                  (on)
-import           Data.Maybe                     (fromMaybe, listToMaybe)
+import           Data.Maybe                     (fromMaybe)
 import           Data.Traversable               hiding (sequence, mapM) 
 import           Data.Foldable                  (Foldable()) 
 import           Data.Monoid                    hiding ((<>))            
@@ -120,63 +131,58 @@ import           Control.Applicative            hiding (empty)
 
 -- import           Debug.Trace (trace)
 
--- | Type Variables
-data TVar = TV { tv_sym :: F.Symbol
-               , tv_loc :: SourceSpan 
-               }
-            deriving (Show, Ord, Data, Typeable)
-
-instance Eq TVar where 
-  a == b = tv_sym a == tv_sym b
-
-instance IsLocated TVar where 
-  srcPos = tv_loc
-
-instance Hashable TVar where 
-  hashWithSalt i α = hashWithSalt i $ tv_sym α 
-
-instance F.Symbolic TVar where
-  symbol = tv_sym 
-
-instance F.Symbolic a => F.Symbolic (Located a) where 
-  symbol = F.symbol . val
-
-
 
 ---------------------------------------------------------------------------------
 -- | RefScript Types
 ---------------------------------------------------------------------------------
 
+type NameSpacePath = [F.Symbol]
+type AbsolutePath  = NameSpacePath
+
+data QName = QN { nsp :: NameSpacePath, bare_name :: F.Symbol }
+    deriving (Eq, Ord, Show, Data, Typeable)
+
+
+-- | Type Variables
+data TVar 
+  = TV { tv_sym :: F.Symbol
+       , tv_loc :: SourceSpan 
+       }
+    deriving (Show, Ord, Data, Typeable)
+
 
 -- | Type Constructors
 data TCon
-  = TInt              -- number
-  | TBool             -- boolean
-  | TString           -- string
-  | TVoid             -- void
-  | TTop              -- top
-  | TRef F.Symbol     -- A
-  | TUn               -- union
-  | TNull             -- null
-  | TUndef            -- undefined
+  = TInt                                                -- ^ number
+  | TBool                                               -- ^ boolean
+  | TString                                             -- ^ string
+  | TVoid                                               -- ^ void
+  | TTop                                                -- ^ top
+  | TRef QName                                          -- ^ A.B.C (class)
+  | TUn                                                 -- ^ union
+  | TNull                                               -- ^ null
+  | TUndef                                              -- ^ undefined
 
-  | TFPBool           -- liquid 'bool'
+  | TFPBool                                             -- ^ liquid 'bool'
     deriving (Ord, Show, Data, Typeable)
 
 -- | (Raw) Refined Types 
 data RType r  
-  = TApp TCon [RType r]     r                           -- ^ C T1,...,Tn
-  | TVar TVar               r                           -- ^ A
-  | TFun [Bind r] (RType r) r                           -- ^ (xi:T1,..,xn:Tn) => T
-  | TCons [TypeMember r] Mutability r                   -- ^ {f1:T1,..,fn:Tn} 
-  | TAll TVar (RType r)                                 -- ^ forall A. T
-  | TAnd [RType r]                                      -- ^ (T1..) => T1' /\ ... /\ (Tn..) => Tn' 
+  = TApp    TCon            [RType r]   r               -- ^ C T1,...,Tn
+  | TVar    TVar                        r               -- ^ A
+  | TFun    [Bind r]        (RType r)   r               -- ^ (xi:T1,..,xn:Tn) => T
+  | TCons   [TypeMember r]  Mutability  r               -- ^ {f1:T1,..,fn:Tn} 
+  | TAll    TVar            (RType r)                   -- ^ forall A. T
+  | TAnd    [RType r]                                   -- ^ /\ (T1..) => T1' ...
+                                                        -- ^ /\ (Tn..) => Tn'
 
-  | TClass F.Symbol                                     -- ^ typeof C (class)
-  | TModule [F.Symbol]                                  -- ^ typeof M (module)
+  | TClass  QName                                       -- ^ typeof A.B.C (class)
+  | TModule NameSpacePath                               -- ^ typeof L.M.N (module)
+                                                        -- ^ names are relative to current
+                                                        -- ^ environment
 
   | TExp F.Expr                                         -- ^ "Expression" parameters for type-aliases: 
-                                                        --   never appear in real/expanded RType
+                                                        -- ^ never appear in real/expanded RType
     deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 -- | Type binder
@@ -191,37 +197,42 @@ data Bind r
 -- | Interfacce definitions 
 ---------------------------------------------------------------------------------
 
-data InterfaceDefinition r 
+data IfaceDef r 
   = ID { t_class :: Bool                                -- ^ Is this a class or interface type
        , t_name  :: !(Id SourceSpan)                    -- ^ Name (possibly no name)
        , t_args  :: ![TVar]                             -- ^ Type variables
-       , t_proto :: !(Maybe (Id SourceSpan, [RType r])) -- ^ Heritage
+       , t_proto :: !(Maybe (QName, [RType r]))         -- ^ Heritage
        , t_elts  :: ![TypeMember r]                     -- ^ List of data type elts 
        } 
      deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
-data TypeMember r = CallSig  { f_type :: RType r }      -- ^ Call Signature
-                  | ConsSig  { f_type :: RType r }      -- ^ Constructor Signature               
-                  | IndexSig { f_sym  :: F.Symbol
-                             , f_key  :: Bool           -- ^ Index Signature (T/F=string/number)
-                             , f_type :: RType r }      
+type SIfaceDef r = (IfaceDef r, [RType r])
+
+data TypeMember r 
+  = CallSig  { f_type :: RType r }                      -- ^ Call Signature
+
+  | ConsSig  { f_type :: RType r }                      -- ^ Constructor Signature               
+  
+  | IndexSig { f_sym  :: F.Symbol
+             , f_key  :: Bool                           -- ^ Index Signature (T/F=string/number)
+             , f_type :: RType r }                      
                   
-                  | FieldSig { f_sym  :: F.Symbol       -- ^ Name  
-                             , f_mut  :: Mutability     -- ^ Mutability
-                             , f_type :: RType r }      -- ^ Property type (could be function)
+  | FieldSig { f_sym  :: F.Symbol                       -- ^ Name  
+             , f_mut  :: Mutability                     -- ^ Mutability
+             , f_type :: RType r }                      -- ^ Property type (could be function)
 
-                  | MethSig  { f_sym  :: F.Symbol       -- ^ Name  
-                             , f_mut  :: Mutability     -- ^ Mutability
-                             , f_type :: RType r }      -- ^ Method type
+  | MethSig  { f_sym  :: F.Symbol                       -- ^ Name  
+             , f_mut  :: Mutability                     -- ^ Mutability
+             , f_type :: RType r }                      -- ^ Method type
 
-                  | StatSig  { f_sym  :: F.Symbol       -- ^ Name  
-                             , f_mut  :: Mutability     -- ^ Mutability
-                             , f_type :: RType r }      -- ^ Property type (could be function)
+  | StatSig  { f_sym  :: F.Symbol                       -- ^ Name  
+             , f_mut  :: Mutability                     -- ^ Mutability
+             , f_type :: RType r }                      -- ^ Property type (could be function)
 
   deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
-type IfaceEnv r = Env (InterfaceDefinition r) 
-
+type IfaceEnv r = Env (IfaceDef r) 
+ 
 
 ---------------------------------------------------------------------------------
 -- | Module definitions 
@@ -229,76 +240,100 @@ type IfaceEnv r = Env (InterfaceDefinition r)
 
 -- | Moudle definition: the exported module API
 
-data ModuleDefinition r 
-  = MD { m_name  :: !(Id SourceSpan)
-       , m_elts  :: !(Env (ModuleMember r))
-       }
+-- data ModuleExports r 
+--   = MD { m_name  :: !(Id SourceSpan)
+--        , m_elts  :: !(Env (ModuleMember r))
+--        }
 
-data ModuleMember r = FuncMem   (RType r)
-                    | IfaceMem  (InterfaceDefinition r)
-                    | ModuleMem (ModuleDefinition r)
-
-type ModuleEnv r = Env (ModuleDefinition r)
+-- data ModuleMember r = FuncMem   (RType r)
+--                     | IfaceMem  (IfaceDef r)
+--                     | ModuleMem (ModuleExports r)
 
 
+-------------------------------------------------------------------------------
+-- | Typecheck Environment 
+-------------------------------------------------------------------------------
 
-mapTDefEnv f e = F.mapSEnv (fmap f) e
---   where 
---     g (ID c n αs (Just (p,ps)) es) = ID c n αs (Just (p, map f ps)) (mapElt f <$> es)
---     g (ID c n αs Nothing       es) = ID c n αs Nothing              (mapElt f <$> es)
+data TCEnv r  = TCE {
 
+    tce_env       :: Env (RType r)                      -- ^ All bindings in scope
+
+  , tce_iface     :: Env (IfaceDef r)                   -- ^ Classs/Interfaces in scope 
+
+  , tce_mod       :: Env (TCEnv r)                      -- ^ Modules in scope (exported API)
+
+  , tce_ctx       :: !IContext                          -- ^ Calling context 
+
+  , tce_nspace    :: NameSpacePath                      -- ^ Namespace absolute path
+
+  , tce_parent    :: Maybe (TCEnv r)                    -- ^ Parent namespace environment
+  }
+  deriving (Functor)
+
+--   We define this alias as the "output" type for typechecking any entity
+--   that can create or affect binders (e.g. @VarDecl@ or @Statement@)
+--   @Nothing@ means if we definitely hit a "return" 
+--   @Just γ'@ means environment extended with statement binders
+
+type TCEnvO r = Maybe (TCEnv r)
+
+
+class EnvLike r t where
+  get_env     :: t r -> Env (RType r)
+  get_iface   :: t r -> Env (IfaceDef r) 
+  get_mod     :: t r -> Env (t r)
+  get_nspace  :: t r -> NameSpacePath
+  get_parent  :: t r -> Maybe (t r)
+
+instance EnvLike r TCEnv where
+  get_env     = tce_env
+  get_iface   = tce_iface
+  get_mod     = tce_mod
+  get_nspace  = tce_nspace
+  get_parent  = tce_parent
  
+
+-- data NameSpaceStep = NsPush F.Symbol
+--                    | NsPop
+--                   
+-- type NameSpaceMove = [NameSpaceStep]
+
+
 ---------------------------------------------------------------------------------
-mapTDefEnvM :: (Monad m, Applicative m) 
-            => (RType t -> m (RType r)) -> IfaceEnv t -> m (IfaceEnv r)
+-- | Environment operations
 ---------------------------------------------------------------------------------
-mapTDefEnvM f e = envFromList <$> mapM (mapSndM (mapTDefM f)) (envToList e)
+
+---------------------------------------------------------------------------------
+mapIfaceEnvM :: (Monad m, Applicative m) 
+             => (RType t -> m (RType r)) -> IfaceEnv t -> m (IfaceEnv r)
+---------------------------------------------------------------------------------
+mapIfaceEnvM f e = envFromList <$> mapM (mapSndM (mapIfaceDefsM f)) (envToList e)
   
 
 ---------------------------------------------------------------------------------
-mapTDefM :: (Monad m, Functor m) 
-         => (RType t -> m (RType r)) -> InterfaceDefinition t -> m (InterfaceDefinition r)
+mapIfaceDefsM :: (Monad m, Functor m) 
+              => (RType t -> m (RType r)) -> IfaceDef t -> m (IfaceDef r)
 ---------------------------------------------------------------------------------
-mapTDefM f (ID c n αs (Just (p,ps)) es) 
+mapIfaceDefsM f (ID c n αs (Just (p,ps)) es) 
   = do  ps' <- mapM f ps 
         es' <- mapM (mapEltM f) es 
         return $ ID c n αs (Just (p,ps')) es'
-mapTDefM f (ID c n αs Nothing es) = 
+mapIfaceDefsM f (ID c n αs Nothing es) = 
   ID c n αs Nothing <$> mapM (mapEltM f) es
 
 
----------------------------------------------------------------------------------
--- tDefFromList :: F.Symbolic s => [(s, InterfaceDefinition t)] -> IfaceEnv t
----------------------------------------------------------------------------------
--- tDefFromList = foldr (uncurry addSym) tDefEmpty 
 
 
 -- ---------------------------------------------------------------------------------
--- tDefToList :: IfaceEnv t -> [InterfaceDefinition t]
+-- findSym :: F.Symbolic a => a -> Env t -> Maybe t
 -- ---------------------------------------------------------------------------------
--- tDefToList e = snd <$> envToList e
-
-
+-- findSym s γ = envFindTy (F.symbol s) γ
+-- 
 -- ---------------------------------------------------------------------------------
--- addSym :: F.Symbolic a => a -> v -> Env v -> Env v
+-- findSymOrDie :: F.Symbolic a => a -> Env t -> t
 -- ---------------------------------------------------------------------------------
--- addSym c t γ = 
---   case envFindTy s γ of 
---     Just _  -> γ
---     Nothing -> envAdd s t γ
---   where
---     s    = F.symbol c
-
----------------------------------------------------------------------------------
-findSym :: F.Symbolic a => a -> Env t -> Maybe t
----------------------------------------------------------------------------------
-findSym s γ = envFindTy (F.symbol s) γ
-
----------------------------------------------------------------------------------
-findSymOrDie :: F.Symbolic a => a -> Env t -> t
----------------------------------------------------------------------------------
-findSymOrDie s γ = fromMaybe (error msg) $ findSym s γ 
-  where msg = "findSymOrDie failed on: " ++ F.symbolString (F.symbol s)
+-- findSymOrDie s γ = fromMaybe (error msg) $ findSym s γ 
+--   where msg = "findSymOrDie failed on: " ++ F.symbolString (F.symbol s)
 
 
 
@@ -311,7 +346,7 @@ type Mutability = Type
 validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable", "AnyMutability"]
 
 mkMut :: String -> Mutability
-mkMut s = TApp (TRef $ F.symbol s) [] ()
+mkMut s = TApp (TRef $ QN [] (F.symbol s)) [] ()
 
 instance Default Mutability where
   def = mkMut "Mutable"
@@ -323,26 +358,26 @@ anyMutability = mkMut "AnyMutability"
 inheritedMut  = mkMut "InheritedMut"
 
 
-isMutabilityType (TApp (TRef s) _ _) = s `elem` validMutNames
-isMutabilityType _                   = False
+isMutabilityType (TApp (TRef (QN [] s)) _ _) = s `elem` validMutNames
+isMutabilityType _                           = False
 
-isMutable        (TApp (TRef s) _ _) = s == F.symbol "Mutable"
-isMutable _                          = False
+isMutable        (TApp (TRef (QN [] s)) _ _) = s == F.symbol "Mutable"
+isMutable _                                  = False
 
-isImmutable      (TApp (TRef s) _ _) = s == F.symbol "Immutable"
-isImmutable _                        = False
+isImmutable      (TApp (TRef (QN [] s)) _ _) = s == F.symbol "Immutable"
+isImmutable _                                = False
 
-isAnyMut (TApp (TRef s) _ _)         = s == F.symbol "AnyMutability"
-isAnyMut _                           = False
+isAnyMut         (TApp (TRef (QN [] s)) _ _) = s == F.symbol "AnyMutability"
+isAnyMut _                                   = False
 
-isReadOnly (TApp (TRef s) _ _)       = s == F.symbol "ReadOnly"
-isReadOnly _                         = False
+isReadOnly       (TApp (TRef (QN [] s)) _ _) = s == F.symbol "ReadOnly"
+isReadOnly _                                 = False
 
-isInheritedMut (TApp (TRef s) _ _)   = s == F.symbol "InheritedMut"
-isInheritedMut _                     = False
+isInheritedMut   (TApp (TRef (QN [] s)) _ _) = s == F.symbol "InheritedMut"
+isInheritedMut _                             = False
 
-combMut _ μf | isMutable μf      = μf
-combMut μ _  | otherwise         = μ
+combMut _ μf | isMutable μf                 = μf
+combMut μ _  | otherwise                    = μ
 
 -- | Variance: true if v is in a positive position in t
 --
@@ -351,7 +386,7 @@ combMut μ _  | otherwise         = μ
 variance :: TVar -> RType r -> Bool
 variance _ _  = True
 
-varianceTDef :: InterfaceDefinition r -> [Bool]
+varianceTDef :: IfaceDef r -> [Bool]
 varianceTDef (ID _ _ vs _ _) = take (length vs) $ repeat True
 
 
@@ -535,6 +570,22 @@ setRTypeR (TFun xts ot _ ) r = TFun xts ot r
 setRTypeR t                _ = t
 
 
+instance Eq TVar where 
+  a == b = tv_sym a == tv_sym b
+
+instance IsLocated TVar where 
+  srcPos = tv_loc
+
+instance Hashable TVar where 
+  hashWithSalt i α = hashWithSalt i $ tv_sym α 
+
+instance F.Symbolic TVar where
+  symbol = tv_sym 
+
+instance F.Symbolic a => F.Symbolic (Located a) where 
+  symbol = F.symbol . val
+
+
 instance Eq TCon where
   TInt     == TInt     = True   
   TBool    == TBool    = True           
@@ -711,18 +762,24 @@ instance PP t => PP (I.IntMap t) where
 instance PP t => PP (F.SEnv t) where
   pp m = vcat $ pp <$> F.toListSEnv m
 
-instance (PP r, F.Reftable r) => PP (InterfaceDefinition r) where
-    pp (ID c nm vs Nothing ts) =  
-          pp (if c then "class" else "interface")
-      <+> pp nm 
-      <+> ppArgs brackets comma vs 
-      <+> braces (intersperse semi $ map pp ts)
-    pp (ID c nm vs (Just (p,ps)) ts) = 
-          pp (if c then "class" else "interface")
-      <+> pp nm 
-      <+> ppArgs brackets comma vs 
-      <+> text "extends" <+> pp p <+> pp ps
-      <+> braces (intersperse semi $ map pp ts)
+instance (PP r, F.Reftable r) => PP (IfaceDef r) where
+  pp (ID c nm vs Nothing ts) =  
+        pp (if c then "class" else "interface")
+    <+> pp nm 
+    <+> ppArgs brackets comma vs 
+    <+> braces (intersperse semi $ map pp ts)
+  pp (ID c nm vs (Just (p,ps)) ts) = 
+        pp (if c then "class" else "interface")
+    <+> pp nm 
+    <+> ppArgs brackets comma vs 
+    <+> text "extends" <+> pp p <+> pp ps
+    <+> braces (intersperse semi $ map pp ts)
+
+instance PP QName where
+  pp (QN ms s) = pp ms <> dot <> pp s
+
+instance PP NameSpacePath where
+  pp ns = intersperse dot $ map pp ns
 
 
 instance (PP r, F.Reftable r) => PP (TypeMember r) where
@@ -818,6 +875,53 @@ definedGlobs       :: (Data r, Typeable r) => [Statement (AnnType r)] -> [Id (An
 definedGlobs stmts = everything (++) ([] `mkQ` fromVarDecl) stmts
   where 
     fromVarDecl (VarDecl l x _) = [ x | VarAnn _ <- ann_fact l ]
+
+
+-- CHECK ME !!!
+--
+--
+-- | Find all function definitions/declarations whose scope is hoisted to 
+--   the current scope. E.g. declarations in the If-branch of a conditional 
+--   expression. Note how declarations do not escape module or function 
+--   blocks (isolation).
+-------------------------------------------------------------------------------
+hoistFuncDecls :: (Data a, Typeable a) => [Statement a] -> [(F.Symbol, a)]
+-------------------------------------------------------------------------------
+hoistFuncDecls stmts = everythingBut (++) (([], False) `mkQ` f) stmts
+  where
+    f = fromStmt `extQ` fromExp 
+    fromStmt (FunctionStmt l n _ _) = ([(F.symbol n,l)], True)
+    fromStmt (FunctionDecl l n _  ) = ([(F.symbol n,l)], True)
+    fromStmt (ClassStmt {})         = ([ ], True)
+    fromStmt (ModuleStmt {})        = ([ ], True)
+    fromStmt _                      = ([ ], False)
+    fromExp :: Expression t -> ([(F.Symbol, t)], Bool)
+    fromExp (FuncExpr {})           = ([ ], True)
+    fromExp _                       = ([ ], False)
+
+-- CHECK ME !!!
+--
+--
+-- | Find all function definitions/declarations whose scope is hoisted to 
+--   the current scope. E.g. declarations in the If-branch of a conditional 
+--   expression. Note how declarations do not escape module or function 
+--   blocks (isolation).
+-------------------------------------------------------------------------------
+hoistAnns :: (Data a, Typeable a) => [Statement a] -> [a]
+-------------------------------------------------------------------------------
+hoistAnns stmts = everythingBut (++) (([], False) `mkQ` f) stmts
+  where
+    f = fromStmt `extQ` fromExp 
+    fromStmt (FunctionStmt l _ _ _) = ([l], True)
+    fromStmt (FunctionDecl l _ _  ) = ([l], True)
+    fromStmt (ClassStmt l _ _ _ _ ) = ([l], True)
+    fromStmt (ModuleStmt l _ _ )    = ([l], True)
+    fromStmt s                      = ([getAnnotation s], False)
+    fromExp :: Expression t -> ([t], Bool)
+    fromExp (FuncExpr l _ _ _)      = ([l], True)
+    fromExp e                       = ([getAnnotation e], False)
+
+
 
 
 -- -- CHECK ME !!!
@@ -933,10 +1037,12 @@ instance Hashable TCon where
   hashWithSalt s TFPBool      = hashWithSalt s (8 :: Int)
   hashWithSalt s (TRef z)     = hashWithSalt s (10:: Int) + hashWithSalt s z
 
+instance Hashable QName where
+  hashWithSalt s (QN ms n)    = hashWithSalt s ms + hashWithSalt s n
+
 instance (PP r, F.Reftable r) => PP (Bind r) where 
   pp (B x t)          = pp x <> colon <> pp t 
 
-ppArgs _  _ [] = text ""
 ppArgs p sep l = p $ intersperse sep $ map pp l
 
 instance (PP s, PP t) => PP (M.HashMap s t) where
@@ -1131,43 +1237,43 @@ phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
 -- | Primitive / Base Types -------------------------------------------
 -----------------------------------------------------------------------
 
-tVar   :: (F.Reftable r) => TVar -> RType r
-tVar   = (`TVar` fTop) 
+tVar                       :: (F.Reftable r) => TVar -> RType r
+tVar                        = (`TVar` fTop) 
 
-isTVar (TVar _ _) = True
-isTVar _          = False
+isTVar (TVar _ _)           = True
+isTVar _                    = False
 
 tInt, tBool, tUndef, tNull, tString, tVoid, tErr :: (F.Reftable r) => RType r
-tInt     = TApp TInt     [] fTop 
-tBool    = TApp TBool    [] fTop
-tString  = TApp TString  [] fTop
-tTop     = TApp TTop     [] fTop
-tVoid    = TApp TVoid    [] fTop
-tUndef   = TApp TUndef   [] fTop
-tNull    = TApp TNull    [] fTop
-tErr     = tVoid
-tFunErr  = ([],[],tErr)
-tAnd ts  = case ts of 
-             [ ] -> errorstar "BUG: empty intersection"
-             [t] -> t
-             _   -> TAnd ts
+tInt                        = TApp TInt     [] fTop 
+tBool                       = TApp TBool    [] fTop
+tString                     = TApp TString  [] fTop
+tTop                        = TApp TTop     [] fTop
+tVoid                       = TApp TVoid    [] fTop
+tUndef                      = TApp TUndef   [] fTop
+tNull                       = TApp TNull    [] fTop
+tErr                        = tVoid
+tFunErr                     = ([],[],tErr)
+tAnd ts                     = case ts of 
+                                [ ] -> errorstar "BUG: empty intersection"
+                                [t] -> t
+                                _   -> TAnd ts
 
-tArr _  = rtArr fTop
-rtArr t = TApp (TRef $ F.symbol "Array") [t] 
+tArr _                      = rtArr fTop
+rtArr t                     = TApp (TRef $ QN [] (F.symbol "Array")) [t] 
 
-isArr (TApp (TRef s) _ _ ) | s == F.symbol "Array" = True
-isArr _                    = False
+isArr (TApp (TRef (QN [] s)) _ _) | s == F.symbol "Array" = True
+isArr _                           = False
 
-isTFun (TFun _ _ _) = True
-isTFun (TAnd ts)    = all isTFun ts
-isTFun (TAll _ t)   = isTFun t
-isTFun _            = False
+isTFun (TFun _ _ _)         = True
+isTFun (TAnd ts)            = all isTFun ts
+isTFun (TAll _ t)           = isTFun t
+isTFun _                    = False
 
 
-orNull t@(TApp TUn ts _) | any isNull ts = t
-orNull   (TApp TUn ts r) | otherwise     = TApp TUn (tNull:ts) r
-orNull t                 | isNull t      = t
-orNull t                 | otherwise     = TApp TUn [tNull,t] fTop
+orNull t@(TApp TUn ts _)    | any isNull ts = t
+orNull   (TApp TUn ts r)    | otherwise     = TApp TUn (tNull:ts) r
+orNull t                    | isNull t      = t
+orNull t                    | otherwise     = TApp TUn [tNull,t] fTop
 
 
 

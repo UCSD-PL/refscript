@@ -32,8 +32,8 @@ module Language.Nano.Typecheck.TCMonad (
   , tcFunTys, tcMethTys
 
   -- * Annotations
-  , addAnn {-TEMP-}, getAnns, getDef, setDef
-  , getExts, getClasses
+  , addAnn {-TEMP-}, getAnns --, getDef, setDef
+  -- , getExts, getClasses
 
   -- * Unification
   , unifyTypeM, unifyTypesM
@@ -44,11 +44,8 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Casts
   , castM
 
-  -- * IfaceEnv
-  , findSymM, findSymOrDieM
-
   -- * Get Type Signature 
-  , getSpecOrDie, getSpecM, addSpec
+  -- , getSpecOrDie, getSpecM, addSpec
 
   -- * Verbosity
   , whenLoud', whenLoud, whenQuiet', whenQuiet
@@ -57,16 +54,17 @@ module Language.Nano.Typecheck.TCMonad (
   , tcPeekThis, tcWithThis
 
   -- * Super
-  , getSuperM, getSuperDefM
+  -- , getSuperM, getSuperDefM
 
   -- * Prop
-  , getPropTDefM, getPropM
+  -- , getPropTDefM, getPropM
 
   )  where 
 
 import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>), (<*>))
 import           Data.Function                      (on)
+import           Data.Generics
 import           Data.Maybe                         (catMaybes)
 import           Control.Monad.State
 import           Control.Monad.Error                hiding (Error)
@@ -90,7 +88,7 @@ import           Language.ECMAScript3.Syntax
 -- import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity   as V
 
-type PPR r = (PP r, F.Reftable r)
+type PPR r = (PP r, F.Reftable r, Data r)
 type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
 
 
@@ -103,10 +101,10 @@ data TCState r = TCS {
   , tc_subst    :: !(RSubst r)
   , tc_cnt      :: !Int
   , tc_anns     :: AnnInfo r                      -- Annotations
-  , tc_specs    :: !(Env (RType r))               -- Function definitions
-  , tc_defs     :: !(IfaceEnv r)                   -- Defined types
-  , tc_ext      :: !(Env (RType r))               -- Extern (unchecked) declarations
-  , tc_cls      :: Env (Statement (AnnSSA r))     -- Class definitions
+  -- , tc_specs    :: !(Env (RType r))               -- Function definitions
+  -- , tc_defs     :: !(IfaceEnv r)                   -- Defined types
+  -- , tc_ext      :: !(Env (RType r))               -- Extern (unchecked) declarations
+  -- , tc_cls      :: Env (Statement (AnnSSA r))     -- Class definitions
   , tc_verb     :: V.Verbosity                    -- Verbosity
   , tc_this     :: ![RType r]                     -- This stack: if empty, assume top
   }
@@ -177,25 +175,25 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ)
   where 
     θ       = fromList $ zip βs (tVar <$> βs)
 
--------------------------------------------------------------------------------
-getDef  :: TCM r (IfaceEnv r) 
--------------------------------------------------------------------------------
-getDef = tc_defs <$> get
+-- -------------------------------------------------------------------------------
+-- getDef  :: TCM r (IfaceEnv r) 
+-- -------------------------------------------------------------------------------
+-- getDef = tc_defs <$> get
 
--------------------------------------------------------------------------------
-getExts  :: TCM r (Env (RType r)) 
--------------------------------------------------------------------------------
-getExts = tc_ext <$> get
+-- -------------------------------------------------------------------------------
+-- getExts  :: TCM r (Env (RType r)) 
+-- -------------------------------------------------------------------------------
+-- getExts = tc_ext <$> get
 
--------------------------------------------------------------------------------
-getClasses  :: TCM r (Env (Statement (AnnSSA r)))
--------------------------------------------------------------------------------
-getClasses = tc_cls <$> get
+-- -------------------------------------------------------------------------------
+-- getClasses  :: TCM r (Env (Statement (AnnSSA r)))
+-- -------------------------------------------------------------------------------
+-- getClasses = tc_cls <$> get
 
--------------------------------------------------------------------------------
-setDef  :: IfaceEnv r -> TCM r ()
--------------------------------------------------------------------------------
-setDef γ = modify $ \u -> u { tc_defs = γ } 
+-- -------------------------------------------------------------------------------
+-- setDef  :: IfaceEnv r -> TCM r ()
+-- -------------------------------------------------------------------------------
+-- setDef γ = modify $ \u -> u { tc_defs = γ } 
 
 -------------------------------------------------------------------------------
 tcError     :: Error -> TCM r a
@@ -210,14 +208,13 @@ logError err x = (modify $ \st -> st { tc_errors = err : tc_errors st}) >> retur
 
 
 -------------------------------------------------------------------------------
-freshTyArgs :: (PP r, F.Reftable r)
-            => SourceSpan -> IContext -> [TVar] -> RType r -> TCM r (RType r)
+freshTyArgs :: PPR r => SourceSpan -> IContext -> [TVar] -> RType r -> TCM r (RType r)
 -------------------------------------------------------------------------------
 freshTyArgs l ξ αs t 
   = (`apply` t) <$> freshSubst l ξ αs
 
 -------------------------------------------------------------------------------
-freshSubst :: (PP r, F.Reftable r) => SourceSpan -> IContext -> [TVar] -> TCM r (RSubst r)
+freshSubst :: PPR r => SourceSpan -> IContext -> [TVar] -> TCM r (RSubst r)
 -------------------------------------------------------------------------------
 freshSubst l ξ αs
   = do when (not $ unique αs) $ logError (errorUniqueTypeParams l) ()
@@ -226,6 +223,9 @@ freshSubst l ξ αs
        extSubst   $ βs 
        return     $ fromList $ zip αs (tVar <$> βs)
 
+-------------------------------------------------------------------------------
+setTyArgs :: PPR r => SourceSpan -> IContext -> [TVar] -> TCM r ()
+-------------------------------------------------------------------------------
 setTyArgs l ξ βs
   = case map tVar βs of 
       [] -> return ()
@@ -246,7 +246,7 @@ getAnns = do θ     <- tc_subst <$> get
              return m' 
 
 -------------------------------------------------------------------------------
-addAnn :: (PPR r, F.Reftable r) => SourceSpan -> Fact r -> TCM r () 
+addAnn :: PPR r => SourceSpan -> Fact r -> TCM r () 
 -------------------------------------------------------------------------------
 addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
  
@@ -262,27 +262,28 @@ execute verb pgm act
 initState :: PPR r => V.Verbosity -> NanoSSAR r -> TCState r
 -------------------------------------------------------------------------------
 initState verb pgm = TCS tc_errors tc_subst tc_cnt tc_anns 
-                          tc_specs tc_defs tc_exts tc_class tc_verb tc_this
+                          -- tc_specs tc_defs tc_exts tc_class 
+                          tc_verb tc_this
   where
     tc_errors = []
     tc_subst = mempty 
     tc_cnt   = 0
     tc_anns  = M.empty
-    tc_specs = specs pgm
-    tc_exts  = externs pgm
-    tc_defs  = envEmpty
     tc_verb  = verb
     tc_this  = []
-    tc_class = envFromList [ (s, ClassStmt l s e i b) | let Src ss = code pgm
-                                                      , ClassStmt l s e i b <- ss ]
+--     tc_specs = specs pgm
+--     tc_exts  = externs pgm
+--     tc_defs  = envEmpty
+--     tc_class = envFromList [ (s, ClassStmt l s e i b) | let Src ss = code pgm
+--                                                       , ClassStmt l s e i b <- ss ]
 
 
-getSpecOrDie f = tc_specs <$> get >>= maybe e return . envFindTy f
-  where e = tcError $ errorMissingSpec (srcPos f) f
-
-getSpecM f = tc_specs <$> get >>= return . envFindTy f
-
-addSpec x t = modify $ \st -> st { tc_specs = envAdds [(x,t)] (tc_specs st) } 
+-- getSpecOrDie f = tc_specs <$> get >>= maybe e return . envFindTy f
+--   where e = tcError $ errorMissingSpec (srcPos f) f
+-- 
+-- getSpecM f = tc_specs <$> get >>= return . envFindTy f
+-- 
+-- addSpec x t = modify $ \st -> st { tc_specs = envAdds [(x,t)] (tc_specs st) } 
 
 
 --------------------------------------------------------------------------
@@ -312,21 +313,20 @@ freshTVar l _ =  ((`TV` l). F.intSymbol (F.symbol "T")) <$> tick
 --------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------
-unifyTypesM :: PPR r => SourceSpan -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
+unifyTypesM :: PPR r 
+            => SourceSpan -> TCEnv r -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
-unifyTypesM l msg t1s t2s
-  | length t1s /= length t2s 
-  = tcError $ errorArgMismatch l 
-  | otherwise 
-  = do  (δ, θ) <- (,) <$> getDef <*> getSubst
-        case unifys l δ θ t1s t2s of
-          Left err -> tcError $ catMessage err msg
-          Right θ' -> setSubst θ' >> return θ' 
+unifyTypesM l γ msg t1s t2s
+  | length t1s /= length t2s = tcError $ errorArgMismatch l 
+  | otherwise = do  θ <- getSubst
+                    case unifys l γ θ t1s t2s of
+                      Left err -> tcError $ catMessage err msg
+                      Right θ' -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------
-unifyTypeM :: PPR r => SourceSpan -> RType r -> RType r -> TCM r (RSubst r)
+unifyTypeM :: PPR r => SourceSpan -> TCEnv r -> RType r -> RType r -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
-unifyTypeM l t t' = unifyTypesM l (ppshow "") [t] [t']
+unifyTypeM l γ t t' = unifyTypesM l γ (ppshow "") [t] [t']
 
 
 --------------------------------------------------------------------------------
@@ -336,32 +336,25 @@ unifyTypeM l t t' = unifyTypesM l (ppshow "") [t] [t']
 -- | For the expression @e@, check the subtyping relation between the type @t1@
 --   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
 --------------------------------------------------------------------------------
-castM :: (PPR r) => IContext -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
+castM :: PPR r => TCEnv r -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-castM ξ e t1 t2 
-  = do  δ <- getDef 
-        case convert (srcPos e) δ t1 t2 of
-          Left  e   -> tcError e
-          Right CNo -> return e
-          Right c   -> addCast ξ e c
-
-
--- | Monad versions of IfaceEnv operations
-
-findSymM i = findSym i <$> getDef
-findSymOrDieM i = findSymOrDie i <$> getDef
+castM γ e t1 t2 
+  = case convert (srcPos e) γ t1 t2 of
+      Left  e   -> tcError e
+      Right CNo -> return e
+      Right c   -> addCast (tce_ctx γ) e c
 
 
 -- | Run the monad `a` in the current state. This action will not alter the
 -- state.
 --------------------------------------------------------------------------------
-runFailM :: (PPR r) => TCM r a -> TCM r (Either Error a)
+runFailM :: PPR r => TCM r a -> TCM r (Either Error a)
 --------------------------------------------------------------------------------
 runFailM a = fst . runState (runErrorT a) <$> get
 
 
 --------------------------------------------------------------------------------
-runMaybeM :: (PPR r) => TCM r a -> TCM r (Maybe a)
+runMaybeM :: PPR r => TCM r a -> TCM r (Maybe a)
 --------------------------------------------------------------------------------
 runMaybeM a = runFailM a >>= \case 
                 Right rr -> return $ Just rr
@@ -370,15 +363,14 @@ runMaybeM a = runFailM a >>= \case
 
 -- | subTypeM will throw error if subtyping fails
 --------------------------------------------------------------------------------
-subtypeM :: (PPR r) => SourceSpan -> RType r -> RType r -> TCM r ()
+subtypeM :: PPR r => SourceSpan -> TCEnv r -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
-subtypeM l t1 t2 
-  = do  δ <- getDef 
-        case convert l δ t1 t2 of
-          Left e          -> tcError e
-          Right CNo       -> return  ()
-          Right (CUp _ _) -> return  ()
-          Right _         -> tcError $ errorSubtype l t1 t2
+subtypeM l γ t1 t2 
+  = case convert l γ t1 t2 of
+      Left e          -> tcError e
+      Right CNo       -> return  ()
+      Right (CUp _ _) -> return  ()
+      Right _         -> tcError $ errorSubtype l t1 t2
 
 
 addCast     ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
@@ -420,37 +412,30 @@ tcPushThis t   = modify $ \st -> st { tc_this = t : tc_this st }
 tcPopThis      = modify $ \st -> st { tc_this = tail $ tc_this st } 
 tcWithThis t p = do { tcPushThis t; a <- p; tcPopThis; return a } 
 
-getPropTDefM _ l s t ts = do 
-  δ <- getDef
-  return $ getPropTDef l δ (F.symbol s) ts t
 
-getPropM _ l s t = do 
-  (δ, ε) <- (,) <$> getDef <*> getExts
-  return  $ snd <$> getProp l ε δ (F.symbol s) t
-
---------------------------------------------------------------------------------
-getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
---------------------------------------------------------------------------------
-getSuperM l (TApp (TRef i) ts _)         = fromTdef =<< findSymOrDieM i
-  where 
-    fromTdef (ID _ _ vs (Just (p,ps)) _) = return  
-                                         $ apply (fromList $ zip vs ts) 
-                                         $ TApp (TRef (F.symbol p)) ps fTop
-    fromTdef (ID _ _ _ Nothing _)        = tcError 
-                                         $ errorSuper (srcPos l) 
-getSuperM l _                            = tcError 
-                                         $ errorSuper (srcPos l) 
-
---------------------------------------------------------------------------------
-getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (InterfaceDefinition r)
---------------------------------------------------------------------------------
-getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
-  where 
-    fromTdef (ID _ _ vs (Just (p,ps)) _) = 
-      do ID c n ws pp ee <- findSymOrDieM p
-         return  $ apply (fromList $ zip vs ts) 
-                 $ apply (fromList $ zip ws ps)
-                 $ ID c n [] pp ee
-    fromTdef (ID _ _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
-getSuperDefM l _  = tcError $ errorSuper (srcPos l)
+-- --------------------------------------------------------------------------------
+-- getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
+-- --------------------------------------------------------------------------------
+-- getSuperM l (TApp (TRef i) ts _)         = fromTdef =<< findSymOrDieM i
+--   where 
+--     fromTdef (ID _ _ vs (Just (p,ps)) _) = return  
+--                                          $ apply (fromList $ zip vs ts) 
+--                                          $ TApp (TRef (F.symbol p)) ps fTop
+--     fromTdef (ID _ _ _ Nothing _)        = tcError 
+--                                          $ errorSuper (srcPos l) 
+-- getSuperM l _                            = tcError 
+--                                          $ errorSuper (srcPos l) 
+-- 
+-- --------------------------------------------------------------------------------
+-- getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (InterfaceDefinition r)
+-- --------------------------------------------------------------------------------
+-- getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
+--   where 
+--     fromTdef (ID _ _ vs (Just (p,ps)) _) = 
+--       do ID c n ws pp ee <- findSymOrDieM p
+--          return  $ apply (fromList $ zip vs ts) 
+--                  $ apply (fromList $ zip ws ps)
+--                  $ ID c n [] pp ee
+--     fromTdef (ID _ _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
+-- getSuperDefM l _  = tcError $ errorSuper (srcPos l)
 

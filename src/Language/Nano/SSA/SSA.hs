@@ -46,7 +46,10 @@ ssaNano :: (PP r, F.Reftable r, Data r, Typeable r) => NanoBareR r -> SSAM r (Na
 ssaNano p@(Nano { code = Src fs }) 
   = do θ         <- getSsaEnv 
        -- All program globals (Variables with annotations)
-       setGlobs   $ tracePP "definedGlobs" $ fmap srcPos <$> definedGlobs fs
+       --
+       -- FIXME: perhaps add hoisted functions here as well
+       --
+       setGlobs   $ fmap srcPos <$> definedGlobs fs
 
        -- FIXME: Classes? Need to isolate the ones in scope
        setSsaEnv  $ extSsaEnv classes θ

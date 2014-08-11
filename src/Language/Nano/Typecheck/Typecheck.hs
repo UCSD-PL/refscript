@@ -160,7 +160,7 @@ patchAnn m (Ann l fs)   = Ann l $ sortNub $ eo ++ fo ++ ti ++ fs
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-initGlobalEnv :: Data r => NanoSSAR r -> TCEnv r
+initGlobalEnv :: (PPR r, Data r) => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
 initGlobalEnv (Nano { code = Src ss }) = TCE env iface mod ctx
   where
@@ -170,11 +170,11 @@ initGlobalEnv (Nano { code = Src ss }) = TCE env iface mod ctx
     ctx     = emptyContext
 
 -------------------------------------------------------------------------------
-initEnv :: Data r => TCEnv r -> Statement (AnnSSA r) -> TCEnv r
+initEnv :: Data r => TCEnv r -> [Statement (AnnSSA r)] -> TCEnv r
 -------------------------------------------------------------------------------
-initEnv (TCE env iface mod ctx) s = TCE env' iface' mod' ctx'
+initEnv (TCE env iface mod ctx) ss = TCE env' iface' mod' ctx'
   where
-    env'    = envUnion env $ populateFuncs [s]
+    env'    = envUnion env $ populateFuncs ss
     iface'  = iface
     mod'    = mod
     ctx'    = ctx
@@ -188,99 +188,6 @@ populateExterns ss
   = envFromList [ (n,t) | (n,ls) <- hoistFuncDecls $ map (fmap ann_fact) ss
                         , VarAnn t <- ls ]
 
--- NAIVE VERSION: 
---
--- populateFuncs ss = 
---     envFromList [(x,t) | fs <- filter isFunctionStmt ss 
---                        , x        <- funName fs
---                        , VarAnn t <- FO.foldMap ann_fact fs ]
---   where
---     funName (FunctionStmt _ n _ _) = [n]
---     funName (FunctionDecl _ n _  ) = [n]
---     funName _                      = [ ]
-
-
--- CHECK ME !!!
---
---
--- | Find all function definitions/declarations whose scope is hoisted to 
---   the current scope. E.g. declarations in the If-branch of a conditional 
---   expression. Note how declarations do not escape module or function 
---   blocks (isolation).
--------------------------------------------------------------------------------
-hoistFuncDecls :: (Data a, Typeable a) => [Statement a] -> [(F.Symbol, a)]
--------------------------------------------------------------------------------
-hoistFuncDecls stmts = everythingBut (++) (([], False) `mkQ` f) stmts
-  where
-    f = fromStmt `extQ` fromExp 
-    fromStmt (FunctionStmt l n _ _) = ([(F.symbol n,l)], True)
-    fromStmt (FunctionDecl l n _  ) = ([(F.symbol n,l)], True)
-    fromStmt (ClassStmt {})         = ([ ], True)
-    fromStmt (ModuleStmt {})        = ([ ], True)
-    fromStmt _                      = ([ ], False)
-    fromExp :: Expression t -> ([(F.Symbol, t)], Bool)
-    fromExp (FuncExpr {})           = ([ ], True)
-    fromExp _                       = ([ ], False)
-
--- CHECK ME !!!
---
---
--- | Find all function definitions/declarations whose scope is hoisted to 
---   the current scope. E.g. declarations in the If-branch of a conditional 
---   expression. Note how declarations do not escape module or function 
---   blocks (isolation).
--------------------------------------------------------------------------------
-hoistAnns :: (Data a, Typeable a) => [Statement a] -> [a]
--------------------------------------------------------------------------------
-hoistAnns stmts = everythingBut (++) (([], False) `mkQ` f) stmts
-  where
-    f = fromStmt `extQ` fromExp 
-    fromStmt (FunctionStmt l n _ _) = ([l], True)
-    fromStmt (FunctionDecl l n _  ) = ([l], True)
-    fromStmt (ClassStmt l _ _ _ _ ) = ([l], True)
-    fromStmt (ModuleStmt l _ _ )    = ([l], True)
-    fromStmt s                      = ([getAnnotation s], False)
-    fromExp :: Expression t -> ([t], Bool)
-    fromExp (FuncExpr l _ _ _)      = ([l], True)
-    fromExp e                       = ([getAnnotation e], False)
-
-
-
--------------------------------------------------------------------------------
--- | Typecheck Environment 
--------------------------------------------------------------------------------
-
---   We define this alias as the "output" type for typechecking any entity
---   that can create or affect binders (e.g. @VarDecl@ or @Statement@)
---   @Nothing@ means if we definitely hit a "return" 
---   @Just γ'@ means environment extended with statement binders
-
-type TCEnvO r = Maybe (TCEnv r)
-
-
--- data TCEnv r  = TCE { 
---     tce_env  :: Env (RType r)               -- ^ This starts off the same
---                                             --   as tce_spec, but grows with
---                                             --   typechecking
---   , tce_spec :: Env (RType r)               -- ^ Program specs. Includes:
---                                             --    * functions 
---                                             --    * variable annotations
---                                             --    * ambient variable declarations
---                                             --    * class types (after being computed)
---   , tce_ctx  :: !IContext 
---   }
--- 
-
-data TCEnv r  = TCE {
-    tce_env   :: Env (RType r)
-
-  , tce_iface :: Env (InterfaceDefinition r)
-
-  , tce_mod   :: Env (ModuleDefinition r)
-
-  , tce_ctx   :: !IContext 
-  }
-
 
 
 -- Q: Who needs this?
@@ -293,15 +200,17 @@ instance PPR r => Substitutable r (TCEnv r) where
   apply θ γ = γ { tce_env = apply θ (tce_env γ) }
 
 instance PPR r => PP (TCEnv r) where
-  pp = undefined -- ppTCEnv
+  pp = ppTCEnv
 
 
-
--- ppTCEnv (TCE env spc ctx) 
---   =   text "******************** Environment ************************"
---   $+$ pp env
---   $+$ text "******************** Specifications *********************"
---   $+$ pp spc 
+-- FIXME !!!
+ppTCEnv (TCE env ifaces modules ctx)
+  =   text "******************** Environment ************************"
+  $+$ pp env
+--   $+$ text "******************** Interfaces *************************"
+--   $+$ pp ifaces
+--   $+$ text "******************** Modules ****************************"
+--   $+$ text "TODO" -- pp modules
 --   $+$ text "******************** Call Context ***********************"
 --   $+$ pp ctx
 
@@ -326,7 +235,7 @@ tcEnvFindTyOrDie l x         = fromMaybe ugh . tcEnvFindTy x  where ugh = die $ 
 -------------------------------------------------------------------------------
 -- | Shorthand aliases 
 -------------------------------------------------------------------------------
-type PPR r = (PP r, F.Reftable r)
+type PPR r = (PP r, F.Reftable r, Data r)
 type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
 
 
@@ -335,28 +244,26 @@ type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r))
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-tcFun :: PPR r =>
-  TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r), Maybe (TCEnv r))
+tcFun :: PPR r => TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r), TCEnvO r)
 -------------------------------------------------------------------------------
 tcFun γ (FunctionStmt l f xs body)
   = case tcEnvFindTy f γ of
       Nothing   -> die $ errorMissingSpec (srcPos l) f
       Just ft   -> do ts    <- tcFunTys l f xs ft
-                      body' <- foldM (tcFun1 γ l f xs) body ts
+                      body' <- foldM (tcFunSingleSig γ' l f xs) body ts
                       return $ (FunctionStmt l f xs body', Just γ) 
+  where
+    γ'           = initEnv γ body
+
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
--------------------------------------------------------------------------------
-tcFun1 :: (PPR r, IsLocated b, IsLocated l, IsLocated a, CallSite t) 
-       => TCEnv r -> a -> l -> [Id b] -> [Statement (AnnSSA r)] 
-       -> (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
--------------------------------------------------------------------------------
-tcFun1 γ l f xs body (i, (αs,ts,t)) = tcFunBody γ' l body t
-  where 
-    γ'                              = envAddFun f i αs xs ts t γ 
+tcFunSingleSig γ l f xs body (i, (αs,ts,t)) 
+  = tcFunBody (envAddFun f i αs xs ts t γ) l body t
+
+tcMethSingleSig γ l f xs body (i, _,ft) 
+  = tcFunSingleSig γ l f xs body (i, ft)
 
 
---
 -- FIXME: Check for mutability (the second part in the triplet)
 --        If this argument is "immutable" We will have to check
 --        statements/expressions that operate on "this" and make sure that they
@@ -364,8 +271,6 @@ tcFun1 γ l f xs body (i, (αs,ts,t)) = tcFunBody γ' l body t
 --
 --        For the moment it just does a regular function check
 --        
-tcMeth1 γ l f xs body (i, _,ft) = tcFun1 γ l f xs body (i, ft)
-
 
 tcFunBody γ l body t = tcStmts γ body >>= go
   where go (_, Just _) | t /= tVoid
@@ -384,31 +289,23 @@ envAddFun f i αs xs ts t = tcEnvAdds tyBinds
   where  
     tyBinds                = [(tVarId α, tVar α) | α <- αs]
     varBinds               = zip
-    
--- -------------------------------------------------------------------------------
--- validInst :: (PP a, Free a) => TCEnv r -> (SourceSpan, a) -> Maybe Error
--- -------------------------------------------------------------------------------
--- validInst γ (l, ts)
---   = case [β | β <- HS.toList $ free $ ts, not $ tVarId β `tcEnvMem` γ] of
---       [] -> Nothing
---       βs -> Just $ errorFreeTyVar l βs
+
 
 -- | Strings ahead: HACK Alert
 tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a   
 
 
 ---------------------------------------------------------------------------------------
-tcClassElt :: PPR r 
-          => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
+tcClassElt :: PPR r => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
 --
 -- FIXME: 1. Check for void return type for constructor
---        2. Use tcMeth1 instead of tcFun1
+--        2. Use tcMethSingleSig instead of tcFunSingleSig
 --
 tcClassElt γ _ (Constructor l xs body) 
   = case [ c | ConsAnn c  <- ann_fact l ] of
       [ConsSig ft]  -> do t        <- tcFunTys l i xs ft
-                          body'    <- foldM (tcFun1 γ l i xs) body t
+                          body'    <- foldM (tcFunSingleSig γ l i xs) body t
                           return    $ Constructor l xs body'
       _             -> tcError $ unsupportedNonSingleConsTy $ srcPos l
   where i   = Id l "constructor"
@@ -440,7 +337,7 @@ tcClassElt γ cid (MemberVarDecl l static (VarDecl l1 x eo))
 tcClassElt γ cid (MemberMethDecl l static i xs body) 
   = case anns of 
       [mt]  -> do mts    <- tcMethTys l i mt
-                  body'  <- foldM (tcMeth1 γ l i xs) body mts
+                  body'  <- foldM (tcMethSingleSig γ l i xs) body mts
                   return  $ MemberMethDecl l static i xs body'
       _    -> tcError     $ errorClassEltAnnot (srcPos l) cid i
   where
@@ -594,7 +491,7 @@ classFromStmt :: PPR r => Statement (AnnSSA r) -> TCM r (InterfaceDefinition r)
 ---------------------------------------------------------------------------------------
 classFromStmt (ClassStmt l id _ _ cs) 
   = do  δ <- getDef
-        case findSym sym δ of
+        case envFindTy sym δ of
           Just d  -> return d   -- if already computed
           Nothing -> do let elts      = addConstr δ $ concatMap (classEltType tClass) cs
                         let freshD    = ID True (fmap ann id) vs p elts
@@ -789,12 +686,13 @@ tcExpr _ e@(SuperRef l) = (e,) <$> (getSuperM l =<< tcPeekThis)
 tcExpr γ (FuncExpr l fo xs body)
   = case anns of 
       [ft] -> do  ts    <- tcFunTys l f xs ft
-                  body' <- foldM (tcFun1 γ l f xs) body ts
+                  body' <- foldM (tcFunSingleSig γ' l f xs) body ts
                   return $ (FuncExpr l fo xs body', ft)
       _    -> tcError    $ errorNonSingleFuncAnn $ srcPos l
   where
     anns    = [ t | FuncAnn t <- ann_fact l ]
     f       = maybe (F.symbol "<anonymous>") F.symbol fo
+    γ'      = initEnv γ body
 
 tcExpr _ e 
   = convertError "tcExpr" e

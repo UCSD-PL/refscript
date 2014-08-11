@@ -39607,13 +39607,9 @@ var TypeScript;
                 } else {
                     tArgs = this.getTypeParameters();
                 }
-
-                var rsTParams = tArgs.map(function (p) {
+                var rsTParams = [mut ? mut : new TypeScript.TTypeReference("Mutable", [])].concat(tArgs.map(function (p) {
                     return p.toRsType();
-                });
-                if (mut !== undefined) {
-                    rsTParams = [mut].concat(rsTParams);
-                }
+                }));
                 return new TypeScript.TTypeReference(this.fullName().split("<")[0], rsTParams);
             }
 

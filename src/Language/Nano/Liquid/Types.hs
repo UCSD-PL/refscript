@@ -452,7 +452,7 @@ zipType δ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _)
   | x1 == x2
   = TApp (TRef x1) (zipWith (zipType δ) t1s t2s) r1
   | otherwise
-  = case weaken δ (findSymOrDie x1 δ, t1s) x2 of
+  = case weaken δ x1 x2 t1s of
       -- Try to move along the class hierarchy
       Just (_, t1s') -> zipType δ (TApp (TRef x2) t1s' r1 `strengthen` reftIO t1 x1) t2
       -- Unfold structures
@@ -469,7 +469,7 @@ zipType δ t1 t2@(TApp (TRef _) _ _) = zipType δ t1 (flattenType δ t2)
 
 
 zipType δ t1@(TClass x1) t2@(TClass x2) 
-  | x2 `elem` lineage δ (findSymOrDie x1 δ)
+  | x2 `elem` ancestors x1 δ
   = TClass x2
   | otherwise 
   = zipType δ (flattenType δ t1) (flattenType δ t2)

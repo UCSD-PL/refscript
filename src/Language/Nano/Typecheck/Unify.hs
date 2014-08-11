@@ -18,11 +18,13 @@ import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors 
 import           Language.Nano.Errors 
 import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Sub
 
 
 import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
+import           Data.Generics
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
@@ -38,16 +40,16 @@ type PPR r = (PP r, F.Reftable r)
 -----------------------------------------------------------------------------
 
 -- | Unify types @t@ and @t'@, in substitution environment @θ@ and type
--- definition environment @δ@.
+-- definition environment @γ@.
 -----------------------------------------------------------------------------
-unify :: PPR r => SourceSpan -> IfaceEnv r
+unify :: (Data r, PPR r) => SourceSpan -> TCEnv r
   -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 
 unify _ _ θ t@(TApp _ _ _) t'@(TApp _ _ _) | any isTop [t,t'] = Right $ θ
 
-unify l δ θ (TFun xts t _) (TFun xts' t' _)
-  = unifys l δ θ (t: map b_type xts) (t': map b_type xts')
+unify l γ θ (TFun xts t _) (TFun xts' t' _)
+  = unifys l γ θ (t: map b_type xts) (t': map b_type xts')
 
 unify l _ θ (TVar α _) (TVar β _) = varEql l θ α β 
 unify l _ θ (TVar α _) t' = varAsn l θ α t'
@@ -56,26 +58,36 @@ unify l _ θ t (TVar α _)  = varAsn l θ α t
 -- XXX: ORDERING IMPORTANT HERE
 -- Keep the union case before unfolding, but after type variables
 
-unify l δ θ t t' | any isUnion [t,t'] = unifys l δ θ t1s' t2s'
+unify l γ θ t t' | any isUnion [t,t'] = unifys l γ θ t1s' t2s'
   where
-    (t1s', t2s') = unzip [ (t1, t2) | t1 <- t1s, t2 <- t2s, related δ t1 t2]
+    (t1s', t2s') = unzip [ (t1, t2) | t1 <- t1s, t2 <- t2s, related γ t1 t2]
     (t1s , t2s ) = mapPair bkUnion (t,t')
 
-unify l δ θ (TApp (TRef x) ts _) (TApp (TRef x') ts' _) 
-  | x == x' = unifys l δ θ ts ts'
+unify l γ θ (TApp (TRef x) ts _) (TApp (TRef x') ts' _) 
+  | x == x' = unifys l γ θ ts ts'
 
-unify l δ θ t1@(TApp (TRef _) _ _) t2 = unify l δ θ (flattenType δ t1) t2
-unify l δ θ t1 t2@(TApp (TRef _) _ _) = unify l δ θ t1 (flattenType δ t2)
+unify l γ θ t1@(TApp (TRef _) _ _) t2 
+  = case flattenType γ t1 of 
+      Just ft1 -> unify l γ θ ft1 t2
+      Nothing  -> Left $ errorUnresolvedType l t1
 
-unify l δ θ t1@(TClass _) t2          = unify l δ θ (flattenType δ t1) t2
-unify l δ θ t1 t2@(TClass _)          = unify l δ θ t1 (flattenType δ t2)
+unify l γ θ t1 t2@(TApp (TRef _) _ _)
+  = case flattenType γ t2 of 
+      Just ft2 -> unify l γ θ t1 ft2
+      Nothing  -> Left $ errorUnresolvedType l t2
 
-unify l δ θ t1@(TModule _) t2         = unify l δ θ (flattenType δ t1) t2
-unify l δ θ t1 t2@(TModule _)         = unify l δ θ t1 (flattenType δ t2)
+unify l γ θ t1@(TClass _) t2
+  = case flattenType γ t1 of 
+      Just ft1 -> unify l γ θ ft1 t2
+      Nothing  -> Left $ errorUnresolvedType l t1
 
+unify l γ θ t1 t2@(TClass _)
+  = case flattenType γ t2 of 
+      Just ft2 -> unify l γ θ t1 ft2
+      Nothing  -> Left $ errorUnresolvedType l t2
 
-unify l δ θ (TCons e1s m1 _) (TCons e2s m2 _)
-  = unifys l δ θ (ofType m1:t1s) (ofType m2:t2s)
+unify l γ θ (TCons e1s m1 _) (TCons e2s m2 _)
+  = unifys l γ θ (ofType m1:t1s) (ofType m2:t2s)
   where 
     (t1s, t2s) = unzip $ map tt es ++ concatMap ττ es ++ concatMap mm es
     es         = [ (e1, e2) | e1 <- e1s
@@ -100,7 +112,7 @@ unify _ _ θ _  _ = return θ
 
    
 -----------------------------------------------------------------------------
-unifys ::  PPR r => SourceSpan -> IfaceEnv r -> RSubst r -> [RType r] 
+unifys :: (Data r, PPR r) => SourceSpan -> TCEnv r -> RSubst r -> [RType r] 
                  -> [RType r] -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 unifys loc γ θ ts ts'  

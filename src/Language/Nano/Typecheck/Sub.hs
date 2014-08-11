@@ -12,8 +12,9 @@
 
 module Language.Nano.Typecheck.Sub (convert, isSubtype, safeExtends, Related (..)) where
 
-import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>))
+
+import           Data.Generics
 import qualified Data.HashSet                       as S
 import           Data.List                          (sort)
 import           Data.Maybe                         (maybeToList)
@@ -22,16 +23,17 @@ import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
 import qualified Language.Fixpoint.Types            as F
 
+import           Language.ECMAScript3.PrettyPrint
+
 import           Language.Nano.Types
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Errors
 import qualified Data.HashMap.Strict                as M
 
 -- import           Debug.Trace                      (trace)
-
-
 
 type PPR r = (PP r, F.Reftable r)
 
@@ -40,26 +42,23 @@ instance PP a => PP (S.HashSet a) where
 
 
 --------------------------------------------------------------------------------
-isSubtype :: (PPR r) => IfaceEnv r -> RType r -> RType r -> Bool
+isSubtype :: (PPR r, Functor g, EnvLike () g) 
+          => g r -> RType r -> RType r -> Bool
 --------------------------------------------------------------------------------
-isSubtype δ t1 t2 =
-  case convert (srcPos dummySpan) δ t1 t2 of
+isSubtype γ t1 t2 =
+  case convert (srcPos dummySpan) γ t1 t2 of
     Right CNo       -> True
     Right (CUp _ _) -> True
     _               -> False
 
 
--- | @convert@ returns:
--- * An equivalent version of @t1@ that has the same sort as the first input type
--- * An equivalent version of @t2@ that has the same sort as the second input type
--- * A subtyping direction between @t1@ and @t2@
---  
--- Padding the input types gives them the same sort, i.e. makes them compatible. 
+-- | `convert`
 --------------------------------------------------------------------------------
-convert :: (PPR r) => SourceSpan -> IfaceEnv r -> RType r -> RType r -> Either Error (Cast r)
+convert :: (PPR r, Functor g, EnvLike () g) 
+        => SourceSpan -> g r -> RType r -> RType r -> Either Error (Cast r)
 --------------------------------------------------------------------------------
-convert l δ t1 t2  
-  =  do c <- convert' l δ t1 t2
+convert l γ t1 t2  
+  =  do c <- convert' l γ' τ1 τ2
         case c of 
           CDNo   -> return $ CNo
           CDUp   -> return $ CUp (rType t1) (rType t2)
@@ -67,27 +66,31 @@ convert l δ t1 t2
           CDDead -> return $ CDead (rType t1)
   where
     rType = ofType . toType
+    τ1    = toType t1
+    τ2    = toType t2
+    γ'    = fmap (\_ -> ()) γ
 
- 
 
 --------------------------------------------------------------------------------
-convert' :: (PPR r) => SourceSpan -> IfaceEnv r -> RType r -> RType r -> Either Error CastDirection
+convert' :: (Functor g, EnvLike () g)
+         => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convert' _ _ t1 t2 | toType t1 == toType t2     = Right CDNo
 convert' _ _ t1 t2 | not (isTop t1) && isTop t2 = Right CDUp
-convert' l δ t1 t2 | any isUnion [t1,t2]        = convertUnion l  (envMap (fmap $ const ()) δ) (toType t1) (toType t2)
-convert' l δ t1 t2 | all isTObj  [t1,t2]        = convertObj l    (envMap (fmap $ const ()) δ) (toType t1) (toType t2)
-convert' l δ t1 t2 | all isTFun  [t1, t2]       = convertFun l    (envMap (fmap $ const ()) δ) (toType t1) (toType t2)
-convert' l δ (TClass c1) (TClass c2)            = convertTClass l (envMap (fmap $ const ()) δ) c1          c2
-convert' l δ t1 t2                              = convertSimple l (envMap (fmap $ const ()) δ) (toType t1) (toType t2)
+convert' l γ t1 t2 | any isUnion [t1,t2]        = convertUnion l  γ t1 t2
+convert' l γ t1 t2 | all isTObj  [t1,t2]        = convertObj l    γ t1 t2
+convert' l γ t1 t2 | all isTFun  [t1, t2]       = convertFun l    γ t1 t2
+convert' l γ (TClass c1) (TClass c2)            = convertTClass l γ c1 c2
+convert' l γ t1 t2                              = convertSimple l γ t1 t2
 
 
 -- | `convertObj`
 
 --------------------------------------------------------------------------------
-convertObj :: (PPR r) => SourceSpan -> IfaceEnv r -> RType r -> RType r -> Either Error CastDirection
+convertObj :: (Functor g, EnvLike () g)
+           => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
+convertObj l γ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
 
   --
   --                       μ <: μ
@@ -96,8 +99,8 @@ convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
   --        [μ]{ [μi]fi:ti } <: [μ]{ [μi]fi:ti }
   --
   | s1l == s2l
-  = if isSubtypeMut δ μ1 μ2 then 
-      if deeps l δ μ1 μ2 b1s b2s then  
+  = if isSubtypeMut γ μ1 μ2 then 
+      if deeps l γ μ1 μ2 b1s b2s then  
         Right CDUp
       else 
        Left $ errorSubtype l t1 t2
@@ -116,7 +119,7 @@ convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
   --  [μ]{ f1:t1,..,fn:tn,..,fm:tm } <: [μ]{ f1:t1,..,fn:tn }
   --
   | otherwise
-  =   convertObj l δ (TCons e1s' μ1 r1) (TCons e2s μ2 r2)
+  =   convertObj l γ (TCons e1s' μ1 r1) (TCons e2s μ2 r2)
     where
       e1s'       = [ e1 | e1 <- e1s
                         , F.symbol e1 `M.member` m1  
@@ -140,37 +143,46 @@ convertObj l δ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
       in12       = s1s `S.intersection` s2s
       -- e1s'       = concat [ fromJust $ M.lookup s m1 | s <- S.toList in12 ]
  
-convertObj l δ t1@(TApp (TRef x1) t1s _) t2@(TApp (TRef x2) t2s _)
+convertObj l γ t1@(TApp (TRef x1) t1s _) t2@(TApp (TRef x2) t2s _)
   | x1 == x2
     -- FIXME: Using covariance here !!!
-  = if all (uncurry $ isSubtype δ) $ zip t1s t2s 
+  = if all (uncurry $ isSubtype γ) $ zip t1s t2s 
       then Right $ CDNo
       else Left  $ errorSubtype l t1 t2
   | otherwise
 
     -- Check type hierarchy
-  = case weaken δ (findSymOrDie x1 δ,t1s) x2 of
+  = case weaken γ x1 x2 t1s of
       -- Adjusting the child class to the parent
       Just (_, t1s') -> 
-          if all (uncurry $ isSubtype δ) $ zip t1s' t2s
+          if all (uncurry $ isSubtype γ) $ zip t1s' t2s
             then Right CDUp 
             else Left  $ errorSubtype l t1 t2
       
       -- Structural subtyping
-      Nothing       -> convertObj l δ (flattenType δ t1) (flattenType δ t2)
+      Nothing       -> 
+          case (flattenType γ t1, flattenType γ t2) of 
+            (Just ft1, Just ft2) -> convertObj l γ ft1 ft2
+            (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2
+            (Nothing , _       ) -> Left $ errorUnresolvedType l t1 
+            (_       , Nothing ) -> Left $ errorUnresolvedType l t2
                           
-convertObj l δ t1@(TApp (TRef _) _ _) t2 
-  = convertObj l δ (flattenType δ t1) t2
+convertObj l γ t1@(TApp (TRef _) _ _) t2 
+  = case flattenType γ t1 of 
+      Just ft1 -> convertObj l γ ft1 t2
+      Nothing  -> Left $ errorUnresolvedType l t1
 
-convertObj l δ t1 t2@(TApp (TRef _) _ _)
-  = convertObj l δ t1 (flattenType δ t2) 
+convertObj l γ t1 t2@(TApp (TRef _) _ _)
+  = case flattenType γ t2 of 
+      Just ft2 -> convertObj l γ t1 ft2
+      Nothing  -> Left $ errorUnresolvedType l t2
 
 convertObj l _ t1 t2 =  Left $ unimplemented l "convertObj" $ ppshow t1 ++ " -- " ++ ppshow t2
 
 
 -- | Deep subtyping for object members
 
-deeps l δ μ1 μ2 e1s e2s = and $ zipWith (deep l δ μ1 μ2) e1s e2s
+deeps l γ μ1 μ2 e1s e2s = and $ zipWith (deep l γ μ1 μ2) e1s e2s
 
 -- | Treat the parts of `e1s` and `e2s` that correspond to the same binder 
 --   as intersection types.
@@ -179,14 +191,14 @@ deeps l δ μ1 μ2 e1s e2s = and $ zipWith (deep l δ μ1 μ2) e1s e2s
 -- | ----------------------
 -- |  s1 /\ ... /\ sn <: t
 --
-deep l δ μ1 μ2 e1s e2s = or $ map (\e1 -> deep1 l δ μ1 μ2 e1 e2s) e1s
+deep l γ μ1 μ2 e1s e2s = or $ map (\e1 -> deep1 l γ μ1 μ2 e1 e2s) e1s
 
 --
 -- |  s <: t1  ...  s <: tn
 -- | ------------------------
 -- |   s <: t1 /\ ... /\ tn
 --
-deep1 l δ μ1 μ2 e es = and $ map (subElt l δ μ1 μ2 e) es
+deep1 l γ μ1 μ2 e es = and $ map (subElt l γ μ1 μ2 e) es
 
 
 -- subElt :: PPR r => SourceSpan -> Mutability -> Mutability -> TypeMember (RType r) -> TypeMember (RType r) -> TCM r Bool
@@ -197,8 +209,8 @@ deep1 l δ μ1 μ2 e es = and $ map (subElt l δ μ1 μ2 e) es
 --  ---------------------------------------
 --    { (ts)=>t } <: { (ts)=>t } 
 --
-subElt _ δ _ _ (CallSig t1) (CallSig t2)
-  = isSubtype δ t1 t2
+subElt _ γ _ _ (CallSig t1) (CallSig t2)
+  = isSubtype γ t1 t2
 
 -- | Field signatures
 --
@@ -208,15 +220,15 @@ subElt _ δ _ _ (CallSig t1) (CallSig t2)
 -- NO :   { mutable  f: PosInt  } <: { mutable   f: int }
 -- NO :   { readonly f: PosInt  } <: { readonly  f: int }
 --
-subElt _ δ μ1 μ2 (FieldSig _ μf1 t1) (FieldSig _ μf2 t2)
-  | isSubtypeMut δ m1 m2 =
+subElt _ γ μ1 μ2 (FieldSig _ μf1 t1) (FieldSig _ μf2 t2)
+  | isSubtypeMut γ m1 m2 =
       if isImmutable m2 then
         -- 
         --               t <: t'
         -- ------------------------------------------
         --  { immut f: t } <: { immut f: t' }
         --
-        isSubtype δ t1 t2
+        isSubtype γ t1 t2
       else 
         --  
         --  μ,μ =/= Immutable
@@ -224,7 +236,7 @@ subElt _ δ μ1 μ2 (FieldSig _ μf1 t1) (FieldSig _ μf2 t2)
         -- ----------------------------------
         --  { μ f: t } <: { μ f: t }
         --
-        and [ isSubtype δ t1 t2, isSubtype δ t2 t1 ]
+        and [ isSubtype γ t1 t2, isSubtype γ t2 t1 ]
 
   | otherwise = False 
   where
@@ -233,16 +245,16 @@ subElt _ δ μ1 μ2 (FieldSig _ μf1 t1) (FieldSig _ μf2 t2)
 
 -- | Methods
 -- 
-subElt _ δ _ _ (MethSig _ _ t1) (MethSig _ _ t2) =
-  isSubtype δ t1 t2
+subElt _ γ _ _ (MethSig _ _ t1) (MethSig _ _ t2) =
+  isSubtype γ t1 t2
   
 
 -- | Constructor signatures
 --
 -- { new (ts)=>() } <: { new (ts)=>() } 
 --
-subElt _ δ _ _ (ConsSig t1) (ConsSig t2)
-  = isSubtype δ t1 t2 
+subElt _ γ _ _ (ConsSig t1) (ConsSig t2)
+  = isSubtype γ t1 t2 
 
 -- | Index signatures
 --
@@ -250,16 +262,16 @@ subElt _ δ _ _ (ConsSig t1) (ConsSig t2)
 --  -----------------------------------
 --    { [x:τ]: t } <: { [x:τ]: t }
 --
-subElt _ δ _ _ (IndexSig _ b1 t1) (IndexSig _ b2 t2)
+subElt _ γ _ _ (IndexSig _ b1 t1) (IndexSig _ b2 t2)
   | b1 == b2 
-  = and [ isSubtype δ t1 t2, isSubtype δ t2 t2 ]
+  = and [ isSubtype γ t1 t2, isSubtype γ t2 t2 ]
 
 -- | Static fields
 --
-subElt _ δ μ1 μ2 (StatSig _ μf1 t1) (StatSig _ μf2 t2)
-  | isSubtypeMut δ m1 m2 =
-      if isImmutable m2 then isSubtype δ t1 t2
-                        else and [ isSubtype δ t2 t1, isSubtype δ t1 t2 ]
+subElt _ γ μ1 μ2 (StatSig _ μf1 t1) (StatSig _ μf2 t2)
+  | isSubtypeMut γ m1 m2 =
+      if isImmutable m2 then isSubtype γ t1 t2
+                        else and [ isSubtype γ t2 t1, isSubtype γ t1 t2 ]
   | otherwise = False 
   where
     m1 = combMut μ1 μf1
@@ -272,12 +284,13 @@ subElt _ _ _ _ _ _ = False
 
 -- | `convertFun`
 --------------------------------------------------------------------------------
-convertFun :: PPR r => SourceSpan -> IfaceEnv r -> RType r -> RType r -> Either Error CastDirection
+convertFun :: (Functor g, EnvLike () g)
+           => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertFun l δ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _) 
+convertFun l γ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _) 
   | length b1s /= length b2s 
-  = do  cs <- zipWithM (convert' l δ) (b_type <$> b2s) (b_type <$> b1s)
-        co <- convert' l δ o1 o2
+  = do  cs <- zipWithM (convert' l γ) (b_type <$> b2s) (b_type <$> b1s)
+        co <- convert' l γ o1 o2
         if all noCast cs && noCast co then 
           Right CDNo
         else if all dnCast cs && upCast co then 
@@ -287,12 +300,12 @@ convertFun l δ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _)
   | otherwise 
   = Left $ errorFuncSubtype l t1 t2
 
-convertFun l δ t1@(TAnd _) t2@(TAnd t2s) = 
-  if and $ isSubtype δ t1 <$> t2s then Right CDUp
+convertFun l γ t1@(TAnd _) t2@(TAnd t2s) = 
+  if and $ isSubtype γ t1 <$> t2s then Right CDUp
                                   else Left  $ errorFuncSubtype l t1 t2
 
-convertFun l δ t1@(TAnd t1s) t2 = 
-  let f t1 = isSubtype δ t1 t2 in 
+convertFun l γ t1@(TAnd t1s) t2 = 
+  let f t1 = isSubtype γ t1 t2 in 
   if or $ f <$> t1s then Right CDUp
                     else Left  $ errorFuncSubtype l t1 t2
  
@@ -301,16 +314,18 @@ convertFun l _ t1 t2 = Left $ unsupportedConvFun l t1 t2
 
 -- | `convertTClass`
 --------------------------------------------------------------------------------
-convertTClass :: PPR r => SourceSpan -> IfaceEnv r -> F.Symbol -> F.Symbol -> Either Error CastDirection
+convertTClass :: (Functor g, EnvLike () g)
+              => SourceSpan -> g () -> QName -> QName -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertTClass l δ c1 c2 | c1 == c2                                  = Right CDNo  
-                        | c1 `elem` (lineage δ $ findSymOrDie c2 δ) = Right CDUp
-                        | otherwise                                 = Left  $ errorTClassSubtype l c1 c2
+convertTClass l γ c1 c2 | c1 == c2                  = Right CDNo  
+                        | c1 `elem` ancestors γ c2  = Right CDUp
+                        | otherwise                 = Left  $ errorTClassSubtype l c1 c2
 
 
 -- | `convertSimple`
 --------------------------------------------------------------------------------
-convertSimple :: PPR r => SourceSpan -> IfaceEnv r -> RType r -> RType r -> Either Error CastDirection
+convertSimple :: (Functor g, EnvLike () g)
+              => SourceSpan -> g r -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertSimple l _ t1 t2
   | t1 == t2      = Right CDNo
@@ -321,9 +336,10 @@ convertSimple l _ t1 t2
 
 -- | `convertUnion`
 --------------------------------------------------------------------------------
-convertUnion :: PPR  r => SourceSpan -> IfaceEnv r -> RType r -> RType r -> Either Error CastDirection
+convertUnion :: (Functor g, EnvLike () g)
+             => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertUnion _ δ t1 t2  
+convertUnion _ γ t1 t2  
 
 
   | upcast    = Right {- $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) -} CDUp 
@@ -338,8 +354,8 @@ convertUnion _ δ t1 t2
 --       ( _ ,_)                             -> Left  $ errorUnionSubtype l t1 t2
   where 
 
-    upcast                = all (\t1 -> any (\t2 -> isSubtype δ t1 t2) t2s) t1s
-    deadcast              = all (\t1 -> not $ any (\t2 -> isSubtype δ t1 t2) t2s) t1s
+    upcast                = all (\t1 -> any (\t2 -> isSubtype γ t1 t2) t2s) t1s
+    deadcast              = all (\t1 -> not $ any (\t2 -> isSubtype γ t1 t2) t2s) t1s
   
 
     (t1s, t2s)            = sanityCheck $ mapPair bkUnion (t1, t2)
@@ -348,45 +364,47 @@ convertUnion _ δ t1 t2
     sanityCheck ([ ],[_]) = errorstar "unionParts', called on too small input"
     sanityCheck ([_],[_]) = errorstar "unionParts', called on too small input"
     sanityCheck p         = p
-    -- distinct              = ([x | x <- t1s, not $ any (\y -> isSubtype δ x y) t2s ],
-    --                          [y | y <- t2s, not $ any (\x -> isSubtype δ x y) t1s ])
+    -- distinct              = ([x | x <- t1s, not $ any (\y -> isSubtype γ x y) t2s ],
+    --                          [y | y <- t2s, not $ any (\x -> isSubtype γ x y) t1s ])
 
 
 -- FIXME: replace eltType
 --------------------------------------------------------------------------------
-safeExtends :: PPR r => SourceSpan -> IfaceEnv r -> InterfaceDefinition r -> [Error]
+safeExtends :: (Data r, PPR r) => SourceSpan -> TCEnv r -> IfaceDef r -> [Error]
 --------------------------------------------------------------------------------
-safeExtends l δ (ID _ c _ (Just (p, ts)) es) =
-    [ errorClassExtends l c p (F.symbol ee) ee pe | pe <- flatten False δ (findSymOrDie p δ,ts)
+safeExtends l γ (ID _ c _ (Just (p, ts)) es) =
+    [ errorClassExtends l c p (F.symbol ee) ee pe 
+                                      | parent <- maybeToList $ resolveIface γ p
+                                      , pe <- concat $ maybeToList $ flatten False γ (parent,ts)
                                       , ee <- es, sameBinder pe ee 
                                       , let t1 = eltType ee
                                       , let t2 = eltType pe
-                                      , not (isSubtype δ t1 t2) ]
+                                      , not (isSubtype γ t1 t2) ]
 safeExtends _ _ (ID _ _ _ Nothing _)  = []
 
 
-isSubtypeMut δ μ1 μ2 
+isSubtypeMut γ μ1 μ2 
   | isAnyMut μ1 || isAnyMut μ2 = True
   | otherwise                     
-  = isSubtype δ (ofType μ1) (ofType μ2)
+  = isSubtype γ (ofType μ1) (ofType μ2)
                     
 
 
 -- | Related types ( ~~ ) 
 
 class Related t where
-  related :: PPR r => IfaceEnv r -> t r -> t r -> Bool
+  related :: (Functor g, EnvLike () g, PPR r) => g r -> t r -> t r -> Bool
 
 instance Related RType where
-  related δ t t' = isSubtype δ t t' || isSubtype δ t' t
+  related γ t t' = isSubtype γ t t' || isSubtype γ t' t
   
 instance Related TypeMember where
-  related δ (CallSig t1)      (CallSig t2)      = related δ t1 t2
-  related δ (ConsSig t1)      (ConsSig t2)      = related δ t1 t2
-  related δ (IndexSig _ _ t1) (IndexSig _ _ t2) = related δ t1 t2
-  related δ (StatSig _ _ t1)  (StatSig _ _ t2)  = related δ t1 t2
-  related δ (FieldSig _ _ t1) (FieldSig _ _ t2) = related δ t1 t2
+  related γ (CallSig t1)      (CallSig t2)      = related γ t1 t2
+  related γ (ConsSig t1)      (ConsSig t2)      = related γ t1 t2
+  related γ (IndexSig _ _ t1) (IndexSig _ _ t2) = related γ t1 t2
+  related γ (StatSig _ _ t1)  (StatSig _ _ t2)  = related γ t1 t2
+  related γ (FieldSig _ _ t1) (FieldSig _ _ t2) = related γ t1 t2
   -- Mutability should have been checked earlier
-  related δ (MethSig  _ _ t1) (MethSig  _ _ t2) = related δ t1 t2
+  related γ (MethSig  _ _ t1) (MethSig  _ _ t2) = related γ t1 t2
   related _ _                       _           = False 
  

@@ -19,20 +19,9 @@ module Language.Nano.Typecheck.Subst (
   -- * Type-class with operations
   , Substitutable (..)
 
-  -- * Flatten a type definition applying subs
-  , flatten, flatten', flattenType
-
-  -- * Ancestors
-  , weaken, lineage
-
-  -- * Constructors
-  , Constructor, toConstructor, isConstSubtype, sameTypeof, getTypeof
-
   ) where 
 
-import           Data.Default
 import           Text.PrettyPrint.HughesPJ
-import           Data.Function                  (on)
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
@@ -42,14 +31,10 @@ import           Language.Fixpoint.Misc (intersperse)
 
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
-import qualified Data.List as L
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid hiding ((<>))
-import           Data.Function (fix)
 
 -- import           Debug.Trace
-
-type PPR r = (PP r, F.Reftable r)
 
 ---------------------------------------------------------------------------
 -- | Substitutions
@@ -193,7 +178,13 @@ instance Substitutable r (Id a) where
 instance F.Reftable r => Substitutable r (Annot (Fact r) z) where
   apply θ (Ann z fs)        = Ann z $ apply θ fs
 
-instance F.Reftable r => Substitutable r (InterfaceDefinition r) where
+instance Substitutable r F.Symbol  where
+  apply _ s                 = s 
+
+instance Substitutable r QName  where
+  apply _ s                 = s 
+
+instance F.Reftable r => Substitutable r (IfaceDef r) where
   apply θ (ID c n v p e)    = ID c n v (apply θ p) (apply θ e)
 
  
@@ -209,145 +200,4 @@ appTy θ        (TCons es m r) = TCons (apply θ es) (appTy (toSubst θ) m) r
 appTy _        (TClass c)     = TClass c
 appTy _        (TModule m)    = TModule m
 appTy _        (TExp _)       = error "appTy should not be applied to TExp"
-
-
--- | flattening type to include all fields inherited by ancestors
----------------------------------------------------------------------------
-flatten :: PPR r => Bool -> IfaceEnv r -> (InterfaceDefinition r, [RType r]) -> [TypeMember r]
----------------------------------------------------------------------------
-flatten True  = fix . ff isStaticSig
-flatten False = fix . ff nonStaticSig
-
-ff flt δ r (ID _ _ vs (Just (i, ts')) es, ts) = 
-    apply θ  . L.unionBy sameBinder (filter flt es) $ r (findSymOrDie i δ, ts')
-  where 
-    θ   = fromList $ zip vs ts
-
-ff flt _ _ (ID _ _ vs _ es, ts)  = apply θ $ filter flt es
-  where 
-    θ = fromList $ zip vs ts
-
--- | flatten' does not apply the top-level type substitution
-flatten' st δ d@(ID _ _ vs _ _) = flatten st δ (d, tVar <$> vs)
-
-
-flattenType δ t@(TApp (TRef x) ts r) = TCons es mut r
-  where 
-    es      = flatten False δ (findSymOrDie x δ, ts)
-    -- Be careful with the mutability classes themselves
-    -- Do not set this to another mutability type cause, or you'll
-    -- end up with infinite recursion
-    mut     | isMutabilityType t = tTop
-            | otherwise          
-            = case ts of 
-                -- FIXME there should always be a head element
-                t:_ -> toType t
-                _   -> def
-
--- FIXME: where is this needed ??? Do we also need TModule?
-flattenType δ (TClass x) = TCons es anyMutability fTop
-  where 
-    es      = flatten' True δ $ findSymOrDie x δ
-
-flattenType _ t = t
-
-
--- | Weaken a named type, by moving upwards in the class hierarchy. This
--- function does the necessary type argument substitutions. 
---
--- FIXME: Works for classes, but interfaces could have multiple ancestors.
--- FIXME: What about common elements in parent class?
----------------------------------------------------------------------------
-weaken :: PPR r => IfaceEnv r -> (InterfaceDefinition r, [RType r]) -> F.Symbol -> Maybe (InterfaceDefinition r, [RType r])
----------------------------------------------------------------------------
-weaken δ dt@(ID _ s vs (Just (p,ps)) _, ts) t 
-  | F.symbol s /= t = weaken δ (apply θ $ findSymOrDie p δ, apply θ ps) t
-  | otherwise       = Just dt
-  where θ   = fromList $ zip vs ts
-
-weaken _ dt@(ID _ s _ Nothing _, _) t
-  | F.symbol s /= t = Nothing
-  | otherwise       = Just dt
-
-
----------------------------------------------------------------------------
-lineage :: IfaceEnv t -> InterfaceDefinition t -> [F.Symbol]
----------------------------------------------------------------------------
-lineage δ (ID _ s _ (Just (p,_)) _) = (F.symbol s):lineage δ (findSymOrDie p δ)
-lineage _ (ID _ s _ Nothing      _) = [F.symbol s]
-
-lineageSymbol δ s = 
-  case findSym s δ of
-    Just d  -> lineage δ d
-    Nothing -> []
-
-
------------------------------------------------------------------------
--- Constructors
------------------------------------------------------------------------
-
-type Constructor = Type 
-
-funcConstr :: Constructor
-funcConstr = TApp (TRef $ F.symbol "Function") [] ()
-
-objectConstr :: Constructor
-objectConstr = TApp (TRef $ F.symbol "Object") [] ()
-
-isObjectConstr (TApp (TRef s) [] ()) | s == F.symbol "Object" = True
-isObjectConstr _                                              = False
-
--- Primitive types don't have constructor
-toConstructor :: RType r -> Maybe Constructor
-toConstructor  (TApp (TRef  x) _ _) = Just $ TApp (TRef  x) [] ()
-toConstructor  (TClass _)           = Just $ funcConstr
-toConstructor  (TModule _)          = Just $ objectConstr
-toConstructor  (TFun _ _ _ )        = Just $ funcConstr
-toConstructor  (TCons _ _ _)        = Just $ objectConstr
-toConstructor  (TAnd _)             = Just $ funcConstr 
-toConstructor  _                    = Nothing
-
-instance F.Symbolic Constructor where
-  symbol (TApp (TRef  x) _ _) = x
-  symbol (TClass _ )          = F.symbol "Function"
-  symbol (TModule _ )         = F.symbol "Object"
-  symbol (TFun _ _ _ )        = F.symbol "Function"
-  symbol (TCons _ _ _)        = F.symbol "Object"
-  symbol (TAnd _)             = F.symbol "Function"
-  symbol _                    = F.symbol "ConstructorERROR"
-
-instance F.Expression Constructor where
-  expr = F.expr . F.symbol
-
-
-
-isConstSubtype δ c1 c2 
-  | isObjectConstr c2 = True
-  | otherwise         = 
-        case (c1, c2) of
-          (TApp (TRef s1) _ _, TApp (TRef s2) _ _) ->  s2 `elem` lineageSymbol δ s1
-          _                                        -> False
-
--- sameTag (TApp TInt _ _   ) (TApp TInt _ _   ) = True
--- sameTag (TApp TBool _ _  ) (TApp TBool _ _  ) = True
--- sameTag (TApp TString _ _) (TApp TString _ _) = True
--- sameTag (TApp TUndef _ _ ) (TApp TUndef _ _ ) = True
--- sameTag (TFun _ _ _      ) (TFun _ _ _      ) = True
--- sameTag (TCons _ _ _     ) (TCons _ _ _     ) = True
--- sameTag (TApp (TRef _) _ _) (TApp (TRef _) _ _) = True
--- sameTag (TCons _ _ _) (TApp (TRef _) _ _) = True
-
-getTypeof (TApp TInt _ _     ) = Just "number"
-getTypeof (TApp TBool _ _    ) = Just "boolean"
-getTypeof (TApp TString _ _  ) = Just "string"
-getTypeof (TApp TUndef _ _   ) = Just "undefined"
-getTypeof (TApp TNull  _ _   ) = Just "undefined"
-getTypeof (TFun _ _ _        ) = Just "function"
-getTypeof (TCons _ _ _       ) = Just "object"
-getTypeof (TApp (TRef _) _ _ ) = Just "object"
-getTypeof (TClass _          ) = Just "function"
-getTypeof (TModule _         ) = Just "object"
-getTypeof _                    = Nothing
-
-sameTypeof = (==) `on` getTypeof
 

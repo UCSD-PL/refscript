@@ -141,3 +141,6 @@ renderAnnotations srcFile res (SomeAnn ann sol)
        annFile  = extFileName Annot srcFile
        ann'     = sol ann
 
+-- Local Variables:
+-- flycheck-disabled-checkers: (haskell-liquid)
+-- End:

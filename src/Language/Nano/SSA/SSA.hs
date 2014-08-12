@@ -106,26 +106,28 @@ ssaStmt s@(EmptyStmt _)
 
 -- x = e
 ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LVar l3 v) e)) = do
-    let x     = Id l3 v
-    (x', e') <- ssaAsgn l2 x e
-    return    $ if x == x' then (True, ExprStmt l1 (AssignExpr l2 OpAssign (LVar l3 v) e'))
-                           else (True, VarDeclStmt l1 [VarDecl l2 x' (Just e')])
+    let x        = Id l3 v
+    (s, x', e') <- ssaAsgn l2 x e
+    return         (True, prefixStmt l1 s $ ssaAsgnStmt l1 l2 x x' e')
 
--- e1.x = e2
+-- e3.x = e2
 ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LDot l3 e3 x) e2)) = do
-    e2' <- ssaExpr e2
-    e3' <- ssaExpr e3
-    return (True, ExprStmt l1 (AssignExpr l2 OpAssign (LDot l3 e3' x) e2'))
+    (s2, e2') <- ssaExpr e2
+    (s3, e3') <- ssaExpr e3
+    let stmt'  = ExprStmt l1 (AssignExpr l2 OpAssign (LDot l3 e3' x) e2')
+    return       (True, prefixStmt l1 (s2 ++ s3) stmt')
 
 -- e1[e2] = e3
 ssaStmt (ExprStmt z1 (AssignExpr l OpAssign (LBracket z2 e1 e2) e3))
-  = do [e1', e2', e3'] <- mapM ssaExpr [e1, e2, e3]
-       return (True, ExprStmt z1 (AssignExpr l OpAssign (LBracket z2 e1' e2') e3'))
+  = do (ss, [e1',e2',e3']) <- unzip <$> mapM ssaExpr [e1, e2, e3]
+       let stmt'            = prefixStmt l (concat ss) $
+                              ExprStmt z1 (AssignExpr l OpAssign (LBracket z2 e1' e2') e3')
+       return (True, stmt')
 
 -- e
 ssaStmt (ExprStmt l e) = do
-    e' <- ssaExpr e
-    return (True, ExprStmt l e')
+    (s, e') <- ssaExpr e
+    return (True, prefixStmt l s $ ExprStmt l e')
 
 -- s1;s2;...;sn
 ssaStmt (BlockStmt l stmts) = do
@@ -138,12 +140,12 @@ ssaStmt (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 ssaStmt (IfStmt l e s1 s2) = do
-    e'           <- ssaExpr e
+    (se, e')     <- ssaExpr e
     θ            <- getSsaEnv
     (θ1, s1')    <- ssaWith θ ssaStmt s1
     (θ2, s2')    <- ssaWith θ ssaStmt s2
     (θ', φ1, φ2) <- envJoin l θ1 θ2
-    let stmt'     = IfStmt l e' (splice s1' φ1) (splice s2' φ2)
+    let stmt'     = prefixStmt l se $ IfStmt l e' (splice s1' φ1) (splice s2' φ2)
     case θ' of
       Just θ''   -> setSsaEnv θ'' >> return (True,  stmt')
       Nothing    ->                  return (False, stmt')
@@ -151,17 +153,18 @@ ssaStmt (IfStmt l e s1 s2) = do
     dbg (Just θ) = trace ("SSA ENV: " ++ ppshow θ) (Just θ) -}
 
 -- while c { b }
-ssaStmt (WhileStmt l cond body)
+ssaStmt (WhileStmt l cnd body)
   = do (xs, x0s)  <- unzip . map (\(x, (SI xo,_)) -> (x, xo)) <$> getLoopPhis body
        x1s        <- mapM (updSsaEnv l) xs
        θ1         <- getSsaEnv
-       cond'      <- ssaExpr cond
+       (sc, cnd') <- ssaExpr cnd
+       when (not $ null sc) (ssaError $ errorUpdateInExpr l cnd)
        (t, body') <- ssaStmt body
        θ2         <- getSsaEnv
        let x2s     = [x2 | Just (SI x2) <- (`envFindTy` θ2) <$> xs]
        addAnn l    $ PhiVar x1s
        setSsaEnv θ1
-       return      $ (t, (asgn x1s x0s) `presplice` (WhileStmt l cond' (body' `splice` (asgn (mkNextId <$> x1s) x2s))))
+       return      $ (t, (asgn x1s x0s) `presplice` (WhileStmt l cnd' (body' `splice` (asgn (mkNextId <$> x1s) x2s))))
     where
        asgn [] _   = Nothing
        asgn ls rs  = Just $ BlockStmt l $ zipWith (mkPhiAsgn l) ls rs
@@ -199,13 +202,13 @@ ssaStmt s@(ReturnStmt _ Nothing)
 
 -- return e
 ssaStmt (ReturnStmt l (Just e)) = do
-    e' <- ssaExpr e
-    return (False, ReturnStmt l (Just e'))
+    (s, e') <- ssaExpr e
+    return (False, prefixStmt l s $ ReturnStmt l (Just e'))
 
 -- throw e
 ssaStmt (ThrowStmt l e) = do
-    e' <- ssaExpr e
-    return (False, ThrowStmt l e')
+    (s, e') <- ssaExpr e
+    return (False, prefixStmt l s $ ThrowStmt l e')
 
 
 -- function f(...){ s }
@@ -238,6 +241,12 @@ ssaStmt (ClassStmt l n e is bd) = do
 -- OTHER (Not handled)
 ssaStmt s
   = convertError "ssaStmt" s
+
+
+ssaAsgnStmt l1 l2 x@(Id l3 v) x' e' 
+  | x == x'   = ExprStmt l1    (AssignExpr l2 OpAssign (LVar l3 v) e')
+  | otherwise = VarDeclStmt l1 [VarDecl l2 x' (Just e')]
+
 
 ssaClassElt (Constructor l xs body)
   = do θ <- getSsaEnv
@@ -294,6 +303,8 @@ splice_ _ (Just s) (Just s') = seqStmt (getAnnotation s) s s'
 seqStmt _ (BlockStmt l s) (BlockStmt _ s') = BlockStmt l (s ++ s')
 seqStmt l s s'                             = BlockStmt l [s, s']
 
+prefixStmt :: SourceSpan -> [Statement SourceSpan] -> Statement SourceSpan -> Statement SourceSpan
+prefixStmt = error "TODO:prefixStmt"
 -------------------------------------------------------------------------------------
 flattenBlock :: [Statement t] -> [Statement t]
 -------------------------------------------------------------------------------------
@@ -303,7 +314,7 @@ flattenBlock = concatMap f
     f s                = [s ]
 
 -------------------------------------------------------------------------------------
-ssaWith :: SsaEnv -> (t -> SSAM r (Bool, t)) -> t -> SSAM r (Maybe SsaEnv, t)
+ssaWith :: SsaEnv -> (a -> SSAM r (Bool, b)) -> a -> SSAM r (Maybe SsaEnv, b)
 -------------------------------------------------------------------------------------
 ssaWith θ f x = do
   setSsaEnv θ
@@ -340,10 +351,15 @@ ssaExpr   (ArrayLit l es)
 ssaExpr e@(VarRef l x)
   = ([],) <$> ssaVarRef l x
 
-ssaExpr (CondExpr l c e1 e2)
-  = errorstar "TODO"
-  -- = CondExpr l <$> ssaExpr c <*> ssaExpr e1 <*> ssaExpr e2
-
+ssaExpr e@(CondExpr l c e1 e2)
+  = do (sc, c')  <- ssaExpr c
+       θ         <- getSsaEnv
+       (s1, e1') <- ssaExprWith θ e1
+       (s2, e2') <- ssaExprWith θ e2
+       case (s1, s2) of
+         ([],[]) -> return (sc, CondExpr l c' e1' e2')
+         (_ , _) -> ssaError $ errorUpdateInExpr l e 
+        
 ssaExpr (PrefixExpr l o e)
   = ssaExpr1 (PrefixExpr l o) e
 
@@ -380,12 +396,12 @@ ssaExpr e
 ssaExprs f es    = (concat *** f) . unzip <$> mapM ssaExpr es
 ssaExpr1 f e     = ssaExprs (\case [e'] -> f e') [e]
 ssaExpr2 f e1 e2 = ssaExprs (\case [e1', e2'] -> f e1' e2') [e1, e2]
-
+ssaExprWith θ e  = snd <$> ssaWith θ (fmap (True,) . ssaExpr) e
 -------------------------------------------------------------------------------------
 ssaVarDecl :: F.Reftable r => VarDecl SourceSpan -> SSAM r (Bool, VarDecl SourceSpan)
 -------------------------------------------------------------------------------------
 ssaVarDecl (VarDecl l x (Just e)) = do
-    (x', e') <- ssaAsgn l x e
+    (s, x', e') <- ssaAsgn l x e
     return    (True, VarDecl l x' (Just e'))
 
 ssaVarDecl (VarDecl l x Nothing) = do
@@ -409,12 +425,12 @@ ssaVarRef l x
 
 ------------------------------------------------------------------------------------
 ssaAsgn :: F.Reftable r => SourceSpan -> Id SourceSpan -> Expression SourceSpan ->
-           SSAM r (Id SourceSpan, Expression SourceSpan)
+           SSAM r ([Statement SourceSpan], Id SourceSpan, Expression SourceSpan)
 ------------------------------------------------------------------------------------
 ssaAsgn l x e  = do
-    e' <- ssaExpr e
-    x' <- updSsaEnv l x
-    return (x', e')
+    (s, e') <- ssaExpr e
+    x'      <- updSsaEnv l x
+    return (s, x', e')
 
 
 -------------------------------------------------------------------------------------

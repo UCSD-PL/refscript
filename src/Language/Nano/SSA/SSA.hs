@@ -5,6 +5,7 @@
 
 module Language.Nano.SSA.SSA (ssaTransform) where
 
+import           Control.Arrow                           ((***))
 import           Control.Applicative                     ((<$>), (<*>))
 import           Control.Monad
 import           Data.Data
@@ -309,72 +310,76 @@ ssaWith θ f x = do
   (b, x') <- f x
   (, x')  <$> (if b then Just <$> getSsaEnv else return Nothing)
 
+
 -------------------------------------------------------------------------------------
-ssaExpr    :: F.Reftable r => Expression SourceSpan -> SSAM r (Expression SourceSpan)
+ssaExpr    :: F.Reftable r => Expression SourceSpan
+           -> SSAM r ([Statement SourceSpan], Expression SourceSpan)
 -------------------------------------------------------------------------------------
 
 ssaExpr e@(IntLit _ _)
-  = return e
+  = return ([], e)
 
 ssaExpr e@(BoolLit _ _)
-  = return e
+  = return ([], e)
 
 ssaExpr e@(StringLit _ _)
-  = return e
+  = return ([], e)
 
 ssaExpr e@(NullLit _)
-  = return e
+  = return ([], e)
 
 ssaExpr e@(ThisRef _)
-  = return e
+  = return ([], e)
 
 ssaExpr e@(SuperRef _)
-  = return e
+  = return ([], e)
 
 ssaExpr   (ArrayLit l es)
-  = ArrayLit l <$> (mapM ssaExpr es)
+  = ssaExprs (ArrayLit l) es
 
 ssaExpr e@(VarRef l x)
-  = do getAssignability x >>= \case
-         WriteGlobal -> return e
-         ReadOnly    -> maybe e   (VarRef l) <$> findSsaEnv x
-         WriteLocal  -> findSsaEnv x >>= \case
-             Just t  -> return   $ VarRef l t
-             Nothing -> ssaError $ errorSSAUnboundId (srcPos x) x
+  = ([],) <$> ssaVarRef l x
 
 ssaExpr (CondExpr l c e1 e2)
-  = CondExpr l <$> ssaExpr c <*> ssaExpr e1 <*> ssaExpr e2
+  = errorstar "TODO"
+  -- = CondExpr l <$> ssaExpr c <*> ssaExpr e1 <*> ssaExpr e2
 
 ssaExpr (PrefixExpr l o e)
-  = PrefixExpr l o <$> ssaExpr e
+  = ssaExpr1 (PrefixExpr l o) e
 
 ssaExpr (InfixExpr l o e1 e2)
-  = InfixExpr l o <$> ssaExpr e1 <*> ssaExpr e2
+  = ssaExpr2 (InfixExpr l o) e1 e2
 
 ssaExpr (CallExpr l e es)
-  = CallExpr l <$> ssaExpr e <*> mapM ssaExpr es
+  = ssaExprs (\case e':es' -> CallExpr l e' es') (e : es)
 
 ssaExpr (ObjectLit l ps)
-  = ObjectLit l <$> mapM (mapSndM ssaExpr) ps
+  = ssaExprs (ObjectLit l . zip fs) es
+  where
+    (fs, es) = unzip ps
 
 ssaExpr (DotRef l e i)
-  = DotRef l <$> ssaExpr e <*> return i
+  = ssaExpr1 (\e' -> DotRef l e' i) e 
 
 ssaExpr (BracketRef l e1 e2)
-  = BracketRef l <$> ssaExpr e1 <*> ssaExpr e2
+  = ssaExpr2 (BracketRef l) e1 e2
 
 ssaExpr (NewExpr l e es)
   -- `e` is the class name - no need to SSA it.
-  = NewExpr l e <$> mapM ssaExpr es
-
-ssaExpr (FuncExpr l fo xs bd)
-  = FuncExpr l fo xs <$> ssaFun l fo xs bd
+  = ssaExprs (NewExpr l e) es
 
 ssaExpr (Cast l e)
-  = Cast l <$> ssaExpr e
+  = ssaExpr1 (Cast l) e
+
+ssaExpr (FuncExpr l fo xs bd)
+  = ([],) . FuncExpr l fo xs <$> ssaFun l fo xs bd
 
 ssaExpr e
   = convertError "ssaExpr" e
+
+ssaExprs f es    = (concat *** f) . unzip <$> mapM ssaExpr es
+ssaExpr1 f e     = ssaExprs (\case [e'] -> f e') [e]
+ssaExpr2 f e1 e2 = ssaExprs (\case [e1', e2'] -> f e1' e2') [e1, e2]
 
 -------------------------------------------------------------------------------------
 ssaVarDecl :: F.Reftable r => VarDecl SourceSpan -> SSAM r (Bool, VarDecl SourceSpan)
@@ -387,6 +392,20 @@ ssaVarDecl (VarDecl l x Nothing) = do
     x' <- updSsaEnv l x
     return    (True, VarDecl l x' Nothing)
 --  = errorstar $ printf "Variable definition of %s at %s with no initialization is not supported." (ppshow x) (ppshow l)
+
+------------------------------------------------------------------------------------------
+ssaVarRef :: F.Reftable r => SourceSpan -> Id SourceSpan -> SSAM r (Expression SourceSpan)
+------------------------------------------------------------------------------------------
+ssaVarRef l x
+  = do getAssignability x >>= \case
+         WriteGlobal -> return e
+         ReadOnly    -> maybe e  (VarRef l) <$> findSsaEnv x
+         WriteLocal  -> findSsaEnv x >>= \case
+             Just t  -> return   $ VarRef l t
+             Nothing -> ssaError $ errorSSAUnboundId (srcPos x) x
+    where
+       e = VarRef l x
+ 
 
 ------------------------------------------------------------------------------------
 ssaAsgn :: F.Reftable r => SourceSpan -> Id SourceSpan -> Expression SourceSpan ->

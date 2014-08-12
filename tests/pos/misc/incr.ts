@@ -13,3 +13,11 @@ function incrBy(x:number, k:number):number{
 function foo(x:number):number{
     return x += incr(x++) + incr(x++);
 }
+
+/*@ bar :: (x:number) => {number|v = x + 4} */
+function bar(x:number):number{
+    var z = incrBy(x++, x++);
+    z = incrBy(x++, x++);
+    return x;
+}
+

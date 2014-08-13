@@ -86,7 +86,7 @@ errorWriteImmutable l x       = mkErr l $ printf "Cannot assign to local variabl
                                        ++ printf "Add a type annotation to indicate it is globally writable." 
 errorSSAUnboundId l x         = mkErr l $ printf "SSA: Identifier '%s' unbound" (ppshow x) 
 
-
+errorUpdateInExpr l e       = mkErr l $ printf "Unsupported: assignment in If-then-else expression %s" (ppshow e)
 ---------------------------------------------------------------------------
 -- | TC 
 ---------------------------------------------------------------------------

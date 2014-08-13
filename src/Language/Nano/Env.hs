@@ -18,6 +18,7 @@ module Language.Nano.Env (
   , envFindTy
   , envAddReturn
   , envFindReturn
+  , envFilter
   , envMem
   , envMap
   , envLefts

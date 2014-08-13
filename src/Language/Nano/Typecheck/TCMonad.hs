@@ -54,7 +54,7 @@ module Language.Nano.Typecheck.TCMonad (
   , tcPeekThis, tcWithThis
 
   -- * Super
-  -- , getSuperM, getSuperDefM
+  , getSuperM, getSuperDefM
 
   -- * Prop
   -- , getPropTDefM, getPropM
@@ -175,25 +175,8 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ)
   where 
     θ       = fromList $ zip βs (tVar <$> βs)
 
--- -------------------------------------------------------------------------------
--- getDef  :: TCM r (IfaceEnv r) 
--- -------------------------------------------------------------------------------
--- getDef = tc_defs <$> get
 
--- -------------------------------------------------------------------------------
--- getExts  :: TCM r (Env (RType r)) 
--- -------------------------------------------------------------------------------
--- getExts = tc_ext <$> get
-
--- -------------------------------------------------------------------------------
--- getClasses  :: TCM r (Env (Statement (AnnSSA r)))
--- -------------------------------------------------------------------------------
--- getClasses = tc_cls <$> get
-
--- -------------------------------------------------------------------------------
--- setDef  :: IfaceEnv r -> TCM r ()
--- -------------------------------------------------------------------------------
--- setDef γ = modify $ \u -> u { tc_defs = γ } 
+-- | Error handling
 
 -------------------------------------------------------------------------------
 tcError     :: Error -> TCM r a
@@ -386,10 +369,7 @@ wrapCast l f e                   = Cast (Ann l [f])    e
 tcFunTys :: (PPRSF r, F.Subable (RType r), F.Symbolic s, PP a) 
          => AnnSSA r -> a -> [s] -> RType r -> TCM r [(Int, ([TVar], [RType r], RType r))]
 --------------------------------------------------------------------------------
-tcFunTys l f xs ft = 
-  case funTys l f xs ft of 
-    Left  e -> tcError e 
-    Right a -> return a
+tcFunTys l f xs ft = either tcError return $ funTys l f xs ft 
 
 
 --------------------------------------------------------------------------------
@@ -413,9 +393,9 @@ tcPopThis      = modify $ \st -> st { tc_this = tail $ tc_this st }
 tcWithThis t p = do { tcPushThis t; a <- p; tcPopThis; return a } 
 
 
--- --------------------------------------------------------------------------------
--- getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
--- --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
+--------------------------------------------------------------------------------
 -- getSuperM l (TApp (TRef i) ts _)         = fromTdef =<< findSymOrDieM i
 --   where 
 --     fromTdef (ID _ _ vs (Just (p,ps)) _) = return  
@@ -423,12 +403,12 @@ tcWithThis t p = do { tcPushThis t; a <- p; tcPopThis; return a }
 --                                          $ TApp (TRef (F.symbol p)) ps fTop
 --     fromTdef (ID _ _ _ Nothing _)        = tcError 
 --                                          $ errorSuper (srcPos l) 
--- getSuperM l _                            = tcError 
---                                          $ errorSuper (srcPos l) 
--- 
--- --------------------------------------------------------------------------------
--- getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (InterfaceDefinition r)
--- --------------------------------------------------------------------------------
+getSuperM l _                            = tcError 
+                                         $ errorSuper (srcPos l) 
+
+--------------------------------------------------------------------------------
+getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (IfaceDef r)
+--------------------------------------------------------------------------------
 -- getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
 --   where 
 --     fromTdef (ID _ _ vs (Just (p,ps)) _) = 
@@ -437,5 +417,5 @@ tcWithThis t p = do { tcPushThis t; a <- p; tcPopThis; return a }
 --                  $ apply (fromList $ zip ws ps)
 --                  $ ID c n [] pp ee
 --     fromTdef (ID _ _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
--- getSuperDefM l _  = tcError $ errorSuper (srcPos l)
+getSuperDefM l _  = tcError $ errorSuper (srcPos l)
 

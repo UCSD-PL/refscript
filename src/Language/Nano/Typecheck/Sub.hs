@@ -111,7 +111,7 @@ convertObj l γ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
   -- NO: { f1:t1,..,fn:tn } <: { f1:t1,..,fn:tn,..,fm:tm }
   --
   | not (S.null df21) 
-  = Left $ errorMissFlds l t1 t2 df21
+  = Left $ errorMissingFields l t1 t2 df21
 
   -- 
   --  [μ]{ f1:t1,..,fn:tn } <: [μ]{ f1:t1,..,fn:tn }

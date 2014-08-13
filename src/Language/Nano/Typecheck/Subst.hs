@@ -113,7 +113,7 @@ instance Free (TypeMember r) where
   free (ConsSig t)          = free t
   free (IndexSig _ _ t)     = free t
 
-instance Free a => Free (Id b, a) where
+instance Free a => Free (QName, a) where
   free (_, a)               = free a
 
 instance Free a => Free (Maybe a) where

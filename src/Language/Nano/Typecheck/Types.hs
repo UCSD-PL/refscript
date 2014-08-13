@@ -40,7 +40,7 @@ module Language.Nano.Typecheck.Types (
   , renameBinds
 
   -- * Regular Types
-  , NameSpacePath, AbsolutePath, QName (..)
+  , NameSpacePath, AbsolutePath, QName (..), Heritage
   , Type, IfaceDef (..), SIfaceDef, TVar (..), TCon (..), TypeMember (..)
 
   -- * Mutability
@@ -91,7 +91,7 @@ module Language.Nano.Typecheck.Types (
   -- * Assignability 
   , Assignability (..), definedGlobs,  writeGlobalVars, readOnlyVars  
 
-  , hoistFuncDecls, hoistAnns
+  , hoistFuncDecls, hoistTypes, hoistAnns
 
   -- * Aliases
   , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
@@ -201,10 +201,12 @@ data IfaceDef r
   = ID { t_class :: Bool                                -- ^ Is this a class or interface type
        , t_name  :: !(Id SourceSpan)                    -- ^ Name (possibly no name)
        , t_args  :: ![TVar]                             -- ^ Type variables
-       , t_proto :: !(Maybe (QName, [RType r]))         -- ^ Heritage
+       , t_proto :: !(Heritage r)                       -- ^ Heritage
        , t_elts  :: ![TypeMember r]                     -- ^ List of data type elts 
        } 
      deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+
+type Heritage r  = Maybe (QName, [RType r])
 
 type SIfaceDef r = (IfaceDef r, [RType r])
 
@@ -233,22 +235,6 @@ data TypeMember r
 
 type IfaceEnv r = Env (IfaceDef r) 
  
-
----------------------------------------------------------------------------------
--- | Module definitions 
----------------------------------------------------------------------------------
-
--- | Moudle definition: the exported module API
-
--- data ModuleExports r 
---   = MD { m_name  :: !(Id SourceSpan)
---        , m_elts  :: !(Env (ModuleMember r))
---        }
-
--- data ModuleMember r = FuncMem   (RType r)
---                     | IfaceMem  (IfaceDef r)
---                     | ModuleMem (ModuleExports r)
-
 
 -------------------------------------------------------------------------------
 -- | Typecheck Environment 
@@ -291,12 +277,7 @@ instance EnvLike r TCEnv where
   get_mod     = tce_mod
   get_nspace  = tce_nspace
   get_parent  = tce_parent
- 
 
--- data NameSpaceStep = NsPush F.Symbol
---                    | NsPop
---                   
--- type NameSpaceMove = [NameSpaceStep]
 
 
 ---------------------------------------------------------------------------------
@@ -320,21 +301,6 @@ mapIfaceDefsM f (ID c n αs (Just (p,ps)) es)
         return $ ID c n αs (Just (p,ps')) es'
 mapIfaceDefsM f (ID c n αs Nothing es) = 
   ID c n αs Nothing <$> mapM (mapEltM f) es
-
-
-
-
--- ---------------------------------------------------------------------------------
--- findSym :: F.Symbolic a => a -> Env t -> Maybe t
--- ---------------------------------------------------------------------------------
--- findSym s γ = envFindTy (F.symbol s) γ
--- 
--- ---------------------------------------------------------------------------------
--- findSymOrDie :: F.Symbolic a => a -> Env t -> t
--- ---------------------------------------------------------------------------------
--- findSymOrDie s γ = fromMaybe (error msg) $ findSym s γ 
---   where msg = "findSymOrDie failed on: " ++ F.symbolString (F.symbol s)
-
 
 
 ---------------------------------------------------------------------------------
@@ -885,19 +851,37 @@ definedGlobs stmts = everything (++) ([] `mkQ` fromVarDecl) stmts
 --   expression. Note how declarations do not escape module or function 
 --   blocks (isolation).
 -------------------------------------------------------------------------------
-hoistFuncDecls :: (Data a, Typeable a) => [Statement a] -> [(F.Symbol, a)]
+hoistFuncDecls                :: Data a => [Statement a] -> [(F.Symbol, a)]
 -------------------------------------------------------------------------------
-hoistFuncDecls stmts = everythingBut (++) (([], False) `mkQ` f) stmts
+hoistFuncDecls                 = everythingBut (++) $ ([], False) `mkQ` f
   where
-    f = fromStmt `extQ` fromExp 
-    fromStmt (FunctionStmt l n _ _) = ([(F.symbol n,l)], True)
-    fromStmt (FunctionDecl l n _  ) = ([(F.symbol n,l)], True)
-    fromStmt (ClassStmt {})         = ([ ], True)
-    fromStmt (ModuleStmt {})        = ([ ], True)
-    fromStmt _                      = ([ ], False)
-    fromExp :: Expression t -> ([(F.Symbol, t)], Bool)
-    fromExp (FuncExpr {})           = ([ ], True)
-    fromExp _                       = ([ ], False)
+    f                          = fSt `extQ` fExp 
+    fSt (FunctionStmt l n _ _) = ([(F.symbol n,l)], True)
+    fSt (FunctionDecl l n _  ) = ([(F.symbol n,l)], True)
+    fSt (ClassStmt {})         = ([ ], True)
+    fSt (ModuleStmt {})        = ([ ], True)
+    fSt _                      = ([ ], False)
+    fExp                      :: Expression t -> ([(F.Symbol, t)], Bool)
+    fExp (FuncExpr {})         = ([ ], True)
+    fExp _                     = ([ ], False)
+
+
+-- | Find classes / interfaces in scope
+-------------------------------------------------------------------------------
+hoistTypes                    :: Data a => [Statement a] -> [Statement a]
+-------------------------------------------------------------------------------
+hoistTypes                     = everythingBut (++) $ ([], False) `mkQ` f
+  where
+    f                          = fSt `extQ` fExp 
+    fSt (FunctionStmt l n _ _) = ([ ], True)
+    fSt (FunctionDecl l n _  ) = ([ ], True)
+    fSt s@(ClassStmt {})       = ([s], True)
+    fSt s@(IfaceStmt {})       = ([s], True)
+    fSt (ModuleStmt {})        = ([ ], True)
+    fSt _                      = ([ ], False)
+    fExp                      :: Expression a -> ([Statement a], Bool)
+    fExp _                     = ([ ], True)
+
 
 -- CHECK ME !!!
 --
@@ -907,19 +891,19 @@ hoistFuncDecls stmts = everythingBut (++) (([], False) `mkQ` f) stmts
 --   expression. Note how declarations do not escape module or function 
 --   blocks (isolation).
 -------------------------------------------------------------------------------
-hoistAnns :: (Data a, Typeable a) => [Statement a] -> [a]
+hoistAnns                     :: Data a => [Statement a] -> [a]
 -------------------------------------------------------------------------------
-hoistAnns stmts = everythingBut (++) (([], False) `mkQ` f) stmts
+hoistAnns                      = everythingBut (++) $ ([], False) `mkQ` f
   where
-    f = fromStmt `extQ` fromExp 
-    fromStmt (FunctionStmt l _ _ _) = ([l], True)
-    fromStmt (FunctionDecl l _ _  ) = ([l], True)
-    fromStmt (ClassStmt l _ _ _ _ ) = ([l], True)
-    fromStmt (ModuleStmt l _ _ )    = ([l], True)
-    fromStmt s                      = ([getAnnotation s], False)
-    fromExp :: Expression t -> ([t], Bool)
-    fromExp (FuncExpr l _ _ _)      = ([l], True)
-    fromExp e                       = ([getAnnotation e], False)
+    f                          = fSt `extQ` fExp 
+    fSt (FunctionStmt l _ _ _) = ([l], True)
+    fSt (FunctionDecl l _ _  ) = ([l], True)
+    fSt (ClassStmt l _ _ _ _ ) = ([l], True)
+    fSt (ModuleStmt l _ _ )    = ([l], True)
+    fSt s                      = ([getAnnotation s], False)
+    fExp                      :: Expression t -> ([t], Bool)
+    fExp (FuncExpr l _ _ _)    = ([l], True)
+    fExp e                     = ([getAnnotation e], False)
 
 
 
@@ -936,17 +920,17 @@ hoistAnns stmts = everythingBut (++) (([], False) `mkQ` f) stmts
 -- -------------------------------------------------------------------------------
 -- hoistedGlobs stmts = everythingBut (++) (([], False) `mkQ` f) stmts
 --   where
---     f                               = fromStmt `extQ` fromExp 
---     fromStmt                        :: Statement (AnnType r) -> ([(Id (AnnType r), RType r)], Bool)
---     fromStmt (FunctionStmt l n _ _) = ([ ], True)
---     fromStmt (FunctionDecl l n _  ) = ([ ], True)
---     fromStmt (ClassStmt {})         = ([ ], True)
---     fromStmt (ModuleStmt {})        = ([ ], True)
---     fromStmt _                      = ([ ], False)
+--     f                               = fSt `extQ` fExp 
+--     fSt                        :: Statement (AnnType r) -> ([(Id (AnnType r), RType r)], Bool)
+--     fSt (FunctionStmt l n _ _) = ([ ], True)
+--     fSt (FunctionDecl l n _  ) = ([ ], True)
+--     fSt (ClassStmt {})         = ([ ], True)
+--     fSt (ModuleStmt {})        = ([ ], True)
+--     fSt _                      = ([ ], False)
 -- 
---     fromExp                         :: Expression (AnnType r) -> ([(Id (AnnType r), RType r)], Bool)
---     fromExp (FuncExpr {})           = ([ ], True)
---     fromExp _                       = ([ ], False)
+--     fExp                         :: Expression (AnnType r) -> ([(Id (AnnType r), RType r)], Bool)
+--     fExp (FuncExpr {})           = ([ ], True)
+--     fExp _                       = ([ ], False)
 -- 
 --     fromVarDecl                     :: VarDecl (AnnType r) -> ([(Id (AnnType r), RType r)], Bool)
 --     fromVarDecl (VarDecl l x _)     = ([(x, t) | VarAnn t <- ann_fact l ], True)
@@ -1146,7 +1130,7 @@ data Fact r
   | UserCast    !(RType r)
   | FuncAnn     !(RType r)
   -- Class annotation
-  | ClassAnn      !([TVar], Maybe (Id SourceSpan,[RType r]))
+  | ClassAnn      !([TVar], Maybe (QName, [RType r]))
     deriving (Eq, Show, Data, Typeable, Functor)
 
 type UFact = Fact ()
@@ -1166,6 +1150,13 @@ type UAnnInfo = AnnInfo ()
 
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 
+
+instance Default a => Default (Annot b a) where
+  def = Ann def []
+
+instance Default SourceSpan where
+  def = srcPos dummySpan
+  
 
 instance Ord (AnnSSA  r) where 
   compare (Ann s1 _) (Ann s2 _) = compare s1 s2

@@ -5,10 +5,16 @@
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
-module Language.Nano.Typecheck.Lookup (getProp, getElt, getCallable, getPropTDef) where 
+module Language.Nano.Typecheck.Lookup (
+    getProp
+  , getElt
+  , getCallable
+  , getConstructor
+  , getPropTDef
+  ) where 
 
 import           Data.Generics
-import           Data.Maybe (listToMaybe)
+import           Data.Maybe (listToMaybe, maybeToList)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors
@@ -23,7 +29,7 @@ import           Control.Applicative ((<$>))
 
 -- import           Debug.Trace
 
-type PPR r = (PP r, F.Reftable r)
+type PPRD r = (PP r, F.Reftable r, Data r)
 
 
 -- | `getProp`: given an environment `γ`, a field `s` and a type `t`, returns 
@@ -31,48 +37,58 @@ type PPR r = (PP r, F.Reftable r)
 --   * The subtype of @t@ for which the access is successful.
 --   * The corresponding accessed type.
 -------------------------------------------------------------------------------
-getProp :: (IsLocated l, PPR r, EnvLike r g, Data r) 
-        => l -> g r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
+getProp :: (PPRD r, EnvLike r g) => g r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getProp l γ s t@(TApp _ _ _  ) = getPropApp l γ s t
-getProp _ _ _   (TFun _ _ _  ) = Nothing
-getProp _ _ s t@(TCons es _ _) = (t,) <$> lookupElt s es
-getProp _ γ s t@(TClass c    ) = do d     <- resolveIface γ c
-                                    es    <- flatten True γ (d,[])
-                                    p     <- lookupElt s es
-                                    return $ (t,p)
-getProp l _ _ t                = die $ bug (srcPos l)
-                                     $ "Using getProp on type: " ++ ppshow t 
+getProp γ s t@(TApp _ _ _  ) = getPropApp γ s t
+getProp _ s t@(TCons es _ _) = (t,) <$> accessMember s es
+getProp γ s t@(TClass c    ) = do d     <- resolveIface γ c
+                                  es    <- flatten True γ (d,[])
+                                  p     <- accessMember s es
+                                  return $ (t,p)
+getProp γ s t@(TModule m   ) = do γ'    <- resolveModuleEnv γ m
+                                  (t,) <$> envFindTy s (get_env γ')
+getProp _ _ t                = Nothing
 
 
 -------------------------------------------------------------------------------
-getPropApp :: (PPR r, IsLocated a, EnvLike r g, Data r) 
-           => a -> g r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
+getPropApp :: (PPRD r, EnvLike r g) => g r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getPropApp l γ s t@(TApp c ts _) = 
+getPropApp γ s t@(TApp c ts _) = 
   case c of 
     TBool    -> Nothing
     TUndef   -> Nothing
     TNull    -> Nothing
-    TUn      -> getPropUnion l γ s ts
-    TInt     -> (t,) <$> lookupAmbientVar l γ s "Number"
-    TString  -> (t,) <$> lookupAmbientVar l γ s "String"
+    TUn      -> getPropUnion γ s ts
+    TInt     -> (t,) <$> lookupAmbientVar γ s "Number"
+    TString  -> (t,) <$> lookupAmbientVar γ s "String"
     TRef x   -> do  d      <- resolveIface γ x
                     es     <- flatten False γ (d,ts)
-                    p      <- lookupElt s es
+                    p      <- accessMember s es
                     return  $ (t,p)
     TFPBool  -> Nothing
     TTop     -> Nothing
     TVoid    -> Nothing
+getPropApp _ _ _ = error "getPropApp should only be applied to TApp"
 
-getPropApp _ _ _ _ = error "getPropApp should only be applied to TApp"
+
+-------------------------------------------------------------------------------
+getConstructor :: (Data r, PP r, F.Reftable r, EnvLike r g) 
+               => g r -> RType t -> Maybe (RType r)
+-------------------------------------------------------------------------------
+getConstructor γ (TClass x) 
+  = do  d        <- resolveIface γ x
+        (vs, es) <- flatten'' False γ d
+        return    $ mkAnd [ mkAll vs (TFun bs (retT vs) r) | ConsSig (TFun bs _ r) <- es ]
+
+    where
+        retT vs   = TApp (TRef x) (tVar <$> vs) fTop
+getConstructor _ _ = Nothing
 
 
 -- | `getElt`: return elements associated with a symbol @s@. The return list 
 -- is empty if the binding was not found or @t@ is an invalid type.
 -------------------------------------------------------------------------------
-getElt :: (F.Symbolic s, PPR r, EnvLike r g, Data r) 
-       => g r -> s -> RType r -> Maybe [TypeMember r]
+getElt :: (F.Symbolic s, PPRD r, EnvLike r g) => g r -> s -> RType r -> Maybe [TypeMember r]
 -------------------------------------------------------------------------------
 getElt γ  s t                = fromCons <$> flattenType γ t
   where   
@@ -81,7 +97,7 @@ getElt γ  s t                = fromCons <$> flattenType γ t
 
 
 -------------------------------------------------------------------------------
-getCallable :: PPR r => IfaceEnv r -> RType r -> [RType r]
+getCallable :: PPRD r => IfaceEnv r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
 getCallable γ t             = uncurry mkAll <$> foo [] t
   where
@@ -97,13 +113,11 @@ getCallable γ t             = uncurry mkAll <$> foo [] t
 --     foo _    t              = error $ "getCallable: " ++ ppshow t
 
 
--- FIXME: CLEAN UP (CODE DUPLICATION)
--- FIXME: for the moment only supporting string index signature
 -------------------------------------------------------------------------------
-lookupElt :: F.Symbol -> [TypeMember r] -> Maybe (RType r)
+accessMember :: F.Symbol -> [TypeMember r] -> Maybe (RType r)
 -------------------------------------------------------------------------------
-lookupElt s es = 
-  case [ eltType e | e <- es, nonStaticSig e, F.symbol e == s ] of
+accessMember s es = 
+  case [ t | FieldSig x _ t <- es, x == s ] of
     t:_ -> Just t
     _   -> listToMaybe [ t | IndexSig _ True t <- es]
 
@@ -111,31 +125,28 @@ lookupElt s es =
 -- Access the property from the relevant ambient object but return the 
 -- original accessed type instead of the type of the ambient object. 
 -------------------------------------------------------------------------------
-lookupAmbientVar :: (PPR r, IsLocated l, EnvLike r g, F.Symbolic s, Data r) 
-                 => l -> g r -> F.Symbol -> s -> Maybe (RType r)
+lookupAmbientVar :: (PPRD r, EnvLike r g, F.Symbolic s) => g r -> F.Symbol -> s -> Maybe (RType r)
 -------------------------------------------------------------------------------
-lookupAmbientVar l γ s amb
+lookupAmbientVar γ s amb
   = do  a <- envFindTy (F.symbol amb) (get_env γ)
-        snd <$> getProp l γ s a
+        snd <$> getProp γ s a
 
 
 -- FIXME: Probably should get rid of this and just use getField, etc...
 -------------------------------------------------------------------------------
-getPropTDef :: (EnvLike r g, PPR r, Data r) 
-            => g r -> F.Symbol -> [RType r] -> IfaceDef r -> Maybe (RType r)
+getPropTDef :: (EnvLike r g, PPRD r) => g r -> F.Symbol -> [RType r] -> IfaceDef r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-getPropTDef γ f ts d = lookupElt f =<< flatten False γ (d,ts)
+getPropTDef γ f ts d = accessMember f =<< flatten False γ (d,ts)
 
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
-getPropUnion :: (IsLocated l, PPR r, EnvLike r g, Data r) 
-             => l -> g r -> F.Symbol -> [RType r] -> Maybe (RType r, RType r)
+getPropUnion :: (PPRD r, EnvLike r g) => g r -> F.Symbol -> [RType r] -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
-getPropUnion l γ f ts = 
-  case [tts | Just tts <- getProp l γ f <$> ts] of
+getPropUnion γ f ts = 
+  case [tts | Just tts <- getProp γ f <$> ts] of
     [] -> Nothing
     ts -> Just $ mapPair mkUnion $ unzip ts
 

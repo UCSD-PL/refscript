@@ -100,7 +100,7 @@ aliasVarT (l, x)
   where
     x'        = symbolString x
     
-iFaceP   :: Parser (Id SourceSpan, InterfaceDefinition Reft)
+iFaceP   :: Parser (Id SourceSpan, IfaceDef Reft)
 iFaceP   = do id     <- identifierP 
               vs     <- option [] tParP
               ext    <- optionMaybe extendsP
@@ -108,10 +108,13 @@ iFaceP   = do id     <- identifierP
               return (id, ID False id vs ext es)
 
 extendsP = do reserved "extends"
-              pId <- (char '#' >> identifierP)
-              ts  <- option [] $ brackets $ sepBy bareTypeP comma
-              return (pId, ts)
-               
+              qn     <- qnameP
+              ts     <- option [] $ brackets $ sepBy bareTypeP comma
+              return (qn, ts)
+
+qnameP   = char '#' >> QN <$> many symbolDotP <*> symbolP
+  where
+    symbolDotP = do { s <- symbolP ; char '.'; return s }
 
 -- [A,B,C...]
 tParP    = angles $ sepBy tvarP comma
@@ -262,12 +265,8 @@ tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
      <|> try (reserved "bool"      >> return TFPBool)
-     <|>     (withinSpacesP $ char '#' >> identifierP >>= idToTRefP)
+     <|>     (TRef <$> qnameP)
 
-----------------------------------------------------------------------------------
-idToTRefP :: Id SourceSpan -> Parser TCon
-----------------------------------------------------------------------------------
-idToTRefP (Id _ s) = return $ TRef (symbol s)
 
 bareAll1P p
   = do reserved "forall"
@@ -279,7 +278,6 @@ bareAll1P p
 bareAllP p =  try p 
           <|> bareAll1P p
 
--- arrayP = brackets bareTypeP
 
 propBindP =  sepEndBy (
               try indexEltP 
@@ -397,14 +395,14 @@ withinSpacesP :: Parser a -> Parser a
 withinSpacesP p = do { spaces; a <- p; spaces; return a } 
              
 ----------------------------------------------------------------------------------
-classDeclP :: Parser (Id SourceSpan, ([TVar], Maybe (Id SourceSpan, [RefType])))
+classDeclP :: Parser (Id SourceSpan, ([TVar], Maybe (QName, [RefType])))
 ----------------------------------------------------------------------------------
 classDeclP = do
-  reserved "class"
-  id <- identifierP 
-  vs <- option [] $ angles $ sepBy tvarP comma
-  pr <- optionMaybe extendsP
-  return (id, (vs, pr))
+    reserved "class"
+    id <- identifierP 
+    vs <- option [] $ angles $ sepBy tvarP comma
+    pr <- optionMaybe extendsP
+    return (id, (vs, pr))
 
 
 ---------------------------------------------------------------------------------
@@ -415,7 +413,6 @@ data RawSpec
   = RawMeas   (SourceSpan, String)   -- Measure
   | RawBind   (SourceSpan, String)   -- Function bindings
   | RawFunc   (SourceSpan, String)   -- Anonymouns function type
-  -- | RawExtern (SourceSpan, String)   -- Extern declarations
   | RawIface  (SourceSpan, String)   -- Variable declaration annotations
   | RawClass  (SourceSpan, String)   -- Class annots
   | RawField  (SourceSpan, String)   -- Field annots
@@ -437,9 +434,8 @@ data PSpec l r
   | Constr (TypeMember r)
   | Method (TypeMember r)
   | Static (TypeMember r)
---  | Extern (Id l, RType r)
-  | IFace  (Id l, InterfaceDefinition r)
-  | Class  (Id l, ([TVar], Maybe (Id l,[RType r])))
+  | IFace  (Id l, IfaceDef r)
+  | Class  (Id l, ([TVar], Maybe (QName, [RType r])))
   | TAlias (Id l, TAlias (RType r))
   | PAlias (Id l, PAlias) 
   | Qual   Qualifier
@@ -457,7 +453,6 @@ parseAnnot (RawField  (_ , _)) = Field  <$>               fieldEltP
 parseAnnot (RawMethod (_ , _)) = Method <$>               methEltP
 parseAnnot (RawStatic (_ , _)) = Static <$>               statEltP
 parseAnnot (RawConstr (_ , _)) = Constr <$>               consEltP
--- parseAnnot (RawExtern (ss, _)) = Extern <$> patch2 ss <$> idBindP
 parseAnnot (RawIface  (ss, _)) = IFace  <$> patch2 ss <$> iFaceP
 parseAnnot (RawClass  (ss, _)) = Class  <$> patch2 ss <$> classDeclP 
 parseAnnot (RawTAlias (ss, _)) = TAlias <$> patch2 ss <$> tAliasP
@@ -473,7 +468,6 @@ getSpecString :: RawSpec -> String
 getSpecString (RawMeas   (_, s)) = s 
 getSpecString (RawBind   (_, s)) = s 
 getSpecString (RawFunc   (_, s)) = s 
--- getSpecString (RawExtern (_, s)) = s  
 getSpecString (RawIface  (_, s)) = s  
 getSpecString (RawField  (_, s)) = s  
 getSpecString (RawMethod (_, s)) = s  
@@ -490,7 +484,6 @@ getSpecSourceSpan :: RawSpec -> SourceSpan
 getSpecSourceSpan (RawMeas   (s,_)) = s 
 getSpecSourceSpan (RawBind   (s,_)) = s 
 getSpecSourceSpan (RawFunc   (s,_)) = s 
--- getSpecSourceSpan (RawExtern (s,_)) = s  
 getSpecSourceSpan (RawIface  (s,_)) = s  
 getSpecSourceSpan (RawField  (s,_)) = s  
 getSpecSourceSpan (RawMethod (s,_)) = s  
@@ -587,6 +580,7 @@ mkCode ss       =  Nano {
     ss'           = (toBare <$>) <$> ss
     anns          = concatMap (FO.foldMap snd) ss
 
+
 -- | At the moment we only support a single index signature with no other
 --   elements, or (normally) bound types without index signature.
 processInterface (t, ID n x vs p elts)
@@ -603,7 +597,7 @@ processInterface (t, ID n x vs p elts)
     nTe                 = length [ () | FieldSig _ _ _     <- elts ]
 
     tvs v               = TVar v fTop
-    tClass              = TApp (TRef $ symbol x) (tvs <$> vs) fTop
+    tClass              = TApp (TRef $ QN [] $ symbol x) (tvs <$> vs) fTop
     f m@(MethSig _ _ _) = setThisBinding m tClass
     f m                 = m
 

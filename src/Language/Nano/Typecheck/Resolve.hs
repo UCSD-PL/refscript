@@ -6,10 +6,10 @@
 
 module Language.Nano.Typecheck.Resolve ( 
   
-  resolveIface
+  resolveModuleEnv, resolveIface
 
   -- * Flatten a type definition applying subs
-  , flatten, flatten', flattenType
+  , flatten, flatten', flatten'', flattenType
 
   -- * Ancestors
   , weaken, ancestors
@@ -124,7 +124,17 @@ flatten b              = fix . ff fn
         θ              = fromList $ zip vs ts
 
 -- | flatten' does not apply the top-level type substitution
+---------------------------------------------------------------------------
+flatten' :: (Data r, PPR r, EnvLike r g) 
+         => Bool -> g r -> IfaceDef r -> Maybe [TypeMember r]
+---------------------------------------------------------------------------
 flatten' st γ d@(ID _ _ vs _ _) = flatten st γ (d, tVar <$> vs)
+
+---------------------------------------------------------------------------
+flatten'' :: (Data r, PPR r, EnvLike r g) 
+          =>  Bool -> g r -> IfaceDef r -> Maybe ([TVar], [TypeMember r])
+---------------------------------------------------------------------------
+flatten'' st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten st γ (d, tVar <$> vs)
 
 
 

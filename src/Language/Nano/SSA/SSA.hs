@@ -493,7 +493,7 @@ ssaVarDecl (VarDecl l x (Just e)) = do
     (s, x', e') <- ssaAsgn l x e
     return    (s, VarDecl l x' (Just e'))
 
-ssaVarDecr (VarDecl l x Nothing) = do
+ssaVarDecl (VarDecl l x Nothing) = do
     x' <- updSsaEnv l x
     return    ([], VarDecl l x' Nothing)
 

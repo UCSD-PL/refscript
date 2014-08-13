@@ -1,4 +1,9 @@
+
 /*@ abs :: ({ } + number) => { boolean | true } */ 
+
 function abs(x: any) {
-  return x > 0;
+
+  return 0 > x;
+
 }
+

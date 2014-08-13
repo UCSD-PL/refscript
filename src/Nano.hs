@@ -1,5 +1,6 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE DeriveGeneric             #-}
 
 import qualified Language.Nano.Typecheck.Typecheck  as TC
@@ -49,14 +50,14 @@ verifier cfg f
 json :: FilePath -> IO (Either (F.FixResult Error) [FilePath])
 -------------------------------------------------------------------------------
 json f | ext `elem` oks 
-       = do (code, stdOut, stdErr) <- readProcessWithExitCode tsCmd args ""
+       = do (code, stdOut, _) <- readProcessWithExitCode tsCmd args ""
             case code of 
-              ExitSuccess          -> case eitherDecode (B.pack stdOut) :: Either String [String] of
-                                        Left  s  -> return $ Left  $ F.UnknownError s
-                                        Right fs -> return $ Right $ map toJSONExt fs
-              ExitFailure _        -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
-                                        Left  s  -> return $ Left $ F.UnknownError s
-                                        Right e  -> return $ Left $ e
+              ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
+                                    Left  s  -> return $ Left  $ F.UnknownError s
+                                    Right fs -> return $ Right $ map toJSONExt fs
+              ExitFailure _    -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
+                                    Left  s  -> return $ Left $ F.UnknownError s
+                                    Right e  -> return $ Left $ e
        | otherwise      
        = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
   where 

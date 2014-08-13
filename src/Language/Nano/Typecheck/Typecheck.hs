@@ -856,7 +856,8 @@ getConstr l γ s =
 
 tcNormalCall γ l fn es ft0 
   = do (es', ts)      <- unzip <$> mapM (tcExpr γ) es
-       z              <- resolveOverload γ l fn es' ts ft0
+       z              <- {- tracePP ("resolved overload for " ++ ppshow fn) <$> -} 
+                         resolveOverload γ l fn es' ts ft0
        case z of 
          Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft
                             addSubst l θ

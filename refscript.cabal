@@ -25,6 +25,9 @@ Source-Repository head
   Location:    https://github.com/UCSD-PL/RefScript
 
 Executable rsc 
+  Default-language:
+                    Haskell2010
+
   build-depends:    base
                   , containers
                   , pretty 
@@ -48,20 +51,23 @@ Executable rsc
                   , language-ecmascript-pp
                   , RefScript
 
-  extensions:       ExistentialQuantification
-                  ,  FlexibleInstances
-                  ,  UndecidableInstances
-                  ,  DeriveDataTypeable
-                  , TupleSections
-                  , NoMonomorphismRestriction
-                  , ScopedTypeVariables
-                  , BangPatterns
+--   extensions:       ExistentialQuantification
+--                   , FlexibleInstances
+--                   , UndecidableInstances
+--                   , DeriveDataTypeable
+--                   , TupleSections
+--                   , NoMonomorphismRestriction
+--                   , ScopedTypeVariables
+--                   , BangPatterns
 
   ghc-options:         -W -O2  
   Main-is:             Nano.hs
   hs-source-dirs:      src
 
 Library
+  Default-language:
+                    Haskell2010
+
   build-depends:    base
                   , containers
                   , pretty 
@@ -84,14 +90,14 @@ Library
                   , parsec
                   , language-ecmascript-pp
 
-  extensions:       ExistentialQuantification, 
-                    FlexibleInstances, 
-                    UndecidableInstances,
-                    DeriveDataTypeable,
-                    TupleSections,
-                    NoMonomorphismRestriction,
-                    ScopedTypeVariables,
-                    BangPatterns
+--   extensions:       ExistentialQuantification, 
+--                     FlexibleInstances, 
+--                     UndecidableInstances,
+--                     DeriveDataTypeable,
+--                     TupleSections,
+--                     NoMonomorphismRestriction,
+--                     ScopedTypeVariables,
+--                     BangPatterns
 
   ghc-options:    -W -O2  
  

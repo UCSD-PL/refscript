@@ -9,8 +9,6 @@ function incr(x:number):number{
   return ++x;
 }
 
-
-
 /*@ incrBy :: (x:number, k:number) => {number|v = x + k} */
 function incrBy(x:number, k:number):number{
   var z = x + k;

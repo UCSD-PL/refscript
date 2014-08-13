@@ -1,7 +1,7 @@
 
 /*@ incr :: (x:number) => {number|v = x + 1} */
 function incr(x:number):number{
-  return x++;
+    return ++x;
 }
 
 /*@ incrBy :: (x:number, k:number) => {number|v = x + k} */

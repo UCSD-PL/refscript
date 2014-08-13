@@ -1,7 +1,8 @@
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE ConstraintKinds      #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE NoMonomorphismRestriction  #-}
+{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE FlexibleInstances          #-}
 
 -- | Module pertaining to Refinement Type descriptions and conversions
 --   Likely mergeable with @Language.Nano.Typecheck.Types@

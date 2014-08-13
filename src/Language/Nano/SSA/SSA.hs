@@ -6,7 +6,7 @@
 module Language.Nano.SSA.SSA (ssaTransform) where
 
 import           Control.Arrow                           ((***))
-import           Control.Applicative                     ((<$>), (<*>))
+import           Control.Applicative                     ((<$>)) -- , (<*>))
 import           Control.Monad
 import           Data.Data
 import qualified Data.Foldable                           as FO
@@ -21,7 +21,7 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types                 as F
 import           Language.Nano.Env
 import           Language.Nano.Errors
-import           Language.Nano.Misc
+-- import           Language.Nano.Misc
 import           Language.Nano.SSA.SSAMonad
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
@@ -61,7 +61,7 @@ ssaNano p@(Nano { code = Src fs })
 -- ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)
 -------------------------------------------------------------------------------------
 -- ssaFun (FunctionStmt l f xs body)
-ssaFun l fo xs body
+ssaFun l _ xs body
   = do θ <- getSsaEnv
        withAssignability ReadOnly (envIds θ) $               -- Variables from OUTER scope are UNASSIGNABLE
          do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
@@ -109,20 +109,6 @@ ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LVar l3 v) e)) = do
     let x        = Id l3 v
     (s, x', e') <- ssaAsgn l2 x e
     return         (True, prefixStmt l1 s $ ssaAsgnStmt l1 l2 x x' e')
-
--- e3.x = e2
-ssaStmt (ExprStmt l1 (AssignExpr l2 OpAssign (LDot l3 e3 x) e2)) = do
-    (s2, e2') <- ssaExpr e2
-    (s3, e3') <- ssaExpr e3
-    let stmt'  = ExprStmt l1 (AssignExpr l2 OpAssign (LDot l3 e3' x) e2')
-    return       (True, prefixStmt l1 (s2 ++ s3) stmt')
-
--- e1[e2] = e3
-ssaStmt (ExprStmt z1 (AssignExpr l OpAssign (LBracket z2 e1 e2) e3))
-  = do (ss, [e1',e2',e3']) <- unzip <$> mapM ssaExpr [e1, e2, e3]
-       let stmt'            = prefixStmt l (concat ss) $
-                              ExprStmt z1 (AssignExpr l OpAssign (LBracket z2 e1' e2') e3')
-       return (True, stmt')
 
 -- e
 ssaStmt (ExprStmt l e) = do
@@ -193,8 +179,14 @@ ssaStmt (ForStmt l (VarInit vds) cOpt (Just i) b) =
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 ssaStmt (VarDeclStmt l ds) = do
-    (_, ds') <- ssaSeq ssaVarDecl ds
-    return (True, VarDeclStmt l ds')
+    stvds' <- mapM ssaVarDecl ds
+    return    (True, mkStmt $ foldr crunch ([], []) stvds') 
+  where
+    crunch ([], d) (ds, ss') = (d:ds, ss')
+    crunch (ss, d) (ds, ss') = ([]  , mkStmts l ss (d:ds) ss')
+    mkStmts l ss ds ss'      = ss ++ VarDeclStmt l ds : ss'
+    mkStmt (ds', [] )        = VarDeclStmt l ds'
+    mkStmt (ds', ss')        = BlockStmt l $ mkStmts l [] ds' ss'
 
 -- return e
 ssaStmt s@(ReturnStmt _ Nothing)
@@ -242,11 +234,9 @@ ssaStmt (ClassStmt l n e is bd) = do
 ssaStmt s
   = convertError "ssaStmt" s
 
-
 ssaAsgnStmt l1 l2 x@(Id l3 v) x' e' 
   | x == x'   = ExprStmt l1    (AssignExpr l2 OpAssign (LVar l3 v) e')
   | otherwise = VarDeclStmt l1 [VarDecl l2 x' (Just e')]
-
 
 ssaClassElt (Constructor l xs body)
   = do θ <- getSsaEnv
@@ -290,7 +280,7 @@ presplice :: Maybe (Statement SourceSpan) -> Statement SourceSpan -> Statement S
 presplice z s' = splice_ (getAnnotation s') z (Just s')
 
 -------------------------------------------------------------------------------------
-splice :: Statement SourceSpan -> Maybe (Statement SourceSpan) -> Statement SourceSpan
+splice :: Statement a -> Maybe (Statement a) -> Statement a 
 -------------------------------------------------------------------------------------
 splice s z = splice_ (getAnnotation s) (Just s) z
 
@@ -299,12 +289,15 @@ splice_ _ (Just s) Nothing   = s
 splice_ _ Nothing (Just s)   = s
 splice_ _ (Just s) (Just s') = seqStmt (getAnnotation s) s s'
 
-
 seqStmt _ (BlockStmt l s) (BlockStmt _ s') = BlockStmt l (s ++ s')
 seqStmt l s s'                             = BlockStmt l [s, s']
 
-prefixStmt :: SourceSpan -> [Statement SourceSpan] -> Statement SourceSpan -> Statement SourceSpan
-prefixStmt = error "TODO:prefixStmt"
+-------------------------------------------------------------------------------------
+prefixStmt :: a -> [Statement a] -> Statement a -> Statement a 
+-------------------------------------------------------------------------------------
+prefixStmt _ [] s = s 
+prefixStmt l ss s = BlockStmt l $ flattenBlock $ ss ++ [s]
+
 -------------------------------------------------------------------------------------
 flattenBlock :: [Statement t] -> [Statement t]
 -------------------------------------------------------------------------------------
@@ -348,7 +341,7 @@ ssaExpr e@(SuperRef _)
 ssaExpr   (ArrayLit l es)
   = ssaExprs (ArrayLit l) es
 
-ssaExpr e@(VarRef l x)
+ssaExpr (VarRef l x)
   = ([],) <$> ssaVarRef l x
 
 ssaExpr e@(CondExpr l c e1 e2)
@@ -390,23 +383,61 @@ ssaExpr (Cast l e)
 ssaExpr (FuncExpr l fo xs bd)
   = ([],) . FuncExpr l fo xs <$> ssaFun l fo xs bd
 
+-- x = e
+ssaExpr (AssignExpr l OpAssign (LVar lx v) e)
+  = ssaAsgnExpr l lx (Id lx v) e
+       
+-- e1.f = e2
+ssaExpr (AssignExpr l OpAssign (LDot ll e1 f) e2)
+  = ssaExpr2 (\e1' e2' -> AssignExpr l OpAssign (LDot ll e1' f) e2') e1 e2
+
+-- e1[e2] = e3
+ssaExpr (AssignExpr l OpAssign (LBracket ll e1 e2) e3)
+  = ssaExpr3 (\e1' e2' e3' -> AssignExpr l OpAssign (LBracket ll e1' e2') e3') e1 e2 e3
+
+-- x++
+ssaExpr (UnaryAssignExpr l uop (LVar l' v))
+  = do let x           = Id l' v
+       xOld           <- ssaVarRef l x
+       xNew           <- updSsaEnv l x
+       let (eIn, eOut) = unaryExprs l uop xOld (VarRef l xNew)
+       return  ([ssaAsgnStmt l l' x xNew eIn], eOut)
+   
 ssaExpr e
   = convertError "ssaExpr" e
 
-ssaExprs f es    = (concat *** f) . unzip <$> mapM ssaExpr es
-ssaExpr1 f e     = ssaExprs (\case [e'] -> f e') [e]
-ssaExpr2 f e1 e2 = ssaExprs (\case [e1', e2'] -> f e1' e2') [e1, e2]
-ssaExprWith θ e  = snd <$> ssaWith θ (fmap (True,) . ssaExpr) e
+ssaAsgnExpr l lx x e
+  = do (s, x', e') <- ssaAsgn l x e
+       return         (s ++ [ssaAsgnStmt l lx x x' e'], e')
+
+unaryExprs l u xOld xNew = (InfixExpr l bop xOld (IntLit l 1), xRet)
+  where
+    bop                  = unaryBinOp        u
+    xRet                 = unaryId xOld xNew u
+    
+unaryBinOp PrefixInc     = OpAdd
+unaryBinOp PostfixInc    = OpAdd
+unaryBinOp _             = OpSub
+unaryId _ x PrefixInc    = x
+unaryId _ x PrefixDec    = x
+unaryId x _ _            = x
+
+ssaExprs f es       = (concat *** f) . unzip <$> mapM ssaExpr es
+ssaExpr1 f e        = ssaExprs (\case [e'] -> f e') [e]
+ssaExpr2 f e1 e2    = ssaExprs (\case [e1', e2'] -> f e1' e2') [e1, e2]
+ssaExpr3 f e1 e2 e3 = ssaExprs (\case [e1', e2', e3'] -> f e1' e2' e3') [e1, e2, e3]
+ssaExprWith θ e     = snd <$> ssaWith θ (fmap (True,) . ssaExpr) e
+
 -------------------------------------------------------------------------------------
-ssaVarDecl :: F.Reftable r => VarDecl SourceSpan -> SSAM r (Bool, VarDecl SourceSpan)
+ssaVarDecl :: F.Reftable r => VarDecl SourceSpan -> SSAM r ([Statement SourceSpan], VarDecl SourceSpan)
 -------------------------------------------------------------------------------------
 ssaVarDecl (VarDecl l x (Just e)) = do
     (s, x', e') <- ssaAsgn l x e
-    return    (True, VarDecl l x' (Just e'))
+    return    (s, VarDecl l x' (Just e'))
 
 ssaVarDecl (VarDecl l x Nothing) = do
     x' <- updSsaEnv l x
-    return    (True, VarDecl l x' Nothing)
+    return    ([], VarDecl l x' Nothing)
 --  = errorstar $ printf "Variable definition of %s at %s with no initialization is not supported." (ppshow x) (ppshow l)
 
 ------------------------------------------------------------------------------------------

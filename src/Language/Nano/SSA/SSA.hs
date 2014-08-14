@@ -44,15 +44,8 @@ ssaTransform = return . execute . ssaNano
 ssaNano :: Data r => NanoBareR r -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano { code = Src fs })
-  = do -- θ      <- getSsaEnv
-       -- setGlobs $ M.fromList $ (\(l,i,_) -> (srcPos l,fmap srcPos i)) <$> definedGlobs fs
-       -- setSsaEnv $ extSsaEnv classes θ   -- Taken care of in initGlobalEnv
-
-       
-       setGlobs $ allGlobs
+  = do setGlobs $ allGlobs
        setMeas  $ S.fromList $ F.symbol <$> envIds (consts p)
-
-
        withAssignability ReadOnly ros $ 
          withAssignability WriteLocal wls $ 
            withAssignability WriteGlobal wgs $ do 
@@ -60,9 +53,8 @@ ssaNano p@(Nano { code = Src fs })
               ssaAnns  <- getAnns
               return    $ p {code = Src $ map (fmap (patch [ssaAnns, typeAnns])) fs' }
     where
-    -- Initializers
       allGlobs        = S.fromList  $ getAnnotation  <$> fmap ann <$> writeGlobalVars fs
-      (ros, wgs, wls) = variablesInScope allGlobs fs
+      (ros, wgs, wls) = tracePP "global (ros,wgs,wls)" $ variablesInScope allGlobs fs
       msrc            = (fmap srcPos <$>)
 
       typeAnns        = M.fromList $ concatMap
@@ -77,37 +69,17 @@ variablesInScope :: (Data a, IsLocated a) => S.HashSet SourceSpan -> [Statement 
 ---------------------------------------------------------------------------------------
 variablesInScope gs fs = (ros, wgs, wls)
   where
-    vs            = hoistVarDecls fs
+    vs            = tracePP ("all hoisted vars on " ++ ppshow fs) $ hoistVarDecls fs
     (wgs, wls)    = mapPair msrc $ L.partition (\s -> srcPos s `S.member` gs) vs 
     ros           = msrc $ hoistReadOnly fs
     msrc          = (fmap srcPos <$>)
 
-
--- ---------------------------------------------------------------------------------------
--- initGlobalEnv :: Data r => NanoBareR r -> SSAEnv
--- ---------------------------------------------------------------------------------------
--- initGlobalEnv p@(Nano { code = Src fs }) = SE allGlobs meas env mod nspace parent
---   where
---     allGlobs    = S.fromList  $ getAnnotation  <$> fmap ann <$> writeGlobalVars fs
---     meas        = S.fromList  $ F.symbol       <$> envIds (consts p)
---     env         = envUnionList [ros, wls, wgs]
---     mod         = envEmpty 
---     nspace      = []
---     parent      = Nothing
--- 
---     vs          = mapFst ann <$> hoistVarDecls fs
---     (_wgs,_wls) = L.partition (\(s,_) -> s `S.member` allGlobs) vs 
---     ros         = envFromList $ (,ReadOnly)    . snd <$> hoistReadOnly fs
---     wls         = envFromList $ (,WriteLocal)  . snd <$> _wls
---     wgs         = envFromList $ (,WriteGlobal) . snd <$> _wgs
-
-
 -------------------------------------------------------------------------------------
-ssaFun :: SourceSpan -> t -> [Var] -> [Statement SourceSpan] -> SSAM r [Statement SourceSpan]
+ssaFun :: PP t => SourceSpan -> t -> [Var] -> [Statement SourceSpan] -> SSAM r [Statement SourceSpan]
 -------------------------------------------------------------------------------------
-ssaFun l _ xs body
+ssaFun l fn xs body
   = do  θ <- getSsaEnv
-        (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
+        (ros, wgs, wls) <- (\g -> tracePP (ppshow fn ++ " (ros,wgs,wls)") $ variablesInScope g body) <$> getGlobs
         withAssignability ReadOnly (envIds θ) $                   -- Variables from OUTER scope are UNASSIGNABLE
           withAssignability ReadOnly ros $ 
             withAssignability WriteGlobal wgs $ 

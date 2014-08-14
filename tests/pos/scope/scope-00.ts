@@ -1,6 +1,7 @@
 
 /*@ foo :: ( ) =>  { number | v > 0 }*/
 function foo( ) : number  {
+  var hehehehehe = 32; 
 
   /*@ a :: { number | v > 0 } */
   var a = 1;
@@ -31,3 +32,6 @@ function foo1( ) : string  {
 }
 
 foo1();
+
+
+var aaaa = 1; 

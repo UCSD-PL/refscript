@@ -9,9 +9,10 @@ import           Control.Arrow                           ((***))
 import           Control.Applicative                     ((<$>), (<*>))
 import           Control.Monad
 import           Data.Data
+import qualified Data.List                               as L
 import qualified Data.Foldable                           as FO
 import qualified Data.HashMap.Strict                     as M
-import           Data.Maybe                              (isJust)
+import qualified Data.HashSet as S
 import           Data.Typeable                           ()
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
@@ -22,6 +23,7 @@ import qualified Language.Fixpoint.Types                 as F
 import           Language.Nano.Env
 import           Language.Nano.Errors
 -- import           Language.Nano.Misc
+import           Language.Nano.SSA.Types
 import           Language.Nano.SSA.SSAMonad
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
@@ -39,36 +41,83 @@ ssaTransform = return . execute . ssaNano
 -- * Spec annotations (functions, global variable declarations)
 -- * Type annotations (variable declarations (?), class elements)
 ----------------------------------------------------------------------------------
-ssaNano :: (PP r, F.Reftable r, Data r, Typeable r) => NanoBareR r -> SSAM r (NanoSSAR r)
+ssaNano :: Data r => NanoBareR r -> SSAM r (NanoSSAR r)
 ----------------------------------------------------------------------------------
 ssaNano p@(Nano { code = Src fs })
-  = do θ <- getSsaEnv
-       setGlobs $ M.fromList $ (\(l,i,_) -> (srcPos l,fmap srcPos i)) <$> definedGlobs fs
-       setSsaEnv $ extSsaEnv classes θ
-       withAssignability ReadOnly ros
-            $ do (_,fs') <- ssaStmts (map (ann <$>) fs)
-                 ssaAnns <- getAnns
-                 return   $ p {code = Src $ map (fmap (patch [ssaAnns, typeAnns])) fs' }
+  = do -- θ      <- getSsaEnv
+       -- setGlobs $ M.fromList $ (\(l,i,_) -> (srcPos l,fmap srcPos i)) <$> definedGlobs fs
+       -- setSsaEnv $ extSsaEnv classes θ   -- Taken care of in initGlobalEnv
+
+       
+       setGlobs $ allGlobs
+       setMeas  $ S.fromList $ F.symbol <$> envIds (consts p)
+
+
+       withAssignability ReadOnly ros $ 
+         withAssignability WriteLocal wls $ 
+           withAssignability WriteGlobal wgs $ do 
+              (_,fs')  <- ssaStmts $ msrc fs
+              ssaAnns  <- getAnns
+              return    $ p {code = Src $ map (fmap (patch [ssaAnns, typeAnns])) fs' }
     where
-      typeAnns      = M.fromList $ concatMap
+    -- Initializers
+      allGlobs        = S.fromList  $ getAnnotation  <$> fmap ann <$> writeGlobalVars fs
+      (ros, wgs, wls) = variablesInScope allGlobs fs
+      msrc            = (fmap srcPos <$>)
+
+      typeAnns        = M.fromList $ concatMap
                         (FO.concatMap (\(Ann l an) -> (l,) <$> single <$> an)) fs
 
-      ros         = readOnlyVars p
+      patch ms l      = Ann l $ concatMap (M.lookupDefault [] l) ms
 
-      patch ms l  = Ann l $ concatMap (M.lookupDefault [] l) ms
-      classes     = [ fmap ann i | ClassStmt _ i _ _ _ <- fs]
+
+---------------------------------------------------------------------------------------
+variablesInScope :: (Data a, IsLocated a) => S.HashSet SourceSpan -> [Statement a] 
+                 -> ([Id SourceSpan], [Id SourceSpan], [Id SourceSpan])
+---------------------------------------------------------------------------------------
+variablesInScope gs fs = (ros, wgs, wls)
+  where
+    vs            = hoistVarDecls fs
+    (wgs, wls)    = mapPair msrc $ L.partition (\s -> srcPos s `S.member` gs) vs 
+    ros           = msrc $ hoistReadOnly fs
+    msrc          = (fmap srcPos <$>)
+
+
+-- ---------------------------------------------------------------------------------------
+-- initGlobalEnv :: Data r => NanoBareR r -> SSAEnv
+-- ---------------------------------------------------------------------------------------
+-- initGlobalEnv p@(Nano { code = Src fs }) = SE allGlobs meas env mod nspace parent
+--   where
+--     allGlobs    = S.fromList  $ getAnnotation  <$> fmap ann <$> writeGlobalVars fs
+--     meas        = S.fromList  $ F.symbol       <$> envIds (consts p)
+--     env         = envUnionList [ros, wls, wgs]
+--     mod         = envEmpty 
+--     nspace      = []
+--     parent      = Nothing
+-- 
+--     vs          = mapFst ann <$> hoistVarDecls fs
+--     (_wgs,_wls) = L.partition (\(s,_) -> s `S.member` allGlobs) vs 
+--     ros         = envFromList $ (,ReadOnly)    . snd <$> hoistReadOnly fs
+--     wls         = envFromList $ (,WriteLocal)  . snd <$> _wls
+--     wgs         = envFromList $ (,WriteGlobal) . snd <$> _wgs
+
 
 -------------------------------------------------------------------------------------
--- ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)
+ssaFun :: SourceSpan -> t -> [Var] -> [Statement SourceSpan] -> SSAM r [Statement SourceSpan]
 -------------------------------------------------------------------------------------
--- ssaFun (FunctionStmt l f xs body)
 ssaFun l _ xs body
-  = do θ <- getSsaEnv
-       withAssignability ReadOnly (envIds θ) $               -- Variables from OUTER scope are UNASSIGNABLE
-         do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
-            (_, body')   <- ssaStmts body                    -- Transform function
-            setSsaEnv θ                                      -- Restore Outer SsaEnv
-            return        $ body'
+  = do  θ <- getSsaEnv
+        (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
+        withAssignability ReadOnly (envIds θ) $                   -- Variables from OUTER scope are UNASSIGNABLE
+          withAssignability ReadOnly ros $ 
+            withAssignability WriteGlobal wgs $ 
+              withAssignability WriteLocal wls $ 
+
+            do  setSsaEnv    $ extSsaEnv ((returnId l) : xs) θ    -- Extend SsaEnv with formal binders
+                (_, body')   <- ssaStmts body                     -- Transform function
+                setSsaEnv θ                                       -- Restore Outer SsaEnv
+                return        $ body'
+
 
 -------------------------------------------------------------------------------------
 ssaSeq :: (a -> SSAM r (Bool, a)) -> [a] -> SSAM r (Bool, [a])
@@ -81,30 +130,25 @@ ssaSeq f            = go True
                          (b', ys) <- go b xs
                          return      (b', y:ys)
 
+
 -------------------------------------------------------------------------------------
-ssaStmts :: F.Reftable r => [Statement SourceSpan] -> SSAM r (Bool, [Statement SourceSpan])
+ssaStmts :: [Statement SourceSpan] -> SSAM r (Bool, [Statement SourceSpan])
 -------------------------------------------------------------------------------------------
-ssaStmts ss
-  = do  αs <- getGlobs
-        withAssignability WriteGlobal (wgs αs) $ mapSnd flattenBlock <$> ssaSeq ssaStmt ss
-    where
-      wgs αs = [ x | VarDeclStmt _ vd <- ss
-                   , VarDecl l x _    <- vd
-                   , isJust $ M.lookup l αs ]
+ssaStmts ss = mapSnd flattenBlock <$> ssaSeq ssaStmt ss
 
 
 -----------------------------------------------------------------------------------
-ssaStmt :: F.Reftable r => Statement SourceSpan -> SSAM r (Bool, Statement SourceSpan)
+ssaStmt ::  Statement SourceSpan -> SSAM r (Bool, Statement SourceSpan)
 -------------------------------------------------------------------------------------
 -- skip
 ssaStmt s@(EmptyStmt _) 
   = return (True, s)
 
--- 
+-- function foo(...): T;
 ssaStmt s@(FunctionDecl _ _ _) 
   = return (True, s)
 
--- 
+-- interface IA<V> extends IB<T> { ... }
 ssaStmt s@(IfaceStmt _) 
   = return (True, s)
 
@@ -321,7 +365,7 @@ ssaWith θ f x = do
 
 
 -------------------------------------------------------------------------------------
-ssaExpr    :: F.Reftable r => Expression SourceSpan
+ssaExpr    ::  Expression SourceSpan
            -> SSAM r ([Statement SourceSpan], Expression SourceSpan)
 -------------------------------------------------------------------------------------
 
@@ -364,7 +408,7 @@ ssaExpr (InfixExpr l o e1 e2)
   = ssaExpr2 (InfixExpr l o) e1 e2
 
 ssaExpr (CallExpr l e es)
-  = ssaExprs (\case e':es' -> CallExpr l e' es') (e : es)
+  = ssaExprs (\case es' -> CallExpr l (head es') (tail es')) (e : es)
 
 ssaExpr (ObjectLit l ps)
   = ssaExprs (ObjectLit l . zip fs) es
@@ -427,7 +471,7 @@ ssaAsgnExpr l lx x e
        return         (s ++ [ssaAsgnStmt l lx x x' e'], e')
 
 -----------------------------------------------------------------------------
-ssaLval    :: F.Reftable r => LValue SourceSpan -> SSAM r (LValue SourceSpan)
+ssaLval    ::  LValue SourceSpan -> SSAM r (LValue SourceSpan)
 -----------------------------------------------------------------------------
 ssaLval (LVar lv v)
   = do VarRef _ (Id _ v') <- ssaVarRef lv (Id lv v)
@@ -445,9 +489,10 @@ ssaLval (LBracket ll e1 e2)
 --------------------------------------------------------------------------
  
 ssaExprs f es       = (concat *** f) . unzip <$> mapM ssaExpr es
-ssaExpr1 f e        = ssaExprs (\case [e'] -> f e') [e]
-ssaExpr2 f e1 e2    = ssaExprs (\case [e1', e2'] -> f e1' e2') [e1, e2]
-ssaExpr3 f e1 e2 e3 = ssaExprs (\case [e1', e2', e3'] -> f e1' e2' e3') [e1, e2, e3]
+
+ssaExpr1 = case1 ssaExprs -- (\case [e'] -> f e') [e]
+ssaExpr2 = case2 ssaExprs -- (\case [e1', e2'] -> f e1' e2') [e1, e2]
+ssaExpr3 = case3 ssaExprs -- (\case [e1', e2', e3'] -> f e1' e2' e3') [e1, e2, e3]
 ssaPureExprWith θ e = snd <$> ssaWith θ (fmap (True,) . ssaPureExpr) e
 
 ssaPureExpr e = do
@@ -471,6 +516,7 @@ assignInfix OpAssignZfRShift = OpZfRShift
 assignInfix OpAssignBAnd     = OpBAnd
 assignInfix OpAssignBXor     = OpBXor
 assignInfix OpAssignBOr      = OpBOr
+assignInfix o                = error $ "assignInfix called with " ++ ppshow o
 
 
 --------------------------------------------------------------------------
@@ -492,7 +538,7 @@ unaryId x _ _            = x
 
 
 -------------------------------------------------------------------------------------
-ssaVarDecl :: F.Reftable r => VarDecl SourceSpan -> SSAM r ([Statement SourceSpan], VarDecl SourceSpan)
+ssaVarDecl :: VarDecl SourceSpan -> SSAM r ([Statement SourceSpan], VarDecl SourceSpan)
 -------------------------------------------------------------------------------------
 ssaVarDecl (VarDecl l x (Just e)) = do
     (s, x', e') <- ssaAsgn l x e
@@ -503,7 +549,7 @@ ssaVarDecl (VarDecl l x Nothing) = do
     return    ([], VarDecl l x' Nothing)
 
 ------------------------------------------------------------------------------------------
-ssaVarRef :: F.Reftable r => SourceSpan -> Id SourceSpan -> SSAM r (Expression SourceSpan)
+ssaVarRef ::  SourceSpan -> Id SourceSpan -> SSAM r (Expression SourceSpan)
 ------------------------------------------------------------------------------------------
 ssaVarRef l x
   = do getAssignability x >>= \case
@@ -517,8 +563,8 @@ ssaVarRef l x
  
 
 ------------------------------------------------------------------------------------
-ssaAsgn :: F.Reftable r => SourceSpan -> Id SourceSpan -> Expression SourceSpan ->
-           SSAM r ([Statement SourceSpan], Id SourceSpan, Expression SourceSpan)
+ssaAsgn :: SourceSpan -> Id SourceSpan -> Expression SourceSpan ->
+            SSAM r ([Statement SourceSpan], Id SourceSpan, Expression SourceSpan)
 ------------------------------------------------------------------------------------
 ssaAsgn l x e  = do
     (s, e') <- ssaExpr e

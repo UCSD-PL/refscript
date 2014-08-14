@@ -2,7 +2,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
 -------------------------------------------------------------------------------------
--- | SSA Monad ----------------------------------------------------------------------
+-- | SSA Monad 
 -------------------------------------------------------------------------------------
 
 
@@ -29,6 +29,7 @@ module Language.Nano.SSA.SSAMonad (
    -- * Access Annotations
    , addAnn, getAnns
    , setGlobs, getGlobs
+   , setMeas, getMeas
 
    -- * Tracking Assignability
    , getAssignability
@@ -42,9 +43,12 @@ import           Control.Monad.Error hiding (Error)
 
 import           Data.Maybe                         (fromMaybe) 
 import qualified Data.HashMap.Strict as M 
+import qualified Data.HashSet as S
+import qualified Language.Fixpoint.Types        as F
 import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Types                
+import           Language.Nano.SSA.Types
 import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
@@ -56,12 +60,15 @@ import           Language.Fixpoint.Misc
 
 type SSAM r     = ErrorT Error (State (SsaState r))
 
-data SsaState r = SsaST { assign      :: Env Assignability -- ^ assignability status 
-                        , names       :: SsaEnv            -- ^ current SSA names 
-                        , count       :: !Int              -- ^ fresh index
-                        , anns        :: !(AnnInfo r)      -- ^ built up map of annots 
-                        , globs       :: ![Var]
-                        -- , globs       :: !(M.HashMap SourceSpan (Var))                         
+data SsaState r = SsaST { assign      :: Env Assignability        -- ^ assignability status 
+                        -- names to be deprecated
+                        , names       :: SsaEnv                   -- ^ current SSA names 
+                        
+                        , count       :: !Int                     -- ^ fresh index
+                        , anns        :: !(AnnInfo r)             -- ^ built up map of annots 
+                        
+                        , ssa_globs   :: S.HashSet SourceSpan     -- ^ Global definition locations
+                        , ssa_meas    :: S.HashSet F.Symbol       -- ^ Measures
                         }
 
 type SsaEnv     = Env SsaInfo 
@@ -112,7 +119,7 @@ withAssignability m xs act
 -------------------------------------------------------------------------------------
 getAssignability :: Var -> SSAM r Assignability 
 -------------------------------------------------------------------------------------
-getAssignability x = (fromMaybe WriteLocal . envFindTy x . assign) <$> get
+getAssignability x = fromMaybe WriteLocal . envFindTy x . assign <$> get
 
 
 -------------------------------------------------------------------------------------
@@ -144,8 +151,11 @@ findSsaEnv x
 addAnn l f = modify $ \st -> st { anns = inserts l f (anns st) }
 getAnns    = anns <$> get
 
-setGlobs g = modify $ \st -> st { globs = g } 
-getGlobs   = globs <$> get
+setGlobs g =  modify $ \st -> st { ssa_globs = g } 
+getGlobs   = ssa_globs <$> get
+
+setMeas m =  modify $ \st -> st { ssa_meas= m } 
+getMeas   = ssa_meas <$> get
 
 
 -------------------------------------------------------------------------------------
@@ -167,5 +177,5 @@ execute act
 tryAction act = get >>= return . runState (runErrorT act)
 
 initState :: SsaState r
-initState = SsaST envEmpty envEmpty 0 M.empty []
+initState = SsaST envEmpty envEmpty 0 M.empty S.empty S.empty 
 

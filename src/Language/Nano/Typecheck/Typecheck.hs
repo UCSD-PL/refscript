@@ -77,7 +77,7 @@ parse fs next = parseNanoFromFiles fs >>= next
 --          Right s -> print $ ppshow s
 
 ssa next p  
-  = do  r <- ssaTransform p 
+  = do  r <- ssaTransform $ tracePP "PARSED FILE" p 
         case r of 
           Left  l -> lerror [l] 
           Right x -> next $ expandAliases x
@@ -119,7 +119,7 @@ castErrors (Ann l facts) = downErrors
 
 
 -------------------------------------------------------------------------------
-typeCheck :: (Data r, PPR r) => NanoSSAR r -> IO (Either [Error] (NanoTypeR r))
+typeCheck :: PPR r => NanoSSAR r -> IO (Either [Error] (NanoTypeR r))
 -------------------------------------------------------------------------------
 typeCheck pgm = do 
   v <- V.getVerbosity
@@ -130,13 +130,12 @@ typeCheck pgm = do
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program
 -------------------------------------------------------------------------------
-tcNano :: (Data r, PPRSF r) => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
+tcNano :: PPRSF r => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do  -- setDef         $ defs p
         -- CHECK TO BE DONE ON THE SPOT
         -- checkInterfaces p
-        γ              <- initGlobalEnv p
         (fs', _)       <- tcStmts γ fs
         m              <- getAnns 
         θ              <- getSubst
@@ -145,6 +144,7 @@ tcNano p@(Nano {code = Src fs})
         -- return          $ (m, p1 { defs  = d })     -- Update IfaceEnv before exiting
         return          $ (m, p1)
     where
+        γ               = initGlobalEnv p
 
 
 -- FIXME: check for mutability parameter
@@ -165,7 +165,7 @@ patchAnn m (Ann l fs)   = Ann l $ sortNub $ eo ++ fo ++ ti ++ fs
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-initGlobalEnv  :: (PPR r, Data r) => NanoSSAR r -> TCM r (TCEnv r)
+initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
 initGlobalEnv (Nano { code = Src ss }) = initModuleEnv Nothing Nothing ss
 
@@ -196,9 +196,9 @@ initFuncEnv γ f i αs xs ts t s = TCE env iface mod ctx nspace parent
 
 
 ---------------------------------------------------------------------------------------
-initClassEnv  :: (Data r, PPR r) => TCEnv r -> IfaceDef r -> TCM r (TCEnv r)
+initClassEnv  :: PPR r => TCEnv r -> IfaceDef r -> TCEnv r
 ---------------------------------------------------------------------------------------
-initClassEnv γ (ID _ n vs h es) = return  $ TCE env iface mod ctx nspace parent
+initClassEnv γ (ID _ n vs h es) = TCE env iface mod ctx nspace parent
   where
     env         = envAdds [(F.symbol "this", tThis)] envEmpty
     iface       = envEmpty 
@@ -212,13 +212,11 @@ initClassEnv γ (ID _ n vs h es) = return  $ TCE env iface mod ctx nspace parent
 
 
 ---------------------------------------------------------------------------------------
-initModuleEnv :: (Data r, PPR r) 
-              => TCEnvO r -> Maybe F.Symbol -> [Statement (AnnSSA r)] -> TCM r (TCEnv r)
+initModuleEnv :: PPR r => TCEnvO r -> Maybe F.Symbol -> [Statement (AnnSSA r)] -> TCEnv r
 ---------------------------------------------------------------------------------------
-initModuleEnv γo n s 
-  = do  iface <- populateTypes s
-        return $ TCE env iface mod ctx nspace parent 
+initModuleEnv γo n s = TCE env iface mod ctx nspace parent 
   where
+    iface     = populateTypes s
     env       = envEmpty
     mod       = populateModules s
     ctx       = emptyContext
@@ -241,33 +239,33 @@ populateFuncs s = envFromList [ (n,t) | (n,ls) <- funcDecls, VarAnn t <- ls ]
 
 
 ---------------------------------------------------------------------------------------
-populateTypes :: (PPR r, Data r) => [Statement (AnnSSA r)] -> TCM r (IfaceEnv r)
+populateTypes :: PPR r => [Statement (AnnSSA r)] -> IfaceEnv r
 ---------------------------------------------------------------------------------------
-populateTypes         = foldM resolveAndAdd envEmpty . hoistTypes
+populateTypes         = foldl resolveAndAdd envEmpty . hoistTypes
   where
-    resolveAndAdd γ s = do  st    <- resolveType s
-                            return $ envAdds st γ
+    resolveAndAdd γ s = envAdds (resolveType s) γ
 
-
+-- FIXME (?): Does not take into account classes with missing annotations.
+--            Ts -> rsc translation should add annotations everywhere.
+-- TODO: Use safeExtends to check inheritance
 ---------------------------------------------------------------------------------------
-resolveType :: PPR r => Statement (AnnSSA r) -> TCM r [(F.Symbol, IfaceDef r)]
+resolveType :: PPR r => Statement (AnnSSA r) -> [(F.Symbol, IfaceDef r)]
 ---------------------------------------------------------------------------------------
 resolveType  (ClassStmt l id _ _ cs)
   = case [ t | ClassAnn t <- ann_fact l ] of
-      [(vs, heritage)] -> 
-        do  -- mapM_ tcError $ safeExtends (srcPos l) γ freshD -- FIXME: check extends 
-            -- es'   <- resolveMembers γ (srcPos l) (tc vs) sid heritage cs
-            let es' = resolveMembers (tc vs) cs
-            return [(sid, ID True (fmap ann id) vs heritage es')]
-      _         -> tcError $ errorClassAnnotMissing (srcPos l) sid
+      [(vs, h)] -> [(s, ID True (fmap ann id) vs h (resolveMembers (tc vs) cs))]
+      _         -> []
   where
-    sid       = F.symbol id
-    x         = QN [] sid
+    s         = F.symbol id
+    x         = QN [] s
     tc vs     = TApp (TRef x) ((`TVar` fTop) <$> vs) fTop
 
-resolveType (IfaceStmt l) = undefined -- TODO
+-- TODO 
+resolveType (IfaceStmt l)
+  = case [ t | IfaceAnn t <- ann_fact l ] of
+    _ -> []
 
-resolveType _ = return [] 
+resolveType _ = [] 
 
 
 -- ---------------------------------------------------------------------------------------

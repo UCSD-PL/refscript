@@ -20,6 +20,7 @@ import           Data.Char                               (isLower)
 import qualified Data.List                        as     L
 import           Data.Generics.Aliases                   ( mkQ)
 import           Data.Generics.Schemes
+import qualified Data.HashMap.Strict              as M
 import           Data.Traversable                        (mapAccumL)
 import           Text.PrettyPrint.HughesPJ               (text)
 import           Data.Data
@@ -434,7 +435,7 @@ data PSpec l r
   | Constr (TypeMember r)
   | Method (TypeMember r)
   | Static (TypeMember r)
-  | IFace  (Id l, IfaceDef r)
+  | Iface  (Id l, IfaceDef r)
   | Class  (Id l, ([TVar], Maybe (QName, [RType r])))
   | TAlias (Id l, TAlias (RType r))
   | PAlias (Id l, PAlias) 
@@ -453,7 +454,7 @@ parseAnnot (RawField  (_ , _)) = Field  <$>               fieldEltP
 parseAnnot (RawMethod (_ , _)) = Method <$>               methEltP
 parseAnnot (RawStatic (_ , _)) = Static <$>               statEltP
 parseAnnot (RawConstr (_ , _)) = Constr <$>               consEltP
-parseAnnot (RawIface  (ss, _)) = IFace  <$> patch2 ss <$> iFaceP
+parseAnnot (RawIface  (ss, _)) = Iface  <$> patch2 ss <$> iFaceP
 parseAnnot (RawClass  (ss, _)) = Class  <$> patch2 ss <$> classDeclP 
 parseAnnot (RawTAlias (ss, _)) = TAlias <$> patch2 ss <$> tAliasP
 parseAnnot (RawPAlias (ss, _)) = PAlias <$> patch2 ss <$> pAliasP
@@ -554,53 +555,51 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 --------------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
-mkCode ss       =  Nano {
-        code      = Src (checkTopStmt <$> ss')
-      , externs   = envEmpty -- envFromList   [ t | Extern t <- anns ]       -- externs
-      -- FIXME: same name methods in different classes.
-      , specs     = catFunSpecDefs δ ss                          -- function sigs (no methods...)
-      , defs      = δ
-      , consts    = envFromList   [ t | Meas   t <- anns ] 
-      , tAlias    = envFromList   [ t | TAlias t <- anns ] 
-      , pAlias    = envFromList   [ t | PAlias t <- anns ] 
-      , quals     =               [ t | Qual   t <- anns ] 
-      , invts     = [Loc (srcPos l) t | Invt l t <- anns ]
+mkCode ss =  Nano {
+        code          = Src (checkTopStmt <$> ss')
+      , specs         = envFromList $ concat $ FO.concatMap foo <$> ss
+      , consts        = envFromList   [ t | Meas   t <- anns ] 
+      , tAlias        = envFromList   [ t | TAlias t <- anns ] 
+      , pAlias        = envFromList   [ t | PAlias t <- anns ] 
+      , quals         =               [ t | Qual   t <- anns ] 
+      , invts         = [Loc (srcPos l) t | Invt l t <- anns ]
     } 
   where
-    δ             = envFromList [ processInterface t | IFace  t <- anns ] 
-    toBare       :: (SourceSpan, [Spec]) -> AnnBare Reft 
-    toBare (l,αs) = Ann l $ [VarAnn   t     | Bind   (_,t) <- αs ]
-                         ++ [ConsAnn  c     | Constr c     <- αs ]
-                         ++ [FieldAnn f     | Field  f     <- αs ]
-                         ++ [MethAnn  m     | Method m     <- αs ]
-                         ++ [StatAnn  m     | Static m     <- αs ]
-                         ++ [ClassAnn t     | Class  (_,t) <- αs ]
-                         ++ [UserCast t     | CastSp _ t   <- αs ]
-                         ++ [FuncAnn  t     | AnFunc t     <- αs ]
-    ss'           = (toBare <$>) <$> ss
-    anns          = concatMap (FO.foldMap snd) ss
+    toBare           :: (SourceSpan, [Spec]) -> AnnBare Reft 
+    toBare (l,αs)     = Ann l $ [VarAnn   t     | Bind   (_,t) <- αs ]
+                             ++ [ConsAnn  c     | Constr c     <- αs ]
+                             ++ [FieldAnn f     | Field  f     <- αs ]
+                             ++ [MethAnn  m     | Method m     <- αs ]
+                             ++ [StatAnn  m     | Static m     <- αs ]
+                             ++ [ClassAnn t     | Class  (_,t) <- αs ]
+                             ++ [IfaceAnn t     | Iface  (_,t) <- αs ]
+                             ++ [UserCast t     | CastSp _ t   <- αs ]
+                             ++ [FuncAnn  t     | AnFunc t     <- αs ]
+    ss'               = (toBare <$>) <$> ss
+    anns              = concatMap (FO.foldMap snd) ss
+    foo (l,αs)        = [ b | Bind b <- αs ]
 
 
--- | At the moment we only support a single index signature with no other
---   elements, or (normally) bound types without index signature.
-processInterface (t, ID n x vs p elts)
-  | nTi == 0  || (nTi == 1 && nTe == 0 && nTn == 0) 
-  -- Replace the 'this' binding in every method element with the type of the interface
-  = (t, ID n x vs p (f <$> elts))
-
-  | otherwise = error   $ "[UNIMPLEMENTED] Object types " ++ 
-                          "can only have a single indexable " ++
-                          "signature and no other elements."
-  where 
-    nTn                 = length [ () | IndexSig _ False _ <- elts ]
-    nTi                 = length [ () | IndexSig _ _ _     <- elts ]
-    nTe                 = length [ () | FieldSig _ _ _     <- elts ]
-
-    tvs v               = TVar v fTop
-    tClass              = TApp (TRef $ QN [] $ symbol x) (tvs <$> vs) fTop
-    f m@(MethSig _ _ _) = setThisBinding m tClass
-    f m                 = m
-
+-- -- | At the moment we only support a single index signature with no other
+-- --   elements, or (normally) bound types without index signature.
+-- processInterface (t, ID n x vs p elts)
+--   | nTi == 0  || (nTi == 1 && nTe == 0 && nTn == 0) 
+--   -- Replace the 'this' binding in every method element with the type of the interface
+--   = (t, ID n x vs p (f <$> elts))
+-- 
+--   | otherwise = error   $ "[UNIMPLEMENTED] Object types " ++ 
+--                           "can only have a single indexable " ++
+--                           "signature and no other elements."
+--   where 
+--     nTn                 = length [ () | IndexSig _ False _ <- elts ]
+--     nTi                 = length [ () | IndexSig _ _ _     <- elts ]
+--     nTe                 = length [ () | FieldSig _ _ _     <- elts ]
+-- 
+--     tvs v               = TVar v fTop
+--     tClass              = TApp (TRef $ QN [] $ symbol x) (tvs <$> vs) fTop
+--     f m@(MethSig _ _ _) = setThisBinding m tClass
+--     f m                 = m
+-- 
 
 type PState = Integer
 
@@ -636,48 +635,26 @@ instance PP (RawSpec) where
   pp = text . getSpecString
 
 
--- FIXME: Disabling the check here
---------------------------------------------------------------------------------------
-catFunSpecDefs :: IfaceEnv Reft -> [Statement (SourceSpan, [Spec])] -> Env RefType
---------------------------------------------------------------------------------------
--- catFunSpecDefs δ ss = envFromList [ (i, checkType δ t) | l <- ds , Bind (i,t) <- snd l ]
-catFunSpecDefs _ ss = envFromList [ (i, t) | (_,l) <- definedFuns ss, Bind (i,t) <- l ]
-
--- --------------------------------------------------------------------------------------
--- catVarSpecDefs :: [Statement (SourceSpan, [Spec])] -> Env RefType
--- --------------------------------------------------------------------------------------
--- catVarSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
---   where ds        = varDeclStmts ss
 
 
--- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
---------------------------------------------------------------------------------------
-definedFuns       :: (Data a, Typeable a) => [Statement a] -> [a]
---------------------------------------------------------------------------------------
-definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
-  where 
-    fromFunction (FunctionStmt l _ _ _) = [l] 
-    fromFunction _                      = []
-
-
---------------------------------------------------------------------------------
--- | Sanity checks on types
---------------------------------------------------------------------------------
---
--- Perhaps move these to typechecking
---
-
-data TypeError = NameNotFound Symbol
-               | InvalidMutability Symbol
-  deriving (Data, Typeable)
-
-instance Show TypeError where
-  show (NameNotFound s)      = printf "Type '%s' is unbound" (ppshow s)
-  show (InvalidMutability s) = "Invalid mutability symbol '" 
-                            ++ ppshow s 
-                            ++ "'. "
-                            ++ "Possible fix: "
-                            ++ "add a mutability modifier as the first type argument"
+-- --------------------------------------------------------------------------------
+-- -- | Sanity checks on types
+-- --------------------------------------------------------------------------------
+-- --
+-- -- Perhaps move these to typechecking
+-- --
+-- 
+-- data TypeError = NameNotFound Symbol
+--                | InvalidMutability Symbol
+--   deriving (Data, Typeable)
+-- 
+-- instance Show TypeError where
+--   show (NameNotFound s)      = printf "Type '%s' is unbound" (ppshow s)
+--   show (InvalidMutability s) = "Invalid mutability symbol '" 
+--                             ++ ppshow s 
+--                             ++ "'. "
+--                             ++ "Possible fix: "
+--                             ++ "add a mutability modifier as the first type argument"
 
 
 -- -- FIXME: This won't work here cause classes have not been included in δ 

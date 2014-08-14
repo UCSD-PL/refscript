@@ -88,9 +88,6 @@ module Language.Nano.Typecheck.Types (
   -- * Contexts
   , CallSite (..), IContext, emptyContext, pushContext
 
-  -- * Assignability 
-  , Assignability (..), definedGlobs,  writeGlobalVars, readOnlyVars  
-
   , hoistFuncDecls, hoistTypes, hoistAnns
 
   -- * Aliases
@@ -113,7 +110,7 @@ import qualified Data.IntMap                    as I
 import qualified Data.HashMap.Strict            as M
 import           Data.Generics                   
 import           Data.Typeable                  ()
-import           Language.ECMAScript3.Syntax    hiding (Cast)
+import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Misc
@@ -656,22 +653,26 @@ remThisBinding t =
 --                      } deriving (Functor, Data, Typeable)
 
 
-data Nano a r        = Nano 
-                     { code   :: !(Source a)               -- ^ Code to check
-                     , externs:: !(Env (RType r))          -- ^ Imported (unchecked) specifications 
-                     , specs  :: !(Env (RType r))          -- ^ Function specs and 
-                     , defs   :: !(IfaceEnv r)             -- ^ Type definitions
-                                                           -- ^ After TC will also include class types
-                     , consts :: !(Env (RType r))          -- ^ Measure Signatures
-							       , tAlias :: !(TAliasEnv (RType r))    -- ^ Type aliases
-                     , pAlias :: !(PAliasEnv)              -- ^ Predicate aliases
-                     , quals  :: ![F.Qualifier]            -- ^ Qualifiers
-                     , invts  :: ![Located (RType r)]      -- ^ Type Invariants
-                     } deriving (Functor, Data, Typeable)
+data Nano a r       = Nano { 
+                    -- ^ Code to check
+                      code   :: !(Source a)               
+                    -- ^ Annotations (keeping this to scrape qualifiers later)
+                    , specs  :: !(Env (RType r))
+                    -- ^ Measure Signatures
+                    , consts :: !(Env (RType r))          
+                    -- ^ Type aliases
+							      , tAlias :: !(TAliasEnv (RType r))    
+                    -- ^ Predicate aliases
+                    , pAlias :: !(PAliasEnv)              
+                    -- ^ Qualifiers
+                    , quals  :: ![F.Qualifier]            
+                    -- ^ Type Invariants
+                    , invts  :: ![Located (RType r)]      
+                    } deriving (Functor, Data, Typeable)
 
 type NanoBareR r   = Nano (AnnBare r) r                    -- ^ After Parse
 type NanoSSAR r    = Nano (AnnSSA  r) r                    -- ^ After SSA  
-type NanoTypeR r   = Nano (AnnType r) r                    -- ^ After TC: Contains an updated IfaceEnv
+type NanoTypeR r   = Nano (AnnType r) r                    -- ^ After TC
 type NanoRefType   = NanoTypeR F.Reft                      -- ^ After Liquid
 
 type ExprSSAR r    = Expression (AnnSSA r)
@@ -696,28 +697,18 @@ instance (PP r, F.Reftable r) => PP (Nano a r) where
   pp pgm@(Nano {code = (Src s) }) 
     =   text "\n******************* Code **********************"
     $+$ pp s
-    {-$+$ text "\n******************* Imported specs ************"-}
-    {-$+$ ppEnv (externs pgm)-}
-    $+$ text "\n******************* Checked fun sigs **********"
-    $+$ pp (specs pgm)
---     $+$ text "\n******************* Global vars ***************"
---     $+$ pp (glVars pgm)
---     $+$ text "\n******************* Constants *****************"
---     $+$ pp (consts pgm) 
---     $+$ text "\n******************* Type Definitions **********"
---     $+$ pp (defs  pgm)
---     $+$ text "\n******************* Predicate Aliases *********"
---     $+$ pp (pAlias pgm)
---     $+$ text "\n******************* Type Aliases **************"
---     $+$ pp (tAlias pgm)
---     $+$ text "\n******************* Qualifiers ****************"
---     $+$ vcat (F.toFix <$> (take 3 $ quals pgm))
---     $+$ text "..."
---     $+$ text "\n******************* Invariants ****************"
---     $+$ vcat (pp <$> (invts pgm))
+    $+$ text "\n******************* Constants *****************"
+    $+$ pp (consts pgm) 
+    $+$ text "\n******************* Predicate Aliases *********"
+    $+$ pp (pAlias pgm)
+    $+$ text "\n******************* Type Aliases **************"
+    $+$ pp (tAlias pgm)
+    $+$ text "\n******************* Qualifiers ****************"
+    $+$ vcat (F.toFix <$> (take 3 $ quals pgm))
+    $+$ text "..."
+    $+$ text "\n******************* Invariants ****************"
+    $+$ vcat (pp <$> (invts pgm))
     $+$ text "\n***********************************************\n"
-
--- ppEnv env = vcat [ pp id <+> text "::" <+> pp t <+> text"\n" | (id, t) <- envToList env]
 
 instance (PP r, F.Reftable r) => PP (IfaceEnv r) where
   pp γ = text "Type definitions:"  $$ nest 2 (pp γ)
@@ -812,36 +803,6 @@ eltType (IndexSig _ _  t) = t
 eltType (StatSig _ _ t)   = t
 
 
-------------------------------------------------------------------------------------------
--- | Assignability 
-------------------------------------------------------------------------------------------
-
-data Assignability 
-  = ReadOnly    -- ^ import,  cannot be modified, can appear in refinements
-  | WriteLocal  -- ^ written in local-scope, can be SSA-ed, can appear in refinements
-  | WriteGlobal -- ^ written in non-local-scope, cannot do SSA, cannot appear in refinements
-
-
--- | `writeGlobalVars p` returns symbols that have `WriteMany` status, i.e. may be 
---    re-assigned multiply in non-local scope, and hence
---    * cannot be SSA-ed
---    * cannot appear in refinements
---    * can only use a single monolithic type (declared or inferred)
- 
-writeGlobalVars   :: PP t => Nano a t -> [Id SourceSpan] 
-writeGlobalVars _ = envIds mGnty 
-  where
-  -- FIXME !!!
-    mGnty         = error "writeGlobalVars" -- glVars p  -- guarantees
-
-
--------------------------------------------------------------------------------
-definedGlobs       :: (Data r, Typeable r) => [Statement (AnnType r)] -> [Id (AnnType r)]
--------------------------------------------------------------------------------
-definedGlobs stmts = everything (++) ([] `mkQ` fromVarDecl) stmts
-  where 
-    fromVarDecl (VarDecl l x _) = [ x | VarAnn _ <- ann_fact l ]
-
 
 -- CHECK ME !!!
 --
@@ -881,6 +842,7 @@ hoistTypes                     = everythingBut (++) $ ([], False) `mkQ` f
     fSt _                      = ([ ], False)
     fExp                      :: Expression a -> ([Statement a], Bool)
     fExp _                     = ([ ], True)
+
 
 
 -- CHECK ME !!!
@@ -937,21 +899,6 @@ hoistAnns                      = everythingBut (++) $ ([], False) `mkQ` f
 --     fromVarDecl _                   = ([ ], False)
 -- 
 
-
--- | `readOnlyVars p` returns symbols that must-not be re-assigned and hence
---    * can appear in refinements
-
-readOnlyVars   :: (IsLocated a, Data a, Typeable a) => Nano a t -> [Id SourceSpan] 
-readOnlyVars p = envIds $ mAssm `envUnion` mMeas `envUnion` mExtr
-  where 
-    mMeas      = consts  p     -- measures
-    mAssm      = specs   p     -- assumes                      
-    mExtr      = externs p     -- externs
-
-instance PP Assignability where
-  pp ReadOnly    = text "ReadOnly"
-  pp WriteLocal  = text "WriteLocal"
-  pp WriteGlobal = text "WriteGlobal"
 
 
 
@@ -1129,8 +1076,9 @@ data Fact r
   | ConsAnn     !(TypeMember r)
   | UserCast    !(RType r)
   | FuncAnn     !(RType r)
-  -- Class annotation
-  | ClassAnn      !([TVar], Maybe (QName, [RType r]))
+  -- Named type annotation
+  | IfaceAnn    !(IfaceDef r)
+  | ClassAnn    !([TVar], Maybe (QName, [RType r]))
     deriving (Eq, Show, Data, Typeable, Functor)
 
 type UFact = Fact ()
@@ -1176,6 +1124,7 @@ instance Ord (Fact r) where
   compare (UserCast c1     ) (UserCast c2     )   = on compare (fmap $ const ()) c1 c2
   compare (FuncAnn t1      ) (FuncAnn t2      )   = on compare (fmap $ const ()) t1 t2
   compare (ClassAnn (_,m1) ) (ClassAnn (_,m2) )   = on compare (fst <$>) m1 m2
+  compare (IfaceAnn d1     ) (IfaceAnn d2     )   = compare (fmap (const ()) d1) (fmap (const ()) d2) 
   compare f1 f2                                   = on compare factToNum f1 f2
 
 factToNum (PhiVar _        ) = 0
@@ -1191,6 +1140,7 @@ factToNum (ConsAnn _       ) = 10
 factToNum (UserCast _      ) = 11
 factToNum (FuncAnn _       ) = 12
 factToNum (ClassAnn _      ) = 13
+factToNum (IfaceAnn _      ) = 14
 
 
 instance Eq (Annot a SourceSpan) where 
@@ -1213,6 +1163,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (MethAnn m)      = text "Method Annotation"      <+> pp m
   pp (StatAnn s)      = text "Static Annotation"      <+> pp s
   pp (ClassAnn _)     = error "UNIMPLEMENTED:pp:ClassAnn"
+  pp (IfaceAnn _)     = error "UNIMPLEMENTED:pp:IfaceAnn"
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . M.toList 

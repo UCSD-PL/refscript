@@ -67,6 +67,10 @@ verifyFile :: [FilePath] -> IO (UAnnSol a, F.FixResult Error)
 --------------------------------------------------------------------------------
 verifyFile fs = parse fs $ ssa $ tc
 
+testFile fs = do  (u,e) <- verifyFile fs
+                  print e
+                  return ()
+
 parse fs next = parseNanoFromFiles fs >>= next
 
 -- testSSA fs
@@ -77,9 +81,9 @@ parse fs next = parseNanoFromFiles fs >>= next
 --          Right s -> print $ ppshow s
 
 ssa next p  
-  = do  r <- ssaTransform $ tracePP "PARSED FILE" p 
+  = do  r <- ssaTransform $ p -- tracePP "PARSED FILE" p 
         case r of 
-          Left  l -> lerror [l] 
+          Left  l -> lerror $ tracePP "ERROR" [l] 
           Right x -> next $ expandAliases x
 
 tc p

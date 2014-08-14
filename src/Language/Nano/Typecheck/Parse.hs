@@ -113,9 +113,10 @@ extendsP = do reserved "extends"
               ts     <- option [] $ brackets $ sepBy bareTypeP comma
               return (qn, ts)
 
-qnameP   = char '#' >> QN <$> many symbolDotP <*> symbolP
-  where
-    symbolDotP = do { s <- symbolP ; char '.'; return s }
+qnameP   = do 
+    char '#' 
+    nn   <- sepBy1 symbolP (char '.')
+    return $  QN (init nn) (last nn)
 
 -- [A,B,C...]
 tParP    = angles $ sepBy tvarP comma

@@ -22,13 +22,12 @@ module Language.Nano.SSA.Types (
 
 
 import           Data.Generics                   
-
 import           Language.Nano.Typecheck.Types
-
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax 
-
 import           Text.PrettyPrint.HughesPJ 
+import           Language.Nano.Types
+
 
 ------------------------------------------------------------------------------------------
 -- | Assignability 
@@ -60,24 +59,20 @@ writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
     fromVD (VarDecl l x _) = [ x | VarAnn _ <- ann_fact l ]
 
 
--- -- | `readOnlyVars p` returns symbols that must-not be re-assigned and hence
--- --    * can appear in refinements
--- -------------------------------------------------------------------------------
--- readOnlyVars   :: (IsLocated a, Data a) => Nano a t -> [F.Symbol]
--- -------------------------------------------------------------------------------
--- readOnlyVars p@(Nano { code = Src fs }) = fdecls
---   where 
---     fdecls     = hoistReadOnly fs              
-
-
 -- | `hoistReadOnly` returns all the ReadOnly variables that are visible in the 
 --    scope of the input statements.
 -------------------------------------------------------------------------------
-hoistReadOnly                 :: Data a => [Statement a] -> [Id a]
+hoistReadOnly :: Data a => [Statement a] -> [Id a]
 -------------------------------------------------------------------------------
-hoistReadOnly                  = everythingBut (++) $ ([], False) `mkQ` f
+hoistReadOnly = everythingBut (++) myQ
   where
-    f                          = fSt `extQ` fExp 
+    myQ a     = case cast a :: (Data a => Maybe (Statement a)) of
+                  Just  s -> fSt s
+                  Nothing -> 
+                      case cast a :: (Data a => Maybe (Expression a)) of
+                        Just  s -> fExp s
+                        Nothing -> ([], False)
+
     fSt                       :: Data a => (Statement a) -> ([Id a],Bool)
     fSt (FunctionStmt _ x _ _) = ([x], True)
     fSt (FunctionDecl _ x _  ) = ([x], True)
@@ -90,12 +85,24 @@ hoistReadOnly                  = everythingBut (++) $ ([], False) `mkQ` f
 
 
 -- | `hoistVarDecls` returns all the declared variables 
+--   
+--   XXX: using extQ does not seem to work - doing the unfloding manually here.
+--
 -------------------------------------------------------------------------------
-hoistVarDecls                 :: Data a => [Statement a] -> [Id a]
+hoistVarDecls :: Data a => [Statement a] -> [Id a]
 -------------------------------------------------------------------------------
-hoistVarDecls                  = everythingBut (++) $ ([], False) `mkQ` f
+hoistVarDecls = everythingBut (++) myQ
   where
-    f                          = fSt `extQ` fExp `extQ` fVD
+    myQ a     = case cast a :: (Data a => Maybe (Statement a)) of
+                  Just  s -> fSt s
+                  Nothing -> 
+                      case cast a :: (Data a => Maybe (Expression a)) of
+                        Just  s -> fExp s
+                        Nothing -> 
+                           case cast a :: (Data a => Maybe (VarDecl a)) of
+                             Just  s -> fVD s
+                             Nothing -> ([], False)
+              
     fSt                       :: Data a => (Statement a) -> ([Id a],Bool)
     fSt (FunctionStmt _ _ _ _) = ([ ], True)
     fSt (FunctionDecl _ _ _  ) = ([ ], True)
@@ -105,7 +112,7 @@ hoistVarDecls                  = everythingBut (++) $ ([], False) `mkQ` f
     fExp                      :: Data a => Expression a -> ([Id a],Bool)
     fExp (FuncExpr _ _ _ _)    = ([ ], True)
     fExp _                     = ([ ], False)
-    fVD (VarDecl _ x _)        = ([x], True)
+    fVD (VarDecl _ x _)        = ([x], False)
 
 
 

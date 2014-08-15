@@ -12,6 +12,8 @@ module Language.Nano.Typecheck.Parse (parseNanoFromFiles) where
 
 import           Prelude                          hiding ( mapM)
 
+import           Data.Default
+import           Data.Maybe                              (listToMaybe, catMaybes)
 import           Data.Aeson                              (eitherDecode)
 import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
@@ -226,11 +228,13 @@ bbaseP
  -- <|> try (rtArr <$> arrayP)                -- Array<T>
  <|> try (TApp <$> tConP <*> bareTyArgsP)  -- #List[A], #Tree[A,B] etc...
  
+
+
 ----------------------------------------------------------------------------------
 objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
 objLitP 
-  = do m     <- option anyMutability (toType <$> mutP)
+  = do m     <- option def (toType <$> mutP)
        bs    <- braces propBindP
        return $ TCons bs m
  
@@ -311,7 +315,7 @@ indexP = xyP id colon sn
 fieldEltP = do 
     x          <- symbolP 
     _          <- colon
-    m          <- option inheritedMut (toType <$> mutP)
+    m          <- option t_inheritedMut (toType <$> mutP)
     t          <- bareTypeP
     return      $ FieldSig x m t
 
@@ -320,7 +324,7 @@ statEltP = do
     _          <- reserved "static"
     x          <- symbolP 
     _          <- colon
-    m          <- option anyMutability (toType <$> mutP)
+    m          <- option def (toType <$> mutP)
     t          <- bareTypeP
     return      $ StatSig x m t
 
@@ -328,7 +332,7 @@ statEltP = do
 methEltP = do
     x          <- symbolP 
     _          <- colon
-    m          <- option anyMutability (toType <$> mutP)
+    m          <- option def (toType <$> mutP)
     t          <- methSigP
     return      $ MethSig x m $ outT t
   where
@@ -412,20 +416,21 @@ classDeclP = do
 ---------------------------------------------------------------------------------
 
 data RawSpec
-  = RawMeas   (SourceSpan, String)   -- Measure
-  | RawBind   (SourceSpan, String)   -- Function bindings
-  | RawFunc   (SourceSpan, String)   -- Anonymouns function type
-  | RawIface  (SourceSpan, String)   -- Variable declaration annotations
-  | RawClass  (SourceSpan, String)   -- Class annots
-  | RawField  (SourceSpan, String)   -- Field annots
-  | RawMethod (SourceSpan, String)   -- Method annots
-  | RawStatic (SourceSpan, String)   -- Static annots
-  | RawConstr (SourceSpan, String)   -- Constructor annots
-  | RawTAlias (SourceSpan, String)   -- Type aliases
-  | RawPAlias (SourceSpan, String)   -- Predicate aliases
-  | RawQual   (SourceSpan, String)   -- Qualifiers
-  | RawInvt   (SourceSpan, String)   -- Invariants
-  | RawCast   (SourceSpan, String)   -- Casts
+  = RawMeas     (SourceSpan, String)   -- Measure
+  | RawBind     (SourceSpan, String)   -- Function bindings
+  | RawFunc     (SourceSpan, String)   -- Anonymouns function type
+  | RawIface    (SourceSpan, String)   -- Variable declaration annotations
+  | RawClass    (SourceSpan, String)   -- Class annots
+  | RawField    (SourceSpan, String)   -- Field annots
+  | RawMethod   (SourceSpan, String)   -- Method annots
+  | RawStatic   (SourceSpan, String)   -- Static annots
+  | RawConstr   (SourceSpan, String)   -- Constructor annots
+  | RawTAlias   (SourceSpan, String)   -- Type aliases
+  | RawPAlias   (SourceSpan, String)   -- Predicate aliases
+  | RawQual     (SourceSpan, String)   -- Qualifiers
+  | RawInvt     (SourceSpan, String)   -- Invariants
+  | RawCast     (SourceSpan, String)   -- Casts
+  | RawExported (SourceSpan, String)   -- Exported
   deriving (Show,Eq,Ord,Data,Typeable,Generic)
 
 data PSpec l r
@@ -443,60 +448,64 @@ data PSpec l r
   | Qual   Qualifier
   | Invt   l (RType r) 
   | CastSp l (RType r)
+  | Exported l
   deriving (Eq, Ord, Show, Data, Typeable)
 
 type Spec = PSpec SourceSpan Reft
 
 parseAnnot :: RawSpec -> Parser Spec
-parseAnnot (RawMeas   (ss, _)) = Meas   <$> patch2 ss <$> idBindP
-parseAnnot (RawBind   (ss, _)) = Bind   <$> patch2 ss <$> idBindP
-parseAnnot (RawFunc   (_ , _)) = AnFunc <$>               anonFuncP
-parseAnnot (RawField  (_ , _)) = Field  <$>               fieldEltP
-parseAnnot (RawMethod (_ , _)) = Method <$>               methEltP
-parseAnnot (RawStatic (_ , _)) = Static <$>               statEltP
-parseAnnot (RawConstr (_ , _)) = Constr <$>               consEltP
-parseAnnot (RawIface  (ss, _)) = Iface  <$> patch2 ss <$> iFaceP
-parseAnnot (RawClass  (ss, _)) = Class  <$> patch2 ss <$> classDeclP 
-parseAnnot (RawTAlias (ss, _)) = TAlias <$> patch2 ss <$> tAliasP
-parseAnnot (RawPAlias (ss, _)) = PAlias <$> patch2 ss <$> pAliasP
-parseAnnot (RawQual   (_ , _)) = Qual   <$>               qualifierP
-parseAnnot (RawInvt   (ss, _)) = Invt              ss <$> bareTypeP
-parseAnnot (RawCast   (ss, _)) = CastSp            ss <$> bareTypeP
+parseAnnot (RawMeas     (ss, _)) = Meas   <$> patch2 ss <$> idBindP
+parseAnnot (RawBind     (ss, _)) = Bind   <$> patch2 ss <$> idBindP
+parseAnnot (RawFunc     (_ , _)) = AnFunc <$>               anonFuncP
+parseAnnot (RawField    (_ , _)) = Field  <$>               fieldEltP
+parseAnnot (RawMethod   (_ , _)) = Method <$>               methEltP
+parseAnnot (RawStatic   (_ , _)) = Static <$>               statEltP
+parseAnnot (RawConstr   (_ , _)) = Constr <$>               consEltP
+parseAnnot (RawIface    (ss, _)) = Iface  <$> patch2 ss <$> iFaceP
+parseAnnot (RawClass    (ss, _)) = Class  <$> patch2 ss <$> classDeclP 
+parseAnnot (RawTAlias   (ss, _)) = TAlias <$> patch2 ss <$> tAliasP
+parseAnnot (RawPAlias   (ss, _)) = PAlias <$> patch2 ss <$> pAliasP
+parseAnnot (RawQual     (_ , _)) = Qual   <$>               qualifierP
+parseAnnot (RawInvt     (ss, _)) = Invt              ss <$> bareTypeP
+parseAnnot (RawCast     (ss, _)) = CastSp            ss <$> bareTypeP
+parseAnnot (RawExported (ss, _)) = return $ Exported ss
 
 
 patch2 ss (id, t)    = (fmap (const ss) id , t)
 
 getSpecString :: RawSpec -> String 
-getSpecString (RawMeas   (_, s)) = s 
-getSpecString (RawBind   (_, s)) = s 
-getSpecString (RawFunc   (_, s)) = s 
-getSpecString (RawIface  (_, s)) = s  
-getSpecString (RawField  (_, s)) = s  
-getSpecString (RawMethod (_, s)) = s  
-getSpecString (RawStatic (_, s)) = s  
-getSpecString (RawConstr (_, s)) = s  
-getSpecString (RawClass  (_, s)) = s  
-getSpecString (RawTAlias (_, s)) = s  
-getSpecString (RawPAlias (_, s)) = s  
-getSpecString (RawQual   (_, s)) = s  
-getSpecString (RawInvt   (_, s)) = s  
-getSpecString (RawCast   (_, s)) = s  
+getSpecString (RawMeas     (_, s)) = s 
+getSpecString (RawBind     (_, s)) = s 
+getSpecString (RawFunc     (_, s)) = s 
+getSpecString (RawIface    (_, s)) = s  
+getSpecString (RawField    (_, s)) = s  
+getSpecString (RawMethod   (_, s)) = s  
+getSpecString (RawStatic   (_, s)) = s  
+getSpecString (RawConstr   (_, s)) = s  
+getSpecString (RawClass    (_, s)) = s  
+getSpecString (RawTAlias   (_, s)) = s  
+getSpecString (RawPAlias   (_, s)) = s  
+getSpecString (RawQual     (_, s)) = s  
+getSpecString (RawInvt     (_, s)) = s  
+getSpecString (RawCast     (_, s)) = s  
+getSpecString (RawExported (_, s)) = s  
 
 getSpecSourceSpan :: RawSpec -> SourceSpan
-getSpecSourceSpan (RawMeas   (s,_)) = s 
-getSpecSourceSpan (RawBind   (s,_)) = s 
-getSpecSourceSpan (RawFunc   (s,_)) = s 
-getSpecSourceSpan (RawIface  (s,_)) = s  
-getSpecSourceSpan (RawField  (s,_)) = s  
-getSpecSourceSpan (RawMethod (s,_)) = s  
-getSpecSourceSpan (RawStatic (s,_)) = s  
-getSpecSourceSpan (RawConstr (s,_)) = s  
-getSpecSourceSpan (RawClass  (s,_)) = s  
-getSpecSourceSpan (RawTAlias (s,_)) = s  
-getSpecSourceSpan (RawPAlias (s,_)) = s  
-getSpecSourceSpan (RawQual   (s,_)) = s  
-getSpecSourceSpan (RawInvt   (s,_)) = s  
-getSpecSourceSpan (RawCast   (s,_)) = s  
+getSpecSourceSpan (RawMeas     (s,_)) = s 
+getSpecSourceSpan (RawBind     (s,_)) = s 
+getSpecSourceSpan (RawFunc     (s,_)) = s 
+getSpecSourceSpan (RawIface    (s,_)) = s  
+getSpecSourceSpan (RawField    (s,_)) = s  
+getSpecSourceSpan (RawMethod   (s,_)) = s  
+getSpecSourceSpan (RawStatic   (s,_)) = s  
+getSpecSourceSpan (RawConstr   (s,_)) = s  
+getSpecSourceSpan (RawClass    (s,_)) = s  
+getSpecSourceSpan (RawTAlias   (s,_)) = s  
+getSpecSourceSpan (RawPAlias   (s,_)) = s  
+getSpecSourceSpan (RawQual     (s,_)) = s  
+getSpecSourceSpan (RawInvt     (s,_)) = s  
+getSpecSourceSpan (RawCast     (s,_)) = s  
+getSpecSourceSpan (RawExported (s,_)) = s  
 
 
 instance FromJSON SourcePos where
@@ -512,7 +521,6 @@ instance FromJSON (Statement (SourceSpan, [RawSpec]))
 instance FromJSON (LValue (SourceSpan, [RawSpec]))
 instance FromJSON (JavaScript (SourceSpan, [RawSpec]))
 instance FromJSON (ClassElt (SourceSpan, [RawSpec]))
-instance FromJSON (ModuleElt (SourceSpan, [RawSpec]))
 instance FromJSON (CaseClause (SourceSpan, [RawSpec]))
 instance FromJSON (CatchClause (SourceSpan, [RawSpec]))
 instance FromJSON (ForInit (SourceSpan, [RawSpec]))
@@ -558,7 +566,8 @@ mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
 mkCode ss =  Nano {
         code          = Src (checkTopStmt <$> ss')
-      , specs         = envFromList $ concat $ FO.concatMap foo <$> ss
+      , specs         = envFromList $ getSpecs ss
+      -- , specs         = qenvFromList $ tracePP "specs" $ getSpecs ss
       , consts        = envFromList   [ t | Meas   t <- anns ] 
       , tAlias        = envFromList   [ t | TAlias t <- anns ] 
       , pAlias        = envFromList   [ t | PAlias t <- anns ] 
@@ -575,32 +584,49 @@ mkCode ss =  Nano {
                              ++ [ClassAnn t     | Class  (_,t) <- αs ]
                              ++ [IfaceAnn t     | Iface  (_,t) <- αs ]
                              ++ [UserCast t     | CastSp _ t   <- αs ]
+                             ++ [ExporedModElt  | Exported _   <- αs ]
                              ++ [FuncAnn  t     | AnFunc t     <- αs ]
     ss'               = (toBare <$>) <$> ss
     anns              = concatMap (FO.foldMap snd) ss
-    foo (l,αs)        = [ b | Bind b <- αs ]
+
+-- Meh... 
+getSpecs :: [Statement (SourceSpan, [Spec])] -> [(Id SourceSpan, RefType)]
+getSpecs ss = rename <$> zip [ b | s <- ss, (_, z) <- FO.toList s, Bind b <- z] [0..]
+  where
+    rename ((Id l s,t), i) = (Id l (s ++ "_" ++ show i), t)
 
 
--- -- | At the moment we only support a single index signature with no other
--- --   elements, or (normally) bound types without index signature.
--- processInterface (t, ID n x vs p elts)
---   | nTi == 0  || (nTi == 1 && nTe == 0 && nTn == 0) 
---   -- Replace the 'this' binding in every method element with the type of the interface
---   = (t, ID n x vs p (f <$> elts))
 -- 
---   | otherwise = error   $ "[UNIMPLEMENTED] Object types " ++ 
---                           "can only have a single indexable " ++
---                           "signature and no other elements."
---   where 
---     nTn                 = length [ () | IndexSig _ False _ <- elts ]
---     nTi                 = length [ () | IndexSig _ _ _     <- elts ]
---     nTe                 = length [ () | FieldSig _ _ _     <- elts ]
+-- -- SLOW SLOW SLOW
+--
+-- -------------------------------------------------------------------------------
+-- getSpecs :: [Statement (SourceSpan, [Spec])] -> [(SourceSpan, QName, RefType)]
+-- -------------------------------------------------------------------------------
+-- getSpecs ss = catMaybes $ specType <$> everythingWithContext [] (++) (myQ (\s -> ([],s))) ss
+--   where
 -- 
---     tvs v               = TVar v fTop
---     tClass              = TApp (TRef $ QN [] $ symbol x) (tvs <$> vs) fTop
---     f m@(MethSig _ _ _) = setThisBinding m tClass
---     f m                 = m
+--     specType :: (SourceSpan, QName, [Spec]) -> Maybe (SourceSpan, QName, RefType)
+--     specType (l,q,s) = listToMaybe [ (l,q,t) | Bind (_,t) <- s ]
 -- 
+--     myQ f a = maybe f fSt  (cast a :: (Data a => Maybe (Statement a)))
+-- 
+-- --     myQ f a = maybe 
+-- --                 (maybe f fExp (cast a :: (Data a => Maybe (Expression a)))) 
+-- --                          fSt  (cast a :: (Data a => Maybe (Statement a)))
+-- 
+--     fSt :: Statement (SourceSpan, [Spec]) -> [Symbol] -> ([(SourceSpan, QName, [Spec])], [Symbol])
+--     fSt (FunctionStmt l x _ _) s = ([(fst l, QN s (symbol x), snd l)], s)
+--     fSt (FunctionDecl _ x _  ) s = ([ ], s ++ [symbol x])
+--     fSt (ClassStmt _ x _ _ _ ) s = ([ ], s ++ [symbol x])
+--     fSt (ModuleStmt _ x _    ) s = ([ ], s ++ [symbol x])
+--     fSt _                      s = ([ ], s)
+-- 
+-- --     fExp :: Expression (SourceSpan, [Spec]) -> [Symbol] -> ([(SourceSpan, QName, [Spec])], [Symbol])
+-- --     fExp (FuncExpr _ _ _ _)    s = ([ ], s)
+-- --     fExp _                     s = ([ ], s)
+
+
+
 
 type PState = Integer
 
@@ -634,8 +660,6 @@ parse ss st c = foo c
 
 instance PP (RawSpec) where
   pp = text . getSpecString
-
-
 
 
 -- --------------------------------------------------------------------------------

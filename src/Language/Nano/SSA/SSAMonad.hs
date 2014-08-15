@@ -39,7 +39,7 @@ module Language.Nano.SSA.SSAMonad (
 
 import           Control.Applicative                ((<$>))
 import           Control.Monad.State                
-import           Control.Monad.Error hiding (Error)
+import           Control.Monad.Trans.Except
 
 import           Data.Maybe                         (fromMaybe) 
 import qualified Data.HashMap.Strict as M 
@@ -50,7 +50,6 @@ import           Language.Nano.Env
 import           Language.Nano.Types                
 import           Language.Nano.SSA.Types
 import           Language.Nano.Typecheck.Types
-import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Fixpoint.Errors
@@ -58,7 +57,7 @@ import           Language.Fixpoint.Misc
 
 -- import           Debug.Trace                        (trace)
 
-type SSAM r     = ErrorT Error (State (SsaState r))
+type SSAM r     = ExceptT Error (State (SsaState r))
 
 data SsaState r = SsaST { assign      :: Env Assignability        -- ^ assignability status 
                         -- names to be deprecated
@@ -161,20 +160,20 @@ getMeas   = ssa_meas <$> get
 -------------------------------------------------------------------------------------
 ssaError :: Error -> SSAM r a
 -------------------------------------------------------------------------------------
-ssaError = throwError
+ssaError = throwE
 
 
 -------------------------------------------------------------------------------------
 execute         :: SSAM r a -> Either Error a 
 -------------------------------------------------------------------------------------
 execute act 
-  = case runState (runErrorT act) initState of 
+  = case runState (runExceptT act) initState of 
       (Left err, _) -> Left err
       (Right x, _)  -> Right x
 
 -- Try the action @act@ in the current state. 
 -- The state will be intact in the end. Just the result will be returned
-tryAction act = get >>= return . runState (runErrorT act)
+tryAction act = get >>= return . runState (runExceptT act)
 
 initState :: SsaState r
 initState = SsaST envEmpty envEmpty 0 M.empty S.empty S.empty 

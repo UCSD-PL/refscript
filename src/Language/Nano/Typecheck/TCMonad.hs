@@ -67,16 +67,14 @@ import           Data.Function                      (on)
 import           Data.Generics
 import           Data.Maybe                         (catMaybes)
 import           Control.Monad.State
-import           Control.Monad.Error                hiding (Error)
+import           Control.Monad.Trans.Except
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
 import qualified Language.Fixpoint.Types            as F
 
-import           Language.Nano.Env
 import           Language.Nano.Types
 import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Types
-import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.Unify
@@ -109,7 +107,7 @@ data TCState r = TCS {
   , tc_this     :: ![RType r]                     -- This stack: if empty, assume top
   }
 
-type TCM r     = ErrorT Error (State (TCState r))
+type TCM r     = ExceptT Error (State (TCState r))
 
 -------------------------------------------------------------------------------
 whenLoud :: TCM r () -> TCM r ()
@@ -181,7 +179,7 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ)
 -------------------------------------------------------------------------------
 tcError     :: Error -> TCM r a
 -------------------------------------------------------------------------------
-tcError err = throwError $ catMessage err "TC-ERROR "
+tcError err = throwE $ catMessage err "TC-ERROR "
 
 
 -------------------------------------------------------------------------------
@@ -237,14 +235,14 @@ addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) }
 execute ::  PPR r => V.Verbosity -> NanoSSAR r -> TCM r a -> Either [Error] a
 -------------------------------------------------------------------------------
 execute verb pgm act 
-  = case runState (runErrorT act) $ initState verb pgm of 
+  = case runState (runExceptT act) $ initState verb pgm of 
       (Left err, _) -> Left [err]
       (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errors st)
 
 -------------------------------------------------------------------------------
 initState :: PPR r => V.Verbosity -> NanoSSAR r -> TCState r
 -------------------------------------------------------------------------------
-initState verb pgm = TCS tc_errors tc_subst tc_cnt tc_anns 
+initState verb _ = TCS tc_errors tc_subst tc_cnt tc_anns 
                           -- tc_specs tc_defs tc_exts tc_class 
                           tc_verb tc_this
   where
@@ -259,14 +257,6 @@ initState verb pgm = TCS tc_errors tc_subst tc_cnt tc_anns
 --     tc_defs  = envEmpty
 --     tc_class = envFromList [ (s, ClassStmt l s e i b) | let Src ss = code pgm
 --                                                       , ClassStmt l s e i b <- ss ]
-
-
--- getSpecOrDie f = tc_specs <$> get >>= maybe e return . envFindTy f
---   where e = tcError $ errorMissingSpec (srcPos f) f
--- 
--- getSpecM f = tc_specs <$> get >>= return . envFindTy f
--- 
--- addSpec x t = modify $ \st -> st { tc_specs = envAdds [(x,t)] (tc_specs st) } 
 
 
 --------------------------------------------------------------------------
@@ -333,7 +323,7 @@ castM γ e t1 t2
 --------------------------------------------------------------------------------
 runFailM :: PPR r => TCM r a -> TCM r (Either Error a)
 --------------------------------------------------------------------------------
-runFailM a = fst . runState (runErrorT a) <$> get
+runFailM a = fst . runState (runExceptT a) <$> get
 
 
 --------------------------------------------------------------------------------

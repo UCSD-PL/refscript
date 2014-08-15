@@ -22,7 +22,6 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types                 as F
 import           Language.Nano.Env
 import           Language.Nano.Errors
--- import           Language.Nano.Misc
 import           Language.Nano.SSA.Types
 import           Language.Nano.SSA.SSAMonad
 import           Language.Nano.Typecheck.Types
@@ -46,15 +45,15 @@ ssaNano :: Data r => NanoBareR r -> SSAM r (NanoSSAR r)
 ssaNano p@(Nano { code = Src fs })
   = do setGlobs $ allGlobs
        setMeas  $ S.fromList $ F.symbol <$> envIds (consts p)
-       withAssignability ReadOnly ros $ 
-         withAssignability WriteLocal wls $ 
-           withAssignability WriteGlobal wgs $ do 
-              (_,fs')  <- ssaStmts $ msrc fs
-              ssaAnns  <- getAnns
-              return    $ p {code = Src $ map (fmap (patch [ssaAnns, typeAnns])) fs' }
+       withAssignability ReadOnly ros         $ 
+         withAssignability WriteLocal wls     $ 
+           withAssignability WriteGlobal wgs  $ 
+            do  (_,fs')  <- ssaStmts $ msrc fs
+                ssaAnns  <- getAnns
+                return    $ p {code = Src $ map (fmap (patch [ssaAnns, typeAnns])) $ tracePP "fs" fs' }
     where
       allGlobs        = S.fromList  $ getAnnotation  <$> fmap ann <$> writeGlobalVars fs
-      (ros, wgs, wls) = tracePP "global (ros,wgs,wls)" $ variablesInScope allGlobs fs
+      (ros, wgs, wls) = tracePP "global (ro,g,l)" $ variablesInScope "global" allGlobs fs
       msrc            = (fmap srcPos <$>)
 
       typeAnns        = M.fromList $ concatMap
@@ -64,12 +63,13 @@ ssaNano p@(Nano { code = Src fs })
 
 
 ---------------------------------------------------------------------------------------
-variablesInScope :: (Data a, IsLocated a) => S.HashSet SourceSpan -> [Statement a] 
-                 -> ([Id SourceSpan], [Id SourceSpan], [Id SourceSpan])
+-- variablesInScope :: (Data a, IsLocated a) => S.HashSet SourceSpan -> [Statement a] 
+--                  -> ([Id SourceSpan], [Id SourceSpan], [Id SourceSpan])
 ---------------------------------------------------------------------------------------
-variablesInScope gs fs = (ros, wgs, wls)
+variablesInScope n gs fs = (ros, wgs, wls)
   where
-    vs            = tracePP ("all hoisted vars on " ++ ppshow fs) $ hoistVarDecls fs
+    vs            = tracePP ("all hoisted vars: " ++ ppshow n) $ hoistVarDecls fs
+    -- vs            = hoistVarDecls fs
     (wgs, wls)    = mapPair msrc $ L.partition (\s -> srcPos s `S.member` gs) vs 
     ros           = msrc $ hoistReadOnly fs
     msrc          = (fmap srcPos <$>)
@@ -79,12 +79,11 @@ ssaFun :: PP t => SourceSpan -> t -> [Var] -> [Statement SourceSpan] -> SSAM r [
 -------------------------------------------------------------------------------------
 ssaFun l fn xs body
   = do  θ <- getSsaEnv
-        (ros, wgs, wls) <- (\g -> tracePP (ppshow fn ++ " (ros,wgs,wls)") $ variablesInScope g body) <$> getGlobs
-        withAssignability ReadOnly (envIds θ) $                   -- Variables from OUTER scope are UNASSIGNABLE
-          withAssignability ReadOnly ros $ 
-            withAssignability WriteGlobal wgs $ 
-              withAssignability WriteLocal wls $ 
-
+        (ros, wgs, wls) <- tracePP (ppshow fn ++ " (ro,g,l)") <$> (\g -> variablesInScope fn g body) <$> getGlobs
+        withAssignability ReadOnly (envIds θ)   $                 -- Variables from OUTER scope are UNASSIGNABLE
+          withAssignability ReadOnly ros        $ 
+            withAssignability WriteGlobal wgs   $ 
+              withAssignability WriteLocal wls  $ 
             do  setSsaEnv    $ extSsaEnv ((returnId l) : xs) θ    -- Extend SsaEnv with formal binders
                 (_, body')   <- ssaStmts body                     -- Transform function
                 setSsaEnv θ                                       -- Restore Outer SsaEnv
@@ -246,13 +245,32 @@ ssaStmt (SwitchStmt l e xs)
       headWithDefault _ xs = head xs
 
 -- class A extends B implements I,J,... { ... }
+--
+--  FIXME: fix env here.
+--
 ssaStmt (ClassStmt l n e is bd) = do
   bd' <- mapM ssaClassElt bd
   return (True, ClassStmt l n e is bd')
 
+--
+--  FIXME: fix env here.
+--
+ssaStmt (ModuleStmt l n body)
+  = do  θ <- getSsaEnv
+        (ros, wgs, wls) <- (\g -> tracePP (ppshow n ++ " (ro,g,l)") $ variablesInScope n g $ body) <$> getGlobs
+        withAssignability ReadOnly (envIds θ)   $           -- Variables from OUTER scope are UNASSIGNABLE
+          withAssignability ReadOnly ros        $ 
+            withAssignability WriteGlobal wgs   $ 
+              withAssignability WriteLocal wls  $ 
+            do  (_, body')   <- ssaStmts body               -- Transform function
+                setSsaEnv θ                                 -- Restore Outer SsaEnv
+                return        $ (True, ModuleStmt l n body')
+
 -- OTHER (Not handled)
 ssaStmt s
   = convertError "ssaStmt" s
+
+
 
 ssaAsgnStmt l1 l2 x@(Id l3 v) x' e' 
   | x == x'   = ExprStmt l1    (AssignExpr l2 OpAssign (LVar l3 v) e')

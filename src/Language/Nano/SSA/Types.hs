@@ -26,7 +26,6 @@ import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax 
 import           Text.PrettyPrint.HughesPJ 
-import           Language.Nano.Types
 
 
 ------------------------------------------------------------------------------------------

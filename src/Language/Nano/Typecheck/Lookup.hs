@@ -14,17 +14,13 @@ module Language.Nano.Typecheck.Lookup (
   ) where 
 
 import           Data.Generics
-import           Data.Maybe (listToMaybe, maybeToList)
+import           Data.Maybe (listToMaybe)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
-import           Language.Nano.Types
-import           Language.Nano.Errors 
 import           Language.Nano.Env
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
-import qualified Language.Nano.Typecheck.Subst as S
 import           Control.Applicative ((<$>))
 
 -- import           Debug.Trace
@@ -47,7 +43,7 @@ getProp γ s t@(TClass c    ) = do d     <- resolveIface γ c
                                   return $ (t,p)
 getProp γ s t@(TModule m   ) = do γ'    <- resolveModuleEnv γ m
                                   (t,) <$> envFindTy s (get_env γ')
-getProp _ _ t                = Nothing
+getProp _ _ _                = Nothing
 
 
 -------------------------------------------------------------------------------
@@ -97,13 +93,14 @@ getElt γ  s t                = fromCons <$> flattenType γ t
 
 
 -------------------------------------------------------------------------------
-getCallable :: PPRD r => IfaceEnv r -> RType r -> [RType r]
+getCallable :: (EnvLike r g, PPRD r) => g r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
-getCallable γ t             = uncurry mkAll <$> foo [] t
+getCallable _ t             = uncurry mkAll <$> foo [] t
   where
     foo αs t@(TFun _ _ _)   = [(αs, t)]
     foo αs   (TAnd ts)      = concatMap (foo αs) ts 
     foo αs   (TAll α t)     = foo (αs ++ [α]) t
+    foo _  _                = []
 -- FIXME !!!
 --     foo αs   (TApp (TRef s) _ _ )
 --                             = case resolveIface γ s of 

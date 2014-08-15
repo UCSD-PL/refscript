@@ -12,17 +12,18 @@ import Data.List                (delete, nub)
 import Data.Maybe               (fromMaybe)
 
 
-nanoQualifiers         :: NanoRefType -> [Qualifier]
-nanoQualifiers p       = quals p ++ nanoQualifiers' p
+nanoQualifiers   :: NanoRefType -> [Qualifier]
+nanoQualifiers p  = quals p ++ nanoQualifiers' p
 
-nanoQualifiers'        :: NanoRefType -> [Qualifier]
-nanoQualifiers' p      = concatMap (refTypeQualifiers γ0) $ envToList $ specs p
+nanoQualifiers'  :: NanoRefType -> [Qualifier]
+nanoQualifiers' p = concatMap (refTypeQualifiers γ0) $ envToList env
   where
-    γ0                 = envSEnv $ envMap rTypeSort $ specs p
+    γ0            = envSEnv $ envMap rTypeSort env
+    env           = {- qenvToEnv $ -} specs p
 
 refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t 
   where
-    addQs γ t qs            = mkQuals l γ t ++ qs
+    addQs γ t qs  = mkQuals l γ t ++ qs
 
 -- extractTypes :: Fact Reft -> [RefType]
 -- extractTypes  = everythingBut (++) $ ([], False) `mkQ` f
@@ -34,7 +35,7 @@ refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t
 --     ff _           = ([],False)
 
 
-mkQuals l γ t      = [ mkQual l γ v so pa | let (RR so (Reft (v, ras))) = rTypeSortedReft t 
+mkQuals l γ t     = [ mkQual l γ v so pa | let (RR so (Reft (v, ras))) = rTypeSortedReft t 
                                           , RConc p                    <- ras                 
                                           , pa                         <- atoms p
                      ]

@@ -2,14 +2,17 @@
 
 {-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DeriveFoldable       #-}
+{-# LANGUAGE DeriveTraversable    #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
 {-# LANGUAGE TupleSections        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
 
 module Language.Nano.Env (
-    Env
-  , Var 
+    Env -- , QEnv
+  , Var, QName(..), NameSpacePath, AbsolutePath 
 
   , envFromList 
   , envToList
@@ -30,11 +33,19 @@ module Language.Nano.Env (
   , envEmpty
   , envSEnv
   , envIds
+
+--   , qenvFromList
+--   , qenvToEnv
+--   , qenvEmpty
   ) where 
 
 import           Data.Maybe             (isJust)
-import           Data.Hashable          ()
+import           Data.Hashable          
 import           Data.Monoid            (Monoid (..))
+-- import qualified Data.HashMap.Strict as M
+-- import qualified Data.Foldable       as FO
+-- import           Data.Traversable
+import           Data.Data
 import qualified Data.List               as L
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
@@ -48,11 +59,38 @@ import           Control.Applicative
 import           Control.Exception (throw)
 
 --------------------------------------------------------------------------
--- | Environments
+-- | Environment Definitions
 --------------------------------------------------------------------------
 
 type Env t      = F.SEnv (Located t) 
+
+-- newtype QEnv t  = QE { qe_binds :: M.HashMap AbsolutePath (Located t) } 
+--     deriving (Eq, Data, Typeable, Generic, Functor)
+
+type NameSpacePath = [F.Symbol]
+type AbsolutePath  = NameSpacePath
+
+data QName = QN { nsp :: NameSpacePath, bare_name :: F.Symbol }
+    deriving (Eq, Ord, Show, Data, Typeable)
+
+instance PP QName where
+  pp (QN ms s) = pp ms <> dot <> pp s
+
+instance F.Symbolic QName where
+  symbol = F.symbol . ppshow 
+
+instance PP NameSpacePath where
+  pp ns = intersperse dot $ map pp ns
+
+instance Hashable QName where
+  hashWithSalt i (QN n s) = hashWithSalt i (s:n)
+
 type Var        = Id SourceSpan 
+
+
+--------------------------------------------------------------------------------
+-- | Env API  
+--------------------------------------------------------------------------------
 
 envIds          = map fst . envToList
 envEmpty        = F.emptySEnv
@@ -107,16 +145,39 @@ isRight (Right _) = True
 isRight (_)       = False
 isLeft            = not . isRight
 
+
+-- --------------------------------------------------------------------------------
+-- -- | QEnv API  
+-- --------------------------------------------------------------------------------
+-- 
+-- qenvFromList :: IsLocated a => [(a, QName, t)] -> QEnv t
+-- qenvFromList     = L.foldl' step qenvEmpty
+--   where 
+--     step γ (l, i, t) = case qenvFindLoc i γ of
+--                       Nothing -> qenvAdd l i t γ 
+--                       Just l' -> throw $ errorDuplicate i (srcPos l) l'
+-- 
+-- 
+-- qenvEmpty        = QE M.empty
+-- qenvFindLoc i γ  = fmap loc $ qenvFind i γ 
+-- qenvFind (QN p s) (QE γ) = M.lookup (p ++ [s]) γ 
+-- 
+-- qenvAdd l (QN p s) t (QE γ) = QE (M.insert (p ++ [s]) (Loc (srcPos l) t) γ)
+-- 
+-- qenvToEnv (QE γ) = envFromList [ (Id l (show x),t) | (x, Loc l t) <- M.toList γ]
+
+
 --------------------------------------------------------------------------------
--- Monoid Instance -------------------------------------------------------------
+-- | Monoid Instance
 --------------------------------------------------------------------------------
 
 instance Monoid (Env t) where
   mempty  = envEmpty
   mappend = envUnion 
 
+
 --------------------------------------------------------------------------------
--- Printing Instance -----------------------------------------------------------
+-- | Printing Instance 
 --------------------------------------------------------------------------------
 
 instance PP t => PP (Env t) where

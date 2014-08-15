@@ -19,6 +19,7 @@ module M {
 
 module N {
 
+   /*@ a :: number */
    var a = 2;
  
    function foo () {

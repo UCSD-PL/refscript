@@ -99,7 +99,7 @@ convertObj l γ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
   --        [μ]{ [μi]fi:ti } <: [μ]{ [μi]fi:ti }
   --
   | s1l == s2l
-  = if isSubtypeMut γ μ1 μ2 then 
+  = if isSubtype γ μ1 μ2 then 
       if deeps l γ μ1 μ2 b1s b2s then  
         Right CDUp
       else 
@@ -221,8 +221,8 @@ subElt _ γ _ _ (CallSig t1) (CallSig t2)
 -- NO :   { readonly f: PosInt  } <: { readonly  f: int }
 --
 subElt _ γ μ1 μ2 (FieldSig _ μf1 t1) (FieldSig _ μf2 t2)
-  | isSubtypeMut γ m1 m2 =
-      if isImmutable m2 then
+  | isSubtype γ m1 m2 =
+      if isSubtype γ m2 t_immut then
         -- 
         --               t <: t'
         -- ------------------------------------------
@@ -240,8 +240,10 @@ subElt _ γ μ1 μ2 (FieldSig _ μf1 t1) (FieldSig _ μf2 t2)
 
   | otherwise = False 
   where
-    m1 = combMut μ1 μf1
-    m2 = combMut μ2 μf2
+    t_immut = t_Immutable $ get_common_ts γ
+    -- FIXME
+    m1      = undefined -- combMut μ1 μf1
+    m2      = undefined -- combMut μ2 μf2
 
 -- | Methods
 -- 
@@ -269,13 +271,17 @@ subElt _ γ _ _ (IndexSig _ b1 t1) (IndexSig _ b2 t2)
 -- | Static fields
 --
 subElt _ γ μ1 μ2 (StatSig _ μf1 t1) (StatSig _ μf2 t2)
-  | isSubtypeMut γ m1 m2 =
-      if isImmutable m2 then isSubtype γ t1 t2
-                        else and [ isSubtype γ t2 t1, isSubtype γ t1 t2 ]
-  | otherwise = False 
+  | isSubtype γ m1 m2 && isSubtype γ m2 t_immut 
+  = isSubtype γ t1 t2
+  | isSubtype γ m1 m2                        
+  = and [ isSubtype γ t2 t1, isSubtype γ t1 t2 ]
+  | otherwise                                   
+  = False 
   where
-    m1 = combMut μ1 μf1
-    m2 = combMut μ2 μf2
+    t_immut = t_Immutable $ get_common_ts γ
+    -- FIXME 
+    m1      = undefined -- combMut μ1 μf1
+    m2      = undefined -- combMut μ2 μf2
 
 -- | otherwise fail
 subElt _ _ _ _ _ _ = False
@@ -381,13 +387,6 @@ safeExtends l γ (ID _ c _ (Just (p, ts)) es) =
                                       , let t2 = eltType pe
                                       , not (isSubtype γ t1 t2) ]
 safeExtends _ _ (ID _ _ _ Nothing _)  = []
-
-
-isSubtypeMut γ μ1 μ2 
-  | isAnyMut μ1 || isAnyMut μ2 = True
-  | otherwise                     
-  = isSubtype γ (ofType μ1) (ofType μ2)
-                    
 
 
 -- | Related types ( ~~ ) 

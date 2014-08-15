@@ -30,16 +30,15 @@ Tests / Benchmarks
 JS Features
 -----------
 
-  - METHODS:
-    - typescript/pos/objects/meth-00.js
-
-  - Do we need dead code cast?
-
 
 Tool/Implementation
 -------------------
   
-  - Parsing exceptions are not captured by regrtest.py
+  - What are good default mutabilities (parsing etc.)?
+
+  - TApp (TRef ...) ... is now prefixed with a '#' to disambiguate from TVar.
+
+  - Parsing exceptions are not captured by regrtest.py.
 
   - Do co/contra-variant checks depending on mutability.
 

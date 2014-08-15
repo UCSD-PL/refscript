@@ -48,6 +48,7 @@ Executable rsc
                   , cmdargs
                   , liquid-fixpoint
                   , parsec
+                  , transformers
                   , language-ecmascript-pp
                   , RefScript
 
@@ -88,6 +89,7 @@ Library
                   , cmdargs
                   , liquid-fixpoint
                   , parsec
+                  , transformers
                   , language-ecmascript-pp
 
 --   extensions:       ExistentialQuantification, 

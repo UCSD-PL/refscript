@@ -16,12 +16,11 @@ module Language.Nano.Typecheck.Resolve (
   , weaken, ancestors
 
   -- * Constructors
-  , Constructor, toConstructor, {- isConstSubtype, -} sameTypeof, getTypeof
+  , Constructor, {- toConstructor, isConstSubtype, -} sameTypeof, getTypeof
 
   ) where 
 
 import           Data.Generics
-import           Data.Default
 import           Control.Monad
 import           Data.Function                  (on)
 import           Language.ECMAScript3.PrettyPrint
@@ -138,30 +137,26 @@ flatten'' :: (Data r, PPR r, EnvLike r g)
 flatten'' st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten st γ (d, tVar <$> vs)
 
 
-
+-- | `flattenType` will flatten *any* type (including Mutability types!)
+--    It is not intended to be called with mutability types.
+--    Types with zero type parameters (missing mutability field) are considered
+--    invalid.
 ---------------------------------------------------------------------------
 flattenType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
-flattenType γ t@(TApp (TRef x) ts r) = do 
+flattenType γ (TApp (TRef x) ts r) = do 
     d                 <- resolveIface γ x
     es                <- flatten False γ (d, ts)
-         
-    return             $ TCons es mut r
-  where 
-    -- Be careful with the mutability classes themselves
-    -- Do not set this to another mutability type, or you'll
-    -- end up with infinite recursion
-    mut                | isMutabilityType t = tTop
-                       | otherwise          = nonEmpty def toType ts
-                       -- FIXME there should always be a head element
-    nonEmpty d _ []    = d
-    nonEmpty _ f (a:_) = f a
+    case ts of 
+      mut : _         -> Just $ TCons es (toType mut) r
+      _               -> Nothing
 
 flattenType γ (TClass x)             = do
     d                 <- resolveIface γ x
     es                <- flatten' True γ d
-    return             $ TCons es anyMutability fTop
-  where 
+    return             $ TCons es mut fTop
+  where
+    mut                = toType $ t_ReadOnly $ get_common_ts γ 
 
 flattenType _ t = Just t
 
@@ -170,7 +165,7 @@ flattenType _ t = Just t
 --   function does the necessary type argument substitutions. 
 --
 -- FIXME: Works for classes, but interfaces could have multiple ancestors.
--- FIXME: What about common elements in parent class?
+--        What about common elements in parent class?
 ---------------------------------------------------------------------------
 weaken :: (Data r, PPR r, EnvLike r g) 
        => g r -> QName -> QName -> [RType r] -> Maybe (SIfaceDef r)
@@ -202,21 +197,24 @@ ancestors γ s =
 
 type Constructor = Type 
 
-funcConstr                            :: Constructor
-funcConstr                             = TApp (TRef (QN [] (F.symbol "Function"))) [] ()
 
-objectConstr                          :: Constructor
-objectConstr                           = TApp (TRef (QN [] (F.symbol "Object"))) [] ()
+-- FIXME: Use common_ts
 
--- Primitive types don't have constructor
-toConstructor                         :: RType r -> Maybe Constructor
-toConstructor  (TApp (TRef  x) _ _)    = Just $ TApp (TRef  x) [] ()
-toConstructor  (TClass _)              = Just $ funcConstr
-toConstructor  (TModule _)             = Just $ objectConstr
-toConstructor  (TFun _ _ _ )           = Just $ funcConstr
-toConstructor  (TCons _ _ _)           = Just $ objectConstr
-toConstructor  (TAnd _)                = Just $ funcConstr 
-toConstructor  _                       = Nothing
+-- funcConstr                            :: Constructor
+-- funcConstr                             = TApp (TRef (QN [] (F.symbol "Function"))) [] ()
+-- 
+-- objectConstr                          :: Constructor
+-- objectConstr                           = TApp (TRef (QN [] (F.symbol "Object"))) [] ()
+-- 
+-- -- Primitive types don't have constructor
+-- toConstructor                         :: RType r -> Maybe Constructor
+-- toConstructor  (TApp (TRef  x) _ _)    = Just $ TApp (TRef  x) [] ()
+-- toConstructor  (TClass _)              = Just $ funcConstr
+-- toConstructor  (TModule _)             = Just $ objectConstr
+-- toConstructor  (TFun _ _ _ )           = Just $ funcConstr
+-- toConstructor  (TCons _ _ _)           = Just $ objectConstr
+-- toConstructor  (TAnd _)                = Just $ funcConstr 
+-- toConstructor  _                       = Nothing
 
 instance F.Symbolic Constructor where
   symbol (TApp (TRef (QN _ x)) _ _)    = x

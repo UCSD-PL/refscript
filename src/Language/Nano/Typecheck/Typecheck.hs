@@ -173,20 +173,6 @@ initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
 initGlobalEnv (Nano { code = Src ss }) = initModuleEnv Nothing Nothing ss
 
--- -------------------------------------------------------------------------------
--- initEnv      :: Data r
---              => Maybe (TCEnv r) -> Maybe F.Symbol -> [Statement (AnnSSA r)] -> TCEnv r
--- -------------------------------------------------------------------------------
--- initEnv γ n s = TCE env iface mod ctx nspace parent
---   where
---     env       = populateFuncs s
---     iface     = maybe envEmpty tce_iface γ    -- TODO: add names in scope
---     mod       = maybe envEmpty tce_mod γ      -- TODO: add modules in scope
---     ctx       = emptyContext
---     nspace    = maybe [] tce_nspace γ ++ maybeToList n
---     parent    = γ
-
-
 initFuncEnv γ f i αs xs ts t s = TCE env iface mod ctx nspace parent
   where
     tyBinds   = [(tVarId α, tVar α) | α <- αs]
@@ -222,24 +208,19 @@ initModuleEnv γo n s = TCE env iface mod ctx nspace parent
   where
     iface     = populateTypes s
     env       = envEmpty
-    mod       = populateModules s
+    mod       = envEmpty -- These shall be populated as we go
     ctx       = emptyContext
     nspace    = maybe [] tce_nspace γo ++ maybeToList n
     parent    = γo
 
 
-
----------------------------------------------------------------------------------------
-populateModules :: Data r => [Statement (AnnSSA r)] -> Env (TCEnv r)
----------------------------------------------------------------------------------------
-populateModules s = envEmpty
-
 ---------------------------------------------------------------------------------------
 populateFuncs :: Data r => [Statement (AnnSSA r)] -> Env (RType r)
 ---------------------------------------------------------------------------------------
-populateFuncs s = envFromList [ (n,t) | (n,ls) <- funcDecls, VarAnn t <- ls ]
-  where
-    funcDecls = hoistFuncDecls $ fmap ann_fact <$> s
+populateFuncs s = envFromList [ (n,t) | (n, Ann _ f) <- hoistFuncDecls s, VarAnn t <- f ]
+
+instance IsLocated (Id (AnnSSA r)) where
+  srcPos (Id a _) = srcPos a
 
 
 ---------------------------------------------------------------------------------------
@@ -257,33 +238,24 @@ resolveType :: PPR r => Statement (AnnSSA r) -> [(F.Symbol, IfaceDef r)]
 ---------------------------------------------------------------------------------------
 resolveType  (ClassStmt l id _ _ cs)
   = case [ t | ClassAnn t <- ann_fact l ] of
-      [(vs, h)] -> [(s, ID True (fmap ann id) vs h (resolveMembers (tc vs) cs))]
+      [(vs, h)] -> [(s, ID True (fmap ann id) vs h (rMem (tc vs) cs))]
       _         -> []
   where
     s         = F.symbol id
     x         = QN [] s
     tc vs     = TApp (TRef x) ((`TVar` fTop) <$> vs) fTop
 
--- TODO 
+    rMem      = concatMap . resolveMemberType
+
 resolveType (IfaceStmt l)
-  = case [ t | IfaceAnn t <- ann_fact l ] of
-    _ -> []
+  = [ (F.symbol n, d) | IfaceAnn d@(ID _ n _ _ _) <- ann_fact l ]
 
 resolveType _ = [] 
 
 
--- ---------------------------------------------------------------------------------------
--- resolveMembers :: (Data r, PPR r) => TCEnv r -> SourceSpan -> RType r -> F.Symbol -> 
---                   Heritage r -> [ClassElt (AnnSSA r)] -> TCM r [TypeMember r]
--- ---------------------------------------------------------------------------------------
--- resolveMembers γ l t s h cs = 
---     patchConstructor γ l s h es 
---   where 
---     es = concatMap (resolveMemberType t) cs
-
-resolveMembers t cs = concatMap (resolveMemberType t) cs
 
 
+-- XXX: No constructor is added if missing
 ---------------------------------------------------------------------------------------
 resolveMemberType :: PPR r => RType r -> ClassElt (AnnSSA r) -> [TypeMember r]
 ---------------------------------------------------------------------------------------
@@ -319,10 +291,6 @@ resolveMemberType t (MemberMethDecl l static _ _ _ )
 --     tVoid :: PPR r => RType r
 --     tVoid = TApp TVoid [] fTop
 --     tt vs ts = apply (fromList $ zip vs ts)
-
-
-
-
 
 
 
@@ -475,9 +443,9 @@ tcSeq f             = go []
 tcStmts :: PPRSF r => 
   TCEnv r -> [Statement (AnnSSA r)] -> TCM r ([Statement (AnnSSA r)], TCEnvO r)
 --------------------------------------------------------------------------------
-tcStmts = undefined -- tcSeq tcStmt 
+tcStmts = tcSeq tcStmt 
 
--- THIS IS DONE ALREADY
+-- THIS IS DONE ALREADY - it shouldn't be done here anyway ...
 -- addStatementFunBinds γ stmts 
 --   = do fts   <- forM fns $ \f -> (f,) <$> getSpecOrDie f
 --        return $ tcEnvAdds fts γ
@@ -590,6 +558,18 @@ tcStmt γ c@(ClassStmt l i e is ce)
   where
     tVars   αs    = [ tVar   α | α <- αs ] 
     tyBinds αs    = [(tVarId α, tVar α) | α <- αs]
+
+
+-- * For each statement, check to see if it's exported and register it with 
+--   the environment.
+--
+--
+tcStmt γ m@(ModuleStmt l n body) 
+  = do  (body', γo) <- tcStmts γ' body
+        return $ (ModuleStmt l n body', γo)
+
+  where
+    γ' = initModuleEnv (Just γ) (Just $ F.symbol n) body 
 
 -- OTHER (Not handled)
 tcStmt _ s 

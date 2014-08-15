@@ -254,7 +254,8 @@ instance IsNano (Statement a) where
   isNano (ThrowStmt _ e)          = isNano e
   isNano (FunctionDecl _ _ _)     = True
   isNano (IfaceStmt _)            = True
-  isNano e                        = errortext (text "Not Nano Statement!" <+> pp e)
+  isNano (ModuleStmt _ _ s)       = all isNano s
+  isNano e                        = errortext (text "Not Nano Statement:" $$ pp e)
 
 instance IsNano (ClassElt a) where
   isNano (Constructor _ _ ss)        = all isNano ss

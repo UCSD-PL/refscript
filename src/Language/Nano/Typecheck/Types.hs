@@ -40,16 +40,16 @@ module Language.Nano.Typecheck.Types (
   , renameBinds
 
   -- * Regular Types
-  , NameSpacePath, AbsolutePath, QName (..), Heritage
-  , Type, IfaceDef (..), SIfaceDef, TVar (..), TCon (..), TypeMember (..)
+  , Heritage, Type, IfaceDef (..), SIfaceDef, TVar (..), TCon (..), TypeMember (..)
 
   -- * Mutability
-  , Mutability, mutable, immutable, anyMutability, inheritedMut, combMut
-  , isMutable, isImmutable, isAnyMut, isMutabilityType, variance, varianceTDef
+  , Mutability, t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly
+  -- , combMut, isMutable, isImmutable, isAnyMut, isMutabilityType, variance, varianceTDef
 
   -- * Primitive Types
-  , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tArr, rtArr, tUndef, tNull
-  , tAnd, isTVar, isArr, isTObj, isConstr, isTFun, fTop, orNull
+  , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
+  , tAnd, isTVar, isTObj, isConstr, isTFun, fTop, orNull
+  -- , isArr , tArr, rtArr
 
   -- * Print Types
   , ppArgs
@@ -62,8 +62,8 @@ module Language.Nano.Typecheck.Types (
   -- * Environments
   , TCEnv (..), TCEnvO, EnvLike (..)
 
-  -- Namespaces
-  -- , NameSpaceMove, NameSpaceStep (..)
+  -- * Common Types
+  , CommonTypes(..)
 
   -- * Type definition env
   , IfaceEnv {-, tDefEmpty, tDefFromList, tDefToList -} 
@@ -132,12 +132,6 @@ import           Control.Applicative            hiding (empty)
 ---------------------------------------------------------------------------------
 -- | RefScript Types
 ---------------------------------------------------------------------------------
-
-type NameSpacePath = [F.Symbol]
-type AbsolutePath  = NameSpacePath
-
-data QName = QN { nsp :: NameSpacePath, bare_name :: F.Symbol }
-    deriving (Eq, Ord, Show, Data, Typeable)
 
 
 -- | Type Variables
@@ -262,18 +256,20 @@ type TCEnvO r = Maybe (TCEnv r)
 
 
 class EnvLike r t where
-  get_env     :: t r -> Env (RType r)
-  get_iface   :: t r -> Env (IfaceDef r) 
-  get_mod     :: t r -> Env (t r)
-  get_nspace  :: t r -> NameSpacePath
-  get_parent  :: t r -> Maybe (t r)
+  get_env         :: t r -> Env (RType r)
+  get_iface       :: t r -> Env (IfaceDef r) 
+  get_mod         :: t r -> Env (t r)
+  get_nspace      :: t r -> NameSpacePath
+  get_parent      :: t r -> Maybe (t r)
+  get_common_ts   :: t r -> CommonTypes r
 
 instance EnvLike r TCEnv where
-  get_env     = tce_env
-  get_iface   = tce_iface
-  get_mod     = tce_mod
-  get_nspace  = tce_nspace
-  get_parent  = tce_parent
+  get_env         = tce_env
+  get_iface       = tce_iface
+  get_mod         = tce_mod
+  get_nspace      = tce_nspace
+  get_parent      = tce_parent
+  get_common_ts   = undefined -- TODO !!!!
 
 
 
@@ -306,51 +302,62 @@ mapIfaceDefsM f (ID c n αs Nothing es) =
 
 type Mutability = Type 
 
-validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable", "AnyMutability"]
 
-mkMut :: String -> Mutability
+data CommonTypes r = CommonTypes {
+                    t_ReadOnly       :: RType r
+                  , t_Immutable      :: RType r
+                  , t_Mutable        :: RType r
+                  , t_AnyMutability  :: RType r
+                  , t_InheritedMut   :: RType r
+              }
+
+-- validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable", "AnyMutability"]
+
 mkMut s = TApp (TRef $ QN [] (F.symbol s)) [] ()
 
 instance Default Mutability where
   def = mkMut "Mutable"
 
-mutable       = mkMut "Mutable"
-immutable     = mkMut "Immutable"
-anyMutability = mkMut "AnyMutability"
--- readOnly      = mkMut "ReadOnly"
-inheritedMut  = mkMut "InheritedMut"
+t_mutable       = mkMut "Mutable"
+t_immutable     = mkMut "Immutable"
+t_anyMutability = mkMut "AnyMutability"
+t_readOnly      = mkMut "ReadOnly"
+t_inheritedMut  = mkMut "InheritedMut"
 
 
-isMutabilityType (TApp (TRef (QN [] s)) _ _) = s `elem` validMutNames
-isMutabilityType _                           = False
+-- isMutabilityType (TApp (TRef (QN [] s)) _ _) = s `elem` validMutNames
+-- isMutabilityType _                           = False
+-- 
+-- isMutable        (TApp (TRef (QN [] s)) _ _) = s == F.symbol "Mutable"
+-- isMutable _                                  = False
+-- 
+-- isImmutable      (TApp (TRef (QN [] s)) _ _) = s == F.symbol "Immutable"
+-- isImmutable _                                = False
+-- 
+-- isAnyMut         (TApp (TRef (QN [] s)) _ _) = s == F.symbol "AnyMutability"
+-- isAnyMut _                                   = False
+-- 
+-- isReadOnly       (TApp (TRef (QN [] s)) _ _) = s == F.symbol "ReadOnly"
+-- isReadOnly _                                 = False
+-- 
+-- isInheritedMut   (TApp (TRef (QN [] s)) _ _) = s == F.symbol "InheritedMut"
+-- isInheritedMut _                             = False
 
-isMutable        (TApp (TRef (QN [] s)) _ _) = s == F.symbol "Mutable"
-isMutable _                                  = False
-
-isImmutable      (TApp (TRef (QN [] s)) _ _) = s == F.symbol "Immutable"
-isImmutable _                                = False
-
-isAnyMut         (TApp (TRef (QN [] s)) _ _) = s == F.symbol "AnyMutability"
-isAnyMut _                                   = False
-
-isReadOnly       (TApp (TRef (QN [] s)) _ _) = s == F.symbol "ReadOnly"
-isReadOnly _                                 = False
-
-isInheritedMut   (TApp (TRef (QN [] s)) _ _) = s == F.symbol "InheritedMut"
-isInheritedMut _                             = False
-
-combMut _ μf | isMutable μf                 = μf
-combMut μ _  | otherwise                    = μ
+-- 
+-- Is this not the common ancestor ?
+--
+-- combMut _ μf | isMutable μf                 = μf
+-- combMut μ _  | otherwise                    = μ
 
 -- | Variance: true if v is in a positive position in t
 --
 -- FIXME: implement these
 --
-variance :: TVar -> RType r -> Bool
-variance _ _  = True
+-- variance :: TVar -> RType r -> Bool
+-- variance _ _  = True
 
-varianceTDef :: IfaceDef r -> [Bool]
-varianceTDef (ID _ _ vs _ _) = take (length vs) $ repeat True
+-- varianceTDef :: IfaceDef r -> [Bool]
+-- varianceTDef (ID _ _ vs _ _) = take (length vs) $ repeat True
 
 
 -- | "pure" top-refinement
@@ -639,7 +646,7 @@ remThisBinding t =
 
 
 ---------------------------------------------------------------------------------
--- | Nano Program = Code + Types for all function binders
+-- | Nano Program 
 ---------------------------------------------------------------------------------
 
 -- | Liquid types environment
@@ -657,7 +664,9 @@ data Nano a r       = Nano {
                     -- ^ Code to check
                       code   :: !(Source a)               
                     -- ^ Annotations (keeping this to scrape qualifiers later)
+                    -- ^ XXX: The names are bogus !!!
                     , specs  :: !(Env (RType r))
+                    -- , specs  :: !(QEnv (RType r))
                     -- ^ Measure Signatures
                     , consts :: !(Env (RType r))          
                     -- ^ Type aliases
@@ -732,31 +741,25 @@ instance (PP r, F.Reftable r) => PP (IfaceDef r) where
     <+> text "extends" <+> pp p <+> pp ps
     <+> braces (intersperse semi $ map pp ts)
 
-instance PP QName where
-  pp (QN ms s) = pp ms <> dot <> pp s
-
-instance PP NameSpacePath where
-  pp ns = intersperse dot $ map pp ns
-
 
 instance (PP r, F.Reftable r) => PP (TypeMember r) where
   pp (CallSig t)          =  text "call" <+> pp t 
   pp (ConsSig t)          =  text "new" <+> pp t
   pp (IndexSig x True t)  =  brackets (pp x <> text ": string") <> text ":" <+> pp t
   pp (IndexSig x False t) =  brackets (pp x <> text ": number") <> text ":" <+> pp t
-  pp (FieldSig x m t)     =  text "field"  <+> ppMut m <+> pp x <> text ":" <+> pp t 
-  pp (MethSig x m t)      =  text "method" <+> ppMut m <+> pp x <> text ":" <+> pp t
-  pp (StatSig x m t)      =  text "static" <+> ppMut m <+> pp x <> text ":" <+> pp t
+  pp (FieldSig x _ t)     =  text "field"  {- <+> ppMut m -} <+> pp x <> text ":" <+> pp t 
+  pp (MethSig x _ t)      =  text "method" {- <+> ppMut m -} <+> pp x <> text ":" <+> pp t
+  pp (StatSig x _ t)      =  text "static" {- <+> ppMut m -} <+> pp x <> text ":" <+> pp t
 
 
-ppMut t | isMutable t      = brackets $ pp "mut"
-        | isAnyMut t       =            pp ""
-        | isInheritedMut t =            pp ""
-        | isReadOnly t     = brackets $ pp "ro"
-        | isImmutable t    = brackets $ pp "imm"
-        | isTVar t         = brackets $ pp t
-        | isTop t          =            pp "top"    -- FIXME: this should go ...
-        | otherwise        = error    $ "ppMut: case not covered: " ++ ppshow t
+-- ppMut t | isMutable t      = brackets $ pp "mut"
+--         | isAnyMut t       =            pp ""
+--         | isInheritedMut t =            pp ""
+--         | isReadOnly t     = brackets $ pp "ro"
+--         | isImmutable t    = brackets $ pp "imm"
+--         | isTVar t         = brackets $ pp t
+--         | isTop t          =            pp "top"    -- FIXME: this should go ...
+--         | otherwise        = error    $ "ppMut: case not covered: " ++ ppshow t
    
 
 instance F.Symbolic (TypeMember t) where
@@ -804,50 +807,58 @@ eltType (StatSig _ _ t)   = t
 
 
 
--- CHECK ME !!!
---
---
--- | Find all function definitions/declarations whose scope is hoisted to 
---   the current scope. E.g. declarations in the If-branch of a conditional 
---   expression. Note how declarations do not escape module or function 
---   blocks (isolation).
+-- | Find all function definitions/declarations whose scope reaches the current 
+--   scope. E.g. declarations in the If-branch of a conditional expression. 
+--   Note how declarations do not escape module or function blocks.
 -------------------------------------------------------------------------------
-hoistFuncDecls                :: Data a => [Statement a] -> [(F.Symbol, a)]
+hoistFuncDecls :: Data a => [Statement a] -> [(Id a,a)]
 -------------------------------------------------------------------------------
-hoistFuncDecls                 = everythingBut (++) $ ([], False) `mkQ` f
+hoistFuncDecls = everythingBut (++) myQ
   where
-    f                          = fSt `extQ` fExp 
-    fSt (FunctionStmt l n _ _) = ([(F.symbol n,l)], True)
-    fSt (FunctionDecl l n _  ) = ([(F.symbol n,l)], True)
-    fSt (ClassStmt {})         = ([ ], True)
-    fSt (ModuleStmt {})        = ([ ], True)
-    fSt _                      = ([ ], False)
-    fExp                      :: Expression t -> ([(F.Symbol, t)], Bool)
-    fExp (FuncExpr {})         = ([ ], True)
-    fExp _                     = ([ ], False)
+    myQ a     = case cast a :: (Data a => Maybe (Statement a)) of
+                  Just  s -> fSt s
+                  Nothing -> 
+                      case cast a :: (Data a => Maybe (Expression a)) of
+                        Just  s -> fExp s
+                        Nothing -> ([], False)
+
+    fSt :: Data a => (Statement a) -> ([(Id a,a)],Bool)
+    fSt (FunctionStmt l n _ _) = ([(n,l)], True)
+    fSt (FunctionDecl l n _  ) = ([(n,l)], True)
+    fSt (ClassStmt {})         = ([], True)
+    fSt (ModuleStmt {})        = ([], True)
+    fSt _                      = ([], False)
+
+    fExp :: Expression a -> ([(Id a, a)], Bool)
+    fExp (FuncExpr {})         = ([], True)
+    fExp _                     = ([], False)
+
 
 
 -- | Find classes / interfaces in scope
 -------------------------------------------------------------------------------
-hoistTypes                    :: Data a => [Statement a] -> [Statement a]
+hoistTypes :: Data a => [Statement a] -> [Statement a]
 -------------------------------------------------------------------------------
-hoistTypes                     = everythingBut (++) $ ([], False) `mkQ` f
+hoistTypes = everythingBut (++) myQ
   where
-    f                          = fSt `extQ` fExp 
-    fSt (FunctionStmt l n _ _) = ([ ], True)
-    fSt (FunctionDecl l n _  ) = ([ ], True)
+    myQ a     = case cast a :: (Data a => Maybe (Statement a)) of
+                  Just  s -> fSt s
+                  Nothing -> 
+                      case cast a :: (Data a => Maybe (Expression a)) of
+                        Just  s -> fExp s
+                        Nothing -> ([], False)
+
+    fSt (FunctionStmt _ _ _ _) = ([ ], True)
+    fSt (FunctionDecl _ _ _  ) = ([ ], True)
     fSt s@(ClassStmt {})       = ([s], True)
     fSt s@(IfaceStmt {})       = ([s], True)
     fSt (ModuleStmt {})        = ([ ], True)
     fSt _                      = ([ ], False)
-    fExp                      :: Expression a -> ([Statement a], Bool)
+    fExp :: Expression a -> ([Statement a], Bool)
     fExp _                     = ([ ], True)
 
 
 
--- CHECK ME !!!
---
---
 -- | Find all function definitions/declarations whose scope is hoisted to 
 --   the current scope. E.g. declarations in the If-branch of a conditional 
 --   expression. Note how declarations do not escape module or function 
@@ -866,38 +877,6 @@ hoistAnns                      = everythingBut (++) $ ([], False) `mkQ` f
     fExp                      :: Expression t -> ([t], Bool)
     fExp (FuncExpr l _ _ _)    = ([l], True)
     fExp e                     = ([getAnnotation e], False)
-
-
-
-
--- -- CHECK ME !!!
--- --
--- --
--- -- | Find all function definitions/declarations whose scope is hoisted to 
--- --   the current scope. E.g. declarations in the If-branch of a conditional 
--- --   expression. Note how declarations do not escape module or function 
--- --   blocks (isolation).
--- -------------------------------------------------------------------------------
--- hoistedGlobs :: (Data a, Typeable a, Typeable r) => [Statement a] -> [(Id (AnnType r), RType r)]
--- -------------------------------------------------------------------------------
--- hoistedGlobs stmts = everythingBut (++) (([], False) `mkQ` f) stmts
---   where
---     f                               = fSt `extQ` fExp 
---     fSt                        :: Statement (AnnType r) -> ([(Id (AnnType r), RType r)], Bool)
---     fSt (FunctionStmt l n _ _) = ([ ], True)
---     fSt (FunctionDecl l n _  ) = ([ ], True)
---     fSt (ClassStmt {})         = ([ ], True)
---     fSt (ModuleStmt {})        = ([ ], True)
---     fSt _                      = ([ ], False)
--- 
---     fExp                         :: Expression (AnnType r) -> ([(Id (AnnType r), RType r)], Bool)
---     fExp (FuncExpr {})           = ([ ], True)
---     fExp _                       = ([ ], False)
--- 
---     fromVarDecl                     :: VarDecl (AnnType r) -> ([(Id (AnnType r), RType r)], Bool)
---     fromVarDecl (VarDecl l x _)     = ([(x, t) | VarAnn t <- ann_fact l ], True)
---     fromVarDecl _                   = ([ ], False)
--- 
 
 
 
@@ -934,8 +913,8 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TApp d@(TRef _ ) ts r)  = F.ppTy r $ pp d <> ppArgs brackets comma ts 
   pp (TApp c [] r)            = F.ppTy r $ pp c 
   pp (TApp c ts r)            = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
-  pp (TCons bs m r)           | length bs < 5 
-                              = F.ppTy r $ ppMut m <> braces (intersperse semi $ map pp bs)
+  pp (TCons bs _ r)           | length bs < 5 
+                              = F.ppTy r $ {- ppMut m <> -} braces (intersperse semi $ map pp bs)
                               | otherwise
                               = F.ppTy r $ lbrace $+$ nest 2 (vcat $ map pp bs) $+$ rbrace
   pp (TModule s  )            = text "module" <+> pp s
@@ -967,9 +946,6 @@ instance Hashable TCon where
   hashWithSalt s TUndef       = hashWithSalt s (7 :: Int)
   hashWithSalt s TFPBool      = hashWithSalt s (8 :: Int)
   hashWithSalt s (TRef z)     = hashWithSalt s (10:: Int) + hashWithSalt s z
-
-instance Hashable QName where
-  hashWithSalt s (QN ms n)    = hashWithSalt s ms + hashWithSalt s n
 
 instance (PP r, F.Reftable r) => PP (Bind r) where 
   pp (B x t)          = pp x <> colon <> pp t 
@@ -1079,6 +1055,7 @@ data Fact r
   -- Named type annotation
   | IfaceAnn    !(IfaceDef r)
   | ClassAnn    !([TVar], Maybe (QName, [RType r]))
+  | ExporedModElt
     deriving (Eq, Show, Data, Typeable, Functor)
 
 type UFact = Fact ()
@@ -1095,6 +1072,8 @@ type UAnnSSA  = AnnSSA  ()
 type UAnnType = AnnType ()
 type UAnnInfo = AnnInfo ()
 
+instance IsLocated (AnnSSA r) where
+  srcPos = ann 
 
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 
@@ -1125,6 +1104,7 @@ instance Ord (Fact r) where
   compare (FuncAnn t1      ) (FuncAnn t2      )   = on compare (fmap $ const ()) t1 t2
   compare (ClassAnn (_,m1) ) (ClassAnn (_,m2) )   = on compare (fst <$>) m1 m2
   compare (IfaceAnn d1     ) (IfaceAnn d2     )   = compare (fmap (const ()) d1) (fmap (const ()) d2) 
+  compare ExporedModElt      ExporedModElt        = EQ
   compare f1 f2                                   = on compare factToNum f1 f2
 
 factToNum (PhiVar _        ) = 0
@@ -1141,6 +1121,7 @@ factToNum (UserCast _      ) = 11
 factToNum (FuncAnn _       ) = 12
 factToNum (ClassAnn _      ) = 13
 factToNum (IfaceAnn _      ) = 14
+factToNum (ExporedModElt   ) = 15
 
 
 instance Eq (Annot a SourceSpan) where 
@@ -1158,6 +1139,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (VarAnn t)       = text "Var Annotation"         <+> pp t
   pp (ConsAnn c)      = text "Constructor Annotation" <+> pp c
   pp (UserCast c)     = text "Cast Annotation"        <+> pp c
+  pp (ExporedModElt)  = text "Exported"
   pp (FuncAnn t)      = text "Func Annotation"        <+> pp t
   pp (FieldAnn f)     = text "Field Annotation"       <+> pp f
   pp (MethAnn m)      = text "Method Annotation"      <+> pp m
@@ -1200,11 +1182,14 @@ tAnd ts                     = case ts of
                                 [t] -> t
                                 _   -> TAnd ts
 
-tArr _                      = rtArr fTop
-rtArr t                     = TApp (TRef $ QN [] (F.symbol "Array")) [t] 
+-- FIXME !!!!
+--    Get this throug get_common_ts
+--
+-- tArr _                      = rtArr fTop
+-- rtArr t                     = TApp (TRef $ QN [] (F.symbol "Array")) [t] 
 
-isArr (TApp (TRef (QN [] s)) _ _) | s == F.symbol "Array" = True
-isArr _                           = False
+-- isArr (TApp (TRef (QN [] s)) _ _) | s == F.symbol "Array" = True
+-- isArr _                           = False
 
 isTFun (TFun _ _ _)         = True
 isTFun (TAnd ts)            = all isTFun ts

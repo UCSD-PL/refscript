@@ -104,6 +104,8 @@ instance Free (Fact r) where
   free (FuncAnn c)          = free c
   free (ClassAnn (vs,m))    = foldr S.delete (free m) vs
   free (UserCast t)         = free t
+  free (IfaceAnn _)         = S.empty
+  free (ExporedModElt)      = S.empty
 
 instance Free (TypeMember r) where
   free (FieldSig _ m t)     = free m `mappend` free t
@@ -167,6 +169,7 @@ instance F.Reftable r => Substitutable r (Fact r) where
   apply θ (FuncAnn t)       = FuncAnn       $ apply θ t
   apply θ (ClassAnn (c, t)) = ClassAnn      $ (c, apply θ t)
   apply θ (UserCast t)      = UserCast      $ apply θ t
+  apply _ a                 = a
 
 instance Substitutable r a => Substitutable r (Maybe a) where
   apply θ (Just a)          = Just $ apply θ a

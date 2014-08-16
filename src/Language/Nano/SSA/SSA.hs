@@ -14,18 +14,25 @@ import qualified Data.Foldable                           as FO
 import qualified Data.HashMap.Strict                     as M
 import qualified Data.HashSet as S
 import           Data.Typeable                           ()
+
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
+
 import qualified Language.Fixpoint.Errors                as E
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types                 as F
+
+import           Language.Nano.Annots
 import           Language.Nano.Env
 import           Language.Nano.Errors
+import           Language.Nano.Locations
+import           Language.Nano.Program
 import           Language.Nano.SSA.Types
 import           Language.Nano.SSA.SSAMonad
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
+
 import           Debug.Trace                        hiding (traceShow)
 
 

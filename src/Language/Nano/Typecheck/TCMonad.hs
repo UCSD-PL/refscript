@@ -61,27 +61,34 @@ module Language.Nano.Typecheck.TCMonad (
 
   )  where 
 
-import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative                ((<$>), (<*>))
-import           Data.Function                      (on)
-import           Data.Generics
-import           Data.Maybe                         (catMaybes)
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
+import           Data.Function                      (on)
+import           Data.Generics
+import qualified Data.HashMap.Strict                as M
+import           Data.Maybe                         (catMaybes)
+import           Data.Monoid                  
+
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
 import qualified Language.Fixpoint.Types            as F
 
-import           Language.Nano.Types
+import           Language.Nano.Annots
+import           Language.Nano.Locations
+import           Language.Nano.Env
 import           Language.Nano.Misc
+import           Language.Nano.Program
+import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
-import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Sub
+import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Errors
-import           Data.Monoid                  
-import qualified Data.HashMap.Strict                as M
+
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.PrettyPrint
 
 -- import           Debug.Trace                      (trace)
 import qualified System.Console.CmdArgs.Verbosity   as V

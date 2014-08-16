@@ -36,12 +36,16 @@ import           Control.Applicative                     ((<$>), ( <*>))
 import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Misc                  (mapEither, mapSnd)
-import           Language.Nano.Types
+
+import           Language.Nano.Annots
 import           Language.Nano.Errors
-import           Language.Nano.Typecheck.Types
-import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
 import           Language.Nano.Files
+import           Language.Nano.Locations
+import           Language.Nano.Program
+import           Language.Nano.Types
+import           Language.Nano.Typecheck.Types
+import           Language.Nano.Liquid.Types
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint

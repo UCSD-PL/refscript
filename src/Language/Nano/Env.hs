@@ -11,9 +11,15 @@
 {-# LANGUAGE OverlappingInstances #-}
 
 module Language.Nano.Env (
+  -- * Env definitions
     Env, QEnv
   , Var, QName(..), NameSpacePath, AbsolutePath 
 
+  -- * Deconstructing Id
+  , idName, idLoc 
+  , returnId
+  
+  -- * Env API
   , envFromList 
   , envToList
   , envAdd, envAdds 
@@ -49,7 +55,7 @@ import           Data.Data
 import qualified Data.List               as L
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
-import           Language.Nano.Types
+import           Language.Nano.Locations
 import           Language.Nano.Errors
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
@@ -75,12 +81,6 @@ data QName = QN { q_ss    :: SourceSpan
                 , q_name  :: F.Symbol }
     deriving (Eq, Ord, Show, Data, Typeable)
 
-instance PP QName where
-  pp (QN _ [] s) = pp s
-  pp (QN _ ms s) = pp ms <> dot <> pp s
-
-instance PP NameSpacePath where
-  pp = hcat . punctuate dot . map pp
 
 instance Hashable QName where
   hashWithSalt i (QN _ n s) = hashWithSalt i (s:n)
@@ -91,6 +91,59 @@ instance IsLocated QName where
 qnameList (QN _ n s) = n ++ [s]
 
 type Var        = Id SourceSpan 
+
+instance F.Symbolic   (Id a) where
+  symbol (Id _ x)   = F.symbol x 
+
+instance Hashable a => Hashable (Id a) where 
+  hashWithSalt i x = hashWithSalt i (idLoc x, idName x)
+
+idName (Id _ x) = x
+idLoc  (Id l _) = l
+
+instance F.Fixpoint String where
+  toFix = text 
+
+
+--------------------------------------------------------------------------------
+-- | Printing
+--------------------------------------------------------------------------------
+
+instance PP F.Symbol where 
+  pp = pprint
+
+instance PP QName where
+  pp (QN _ [] s) = pp s
+  pp (QN _ ms s) = pp ms <> dot <> pp s
+
+instance PP NameSpacePath where
+  pp = hcat . punctuate dot . map pp
+
+instance (Ord a, F.Fixpoint a) => PP (F.FixResult a) where
+  pp = F.resultDoc
+
+instance PP F.Pred where 
+  pp = pprint
+
+instance PP (Id a) where
+  pp (Id _ x) = text x
+
+instance PP a => PP (Located a) where
+  pp x = pp (val x) <+> text "at:" <+> pp (loc x)
+
+
+
+returnName :: String
+returnName = "$result"
+
+symbolId :: (IsLocated l, F.Symbolic x) => l -> x -> Id l
+symbolId l x = Id l $ F.symbolString $ F.symbol x
+
+returnId   :: a -> Id a
+returnId x = Id x returnName 
+
+returnSymbol :: F.Symbol
+returnSymbol = F.symbol returnName
 
 
 --------------------------------------------------------------------------------

@@ -22,6 +22,7 @@ module Language.Nano.SSA.Types (
 
 
 import           Data.Generics                   
+import           Language.Nano.Annots
 import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax 

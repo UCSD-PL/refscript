@@ -26,12 +26,16 @@ import           Data.Generics
 
 import           Text.PrettyPrint.HughesPJ          (text, ($+$))
 
+import           Language.Nano.Annots
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
+import           Language.Nano.Locations
+import           Language.Nano.Program
 import           Language.Nano.Types
-import           Language.Nano.Annots
 import           Language.Nano.Env
 import qualified Language.Nano.Misc                 as NM
+import           Language.Nano.SystemUtils
+import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Parse 
@@ -133,7 +137,7 @@ tcNano p@(Nano {code = Src fs})
   = do  -- setDef         $ defs p
         -- CHECK TO BE DONE ON THE SPOT
         -- checkInterfaces p
-        (fs', _)       <- tcStmts γ $ trace ("env " ++ ppshow γ) fs
+        (fs', _)       <- tcStmts γ $ trace (ppshow γ) fs
         m              <- getAnns 
         θ              <- getSubst
         let p1          = p {code = (patchAnn m . apply θ) <$> Src fs' }
@@ -169,7 +173,7 @@ initGlobalEnv (Nano { code = Src ss }) -- = initModuleEnv Nothing Nothing ss
     = TCE env types mod ctx nspace
   where
     env       = envEmpty
-    types     = registerAllTypes ss
+    types     = undefined -- registerAllTypes ss
     mod       = registerAllModules ss 
     ctx       = emptyContext
     nspace    = []
@@ -180,7 +184,7 @@ initFuncEnv γ f i αs xs ts t s = TCE env iface mod ctx nspace -- parent
     tyBinds   = [(tVarId α, tVar α) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) ts
     env       = envAddReturn f t $ envAdds (tyBinds ++ varBinds) $ populateFuncs s
-    iface     = qenvEmpty 
+    iface     = envEmpty 
     mod       = qenvEmpty
     ctx       = pushContext i (tce_ctx γ) 
     nspace    = tce_nspace γ
@@ -208,7 +212,7 @@ initModuleEnv :: PPR r => TCEnvO r -> Maybe F.Symbol -> [Statement (AnnSSA r)] -
 ---------------------------------------------------------------------------------------
 initModuleEnv γo n s = TCE env iface mod ctx nspace -- parent 
   where
-    iface     = populateTypes s
+    iface     = undefined -- populateTypes s
     env       = envEmpty
     mod       = qenvEmpty -- These shall be populated as we go
     ctx       = emptyContext
@@ -293,11 +297,11 @@ registerAllModules               = qenvFromList . catMaybes . map mkMod . collec
     mkMod (ns, ModuleStmt l n m) = Just (QN (ann l) ns (F.symbol n), fStmts m)
     mkMod _                      = Nothing
 
-    fStmts    ss                 = tracePP "after fStmts" $ concatMap fStmt $ filter isExported ss
+    fStmts    ss                 = concatMap fStmt $ filter isExported ss
     -- An exported variable needs to have a type annotation    
     fStmt (VarDeclStmt l vds)    = [ ModVar   (fmap ann x) t | VarDecl l x _ <- vds, VarAnn t <- ann_fact l ]
     fStmt (FunctionStmt l x _ _) = [ ModVar   (fmap ann x) t |                       VarAnn t <- ann_fact l ]
-    fStmt c@(ClassStmt {})       = [ ModClass           x  t | (x, t) <- maybeToList $ tracePP "resolved type" <$> resolveType c ]
+    fStmt c@(ClassStmt {})       = [ ModClass           x  t | (x, t) <- maybeToList $ resolveType c ]
     fStmt c@(ModuleStmt l x ss)  = [ ModModule (fmap ann x) ]
     fStmt _                      = [ ] 
 

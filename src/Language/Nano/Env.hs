@@ -11,7 +11,7 @@
 {-# LANGUAGE OverlappingInstances #-}
 
 module Language.Nano.Env (
-    Env -- , QEnv
+    Env, QEnv
   , Var, QName(..), NameSpacePath, AbsolutePath 
 
   , envFromList 
@@ -34,15 +34,15 @@ module Language.Nano.Env (
   , envSEnv
   , envIds
 
---   , qenvFromList
---   , qenvToEnv
---   , qenvEmpty
+  , qenvFromList
+  , qenvToEnv
+  , qenvEmpty
   ) where 
 
 import           Data.Maybe             (isJust)
 import           Data.Hashable          
 import           Data.Monoid            (Monoid (..))
--- import qualified Data.HashMap.Strict as M
+import qualified Data.HashMap.Strict as M
 -- import qualified Data.Foldable       as FO
 -- import           Data.Traversable
 import           Data.Data
@@ -64,26 +64,31 @@ import           Control.Exception (throw)
 
 type Env t      = F.SEnv (Located t) 
 
--- newtype QEnv t  = QE { qe_binds :: M.HashMap AbsolutePath (Located t) } 
---     deriving (Eq, Data, Typeable, Generic, Functor)
+newtype QEnv t  = QE { qe_binds :: M.HashMap QName (Located t) } 
+    deriving (Eq, Data, Typeable, Functor)
 
 type NameSpacePath = [F.Symbol]
 type AbsolutePath  = NameSpacePath
 
-data QName = QN { nsp :: NameSpacePath, bare_name :: F.Symbol }
+data QName = QN { q_ss    :: SourceSpan
+                , q_path  :: NameSpacePath
+                , q_name  :: F.Symbol }
     deriving (Eq, Ord, Show, Data, Typeable)
 
 instance PP QName where
-  pp (QN ms s) = pp ms <> dot <> pp s
-
-instance F.Symbolic QName where
-  symbol = F.symbol . ppshow 
+  pp (QN _ [] s) = pp s
+  pp (QN _ ms s) = pp ms <> dot <> pp s
 
 instance PP NameSpacePath where
-  pp ns = intersperse dot $ map pp ns
+  pp = hcat . punctuate dot . map pp
 
 instance Hashable QName where
-  hashWithSalt i (QN n s) = hashWithSalt i (s:n)
+  hashWithSalt i (QN _ n s) = hashWithSalt i (s:n)
+
+instance IsLocated QName where
+  srcPos (QN s _ _) = s
+
+qnameList (QN _ n s) = n ++ [s]
 
 type Var        = Id SourceSpan 
 
@@ -110,61 +115,62 @@ envFindReturn   = maybe msg val . F.lookupSEnv returnSymbol
   where 
     msg = errorstar "bad call to envFindReturn"
 
-envSEnv         :: Env a -> F.SEnv a
-envSEnv         = F.fromListSEnv . map (mapFst F.symbol) . envToList
+envSEnv           :: Env a -> F.SEnv a
+envSEnv            = F.fromListSEnv . map (mapFst F.symbol) . envToList
 
 envFromList       :: (PP x, IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
-envFromList       = L.foldl' step envEmpty
+envFromList        = L.foldl' step envEmpty
   where 
-    step γ (i, t) = case envFindLoc i γ of
-                      Nothing -> envAdd i t γ 
-                      Just l' -> throw $ errorDuplicate i (srcPos i) l'
+    step γ (i, t)  = case envFindLoc i γ of
+                       Nothing -> envAdd i t γ 
+                       Just l' -> throw $ errorDuplicate i (srcPos i) l'
 
-envIntersectWith :: (a -> b -> c) -> Env a -> Env b -> Env c
+envIntersectWith  :: (a -> b -> c) -> Env a -> Env b -> Env c
 envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))
 
 -- | Favors the bindings in the second environment
-envUnion :: Env a -> Env a -> Env a
-envUnion = envAdds . envToList
+envUnion          :: Env a -> Env a -> Env a
+envUnion           = envAdds . envToList
 
-envUnionList    = go envEmpty 
+envUnionList       = go envEmpty 
   where
-    go acc (y:ys) = go (envUnion acc y) ys
-    go acc []     = acc
+    go acc (y:ys)  = go (envUnion acc y) ys
+    go acc []      = acc
 
-envRights :: Env (Either a b) -> Env b
-envRights = envMap (\(Right z) -> z) . envFilter isRight
+envRights         :: Env (Either a b) -> Env b
+envRights          = envMap (\(Right z) -> z) . envFilter isRight
 
-envLefts :: Env (Either a b) -> Env a
-envLefts = envMap (\(Left z) -> z) . envFilter isLeft
+envLefts          :: Env (Either a b) -> Env a
+envLefts           = envMap (\(Left z) -> z) . envFilter isLeft
 
-envDiff :: Env a -> Env b -> Env a
-envDiff m1 m2 = envFromList [(x, t) | (x, t) <- envToList m1, not (x `envMem` m2)] 
+envDiff           :: Env a -> Env b -> Env a
+envDiff m1 m2      = envFromList [(x, t) | (x, t) <- envToList m1, not (x `envMem` m2)] 
 
-isRight (Right _) = True
-isRight (_)       = False
-isLeft            = not . isRight
+isRight (Right _)  = True
+isRight (_)        = False
+isLeft             = not . isRight
 
 
--- --------------------------------------------------------------------------------
--- -- | QEnv API  
--- --------------------------------------------------------------------------------
--- 
--- qenvFromList :: IsLocated a => [(a, QName, t)] -> QEnv t
--- qenvFromList     = L.foldl' step qenvEmpty
---   where 
---     step γ (l, i, t) = case qenvFindLoc i γ of
---                       Nothing -> qenvAdd l i t γ 
---                       Just l' -> throw $ errorDuplicate i (srcPos l) l'
--- 
--- 
--- qenvEmpty        = QE M.empty
--- qenvFindLoc i γ  = fmap loc $ qenvFind i γ 
--- qenvFind (QN p s) (QE γ) = M.lookup (p ++ [s]) γ 
--- 
--- qenvAdd l (QN p s) t (QE γ) = QE (M.insert (p ++ [s]) (Loc (srcPos l) t) γ)
--- 
--- qenvToEnv (QE γ) = envFromList [ (Id l (show x),t) | (x, Loc l t) <- M.toList γ]
+--------------------------------------------------------------------------------
+-- | QEnv API  
+--------------------------------------------------------------------------------
+
+qenvFromList       :: [(QName, t)] -> QEnv t
+qenvFromList        = L.foldl' step qenvEmpty
+  where 
+    step γ (q, t)   = case qenvFindLoc q γ of
+                        Nothing -> qenvAdd q t γ 
+                        Just l' -> throw $ errorDuplicate q (srcPos q) l'
+
+qenvEmpty           = QE M.empty
+qenvFindLoc i γ     = fmap loc $ qenvFind i γ 
+qenvFind q (QE γ)   = M.lookup q γ 
+
+qenvAdd :: QName -> t -> QEnv t -> QEnv t
+qenvAdd q t (QE γ)  = QE (M.insert q (Loc (srcPos q) t) γ)
+
+-- Create dot separated symbols as keys
+qenvToEnv (QE γ)    = envFromList [ (Id l (ppshow x),t) | (x, Loc l t) <- M.toList γ]
 
 
 --------------------------------------------------------------------------------
@@ -182,6 +188,9 @@ instance Monoid (Env t) where
 
 instance PP t => PP (Env t) where
   pp = vcat . (ppBind <$>) . F.toListSEnv . fmap val 
+
+instance PP t => PP (QEnv t) where
+  pp = pp . qenvToEnv
 
 ppBind (x, t) = pprint x <+> dcolon <+> pp t
 

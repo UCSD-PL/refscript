@@ -240,10 +240,10 @@ subElt _ γ μ1 μ2 (FieldSig _ μf1 t1) (FieldSig _ μf2 t2)
 
   | otherwise = False 
   where
-    t_immut = t_Immutable $ get_common_ts γ
+    t_immut = t_immutable -- t_Immutable $ get_common_ts γ
     -- FIXME
-    m1      = undefined -- combMut μ1 μf1
-    m2      = undefined -- combMut μ2 μf2
+    m1      = error "subElt" -- combMut μ1 μf1
+    m2      = error "subElt" -- combMut μ2 μf2
 
 -- | Methods
 -- 
@@ -278,10 +278,10 @@ subElt _ γ μ1 μ2 (StatSig _ μf1 t1) (StatSig _ μf2 t2)
   | otherwise                                   
   = False 
   where
-    t_immut = t_Immutable $ get_common_ts γ
+    t_immut = t_immutable -- t_Immutable $ get_common_ts γ
     -- FIXME 
-    m1      = undefined -- combMut μ1 μf1
-    m2      = undefined -- combMut μ2 μf2
+    m1      = error "subElt" -- combMut μ1 μf1
+    m2      = error "subElt" -- combMut μ2 μf2
 
 -- | otherwise fail
 subElt _ _ _ _ _ _ = False
@@ -380,7 +380,7 @@ safeExtends :: (Data r, PPR r) => SourceSpan -> TCEnv r -> IfaceDef r -> [Error]
 --------------------------------------------------------------------------------
 safeExtends l γ (ID _ c _ (Just (p, ts)) es) =
     [ errorClassExtends l c p (F.symbol ee) ee pe 
-                                      | parent <- maybeToList $ resolveIface γ p
+                                      | parent <- maybeToList $ resolveQName γ p
                                       , pe <- concat $ maybeToList $ flatten False γ (parent,ts)
                                       , ee <- es, sameBinder pe ee 
                                       , let t1 = eltType ee

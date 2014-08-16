@@ -6,6 +6,7 @@
 {-# LANGUAGE DeriveFoldable            #-}
 {-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
+{-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
@@ -34,13 +35,14 @@ module Language.Nano.Typecheck.Types (
   -- * Deconstructing Types
   , bkFun, bkFuns, bkAll, bkAnd, bkUnion, funTys -- , methTys
   
-  -- Type ops
+  -- * Type ops
   , rUnion, rTypeR, setRTypeR
   
   , renameBinds
 
   -- * Regular Types
   , Heritage, Type, IfaceDef (..), SIfaceDef, TVar (..), TCon (..), TypeMember (..)
+  , ModuleExports, ModuleMember (..)
 
   -- * Mutability
   , Mutability, t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly
@@ -88,7 +90,7 @@ module Language.Nano.Typecheck.Types (
   -- * Contexts
   , CallSite (..), IContext, emptyContext, pushContext
 
-  , hoistFuncDecls, hoistTypes, hoistAnns
+  , hoistFuncDecls, hoistTypes, collectTypes, collectModules -- , hoistAnns
 
   -- * Aliases
   , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
@@ -189,8 +191,8 @@ data Bind r
 ---------------------------------------------------------------------------------
 
 data IfaceDef r 
-  = ID { t_class :: Bool                                -- ^ Is this a class or interface type
-       , t_name  :: !(Id SourceSpan)                    -- ^ Name (possibly no name)
+  = ID { t_class :: Bool                                -- ^ Class (True) or interface (False)
+       , t_name  :: !(Id SourceSpan)                    -- ^ Name
        , t_args  :: ![TVar]                             -- ^ Type variables
        , t_proto :: !(Heritage r)                       -- ^ Heritage
        , t_elts  :: ![TypeMember r]                     -- ^ List of data type elts 
@@ -202,27 +204,44 @@ type Heritage r  = Maybe (QName, [RType r])
 type SIfaceDef r = (IfaceDef r, [RType r])
 
 data TypeMember r 
-  = CallSig  { f_type :: RType r }                      -- ^ Call Signature
+  = CallSig   { f_type :: RType r }                     -- ^ Call Signature
 
-  | ConsSig  { f_type :: RType r }                      -- ^ Constructor Signature               
+  | ConsSig   { f_type :: RType r }                     -- ^ Constructor Signature               
   
-  | IndexSig { f_sym  :: F.Symbol
-             , f_key  :: Bool                           -- ^ Index Signature (T/F=string/number)
-             , f_type :: RType r }                      
-                  
-  | FieldSig { f_sym  :: F.Symbol                       -- ^ Name  
-             , f_mut  :: Mutability                     -- ^ Mutability
-             , f_type :: RType r }                      -- ^ Property type (could be function)
+  | IndexSig  { f_sym  :: F.Symbol
+              , f_key  :: Bool                          -- ^ Index Signature (T/F=string/number)
+              , f_type :: RType r }                     
+                   
+  | FieldSig  { f_sym  :: F.Symbol                      -- ^ Name  
+              , f_mut  :: Mutability                    -- ^ Mutability
+              , f_type :: RType r }                     -- ^ Property type (could be function)
 
-  | MethSig  { f_sym  :: F.Symbol                       -- ^ Name  
-             , f_mut  :: Mutability                     -- ^ Mutability
-             , f_type :: RType r }                      -- ^ Method type
+  | MethSig   { f_sym  :: F.Symbol                      -- ^ Name  
+              , f_mut  :: Mutability                    -- ^ Mutability
+              , f_type :: RType r }                     -- ^ Method type
 
-  | StatSig  { f_sym  :: F.Symbol                       -- ^ Name  
-             , f_mut  :: Mutability                     -- ^ Mutability
-             , f_type :: RType r }                      -- ^ Property type (could be function)
+  | StatSig   { f_sym  :: F.Symbol                      -- ^ Name  
+              , f_mut  :: Mutability                    -- ^ Mutability
+              , f_type :: RType r }                     -- ^ Property type (could be function)
 
   deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+
+
+-- | A module s exported API
+data ModuleMember r 
+  = ModClass  { m_sym  :: Id SourceSpan                 -- ^ Exported class
+              , m_def  :: IfaceDef r }
+
+  | ModVar    { m_sym  :: Id SourceSpan                 -- ^ Exported binding
+              , m_type :: RType r }                    
+
+  | ModModule { m_sym  :: Id SourceSpan }               -- ^ Exported module
+                                                        --   Use this to find
+                                                        --   the module definition
+
+  deriving (Functor)
+
+type ModuleExports r = [ModuleMember r] 
 
 type IfaceEnv r = Env (IfaceDef r) 
  
@@ -231,19 +250,24 @@ type IfaceEnv r = Env (IfaceDef r)
 -- | Typecheck Environment 
 -------------------------------------------------------------------------------
 
+class EnvLike r t where
+  get_env         :: t r -> Env (RType r)               -- ^ All bindings in scope
+  get_types       :: t r -> QEnv (IfaceDef r)           -- ^ All Classs/Interfaces 
+  get_mod         :: t r -> QEnv (ModuleExports r)      -- ^ Modules in scope (exported API)
+  get_nspace      :: t r -> NameSpacePath               -- ^ Namespace absolute path
+  get_ctx         :: t r -> IContext                    -- ^ Calling context
+
+--   get_common_ts   :: t r -> CommonTypes r
+
+
+
+
 data TCEnv r  = TCE {
-
-    tce_env       :: Env (RType r)                      -- ^ All bindings in scope
-
-  , tce_iface     :: Env (IfaceDef r)                   -- ^ Classs/Interfaces in scope 
-
-  , tce_mod       :: Env (TCEnv r)                      -- ^ Modules in scope (exported API)
-
+    tce_env       :: Env (RType r)
+  , tce_types     :: QEnv (IfaceDef r) 
+  , tce_mod       :: QEnv (ModuleExports r)
   , tce_ctx       :: !IContext                          -- ^ Calling context 
-
-  , tce_nspace    :: NameSpacePath                      -- ^ Namespace absolute path
-
-  , tce_parent    :: Maybe (TCEnv r)                    -- ^ Parent namespace environment
+  , tce_nspace    :: NameSpacePath                      
   }
   deriving (Functor)
 
@@ -255,21 +279,14 @@ data TCEnv r  = TCE {
 type TCEnvO r = Maybe (TCEnv r)
 
 
-class EnvLike r t where
-  get_env         :: t r -> Env (RType r)
-  get_iface       :: t r -> Env (IfaceDef r) 
-  get_mod         :: t r -> Env (t r)
-  get_nspace      :: t r -> NameSpacePath
-  get_parent      :: t r -> Maybe (t r)
-  get_common_ts   :: t r -> CommonTypes r
-
 instance EnvLike r TCEnv where
   get_env         = tce_env
-  get_iface       = tce_iface
+  get_types       = tce_types
   get_mod         = tce_mod
   get_nspace      = tce_nspace
-  get_parent      = tce_parent
-  get_common_ts   = undefined -- TODO !!!!
+  get_ctx         = tce_ctx
+
+--   get_common_ts   = undefined -- TODO !!!!
 
 
 
@@ -313,7 +330,7 @@ data CommonTypes r = CommonTypes {
 
 -- validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable", "AnyMutability"]
 
-mkMut s = TApp (TRef $ QN [] (F.symbol s)) [] ()
+mkMut s = TApp (TRef $ QN (srcPos dummySpan) [] (F.symbol s)) [] ()
 
 instance Default Mutability where
   def = mkMut "Mutable"
@@ -620,12 +637,6 @@ isMethodSig _                = False
 isFieldSig (FieldSig _ _ _ ) = True
 isFieldSig _                 = False
 
--- eltHasThisBinding (MethSig _ _ t) = 
---   case bkFun t of
---     Just (_, (B x _):_,_) | x == F.symbol "this" -> True
---     _                                            -> False
--- eltHasThisBinding _               = False
-
 
 setThisBinding m@(MethSig _ _ t) t' = m { f_type = mapAnd bkTy t }
   where
@@ -664,7 +675,8 @@ data Nano a r       = Nano {
                     -- ^ Code to check
                       code   :: !(Source a)               
                     -- ^ Annotations (keeping this to scrape qualifiers later)
-                    -- ^ XXX: The names are bogus !!!
+                    -- ^ XXX: The names are bogus - made unique to avoid
+                    -- ^ overwrites
                     , specs  :: !(Env (RType r))
                     -- , specs  :: !(QEnv (RType r))
                     -- ^ Measure Signatures
@@ -731,15 +743,17 @@ instance PP t => PP (F.SEnv t) where
 instance (PP r, F.Reftable r) => PP (IfaceDef r) where
   pp (ID c nm vs Nothing ts) =  
         pp (if c then "class" else "interface")
-    <+> pp nm 
-    <+> ppArgs brackets comma vs 
+    <+> pp nm <> ppArgs angles comma vs 
     <+> braces (intersperse semi $ map pp ts)
   pp (ID c nm vs (Just (p,ps)) ts) = 
         pp (if c then "class" else "interface")
-    <+> pp nm 
-    <+> ppArgs brackets comma vs 
-    <+> text "extends" <+> pp p <+> pp ps
+    <+> pp nm <> ppArgs angles comma vs
+    <+> text "extends" 
+    <+> pp p  <> ppArgs angles comma ps
     <+> braces (intersperse semi $ map pp ts)
+
+angles p = char '<' <> p <> char '>'
+
 
 
 instance (PP r, F.Reftable r) => PP (TypeMember r) where
@@ -807,6 +821,11 @@ eltType (StatSig _ _ t)   = t
 
 
 
+---------------------------------------------------------------------------
+-- | AST Traversals
+---------------------------------------------------------------------------
+
+
 -- | Find all function definitions/declarations whose scope reaches the current 
 --   scope. E.g. declarations in the If-branch of a conditional expression. 
 --   Note how declarations do not escape module or function blocks.
@@ -841,12 +860,12 @@ hoistTypes :: Data a => [Statement a] -> [Statement a]
 -------------------------------------------------------------------------------
 hoistTypes = everythingBut (++) myQ
   where
-    myQ a     = case cast a :: (Data a => Maybe (Statement a)) of
-                  Just  s -> fSt s
-                  Nothing -> 
-                      case cast a :: (Data a => Maybe (Expression a)) of
-                        Just  s -> fExp s
-                        Nothing -> ([], False)
+    myQ a  = case cast a :: (Data a => Maybe (Statement a)) of
+               Just  s -> fSt s
+               Nothing -> 
+                   case cast a :: (Data a => Maybe (Expression a)) of
+                     Just  s -> fExp s
+                     Nothing -> ([], False)
 
     fSt (FunctionStmt _ _ _ _) = ([ ], True)
     fSt (FunctionDecl _ _ _  ) = ([ ], True)
@@ -859,24 +878,63 @@ hoistTypes = everythingBut (++) myQ
 
 
 
--- | Find all function definitions/declarations whose scope is hoisted to 
---   the current scope. E.g. declarations in the If-branch of a conditional 
---   expression. Note how declarations do not escape module or function 
---   blocks (isolation).
+-- -- | Find all function definitions/declarations whose scope is hoisted to 
+-- --   the current scope. E.g. declarations in the If-branch of a conditional 
+-- --   expression. Note how declarations do not escape module or function 
+-- --   blocks (isolation).
+-- -------------------------------------------------------------------------------
+-- hoistAnns                     :: Data a => [Statement a] -> [a]
+-- -------------------------------------------------------------------------------
+-- hoistAnns                      = everythingBut (++) $ ([], False) `mkQ` f
+--   where
+--     f                          = fSt `extQ` fExp 
+--     fSt (FunctionStmt l _ _ _) = ([l], True)
+--     fSt (FunctionDecl l _ _  ) = ([l], True)
+--     fSt (ClassStmt l _ _ _ _ ) = ([l], True)
+--     fSt (ModuleStmt l _ _ )    = ([l], True)
+--     fSt s                      = ([getAnnotation s], False)
+--     fExp                      :: Expression t -> ([t], Bool)
+--     fExp (FuncExpr l _ _ _)    = ([l], True)
+--     fExp e                     = ([getAnnotation e], False)
+-- 
+
+-- Only descend down modules 
 -------------------------------------------------------------------------------
-hoistAnns                     :: Data a => [Statement a] -> [a]
+collectTypes :: Data a => [Statement a] -> [(NameSpacePath, Statement a)]
 -------------------------------------------------------------------------------
-hoistAnns                      = everythingBut (++) $ ([], False) `mkQ` f
+collectTypes  = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
   where
-    f                          = fSt `extQ` fExp 
-    fSt (FunctionStmt l _ _ _) = ([l], True)
-    fSt (FunctionDecl l _ _  ) = ([l], True)
-    fSt (ClassStmt l _ _ _ _ ) = ([l], True)
-    fSt (ModuleStmt l _ _ )    = ([l], True)
-    fSt s                      = ([getAnnotation s], False)
-    fExp                      :: Expression t -> ([t], Bool)
-    fExp (FuncExpr l _ _ _)    = ([l], True)
-    fExp e                     = ([getAnnotation e], False)
+    f e@(ClassStmt _ _ _ _ _ ) s = ([(s,e)], s                , True )
+    f e@(ModuleStmt _ x _    ) s = ([(s,e)], s ++ [F.symbol x], False)
+    f _                        s = ([]     , s                , True )
+
+
+-- Only descend down modules 
+-------------------------------------------------------------------------------
+collectModules :: Data a => [Statement a] -> [(NameSpacePath, Statement a)]
+-------------------------------------------------------------------------------
+collectModules  = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
+  where
+    f e@(ClassStmt _ _ _ _ _ ) s = ([(s,e)], s                , True )
+    f e@(ModuleStmt _ x _    ) s = ([(s,e)], s ++ [F.symbol x], False)
+    f _                        s = ([]     , s                , True )
+
+
+
+
+-- | Summarise all nodes in top-down, left-to-right order, carrying some state
+--   down the tree during the computation, but not left-to-right to siblings,
+--   and also stop when a condition is true.
+---------------------------------------------------------------------------
+everythingButWithContext :: s -> (r -> r -> r) -> GenericQ (s -> (r, s, Bool)) -> GenericQ r
+---------------------------------------------------------------------------
+everythingButWithContext s0 f q x
+  | stop      = r
+  | otherwise = foldl f r (gmapQ (everythingButWithContext s' f q) x)
+    where (r, s', stop) = q x s0
+
+
+
 
 
 
@@ -954,6 +1012,15 @@ ppArgs p sep l = p $ intersperse sep $ map pp l
 
 instance (PP s, PP t) => PP (M.HashMap s t) where
   pp m = vcat $ pp <$> M.toList m
+
+instance (F.Reftable r, PP r) => PP (ModuleExports r) where
+  pp = braces . intersperse semi . map pp
+
+instance (F.Reftable r, PP r) => PP (ModuleMember r) where
+  pp (ModClass x t ) = pp x <> colon <+> pp t
+  pp (ModVar x t   ) = pp x <> colon <+> pp t
+  pp (ModModule x  ) = pp x
+
 
 
 -----------------------------------------------------------------------------
@@ -1144,8 +1211,8 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (FieldAnn f)     = text "Field Annotation"       <+> pp f
   pp (MethAnn m)      = text "Method Annotation"      <+> pp m
   pp (StatAnn s)      = text "Static Annotation"      <+> pp s
-  pp (ClassAnn _)     = error "UNIMPLEMENTED:pp:ClassAnn"
-  pp (IfaceAnn _)     = error "UNIMPLEMENTED:pp:IfaceAnn"
+  pp (ClassAnn _)     = text "UNIMPLEMENTED:pp:ClassAnn"
+  pp (IfaceAnn _)     = text "UNIMPLEMENTED:pp:IfaceAnn"
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . M.toList 

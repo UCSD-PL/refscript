@@ -7,7 +7,7 @@
 
 module Language.Nano.Typecheck.Resolve ( 
   
-  resolveModuleEnv, resolveIface
+  resolveModuleEnv, resolveQName
 
   -- * Flatten a type definition applying subs
   , flatten, flatten', flatten'', flattenType
@@ -70,35 +70,39 @@ absolutePath γ p = get_nspace <$> resolveModuleEnv γ p
 resolveModuleEnv     :: EnvLike r g => g r -> NameSpacePath -> Maybe (g r)
 ---------------------------------------------------------------------------
 resolveModuleEnv γ [] = Just γ
-resolveModuleEnv γ (m:ms) = 
-  case envFindTy m (get_mod γ) of
-    Just γ' -> foldM (\g -> (`envFindTy` get_mod g)) γ' ms
-    Nothing -> case get_parent γ of
-                 Just γ' -> resolveModuleEnv γ' (m:ms)
-                 Nothing -> Nothing
+
+-- FIXME !!!
+ 
+-- resolveModuleEnv γ (m:ms) = 
+--   case envFindTy m (get_mod γ) of
+--     Just γ' -> foldM (\g -> (`envFindTy` get_mod g)) γ' ms
+--     Nothing -> case get_parent γ of
+--                  Just γ' -> resolveModuleEnv γ' (m:ms)
+--                  Nothing -> Nothing
 
 
--- | `resolveIface`: 
+-- | `resolveQName`: 
 --   * Returns the interface definition `d` that resides at path `xs` 
 --     using `g` as point of reference. 
 --   * All qualified names in `d` have been translated to terms of 
 --     environment `g`. 
 ---------------------------------------------------------------------------
-resolveIface :: (Data r, EnvLike r g) => g r -> QName -> Maybe (IfaceDef r)
+resolveQName :: (Data r, EnvLike r g) => g r -> QName -> Maybe (IfaceDef r)
 ---------------------------------------------------------------------------
-resolveIface γ qn = do
+resolveQName γ qn = do
     (γ',d) <- resolveIfaceAux γ qn
     rebaseNamespaces γ' γ d
   where
-    resolveIfaceAux γ qn@(QN [] s) = 
-      case envFindTy s (get_iface γ) of 
+  -- FIXME 
+    resolveIfaceAux γ qn@(QN _ [] s) = 
+      case envFindTy s (error "resolveQName") of -- (get_types γ) of 
         Just d  -> Just (γ,d)
-        Nothing -> case get_parent γ of
-                    Just γ' -> resolveIfaceAux γ' qn
-                    Nothing -> Nothing
-    resolveIfaceAux γ (QN ns s) = do
+--         Nothing -> case get_parent γ of
+--                     Just γ' -> resolveIfaceAux γ' qn
+--                     Nothing -> Nothing
+    resolveIfaceAux γ (QN l ns s) = do
         γ' <- resolveModuleEnv γ ns
-        resolveIfaceAux γ' (QN [] s) 
+        resolveIfaceAux γ' (QN l [] s) 
 
 
 -- | flattening type to include all fields inherited by ancestors
@@ -111,7 +115,7 @@ flatten b              = fix . ff fn
        | otherwise     = nonStaticSig
 
     ff flt γ rec (ID _ _ vs (Just (p, ts')) es, ts) = do  
-        parent        <- resolveIface γ p
+        parent        <- resolveQName γ p
         inherited     <- rec (parent, ts')
         return         $ apply θ $ L.unionBy sameBinder current inherited
       where 
@@ -145,18 +149,18 @@ flatten'' st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten st γ (d, tVar <$> vs)
 flattenType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
 flattenType γ (TApp (TRef x) ts r) = do 
-    d                 <- resolveIface γ x
+    d                 <- resolveQName γ x
     es                <- flatten False γ (d, ts)
     case ts of 
       mut : _         -> Just $ TCons es (toType mut) r
       _               -> Nothing
 
 flattenType γ (TClass x)             = do
-    d                 <- resolveIface γ x
+    d                 <- resolveQName γ x
     es                <- flatten' True γ d
     return             $ TCons es mut fTop
   where
-    mut                = toType $ t_ReadOnly $ get_common_ts γ 
+    mut                = t_readOnly -- toType $ t_ReadOnly $ get_common_ts γ 
 
 flattenType _ t = Just t
 
@@ -171,9 +175,9 @@ weaken :: (Data r, PPR r, EnvLike r g)
        => g r -> QName -> QName -> [RType r] -> Maybe (SIfaceDef r)
 ---------------------------------------------------------------------------
 weaken γ pa pb ts
-  | pa == pb = (,ts) <$> resolveIface γ pa
+  | pa == pb = (,ts) <$> resolveQName γ pa
   | otherwise
-  = do  z <- resolveIface γ pa
+  = do  z <- resolveQName γ pa
         case z of
           ID _ _ vs (Just (p,ps)) _ -> weaken γ p pb $ apply (fromList $ zip vs ts) ps
           ID _ _ _  Nothing       _ -> Nothing
@@ -183,7 +187,7 @@ weaken γ pa pb ts
 ancestors :: (Data r, EnvLike r g) => g r -> QName -> [QName]
 ---------------------------------------------------------------------------
 ancestors γ s = 
-  case resolveIface γ s of 
+  case resolveQName γ s of 
     Just (ID {t_proto = p }) -> 
       case p of 
         Just (par,_) ->  s : ancestors γ par
@@ -217,7 +221,7 @@ type Constructor = Type
 -- toConstructor  _                       = Nothing
 
 instance F.Symbolic Constructor where
-  symbol (TApp (TRef (QN _ x)) _ _)    = x
+  symbol (TApp (TRef (QN _ _ x)) _ _)  = x
   symbol (TClass _ )                   = F.symbol "Function"
   symbol (TModule _ )                  = F.symbol "Object"
   symbol (TFun _ _ _ )                 = F.symbol "Function"

@@ -37,7 +37,7 @@ getProp :: (PPRD r, EnvLike r g) => g r -> F.Symbol -> RType r -> Maybe (RType r
 -------------------------------------------------------------------------------
 getProp γ s t@(TApp _ _ _  ) = getPropApp γ s t
 getProp _ s t@(TCons es _ _) = (t,) <$> accessMember s es
-getProp γ s t@(TClass c    ) = do d     <- resolveIface γ c
+getProp γ s t@(TClass c    ) = do d     <- resolveQName γ c
                                   es    <- flatten True γ (d,[])
                                   p     <- accessMember s es
                                   return $ (t,p)
@@ -57,7 +57,7 @@ getPropApp γ s t@(TApp c ts _) =
     TUn      -> getPropUnion γ s ts
     TInt     -> (t,) <$> lookupAmbientVar γ s "Number"
     TString  -> (t,) <$> lookupAmbientVar γ s "String"
-    TRef x   -> do  d      <- resolveIface γ x
+    TRef x   -> do  d      <- resolveQName γ x
                     es     <- flatten False γ (d,ts)
                     p      <- accessMember s es
                     return  $ (t,p)
@@ -72,7 +72,7 @@ getConstructor :: (Data r, PP r, F.Reftable r, EnvLike r g)
                => g r -> RType t -> Maybe (RType r)
 -------------------------------------------------------------------------------
 getConstructor γ (TClass x) 
-  = do  d        <- resolveIface γ x
+  = do  d        <- resolveQName γ x
         (vs, es) <- flatten'' False γ d
         return    $ mkAnd [ mkAll vs (TFun bs (retT vs) r) | ConsSig (TFun bs _ r) <- es ]
 
@@ -103,7 +103,7 @@ getCallable _ t             = uncurry mkAll <$> foo [] t
     foo _  _                = []
 -- FIXME !!!
 --     foo αs   (TApp (TRef s) _ _ )
---                             = case resolveIface γ s of 
+--                             = case resolveQName γ s of 
 --                                 Just d  -> [ (αs, t) | CallSig t <- t_elts d ]
 --                                 Nothing -> []
 --     foo αs   (TCons es _ _) = [ (αs, t) | CallSig t <- es  ]

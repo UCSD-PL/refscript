@@ -1,4 +1,10 @@
 
+{-# LANGUAGE TypeSynonymInstances   #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE DeriveDataTypeable     #-}
+{-# LANGUAGE DeriveFunctor          #-}
+{-# LANGUAGE OverlappingInstances      #-}
+
 module Language.Nano.Annots (
 
 
@@ -17,18 +23,13 @@ module Language.Nano.Annots (
 ) where
 
 import           Control.Applicative            hiding (empty)
-import           Data.Monoid                    hiding ((<>))            
 import           Data.Default
 import           Data.Function                  (on)
 import           Data.Generics                   
 import qualified Data.HashMap.Strict            as M
-import qualified Data.IntMap                    as I
-import           Data.Traversable               hiding (sequence, mapM) 
 import           Text.PrettyPrint.HughesPJ 
 
 import           Language.Nano.Env
-import           Language.Nano.Errors
-import           Language.Nano.Misc
 import           Language.Nano.Types
 import           Language.Nano.Locations
 import           Language.Nano.Typecheck.Types

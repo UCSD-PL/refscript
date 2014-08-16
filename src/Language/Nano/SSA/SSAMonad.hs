@@ -48,11 +48,9 @@ import qualified Language.Fixpoint.Types        as F
 import           Language.Nano.Annots
 import           Language.Nano.Errors
 import           Language.Nano.Env
-import           Language.Nano.Types                
 import           Language.Nano.SSA.Types
 import           Language.Nano.Locations
 import           Language.Nano.Program
-import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Fixpoint.Errors

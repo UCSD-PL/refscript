@@ -31,6 +31,10 @@ module Language.Nano.Misc (
   -- Container operations
   , isProperSubsetOf, isEqualSet, isProperSubmapOf
   , equalKeys
+
+  -- * Error message
+  , convertError
+
 ) where
 
 -- import           Control.Applicative                ((<$>))
@@ -43,7 +47,10 @@ import           Data.Function                        (on)
 import           Data.Hashable
 import qualified Data.HashMap.Strict                  as M
 import qualified Data.List                            as L
+
 import qualified Language.Fixpoint.Types              as F
+import           Language.Fixpoint.Misc
+import           Language.ECMAScript3.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 
 -------------------------------------------------------------------------------
@@ -161,4 +168,9 @@ isProperSubmapOf = isProperSubsetOf `on` (fromList . M.keys)
 
 equalKeys :: (Eq a, Ord a, Hashable a) => M.HashMap a b -> M.HashMap a b -> Bool
 equalKeys =  (==) `on` (L.sort . M.keys)
+
+
+convertError tgt e  = errortext $ msg <+> pp e
+  where 
+    msg             = text $ "Cannot convert to: " ++ tgt
 

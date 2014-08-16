@@ -16,7 +16,7 @@ module Language.Nano.Liquid.Types (
   , cge_env
 
   -- * Constraint Environments
-  , CGEnv (..)
+  , CGEnv
 
   -- * Constraint Information
   , Cinfo (..)
@@ -25,6 +25,9 @@ module Language.Nano.Liquid.Types (
   -- * Constraints
   , SubC (..) , WfC (..)
   , FixSubC   , FixWfC
+
+  -- * Some Operators on Pred
+  , pAnd, pOr
 
   -- * Conversions
   , RefTypable (..)
@@ -54,6 +57,12 @@ module Language.Nano.Liquid.Types (
   , efoldRType
   , AnnTypeR
 
+  -- * Accessing Spec Annotations
+  , getSpec, getRequires, getEnsures, getAssume, getAssert
+  , getInvariant, getFunctionIds, isSpecification 
+    -- ,  returnSymbol, returnId, symbolId, mkId
+
+
   -- * Raw low-level Location-less constructors
   , rawStringSymbol 
 
@@ -62,9 +71,10 @@ module Language.Nano.Liquid.Types (
 
   ) where
 
-import           Data.Maybe             (fromMaybe)
+import           Data.Maybe             (fromMaybe, catMaybes)
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
+import           Data.Monoid                        (mconcat)
 import           Text.PrettyPrint.HughesPJ
 import           Text.Printf 
 import           Control.Applicative 
@@ -77,7 +87,9 @@ import           Language.Nano.Annots
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Types
+import           Language.Nano.Program
 import           Language.Nano.Env
+import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Sub
@@ -211,6 +223,67 @@ instance IsLocated WfC where
 
 type FixSubC = F.SubC Cinfo
 type FixWfC  = F.WfC  Cinfo
+
+
+------------------------------------------------------------------
+-- | Converting `ECMAScript3` values into `Fixpoint` values, 
+--   i.e. *language* level entities into *logic* level entities.
+------------------------------------------------------------------
+
+instance F.Expression (Id a) where
+  expr = F.eVar
+
+instance F.Expression (LValue a) where
+  expr = F.eVar
+
+instance F.Expression (Expression a) where
+  expr (IntLit _ i)                 = F.expr i
+  expr (VarRef _ x)                 = F.expr x
+  expr (InfixExpr _ o e1 e2)        = F.EBin (bop o) (F.expr e1) (F.expr e2)
+  expr (PrefixExpr _ PrefixMinus e) = F.EBin F.Minus (F.expr (0 :: Int)) (F.expr e)  
+  expr e                            = convertError "F.Expr" e
+
+instance F.Predicate  (Expression a) where 
+  prop (BoolLit _ True)            = F.PTrue
+  prop (BoolLit _ False)           = F.PFalse
+  prop (PrefixExpr _ PrefixLNot e) = F.PNot (F.prop e)
+  prop e@(InfixExpr _ _ _ _ )      = eProp e
+  prop e                           = convertError "F.Pred" e  
+
+
+------------------------------------------------------------------
+eProp :: Expression a -> F.Pred
+------------------------------------------------------------------
+
+eProp (InfixExpr _ OpLT   e1 e2)       = F.PAtom F.Lt (F.expr e1) (F.expr e2) 
+eProp (InfixExpr _ OpLEq  e1 e2)       = F.PAtom F.Le (F.expr e1) (F.expr e2) 
+eProp (InfixExpr _ OpGT   e1 e2)       = F.PAtom F.Gt (F.expr e1) (F.expr e2)  
+eProp (InfixExpr _ OpGEq  e1 e2)       = F.PAtom F.Ge (F.expr e1) (F.expr e2)  
+eProp (InfixExpr _ OpEq   e1 e2)       = F.PAtom F.Eq (F.expr e1) (F.expr e2) 
+-- XXX @==@ and @===@ are translated the same. This should not make a difference
+-- as long as same type operands are used.
+eProp (InfixExpr _ OpStrictEq   e1 e2) = F.PAtom F.Eq (F.expr e1) (F.expr e2) 
+eProp (InfixExpr _ OpNEq  e1 e2)       = F.PAtom F.Ne (F.expr e1) (F.expr e2) 
+eProp (InfixExpr _ OpLAnd e1 e2)       = pAnd (F.prop e1) (F.prop e2) 
+eProp (InfixExpr _ OpLOr  e1 e2)       = pOr  (F.prop e1) (F.prop e2)
+eProp e                                = convertError "InfixExpr -> F.Prop" e
+
+------------------------------------------------------------------
+bop       :: InfixOp -> F.Bop
+------------------------------------------------------------------
+
+bop OpSub = F.Minus 
+bop OpAdd = F.Plus
+bop OpMul = F.Times
+bop OpDiv = F.Div
+bop OpMod = F.Mod
+bop o     = convertError "F.Bop" o
+
+------------------------------------------------------------------
+pAnd p q  = F.pAnd [p, q] 
+pOr  p q  = F.pOr  [p, q]
+
+
 
 ------------------------------------------------------------------------
 -- | Embedding Values as RefTypes
@@ -408,6 +481,54 @@ infixOpRTy o g  = infixOpTy o $ cge_env g
 
 rawStringSymbol = F.Loc (F.dummyPos "RSC.Types.rawStringSymbol") . F.symbol
 rawStringFTycon = F.symbolFTycon . F.Loc (F.dummyPos "RSC.Types.rawStringFTycon") . F.symbol
+
+
+
+-----------------------------------------------------------------------------------
+-- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 
+-----------------------------------------------------------------------------------
+
+isSpecification :: Statement a -> Bool
+isSpecification s  = not $ null $ catMaybes $ ($ s) <$> specs 
+  where 
+    specs          = [getAssume, getInv, getRequires, getEnsures]
+
+getInvariant :: Statement a -> F.Pred 
+
+getInvariant = getSpec getInv . flattenStmt
+
+
+getAssume    :: Statement a -> Maybe F.Pred 
+getAssume    = getStatementPred "assume"
+
+getAssert    :: Statement a -> Maybe F.Pred 
+getAssert    = getStatementPred "assert"
+
+getRequires  = getStatementPred "requires"
+getEnsures   = getStatementPred "ensures"
+getInv       = getStatementPred "invariant"
+
+getStatementPred :: String -> Statement a -> Maybe F.Pred 
+getStatementPred name (ExprStmt _ (CallExpr _ (VarRef _ (Id _ f)) [p]))
+  | name == f 
+  = Just $ F.prop p
+getStatementPred _ _ 
+  = Nothing 
+
+getSpec   :: (Statement a -> Maybe F.Pred) -> [Statement a] -> F.Pred 
+getSpec g = mconcat . catMaybes . map g
+
+getFunctionIds :: Statement a -> [Id a]
+getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
+
+
+
+
+
+
+
+
+
 
 -- | `zipType` returns a type that is:
 --

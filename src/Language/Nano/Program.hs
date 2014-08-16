@@ -1,5 +1,9 @@
 
 {-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE DeriveDataTypeable        #-}
 
 module Language.Nano.Program (
 
@@ -12,10 +16,8 @@ module Language.Nano.Program (
   -- * Nano Definition
   , IsNano (..), checkTopStmt
 
-  -- * Accessing Spec Annotations
-  , getSpec, getRequires, getEnsures, getAssume, getAssert
-  , getInvariant, getFunctionIds, isSpecification 
-    -- ,  returnSymbol, returnId, symbolId, mkId
+  -- * Nano Transformations
+  , flattenStmt
 
   -- * SSA Ids 
   , mkNextId, isNextId, mkSSAId -- , stripSSAId
@@ -30,18 +32,15 @@ module Language.Nano.Program (
 import           Control.Applicative     hiding (empty)
 import           Control.Exception              (throw)
 import           Data.Monoid             hiding ((<>))            
-import           Data.Maybe                     (catMaybes)            
 import           Data.List                      (stripPrefix)            
 import           Data.Generics                   
 import qualified Data.IntMap                 as I
-import           Data.Traversable        hiding (sequence, mapM) 
 import           Text.PrettyPrint.HughesPJ 
 
 import           Language.Nano.Annots
 import           Language.Nano.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
-import           Language.Nano.Misc
 import           Language.Nano.Types
 
 import           Language.ECMAScript3.Syntax 
@@ -324,48 +323,8 @@ getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
     fromWhile _                = [] 
 -}
 
-
-
------------------------------------------------------------------------------------
--- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 
------------------------------------------------------------------------------------
-
-isSpecification :: Statement a -> Bool
-isSpecification s  = not $ null $ catMaybes $ ($ s) <$> specs 
-  where 
-    specs          = [getAssume, getInv, getRequires, getEnsures]
-
-getInvariant :: Statement a -> F.Pred 
-
-getInvariant = getSpec getInv . flattenStmt
-
 flattenStmt (BlockStmt _ ss) = concatMap flattenStmt ss
 flattenStmt s                = [s]
-
-
-getAssume    :: Statement a -> Maybe F.Pred 
-getAssume    = getStatementPred "assume"
-
-getAssert    :: Statement a -> Maybe F.Pred 
-getAssert    = getStatementPred "assert"
-
-getRequires  = getStatementPred "requires"
-getEnsures   = getStatementPred "ensures"
-getInv       = getStatementPred "invariant"
-
-getStatementPred :: String -> Statement a -> Maybe F.Pred 
-getStatementPred name (ExprStmt _ (CallExpr _ (VarRef _ (Id _ f)) [p]))
-  | name == f 
-  = Just $ F.prop p
-getStatementPred _ _ 
-  = Nothing 
-
-getSpec   :: (Statement a -> Maybe F.Pred) -> [Statement a] -> F.Pred 
-getSpec g = mconcat . catMaybes . map g
-
-getFunctionIds :: Statement a -> [Id a]
-getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
-
 
 
 

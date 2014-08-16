@@ -16,7 +16,7 @@ module Language.Nano.Env (
   , Var, QName(..), NameSpacePath, AbsolutePath 
 
   -- * Deconstructing Id
-  , idName, idLoc 
+  , idName, idLoc, symbolId
   , returnId
   
   -- * Env API
@@ -70,7 +70,7 @@ import           Control.Exception (throw)
 
 type Env t      = F.SEnv (Located t) 
 
-newtype QEnv t  = QE { qe_binds :: M.HashMap QName (Located t) } 
+newtype QEnv t  = QE ( M.HashMap QName (Located t) )
     deriving (Eq, Data, Typeable, Functor)
 
 type NameSpacePath = [F.Symbol]
@@ -87,8 +87,6 @@ instance Hashable QName where
 
 instance IsLocated QName where
   srcPos (QN s _ _) = s
-
-qnameList (QN _ n s) = n ++ [s]
 
 type Var        = Id SourceSpan 
 

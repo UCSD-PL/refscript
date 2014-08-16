@@ -1,3 +1,7 @@
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE DeriveDataTypeable     #-}
+{-# LANGUAGE OverlappingInstances   #-}
+
 
 module Language.Nano.Locations (
 
@@ -20,11 +24,8 @@ module Language.Nano.Locations (
 
 ) where
 
-import           Control.Exception                  (throw)
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
-import           Data.Monoid                        (Monoid (..))
-import           Data.List                          (stripPrefix)
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
@@ -78,8 +79,8 @@ instance IsLocated SourcePos where
 instance IsLocated (F.Located a) where
   srcPos = srcPos . F.loc
 
-instance IsLocated a => IsLocated (Id a) where 
-  srcPos (Id x _) = srcPos x
+-- instance IsLocated a => IsLocated (Id a) where 
+--   srcPos (Id x _) = srcPos x
 
 instance (HasAnnotation thing, IsLocated a) => IsLocated (thing a) where 
   srcPos  = srcPos . getAnnotation  

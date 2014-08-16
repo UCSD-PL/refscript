@@ -1,5 +1,8 @@
 
 {-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE DeriveFunctor             #-}
 
 module Language.Nano.Typecheck.Environment (
 
@@ -11,17 +14,15 @@ module Language.Nano.Typecheck.Environment (
 
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
-import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.ECMAScript3.PrettyPrint
 import           Control.Applicative            hiding (empty)
-import           Language.Fixpoint.Misc
 import           Language.Nano.Misc
 import qualified Language.Fixpoint.Types        as F
 import           Text.PrettyPrint.HughesPJ 
 
 -------------------------------------------------------------------------------
--- | Typecheck Environment (TODO: move to Environment.hs) 
+-- | Typecheck Environment (TODO: move to src/Environment.hs) 
 -------------------------------------------------------------------------------
 
 class EnvLike r t where
@@ -105,8 +106,4 @@ mapIfaceDefsM f (ID c n αs (Just (p,ps)) es)
         return $ ID c n αs (Just (p,ps')) es'
 mapIfaceDefsM f (ID c n αs Nothing es) = 
   ID c n αs Nothing <$> mapM (mapEltM f) es
-
-
-instance (PP r, F.Reftable r) => PP (IfaceEnv r) where
-  pp γ = text "Type definitions:"  $$ nest 2 (pp γ)
 

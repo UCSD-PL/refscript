@@ -17,6 +17,8 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors 
 import           Language.Nano.Errors 
+import           Language.Nano.Types
+import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Subst

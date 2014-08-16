@@ -1,90 +1,63 @@
 {-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE DeriveTraversable      #-}
+{-# LANGUAGE DeriveFoldable         #-}
 {-# LANGUAGE OverlappingInstances   #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 
 module Language.Nano.Types (
+
   -- * Configuration Options
     Config (..)
 
+  -- * (Refinement) Types
+  , RType (..), Bind (..)
+
+  -- * Regular Types
+  , Heritage, Type, IfaceDef (..), SIfaceDef, TVar (..), TCon (..), TypeMember (..)
+  , ModuleExports, ModuleMember (..)
+  , Mutability, CommonTypes (..)
+
   -- * Some Operators on Pred
-  , pAnd
-  , pOr
-
-  -- * Nano Definition
-  , IsNano (..)
-  , checkTopStmt
-
-  -- * Located Values
-  , Located (..) 
-  , IsLocated (..)
-  , sourcePos
-
-  -- * Accessing Spec Annotations
-  , getSpec
-  , getRequires
-  , getEnsures
-  , getAssume
-  , getAssert
-  , getInvariant
---   , getFunctionStatements 
-  , getFunctionIds
-
-  , isSpecification
-  , returnSymbol
-  , returnId
-  , symbolId
-  , mkId
-
-  -- * SSA Ids 
-  , mkNextId
-  , isNextId
-  , mkSSAId
-  -- , stripSSAId
+  , pAnd, pOr
 
   -- * Error message
   , convertError
 
-  -- * Deconstructing Id
-  , idName
-  , idLoc 
- 
-  -- * Manipulating SourceSpan
-  , SourceSpan (..)
-  , dummySpan
-  , srcSpanFile
-  , srcSpanStartLine
-  , srcSpanEndLine
-  , srcSpanStartCol
-  , srcSpanEndCol
-  
   -- * Builtin Operators
-  , BuiltinOp (..)
+  , BuiltinOp (..) 
+
+  -- * Contexts
+  , CallSite (..), IContext, emptyContext, pushContext
+ 
+  -- * Aliases
+  , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
 
   ) where
 
-import           Control.Exception                  (throw)
 import           Control.Applicative                ((<$>))
--- import qualified Data.HashMap.Strict as M
 import           Data.Hashable
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.Monoid                        (Monoid (..))
 import           Data.Maybe                         (catMaybes)
-import           Data.List                          (stripPrefix)
+import           Data.List                          (stripPrefix, (\\))
+import           Data.Traversable            hiding (sequence, mapM) 
+import           Data.Foldable                      (Foldable()) 
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
 import           Language.ECMAScript3.Parser.Type   (SourceSpan (..))
 
-import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Types         as F
 
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Misc
 import           Language.Nano.Errors
+import           Language.Nano.Env
+import           Language.Nano.Locations
 import           Text.PrettyPrint.HughesPJ
-import           Text.Parsec.Pos                    (initialPos)
 import           Text.Printf                        (printf)
 
 ---------------------------------------------------------------------
@@ -103,320 +76,12 @@ data Config
   deriving (Data, Typeable, Show, Eq)
 
 
----------------------------------------------------------------------
--- | Tracking Source Code Locations --------------------------------- 
----------------------------------------------------------------------
-
-data Located a
-  = Loc { loc :: !SourceSpan
-        , val :: a
-        }
-    deriving (Data, Typeable)
- 
-instance Functor Located where 
-  fmap f (Loc l x) = Loc l (f x)
-
---------------------------------------------------------------------------------
--- | `IsLocated` is a predicate for values which we have a SourceSpan
---------------------------------------------------------------------------------
-
-sourcePos :: IsLocated a => a -> SourcePos
-sourcePos = sp_begin . srcPos 
-
-class IsLocated a where 
-  srcPos :: a -> SourceSpan
-
-instance IsLocated SrcSpan where 
-  srcPos (SS a b) = Span a b
-
-instance IsLocated Error where
-  srcPos = srcPos . errLoc 
-
-instance IsLocated SourceSpan where 
-  srcPos x = x 
-
-instance IsLocated (Located a) where 
-  srcPos = loc
-
-instance IsLocated SourcePos where
-  srcPos x = Span x x 
-
-instance IsLocated (F.Located a) where
-  srcPos = srcPos . F.loc
-
-instance IsLocated a => IsLocated (Id a) where 
-  srcPos (Id x _) = srcPos x
-
-instance (HasAnnotation thing, IsLocated a) => IsLocated (thing a) where 
-  srcPos  = srcPos . getAnnotation  
-
-instance IsLocated F.Symbol where 
-  srcPos _ = srcPos dummySpan
-
-instance IsLocated (SourceSpan, r) where 
-  srcPos = srcPos . fst
-
-instance Eq a => Eq (Located a) where 
-  x == y = val x == val y
-
----------------------------------------------------------------------
--- | Wrappers around `Language.ECMAScript3.Syntax` ------------------
----------------------------------------------------------------------
-
--- | `IsNano` is a predicate that describes the **syntactic subset** 
---   of ECMAScript3 that comprises `Nano`.
-
-class IsNano a where 
-  isNano :: a -> Bool
-
-
-instance IsNano InfixOp where
-  isNano OpLT         = True --  @<@
-  isNano OpLEq        = True --  @<=@
-  isNano OpGT         = True --  @>@
-  isNano OpGEq        = True --  @>=@
-  -- isNano OpEq         = True --  @==@
-  isNano OpStrictEq   = True --  @===@
-  isNano OpNEq        = True --  @!=@
-  isNano OpStrictNEq  = True --  @!==@
-
-  isNano OpLAnd       = True --  @&&@
-  isNano OpLOr        = True --  @||@
-
-  isNano OpSub        = True --  @-@
-  isNano OpAdd        = True --  @+@
-  isNano OpMul        = True --  @*@
-  isNano OpDiv        = True --  @/@
-  isNano OpMod        = True --  @%@
-  isNano OpInstanceof = True --  @instanceof@
-  isNano e            = errortext (text "Not Nano InfixOp!" <+> pp e)
-
-instance IsNano (LValue a) where 
-  isNano (LVar _ _)        = True
-  isNano (LDot _ e _)      = isNano e
-  isNano (LBracket _ e e') = isNano e && isNano e'
-
-instance IsNano (VarDecl a) where
-  isNano (VarDecl _ _ (Just e)) = isNano e
-  isNano (VarDecl _ _ Nothing)  = True
-
-instance IsNano (Expression a) where 
-  isNano (BoolLit _ _)           = True
-  isNano (IntLit _ _)            = True
-  isNano (NullLit _ )            = True
-  isNano (ArrayLit _ es)         = all isNano es
-  isNano (StringLit _ _)         = True
-  isNano (CondExpr _ e1 e2 e3)   = all isNano [e1,e2,e3]
-  isNano (VarRef _ _)            = True
-  isNano (InfixExpr _ o e1 e2)   = isNano o && isNano e1 && isNano e2
-  isNano (PrefixExpr _ o e)      = isNano o && isNano e
-  isNano (CallExpr _ e es)       = all isNano (e:es)
-  isNano (ObjectLit _ bs)        = all isNano $ snd <$> bs
-  isNano (DotRef _ e _)          = isNano e
-  isNano (BracketRef _ e1 e2)    = isNano e1 && isNano e2
-  isNano (AssignExpr _ _ l e)    = isNano e && isNano l && isNano e
-  isNano (UnaryAssignExpr _ _ l) = isNano l
-  isNano (ThisRef _)             = True 
-  isNano (SuperRef _)            = True 
-  isNano (FuncExpr _ _ _ s)      = isNano s
-  isNano (NewExpr _ e es)        = isNano e && all isNano es
-  isNano (Cast _ e)              = isNano e
-  isNano e                       = errortext (text "Not Nano Expression!" <+> pp e)
-  -- isNano _                     = False
-
-instance IsNano AssignOp where
-  isNano OpAssign     = True
-  isNano OpAssignAdd  = True
-  isNano x            = errortext (text "Not Nano AssignOp!" <+> pp x) 
-  -- isNano _        = False
-
-instance IsNano PrefixOp where
-  isNano PrefixLNot   = True
-  isNano PrefixMinus  = True 
-  isNano PrefixTypeof = True 
-  isNano PrefixBNot   = True 
-  isNano e            = errortext (text "Not Nano PrefixOp!" <+> pp e)
-  -- isNano _            = False
-
-instance IsNano (Statement a) where
-  isNano (EmptyStmt _)            = True                   --  skip
-  isNano (ExprStmt _ e)           = isNanoExprStatement e  --  x = e
-  isNano (BlockStmt _ ss)         = isNano ss              --  sequence
-  isNano (IfSingleStmt _ b s)     = isNano b && isNano s
-  isNano (IfStmt _ b s1 s2)       = isNano b && isNano s1 && isNano s2
-  isNano (WhileStmt _ b s)        = isNano b && isNano s
-  isNano (ForStmt _ i t inc b)    = isNano i && isNano t && isNano inc && isNano b
-  isNano (VarDeclStmt _ ds)       = all isNano ds
-  isNano (ReturnStmt _ e)         = isNano e
-  isNano (FunctionStmt _ _ _ b)   = isNano b
-  isNano (SwitchStmt _ e cs)      = isNano e && not (null cs) && isNano cs
-  isNano (ClassStmt _ _ _ _  bd)  = all isNano bd
-  isNano (ThrowStmt _ e)          = isNano e
-  isNano (FunctionDecl _ _ _)     = True
-  isNano (IfaceStmt _)            = True
-  isNano (ModuleStmt _ _ s)       = all isNano s
-  isNano e                        = errortext (text "Not Nano Statement:" $$ pp e)
-
-instance IsNano (ClassElt a) where
-  isNano (Constructor _ _ ss)        = all isNano ss
-  isNano (MemberMethDecl _ _ _ _ ss) = all isNano ss
-  isNano (MemberVarDecl _ _ vd)      = isNano vd
-
-instance IsNano a => IsNano (Maybe a) where 
-  isNano (Just x) = isNano x
-  isNano Nothing  = True
-
-instance IsNano [(Statement a)] where 
-  isNano = all isNano 
-
-instance IsNano (ForInit a) where 
-  isNano NoInit        = True
-  isNano (VarInit vds) = all isNano vds
-  isNano (ExprInit e)  = isNano e
-
-
--- | Holds for `Expression` that is a valid side-effecting `Statement` 
-
-isNanoExprStatement :: Expression a -> Bool
-isNanoExprStatement (UnaryAssignExpr _ _ lv) = isNano lv
-isNanoExprStatement (AssignExpr _ o lv e)    = isNano o && isNano lv && isNano e
-isNanoExprStatement (CallExpr _ e es)        = all isNano (e:es)
-isNanoExprStatement (Cast _ e)               = isNanoExprStatement e
-isNanoExprStatement e@(FuncExpr _ _ _ _ )    = errortext (text "Unannotated function expression" <+> pp e)
-isNanoExprStatement e                        = errortext (text "Not Nano ExprStmtZ!" <+> pp e)
-
--- | Switch Statement
-
--- Is Nano-js code if each clause ends with a break statement
-
-instance IsNano (CaseClause a) where
-  isNano (CaseClause _ e st) = isNano e && holdsInit isNano st' && endsWithBreak st'
-    where st' = concatMap flattenStmt st
-  isNano (CaseDefault _  st) =             holdsInit isNano st' && endsWithBreak st'
-    where st' = concatMap flattenStmt st
-
-class EndsWithBreak a where
-  endsWithBreak :: a -> Bool
-
-instance EndsWithBreak (Statement a) where
-  endsWithBreak (BlockStmt _ xs)      = endsWithBreak xs
-  endsWithBreak (BreakStmt _ Nothing) = True
-  endsWithBreak _                     = False
-
-instance EndsWithBreak ([Statement a]) where
-  endsWithBreak [] = False
-  endsWithBreak xs = endsWithBreak $ last xs
-
-instance IsNano [(CaseClause a)] where 
-  isNano [] = False
-  isNano xs = all isNano xs && holdsInit (not . defaultC) xs
-    where
-      defaultC (CaseClause _ _ _) = False
-      defaultC (CaseDefault _ _ ) = True
-
--- | Check if `p` hold for all xs but the last one.  
-holdsInit :: (a -> Bool) -> [a] -> Bool
-holdsInit _ [] = True
-holdsInit p xs = all p $ init xs
-
--- | Trivial Syntax Checking 
--- TODO: Add check for top-level classes here.
-
-checkTopStmt :: (IsLocated a) => Statement a -> Statement a
-checkTopStmt s | checkBody [s] = s
-checkTopStmt s | otherwise     = throw $ errorInvalidTopStmt (srcPos s) s
-
-checkBody :: [Statement a] -> Bool
--- Adding support for loops so removing the while check
-checkBody stmts = all isNano stmts -- && null (getWhiles stmts) 
-    
-{-    
-getWhiles :: [Statement SourceSpan] -> [Statement SourceSpan]
-getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
-  where 
-    fromWhile s@(WhileStmt {}) = [s]
-    fromWhile _                = [] 
--}
-
------------------------------------------------------------------------------------
--- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 
------------------------------------------------------------------------------------
-
--- Ideally, a la JML, we'd modify the parser to take in annotations for 
--- 
---   * assert(p)
---   * assume(p)
---   * invariant(p) 
---
--- For now, we hack them with function calls.
-
-mkId = Id (initialPos "") 
-
------------------------------------------------------------------------------------
--- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 
------------------------------------------------------------------------------------
-
-returnName :: String
-returnName = "$result"
-
-symbolId :: (IsLocated l, F.Symbolic x) => l -> x -> Id l
-symbolId l x = Id l $ F.symbolString $ F.symbol x
-
-returnId   :: a -> Id a
-returnId x = Id x returnName 
-
-returnSymbol :: F.Symbol
-returnSymbol = F.symbol returnName
-
-
-
-isSpecification :: Statement a -> Bool
-isSpecification s  = not $ null $ catMaybes $ ($ s) <$> specs 
-  where 
-    specs          = [getAssume, getInv, getRequires, getEnsures]
-
-getInvariant :: Statement a -> F.Pred 
-
-getInvariant = getSpec getInv . flattenStmt
-
-flattenStmt (BlockStmt _ ss) = concatMap flattenStmt ss
-flattenStmt s                = [s]
-
-
-getAssume    :: Statement a -> Maybe F.Pred 
-getAssume    = getStatementPred "assume"
-
-getAssert    :: Statement a -> Maybe F.Pred 
-getAssert    = getStatementPred "assert"
-
-getRequires  = getStatementPred "requires"
-getEnsures   = getStatementPred "ensures"
-getInv       = getStatementPred "invariant"
-
-getStatementPred :: String -> Statement a -> Maybe F.Pred 
-getStatementPred name (ExprStmt _ (CallExpr _ (VarRef _ (Id _ f)) [p]))
-  | name == f 
-  = Just $ F.prop p
-getStatementPred _ _ 
-  = Nothing 
-
-getSpec   :: (Statement a -> Maybe F.Pred) -> [Statement a] -> F.Pred 
-getSpec g = mconcat . catMaybes . map g
-
--- getFunctionStatements :: Statement a -> [Statement a]
--- getFunctionStatements s = [fs | fs@(FunctionStmt _ _ _ _) <- flattenStmt s]
-
-getFunctionIds :: Statement a -> [Id a]
-getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
 
 
 ------------------------------------------------------------------
 -- | Converting `ECMAScript3` values into `Fixpoint` values, 
 --   i.e. *language* level entities into *logic* level entities.
 ------------------------------------------------------------------
-
-instance F.Symbolic   (Id a) where
-  symbol (Id _ x)   = F.symbol x 
 
 instance F.Symbolic (LValue a) where
   symbol (LVar _ x) = F.symbol x
@@ -483,61 +148,241 @@ bop o     = convertError "F.Bop" o
 pAnd p q  = F.pAnd [p, q] 
 pOr  p q  = F.pOr  [p, q]
 
-------------------------------------------------------------------
--- SourcePos Instances -------------------------------------------
-------------------------------------------------------------------
 
 
-instance Hashable a => Hashable (Id a) where 
-  hashWithSalt i x = hashWithSalt i (idLoc x, idName x)
 
-idName (Id _ x) = x
-idLoc  (Id l _) = l
 
--- instance PP SourcePos where 
---   pp = ppSourcePos 
--- 
--- instance F.Fixpoint SourcePos where
---   toFix = pp 
+---------------------------------------------------------------------------------
+-- | RefScript Types
+---------------------------------------------------------------------------------
 
-instance F.Fixpoint SourceSpan where
-  toFix = pp 
 
-instance F.Fixpoint String where
-  toFix = text 
+-- | Type Variables
+data TVar 
+  = TV { tv_sym :: F.Symbol
+       , tv_loc :: SourceSpan 
+       }
+    deriving (Show, Ord, Data, Typeable)
 
-instance (Ord a, F.Fixpoint a) => PP (F.FixResult a) where
-  pp = F.resultDoc
+
+-- | Type Constructors
+data TCon
+  = TInt                                                -- ^ number
+  | TBool                                               -- ^ boolean
+  | TString                                             -- ^ string
+  | TVoid                                               -- ^ void
+  | TTop                                                -- ^ top
+  | TRef QName                                          -- ^ A.B.C (class)
+  | TUn                                                 -- ^ union
+  | TNull                                               -- ^ null
+  | TUndef                                              -- ^ undefined
+
+  | TFPBool                                             -- ^ liquid 'bool'
+    deriving (Ord, Show, Data, Typeable)
+
+-- | (Raw) Refined Types 
+data RType r  
+  = TApp    TCon            [RType r]   r               -- ^ C T1,...,Tn
+  | TVar    TVar                        r               -- ^ A
+  | TFun    [Bind r]        (RType r)   r               -- ^ (xi:T1,..,xn:Tn) => T
+  | TCons   [TypeMember r]  Mutability  r               -- ^ {f1:T1,..,fn:Tn} 
+  | TAll    TVar            (RType r)                   -- ^ forall A. T
+  | TAnd    [RType r]                                   -- ^ /\ (T1..) => T1' ...
+                                                        -- ^ /\ (Tn..) => Tn'
+
+  | TClass  QName                                       -- ^ typeof A.B.C (class)
+  | TModule NameSpacePath                               -- ^ typeof L.M.N (module)
+                                                        -- ^ names are relative to current
+                                                        -- ^ environment
+
+  | TExp F.Expr                                         -- ^ "Expression" parameters for type-aliases: 
+                                                        -- ^ never appear in real/expanded RType
+    deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+
+
+-- | Standard Types
+type Type    = RType ()
+
+
+-- | Type binder
+data Bind r
+  = B { b_sym  :: F.Symbol                              -- ^ Binding's symbol
+      , b_type :: !(RType r)                            -- ^ Field type
+      } 
+    deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+
+
+---------------------------------------------------------------------------------
+-- | Interfacce definitions 
+---------------------------------------------------------------------------------
+
+data IfaceDef r = ID { 
+  -- 
+  -- ^ Class (True) or interface (False)
+  --
+    t_class :: Bool                                
+  -- 
+  -- ^ Name
+  --
+  , t_name  :: !(Id SourceSpan)                    
+  -- 
+  -- ^ Type variables
+  --
+  , t_args  :: ![TVar]                             
+  -- 
+  -- ^ Heritage
+  --
+  , t_proto :: !(Heritage r)                       
+  -- 
+  -- ^ List of data type elts 
+  --
+  , t_elts  :: ![TypeMember r]                     
+  } 
+  deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+
+
+type Heritage r  = Maybe (QName, [RType r])
+
+
+type SIfaceDef r = (IfaceDef r, [RType r])
+
+
+data TypeMember r 
+  -- 
+  -- ^ Call signature
+  --
+  = CallSig   { f_type :: RType r }                     
+  -- 
+  -- ^ Constructor signature
+  --
+  | ConsSig   { f_type :: RType r }
+  -- 
+  -- ^ Index signature
+  --
+  | IndexSig  { f_sym  :: F.Symbol
+              , f_key  :: Bool                         -- True = string
+              , f_type :: RType r }                     
+  -- 
+  -- ^ Field signature
+  --
+  | FieldSig  { f_sym  :: F.Symbol                      -- ^ Name  
+              , f_mut  :: Mutability                    -- ^ Mutability
+              , f_type :: RType r }                     -- ^ Property type (could be function)
+  -- 
+  -- ^ Method signature
+  --
+  | MethSig   { f_sym  :: F.Symbol                      -- ^ Name  
+              , f_mut  :: Mutability                    -- ^ Mutability
+              , f_type :: RType r }                     -- ^ Method type
+  -- 
+  -- ^ Static field signature
+  --
+  | StatSig   { f_sym  :: F.Symbol                      -- ^ Name  
+              , f_mut  :: Mutability                    -- ^ Mutability
+              , f_type :: RType r }                     -- ^ Property type (could be function)
+  deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+
+
+-- | A module s exported API
+--
+data ModuleMember r 
+  -- 
+  -- ^ Exported class
+  --
+  = ModClass  { m_sym  :: Id SourceSpan                 
+              , m_def  :: IfaceDef r }
+  -- 
+  -- ^ Exported binding
+  --
+  | ModVar    { m_sym  :: Id SourceSpan                 
+              , m_type :: RType r }                    
+  -- 
+  -- ^ Exported module -- Use this to find the module definition
+  --
+  | ModModule { m_sym  :: Id SourceSpan }               
+
+  deriving (Functor)
+
+type ModuleExports r = [ModuleMember r] 
+
+
+---------------------------------------------------------------------------------
+-- | Mutability (TODO: move to new file - perhaps new folder called Mutability)
+---------------------------------------------------------------------------------
+
+type Mutability = Type 
+
+
+data CommonTypes r = CommonTypes {
+    t_ReadOnly       :: RType r
+  , t_Immutable      :: RType r
+  , t_Mutable        :: RType r
+  , t_AnyMutability  :: RType r
+  , t_InheritedMut   :: RType r
+  }
+
+
+
+---------------------------------------------------------------------------------
+-- | Eq Instances
+---------------------------------------------------------------------------------
+
+
+instance Eq TVar where 
+  a == b = tv_sym a == tv_sym b
+
+instance IsLocated TVar where 
+  srcPos = tv_loc
+
+instance Hashable TVar where 
+  hashWithSalt i α = hashWithSalt i $ tv_sym α 
+
+instance F.Symbolic TVar where
+  symbol = tv_sym 
+
+instance F.Symbolic a => F.Symbolic (Located a) where 
+  symbol = F.symbol . val
+
+
+instance Eq TCon where
+  TInt     == TInt     = True   
+  TBool    == TBool    = True           
+  TString  == TString  = True
+  TVoid    == TVoid    = True         
+  TTop     == TTop     = True
+  TRef x1  == TRef x2  = x1 == x2
+  TUn      == TUn      = True
+  TNull    == TNull    = True
+  TUndef   == TUndef   = True
+  TFPBool  == TFPBool  = True
+  _        == _        = False
  
---ppSourcePos src = parens 
---                $ text ("file: " ++ f) <> comma <+> int l <> comma <+> int c
---  where 
---    (f,l,c)     = sourcePosElts src 
+
+-- Ignoring refinements in equality check
+instance Eq (RType r) where
+  TApp TUn t1 _  == TApp TUn t2 _  = (null $ t1 \\ t2) && (null $ t2 \\ t1)
+  TApp c1 t1s _  == TApp c2 t2s _  = (c1, t1s) == (c2, t2s)
+  TVar v1 _      == TVar v2 _      = v1        == v2
+  TFun b1 t1 _   == TFun b2 t2 _   = (b_type <$> b1, t1)  == (b_type <$> b2, t2)
+  TAll v1 t1     == TAll v2 t2     = (v1,t1)  == (v2,t2)   -- Very strict Eq here
+  TAnd t1s       == TAnd t2s       = t1s == t2s
+  TCons e1s m1 _ == TCons e2s m2 _ = (e1s,m1) == (e2s,m2)
+  _              == _              = False
 
 
-instance PP F.Pred where 
-  pp = pprint
+instance Eq (TypeMember r) where 
+  CallSig t1        == CallSig t2        = t1 == t2
+  ConsSig t1        == ConsSig t2        = t1 == t2
+  IndexSig _ b1 t1  == IndexSig _ b2 t2  = (b1,t1) == (b2,t2)
+  FieldSig f1 m1 t1 == FieldSig f2 m2 t2 = (f1,m1,t1) == (f2,m2,t2)
+  MethSig  f1 m1 t1 == MethSig f2 m2 t2  = (f1,m1,t1) == (f2,m2,t2)
+  StatSig f1 m1 t1  == StatSig f2 m2 t2  = (f1,m1,t1) == (f2,m2,t2)
+  _                 == _                 = False
+ 
 
-instance PP F.Symbol where 
-  pp = pprint
-
-instance PP (Id a) where
-  pp (Id _ x) = text x
-
-instance PP a => PP (Located a) where
-  pp x = pp (val x) <+> text "at:" <+> pp (loc x)
---------------------------------------------------------------------------------
-
-srcSpanStartLine = snd3 . sourcePosElts . sp_start . sourceSpanSrcSpan   
-srcSpanEndLine   = snd3 . sourcePosElts . sp_stop  . sourceSpanSrcSpan
-srcSpanStartCol  = thd3 . sourcePosElts . sp_start . sourceSpanSrcSpan 
-srcSpanEndCol    = thd3 . sourcePosElts . sp_stop  . sourceSpanSrcSpan 
-srcSpanFile      = fst3 . sourcePosElts . sp_start . sourceSpanSrcSpan
-
-
----------------------------------------------------------------------------------
--- | New Builtin Operators ------------------------------------------------------
----------------------------------------------------------------------------------
+-----------------------------------------------------------------------
+-- | Operator Types
+-----------------------------------------------------------------------
 
 data BuiltinOp = BIUndefined
                | BIBracketRef
@@ -553,28 +398,75 @@ instance PP BuiltinOp where
   pp = text . show 
 
 
---------------------------------------------------------------------------------
--- | Manipulating SSA Ids ------------------------------------------------------
---------------------------------------------------------------------------------
+-----------------------------------------------------------------------------
+-- | IContext keeps track of context of intersection-type cases
+-----------------------------------------------------------------------------
 
-mkSSAId :: IsLocated a => a -> Id a -> Int -> Id a
-mkSSAId l (Id _ x) n = Id l (x ++ ssaStr ++ show n)  
+-- | Keeps track of intersection-type context, to allow casts to be guarded by
+--   context. Otherwise, the "dead-casts" for one case must be proven in another
+--   case which is impossible. See tests/liquid/pos/misc/negate-05.js
+--   A context IC [i_1,...,i_n] denotes the case where we use the conjunct i_k
+--   from the kth function in lexical scope order (ignoring functions that have
+--   a single conjunct.)
 
--- Returns the identifier as is if this is not an SSAed name.
--- stripSSAId :: Id a -> Id a
--- stripSSAId (Id l x) = Id l (unpack $ head $ splitOn (pack ssaStr) (pack x))
+class CallSite a where
+  siteIndex :: a -> Int
 
-mkNextId :: Id a -> Id a
-mkNextId (Id a x) =  Id a $ nextStr ++ x
+instance CallSite Int where
+  siteIndex i = i
 
-isNextId :: Id a -> Maybe (Id a)
-isNextId (Id a s) = Id a <$> stripPrefix nextStr s
+newtype IContext = IC [Int] 
+                   deriving (Eq, Ord, Show, Data, Typeable)
 
-nextStr = "_NEXT_"
-ssaStr  = "_SSA_"
+emptyContext         :: IContext
+emptyContext         = IC []
+
+pushContext          :: (CallSite a) => a -> IContext -> IContext
+pushContext s (IC c) = IC ((siteIndex s) : c) 
+
+
+instance PP Int where
+  pp        = int
+
+ppArgs p sep l = p $ intersperse sep $ map pp l
+
+instance PP a => PP [a] where 
+  pp = ppArgs brackets comma 
+
+instance PP IContext where
+  pp (IC x) = text "Context: " <+> pp x
+
+
+
+-----------------------------------------------------------------------
+-- Type and Predicate Aliases
+-----------------------------------------------------------------------
+
+data Alias a s t = Alias {
+    al_name   :: Id SourceSpan  -- ^ alias name
+  , al_tyvars :: ![a]           -- ^ type  parameters  
+  , al_syvars :: ![s]           -- ^ value parameters 
+  , al_body   :: !t             -- ^ alias body
+  } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+
+type TAlias t    = Alias TVar F.Symbol t
+type PAlias      = Alias ()   F.Symbol F.Pred 
+type TAliasEnv t = Env (TAlias t)
+type PAliasEnv   = Env PAlias
+
+instance IsLocated (Alias a s t) where
+  srcPos = srcPos . al_name
+
+instance (PP a, PP s, PP t) => PP (Alias a s t) where
+  pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body 
+
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)
 -- End:
+
+
+
+
 
 

@@ -14,7 +14,6 @@ module Language.Nano.Liquid.Types (
   -- * Refinement Types and Environments
     RefType 
   , cge_env
-  , NanoRefType
 
   -- * Constraint Environments
   , CGEnv (..)
@@ -73,14 +72,19 @@ import           Control.Monad          (zipWithM)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
+
+import           Language.Nano.Annots
 import           Language.Nano.Errors
+import           Language.Nano.Locations
 import           Language.Nano.Types
-import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Env
-import           Language.Fixpoint.Misc
-import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Sub
+import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Types
+
+import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
   
@@ -114,7 +118,7 @@ data CGEnvR r = CGE {
 
         -- , cge_defs :: !(IfaceEnv r)                  -- ^ type definitions
 
-        , cge_types     :: QEnv (IfaceDef r)            -- ^ Classs/Interfaces in scope 
+        , cge_types     :: Env (IfaceDef r)            -- ^ Classs/Interfaces in scope 
 
         , cge_mod       :: QEnv (ModuleExports r)       -- ^ Modules in scope (exported API)
  

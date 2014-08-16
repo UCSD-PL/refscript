@@ -6,7 +6,6 @@
 {-# LANGUAGE DeriveFoldable            #-}
 {-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
-{-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
@@ -18,13 +17,8 @@
 
 module Language.Nano.Typecheck.Types (
 
-  -- * Programs
-    Nano (..)
-  , NanoBare, NanoSSA, NanoBareR, NanoSSAR, NanoRefType, NanoTypeR, NanoType, ExprSSAR, StmtSSAR
-  , Source (..)
-
-  -- * (Refinement) Types
-  , RType (..), Bind (..), toType, ofType, rTop, strengthen 
+  -- * Type operations
+    toType, ofType, rTop, strengthen 
 
   -- * Predicates on Types 
   , isTop, isNull, isVoid, isTNum, isUndef, isUnion
@@ -35,17 +29,12 @@ module Language.Nano.Typecheck.Types (
   -- * Deconstructing Types
   , bkFun, bkFuns, bkAll, bkAnd, bkUnion, funTys -- , methTys
   
-  -- * Type ops
   , rUnion, rTypeR, setRTypeR
-  
+
   , renameBinds
 
-  -- * Regular Types
-  , Heritage, Type, IfaceDef (..), SIfaceDef, TVar (..), TCon (..), TypeMember (..)
-  , ModuleExports, ModuleMember (..)
-
   -- * Mutability
-  , Mutability, t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly
+  , t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly
   -- , combMut, isMutable, isImmutable, isAnyMut, isMutabilityType, variance, varianceTDef
 
   -- * Primitive Types
@@ -53,47 +42,12 @@ module Language.Nano.Typecheck.Types (
   , tAnd, isTVar, isTObj, isConstr, isTFun, fTop, orNull
   -- , isArr , tArr, rtArr
 
-  -- * Print Types
-  , ppArgs
-
   -- * Element ops 
   , sameBinder, eltType, isStaticSig, nonStaticSig, nonConstrElt, mutability, baseType
-  , isMethodSig, isFieldSig, setThisBinding, remThisBinding
-
-
-  -- * Environments
-  , TCEnv (..), TCEnvO, EnvLike (..)
-
-  -- * Common Types
-  , CommonTypes(..)
-
-  -- * Type definition env
-  , IfaceEnv {-, tDefEmpty, tDefFromList, tDefToList -} 
-  , {- addSym, findSym, findSymOrDie, mapTDefEnv, -} mapIfaceEnvM
-
-  -- , ModuleExports
+  , isMethodSig, isFieldSig, setThisBinding, remThisBinding, mapEltM
 
   -- * Operator Types
   , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy, objLitTy, setPropTy, returnTy
-  -- , getFieldTy, getMethTy, getStatTy
-
-  -- * Annotations
-  , Annot (..), UFact, Fact (..), phiVarsAnnot, ClassInfo
-  
-  -- * Casts
-  , Cast(..), CastDirection(..), noCast, upCast, dnCast, ddCast
-
-  -- * Aliases for annotated Source 
-  , AnnBare, UAnnBare, AnnSSA , UAnnSSA
-  , AnnType, UAnnType, AnnInfo, UAnnInfo
-
-  -- * Contexts
-  , CallSite (..), IContext, emptyContext, pushContext
-
-  , hoistFuncDecls, hoistTypes, collectTypes, collectModules -- , hoistAnns
-
-  -- * Aliases
-  , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
 
 
   ) where 
@@ -102,7 +56,6 @@ import           Text.Printf
 import           Data.Default
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
-import           Data.Function                  (on)
 import           Data.Maybe                     (fromMaybe)
 import           Data.Traversable               hiding (sequence, mapM) 
 import           Data.Foldable                  (Foldable()) 
@@ -119,214 +72,23 @@ import           Language.Nano.Misc
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
+import           Language.Nano.Locations
 
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.PrettyPrint
 import           Text.PrettyPrint.HughesPJ 
+import           Text.Parsec.Pos                    (initialPos)
 
 import           Control.Applicative            hiding (empty)
 
 -- import           Debug.Trace (trace)
 
 
----------------------------------------------------------------------------------
--- | RefScript Types
----------------------------------------------------------------------------------
-
-
--- | Type Variables
-data TVar 
-  = TV { tv_sym :: F.Symbol
-       , tv_loc :: SourceSpan 
-       }
-    deriving (Show, Ord, Data, Typeable)
-
-
--- | Type Constructors
-data TCon
-  = TInt                                                -- ^ number
-  | TBool                                               -- ^ boolean
-  | TString                                             -- ^ string
-  | TVoid                                               -- ^ void
-  | TTop                                                -- ^ top
-  | TRef QName                                          -- ^ A.B.C (class)
-  | TUn                                                 -- ^ union
-  | TNull                                               -- ^ null
-  | TUndef                                              -- ^ undefined
-
-  | TFPBool                                             -- ^ liquid 'bool'
-    deriving (Ord, Show, Data, Typeable)
-
--- | (Raw) Refined Types 
-data RType r  
-  = TApp    TCon            [RType r]   r               -- ^ C T1,...,Tn
-  | TVar    TVar                        r               -- ^ A
-  | TFun    [Bind r]        (RType r)   r               -- ^ (xi:T1,..,xn:Tn) => T
-  | TCons   [TypeMember r]  Mutability  r               -- ^ {f1:T1,..,fn:Tn} 
-  | TAll    TVar            (RType r)                   -- ^ forall A. T
-  | TAnd    [RType r]                                   -- ^ /\ (T1..) => T1' ...
-                                                        -- ^ /\ (Tn..) => Tn'
-
-  | TClass  QName                                       -- ^ typeof A.B.C (class)
-  | TModule NameSpacePath                               -- ^ typeof L.M.N (module)
-                                                        -- ^ names are relative to current
-                                                        -- ^ environment
-
-  | TExp F.Expr                                         -- ^ "Expression" parameters for type-aliases: 
-                                                        -- ^ never appear in real/expanded RType
-    deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
-
--- | Type binder
-data Bind r
-  = B { b_sym  :: F.Symbol                              -- ^ Binding's symbol
-      , b_type :: !(RType r)                            -- ^ Field type
-      } 
-    deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
-
-
----------------------------------------------------------------------------------
--- | Interfacce definitions 
----------------------------------------------------------------------------------
-
-data IfaceDef r 
-  = ID { t_class :: Bool                                -- ^ Class (True) or interface (False)
-       , t_name  :: !(Id SourceSpan)                    -- ^ Name
-       , t_args  :: ![TVar]                             -- ^ Type variables
-       , t_proto :: !(Heritage r)                       -- ^ Heritage
-       , t_elts  :: ![TypeMember r]                     -- ^ List of data type elts 
-       } 
-     deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
-
-type Heritage r  = Maybe (QName, [RType r])
-
-type SIfaceDef r = (IfaceDef r, [RType r])
-
-data TypeMember r 
-  = CallSig   { f_type :: RType r }                     -- ^ Call Signature
-
-  | ConsSig   { f_type :: RType r }                     -- ^ Constructor Signature               
-  
-  | IndexSig  { f_sym  :: F.Symbol
-              , f_key  :: Bool                          -- ^ Index Signature (T/F=string/number)
-              , f_type :: RType r }                     
-                   
-  | FieldSig  { f_sym  :: F.Symbol                      -- ^ Name  
-              , f_mut  :: Mutability                    -- ^ Mutability
-              , f_type :: RType r }                     -- ^ Property type (could be function)
-
-  | MethSig   { f_sym  :: F.Symbol                      -- ^ Name  
-              , f_mut  :: Mutability                    -- ^ Mutability
-              , f_type :: RType r }                     -- ^ Method type
-
-  | StatSig   { f_sym  :: F.Symbol                      -- ^ Name  
-              , f_mut  :: Mutability                    -- ^ Mutability
-              , f_type :: RType r }                     -- ^ Property type (could be function)
-
-  deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
-
-
--- | A module s exported API
-data ModuleMember r 
-  = ModClass  { m_sym  :: Id SourceSpan                 -- ^ Exported class
-              , m_def  :: IfaceDef r }
-
-  | ModVar    { m_sym  :: Id SourceSpan                 -- ^ Exported binding
-              , m_type :: RType r }                    
-
-  | ModModule { m_sym  :: Id SourceSpan }               -- ^ Exported module
-                                                        --   Use this to find
-                                                        --   the module definition
-
-  deriving (Functor)
-
-type ModuleExports r = [ModuleMember r] 
-
-type IfaceEnv r = Env (IfaceDef r) 
- 
-
--------------------------------------------------------------------------------
--- | Typecheck Environment 
--------------------------------------------------------------------------------
-
-class EnvLike r t where
-  get_env         :: t r -> Env (RType r)               -- ^ All bindings in scope
-  get_types       :: t r -> QEnv (IfaceDef r)           -- ^ All Classs/Interfaces 
-  get_mod         :: t r -> QEnv (ModuleExports r)      -- ^ Modules in scope (exported API)
-  get_nspace      :: t r -> NameSpacePath               -- ^ Namespace absolute path
-  get_ctx         :: t r -> IContext                    -- ^ Calling context
-
---   get_common_ts   :: t r -> CommonTypes r
-
-
-
-
-data TCEnv r  = TCE {
-    tce_env       :: Env (RType r)
-  , tce_types     :: QEnv (IfaceDef r) 
-  , tce_mod       :: QEnv (ModuleExports r)
-  , tce_ctx       :: !IContext                          -- ^ Calling context 
-  , tce_nspace    :: NameSpacePath                      
-  }
-  deriving (Functor)
-
---   We define this alias as the "output" type for typechecking any entity
---   that can create or affect binders (e.g. @VarDecl@ or @Statement@)
---   @Nothing@ means if we definitely hit a "return" 
---   @Just γ'@ means environment extended with statement binders
-
-type TCEnvO r = Maybe (TCEnv r)
-
-
-instance EnvLike r TCEnv where
-  get_env         = tce_env
-  get_types       = tce_types
-  get_mod         = tce_mod
-  get_nspace      = tce_nspace
-  get_ctx         = tce_ctx
-
---   get_common_ts   = undefined -- TODO !!!!
-
-
-
----------------------------------------------------------------------------------
--- | Environment operations
----------------------------------------------------------------------------------
-
----------------------------------------------------------------------------------
-mapIfaceEnvM :: (Monad m, Applicative m) 
-             => (RType t -> m (RType r)) -> IfaceEnv t -> m (IfaceEnv r)
----------------------------------------------------------------------------------
-mapIfaceEnvM f e = envFromList <$> mapM (mapSndM (mapIfaceDefsM f)) (envToList e)
-  
-
----------------------------------------------------------------------------------
-mapIfaceDefsM :: (Monad m, Functor m) 
-              => (RType t -> m (RType r)) -> IfaceDef t -> m (IfaceDef r)
----------------------------------------------------------------------------------
-mapIfaceDefsM f (ID c n αs (Just (p,ps)) es) 
-  = do  ps' <- mapM f ps 
-        es' <- mapM (mapEltM f) es 
-        return $ ID c n αs (Just (p,ps')) es'
-mapIfaceDefsM f (ID c n αs Nothing es) = 
-  ID c n αs Nothing <$> mapM (mapEltM f) es
-
-
----------------------------------------------------------------------------------
+---------------------------------------------------------------------
 -- | Mutability
----------------------------------------------------------------------------------
-
-type Mutability = Type 
-
-
-data CommonTypes r = CommonTypes {
-                    t_ReadOnly       :: RType r
-                  , t_Immutable      :: RType r
-                  , t_Mutable        :: RType r
-                  , t_AnyMutability  :: RType r
-                  , t_InheritedMut   :: RType r
-              }
+---------------------------------------------------------------------
 
 -- validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable", "AnyMutability"]
 
@@ -377,12 +139,15 @@ t_inheritedMut  = mkMut "InheritedMut"
 -- varianceTDef (ID _ _ vs _ _) = take (length vs) $ repeat True
 
 
+
+
+---------------------------------------------------------------------
+-- | Refinement manipulation
+---------------------------------------------------------------------
+
 -- | "pure" top-refinement
 fTop :: (F.Reftable r) => r
 fTop = mempty
-
--- | Standard Types
-type Type    = RType ()
 
 -- | Stripping out Refinements 
 toType :: RType a -> Type
@@ -394,32 +159,6 @@ ofType = fmap (const fTop)
 
 -- | Top-up refinemnt
 rTop = ofType . toType
-
-funTys l f xs ft 
-  = case bkFuns ft of
-      Nothing -> Left $ errorNonFunction (srcPos l) f ft 
-      Just ts -> 
-        case partitionEithers [funTy l xs t | t <- ts] of 
-          ([], fts) -> Right $ zip ([0..] :: [Int]) fts
-          (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
-
--- methTys l f xs i (m,ft0)
---   = case remThisBinding ft0 of
---       Nothing        -> Left  $ errorNonFunction (srcPos l) f ft0 
---       Just (αs,bs,t) -> Right $ (i,m,αs,bs,t)
-
---   = case bkFuns ft0 of
---       Nothing -> Left $ errorNonFunction (srcPos l) f ft0 
---       Just ts -> 
---         case partitionEithers [funTy l xs t | t <- ts] of 
---           ([], fts) -> Right $ zip3 ([0..] :: [Int]) (repeat m) fts
---           (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
-
-
-funTy l xs (αs, yts, t) 
-  | length xs == length yts = let (su, ts') = renameBinds yts xs 
-                              in  Right (αs, ts', F.subst su t)    
-  | otherwise               = Left $ errorArgMismatch (srcPos l)
 
 renameBinds yts xs    = (su, [F.subst su ty | B _ ty <- yts])
   where 
@@ -557,58 +296,6 @@ setRTypeR (TFun xts ot _ ) r = TFun xts ot r
 setRTypeR t                _ = t
 
 
-instance Eq TVar where 
-  a == b = tv_sym a == tv_sym b
-
-instance IsLocated TVar where 
-  srcPos = tv_loc
-
-instance Hashable TVar where 
-  hashWithSalt i α = hashWithSalt i $ tv_sym α 
-
-instance F.Symbolic TVar where
-  symbol = tv_sym 
-
-instance F.Symbolic a => F.Symbolic (Located a) where 
-  symbol = F.symbol . val
-
-
-instance Eq TCon where
-  TInt     == TInt     = True   
-  TBool    == TBool    = True           
-  TString  == TString  = True
-  TVoid    == TVoid    = True         
-  TTop     == TTop     = True
-  TRef x1  == TRef x2  = x1 == x2
-  TUn      == TUn      = True
-  TNull    == TNull    = True
-  TUndef   == TUndef   = True
-  TFPBool  == TFPBool  = True
-  _        == _        = False
- 
-
--- Ignoring refinements in equality check
-instance Eq (RType r) where
-  TApp TUn t1 _  == TApp TUn t2 _  = (null $ t1 L.\\ t2) && (null $ t2 L.\\ t1)
-  TApp c1 t1s _  == TApp c2 t2s _  = (c1, t1s) == (c2, t2s)
-  TVar v1 _      == TVar v2 _      = v1        == v2
-  TFun b1 t1 _   == TFun b2 t2 _   = (b_type <$> b1, t1)  == (b_type <$> b2, t2)
-  TAll v1 t1     == TAll v2 t2     = (v1,t1)  == (v2,t2)   -- Very strict Eq here
-  TAnd t1s       == TAnd t2s       = t1s == t2s
-  TCons e1s m1 _ == TCons e2s m2 _ = (e1s,m1) == (e2s,m2)
-  _              == _              = False
-
-
-instance Eq (TypeMember r) where 
-  CallSig t1        == CallSig t2        = t1 == t2
-  ConsSig t1        == ConsSig t2        = t1 == t2
-  IndexSig _ b1 t1  == IndexSig _ b2 t2  = (b1,t1) == (b2,t2)
-  FieldSig f1 m1 t1 == FieldSig f2 m2 t2 = (f1,m1,t1) == (f2,m2,t2)
-  MethSig  f1 m1 t1 == MethSig f2 m2 t2  = (f1,m1,t1) == (f2,m2,t2)
-  StatSig f1 m1 t1  == StatSig f2 m2 t2  = (f1,m1,t1) == (f2,m2,t2)
-  _                 == _                 = False
- 
-
 -- mapElt f (CallSig t)      = CallSig (f t)
 -- mapElt f (ConsSig t)      = ConsSig (f t)
 -- mapElt f (IndexSig i b t) = IndexSig i b ( f t)
@@ -645,7 +332,6 @@ setThisBinding m@(MethSig _ _ t) t' = m { f_type = mapAnd bkTy t }
         Just (vs, bs@(B x _:_),ot) | x == F.symbol "this" -> mkFun (vs,bs,ot)
         Just (vs, bs,ot) -> mkFun (vs, B (F.symbol "this") t':bs, ot)
         _ -> ty
-
 setThisBinding m _        = m
 
 remThisBinding t =
@@ -654,127 +340,6 @@ remThisBinding t =
     Just ft                                         -> Just ft
     _                                               -> Nothing
 
-
-
----------------------------------------------------------------------------------
--- | Nano Program 
----------------------------------------------------------------------------------
-
--- | Liquid types environment
-
--- data LiquidEnv r     = LEnv                     
---                      { consts :: !(Env (RType r))          -- ^ Measure Signatures
--- 							       , tAlias :: !(TAliasEnv (RType r))    -- ^ Type aliases
---                      , pAlias :: !(PAliasEnv)              -- ^ Predicate aliases
---                      , quals  :: ![F.Qualifier]            -- ^ Qualifiers
---                      , invts  :: ![Located (RType r)]      -- ^ Type Invariants
---                      } deriving (Functor, Data, Typeable)
-
-
-data Nano a r       = Nano { 
-                    -- ^ Code to check
-                      code   :: !(Source a)               
-                    -- ^ Annotations (keeping this to scrape qualifiers later)
-                    -- ^ XXX: The names are bogus - made unique to avoid
-                    -- ^ overwrites
-                    , specs  :: !(Env (RType r))
-                    -- , specs  :: !(QEnv (RType r))
-                    -- ^ Measure Signatures
-                    , consts :: !(Env (RType r))          
-                    -- ^ Type aliases
-							      , tAlias :: !(TAliasEnv (RType r))    
-                    -- ^ Predicate aliases
-                    , pAlias :: !(PAliasEnv)              
-                    -- ^ Qualifiers
-                    , quals  :: ![F.Qualifier]            
-                    -- ^ Type Invariants
-                    , invts  :: ![Located (RType r)]      
-                    } deriving (Functor, Data, Typeable)
-
-type NanoBareR r   = Nano (AnnBare r) r                    -- ^ After Parse
-type NanoSSAR r    = Nano (AnnSSA  r) r                    -- ^ After SSA  
-type NanoTypeR r   = Nano (AnnType r) r                    -- ^ After TC
-type NanoRefType   = NanoTypeR F.Reft                      -- ^ After Liquid
-
-type ExprSSAR r    = Expression (AnnSSA r)
-type StmtSSAR r    = Statement  (AnnSSA r)
-
-type NanoBare      = NanoBareR ()
-type NanoSSA       = NanoSSAR ()
-type NanoType      = NanoTypeR ()
-
-
-newtype Source a = Src [Statement a]
-  deriving (Data, Typeable)
-
-instance Monoid (Source a) where
-  mempty                    = Src []
-  mappend (Src s1) (Src s2) = Src $ s1 ++ s2
-
-instance Functor Source where 
-  fmap f (Src zs) = Src (map (fmap f) zs)
-
-instance (PP r, F.Reftable r) => PP (Nano a r) where
-  pp pgm@(Nano {code = (Src s) }) 
-    =   text "\n******************* Code **********************"
-    $+$ pp s
-    $+$ text "\n******************* Constants *****************"
-    $+$ pp (consts pgm) 
-    $+$ text "\n******************* Predicate Aliases *********"
-    $+$ pp (pAlias pgm)
-    $+$ text "\n******************* Type Aliases **************"
-    $+$ pp (tAlias pgm)
-    $+$ text "\n******************* Qualifiers ****************"
-    $+$ vcat (F.toFix <$> (take 3 $ quals pgm))
-    $+$ text "..."
-    $+$ text "\n******************* Invariants ****************"
-    $+$ vcat (pp <$> (invts pgm))
-    $+$ text "\n***********************************************\n"
-
-instance (PP r, F.Reftable r) => PP (IfaceEnv r) where
-  pp γ = text "Type definitions:"  $$ nest 2 (pp γ)
-
-instance PP t => PP (I.IntMap t) where
-  pp m = vcat (pp <$> I.toList m)
-
-instance PP t => PP (F.SEnv t) where
-  pp m = vcat $ pp <$> F.toListSEnv m
-
-instance (PP r, F.Reftable r) => PP (IfaceDef r) where
-  pp (ID c nm vs Nothing ts) =  
-        pp (if c then "class" else "interface")
-    <+> pp nm <> ppArgs angles comma vs 
-    <+> braces (intersperse semi $ map pp ts)
-  pp (ID c nm vs (Just (p,ps)) ts) = 
-        pp (if c then "class" else "interface")
-    <+> pp nm <> ppArgs angles comma vs
-    <+> text "extends" 
-    <+> pp p  <> ppArgs angles comma ps
-    <+> braces (intersperse semi $ map pp ts)
-
-angles p = char '<' <> p <> char '>'
-
-
-
-instance (PP r, F.Reftable r) => PP (TypeMember r) where
-  pp (CallSig t)          =  text "call" <+> pp t 
-  pp (ConsSig t)          =  text "new" <+> pp t
-  pp (IndexSig x True t)  =  brackets (pp x <> text ": string") <> text ":" <+> pp t
-  pp (IndexSig x False t) =  brackets (pp x <> text ": number") <> text ":" <+> pp t
-  pp (FieldSig x _ t)     =  text "field"  {- <+> ppMut m -} <+> pp x <> text ":" <+> pp t 
-  pp (MethSig x _ t)      =  text "method" {- <+> ppMut m -} <+> pp x <> text ":" <+> pp t
-  pp (StatSig x _ t)      =  text "static" {- <+> ppMut m -} <+> pp x <> text ":" <+> pp t
-
-
--- ppMut t | isMutable t      = brackets $ pp "mut"
---         | isAnyMut t       =            pp ""
---         | isInheritedMut t =            pp ""
---         | isReadOnly t     = brackets $ pp "ro"
---         | isImmutable t    = brackets $ pp "imm"
---         | isTVar t         = brackets $ pp t
---         | isTop t          =            pp "top"    -- FIXME: this should go ...
---         | otherwise        = error    $ "ppMut: case not covered: " ++ ppshow t
-   
 
 instance F.Symbolic (TypeMember t) where
   symbol (FieldSig s _ _)     = s
@@ -820,129 +385,11 @@ eltType (IndexSig _ _  t) = t
 eltType (StatSig _ _ t)   = t
 
 
-
----------------------------------------------------------------------------
--- | AST Traversals
----------------------------------------------------------------------------
-
-
--- | Find all function definitions/declarations whose scope reaches the current 
---   scope. E.g. declarations in the If-branch of a conditional expression. 
---   Note how declarations do not escape module or function blocks.
--------------------------------------------------------------------------------
-hoistFuncDecls :: Data a => [Statement a] -> [(Id a,a)]
--------------------------------------------------------------------------------
-hoistFuncDecls = everythingBut (++) myQ
-  where
-    myQ a     = case cast a :: (Data a => Maybe (Statement a)) of
-                  Just  s -> fSt s
-                  Nothing -> 
-                      case cast a :: (Data a => Maybe (Expression a)) of
-                        Just  s -> fExp s
-                        Nothing -> ([], False)
-
-    fSt :: Data a => (Statement a) -> ([(Id a,a)],Bool)
-    fSt (FunctionStmt l n _ _) = ([(n,l)], True)
-    fSt (FunctionDecl l n _  ) = ([(n,l)], True)
-    fSt (ClassStmt {})         = ([], True)
-    fSt (ModuleStmt {})        = ([], True)
-    fSt _                      = ([], False)
-
-    fExp :: Expression a -> ([(Id a, a)], Bool)
-    fExp (FuncExpr {})         = ([], True)
-    fExp _                     = ([], False)
-
-
-
--- | Find classes / interfaces in scope
--------------------------------------------------------------------------------
-hoistTypes :: Data a => [Statement a] -> [Statement a]
--------------------------------------------------------------------------------
-hoistTypes = everythingBut (++) myQ
-  where
-    myQ a  = case cast a :: (Data a => Maybe (Statement a)) of
-               Just  s -> fSt s
-               Nothing -> 
-                   case cast a :: (Data a => Maybe (Expression a)) of
-                     Just  s -> fExp s
-                     Nothing -> ([], False)
-
-    fSt (FunctionStmt _ _ _ _) = ([ ], True)
-    fSt (FunctionDecl _ _ _  ) = ([ ], True)
-    fSt s@(ClassStmt {})       = ([s], True)
-    fSt s@(IfaceStmt {})       = ([s], True)
-    fSt (ModuleStmt {})        = ([ ], True)
-    fSt _                      = ([ ], False)
-    fExp :: Expression a -> ([Statement a], Bool)
-    fExp _                     = ([ ], True)
-
-
-
--- -- | Find all function definitions/declarations whose scope is hoisted to 
--- --   the current scope. E.g. declarations in the If-branch of a conditional 
--- --   expression. Note how declarations do not escape module or function 
--- --   blocks (isolation).
--- -------------------------------------------------------------------------------
--- hoistAnns                     :: Data a => [Statement a] -> [a]
--- -------------------------------------------------------------------------------
--- hoistAnns                      = everythingBut (++) $ ([], False) `mkQ` f
---   where
---     f                          = fSt `extQ` fExp 
---     fSt (FunctionStmt l _ _ _) = ([l], True)
---     fSt (FunctionDecl l _ _  ) = ([l], True)
---     fSt (ClassStmt l _ _ _ _ ) = ([l], True)
---     fSt (ModuleStmt l _ _ )    = ([l], True)
---     fSt s                      = ([getAnnotation s], False)
---     fExp                      :: Expression t -> ([t], Bool)
---     fExp (FuncExpr l _ _ _)    = ([l], True)
---     fExp e                     = ([getAnnotation e], False)
--- 
-
--- Only descend down modules 
--------------------------------------------------------------------------------
-collectTypes :: Data a => [Statement a] -> [(NameSpacePath, Statement a)]
--------------------------------------------------------------------------------
-collectTypes  = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
-  where
-    f e@(ClassStmt _ _ _ _ _ ) s = ([(s,e)], s                , True )
-    f e@(ModuleStmt _ x _    ) s = ([(s,e)], s ++ [F.symbol x], False)
-    f _                        s = ([]     , s                , True )
-
-
--- Only descend down modules 
--------------------------------------------------------------------------------
-collectModules :: Data a => [Statement a] -> [(NameSpacePath, Statement a)]
--------------------------------------------------------------------------------
-collectModules  = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
-  where
-    f e@(ClassStmt _ _ _ _ _ ) s = ([(s,e)], s                , True )
-    f e@(ModuleStmt _ x _    ) s = ([(s,e)], s ++ [F.symbol x], False)
-    f _                        s = ([]     , s                , True )
-
-
-
-
--- | Summarise all nodes in top-down, left-to-right order, carrying some state
---   down the tree during the computation, but not left-to-right to siblings,
---   and also stop when a condition is true.
----------------------------------------------------------------------------
-everythingButWithContext :: s -> (r -> r -> r) -> GenericQ (s -> (r, s, Bool)) -> GenericQ r
----------------------------------------------------------------------------
-everythingButWithContext s0 f q x
-  | stop      = r
-  | otherwise = foldl f r (gmapQ (everythingButWithContext s' f q) x)
-    where (r, s', stop) = q x s0
-
-
-
-
-
-
-
 ---------------------------------------------------------------------------
 -- | Pretty Printer Instances
 ---------------------------------------------------------------------------
 
+angles p = char '<' <> p <> char '>'
 
 instance PP Bool where
   pp True   = text "True"
@@ -950,9 +397,6 @@ instance PP Bool where
 
 instance PP () where 
   pp _ = text ""
-
-instance PP a => PP [a] where 
-  pp = ppArgs brackets comma 
 
 instance PP a => PP (Maybe a) where 
   pp = maybe (text "Nothing") pp 
@@ -1022,210 +466,42 @@ instance (F.Reftable r, PP r) => PP (ModuleMember r) where
   pp (ModModule x  ) = pp x
 
 
-
------------------------------------------------------------------------------
--- | IContext keeps track of context of intersection-type cases
------------------------------------------------------------------------------
-
--- | Keeps track of intersection-type context, to allow casts to be guarded by
---   context. Otherwise, the "dead-casts" for one case must be proven in another
---   case which is impossible. See tests/liquid/pos/misc/negate-05.js
---   A context IC [i_1,...,i_n] denotes the case where we use the conjunct i_k
---   from the kth function in lexical scope order (ignoring functions that have
---   a single conjunct.)
-
-class CallSite a where
-  siteIndex :: a -> Int
-
-instance CallSite Int where
-  siteIndex i = i
-
-newtype IContext = IC [Int] 
-                   deriving (Eq, Ord, Show, Data, Typeable)
-
-instance PP Int where
-  pp        = int
-
-instance PP IContext where
-  pp (IC x) = text "Context: " <+> pp x
-
-emptyContext         :: IContext
-emptyContext         = IC []
-
-pushContext          :: (CallSite a) => a -> IContext -> IContext
-pushContext s (IC c) = IC ((siteIndex s) : c) 
-
------------------------------------------------------------------------------
--- | Casts 
------------------------------------------------------------------------------
-data Cast r  = CNo                                      -- .
-             | CDead {                 tgt :: RType r } -- |dead code|
-             | CUp   { org :: RType r, tgt :: RType r } -- <t1 UP t2>
-             | CDn   { org :: RType r, tgt :: RType r } -- <t1 DN t2>
-             deriving (Eq, Ord, Show, Data, Typeable, Functor)
-
-data CastDirection   = CDNo    -- .
-                     | CDDead  -- |dead code|
-                     | CDUp    -- <UP>
-                     | CDDn    -- <DN>
-             deriving (Eq, Ord, Show, Data, Typeable)
+instance (PP r, F.Reftable r) => PP (IfaceDef r) where
+  pp (ID c nm vs Nothing ts) =  
+        pp (if c then "class" else "interface")
+    <+> pp nm <> ppArgs angles comma vs 
+    <+> braces (intersperse semi $ map pp ts)
+  pp (ID c nm vs (Just (p,ps)) ts) = 
+        pp (if c then "class" else "interface")
+    <+> pp nm <> ppArgs angles comma vs
+    <+> text "extends" 
+    <+> pp p  <> ppArgs angles comma ps
+    <+> braces (intersperse semi $ map pp ts)
 
 
-instance (PP r, F.Reftable r) => PP (Cast r) where
-  pp CNo         = text "No cast"
-  pp (CDead _)   = text "Dead code"
-  pp (CUp t1 t2) = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
-  pp (CDn t1 t2) = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
-
-instance PP CastDirection where
-  pp CDNo   = text "="
-  pp CDDead = text "dead"
-  pp CDUp   = text "UP"
-  pp CDDn   = text "DN"
-
-noCast CDNo = True
-noCast _   = False
-
-upCast CDDead = False
-upCast CDNo   = True
-upCast CDUp   = True
-upCast CDDn   = False
-
-dnCast CDDead = False
-dnCast CDNo   = True
-dnCast CDUp   = False
-dnCast CDDn   = True
-
-ddCast CDDead = True
-ddCast _      = False
+instance (PP r, F.Reftable r) => PP (TypeMember r) where
+  pp (CallSig t)          =  text "call" <+> pp t 
+  pp (ConsSig t)          =  text "new" <+> pp t
+  pp (IndexSig x True t)  =  brackets (pp x <> text ": string") <> text ":" <+> pp t
+  pp (IndexSig x False t) =  brackets (pp x <> text ": number") <> text ":" <+> pp t
+  pp (FieldSig x _ t)     =  text "field"  {- <+> ppMut m -} <+> pp x <> text ":" <+> pp t 
+  pp (MethSig x _ t)      =  text "method" {- <+> ppMut m -} <+> pp x <> text ":" <+> pp t
+  pp (StatSig x _ t)      =  text "static" {- <+> ppMut m -} <+> pp x <> text ":" <+> pp t
 
 
------------------------------------------------------------------------------
--- | Annotations
------------------------------------------------------------------------------
+-- ppMut t | isMutable t      = brackets $ pp "mut"
+--         | isAnyMut t       =            pp ""
+--         | isInheritedMut t =            pp ""
+--         | isReadOnly t     = brackets $ pp "ro"
+--         | isImmutable t    = brackets $ pp "imm"
+--         | isTVar t         = brackets $ pp t
+--         | isTop t          =            pp "top"    -- FIXME: this should go ...
+--         | otherwise        = error    $ "ppMut: case not covered: " ++ ppshow t
+   
 
-data Fact r
-  = PhiVar      ![(Id SourceSpan)]
-  | TypInst     !IContext ![RType r]
-  -- Overloading
-  | EltOverload !IContext  !(TypeMember r)
-  | Overload    !IContext  !(RType r)
-  | TCast       !IContext  !(Cast r)
-  -- Type annotations
-  | VarAnn      !(RType r)
-  | FieldAnn    !(TypeMember r)
-  | MethAnn     !(TypeMember r) 
-  | StatAnn     !(TypeMember r) 
-  | ConsAnn     !(TypeMember r)
-  | UserCast    !(RType r)
-  | FuncAnn     !(RType r)
-  -- Named type annotation
-  | IfaceAnn    !(IfaceDef r)
-  | ClassAnn    !([TVar], Maybe (QName, [RType r]))
-  | ExporedModElt
-    deriving (Eq, Show, Data, Typeable, Functor)
-
-type UFact = Fact ()
-
-data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show, Data, Typeable)
-type AnnBare r = Annot (Fact r) SourceSpan -- NO facts
-type AnnSSA  r = Annot (Fact r) SourceSpan -- Phi facts
-type AnnType r = Annot (Fact r) SourceSpan -- Phi + t. annot. + Cast facts
-type AnnInfo r = M.HashMap SourceSpan [Fact r] 
-type ClassInfo r = Env (RType r)
-
-type UAnnBare = AnnBare () 
-type UAnnSSA  = AnnSSA  ()
-type UAnnType = AnnType ()
-type UAnnInfo = AnnInfo ()
-
-instance IsLocated (AnnSSA r) where
-  srcPos = ann 
-
-instance HasAnnotation (Annot b) where 
-  getAnnotation = ann 
-
-instance Default a => Default (Annot b a) where
-  def = Ann def []
-
-instance Default SourceSpan where
-  def = srcPos dummySpan
-  
-
-instance Ord (AnnSSA  r) where 
-  compare (Ann s1 _) (Ann s2 _) = compare s1 s2
-
--- XXX: This shouldn't have to be that hard...
-instance Ord (Fact r) where
-  compare (PhiVar i1       ) (PhiVar i2       )   = compare i1 i2
-  compare (TypInst c1 t1   ) (TypInst c2 t2   )   = compare (c1,toType <$> t1) (c2,toType <$> t2)
-  compare (EltOverload c1 t1) (EltOverload c2 t2) = compare (c1, const () <$> t1) (c2, const () <$> t2)
-  compare (Overload c1 t1  ) (Overload c2 t2  )   = compare (c1, toType t1) (c2, toType t2)
-  compare (TCast c1 _      ) (TCast c2 _      )   = compare c1 c2
-  compare (VarAnn t1       ) (VarAnn t2       )   = on compare toType t1 t2
-  compare (FieldAnn f1     ) (FieldAnn f2     )   = on compare (fmap $ const ()) f1 f2
-  compare (MethAnn m1      ) (MethAnn m2      )   = on compare (fmap $ const ()) m1 m2
-  compare (StatAnn s1      ) (StatAnn s2      )   = on compare (fmap $ const ()) s1 s2
-  compare (ConsAnn c1      ) (ConsAnn c2      )   = on compare (fmap $ const ()) c1 c2
-  compare (UserCast c1     ) (UserCast c2     )   = on compare (fmap $ const ()) c1 c2
-  compare (FuncAnn t1      ) (FuncAnn t2      )   = on compare (fmap $ const ()) t1 t2
-  compare (ClassAnn (_,m1) ) (ClassAnn (_,m2) )   = on compare (fst <$>) m1 m2
-  compare (IfaceAnn d1     ) (IfaceAnn d2     )   = compare (fmap (const ()) d1) (fmap (const ()) d2) 
-  compare ExporedModElt      ExporedModElt        = EQ
-  compare f1 f2                                   = on compare factToNum f1 f2
-
-factToNum (PhiVar _        ) = 0
-factToNum (TypInst _ _     ) = 1
-factToNum (EltOverload _ _ ) = 2
-factToNum (Overload _  _   ) = 3
-factToNum (TCast _ _       ) = 4
-factToNum (VarAnn _        ) = 6
-factToNum (FieldAnn _      ) = 7
-factToNum (MethAnn _       ) = 8
-factToNum (StatAnn _       ) = 9
-factToNum (ConsAnn _       ) = 10
-factToNum (UserCast _      ) = 11
-factToNum (FuncAnn _       ) = 12
-factToNum (ClassAnn _      ) = 13
-factToNum (IfaceAnn _      ) = 14
-factToNum (ExporedModElt   ) = 15
-
-
-instance Eq (Annot a SourceSpan) where 
-  (Ann s1 _) == (Ann s2 _) = s1 == s2
-
-instance IsLocated (Annot a SourceSpan) where 
-  srcPos = ann
-
-instance (F.Reftable r, PP r) => PP (Fact r) where
-  pp (PhiVar x)       = text "phi"                    <+> pp x
-  pp (TypInst ξ ts)   = text "inst"                   <+> pp ξ <+> pp ts 
-  pp (Overload ξ i)   = text "overload"               <+> pp ξ <+> pp i
-  pp (EltOverload ξ i)= text "elt_overload"           <+> pp ξ <+> pp i
-  pp (TCast  ξ c)     = text "cast"                   <+> pp ξ <+> pp c
-  pp (VarAnn t)       = text "Var Annotation"         <+> pp t
-  pp (ConsAnn c)      = text "Constructor Annotation" <+> pp c
-  pp (UserCast c)     = text "Cast Annotation"        <+> pp c
-  pp (ExporedModElt)  = text "Exported"
-  pp (FuncAnn t)      = text "Func Annotation"        <+> pp t
-  pp (FieldAnn f)     = text "Field Annotation"       <+> pp f
-  pp (MethAnn m)      = text "Method Annotation"      <+> pp m
-  pp (StatAnn s)      = text "Static Annotation"      <+> pp s
-  pp (ClassAnn _)     = text "UNIMPLEMENTED:pp:ClassAnn"
-  pp (IfaceAnn _)     = text "UNIMPLEMENTED:pp:IfaceAnn"
-
-instance (F.Reftable r, PP r) => PP (AnnInfo r) where
-  pp             = vcat . (ppB <$>) . M.toList 
-    where 
-      ppB (x, t) = pp x <+> dcolon <+> pp t
-
-instance (PP a, PP b) => PP (Annot b a) where
-  pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
-
-phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
 
 -----------------------------------------------------------------------
--- | Primitive / Base Types -------------------------------------------
+-- | Primitive / Base Types
 -----------------------------------------------------------------------
 
 tVar                       :: (F.Reftable r) => TVar -> RType r
@@ -1271,9 +547,6 @@ orNull t                    | otherwise     = TApp TUn [tNull,t] fTop
 
 
 
------------------------------------------------------------------------
--- | Operator Types
------------------------------------------------------------------------
 
 -----------------------------------------------------------------------
 builtinOpTy       :: (IsLocated l) => l -> BuiltinOp -> Env t -> t
@@ -1433,29 +706,36 @@ prefixOpId PrefixBNot   = builtinId "PrefixBNot"
 prefixOpId o            = errorstar $ "prefixOpId: Cannot handle: " ++ ppshow o
 
 
+mkId            = Id (initialPos "") 
 builtinId       = mkId . ("builtin_" ++)
 
+
 -----------------------------------------------------------------------
--- Type and Predicate Aliases
+-- funTys
 -----------------------------------------------------------------------
+funTys l f xs ft 
+  = case bkFuns ft of
+      Nothing -> Left $ errorNonFunction (srcPos l) f ft 
+      Just ts -> 
+        case partitionEithers [funTy l xs t | t <- ts] of 
+          ([], fts) -> Right $ zip ([0..] :: [Int]) fts
+          (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
 
-data Alias a s t = Alias {
-    al_name   :: Id SourceSpan  -- ^ alias name
-  , al_tyvars :: ![a]           -- ^ type  parameters  
-  , al_syvars :: ![s]           -- ^ value parameters 
-  , al_body   :: !t             -- ^ alias body
-  } deriving (Eq, Ord, Show, Functor, Data, Typeable)
+-- methTys l f xs i (m,ft0)
+--   = case remThisBinding ft0 of
+--       Nothing        -> Left  $ errorNonFunction (srcPos l) f ft0 
+--       Just (αs,bs,t) -> Right $ (i,m,αs,bs,t)
 
-type TAlias t    = Alias TVar F.Symbol t
-type PAlias      = Alias ()   F.Symbol F.Pred 
-type TAliasEnv t = Env (TAlias t)
-type PAliasEnv   = Env PAlias
-
-instance IsLocated (Alias a s t) where
-  srcPos = srcPos . al_name
-
-instance (PP a, PP s, PP t) => PP (Alias a s t) where
-  pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body 
+--   = case bkFuns ft0 of
+--       Nothing -> Left $ errorNonFunction (srcPos l) f ft0 
+--       Just ts -> 
+--         case partitionEithers [funTy l xs t | t <- ts] of 
+--           ([], fts) -> Right $ zip3 ([0..] :: [Int]) (repeat m) fts
+--           (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
 
 
+funTy l xs (αs, yts, t) 
+  | length xs == length yts = let (su, ts') = renameBinds yts xs 
+                              in  Right (αs, ts', F.subst su t)    
+  | otherwise               = Left $ errorArgMismatch (srcPos l)
 

@@ -15,10 +15,15 @@ module Language.Nano.Typecheck.Lookup (
 
 import           Data.Generics
 import           Data.Maybe (listToMaybe)
+
 import           Language.ECMAScript3.PrettyPrint
+
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
+
+import           Language.Nano.Types
 import           Language.Nano.Env
+import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
 import           Control.Applicative ((<$>))

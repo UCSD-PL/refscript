@@ -26,6 +26,8 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
+import           Language.Nano.Types
+import           Language.Nano.Annots
 import           Language.Nano.Typecheck.Types
 import           Language.Fixpoint.Misc (intersperse)
 

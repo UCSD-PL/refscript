@@ -12,8 +12,11 @@ import           Control.Monad.State
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types as F
 
+import           Language.Nano.Annots
 import           Language.Nano.Env
 import           Language.Nano.Errors
+import           Language.Nano.Locations
+import           Language.Nano.Program
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import qualified Language.Nano.Typecheck.Subst as S

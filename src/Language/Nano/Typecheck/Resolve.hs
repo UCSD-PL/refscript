@@ -26,7 +26,9 @@ import           Data.Function                  (on)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
+import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Subst
 
 import           Control.Applicative ((<$>))

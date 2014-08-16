@@ -85,8 +85,8 @@ getTApps    :: RefType -> [F.Symbol]
 getTApps    = everything (++) ([] `mkQ` fromT)
   where
     fromT   :: RefType -> [F.Symbol] 
-    fromT (TApp (TRef (QN [] c)) _ _) = [c]
-    fromT _                           = [ ]
+    fromT (TApp (TRef (QN _ [] c)) _ _) = [c]
+    fromT _                             = [ ]
 
 expandTAlias  :: TAliasEnv RefType -> TAlias RefType -> TAlias RefType
 expandTAlias te a = a {al_body = expandRefType te $ al_body a}
@@ -94,8 +94,8 @@ expandTAlias te a = a {al_body = expandRefType te $ al_body a}
 expandRefType :: Data a => TAliasEnv RefType -> a -> a
 expandRefType te = everywhere $ mkT $ tx
   where
-    tx t@(TApp (TRef (QN [] c)) ts r) = maybe t (applyTAlias t c ts r) $ envFindTy c te
-    tx t                              = t
+    tx t@(TApp (TRef (QN _ [] c)) ts r) = maybe t (applyTAlias t c ts r) $ envFindTy c te
+    tx t                                = t
 
 applyTAlias t c ts_ r a
   | (nt, ne) == (nα, nx) = (F.subst su $ S.apply θ $ al_body a) `strengthen` r

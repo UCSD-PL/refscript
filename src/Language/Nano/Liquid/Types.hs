@@ -114,9 +114,9 @@ data CGEnvR r = CGE {
 
         -- , cge_defs :: !(IfaceEnv r)                  -- ^ type definitions
 
-        , cge_iface     :: Env (IfaceDef r)             -- ^ Classs/Interfaces in scope 
+        , cge_types     :: QEnv (IfaceDef r)            -- ^ Classs/Interfaces in scope 
 
-        , cge_mod       :: Env (CGEnvR r)               -- ^ Modules in scope (exported API)
+        , cge_mod       :: QEnv (ModuleExports r)       -- ^ Modules in scope (exported API)
  
         , cge_nspace    :: NameSpacePath                -- ^ Namespace absolute path
  
@@ -129,18 +129,18 @@ type CGEnv = CGEnvR F.Reft
 
 instance EnvLike F.Reft CGEnvR where
   get_env     = cge_env
-  get_iface   = cge_iface
+  get_types   = cge_types
   get_mod     = cge_mod
   get_nspace  = cge_nspace
-  get_parent  = cge_parent
+--  get_parent  = cge_parent
   
 
 instance EnvLike () CGEnvR where
   get_env     = cge_env
-  get_iface   = cge_iface
+  get_types   = cge_types
   get_mod     = cge_mod
   get_nspace  = cge_nspace
-  get_parent  = cge_parent
+--   get_parent  = cge_parent
  
 
 ----------------------------------------------------------------------------
@@ -490,7 +490,7 @@ zipType γ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _)
   | otherwise
   = case weaken γ x1 x2 t1s of
       -- Try to move along the class hierarchy
-      Just (_, t1s') -> zipType γ (TApp (TRef x2) t1s' r1 `strengthen` reftIO t1 (bare_name x1)) t2
+      Just (_, t1s') -> zipType γ (TApp (TRef x2) t1s' r1 `strengthen` reftIO t1 (q_name x1)) t2
 
       -- Unfold structures
       Nothing        -> do  t1' <- flattenType γ t1 

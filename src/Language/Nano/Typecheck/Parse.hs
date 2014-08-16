@@ -115,10 +115,20 @@ extendsP = do reserved "extends"
               ts     <- option [] $ brackets $ sepBy bareTypeP comma
               return (qn, ts)
 
-qnameP   = do 
-    char '#' 
-    nn   <- sepBy1 symbolP (char '.')
-    return $  QN (init nn) (last nn)
+qnameP   = withSpan (\s x -> QN s (init x) (last x)) $ char '#' >> sepBy1 qSymbolP (char '.')
+
+-- | Redefining some stuff to make the Qualified names parse right
+qSymbolP :: Parser Symbol
+qSymbolP = symbol <$> qSymCharsP
+qSymCharsP   = condIdP qSymChars (`notElem` keyWordSyms)
+keyWordSyms = ["if", "then", "else", "mod"]
+qSymChars
+  =  ['a' .. 'z']
+  ++ ['A' .. 'Z']
+  ++ ['0' .. '9']
+  ++ ['_', '%', '#']    -- omitting the the '.'
+
+
 
 -- [A,B,C...]
 tParP    = angles $ sepBy tvarP comma
@@ -567,7 +577,6 @@ mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 mkCode ss =  Nano {
         code          = Src (checkTopStmt <$> ss')
       , specs         = envFromList $ getSpecs ss
-      -- , specs         = qenvFromList $ tracePP "specs" $ getSpecs ss
       , consts        = envFromList   [ t | Meas   t <- anns ] 
       , tAlias        = envFromList   [ t | TAlias t <- anns ] 
       , pAlias        = envFromList   [ t | PAlias t <- anns ] 
@@ -576,16 +585,20 @@ mkCode ss =  Nano {
     } 
   where
     toBare           :: (SourceSpan, [Spec]) -> AnnBare Reft 
-    toBare (l,αs)     = Ann l $ [VarAnn   t     | Bind   (_,t) <- αs ]
-                             ++ [ConsAnn  c     | Constr c     <- αs ]
-                             ++ [FieldAnn f     | Field  f     <- αs ]
-                             ++ [MethAnn  m     | Method m     <- αs ]
-                             ++ [StatAnn  m     | Static m     <- αs ]
-                             ++ [ClassAnn t     | Class  (_,t) <- αs ]
-                             ++ [IfaceAnn t     | Iface  (_,t) <- αs ]
-                             ++ [UserCast t     | CastSp _ t   <- αs ]
-                             ++ [ExporedModElt  | Exported _   <- αs ]
-                             ++ [FuncAnn  t     | AnFunc t     <- αs ]
+    toBare (l,αs)     = Ann l $ catMaybes $ bb <$> αs 
+    
+    bb (Bind   (_,t)) = Just $ VarAnn   t   
+    bb (Constr c    ) = Just $ ConsAnn  c   
+    bb (Field  f    ) = Just $ FieldAnn f   
+    bb (Method m    ) = Just $ MethAnn  m   
+    bb (Static m    ) = Just $ StatAnn  m   
+    bb (Class  (_,t)) = Just $ ClassAnn t   
+    bb (Iface  (_,t)) = Just $ IfaceAnn t   
+    bb (CastSp _ t  ) = Just $ UserCast t   
+    bb (Exported _  ) = Just $ ExporedModElt
+    bb (AnFunc t    ) = Just $ FuncAnn  t   
+    bb _              = Nothing
+
     ss'               = (toBare <$>) <$> ss
     anns              = concatMap (FO.foldMap snd) ss
 

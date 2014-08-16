@@ -27,11 +27,10 @@ import           Language.Nano.Annots
 import           Language.Nano.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
+import           Language.Nano.Misc
 import           Language.Nano.Program
 import           Language.Nano.SSA.Types
 import           Language.Nano.SSA.SSAMonad
-import           Language.Nano.Typecheck.Types
-import           Language.Nano.Types
 
 import           Debug.Trace                        hiding (traceShow)
 
@@ -75,7 +74,7 @@ ssaNano p@(Nano { code = Src fs })
 -- variablesInScope :: (Data a, IsLocated a) => S.HashSet SourceSpan -> [Statement a] 
 --                  -> ([Id SourceSpan], [Id SourceSpan], [Id SourceSpan])
 ---------------------------------------------------------------------------------------
-variablesInScope n gs fs = (ros, wgs, wls)
+variablesInScope _ gs fs = (ros, wgs, wls)
   where
     vs            = {-tracePP ("all hoisted vars: " ++ ppshow n) $-} hoistVarDecls fs
     -- vs            = hoistVarDecls fs

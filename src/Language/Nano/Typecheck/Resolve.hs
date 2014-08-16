@@ -21,7 +21,6 @@ module Language.Nano.Typecheck.Resolve (
   ) where 
 
 import           Data.Generics
-import           Control.Monad
 import           Data.Function                  (on)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F

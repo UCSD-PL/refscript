@@ -610,7 +610,7 @@ tcStmt γ m@(ModuleStmt l n body)
 
 -- OTHER (Not handled)
 tcStmt _ s 
-  = convertError "tcStmt" s
+  = NM.convertError "tcStmt" s
 
 
 
@@ -752,7 +752,7 @@ tcExpr γ (FuncExpr l fo xs body)
     f       = maybe (F.symbol "<anonymous>") F.symbol fo
 
 tcExpr _ e 
-  = convertError "tcExpr" e
+  = NM.convertError "tcExpr" e
 
 
 ---------------------------------------------------------------------------------------

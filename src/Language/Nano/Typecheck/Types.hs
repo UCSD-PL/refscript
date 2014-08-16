@@ -57,16 +57,10 @@ import           Data.Default
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
 import           Data.Maybe                     (fromMaybe)
-import           Data.Traversable               hiding (sequence, mapM) 
-import           Data.Foldable                  (Foldable()) 
 import           Data.Monoid                    hiding ((<>))            
-import qualified Data.List                      as L
-import qualified Data.IntMap                    as I
 import qualified Data.HashMap.Strict            as M
-import           Data.Generics                   
 import           Data.Typeable                  ()
 import           Language.ECMAScript3.Syntax 
-import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Misc
 import           Language.Nano.Types
@@ -618,6 +612,15 @@ objLitTy l ps     = mkFun (vs, bs, rt)
     rt            = TCons elts mt fTop
     mSym          = F.symbol "M"
     aSym          = F.symbol "A"
+
+instance F.Symbolic (LValue a) where
+  symbol (LVar _ x) = F.symbol x
+  symbol lv         = convertError "F.Symbol" lv
+
+instance F.Symbolic (Prop a) where 
+  symbol (PropId _ id) = F.symbol id
+  symbol p             = error $ printf "Symbol of property %s not supported yet" (ppshow p)
+
     
 --------------------------------------------------------------------------
 setPropTy :: (PP r, F.Reftable r, IsLocated l) 

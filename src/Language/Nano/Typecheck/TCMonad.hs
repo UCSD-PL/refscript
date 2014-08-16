@@ -61,7 +61,7 @@ module Language.Nano.Typecheck.TCMonad (
 
   )  where 
 
-import           Control.Applicative                ((<$>), (<*>))
+import           Control.Applicative                ((<$>))
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
 import           Data.Function                      (on)
@@ -76,7 +76,6 @@ import qualified Language.Fixpoint.Types            as F
 
 import           Language.Nano.Annots
 import           Language.Nano.Locations
-import           Language.Nano.Env
 import           Language.Nano.Misc
 import           Language.Nano.Program
 import           Language.Nano.Types

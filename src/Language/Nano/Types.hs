@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable     #-}
+{-# LANGUAGE DeriveFunctor          #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE DeriveTraversable      #-}
 {-# LANGUAGE DeriveFoldable         #-}
@@ -18,11 +19,6 @@ module Language.Nano.Types (
   , ModuleExports, ModuleMember (..)
   , Mutability, CommonTypes (..)
 
-  -- * Some Operators on Pred
-  , pAnd, pOr
-
-  -- * Error message
-  , convertError
 
   -- * Builtin Operators
   , BuiltinOp (..) 
@@ -39,26 +35,18 @@ import           Control.Applicative                ((<$>))
 import           Data.Hashable
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
-import           Data.Monoid                        (Monoid (..))
-import           Data.Maybe                         (catMaybes)
-import           Data.List                          (stripPrefix, (\\))
+import           Data.List                          ((\\))
 import           Data.Traversable            hiding (sequence, mapM) 
 import           Data.Foldable                      (Foldable()) 
 import           Language.ECMAScript3.Syntax 
-import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
-import           Language.ECMAScript3.Parser.Type   (SourceSpan (..))
 
 import qualified Language.Fixpoint.Types         as F
 
-import           Language.Fixpoint.Errors
-import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Misc
-import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Locations
 import           Text.PrettyPrint.HughesPJ
-import           Text.Printf                        (printf)
 
 ---------------------------------------------------------------------
 -- | Command Line Configuration Options
@@ -74,81 +62,6 @@ data Config
            , kVarInst    :: Bool           -- ^ instantiate function types with k-vars
            }
   deriving (Data, Typeable, Show, Eq)
-
-
-
-
-------------------------------------------------------------------
--- | Converting `ECMAScript3` values into `Fixpoint` values, 
---   i.e. *language* level entities into *logic* level entities.
-------------------------------------------------------------------
-
-instance F.Symbolic (LValue a) where
-  symbol (LVar _ x) = F.symbol x
-  symbol lv         = convertError "F.Symbol" lv
-
-instance F.Symbolic (Prop a) where 
-  symbol (PropId _ id) = F.symbol id
-  symbol p             = error $ printf "Symbol of property %s not supported yet" (ppshow p)
-
-instance F.Expression (Id a) where
-  expr = F.eVar
-
-instance F.Expression (LValue a) where
-  expr = F.eVar
-
-instance F.Expression (Expression a) where
-  expr (IntLit _ i)                 = F.expr i
-  expr (VarRef _ x)                 = F.expr x
-  expr (InfixExpr _ o e1 e2)        = F.EBin (bop o) (F.expr e1) (F.expr e2)
-  expr (PrefixExpr _ PrefixMinus e) = F.EBin F.Minus (F.expr (0 :: Int)) (F.expr e)  
-  expr e                            = convertError "F.Expr" e
-
-instance F.Predicate  (Expression a) where 
-  prop (BoolLit _ True)            = F.PTrue
-  prop (BoolLit _ False)           = F.PFalse
-  prop (PrefixExpr _ PrefixLNot e) = F.PNot (F.prop e)
-  prop e@(InfixExpr _ _ _ _ )      = eProp e
-  prop e                           = convertError "F.Pred" e  
-
-convertError tgt e  = errortext $ msg <+> pp e
-  where 
-    msg             = text $ "Cannot convert to: " ++ tgt
-
-
-------------------------------------------------------------------
-eProp :: Expression a -> F.Pred
-------------------------------------------------------------------
-
-eProp (InfixExpr _ OpLT   e1 e2)       = F.PAtom F.Lt (F.expr e1) (F.expr e2) 
-eProp (InfixExpr _ OpLEq  e1 e2)       = F.PAtom F.Le (F.expr e1) (F.expr e2) 
-eProp (InfixExpr _ OpGT   e1 e2)       = F.PAtom F.Gt (F.expr e1) (F.expr e2)  
-eProp (InfixExpr _ OpGEq  e1 e2)       = F.PAtom F.Ge (F.expr e1) (F.expr e2)  
-eProp (InfixExpr _ OpEq   e1 e2)       = F.PAtom F.Eq (F.expr e1) (F.expr e2) 
--- XXX @==@ and @===@ are translated the same. This should not make a difference
--- as long as same type operands are used.
-eProp (InfixExpr _ OpStrictEq   e1 e2) = F.PAtom F.Eq (F.expr e1) (F.expr e2) 
-eProp (InfixExpr _ OpNEq  e1 e2)       = F.PAtom F.Ne (F.expr e1) (F.expr e2) 
-eProp (InfixExpr _ OpLAnd e1 e2)       = pAnd (F.prop e1) (F.prop e2) 
-eProp (InfixExpr _ OpLOr  e1 e2)       = pOr  (F.prop e1) (F.prop e2)
-eProp e                                = convertError "InfixExpr -> F.Prop" e
-
-------------------------------------------------------------------
-bop       :: InfixOp -> F.Bop
-------------------------------------------------------------------
-
-bop OpSub = F.Minus 
-bop OpAdd = F.Plus
-bop OpMul = F.Times
-bop OpDiv = F.Div
-bop OpMod = F.Mod
-bop o     = convertError "F.Bop" o
-
-------------------------------------------------------------------
-pAnd p q  = F.pAnd [p, q] 
-pOr  p q  = F.pOr  [p, q]
-
-
 
 
 
@@ -307,7 +220,7 @@ type ModuleExports r = [ModuleMember r]
 
 
 ---------------------------------------------------------------------------------
--- | Mutability (TODO: move to new file - perhaps new folder called Mutability)
+-- | Mutability 
 ---------------------------------------------------------------------------------
 
 type Mutability = Type 

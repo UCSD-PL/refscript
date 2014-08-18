@@ -66,8 +66,9 @@ module Language.Nano.Typecheck.Types (
   -- , getFieldTy, getMethTy, getStatTy
 
   -- * Annotations
-  , Annot (..), UFact, Fact (..), phiVarsAnnot, ClassInfo
-  
+  , Annot (..), UFact, Fact (..), ClassInfo
+  , phiVarsAnnot, copyAnn
+                                                
   -- * Casts
   , Cast(..), CastDirection(..), noCast, upCast, dnCast, ddCast
 
@@ -1101,7 +1102,10 @@ instance (F.Reftable r, PP r) => PP (AnnInfo r) where
 instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
 
-phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
+phiVarsAnnot l    = concat [xs | PhiVar xs <- ann_fact l]
+
+copyAnn   :: Annot b a -> Annot c a
+copyAnn x = Ann (ann x) [] 
 
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------
@@ -1206,14 +1210,13 @@ freshTV l s n     = (v,t)
     t             = TVar v ()
 
 --------------------------------------------------------------------------
-objLitTy         :: (F.Reftable r, IsLocated a) 
-                 => a -> [Prop a] -> RType r
+objLitTy         :: (F.Reftable r, IsLocated a) => a -> [Prop a] -> RType r
 --------------------------------------------------------------------------
 objLitTy l ps     = mkFun (vs, bs, rt)
   where
-    (mv,mt)       = freshTV l mSym 0                             -- obj mutability
-    (mvs,mts)     = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
-    (avs,ats)     = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
+    (mv, mt)      = freshTV l mSym 0                             -- obj mutability
+    (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
+    (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
     ss            = [ F.symbol p | p <- ps]
     vs            = [mv] ++ mvs ++ avs
     bs            = [ B s (ofType a) | (s,a) <- zip ss ats ]

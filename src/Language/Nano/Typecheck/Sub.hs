@@ -328,8 +328,8 @@ convertSimple :: PPR r => SourceSpan -> TDR r -> RType r -> RType r -> Either Er
 convertSimple l _ t1 t2
   | t1 == t2      = Right CDNo
   -- TOGGLE dead-code
---   | otherwise = return $ CDead t2
-  | otherwise     = Left  $ errorSubtype l t1 t2
+  | otherwise = Right CDead 
+--  | otherwise     = Left  $ errorSubtype l t1 t2
 
 
 -- | `convertUnion`

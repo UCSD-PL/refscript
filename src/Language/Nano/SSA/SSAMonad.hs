@@ -48,6 +48,7 @@ import qualified Language.Fixpoint.Types        as F
 import           Language.Nano.Annots
 import           Language.Nano.Errors
 import           Language.Nano.Env
+import           Language.Nano.Names
 import           Language.Nano.SSA.Types
 import           Language.Nano.Locations
 import           Language.Nano.Program

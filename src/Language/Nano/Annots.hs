@@ -7,7 +7,6 @@
 
 module Language.Nano.Annots (
 
-
   -- * Annotations
     Annot (..), UFact, Fact (..), phiVarsAnnot, ClassInfo
 
@@ -17,8 +16,6 @@ module Language.Nano.Annots (
   -- * Aliases for annotated Source 
   , AnnBare, UAnnBare, AnnSSA , UAnnSSA
   , AnnType, UAnnType, AnnInfo, UAnnInfo
-
-
 
 ) where
 
@@ -32,6 +29,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Language.Nano.Env
 import           Language.Nano.Types
 import           Language.Nano.Locations
+import           Language.Nano.Names
 import           Language.Nano.Typecheck.Types
 
 import           Language.ECMAScript3.Syntax 
@@ -107,7 +105,7 @@ data Fact r
   | FuncAnn     !(RType r)
   -- Named type annotation
   | IfaceAnn    !(IfaceDef r)
-  | ClassAnn    !([TVar], Maybe (QName, [RType r]))
+  | ClassAnn    !([TVar], Maybe (RelName, [RType r]))
   | ExporedModElt
     deriving (Eq, Show, Data, Typeable, Functor)
 

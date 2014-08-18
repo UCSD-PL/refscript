@@ -6,30 +6,7 @@
 {-# LANGUAGE OverlappingInstances   #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 
-module Language.Nano.Types (
-
-  -- * Configuration Options
-    Config (..)
-
-  -- * (Refinement) Types
-  , RType (..), Bind (..)
-
-  -- * Regular Types
-  , Heritage, Type, IfaceDef (..), SIfaceDef, TVar (..), TCon (..), TypeMember (..)
-  , ModuleExports, ModuleMember (..)
-  , Mutability, CommonTypes (..)
-
-
-  -- * Builtin Operators
-  , BuiltinOp (..) 
-
-  -- * Contexts
-  , CallSite (..), IContext, emptyContext, pushContext
- 
-  -- * Aliases
-  , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
-
-  ) where
+module Language.Nano.Types where
 
 import           Control.Applicative                ((<$>))
 import           Data.Hashable
@@ -45,24 +22,9 @@ import qualified Language.Fixpoint.Types         as F
 
 import           Language.Fixpoint.Misc
 import           Language.Nano.Env
+import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Text.PrettyPrint.HughesPJ
-
----------------------------------------------------------------------
--- | Command Line Configuration Options
----------------------------------------------------------------------
-
-data Config 
-  = TC     { files       :: [FilePath]     -- ^ source files to check
-           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
-           , noFailCasts :: Bool           -- ^ fail typecheck when casts are inserted
-           }
-  | Liquid { files       :: [FilePath]     -- ^ source files to check
-           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
-           , kVarInst    :: Bool           -- ^ instantiate function types with k-vars
-           }
-  deriving (Data, Typeable, Show, Eq)
-
 
 
 ---------------------------------------------------------------------------------
@@ -71,11 +33,13 @@ data Config
 
 
 -- | Type Variables
-data TVar 
-  = TV { tv_sym :: F.Symbol
-       , tv_loc :: SourceSpan 
-       }
-    deriving (Show, Ord, Data, Typeable)
+data TVar = TV { 
+
+    tv_sym :: F.Symbol
+
+  , tv_loc :: SourceSpan 
+
+  } deriving (Show, Ord, Data, Typeable)
 
 
 -- | Type Constructors
@@ -85,7 +49,7 @@ data TCon
   | TString                                             -- ^ string
   | TVoid                                               -- ^ void
   | TTop                                                -- ^ top
-  | TRef QName                                          -- ^ A.B.C (class)
+  | TRef RelName                                        -- ^ A.B.C (class)
   | TUn                                                 -- ^ union
   | TNull                                               -- ^ null
   | TUndef                                              -- ^ undefined
@@ -94,22 +58,43 @@ data TCon
     deriving (Ord, Show, Data, Typeable)
 
 -- | (Raw) Refined Types 
-data RType r  
-  = TApp    TCon            [RType r]   r               -- ^ C T1,...,Tn
-  | TVar    TVar                        r               -- ^ A
-  | TFun    [Bind r]        (RType r)   r               -- ^ (xi:T1,..,xn:Tn) => T
-  | TCons   [TypeMember r]  Mutability  r               -- ^ {f1:T1,..,fn:Tn} 
-  | TAll    TVar            (RType r)                   -- ^ forall A. T
-  | TAnd    [RType r]                                   -- ^ /\ (T1..) => T1' ...
-                                                        -- ^ /\ (Tn..) => Tn'
-
-  | TClass  QName                                       -- ^ typeof A.B.C (class)
-  | TModule NameSpacePath                               -- ^ typeof L.M.N (module)
-                                                        -- ^ names are relative to current
-                                                        -- ^ environment
-
-  | TExp F.Expr                                         -- ^ "Expression" parameters for type-aliases: 
-                                                        -- ^ never appear in real/expanded RType
+data RType r =
+  -- 
+  -- ^ C T1,...,Tn
+  --
+    TApp TCon [RType r] r
+  -- 
+  -- ^ A
+  --
+  | TVar TVar r               
+  -- 
+  -- ^ (xi:T1,..,xn:Tn) => T
+  --
+  | TFun [Bind r] (RType r) r
+  -- 
+  -- ^ {f1:T1,..,fn:Tn} 
+  --
+  | TCons [TypeMember r] Mutability r
+  -- 
+  -- ^ forall A. T
+  --
+  | TAll TVar (RType r)                   
+  -- 
+  -- ^ /\ (T1..) => T1' ... /\ (Tn..) => Tn'
+  --
+  | TAnd [RType r]                                   
+  -- 
+  -- ^ typeof A.B.C (class)
+  --
+  | TClass RelName
+  -- 
+  -- ^ typeof L.M.N (module)
+  --
+  | TModule RelPath
+  -- 
+  -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
+  --
+  | TExp F.Expr
     deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
@@ -118,11 +103,18 @@ type Type    = RType ()
 
 
 -- | Type binder
-data Bind r
-  = B { b_sym  :: F.Symbol                              -- ^ Binding's symbol
-      , b_type :: !(RType r)                            -- ^ Field type
-      } 
-    deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+data Bind r = B { 
+
+  -- 
+  -- ^ Binding's symbol
+  --
+    b_sym  :: F.Symbol                              
+  --
+  -- ^ Field type
+  --
+  , b_type :: !(RType r)                            
+
+  } deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
 ---------------------------------------------------------------------------------
@@ -145,7 +137,7 @@ data IfaceDef r = ID {
   -- 
   -- ^ Heritage
   --
-  , t_proto :: !(Heritage r)                       
+  , t_proto :: !(Heritage r)
   -- 
   -- ^ List of data type elts 
   --
@@ -154,7 +146,7 @@ data IfaceDef r = ID {
   deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
-type Heritage r  = Maybe (QName, [RType r])
+type Heritage r  = Maybe (RelName, [RType r])
 
 
 type SIfaceDef r = (IfaceDef r, [RType r])
@@ -193,30 +185,53 @@ data TypeMember r
   | StatSig   { f_sym  :: F.Symbol                      -- ^ Name  
               , f_mut  :: Mutability                    -- ^ Mutability
               , f_type :: RType r }                     -- ^ Property type (could be function)
+
   deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
--- | A module s exported API
+-- | A module's content (local and exported API)
 --
 data ModuleMember r 
   -- 
-  -- ^ Exported class
+  -- ^ Class / Interface type
   --
-  = ModClass  { m_sym  :: Id SourceSpan                 
+  = ModType   { m_sym  :: Id SourceSpan
+              , m_vis  :: Visibility
               , m_def  :: IfaceDef r }
   -- 
-  -- ^ Exported binding
+  -- ^ Variable / Function binding
   --
   | ModVar    { m_sym  :: Id SourceSpan                 
+              , m_vis  :: Visibility
               , m_type :: RType r }                    
   -- 
-  -- ^ Exported module -- Use this to find the module definition
+  -- ^ Module -- use this to find the module definition
   --
-  | ModModule { m_sym  :: Id SourceSpan }               
+  | ModModule { m_sym  :: Id SourceSpan
+              , m_vis  :: Visibility }
 
   deriving (Functor)
 
-type ModuleExports r = [ModuleMember r] 
+
+data Visibility 
+
+  = Local 
+
+  | Exported
+
+
+data ModuleDef r = ModuleDef {
+  -- 
+  -- ^ Contents of a module (local and exported)
+  --
+    m_contents    :: Env (ModuleMember r)
+  -- 
+  -- ^ Absolute path of definition
+  --
+  , m_path        :: AbsPath
+  }
+  deriving (Functor)
+
 
 
 ---------------------------------------------------------------------------------

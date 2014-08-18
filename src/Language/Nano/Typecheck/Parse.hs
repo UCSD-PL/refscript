@@ -42,8 +42,9 @@ import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Files
 import           Language.Nano.Locations
+import           Language.Nano.Names
 import           Language.Nano.Program
-import           Language.Nano.Types
+import           Language.Nano.Types              hiding (Exported)
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
 
@@ -110,16 +111,16 @@ aliasVarT (l, x)
 iFaceP   :: Parser (Id SourceSpan, IfaceDef Reft)
 iFaceP   = do id     <- identifierP 
               vs     <- option [] tParP
-              ext    <- optionMaybe extendsP
+              h      <- optionMaybe extendsP
               es     <- braces propBindP
-              return (id, ID False id vs ext es)
+              return (id, ID False id vs h es)
 
 extendsP = do reserved "extends"
-              qn     <- qnameP
+              qn     <- RN <$> qnameP
               ts     <- option [] $ brackets $ sepBy bareTypeP comma
               return (qn, ts)
 
-qnameP   = withSpan (\s x -> QN s (init x) (last x)) $ char '#' >> sepBy1 qSymbolP (char '.')
+qnameP   = withSpan (\s x -> QName s (init x) (last x)) $ char '#' >> sepBy1 qSymbolP (char '.')
 
 -- | Redefining some stuff to make the Qualified names parse right
 qSymbolP :: Parser Symbol
@@ -285,7 +286,7 @@ tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
      <|> try (reserved "bool"      >> return TFPBool)
-     <|>     (TRef <$> qnameP)
+     <|>     (TRef <$> RN <$> qnameP)
 
 
 bareAll1P p
@@ -415,7 +416,7 @@ withinSpacesP :: Parser a -> Parser a
 withinSpacesP p = do { spaces; a <- p; spaces; return a } 
              
 ----------------------------------------------------------------------------------
-classDeclP :: Parser (Id SourceSpan, ([TVar], Maybe (QName, [RefType])))
+classDeclP :: Parser (Id SourceSpan, ([TVar], Maybe (RelName, [RefType])))
 ----------------------------------------------------------------------------------
 classDeclP = do
     reserved "class"
@@ -456,7 +457,7 @@ data PSpec l r
   | Method (TypeMember r)
   | Static (TypeMember r)
   | Iface  (Id l, IfaceDef r)
-  | Class  (Id l, ([TVar], Maybe (QName, [RType r])))
+  | Class  (Id l, ([TVar], Maybe (RelName, [RType r])))
   | TAlias (Id l, TAlias (RType r))
   | PAlias (Id l, PAlias) 
   | Qual   Qualifier

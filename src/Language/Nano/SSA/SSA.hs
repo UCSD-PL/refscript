@@ -27,6 +27,7 @@ import           Language.Nano.Annots
 import           Language.Nano.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
+import           Language.Nano.Names
 import           Language.Nano.Misc
 import           Language.Nano.Program
 import           Language.Nano.SSA.Types

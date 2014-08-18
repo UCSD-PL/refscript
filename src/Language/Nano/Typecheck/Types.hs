@@ -67,6 +67,7 @@ import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Locations
+import           Language.Nano.Names
 
 import qualified Language.Fixpoint.Types        as F
 import           Language.Fixpoint.Misc
@@ -86,7 +87,7 @@ import           Control.Applicative            hiding (empty)
 
 -- validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable", "AnyMutability"]
 
-mkMut s = TApp (TRef $ QN (srcPos dummySpan) [] (F.symbol s)) [] ()
+mkMut s = TApp (TRef $ RN $ QName (srcPos dummySpan) [] (F.symbol s)) [] ()
 
 instance Default Mutability where
   def = mkMut "Mutable"
@@ -446,18 +447,17 @@ instance Hashable TCon where
 instance (PP r, F.Reftable r) => PP (Bind r) where 
   pp (B x t)          = pp x <> colon <> pp t 
 
-ppArgs p sep l = p $ intersperse sep $ map pp l
-
 instance (PP s, PP t) => PP (M.HashMap s t) where
   pp m = vcat $ pp <$> M.toList m
 
-instance (F.Reftable r, PP r) => PP (ModuleExports r) where
-  pp = braces . intersperse semi . map pp
-
 instance (F.Reftable r, PP r) => PP (ModuleMember r) where
-  pp (ModClass x t ) = pp x <> colon <+> pp t
-  pp (ModVar x t   ) = pp x <> colon <+> pp t
-  pp (ModModule x  ) = pp x
+  pp (ModType x v t )  = pp v <> pp x <> colon <+> pp t
+  pp (ModVar x v t   ) = pp v <> pp x <> colon <+> pp t
+  pp (ModModule x v  ) = pp v <> pp x
+
+instance PP Visibility where
+  pp Local = text ""
+  pp Exported = text "exported "
 
 
 instance (PP r, F.Reftable r) => PP (IfaceDef r) where
@@ -491,7 +491,12 @@ instance (PP r, F.Reftable r) => PP (TypeMember r) where
 --         | isTVar t         = brackets $ pp t
 --         | isTop t          =            pp "top"    -- FIXME: this should go ...
 --         | otherwise        = error    $ "ppMut: case not covered: " ++ ppshow t
-   
+ 
+
+instance (PP r, F.Reftable r) => PP (ModuleDef r) where
+  pp (ModuleDef cc path) =  
+    text "module" <+> pp path $$ braces (pp cc)
+  
 
 
 -----------------------------------------------------------------------

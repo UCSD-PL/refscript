@@ -41,6 +41,7 @@ import           Language.Nano.Annots
 import           Language.Nano.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
+import           Language.Nano.Names
 import           Language.Nano.Types
 
 import           Language.ECMAScript3.Syntax 
@@ -431,24 +432,24 @@ hoistTypes = everythingBut (++) myQ
 
 -- Only descend down modules 
 -------------------------------------------------------------------------------
-collectTypes :: Data a => [Statement a] -> [(NameSpacePath, Statement a)]
+collectTypes :: (IsLocated a, Data a) => [Statement a] -> [(AbsName, Statement a)]
 -------------------------------------------------------------------------------
 collectTypes  = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
   where
-    f e@(ClassStmt _ _ _ _ _ ) s = ([(s,e)], s                , True )
-    f e@(ModuleStmt _ x _    ) s = ([(s,e)], s ++ [F.symbol x], False)
-    f _                        s = ([]     , s                , True )
+    f e@(ClassStmt _ x _ _ _ ) s = ([(AN $ QName (srcPos e) s $ F.symbol x,e)], s, True)
+    f e@(ModuleStmt _ x _    ) s = ([], s ++ [F.symbol x], False)
+    f _                        s = ([], s, True)
 
 
 -- Only descend down modules 
 -------------------------------------------------------------------------------
-collectModules :: Data a => [Statement a] -> [(NameSpacePath, Statement a)]
+collectModules :: (IsLocated a, Data a) => [Statement a] -> [(AbsPath, Statement a)]
 -------------------------------------------------------------------------------
 collectModules  = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
   where
-    f e@(ClassStmt _ _ _ _ _ ) s = ([(s,e)], s                , True )
-    f e@(ModuleStmt _ x _    ) s = ([(s,e)], s ++ [F.symbol x], False)
-    f _                        s = ([]     , s                , True )
+    f e@(ModuleStmt _ x _    ) s = let p = s ++ [F.symbol x] in
+                                   ([(AP $ QPath (srcPos e) p,e)], p, False) 
+    f _                        s = ([], s, True)
 
 
 

@@ -11,7 +11,7 @@
 
 module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where 
 
-import           Control.Applicative                ((<$>))
+import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
 
 import qualified Data.HashMap.Strict                as M 
@@ -34,7 +34,7 @@ import           Language.Nano.Names
 import           Language.Nano.Program
 import           Language.Nano.Types
 import           Language.Nano.Env
-import qualified Language.Nano.Misc                 as NM
+import           Language.Nano.Misc                 (convertError, mapPairM)
 import           Language.Nano.SystemUtils
 import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
@@ -126,29 +126,31 @@ typeCheck :: PPR r => NanoSSAR r -> IO (Either [Error] (NanoTypeR r))
 typeCheck pgm = do 
   v <- V.getVerbosity
   let r = execute v pgm $ tcNano pgm 
-  return $ snd <$> r
+  return $ r
 
 
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program
 -------------------------------------------------------------------------------
-tcNano :: PPRSF r => NanoSSAR r -> TCM r (AnnInfo r, NanoTypeR r)
+tcNano :: PPRSF r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
-  = do  -- setDef         $ defs p
-        -- CHECK TO BE DONE ON THE SPOT
-        -- checkInterfaces p
-        (fs', _)       <- tcStmts γ $ trace (ppshow γ) fs
-        m              <- getAnns 
-        θ              <- getSubst
-        let p1          = p {code = (patchAnn m . apply θ) <$> Src fs' }
+  = do  (fs', _)       <- tcStmts γ $ trace (ppshow γ) fs
+        -- patchAnnn $ p { code = Src fs' }
+
+        -- let p1          = p {code = (patchAnn m . apply θ) <$> Src fs' }
         -- d              <- getDef
         -- return          $ (m, p1 { defs  = d })     -- Update IfaceEnv before exiting
-        return          $ (m, p1)
+        return          $ p
     where
         γ               = initGlobalEnv p
 
 
+patchAnnn p@(Nano { code = Src fs }) = 
+  do (m,θ) <- (,) <$> getAnns <*> getSubst
+     return $ (patchAnn m <$>) <$> apply θ <$> fs
+
+patchAnn :: AnnInfo r -> Annot (Fact r) SourceSpan -> Annot (Fact r) SourceSpan
 patchAnn m (Ann l fs)   = Ann l $ sortNub $ eo ++ fo ++ ti ++ fs 
   where
     ti                  = [f | f@(TypInst _ _    ) <- M.lookupDefault [] l m]
@@ -278,9 +280,7 @@ typeMembers t (MemberMethDecl l static _ _ _ )
 --     mkPair l ns (s, t)           = (AN $ QName (srcPos l) ns (F.symbol s), t)
 
 
--- | `registerAllModules` creates the global module store 
---
---  FIXME: fill up Visibility
+-- | `registerAllModules ss` creates a module store from the statements in @ss@
 --
 ---------------------------------------------------------------------------------------
 registerAllModules :: PPR r => [Statement (AnnSSA r)] -> QEnv (ModuleDef r)
@@ -573,7 +573,7 @@ tcStmt γ m@(ModuleStmt l n body)
 
 -- OTHER (Not handled)
 tcStmt _ s 
-  = NM.convertError "tcStmt" s
+  = convertError "tcStmt" s
 
 
 
@@ -715,7 +715,7 @@ tcExpr γ (FuncExpr l fo xs body)
     f       = maybe (F.symbol "<anonymous>") F.symbol fo
 
 tcExpr _ e 
-  = NM.convertError "tcExpr" e
+  = convertError "tcExpr" e
 
 
 ---------------------------------------------------------------------------------------
@@ -916,7 +916,7 @@ tcCallCase γ l fn es ts ft = undefined
 --        let its          = b_type <$> ibs
 --        θ               <- {- tracePP "unif" <$> -} unifyTypesM (srcPos l) "tcCall" ts its
 --        let (ts',its')   = mapPair (apply θ) (ts, its)
---        es'             <- NM.zipWith3M (castM ξ) es ts' its'
+--        es'             <- zipWith3M (castM ξ) es ts' its'
 --        return             (es', apply θ ot, θ)
 
 instantiate l ξ fn ft 

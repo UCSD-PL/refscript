@@ -407,7 +407,7 @@ ssaExpr (InfixExpr l o e1 e2)
   = ssaExpr2 (InfixExpr l o) e1 e2
 
 ssaExpr (CallExpr l e es)
-  = ssaExprs (\case es' -> CallExpr l (head es') (tail es')) (e : es)
+  = ssaExprs (\es' -> CallExpr l (head es') (tail es')) (e : es)
 
 ssaExpr (ObjectLit l ps)
   = ssaExprs (ObjectLit l . zip fs) es
@@ -421,8 +421,7 @@ ssaExpr (BracketRef l e1 e2)
   = ssaExpr2 (BracketRef l) e1 e2
 
 ssaExpr (NewExpr l e es)
-  -- `e` is the class name - no need to SSA it.
-  = ssaExprs (NewExpr l e) es
+  = ssaExprs(\es' -> NewExpr l (head es') (tail es')) (e:es) 
 
 ssaExpr (Cast l e)
   = ssaExpr1 (Cast l) e

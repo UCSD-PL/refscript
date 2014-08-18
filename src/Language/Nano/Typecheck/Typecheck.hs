@@ -235,16 +235,14 @@ tcFun γ (FunctionStmt l f xs body)
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
 -------------------------------------------------------------------------------
-tcFun1 :: (PPR r, IsLocated b, IsLocated l, IsLocated a, CallSite t) 
-       => TCEnv r -> a -> l -> [Id b] -> [Statement (AnnSSA r)] 
+tcFun1 :: (PPR r, IsLocated l, CallSite t) 
+       => TCEnv r -> (AnnSSA r) -> l -> [Id (AnnSSA r)] -> [Statement (AnnSSA r)] 
        -> (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
 tcFun1 γ l f xs body (i, (αs,ts,t)) = tcFunBody γ' l body t
   where 
     γ'                              = envAddFun f i αs xs ts t γ 
 
-
---
 -- FIXME: Check for mutability (the second part in the triplet)
 --        If this argument is "immutable" We will have to check
 --        statements/expressions that operate on "this" and make sure that they

@@ -145,20 +145,8 @@ consMeth1 l g f xs body (i, _, ft) = consFun1 l g f xs body (i,ft)
 --   conjuncts of an overloaded (intersection) type signature.
 --   Assume: len ts' = len xs
 
-consFun1 l g f xs body (i, ft@(_,ts',_)) 
-  = envAddFun l f i xs ft g >>= (`consStmts` (argS : body))
-  where
-    argS  = VarDeclStmt l [argDecl l xs ts']
-    
-argDecl l xs ts' = VarDecl l argId $ Just dArg 
-  where
-    argId        = Id l "arguments" 
-    -- TODO: precisely support heterogenous args
-    dArg         = ObjectLit l $ safeZip "argDecl" ps es 
-    k            = fromMaybe 0 $ findIndex isUndef ts'
-    es           = VarRef  l             <$> take k xs
-    ps           = PropNum l . toInteger <$> [0 .. k-1]
-    
+consFun1 l g f xs body (i, ft) 
+  = envAddFun l f i xs ft g >>= (`consStmts` body)
 
 -- consFun1 l g' f xs body (i, ft) 
 --   = do g'' <- envAddFun l f i xs ft g'
@@ -166,15 +154,31 @@ argDecl l xs ts' = VarDecl l argId $ Just dArg
 --        maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
 
 
-
-
 envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g) 
                                    >>= (return . envAddReturn f t' ) 
                                    >>= envAdds False (varBinds xs ts')
+                                   >>= envAdds False [argBind l ts' (renv g)]
                                    >>= envAdds False tyBinds
   where
     tyBinds                        = [(Loc (srcPos l) α, tVar α) | α <- αs]
     varBinds                       = safeZip "envAddFun"
+
+
+-- | @argBind@ returns a dummy type binding `arguments :: T `
+--   where T is an object literal containing the non-undefined `ts`.
+    
+argBind l ts g = (argId, immObjectLitTy l g ps' ts') 
+  where
+    argId      = Id l "arguments" 
+    -- xs'           = take k xs
+    ts'        = take k ts
+    ps'        = PropNum l . toInteger <$> [0 .. k-1]
+    k          = fromMaybe 0 $ findIndex isUndef ts
+
+--     dArg        = ObjectLit l $ safeZip "argDecl" ps es 
+--     es          = VarRef  l             <$> take k xs
+--     l           = getAnnotation $ head body 
+
 
 
                                      
@@ -486,7 +490,7 @@ consExpr g (ArrayLit l es)
 
 -- | {f1:e1,...,fn:en}
 consExpr g (ObjectLit l bs) 
-  = consCall g l "ObjectLit" es $ objLitTy l ps (renv g)
+  = consCall g l "ObjectLit" es $ tracePP "objectLitTY" $ objLitTy l ps (renv g)
   where
     (ps, es) = unzip bs
     

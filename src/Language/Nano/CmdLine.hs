@@ -1,10 +1,25 @@
 {-# LANGUAGE TupleSections      #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
-module Language.Nano.CmdLine (getOpts) where
+module Language.Nano.CmdLine (Config(..), getOpts) where
 
-import Language.Nano.Types                      (Config (..))
 import System.Console.CmdArgs 
+
+---------------------------------------------------------------------
+-- | Command Line Configuration Options
+---------------------------------------------------------------------
+
+data Config 
+  = TC     { files       :: [FilePath]     -- ^ source files to check
+           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
+           , noFailCasts :: Bool           -- ^ fail typecheck when casts are inserted
+           }
+  | Liquid { files       :: [FilePath]     -- ^ source files to check
+           , incdirs     :: [FilePath]     -- ^ path to directory for include specs
+           , kVarInst    :: Bool           -- ^ instantiate function types with k-vars
+           }
+  deriving (Data, Typeable, Show, Eq)
+
 
 ---------------------------------------------------------------------------------
 -- | Parsing Command Line -------------------------------------------------------

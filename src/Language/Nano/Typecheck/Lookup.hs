@@ -23,6 +23,8 @@ import           Language.Fixpoint.Misc
 
 import           Language.Nano.Types
 import           Language.Nano.Env
+import           Language.Nano.Locations
+import           Language.Nano.Names
 import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
@@ -42,12 +44,19 @@ getProp :: (PPRD r, EnvLike r g) => g r -> F.Symbol -> RType r -> Maybe (RType r
 -------------------------------------------------------------------------------
 getProp γ s t@(TApp _ _ _  ) = getPropApp γ s t
 getProp _ s t@(TCons es _ _) = (t,) <$> accessMember s es
-getProp γ s t@(TClass c    ) = do d     <- resolveQName γ c
-                                  es    <- flatten True γ (d,[])
-                                  p     <- accessMember s es
-                                  return $ (t,p)
-getProp γ s t@(TModule m   ) = do γ'    <- resolveModuleEnv γ m
-                                  (t,) <$> envFindTy s (get_env γ')
+getProp γ s t@(TClass c    ) 
+  = do  d   <- resolveRelNameInEnv γ c
+        es  <- flatten True γ (d,[])
+        p   <- accessMember s es
+        return $ (t,p)
+getProp γ s t@(TModule m   ) 
+  = do  m' <- resolveRelPathInEnv γ m
+        case envFindTy s (m_contents m') of
+          Just (ModVar _ _ t') -> return (t,t')
+          Just (ModType s _ _) -> return (t, TClass $ f m (F.symbol s))
+          Nothing              -> Nothing
+  where
+    f (RP (QPath l p)) = RN . QName l p
 getProp _ _ _                = Nothing
 
 
@@ -62,7 +71,7 @@ getPropApp γ s t@(TApp c ts _) =
     TUn      -> getPropUnion γ s ts
     TInt     -> (t,) <$> lookupAmbientVar γ s "Number"
     TString  -> (t,) <$> lookupAmbientVar γ s "String"
-    TRef x   -> do  d      <- resolveQName γ x
+    TRef x   -> do  d      <- resolveRelNameInEnv γ x
                     es     <- flatten False γ (d,ts)
                     p      <- accessMember s es
                     return  $ (t,p)
@@ -77,7 +86,7 @@ getConstructor :: (Data r, PP r, F.Reftable r, EnvLike r g)
                => g r -> RType t -> Maybe (RType r)
 -------------------------------------------------------------------------------
 getConstructor γ (TClass x) 
-  = do  d        <- resolveQName γ x
+  = do  d        <- resolveRelNameInEnv γ x
         (vs, es) <- flatten'' False γ d
         return    $ mkAnd [ mkAll vs (TFun bs (retT vs) r) | ConsSig (TFun bs _ r) <- es ]
 
@@ -130,7 +139,7 @@ accessMember s es =
 lookupAmbientVar :: (PPRD r, EnvLike r g, F.Symbolic s) => g r -> F.Symbol -> s -> Maybe (RType r)
 -------------------------------------------------------------------------------
 lookupAmbientVar γ s amb
-  = do  a <- envFindTy (F.symbol amb) (get_env γ)
+  = do  a <- envFindTy (F.symbol amb) (names γ)
         snd <$> getProp γ s a
 
 

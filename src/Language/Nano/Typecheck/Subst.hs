@@ -25,9 +25,10 @@ import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
-import           Language.Nano.Env
-import           Language.Nano.Types
 import           Language.Nano.Annots
+import           Language.Nano.Env
+import           Language.Nano.Names
+import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Fixpoint.Misc (intersperse)
 
@@ -117,7 +118,7 @@ instance Free (TypeMember r) where
   free (ConsSig t)          = free t
   free (IndexSig _ _ t)     = free t
 
-instance Free a => Free (QName, a) where
+instance Free a => Free (RelName, a) where
   free (_, a)               = free a
 
 instance Free a => Free (Maybe a) where
@@ -186,7 +187,10 @@ instance F.Reftable r => Substitutable r (Annot (Fact r) z) where
 instance Substitutable r F.Symbol  where
   apply _ s                 = s 
 
-instance Substitutable r QName  where
+instance Substitutable r QName where
+  apply _ s                 = s 
+
+instance Substitutable r RelName where
   apply _ s                 = s 
 
 instance F.Reftable r => Substitutable r (IfaceDef r) where

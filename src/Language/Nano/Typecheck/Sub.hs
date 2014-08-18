@@ -28,6 +28,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Annots
 import           Language.Nano.Types
 import           Language.Nano.Env
+import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
@@ -324,7 +325,7 @@ convertFun l _ t1 t2 = Left $ unsupportedConvFun l t1 t2
 -- | `convertTClass`
 --------------------------------------------------------------------------------
 convertTClass :: (Functor g, EnvLike () g)
-              => SourceSpan -> g () -> QName -> QName -> Either Error CastDirection
+              => SourceSpan -> g () -> RelName -> RelName -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertTClass l γ c1 c2 | c1 == c2                  = Right CDNo  
                         | c1 `elem` ancestors γ c2  = Right CDUp
@@ -383,7 +384,7 @@ safeExtends :: (Data r, PPR r) => SourceSpan -> TCEnv r -> IfaceDef r -> [Error]
 --------------------------------------------------------------------------------
 safeExtends l γ (ID _ c _ (Just (p, ts)) es) =
     [ errorClassExtends l c p (F.symbol ee) ee pe 
-                                      | parent <- maybeToList $ resolveQName γ p
+                                      | parent <- maybeToList $ resolveRelNameInEnv γ p
                                       , pe <- concat $ maybeToList $ flatten False γ (parent,ts)
                                       , ee <- es, sameBinder pe ee 
                                       , let t1 = eltType ee

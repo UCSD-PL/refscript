@@ -27,9 +27,10 @@ import           Data.Generics
 import           Text.PrettyPrint.HughesPJ          (text, ($+$))
 
 import           Language.Nano.Annots
-import           Language.Nano.CmdLine              (getOpts)
+import           Language.Nano.CmdLine              (getOpts, noFailCasts)
 import           Language.Nano.Errors
 import           Language.Nano.Locations
+import           Language.Nano.Names
 import           Language.Nano.Program
 import           Language.Nano.Types
 import           Language.Nano.Env
@@ -148,14 +149,6 @@ tcNano p@(Nano {code = Src fs})
         γ               = initGlobalEnv p
 
 
--- FIXME: check for mutability parameter
--- checkInterfaces p = 
---     forM_ (concatMap (safeExtends l (defs p)) is) tcError
---   where 
---     l  = srcPos dummySpan
---     is = [ d | (_, d@(ID False _ _ _ _)) <- envToList $ defs p ]
-
-
 patchAnn m (Ann l fs)   = Ann l $ sortNub $ eo ++ fo ++ ti ++ fs 
   where
     ti                  = [f | f@(TypInst _ _    ) <- M.lookupDefault [] l m]
@@ -169,26 +162,24 @@ patchAnn m (Ann l fs)   = Ann l $ sortNub $ eo ++ fo ++ ti ++ fs
 -------------------------------------------------------------------------------
 initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv (Nano { code = Src ss }) -- = initModuleEnv Nothing Nothing ss
-    = TCE env types mod ctx nspace
+initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
-    env       = envEmpty
-    types     = undefined -- registerAllTypes ss
+    nms       = envEmpty
     mod       = registerAllModules ss 
     ctx       = emptyContext
-    nspace    = []
+    pth       = AP $ QPath (srcPos dummySpan) []
 
 
-initFuncEnv γ f i αs xs ts t s = TCE env iface mod ctx nspace -- parent
+initFuncEnv γ f i αs xs ts t s = TCE nms mod ctx pth parent
   where
     tyBinds   = [(tVarId α, tVar α) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) ts
-    env       = envAddReturn f t $ envAdds (tyBinds ++ varBinds) $ populateFuncs s
+    nms       = envAddReturn f t $ envAdds (tyBinds ++ varBinds) $ populateFuncs s
     iface     = envEmpty 
     mod       = qenvEmpty
     ctx       = pushContext i (tce_ctx γ) 
-    nspace    = tce_nspace γ
---    parent    = Just γ
+    pth       = tce_path γ
+    parent    = Just γ
 
 
 -- ---------------------------------------------------------------------------------------
@@ -200,24 +191,23 @@ initFuncEnv γ f i αs xs ts t s = TCE env iface mod ctx nspace -- parent
 --     iface       = qenvEmpty 
 --     mod         = envEmpty
 --     ctx         = emptyContext 
---     nspace      = tce_nspace γ
+--     nspace      = tce_path γ
 --     -- parent      = Just γ
 --     tThis       = TApp (TRef x) ts fTop
---     x           = QN l [] (F.symbol n)
+--     x           = QName l [] (F.symbol n)
 --     ts          = tVar <$> vs
 
 
 ---------------------------------------------------------------------------------------
-initModuleEnv :: PPR r => TCEnvO r -> Maybe F.Symbol -> [Statement (AnnSSA r)] -> TCEnv r
+initModuleEnv :: (PPR r, F.Symbolic n) => TCEnv r -> n -> [Statement (AnnSSA r)] -> TCEnv r
 ---------------------------------------------------------------------------------------
-initModuleEnv γo n s = TCE env iface mod ctx nspace -- parent 
+initModuleEnv γ n s = TCE nms mod ctx pth parent 
   where
-    iface     = undefined -- populateTypes s
-    env       = envEmpty
-    mod       = qenvEmpty -- These shall be populated as we go
+    nms       = envEmpty
+    mod       = modules γ
     ctx       = emptyContext
-    nspace    = maybe [] tce_nspace γo ++ maybeToList n
-    parent    = γo
+    pth       = extendAbsPath (tce_path γ) n
+    parent    = Just γ
 
 
 ---------------------------------------------------------------------------------------
@@ -249,9 +239,9 @@ resolveType  (ClassStmt l c _ _ cs)
       _         -> Nothing
   where
     cc        = fmap ann c
-    x         = QN (srcPos l) [] (F.symbol c)
+    x         = RN $ QName (srcPos l) [] (F.symbol c)
     tc vs     = TApp (TRef x) ((`TVar` fTop) <$> vs) fTop
-    rMem      = concatMap . resolveMemberType
+    rMem      = concatMap . typeMembers
 
 resolveType (IfaceStmt l)
   = listToMaybe [ (n, t) | IfaceAnn t@(ID _ n _ _ _) <- ann_fact l ]
@@ -260,113 +250,86 @@ resolveType _ = Nothing
 
 
 
-
--- XXX: No constructor is added if missing
+-- | `typeMembers` returns all the TypeMember elements associated with a class 
+--    element -- XXX: No constructor is added if missing
+--
 ---------------------------------------------------------------------------------------
-resolveMemberType :: PPR r => RType r -> ClassElt (AnnSSA r) -> [TypeMember r]
+typeMembers :: PPR r => RType r -> ClassElt (AnnSSA r) -> [TypeMember r]
 ---------------------------------------------------------------------------------------
-resolveMemberType _ (Constructor l _ _ ) = [ c | ConsAnn c   <- ann_fact l ]
+typeMembers _ (Constructor l _ _ ) = [ c | ConsAnn c   <- ann_fact l ]
 
-resolveMemberType _ (MemberVarDecl _ static (VarDecl l _ _)) 
+typeMembers _ (MemberVarDecl _ static (VarDecl l _ _)) 
     | static    = [ s | StatAnn  s@(StatSig _ _ _)  <- ann_fact l ]
     | otherwise = [ f | FieldAnn f@(FieldSig _ _ _) <- ann_fact l ]
 
-resolveMemberType t (MemberMethDecl l static _ _ _ )
+typeMembers t (MemberMethDecl l static _ _ _ )
     | static    = [ s                  | StatAnn s@(StatSig _ _ _)  <- ann_fact l ]
     | otherwise = [ setThisBinding m t | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
 
 
----------------------------------------------------------------------------------------
-registerAllTypes :: PPR r => [Statement (AnnSSA r)] -> QEnv (IfaceDef r)
----------------------------------------------------------------------------------------
-registerAllTypes                 = qenvFromList . catMaybes . map mkType . collectTypes
-  where
-    mkType (ns, c@(ClassStmt{})) = resolveType c >>= return . mkPair (getAnnotation c) ns
-    mkType (ns, c@(IfaceStmt{})) = resolveType c >>= return . mkPair (getAnnotation c) ns 
-    mkType _                     = Nothing
-    mkPair l ns (s, t)           = (QN (srcPos l) ns (F.symbol s), t)
-
-
----------------------------------------------------------------------------------------
-registerAllModules :: PPR r => [Statement (AnnSSA r)] -> QEnv (ModuleExports r)
----------------------------------------------------------------------------------------
-registerAllModules               = qenvFromList . catMaybes . map mkMod . collectModules
-  where
-    isExported                   = (ExporedModElt `elem`) . ann_fact . getAnnotation
-
-    mkMod (ns, ModuleStmt l n m) = Just (QN (ann l) ns (F.symbol n), fStmts m)
-    mkMod _                      = Nothing
-
-    fStmts    ss                 = concatMap fStmt $ filter isExported ss
-    -- An exported variable needs to have a type annotation    
-    fStmt (VarDeclStmt l vds)    = [ ModVar   (fmap ann x) t | VarDecl l x _ <- vds, VarAnn t <- ann_fact l ]
-    fStmt (FunctionStmt l x _ _) = [ ModVar   (fmap ann x) t |                       VarAnn t <- ann_fact l ]
-    fStmt c@(ClassStmt {})       = [ ModClass           x  t | (x, t) <- maybeToList $ resolveType c ]
-    fStmt c@(ModuleStmt l x ss)  = [ ModModule (fmap ann x) ]
-    fStmt _                      = [ ] 
-
-
-
-
 -- ---------------------------------------------------------------------------------------
--- patchConstructor :: (PPR r, Data r) => TCEnv r -> SourceSpan -> F.Symbol -> Heritage r -> 
---                     [TypeMember r] -> TCM r [TypeMember r]
+-- registerAllTypes :: PPR r => [Statement (AnnSSA r)] -> QQEnv (IfaceDef r)
 -- ---------------------------------------------------------------------------------------
--- patchConstructor γ l s heritage es 
---   | isJust (find isConstr es) = return $ es
---   | otherwise
---   = case heritage of 
---       Just (p,ts) ->  
---           case resolveIface γ p of
---             Just (ID _ _ vs' _ es') -> 
---                 case [ t | ConsSig t <- es'] of
---                   [t] -> return (ConsSig (tt vs' ts t) : es)
---                   _   -> tcError $ errorConstrMissing l p 
---             _ -> tcError $ errorParentClassMissing l s p 
---             -- No parent class around - infer a default type
---       Nothing       -> return (ConsSig (TFun [] tVoid fTop) : es)
+-- registerAllTypes                 = qenvFromList . catMaybes . map mkType . collectTypes
 --   where
---     tVoid :: PPR r => RType r
---     tVoid = TApp TVoid [] fTop
---     tt vs ts = apply (fromList $ zip vs ts)
+--     mkType (ns, c@(ClassStmt{})) = resolveType c >>= return . mkPair (getAnnotation c) ns
+--     mkType (ns, c@(IfaceStmt{})) = resolveType c >>= return . mkPair (getAnnotation c) ns 
+--     mkType _                     = Nothing
+--     mkPair l ns (s, t)           = (AN $ QName (srcPos l) ns (F.symbol s), t)
+
+
+-- | `registerAllModules` creates the global module store 
+--
+--  FIXME: fill up Visibility
+--
+---------------------------------------------------------------------------------------
+registerAllModules :: PPR r => [Statement (AnnSSA r)] -> QEnv (ModuleDef r)
+---------------------------------------------------------------------------------------
+registerAllModules                = qenvFromList . catMaybes . map mkMod . collectModules
+  where
+    visibility l                  | ExporedModElt `elem` ann_fact l = Exported
+                                  | otherwise                       = Local
+
+    mkMod (ap, ModuleStmt l n m)  = Just (ap, ModuleDef (envFromList (fStmts m)) ap)
+    mkMod _                       = Nothing
+
+    fStmts    ss                  = concatMap fStmt ss
+    -- An exported variable needs to have a type annotation    
+    --
+    --
+    fStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, ModuleMember r)]
+    fStmt (VarDeclStmt l vds)     = [ (ss x, ModVar (ss x) (visibility l) t) 
+                                    | VarDecl l x _ <- vds
+                                    , VarAnn t <- ann_fact l 
+                                    ]
+    fStmt (FunctionStmt l x _ _)  = [ (ss x, ModVar (ss x) (visibility l) t) 
+                                    | VarAnn t <- ann_fact l 
+                                    ]
+    fStmt c@(ClassStmt l _ _ _ _) = [ (x, ModType x (visibility l) t) 
+                                    | (x, t) <- maybeToList $ resolveType c 
+                                    ]
+    fStmt c@(ModuleStmt l x _)    = [ (ss x, ModModule (ss x) (visibility l) ) ]
+    fStmt _                       = [ ] 
+
+    ss = fmap ann
 
 
 
+-- | Environment wrappers
+--
 
--- -- Q: Who needs this?
--- -- A: Unification is not local any more. For example an empty array may be
--- --    created and its type can be instantiated only after a use of it which can 
--- --    be arbitrarily far from creation point. At that point we need to update
--- --    the current environment by applying the substitution.
--- --
--- instance PPR r => Substitutable r (TCEnv r) where 
---   apply θ γ = γ { tce_env = apply θ (tce_env γ) }
- 
-instance PPR r => PP (TCEnv r) where
-  pp = ppTCEnv
+tcEnvAdds     x γ     = γ { tce_names = envAdds x $ tce_names γ }
 
-ppTCEnv (TCE env types modules _ _ )
-  =   text "******************** Environment ************************"
-  $+$ pp env
-  $+$ text "******************** Interfaces *************************"
-  $+$ pp types
-  $+$ text "******************** Modules ****************************"
-  $+$ pp modules
---   $+$ text "******************** Call Context ***********************"
---   $+$ pp ctx
-
-
-tcEnvAdds     x γ     = γ { tce_env = envAdds x $ tce_env γ }
-
-tcEnvFindTy x = envFindTy x . tce_env
--- tcEnvFindTy x γ       = case envFindTy x (tce_env γ) of 
+-- FIXME !!!
+tcEnvFindTy x = envFindTy x . tce_names
+-- tcEnvFindTy x γ       = case envFindTy x (tce_names γ) of 
 --                           Just t   -> Just t
 --                           Nothing  -> 
 --                             case tce_parent γ of 
 --                               Just γ' -> tcEnvFindTy x γ'
 --                               Nothing -> Nothing
 
-tcEnvFindReturn       = envFindReturn . tce_env
+tcEnvFindReturn       = envFindReturn . tce_names
 
 tcEnvFindTyOrDie l x  = fromMaybe ugh . tcEnvFindTy x  where ugh = die $ errorUnboundId (ann l) x
 
@@ -517,7 +480,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 
 -- e1.f = e2
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
-  = do z             <- tcNormalCall γ l BISetProp [e1,e2] $ setPropTy (F.symbol f) l $ tce_env γ
+  = do z             <- tcNormalCall γ l BISetProp [e1,e2] $ setPropTy (F.symbol f) l $ tce_names γ
        case z of 
          ([e1',e2'], _)
                      -> return (ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 e1' f) e2', Just γ)
@@ -539,7 +502,7 @@ tcStmt γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
-  = do z <- tcNormalCall γ l BITruthy [e] $ builtinOpTy l BITruthy (tce_env γ)
+  = do z <- tcNormalCall γ l BITruthy [e] $ builtinOpTy l BITruthy (tce_names γ)
        case z of 
          ([e'], _) -> do (s1', γ1) <- tcStmt γ s1
                          (s2', γ2) <- tcStmt γ s2
@@ -589,7 +552,7 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 tcStmt γ c@(ClassStmt l i e is ce) 
   = do  ID _ _ αs _ _ <- error "tc-ClassStmt" -- resolveType c                              -- (1)
         let γ'        = tcEnvAdds (tyBinds αs) γ                      -- (2)
-        let thisT     = TApp (TRef (QN (srcPos l) [] (F.symbol i))) (tVars αs) fTop      -- (3)
+        let thisT     = TApp (TRef (RN $ QName (srcPos l) [] (F.symbol i))) (tVars αs) fTop      -- (3)
         ce'          <- tcWithThis thisT $ mapM (tcClassElt γ' i) ce  -- (4)
         return          (ClassStmt l i e is ce', Just γ)
   where
@@ -606,7 +569,7 @@ tcStmt γ m@(ModuleStmt l n body)
         return $ (ModuleStmt l n body', γo)
 
   where
-    γ' = initModuleEnv (Just γ) (Just $ F.symbol n) body 
+    γ' = initModuleEnv γ n body 
 
 -- OTHER (Not handled)
 tcStmt _ s 
@@ -761,7 +724,7 @@ tcCall :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 
 -- | `o e`
 tcCall γ (PrefixExpr l o e)        
-  = do z                      <- tcNormalCall γ l o [e] (prefixOpTy o $ tce_env γ) 
+  = do z                      <- tcNormalCall γ l o [e] (prefixOpTy o $ tce_names γ) 
        case z of
          ([e'], t)            -> return (PrefixExpr l o e', t)
          _                    -> tcError $ impossible (srcPos l) "tcCall PrefixExpr"
@@ -770,24 +733,23 @@ tcCall γ (PrefixExpr l o e)
 tcCall γ (InfixExpr l o@OpInstanceof e1 e2) 
   = do (e2',t)                <- tcExpr γ e2
        case t of
-         TClass (QN _ p x)    -> do ([e1',_], t) <- tcNormalCall γ l o
-                                                      [e1, StringLit l2 (F.symbolString x)] 
-                                                      -- FIXME: add qualified name
-                                                      (infixOpTy o $ tce_env γ)
-                                    return        $ (InfixExpr l o e1' e2', t) 
+         TClass (RN (QName _ p x)) -> 
+            do ([e1',_], t) <- tcNormalCall γ l o [e1, StringLit l2 (F.symbolString x)] (infixOpTy o $ tce_names γ)
+         -- FIXME: add qualified name
+               return (InfixExpr l o e1' e2', t) 
          _                    -> tcError          $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
   where
     l2 = getAnnotation e2
 
 -- | e ? e1 : e2
 tcCall γ (CondExpr l e e1 e2)
-  = do z                      <- tcNormalCall γ l BICondExpr [e,e1,e2] (builtinOpTy l BICondExpr $ tce_env γ)
+  = do z                      <- tcNormalCall γ l BICondExpr [e,e1,e2] (builtinOpTy l BICondExpr $ tce_names γ)
        case z of
          ([e',e1',e2'], t)    -> return (CondExpr l e' e1' e2', t)
          _                    -> tcError $ impossible (srcPos l) "tcCall CondExpr"
 
 tcCall γ (InfixExpr l o e1 e2)        
-  = do z                      <- tcNormalCall γ l o [e1, e2] (infixOpTy o $ tce_env γ) 
+  = do z                      <- tcNormalCall γ l o [e1, e2] (infixOpTy o $ tce_names γ) 
        case z of
          ([e1', e2'], t)      -> return (InfixExpr l o e1' e2', t)
          _                    -> tcError $ impossible (srcPos l) "tcCall InfixExpr"
@@ -795,26 +757,26 @@ tcCall γ (InfixExpr l o e1 e2)
 
 -- | `e1[e2]`
 tcCall γ (BracketRef l e1 e2)
-  = do z                      <- tcNormalCall γ l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ tce_env γ 
+  = do z                      <- tcNormalCall γ l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ tce_names γ 
        case z of
          ([e1', e2'], t)      -> return (BracketRef l e1' e2', t)
          _                    -> tcError $ impossible (srcPos l) "tcCall BracketRef"
    
 -- | `e1[e2] = e3`
 tcCall γ (AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
-  = do z                      <- tcNormalCall γ l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ tce_env γ
+  = do z                      <- tcNormalCall γ l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ tce_names γ
        case z of
          ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
          _                    -> tcError $ impossible (srcPos l) "tcCall AssignExpr"
 
 -- | `[e1,...,en]`
 tcCall γ (ArrayLit l es)
-  = do (es', t)               <- tcNormalCall γ l BIArrayLit es $ arrayLitTy l (length es) $ tce_env γ
+  = do (es', t)               <- tcNormalCall γ l BIArrayLit es $ arrayLitTy l (length es) $ tce_names γ
        return                  $ (ArrayLit l es', t)
 
 -- | `{ f1:t1,...,fn:tn }`
 tcCall γ (ObjectLit l bs) 
-  = do (es', t)               <- tcNormalCall γ l "ObjectLit" es $ undefined -- FIXME: objLitTy l ps 
+  = do (es', t)               <- tcNormalCall γ l "ObjectLit" es $ error "tcCall-objectlit" -- FIXME: objLitTy l ps 
        return                  $ (ObjectLit l (zip ps es'), t)
   where
     (ps,es) = unzip bs
@@ -828,6 +790,9 @@ tcCall γ (NewExpr l e es)
          _       -> tcError $ errorConstrMissing (srcPos l) t
 
 -- | e.f 
+--
+--   FIXME ???
+--
 tcCall γ ef@(DotRef l e f)
   = do z              <- runFailM $ tcExpr γ e
        case z of
@@ -849,7 +814,7 @@ tcCall γ (CallExpr l e@(SuperRef _)  es)
                             return            $ (CallExpr l e es', t')
            _          -> error "tcError $ errorConsSigMissing (srcPos l) e"
    
--- | `e(es)`
+-- | `e.f(es)`
 tcCall γ (CallExpr l em@(DotRef _ e f) es)
   = do z              <- runFailM $ tcExpr γ e
        case z of 
@@ -1021,7 +986,7 @@ getLoopNextPhiType l γ γl x =
       tcError $ bugUnboundPhiVar loc x where loc = srcPos $ ann l
 
 
-forceCheck x γ = elem x $ fst <$> envToList (tce_env γ)
+forceCheck x γ = elem x $ fst <$> envToList (tce_names γ)
 
 
 -- | scrapeVarDecl: Scrape a variable declaration for annotations

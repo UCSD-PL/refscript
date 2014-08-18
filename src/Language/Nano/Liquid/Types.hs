@@ -84,12 +84,13 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Nano.Annots
+import           Language.Nano.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
+import           Language.Nano.Misc
+import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Program
-import           Language.Nano.Env
-import           Language.Nano.Misc
 import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Sub
@@ -117,46 +118,54 @@ type AnnTypeR    = AnnType F.Reft
 -------------------------------------------------------------------------------------
 
 data CGEnvR r = CGE { 
-
-          cge_env     :: !(Env (RType r))               -- ^ bindings in scope 
-
-        , fenv     :: F.IBindEnv                        -- ^ fixpoint bindings
+  -- 
+  -- ^ bindings in scope 
+  --
+    cge_env     :: !(Env (RType r))               
+  -- 
+  -- ^ fixpoint bindings
+  --
+  , fenv        :: F.IBindEnv
+  -- 
+  -- ^ branch target conditions  
+  --
+  , guards      :: ![F.Pred]
+  -- 
+  -- ^ intersection-type context 
+  --
+  , cge_ctx     :: !IContext
+  -- 
+  -- ^ Modules in scope (exported API)
+  --
+  , cge_mod     :: QEnv (ModuleDef r)       
+  -- 
+  -- ^ Namespace absolute path
+  --
+  , cge_path    :: AbsPath
+  -- 
+  -- ^ Parent namespace environment
+  --
+  , cge_parent  :: Maybe (CGEnvR r)
   
-        , guards   :: ![F.Pred]                         -- ^ branch target conditions  
-
-        , cge_ctx  :: !IContext                         -- ^ intersection-type context 
-
-        -- , cge_spec :: !(Env (RType r))               -- ^ specifications for defined functions
-
-        -- , cge_defs :: !(IfaceEnv r)                  -- ^ type definitions
-
-        , cge_types     :: Env (IfaceDef r)            -- ^ Classs/Interfaces in scope 
-
-        , cge_mod       :: QEnv (ModuleExports r)       -- ^ Modules in scope (exported API)
- 
-        , cge_nspace    :: NameSpacePath                -- ^ Namespace absolute path
- 
-        , cge_parent    :: Maybe (CGEnvR r)             -- ^ Parent namespace environment
-
-        }
-  deriving (Functor)
+  } deriving (Functor)
 
 type CGEnv = CGEnvR F.Reft
 
 instance EnvLike F.Reft CGEnvR where
-  get_env     = cge_env
-  get_types   = cge_types
-  get_mod     = cge_mod
-  get_nspace  = cge_nspace
---  get_parent  = cge_parent
+  names     = cge_env
+  modules   = cge_mod
+  absPath   = cge_path
+  context   = cge_ctx
+  parent    = cge_parent
   
 
 instance EnvLike () CGEnvR where
-  get_env     = cge_env
-  get_types   = cge_types
-  get_mod     = cge_mod
-  get_nspace  = cge_nspace
---   get_parent  = cge_parent
+  names     = cge_env
+  modules   = cge_mod
+  absPath   = cge_path
+  context   = cge_ctx
+  parent    = cge_parent
+ 
  
 
 ----------------------------------------------------------------------------
@@ -615,17 +624,17 @@ zipType γ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _)
   | otherwise
   = case weaken γ x1 x2 t1s of
       -- Try to move along the class hierarchy
-      Just (_, t1s') -> zipType γ (TApp (TRef x2) t1s' r1 `strengthen` reftIO t1 (q_name x1)) t2
+      Just (_, t1s') -> zipType γ (TApp (TRef x2) t1s' r1 `strengthen` reftIO t1 (F.symbol x1)) t2
 
       -- Unfold structures
       Nothing        -> do  t1' <- flattenType γ t1 
                             t2' <- flattenType γ t2
                             zipType γ t1' t2'
   where
-    reftIO t c               = F.Reft (vv t, [refaIO t c])
-    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr  $ F.symbolText c]
-    vv                       = rTypeValueVar
-    sym                      = F.dummyLoc $ F.symbol "instanceof"
+    reftIO t c = F.Reft (vv t, [refaIO t c])
+    refaIO t c = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr  $ F.symbolText c]
+    vv         = rTypeValueVar
+    sym        = F.dummyLoc $ F.symbol "instanceof"
 
 
 zipType γ t1@(TApp (TRef _) _ _) t2 = do t1' <- flattenType γ t1

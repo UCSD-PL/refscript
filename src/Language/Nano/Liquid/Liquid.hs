@@ -569,21 +569,42 @@ consCast g a e
         δ     <- getDef
         case envGetContextCast g a of
           CNo       -> return (x,g)
-          CDead t   -> consDeadCode δ g l x t
+          CDead t   -> consDeadCode g l t
           CUp t t'  -> consUpCast δ g l x t t'
           CDn t t'  -> consDownCast δ g l x t t'
     where  
       l = srcPos a
 
+consCast g a e  
+  | CDead t <- eCast = consDeadCode g l t 
+  | otherwise        = do (x,g) <- consExpr g e 
+                          δ     <- getDef
+                          case eCast of
+                            CNo       -> return (x,g)
+                            CUp t t'  -> consUpCast δ g l x t t'
+                            CDn t t'  -> consDownCast δ g l x t t'
+                            -- CDead t   -> consDeadCode δ g l x t
+  where  
+    l                = srcPos a
+    eCast            = envGetContextCast g a 
+
+                       
+consDeadCode g l t
+  = do subType l g t tBot
+       -- NOTE: return the target type (falsified)
+       envAddFresh l tBot g
+    where
+       tBot = strengthen t $ F.bot $ rTypeR t
+
 -- | Dead code 
-consDeadCode δ g l x t
-  = do  subType l g tx xBot
-        -- NOTE: return the target type (falsified)
-        envAddFresh l tBot g
-    where 
-        xBot = zipType δ (fmap F.bot tx) tx
-        tBot = zipType δ (fmap F.bot t) t
-        tx   = envFindTy x g
+-- OLD consDeadCode δ g l x t
+-- OLD   = do  subType l g tx xBot
+-- OLD         -- NOTE: return the target type (falsified)
+-- OLD         envAddFresh l tBot g
+-- OLD     where 
+-- OLD         xBot = zipType δ (fmap F.bot tx) tx
+-- OLD         tBot = zipType δ (fmap F.bot t) t
+-- OLD         tx   = envFindTy x g
 
 -- | UpCast(x, t1 => t2)
 consUpCast δ g l x _ t2 = envAddFresh l stx g

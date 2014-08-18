@@ -49,9 +49,6 @@ module Language.Nano.Typecheck.TCMonad (
 
   -- * Verbosity
   , whenLoud', whenLoud, whenQuiet', whenQuiet
-  
-  -- * This
-  , tcPeekThis, tcWithThis
 
   -- * Super
   , getSuperM, getSuperDefM
@@ -381,12 +378,6 @@ methTys l f ft0
       Nothing         -> tcError $ errorNonFunction (srcPos l) f ft0 
       Just (vs,bs,t)  -> return  $ (vs,b_type <$> bs,t)
 
-
--- | `this`
-tcPeekThis     = safeHead "get 'this'" <$> (tc_this <$> get)
-tcPushThis t   = modify $ \st -> st { tc_this = t : tc_this st } 
-tcPopThis      = modify $ \st -> st { tc_this = tail $ tc_this st } 
-tcWithThis t p = do { tcPushThis t; a <- p; tcPopThis; return a } 
 
 
 --------------------------------------------------------------------------------

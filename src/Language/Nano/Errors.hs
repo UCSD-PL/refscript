@@ -71,6 +71,8 @@ bugUnknown l thing x          = mkErr l $ printf "Cannot find '%s' in '%s'" thin
 bugCallTo l x es              = mkErr l $ printf "Bug at call to '%s' with args '%s'" (ppshow x) (ppshow es)
 bugMultipleCasts l e          = mkErr l $ printf "Found multple casts on expression '%s'" (ppshow e)
 
+bugClassDefNotFound l x       = mkErr l $ printf "Class definition for '%s' not found." (ppshow x)
+
 
 ---------------------------------------------------------------------------
 -- | Nano
@@ -132,6 +134,7 @@ errorMissingFld l f t         = mkErr l $ printf "Field '%s' is missing from typ
 errorNonSingleFuncAnn l       = mkErr l $ printf "Anonymous function needs to have exactly one type annotation."
 errorUnresolvedType l t       = mkErr l $ printf "Could not resolve type '%s'." (ppshow t)
 errorUnresolvedTypes l t1 t2  = mkErr l $ printf "Could not resolve types '%s' and '%s'." (ppshow t1) (ppshow t2)
+errorConsSigMissing l t       = mkErr l $ printf "Constructor signature for '%s' is missing." (ppshow t)
 
 
 ---------------------------------------------------------------------------

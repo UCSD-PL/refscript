@@ -451,9 +451,9 @@ instance (PP s, PP t) => PP (M.HashMap s t) where
   pp m = vcat $ pp <$> M.toList m
 
 instance (F.Reftable r, PP r) => PP (ModuleMember r) where
-  pp (ModType x v t )  = pp v <> pp x <> colon <+> pp t
-  pp (ModVar x v t   ) = pp v <> pp x <> colon <+> pp t
-  pp (ModModule x v  ) = pp v <> pp x
+  pp (ModType x v t ) = pp v <> pp x <> colon <+> pp t
+  pp (ModVar x v t  ) = pp v <> pp x <> colon <+> pp t
+  pp (ModModule x v ) = pp v <> text "module" <+> pp x
 
 instance PP Visibility where
   pp Local = text ""

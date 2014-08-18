@@ -196,6 +196,10 @@ instance Substitutable r RelName where
 instance F.Reftable r => Substitutable r (IfaceDef r) where
   apply θ (ID c n v p e)    = ID c n v (apply θ p) (apply θ e)
 
+instance (F.Reftable r, Substitutable r a) => Substitutable r (Statement a) where
+  apply θ s                 = fmap (apply θ) s
+
+
  
 ---------------------------------------------------------------------------------
 appTy :: F.Reftable r => RSubst r -> RType r -> RType r

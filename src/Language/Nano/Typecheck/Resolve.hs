@@ -25,6 +25,7 @@ import           Data.Function                  (on)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
+import           Language.Nano.Errors
 import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
@@ -121,7 +122,7 @@ resolveRelPathInEnv γ = resolveRelPath (modules γ) (absPath γ)
 --   All relative qualified names have been made relative to absolute path `a`.
 --
 ---------------------------------------------------------------------------
-resolveRelName :: Data r => QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe (IfaceDef r)
+resolveRelName :: (PPR r, Data r) => QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe (IfaceDef r)
 ---------------------------------------------------------------------------
 resolveRelName env curP (RN qn) = do
     curM        <- qenvFindTy curP env
@@ -141,7 +142,7 @@ resolveRelName env curP (RN qn) = do
 
 
 ---------------------------------------------------------------------------
-resolveRelNameInEnv :: Data r => EnvLike r g => g r -> RelName -> Maybe (IfaceDef r)
+resolveRelNameInEnv :: (PPR r, Data r) => EnvLike r g => g r -> RelName -> Maybe (IfaceDef r)
 ---------------------------------------------------------------------------
 resolveRelNameInEnv γ = resolveRelName (modules γ) (absPath γ)
 
@@ -244,7 +245,7 @@ weaken γ pa pb ts
 
 -- FIXME: revisit these
 ---------------------------------------------------------------------------
-ancestors :: (Data r, EnvLike r g) => g r -> RelName -> [RelName]
+ancestors :: (PPR r, Data r, EnvLike r g) => g r -> RelName -> [RelName]
 ---------------------------------------------------------------------------
 ancestors γ s = 
   case resolveRelNameInEnv γ s of 

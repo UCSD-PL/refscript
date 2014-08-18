@@ -74,12 +74,16 @@ newtype AbsName = AN QName deriving (Eq, Ord, Show, Data, Typeable)
 data QPath = QPath { 
     qp_ss    :: SourceSpan
   , qp_path  :: NameSpacePath 
-  } deriving (Eq, Ord, Show, Data, Typeable)
+  } deriving (Ord, Show, Data, Typeable)
 
 -- | Relative and absolute version of a qualafied path
 --
 newtype RelPath = RP QPath deriving (Eq, Ord, Show, Data, Typeable)
 newtype AbsPath = AP QPath deriving (Eq, Ord, Show, Data, Typeable)
+
+
+instance Eq QPath where
+  QPath _ p1 == QPath _ p2 = p1 == p1
 
 instance F.Symbolic RelName where
   symbol (RN (QName _ _ s)) = s

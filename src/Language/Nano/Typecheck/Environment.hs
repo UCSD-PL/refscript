@@ -100,11 +100,13 @@ instance EnvLike r TCEnv where
 instance (PP r, F.Reftable r) => PP (TCEnv r) where
   pp = ppTCEnv
 
-ppTCEnv (TCE nms mod _ _ _ )
+ppTCEnv (TCE nms mod _ pth _ )
   =   text "******************** Environment ************************"
   $+$ pp nms
   $+$ text "******************** Modules ****************************"
   $+$ pp mod
+  $+$ text "******************** Absolute path **********************"
+  $+$ pp pth
 --   $+$ text "******************** Call Context ***********************"
 --   $+$ pp ctx
 

@@ -11,7 +11,7 @@ function plus(x, y) {
 
 function foo(a){
     if (typeof(a) === "number")
-	return a + 1;
+	return plus(a, 1);
 
     return plus(a, "cat");
 }

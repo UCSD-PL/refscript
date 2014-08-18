@@ -153,6 +153,7 @@ consFun1 l g f xs body (i, ft@(_,ts',_))
 argDecl l xs ts' = VarDecl l argId $ Just dArg 
   where
     argId        = Id l "arguments" 
+    -- TODO: precisely support heterogenous args
     dArg         = ObjectLit l $ safeZip "argDecl" ps es 
     k            = fromMaybe 0 $ findIndex isUndef ts'
     es           = VarRef  l             <$> take k xs
@@ -485,7 +486,7 @@ consExpr g (ArrayLit l es)
 
 -- | {f1:e1,...,fn:en}
 consExpr g (ObjectLit l bs) 
-  = consCall g l "ObjectLit" es $ objLitTy l ps
+  = consCall g l "ObjectLit" es $ objLitTy l ps (renv g)
   where
     (ps, es) = unzip bs
     

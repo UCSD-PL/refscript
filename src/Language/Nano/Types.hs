@@ -542,6 +542,7 @@ data BuiltinOp = BIUndefined
                | BIBracketRef
                | BIBracketAssign
                | BIArrayLit
+               | BIObjectLit
                | BINumArgs
                | BITruthy
                | BISetProp

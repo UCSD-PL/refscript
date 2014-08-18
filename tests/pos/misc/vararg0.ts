@@ -1,17 +1,24 @@
-
-
-/*@ buildName :: /\ (firstName: string, lastName: undefined) => string
-                 /\ (firstName: string, lastName: string   ) => string
- */
-
-function buildName(firstName: string, lastName?: string) {
-    if (lastName)
-        return firstName + " " + lastName;
-    else
-        return firstName;
+/*@ plus :: /\ (number, number) => number 
+            /\ (string, string) => string */
+function plus(x, y) {
+    
+    var z = x + y;
+    return z;
 }
 
-var result1 = buildName("Bob");                  //works correctly now
-var result3 = buildName("Bob", "Adams");         //ah, just right
 
-// NEG : var result2 = buildName("Bob", "Adams", "Sr.");  //error, too many parameters
+/*@ buildName :: /\ (firstName: string, lastName: number) => string
+                 /\ (firstName: string, lastName: string) => string
+ */
+
+function buildName(firstName, lastName) {
+    if (typeof(lastName) === "number")
+        return firstName;
+   
+    var a = plus (" ", lastName);
+    var b = plus(firstName, a);
+    return b;
+}
+
+var a = buildName("Bob", 56);              //works correctly now
+var b = buildName("Bob", "Adams");         //ah, just right

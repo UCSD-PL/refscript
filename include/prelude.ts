@@ -43,7 +43,7 @@
 */
 
 
-/*@ extern builtin_BIObjectLit :: forall A . () 
+/*@ extern builtin_BIObjectLit :: forall A . (A) 
                                => {v: A | [ (len v) = builtin_BINumArgs; not (null v) ] } 
 */
 

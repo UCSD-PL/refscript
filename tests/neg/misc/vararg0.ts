@@ -5,7 +5,7 @@
  */
 
 function buildName(firstName: string, lastName?: string) {
-    if (lastName)
+    if (firstName)
         return firstName + " " + lastName;
     else
         return firstName;

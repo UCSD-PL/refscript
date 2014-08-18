@@ -62,7 +62,9 @@ module Language.Nano.Typecheck.Types (
   , addSym, findSym, findSymOrDie, mapTDefEnv, mapTDefEnvM
 
   -- * Operator Types
-  , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy, objLitTy, setPropTy, returnTy
+  , infixOpTy, prefixOpTy, builtinOpTy
+  , arrayLitTy, objLitTy, immObjectLitTy
+  , setPropTy, returnTy
   -- , getFieldTy, getMethTy, getStatTy
 
   -- * Annotations
@@ -84,7 +86,6 @@ module Language.Nano.Typecheck.Types (
 
   -- * Aliases
   , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
-
 
   ) where 
 
@@ -313,8 +314,8 @@ instance Default Mutability where
 mutable       = mkMut "Mutable"
 immutable     = mkMut "Immutable"
 anyMutability = mkMut "AnyMutability"
--- readOnly      = mkMut "ReadOnly"
 inheritedMut  = mkMut "InheritedMut"
+-- readOnly      = mkMut "ReadOnly"
 
 
 isMutabilityType (TApp (TRef s) _ _) = s `elem` validMutNames
@@ -1202,10 +1203,9 @@ substBINumArgs n t = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::In
 -- | Object literal types
 --------------------------------------------------------------------------
 
---------------------------------------------------------------------------
-objLitTy         :: (F.Reftable r, IsLocated a)
-                 => a -> [Prop a] -> Env (RType r) -> RType r
---------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------
+objLitTy         :: (F.Reftable r, IsLocated a) => a -> [Prop a] -> Env (RType r) -> RType r
+--------------------------------------------------------------------------------------------
 objLitTy l ps g   = mkFun (vs, bs, rt)
   where
     vs            = [mv] ++ mvs ++ avs
@@ -1224,6 +1224,13 @@ objLitR l n g     = fromMaybe fTop $ substBINumArgs n . rTypeR . thd3 <$> bkFun 
   where
     t             = builtinOpTy l BIObjectLit g
 
+immObjectLitTy l g ps ts 
+  | nps == length ts = TCons elts immutable $ objLitR l nps g 
+  | otherwise        = die $ bug (srcPos l) $ "Mismatched args for immObjectLit"
+  where
+    elts             = safeZipWith "immObjectLitTy" (\p t -> FieldSig (F.symbol p) immutable t) ps ts
+    nps              = length ps
+    
 -- FIXME: Avoid capture
 freshTV l s n     = (v, t)
   where 
@@ -1342,6 +1349,5 @@ instance IsLocated (Alias a s t) where
 
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body 
-
 
 

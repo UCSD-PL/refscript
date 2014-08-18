@@ -1167,6 +1167,7 @@ builtinOpId BIUndefined     = builtinId "BIUndefined"
 builtinOpId BIBracketRef    = builtinId "BIBracketRef"
 builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
 builtinOpId BIArrayLit      = builtinId "BIArrayLit"
+builtinOpId BIObjectLit     = builtinId "BIObjectLit"
 builtinOpId BISetProp       = builtinId "BISetProp"
 builtinOpId BINumArgs       = builtinId "BINumArgs"
 builtinOpId BITruthy        = builtinId "BITruthy"
@@ -1184,7 +1185,7 @@ arrayLitTy :: (F.Subable (RType r), IsLocated a)
 arrayLitTy l n g 
   = case ty of 
       TAll μ (TAll α (TFun [xt] t r)) 
-                  -> mkAll [μ,α] $ TFun (arrayLitBinds n xt) (arrayLitOut n t) r
+                  -> mkAll [μ,α] $ TFun (arrayLitBinds n xt) (substBINumArgs n t) r
       _           -> err 
     where
       ty          = builtinOpTy l BIArrayLit g
@@ -1195,36 +1196,42 @@ arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]]
     xs            = F.symbolString x
     x_            = F.symbol . (xs ++) . show 
 
-arrayLitOut n t   = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
-
+substBINumArgs n t = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
 
 --------------------------------------------------------------------------
 -- | Object literal types
 --------------------------------------------------------------------------
 
+--------------------------------------------------------------------------
+objLitTy         :: (F.Reftable r, IsLocated a)
+                 => a -> [Prop a] -> Env (RType r) -> RType r
+--------------------------------------------------------------------------
+objLitTy l ps g   = mkFun (vs, bs, rt)
+  where
+    vs            = [mv] ++ mvs ++ avs
+    bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
+    rt            = TCons elts mt $ objLitR l nps g -- fTop
+    elts          = [FieldSig s m (ofType a) | (s,m,a) <- zip3 ss mts ats ] 
+    nps           = length ps
+    (mv, mt)      = freshTV l mSym 0                             -- obj mutability
+    (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
+    (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
+    ss            = [F.symbol p | p <- ps]
+    mSym          = F.symbol "M"
+    aSym          = F.symbol "A"
+
+objLitR l n g     = fromMaybe fTop $ substBINumArgs n . rTypeR . thd3 <$> bkFun t 
+  where
+    t             = builtinOpTy l BIObjectLit g
+
 -- FIXME: Avoid capture
-freshTV l s n     = (v,t)
+freshTV l s n     = (v, t)
   where 
     i             = F.intSymbol s n
     v             = TV i (srcPos l)
     t             = TVar v ()
 
---------------------------------------------------------------------------
-objLitTy         :: (F.Reftable r, IsLocated a) => a -> [Prop a] -> RType r
---------------------------------------------------------------------------
-objLitTy l ps     = mkFun (vs, bs, rt)
-  where
-    (mv, mt)      = freshTV l mSym 0                             -- obj mutability
-    (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
-    (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
-    ss            = [ F.symbol p | p <- ps]
-    vs            = [mv] ++ mvs ++ avs
-    bs            = [ B s (ofType a) | (s,a) <- zip ss ats ]
-    elts          = [ FieldSig s m (ofType a) | (s,m,a) <- zip3 ss mts ats ] 
-    rt            = TCons elts mt fTop
-    mSym          = F.symbol "M"
-    aSym          = F.symbol "A"
-    
+   
 --------------------------------------------------------------------------
 setPropTy :: (PP r, F.Reftable r, IsLocated l) 
           => F.Symbol -> l -> F.SEnv (Located (RType r)) -> RType r

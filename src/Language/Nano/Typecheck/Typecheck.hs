@@ -734,7 +734,7 @@ tcCall γ (ArrayLit l es)
 
 -- | `{ f1:t1,...,fn:tn }`
 tcCall γ (ObjectLit l bs) 
-  = do (es', t)               <- tcNormalCall γ l "ObjectLit" es $ objLitTy l ps 
+  = do (es', t)               <- tcNormalCall γ l "ObjectLit" es $ objLitTy l ps $ tce_env γ 
        return                  $ (ObjectLit l (zip ps es'), t)
   where
     (ps,es) = unzip bs

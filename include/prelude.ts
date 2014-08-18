@@ -43,6 +43,10 @@
 */
 
 
+/*@ extern builtin_BIObjectLit :: forall A . () 
+                               => {v: A | [ (len v) = builtin_BINumArgs; not (null v) ] } 
+*/
+
 /*@ extern builtin_BIArrayLit  :: forall M  A . (A) 
                                => {v: #Array[M,A] | [ (len v) = builtin_BINumArgs; not (null v) ] } 
 */

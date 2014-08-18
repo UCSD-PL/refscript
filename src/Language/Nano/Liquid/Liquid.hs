@@ -11,8 +11,9 @@ module Language.Nano.Liquid.Liquid (verifyFile) where
 import           Control.Monad
 import           Control.Applicative                ((<$>))
 
+import           Data.List                          (findIndex) 
 import qualified Data.HashMap.Strict                as M
-import           Data.Maybe                         (listToMaybe, catMaybes, maybeToList, isJust)
+import           Data.Maybe                         (fromMaybe, listToMaybe, catMaybes, maybeToList, isJust)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -138,8 +139,25 @@ consFun g (FunctionStmt l f xs body)
 consFun _ s 
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
 
-consFun1 l g f xs body (i, ft) 
-  = envAddFun l f i xs ft g >>= (`consStmts` body)
+consMeth1 l g f xs body (i, _, ft) = consFun1 l g f xs body (i,ft)
+
+-- | @consFun1@ checks a function body against a *one* of multiple
+--   conjuncts of an overloaded (intersection) type signature.
+--   Assume: len ts' = len xs
+
+consFun1 l g f xs body (i, ft@(_,ts',_)) 
+  = envAddFun l f i xs ft g >>= (`consStmts` (argS : body))
+  where
+    argS  = VarDeclStmt l [argDecl l xs ts']
+    
+argDecl l xs ts' = VarDecl l argId $ Just dArg 
+  where
+    argId        = Id l "arguments" 
+    dArg         = ObjectLit l $ safeZip "argDecl" ps es 
+    k            = fromMaybe 0 $ findIndex isUndef ts'
+    es           = VarRef  l             <$> take k xs
+    ps           = PropNum l . toInteger <$> [0 .. k-1]
+    
 
 -- consFun1 l g' f xs body (i, ft) 
 --   = do g'' <- envAddFun l f i xs ft g'
@@ -147,7 +165,6 @@ consFun1 l g f xs body (i, ft)
 --        maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
 
 
-consMeth1 l g f xs body (i, _, ft) = consFun1 l g f xs body (i,ft)
 
 
 envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g) 
@@ -158,6 +175,8 @@ envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g)
     tyBinds                        = [(Loc (srcPos l) α, tVar α) | α <- αs]
     varBinds                       = safeZip "envAddFun"
 
+
+                                     
 --------------------------------------------------------------------------------
 consStmts :: CGEnv -> [Statement AnnTypeR]  -> CGM (Maybe CGEnv) 
 --------------------------------------------------------------------------------
@@ -169,11 +188,12 @@ addFunAndGlobs g stmts
   = do   g1 <- (\xts -> envAdds False xts g ) =<< mapM ff funs 
          g2 <- (\xts -> envAdds True  xts g1) =<< mapM vv globs 
          return g2
-  where  ff (l,f)      = (f,) <$> (freshTyFun g l =<< getDefType f)
-         vv (l,x,t)    = (x,) <$> freshTyVar g l t
-         funs          = definedFuns stmts 
-         globs         = globsInScope stmts 
-         -- globs         = definedGlobs stmts 
+    where
+         ff (l,f)    = (f,) <$> (freshTyFun g l =<< getDefType f)
+         vv (l,x,t)  = (x,) <$> freshTyVar g l t
+         funs        = definedFuns stmts 
+         globs       = globsInScope stmts 
+         -- globs    = definedGlobs stmts 
 
 definedFuns       :: (Data a, Typeable a) => [Statement a] -> [(a,Id a)]
 definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
@@ -457,6 +477,7 @@ consExpr g (BracketRef l e1 e2)
 consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3)
   = consCall g l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ renv g
 
+-- TODO: Yuck. Please don't mix scrapeQualifiers and consGen
 -- | [e1,...,en]
 consExpr g (ArrayLit l es)
   = do  t <- scrapeQualifiers $ arrayLitTy l (length es) $ renv g
@@ -466,7 +487,7 @@ consExpr g (ArrayLit l es)
 consExpr g (ObjectLit l bs) 
   = consCall g l "ObjectLit" es $ objLitTy l ps
   where
-    (ps,es) = unzip bs
+    (ps, es) = unzip bs
     
 
 -- | new C(e, ...)

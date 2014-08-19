@@ -187,7 +187,7 @@ consStmts :: CGEnv -> [Statement AnnTypeR]  -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
 consStmts g stmts 
   = do g' <- addFunAndGlobs g stmts     -- K-Var functions and globals 
-       consSeq consStmt g' stmts
+       consFold consStmt g' stmts
 
 addFunAndGlobs g stmts 
   = do   g1 <- (\xts -> envAdds False xts g ) =<< mapM ff funs 
@@ -265,7 +265,7 @@ consStmt g (WhileStmt l e s)
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 consStmt g (VarDeclStmt _ ds)
-  = consSeq consVarDecl g ds
+  = consFold consVarDecl g ds
 
 -- return e 
 consStmt g (ReturnStmt l eo)
@@ -642,7 +642,7 @@ consCall :: (PP a) =>
 --   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in output type of callee.
 
 consCall g l fn es ft0 
-  = do (xes, g')    <- consScan consExpr g es
+  = mseq (consScan consExpr g es) $ \(xes, g') -> do 
        -- Attempt to gather qualifiers here -- needed for object literal quals
        ts           <- mapM scrapeQualifiers [envFindTy x g' | x <- xes]
        δ            <- getDef
@@ -693,18 +693,27 @@ instantiate l g fn ft
 
 
 ---------------------------------------------------------------------------------
-consScan :: (CGEnv -> a -> CGM (b, CGEnv)) -> CGEnv -> [a] -> CGM ([b], CGEnv)
----------------------------------------------------------------------------------
-consScan step g xs  = go g [] xs 
-  where 
-    go g acc []     = return (reverse acc, g)
-    go g acc (x:xs) = do (y, g') <- step g x
-                         go g' (y:acc) xs
+-- consScan :: (CGEnv -> a -> CGM (b, CGEnv)) -> CGEnv -> [a] -> CGM ([b], CGEnv)
+-- ---------------------------------------------------------------------------------
+-- consScan step g xs  = go g [] xs 
+--   where 
+--     go g acc []     = return (reverse acc, g)
+--     go g acc (x:xs) = do (y, g') <- step g x
+--                          go g' (y:acc) xs
+
+-----------------------------------------------------------------------------------
+consScan :: (CGEnv -> a -> CGM (Maybe (b, CGEnv))) -> CGEnv -> [a] -> CGM (Maybe ([b], CGEnv))
+-- ---------------------------------------------------------------------------------
+consScan f g xs    = fmap (mapFst reverse) <$> consFold step ([], g) xs
+  where
+    step (ys, g) x = fmap (mapFst (:ys))   <$> f g x
+    
 
 ---------------------------------------------------------------------------------
-consSeq  :: (CGEnv -> a -> CGM (Maybe CGEnv)) -> CGEnv -> [a] -> CGM (Maybe CGEnv) 
+-- consFold  :: (CGEnv -> b -> CGM (Maybe CGEnv)) -> CGEnv -> [b] -> CGM (Maybe CGEnv) 
+consFold :: (a -> b -> CGM (Maybe a)) -> a -> [b] -> CGM (Maybe a) 
 ---------------------------------------------------------------------------------
-consSeq f           = foldM step . Just 
+consFold f          = foldM step . Just 
   where 
     step Nothing _  = return Nothing
     step (Just g) x = f g x

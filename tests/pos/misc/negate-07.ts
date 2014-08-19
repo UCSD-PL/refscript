@@ -2,13 +2,18 @@ function plus(x:number, y:number):number {
     return plus(x, y); 
 }
 
-/*@ nein :: (boolean) => {boolean | true} */
+// If you leave the outputs unrefined, then rsc infers a refinement
+// that mentions `x` but which is malformed when you do the substitution,
+// unless the DEADCAST basically stops consgen from that point onwards i.e. 
+// DEADCAST is treated as a return.
+
+/*@ nein :: (boolean) => boolean */
 function nein(x){
     return !x;
 }
 
 /*@ negate :: /\ (x:number)  => number 
-              /\ (x:boolean) => {v:boolean | true}
+              /\ (x:boolean) => boolean
 
 */
 function negate(x):any {

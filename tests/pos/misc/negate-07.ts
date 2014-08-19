@@ -17,7 +17,7 @@ function nein(x){
 
 */
 function negate(x):any {
-  if (typeof(x) === "numbe") {
+  if (typeof(x) === "number") {
       return plus(x, 1);
   } 
   

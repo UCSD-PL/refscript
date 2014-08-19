@@ -568,38 +568,16 @@ getConstr l g s =
 --------------------------------------------------------------------------------
 consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
-consCast g a e
-  = mseq (consExpr g e) $ \(x,g) -> do 
-       δ     <- getDef
-       case envGetContextCast g a of
-         CNo       -> return $ Just (x,g)
-         CDead t   -> Just <$> consDeadCode g l t
-         CUp t t'  -> Just <$> consUpCast δ g l x t t'
-         CDn t t'  -> Just <$> consDownCast δ g l x t t'
-    where  
-      l = srcPos a
-
-consCast g a e  
-  | CDead t <- eCast = Just <$> consDeadCode g l t 
-  | otherwise        = mseq (consExpr g e) $ \(x,g) -> do 
-                          δ     <- getDef
-                          case eCast of
-                            CNo       -> return $ Just (x,g)
-                            CUp t t'  -> Just <$> consUpCast δ g l x t t'
-                            CDn t t'  -> Just <$> consDownCast δ g l x t t'
-  where  
-    l                = srcPos a
-    eCast            = envGetContextCast g a 
-
-                       
-consDeadCode g l t
-  = do subType l g t tBot
-       -- NOTE: return the target type (falsified)
-       envAddFresh l tBot g
-    where
-       tBot = strengthen t $ F.bot $ rTypeR t
-
--- | Dead code 
+-- OLD consCast g a e
+-- OLD   = mseq (consExpr g e) $ \(x,g) -> do 
+-- OLD        δ     <- getDef
+-- OLD        case envGetContextCast g a of
+-- OLD          CNo       -> return $ Just (x,g)
+-- OLD          CDead t   -> Just <$> consDeadCode g l t
+-- OLD          CUp t t'  -> Just <$> consUpCast δ g l x t t'
+-- OLD          CDn t t'  -> Just <$> consDownCast δ g l x t t'
+-- OLD     where  
+-- OLD       l = srcPos a
 -- OLD consDeadCode δ g l x t
 -- OLD   = do  subType l g tx xBot
 -- OLD         -- NOTE: return the target type (falsified)
@@ -608,6 +586,27 @@ consDeadCode g l t
 -- OLD         xBot = zipType δ (fmap F.bot tx) tx
 -- OLD         tBot = zipType δ (fmap F.bot t) t
 -- OLD         tx   = envFindTy x g
+
+
+consCast g a e  
+  | CDead t <- eCast = consDeadCode g l t 
+  | otherwise        = mseq (consExpr g e) $ \(x,g) -> do 
+                          δ     <- getDef
+                          case eCast of
+                            CNo       -> return $ Just (x,g)
+                            CUp t t'  -> Just <$> consUpCast δ g l x t t'
+                            CDn t t'  -> Just <$> consDownCast δ g l x t t'
+                            _         -> error "impossible"
+  where  
+    l                = srcPos a
+    eCast            = envGetContextCast g a 
+                       
+-- | Dead code 
+consDeadCode g l t
+  = do subType l g t tBot
+       return Nothing
+    where
+       tBot = strengthen t $ F.bot $ rTypeR t
 
 -- | UpCast(x, t1 => t2)
 consUpCast δ g l x _ t2 = envAddFresh l stx g
@@ -811,3 +810,8 @@ envJoin' l g g1 g2
         t1s  = (\t -> envFindTy t g1) <$> xs 
         t2s  = (\t -> envFindTy t g2) <$> xs
 
+
+
+-- Local Variables:
+-- flycheck-disabled-checkers: (haskell-liquid)
+-- End:

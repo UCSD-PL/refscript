@@ -891,3 +891,7 @@ getSuperDefM l (TApp (TRef i) ts _)
 
 getSuperDefM l _  = cgError l $ errorSuper $ srcPos l
 
+
+-- Local Variables:
+-- flycheck-disabled-checkers: (haskell-liquid)
+-- End:

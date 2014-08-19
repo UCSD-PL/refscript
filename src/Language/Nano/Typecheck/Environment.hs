@@ -73,30 +73,8 @@ instance EnvLike r TCEnv where
   absPath         = tce_path
   context         = tce_ctx
   parent          = tce_parent
-
-
--- type IfaceEnv r = Env (IfaceDef r) 
---  
--- ---------------------------------------------------------------------------------
--- mapIfaceEnvM :: (Monad m, Applicative m) 
---              => (RType t -> m (RType r)) -> IfaceEnv t -> m (IfaceEnv r)
--- ---------------------------------------------------------------------------------
--- mapIfaceEnvM f e = envFromList <$> mapM (mapSndM (mapIfaceDefsM f)) (envToList e)
---   
--- 
--- ---------------------------------------------------------------------------------
--- mapIfaceDefsM :: (Monad m, Functor m) 
---               => (RType t -> m (RType r)) -> IfaceDef t -> m (IfaceDef r)
--- ---------------------------------------------------------------------------------
--- mapIfaceDefsM f (ID c n αs (Just (p,ps)) es) 
---   = do  ps' <- mapM f ps 
---         es' <- mapM (mapEltM f) es 
---         return $ ID c n αs (Just (p,ps')) es'
--- mapIfaceDefsM f (ID c n αs Nothing es) = 
---   ID c n αs Nothing <$> mapM (mapEltM f) es
--- 
-
  
+
 instance (PP r, F.Reftable r) => PP (TCEnv r) where
   pp = ppTCEnv
 
@@ -109,5 +87,4 @@ ppTCEnv (TCE nms mod _ pth _ )
   $+$ pp pth
 --   $+$ text "******************** Call Context ***********************"
 --   $+$ pp ctx
-
 

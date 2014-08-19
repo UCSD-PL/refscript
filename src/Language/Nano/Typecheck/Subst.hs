@@ -199,7 +199,6 @@ instance F.Reftable r => Substitutable r (IfaceDef r) where
 instance (F.Reftable r, Substitutable r a) => Substitutable r (Statement a) where
   apply θ s                 = fmap (apply θ) s
 
-
  
 ---------------------------------------------------------------------------------
 appTy :: F.Reftable r => RSubst r -> RType r -> RType r

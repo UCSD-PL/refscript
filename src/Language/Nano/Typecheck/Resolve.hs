@@ -24,6 +24,7 @@ import           Data.Generics
 import           Data.Function                  (on)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
+import           Language.Fixpoint.Misc (traceShow)
 import           Language.Nano.Env
 import           Language.Nano.Errors
 import           Language.Nano.Names
@@ -125,7 +126,7 @@ resolveRelPathInEnv γ = resolveRelPath (modules γ) (absPath γ)
 resolveRelName :: (PPR r, Data r) => QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe (IfaceDef r)
 ---------------------------------------------------------------------------
 resolveRelName env curP (RN qn) = do
-    curM        <- qenvFindTy curP env
+    curM        <- qenvFindTy (traceShow ("curP in keys " ++ show (qenvKeys env)) curP) env
     (dfn, remP) <- aux curM qn
     renameRelative env remP curP dfn 
   where

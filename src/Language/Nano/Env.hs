@@ -39,6 +39,7 @@ module Language.Nano.Env (
   , qenvToEnv
   , qenvEmpty
   , qenvFindTy
+  , qenvKeys
   ) where 
 
 import           Control.Applicative 
@@ -168,11 +169,12 @@ qenvFind q (QE γ)   = M.lookup q γ
 qenvFindTy  i γ     = fmap val $ qenvFind i γ
 
 qenvAdd :: AbsPath -> t -> QEnv t -> QEnv t
-qenvAdd q t (QE γ)  = QE (M.insert q (Loc (srcPos q) t) γ)
+qenvAdd q t (QE γ)  = QE (M.insert (tracePP "inserting" q) (Loc (srcPos q) t) γ)
 
 -- Create dot separated symbols as keys
 qenvToEnv (QE γ)    = envFromList [ (Id l (ppshow x),t) | (x, Loc l t) <- M.toList γ]
 
+qenvKeys (QE γ)     = M.keys γ
 
 
 --------------------------------------------------------------------------------

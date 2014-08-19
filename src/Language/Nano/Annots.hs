@@ -123,8 +123,6 @@ type UAnnSSA  = AnnSSA  ()
 type UAnnType = AnnType ()
 type UAnnInfo = AnnInfo ()
 
-instance IsLocated (AnnSSA r) where
-  srcPos = ann 
 
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 
@@ -207,7 +205,4 @@ instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
 
 phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
-
-
-
 

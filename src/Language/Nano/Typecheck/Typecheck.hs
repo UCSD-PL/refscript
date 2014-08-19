@@ -1000,3 +1000,6 @@ sanity l t@(TApp (TRef i) ts _)
 sanity _ t = return t
 
 
+-- Local Variables:
+-- flycheck-disabled-checkers: (haskell-liquid)
+-- End:

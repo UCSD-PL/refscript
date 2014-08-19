@@ -24,7 +24,7 @@ module Language.Nano.Program (
 
 
   -- * Traversals
-  , hoistFuncDecls, hoistTypes, collectTypes, collectModules -- , hoistAnns
+  , hoistBindings, hoistTypes, collectTypes, collectModules -- , hoistAnns
 
 
   ) where
@@ -351,20 +351,19 @@ ssaStr  = "_SSA_"
 
 
 
-
-
 ---------------------------------------------------------------------------
 -- | AST Traversals
 ---------------------------------------------------------------------------
 
 
--- | Find all function definitions/declarations whose scope reaches the current 
---   scope. E.g. declarations in the If-branch of a conditional expression. 
---   Note how declarations do not escape module or function blocks.
+-- | Find all bindings (function definitions/declarations, classes, etc.) whose 
+--   scope reaches the current scope. E.g. declarations in the If-branch of a 
+--   conditional expression. Note how declarations do not escape module or function 
+--   blocks.
 -------------------------------------------------------------------------------
-hoistFuncDecls :: Data a => [Statement a] -> [(Id a,a)]
+hoistBindings :: Data a => [Statement a] -> [(Id a,a)]
 -------------------------------------------------------------------------------
-hoistFuncDecls = everythingBut (++) myQ
+hoistBindings = everythingBut (++) myQ
   where
     myQ a     = case cast a :: (Data a => Maybe (Statement a)) of
                   Just  s -> fSt s
@@ -376,7 +375,7 @@ hoistFuncDecls = everythingBut (++) myQ
     fSt :: Data a => (Statement a) -> ([(Id a,a)],Bool)
     fSt (FunctionStmt l n _ _) = ([(n,l)], True)
     fSt (FunctionDecl l n _  ) = ([(n,l)], True)
-    fSt (ClassStmt {})         = ([], True)
+    fSt (ClassStmt l n _ _ _ ) = ([(n,l)], True)
     fSt (ModuleStmt {})        = ([], True)
     fSt _                      = ([], False)
 
@@ -443,13 +442,15 @@ collectTypes  = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
 
 -- Only descend down modules 
 -------------------------------------------------------------------------------
-collectModules :: (IsLocated a, Data a) => [Statement a] -> [(AbsPath, Statement a)]
+collectModules :: (IsLocated a, Data a) => [Statement a] -> [(AbsPath, [Statement a])]
 -------------------------------------------------------------------------------
-collectModules  = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
+collectModules ss = topLevel : rest ss
   where
-    f e@(ModuleStmt _ x _    ) s = let p = s ++ [F.symbol x] in
-                                   ([(AP $ QPath (srcPos e) p,e)], p, False) 
-    f _                        s = ([], s, True)
+    rest                      = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
+    f e@(ModuleStmt _ x ms) s = let p = s ++ [F.symbol x] in
+                                ([(AP $ QPath (srcPos e) p, ms)], p, False) 
+    f _                    s  = ([], s, True)
+    topLevel                  = (AP $ QPath (srcPos dummySpan) [], ss)
 
 
 

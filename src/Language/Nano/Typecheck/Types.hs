@@ -675,11 +675,11 @@ mkInitFldTy _                = Nothing
 
 
 -----------------------------------------------------------------------
-infixOpTy :: InfixOp -> Env t -> t 
+-- infixOpTy :: InfixOp -> Env t -> t 
 -----------------------------------------------------------------------
 infixOpTy o g = fromMaybe err $ envFindTy ox g
   where 
-    err       = errorstar $ printf "Cannot find infixOpTy %s" (ppshow ox) -- (ppshow g)
+    err       = errorstar $ printf "Cannot find infixOpTy %s in %s" (ppshow ox) (ppshow $ g)
     ox        = infixOpId o
 
 infixOpId OpLT         = builtinId "OpLT"

@@ -23,6 +23,7 @@ import           Language.Fixpoint.Misc
 
 import           Language.Nano.Types
 import           Language.Nano.Env
+import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Typecheck.Environment
@@ -30,7 +31,7 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
 import           Control.Applicative ((<$>))
 
--- import           Debug.Trace
+import           Debug.Trace
 
 type PPRD r = (PP r, F.Reftable r, Data r)
 
@@ -71,8 +72,8 @@ getPropApp γ s t@(TApp c ts _) =
     TUn      -> getPropUnion γ s ts
     TInt     -> (t,) <$> lookupAmbientVar γ s "Number"
     TString  -> (t,) <$> lookupAmbientVar γ s "String"
-    TRef x   -> do  d      <- resolveRelNameInEnv γ x
-                    es     <- flatten False γ (d,ts)
+    TRef x   -> do  d      <- resolveRelNameInEnv (trace ("getPropApp - keys " ++ ppshow (qenvKeys $ modules γ)) γ) x
+                    es     <- tracePP "getProp-flattened" <$> flatten False γ (d,ts)
                     p      <- accessMember s es
                     return  $ (t,p)
     TFPBool  -> Nothing

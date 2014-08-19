@@ -44,17 +44,17 @@ data TVar = TV {
 
 -- | Type Constructors
 data TCon
-  = TInt                                                -- ^ number
-  | TBool                                               -- ^ boolean
-  | TString                                             -- ^ string
-  | TVoid                                               -- ^ void
-  | TTop                                                -- ^ top
-  | TRef RelName                                        -- ^ A.B.C (class)
-  | TUn                                                 -- ^ union
-  | TNull                                               -- ^ null
-  | TUndef                                              -- ^ undefined
+  = TInt                -- ^ number
+  | TBool               -- ^ boolean
+  | TString             -- ^ string
+  | TVoid               -- ^ void
+  | TTop                -- ^ top
+  | TRef RelName        -- ^ A.B.C (class)
+  | TUn                 -- ^ union
+  | TNull               -- ^ null
+  | TUndef              -- ^ undefined
 
-  | TFPBool                                             -- ^ liquid 'bool'
+  | TFPBool             -- ^ liquid 'bool'
     deriving (Ord, Show, Data, Typeable)
 
 -- | (Raw) Refined Types 

@@ -12,6 +12,6 @@ class BankAccount {
 
 }
 
-var ba : BankAccount = new BankAccount(1);
+var ba = new BankAccount(1);
 
 assert(ba.g === "a");

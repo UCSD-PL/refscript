@@ -1221,7 +1221,7 @@ objLitTy l ps g   = mkFun (vs, bs, rt)
     mSym          = F.symbol "M"
     aSym          = F.symbol "A"
 
-objLitR l n g     = fromMaybe fTop $ substBINumArgs n . rTypeR . thd3 <$> bkFun t 
+objLitR l n g     = fTop -- fromMaybe fTop $ substBINumArgs n . rTypeR . thd3 <$> bkFun t 
   where
     t             = builtinOpTy l BIObjectLit g
 

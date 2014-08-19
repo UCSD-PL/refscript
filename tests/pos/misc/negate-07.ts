@@ -2,8 +2,8 @@ function plus(x:number, y:number):number {
     return plus(x, y); 
 }
 
-/*@ not :: (boolean) => boolean */
-function not(x){
+/*@ nein :: (boolean) => {boolean | true} */
+function nein(x){
     return !x;
 }
 
@@ -16,6 +16,12 @@ function negate(x):any {
       return plus(x, 1);
   } 
   else {
-      return not(x);
+      return nein(x);
   }
+}
+
+/*@ foo :: (number) => {v:number | v = 1} */
+function foo(x:number):any {
+    return 1;
+    return "cat";
 }

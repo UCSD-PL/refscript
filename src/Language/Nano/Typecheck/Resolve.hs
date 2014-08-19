@@ -24,7 +24,7 @@ import           Data.Generics
 import           Data.Function                  (on)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.Misc (traceShow)
+-- import           Language.Fixpoint.Misc (traceShow)
 import           Language.Nano.Env
 import           Language.Nano.Errors
 import           Language.Nano.Names
@@ -39,7 +39,7 @@ import           Data.Function (fix)
 
 -- import           Debug.Trace
 
-type PPR r = (PP r, F.Reftable r)
+type PPR r = (PP r, F.Reftable r, Data r)
 
 
 ---------------------------------------------------------------------------
@@ -105,11 +105,11 @@ resolveRelPath :: QEnv (ModuleDef r) -> AbsPath -> RelPath -> Maybe (ModuleDef r
 resolveRelPath env a (RP (QPath _ [])) = qenvFindTy a env
 resolveRelPath env a r@(RP (QPath l (m:ms))) = do
     curM <- qenvFindTy a env
-    case envFindTy m (m_contents curM) of
-      Just (ModModule x _) -> resolveRelPath env (extendPath a x) (RP (QPath l ms))
-      Just _               -> Nothing
-      Nothing              -> do prP <- parentOf a
-                                 resolveRelPath env prP r
+    case envFindTy m (m_variables curM) of
+      Just (_, TModule r) -> resolveRelPath env (extendPath a m) r
+      Just _              -> Nothing
+      Nothing             -> do prP <- parentOf a
+                                resolveRelPath env prP r
 
 ---------------------------------------------------------------------------
 resolveRelPathInEnv :: Data r => EnvLike r g => g r -> RelPath -> Maybe (ModuleDef r)
@@ -122,28 +122,29 @@ resolveRelPathInEnv γ = resolveRelPath (modules γ) (absPath γ)
 --   
 --   All relative qualified names have been made relative to absolute path `a`.
 --
+--   FIXME: check visibility
+--
 ---------------------------------------------------------------------------
-resolveRelName :: (PPR r, Data r) => QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe (IfaceDef r)
+resolveRelName :: PPR r => QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe (IfaceDef r)
 ---------------------------------------------------------------------------
 resolveRelName env curP (RN qn) = do
-    curM        <- qenvFindTy (traceShow ("curP in keys " ++ show (qenvKeys env)) curP) env
+    curM        <- qenvFindTy curP env
     (dfn, remP) <- aux curM qn
     renameRelative env remP curP dfn 
   where
     aux curM qn@(QName _ [] s) = do
-      case envFindTy s (m_contents curM) of 
-        Just (ModType _ _ d) -> Just (d, m_path curM)
-        Just _               -> Nothing
-        Nothing              -> do prP <- parentOf $ m_path curM
-                                   prM <- qenvFindTy prP env
-                                   aux prM qn
-
-    aux curM (QName l ns s)   = do remM <- resolveRelPath env (m_path curM) (RP (QPath l ns))
-                                   aux remM (QName l [] s)
+      case envFindTy s (m_types curM) of 
+        Just dfn -> Just (dfn, m_path curM)
+        Nothing  -> do prP <- parentOf $ m_path curM
+                       prM <- qenvFindTy prP env
+                       aux prM qn
+    aux curM (QName l ns s)   = do 
+      remM <- resolveRelPath env (m_path curM) (RP (QPath l ns))
+      aux remM (QName l [] s)
 
 
 ---------------------------------------------------------------------------
-resolveRelNameInEnv :: (PPR r, Data r) => EnvLike r g => g r -> RelName -> Maybe (IfaceDef r)
+resolveRelNameInEnv :: PPR r => EnvLike r g => g r -> RelName -> Maybe (IfaceDef r)
 ---------------------------------------------------------------------------
 resolveRelNameInEnv γ = resolveRelName (modules γ) (absPath γ)
 
@@ -163,42 +164,37 @@ parentOf (AP (QPath l m )) = Just (AP (QPath l (init m)))
 
 
 
-
 -- | Flattenning 
 --
 
 -- | flattening type to include all fields inherited by ancestors
+--
 ---------------------------------------------------------------------------
 flatten :: (EnvLike r g, PPR r, Data r) => Bool -> g r -> (SIfaceDef r) -> Maybe [TypeMember r]
 ---------------------------------------------------------------------------
-flatten b              = fix . ff fn
-  where
-    fn | b             = isStaticSig
-       | otherwise     = nonStaticSig
+flatten b γ (ID _ _ vs h es, ts) =
+    case h of 
+      Just (p, ts') -> 
+          do  parent        <- resolveRelNameInEnv γ p
+              inherited     <- flatten b γ (parent, ts')
+              return         $ apply θ $ L.unionBy sameBinder current inherited
+      Nothing -> 
+          return             $ apply θ current
+  where 
+    current        = filter (fn b) es
+    θ              = fromList $ zip vs ts
+    fn True        = isStaticSig
+    fn False       = nonStaticSig
 
-    ff flt γ rec (ID _ _ vs (Just (p, ts')) es, ts) = do  
-        parent        <- resolveRelNameInEnv γ p
-        inherited     <- rec (parent, ts')
-        return         $ apply θ $ L.unionBy sameBinder current inherited
-      where 
-        current        = filter flt es
-        θ              = fromList $ zip vs ts
-
-    ff flt _ _ (ID _ _ vs Nothing es, ts) = 
-        return $ apply θ $ filter flt es
-      where 
-        θ              = fromList $ zip vs ts
 
 -- | flatten' does not apply the top-level type substitution
 ---------------------------------------------------------------------------
-flatten' :: (Data r, PPR r, EnvLike r g) 
-         => Bool -> g r -> IfaceDef r -> Maybe [TypeMember r]
+flatten' :: (PPR r, EnvLike r g) => Bool -> g r -> IfaceDef r -> Maybe [TypeMember r]
 ---------------------------------------------------------------------------
 flatten' st γ d@(ID _ _ vs _ _) = flatten st γ (d, tVar <$> vs)
 
 ---------------------------------------------------------------------------
-flatten'' :: (Data r, PPR r, EnvLike r g) 
-          =>  Bool -> g r -> IfaceDef r -> Maybe ([TVar], [TypeMember r])
+flatten'' :: (PPR r, EnvLike r g) =>  Bool -> g r -> IfaceDef r -> Maybe ([TVar], [TypeMember r])
 ---------------------------------------------------------------------------
 flatten'' st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten st γ (d, tVar <$> vs)
 
@@ -211,15 +207,17 @@ flatten'' st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten st γ (d, tVar <$> vs)
 flattenType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
 flattenType γ (TApp (TRef x) ts r) = do 
-    d                 <- resolveRelNameInEnv γ x
-    es                <- flatten False γ (d, ts)
+    -- es                <- tracePP "flattened" <$> flatten False γ . (, ts) =<< tracePP "resolveRelNameInEnv" <$> resolveRelNameInEnv γ x
+    es                <- flatten False γ . (, ts) =<< resolveRelNameInEnv γ x
     case ts of 
       mut : _         -> Just $ TCons es (toType mut) r
       _               -> Nothing
+  where
+
+    _                  = flatten False γ . (,ts)
 
 flattenType γ (TClass x)             = do
-    d                 <- resolveRelNameInEnv γ x
-    es                <- flatten' True γ d
+    es                <- flatten' True γ =<< resolveRelNameInEnv γ x
     return             $ TCons es mut fTop
   where
     mut                = t_readOnly -- toType $ t_ReadOnly $ get_common_ts γ 
@@ -227,14 +225,13 @@ flattenType γ (TClass x)             = do
 flattenType _ t = Just t
 
 
--- | `weaken` a named type, by moving upwards in the class hierarchy. This
---   function does the necessary type argument substitutions. 
+-- | `weaken γ a b ts` moves a name @a@ by moving it upwards in the class 
+--   hierarchy. This function does the necessary type argument substitutions.
 --
--- FIXME: Works for classes, but interfaces could have multiple ancestors.
---        What about common elements in parent class?
+--    FIXME: Works for classes, but interfaces could have multiple ancestors.
+--           What about common elements in parent class?
 ---------------------------------------------------------------------------
-weaken :: (Data r, PPR r, EnvLike r g) 
-       => g r -> RelName -> RelName -> [RType r] -> Maybe (SIfaceDef r)
+weaken :: (PPR r, EnvLike r g) => g r -> RelName -> RelName -> [RType r] -> Maybe (SIfaceDef r)
 ---------------------------------------------------------------------------
 weaken γ pa pb ts
   | pa == pb = (,ts) <$> resolveRelNameInEnv γ pa
@@ -246,7 +243,7 @@ weaken γ pa pb ts
 
 -- FIXME: revisit these
 ---------------------------------------------------------------------------
-ancestors :: (PPR r, Data r, EnvLike r g) => g r -> RelName -> [RelName]
+ancestors :: (PPR r, EnvLike r g) => g r -> RelName -> [RelName]
 ---------------------------------------------------------------------------
 ancestors γ s = 
   case resolveRelNameInEnv γ s of 

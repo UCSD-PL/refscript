@@ -36,6 +36,8 @@ Tool/Implementation
   
   - What are good default mutabilities (parsing etc.)?
 
+  - Revisit mutability subtyping
+
   - TApp (TRef ...) ... is now prefixed with a '#' to disambiguate from TVar.
 
   - Parsing exceptions are not captured by regrtest.py.

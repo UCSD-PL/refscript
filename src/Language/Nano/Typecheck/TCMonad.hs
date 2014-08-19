@@ -289,20 +289,19 @@ freshTVar l _ =  ((`TV` l). F.intSymbol (F.symbol "T")) <$> tick
 --------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------
-unifyTypesM :: PPR r 
-            => SourceSpan -> TCEnv r -> String -> [RType r] -> [RType r] -> TCM r (RSubst r)
+unifyTypesM :: PPR r => SourceSpan -> TCEnv r -> [RType r] -> [RType r] -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
-unifyTypesM l γ msg t1s t2s
+unifyTypesM l γ t1s t2s 
   | length t1s /= length t2s = tcError $ errorArgMismatch l 
   | otherwise = do  θ <- getSubst
                     case unifys l γ θ t1s t2s of
-                      Left err -> tcError $ catMessage err msg
+                      Left err -> tcError $ err 
                       Right θ' -> setSubst θ' >> return θ' 
 
 ----------------------------------------------------------------------------------
 unifyTypeM :: PPR r => SourceSpan -> TCEnv r -> RType r -> RType r -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
-unifyTypeM l γ t t' = unifyTypesM l γ (ppshow "") [t] [t']
+unifyTypeM l γ t t' = unifyTypesM l γ [t] [t']
 
 
 --------------------------------------------------------------------------------

@@ -132,6 +132,7 @@ errorArgName l x y            = mkErr l $ printf "Wrong Parameter Name at %s: Sa
 errorExtractNonFld l f x t    = mkErr l $ printf "Cannot extract non-field '%s' from object '%s' of type '%s'." (ppshow f) (ppshow x) (ppshow t)
 errorMissingFld l f t         = mkErr l $ printf "Field '%s' is missing from type '%s'." (ppshow f) (ppshow t)
 errorNonSingleFuncAnn l       = mkErr l $ printf "Anonymous function needs to have exactly one type annotation."
+errorUnfoldType l t           = mkErr l $ printf "Could not unfold type '%s'." (ppshow t)
 errorUnresolvedType l t       = mkErr l $ printf "Could not resolve type '%s'." (ppshow t)
 errorUnresolvedTypes l t1 t2  = mkErr l $ printf "Could not resolve types '%s' and '%s'." (ppshow t1) (ppshow t2)
 errorConsSigMissing l t       = mkErr l $ printf "Constructor signature for '%s' is missing." (ppshow t)

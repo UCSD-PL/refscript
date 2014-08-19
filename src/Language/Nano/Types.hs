@@ -189,28 +189,28 @@ data TypeMember r
   deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
--- | A module's content (local and exported API)
---
-data ModuleMember r 
-  -- 
-  -- ^ Class / Interface type
-  --
-  = ModType   { m_sym  :: Id SourceSpan
-              , m_vis  :: Visibility
-              , m_def  :: IfaceDef r }
-  -- 
-  -- ^ Variable / Function binding
-  --
-  | ModVar    { m_sym  :: Id SourceSpan                 
-              , m_vis  :: Visibility
-              , m_type :: RType r }                    
-  -- 
-  -- ^ Module -- use this to find the module definition
-  --
-  | ModModule { m_sym  :: Id SourceSpan
-              , m_vis  :: Visibility }
-
-  deriving (Functor)
+-- -- | A module's content (local and exported API)
+-- --
+-- data ModuleMember r 
+--   -- 
+--   -- ^ Class / Interface type
+--   --
+--   = ModType   { m_sym  :: Id SourceSpan
+--               , m_vis  :: Visibility
+--               , m_def  :: IfaceDef r }
+--   -- 
+--   -- ^ Variable / Function binding
+--   --
+--   | ModVar    { m_sym  :: Id SourceSpan                 
+--               , m_vis  :: Visibility
+--               , m_type :: RType r }                    
+--   -- 
+--   -- ^ Module -- use this to find the module definition
+--   --
+--   | ModModule { m_sym  :: Id SourceSpan
+--               , m_vis  :: Visibility }
+-- 
+--   deriving (Functor)
 
 
 data Visibility 
@@ -220,11 +220,31 @@ data Visibility
   | Exported
 
 
+-- | Module Body 
+--
+--  As per TypeScript spec par. 10.2:
+--
+--  Each module body has a declaration space for local variables (including
+--  functions, modules, class constructor functions, and enum objects), a 
+--  declaration space for local named types (classes, interfaces, and enums),
+--  and a declaration space for local namespaces (containers of named types).
+--  Every declaration (whether local or exported) in a module contributes to 
+--  one or more of these declaration spaces.
+--
+--  PV: the last case has not been included
+--
 data ModuleDef r = ModuleDef {
   -- 
   -- ^ Contents of a module (local and exported)
+  --   
+  --   * Interfaces are _not_ included here (because thery don't appear as
+  --   bindings in the language)
   --
-    m_contents    :: Env (ModuleMember r)
+    m_variables   :: Env (Visibility, RType r)
+  --
+  -- ^ Types
+  --
+  , m_types       :: Env (IfaceDef r)
   -- 
   -- ^ Absolute path of definition
   --
@@ -232,6 +252,14 @@ data ModuleDef r = ModuleDef {
   }
   deriving (Functor)
 
+
+-- data ModuleKind 
+-- 
+--   = TypeKind
+-- 
+--   | VarKind
+-- 
+--   | ModuleKind
 
 
 ---------------------------------------------------------------------------------

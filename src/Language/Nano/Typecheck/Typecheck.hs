@@ -134,11 +134,11 @@ typeCheck pgm = do
 tcNano :: PPR r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
-  = do  (fs',_)   <- tcStmts (trace ("INIT KEYS IN MODULES " ++ (ppshow $ qenvKeys $ modules γ)) γ) fs
+  = do  (fs',_)   <- tcStmts γ fs
         fs''      <- patch fs'
         return     $ p { code = Src fs'' }
     where
-        γ          = {- tracePP "INIT GLOBAL" $-} initGlobalEnv p
+        γ          = initGlobalEnv p
 
 
 -- | Patch annotation on the AST
@@ -164,20 +164,21 @@ patch fs =
 -------------------------------------------------------------------------------
 initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
+initGlobalEnv (Nano { code = Src ss }) = TCE nms ifc mod ctx pth Nothing
   where
-    nms       = envFromList $ visibleBindings ss
+    nms       = envFromList $ visibleNames ss
+    ifc       = envFromList $ visibleIfaces ss
     mod       = registerAllModules ss 
     ctx       = emptyContext
     pth       = AP $ QPath (srcPos dummySpan) []
 
 
-initFuncEnv γ f i αs xs ts t s = TCE nms mod ctx pth parent
+initFuncEnv γ f i αs xs ts t s = TCE nms ifc mod ctx pth parent
   where
     tyBinds   = [(tVarId α, tVar α) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) ts
-    nms       = envAddReturn f t $ envAdds (tyBinds ++ varBinds ++ visibleBindings s) $ tce_names γ
-    iface     = envEmpty 
+    nms       = envAddReturn f t $ envAdds (tyBinds ++ varBinds ++ visibleNames s) $ tce_names γ
+    ifc       = envFromList $ visibleIfaces s
     mod       = tce_mod γ
     ctx       = pushContext i (tce_ctx γ) 
     pth       = tce_path γ
@@ -187,9 +188,10 @@ initFuncEnv γ f i αs xs ts t s = TCE nms mod ctx pth parent
 ---------------------------------------------------------------------------------------
 initModuleEnv :: (PPR r, F.Symbolic n) => TCEnv r -> n -> [Statement (AnnSSA r)] -> TCEnv r
 ---------------------------------------------------------------------------------------
-initModuleEnv γ n s = TCE nms mod ctx pth parent 
+initModuleEnv γ n s = TCE nms ifc mod ctx pth parent 
   where
-    nms       = envFromList $ visibleBindings s
+    nms       = envFromList $ visibleNames s
+    ifc       = envFromList $ visibleIfaces s
     mod       = modules γ
     ctx       = emptyContext
     pth       = extendAbsPath (tce_path γ) n
@@ -197,13 +199,22 @@ initModuleEnv γ n s = TCE nms mod ctx pth parent
 
 
 ---------------------------------------------------------------------------------------
-visibleBindings :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, RType r)]
+visibleNames :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, RType r)]
 ---------------------------------------------------------------------------------------
-visibleBindings s = [ (ann <$> n, t) | (n, Ann l ff) <- hoistBindings s, f <- ff, t <- annToType l n f ]
+visibleNames s = [ (ann <$> n, t) | (n, Ann l ff) <- hoistBindings s, f <- ff, t <- annToType l n f ]
   where
     annToType _ _ (VarAnn t)    = [t]
-    annToType l n (IfaceAnn {}) = [TClass $ RN $ QName l [] (F.symbol n)]
     annToType l n (ClassAnn {}) = [TClass $ RN $ QName l [] (F.symbol n)]
+    annToType _ _ _             = []
+
+---------------------------------------------------------------------------------------
+visibleIfaces :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, RType r)]
+---------------------------------------------------------------------------------------
+visibleIfaces s = [ (ann <$> n, t) | (n, Ann l ff) <- hoistBindings s, f <- ff, t <- annToType l n f ]
+  where
+    annToType l n (IfaceAnn {}) = [TClass $ RN $ QName l [] (F.symbol n)]
+    annToType _ _ _             = []
+
 
 
 -- FIXME (?): Does not take into account classes with missing annotations.
@@ -248,6 +259,11 @@ typeMembers t (MemberMethDecl l static _ _ _ )
 
 
 -- | `registerAllModules ss` creates a module store from the statements in @ss@
+--   For every module we populate:
+--
+--    * m_variables with: functions, variables, class constructors, modules
+--
+--    * m_types with: classes and interfaces
 --
 ---------------------------------------------------------------------------------------
 registerAllModules :: PPR r => [Statement (AnnSSA r)] -> QEnv (ModuleDef r)
@@ -257,26 +273,35 @@ registerAllModules                = qenvFromList . map mkMod . collectModules
     visibility l                  | ExporedModElt `elem` ann_fact l = Exported
                                   | otherwise                       = Local
 
-    mkMod (ap, m)                 = (ap, ModuleDef (envFromList (fStmts m)) ap)
+    mkMod (ap, m)                 = (ap, trace (ppshow (envKeys $ varEnv m)
+                                                ++ "\n\n" ++ ppshow (envKeys $ typeEnv m)) 
+                                    $ ModuleDef (varEnv m) (typeEnv m) ap)
+    varEnv                        = envFromList . vStmts
+    typeEnv                       = envFromList . tStmts
 
-    fStmts    ss                  = concatMap fStmt ss
+    vStmts                        = concatMap vStmt
 
-    fStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, ModuleMember r)]
-    fStmt (VarDeclStmt l vds)     = [ (ss x, ModVar (ss x) (visibility l) t) 
+    vStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, (Visibility, RType r))]
+    vStmt (VarDeclStmt l vds)     = [ (ss x, (visibility l, t)) 
                                     | VarDecl l x _ <- vds
                                     , VarAnn t <- ann_fact l 
                                     ]
-    fStmt (FunctionStmt l x _ _)  = [ (ss x, ModVar (ss x) (visibility l) t) 
+    vStmt (FunctionStmt l x _ _)  = [ (ss x, (visibility l, t)) 
                                     | VarAnn t <- ann_fact l 
                                     ]
-    fStmt (FunctionDecl l x _  )  = [ (ss x, ModVar (ss x) (visibility l) t) 
+    vStmt (FunctionDecl l x _  )  = [ (ss x, (visibility l, t)) 
                                     | VarAnn t <- ann_fact l 
                                     ]
-    fStmt c@(ClassStmt l _ _ _ _) = [ (x, ModType x (visibility l) t) 
-                                    | (x, t) <- maybeToList $ resolveType c 
-                                    ]
-    fStmt c@(ModuleStmt l x _)    = [ (ss x, ModModule (ss x) (visibility l) ) ]
-    fStmt _                       = [ ] 
+    vStmt c@(ClassStmt l x _ _ _) = [ (ss x, (visibility l, TClass $ RN $ QName (ann l) [] $ F.symbol x)) ]
+    vStmt c@(ModuleStmt l x _)    = [ (ss x, (visibility l, TModule $ RP $ QPath (ann l) [F.symbol x])) ]
+    vStmt _                       = [ ] 
+
+    tStmts                        = concatMap tStmt
+
+    tStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, IfaceDef r)]
+    tStmt c@(ClassStmt l _ _ _ _) = maybeToList $ resolveType c
+    tStmt c@(IfaceStmt l)         = maybeToList $ resolveType c
+    tStmt _                       = [ ]
 
     ss = fmap ann
 
@@ -734,7 +759,7 @@ tcCall γ (ArrayLit l es)
 
 -- | `{ f1:t1,...,fn:tn }`
 tcCall γ (ObjectLit l bs) 
-  = do (es', t)               <- tcNormalCall γ l "ObjectLit" es $ error "tcCall-objectlit" -- FIXME: objLitTy l ps 
+  = do (es', t)               <- tcNormalCall γ l "ObjectLit" es $ objLitTy l ps 
        return                  $ (ObjectLit l (zip ps es'), t)
   where
     (ps,es) = unzip bs
@@ -822,8 +847,8 @@ tcCallDotRef _ _ _ _ _ = error "tcCallDotRef-unsupported"
 -- | Signature resolution
 tcNormalCall γ l fn es ft0 
   = do (es', ts)      <- unzip <$> mapM (tcExpr γ) es
-       z              <- {- tracePP ("resolved overload for " ++ ppshow fn) <$> -} 
-                         resolveOverload γ l fn es' ts ft0
+       z              <- {- tracePP ("resolved overload for " ++ ppshow fn ++ " :: " ++ ppshow ft0) 
+                          <$> -}  resolveOverload γ l fn es' ts ft0
        case z of 
          Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
@@ -869,7 +894,7 @@ tcCallCaseTry γ l fn ts ft
   = runMaybeM $ 
       do  (_,ibs,_) <- instantiate l (tce_ctx γ) fn ft
           let its    = b_type <$> ibs
-          θ'        <- unifyTypesM (ann l) γ "tcCallCaseTryAux" ts its
+          θ'        <- unifyTypesM (ann l) γ ts its
           zipWithM_    (subtypeM (ann l) γ) (apply θ' ts) (apply θ' its)
           return     $ θ'
 
@@ -879,7 +904,7 @@ tcCallCase γ l fn es ts ft
        -- Generate fresh type parameters
        (_,ibs,ot)      <- {- tracePP ("inst " ++ ppshow ft) <$> -} instantiate l ξ fn ft
        let its          = b_type <$> ibs
-       θ               <- {- tracePP "unif" <$> -} unifyTypesM (srcPos l) γ "tcCall" ts its
+       θ               <- {- tracePP "unif" <$> -} unifyTypesM (srcPos l) γ ts its
        let (ts',its')   = mapPair (apply θ) (ts, its)
        es'             <- zipWith3M (castM γ) es ts' its'
        return             (es', apply θ ot, θ)
@@ -917,11 +942,12 @@ envJoin l γ (Just γ1) (Just γ2) =
 envLoopJoin :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
 ----------------------------------------------------------------------------------
 envLoopJoin _ γ Nothing   = return $ Just γ
--- envLoopJoin l γ (Just γl) = 
---   do let xs = phiVarsAnnot l 
---      ts    <- mapM (getLoopNextPhiType l γ γl) xs
---      θ     <- getSubst
---      return $ Just $ tcEnvAdds (zip xs ts) (apply θ γ)
+envLoopJoin l γ (Just γl) = 
+  do  ts    <- mapM (getLoopNextPhiType l γ γl) xs
+      θ     <- getSubst
+      return $ Just $ tcEnvAdds (zip xs ts) $ γ { tce_names = apply θ (tce_names γ) }
+  where 
+      xs = phiVarsAnnot l 
  
 ----------------------------------------------------------------------------------
 getPhiType :: PPR r 

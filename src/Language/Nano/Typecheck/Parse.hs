@@ -69,7 +69,7 @@ question   = T.symbol     lexer "?"
 ----------------------------------------------------------------------------------
 
 idBindP :: Parser (Id SourceSpan, RefType)
-idBindP = xyP identifierP dcolon bareTypeP
+idBindP = withinSpacesP $ xyP identifierP dcolon bareTypeP
 
 anonFuncP :: Parser RefType
 anonFuncP = funcSigP

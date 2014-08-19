@@ -25,8 +25,15 @@ import           Text.PrettyPrint.HughesPJ
 class EnvLike r t where
   -- 
   -- ^ Bindings in scope
+  --   (values of the source language:
+  --   variables, functions, classes)
   --
   names           :: t r -> Env (RType r)               
+  -- 
+  -- ^ Interface bindings in scope 
+  --   (not part of the source language)
+  --
+  interfaces      :: t r -> Env (RType r)
   -- 
   -- ^ Modules in scope (exported API)
   --
@@ -43,18 +50,15 @@ class EnvLike r t where
   -- ^ Parent environment
   --
   parent          :: t r -> Maybe (t r)
---   -- 
---   -- ^ Ambient bindings in the global module
---   --
---   get_common_ts   :: t r -> CommonTypes r
 
 
 data TCEnv r  = TCE {
-    tce_names     :: Env (RType r)
-  , tce_mod       :: QEnv (ModuleDef r)
-  , tce_ctx       :: !IContext                          -- ^ Calling context 
-  , tce_path      :: AbsPath
-  , tce_parent    :: Maybe (TCEnv r)
+    tce_names       :: Env (RType r)
+  , tce_interfaces  :: Env (RType r)
+  , tce_mod         :: QEnv (ModuleDef r)
+  , tce_ctx         :: !IContext
+  , tce_path        :: AbsPath
+  , tce_parent      :: Maybe (TCEnv r)
   }
   deriving (Functor)
 
@@ -69,6 +73,7 @@ type TCEnvO r = Maybe (TCEnv r)
 
 instance EnvLike r TCEnv where
   names           = tce_names
+  interfaces      = tce_interfaces
   modules         = tce_mod
   absPath         = tce_path
   context         = tce_ctx
@@ -78,13 +83,13 @@ instance EnvLike r TCEnv where
 instance (PP r, F.Reftable r) => PP (TCEnv r) where
   pp = ppTCEnv
 
-ppTCEnv (TCE nms mod _ pth _ )
+ppTCEnv (TCE nms ifc mod _ pth _ )
   =   text "******************** Environment ************************"
   $+$ pp nms
+  $+$ text "******************** Interfaces *************************"
+  $+$ pp ifc
   $+$ text "******************** Modules ****************************"
   $+$ pp mod
   $+$ text "******************** Absolute path **********************"
   $+$ pp pth
---   $+$ text "******************** Call Context ***********************"
---   $+$ pp ctx
 

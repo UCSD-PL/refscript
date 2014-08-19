@@ -12,6 +12,6 @@ class Foo<A> {
 	
 }
 
-var a :Foo<number>= new Foo<number>(1);
+var a = new Foo(1);
 
 assert(a.f === 1);

@@ -1,6 +1,8 @@
-/*****************************************************************************/
-/*********** General purpose auxiliary definitions ***********************/
-/*****************************************************************************/
+/*************************************************************************
+        
+  | General purpose auxiliary definitions 
+
+*************************************************************************/
 
 declare function crash<A>(): A; 
 
@@ -24,9 +26,11 @@ interface Pair<A,B> { }
 
 
 
-/*****************************************************************************/
-/************** Types for Builtin Operators ******************************/
-/*****************************************************************************/
+/*************************************************************************
+        
+  | Types for Builtin Operators 
+
+*************************************************************************/
 
 /*@ builtin_BIBracketRef ::
     /\ forall A. (arr: #Array[#Immutable,A], {idx:number | (0 <= idx && idx < (len arr))}) => A
@@ -42,10 +46,14 @@ declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
 */
 declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
 
-/*@ builtin_BISetProp ::
+/*  builtin_BISetProp ::
     /\ forall A M. ([M] { f : [#Mutable] A }, A) => A
     /\ forall A M. ([#Mutable] { f : [M] A }, A) => A
 */
+
+/*@ builtin_BISetProp :: 
+    forall A M. ([M] { f : [#Mutable] A }, A) => A 
+ */
 declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
 /*@ builtin_BIArrayLit :: 
@@ -167,7 +175,7 @@ declare function builtin_PrefixBNot(n: number): number;
 
 /*************************************************************************
   
-  Ambient Definitions 
+  | Ambient Definitions 
 
   Taken from here: 
 
@@ -512,17 +520,19 @@ declare var Array: {
 
 
 
-/*****************************************************************************/
-/************** Run-Time Tags ************************************************/
-/*****************************************************************************/
+/*************************************************************************
+        
+  | Run-Time Tags 
 
-/*@ measure ttag :: forall A . (A) => string                                 */
+*************************************************************************/
 
-/*@ measure FLS  :: forall A . (A) => bool                                   */
+/*@ measure ttag :: forall A . (A) => string */
 
-/*@ measure Prop :: forall A . (A) => bool                                   */
+/*@ measure FLS  :: forall A . (A) => bool */
 
-/*@ measure null :: forall A . (A) => bool                                   */
+/*@ measure Prop :: forall A . (A) => bool */
+
+/*@ measure null :: forall A . (A) => bool */
 
 /*@ builtin_PrefixTypeof :: 
     forall A. (x:A) => {v:string | (ttag x) = v }                
@@ -539,20 +549,20 @@ declare function builtin_BITruthy<A>(x: A): boolean;
 */
 declare function builtin_BIFalsy<A>(x: A): boolean; 
 
-/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]}       */
+/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]} */
 
-/*@ invariant {v:null | [(ttag(v) = "object"); not (Prop(v)); null(v) ]}     */
+/*@ invariant {v:null | [(ttag(v) = "object"); not (Prop(v)); null(v) ]} */
 
-/*@ invariant {v:boolean | [(ttag(v) = "boolean")]}                          */ 
+/*@ invariant {v:boolean | [(ttag(v) = "boolean")]} */ 
 
-/*@ invariant {v:string | [(ttag(v) = "string"); (Prop(v) <=> v /= "" )]}    */
+/*@ invariant {v:string | [(ttag(v) = "string"); (Prop(v) <=> v /= "" )]} */
 
 /*@ invariant {v:number | [(ttag(v)  =  "number");
                            (Prop(v) <=> v /= 0  ); 
-                           (FLS(v)  <=> v  = 0  )]}					                 */
+                           (FLS(v)  <=> v  = 0  )]}	*/
 
 
-/*@ measure instanceof :: forall A . (A,string) => bool                      */
+/*@ measure instanceof :: forall A . (A,string) => bool */
 
 /*@ builtin_OpInstanceof :: 
     forall A . (x:A, s: string) => { v: boolean | (Prop(v) <=> instanceof(x,s)) }     
@@ -561,48 +571,52 @@ declare function builtin_OpInstanceof<A>(x: A, s: string): boolean;
 
 
 
-/*****************************************************************************/
-/************** Pre-Loaded Qualifiers ****************************************/
-/*****************************************************************************/
+/*************************************************************************
+        
+  | Pre-Loaded Qualifiers 
 
-/*@ qualif Bot(v:a)                  : 0 = 1							                   */
-/*@ qualif Bot(v:obj)                : 0 = 1                   			         */
-/*@ qualif Bot(v:boolean)            : 0 = 1                   			         */
-/*@ qualif Bot(v:number)             : 0 = 1                   			         */
-/*@ qualif CmpZ(v:number)            : v < 0                   			         */
-/*@ qualif CmpZ(v:number)            : v <= 0                  			         */
-/*@ qualif CmpZ(v:number)            : v >  0                  			         */
-/*@ qualif CmpO(v:number)            : v >  1                  			         */
-/*@ qualif CmpZ(v:number)            : v >= 0                  			         */
-/*@ qualif CmpZ(v:number)            : v =  0                  			         */
-/*@ qualif CmpZ(v:number)            : v != 0                  			         */
+*************************************************************************/
 
-/*@ qualif Cmp(v:number, x:number)   : v <  x                  			         */
-/*@ qualif Cmp(v:number, x:number)   : v <= x                  			         */
-/*@ qualif Cmp(v:number, x:number)   : v >  x                  			         */
-/*@ qualif Cmp(v:number, x:number)   : v >= x                  			         */
+/*@ qualif Bot(v:a): 0 = 1 */
+/*@ qualif Bot(v:obj): 0 = 1 */
+/*@ qualif Bot(v:boolean): 0 = 1 */
+/*@ qualif Bot(v:number): 0 = 1 */
+/*@ qualif CmpZ(v:number): v < 0 */
+/*@ qualif CmpZ(v:number): v <= 0 */
+/*@ qualif CmpZ(v:number): v >  0 */
+/*@ qualif CmpO(v:number): v >  1 */
+/*@ qualif CmpZ(v:number): v >= 0 */
+/*@ qualif CmpZ(v:number): v =  0 */
+/*@ qualif CmpZ(v:number): v != 0 */
 
-/*@ qualif Cmp(v:a,x:a)              : v =  x                  			         */
-/*@ qualif Cmp(v:a,x:a)              : v != x                  			         */
-/*@ qualif One(v:number)             : v = 1                   			         */
-/*  qualif True(v:boolean)           : (v)                     			         */
-/*  qualif False(v:boolean)          : (not v)                 			         */
-/*@ qualif True1(v:boolean)          : (Prop v)                			         */
-/*@ qualif False1(v:boolean)         : not (Prop v)            			         */
+/*@ qualif Cmp(v:number, x:number): v <  x */
+/*@ qualif Cmp(v:number, x:number): v <= x */
+/*@ qualif Cmp(v:number, x:number): v >  x */
+/*@ qualif Cmp(v:number, x:number): v >= x */
+
+/*@ qualif Cmp(v:a,x:a): v =  x */
+/*@ qualif Cmp(v:a,x:a): v != x */
+/*@ qualif One(v:number): v = 1 */
+/*  qualif True(v:boolean): (v) */
+/*  qualif False(v:boolean): (not v) */
+/*@ qualif True1(v:boolean): (Prop v) */
+/*@ qualif False1(v:boolean): not (Prop v) */
 
 
 // Somewhat more controversial qualifiers (i.e. "expensive"...)
 
-/*  qualif Add(v:number,x:number,y:number): v = x + y          			         */
-/*  qualif Sub(v:number,x:number,y:number): v = x - y          			         */
+/*  qualif Add(v:number,x:number,y:number): v = x + y */
+/*  qualif Sub(v:number,x:number,y:number): v = x - y */
 
-/*  qualif Len(v:number, n: number)  : n < (len v)             			         */
+/*  qualif Len(v:number, n: number)  : n < (len v) */
 
 
 
-/*****************************************************************************/
-/*************  Error handling   *********************************************/
-/*****************************************************************************/
+/*************************************************************************
+        
+  | Error Handling
+
+*************************************************************************/
 
 // NOTE: types that are defined in lib.d.ts need to be in comment to pass
 // through the TS compilation phase.
@@ -650,24 +664,33 @@ declare var Error: {
 
 
 
-/*****************************************************************************/
-/******************  Mutability  *********************************************/
-/*****************************************************************************/
+/*************************************************************************
+        
+  | Mutability 
 
+  Do not include type parameters here 
+
+*************************************************************************/
+
+/*@ interface ReadOnly */
 interface ReadOnly { }
 
+/*@ interface Immutable extends #ReadOnly */
 interface Immutable extends ReadOnly {
     immutable__: void;
 } 
 
+/*@ interface Mutable extends #ReadOnly */
 interface Mutable extends ReadOnly {
     mutable__: void;
 } 
 
+/*@ interface AnyMutability extends #ReadOnly */
 interface AnyMutability extends ReadOnly {
     defaultMut__: void;
 } 
 
+/*@ interface InheritedMut extends #ReadOnly */
 interface InheritedMut extends ReadOnly {
     defaultMut__: void;
 } 

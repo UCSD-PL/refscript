@@ -62,7 +62,7 @@ data QName = QName {
     qn_ss    :: SourceSpan
   , qn_path  :: NameSpacePath
   , qn_name  :: F.Symbol 
-  } deriving (Eq, Ord, Show, Data, Typeable)
+  } deriving (Ord, Show, Data, Typeable)
 
 -- | Relative and absolute version of a qualafied name
 --
@@ -81,9 +81,11 @@ data QPath = QPath {
 newtype RelPath = RP QPath deriving (Eq, Ord, Show, Data, Typeable)
 newtype AbsPath = AP QPath deriving (Eq, Ord, Show, Data, Typeable)
 
-
 instance Eq QPath where
-  QPath _ p1 == QPath _ p2 = p1 == p1
+  QPath _ p1 == QPath _ p2 = p1 == p2
+
+instance Eq QName where
+  QName _ p1 n1 == QName _ p2 n2 = (p1,n1) == (p2,n2)
 
 instance F.Symbolic RelName where
   symbol (RN (QName _ _ s)) = s

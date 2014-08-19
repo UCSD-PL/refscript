@@ -68,25 +68,27 @@ unify l γ θ t t' | any isUnion [t,t'] = unifys l γ θ t1s' t2s'
 unify l γ θ (TApp (TRef x) ts _) (TApp (TRef x') ts' _) 
   | x == x' = unifys l γ θ ts ts'
 
+-- FIXME: fill in the "otherwise case"
+
 unify l γ θ t1@(TApp (TRef _) _ _) t2 
   = case flattenType γ t1 of 
       Just ft1 -> unify l γ θ ft1 t2
-      Nothing  -> Left $ errorUnresolvedType l t1
+      Nothing  -> Left $ errorUnfoldType l t1
 
 unify l γ θ t1 t2@(TApp (TRef _) _ _)
   = case flattenType γ t2 of 
       Just ft2 -> unify l γ θ t1 ft2
-      Nothing  -> Left $ errorUnresolvedType l t2
+      Nothing  -> Left $ errorUnfoldType l t2
 
 unify l γ θ t1@(TClass _) t2
   = case flattenType γ t1 of 
       Just ft1 -> unify l γ θ ft1 t2
-      Nothing  -> Left $ errorUnresolvedType l t1
+      Nothing  -> Left $ errorUnfoldType l t1
 
 unify l γ θ t1 t2@(TClass _)
   = case flattenType γ t2 of 
       Just ft2 -> unify l γ θ t1 ft2
-      Nothing  -> Left $ errorUnresolvedType l t2
+      Nothing  -> Left $ errorUnfoldType l t2
 
 unify l γ θ (TCons e1s m1 _) (TCons e2s m2 _)
   = unifys l γ θ (ofType m1:t1s) (ofType m2:t2s)

@@ -34,8 +34,8 @@ module Language.Nano.Typecheck.Types (
   , renameBinds
 
   -- * Mutability
-  , t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly
-  -- , combMut, isMutable, isImmutable, isAnyMut, isMutabilityType, variance, varianceTDef
+  , t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly, combMut 
+  -- isMutable, isImmutable, isAnyMut, isMutabilityType, variance, varianceTDef
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
@@ -81,6 +81,9 @@ import           Control.Applicative            hiding (empty)
 -- import           Debug.Trace (trace)
 
 
+type PPR  r = (PP r, F.Reftable r)
+
+
 ---------------------------------------------------------------------
 -- | Mutability
 ---------------------------------------------------------------------
@@ -102,8 +105,8 @@ t_inheritedMut  = mkMut "InheritedMut"
 -- isMutabilityType (TApp (TRef (QN [] s)) _ _) = s `elem` validMutNames
 -- isMutabilityType _                           = False
 -- 
--- isMutable        (TApp (TRef (QN [] s)) _ _) = s == F.symbol "Mutable"
--- isMutable _                                  = False
+isMutable        (TApp (TRef (RN (QName _ [] s))) _ _) = s == F.symbol "Mutable"
+isMutable _                                         = False
 -- 
 -- isImmutable      (TApp (TRef (QN [] s)) _ _) = s == F.symbol "Immutable"
 -- isImmutable _                                = False
@@ -120,8 +123,8 @@ t_inheritedMut  = mkMut "InheritedMut"
 -- 
 -- Is this not the common ancestor ?
 --
--- combMut _ μf | isMutable μf                 = μf
--- combMut μ _  | otherwise                    = μ
+combMut _ μf | isMutable μf                 = μf
+combMut μ _  | otherwise                    = μ
 
 -- | Variance: true if v is in a positive position in t
 --
@@ -197,24 +200,24 @@ mkAnd ts             = TAnd ts
 mapAnd f t           = mkAnd $ f <$> bkAnd t
 
 
----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
 mkUnion :: (F.Reftable r) => [RType r] -> RType r
----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
 mkUnion [ ] = tErr
 mkUnion [t] = t             
 mkUnion ts  = TApp TUn ts fTop
 
----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
 bkUnion :: RType r -> [RType r]
----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
 bkUnion (TApp TUn xs _) = xs
 bkUnion t               = [t]
 
 
 -- | Strengthen the top-level refinement
----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
 strengthen                   :: F.Reftable r => RType r -> r -> RType r
----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
 strengthen (TApp c ts r) r'  = TApp c ts  $ r' `F.meet` r 
 strengthen (TCons ts m r) r' = TCons ts m $ r' `F.meet` r 
 strengthen (TVar α r)    r'  = TVar α     $ r' `F.meet` r 
@@ -230,9 +233,9 @@ strengthen t _               = t
 -- type @t1@.
 
 
----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
 -- | Predicates on Types 
----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
 
 -- | Top-level Top (any) check
 isTop :: RType r -> Bool
@@ -380,9 +383,9 @@ eltType (IndexSig _ _  t) = t
 eltType (StatSig _ _ t)   = t
 
 
----------------------------------------------------------------------------
+----------------------------------------------------------------------------------
 -- | Pretty Printer Instances
----------------------------------------------------------------------------
+----------------------------------------------------------------------------------
 
 angles p = char '<' <> p <> char '>'
 
@@ -450,10 +453,10 @@ instance (PP r, F.Reftable r) => PP (Bind r) where
 instance (PP s, PP t) => PP (M.HashMap s t) where
   pp m = vcat $ pp <$> M.toList m
 
-instance (F.Reftable r, PP r) => PP (ModuleMember r) where
-  pp (ModType x v t ) = pp v <> pp x <> colon <+> pp t
-  pp (ModVar x v t  ) = pp v <> pp x <> colon <+> pp t
-  pp (ModModule x v ) = pp v <> text "module" <+> pp x
+-- instance (F.Reftable r, PP r) => PP (ModuleMember r) where
+--   pp (ModType x v t ) = pp v <> pp x <> colon <+> pp t
+--   pp (ModVar x v t  ) = pp v <> pp x <> colon <+> pp t
+--   pp (ModModule x v ) = pp v <> text "module" <+> pp x
 
 instance PP Visibility where
   pp Local = text ""
@@ -494,8 +497,10 @@ instance (PP r, F.Reftable r) => PP (TypeMember r) where
  
 
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
-  pp (ModuleDef cc path) =  
-    text "module" <+> pp path $$ braces (pp cc)
+  pp (ModuleDef vars tys path) =  
+    text "module" <+> pp path 
+      $$ text "Variables" $$ braces (pp vars) 
+      $$ text "Types" $$ (pp tys)
   
 
 
@@ -565,9 +570,9 @@ builtinOpId BITruthy        = builtinId "BITruthy"
 builtinOpId BICondExpr      = builtinId "BICondExpr"
 
 
---------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- | Array literal types
---------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 -----------------------------------------------------------------------
 arrayLitTy :: (F.Subable (RType r), IsLocated a) 
@@ -590,9 +595,9 @@ arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]]
 arrayLitOut n t   = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
 
 
---------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- | Object literal types
---------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 -- FIXME: Avoid capture
 freshTV l s n     = (v,t)
@@ -601,10 +606,9 @@ freshTV l s n     = (v,t)
     v             = TV i (srcPos l)
     t             = TVar v ()
 
---------------------------------------------------------------------------
-objLitTy         :: (F.Reftable r, IsLocated a) 
-                 => a -> [Prop a] -> RType r
---------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+objLitTy         :: (F.Reftable r, IsLocated a) => a -> [Prop a] -> RType r
+---------------------------------------------------------------------------------
 objLitTy l ps     = mkFun (vs, bs, rt)
   where
     (mv,mt)       = freshTV l mSym 0                             -- obj mutability
@@ -627,18 +631,15 @@ instance F.Symbolic (Prop a) where
   symbol p             = error $ printf "Symbol of property %s not supported yet" (ppshow p)
 
     
---------------------------------------------------------------------------
-setPropTy :: (PP r, F.Reftable r, IsLocated l) 
-          => F.Symbol -> l -> F.SEnv (Located (RType r)) -> RType r
---------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+setPropTy :: (PPR r, IsLocated l) => F.Symbol -> l -> F.SEnv (Located (RType r)) -> RType r
+---------------------------------------------------------------------------------
 setPropTy f l g =
     case ty of 
-      TAnd [TAll α1 (TAll μ1 (TFun [xt1,a1] rt1 r1)) ,
-            TAll α2 (TAll μ2 (TFun [xt2,a2] rt2 r2)) ] -> 
-        TAnd [TAll α1 (TAll μ1 (TFun [tr xt1,a1] rt1 r1)) ,
-              TAll α2 (TAll μ2 (TFun [tr xt2,a2] rt2 r2)) ]
-      _ -> errorstar $ "setPropTy " ++ ppshow ty
+      TAll α2 (TAll μ2 (TFun [xt2,a2] rt2 r2)) -> TAll α2 (TAll μ2 (TFun [tr xt2,a2] rt2 r2))
+      _                                        -> errorstar $ "setPropTy " ++ ppshow ty
   where
+    -- replace the field name
     tr (B n (TCons [FieldSig x μx t] μ r)) 
           | x == F.symbol "f"
           = B n (TCons [FieldSig f μx t] μ r)
@@ -647,18 +648,18 @@ setPropTy f l g =
 
 
 
---------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 returnTy :: (PP r, F.Reftable r) => RType r -> Bool -> RType r
---------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 returnTy t True  = mkFun ([], [B (F.symbol "r") t], tVoid)
 returnTy _ False = mkFun ([], [], tVoid)
 
 
 -- | `mkEltFunTy`: Creates a function type that corresponds to an invocation 
 --   to the input element. 
---------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 mkEltFunTy :: F.Reftable r => TypeMember r -> Maybe (RType r)
---------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 -- `τ` is the type for the lately bound object, to be used in the position of 
 -- "this". It will only be used if `m` does not specify it.
 mkEltFunTy (MethSig _ _  t) = mkEltFromType t
@@ -674,9 +675,9 @@ mkInitFldTy (StatSig  _ _ t) = Just $ mkFun ([], [B (F.symbol "f") t], tVoid)
 mkInitFldTy _                = Nothing
 
 
------------------------------------------------------------------------
--- infixOpTy :: InfixOp -> Env t -> t 
------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+infixOpTy :: PP t => InfixOp -> Env t -> t 
+---------------------------------------------------------------------------------
 infixOpTy o g = fromMaybe err $ envFindTy ox g
   where 
     err       = errorstar $ printf "Cannot find infixOpTy %s in %s" (ppshow ox) (ppshow $ g)
@@ -718,9 +719,9 @@ mkId            = Id (initialPos "")
 builtinId       = mkId . ("builtin_" ++)
 
 
------------------------------------------------------------------------
--- funTys
------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- | funTys
+---------------------------------------------------------------------------------
 funTys l f xs ft 
   = case bkFuns ft of
       Nothing -> Left $ errorNonFunction (srcPos l) f ft 

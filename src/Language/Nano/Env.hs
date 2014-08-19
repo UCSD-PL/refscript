@@ -34,6 +34,7 @@ module Language.Nano.Env (
   , envEmpty
   , envSEnv
   , envIds
+  , envKeys
 
   , qenvFromList
   , qenvToEnv
@@ -124,6 +125,8 @@ envLefts           = envMap (\(Left z) -> z) . envFilter isLeft
 envDiff           :: Env a -> Env b -> Env a
 envDiff m1 m2      = envFromList [(x, t) | (x, t) <- envToList m1, not (x `envMem` m2)] 
 
+envKeys γ          = fst <$> envToList γ 
+
 isRight (Right _)  = True
 isRight (_)        = False
 isLeft             = not . isRight
@@ -169,7 +172,7 @@ qenvFind q (QE γ)   = M.lookup q γ
 qenvFindTy  i γ     = fmap val $ qenvFind i γ
 
 qenvAdd :: AbsPath -> t -> QEnv t -> QEnv t
-qenvAdd q t (QE γ)  = QE (M.insert (tracePP "inserting" q) (Loc (srcPos q) t) γ)
+qenvAdd q t (QE γ)  = QE (M.insert q (Loc (srcPos q) t) γ)
 
 -- Create dot separated symbols as keys
 qenvToEnv (QE γ)    = envFromList [ (Id l (ppshow x),t) | (x, Loc l t) <- M.toList γ]

@@ -246,8 +246,8 @@ subElt _ γ μ1 μ2 (FieldSig _ μf1 t1) (FieldSig _ μf2 t2)
   where
     t_immut = t_immutable -- t_Immutable $ get_common_ts γ
     -- FIXME
-    m1      = error "subElt" -- combMut μ1 μf1
-    m2      = error "subElt" -- combMut μ2 μf2
+    m1      = combMut μ1 μf1
+    m2      = combMut μ2 μf2
 
 -- | Methods
 -- 
@@ -284,8 +284,8 @@ subElt _ γ μ1 μ2 (StatSig _ μf1 t1) (StatSig _ μf2 t2)
   where
     t_immut = t_immutable -- t_Immutable $ get_common_ts γ
     -- FIXME 
-    m1      = error "subElt" -- combMut μ1 μf1
-    m2      = error "subElt" -- combMut μ2 μf2
+    m1      = combMut μ1 μf1
+    m2      = combMut μ2 μf2
 
 -- | otherwise fail
 subElt _ _ _ _ _ _ = False

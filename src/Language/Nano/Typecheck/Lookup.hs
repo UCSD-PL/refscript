@@ -38,8 +38,13 @@ type PPRD r = (PP r, F.Reftable r, Data r)
 
 -- | `getProp`: given an environment `γ`, a field `s` and a type `t`, returns 
 --   a pair containing:
+--
 --   * The subtype of @t@ for which the access is successful.
+--
 --   * The corresponding accessed type.
+--
+--  FIXME: Fix visibility
+--
 -------------------------------------------------------------------------------
 getProp :: (PPRD r, EnvLike r g) => g r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
@@ -48,17 +53,13 @@ getProp _ s t@(TCons es _ _) = (t,) <$> accessMember s es
 getProp γ s t@(TClass c    ) 
   = do  d   <- resolveRelNameInEnv γ c
         es  <- flatten True γ (d,[])
-        p   <- accessMember s es
-        return $ (t,p)
+        (t,) <$> accessMember s es
 getProp γ s t@(TModule m   ) 
   = do  m' <- resolveRelPathInEnv γ m
-        case envFindTy s (m_contents m') of
-          Just (ModVar _ _ t') -> return (t,t')
-          Just (ModType s _ _) -> return (t, TClass $ f m (F.symbol s))
-          Nothing              -> Nothing
+        (t,) <$> snd <$> envFindTy s (m_variables m')
   where
     f (RP (QPath l p)) = RN . QName l p
-getProp _ _ _                = Nothing
+getProp _ _ _ = Nothing
 
 
 -------------------------------------------------------------------------------
@@ -72,8 +73,8 @@ getPropApp γ s t@(TApp c ts _) =
     TUn      -> getPropUnion γ s ts
     TInt     -> (t,) <$> lookupAmbientVar γ s "Number"
     TString  -> (t,) <$> lookupAmbientVar γ s "String"
-    TRef x   -> do  d      <- resolveRelNameInEnv (trace ("getPropApp - keys " ++ ppshow (qenvKeys $ modules γ)) γ) x
-                    es     <- tracePP "getProp-flattened" <$> flatten False γ (d,ts)
+    TRef x   -> do  d      <- resolveRelNameInEnv γ x
+                    es     <- flatten False γ (d,ts)
                     p      <- accessMember s es
                     return  $ (t,p)
     TFPBool  -> Nothing

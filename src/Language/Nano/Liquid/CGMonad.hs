@@ -631,8 +631,7 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   | α1 == α2
   = bsplitC g i t1 t2
   | otherwise
-  = splitIncompatC l t1 t2 where l = srcPos i
-  -- = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
+  = splitIncompatC l g i t1 t2 where l = srcPos i
 
 -- | Unions
 splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
@@ -645,8 +644,7 @@ splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
 -- |Type references
 splitC (Sub g i t1@(TApp (TRef x1) (_:t1s) _) t2@(TApp (TRef x2) (μ2:t2s) _)) 
   | x1 /= x2 
-  = splitIncompatC l t1 t2
-  -- = cgError l $ bugBadSubtypes l t1 t2
+  = splitIncompatC l g i t1 t2
   | isImmutable μ2
   = do  cs    <- bsplitC g i t1 t2
         δ     <- getDef
@@ -676,8 +674,7 @@ splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- concatMapM splitC ((safeZipWith "splitc-5") (Sub g i) t1s t2s)
         return $ cs ++ cs'
-  | otherwise = splitIncompatC l t1 t2 where l = srcPos i
-              -- cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
+  | otherwise = splitIncompatC l g i t1 t2 where l = srcPos i
 
 -- These need to be here due to the lack of a folding operation
 splitC (Sub g i t1@(TApp (TRef _) _ _) t2)
@@ -694,15 +691,16 @@ splitC (Sub g i t1@(TCons e1s μ1 _ ) t2@(TCons e2s μ2 _ ))
         cs'   <- splitEs g i μ1 μ2 e1s e2s
         return $ cs ++ cs'
   
-splitC x@(Sub _ _ t1 t2)
-  = splitIncompatC (srcPos x) t1 t2 
-  -- = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos x
-
-splitIncompatC l t1 t2 = cgError l $ bugBadSubtypes l t1 t2
+splitC x@(Sub g i t1 t2)
+  = splitIncompatC l g i t1 t2 where l = srcPos x
 
 -- splitIncompatC :: SourceSpan -> RefType -> RefType -> a
--- splitIncompatC l t1 t2 = error "TODO:splitIncompatC"
-
+splitIncompatC _ g i t1 _ = bsplitC g i t1 (mkBot t1)
+  
+-- splitIncompatC l t1 t2 = cgError l $ bugBadSubtypes l t1 t2
+    
+mkBot   :: (F.Reftable r) => RType r -> RType r
+mkBot t = setRTypeR t (F.bot r) where r = rTypeR t
 
 -- FIXME: 
 --  * Add special cases: IndexSig ...

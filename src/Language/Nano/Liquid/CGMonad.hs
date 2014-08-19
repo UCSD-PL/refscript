@@ -240,7 +240,7 @@ envGetContextCast g a
 envGetContextTypArgs :: CGEnv -> AnnTypeR -> [TVar] -> [RefType]
 ---------------------------------------------------------------------------------------
 -- NOTE: If we do not need to instantiate any type parameter (i.e. length αs ==
--- 0), DO NOT attempt to compare that with the TypInst that might hide withing
+-- 0), DO NOT attempt to compare that with the TypInst that might hide within
 -- the expression, cause those type instantiations might serve anothor reason
 -- (i.e. might be there for a separate instantiation).  
 envGetContextTypArgs _ _ []        = []
@@ -631,7 +631,8 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   | α1 == α2
   = bsplitC g i t1 t2
   | otherwise
-  = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
+  = splitIncompatC l t1 t2 where l = srcPos i
+  -- = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
 
 -- | Unions
 splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
@@ -644,7 +645,8 @@ splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
 -- |Type references
 splitC (Sub g i t1@(TApp (TRef x1) (_:t1s) _) t2@(TApp (TRef x2) (μ2:t2s) _)) 
   | x1 /= x2 
-  = cgError l $ bugBadSubtypes l t1 t2
+  = splitIncompatC l t1 t2
+  -- = cgError l $ bugBadSubtypes l t1 t2
   | isImmutable μ2
   = do  cs    <- bsplitC g i t1 t2
         δ     <- getDef
@@ -674,7 +676,8 @@ splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- concatMapM splitC ((safeZipWith "splitc-5") (Sub g i) t1s t2s)
         return $ cs ++ cs'
-  | otherwise = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
+  | otherwise = splitIncompatC l t1 t2 where l = srcPos i
+              -- cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
 
 -- These need to be here due to the lack of a folding operation
 splitC (Sub g i t1@(TApp (TRef _) _ _) t2)
@@ -692,7 +695,13 @@ splitC (Sub g i t1@(TCons e1s μ1 _ ) t2@(TCons e2s μ2 _ ))
         return $ cs ++ cs'
   
 splitC x@(Sub _ _ t1 t2)
-  = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos x
+  = splitIncompatC (srcPos x) t1 t2 
+  -- = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos x
+
+splitIncompatC l t1 t2 = cgError l $ bugBadSubtypes l t1 t2
+
+-- splitIncompatC :: SourceSpan -> RefType -> RefType -> a
+-- splitIncompatC l t1 t2 = error "TODO:splitIncompatC"
 
 
 -- FIXME: 

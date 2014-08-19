@@ -528,6 +528,7 @@ setRTypeR :: RType r -> r -> RType r
 setRTypeR (TApp c ts _   ) r = TApp c ts r
 setRTypeR (TVar v _      ) r = TVar v r
 setRTypeR (TFun xts ot _ ) r = TFun xts ot r
+setRTypeR (TCons x y _)    r = TCons x y r  
 setRTypeR t                _ = t
 
 

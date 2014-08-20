@@ -340,7 +340,7 @@ mkQuals γ t      = [ mkQual γ v so pa | let (F.RR so (F.Reft (v, ras))) = rTyp
 mkQual γ v so p = F.Q (F.symbol "Auto") [(v, so)] (F.subst θ p) l0
   where 
     θ             = F.mkSubst [(x, F.eVar y)   | (x, y) <- xys]
-    xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show i))) xs [0..] 
+    xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show (i :: Int)))) xs [0..] 
     xs            = L.delete v $ orderedFreeVars γ p
     l0            = F.dummyPos "RSC.CGMonad.mkQual"
 
@@ -484,31 +484,31 @@ freshTyObj :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType
 freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g 
 
 
-
 ---------------------------------------------------------------------------------------
 -- | Adding Subtyping Constraints
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
+subType :: (IsLocated l) => l -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
-subType l g t1 t2 =
+subType l err g t1 t2 =
   do t1'   <- addInvariant t1  -- enhance LHS with invariants
      g'    <- envAdds False [(symbolId l x, t) | (x, Just t) <- rNms t1' ++ rNms t2 ] g
      modify $ \st -> st {cs = c g' (t1', t2) : (cs st)}
   where
-    c g     = uncurry $ Sub g (ci l)
+    c g     = uncurry $ Sub g (ci err l)
     rNms t  = (\n -> (n, n `E.envFindTy` renv g)) <$> names t
     names   = foldReft rr []
     rr r xs = F.syms r ++ xs
-
+    -- err     = fromMaybe (errorLiquid (srcPos l)) eo
 
 ---------------------------------------------------------------------------------------
 safeExtends :: SourceSpan -> CGEnv -> TDefEnv F.Reft -> TDef F.Reft -> CGM ()
 ---------------------------------------------------------------------------------------
 safeExtends l g δ (TD _ _ _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
   where
-    sub t1 t2  = subType l g (zipType δ t1 t2) t2
+    err        = errorUnsafeExtends l
+    sub t1 t2  = subType l err g (zipType δ t1 t2) t2 
     (t1s, t2s) = unzip [ (t1,t2) | pe <- flatten True δ (findSymOrDie p δ, ts)
                                  , ee <- es 
                                  , sameBinder pe ee 
@@ -524,9 +524,11 @@ safeExtends _ _ _ (TD _ _ _ Nothing _) = return ()
 --------------------------------------------------------------------------------
 wellFormed       :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType  
 --------------------------------------------------------------------------------
-wellFormed l g t = do modify $ \st -> st { ws = (W g (ci l) t) : ws st }
-                      return t
-
+wellFormed l g t
+  = do modify $ \st -> st { ws = (W g (ci err l) t) : ws st }
+       return t
+    where
+       err = errorWellFormed (srcPos l)
 
 --------------------------------------------------------------------------------
 -- | Generating Fresh Values 

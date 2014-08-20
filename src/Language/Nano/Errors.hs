@@ -136,7 +136,8 @@ errorBadPAlias l p nx ne      = mkErr l $ printf "Invalid predicate alias applic
 errorLiquid l                 = mkErr l $ printf "Liquid Type Error" 
 errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%s'.\nArgument Types: %s\nFunction Type: %s" (ppshow fn) (ppshow ts) (ppshow t)
 errorMultipleCasts l cs       = mkErr l $ render $ text "Multiple Casts: " <+> (vcat (map pp cs)) 
-
+errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"
+errorWellFormed l             = mkErr l $ printf "Well-formedness Error" 
  
 ---------------------------------------------------------------------------
 -- | Pervasive (typechecking TC and Liquid)

@@ -71,7 +71,7 @@ solveConstraints :: FilePath -> CGInfo -> IO (A.UAnnSol RefType, F.FixResult Err
 --------------------------------------------------------------------------------
 solveConstraints f cgi 
   = do (r, s)  <- solve (C.withUEqAllSorts def True) f [] $ cgi_finfo cgi
-       let r'   = fmap (errorLiquid . srcPos . F.sinfo) r
+       let r'   = fmap (ci_info . F.sinfo) r
        let ann  = cgi_annot cgi
        let sol  = applySolution s 
        return (A.SomeAnn ann sol, r') 
@@ -100,12 +100,11 @@ consNano pgm@(Nano {code = Src fs})
         consStmts g' fs 
         return ()
 
-checkInterfaces p g = 
-     mapM_ (safeExtends l g δ) is
+checkInterfaces p g = mapM_ (safeExtends l g δ) is
    where 
-     δ           = defs p
-     l           = srcPos dummySpan   -- FIXME  
-     is          = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
+     δ              = defs p
+     l              = srcPos dummySpan   -- FIXME  
+     is             = [ d |d@(TD False _ _ _ _) <- tDefToList $ defs p ]
 
 
 --------------------------------------------------------------------------------
@@ -148,11 +147,6 @@ consMeth1 l g f xs body (i, _, ft) = consFun1 l g f xs body (i,ft)
 
 consFun1 l g f xs body (i, ft) 
   = envAddFun l f i xs ft g >>= (`consStmts` body)
-
--- consFun1 l g' f xs body (i, ft) 
---   = do g'' <- envAddFun l f i xs ft g'
---        gm  <- consStmts g'' body
---        maybe (return ()) (\g -> subType l g tVoid (envFindReturn g'')) gm
 
 
 envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g) 
@@ -309,8 +303,8 @@ consVarDecl g (VarDecl l x (Just e))
   = case envGlobAnnot l x g of
       -- Global variable (Non-SSA)
       Just ta -> mseq (consExpr g e) $ \(y, gy) -> do
-                   gy'     <- envRemSpec x gy
-                   subType l gy' (envFindTy y gy) ta
+                   gy' <- envRemSpec x gy
+                   _   <- subType l (errorLiquid' l) gy' (envFindTy y gy) ta
                    return (Just gy)
       Nothing -> consAsgn g l x e
  
@@ -372,7 +366,7 @@ consExprT g e to
       let te   = envFindTy x g'
       case to of
         Nothing -> return $ Just (x, g')
-        Just t  -> do subType l g' te t
+        Just t  -> do _ <- subType l (errorLiquid' l) g' te t
                       return $ Just (x, g')
                       -- (x,) <$> envAdds False [(x, t)] g'
     where
@@ -565,7 +559,7 @@ getConstr l g s =
 consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
 consCast g a e  
-  | CDead _ t <- eCast = consDeadCode g l t 
+  | CDead e t <- eCast = consDeadCode g l e t 
   | otherwise          = mseq (consExpr g e) $ \(x,g) -> do 
                            δ     <- getDef
                            case eCast of
@@ -578,8 +572,8 @@ consCast g a e
     eCast              = envGetContextCast g a 
                        
 -- | Dead code 
-consDeadCode g l t
-  = do subType l g t tBot
+consDeadCode g l e t
+  = do subType l e g t tBot
        return Nothing
     where
        tBot = strengthen t $ F.bot $ rTypeR t
@@ -593,9 +587,10 @@ consUpCast δ g l x _ t2 = envAddFresh l stx g
     
 -- | DownCast(x, t1 => t2)
 consDownCast δ g l x _ t2
-  = do  subType l g txx tx2
+  = do  subType l err g txx tx2
         envAddFresh l ztx g
-    where 
+    where
+        err  = errorDownCast l txx t2
         tx   = envFindTy x g
         -- This will drop all top-level refinements from union-level to its parts
         txx  = zipType δ tx tx 
@@ -624,10 +619,11 @@ consCall g l fn es ft0
        case overload δ l of
          Just ft    -> do  (_,its,ot)   <- instantiate l g fn ft
                            let (su, ts') = renameBinds its xes
-                           zipWithM_ (subType l g') ts ts'
+                           zipWithM_ (subType l err g') ts ts'
                            Just <$> envAddFresh l (F.subst su ot) g'
          Nothing    -> cgError l $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> getCallable δ ft0) 
     where
+       err           = errorLiquid' l
        overload δ l  = listToMaybe [ lt | Overload cx t <-  ann_fact l 
                                         , cge_ctx g     == cx
                                         , lt            <- getCallable δ ft0
@@ -737,16 +733,18 @@ consWhile g l cond body
         xs                   = concat [xs | PhiVar xs <- ann_fact l]
         ts                   = (\t -> envFindTy t g) <$> xs 
 
-consWhileBase l xs tIs g    = zipWithM_ (subType l g) xts_base tIs      -- (c)
+consWhileBase l xs tIs g    = zipWithM_ (subType l err g) xts_base tIs      -- (c)
   where 
    xts_base                 = (\t -> envFindTy t g) <$> xs
- 
-consWhileStep l xs tIs gI'' = zipWithM_ (subType l gI'') xts_step tIs'  -- (f)
+   err                      = errorLiquid' l
+
+consWhileStep l xs tIs gI'' = zipWithM_ (subType l err gI'') xts_step tIs'  -- (f)
   where 
     xts_step                = (\t -> envFindTy t gI'') <$> xs'
     tIs'                    = F.subst su <$> tIs
     xs'                     = mkNextId   <$> xs
     su                      = F.mkSubst   $  safeZip "consWhileStep" (F.symbol <$> xs) (F.eVar <$> xs')
+    err                     = errorLiquid' l
 
 whenJustM Nothing  _ = return ()
 whenJustM (Just x) f = f x
@@ -778,15 +776,17 @@ envJoin' l g g1 g2
         -- up that one.
         -- FIXME: Add a raw type check on t1 and t2
         (g',ts) <- freshTyPhis (srcPos l) g xs $ toType <$> t1s
-        zipWithM_ (subType l g1') [envFindTy x g1' | x <- xs] ts
-        zipWithM_ (subType l g2') [envFindTy x g2' | x <- xs] ts
+        zipWithM_ (subType l err g1') [envFindTy x g1' | x <- xs] ts
+        zipWithM_ (subType l err g2') [envFindTy x g2' | x <- xs] ts
         return g'
     where
         xs   = concat [xs | PhiVar xs <- ann_fact l] 
         t1s  = (\t -> envFindTy t g1) <$> xs 
         t2s  = (\t -> envFindTy t g2) <$> xs
+        err  = errorLiquid' l 
 
 
+errorLiquid' = errorLiquid . srcPos
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

@@ -1211,7 +1211,7 @@ objLitTy l ps g   = mkFun (vs, bs, rt)
   where
     vs            = [mv] ++ mvs ++ avs
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
-    rt            = TCons elts mt fTop -- $ objLitR l nps g -- fTop
+    rt            = TCons elts mt $ objLitR l nps g -- fTop
     elts          = [FieldSig s m (ofType a) | (s,m,a) <- zip3 ss mts ats ] 
     nps           = length ps
     (mv, mt)      = freshTV l mSym 0                             -- obj mutability

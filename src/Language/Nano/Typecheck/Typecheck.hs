@@ -758,18 +758,35 @@ tcCall γ (NewExpr l (VarRef lv i) es)
        (es', t)               <- tcNormalCall γ l "constructor" es tc
        return                  $ (NewExpr l (VarRef lv i) es', t)
 
+-- TODO: NUKE runFailM -- | e.f 
+-- TODO: NUKE runFailM tcCall γ ef@(DotRef l e f)
+-- TODO: NUKE runFailM   = do  (_, t) <- tcExpr γ e
+-- TODO: NUKE runFailM         δ      <- getDef 
+-- TODO: NUKE runFailM         case getElt δ f t of 
+-- TODO: NUKE runFailM           [FieldSig _ _ ft] -> do ([e'], t') <- tcNormalCall γ l ef [e] $ mkTy ft
+-- TODO: NUKE runFailM                                   return      $ (DotRef l e' f, t')
+-- TODO: NUKE runFailM           _                 -> tcError $ errorExtractNonFld (srcPos l) f e 
+-- TODO: NUKE runFailM   where
+-- TODO: NUKE runFailM     mkTy t   = mkFun ([α], [B (F.symbol "this") tα], t) 
+-- TODO: NUKE runFailM     α        = TV (F.symbol "α" ) (srcPos l)
+-- TODO: NUKE runFailM     tα       = TVar α fTop
+
 -- | e.f 
 tcCall γ ef@(DotRef l e f)
-  = do  (_, t) <- tcExpr γ e
-        δ      <- getDef 
-        case getElt δ f t of 
-          [FieldSig _ _ ft] -> do ([e'], t') <- tcNormalCall γ l ef [e] $ mkTy ft
-                                  return      $ (DotRef l e' f, t')
-          _                 -> tcError $ errorExtractNonFld (srcPos l) f e 
+  = do  z              <- runFailM $ tcExpr γ e
+        case z of
+          Right (_, t) -> 
+            do  δ      <- getDef 
+                case getElt δ (PropId l f) t of 
+                  [FieldSig _ _ ft] -> do ([e'], t') <- tcNormalCall γ l ef [e] $ mkTy ft
+                                          return      $ (DotRef l e' f, t')
+                  _                 -> tcError $ errorExtractNonFld (srcPos l) f e 
+          Left err     -> tcError err
   where
     mkTy t   = mkFun ([α], [B (F.symbol "this") tα], t) 
     α        = TV (F.symbol "α" ) (srcPos l)
     tα       = TVar α fTop
+
 
          
 -- | `super(e1,...,en)`
@@ -782,13 +799,22 @@ tcCall γ (CallExpr l e@(SuperRef _)  es)
           do (es', t')        <- tcNormalCall γ l "constructor" es t
              return            $ (CallExpr l e es', t')
        go _                    = error "tcError $ errorConsSigMissing (srcPos l) e"
-   
+
 -- | `e(es)`
-tcCall γ (CallExpr l em@(DotRef _ e f) es)
-  = do (_, t)        <- tcExpr γ e
-       δ             <- getDef 
-       (em', es', t) <- tcCallDotRef γ (getElt δ f t) l em es
-       return         $ (CallExpr l em' es', t)
+tcCall γ (CallExpr l em@(DotRef lf e f) es)
+  = do z              <- runFailM $ tcExpr γ e
+       case z of 
+         Right (_, t) -> do δ             <- getDef 
+                            (em', es', t) <- tcCallDotRef γ (getElt δ (PropId lf f) t) l em es
+                            return         $ (CallExpr l em' es', t)
+         Left err     -> tcError err
+       
+-- TODO: NUKE runFailM -- | `e.f(es)`
+-- TODO: NUKE runFailM tcCall γ (CallExpr l em@(DotRef _ e f) es)
+-- TODO: NUKE runFailM   = do (_, t)        <- tcExpr γ e
+-- TODO: NUKE runFailM        δ             <- getDef 
+-- TODO: NUKE runFailM        (em', es', t) <- tcCallDotRef γ (getElt δ f t) l em es
+-- TODO: NUKE runFailM        return         $ (CallExpr l em' es', t)
 
 -- | `e(es)`
 tcCall γ (CallExpr l e es)

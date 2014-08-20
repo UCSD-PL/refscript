@@ -436,7 +436,7 @@ collectTypes :: (IsLocated a, Data a) => [Statement a] -> [(AbsName, Statement a
 collectTypes  = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
   where
     f e@(ClassStmt _ x _ _ _ ) s = ([(AN $ QName (srcPos e) s $ F.symbol x,e)], s, True)
-    f e@(ModuleStmt _ x _    ) s = ([], s ++ [F.symbol x], False)
+    f   (ModuleStmt _ x _    ) s = ([], s ++ [F.symbol x], False)
     f _                        s = ([], s, True)
 
 

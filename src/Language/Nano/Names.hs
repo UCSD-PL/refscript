@@ -29,19 +29,12 @@ module Language.Nano.Names (
 
   ) where 
 
-import           Control.Applicative 
-import           Control.Exception (throw)
-import           Data.Maybe             (isJust)
 import           Data.Hashable          
-import           Data.Monoid            (Monoid (..))
-import qualified Data.HashMap.Strict as M
 import           Data.Data
-import qualified Data.List               as L
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Locations
-import           Language.Nano.Errors
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint

@@ -46,7 +46,6 @@ module Language.Nano.Env (
 import           Control.Applicative 
 import           Control.Exception (throw)
 import           Data.Maybe             (isJust)
-import           Data.Hashable          
 import           Data.Monoid            (Monoid (..))
 import qualified Data.HashMap.Strict as M
 import           Data.Data

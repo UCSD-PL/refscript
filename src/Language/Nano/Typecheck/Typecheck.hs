@@ -315,7 +315,6 @@ tcClassElt γ cid (MemberVarDecl l static (VarDecl l1 x eo))
          | otherwise = [ f | FieldAnn f <- ann_fact l1 ]
     ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> flds
 
---
 --  Currently we allow a single type annotation that can be an overloaded
 --  function though. Proceed as follows:
 --    1. Get all overloads
@@ -380,7 +379,7 @@ tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
        case z of 
          ([e1',e2'], _)
                      -> return (ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 e1' f) e2', Just γ)
-         (e,t)       -> error $ "BUG: tcStmt - e.f = e : " ++ ppshow e ++ "\n" ++ ppshow t
+         (e, t)      -> error $ "BUG: tcStmt - e.f = e : " ++ ppshow e ++ "\n" ++ ppshow t
 
 -- e
 tcStmt γ (ExprStmt l e)   
@@ -557,8 +556,10 @@ tcAsgn l γ x e
     -- it at declaration or through initialization.
        rhsT      = tcEnvFindSpecOrTy x γ
 
+-- FIXME: there is no `init` -- is the above comment dead?
 -- | There are two versions for `tcExprT`. If `init` is True then this is the 
 -- variable initialization phase, otherwise any other assignment.
+       
 -------------------------------------------------------------------------------
 tcExprT :: PPR r 
         => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) 
@@ -850,12 +851,15 @@ getConstr l γ s =
     abs vs t = foldr TAll t vs
 
 
--- | Signature resolution
-
+------------------------------------------------------------------------------------------
+-- | @tcNormalCall@ resolves overloads and returns cast-wrapped versions of the arguments.
+------------------------------------------------------------------------------------------
+tcNormalCall ::  (PPRSF r) => TCEnv r -> AnnSSA r -> String -> [ExprSSAR r] -> RType r
+             -> TCM r ([ExprSSAR r], RType r) 
+------------------------------------------------------------------------------------------
 tcNormalCall γ l fn es ft0 
   = do (es', ts)      <- unzip <$> mapM (tcExpr γ) es
-       z              <- {- tracePP ("resolved overload for " ++ ppshow fn) <$> -} 
-                         resolveOverload γ l fn es' ts ft0
+       z              <- resolveOverload γ l fn es' ts ft0
        case z of 
          Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
@@ -904,9 +908,9 @@ tcCallCaseTry γ l fn ts ft = runMaybeM $
 tcCallCase γ l fn es ts ft 
   = do let ξ            = tce_ctx γ
        -- Generate fresh type parameters
-       (_,ibs,ot)      <- {- tracePP ("inst " ++ ppshow ft) <$> -} instantiate l ξ fn ft
+       (_,ibs,ot)      <- instantiate l ξ fn ft
        let its          = b_type <$> ibs
-       θ               <- {- tracePP "unif" <$> -} unifyTypesM (srcPos l) "tcCall" ts its
+       θ               <- unifyTypesM (srcPos l) "tcCall" ts its
        let (ts',its')   = mapPair (apply θ) (ts, its)
        es'             <- NM.zipWith3M (castM ξ) es ts' its'
        return             (es', apply θ ot, θ)

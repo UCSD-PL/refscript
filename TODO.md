@@ -64,7 +64,6 @@ Changes:
 
 Failed 20 tests: 
 	pos/misc/overload.ts,
-	neg/arrays/arr-14.ts,
 	neg/classes/class-07.ts,
 	neg/loops/for-rec-01.ts,
 	neg/misc/abs-hof.ts,
@@ -75,9 +74,6 @@ Failed 20 tests:
 	pos/misc/funIncr.ts,
 	pos/misc/vararg-00.ts,
 	pos/misc/vararg-02.ts,
-	pos/unions/union-04.ts
-
-Exceptions thrown on 2 tests:
     neg/arrays/arr-14.ts,
 
 Tool/Implementation

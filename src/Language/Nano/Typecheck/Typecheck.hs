@@ -164,21 +164,19 @@ patch fs =
 -------------------------------------------------------------------------------
 initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv (Nano { code = Src ss }) = TCE nms ifc mod ctx pth Nothing
+initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
     nms       = envFromList $ visibleNames ss
-    ifc       = envFromList $ visibleIfaces ss
     mod       = registerAllModules ss 
     ctx       = emptyContext
     pth       = AP $ QPath (srcPos dummySpan) []
 
 
-initFuncEnv γ f i αs xs ts t s = TCE nms ifc mod ctx pth parent
+initFuncEnv γ f i αs xs ts t s = TCE nms mod ctx pth parent
   where
     tyBinds   = [(tVarId α, tVar α) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) ts
     nms       = envAddReturn f t $ envAdds (tyBinds ++ varBinds ++ visibleNames s) $ tce_names γ
-    ifc       = envFromList $ visibleIfaces s
     mod       = tce_mod γ
     ctx       = pushContext i (tce_ctx γ) 
     pth       = tce_path γ
@@ -188,10 +186,9 @@ initFuncEnv γ f i αs xs ts t s = TCE nms ifc mod ctx pth parent
 ---------------------------------------------------------------------------------------
 initModuleEnv :: (PPR r, F.Symbolic n) => TCEnv r -> n -> [Statement (AnnSSA r)] -> TCEnv r
 ---------------------------------------------------------------------------------------
-initModuleEnv γ n s = TCE nms ifc mod ctx pth parent 
+initModuleEnv γ n s = TCE nms mod ctx pth parent 
   where
     nms       = envFromList $ visibleNames s
-    ifc       = envFromList $ visibleIfaces s
     mod       = modules γ
     ctx       = emptyContext
     pth       = extendAbsPath (tce_path γ) n

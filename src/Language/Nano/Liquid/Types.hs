@@ -342,16 +342,16 @@ rTypeSortApp TUn  _  = F.FApp (tconFTycon TUn) [] -- simplifying union sorts, th
 rTypeSortApp c ts    = F.FApp (tconFTycon c) (rTypeSort <$> ts) 
 
 tconFTycon :: TCon -> F.FTycon 
-tconFTycon TInt         = F.intFTyCon
-tconFTycon TBool        = rawStringFTycon "Boolean"
-tconFTycon TFPBool      = F.boolFTyCon
-tconFTycon TVoid        = rawStringFTycon "Void"
-tconFTycon (TRef s)     = rawStringFTycon $ F.symbolString undefined
-tconFTycon TUn          = rawStringFTycon "Union"
-tconFTycon TString      = F.strFTyCon
-tconFTycon TTop         = rawStringFTycon "Top"
-tconFTycon TNull        = rawStringFTycon "Null"
-tconFTycon TUndef       = rawStringFTycon "Undefined"
+tconFTycon TInt                      = F.intFTyCon
+tconFTycon TBool                     = rawStringFTycon "Boolean"
+tconFTycon TFPBool                   = F.boolFTyCon
+tconFTycon TVoid                     = rawStringFTycon "Void"
+tconFTycon (TRef (RN (QName _ _ s))) = rawStringFTycon $ F.symbolString s
+tconFTycon TUn                       = rawStringFTycon "Union"
+tconFTycon TString                   = F.strFTyCon
+tconFTycon TTop                      = rawStringFTycon "Top"
+tconFTycon TNull                     = rawStringFTycon "Null"
+tconFTycon TUndef                    = rawStringFTycon "Undefined"
 
 
 rTypeSortForAll t    = genSort n θ $ rTypeSort tbody
@@ -587,7 +587,7 @@ zipType γ (TApp TUn t1s r1) (TApp TUn t2s _) =
        return  $ TApp TUn p2s r1
   where
     pair t2 = case L.find (related γ t2) t1s of
-                Just t1 -> do t <- zipType γ t1 t2 
+                Just t1 -> do -- t <- zipType γ t1 t2 
                               return $ t1 `strengthen` r1
                 Nothing -> return $ fmap F.bot t2
 

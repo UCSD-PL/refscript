@@ -26,7 +26,6 @@ import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 -- import           Language.Fixpoint.Misc (traceShow)
 import           Language.Nano.Env
-import           Language.Nano.Errors
 import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
@@ -35,7 +34,6 @@ import           Language.Nano.Typecheck.Subst
 
 import           Control.Applicative ((<$>))
 import qualified Data.List as L
-import           Data.Function (fix)
 
 -- import           Debug.Trace
 
@@ -88,7 +86,7 @@ absolutePath env a r = m_path <$> resolveRelPath env a r
 ---------------------------------------------------------------------------
 absoluteName    :: QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe AbsName
 ---------------------------------------------------------------------------
-absoluteName env a r@(RN (QName l ps s)) = g <$> absolutePath env a (f r)
+absoluteName env a r@(RN (QName _ _ s)) = g <$> absolutePath env a (f r)
   where
     f (RN (QName l p _)) = RP (QPath l p)
     g (AP (QPath l p))   = AN (QName l p s)
@@ -103,7 +101,7 @@ absoluteName env a r@(RN (QName l ps s)) = g <$> absolutePath env a (f r)
 resolveRelPath :: QEnv (ModuleDef r) -> AbsPath -> RelPath -> Maybe (ModuleDef r)
 ---------------------------------------------------------------------------
 resolveRelPath env a (RP (QPath _ [])) = qenvFindTy a env
-resolveRelPath env a r@(RP (QPath l (m:ms))) = do
+resolveRelPath env a r@(RP (QPath _ (m:_))) = do
     curM <- qenvFindTy a env
     case envFindTy m (m_variables curM) of
       Just (_, TModule r) -> resolveRelPath env (extendPath a m) r

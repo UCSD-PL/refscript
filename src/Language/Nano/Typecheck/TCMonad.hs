@@ -102,12 +102,7 @@ data TCState r = TCS {
   , tc_subst    :: !(RSubst r)
   , tc_cnt      :: !Int
   , tc_anns     :: AnnInfo r                      -- Annotations
-  -- , tc_specs    :: !(Env (RType r))               -- Function definitions
-  -- , tc_defs     :: !(IfaceEnv r)                   -- Defined types
-  -- , tc_ext      :: !(Env (RType r))               -- Extern (unchecked) declarations
-  -- , tc_cls      :: Env (Statement (AnnSSA r))     -- Class definitions
   , tc_verb     :: V.Verbosity                    -- Verbosity
-  , tc_this     :: ![RType r]                     -- This stack: if empty, assume top
   }
 
 type TCM r     = ExceptT Error (State (TCState r))
@@ -245,21 +240,13 @@ execute verb pgm act
 -------------------------------------------------------------------------------
 initState :: PPR r => V.Verbosity -> NanoSSAR r -> TCState r
 -------------------------------------------------------------------------------
-initState verb _ = TCS tc_errors tc_subst tc_cnt tc_anns 
-                          -- tc_specs tc_defs tc_exts tc_class 
-                          tc_verb tc_this
+initState verb _ = TCS tc_errors tc_subst tc_cnt tc_anns tc_verb
   where
     tc_errors = []
     tc_subst = mempty 
     tc_cnt   = 0
     tc_anns  = M.empty
     tc_verb  = verb
-    tc_this  = []
---     tc_specs = specs pgm
---     tc_exts  = externs pgm
---     tc_defs  = envEmpty
---     tc_class = envFromList [ (s, ClassStmt l s e i b) | let Src ss = code pgm
---                                                       , ClassStmt l s e i b <- ss ]
 
 
 --------------------------------------------------------------------------

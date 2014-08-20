@@ -12,7 +12,7 @@ function plus(x, y) {
  */
 
 function buildName(firstName:any, lastName:any) : string {
-    if (typeof(lastName) === "string")
+    if (typeof(lastName) === "number")
         return firstName;
   
     var a = plus (" ", lastName);

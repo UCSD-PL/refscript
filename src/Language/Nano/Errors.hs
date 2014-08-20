@@ -125,7 +125,7 @@ errorArgMismatch l            = mkErr l $ printf "Mismatch in Number of argument
 errorArgName l x y            = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 errorExtractNonFld l f x      = mkErr l $ printf "Cannot extract non-field '%s' from object '%s'" (ppshow f) (ppshow x)
 errorNonSingleFuncAnn l       = mkErr l $ printf "Anonymous function needs to have exactly one type annotation."
-
+errorDeadCast l t1 t2         = mkErr l $ printf "Cannot convert %s into %s" (ppshow t1) (ppshow t2)
 
 ---------------------------------------------------------------------------
 -- | LIQUID

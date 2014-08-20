@@ -20,7 +20,7 @@ module Language.Nano.Typecheck.TCMonad (
   , runFailM, runMaybeM
 
   -- * Errors
-  , logError, tcError
+  , logError, tcError, tcWrap
 
   -- * Freshness
   , freshTyArgs
@@ -43,7 +43,8 @@ module Language.Nano.Typecheck.TCMonad (
 
   -- * Casts
   , castM
-
+  , deadcastM
+    
   -- * TDefEnv
   , findSymM, findSymOrDieM
 
@@ -217,6 +218,13 @@ tcError     :: Error -> TCM r a
 -------------------------------------------------------------------------------
 tcError err = throwError $ catMessage err "TC-ERROR "
 
+-------------------------------------------------------------------------------
+tcWrap :: TCM r a -> TCM r (Either Error a)
+-------------------------------------------------------------------------------
+tcWrap act = (Right <$> act) `catchError` (return . Left)
+
+
+
 
 -------------------------------------------------------------------------------
 logError   :: Error -> a -> TCM r a
@@ -348,6 +356,12 @@ unifyTypeM l t t' = unifyTypesM l (ppshow "") [t] [t']
 --  Cast Helpers
 --------------------------------------------------------------------------------
 
+-- | @deadcastM@ wraps an expression @e@ with a dead-cast around @e@. 
+--------------------------------------------------------------------------------
+deadcastM :: (PPR r) => IContext -> Error -> Expression (AnnSSA r) -> TCM r (Expression (AnnSSA r))
+--------------------------------------------------------------------------------
+deadcastM = error "TODO:deadcastM"
+
 -- | For the expression @e@, check the subtyping relation between the type @t1@
 --   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
 --------------------------------------------------------------------------------
@@ -396,9 +410,10 @@ subtypeM l t1 t2
           Right _         -> tcError $ errorSubtype l t1 t2
 
 
-addCast     ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
-  where loc       = srcPos e
-        fact      = TCast ξ c
+addCast ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
+  where
+    loc       = srcPos e
+    fact      = TCast ξ c
 
 wrapCast _ f (Cast (Ann l fs) e) = Cast (Ann l (f:fs)) e
 wrapCast l f e                   = Cast (Ann l [f])    e

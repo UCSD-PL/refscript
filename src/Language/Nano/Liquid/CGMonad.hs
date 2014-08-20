@@ -18,8 +18,8 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Execute Action and Get FInfo
   , getCGInfo 
-  , runFailM
-
+  -- , runFailM (!!!! Wierd to run the monad in the middle of building an action!!!!)
+    
   -- * Get Defined Function Type Signature
   , getDefType, getDef, setDef, getPropTDefM, getPropM
 
@@ -126,7 +126,7 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
   
-runFailM a = fst . runState (runErrorT a) <$> get
+-- runFailM a = fst . runState (runErrorT a) <$> get
 
 initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
 initState c p   = CGS F.emptyBindEnv (specs p) (defs p) (externs p)

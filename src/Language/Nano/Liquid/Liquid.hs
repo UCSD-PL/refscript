@@ -25,6 +25,7 @@ import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Interface        (solve)
 
+import           Language.Nano.Misc                 (mseq)
 import           Language.Nano.CmdLine              (getOpts)
 import           Language.Nano.Errors
 import qualified Language.Nano.Env                  as Env --  (envUnion, envToList)
@@ -528,11 +529,6 @@ consExpr g (FuncExpr l fo xs body)
 
 -- not handled
 consExpr _ e = cgError l $ unimplemented l "consExpr" e where l = srcPos  e
-
-mseq act k = do z <- act
-                case z of
-                  Nothing -> return Nothing
-                  Just x  -> k x
 
 -- | `getConstr` first checks whether input @s@ is a class, in which case it
 -- tries to retrieve a constructor binding, using a default one if that fails.

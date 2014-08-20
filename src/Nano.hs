@@ -43,8 +43,8 @@ verifier cfg f
         case z of
           Left  e     -> return (NoAnn, e)
           Right jsons -> case cfg of
-                        TC     {} -> TC.verifyFile   jsons
-                        Liquid {} -> LQ.verifyFile f jsons
+                          TC     {} -> TC.verifyFile   jsons
+                          Liquid {} -> LQ.verifyFile f jsons
 
 -------------------------------------------------------------------------------
 json :: FilePath -> IO (Either (F.FixResult Error) [FilePath])

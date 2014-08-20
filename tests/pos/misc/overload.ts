@@ -6,12 +6,14 @@ function plus(x, y) {
     return z;
 }
 
-/*@ foo :: /\ (number) => number
+/*@ foo :: /\ (number) => {v:number | true}
            /\ (string) => string */
 
 function foo(a){
-    if (typeof(a) === "number")
-	return plus(a, 1);
+    if (typeof(a) === "number"){
+	var z1 = plus(a, 1);
+	return z1;
+    }
 
     return plus(a, "cat");
 }

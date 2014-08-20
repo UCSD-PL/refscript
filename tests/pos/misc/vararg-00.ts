@@ -1,4 +1,7 @@
-/*@ concat ::  (string, string) => string */
+/*@ concat :: /\ (string, string) => string 
+              /\  (number, number) => number
+*/
+
 function concat(x, y) {
     
     var z = x + y;

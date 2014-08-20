@@ -101,10 +101,10 @@ instance Free a => Free [a] where
   free = S.unions . map free
 
 instance Free (Cast r) where
-  free CNo        = S.empty
-  free (CDead t)  = free t
-  free (CUp t t') = free [t,t']
-  free (CDn t t') = free [t,t']
+  free CNo         = S.empty
+  free (CDead _ t) = free t
+  free (CUp t t')  = free [t,t']
+  free (CDn t t')  = free [t,t']
 
 instance Free (Fact r) where
   free (PhiVar _)        = S.empty
@@ -163,10 +163,10 @@ instance F.Reftable r => Substitutable r (TElt r) where
   apply θ (IndexSig x b t)   = IndexSig x b (apply θ t)
 
 instance F.Reftable r => Substitutable r (Cast r) where
-  apply _ CNo        = CNo
-  apply θ (CDead t)  = CDead (apply θ t)
-  apply θ (CUp t t') = CUp (apply θ t) (apply θ t')
-  apply θ (CDn t t') = CDn (apply θ t) (apply θ t')
+  apply _ CNo         = CNo
+  apply θ (CDead z t) = CDead z         (apply θ t)
+  apply θ (CUp t t')  = CUp (apply θ t) (apply θ t')
+  apply θ (CDn t t')  = CDn (apply θ t) (apply θ t')
 
 instance F.Reftable r => Substitutable r (Fact r) where
   apply _ x@(PhiVar _)      = x

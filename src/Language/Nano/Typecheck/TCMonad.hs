@@ -360,7 +360,8 @@ unifyTypeM l t t' = unifyTypesM l (ppshow "") [t] [t']
 --------------------------------------------------------------------------------
 deadcastM :: (PPR r) => IContext -> Error -> Expression (AnnSSA r) -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
-deadcastM = error "TODO:deadcastM"
+deadcastM ξ err e
+  = addCast ξ e $ CDead err tNull -- $ error "TODO:deadcastM"
 
 -- | For the expression @e@, check the subtyping relation between the type @t1@
 --   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
@@ -485,3 +486,7 @@ getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
     fromTdef (TD _ _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
 getSuperDefM l _  = tcError $ errorSuper (srcPos l)
 
+
+-- Local Variables:
+-- flycheck-disabled-checkers: (haskell-liquid)
+-- End:

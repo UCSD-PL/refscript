@@ -66,7 +66,7 @@ convert l δ t1 t2
           CDNo   -> return $ CNo
           CDUp   -> return $ CUp (rType t1) (rType t2)
           CDDn   -> return $ CDn (rType t1) (rType t2)
-          CDDead -> return $ CDead (rType t1)
+          CDDead -> return $ CDead (errorDeadCast l t1 t2) (rType t1)
   where
     rType = ofType . toType
 

@@ -648,7 +648,7 @@ tcExpr γ ex@(Cast l@(Ann loc fs) e)
     rplc δ t0 (UserCast t1) | on (==) toType t0 t1  = TCast (tce_ctx γ) $ CNo
                             | isSubtype δ t0 t1     = TCast (tce_ctx γ) $ CUp t0 t1
                             | isSubtype δ t1 t0     = TCast (tce_ctx γ) $ CDn t0 t1
-                            | otherwise             = TCast (tce_ctx γ) $ CDead t1
+                            | otherwise             = TCast (tce_ctx γ) $ CDead (errorDeadCast (srcPos l) t0 t1) t1
     rplc _ _  a                                     = a
     
  

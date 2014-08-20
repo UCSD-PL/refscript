@@ -565,17 +565,17 @@ getConstr l g s =
 consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
 consCast g a e  
-  | CDead t <- eCast = consDeadCode g l t 
-  | otherwise        = mseq (consExpr g e) $ \(x,g) -> do 
-                          δ     <- getDef
-                          case eCast of
-                            CNo       -> return $ Just (x,g)
-                            CUp t t'  -> Just <$> consUpCast δ g l x t t'
-                            CDn t t'  -> Just <$> consDownCast δ g l x t t'
-                            _         -> error "impossible"
+  | CDead _ t <- eCast = consDeadCode g l t 
+  | otherwise          = mseq (consExpr g e) $ \(x,g) -> do 
+                           δ     <- getDef
+                           case eCast of
+                             CNo       -> return $ Just (x,g)
+                             CUp t t'  -> Just <$> consUpCast δ g l x t t'
+                             CDn t t'  -> Just <$> consDownCast δ g l x t t'
+                             _         -> error "impossible"
   where  
-    l                = srcPos a
-    eCast            = envGetContextCast g a 
+    l                  = srcPos a
+    eCast              = envGetContextCast g a 
                        
 -- | Dead code 
 consDeadCode g l t

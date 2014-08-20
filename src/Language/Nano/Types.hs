@@ -420,7 +420,7 @@ instance F.Symbolic (LValue a) where
   symbol lv         = convertError "F.Symbol" lv
 
 instance F.Symbolic (Prop a) where 
-  symbol (PropId _ (Id _ x)) = F.symbol $ "propId_"     ++ x
+  symbol (PropId _ (Id _ x)) = F.symbol x -- TODO $ "propId_"     ++ x
   symbol (PropString _ s)    = F.symbol $ "propString_" ++ s
   symbol (PropNum _ n)       = F.symbol $ "propNum_"    ++ show n
   -- symbol p                   = error $ printf "Symbol of property %s not supported yet" (ppshow p)

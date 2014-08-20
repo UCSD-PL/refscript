@@ -486,7 +486,7 @@ consExpr g (ArrayLit l es)
 
 -- | {f1:e1,...,fn:en}
 consExpr g (ObjectLit l bs) 
-  = consCall g l "ObjectLit" es $ tracePP "objectLitTY" $ objLitTy l ps (renv g)
+  = consCall g l "ObjectLit" es $ {- tracePP "objectLitTY" $ -} objLitTy l ps (renv g)
   where
     (ps, es) = unzip bs
 

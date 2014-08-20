@@ -11,7 +11,7 @@ function concat(x, y) {
  */
 
 function buildName(firstName, lastName) {
-    if (typeof(lastName) === "string")
+    if (typeof(lastName) === "number")
         return firstName;
    
     var a = concat (" ", lastName);

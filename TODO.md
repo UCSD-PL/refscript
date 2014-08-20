@@ -4,7 +4,7 @@ Tests / Benchmarks
 ### Failing tests
 
     neg/misc/abs-join-00.ts,              // TS translation exception
-    pos/arrays/arr-11.ts,                 
+    pos/arrays/arr-11.ts,
     pos/loops/obj-01.ts,
     pos/loops/obj-02.ts,
     pos/misc/animals.ts,                  // numbers of arguments
@@ -62,54 +62,23 @@ Changes:
 + add `Error` information to `Cinfo` for better reporting
 
 
-Failed 35 tests: 
- neg/arrays/arr-14.ts,
- neg/classes/class-07.ts,
- neg/classes/point-00.ts,
- neg/loops/for-rec-01.ts,
- neg/misc/abs-hof.ts,
- neg/misc/abs-join-00.ts,
- neg/objects/obj-07-hide.ts,
- neg/objects/obj-08.ts,
- neg/simple/glob-04.ts,
- neg/simple/parse-01.ts,
- pos/arrays/arr-11.ts,
- pos/loops/obj-01.ts,
- pos/loops/obj-02.ts,
- pos/misc/animals.ts,
- pos/misc/funIncr.ts,
- pos/misc/minindex-02.ts,
- pos/misc/negate-00.ts,
- pos/misc/overload.ts,
- pos/misc/vararg-00.ts,
- pos/misc/vararg-02.ts,
- pos/objects/infer-00.ts,
- pos/objects/infer-01.ts,
- pos/objects/infer-02.ts,
- pos/objects/infer-03.ts,
- pos/objects/obj-00.ts,
- pos/objects/obj-02.ts,
- pos/objects/obj-03.ts,
- pos/objects/obj-07.ts,
- pos/objects/obj-08.ts,
- pos/simple/obj-00.ts,
- pos/simple/obj-01.ts,
- pos/simple/obj-02.ts,
- pos/simple/qualgen-01.ts,
- pos/simple/unif-01.ts,
- pos/unions/union-04.ts
+Failed 20 tests: 
+	pos/misc/overload.ts,
+	neg/arrays/arr-14.ts,
+	neg/classes/class-07.ts,
+	neg/loops/for-rec-01.ts,
+	neg/misc/abs-hof.ts,
+	neg/objects/obj-07-hide.ts,
+	neg/objects/obj-08.ts,
+	neg/simple/glob-04.ts,
+	neg/simple/parse-01.ts,
+	pos/misc/funIncr.ts,
+	pos/misc/vararg-00.ts,
+	pos/misc/vararg-02.ts,
+	pos/unions/union-04.ts
 
-Exceptions thrown on 3 tests:
- neg/arrays/arr-14.ts,
- neg/misc/abs-join-00.ts,
- pos/misc/minindex-02.ts
-
-
-
-	
-
-
-
+Exceptions thrown on 2 tests:
+    neg/arrays/arr-14.ts,
 
 Tool/Implementation
 -------------------

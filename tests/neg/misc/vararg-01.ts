@@ -2,7 +2,7 @@
             /\  (number, number) => number 
 
 */
-function plus(x, y) {
+function plus(x:number, y:number) {
     return x + y;
 }
 

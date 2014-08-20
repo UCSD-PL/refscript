@@ -440,14 +440,14 @@ consExpr g (CallExpr l e@(SuperRef _) es)
        go _   = cgError l $ unsupportedNonSingleConsTy $ srcPos l
 
 -- | e.m(es)
-consExpr g (CallExpr l em@(DotRef _ e f) es)
+consExpr g (CallExpr l em@(DotRef lf e f) es)
   = mseq (consExpr g e) $ \(x,g') -> do 
       δ      <- getDef
       consCallDotRef g' l em (vr x) (elt δ x g') es
     where
       -- Add a VarRef so that e is not typechecked again
       vr          = VarRef $ getAnnotation e
-      elt δ x g   = getElt δ f $ envFindTy x g
+      elt δ x g   = getElt δ (PropId lf f) $ envFindTy x g
 
 -- | e(es)
 consExpr g (CallExpr l e es)
@@ -458,7 +458,7 @@ consExpr g (CallExpr l e es)
 consExpr g ef@(DotRef l e f)
   = mseq (consExpr g e) $ \(x,g') -> do
       δ      <- getDef        
-      case getElt δ f $ envFindTy  x g' of 
+      case getElt δ (PropId l f) $ envFindTy  x g' of 
         [FieldSig _ _ ft] -> consCall g' l ef [vr x] $ mkTy ft
         _                 -> cgError l $ errorExtractNonFld (srcPos l) f e 
     where

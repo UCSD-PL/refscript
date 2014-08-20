@@ -1,7 +1,7 @@
 
-/*@ c :: string */
+/*@ c :: {v:string | true } */
 var c = 1;
 
-/*@ e :: #Array[#Immutable,string] */
+/* e :: {v: #Array[#Immutable,string] | true} */
 var e = "aaa";
 

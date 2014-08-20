@@ -568,26 +568,6 @@ getConstr l g s =
 --------------------------------------------------------------------------------
 consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
--- OLD consCast g a e
--- OLD   = mseq (consExpr g e) $ \(x,g) -> do 
--- OLD        δ     <- getDef
--- OLD        case envGetContextCast g a of
--- OLD          CNo       -> return $ Just (x,g)
--- OLD          CDead t   -> Just <$> consDeadCode g l t
--- OLD          CUp t t'  -> Just <$> consUpCast δ g l x t t'
--- OLD          CDn t t'  -> Just <$> consDownCast δ g l x t t'
--- OLD     where  
--- OLD       l = srcPos a
--- OLD consDeadCode δ g l x t
--- OLD   = do  subType l g tx xBot
--- OLD         -- NOTE: return the target type (falsified)
--- OLD         envAddFresh l tBot g
--- OLD     where 
--- OLD         xBot = zipType δ (fmap F.bot tx) tx
--- OLD         tBot = zipType δ (fmap F.bot t) t
--- OLD         tx   = envFindTy x g
-
-
 consCast g a e  
   | CDead t <- eCast = consDeadCode g l t 
   | otherwise        = mseq (consExpr g e) $ \(x,g) -> do 

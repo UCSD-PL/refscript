@@ -8,7 +8,7 @@
 module Language.Nano.Typecheck.Environment where
 
 import           Language.Nano.Types
-import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Types()
 import           Language.Nano.Env
 import           Language.Nano.Environment
 import           Language.Nano.Names
@@ -46,4 +46,17 @@ instance EnvLike r TCEnv where
   context         = tce_ctx
   parent          = tce_parent
  
+
+instance (PP r, F.Reftable r) => PP (TCEnv r) where
+  pp = ppTCEnv
+
+
+ppTCEnv :: (PP r, F.Reftable r) => TCEnv r -> Doc
+ppTCEnv g
+  =   text "******************** Environment ************************"
+  $+$ pp (names g)
+  $+$ text "******************** Modules ****************************"
+  $+$ pp (modules g)
+  $+$ text "******************** Absolute path **********************"
+  $+$ pp (absPath g)
 

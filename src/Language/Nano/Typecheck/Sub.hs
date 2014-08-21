@@ -4,6 +4,8 @@
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
+
+{-# LANGUAGE OverlappingInstances      #-}
 {-# LANGUAGE LiberalTypeSynonyms       #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}

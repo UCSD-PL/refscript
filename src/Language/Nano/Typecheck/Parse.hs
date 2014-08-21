@@ -13,16 +13,13 @@ module Language.Nano.Typecheck.Parse (parseNanoFromFiles) where
 import           Prelude                          hiding ( mapM)
 
 import           Data.Default
-import           Data.Maybe                              (listToMaybe, catMaybes)
+import           Data.Maybe                              (catMaybes)
 import           Data.Aeson                              (eitherDecode)
 import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
 import qualified Data.List                        as     L
-import           Data.Generics.Aliases                   ( mkQ)
-import           Data.Generics.Schemes
-import qualified Data.HashMap.Strict              as M
 import           Data.Traversable                        (mapAccumL)
 import           Text.PrettyPrint.HughesPJ               (text)
 import           Data.Data
@@ -40,7 +37,6 @@ import           Language.Fixpoint.Misc                  (mapEither, mapSnd)
 import           Language.Nano.Annots
 import           Language.Nano.Errors
 import           Language.Nano.Env
-import           Language.Nano.Files
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Program
@@ -51,7 +47,6 @@ import           Language.Nano.Liquid.Types
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
-import           Text.Printf 
 import           Text.Parsec                      hiding (parse)
 import           Text.Parsec.Pos                         (newPos)
 import qualified Text.Parsec.Token                as     T

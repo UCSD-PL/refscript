@@ -10,13 +10,13 @@ function abs(f, x) {
 }
 
 
-/*@ dubble :: ( p: number ) => number */
+/*@ dubble :: (p:number) => number */
 function dubble(p) {
     return p + p;
 }
 
 
-/*@ main :: ( y: number ) => number */
+/*@ main :: (y:number) => {v:number | true} */
 function main(y) {
     var yy = abs(dubble, y);
     assert(yy >= 0);

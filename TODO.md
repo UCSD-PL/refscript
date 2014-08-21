@@ -62,19 +62,11 @@ Changes:
 + add `Error` information to `Cinfo` for better reporting
 
 
-Failed 20 tests: 
+Failed tests: 
 	pos/misc/overload.ts,
-	neg/classes/class-07.ts,
-	neg/loops/for-rec-01.ts,
-	neg/misc/abs-hof.ts,
-	neg/objects/obj-07-hide.ts,
-	neg/objects/obj-08.ts,
-	neg/simple/glob-04.ts,
-	neg/simple/parse-01.ts,
-	pos/misc/funIncr.ts,
 	pos/misc/vararg-00.ts,
 	pos/misc/vararg-02.ts,
-    neg/arrays/arr-14.ts,
+	? neg/arrays/arr-14.ts,
 
 Tool/Implementation
 -------------------

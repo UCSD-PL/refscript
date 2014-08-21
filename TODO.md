@@ -36,7 +36,7 @@ Tool/Implementation
   
   - What are good default mutabilities (parsing etc.)?
 
-  - Revisit mutability subtyping
+  - Revisit mutability subtyping, compute variance of type parameter in type
 
   - TApp (TRef ...) ... is now prefixed with a '#' to disambiguate from TVar.
 

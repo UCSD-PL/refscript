@@ -33,9 +33,9 @@ module Language.Nano.Typecheck.Types (
 
   , renameBinds
 
-  -- * Mutability
+  -- * Mutability primitives
   , t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly, combMut 
-  -- isMutable, isImmutable, isAnyMut, isMutabilityType, variance, varianceTDef
+  , isMutable, isImmutable -- , isAnyMut, isMutabilityType, variance, varianceTDef
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
@@ -106,10 +106,10 @@ t_inheritedMut  = mkMut "InheritedMut"
 -- isMutabilityType _                           = False
 -- 
 isMutable        (TApp (TRef (RN (QName _ [] s))) _ _) = s == F.symbol "Mutable"
-isMutable _                                         = False
--- 
--- isImmutable      (TApp (TRef (QN [] s)) _ _) = s == F.symbol "Immutable"
--- isImmutable _                                = False
+isMutable _                                            = False
+ 
+isImmutable      (TApp (TRef (RN (QName _ [] s))) _ _) = s == F.symbol "Immutable"
+isImmutable _                                          = False
 -- 
 -- isAnyMut         (TApp (TRef (QN [] s)) _ _) = s == F.symbol "AnyMutability"
 -- isAnyMut _                                   = False
@@ -126,15 +126,14 @@ isMutable _                                         = False
 combMut _ μf | isMutable μf                 = μf
 combMut μ _  | otherwise                    = μ
 
+
 -- | Variance: true if v is in a positive position in t
 --
--- FIXME: implement these
+--   FIXME: implement these
 --
--- variance :: TVar -> RType r -> Bool
--- variance _ _  = True
-
--- varianceTDef :: IfaceDef r -> [Bool]
--- varianceTDef (ID _ _ vs _ _) = take (length vs) $ repeat True
+--    variance      :: TVar -> RType r -> Bool
+--
+--    varianceTDef  :: IfaceDef r -> [Bool]
 
 
 
@@ -463,6 +462,12 @@ instance PP Visibility where
   pp Exported = text "exported "
 
 
+instance PP Assignability where
+  pp ReadOnly    = text "ReadOnly"
+  pp WriteLocal  = text "WriteLocal"
+  pp WriteGlobal = text "WriteGlobal"
+
+
 instance (PP r, F.Reftable r) => PP (IfaceDef r) where
   pp (ID c nm vs Nothing ts) =  
         pp (if c then "class" else "interface")
@@ -501,7 +506,6 @@ instance (PP r, F.Reftable r) => PP (ModuleDef r) where
     text "module" <+> pp path 
       $$ text "Variables" $$ braces (pp vars) 
       $$ text "Types" $$ (pp tys)
-  
 
 
 -----------------------------------------------------------------------

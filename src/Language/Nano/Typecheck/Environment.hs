@@ -3,12 +3,14 @@
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE DeriveFunctor             #-}
+{-# LANGUAGE UndecidableInstances      #-}
 
 module Language.Nano.Typecheck.Environment where
 
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Env
+import           Language.Nano.Environment
 import           Language.Nano.Names
 
 import           Language.ECMAScript3.PrettyPrint
@@ -18,31 +20,6 @@ import           Text.PrettyPrint.HughesPJ
 -------------------------------------------------------------------------------
 -- | Typecheck Environment (TODO: move to src/Environment.hs) 
 -------------------------------------------------------------------------------
-
-class EnvLike r t where
-  -- 
-  -- ^ Bindings in scope
-  --   (values of the source language:
-  --   variables, functions, classes)
-  --
-  names           :: t r -> Env (RType r)               
-  -- 
-  -- ^ Modules in scope (exported API)
-  --
-  modules         :: t r -> QEnv (ModuleDef r)
-  -- 
-  -- ^ Namespace absolute path
-  --
-  absPath         :: t r -> AbsPath
-  -- 
-  -- ^ Calling context
-  --
-  context         :: t r -> IContext
-  -- 
-  -- ^ Parent environment
-  --
-  parent          :: t r -> Maybe (t r)
-
 
 data TCEnv r  = TCE {
     tce_names       :: Env (RType r)
@@ -64,21 +41,9 @@ type TCEnvO r = Maybe (TCEnv r)
 
 instance EnvLike r TCEnv where
   names           = tce_names
---   interfaces      = tce_interfaces
   modules         = tce_mod
   absPath         = tce_path
   context         = tce_ctx
   parent          = tce_parent
  
-
-instance (PP r, F.Reftable r) => PP (TCEnv r) where
-  pp = ppTCEnv
-
-ppTCEnv (TCE nms mod _ pth _ )
-  =   text "******************** Environment ************************"
-  $+$ pp nms
-  $+$ text "******************** Modules ****************************"
-  $+$ pp mod
-  $+$ text "******************** Absolute path **********************"
-  $+$ pp pth
 

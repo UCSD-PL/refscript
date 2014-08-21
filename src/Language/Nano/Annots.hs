@@ -8,7 +8,7 @@
 module Language.Nano.Annots (
 
   -- * Annotations
-    Annot (..), UFact, Fact (..), phiVarsAnnot, ClassInfo
+    Annot (..), UFact, Fact (..), phiVarsAnnot
 
   -- * Casts
   , Cast(..), CastDirection(..), noCast, upCast, dnCast, ddCast
@@ -26,7 +26,6 @@ import           Data.Generics
 import qualified Data.HashMap.Strict            as M
 import           Text.PrettyPrint.HughesPJ 
 
-import           Language.Nano.Env
 import           Language.Nano.Types
 import           Language.Nano.Locations
 import           Language.Nano.Names
@@ -116,7 +115,6 @@ type AnnBare r = Annot (Fact r) SourceSpan -- NO facts
 type AnnSSA  r = Annot (Fact r) SourceSpan -- Phi facts
 type AnnType r = Annot (Fact r) SourceSpan -- Phi + t. annot. + Cast facts
 type AnnInfo r = M.HashMap SourceSpan [Fact r] 
-type ClassInfo r = Env (RType r)
 
 type UAnnBare = AnnBare () 
 type UAnnSSA  = AnnSSA  ()

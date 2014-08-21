@@ -33,7 +33,6 @@ module Language.Nano.Typecheck.TCMonad (
 
   -- * Annotations
   , addAnn {-TEMP-}, getAnns --, getDef, setDef
-  -- , getExts, getClasses
 
   -- * Unification
   , unifyTypeM, unifyTypesM
@@ -44,17 +43,11 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Casts
   , castM
 
-  -- * Get Type Signature 
-  -- , getSpecOrDie, getSpecM, addSpec
-
   -- * Verbosity
   , whenLoud', whenLoud, whenQuiet', whenQuiet
 
   -- * Super
   , getSuperM, getSuperDefM
-
-  -- * Prop
-  -- , getPropTDefM, getPropM
 
   )  where 
 
@@ -98,11 +91,26 @@ type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r))
 -------------------------------------------------------------------------------
 
 data TCState r = TCS {
-    tc_errors   :: ![Error]                       -- Errors
+  -- 
+  -- ^ Errors
+  --
+    tc_errors   :: ![Error]
+  -- 
+  -- ^ Substitutions
+  --
   , tc_subst    :: !(RSubst r)
+  -- 
+  -- ^ Freshness counter
+  --
   , tc_cnt      :: !Int
-  , tc_anns     :: AnnInfo r                      -- Annotations
-  , tc_verb     :: V.Verbosity                    -- Verbosity
+  -- 
+  -- ^ Annotations
+  --
+  , tc_anns     :: AnnInfo r
+  -- 
+  -- ^ Verbosity
+  --
+  , tc_verb     :: V.Verbosity
   }
 
 type TCM r     = ExceptT Error (State (TCState r))
@@ -365,7 +373,7 @@ methTys l f ft0
       Just (vs,bs,t)  -> return  $ (vs,b_type <$> bs,t)
 
 
-
+-- FIXME: use common implementation for TC and liquid
 --------------------------------------------------------------------------------
 getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
 --------------------------------------------------------------------------------

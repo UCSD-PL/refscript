@@ -60,18 +60,21 @@ unsupportedConvFun l t1 t2    = mkErr l $ printf "Unsupported case in convertFun
 bug' l s                      = err   l $ "BUG: " ++ s 
 bug l s                       = mkErr l $ "BUG: " ++ s 
 impossible l s                = mkErr l $ "IMPOSSIBLE" ++ s 
-bugBadSubtypes l t1 t2        = mkErr l $ printf "Unexpected Subtyping Constraint\n%s <: %s" (ppshow t1) (ppshow t2)
-bugMalignedFields l s s'      = mkErr l $ printf "[%s] \n CGMonad: fields not aligned: '%s' and '%s'" (ppshow l) (ppshow s) (ppshow s')
+bugBadSubtypes l t1 t2        = mkErr l $ printf "BUG: Unexpected Subtyping Constraint\n%s <: %s" (ppshow t1) (ppshow t2)
+bugMalignedFields l s s'      = mkErr l $ printf "BUG: [%s] \n CGMonad: fields not aligned: '%s' and '%s'" (ppshow l) (ppshow s) (ppshow s')
 
-bugUnknownAlias l x           = mkErr l $ printf "Unknown definition for alias %s" (ppshow x)
-bugUnboundPhiVar l x          = mkErr l $ printf "Phi Variable %s is unbound" (ppshow x)
-bugUnboundVariable l   x      = mkErr l $ printf "Variable '%s' is unbound" (ppshow x)
-bugMissingTypeArgs l          = mkErr l $ printf "Missing Type Arguments at %s" (ppshow l)
-bugUnknown l thing x          = mkErr l $ printf "Cannot find '%s' in '%s'" thing (ppshow x) 
-bugCallTo l x es              = mkErr l $ printf "Bug at call to '%s' with args '%s'" (ppshow x) (ppshow es)
-bugMultipleCasts l e          = mkErr l $ printf "Found multple casts on expression '%s'" (ppshow e)
+bugUnknownAlias l x           = mkErr l $ printf "BUG: Unknown definition for alias %s" (ppshow x)
+bugUnboundPhiVar l x          = mkErr l $ printf "BUG: Phi Variable %s is unbound" (ppshow x)
+bugUnboundVariable l   x      = mkErr l $ printf "BUG: Variable '%s' is unbound" (ppshow x)
+bugMissingTypeArgs l          = mkErr l $ printf "BUG: Missing Type Arguments at %s" (ppshow l)
+bugUnknown l thing x          = mkErr l $ printf "BUG: Cannot find '%s' in '%s'" thing (ppshow x) 
+bugCallTo l x es              = mkErr l $ printf "BUG: Bug at call to '%s' with args '%s'" (ppshow x) (ppshow es)
+bugMultipleCasts l e          = mkErr l $ printf "BUG: Found multple casts on expression '%s'" (ppshow e)
+bugNoAnnotForGlob l x         = mkErr l $ printf "BUG: No type annotation found for global variable '%s'" (ppshow x)
 
-bugClassDefNotFound l x       = mkErr l $ printf "Class definition for '%s' not found." (ppshow x)
+bugClassDefNotFound l x       = mkErr l $ printf "BUG: Class definition for '%s' not found." (ppshow x)
+bugEnvFindTy l x              = mkErr l $ printf "BUG: envFindTy failed to find binding '%s'" (ppshow x)
+bugZipType l t1 t2            = mkErr l $ printf "BUG: zipType of types '%s' and '%s'" (ppshow t1) (ppshow t2)
 
 
 ---------------------------------------------------------------------------

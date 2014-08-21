@@ -29,6 +29,7 @@ import           Language.Nano.Annots
 import           Language.Nano.Types
 import           Language.Nano.Names
 import           Language.Nano.Locations
+import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
@@ -348,8 +349,6 @@ convertUnion :: (Functor g, EnvLike () g)
              => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertUnion _ γ t1 t2  
-
-
   | upcast    = Right {- $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) -} CDUp 
   | deadcast  = Right {- $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) -} CDDead
   | otherwise = Right {- $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) -} CDDn

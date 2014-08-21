@@ -30,10 +30,11 @@ import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Misc
 import           Language.Nano.Program
+import           Language.Nano.Types
 import           Language.Nano.SSA.Types
 import           Language.Nano.SSA.SSAMonad
 
-import           Debug.Trace                        hiding (traceShow)
+-- import           Debug.Trace                        hiding (traceShow)
 
 
 ----------------------------------------------------------------------------------
@@ -58,10 +59,10 @@ ssaNano p@(Nano { code = Src fs })
            withAssignability WriteGlobal wgs  $ 
             do  (_,fs')  <- ssaStmts $ msrc fs
                 ssaAnns  <- getAnns
-                return    $ trace "Done SSA" $ p {code = Src $ map (fmap (patch [ssaAnns, existingAnns])) $ fs' }
+                return    $ p {code = Src $ map (fmap (patch [ssaAnns, existingAnns])) $ fs' }
     where
       allGlobs        = S.fromList  $ getAnnotation  <$> fmap ann <$> writeGlobalVars fs
-      (ros, wgs, wls) = {-tracePP "global (ro,g,l)" $-} variablesInScope "global" allGlobs fs
+      (ros, wgs, wls) = variablesInScope allGlobs fs
       msrc            = (fmap srcPos <$>)
 
       existingAnns    = foldl add M.empty $ concatMap FO.toList fs
@@ -72,10 +73,10 @@ ssaNano p@(Nano { code = Src fs })
 
 
 ---------------------------------------------------------------------------------------
--- variablesInScope :: (Data a, IsLocated a) => S.HashSet SourceSpan -> [Statement a] 
---                  -> ([Id SourceSpan], [Id SourceSpan], [Id SourceSpan])
+variablesInScope :: (Data a, IsLocated a) 
+                 => S.HashSet SourceSpan -> [Statement a] -> ([Var], [Var], [Var])
 ---------------------------------------------------------------------------------------
-variablesInScope _ gs fs = (ros, wgs, wls)
+variablesInScope gs fs = (ros, wgs, wls)
   where
     vs            = {-tracePP ("all hoisted vars: " ++ ppshow n) $-} hoistVarDecls fs
     -- vs            = hoistVarDecls fs
@@ -86,9 +87,9 @@ variablesInScope _ gs fs = (ros, wgs, wls)
 -------------------------------------------------------------------------------------
 ssaFun :: PP t => SourceSpan -> t -> [Var] -> [Statement SourceSpan] -> SSAM r [Statement SourceSpan]
 -------------------------------------------------------------------------------------
-ssaFun l fn xs body
+ssaFun l _ xs body
   = do  θ <- getSsaEnv
-        (ros, wgs, wls) <- {-tracePP (ppshow fn ++ " (ro,g,l)") <$>-} (\g -> variablesInScope fn g body) <$> getGlobs
+        (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
         withAssignability ReadOnly (envIds θ)   $                 -- Variables from OUTER scope are UNASSIGNABLE
           withAssignability ReadOnly ros        $ 
             withAssignability WriteGlobal wgs   $ 
@@ -266,7 +267,7 @@ ssaStmt (ClassStmt l n e is bd) = do
 --
 ssaStmt (ModuleStmt l n body)
   = do  θ <- getSsaEnv
-        (ros, wgs, wls) <- (\g -> {-tracePP (ppshow n ++ " (ro,g,l)") $-} variablesInScope n g $ body) <$> getGlobs
+        (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
         withAssignability ReadOnly (envIds θ)   $           -- Variables from OUTER scope are UNASSIGNABLE
           withAssignability ReadOnly ros        $ 
             withAssignability WriteGlobal wgs   $ 

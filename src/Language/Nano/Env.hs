@@ -23,6 +23,7 @@ module Language.Nano.Env (
   , envAddReturn
   , envFindReturn
   , envFilter
+  , envFindLoc
   , envMem
   , envMap
   , envLefts
@@ -36,6 +37,7 @@ module Language.Nano.Env (
   , envIds
   , envKeys
 
+  , qenvToList
   , qenvFromList
   , qenvToEnv
   , qenvEmpty
@@ -75,21 +77,21 @@ newtype QEnv t = QE (M.HashMap AbsPath (Located t)) deriving (Eq, Data, Typeable
 -- | Env API  
 --------------------------------------------------------------------------------
 
-envIds          = map fst . envToList
-envEmpty        = F.emptySEnv
-envMap    f     = F.mapSEnv (fmap f) 
-envFilter f     = F.filterSEnv (f . val) 
-envMem i γ      = isJust $ envFind i γ
-envFind    i γ  = F.lookupSEnv (F.symbol i) γ
-envFindLoc i γ  = fmap loc $ envFind i γ 
-envFindTy  i γ  = fmap val $ envFind i γ
-envAdd   i t γ  = F.insertSEnv (F.symbol i) (Loc (srcPos i) t) γ
-envAdds  xts γ  = L.foldl' (\γ (x,t) -> envAdd x t γ) γ xts
-envDel   i   γ  = F.deleteSEnv (F.symbol i) γ
-envDels  is  γ  = L.foldl' (\γ x -> envDel x γ) γ is
-envToList  γ    = [ (Id l (F.symbolString x), t) | (x, Loc l t) <- F.toListSEnv γ]
-envAddReturn f  = envAdd (returnId (srcPos f))
-envFindReturn   = maybe msg val . F.lookupSEnv returnSymbol  
+envIds             = map fst . envToList
+envEmpty           = F.emptySEnv
+envMap    f        = F.mapSEnv (fmap f) 
+envFilter f        = F.filterSEnv (f . val) 
+envMem i γ         = isJust $ envFind i γ
+envFind    i γ     = F.lookupSEnv (F.symbol i) γ
+envFindLoc i γ     = fmap loc $ envFind i γ 
+envFindTy  i γ     = fmap val $ envFind i γ
+envAdd   i t γ     = F.insertSEnv (F.symbol i) (Loc (srcPos i) t) γ
+envAdds  xts γ     = L.foldl' (\γ (x,t) -> envAdd x t γ) γ xts
+envDel   i   γ     = F.deleteSEnv (F.symbol i) γ
+envDels  is  γ     = L.foldl' (\γ x -> envDel x γ) γ is
+envToList  γ       = [ (Id l (F.symbolString x), t) | (x, Loc l t) <- F.toListSEnv γ]
+envAddReturn f     = envAdd (returnId (srcPos f))
+envFindReturn      = maybe msg val . F.lookupSEnv returnSymbol  
   where 
     msg = errorstar "bad call to envFindReturn"
 
@@ -131,31 +133,13 @@ isRight (_)        = False
 isLeft             = not . isRight
 
 
--- --------------------------------------------------------------------------------
--- -- | QEnv API  
--- --------------------------------------------------------------------------------
--- 
--- qenvFromList       :: [(QName, t)] -> QEnv t
--- qenvFromList        = L.foldl' step qenvEmpty
---   where 
---     step γ (q, t)   = case qenvFindLoc q γ of
---                         Nothing -> qenvAdd q t γ 
---                         Just l' -> throw $ errorDuplicate q (srcPos q) l'
--- 
--- qenvEmpty           = QE M.empty
--- qenvFindLoc i γ     = fmap loc $ qenvFind i γ 
--- qenvFind q (QE γ)   = M.lookup q γ 
--- 
--- qenvAdd :: QName -> t -> QEnv t -> QEnv t
--- qenvAdd q t (QE γ)  = QE (M.insert q (Loc (srcPos q) t) γ)
--- 
--- -- Create dot separated symbols as keys
--- qenvToEnv (QE γ)    = envFromList [ (Id l (ppshow x),t) | (x, Loc l t) <- M.toList γ]
-
 
 --------------------------------------------------------------------------------
 -- | QEnv API  
 --------------------------------------------------------------------------------
+
+qenvToList :: QEnv t -> [(AbsPath, t)]
+qenvToList  (QE γ)  = [ (x, t) | (x, Loc l t) <- M.toList γ]
 
 qenvFromList       :: [(AbsPath, t)] -> QEnv t
 qenvFromList        = L.foldl' step qenvEmpty

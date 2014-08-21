@@ -24,12 +24,11 @@ import           Data.Generics
 import           Data.Function                  (on)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
--- import           Language.Fixpoint.Misc (traceShow)
 import           Language.Nano.Env
+import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
-import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Subst
 
 import           Control.Applicative ((<$>))
@@ -104,10 +103,10 @@ resolveRelPath env a (RP (QPath _ [])) = qenvFindTy a env
 resolveRelPath env a r@(RP (QPath _ (m:_))) = do
     curM <- qenvFindTy a env
     case envFindTy m (m_variables curM) of
-      Just (_, TModule r) -> resolveRelPath env (extendPath a m) r
-      Just _              -> Nothing
-      Nothing             -> do prP <- parentOf a
-                                resolveRelPath env prP r
+      Just (_, _,TModule r) -> resolveRelPath env (extendPath a m) r
+      Just _                -> Nothing
+      Nothing               -> do prP <- parentOf a
+                                  resolveRelPath env prP r
 
 ---------------------------------------------------------------------------
 resolveRelPathInEnv :: Data r => EnvLike r g => g r -> RelPath -> Maybe (ModuleDef r)

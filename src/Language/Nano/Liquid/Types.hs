@@ -11,57 +11,43 @@
 
 module Language.Nano.Liquid.Types ( 
   
-  -- * Refinement Types and Environments
+  -- * Refinement Types
     RefType 
-  , cge_env
 
   -- * Constraint Environments
-  , CGEnv
+  , CGEnvR(..), CGEnv
 
   -- * Constraint Information
-  , Cinfo (..)
-  , ci
+  , Cinfo (..), ci
 
   -- * Constraints
-  , SubC (..) , WfC (..)
-  , FixSubC   , FixWfC
+  , SubC (..) , WfC (..), FixSubC   , FixWfC
 
   -- * Some Operators on Pred
   , pAnd, pOr
 
   -- * Conversions
-  , RefTypable (..)
-  , eSingleton
-  , pSingleton
-  -- , shiftVVs
+  , RefTypable (..), eSingleton, pSingleton -- , shiftVVs
 
   -- * Manipulating RefType
-  , rTypeReft
-  , rTypeSort
-  , rTypeSortedReft
-  , rTypeValueVar
+  , rTypeReft, rTypeSort, rTypeSortedReft, rTypeValueVar
 
   -- * Predicates On RefType 
-  , isBaseRType
-  , isTrivialRefType
+  , isBaseRType, isTrivialRefType
 
   -- * Monadic map (TODO: Applicative/Traversable)
   , mapReftM
 
   -- * Primitive Types
-  , prefixOpRTy
-  , infixOpRTy 
+  , prefixOpRTy, infixOpRTy 
 
   -- * Useful Operations
-  , foldReft
-  , efoldRType
-  , AnnTypeR
+  , foldReft, efoldRType, AnnTypeR
 
   -- * Accessing Spec Annotations
   , getSpec, getRequires, getEnsures, getAssume, getAssert
   , getInvariant, getFunctionIds, isSpecification 
     -- ,  returnSymbol, returnId, symbolId, mkId
-
 
   -- * Raw low-level Location-less constructors
   , rawStringSymbol 
@@ -74,6 +60,7 @@ module Language.Nano.Liquid.Types (
 import           Data.Maybe             (fromMaybe, catMaybes)
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
+-- import qualified Data.HashSet            as S
 import           Data.Monoid                        (mconcat)
 import           Text.PrettyPrint.HughesPJ
 import           Text.Printf 
@@ -91,10 +78,9 @@ import           Language.Nano.Misc
 import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Program
-import           Language.Nano.Typecheck.Environment
+import           Language.Nano.Liquid.Environment
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Sub
-import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
 
 import           Language.Fixpoint.Misc
@@ -106,67 +92,12 @@ import           Language.Fixpoint.PrettyPrint
 type PPR r = (PP r, F.Reftable r)
 
 -------------------------------------------------------------------------------------
--- | Refinement Types and Environments
+-- | Refinement Types and Annotations
 -------------------------------------------------------------------------------------
 
 type RefType     = RType F.Reft
 
 type AnnTypeR    = AnnType F.Reft
-
--------------------------------------------------------------------------------------
--- | Constraint Generation Environment 
--------------------------------------------------------------------------------------
-
-data CGEnvR r = CGE { 
-  -- 
-  -- ^ bindings in scope 
-  --
-    cge_env     :: !(Env (RType r))               
-  -- 
-  -- ^ fixpoint bindings
-  --
-  , fenv        :: F.IBindEnv
-  -- 
-  -- ^ branch target conditions  
-  --
-  , guards      :: ![F.Pred]
-  -- 
-  -- ^ intersection-type context 
-  --
-  , cge_ctx     :: !IContext
-  -- 
-  -- ^ Modules in scope (exported API)
-  --
-  , cge_mod     :: QEnv (ModuleDef r)       
-  -- 
-  -- ^ Namespace absolute path
-  --
-  , cge_path    :: AbsPath
-  -- 
-  -- ^ Parent namespace environment
-  --
-  , cge_parent  :: Maybe (CGEnvR r)
-  
-  } deriving (Functor)
-
-type CGEnv = CGEnvR F.Reft
-
-instance EnvLike F.Reft CGEnvR where
-  names     = cge_env
-  modules   = cge_mod
-  absPath   = cge_path
-  context   = cge_ctx
-  parent    = cge_parent
-  
-
-instance EnvLike () CGEnvR where
-  names     = cge_env
-  modules   = cge_mod
-  absPath   = cge_path
-  context   = cge_ctx
-  parent    = cge_parent
- 
- 
 
 ----------------------------------------------------------------------------
 -- | Constraint Information 
@@ -213,12 +144,12 @@ instance PP F.Reft where
   pp = pprint
 
 instance PP SubC where
-  pp (Sub γ i t t') = pp (cge_env γ) $+$ pp (guards γ) 
+  pp (Sub γ i t t') = pp (cge_names γ) $+$ pp (cge_guards γ) 
                         $+$ ((text "|-") <+> (pp t $+$ text "<:" $+$ pp t'))
                         $+$ ((text "from:") <+> pp i) 
 
 instance PP WfC where
-  pp (W γ t i)      = pp (cge_env γ) 
+  pp (W γ t i)      = pp (cge_names γ) 
                         $+$ (text "|-" <+> pp t) 
                         $+$ ((text "from:") <+> pp i) 
 
@@ -481,12 +412,12 @@ isTrivialRefType t     = foldReft (\r -> (f r &&)) True t
 ------------------------------------------------------------------------------------------
 prefixOpRTy :: PrefixOp -> CGEnv -> RefType
 ------------------------------------------------------------------------------------------
-prefixOpRTy o g = prefixOpTy o $ cge_env g
+prefixOpRTy o g = prefixOpTy o $ cge_names g
 
 ------------------------------------------------------------------------------------------
 infixOpRTy :: InfixOp -> CGEnv -> RefType
 ------------------------------------------------------------------------------------------
-infixOpRTy o g  = infixOpTy o $ cge_env g
+infixOpRTy o g  = infixOpTy o $ cge_names g
 
 rawStringSymbol = F.Loc (F.dummyPos "RSC.Types.rawStringSymbol") . F.symbol
 rawStringFTycon = F.symbolFTycon . F.Loc (F.dummyPos "RSC.Types.rawStringFTycon") . F.symbol

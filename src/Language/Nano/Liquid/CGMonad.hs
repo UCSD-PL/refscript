@@ -20,30 +20,25 @@ module Language.Nano.Liquid.CGMonad (
   , getCGInfo 
   , runFailM
 
-  -- * Get Defined Function Type Signature
-  , getDefType, getDef, setDef, getPropTDefM, getPropM
-
   -- * Throw Errors
   , cgError      
 
   -- * Fresh Templates for Unknown Refinement Types 
   , freshTyFun, freshTyVar, freshTyInst, freshTyPhis
-  , freshTyPhisWhile, freshTyObj
+  , freshTyPhisWhile, freshTyObj, freshenCGEnvM
 
   -- * Freshable
   , Freshable (..), refreshValueVar
 
   -- * Environment API
-  , envAddFresh, envAdds, envAddReturn, envAddGuard, envFindTy
-  , envGlobAnnot, envFieldAnnot
-  , envRemSpec, isGlobalVar, envToList, envFindReturn, envPushContext
+  , envAddFresh, envAdds, envAddReturn, envAddGuard, envFindTy, safeEnvFindTy
+  , isGlobalVar 
+  , envRemSpec, isGlobalVar, envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
   , scrapeQualifiers
 
-  , findSymM, findSymOrDieM
-
   -- * Add Subtyping Constraints
-  , subType, wellFormed, safeExtends
+  , subType, wellFormed -- , safeExtends
   
   -- * Add Type Annotations
   , addAnnot
@@ -51,11 +46,12 @@ module Language.Nano.Liquid.CGMonad (
   -- * Function Types
   , cgFunTys, cgMethTys
 
-  -- * This
-  , cgPeekThis, cgWithThis
 
   -- * Super 
   , getSuperM, getSuperDefM
+
+  -- * Zip type wrapper
+  , zipTypeM
 
 
   ) where
@@ -63,20 +59,29 @@ module Language.Nano.Liquid.CGMonad (
 import           Data.Maybe                     (fromMaybe, listToMaybe, catMaybes, isJust)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
+-- import qualified Data.HashSet            as S
 import qualified Data.List                      as L
 import           Data.Function                  (on)
 import           Text.PrettyPrint.HughesPJ
 import qualified Data.Traversable                   as T 
 import           Language.Nano.Types
 import           Language.Nano.Errors
-import qualified Language.Nano.Annots           as A
+import           Language.Nano.Annots
 import qualified Language.Nano.Env              as E
+import           Language.Nano.Locations
+import           Language.Nano.Misc
+import           Language.Nano.Names
+import           Language.Nano.CmdLine
+import           Language.Nano.Program
+import           Language.Nano.Typecheck.Resolve
+import qualified Language.Nano.SystemUtils      as S
 import           Language.Nano.Typecheck.Types  hiding (quals)
 import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Environment
+import           Language.Nano.Liquid.Environment
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Qualifiers
-import           Language.Nano.Misc
 
 
 import qualified Language.Fixpoint.Types as F
@@ -99,7 +104,7 @@ import           Language.ECMAScript3.PrettyPrint
 -------------------------------------------------------------------------------
 
 data CGInfo = CGI { cgi_finfo :: F.FInfo Cinfo
-                  , cgi_annot :: A.UAnnInfo RefType  
+                  , cgi_annot :: S.UAnnInfo RefType  
                   }
 
 -- Dump the refinement subtyping constraints
@@ -128,21 +133,17 @@ execute cfg pgm act
   
 runFailM a = fst . runState (runErrorT a) <$> get
 
+-------------------------------------------------------------------------------
 initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
-initState c p   = CGS F.emptyBindEnv (specs p) (defs p) (externs p)
-                    [] [] 0 mempty invs c [this] M.empty []
+-------------------------------------------------------------------------------
+initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invs c [] 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
-    this        = tTop
 
-getDefType f 
-  = do m <- cg_sigs <$> get
-       maybe err return $ E.envFindTy f m 
-    where 
-       err = cgError l $ errorMissingSpec l f
-       l   = srcPos f
 
--- cgStateFInfo :: Nano a1 (RType F.Reft)-> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
+-------------------------------------------------------------------------------
+cgStateCInfo :: NanoRefType -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGInfo
+-------------------------------------------------------------------------------
 cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
   where 
     fi   = F.FI { F.cm    = M.fromList $ F.addIds fcs  
@@ -168,49 +169,45 @@ measureEnv   = fmap rTypeSortedReft . E.envSEnv . consts
 -- | Constraint Generation Monad 
 ---------------------------------------------------------------------------------------
 
-data CGState 
-  = CGS { binds    :: F.BindEnv            -- ^ global list of fixpoint binders
-        , cg_sigs  :: !(E.Env RefType)     -- ^ type sigs for all defined functions
-        , cg_defs  :: !(IfaceEnv F.Reft)    -- ^ defined types 
-        , cg_ext   :: !(E.Env RefType)     -- ^ Extern (unchecked) declarations
-        , cs       :: ![SubC]              -- ^ subtyping constraints
-        , ws       :: ![WfC]               -- ^ well-formedness constraints
-        , count    :: !Integer             -- ^ freshness counter
-        , cg_ann   :: A.UAnnInfo RefType   -- ^ recorded annotations
-        , invs     :: TConInv              -- ^ type constructor invariants
-        , cg_opts  :: Config               -- ^ configuration options
-        , cg_this  :: ![RefType]           -- ^ a stack holding types for 'this' 
-        , globs    :: !GlobEnv             -- ^ bindings of globals
-        , quals    :: ![F.Qualifier]       -- ^ qualifiers that arise at typechecking
-        }
+data CGState = CGS { 
+  -- 
+  -- ^ global list of fixpoint binders
+  --
+    binds    :: F.BindEnv
+  -- 
+  -- ^ subtyping constraints
+  --
+  , cs       :: ![SubC]
+  -- 
+  -- ^ well-formedness constraints
+  --
+  , ws       :: ![WfC]               
+  -- 
+  -- ^ freshness counter
+  --
+  , count    :: !Integer             
+  -- 
+  -- ^ recorded annotations
+  --
+  , cg_ann   :: S.UAnnInfo RefType   
+  -- 
+  -- ^ type constructor invariants
+  --
+  , invs     :: TConInv              
+  -- 
+  -- ^ configuration options
+  --
+  , cg_opts  :: Config               
+  -- 
+  -- ^ qualifiers that arise at typechecking
+  --
+  , quals    :: ![F.Qualifier]       
+  }
 
 type CGM     = ErrorT Error (State CGState)
 
 type TConInv = M.HashMap TCon (Located RefType)
-
-type GlobEnv = M.HashMap F.Symbol [F.BindId]
-
--------------------------------------------------------------------------------
-getDef  :: CGM (IfaceEnv F.Reft)
--------------------------------------------------------------------------------
-getDef   = cg_defs <$> get
-
-setDef d = modify $ \st -> st { cg_defs  = d } 
-
--- XXX: This is not really used 
--------------------------------------------------------------------------------
-getExts  :: CGM (E.Env RefType)
--------------------------------------------------------------------------------
-getExts = cg_ext <$> get
-
-
-getPropTDefM l s t ts = do 
-  δ <- getDef 
-  return $ getPropTDef l δ (F.symbol s) ts t
-
-getPropM l s t = do 
-  (δ, ε) <- (,) <$> getDef <*> getExts
-  return  $ snd <$> getProp l ε δ (F.symbol s) t
+ 
 
 ---------------------------------------------------------------------------------------
 cgError     :: a -> Error -> CGM b 
@@ -255,7 +252,7 @@ envAddFresh :: (IsLocated l) => l -> RefType -> CGEnv -> CGM (Id AnnTypeR, CGEnv
 ---------------------------------------------------------------------------------------
 envAddFresh l t g 
   = do x  <- freshId $ srcPos l
-       g' <- envAdds False [(x, t)] g
+       g' <- envAdds [(x, t)] g
        addAnnot (srcPos l) x t
        return (x, g')
    
@@ -263,30 +260,21 @@ freshId l = Id (Ann l []) <$> fresh
 
 
 ---------------------------------------------------------------------------------------
-envAdds      :: (PP x, F.Symbolic x, IsLocated x) => Bool -> [(x, RefType)] -> CGEnv -> CGM CGEnv
+envAdds :: (PP x, F.Symbolic x, IsLocated x) => [(x, RefType)] -> CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAdds glob xts' g
+envAdds xts' g
   = do xts      <- zip xs  <$> mapM addInvariant ts
        is       <- forM xts $  addFixpointBind 
        _        <- forM xts $  \(x, t) -> addAnnot (srcPos x) x t
-       when glob $ forM_ (zip xs is) addGlobBind
-
-       return    $ g { renv  = E.envAdds xts        (renv g) } 
-                     { fenv  = F.insertsIBindEnv is (fenv g) }
-    where 
-       (xs,ts)   = unzip xts'
-
-
----------------------------------------------------------------------------------------
-addGlobBind :: (F.Symbolic x) => (x, F.BindId) -> CGM ()
----------------------------------------------------------------------------------------
-addGlobBind (x,i) 
-  = do let s     = F.symbol x
-       modify    $ \st -> st { globs = upd s i (globs st) }
+       return    $ g { cge_names = E.envAdds xts $ cge_names g
+                     , cge_fenv  = F.insertsIBindEnv is $ cge_fenv g 
+                     -- Update the binders...
+                     , cge_globs = foldl adjust (cge_globs g) (zip xs is) }
     where
-       upd s i m = case M.lookup s m of
-           Just is -> M.insert s (i:is) m
-           Nothing -> M.insert s [i] m
+       (xs,ts)        = unzip xts'
+       adjust m (k,v) = M.adjust (v:) (F.symbol k) m
+
+
 
 ---------------------------------------------------------------------------------------
 addFixpointBind :: (F.Symbolic x) => (x, RefType) -> CGM F.BindId
@@ -310,12 +298,13 @@ addInvariant t               = (ty . (`tx` t) . invs) <$> get
     ofRef (F.Reft (s, as))   = (F.Reft . (s,) . single) <$> as
 
     -- instanceof(v,"C")
-    ty t@(TApp (TRef c) _ _) = t `strengthen` reftIO t c
+    ty t@(TApp (TRef c) _ _) = t `strengthen` reftIO t (name c)
     ty t                     = t 
+    name (RN (QName _ _ s))  = s
     reftIO t c               = F.Reft (vv t, [refaIO t c])
     refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr   $ F.symbolText c]
     vv                       = rTypeValueVar
-    sym = F.dummyLoc $ F.symbol "instanceof"
+    sym                      = F.dummyLoc $ F.symbol "instanceof"
 
 
 ---------------------------------------------------------------------------------------
@@ -354,84 +343,75 @@ atoms p           = [p]
 ---------------------------------------------------------------------------------------
 addAnnot       :: (F.Symbolic x) => SourceSpan -> x -> RefType -> CGM () 
 ---------------------------------------------------------------------------------------
-addAnnot l x t = modify $ \st -> st {cg_ann = A.addAnnot l x t (cg_ann st)}
+addAnnot l x t = modify $ \st -> st {cg_ann = S.addAnnot l x t (cg_ann st)}
 
 ---------------------------------------------------------------------------------------
 envAddReturn        :: (IsLocated f)  => f -> RefType -> CGEnv -> CGEnv 
 ---------------------------------------------------------------------------------------
-envAddReturn f t g  = g { renv = E.envAddReturn f t (renv g) } 
+envAddReturn f t g  = g { cge_names = E.envAddReturn f t (cge_names g) } 
 
 ---------------------------------------------------------------------------------------
 envAddGuard       :: (F.Symbolic x, IsLocated x) => x -> Bool -> CGEnv -> CGEnv  
 ---------------------------------------------------------------------------------------
-envAddGuard x b g = g { guards = guard b x : guards g }
+envAddGuard x b g = g { cge_guards = guard b x : cge_guards g }
   where 
     guard True    = F.eProp 
     guard False   = F.PNot . F.eProp
 
 
--- | A helper that returns the actual @RefType@ of variable @x@. Interstring cases:
+-- | A helper that returns the @RefType@ of variable @x@. Interstring cases:
 --   
 --   * Global variables (that can still be assigned) should not be strengthened
 --     with single
+--
 --   * Class names (they might contain static fields)
+--
 --   * Local (non-assignable) variables (strengthened with singleton for base-types)
+--
 ---------------------------------------------------------------------------------------
-envFindTy :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> RefType 
+envFindTy :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> Maybe RefType 
 ---------------------------------------------------------------------------------------
-envFindTy x g = fromMaybe err $ listToMaybe $ catMaybes [globalSpec, className, local]
-  where 
-    -- globals
-    globalSpec  | isJust $ E.envFindTy x $ cge_spec g = E.envFindTy x $ renv g
-                | otherwise                           = Nothing
-    -- typeof A
-    className   = case findSym x $ cge_defs g of    
-        Just t  | t_class t -> Just $ TClass $ F.symbol x
-        _                   -> Nothing 
-    -- locals
-    local       = fmap (`eSingleton` x) $ E.envFindTy x $ renv g
-    err         = throw $ bugUnboundVariable (srcPos x) (F.symbol x) 
-
-
-envGlobAnnot _ x g = E.envFindTy x $ renv g
-
-envFieldAnnot l    =  listToMaybe [ t | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
+envFindTy x g | isGlobalVar x g = E.envFindTy x $ cge_names g
+              | otherwise       = fmap (`eSingleton` x) $ E.envFindTy x $ cge_names g
 
 
 ---------------------------------------------------------------------------------------
-envRemSpec     :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) 
-               => x -> CGEnv -> CGM CGEnv
+safeEnvFindTy :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) 
+              => x -> CGEnv -> CGM RefType 
 ---------------------------------------------------------------------------------------
-envRemSpec x g = do 
-      gls   <- concat . M.elems . globs <$> get
-      return $ g { cge_spec = E.envDel x $ cge_spec g 
-                 , renv     = E.envDel x $ renv     g
-                 , fenv     = foldr F.deleteIBindEnv (fenv g) gls }
+safeEnvFindTy x g = case envFindTy x g of
+                        Just t  -> return t
+                        Nothing ->  cgError l $ bugEnvFindTy l x 
+  where
+    l = srcPos x
 
 
--- | A global variable should have an entry in `cge_spec`.
+-- | `isGlobalVar x g` returns True if @x@ is a global variable.
 ---------------------------------------------------------------------------------------
-isGlobalVar :: F.Symbolic x => x -> CGEnv -> Bool
+isGlobalVar :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> Bool
 ---------------------------------------------------------------------------------------
-isGlobalVar x g = E.envMem x $ cge_spec g
-    
+isGlobalVar x = isJust . M.lookup (F.symbol x) . cge_globs
 
+
+-- | `envRemSpec x g` removes:
+--
+--   * all bindings of @x@ from the name's environment, and
+--
+--   * all bindings of other global variables that are in scope from the set of
+--     fixpoint bindings.
+--
 ---------------------------------------------------------------------------------------
-envToList     ::  CGEnv -> [(Id SourceSpan, RefType)]
+envRemSpec :: F.Symbolic x => x -> CGEnv -> CGEnv
 ---------------------------------------------------------------------------------------
-envToList g = E.envToList $ renv g
+envRemSpec x g 
+  = g { cge_names = E.envDel x $ cge_names g
+      , cge_fenv  = foldr F.deleteIBindEnv (cge_fenv g) $ concat $ M.elems $ cge_globs g }
 
 
 ---------------------------------------------------------------------------------------
 envFindReturn :: CGEnv -> RefType 
 ---------------------------------------------------------------------------------------
-envFindReturn = E.envFindReturn . renv
-
-
--- | Monad versions of IfaceEnv operations
-findSymOrDieM i = findSymOrDie i <$> getDef
-findSymM i      = findSym i      <$> getDef
-
+envFindReturn = E.envFindReturn . cge_names
 
 
 ---------------------------------------------------------------------------------------
@@ -463,18 +443,18 @@ freshTyInst l g αs τs tbody
 freshTyPhis :: (PP l, IsLocated l) => l -> CGEnv -> [Id l] -> [Type] -> CGM (CGEnv, [RefType])  
 ---------------------------------------------------------------------------------------
 freshTyPhis l g xs τs 
-  = do ts <- mapM    (freshTy "freshTyPhis")  τs
-       g' <- envAdds False (safeZip "freshTyPhis" xs ts) g
-       _  <- mapM    (wellFormed l g') ts
+  = do ts <- mapM (freshTy "freshTyPhis")  τs
+       g' <- envAdds (safeZip "freshTyPhis" xs ts) g
+       _  <- mapM (wellFormed l g') ts
        return (g', ts)
 
 ---------------------------------------------------------------------------------------
 freshTyPhisWhile :: (PP l, IsLocated l) => l -> CGEnv -> [Id l] -> [Type] -> CGM (CGEnv, [RefType])  
 ---------------------------------------------------------------------------------------
 freshTyPhisWhile l g xs τs 
-  = do ts <- mapM    (freshTy "freshTyPhis")  τs
-       g' <- envAdds False (safeZip "freshTyPhis" xs ts) g
-       _  <- mapM    (wellFormed l g) ts
+  = do ts <- mapM (freshTy "freshTyPhis")  τs
+       g' <- envAdds (safeZip "freshTyPhis" xs ts) g
+       _  <- mapM (wellFormed l g) ts
        return (g', ts)
 
 -- | Fresh Object Type
@@ -482,6 +462,39 @@ freshTyPhisWhile l g xs τs
 freshTyObj :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
 freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g 
+
+
+---------------------------------------------------------------------------------------
+freshenCGEnvM :: CGEnv -> CGM CGEnv
+---------------------------------------------------------------------------------------
+freshenCGEnvM g  
+  = do  names   <- E.envFromList  <$> mapM (freshenVarbindingM g) (E.envToList $ cge_names g)
+        modules <- E.qenvFromList <$> mapM (freshenModuleDefM g) (E.qenvToList $ cge_mod g)
+        return $ g { cge_names = names, cge_mod = modules } 
+  where
+
+
+freshenVarbindingM g (x,t) = (x,) <$> freshTyVar g (srcPos x) t
+
+freshenModuleDefM g (a, m)  
+  = do  vars     <- E.envFromList <$> mapM f (E.envToList $ m_variables m)
+        types    <- E.envFromList <$> mapM h (E.envToList $ m_types m)        
+        return (a,m { m_variables = vars, m_types = types })
+  where
+    f (x, (v, w, t)) =
+      case w of
+        WriteLocal -> return (x,(v,w,t))
+        -- Freshen global variables and specs
+        _          -> do  ft    <- freshTyVar g (srcPos x) t 
+                          return   (x, (v, w, ft))
+
+    h (x, ID c n αs hr es) = 
+      case hr of
+        Just (p,ps) -> do ps'   <- mapM (freshTyVar g (srcPos x)) ps 
+                          es'   <- mapM (mapEltM $ freshTyVar g (srcPos x)) es 
+                          return   (x, ID c n αs (Just (p,ps')) es')
+        Nothing     -> do es'   <- mapM (mapEltM $ freshTyVar g (srcPos x)) es
+                          return   (x, ID c n αs Nothing es')
 
 
 
@@ -494,27 +507,28 @@ subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 =
   do t1'   <- addInvariant t1  -- enhance LHS with invariants
-     g'    <- envAdds False [(symbolId l x, t) | (x, Just t) <- rNms t1' ++ rNms t2 ] g
+     g'    <- envAdds [(symbolId l x, t) | (x, Just t) <- rNms t1' ++ rNms t2 ] g
      modify $ \st -> st {cs = c g' (t1', t2) : (cs st)}
   where
     c g     = uncurry $ Sub g (ci l)
-    rNms t  = (\n -> (n, n `E.envFindTy` renv g)) <$> names t
+    rNms t  = (\n -> (n, n `E.envFindTy` cge_names g)) <$> names t
     names   = foldReft rr []
     rr r xs = F.syms r ++ xs
 
 
----------------------------------------------------------------------------------------
-safeExtends :: SourceSpan -> CGEnv -> IfaceEnv F.Reft -> InterfaceDefinition F.Reft -> CGM ()
----------------------------------------------------------------------------------------
-safeExtends l g δ (ID _ _ _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
-  where
-    sub t1 t2  = subType l g (zipType δ t1 t2) t2
-    (t1s, t2s) = unzip [ (t1,t2) | pe <- flatten True δ (findSymOrDie p δ, ts)
-                                 , ee <- es 
-                                 , sameBinder pe ee 
-                                 , let t1 = eltType ee
-                                 , let t2 = eltType pe ]
-safeExtends _ _ _ (ID _ _ _ Nothing _) = return ()
+-- FIXME: Restore this check !!!
+-- ---------------------------------------------------------------------------------------
+-- safeExtends :: SourceSpan -> CGEnv -> IfaceDef F.Reft -> CGM ()
+-- ---------------------------------------------------------------------------------------
+-- safeExtends l g (ID _ _ _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
+--   where
+--     sub t1 t2  = subType l g (zipType δ t1 t2) t2
+--     (t1s, t2s) = unzip [ (t1,t2) | pe <- flatten True δ (findSymOrDie p δ, ts)
+--                                  , ee <- es 
+--                                  , sameBinder pe ee 
+--                                  , let t1 = eltType ee
+--                                  , let t2 = eltType pe ]
+-- safeExtends _ _ _ (ID _ _ _ Nothing _) = return ()
 
 
 --------------------------------------------------------------------------------
@@ -604,6 +618,7 @@ splitC :: SubC -> CGM [FixSubC]
 --------------------------------------------------------------------------------
 
 -- | Function types
+--
 splitC (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
   = do bcs       <- bsplitC g i tf1 tf2
        g'        <- envTyAdds i xt2s g 
@@ -617,6 +632,7 @@ splitC (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
        bSub b1 b2 = (b_sym b1, F.eVar $ b_sym b2)
 
 -- | TAlls
+--
 splitC (Sub g i (TAll α1 t1) (TAll α2 t2))
   | α1 == α2 
   = splitC $ Sub g i t1 t2
@@ -627,6 +643,7 @@ splitC (Sub g i (TAll α1 t1) (TAll α2 t2))
     t2' = apply θ t2
 
 -- | TVars
+--
 splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _)) 
   | α1 == α2
   = bsplitC g i t1 t2
@@ -634,6 +651,7 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
 
 -- | Unions
+--
 splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
   = (++) <$> bsplitC g i t1 t2 
          <*> concatMapM splitC (safeZipWith "splitc-3" (Sub g i) s1s s2s)
@@ -642,13 +660,16 @@ splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
        s2s = L.sortBy (compare `on` toType) t2s
 
 -- |Type references
+--  
+--  FIXME: restore co/contra-variance 
+--
 splitC (Sub g i t1@(TApp (TRef x1) (_:t1s) _) t2@(TApp (TRef x2) (μ2:t2s) _)) 
   | x1 /= x2 
   = cgError l $ bugBadSubtypes l t1 t2
   | isImmutable μ2
   = do  cs    <- bsplitC g i t1 t2
-        δ     <- getDef
-        cs'   <- splitWithVariance (varianceTDef $ findSymOrDie x1 δ) t1s t2s
+        -- cs'   <- splitWithVariance (varianceTDef $ findSymOrDie x1 δ) t1s t2s
+        cs'   <- concatMapM splitC $ safeZipWith "split-4" (Sub g i) t1s t2s
         return $ cs ++ cs' 
   | otherwise 
   = do  cs    <- bsplitC g i t1 t2
@@ -656,9 +677,9 @@ splitC (Sub g i t1@(TApp (TRef x1) (_:t1s) _) t2@(TApp (TRef x2) (μ2:t2s) _))
         cs''  <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g i) t2s t1s
         return $ cs ++ cs' ++ cs''
   where
-    splitWithVariance vs t1s t2s = concat <$> zipWith3M splitCov vs t1s t2s
-    splitCov True  t1 t2 = splitC (Sub g i t1 t2)
-    splitCov False t1 t2 = splitC (Sub g i t2 t1)
+--     splitWithVariance vs t1s t2s = concat <$> zipWith3M splitCov vs t1s t2s
+--     splitCov True  t1 t2 = splitC (Sub g i t1 t2)
+--     splitCov False t1 t2 = splitC (Sub g i t2 t1)
     l = srcPos i
 
 -- -- FIXME: Add constraint for null
@@ -669,6 +690,7 @@ splitC (Sub g i t1@(TApp (TRef x1) (_:t1s) _) t2@(TApp (TRef x2) (μ2:t2s) _))
 --   = return []
 
 -- | Rest of TApp
+--
 splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
   | c1 == c2
   = do  cs    <- bsplitC g i t1 t2
@@ -676,16 +698,20 @@ splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
         return $ cs ++ cs'
   | otherwise = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
 
--- These need to be here due to the lack of a folding operation
-splitC (Sub g i t1@(TApp (TRef _) _ _) t2)
-  = do  δ <- getDef
-        splitC (Sub g i (flattenType δ t1) t2)
+-- | These need to be here due to the lack of a folding operation
+--
+splitC (Sub g i t1@(TApp (TRef _) _ _) t2) = 
+  case flattenType g t1 of
+    Just t1' -> splitC (Sub g i t1' t2)
+    Nothing  -> cgError l $ errorUnfoldType l t1 where l = srcPos i
 
-splitC (Sub g i t1 t2@(TApp (TRef _) _ _))
-  = do  δ <- getDef
-        splitC (Sub g i t1 (flattenType δ t2))
+splitC (Sub g i t1 t2@(TApp (TRef _) _ _)) = 
+  case flattenType g t2 of
+    Just t2' -> splitC (Sub g i t1 t2')
+    Nothing  -> cgError l $ errorUnfoldType l t2 where l = srcPos i
 
 -- | TCons
+--
 splitC (Sub g i t1@(TCons e1s μ1 _ ) t2@(TCons e2s μ2 _ ))
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- splitEs g i μ1 μ2 e1s e2s
@@ -741,8 +767,8 @@ splitWithMut g i _ μ2 (_,t1) (μf2,t2)
     m2 = combMut μ2 μf2
 
 
-splitMaybe g i (Just t1) (Just t2) = splitC (Sub g i t1 t2) 
-splitMaybe _ _ _         _         = return []
+-- splitMaybe g i (Just t1) (Just t2) = splitC (Sub g i t1 t2) 
+-- splitMaybe _ _ _         _         = return []
 
 ---------------------------------------------------------------------------------------
 bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
@@ -752,13 +778,13 @@ bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant t1 <*> return t2
 
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2
-  = F.subC (fenv g) F.PTrue (r1 {F.sr_reft = fTop}) r2 Nothing [] ci
+  = F.subC (cge_fenv g) F.PTrue (r1 {F.sr_reft = fTop}) r2 Nothing [] ci
   | F.isNonTrivialSortedReft r2
-  = F.subC (fenv g) p r1 r2 Nothing [] ci
+  = F.subC (cge_fenv g) p r1 r2 Nothing [] ci
   | otherwise
   = []
   where
-    p  = F.pAnd $ guards g
+    p  = F.pAnd $ cge_guards g
     -- Use common sort for top or named type
     (r1,r2) = sorts t1 t2
 
@@ -811,12 +837,12 @@ splitW (W _ _ t) = error $ render $ text "Not supported in splitW: " <+> pp t
 
 bsplitW g t i 
   | F.isNonTrivialSortedReft r'
-  = [F.wfC (fenv g) r' Nothing i] 
+  = [F.wfC (cge_fenv g) r' Nothing i] 
   | otherwise
   = []
   where r' = rTypeSortedReft t
 
-envTyAdds l xts = envAdds False [(symbolId l x, t) | B x t <- xts]
+envTyAdds l xts = envAdds [(symbolId l x, t) | B x t <- xts]
 
 cgFunTys l f xs ft = 
   case funTys l f xs ft of 
@@ -836,51 +862,42 @@ methTys l f ft0
       Nothing         -> cgError l $ errorNonFunction (srcPos l) f ft0 
       Just (vs,bs,t)  -> return    $ (vs,b_type <$> bs,t)
 
---     case aux of
---       Left  e -> cgError l e
---       Right a -> return a 
---   where 
---     aux = do  fts <-  mapM (methTys l f xs) mfts
---               return $ concat fts 
--- 
-
---------------------------------------------------------------------------------
--- | `this`
-
-cgPeekThis = safeHead "get 'this'" <$> (cg_this <$> get)
-
-cgPushThis t = modify $ \st -> st { cg_this = t : cg_this st } 
-
-cgPopThis    = modify $ \st -> st { cg_this = tail $ cg_this st } 
-
-cgWithThis t p = do { cgPushThis t; a <- p; cgPopThis; return a } 
-
 
 --------------------------------------------------------------------------------
 getSuperM :: IsLocated a => a -> RefType -> CGM RefType
 --------------------------------------------------------------------------------
-getSuperM l (TApp (TRef i) ts _) 
-  = do  z    <- findSymOrDieM i
-        case z of 
-          ID _ _ vs (Just (p,ps)) _ -> return  $ apply (fromList $ zip vs ts) 
-                                               $ TApp (TRef $ F.symbol p) ps fTop
-          ID _ _ _ Nothing _        -> cgError l $ errorSuper (srcPos l) 
+-- getSuperM l (TApp (TRef i) ts _) 
+--   = do  z    <- findSymOrDieM i
+--         case z of 
+--           ID _ _ vs (Just (p,ps)) _ -> return  $ apply (fromList $ zip vs ts) 
+--                                                $ TApp (TRef $ F.symbol p) ps fTop
+--           ID _ _ _ Nothing _        -> cgError l $ errorSuper (srcPos l) 
 
 getSuperM l _  = cgError l $ errorSuper $ srcPos l
 
 
 --------------------------------------------------------------------------------
-getSuperDefM :: IsLocated a => a -> RefType -> CGM (InterfaceDefinition F.Reft)
+getSuperDefM :: IsLocated a => a -> RefType -> CGM (IfaceDef F.Reft)
 --------------------------------------------------------------------------------
-getSuperDefM l (TApp (TRef i) ts _) 
-  = do  z    <- findSymOrDieM i
-        case z of 
-          ID _ _ vs (Just (p,ps)) _ -> 
-            do ID c n ws pp ee  <- findSymOrDieM p
-               return            $ apply (fromList $ zip vs ts) 
-                                 $ apply (fromList $ zip ws ps)
-                                 $ ID c n [] pp ee
-          ID _ _ _ Nothing _ -> cgError l $ errorSuper (srcPos l) 
+-- getSuperDefM l (TApp (TRef i) ts _) 
+--   = do  z    <- findSymOrDieM i
+--         case z of 
+--           ID _ _ vs (Just (p,ps)) _ -> 
+--             do ID c n ws pp ee  <- findSymOrDieM p
+--                return            $ apply (fromList $ zip vs ts) 
+--                                  $ apply (fromList $ zip ws ps)
+--                                  $ ID c n [] pp ee
+--           ID _ _ _ Nothing _ -> cgError l $ errorSuper (srcPos l) 
 
 getSuperDefM l _  = cgError l $ errorSuper $ srcPos l
+
+
+
+--------------------------------------------------------------------------------
+-- | zipType wrapper
+
+zipTypeM l g t1 t2 = 
+  case zipType g t1 t2 of
+    Just t  -> return t
+    Nothing -> cgError l $ bugZipType l t1 t2
 

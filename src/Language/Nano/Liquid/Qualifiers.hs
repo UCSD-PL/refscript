@@ -2,11 +2,9 @@ module Language.Nano.Liquid.Qualifiers (nanoQualifiers) where
 
 import Language.Fixpoint.Errors
 import Language.Fixpoint.Types hiding (quals) 
-import Language.Nano.Typecheck.Types
 import Language.Nano.Liquid.Types
 import Language.Nano.Env
 import Language.Nano.Errors
-import Language.Nano.Types
 import Language.Nano.Locations
 import Language.Nano.Program
 import Language.ECMAScript3.Syntax
@@ -15,7 +13,7 @@ import Data.Maybe               (fromMaybe)
 
 
 nanoQualifiers   :: NanoRefType -> [Qualifier]
-nanoQualifiers p  = quals p ++ nanoQualifiers' p
+nanoQualifiers p  = pQuals p ++ nanoQualifiers' p
 
 nanoQualifiers'  :: NanoRefType -> [Qualifier]
 nanoQualifiers' p = concatMap (refTypeQualifiers γ0) $ envToList env

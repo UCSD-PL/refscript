@@ -71,7 +71,6 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Nano.Annots
-import           Language.Nano.Env
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Misc

@@ -16,47 +16,20 @@ module Language.Nano.Liquid.Environment (
 
   ) where
 
-import           Data.Maybe             (fromMaybe, catMaybes)
-import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
--- import qualified Data.HashSet            as S
-import           Data.Monoid                        (mconcat)
 import           Text.PrettyPrint.HughesPJ
-import           Text.Printf 
-import           Control.Applicative 
-import           Control.Monad          (zipWithM)
 
-import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
-import           Language.Nano.Annots
+import           Language.Nano.Annots()
 import           Language.Nano.Env
-import           Language.Nano.Errors
-import           Language.Nano.Locations
-import           Language.Nano.Misc
 import           Language.Nano.Names
 import           Language.Nano.Types
-import           Language.Nano.Program
 import           Language.Nano.Environment
-import           Language.Nano.Typecheck.Resolve
-import           Language.Nano.Typecheck.Sub
-import           Language.Nano.Typecheck.Types
 
-import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
-import           Language.Fixpoint.PrettyPrint
   
 -- import           Debug.Trace                        (trace)
-
-type PPR r = (PP r, F.Reftable r)
-
--------------------------------------------------------------------------------------
--- | Refinement Types and Annotations
--------------------------------------------------------------------------------------
-
-type RefType     = RType F.Reft
-
-type AnnTypeR    = AnnType F.Reft
 
 -------------------------------------------------------------------------------------
 -- | Constraint Generation Environment 
@@ -107,16 +80,9 @@ data CGEnvR r = CGE {
   } deriving (Functor)
 
 type CGEnv = CGEnvR F.Reft
+ 
 
-instance EnvLike F.Reft CGEnvR where
-  names     = cge_names
-  modules   = cge_mod
-  absPath   = cge_path
-  context   = cge_ctx
-  parent    = cge_parent
-  
-
-instance EnvLike () CGEnvR where
+instance EnvLike r CGEnvR where
   names     = cge_names
   modules   = cge_mod
   absPath   = cge_path
@@ -124,3 +90,16 @@ instance EnvLike () CGEnvR where
   parent    = cge_parent
  
  
+instance (PP r, F.Reftable r) => PP (CGEnvR r) where
+  pp = ppTCEnv
+
+
+ppTCEnv :: (PP r, F.Reftable r) => CGEnvR r -> Doc
+ppTCEnv g
+  =   text "******************** Environment ************************"
+  $+$ pp (names g)
+  $+$ text "******************** Modules ****************************"
+  $+$ pp (modules g)
+  $+$ text "******************** Absolute path **********************"
+  $+$ pp (absPath g)
+

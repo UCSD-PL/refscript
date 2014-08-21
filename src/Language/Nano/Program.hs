@@ -61,17 +61,6 @@ type PPR  r = (PP r, F.Reftable r, Data r)
 -- | Nano Program 
 ---------------------------------------------------------------------------------
 
--- | Liquid types environment
-
--- data LiquidEnv r     = LEnv                     
---                      { consts :: !(Env (RType r))          -- ^ Measure Signatures
--- 							       , tAlias :: !(TAliasEnv (RType r))    -- ^ Type aliases
---                      , pAlias :: !(PAliasEnv)              -- ^ Predicate aliases
---                      , quals  :: ![F.Qualifier]            -- ^ Qualifiers
---                      , invts  :: ![Located (RType r)]      -- ^ Type Invariants
---                      } deriving (Functor, Data, Typeable)
-
-
 data Nano a r = Nano { 
   -- 
   -- ^ Code to check

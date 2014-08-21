@@ -9,11 +9,10 @@ import qualified Language.Nano.Liquid.Types         as L
 
 import           Data.Aeson                         (eitherDecode)
 import           Data.Aeson.Types            hiding (Parser, Error, parse)
-import           Language.Nano.CmdLine              (getOpts)
+import           Language.Nano.CmdLine
 import           Language.Nano.Errors
 import           Language.Nano.Files
-import           Language.Nano.Types
-import           Language.Nano.Annots
+import           Language.Nano.SystemUtils
 import           Control.Exception                  (catch)
 import           Control.Monad
 import           Data.Monoid

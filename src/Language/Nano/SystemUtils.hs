@@ -35,7 +35,7 @@ import           Language.Fixpoint.Misc             (inserts)
 import qualified Language.Fixpoint.Types    as F
 import           Language.ECMAScript3.PrettyPrint   
 import           Text.Parsec.Pos                   
-import           Language.Nano.Types
+import           Language.Nano.Types()
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Text.PrettyPrint.HughesPJ          (text, ($+$), vcat, nest, (<+>), punctuate, render)

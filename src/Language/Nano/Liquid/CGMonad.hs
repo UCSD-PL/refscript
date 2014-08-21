@@ -32,7 +32,6 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Environment API
   , envAddFresh, envAdds, envAddReturn, envAddGuard, envFindTy, safeEnvFindTy
-  , isGlobalVar 
   , envRemSpec, isGlobalVar, envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
   , scrapeQualifiers
@@ -56,7 +55,13 @@ module Language.Nano.Liquid.CGMonad (
 
   ) where
 
-import           Data.Maybe                     (fromMaybe, listToMaybe, catMaybes, isJust)
+import           Control.Applicative 
+import           Control.Exception (throw)
+import           Control.Monad
+import           Control.Monad.State
+import           Control.Monad.Trans.Except
+
+import           Data.Maybe                     (isJust)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 -- import qualified Data.HashSet            as S
@@ -69,16 +74,13 @@ import           Language.Nano.Errors
 import           Language.Nano.Annots
 import qualified Language.Nano.Env              as E
 import           Language.Nano.Locations
-import           Language.Nano.Misc
 import           Language.Nano.Names
 import           Language.Nano.CmdLine
 import           Language.Nano.Program
 import           Language.Nano.Typecheck.Resolve
 import qualified Language.Nano.SystemUtils      as S
-import           Language.Nano.Typecheck.Types  hiding (quals)
-import           Language.Nano.Typecheck.Lookup
+import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
-import           Language.Nano.Environment
 import           Language.Nano.Liquid.Environment
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Qualifiers
@@ -87,12 +89,6 @@ import           Language.Nano.Liquid.Qualifiers
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Errors
-import           Control.Applicative 
-import           Control.Exception (throw)
-
-import           Control.Monad
-import           Control.Monad.State
-import           Control.Monad.Error hiding (Error)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
@@ -126,12 +122,12 @@ getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
 
 execute :: Config -> NanoRefType -> CGM a -> (a, CGState)
 execute cfg pgm act
-  = case runState (runErrorT act) $ initState cfg pgm of 
+  = case runState (runExceptT act) $ initState cfg pgm of 
       (Left err, _) -> throw err
       (Right x, st) -> (x, st)  
 
   
-runFailM a = fst . runState (runErrorT a) <$> get
+runFailM a = fst . runState (runExceptT a) <$> get
 
 -------------------------------------------------------------------------------
 initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
@@ -204,7 +200,7 @@ data CGState = CGS {
   , quals    :: ![F.Qualifier]       
   }
 
-type CGM     = ErrorT Error (State CGState)
+type CGM     = ExceptT Error (State CGState)
 
 type TConInv = M.HashMap TCon (Located RefType)
  
@@ -212,7 +208,7 @@ type TConInv = M.HashMap TCon (Located RefType)
 ---------------------------------------------------------------------------------------
 cgError     :: a -> Error -> CGM b 
 ---------------------------------------------------------------------------------------
-cgError _ e = throwError e
+cgError _ e = throwE e
 
 ---------------------------------------------------------------------------------------
 -- | Environment API

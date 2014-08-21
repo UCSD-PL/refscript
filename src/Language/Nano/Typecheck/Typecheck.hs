@@ -424,16 +424,13 @@ tcStmt γ (VarDeclStmt l ds)
 
 -- return e 
 
-HEREHEREHEREHEREHERE
+-- return e 
+tcStmt γ (ReturnStmt l eo) 
+  = tcRetW γ l eo
 
-tcStmt γ (ReturnStmt l (Just e)) 
-  = do  ([e'],_) <- tcNormalCall γ l "return" [e] $ returnTy (tcEnvFindReturn γ) True
-        return   $ (ReturnStmt l $ listToMaybe [e'], Nothing)
+-- ORIG do  (es',_) <- tcNormalCall γ l "return" (maybeToList eo) $ returnTy (tcEnvFindReturn γ) (isJust eo)
+-- ORIG     return   $ (ReturnStmt l $ listToMaybe es', Nothing)
 
--- return
-tcStmt γ (ReturnStmt l Nothing) 
-  = do  ([],_) <- tcNormalCall γ l "return" [] $ returnTy (tcEnvFindReturn γ) False
-        return   $ (ReturnStmt l Nothing, Nothing)
 
 -- throw e 
 tcStmt γ (ThrowStmt l e) 
@@ -574,12 +571,19 @@ tcExprW :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, Maybe (RType r))
 ----------------------------------------------------------------------------------------------------------------
 tcExprTW l γ e to = (tcWrap $ tcExprT l γ e to) >>= tcEW γ e
 tcExprW γ e       = (tcWrap $ tcExpr γ e)       >>= tcEW γ e 
-tcReturnW γ eo    = undefined
 
+tcRetW γ l (Just e)
+  = (tcWrap $ tcNormalCall γ l "return" [e] $ returnTy (tcEnvFindReturn γ) True) >>= \case
+       Right ([e'], _) -> return  (ReturnStmt l (Just e'), Nothing)  
+       Left err        -> (\e' -> (ReturnStmt l (Just e'), Nothing)) <$> deadcastM (tce_ctx γ) err e
+
+tcRetW γ l Nothing
+  = do ([], _) <- tcNormalCall γ l "return" [] $ returnTy (tcEnvFindReturn γ) False
+       return $ (ReturnStmt l Nothing, Nothing)
+  
 tcEW :: PPR r => TCEnv r -> ExprSSAR r -> Either Error ((ExprSSAR r), b) -> TCM r ((ExprSSAR r), Maybe b)
 tcEW _ _ (Right (e', t')) = return $  (e', Just t')
 tcEW γ e (Left err)       = (, Nothing) <$> deadcastM (tce_ctx γ) err e 
-
 
 -------------------------------------------------------------------------------
 tcExprT :: PPR r 

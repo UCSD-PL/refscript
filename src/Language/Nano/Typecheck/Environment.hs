@@ -1,4 +1,3 @@
-
 {-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
@@ -18,7 +17,7 @@ import qualified Language.Fixpoint.Types        as F
 import           Text.PrettyPrint.HughesPJ 
 
 -------------------------------------------------------------------------------
--- | Typecheck Environment (TODO: move to src/Environment.hs) 
+-- | Typecheck Environment
 -------------------------------------------------------------------------------
 
 data TCEnv r  = TCE {

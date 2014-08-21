@@ -25,7 +25,7 @@ module Language.Nano.Program (
 
 
   -- * Traversals / folds
-  , hoistBindings, hoistTypes, visibleIfaces, hoistGlobals
+  , hoistTypes, visibleIfaces, hoistGlobals
   , visibleNames, scrapeModules, writeGlobalVars
 
   ) where
@@ -351,32 +351,43 @@ ssaStr  = "_SSA_"
 ---------------------------------------------------------------------------
 
 
--- | Find all bindings (function definitions/declarations, classes, etc.) whose 
---   scope reaches the current scope. E.g. declarations in the If-branch of a 
---   conditional expression. Note how declarations do not escape module or function 
---   blocks.
+-- | Find all language level bindings whose scope reaches the current scope. 
+--   This includes: 
+--    * function definitions/declarations, 
+--    * classes, 
+--    * modules,
+--    * global (annotated) variables
+--
+--   E.g. declarations in the If-branch of a conditional expression. Note how 
+--   declarations do not escape module or function blocks.
+--
 -------------------------------------------------------------------------------
-hoistBindings :: Data a => [Statement a] -> [(Id a,a)]
+hoistBindings :: Data r => [Statement (AnnType r)] -> [(Id (AnnType r), AnnType r)]
 -------------------------------------------------------------------------------
 hoistBindings = everythingBut (++) myQ
   where
-    myQ a     = case cast a :: (Data a => Maybe (Statement a)) of
-                  Just  s -> fSt s
-                  Nothing -> 
-                      case cast a :: (Data a => Maybe (Expression a)) of
-                        Just  s -> fExp s
-                        Nothing -> ([], False)
+    myQ a = case cast a :: (Data r => Maybe (Statement (AnnType r))) of
+              Just  s -> fSt s
+              Nothing -> 
+                  case cast a :: (Data r => Maybe (Expression (AnnType r))) of
+                    Just  s -> fExp s
+                    Nothing -> 
+                        case cast a :: (Data r => Maybe (VarDecl (AnnType r))) of
+                          Just  s -> fVd s
+                          Nothing -> ([], False)
 
-    fSt :: Data a => (Statement a) -> ([(Id a,a)],Bool)
+    fSt :: Statement (AnnType r) -> ([(Id (AnnType r), AnnType r)],Bool)
     fSt (FunctionStmt l n _ _) = ([(n,l)], True)
     fSt (FunctionDecl l n _  ) = ([(n,l)], True)
     fSt (ClassStmt l n _ _ _ ) = ([(n,l)], True)
     fSt (ModuleStmt {})        = ([], True)
     fSt _                      = ([], False)
 
-    fExp :: Expression a -> ([(Id a, a)], Bool)
-    fExp (FuncExpr {})         = ([], True)
-    fExp _                     = ([], False)
+    fExp :: Expression (AnnType r) -> ([(Id (AnnType r), AnnType r)], Bool)
+    fExp _                     = ([], True)
+
+    fVd :: VarDecl (AnnType r) -> ([(Id (AnnType r), AnnType r)], Bool)
+    fVd (VarDecl l n _)        = ([(n,l) | VarAnn _ <- ann_fact l], True)
 
 
 
@@ -423,9 +434,9 @@ hoistGlobals = everythingBut (++) myQ
     fSt (FunctionDecl{}) = ([ ], True)
     fSt (ClassStmt{})    = ([ ], True)
     fSt (ModuleStmt{})   = ([ ], True)
-    fSt s                = ([ ], False)
+    fSt _                = ([ ], False)
     fExp                :: Expression (AnnType r) -> ([Id (AnnType r)], Bool)
-    fExp e               = ([ ], True)
+    fExp _               = ([ ], True)
     fVd                 :: VarDecl (AnnType r) -> ([Id (AnnType r)], Bool)
     fVd (VarDecl l x _)  = ([ x | VarAnn _ <- ann_fact l ], True)
 

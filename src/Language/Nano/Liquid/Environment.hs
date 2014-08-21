@@ -6,15 +6,7 @@
 {-# LANGUAGE UndecidableInstances       #-}
 {-# LANGUAGE FlexibleInstances          #-}
 
--- | Module pertaining to Refinement Type descriptions and conversions
---   Likely mergeable with @Language.Nano.Typecheck.Types@
-
-module Language.Nano.Liquid.Environment ( 
-  
-  -- * Constraint Environments
-    CGEnvR(..), CGEnv
-
-  ) where
+module Language.Nano.Liquid.Environment where
 
 import qualified Data.HashMap.Strict     as M
 import           Text.PrettyPrint.HughesPJ

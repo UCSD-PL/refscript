@@ -45,12 +45,9 @@ import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
 
 import qualified Data.Text                          as T 
-import           Data.Data
-import           Data.Generics.Aliases                   ( mkQ)
-import           Data.Generics.Schemes
 
 import           System.Console.CmdArgs.Default
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -109,7 +106,8 @@ consNano p@(Nano {code = Src fs})
 -------------------------------------------------------------------------------
 initGlobalEnv  :: NanoRefType -> CGEnv
 -------------------------------------------------------------------------------
-initGlobalEnv (Nano { code = Src ss }) = CGE nms bds grd ctx mod pth glb Nothing
+initGlobalEnv (Nano { code = Src ss }) = CGE 
+    (trace ("names: " ++ ppshow (E.envKeys nms))  nms) bds grd ctx mod pth glb Nothing
   where
     nms       = E.envFromList $ visibleNames ss
     bds       = F.emptyIBindEnv
@@ -124,12 +122,18 @@ initGlobalEnv (Nano { code = Src ss }) = CGE nms bds grd ctx mod pth glb Nothing
 -- | Environment wrappers
 -------------------------------------------------------------------------------
 
+-------------------------------------------------------------------------------
+consEnvFindTypeDefM :: IsLocated a => a -> CGEnv -> RelName -> CGM (IfaceDef F.Reft)
+-------------------------------------------------------------------------------
 consEnvFindTypeDefM l γ x
   = case resolveRelNameInEnv γ x of 
       Just t  -> return t
       Nothing -> cgError l $ bugClassDefNotFound (srcPos l) x
 
 
+-------------------------------------------------------------------------------
+-- | Constraint generation
+-------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 consFun :: CGEnv -> Statement (AnnType F.Reft) -> CGM CGEnv
@@ -209,8 +213,8 @@ consStmt g (EmptyStmt _)
   = return $ Just g
 
 -- x = e
-consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))   
-  = consAsgn g l (Id lx x) e
+consStmt g (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))   
+  = consAsgn g (Id lx x) e
 
 -- e1.f = e2
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
@@ -259,30 +263,37 @@ consStmt g (ReturnStmt l eo)
 consStmt g (ThrowStmt _ e)
   = consExpr g e >> return Nothing
 
+-- function f(x1...xn);
+consStmt g (FunctionDecl l n _ )
+  = case envFindTy n g of
+      Just _  -> return $ Just g
+      Nothing -> cgError l $ bugEnvFindTy (srcPos l) n
 
 -- function f(x1...xn){ s }
 consStmt g s@(FunctionStmt _ _ _ _)
   = Just <$> consFun g s
 
 --
--- class A<S...> [extends B<T...>] [implements I,J,...] { ... }
+-- class A<V> [extends B<T>] {..}
 --
--- 1. Compute / get the class type 
--- 2. Add the type vars in the environment
--- 3. Compute type for "this" and add that to the env as well. This type uses the classes type 
---    variables as type parameters. 
+--  * Add the type vars V in the environment
+--  
+--  * Compute type for "this" and add that to the env as well. 
 --
 consStmt g (ClassStmt l x _ _ ce) 
   = do  dfn      <- consEnvFindTypeDefM l g rn
         -- FIXME: Should this check be done at TC too?
         g'       <- envAdds [(Loc (ann l) α, tVar α) | α <- t_args dfn] g
         g''      <- envAdds [(Loc (ann l) "this", mkThis $ t_args dfn)] g'
-        consClassElts (srcPos l) g'' x dfn ce
+        consClassElts g'' x ce
         return    $ Just g
   where
     tVars   αs    = [ tVar   α | α <- αs ] 
     rn            = RN $ QName (srcPos l) [] (F.symbol x)
     mkThis αs     = TApp (TRef rn) (tVars αs) fTop
+
+consStmt g (IfaceStmt _)
+  = return $ Just g
 
 
 -- OTHER (Not handled)
@@ -302,7 +313,7 @@ consVarDecl g (VarDecl l x (Just e))
                                       _       <- subType l gy' t ta
                                       return   $ Just gy
                         _        -> cgError l $ bugNoAnnotForGlob (ann l) x 
-  | otherwise       = consAsgn g l x e
+  | otherwise       = consAsgn g x e
  
 consVarDecl g (VarDecl l x Nothing)
   | isGlobalVar x g = case envFindTy x g of
@@ -314,9 +325,9 @@ consVarDecl g (VarDecl l x Nothing)
 -- FIXME: Do the safeExtends check here. Also add casts in the TC phase wherever
 -- needed
 ------------------------------------------------------------------------------------
-consClassElts :: PP a => SourceSpan -> CGEnv -> a -> IfaceDef F.Reft -> [ClassElt AnnTypeR] -> CGM ()
+consClassElts :: PP a => CGEnv -> a -> [ClassElt AnnTypeR] -> CGM ()
 ------------------------------------------------------------------------------------
-consClassElts l g x d ce 
+consClassElts g x ce 
    = mapM_ (consClassElt g x) ce
 
 
@@ -368,9 +379,9 @@ consExprT g e to
 
 
 --------------------------------------------------------------------------------
-consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv)
+consAsgn :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
-consAsgn g l x e 
+consAsgn g x e 
   = do (x', g') <- consExprT g e $ envFindTy x g
        if isGlobalVar x g 
          then return $ Just g'
@@ -500,14 +511,18 @@ consExpr g (NewExpr l e es)
 -- | super
 consExpr g (SuperRef l) 
   = case envFindTy (Id (ann l) "this") g of 
-      Just (TApp (TRef x) ts _) -> 
-          do  ID _ _ vs h _ <- consEnvFindTypeDefM l g x
-              case h of 
-                Just (p, ps) -> let θ = fromList $ zip vs ts in
-                                let t = apply θ $ TApp (TRef p) ps fTop in
-                                envAddFresh l t g
-                Nothing -> cgError l $ errorSuper (srcPos l) 
+      Just t  -> getParentType l t
+--       Just (TApp (TRef x) ts _) -> 
+--           do  ID _ _ vs h _ <- consEnvFindTypeDefM l g x
+--               case h of 
+--                 Just (p, ps) -> let θ = fromList $ zip vs ts in
+--                                 let t = apply θ $ TApp (TRef p) ps fTop in
+--                                 envAddFresh l t g
+--                 Nothing -> cgError l $ errorSuper (srcPos l) 
+--       Just    -> cgError l $ unimplemented (srcPos l) "Cannot extract super" 
       Nothing -> cgError l $ errorSuper (srcPos l) 
+  where 
+    getParentType _ _  = error "getParentType"
 
 -- | function(xs) { }
 consExpr g (FuncExpr l fo xs body) 
@@ -562,7 +577,6 @@ consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Id AnnTypeR, CGEnv)
 --------------------------------------------------------------------------------
 consCast g a e
   = do  (x,g) <- consExpr g e 
-        t     <- safeEnvFindTy x g
         case envGetContextCast g a of
           CNo       -> return (x,g)
           CDead t   -> consDeadCode g l x t

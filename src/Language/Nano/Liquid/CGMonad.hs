@@ -367,8 +367,16 @@ envAddGuard x b g = g { cge_guards = guard b x : cge_guards g }
 ---------------------------------------------------------------------------------------
 envFindTy :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> Maybe RefType 
 ---------------------------------------------------------------------------------------
-envFindTy x g | isGlobalVar x g = E.envFindTy x $ cge_names g
-              | otherwise       = fmap (`eSingleton` x) $ E.envFindTy x $ cge_names g
+envFindTy x g | isGlobalVar x g = findT x g
+              | otherwise       = fmap (`eSingleton` x) $ findT x g
+
+  where
+    findT x g = case E.envFindTy x $ cge_names g of 
+                  Just t   -> Just t
+                  Nothing  -> case cge_parent g of 
+                                Just g' -> findT x g'
+                                Nothing -> Nothing
+
 
 
 ---------------------------------------------------------------------------------------

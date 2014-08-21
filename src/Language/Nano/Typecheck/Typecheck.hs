@@ -16,16 +16,10 @@ import           Control.Monad
 import           Control.Arrow                      ((***), first)
 
 import qualified Data.HashMap.Strict                as M 
-import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe, fromJust, maybeToList, isJust)
-import           Data.List                          (find, filter)
-import           Data.Default
+import           Data.Maybe                         (catMaybes, listToMaybe, maybeToList, isJust)
 import           Data.Data 
-import           Data.Char                          (isUpper)
-import qualified Data.Foldable                      as FO
 import           Data.Function                      (on)
 import           Data.Generics                   
-
-import           Text.PrettyPrint.HughesPJ          (text, ($+$))
 
 import           Language.Nano.Annots
 import           Language.Nano.CmdLine              (getOpts, noFailCasts)
@@ -35,7 +29,7 @@ import           Language.Nano.Names
 import           Language.Nano.Program
 import           Language.Nano.Types
 import           Language.Nano.Env
-import           Language.Nano.Misc                 (convertError, mapPairM, zipWith3M)
+import           Language.Nano.Misc                 (convertError, zipWith3M)
 import           Language.Nano.SystemUtils
 import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
@@ -54,14 +48,12 @@ import           Language.Fixpoint.Misc             as FM
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
-import           Debug.Trace                        hiding (traceShow)
+-- import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
 
-
 type PPR  r = (PP r, F.Reftable r, Data r)
-
 
 
 --------------------------------------------------------------------------------
@@ -72,8 +64,8 @@ verifyFile :: [FilePath] -> IO (UAnnSol a, F.FixResult Error)
 --------------------------------------------------------------------------------
 verifyFile fs = parse fs $ ssa $ tc
 
-testFile fs = do  (u,e) <- verifyFile fs
-                  return ()
+-- testFile fs = do  (u,e) <- verifyFile fs
+--                   return ()
 
 parse fs next = parseNanoFromFiles fs >>= next
 
@@ -195,10 +187,6 @@ initModuleEnv γ n s = TCE nms mod ctx pth parent
     parent    = Just γ
 
 
-
-
-
-
 -------------------------------------------------------------------------------
 -- | Environment wrappers
 -------------------------------------------------------------------------------
@@ -214,9 +202,11 @@ tcEnvFindTy x γ       = case envFindTy x $ tce_names γ of
                               Just γ' -> tcEnvFindTy x γ'
                               Nothing -> Nothing
 
-tcEnvFindReturn       = envFindReturn . tce_names
+safeTcEnvFindTy l γ x = case tcEnvFindTy x γ of
+                          Just t  -> return t
+                          Nothing -> tcError $ bugEnvFindTy (srcPos l) x 
 
-tcEnvFindTyOrDie l x  = fromMaybe ugh . tcEnvFindTy x  where ugh = die $ errorUnboundId (ann l) x
+tcEnvFindReturn       = envFindReturn . tce_names
 
 tcEnvFindTypeDefM l γ x 
   = case resolveRelNameInEnv γ x of 
@@ -365,7 +355,7 @@ tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
        case z of 
          ([e1',e2'], _)
                      -> return (ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 e1' f) e2', Just γ)
-         (e,t)       -> error $ "BUG: tcStmt - e.f = e : " -- ++ ppshow e ++ "\n" ++ ppshow t
+         (_,_)       -> error $ "BUG: tcStmt - e.f = e : " -- ++ ppshow e ++ "\n" ++ ppshow t
 
 -- e
 tcStmt γ (ExprStmt l e)   
@@ -394,14 +384,14 @@ tcStmt γ (IfStmt l e s1 s2)
 -- while c { b } 
 tcStmt γ (WhileStmt l c b) 
   = do (c', t)      <- tcExpr γ c
-       unifyTypeM (srcPos l) γ t tBool
-       (b', γl)     <- tcStmt γ' b
-
+       _            <- unifyTypeM (srcPos l) γ t tBool
+       pTys         <- mapM (safeTcEnvFindTy l γ) phis
+       (b', γl)     <- tcStmt (tcEnvAdds (zip xs pTys) γ) b
        γout         <- envLoopJoin l γ γl
-       return       (WhileStmt l c' b', γout)  
+       return        $ (WhileStmt l c' b', γout)  
     where 
-       xts'          = [(mkNextId x, tcEnvFindTyOrDie l x γ) | x <- phiVarsAnnot l]
-       γ'            = tcEnvAdds xts' γ
+       xs            = [ mkNextId x | x <- phis ]
+       phis          = [ x | x <- phiVarsAnnot l ]
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 tcStmt γ (VarDeclStmt l ds)
@@ -423,7 +413,7 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 
 -- | class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 --
-tcStmt γ c@(ClassStmt l x e is ce) 
+tcStmt γ (ClassStmt l x e is ce) 
   = do  dfn      <- tcEnvFindTypeDefM l γ rn
         ce'      <- mapM (tcClassElt (newEnv $ t_args dfn) x) ce
         return    $ (ClassStmt l x e is ce', Just γ)
@@ -436,7 +426,7 @@ tcStmt γ c@(ClassStmt l x e is ce)
 
 -- | module M { ... } 
 --
-tcStmt γ m@(ModuleStmt l n body) 
+tcStmt γ (ModuleStmt l n body) 
   = (ModuleStmt l n *** return (Just γ)) <$>  tcStmts (initModuleEnv γ n body) body
 
 -- OTHER (Not handled)
@@ -571,13 +561,15 @@ tcExpr γ e@(NewExpr _ _ _)
   = tcCall γ e
 
 -- | super
+--
+--  FIXME
+--
 tcExpr γ e@(SuperRef l) 
   = case tcEnvFindTy (F.symbol "this") γ of
       Just t  -> return (e, getParentType l t)
       Nothing -> tcError $ errorSuper (ann l)
-
   where 
-    getParentType l t = error "getParentType"
+    getParentType _ _ = error "getParentType"
 
 -- | function (x,..) {  }
 tcExpr γ (FuncExpr l fo xs body)
@@ -609,7 +601,7 @@ tcCall γ (PrefixExpr l o e)
 tcCall γ (InfixExpr l o@OpInstanceof e1 e2) 
   = do (e2',t)                <- tcExpr γ e2
        case t of
-         TClass (RN (QName _ p x)) -> 
+         TClass (RN (QName _ _ x)) -> 
             do ([e1',_], t) <- tcNormalCall γ l o [e1, StringLit l2 (F.symbolString x)] (infixOpTy o $ tce_names γ)
          -- FIXME: add qualified name
                return (InfixExpr l o e1' e2', t) 
@@ -689,8 +681,9 @@ tcCall γ (CallExpr l e@(SuperRef _)  es)
                     case [ ct | ConsSig ct <- elts ] of
                       [ct] -> first (CallExpr l e) <$> tcNormalCall γ l "constructor" es ct
                       _    -> tcError $ errorConsSigMissing (srcPos l) "<UNIMPLEMENTED>"
+      Nothing -> error "call-super"
   where
-    getSuperM l t = undefined
+    -- getSuperM _ _ = undefined
    
 -- | `e.f(es)`
 tcCall γ (CallExpr l em@(DotRef _ e f) es)

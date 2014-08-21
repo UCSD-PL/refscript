@@ -18,7 +18,7 @@ import           Control.Monad
 import           Data.Monoid
 import           Data.List                          (sort, nub)
 import           System.Exit
-import           System.Directory                   (createDirectoryIfMissing)
+import           System.Directory                   (createDirectoryIfMissing, doesFileExist)
 import           System.Process
 import           System.FilePath.Posix
 import           Language.Fixpoint.Interface        (resultExit)
@@ -49,20 +49,25 @@ verifier cfg f
 -------------------------------------------------------------------------------
 json :: FilePath -> IO (Either (F.FixResult Error) [FilePath])
 -------------------------------------------------------------------------------
-json f | ext `elem` oks 
-       = do (code, stdOut, _) <- readProcessWithExitCode tsCmd args ""
-            case code of 
-              ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
-                                   Left  s  -> return $ Left  $ F.UnknownError s
-                                   Right fs -> return $ Right $ fs
-              ExitFailure _   -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
-                                   Left  s  -> return $ Left $ F.UnknownError s
-                                   Right e  -> return $ Left $ e
-       | otherwise      
-       = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
+json f
+  = do fileExists <- doesFileExist f
+       if fileExists then withExistingFile f
+                     else return $ Left $ F.Crash [] $ "File does not exist: " ++ f
+
+withExistingFile f 
+  | ext `elem` oks 
+  = do  (code, stdOut, _) <- readProcessWithExitCode tsCmd args ""
+        case code of 
+          ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
+                                Left  s  -> return $ Left  $ F.UnknownError s
+                                Right fs -> return $ Right $ fs
+          ExitFailure _   -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
+                                Left  s  -> return $ Left $ F.UnknownError s
+                                Right e  -> return $ Left $ e
+  | otherwise
+  = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
   where 
     ext            = takeExtension f
-    toJSONExt      = extFileName Json . dropExtension
     tsCmd          = "tsc" 
     args           = [ "--outDir", tempDirectory f
                      , "--refscript"

@@ -609,38 +609,6 @@ getSpecs ss = rename <$> zip [ b | s <- ss, (_, z) <- FO.toList s, Bind b <- z] 
     rename ((Id l s,t), i) = (Id l (s ++ "_" ++ show i), t)
 
 
--- 
--- -- SLOW SLOW SLOW
---
--- -------------------------------------------------------------------------------
--- getSpecs :: [Statement (SourceSpan, [Spec])] -> [(SourceSpan, QName, RefType)]
--- -------------------------------------------------------------------------------
--- getSpecs ss = catMaybes $ specType <$> everythingWithContext [] (++) (myQ (\s -> ([],s))) ss
---   where
--- 
---     specType :: (SourceSpan, QName, [Spec]) -> Maybe (SourceSpan, QName, RefType)
---     specType (l,q,s) = listToMaybe [ (l,q,t) | Bind (_,t) <- s ]
--- 
---     myQ f a = maybe f fSt  (cast a :: (Data a => Maybe (Statement a)))
--- 
--- --     myQ f a = maybe 
--- --                 (maybe f fExp (cast a :: (Data a => Maybe (Expression a)))) 
--- --                          fSt  (cast a :: (Data a => Maybe (Statement a)))
--- 
---     fSt :: Statement (SourceSpan, [Spec]) -> [Symbol] -> ([(SourceSpan, QName, [Spec])], [Symbol])
---     fSt (FunctionStmt l x _ _) s = ([(fst l, QN s (symbol x), snd l)], s)
---     fSt (FunctionDecl _ x _  ) s = ([ ], s ++ [symbol x])
---     fSt (ClassStmt _ x _ _ _ ) s = ([ ], s ++ [symbol x])
---     fSt (ModuleStmt _ x _    ) s = ([ ], s ++ [symbol x])
---     fSt _                      s = ([ ], s)
--- 
--- --     fExp :: Expression (SourceSpan, [Spec]) -> [Symbol] -> ([(SourceSpan, QName, [Spec])], [Symbol])
--- --     fExp (FuncExpr _ _ _ _)    s = ([ ], s)
--- --     fExp _                     s = ([ ], s)
-
-
-
-
 type PState = Integer
 
 instance PP Integer where

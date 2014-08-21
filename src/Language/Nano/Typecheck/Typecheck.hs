@@ -167,7 +167,7 @@ initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
     nms       = envFromList $ visibleNames ss
-    mod       = registerAllModules ss 
+    mod       = scrapeModules ss 
     ctx       = emptyContext
     pth       = AP $ QPath (srcPos dummySpan) []
 
@@ -189,125 +189,21 @@ initModuleEnv :: (PPR r, F.Symbolic n) => TCEnv r -> n -> [Statement (AnnSSA r)]
 initModuleEnv γ n s = TCE nms mod ctx pth parent 
   where
     nms       = envFromList $ visibleNames s
-    mod       = modules γ
+    mod       = tce_mod γ
     ctx       = emptyContext
     pth       = extendAbsPath (tce_path γ) n
     parent    = Just γ
 
 
----------------------------------------------------------------------------------------
-visibleNames :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, RType r)]
----------------------------------------------------------------------------------------
-visibleNames s = [ (ann <$> n, t) | (n, Ann l ff) <- hoistBindings s, f <- ff, t <- annToType l n f ]
-  where
-    annToType _ _ (VarAnn t)    = [t]
-    annToType l n (ClassAnn {}) = [TClass $ RN $ QName l [] (F.symbol n)]
-    annToType _ _ _             = []
-
----------------------------------------------------------------------------------------
-visibleIfaces :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, RType r)]
----------------------------------------------------------------------------------------
-visibleIfaces s = [ (ann <$> n, t) | (n, Ann l ff) <- hoistBindings s, f <- ff, t <- annToType l n f ]
-  where
-    annToType l n (IfaceAnn {}) = [TClass $ RN $ QName l [] (F.symbol n)]
-    annToType _ _ _             = []
 
 
 
--- FIXME (?): Does not take into account classes with missing annotations.
---            Ts -> rsc translation should add annotations everywhere.
--- TODO: Use safeExtends to check inheritance
----------------------------------------------------------------------------------------
-resolveType :: PPR r => Statement (AnnSSA r) -> Maybe (Id SourceSpan, IfaceDef r)
----------------------------------------------------------------------------------------
-resolveType  (ClassStmt l c _ _ cs)
-  = case [ t | ClassAnn t <- ann_fact l ] of
-      [(vs, h)] -> Just (cc, ID True cc vs h (rMem (tc vs) cs))
-      _         -> Nothing
-  where
-    cc        = fmap ann c
-    x         = RN $ QName (srcPos l) [] (F.symbol c)
-    tc vs     = TApp (TRef x) ((`TVar` fTop) <$> vs) fTop
-    rMem      = concatMap . typeMembers
 
-resolveType (IfaceStmt l)
-  = listToMaybe [ (n, t) | IfaceAnn t@(ID _ n _ _ _) <- ann_fact l ]
-
-resolveType _ = Nothing 
-
-
-
--- | `typeMembers` returns all the TypeMember elements associated with a class 
---    element -- XXX: No constructor is added if missing
---
----------------------------------------------------------------------------------------
-typeMembers :: PPR r => RType r -> ClassElt (AnnSSA r) -> [TypeMember r]
----------------------------------------------------------------------------------------
-typeMembers _ (Constructor l _ _ ) = [ c | ConsAnn c   <- ann_fact l ]
-
-typeMembers _ (MemberVarDecl _ static (VarDecl l _ _)) 
-    | static    = [ s | StatAnn  s@(StatSig _ _ _)  <- ann_fact l ]
-    | otherwise = [ f | FieldAnn f@(FieldSig _ _ _) <- ann_fact l ]
-
-typeMembers t (MemberMethDecl l static _ _ _ )
-    | static    = [ s                  | StatAnn s@(StatSig _ _ _)  <- ann_fact l ]
-    | otherwise = [ setThisBinding m t | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
-
-
-
--- | `registerAllModules ss` creates a module store from the statements in @ss@
---   For every module we populate:
---
---    * m_variables with: functions, variables, class constructors, modules
---
---    * m_types with: classes and interfaces
---
----------------------------------------------------------------------------------------
-registerAllModules :: PPR r => [Statement (AnnSSA r)] -> QEnv (ModuleDef r)
----------------------------------------------------------------------------------------
-registerAllModules                = qenvFromList . map mkMod . collectModules
-  where
-    visibility l                  | ExporedModElt `elem` ann_fact l = Exported
-                                  | otherwise                       = Local
-
-    mkMod (ap, m)                 = (ap, trace (ppshow (envKeys $ varEnv m)
-                                                ++ "\n\n" ++ ppshow (envKeys $ typeEnv m)) 
-                                    $ ModuleDef (varEnv m) (typeEnv m) ap)
-    varEnv                        = envFromList . vStmts
-    typeEnv                       = envFromList . tStmts
-
-    vStmts                        = concatMap vStmt
-
-    vStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, (Visibility, RType r))]
-    vStmt (VarDeclStmt l vds)     = [ (ss x, (visibility l, t)) 
-                                    | VarDecl l x _ <- vds
-                                    , VarAnn t <- ann_fact l 
-                                    ]
-    vStmt (FunctionStmt l x _ _)  = [ (ss x, (visibility l, t)) 
-                                    | VarAnn t <- ann_fact l 
-                                    ]
-    vStmt (FunctionDecl l x _  )  = [ (ss x, (visibility l, t)) 
-                                    | VarAnn t <- ann_fact l 
-                                    ]
-    vStmt c@(ClassStmt l x _ _ _) = [ (ss x, (visibility l, TClass $ RN $ QName (ann l) [] $ F.symbol x)) ]
-    vStmt c@(ModuleStmt l x _)    = [ (ss x, (visibility l, TModule $ RP $ QPath (ann l) [F.symbol x])) ]
-    vStmt _                       = [ ] 
-
-    tStmts                        = concatMap tStmt
-
-    tStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, IfaceDef r)]
-    tStmt c@(ClassStmt l _ _ _ _) = maybeToList $ resolveType c
-    tStmt c@(IfaceStmt l)         = maybeToList $ resolveType c
-    tStmt _                       = [ ]
-
-    ss = fmap ann
-
-
-
+-------------------------------------------------------------------------------
 -- | Environment wrappers
---
+-------------------------------------------------------------------------------
 
-tcEnvAdds     x γ     = γ { tce_names = envAdds x  $ tce_names γ }
+tcEnvAdds     xs γ    = γ { tce_names = envAdds xs $ tce_names γ }
 
 tcEnvAdd      x t γ   = γ { tce_names = envAdd x t $ tce_names γ }
 
@@ -528,9 +424,9 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 -- | class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 --
 tcStmt γ c@(ClassStmt l x e is ce) 
-  = do  ID _ _ αs _ _ <- tcEnvFindTypeDefM l γ rn
-        ce'           <- mapM (tcClassElt (newEnv αs) x) ce
-        return         $ (ClassStmt l x e is ce', Just γ)
+  = do  dfn      <- tcEnvFindTypeDefM l γ rn
+        ce'      <- mapM (tcClassElt (newEnv $ t_args dfn) x) ce
+        return    $ (ClassStmt l x e is ce', Just γ)
   where
     tVars   αs    = [ tVar   α | α <- αs ] 
     tyBinds αs    = [(tVarId α, tVar α) | α <- αs]
@@ -764,7 +660,7 @@ tcCall γ (ObjectLit l bs)
 -- | `new e(e1,...,en)`
 tcCall γ (NewExpr l e es) 
   = do (e',t)                     <- tcExpr γ e
-       case getConstructor γ t of 
+       case extractCtor γ t of 
          Just ct -> do (es', t)   <- tcNormalCall γ l "constructor" es ct
                        return      $ (NewExpr l e' es', t)
          _       -> tcError $ errorConstrMissing (srcPos l) t
@@ -800,10 +696,8 @@ tcCall γ (CallExpr l e@(SuperRef _)  es)
 tcCall γ (CallExpr l em@(DotRef _ e f) es)
   = do z              <- runFailM $ tcExpr γ e
        case z of 
-         Right (_, t) -> do case getElt γ f t of
-                              Just tf -> do (em', es', t) <- tcCallDotRef γ tf l em es
-                                            return         $ (CallExpr l em' es', t)
-                              Nothing -> tcError $ errorMissingFld (srcPos l) f t
+         Right (_, t) -> do (em', es', t) <- tcCallDotRef γ (getElt γ f t) l em es
+                            return         $ (CallExpr l em' es', t)
          Left err     -> tcError err
 
 -- | `e(es)`
@@ -870,7 +764,7 @@ resolveOverload γ l fn es ts ft
       fts    -> do  θs    <- mapM (\t -> tcCallCaseTry γ l fn ts t) fts
                     return $ listToMaybe [ (θ, apply θ t) | (t, Just θ) <- zip fts θs ]
   where
-    sigs  = catMaybes (bkFun <$> getCallable γ ft)
+    sigs  = catMaybes (bkFun <$> extractCall γ ft)
 
 
 -- | A successful pairing of formal to actual parameters will return `Just θ`,

@@ -585,7 +585,7 @@ mkCode ss =  Nano {
       , consts        = envFromList   [ t | Meas   t <- anns ] 
       , tAlias        = envFromList   [ t | TAlias t <- anns ] 
       , pAlias        = envFromList   [ t | PAlias t <- anns ] 
-      , quals         =               [ t | Qual   t <- anns ] 
+      , pQuals        =               [ t | Qual   t <- anns ] 
       , invts         = [Loc (srcPos l) t | Invt l t <- anns ]
     } 
   where

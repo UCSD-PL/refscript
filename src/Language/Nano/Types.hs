@@ -189,35 +189,33 @@ data TypeMember r
   deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
--- -- | A module's content (local and exported API)
--- --
--- data ModuleMember r 
---   -- 
---   -- ^ Class / Interface type
---   --
---   = ModType   { m_sym  :: Id SourceSpan
---               , m_vis  :: Visibility
---               , m_def  :: IfaceDef r }
---   -- 
---   -- ^ Variable / Function binding
---   --
---   | ModVar    { m_sym  :: Id SourceSpan                 
---               , m_vis  :: Visibility
---               , m_type :: RType r }                    
---   -- 
---   -- ^ Module -- use this to find the module definition
---   --
---   | ModModule { m_sym  :: Id SourceSpan
---               , m_vis  :: Visibility }
--- 
---   deriving (Functor)
-
-
 data Visibility 
 
   = Local 
 
   | Exported
+
+
+------------------------------------------------------------------------------------------
+-- | Assignability 
+------------------------------------------------------------------------------------------
+
+data Assignability 
+  -- 
+  -- ^ import,  cannot be modified, can appear in refinements
+  -- ^ contains: FunctionStmts, Measures, Classes, Modules.
+  --
+  = ReadOnly    
+  -- 
+  -- ^ written in local-scope, can be SSA-ed, can appear in refinements
+  --
+  | WriteLocal  
+  -- 
+  -- ^ written in non-local-scope, cannot do SSA, cannot appear in refinements
+  --
+  | WriteGlobal 
+  deriving (Eq)
+
 
 
 -- | Module Body 
@@ -240,7 +238,7 @@ data ModuleDef r = ModuleDef {
   --   * Interfaces are _not_ included here (because thery don't appear as
   --   bindings in the language)
   --
-    m_variables   :: Env (Visibility, RType r)
+    m_variables   :: Env (Visibility, Assignability, RType r)
   --
   -- ^ Types
   --
@@ -252,14 +250,6 @@ data ModuleDef r = ModuleDef {
   }
   deriving (Functor)
 
-
--- data ModuleKind 
--- 
---   = TypeKind
--- 
---   | VarKind
--- 
---   | ModuleKind
 
 
 ---------------------------------------------------------------------------------
@@ -420,9 +410,5 @@ instance (PP a, PP s, PP t) => PP (Alias a s t) where
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)
 -- End:
-
-
-
-
 
 

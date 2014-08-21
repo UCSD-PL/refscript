@@ -49,9 +49,9 @@ import           Language.Nano.Annots
 import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Names
-import           Language.Nano.SSA.Types
 import           Language.Nano.Locations
 import           Language.Nano.Program
+import           Language.Nano.Types
 import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Fixpoint.Errors

@@ -9,10 +9,7 @@
 
 module Language.Nano.SSA.Types (
 
-  -- * Assignability 
-    Assignability (..), writeGlobalVars -- , readOnlyVars  
-
-  , hoistReadOnly, hoistVarDecls
+    hoistReadOnly, hoistVarDecls
 
   -- , SSAEnv (..), SSAEnvO
   -- * Auxiliary 
@@ -22,40 +19,7 @@ module Language.Nano.SSA.Types (
 
 
 import           Data.Generics                   
-import           Language.Nano.Annots
-import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax 
-import           Text.PrettyPrint.HughesPJ 
-
-
-------------------------------------------------------------------------------------------
--- | Assignability 
-------------------------------------------------------------------------------------------
-
-data Assignability 
-  = ReadOnly    -- ^ import,  cannot be modified, can appear in refinements
-                -- ^ contain: FunctionStmts, Measures, Classes, Modules.
-  | WriteLocal  -- ^ written in local-scope, can be SSA-ed, can appear in refinements
-  | WriteGlobal -- ^ written in non-local-scope, cannot do SSA, cannot appear in refinements
-
-
-instance PP Assignability where
-  pp ReadOnly    = text "ReadOnly"
-  pp WriteLocal  = text "WriteLocal"
-  pp WriteGlobal = text "WriteGlobal"
-
-
--- | `writeGlobalVars p` returns symbols that have `WriteMany` status, i.e. may be 
---    re-assigned multiply in non-local scope, and hence
---    * cannot be SSA-ed
---    * cannot appear in refinements
---    * can only use a single monolithic type (declared or inferred)
--------------------------------------------------------------------------------
-writeGlobalVars           :: Data r => [Statement (AnnType r)] -> [Id (AnnType r)]
--------------------------------------------------------------------------------
-writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
-  where 
-    fromVD (VarDecl l x _) = [ x | VarAnn _ <- ann_fact l ]
 
 
 -- | `hoistReadOnly` returns all the ReadOnly variables that are visible in the 

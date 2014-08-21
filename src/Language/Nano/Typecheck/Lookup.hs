@@ -8,8 +8,8 @@
 module Language.Nano.Typecheck.Lookup (
     getProp
   , getElt
-  , getCallable
-  , getConstructor
+  , extractCall
+  , extractCtor
   , getPropTDef
   ) where 
 
@@ -23,15 +23,11 @@ import           Language.Fixpoint.Misc
 
 import           Language.Nano.Types
 import           Language.Nano.Env
-import           Language.Nano.Errors
-import           Language.Nano.Locations
-import           Language.Nano.Names
-import           Language.Nano.Typecheck.Environment
+import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
 import           Control.Applicative ((<$>))
 
-import           Debug.Trace
 
 type PPRD r = (PP r, F.Reftable r, Data r)
 
@@ -56,9 +52,7 @@ getProp γ s t@(TClass c    )
         (t,) <$> accessMember s es
 getProp γ s t@(TModule m   ) 
   = do  m' <- resolveRelPathInEnv γ m
-        (t,) <$> snd <$> envFindTy s (m_variables m')
-  where
-    f (RP (QPath l p)) = RN . QName l p
+        (t,) <$> thd3 <$> envFindTy s (m_variables m')
 getProp _ _ _ = Nothing
 
 
@@ -84,34 +78,36 @@ getPropApp _ _ _ = error "getPropApp should only be applied to TApp"
 
 
 -------------------------------------------------------------------------------
-getConstructor :: (Data r, PP r, F.Reftable r, EnvLike r g) 
+extractCtor :: (Data r, PP r, F.Reftable r, EnvLike r g) 
                => g r -> RType t -> Maybe (RType r)
 -------------------------------------------------------------------------------
-getConstructor γ (TClass x) 
+extractCtor γ (TClass x) 
   = do  d        <- resolveRelNameInEnv γ x
         (vs, es) <- flatten'' False γ d
         return    $ mkAnd [ mkAll vs (TFun bs (retT vs) r) | ConsSig (TFun bs _ r) <- es ]
 
     where
         retT vs   = TApp (TRef x) (tVar <$> vs) fTop
-getConstructor _ _ = Nothing
+extractCtor _ _ = Nothing
 
 
 -- | `getElt`: return elements associated with a symbol @s@. The return list 
 -- is empty if the binding was not found or @t@ is an invalid type.
 -------------------------------------------------------------------------------
-getElt :: (F.Symbolic s, PPRD r, EnvLike r g) => g r -> s -> RType r -> Maybe [TypeMember r]
+getElt :: (F.Symbolic s, PPRD r, EnvLike r g) => g r -> s -> RType r -> [TypeMember r]
 -------------------------------------------------------------------------------
-getElt γ  s t                = fromCons <$> flattenType γ t
+getElt γ  s t = case flattenType γ t of
+                  Just t  -> fromCons t
+                  Nothing -> []
   where   
     fromCons (TCons es _ _) = [ e | e <- es, F.symbol e == F.symbol s ]
     fromCons _              = []
 
 
 -------------------------------------------------------------------------------
-getCallable :: (EnvLike r g, PPRD r) => g r -> RType r -> [RType r]
+extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
-getCallable _ t             = uncurry mkAll <$> foo [] t
+extractCall _ t             = uncurry mkAll <$> foo [] t
   where
     foo αs t@(TFun _ _ _)   = [(αs, t)]
     foo αs   (TAnd ts)      = concatMap (foo αs) ts 
@@ -123,7 +119,7 @@ getCallable _ t             = uncurry mkAll <$> foo [] t
 --                                 Just d  -> [ (αs, t) | CallSig t <- t_elts d ]
 --                                 Nothing -> []
 --     foo αs   (TCons es _ _) = [ (αs, t) | CallSig t <- es  ]
---     foo _    t              = error $ "getCallable: " ++ ppshow t
+--     foo _    t              = error $ "extractCall: " ++ ppshow t
 
 
 -------------------------------------------------------------------------------

@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE DeriveFunctor             #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
+{-# LANGUAGE ConstraintKinds           #-}
 
 module Language.Nano.Program (
 
@@ -23,15 +24,16 @@ module Language.Nano.Program (
   , mkNextId, isNextId, mkSSAId -- , stripSSAId
 
 
-  -- * Traversals
-  , hoistBindings, hoistTypes, collectTypes, collectModules -- , hoistAnns
-
+  -- * Traversals / folds
+  , hoistBindings, hoistTypes, visibleIfaces, hoistGlobals
+  , visibleNames, scrapeModules, writeGlobalVars
 
   ) where
 
 import           Control.Applicative     hiding (empty)
 import           Control.Exception              (throw)
 import           Data.Monoid             hiding ((<>))            
+import           Data.Maybe                     (maybeToList, listToMaybe)
 import           Data.List                      (stripPrefix)            
 import           Data.Generics                   
 import qualified Data.IntMap                 as I
@@ -43,12 +45,16 @@ import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Types
+import           Language.Nano.Typecheck.Types
 
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types        as F
+
+
+type PPR  r = (PP r, F.Reftable r, Data r)
 
 
 ---------------------------------------------------------------------------------
@@ -91,7 +97,7 @@ data Nano a r = Nano {
   -- 
   -- ^ Qualifiers
   --
-  , quals  :: ![F.Qualifier]            
+  , pQuals  :: ![F.Qualifier]            
   -- 
   -- ^ Type Invariants
   --
@@ -132,7 +138,7 @@ instance (PP r, F.Reftable r) => PP (Nano a r) where
     $+$ text "\n******************* Type Aliases **************"
     $+$ pp (tAlias pgm)
     $+$ text "\n******************* Qualifiers ****************"
-    $+$ vcat (F.toFix <$> (take 3 $ quals pgm))
+    $+$ vcat (F.toFix <$> (take 3 $ pQuals pgm))
     $+$ text "..."
     $+$ text "\n******************* Invariants ****************"
     $+$ vcat (pp <$> (invts pgm))
@@ -409,48 +415,30 @@ hoistTypes = everythingBut (++) myQ
 
 
 
--- -- | Find all function definitions/declarations whose scope is hoisted to 
--- --   the current scope. E.g. declarations in the If-branch of a conditional 
--- --   expression. Note how declarations do not escape module or function 
--- --   blocks (isolation).
--- -------------------------------------------------------------------------------
--- hoistAnns                     :: Data a => [Statement a] -> [a]
--- -------------------------------------------------------------------------------
--- hoistAnns                      = everythingBut (++) $ ([], False) `mkQ` f
---   where
---     f                          = fSt `extQ` fExp 
---     fSt (FunctionStmt l _ _ _) = ([l], True)
---     fSt (FunctionDecl l _ _  ) = ([l], True)
---     fSt (ClassStmt l _ _ _ _ ) = ([l], True)
---     fSt (ModuleStmt l _ _ )    = ([l], True)
---     fSt s                      = ([getAnnotation s], False)
---     fExp                      :: Expression t -> ([t], Bool)
---     fExp (FuncExpr l _ _ _)    = ([l], True)
---     fExp e                     = ([getAnnotation e], False)
--- 
-
--- Only descend down modules 
 -------------------------------------------------------------------------------
-collectTypes :: (IsLocated a, Data a) => [Statement a] -> [(AbsName, Statement a)]
+hoistGlobals :: Data r => [Statement (AnnType r)] -> [Id (AnnType r)]
 -------------------------------------------------------------------------------
-collectTypes  = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
+hoistGlobals = everythingBut (++) myQ
   where
-    f e@(ClassStmt _ x _ _ _ ) s = ([(AN $ QName (srcPos e) s $ F.symbol x,e)], s, True)
-    f   (ModuleStmt _ x _    ) s = ([], s ++ [F.symbol x], False)
-    f _                        s = ([], s, True)
+    myQ a  = case cast a :: (Data r => Maybe (Statement (AnnType r))) of
+               Just  s -> fSt s
+               Nothing -> 
+                   case cast a :: (Data r => Maybe (Expression (AnnType r))) of
+                     Just  s -> fExp s
+                     Nothing -> case cast a :: (Data r => Maybe (VarDecl (AnnType r))) of
+                                  Just  s -> fVd s
+                                  Nothing -> ([], False)
 
-
--- Only descend down modules 
--------------------------------------------------------------------------------
-collectModules :: (IsLocated a, Data a) => [Statement a] -> [(AbsPath, [Statement a])]
--------------------------------------------------------------------------------
-collectModules ss = topLevel : rest ss
-  where
-    rest                      = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
-    f e@(ModuleStmt _ x ms) s = let p = s ++ [F.symbol x] in
-                                ([(AP $ QPath (srcPos e) p, ms)], p, False) 
-    f _                    s  = ([], s, True)
-    topLevel                  = (AP $ QPath (srcPos dummySpan) [], ss)
+    fSt                 :: Statement (AnnType r) -> ([Id (AnnType r)], Bool)
+    fSt (FunctionStmt{}) = ([ ], True)
+    fSt (FunctionDecl{}) = ([ ], True)
+    fSt (ClassStmt{})    = ([ ], True)
+    fSt (ModuleStmt{})   = ([ ], True)
+    fSt s                = ([ ], False)
+    fExp                :: Expression (AnnType r) -> ([Id (AnnType r)], Bool)
+    fExp e               = ([ ], True)
+    fVd                 :: VarDecl (AnnType r) -> ([Id (AnnType r)], Bool)
+    fVd (VarDecl l x _)  = ([ x | VarAnn _ <- ann_fact l ], True)
 
 
 
@@ -467,4 +455,149 @@ everythingButWithContext s0 f q x
     where (r, s', stop) = q x s0
 
 
+---------------------------------------------------------------------------
+-- | AST Folds
+---------------------------------------------------------------------------
+
+-- -- Only descend down modules 
+-- -------------------------------------------------------------------------------
+-- collectTypes :: (IsLocated a, Data a) => [Statement a] -> [(AbsName, Statement a)]
+-- -------------------------------------------------------------------------------
+-- collectTypes  = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
+--   where
+--     f e@(ClassStmt _ x _ _ _ ) s = ([(AN $ QName (srcPos e) s $ F.symbol x,e)], s, True)
+--     f   (ModuleStmt _ x _    ) s = ([], s ++ [F.symbol x], False)
+--     f _                        s = ([], s, True)
+
+
+-- Only descend down modules 
+-------------------------------------------------------------------------------
+collectModules :: (IsLocated a, Data a) => [Statement a] -> [(AbsPath, [Statement a])]
+-------------------------------------------------------------------------------
+collectModules ss = topLevel : rest ss
+  where
+    rest                      = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
+    f e@(ModuleStmt _ x ms) s = let p = s ++ [F.symbol x] in
+                                ([(AP $ QPath (srcPos e) p, ms)], p, False) 
+    f _                    s  = ([], s, True)
+    topLevel                  = (AP $ QPath (srcPos dummySpan) [], ss)
+
+
+---------------------------------------------------------------------------------------
+visibleNames :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, RType r)]
+---------------------------------------------------------------------------------------
+visibleNames s = [ (ann <$> n, t) | (n, Ann l ff) <- hoistBindings s, f <- ff, t <- annToType l n f ]
+  where
+    annToType _ _ (VarAnn t)    = [t]
+    annToType l n (ClassAnn {}) = [TClass $ RN $ QName l [] (F.symbol n)]
+    annToType _ _ _             = []
+
+---------------------------------------------------------------------------------------
+visibleIfaces :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, RType r)]
+---------------------------------------------------------------------------------------
+visibleIfaces s = [ (ann <$> n, t) | (n, Ann l ff) <- hoistBindings s, f <- ff, t <- annToType l n f ]
+  where
+    annToType l n (IfaceAnn {}) = [TClass $ RN $ QName l [] (F.symbol n)]
+    annToType _ _ _             = []
+
+
+
+-- | `scrapeModules ss` creates a module store from the statements in @ss@
+--   For every module we populate:
+--
+--    * m_variables with: functions, variables, class constructors, modules
+--
+--    * m_types with: classes and interfaces
+--
+---------------------------------------------------------------------------------------
+scrapeModules               :: PPR r => [Statement (AnnSSA r)] -> QEnv (ModuleDef r)
+---------------------------------------------------------------------------------------
+scrapeModules                = qenvFromList . map mkMod . collectModules
+  where
+    visibility l                  | ExporedModElt `elem` ann_fact l = Exported
+                                  | otherwise                       = Local
+
+    mkMod (ap, m)                 = (ap, {- trace (ppshow (envKeys $ varEnv m)
+                                            ++ "\n\n" ++ ppshow (envKeys $ typeEnv m)) $ -}
+                                          ModuleDef (varEnv m) (typeEnv m) ap)
+    varEnv                        = envFromList . vStmts
+    typeEnv                       = envFromList . tStmts
+
+    vStmts                        = concatMap vStmt
+
+    vStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, (Visibility, Assignability, RType r))]
+    vStmt (VarDeclStmt _ vds)     = [ (ss x, (visibility l, WriteGlobal, t)) 
+                                    | VarDecl l x _ <- vds
+                                    , VarAnn t <- ann_fact l 
+                                    ]
+    vStmt (FunctionStmt l x _ _)  = [ (ss x, (visibility l, ReadOnly, t)) 
+                                    | VarAnn t <- ann_fact l 
+                                    ]
+    vStmt (FunctionDecl l x _  )  = [ (ss x, (visibility l, ReadOnly, t)) 
+                                    | VarAnn t <- ann_fact l 
+                                    ]
+    vStmt (ClassStmt l x _ _ _)   = [ (ss x, (visibility l, ReadOnly, TClass $ RN $ QName (ann l) [] $ F.symbol x)) ]
+    vStmt (ModuleStmt l x _)      = [ (ss x, (visibility l, ReadOnly, TModule $ RP $ QPath (ann l) [F.symbol x])) ]
+    vStmt _                       = [ ] 
+
+    tStmts                        = concatMap tStmt
+
+    tStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, IfaceDef r)]
+    tStmt c@(ClassStmt _ _ _ _ _) = maybeToList $ resolveType c
+    tStmt c@(IfaceStmt _)         = maybeToList $ resolveType c
+    tStmt _                       = [ ]
+
+    ss = fmap ann
+
+
+-- FIXME (?): Does not take into account classes with missing annotations.
+--            Ts -> rsc translation should add annotations everywhere.
+-- TODO: Use safeExtends to check inheritance
+---------------------------------------------------------------------------------------
+resolveType :: PPR r => Statement (AnnSSA r) -> Maybe (Id SourceSpan, IfaceDef r)
+---------------------------------------------------------------------------------------
+resolveType  (ClassStmt l c _ _ cs)
+  = case [ t | ClassAnn t <- ann_fact l ] of
+      [(vs, h)] -> Just (cc, ID True cc vs h (rMem (tc vs) cs))
+      _         -> Nothing
+  where
+    cc        = fmap ann c
+    x         = RN $ QName (srcPos l) [] (F.symbol c)
+    tc vs     = TApp (TRef x) ((`TVar` fTop) <$> vs) fTop
+    rMem      = concatMap . typeMembers
+
+resolveType (IfaceStmt l)
+  = listToMaybe [ (n, t) | IfaceAnn t@(ID _ n _ _ _) <- ann_fact l ]
+
+resolveType _ = Nothing 
+
+
+-- | `typeMembers` returns all the TypeMember elements associated with a class 
+--    element -- XXX: No constructor is added if missing
+--
+---------------------------------------------------------------------------------------
+typeMembers :: PPR r => RType r -> ClassElt (AnnSSA r) -> [TypeMember r]
+---------------------------------------------------------------------------------------
+typeMembers _ (Constructor l _ _ ) = [ c | ConsAnn c   <- ann_fact l ]
+
+typeMembers _ (MemberVarDecl _ static (VarDecl l _ _)) 
+    | static    = [ s | StatAnn  s@(StatSig _ _ _)  <- ann_fact l ]
+    | otherwise = [ f | FieldAnn f@(FieldSig _ _ _) <- ann_fact l ]
+
+typeMembers t (MemberMethDecl l static _ _ _ )
+    | static    = [ s                  | StatAnn s@(StatSig _ _ _)  <- ann_fact l ]
+    | otherwise = [ setThisBinding m t | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
+
+
+-- | `writeGlobalVars p` returns symbols that have `WriteMany` status, i.e. may be 
+--    re-assigned multiply in non-local scope, and hence
+--    * cannot be SSA-ed
+--    * cannot appear in refinements
+--    * can only use a single monolithic type (declared or inferred)
+-------------------------------------------------------------------------------
+writeGlobalVars           :: Data r => [Statement (AnnType r)] -> [Id (AnnType r)]
+-------------------------------------------------------------------------------
+writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
+  where 
+    fromVD (VarDecl l x _) = [ x | VarAnn _ <- ann_fact l ]
 

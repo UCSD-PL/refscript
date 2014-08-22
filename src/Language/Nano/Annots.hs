@@ -88,12 +88,13 @@ ddCast _      = False
 
 
 data Fact r
+  -- SSA
   = PhiVar      ![(Id SourceSpan)]
+  -- Unification
   | TypInst     !IContext ![RType r]
   -- Overloading
   | EltOverload !IContext  !(TypeMember r)
   | Overload    !IContext  !(RType r)
-  | TCast       !IContext  !(Cast r)
   -- Type annotations
   | VarAnn      !(RType r)
   | FieldAnn    !(TypeMember r)
@@ -102,6 +103,7 @@ data Fact r
   | ConsAnn     !(TypeMember r)
   | UserCast    !(RType r)
   | FuncAnn     !(RType r)
+  | TCast       !IContext  !(Cast r)
   -- Named type annotation
   | IfaceAnn    !(IfaceDef r)
   | ClassAnn    !([TVar], Maybe (RelName, [RType r]))

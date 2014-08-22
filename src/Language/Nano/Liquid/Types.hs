@@ -39,7 +39,8 @@ module Language.Nano.Liquid.Types (
   , mapReftM
 
   -- * Primitive Types
-  , prefixOpRTy, infixOpRTy 
+  -- , prefixOpRTy
+  -- , infixOpRTy 
 
   -- * Useful Operations
   , foldReft, efoldRType, AnnTypeR
@@ -408,15 +409,15 @@ isTrivialRefType t     = foldReft (\r -> (f r &&)) True t
   where 
     f (F.Reft (_,ras)) = null ras
 
-------------------------------------------------------------------------------------------
-prefixOpRTy :: PrefixOp -> CGEnv -> RefType
-------------------------------------------------------------------------------------------
-prefixOpRTy o g = prefixOpTy o $ cge_names g
+-- ------------------------------------------------------------------------------------------
+-- prefixOpRTy :: PrefixOp -> CGEnv -> RefType
+-- ------------------------------------------------------------------------------------------
+-- prefixOpRTy o g = prefixOpTy o $ cge_names g
 
-------------------------------------------------------------------------------------------
-infixOpRTy :: InfixOp -> CGEnv -> RefType
-------------------------------------------------------------------------------------------
-infixOpRTy o g  = infixOpTy o $ cge_names g
+-- ------------------------------------------------------------------------------------------
+-- infixOpRTy :: InfixOp -> CGEnv -> RefType
+-- ------------------------------------------------------------------------------------------
+-- infixOpRTy o g  = infixOpTy o $ cge_names g
 
 rawStringSymbol = F.Loc (F.dummyPos "RSC.Types.rawStringSymbol") . F.symbol
 rawStringFTycon = F.symbolFTycon . F.Loc (F.dummyPos "RSC.Types.rawStringFTycon") . F.symbol

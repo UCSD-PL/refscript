@@ -166,9 +166,9 @@ initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
 
 initFuncEnv γ f i αs xs ts t s = TCE nms mod ctx pth parent
   where
-    tyBinds   = [(tVarId α, tVar α) | α <- αs]
-    varBinds  = zip (fmap ann <$> xs) ts
-    nms       = envAddReturn f t $ envAdds (tyBinds ++ varBinds ++ visibleNames s) $ tce_names γ
+    tyBinds   = [(tVarId α, (tVar α, ReadOnly)) | α <- αs]
+    varBinds  = zip (fmap ann <$> xs) $ zip ts (repeat WriteLocal)
+    nms       = envAddReturn f (t, ReadOnly) $ envAdds (tyBinds ++ varBinds ++ visibleNames s) $ envEmpty -- tce_names γ
     mod       = tce_mod γ
     ctx       = pushContext i (tce_ctx γ) 
     pth       = tce_path γ
@@ -195,18 +195,24 @@ tcEnvAdds     xs γ    = γ { tce_names = envAdds xs $ tce_names γ }
 
 tcEnvAdd      x t γ   = γ { tce_names = envAdd x t $ tce_names γ }
 
-tcEnvFindTy x γ       = case envFindTy x $ tce_names γ of 
-                          Just t   -> Just t
-                          Nothing  -> 
-                            case tce_parent γ of 
-                              Just γ' -> tcEnvFindTy x γ'
-                              Nothing -> Nothing
+tcEnvFindTy :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r)
+tcEnvFindTy x γ       = fst <$> tcEnvFindTyWithAgsn x γ 
+
+
+tcEnvFindTyWithAgsn :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability)
+tcEnvFindTyWithAgsn x γ = case envFindTy x $ tce_names γ of 
+                            Just t -> Just t
+                            Nothing     -> 
+                              case tce_parent γ of 
+                                Just γ' -> tcEnvFindTyWithAgsn x γ'
+                                Nothing -> Nothing
+
 
 safeTcEnvFindTy l γ x = case tcEnvFindTy x γ of
                           Just t  -> return t
                           Nothing -> tcError $ bugEnvFindTy (srcPos l) x 
 
-tcEnvFindReturn       = envFindReturn . tce_names
+tcEnvFindReturn       = fst . envFindReturn . tce_names
 
 tcEnvFindTypeDefM l γ x 
   = case resolveRelNameInEnv γ x of 
@@ -224,14 +230,14 @@ tcFun :: PPR r => TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r)
 -------------------------------------------------------------------------------
 tcFun γ (FunctionStmt l f xs body)
   = case tcEnvFindTy f γ of
-      Nothing       -> die $ errorMissingSpec (srcPos l) f
       Just ft       -> do ts    <- tcFunTys l f xs ft
                           body' <- foldM (tcFun1 γ l f xs) body ts
                           return $ (FunctionStmt l f xs body', Just γ) 
+      Nothing       -> die $ errorMissingSpec (srcPos l) f
 
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
-
+-- tcFun1 :: (F.Symbolic a) => TCEnv r -> AnnSSA r -> a -> [Id (AnnSSA r)] -> [Statement (AnnSSA r)] -> (Int, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
 tcFun1 γ l f xs body (i, (αs,ts,t)) 
   = tcFunBody (initFuncEnv γ f i αs xs ts t body) l body t
 
@@ -373,7 +379,8 @@ tcStmt γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
-  = do z <- tcNormalCall γ l BITruthy [e] $ builtinOpTy l BITruthy (tce_names γ)
+  = do opTy         <- safeTcEnvFindTy l γ (builtinOpId BITruthy)
+       z            <- tcNormalCall γ l BITruthy [e] opTy
        case z of 
          ([e'], _) -> do (s1', γ1) <- tcStmt γ s1
                          (s2', γ2) <- tcStmt γ s2
@@ -386,7 +393,7 @@ tcStmt γ (WhileStmt l c b)
   = do (c', t)      <- tcExpr γ c
        _            <- unifyTypeM (srcPos l) γ t tBool
        pTys         <- mapM (safeTcEnvFindTy l γ) phis
-       (b', γl)     <- tcStmt (tcEnvAdds (zip xs pTys) γ) b
+       (b', γl)     <- tcStmt (tcEnvAdds (zip xs (zip pTys (repeat WriteLocal))) γ) b
        γout         <- envLoopJoin l γ γl
        return        $ (WhileStmt l c' b', γout)  
     where 
@@ -400,8 +407,10 @@ tcStmt γ (VarDeclStmt l ds)
 
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
-  = do  (es',_) <- tcNormalCall γ l "return" (maybeToList eo) $ returnTy (tcEnvFindReturn γ) (isJust eo)
+  = do  (es',_) <- tcNormalCall γ l "return" (maybeToList eo) retTy
         return   $ (ReturnStmt l $ listToMaybe es', Nothing)
+  where
+    retTy        = returnTy (tcEnvFindReturn γ) (isJust eo)
 
 -- throw e 
 tcStmt γ (ThrowStmt l e) 
@@ -419,10 +428,10 @@ tcStmt γ (ClassStmt l x e is ce)
         return    $ (ClassStmt l x e is ce', Just γ)
   where
     tVars   αs    = [ tVar   α | α <- αs ] 
-    tyBinds αs    = [(tVarId α, tVar α) | α <- αs]
+    tyBinds αs    = [(tVarId α, (tVar α, WriteGlobal)) | α <- αs]
     rn            = RN $ QName (srcPos l) [] (F.symbol x)
     mkThis αs     = TApp (TRef rn) (tVars αs) fTop
-    newEnv αs     = tcEnvAdd (F.symbol "this") (mkThis αs) $ tcEnvAdds (tyBinds αs) γ
+    newEnv αs     = tcEnvAdd (F.symbol "this") (mkThis αs, WriteGlobal) $ tcEnvAdds (tyBinds αs) γ
 
 -- | module M { ... } 
 --
@@ -443,12 +452,15 @@ tcVarDecl ::  PPR r
 tcVarDecl γ v@(VarDecl l x (Just e))
   = do ann         <- listToMaybe <$> scrapeVarDecl v
        (e', t)     <- tcExprT l γ e ann
-       return       $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, t)] γ)
+       return       $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, (t, asgn ann))] γ)
+  where
+    asgn (Just _)   = WriteGlobal
+    asgn _          = WriteLocal
 
 tcVarDecl γ v@(VarDecl l x Nothing) 
   = do ann <- scrapeVarDecl v
        case ann of
-         [t] -> return (v, Just $ tcEnvAdds [(x, t)] γ)
+         [t] -> return (v, Just $ tcEnvAdds [(x, (t, WriteGlobal))] γ)
          _   -> tcError $ errorVarDeclAnnot (srcPos l) x
 
 -------------------------------------------------------------------------------
@@ -456,13 +468,12 @@ tcAsgn :: PPR r
        => AnnSSA r -> TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 -------------------------------------------------------------------------------
 tcAsgn l γ x e
-  = do (e' , t) <- tcExprT l γ e rhsT
-       return      (e', Just $ tcEnvAdds [(x, t)] γ)
+  = do (e' , t)    <- tcExprT l γ e tRHS
+       return       $ (e', Just $ tcEnvAdds [(x, (t,asgn))] γ)
     where
-    -- Every variable has a single raw type, whether it has been annotated with
-    -- it at declaration or through initialization.
-       rhsT      = tcEnvFindTy x γ
-       -- rhsT      = tcEnvFindSpecOrTy x γ
+       (tRHS, asgn) = case tcEnvFindTyWithAgsn x γ of
+                        Just (t, a) -> (Just t, a)
+                        Nothing     -> (Nothing, WriteLocal)
 
 -- | There are two versions for `tcExprT`. If `init` is True then this is the 
 -- variable initialization phase, otherwise any other assignment.
@@ -592,7 +603,8 @@ tcCall :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 
 -- | `o e`
 tcCall γ (PrefixExpr l o e)        
-  = do z                      <- tcNormalCall γ l o [e] (prefixOpTy o $ tce_names γ) 
+  = do opTy                   <- safeTcEnvFindTy l γ (prefixOpId o)
+       z                      <- tcNormalCall γ l o [e] opTy
        case z of
          ([e'], t)            -> return (PrefixExpr l o e', t)
          _                    -> tcError $ impossible (srcPos l) "tcCall PrefixExpr"
@@ -602,22 +614,25 @@ tcCall γ (InfixExpr l o@OpInstanceof e1 e2)
   = do (e2',t)                <- tcExpr γ e2
        case t of
          TClass (RN (QName _ _ x)) -> 
-            do ([e1',_], t) <- tcNormalCall γ l o [e1, StringLit l2 (F.symbolString x)] (infixOpTy o $ tce_names γ)
-         -- FIXME: add qualified name
-               return (InfixExpr l o e1' e2', t) 
-         _                    -> tcError          $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
+              do  opTy         <- safeTcEnvFindTy l γ (infixOpId o)
+                  ([e1',_], t) <- tcNormalCall γ l o [e1, StringLit l2 (F.symbolString x)] opTy
+                  -- FIXME: add qualified name
+                  return (InfixExpr l o e1' e2', t) 
+         _  -> tcError $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
   where
     l2 = getAnnotation e2
 
 -- | e ? e1 : e2
 tcCall γ (CondExpr l e e1 e2)
-  = do z                      <- tcNormalCall γ l BICondExpr [e,e1,e2] (builtinOpTy l BICondExpr $ tce_names γ)
+  = do opTy                   <- safeTcEnvFindTy l γ (builtinOpId BICondExpr)
+       z                      <- tcNormalCall γ l BICondExpr [e,e1,e2] opTy
        case z of
          ([e',e1',e2'], t)    -> return (CondExpr l e' e1' e2', t)
          _                    -> tcError $ impossible (srcPos l) "tcCall CondExpr"
 
 tcCall γ (InfixExpr l o e1 e2)        
-  = do z                      <- tcNormalCall γ l o [e1, e2] (infixOpTy o $ tce_names γ) 
+  = do opTy                   <- safeTcEnvFindTy l γ (infixOpId o)
+       z                      <- tcNormalCall γ l o [e1, e2] opTy
        case z of
          ([e1', e2'], t)      -> return (InfixExpr l o e1' e2', t)
          _                    -> tcError $ impossible (srcPos l) "tcCall InfixExpr"
@@ -625,14 +640,16 @@ tcCall γ (InfixExpr l o e1 e2)
 
 -- | `e1[e2]`
 tcCall γ (BracketRef l e1 e2)
-  = do z                      <- tcNormalCall γ l BIBracketRef [e1, e2] $ builtinOpTy l BIBracketRef $ tce_names γ 
+  = do opTy                   <- safeTcEnvFindTy l γ (builtinOpId BIBracketRef)
+       z                      <- tcNormalCall γ l BIBracketRef [e1, e2] opTy
        case z of
          ([e1', e2'], t)      -> return (BracketRef l e1' e2', t)
          _                    -> tcError $ impossible (srcPos l) "tcCall BracketRef"
    
 -- | `e1[e2] = e3`
 tcCall γ (AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
-  = do z                      <- tcNormalCall γ l BIBracketAssign [e1,e2,e3] $ builtinOpTy l BIBracketAssign $ tce_names γ
+  = do opTy                   <- safeTcEnvFindTy l γ (builtinOpId BIBracketAssign)
+       z                      <- tcNormalCall γ l BIBracketAssign [e1,e2,e3] opTy
        case z of
          ([e1', e2', e3'], t) -> return (AssignExpr l OpAssign (LBracket l1 e1' e2') e3', t)
          _                    -> tcError $ impossible (srcPos l) "tcCall AssignExpr"
@@ -815,9 +832,9 @@ envJoin :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEn
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
 envJoin l γ (Just γ1) (Just γ2) = 
-  do  ts    <- mapM (getPhiType l γ1 γ2) xs
+  do  tas   <- mapM (getPhiType l γ1 γ2) xs
       θ     <- getSubst
-      return $ Just $ tcEnvAdds (zip xs ts) $ γ { tce_names = apply θ (tce_names γ) }
+      return $ Just $ tcEnvAdds (zip xs tas) $ γ { tce_names = apply θ (tce_names γ) }
   where
       xs = phiVarsAnnot l
 
@@ -829,21 +846,20 @@ envLoopJoin _ γ Nothing   = return $ Just γ
 envLoopJoin l γ (Just γl) = 
   do  ts    <- mapM (getLoopNextPhiType l γ γl) xs
       θ     <- getSubst
-      return $ Just $ tcEnvAdds (zip xs ts) $ γ { tce_names = apply θ (tce_names γ) }
+      return $ Just $ tcEnvAdds (zip xs (zip ts (repeat WriteLocal))) $ γ { tce_names = apply θ (tce_names γ) }
   where 
       xs = phiVarsAnnot l 
  
 ----------------------------------------------------------------------------------
-getPhiType :: PPR r 
-           => (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan-> TCM r (RType r)
+getPhiType :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan -> TCM r (RType r, Assignability)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
-  case (tcEnvFindTy x γ1, tcEnvFindTy x γ2) of
-    (Just t1, Just t2) | t1 /= t2  -> tcError $ errorEnvJoin (ann l) x t1 t2
-                       | otherwise -> return t1
-    (_      , _      ) | forceCheck x γ1 && forceCheck x γ2 
-                          -> tcError $ bug loc "Oh no, the HashMap GREMLIN is back..."
-                       | otherwise -> tcError $ bugUnboundPhiVar loc x
+  case (tcEnvFindTyWithAgsn x γ1, tcEnvFindTyWithAgsn x γ2) of
+    (Just (t1,a1), Just (t2,s2)) | t1 /= t2  -> tcError $ errorEnvJoin (ann l) x t1 t2
+                                 | otherwise -> return (t1,a1)
+    (_      , _      )           | forceCheck x γ1 && forceCheck x γ2 
+                                  -> tcError $ bug loc "Oh no, the HashMap GREMLIN is back..."
+                                 | otherwise -> tcError $ bugUnboundPhiVar loc x
   where 
     loc = srcPos $ ann l
 

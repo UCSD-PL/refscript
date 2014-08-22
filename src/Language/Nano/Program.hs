@@ -25,7 +25,7 @@ module Language.Nano.Program (
 
 
   -- * Traversals / folds
-  , hoistTypes, visibleIfaces, hoistGlobals
+  , hoistTypes, hoistGlobals
   , visibleNames, scrapeModules, writeGlobalVars
 
   ) where
@@ -362,7 +362,7 @@ ssaStr  = "_SSA_"
 --   declarations do not escape module or function blocks.
 --
 -------------------------------------------------------------------------------
-hoistBindings :: Data r => [Statement (AnnType r)] -> [(Id (AnnType r), AnnType r)]
+hoistBindings :: Data r => [Statement (AnnType r)] -> [(Id (AnnType r), AnnType r, Assignability)]
 -------------------------------------------------------------------------------
 hoistBindings = everythingBut (++) myQ
   where
@@ -376,18 +376,18 @@ hoistBindings = everythingBut (++) myQ
                           Just  s -> fVd s
                           Nothing -> ([], False)
 
-    fSt :: Statement (AnnType r) -> ([(Id (AnnType r), AnnType r)],Bool)
-    fSt (FunctionStmt l n _ _) = ([(n,l)], True)
-    fSt (FunctionDecl l n _  ) = ([(n,l)], True)
-    fSt (ClassStmt l n _ _ _ ) = ([(n,l)], True)
-    fSt (ModuleStmt {})        = ([], True)
+    fSt :: Statement (AnnType r) -> ([(Id (AnnType r), AnnType r, Assignability)],Bool)
+    fSt (FunctionStmt l n _ _) = ([(n, l, ReadOnly)], True)
+    fSt (FunctionDecl l n _  ) = ([(n, l, ReadOnly)], True)
+    fSt (ClassStmt l n _ _ _ ) = ([(n, l, ReadOnly)], True)
+    fSt (ModuleStmt l n _)     = ([(n, l, ReadOnly)], True)
     fSt _                      = ([], False)
 
-    fExp :: Expression (AnnType r) -> ([(Id (AnnType r), AnnType r)], Bool)
+    fExp :: Expression (AnnType r) -> ([(Id (AnnType r), AnnType r, Assignability)], Bool)
     fExp _                     = ([], True)
 
-    fVd :: VarDecl (AnnType r) -> ([(Id (AnnType r), AnnType r)], Bool)
-    fVd (VarDecl l n _)        = ([(n,l) | VarAnn _ <- ann_fact l], True)
+    fVd :: VarDecl (AnnType r) -> ([(Id (AnnType r), AnnType r, Assignability)], Bool)
+    fVd (VarDecl l n _)        = ([(n, l, WriteGlobal) | VarAnn _ <- ann_fact l], True)
 
 
 
@@ -484,21 +484,15 @@ collectModules ss = topLevel : rest ss
 
 
 ---------------------------------------------------------------------------------------
-visibleNames :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, RType r)]
+visibleNames :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, (RType r, Assignability))]
 ---------------------------------------------------------------------------------------
-visibleNames s = [ (ann <$> n, t) | (n, Ann l ff) <- hoistBindings s, f <- ff, t <- annToType l n f ]
+visibleNames s = [ (ann <$> n,(t,a)) | (n,Ann l ff,a) <- hoistBindings s
+                                     , f              <- ff
+                                     , t              <- annToType l n f ]
   where
-    annToType _ _ (VarAnn t)    = [t]
-    annToType l n (ClassAnn {}) = [TClass $ RN $ QName l [] (F.symbol n)]
-    annToType _ _ _             = []
-
----------------------------------------------------------------------------------------
-visibleIfaces :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, RType r)]
----------------------------------------------------------------------------------------
-visibleIfaces s = [ (ann <$> n, t) | (n, Ann l ff) <- hoistBindings s, f <- ff, t <- annToType l n f ]
-  where
-    annToType l n (IfaceAnn {}) = [TClass $ RN $ QName l [] (F.symbol n)]
-    annToType _ _ _             = []
+    annToType _ _ (VarAnn t)         = [t]
+    annToType l n (ClassAnn {})      = [TClass $ RN $ QName l [] (F.symbol n)]
+    annToType _ _ _                  = []
 
 
 

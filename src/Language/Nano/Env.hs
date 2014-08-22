@@ -91,7 +91,7 @@ envDel   i   γ     = F.deleteSEnv (F.symbol i) γ
 envDels  is  γ     = L.foldl' (\γ x -> envDel x γ) γ is
 envToList  γ       = [ (Id l (F.symbolString x), t) | (x, Loc l t) <- F.toListSEnv γ]
 envAddReturn f     = envAdd (returnId (srcPos f))
-envFindReturn      = maybe msg val . F.lookupSEnv returnSymbol  
+envFindReturn      = maybe msg val . F.lookupSEnv returnSymbol
   where 
     msg = errorstar "bad call to envFindReturn"
 

@@ -47,7 +47,13 @@ module Language.Nano.Typecheck.Types (
   , isMethodSig, isFieldSig, setThisBinding, remThisBinding, mapEltM
 
   -- * Operator Types
-  , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy, objLitTy, setPropTy, returnTy
+  , infixOpId 
+  , prefixOpId 
+  , builtinOpId 
+  , arrayLitTy
+  , objLitTy
+  , setPropTy
+  , returnTy
 
 
   ) where 
@@ -555,7 +561,7 @@ orNull t                    | otherwise     = TApp TUn [tNull,t] fTop
 
 
 
-
+-- Kepping this alive, cause arrayLitTy still uses it.
 -----------------------------------------------------------------------
 builtinOpTy       :: (IsLocated l) => l -> BuiltinOp -> Env t -> t
 -----------------------------------------------------------------------
@@ -580,7 +586,7 @@ builtinOpId BICondExpr      = builtinId "BICondExpr"
 
 -----------------------------------------------------------------------
 arrayLitTy :: (F.Subable (RType r), IsLocated a) 
-           => a -> Int -> Env (RType r) -> RType r
+           => a -> Int -> Env (RType r, Assignability) -> RType r
 -----------------------------------------------------------------------
 arrayLitTy l n g 
   = case ty of 
@@ -588,7 +594,7 @@ arrayLitTy l n g
                   -> mkAll [μ,α] $ TFun (arrayLitBinds n xt) (arrayLitOut n t) r
       _           -> err 
     where
-      ty          = builtinOpTy l BIArrayLit g
+      ty          = fst $ builtinOpTy l BIArrayLit g
       err         = die $ bug (srcPos l) $ "Bad Type for ArrayLit Constructor"
       
 arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]] 
@@ -636,7 +642,7 @@ instance F.Symbolic (Prop a) where
 
     
 ---------------------------------------------------------------------------------
-setPropTy :: (PPR r, IsLocated l) => F.Symbol -> l -> F.SEnv (Located (RType r)) -> RType r
+setPropTy :: (PPR r, IsLocated l) => F.Symbol -> l -> Env (RType r, Assignability) -> RType r
 ---------------------------------------------------------------------------------
 setPropTy f l g =
     case ty of 
@@ -648,7 +654,7 @@ setPropTy f l g =
           | x == F.symbol "f"
           = B n (TCons [FieldSig f μx t] μ r)
     tr t  = error $ "setPropTy:tr " ++ ppshow t
-    ty    = builtinOpTy l BISetProp g
+    ty    = builtinOpTy l BISetProp (envMap fst g)
 
 
 
@@ -679,13 +685,13 @@ mkInitFldTy (StatSig  _ _ t) = Just $ mkFun ([], [B (F.symbol "f") t], tVoid)
 mkInitFldTy _                = Nothing
 
 
----------------------------------------------------------------------------------
-infixOpTy :: PP t => InfixOp -> Env t -> t 
----------------------------------------------------------------------------------
-infixOpTy o g = fromMaybe err $ envFindTy ox g
-  where 
-    err       = errorstar $ printf "Cannot find infixOpTy %s in %s" (ppshow ox) (ppshow $ g)
-    ox        = infixOpId o
+-- ---------------------------------------------------------------------------------
+-- infixOpTy :: PP t => InfixOp -> Env t -> t 
+-- ---------------------------------------------------------------------------------
+-- infixOpTy o g = fromMaybe err $ envFindTy ox g
+--   where 
+--     err       = errorstar $ printf "Cannot find infixOpTy %s in %s" (ppshow ox) (ppshow $ g)
+--     ox        = infixOpId o
 
 infixOpId OpLT         = builtinId "OpLT"
 infixOpId OpLEq        = builtinId "OpLEq"
@@ -705,12 +711,12 @@ infixOpId OpMod        = builtinId "OpMod"
 infixOpId OpInstanceof = builtinId "OpInstanceof"
 infixOpId o            = errorstar $ "infixOpId: Cannot handle: " ++ ppshow o
 
------------------------------------------------------------------------
-prefixOpTy :: PrefixOp -> Env t -> t 
------------------------------------------------------------------------
-prefixOpTy o g = fromMaybe err $ envFindTy (prefixOpId o) g
-  where 
-    err       = convertError "prefixOpTy" o
+-- -----------------------------------------------------------------------
+-- prefixOpTy :: PrefixOp -> Env t -> t 
+-- -----------------------------------------------------------------------
+-- prefixOpTy o g = fromMaybe err $ envFindTy (prefixOpId o) g
+--   where 
+--     err       = convertError "prefixOpTy" o
 
 prefixOpId PrefixMinus  = builtinId "PrefixMinus"
 prefixOpId PrefixLNot   = builtinId "PrefixLNot"

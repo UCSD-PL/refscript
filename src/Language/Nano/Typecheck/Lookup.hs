@@ -133,12 +133,14 @@ accessMember s es =
 
 -- Access the property from the relevant ambient object but return the 
 -- original accessed type instead of the type of the ambient object. 
+-- FIXME !!!
 -------------------------------------------------------------------------------
 lookupAmbientVar :: (PPRD r, EnvLike r g, F.Symbolic s) => g r -> F.Symbol -> s -> Maybe (RType r)
 -------------------------------------------------------------------------------
 lookupAmbientVar γ s amb
-  = do  a <- envFindTy (F.symbol amb) (names γ)
-        snd <$> getProp γ s a
+  = do  (t, _ )   <- envFindTy (F.symbol amb) (names γ)
+        (_, t')   <- getProp γ s t
+        return     $ t'
 
 
 -- FIXME: Probably should get rid of this and just use getField, etc...

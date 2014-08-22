@@ -31,7 +31,7 @@ data CGEnvR r = CGE {
   -- 
   -- ^ bindings in scope 
   --
-    cge_names   :: !(Env (RType r))
+    cge_names   :: !(Env (RType r, Assignability))
   -- 
   -- ^ fixpoint bindings
   --
@@ -52,18 +52,6 @@ data CGEnvR r = CGE {
   -- ^ Namespace absolute path
   --
   , cge_path    :: AbsPath
-  -- 
-  -- ^ Globals in scope, along with their fixpoint binders. We need to keep
-  --   track of these in order to remove them as bindings from the environments
-  --   where the globals appear in the LHS of a constraint.
-  --
-  --   FIXME: 
-  --
-  --      * do not allow globals to be shadows by other vars !!!
-  --        
-  --      * perhaps merge with cge_names
-  --
-  , cge_globs   :: M.HashMap F.Symbol [F.BindId]
   -- 
   -- ^ Parent namespace environment
   --

@@ -52,9 +52,9 @@ Executable rsc
                   , language-ecmascript-pp
                   , RefScript
 
-  extensions:       ExistentialQuantification
-                  , FlexibleInstances
-                  , OverlappingInstances
+--   extensions:       ExistentialQuantification
+--                   , FlexibleInstances
+--                   , OverlappingInstances
 --                   , UndecidableInstances
 --                   , DeriveDataTypeable
 --                   , TupleSections

@@ -21,8 +21,9 @@ import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
+import qualified Data.HashMap.Strict              as     M
 import qualified Data.List                        as     L
-import           Data.Traversable                        (mapAccumL)
+-- import           Data.Traversable                        (mapAccumL)
 import           Text.PrettyPrint.HughesPJ               (text)
 import           Data.Data
 import qualified Data.Foldable                    as     FO
@@ -34,7 +35,8 @@ import           Control.Applicative                     ((<$>), ( <*>))
 
 import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
 import           Language.Fixpoint.Parse
-import           Language.Fixpoint.Misc                  (mapEither, mapSnd)
+import           Language.Fixpoint.Errors
+import           Language.Fixpoint.Misc                  (mapEither)
 
 import           Language.Nano.Annots
 import           Language.Nano.Errors
@@ -51,6 +53,7 @@ import           Language.ECMAScript3.PrettyPrint
 
 import           Text.Parsec                      hiding (parse)
 import           Text.Parsec.Pos                         (newPos)
+import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
 import qualified Text.Parsec.Token                as     T
 
 import           GHC.Generics
@@ -502,22 +505,22 @@ getSpecString (RawInvt     (_, s)) = s
 getSpecString (RawCast     (_, s)) = s  
 getSpecString (RawExported (_, s)) = s  
 
-getSpecSourceSpan :: RawSpec -> SourceSpan
-getSpecSourceSpan (RawMeas     (s,_)) = s 
-getSpecSourceSpan (RawBind     (s,_)) = s 
-getSpecSourceSpan (RawFunc     (s,_)) = s 
-getSpecSourceSpan (RawIface    (s,_)) = s  
-getSpecSourceSpan (RawField    (s,_)) = s  
-getSpecSourceSpan (RawMethod   (s,_)) = s  
-getSpecSourceSpan (RawStatic   (s,_)) = s  
-getSpecSourceSpan (RawConstr   (s,_)) = s  
-getSpecSourceSpan (RawClass    (s,_)) = s  
-getSpecSourceSpan (RawTAlias   (s,_)) = s  
-getSpecSourceSpan (RawPAlias   (s,_)) = s  
-getSpecSourceSpan (RawQual     (s,_)) = s  
-getSpecSourceSpan (RawInvt     (s,_)) = s  
-getSpecSourceSpan (RawCast     (s,_)) = s  
-getSpecSourceSpan (RawExported (s,_)) = s  
+-- getSpecSourceSpan :: RawSpec -> SourceSpan
+-- getSpecSourceSpan (RawMeas     (s,_)) = s 
+-- getSpecSourceSpan (RawBind     (s,_)) = s 
+-- getSpecSourceSpan (RawFunc     (s,_)) = s 
+-- getSpecSourceSpan (RawIface    (s,_)) = s  
+-- getSpecSourceSpan (RawField    (s,_)) = s  
+-- getSpecSourceSpan (RawMethod   (s,_)) = s  
+-- getSpecSourceSpan (RawStatic   (s,_)) = s  
+-- getSpecSourceSpan (RawConstr   (s,_)) = s  
+-- getSpecSourceSpan (RawClass    (s,_)) = s  
+-- getSpecSourceSpan (RawTAlias   (s,_)) = s  
+-- getSpecSourceSpan (RawPAlias   (s,_)) = s  
+-- getSpecSourceSpan (RawQual     (s,_)) = s  
+-- getSpecSourceSpan (RawInvt     (s,_)) = s  
+-- getSpecSourceSpan (RawCast     (s,_)) = s  
+-- getSpecSourceSpan (RawExported (s,_)) = s  
 
 
 instance FromJSON SourcePos where
@@ -554,12 +557,15 @@ instance FromJSON RawSpec
 --------------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------------
-parseNanoFromFiles :: [FilePath] -> IO (Either (FixResult a) (NanoBareR Reft))
+parseNanoFromFiles :: [FilePath] -> IO (Either (FixResult Error) (NanoBareR Reft))
 --------------------------------------------------------------------------------------
 parseNanoFromFiles fs = 
   do  sa <- partitionEithers <$> mapM parseScriptFromJSON fs
       case sa of
-        ([],ps) -> return $ Right $ mkCode $ expandAnnots $ concat ps
+        -- ([],ps) -> return $ Right $ mkCode $ expandAnnots $ concat ps
+        ([],ps) -> case expandAnnots $ concat ps of
+                     Right ps -> return $ Right $ mkCode $ ps 
+                     Left e   -> return $ Left e
         (es,_ ) -> return $ Left  $ mconcat es 
 
 --------------------------------------------------------------------------------------
@@ -621,29 +627,70 @@ instance PP Integer where
   pp = pp . show
 
 
---------------------------------------------------------------------------------------
-expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> [Statement (SourceSpan, [Spec])]
---------------------------------------------------------------------------------------
-expandAnnots = snd <$> mapAccumL (mapAccumL f) 0
-  where f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
+-- --------------------------------------------------------------------------------------
+-- expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> [Statement (SourceSpan, [Spec])]
+-- --------------------------------------------------------------------------------------
+-- expandAnnots = snd <$> mapAccumL (mapAccumL f) 0
+--   where f st (ss,sp) = mapSnd ((ss),) (g st ss sp)
+--         g st ss sp   = L.mapAccumL (parse ss) st sp
+
 
 --------------------------------------------------------------------------------------
-parse :: SourceSpan -> PState -> RawSpec -> (PState, Spec)
+expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> Either (FixResult Error) [Statement (SourceSpan, [Spec])]
 --------------------------------------------------------------------------------------
-parse ss st c = foo c
-  where foo s    = failLeft $ runParser (parser s) st f (getSpecString s)
-        parser s = do a <- parseAnnot s
-                      st <- getState
-                      it <- getInput
-                      if it /= "" 
-                        then unexpected $ "trailing input: " ++ it
-                        else return $ (st, a) 
-        failLeft (Left _) = error $ "Error while parsing: " 
-                                  ++ show (getSpecString c) 
-                                  ++ "\nAt position: " 
-                                  ++ ppshow (getSpecSourceSpan c)
-        failLeft (Right r) = r
-        f = sourceName $ sp_begin ss
+expandAnnots ss 
+  | length errs > 0  = Left  $ Unsafe errs
+  | otherwise        = Right $ fmap replace <$> ss
+  where 
+    g st (ss,sp)     = foldl (parse ss) st sp
+    (_,m, errs)      = foldl g (0, M.empty, []) $ concatMap FO.toList ss 
+    replace (ss, _)  = (ss, M.lookupDefault [] ss m)
+
+-- --------------------------------------------------------------------------------------
+-- parse :: SourceSpan -> PState -> RawSpec -> (PState, Spec)
+-- --------------------------------------------------------------------------------------
+-- parse ss st c          = failLeft $ runParser (parser c) st f (getSpecString c)
+--   where
+--     parser s           = do  a <- parseAnnot s
+--                              st <- getState
+--                              it <- getInput
+--                              if it /= "" 
+--                                then unexpected $ "trailing input: " ++ it
+--                                else return $ (st, a) 
+--     failLeft (Left _)  = error $ "Error while parsing: " 
+--                              ++ show (getSpecString c) 
+--                              ++ "\nAt position: " 
+--                              ++ ppshow (getSpecSourceSpan c)
+--     failLeft (Right r) = r
+--     f = sourceName $ sp_begin ss
+
+
+--------------------------------------------------------------------------------------
+parse :: SourceSpan -> (PState, M.HashMap SourceSpan [Spec], [Error]) -> RawSpec -> (PState, M.HashMap SourceSpan [Spec], [Error])
+--------------------------------------------------------------------------------------
+parse ss (st,m,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
+  where
+    parser s = do a     <- parseAnnot s
+                  state <- getState
+                  it    <- getInput
+                  case it of 
+                    ""  -> return $ (state, a) 
+                    _   -> unexpected $ "trailing input: " ++ it
+
+
+    failLeft (Left err)      = (st, m,(fromError err): errs)
+    failLeft (Right (s, r))  = (s, M.insertWith (++) ss [r] m, errs)
+
+    -- Slight change from this one:
+    -- http://hackage.haskell.org/package/parsec-3.1.5/docs/src/Text-Parsec-Error.html#ParseError
+    showErr = showErrorMessages "or" "unknown parse error" "expecting" 
+                "unexpected" "end of input" . errorMessages
+    fromError err = mkErr ss   $ showErr err 
+                              ++ "\n\nWhile parsing: " 
+                              ++ show (getSpecString c)
+
+    f = sourceName $ sp_begin ss
+
 
 instance PP (RawSpec) where
   pp = text . getSpecString

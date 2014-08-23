@@ -341,6 +341,8 @@ mapReftM f (TFun xts t r)    = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM
 mapReftM f (TAll α t)        = TAll α <$> mapReftM f t
 mapReftM f (TAnd ts)         = TAnd   <$> mapM (mapReftM f) ts
 mapReftM f (TCons bs m r)    = TCons  <$> mapM (mapReftEltM f) bs <*> return m <*> f r
+mapReftM _ (TClass a)        = return $ TClass a
+mapReftM _ (TModule a)       = return $ TModule a
 mapReftM _ t                 = error   $ render $ text "Not supported in mapReftM: " <+> pp t 
 
 mapReftBindM f (B x t)       = B x     <$> mapReftM f t
@@ -373,6 +375,8 @@ efoldReft g f = go
     go γ z (TFun xts t r)   = f γ r $ go γ' (gos γ' z (b_type <$> xts)) t  where γ' = foldr (efoldExt g) γ xts
     go γ z (TAnd ts)        = gos γ z ts 
     go γ z (TCons bs _ r)   = f γ' r $ gos γ z (f_type <$> bs) where γ' = foldr (efoldExt' g) γ bs
+    go _ z (TClass _)       = z
+    go _ z (TModule _)      = z
     go _ _ t                = error $ "Not supported in efoldReft: " ++ ppshow t
 
     gos γ z ts              = L.foldl' (go γ) z ts

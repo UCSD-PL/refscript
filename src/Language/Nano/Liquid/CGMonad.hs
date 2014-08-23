@@ -208,9 +208,9 @@ type TConInv = M.HashMap TCon (Located RefType)
  
 
 ---------------------------------------------------------------------------------------
-cgError     :: a -> Error -> CGM b 
+cgError     :: Error -> CGM b 
 ---------------------------------------------------------------------------------------
-cgError _ e = throwE e
+cgError err = throwE $ catMessage err "CG-ERROR\n"
 
 ---------------------------------------------------------------------------------------
 -- | Environment API
@@ -429,7 +429,7 @@ safeEnvFindTy :: (IsLocated x, F.Symbolic x, F.Expression x, PP x)
 ---------------------------------------------------------------------------------------
 safeEnvFindTy x g = case envFindTy x g of
                         Just t  -> return t
-                        Nothing ->  cgError l $ bugEnvFindTy l x 
+                        Nothing ->  cgError $ bugEnvFindTy l x 
   where
     l = srcPos x
 
@@ -439,7 +439,7 @@ safeEnvFindTyWithAsgn :: (IsLocated x, F.Symbolic x, F.Expression x, PP x)
 ---------------------------------------------------------------------------------------
 safeEnvFindTyWithAsgn x g = case envFindTyWithAsgn x g of
                         Just t  -> return t
-                        Nothing ->  cgError l $ bugEnvFindTy l x 
+                        Nothing ->  cgError $ bugEnvFindTy l x 
   where
     l = srcPos x
 
@@ -687,7 +687,7 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   | α1 == α2
   = bsplitC g i t1 t2
   | otherwise
-  = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
+  = cgError $ bugBadSubtypes l t1 t2 where l = srcPos i
 
 -- | Unions
 --
@@ -704,7 +704,7 @@ splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
 --
 splitC (Sub g i t1@(TApp (TRef x1) (_:t1s) _) t2@(TApp (TRef x2) (μ2:t2s) _)) 
   | x1 /= x2 
-  = cgError l $ bugBadSubtypes l t1 t2
+  = cgError $ bugBadSubtypes l t1 t2
   | isImmutable μ2
   = do  cs    <- bsplitC g i t1 t2
         -- cs'   <- splitWithVariance (varianceTDef $ findSymOrDie x1 δ) t1s t2s
@@ -735,19 +735,19 @@ splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- concatMapM splitC ((safeZipWith "splitc-5") (Sub g i) t1s t2s)
         return $ cs ++ cs'
-  | otherwise = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
+  | otherwise = cgError $ bugBadSubtypes l t1 t2 where l = srcPos i
 
 -- | These need to be here due to the lack of a folding operation
 --
 splitC (Sub g i t1@(TApp (TRef _) _ _) t2) = 
   case flattenType g t1 of
     Just t1' -> splitC (Sub g i t1' t2)
-    Nothing  -> cgError l $ errorUnfoldType l t1 where l = srcPos i
+    Nothing  -> cgError $ errorUnfoldType l t1 where l = srcPos i
 
 splitC (Sub g i t1 t2@(TApp (TRef _) _ _)) = 
   case flattenType g t2 of
     Just t2' -> splitC (Sub g i t1 t2')
-    Nothing  -> cgError l $ errorUnfoldType l t2 where l = srcPos i
+    Nothing  -> cgError $ errorUnfoldType l t2 where l = srcPos i
 
 -- | TCons
 --
@@ -757,7 +757,7 @@ splitC (Sub g i t1@(TCons e1s μ1 _ ) t2@(TCons e2s μ2 _ ))
         return $ cs ++ cs'
   
 splitC x@(Sub _ _ t1 t2)
-  = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos x
+  = cgError $ bugBadSubtypes l t1 t2 where l = srcPos x
 
 
 -- FIXME: 
@@ -771,7 +771,7 @@ splitEs g i μ1 μ2 e1s e2s
   | length e1s' == length e2s'
   = concatMapM (uncurry $ splitE g i μ1 μ2) $ zip e1s' e2s'
   | otherwise
-  = cgError l $ bugMalignedFields l e1s e2s 
+  = cgError $ bugMalignedFields l e1s e2s 
   where
     l     = srcPos i
     e1s'  = L.sortBy (compare `on` F.symbol) (filter flt e1s)
@@ -872,6 +872,12 @@ splitW (W g i t@(TCons es _ _))
        ws     <- concatMapM splitW [ W g i $ eltType e | e <- es ]
        return  $ bws ++ ws
 
+splitW (W _ _ (TClass _ ))
+  = return []
+
+splitW (W _ _ (TModule _ ))
+  = return []
+
 splitW (W _ _ t) = error $ render $ text "Not supported in splitW: " <+> pp t
 
 bsplitW g t i 
@@ -885,7 +891,7 @@ envTyAdds l xts = envAdds "envTyAdds" [(symbolId l x,(t,WriteLocal)) | B x t <- 
 
 cgFunTys l f xs ft = 
   case funTys l f xs ft of 
-    Left e  -> cgError l e 
+    Left e  -> cgError e 
     Right a -> return a
 
 
@@ -898,7 +904,7 @@ cgMethTys l f (m,t)
 
 methTys l f ft0
   = case remThisBinding ft0 of
-      Nothing         -> cgError l $ errorNonFunction (srcPos l) f ft0 
+      Nothing         -> cgError $ errorNonFunction (srcPos l) f ft0 
       Just (vs,bs,t)  -> return    $ (vs,b_type <$> bs,t)
 
 
@@ -910,9 +916,9 @@ getSuperM :: IsLocated a => a -> RefType -> CGM RefType
 --         case z of 
 --           ID _ _ vs (Just (p,ps)) _ -> return  $ apply (fromList $ zip vs ts) 
 --                                                $ TApp (TRef $ F.symbol p) ps fTop
---           ID _ _ _ Nothing _        -> cgError l $ errorSuper (srcPos l) 
+--           ID _ _ _ Nothing _        -> cgError $ errorSuper (srcPos l) 
 
-getSuperM l _  = cgError l $ errorSuper $ srcPos l
+getSuperM l _  = cgError $ errorSuper $ srcPos l
 
 
 --------------------------------------------------------------------------------
@@ -926,9 +932,9 @@ getSuperDefM :: IsLocated a => a -> RefType -> CGM (IfaceDef F.Reft)
 --                return            $ apply (fromList $ zip vs ts) 
 --                                  $ apply (fromList $ zip ws ps)
 --                                  $ ID c n [] pp ee
---           ID _ _ _ Nothing _ -> cgError l $ errorSuper (srcPos l) 
+--           ID _ _ _ Nothing _ -> cgError $ errorSuper (srcPos l) 
 
-getSuperDefM l _  = cgError l $ errorSuper $ srcPos l
+getSuperDefM l _  = cgError $ errorSuper $ srcPos l
 
 
 
@@ -938,5 +944,5 @@ getSuperDefM l _  = cgError l $ errorSuper $ srcPos l
 zipTypeM l g t1 t2 = 
   case zipType g t1 t2 of
     Just t  -> return t
-    Nothing -> cgError l $ bugZipType l t1 t2
+    Nothing -> cgError $ bugZipType l t1 t2
 

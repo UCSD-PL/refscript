@@ -55,9 +55,14 @@ type PPRS r = (PPR r, Substitutable r (Fact r))
 --------------------------------------------------------------------------------
 verifyFile    :: FilePath -> [FilePath] -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile f fs = parse fs $ ssa $ tc $ refTc f
+verifyFile f fs = do  (a,b) <- parse fs $ ssa $ tc $ refTc f
+                      return (a,b)
+parse fs next 
+  = do  r <- parseNanoFromFiles fs 
+        case r of 
+          Left  l -> return (A.NoAnn, l) 
+          Right x -> next x
 
-parse f next    = parseNanoFromFiles f         >>= next
 ssa   next p    = ssaTransform p              >>= either (lerror . single) next
 tc    next p    = typeCheck (expandAliases p) >>= either lerror next
 refTc f    p    = getOpts >>= solveConstraints f . (`generateConstraints` p)
@@ -126,7 +131,7 @@ consEnvFindTypeDefM :: IsLocated a => a -> CGEnv -> RelName -> CGM (IfaceDef F.R
 consEnvFindTypeDefM l γ x
   = case resolveRelNameInEnv γ x of 
       Just t  -> return t
-      Nothing -> cgError l $ bugClassDefNotFound (srcPos l) x
+      Nothing -> cgError $ bugClassDefNotFound (srcPos l) x
 
 
 -------------------------------------------------------------------------------
@@ -141,7 +146,7 @@ consFun g (FunctionStmt l f xs body)
       Just spec -> do ft        <- cgFunTys l f xs spec
                       forM_ ft   $ consFun1 l g f xs body
                       return     $ g
-      Nothing   -> cgError l $ errorMissingSpec (srcPos l) f
+      Nothing   -> cgError $ errorMissingSpec (srcPos l) f
        
 consFun _ s 
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
@@ -264,7 +269,7 @@ consStmt g (ThrowStmt _ e)
 consStmt g (FunctionDecl l n _ )
   = case envFindTy n g of
       Just _  -> return $ Just g
-      Nothing -> cgError l $ bugEnvFindTy (srcPos l) n
+      Nothing -> cgError $ bugEnvFindTy (srcPos l) n
 
 -- function f(x1...xn){ s }
 consStmt g s@(FunctionStmt _ _ _ _)
@@ -312,7 +317,7 @@ consVarDecl g (VarDecl l x (Just e)) =
 consVarDecl g (VarDecl l x Nothing) =
   case envFindTyWithAsgn x g of
     Just (ta, WriteGlobal) -> Just <$> envAdds "consVarDecl" [(x, (ta, WriteGlobal))] g
-    _                      -> cgError l $ errorVarDeclAnnot (srcPos l) x
+    _                      -> cgError $ errorVarDeclAnnot (srcPos l) x
 
 
 -- FIXME: Do the safeExtends check here. Also add casts in the TC phase wherever
@@ -331,13 +336,13 @@ consClassElt g _ (Constructor l xs body)
   = case [ c | ConsAnn c  <- ann_fact l ] of
       [ConsSig ft]        -> do t <-    cgFunTys l i xs ft
                                 mapM_ (consFun1 l g i xs body) t
-      _                   -> cgError l $ unsupportedNonSingleConsTy $ srcPos l
+      _                   -> cgError $ unsupportedNonSingleConsTy $ srcPos l
   where 
     i = Id l "constructor"
 
 consClassElt g cid (MemberVarDecl _ static (VarDecl l1 x eo))
   = case anns of 
-      []  ->  cgError l1    $ errorClassEltAnnot (srcPos l1) cid x
+      []  ->  cgError       $ errorClassEltAnnot (srcPos l1) cid x
       fs  ->  case eo of
                 Just e     -> void <$> consCall g l1 "field init" [e] $ ft fs
                 Nothing    -> return ()
@@ -350,7 +355,7 @@ consClassElt g cid (MemberMethDecl l static i xs body)
   = case anns of
       [mt]  -> do mts   <- cgMethTys l i mt
                   mapM_    (consMeth1 l g i xs body) mts
-      _    -> cgError l  $ errorClassEltAnnot (srcPos l) cid i
+      _    -> cgError  $ errorClassEltAnnot (srcPos l) cid i
   where
     anns | static    = [ (m, t) | StatAnn (StatSig _ m t)  <- ann_fact l ]
          | otherwise = [ (m, t) | MethAnn (MethSig _ m t)  <- ann_fact l ]
@@ -409,12 +414,12 @@ consExpr g (NullLit l)
 consExpr g (ThisRef l)
   = case envFindTy (Id (ann l) "this") g of
       Just t  -> envAddFresh l (t, WriteGlobal) g
-      Nothing -> cgError l $ errorUnboundId (ann l) "this" 
+      Nothing -> cgError $ errorUnboundId (ann l) "this" 
 
 consExpr g (VarRef l x)
   = case envFindTy x g of
       Just t  -> addAnnot (srcPos l) x t >> return (x, g) 
-      Nothing -> cgError l $ errorUnboundId (ann l) x
+      Nothing -> cgError $ errorUnboundId (ann l) x
 
 consExpr g (PrefixExpr l o e)
   = do opTy         <- safeEnvFindTy (prefixOpId o) g
@@ -426,7 +431,7 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2)
        case t of
          TClass x   -> do opTy <- safeEnvFindTy (infixOpId o) g
                           consCall g l o [e1, StringLit l2 (cc x)] opTy
-         _          -> cgError l $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
+         _          -> cgError $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
   where
     l2 = getAnnotation e2
     cc (RN (QName _ _ s)) = F.symbolString s 
@@ -446,8 +451,8 @@ consExpr g (CallExpr l e@(SuperRef _) es)
       Just t  ->  do  elts <- t_elts <$> getSuperDefM l t
                       case [ t | ConsSig t <- elts ] of
                         [ct] -> consCall g l e es ct
-                        _    -> cgError l $ unsupportedNonSingleConsTy $ srcPos l
-      Nothing ->  cgError l $ errorUnboundId (srcPos l) "this"
+                        _    -> cgError $ unsupportedNonSingleConsTy $ srcPos l
+      Nothing ->  cgError $ errorUnboundId (srcPos l) "this"
 
 -- | e.m(es)
 consExpr g (CallExpr l em@(DotRef _ e f) es)
@@ -470,7 +475,7 @@ consExpr g ef@(DotRef l e f)
         t      <- safeEnvFindTy x g'
         case getElt g' f t of 
           [FieldSig _ _ ft] -> consCall g' l ef [vr x] $ mkTy ft
-          _                 -> cgError l $ errorExtractNonFld (srcPos l) f e t 
+          _                 -> cgError $ errorExtractNonFld (srcPos l) f e t 
   where
     -- Add a VarRef so that e is not typechecked again
     vr       = VarRef $ getAnnotation e
@@ -509,7 +514,7 @@ consExpr g (NewExpr l e es)
         t       <- safeEnvFindTy x g'
         case extractCtor g t of
           Just ct -> consCall g l "constructor" es ct
-          Nothing -> cgError l $ errorConstrMissing (srcPos l) t 
+          Nothing -> cgError $ errorConstrMissing (srcPos l) t 
 
 -- | super
 consExpr g (SuperRef l) 
@@ -521,9 +526,9 @@ consExpr g (SuperRef l)
 --                 Just (p, ps) -> let θ = fromList $ zip vs ts in
 --                                 let t = apply θ $ TApp (TRef p) ps fTop in
 --                                 envAddFresh l t g
---                 Nothing -> cgError l $ errorSuper (srcPos l) 
---       Just    -> cgError l $ unimplemented (srcPos l) "Cannot extract super" 
-      Nothing -> cgError l $ errorSuper (srcPos l) 
+--                 Nothing -> cgError $ errorSuper (srcPos l) 
+--       Just    -> cgError $ unimplemented (srcPos l) "Cannot extract super" 
+      Nothing -> cgError $ errorSuper (srcPos l) 
   where 
     getParentType _ _  = error "getParentType"
 
@@ -534,14 +539,14 @@ consExpr g (FuncExpr l fo xs body)
                   fts       <- cgFunTys l f xs kft
                   forM_ fts  $ consFun1 l g f xs body
                   envAddFresh l (kft, WriteGlobal) g 
-      _    -> cgError l      $ errorNonSingleFuncAnn $ srcPos l
+      _    -> cgError      $ errorNonSingleFuncAnn $ srcPos l
   where
     anns                     = [ t | FuncAnn t <- ann_fact l ]
     f                        = maybe (F.symbol "<anonymous>") F.symbol fo
 
 
 -- not handled
-consExpr _ e = cgError l $ unimplemented l "consExpr" e where l = srcPos  e
+consExpr _ e = cgError $ unimplemented l "consExpr" e where l = srcPos  e
 
 
 -- -- | `getConstr l g s` first checks whether input @s@ is a class, in which 
@@ -560,13 +565,13 @@ consExpr _ e = cgError l $ unimplemented l "consExpr" e where l = srcPos  e
 --         do  z <- getPropTDefM  l "__constructor__" t $ tVar <$> t_args t
 --             case z of 
 --               Just (TFun bs _ r) -> return $ abs (t_args t) $ TFun bs (retT t) r
---               Just t             -> cgError l $ unsupportedConsTy l t
+--               Just t             -> cgError $ unsupportedConsTy l t
 --               Nothing            -> return $ abs (t_args t) $ TFun [] (retT t) fTop
 --       _ -> 
 --         do  z <- getPropM l "__constructor__" $ envFindTy s g
 --             case z of
 --               Just t  -> return t
---               Nothing -> cgError l $ unsupportedNonSingleConsTy $ srcPos l
+--               Nothing -> cgError $ unsupportedNonSingleConsTy $ srcPos l
 --   where
 --     -- Constructor's return type is void - instead return the class type
 --     -- FIXME: type parameters in returned type: inferred ... or provided !!! 
@@ -635,7 +640,7 @@ consCall g l fn es ft0
                            let (su, ts') = renameBinds its xes
                            zipWithM_ (subType l g') ts ts'
                            envAddFresh l (F.subst su ot, WriteLocal) g'
-         Nothing    -> cgError l $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
+         Nothing    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
     where
        overload l    = listToMaybe [ lt | Overload cx t <-  ann_fact l 
                                         , cge_ctx g     == cx
@@ -658,7 +663,7 @@ consCallDotRef g l fn rcvr elts es
     = consCall g l fn es $ ft isFieldSig
 
     | otherwise
-    = cgError l $ unsupportedDotRef (srcPos l) fn
+    = cgError $ unsupportedDotRef (srcPos l) fn
 
   where
     ft f = mkAnd $ catMaybes $ mkEltFunTy <$> filter f elts
@@ -674,7 +679,7 @@ instantiate l g fn ft
     where 
       (αs, t) = bkAll ft
       ts      = envGetContextTypArgs g l αs
-      err     = cgError l $ errorNonFunction (srcPos l) fn ft  
+      err     = cgError $ errorNonFunction (srcPos l) fn ft  
 
 
 ---------------------------------------------------------------------------------

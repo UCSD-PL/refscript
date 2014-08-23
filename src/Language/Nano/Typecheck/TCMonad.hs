@@ -185,7 +185,7 @@ extSubst βs = getSubst >>= setSubst . (`mappend` θ)
 -------------------------------------------------------------------------------
 tcError     :: Error -> TCM r a
 -------------------------------------------------------------------------------
-tcError err = throwE $ catMessage err "TC-ERROR "
+tcError err = throwE $ catMessage err "TC-ERROR\n"
 
 
 -------------------------------------------------------------------------------

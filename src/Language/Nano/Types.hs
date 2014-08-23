@@ -3,8 +3,8 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE DeriveTraversable      #-}
 {-# LANGUAGE DeriveFoldable         #-}
-{-# LANGUAGE OverlappingInstances   #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE OverlappingInstances   #-}
 
 module Language.Nano.Types where
 
@@ -372,7 +372,7 @@ pushContext s (IC c) = IC ((siteIndex s) : c)
 
 
 instance PP Int where
-  pp        = int
+  pp = int
 
 ppArgs p sep l = p $ intersperse sep $ map pp l
 

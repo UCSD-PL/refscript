@@ -1,6 +1,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
+{-# LANGUAGE OverlappingInstances      #-}
 
 module Language.Nano.Errors where
 

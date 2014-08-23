@@ -36,7 +36,7 @@ if not os.path.exists(logdir):
 argcomment = "--! run with "
 
 def logged_sys_call(args, out=None, err=None):
-  #print "exec: " + " ".join(args)
+  # print "exec: " + " ".join(args)
   return subprocess.call(args, stdout=out, stderr=err)
 
 def solve_quals(solve, file, bare, time, quiet, flags, dargs):
@@ -101,14 +101,14 @@ options, args = parser.parse_args()
 testSign  = [("pos", 0), ("neg", 1)]
 
 testCategories = [ 
-                   "objects"
-                 , "arrays"
-                 , "classes"
-                 , "loops"
-                 , "misc"
-                 , "operators"
-                 , "simple"
-                 , "unions"
+                 #  "objects"
+                 #, "arrays"
+                 #, "classes"
+                 #, "loops"
+                 #, "misc"
+                 #, "operators"
+                    "simple"
+                 #, "unions"
 
                  ## not supported:
                  # , "proto"
@@ -120,6 +120,6 @@ testCategories = [
 testdirs = [("/".join([s, c]), p) for (s, p) in testSign 
                                   for c      in testCategories ]
 
-runner    = rtest.TestRunner (Config ("rsc liquid", options.opts, testdirs, logfile, options.threadcount))
+runner    = rtest.TestRunner (Config ("rsc", options.opts, testdirs, logfile, options.threadcount))
 runner.run ()
 

@@ -49,14 +49,18 @@ verifier cfg f
 -------------------------------------------------------------------------------
 json :: FilePath -> IO (Either (F.FixResult Error) [FilePath])
 -------------------------------------------------------------------------------
-json f
-  = do fileExists <- doesFileExist f
-       if fileExists then withExistingFile f
-                     else return $ Left $ F.Crash [] $ "File does not exist: " ++ f
+json f = do fileExists <- doesFileExist f
+            if fileExists then withExistingFile f
+                          else return $ Left $ F.Crash [] $ "File does not exist: " ++ f
 
 withExistingFile f 
   | ext `elem` oks 
-  = do  (code, stdOut, _) <- readProcessWithExitCode tsCmd args ""
+  = do  preludeTSPath     <- getPreludeTSPath 
+        let args           = [ "--outDir", tempDirectory f
+                             , "--refscript"
+                             , "--lib", preludeTSPath
+                             , f ]
+        (code, stdOut, _) <- readProcessWithExitCode tsCmd args ""
         case code of 
           ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
                                 Left  s  -> return $ Left  $ F.UnknownError s
@@ -69,11 +73,6 @@ withExistingFile f
   where 
     ext            = takeExtension f
     tsCmd          = "tsc" 
-    args           = [ "--outDir", tempDirectory f
-                     , "--refscript"
-                     , "--lib", getPreludeTSPath
-                     , f
-                     ]
     oks            = [".ts", ".js"]
 
 
@@ -81,7 +80,7 @@ instance FromJSON (F.FixResult Error)
 instance ToJSON (F.FixResult Error)
 
 instance FromJSON Error
-instance ToJSON Error
+instance ToJSON Error 
 
 instance FromJSON SrcSpan
 instance ToJSON SrcSpan

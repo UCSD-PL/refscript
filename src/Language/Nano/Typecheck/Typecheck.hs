@@ -357,7 +357,8 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 
 -- e1.f = e2
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
-  = do z             <- tcNormalCall γ l BISetProp [e1,e2] $ setPropTy (F.symbol f) l $ tce_names γ
+  = do opTy          <- setPropTy l (F.symbol f) <$> safeTcEnvFindTy l γ (builtinOpId BISetProp)
+       z             <- tcNormalCall γ l BISetProp [e1,e2] opTy
        case z of 
          ([e1',e2'], _)
                      -> return (ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 e1' f) e2', Just γ)
@@ -656,7 +657,8 @@ tcCall γ (AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
 
 -- | `[e1,...,en]`
 tcCall γ (ArrayLit l es)
-  = do (es', t)               <- tcNormalCall γ l BIArrayLit es $ arrayLitTy l (length es) $ tce_names γ
+  = do opTy                   <- arrayLitTy l (length es) <$> safeTcEnvFindTy l γ (builtinOpId BIArrayLit)
+       (es', t)               <- tcNormalCall γ l BIArrayLit es opTy
        return                  $ (ArrayLit l es', t)
 
 -- | `{ f1:t1,...,fn:tn }`

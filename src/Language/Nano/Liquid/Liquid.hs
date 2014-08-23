@@ -168,9 +168,9 @@ consMeth1 l g f xs body (i, _, ft) = consFun1 l g f xs body (i,ft)
 --
 initFuncEnv l f i xs (αs, ts, t) g s =
     --  Compute base environment @g'@, then add extra bindings
-        envAdds varBinds g' 
-    >>= envAdds tyBinds 
-    >>= envAdds (visibleNames s)
+        envAdds "initFunc-0" varBinds g'
+    >>= envAdds "initFunc-1" tyBinds 
+    >>= envAdds "initFunc-2" (visibleNames s)
     >>= envAddReturn f t
   where
     g'        = CGE nms fenv grds ctx mod pth parent
@@ -211,7 +211,8 @@ consStmt g (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))
 
 -- e1.f = e2
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
-  = do (_,g') <- consCall g l BISetProp [e1,e2] $ setPropTy (F.symbol f) l $ cge_names g
+  = do opTy   <- setPropTy l (F.symbol f) <$> safeEnvFindTy (builtinOpId BISetProp) g
+       (_,g') <- consCall g l BISetProp [e1,e2] opTy
        return  $ Just g'
    
 -- e
@@ -279,8 +280,8 @@ consStmt g s@(FunctionStmt _ _ _ _)
 consStmt g (ClassStmt l x _ _ ce) 
   = do  dfn      <- consEnvFindTypeDefM l g rn
         -- FIXME: Should this check be done at TC too?
-        g'       <- envAdds [(Loc (ann l) α, (tVar α, WriteGlobal)) | α <- t_args dfn] g
-        g''      <- envAdds [(Loc (ann l) "this", (mkThis $ t_args dfn, WriteGlobal))] g'
+        g'       <- envAdds "consStmt-class-0" [(Loc (ann l) α, (tVar α, WriteGlobal)) | α <- t_args dfn] g
+        g''      <- envAdds "consStmt-class-1" [(Loc (ann l) "this", (mkThis $ t_args dfn, WriteGlobal))] g'
         consClassElts g'' x ce
         return    $ Just g
   where
@@ -310,7 +311,7 @@ consVarDecl g (VarDecl l x (Just e)) =
  
 consVarDecl g (VarDecl l x Nothing) =
   case envFindTyWithAsgn x g of
-    Just (ta, WriteGlobal) -> Just <$> envAdds [(x, (ta, WriteGlobal))] g
+    Just (ta, WriteGlobal) -> Just <$> envAdds "consVarDecl" [(x, (ta, WriteGlobal))] g
     _                      -> cgError l $ errorVarDeclAnnot (srcPos l) x
 
 
@@ -378,10 +379,10 @@ consAsgn g x e =
                                return    $ Just g'
     Just (t,a)           -> do (x', g') <- consExprT g e $ Just t
                                t        <- safeEnvFindTy x' g'
-                               Just    <$> envAdds [(x,(t,a))] g'
+                               Just    <$> envAdds "consAsgn-1" [(x,(t,a))] g'
     Nothing              -> do (x', g') <- consExprT g e Nothing
                                t        <- safeEnvFindTy x' g'
-                               Just    <$> envAdds [(x,(t,WriteLocal))] g'
+                               Just    <$> envAdds "consAsgn-1" [(x,(t,WriteLocal))] g'
 
 
 -- | @consExpr g e@ returns a pair (g', x') where x' is a fresh, 
@@ -491,7 +492,8 @@ consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3)
 
 -- | [e1,...,en]
 consExpr g (ArrayLit l es)
-  = do  t <- scrapeQualifiers $ arrayLitTy l (length es) $ cge_names g
+  = do  opTy <- arrayLitTy l (length es) <$> safeEnvFindTy (builtinOpId BIArrayLit) g
+        t    <- scrapeQualifiers opTy
         consCall g l BIArrayLit es t
 
 -- | {f1:e1,...,fn:en}
@@ -772,8 +774,8 @@ envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 envJoin' l g g1 g2
   = do  t1s     <- mapM (`safeEnvFindTyWithAsgn` g1) xs 
         t2s     <- mapM (`safeEnvFindTyWithAsgn` g2) xs
-        g1'     <- envAdds (zip xs t1s) g1 
-        g2'     <- envAdds (zip xs t2s) g2
+        g1'     <- envAdds "envJoin-0" (zip xs t1s) g1 
+        g2'     <- envAdds "envJoin-1" (zip xs t2s) g2
         -- t1s and t2s should have the same raw type, otherwise they wouldn't
         -- pass TC (we don't need to pad / fix them before joining).
         -- So we can use the raw type from one of the two branches and freshen

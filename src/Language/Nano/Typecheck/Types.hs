@@ -12,6 +12,7 @@
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE IncoherentInstances       #-}
 {-# LANGUAGE UndecidableInstances      #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
@@ -561,7 +562,6 @@ orNull t                    | otherwise     = TApp TUn [tNull,t] fTop
 
 
 
--- Kepping this alive, cause arrayLitTy still uses it.
 -----------------------------------------------------------------------
 builtinOpTy       :: (IsLocated l) => l -> BuiltinOp -> Env t -> t
 -----------------------------------------------------------------------
@@ -584,17 +584,16 @@ builtinOpId BICondExpr      = builtinId "BICondExpr"
 -- | Array literal types
 ---------------------------------------------------------------------------------
 
------------------------------------------------------------------------
-arrayLitTy :: (F.Subable (RType r), IsLocated a) 
-           => a -> Int -> Env (RType r, Assignability) -> RType r
------------------------------------------------------------------------
-arrayLitTy l n g 
-  = case ty of 
+---------------------------------------------------------------------------------
+arrayLitTy :: (F.Subable (RType r), IsLocated a) => a -> Int -> RType r -> RType r
+---------------------------------------------------------------------------------
+arrayLitTy l n ty
+  = case ty of
       TAll μ (TAll α (TFun [xt] t r)) 
                   -> mkAll [μ,α] $ TFun (arrayLitBinds n xt) (arrayLitOut n t) r
       _           -> err 
     where
-      ty          = fst $ builtinOpTy l BIArrayLit g
+      -- ty          = fst $ builtinOpTy l BIArrayLit g
       err         = die $ bug (srcPos l) $ "Bad Type for ArrayLit Constructor"
       
 arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]] 
@@ -642,9 +641,9 @@ instance F.Symbolic (Prop a) where
 
     
 ---------------------------------------------------------------------------------
-setPropTy :: (PPR r, IsLocated l) => F.Symbol -> l -> Env (RType r, Assignability) -> RType r
+setPropTy :: (PPR r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
 ---------------------------------------------------------------------------------
-setPropTy f l g =
+setPropTy l f ty =
     case ty of 
       TAll α2 (TAll μ2 (TFun [xt2,a2] rt2 r2)) -> TAll α2 (TAll μ2 (TFun [tr xt2,a2] rt2 r2))
       _                                        -> errorstar $ "setPropTy " ++ ppshow ty
@@ -654,7 +653,7 @@ setPropTy f l g =
           | x == F.symbol "f"
           = B n (TCons [FieldSig f μx t] μ r)
     tr t  = error $ "setPropTy:tr " ++ ppshow t
-    ty    = builtinOpTy l BISetProp (envMap fst g)
+    -- ty    = builtinOpTy l BISetProp (envMap fst g)
 
 
 

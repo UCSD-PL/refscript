@@ -5,7 +5,7 @@
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
 
-{-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE IncoherentInstances       #-}
 {-# LANGUAGE LiberalTypeSynonyms       #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}

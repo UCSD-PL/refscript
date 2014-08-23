@@ -139,7 +139,7 @@ isLeft             = not . isRight
 --------------------------------------------------------------------------------
 
 qenvToList :: QEnv t -> [(AbsPath, t)]
-qenvToList  (QE γ)  = [ (x, t) | (x, Loc l t) <- M.toList γ]
+qenvToList  (QE γ)  = [ (x, t) | (x, Loc _ t) <- M.toList γ]
 
 qenvFromList       :: [(AbsPath, t)] -> QEnv t
 qenvFromList        = L.foldl' step qenvEmpty

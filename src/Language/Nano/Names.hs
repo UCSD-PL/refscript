@@ -17,7 +17,6 @@ module Language.Nano.Names (
   , RelName(..), AbsName(..)
   , RelPath(..), AbsPath(..)
   , NameSpacePath
-  , AbsolutePath 
 
   -- * Deconstructing Id
   , idName
@@ -46,8 +45,6 @@ import           Text.PrettyPrint.HughesPJ
 --------------------------------------------------------------------------
 
 type NameSpacePath = [F.Symbol]
-
-type AbsolutePath  = NameSpacePath
 
 -- | A qualified name (used for qualified variables, classes, functions, etc.)
 --
@@ -129,11 +126,11 @@ instance PP F.Symbol where
 
 instance PP QName where
   pp (QName _ [] s) = pp s
-  pp (QName _ ms s) = pp ms <> dot <> pp s
+  pp (QName _ ms s) = (hcat $ punctuate dot $ map pp ms) <> dot <> pp s
 
 instance PP QPath where
   pp (QPath _ []) = pp "<global>"
-  pp (QPath _ ms) = pp ms
+  pp (QPath _ ms) = hcat $ punctuate dot $ map pp ms
 
 instance PP RelPath where
   pp (RP p) = pp p
@@ -147,8 +144,8 @@ instance PP RelName where
 instance PP AbsName where
   pp (AN p) = pp p
 
-instance PP NameSpacePath where
-  pp = hcat . punctuate dot . map pp
+-- instance PP NameSpacePath where
+--   pp = hcat . punctuate dot . map pp
 
 instance (Ord a, F.Fixpoint a) => PP (F.FixResult a) where
   pp = F.resultDoc

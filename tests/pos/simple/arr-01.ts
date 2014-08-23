@@ -7,7 +7,16 @@
 /*@ ext :: (x: number) => void */
 function ext(x: number) { }
 
-class Foo {
+class Bar {
+
+  /*@ new () => void */
+  constructor () {}
+
+
+}
+
+
+class Foo extends Bar {
 
   // Static method
   /*@ static s : (x: number) => void */

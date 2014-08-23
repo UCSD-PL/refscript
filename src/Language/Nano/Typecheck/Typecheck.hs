@@ -751,8 +751,8 @@ tcCallDotRef _ _ _ _ _ = error "tcCallDotRef-unsupported"
 -- | Signature resolution
 tcNormalCall γ l fn es ft0 
   = do (es', ts)      <- unzip <$> mapM (tcExpr γ) es
-       z              <- {- tracePP ("resolved overload for " ++ ppshow fn ++ " :: " ++ ppshow ft0) 
-                          <$> -}  resolveOverload γ l fn es' ts ft0
+       z              <- {- tracePP ("resolved overload for " ++ ppshow fn ++ " :: " ++ ppshow ft0) <$> -} 
+                            resolveOverload γ l fn es' ts ft0 -- (tracePP "ft0" ft0)
        case z of 
          Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft
                             addSubst l θ

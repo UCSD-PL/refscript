@@ -101,7 +101,7 @@ runOne verifyFile f
        renderAnnotations f r u
        return r
     where
-       handler e = return (NoAnn, F.Crash [e] "")
+       handler e = return (NoAnn, F.Unsafe [e])
        tmpDir    = tempDirectory f
 
 

@@ -12,7 +12,9 @@ module Language.Nano.Typecheck.Parse (parseNanoFromFiles) where
 
 import           Prelude                          hiding ( mapM)
 
+import           Data.Either                             (partitionEithers)
 import           Data.Default
+import           Data.Monoid                             (mconcat)
 import           Data.Maybe                              (catMaybes)
 import           Data.Aeson                              (eitherDecode)
 import           Data.Aeson.Types                 hiding (Parser, Error, parse)
@@ -552,9 +554,13 @@ instance FromJSON RawSpec
 --------------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------------
-parseNanoFromFiles :: [FilePath] -> IO (NanoBareR Reft)
+parseNanoFromFiles :: [FilePath] -> IO (Either (FixResult a) (NanoBareR Reft))
 --------------------------------------------------------------------------------------
-parseNanoFromFiles fs = mkCode . expandAnnots . concat <$> mapM parseScriptFromJSON fs
+parseNanoFromFiles fs = 
+  do  sa <- partitionEithers <$> mapM parseScriptFromJSON fs
+      case sa of
+        ([],ps) -> return $ Right $ mkCode $ expandAnnots $ concat ps
+        (es,_ ) -> return $ Left  $ mconcat es 
 
 --------------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString
@@ -562,14 +568,14 @@ getJSON :: MonadIO m => FilePath -> m B.ByteString
 getJSON = liftIO . B.readFile
 
 --------------------------------------------------------------------------------------
-parseScriptFromJSON :: FilePath -> IO [Statement (SourceSpan, [RawSpec])]
+parseScriptFromJSON :: FilePath -> IO (Either (FixResult a) [Statement (SourceSpan, [RawSpec])])
 --------------------------------------------------------------------------------------
 parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
   where 
     decodeOrDie s =
       case eitherDecode s :: Either String [Statement (SourceSpan, [RawSpec])] of
-        Left msg -> error $ "JSON decode error:\n" ++ msg
-        Right p  -> p
+        Left msg -> Left  $ Crash [] $ "JSON decode error:\n" ++ msg
+        Right p  -> Right $ p
 
 --------------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft

@@ -22,7 +22,7 @@ declare function pos(): number;
 
 declare function alert(s: string): void;
 
-interface Pair<A,B> { }
+interface Pair<A,B> { x: A; y: B; }
 
 
 

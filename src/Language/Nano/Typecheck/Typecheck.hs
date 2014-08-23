@@ -64,10 +64,11 @@ verifyFile :: [FilePath] -> IO (UAnnSol a, F.FixResult Error)
 --------------------------------------------------------------------------------
 verifyFile fs = parse fs $ ssa $ tc
 
--- testFile fs = do  (u,e) <- verifyFile fs
---                   return ()
-
-parse fs next = parseNanoFromFiles fs >>= next
+parse fs next 
+  = do  r <- parseNanoFromFiles fs 
+        case r of 
+          Left  l -> return (NoAnn, l) 
+          Right x -> next x
 
 ssa next p  
   = do  r <- ssaTransform p
@@ -857,7 +858,7 @@ getPhiType :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan -> TCM 
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (tcEnvFindTyWithAgsn x γ1, tcEnvFindTyWithAgsn x γ2) of
-    (Just (t1,a1), Just (t2,s2)) | t1 /= t2  -> tcError $ errorEnvJoin (ann l) x t1 t2
+    (Just (t1,a1), Just (t2,_ )) | t1 /= t2  -> tcError $ errorEnvJoin (ann l) x t1 t2
                                  | otherwise -> return (t1,a1)
     (_      , _      )           | forceCheck x γ1 && forceCheck x γ2 
                                   -> tcError $ bug loc "Oh no, the HashMap GREMLIN is back..."

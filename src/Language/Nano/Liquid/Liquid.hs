@@ -217,7 +217,7 @@ consStmt g (ExprStmt _ (AssignExpr _ OpAssign (LVar lx x) e))
 -- e1.f = e2
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
   = do opTy   <- setPropTy l (F.symbol f) <$> safeEnvFindTy (builtinOpId BISetProp) g
-       (_,g') <- consCall g l BISetProp [e1,e2] opTy
+       (_,g') <- consCall g l BISetProp [e1,e2] $ opTy
        return  $ Just g'
    
 -- e
@@ -473,24 +473,12 @@ consExpr g (CallExpr l e es)
 consExpr g ef@(DotRef l e f)
   = do  (x,g') <- consExpr g e
         te     <- safeEnvFindTy x g'
-
         case getProp g' (F.symbol f) te of
           Just (_, t) -> consCall g' l ef [vr x] $ mkTy te t
           Nothing     -> cgError $ errorMissingFld (srcPos l) f te
-
-
---         case getElt g' f t of 
---           [FieldSig _ _ ft] -> consCall g' l ef [vr x] $ mkTy te ft
---           _                 -> cgError $ errorExtractNonFld (srcPos l) f e t 
---
   where
     mkTy s t = mkFun ([], [B (F.symbol "this") s], t) 
     vr       = VarRef $ getAnnotation e
-
-    -- Add a VarRef so that e is not typechecked again
-    -- mkTy t   = mkFun ([α], [B (F.symbol "this") tα], t) 
-    -- α        = TV (F.symbol "α" ) (srcPos l)
-    -- tα       = TVar α fTop
 
 -- FIXME: e["f"]
 

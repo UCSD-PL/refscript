@@ -56,7 +56,7 @@ data QName = QName {
 
 -- | Relative and absolute version of a qualafied name
 --
-newtype RelName = RN QName deriving (Eq, Ord, Show, Data, Typeable)
+newtype RelName = RN QName deriving (Ord, Show, Data, Typeable)
 newtype AbsName = AN QName deriving (Eq, Ord, Show, Data, Typeable)
 
 -- | A qualified path (used for qualified namespaces, i.e. modules)
@@ -76,6 +76,9 @@ instance Eq QPath where
 
 instance Eq QName where
   QName _ p1 n1 == QName _ p2 n2 = (p1,n1) == (p2,n2)
+  
+instance Eq RelName where
+  RN n1 == RN n2 = n1 == n2
 
 instance F.Symbolic RelName where
   symbol (RN (QName _ _ s)) = s

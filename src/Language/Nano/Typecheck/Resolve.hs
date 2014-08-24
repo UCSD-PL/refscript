@@ -25,6 +25,7 @@ import           Data.Function                  (on)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
+import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Types
@@ -204,14 +205,11 @@ flatten'' st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten st γ (d, tVar <$> vs)
 flattenType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
 flattenType γ (TApp (TRef x) ts r) = do 
-    -- es                <- tracePP "flattened" <$> flatten False γ . (, ts) =<< tracePP "resolveRelNameInEnv" <$> resolveRelNameInEnv γ x
-    es                <- flatten False γ . (, ts) =<< resolveRelNameInEnv γ x
+    es                <- {- tracePP ("flattening " ++ ppshow x) <$> -} flatten False γ . (, ts) 
+                     =<< {- tracePP ("resolving " ++ ppshow x) <$> -} resolveRelNameInEnv γ x
     case ts of 
       mut : _         -> Just $ TCons es (toType mut) r
       _               -> Nothing
-  where
-
-    _                  = flatten False γ . (,ts)
 
 flattenType γ (TClass x)             = do
     es                <- flatten' True γ =<< resolveRelNameInEnv γ x

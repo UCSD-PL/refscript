@@ -359,11 +359,8 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 -- e1.f = e2
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do opTy          <- setPropTy l (F.symbol f) <$> safeTcEnvFindTy l γ (builtinOpId BISetProp)
-       z             <- tcNormalCall γ l BISetProp [e1,e2] opTy
-       case z of 
-         ([e1',e2'], _)
-                     -> return (ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 e1' f) e2', Just γ)
-         (_,_)       -> error $ "BUG: tcStmt - e.f = e : " -- ++ ppshow e ++ "\n" ++ ppshow t
+       ([e1',e2'],_) <- tcNormalCall γ l BISetProp [e1,e2] opTy
+       return         $ (ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 e1' f) e2', Just γ)
 
 -- e
 tcStmt γ (ExprStmt l e)   
@@ -664,7 +661,7 @@ tcCall γ (ArrayLit l es)
 
 -- | `{ f1:t1,...,fn:tn }`
 tcCall γ (ObjectLit l bs) 
-  = do (es', t)               <- tcNormalCall γ l "ObjectLit" es $ objLitTy l ps 
+  = do (es', t)               <- tcNormalCall γ l "ObjectLit" es $ tracePP "objlit" $ objLitTy l ps 
        return                  $ (ObjectLit l (zip ps es'), t)
   where
     (ps,es) = unzip bs
@@ -766,7 +763,7 @@ tcNormalCall γ l fn es ft0
        case z of 
          Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
-                            (es'', ot, _ ) <- tcCallCase γ l fn es' ts ft
+                            (es'', ot, _ ) <- tcCallCase γ l fn es' ts $ tracePP "ft" ft
                             return          $ (es'', ot)
          Nothing      -> tcError $ errorCallNotSup (srcPos l) fn es ts 
 
@@ -818,7 +815,8 @@ tcCallCase γ l fn es ts ft
        -- Generate fresh type parameters
        (_,ibs,ot)      <- instantiate l ξ fn ft
        let its          = b_type <$> ibs
-       θ               <- unifyTypesM (srcPos l) γ ts its
+       θ               <- tracePP (ppshow ts ++ " U " ++ ppshow its) 
+                           <$> unifyTypesM (srcPos l) γ (tracePP "ts" ts) (tracePP "its" its)
        let (ts',its')   = mapPair (apply θ) (ts, its)
        es'             <- zipWith3M (castM γ) es ts' its'
        return             (es', apply θ ot, θ)

@@ -472,16 +472,25 @@ consExpr g (CallExpr l e es)
 -- | e.f
 consExpr g ef@(DotRef l e f)
   = do  (x,g') <- consExpr g e
-        t      <- safeEnvFindTy x g'
-        case getElt g' f t of 
-          [FieldSig _ _ ft] -> consCall g' l ef [vr x] $ mkTy ft
-          _                 -> cgError $ errorExtractNonFld (srcPos l) f e t 
+        te     <- safeEnvFindTy x g'
+
+        case getProp g' (F.symbol f) te of
+          Just (_, t) -> consCall g' l ef [vr x] $ mkTy te t
+          Nothing     -> cgError $ errorMissingFld (srcPos l) f te
+
+
+--         case getElt g' f t of 
+--           [FieldSig _ _ ft] -> consCall g' l ef [vr x] $ mkTy te ft
+--           _                 -> cgError $ errorExtractNonFld (srcPos l) f e t 
+--
   where
-    -- Add a VarRef so that e is not typechecked again
+    mkTy s t = mkFun ([], [B (F.symbol "this") s], t) 
     vr       = VarRef $ getAnnotation e
-    mkTy t   = mkFun ([α], [B (F.symbol "this") tα], t) 
-    α        = TV (F.symbol "α" ) (srcPos l)
-    tα       = TVar α fTop
+
+    -- Add a VarRef so that e is not typechecked again
+    -- mkTy t   = mkFun ([α], [B (F.symbol "this") tα], t) 
+    -- α        = TV (F.symbol "α" ) (srcPos l)
+    -- tα       = TVar α fTop
 
 -- FIXME: e["f"]
 
@@ -634,7 +643,7 @@ consCall g l fn es ft0
   = do (xes, g')    <- consScan consExpr g es
        -- Attempt to gather qualifiers here -- needed for object literal quals
        -- REMOVING qualifier scraping from here - expect tests to break.
-       ts           <- mapM (\x -> safeEnvFindTy x g') xes
+       ts           <- mapM (`safeEnvFindTy` g') xes
        case overload l of
          Just ft    -> do  (_,its,ot)   <- instantiate l g fn ft
                            let (su, ts') = renameBinds its xes
@@ -643,9 +652,9 @@ consCall g l fn es ft0
          Nothing    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
     where
        overload l    = listToMaybe [ lt | Overload cx t <-  ann_fact l 
-                                        , cge_ctx g     == cx
-                                        , lt            <- callSigs
-                                        , toType t      == toType lt ]
+                                        , cge_ctx g == cx
+                                        , lt <- callSigs
+                                        , toType t == toType lt ]
        callSigs      = extractCall g ft0
 
 

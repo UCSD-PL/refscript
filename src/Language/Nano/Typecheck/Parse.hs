@@ -112,7 +112,8 @@ iFaceP   :: Parser (Id SourceSpan, IfaceDef Reft)
 iFaceP   = do id     <- identifierP 
               vs     <- option [] tParP
               h      <- optionMaybe extendsP
-              es     <- braces propBindP
+              -- FIXME
+              es     <- braces $ propBindP def
               return (id, ID False id vs h es)
 
 extendsP = do reserved "extends"
@@ -250,7 +251,7 @@ objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
 objLitP 
   = do m     <- option def (toType <$> mutP)
-       bs    <- braces propBindP
+       bs    <- braces (propBindP m)
        return $ TCons bs m
  
 mutP =  try (TVar <$> brackets tvarP <*> return ()) 
@@ -300,14 +301,14 @@ bareAllP p =  try p
           <|> bareAll1P p
 
 
-propBindP =  sepEndBy (
-              try indexEltP 
-          <|> try fieldEltP
-          <|> try statEltP
-          <|> try methEltP
-          <|> try callEltP
-          <|> try consEltP
-              ) semi
+propBindP defM =  sepEndBy (
+                  try indexEltP 
+              <|> try (fieldEltP defM)
+              <|> try (statEltP defM)
+              <|> try (methEltP defM)
+              <|> try callEltP
+              <|> try consEltP
+                  ) semi
 
 
 -- | [f: string]: t
@@ -327,27 +328,27 @@ indexP = xyP id colon sn
 
 
 -- | <[mut]> f: t
-fieldEltP = do 
+fieldEltP defM  = do 
     x          <- symbolP 
     _          <- colon
-    m          <- option t_inheritedMut (toType <$> mutP)
+    m          <- option defM (toType <$> mutP)
     t          <- bareTypeP
     return      $ FieldSig x m t
 
 -- | static <[mut]> f :: t
-statEltP = do 
+statEltP defM   = do 
     _          <- reserved "static"
     x          <- symbolP 
     _          <- colon
-    m          <- option def (toType <$> mutP)
+    m          <- option defM (toType <$> mutP)
     t          <- bareTypeP
     return      $ StatSig x m t
 
 -- | <[mut]> m :: (ts): t
-methEltP = do
+methEltP defM   = do
     x          <- symbolP 
     _          <- colon
-    m          <- option def (toType <$> mutP)
+    m          <- option defM (toType <$> mutP)
     t          <- methSigP
     return      $ MethSig x m $ outT t
   where
@@ -472,9 +473,9 @@ parseAnnot :: RawSpec -> Parser Spec
 parseAnnot (RawMeas     (ss, _)) = Meas   <$> patch2 ss <$> idBindP
 parseAnnot (RawBind     (ss, _)) = Bind   <$> patch2 ss <$> idBindP
 parseAnnot (RawFunc     (_ , _)) = AnFunc <$>               anonFuncP
-parseAnnot (RawField    (_ , _)) = Field  <$>               fieldEltP
-parseAnnot (RawMethod   (_ , _)) = Method <$>               methEltP
-parseAnnot (RawStatic   (_ , _)) = Static <$>               statEltP
+parseAnnot (RawField    (_ , _)) = Field  <$>               fieldEltP def -- FIXME: these need to be patched aferwards  
+parseAnnot (RawMethod   (_ , _)) = Method <$>               methEltP def 
+parseAnnot (RawStatic   (_ , _)) = Static <$>               statEltP def
 parseAnnot (RawConstr   (_ , _)) = Constr <$>               consEltP
 parseAnnot (RawIface    (ss, _)) = Iface  <$> patch2 ss <$> iFaceP
 parseAnnot (RawClass    (ss, _)) = Class  <$> patch2 ss <$> classDeclP 

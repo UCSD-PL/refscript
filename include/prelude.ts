@@ -264,11 +264,11 @@ declare var Object: {
 
 // FIXME:	NaN =/= NaN
 
-/*@ measure numeric_nan               :: number */
-/*@ measure numeric_max_value         :: number */
-/*@ measure numeric_min_value         :: number */
-/*@ measure numeric_negative_infinity :: number */
-/*@ measure numeric_positive_infinity :: number */
+/* measure numeric_nan               :: number */
+/* measure numeric_max_value         :: number */
+/* measure numeric_min_value         :: number */
+/* measure numeric_negative_infinity :: number */
+/* measure numeric_positive_infinity :: number */
 
 
 /*@ NaN :: { number | v = numeric_nan } */
@@ -295,19 +295,19 @@ declare var Number: {
     (value: any): number;							// (value?: any): number;
     prototype: Number;
 
-    /*@ MAX_VALUE: { number | v = numeric_max_value } */
+    /*  MAX_VALUE: { number | v = numeric_max_value } */
     MAX_VALUE: number;
 
-    /*@ MIN_VALUE: { number | v = numeric_min_value } */
+    /*  MIN_VALUE: { number | v = numeric_min_value } */
     MIN_VALUE: number;
 
-    /*@ NaN: { number | v = numeric_nan } */
+    /*  NaN: { number | v = numeric_nan } */
     NaN: number;
 
-    /*@ NEGATIVE_INFINITY: { number | v = numeric_negative_infinity } */
+    /*  NEGATIVE_INFINITY: { number | v = numeric_negative_infinity } */
     NEGATIVE_INFINITY: number;
 
-    /*@ POSITIVE_INFINITY: { number | v = numeric_positive_infinity } */
+    /*  POSITIVE_INFINITY: { number | v = numeric_positive_infinity } */
     POSITIVE_INFINITY: number;
 }
 
@@ -687,11 +687,6 @@ interface Mutable extends ReadOnly {
 
 /*@ interface AnyMutability extends #ReadOnly */
 interface AnyMutability extends ReadOnly {
-    defaultMut__: void;
-} 
-
-/*@ interface InheritedMut extends #ReadOnly */
-interface InheritedMut extends ReadOnly {
     defaultMut__: void;
 } 
 

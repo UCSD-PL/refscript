@@ -419,8 +419,8 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TApp d@(TRef _ ) ts r)  = F.ppTy r $ pp d <> ppArgs brackets comma ts 
   pp (TApp c [] r)            = F.ppTy r $ pp c 
   pp (TApp c ts r)            = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
-  pp (TCons bs _ r)           | length bs < 5 
-                              = F.ppTy r $ {- ppMut m <> -} braces (intersperse semi $ map pp bs)
+  pp (TCons bs m r)           | length bs < 5 
+                              = F.ppTy r $ ppMut m <> braces (intersperse semi $ map pp bs)
                               | otherwise
                               = F.ppTy r $ lbrace $+$ nest 2 (vcat $ map pp bs) $+$ rbrace
   pp (TModule s  )            = text "module" <+> pp s
@@ -493,21 +493,22 @@ instance (PP r, F.Reftable r) => PP (TypeMember r) where
   pp (ConsSig t)          =  text "new" <+> pp t
   pp (IndexSig x True t)  =  brackets (pp x <> text ": string") <> text ":" <+> pp t
   pp (IndexSig x False t) =  brackets (pp x <> text ": number") <> text ":" <+> pp t
-  pp (FieldSig x _ t)     =  text "field"  {- <+> ppMut m -} <+> pp x <> text ":" <+> pp t 
-  pp (MethSig x _ t)      =  text "method" {- <+> ppMut m -} <+> pp x <> text ":" <+> pp t
-  pp (StatSig x _ t)      =  text "static" {- <+> ppMut m -} <+> pp x <> text ":" <+> pp t
+  pp (FieldSig x m t)     =  text "field"  <+> ppMut m <+> pp x <> text ":" <+> pp t 
+  pp (MethSig x m t)      =  text "method" <+> ppMut m <+> pp x <> text ":" <+> pp t
+  pp (StatSig x m t)      =  text "static" <+> ppMut m <+> pp x <> text ":" <+> pp t
 
 
--- ppMut t | isMutable t      = brackets $ pp "mut"
---         | isAnyMut t       =            pp ""
---         | isInheritedMut t =            pp ""
---         | isReadOnly t     = brackets $ pp "ro"
---         | isImmutable t    = brackets $ pp "imm"
---         | isTVar t         = brackets $ pp t
---         | isTop t          =            pp "top"    -- FIXME: this should go ...
---         | otherwise        = error    $ "ppMut: case not covered: " ++ ppshow t
+ppMut t@(TApp (TRef (RN (QName _ _ s))) _ _)
+  | s == F.symbol "Mutable"       = pp "◁"
+  | s == F.symbol "Immutable"     = pp "◀"
+  | s == F.symbol "AnyMutability" = pp "₌"
+  | s == F.symbol "ReadOnly"      = pp "◆"
+  | s == F.symbol "InheritedMut"  = pp "◇"
+  | otherwise                     = pp "?"
+ppMut t@(TVar{})                  = pp "[" <> pp t <> pp "]" 
+ppMut t                           = pp "?"
+
  
-
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
   pp (ModuleDef vars tys path) =  
     text "module" <+> pp path 

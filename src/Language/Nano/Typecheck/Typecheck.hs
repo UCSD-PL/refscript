@@ -671,26 +671,37 @@ tcCall γ (ObjectLit l bs)
 
 -- | `new e(e1,...,en)`
 tcCall γ (NewExpr l e es) 
-  = do (e',t)                     <- tcExpr γ e
+  = do (e',t)                 <- tcExpr γ e
        case extractCtor γ t of 
-         Just ct -> do (es', t)   <- tcNormalCall γ l "constructor" es ct
-                       return      $ (NewExpr l e' es', t)
-         _       -> tcError $ errorConstrMissing (srcPos l) t
+         Just ct -> 
+            do (es', t)       <- tcNormalCall γ l "constructor" es ct
+               return          $ (NewExpr l e' es', t)
+         _       -> tcError    $ errorConstrMissing (srcPos l) t
 
 -- | e.f 
+--   
+--   Accessing field @f@ of an expression @e@ with type @te@, causes an implicit
+--   coercion of @e@ to a type @te'@ (this type is a subtype of @te@ and
+--   accounts for the case where @te@ is a union type where not all parts of the 
+--   union can be accessed successfully at offset @f@. This is captured by the
+--   call to `mkTy te' t`, that produces an accessor function with type:
 --
---   FIXME ???
+--      getProp_f :: (this: te') => t
+--
+--   The coercion occurs when calling `getProp_f` with @e@ as argument.
 --
 tcCall γ ef@(DotRef l e f)
-  = do z              <- runFailM $ tcExpr γ e
+  = do z                      <- runFailM $ tcExpr γ e
        case z of
-         Right (_, t) -> case getProp γ (F.symbol f) t of
-                           Just (s, t) -> do ([e'], t') <- tcNormalCall γ l ef [e] $ mkTy s t
-                                             return      $ (DotRef l e' f, t')
-                           _           -> tcError $ errorMissingFld (srcPos l) f t
+         Right (_, te)        -> 
+            case getProp γ (F.symbol f) te of
+              Just (te', t)   ->
+                  do ([e'],τ) <- tcNormalCall γ l ef [e] $ mkTy te' t
+                     return    $ (DotRef l e' f, τ)
+              Nothing         -> tcError $ errorMissingFld (srcPos l) f te
          Left err     -> tcError err
   where
-    mkTy s t = mkFun ([], [B (F.symbol "this") s], t) 
+    mkTy s t                   = mkFun ([], [B (F.symbol "this") s], t) 
 
          
 -- | `super(e1,...,en)`
@@ -726,18 +737,18 @@ tcCallDotRef γ elts l em@(DotRef l1 e f) es
     -- Static call
     | all isStaticSig elts
     = do  (e' , _ )   <- tcExpr γ e       -- TC `e` separately
-          (es', t')   <- tcNormalCall γ l em es {-$ tracePP ("statsig " ++ ppshow (srcPos l)) -} $ ft isStaticSig
+          (es', t')   <- tcNormalCall γ l em es $ ft isStaticSig
           return       $ (DotRef l1 e' f, es', t')
 
     -- Virtual method call
     | all isMethodSig elts 
-    = do  (e':es', t) <- tcNormalCall γ l em (e:es) {-$ tracePP ("methSig " ++ ppshow (srcPos l)) -} $ ft isMethodSig
+    = do  (e':es', t) <- tcNormalCall γ l em (e:es) $ ft isMethodSig
           return       $ (DotRef l1 e' f, es', t)
 
     -- Normal function call
     | all isFieldSig elts
     = do  (e' , _ )   <- tcExpr γ e       -- TC `e` separately
-          (es', t')   <- tcNormalCall γ l em es {-$ tracePP ("fieldSig " ++ ppshow (srcPos l)) -} $ ft isFieldSig
+          (es', t')   <- tcNormalCall γ l em es $ ft isFieldSig
           return       $ (DotRef l1 e' f, es', t')
 
     | otherwise
@@ -751,8 +762,7 @@ tcCallDotRef _ _ _ _ _ = error "tcCallDotRef-unsupported"
 -- | Signature resolution
 tcNormalCall γ l fn es ft0 
   = do (es', ts)      <- unzip <$> mapM (tcExpr γ) es
-       z              <- {- tracePP ("resolved overload for " ++ ppshow fn ++ " :: " ++ ppshow ft0) <$> -} 
-                            resolveOverload γ l fn es' ts ft0 -- (tracePP "ft0" ft0)
+       z              <- resolveOverload γ l fn es' ts ft0
        case z of 
          Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
@@ -806,9 +816,9 @@ tcCallCaseTry γ l fn ts ft
 tcCallCase γ l fn es ts ft  
   = do let ξ            = tce_ctx γ
        -- Generate fresh type parameters
-       (_,ibs,ot)      <- {- tracePP ("inst " ++ ppshow ft) <$> -} instantiate l ξ fn ft
+       (_,ibs,ot)      <- instantiate l ξ fn ft
        let its          = b_type <$> ibs
-       θ               <- {- tracePP "unif" <$> -} unifyTypesM (srcPos l) γ ts its
+       θ               <- unifyTypesM (srcPos l) γ ts its
        let (ts',its')   = mapPair (apply θ) (ts, its)
        es'             <- zipWith3M (castM γ) es ts' its'
        return             (es', apply θ ot, θ)

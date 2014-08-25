@@ -52,7 +52,7 @@ getProp γ s t@(TClass c    )
         es  <- flatten True γ (d,[])
         (t,) <$> accessMember s es
 getProp γ s t@(TModule m   ) 
-  = do  m' <- tracePP "resolveRelNameInEnv" <$> resolveRelPathInEnv γ m
+  = do  m' <- resolveRelPathInEnv γ m
         (t,) <$> thd3 <$> envFindTy s (m_variables m')
 getProp _ _ _ = Nothing
 
@@ -85,10 +85,12 @@ extractCtor :: (Data r, PP r, F.Reftable r, EnvLike r g)
 extractCtor γ (TClass x) 
   = do  d        <- resolveRelNameInEnv γ x
         (vs, es) <- flatten'' False γ d
-        return    $ mkAnd [ mkAll vs (TFun bs (retT vs) r) | ConsSig (TFun bs _ r) <- es ]
-
+        case [ mkAll vs (TFun bs (retT vs) r) | ConsSig (TFun bs _ r) <- es ] of
+          [] -> return $ defCtor vs
+          ts -> return $ mkAnd ts
     where
-        retT vs   = TApp (TRef x) (tVar <$> vs) fTop
+        retT vs    = TApp (TRef x) (tVar <$> vs) fTop
+        defCtor vs = TFun [] (retT vs) fTop
 extractCtor _ _ = Nothing
 
 

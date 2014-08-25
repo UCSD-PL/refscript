@@ -328,6 +328,8 @@ emapReft f γ (TFun xts t r)  = TFun (emapReftBind f γ' <$> xts) (emapReft f γ
   where    γ'                = (b_sym <$> xts) ++ γ
 emapReft f γ (TCons xts m r) = TCons (emapReftElt f γ' <$> xts) m (f γ r)
   where    γ'                = (f_sym <$> xts) ++ γ
+emapReft _ _ (TClass c)      = TClass c
+emapReft _ _ (TModule m)     = TModule m
 emapReft _ _ _               = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)     = B x $ emapReft f γ t

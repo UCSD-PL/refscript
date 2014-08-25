@@ -755,6 +755,9 @@ splitC (Sub g i t1@(TCons e1s μ1 _ ) t2@(TCons e2s μ2 _ ))
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- splitEs g i μ1 μ2 e1s e2s
         return $ cs ++ cs'
+
+splitC (Sub _ _ (TClass _) (TClass _)) = return []
+splitC (Sub _ _ (TModule _) (TModule _)) = return []
   
 splitC x@(Sub _ _ t1 t2)
   = cgError $ bugBadSubtypes l t1 t2 where l = srcPos x

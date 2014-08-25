@@ -313,6 +313,8 @@ instance Eq (RType r) where
   TAll v1 t1     == TAll v2 t2     = (v1,t1)  == (v2,t2)   -- Very strict Eq here
   TAnd t1s       == TAnd t2s       = t1s == t2s
   TCons e1s m1 _ == TCons e2s m2 _ = (e1s,m1) == (e2s,m2)
+  TClass c1      == TClass c2      = c1 == c2
+  TModule m1     == TModule m2     = m1 == m2
   _              == _              = False
 
 

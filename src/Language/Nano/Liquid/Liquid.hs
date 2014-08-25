@@ -111,14 +111,56 @@ consNano p@(Nano {code = Src fs})
 -------------------------------------------------------------------------------
 initGlobalEnv  :: NanoRefType -> CGEnv
 -------------------------------------------------------------------------------
-initGlobalEnv (Nano { code = Src ss }) = CGE nms bds grd ctx mod pth Nothing
+initGlobalEnv (Nano { code = Src s }) = CGE nms bds grd ctx mod pth Nothing
   where
-    nms       = E.envAdds (visibleNames ss) E.envEmpty
+    nms       = E.envAdds (visibleNames s) E.envEmpty
     bds       = F.emptyIBindEnv
     grd       = []
-    mod       = scrapeModules ss 
+    mod       = scrapeModules s 
     ctx       = emptyContext
     pth       = AP $ QPath (srcPos dummySpan) []
+
+
+-------------------------------------------------------------------------------
+initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> CGEnv
+-------------------------------------------------------------------------------
+initModuleEnv g n s = CGE nms bds grd ctx mod pth (Just g)
+  where
+
+    nms       = E.envAdds (visibleNames s) E.envEmpty
+    bds       = cge_fenv g
+    grd       = []
+    mod       = cge_mod g
+    ctx       = emptyContext
+    pth       = extendAbsPath (cge_path g) n
+
+
+-- | `initFuncEnv l f i xs (αs, ts, t) g` 
+--
+--    * Pushes a new context @i@
+--    * Adds return type @t@
+--    * Adds binders for the type variables @αs@
+--    * Adds binders for the arguments @ts@
+--
+initFuncEnv l f i xs (αs, ts, t) g s =
+    --  Compute base environment @g'@, then add extra bindings
+        envAdds "initFunc-0" varBinds g'
+    >>= envAdds "initFunc-1" tyBinds 
+    >>= envAdds "initFunc-2" (visibleNames s)
+    >>= envAddReturn f t
+  where
+    g'        = CGE nms fenv grds ctx mod pth parent
+    nms       = E.envEmpty
+    fenv      = cge_fenv g
+    grds      = []
+    mod       = cge_mod g
+    ctx       = pushContext i (cge_ctx g)
+    pth       = cge_path g
+    parent    = Just g
+    tyBinds   = [(Loc (srcPos l) α, (tVar α, ReadOnly)) | α <- αs]
+    varBinds  = zip (fmap ann <$> xs) (zip ts (repeat WriteLocal))
+
+
 
 
 -------------------------------------------------------------------------------
@@ -163,31 +205,6 @@ consFun1 l g f xs body (i, ft)
 
 
 consMeth1 l g f xs body (i, _, ft) = consFun1 l g f xs body (i,ft)
-
--- | `initFuncEnv l f i xs (αs, ts, t) g` 
---
---    * Pushes a new context @i@
---    * Adds return type @t@
---    * Adds binders for the type variables @αs@
---    * Adds binders for the arguments @ts@
---
-initFuncEnv l f i xs (αs, ts, t) g s =
-    --  Compute base environment @g'@, then add extra bindings
-        envAdds "initFunc-0" varBinds g'
-    >>= envAdds "initFunc-1" tyBinds 
-    >>= envAdds "initFunc-2" (visibleNames s)
-    >>= envAddReturn f t
-  where
-    g'        = CGE nms fenv grds ctx mod pth parent
-    nms       = E.envEmpty
-    fenv      = cge_fenv g
-    grds      = []
-    mod       = cge_mod g
-    ctx       = pushContext i (cge_ctx g)
-    pth       = cge_path g
-    parent    = Just g
-    tyBinds   = [(Loc (srcPos l) α, (tVar α, ReadOnly)) | α <- αs]
-    varBinds  = zip (fmap ann <$> xs) (zip ts (repeat WriteLocal))
 
 
 --------------------------------------------------------------------------------
@@ -297,6 +314,8 @@ consStmt g (ClassStmt l x _ _ ce)
 consStmt g (IfaceStmt _)
   = return $ Just g
 
+consStmt g (ModuleStmt l n body)
+  = consStmts (initModuleEnv g n body) body
 
 -- OTHER (Not handled)
 consStmt _ s 
@@ -639,7 +658,7 @@ consCall g l fn es ft0
                            envAddFresh l (F.subst su ot, WriteLocal) g'
          Nothing    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
     where
-       overload l    = listToMaybe [ lt | Overload cx t <-  ann_fact l 
+       overload l    = listToMaybe [ lt | Overload cx t <- ann_fact l 
                                         , cge_ctx g == cx
                                         , lt <- callSigs
                                         , toType t == toType lt ]

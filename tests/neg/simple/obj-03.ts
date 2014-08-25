@@ -1,7 +1,8 @@
 
-var obj = { f: 1 };
+/*@ oooo :: { f: { number | v > 0 } } */
+var oooo = { f: 1 };
 
-obj.f = -1;
+oooo.f = -1;
 
-assert(obj.f > 0);
+assert(oooo.f > 0);
 

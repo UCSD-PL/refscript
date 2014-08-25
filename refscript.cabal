@@ -66,65 +66,66 @@ Executable rsc
   Main-is:             Nano.hs
   hs-source-dirs:      src
 
+
 Library
   Default-language:
                     Haskell2010
 
-  build-depends:    base
-                  , containers
-                  , pretty 
-                  , split
-                  , vector
-                  , bytestring
-                  , text
-                  , aeson <= 0.6.1.0
-                  , hashable
-                  , data-default
-                  , directory
-                  , unordered-containers
-                  , filepath
-                  , ansi-terminal
-                  , process
-                  , mtl
-                  , syb
-                  , cmdargs
-                  , liquid-fixpoint
-                  , parsec
-                  , transformers
-                  , language-ecmascript-pp
-
---   extensions:       ExistentialQuantification, 
---                     FlexibleInstances, 
---                     UndecidableInstances,
---                     DeriveDataTypeable,
---                     TupleSections,
---                     NoMonomorphismRestriction,
---                     ScopedTypeVariables,
---                     BangPatterns
-
-  ghc-options:    -W -O2  
- 
- 
-  hs-source-dirs:   src
-
-  Exposed-Modules:  Paths_RefScript
-                    Language.Nano.Errors
-                    Language.Nano.Files
-                    Language.Nano.Types
-                    Language.Nano.Env
-                    Language.Nano.Misc
-                    Language.Nano.Annots
-                    Language.Nano.CmdLine
-                    Language.Nano.SSA.SSAMonad
-                    Language.Nano.SSA.SSA
-                    Language.Nano.Typecheck.Unify
-                    Language.Nano.Typecheck.Types
-                    Language.Nano.Typecheck.Parse
-                    Language.Nano.Typecheck.TCMonad
-                    Language.Nano.Typecheck.Subst
-                    Language.Nano.Typecheck.Lookup
-                    Language.Nano.Typecheck.Typecheck
-                    Language.Nano.Liquid.Liquid
-                    Language.Nano.Liquid.Types
-                    Language.Nano.Liquid.CGMonad
-                    Language.Nano.Liquid.Qualifiers
+--   build-depends:    base
+--                   , containers
+--                   , pretty 
+--                   , split
+--                   , vector
+--                   , bytestring
+--                   , text
+--                   , aeson <= 0.6.1.0
+--                   , hashable
+--                   , data-default
+--                   , directory
+--                   , unordered-containers
+--                   , filepath
+--                   , ansi-terminal
+--                   , process
+--                   , mtl
+--                   , syb
+--                   , cmdargs
+--                   , liquid-fixpoint
+--                   , parsec
+--                   , transformers
+--                   , language-ecmascript-pp
+-- 
+-- --   extensions:       ExistentialQuantification, 
+-- --                     FlexibleInstances, 
+-- --                     UndecidableInstances,
+-- --                     DeriveDataTypeable,
+-- --                     TupleSections,
+-- --                     NoMonomorphismRestriction,
+-- --                     ScopedTypeVariables,
+-- --                     BangPatterns
+-- 
+--   ghc-options:    -W -O2  
+--  
+--  
+--   hs-source-dirs:   src
+-- 
+--   Exposed-Modules:  Paths_RefScript
+--                     Language.Nano.Errors
+--                     Language.Nano.Files
+--                     Language.Nano.Types
+--                     Language.Nano.Env
+--                     Language.Nano.Misc
+--                     Language.Nano.Annots
+--                     Language.Nano.CmdLine
+--                     Language.Nano.SSA.SSAMonad
+--                     Language.Nano.SSA.SSA
+--                     Language.Nano.Typecheck.Unify
+--                     Language.Nano.Typecheck.Types
+--                     Language.Nano.Typecheck.Parse
+--                     Language.Nano.Typecheck.TCMonad
+--                     Language.Nano.Typecheck.Subst
+--                     Language.Nano.Typecheck.Lookup
+--                     Language.Nano.Typecheck.Typecheck
+--                     Language.Nano.Liquid.Liquid
+--                     Language.Nano.Liquid.Types
+--                     Language.Nano.Liquid.CGMonad
+--                     Language.Nano.Liquid.Qualifiers

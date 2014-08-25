@@ -48,7 +48,8 @@ import           Language.Fixpoint.Misc             as FM
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
--- import           Debug.Trace                        hiding (traceShow)
+
+import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -157,7 +158,7 @@ patch fs =
 -------------------------------------------------------------------------------
 initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
+initGlobalEnv (Nano { code = Src ss }) = TCE (trace (ppshow $ envKeys nms) nms) mod ctx pth Nothing
   where
     nms       = envFromList $ visibleNames ss
     mod       = scrapeModules ss 
@@ -169,7 +170,9 @@ initFuncEnv γ f i αs xs ts t s = TCE nms mod ctx pth parent
   where
     tyBinds   = [(tVarId α, (tVar α, ReadOnly)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ zip ts (repeat WriteLocal)
-    nms       = envAddReturn f (t, ReadOnly) $ envAdds (tyBinds ++ varBinds ++ visibleNames s) $ envEmpty -- tce_names γ
+    nms       = envAddReturn f (t, ReadOnly) 
+              $ envAdds (tyBinds ++ varBinds ++ visibleNames s) 
+              $ envEmpty
     mod       = tce_mod γ
     ctx       = pushContext i (tce_ctx γ) 
     pth       = tce_path γ
@@ -177,11 +180,11 @@ initFuncEnv γ f i αs xs ts t s = TCE nms mod ctx pth parent
 
 
 ---------------------------------------------------------------------------------------
-initModuleEnv :: (PPR r, F.Symbolic n) => TCEnv r -> n -> [Statement (AnnSSA r)] -> TCEnv r
+initModuleEnv :: (PPR r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnSSA r)] -> TCEnv r
 ---------------------------------------------------------------------------------------
-initModuleEnv γ n s = TCE nms mod ctx pth parent 
+initModuleEnv γ n s = TCE (trace ("initing module " ++ ppshow n ++ ppshow (envKeys nms)) nms) mod ctx pth parent 
   where
-    nms       = envFromList $ visibleNames s
+    nms       = envEmpty -- envFromList $ tracePP "visibleNames in module init" $ visibleNames s
     mod       = tce_mod γ
     ctx       = emptyContext
     pth       = extendAbsPath (tce_path γ) n
@@ -196,12 +199,12 @@ tcEnvAdds     xs γ    = γ { tce_names = envAdds xs $ tce_names γ }
 
 tcEnvAdd      x t γ   = γ { tce_names = envAdd x t $ tce_names γ }
 
-tcEnvFindTy :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r)
+-- tcEnvFindTy :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r)
 tcEnvFindTy x γ       = fst <$> tcEnvFindTyWithAgsn x γ 
 
 
-tcEnvFindTyWithAgsn :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability)
-tcEnvFindTyWithAgsn x γ = case envFindTy x $ tce_names γ of 
+-- tcEnvFindTyWithAgsn :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability)
+tcEnvFindTyWithAgsn x γ = case envFindTy (tracePP "looking for" x) $ tce_names γ of 
                             Just t -> Just t
                             Nothing     -> 
                               case tce_parent γ of 
@@ -435,7 +438,7 @@ tcStmt γ (ClassStmt l x e is ce)
 -- | module M { ... } 
 --
 tcStmt γ (ModuleStmt l n body) 
-  = (ModuleStmt l n *** return (Just γ)) <$>  tcStmts (initModuleEnv γ n body) body
+  = (ModuleStmt l n *** return (Just γ)) <$>  tcStmts (undefined {-initModuleEnv γ n body-}) (tracePP "doing body" body)
 
 -- OTHER (Not handled)
 tcStmt _ s 
@@ -661,7 +664,7 @@ tcCall γ (ArrayLit l es)
 
 -- | `{ f1:t1,...,fn:tn }`
 tcCall γ (ObjectLit l bs) 
-  = do (es', t)               <- tcNormalCall γ l "ObjectLit" es $ tracePP "objlit" $ objLitTy l ps 
+  = do (es', t)               <- tcNormalCall γ l "ObjectLit" es $ {-tracePP "objlit" $-} objLitTy l ps 
        return                  $ (ObjectLit l (zip ps es'), t)
   where
     (ps,es) = unzip bs
@@ -691,7 +694,7 @@ tcCall γ ef@(DotRef l e f)
   = do z                      <- runFailM $ tcExpr γ e
        case z of
          Right (_, te)        -> 
-            case getProp γ (F.symbol f) te of
+            case tracePP "getProp_f" $ getProp γ (F.symbol f) $ tracePP "te" te of
               Just (te', t)   ->
                   do ([e'],τ) <- tcNormalCall γ l ef [e] $ mkTy te' t
                      return    $ (DotRef l e' f, τ)
@@ -763,7 +766,7 @@ tcNormalCall γ l fn es ft0
        case z of 
          Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
-                            (es'', ot, _ ) <- tcCallCase γ l fn es' ts $ tracePP "ft" ft
+                            (es'', ot, _ ) <- tcCallCase γ l fn es' ts {-$ tracePP "ft" -}ft
                             return          $ (es'', ot)
          Nothing      -> tcError $ errorCallNotSup (srcPos l) fn es ts 
 
@@ -815,8 +818,8 @@ tcCallCase γ l fn es ts ft
        -- Generate fresh type parameters
        (_,ibs,ot)      <- instantiate l ξ fn ft
        let its          = b_type <$> ibs
-       θ               <- tracePP (ppshow ts ++ " U " ++ ppshow its) 
-                           <$> unifyTypesM (srcPos l) γ (tracePP "ts" ts) (tracePP "its" its)
+       θ               <- -- tracePP (ppshow ts ++ " U " ++ ppshow its) <$> 
+                            unifyTypesM (srcPos l) γ ts its
        let (ts',its')   = mapPair (apply θ) (ts, its)
        es'             <- zipWith3M (castM γ) es ts' its'
        return             (es', apply θ ot, θ)
@@ -895,10 +898,9 @@ forceCheck x γ = elem x $ fst <$> envToList (tce_names γ)
 scrapeVarDecl :: VarDecl (AnnSSA r) -> TCM r [RType r]
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _) = 
-  -- mapM (sanity $ srcPos l) $ [ t | VarAnn                 t  <- ann_fact l ] 
-  --                         ++ [ t | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
-  return                   $ [ t | VarAnn                 t  <- ann_fact l ] 
-                          ++ [ t | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
+  return $ -- mapM (sanity $ srcPos l) 
+            [ t | VarAnn                 t  <- ann_fact l ] 
+         ++ [ t | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
 
 -- sanity l t@(TApp (TRef i) ts _) 
 --   = do  δ       <- getDef 

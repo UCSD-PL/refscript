@@ -35,7 +35,7 @@ import           Language.Nano.Typecheck.Subst
 import           Control.Applicative ((<$>))
 import qualified Data.List as L
 
--- import           Debug.Trace
+import           Debug.Trace
 
 type PPR r = (PP r, F.Reftable r, Data r)
 
@@ -93,18 +93,18 @@ absoluteName env a r@(RN (QName _ _ s)) = g <$> absolutePath env a (f r)
 
 
 -- | `resolveRelPath γ a r` returns the environment referenced by the relative 
---   path @r@ when expressed in terms of namespace @a@.
+--   path @r@ expressed in terms of namespace @a@.
 --
 --   FIXME: check visibility
 --
 ---------------------------------------------------------------------------
 resolveRelPath :: QEnv (ModuleDef r) -> AbsPath -> RelPath -> Maybe (ModuleDef r)
 ---------------------------------------------------------------------------
-resolveRelPath env a (RP (QPath _ [])) = qenvFindTy a env
-resolveRelPath env a r@(RP (QPath _ (m:_))) = do
-    curM <- qenvFindTy a env
+resolveRelPath env a   (RP (QPath _ []    )) = qenvFindTy a env
+resolveRelPath env a r@(RP (QPath l (m:ms))) = do
+    curM <-qenvFindTy a env
     case envFindTy m (m_variables curM) of
-      Just (_, _,TModule r) -> resolveRelPath env (extendPath a m) r
+      Just (_, _,TModule _) -> resolveRelPath env (extendPath a m) (RP (QPath l ms))
       Just _                -> Nothing
       Nothing               -> do prP <- parentOf a
                                   resolveRelPath env prP r

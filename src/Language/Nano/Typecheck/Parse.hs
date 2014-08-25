@@ -14,6 +14,7 @@ import           Prelude                          hiding ( mapM)
 
 import           Data.Either                             (partitionEithers)
 import           Data.Default
+import           Data.Traversable                        (mapAccumL)
 import           Data.Monoid                             (mconcat)
 import           Data.Maybe                              (catMaybes)
 import           Data.Aeson                              (eitherDecode)
@@ -36,7 +37,7 @@ import           Control.Applicative                     ((<$>), ( <*>))
 import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc                  (mapEither)
+import           Language.Fixpoint.Misc                  (mapEither, mapSnd)
 
 import           Language.Nano.Annots
 import           Language.Nano.Errors
@@ -465,6 +466,9 @@ data PSpec l r
   | Invt   l (RType r) 
   | CastSp l (RType r)
   | Exported l
+
+  -- Used only for parsing specs
+  | ErrorSpec
   deriving (Eq, Ord, Show, Data, Typeable)
 
 type Spec = PSpec SourceSpan Reft
@@ -563,7 +567,6 @@ parseNanoFromFiles :: [FilePath] -> IO (Either (FixResult Error) (NanoBareR Reft
 parseNanoFromFiles fs = 
   do  sa <- partitionEithers <$> mapM parseScriptFromJSON fs
       case sa of
-        -- ([],ps) -> return $ Right $ mkCode $ expandAnnots $ concat ps
         ([],ps) -> case expandAnnots $ concat ps of
                      Right ps -> return $ Right $ mkCode $ ps 
                      Left e   -> return $ Left e
@@ -629,22 +632,20 @@ instance PP Integer where
 
 
 --------------------------------------------------------------------------------------
-expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> Either (FixResult Error) [Statement (SourceSpan, [Spec])]
+expandAnnots :: [Statement (SourceSpan, [RawSpec])] 
+             -> Either (FixResult Error) [Statement (SourceSpan, [Spec])]
 --------------------------------------------------------------------------------------
-expandAnnots ss 
-  | length errs > 0  = Left  $ Unsafe errs
-  | otherwise        = Right $ fmap replace <$> ss
+expandAnnots ss = 
+  case mapAccumL (mapAccumL f) (0,[]) ss of
+    ((_,[]),b) -> Right $ b
+    ((_,es),_) -> Left  $ Unsafe es
   where 
-    g st (_,sp)      = foldl parse st sp
-    (_,m, errs)      = foldl g (0, M.empty, []) $ concatMap FO.toList ss 
-    replace (ss, rs) = (ss, concatMap (`recover` m) rs)
-    recover          = M.lookupDefault [] . srcPos
-
+    f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
 
 --------------------------------------------------------------------------------------
-parse :: (PState, M.HashMap SourceSpan [Spec], [Error]) -> RawSpec -> (PState, M.HashMap SourceSpan [Spec], [Error])
+parse :: SourceSpan -> (PState, [Error]) -> RawSpec -> ((PState, [Error]), Spec)
 --------------------------------------------------------------------------------------
-parse (st,m,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
+parse ss (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
   where
     parser s = do a     <- parseAnnot s
                   state <- getState
@@ -653,9 +654,8 @@ parse (st,m,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
                     ""  -> return $ (state, a) 
                     _   -> unexpected $ "trailing input: " ++ it
 
-
-    failLeft (Left err)      = (st, m,(fromError err): errs)
-    failLeft (Right (s, r))  = (s, M.insertWith (++) ss [r] m, errs)
+    failLeft (Left err)      = ((st, (fromError err): errs), ErrorSpec)
+    failLeft (Right (s, r))  = ((s, errs), r)
 
     -- Slight change from this one:
     -- http://hackage.haskell.org/package/parsec-3.1.5/docs/src/Text-Parsec-Error.html#ParseError
@@ -667,6 +667,49 @@ parse (st,m,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
     ss = srcPos c
     f = sourceName $ sp_begin ss
 
+
+
+-- --------------------------------------------------------------------------------------
+-- expandAnnots :: [Statement (SourceSpan, [RawSpec])] 
+--              -> Either (FixResult Error) [Statement (SourceSpan, [Spec])]
+-- --------------------------------------------------------------------------------------
+-- expandAnnots ss 
+--   | length errs > 0  = Left  $ Unsafe errs
+--   | otherwise        = Right $ fmap replace <$> ss
+--   where 
+--     g st (_,sp)      = foldl parse st sp
+--     (_,m, errs)      = foldl g (0, M.empty, []) $ concatMap FO.toList ss 
+--     replace (ss, rs) = (ss, concatMap (`recover` m) rs)
+--     recover          = M.lookupDefault [] . srcPos
+-- 
+-- 
+-- --------------------------------------------------------------------------------------
+-- parse :: (PState, M.HashMap SourceSpan [Spec], [Error]) -> RawSpec 
+--       -> (PState, M.HashMap SourceSpan [Spec], [Error])
+-- --------------------------------------------------------------------------------------
+-- parse (st,m,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
+--   where
+--     parser s = do a     <- parseAnnot s
+--                   state <- getState
+--                   it    <- getInput
+--                   case it of 
+--                     ""  -> return $ (state, a) 
+--                     _   -> unexpected $ "trailing input: " ++ it
+-- 
+-- 
+--     failLeft (Left err)      = (st, m,(fromError err): errs)
+--     failLeft (Right (s, r))  = (s, M.insertWith (++) ss [r] m, errs)
+-- 
+--     -- Slight change from this one:
+--     -- http://hackage.haskell.org/package/parsec-3.1.5/docs/src/Text-Parsec-Error.html#ParseError
+--     showErr = showErrorMessages "or" "unknown parse error" "expecting" 
+--                 "unexpected" "end of input" . errorMessages
+--     fromError err = mkErr ss   $ showErr err 
+--                               ++ "\n\nWhile parsing: " 
+--                               ++ show (getSpecString c)
+--     ss = srcPos c
+--     f = sourceName $ sp_begin ss
+-- 
 
 instance PP (RawSpec) where
   pp = text . getSpecString

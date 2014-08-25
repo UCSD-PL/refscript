@@ -53,7 +53,7 @@ Tool/Implementation
   - Check that the first argument of a generic type is in { ReadOnly, Immutable,
     AssignFields, Mutable }.
 
-  - Arguments cannot be named: "func"
+  - Variables cannot be named: "func" or "obj" (fixpoint restriction)
 
   - Test examples with infinite loops.
 

@@ -49,7 +49,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
 
-import           Debug.Trace                        hiding (traceShow)
+-- import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -158,7 +158,7 @@ patch fs =
 -------------------------------------------------------------------------------
 initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv (Nano { code = Src ss }) = TCE (trace (ppshow $ envKeys nms) nms) mod ctx pth Nothing
+initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
     nms       = envFromList $ visibleNames ss
     mod       = scrapeModules ss 
@@ -182,9 +182,9 @@ initFuncEnv γ f i αs xs ts t s = TCE nms mod ctx pth parent
 ---------------------------------------------------------------------------------------
 initModuleEnv :: (PPR r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnSSA r)] -> TCEnv r
 ---------------------------------------------------------------------------------------
-initModuleEnv γ n s = TCE (trace ("initing module " ++ ppshow n ++ ppshow (envKeys nms)) nms) mod ctx pth parent 
+initModuleEnv γ n s = TCE nms mod ctx pth parent 
   where
-    nms       = envEmpty -- envFromList $ tracePP "visibleNames in module init" $ visibleNames s
+    nms       = envFromList $ visibleNames s
     mod       = tce_mod γ
     ctx       = emptyContext
     pth       = extendAbsPath (tce_path γ) n
@@ -199,12 +199,12 @@ tcEnvAdds     xs γ    = γ { tce_names = envAdds xs $ tce_names γ }
 
 tcEnvAdd      x t γ   = γ { tce_names = envAdd x t $ tce_names γ }
 
--- tcEnvFindTy :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r)
+tcEnvFindTy :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r)
 tcEnvFindTy x γ       = fst <$> tcEnvFindTyWithAgsn x γ 
 
 
--- tcEnvFindTyWithAgsn :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability)
-tcEnvFindTyWithAgsn x γ = case envFindTy (tracePP "looking for" x) $ tce_names γ of 
+tcEnvFindTyWithAgsn :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability)
+tcEnvFindTyWithAgsn x γ = case envFindTy x $ tce_names γ of 
                             Just t -> Just t
                             Nothing     -> 
                               case tce_parent γ of 
@@ -438,7 +438,7 @@ tcStmt γ (ClassStmt l x e is ce)
 -- | module M { ... } 
 --
 tcStmt γ (ModuleStmt l n body) 
-  = (ModuleStmt l n *** return (Just γ)) <$>  tcStmts (undefined {-initModuleEnv γ n body-}) (tracePP "doing body" body)
+  = (ModuleStmt l n *** return (Just γ)) <$>  tcStmts (initModuleEnv γ n body) body
 
 -- OTHER (Not handled)
 tcStmt _ s 
@@ -664,7 +664,7 @@ tcCall γ (ArrayLit l es)
 
 -- | `{ f1:t1,...,fn:tn }`
 tcCall γ (ObjectLit l bs) 
-  = do (es', t)               <- tcNormalCall γ l "ObjectLit" es $ {-tracePP "objlit" $-} objLitTy l ps 
+  = do (es', t)               <- tcNormalCall γ l "ObjectLit" es $ objLitTy l ps 
        return                  $ (ObjectLit l (zip ps es'), t)
   where
     (ps,es) = unzip bs
@@ -694,7 +694,7 @@ tcCall γ ef@(DotRef l e f)
   = do z                      <- runFailM $ tcExpr γ e
        case z of
          Right (_, te)        -> 
-            case tracePP "getProp_f" $ getProp γ (F.symbol f) $ tracePP "te" te of
+            case getProp γ (F.symbol f) te of
               Just (te', t)   ->
                   do ([e'],τ) <- tcNormalCall γ l ef [e] $ mkTy te' t
                      return    $ (DotRef l e' f, τ)
@@ -766,7 +766,7 @@ tcNormalCall γ l fn es ft0
        case z of 
          Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
-                            (es'', ot, _ ) <- tcCallCase γ l fn es' ts {-$ tracePP "ft" -}ft
+                            (es'', ot, _ ) <- tcCallCase γ l fn es' ts ft
                             return          $ (es'', ot)
          Nothing      -> tcError $ errorCallNotSup (srcPos l) fn es ts 
 

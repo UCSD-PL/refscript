@@ -82,11 +82,12 @@ convert' :: (Functor g, EnvLike () g)
 --------------------------------------------------------------------------------
 convert' _ _ t1 t2 | toType t1 == toType t2     = Right CDNo
 convert' _ _ t1 t2 | not (isTop t1) && isTop t2 = Right CDUp
-convert' l γ t1 t2 | any isUnion [t1,t2]        = convertUnion l  γ t1 t2
-convert' l γ t1 t2 | all isTObj  [t1,t2]        = convertObj l    γ t1 t2
-convert' l γ t1 t2 | all isTFun  [t1, t2]       = convertFun l    γ t1 t2
-convert' l γ (TClass c1) (TClass c2)            = convertTClass l γ c1 c2
-convert' l γ t1 t2                              = convertSimple l γ t1 t2
+convert' l γ t1 t2 | any isUnion [t1,t2]        = convertUnion   l γ t1 t2
+convert' l γ t1 t2 | all isTObj  [t1,t2]        = convertObj     l γ t1 t2
+convert' l γ t1 t2 | all isTFun  [t1, t2]       = convertFun     l γ t1 t2
+convert' l γ (TClass  c1) (TClass  c2)          = convertTClass  l γ c1 c2
+convert' l γ (TModule m1) (TModule m2)          = convertTModule l γ m1 m2
+convert' l γ t1 t2                              = convertSimple  l γ t1 t2
 
 
 -- | `convertObj`
@@ -329,8 +330,19 @@ convertTClass :: (Functor g, EnvLike () g)
               => SourceSpan -> g () -> RelName -> RelName -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertTClass l γ c1 c2 | c1 == c2                  = Right CDNo  
-                        | c1 `elem` ancestors γ c2  = Right CDUp
+                        -- | c1 `elem` ancestors γ c2  = Right CDUp
                         | otherwise                 = Left  $ errorTClassSubtype l c1 c2
+
+-- | `convertTModule`
+--------------------------------------------------------------------------------
+convertTModule :: (Functor g, EnvLike () g)
+              => SourceSpan -> g () -> RelPath -> RelPath -> Either Error CastDirection
+--------------------------------------------------------------------------------
+convertTModule l γ c1 c2 = 
+  case (absolutePath γ c1, absolutePath γ c2) of
+    (Just a1, Just a2) -> Right CDNo
+    _                  -> Left $ errorTModule l c1 c2
+
 
 
 -- | `convertSimple`

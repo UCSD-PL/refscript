@@ -7,7 +7,7 @@
 
 module Language.Nano.Typecheck.Resolve ( 
   
-  resolveRelPath, resolveRelPathInEnv, resolveRelName, resolveRelNameInEnv
+  absolutePath, resolveRelPath, resolveRelPathInEnv, resolveRelName, resolveRelNameInEnv
 
   -- * Flatten a type definition applying subs
   , flatten, flatten', flatten'', flattenType
@@ -57,7 +57,7 @@ renameRelative env a b = everywhereM $ mkM $ t1 `extM` t2
   where
 
     t1                :: RelPath -> Maybe RelPath
-    t1                 = maybe Nothing ff . absolutePath env a
+    t1                 = maybe Nothing ff . absPth env a
 
     t2                :: RelName -> Maybe RelName
     t2                 = maybe Nothing gg . absoluteName env a
@@ -73,20 +73,29 @@ renameRelative env a b = everywhereM $ mkM $ t1 `extM` t2
 
 
 -- | `absolutePath env a r` returns the absolute path that corresponds to the 
+--   a path @r@ expressed in terms of environment @env@.
+--
+---------------------------------------------------------------------------
+absolutePath :: EnvLike r t => t r -> RelPath -> Maybe AbsPath
+---------------------------------------------------------------------------
+absolutePath env r = absPth (modules env) (absPath env) r
+
+
+-- | `absPth env a r` returns the absolute path that corresponds to the 
 --   a path @r@ that is relative to an absolute namespace @a@.
 --
 ---------------------------------------------------------------------------
-absolutePath    :: QEnv (ModuleDef r) -> AbsPath -> RelPath -> Maybe AbsPath
+absPth    :: QEnv (ModuleDef r) -> AbsPath -> RelPath -> Maybe AbsPath
 ---------------------------------------------------------------------------
-absolutePath env a r = m_path <$> resolveRelPath env a r 
+absPth env a r = m_path <$> resolveRelPath env a r 
 
--- | `absolutePath env a r` returns the absolute path that corresponds to the 
+-- | `absPth env a r` returns the absolute path that corresponds to the 
 --   a path @r@ that is relative to an absolute namespace @a@.
 --
 ---------------------------------------------------------------------------
 absoluteName    :: QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe AbsName
 ---------------------------------------------------------------------------
-absoluteName env a r@(RN (QName _ _ s)) = g <$> absolutePath env a (f r)
+absoluteName env a r@(RN (QName _ _ s)) = g <$> absPth env a (f r)
   where
     f (RN (QName l p _)) = RP (QPath l p)
     g (AP (QPath l p))   = AN (QName l p s)
@@ -225,6 +234,7 @@ flattenType _ t = Just t
 --
 --    FIXME: Works for classes, but interfaces could have multiple ancestors.
 --           What about common elements in parent class?
+--
 ---------------------------------------------------------------------------
 weaken :: (PPR r, EnvLike r g) => g r -> RelName -> RelName -> [RType r] -> Maybe (SIfaceDef r)
 ---------------------------------------------------------------------------

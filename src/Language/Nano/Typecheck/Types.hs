@@ -493,9 +493,18 @@ instance (PP r, F.Reftable r) => PP (TypeMember r) where
   pp (ConsSig t)          =  text "new" <+> pp t
   pp (IndexSig x True t)  =  brackets (pp x <> text ": string") <> text ":" <+> pp t
   pp (IndexSig x False t) =  brackets (pp x <> text ": number") <> text ":" <+> pp t
-  pp (FieldSig x m t)     =  text "field"  <+> ppMut m <+> pp x <> text ":" <+> pp t 
-  pp (MethSig x m t)      =  text "method" <+> ppMut m <+> pp x <> text ":" <+> pp t
+  pp (FieldSig x m t)     =  ppMut m <+> pp x <> text ":" <+> pp t 
+  pp (MethSig x m t)      =  ppMut m <+> pp x <> ppMeth t
   pp (StatSig x m t)      =  text "static" <+> ppMut m <+> pp x <> text ":" <+> pp t
+
+
+ppMeth t = 
+  case bkFun t of
+    Just ([],ts,t) -> ppfun ts t
+    Just (αs,ts,t) -> angles (ppArgs id comma αs) <> ppfun ts t
+    Nothing        -> text "ERROR TYPE"
+  where
+    ppfun ts t = ppArgs parens comma ts <> text ":" <+> pp t
 
 
 ppMut t@(TApp (TRef (RN (QName _ _ s))) _ _)

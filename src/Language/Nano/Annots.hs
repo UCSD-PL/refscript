@@ -108,6 +108,7 @@ data Fact r
   | IfaceAnn    !(IfaceDef r)
   | ClassAnn    !([TVar], Maybe (RelName, [RType r]))
   | ExporedModElt
+  | ModuleAnn   !(F.Symbol)
     deriving (Eq, Show, Data, Typeable, Functor)
 
 type UFact = Fact ()
@@ -153,7 +154,8 @@ instance Ord (Fact r) where
   compare (FuncAnn t1      ) (FuncAnn t2      )   = on compare (fmap $ const ()) t1 t2
   compare (ClassAnn (_,m1) ) (ClassAnn (_,m2) )   = on compare (fst <$>) m1 m2
   compare (IfaceAnn d1     ) (IfaceAnn d2     )   = compare (fmap (const ()) d1) (fmap (const ()) d2) 
-  compare ExporedModElt      ExporedModElt        = EQ
+  compare (ExporedModElt   ) (ExporedModElt   )   = EQ
+  compare (ModuleAnn s1    ) (ModuleAnn s2    )   = compare s1 s2
   compare f1 f2                                   = on compare factToNum f1 f2
 
 factToNum (PhiVar _        ) = 0
@@ -171,6 +173,7 @@ factToNum (FuncAnn _       ) = 12
 factToNum (ClassAnn _      ) = 13
 factToNum (IfaceAnn _      ) = 14
 factToNum (ExporedModElt   ) = 15
+factToNum (ModuleAnn _     ) = 16
 
 
 instance Eq (Annot a SourceSpan) where 
@@ -195,6 +198,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (StatAnn s)      = text "Static Annotation"      <+> pp s
   pp (ClassAnn _)     = text "UNIMPLEMENTED:pp:ClassAnn"
   pp (IfaceAnn _)     = text "UNIMPLEMENTED:pp:IfaceAnn"
+  pp (ModuleAnn s)    = text "module"                 <+> pp s
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . M.toList 

@@ -380,7 +380,7 @@ consAsgn :: CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
 consAsgn g x e =
   case envFindTyWithAsgn x g of 
-    Just (t,WriteGlobal) -> do (x', g') <- consExprT g e $ Just t
+    Just (t,WriteGlobal) -> do (_ , g') <- consExprT g e $ Just t
                                return    $ Just g'
     Just (t,a)           -> do (x', g') <- consExprT g e $ Just t
                                t        <- safeEnvFindTy x' g'

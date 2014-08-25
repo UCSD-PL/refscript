@@ -381,7 +381,7 @@ hoistBindings = everythingBut (++) myQ
     fSt (FunctionStmt l n _ _) = ([(n, l, ReadOnly)], True)
     fSt (FunctionDecl l n _  ) = ([(n, l, ReadOnly)], True)
     fSt (ClassStmt l n _ _ _ ) = ([(n, l, ReadOnly)], True)
-    fSt (ModuleStmt l n _)     = ([(n, l, ReadOnly)], True)
+    fSt (ModuleStmt l n _)     = ([(n, Ann (srcPos l) [ModuleAnn $ F.symbol n], ReadOnly)], True)
     fSt _                      = ([], False)
 
     fExp :: Expression (AnnType r) -> ([(Id (AnnType r), AnnType r, Assignability)], Bool)
@@ -493,6 +493,7 @@ visibleNames s = [ (ann <$> n,(t,a)) | (n,Ann l ff,a) <- hoistBindings s
   where
     annToType _ _ (VarAnn t)         = [t]
     annToType l n (ClassAnn {})      = [TClass $ RN $ QName l [] (F.symbol n)]
+    annToType l _ (ModuleAnn n)      = [TModule $ RP $ QPath l [n]]
     annToType _ _ _                  = []
 
 

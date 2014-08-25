@@ -23,6 +23,7 @@ import           Language.Fixpoint.Misc
 
 import           Language.Nano.Types
 import           Language.Nano.Env
+import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
@@ -51,7 +52,7 @@ getProp γ s t@(TClass c    )
         es  <- flatten True γ (d,[])
         (t,) <$> accessMember s es
 getProp γ s t@(TModule m   ) 
-  = do  m' <- resolveRelPathInEnv γ m
+  = do  m' <- tracePP "resolveRelNameInEnv" <$> resolveRelPathInEnv γ m
         (t,) <$> thd3 <$> envFindTy s (m_variables m')
 getProp _ _ _ = Nothing
 

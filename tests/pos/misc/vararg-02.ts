@@ -1,7 +1,7 @@
 
 
-/*@ buildName :: /\ (firstName: string, lastName: undefined) => string
-                 /\ (firstName: string, lastName: string   ) => string
+/*@ buildName :: /\ (firstName: string) => string
+                 /\ (firstName: string, lastName: string) => string
  */
 
 function buildName(firstName: string, lastName?: string) {

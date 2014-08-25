@@ -229,7 +229,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
      
 -- e
 consStmt g (ExprStmt _ e) 
-  = consExpr g e >> (return $ Just g)
+  = fmap snd <$> consExpr g e -- >> (return $ Just g)
 
 -- s1;s2;...;sn
 consStmt g (BlockStmt _ stmts) 

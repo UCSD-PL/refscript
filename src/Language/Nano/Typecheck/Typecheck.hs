@@ -591,7 +591,7 @@ tcExprT :: PPR r
         -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
 tcExprT l γ e to 
-  = do (e', t)    <- tcExpr γ e
+  = do (e', t)   <- tcExpr γ e
        case to of
          Nothing -> return (e', t)
          Just ta -> do θ <- unifyTypeM (srcPos l) t ta

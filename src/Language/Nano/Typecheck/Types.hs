@@ -389,10 +389,26 @@ funTys l f xs ft
 --           (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
 
 
-funTy l xs (αs, yts, t) 
-  | length xs == length yts = let (su, ts') = renameBinds yts xs 
-                              in  Right (αs, ts', F.subst su t)    
-  | otherwise               = Left $ errorArgMismatch (srcPos l)
+-- NEW
+funTy l xs (αs, yts, t) =
+  case padUndefineds xs yts of
+    Nothing   -> Left  $ errorArgMismatch (srcPos l)
+    Just yts' -> Right $ (αs, ts', F.subst su t)
+                   where
+                    (su, ts') = renameBinds yts' xs 
+
+-- ORIG funTy l xs (αs, yts, t) 
+-- ORIG   | length xs == length yts = let (su, ts') = renameBinds yts xs 
+-- ORIG                               in  Right (αs, ts', F.subst su t)    
+-- ORIG   | otherwise               = Left $ errorArgMismatch (srcPos l)
+
+padUndefineds xs yts
+  | nyts <= nxs = Just $ yts ++ xundefs
+  | otherwise   = Nothing
+  where
+    nyts        = length yts
+    nxs         = length xs
+    xundefs     = [B (F.symbol x') tUndef | x' <- snd $ splitAt nyts xs ]
 
 renameBinds yts xs    = (su, [F.subst su ty | B _ ty <- yts])
   where 

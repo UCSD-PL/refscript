@@ -1,5 +1,5 @@
 
-/*@ foo :: forall A. (A, A) => A */
+/*@ foo :: forall A. (A, A) => {v:A |true} */
 function foo(x, y) {
   if (x === y) {
     return x;
@@ -8,7 +8,7 @@ function foo(x, y) {
   }
 }
 
-/*@ bar :: forall A. (A, B) => A */
+/*@ bar :: forall A. (A, B) => {v:A | true} */
 function bar(x,y) {
   return foo(x,y);
 }

@@ -161,7 +161,7 @@ initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
     nms       = envFromList $ visibleNames ss
-    mod       = scrapeModules ss 
+    mod       = tracePP "modules" $scrapeModules ss 
     ctx       = emptyContext
     pth       = AP $ QPath (srcPos dummySpan) []
 
@@ -508,7 +508,7 @@ tcExpr _ e@(NullLit _)
 
 tcExpr γ e@(ThisRef l)
   = case tcEnvFindTy (F.symbol "this") γ of 
-      Just t  -> return (e,t) 
+      Just t  -> return (e, t) 
       Nothing -> tcError $ errorUnboundId (ann l) "this"
 
 tcExpr γ e@(VarRef l x)
@@ -574,12 +574,13 @@ tcExpr γ e@(NewExpr _ _ _)
   = tcCall γ e
 
 -- | super
---
---  FIXME
---
 tcExpr γ e@(SuperRef l) 
+--   = case tcEnvFindTy (F.symbol "super") γ of 
+--       Just t  -> return (e,t) 
+--       Nothing -> tcError $ errorUnboundId (ann l) "super"
+
   = case tcEnvFindTy (F.symbol "this") γ of
-      Just t  -> return (e, getParentType l t)
+      Just t  -> return (e, tracePP "parent type" $ getParentType l t)
       Nothing -> tcError $ errorSuper (ann l)
   where 
     getParentType _ _ = error "getParentType"
@@ -672,7 +673,7 @@ tcCall γ (ObjectLit l bs)
 -- | `new e(e1,...,en)`
 tcCall γ (NewExpr l e es) 
   = do (e',t)                 <- tcExpr γ e
-       case extractCtor γ t of 
+       case tracePP ("extracted ctor from " ++ ppshow e ++ " :: " ++ ppshow t) $ extractCtor γ t of 
          Just ct -> 
             do (es', t)       <- tcNormalCall γ l "constructor" es ct
                return          $ (NewExpr l e' es', t)
@@ -705,16 +706,17 @@ tcCall γ ef@(DotRef l e f)
 
          
 -- | `super(e1,...,en)`
---   TSC will already have checked that `super` is only called whithin the constructor.
 tcCall γ (CallExpr l e@(SuperRef _)  es) 
   = case tcEnvFindTy (F.symbol "this") γ of 
-      Just t -> do  elts         <- t_elts <$> getSuperDefM l t
-                    case [ ct | ConsSig ct <- elts ] of
-                      [ct] -> first (CallExpr l e) <$> tcNormalCall γ l "constructor" es ct
-                      _    -> tcError $ errorConsSigMissing (srcPos l) "<UNIMPLEMENTED>"
-      Nothing -> error "call-super"
-  where
-    -- getSuperM _ _ = undefined
+      Just t -> 
+          case extractParent γ t of 
+            Just (TApp (TRef x) _ _) -> 
+                case extractCtor γ (TClass x) of
+                  Just ct -> first (CallExpr l e) <$> tcNormalCall γ l "constructor" es ct
+                  _       -> tcError $ errorUnboundId (ann l) "super"
+            Nothing -> tcError $ errorUnboundId (ann l) "super"
+      Nothing -> tcError $ errorUnboundId (ann l) "this"
+
    
 -- | `e.f(es)`
 tcCall γ (CallExpr l em@(DotRef _ e f) es)

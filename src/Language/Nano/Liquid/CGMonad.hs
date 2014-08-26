@@ -47,10 +47,6 @@ module Language.Nano.Liquid.CGMonad (
   -- * Function Types
   , cgFunTys, cgMethTys
 
-
-  -- * Super 
-  , getSuperM, getSuperDefM
-
   -- * Zip type wrapper
   , zipTypeM
 
@@ -909,36 +905,6 @@ methTys l f ft0
   = case remThisBinding ft0 of
       Nothing         -> cgError $ errorNonFunction (srcPos l) f ft0 
       Just (vs,bs,t)  -> return    $ (vs,b_type <$> bs,t)
-
-
---------------------------------------------------------------------------------
-getSuperM :: IsLocated a => a -> RefType -> CGM RefType
---------------------------------------------------------------------------------
--- getSuperM l (TApp (TRef i) ts _) 
---   = do  z    <- findSymOrDieM i
---         case z of 
---           ID _ _ vs (Just (p,ps)) _ -> return  $ apply (fromList $ zip vs ts) 
---                                                $ TApp (TRef $ F.symbol p) ps fTop
---           ID _ _ _ Nothing _        -> cgError $ errorSuper (srcPos l) 
-
-getSuperM l _  = cgError $ errorSuper $ srcPos l
-
-
---------------------------------------------------------------------------------
-getSuperDefM :: IsLocated a => a -> RefType -> CGM (IfaceDef F.Reft)
---------------------------------------------------------------------------------
--- getSuperDefM l (TApp (TRef i) ts _) 
---   = do  z    <- findSymOrDieM i
---         case z of 
---           ID _ _ vs (Just (p,ps)) _ -> 
---             do ID c n ws pp ee  <- findSymOrDieM p
---                return            $ apply (fromList $ zip vs ts) 
---                                  $ apply (fromList $ zip ws ps)
---                                  $ ID c n [] pp ee
---           ID _ _ _ Nothing _ -> cgError $ errorSuper (srcPos l) 
-
-getSuperDefM l _  = cgError $ errorSuper $ srcPos l
-
 
 
 --------------------------------------------------------------------------------

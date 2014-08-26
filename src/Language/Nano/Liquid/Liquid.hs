@@ -466,12 +466,20 @@ consExpr g (CondExpr l e e1 e2)
 
 -- | super(e1,..,en)
 consExpr g (CallExpr l e@(SuperRef _) es) 
-  = case envFindTy (Id (ann l) "this") g of
-      Just t  ->  do  elts <- t_elts <$> getSuperDefM l t
-                      case [ t | ConsSig t <- elts ] of
-                        [ct] -> consCall g l e es ct
-                        _    -> cgError $ unsupportedNonSingleConsTy $ srcPos l
-      Nothing ->  cgError $ errorUnboundId (srcPos l) "this"
+  = case envFindTy (F.symbol "this") g of
+      Just t -> case extractParent g t of 
+                  Just (TApp (TRef x) _ _) -> case extractCtor g (TClass x) of
+                                                Just ct -> consCall g l "super" es ct
+                                                _       -> cgError $ errorUnboundId (ann l) "super"
+                  Nothing -> cgError $ errorUnboundId (ann l) "super"
+      Nothing -> cgError $ errorUnboundId (ann l) "this"
+
+--   = case envFindTy (Id (ann l) "this") g of
+--       Just t  ->  do  elts <- t_elts <$> getSuperDefM l t
+--                       case [ t | ConsSig t <- elts ] of
+--                         [ct] -> consCall g l e es ct
+--                         _    -> cgError $ unsupportedNonSingleConsTy $ srcPos l
+--       Nothing ->  cgError $ errorUnboundId (srcPos l) "this"
 
 -- | e.m(es)
 consExpr g (CallExpr l em@(DotRef _ e f) es)
@@ -534,6 +542,7 @@ consExpr g (NewExpr l e es)
 
 -- | super
 consExpr g (SuperRef l) 
+
   = case envFindTy (Id (ann l) "this") g of 
       Just t  -> getParentType l t
 --       Just (TApp (TRef x) ts _) -> 

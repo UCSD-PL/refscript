@@ -36,23 +36,20 @@ Tool/Implementation
   
   - What are good default mutabilities (parsing etc.)?
 
+  - Tidy up output files
+
   - Revisit mutability subtyping, compute variance of type parameter in type
 
   - TApp (TRef ...) ... is now prefixed with a '#' to disambiguate from TVar.
-
-  - Parsing exceptions are not captured by regrtest.py.
 
   - Do co/contra-variant checks depending on mutability.
 
   - Enforce invariant that overloaded functions signatures are non-overlapping
 
-  - Add check for number of parameters passed to generic type
+  - Checks on type parameters (including mutability - always first parameter)
   
   - Encode method mutability
   
-  - Check that the first argument of a generic type is in { ReadOnly, Immutable,
-    AssignFields, Mutable }.
-
   - Variables cannot be named: "func" or "obj" (fixpoint restriction)
 
   - Test examples with infinite loops.

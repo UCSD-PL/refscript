@@ -65,8 +65,10 @@ module Language.Nano.Typecheck.Types (
   , arrayLitTy, objLitTy
   , setPropTy
 
+    
   -- * Builtin: Binders
-  , argBind
+  , argId
+  , argTy
   , returnTy
     
 
@@ -1245,17 +1247,17 @@ objLitTy l ps g   = mkFun (vs, bs, rt)
 -- | @argBind@ returns a dummy type binding `arguments :: T `
 --   where T is an object literal containing the non-undefined `ts`.
     
-argBind l ts g = (argId, immObjectLitTy l g ps' ts') 
+argTy l ts g   = immObjectLitTy l g ps' ts'
   where
-    argId      = Id l "arguments" 
     ts'        = take k ts
     ps'        = PropNum l . toInteger <$> [0 .. k-1]
     k          = fromMaybe 0 $ L.findIndex isUndef ts
 
+argId l        = Id l "arguments" 
 
-objLitR l n g     = fTop -- fromMaybe fTop $ substBINumArgs n . rTypeR . thd3 <$> bkFun t 
+objLitR l n g  = fromMaybe fTop $ substBINumArgs n . rTypeR . thd3 <$> bkFun t 
   where
-    t             = builtinOpTy l BIObjectLit g
+    t          = builtinOpTy l BIObjectLit g
 
 immObjectLitTy l g ps ts 
   | nps == length ts = TCons elts immutable $ objLitR l nps g 

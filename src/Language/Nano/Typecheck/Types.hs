@@ -36,7 +36,6 @@ module Language.Nano.Typecheck.Types (
   
   -- Type ops
   , rUnion, rTypeR, setRTypeR
-  
   , renameBinds
 
   -- * Regular Types
@@ -61,11 +60,15 @@ module Language.Nano.Typecheck.Types (
   , TDefEnv (..), tDefEmpty, tDefFromList, tDefToList
   , addSym, findSym, findSymOrDie, mapTDefEnv, mapTDefEnvM
 
-  -- * Operator Types
+  -- * Builtin: Operators 
   , infixOpTy, prefixOpTy, builtinOpTy
-  , arrayLitTy, objLitTy, immObjectLitTy
-  , setPropTy, returnTy
-  -- , getFieldTy, getMethTy, getStatTy
+  , arrayLitTy, objLitTy
+  , setPropTy
+
+  -- * Builtin: Binders
+  , argBind
+  , returnTy
+    
 
   -- * Annotations
   , Annot (..), UFact, Fact (..), ClassInfo
@@ -87,6 +90,7 @@ module Language.Nano.Typecheck.Types (
   -- * Aliases
   , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
 
+               
   ) where 
 
 import           Text.Printf
@@ -1236,6 +1240,18 @@ objLitTy l ps g   = mkFun (vs, bs, rt)
     ss            = [F.symbol p | p <- ps]
     mSym          = F.symbol "M"
     aSym          = F.symbol "A"
+
+
+-- | @argBind@ returns a dummy type binding `arguments :: T `
+--   where T is an object literal containing the non-undefined `ts`.
+    
+argBind l ts g = (argId, immObjectLitTy l g ps' ts') 
+  where
+    argId      = Id l "arguments" 
+    ts'        = take k ts
+    ps'        = PropNum l . toInteger <$> [0 .. k-1]
+    k          = fromMaybe 0 $ L.findIndex isUndef ts
+
 
 objLitR l n g     = fTop -- fromMaybe fTop $ substBINumArgs n . rTypeR . thd3 <$> bkFun t 
   where

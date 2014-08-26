@@ -159,22 +159,6 @@ envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g)
     varBinds                       = safeZip "envAddFun"
 
 
--- | @argBind@ returns a dummy type binding `arguments :: T `
---   where T is an object literal containing the non-undefined `ts`.
-    
-argBind l ts g = (argId, immObjectLitTy l g ps' ts') 
-  where
-    argId      = Id l "arguments" 
-    -- xs'           = take k xs
-    ts'        = take k ts
-    ps'        = PropNum l . toInteger <$> [0 .. k-1]
-    k          = fromMaybe 0 $ findIndex isUndef ts
-
---     dArg        = ObjectLit l $ safeZip "argDecl" ps es 
---     es          = VarRef  l             <$> take k xs
---     l           = getAnnotation $ head body 
-
-
 
                                      
 --------------------------------------------------------------------------------

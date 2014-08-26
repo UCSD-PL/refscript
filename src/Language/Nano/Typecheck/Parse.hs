@@ -434,9 +434,9 @@ classDeclP = do
 
 data RawSpec
   = RawMeas     (SourceSpan, String)   -- Measure
-  | RawBind     (SourceSpan, String)   -- Function bindings
+  | RawBind     (SourceSpan, String)   -- Named function or var bindings
   | RawFunc     (SourceSpan, String)   -- Anonymouns function type
-  | RawIface    (SourceSpan, String)   -- Variable declaration annotations
+  | RawIface    (SourceSpan, String)   -- Interface annots
   | RawClass    (SourceSpan, String)   -- Class annots
   | RawField    (SourceSpan, String)   -- Field annots
   | RawMethod   (SourceSpan, String)   -- Method annots

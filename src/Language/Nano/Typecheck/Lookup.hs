@@ -10,6 +10,7 @@ module Language.Nano.Typecheck.Lookup (
   , getElt
   , extractCall
   , extractCtor
+  , extractParent
   , getPropTDef
   ) where 
 
@@ -27,6 +28,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
+import           Language.Nano.Typecheck.Subst
 import           Control.Applicative ((<$>))
 
 
@@ -79,8 +81,8 @@ getPropApp _ _ _ = error "getPropApp should only be applied to TApp"
 
 
 -------------------------------------------------------------------------------
-extractCtor :: (Data r, PP r, F.Reftable r, EnvLike r g) 
-               => g r -> RType t -> Maybe (RType r)
+-- extractCtor :: (Data r, PP r, F.Reftable r, EnvLike r g) 
+--             => g r -> RType t -> Maybe (RType r)
 -------------------------------------------------------------------------------
 extractCtor γ (TClass x) 
   = do  d        <- resolveRelNameInEnv γ x
@@ -91,7 +93,38 @@ extractCtor γ (TClass x)
     where
         retT vs    = TApp (TRef x) (tVar <$> vs) fTop
         defCtor vs = TFun [] (retT vs) fTop
+
+extractCtor γ (TApp (TRef x) ts _) 
+  = do  d        <- resolveRelNameInEnv γ x
+        (vs, es) <- flatten'' False γ d
+        case [ mkAll vs (TFun bs (retT vs) r) | ConsSig (TFun bs _ r) <- es ] of
+          [] -> return $ apply (fromList $ zip vs ts) $ defCtor vs
+          ts -> return $ apply (fromList $ zip vs ts) $ mkAnd ts
+    where
+        retT vs    = TApp (TRef x) (tVar <$> vs) fTop
+        defCtor vs = TFun [] (retT vs) fTop
+
+extractCtor γ (TCons es _ _ )
+  = do  case [ TFun bs t r | ConsSig (TFun bs t r) <- es ] of
+          [] -> Nothing 
+          ts -> return $ mkAnd ts
+       
 extractCtor _ _ = Nothing
+
+
+-------------------------------------------------------------------------------
+extractParent :: (Data r, F.Reftable r, PP r, EnvLike r g, Substitutable r (RType r)) 
+              => g r -> RType r -> Maybe (RType r)
+-------------------------------------------------------------------------------
+extractParent γ (TApp (TRef x) ts _) 
+  = do  d <- resolveRelNameInEnv γ x
+        case t_proto d of
+          Just (p,ps) -> Just $ TApp (TRef p) (tArgs d ts ps) fTop
+          _           -> Nothing
+  where
+    tArgs d ts ps = apply (fromList $ zip (t_args d) ts) ps
+parentDef _ _ = Nothing
+
 
 
 -- | `getElt`: return elements associated with a symbol @s@. The return list 

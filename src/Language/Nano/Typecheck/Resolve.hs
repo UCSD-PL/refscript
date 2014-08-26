@@ -174,7 +174,9 @@ parentOf (AP (QPath l m )) = Just (AP (QPath l (init m)))
 -- | Flattenning 
 --
 
--- | flattening type to include all fields inherited by ancestors
+-- | `flatten b γ (d,ts)` epands a type reference to a structural type that 
+--   includes all elements of the the named type and its ancestors. Argument
+--   @b@ determines if static or non-static elements should be included.
 --
 ---------------------------------------------------------------------------
 flatten :: (EnvLike r g, PPR r, Data r) => Bool -> g r -> (SIfaceDef r) -> Maybe [TypeMember r]

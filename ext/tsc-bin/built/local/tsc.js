@@ -9936,20 +9936,45 @@ var TypeScript;
                         var anns = tokenAnnots(v.propertyName);
                         if (anns.length === 0) {
                             var eltSymbol = helper.getSymbolForAST(v);
-                            return [eltSymbol.name + ": " + eltSymbol.toRsType().toString()];
+                            return [new TypeScript.RsMethSig(eltSymbol.name, new TypeScript.RsTAnd(eltSymbol.type.getCallSignatures().map(function (s) {
+                                    return s.toRsTMeth();
+                                }))).toString()];
                         } else {
                             return anns.map(function (m) {
                                 return m.content();
                             });
                         }
-                        break;
 
                     case 141 /* PropertySignature */:
                         var v = m;
                         var anns = tokenAnnots(v.propertyName);
                         if (anns.length === 0) {
                             var eltSymbol = helper.getSymbolForAST(v);
-                            return [eltSymbol.name + ": " + eltSymbol.type.toRsType().toString()];
+                            return [new TypeScript.RsFieldSig(eltSymbol.name, eltSymbol.type.toRsType()).toString()];
+                        } else {
+                            return anns.map(function (m) {
+                                return m.content();
+                            });
+                        }
+
+                    case 143 /* ConstructSignature */:
+                        var c = m;
+                        var anns = tokenAnnots(c.newKeyword);
+                        if (anns.length === 0) {
+                            var eltSymbol = helper.getSymbolForAST(c);
+                            return [new TypeScript.RsConsSig(eltSymbol.type.toRsType()).toString()];
+                        } else {
+                            return anns.map(function (m) {
+                                return m.content();
+                            });
+                        }
+
+                    case 142 /* CallSignature */:
+                        var cs = m;
+                        var anns = tokenAnnots(cs);
+                        if (anns.length === 0) {
+                            var eltSymbol = helper.getSymbolForAST(cs);
+                            return [new TypeScript.RsCallSig(eltSymbol.type.toRsType()).toString()];
                         } else {
                             return anns.map(function (m) {
                                 return m.content();
@@ -37786,28 +37811,6 @@ var TypeScript;
 
             return null;
         };
-
-        PullSymbol.prototype.toRsType = function () {
-            if (this.isMethod()) {
-                var type = this.type;
-                var sigs = type.getCallSignatures();
-
-                if (sigs.length !== 1) {
-                    return new TypeScript.TError(type.toString());
-                }
-                var sig = sigs[0];
-
-                var methParams = sig.getTypeParameters().map(function (p) {
-                    return p.type.toRsTypeParameter();
-                });
-                var methArgs = sig.parameters.map(function (p) {
-                    return new TypeScript.BoundedRsType(p.name, p.type.toRsType());
-                });
-                var methRetT = sig.returnType.toRsType();
-                return new TypeScript.TMethodSig(methParams, methArgs, methRetT);
-            }
-            throw new Error("UNIMPLEMENTED: PullSymbol.toRsType not supprted for " + this.toString());
-        };
         return PullSymbol;
     })();
     TypeScript.PullSymbol = PullSymbol;
@@ -38223,7 +38226,7 @@ var TypeScript;
             return false;
         };
 
-        PullSignatureSymbol.prototype.toTFunctionSigMember = function () {
+        PullSignatureSymbol.prototype.toRsTFun = function () {
             var tParams = this.getTypeParameters().map(function (p) {
                 return p.type.toRsTypeParameter();
             });
@@ -38231,7 +38234,18 @@ var TypeScript;
                 return new TypeScript.BoundedRsType(p.name, p.type.toRsType());
             });
             var retT = this.returnType.toRsType();
-            return new TypeScript.TFunctionSigMember(tParams, tArgs, retT);
+            return new TypeScript.RsTFun(tParams, tArgs, retT);
+        };
+
+        PullSignatureSymbol.prototype.toRsTMeth = function () {
+            var tParams = this.getTypeParameters().map(function (p) {
+                return p.type.toRsTypeParameter();
+            });
+            var tArgs = this.parameters.map(function (p) {
+                return new TypeScript.BoundedRsType(p.name, p.type.toRsType());
+            });
+            var retT = this.returnType.toRsType();
+            return new TypeScript.RsMeth(tParams, tArgs, retT);
         };
         return PullSignatureSymbol;
     })(PullSymbol);
@@ -39590,18 +39604,31 @@ var TypeScript;
                     return !sig.isStringConstantOverloadSignature();
                 });
 
-                return new TypeScript.TFunctionSig(filteredSigs.map(function (s) {
-                    return s.toTFunctionSigMember();
+                return new TypeScript.RsTAnd(filteredSigs.map(function (s) {
+                    return s.toRsTFun();
                 }));
             }
 
             if (this.kind === 8388608 /* ObjectType */) {
-                var methods = this.getAllMembers(65536 /* Method */, 0 /* all */);
-                var properties = this.getAllMembers(4096 /* Property */, 0 /* all */);
-                var fields = methods.concat(properties).map(function (s) {
-                    return new TypeScript.TField(s.name, s.type.toRsType());
+                var methods = this.getAllMembers(65536 /* Method */, 0 /* all */).map(function (m) {
+                    return new TypeScript.RsMethSig(m.name, new TypeScript.RsTAnd(m.type.getCallSignatures().map(function (s) {
+                        return s.toRsTMeth();
+                    })));
                 });
-                return new TypeScript.TObject(fields);
+
+                var properties = this.getAllMembers(4096 /* Property */, 0 /* all */).map(function (p) {
+                    return new TypeScript.RsFieldSig(p.name, p.type.toRsType());
+                });
+
+                var constructors = this.getConstructSignatures().map(function (c) {
+                    return new TypeScript.RsConsSig(c.toRsTFun());
+                });
+
+                var calls = this.getCallSignatures().map(function (s) {
+                    return new TypeScript.RsCallSig(s.toRsTFun());
+                });
+
+                return new TypeScript.TObject(TypeScript.ArrayUtilities.concat([methods, properties, constructors, calls]));
             }
 
             return new TypeScript.TError(this.toString());
@@ -60672,13 +60699,24 @@ var TypeScript;
     })(RsType);
     TypeScript.TObject = TObject;
 
-    var TFunctionSigMember = (function () {
-        function TFunctionSigMember(tParams, argTs, returnT) {
+    var RsFunctionLike = (function (_super) {
+        __extends(RsFunctionLike, _super);
+        function RsFunctionLike() {
+            _super.apply(this, arguments);
+        }
+        return RsFunctionLike;
+    })(RsType);
+    TypeScript.RsFunctionLike = RsFunctionLike;
+
+    var RsTFun = (function (_super) {
+        __extends(RsTFun, _super);
+        function RsTFun(tParams, argTs, returnT) {
+            _super.call(this);
             this.tParams = tParams;
             this.argTs = argTs;
             this.returnT = returnT;
         }
-        TFunctionSigMember.prototype.toString = function () {
+        RsTFun.prototype.toString = function () {
             var s = "";
             if (this.tParams.length > 0) {
                 s += "forall " + this.tParams.map(function (p) {
@@ -60693,17 +60731,19 @@ var TypeScript;
             s += this.returnT.toString();
             return s;
         };
-        return TFunctionSigMember;
-    })();
-    TypeScript.TFunctionSigMember = TFunctionSigMember;
+        return RsTFun;
+    })(RsFunctionLike);
+    TypeScript.RsTFun = RsTFun;
 
-    var TMethodSig = (function () {
-        function TMethodSig(tParams, argTs, returnT) {
+    var RsMeth = (function (_super) {
+        __extends(RsMeth, _super);
+        function RsMeth(tParams, argTs, returnT) {
+            _super.call(this);
             this.tParams = tParams;
             this.argTs = argTs;
             this.returnT = returnT;
         }
-        TMethodSig.prototype.toString = function () {
+        RsMeth.prototype.toString = function () {
             var s = "";
             if (this.tParams.length > 0) {
                 s += "forall " + this.tParams.map(function (p) {
@@ -60718,30 +60758,28 @@ var TypeScript;
             s += this.returnT.toString();
             return s;
         };
-        return TMethodSig;
-    })();
-    TypeScript.TMethodSig = TMethodSig;
+        return RsMeth;
+    })(RsFunctionLike);
+    TypeScript.RsMeth = RsMeth;
 
-    var TFunctionSig = (function (_super) {
-        __extends(TFunctionSig, _super);
-        function TFunctionSig(signatures) {
+    var RsTAnd = (function (_super) {
+        __extends(RsTAnd, _super);
+        function RsTAnd(signatures) {
             _super.call(this);
             this.signatures = signatures;
         }
-        TFunctionSig.prototype.toString = function () {
+        RsTAnd.prototype.toString = function () {
             if (this.signatures && this.signatures.length > 0) {
-                if (this.signatures.length == 1) {
-                    return this.signatures[0].toString();
-                } else {
-                    return "\n" + this.signatures.map(function (s) {
-                        return "\t/\\ " + s.toString();
-                    }).join("\n");
-                }
+                return (this.signatures.length == 1) ? this.signatures[0].toString() : ("\n" + this.signatures.map(function (s) {
+                    return "\t/\\ " + s.toString();
+                }).join("\n"));
+            } else {
+                return new TError("RsTAnd").toString();
             }
         };
-        return TFunctionSig;
+        return RsTAnd;
     })(RsType);
-    TypeScript.TFunctionSig = TFunctionSig;
+    TypeScript.RsTAnd = RsTAnd;
 
     var TArray = (function (_super) {
         __extends(TArray, _super);
@@ -60853,51 +60891,66 @@ var TypeScript;
     })();
     TypeScript.TParentType = TParentType;
 
-    var TElt = (function () {
-        function TElt() {
+    var RsTypeMember = (function () {
+        function RsTypeMember() {
         }
-        TElt.createTElt = function (t) {
-            if (t.isMethod()) {
-                console.log("TypeParameters: " + t.getTypeParameters().map(function (t) {
-                    return t.toString();
-                }));
-            }
-            return null;
-        };
-        return TElt;
+        return RsTypeMember;
     })();
-    TypeScript.TElt = TElt;
+    TypeScript.RsTypeMember = RsTypeMember;
 
-    var TMeth = (function (_super) {
-        __extends(TMeth, _super);
-        function TMeth(name, args, rt) {
+    var RsCallSig = (function (_super) {
+        __extends(RsCallSig, _super);
+        function RsCallSig(type) {
             _super.call(this);
-            this.name = name;
-            this.args = args;
-            this.rt = rt;
+            this.type = type;
         }
-        TMeth.prototype.toString = function () {
-            return this.name + ": (" + this.args.map(function (t) {
-                return t.toString();
-            }).join(", ") + "): " + this.rt.toString();
+        RsCallSig.prototype.toString = function () {
+            return this.type.toString();
         };
-        return TMeth;
-    })(TElt);
-    TypeScript.TMeth = TMeth;
+        return RsCallSig;
+    })(RsTypeMember);
+    TypeScript.RsCallSig = RsCallSig;
 
-    var TField = (function (_super) {
-        __extends(TField, _super);
-        function TField(name, type) {
+    var RsConsSig = (function (_super) {
+        __extends(RsConsSig, _super);
+        function RsConsSig(type) {
+            _super.call(this);
+            this.type = type;
+        }
+        RsConsSig.prototype.toString = function () {
+            return "new " + this.type.toString();
+        };
+        return RsConsSig;
+    })(RsTypeMember);
+    TypeScript.RsConsSig = RsConsSig;
+
+    var RsFieldSig = (function (_super) {
+        __extends(RsFieldSig, _super);
+        function RsFieldSig(name, type) {
             _super.call(this);
             this.name = name;
             this.type = type;
         }
-        TField.prototype.toString = function () {
+        RsFieldSig.prototype.toString = function () {
             return this.name + ": " + this.type.toString();
         };
-        return TField;
-    })(TElt);
-    TypeScript.TField = TField;
+        return RsFieldSig;
+    })(RsTypeMember);
+    TypeScript.RsFieldSig = RsFieldSig;
+
+    var RsMethSig = (function (_super) {
+        __extends(RsMethSig, _super);
+        function RsMethSig(name, type) {
+            _super.call(this);
+            this.name = name;
+            this.type = type;
+        }
+        RsMethSig.prototype.toString = function () {
+            return this.name + ": " + this.type.toString();
+        };
+        return RsMethSig;
+    })(RsTypeMember);
+    TypeScript.RsMethSig = RsMethSig;
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
 (function (TypeScript) {

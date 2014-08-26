@@ -161,7 +161,7 @@ initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
     nms       = envFromList $ visibleNames ss
-    mod       = tracePP "modules" $scrapeModules ss 
+    mod       = scrapeModules ss 
     ctx       = emptyContext
     pth       = AP $ QPath (srcPos dummySpan) []
 
@@ -673,7 +673,7 @@ tcCall γ (ObjectLit l bs)
 -- | `new e(e1,...,en)`
 tcCall γ (NewExpr l e es) 
   = do (e',t)                 <- tcExpr γ e
-       case tracePP ("extracted ctor from " ++ ppshow e ++ " :: " ++ ppshow t) $ extractCtor γ t of 
+       case extractCtor γ t of 
          Just ct -> 
             do (es', t)       <- tcNormalCall γ l "constructor" es ct
                return          $ (NewExpr l e' es', t)
@@ -714,7 +714,7 @@ tcCall γ (CallExpr l e@(SuperRef _)  es)
                 case extractCtor γ (TClass x) of
                   Just ct -> first (CallExpr l e) <$> tcNormalCall γ l "constructor" es ct
                   _       -> tcError $ errorUnboundId (ann l) "super"
-            Nothing -> tcError $ errorUnboundId (ann l) "super"
+            _ -> tcError $ errorUnboundId (ann l) "super"
       Nothing -> tcError $ errorUnboundId (ann l) "this"
 
    

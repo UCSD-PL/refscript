@@ -30,7 +30,6 @@ import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
 import qualified Data.ByteString.Lazy.Char8   as    B
 
--- import           Debug.Trace                        (trace)
 
 main = do cfg  <- getOpts
           run (verifier cfg) cfg

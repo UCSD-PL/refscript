@@ -239,14 +239,16 @@ tcFun1 :: (PPR r, IsLocated l, CallSite t)
        => TCEnv r -> (AnnSSA r) -> l -> [Id (AnnSSA r)] -> [Statement (AnnSSA r)] 
        -> (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
-tcFun1 γ l f xs body (i, (αs,ts,t)) = tcFunBody γ' l body t
+tcFun1 γ l f xs body fty = tcFunBody γ' l body t
   where 
-    γ'                              = envAddFun f i αs xs ts t γ 
-
+    γ'                   = envAddFun f i αs xs ts arg t γ 
+    (i, (αs,ts,t))       = fty
+    arg                  = argBind l ts $ tce_env γ
+    
 -- FIXME: Check for mutability (the second part in the triplet)
 --        If this argument is "immutable" We will have to check
---        statements/expressions that operate on "this" and make sure that they
---        do not mutate it.
+--        statements/expressions that operate on "this" and make
+--        sure that they do not mutate it.
 --
 --        For the moment it just does a regular function check
 --        
@@ -260,13 +262,14 @@ tcFunBody γ l body t = tcStmts γ body >>= go
                        = return b
 
 -------------------------------------------------------------------------------
-envAddFun :: (F.Reftable r, IsLocated c, IsLocated a, CallSite b) =>
-  a -> b -> [TVar] -> [Id c] -> [RType r] -> RType r -> TCEnv r -> TCEnv r
+-- envAddFun :: (F.Reftable r, IsLocated c, IsLocated a, CallSite b) =>
+--   a -> b -> [TVar] -> [Id c] -> [RType r] -> RType r -> TCEnv r -> TCEnv r
 -------------------------------------------------------------------------------
-envAddFun f i αs xs ts t = tcEnvAdds tyBinds 
-                         . tcEnvAdds (varBinds xs ts) 
-                         . tcEnvAddReturn f t
-                         . tcEnvPushSite i 
+envAddFun f i αs xs ts a t = tcEnvAdds tyBinds 
+                           . tcEnvAdds (varBinds xs ts) 
+                           . tcEnvAdds [a] 
+                           . tcEnvAddReturn f t
+                           . tcEnvPushSite i 
   where  
     tyBinds                = [(tVarId α, tVar α) | α <- αs]
     varBinds               = zip

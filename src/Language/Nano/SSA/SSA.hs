@@ -21,7 +21,6 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types                 as F
 import           Language.Nano.Env
 import           Language.Nano.Errors
--- import           Language.Nano.Misc
 import           Language.Nano.SSA.SSAMonad
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Types
@@ -561,7 +560,6 @@ getLoopPhis b = do
     return $ envToList (envLefts $ envIntersectWith meet θ θ')
   where
     meet x x' = if x == x' then Right x else Left (x, x')
-
 
 ssaForLoop l vds cOpt incExp b =
   do

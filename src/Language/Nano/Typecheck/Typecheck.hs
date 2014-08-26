@@ -243,7 +243,7 @@ tcFun1 γ l f xs body fty = tcFunBody γ' l body t
   where 
     γ'                   = envAddFun f i αs xs ts arg t γ 
     (i, (αs,ts,t))       = fty
-    arg                  = argBind l ts $ tce_env γ
+    arg                  = (argId l, argTy l ts $ tce_env γ)
     
 -- FIXME: Check for mutability (the second part in the triplet)
 --        If this argument is "immutable" We will have to check

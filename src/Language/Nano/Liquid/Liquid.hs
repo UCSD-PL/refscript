@@ -152,12 +152,13 @@ consFun1 l g f xs body (i, ft)
 envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g) 
                                    >>= (return . envAddReturn f t' ) 
                                    >>= envAdds False (varBinds xs ts')
-                                   >>= envAdds False [argBind l ts' (renv g)]
+                                   >>= envAdds False [argBind]
                                    >>= envAdds False tyBinds
   where
     tyBinds                        = [(Loc (srcPos l) α, tVar α) | α <- αs]
     varBinds                       = safeZip "envAddFun"
-
+    argBind                        = (argId l, argTy l ts' (renv g))
+                                   
 
 
                                      

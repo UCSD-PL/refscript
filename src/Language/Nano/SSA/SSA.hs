@@ -59,17 +59,16 @@ ssaNano p@(Nano { code = Src fs })
 -------------------------------------------------------------------------------------
 -- ssaFun :: F.Reftable r => FunctionStatement SourceSpan -> SSAM r (FunctionStatement SourceSpan)
 -------------------------------------------------------------------------------------
--- ssaFun (FunctionStmt l f xs body)
 ssaFun l _ xs body
   = do θ <- getSsaEnv
-       withAssignability ReadOnly (envIds θ) $               -- Variables from OUTER scope are UNASSIGNABLE
-         do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
-            (_, body')   <- ssaStmts body                    -- Transform function
-            setSsaEnv θ                                      -- Restore Outer SsaEnv
+       withAssignability ReadOnly (arg : envIds θ) $      -- Variables from OUTER scope are UNASSIGNABLE
+         do setSsaEnv     $ extSsaEnv (arg : ret : xs) θ  -- Extend SsaEnv with formal binders
+            (_, body')   <- ssaStmts body                 -- Transform function
+            setSsaEnv θ                                   -- Restore Outer SsaEnv
             return        $ body'
-            -- return        $ FunctionStmt l f xs body'
-
--- ssaFun _ = error "Calling ssaFun not with FunctionStmt"
+    where
+       arg = argId l
+       ret = returnId l
 
 -------------------------------------------------------------------------------------
 ssaSeq :: (a -> SSAM r (Bool, a)) -> [a] -> SSAM r (Bool, [a])

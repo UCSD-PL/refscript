@@ -3,16 +3,14 @@ Tests / Benchmarks
 
 ### Failing tests
 
-    neg/misc/abs-join-00.ts,              // TS translation exception
+    neg/misc/abs-join-00.ts,  // TS translation exception
 
-    pos/misc/unite-01.ts, // Unification issue
-    pos/loops/obj-01.ts,  // Unification issue                 
-    pos/loops/obj-02.ts,  // Unification issue
+    pos/misc/unite-01.ts,     // Unification issue
+    pos/loops/obj-01.ts,      // Unification issue                 
+    pos/loops/obj-02.ts,      // Unification issue
 
-pos/objects/obj-03.ts,                // unsupported bracket-ref
-
-	pos/simple/ambient-00.ts,             // annotation missing - fixed modules
-    pos/simple/ambient-01.ts,             // fixed in modules
+	pos/simple/ambient-00.ts, // annotation missing - fixed modules
+    pos/simple/ambient-01.ts, // fixed in modules
 
 
 

@@ -34,13 +34,6 @@ JS Features
     - typescript/pos/objects/meth-00.js
 
 
-Varargs
--------
-
-Failed 16 tests: 
- neg/misc/locks-bad.ts,
-
-
 Tool/Implementation
 -------------------
   

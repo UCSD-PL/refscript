@@ -25,16 +25,17 @@ function work(){
 
 /*@ loop :: (number, number) => number */
 function loop(n, l) {
-  
   var flag = random();
+
   if (n <= 0) {
     return l;
   }
 
   l = acquire(l); 
   work();
+ 
   // l = release(l);
-  
+    
   return loop(n-1, l);
 }
 
@@ -42,7 +43,7 @@ function loop(n, l) {
 /*@ main :: ({n:number|n > 0}) => void */
 function main(n){
   var l = create();
-  loop(n, l);
+  l = loop(n, l);
   assert(l === 0);
 }
 

@@ -61,14 +61,15 @@ ssaNano p@(Nano { code = Src fs })
 -------------------------------------------------------------------------------------
 ssaFun l _ xs body
   = do θ <- getSsaEnv
-       withAssignability ReadOnly (arg : envIds θ) $      -- Variables from OUTER scope are UNASSIGNABLE
+       withAssignability ReadOnly (eIds θ) $      -- Variables from OUTER scope are UNASSIGNABLE
          do setSsaEnv     $ extSsaEnv (arg : ret : xs) θ  -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                 -- Transform function
             setSsaEnv θ                                   -- Restore Outer SsaEnv
             return        $ body'
     where
-       arg = argId l
-       ret = returnId l
+       arg    = argId l
+       ret    = returnId l
+       eIds θ = arg : [x | x <- envIds θ, F.symbol x /= F.symbol arg]
 
 -------------------------------------------------------------------------------------
 ssaSeq :: (a -> SSAM r (Bool, a)) -> [a] -> SSAM r (Bool, [a])

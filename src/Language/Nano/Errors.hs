@@ -75,7 +75,7 @@ bugCallTo l x es              = mkErr l $ printf "Bug at call to '%s' with args 
 -- | Nano
 ---------------------------------------------------------------------------
 errorInvalidTopStmt l x       = mkErr l $ printf "Invalid top-level statement: %s" (ppshow x) 
-errorDuplicate i l l'         = mkErr l $ printf "Duplicate Specification for %s:\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
+errorDuplicate i l l'         = mkErr l $ printf "Duplicate Specification for: %s\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
 
 
 ---------------------------------------------------------------------------

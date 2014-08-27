@@ -80,7 +80,6 @@
                                   /\ (x:number, y:string) => string
                                   /\ (x:string, y:number) => string
                                   /\ (x:string, y:string) => string           
-                                  /\ (x:{top|false}, y:{top|false}) => top                          
  */
 
 /*@ extern builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v ~~ x - y} */

@@ -59,6 +59,9 @@ import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
 
+import           Data.Generics.Schemes
+import           Data.Generics.Aliases
+
 import           Data.Maybe                     (isJust, catMaybes)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
@@ -256,13 +259,16 @@ freshId l = Id (Ann l []) <$> fresh
 -- | We do not add binders for WriteGlobal variables as they cannot appear in
 --   refinements.
 --
+--   NONONONONONO: They can!!!
+--
 ---------------------------------------------------------------------------------------
 envAdds :: (PP [x], PP x, F.Symbolic x, IsLocated x) 
         => String -> [(x, (RefType, Assignability))] -> CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 envAdds msg xts' g
   = do xtas     <- zip xs . (`zip` as) <$> mapM addInvariant ts'
-       is       <- catMaybes           <$> forM xtas addFixpointBind
+       is       <- -- tracePP (msg ++ " -- adding " ++ ppshow (fst <$> xtas)) <$> 
+                     catMaybes <$> forM xtas addFixpointBind
        _        <- forM xtas            $  \(x,(t,_)) -> addAnnot (srcPos x) x t
        return    $ g { cge_names        = E.envAdds xtas       $ cge_names g
                      , cge_fenv         = F.insertsIBindEnv is $ cge_fenv  g }
@@ -274,38 +280,13 @@ envAdds msg xts' g
 instance PP F.IBindEnv where
   pp e = F.toFix e 
 
-
+-- ReturnVar definitely does not need to be in the bindings
 ---------------------------------------------------------------------------------------
 addFixpointBind :: (F.Symbolic x) => (x, (RefType, Assignability)) -> CGM (Maybe F.BindId)
 ---------------------------------------------------------------------------------------
-addFixpointBind (x, (t, WriteGlobal)) = return Nothing
+addFixpointBind (x, (t, ReturnVar))
+  = return Nothing 
 addFixpointBind (x, (t, _))
-  = do (i, bs') <- F.insertBindEnv s r . binds <$> get 
-       modify    $ \st -> st { binds = bs' }
-       return    $ Just i
-  where
-       (s,r)     = (F.symbol x, rTypeSortedReft t)
-
-
----------------------------------------------------------------------------------------
-envAddsAll :: (PP [x], PP x, F.Symbolic x, IsLocated x) 
-           => String -> [(x, (RefType, Assignability))] -> CGEnv -> CGM CGEnv
----------------------------------------------------------------------------------------
-envAddsAll msg xts' g
-  = do xtas     <- zip xs . (`zip` as) <$> mapM addInvariant ts'
-       is       <- catMaybes           <$> forM xtas addFixpointBindAll
-       _        <- forM xtas            $  \(x,(t,_)) -> addAnnot (srcPos x) x t
-       return    $ g { cge_names        = E.envAdds xtas       $ cge_names g
-                     , cge_fenv         = F.insertsIBindEnv is $ cge_fenv  g }
-    where
-       (xs,ys)    = unzip xts'
-       (ts',as)   = unzip ys
-       -- adjust m (k,v) = M.adjust (v:) (F.symbol k) m
-
----------------------------------------------------------------------------------------
-addFixpointBindAll :: (F.Symbolic x) => (x, (RefType, Assignability)) -> CGM (Maybe F.BindId)
----------------------------------------------------------------------------------------
-addFixpointBindAll (x, (t, _))
   = do (i, bs') <- F.insertBindEnv s r . binds <$> get 
        modify    $ \st -> st { binds = bs' }
        return    $ Just i
@@ -375,7 +356,7 @@ addAnnot l x t = modify $ \st -> st {cg_ann = S.addAnnot l x t (cg_ann st)}
 ---------------------------------------------------------------------------------------
 envAddReturn        :: (IsLocated f)  => f -> RefType -> CGEnv -> CGM CGEnv 
 ---------------------------------------------------------------------------------------
-envAddReturn f t g  = return $ g { cge_names = E.envAddReturn f (t, WriteGlobal) (cge_names g) } 
+envAddReturn f t g  = return $ g { cge_names = E.envAddReturn f (t, ReturnVar) (cge_names g) } 
 
 ---------------------------------------------------------------------------------------
 envAddGuard       :: (F.Symbolic x, IsLocated x) => x -> Bool -> CGEnv -> CGEnv  
@@ -507,13 +488,13 @@ freshenCGEnvM g
         return $ g { cge_names = names, cge_mod = modules } 
   where
 
-
-freshenVarbindingM g (x,(t,a)) = (\t -> (x,(t,a))) <$> freshTyVar g (srcPos x) t
+-- XXX: why were we K-varing these in the first place? 
+freshenVarbindingM g (x,(t,a)) = (\t -> (x,(t,a))) <$> return t -- freshTyVar g (srcPos x) t
 
 freshenModuleDefM g (a, m)  
   = do  vars     <- E.envFromList <$> mapM f (E.envToList $ m_variables m)
-        types    <- E.envFromList <$> mapM h (E.envToList $ m_types m)        
-        return (a,m { m_variables = vars, m_types = types })
+        -- types    <- E.envFromList <$> mapM h (E.envToList $ m_types m)        
+        return (a,m { m_variables = vars }) -- , m_types = types })
   where
     f (x, (v, w, t)) =
       case w of
@@ -540,15 +521,17 @@ freshenModuleDefM g (a, m)
 subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l g t1 t2 =
-  do t1'   <- addInvariant t1  -- enhance LHS with invariants
-     g'    <- envAddsAll "subtype" [(symbolId l x,(t,a)) | (x, Just (t,a)) <- rNms t1' ++ rNms t2 ] g
-     modify $ \st -> st {cs = c g' (t1', t2) : (cs st)}
+  do t1'    <- addInvariant t1  -- enhance LHS with invariants
+     let xs  =    [(symbolId l x,(t,a)) | (x, Just (t,a)) <- rNms t1' ++ rNms t2 ]
+              ++  [(symbolId l x,(t,a)) | (x,      (t,a)) <- E.envToList $ cge_names g ]
+     g'     <- envAdds "subtype" xs g
+     modify  $ \st -> st {cs = c g' (t1', t2) : (cs st)}
   where
-    c g     = uncurry $ Sub g (ci l)
-    rNms t  = mapSnd (`envFindTyWithAsgn` g) . dup <$> names t
-    dup a   = (a,a)
-    names   = foldReft rr []
-    rr r xs = F.syms r ++ xs
+    c g      = uncurry $ Sub g (ci l)
+    rNms t   = mapSnd (`envFindTyWithAsgn` g) . dup <$> names t
+    dup a    = (a,a)
+    names    = foldReft rr []
+    rr r xs  = F.syms r ++ xs
 
 
 -- FIXME: Restore this check !!!
@@ -627,10 +610,23 @@ instance Freshable RefType where
 trueRefType    :: RefType -> CGM RefType
 trueRefType    = mapReftM true
 
+-- | Refreshing "∀ A . t" causes all occurences of A in t to be instantiated
+--   with the same fresh k-var.
+--
+--------------------------------------------------------------------------------
 refreshRefType :: RefType -> CGM RefType
-refreshRefType = mapReftM refresh
+--------------------------------------------------------------------------------
+refreshRefType t0@(TAll α t) = TAll α . (`trans` t) <$> refresh (fTop :: F.Reft)
+  where
+      trans r = everywhere $ mkT $ tx r
+      tx r (TVar β _) | α == β = TVar β r      
+      tx _ t                   = t
+refreshRefType t = mapReftM refresh t
 
+
+--------------------------------------------------------------------------------
 refreshValueVar :: RefType -> CGM RefType
+--------------------------------------------------------------------------------
 refreshValueVar t = T.mapM freshR t
   where 
     freshR (F.Reft (v,r)) = do 
@@ -639,6 +635,8 @@ refreshValueVar t = T.mapM freshR t
     freshVV = F.vv . Just  <$> fresh
     ss old new w | F.symbol old == F.symbol w = new
                  | otherwise                  = w
+
+
 
 --------------------------------------------------------------------------------
 -- | Splitting Subtyping Constraints 
@@ -656,7 +654,7 @@ splitC :: SubC -> CGM [FixSubC]
 --
 splitC (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
   = do bcs       <- bsplitC g i tf1 tf2
-       g'        <- envTyAdds i xt2s g 
+       g'        <- envTyAdds "splitC" i xt2s g 
        cs        <- concatMapM splitC $ safeZipWith "splitc-1" (Sub g' i) t2s t1s' 
        cs'       <- splitC $ Sub g' i (F.subst su t1) t2      
        return     $ bcs ++ cs ++ cs'
@@ -846,7 +844,7 @@ splitW :: WfC -> CGM [FixWfC]
 ---------------------------------------------------------------------------------------
 splitW (W g i ft@(TFun ts t _)) 
   = do let bws = bsplitW g ft i
-       g'     <- envTyAdds i ts g 
+       g'     <- envTyAdds "splitW" i ts g 
        ws     <- concatMapM splitW [W g' i ti | B _ ti <- ts]
        ws'    <-            splitW (W g' i t)
        return  $ bws ++ ws ++ ws'
@@ -886,7 +884,7 @@ bsplitW g t i
   = []
   where r' = rTypeSortedReft t
 
-envTyAdds l xts = envAdds "envTyAdds" [(symbolId l x,(t,WriteLocal)) | B x t <- xts]
+envTyAdds msg l xts = envAdds (msg ++  " - envTyAdds " ++ ppshow (srcPos l)) [(symbolId l x,(t,WriteLocal)) | B x t <- xts]
 
 cgFunTys l f xs ft = 
   case funTys l f xs ft of 

@@ -29,6 +29,8 @@ module Language.Nano.Program (
   , hoistTypes, hoistGlobals
   , visibleNames, scrapeModules, writeGlobalVars
 
+  , scrapeVarDecl
+
   ) where
 
 import           Control.Applicative     hiding (empty)
@@ -460,17 +462,6 @@ everythingButWithContext s0 f q x
 -- | AST Folds
 ---------------------------------------------------------------------------
 
--- -- Only descend down modules 
--- -------------------------------------------------------------------------------
--- collectTypes :: (IsLocated a, Data a) => [Statement a] -> [(AbsName, Statement a)]
--- -------------------------------------------------------------------------------
--- collectTypes  = everythingButWithContext [] (++) $ ([],,False) `mkQ` f
---   where
---     f e@(ClassStmt _ x _ _ _ ) s = ([(AN $ QName (srcPos e) s $ F.symbol x,e)], s, True)
---     f   (ModuleStmt _ x _    ) s = ([], s ++ [F.symbol x], False)
---     f _                        s = ([], s, True)
-
-
 -- Only descend down modules 
 -------------------------------------------------------------------------------
 collectModules :: (IsLocated a, Data a) => [Statement a] -> [(AbsPath, [Statement a])]
@@ -489,12 +480,12 @@ visibleNames :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, (RType r, A
 ---------------------------------------------------------------------------------------
 visibleNames s = [ (ann <$> n,(t,a)) | (n,Ann l ff,a) <- hoistBindings s
                                      , f              <- ff
-                                     , t              <- annToType l n f ]
+                                     , t              <- annToType l n a f ]
   where
-    annToType _ _ (VarAnn t)         = [t]
-    annToType l n (ClassAnn {})      = [TClass $ RN $ QName l [] (F.symbol n)]
-    annToType l _ (ModuleAnn n)      = [TModule $ RP $ QPath l [n]]
-    annToType _ _ _                  = []
+    annToType _ _ ReadOnly (VarAnn t)     = [t] -- Only hoist ReadOnly vars (i.e. function decls)
+    annToType l n _        (ClassAnn {})  = [TClass $ RN $ QName l [] (F.symbol n)]
+    annToType l _ _        (ModuleAnn n)  = [TModule $ RP $ QPath l [n]]
+    annToType _ _ _        _              = []
 
 
 
@@ -596,4 +587,12 @@ writeGlobalVars           :: Data r => [Statement (AnnType r)] -> [Id (AnnType r
 writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
   where 
     fromVD (VarDecl l x _) = [ x | VarAnn _ <- ann_fact l ]
+
+
+-- | scrapeVarDecl: Scrape a variable declaration for annotations
+----------------------------------------------------------------------------------
+scrapeVarDecl :: VarDecl (AnnSSA r) -> [RType r]
+----------------------------------------------------------------------------------
+scrapeVarDecl (VarDecl l _ _) = [ t | VarAnn                 t  <- ann_fact l ] 
+                             ++ [ t | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
 

@@ -6,6 +6,7 @@ function abs(x){
   } else {
     res = <any>(x > 99);
   };
+  
   assert(res >= 0);
   return res;
 }

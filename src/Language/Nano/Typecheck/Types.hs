@@ -1233,7 +1233,7 @@ objLitTy l ps g   = mkFun (vs, bs, rt)
   where
     vs            = [mv] ++ mvs ++ avs
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
-    rt            = TCons elts mt $ objLitR l nps g -- fTop
+    rt            = TCons elts mt fTop -- $ objLitR l nps g fTop
     elts          = [FieldSig s m (ofType a) | (s,m,a) <- zip3 ss mts ats ] 
     nps           = length ps
     (mv, mt)      = freshTV l mSym 0                             -- obj mutability
@@ -1243,29 +1243,34 @@ objLitTy l ps g   = mkFun (vs, bs, rt)
     mSym          = F.symbol "M"
     aSym          = F.symbol "A"
 
+lenId l           = Id l "length" 
+argId l           = Id l "arguments" 
 
 -- | @argBind@ returns a dummy type binding `arguments :: T `
 --   where T is an object literal containing the non-undefined `ts`.
     
-argTy l ts g   = immObjectLitTy l g ps' ts'
+argTy l ts g   = immObjectLitTy l g (pLen : ps') (tLen : ts')
   where
     ts'        = take k ts
     ps'        = PropNum l . toInteger <$> [0 .. k-1]
+    pLen       = PropId l $ lenId l
+    tLen       = tInt `strengthen` rLen
+    rLen       = F.ofReft $ F.uexprReft k
     k          = fromMaybe 0 $ L.findIndex isUndef ts
 
-argId l        = Id l "arguments" 
 
-objLitR l n g  = fromMaybe fTop $ substBINumArgs n . rTypeR . thd3 <$> bkFun t 
-  where
-    t          = builtinOpTy l BIObjectLit g
-
-immObjectLitTy l g ps ts 
-  | nps == length ts = TCons elts immutable $ objLitR l nps g 
+immObjectLitTy l _ ps ts 
+  | nps == length ts = TCons elts immutable fTop -- objLitR l nps g 
   | otherwise        = die $ bug (srcPos l) $ "Mismatched args for immObjectLit"
   where
     elts             = safeZipWith "immObjectLitTy" (\p t -> FieldSig (F.symbol p) immutable t) ps ts
     nps              = length ps
-    
+
+-- objLitR l n g  = fromMaybe fTop $ substBINumArgs n . rTypeR . thd3 <$> bkFun t 
+--   where
+--     t          = builtinOpTy l BIObjectLit g
+
+   
 -- FIXME: Avoid capture
 freshTV l s n     = (v, t)
   where 

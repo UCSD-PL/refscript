@@ -243,7 +243,8 @@ tcFun1 γ l f xs body fty = tcFunBody γ' l body t
   where 
     γ'                   = envAddFun f i αs xs ts arg t γ 
     (i, (αs,ts,t))       = fty
-    arg                  = (argId l, argTy l ts $ tce_env γ)
+    arg                  = (argId l, aTy)
+    aTy                  = argTy l ts $ tce_env γ 
     
 -- FIXME: Check for mutability (the second part in the triplet)
 --        If this argument is "immutable" We will have to check
@@ -775,34 +776,34 @@ tcCall γ (NewExpr l (VarRef lv i) es)
        (es', t)               <- tcNormalCall γ l "constructor" es tc
        return                  $ (NewExpr l (VarRef lv i) es', t)
 
--- TODO: NUKE runFailM -- | e.f 
--- TODO: NUKE runFailM tcCall γ ef@(DotRef l e f)
--- TODO: NUKE runFailM   = do  (_, t) <- tcExpr γ e
--- TODO: NUKE runFailM         δ      <- getDef 
--- TODO: NUKE runFailM         case getElt δ f t of 
--- TODO: NUKE runFailM           [FieldSig _ _ ft] -> do ([e'], t') <- tcNormalCall γ l ef [e] $ mkTy ft
--- TODO: NUKE runFailM                                   return      $ (DotRef l e' f, t')
--- TODO: NUKE runFailM           _                 -> tcError $ errorExtractNonFld (srcPos l) f e 
--- TODO: NUKE runFailM   where
--- TODO: NUKE runFailM     mkTy t   = mkFun ([α], [B (F.symbol "this") tα], t) 
--- TODO: NUKE runFailM     α        = TV (F.symbol "α" ) (srcPos l)
--- TODO: NUKE runFailM     tα       = TVar α fTop
-
 -- | e.f 
 tcCall γ ef@(DotRef l e f)
-  = do  z              <- runFailM $ tcExpr γ e
-        case z of
-          Right (_, t) -> 
-            do  δ      <- getDef 
-                case getElt δ (PropId l f) t of 
-                  [FieldSig _ _ ft] -> do ([e'], t') <- tcNormalCall γ l ef [e] $ mkTy ft
-                                          return      $ (DotRef l e' f, t')
-                  _                 -> tcError $ errorExtractNonFld (srcPos l) f e 
-          Left err     -> tcError err
+  = do  (_, t) <- tcExpr γ e
+        δ      <- getDef 
+        case getElt δ (PropId l f) t of 
+          [FieldSig _ _ ft] -> do ([e'], t') <- tcNormalCall γ l ef [e] $ mkTy ft
+                                  return      $ (DotRef l e' f, t')
+          _                 -> tcError $ errorExtractNonFld (srcPos l) f e 
   where
     mkTy t   = mkFun ([α], [B (F.symbol "this") tα], t) 
     α        = TV (F.symbol "α" ) (srcPos l)
     tα       = TVar α fTop
+
+-- | e.f 
+-- ORIG tcCall γ ef@(DotRef l e f)
+-- ORIG   = do  z              <- runFailM $ tcExpr γ e
+-- ORIG         case z of
+-- ORIG           Right (_, t) -> 
+-- ORIG             do  δ      <- getDef 
+-- ORIG                 case getElt δ (PropId l f) t of 
+-- ORIG                   [FieldSig _ _ ft] -> do ([e'], t') <- tcNormalCall γ l ef [e] $ mkTy ft
+-- ORIG                                           return      $ (DotRef l e' f, t')
+-- ORIG                   _                 -> tcError $ errorExtractNonFld (srcPos l) f e 
+-- ORIG           Left err     -> tcError err
+-- ORIG   where
+-- ORIG     mkTy t   = mkFun ([α], [B (F.symbol "this") tα], t) 
+-- ORIG     α        = TV (F.symbol "α" ) (srcPos l)
+-- ORIG     tα       = TVar α fTop
 
 
          

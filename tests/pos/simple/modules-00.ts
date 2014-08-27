@@ -1,12 +1,19 @@
 module M {
 
-    /*@ s :: { string | v = "hello" } */
     export var s = "hello";
 
-    /*@ f :: () => string */
-    export function f() {
+    export function foo(): string {
         return s;
+    }
+
+    export module N {
+    
+      export function bar(): number {
+        return 2;      
+      } 
     }
 }
 
-M.f();
+M.foo();
+
+M.N.bar();

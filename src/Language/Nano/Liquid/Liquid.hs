@@ -47,7 +47,7 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 
 import           System.Console.CmdArgs.Default
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -99,7 +99,7 @@ generateConstraints cfg pgm = getCGInfo cfg pgm $ consNano pgm
 consNano :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano p@(Nano {code = Src fs}) 
-  = do  g   <- freshenCGEnvM $ initGlobalEnv p
+  = do  g   <- {- freshenCGEnvM $-} return $ initGlobalEnv p
         consStmts g fs 
         return ()
 
@@ -322,21 +322,34 @@ consStmt _ s
   = errorstar $ "consStmt: not handled " ++ ppshow s
 
 
+-- | /*@ x :: t */
+-- | var x = e;
+--    
+--    G     |- e :: G', xe
+--    te    =  G'(xe)
+--    ft    <- fresh G' t
+--    G'    |- te <: ft
+--    G'    |- ft <: t
+--    -------------------------
+--    G     |- var x /*@ t */ = e ::  G'
+--    
 ------------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
-consVarDecl g (VarDecl l x (Just e)) =
-  case envFindTyWithAsgn x g of
-    Just (ta, WriteGlobal) -> do (y, gy) <- consExpr g e
-                                 t       <- safeEnvFindTy y gy
-                                 _       <- subType l gy t ta
-                                 return   $ Just gy
-    _                      -> consAsgn g x e
+consVarDecl g v@(VarDecl l x (Just e)) =
+  case listToMaybe $ scrapeVarDecl v of 
+    Just ta -> do (y, gy) <- consExpr g e
+                  t       <- safeEnvFindTy y gy
+                  fta     <- freshTyVar gy l ta
+                  _       <- subType l gy t fta
+                  _       <- subType l gy fta ta
+                  Just <$> envAdds "consVarDecl" [(x, (fta, WriteGlobal))] g
+    _       -> consAsgn g x e
  
-consVarDecl g (VarDecl l x Nothing) =
-  case envFindTyWithAsgn x g of
-    Just (ta, WriteGlobal) -> Just <$> envAdds "consVarDecl" [(x, (ta, WriteGlobal))] g
-    _                      -> cgError $ errorVarDeclAnnot (srcPos l) x
+consVarDecl g v@(VarDecl l x Nothing) =
+  case listToMaybe $ scrapeVarDecl v of 
+    Just ta -> Just <$> envAdds "consVarDecl" [(x, (ta, WriteGlobal))] g
+    _       -> cgError $ errorVarDeclAnnot (srcPos l) x
 
 
 -- FIXME: Do the safeExtends check here. Also add casts in the TC phase wherever
@@ -485,7 +498,13 @@ consExpr g (CallExpr l e@(SuperRef _) es)
 consExpr g (CallExpr l em@(DotRef _ e f) es)
   = do  (x,g') <- consExpr g e
         t      <- safeEnvFindTy x g'
-        consCallDotRef g' l em (vr x) (getElt g f t) es
+        case t of 
+          TModule r -> case resolveRelPathInEnv g r of
+                         Just m  -> case E.envFindTy f $ m_variables m of
+                                      Just ft -> consCall  g l em es $ thd3 ft
+                                      Nothing -> cgError $ errorModuleExport (srcPos l) r f 
+                         Nothing -> cgError $ bugMissingModule (srcPos l) r 
+          _ -> consCallDotRef g' l em (vr x) (getElt g f t) es
   where
     -- Add a VarRef so that e is not typechecked again
     vr          = VarRef $ getAnnotation e
@@ -652,7 +671,7 @@ consCall :: (PP a) =>
 --      i.e. the callee's RefType, at this call-site (You may want 
 --      to use @freshTyInst@)
 --   2. Use @consExpr@ to determine types for arguments @es@
---   3. Use @subTypes@ to add constraints between the types from (step 2) and (step 1)
+--   3. Use @subType@ to add constraints between the types from (step 2) and (step 1)
 --   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in output type of callee.
 
 consCall g l fn es ft0 

@@ -132,6 +132,11 @@ parentDef _ _ = Nothing
 -------------------------------------------------------------------------------
 getElt :: (F.Symbolic s, PPRD r, EnvLike r g) => g r -> s -> RType r -> [TypeMember r]
 -------------------------------------------------------------------------------
+-- getElt γ  s (TModule r) = 
+--     case resolveRelPathInEnv r of
+--       Just m  -> 
+--       Nothing -> []
+
 getElt γ  s t = case flattenType γ t of
                   Just t  -> fromCons t
                   Nothing -> []

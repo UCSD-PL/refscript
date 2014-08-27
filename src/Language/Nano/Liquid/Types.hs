@@ -266,6 +266,8 @@ rTypeSort   (TFun xts t _) = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort   (TApp c ts _)  = rTypeSortApp c ts 
 rTypeSort   (TAnd (t:_))   = rTypeSort t
 rTypeSort   (TCons _ _ _ ) = F.FObj $ F.symbol "cons"
+rTypeSort   (TClass _)     = F.FObj $ F.symbol "typeof"
+rTypeSort   (TModule _)    = F.FObj $ F.symbol "module"
 rTypeSort t                = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
 
 rTypeSortApp TInt _  = F.FInt

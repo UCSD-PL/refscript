@@ -264,14 +264,14 @@ declare var Object: {
 
 // FIXME:	NaN =/= NaN
 
-/* measure numeric_nan               :: number */
-/* measure numeric_max_value         :: number */
-/* measure numeric_min_value         :: number */
-/* measure numeric_negative_infinity :: number */
-/* measure numeric_positive_infinity :: number */
+/*@ measure numeric_nan               :: number */
+/*@ measure numeric_max_value         :: number */
+/*@ measure numeric_min_value         :: number */
+/*@ measure numeric_negative_infinity :: number */
+/*@ measure numeric_positive_infinity :: number */
 
 
-/*@ NaN :: { number | v = numeric_nan } */
+/*@  NaN :: { number | v = numeric_nan } */
 declare var NaN: number;
 
 

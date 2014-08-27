@@ -214,6 +214,10 @@ data Assignability
   -- ^ written in non-local-scope, cannot do SSA, cannot appear in refinements
   --
   | WriteGlobal 
+  -- 
+  -- ^ Used to denote return variable
+  -- 
+  | ReturnVar
   deriving (Eq)
 
 

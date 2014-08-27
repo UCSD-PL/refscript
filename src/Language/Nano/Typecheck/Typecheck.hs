@@ -199,12 +199,13 @@ tcEnvAdds     xs γ    = γ { tce_names = envAdds xs $ tce_names γ }
 
 tcEnvAdd      x t γ   = γ { tce_names = envAdd x t $ tce_names γ }
 
-tcEnvFindTy :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r)
+-- tcEnvFindTy :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r)
 tcEnvFindTy x γ       = fst <$> tcEnvFindTyWithAgsn x γ 
 
 
-tcEnvFindTyWithAgsn :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability)
-tcEnvFindTyWithAgsn x γ = case envFindTy x $ tce_names γ of 
+-- tcEnvFindTyWithAgsn :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability)
+tcEnvFindTyWithAgsn x γ = case -- trace ("looking for " ++ ppshow x ++ " in " ++ ppshow (envKeys (tce_names γ))) i $
+                                  envFindTy x $ tce_names γ of 
                             Just t -> Just t
                             Nothing     -> 
                               case tce_parent γ of 
@@ -451,19 +452,18 @@ tcStmt _ s
 tcVarDecl ::  PPR r 
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
-tcVarDecl γ v@(VarDecl l x (Just e))
-  = do ann         <- listToMaybe <$> scrapeVarDecl v
-       (e', t)     <- tcExprT l γ e ann
-       return       $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, (t, asgn ann))] γ)
+tcVarDecl γ v@(VarDecl l x (Just e)) =
+  do  (e', t)    <- tcExprT l γ e ann
+      return      $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, (t, asgn ann))] γ)
   where
-    asgn (Just _)   = WriteGlobal
-    asgn _          = WriteLocal
+    ann           = listToMaybe $ scrapeVarDecl v
+    asgn (Just _) = WriteGlobal
+    asgn _        = WriteLocal
 
-tcVarDecl γ v@(VarDecl l x Nothing) 
-  = do ann <- scrapeVarDecl v
-       case ann of
-         [t] -> return (v, Just $ tcEnvAdds [(x, (t, WriteGlobal))] γ)
-         _   -> tcError $ errorVarDeclAnnot (srcPos l) x
+tcVarDecl γ v@(VarDecl l x Nothing) = 
+  case scrapeVarDecl v of
+    [t]          -> return (v, Just $ tcEnvAdds [(x, (t, WriteGlobal))] γ)
+    _            -> tcError $ errorVarDeclAnnot (srcPos l) x
 
 -------------------------------------------------------------------------------
 tcAsgn :: PPR r 
@@ -580,7 +580,7 @@ tcExpr γ e@(SuperRef l)
 --       Nothing -> tcError $ errorUnboundId (ann l) "super"
 
   = case tcEnvFindTy (F.symbol "this") γ of
-      Just t  -> return (e, tracePP "parent type" $ getParentType l t)
+      Just t  -> return (e, getParentType l t)
       Nothing -> tcError $ errorSuper (ann l)
   where 
     getParentType _ _ = error "getParentType"
@@ -719,9 +719,17 @@ tcCall γ (CallExpr l e@(SuperRef _)  es)
 
    
 -- | `e.f(es)`
-tcCall γ (CallExpr l em@(DotRef _ e f) es)
+tcCall γ (CallExpr l em@(DotRef l1 e f) es)
   = do z              <- runFailM $ tcExpr γ e
        case z of 
+         Right (_, TModule r) -> 
+             case resolveRelPathInEnv γ r of
+               Just m  -> case envFindTy f $ m_variables m of
+                           Just ft -> do (e' , _ ) <- tcExpr γ e
+                                         (es', t') <- tcNormalCall γ l em es $ thd3 ft
+                                         return (CallExpr l (DotRef l1 e' f) es', t')
+                           Nothing -> tcError $ errorModuleExport (srcPos l) r f 
+               Nothing -> tcError $ bugMissingModule (srcPos l) r 
          Right (_, t) -> do (em', es', t) <- tcCallDotRef γ (getElt γ f t) l em es
                             return         $ (CallExpr l em' es', t)
          Left err     -> tcError err
@@ -894,15 +902,6 @@ getLoopNextPhiType l γ γl x =
 
 forceCheck x γ = elem x $ fst <$> envToList (tce_names γ)
 
-
--- | scrapeVarDecl: Scrape a variable declaration for annotations
-----------------------------------------------------------------------------------
-scrapeVarDecl :: VarDecl (AnnSSA r) -> TCM r [RType r]
-----------------------------------------------------------------------------------
-scrapeVarDecl (VarDecl l _ _) = 
-  return $ -- mapM (sanity $ srcPos l) 
-            [ t | VarAnn                 t  <- ann_fact l ] 
-         ++ [ t | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
 
 -- sanity l t@(TApp (TRef i) ts _) 
 --   = do  δ       <- getDef 

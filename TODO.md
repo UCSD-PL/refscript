@@ -37,35 +37,8 @@ JS Features
 Varargs
 -------
 
-+ Add test cases
-
-	tests/{pos,neg}/misc/vararg{0,1}.ts
-
-+ Modify function-body type reftype-checking case so that when checking the sig:
-
-    (x0:t0,...,xn:tn) => t
-
-  we add the binding
-
-    arguments :: {v : { '0' : {v:t0 | v=x0}
-	                  , '1' : {v:t1 | v=x1}
-				      , 'k' : {v:tk | v=xk} } | len v = k+1 }
-
-  where
-
-    k = max_i ti /= undefined
-
-Changes:
-
-+ make all TC-phase errors --> DEADCAST
-+ DEADCAST eliminates checking for *dominated* statements/expressions
-+ add `Error` information to `Cinfo` for better reporting
-
-
-Failed tests: 
-
-    neg/arrays/arr-14.ts,
-	neg/arrays/arr-15.ts,
+Failed 16 tests: 
+ neg/misc/locks-bad.ts,
 
 
 Tool/Implementation

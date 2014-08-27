@@ -246,10 +246,15 @@ consStmt g (WhileStmt l e s)
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 consStmt g (VarDeclStmt _ ds)
   = consFold consVarDecl g ds
-
+    
+-- return 
+consStmt g (ReturnStmt l Nothing)
+  = do _ <- subType l (errorLiquid' l) g tVoid (envFindReturn g) 
+       return Nothing
+       
 -- return e 
-consStmt g (ReturnStmt l eo)
-  = do  _ <- consCall g l "return" (maybeToList eo) $ returnTy (envFindReturn g) (isJust eo)
+consStmt g (ReturnStmt l (Just e))
+  = do  _ <- consCall g l "return" [e] $ returnTy (envFindReturn g) True 
         return Nothing
 
 -- throw e 

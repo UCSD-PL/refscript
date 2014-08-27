@@ -75,6 +75,7 @@
 */
 
 // FIXME: what is the last line useful for?
+// /\ (x:{top|false}, y:{top|false}) => top                          
 
 /*@ extern builtin_OpAdd       :: /\ (x:number, y:number) => {number | v = x + y}
                                   /\ (x:number, y:string) => string

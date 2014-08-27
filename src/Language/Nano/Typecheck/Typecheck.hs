@@ -400,13 +400,13 @@ tcStmt γ (IfSingleStmt l b s)
 
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
-  = do z <- tcNormalCall γ l BITruthy [e] $ builtinOpTy l BITruthy (tce_env γ)
+  = do ([e'], z) <- tcNormalCallW γ l BITruthy [e] $ builtinOpTy l BITruthy (tce_env γ)
        case z of 
-         ([e'], _) -> do (s1', γ1) <- tcStmt γ s1
-                         (s2', γ2) <- tcStmt γ s2
-                         γ3        <- envJoin l γ γ1 γ2
-                         return       (IfStmt l e' s1' s2', γ3)
-         _          -> error "BUG: tcStmt - If then else"
+         Just _  -> do (s1', γ1) <- tcStmt γ s1
+                       (s2', γ2) <- tcStmt γ s2
+                       γ3        <- envJoin l γ γ1 γ2
+                       return       (IfStmt l e' s1' s2', γ3)
+         _       -> return (IfStmt l e' s1 s2, Nothing)
 
 -- while c { b } 
 tcStmt γ (WhileStmt l c b) 
@@ -431,10 +431,6 @@ tcStmt γ (VarDeclStmt l ds)
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
   = tcRetW γ l eo
-
--- ORIG do  (es',_) <- tcNormalCall γ l "return" (maybeToList eo) $ returnTy (tcEnvFindReturn γ) (isJust eo)
--- ORIG     return   $ (ReturnStmt l $ listToMaybe es', Nothing)
-
 
 -- throw e 
 tcStmt γ (ThrowStmt l e) 
@@ -573,8 +569,13 @@ tcEnvAddo γ x (Just t) = Just $ tcEnvAdds [(x, t)] γ
 tcExprTW :: PPR r => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, Maybe (RType r))
 tcExprW :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, Maybe (RType r))
 ----------------------------------------------------------------------------------------------------------------
-tcExprTW l γ e to = (tcWrap $ tcExprT l γ e to) >>= tcEW γ e
-tcExprW γ e       = (tcWrap $ tcExpr γ e)       >>= tcEW γ e 
+tcExprTW l γ e to        = (tcWrap $ tcExprT l γ e to) >>= tcEW γ e
+tcExprW γ e              = (tcWrap $ tcExpr γ e)       >>= tcEW γ e 
+tcNormalCallW γ l o es t = (tcWrap $ tcNormalCall γ l o es t) >>= \case
+                             Right (es', t') -> return (es', Just t')
+                             Left err        -> do es' <- mapM (deadcastM (tce_ctx γ) err) es
+                                                   return (es', Nothing) 
+
 
 tcRetW γ l (Just e)
   = (tcWrap $ tcNormalCall γ l "return" [e] $ returnTy (tcEnvFindReturn γ) True) >>= \case
@@ -702,7 +703,6 @@ tcExpr γ (FuncExpr l fo xs body)
 
 tcExpr _ e 
   = convertError "tcExpr" e
-
 
 ---------------------------------------------------------------------------------------
 tcCall :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)

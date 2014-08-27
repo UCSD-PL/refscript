@@ -4,17 +4,17 @@ Tests / Benchmarks
 ### Failing tests
 
     neg/misc/abs-join-00.ts,              // TS translation exception
-    pos/arrays/arr-11.ts,
+
     pos/loops/obj-01.ts,
     pos/loops/obj-02.ts,
-    pos/misc/animals.ts,                  // numbers of arguments
-    pos/misc/negate-00.ts,                // tag information
-    pos/misc/negate-05.ts,                // intersection types - TC under false condition
-    pos/misc/negate-06.ts,                // <same>
     pos/objects/obj-03.ts,                // unsupported bracket-ref
-    pos/simple/ambient-00.ts,             // annotation missing - fixed modules
+
+	pos/simple/ambient-00.ts,             // annotation missing - fixed modules
     pos/simple/ambient-01.ts,             // fixed in modules
+
     pos/unions/union-04.ts                // unions
+
+
 
 ### Exceptions 
     

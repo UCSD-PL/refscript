@@ -296,7 +296,7 @@ interface Number {
 
 declare var Number: {
     new (value: any): Number;						// new (value?: any): Number;
-    (value: any): number;							// (value?: any): number;
+    <A>(value: A): number;							// (value?: any): number;
     prototype: Number;
 
     /*  MAX_VALUE: { number | v = numeric_max_value } */

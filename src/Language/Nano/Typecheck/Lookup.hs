@@ -150,19 +150,17 @@ getElt γ  s t = case flattenType γ t of
 -------------------------------------------------------------------------------
 extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
-extractCall _ t             = uncurry mkAll <$> foo [] t
+extractCall γ t             = uncurry mkAll <$> foo [] t
   where
     foo αs t@(TFun _ _ _)   = [(αs, t)]
     foo αs   (TAnd ts)      = concatMap (foo αs) ts 
     foo αs   (TAll α t)     = foo (αs ++ [α]) t
+    foo αs   (TApp (TRef s) _ _ )
+                            = case resolveRelNameInEnv γ s of 
+                                Just d  -> [ (αs, t) | CallSig t <- t_elts d ]
+                                Nothing -> []
+    foo αs   (TCons es _ _) = [ (αs, t) | CallSig t <- es  ]
     foo _  _                = []
--- FIXME !!!
---     foo αs   (TApp (TRef s) _ _ )
---                             = case resolveQName γ s of 
---                                 Just d  -> [ (αs, t) | CallSig t <- t_elts d ]
---                                 Nothing -> []
---     foo αs   (TCons es _ _) = [ (αs, t) | CallSig t <- es  ]
---     foo _    t              = error $ "extractCall: " ++ ppshow t
 
 
 -------------------------------------------------------------------------------

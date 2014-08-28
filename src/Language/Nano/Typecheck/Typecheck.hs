@@ -743,7 +743,7 @@ tcCall γ (CallExpr l em@(DotRef l1 e f) es)
 
 -- | `e(es)`
 tcCall γ (CallExpr l e es)
-  = do (e', ft0)              <- tcExpr γ e
+  = do (e', ft0)              <- tracePP "tcexpr" <$> tcExpr γ e
        (es', t)               <- tcNormalCall γ l e es ft0
        return                  $ (CallExpr l e' es', t)
 
@@ -779,7 +779,7 @@ tcCallDotRef _ _ _ _ _ = error "tcCallDotRef-unsupported"
 -- | Signature resolution
 tcNormalCall γ l fn es ft0 
   = do (es', ts)      <- unzip <$> mapM (tcExpr γ) es
-       z              <- resolveOverload γ l fn es' ts ft0
+       z              <- resolveOverload γ l fn es' ts $ tracePP "ft0" ft0
        case z of 
          Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
@@ -804,7 +804,7 @@ resolveOverload γ l fn es ts ft
       fts    -> do  θs    <- mapM (\t -> tcCallCaseTry γ l fn ts t) fts
                     return $ listToMaybe [ (θ, apply θ t) | (t, Just θ) <- zip fts θs ]
   where
-    sigs  = catMaybes (bkFun <$> extractCall γ ft)
+    sigs  = tracePP "sigs" $ catMaybes (bkFun <$> extractCall γ ft)
 
 
 -- | A successful pairing of formal to actual parameters will return `Just θ`,

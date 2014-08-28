@@ -102,8 +102,8 @@ testSign  = [("pos", 0), ("neg", 1)]
 
 testCategories = [ 
                  #  "objects"
-                 #, "arrays"
-                 "classes"
+                 "arrays"
+                 #, "classes"
                  #, "loops"
                  #, "misc"
                  #, "operators"

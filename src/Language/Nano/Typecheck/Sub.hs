@@ -104,50 +104,51 @@ convertObj l γ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
   -- ------------------------------------------------
   --        [μ]{ [μi]fi:ti } <: [μ]{ [μi]fi:ti }
   --
-  | s1l == s2l
-  = if isSubtype γ μ1 μ2 then 
-      if deeps l γ μ1 μ2 b1s b2s then  
-        Right CDUp
-      else 
-       Left $ errorSubtype l t1 t2
-    else 
-      Left $ errorIncompMutTy l t1 t2
-
+  | sameBinders && mutabilitySub && deepSub = Right $ CDUp
+  | sameBinders && mutabilitySub            = Left  $ errorSubtype l t1 t2
+  | sameBinders                             = Left  $ errorIncompMutTy l t1 t2 
   -- 
   -- NO: { f1:t1,..,fn:tn } <: { f1:t1,..,fn:tn,..,fm:tm }
   --
-  | not (S.null df21) 
-  = Left $ errorMissingFields l t1 t2 df21
-
+  | not nullDif                             = Left $ errorMissingFields l t1 t2 df21
   -- 
   --  [μ]{ f1:t1,..,fn:tn } <: [μ]{ f1:t1,..,fn:tn }
   -- ------------------------------------------------------------
   --  [μ]{ f1:t1,..,fn:tn,..,fm:tm } <: [μ]{ f1:t1,..,fn:tn }
   --
-  | otherwise
-  =   convertObj l γ (TCons e1s' μ1 r1) (TCons e2s μ2 r2)
+  | otherwise                               = convertObj l γ c1 c2
+
     where
-      e1s'       = [ e1 | e1 <- e1s
-                        , F.symbol e1 `M.member` m1  
-                        , F.symbol e1 `M.member` m2 ]
+
+      sameBinders   = s1l == s2l
+      mutabilitySub = isSubtype γ μ1 μ2
+
+      deepSub       = deeps l γ μ1 μ2 b1s b2s
+      nullDif       = S.null df21
+
+      c1            = TCons e1s' μ1 r1 
+      c2            = TCons e2s  μ2 r2
+
+      e1s'          = [ e1 | e1 <- e1s
+                           , F.symbol e1 `M.member` m1  
+                           , F.symbol e1 `M.member` m2 ]
         
       -- All the bound elements that correspond to each binder 
       -- Map : symbol -> [ elements ]
-      (m1,m2)    = mapPair toMap (e1s, e2s)
+      (m1,m2)       = mapPair toMap (e1s, e2s)
       -- Filter out constructors
-      toMap      = foldr mi M.empty . filter nonConstrElt
-      mi e       = M.insertWith (++) (F.symbol e) [e]
+      toMap         = foldr mi M.empty . filter nonConstrElt
+      mi e          = M.insertWith (++) (F.symbol e) [e]
       -- Binders for each element
-      (s1s,s2s)  = mapPair (S.fromList . M.keys) (m1,m2)
-      (s1l,s2l)  = mapPair (sort     . M.keys) (m1,m2)
+      (s1s,s2s)     = mapPair (S.fromList . M.keys) (m1,m2)
+      (s1l,s2l)     = mapPair (sort     . M.keys) (m1,m2)
       -- Join elements on common binder
-      (b1s,b2s)  = unzip [ (e1,e2) | s  <- S.toList in12 
-                                   , e1 <- maybeToList $ M.lookup s m1 
-                                   , e2 <- maybeToList $ M.lookup s m2 ]
+      (b1s,b2s)     = unzip [ (e1,e2) | s  <- S.toList in12 
+                                      , e1 <- maybeToList $ M.lookup s m1 
+                                      , e2 <- maybeToList $ M.lookup s m2 ]
       -- Difference and intersection of keys
-      df21       = s2s `S.difference` s1s
-      in12       = s1s `S.intersection` s2s
-      -- e1s'       = concat [ fromJust $ M.lookup s m1 | s <- S.toList in12 ]
+      df21          = s2s `S.difference` s1s
+      in12          = s1s `S.intersection` s2s
  
 convertObj l γ t1@(TApp (TRef x1) t1s _) t2@(TApp (TRef x2) t2s _)
   | x1 == x2

@@ -100,7 +100,7 @@ type PPR  r = (PP r, F.Reftable r)
 mkMut s = TApp (TRef $ RN $ QName (srcPos dummySpan) [] (F.symbol s)) [] ()
 
 instance Default Mutability where
-  def = mkMut "Mutable"
+  def = mkMut "Immutable"
 
 t_mutable       = mkMut "Mutable"
 t_immutable     = mkMut "Immutable"
@@ -416,7 +416,7 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TAnd ts)                = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TExp e)                 = pprint e 
   pp (TApp TUn ts r)          = F.ppTy r $ ppArgs id (text " +") ts 
-  pp (TApp d@(TRef _ ) ts r)  = F.ppTy r $ pp d <> ppArgs brackets comma ts 
+  pp (TApp (TRef x) (m:ts) r) = F.ppTy r $ pp x <> ppMut m <> ppArgs brackets comma ts 
   pp (TApp c [] r)            = F.ppTy r $ pp c 
   pp (TApp c ts r)            = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
   pp (TCons bs m r)           | length bs < 5 
@@ -425,6 +425,7 @@ instance (PP r, F.Reftable r) => PP (RType r) where
                               = F.ppTy r $ lbrace $+$ nest 2 (vcat $ map pp bs) $+$ rbrace
   pp (TModule s  )            = text "module" <+> pp s
   pp (TClass c   )            = text "typeof" <+> pp c
+  pp _                        = text "ERROR TYPE"
 
 instance PP TVar where 
   pp     = pprint . F.symbol

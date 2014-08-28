@@ -1,19 +1,24 @@
-module M {
+module K {
 
-    export var s = "hello";
+    export function foo(): void { }
 
-    export function foo(): string {
-        return s;
-    }
+    export module L {
 
-    export module N {
+      export function baz(): void { }
     
-      export function bar(): number {
-        return 2;      
-      } 
+      export module M { 
+
+          export function bar(): void {
+            foo();
+            K.foo();
+
+            L.baz();
+            K.L.baz();
+          } 
+      }
     }
 }
 
-M.foo();
+K.foo();
 
-M.N.bar();
+K.L.M.bar();

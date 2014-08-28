@@ -339,7 +339,7 @@ convertTModule :: (Functor g, EnvLike () g)
               => SourceSpan -> g () -> RelPath -> RelPath -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertTModule l γ c1 c2 = 
-  case (absolutePath γ c1, absolutePath γ c2) of
+  case (absolutePathInEnv γ c1, absolutePathInEnv γ c2) of
     (Just a1, Just a2) -> Right CDNo
     _                  -> Left $ errorTModule l c1 c2
 

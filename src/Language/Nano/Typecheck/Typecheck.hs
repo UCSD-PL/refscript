@@ -49,7 +49,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
 
--- import           Debug.Trace                        hiding (traceShow)
+import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -695,6 +695,8 @@ tcCall γ ef@(DotRef l e f)
   = do z                      <- runFailM $ tcExpr γ e
        case z of
          Right (_, te)        -> 
+            -- case tracePP ("Getting prop " ++ ppshow f ++ " from " ++ 
+            --             ppshow e ++ " :: " ++ ppshow te) $ getProp γ (F.symbol f) te of
             case getProp γ (F.symbol f) te of
               Just (te', t)   ->
                   do ([e'],τ) <- tcNormalCall γ l ef [e] $ mkTy te' t
@@ -723,8 +725,12 @@ tcCall γ (CallExpr l em@(DotRef l1 e f) es)
   = do z              <- runFailM $ tcExpr γ e
        case z of 
          Right (_, TModule r) -> 
-             case resolveRelPathInEnv γ r of
-               Just m  -> case envFindTy f $ m_variables m of
+             case {- tracePP (ppshow (srcPos l) ++ "\n" ++
+                           ppshow e ++ " :: " ++ ppshow r ++ "\n" ++
+                           "Looking for name " ++ ppshow f ++ " in module " ++ ppshow r ++ 
+                           " in abspath " ++ ppshow (tce_path γ)) $ -}
+                    resolveRelPathInEnv γ r of
+               Just m -> case envFindTy f $ m_variables m of
                            Just ft -> do (e' , _ ) <- tcExpr γ e
                                          (es', t') <- tcNormalCall γ l em es $ thd3 ft
                                          return (CallExpr l (DotRef l1 e' f) es', t')
@@ -828,8 +834,7 @@ tcCallCase γ l fn es ts ft
        -- Generate fresh type parameters
        (_,ibs,ot)      <- instantiate l ξ fn ft
        let its          = b_type <$> ibs
-       θ               <- -- tracePP (ppshow ts ++ " U " ++ ppshow its) <$> 
-                            unifyTypesM (srcPos l) γ ts its
+       θ               <- unifyTypesM (srcPos l) γ ts its
        let (ts',its')   = mapPair (apply θ) (ts, its)
        es'             <- zipWith3M (castM γ) es ts' its'
        return             (es', apply θ ot, θ)

@@ -7,7 +7,11 @@
 
 module Language.Nano.Typecheck.Resolve ( 
   
-  absolutePath, resolveRelPath, resolveRelPathInEnv, resolveRelName, resolveRelNameInEnv
+    absolutePathInEnv, absolutePath, absoluteName
+  , resolveRelPath, resolveRelPathInEnv
+  , resolveRelName, resolveRelNameInEnv
+  , relativePath, relativeName, extendPath
+  , renameRelative
 
   -- * Flatten a type definition applying subs
   , flatten, flatten', flatten'', flattenType
@@ -44,58 +48,73 @@ type PPR r = (PP r, F.Reftable r, Data r)
 -- | Namespace substitutions
 ---------------------------------------------------------------------------
 
--- | `renameRelative env from to a` transforms all relative paths names in @a@ 
---   from being relative to absolute path @from@ to being relative to absolute 
---   path @to@.
+-- | `renameRelative mods base tgt` transforms all relative paths (and names), 
+--   originally assumed to be expressed in terms of absolute path @base@ to paths
+--   (and names) that are relative to the absolute path @tgt@.
 --
 --   FIXME: Is extM working right?
 --
 ---------------------------------------------------------------------------
 renameRelative :: Data a => QEnv (ModuleDef r) -> AbsPath -> AbsPath -> a -> Maybe a
 --------------------------------------------------------------------------
-renameRelative env a b = everywhereM $ mkM $ t1 `extM` t2
+renameRelative mods base tgt = everywhereM $ mkM $ paths `extM` names
   where
-
-    t1                :: RelPath -> Maybe RelPath
-    t1                 = maybe Nothing ff . absPth env a
-
-    t2                :: RelName -> Maybe RelName
-    t2                 = maybe Nothing gg . absoluteName env a
-
-    same (x,y)         = x == y
-
-    ff (AP q)          = Just $ RP $ ffPref b q
-
-    gg (AN q)          = Just $ RN $ ggPref b q
-
-    ffPref (AP (QPath _ x)) (QPath ly y)   = QPath ly (snd <$> dropWhile same (zip x y))
-    ggPref (AP (QPath _ x)) (QName ly y s) = QName ly (snd <$> dropWhile same (zip x y)) s
+    paths :: RelPath -> Maybe RelPath
+    paths r             = relativePath tgt <$> absolutePath mods base r
+    names n             = relativeName tgt <$> absoluteName mods base n
 
 
--- | `absolutePath env a r` returns the absolute path that corresponds to the 
+--------------------------------------------------------------------------
+renameRelativeWithEnv :: (EnvLike r g, Data a, Data r) => g r -> AbsPath -> a -> Maybe a
+--------------------------------------------------------------------------
+renameRelativeWithEnv γ = renameRelative (modules γ) (absPath γ)
+   
+
+-- | `relativePath base tgt` expresses path @tgt@ in relative terms of path
+--   @base@.
+---------------------------------------------------------------------------
+relativePath :: AbsPath -> AbsPath -> RelPath
+---------------------------------------------------------------------------
+relativePath (AP (QPath _ x)) (AP (QPath ly y)) = RP $ QPath ly $ dropCommonPref x y
+
+---------------------------------------------------------------------------
+relativeName :: AbsPath -> AbsName -> RelName
+---------------------------------------------------------------------------
+relativeName (AP (QPath _ x)) (AN (QName ly y s)) = RN $ QName ly (dropCommonPref x y) s
+
+
+dropCommonPref _      []      = []
+dropCommonPref []     ys      = ys
+dropCommonPref _      [s]     = [s]
+dropCommonPref (x:xs) (y:ys)  | x == y    = dropCommonPref xs ys
+                              | otherwise = y:ys
+
+
+
+-- | `absolutePathInEnv env a r` returns the absolute path that corresponds to 
 --   a path @r@ expressed in terms of environment @env@.
 --
 ---------------------------------------------------------------------------
-absolutePath :: EnvLike r t => t r -> RelPath -> Maybe AbsPath
+absolutePathInEnv :: EnvLike r t => t r -> RelPath -> Maybe AbsPath
 ---------------------------------------------------------------------------
-absolutePath env r = absPth (modules env) (absPath env) r
+absolutePathInEnv env r = absolutePath (modules env) (absPath env) r
 
 
--- | `absPth env a r` returns the absolute path that corresponds to the 
+-- | `absolutePath env a r` returns the absolute path that corresponds to the 
 --   a path @r@ that is relative to an absolute namespace @a@.
 --
 ---------------------------------------------------------------------------
-absPth    :: QEnv (ModuleDef r) -> AbsPath -> RelPath -> Maybe AbsPath
+absolutePath    :: QEnv (ModuleDef r) -> AbsPath -> RelPath -> Maybe AbsPath
 ---------------------------------------------------------------------------
-absPth env a r = m_path <$> resolveRelPath env a r 
+absolutePath env a r    = m_path <$> resolveRelPath env a r 
 
--- | `absPth env a r` returns the absolute path that corresponds to the 
+-- | `absolutePath env a r` returns the absolute path that corresponds to the 
 --   a path @r@ that is relative to an absolute namespace @a@.
 --
 ---------------------------------------------------------------------------
 absoluteName    :: QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe AbsName
 ---------------------------------------------------------------------------
-absoluteName env a r@(RN (QName _ _ s)) = g <$> absPth env a (f r)
+absoluteName env a r@(RN (QName _ _ s)) = g <$> absolutePath env a (f r)
   where
     f (RN (QName l p _)) = RP (QPath l p)
     g (AP (QPath l p))   = AN (QName l p s)

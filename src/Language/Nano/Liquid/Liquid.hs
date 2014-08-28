@@ -315,7 +315,7 @@ consStmt g (IfaceStmt _)
   = return $ Just g
 
 consStmt g (ModuleStmt l n body)
-  = consStmts (initModuleEnv g n body) body
+  = consStmts (initModuleEnv g n body) body >> return (Just g)
 
 -- OTHER (Not handled)
 consStmt _ s 
@@ -588,40 +588,8 @@ consExpr g (FuncExpr l fo xs body)
     anns                     = [ t | FuncAnn t <- ann_fact l ]
     f                        = maybe (F.symbol "<anonymous>") F.symbol fo
 
-
 -- not handled
 consExpr _ e = cgError $ unimplemented l "consExpr" e where l = srcPos  e
-
-
--- -- | `getConstr l g s` first checks whether input @s@ is a class, in which 
--- --   case it tries to retrieve a constructor binding, using a default one if 
--- --   that fails. Otherwise, it tries to retrieve an object with the same name 
--- --   from the environment that has a constructor property.
--- --
--- -- FIXME: Do not lookup the constructor by string. We have a special struct for
--- -- that.
--- ----------------------------------------------------------------------------------
--- getConstr :: IsLocated a => SourceSpan -> CGEnv -> Id a -> CGM RefType
--- ----------------------------------------------------------------------------------
--- getConstr l g s = 
---     case findSym s (cge_defs g) of
---       Just t | t_class t ->       -- This needs to be a class
---         do  z <- getPropTDefM  l "__constructor__" t $ tVar <$> t_args t
---             case z of 
---               Just (TFun bs _ r) -> return $ abs (t_args t) $ TFun bs (retT t) r
---               Just t             -> cgError $ unsupportedConsTy l t
---               Nothing            -> return $ abs (t_args t) $ TFun [] (retT t) fTop
---       _ -> 
---         do  z <- getPropM l "__constructor__" $ envFindTy s g
---             case z of
---               Just t  -> return t
---               Nothing -> cgError $ unsupportedNonSingleConsTy $ srcPos l
---   where
---     -- Constructor's return type is void - instead return the class type
---     -- FIXME: type parameters in returned type: inferred ... or provided !!! 
---     retT t   = TApp (TRef $ F.symbol s) (tVar <$> t_args t) fTop
---     abs [] t = t
---     abs vs t = foldr TAll t vs
 
 
 --------------------------------------------------------------------------------

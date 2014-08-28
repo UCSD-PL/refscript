@@ -31,6 +31,7 @@ import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Subst
 import           Control.Applicative ((<$>))
 
+import           Debug.Trace
 
 type PPRD r = (PP r, F.Reftable r, Data r)
 
@@ -54,8 +55,10 @@ getProp γ s t@(TClass c    )
         es  <- flatten True γ (d,[])
         (t,) <$> accessMember s es
 getProp γ s t@(TModule m   ) 
-  = do  m' <- resolveRelPathInEnv γ m
-        (t,) <$> thd3 <$> envFindTy s (m_variables m')
+  = do  m'        <- resolveRelPathInEnv γ m
+        (_,_,ty)  <- envFindTy s $ m_variables m'
+        (t,)     <$> renameRelative (modules γ) (m_path m') (absPath γ) ty
+
 getProp _ _ _ = Nothing
 
 

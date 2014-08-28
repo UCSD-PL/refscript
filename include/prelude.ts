@@ -43,6 +43,10 @@
 */
 
 
+/*@ extern builtin_BIObjectLit :: forall A . (A) 
+                               => {v: A | [ (len v) = builtin_BINumArgs; not (null v) ] } 
+*/
+
 /*@ extern builtin_BIArrayLit  :: forall M  A . (A) 
                                => {v: #Array[M,A] | [ (len v) = builtin_BINumArgs; not (null v) ] } 
 */
@@ -71,12 +75,12 @@
 */
 
 // FIXME: what is the last line useful for?
+// /\ (x:{top|false}, y:{top|false}) => top                          
 
 /*@ extern builtin_OpAdd       :: /\ (x:number, y:number) => {number | v = x + y}
                                   /\ (x:number, y:string) => string
                                   /\ (x:string, y:number) => string
                                   /\ (x:string, y:string) => string           
-                                  /\ (x:{top|false}, y:{top|false}) => top                          
  */
 
 /*@ extern builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v ~~ x - y} */

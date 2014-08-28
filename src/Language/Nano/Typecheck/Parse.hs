@@ -35,7 +35,7 @@ import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Misc                  (mapEither, mapSnd)
 import           Language.Nano.Types
 import           Language.Nano.Errors
-import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Types    hiding (argBind)
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
 import           Language.Nano.Files

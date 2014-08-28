@@ -66,7 +66,7 @@ import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 import           Text.PrettyPrint.HughesPJ
 import           Text.Printf 
-import           Control.Applicative 
+import           Control.Applicative hiding (empty) 
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
@@ -79,6 +79,7 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Sub
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.Errors
   
 -- import           Debug.Trace                        (trace)
 
@@ -90,7 +91,6 @@ type PPR r = (PP r, F.Reftable r)
 
 type RefType     = RType F.Reft
 type REnv        = Env RefType
-
 type AnnTypeR    = AnnType F.Reft
 
 -------------------------------------------------------------------------------------
@@ -110,18 +110,18 @@ data CGEnv
 -- | Constraint Information 
 ----------------------------------------------------------------------------
 
-newtype Cinfo = Ci SourceSpan deriving (Eq, Ord, Show) 
+data Cinfo = Ci { ci_info    :: !Error
+                , ci_srcspan :: !SourceSpan
+                } deriving (Eq, Ord, Show) 
 
--- emptyCinfo    = Ci $ initialPos ""
-
-ci :: (IsLocated a) => a -> Cinfo
-ci = Ci . srcPos 
+ci   :: (IsLocated a) => Error -> a -> Cinfo
+ci e = Ci e . srcPos 
 
 instance PP Cinfo where
-  pp (Ci l)   = text "CInfo:" <+> pp l 
-
+  pp (Ci e l)   = text "CInfo:" <+> pp l <+> (parens $ pp e)
+  
 instance IsLocated Cinfo where
-  srcPos (Ci x) = x
+  srcPos = ci_srcspan 
 
 instance F.Fixpoint Cinfo where 
   toFix = pp

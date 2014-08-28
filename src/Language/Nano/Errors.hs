@@ -75,7 +75,7 @@ bugCallTo l x es              = mkErr l $ printf "Bug at call to '%s' with args 
 -- | Nano
 ---------------------------------------------------------------------------
 errorInvalidTopStmt l x       = mkErr l $ printf "Invalid top-level statement: %s" (ppshow x) 
-errorDuplicate i l l'         = mkErr l $ printf "Duplicate Specification for %s:\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
+errorDuplicate i l l'         = mkErr l $ printf "Duplicate Specification for: %s\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
 
 
 ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ errorArgMismatch l            = mkErr l $ printf "Mismatch in Number of argument
 errorArgName l x y            = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 errorExtractNonFld l f x      = mkErr l $ printf "Cannot extract non-field '%s' from object '%s'" (ppshow f) (ppshow x)
 errorNonSingleFuncAnn l       = mkErr l $ printf "Anonymous function needs to have exactly one type annotation."
-
+errorDeadCast l t1 t2         = mkErr l $ printf "Cannot convert %s into %s" (ppshow t1) (ppshow t2)
 
 ---------------------------------------------------------------------------
 -- | LIQUID
@@ -136,7 +136,8 @@ errorBadPAlias l p nx ne      = mkErr l $ printf "Invalid predicate alias applic
 errorLiquid l                 = mkErr l $ printf "Liquid Type Error" 
 errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%s'.\nArgument Types: %s\nFunction Type: %s" (ppshow fn) (ppshow ts) (ppshow t)
 errorMultipleCasts l cs       = mkErr l $ render $ text "Multiple Casts: " <+> (vcat (map pp cs)) 
-
+errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"
+errorWellFormed l             = mkErr l $ printf "Well-formedness Error" 
  
 ---------------------------------------------------------------------------
 -- | Pervasive (typechecking TC and Liquid)

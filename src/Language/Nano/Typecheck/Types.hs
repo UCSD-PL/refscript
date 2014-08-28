@@ -36,7 +36,6 @@ module Language.Nano.Typecheck.Types (
   
   -- Type ops
   , rUnion, rTypeR, setRTypeR
-  
   , renameBinds
 
   -- * Regular Types
@@ -61,13 +60,22 @@ module Language.Nano.Typecheck.Types (
   , TDefEnv (..), tDefEmpty, tDefFromList, tDefToList
   , addSym, findSym, findSymOrDie, mapTDefEnv, mapTDefEnvM
 
-  -- * Operator Types
-  , infixOpTy, prefixOpTy, builtinOpTy, arrayLitTy, objLitTy, setPropTy, returnTy
-  -- , getFieldTy, getMethTy, getStatTy
+  -- * Builtin: Operators 
+  , infixOpTy, prefixOpTy, builtinOpTy
+  , arrayLitTy, objLitTy
+  , setPropTy
+
+    
+  -- * Builtin: Binders
+  , argId
+  , argTy
+  , returnTy
+    
 
   -- * Annotations
-  , Annot (..), UFact, Fact (..), phiVarsAnnot, ClassInfo
-  
+  , Annot (..), UFact, Fact (..), ClassInfo
+  , phiVarsAnnot, copyAnn
+                                                
   -- * Casts
   , Cast(..), CastDirection(..), noCast, upCast, dnCast, ddCast
 
@@ -84,7 +92,7 @@ module Language.Nano.Typecheck.Types (
   -- * Aliases
   , Alias (..), TAlias, PAlias, PAliasEnv, TAliasEnv
 
-
+               
   ) where 
 
 import           Text.Printf
@@ -312,8 +320,8 @@ instance Default Mutability where
 mutable       = mkMut "Mutable"
 immutable     = mkMut "Immutable"
 anyMutability = mkMut "AnyMutability"
--- readOnly      = mkMut "ReadOnly"
 inheritedMut  = mkMut "InheritedMut"
+-- readOnly      = mkMut "ReadOnly"
 
 
 isMutabilityType (TApp (TRef s) _ _) = s `elem` validMutNames
@@ -387,10 +395,26 @@ funTys l f xs ft
 --           (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
 
 
-funTy l xs (αs, yts, t) 
-  | length xs == length yts = let (su, ts') = renameBinds yts xs 
-                              in  Right (αs, ts', F.subst su t)    
-  | otherwise               = Left $ errorArgMismatch (srcPos l)
+-- NEW
+funTy l xs (αs, yts, t) =
+  case padUndefineds xs yts of
+    Nothing   -> Left  $ errorArgMismatch (srcPos l)
+    Just yts' -> Right $ (αs, ts', F.subst su t)
+                   where
+                    (su, ts') = renameBinds yts' xs 
+
+-- ORIG funTy l xs (αs, yts, t) 
+-- ORIG   | length xs == length yts = let (su, ts') = renameBinds yts xs 
+-- ORIG                               in  Right (αs, ts', F.subst su t)    
+-- ORIG   | otherwise               = Left $ errorArgMismatch (srcPos l)
+
+padUndefineds xs yts
+  | nyts <= nxs = Just $ yts ++ xundefs
+  | otherwise   = Nothing
+  where
+    nyts        = length yts
+    nxs         = length xs
+    xundefs     = [B (F.symbol x') tUndef | x' <- snd $ splitAt nyts xs ]
 
 renameBinds yts xs    = (su, [F.subst su ty | B _ ty <- yts])
   where 
@@ -526,6 +550,7 @@ setRTypeR :: RType r -> r -> RType r
 setRTypeR (TApp c ts _   ) r = TApp c ts r
 setRTypeR (TVar v _      ) r = TVar v r
 setRTypeR (TFun xts ot _ ) r = TFun xts ot r
+setRTypeR (TCons x y _)    r = TCons x y r  
 setRTypeR t                _ = t
 
 
@@ -955,7 +980,7 @@ pushContext s (IC c) = IC ((siteIndex s) : c)
 -- | Casts 
 -----------------------------------------------------------------------------
 data Cast r  = CNo                                      -- .
-             | CDead {                 tgt :: RType r } -- |dead code|
+             | CDead { err :: Error  , tgt :: RType r } -- |dead code|
              | CUp   { org :: RType r, tgt :: RType r } -- <t1 UP t2>
              | CDn   { org :: RType r, tgt :: RType r } -- <t1 DN t2>
              deriving (Eq, Ord, Show, Data, Typeable, Functor)
@@ -969,7 +994,7 @@ data CastDirection   = CDNo    -- .
 
 instance (PP r, F.Reftable r) => PP (Cast r) where
   pp CNo         = text "No cast"
-  pp (CDead _)   = text "Dead code"
+  pp (CDead e _) = text "Dead code:" <+> pp e
   pp (CUp t1 t2) = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
   pp (CDn t1 t2) = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
 
@@ -1101,7 +1126,10 @@ instance (F.Reftable r, PP r) => PP (AnnInfo r) where
 instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
 
-phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
+phiVarsAnnot l    = concat [xs | PhiVar xs <- ann_fact l]
+
+copyAnn   :: Annot b a -> Annot c a
+copyAnn x = Ann (ann x) [] 
 
 -----------------------------------------------------------------------
 -- | Primitive / Base Types -------------------------------------------
@@ -1163,6 +1191,7 @@ builtinOpId BIUndefined     = builtinId "BIUndefined"
 builtinOpId BIBracketRef    = builtinId "BIBracketRef"
 builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
 builtinOpId BIArrayLit      = builtinId "BIArrayLit"
+builtinOpId BIObjectLit     = builtinId "BIObjectLit"
 builtinOpId BISetProp       = builtinId "BISetProp"
 builtinOpId BINumArgs       = builtinId "BINumArgs"
 builtinOpId BITruthy        = builtinId "BITruthy"
@@ -1180,7 +1209,7 @@ arrayLitTy :: (F.Subable (RType r), IsLocated a)
 arrayLitTy l n g 
   = case ty of 
       TAll μ (TAll α (TFun [xt] t r)) 
-                  -> mkAll [μ,α] $ TFun (arrayLitBinds n xt) (arrayLitOut n t) r
+                  -> mkAll [μ,α] $ TFun (arrayLitBinds n xt) (substBINumArgs n t) r
       _           -> err 
     where
       ty          = builtinOpTy l BIArrayLit g
@@ -1191,37 +1220,65 @@ arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]]
     xs            = F.symbolString x
     x_            = F.symbol . (xs ++) . show 
 
-arrayLitOut n t   = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
-
+substBINumArgs n t = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
 
 --------------------------------------------------------------------------
 -- | Object literal types
 --------------------------------------------------------------------------
 
+--------------------------------------------------------------------------------------------
+objLitTy         :: (F.Reftable r, IsLocated a) => a -> [Prop a] -> Env (RType r) -> RType r
+--------------------------------------------------------------------------------------------
+objLitTy l ps g   = mkFun (vs, bs, rt)
+  where
+    vs            = [mv] ++ mvs ++ avs
+    bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
+    rt            = TCons elts mt fTop -- $ objLitR l nps g fTop
+    elts          = [FieldSig s m (ofType a) | (s,m,a) <- zip3 ss mts ats ] 
+    nps           = length ps
+    (mv, mt)      = freshTV l mSym 0                             -- obj mutability
+    (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
+    (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
+    ss            = [F.symbol p | p <- ps]
+    mSym          = F.symbol "M"
+    aSym          = F.symbol "A"
+
+lenId l           = Id l "length" 
+argId l           = Id l "arguments" 
+
+-- | @argBind@ returns a dummy type binding `arguments :: T `
+--   where T is an object literal containing the non-undefined `ts`.
+    
+argTy l ts g   = immObjectLitTy l g (pLen : ps') (tLen : ts')
+  where
+    ts'        = take k ts
+    ps'        = PropNum l . toInteger <$> [0 .. k-1]
+    pLen       = PropId l $ lenId l
+    tLen       = tInt `strengthen` rLen
+    rLen       = F.ofReft $ F.uexprReft k
+    k          = fromMaybe 0 $ L.findIndex isUndef ts
+
+
+immObjectLitTy l _ ps ts 
+  | nps == length ts = TCons elts immutable fTop -- objLitR l nps g 
+  | otherwise        = die $ bug (srcPos l) $ "Mismatched args for immObjectLit"
+  where
+    elts             = safeZipWith "immObjectLitTy" (\p t -> FieldSig (F.symbol p) immutable t) ps ts
+    nps              = length ps
+
+-- objLitR l n g  = fromMaybe fTop $ substBINumArgs n . rTypeR . thd3 <$> bkFun t 
+--   where
+--     t          = builtinOpTy l BIObjectLit g
+
+   
 -- FIXME: Avoid capture
-freshTV l s n     = (v,t)
+freshTV l s n     = (v, t)
   where 
     i             = F.intSymbol s n
     v             = TV i (srcPos l)
     t             = TVar v ()
 
---------------------------------------------------------------------------
-objLitTy         :: (F.Reftable r, IsLocated a) 
-                 => a -> [Prop a] -> RType r
---------------------------------------------------------------------------
-objLitTy l ps     = mkFun (vs, bs, rt)
-  where
-    (mv,mt)       = freshTV l mSym 0                             -- obj mutability
-    (mvs,mts)     = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
-    (avs,ats)     = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
-    ss            = [ F.symbol p | p <- ps]
-    vs            = [mv] ++ mvs ++ avs
-    bs            = [ B s (ofType a) | (s,a) <- zip ss ats ]
-    elts          = [ FieldSig s m (ofType a) | (s,m,a) <- zip3 ss mts ats ] 
-    rt            = TCons elts mt fTop
-    mSym          = F.symbol "M"
-    aSym          = F.symbol "A"
-    
+   
 --------------------------------------------------------------------------
 setPropTy :: (PP r, F.Reftable r, IsLocated l) 
           => F.Symbol -> l -> F.SEnv (Located (RType r)) -> RType r
@@ -1332,6 +1389,5 @@ instance IsLocated (Alias a s t) where
 
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body 
-
 
 

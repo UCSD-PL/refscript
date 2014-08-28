@@ -18,8 +18,8 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Execute Action and Get FInfo
   , getCGInfo 
-  , runFailM
-
+  -- , runFailM (!!!! Wierd to run the monad in the middle of building an action!!!!)
+    
   -- * Get Defined Function Type Signature
   , getDefType, getDef, setDef, getPropTDefM, getPropM
 
@@ -126,7 +126,7 @@ execute cfg pgm act
       (Right x, st) -> (x, st)  
 
   
-runFailM a = fst . runState (runErrorT a) <$> get
+-- runFailM a = fst . runState (runErrorT a) <$> get
 
 initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
 initState c p   = CGS F.emptyBindEnv (specs p) (defs p) (externs p)
@@ -240,7 +240,7 @@ envGetContextCast g a
 envGetContextTypArgs :: CGEnv -> AnnTypeR -> [TVar] -> [RefType]
 ---------------------------------------------------------------------------------------
 -- NOTE: If we do not need to instantiate any type parameter (i.e. length αs ==
--- 0), DO NOT attempt to compare that with the TypInst that might hide withing
+-- 0), DO NOT attempt to compare that with the TypInst that might hide within
 -- the expression, cause those type instantiations might serve anothor reason
 -- (i.e. might be there for a separate instantiation).  
 envGetContextTypArgs _ _ []        = []
@@ -340,7 +340,7 @@ mkQuals γ t      = [ mkQual γ v so pa | let (F.RR so (F.Reft (v, ras))) = rTyp
 mkQual γ v so p = F.Q (F.symbol "Auto") [(v, so)] (F.subst θ p) l0
   where 
     θ             = F.mkSubst [(x, F.eVar y)   | (x, y) <- xys]
-    xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show i))) xs [0..] 
+    xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show (i :: Int)))) xs [0..] 
     xs            = L.delete v $ orderedFreeVars γ p
     l0            = F.dummyPos "RSC.CGMonad.mkQual"
 
@@ -484,31 +484,31 @@ freshTyObj :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType
 freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g 
 
 
-
 ---------------------------------------------------------------------------------------
 -- | Adding Subtyping Constraints
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
+subType :: (IsLocated l) => l -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
-subType l g t1 t2 =
+subType l err g t1 t2 =
   do t1'   <- addInvariant t1  -- enhance LHS with invariants
      g'    <- envAdds False [(symbolId l x, t) | (x, Just t) <- rNms t1' ++ rNms t2 ] g
      modify $ \st -> st {cs = c g' (t1', t2) : (cs st)}
   where
-    c g     = uncurry $ Sub g (ci l)
+    c g     = uncurry $ Sub g (ci err l)
     rNms t  = (\n -> (n, n `E.envFindTy` renv g)) <$> names t
     names   = foldReft rr []
     rr r xs = F.syms r ++ xs
-
+    -- err     = fromMaybe (errorLiquid (srcPos l)) eo
 
 ---------------------------------------------------------------------------------------
 safeExtends :: SourceSpan -> CGEnv -> TDefEnv F.Reft -> TDef F.Reft -> CGM ()
 ---------------------------------------------------------------------------------------
 safeExtends l g δ (TD _ _ _ (Just (p, ts)) es) = zipWithM_ sub t1s t2s
   where
-    sub t1 t2  = subType l g (zipType δ t1 t2) t2
+    err        = errorUnsafeExtends l
+    sub t1 t2  = subType l err g (zipType δ t1 t2) t2 
     (t1s, t2s) = unzip [ (t1,t2) | pe <- flatten True δ (findSymOrDie p δ, ts)
                                  , ee <- es 
                                  , sameBinder pe ee 
@@ -524,9 +524,11 @@ safeExtends _ _ _ (TD _ _ _ Nothing _) = return ()
 --------------------------------------------------------------------------------
 wellFormed       :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType  
 --------------------------------------------------------------------------------
-wellFormed l g t = do modify $ \st -> st { ws = (W g (ci l) t) : ws st }
-                      return t
-
+wellFormed l g t
+  = do modify $ \st -> st { ws = (W g (ci err l) t) : ws st }
+       return t
+    where
+       err = errorWellFormed (srcPos l)
 
 --------------------------------------------------------------------------------
 -- | Generating Fresh Values 
@@ -631,7 +633,7 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   | α1 == α2
   = bsplitC g i t1 t2
   | otherwise
-  = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
+  = splitIncompatC l g i t1 t2 where l = srcPos i
 
 -- | Unions
 splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
@@ -644,7 +646,7 @@ splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
 -- |Type references
 splitC (Sub g i t1@(TApp (TRef x1) (_:t1s) _) t2@(TApp (TRef x2) (μ2:t2s) _)) 
   | x1 /= x2 
-  = cgError l $ bugBadSubtypes l t1 t2
+  = splitIncompatC l g i t1 t2
   | isImmutable μ2
   = do  cs    <- bsplitC g i t1 t2
         δ     <- getDef
@@ -674,7 +676,7 @@ splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- concatMapM splitC ((safeZipWith "splitc-5") (Sub g i) t1s t2s)
         return $ cs ++ cs'
-  | otherwise = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos i
+  | otherwise = splitIncompatC l g i t1 t2 where l = srcPos i
 
 -- These need to be here due to the lack of a folding operation
 splitC (Sub g i t1@(TApp (TRef _) _ _) t2)
@@ -691,9 +693,16 @@ splitC (Sub g i t1@(TCons e1s μ1 _ ) t2@(TCons e2s μ2 _ ))
         cs'   <- splitEs g i μ1 μ2 e1s e2s
         return $ cs ++ cs'
   
-splitC x@(Sub _ _ t1 t2)
-  = cgError l $ bugBadSubtypes l t1 t2 where l = srcPos x
+splitC x@(Sub g i t1 t2)
+  = splitIncompatC l g i t1 t2 where l = srcPos x
 
+-- splitIncompatC :: SourceSpan -> RefType -> RefType -> a
+splitIncompatC _ g i t1 _ = bsplitC g i t1 (mkBot t1)
+  
+-- splitIncompatC l t1 t2 = cgError l $ bugBadSubtypes l t1 t2
+    
+mkBot   :: (F.Reftable r) => RType r -> RType r
+mkBot t = setRTypeR t (F.bot r) where r = rTypeR t
 
 -- FIXME: 
 --  * Add special cases: IndexSig ...
@@ -884,3 +893,7 @@ getSuperDefM l (TApp (TRef i) ts _)
 
 getSuperDefM l _  = cgError l $ errorSuper $ srcPos l
 
+
+-- Local Variables:
+-- flycheck-disabled-checkers: (haskell-liquid)
+-- End:

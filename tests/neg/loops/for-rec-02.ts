@@ -13,5 +13,5 @@ function plus(i, x) { return x - i ; }
 /*@ main :: ({n:number| n > 0}) => void */
 function main(n){
   var m = forloop(0, n, plus, n);
-  assert(m >= n);
+  assert(m > n);
 }

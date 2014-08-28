@@ -12,14 +12,7 @@ Tests / Benchmarks
     pos/misc/negate-05.ts,                // intersection types - TC under false condition
     pos/misc/negate-06.ts,                // <same>
     pos/objects/obj-03.ts,                // unsupported bracket-ref
-    pos/simple/ambient-00.ts,             // annotation missing - fixed modules
-    pos/simple/ambient-01.ts,             // fixed in modules
     pos/unions/union-04.ts                // unions
-
-### Exceptions 
-    
-    neg/misc/abs-join-00.ts,
-    pos/simple/ambient-01.ts
 
 
 ### Working benchmarks
@@ -35,6 +28,8 @@ Tool/Implementation
 -------------------
   
   - What are good default mutabilities (parsing etc.)?
+
+  - Infer TS method types
 
   - Tidy up output files
 

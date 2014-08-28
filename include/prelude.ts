@@ -15,6 +15,7 @@ declare function requires(x: boolean): void;
 
 declare function ensures(x: boolean): void;
 
+/*@ random :: () => {v:number | true} */
 declare function random(): number;
 
 /*@ pos :: () => {v:number | v > 0} */
@@ -132,9 +133,12 @@ declare function builtin_PrefixMinus(a: number): number;
 */
 // declare function builtin_OpEq<A,B>(a: A, b: B): boolean;
 
-/*@ builtin_OpSEq :: 
+/*  builtin_OpSEq :: 
     /\ forall A  . (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }
     /\ forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
+*/
+/*@ builtin_OpSEq :: 
+    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
 */
 declare function builtin_OpSEq<A,B>(x: A, y: B): boolean;
 
@@ -457,6 +461,7 @@ interface Array<T> {
 
     shift(): T;
 
+    /*@ slice: forall N . (this: #Array[M,T], start: number, start: number): #Array[N,T] */
     slice(start/*?*/: number, end/*?*/: number): T[];
 
     sort(compareFn/*?*/: (a: T, b: T) => number): T[];

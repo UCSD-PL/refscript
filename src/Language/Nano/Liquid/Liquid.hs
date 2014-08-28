@@ -99,7 +99,7 @@ generateConstraints cfg pgm = getCGInfo cfg pgm $ consNano pgm
 consNano :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano p@(Nano {code = Src fs}) 
-  = do  g   <- {- freshenCGEnvM $-} return $ initGlobalEnv p
+  = do  g   <- initGlobalEnv p
         consStmts g fs 
         return ()
 
@@ -109,9 +109,10 @@ consNano p@(Nano {code = Src fs})
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-initGlobalEnv  :: NanoRefType -> CGEnv
+initGlobalEnv  :: NanoRefType -> CGM CGEnv
 -------------------------------------------------------------------------------
-initGlobalEnv (Nano { code = Src s }) = CGE nms bds grd ctx mod pth Nothing
+initGlobalEnv (Nano { code = Src s }) = 
+    freshenCGEnvM $ CGE nms bds grd ctx mod pth Nothing
   where
     nms       = E.envAdds (visibleNames s) E.envEmpty
     bds       = F.emptyIBindEnv
@@ -122,9 +123,9 @@ initGlobalEnv (Nano { code = Src s }) = CGE nms bds grd ctx mod pth Nothing
 
 
 -------------------------------------------------------------------------------
-initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> CGEnv
+initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> CGM CGEnv
 -------------------------------------------------------------------------------
-initModuleEnv g n s = CGE nms bds grd ctx mod pth (Just g)
+initModuleEnv g n s = freshenCGEnvM $ CGE nms bds grd ctx mod pth (Just g)
   where
 
     nms       = E.envAdds (visibleNames s) E.envEmpty
@@ -148,6 +149,7 @@ initFuncEnv l f i xs (αs, ts, t) g s =
     >>= envAdds "initFunc-1" tyBinds 
     >>= envAdds "initFunc-2" (visibleNames s)
     >>= envAddReturn f t
+    >>= freshenCGEnvM
   where
     g'        = CGE nms fenv grds ctx mod pth parent
     nms       = E.envEmpty
@@ -315,7 +317,7 @@ consStmt g (IfaceStmt _)
   = return $ Just g
 
 consStmt g (ModuleStmt l n body)
-  = consStmts (initModuleEnv g n body) body >> return (Just g)
+  = initModuleEnv g n body >>= (`consStmts` body) >> return (Just g)
 
 -- OTHER (Not handled)
 consStmt _ s 
@@ -561,20 +563,11 @@ consExpr g (NewExpr l e es)
 
 -- | super
 consExpr g (SuperRef l) 
-
   = case envFindTy (Id (ann l) "this") g of 
-      Just t  -> getParentType l t
---       Just (TApp (TRef x) ts _) -> 
---           do  ID _ _ vs h _ <- consEnvFindTypeDefM l g x
---               case h of 
---                 Just (p, ps) -> let θ = fromList $ zip vs ts in
---                                 let t = apply θ $ TApp (TRef p) ps fTop in
---                                 envAddFresh l t g
---                 Nothing -> cgError $ errorSuper (srcPos l) 
---       Just    -> cgError $ unimplemented (srcPos l) "Cannot extract super" 
-      Nothing -> cgError $ errorSuper (srcPos l) 
-  where 
-    getParentType _ _  = error "getParentType"
+      Just t   -> case extractParent g t of 
+                    Just tp -> envAddFresh l (tp, WriteGlobal) g
+                    Nothing -> cgError $ errorSuper (ann l)
+      Nothing  -> cgError $ errorSuper (ann l)
 
 -- | function(xs) { }
 consExpr g (FuncExpr l fo xs body) 

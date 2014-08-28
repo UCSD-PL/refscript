@@ -84,8 +84,7 @@ getPropApp _ _ _ = error "getPropApp should only be applied to TApp"
 
 
 -------------------------------------------------------------------------------
--- extractCtor :: (Data r, PP r, F.Reftable r, EnvLike r g) 
---             => g r -> RType t -> Maybe (RType r)
+extractCtor :: (PPRD r, EnvLike r g) => g r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 extractCtor γ (TClass x) 
   = do  d        <- resolveRelNameInEnv γ x
@@ -95,7 +94,7 @@ extractCtor γ (TClass x)
           ts -> return $ mkAnd ts
     where
         retT vs    = TApp (TRef x) (tVar <$> vs) fTop
-        defCtor vs = TFun [] (retT vs) fTop
+        defCtor vs = mkAll vs $ TFun [] (retT vs) fTop
 
 extractCtor γ (TApp (TRef x) ts _) 
   = do  d        <- resolveRelNameInEnv γ x
@@ -105,7 +104,7 @@ extractCtor γ (TApp (TRef x) ts _)
           ts -> return $ apply (fromList $ zip vs ts) $ mkAnd ts
     where
         retT vs    = TApp (TRef x) (tVar <$> vs) fTop
-        defCtor vs = TFun [] (retT vs) fTop
+        defCtor vs = mkAll vs $ TFun [] (retT vs) fTop
 
 extractCtor γ (TCons es _ _ )
   = do  case [ TFun bs t r | ConsSig (TFun bs t r) <- es ] of

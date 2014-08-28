@@ -31,7 +31,7 @@ class HTMLCanvasElt extends HTMLElt {
 }
 
 
-/*@ foo :: (elt: { #HTMLElt[#Mutable] | true } ) => #HTMLDivElt[#Mutable] */
+/*@ foo :: (elt: { #HTMLElt[#Immutable] | true } ) => #HTMLDivElt[#Immutable] */
 function foo(elt: HTMLElt): HTMLDivElt {
 
   if (elt instanceof HTMLDivElt) {

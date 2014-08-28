@@ -27,7 +27,8 @@ JS Features
 Tool/Implementation
 -------------------
   
-  - What are good default mutabilities (parsing etc.)?
+  - What are good default mutabilities (parsing etc.)? Mutability annotations
+    are very ugly (see pos/objects/obj-08.ts). 
 
   - Infer TS method types
 

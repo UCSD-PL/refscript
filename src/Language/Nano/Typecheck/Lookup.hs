@@ -107,7 +107,7 @@ extractCtor γ (TApp (TRef x) ts _)
         defCtor vs = mkAll vs $ TFun [] (retT vs) fTop
 
 extractCtor γ (TCons es _ _ )
-  = do  case [ TFun bs t r | ConsSig (TFun bs t r) <- es ] of
+  = do  case [ tf | ConsSig tf <- es ] of
           [] -> Nothing 
           ts -> return $ mkAnd ts
        

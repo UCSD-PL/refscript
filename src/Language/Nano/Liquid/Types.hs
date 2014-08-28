@@ -329,7 +329,7 @@ emapReft f γ (TAll α t)      = TAll α (emapReft f γ t)
 emapReft f γ (TFun xts t r)  = TFun (emapReftBind f γ' <$> xts) (emapReft f γ' t) (f γ r)
   where    γ'                = (b_sym <$> xts) ++ γ
 emapReft f γ (TCons xts m r) = TCons (emapReftElt f γ' <$> xts) m (f γ r)
-  where    γ'                = (f_sym <$> xts) ++ γ
+  where    γ'                = (F.symbol <$> xts) ++ γ
 emapReft _ _ (TClass c)      = TClass c
 emapReft _ _ (TModule m)     = TModule m
 emapReft _ _ _               = error "Not supported in emapReft"
@@ -386,7 +386,8 @@ efoldReft g f = go
     gos γ z ts              = L.foldl' (go γ) z ts
 
 efoldExt g xt γ             = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
-efoldExt' g xt γ            = F.insertSEnv (f_sym xt) (g $ f_type xt) γ
+-- FIXME: this implementation is sub-ideal
+efoldExt' g xt γ            = F.insertSEnv (F.symbol xt) (g $ f_type xt) γ
 
 ------------------------------------------------------------------------------------------
 efoldRType :: PPR r => (RType r -> b) -> (F.SEnv b -> RType r -> a -> a) -> F.SEnv b -> a -> RType r -> a

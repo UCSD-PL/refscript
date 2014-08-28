@@ -500,15 +500,16 @@ interface Array<T> {
 
 declare var Array: {
 
-    /*@ new forall M T . (arrayLength: number) => { v: #Array[M, T] | [ (len v) = arrayLength; not(null v)] } */
+    (arrayLength/*?*/: number): any[];
+
+    /*@ new forall M T . (arrayLength: number) => { v: #Array[M, T] | [ (len v) = arrayLength; (not (null v))] } */
     new (arrayLength/*?*/: number): any[];
 
-    /*@ forall M T. (arrayLength: number) => { v: #Array[M, T] | [ (len v) = arrayLength; not(null v)] } */
+    /*@ new forall M T. (arrayLength: number) => { v: #Array[M, T] | [ (len v) = arrayLength; (not (null v))] } */
     new <T>(arrayLength: number): T[];
 
     // new <T>(...items: T[]): T[];
 
-    (arrayLength/*?*/: number): any[];
 
     <T>(arrayLength: number): T[];
     

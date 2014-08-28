@@ -9130,6 +9130,7 @@ var TypeScript;
             return TypeScript.RsAnnotation.createAnnotation(t.snd(), ctx, t.fst());
         });
     }
+    TypeScript.tokenAnnots = tokenAnnots;
 
     var SourceUnitSyntax = (function (_super) {
         __extends(SourceUnitSyntax, _super);
@@ -10730,6 +10731,7 @@ var TypeScript;
                 if ((pullDecl.flags & 8 /* Ambient */) === 8 /* Ambient */) {
                     if (anns1.length === 0) {
                         var type = helper.getDeclForAST(this).getSymbol().type.toRsType();
+
                         if (type instanceof TypeScript.TError) {
                             var tError = type;
                             helper.postDiagnostic(this, TypeScript.DiagnosticCode.Cannot_translate_type_0_into_RefScript_type, [tError.message()]);
@@ -39591,7 +39593,7 @@ var TypeScript;
                 } else {
                     tArgs = this.getTypeParameters();
                 }
-                var rsTParams = [mut ? mut : new TypeScript.TTypeReference("Mutable", [])].concat(tArgs.map(function (p) {
+                var rsTParams = [mut ? mut : new TypeScript.TTypeReference("Immutable", [])].concat(tArgs.map(function (p) {
                     return p.toRsType();
                 }));
                 return new TypeScript.TTypeReference(this.getDisplayName().split("<")[0], rsTParams);
@@ -39610,27 +39612,75 @@ var TypeScript;
             }
 
             if (this.kind === 8388608 /* ObjectType */) {
-                var methods = this.getAllMembers(65536 /* Method */, 0 /* all */).map(function (m) {
-                    return new TypeScript.RsMethSig(m.name, new TypeScript.RsTAnd(m.type.getCallSignatures().map(function (s) {
-                        return s.toRsTMeth();
-                    })));
-                });
+                var methods = TypeScript.ArrayUtilities.concat(this.getAllMembers(65536 /* Method */, 0 /* all */).map(function (m) {
+                    return m.type.getCallSignatures().map(function (s) {
+                        var decls = s.getDeclarations();
+                        if (decls.length === 1) {
+                            var methAnns = TypeScript.tokenAnnots(decls[0].ast());
+                            if (methAnns.length === 0) {
+                                var ty = new TypeScript.RsTAnd([decls[0].getSignatureSymbol().toRsTMeth()]);
+                                return new TypeScript.RsMethSig(m.name, ty);
+                            } else if (methAnns.length === 1) {
+                                return new TypeScript.RsRawStringMember(methAnns[0].content());
+                            } else {
+                                throw new Error("PullTypeSymbol toRsType Multi user annotations");
+                            }
+                        } else {
+                            throw new Error("PullTypeSymbol toRsType Method Elements");
+                        }
+                    });
+                }));
 
-                var properties = this.getAllMembers(4096 /* Property */, 0 /* all */).map(function (p) {
-                    return new TypeScript.RsFieldSig(p.name, p.type.toRsType());
-                });
+                var properties = TypeScript.ArrayUtilities.concat(this.getAllMembers(4096 /* Property */, 0 /* all */).map(function (m) {
+                    return m.getDeclarations().map(function (d) {
+                        var propAnns = TypeScript.tokenAnnots(d.ast());
+                        switch (propAnns.length) {
+                            case 0:
+                                return new TypeScript.RsFieldSig(m.name, m.type.toRsType());
+                            case 1:
+                                return new TypeScript.RsRawStringMember(propAnns[0].content());
+                            default:
+                                throw new Error("BUG: PullTypeSymbol.toRsType.ObjectType.fields");
+                        }
+                    });
+                }));
 
-                var constructors = this.getConstructSignatures().map(function (c) {
-                    return new TypeScript.RsConsSig(c.toRsTFun());
+                var constructors = this.getConstructSignatures().map(function (s) {
+                    var decls = s.getDeclarations();
+                    if (decls.length === 1) {
+                        var constrAnns = TypeScript.tokenAnnots(decls[0].ast());
+                        switch (constrAnns.length) {
+                            case 0:
+                                return new TypeScript.RsConsSig(s.toRsTFun());
+                            case 1:
+                                return new TypeScript.RsRawStringMember(constrAnns[0].content());
+                            default:
+                                throw new Error("PullTypeSymbol toRsType Multi user annotations");
+                        }
+                    } else {
+                        throw new Error("PullTypeSymbol toRsType Method Elements");
+                    }
                 });
 
                 var calls = this.getCallSignatures().map(function (s) {
-                    return new TypeScript.RsCallSig(s.toRsTFun());
+                    var decls = s.getDeclarations();
+                    if (decls.length === 1) {
+                        var callAnns = TypeScript.tokenAnnots(decls[0].ast());
+                        switch (callAnns.length) {
+                            case 0:
+                                return new TypeScript.RsCallSig(s.toRsTFun());
+                            case 1:
+                                return new TypeScript.RsRawStringMember(callAnns[0].content());
+                            default:
+                                throw new Error("PullTypeSymbol toRsType Multi user annotations");
+                        }
+                    } else {
+                        throw new Error("PullTypeSymbol toRsType Method Elements");
+                    }
                 });
 
                 return new TypeScript.TObject(TypeScript.ArrayUtilities.concat([methods, properties, constructors, calls]));
             }
-
             return new TypeScript.TError(this.toString());
         };
 
@@ -60951,6 +61001,19 @@ var TypeScript;
         return RsMethSig;
     })(RsTypeMember);
     TypeScript.RsMethSig = RsMethSig;
+
+    var RsRawStringMember = (function (_super) {
+        __extends(RsRawStringMember, _super);
+        function RsRawStringMember(str) {
+            _super.call(this);
+            this.str = str;
+        }
+        RsRawStringMember.prototype.toString = function () {
+            return this.str;
+        };
+        return RsRawStringMember;
+    })(RsTypeMember);
+    TypeScript.RsRawStringMember = RsRawStringMember;
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
 (function (TypeScript) {

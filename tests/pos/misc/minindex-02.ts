@@ -1,8 +1,8 @@
 /*@ qualif UBound(v:number, x:a) : v < (len x) */
 
 /*@ range :: (number, number) => #Array[#Immutable, number] */
-function range(lo:number, hi:number) :number[]{
-	if (lo < hi) { 
+function range(lo:number, hi:number) {
+	if (lo < hi) {
 		var rest :number[]= range(lo + 1, hi); 
 		return [lo].concat(rest); 
 	}
@@ -22,8 +22,7 @@ function foldl(f, acc, xs){
 /*@ minIndex :: ({a:#Array[#Immutable, number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a)  )} */ 
 function minIndex(a){
 	
-	/*@ step :: (number, number) => number */
-	function step(i, min){
+	function step(i: number, min: number) {
 		if (a[i] < a[min]) { 
 			return i;
 		} 

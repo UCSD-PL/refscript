@@ -259,8 +259,6 @@ freshId l = Id (Ann l []) <$> fresh
 -- | We do not add binders for WriteGlobal variables as they cannot appear in
 --   refinements.
 --
---   NONONONONONO: They can!!!
---
 ---------------------------------------------------------------------------------------
 envAdds :: (PP [x], PP x, F.Symbolic x, IsLocated x) 
         => String -> [(x, (RefType, Assignability))] -> CGEnv -> CGM CGEnv
@@ -488,8 +486,8 @@ freshenCGEnvM g
         return $ g { cge_names = names, cge_mod = modules } 
   where
 
--- XXX: why were we K-varing these in the first place? 
-freshenVarbindingM g (x,(t,a)) = (\t -> (x,(t,a))) <$> return t -- freshTyVar g (srcPos x) t
+freshenVarbindingM g (x,(t,ReadOnly)) = (\t -> (x,(t,ReadOnly))) <$> freshTyVar g (srcPos x) t
+freshenVarbindingM g (x,(t,a)) = (\t -> (x,(t,a))) <$> return t
 
 freshenModuleDefM g (a, m)  
   = do  vars     <- E.envFromList <$> mapM f (E.envToList $ m_variables m)
@@ -498,10 +496,9 @@ freshenModuleDefM g (a, m)
   where
     f (x, (v, w, t)) =
       case w of
-        WriteLocal -> return (x,(v,w,t))
-        -- Freshen global variables and specs
-        _          -> do  ft    <- freshTyVar g (srcPos x) t 
+        ReadOnly   -> do  ft    <- freshTyVar g (srcPos x) t 
                           return   (x, (v, w, ft))
+        _          -> return (x,(v,w,t))
 
     h (x, ID c n αs hr es) = 
       case hr of
@@ -616,7 +613,10 @@ trueRefType    = mapReftM true
 --------------------------------------------------------------------------------
 refreshRefType :: RefType -> CGM RefType
 --------------------------------------------------------------------------------
-refreshRefType t0@(TAll α t) = TAll α . (`trans` t) <$> refresh (fTop :: F.Reft)
+refreshRefType t0@(TAll α t) 
+  = do  rt    <- refresh t
+        tα    <- refresh (fTop :: F.Reft)        
+        return $ TAll α $ trans tα rt
   where
       trans r = everywhere $ mkT $ tx r
       tx r (TVar β _) | α == β = TVar β r      

@@ -580,10 +580,10 @@ tcExpr γ e@(SuperRef l)
 --       Nothing -> tcError $ errorUnboundId (ann l) "super"
 
   = case tcEnvFindTy (F.symbol "this") γ of
-      Just t  -> return (e, getParentType l t)
-      Nothing -> tcError $ errorSuper (ann l)
-  where 
-    getParentType _ _ = error "getParentType"
+      Just t   -> case extractParent γ t  of 
+                    Just tp -> return (e, tp)
+                    Nothing -> tcError $ errorSuper (ann l)
+      Nothing  -> tcError $ errorSuper (ann l)
 
 -- | function (x,..) {  }
 tcExpr γ (FuncExpr l fo xs body)

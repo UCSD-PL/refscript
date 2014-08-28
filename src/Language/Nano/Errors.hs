@@ -108,8 +108,8 @@ errorUniqueTypeParams l       = mkErr l $ printf "Only unique type paramteres ar
 
 -- Subtyping
 errorDownCast l t1 t2         = mkErr l $ printf "Downcast: %s => %s" (ppshow t1) (ppshow t2)
-errorClassExtends l x y s v w = mkErr l $ printf "Type '%s' cannot extend type '%s'.\nProperty '%s' has type '%s' in '%s', and type '%s' in '%s'."   
-                                                   (ppshow x) (ppshow y) (ppshow s) (ppshow v) (ppshow x) (ppshow w) (ppshow y)
+errorClassExtends l x y s     = mkErr l $ printf "Type '%s' cannot extend type '%s'.Types of elements %s are incompatible."   
+                                                   (ppshow x) (ppshow y) (ppshow s)
 errorIncompMutTy l t t'       = mkErr l $ printf "Types '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
 errorIncompMutElt l t t'      = mkErr l $ printf "Elements '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
 errorConstrMissing l t        = mkErr l $ printf "Could not find constructor for type '%s'." (ppshow t)

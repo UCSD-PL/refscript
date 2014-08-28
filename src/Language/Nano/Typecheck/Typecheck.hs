@@ -427,8 +427,9 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 --
 tcStmt γ (ClassStmt l x e is ce) 
   = do  dfn      <- tcEnvFindTypeDefM l γ rn
-        ce'      <- mapM (tcClassElt (newEnv $ t_args dfn) x) ce
-        return    $ (ClassStmt l x e is ce', Just γ)
+        case safeExtends (srcPos l) γ dfn of 
+          Nothing -> (, Just γ) . ClassStmt l x e is <$> mapM (tcClassElt (newEnv $ t_args dfn) x) ce
+          Just e  -> tcError e
   where
     tVars   αs    = [ tVar   α | α <- αs ] 
     tyBinds αs    = [(tVarId α, (tVar α, WriteGlobal)) | α <- αs]

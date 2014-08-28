@@ -19,7 +19,7 @@ import           Control.Applicative                ((<$>))
 import           Data.Generics
 import qualified Data.HashSet                       as S
 import           Data.List                          (sort)
-import           Data.Maybe                         (maybeToList)
+import           Data.Maybe                         (maybeToList, catMaybes)
 import           Control.Monad.State
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
@@ -386,23 +386,34 @@ convertUnion _ γ t1 t2
     sanityCheck ([ ],[_]) = errorstar "unionParts', called on too small input"
     sanityCheck ([_],[_]) = errorstar "unionParts', called on too small input"
     sanityCheck p         = p
-    -- distinct              = ([x | x <- t1s, not $ any (\y -> isSubtype γ x y) t2s ],
-    --                          [y | y <- t2s, not $ any (\x -> isSubtype γ x y) t1s ])
 
 
--- FIXME: replace eltType
 --------------------------------------------------------------------------------
-safeExtends :: (Data r, PPR r) => SourceSpan -> TCEnv r -> IfaceDef r -> [Error]
+safeExtends :: (Data r, PPR r) => SourceSpan -> TCEnv r -> IfaceDef r -> Maybe Error
 --------------------------------------------------------------------------------
-safeExtends l γ (ID _ c _ (Just (p, ts)) es) =
-    [ errorClassExtends l c p (F.symbol ee) ee pe 
-                                      | parent <- maybeToList $ resolveRelNameInEnv γ p
-                                      , pe <- concat $ maybeToList $ flatten False γ (parent,ts)
-                                      , ee <- es, sameBinder pe ee 
-                                      , let t1 = eltType ee
-                                      , let t2 = eltType pe
-                                      , not (isSubtype γ t1 t2) ]
-safeExtends _ _ (ID _ _ _ Nothing _)  = []
+safeExtends _ _ (ID _ _ _ Nothing _)         = Nothing
+safeExtends l γ (ID _ c _ (Just (p, ts)) es) = 
+    case catMaybes $ uncurry validElt <$> compairablePairs of 
+       [] -> Nothing
+       es -> Just $ errorClassExtends l c p (F.symbol <$> es)
+  where
+    compairablePairs  = [ (ee, filter (sameBinder ee) ps) | ee <- es ]
+    parent            = resolveRelNameInEnv γ p
+    ps                = case  resolveRelNameInEnv γ p of
+                          Just par  -> concat $ maybeToList (flatten False γ (par,ts))
+                          Nothing -> []
+    validElt c ps     | null ps                = Nothing
+                      | any (compatElt γ c) ps = Nothing
+                      | otherwise              = Just c
+
+compatElt γ (CallSig t1      ) (CallSig t2)       = isSubtype γ t1 t2 
+compatElt γ (ConsSig t1      ) (ConsSig t2)       = isSubtype γ t1 t2 
+compatElt γ (IndexSig _ _ t1 ) (IndexSig _ _ t2)  = isSubtype γ t1 t2 && isSubtype γ t2 t1 
+compatElt γ (FieldSig _ m1 t1) (FieldSig _ m2 t2) = isSubtype γ t1 t2 
+compatElt γ (MethSig _ m1 t1 ) (MethSig _ m2 t2)  = isSubtype (fmap (const ()) γ) m1 m2 && isSubtype γ t1 t2 
+compatElt γ (StatSig _ m1 t1 ) (StatSig _ m2 t2)  = isSubtype (fmap (const ()) γ) m1 m2 && isSubtype γ t1 t2 
+compatElt _ e1                 e2                 = False 
+
 
 
 -- | Related types ( ~~ ) 

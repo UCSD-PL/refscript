@@ -9,6 +9,7 @@ module Language.Nano.Typecheck.Lookup (getProp, getElt, getCallable, getPropTDef
 
 import           Data.Maybe (listToMaybe)
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Syntax
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
@@ -51,7 +52,7 @@ getProp l _ _ _ t                = die $ bug (srcPos l)
 -- | `getElt`: return elements associated with a symbol @s@. The return list 
 -- is empty if the binding was not found or @t@ is an invalid type.
 -------------------------------------------------------------------------------
-getElt :: (F.Symbolic s, PPR r) => TDR r -> s -> RType r -> [TElt r]
+getElt :: (PPR r) => TDR r -> Prop s -> RType r -> [TElt r]
 -------------------------------------------------------------------------------
 getElt δ s t                = fromCons $ S.flattenType δ t
   where   

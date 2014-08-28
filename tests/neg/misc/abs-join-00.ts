@@ -4,8 +4,9 @@ function abs(x){
   if (x > 0) {
     res = x;
   } else {
-    res = <any>(x > 99);
+    res = (x > 99);
   };
+  
   assert(res >= 0);
   return res;
 }

@@ -1,5 +1,8 @@
 
-/*@ a :: { b: { c: string } } */
-var a  = { b : { c: 3 }, e : "st" };
+/*@ zoo :: ({v:number | true}) => { b: { c: string } } */
+function zoo(z){
+    var a  = { b : { c: z }, e : "st" };
+    return a;
+}
 
 

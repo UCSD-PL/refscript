@@ -4,3 +4,5 @@ var emp = [];
 
 assert(emp === null);
 
+assert(false);
+

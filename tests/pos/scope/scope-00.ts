@@ -1,12 +1,12 @@
 
 /*@ foo :: ( ) =>  { number | v > 0 }*/
 function foo( ) : number  {
+  var hehehehehe = 32; 
 
   /*@ a :: { number | v > 0 } */
   var a = 1;
   a = a + 123;
 
-   /*@ bar :: ( ) => number */
    function bar( ) : number  {
      a = a + 1;
      return a;
@@ -17,14 +17,12 @@ function foo( ) : number  {
 
 foo();
 
-/*@ foo1 :: ( ) => { string | true } */
 function foo1( ) : string  {
 
-  /*@ a1 :: { string | true } */
+  /*@ a1 :: string */
   var a1 = "1";
   a1 = a1 + "2";
 
-  /*@ bar1 :: ( ) => string */
   function bar1( ) : string  {
     a1 = a1 + "3";
     return a1;
@@ -32,3 +30,8 @@ function foo1( ) : string  {
 
   return bar1();
 }
+
+foo1();
+
+
+var aaaa = 1; 

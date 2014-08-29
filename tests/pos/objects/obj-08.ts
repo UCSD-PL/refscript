@@ -1,9 +1,12 @@
 
-/*@ a :: { b: { c: { number | v > 0 } } } */
+
+// XXX: This is super ugly -- FIX !!! 
+
+/*@ a :: [#Mutable]{ b: [#Mutable] [#Mutable]{ c: [#Mutable] number } } */
 var a  = { b : { c: 3 } };
 
 
-/*@ foo :: (o: { c: number }) => void */
+/*@ foo :: (o: [#Mutable]{ c: number }) => void */
 function foo (o: { c: number }) { 
 
   o.c = 1;
@@ -13,4 +16,4 @@ function foo (o: { c: number }) {
 foo(a.b);
 
 
-assert(a.b.c > 0);
+// assert(a.b.c > 0);

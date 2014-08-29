@@ -9,16 +9,16 @@ import qualified Language.Nano.Liquid.Types         as L
 
 import           Data.Aeson                         (eitherDecode)
 import           Data.Aeson.Types            hiding (Parser, Error, parse)
-import           Language.Nano.CmdLine              (getOpts)
+import           Language.Nano.CmdLine
 import           Language.Nano.Errors
-import           Language.Nano.Types
-import           Language.Nano.Annots
+import           Language.Nano.Files
+import           Language.Nano.SystemUtils
 import           Control.Exception                  (catch)
 import           Control.Monad
 import           Data.Monoid
 import           Data.List                          (sort, nub)
 import           System.Exit
-import           System.Directory                   (createDirectoryIfMissing)
+import           System.Directory                   (createDirectoryIfMissing, doesFileExist)
 import           System.Process
 import           System.FilePath.Posix
 import           Language.Fixpoint.Interface        (resultExit)
@@ -48,30 +48,38 @@ verifier cfg f
 -------------------------------------------------------------------------------
 json :: FilePath -> IO (Either (F.FixResult Error) [FilePath])
 -------------------------------------------------------------------------------
-json f | ext `elem` oks 
-       = do (code, stdOut, _) <- readProcessWithExitCode tsCmd args ""
-            case code of 
-              ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
-                                    Left  s  -> return $ Left  $ F.UnknownError s
-                                    Right fs -> return $ Right $ map toJSONExt fs
-              ExitFailure _    -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
-                                    Left  s  -> return $ Left $ F.UnknownError s
-                                    Right e  -> return $ Left $ e
-       | otherwise      
-       = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
+json f = do fileExists <- doesFileExist f
+            if fileExists then withExistingFile f
+                          else return $ Left $ F.Crash [] $ "File does not exist: " ++ f
+
+withExistingFile f 
+  | ext `elem` oks 
+  = do  preludeTSPath     <- getPreludeTSPath 
+        (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs preludeTSPath) ""
+        case code of 
+          ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
+                                Left  s  -> return $ Left  $ F.UnknownError s
+                                Right fs -> return $ Right $ fs
+          ExitFailure _   -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
+                                Left  s  -> return $ Left $ F.UnknownError s
+                                Right e  -> return $ Left $ e
+  | otherwise
+  = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
   where 
     ext            = takeExtension f
-    toJSONExt      = extFileName Json . dropExtension
     tsCmd          = "tsc" 
-    args           = ["--outDir", tempDirectory f, "--refscript", f]
     oks            = [".ts", ".js"]
+    mkArgs pre     = [ "--outDir", tempDirectory f
+                     , "--refscript"
+                     , "--lib", pre
+                     , f ]
 
 
 instance FromJSON (F.FixResult Error)
 instance ToJSON (F.FixResult Error)
 
 instance FromJSON Error
-instance ToJSON Error
+instance ToJSON Error 
 
 instance FromJSON SrcSpan
 instance ToJSON SrcSpan
@@ -81,7 +89,6 @@ run verifyFile cfg
   = do mapM_ (createDirectoryIfMissing False. tmpDir) (files cfg)
        rs   <- mapM (runOne verifyFile) $ files cfg
        let r = mconcat rs
-       -- donePhaseWithOptStars False (F.colorResult r) (render $ pp r) 
        writeResult r
        exitWith (resultExit r)
     where
@@ -93,7 +100,7 @@ runOne verifyFile f
        renderAnnotations f r u
        return r
     where
-       handler e = return (NoAnn, F.Crash [e] "")
+       handler e = return (NoAnn, F.Unsafe [e])
        tmpDir    = tempDirectory f
 
 

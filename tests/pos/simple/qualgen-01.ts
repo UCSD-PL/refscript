@@ -1,9 +1,7 @@
 
-/*@ interface List<M,A> */
 interface List<A> {
-  /*@ data : A */
   data: A;
-  /*@ next : #List[M,A]? */
+  /*@ next : #List[M,A] + null */
   next: List<A>;
 } 
 

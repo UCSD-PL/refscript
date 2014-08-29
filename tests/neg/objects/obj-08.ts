@@ -1,8 +1,17 @@
 
-/*@ zoo :: ({v:number | true}) => { b: { c: string } } */
-function zoo(z){
-    var a  = { b : { c: z }, e : "st" };
-    return a;
+/*@ a :: { b: { c: { number | v > 0 } } } */
+var a  = { b : { c: 3 } };
+
+
+/*@ foo :: (o: []{ c: number }) => void */
+function foo (o: { c: number }) { 
+
+  o.c = 1;
+
 }
 
+foo(a.b);
+
+
+assert(a.b.c > 0);
 

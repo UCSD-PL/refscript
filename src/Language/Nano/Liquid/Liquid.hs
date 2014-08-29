@@ -153,7 +153,7 @@ initFuncEnv l f i xs (αs, ts, t) g s =
         envAdds "initFunc-0" varBinds g'
     >>= envAdds "initFunc-1" tyBinds 
     >>= envAdds "initFunc-2" (visibleNames s)
-    -- FIXME: do not freshen everything
+    >>= envAdds "initFunc-3" argBind
     >>= envAddReturn f t
     >>= freshenCGEnvM
   where
@@ -167,7 +167,7 @@ initFuncEnv l f i xs (αs, ts, t) g s =
     parent    = Just g
     tyBinds   = [(Loc (srcPos l) α, (tVar α, ReadOnly)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) (zip ts (repeat WriteLocal))
-    argBind   = (argId l, argTy l ts (cge_names g))
+    argBind   = [(argId l, (argTy l ts (cge_names g), ReadOnly))]
     
 
 

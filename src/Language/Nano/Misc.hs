@@ -26,8 +26,8 @@ module Language.Nano.Misc (
   , unzip4
 
   -- Maybe
-  , maybeM, maybeM_, fromJust', maybeToEither
-
+  , maybeM, maybeM_, fromJust', maybeToEither, mseq
+                                               
   -- Container operations
   , isProperSubsetOf, isEqualSet, isProperSubmapOf
   , equalKeys
@@ -78,6 +78,16 @@ mkEither False s _ = Left s
 either2Bool :: Either a b -> Bool
 -------------------------------------------------------------------------------
 either2Bool = either (const False) (const True)
+
+-------------------------------------------------------------------------------
+mseq :: (Monad m) => m (Maybe a) -> (a -> m (Maybe b)) -> m (Maybe b) 
+-------------------------------------------------------------------------------
+mseq act k = do z <- act
+                case z of
+                  Nothing -> return Nothing
+                  Just x  -> k x
+
+
 
 -------------------------------------------------------------------------------
 maybeM :: (Monad m) => b -> (a -> m b) -> Maybe a -> m b

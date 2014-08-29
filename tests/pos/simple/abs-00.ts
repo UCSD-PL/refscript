@@ -10,3 +10,8 @@ function ab(x:number):number{
 }
 
 var a = ab(1)
+
+/*@ minus :: (x:number, y:number) => {v:number | v = x - y} */
+function minus(x, y) { 
+  return x - y; 
+}

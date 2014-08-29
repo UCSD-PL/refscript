@@ -68,7 +68,7 @@ convert l γ t1 t2
           CDNo   -> return $ CNo
           CDUp   -> return $ CUp (rType t1) (rType t2)
           CDDn   -> return $ CDn (rType t1) (rType t2)
-          CDDead -> return $ CDead (rType t1)
+          CDDead -> return $ CDead (errorDeadCast l t1 t2) (rType t1)
   where
     rType = ofType . toType
     τ1    = toType t1
@@ -354,8 +354,8 @@ convertSimple :: (Functor g, EnvLike () g)
 convertSimple l _ t1 t2
   | t1 == t2      = Right CDNo
   -- TOGGLE dead-code
---   | otherwise = return $ CDead t2
-  | otherwise     = Left  $ errorSubtype l t1 t2
+  | otherwise = Right CDDead 
+--  | otherwise     = Left  $ errorSubtype l t1 t2
 
 
 -- | `convertUnion`

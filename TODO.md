@@ -3,16 +3,15 @@ Tests / Benchmarks
 
 ### Failing tests
 
-    neg/misc/abs-join-00.ts,              // TS translation exception
-    pos/arrays/arr-11.ts,                 
-    pos/loops/obj-01.ts,
-    pos/loops/obj-02.ts,
-    pos/misc/animals.ts,                  // numbers of arguments
-    pos/misc/negate-00.ts,                // tag information
-    pos/misc/negate-05.ts,                // intersection types - TC under false condition
-    pos/misc/negate-06.ts,                // <same>
-    pos/objects/obj-03.ts,                // unsupported bracket-ref
-    pos/unions/union-04.ts                // unions
+    neg/misc/abs-join-00.ts,  // TS translation exception
+
+    pos/misc/unite-01.ts,     // Unification issue
+    pos/loops/obj-01.ts,      // Unification issue                 
+    pos/loops/obj-02.ts,      // Unification issue
+
+	pos/simple/ambient-00.ts, // annotation missing - fixed modules
+    pos/simple/ambient-01.ts, // fixed in modules
+
 
 
 ### Working benchmarks
@@ -22,6 +21,9 @@ Tests / Benchmarks
 
 JS Features
 -----------
+
+  - METHODS:
+    - typescript/pos/objects/meth-00.js
 
 
 Tool/Implementation

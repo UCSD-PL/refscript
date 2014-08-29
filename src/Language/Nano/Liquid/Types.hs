@@ -73,6 +73,7 @@ import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Nano.Annots
 import           Language.Nano.Errors
+import           Language.Nano.Env
 import           Language.Nano.Locations
 import           Language.Nano.Misc
 import           Language.Nano.Names
@@ -86,6 +87,7 @@ import           Language.Nano.Typecheck.Types
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.PrettyPrint
+import           Language.Fixpoint.Errors
   
 -- import           Debug.Trace                        (trace)
 
@@ -96,25 +98,25 @@ type PPR r = (PP r, F.Reftable r)
 -------------------------------------------------------------------------------------
 
 type RefType     = RType F.Reft
-
+type REnv        = Env RefType
 type AnnTypeR    = AnnType F.Reft
 
 ----------------------------------------------------------------------------
 -- | Constraint Information 
 ----------------------------------------------------------------------------
 
-newtype Cinfo = Ci SourceSpan deriving (Eq, Ord, Show) 
+data Cinfo = Ci { ci_info    :: !Error
+                , ci_srcspan :: !SourceSpan
+                } deriving (Eq, Ord, Show) 
 
--- emptyCinfo    = Ci $ initialPos ""
-
-ci :: (IsLocated a) => a -> Cinfo
-ci = Ci . srcPos 
+ci   :: (IsLocated a) => Error -> a -> Cinfo
+ci e = Ci e . srcPos 
 
 instance PP Cinfo where
-  pp (Ci l)   = text "CInfo:" <+> pp l 
-
+  pp (Ci e l)   = text "CInfo:" <+> pp l <+> (parens $ pp e)
+  
 instance IsLocated Cinfo where
-  srcPos (Ci x) = x
+  srcPos = ci_srcspan 
 
 instance F.Fixpoint Cinfo where 
   toFix = pp
@@ -616,7 +618,6 @@ zipType γ (TFun x1s t1 r1) (TFun x2s t2 _) =
     do  xs <- zipWithM (zipBind γ) x1s x2s
         y  <- zipType γ t1 t2
         return $ TFun xs y r1
-  where
 
 -- | Object types
 --

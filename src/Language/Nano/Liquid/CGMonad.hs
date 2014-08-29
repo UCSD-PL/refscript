@@ -19,7 +19,8 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Execute Action and Get FInfo
   , getCGInfo 
-  , runFailM
+  -- , runFailM (!!!! Wierd to run the monad in the middle of building an action!!!!)
+
 
   -- * Throw Errors
   , cgError      
@@ -65,7 +66,6 @@ import           Data.Generics.Aliases
 import           Data.Maybe                     (isJust, catMaybes)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
--- import qualified Data.HashSet            as S
 import qualified Data.List                      as L
 import           Data.Function                  (on)
 import           Text.PrettyPrint.HughesPJ
@@ -234,7 +234,7 @@ envGetContextCast g a
 envGetContextTypArgs :: CGEnv -> AnnTypeR -> [TVar] -> [RefType]
 ---------------------------------------------------------------------------------------
 -- NOTE: If we do not need to instantiate any type parameter (i.e. length αs ==
--- 0), DO NOT attempt to compare that with the TypInst that might hide withing
+-- 0), DO NOT attempt to compare that with the TypInst that might hide within
 -- the expression, cause those type instantiations might serve anothor reason
 -- (i.e. might be there for a separate instantiation).  
 envGetContextTypArgs _ _ []        = []
@@ -335,7 +335,7 @@ mkQuals γ t      = [ mkQual γ v so pa | let (F.RR so (F.Reft (v, ras))) = rTyp
 mkQual γ v so p = F.Q (F.symbol "Auto") [(v, so)] (F.subst θ p) l0
   where 
     θ             = F.mkSubst [(x, F.eVar y)   | (x, y) <- xys]
-    xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show i))) xs [0..] 
+    xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show (i :: Int)))) xs [0..] 
     xs            = L.delete v $ orderedFreeVars γ p
     l0            = F.dummyPos "RSC.CGMonad.mkQual"
 
@@ -515,16 +515,16 @@ freshenModuleDefM g (a, m)
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-subType :: (IsLocated l) => l -> CGEnv -> RefType -> RefType -> CGM ()
+subType :: (IsLocated l) => l -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
-subType l g t1 t2 =
+subType l err g t1 t2 =
   do t1'    <- addInvariant t1  -- enhance LHS with invariants
      let xs  =    [(symbolId l x,(t,a)) | (x, Just (t,a)) <- rNms t1' ++ rNms t2 ]
               ++  [(symbolId l x,(t,a)) | (x,      (t,a)) <- E.envToList $ cge_names g ]
      g'     <- envAdds "subtype" xs g
      modify  $ \st -> st {cs = c g' (t1', t2) : (cs st)}
   where
-    c g      = uncurry $ Sub g (ci l)
+    c g      = uncurry $ Sub g (ci err l)
     rNms t   = mapSnd (`envFindTyWithAsgn` g) . dup <$> names t
     dup a    = (a,a)
     names    = foldReft rr []
@@ -553,9 +553,11 @@ subType l g t1 t2 =
 --------------------------------------------------------------------------------
 wellFormed       :: (IsLocated l) => l -> CGEnv -> RefType -> CGM RefType  
 --------------------------------------------------------------------------------
-wellFormed l g t = do modify $ \st -> st { ws = (W g (ci l) t) : ws st }
-                      return t
-
+wellFormed l g t
+  = do modify $ \st -> st { ws = (W g (ci err l) t) : ws st }
+       return t
+    where
+       err = errorWellFormed (srcPos l)
 
 --------------------------------------------------------------------------------
 -- | Generating Fresh Values 
@@ -681,7 +683,7 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
   | α1 == α2
   = bsplitC g i t1 t2
   | otherwise
-  = cgError $ bugBadSubtypes l t1 t2 where l = srcPos i
+  = splitIncompatC l g i t1 t2 where l = srcPos i
 
 -- | Unions
 --
@@ -698,7 +700,7 @@ splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
 --
 splitC (Sub g i t1@(TApp (TRef x1) (_:t1s) _) t2@(TApp (TRef x2) (μ2:t2s) _)) 
   | x1 /= x2 
-  = cgError $ bugBadSubtypes l t1 t2
+  = splitIncompatC l g i t1 t2
   | isImmutable μ2
   = do  cs    <- bsplitC g i t1 t2
         -- cs'   <- splitWithVariance (varianceTDef $ findSymOrDie x1 δ) t1s t2s
@@ -729,7 +731,7 @@ splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- concatMapM splitC ((safeZipWith "splitc-5") (Sub g i) t1s t2s)
         return $ cs ++ cs'
-  | otherwise = cgError $ bugBadSubtypes l t1 t2 where l = srcPos i
+  | otherwise = splitIncompatC l g i t1 t2 where l = srcPos i
 
 -- | These need to be here due to the lack of a folding operation
 --
@@ -753,9 +755,16 @@ splitC (Sub g i t1@(TCons e1s μ1 _ ) t2@(TCons e2s μ2 _ ))
 splitC (Sub _ _ (TClass _) (TClass _)) = return []
 splitC (Sub _ _ (TModule _) (TModule _)) = return []
   
-splitC x@(Sub _ _ t1 t2)
-  = cgError $ bugBadSubtypes l t1 t2 where l = srcPos x
+splitC x@(Sub g i t1 t2)
+  = splitIncompatC l g i t1 t2 where l = srcPos x
 
+-- splitIncompatC :: SourceSpan -> RefType -> RefType -> a
+splitIncompatC _ g i t1 _ = bsplitC g i t1 (mkBot t1)
+  
+-- splitIncompatC l t1 t2 = cgError l $ bugBadSubtypes l t1 t2
+    
+mkBot   :: (F.Reftable r) => RType r -> RType r
+mkBot t = setRTypeR t (F.bot r) where r = rTypeR t
 
 -- FIXME: 
 --  * Add special cases: IndexSig ...
@@ -913,3 +922,6 @@ zipTypeM l g t1 t2 =
     Just t  -> return t
     Nothing -> cgError $ bugZipType l t1 t2
 
+-- Local Variables:
+-- flycheck-disabled-checkers: (haskell-liquid)
+-- End:

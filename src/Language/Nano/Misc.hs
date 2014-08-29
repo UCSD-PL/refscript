@@ -15,7 +15,6 @@ module Language.Nano.Misc (
   , fst4, snd4, thd4, fth4
   , mapFstM, mapSndM, mapPairM
   , setFst3, setSnd3, setThd3
-  , appFst3, appSnd3, appThd3
   , setFst4, setSnd4, setThd4, setFth4
   , appFst4, appSnd4, appThd4, appFth4
 
@@ -27,11 +26,15 @@ module Language.Nano.Misc (
   , unzip4
 
   -- Maybe
-  , maybeM, maybeM_, fromJust', maybeToEither
-
+  , maybeM, maybeM_, fromJust', maybeToEither, mseq
+                                               
   -- Container operations
   , isProperSubsetOf, isEqualSet, isProperSubmapOf
   , equalKeys
+
+  -- * Error message
+  , convertError
+
 ) where
 
 -- import           Control.Applicative                ((<$>))
@@ -44,7 +47,10 @@ import           Data.Function                        (on)
 import           Data.Hashable
 import qualified Data.HashMap.Strict                  as M
 import qualified Data.List                            as L
+
 import qualified Language.Fixpoint.Types              as F
+import           Language.Fixpoint.Misc
+import           Language.ECMAScript3.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
 
 -------------------------------------------------------------------------------
@@ -74,6 +80,16 @@ either2Bool :: Either a b -> Bool
 either2Bool = either (const False) (const True)
 
 -------------------------------------------------------------------------------
+mseq :: (Monad m) => m (Maybe a) -> (a -> m (Maybe b)) -> m (Maybe b) 
+-------------------------------------------------------------------------------
+mseq act k = do z <- act
+                case z of
+                  Nothing -> return Nothing
+                  Just x  -> k x
+
+
+
+-------------------------------------------------------------------------------
 maybeM :: (Monad m) => b -> (a -> m b) -> Maybe a -> m b
 -------------------------------------------------------------------------------
 maybeM d f a = maybe (return d) f a
@@ -96,10 +112,6 @@ exists f = isJust . L.find f
 setFst3 (_,b,c) a' = (a',b,c)
 setSnd3 (a,_,c) b' = (a,b',c)
 setThd3 (a,b,_) c' = (a,b,c')
-
-appFst3 (a,b,c) f = (f a,b,c)
-appSnd3 (a,b,c) f = (a,f b,c)
-appThd3 (a,b,c) f = (a,b,f c)
 
 fst4 (a,_,_,_) = a
 snd4 (_,b,_,_) = b
@@ -150,6 +162,7 @@ fromJust' s _        = error s
 maybeToEither _ (Just a) = Right a
 maybeToEither e Nothing  = Left e
 
+-- | Sets / maps
 
 isProperSubsetOf :: (Eq a, Hashable a) => HashSet a -> HashSet a -> Bool
 s1 `isProperSubsetOf` s2 = size (s1 \\ s2) == 0 && size (s2 \\ s1) > 0  
@@ -165,3 +178,9 @@ isProperSubmapOf = isProperSubsetOf `on` (fromList . M.keys)
 
 equalKeys :: (Eq a, Ord a, Hashable a) => M.HashMap a b -> M.HashMap a b -> Bool
 equalKeys =  (==) `on` (L.sort . M.keys)
+
+
+convertError tgt e  = errortext $ msg <+> pp e
+  where 
+    msg             = text $ "Cannot convert to: " ++ tgt
+

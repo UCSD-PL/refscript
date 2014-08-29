@@ -771,7 +771,7 @@ consWhileBase l xs tIs g
 
 consWhileStep l xs tIs gI'' 
   = do  xts_step           <- mapM (`safeEnvFindTy` gI'') xs 
-        zipWithM_ (subType l err gI'') xts_step tIs'  -- (f)
+        zipWithM_ (subType l err gI'') xts_step tIs'                        -- (f)
   where 
     tIs'                    = F.subst su <$> tIs
     xs'                     = mkNextId   <$> xs

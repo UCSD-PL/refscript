@@ -31,6 +31,7 @@ import           Language.Nano.Names
 import           Language.Nano.Misc
 import           Language.Nano.Program
 import           Language.Nano.Types
+import           Language.Nano.Typecheck.Types
 import           Language.Nano.SSA.Types
 import           Language.Nano.SSA.SSAMonad
 
@@ -94,11 +95,14 @@ ssaFun l _ xs body
           withAssignability ReadOnly ros        $ 
             withAssignability WriteGlobal wgs   $ 
               withAssignability WriteLocal wls  $ 
-            do  setSsaEnv    $ extSsaEnv ((returnId l) : xs) θ    -- Extend SsaEnv with formal binders
-                (_, body')   <- ssaStmts body                     -- Transform function
-                setSsaEnv θ                                       -- Restore Outer SsaEnv
+            do  setSsaEnv    $ extSsaEnv (arg: ret : xs) θ  -- Extend SsaEnv with formal binders
+                (_, body')   <- ssaStmts body               -- Transform function
+                setSsaEnv θ                                 -- Restore Outer SsaEnv
                 return        $ body'
-
+    where
+       arg    = argId l
+       ret    = returnId l
+       eIds θ = arg : [x | x <- envIds θ, F.symbol x /= F.symbol arg]
 
 -------------------------------------------------------------------------------------
 ssaSeq :: (a -> SSAM r (Bool, a)) -> [a] -> SSAM r (Bool, [a])

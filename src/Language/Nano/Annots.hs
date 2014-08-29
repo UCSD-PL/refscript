@@ -35,6 +35,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types        as F
 
@@ -44,11 +45,13 @@ import qualified Language.Fixpoint.Types        as F
 -----------------------------------------------------------------------------
 -- | Casts 
 -----------------------------------------------------------------------------
+
 data Cast r  = CNo                                      -- .
-             | CDead {                 tgt :: RType r } -- |dead code|
+             | CDead { err :: Error  , tgt :: RType r } -- |dead code|
              | CUp   { org :: RType r, tgt :: RType r } -- <t1 UP t2>
              | CDn   { org :: RType r, tgt :: RType r } -- <t1 DN t2>
              deriving (Eq, Ord, Show, Data, Typeable, Functor)
+
 
 data CastDirection   = CDNo    -- .
                      | CDDead  -- |dead code|
@@ -59,7 +62,7 @@ data CastDirection   = CDNo    -- .
 
 instance (PP r, F.Reftable r) => PP (Cast r) where
   pp CNo         = text "No cast"
-  pp (CDead _)   = text "Dead code"
+  pp (CDead e _) = text "Dead code:" <+> pp e
   pp (CUp t1 t2) = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
   pp (CDn t1 t2) = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
 

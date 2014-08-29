@@ -16,8 +16,8 @@ import           Control.Monad
 import           Control.Arrow                      ((***), first)
 
 import qualified Data.HashMap.Strict                as M 
-import           Data.Maybe                         (catMaybes, listToMaybe, maybeToList, isJust)
-import           Data.Data 
+import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe, fromJust, maybeToList, isJust)
+import           Data.List                          (find)
 import           Data.Function                      (on)
 import           Data.Generics                   
 
@@ -55,6 +55,7 @@ import qualified System.Console.CmdArgs.Verbosity as V
 
 
 type PPR  r = (PP r, F.Reftable r, Data r)
+type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
 
 
 --------------------------------------------------------------------------------
@@ -166,7 +167,8 @@ initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
     pth       = AP $ QPath (srcPos dummySpan) []
 
 
-initFuncEnv γ f i αs xs ts t s = TCE nms mod ctx pth parent
+-- MERGE NOTE : add args
+initFuncEnv γ f i αs xs ts t _ s = TCE nms mod ctx pth parent
   where
     tyBinds   = [(tVarId α, (tVar α, ReadOnly)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ zip ts (repeat WriteLocal)
@@ -231,7 +233,8 @@ tcEnvFindTypeDefM l γ x
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-tcFun :: PPR r => TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r), TCEnvO r)
+tcFun :: PPR r =>
+  TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r), Maybe (TCEnv r))
 -------------------------------------------------------------------------------
 tcFun γ (FunctionStmt l f xs body)
   = case tcEnvFindTy f γ of
@@ -242,10 +245,17 @@ tcFun γ (FunctionStmt l f xs body)
 
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
--- tcFun1 :: (F.Symbolic a) => TCEnv r -> AnnSSA r -> a -> [Id (AnnSSA r)] -> [Statement (AnnSSA r)] -> (Int, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
-tcFun1 γ l f xs body (i, (αs,ts,t)) 
-  = tcFunBody (initFuncEnv γ f i αs xs ts t body) l body t
-
+-------------------------------------------------------------------------------
+tcFun1 :: (PPR r, IsLocated l, CallSite t) 
+       => TCEnv r -> (AnnSSA r) -> l -> [Id (AnnSSA r)] -> [Statement (AnnSSA r)] 
+       -> (t, ([TVar], [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
+-------------------------------------------------------------------------------
+tcFun1 γ l f xs body fty = tcFunBody γ' l body t
+  where
+    γ' 					 = initFuncEnv γ f i αs xs ts t arg body
+    (i, (αs,ts,t))       = fty
+    arg                  = (argId l, aTy)
+    aTy                  = argTy l ts $ tce_names γ 
 
 tcMethSingleSig γ l f xs body (i, _,ft) 
   = tcFun1 γ l f xs body (i, ft)
@@ -253,11 +263,12 @@ tcMethSingleSig γ l f xs body (i, _,ft)
 
 -- FIXME: Check for mutability (the second part in the triplet)
 --        If this argument is "immutable" We will have to check
---        statements/expressions that operate on "this" and make sure that they
---        do not mutate it.
+--        statements/expressions that operate on "this" and make
+--        sure that they do not mutate it.
 --
 --        For the moment it just does a regular function check
 --        
+tcMeth1 γ l f xs body (i, _,ft) = tcFun1 γ l f xs body (i, ft)
 
 tcFunBody γ l body t 
   = do  z                          <- tcStmts γ body
@@ -270,9 +281,9 @@ tcFunBody γ l body t
 tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a   
 
 
-
 ---------------------------------------------------------------------------------------
-tcClassElt :: PPR r => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
+tcClassElt :: PPR r 
+          => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
 --
 -- FIXME: 1. Check for void return type for constructor
@@ -318,15 +329,16 @@ tcClassElt γ cid (MemberMethDecl l static i xs body)
     anns | static    = [ (m, t) | StatAnn (StatSig _ m t)  <- ann_fact l ]
          | otherwise = [ (m, t) | MethAnn (MethSig _ m t)  <- ann_fact l ]
 
+
 --------------------------------------------------------------------------------
-tcSeq :: (TCEnv r -> a -> TCM r (b, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([b], TCEnvO r)
+tcSeq :: (TCEnv r -> a -> TCM r (a, TCEnvO r)) -> TCEnv r -> [a] -> TCM r ([a], TCEnvO r)
 --------------------------------------------------------------------------------
 tcSeq f             = go []
   where
     go acc γ []     = return (reverse acc, Just γ)
     go acc γ (x:xs) = do (y, γo) <- f γ x
                          case γo of
-                           Nothing -> return (reverse (y:acc), Nothing) 
+                           Nothing -> return (reverse acc ++ y:xs, Nothing) 
                            Just γ' -> go (y:acc) γ' xs
 
 --------------------------------------------------------------------------------
@@ -336,7 +348,6 @@ tcStmts :: PPR r =>
 tcStmts = tcSeq tcStmt 
 
 
--- TODO: Add case for module and change Functions etc...
 -------------------------------------------------------------------------------
 tcStmt  :: PPR r =>
   TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r), TCEnvO r)
@@ -368,9 +379,9 @@ tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
 
 -- e
 tcStmt γ (ExprStmt l e)   
-  = do (e', _) <- tcExpr γ e 
-       return (ExprStmt l e', Just γ) 
-
+  = do (e', to) <- tcExprW γ e
+       return (ExprStmt l e', const γ <$> to)
+           
 -- s1;s2;...;sn
 tcStmt γ (BlockStmt l stmts) 
   = do (stmts', g) <- tcStmts γ stmts
@@ -383,22 +394,24 @@ tcStmt γ (IfSingleStmt l b s)
 -- if b { s1 } else { s2 }
 tcStmt γ (IfStmt l e s1 s2)
   = do opTy         <- safeTcEnvFindTy l γ (builtinOpId BITruthy)
-       z            <- tcNormalCall γ l BITruthy [e] opTy
+       ([e'], z)    <- tcNormalCallW γ l BITruthy [e] opTy
        case z of 
-         ([e'], _) -> do (s1', γ1) <- tcStmt γ s1
-                         (s2', γ2) <- tcStmt γ s2
-                         γ3        <- envJoin l γ γ1 γ2
-                         return       (IfStmt l e' s1' s2', γ3)
-         _          -> error "BUG: tcStmt - If then else"
+         Just _  -> do (s1', γ1) <- tcStmt γ s1
+                       (s2', γ2) <- tcStmt γ s2
+                       γ3        <- envJoin l γ γ1 γ2
+                       return       (IfStmt l e' s1' s2', γ3)
+         _       -> return (IfStmt l e' s1 s2, Nothing)
 
 -- while c { b } 
 tcStmt γ (WhileStmt l c b) 
-  = do (c', t)      <- tcExpr γ c
-       _            <- unifyTypeM (srcPos l) γ t tBool
-       pTys         <- mapM (safeTcEnvFindTy l γ) phis
-       (b', γl)     <- tcStmt (tcEnvAdds (zip xs (zip pTys (repeat WriteLocal))) γ) b
-       γout         <- envLoopJoin l γ γl
-       return        $ (WhileStmt l c' b', γout)  
+  = do (c', to)  <- tcExprW γ c
+       case to of
+         Nothing -> return (WhileStmt l c' b, Nothing)
+         Just t  -> do unifyTypeM (srcPos l) γ t tBool
+                       pTys         <- mapM (safeTcEnvFindTy l γ) phis
+                       (b', γl)     <- tcStmt (tcEnvAdds (zip xs (zip pTys (repeat WriteLocal))) γ) b
+                       γout         <- envLoopJoin l γ γl
+                       return        $ (WhileStmt l c' b', γout)  
     where 
        xs            = [ mkNextId x | x <- phis ]
        phis          = [ x | x <- phiVarsAnnot l ]
@@ -410,14 +423,15 @@ tcStmt γ (VarDeclStmt l ds)
 
 -- return e 
 tcStmt γ (ReturnStmt l eo) 
-  = do  (es',_) <- tcNormalCall γ l "return" (maybeToList eo) retTy
-        return   $ (ReturnStmt l $ listToMaybe es', Nothing)
-  where
-    retTy        = returnTy (tcEnvFindReturn γ) (isJust eo)
+  = tcRetW γ l eo
+  -- = do  (es',_) <- tcNormalCall γ l "return" (maybeToList eo) retTy
+  --       return   $ (ReturnStmt l $ listToMaybe es', Nothing)
+  -- where
+  --   retTy        = returnTy (tcEnvFindReturn γ) (isJust eo)
 
 -- throw e 
 tcStmt γ (ThrowStmt l e) 
-  = (,Nothing) . ThrowStmt l . fst <$> tcExpr γ e
+  = (,Nothing) . ThrowStmt l . fst <$> tcExprW γ e
 
 
 tcStmt γ s@(FunctionStmt _ _ _ _)
@@ -454,8 +468,8 @@ tcVarDecl ::  PPR r
           => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e)) =
-  do  (e', t)    <- tcExprT l γ e ann
-      return      $ (VarDecl l x (Just e'), Just $ tcEnvAdds [(x, (t, asgn ann))] γ)
+  do  (e', to)   <- tcExprTW l γ e ann
+      return      $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,asgn ann) <$> to)
   where
     ann           = listToMaybe $ scrapeVarDecl v
     asgn (Just _) = WriteGlobal
@@ -471,22 +485,49 @@ tcAsgn :: PPR r
        => AnnSSA r -> TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 -------------------------------------------------------------------------------
 tcAsgn l γ x e
-  = do (e' , t)    <- tcExprT l γ e tRHS
-       return       $ (e', Just $ tcEnvAdds [(x, (t,asgn))] γ)
+  = do (e' , to)    <- tcExprTW l γ e rhsT
+       return       $ (e', tcEnvAddo γ x $ (,asgn) <$> to)
     where
-       (tRHS, asgn) = case tcEnvFindTyWithAgsn x γ of
+       (rhsT, asgn) = case tcEnvFindTyWithAgsn x γ of
                         Just (t, a) -> (Just t, a)
                         Nothing     -> (Nothing, WriteLocal)
 
--- | There are two versions for `tcExprT`. If `init` is True then this is the 
--- variable initialization phase, otherwise any other assignment.
+tcEnvAddo _ _ Nothing  = Nothing
+tcEnvAddo γ x (Just t) = Just $ tcEnvAdds [(x, t)] γ 
+
+  
+----------------------------------------------------------------------------------------------------------------
+tcExprTW :: PPR r => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, Maybe (RType r))
+tcExprW :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, Maybe (RType r))
+----------------------------------------------------------------------------------------------------------------
+tcExprTW l γ e to        = (tcWrap $ tcExprT l γ e to) >>= tcEW γ e
+tcExprW γ e              = (tcWrap $ tcExpr γ e)       >>= tcEW γ e 
+tcNormalCallW γ l o es t = (tcWrap $ tcNormalCall γ l o es t) >>= \case
+                             Right (es', t') -> return (es', Just t')
+                             Left err        -> do es' <- mapM (deadcastM (tce_ctx γ) err) es
+                                                   return (es', Nothing) 
+
+
+tcRetW γ l (Just e)
+  = (tcWrap $ tcNormalCall γ l "return" [e] $ returnTy (tcEnvFindReturn γ) True) >>= \case
+       Right ([e'], _) -> return  (ReturnStmt l (Just e'), Nothing)  
+       Left err        -> (\e' -> (ReturnStmt l (Just e'), Nothing)) <$> deadcastM (tce_ctx γ) err e
+
+tcRetW γ l Nothing
+  = do ([], _) <- tcNormalCall γ l "return" [] $ returnTy (tcEnvFindReturn γ) False
+       return $ (ReturnStmt l Nothing, Nothing)
+  
+tcEW :: PPR r => TCEnv r -> ExprSSAR r -> Either Error ((ExprSSAR r), b) -> TCM r ((ExprSSAR r), Maybe b)
+tcEW _ _ (Right (e', t')) = return $  (e', Just t')
+tcEW γ e (Left err)       = (, Nothing) <$> deadcastM (tce_ctx γ) err e 
+
 -------------------------------------------------------------------------------
 tcExprT :: PPR r 
         => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) 
         -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
 tcExprT l γ e to 
-  = do (e', t)    <- tcExpr γ e
+  = do (e', t)   <- tcExpr γ e
        case to of
          Nothing -> return (e', t)
          Just ta -> do θ <- unifyTypeM (srcPos l) γ t ta
@@ -554,7 +595,7 @@ tcExpr γ ex@(Cast l@(Ann loc fs) e)
     replace t0 (UserCast t1) | on (==) toType t0 t1  = TCast (tce_ctx γ) $ CNo
                              | isSubtype γ t0 t1     = TCast (tce_ctx γ) $ CUp t0 t1
                              | isSubtype γ t1 t0     = TCast (tce_ctx γ) $ CDn t0 t1
-                             | otherwise             = TCast (tce_ctx γ) $ CDead t1
+                             | otherwise             = TCast (tce_ctx γ) $ CDead (errorDeadCast (srcPos l) t0 t1) t1
     replace _  a                                     = a
     
  
@@ -776,10 +817,15 @@ tcCallDotRef γ elts l em@(DotRef l1 e f) es
 tcCallDotRef _ _ _ _ _ = error "tcCallDotRef-unsupported"
 
 
--- | Signature resolution
+------------------------------------------------------------------------------------------
+-- | @tcNormalCall@ resolves overloads and returns cast-wrapped versions of the arguments.
+------------------------------------------------------------------------------------------
+tcNormalCall ::  (PPRSF r, PP a) => TCEnv r -> AnnSSA r -> a -> [ExprSSAR r] -> RType r
+             -> TCM r ([ExprSSAR r], RType r) 
+------------------------------------------------------------------------------------------
 tcNormalCall γ l fn es ft0 
   = do (es', ts)      <- unzip <$> mapM (tcExpr γ) es
-       z              <- resolveOverload γ l fn es' ts $ ft0
+       z              <- resolveOverload γ l fn es' ts ft0
        case z of 
          Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
@@ -919,3 +965,6 @@ forceCheck x γ = elem x $ fst <$> envToList (tce_names γ)
 --                                                                   ++ ppshow (srcPos l) 
 -- sanity _ t = return t
 
+-- Local Variables:
+-- flycheck-disabled-checkers: (haskell-liquid)
+-- End:

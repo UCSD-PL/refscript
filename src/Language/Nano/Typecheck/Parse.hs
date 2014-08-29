@@ -46,7 +46,7 @@ import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Program
 import           Language.Nano.Types              hiding (Exported)
-import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Types    hiding (argBind)
 import           Language.Nano.Liquid.Types
 
 import           Language.ECMAScript3.Syntax

@@ -2,10 +2,10 @@
               /\ (x:boolean) => {boolean | true }  */
 function negate(x): any {
   if (typeof(x) === "number") {
-    return x + 1;
+    return !x;
   } 
   else {
-    return !x;
+    return x + 1;
   }
 }
 

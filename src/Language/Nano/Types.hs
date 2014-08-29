@@ -340,6 +340,7 @@ data BuiltinOp = BIUndefined
                | BIBracketRef
                | BIBracketAssign
                | BIArrayLit
+               | BIObjectLit
                | BINumArgs
                | BITruthy
                | BISetProp
@@ -358,7 +359,7 @@ instance PP BuiltinOp where
 --   context. Otherwise, the "dead-casts" for one case must be proven in another
 --   case which is impossible. See tests/liquid/pos/misc/negate-05.js
 --   A context IC [i_1,...,i_n] denotes the case where we use the conjunct i_k
---   from the kth function in lexical scope order (ignoring functions that have
+--   from the kth function in lexical scope order (ignoring functions thatz have
 --   a single conjunct.)
 
 class CallSite a where

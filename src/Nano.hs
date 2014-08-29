@@ -30,7 +30,6 @@ import           Text.PrettyPrint.HughesPJ
 import           Language.ECMAScript3.PrettyPrint
 import qualified Data.ByteString.Lazy.Char8   as    B
 
--- import           Debug.Trace                        (trace)
 
 main = do cfg  <- getOpts
           run (verifier cfg) cfg
@@ -43,8 +42,8 @@ verifier cfg f
         case z of
           Left  e     -> return (NoAnn, e)
           Right jsons -> case cfg of
-                        TC     {} -> TC.verifyFile   jsons
-                        Liquid {} -> LQ.verifyFile f jsons
+                          TC     {} -> TC.verifyFile   jsons
+                          Liquid {} -> LQ.verifyFile f jsons
 
 -------------------------------------------------------------------------------
 json :: FilePath -> IO (Either (F.FixResult Error) [FilePath])

@@ -144,7 +144,7 @@ errorUnresolvedTypes l t1 t2  = mkErr l $ printf "Could not resolve types '%s' a
 errorConsSigMissing l t       = mkErr l $ printf "Constructor signature for '%s' is missing." (ppshow t)
 errorModuleExport l m x       = mkErr l $ printf "Module '%s' does not export '%s'." (ppshow m) (ppshow x)
 
-
+errorDeadCast l t1 t2         = mkErr l $ printf "Cannot convert %s into %s" (ppshow t1) (ppshow t2)
 ---------------------------------------------------------------------------
 -- | LIQUID
 ---------------------------------------------------------------------------
@@ -154,7 +154,8 @@ errorBadPAlias l p nx ne      = mkErr l $ printf "Invalid predicate alias applic
 errorLiquid l                 = mkErr l $ printf "Liquid Type Error" 
 errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%s'.\nArgument Types: %s\nFunction Type: %s" (ppshow fn) (ppshow ts) (ppshow t)
 errorMultipleCasts l cs       = mkErr l $ render $ text "Multiple Casts: " <+> (vcat (map pp cs)) 
-
+errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"
+errorWellFormed l             = mkErr l $ printf "Well-formedness Error" 
  
 ---------------------------------------------------------------------------
 -- | Pervasive (typechecking TC and Liquid)

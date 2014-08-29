@@ -54,6 +54,11 @@ module Language.Nano.Typecheck.Types (
   , arrayLitTy
   , objLitTy
   , setPropTy
+
+    
+  -- * Builtin: Binders
+  , argId
+  , argTy
   , returnTy
 
 
@@ -63,6 +68,7 @@ import           Text.Printf
 import           Data.Default
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
+import qualified Data.List                      as L
 import           Data.Maybe                     (fromMaybe)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.HashMap.Strict            as M
@@ -163,6 +169,43 @@ ofType = fmap (const fTop)
 
 -- | Top-up refinemnt
 rTop = ofType . toType
+
+funTys l f xs ft 
+  = case bkFuns ft of
+      Nothing -> Left $ errorNonFunction (srcPos l) f ft 
+      Just ts -> 
+        case partitionEithers [funTy l xs t | t <- ts] of 
+          ([], fts) -> Right $ zip ([0..] :: [Int]) fts
+          (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
+
+-- methTys l f xs i (m,ft0)
+--   = case remThisBinding ft0 of
+--       Nothing        -> Left  $ errorNonFunction (srcPos l) f ft0 
+--       Just (αs,bs,t) -> Right $ (i,m,αs,bs,t)
+
+--   = case bkFuns ft0 of
+--       Nothing -> Left $ errorNonFunction (srcPos l) f ft0 
+--       Just ts -> 
+--         case partitionEithers [funTy l xs t | t <- ts] of 
+--           ([], fts) -> Right $ zip3 ([0..] :: [Int]) (repeat m) fts
+--           (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
+
+
+-- NEW
+funTy l xs (αs, yts, t) =
+  case padUndefineds xs yts of
+    Nothing   -> Left  $ errorArgMismatch (srcPos l)
+    Just yts' -> Right $ (αs, ts', F.subst su t)
+                   where
+                    (su, ts') = renameBinds yts' xs 
+
+padUndefineds xs yts
+  | nyts <= nxs = Just $ yts ++ xundefs
+  | otherwise   = Nothing
+  where
+    nyts        = length yts
+    nxs         = length xs
+    xundefs     = [B (F.symbol x') tUndef | x' <- snd $ splitAt nyts xs ]
 
 renameBinds yts xs    = (su, [F.subst su ty | B _ ty <- yts])
   where 
@@ -297,6 +340,7 @@ setRTypeR :: RType r -> r -> RType r
 setRTypeR (TApp c ts _   ) r = TApp c ts r
 setRTypeR (TVar v _      ) r = TVar v r
 setRTypeR (TFun xts ot _ ) r = TFun xts ot r
+setRTypeR (TCons x y _)    r = TCons x y r  
 setRTypeR t                _ = t
 
 
@@ -336,6 +380,7 @@ setThisBinding m@(MethSig _ _ t) t' = m { f_type = mapAnd bkTy t }
         Just (vs, bs@(B x _:_),ot) | x == F.symbol "this" -> mkFun (vs,bs,ot)
         Just (vs, bs,ot) -> mkFun (vs, B (F.symbol "this") t':bs, ot)
         _ -> ty
+
 setThisBinding m _        = m
 
 remThisBinding t =
@@ -460,10 +505,6 @@ instance (PP r, F.Reftable r) => PP (Bind r) where
 instance (PP s, PP t) => PP (M.HashMap s t) where
   pp m = vcat $ pp <$> M.toList m
 
--- instance (F.Reftable r, PP r) => PP (ModuleMember r) where
---   pp (ModType x v t ) = pp v <> pp x <> colon <+> pp t
---   pp (ModVar x v t  ) = pp v <> pp x <> colon <+> pp t
---   pp (ModModule x v ) = pp v <> text "module" <+> pp x
 
 instance PP Visibility where
   pp Local = text ""
@@ -585,6 +626,7 @@ builtinOpId BIUndefined     = builtinId "BIUndefined"
 builtinOpId BIBracketRef    = builtinId "BIBracketRef"
 builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
 builtinOpId BIArrayLit      = builtinId "BIArrayLit"
+builtinOpId BIObjectLit     = builtinId "BIObjectLit"
 builtinOpId BISetProp       = builtinId "BISetProp"
 builtinOpId BINumArgs       = builtinId "BINumArgs"
 builtinOpId BITruthy        = builtinId "BITruthy"
@@ -601,7 +643,7 @@ arrayLitTy :: (F.Subable (RType r), IsLocated a) => a -> Int -> RType r -> RType
 arrayLitTy l n ty
   = case ty of
       TAll μ (TAll α (TFun [xt] t r)) 
-                  -> mkAll [μ,α] $ TFun (arrayLitBinds n xt) (arrayLitOut n t) r
+                  -> mkAll [μ,α] $ TFun (arrayLitBinds n xt) (substBINumArgs n t) r
       _           -> err 
     where
       -- ty          = fst $ builtinOpTy l BIArrayLit g
@@ -612,7 +654,7 @@ arrayLitBinds n (B x t) = [B (x_ i) t | i <- [1..n]]
     xs            = F.symbolString x
     x_            = F.symbol . (xs ++) . show 
 
-arrayLitOut n t   = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
+substBINumArgs n t = F.subst1 t (F.symbol $ builtinOpId BINumArgs, F.expr (n::Int))
 
 
 ---------------------------------------------------------------------------------
@@ -626,29 +668,63 @@ freshTV l s n     = (v,t)
     v             = TV i (srcPos l)
     t             = TVar v ()
 
----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------
 objLitTy         :: (F.Reftable r, IsLocated a) => a -> [Prop a] -> RType r
----------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------
 objLitTy l ps     = mkFun (vs, bs, rt)
   where
-    (mv,mt)       = freshTV l mSym 0                             -- obj mutability
-    (mvs,mts)     = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
-    (avs,ats)     = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
-    ss            = [ F.symbol p | p <- ps]
     vs            = [mv] ++ mvs ++ avs
-    bs            = [ B s (ofType a) | (s,a) <- zip ss ats ]
-    elts          = [ FieldSig s m (ofType a) | (s,m,a) <- zip3 ss mts ats ] 
-    rt            = TCons elts mt fTop
+    bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
+    rt            = TCons elts mt fTop -- $ objLitR l nps g fTop
+    elts          = [FieldSig s m (ofType a) | (s,m,a) <- zip3 ss mts ats ] 
+    nps           = length ps
+    (mv, mt)      = freshTV l mSym 0                             -- obj mutability
+    (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
+    (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
+    ss            = [F.symbol p | p <- ps]
     mSym          = F.symbol "M"
     aSym          = F.symbol "A"
+
+lenId l           = Id l "length" 
+argId l           = Id l "arguments"
 
 instance F.Symbolic (LValue a) where
   symbol (LVar _ x) = F.symbol x
   symbol lv         = convertError "F.Symbol" lv
 
+
 instance F.Symbolic (Prop a) where 
-  symbol (PropId _ id) = F.symbol id
-  symbol p             = error $ printf "Symbol of property %s not supported yet" (ppshow p)
+  symbol (PropId _ (Id _ x)) = F.symbol x -- TODO $ "propId_"     ++ x
+  symbol (PropString _ s)    = F.symbol $ "propString_" ++ s
+  symbol (PropNum _ n)       = F.symbol $ "propNum_"    ++ show n
+  -- symbol p                   = error $ printf "Symbol of property %s not supported yet" (ppshow p)
+
+
+-- | @argBind@ returns a dummy type binding `arguments :: T `
+--   where T is an object literal containing the non-undefined `ts`.
+    
+argTy l ts g   = immObjectLitTy l g (pLen : ps') (tLen : ts')
+  where
+    ts'        = take k ts
+    ps'        = PropNum l . toInteger <$> [0 .. k-1]
+    pLen       = PropId l $ lenId l
+    tLen       = tInt `strengthen` rLen
+    rLen       = F.ofReft $ F.uexprReft k
+    k          = fromMaybe 0 $ L.findIndex isUndef ts
+
+
+immObjectLitTy l _ ps ts 
+  | nps == length ts = TCons elts t_immutable fTop -- objLitR l nps g 
+  | otherwise        = die $ bug (srcPos l) $ "Mismatched args for immObjectLit"
+  where
+    elts             = safeZipWith "immObjectLitTy" (\p t -> FieldSig (F.symbol p) t_immutable t) ps ts
+    nps              = length ps
+
+-- objLitR l n g  = fromMaybe fTop $ substBINumArgs n . rTypeR . thd3 <$> bkFun t 
+--   where
+--     t          = builtinOpTy l BIObjectLit g
+
+   
 
     
 ---------------------------------------------------------------------------------
@@ -738,33 +814,4 @@ prefixOpId o            = errorstar $ "prefixOpId: Cannot handle: " ++ ppshow o
 mkId            = Id (initialPos "") 
 builtinId       = mkId . ("builtin_" ++)
 
-
----------------------------------------------------------------------------------
--- | funTys
----------------------------------------------------------------------------------
-funTys l f xs ft 
-  = case bkFuns ft of
-      Nothing -> Left $ errorNonFunction (srcPos l) f ft 
-      Just ts -> 
-        case partitionEithers [funTy l xs t | t <- ts] of 
-          ([], fts) -> Right $ zip ([0..] :: [Int]) fts
-          (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
-
--- methTys l f xs i (m,ft0)
---   = case remThisBinding ft0 of
---       Nothing        -> Left  $ errorNonFunction (srcPos l) f ft0 
---       Just (αs,bs,t) -> Right $ (i,m,αs,bs,t)
-
---   = case bkFuns ft0 of
---       Nothing -> Left $ errorNonFunction (srcPos l) f ft0 
---       Just ts -> 
---         case partitionEithers [funTy l xs t | t <- ts] of 
---           ([], fts) -> Right $ zip3 ([0..] :: [Int]) (repeat m) fts
---           (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
-
-
-funTy l xs (αs, yts, t) 
-  | length xs == length yts = let (su, ts') = renameBinds yts xs 
-                              in  Right (αs, ts', F.subst su t)    
-  | otherwise               = Left $ errorArgMismatch (srcPos l)
 

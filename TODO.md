@@ -3,15 +3,7 @@ Tests / Benchmarks
 
 ### Failing tests
 
-    neg/misc/abs-join-00.ts,  // TS translation exception
-
-    pos/misc/unite-01.ts,     // Unification issue
-    pos/loops/obj-01.ts,      // Unification issue                 
-    pos/loops/obj-02.ts,      // Unification issue
-
-	pos/simple/ambient-00.ts, // annotation missing - fixed modules
-    pos/simple/ambient-01.ts, // fixed in modules
-
+    pos/arrays/arr-11.ts        // qualifiers
 
 
 ### Working benchmarks
@@ -28,21 +20,29 @@ JS Features
 
 Tool/Implementation
 -------------------
-  
-  - Parsing exceptions are not captured by regrtest.py
+
+  - What needs to be freshened at init-function-env?
+
+  - What are good default mutabilities (parsing etc.)? Mutability annotations
+    are very ugly (see pos/objects/obj-08.ts). 
+
+  - Infer TS method types
+
+  - Tidy up output files
+
+  - Revisit mutability subtyping, compute variance of type parameter in type
+
+  - TApp (TRef ...) ... is now prefixed with a '#' to disambiguate from TVar.
 
   - Do co/contra-variant checks depending on mutability.
 
   - Enforce invariant that overloaded functions signatures are non-overlapping
 
-  - Add check for number of parameters passed to generic type
+  - Checks on type parameters (including mutability - always first parameter)
   
   - Encode method mutability
   
-  - Check that the first argument of a generic type is in { ReadOnly, Immutable,
-    AssignFields, Mutable }.
-
-  - Arguments cannot be named: "func"
+  - Variables cannot be named: "func" or "obj" (fixpoint restriction)
 
   - Test examples with infinite loops.
 

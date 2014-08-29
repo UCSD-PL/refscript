@@ -1,9 +1,8 @@
 
-// TODO : add explicit cast here.
+/*@ oooo :: { f: { number | v > 0 } } */
+var oooo = { f: 1 };
 
-/*@ foo :: (p: #Point + { x: string } ) => { top | true }  */
-function foo(p: any) {
+oooo.f = -1;
 
-  return p.x;
+assert(oooo.f > 0);
 
-}

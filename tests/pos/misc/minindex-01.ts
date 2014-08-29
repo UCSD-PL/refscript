@@ -1,19 +1,22 @@
 /*@ qualif UBound(v:number, x:a) : v < (len x) */
 
-/*@ forloop :: forall A. (number, number, (number, A) => A, A) => A */
-function forloop(lo:number, hi:number, body:(number,any)=>any, accum:any):any{
+/*@ predicate within(v,a) = (0 <= v && v < (len a)) */
+
+function forloop<A>(lo: number, hi: number, body: (x: number, y:A) => A, accum: A): A {
 	if (lo < hi) {
-		var newAcc :any= body(lo, accum);
+		var newAcc = body(lo, accum);
 		return forloop(lo + 1, hi, body, newAcc);
 	}
 	return accum;
 }
 
-/*@ minIndex :: ({a: #Array[#Immutable, number] | 0 < (len a)}) => {v:number | (0 <= v && v < (len a))} */ 
+/*@ minIndex :: ({a: #Array[#Immutable, number] | 0 < (len a)}) => {v:number | within(v,a) } */ 
 function minIndex(a:number[]):number{
 	
-	/*@ step :: (number, number) => number */
-	function step(i:number, min:number):number{
+  /* step :: (i: { number | within(v,a) }, min: { number | within(v,a) }) 
+           => { number | within(v,a) } 
+   */
+	function step(i: number, min: number) {
 		if (a[i] < a[min]) { 
 			return i;
 		} 

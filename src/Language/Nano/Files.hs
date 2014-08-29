@@ -6,10 +6,12 @@
 
 module Language.Nano.Files (
   -- * Hardwired paths
-  getPreludePath
+    getPreludeJSONPath
+  , getPreludeTSPath
   ) 
   where
 
 import Paths_RefScript
 
-getPreludePath = getDataFileName "include/prelude.json" 
+getPreludeJSONPath = getDataFileName "include/prelude.json"
+getPreludeTSPath   = getDataFileName "include/prelude.ts"

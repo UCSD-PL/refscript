@@ -7,14 +7,14 @@ var bar = function (x: number): number {
   return x + 1;
 }
 
-var foo = function (x: number): number {
-  var a = bar(x);
-  var b = bar(a);
-  return b;
-}
+//var foo = function (x: number): number {
+//  var a = bar(x);
+//  var b = bar(a);
+//  return b;
+//}
 
-var baz = foo;
+//var baz = foo;
+
 assert(bar(1) === 2);
 
-
-assert(foo(1) === baz(1));
+// assert(foo(1) === baz(1));

@@ -1,8 +1,7 @@
 
-/*@ twice :: forall A. ((A) => A, A) => A */
-function twice(f:(any)=>any, x0:any):any{
-	var x1 :any= f(x0);
-	var x1 :any= f(x1);
+function twice<A>(f:(a:A) => A, x0:A): A {
+	var x1 = f(x0);
+	x1 = f(x1);
 	return x1;
 }
 

@@ -12,15 +12,19 @@ module Language.Nano.Typecheck.Parse (parseNanoFromFiles) where
 
 import           Prelude                          hiding ( mapM)
 
+import           Data.Either                             (partitionEithers)
+import           Data.Default
+import           Data.Traversable                        (mapAccumL)
+import           Data.Monoid                             (mconcat)
+import           Data.Maybe                              (catMaybes)
 import           Data.Aeson                              (eitherDecode)
 import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
+import qualified Data.HashMap.Strict              as     M
 import qualified Data.List                        as     L
-import           Data.Generics.Aliases                   ( mkQ)
-import           Data.Generics.Schemes
-import           Data.Traversable                        (mapAccumL)
+-- import           Data.Traversable                        (mapAccumL)
 import           Text.PrettyPrint.HughesPJ               (text)
 import           Data.Data
 import qualified Data.Foldable                    as     FO
@@ -32,20 +36,25 @@ import           Control.Applicative                     ((<$>), ( <*>))
 
 import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
 import           Language.Fixpoint.Parse
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc                  (mapEither, mapSnd)
-import           Language.Nano.Types
+
+import           Language.Nano.Annots
 import           Language.Nano.Errors
+import           Language.Nano.Env
+import           Language.Nano.Locations
+import           Language.Nano.Names
+import           Language.Nano.Program
+import           Language.Nano.Types              hiding (Exported)
 import           Language.Nano.Typecheck.Types    hiding (argBind)
 import           Language.Nano.Liquid.Types
-import           Language.Nano.Env
-import           Language.Nano.Files
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
-import           Text.Printf 
 import           Text.Parsec                      hiding (parse)
 import           Text.Parsec.Pos                         (newPos)
+import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
 import qualified Text.Parsec.Token                as     T
 
 import           GHC.Generics
@@ -61,7 +70,7 @@ question   = T.symbol     lexer "?"
 ----------------------------------------------------------------------------------
 
 idBindP :: Parser (Id SourceSpan, RefType)
-idBindP = xyP identifierP dcolon bareTypeP
+idBindP = withinSpacesP $ xyP identifierP dcolon bareTypeP
 
 anonFuncP :: Parser RefType
 anonFuncP = funcSigP
@@ -100,18 +109,33 @@ aliasVarT (l, x)
   where
     x'        = symbolString x
     
-iFaceP   :: Parser (Id SourceSpan, TDef Reft)
+iFaceP   :: Parser (Id SourceSpan, IfaceDef Reft)
 iFaceP   = do id     <- identifierP 
               vs     <- option [] tParP
-              ext    <- optionMaybe extendsP
-              es     <- braces propBindP
-              return (id, TD False id vs ext es)
+              h      <- optionMaybe extendsP
+              -- FIXME
+              es     <- braces $ propBindP def
+              return (id, ID False id vs h es)
 
 extendsP = do reserved "extends"
-              pId <- (char '#' >> identifierP)
-              ts  <- option [] $ brackets $ sepBy bareTypeP comma
-              return (pId, ts)
-               
+              qn     <- RN <$> qnameP
+              ts     <- option [] $ brackets $ sepBy bareTypeP comma
+              return (qn, ts)
+
+qnameP   = withSpan (\s x -> QName s (init x) (last x)) $ char '#' >> sepBy1 qSymbolP (char '.')
+
+-- | Redefining some stuff to make the Qualified names parse right
+qSymbolP :: Parser Symbol
+qSymbolP = symbol <$> qSymCharsP
+qSymCharsP   = condIdP qSymChars (`notElem` keyWordSyms)
+keyWordSyms = ["if", "then", "else", "mod"]
+qSymChars
+  =  ['a' .. 'z']
+  ++ ['A' .. 'Z']
+  ++ ['0' .. '9']
+  ++ ['_', '%', '#']    -- omitting the the '.'
+
+
 
 -- [A,B,C...]
 tParP    = angles $ sepBy tvarP comma
@@ -221,12 +245,14 @@ bbaseP
  -- <|> try (rtArr <$> arrayP)                -- Array<T>
  <|> try (TApp <$> tConP <*> bareTyArgsP)  -- #List[A], #Tree[A,B] etc...
  
+
+
 ----------------------------------------------------------------------------------
 objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
 objLitP 
-  = do m     <- option anyMutability (toType <$> mutP)
-       bs    <- braces propBindP
+  = do m     <- option def (toType <$> mutP)
+       bs    <- braces (propBindP m)
        return $ TCons bs m
  
 mutP =  try (TVar <$> brackets tvarP <*> return ()) 
@@ -262,12 +288,8 @@ tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
      <|> try (reserved "bool"      >> return TFPBool)
-     <|>     (withinSpacesP $ char '#' >> identifierP >>= idToTRefP)
+     <|>     (TRef <$> RN <$> qnameP)
 
-----------------------------------------------------------------------------------
-idToTRefP :: Id SourceSpan -> Parser TCon
-----------------------------------------------------------------------------------
-idToTRefP (Id _ s) = return $ TRef (symbol s)
 
 bareAll1P p
   = do reserved "forall"
@@ -279,16 +301,15 @@ bareAll1P p
 bareAllP p =  try p 
           <|> bareAll1P p
 
--- arrayP = brackets bareTypeP
 
-propBindP =  sepEndBy (
-              try indexEltP 
-          <|> try fieldEltP
-          <|> try statEltP
-          <|> try methEltP
-          <|> try callEltP
-          <|> try consEltP
-              ) semi
+propBindP defM =  sepEndBy (
+                  try indexEltP 
+              <|> try (fieldEltP defM)
+              <|> try (statEltP defM)
+              <|> try (methEltP defM)
+              <|> try callEltP
+              <|> try consEltP
+                  ) semi
 
 
 -- | [f: string]: t
@@ -308,27 +329,27 @@ indexP = xyP id colon sn
 
 
 -- | <[mut]> f: t
-fieldEltP = do 
+fieldEltP defM  = do 
     x          <- symbolP 
     _          <- colon
-    m          <- option inheritedMut (toType <$> mutP)
+    m          <- option defM (toType <$> mutP)
     t          <- bareTypeP
     return      $ FieldSig x m t
 
 -- | static <[mut]> f :: t
-statEltP = do 
+statEltP defM   = do 
     _          <- reserved "static"
     x          <- symbolP 
     _          <- colon
-    m          <- option anyMutability (toType <$> mutP)
+    m          <- option defM (toType <$> mutP)
     t          <- bareTypeP
     return      $ StatSig x m t
 
 -- | <[mut]> m :: (ts): t
-methEltP = do
+methEltP defM   = do
     x          <- symbolP 
     _          <- colon
-    m          <- option anyMutability (toType <$> mutP)
+    m          <- option defM (toType <$> mutP)
     t          <- methSigP
     return      $ MethSig x m $ outT t
   where
@@ -397,14 +418,14 @@ withinSpacesP :: Parser a -> Parser a
 withinSpacesP p = do { spaces; a <- p; spaces; return a } 
              
 ----------------------------------------------------------------------------------
-classDeclP :: Parser (Id SourceSpan, ([TVar], Maybe (Id SourceSpan, [RefType])))
+classDeclP :: Parser (Id SourceSpan, ([TVar], Maybe (RelName, [RefType])))
 ----------------------------------------------------------------------------------
 classDeclP = do
-  reserved "class"
-  id <- identifierP 
-  vs <- option [] $ angles $ sepBy tvarP comma
-  pr <- optionMaybe extendsP
-  return (id, (vs, pr))
+    reserved "class"
+    id <- identifierP 
+    vs <- option [] $ angles $ sepBy tvarP comma
+    pr <- optionMaybe extendsP
+    return (id, (vs, pr))
 
 
 ---------------------------------------------------------------------------------
@@ -412,96 +433,99 @@ classDeclP = do
 ---------------------------------------------------------------------------------
 
 data RawSpec
-  = RawMeas   (SourceSpan, String)   -- Measure
-  | RawBind   (SourceSpan, String)   -- Function bindings
-  | RawFunc   (SourceSpan, String)   -- Anonymouns function type
-  | RawExtern (SourceSpan, String)   -- Extern declarations
-  | RawType   (SourceSpan, String)   -- Variable declaration annotations
-  | RawClass  (SourceSpan, String)   -- Class annots
-  | RawField  (SourceSpan, String)   -- Field annots
-  | RawMethod (SourceSpan, String)   -- Method annots
-  | RawStatic (SourceSpan, String)   -- Static annots
-  | RawConstr (SourceSpan, String)   -- Constructor annots
-  | RawTAlias (SourceSpan, String)   -- Type aliases
-  | RawPAlias (SourceSpan, String)   -- Predicate aliases
-  | RawQual   (SourceSpan, String)   -- Qualifiers
-  | RawInvt   (SourceSpan, String)   -- Invariants
-  | RawCast   (SourceSpan, String)   -- Casts
+  = RawMeas     (SourceSpan, String)   -- Measure
+  | RawBind     (SourceSpan, String)   -- Named function or var bindings
+  | RawFunc     (SourceSpan, String)   -- Anonymouns function type
+  | RawIface    (SourceSpan, String)   -- Interface annots
+  | RawClass    (SourceSpan, String)   -- Class annots
+  | RawField    (SourceSpan, String)   -- Field annots
+  | RawMethod   (SourceSpan, String)   -- Method annots
+  | RawStatic   (SourceSpan, String)   -- Static annots
+  | RawConstr   (SourceSpan, String)   -- Constructor annots
+  | RawTAlias   (SourceSpan, String)   -- Type aliases
+  | RawPAlias   (SourceSpan, String)   -- Predicate aliases
+  | RawQual     (SourceSpan, String)   -- Qualifiers
+  | RawInvt     (SourceSpan, String)   -- Invariants
+  | RawCast     (SourceSpan, String)   -- Casts
+  | RawExported (SourceSpan, String)   -- Exported
   deriving (Show,Eq,Ord,Data,Typeable,Generic)
 
 data PSpec l r
   = Meas   (Id l, RType r)
   | Bind   (Id l, RType r) 
   | AnFunc (RType r) 
-  | Field  (TElt r)
-  | Constr (TElt r)
-  | Method (TElt r)
-  | Static (TElt r)
-  | Extern (Id l, RType r)
-  | IFace  (Id l, TDef r)
-  | Class  (Id l, ([TVar], Maybe (Id l,[RType r])))
+  | Field  (TypeMember r)
+  | Constr (TypeMember r)
+  | Method (TypeMember r)
+  | Static (TypeMember r)
+  | Iface  (Id l, IfaceDef r)
+  | Class  (Id l, ([TVar], Maybe (RelName, [RType r])))
   | TAlias (Id l, TAlias (RType r))
   | PAlias (Id l, PAlias) 
   | Qual   Qualifier
   | Invt   l (RType r) 
   | CastSp l (RType r)
+  | Exported l
+
+  -- Used only for parsing specs
+  | ErrorSpec
   deriving (Eq, Ord, Show, Data, Typeable)
 
 type Spec = PSpec SourceSpan Reft
 
 parseAnnot :: RawSpec -> Parser Spec
-parseAnnot (RawMeas   (ss, _)) = Meas   <$> patch2 ss <$> idBindP
-parseAnnot (RawBind   (ss, _)) = Bind   <$> patch2 ss <$> idBindP
-parseAnnot (RawFunc   (_ , _)) = AnFunc <$>               anonFuncP
-parseAnnot (RawField  (_ , _)) = Field  <$>               fieldEltP
-parseAnnot (RawMethod (_ , _)) = Method <$>               methEltP
-parseAnnot (RawStatic (_ , _)) = Static <$>               statEltP
-parseAnnot (RawConstr (_ , _)) = Constr <$>               consEltP
-parseAnnot (RawExtern (ss, _)) = Extern <$> patch2 ss <$> idBindP
-parseAnnot (RawType   (ss, _)) = IFace  <$> patch2 ss <$> iFaceP
-parseAnnot (RawClass  (ss, _)) = Class  <$> patch2 ss <$> classDeclP 
-parseAnnot (RawTAlias (ss, _)) = TAlias <$> patch2 ss <$> tAliasP
-parseAnnot (RawPAlias (ss, _)) = PAlias <$> patch2 ss <$> pAliasP
-parseAnnot (RawQual   (_ , _)) = Qual   <$>               qualifierP
-parseAnnot (RawInvt   (ss, _)) = Invt              ss <$> bareTypeP
-parseAnnot (RawCast   (ss, _)) = CastSp            ss <$> bareTypeP
+parseAnnot (RawMeas     (ss, _)) = Meas   <$> patch2 ss <$> idBindP
+parseAnnot (RawBind     (ss, _)) = Bind   <$> patch2 ss <$> idBindP
+parseAnnot (RawFunc     (_ , _)) = AnFunc <$>               anonFuncP
+parseAnnot (RawField    (_ , _)) = Field  <$>               fieldEltP def -- FIXME: these need to be patched aferwards  
+parseAnnot (RawMethod   (_ , _)) = Method <$>               methEltP def 
+parseAnnot (RawStatic   (_ , _)) = Static <$>               statEltP def
+parseAnnot (RawConstr   (_ , _)) = Constr <$>               consEltP
+parseAnnot (RawIface    (ss, _)) = Iface  <$> patch2 ss <$> iFaceP
+parseAnnot (RawClass    (ss, _)) = Class  <$> patch2 ss <$> classDeclP 
+parseAnnot (RawTAlias   (ss, _)) = TAlias <$> patch2 ss <$> tAliasP
+parseAnnot (RawPAlias   (ss, _)) = PAlias <$> patch2 ss <$> pAliasP
+parseAnnot (RawQual     (_ , _)) = Qual   <$>               qualifierP
+parseAnnot (RawInvt     (ss, _)) = Invt              ss <$> bareTypeP
+parseAnnot (RawCast     (ss, _)) = CastSp            ss <$> bareTypeP
+parseAnnot (RawExported (ss, _)) = return $ Exported ss
 
 
 patch2 ss (id, t)    = (fmap (const ss) id , t)
 
 getSpecString :: RawSpec -> String 
-getSpecString (RawMeas   (_, s)) = s 
-getSpecString (RawBind   (_, s)) = s 
-getSpecString (RawFunc   (_, s)) = s 
-getSpecString (RawExtern (_, s)) = s  
-getSpecString (RawType   (_, s)) = s  
-getSpecString (RawField  (_, s)) = s  
-getSpecString (RawMethod (_, s)) = s  
-getSpecString (RawStatic (_, s)) = s  
-getSpecString (RawConstr (_, s)) = s  
-getSpecString (RawClass  (_, s)) = s  
-getSpecString (RawTAlias (_, s)) = s  
-getSpecString (RawPAlias (_, s)) = s  
-getSpecString (RawQual   (_, s)) = s  
-getSpecString (RawInvt   (_, s)) = s  
-getSpecString (RawCast   (_, s)) = s  
+getSpecString (RawMeas     (_, s)) = s 
+getSpecString (RawBind     (_, s)) = s 
+getSpecString (RawFunc     (_, s)) = s 
+getSpecString (RawIface    (_, s)) = s  
+getSpecString (RawField    (_, s)) = s  
+getSpecString (RawMethod   (_, s)) = s  
+getSpecString (RawStatic   (_, s)) = s  
+getSpecString (RawConstr   (_, s)) = s  
+getSpecString (RawClass    (_, s)) = s  
+getSpecString (RawTAlias   (_, s)) = s  
+getSpecString (RawPAlias   (_, s)) = s  
+getSpecString (RawQual     (_, s)) = s  
+getSpecString (RawInvt     (_, s)) = s  
+getSpecString (RawCast     (_, s)) = s  
+getSpecString (RawExported (_, s)) = s  
 
-getSpecSourceSpan :: RawSpec -> SourceSpan
-getSpecSourceSpan (RawMeas   (s,_)) = s 
-getSpecSourceSpan (RawBind   (s,_)) = s 
-getSpecSourceSpan (RawFunc   (s,_)) = s 
-getSpecSourceSpan (RawExtern (s,_)) = s  
-getSpecSourceSpan (RawType   (s,_)) = s  
-getSpecSourceSpan (RawField  (s,_)) = s  
-getSpecSourceSpan (RawMethod (s,_)) = s  
-getSpecSourceSpan (RawStatic (s,_)) = s  
-getSpecSourceSpan (RawConstr (s,_)) = s  
-getSpecSourceSpan (RawClass  (s,_)) = s  
-getSpecSourceSpan (RawTAlias (s,_)) = s  
-getSpecSourceSpan (RawPAlias (s,_)) = s  
-getSpecSourceSpan (RawQual   (s,_)) = s  
-getSpecSourceSpan (RawInvt   (s,_)) = s  
-getSpecSourceSpan (RawCast   (s,_)) = s  
+instance IsLocated RawSpec where
+  srcPos (RawMeas     (s,_)) = s 
+  srcPos (RawBind     (s,_)) = s 
+  srcPos (RawFunc     (s,_)) = s 
+  srcPos (RawIface    (s,_)) = s  
+  srcPos (RawField    (s,_)) = s  
+  srcPos (RawMethod   (s,_)) = s  
+  srcPos (RawStatic   (s,_)) = s  
+  srcPos (RawConstr   (s,_)) = s  
+  srcPos (RawClass    (s,_)) = s  
+  srcPos (RawTAlias   (s,_)) = s  
+  srcPos (RawPAlias   (s,_)) = s  
+  srcPos (RawQual     (s,_)) = s  
+  srcPos (RawInvt     (s,_)) = s  
+  srcPos (RawCast     (s,_)) = s  
+  srcPos (RawExported (s,_)) = s  
 
 
 instance FromJSON SourcePos where
@@ -538,12 +562,15 @@ instance FromJSON RawSpec
 --------------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------------
-parseNanoFromFiles :: [FilePath] -> IO (NanoBareR Reft)
+parseNanoFromFiles :: [FilePath] -> IO (Either (FixResult Error) (NanoBareR Reft))
 --------------------------------------------------------------------------------------
-parseNanoFromFiles fs 
-  = do  ssP   <- parseScriptFromJSON =<< getPreludePath
-        ssF   <- concat <$> mapM parseScriptFromJSON fs
-        return $ mkCode $ expandAnnots $ ssP ++ ssF
+parseNanoFromFiles fs = 
+  do  sa <- partitionEithers <$> mapM parseScriptFromJSON fs
+      case sa of
+        ([],ps) -> case expandAnnots $ concat ps of
+                     Right ps -> return $ Right $ mkCode $ ps 
+                     Left e   -> return $ Left e
+        (es,_ ) -> return $ Left  $ mconcat es 
 
 --------------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString
@@ -551,63 +578,51 @@ getJSON :: MonadIO m => FilePath -> m B.ByteString
 getJSON = liftIO . B.readFile
 
 --------------------------------------------------------------------------------------
-parseScriptFromJSON :: FilePath -> IO [Statement (SourceSpan, [RawSpec])]
+parseScriptFromJSON :: FilePath -> IO (Either (FixResult a) [Statement (SourceSpan, [RawSpec])])
 --------------------------------------------------------------------------------------
 parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
   where 
     decodeOrDie s =
       case eitherDecode s :: Either String [Statement (SourceSpan, [RawSpec])] of
-        Left msg -> error $ "JSON decode error:\n" ++ msg
-        Right p  -> p
+        Left msg -> Left  $ Crash [] $ "JSON decode error:\n" ++ msg
+        Right p  -> Right $ p
 
 --------------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
-mkCode ss       =  Nano {
-        code      = Src (checkTopStmt <$> ss')
-      , externs   = envFromList   [ t | Extern t <- anns ]       -- externs
-      -- FIXME: same name methods in different classes.
-      , specs     = catFunSpecDefs δ ss                          -- function sigs (no methods...)
-      , defs      = δ
-      , consts    = envFromList   [ t | Meas   t <- anns ] 
-      , tAlias    = envFromList   [ t | TAlias t <- anns ] 
-      , pAlias    = envFromList   [ t | PAlias t <- anns ] 
-      , quals     =               [ t | Qual   t <- anns ] 
-      , invts     = [Loc (srcPos l) t | Invt l t <- anns ]
+mkCode ss =  Nano {
+        code          = Src (checkTopStmt <$> ss')
+      , specs         = envFromList $ getSpecs ss
+      , consts        = envFromList   [ t | Meas   t <- anns ] 
+      , tAlias        = envFromList   [ t | TAlias t <- anns ] 
+      , pAlias        = envFromList   [ t | PAlias t <- anns ] 
+      , pQuals        =               [ t | Qual   t <- anns ] 
+      , invts         = [Loc (srcPos l) t | Invt l t <- anns ]
     } 
   where
-    δ             = tDefFromList [ processInterface t | IFace  t <- anns ] 
-    toBare       :: (SourceSpan, [Spec]) -> AnnBare Reft 
-    toBare (l,αs) = Ann l $ [VarAnn   t     | Bind   (_,t) <- αs ]
-                         ++ [ConsAnn  c     | Constr c     <- αs ]
-                         ++ [FieldAnn f     | Field  f     <- αs ]
-                         ++ [MethAnn  m     | Method m     <- αs ]
-                         ++ [StatAnn  m     | Static m     <- αs ]
-                         ++ [ClassAnn t     | Class  (_,t) <- αs ]
-                         ++ [UserCast t     | CastSp _ t   <- αs ]
-                         ++ [FuncAnn  t     | AnFunc t     <- αs ]
-    ss'           = (toBare <$>) <$> ss
-    anns          = concatMap (FO.foldMap snd) ss
+    toBare           :: (SourceSpan, [Spec]) -> AnnBare Reft 
+    toBare (l,αs)     = Ann l $ catMaybes $ bb <$> αs 
+    
+    bb (Bind   (_,t)) = Just $ VarAnn   t   
+    bb (Constr c    ) = Just $ ConsAnn  c   
+    bb (Field  f    ) = Just $ FieldAnn f   
+    bb (Method m    ) = Just $ MethAnn  m   
+    bb (Static m    ) = Just $ StatAnn  m   
+    bb (Class  (_,t)) = Just $ ClassAnn t   
+    bb (Iface  (_,t)) = Just $ IfaceAnn t   
+    bb (CastSp _ t  ) = Just $ UserCast t   
+    bb (Exported _  ) = Just $ ExporedModElt
+    bb (AnFunc t    ) = Just $ FuncAnn  t   
+    bb _              = Nothing
 
--- | At the moment we only support a single index signature with no other
---   elements, or (normally) bound types without index signature.
-processInterface (t, TD n x vs p elts)
-  | nTi == 0  || (nTi == 1 && nTe == 0 && nTn == 0) 
-  -- Replace the 'this' binding in every method element with the type of the interface
-  = (t, TD n x vs p (f <$> elts))
+    ss'               = (toBare <$>) <$> ss
+    anns              = concatMap (FO.foldMap snd) ss
 
-  | otherwise = error   $ "[UNIMPLEMENTED] Object types " ++ 
-                          "can only have a single indexable " ++
-                          "signature and no other elements."
-  where 
-    nTn                 = length [ () | IndexSig _ False _ <- elts ]
-    nTi                 = length [ () | IndexSig _ _ _     <- elts ]
-    nTe                 = length [ () | FieldSig _ _ _     <- elts ]
-
-    tvs v               = TVar v fTop
-    tClass              = TApp (TRef $ symbol x) (tvs <$> vs) fTop
-    f m@(MethSig _ _ _) = setThisBinding m tClass
-    f m                 = m
+-- Meh... 
+getSpecs :: [Statement (SourceSpan, [Spec])] -> [(Id SourceSpan, RefType)]
+getSpecs ss = rename <$> zip [ b | s <- ss, (_, z) <- FO.toList s, Bind b <- z] [0..]
+  where
+    rename ((Id l s,t), i) = (Id l (s ++ "_" ++ show i), t)
 
 
 type PState = Integer
@@ -617,80 +632,112 @@ instance PP Integer where
 
 
 --------------------------------------------------------------------------------------
-expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> [Statement (SourceSpan, [Spec])]
+expandAnnots :: [Statement (SourceSpan, [RawSpec])] 
+             -> Either (FixResult Error) [Statement (SourceSpan, [Spec])]
 --------------------------------------------------------------------------------------
-expandAnnots = snd <$> mapAccumL (mapAccumL f) 0
-  where f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
+expandAnnots ss = 
+  case mapAccumL (mapAccumL f) (0,[]) ss of
+    ((_,[]),b) -> Right $ b
+    ((_,es),_) -> Left  $ Unsafe es
+  where 
+    f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
 
 --------------------------------------------------------------------------------------
-parse :: SourceSpan -> PState -> RawSpec -> (PState, Spec)
+parse :: SourceSpan -> (PState, [Error]) -> RawSpec -> ((PState, [Error]), Spec)
 --------------------------------------------------------------------------------------
-parse ss st c = foo c
-  where foo s    = failLeft $ runParser (parser s) st f (getSpecString s)
-        parser s = do a <- parseAnnot s
-                      st <- getState
-                      it <- getInput
-                      if it /= "" 
-                        then unexpected $ "trailing input: " ++ it
-                        else return $ (st, a) 
-        failLeft (Left _) = error $ "Error while parsing: " 
-                                  ++ show (getSpecString c) 
-                                  ++ "\nAt position: " 
-                                  ++ ppshow (getSpecSourceSpan c)
-        failLeft (Right r) = r
-        f = sourceName $ sp_begin ss
+parse ss (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
+  where
+    parser s = do a     <- parseAnnot s
+                  state <- getState
+                  it    <- getInput
+                  case it of 
+                    ""  -> return $ (state, a) 
+                    _   -> unexpected $ "trailing input: " ++ it
+
+    failLeft (Left err)      = ((st, (fromError err): errs), ErrorSpec)
+    failLeft (Right (s, r))  = ((s, errs), r)
+
+    -- Slight change from this one:
+    -- http://hackage.haskell.org/package/parsec-3.1.5/docs/src/Text-Parsec-Error.html#ParseError
+    showErr = showErrorMessages "or" "unknown parse error" "expecting" 
+                "unexpected" "end of input" . errorMessages
+    fromError err = mkErr ss   $ showErr err 
+                              ++ "\n\nWhile parsing: " 
+                              ++ show (getSpecString c)
+    ss = srcPos c
+    f = sourceName $ sp_begin ss
+
+
+
+-- --------------------------------------------------------------------------------------
+-- expandAnnots :: [Statement (SourceSpan, [RawSpec])] 
+--              -> Either (FixResult Error) [Statement (SourceSpan, [Spec])]
+-- --------------------------------------------------------------------------------------
+-- expandAnnots ss 
+--   | length errs > 0  = Left  $ Unsafe errs
+--   | otherwise        = Right $ fmap replace <$> ss
+--   where 
+--     g st (_,sp)      = foldl parse st sp
+--     (_,m, errs)      = foldl g (0, M.empty, []) $ concatMap FO.toList ss 
+--     replace (ss, rs) = (ss, concatMap (`recover` m) rs)
+--     recover          = M.lookupDefault [] . srcPos
+-- 
+-- 
+-- --------------------------------------------------------------------------------------
+-- parse :: (PState, M.HashMap SourceSpan [Spec], [Error]) -> RawSpec 
+--       -> (PState, M.HashMap SourceSpan [Spec], [Error])
+-- --------------------------------------------------------------------------------------
+-- parse (st,m,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
+--   where
+--     parser s = do a     <- parseAnnot s
+--                   state <- getState
+--                   it    <- getInput
+--                   case it of 
+--                     ""  -> return $ (state, a) 
+--                     _   -> unexpected $ "trailing input: " ++ it
+-- 
+-- 
+--     failLeft (Left err)      = (st, m,(fromError err): errs)
+--     failLeft (Right (s, r))  = (s, M.insertWith (++) ss [r] m, errs)
+-- 
+--     -- Slight change from this one:
+--     -- http://hackage.haskell.org/package/parsec-3.1.5/docs/src/Text-Parsec-Error.html#ParseError
+--     showErr = showErrorMessages "or" "unknown parse error" "expecting" 
+--                 "unexpected" "end of input" . errorMessages
+--     fromError err = mkErr ss   $ showErr err 
+--                               ++ "\n\nWhile parsing: " 
+--                               ++ show (getSpecString c)
+--     ss = srcPos c
+--     f = sourceName $ sp_begin ss
+-- 
 
 instance PP (RawSpec) where
   pp = text . getSpecString
 
 
--- FIXME: Disabling the check here
---------------------------------------------------------------------------------------
-catFunSpecDefs :: TDefEnv Reft -> [Statement (SourceSpan, [Spec])] -> Env RefType
---------------------------------------------------------------------------------------
--- catFunSpecDefs δ ss = envFromList [ (i, checkType δ t) | l <- ds , Bind (i,t) <- snd l ]
-catFunSpecDefs _ ss = envFromList [ (i, t) | (_,l) <- definedFuns ss, Bind (i,t) <- l ]
-
--- --------------------------------------------------------------------------------------
--- catVarSpecDefs :: [Statement (SourceSpan, [Spec])] -> Env RefType
--- --------------------------------------------------------------------------------------
--- catVarSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
---   where ds        = varDeclStmts ss
-
-
--- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
---------------------------------------------------------------------------------------
-definedFuns       :: (Data a, Typeable a) => [Statement a] -> [a]
---------------------------------------------------------------------------------------
-definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
-  where 
-    fromFunction (FunctionStmt l _ _ _) = [l] 
-    fromFunction _                      = []
-
-
---------------------------------------------------------------------------------
--- | Sanity checks on types
---------------------------------------------------------------------------------
---
--- Perhaps move these to typechecking
---
-
-data TypeError = NameNotFound Symbol
-               | InvalidMutability Symbol
-  deriving (Data, Typeable)
-
-instance Show TypeError where
-  show (NameNotFound s)      = printf "Type '%s' is unbound" (ppshow s)
-  show (InvalidMutability s) = "Invalid mutability symbol '" 
-                            ++ ppshow s 
-                            ++ "'. "
-                            ++ "Possible fix: "
-                            ++ "add a mutability modifier as the first type argument"
+-- --------------------------------------------------------------------------------
+-- -- | Sanity checks on types
+-- --------------------------------------------------------------------------------
+-- --
+-- -- Perhaps move these to typechecking
+-- --
+-- 
+-- data TypeError = NameNotFound Symbol
+--                | InvalidMutability Symbol
+--   deriving (Data, Typeable)
+-- 
+-- instance Show TypeError where
+--   show (NameNotFound s)      = printf "Type '%s' is unbound" (ppshow s)
+--   show (InvalidMutability s) = "Invalid mutability symbol '" 
+--                             ++ ppshow s 
+--                             ++ "'. "
+--                             ++ "Possible fix: "
+--                             ++ "add a mutability modifier as the first type argument"
 
 
 -- -- FIXME: This won't work here cause classes have not been included in δ 
 -- --------------------------------------------------------------------------------
--- checkType :: TDefEnv Reft -> RefType -> RefType
+-- checkType :: IfaceEnv Reft -> RefType -> RefType
 -- --------------------------------------------------------------------------------
 -- checkType δ typ = 
 --     case everything (++) ([] `mkQ` fromType) typ of

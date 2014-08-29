@@ -1,131 +1,181 @@
-/*************************************************************************/
-/*********** General purpose auxiliary functions *************************/
-/*************************************************************************/
+/*************************************************************************
+        
+  | General purpose auxiliary definitions 
 
-/*@ extern crash     :: forall A.()            => A                  */
+*************************************************************************/
 
-/*@ extern assume    :: (boolean)              => void               */
+declare function crash<A>(): A; 
 
-/*@ extern assert    :: ({x:boolean|(Prop x)}) => void               */
+declare function assume(x: boolean): void;
 
-/*@ extern requires  :: (boolean)              => void               */
+/*@ assert :: ({x:boolean|(Prop x)}) => void */
+declare function assert(x: boolean): void;
 
-/*@ extern ensures   :: (boolean)              => void               */
+/*@ random :: () => {v:number | true} */
+declare function random(): number;
 
-/*@ extern random    :: ()                     => number             */
+/*@ pos :: () => {v:number | v > 0} */
+declare function pos(): number;
 
-/*@ extern pos       :: ()                     => {v:number | v > 0} */
+declare function alert(s: string): void;
 
-/*@ extern alert     :: (string)               => void               */
+interface Pair<A,B> { x: A; y: B; }
 
 
 
-/*************************************************************************/
-/************** Types for Builtin Operators ******************************/
-/*************************************************************************/
+/*************************************************************************
+        
+  | Types for Builtin Operators 
 
-/*@ extern builtin_BIBracketRef     :: 
-    /\ forall A. (arr: #Array[#Immutable,A]   , {idx:number | (0 <= idx && idx < (len arr))}) => A 
-    /\ forall A. (arr: #Array[#Mutable, A ]   , idx:number                                  ) => A? 
-    /\ forall A. ([#ReadOnly]{[y: string]: A }, x:string                                    ) => A      
+*************************************************************************/
+
+/*@ builtin_BIBracketRef ::
+    /\ forall A. (arr: #Array[#Immutable,A], {idx:number | (0 <= idx && idx < (len arr))}) => A
+    /\ forall A. (arr: #Array[#Mutable, A ], idx:number) => A?
+    /\ forall A. ([#ReadOnly]{[y: string]: A }, x:string) => A
+*/
+declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
+
+/*@ builtin_BIBracketAssign :: 
+    /\ forall A. (arr: #Array[#Immutable, A], {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
+    /\ forall A. (arr: #Array[#ReadOnly , A], idx:number, val: A) => void
+    /\ forall A M. ([#Mutable]{[y: string]: A }, x:string, val: A) => void
+*/
+declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
+
+/*  builtin_BISetProp ::
+    /\ forall A M. ([M] { f : [#Mutable] A }, A) => A
+    /\ forall A M. ([#Mutable] { f : [M] A }, A) => A
 */
 
-/*@ extern builtin_BIBracketAssign  :: 
-    /\ forall A  . (arr: #Array[#Immutable, A] , {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
-    /\ forall A  . (arr: #Array[#ReadOnly , A] ,  idx:number                                 , val: A) => void
-    /\ forall A M. ([#Mutable]{[y: string]: A },    x:string                                 , val: A) => void  
-*/
-
-
-/*@ extern builtin_BISetProp ::
-    /\ forall A M . ([M]        { f : [#Mutable] A }, A) => A
-    /\ forall A M . ([#Mutable] { f : [M]        A }, A) => A
-*/
-
-
-/*@ extern builtin_BIObjectLit :: forall A . (A) 
-                               => {v: A | [ (len v) = builtin_BINumArgs; not (null v) ] } 
-*/
-
-/*@ extern builtin_BIArrayLit  :: forall M  A . (A) 
-                               => {v: #Array[M,A] | [ (len v) = builtin_BINumArgs; not (null v) ] } 
-*/
-
-/*@ extern builtin_BIUndefined :: forall A. {A | false} */
-
-/*@ extern builtin_BICondExpr  :: forall A . (c: boolean, x: A, y: A) 
-                               =>  { v:A | (if (Prop(c)) then (v = x) else (v = y)) } 
-*/
-
-
-/*@ extern builtin_OpLT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
-                                  /\ forall T . (x:T, y:T ) => boolean
-*/
-
-/*@ extern builtin_OpLEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <= y)) } 
-                                  /\ forall T . (x:T, y:T ) => boolean
-*/
-
-/*@ extern builtin_OpGT        :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) }
-                                  /\ forall T . (x:T, y:T ) => boolean
-*/
-
-/*@ extern builtin_OpGEq       :: /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >= y)) }
-                                  /\ forall T . (x:T, y:T ) => boolean
-*/
-
-// FIXME: what is the last line useful for?
-// /\ (x:{top|false}, y:{top|false}) => top                          
-
-/*@ extern builtin_OpAdd       :: /\ (x:number, y:number) => {number | v = x + y}
-                                  /\ (x:number, y:string) => string
-                                  /\ (x:string, y:number) => string
-                                  /\ (x:string, y:string) => string           
+/*@ builtin_BISetProp :: 
+    forall A M. ([M] { f : [#Mutable] A }, A) => A 
  */
+declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
-/*@ extern builtin_OpSub       :: ({x:number | true}, {y:number | true})  => {v:number | v ~~ x - y} */
+/*@ builtin_BIArrayLit :: 
+    forall M A. (A) => {v: #Array[M,A] | [ (len v) = builtin_BINumArgs; not (null v) ] } 
+*/
+declare function builtin_BIArrayLit<A>(a: A): A[];
 
-/*@ extern builtin_OpMul       :: (number,  number)  => number */
+/*@ builtin_BIUndefined ::
+    forall A. {A | false} 
+*/
+declare var builtin_BIUndefined: any;
 
+/*@ builtin_BICondExpr :: 
+    forall A. (c: boolean, x: A, y: A) => { v:A | (if (Prop(c)) then (v = x) else (v = y)) }
+*/
+declare function builtin_BICondExpr<A>(c: boolean, x: A, y: A): A;
+
+/*@ builtin_OpLT :: 
+    /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
+    /\ forall T. (x:T, y:T) => boolean
+*/
+declare function builtin_OpLT(a: any, b: any): boolean;
+
+/*@ builtin_OpLEq :: 
+    /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <= y)) }
+    /\ forall T. (x:T, y:T) => boolean
+*/
+declare function builtin_OpLEq(a: any, b: any): boolean;
+
+/*@ builtin_OpGT :: 
+    /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) }
+    /\ forall T. (x:T, y:T) => boolean
+*/
+declare function builtin_OpGT(a: any, b: any): boolean;
+
+/*@ builtin_OpGEq ::
+    /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >= y)) }
+    /\ forall T. (x:T, y:T) => boolean
+*/
+declare function builtin_OpGEq(a: any, b: any): boolean;
+
+/*@ builtin_OpAdd :: 
+    /\ (x:number, y:number) => {number | v = x + y}
+    /\ (x:number, y:string) => string
+    /\ (x:string, y:number) => string
+    /\ (x:string, y:string) => string           
+    /\ (x:{top|false}, y:{top|false}) => top                          
+ */
+declare function builtin_OpAdd(a: any, b: any): any;
+// FIXME: what is the last line useful for?
+
+/*@ builtin_OpSub :: 
+    ({x:number | true}, {y:number | true})  => {v:number | v ~~ x - y} 
+*/
+declare function builtin_OpSub(a: number, b: number): number;
+
+declare function builtin_OpMul(a: number, b: number): number;
+
+/*@ builtin_OpDiv :: 
+    (x: number, y: { v: number | v != 0 }) => { v:number | (((x>0 && y>0) => v>0) 
+                                                        && (x=0 <=> v=0) 
+                                                        && ((x>0 && y>1) => v<x) )} 
+ */
+declare function builtin_OpDiv(a: number, b: number): number;
 // FIXME: This is not correct. Add definition for: >>
 
-/*@ extern builtin_OpDiv       :: (x: number, y: { v: number | v != 0 }) 
-                               => { v:number | (((x>0 && y>0) => v>0) && (x=0 <=> v=0) && ((x>0 && y>1) => v<x) )} 
- */
+declare function builtin_OpMod(a: number, b: number): number;
 
-/*@ extern builtin_OpMod       :: (number,  number)  => number */
+/*@ builtin_PrefixMinus :: 
+    ({x:number  | true}) => {v:number  | v ~~ (0 - x)} 
+*/
+declare function builtin_PrefixMinus(a: number): number;
 
-/*@ extern builtin_PrefixMinus :: ({x:number  | true}) => {v:number  | v ~~ (0 - x)} */
+/*  builtin_OpEq :: 
+    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
+*/
+// declare function builtin_OpEq<A,B>(a: A, b: B): boolean;
 
-/*  extern builtin_OpEq        :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } */
+/*  builtin_OpSEq :: 
+    /\ forall A  . (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }
+    /\ forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
+*/
+/*@ builtin_OpSEq :: 
+    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
+*/
+declare function builtin_OpSEq<A,B>(x: A, y: B): boolean;
 
-/*@ extern builtin_OpSEq       :: /\ forall A  . (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }
-                                  /\ forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } */
+/*@ builtin_OpNEq :: 
+    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) } 
+*/
+declare function builtin_OpNEq<A,B>(x: A, y: B): boolean;
 
-/*@ extern builtin_OpNEq       :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) } */
-
-/*@ extern builtin_OpSNEq      :: forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) } */
-
+/*@ builtin_OpSNEq :: 
+    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) } 
+*/
+declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
 // FIXME: the two version of inequality should not be the same...
 
-/*@ extern builtin_OpLAnd      :: /\ forall A   . (x:A, y:A)  => { v:A   | (if (Prop(x)) then (v = y) else (v = x)) }
-                                  /\ forall A B . (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) && Prop(y))) } 
+/*@ builtin_OpLAnd :: 
+    /\ forall A. (x:A, y:A) => { v:A | (if (Prop(x)) then (v = y) else (v = x)) }
+    /\ forall A B. (x:A, y:B) => { v:top | (Prop(v) <=> (Prop(x) && Prop(y))) }
 */
+declare function builtin_OpLAnd(x: any, y: any): any;
       
-/*@ extern builtin_OpLOr       :: /\ forall A   . (x:A, y:A)  => { v:A   | (if (FLS(x)) then (v = y) else (v = x)) } 
-                                  /\ forall A B . (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) || Prop(y))) }
+/*@ builtin_OpLOr :: 
+    /\ forall A. (x:A, y:A) => { v:A | (if (FLS(x)) then (v = y) else (v = x)) } 
+    /\ forall A B. (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) || Prop(y))) }
 */
+declare function builtin_OpLOr(x: any, y: any): any;
 
-/*@ extern builtin_PrefixLNot  :: forall A . (x: A) => {v:boolean | (((Prop v) <=> not Prop(x)) && ((Prop v) <=> FLS(x)))} */
+/*@ builtin_PrefixLNot :: 
+    forall A. (x: A) => {v:boolean | (((Prop v) <=> not Prop(x)) && ((Prop v) <=> FLS(x)))} 
+*/
+declare function builtin_PrefixLNot<A>(x: A): boolean;
 
-/*@ extern builtin_PrefixBNot  :: (x: number) => {v:number | v = 0 - (x + 1) } */
-
+/*@ builtin_PrefixBNot ::
+    (x: number) => {v:number | v = 0 - (x + 1) } 
+*/
+declare function builtin_PrefixBNot(n: number): number;
 
 
 
 /*************************************************************************
   
-  Ambient Definitions 
+  | Ambient Definitions 
 
   Taken from here: 
 
@@ -136,150 +186,238 @@
 
 /*** Object **************************************************************/
 
+// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L80
 
-/*@ interface Object<M> {
+interface Object {
+    // TODO
+    /** The initial value of Object.prototype.constructor is the standard built-in Object constructor. */
+    // constructor: Function;
 
-      toString             : () => string;
-      toLocaleString       : () => string;
-      valueOf              : () => #Object;
-      hasOwnProperty       : (v: string) => boolean;
-      isPrototypeOf        : forall A . (v: A) => boolean;
-      propertyIsEnumerable : (v: string) => boolean;
+    /** Returns a string representation of an object. */
+    toString(): string;
 
-    } */
+    /** Returns a date converted to a string using the current locale. */
+    toLocaleString(): string;
 
-      ////TODO:
-      //constructor: Function;
+    /** Returns the primitive value of the specified object. */
+    valueOf(): Object;
+
+    /**
+      * Determines whether an object has a property with the specified name. 
+      * @param v A property name.
+      */
+    hasOwnProperty(v: string): boolean;
+
+    /**
+      * Determines whether an object exists in another object's prototype chain. 
+      * @param v Another object whose prototype chain is to be checked.
+      */
+    isPrototypeOf<A>(v: A): boolean;
+
+    /** 
+      * Determines whether a specified property is enumerable.
+      * @param v A property name.
+      */
+    propertyIsEnumerable(v: string): boolean;
+}
 
 
+// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L115
 
-/*@ extern Object :: {
+declare var Object: {
+    new <A>(value: A): Object;						// new (value?: any): Object;
+    (): any;
+    <A>(value: A): any;								// (value: any): any;
 
-      new forall A . (value: A) => #Object;
-      forall A .     (value: A) => top;
+    prototype: Object;
 
-      prototype           : #Object;
-      getPrototypeOf      : forall A . (o: A): top;
-      getOwnPropertyNames : forall A . (o: A): #Array[#Immutable,string];
-      keys                : forall A . (o: A): #Array[#Immutable,string];
+    getPrototypeOf<A>(o: A): any;					// getPrototypeOf(o: any): any;
 
-    } */
+    // getOwnPropertyDescriptor(o: any, p: string): PropertyDescriptor;
 
-      ////TODO: 
-      //(): any;
-      //getOwnPropertyDescriptor(o: any, p: string): PropertyDescriptor;
-      //create(o: any, properties?: PropertyDescriptorMap): any;
-      //defineProperty(o: any, p: string, attributes: PropertyDescriptor): any;
-      //defineProperties(o: any, properties: PropertyDescriptorMap): any;
-      //seal(o: any): any;
-      //freeze(o: any): any;
-      //preventExtensions(o: any): any;
-      //isSealed(o: any): boolean;
-      //isFrozen(o: any): boolean;
-      //isExtensible(o: any): boolean;
+    getOwnPropertyNames<A>(o: A): string[];			// getOwnPropertyNames(o: any): string[];
+
+    // create(o: any, properties?: PropertyDescriptorMap): any;
+
+    // defineProperty(o: any, p: string, attributes: PropertyDescriptor): any;
+
+    // defineProperties(o: any, properties: PropertyDescriptorMap): any;
+
+    // seal(o: any): any;
+
+    // freeze(o: any): any;
+
+    // preventExtensions(o: any): any;
+
+    // isSealed(o: any): boolean;
+
+    // isFrozen(o: any): boolean;
+
+    // isExtensible(o: any): boolean;
+
+    keys<A>(o: A): string[];						// keys(o: any): string[];
+}
 
 
 
 /*** Number **************************************************************/
 
-// FIXME: Be careful in defining equality between NaN values: 
-//        
-//        NaN =/= NaN
-//
+// FIXME:	NaN =/= NaN
 
-/*@ measure numeric_nan               :: number                 */
-/*@ measure numeric_max_value         :: number                 */
-/*@ measure numeric_min_value         :: number                 */
-/*@ measure numeric_negative_infinity :: number                 */
-/*@ measure numeric_positive_infinity :: number                 */
+/*@ measure numeric_nan               :: number */
+/*@ measure numeric_max_value         :: number */
+/*@ measure numeric_min_value         :: number */
+/*@ measure numeric_negative_infinity :: number */
+/*@ measure numeric_positive_infinity :: number */
 
 
-/*@ extern  NaN :: { number | v = numeric_nan }   */
-
-/*@ extern Number :: { 
-      new forall A . (value: A) => #Number;
-      forall A . (value: A) => number;
-
-      prototype         : #Number;
-      MAX_VALUE         : { number | v = numeric_max_value         };
-      MIN_VALUE         : { number | v = numeric_min_value         };
-      NaN               : { number | v = numeric_nan               };
-      NEGATIVE_INFINITY : { number | v = numeric_negative_infinity };
-      POSITIVE_INFINITY : { number | v = numeric_positive_infinity };
-    } */
+/*@  NaN :: { number | v = numeric_nan } */
+declare var NaN: number;
 
 
-/*@ interface Number {
-      toString        : (radix: number):string;
-      toString        : ( ): string;
-      toFixed         : (fractionDigits: number) => string;
-      toExponential   : (fractionDigits: number) => string;
-      toPrecision     : (precision: number) => string
-    } */
+// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L430
+// TODO: all optional arguments have been changed to necessary
+interface Number {
+    toString(radix/*?*/: number): string;
+
+    toFixed(fractionDigits/*?*/: number): string;
+
+    toExponential(fractionDigits/*?*/: number): string;
+
+    toPrecision(precision/*?*/: number): string;
+}
+
+
+// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L457
+
+declare var Number: {
+    new (value: any): Number;						// new (value?: any): Number;
+    <A>(value: A): number;							// (value?: any): number;
+    prototype: Number;
+
+    /*  MAX_VALUE: { number | v = numeric_max_value } */
+    MAX_VALUE: number;
+
+    /*  MIN_VALUE: { number | v = numeric_min_value } */
+    MIN_VALUE: number;
+
+    /*  NaN: { number | v = numeric_nan } */
+    NaN: number;
+
+    /*  NEGATIVE_INFINITY: { number | v = numeric_negative_infinity } */
+    NEGATIVE_INFINITY: number;
+
+    /*  POSITIVE_INFINITY: { number | v = numeric_positive_infinity } */
+    POSITIVE_INFINITY: number;
+}
 
 
 
 /*** Math ****************************************************************/
 
-/*@ extern Math :: {
-      E       : number;
-      LN10    : number;
-      LN2     : number;
-      LOG2E   : number;
-      LOG10E  : number;
-      PI      : number;
-      SQRT1_2 : number;
-      SQRT2   : number;
-      abs     : (x: number) => number;
-      acos    : (x: number) => number;
-      asin    : (x: number) => number;
-      atan    : (x: number) => number;
-      atan2   : (y: number, x: number) =>  number;
-      ceil    : (x: number) => number;
-      cos     : (x: number) => number;
-      exp     : (x: number) => number;
-      floor   : (x: number) => number;
-      log     : (x: number) => number;
-      max     : (values: #Array[#ReadOnly,number]) => number;
-      min     : (values: #Array[#ReadOnly,number]) => number;
-      pow     : (x: number, y: number) => number;
-      random  : () =>  number;
-      round   : (x: number) => number;
-      sin     : (x: number) => number;
-      sqrt    : (x: number) => number;
-      tan     : (x: number) => number
-    } */
+// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L487
+
+interface Math {
+    E: number;
+    LN10: number;
+    LN2: number;
+    LOG2E: number;
+    LOG10E: number;
+    PI: number;
+    SQRT1_2: number;
+    SQRT2: number;
+    abs(x: number): number;
+    acos(x: number): number;
+    asin(x: number): number;
+    atan(x: number): number;
+    atan2(y: number, x: number): number;
+    ceil(x: number): number;
+    cos(x: number): number;
+    exp(x: number): number;
+    floor(x: number): number;
+    log(x: number): number;
+    // max(...values: number[]): number;
+    // min(...values: number[]): number;
+    pow(x: number, y: number): number;
+    random(): number;
+    round(x: number): number;
+    sin(x: number): number;
+    sqrt(x: number): number;
+    tan(x: number): number;
+}
+
+declare var Math: Math;
 
 
 
 /*** String **************************************************************/
 
-/*@ extern String     :: {
+// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L259
 
-      toString          : (): string;
-      charAt            : (pos: number): string;
-      charCodeAt        : (index: number): number;
-      concat            : (strings: #Array[#ReadOnly,string]): string;
-      indexOf           : (searchString: string, position: number): number;
-      lastIndexOf       : (searchString: string, position: number): number;
-      localeCompare     : (that: string): number;
-      match             : forall M . (regexp: string): #Array[M, string];
-      replace           : (searchValue: string, replaceValue: string): string;
-      search            : (regexp: string): number;
-      slice             : (start: number, end: number): string;
-      split             : forall M . (separator: string, limit: number): #Array[M, string];
-      substring         : (start: number, end: number): string;
-      toLowerCase       : (): string;
-      toLocaleLowerCase : (): string;
-      toUpperCase       : (): string;
-      toLocaleUpperCase : (): string;
-      trim              : (): string;
 
-      length            : { number | v >= 0 };
+interface String {
+    toString(): string;
 
-      substr            : (from: number, length: number) => string
+    charAt(pos: number): string;
 
-    } */
+    charCodeAt(index: number): number;
+
+    // concat(...strings: string[]): string;
+
+    indexOf(searchString: string, position/*?*/: number): number;
+
+    lastIndexOf(searchString: string, position/*?*/: number): number;
+
+    localeCompare(that: string): number;
+
+    match(regexp: string): string[];
+
+    // match(regexp: RegExp): string[];
+
+    replace(searchValue: string, replaceValue: string): string;
+
+    // replace(searchValue: string, replaceValue: (substring: string, ...args: any[]) => string): string;
+
+    // replace(searchValue: RegExp, replaceValue: string): string;
+
+    // replace(searchValue: RegExp, replaceValue: (substring: string, ...args: any[]) => string): string;
+
+    search(regexp: string): number;
+
+    // search(regexp: RegExp): number;
+
+    slice(start/*?*/: number, end/*?*/: number): string;
+
+    split(separator: string, limit/*?*/: number): string[];
+
+    // split(separator: RegExp, limit/*?*/: number): string[];
+
+    substring(start: number, end/*?*/: number): string;
+
+    toLowerCase(): string;
+
+    toLocaleLowerCase(): string;
+
+    toUpperCase(): string;
+
+    toLocaleUpperCase(): string;
+
+    trim(): string;
+
+    /*@ length: { number | v >= 0 } */
+    length: number;
+
+    substr(from: number, length/*?*/: number): string;
+
+    // [index: number]: string;
+}
+
+declare var String: {
+    new (value/*?*/: any): String;
+    (value?: any): string;
+    prototype: String;
+    // fromCharCode(...codes: number[]): string;
+}
 
 
 
@@ -287,207 +425,280 @@
 
 /*@ measure len      :: forall M A . (#Array[M,A]) => number             */
 
-/*@ interface Array<M,T> {
-      toString       : (): string;
-      toLocaleString : (): string;
-      concat         : /\ forall M0       . (this: #Array[#Immutable,T], items: #Array[#Immutable,T]): { #Array[M0,T] | (len v) = (len this) + (len items) }
-                       /\ forall M0 M1 M2 . (this: M0, items: #Array[M1,T]): #Array[M2,T];
-      join           : (separator: string): string;
-      pop            : (this: #Array[#Mutable, T]): T;
-      push           : (this: #Array[#Mutable,T], items: T): number;
-      reverse        : (this: #Array[M,T]): #Array[M,T];
-      shift          : (): T;
-      slice          : /\ forall N . (start: number): #Array[N,T]
-                       /\ forall N . (start: number, end: number): #Array[N,T];
-      sort           : (this: #Array[#Mutable,T], compareFn: (a: T, b: T) => number): #Array[#Immutable,T];      
-      splice         : /\ (start: number): #Array[#Immutable,T]
-                       /\ (start: number, deleteCount: number, items: #Array[#Immutable,T]): #Array[#Immutable,T];
-      unshift        : (items: #Array[#Immutable,T]): number;
-      indexOf        : (searchElement: T, fromIndex: number): number;
-      lastIndexOf    : (searchElement: T, fromIndex: number): number;      
-      every          : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => boolean): boolean;      
-      some           : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => boolean): boolean;      
-      forEach        : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => void): void;      
-      map            : forall U . (callbackfn: (value: T) => U): #Array[#Immutable, U];
-      filter         : (callbackfn: (value: T, index: number, array: #Array[#Immutable,T]) => boolean): #Array[#Immutable,T];
-      reduce         : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: #Array[#Immutable,T]) => T, initialValue: T): T;
-      reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: #Array[#Immutable,T]) => T, initialValue: T): T;
-      length         : { v: number | (v = (len this) && v >= 0) };
-    } */
+// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L966
 
-      ////TODO
-      //reduce         : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T
-      //reduce         : forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U;
-      //reduceRight    : (callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: [T]) => T, initialValue: T) => T
-      //reduceRight    : forall U . (callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: [T]) => U, initialValue: U) => U;
-      //[x: number]    : T;
+// TODO: Fix mutabilities
+// consult: https://github.com/UCSD-PL/RefScript/blob/develop/include/prelude.ts
 
+/*@ interface Array<M, T> */
+interface Array<T> {
 
-/*@ extern Array :: {
+    toString(): string;
 
-      new forall M T . (arrayLength: number) => { v: #Array[M,T] | [ (len v) = arrayLength; not (null v) ] };
-      forall M T . (arrayLength: number) => { v: #Array[M,T] | [ (len v) = arrayLength; not (null v) ] };
+    toLocaleString(): string;
 
-      isArray         : forall M T . (arg: #Array[M,T]) => { v: boolean | Prop(v) };
-      isArray         : forall A . (arg: A) => boolean ;
+    /*@ concat: 
+        /\ forall M0       . (this: #Array[#Immutable,T], items: #Array[#Immutable,T]): { #Array[M0,T] | (len v) = (len this) + (len items) }
+        /\ forall M0 M1 M2 . (this: M0, items: #Array[M1,T]): #Array[M2,T]
+    */
+    concat<U extends T[]>(...items: U[]): T[];
+    // concat(...items: T[]): T[];
+  
+    join(separator/*?*/: string): string;
 
-    } */
+    /*@ pop: (this: #Array[#Mutable, T]): T */
+    pop(): T;
 
-      ////TODO
-      //prototype: Array<any>;
+    /*@ push: (this: #Array[#Mutable,T], items: T): number */
+    push(T): number;								// push(...items: T[]): number;
 
-/*************************************************************************/
-/************** Run-Time Tags ********************************************/
-/*************************************************************************/
+    /*@ reverse: (this: #Array[M,T]): #Array[M,T] */
+    reverse(): T[];
 
-/*@ measure ttag :: forall A . (A) => string                             */
+    shift(): T;
 
-/*@ measure FLS  :: forall A . (A) => bool                               */
+    /*@ slice: forall N . (this: #Array[M,T], start: number, start: number): #Array[N,T] */
+    slice(start/*?*/: number, end/*?*/: number): T[];
 
-/*@ measure Prop :: forall A . (A) => bool                               */
+    sort(compareFn/*?*/: (a: T, b: T) => number): T[];
 
-/*@ measure null :: forall A . (A) => bool                               */
+    splice(start: number): T[];
 
-/*@ extern builtin_PrefixTypeof :: forall A. (x:A) 
-                                => {v:string | (ttag x) = v }            */
+    // splice(start: number, deleteCount: number, ...items: T[]): T[];
 
-/*@ extern builtin_BITruthy :: forall A. (x:A) 
-                            => { v:boolean | ((Prop v) <=> Prop(x)) }    */
+    // unshift(...items: T[]): number;
 
-/*@ extern builtin_BIFalsy :: forall A. (x:A) 
-                           => { v:boolean | ((Prop v) <=> FLS(x)) }      */
+    indexOf(searchElement: T, fromIndex/*?*/: number): number;
 
-/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]}            */
+    lastIndexOf(searchElement: T, fromIndex/*?*/: number): number;
 
-/*@ invariant {v:null      | [(ttag(v) = "object")   ; not (Prop(v)); null(v) ]}  */
+    every(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): boolean;
 
-/*@ invariant {v:boolean   | [(ttag(v) = "boolean")]}                             */ 
+    some(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): boolean;
 
-/*@ invariant {v:string    | [(ttag(v) = "string"   ); (Prop(v) <=> v /= ""  )]}  */
+    forEach(callbackfn: (value: T, index: number, array: T[]) => void/*, thisArg?: any*/): void;
 
-/*@ invariant {v:number    | [(ttag(v)  =  "number");
-                              (Prop(v) <=> v /= 0  ); 
-                              (FLS(v)  <=> v  = 0  )]} */
+    map<U>(callbackfn: (value: T, index: number, array: T[]) => U/*, thisArg?: any*/): U[];
 
+    filter(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): T[];
 
-/*@ measure instanceof :: forall A . (A, string) => bool                          */
+    reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue/*?*/: T): T;
+    // reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
-/*@ extern builtin_OpInstanceof :: forall A . (x:A, s: string) 
-                                => { v: boolean | (Prop(v) <=> instanceof(x,s)) } */
+    reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue/*?*/: T): T;
+    // reduceRight<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
+
+    /*@ length: { v: number | (v = (len this) && v >= 0) } */
+    length: number;
+
+//      // [n: number]: T;
+}
+
+declare var Array: {
+
+    (arrayLength/*?*/: number): any[];
+
+    /*@ new forall M T . (arrayLength: number) => { v: #Array[M, T] | [ (len v) = arrayLength; (not (null v))] } */
+    new (arrayLength/*?*/: number): any[];
+
+    /*@ new forall M T. (arrayLength: number) => { v: #Array[M, T] | [ (len v) = arrayLength; (not (null v))] } */
+    new <T>(arrayLength: number): T[];
+
+    // new <T>(...items: T[]): T[];
 
 
+    <T>(arrayLength: number): T[];
+    
+    // <T>(...items: T[]): T[];
 
-/*************************************************************************/
-/************** Pre-Loaded Qualifiers ************************************/
-/*************************************************************************/
+    /*@ isArray: 
+        /\ forall M T. (arg: #Array[M,T]): { v: boolean | Prop(v) }
+        /\ forall A . (arg: A): boolean
+    */
+    isArray(arg: any): boolean;
 
-/*@ qualif Bot(v:a)                  : 0 = 1                    */
-/*@ qualif Bot(v:obj)                : 0 = 1                    */
-/*@ qualif Bot(v:boolean)            : 0 = 1                    */
-/*@ qualif Bot(v:number)             : 0 = 1                    */
-/*@ qualif CmpZ(v:number)            : v < 0                    */
-/*@ qualif CmpZ(v:number)            : v <= 0                   */
-/*@ qualif CmpZ(v:number)            : v >  0                   */
-/*@ qualif CmpO(v:number)            : v >  1                   */
-/*@ qualif CmpZ(v:number)            : v >= 0                   */
-/*@ qualif CmpZ(v:number)            : v =  0                   */
-/*@ qualif CmpZ(v:number)            : v != 0                   */
+    prototype: Array<any>;
+}
 
-/*@ qualif Cmp(v:number, x:number)   : v <  x                   */
-/*@ qualif Cmp(v:number, x:number)   : v <= x                   */
-/*@ qualif Cmp(v:number, x:number)   : v >  x                   */
-/*@ qualif Cmp(v:number, x:number)   : v >= x                   */
 
-/*@ qualif Cmp(v:a,x:a)              : v =  x                   */
-/*@ qualif Cmp(v:a,x:a)              : v != x                   */
-/*@ qualif One(v:number)             : v = 1                    */
-/*  qualif True(v:boolean)           : (v)                      */
-/*  qualif False(v:boolean)          : (not v)                  */
-/*@ qualif True1(v:boolean)          : (Prop v)                 */
-/*@ qualif False1(v:boolean)         : not (Prop v)             */
+interface IArguments {
+  
+    [index: number]: any;
+
+    length: number;
+
+    // callee: Function;
+}
+
+
+
+/*************************************************************************
+        
+  | Run-Time Tags 
+
+*************************************************************************/
+
+/*@ measure ttag :: forall A . (A) => string */
+
+/*@ measure FLS  :: forall A . (A) => bool */
+
+/*@ measure Prop :: forall A . (A) => bool */
+
+/*@ measure null :: forall A . (A) => bool */
+
+/*@ builtin_PrefixTypeof :: 
+    forall A. (x:A) => {v:string | (ttag x) = v }                
+ */
+declare function builtin_PrefixTypeof<A>(x: A): string; 
+
+/*@ builtin_BITruthy :: 
+    forall A. (x:A) => { v:boolean | ((Prop v) <=> Prop(x)) }        
+*/
+declare function builtin_BITruthy<A>(x: A): boolean; 
+
+/*@ builtin_BIFalsy :: 
+    forall A. (x:A) => { v:boolean | ((Prop v) <=> FLS(x)) }          
+*/
+declare function builtin_BIFalsy<A>(x: A): boolean; 
+
+/*@ invariant {v:undefined | [(ttag(v) = "undefined"); not (Prop(v))]} */
+
+/*@ invariant {v:null | [(ttag(v) = "object"); not (Prop(v)); null(v) ]} */
+
+/*@ invariant {v:boolean | [(ttag(v) = "boolean")]} */ 
+
+/*@ invariant {v:string | [(ttag(v) = "string"); (Prop(v) <=> v /= "" )]} */
+
+/*@ invariant {v:number | [(ttag(v)  =  "number");
+                           (Prop(v) <=> v /= 0  ); 
+                           (FLS(v)  <=> v  = 0  )]}	*/
+
+
+/*@ measure instanceof :: forall A . (A,string) => bool */
+
+/*@ builtin_OpInstanceof :: 
+    forall A . (x:A, s: string) => { v: boolean | (Prop(v) <=> instanceof(x,s)) }     
+*/
+declare function builtin_OpInstanceof<A>(x: A, s: string): boolean; 
+
+
+
+/*************************************************************************
+        
+  | Pre-Loaded Qualifiers 
+
+*************************************************************************/
+
+/*@ qualif Bot(v:a): 0 = 1 */
+/*@ qualif Bot(v:obj): 0 = 1 */
+/*@ qualif Bot(v:boolean): 0 = 1 */
+/*@ qualif Bot(v:number): 0 = 1 */
+/*@ qualif CmpZ(v:number): v < 0 */
+/*@ qualif CmpZ(v:number): v <= 0 */
+/*@ qualif CmpZ(v:number): v >  0 */
+/*@ qualif CmpO(v:number): v >  1 */
+/*@ qualif CmpZ(v:number): v >= 0 */
+/*@ qualif CmpZ(v:number): v =  0 */
+/*@ qualif CmpZ(v:number): v != 0 */
+
+/*@ qualif Cmp(v:number, x:number): v <  x */
+/*@ qualif Cmp(v:number, x:number): v <= x */
+/*@ qualif Cmp(v:number, x:number): v >  x */
+/*@ qualif Cmp(v:number, x:number): v >= x */
+
+/*@ qualif Cmp(v:a,x:a): v =  x */
+/*@ qualif Cmp(v:a,x:a): v != x */
+/*@ qualif One(v:number): v = 1 */
+/*  qualif True(v:boolean): (v) */
+/*  qualif False(v:boolean): (not v) */
+/*@ qualif True1(v:boolean): (Prop v) */
+/*@ qualif False1(v:boolean): not (Prop v) */
 
 
 // Somewhat more controversial qualifiers (i.e. "expensive"...)
 
-/*  qualif Add(v:number,x:number,y:number): v = x + y           */
-/*  qualif Sub(v:number,x:number,y:number): v = x - y           */
+/*  qualif Add(v:number,x:number,y:number): v = x + y */
+/*  qualif Sub(v:number,x:number,y:number): v = x - y */
 
-/*  qualif Len(v:number, n: number)  : n < (len v)              */
+/*  qualif Len(v:number, n: number)  : n < (len v) */
 
 
 
-/*************************************************************************/
-/*************  Error handling   *****************************************/
-/*************************************************************************/
+/*************************************************************************
+        
+  | Error Handling
+
+*************************************************************************/
 
 // NOTE: types that are defined in lib.d.ts need to be in comment to pass
 // through the TS compilation phase.
 
-/*@ interface Error<M> {
-      name    : string; 
-      message : string;
-  } */
+interface Error {
+    name: string; 
+    message: string;
+}
 
-/*@ extern Error :: {
-      new (message: string) => #Error;
-      (message: string) => #Error;
-      prototype : #Error;
-  } */ 
-; // XXX: IMPORTANT  -- keep the empty statement here !
-
+declare var Error: {
+    new (message/*?*/: string): Error;
+    (message/*?*/: string): Error;
+    prototype: Error;
+}
 
 
-//class Errors<M> {
 
-//  /*@ argument :: (argument: string, message: string) => #Error */
-//  public static argument(arg: string, message: string): Error {
-//    return new Error("Invalid argument: " + arg + ". " + message);
-//  }
+//class Errors {
 
-//  /*@ argumentOutOfRange :: (arg: string) => #Error */
-//  public static argumentOutOfRange(arg: string): Error {
-//    return new Error("Argument out of range: " + arg);
-//  }
+//	public static argument(argument: string, message/*?*/: string): Error {
+//		return new Error("Invalid argument: " + argument + ". " + message);
+//	}
 
-//  /*@ argumentNull :: (arg: string) => #Error */
-//  public static argumentNull(arg: string): Error {
-//    return new Error("Argument null: " + arg);
-//  }
+//	public static argumentOutOfRange(argument: string): Error {
+//		return new Error("Argument out of range: " + argument);
+//	}
 
-//  /*@ abstract :: () => #Error */
-//  public static abstract(): Error {
-//    return new Error("Operation not implemented properly by subclass.");
-//  }
+//	public static argumentNull(argument: string): Error {
+//		return new Error("Argument null: " + argument);
+//	}
 
-//  /*@ notYetImplemented :: () => #Error */
-//  public static notYetImplemented(): Error {
-//    return new Error("Not yet implemented.");
-//  }
+//	public static abstract(): Error {
+//		return new Error("Operation not implemented properly by subclass.");
+//	}
 
-//  /*@ invalidOperation :: (message: string) => #Error */
-//  public static invalidOperation(message?: string): Error {
-//    return new Error("Invalid operation: " + message);
-//  }
+//	public static notYetImplemented(): Error {
+//		return new Error("Not yet implemented.");
+//	}
+
+//	public static invalidOperation(message/*?*/: string): Error {
+//		return new Error("Invalid operation: " + message);
+//	}
+    
 //}
 
 
-/*************************************************************************/
-/*******************  Auxilliary *****************************************/
-/*************************************************************************/
-interface Pair<A,B> { }
 
+/*************************************************************************
+        
+  | Mutability 
 
-/*************************************************************************/
-/******************  Mutability  *****************************************/
-/*************************************************************************/
+  Do not include type parameters here 
 
-interface ReadOnly                        {                      }
+*************************************************************************/
 
-interface Immutable      extends ReadOnly { immutable__   : void; } 
+/*@ interface ReadOnly */
+interface ReadOnly { }
 
-interface Mutable        extends ReadOnly { mutable__     : void; } 
+/*@ interface Immutable extends #ReadOnly */
+interface Immutable extends ReadOnly {
+    immutable__: void;
+} 
 
-interface AnyMutability  extends ReadOnly { defaultMut__  : void; } 
+/*@ interface Mutable extends #ReadOnly */
+interface Mutable extends ReadOnly {
+    mutable__: void;
+} 
 
-interface InheritedMut   extends ReadOnly { defaultMut__  : void; } 
+/*@ interface AnyMutability extends #ReadOnly */
+interface AnyMutability extends ReadOnly {
+    defaultMut__: void;
+} 
 

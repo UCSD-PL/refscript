@@ -12,8 +12,12 @@ import           Control.Monad.State
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types as F
 
+import           Language.Nano.Annots
 import           Language.Nano.Env
 import           Language.Nano.Errors
+import           Language.Nano.Locations
+import           Language.Nano.Names
+import           Language.Nano.Program
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import qualified Language.Nano.Typecheck.Subst as S
@@ -84,10 +88,9 @@ expandTAliasEnv te = solve te support expandTAlias
 getTApps    :: RefType -> [F.Symbol]
 getTApps    = everything (++) ([] `mkQ` fromT)
   where
-    fromT   :: RefType -> [F.Symbol]
-    fromT (TApp (TRef c) _ _)
-            = [F.symbol c]
-    fromT _ = []
+    fromT   :: RefType -> [F.Symbol] 
+    fromT (TApp (TRef (RN (QName _ [] c))) _ _) = [c]
+    fromT _                                  = [ ]
 
 expandTAlias  :: TAliasEnv RefType -> TAlias RefType -> TAlias RefType
 expandTAlias te a = a {al_body = expandRefType te $ al_body a}
@@ -95,9 +98,8 @@ expandTAlias te a = a {al_body = expandRefType te $ al_body a}
 expandRefType :: Data a => TAliasEnv RefType -> a -> a
 expandRefType te = everywhere $ mkT $ tx
   where
-    tx t@(TApp (TRef c) ts r)
-                 = maybe t (applyTAlias t c ts r) $ envFindTy c te
-    tx t         = t
+    tx t@(TApp (TRef (RN (QName _ [] c))) ts r) = maybe t (applyTAlias t c ts r) $ envFindTy c te
+    tx t                                        = t
 
 applyTAlias t c ts_ r a
   | (nt, ne) == (nα, nx) = (F.subst su $ S.apply θ $ al_body a) `strengthen` r

@@ -3,9 +3,8 @@
 
 /*@ loop :: () => { number | v = 6 } */
 function loop() : number{  
-	var x : number = 1;
   
-	for(var x : number= 1; x <= 5; x ++) {
+	for (var x = 1; x <= 5; x ++) {
 
   }
 

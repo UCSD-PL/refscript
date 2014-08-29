@@ -147,6 +147,7 @@ initModuleEnv g n s = freshenCGEnvM $ CGE nms bds grd ctx mod pth (Just g)
 --    * Adds return type @t@
 --    * Adds binders for the type variables @αs@
 --    * Adds binders for the arguments @ts@
+--    * Adds binder for the 'arguments' variable
 --
 initFuncEnv l f i xs (αs, ts, t) g s =
     --  Compute base environment @g'@, then add extra bindings
@@ -211,24 +212,11 @@ consMeth1 l g f xs body (i, _, ft) = consFun1 l g f xs body (i,ft)
 consFun1 l g f xs body (i, ft) 
   = initFuncEnv l f i xs ft g body >>= (`consStmts` body)
 
-
--- envAddFun l f i xs (αs, ts', t') g =   (return $ envPushContext i g) 
---                                    >>= (return . envAddReturn f t' ) 
---                                    >>= envAdds (varBinds xs ts')
---                                    >>= envAdds [argBind]
---                                    >>= envAdds tyBinds
---   where
---     tyBinds                        = [(Loc (srcPos l) α, tVar α) | α <- αs]
---     varBinds                       = safeZip "envAddFun"
---     argBind                        = (argId l, argTy l ts' (cge_names g))
-                                   
                                   
 --------------------------------------------------------------------------------
 consStmts :: CGEnv -> [Statement AnnTypeR]  -> CGM (Maybe CGEnv) 
 --------------------------------------------------------------------------------
-consStmts g stmts 
-  = do -- g' <- addFunAndGlobs g stmts     -- K-Var functions and globals 
-       consFold consStmt g stmts
+consStmts g stmts = consFold consStmt g stmts
 
 
 --------------------------------------------------------------------------------

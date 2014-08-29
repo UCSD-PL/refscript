@@ -11,10 +11,6 @@ declare function assume(x: boolean): void;
 /*@ assert :: ({x:boolean|(Prop x)}) => void */
 declare function assert(x: boolean): void;
 
-declare function requires(x: boolean): void;
-
-declare function ensures(x: boolean): void;
-
 /*@ random :: () => {v:number | true} */
 declare function random(): number;
 

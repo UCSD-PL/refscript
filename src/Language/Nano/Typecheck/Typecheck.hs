@@ -170,7 +170,8 @@ initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
 
 initFuncEnv γ f i αs xs ts t args s = TCE nms mod ctx pth parent
   where
-    tyBinds   = [(tVarId α, (tVar α, ReadOnly)) | α <- αs]
+    tyBinds   = [(tVarId α, (tVar α, ReadOnly)) | α <- αs] ++
+                [(tVarId α, (tVar α, ImportDecl)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ zip ts (repeat WriteLocal)
     nms       = envAddReturn f (t, ReadOnly) 
               $ envAdds (tyBinds ++ varBinds ++ args ++ visibleNames s) 

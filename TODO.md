@@ -3,7 +3,6 @@ Tests / Benchmarks
 
 ### Failing tests
 
-    pos/misc/vararg-03.ts
     neg/misc/driver-numargs.ts
     pos/arrays/arr-11.ts        // qualifiers
 

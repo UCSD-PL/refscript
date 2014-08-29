@@ -22,7 +22,9 @@ JS Features
 
 Tool/Implementation
 -------------------
-  
+
+  - What needs to be freshened at init-function-env?
+
   - What are good default mutabilities (parsing etc.)? Mutability annotations
     are very ugly (see pos/objects/obj-08.ts). 
 

@@ -3,15 +3,9 @@ Tests / Benchmarks
 
 ### Failing tests
 
-    neg/misc/abs-join-00.ts,  // TS translation exception
-
-    pos/misc/unite-01.ts,     // Unification issue
-    pos/loops/obj-01.ts,      // Unification issue                 
-    pos/loops/obj-02.ts,      // Unification issue
-
-	pos/simple/ambient-00.ts, // annotation missing - fixed modules
-    pos/simple/ambient-01.ts, // fixed in modules
-
+    pos/misc/vararg-03.ts
+    neg/misc/driver-numargs.ts
+    pos/arrays/arr-11.ts        // qualifiers
 
 
 ### Working benchmarks

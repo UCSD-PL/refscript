@@ -153,6 +153,7 @@ initFuncEnv l f i xs (αs, ts, t) g s =
         envAdds "initFunc-0" varBinds g'
     >>= envAdds "initFunc-1" tyBinds 
     >>= envAdds "initFunc-2" (visibleNames s)
+    -- FIXME: do not freshen everything
     >>= envAddReturn f t
     >>= freshenCGEnvM
   where
@@ -770,7 +771,7 @@ consWhileBase l xs tIs g
    err                      = errorLiquid' l
 
 consWhileStep l xs tIs gI'' 
-  = do  xts_step           <- mapM (`safeEnvFindTy` gI'') xs 
+  = do  xts_step           <- mapM (`safeEnvFindTy` gI'') xs' 
         zipWithM_ (subType l err gI'') xts_step tIs'                        -- (f)
   where 
     tIs'                    = F.subst su <$> tIs

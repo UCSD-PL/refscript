@@ -31,6 +31,7 @@ import           Language.Nano.Types
 import           Language.Nano.Env
 import           Language.Nano.Misc                 (convertError, zipWith3M)
 import           Language.Nano.SystemUtils
+import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
@@ -167,13 +168,12 @@ initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
     pth       = AP $ QPath (srcPos dummySpan) []
 
 
--- MERGE NOTE : add args
-initFuncEnv γ f i αs xs ts t _ s = TCE nms mod ctx pth parent
+initFuncEnv γ f i αs xs ts t args s = TCE nms mod ctx pth parent
   where
     tyBinds   = [(tVarId α, (tVar α, ReadOnly)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ zip ts (repeat WriteLocal)
     nms       = envAddReturn f (t, ReadOnly) 
-              $ envAdds (tyBinds ++ varBinds ++ visibleNames s) 
+              $ envAdds (tyBinds ++ varBinds ++ args ++ visibleNames s) 
               $ envEmpty
     mod       = tce_mod γ
     ctx       = pushContext i (tce_ctx γ) 
@@ -252,9 +252,9 @@ tcFun1 :: (PPR r, IsLocated l, CallSite t)
 -------------------------------------------------------------------------------
 tcFun1 γ l f xs body fty = tcFunBody γ' l body t
   where
-    γ' 					 = initFuncEnv γ f i αs xs ts t arg body
+    γ' 					         = initFuncEnv γ f i αs xs ts t arg body
     (i, (αs,ts,t))       = fty
-    arg                  = (argId l, aTy)
+    arg                  = [(argId $ srcPos l, (aTy, ReadOnly))]
     aTy                  = argTy l ts $ tce_names γ 
 
 tcMethSingleSig γ l f xs body (i, _,ft) 
@@ -509,7 +509,7 @@ tcNormalCallW γ l o es t = (tcWrap $ tcNormalCall γ l o es t) >>= \case
 
 
 tcRetW γ l (Just e)
-  = (tcWrap $ tcNormalCall γ l "return" [e] $ returnTy (tcEnvFindReturn γ) True) >>= \case
+  = (tcWrap $ tcNormalCall γ l "return" [e] (returnTy (tcEnvFindReturn γ) True)) >>= \case
        Right ([e'], _) -> return  (ReturnStmt l (Just e'), Nothing)  
        Left err        -> (\e' -> (ReturnStmt l (Just e'), Nothing)) <$> deadcastM (tce_ctx γ) err e
 
@@ -893,15 +893,6 @@ instantiate l ξ fn ft
        (αs, t)          = bkAll ft
        err = tcError    $ errorNonFunction (ann l) fn ft
 
---              
--- tcPropRead getter γ l e fld 
---   = do (e', te)         <- tcExpr γ e
---        (δ, ε)           <- (,) <$> getDef <*> getExts
---        case getter l ε δ fld te of
---          Nothing        -> tcError $  errorPropRead (srcPos l) e fld
---          Just (te', tf) -> tcWithThis te $ (, tf) <$> castM l (tce_ctx γ) e' te te'
--- 
-
 ----------------------------------------------------------------------------------
 envJoin :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)
 ----------------------------------------------------------------------------------
@@ -921,35 +912,47 @@ envLoopJoin :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
 envLoopJoin _ γ Nothing   = return $ Just γ
 envLoopJoin l γ (Just γl) = 
   do  ts    <- mapM (getLoopNextPhiType l γ γl) xs
-      θ     <- getSubst
-      return $ Just $ tcEnvAdds (zip xs (zip ts (repeat WriteLocal))) $ γ { tce_names = apply θ (tce_names γ) }
+      γ'    <- (`substNames` γ) <$> getSubst
+      return $ Just $ tcEnvAdds (zip xs (zip ts (repeat WriteLocal))) $ γ'
   where 
-      xs = phiVarsAnnot l 
+      xs             = phiVarsAnnot l 
+      substNames θ γ = γ { tce_names = apply θ (tce_names γ) }
  
+
 ----------------------------------------------------------------------------------
 getPhiType :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan -> TCM r (RType r, Assignability)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (tcEnvFindTyWithAgsn x γ1, tcEnvFindTyWithAgsn x γ2) of
-    (Just (t1,a1), Just (t2,_ )) | t1 /= t2  -> tcError $ errorEnvJoin (ann l) x t1 t2
-                                 | otherwise -> return (t1,a1)
-    (_      , _      )           | forceCheck x γ1 && forceCheck x γ2 
-                                  -> tcError $ bug loc "Oh no, the HashMap GREMLIN is back..."
-                                 | otherwise -> tcError $ bugUnboundPhiVar loc x
+    (Just (t1,a1), Just (t2,_ )) -> unif t1 a1 t2 
+    (_      , _      )           |  forceCheck x γ1 && forceCheck x γ2 
+                                 -> tcError $ bug loc "Oh no, the HashMap GREMLIN is back..."
+                                 |  otherwise -> tcError $ bugUnboundPhiVar loc x
   where 
     loc = srcPos $ ann l
+    unif t1 a1 t2  = 
+      do  θ <- getSubst 
+          case unifys (srcPos l) γ1 θ [t1] [t2] of
+            Left  _ -> tcError $ errorEnvJoin (ann l) x t1 t2
+            Right θ' | on (==) (toType . apply θ') t1 t2 -> setSubst θ' >> return (t1,a1)
+                     | otherwise ->  tcError $ errorEnvJoin (ann l) x t1 t2
+
 
 ----------------------------------------------------------------------------------
-getLoopNextPhiType :: PPR r 
-           => (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan-> TCM r (RType r)
+getLoopNextPhiType :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan-> TCM r (RType r)
 ----------------------------------------------------------------------------------
 getLoopNextPhiType l γ γl x =
-  case (tcEnvFindTy x γ, tcEnvFindTy (mkNextId x) γl) of 
-    (Just t1, Just t2) -> 
-      do  when (t1 /= t2) (tcError $ errorEnvJoin (ann l) x t1 t2)
-          return t1
-    (_      , _      ) -> 
-      tcError $ bugUnboundPhiVar loc x where loc = srcPos $ ann l
+  case (tcEnvFindTy x γ, tcEnvFindTy (mkNextId x) γl) of
+    (Just t1, Just t2) -> unif t1 t2 
+    _                  -> tcError $ bugUnboundPhiVar loc x
+  where 
+    loc = srcPos $ ann l
+    unif t1 t2  = 
+      do  θ <- getSubst 
+          case unifys (srcPos l) γ θ [t1] [t2] of
+            Left  _ -> tcError $ errorEnvJoin (ann l) x t1 t2
+            Right θ' | on (==) (toType . apply θ') t1 t2 -> setSubst θ' >> return t1
+                     | otherwise ->  tcError $ errorEnvJoin (ann l) x t1 t2
 
 
 forceCheck x γ = elem x $ fst <$> envToList (tce_names γ)

@@ -486,8 +486,9 @@ freshenCGEnvM g
         return $ g { cge_names = names, cge_mod = modules } 
   where
 
-freshenVarbindingM g (x,(t,ReadOnly)) = (\t -> (x,(t,ReadOnly))) <$> freshTyVar g (srcPos x) t
-freshenVarbindingM g (x,(t,a)) = (\t -> (x,(t,a))) <$> return t
+freshenVarbindingM g (x,(v@(TVar{}),a)) = return (x,(v,a))
+freshenVarbindingM g (x,(t,ReadOnly)  ) = (\t -> (x,(t,ReadOnly))) <$> freshTyVar g (srcPos x) t
+freshenVarbindingM g (x,(t,a)         ) = return (x,(t,a))
 
 freshenModuleDefM g (a, m)  
   = do  vars     <- E.envFromList <$> mapM f (E.envToList $ m_variables m)

@@ -48,9 +48,6 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Verbosity
   , whenLoud', whenLoud, whenQuiet', whenQuiet
 
-  -- * Super
-  , getSuperM, getSuperDefM
-
   )  where 
 
 import           Control.Applicative                ((<$>))
@@ -387,33 +384,6 @@ methTys l f ft0
       Nothing         -> tcError $ errorNonFunction (srcPos l) f ft0 
       Just (vs,bs,t)  -> return  $ (vs,b_type <$> bs,t)
 
-
--- FIXME: use common implementation for TC and liquid
---------------------------------------------------------------------------------
-getSuperM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (RType r)
---------------------------------------------------------------------------------
--- getSuperM l (TApp (TRef i) ts _)         = fromTdef =<< findSymOrDieM i
---   where 
---     fromTdef (ID _ _ vs (Just (p,ps)) _) = return  
---                                          $ apply (fromList $ zip vs ts) 
---                                          $ TApp (TRef (F.symbol p)) ps fTop
---     fromTdef (ID _ _ _ Nothing _)        = tcError 
---                                          $ errorSuper (srcPos l) 
-getSuperM l _                            = tcError 
-                                         $ errorSuper (srcPos l) 
-
---------------------------------------------------------------------------------
-getSuperDefM :: (PPRSF r, IsLocated a) => a -> RType r -> TCM r (IfaceDef r)
---------------------------------------------------------------------------------
--- getSuperDefM l (TApp (TRef i) ts _) = fromTdef =<< findSymOrDieM i
---   where 
---     fromTdef (ID _ _ vs (Just (p,ps)) _) = 
---       do ID c n ws pp ee <- findSymOrDieM p
---          return  $ apply (fromList $ zip vs ts) 
---                  $ apply (fromList $ zip ws ps)
---                  $ ID c n [] pp ee
---     fromTdef (ID _ _ _ Nothing _) = tcError $ errorSuper (srcPos l) 
-getSuperDefM l _  = tcError $ errorSuper (srcPos l)
 
 
 -- Local Variables:

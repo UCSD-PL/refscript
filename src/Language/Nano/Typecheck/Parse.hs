@@ -7,73 +7,81 @@
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE DeriveGeneric             #-}
 
-module Language.Nano.Typecheck.Parse (
-    parseNanoFromFile, printFile
-  ) where
+
+module Language.Nano.Typecheck.Parse (parseNanoFromFiles) where
 
 import           Prelude                          hiding ( mapM)
 
+import           Data.Either                             (partitionEithers)
+import           Data.Default
+import           Data.Traversable                        (mapAccumL)
+import           Data.Monoid                             (mconcat)
+import           Data.Maybe                              (catMaybes)
 import           Data.Aeson                              (eitherDecode)
 import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
-import           Data.Char                               (isLower, isSpace)
-import           Data.Maybe                              (isJust)
+import           Data.Char                               (isLower)
+import qualified Data.HashMap.Strict              as     M
 import qualified Data.List                        as     L
-import           Data.Generics.Aliases                   ( mkQ)
-import           Data.Generics.Schemes
-import           Data.Traversable                        (mapAccumL)
+-- import           Data.Traversable                        (mapAccumL)
 import           Text.PrettyPrint.HughesPJ               (text)
 import           Data.Data
 import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
 
-import           Control.Monad                    hiding (mapM)
+import           Control.Monad
 import           Control.Monad.Trans                     (MonadIO,liftIO)
 import           Control.Applicative                     ((<$>), ( <*>))
 
 import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
 import           Language.Fixpoint.Parse
+import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc                  (mapEither, mapSnd)
-import           Language.Nano.Types
+
+import           Language.Nano.Annots
 import           Language.Nano.Errors
-import           Language.Nano.Typecheck.Types
-import           Language.Nano.Liquid.Types
 import           Language.Nano.Env
-import           Language.Nano.Files
+import           Language.Nano.Locations
+import           Language.Nano.Names
+import           Language.Nano.Program
+import           Language.Nano.Types              hiding (Exported)
+import           Language.Nano.Typecheck.Types    hiding (argBind)
+import           Language.Nano.Liquid.Types
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
 import           Text.Parsec                      hiding (parse)
 import           Text.Parsec.Pos                         (newPos)
-import qualified Text.Parsec.Token                as     Token
+import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
+import qualified Text.Parsec.Token                as     T
 
 import           GHC.Generics
 
 -- import           Debug.Trace                             ( trace, traceShow)
 
-dot        = Token.dot        lexer
-plus       = Token.symbol     lexer "+"
-star       = Token.symbol     lexer "*"
-question   = Token.symbol     lexer "?"
-
-
--- type ParserS a = Parser (TDefEnv RefType, Integer) a 
+dot        = T.dot        lexer
+plus       = T.symbol     lexer "+"
+question   = T.symbol     lexer "?"
 
 ----------------------------------------------------------------------------------
 -- | Type Binders 
 ----------------------------------------------------------------------------------
 
 idBindP :: Parser (Id SourceSpan, RefType)
-idBindP = xyP identifierP dcolon bareTypeP
+idBindP = withinSpacesP $ xyP identifierP dcolon bareTypeP
 
-idFieldP = xyzP identifierP dcolon bareTypeP
+anonFuncP :: Parser RefType
+anonFuncP = funcSigP
 
 identifierP :: Parser (Id SourceSpan)
-identifierP =   try (withSpan Id upperIdP)
-           <|>      (withSpan Id lowerIdP)
-
+identifierP =  try (withSpan Id uIdP)
+           <|>     (withSpan Id lIdP)
+  where
+    uIdP    = symbolString <$> upperIdP
+    lIdP    = symbolString <$> lowerIdP
+  
 pAliasP :: Parser (Id SourceSpan, PAlias) 
 pAliasP = do name <- identifierP
              πs   <- pAliasVarsP -- many symbolP 
@@ -94,22 +102,40 @@ tAliasP = do name      <- identifierP
 aliasVarsP    = try (brackets $ sepBy aliasVarP comma) <|> return []
 aliasVarP     = withSpan (,) (wordP $ \_ -> True)
 
+aliasVarT :: (SourceSpan, Symbol) -> Either TVar Symbol
 aliasVarT (l, x)      
-  | isTvar x  = Left  $ tvar l x
-  | otherwise = Right $ stringSymbol x 
-
-iFaceP   :: Parser (Id SourceSpan, TDef RefType)
+  | isTvar x' = Left  $ tvar l x
+  | otherwise = Right $ x 
+  where
+    x'        = symbolString x
+    
+iFaceP   :: Parser (Id SourceSpan, IfaceDef Reft)
 iFaceP   = do id     <- identifierP 
               vs     <- option [] tParP
-              ext    <- optionMaybe extendsP
-              es     <- braces $ eltsP
-              return (id, TD id vs ext es)
+              h      <- optionMaybe extendsP
+              -- FIXME
+              es     <- braces $ propBindP def
+              return (id, ID False id vs h es)
 
 extendsP = do reserved "extends"
-              pId <- (char '#' >> identifierP)
-              ts  <- option [] $ brackets $ sepBy bareTypeP comma
-              return (pId, ts)
-               
+              qn     <- RN <$> qnameP
+              ts     <- option [] $ brackets $ sepBy bareTypeP comma
+              return (qn, ts)
+
+qnameP   = withSpan (\s x -> QName s (init x) (last x)) $ char '#' >> sepBy1 qSymbolP (char '.')
+
+-- | Redefining some stuff to make the Qualified names parse right
+qSymbolP :: Parser Symbol
+qSymbolP = symbol <$> qSymCharsP
+qSymCharsP   = condIdP qSymChars (`notElem` keyWordSyms)
+keyWordSyms = ["if", "then", "else", "mod"]
+qSymChars
+  =  ['a' .. 'z']
+  ++ ['A' .. 'Z']
+  ++ ['0' .. '9']
+  ++ ['_', '%', '#']    -- omitting the the '.'
+
+
 
 -- [A,B,C...]
 tParP    = angles $ sepBy tvarP comma
@@ -123,11 +149,6 @@ withSpan f p = do pos   <- getPosition
 xyP lP sepP rP
   = (\x _ y -> (x, y)) <$> lP <*> (spaces >> sepP) <*> rP
 
-xyzP lP sepP rP
-  = (\x _ y z -> (x, y, z)) <$> lP 
-                            <*> (spaces >> sepP) 
-                            <*> (isJust <$> optionMaybe star) 
-                            <*> rP
 
 postP p post 
   = (\x _ -> x) <$> p <*> post
@@ -141,7 +162,7 @@ postP p post
 ----------------------------------------------------------------------------------
 bareTypeP :: Parser RefType 
 ----------------------------------------------------------------------------------
-bareTypeP =       
+bareTypeP = bareAllP $ 
       try bUnP
   <|> try (refP rUnP)
   <|>     (xrefP rUnP)
@@ -160,27 +181,43 @@ bUnP        = parenNullP (bareTypeNoUnionP `sepBy1` plus) toN >>= mkU
 
 
 -- | `bareTypeNoUnionP` parses a type that does not contain a union at the top-level.
-bareTypeNoUnionP = try funcSigP <|> (bareAtomP bbaseP)
+bareTypeNoUnionP = try funcSigP <|> (bareAllP $ bareAtomP bbaseP)
 
--- | `optNullP` optianlly parses "( `a` )?", where `a` is parsed by the input parser @pr@.
+-- | `optNullP` optionally parses "( `a` )?", where `a` is parsed by the input parser @pr@.
 parenNullP p f =  try (f <$> postP p question) <|> p
 
 -- | `funcSigP` parses a function type that is possibly generic and/or an intersection.
-funcSigP = 
-      try bareAll1P
-  <|> try (intersectP bareAll1P) 
-  <|> try bareFun1P
-  <|>     (intersectP bareFun1P)
+funcSigP =  try (bareAllP bareFunP)
+        <|> try (intersectP $ bareAllP bareFunP) 
+  where
+    intersectP p = tAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
 
-intersectP p      = tAnd <$> many1 (reserved "/\\" >> p)
+methSigP =  try (bareAllP bareMethP)
+        <|> try (intersectP $ bareAllP bareMethP) 
+  where
+    intersectP p = tAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
 
--- | `bareFun1P` parses a single function type
-bareFun1P
+
+-- | `bareFunP` parses a single function type
+--
+--  (x:t, ...) => t
+--
+bareFunP
   = do args   <- parens $ sepBy bareArgP comma
        reserved "=>" 
        ret    <- bareTypeP 
        r      <- topP
        return $ TFun args ret r
+
+
+--  (x:t, ...): t
+bareMethP
+  = do args   <- parens $ sepBy bareArgP comma
+       _      <- colon
+       ret    <- bareTypeP 
+       r      <- topP
+       return $ TFun args ret r
+
 
 bareArgP 
   =   (try boundTypeP)
@@ -202,16 +239,24 @@ bbaseP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
 bbaseP 
   =  try (TVar <$> tvarP)                  -- A
- <|> try objLitP                           -- {f1: T1, ... , fn: Tn} 
- <|> try (TArr <$> arrayP)                 -- [T]
+ <|> try objLitP                           -- {f1: T1; ... ; fn: Tn} 
+ -- FIXME
+ -- Disabling array in this form cause there is no room for mutability ...
+ -- <|> try (rtArr <$> arrayP)                -- Array<T>
  <|> try (TApp <$> tConP <*> bareTyArgsP)  -- #List[A], #Tree[A,B] etc...
  
+
+
 ----------------------------------------------------------------------------------
 objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
-objLitP = do 
-  bs    <- braces $ bindsP
-  return $ TCons [ TE s True t | B s t <- bs ]
+objLitP 
+  = do m     <- option def (toType <$> mutP)
+       bs    <- braces (propBindP m)
+       return $ TCons bs m
+ 
+mutP =  try (TVar <$> brackets tvarP <*> return ()) 
+    <|> try (TApp <$> brackets tConP <*> return [] <*> return ())
 
 
 bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
@@ -224,7 +269,7 @@ tvarP    :: Parser TVar
 ----------------------------------------------------------------------------------
 tvarP    = withSpan tvar $ wordP isTvar 
 
-tvar l x = TV (stringSymbol x) l
+tvar l x = TV x l
 
 isTvar   = not . isLower . head
 
@@ -242,48 +287,92 @@ tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "top"       >> return TTop)
      <|> try (reserved "string"    >> return TString)
      <|> try (reserved "null"      >> return TNull)
-     <|>     (withinSpacesP $ char '#' >> identifierP >>= idToTRefP)
+     <|> try (reserved "bool"      >> return TFPBool)
+     <|>     (TRef <$> RN <$> qnameP)
 
-----------------------------------------------------------------------------------
-idToTRefP :: Id SourceSpan -> Parser TCon
-----------------------------------------------------------------------------------
-idToTRefP (Id _ s) = do
---   (u, _)     <- getState
---   let u'      = addSym s u 
---   modifyState $ \(_,n) -> (u', n)
-  return      $ TRef $ symbol s
 
-bareAll1P 
+bareAll1P p
   = do reserved "forall"
        αs <- many1 tvarP
        dot
-       t  <- bareTypeP
+       t  <- p
        return $ foldr TAll t αs
 
-arrayP = brackets bareTypeP
+bareAllP p =  try p 
+          <|> bareAll1P p
 
--- | f1: t1, f2: t2, ..., fn: tn
-bindsP 
-  =  try (sepBy1 bareBindP comma)
- <|> (spaces >> return [])
 
--- | f : type 
-bareBindP = do s <- binderP
-               withinSpacesP colon
-               t <- bareTypeP
-               return $ B s t 
+propBindP defM =  sepEndBy (
+                  try indexEltP 
+              <|> try (fieldEltP defM)
+              <|> try (statEltP defM)
+              <|> try (methEltP defM)
+              <|> try callEltP
+              <|> try consEltP
+                  ) semi
 
--- | f1:[*] t1, f2:[*] t2, ..., fn:[*] tn
-eltsP 
-  =  try (sepBy1 bareEltP comma)
- <|> (spaces >> return [])
 
--- | f :[*] type 
-bareEltP = do s <- binderP
-              withinSpacesP colon
-              mut <- isJust <$> optionMaybe star
-              t <- bareTypeP
-              return $ TE s mut t 
+-- | [f: string]: t
+-- | [f: number]: t
+
+indexEltP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
+               case it of 
+                 "number" -> return $ IndexSig x False t
+                 "string" -> return $ IndexSig x True t
+                 _        -> error $ "Index signature can only have " ++
+                                     "string or number as index." 
+
+indexP = xyP id colon sn
+  where
+    id = symbol <$> (try lowerIdP <|> upperIdP)
+    sn = withinSpacesP (string "string" <|> string "number")
+
+
+-- | <[mut]> f: t
+fieldEltP defM  = do 
+    x          <- symbolP 
+    _          <- colon
+    m          <- option defM (toType <$> mutP)
+    t          <- bareTypeP
+    return      $ FieldSig x m t
+
+-- | static <[mut]> f :: t
+statEltP defM   = do 
+    _          <- reserved "static"
+    x          <- symbolP 
+    _          <- colon
+    m          <- option defM (toType <$> mutP)
+    t          <- bareTypeP
+    return      $ StatSig x m t
+
+-- | <[mut]> m :: (ts): t
+methEltP defM   = do
+    x          <- symbolP 
+    _          <- colon
+    m          <- option defM (toType <$> mutP)
+    t          <- methSigP
+    return      $ MethSig x m $ outT t
+  where
+    outT t      =  
+      case bkFun t of 
+        Just (_, (B x _):_,_) | x == symbol "this" -> t
+        Just (vs, bs      ,ot)                     -> mkFun (v:vs, B (symbol "this") tv : bs, ot)
+        _                                          -> t
+    -- XXX: using _THIS_ as a reserved sting here.
+    v  = TV (symbol "_THIS_") (srcPos (dummyPos "RSC.Parse.methEltP"))
+    tv = TVar v fTop
+
+
+-- | <forall A .> (t...) => t
+
+callEltP = CallSig <$> withinSpacesP (bareAllP bareFunP)
+
+
+-- | new <forall A .> (t...) => t
+
+consEltP = do
+    try      $  reserved "new"
+    ConsSig <$> withinSpacesP (bareAllP bareFunP)
 
  
 ----------------------------------------------------------------------------------
@@ -314,7 +403,7 @@ xrefP kindP
       t   <- kindP
       reserved "|"
       ras <- refasP 
-      return $ t (Reft (stringSymbol "v", ras))
+      return $ t (Reft (symbol "v", ras))
 
 ----------------------------------------------------------------------------------
 refasP :: Parser [Refa]
@@ -322,16 +411,6 @@ refasP :: Parser [Refa]
 refasP  =  (try (brackets $ sepBy (RConc <$> predP) semi)) 
        <|> liftM ((:[]) . RConc) predP
  
-----------------------------------------------------------------------------------
-binderP :: Parser Symbol
-----------------------------------------------------------------------------------
-binderP = try (stringSymbol <$> idP badc)
-      -- <|> try (star >> return (stringSymbol "*")) -- disabling this
-      <|> liftM pwr (parens (idP bad))
-      where idP p  = many1 (satisfy (not . p))
-            badc c = (c == ':') ||  bad c
-            bad c  = isSpace c || c `elem` "()"
-            pwr s  = stringSymbol $ "(" ++ s ++ ")" 
 
 ----------------------------------------------------------------------------------
 withinSpacesP :: Parser a -> Parser a
@@ -339,14 +418,14 @@ withinSpacesP :: Parser a -> Parser a
 withinSpacesP p = do { spaces; a <- p; spaces; return a } 
              
 ----------------------------------------------------------------------------------
-classDeclP :: Parser (Id SourceSpan, ([TVar], Maybe (Id SourceSpan, [RefType])))
+classDeclP :: Parser (Id SourceSpan, ([TVar], Maybe (RelName, [RefType])))
 ----------------------------------------------------------------------------------
 classDeclP = do
-  reserved "class"
-  id <- identifierP 
-  vs <- option [] $ angles $ sepBy tvarP comma
-  pr <- optionMaybe extendsP
-  return (id, (vs, pr))
+    reserved "class"
+    id <- identifierP 
+    vs <- option [] $ angles $ sepBy tvarP comma
+    pr <- optionMaybe extendsP
+    return (id, (vs, pr))
 
 
 ---------------------------------------------------------------------------------
@@ -354,68 +433,100 @@ classDeclP = do
 ---------------------------------------------------------------------------------
 
 data RawSpec
-  = RawMeas   String   -- Measure
-  | RawBind   String   -- Function bindings
-  | RawExtern String   -- Extern declarations
-  | RawType   String   -- Variable declaration annotations
-  | RawClass  String   -- Class annots
-  | RawField  String   -- Field annots
-  | RawMethod String   -- Method annots
-  | RawConstr String   -- Constructor annots
-  | RawTAlias String   -- Type aliases
-  | RawPAlias String   -- Predicate aliases
-  | RawQual   String   -- Qualifiers
-  | RawInvt   String   -- Invariants
+  = RawMeas     (SourceSpan, String)   -- Measure
+  | RawBind     (SourceSpan, String)   -- Named function or var bindings
+  | RawFunc     (SourceSpan, String)   -- Anonymouns function type
+  | RawIface    (SourceSpan, String)   -- Interface annots
+  | RawClass    (SourceSpan, String)   -- Class annots
+  | RawField    (SourceSpan, String)   -- Field annots
+  | RawMethod   (SourceSpan, String)   -- Method annots
+  | RawStatic   (SourceSpan, String)   -- Static annots
+  | RawConstr   (SourceSpan, String)   -- Constructor annots
+  | RawTAlias   (SourceSpan, String)   -- Type aliases
+  | RawPAlias   (SourceSpan, String)   -- Predicate aliases
+  | RawQual     (SourceSpan, String)   -- Qualifiers
+  | RawInvt     (SourceSpan, String)   -- Invariants
+  | RawCast     (SourceSpan, String)   -- Casts
+  | RawExported (SourceSpan, String)   -- Exported
   deriving (Show,Eq,Ord,Data,Typeable,Generic)
 
-data PSpec l t 
-  = Meas   (Id l, t)
-  | Bind   (Id l, t) 
-  | Field  (Id l, Bool, t) 
-  | Constr (Id l, t)
-  | Method (Id l, t)
-  | Extern (Id l, t)
-  | IFace  (Id l, TDef t)
-  | Class  (Id l, ([TVar], Maybe (Id l,[t])))
-  | TAlias (Id l, TAlias t)
+data PSpec l r
+  = Meas   (Id l, RType r)
+  | Bind   (Id l, RType r) 
+  | AnFunc (RType r) 
+  | Field  (TypeMember r)
+  | Constr (TypeMember r)
+  | Method (TypeMember r)
+  | Static (TypeMember r)
+  | Iface  (Id l, IfaceDef r)
+  | Class  (Id l, ([TVar], Maybe (RelName, [RType r])))
+  | TAlias (Id l, TAlias (RType r))
   | PAlias (Id l, PAlias) 
   | Qual   Qualifier
-  | Invt   l t 
+  | Invt   l (RType r) 
+  | CastSp l (RType r)
+  | Exported l
+
+  -- Used only for parsing specs
+  | ErrorSpec
   deriving (Eq, Ord, Show, Data, Typeable)
 
-type Spec = PSpec SourceSpan RefType
+type Spec = PSpec SourceSpan Reft
 
-parseAnnot :: SourceSpan -> RawSpec -> Parser Spec
-parseAnnot ss (RawMeas   _) = Meas   <$> patch2 ss <$> idBindP
-parseAnnot ss (RawBind   _) = Bind   <$> patch2 ss <$> idBindP
-parseAnnot ss (RawField  _) = Field  <$> patch3 ss <$> idFieldP
-parseAnnot ss (RawMethod _) = Method <$> patch2 ss <$> idBindP
-parseAnnot ss (RawConstr _) = Constr <$> patch2 ss <$> idBindP
-parseAnnot ss (RawExtern _) = Extern <$> patch2 ss <$> idBindP
-parseAnnot ss (RawType   _) = IFace  <$> patch2 ss <$> iFaceP
-parseAnnot ss (RawClass  _) = Class  <$> patch2 ss <$> classDeclP 
-parseAnnot ss (RawTAlias _) = TAlias <$> patch2 ss <$> tAliasP
-parseAnnot ss (RawPAlias _) = PAlias <$> patch2 ss <$> pAliasP
-parseAnnot _  (RawQual   _) = Qual   <$>              qualifierP
-parseAnnot ss (RawInvt   _) = Invt             ss <$> bareTypeP
+parseAnnot :: RawSpec -> Parser Spec
+parseAnnot (RawMeas     (ss, _)) = Meas   <$> patch2 ss <$> idBindP
+parseAnnot (RawBind     (ss, _)) = Bind   <$> patch2 ss <$> idBindP
+parseAnnot (RawFunc     (_ , _)) = AnFunc <$>               anonFuncP
+parseAnnot (RawField    (_ , _)) = Field  <$>               fieldEltP def -- FIXME: these need to be patched aferwards  
+parseAnnot (RawMethod   (_ , _)) = Method <$>               methEltP def 
+parseAnnot (RawStatic   (_ , _)) = Static <$>               statEltP def
+parseAnnot (RawConstr   (_ , _)) = Constr <$>               consEltP
+parseAnnot (RawIface    (ss, _)) = Iface  <$> patch2 ss <$> iFaceP
+parseAnnot (RawClass    (ss, _)) = Class  <$> patch2 ss <$> classDeclP 
+parseAnnot (RawTAlias   (ss, _)) = TAlias <$> patch2 ss <$> tAliasP
+parseAnnot (RawPAlias   (ss, _)) = PAlias <$> patch2 ss <$> pAliasP
+parseAnnot (RawQual     (_ , _)) = Qual   <$>               qualifierP
+parseAnnot (RawInvt     (ss, _)) = Invt              ss <$> bareTypeP
+parseAnnot (RawCast     (ss, _)) = CastSp            ss <$> bareTypeP
+parseAnnot (RawExported (ss, _)) = return $ Exported ss
 
 
 patch2 ss (id, t)    = (fmap (const ss) id , t)
-patch3 ss (id, m, t) = (fmap (const ss) id , m, t)
 
 getSpecString :: RawSpec -> String 
-getSpecString (RawMeas   s) = s 
-getSpecString (RawBind   s) = s 
-getSpecString (RawExtern s) = s  
-getSpecString (RawType   s) = s  
-getSpecString (RawField  s) = s  
-getSpecString (RawMethod s) = s  
-getSpecString (RawConstr s) = s  
-getSpecString (RawClass  s) = s  
-getSpecString (RawTAlias s) = s  
-getSpecString (RawPAlias s) = s  
-getSpecString (RawQual   s) = s  
-getSpecString (RawInvt   s) = s  
+getSpecString (RawMeas     (_, s)) = s 
+getSpecString (RawBind     (_, s)) = s 
+getSpecString (RawFunc     (_, s)) = s 
+getSpecString (RawIface    (_, s)) = s  
+getSpecString (RawField    (_, s)) = s  
+getSpecString (RawMethod   (_, s)) = s  
+getSpecString (RawStatic   (_, s)) = s  
+getSpecString (RawConstr   (_, s)) = s  
+getSpecString (RawClass    (_, s)) = s  
+getSpecString (RawTAlias   (_, s)) = s  
+getSpecString (RawPAlias   (_, s)) = s  
+getSpecString (RawQual     (_, s)) = s  
+getSpecString (RawInvt     (_, s)) = s  
+getSpecString (RawCast     (_, s)) = s  
+getSpecString (RawExported (_, s)) = s  
+
+instance IsLocated RawSpec where
+  srcPos (RawMeas     (s,_)) = s 
+  srcPos (RawBind     (s,_)) = s 
+  srcPos (RawFunc     (s,_)) = s 
+  srcPos (RawIface    (s,_)) = s  
+  srcPos (RawField    (s,_)) = s  
+  srcPos (RawMethod   (s,_)) = s  
+  srcPos (RawStatic   (s,_)) = s  
+  srcPos (RawConstr   (s,_)) = s  
+  srcPos (RawClass    (s,_)) = s  
+  srcPos (RawTAlias   (s,_)) = s  
+  srcPos (RawPAlias   (s,_)) = s  
+  srcPos (RawQual     (s,_)) = s  
+  srcPos (RawInvt     (s,_)) = s  
+  srcPos (RawCast     (s,_)) = s  
+  srcPos (RawExported (s,_)) = s  
+
 
 instance FromJSON SourcePos where
   parseJSON (Array v) = do
@@ -446,18 +557,20 @@ instance FromJSON SourceSpan
 instance FromJSON RawSpec
 
 
--------------------------------------------------------------------------------
--- | Parse File and Type Signatures -------------------------------------------
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------
+-- | Parse File and Type Signatures 
+--------------------------------------------------------------------------------------
 
--------------------------------------------------------------------------------
-parseNanoFromFile :: FilePath-> IO (NanoBareR Reft)
--------------------------------------------------------------------------------
-parseNanoFromFile f 
-  = do  ssP   <- parseScriptFromJSON =<< getPreludePath
-        ssF   <- parseScriptFromJSON f 
-        -- Concat the programs at the JSON level
-        return $ mkCode f $ expandAnnots $ ssP ++ ssF
+--------------------------------------------------------------------------------------
+parseNanoFromFiles :: [FilePath] -> IO (Either (FixResult Error) (NanoBareR Reft))
+--------------------------------------------------------------------------------------
+parseNanoFromFiles fs = 
+  do  sa <- partitionEithers <$> mapM parseScriptFromJSON fs
+      case sa of
+        ([],ps) -> case expandAnnots $ concat ps of
+                     Right ps -> return $ Right $ mkCode $ ps 
+                     Left e   -> return $ Left e
+        (es,_ ) -> return $ Left  $ mconcat es 
 
 --------------------------------------------------------------------------------------
 getJSON :: MonadIO m => FilePath -> m B.ByteString
@@ -465,103 +578,177 @@ getJSON :: MonadIO m => FilePath -> m B.ByteString
 getJSON = liftIO . B.readFile
 
 --------------------------------------------------------------------------------------
-parseScriptFromJSON :: FilePath -> IO [Statement (SourceSpan, [RawSpec])]
+parseScriptFromJSON :: FilePath -> IO (Either (FixResult a) [Statement (SourceSpan, [RawSpec])])
 --------------------------------------------------------------------------------------
 parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
   where 
     decodeOrDie s =
       case eitherDecode s :: Either String [Statement (SourceSpan, [RawSpec])] of
-        Left msg -> error $ "JSON decode error:\n" ++ msg
-        Right p  -> p
+        Left msg -> Left  $ Crash [] $ "JSON decode error:\n" ++ msg
+        Right p  -> Right $ p
 
 --------------------------------------------------------------------------------------
-mkCode :: FilePath -> [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
+mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
-mkCode f ss =  Nano {
-        fp      = f
-      , code    = Src (checkTopStmt <$> ss')
-      , externs = envFromList   [ t | Extern t <- anns ] -- externs
-      -- FIXME: same name methods in different classes.
-      , specs   = catFunSpecDefs ss                      -- function sigs (no methods...)
-      , glVars  = catVarSpecDefs ss                      -- variables
-      , consts  = envFromList   [ t | Meas   t <- anns ] 
-      , defs    = tDefFromList  [ t | IFace  t <- anns ] 
-      , tAlias  = envFromList   [ t | TAlias t <- anns ] 
-      , pAlias  = envFromList   [ t | PAlias t <- anns ] 
-      , quals   =               [ t | Qual   t <- anns ] 
-      , invts   = [Loc (srcPos l) t | Invt l t <- anns ]
+mkCode ss =  Nano {
+        code          = Src (checkTopStmt <$> ss')
+      , specs         = envFromList $ getSpecs ss
+      , consts        = envFromList   [ t | Meas   t <- anns ] 
+      , tAlias        = envFromList   [ t | TAlias t <- anns ] 
+      , pAlias        = envFromList   [ t | PAlias t <- anns ] 
+      , pQuals        =               [ t | Qual   t <- anns ] 
+      , invts         = [Loc (srcPos l) t | Invt l t <- anns ]
     } 
   where
-    toBare     :: (SourceSpan, [Spec]) -> AnnBare Reft 
-    toBare (l,αs) = Ann l $ [VarAnn t       | Bind   (_,t) <- αs ]
-                         ++ [ConsAnn t      | Constr (_,t) <- αs ]
-                         ++ [FieldAnn (m,t) | Field  (_,m,t) <- αs ]
-                         ++ [MethAnn t      | Method (_,t) <- αs ]
-                         ++ [ClassAnn t     | Class  (_,t) <- αs ]
-    ss'           = (toBare <$>) <$> ss
-    anns          = concatMap (FO.foldMap snd) ss
+    toBare           :: (SourceSpan, [Spec]) -> AnnBare Reft 
+    toBare (l,αs)     = Ann l $ catMaybes $ bb <$> αs 
+    
+    bb (Bind   (_,t)) = Just $ VarAnn   t   
+    bb (Constr c    ) = Just $ ConsAnn  c   
+    bb (Field  f    ) = Just $ FieldAnn f   
+    bb (Method m    ) = Just $ MethAnn  m   
+    bb (Static m    ) = Just $ StatAnn  m   
+    bb (Class  (_,t)) = Just $ ClassAnn t   
+    bb (Iface  (_,t)) = Just $ IfaceAnn t   
+    bb (CastSp _ t  ) = Just $ UserCast t   
+    bb (Exported _  ) = Just $ ExporedModElt
+    bb (AnFunc t    ) = Just $ FuncAnn  t   
+    bb _              = Nothing
+
+    ss'               = (toBare <$>) <$> ss
+    anns              = concatMap (FO.foldMap snd) ss
+
+-- Meh... 
+getSpecs :: [Statement (SourceSpan, [Spec])] -> [(Id SourceSpan, RefType)]
+getSpecs ss = rename <$> zip [ b | s <- ss, (_, z) <- FO.toList s, Bind b <- z] [0..]
+  where
+    rename ((Id l s,t), i) = (Id l (s ++ "_" ++ show i), t)
 
 
 type PState = Integer
 
-
 instance PP Integer where
   pp = pp . show
 
---------------------------------------------------------------------------------------
-expandAnnots :: [Statement (SourceSpan, [RawSpec])] -> [Statement (SourceSpan, [Spec])]
---------------------------------------------------------------------------------------
-expandAnnots = snd <$> mapAccumL (mapAccumL f) 0
-  where f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
 
 --------------------------------------------------------------------------------------
-parse :: SourceSpan -> PState -> RawSpec -> (PState, Spec)
+expandAnnots :: [Statement (SourceSpan, [RawSpec])] 
+             -> Either (FixResult Error) [Statement (SourceSpan, [Spec])]
 --------------------------------------------------------------------------------------
-parse ss st c = foo c
-  where foo s = failLeft $ runParser 
-                  (do a <- parseAnnot ss s
-                      st <- getState
-                      return (st, a)) 
-                  st f (getSpecString s)
-        failLeft (Left s) = error $ show s
-        failLeft (Right r) = r
-        f = sourceName $ sp_begin ss
+expandAnnots ss = 
+  case mapAccumL (mapAccumL f) (0,[]) ss of
+    ((_,[]),b) -> Right $ b
+    ((_,es),_) -> Left  $ Unsafe es
+  where 
+    f st (ss,sp) = mapSnd ((ss),) $ L.mapAccumL (parse ss) st sp
+
+--------------------------------------------------------------------------------------
+parse :: SourceSpan -> (PState, [Error]) -> RawSpec -> ((PState, [Error]), Spec)
+--------------------------------------------------------------------------------------
+parse ss (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
+  where
+    parser s = do a     <- parseAnnot s
+                  state <- getState
+                  it    <- getInput
+                  case it of 
+                    ""  -> return $ (state, a) 
+                    _   -> unexpected $ "trailing input: " ++ it
+
+    failLeft (Left err)      = ((st, (fromError err): errs), ErrorSpec)
+    failLeft (Right (s, r))  = ((s, errs), r)
+
+    -- Slight change from this one:
+    -- http://hackage.haskell.org/package/parsec-3.1.5/docs/src/Text-Parsec-Error.html#ParseError
+    showErr = showErrorMessages "or" "unknown parse error" "expecting" 
+                "unexpected" "end of input" . errorMessages
+    fromError err = mkErr ss   $ showErr err 
+                              ++ "\n\nWhile parsing: " 
+                              ++ show (getSpecString c)
+    ss = srcPos c
+    f = sourceName $ sp_begin ss
+
+
+
+-- --------------------------------------------------------------------------------------
+-- expandAnnots :: [Statement (SourceSpan, [RawSpec])] 
+--              -> Either (FixResult Error) [Statement (SourceSpan, [Spec])]
+-- --------------------------------------------------------------------------------------
+-- expandAnnots ss 
+--   | length errs > 0  = Left  $ Unsafe errs
+--   | otherwise        = Right $ fmap replace <$> ss
+--   where 
+--     g st (_,sp)      = foldl parse st sp
+--     (_,m, errs)      = foldl g (0, M.empty, []) $ concatMap FO.toList ss 
+--     replace (ss, rs) = (ss, concatMap (`recover` m) rs)
+--     recover          = M.lookupDefault [] . srcPos
+-- 
+-- 
+-- --------------------------------------------------------------------------------------
+-- parse :: (PState, M.HashMap SourceSpan [Spec], [Error]) -> RawSpec 
+--       -> (PState, M.HashMap SourceSpan [Spec], [Error])
+-- --------------------------------------------------------------------------------------
+-- parse (st,m,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
+--   where
+--     parser s = do a     <- parseAnnot s
+--                   state <- getState
+--                   it    <- getInput
+--                   case it of 
+--                     ""  -> return $ (state, a) 
+--                     _   -> unexpected $ "trailing input: " ++ it
+-- 
+-- 
+--     failLeft (Left err)      = (st, m,(fromError err): errs)
+--     failLeft (Right (s, r))  = (s, M.insertWith (++) ss [r] m, errs)
+-- 
+--     -- Slight change from this one:
+--     -- http://hackage.haskell.org/package/parsec-3.1.5/docs/src/Text-Parsec-Error.html#ParseError
+--     showErr = showErrorMessages "or" "unknown parse error" "expecting" 
+--                 "unexpected" "end of input" . errorMessages
+--     fromError err = mkErr ss   $ showErr err 
+--                               ++ "\n\nWhile parsing: " 
+--                               ++ show (getSpecString c)
+--     ss = srcPos c
+--     f = sourceName $ sp_begin ss
+-- 
 
 instance PP (RawSpec) where
   pp = text . getSpecString
 
 
---------------------------------------------------------------------------------------
-catFunSpecDefs :: [Statement (SourceSpan, [Spec])] -> Env RefType
---------------------------------------------------------------------------------------
-catFunSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
-  where ds     = definedFuns ss
+-- --------------------------------------------------------------------------------
+-- -- | Sanity checks on types
+-- --------------------------------------------------------------------------------
+-- --
+-- -- Perhaps move these to typechecking
+-- --
+-- 
+-- data TypeError = NameNotFound Symbol
+--                | InvalidMutability Symbol
+--   deriving (Data, Typeable)
+-- 
+-- instance Show TypeError where
+--   show (NameNotFound s)      = printf "Type '%s' is unbound" (ppshow s)
+--   show (InvalidMutability s) = "Invalid mutability symbol '" 
+--                             ++ ppshow s 
+--                             ++ "'. "
+--                             ++ "Possible fix: "
+--                             ++ "add a mutability modifier as the first type argument"
 
---------------------------------------------------------------------------------------
-catVarSpecDefs :: [Statement (SourceSpan, [Spec])] -> Env RefType
---------------------------------------------------------------------------------------
-catVarSpecDefs ss = envFromList [ a | l <- ds , Bind a <- snd l ]
-  where ds     = varDeclStmts ss
 
-
--- SYB examples at: http://web.archive.org/web/20080622204226/http://www.cs.vu.nl/boilerplate/#suite
---------------------------------------------------------------------------------------
-definedFuns       :: (Data a, Typeable a) => [Statement a] -> [a]
---------------------------------------------------------------------------------------
-definedFuns stmts = everything (++) ([] `mkQ` fromFunction) stmts
-  where 
-    fromFunction (FunctionStmt l _ _ _) = [l] 
-    fromFunction _                      = []
-
---------------------------------------------------------------------------------------
-varDeclStmts         :: (Data a, Typeable a) => [Statement a] -> [a]
---------------------------------------------------------------------------------------
-varDeclStmts stmts    = everything (++) ([] `mkQ` fromVarDecl) stmts
-  where 
-    fromVarDecl (VarDecl l _ _) = [l]
-
---------------------------------------------------------------------------------
-printFile :: FilePath -> IO () -- Either Error (NanoBareR Reft))
---------------------------------------------------------------------------------
-printFile f = parseNanoFromFile f >>= putStr . ppshow
-
+-- -- FIXME: This won't work here cause classes have not been included in δ 
+-- --------------------------------------------------------------------------------
+-- checkType :: IfaceEnv Reft -> RefType -> RefType
+-- --------------------------------------------------------------------------------
+-- checkType δ typ = 
+--     case everything (++) ([] `mkQ` fromType) typ of
+--       [] -> typ
+--       es -> error $ show es 
+--   where 
+--     fromType :: RefType -> [TypeError]
+--     fromType (TApp (TRef x) (m:_) _) | isNothing (findSym x δ) = [NameNotFound x] 
+--                                      | not (validMutability m) = [InvalidMutability x]
+--     fromType _                       = []
+-- 
+--     validMutability (TVar _ _)       = True
+--     validMutability t                = isMutabilityType t
+-- 

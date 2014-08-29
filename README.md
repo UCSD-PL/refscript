@@ -2,37 +2,17 @@
 
 Refinement Types for Scripting Languages
 
+## Install
 
-## Dependencies
+### Dependencies
 
-RefScript depends on the following projects:
+RefScript requires `ghc` and `cabal > 1.18` and:
 
- * Haskell compiler
- * [hsenv](https://github.com/Paczesiowa/hsenv) (optional)
- * Ocaml Compiler
- * [Node.js](http://nodejs.org/) and (optionally) [Jake](https://github.com/mde/jake)
- * [TypeScript](https://github.com/panagosg7/typescript): TypeScript compiler, used as front-end
- * [Liquid-fixpont](https://github.com/ucsd-progsys/liquid-fixpoint): Haskell Interface for Back-End Implication / Horn Clause Constraint Solving for Liquid Types
- * [Language Ecmascript](https://github.com/UCSD-PL/language-ecmascript): JavaScript Syntax writen in Haskell
+* [Node.js](http://nodejs.org/) version > 0.8 
+* [Ocaml](http://caml.inria.fr/ocaml/release.en.html)
+* [Z3 Binary](http://z3.codeplex.com/) version >= 4.3.2
 
-
-
-
-## Installing dependencies
-
-The following instructions have been tested on Ubuntu >= 12.04. 
-
-We assume that the requirements regarding the Haskell and Ocaml compiler are met.
-
-TypeScript depends on [node.js](http://nodejs.org/) version > 0.8 
-
-
-#### Installing Node on MacOS
-
-Install the [node package](http://nodejs.org/download/)
-
-
-#### Installing Node on Ubuntu/Debian
+### Installing Node on Ubuntu/Debian
 
     sudo apt-get install nodejs npm
 
@@ -43,38 +23,23 @@ install a newer version from the following PPA:
     sudo apt-get update
     sudo apt-get install nodejs npm
 
+### Download and Build 
 
-### Create Virtual Haskell Environment (Optional)
-
-It is recommended to use an isolated Haskell environment
-([hsenv](https://github.com/Paczesiowa/hsenv)). 
-Create one using version 7.6.3 of the GHC Haskell compiler (available
-[here](https://www.haskell.org/ghc/download_ghc_7_6_3)):
-
-    hsenv --ghc=/PATH/TO/GHC/ghc-7.6.3-x86_64-unknown-linux.tar
-    
-And then to enable it:
-
-    source .hsenv/bin/activate
-
-
-
-
-## Getting the source code
-
-Clone all dependencies and RefScript in the same directory `ROOT`:
+Suppose you want to work in a directory `$ROOT`. First `cd $ROOT`, and then:
 
     git clone https://github.com/panagosg7/liquid-fixpoint
     git clone https://github.com/UCSD-PL/language-ecmascript
+    cd RefScript && git checkout RefScript && cd ..
     git clone https://github.com/UCSD-PL/RefScript
+    cd RefScript && git checkout develop && cd ..
+    cd RefScript
+    cabal sandbox init
+    cabal sandbox add-source ../liquid-fixpoint
+    cabal sandbox add-source ../language-ecmascript
+    make
+	
 
-After acquiring the code you should have the following folder structure:
-
-    ROOT
-      ├── language-ecmascript
-      ├── liquid-fixpoint
-      └── RefScript
-
+### Building typescript (optional) 
 
 You can **optionally** get the latest version of our TypeScript to RefScript
 translation phase, as an alternative to using the precompiled scripts in
@@ -89,20 +54,6 @@ After acquiring the code you should have the following folder structure:
       ├── liquid-fixpoint
       ├── RefScript
       └── typescript
-
-
-
-
-## Building the project
-
-
-### Building dependencies
-
-    cd liquid-fixpoint     && cabal install && cd ..
-    cd language-ecmascript && git checkout RefScript && cabal install && cd ..
-
-
-### Building typescript (optional) 
 
 If you downloaded the TypeScript to RefScript translation, you can now build it: 
 
@@ -130,20 +81,11 @@ or, if this fails:
 
 
 
-### Building RefScript
-
-    cd RefScript           && cabal install
-
-
-
-
 ## Usage
 
 To run RefScript on a single TypeScript file:
 
-    nanojs liquid /path_to_JS_file/file.ts
-
-
+    rsc /path/to/file.ts
 
 
 ## Specifications
@@ -153,7 +95,6 @@ All specifications are added in comments of the following form:
     /*@ <specification> */
 
 RefScript currently allows the following forms of specifications:
-
 
 ### Signatures
 
@@ -187,7 +128,7 @@ Type anntoations on variables are of the form:
 
     /*@ <id> :: t */
     var <id> [= <exp>];
-    
+
 For example:
 
     /*@ a :: { number | v > 0 } */
@@ -377,4 +318,53 @@ TODO: some stuff is missing here. Do we even use that?
 
 
 
+## Editor Integration
 
+Currently, only support for Vim, *sorry!* (Feel free to submit a PR for emacs).
+
+### Vim
+
+**Install**
+
+1. Add the following to your `.vimrc`
+
+~~~~~
+Bundle 'scrooloose/syntastic'
+Bundle 'panagosg7/vim-annotations'
+~~~~~
+
+2. Copy the following files
+
+~~~~~
+cp ext/vim/typescript/nanojs.vim  ~/.vim/bundle/syntastic/syntax_checkers/typescript/nanojs.vim
+cp ext/vim/typescript/nanojs.vim  ~/.vim/bundle/syntastic/syntax_checkers/typescript/nanojs.vim
+~~~~~
+
+**Run**
+
++ `:SyntasticCheck liquid` runs `nanojs` on the current buffer.
+
+**View**
+
+1. **Warnings** will be displayed in the usual error buffer.
+
+2. **Inferred Types** will be displayed when `<F1>` is pressed over an identifier.
+
+
+**Options**
+
+You can configure the checker in various ways in your `.vimrc`.
+
++ To run after **each save**, for *all* Haskell files, add:
+
+~~~~~
+let g:syntastic_mode_map = { 'mode': 'active' }
+let g:syntastic_typescript_checkers += ['liquid']
+let g:syntastic_javascript_checkers += ['liquid']
+~~~~~
+
++ To pass extra options to `nanojs` add: 
+
+~~~~~
+let g:syntastic_typescript_liquid_args = '...'
+~~~~~

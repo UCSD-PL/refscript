@@ -2,40 +2,51 @@ module Language.Nano.Liquid.Qualifiers (nanoQualifiers) where
 
 import Language.Fixpoint.Errors
 import Language.Fixpoint.Types hiding (quals) 
-import Language.Nano.Typecheck.Types
 import Language.Nano.Liquid.Types
 import Language.Nano.Env
 import Language.Nano.Errors
-import Language.Nano.Types
+import Language.Nano.Locations
+import Language.Nano.Program
 import Language.ECMAScript3.Syntax
 import Data.List                (delete, nub)
 import Data.Maybe               (fromMaybe)
 
 
-nanoQualifiers         :: NanoRefType -> [Qualifier]
-nanoQualifiers p       = quals p ++ nanoQualifiers' p
+nanoQualifiers   :: NanoRefType -> [Qualifier]
+nanoQualifiers p  = pQuals p ++ nanoQualifiers' p
 
-nanoQualifiers'        :: NanoRefType -> [Qualifier]
-nanoQualifiers' p      = concatMap (refTypeQualifiers γ0) $ envToList $ envs 
+nanoQualifiers'  :: NanoRefType -> [Qualifier]
+nanoQualifiers' p = concatMap (refTypeQualifiers γ0) $ envToList env
   where
-    envs               = envUnionList [specs p]
-    γ0                 = envSEnv $ envMap rTypeSort $ specs p
+    γ0            = envSEnv $ envMap rTypeSort env
+    env           = {- qenvToEnv $ -} specs p
 
 refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t 
   where
-    addQs γ t qs            = (mkQuals l γ t) ++ qs
+    addQs γ t qs  = mkQuals l γ t ++ qs
 
-mkQuals l γ t      = [ mkQual l γ v so pa | let (RR so (Reft (v, ras))) = rTypeSortedReft t 
+-- extractTypes :: Fact Reft -> [RefType]
+-- extractTypes  = everythingBut (++) $ ([], False) `mkQ` f
+--   where 
+--     f              = ft `extQ` ff 
+--     ft            :: RefType -> ([RefType], Bool)
+--     ft a           = ([a], False)
+--     ff            :: Fact Reft -> ([RefType], Bool)
+--     ff _           = ([],False)
+
+
+mkQuals l γ t     = [ mkQual l γ v so pa | let (RR so (Reft (v, ras))) = rTypeSortedReft t 
                                           , RConc p                    <- ras                 
                                           , pa                         <- atoms p
                      ]
 
-mkQual l γ v so p = Q "Auto" ((v, so) : yts) $ subst θ p
+mkQual l γ v so p = Q (symbol "Auto") ((v, so) : yts) (subst θ p) l0 
   where 
     yts           = [(y, lookupSort l x γ) | (x, y) <- xys ]
     θ             = mkSubst [(x, eVar y)   | (x, y) <- xys]
-    xys           = zipWith (\x i -> (x, stringSymbol ("~A" ++ show i))) xs [0..] 
+    xys           = zipWith (\x i -> (x, symbol ("~A" ++ show i))) xs [0..] 
     xs            = delete v $ orderedFreeVars γ p
+    l0            = dummyPos "RSC.Qualifiers.mkQual"
 
 lookupSort l  x γ = fromMaybe err $ lookupSEnv x γ 
   where 

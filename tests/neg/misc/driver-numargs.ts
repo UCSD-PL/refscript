@@ -18,8 +18,6 @@ function release(l){
 /*@ driver :: (number, number, number) => number */ 
 function driver(l0, newCount0, oldCount0){
   
-  requires( (newCount0 !== oldCount0 && l0 === 0) || (newCount0 === oldCount0 && l0 === 1));
-  
   //ensures($result === 1);
   var l        = l0;
   var newCount = newCount0;
@@ -39,7 +37,7 @@ function driver(l0, newCount0, oldCount0){
   return l;
 }
 
-/*@ main :: () => void */
+/*@ main :: () => { void | true } */
 function main() {
   var newCount = pos();
   var oldCount = pos(); 

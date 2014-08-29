@@ -207,6 +207,10 @@ data Assignability
   --
   = ReadOnly    
   -- 
+  -- ^ Like ReadOnly but for function declarations with no body
+  --
+  | ImportDecl
+  -- 
   -- ^ written in local-scope, can be SSA-ed, can appear in refinements
   --
   | WriteLocal  

@@ -381,7 +381,7 @@ hoistBindings = everythingBut (++) myQ
 
     fSt :: Statement (AnnType r) -> ([(Id (AnnType r), AnnType r, Assignability)],Bool)
     fSt (FunctionStmt l n _ _) = ([(n, l, ReadOnly)], True)
-    fSt (FunctionDecl l n _  ) = ([(n, l, ReadOnly)], True)
+    fSt (FunctionDecl l n _  ) = ([(n, l, ImportDecl)], True)    
     fSt (ClassStmt l n _ _ _ ) = ([(n, l, ReadOnly)], True)
     fSt (ModuleStmt l n _)     = ([(n, Ann (srcPos l) [ModuleAnn $ F.symbol n], ReadOnly)], True)
     fSt _                      = ([], False)
@@ -482,10 +482,11 @@ visibleNames s = [ (ann <$> n,(t,a)) | (n,Ann l ff,a) <- hoistBindings s
                                      , f              <- ff
                                      , t              <- annToType l n a f ]
   where
-    annToType _ _ ReadOnly (VarAnn t)     = [t] -- Only hoist ReadOnly vars (i.e. function decls)
-    annToType l n _        (ClassAnn {})  = [TClass $ RN $ QName l [] (F.symbol n)]
-    annToType l _ _        (ModuleAnn n)  = [TModule $ RP $ QPath l [n]]
-    annToType _ _ _        _              = []
+    annToType _ _ ReadOnly   (VarAnn t)      = [t] -- Hoist ReadOnly vars (i.e. function defs)
+    annToType _ _ ImportDecl (VarAnn t)      = [t] -- Hoist ImportDecl (i.e. function decls)
+    annToType l n _          (ClassAnn {})   = [TClass $ RN $ QName l [] (F.symbol n)]
+    annToType l _ _          (ModuleAnn n)   = [TModule $ RP $ QPath l [n]]
+    annToType _ _ _          _               = []
 
 
 
@@ -520,7 +521,7 @@ scrapeModules                = qenvFromList . map mkMod . collectModules
     vStmt (FunctionStmt l x _ _)  = [ (ss x, (visibility l, ReadOnly, t)) 
                                     | VarAnn t <- ann_fact l 
                                     ]
-    vStmt (FunctionDecl l x _  )  = [ (ss x, (visibility l, ReadOnly, t)) 
+    vStmt (FunctionDecl l x _  )  = [ (ss x, (visibility l, ImportDecl, t)) 
                                     | VarAnn t <- ann_fact l 
                                     ]
     vStmt (ClassStmt l x _ _ _)   = [ (ss x, (visibility l, ReadOnly, TClass $ RN $ QName (ann l) [] $ F.symbol x)) ]

@@ -486,7 +486,13 @@ freshenCGEnvM g
         return $ g { cge_names = names, cge_mod = modules } 
   where
 
+-- XXX: stuff not to be freshened: TVars, func declarations, return vars.
+--
+--      What else?
+--
 freshenVarbindingM g (x,(v@(TVar{}),a)) = return (x,(v,a))
+freshenVarbindingM g (x,(v,ReturnVar))  = return (x,(v,ReturnVar))
+freshenVarbindingM g (x,(v,ImportDecl)) = return (x,(v,ReturnVar))
 freshenVarbindingM g (x,(t,ReadOnly)  ) = (\t -> (x,(t,ReadOnly))) <$> freshTyVar g (srcPos x) t
 freshenVarbindingM g (x,(t,a)         ) = return (x,(t,a))
 

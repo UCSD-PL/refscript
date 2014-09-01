@@ -81,6 +81,7 @@ import           Language.Nano.Program
 import           Language.Nano.Liquid.Environment
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Sub
+import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
 
 import           Language.Fixpoint.Misc
@@ -482,9 +483,8 @@ getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
 -- | `zipType` returns a type that is:
 --
 --  * structurally equivalent to @t2@
+--
 --  * semantically equivalent to @t1@
---  * applys @f@ whenever refinements are present on both sides
---  * applys @g@ whenever the respective part in type @t2@ is missing
 --
 --------------------------------------------------------------------------------
 zipType :: CGEnv -> RefType -> RefType -> Maybe RefType
@@ -656,6 +656,12 @@ zipType γ (TAnd t1s) (TAnd t2s) =
 
 zipType γ t1 (TAnd t2s) = zipType γ (TAnd [t1]) (TAnd t2s)
 zipType γ (TAnd t1s) t2 = zipType γ (TAnd t1s) (TAnd [t2])
+
+-- FIXME: preserve t1's ref in all occurences of TVar v1 in the LHS
+zipType γ (TAll v1 t1) (TAll v2 t2) = 
+    TAll v1 <$> zipType γ t1 (apply θ t2) 
+  where
+    θ = fromList [(v2, tVar v1 :: RefType)]
 
 zipType _ t1 t2 = errorstar $ printf "BUG[zipType] Unsupported:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
 

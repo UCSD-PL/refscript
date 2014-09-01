@@ -715,13 +715,13 @@ interface Event {
     timeStamp: number;
     defaultPrevented: boolean;
     isTrusted: boolean;
-    currentTarget: EventTarget;
+//    currentTarget: EventTarget;
     cancelBubble: boolean;
-    target: EventTarget;
+//    target: EventTarget;
     eventPhase: number;
     cancelable: boolean;
     type: string;
-    srcElement: Element;
+//    srcElement: Element;
     bubbles: boolean;
     initEvent(eventTypeArg: string, canBubbleArg: boolean, cancelableArg: boolean): void;
     stopPropagation(): void;

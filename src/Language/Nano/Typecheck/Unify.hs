@@ -17,6 +17,7 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors 
 import           Language.Nano.Errors 
+import           Language.Nano.Locations
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
@@ -33,7 +34,8 @@ import           Data.Monoid
 import           Data.Default
 import           Control.Monad  (foldM)
 import           Data.Function                  (on)
--- import           Debug.Trace
+
+import           Debug.Trace
 
 type PPR r = (PP r, F.Reftable r)
 
@@ -71,12 +73,12 @@ unify l γ θ (TApp (TRef x) ts _) (TApp (TRef x') ts' _)
 -- FIXME: fill in the "otherwise case"
 
 unify l γ θ t1@(TApp (TRef _) _ _) t2 
-  = case flattenType γ t1 of -- (trace ("unifying " ++ ppshow t1 ++ " U " ++ ppshow t1) t1) of 
+  = case flattenType γ t1 of -- (trace ("unifying " ++ ppshow (srcPos l) ++ " " ++ ppshow t1 ++ " U " ++ ppshow t2) t1) of 
       Just ft1 -> unify l γ θ ft1 t2
       Nothing  -> Left $ errorUnfoldType l t1
 
 unify l γ θ t1 t2@(TApp (TRef _) _ _)
-  = case flattenType γ t2 of -- (trace ("unifying " ++ ppshow t1 ++ " U " ++ ppshow t1) t2) of 
+  = case flattenType γ t2 of -- (trace ("unifying " ++ ppshow (srcPos l) ++ " " ++ ppshow t1 ++ " U " ++ ppshow t1) t2) of 
       Just ft2 -> unify l γ θ t1 ft2
       Nothing  -> Left $ errorUnfoldType l t2
 

@@ -82,7 +82,7 @@ identifierP =  try (withSpan Id uIdP)
   
 pAliasP :: Parser (Id SourceSpan, PAlias) 
 pAliasP = do name <- identifierP
-             πs   <- pAliasVarsP -- many symbolP 
+             πs   <- pAliasVarsP 
              reservedOp "="
              body <- predP 
              return  (name, Alias name [] πs body) 
@@ -588,7 +588,7 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 --------------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
-mkCode ss =  Nano {
+mkCode ss = Nano {
         code          = Src (checkTopStmt <$> ss')
       , specs         = envFromList $ getSpecs ss
       , consts        = envFromList   [ t | Meas   t <- anns ] 

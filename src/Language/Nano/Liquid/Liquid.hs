@@ -48,6 +48,7 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 
 import           System.Console.CmdArgs.Default
+
 -- import           Debug.Trace                        (trace)
 
 type PPR r = (PP r, F.Reftable r)
@@ -637,9 +638,7 @@ consCall :: (PP a) =>
 
 consCall g l fn es ft0 
   = mseq (consScan consExpr g es) $ \(xes, g') -> do
-       -- Attempt to gather qualifiers here -- needed for object literal quals
-       -- REMOVING qualifier scraping from here - expect tests to break.
-     ts           <- mapM (`safeEnvFindTy` g') xes
+     ts <- mapM (`safeEnvFindTy` g') xes
      case overload l of
          Just ft    -> do  (_,its,ot)   <- instantiate l g fn ft
                            let (su, ts') = renameBinds its xes

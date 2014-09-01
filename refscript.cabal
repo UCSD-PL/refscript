@@ -43,7 +43,7 @@ Executable rsc
                   , filepath
                   , ansi-terminal
                   , process
-                  , mtl
+                  , mtl >= 2.2.1
                   , syb
                   , cmdargs
                   , liquid-fixpoint

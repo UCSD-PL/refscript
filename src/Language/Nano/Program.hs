@@ -48,7 +48,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Types
-import           Language.Nano.Typecheck.Types hiding (PP)
+import           Language.Nano.Typecheck.Types
 
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint

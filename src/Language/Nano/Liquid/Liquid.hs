@@ -11,9 +11,8 @@ module Language.Nano.Liquid.Liquid (verifyFile) where
 import           Control.Monad
 import           Control.Applicative                ((<$>))
 
-import           Data.List                          (findIndex) 
 import qualified Data.HashMap.Strict                as M
-import           Data.Maybe                         (fromMaybe, listToMaybe, catMaybes, maybeToList, isJust)
+import           Data.Maybe                         (listToMaybe, catMaybes)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -47,9 +46,6 @@ import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
 
 import qualified Data.Text                          as T 
-import           Data.Data
-import           Data.Generics.Aliases                   ( mkQ)
-import           Data.Generics.Schemes
 
 import           System.Console.CmdArgs.Default
 -- import           Debug.Trace                        (trace)
@@ -319,7 +315,7 @@ consStmt g (ClassStmt l x _ _ ce)
 consStmt g (IfaceStmt _)
   = return $ Just g
 
-consStmt g (ModuleStmt l n body)
+consStmt g (ModuleStmt _ n body)
   = initModuleEnv g n body >>= (`consStmts` body) >> return (Just g)
 
 -- OTHER (Not handled)
@@ -415,7 +411,7 @@ consExprT g e to
 --------------------------------------------------------------------------------
 consAsgn :: CGEnv -> AnnTypeR -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
-consAsgn g l x e =
+consAsgn g _ x e =
   case envFindTyWithAsgn x g of 
     Just (t,WriteGlobal) -> mseq (consExprT g e $ Just t) $ \(_, g') -> 
                               return    $ Just g'
@@ -483,12 +479,13 @@ consExpr g (CondExpr l e e1 e2)
        consCall g l BICondExpr [e,e1,e2] opTy
 
 -- | super(e1,..,en)
-consExpr g (CallExpr l e@(SuperRef _) es) 
+consExpr g (CallExpr l (SuperRef _) es) 
   = case envFindTy (F.symbol "this") g of
       Just t -> case extractParent g t of 
                   Just (TApp (TRef x) _ _) -> case extractCtor g (TClass x) of
                                                 Just ct -> consCall g l "super" es ct
                                                 _       -> cgError $ errorUnboundId (ann l) "super"
+                  Just _  -> cgError $ errorUnboundId (ann l) "super"
                   Nothing -> cgError $ errorUnboundId (ann l) "super"
       Nothing -> cgError $ errorUnboundId (ann l) "this"
 

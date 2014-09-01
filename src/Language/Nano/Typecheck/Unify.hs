@@ -33,7 +33,7 @@ import           Data.Monoid
 import           Data.Default
 import           Control.Monad  (foldM)
 import           Data.Function                  (on)
-import           Debug.Trace
+-- import           Debug.Trace
 
 type PPR r = (PP r, F.Reftable r)
 

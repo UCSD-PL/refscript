@@ -8,7 +8,6 @@
 
 module Language.Nano.Liquid.Environment where
 
-import qualified Data.HashMap.Strict     as M
 import           Text.PrettyPrint.HughesPJ
 
 import           Language.ECMAScript3.PrettyPrint

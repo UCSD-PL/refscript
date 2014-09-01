@@ -233,13 +233,13 @@ flatten'' st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten st γ (d, tVar <$> vs)
 ---------------------------------------------------------------------------
 flattenType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
--- This case is for Mutability types 
-flattenType γ (TApp (TRef x) [] r) 
+-- -- This case is for Mutability types 
+flattenType γ (TApp (TRef x) [] r)
   = do  es      <- flatten False γ . (, []) =<< resolveRelNameInEnv γ x
         return   $ TCons es t_immutable r
 
 flattenType γ (TApp (TRef x) (mut:ts) r)
-  = do  es      <- flatten False γ . (, ts) =<< resolveRelNameInEnv γ x
+  = do  es      <- flatten False γ . (,mut:ts) =<< resolveRelNameInEnv γ x
         return   $ TCons es (toType mut) r
 
 flattenType γ (TClass x)             = do

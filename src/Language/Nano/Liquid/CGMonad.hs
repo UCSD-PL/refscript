@@ -35,7 +35,6 @@ module Language.Nano.Liquid.CGMonad (
   , safeEnvFindTy, safeEnvFindTyWithAsgn
   , envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
-  , scrapeQualifiers
 
   -- * Add Subtyping Constraints
   , subType, wellFormed -- , safeExtends
@@ -308,37 +307,36 @@ addInvariant t               = (ty . (`tx` t) . invs) <$> get
     sym                      = F.dummyLoc $ F.symbol "instanceof"
 
 
----------------------------------------------------------------------------------------
-scrapeQualifiers   :: RefType -> CGM RefType 
----------------------------------------------------------------------------------------
-scrapeQualifiers t  = do 
-    modify $ \st -> st { quals = qs ++ quals st }
-    return t 
-   where
-     qs             = concatMap (refTypeQualifiers γ0) $ [t]
-     γ0             = E.envEmpty :: F.SEnv F.Sort 
-
-
-refTypeQualifiers γ0 t = efoldRType rTypeSort addQs γ0 [] t 
-  where addQs γ t qs   = (mkQuals γ t) ++ qs
-
-mkQuals γ t      = [ mkQual γ v so pa | let (F.RR so (F.Reft (v, ras))) = rTypeSortedReft t 
-                                      , F.RConc p                    <- ras                 
-                                      , pa                         <- atoms p
-                   ]
-
-mkQual γ v so p = F.Q (F.symbol "Auto") [(v, so)] (F.subst θ p) l0
-  where 
-    θ             = F.mkSubst [(x, F.eVar y)   | (x, y) <- xys]
-    xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show (i :: Int)))) xs [0..] 
-    xs            = L.delete v $ orderedFreeVars γ p
-    l0            = F.dummyPos "RSC.CGMonad.mkQual"
-
-
-orderedFreeVars γ = L.nub . filter (`F.memberSEnv` γ) . F.syms 
-
-atoms (F.PAnd ps)   = concatMap atoms ps
-atoms p           = [p]
+-- ---------------------------------------------------------------------------------------
+-- scrapeQualifiers   :: RefType -> CGM RefType 
+-- ---------------------------------------------------------------------------------------
+-- scrapeQualifiers t  = do 
+--     modify $ \st -> st { quals = qs ++ quals st }
+--     return t 
+--    where
+--      qs             = concatMap (refTypeQualifiers γ0) $ [t]
+--      γ0             = E.envEmpty :: F.SEnv F.Sort 
+-- 
+-- 
+-- refTypeQualifiers γ0 t = efoldRType rTypeSort addQs γ0 [] t 
+--   where addQs γ t qs   = (mkQuals γ t) ++ qs
+-- 
+-- mkQuals γ t      = [ mkQual γ v so pa | let (F.RR so (F.Reft (v, ras))) = rTypeSortedReft t 
+--                                       , F.RConc p                    <- ras                 
+--                                       , pa                         <- atoms p
+--                    ]
+-- 
+-- mkQual γ v so p = F.Q (F.symbol "Auto") [(v, so)] (F.subst θ p) l0
+--   where 
+--     θ             = F.mkSubst [(x, F.eVar y)   | (x, y) <- xys]
+--     xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show (i :: Int)))) xs [0..] 
+--     xs            = L.delete v $ orderedFreeVars γ p
+--     l0            = F.dummyPos "RSC.CGMonad.mkQual"
+-- 
+-- orderedFreeVars γ = L.nub . filter (`F.memberSEnv` γ) . F.syms 
+-- 
+-- atoms (F.PAnd ps)   = concatMap atoms ps
+-- atoms p           = [p]
 
 
 ---------------------------------------------------------------------------------------
@@ -487,7 +485,7 @@ freshenCGEnvM g
 --
 freshenVarbindingM _ (x,(v@(TVar{}),a)) = return (x,(v,a))
 freshenVarbindingM _ (x,(v,ReturnVar))  = return (x,(v,ReturnVar))
-freshenVarbindingM _ (x,(v,ImportDecl)) = return (x,(v,ReturnVar))
+freshenVarbindingM _ (x,(v,ImportDecl)) = return (x,(v,ImportDecl))
 freshenVarbindingM g (x,(t,ReadOnly)  ) = (\t -> (x,(t,ReadOnly))) <$> freshTyVar g (srcPos x) t
 freshenVarbindingM _ (x,(t,a)         ) = return (x,(t,a))
 

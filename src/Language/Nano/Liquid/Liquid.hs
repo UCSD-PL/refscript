@@ -540,12 +540,10 @@ consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3)
   = do  opTy <- safeEnvFindTy (builtinOpId BIBracketAssign) g
         consCall g l BIBracketAssign [e1,e2,e3] opTy
 
--- TODO: Yuck. Please don't mix scrapeQualifiers and consGen
 -- | [e1,...,en]
 consExpr g (ArrayLit l es)
   = do  opTy <- arrayLitTy l (length es) <$> safeEnvFindTy (builtinOpId BIArrayLit) g
-        t    <- scrapeQualifiers opTy
-        consCall g l BIArrayLit es t
+        consCall g l BIArrayLit es opTy
 
 -- | {f1:e1,...,fn:en}
 consExpr g (ObjectLit l bs) 

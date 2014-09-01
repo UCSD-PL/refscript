@@ -574,7 +574,7 @@ consExpr g (FuncExpr l fo xs body)
                   fts       <-  cgFunTys l f xs kft
                   forM_ fts  $  consFun1 l g f xs body
                   Just      <$> envAddFresh l (kft, WriteGlobal) g 
-      _    -> cgError        $  errorNonSingleFuncAnn $ srcPos l
+      _    -> cgError        $  errorNoFuncAnn $ srcPos l
   where
     anns                     = [ t | FuncAnn t <- ann_fact l ]
     f                        = maybe (F.symbol "<anonymous>") F.symbol fo

@@ -48,15 +48,16 @@ type PPRD r = (PP r, F.Reftable r, Data r)
 getProp :: (PPRD r, EnvLike r g) => g r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 getProp γ s t@(TApp _ _ _  ) = getPropApp γ s t
+
 getProp _ s t@(TCons es _ _) = (t,) <$> accessMember s es
-getProp γ s t@(TClass c    ) 
-  = do  d   <- resolveRelNameInEnv γ c
-        es  <- flatten True γ (d,[])
-        (t,) <$> accessMember s es
-getProp γ s t@(TModule m   ) 
-  = do  m'        <- resolveRelPathInEnv γ m
-        (_,_,ty)  <- envFindTy s $ m_variables m'
-        (t,)     <$> renameRelative (modules γ) (m_path m') (absPath γ) ty
+
+getProp γ s t@(TClass c    ) = do d        <- resolveRelNameInEnv γ c
+                                  es       <- flatten True γ (d,[])
+                                  (t,)    <$> accessMember s es
+
+getProp γ s t@(TModule m   ) = do m'       <- resolveRelPathInEnv γ m
+                                  (_,_,ty) <- envFindTy s $ m_variables m'
+                                  (t,)    <$> renameRelative (modules γ) (m_path m') (absPath γ) ty
 
 getProp _ _ _ = Nothing
 

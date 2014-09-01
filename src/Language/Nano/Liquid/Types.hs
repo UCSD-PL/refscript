@@ -333,6 +333,7 @@ emapReft f γ (TCons xts m r) = TCons (emapReftElt f γ' <$> xts) m (f γ r)
   where    γ'                = (F.symbol <$> xts) ++ γ
 emapReft _ _ (TClass c)      = TClass c
 emapReft _ _ (TModule m)     = TModule m
+emapReft f γ (TAnd ts)       = TAnd (emapReft f γ <$> ts)
 emapReft _ _ _               = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)     = B x $ emapReft f γ t

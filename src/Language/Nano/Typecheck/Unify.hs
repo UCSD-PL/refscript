@@ -26,7 +26,6 @@ import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Sub
 
 
-import           Language.ECMAScript3.Parser.Type    (SourceSpan (..))
 import           Data.Generics
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
@@ -35,7 +34,7 @@ import           Data.Default
 import           Control.Monad  (foldM)
 import           Data.Function                  (on)
 
-import           Debug.Trace
+-- import           Debug.Trace
 
 type PPR r = (PP r, F.Reftable r)
 

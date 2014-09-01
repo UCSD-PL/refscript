@@ -73,7 +73,6 @@ import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Nano.Annots
 import           Language.Nano.Errors
-import           Language.Nano.Env
 import           Language.Nano.Locations
 import           Language.Nano.Misc
 import           Language.Nano.Names
@@ -98,7 +97,6 @@ type PPR r = (PP r, F.Reftable r)
 -------------------------------------------------------------------------------------
 
 type RefType     = RType F.Reft
-type REnv        = Env RefType
 type AnnTypeR    = AnnType F.Reft
 
 ----------------------------------------------------------------------------

@@ -16,8 +16,7 @@ import           Control.Monad
 import           Control.Arrow                      ((***), first)
 
 import qualified Data.HashMap.Strict                as M 
-import           Data.Maybe                         (catMaybes, fromMaybe, listToMaybe, fromJust, maybeToList, isJust)
-import           Data.List                          (find)
+import           Data.Maybe                         (catMaybes, listToMaybe)
 import           Data.Function                      (on)
 import           Data.Generics                   
 
@@ -50,7 +49,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
 
-import           Debug.Trace                        hiding (traceShow)
+-- import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -269,7 +268,7 @@ tcMethSingleSig γ l f xs body (i, _,ft)
 --
 --        For the moment it just does a regular function check
 --        
-tcMeth1 γ l f xs body (i, _,ft) = tcFun1 γ l f xs body (i, ft)
+-- tcMeth1 γ l f xs body (i, _,ft) = tcFun1 γ l f xs body (i, ft)
 
 tcFunBody γ l body t 
   = do  z                          <- tcStmts γ body
@@ -511,8 +510,8 @@ tcNormalCallW γ l o es t = (tcWrap $ tcNormalCall γ l o es t) >>= \case
 
 tcRetW γ l (Just e)
   = (tcWrap $ tcNormalCall γ l "return" [e] (returnTy (tcEnvFindReturn γ) True)) >>= \case
-       Right ([e'], _) -> return  (ReturnStmt l (Just e'), Nothing)  
-       Left err        -> (\e' -> (ReturnStmt l (Just e'), Nothing)) <$> deadcastM (tce_ctx γ) err e
+       Right (es', _) -> return  (ReturnStmt l (Just $ head es'), Nothing)  
+       Left err       -> (\e' -> (ReturnStmt l (Just e'), Nothing)) <$> deadcastM (tce_ctx γ) err e
 
 tcRetW γ l Nothing
   = do ([], _) <- tcNormalCall γ l "return" [] $ returnTy (tcEnvFindReturn γ) False

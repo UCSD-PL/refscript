@@ -109,6 +109,7 @@ instance Free (Fact r) where
   free (UserCast t)         = free t
   free (IfaceAnn _)         = S.empty
   free (ExporedModElt)      = S.empty
+  free (ModuleAnn _)        = S.empty
 
 instance Free (TypeMember r) where
   free (FieldSig _ m t)     = free m `mappend` free t
@@ -200,7 +201,7 @@ instance (F.Reftable r, Substitutable r a) => Substitutable r (Statement a) wher
   apply θ s                 = fmap (apply θ) s
 
 instance Substitutable r Assignability where
-  apply θ s                 = s
+  apply _ s                 = s
 
  
 ---------------------------------------------------------------------------------

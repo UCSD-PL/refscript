@@ -24,14 +24,13 @@ import           Language.Fixpoint.Misc
 
 import           Language.Nano.Types
 import           Language.Nano.Env
-import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Subst
 import           Control.Applicative ((<$>))
 
-import           Debug.Trace
+-- import           Debug.Trace
 
 type PPRD r = (PP r, F.Reftable r, Data r)
 
@@ -106,7 +105,7 @@ extractCtor γ (TApp (TRef x) ts _)
         retT vs    = TApp (TRef x) (tVar <$> vs) fTop
         defCtor vs = mkAll vs $ TFun [] (retT vs) fTop
 
-extractCtor γ (TCons es _ _ )
+extractCtor _ (TCons es _ _ )
   = do  case [ tf | ConsSig tf <- es ] of
           [] -> Nothing 
           ts -> return $ mkAnd ts
@@ -125,8 +124,7 @@ extractParent γ (TApp (TRef x) ts _)
           _           -> Nothing
   where
     tArgs d ts ps = apply (fromList $ zip (t_args d) ts) ps
-parentDef _ _ = Nothing
-
+extractParent _ _ = Nothing
 
 
 -- | `getElt`: return elements associated with a symbol @s@. The return list 

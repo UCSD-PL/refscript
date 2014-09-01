@@ -630,7 +630,7 @@ tcExpr γ e@(SuperRef l) _
 -- | function (x,..) {  }
 tcExpr γ (FuncExpr l fo xs body) tCtxO
   = case tCtxO of
-      Just tCtx -> tcFuncExpr $ tracePP "TC Using contextual type" tCtx
+      Just tCtx -> tcFuncExpr tCtx
       Nothing   -> case anns of 
                      [ft] -> tcFuncExpr ft
                      _    -> tcError $ errorNoFuncAnn $ srcPos l

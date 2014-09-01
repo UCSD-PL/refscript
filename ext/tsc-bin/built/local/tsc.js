@@ -10617,7 +10617,7 @@ var TypeScript;
         };
 
         VariableDeclarationSyntax.prototype.toRsStmt = function (helper, parentAnns) {
-            var anns = tokenAnnots(this.varKeyword, 4 /* OtherContext */);
+            var anns = tokenAnnots(this.firstToken(), 4 /* OtherContext */);
 
             var bindAnns = parentAnns.concat(anns).filter(function (a) {
                 return a.kind() === 1 /* RawBind */;
@@ -16815,13 +16815,6 @@ var TypeScript;
             });
 
             if (funcAnns.length === 0) {
-                var type = helper.getDeclForAST(this).getSymbol().type.toRsType();
-                if (type instanceof TypeScript.TError) {
-                    var tError = type;
-                    helper.postDiagnostic(this, TypeScript.DiagnosticCode.Cannot_translate_type_0_into_RefScript_type, [tError.message()]);
-                }
-                var typeStr = type.toString();
-                anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 2 /* RawFunc */, typeStr));
             } else if (funcAnns.length !== 1) {
                 helper.postDiagnostic(this, TypeScript.DiagnosticCode.Anonymous_function_cannot_have_more_than_one_type_annotations);
             }

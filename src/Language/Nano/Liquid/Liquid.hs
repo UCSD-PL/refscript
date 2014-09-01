@@ -572,7 +572,7 @@ consExpr g (SuperRef l) _
 -- | function(xs) { }
 consExpr g (FuncExpr l fo xs body) tCxtO
   = case tCxtO of
-      Just tCtx -> consFuncExpr $ tracePP "LQ Using contextual type" tCtx
+      Just tCtx -> consFuncExpr tCtx
       Nothing   -> case anns of
                      [ft] -> consFuncExpr ft
                      _    -> cgError $ errorNoFuncAnn $ srcPos l

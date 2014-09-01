@@ -320,7 +320,20 @@ TODO: some stuff is missing here. Do we even use that?
 
 ## Editor Integration
 
-Currently, only support for Vim, *sorry!* (Feel free to submit a PR for emacs).
+We have some support for `rsc` in vim and emacs.
+
+### Emacs
+
+There is a `flycheck` plugin for RefScript. 
+
+1. Copy `ext/emacs/typescript-rsc.el` into your emacs PATH.
+
+2. Add this to your `init.el`
+
+    (require 'typescript)
+    (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-mode))
+    (require 'flycheck-rsc)
+
 
 ### Vim
 

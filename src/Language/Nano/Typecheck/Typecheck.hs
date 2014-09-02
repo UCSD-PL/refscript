@@ -629,11 +629,11 @@ tcExpr γ e@(SuperRef l) _
 
 -- | function (x,..) {  }
 tcExpr γ (FuncExpr l fo xs body) tCtxO
-  = case tCtxO of
-      Just tCtx -> tcFuncExpr tCtx
-      Nothing   -> case anns of 
-                     [ft] -> tcFuncExpr ft
-                     _    -> tcError $ errorNoFuncAnn $ srcPos l
+  = case anns of 
+      [ft] -> tcFuncExpr ft
+      _    -> case tCtxO of
+                Just tCtx -> tcFuncExpr tCtx
+                Nothing   -> tcError $ errorNoFuncAnn $ srcPos l
   where
     tcFuncExpr t = do ts    <- tcFunTys l f xs t
                       body' <- foldM (tcFun1 γ l f xs) body ts

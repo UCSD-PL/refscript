@@ -571,11 +571,11 @@ consExpr g (SuperRef l) _
 
 -- | function(xs) { }
 consExpr g (FuncExpr l fo xs body) tCxtO
-  = case tCxtO of
-      Just tCtx -> consFuncExpr tCtx
-      Nothing   -> case anns of
-                     [ft] -> consFuncExpr ft
-                     _    -> cgError $ errorNoFuncAnn $ srcPos l
+  = case anns of
+      [ft] -> consFuncExpr ft
+      _    -> case tCxtO of
+                Just tCtx -> consFuncExpr tCtx
+                Nothing   -> cgError $ errorNoFuncAnn $ srcPos l
   where
     consFuncExpr ft = do kft       <-  freshTyFun g l ft
                          fts       <-  cgFunTys l f xs kft
@@ -584,7 +584,6 @@ consExpr g (FuncExpr l fo xs body) tCxtO
   
     anns            = [ t | FuncAnn t <- ann_fact l ]
     f               = maybe (F.symbol "<anonymous>") F.symbol fo
-
 
 -- not handled
 consExpr _ e _ = cgError $ unimplemented l "consExpr" e where l = srcPos  e

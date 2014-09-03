@@ -509,10 +509,14 @@ consExpr g (CallExpr l em@(DotRef _ e f) es) _
                                     Just ft -> consCall  g l em ((,Nothing) <$> es) $ thd3 ft
                                     Nothing -> cgError $ errorModuleExport (srcPos l) r f 
                        Nothing -> cgError $ bugMissingModule (srcPos l) r 
-        _ -> consCallDotRef g' l em (vr x) (getElt g f t) es
+
+        t | isVariadicCall f   -> consVariadicCall g l em ((,Nothing) <$> es) t
+
+          | otherwise -> consCallDotRef g' l em (vr x) (getElt g f t) es
   where
     -- Add a VarRef so that e is not typechecked again
-    vr          = VarRef $ getAnnotation e
+    vr               = VarRef $ getAnnotation e
+    isVariadicCall f = F.symbol f == F.symbol "call"
 
 -- | e(es)
 consExpr g (CallExpr l e es) _
@@ -587,6 +591,13 @@ consExpr g (FuncExpr l fo xs body) tCxtO
 
 -- not handled
 consExpr _ e _ = cgError $ unimplemented l "consExpr" e where l = srcPos  e
+
+
+consVariadicCall g l em es ft =
+  case bkFun ft of 
+    Just (αs, ts, t) -> consCall g l em es $ 
+                          mkFun (αs, B (F.symbol "this") (TApp TTop [] fTop):ts, t)
+    Nothing          -> cgError $ errorVariadic (srcPos l) ft
 
 
 --------------------------------------------------------------------------------

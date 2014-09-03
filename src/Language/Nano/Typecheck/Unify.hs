@@ -49,7 +49,7 @@ unify :: (Data r, PPR r) => SourceSpan -> TCEnv r
   -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 
-unify _ _ θ t@(TApp _ _ _) t'@(TApp _ _ _) | any isTop [t,t'] = Right $ θ
+unify _ _ θ t t' | any isTop [t,t'] = Right $ θ
 
 unify l γ θ (TFun xts t _) (TFun xts' t' _)
   = unifys l γ θ (t: map b_type xts) (t': map b_type xts')

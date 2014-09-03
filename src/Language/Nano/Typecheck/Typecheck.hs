@@ -169,8 +169,7 @@ initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
 
 initFuncEnv γ f i αs xs ts t args s = TCE nms mod ctx pth parent
   where
-    tyBinds   = [(tVarId α, (tVar α, ReadOnly)) | α <- αs] ++
-                [(tVarId α, (tVar α, ImportDecl)) | α <- αs]
+    tyBinds   = [(tVarId α, (tVar α, ReadOnly)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ zip ts (repeat WriteLocal)
     nms       = envAddReturn f (t, ReadOnly) 
               $ envAdds (tyBinds ++ varBinds ++ args ++ visibleNames s) 
@@ -201,11 +200,11 @@ tcEnvAdds     xs γ    = γ { tce_names = envAdds xs $ tce_names γ }
 
 tcEnvAdd      x t γ   = γ { tce_names = envAdd x t $ tce_names γ }
 
--- tcEnvFindTy :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r)
+tcEnvFindTy :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r)
 tcEnvFindTy x γ       = fst <$> tcEnvFindTyWithAgsn x γ 
 
 
--- tcEnvFindTyWithAgsn :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability)
+tcEnvFindTyWithAgsn :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability)
 tcEnvFindTyWithAgsn x γ = case -- trace ("looking for " ++ ppshow x ++ " in " ++ ppshow (envKeys (tce_names γ))) i $
                                   envFindTy x $ tce_names γ of 
                             Just t -> Just t
@@ -767,23 +766,29 @@ tcCall γ (CallExpr l e@(SuperRef _)  es)
    
 -- | `e.f(es)`
 tcCall γ (CallExpr l em@(DotRef l1 e f) es)
-  = do z              <- runFailM $ tcExpr γ e Nothing
+  = do z              <- runFailM (tcExpr γ e Nothing)
        case z of 
          Right (_, TModule r) -> 
-             case {- tracePP (ppshow (srcPos l) ++ "\n" ++
-                           ppshow e ++ " :: " ++ ppshow r ++ "\n" ++
-                           "Looking for name " ++ ppshow f ++ " in module " ++ ppshow r ++ 
-                           " in abspath " ++ ppshow (tce_path γ)) $ -}
-                    resolveRelPathInEnv γ r of
-               Just m -> case envFindTy f $ m_variables m of
-                           Just ft -> do (e' , _ ) <- tcExpr γ e Nothing
-                                         (es', t') <- tcNormalCall γ l em ((,Nothing) <$> es) $ thd3 ft
-                                         return (CallExpr l (DotRef l1 e' f) es', t')
-                           Nothing -> tcError $ errorModuleExport (srcPos l) r f 
-               Nothing -> tcError $ bugMissingModule (srcPos l) r 
-         Right (_, t) -> do (em', es', t) <- tcCallDotRef γ (getElt γ f t) l em es
-                            return         $ (CallExpr l em' es', t)
+             case resolveRelPathInEnv γ r of
+               Just m ->  case envFindTy f $ m_variables m of
+                            Just ft -> 
+                                do  (e' , _ ) <- tcExpr γ e Nothing
+                                    (es', t') <- tcNormalCall γ l em ((,Nothing) <$> es) $ thd3 ft
+                                    return     $ (CallExpr l (DotRef l1 e' f) es', t')
+                            Nothing -> tcError $ errorModuleExport (srcPos l) r f 
+
+               Nothing -> tcError $ bugMissingModule (srcPos l) r
+
+         Right (_, t) | isVariadicCall f -> do (e' , _ ) <- tcExpr γ e Nothing
+                                               (es', t') <- tcVariadicCall γ l em es t
+                                               return     $ (CallExpr l (DotRef l1 e' f) es', t')
+
+                      | otherwise ->  do (em', es', t) <- tcCallDotRef γ (getElt γ f t) l em es
+                                         return         $ (CallExpr l em' es', t)
+
          Left err     -> tcError err
+  where
+    isVariadicCall f = F.symbol f == F.symbol "call"
 
 -- | `e(es)`
 tcCall γ (CallExpr l e es)
@@ -792,6 +797,15 @@ tcCall γ (CallExpr l e es)
        return                  $ (CallExpr l e' es', t)
 
 tcCall _ e = tcError $ unimplemented (srcPos e) "tcCall" e
+
+
+tcVariadicCall γ l em es ft = 
+  case bkFun ft of
+    Just (αs, ts, t) -> tcNormalCall γ l em ((,Nothing) <$> es) $ 
+                          mkFun (αs, B (F.symbol "this") (TApp TTop [] fTop):ts, t)
+
+    Nothing -> tcError $ errorVariadic (srcPos l) ft
+  
 
 
 tcCallDotRef γ elts l em@(DotRef l1 e f) es 

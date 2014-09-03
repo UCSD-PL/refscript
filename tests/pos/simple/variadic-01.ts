@@ -1,8 +1,11 @@
 
-(function () 
- /*@ <anonymous> () => { void | true } */
- {
+var a = 
+  (function () 
+  /*@ <anonymous> forall A . (this: A) => A */
+  {
+    return this;
 
-  assert(this.length > 0);
+  }).call([1,2,3]);
 
-}).call([1,2,3]);
+assert(a === 4);
+

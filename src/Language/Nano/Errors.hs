@@ -167,4 +167,5 @@ errorMissingAnnot l s         = mkErr l $ printf "Missing type annotation for %s
 errorNonFunction l f t        = mkErr l $ printf "Non-function type: %s :: %s " (ppshow f) (ppshow t)
 errorMissingReturn l          = mkErr l $ printf "Missing Return statement."
 errorMissingSpec l f          = mkErr l $ printf "Missing signature for '%s'" (ppshow f)
+errorVariadic l f             = mkErr l $ printf "Cannot call variadic on type '%s'" (ppshow f)
 

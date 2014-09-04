@@ -184,3 +184,7 @@ convertError tgt e  = errortext $ msg <+> pp e
   where 
     msg             = text $ "Cannot convert to: " ++ tgt
 
+
+
+instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
+  pp (a,b,c,d) = pp a <+> text ":" <+>  pp b <+> text ":" <+> pp c <+> text ":" <+>  pp d

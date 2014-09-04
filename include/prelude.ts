@@ -739,13 +739,18 @@ interface Immutable extends ReadOnly {
     immutable__: void;
 } 
 
-/*@ interface Mutable extends #ReadOnly */
-interface Mutable extends ReadOnly {
+/*@ interface Mutable extends #AssignsFields */
+interface Mutable extends AssignsFields {
     mutable__: void;
 } 
 
 /*@ interface AnyMutability extends #ReadOnly */
 interface AnyMutability extends ReadOnly {
+    defaultMut__: void;
+} 
+
+/*@ interface AssignsFields extends #ReadOnly */
+interface AssignsFields extends ReadOnly {
     defaultMut__: void;
 } 
 

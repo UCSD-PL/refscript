@@ -16,7 +16,7 @@ import           Control.Monad
 import           Control.Arrow                      ((***), first)
 
 import qualified Data.HashMap.Strict                as M 
-import           Data.Maybe                         (catMaybes, listToMaybe, fromMaybe, maybeToList)
+import           Data.Maybe                         (catMaybes, listToMaybe, maybeToList)
 import           Data.Function                      (on)
 import           Data.Generics                   
 
@@ -129,7 +129,8 @@ typeCheck pgm = do
 tcNano :: PPR r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
-  = do  (fs',_)   <- tcStmts γ fs
+  = do  γ'        <- addUndefined γ   -- adding undefined into scope
+        (fs',_)   <- tcStmts γ' fs
         fs''      <- patch fs'
         return     $ p { code = Src fs'' }
     where
@@ -197,15 +198,14 @@ initModuleEnv γ n s = TCE nms mod ctx pth parent
 -- | Environment wrappers
 -------------------------------------------------------------------------------
 
-tcEnvAdds     xs γ    = γ { tce_names = envAdds xs $ tce_names γ }
+tcEnvAdds     xs γ      = γ { tce_names = envAdds xs $ tce_names γ }
 
-tcEnvAdd      x t γ   = γ { tce_names = envAdd x t $ tce_names γ }
+tcEnvAdd      x t γ     = γ { tce_names = envAdd x t $ tce_names γ }
 
-tcEnvFindTy :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r)
-tcEnvFindTy x γ       = fst <$> tcEnvFindTyWithAgsn x γ 
+tcEnvFindTy            :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r)
+tcEnvFindTy x γ         = fst <$> tcEnvFindTyWithAgsn x γ 
 
-
-tcEnvFindTyWithAgsn :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability)
+tcEnvFindTyWithAgsn    :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability)
 tcEnvFindTyWithAgsn x γ = case envFindTy x $ tce_names γ of 
                             Just t -> Just t
                             Nothing     -> 
@@ -213,17 +213,22 @@ tcEnvFindTyWithAgsn x γ = case envFindTy x $ tce_names γ of
                                 Just γ' -> tcEnvFindTyWithAgsn x γ'
                                 Nothing -> Nothing
 
+safeTcEnvFindTy l γ x   = case tcEnvFindTy x γ of
+                            Just t  -> return t
+                            Nothing -> tcError $ bugEnvFindTy (srcPos l) x 
 
-safeTcEnvFindTy l γ x = case tcEnvFindTy x γ of
-                          Just t  -> return t
-                          Nothing -> tcError $ bugEnvFindTy (srcPos l) x 
-
-tcEnvFindReturn       = fst . envFindReturn . tce_names
+tcEnvFindReturn         = fst . envFindReturn . tce_names
 
 tcEnvFindTypeDefM l γ x 
   = case resolveRelNameInEnv γ x of 
       Just t  -> return t
       Nothing -> tcError $ bugClassDefNotFound (srcPos l) x
+
+
+addUndefined γ = return $ tcEnvAdds [(F.symbol "undefined",(t, ReadOnly))] γ 
+  where
+    t          = TApp TUndef [] fTop
+
 
 
 

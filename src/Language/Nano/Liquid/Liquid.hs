@@ -102,7 +102,8 @@ consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano p@(Nano {code = Src fs}) 
   = do  g   <- initGlobalEnv p
-        consStmts g fs 
+        g'  <- addUndefined g
+        consStmts g' fs 
         return ()
 
 
@@ -169,6 +170,10 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     argBind   = [(argId l, (argTy l ts (cge_names g), ReadOnly))]
     thisBind  = (\t -> (Id (srcPos dummySpan) "this", (t, WriteGlobal))) <$> maybeToList thisTO
     
+
+addUndefined g = envAdds "addUndefined" [(F.symbol "undefined",(t, ReadOnly))] g
+  where
+    t          = TApp TUndef [] fTop
 
 
 

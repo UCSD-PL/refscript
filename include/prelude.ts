@@ -58,11 +58,6 @@ declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 */
 declare function builtin_BIArrayLit<A>(a: A): A[];
 
-/*@ builtin_BIUndefined ::
-    forall A. {A | false} 
-*/
-declare var builtin_BIUndefined: any;
-
 /*@ builtin_BICondExpr :: 
     forall A. (c: boolean, x: A, y: A) => { v:A | (if (Prop(c)) then (v = x) else (v = y)) }
 */
@@ -139,12 +134,12 @@ declare function builtin_PrefixMinus(a: number): number;
 declare function builtin_OpSEq<A,B>(x: A, y: B): boolean;
 
 /*@ builtin_OpNEq :: 
-    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) } 
+    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (not (x ~~ y))) } 
 */
 declare function builtin_OpNEq<A,B>(x: A, y: B): boolean;
 
 /*@ builtin_OpSNEq :: 
-    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) } 
+    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (not (x ~~ y))) } 
 */
 declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
 // FIXME: the two version of inequality should not be the same...

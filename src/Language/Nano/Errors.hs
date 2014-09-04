@@ -144,7 +144,8 @@ errorUnresolvedTypes l t1 t2  = mkErr l $ printf "Could not resolve types '%s' a
 errorConsSigMissing l t       = mkErr l $ printf "Constructor signature for '%s' is missing." (ppshow t)
 errorModuleExport l m x       = mkErr l $ printf "Module '%s' does not export '%s'." (ppshow m) (ppshow x)
 
-errorDeadCast l t1 t2         = mkErr l $ printf "Cannot convert %s into %s" (ppshow t1) (ppshow t2)
+errorDeadCast l t1 t2         = mkErr l $ printf "Cannot convert '%s' to '%s'" (ppshow t1) (ppshow t2)
+
 ---------------------------------------------------------------------------
 -- | LIQUID
 ---------------------------------------------------------------------------
@@ -161,7 +162,7 @@ errorWellFormed l             = mkErr l $ printf "Well-formedness Error"
 -- | Pervasive (typechecking TC and Liquid)
 ---------------------------------------------------------------------------
 errorSuper l                  = mkErr l $ printf "Cannot resolve reference to super." 
-errorMissingFields l t1 t2 x  = mkErr l $ printf "Cannot convert: %s to %s. Type %s is missing fields %s." (ppshow t1) (ppshow t2) (ppshow t1) (ppshow x) 
+errorMissingFields l t1 t2 x  = mkErr l $ printf "Cannot convert %s to %s. Type %s is missing fields %s." (ppshow t1) (ppshow t2) (ppshow t1) (ppshow x) 
 errorVarDeclAnnot l x         = mkErr l $ printf "Variable definition of '%s' with neither type annotation nor initialization is not supported." (ppshow x)
 errorMissingAnnot l s         = mkErr l $ printf "Missing type annotation for %s" s
 errorNonFunction l f t        = mkErr l $ printf "Non-function type: %s :: %s " (ppshow f) (ppshow t)

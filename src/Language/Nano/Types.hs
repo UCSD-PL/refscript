@@ -68,9 +68,9 @@ data RType r =
   --
   | TVar TVar r               
   -- 
-  -- ^ (xi:T1,..,xn:Tn) => T
+  -- ^ ([Tthis], xi:T1, .., xn:Tn) => T
   --
-  | TFun [Bind r] (RType r) r
+  | TFun (Maybe (RType r)) [Bind r] (RType r) r
   -- 
   -- ^ {f1:T1,..,fn:Tn} 
   --
@@ -314,16 +314,16 @@ instance Eq TCon where
 
 -- Ignoring refinements in equality check
 instance Eq (RType r) where
-  TApp TUn t1 _  == TApp TUn t2 _  = (null $ t1 \\ t2) && (null $ t2 \\ t1)
-  TApp c1 t1s _  == TApp c2 t2s _  = (c1, t1s) == (c2, t2s)
-  TVar v1 _      == TVar v2 _      = v1        == v2
-  TFun b1 t1 _   == TFun b2 t2 _   = (b_type <$> b1, t1)  == (b_type <$> b2, t2)
-  TAll v1 t1     == TAll v2 t2     = (v1,t1)  == (v2,t2)   -- Very strict Eq here
-  TAnd t1s       == TAnd t2s       = t1s == t2s
-  TCons e1s m1 _ == TCons e2s m2 _ = (e1s,m1) == (e2s,m2)
-  TClass c1      == TClass c2      = c1 == c2
-  TModule m1     == TModule m2     = m1 == m2
-  _              == _              = False
+  TApp TUn t1 _   == TApp TUn t2 _   = (null $ t1 \\ t2) && (null $ t2 \\ t1)
+  TApp c1 t1s _   == TApp c2 t2s _   = (c1, t1s) == (c2, t2s)
+  TVar v1 _       == TVar v2 _       = v1        == v2
+  TFun s1 b1 t1 _ == TFun s2 b2 t2 _ = (s1, b_type <$> b1, t1)  == (s2, b_type <$> b2, t2)
+  TAll v1 t1      == TAll v2 t2      = (v1,t1)  == (v2,t2)   -- Very strict Eq here
+  TAnd t1s        == TAnd t2s        = t1s == t2s
+  TCons e1s m1 _  == TCons e2s m2 _  = (e1s,m1) == (e2s,m2)
+  TClass c1       == TClass c2       = c1 == c2
+  TModule m1      == TModule m2      = m1 == m2
+  _               == _               = False
 
 
 instance Eq (TypeMember r) where 

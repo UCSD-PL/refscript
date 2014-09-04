@@ -121,7 +121,7 @@ errorObjSubtype l t t'        = mkErr l $ printf "Object type '%s' is not a subt
 errorFuncSubtype l t t'       = mkErr l $ printf "Function type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 
 -- Typechecking
-errorCallNotSup l fn es ts    = mkErr l $ printf "Cannot call '%s' with argument(s): %s of type %s" (ppshow fn) (ppshow es) (ppshow ts)
+errorCallNotSup l fn ft es ts = mkErr l $ printf "Cannot call '%s' :: '%s' with argument(s): %s of type %s" (ppshow fn) (ppshow ft) (ppshow es) (ppshow ts)
 errorCallMatch l fn ts        = mkErr l $ printf "Could not match call to '%s' to a particular signature. Argument(s) with types '%s' are invalid." (ppshow fn) (ppshow ts)
 errorCallReceiver l e f       = mkErr l $ printf "Could not call method '%s' of '%s'." (ppshow f) (ppshow e)
 errorTypeArgsNum l n p q      = mkErr l $ printf "Type %s expects %s arguments but %s were provided" (ppshow n) (ppshow p) (ppshow q)

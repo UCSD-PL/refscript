@@ -64,7 +64,6 @@ module Language.Nano.Typecheck.Types (
 
   ) where 
 
-import           Text.Printf
 import           Data.Default
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
@@ -78,7 +77,6 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Misc
 import           Language.Nano.Types
 import           Language.Nano.Errors
-import           Language.Nano.Env
 import           Language.Nano.Locations
 import           Language.Nano.Names
 
@@ -470,7 +468,6 @@ instance (PP r, F.Reftable r) => PP (RType r) where
                               = F.ppTy r $ lbrace $+$ nest 2 (vcat $ map pp bs) $+$ rbrace
   pp (TModule s  )            = text "module" <+> pp s
   pp (TClass c   )            = text "typeof" <+> pp c
-  pp _                        = text "ERROR TYPE"
 
 instance PP TVar where 
   pp     = pprint . F.symbol
@@ -515,6 +512,8 @@ instance PP Assignability where
   pp ReadOnly    = text "ReadOnly"
   pp WriteLocal  = text "WriteLocal"
   pp WriteGlobal = text "WriteGlobal"
+  pp ImportDecl  = text "ImportDecl"
+  pp ReturnVar   = text "ReturnVar"
 
 
 instance (PP r, F.Reftable r) => PP (IfaceDef r) where
@@ -549,7 +548,7 @@ ppMeth t =
     ppfun ts t = ppArgs parens comma ts <> text ":" <+> pp t
 
 
-ppMut t@(TApp (TRef (RN (QName _ _ s))) _ _)
+ppMut (TApp (TRef (RN (QName _ _ s))) _ _)
   | s == F.symbol "Mutable"       = pp "◁"
   | s == F.symbol "Immutable"     = pp "◀"
   | s == F.symbol "AnyMutability" = pp "₌"
@@ -557,7 +556,7 @@ ppMut t@(TApp (TRef (RN (QName _ _ s))) _ _)
   | s == F.symbol "InheritedMut"  = pp "◇"
   | otherwise                     = pp "?"
 ppMut t@(TVar{})                  = pp "[" <> pp t <> pp "]" 
-ppMut t                           = pp "?"
+ppMut _                           = pp "?"
 
  
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
@@ -614,13 +613,13 @@ orNull t                    | otherwise     = TApp TUn [tNull,t] fTop
 
 
 
------------------------------------------------------------------------
-builtinOpTy       :: (IsLocated l) => l -> BuiltinOp -> Env t -> t
------------------------------------------------------------------------
-builtinOpTy l o g = fromMaybe err $ envFindTy ox g
-  where 
-    err           = die $ bugUnknown (srcPos l) "builtinOp" o
-    ox            = builtinOpId o
+-- -----------------------------------------------------------------------
+-- builtinOpTy       :: (IsLocated l) => l -> BuiltinOp -> Env t -> t
+-- -----------------------------------------------------------------------
+-- builtinOpTy l o g = fromMaybe err $ envFindTy ox g
+--   where 
+--     err           = die $ bugUnknown (srcPos l) "builtinOp" o
+--     ox            = builtinOpId o
  
 builtinOpId BIUndefined     = builtinId "BIUndefined"
 builtinOpId BIBracketRef    = builtinId "BIBracketRef"
@@ -677,7 +676,7 @@ objLitTy l ps     = mkFun (vs, bs, rt)
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
     rt            = TCons elts mt fTop -- $ objLitR l nps g fTop
     elts          = [FieldSig s m (ofType a) | (s,m,a) <- zip3 ss mts ats ] 
-    nps           = length ps
+    -- nps           = length ps
     (mv, mt)      = freshTV l mSym 0                             -- obj mutability
     (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
     (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
@@ -724,13 +723,11 @@ immObjectLitTy l _ ps ts
 --   where
 --     t          = builtinOpTy l BIObjectLit g
 
-   
-
     
 ---------------------------------------------------------------------------------
 setPropTy :: (PPR r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
 ---------------------------------------------------------------------------------
-setPropTy l f ty =
+setPropTy _ f ty =
     case ty of 
       TAll α2 (TAll μ2 (TFun [xt2,a2] rt2 r2)) -> TAll α2 (TAll μ2 (TFun [tr xt2,a2] rt2 r2))
       _                                        -> errorstar $ "setPropTy " ++ ppshow ty
@@ -740,8 +737,6 @@ setPropTy l f ty =
           | x == F.symbol "f"
           = B n (TCons [FieldSig f μx t] μ r)
     tr t  = error $ "setPropTy:tr " ++ ppshow t
-    -- ty    = builtinOpTy l BISetProp (envMap fst g)
-
 
 
 ---------------------------------------------------------------------------------

@@ -24,14 +24,13 @@ import           Language.Fixpoint.Misc
 
 import           Language.Nano.Types
 import           Language.Nano.Env
-import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Subst
 import           Control.Applicative ((<$>))
 
-import           Debug.Trace
+-- import           Debug.Trace
 
 type PPRD r = (PP r, F.Reftable r, Data r)
 
@@ -49,15 +48,16 @@ type PPRD r = (PP r, F.Reftable r, Data r)
 getProp :: (PPRD r, EnvLike r g) => g r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 getProp γ s t@(TApp _ _ _  ) = getPropApp γ s t
+
 getProp _ s t@(TCons es _ _) = (t,) <$> accessMember s es
-getProp γ s t@(TClass c    ) 
-  = do  d   <- resolveRelNameInEnv γ c
-        es  <- flatten True γ (d,[])
-        (t,) <$> accessMember s es
-getProp γ s t@(TModule m   ) 
-  = do  m'        <- resolveRelPathInEnv γ m
-        (_,_,ty)  <- envFindTy s $ m_variables m'
-        (t,)     <$> renameRelative (modules γ) (m_path m') (absPath γ) ty
+
+getProp γ s t@(TClass c    ) = do d        <- resolveRelNameInEnv γ c
+                                  es       <- flatten True γ (d,[])
+                                  (t,)    <$> accessMember s es
+
+getProp γ s t@(TModule m   ) = do m'       <- resolveRelPathInEnv γ m
+                                  (_,_,ty) <- envFindTy s $ m_variables m'
+                                  (t,)    <$> renameRelative (modules γ) (m_path m') (absPath γ) ty
 
 getProp _ _ _ = Nothing
 
@@ -106,7 +106,7 @@ extractCtor γ (TApp (TRef x) ts _)
         retT vs    = TApp (TRef x) (tVar <$> vs) fTop
         defCtor vs = mkAll vs $ TFun [] (retT vs) fTop
 
-extractCtor γ (TCons es _ _ )
+extractCtor _ (TCons es _ _ )
   = do  case [ tf | ConsSig tf <- es ] of
           [] -> Nothing 
           ts -> return $ mkAnd ts
@@ -125,8 +125,7 @@ extractParent γ (TApp (TRef x) ts _)
           _           -> Nothing
   where
     tArgs d ts ps = apply (fromList $ zip (t_args d) ts) ps
-parentDef _ _ = Nothing
-
+extractParent _ _ = Nothing
 
 
 -- | `getElt`: return elements associated with a symbol @s@. The return list 

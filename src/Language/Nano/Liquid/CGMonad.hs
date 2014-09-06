@@ -19,8 +19,6 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Execute Action and Get FInfo
   , getCGInfo 
-  -- , runFailM (!!!! Wierd to run the monad in the middle of building an action!!!!)
-
 
   -- * Throw Errors
   , cgError      
@@ -37,7 +35,6 @@ module Language.Nano.Liquid.CGMonad (
   , safeEnvFindTy, safeEnvFindTyWithAsgn
   , envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
-  , scrapeQualifiers
 
   -- * Add Subtyping Constraints
   , subType, wellFormed -- , safeExtends
@@ -63,7 +60,7 @@ import           Control.Monad.Trans.Except
 import           Data.Generics.Schemes
 import           Data.Generics.Aliases
 
-import           Data.Maybe                     (isJust, catMaybes)
+import           Data.Maybe                     (catMaybes)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 import qualified Data.List                      as L
@@ -127,8 +124,6 @@ execute cfg pgm act
       (Left err, _) -> throw err
       (Right x, st) -> (x, st)  
 
-  
-runFailM a = fst . runState (runExceptT a) <$> get
 
 -------------------------------------------------------------------------------
 initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
@@ -263,7 +258,7 @@ freshId l = Id (Ann l []) <$> fresh
 envAdds :: (PP [x], PP x, F.Symbolic x, IsLocated x) 
         => String -> [(x, (RefType, Assignability))] -> CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAdds msg xts' g
+envAdds _ xts' g
   = do xtas     <- zip xs . (`zip` as) <$> mapM addInvariant ts'
        is       <- -- tracePP (msg ++ " -- adding " ++ ppshow (fst <$> xtas)) <$> 
                      catMaybes <$> forM xtas addFixpointBind
@@ -282,8 +277,7 @@ instance PP F.IBindEnv where
 ---------------------------------------------------------------------------------------
 addFixpointBind :: (F.Symbolic x) => (x, (RefType, Assignability)) -> CGM (Maybe F.BindId)
 ---------------------------------------------------------------------------------------
-addFixpointBind (x, (t, ReturnVar))
-  = return Nothing 
+addFixpointBind (_, (_, ReturnVar)) = return Nothing 
 addFixpointBind (x, (t, _))
   = do (i, bs') <- F.insertBindEnv s r . binds <$> get 
        modify    $ \st -> st { binds = bs' }
@@ -313,37 +307,36 @@ addInvariant t               = (ty . (`tx` t) . invs) <$> get
     sym                      = F.dummyLoc $ F.symbol "instanceof"
 
 
----------------------------------------------------------------------------------------
-scrapeQualifiers   :: RefType -> CGM RefType 
----------------------------------------------------------------------------------------
-scrapeQualifiers t  = do 
-    modify $ \st -> st { quals = qs ++ quals st }
-    return t 
-   where
-     qs             = concatMap (refTypeQualifiers γ0) $ [t]
-     γ0             = E.envEmpty :: F.SEnv F.Sort 
-
-
-refTypeQualifiers γ0 t = efoldRType rTypeSort addQs γ0 [] t 
-  where addQs γ t qs   = (mkQuals γ t) ++ qs
-
-mkQuals γ t      = [ mkQual γ v so pa | let (F.RR so (F.Reft (v, ras))) = rTypeSortedReft t 
-                                      , F.RConc p                    <- ras                 
-                                      , pa                         <- atoms p
-                   ]
-
-mkQual γ v so p = F.Q (F.symbol "Auto") [(v, so)] (F.subst θ p) l0
-  where 
-    θ             = F.mkSubst [(x, F.eVar y)   | (x, y) <- xys]
-    xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show (i :: Int)))) xs [0..] 
-    xs            = L.delete v $ orderedFreeVars γ p
-    l0            = F.dummyPos "RSC.CGMonad.mkQual"
-
-
-orderedFreeVars γ = L.nub . filter (`F.memberSEnv` γ) . F.syms 
-
-atoms (F.PAnd ps)   = concatMap atoms ps
-atoms p           = [p]
+-- ---------------------------------------------------------------------------------------
+-- scrapeQualifiers   :: RefType -> CGM RefType 
+-- ---------------------------------------------------------------------------------------
+-- scrapeQualifiers t  = do 
+--     modify $ \st -> st { quals = qs ++ quals st }
+--     return t 
+--    where
+--      qs             = concatMap (refTypeQualifiers γ0) $ [t]
+--      γ0             = E.envEmpty :: F.SEnv F.Sort 
+-- 
+-- 
+-- refTypeQualifiers γ0 t = efoldRType rTypeSort addQs γ0 [] t 
+--   where addQs γ t qs   = (mkQuals γ t) ++ qs
+-- 
+-- mkQuals γ t      = [ mkQual γ v so pa | let (F.RR so (F.Reft (v, ras))) = rTypeSortedReft t 
+--                                       , F.RConc p                    <- ras                 
+--                                       , pa                         <- atoms p
+--                    ]
+-- 
+-- mkQual γ v so p = F.Q (F.symbol "Auto") [(v, so)] (F.subst θ p) l0
+--   where 
+--     θ             = F.mkSubst [(x, F.eVar y)   | (x, y) <- xys]
+--     xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show (i :: Int)))) xs [0..] 
+--     xs            = L.delete v $ orderedFreeVars γ p
+--     l0            = F.dummyPos "RSC.CGMonad.mkQual"
+-- 
+-- orderedFreeVars γ = L.nub . filter (`F.memberSEnv` γ) . F.syms 
+-- 
+-- atoms (F.PAnd ps)   = concatMap atoms ps
+-- atoms p           = [p]
 
 
 ---------------------------------------------------------------------------------------
@@ -490,11 +483,11 @@ freshenCGEnvM g
 --
 --      What else?
 --
-freshenVarbindingM g (x,(v@(TVar{}),a)) = return (x,(v,a))
-freshenVarbindingM g (x,(v,ReturnVar))  = return (x,(v,ReturnVar))
-freshenVarbindingM g (x,(v,ImportDecl)) = return (x,(v,ReturnVar))
+freshenVarbindingM _ (x,(v@(TVar{}),a)) = return (x,(v,a))
+freshenVarbindingM _ (x,(v,ReturnVar))  = return (x,(v,ReturnVar))
+freshenVarbindingM _ (x,(v,ImportDecl)) = return (x,(v,ImportDecl))
 freshenVarbindingM g (x,(t,ReadOnly)  ) = (\t -> (x,(t,ReadOnly))) <$> freshTyVar g (srcPos x) t
-freshenVarbindingM g (x,(t,a)         ) = return (x,(t,a))
+freshenVarbindingM _ (x,(t,a)         ) = return (x,(t,a))
 
 freshenModuleDefM g (a, m)  
   = do  vars     <- E.envFromList <$> mapM f (E.envToList $ m_variables m)
@@ -507,13 +500,13 @@ freshenModuleDefM g (a, m)
                           return   (x, (v, w, ft))
         _          -> return (x,(v,w,t))
 
-    h (x, ID c n αs hr es) = 
-      case hr of
-        Just (p,ps) -> do ps'   <- mapM (freshTyVar g (srcPos x)) ps 
-                          es'   <- mapM (mapEltM $ freshTyVar g (srcPos x)) es 
-                          return   (x, ID c n αs (Just (p,ps')) es')
-        Nothing     -> do es'   <- mapM (mapEltM $ freshTyVar g (srcPos x)) es
-                          return   (x, ID c n αs Nothing es')
+--     h (x, ID c n αs hr es) = 
+--       case hr of
+--         Just (p,ps) -> do ps'   <- mapM (freshTyVar g (srcPos x)) ps 
+--                           es'   <- mapM (mapEltM $ freshTyVar g (srcPos x)) es 
+--                           return   (x, ID c n αs (Just (p,ps')) es')
+--         Nothing     -> do es'   <- mapM (mapEltM $ freshTyVar g (srcPos x)) es
+--                           return   (x, ID c n αs Nothing es')
 
 
 
@@ -622,7 +615,7 @@ trueRefType    = mapReftM true
 --------------------------------------------------------------------------------
 refreshRefType :: RefType -> CGM RefType
 --------------------------------------------------------------------------------
-refreshRefType t0@(TAll α t) 
+refreshRefType (TAll α t) 
   = do  rt    <- refresh t
         tα    <- refresh (fTop :: F.Reft)        
         return $ TAll α $ trans tα rt

@@ -22,9 +22,7 @@ import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
-import qualified Data.HashMap.Strict              as     M
 import qualified Data.List                        as     L
--- import           Data.Traversable                        (mapAccumL)
 import           Text.PrettyPrint.HughesPJ               (text)
 import           Data.Data
 import qualified Data.Foldable                    as     FO
@@ -46,7 +44,7 @@ import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Program
 import           Language.Nano.Types              hiding (Exported)
-import           Language.Nano.Typecheck.Types    hiding (argBind)
+import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
 
 import           Language.ECMAScript3.Syntax
@@ -84,7 +82,7 @@ identifierP =  try (withSpan Id uIdP)
   
 pAliasP :: Parser (Id SourceSpan, PAlias) 
 pAliasP = do name <- identifierP
-             πs   <- pAliasVarsP -- many symbolP 
+             πs   <- pAliasVarsP 
              reservedOp "="
              body <- predP 
              return  (name, Alias name [] πs body) 
@@ -590,7 +588,7 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 --------------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
-mkCode ss =  Nano {
+mkCode ss = Nano {
         code          = Src (checkTopStmt <$> ss')
       , specs         = envFromList $ getSpecs ss
       , consts        = envFromList   [ t | Meas   t <- anns ] 
@@ -645,7 +643,7 @@ expandAnnots ss =
 --------------------------------------------------------------------------------------
 parse :: SourceSpan -> (PState, [Error]) -> RawSpec -> ((PState, [Error]), Spec)
 --------------------------------------------------------------------------------------
-parse ss (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
+parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
   where
     parser s = do a     <- parseAnnot s
                   state <- getState

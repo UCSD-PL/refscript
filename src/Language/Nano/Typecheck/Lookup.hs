@@ -24,6 +24,7 @@ import           Language.Fixpoint.Misc
 
 import           Language.Nano.Types
 import           Language.Nano.Env
+import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
@@ -89,22 +90,22 @@ extractCtor :: (PPRD r, EnvLike r g) => g r -> RType r -> Maybe (RType r)
 extractCtor γ (TClass x) 
   = do  d        <- resolveRelNameInEnv γ x
         (vs, es) <- flatten'' False γ d
-        case [ mkAll vs (TFun bs (retT vs) r) | ConsSig (TFun bs _ r) <- es ] of
+        case [ mkAll vs (TFun s bs (retT vs) r) | ConsSig (TFun s bs _ r) <- es ] of
           [] -> return $ defCtor vs
           ts -> return $ mkAnd ts
     where
         retT vs    = TApp (TRef x) (tVar <$> vs) fTop
-        defCtor vs = mkAll vs $ TFun [] (retT vs) fTop
+        defCtor vs = mkAll vs $ TFun Nothing [] (retT vs) fTop
 
 extractCtor γ (TApp (TRef x) ts _) 
   = do  d        <- resolveRelNameInEnv γ x
         (vs, es) <- flatten'' False γ d
-        case [ mkAll vs (TFun bs (retT vs) r) | ConsSig (TFun bs _ r) <- es ] of
+        case [ mkAll vs (TFun s bs (retT vs) r) | ConsSig (TFun s bs _ r) <- es ] of
           [] -> return $ apply (fromList $ zip vs ts) $ defCtor vs
           ts -> return $ apply (fromList $ zip vs ts) $ mkAnd ts
     where
         retT vs    = TApp (TRef x) (tVar <$> vs) fTop
-        defCtor vs = mkAll vs $ TFun [] (retT vs) fTop
+        defCtor vs = mkAll vs $ TFun Nothing [] (retT vs) fTop
 
 extractCtor _ (TCons es _ _ )
   = do  case [ tf | ConsSig tf <- es ] of
@@ -151,7 +152,7 @@ extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
 extractCall γ t             = uncurry mkAll <$> foo [] t
   where
-    foo αs t@(TFun _ _ _)   = [(αs, t)]
+    foo αs t@(TFun _ _ _ _) = [(αs, t)]
     foo αs   (TAnd ts)      = concatMap (foo αs) ts 
     foo αs   (TAll α t)     = foo (αs ++ [α]) t
     foo αs   (TApp (TRef s) _ _ )
@@ -163,7 +164,7 @@ extractCall γ t             = uncurry mkAll <$> foo [] t
 
 
 -------------------------------------------------------------------------------
-accessMember :: F.Symbol -> [TypeMember r] -> Maybe (RType r)
+-- accessMember :: F.Symbol -> [TypeMember r] -> Maybe (RType r)
 -------------------------------------------------------------------------------
 accessMember s es = 
   case [ t | FieldSig x _ t <- es, x == s ] of

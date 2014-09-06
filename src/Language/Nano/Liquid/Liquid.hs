@@ -12,7 +12,7 @@ import           Control.Monad
 import           Control.Applicative                ((<$>))
 
 import qualified Data.HashMap.Strict                as M
-import           Data.Maybe                         (listToMaybe, catMaybes)
+import           Data.Maybe                         (listToMaybe, catMaybes, maybeToList)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -102,7 +102,8 @@ consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano p@(Nano {code = Src fs}) 
   = do  g   <- initGlobalEnv p
-        consStmts g fs 
+        g'  <- addUndefined g
+        consStmts g' fs 
         return ()
 
 
@@ -146,12 +147,13 @@ initModuleEnv g n s = freshenCGEnvM $ CGE nms bds grd ctx mod pth (Just g)
 --    * Adds binders for the arguments @ts@
 --    * Adds binder for the 'arguments' variable
 --
-initFuncEnv l f i xs (αs, ts, t) g s =
+initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     --  Compute base environment @g'@, then add extra bindings
         envAdds "initFunc-0" varBinds g'
     >>= envAdds "initFunc-1" tyBinds 
     >>= envAdds "initFunc-2" (visibleNames s)
     >>= envAdds "initFunc-3" argBind
+    >>= envAdds "initFunc-4" thisBind
     >>= envAddReturn f t
     >>= freshenCGEnvM
   where
@@ -166,7 +168,12 @@ initFuncEnv l f i xs (αs, ts, t) g s =
     tyBinds   = [(Loc (srcPos l) α, (tVar α, ReadOnly)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) (zip ts (repeat WriteLocal))
     argBind   = [(argId l, (argTy l ts (cge_names g), ReadOnly))]
+    thisBind  = (\t -> (Id (srcPos dummySpan) "this", (t, WriteGlobal))) <$> maybeToList thisTO
     
+
+addUndefined g = envAdds "addUndefined" [(F.symbol "undefined",(t, ReadOnly))] g
+  where
+    t          = TApp TUndef [] fTop
 
 
 
@@ -377,8 +384,8 @@ consClassElt :: PP a => CGEnv -> a -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElt g _ (Constructor l xs body) 
   = case [ c | ConsAnn c  <- ann_fact l ] of
-      [ConsSig ft]        -> do t <-    cgFunTys l i xs ft
-                                mapM_ (consFun1 l g i xs body) t
+      [ConsSig ft]        -> do its <- cgCtorTys l i ft
+                                mapM_ (consFun1 l g i xs body) its
       _                   -> cgError $ unsupportedNonSingleConsTy $ srcPos l
   where 
     i = Id l "constructor"
@@ -509,10 +516,14 @@ consExpr g (CallExpr l em@(DotRef _ e f) es) _
                                     Just ft -> consCall  g l em ((,Nothing) <$> es) $ thd3 ft
                                     Nothing -> cgError $ errorModuleExport (srcPos l) r f 
                        Nothing -> cgError $ bugMissingModule (srcPos l) r 
-        _ -> consCallDotRef g' l em (vr x) (getElt g f t) es
+
+        t | isVariadicCall f   -> consVariadicCall g l em ((,Nothing) <$> es) t
+
+          | otherwise -> consCallDotRef g' l em (vr x) (getElt g f t) es
   where
     -- Add a VarRef so that e is not typechecked again
-    vr          = VarRef $ getAnnotation e
+    vr               = VarRef $ getAnnotation e
+    isVariadicCall f = F.symbol f == F.symbol "call"
 
 -- | e(es)
 consExpr g (CallExpr l e es) _
@@ -522,12 +533,12 @@ consExpr g (CallExpr l e es) _
 -- | e.f
 consExpr g ef@(DotRef l e f) _
   = mseq (consExpr g e Nothing) $ \(x,g') -> do
-      te     <- safeEnvFindTy x g'
+      te            <- safeEnvFindTy x g'
       case getProp g' (F.symbol f) te of
         Just (_, t) -> consCall g' l ef ((,Nothing) <$> [vr x]) $ mkTy te t
         Nothing     -> cgError $ errorMissingFld (srcPos l) f te
   where
-    mkTy s t = mkFun ([], [B (F.symbol "this") s], t) 
+    mkTy s t = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
     vr       = VarRef $ getAnnotation e
 
 -- FIXME: e["f"]
@@ -590,6 +601,19 @@ consExpr _ e _ = cgError $ unimplemented l "consExpr" e where l = srcPos  e
 
 
 --------------------------------------------------------------------------------
+consVariadicCall :: PP a => CGEnv -> AnnTypeR -> a -> [(Expression AnnTypeR, Maybe RefType)] 
+                         -> RType F.Reft -> CGM (Maybe (Id AnnTypeR, CGEnv))
+--------------------------------------------------------------------------------
+consVariadicCall g l em es ft =
+  case bkFun ft of 
+    Just (αs,Just s ,ts,t) -> consCall g l em es $ mkFun (αs,Nothing,bs s:ts,t)
+    Just (αs,Nothing,ts,t) -> consCall g l em es $ mkFun (αs,Nothing,bs tTop:ts,t)
+    _                     -> cgError $ errorVariadic (srcPos l) ft
+  where
+    bs = B $ F.symbol "this"
+
+
+--------------------------------------------------------------------------------
 consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
 consCast g a e  
@@ -627,6 +651,13 @@ consDownCast g l x _ t2
         envAddFresh l (ztx,a) g
 
 
+-- | `consCall g l fn ets ft0`:
+--   
+--   * @ets@ is the list of arguments, as pairs of expressions and optionally 
+--     contextual types on them.
+--   * @ft0@ is the function's signature -- the 'this' argument should have been
+--     made explicit by this point.
+--
 --------------------------------------------------------------------------------
 consCall :: (PP a) => 
   CGEnv -> AnnTypeR -> a -> [(Expression AnnTypeR, Maybe RefType)] 
@@ -644,10 +675,10 @@ consCall g l fn ets ft0
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
      ts <- mapM (`safeEnvFindTy` g') xes
      case overload l of
-         Just ft    -> do  (_,its,ot)   <- instantiate l g fn ft
-                           let (su, ts') = renameBinds its xes
-                           zipWithM_ (subType l err g') ts ts'
-                           Just <$> envAddFresh l (F.subst su ot, WriteLocal) g'
+         Just ft    -> do  (_,_,its,ot)   <- instantiate l g fn ft
+                           let (su, ts')   = renameBinds its xes
+                           _              <- zipWithM_ (subType l err g') ts ts'
+                           Just          <$> envAddFresh l (F.subst su ot, WriteLocal) g'
          Nothing    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
     where
        err           = errorLiquid' l
@@ -680,7 +711,7 @@ consCallDotRef g l fn rcvr elts es
 
 ---------------------------------------------------------------------------------
 instantiate :: (PP a, PPRS F.Reft) => 
-  AnnTypeR -> CGEnv -> a -> RefType -> CGM  ([TVar], [Bind F.Reft], RefType)
+  AnnTypeR -> CGEnv -> a -> RefType -> CGM  ([TVar], Maybe RefType, [Bind F.Reft], RefType)
 ---------------------------------------------------------------------------------
 instantiate l g fn ft 
   = do  t'   <- freshTyInst l g αs ts t

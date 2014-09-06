@@ -43,7 +43,7 @@ module Language.Nano.Liquid.CGMonad (
   , addAnnot
 
   -- * Function Types
-  , cgFunTys, cgMethTys
+  , cgFunTys, cgMethTys, cgCtorTys
 
   -- * Zip type wrapper
   , zipTypeM
@@ -60,7 +60,7 @@ import           Control.Monad.Trans.Except
 import           Data.Generics.Schemes
 import           Data.Generics.Aliases
 
-import           Data.Maybe                     (catMaybes)
+import           Data.Maybe                     (catMaybes, maybeToList)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 import qualified Data.List                      as L
@@ -479,13 +479,12 @@ freshenCGEnvM g
         return $ g { cge_names = names, cge_mod = modules } 
   where
 
--- XXX: stuff not to be freshened: TVars, func declarations, return vars.
+
+-- | @freshenVarbindingM@ 
 --
---      What else?
+--    XXX: only ReadOnly vars are freshened
 --
 freshenVarbindingM _ (x,(v@(TVar{}),a)) = return (x,(v,a))
-freshenVarbindingM _ (x,(v,ReturnVar))  = return (x,(v,ReturnVar))
-freshenVarbindingM _ (x,(v,ImportDecl)) = return (x,(v,ImportDecl))
 freshenVarbindingM g (x,(t,ReadOnly)  ) = (\t -> (x,(t,ReadOnly))) <$> freshTyVar g (srcPos x) t
 freshenVarbindingM _ (x,(t,a)         ) = return (x,(t,a))
 
@@ -654,12 +653,13 @@ splitC :: SubC -> CGM [FixSubC]
 
 -- | Function types
 --
-splitC (Sub g i tf1@(TFun xt1s t1 _) tf2@(TFun xt2s t2 _))
+splitC (Sub g i tf1@(TFun s1 xt1s t1 _) tf2@(TFun s2 xt2s t2 _))
   = do bcs       <- bsplitC g i tf1 tf2
        g'        <- envTyAdds "splitC" i xt2s g 
-       cs        <- concatMapM splitC $ safeZipWith "splitc-1" (Sub g' i) t2s t1s' 
-       cs'       <- splitC $ Sub g' i (F.subst su t1) t2      
-       return     $ bcs ++ cs ++ cs'
+       cs        <- splitOC g i s1 s2
+       cs'       <- concatMapM splitC $ safeZipWith "splitc-1" (Sub g' i) t2s t1s' 
+       cs''      <- splitC $ Sub g' i (F.subst su t1) t2      
+       return     $ bcs ++ cs ++ cs' ++ cs''
     where 
        t2s        = b_type <$> xt2s
        t1s'       = F.subst su (b_type <$> xt1s)
@@ -758,6 +758,9 @@ splitC (Sub _ _ (TModule _) (TModule _)) = return []
 splitC x@(Sub g i t1 t2)
   = splitIncompatC l g i t1 t2 where l = srcPos x
 
+splitOC g i (Just t) (Just t') = splitC (Sub g i t t') 
+splitOC _ _ _        _         = return []
+
 -- splitIncompatC :: SourceSpan -> RefType -> RefType -> a
 splitIncompatC _ g i t1 _ = bsplitC g i t1 (mkBot t1)
   
@@ -851,12 +854,13 @@ instance PP (F.SortedReft) where
 ---------------------------------------------------------------------------------------
 splitW :: WfC -> CGM [FixWfC]
 ---------------------------------------------------------------------------------------
-splitW (W g i ft@(TFun ts t _)) 
+splitW (W g i ft@(TFun s ts t _)) 
   = do let bws = bsplitW g ft i
        g'     <- envTyAdds "splitW" i ts g 
-       ws     <- concatMapM splitW [W g' i ti | B _ ti <- ts]
-       ws'    <-            splitW (W g' i t)
-       return  $ bws ++ ws ++ ws'
+       ws     <- concatMapM splitW (W g' i <$> maybeToList s)
+       ws'    <- concatMapM splitW [W g' i ti | B _ ti <- ts]
+       ws''   <-            splitW (W g' i t)
+       return  $ bws ++ ws ++ ws' ++ ws''
 
 splitW (W g i (TAll _ t)) 
   = splitW (W g i t)
@@ -895,23 +899,30 @@ bsplitW g t i
 
 envTyAdds msg l xts = envAdds (msg ++  " - envTyAdds " ++ ppshow (srcPos l)) [(symbolId l x,(t,WriteLocal)) | B x t <- xts]
 
-cgFunTys l f xs ft = 
-  case funTys l f xs ft of 
-    Left e  -> cgError e 
-    Right a -> return a
 
+------------------------------------------------------------------------------
+cgFunTys :: (F.Symbolic s, F.Reftable r, PP r, PP a) =>
+  AnnSSA r -> a -> [s] -> RType r -> CGM [(Int, ([TVar], Maybe (RType r), [RType r], RType r))]
+------------------------------------------------------------------------------
+cgFunTys l f xs ft = either cgError return $ funTys l f xs ft 
 
 ------------------------------------------------------------------------------
 cgMethTys :: (PP a) => AnnTypeR -> a -> (Mutability, RefType)
-                    -> CGM [(Int, Mutability, ([TVar], [RefType], RefType))]
+                    -> CGM [(Int, Mutability, ([TVar], Maybe RefType, [RefType], RefType))]
 ------------------------------------------------------------------------------
 cgMethTys l f (m,t) 
    = zip3 [0..] (repeat m) <$> mapM (methTys l f) (bkAnd t)
 
 methTys l f ft0
   = case remThisBinding ft0 of
-      Nothing         -> cgError $ errorNonFunction (srcPos l) f ft0 
-      Just (vs,bs,t)  -> return    $ (vs,b_type <$> bs,t)
+      Nothing          -> cgError $ errorNonFunction (srcPos l) f ft0 
+      Just (vs,s,bs,t) -> return  $ (vs,s,b_type <$> bs,t)
+
+------------------------------------------------------------------------------
+cgCtorTys :: (PP a) => AnnTypeR -> a -> RefType
+                    -> CGM [(Int, ([TVar], Maybe RefType, [RefType], RefType))]
+------------------------------------------------------------------------------
+cgCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 
 
 --------------------------------------------------------------------------------

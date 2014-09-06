@@ -227,8 +227,7 @@ flatten'' st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten st γ (d, tVar <$> vs)
 --    Types with zero type parameters (missing mutability field) are considered
 --    invalid.
 --
---  FIXME: Return an `Either Error (RType r)` for better error reporting.
---
+--    FIXME: Return an `Either Error (RType r)` for better error reporting.
 --
 ---------------------------------------------------------------------------
 flattenType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
@@ -310,7 +309,7 @@ instance F.Symbolic Constructor where
   symbol (TApp (TRef x) _ _)           = F.symbol x
   symbol (TClass _ )                   = F.symbol "Function"
   symbol (TModule _ )                  = F.symbol "Object"
-  symbol (TFun _ _ _ )                 = F.symbol "Function"
+  symbol (TFun _ _ _ _ )               = F.symbol "Function"
   symbol (TCons _ _ _)                 = F.symbol "Object"
   symbol (TAnd _)                      = F.symbol "Function"
   symbol _                             = F.symbol "ConstructorERROR"
@@ -324,7 +323,7 @@ getTypeof (TApp TBool _ _    )         = Just "boolean"
 getTypeof (TApp TString _ _  )         = Just "string"
 getTypeof (TApp TUndef _ _   )         = Just "undefined"
 getTypeof (TApp TNull  _ _   )         = Just "undefined"
-getTypeof (TFun _ _ _        )         = Just "function"
+getTypeof (TFun _ _ _ _      )         = Just "function"
 getTypeof (TCons _ _ _       )         = Just "object"
 getTypeof (TApp (TRef _) _ _ )         = Just "object"
 getTypeof (TClass _          )         = Just "function"

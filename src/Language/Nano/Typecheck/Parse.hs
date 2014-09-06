@@ -205,8 +205,12 @@ bareFunP
        reserved "=>" 
        ret    <- bareTypeP 
        r      <- topP
-       return $ TFun args ret r
-
+       return $ mkF args ret r
+  where 
+    mkF as ret r = case as of
+      (B s t : ts) | s == symbol "this" -> TFun (Just t) ts ret r
+      ts                                -> TFun Nothing ts ret r
+  
 
 --  (x:t, ...): t
 bareMethP
@@ -214,7 +218,11 @@ bareMethP
        _      <- colon
        ret    <- bareTypeP 
        r      <- topP
-       return $ TFun args ret r
+       return $ mkF args ret r
+  where 
+    mkF as ret r = case as of
+      (B s t : ts) | s == symbol "this" -> TFun (Just t) ts ret r
+      ts                                -> TFun Nothing ts ret r
 
 
 bareArgP 
@@ -349,16 +357,16 @@ methEltP defM   = do
     _          <- colon
     m          <- option defM (toType <$> mutP)
     t          <- methSigP
-    return      $ MethSig x m $ outT t
+    return      $ MethSig x m t
   where
-    outT t      =  
-      case bkFun t of 
-        Just (_, (B x _):_,_) | x == symbol "this" -> t
-        Just (vs, bs      ,ot)                     -> mkFun (v:vs, B (symbol "this") tv : bs, ot)
-        _                                          -> t
-    -- XXX: using _THIS_ as a reserved sting here.
-    v  = TV (symbol "_THIS_") (srcPos (dummyPos "RSC.Parse.methEltP"))
-    tv = TVar v fTop
+--     outT t      =  
+--       case bkFun t of 
+--         Just (_, (B x _):_,_ ) | x == symbol "this" -> t
+--         Just (vs, bs      ,ot)                     -> mkFun (v:vs, B (symbol "this") tv : bs, ot)
+--         _                                          -> t
+--     -- XXX: using _THIS_ as a reserved sting here.
+--     v  = TV (symbol "_THIS_") (srcPos (dummyPos "RSC.Parse.methEltP"))
+--     tv = TVar v fTop
 
 
 -- | <forall A .> (t...) => t

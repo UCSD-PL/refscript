@@ -79,8 +79,7 @@ variablesInScope :: (Data a, IsLocated a)
 ---------------------------------------------------------------------------------------
 variablesInScope gs fs = (ros, wgs, wls)
   where
-    vs            = {-tracePP ("all hoisted vars: " ++ ppshow n) $-} hoistVarDecls fs
-    -- vs            = hoistVarDecls fs
+    vs            = hoistVarDecls fs
     (wgs, wls)    = mapPair msrc $ L.partition (\s -> srcPos s `S.member` gs) vs 
     ros           = msrc $ hoistReadOnly fs
     msrc          = (fmap srcPos <$>)
@@ -559,7 +558,7 @@ ssaVarRef l x
          ReadOnly    -> maybe e  (VarRef l) <$> findSsaEnv x
          WriteLocal  -> findSsaEnv x >>= \case
              Just t  -> return   $ VarRef l t
-             Nothing -> ssaError $ errorSSAUnboundId (srcPos x) x
+             Nothing -> return   $ VarRef l x -- ssaError $ errorSSAUnboundId (srcPos x) x
          ImportDecl  -> ssaError $ errorSSAUnboundId (srcPos x) x
          ReturnVar   -> ssaError $ errorSSAUnboundId (srcPos x) x
     where

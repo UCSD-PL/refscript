@@ -19,7 +19,7 @@ import           Control.Applicative                ((<$>))
 import           Data.Generics
 import qualified Data.HashSet                       as S
 import           Data.List                          (sort)
-import           Data.Maybe                         (maybeToList, catMaybes)
+import           Data.Maybe                         (maybeToList, catMaybes, fromMaybe)
 import           Control.Monad.State
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
@@ -29,6 +29,7 @@ import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Nano.Annots
 import           Language.Nano.Types
+import           Language.Nano.Misc                 (setSnd4)
 import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Language.Nano.Environment
@@ -300,9 +301,9 @@ subElt _ _ _ _ _ _ = False
 convertFun :: (Functor g, EnvLike () g)
            => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertFun l γ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _) 
-  | length b1s /= length b2s 
-  = do  cs <- zipWithM (convert' l γ) (b_type <$> b2s) (b_type <$> b1s)
+convertFun l γ t1@(TFun s1 b1s o1 _) t2@(TFun s2 b2s o2 _) 
+  | length b1s == length b2s
+  = do  cs <- zipWithM (convert' l γ) (s1' : map b_type b2s) (s2' : map b_type b1s)
         co <- convert' l γ o1 o2
         if all noCast cs && noCast co then 
           Right CDNo
@@ -312,6 +313,9 @@ convertFun l γ t1@(TFun b1s o1 _) t2@(TFun b2s o2 _)
           Left $ errorFuncSubtype l t1 t2
   | otherwise 
   = Left $ errorFuncSubtype l t1 t2
+  where
+    s1' = fromMaybe tTop s1 
+    s2' = fromMaybe tTop s2
 
 convertFun l γ t1@(TAnd _) t2@(TAnd t2s) = 
   if and $ isSubtype γ t1 <$> t2s then Right CDUp
@@ -366,19 +370,9 @@ convertUnion _ γ t1 t2
   | upcast    = Right {- $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) -} CDUp 
   | deadcast  = Right {- $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) -} CDDead
   | otherwise = Right {- $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) -} CDDn
-
---     case distinct of
---       ([],[])  | length t1s == length t2s -> Right $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) CDNo
---                | otherwise                -> error "convertUnion - impossible"
---       ([],_ )                             -> Right $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) CDUp 
---       (_ ,[])                             -> Right $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) CDDn 
---       ( _ ,_)                             -> Left  $ errorUnionSubtype l t1 t2
   where 
-
-    upcast                = all (\t1 -> any (\t2 -> isSubtype γ t1 t2) t2s) t1s
-    deadcast              = all (\t1 -> not $ any (\t2 -> isSubtype γ t1 t2) t2s) t1s
-  
-
+    upcast                = all (\t1 -> any (isSubtype γ t1) t2s) t1s
+    deadcast              = all (\t1 -> not $ any (isSubtype γ t1) t2s) t1s
     (t1s, t2s)            = sanityCheck $ mapPair bkUnion (t1, t2)
     sanityCheck ([ ],[ ]) = errorstar "unionParts', called on too small input"
     sanityCheck ([_],[ ]) = errorstar "unionParts', called on too small input"
@@ -406,10 +400,13 @@ safeExtends l γ (ID _ c _ (Just (p, ts)) es) =
                       | otherwise              = Just c
 
 compatElt γ (CallSig t1      ) (CallSig t2)       = isSubtype γ t1 t2 
-compatElt γ (ConsSig t1      ) (ConsSig t2)       = isSubtype γ t1 t2 
+compatElt _ (ConsSig t1      ) (ConsSig t2)       = True
 compatElt γ (IndexSig _ _ t1 ) (IndexSig _ _ t2)  = isSubtype γ t1 t2 && isSubtype γ t2 t1 
-compatElt γ (FieldSig _ _ t1) (FieldSig _ _ t2) = isSubtype γ t1 t2 
-compatElt γ (MethSig _ m1 t1 ) (MethSig _ m2 t2)  = isSubtype (fmap (const ()) γ) m1 m2 && isSubtype γ t1 t2 
+compatElt γ (FieldSig _ _ t1 ) (FieldSig _ _ t2)  = isSubtype γ t1 t2 
+compatElt γ (MethSig _ m1 t1 ) (MethSig _ m2 t2)  = isSubtype (fmap (const ()) γ) m1 m2 && isSubtype γ (clearThis t1) (clearThis t2)
+  where
+  -- get rid of the 'this' part before doing the check
+    clearThis = mkAnd . map mkFun . concat . maybeToList . fmap (map (`setSnd4` Nothing)) . bkFuns
 compatElt γ (StatSig _ m1 t1 ) (StatSig _ m2 t2)  = isSubtype (fmap (const ()) γ) m1 m2 && isSubtype γ t1 t2 
 compatElt _ _                  _                  = False 
 

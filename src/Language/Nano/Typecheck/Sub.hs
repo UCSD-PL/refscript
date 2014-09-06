@@ -330,8 +330,7 @@ convertFun l _ t1 t2 = Left $ unsupportedConvFun l t1 t2
 convertTClass :: (Functor g, EnvLike () g)
               => SourceSpan -> g () -> RelName -> RelName -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertTClass l γ c1 c2 | c1 == c2                  = Right CDNo  
-                        -- | c1 `elem` ancestors γ c2  = Right CDUp
+convertTClass l _ c1 c2 | c1 == c2                  = Right CDNo  
                         | otherwise                 = Left  $ errorTClassSubtype l c1 c2
 
 -- | `convertTModule`
@@ -341,8 +340,8 @@ convertTModule :: (Functor g, EnvLike () g)
 --------------------------------------------------------------------------------
 convertTModule l γ c1 c2 = 
   case (absolutePathInEnv γ c1, absolutePathInEnv γ c2) of
-    (Just a1, Just a2) -> Right CDNo
-    _                  -> Left $ errorTModule l c1 c2
+    (Just _, Just _) -> Right CDNo
+    _                -> Left $ errorTModule l c1 c2
 
 
 
@@ -351,7 +350,7 @@ convertTModule l γ c1 c2 =
 convertSimple :: (Functor g, EnvLike () g)
               => SourceSpan -> g r -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertSimple l _ t1 t2
+convertSimple _ _ t1 t2
   | t1 == t2      = Right CDNo
   -- TOGGLE dead-code
   | otherwise = Right CDDead 
@@ -398,7 +397,7 @@ safeExtends l γ (ID _ c _ (Just (p, ts)) es) =
        es -> Just $ errorClassExtends l c p (F.symbol <$> es)
   where
     compairablePairs  = [ (ee, filter (sameBinder ee) ps) | ee <- es ]
-    parent            = resolveRelNameInEnv γ p
+    -- parent            = resolveRelNameInEnv γ p
     ps                = case  resolveRelNameInEnv γ p of
                           Just par  -> concat $ maybeToList (flatten False γ (par,ts))
                           Nothing -> []
@@ -409,10 +408,10 @@ safeExtends l γ (ID _ c _ (Just (p, ts)) es) =
 compatElt γ (CallSig t1      ) (CallSig t2)       = isSubtype γ t1 t2 
 compatElt γ (ConsSig t1      ) (ConsSig t2)       = isSubtype γ t1 t2 
 compatElt γ (IndexSig _ _ t1 ) (IndexSig _ _ t2)  = isSubtype γ t1 t2 && isSubtype γ t2 t1 
-compatElt γ (FieldSig _ m1 t1) (FieldSig _ m2 t2) = isSubtype γ t1 t2 
+compatElt γ (FieldSig _ _ t1) (FieldSig _ _ t2) = isSubtype γ t1 t2 
 compatElt γ (MethSig _ m1 t1 ) (MethSig _ m2 t2)  = isSubtype (fmap (const ()) γ) m1 m2 && isSubtype γ t1 t2 
 compatElt γ (StatSig _ m1 t1 ) (StatSig _ m2 t2)  = isSubtype (fmap (const ()) γ) m1 m2 && isSubtype γ t1 t2 
-compatElt _ e1                 e2                 = False 
+compatElt _ _                  _                  = False 
 
 
 

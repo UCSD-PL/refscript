@@ -80,6 +80,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
 -- import           Debug.Trace                      (trace)
+--
 import qualified System.Console.CmdArgs.Verbosity   as V
 
 type PPR r = (PP r, F.Reftable r, Data r)

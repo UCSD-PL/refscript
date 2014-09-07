@@ -13,6 +13,7 @@ import           Control.Applicative                ((<$>))
 
 import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (listToMaybe, catMaybes, maybeToList)
+import qualified Data.Foldable                      as FO
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -46,6 +47,7 @@ import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
 
 import qualified Data.Text                          as T 
+import           Text.PrettyPrint.HughesPJ 
 
 import           System.Console.CmdArgs.Default
 
@@ -65,11 +67,29 @@ parse fs next
           Left  l -> return (A.NoAnn, l) 
           Right x -> next x
 
-ssa   next p    = ssaTransform p              >>= either (lerror . single) next
-tc    next p    = typeCheck (expandAliases p) >>= either lerror next
+ssa next p    
+  = do  r <- ssaTransform p              
+        either (lerror . single) next r
+
+tc next p    
+  = do  r <- typeCheck (expandAliases p) 
+        case r of 
+          Left l  -> lerror l 
+          Right x -> next x
+
 refTc f    p    = getOpts >>= solveConstraints f . (`generateConstraints` p)
 
 lerror          = return . (A.NoAnn,) . F.Unsafe
+
+
+
+
+-- ppCasts :: NanoRefType -> [ Cast F.Reft ]
+ppCasts (Nano { code = Src fs }) = 
+  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+                                , TCast _ c <- ann_fact a ] 
+
+
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -242,7 +262,8 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 -- e1.f = e2
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
   = mseq (consExpr g e1 Nothing) $ \(x1,g') ->
-      safeEnvFindTy x1 g' >>= consSetProp g' x1 . fmap snd . getProp g' (F.symbol f)
+      do t <- safeEnvFindTy x1 g' 
+         consSetProp g' x1 (fmap snd $ getProp g' (F.symbol f) t)
   where
     consSetProp g x rhsCtx = 
       do opTy      <- setPropTy l (F.symbol f) <$> safeEnvFindTy (builtinOpId BISetProp) g

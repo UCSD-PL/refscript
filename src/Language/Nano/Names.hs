@@ -34,6 +34,7 @@ import           Data.Data
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Locations
+import           Language.Nano.Errors()
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.PrettyPrint

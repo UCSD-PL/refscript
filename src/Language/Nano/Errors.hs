@@ -8,25 +8,13 @@ module Language.Nano.Errors where
 import Debug.Trace
 import Text.Printf 
 import Text.PrettyPrint.HughesPJ
+import Language.Nano.Locations
 import Language.ECMAScript3.PrettyPrint
-import Language.ECMAScript3.Parser.Type      (SourceSpan (..))
 import Language.Fixpoint.Errors
 import Language.Fixpoint.PrettyPrint
 
 
 mkErr = err . sourceSpanSrcSpan 
-
-sourceSpanSrcSpan sp = SS (sp_begin sp) (sp_end sp)
-
---------------------------------------------------------------------------------
--- | SourceSpans ---------------------------------------------------------------
---------------------------------------------------------------------------------
-
-instance PP SrcSpan where
-  pp    = pprint
-
-instance PP SourceSpan where 
-  pp    = pp . tx where tx (Span x y) = SS x y
 
 ---------------------------------------------------------------------
 ppshow :: (PP a) => a -> String
@@ -37,6 +25,12 @@ ppshow = render . pp
 tracePP     ::  (PP a) => String -> a -> a
 ---------------------------------------------------------------------
 tracePP s x = trace (printf "\nTrace: [%s]: %s" s (ppshow x)) x
+
+---------------------------------------------------------------------
+ltracePP     ::  (PP a, IsLocated l) => l -> String -> a -> a
+---------------------------------------------------------------------
+ltracePP l s x = trace (printf "\nTrace: [%s: %s]: %s" (ppshow (srcPos l)) s (ppshow x)) x
+
 
 instance PP a => PP (Either String a) where 
   pp (Left s)  = text $ "ERROR!" ++ s
@@ -169,4 +163,4 @@ errorNonFunction l f t        = mkErr l $ printf "Non-function type: %s :: %s " 
 errorMissingReturn l          = mkErr l $ printf "Missing Return statement."
 errorMissingSpec l f          = mkErr l $ printf "Missing signature for '%s'" (ppshow f)
 errorVariadic l f             = mkErr l $ printf "Cannot call variadic on type '%s'" (ppshow f)
-
+errorConflateTypeMembers l es = mkErr l $ printf "Cannot conflate type members '%s'" (ppshow es)  

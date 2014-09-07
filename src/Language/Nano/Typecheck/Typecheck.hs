@@ -129,12 +129,17 @@ typeCheck pgm = do
 tcNano :: PPR r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
-  = do  γ'        <- addUndefined γ   -- adding undefined into scope
-        (fs',_)   <- tcStmts γ' fs
-        fs''      <- patch fs'
-        return     $ p { code = Src fs'' }
+  -- adding undefined into scope
+  = conflateTypeMembers <$> addUndefined γ >>= \case
+      Left es  -> manyEs es 
+      Right γ' -> do (fs',_)   <- tcStmts γ' fs
+                     fs''      <- patch fs'
+                     return     $ p { code = Src fs'' }
     where
         γ          = initGlobalEnv p
+        manyEs []     = tcError $ impossible (srcPos dummySpan) "tcNano manyEs"
+        manyEs [e]    = tcError e
+        manyEs (e:es) = tcError e >> manyEs es
 
 
 -- | Patch annotation on the AST
@@ -254,7 +259,7 @@ tcFun1 :: (PPR r, IsLocated l, CallSite t)
        => TCEnv r -> (AnnSSA r) -> l -> [Id (AnnSSA r)] -> [Statement (AnnSSA r)] 
        -> (t, ([TVar], Maybe (RType r), [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
-tcFun1 γ l f xs body fty = tcFunBody γ' l body t
+tcFun1 γ l f xs body fty = tcFunBody γ' l body $ t
   where
     γ' 					         = initFuncEnv γ f i αs s xs ts t arg body
     (i, (αs,s,ts,t))     = fty
@@ -379,7 +384,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do z               <- runFailM $ tcExpr γ e1 Nothing
        case z of 
-         Right (_,te)  -> case getProp γ (F.symbol f) te of
+         Right (_,te1) -> case getProp γ (F.symbol f) te1 of
                             Just (_, tf) -> tcSetProp $ Just tf
                             Nothing      -> tcSetProp $ Nothing
          Left _        -> tcSetProp $ Nothing
@@ -636,7 +641,7 @@ tcExpr γ (FuncExpr l fo xs body) tCtxO
   = case anns of 
       [ft] -> tcFuncExpr ft
       _    -> case tCtxO of
-                Just tCtx -> tcFuncExpr tCtx
+                Just tCtx -> tcFuncExpr $ tCtx
                 Nothing   -> tcError $ errorNoFuncAnn $ srcPos l
   where
     tcFuncExpr t = do ts    <- tcFunTys l f xs t

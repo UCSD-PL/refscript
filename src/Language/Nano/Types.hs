@@ -141,7 +141,7 @@ data IfaceDef r = ID {
   -- 
   -- ^ List of data type elts 
   --
-  , t_elts  :: ![TypeMember r]                     
+  , t_elts  :: ![TypeMember r]
   } 
   deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
@@ -194,6 +194,7 @@ data Visibility
   = Local 
 
   | Exported
+  deriving (Eq, Data, Typeable)
 
 
 ------------------------------------------------------------------------------------------
@@ -222,7 +223,7 @@ data Assignability
   -- ^ Used to denote return variable
   -- 
   | ReturnVar
-  deriving (Eq)
+  deriving (Eq, Data, Typeable)
 
 
 
@@ -256,7 +257,7 @@ data ModuleDef r = ModuleDef {
   --
   , m_path        :: AbsPath
   }
-  deriving (Functor)
+  deriving (Functor, Data, Typeable)
 
 
 

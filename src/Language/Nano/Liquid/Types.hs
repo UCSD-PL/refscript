@@ -492,14 +492,17 @@ getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
 zipType :: CGEnv -> RefType -> RefType -> Maybe RefType
 --------------------------------------------------------------------------------
 --
---  s1 \/ .. sn | t1 \/ .. tm = s1'|t1' \/ .. tk|tk' \/ .. bot(tm')
+-- | Unions
 --  
--- \/{vi:Si|Pi} || \/{wj:Tj|_} = \/{wj: Si||Tj |Qj},
+--    s1 \/ .. sn | t1 \/ .. tm = s1'|t1' \/ .. tk|tk' \/ .. bot(tm')
+--  
+--    \/{vi:Si|Pi} || \/{wj:Tj|_} = \/{wj: Si||Tj |Qj},
 --
---    where Qj =  (/\ [ instanceof(wj,Si') => Pi' ])  /\ ( \/ [instanceof(wj,Si')] )
+--        where Qj =  (/\ [ instanceof(wj,Si') => Pi' ])  /\ ( \/ [instanceof(wj,Si')] )
 --    
---    with  Constr(Si') <: Constr(Tj) 
---    and   {vi':Si'|Pi'} a permutation of {vi:Si|Pi}
+--        with  Constr(Si') <: Constr(Tj) 
+--        
+--        and   {vi':Si'|Pi'} a permutation of {vi:Si|Pi}
 --
 zipType γ (TApp TUn t1s r1) (TApp TUn t2s _) = 
   
@@ -541,6 +544,12 @@ zipType γ (TApp TUn t1s r) t2 =
                     return $ t `strengthen` r
       Nothing -> return $ fmap F.bot t2
 
+-- | No unions below this point
+--
+-- | Undefined
+--
+-- UNDEFINED
+-- zipType γ (TApp TUndef _ r1) t2 = Just $ rType t2 `strengthen` r1
 
 
 -- | Class/interface types

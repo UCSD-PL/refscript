@@ -5,9 +5,9 @@
 {-# LANGUAGE DeriveTraversable         #-}
 {-# LANGUAGE DeriveFoldable            #-}
 {-# LANGUAGE MultiParamTypeClasses     #-}
-{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE FlexibleContexts          #-}
@@ -40,12 +40,13 @@ module Language.Nano.Typecheck.Types (
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
-  , tAnd, isTVar, isTObj, isConstr, isTFun, fTop, orNull
+  , isTVar, isTObj, isConstr, isTFun, fTop, orNull
   -- , isArr , tArr, rtArr
 
   -- * Element ops 
   , sameBinder, eltType, isStaticSig, nonStaticSig, nonConstrElt, mutability, baseType
   , isMethodSig, isFieldSig, setThisBinding, remThisBinding, mapEltM
+  , conflateTypeMembers
 
   -- * Operator Types
   , infixOpId 
@@ -64,6 +65,7 @@ module Language.Nano.Typecheck.Types (
 
   ) where 
 
+import           Data.Data
 import           Data.Default
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
@@ -72,6 +74,8 @@ import           Data.Maybe                     (fromMaybe)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.HashMap.Strict            as M
 import           Data.Typeable                  ()
+import           Data.Generics.Schemes
+import           Data.Generics.Aliases          (mkM)
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Misc
@@ -88,6 +92,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Text.Parsec.Pos                    (initialPos)
 
 import           Control.Applicative            hiding (empty)
+import           Control.Monad.Trans.State               (modify, State, runState)
 
 -- import           Debug.Trace (trace)
 
@@ -349,7 +354,73 @@ mapEltM f (IndexSig i b t)   = IndexSig i b <$> f t
 mapEltM f (FieldSig x m t)   = FieldSig x m <$> f t
 mapEltM f (MethSig  x m t)   = MethSig x m <$> f t
 mapEltM f (StatSig x m t)    = StatSig x m <$> f t
+
+
+
+type CheckM = State [Error] 
+
+newtype M m a = M (a -> m a)
+
+-- | @conflateTypeMembers@ enforces unique binders in every element list
+--
+--  FIXME: add separate pass for `RType F.Reft`
+--
+--------------------------------------------------------------------------------------
+conflateTypeMembers :: (Typeable a, Data a) => a-> Either [Error] a
+--------------------------------------------------------------------------------------
+conflateTypeMembers a = 
+    case runState (everywhereM (mkM myT) a) [] of 
+      (a, []) -> Right a
+      (_, es) -> Left es
+  where
+    -- FIXME: How do we use extM correctly ???
+    -- myT = rTypeT `extM` ifaceDefT
+    myT :: IfaceDef F.Reft -> CheckM (IfaceDef F.Reft)
+    myT = ifaceDefT
+
+    ifaceDefT            :: IfaceDef F.Reft -> CheckM (IfaceDef F.Reft)
+    ifaceDefT d           = case conflateTMs dummySpan $ t_elts d of
+                              Right es' -> return $ d { t_elts = es' }
+                              Left  e   -> modify (e:) >> return d
+
+--     rTypeT               :: RType F.Reft -> CheckM (RType F.Reft)
+--     rTypeT (TCons es m r) = case conflateTMs dummySpan es of
+--                               Right es' -> return $ TCons es' m r
+--                               Left  e   -> modify (e:) >> return (TCons es  m r)
+--     rTypeT t              = return t
+
+
+-- | Keep multiple bindings (of the same symbol) of methods or fields into a 
+--   single binding bound to a intersection type.
+----------------------------------------------------------------------------------
+conflateTMs :: (IsLocated l) => l -> [TypeMember r] -> Either Error [TypeMember r]
+----------------------------------------------------------------------------------
+conflateTMs l es 
+  | null fails  = Right $ success
+  | otherwise   = Left  $ errorConflateTypeMembers (srcPos l) fails
+    
+  where
+    success   = [ e                       | (_, Just e) <- bnds ]
+    fails     = [ b                       | (b, Nothing) <- bnds ]
+    bnds      = [ (s, foldM1 joinElts es) | (s, es) <- cmnBnds ]
+    cmnBnds   = [ (b, findEs b)           | b <- L.nub (F.symbol <$> es) ]
+    findEs b  = [ e                       | e <- es, F.symbol e == b ]
  
+
+joinElts (CallSig t1)        (CallSig t2)       = Just $ CallSig         $ joinTys t1 t2 
+joinElts (ConsSig t1)        (ConsSig t2)       = Just $ ConsSig         $ joinTys t1 t2 
+joinElts (IndexSig x1 s1 t1) (IndexSig _ _ t2)  = Just $ IndexSig x1 s1  $ joinTys t1 t2
+joinElts (FieldSig x1 m1 t1) (FieldSig _ m2 t2) | m1 == m2 
+                                                = Just $ FieldSig x1 m1  $ joinTys t1 t2 
+joinElts (MethSig x1 m1 t1)  (MethSig _ m2 t2)  | m1 == m2 
+                                                = Just $ MethSig  x1 m1  $ joinTys t1 t2 
+joinElts (StatSig x1 m1 t1)  (StatSig _ m2 t2)  | m1 == m2 
+                                                = Just $ StatSig  x1 m1  $ joinTys t1 t2 
+joinElts _                   _                  = Nothing
+
+joinTys t1 t2 = mkAnd $ bkAnd t1 ++ bkAnd t2 
+
+
 
 isStaticSig (StatSig _ _ _)   = True
 isStaticSig _                 = False
@@ -399,6 +470,7 @@ sameBinder (MethSig x1 _ _)  (MethSig x2 _ _)   = x1 == x2
 sameBinder (StatSig x1 _ _)  (StatSig x2 _ _)   = x1 == x2
 sameBinder _                 _                  = False
 
+mutability :: TypeMember r -> Maybe Mutability
 mutability (CallSig _)      = Nothing
 mutability (ConsSig _)      = Nothing  
 mutability (IndexSig _ _ _) = Nothing  
@@ -454,7 +526,7 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TApp (TRef x) (m:ts) r) = F.ppTy r $ pp x <> ppMut m <> ppArgs brackets comma ts 
   pp (TApp c [] r)            = F.ppTy r $ pp c 
   pp (TApp c ts r)            = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
-  pp (TCons bs m r)           | length bs < 5 
+  pp (TCons bs m r)           | length bs < 3 
                               = F.ppTy r $ ppMut m <> braces (intersperse semi $ map pp bs)
                               | otherwise
                               = F.ppTy r $ lbrace $+$ nest 2 (vcat $ map pp bs) $+$ rbrace
@@ -512,13 +584,13 @@ instance (PP r, F.Reftable r) => PP (IfaceDef r) where
   pp (ID c nm vs Nothing ts) =  
         pp (if c then "class" else "interface")
     <+> pp nm <> ppArgs angles comma vs 
-    <+> braces (intersperse semi $ map pp ts)
+    <+> lbrace $+$ nest 2 (vcat $ map pp ts) $+$ rbrace
   pp (ID c nm vs (Just (p,ps)) ts) = 
         pp (if c then "class" else "interface")
     <+> pp nm <> ppArgs angles comma vs
     <+> text "extends" 
     <+> pp p  <> ppArgs angles comma ps
-    <+> braces (intersperse semi $ map pp ts)
+    <+> lbrace $+$ nest 2 (vcat $ map pp ts) $+$ rbrace
 
 
 instance (PP r, F.Reftable r) => PP (TypeMember r) where
@@ -579,10 +651,6 @@ tUndef                      = TApp TUndef   [] fTop
 tNull                       = TApp TNull    [] fTop
 tErr                        = tVoid
 tFunErr                     = ([],[],tErr)
-tAnd ts                     = case ts of 
-                                [ ] -> errorstar "BUG: empty intersection"
-                                [t] -> t
-                                _   -> TAnd ts
 
 
 isTFun (TFun _ _ _ _)       = True
@@ -780,5 +848,7 @@ prefixOpId o            = errorstar $ "prefixOpId: Cannot handle: " ++ ppshow o
 
 mkId            = Id (initialPos "") 
 builtinId       = mkId . ("builtin_" ++)
+
+
 
 

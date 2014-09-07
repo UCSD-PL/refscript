@@ -164,12 +164,12 @@ extractCall γ t             = uncurry mkAll <$> foo [] t
 
 
 -------------------------------------------------------------------------------
--- accessMember :: F.Symbol -> [TypeMember r] -> Maybe (RType r)
+accessMember :: F.Symbol -> [TypeMember r] -> Maybe (RType r)
 -------------------------------------------------------------------------------
 accessMember s es = 
   case [ t | FieldSig x _ t <- es, x == s ] of
-    t:_ -> Just t
-    _   -> listToMaybe [ t | IndexSig _ True t <- es]
+    ts -> Just $ mkAnd ts
+    _  -> listToMaybe [ t | IndexSig _ True t <- es]
 
 
 -- Access the property from the relevant ambient object but return the 

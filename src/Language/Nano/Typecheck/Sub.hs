@@ -82,12 +82,22 @@ convert' :: (Functor g, EnvLike () g)
          => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convert' _ _ t1 t2 | toType t1 == toType t2     = Right CDNo
+
 convert' _ _ t1 t2 | not (isTop t1) && isTop t2 = Right CDUp
+
+-- UNDEFINED
+-- convert' _ _ t1 t2 | isUndef t1                 = Right CDUp
+
 convert' l γ t1 t2 | any isUnion [t1,t2]        = convertUnion   l γ t1 t2
+
 convert' l γ t1 t2 | all isTObj  [t1,t2]        = convertObj     l γ t1 t2
+
 convert' l γ t1 t2 | all isTFun  [t1, t2]       = convertFun     l γ t1 t2
+
 convert' l γ (TClass  c1) (TClass  c2)          = convertTClass  l γ c1 c2
+
 convert' l γ (TModule m1) (TModule m2)          = convertTModule l γ m1 m2
+
 convert' l γ t1 t2                              = convertSimple  l γ t1 t2
 
 
@@ -367,9 +377,9 @@ convertUnion :: (Functor g, EnvLike () g)
              => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertUnion _ γ t1 t2  
-  | upcast    = Right {- $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) -} CDUp 
-  | deadcast  = Right {- $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) -} CDDead
-  | otherwise = Right {- $ tracePP (ppshow (toType t1) ++ " <: " ++ ppshow (toType t2)) -} CDDn
+  | upcast    = Right CDUp 
+  | deadcast  = Right CDDead
+  | otherwise = Right CDDn
   where 
     upcast                = all (\t1 -> any (isSubtype γ t1) t2s) t1s
     deadcast              = all (\t1 -> not $ any (isSubtype γ t1) t2s) t1s

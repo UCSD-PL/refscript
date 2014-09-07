@@ -1,11 +1,14 @@
 {-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE DeriveFunctor             #-}
 {-# LANGUAGE UndecidableInstances      #-}
 
 module Language.Nano.Typecheck.Environment where
 
+import           Data.Data                          (Data)
+import           Data.Typeable                      (Typeable)
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types()
 import           Language.Nano.Env
@@ -27,7 +30,7 @@ data TCEnv r  = TCE {
   , tce_path        :: AbsPath
   , tce_parent      :: Maybe (TCEnv r)
   }
-  deriving (Functor)
+  deriving (Functor, Data, Typeable)
 
 
 --   We define this alias as the "output" type for typechecking any entity

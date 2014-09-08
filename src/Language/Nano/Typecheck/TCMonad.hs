@@ -30,7 +30,7 @@ module Language.Nano.Typecheck.TCMonad (
   , getSubst, setSubst, addSubst
 
   -- * Function Types
-  , tcFunTys, tcMethTys
+  , tcFunTys, tcMethTys, tcCtorTys
 
   -- * Annotations
   , addAnn {-TEMP-}, getAnns --, getDef, setDef
@@ -80,6 +80,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
 -- import           Debug.Trace                      (trace)
+--
 import qualified System.Console.CmdArgs.Verbosity   as V
 
 type PPR r = (PP r, F.Reftable r, Data r)
@@ -324,6 +325,8 @@ castM γ e t1 t2
       Left  e   -> tcError e
       Right CNo -> return e
       Right c   -> addCast (tce_ctx γ) e c
+      -- Right c   -> addCast (tce_ctx γ) e 
+      -- $ tracePP (ppshow e ++ " |- " ++ ppshow t1 ++ "  <:  " ++ ppshow t2) c
 
 
 -- | Run the monad `a` in the current state. This action will not alter the
@@ -366,7 +369,7 @@ wrapCast l f e                   = Cast (Ann l [f])    e
 -- | tcFunTys: "context-sensitive" function signature
 --------------------------------------------------------------------------------
 tcFunTys :: (PPRSF r, F.Subable (RType r), F.Symbolic s, PP a) 
-         => AnnSSA r -> a -> [s] -> RType r -> TCM r [(Int, ([TVar], [RType r], RType r))]
+         => AnnSSA r -> a -> [s] -> RType r -> TCM r [(Int, ([TVar], Maybe (RType r), [RType r], RType r))]
 --------------------------------------------------------------------------------
 tcFunTys l f xs ft = either tcError return $ funTys l f xs ft 
 
@@ -374,15 +377,24 @@ tcFunTys l f xs ft = either tcError return $ funTys l f xs ft
 --------------------------------------------------------------------------------
 tcMethTys :: (PPRSF r, F.Subable (RType r), PP a) 
           => AnnSSA r -> a -> (Mutability, RType r)
-          -> TCM r [(Int, Mutability, ([TVar], [RType r], RType r))]
+          -> TCM r [(Int, Mutability, ([TVar], Maybe (RType r), [RType r], RType r))]
 --------------------------------------------------------------------------------
 tcMethTys l f (m,t) 
   = zip3 [0..] (repeat m) <$> mapM (methTys l f) (bkAnd t)
-       
+
+
 methTys l f ft0
   = case remThisBinding ft0 of
-      Nothing         -> tcError $ errorNonFunction (srcPos l) f ft0 
-      Just (vs,bs,t)  -> return  $ (vs,b_type <$> bs,t)
+      Nothing          -> tcError $ errorNonFunction (srcPos l) f ft0 
+      Just (vs,s,bs,t) -> return  $ (vs,s,b_type <$> bs,t)
+
+
+--------------------------------------------------------------------------------
+tcCtorTys :: (PPRSF r, F.Subable (RType r), PP a) 
+          => AnnSSA r -> a -> RType r
+          -> TCM r [(Int, ([TVar], Maybe (RType r), [RType r], RType r))]
+--------------------------------------------------------------------------------
+tcCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 
 
 

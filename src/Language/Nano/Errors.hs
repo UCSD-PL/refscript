@@ -8,25 +8,13 @@ module Language.Nano.Errors where
 import Debug.Trace
 import Text.Printf 
 import Text.PrettyPrint.HughesPJ
+import Language.Nano.Locations
 import Language.ECMAScript3.PrettyPrint
-import Language.ECMAScript3.Parser.Type      (SourceSpan (..))
 import Language.Fixpoint.Errors
 import Language.Fixpoint.PrettyPrint
 
 
 mkErr = err . sourceSpanSrcSpan 
-
-sourceSpanSrcSpan sp = SS (sp_begin sp) (sp_end sp)
-
---------------------------------------------------------------------------------
--- | SourceSpans ---------------------------------------------------------------
---------------------------------------------------------------------------------
-
-instance PP SrcSpan where
-  pp    = pprint
-
-instance PP SourceSpan where 
-  pp    = pp . tx where tx (Span x y) = SS x y
 
 ---------------------------------------------------------------------
 ppshow :: (PP a) => a -> String
@@ -37,6 +25,12 @@ ppshow = render . pp
 tracePP     ::  (PP a) => String -> a -> a
 ---------------------------------------------------------------------
 tracePP s x = trace (printf "\nTrace: [%s]: %s" s (ppshow x)) x
+
+---------------------------------------------------------------------
+ltracePP     ::  (PP a, IsLocated l) => l -> String -> a -> a
+---------------------------------------------------------------------
+ltracePP l s x = trace (printf "\nTrace: [%s: %s]: %s" (ppshow (srcPos l)) s (ppshow x)) x
+
 
 instance PP a => PP (Either String a) where 
   pp (Left s)  = text $ "ERROR!" ++ s
@@ -121,7 +115,7 @@ errorObjSubtype l t t'        = mkErr l $ printf "Object type '%s' is not a subt
 errorFuncSubtype l t t'       = mkErr l $ printf "Function type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 
 -- Typechecking
-errorCallNotSup l fn es ts    = mkErr l $ printf "Cannot call '%s' with argument(s): %s of type %s" (ppshow fn) (ppshow es) (ppshow ts)
+errorCallNotSup l fn ft es ts = mkErr l $ printf "Cannot call '%s' :: '%s' with argument(s): %s of type %s" (ppshow fn) (ppshow ft) (ppshow es) (ppshow ts)
 errorCallMatch l fn ts        = mkErr l $ printf "Could not match call to '%s' to a particular signature. Argument(s) with types '%s' are invalid." (ppshow fn) (ppshow ts)
 errorCallReceiver l e f       = mkErr l $ printf "Could not call method '%s' of '%s'." (ppshow f) (ppshow e)
 errorTypeArgsNum l n p q      = mkErr l $ printf "Type %s expects %s arguments but %s were provided" (ppshow n) (ppshow p) (ppshow q)
@@ -137,14 +131,15 @@ errorArgMismatch l            = mkErr l $ printf "Mismatch in Number of argument
 errorArgName l x y            = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 errorExtractNonFld l f x t    = mkErr l $ printf "Cannot extract non-field '%s' from object '%s' of type '%s'." (ppshow f) (ppshow x) (ppshow t)
 errorMissingFld l f t         = mkErr l $ printf "Field '%s' is missing from type '%s'." (ppshow f) (ppshow t)
-errorNonSingleFuncAnn l       = mkErr l $ printf "Anonymous function needs to have exactly one type annotation."
+errorNoFuncAnn l              = mkErr l $ printf "No type annotation or contextual type for anonymous function."
 errorUnfoldType l t           = mkErr l $ printf "Could not unfold type '%s'." (ppshow t)
 errorUnresolvedType l t       = mkErr l $ printf "Could not resolve type '%s'." (ppshow t)
 errorUnresolvedTypes l t1 t2  = mkErr l $ printf "Could not resolve types '%s' and '%s'." (ppshow t1) (ppshow t2)
 errorConsSigMissing l t       = mkErr l $ printf "Constructor signature for '%s' is missing." (ppshow t)
 errorModuleExport l m x       = mkErr l $ printf "Module '%s' does not export '%s'." (ppshow m) (ppshow x)
 
-errorDeadCast l t1 t2         = mkErr l $ printf "Cannot convert %s into %s" (ppshow t1) (ppshow t2)
+errorDeadCast l t1 t2         = mkErr l $ printf "Cannot convert '%s' to '%s'" (ppshow t1) (ppshow t2)
+
 ---------------------------------------------------------------------------
 -- | LIQUID
 ---------------------------------------------------------------------------
@@ -161,10 +156,11 @@ errorWellFormed l             = mkErr l $ printf "Well-formedness Error"
 -- | Pervasive (typechecking TC and Liquid)
 ---------------------------------------------------------------------------
 errorSuper l                  = mkErr l $ printf "Cannot resolve reference to super." 
-errorMissingFields l t1 t2 x  = mkErr l $ printf "Cannot convert: %s to %s. Type %s is missing fields %s." (ppshow t1) (ppshow t2) (ppshow t1) (ppshow x) 
+errorMissingFields l t1 t2 x  = mkErr l $ printf "Cannot convert %s to %s. Type %s is missing fields %s." (ppshow t1) (ppshow t2) (ppshow t1) (ppshow x) 
 errorVarDeclAnnot l x         = mkErr l $ printf "Variable definition of '%s' with neither type annotation nor initialization is not supported." (ppshow x)
 errorMissingAnnot l s         = mkErr l $ printf "Missing type annotation for %s" s
 errorNonFunction l f t        = mkErr l $ printf "Non-function type: %s :: %s " (ppshow f) (ppshow t)
 errorMissingReturn l          = mkErr l $ printf "Missing Return statement."
 errorMissingSpec l f          = mkErr l $ printf "Missing signature for '%s'" (ppshow f)
-
+errorVariadic l f             = mkErr l $ printf "Cannot call variadic on type '%s'" (ppshow f)
+errorConflateTypeMembers l es = mkErr l $ printf "Cannot conflate type members '%s'" (ppshow es)  

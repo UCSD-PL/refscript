@@ -35,7 +35,7 @@ module Language.Nano.Liquid.Types (
   -- * Predicates On RefType 
   , isBaseRType, isTrivialRefType
 
-  -- * Monadic map (TODO: Applicative/Traversable)
+  -- * Monadic map 
   , mapReftM
 
   -- * Primitive Types
@@ -58,11 +58,13 @@ module Language.Nano.Liquid.Types (
 
   ) where
 
-import           Data.Maybe             (fromMaybe, catMaybes)
+import           Data.Maybe             (fromMaybe, catMaybes, maybeToList)
+import           Data.Either            (partitionEithers)
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as M
 -- import qualified Data.HashSet            as S
 import           Data.Monoid                        (mconcat)
+import qualified Data.Traversable       as T
 import           Text.PrettyPrint.HughesPJ
 import           Text.Printf 
 import           Control.Applicative 
@@ -73,7 +75,6 @@ import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Nano.Annots
 import           Language.Nano.Errors
-import           Language.Nano.Env
 import           Language.Nano.Locations
 import           Language.Nano.Misc
 import           Language.Nano.Names
@@ -82,6 +83,7 @@ import           Language.Nano.Program
 import           Language.Nano.Liquid.Environment
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Sub
+import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Types
 
 import           Language.Fixpoint.Misc
@@ -98,7 +100,6 @@ type PPR r = (PP r, F.Reftable r)
 -------------------------------------------------------------------------------------
 
 type RefType     = RType F.Reft
-type REnv        = Env RefType
 type AnnTypeR    = AnnType F.Reft
 
 ----------------------------------------------------------------------------
@@ -262,9 +263,10 @@ rTypeValueVar t   = vv where F.Reft (vv,_) = rTypeReft t
 ------------------------------------------------------------------------------------------
 rTypeSort :: (PPR r) => RType r -> F.Sort
 ------------------------------------------------------------------------------------------
-rTypeSort   (TVar α _)     = F.FObj $ F.symbol α 
-rTypeSort t@(TAll _ _)     = rTypeSortForAll t 
-rTypeSort   (TFun xts t _) = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
+rTypeSort   (TVar α _)       = F.FObj $ F.symbol α 
+rTypeSort t@(TAll _ _)       = rTypeSortForAll t 
+rTypeSort   (TFun (Just s) xts t _) = F.FFunc 0 $ rTypeSort <$> [s] ++ (b_type <$> xts) ++ [t]
+rTypeSort   (TFun Nothing  xts t _) = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
 rTypeSort   (TApp c ts _)  = rTypeSortApp c ts 
 rTypeSort   (TAnd (t:_))   = rTypeSort t
 rTypeSort   (TCons _ _ _ ) = F.FObj $ F.symbol "cons"
@@ -301,11 +303,11 @@ genSort n θ t              = F.FFunc n [F.sortSubst θ t]
 ------------------------------------------------------------------------------------------
 stripRTypeBase :: RType r -> Maybe r 
 ------------------------------------------------------------------------------------------
-stripRTypeBase (TApp _ _ r)  = Just r
-stripRTypeBase (TVar _ r)    = Just r
-stripRTypeBase (TFun _ _ r)  = Just r
-stripRTypeBase (TCons _ _ r) = Just r
-stripRTypeBase _             = Nothing
+stripRTypeBase (TApp _ _ r)   = Just r
+stripRTypeBase (TVar _ r)     = Just r
+stripRTypeBase (TFun _ _ _ r) = Just r
+stripRTypeBase (TCons _ _ r)  = Just r
+stripRTypeBase _              = Nothing
 
 ------------------------------------------------------------------------------------------
 -- | Substitutions
@@ -325,16 +327,17 @@ instance (PPR r, F.Subable r) => F.Subable (RType r) where
 ------------------------------------------------------------------------------------------
 emapReft  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> RType a -> RType b
 ------------------------------------------------------------------------------------------
-emapReft f γ (TVar α r)      = TVar α (f γ r)
-emapReft f γ (TApp c ts r)   = TApp c (emapReft f γ <$> ts) (f γ r)
-emapReft f γ (TAll α t)      = TAll α (emapReft f γ t)
-emapReft f γ (TFun xts t r)  = TFun (emapReftBind f γ' <$> xts) (emapReft f γ' t) (f γ r)
-  where    γ'                = (b_sym <$> xts) ++ γ
-emapReft f γ (TCons xts m r) = TCons (emapReftElt f γ' <$> xts) m (f γ r)
-  where    γ'                = (F.symbol <$> xts) ++ γ
-emapReft _ _ (TClass c)      = TClass c
-emapReft _ _ (TModule m)     = TModule m
-emapReft _ _ _               = error "Not supported in emapReft"
+emapReft f γ (TVar α r)       = TVar α (f γ r)
+emapReft f γ (TApp c ts r)    = TApp c (emapReft f γ <$> ts) (f γ r)
+emapReft f γ (TAll α t)       = TAll α (emapReft f γ t)
+emapReft f γ (TFun s xts t r) = TFun (emapReft f γ' <$> s) (emapReftBind f γ' <$> xts) (emapReft f γ' t) (f γ r)
+  where    γ'                 = (b_sym <$> xts) ++ γ
+emapReft f γ (TCons xts m r)  = TCons (emapReftElt f γ' <$> xts) m (f γ r)
+  where    γ'                 = (F.symbol <$> xts) ++ γ
+emapReft _ _ (TClass c)       = TClass c
+emapReft _ _ (TModule m)      = TModule m
+emapReft f γ (TAnd ts)        = TAnd (emapReft f γ <$> ts)
+emapReft _ _ _                = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)     = B x $ emapReft f γ t
 
@@ -343,7 +346,10 @@ emapReftElt f γ e            = fmap (f γ) e
 
 mapReftM f (TVar α r)        = TVar α <$> f r
 mapReftM f (TApp c ts r)     = TApp c <$> mapM (mapReftM f) ts <*> f r
-mapReftM f (TFun xts t r)    = TFun   <$> mapM (mapReftBindM f) xts <*> mapReftM f t <*> (return $ F.top r) --f r 
+mapReftM f (TFun s xts t r)  = TFun   <$> T.mapM (mapReftM f) s 
+                                      <*> mapM (mapReftBindM f) xts 
+                                      <*> mapReftM f t 
+                                      <*> return (F.top r)
 mapReftM f (TAll α t)        = TAll α <$> mapReftM f t
 mapReftM f (TAnd ts)         = TAnd   <$> mapM (mapReftM f) ts
 mapReftM f (TCons bs m r)    = TCons  <$> mapM (mapReftEltM f) bs <*> return m <*> f r
@@ -378,7 +384,7 @@ efoldReft g f = go
     go γ z (TVar _ r)       = f γ r z
     go γ z t@(TApp _ ts r)  = f γ r $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
     go γ z (TAll _ t)       = go γ z t
-    go γ z (TFun xts t r)   = f γ r $ go γ' (gos γ' z (b_type <$> xts)) t  where γ' = foldr (efoldExt g) γ xts
+    go γ z (TFun s xts t r) = f γ r $ go γ' (gos γ' z (maybeToList s ++ map b_type xts)) t  where γ' = foldr (efoldExt g) γ xts
     go γ z (TAnd ts)        = gos γ z ts 
     go γ z (TCons bs _ r)   = f γ' r $ gos γ z (f_type <$> bs) where γ' = foldr (efoldExt' g) γ bs
     go _ z (TClass _)       = z
@@ -394,16 +400,16 @@ efoldExt' g xt γ            = F.insertSEnv (F.symbol xt) (g $ f_type xt) γ
 ------------------------------------------------------------------------------------------
 efoldRType :: PPR r => (RType r -> b) -> (F.SEnv b -> RType r -> a -> a) -> F.SEnv b -> a -> RType r -> a
 ------------------------------------------------------------------------------------------
-efoldRType g f               = go
+efoldRType g f                 = go
   where 
-    go γ z t@(TVar _ _)      = f γ t z
-    go γ z t@(TApp _ ts _)   = f γ t $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
-    go γ z t@(TAll _ t1)     = f γ t $ go γ z t1
-    go γ z t@(TFun xts t1 _) = f γ t $ go γ' (gos γ' z (b_type <$> xts)) t1  where γ' = foldr (efoldExt g) γ xts
-    go γ z   (TAnd ts)       = gos γ z ts 
-    go γ z t@(TCons xts _ _) = f γ t $ gos γ' z (f_type <$> xts) where γ' = foldr (efoldExt' g) γ xts
-    go _ _ t                 = error $ "Not supported in efoldRType: " ++ ppshow t
-    gos γ z ts               = L.foldl' (go γ) z ts
+    go γ z t@(TVar _ _)        = f γ t z
+    go γ z t@(TApp _ ts _)     = f γ t $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
+    go γ z t@(TAll _ t1)       = f γ t $ go γ z t1
+    go γ z t@(TFun s xts t1 _) = f γ t $ go γ' (gos γ' z (maybeToList s ++ map b_type xts)) t1  where γ' = foldr (efoldExt g) γ xts
+    go γ z   (TAnd ts)         = gos γ z ts 
+    go γ z t@(TCons xts _ _)   = f γ t $ gos γ' z (f_type <$> xts) where γ' = foldr (efoldExt' g) γ xts
+    go _ _ t                   = error $ "Not supported in efoldRType: " ++ ppshow t
+    gos γ z ts                 = L.foldl' (go γ) z ts
 
 
 ------------------------------------------------------------------------------------------
@@ -476,30 +482,27 @@ getFunctionIds s = [f | (FunctionStmt _ f _ _) <- flattenStmt s]
 
 
 
-
-
-
-
-
 -- | `zipType` returns a type that is:
 --
 --  * structurally equivalent to @t2@
+--
 --  * semantically equivalent to @t1@
---  * applys @f@ whenever refinements are present on both sides
---  * applys @g@ whenever the respective part in type @t2@ is missing
 --
 --------------------------------------------------------------------------------
 zipType :: CGEnv -> RefType -> RefType -> Maybe RefType
 --------------------------------------------------------------------------------
 --
---  s1 \/ .. sn | t1 \/ .. tm = s1'|t1' \/ .. tk|tk' \/ .. bot(tm')
+-- | Unions
 --  
--- \/{vi:Si|Pi} || \/{wj:Tj|_} = \/{wj: Si||Tj |Qj},
+--    s1 \/ .. sn | t1 \/ .. tm = s1'|t1' \/ .. tk|tk' \/ .. bot(tm')
+--  
+--    \/{vi:Si|Pi} || \/{wj:Tj|_} = \/{wj: Si||Tj |Qj},
 --
---    where Qj =  (/\ [ instanceof(wj,Si') => Pi' ])  /\ ( \/ [instanceof(wj,Si')] )
+--        where Qj =  (/\ [ instanceof(wj,Si') => Pi' ])  /\ ( \/ [instanceof(wj,Si')] )
 --    
---    with  Constr(Si') <: Constr(Tj) 
---    and   {vi':Si'|Pi'} a permutation of {vi:Si|Pi}
+--        with  Constr(Si') <: Constr(Tj) 
+--        
+--        and   {vi':Si'|Pi'} a permutation of {vi:Si|Pi}
 --
 zipType γ (TApp TUn t1s r1) (TApp TUn t2s _) = 
   
@@ -541,6 +544,12 @@ zipType γ (TApp TUn t1s r) t2 =
                     return $ t `strengthen` r
       Nothing -> return $ fmap F.bot t2
 
+-- | No unions below this point
+--
+-- | Undefined
+--
+-- UNDEFINED
+-- zipType γ (TApp TUndef _ r1) t2 = Just $ rType t2 `strengthen` r1
 
 
 -- | Class/interface types
@@ -558,15 +567,15 @@ zipType γ (TApp TUn t1s r) t2 =
 --   
 --   C<Si> || {F;M} = toStruct(C<Si>) || {F;M}
 --   
-zipType γ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _) 
+zipType γ t1@(TApp (TRef x1) (_:t1s) r1) t2@(TApp (TRef x2) (m2:t2s) _) 
   | x1 == x2
   = do  ts    <- zipWithM (zipType γ) t1s t2s
-        return $ TApp (TRef x1) ts r1
+        return $ TApp (TRef x2) (m2:ts) r1
 
   | otherwise
   = case weaken γ x1 x2 t1s of
       -- Try to move along the class hierarchy
-      Just (_, t1s') -> zipType γ (TApp (TRef x2) t1s' r1 `strengthen` reftIO t1 (F.symbol x1)) t2
+      Just (_, t1s') -> zipType γ (TApp (TRef x2) (m2:t1s') r1 `strengthen` reftIO t1 (F.symbol x1)) t2
 
       -- Unfold structures
       Nothing        -> do  t1' <- flattenType γ t1 
@@ -578,11 +587,13 @@ zipType γ t1@(TApp (TRef x1) t1s r1) t2@(TApp (TRef x2) t2s _)
     vv         = rTypeValueVar
     sym        = F.dummyLoc $ F.symbol "instanceof"
 
+zipType _ t1@(TApp (TRef _) [] _) _ = error $ "zipType on " ++ ppshow t1   -- Invalid type
+zipType _ _ t2@(TApp (TRef _) [] _) = error $ "zipType on " ++ ppshow t2  -- Invalid type
 
 zipType γ t1@(TApp (TRef _) _ _) t2 = do t1' <- flattenType γ t1
                                          zipType γ t1' t2
 
-zipType γ t1 t2@(TApp (TRef _) _ _) = do t2' <- flattenType γ t2
+zipType γ t1 t2@(TApp (TRef _) _ _) = do t2' <- flattenType γ t2 
                                          zipType γ t1 t2'
 
 
@@ -614,31 +625,44 @@ zipType _ (TVar v r) (TVar v' _) | v == v' = return $ TVar v r
 --
 --  (Si)=>S || (Ti)=>T = (Si||Ti)=>S||T
 --
-zipType γ (TFun x1s t1 r1) (TFun x2s t2 _) = 
-    do  xs <- zipWithM (zipBind γ) x1s x2s
-        y  <- zipType γ t1 t2
-        return $ TFun xs y r1
+zipType γ (TFun (Just s1) x1s t1 r1) (TFun (Just s2) x2s t2 _) = 
+  TFun <$> Just <$> zipType γ s1 s2 
+       <*> zipWithM (zipBind γ) x1s x2s 
+       <*> zipType γ t1 t2 
+       <*> return r1
+
+zipType γ (TFun Nothing x1s t1 r1) (TFun Nothing x2s t2 _) = 
+  TFun Nothing <$> zipWithM (zipBind γ) x1s x2s 
+               <*> zipType γ t1 t2 
+               <*> return r1
+
+zipType _ (TFun _ _ _ _ ) (TFun _ _ _ _) = Nothing
+
+
 
 -- | Object types
 --
 --  { F1,F2 } | { F1',F3' } = { F1|F1',top(F3) }, where disjoint F2 F3'
 --
-zipType γ (TCons f1s m1 r1) (TCons f2s _ _) = do 
-    common'                 <- mapM (uncurry $ zipElts γ) common
-    return                   $ TCons (common' ++ disjoint') m1 r1
+zipType γ (TCons f1s _ r1) (TCons f2s m2 _) = do 
+    (disjoint, common) <- partition
+    common'            <- mapM (uncurry $ zipElts γ) common
+    return              $ TCons (common' ++ tp disjoint) m2 r1
   where 
-    disjoint'                = (const fTop <$>) <$> disjoint  -- top
-    (common, disjoint)       = partition [] [] f2s
+    tp                  = ((const fTop <$>) <$>)
 
-    partition g1 g2 []       = (g1, g2)
-    partition g1 g2 (e2:e2s) =
-      case pick e2 of 
-        [  ]                -> partition g1 (e2:g2) e2s
-        [ee]                -> partition (ee:g1) g2 e2s
-        ees                 -> error $ "zipType: " ++ ppshow e2 ++ " got matched with " 
-                                    ++ ppshow ees
-    pick f                   = [ (f1, f) | f1 <- f1s, compatible f1 f ]
-    compatible e e'          = sameBinder e e' && related γ e e'
+    pairing             = [unique ([f1 | f1 <- f1s, compatible f1 f2], f2) | f2 <- f2s]
+    validPairing        = catMaybes pairing
+    partition           | length validPairing == length pairing
+                        = Just $ partitionEithers validPairing
+                        | otherwise
+                        = Nothing
+
+    unique ([ ],f')     = Just $ Left f'
+    unique ([f],f')     = Just $ Right (f,f')
+    unique _            = Nothing
+
+    compatible e e'     = sameBinder e e' && related γ e e'
 
 
 -- | Intersection types
@@ -659,6 +683,12 @@ zipType γ (TAnd t1s) (TAnd t2s) =
 zipType γ t1 (TAnd t2s) = zipType γ (TAnd [t1]) (TAnd t2s)
 zipType γ (TAnd t1s) t2 = zipType γ (TAnd t1s) (TAnd [t2])
 
+-- FIXME: preserve t1's ref in all occurences of TVar v1 in the LHS
+zipType γ (TAll v1 t1) (TAll v2 t2) = 
+    TAll v1 <$> zipType γ t1 (apply θ t2) 
+  where
+    θ = fromList [(v2, tVar v1 :: RefType)]
+
 zipType _ t1 t2 = errorstar $ printf "BUG[zipType] Unsupported:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
 
 
@@ -674,5 +704,5 @@ zipElts γ (StatSig _ _ t1)  (StatSig x2 m2 t2)  = StatSig  x2 m2 <$> zipType γ
 zipElts γ (IndexSig _ _ t1) (IndexSig x2 b2 t2) = IndexSig x2 b2 <$> zipType γ t1 t2 
 zipElts γ (FieldSig _ _ t1) (FieldSig x2 m2 t2) = FieldSig x2 m2 <$> zipType γ t1 t2
 zipElts γ (MethSig _ _  t1) (MethSig x2 m2 t2)  = MethSig  x2 m2 <$> zipType γ t1 t2
-zipElts _ e1 e2 = error $ "Cannot zip: " ++ ppshow e1 ++ " and " ++ ppshow e2
+zipElts _ _                 _                   = Nothing
 

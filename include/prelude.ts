@@ -58,11 +58,6 @@ declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 */
 declare function builtin_BIArrayLit<A>(a: A): A[];
 
-/*@ builtin_BIUndefined ::
-    forall A. {A | false} 
-*/
-declare var builtin_BIUndefined: any;
-
 /*@ builtin_BICondExpr :: 
     forall A. (c: boolean, x: A, y: A) => { v:A | (if (Prop(c)) then (v = x) else (v = y)) }
 */
@@ -139,12 +134,12 @@ declare function builtin_PrefixMinus(a: number): number;
 declare function builtin_OpSEq<A,B>(x: A, y: B): boolean;
 
 /*@ builtin_OpNEq :: 
-    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) } 
+    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (not (x ~~ y))) } 
 */
 declare function builtin_OpNEq<A,B>(x: A, y: B): boolean;
 
 /*@ builtin_OpSNEq :: 
-    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) } 
+    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (not (x ~~ y))) } 
 */
 declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
 // FIXME: the two version of inequality should not be the same...
@@ -531,6 +526,53 @@ interface IArguments {
 }
 
 
+/*** Function ************************************************************/
+
+/**
+  * Creates a new function.
+  */
+interface Function {
+    /**
+      * Calls the function, substituting the specified object for the this value of the function, and the specified array for the arguments of the function.
+      * @param thisArg The object to be used as the this object.
+      * @param argArray A set of arguments to be passed to the function.
+      */
+    apply(thisArg: any, argArray?: any): any;
+
+    /**
+      * Calls a method of an object, substituting another object for the current object.
+      * @param thisArg The object to be used as the current object.
+      * @param argArray A list of arguments to be passed to the method.
+      */
+    call(thisArg: any, ...argArray: any[]): any;
+
+    /**
+      * For a given function, creates a bound function that has the same body as the original function. 
+      * The this object of the bound function is associated with the specified object, and has the specified initial parameters.
+      * @param thisArg An object to which the this keyword can refer inside the new function.
+      * @param argArray A list of arguments to be passed to the new function.
+      */
+    bind(thisArg: any, ...argArray: any[]): any;
+
+    prototype: any;
+    length: number;
+
+    // Non-standard extensions
+    arguments: any;
+    caller: Function;
+}
+
+declare var Function: {
+    /** 
+      * Creates a new function.
+      * @param args A list of arguments the function accepts.
+      */
+    //new (...args: string[]): Function;
+    //(...args: string[]): Function;
+    prototype: Function;
+}
+
+
 
 /*************************************************************************
         
@@ -692,8 +734,8 @@ interface Immutable extends ReadOnly {
     immutable__: void;
 } 
 
-/*@ interface Mutable extends #ReadOnly */
-interface Mutable extends ReadOnly {
+/*@ interface Mutable extends #AssignsFields */
+interface Mutable extends AssignsFields {
     mutable__: void;
 } 
 
@@ -701,4 +743,47 @@ interface Mutable extends ReadOnly {
 interface AnyMutability extends ReadOnly {
     defaultMut__: void;
 } 
+
+/*@ interface AssignsFields extends #ReadOnly */
+interface AssignsFields extends ReadOnly {
+    defaultMut__: void;
+} 
+
+
+
+
+/*************************************************************************
+        
+  | DOM API 
+
+*************************************************************************/
+
+interface Event {
+    timeStamp: number;
+    defaultPrevented: boolean;
+    isTrusted: boolean;
+//    currentTarget: EventTarget;
+    cancelBubble: boolean;
+//    target: EventTarget;
+    eventPhase: number;
+    cancelable: boolean;
+    type: string;
+//    srcElement: Element;
+    bubbles: boolean;
+    initEvent(eventTypeArg: string, canBubbleArg: boolean, cancelableArg: boolean): void;
+    stopPropagation(): void;
+    stopImmediatePropagation(): void;
+    preventDefault(): void;
+    CAPTURING_PHASE: number;
+    AT_TARGET: number;
+    BUBBLING_PHASE: number;
+}
+
+declare var Event: {
+    prototype: Event;
+    new(): Event;
+    CAPTURING_PHASE: number;
+    AT_TARGET: number;
+    BUBBLING_PHASE: number;
+}
 

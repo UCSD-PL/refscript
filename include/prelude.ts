@@ -116,55 +116,75 @@ declare function builtin_OpMod(a: number, b: number): number;
 
 /*@ builtin_PrefixMinus :: 
     ({x:number  | true}) => {v:number  | v ~~ (0 - x)} 
-*/
+ */
 declare function builtin_PrefixMinus(a: number): number;
 
 /*  builtin_OpEq :: 
     forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
-*/
+ */
 // declare function builtin_OpEq<A,B>(a: A, b: B): boolean;
 
 /*  builtin_OpSEq :: 
     /\ forall A  . (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }
     /\ forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
-*/
+ */
 /*@ builtin_OpSEq :: 
     forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
-*/
+ */
 declare function builtin_OpSEq<A,B>(x: A, y: B): boolean;
 
 /*@ builtin_OpNEq :: 
     forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (not (x ~~ y))) } 
-*/
+ */
 declare function builtin_OpNEq<A,B>(x: A, y: B): boolean;
 
 /*@ builtin_OpSNEq :: 
     forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (not (x ~~ y))) } 
-*/
+ */
 declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
 // FIXME: the two version of inequality should not be the same...
 
 /*@ builtin_OpLAnd :: 
     /\ forall A. (x:A, y:A) => { v:A | (if (Prop(x)) then (v = y) else (v = x)) }
     /\ forall A B. (x:A, y:B) => { v:top | (Prop(v) <=> (Prop(x) && Prop(y))) }
-*/
+ */
 declare function builtin_OpLAnd(x: any, y: any): any;
       
 /*@ builtin_OpLOr :: 
     /\ forall A. (x:A, y:A) => { v:A | (if (FLS(x)) then (v = y) else (v = x)) } 
     /\ forall A B. (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) || Prop(y))) }
-*/
+ */
 declare function builtin_OpLOr(x: any, y: any): any;
 
 /*@ builtin_PrefixLNot :: 
     forall A. (x: A) => {v:boolean | (((Prop v) <=> not Prop(x)) && ((Prop v) <=> FLS(x)))} 
-*/
+ */
 declare function builtin_PrefixLNot<A>(x: A): boolean;
 
 /*@ builtin_PrefixBNot ::
     (x: number) => {v:number | v = 0 - (x + 1) } 
-*/
+ */
 declare function builtin_PrefixBNot(n: number): number;
+
+
+// 
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for...in
+//
+/*@ builtin_BIForInKeys :: 
+    (obj: [#Immutable]{ }) => #Array[#Immutable, { v: string | (keyIn(v,obj) && enumProp(v,obj)) }]
+ */
+declare function builtin_BIForInKeys(obj: Object): string[];
+
+
+
+/*************************************************************************
+
+  | Object related measures
+
+*************************************************************************/
+
+/*@ measure keyIn      :: forall A . (string, A) => bool */
+/*@ measure enumProp   :: forall A . (string, A) => bool */
 
 
 

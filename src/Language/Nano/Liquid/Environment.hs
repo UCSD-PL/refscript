@@ -5,9 +5,12 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE UndecidableInstances       #-}
 {-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
 
 module Language.Nano.Liquid.Environment where
 
+import           Data.Data                          (Data)
+import           Data.Typeable                      (Typeable)
 import           Text.PrettyPrint.HughesPJ
 
 import           Language.ECMAScript3.PrettyPrint
@@ -56,7 +59,7 @@ data CGEnvR r = CGE {
   --
   , cge_parent  :: Maybe (CGEnvR r)
   
-  } deriving (Functor)
+  } deriving (Functor, Data, Typeable)
 
 type CGEnv = CGEnvR F.Reft
  

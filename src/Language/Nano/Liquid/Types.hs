@@ -567,7 +567,7 @@ zipType γ (TApp TUn t1s r) t2 =
 --   
 --   C<Si> || {F;M} = toStruct(C<Si>) || {F;M}
 --   
-zipType γ t1@(TApp (TRef x1) (m1:t1s) r1) t2@(TApp (TRef x2) (m2:t2s) _) 
+zipType γ t1@(TApp (TRef x1) (_:t1s) r1) t2@(TApp (TRef x2) (m2:t2s) _) 
   | x1 == x2
   = do  ts    <- zipWithM (zipType γ) t1s t2s
         return $ TApp (TRef x2) (m2:ts) r1
@@ -587,8 +587,8 @@ zipType γ t1@(TApp (TRef x1) (m1:t1s) r1) t2@(TApp (TRef x2) (m2:t2s) _)
     vv         = rTypeValueVar
     sym        = F.dummyLoc $ F.symbol "instanceof"
 
-zipType γ t1@(TApp (TRef _) [] _) _ = error $ "zipType on " ++ ppshow t1   -- Invalid type
-zipType γ _ t2@(TApp (TRef _) [] _) = error $ "zipType on " ++ ppshow t2  -- Invalid type
+zipType _ t1@(TApp (TRef _) [] _) _ = error $ "zipType on " ++ ppshow t1   -- Invalid type
+zipType _ _ t2@(TApp (TRef _) [] _) = error $ "zipType on " ++ ppshow t2  -- Invalid type
 
 zipType γ t1@(TApp (TRef _) _ _) t2 = do t1' <- flattenType γ t1
                                          zipType γ t1' t2
@@ -636,7 +636,7 @@ zipType γ (TFun Nothing x1s t1 r1) (TFun Nothing x2s t2 _) =
                <*> zipType γ t1 t2 
                <*> return r1
 
-zipType γ (TFun _ _ _ _ ) (TFun _ _ _ _) = Nothing
+zipType _ (TFun _ _ _ _ ) (TFun _ _ _ _) = Nothing
 
 
 
@@ -704,5 +704,5 @@ zipElts γ (StatSig _ _ t1)  (StatSig x2 m2 t2)  = StatSig  x2 m2 <$> zipType γ
 zipElts γ (IndexSig _ _ t1) (IndexSig x2 b2 t2) = IndexSig x2 b2 <$> zipType γ t1 t2 
 zipElts γ (FieldSig _ _ t1) (FieldSig x2 m2 t2) = FieldSig x2 m2 <$> zipType γ t1 t2
 zipElts γ (MethSig _ _  t1) (MethSig x2 m2 t2)  = MethSig  x2 m2 <$> zipType γ t1 t2
-zipElts _ e1                e2                  = Nothing
+zipElts _ _                 _                   = Nothing
 

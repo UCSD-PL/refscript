@@ -359,8 +359,6 @@ mapEltM f (StatSig x m t)    = StatSig x m <$> f t
 
 type CheckM = State [Error] 
 
-newtype M m a = M (a -> m a)
-
 -- | @conflateTypeMembers@ enforces unique binders in every element list
 --
 --  FIXME: add separate pass for `RType F.Reft`

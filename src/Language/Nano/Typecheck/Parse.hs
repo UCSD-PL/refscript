@@ -22,9 +22,7 @@ import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
-import qualified Data.HashMap.Strict              as     M
 import qualified Data.List                        as     L
--- import           Data.Traversable                        (mapAccumL)
 import           Text.PrettyPrint.HughesPJ               (text)
 import           Data.Data
 import qualified Data.Foldable                    as     FO
@@ -46,13 +44,13 @@ import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Program
 import           Language.Nano.Types              hiding (Exported)
-import           Language.Nano.Typecheck.Types    hiding (argBind)
+import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
-import           Text.Parsec                      hiding (parse)
+import           Text.Parsec                      hiding (parse, State)
 import           Text.Parsec.Pos                         (newPos)
 import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
 import qualified Text.Parsec.Token                as     T
@@ -84,7 +82,7 @@ identifierP =  try (withSpan Id uIdP)
   
 pAliasP :: Parser (Id SourceSpan, PAlias) 
 pAliasP = do name <- identifierP
-             πs   <- pAliasVarsP -- many symbolP 
+             πs   <- pAliasVarsP 
              reservedOp "="
              body <- predP 
              return  (name, Alias name [] πs body) 
@@ -190,12 +188,12 @@ parenNullP p f =  try (f <$> postP p question) <|> p
 funcSigP =  try (bareAllP bareFunP)
         <|> try (intersectP $ bareAllP bareFunP) 
   where
-    intersectP p = tAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
+    intersectP p = mkAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
 
 methSigP =  try (bareAllP bareMethP)
         <|> try (intersectP $ bareAllP bareMethP) 
   where
-    intersectP p = tAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
+    intersectP p = mkAnd <$> many1 (reserved "/\\" >> withinSpacesP p)
 
 
 -- | `bareFunP` parses a single function type
@@ -207,8 +205,12 @@ bareFunP
        reserved "=>" 
        ret    <- bareTypeP 
        r      <- topP
-       return $ TFun args ret r
-
+       return $ mkF args ret r
+  where 
+    mkF as ret r = case as of
+      (B s t : ts) | s == symbol "this" -> TFun (Just t) ts ret r
+      ts                                -> TFun Nothing ts ret r
+  
 
 --  (x:t, ...): t
 bareMethP
@@ -216,7 +218,11 @@ bareMethP
        _      <- colon
        ret    <- bareTypeP 
        r      <- topP
-       return $ TFun args ret r
+       return $ mkF args ret r
+  where 
+    mkF as ret r = case as of
+      (B s t : ts) | s == symbol "this" -> TFun (Just t) ts ret r
+      ts                                -> TFun Nothing ts ret r
 
 
 bareArgP 
@@ -233,6 +239,7 @@ bareAtomP p
   =  try (xrefP  p)
  <|> try (refP p)
  <|>     (dummyP p)
+
 
 ----------------------------------------------------------------------------------
 bbaseP :: Parser (Reft -> RefType)
@@ -351,16 +358,16 @@ methEltP defM   = do
     _          <- colon
     m          <- option defM (toType <$> mutP)
     t          <- methSigP
-    return      $ MethSig x m $ outT t
+    return      $ MethSig x m t
   where
-    outT t      =  
-      case bkFun t of 
-        Just (_, (B x _):_,_) | x == symbol "this" -> t
-        Just (vs, bs      ,ot)                     -> mkFun (v:vs, B (symbol "this") tv : bs, ot)
-        _                                          -> t
-    -- XXX: using _THIS_ as a reserved sting here.
-    v  = TV (symbol "_THIS_") (srcPos (dummyPos "RSC.Parse.methEltP"))
-    tv = TVar v fTop
+--     outT t      =  
+--       case bkFun t of 
+--         Just (_, (B x _):_,_ ) | x == symbol "this" -> t
+--         Just (vs, bs      ,ot)                     -> mkFun (v:vs, B (symbol "this") tv : bs, ot)
+--         _                                          -> t
+--     -- XXX: using _THIS_ as a reserved sting here.
+--     v  = TV (symbol "_THIS_") (srcPos (dummyPos "RSC.Parse.methEltP"))
+--     tv = TVar v fTop
 
 
 -- | <forall A .> (t...) => t
@@ -568,7 +575,9 @@ parseNanoFromFiles fs =
   do  sa <- partitionEithers <$> mapM parseScriptFromJSON fs
       case sa of
         ([],ps) -> case expandAnnots $ concat ps of
-                     Right ps -> return $ Right $ mkCode $ ps 
+                     Right ps -> return $ either (Left . Unsafe) Right 
+                                        $ conflateTypeMembers 
+                                        $ mkCode ps
                      Left e   -> return $ Left e
         (es,_ ) -> return $ Left  $ mconcat es 
 
@@ -590,7 +599,7 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 --------------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
-mkCode ss =  Nano {
+mkCode ss = Nano {
         code          = Src (checkTopStmt <$> ss')
       , specs         = envFromList $ getSpecs ss
       , consts        = envFromList   [ t | Meas   t <- anns ] 
@@ -645,7 +654,7 @@ expandAnnots ss =
 --------------------------------------------------------------------------------------
 parse :: SourceSpan -> (PState, [Error]) -> RawSpec -> ((PState, [Error]), Spec)
 --------------------------------------------------------------------------------------
-parse ss (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
+parse _ (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
   where
     parser s = do a     <- parseAnnot s
                   state <- getState
@@ -668,87 +677,8 @@ parse ss (st,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
     f = sourceName $ sp_begin ss
 
 
-
--- --------------------------------------------------------------------------------------
--- expandAnnots :: [Statement (SourceSpan, [RawSpec])] 
---              -> Either (FixResult Error) [Statement (SourceSpan, [Spec])]
--- --------------------------------------------------------------------------------------
--- expandAnnots ss 
---   | length errs > 0  = Left  $ Unsafe errs
---   | otherwise        = Right $ fmap replace <$> ss
---   where 
---     g st (_,sp)      = foldl parse st sp
---     (_,m, errs)      = foldl g (0, M.empty, []) $ concatMap FO.toList ss 
---     replace (ss, rs) = (ss, concatMap (`recover` m) rs)
---     recover          = M.lookupDefault [] . srcPos
--- 
--- 
--- --------------------------------------------------------------------------------------
--- parse :: (PState, M.HashMap SourceSpan [Spec], [Error]) -> RawSpec 
---       -> (PState, M.HashMap SourceSpan [Spec], [Error])
--- --------------------------------------------------------------------------------------
--- parse (st,m,errs) c = failLeft $ runParser (parser c) st f (getSpecString c)
---   where
---     parser s = do a     <- parseAnnot s
---                   state <- getState
---                   it    <- getInput
---                   case it of 
---                     ""  -> return $ (state, a) 
---                     _   -> unexpected $ "trailing input: " ++ it
--- 
--- 
---     failLeft (Left err)      = (st, m,(fromError err): errs)
---     failLeft (Right (s, r))  = (s, M.insertWith (++) ss [r] m, errs)
--- 
---     -- Slight change from this one:
---     -- http://hackage.haskell.org/package/parsec-3.1.5/docs/src/Text-Parsec-Error.html#ParseError
---     showErr = showErrorMessages "or" "unknown parse error" "expecting" 
---                 "unexpected" "end of input" . errorMessages
---     fromError err = mkErr ss   $ showErr err 
---                               ++ "\n\nWhile parsing: " 
---                               ++ show (getSpecString c)
---     ss = srcPos c
---     f = sourceName $ sp_begin ss
--- 
-
 instance PP (RawSpec) where
   pp = text . getSpecString
 
 
--- --------------------------------------------------------------------------------
--- -- | Sanity checks on types
--- --------------------------------------------------------------------------------
--- --
--- -- Perhaps move these to typechecking
--- --
--- 
--- data TypeError = NameNotFound Symbol
---                | InvalidMutability Symbol
---   deriving (Data, Typeable)
--- 
--- instance Show TypeError where
---   show (NameNotFound s)      = printf "Type '%s' is unbound" (ppshow s)
---   show (InvalidMutability s) = "Invalid mutability symbol '" 
---                             ++ ppshow s 
---                             ++ "'. "
---                             ++ "Possible fix: "
---                             ++ "add a mutability modifier as the first type argument"
 
-
--- -- FIXME: This won't work here cause classes have not been included in δ 
--- --------------------------------------------------------------------------------
--- checkType :: IfaceEnv Reft -> RefType -> RefType
--- --------------------------------------------------------------------------------
--- checkType δ typ = 
---     case everything (++) ([] `mkQ` fromType) typ of
---       [] -> typ
---       es -> error $ show es 
---   where 
---     fromType :: RefType -> [TypeError]
---     fromType (TApp (TRef x) (m:_) _) | isNothing (findSym x δ) = [NameNotFound x] 
---                                      | not (validMutability m) = [InvalidMutability x]
---     fromType _                       = []
--- 
---     validMutability (TVar _ _)       = True
---     validMutability t                = isMutabilityType t
--- 

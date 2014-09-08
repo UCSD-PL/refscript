@@ -3,7 +3,6 @@ Tests / Benchmarks
 
 ### Failing tests
 
-    pos/arrays/arr-11.ts        // qualifiers
 
 
 ### Working benchmarks
@@ -11,36 +10,28 @@ Tests / Benchmarks
     tests/strobe/gadgets/resistor-00.js
 
 
-JS Features
------------
-
-  - METHODS:
-    - typescript/pos/objects/meth-00.js
-
-
 Tool/Implementation
 -------------------
 
-  - What needs to be freshened at init-function-env?
-
-  - What are good default mutabilities (parsing etc.)? Mutability annotations
-    are very ugly (see pos/objects/obj-08.ts). 
+  - instanceOf refinement: only for class constructed types - not interfaces 
 
   - Infer TS method types
 
-  - Tidy up output files
-
-  - Revisit mutability subtyping, compute variance of type parameter in type
-
   - TApp (TRef ...) ... is now prefixed with a '#' to disambiguate from TVar.
-
-  - Do co/contra-variant checks depending on mutability.
 
   - Enforce invariant that overloaded functions signatures are non-overlapping
 
-  - Checks on type parameters (including mutability - always first parameter)
+  - Mutability 
+
+      * What are good default mutabilities (parsing etc.)? Mutability annotations
+        are very ugly (see pos/objects/obj-08.ts).
+
+      * Checks on type parameters (including mutability - always first parameter)
+
+      * Revisit mutability subtyping, compute variance of type parameter in type
+        Do co/contra-variant checks depending on mutability.
   
-  - Encode method mutability
+      * Encode method mutability
   
   - Variables cannot be named: "func" or "obj" (fixpoint restriction)
 

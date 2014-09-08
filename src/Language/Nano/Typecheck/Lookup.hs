@@ -24,14 +24,13 @@ import           Language.Fixpoint.Misc
 
 import           Language.Nano.Types
 import           Language.Nano.Env
-import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Subst
 import           Control.Applicative ((<$>))
 
-import           Debug.Trace
+-- import           Debug.Trace
 
 type PPRD r = (PP r, F.Reftable r, Data r)
 
@@ -49,15 +48,16 @@ type PPRD r = (PP r, F.Reftable r, Data r)
 getProp :: (PPRD r, EnvLike r g) => g r -> F.Symbol -> RType r -> Maybe (RType r, RType r)
 -------------------------------------------------------------------------------
 getProp γ s t@(TApp _ _ _  ) = getPropApp γ s t
+
 getProp _ s t@(TCons es _ _) = (t,) <$> accessMember s es
-getProp γ s t@(TClass c    ) 
-  = do  d   <- resolveRelNameInEnv γ c
-        es  <- flatten True γ (d,[])
-        (t,) <$> accessMember s es
-getProp γ s t@(TModule m   ) 
-  = do  m'        <- resolveRelPathInEnv γ m
-        (_,_,ty)  <- envFindTy s $ m_variables m'
-        (t,)     <$> renameRelative (modules γ) (m_path m') (absPath γ) ty
+
+getProp γ s t@(TClass c    ) = do d        <- resolveRelNameInEnv γ c
+                                  es       <- flatten True γ (d,[])
+                                  (t,)    <$> accessMember s es
+
+getProp γ s t@(TModule m   ) = do m'       <- resolveRelPathInEnv γ m
+                                  (_,_,ty) <- envFindTy s $ m_variables m'
+                                  (t,)    <$> renameRelative (modules γ) (m_path m') (absPath γ) ty
 
 getProp _ _ _ = Nothing
 
@@ -89,24 +89,24 @@ extractCtor :: (PPRD r, EnvLike r g) => g r -> RType r -> Maybe (RType r)
 extractCtor γ (TClass x) 
   = do  d        <- resolveRelNameInEnv γ x
         (vs, es) <- flatten'' False γ d
-        case [ mkAll vs (TFun bs (retT vs) r) | ConsSig (TFun bs _ r) <- es ] of
+        case [ mkAll vs (TFun s bs (retT vs) r) | ConsSig (TFun s bs _ r) <- es ] of
           [] -> return $ defCtor vs
           ts -> return $ mkAnd ts
     where
         retT vs    = TApp (TRef x) (tVar <$> vs) fTop
-        defCtor vs = mkAll vs $ TFun [] (retT vs) fTop
+        defCtor vs = mkAll vs $ TFun Nothing [] (retT vs) fTop
 
 extractCtor γ (TApp (TRef x) ts _) 
   = do  d        <- resolveRelNameInEnv γ x
         (vs, es) <- flatten'' False γ d
-        case [ mkAll vs (TFun bs (retT vs) r) | ConsSig (TFun bs _ r) <- es ] of
+        case [ mkAll vs (TFun s bs (retT vs) r) | ConsSig (TFun s bs _ r) <- es ] of
           [] -> return $ apply (fromList $ zip vs ts) $ defCtor vs
           ts -> return $ apply (fromList $ zip vs ts) $ mkAnd ts
     where
         retT vs    = TApp (TRef x) (tVar <$> vs) fTop
-        defCtor vs = mkAll vs $ TFun [] (retT vs) fTop
+        defCtor vs = mkAll vs $ TFun Nothing [] (retT vs) fTop
 
-extractCtor γ (TCons es _ _ )
+extractCtor _ (TCons es _ _ )
   = do  case [ tf | ConsSig tf <- es ] of
           [] -> Nothing 
           ts -> return $ mkAnd ts
@@ -125,8 +125,7 @@ extractParent γ (TApp (TRef x) ts _)
           _           -> Nothing
   where
     tArgs d ts ps = apply (fromList $ zip (t_args d) ts) ps
-parentDef _ _ = Nothing
-
+extractParent _ _ = Nothing
 
 
 -- | `getElt`: return elements associated with a symbol @s@. The return list 
@@ -152,7 +151,7 @@ extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
 extractCall γ t             = uncurry mkAll <$> foo [] t
   where
-    foo αs t@(TFun _ _ _)   = [(αs, t)]
+    foo αs t@(TFun _ _ _ _) = [(αs, t)]
     foo αs   (TAnd ts)      = concatMap (foo αs) ts 
     foo αs   (TAll α t)     = foo (αs ++ [α]) t
     foo αs   (TApp (TRef s) _ _ )
@@ -168,8 +167,8 @@ accessMember :: F.Symbol -> [TypeMember r] -> Maybe (RType r)
 -------------------------------------------------------------------------------
 accessMember s es = 
   case [ t | FieldSig x _ t <- es, x == s ] of
-    t:_ -> Just t
-    _   -> listToMaybe [ t | IndexSig _ True t <- es]
+    [] -> listToMaybe [ t | IndexSig _ True t <- es]
+    ts -> Just $ mkAnd ts
 
 
 -- Access the property from the relevant ambient object but return the 

@@ -161,15 +161,39 @@ convertObj l γ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
       df21          = s2s `S.difference` s1s
       in12          = s1s `S.intersection` s2s
  
-convertObj l γ t1@(TApp (TRef x1) t1s _) t2@(TApp (TRef x2) t2s _)
-  | x1 == x2
-    -- FIXME: Using covariance here !!!
-  = if all (uncurry $ isSubtype γ) $ zip t1s t2s 
-      then Right $ CDNo
-      else Left  $ errorSubtype l t1 t2
-  | otherwise
+convertObj l γ t1@(TApp (TRef x1) (m1:t1s) _) t2@(TApp (TRef x2) (m2:t2s) _)
 
-    -- Check type hierarchy
+  -- * Incompatible mutabilities
+  | not (isSubtype γ m1 m2) 
+  = Left $ errorIncompMutTy l t1 t2
+  
+  -- * Both immutable, same name
+  --
+  --    Co-variant subtyping
+  --
+  | x1 == x2 && isImmutable m2 
+  = do z <- zipWithM (convert l γ) t1s t2s
+       if       all (noCast . castDirection) z then Right $ CDNo
+       else if  all (dnCast . castDirection) z then Right $ CDDn
+       else if  all (upCast . castDirection) z then Right $ CDUp
+       else                                         Left  $ errorSubtype l t1 t2
+
+  -- * Non-immutable, same name
+  --
+  --    We are treating the upcast case as a downcast (co/contra-variance)
+  --
+  --    FIXME: this is a bit dodgy !!!
+  --
+  | x1 == x2 
+  = do z <- zipWithM (convert l γ) t1s t2s
+       if       all (noCast . castDirection) z then Right $ CDNo
+       else if  all (dnCast . castDirection) z then Right $ CDDn
+       else if  all (upCast . castDirection) z then Right $ CDDn
+       else                                         Left  $ errorSubtype l t1 t2
+
+
+  -- * Compatible mutabilities, differenet names:
+  | otherwise       
   = case weaken γ x1 x2 t1s of
       -- Adjusting the child class to the parent
       Just (_, t1s') -> 
@@ -184,6 +208,7 @@ convertObj l γ t1@(TApp (TRef x1) t1s _) t2@(TApp (TRef x2) t2s _)
             (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2
             (Nothing , _       ) -> Left $ errorUnresolvedType l t1 
             (_       , Nothing ) -> Left $ errorUnresolvedType l t2
+  where
                           
 convertObj l γ t1@(TApp (TRef _) _ _) t2 
   = case flattenType γ t1 of 

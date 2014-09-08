@@ -30,9 +30,9 @@ interface Pair<A,B> { x: A; y: B; }
 *************************************************************************/
 
 /*@ builtin_BIBracketRef ::
-    /\ forall A. (arr: #Array[#Immutable,A], {idx:number | (0 <= idx && idx < (len arr))}) => A
-    /\ forall A. (arr: #Array[#Mutable, A ], idx:number) => A?
-    /\ forall A. ([#ReadOnly]{[y: string]: A }, x:string) => A
+    /\ forall A. (arr: #Array[#Immutable,A], {idx: number | (0 <= idx && idx < (len arr))}) => A
+    /\ forall A. (arr: #Array[#Mutable, A ], idx: number) => A + undefined
+    /\ forall A. (o: {[y: string]: A }, x: string) => { A | keyIn(x,o)} + { undefined | not (keyIn(x,o)) }
 */
 declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
 
@@ -54,7 +54,7 @@ declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
 declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
 /*@ builtin_BIArrayLit :: 
-    forall M A. (A) => {v: #Array[M,A] | [ (len v) = builtin_BINumArgs; not (null v) ] } 
+    forall M A. (A) => {v: #Array[M,A] | (len v) = builtin_BINumArgs } 
 */
 declare function builtin_BIArrayLit<A>(a: A): A[];
 

@@ -171,7 +171,8 @@ declare function builtin_PrefixBNot(n: number): number;
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for...in
 //
 /*@ builtin_BIForInKeys :: 
-    (obj: [#Immutable]{ }) => #Array[#Immutable, { v: string | (keyIn(v,obj) && enumProp(v,obj)) }]
+    /\ forall A . (a: #Array[#Immutable, A]) => #Array[#Immutable, { v: number | (0 <= v && v < (len a)) }]
+    /\ (o: [#Immutable]{ }) => #Array[#Immutable, { v: string | (keyIn(v,o) && enumProp(v,o)) }]
  */
 declare function builtin_BIForInKeys(obj: Object): string[];
 

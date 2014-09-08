@@ -641,7 +641,7 @@ tcExpr γ (FuncExpr l fo xs body) tCtxO
   = case anns of 
       [ft] -> tcFuncExpr ft
       _    -> case tCtxO of
-                Just tCtx -> tcFuncExpr $ tCtx
+                Just tCtx -> tcFuncExpr tCtx
                 Nothing   -> tcError $ errorNoFuncAnn $ srcPos l
   where
     tcFuncExpr t = do ts    <- tcFunTys l f xs t

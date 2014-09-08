@@ -410,7 +410,7 @@ safeExtends l γ (ID _ c _ (Just (p, ts)) es) =
                       | otherwise              = Just c
 
 compatElt γ (CallSig t1      ) (CallSig t2)       = isSubtype γ t1 t2 
-compatElt _ (ConsSig t1      ) (ConsSig t2)       = True
+compatElt _ (ConsSig _       ) (ConsSig _ )       = True
 compatElt γ (IndexSig _ _ t1 ) (IndexSig _ _ t2)  = isSubtype γ t1 t2 && isSubtype γ t2 t1 
 compatElt γ (FieldSig _ _ t1 ) (FieldSig _ _ t2)  = isSubtype γ t1 t2 
 compatElt γ (MethSig _ m1 t1 ) (MethSig _ m2 t2)  = isSubtype (fmap (const ()) γ) m1 m2 && isSubtype γ (clearThis t1) (clearThis t2)

@@ -13,7 +13,7 @@ import           Control.Applicative                ((<$>))
 
 import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (listToMaybe, catMaybes, maybeToList)
-import qualified Data.Foldable                      as FO
+-- import qualified Data.Foldable                      as FO
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -47,7 +47,7 @@ import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
 
 import qualified Data.Text                          as T 
-import           Text.PrettyPrint.HughesPJ 
+-- import           Text.PrettyPrint.HughesPJ 
 
 import           System.Console.CmdArgs.Default
 
@@ -82,13 +82,9 @@ refTc f    p    = getOpts >>= solveConstraints f . (`generateConstraints` p)
 lerror          = return . (A.NoAnn,) . F.Unsafe
 
 
-
-
--- ppCasts :: NanoRefType -> [ Cast F.Reft ]
-ppCasts (Nano { code = Src fs }) = 
-  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
-                                , TCast _ c <- ann_fact a ] 
-
+-- ppCasts (Nano { code = Src fs }) = 
+--   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+--                                 , TCast _ c <- ann_fact a ] 
 
          
 -- | solveConstraints
@@ -122,9 +118,14 @@ consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano p@(Nano {code = Src fs}) 
   = do  g   <- initGlobalEnv p
-        g'  <- addUndefined g
-        consStmts g' fs 
-        return ()
+        conflateTypeMembers <$> addUndefined g >>= \case
+          Left es -> manyEs es 
+          Right g' -> consStmts g' fs >> return ()
+  where
+        manyEs []     = cgError $ impossible (srcPos dummySpan) "consNano manyEs"
+        manyEs [e]    = cgError e
+        manyEs (e:es) = cgError e >> manyEs es
+
 
 
 -------------------------------------------------------------------------------

@@ -24,7 +24,6 @@ import           Language.Fixpoint.Misc
 
 import           Language.Nano.Types
 import           Language.Nano.Env
-import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
@@ -168,8 +167,8 @@ accessMember :: F.Symbol -> [TypeMember r] -> Maybe (RType r)
 -------------------------------------------------------------------------------
 accessMember s es = 
   case [ t | FieldSig x _ t <- es, x == s ] of
+    [] -> listToMaybe [ t | IndexSig _ True t <- es]
     ts -> Just $ mkAnd ts
-    _  -> listToMaybe [ t | IndexSig _ True t <- es]
 
 
 -- Access the property from the relevant ambient object but return the 

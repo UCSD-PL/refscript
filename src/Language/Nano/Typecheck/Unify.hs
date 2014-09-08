@@ -11,8 +11,7 @@ module Language.Nano.Typecheck.Unify (
 
   ) where 
 
-import           Control.Applicative                ((<$>), (<*>))
--- import           Text.PrettyPrint.HughesPJ
+import           Control.Applicative                ((<$>))
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types as F
@@ -29,11 +28,10 @@ import           Language.Nano.Typecheck.Sub
 
 import           Data.Generics
 import           Data.List (nub, find)
-import           Data.Maybe (maybeToList, catMaybes)
+import           Data.Maybe (catMaybes)
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as M 
 import           Data.Monoid
-import           Data.Default
 import           Control.Monad  (foldM)
 import           Data.Function                  (on)
 

@@ -15757,7 +15757,7 @@ var TypeScript;
                 helper.postDiagnostic(this, TypeScript.DiagnosticCode.Variable_declarations_are_only_supported_in_the_first_part_of_the_loop_in_0, [this.initializer.fullText()]);
             }
             var anns = tokenAnnots(this.forKeyword);
-            return new TypeScript.RsForStmt(helper.getSourceSpan(this), tokenAnnots(this), this.variableDeclaration.toRsForInit(helper, anns), this.condition.toRsExp(helper), this.incrementor.toRsExp(helper), this.statement.toRsStmt(helper));
+            return new TypeScript.RsForStmt(helper.getSourceSpan(this), tokenAnnots(this), this.variableDeclaration.toRsForInit(helper, anns), this.condition ? this.condition.toRsExp(helper) : null, this.incrementor ? this.incrementor.toRsExp(helper) : null, this.statement.toRsStmt(helper));
         };
         return ForStatementSyntax;
     })(TypeScript.SyntaxNode);
@@ -60334,9 +60334,9 @@ var TypeScript;
                     [this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
                         })],
-                    (this.init) ? this.init.toObject() : null,
+                    this.init.toObject(),
                     (this.test) ? this.test.toObject() : null,
-                    this.inc.toObject(),
+                    (this.inc) ? this.inc.toObject() : null,
                     this.body.toObject()]
             };
         };

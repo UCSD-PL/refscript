@@ -350,6 +350,7 @@ data BuiltinOp = BIUndefined
                | BITruthy
                | BISetProp
                | BICondExpr
+               | BIForInKeys
                  deriving (Eq, Ord, Show)
 
 instance PP BuiltinOp where

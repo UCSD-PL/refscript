@@ -54,7 +54,7 @@ declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
 declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
 /*@ builtin_BIArrayLit :: 
-    forall M A. (A) => {v: #Array[M,A] | (len v) = builtin_BINumArgs } 
+    forall M A. (A) => {v: #Array[M,A] | [ (len v) = builtin_BINumArgs; not (null v) ] } 
 */
 declare function builtin_BIArrayLit<A>(a: A): A[];
 

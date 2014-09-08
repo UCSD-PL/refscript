@@ -219,12 +219,3 @@ appTy _        (TModule m)     = TModule m
 appTy _        (TExp _)        = error "appTy should not be applied to TExp"
 
 
--- | @flattenUnions@: flattens one-level of unions
---
--- FIXME: add check for duplicates in parts of unions
---
-flattenUnions (TApp TUn ts r) = TApp TUn (concatMap go ts) r
-  where go (TApp TUn τs r)    = (`strengthen` r) <$> τs
-        go t                  = [t]
-flattenUnions t               = t
-

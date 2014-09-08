@@ -165,16 +165,16 @@ bareTypeP = bareAllP $
   <|> try (refP rUnP)
   <|>     (xrefP rUnP)
 
-rUnP        = mkU <$> parenNullP (bareTypeNoUnionP `sepBy1` plus) toN
+rUnP          = mkU <$> parenNullP (bareTypeNoUnionP `sepBy1` plus) toN
   where
     mkU [x] = strengthen x
-    mkU xs  = TApp TUn (L.sort xs)
+    mkU xs  = flattenUnions . TApp TUn (L.sort xs)
     toN     = (tNull:)
 
 bUnP        = parenNullP (bareTypeNoUnionP `sepBy1` plus) toN >>= mkU
   where
     mkU [x] = return x
-    mkU xs  = TApp TUn xs <$> topP
+    mkU xs  = flattenUnions . TApp TUn xs <$> topP
     toN     = (tNull:)
 
 

@@ -68,32 +68,32 @@ data Nano a r = Nano {
   -- 
   -- ^ Code to check
   --
-    code   :: !(Source a)               
+    code      :: !(Source a)               
   -- 
   -- ^ Annotations (keeping this to scrape qualifiers later)
   -- ^ XXX: The names are bogus - made unique to avoid overwrites
   --
-  , specs  :: !(Env (RType r))
+  , qualPool  :: !(Env (RType r))
   -- 
   -- ^ Measure Signatures
   --
-  , consts :: !(Env (RType r))          
+  , consts    :: !(Env (RType r))          
   -- 
   -- ^ Type aliases
   --
-  , tAlias :: !(TAliasEnv (RType r))    
+  , tAlias    :: !(TAliasEnv (RType r))    
   -- 
   -- ^ Predicate aliases
   --
-  , pAlias :: !(PAliasEnv)              
+  , pAlias    :: !(PAliasEnv)              
   -- 
   -- ^ Qualifiers
   --
-  , pQuals  :: ![F.Qualifier]            
+  , pQuals    :: ![F.Qualifier]            
   -- 
   -- ^ Type Invariants
   --
-  , invts  :: ![Located (RType r)]      
+  , invts     :: ![Located (RType r)]      
   } deriving (Functor, Data, Typeable)
 
 type NanoBareR r   = Nano (AnnBare r) r                    -- ^ After Parse

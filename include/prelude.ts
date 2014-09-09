@@ -32,8 +32,11 @@ interface Pair<A,B> { x: A; y: B; }
 /*@ builtin_BIBracketRef ::
     /\ forall A. (arr: #Array[#Immutable,A], {idx: number | (0 <= idx && idx < (len arr))}) => A
     /\ forall A. (arr: #Array[#Mutable, A ], idx: number) => A + undefined
-    /\ forall A. (o: {[y: string]: A }, x: string) => { A | keyIn(x,o)} + { undefined | not (keyIn(x,o)) }
+    /\ forall A. (o: {[y: string]: A }, x: { string| keyIn(x,o) }) => A
 */
+
+// /\ forall A. (o: {[y: string]: A }, x: string) => { A | keyIn(x,o)} + { undefined | not (keyIn(x,o)) }
+
 declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
 
 /*@ builtin_BIBracketAssign :: 

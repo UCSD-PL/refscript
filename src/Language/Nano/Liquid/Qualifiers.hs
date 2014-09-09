@@ -19,21 +19,11 @@ nanoQualifiers'  :: NanoRefType -> [Qualifier]
 nanoQualifiers' p = concatMap (refTypeQualifiers γ0) $ envToList env
   where
     γ0            = envSEnv $ envMap rTypeSort env
-    env           = {- qenvToEnv $ -} specs p
+    env           = qualPool p
 
 refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t 
   where
     addQs γ t qs  = mkQuals l γ t ++ qs
-
--- extractTypes :: Fact Reft -> [RefType]
--- extractTypes  = everythingBut (++) $ ([], False) `mkQ` f
---   where 
---     f              = ft `extQ` ff 
---     ft            :: RefType -> ([RefType], Bool)
---     ft a           = ([a], False)
---     ff            :: Fact Reft -> ([RefType], Bool)
---     ff _           = ([],False)
-
 
 mkQuals l γ t     = [ mkQual l γ v so pa | let (RR so (Reft (v, ras))) = rTypeSortedReft t 
                                           , RConc p                    <- ras                 

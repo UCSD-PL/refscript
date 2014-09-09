@@ -1,9 +1,10 @@
 // Taken from strobe
+/*@ qualif Bot(v:a,s:string): keyIn(v,s) */
 
-/*@ foo :: (obj: { [x:string]: string + number }) => number */ 
-function foo(obj) {
-  for (var x in obj) {
-    var r = obj[x];
+/*@ foo :: (o: { [x:string]: string + number }) => { number | true } */ 
+function foo(o) {
+  for (var x in o) {
+    var r = o[x];
     if (typeof r === "string") {
       return r;
     }

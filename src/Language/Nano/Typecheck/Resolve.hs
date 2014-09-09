@@ -115,6 +115,9 @@ absoluteName env a r@(RN (QName _ _ s)) = g <$> absolutePath env a (f r)
     g (AP (QPath l p))   = AN (QName l p s)
 
 
+absoluteNameInEnv env r = absoluteName (modules env) (absPath env) r
+
+
 -- | `resolveRelPath γ a r` returns the environment referenced by the relative 
 --   path @r@ expressed in terms of namespace @a@.
 --
@@ -250,8 +253,14 @@ flattenType γ (TClass x)             = do
 flattenType _ t = Just t
 
 
--- | `weaken γ a b ts` moves a name @a@ by moving it upwards in the class 
---   hierarchy. This function does the necessary type argument substitutions.
+-- | `weaken γ A B T..`: Given a relative type name @A@  distinguishes two
+--   cases:
+--
+--    * If A<V..> extends B<S..> (i.e. type B is an ancestor of A), then returns
+--      B applied to T.., substituted accordingly to match B's type arguments.
+--
+--    * If A </: B then return @Nothing@.
+--
 --
 --    FIXME: Works for classes, but interfaces could have multiple ancestors.
 --           What about common elements in parent class?
@@ -260,12 +269,13 @@ flattenType _ t = Just t
 weaken :: (PPR r, EnvLike r g) => g r -> RelName -> RelName -> [RType r] -> Maybe (SIfaceDef r)
 ---------------------------------------------------------------------------
 weaken γ pa pb ts
-  | pa == pb = (,ts) <$> resolveRelNameInEnv γ pa
+  | on (==) (absoluteNameInEnv γ) pa pb = (,ts) <$> resolveRelNameInEnv γ pa
   | otherwise
   = do  z <- resolveRelNameInEnv γ pa
         case z of
           ID _ _ vs (Just (p,ps)) _ -> weaken γ p pb $ apply (fromList $ zip vs ts) ps
           ID _ _ _  Nothing       _ -> Nothing
+
 
 -- FIXME: revisit these
 ---------------------------------------------------------------------------

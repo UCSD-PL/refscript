@@ -1,4 +1,6 @@
 
+/*@ qualif Bot(v:a,s:string): keyIn(v,s) */
+
 /*@ foo :: (o: [#Immutable]{ [x:string]: string }) => { #Array[#Mutable, string] | true } */ 
 function foo(o) {
 

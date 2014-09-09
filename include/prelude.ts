@@ -32,24 +32,21 @@ interface Pair<A,B> { x: A; y: B; }
 /*@ builtin_BIBracketRef ::
     /\ forall A. (arr: #Array[#Immutable,A], {idx: number | (0 <= idx && idx < (len arr))}) => A
     /\ forall A. (arr: #Array[#Mutable, A ], idx: number) => A + undefined
-    /\ forall A. (o: {[y: string]: A }, x: { string| keyIn(x,o) }) => A
-*/
-
-// /\ forall A. (o: {[y: string]: A }, x: string) => { A | keyIn(x,o)} + { undefined | not (keyIn(x,o)) }
-
+    /\ forall A. (o: {[y: string]: A }, x: { string | keyIn(x,o) }) => A
+ */
 declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
 
 /*@ builtin_BIBracketAssign :: 
     /\ forall A. (arr: #Array[#Immutable, A], {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
     /\ forall A. (arr: #Array[#ReadOnly , A], idx:number, val: A) => void
     /\ forall A M. ([#Mutable]{[y: string]: A }, x:string, val: A) => void
-*/
+ */
 declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
 
 /*  builtin_BISetProp ::
     /\ forall A M. ([M] { f : [#Mutable] A }, A) => A
     /\ forall A M. ([#Mutable] { f : [M] A }, A) => A
-*/
+ */
 
 /*@ builtin_BISetProp :: 
     forall A M. ([M] { f : [#Mutable] A }, A) => A 
@@ -58,36 +55,36 @@ declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
 /*@ builtin_BIArrayLit :: 
     forall M A. (A) => {v: #Array[M,A] | [ (len v) = builtin_BINumArgs; not (null v) ] } 
-*/
+ */
 declare function builtin_BIArrayLit<A>(a: A): A[];
 
 /*@ builtin_BICondExpr :: 
     forall A. (c: boolean, x: A, y: A) => { v:A | (if (Prop(c)) then (v = x) else (v = y)) }
-*/
+ */
 declare function builtin_BICondExpr<A>(c: boolean, x: A, y: A): A;
 
 /*@ builtin_OpLT :: 
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
     /\ forall T. (x:T, y:T) => boolean
-*/
+ */
 declare function builtin_OpLT(a: any, b: any): boolean;
 
 /*@ builtin_OpLEq :: 
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <= y)) }
     /\ forall T. (x:T, y:T) => boolean
-*/
+ */
 declare function builtin_OpLEq(a: any, b: any): boolean;
 
 /*@ builtin_OpGT :: 
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) }
     /\ forall T. (x:T, y:T) => boolean
-*/
+ */
 declare function builtin_OpGT(a: any, b: any): boolean;
 
 /*@ builtin_OpGEq ::
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >= y)) }
     /\ forall T. (x:T, y:T) => boolean
-*/
+ */
 declare function builtin_OpGEq(a: any, b: any): boolean;
 
 /*@ builtin_OpAdd :: 

@@ -208,7 +208,7 @@ instance Substitutable r Assignability where
 ---------------------------------------------------------------------------------
 appTy :: F.Reftable r => RSubst r -> RType r -> RType r
 ---------------------------------------------------------------------------------
-appTy θ        (TApp c ts r)   = TApp c (apply θ ts) r
+appTy θ        (TApp c ts r)   = flattenUnions $ TApp c (apply θ ts) r
 appTy θ        (TAnd ts)       = TAnd (apply θ ts) 
 appTy (Su m) t@(TVar α r)      = (M.lookupDefault t α m) `strengthen` r
 appTy θ        (TFun s ts t r) = TFun (apply θ <$> s) (apply θ ts) (apply θ t) r
@@ -217,4 +217,5 @@ appTy θ        (TCons es m r)  = TCons (apply θ es) (appTy (toSubst θ) m) r
 appTy _        (TClass c)      = TClass c
 appTy _        (TModule m)     = TModule m
 appTy _        (TExp _)        = error "appTy should not be applied to TExp"
+
 

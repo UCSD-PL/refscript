@@ -17,6 +17,7 @@ import           Data.Default
 import           Data.Traversable                        (mapAccumL)
 import           Data.Monoid                             (mconcat)
 import           Data.Maybe                              (catMaybes)
+import           Data.Generics                    hiding (Generic)
 import           Data.Aeson                              (eitherDecode)
 import           Data.Aeson.Types                 hiding (Parser, Error, parse)
 import qualified Data.Aeson.Types                 as     AI
@@ -24,7 +25,6 @@ import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
 import qualified Data.List                        as     L
 import           Text.PrettyPrint.HughesPJ               (text)
-import           Data.Data
 import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
 
@@ -165,16 +165,16 @@ bareTypeP = bareAllP $
   <|> try (refP rUnP)
   <|>     (xrefP rUnP)
 
-rUnP        = mkU <$> parenNullP (bareTypeNoUnionP `sepBy1` plus) toN
+rUnP          = mkU <$> parenNullP (bareTypeNoUnionP `sepBy1` plus) toN
   where
     mkU [x] = strengthen x
-    mkU xs  = TApp TUn (L.sort xs)
+    mkU xs  = flattenUnions . TApp TUn (L.sort xs)
     toN     = (tNull:)
 
 bUnP        = parenNullP (bareTypeNoUnionP `sepBy1` plus) toN >>= mkU
   where
     mkU [x] = return x
-    mkU xs  = TApp TUn xs <$> topP
+    mkU xs  = flattenUnions . TApp TUn xs <$> topP
     toN     = (tNull:)
 
 
@@ -601,7 +601,7 @@ mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
 mkCode ss = Nano {
         code          = Src (checkTopStmt <$> ss')
-      , specs         = envFromList $ getSpecs ss
+      , qualPool      = envFromList $ getQualifPool ss
       , consts        = envFromList   [ t | Meas   t <- anns ] 
       , tAlias        = envFromList   [ t | TAlias t <- anns ] 
       , pAlias        = envFromList   [ t | PAlias t <- anns ] 
@@ -627,11 +627,19 @@ mkCode ss = Nano {
     ss'               = (toBare <$>) <$> ss
     anns              = concatMap (FO.foldMap snd) ss
 
--- Meh... 
-getSpecs :: [Statement (SourceSpan, [Spec])] -> [(Id SourceSpan, RefType)]
-getSpecs ss = rename <$> zip [ b | s <- ss, (_, z) <- FO.toList s, Bind b <- z] [0..]
+
+-------------------------------------------------------------------------------
+getQualifPool :: [Statement (SourceSpan, [Spec])] -> [(Id SourceSpan, RefType)]
+-------------------------------------------------------------------------------
+getQualifPool a = concatMap ext $ everything (++) ([] `mkQ` f) a
   where
-    rename ((Id l s,t), i) = (Id l (s ++ "_" ++ show i), t)
+    ext (_, ss) = [ b | Bind b <- ss ]
+
+    f :: Statement (SourceSpan, [Spec]) -> [(SourceSpan, [Spec])]
+    f (FunctionStmt l _ _ _) = [l]
+    f (ClassStmt _ _ _ _ es) = [l | MemberMethDecl l _ _ _ _ <- es ]  
+    f (VarDeclStmt _ vds)    = [l | VarDecl l _ _ <- vds ]  
+    f _                      = []
 
 
 type PState = Integer

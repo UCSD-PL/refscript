@@ -46,6 +46,8 @@ Tool/Implementation
 
     Note use of lower-case which gets translated into tyvars in fixpoint. sigh.
 
+  - Check polarity of type parameter in type
+
   - Array literal checks are quite slow.
       E.g.: typescript/pos/arrays/arr-07.js
 

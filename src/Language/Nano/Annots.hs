@@ -11,7 +11,7 @@ module Language.Nano.Annots (
     Annot (..), UFact, Fact (..), phiVarsAnnot
 
   -- * Casts
-  , Cast(..), CastDirection(..), noCast, upCast, dnCast, ddCast
+  , Cast(..), CastDirection(..), castDirection, noCast, upCast, dnCast, ddCast
 
   -- * Aliases for annotated Source 
   , AnnBare, UAnnBare, AnnSSA , UAnnSSA
@@ -72,22 +72,15 @@ instance PP CastDirection where
   pp CDUp   = text "UP"
   pp CDDn   = text "DN"
 
-noCast CDNo = True
-noCast _   = False
+noCast = (`elem` [CDNo])
+upCast = (`elem` [CDNo, CDUp])
+dnCast = (`elem` [CDNo, CDDn])
+ddCast = (`elem` [CDDead])
 
-upCast CDDead = False
-upCast CDNo   = True
-upCast CDUp   = True
-upCast CDDn   = False
-
-dnCast CDDead = False
-dnCast CDNo   = True
-dnCast CDUp   = False
-dnCast CDDn   = True
-
-ddCast CDDead = True
-ddCast _      = False
-
+castDirection (CNo  {}) = CDNo
+castDirection (CDead{}) = CDDead
+castDirection (CUp  {}) = CDUp
+castDirection (CDn  {}) = CDDn
 
 
 data Fact r

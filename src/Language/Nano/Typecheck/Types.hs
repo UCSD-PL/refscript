@@ -25,7 +25,7 @@ module Language.Nano.Typecheck.Types (
   , isTop, isNull, isVoid, isTNum, isUndef, isUnion
 
   -- * Constructing Types
-  , mkUnion, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy
+  , mkUnion, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions
 
   -- * Deconstructing Types
   , bkFun, bkFuns, bkAll, bkAnd, bkUnion, funTys -- , methTys
@@ -258,13 +258,27 @@ mkUnion :: (F.Reftable r) => [RType r] -> RType r
 ----------------------------------------------------------------------------------------
 mkUnion [ ] = tErr
 mkUnion [t] = t             
-mkUnion ts  = TApp TUn ts fTop
+mkUnion ts  = flattenUnions $ TApp TUn ts fTop
 
 ----------------------------------------------------------------------------------------
 bkUnion :: RType r -> [RType r]
 ----------------------------------------------------------------------------------------
 bkUnion (TApp TUn xs _) = xs
 bkUnion t               = [t]
+
+
+-- | @flattenUnions@: flattens one-level of unions
+--
+-- FIXME: add check for duplicates in parts of unions
+--
+----------------------------------------------------------------------------------------
+flattenUnions :: F.Reftable r => RType r -> RType r
+----------------------------------------------------------------------------------------
+flattenUnions (TApp TUn ts r) = TApp TUn (concatMap go ts) r
+  where go (TApp TUn τs r)    = (`strengthen` r) <$> τs
+        go t                  = [t]
+flattenUnions t               = t
+
 
 
 -- | Strengthen the top-level refinement
@@ -678,6 +692,7 @@ builtinOpId BIBracketAssign = builtinId "BIBracketAssign"
 builtinOpId BIArrayLit      = builtinId "BIArrayLit"
 builtinOpId BIObjectLit     = builtinId "BIObjectLit"
 builtinOpId BISetProp       = builtinId "BISetProp"
+builtinOpId BIForInKeys     = builtinId "BIForInKeys"
 builtinOpId BINumArgs       = builtinId "BINumArgs"
 builtinOpId BITruthy        = builtinId "BITruthy"
 builtinOpId BICondExpr      = builtinId "BICondExpr"

@@ -47,7 +47,7 @@ module Language.Nano.Liquid.Types (
 
   -- * Accessing Spec Annotations
   , getSpec, getRequires, getEnsures, getAssume, getAssert
-  , getInvariant, getFunctionIds, isSpecification 
+  , getInvariant, getFunctionIds
     -- ,  returnSymbol, returnId, symbolId, mkId
 
   -- * Raw low-level Location-less constructors
@@ -444,11 +444,6 @@ rawStringFTycon = F.symbolFTycon . F.Loc (F.dummyPos "RSC.Types.rawStringFTycon"
 -----------------------------------------------------------------------------------
 -- | Helpers for extracting specifications from @ECMAScript3@ @Statement@ 
 -----------------------------------------------------------------------------------
-
-isSpecification :: Statement a -> Bool
-isSpecification s  = not $ null $ catMaybes $ ($ s) <$> specs 
-  where 
-    specs          = [getAssume, getInv, getRequires, getEnsures]
 
 getInvariant :: Statement a -> F.Pred 
 

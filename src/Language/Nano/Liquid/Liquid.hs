@@ -13,7 +13,6 @@ import           Control.Applicative                ((<$>))
 
 import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (listToMaybe, catMaybes, maybeToList)
--- import qualified Data.Foldable                      as FO
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -47,11 +46,11 @@ import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
 
 import qualified Data.Text                          as T 
--- import           Text.PrettyPrint.HughesPJ 
-
 import           System.Console.CmdArgs.Default
 
 -- import           Debug.Trace                        (trace)
+-- import qualified Data.Foldable                      as FO
+-- import           Text.PrettyPrint.HughesPJ 
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -62,7 +61,7 @@ verifyFile    :: FilePath -> [FilePath] -> IO (A.UAnnSol RefType, F.FixResult Er
 verifyFile f fs = do  (a,b) <- parse fs $ ssa $ tc $ refTc f
                       return (a,b)
 parse fs next 
-  = do  r <- parseNanoFromFiles fs 
+  = do  r <- parseNanoFromFiles fs
         case r of 
           Left  l -> return (A.NoAnn, l) 
           Right x -> next x
@@ -76,6 +75,7 @@ tc next p
         case r of 
           Left l  -> lerror l 
           Right x -> next x
+          -- Right x -> next $ trace (show $ ppCasts x) x
 
 refTc f    p    = getOpts >>= solveConstraints f . (`generateConstraints` p)
 

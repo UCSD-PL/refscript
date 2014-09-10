@@ -36077,7 +36077,7 @@ var TypeScript;
             this.noImplicitAny = false;
             this.noLib = false;
             this.refScript = false;
-            this.refscriptLib = "";
+            this.refscriptLibs = [];
             this.codeGenTarget = 0 /* EcmaScript3 */;
             this.moduleGenTarget = 0 /* Unspecified */;
             this.outFileOption = "";
@@ -36096,7 +36096,7 @@ var TypeScript;
     TypeScript.CompilationSettings = CompilationSettings;
 
     var ImmutableCompilationSettings = (function () {
-        function ImmutableCompilationSettings(propagateEnumConstants, removeComments, watch, noResolve, allowAutomaticSemicolonInsertion, noImplicitAny, noLib, refScript, refScriptLib, codeGenTarget, moduleGenTarget, outFileOption, outDirOption, mapSourceFiles, mapRoot, sourceRoot, generateDeclarationFiles, useCaseSensitiveFileResolution, gatherDiagnostics, codepage, createFileLog) {
+        function ImmutableCompilationSettings(propagateEnumConstants, removeComments, watch, noResolve, allowAutomaticSemicolonInsertion, noImplicitAny, noLib, refScript, refScriptLibs, codeGenTarget, moduleGenTarget, outFileOption, outDirOption, mapSourceFiles, mapRoot, sourceRoot, generateDeclarationFiles, useCaseSensitiveFileResolution, gatherDiagnostics, codepage, createFileLog) {
             this._propagateEnumConstants = propagateEnumConstants;
             this._removeComments = removeComments;
             this._watch = watch;
@@ -36106,7 +36106,7 @@ var TypeScript;
             this._noLib = noLib;
 
             this._refScript = refScript;
-            this._refScriptLib = refScriptLib;
+            this._refScriptLibs = refScriptLibs;
 
             this._codeGenTarget = codeGenTarget;
             this._moduleGenTarget = moduleGenTarget;
@@ -36146,8 +36146,8 @@ var TypeScript;
         ImmutableCompilationSettings.prototype.refScript = function () {
             return this._refScript;
         };
-        ImmutableCompilationSettings.prototype.refScriptLib = function () {
-            return this._refScriptLib;
+        ImmutableCompilationSettings.prototype.refScriptLibs = function () {
+            return this._refScriptLibs;
         };
 
         ImmutableCompilationSettings.prototype.codeGenTarget = function () {
@@ -36196,7 +36196,7 @@ var TypeScript;
         };
 
         ImmutableCompilationSettings.fromCompilationSettings = function (settings) {
-            return new ImmutableCompilationSettings(settings.propagateEnumConstants, settings.removeComments, settings.watch, settings.noResolve, settings.allowAutomaticSemicolonInsertion, settings.noImplicitAny, settings.noLib, settings.refScript, settings.refscriptLib, settings.codeGenTarget, settings.moduleGenTarget, settings.outFileOption, settings.outDirOption, settings.mapSourceFiles, settings.mapRoot, settings.sourceRoot, settings.generateDeclarationFiles, settings.useCaseSensitiveFileResolution, settings.gatherDiagnostics, settings.codepage, settings.createFileLog);
+            return new ImmutableCompilationSettings(settings.propagateEnumConstants, settings.removeComments, settings.watch, settings.noResolve, settings.allowAutomaticSemicolonInsertion, settings.noImplicitAny, settings.noLib, settings.refScript, settings.refscriptLibs, settings.codeGenTarget, settings.moduleGenTarget, settings.outFileOption, settings.outDirOption, settings.mapSourceFiles, settings.mapRoot, settings.sourceRoot, settings.generateDeclarationFiles, settings.useCaseSensitiveFileResolution, settings.gatherDiagnostics, settings.codepage, settings.createFileLog);
         };
 
         ImmutableCompilationSettings.prototype.toCompilationSettings = function () {
@@ -61867,15 +61867,16 @@ var TypeScript;
             var defaultLibStart = new Date().getTime();
 
             if (this.compilationSettings.refScript()) {
-                var refscriptLib = this.compilationSettings.refScriptLib();
-                if (refscriptLib && refscriptLib !== "") {
-                    var libraryResolvedFile = {
-                        path: this.resolvePath(refscriptLib),
-                        referencedFiles: [],
-                        importedFiles: []
-                    };
+                var refScriptLibs = this.compilationSettings.refScriptLibs();
+                if (refScriptLibs) {
+                    var libraryResolvedFiles = refScriptLibs.map(function (refScriptLib) {
+                        return {
+                            path: _this.resolvePath(refScriptLib),
+                            referencedFiles: [],
+                            importedFiles: [] };
+                    });
 
-                    resolvedFiles = [libraryResolvedFile].concat(resolvedFiles);
+                    resolvedFiles = libraryResolvedFiles.concat(resolvedFiles);
                 }
             } else {
                 if (includeDefaultLibrary) {
@@ -61969,7 +61970,7 @@ var TypeScript;
                 },
                 type: TypeScript.DiagnosticCode.LOCATION,
                 set: function (str) {
-                    mutableSettings.refscriptLib = str;
+                    mutableSettings.refscriptLibs.push(str);
                 }
             });
 

@@ -408,7 +408,10 @@ interface String {
 
     // split(separator: RegExp, limit/*?*/: number): string[];
 
-    substring(start: number, end/*?*/: number): string;
+    /*@ substring : /\ (start: number) => string
+                    /\ (start: number, end: number) => string
+     */
+    substring(start: number, end?: number): string;
 
     toLowerCase(): string;
 
@@ -769,42 +772,4 @@ interface AnyMutability extends ReadOnly {
 interface AssignsFields extends ReadOnly {
     defaultMut__: void;
 } 
-
-
-
-
-/*************************************************************************
-        
-  | DOM API 
-
-*************************************************************************/
-
-interface Event {
-    timeStamp: number;
-    defaultPrevented: boolean;
-    isTrusted: boolean;
-//    currentTarget: EventTarget;
-    cancelBubble: boolean;
-//    target: EventTarget;
-    eventPhase: number;
-    cancelable: boolean;
-    type: string;
-//    srcElement: Element;
-    bubbles: boolean;
-    initEvent(eventTypeArg: string, canBubbleArg: boolean, cancelableArg: boolean): void;
-    stopPropagation(): void;
-    stopImmediatePropagation(): void;
-    preventDefault(): void;
-    CAPTURING_PHASE: number;
-    AT_TARGET: number;
-    BUBBLING_PHASE: number;
-}
-
-declare var Event: {
-    prototype: Event;
-    new(): Event;
-    CAPTURING_PHASE: number;
-    AT_TARGET: number;
-    BUBBLING_PHASE: number;
-}
 

@@ -850,6 +850,7 @@ infixOpId OpMul        = builtinId "OpMul"
 infixOpId OpDiv        = builtinId "OpDiv"
 infixOpId OpMod        = builtinId "OpMod"
 infixOpId OpInstanceof = builtinId "OpInstanceof"
+infixOpId OpIn         = builtinId "OpIn"
 infixOpId o            = errorstar $ "infixOpId: Cannot handle: " ++ ppshow o
 
 prefixOpId PrefixMinus  = builtinId "PrefixMinus"

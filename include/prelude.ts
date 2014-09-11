@@ -1,8 +1,8 @@
 /*************************************************************************
-        
-  | General purpose auxiliary definitions 
-
-*************************************************************************/
+ *        
+ *  GENERAL PURPOSE AUXILIARY DEFINITIONS 
+ *
+ ************************************************************************/
 
 declare function crash<A>(): A; 
 
@@ -24,10 +24,10 @@ interface Pair<A,B> { x: A; y: B; }
 
 
 /*************************************************************************
-        
-  | Types for Builtin Operators 
-
-*************************************************************************/
+ *        
+ *  TYPES FOR BUILTIN OPERATORS 
+ *
+ ************************************************************************/
 
 /*@ builtin_BIBracketRef ::
     /\ forall A. (arr: #Array[#Immutable,A], {idx: number | (0 <= idx && idx < (len arr))}) => A
@@ -167,9 +167,22 @@ declare function builtin_PrefixLNot<A>(x: A): boolean;
 declare function builtin_PrefixBNot(n: number): number;
 
 
-// 
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for...in
-//
+/**
+ *
+ *    for ... in ... 
+ *
+ *    https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for...in
+ *
+ *    A for...in loop only iterates over enumerable properties. Objects created from
+ *    built–in constructors like Array and Object have inherited non–enumerable
+ *    properties from Object.prototype and String.prototype, such as String's
+ *    indexOf() method or Object's toString() method. The loop will iterate over all
+ *    enumerable properties of the object itself and those the object inherits from
+ *    its constructor's prototype (properties closer to the object in the prototype
+ *    chain override prototypes' properties).
+ *
+ */
+
 /*@ builtin_BIForInKeys :: 
     /\ forall A . (a: #Array[#Immutable, A]) => #Array[#Immutable, { v: number | (0 <= v && v < (len a)) }]
     /\ (o: [#Immutable]{ }) => #Array[#Immutable, { v: string | (keyIn(v,o) && enumProp(v,o)) }]
@@ -179,30 +192,45 @@ declare function builtin_BIForInKeys(obj: Object): string[];
 
 
 /*************************************************************************
+ *
+ *    OBJECT RELATED MEASURES
+ *
+ ************************************************************************/
 
-  | Object related measures
-
-*************************************************************************/
+/**
+ *
+ *    keyIn 
+ *
+ *    This property is true if the first string argument is an existing field 
+ *    of either the object referenced in the second or the objects it inherits 
+ *    from through its prototype chain.
+ *
+ */
 
 /*@ measure keyIn      :: forall A . (string, A) => bool */
+
 /*@ measure enumProp   :: forall A . (string, A) => bool */
 
 
 
 /*************************************************************************
-  
-  | Ambient Definitions 
+ *
+ *    AMBIENT DEFINITIONS 
+ *
+ *    Taken from here: 
+ *
+ *    http://typescript.codeplex.com/sourcecontrol/latest#typings/core.d.ts
+ *
+ *************************************************************************/
 
-  Taken from here: 
 
-  http://typescript.codeplex.com/sourcecontrol/latest#typings/core.d.ts
-
-**************************************************************************/
-
-
-/*** Object **************************************************************/
-
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L80
+/**
+ *  OBJECT 
+ *
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L80
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L115
+ *
+ */
 
 interface Object {
     // TODO
@@ -238,7 +266,6 @@ interface Object {
 }
 
 
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L115
 
 declare var Object: {
     new <A>(value: A): Object;						// new (value?: any): Object;
@@ -276,9 +303,20 @@ declare var Object: {
 
 
 
-/*** Number **************************************************************/
-
-// FIXME:	NaN =/= NaN
+/**
+ *  NUMBER 
+ *
+ * 
+ *  TODO: 
+ *
+ *    - NaN =/= NaN
+ *
+ *    - all optional arguments have been changed to necessary
+ *
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L430
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L457
+ *
+ */
 
 /*@ measure numeric_nan               :: number */
 /*@ measure numeric_max_value         :: number */
@@ -286,13 +324,10 @@ declare var Object: {
 /*@ measure numeric_negative_infinity :: number */
 /*@ measure numeric_positive_infinity :: number */
 
-
 /*@  NaN :: { number | v = numeric_nan } */
 declare var NaN: number;
 
 
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L430
-// TODO: all optional arguments have been changed to necessary
 interface Number {
     toString(radix/*?*/: number): string;
 
@@ -304,7 +339,6 @@ interface Number {
 }
 
 
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L457
 
 declare var Number: {
     new (value: any): Number;						// new (value?: any): Number;
@@ -329,9 +363,12 @@ declare var Number: {
 
 
 
-/*** Math ****************************************************************/
-
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L487
+/**
+ *  MATH
+ *
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L487
+ *
+ */
 
 interface Math {
     E: number;
@@ -365,11 +402,12 @@ interface Math {
 declare var Math: Math;
 
 
-
-/*** String **************************************************************/
-
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L259
-
+/**
+ *  STRING
+ *  
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L259
+ *
+ */
 
 interface String {
     toString(): string;
@@ -440,14 +478,19 @@ declare var String: {
 
 
 
-/*** Array ***************************************************************/
+/**
+ *  ARRAY 
+ *  
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L966
+ *
+ *    TODO: Fix mutabilities
+ *    consult: https://github.com/UCSD-PL/RefScript/blob/develop/include/prelude.ts
+ *
+ */
+ 
 
 /*@ measure len      :: forall M A . (#Array[M,A]) => number             */
 
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L966
-
-// TODO: Fix mutabilities
-// consult: https://github.com/UCSD-PL/RefScript/blob/develop/include/prelude.ts
 
 /*@ interface Array<M, T> */
 interface Array<T> {
@@ -541,23 +584,18 @@ declare var Array: {
 
 
 interface IArguments {
-  
     [index: number]: any;
-
     length: number;
-
     // callee: Function;
 }
 
 
 /*** Function ************************************************************/
 
-/**
-  * Creates a new function.
-  */
 interface Function {
     /**
-      * Calls the function, substituting the specified object for the this value of the function, and the specified array for the arguments of the function.
+      * Calls the function, substituting the specified object for the this 
+      * value of the function, and the specified array for the arguments of the function.
       * @param thisArg The object to be used as the this object.
       * @param argArray A set of arguments to be passed to the function.
       */
@@ -571,8 +609,10 @@ interface Function {
     call(thisArg: any, ...argArray: any[]): any;
 
     /**
-      * For a given function, creates a bound function that has the same body as the original function. 
-      * The this object of the bound function is associated with the specified object, and has the specified initial parameters.
+      * For a given function, creates a bound function that has the same body 
+      * as the original function. 
+      * The this object of the bound function is associated with the specified 
+      * object, and has the specified initial parameters.
       * @param thisArg An object to which the this keyword can refer inside the new function.
       * @param argArray A list of arguments to be passed to the new function.
       */
@@ -599,10 +639,10 @@ declare var Function: {
 
 
 /*************************************************************************
-        
-  | Run-Time Tags 
-
-*************************************************************************/
+ *       
+ *          RUN-TIME TAGS 
+ * 
+ ************************************************************************/
 
 /*@ measure ttag :: forall A . (A) => string */
 
@@ -648,12 +688,27 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
 declare function builtin_OpInstanceof<A>(x: A, s: string): boolean; 
 
 
+/**
+ *
+ *    ... `in` ... 
+ *
+ *   https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/in 
+ * 
+ *   The in operator returns true for properties in the prototype chain.
+ *
+ */
+
+/*@ builtin_OpIn :: (s: string, o: { }) => { v: boolean | keyIn(v,o) } */
+declare function builtin_OpIn(s: string, obj: Object): boolean;
+
+
+
 
 /*************************************************************************
-        
-  | Pre-Loaded Qualifiers 
-
-*************************************************************************/
+ *        
+ *        PRE-LOADED QUALIFIERS 
+ * 
+ ************************************************************************/
 
 /*@ qualif Bot(v:a): 0 = 1 */
 /*@ qualif Bot(v:obj): 0 = 1 */
@@ -691,10 +746,10 @@ declare function builtin_OpInstanceof<A>(x: A, s: string): boolean;
 
 
 /*************************************************************************
-        
-  | Error Handling
-
-*************************************************************************/
+ *        
+ *        ERROR HANDLING
+ *
+ ************************************************************************/
 
 // NOTE: types that are defined in lib.d.ts need to be in comment to pass
 // through the TS compilation phase.
@@ -741,14 +796,13 @@ declare var Error: {
 //}
 
 
-
 /*************************************************************************
-        
-  | Mutability 
-
-  Do not include type parameters here 
-
-*************************************************************************/
+ *
+ *      MUTABILITY 
+ *    
+ *      Do not include type parameters here 
+ *    
+ ************************************************************************/
 
 /*@ interface ReadOnly */
 interface ReadOnly { }

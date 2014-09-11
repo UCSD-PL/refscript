@@ -21,6 +21,8 @@ Tool/Implementation
 
   - Enforce invariant that overloaded functions signatures are non-overlapping
 
+  - Infer variable argument signatures from TS sigs with '?' arguments.
+
   - Mutability 
 
       * What are good default mutabilities (parsing etc.)? Mutability annotations
@@ -34,8 +36,6 @@ Tool/Implementation
       * Encode method mutability
   
   - Variables cannot be named: "func" or "obj" (fixpoint restriction)
-
-  - Test examples with infinite loops.
 
   - Add sanity check for types: each sort should be represented at most once at
     a union type top-level.

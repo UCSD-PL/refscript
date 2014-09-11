@@ -13011,6 +13011,9 @@ var TypeScript;
                 case 200 /* InstanceOfExpression */:
                     return new TypeScript.RsInfixExpr(helper.getSourceSpan(this), tokenAnnots(this), new TypeScript.RsInfixOp("instanceof"), this.left.toRsExp(helper), this.right.toRsExp(helper));
 
+                case 201 /* InExpression */:
+                    return new TypeScript.RsInfixExpr(helper.getSourceSpan(this), tokenAnnots(this), new TypeScript.RsInfixOp("in"), this.left.toRsExp(helper), this.right.toRsExp(helper));
+
                 default:
                     helper.postDiagnostic(this, TypeScript.DiagnosticCode.Cannot_call_toRsExp_on_BinaryExpression_with_SyntaxKind_0, [TypeScript.SyntaxKind[this.kind()]]);
             }
@@ -16401,9 +16404,9 @@ var TypeScript;
         };
 
         CastExpressionSyntax.prototype.toRsExp = function (helper) {
+            var sourceSpan = helper.getSourceSpan(this);
             var eltSymbol = helper.getSymbolForAST(this.type);
             var castType = eltSymbol.type.toRsType();
-            var sourceSpan = helper.getSourceSpan(this);
             var castAnn = new TypeScript.RsBindAnnotation(sourceSpan, 13 /* RawCast */, castType.toString());
             return new TypeScript.RsCast(helper.getSourceSpan(this), [castAnn], this.expression.toRsExp(helper));
         };

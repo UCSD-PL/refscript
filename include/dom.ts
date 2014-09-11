@@ -1,9 +1,9 @@
 
 /*************************************************************************
-        
-    DOM API 
-
-*************************************************************************/
+ *
+ *      DOM API 
+ *
+ ************************************************************************/
 
 interface Event {
     timeStamp: number;
@@ -34,11 +34,22 @@ declare var Event: {
     BUBBLING_PHASE: number;
 }
 
-declare var document: Document
+declare var document: Document;
 
+
+interface HTMLElement {
+
+}
 
 // https://github.com/Microsoft/TypeScript/blob/master/src/lib/dom.generated.d.ts
 interface Document {
 
+    documentElement: HTMLElement;
+
 } 
 
+declare var window: Window;
+
+interface Window {
+
+}

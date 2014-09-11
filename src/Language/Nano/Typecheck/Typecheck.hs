@@ -821,7 +821,6 @@ tcVariadicCall γ l em es ft =
     _                         -> tcError $ errorVariadic (srcPos l) ft
   where
     bs = B $ F.symbol "this"
-  
 
 
 tcCallDotRef γ elts l em@(DotRef l1 e f) es 
@@ -860,7 +859,7 @@ tcNormalCall :: (PPRSF r, PP a)
 ------------------------------------------------------------------------------------------
 tcNormalCall γ l fn ets ft0 
   = do (es', ts)      <- unzip <$> mapM (uncurry $ tcExpr γ) ets
-       z              <- resolveOverload γ l fn es' ts ft0
+       z              <- resolveOverload γ l fn es' ts $ ltracePP l "ft0" ft0
        case z of 
          Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft
                             addSubst l θ

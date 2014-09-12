@@ -79,6 +79,7 @@ import           Language.Nano.Typecheck.Resolve
 import qualified Language.Nano.SystemUtils      as S
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
+import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Liquid.Environment
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Qualifiers
@@ -698,19 +699,30 @@ splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
 --  
 --  FIXME: restore co/contra-variance 
 --
-splitC (Sub g i t1@(TApp (TRef x1) (_:t1s) _) t2@(TApp (TRef x2) (μ2:t2s) _)) 
-  | x1 /= x2 
+splitC (Sub g i t1@(TApp (TRef x1) (m1:t1s) _) t2@(TApp (TRef x2) (m2:t2s) _)) 
+  --
+  -- * Incompatible mutabilities
+  --
+  | not (isSubtype g m1 m2) 
   = splitIncompatC l g i t1 t2
-  | isImmutable μ2
-  = do  cs    <- bsplitC g i t1 t2
-        -- cs'   <- splitWithVariance (varianceTDef $ findSymOrDie x1 δ) t1s t2s
-        cs'   <- concatMapM splitC $ safeZipWith "split-4" (Sub g i) t1s t2s
-        return $ cs ++ cs' 
-  | otherwise 
+  --  
+  -- * Both immutable, same name, non arrays: Co-variant subtyping
+  --
+  | x1 == x2 && isImmutable m2 && not (isArr t1) 
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- concatMapM splitC $ safeZipWith "splitc-4" (Sub g i) t1s t2s
-        cs''  <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g i) t2s t1s
+        return $ cs ++ cs'
+  -- 
+  -- * Non-immutable, same name: invariance
+  --
+  | x1 == x2 
+  = do  cs    <- bsplitC g i t1 t2
+        cs'   <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g i) t1s t2s
+        cs''  <- concatMapM splitC $ safeZipWith "splitc-6" (Sub g i) t2s t1s
         return $ cs ++ cs' ++ cs''
+  | otherwise 
+  = splitIncompatC l g i t1 t2
+
   where
 --     splitWithVariance vs t1s t2s = concat <$> zipWith3M splitCov vs t1s t2s
 --     splitCov True  t1 t2 = splitC (Sub g i t1 t2)

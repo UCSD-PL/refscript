@@ -489,7 +489,7 @@ declare var String: {
  */
  
 
-/*@ measure len      :: forall M A . (#Array[M,A]) => number             */
+/*@ measure len :: forall A . (A) => number */
 
 
 /*@ interface Array<M, T> */
@@ -500,7 +500,7 @@ interface Array<T> {
     toLocaleString(): string;
 
     /*@ concat: 
-        /\ forall M0       . (this: #Array[#Immutable,T], items: #Array[#Immutable,T]): { #Array[M0,T] | (len v) = (len this) + (len items) }
+        /\ forall M0 . (this: #Array[#Immutable,T], items: #Array[#Immutable,T]): { #Array[M0,T] | (len v) = (len this) + (len items) }
         /\ forall M0 M1 M2 . (this: M0, items: #Array[M1,T]): #Array[M2,T]
     */
     concat<U extends T[]>(...items: U[]): T[];
@@ -698,7 +698,10 @@ declare function builtin_OpInstanceof<A>(x: A, s: string): boolean;
  *
  */
 
-/*@ builtin_OpIn :: (s: string, o: { }) => { v: boolean | ((Prop v) <=> keyIn(s,o)) } */
+/*@ builtin_OpIn :: 
+    /\ forall A . (i: number, a: #Array[#Immutable,A]) => { v: boolean | ((Prop v) <=> (0 <= i && i < (len a))) }
+    /\ (s: string, o: { }) => { v: boolean | ((Prop v) <=> keyIn(s,o)) } 
+ */
 declare function builtin_OpIn(s: string, obj: Object): boolean;
 
 

@@ -698,7 +698,7 @@ declare function builtin_OpInstanceof<A>(x: A, s: string): boolean;
  *
  */
 
-/*@ builtin_OpIn :: (s: string, o: { }) => { v: boolean | keyIn(v,o) } */
+/*@ builtin_OpIn :: (s: string, o: { }) => { v: boolean | ((Prop v) <=> keyIn(s,o)) } */
 declare function builtin_OpIn(s: string, obj: Object): boolean;
 
 

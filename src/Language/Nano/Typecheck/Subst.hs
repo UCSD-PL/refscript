@@ -201,6 +201,9 @@ instance F.Reftable r => Substitutable r (IfaceDef r) where
 instance (F.Reftable r, Substitutable r a) => Substitutable r (Statement a) where
   apply θ s                 = fmap (apply θ) s
 
+instance (F.Reftable r, Substitutable r t) => Substitutable r (FuncInputs t) where
+  apply θ (FI a b)          = FI (apply θ a) (apply θ b)
+
 instance Substitutable r Assignability where
   apply _ s                 = s
 

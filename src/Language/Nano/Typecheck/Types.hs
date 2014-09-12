@@ -28,7 +28,7 @@ module Language.Nano.Typecheck.Types (
   , mkUnion, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions
 
   -- * Deconstructing Types
-  , bkFun, bkFuns, bkAll, bkAnd, bkUnion, funTys -- , methTys
+  , bkFun, bkFunBinds, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion, funTys -- , methTys
   
   , rUnion, rTypeR, setRTypeR
 
@@ -70,7 +70,7 @@ import           Data.Default
 import           Data.Hashable
 import           Data.Either                    (partitionEithers)
 import qualified Data.List                      as L
-import           Data.Maybe                     (fromMaybe)
+import           Data.Maybe                     (fromMaybe, maybeToList)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.HashMap.Strict            as M
 import           Data.Typeable                  ()
@@ -224,6 +224,16 @@ bkFun :: RType r -> Maybe ([TVar], Maybe (RType r), [Bind r], RType r)
 bkFun t = do let (αs, t')   = bkAll t
              (s, xts, t'') <- bkArr t'
              return           (αs, s, xts, t'')
+
+bkFunBinds :: RType r -> Maybe ([TVar], FuncInputs (Bind r), RType r)
+bkFunBinds t = do let (αs, t')   = bkAll t
+                  (s, xts, t'') <- bkArr t'
+                  return           (αs, FI (B (F.symbol "this") <$> s) xts, t'')
+
+
+bkFunNoBinds :: RType r -> Maybe ([TVar], FuncInputs (RType r), RType r)
+bkFunNoBinds t = do (αs, s, bs, t) <- bkFun t
+                    return          $ (αs, FI s (b_type <$> bs), t)
 
 mkFun :: (F.Reftable r) => ([TVar], Maybe (RType r), [Bind r], RType r) -> RType r
 mkFun ([], s, bs, rt) = TFun s bs rt fTop 
@@ -544,6 +554,9 @@ instance (PP r, F.Reftable r) => PP (RType r) where
                               = F.ppTy r $ lbrace $+$ nest 2 (vcat $ map pp bs) $+$ rbrace
   pp (TModule s  )            = text "module" <+> pp s
   pp (TClass c   )            = text "typeof" <+> pp c
+
+instance PP t => PP (FuncInputs t) where
+  pp (FI a as) = ppArgs parens comma (maybeToList a ++ as)
 
 instance PP TVar where 
   pp     = pprint . F.symbol

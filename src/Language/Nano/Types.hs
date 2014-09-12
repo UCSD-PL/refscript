@@ -117,6 +117,9 @@ data Bind r = B {
   } deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
+data FuncInputs t = FI { fi_self :: Maybe t, fi_args :: [t] } deriving (Functor, Traversable, Foldable)
+
+
 ---------------------------------------------------------------------------------
 -- | Interfacce definitions 
 ---------------------------------------------------------------------------------

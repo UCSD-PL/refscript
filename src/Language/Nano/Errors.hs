@@ -115,7 +115,8 @@ errorObjSubtype l t t'        = mkErr l $ printf "Object type '%s' is not a subt
 errorFuncSubtype l t t'       = mkErr l $ printf "Function type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 
 -- Typechecking
-errorCallNotSup l fn ft es ts = mkErr l $ printf "Cannot call '%s' of type '%s' with argument(s) %s of type %s" (ppshow fn) (ppshow ft) (ppshow es) (ppshow ts)
+errorCallNotSup l fn ft es ts = mkErr l $ printf "Cannot call '%s' of type '%s' with argument(s) %s of type %s." (ppshow fn) (ppshow ft) (ppshow es) (ppshow ts)
+errorCallNotFound l e f       = mkErr l $ printf "Cannot find callable property '%s' of object '%s'." (ppshow f) (ppshow e)
 errorCallMatch l fn ts        = mkErr l $ printf "Could not match call to '%s' to a particular signature. Argument(s) with types '%s' are invalid." (ppshow fn) (ppshow ts)
 errorCallReceiver l e f       = mkErr l $ printf "Could not call method '%s' of '%s'." (ppshow f) (ppshow e)
 errorTypeArgsNum l n p q      = mkErr l $ printf "Type %s expects %s arguments but %s were provided" (ppshow n) (ppshow p) (ppshow q)
@@ -158,9 +159,10 @@ errorWellFormed l             = mkErr l $ printf "Well-formedness Error"
 errorSuper l                  = mkErr l $ printf "Cannot resolve reference to super." 
 errorMissingFields l t1 t2 x  = mkErr l $ printf "Cannot convert %s to %s. Type %s is missing fields %s." (ppshow t1) (ppshow t2) (ppshow t1) (ppshow x) 
 errorVarDeclAnnot l x         = mkErr l $ printf "Variable definition of '%s' with neither type annotation nor initialization is not supported." (ppshow x)
-errorMissingAnnot l s         = mkErr l $ printf "Missing type annotation for %s" s
-errorNonFunction l f t        = mkErr l $ printf "Non-function type: %s :: %s " (ppshow f) (ppshow t)
+errorMissingAnnot l s         = mkErr l $ printf "Missing type annotation for %s." s
+errorNonFunction l f t        = mkErr l $ printf "Non-function type: %s :: %s." (ppshow f) (ppshow t)
 errorMissingReturn l          = mkErr l $ printf "Missing Return statement."
-errorMissingSpec l f          = mkErr l $ printf "Missing signature for '%s'" (ppshow f)
-errorVariadic l f             = mkErr l $ printf "Cannot call variadic on type '%s'" (ppshow f)
-errorConflateTypeMembers l es = mkErr l $ printf "Cannot conflate type members '%s'" (ppshow es)  
+errorMissingSpec l f          = mkErr l $ printf "Missing signature for '%s'." (ppshow f)
+errorVariadic l f             = mkErr l $ printf "Cannot call variadic on type '%s'." (ppshow f)
+errorVariadicNoArgs l f       = mkErr l $ printf "Cannot make variadic call '%s' without arguments." (ppshow f)
+errorConflateTypeMembers l es = mkErr l $ printf "Cannot conflate type members '%s'." (ppshow es)  

@@ -57,7 +57,7 @@ import           Control.Monad.Except               (catchError)
 import           Data.Function                      (on)
 import           Data.Generics
 import qualified Data.HashMap.Strict                as M
-import           Data.Maybe                         (catMaybes)
+import           Data.Maybe                         (catMaybes, isJust, maybeToList)
 import           Data.Monoid                  
 
 import           Language.Fixpoint.Errors
@@ -289,19 +289,23 @@ freshTVar l _ =  ((`TV` l). F.intSymbol (F.symbol "T")) <$> tick
 --------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------
-unifyTypesM :: PPR r => SourceSpan -> TCEnv r -> [RType r] -> [RType r] -> TCM r (RSubst r)
+unifyTypesM :: PPR r => SourceSpan -> TCEnv r -> FuncInputs (RType r) 
+                     -> FuncInputs (RType r) -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
 unifyTypesM l γ t1s t2s 
-  | length t1s /= length t2s = tcError $ errorArgMismatch l 
-  | otherwise = do  θ <- getSubst
-                    case unifys l γ θ t1s t2s of
-                      Left err -> tcError $ err 
-                      Right θ' -> setSubst θ' >> return θ' 
+  | sameLength t1s t2s = do θ <- getSubst
+                            case unifys l γ θ (toList t1s) (toList t2s) of
+                              Left err -> tcError $ err 
+                              Right θ' -> setSubst θ' >> return θ' 
+  | otherwise          = tcError $ errorArgMismatch l 
+  where 
+    sameLength (FI to ts) (FI to' ts') = isJust to == isJust to' && length ts == length ts'
+    toList (FI to ts)                  = maybeToList to ++ ts
 
 ----------------------------------------------------------------------------------
 unifyTypeM :: PPR r => SourceSpan -> TCEnv r -> RType r -> RType r -> TCM r (RSubst r)
 ----------------------------------------------------------------------------------
-unifyTypeM l γ t t' = unifyTypesM l γ [t] [t']
+unifyTypeM l γ t t' = unifyTypesM l γ (FI Nothing [t]) (FI Nothing [t'])
 
 
 --------------------------------------------------------------------------------

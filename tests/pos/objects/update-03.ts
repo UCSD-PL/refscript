@@ -1,5 +1,16 @@
-/*@ foo ::  ([#Mutable]{ x: { v: number | v = 10 } }) => { v: number | v = 20 } */ 
-function foo(o) :number{ 
-  o.x = 10;
-  return o.x + 10
+
+/*@ bar :: (x: { f: number} ) => void */
+function bar(a: any) {
+
+  a.f = 1;
+
+}
+
+/*@ foo :: (x: [#Mutable]{ f: { number | v > 0 } }) => void */
+function foo(x: any) {
+
+  bar(x);
+
+  assert(x.f > 0);
+
 }

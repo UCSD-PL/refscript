@@ -186,7 +186,7 @@ data CGState = CGS {
   -- 
   -- ^ type constructor invariants
   --
-  , invs     :: TConInv              
+  , invs     :: TConInv
   -- 
   -- ^ configuration options
   --
@@ -260,16 +260,14 @@ envAdds :: (PP [x], PP x, F.Symbolic x, IsLocated x)
         => String -> [(x, (RefType, Assignability))] -> CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 envAdds _ xts' g
-  = do xtas     <- zip xs . (`zip` as) <$> mapM addInvariant ts'
-       is       <- -- tracePP (msg ++ " -- adding " ++ ppshow (fst <$> xtas)) <$> 
-                     catMaybes <$> forM xtas addFixpointBind
+  = do xtas     <- zip xs . (`zip` as) <$> mapM (addInvariant g) ts'
+       is       <- catMaybes <$> forM xtas addFixpointBind
        _        <- forM xtas            $  \(x,(t,_)) -> addAnnot (srcPos x) x t
        return    $ g { cge_names        = E.envAdds xtas       $ cge_names g
                      , cge_fenv         = F.insertsIBindEnv is $ cge_fenv  g }
     where
        (xs,ys)    = unzip xts'
        (ts',as)   = unzip ys
-       -- adjust m (k,v) = M.adjust (v:) (F.symbol k) m
 
 instance PP F.IBindEnv where
   pp e = F.toFix e 
@@ -288,56 +286,32 @@ addFixpointBind (x, (t, _))
 
 
 ---------------------------------------------------------------------------------------
-addInvariant              :: RefType -> CGM RefType
+addInvariant :: CGEnv -> RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
-addInvariant t               = (ty . (`tx` t) . invs) <$> get
+addInvariant g t             = (keyIn . instanceof . typeof t . invs) <$> get
   where
-    tx i t@(TApp tc _ o)     = maybe t (strengthenOp t o . rTypeReft . val) $ M.lookup tc i
-    tx _ t                   = t 
+    -- | typeof 
+    typeof t@(TApp tc _ o) i = maybe t (strengthenOp t o . rTypeReft . val) $ M.lookup tc i
+    typeof  t              _ = t 
     strengthenOp t o r       | L.elem r (ofRef o) = t
     strengthenOp t _ r       | otherwise          = strengthen t r
     ofRef (F.Reft (s, as))   = (F.Reft . (s,) . single) <$> as
 
-    -- instanceof(v,"C")
-    ty t@(TApp (TRef c) _ _) = t `strengthen` reftIO t (name c)
-    ty t                     = t 
+    -- | { f: T } --> keyIn("f", v)
+    keyIn t                  = t `strengthen` keyReft (boundKeys g t) 
+
+    keyReft                  = F.Reft . (vv t,) . (F.RConc . F.PBexp . keyInExpr <$>) 
+    keyInExpr s              = F.EApp (F.dummyLoc (F.symbol "keyIn")) [F.expr (F.symbolText s), F.eVar $ vv t]
+
+    -- | instanceof(v,"C")
+    instanceof t@(TApp (TRef c) _ _) 
+                             = t `strengthen` reftIO t (name c)
+    instanceof t             = t 
     name (RN (QName _ _ s))  = s
     reftIO t c               = F.Reft (vv t, [refaIO t c])
-    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr   $ F.symbolText c]
+    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr $ F.symbolText c]
     vv                       = rTypeValueVar
     sym                      = F.dummyLoc $ F.symbol "instanceof"
-
-
--- ---------------------------------------------------------------------------------------
--- scrapeQualifiers   :: RefType -> CGM RefType 
--- ---------------------------------------------------------------------------------------
--- scrapeQualifiers t  = do 
---     modify $ \st -> st { quals = qs ++ quals st }
---     return t 
---    where
---      qs             = concatMap (refTypeQualifiers γ0) $ [t]
---      γ0             = E.envEmpty :: F.SEnv F.Sort 
--- 
--- 
--- refTypeQualifiers γ0 t = efoldRType rTypeSort addQs γ0 [] t 
---   where addQs γ t qs   = (mkQuals γ t) ++ qs
--- 
--- mkQuals γ t      = [ mkQual γ v so pa | let (F.RR so (F.Reft (v, ras))) = rTypeSortedReft t 
---                                       , F.RConc p                    <- ras                 
---                                       , pa                         <- atoms p
---                    ]
--- 
--- mkQual γ v so p = F.Q (F.symbol "Auto") [(v, so)] (F.subst θ p) l0
---   where 
---     θ             = F.mkSubst [(x, F.eVar y)   | (x, y) <- xys]
---     xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show (i :: Int)))) xs [0..] 
---     xs            = L.delete v $ orderedFreeVars γ p
---     l0            = F.dummyPos "RSC.CGMonad.mkQual"
--- 
--- orderedFreeVars γ = L.nub . filter (`F.memberSEnv` γ) . F.syms 
--- 
--- atoms (F.PAnd ps)   = concatMap atoms ps
--- atoms p           = [p]
 
 
 ---------------------------------------------------------------------------------------
@@ -391,7 +365,6 @@ envFindTyWithAsgn x = (eSngl <$>) . findT x
                                 Nothing -> Nothing
 
 
-
 ---------------------------------------------------------------------------------------
 safeEnvFindTy :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) 
               => x -> CGEnv -> CGM RefType 
@@ -408,12 +381,7 @@ safeEnvFindTyWithAsgn :: (IsLocated x, F.Symbolic x, F.Expression x, PP x)
 ---------------------------------------------------------------------------------------
 safeEnvFindTyWithAsgn x g = case envFindTyWithAsgn x g of
                         Just t  -> return t
-                        Nothing ->  cgError $ bugEnvFindTy l x 
-  where
-    l = srcPos x
-
-
-
+                        Nothing ->  cgError $ bugEnvFindTy (srcPos x) x
 
 ---------------------------------------------------------------------------------------
 envFindReturn :: CGEnv -> RefType 
@@ -518,7 +486,7 @@ freshenModuleDefM g (a, m)
 subType :: (IsLocated l) => l -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l err g t1 t2 =
-  do t1'    <- addInvariant t1  -- enhance LHS with invariants
+  do t1'    <- addInvariant g t1  -- enhance LHS with invariants
      let xs  =    [(symbolId l x,(t,a)) | (x, Just (t,a)) <- rNms t1' ++ rNms t2 ]
               ++  [(symbolId l x,(t,a)) | (x,      (t,a)) <- E.envToList $ cge_names g ]
      g'     <- envAdds "subtype" xs g
@@ -834,7 +802,7 @@ splitWithMut g i _ μ2 (_,t1) (μf2,t2)
 bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 ---------------------------------------------------------------------------------------
 -- NOTE: removing addInvariant from RHS
-bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant t1 <*> return t2
+bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant g t1 <*> return t2
 
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2

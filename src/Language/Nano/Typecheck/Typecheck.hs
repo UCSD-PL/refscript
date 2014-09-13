@@ -995,17 +995,6 @@ getLoopNextPhiType l γ γl x =
 
 forceCheck x γ = elem x $ fst <$> envToList (tce_names γ)
 
-
--- sanity l t@(TApp (TRef i) ts _) 
---   = do  δ       <- getDef 
---         case findSym i δ of
---           Just (ID _ _ αs _ _) | length αs == length ts -> return  $ t 
---           Just (ID _ n αs _ _) | otherwise              -> tcError $ errorTypeArgsNum l n (length αs) (length ts)
---           Nothing                                       -> error   $ "BUG: Id: " ++ ppshow i 
---                                                                   ++ " was not found in env at " 
---                                                                   ++ ppshow (srcPos l) 
--- sanity _ t = return t
-
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)
 -- End:

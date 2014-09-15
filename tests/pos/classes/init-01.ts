@@ -7,7 +7,7 @@ class PosPoint {
 
     /*@ new (a: number, b: number) => void */
     constructor(a: number, b: number) {
-        this.x = a - a; 
-        this.y = b - b;
+        if (a > 0 && b > 0) { this.x = a; this.y = b; }
+        else                { this.x = 0; this.y = 0; }
     }
 }

@@ -4,6 +4,7 @@
  *
  ************************************************************************/
 
+/*@ crash :: forall A. () => A */
 declare function crash<A>(): A; 
 
 /*@ assume :: (x:boolean) => {v:void | Prop x} */

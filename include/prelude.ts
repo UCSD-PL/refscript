@@ -6,6 +6,7 @@
 
 declare function crash<A>(): A; 
 
+/*@ assume :: (x:boolean) => {v:void | Prop x} */
 declare function assume(x: boolean): void;
 
 /*@ assert :: ({x:boolean|(Prop x)}) => void */

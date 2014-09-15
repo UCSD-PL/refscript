@@ -389,8 +389,9 @@ consVarDecl g v@(VarDecl l x (Just e)) =
     _       -> consAsgn g l x e
  
 consVarDecl g v@(VarDecl l x Nothing) =
-  case listToMaybe $ scrapeVarDecl v of 
-    Just ta -> Just <$> envAdds "consVarDecl" [(x, (ta, WriteGlobal))] g
+  case scrapeVarDecl v of
+    [ ]     -> consVarDecl g $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
+    [t]     -> Just <$> envAdds "consVarDecl" [(x, (t, WriteGlobal))] g
     _       -> cgError $ errorVarDeclAnnot (srcPos l) x
 
 

@@ -29,7 +29,7 @@ import           Data.Function                  (on)
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Nano.Env
-import           Language.Nano.Errors
+-- import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Types
@@ -39,7 +39,7 @@ import           Language.Nano.Typecheck.Subst
 import           Control.Applicative ((<$>))
 import qualified Data.List as L
 
-import           Debug.Trace
+-- import           Debug.Trace
 
 type PPR r = (PP r, F.Reftable r, Data r)
 
@@ -63,12 +63,7 @@ renameRelative mods base tgt = everywhereM $ mkM $ paths `extM` names
     paths r             = relativePath tgt <$> absolutePath mods base r
     names n             = relativeName tgt <$> absoluteName mods base n
 
-
---------------------------------------------------------------------------
-renameRelativeWithEnv :: (EnvLike r g, Data a, Data r) => g r -> AbsPath -> a -> Maybe a
---------------------------------------------------------------------------
-renameRelativeWithEnv γ = renameRelative (modules γ) (absPath γ)
-   
+ 
 
 -- | `relativePath base tgt` expresses path @tgt@ in relative terms of path
 --   @base@.
@@ -118,6 +113,9 @@ absoluteName env a r@(RN (QName _ _ s)) = g <$> absolutePath env a (f r)
   where
     f (RN (QName l p _)) = RP (QPath l p)
     g (AP (QPath l p))   = AN (QName l p s)
+
+
+absoluteNameInEnv env r = absoluteName (modules env) (absPath env) r
 
 
 -- | `resolveRelPath γ a r` returns the environment referenced by the relative 
@@ -231,15 +229,20 @@ flatten'' st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten st γ (d, tVar <$> vs)
 --    It is not intended to be called with mutability types.
 --    Types with zero type parameters (missing mutability field) are considered
 --    invalid.
+--
+--    FIXME: Return an `Either Error (RType r)` for better error reporting.
+--
 ---------------------------------------------------------------------------
 flattenType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
-flattenType γ (TApp (TRef x) ts r) = do 
-    es                <- {- tracePP ("flattening " ++ ppshow x) <$> -} flatten False γ . (, ts) 
-                     =<< {- tracePP ("resolving " ++ ppshow x) <$> -} resolveRelNameInEnv γ x
-    case ts of 
-      mut : _         -> Just $ TCons es (toType mut) r
-      _               -> Nothing
+-- -- This case is for Mutability types 
+flattenType γ (TApp (TRef x) [] r)
+  = do  es      <- flatten False γ . (, []) =<< resolveRelNameInEnv γ x
+        return   $ TCons es t_immutable r
+
+flattenType γ (TApp (TRef x) (mut:ts) r)
+  = do  es      <- flatten False γ . (,mut:ts) =<< resolveRelNameInEnv γ x
+        return   $ TCons es (toType mut) r
 
 flattenType γ (TClass x)             = do
     es                <- flatten' True γ =<< resolveRelNameInEnv γ x
@@ -250,8 +253,14 @@ flattenType γ (TClass x)             = do
 flattenType _ t = Just t
 
 
--- | `weaken γ a b ts` moves a name @a@ by moving it upwards in the class 
---   hierarchy. This function does the necessary type argument substitutions.
+-- | `weaken γ A B T..`: Given a relative type name @A@  distinguishes two
+--   cases:
+--
+--    * If A<V..> extends B<S..> (i.e. type B is an ancestor of A), then returns
+--      B applied to T.., substituted accordingly to match B's type arguments.
+--
+--    * If A </: B then return @Nothing@.
+--
 --
 --    FIXME: Works for classes, but interfaces could have multiple ancestors.
 --           What about common elements in parent class?
@@ -260,12 +269,13 @@ flattenType _ t = Just t
 weaken :: (PPR r, EnvLike r g) => g r -> RelName -> RelName -> [RType r] -> Maybe (SIfaceDef r)
 ---------------------------------------------------------------------------
 weaken γ pa pb ts
-  | pa == pb = (,ts) <$> resolveRelNameInEnv γ pa
+  | on (==) (absoluteNameInEnv γ) pa pb = (,ts) <$> resolveRelNameInEnv γ pa
   | otherwise
   = do  z <- resolveRelNameInEnv γ pa
         case z of
           ID _ _ vs (Just (p,ps)) _ -> weaken γ p pb $ apply (fromList $ zip vs ts) ps
           ID _ _ _  Nothing       _ -> Nothing
+
 
 -- FIXME: revisit these
 ---------------------------------------------------------------------------
@@ -309,7 +319,7 @@ instance F.Symbolic Constructor where
   symbol (TApp (TRef x) _ _)           = F.symbol x
   symbol (TClass _ )                   = F.symbol "Function"
   symbol (TModule _ )                  = F.symbol "Object"
-  symbol (TFun _ _ _ )                 = F.symbol "Function"
+  symbol (TFun _ _ _ _ )               = F.symbol "Function"
   symbol (TCons _ _ _)                 = F.symbol "Object"
   symbol (TAnd _)                      = F.symbol "Function"
   symbol _                             = F.symbol "ConstructorERROR"
@@ -323,7 +333,7 @@ getTypeof (TApp TBool _ _    )         = Just "boolean"
 getTypeof (TApp TString _ _  )         = Just "string"
 getTypeof (TApp TUndef _ _   )         = Just "undefined"
 getTypeof (TApp TNull  _ _   )         = Just "undefined"
-getTypeof (TFun _ _ _        )         = Just "function"
+getTypeof (TFun _ _ _ _      )         = Just "function"
 getTypeof (TCons _ _ _       )         = Just "object"
 getTypeof (TApp (TRef _) _ _ )         = Just "object"
 getTypeof (TClass _          )         = Just "function"

@@ -9,6 +9,7 @@ import           Control.Arrow                           ((***))
 import           Control.Applicative                     ((<$>), (<*>))
 import           Control.Monad
 import           Data.Data
+import           Data.Maybe                              (catMaybes) 
 import qualified Data.List                               as L
 import qualified Data.Foldable                           as FO
 import qualified Data.HashMap.Strict                     as M
@@ -79,8 +80,7 @@ variablesInScope :: (Data a, IsLocated a)
 ---------------------------------------------------------------------------------------
 variablesInScope gs fs = (ros, wgs, wls)
   where
-    vs            = {-tracePP ("all hoisted vars: " ++ ppshow n) $-} hoistVarDecls fs
-    -- vs            = hoistVarDecls fs
+    vs            = hoistVarDecls fs
     (wgs, wls)    = mapPair msrc $ L.partition (\s -> srcPos s `S.member` gs) vs 
     ros           = msrc $ hoistReadOnly fs
     msrc          = (fmap srcPos <$>)
@@ -102,7 +102,6 @@ ssaFun l _ xs body
     where
        arg    = argId l
        ret    = returnId l
-       eIds θ = arg : [x | x <- envIds θ, F.symbol x /= F.symbol arg]
 
 -------------------------------------------------------------------------------------
 ssaSeq :: (a -> SSAM r (Bool, a)) -> [a] -> SSAM r (Bool, [a])
@@ -114,7 +113,6 @@ ssaSeq f            = go True
     go True  (x:xs) = do (b , y)  <- f x
                          (b', ys) <- go b xs
                          return      (b', y:ys)
-
 
 -------------------------------------------------------------------------------------
 ssaStmts :: [Statement SourceSpan] -> SSAM r (Bool, [Statement SourceSpan])
@@ -201,13 +199,43 @@ ssaStmt (ForStmt l v cOpt (Just (UnaryAssignExpr l1 o lv)) b) =
     op PostfixDec  = OpAssignSub
 
 ssaStmt (ForStmt l (VarInit vds) cOpt (Just e@(AssignExpr l1 _ _ _)) b) =
-    ssaForLoop l vds cOpt (ExprStmt l1 (expand e)) b
+    ssaForLoop l vds cOpt (Just $ ExprStmt l1 (expand e)) b
   where
     expand (AssignExpr l1 o lv e) = AssignExpr l1 OpAssign lv (infOp o l1 lv e)
     expand _ = errorstar "unimplemented: expand assignExpr"
 
 ssaStmt (ForStmt l (VarInit vds) cOpt (Just i) b) =
-    ssaForLoop l vds cOpt (ExprStmt (getAnnotation i) i) b
+    ssaForLoop l vds cOpt (Just $ ExprStmt (getAnnotation i) i) b
+
+ssaStmt (ForStmt l (VarInit vds) cOpt Nothing  b) =
+    ssaForLoop l vds cOpt Nothing b
+
+-- | for (var k in obj) { <body> } 
+-- 
+--      ==>
+-- 
+--   var _keys = builtin_BIForInKeys(obj); 
+--               // Array<Imm, { v: string | (keyIn(v,obj) && enumProp(v,obj)) }>
+--
+--   for (var _i = 0; _i < _keys.length; _i++) {
+--     var k = _keys[_i];
+--
+--     <body>
+--
+--   }
+
+ssaStmt (ForInStmt l (ForInVar v) e b) =
+    ssaStmt $ BlockStmt l [ initArr, forStmt ]
+  where
+    biForInKeys = fmap srcPos $ builtinOpId BIForInKeys
+    initArr     = VarDeclStmt l [ VarDecl l keysArr (Just $ CallExpr l (VarRef l biForInKeys) [e]) ]
+    initIdx     = VarDecl l keysIdx (Just $ IntLit l 0)
+    condition   = Just $ InfixExpr l OpLT (VarRef l keysIdx) (DotRef l (VarRef l keysArr) (Id l "length")) 
+    increment   = Just $ UnaryAssignExpr l PostfixInc (LVar l (unId keysIdx))   
+    keysArr     = mkKeysId v 
+    keysIdx     = mkKeysIdxId v
+    accessKeys  = VarDeclStmt l [VarDecl l v (Just $ BracketRef l (VarRef l keysArr) (VarRef l keysIdx))]
+    forStmt     = ForStmt l (VarInit [initIdx]) condition increment (BlockStmt l [accessKeys, b])
 
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
@@ -560,7 +588,9 @@ ssaVarRef l x
          ReadOnly    -> maybe e  (VarRef l) <$> findSsaEnv x
          WriteLocal  -> findSsaEnv x >>= \case
              Just t  -> return   $ VarRef l t
-             Nothing -> ssaError $ errorSSAUnboundId (srcPos x) x
+             Nothing -> return   $ VarRef l x -- ssaError $ errorSSAUnboundId (srcPos x) x
+         ImportDecl  -> ssaError $ errorSSAUnboundId (srcPos x) x
+         ReturnVar   -> ssaError $ errorSSAUnboundId (srcPos x) x
     where
        e = VarRef l x
  
@@ -617,13 +647,17 @@ getLoopPhis b = do
     meet x x' = if x == x' then Right x else Left (x, x')
 
 
-ssaForLoop l vds cOpt incExp b =
+-------------------------------------------------------------------------------------
+ssaForLoop :: SourceSpan -> [VarDecl SourceSpan] -> Maybe (Expression SourceSpan) 
+  -> Maybe (Statement SourceSpan) -> Statement SourceSpan -> SSAM r (Bool, Statement SourceSpan)
+-------------------------------------------------------------------------------------
+ssaForLoop l vds cOpt incExpOpt b =
   do
     (b, sts') <- ssaStmts sts
     return     $ (b, BlockStmt l sts')
   where
     sts        = [VarDeclStmt l vds, WhileStmt l c bd]
-    bd         = BlockStmt bl [b, incExp]
+    bd         = BlockStmt bl $ [b] ++ catMaybes [incExpOpt]
     bl         = getAnnotation b
     c          = maybe (BoolLit l True) id cOpt
 

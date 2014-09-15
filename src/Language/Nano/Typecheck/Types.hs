@@ -683,6 +683,7 @@ isTFun (TAll _ t)           = isTFun t
 isTFun _                    = False
 
 isArr (TApp (TRef x) _ _ )  = F.symbol x == F.symbol "Array"
+isArr _                     = False
 
 
 orNull t@(TApp TUn ts _)    | any isNull ts = t
@@ -876,7 +877,4 @@ prefixOpId o            = errorstar $ "prefixOpId: Cannot handle: " ++ ppshow o
 
 mkId            = Id (initialPos "") 
 builtinId       = mkId . ("builtin_" ++)
-
-
-
 

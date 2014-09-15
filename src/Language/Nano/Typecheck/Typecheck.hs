@@ -491,7 +491,8 @@ tcVarDecl γ v@(VarDecl l x (Just e)) =
 
 tcVarDecl γ v@(VarDecl l x Nothing) = 
   case scrapeVarDecl v of
-    [t]          -> return (v, Just $ tcEnvAdds [(x, (t, WriteGlobal))] γ)
+    [ ]          -> tcVarDecl γ $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
+    [t]          -> return (v, Just $ tcEnvAdds [(x, (t, WriteGlobal))] γ)    
     _            -> tcError $ errorVarDeclAnnot (srcPos l) x
 
 -------------------------------------------------------------------------------

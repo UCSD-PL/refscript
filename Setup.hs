@@ -24,11 +24,6 @@ copyExts _ _ pkg lbi
        -- Compile and copy TypeScript executables
        executeShellCommand $ "chmod a+x " ++ tscR ++ "/bin/tsc"
        mapM_ executeShellCommand (map cpFile $ tscBins tscR)
-       -- Compile and copy TypeScript's prelude
-       -- NOT DOING THIS ANYMORE
-       -- prelude is compiled as part of the main file!
-       -- executeShellCommand $ "tsc --refscript --noLib " ++ preludeSrc ++ " > /dev/null"
-       -- executeShellCommand $ "cp " ++ preludeTgt ++ " " ++ dataDir ++ preludeTgt
   where 
     allDirs     = absoluteInstallDirs pkg lbi NoCopyDest
     withSpaces  = concatMap $ (++) " "
@@ -38,14 +33,7 @@ copyExts _ _ pkg lbi
     cpFile f    = withSpaces ["cp", f, binDir]
     lTscRoot    = "ext/tsc-bin"
     tscBins r   = map (r ++) ["/bin/tsc",
-                              "/built/local/tsc.js",
-                              "/built/local/lib.d.ts",
-                              "/typings/jquery.d.ts",
-                              "/typings/winjs.d.ts",
-                              "/typings/winrt.d.ts" ]
-
-    -- preludeSrc  = "include/prelude.ts"
-    -- preludeTgt  = "include/prelude.json"
+                              "/built/local/tsc.js"]
     flags       = configConfigurationsFlags $ configFlags lbi
     z3mem       = fromJust $ lookup (FlagName "z3mem") flags
 

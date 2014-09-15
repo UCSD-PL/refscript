@@ -10237,7 +10237,7 @@ var TypeScript;
         };
 
         ModuleDeclarationSyntax.prototype.toRsStmt = function (helper) {
-            var originalAnnots = tokenAnnots(this.moduleKeyword);
+            var originalAnnots = tokenAnnots(this);
 
             if (this.modifiers.toArray().some(function (m) {
                 return m.tokenKind === 47 /* ExportKeyword */;
@@ -10617,7 +10617,7 @@ var TypeScript;
         };
 
         VariableDeclarationSyntax.prototype.toRsStmt = function (helper, parentAnns) {
-            var anns = tokenAnnots(this.varKeyword, 4 /* OtherContext */);
+            var anns = tokenAnnots(this.firstToken(), 4 /* OtherContext */);
 
             var bindAnns = parentAnns.concat(anns).filter(function (a) {
                 return a.kind() === 1 /* RawBind */;
@@ -13010,6 +13010,9 @@ var TypeScript;
 
                 case 200 /* InstanceOfExpression */:
                     return new TypeScript.RsInfixExpr(helper.getSourceSpan(this), tokenAnnots(this), new TypeScript.RsInfixOp("instanceof"), this.left.toRsExp(helper), this.right.toRsExp(helper));
+
+                case 201 /* InExpression */:
+                    return new TypeScript.RsInfixExpr(helper.getSourceSpan(this), tokenAnnots(this), new TypeScript.RsInfixOp("in"), this.left.toRsExp(helper), this.right.toRsExp(helper));
 
                 default:
                     helper.postDiagnostic(this, TypeScript.DiagnosticCode.Cannot_call_toRsExp_on_BinaryExpression_with_SyntaxKind_0, [TypeScript.SyntaxKind[this.kind()]]);
@@ -15757,7 +15760,7 @@ var TypeScript;
                 helper.postDiagnostic(this, TypeScript.DiagnosticCode.Variable_declarations_are_only_supported_in_the_first_part_of_the_loop_in_0, [this.initializer.fullText()]);
             }
             var anns = tokenAnnots(this.forKeyword);
-            return new TypeScript.RsForStmt(helper.getSourceSpan(this), tokenAnnots(this), this.variableDeclaration.toRsForInit(helper, anns), this.condition.toRsExp(helper), this.incrementor.toRsExp(helper), this.statement.toRsStmt(helper));
+            return new TypeScript.RsForStmt(helper.getSourceSpan(this), tokenAnnots(this), this.variableDeclaration.toRsForInit(helper, anns), this.condition ? this.condition.toRsExp(helper) : null, this.incrementor ? this.incrementor.toRsExp(helper) : null, this.statement.toRsStmt(helper));
         };
         return ForStatementSyntax;
     })(TypeScript.SyntaxNode);
@@ -16401,9 +16404,9 @@ var TypeScript;
         };
 
         CastExpressionSyntax.prototype.toRsExp = function (helper) {
+            var sourceSpan = helper.getSourceSpan(this);
             var eltSymbol = helper.getSymbolForAST(this.type);
             var castType = eltSymbol.type.toRsType();
-            var sourceSpan = helper.getSourceSpan(this);
             var castAnn = new TypeScript.RsBindAnnotation(sourceSpan, 13 /* RawCast */, castType.toString());
             return new TypeScript.RsCast(helper.getSourceSpan(this), [castAnn], this.expression.toRsExp(helper));
         };
@@ -16815,13 +16818,6 @@ var TypeScript;
             });
 
             if (funcAnns.length === 0) {
-                var type = helper.getDeclForAST(this).getSymbol().type.toRsType();
-                if (type instanceof TypeScript.TError) {
-                    var tError = type;
-                    helper.postDiagnostic(this, TypeScript.DiagnosticCode.Cannot_translate_type_0_into_RefScript_type, [tError.message()]);
-                }
-                var typeStr = type.toString();
-                anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 2 /* RawFunc */, typeStr));
             } else if (funcAnns.length !== 1) {
                 helper.postDiagnostic(this, TypeScript.DiagnosticCode.Anonymous_function_cannot_have_more_than_one_type_annotations);
             }
@@ -36084,7 +36080,7 @@ var TypeScript;
             this.noImplicitAny = false;
             this.noLib = false;
             this.refScript = false;
-            this.refscriptLib = "";
+            this.refscriptLibs = [];
             this.codeGenTarget = 0 /* EcmaScript3 */;
             this.moduleGenTarget = 0 /* Unspecified */;
             this.outFileOption = "";
@@ -36103,7 +36099,7 @@ var TypeScript;
     TypeScript.CompilationSettings = CompilationSettings;
 
     var ImmutableCompilationSettings = (function () {
-        function ImmutableCompilationSettings(propagateEnumConstants, removeComments, watch, noResolve, allowAutomaticSemicolonInsertion, noImplicitAny, noLib, refScript, refScriptLib, codeGenTarget, moduleGenTarget, outFileOption, outDirOption, mapSourceFiles, mapRoot, sourceRoot, generateDeclarationFiles, useCaseSensitiveFileResolution, gatherDiagnostics, codepage, createFileLog) {
+        function ImmutableCompilationSettings(propagateEnumConstants, removeComments, watch, noResolve, allowAutomaticSemicolonInsertion, noImplicitAny, noLib, refScript, refScriptLibs, codeGenTarget, moduleGenTarget, outFileOption, outDirOption, mapSourceFiles, mapRoot, sourceRoot, generateDeclarationFiles, useCaseSensitiveFileResolution, gatherDiagnostics, codepage, createFileLog) {
             this._propagateEnumConstants = propagateEnumConstants;
             this._removeComments = removeComments;
             this._watch = watch;
@@ -36113,7 +36109,7 @@ var TypeScript;
             this._noLib = noLib;
 
             this._refScript = refScript;
-            this._refScriptLib = refScriptLib;
+            this._refScriptLibs = refScriptLibs;
 
             this._codeGenTarget = codeGenTarget;
             this._moduleGenTarget = moduleGenTarget;
@@ -36153,8 +36149,8 @@ var TypeScript;
         ImmutableCompilationSettings.prototype.refScript = function () {
             return this._refScript;
         };
-        ImmutableCompilationSettings.prototype.refScriptLib = function () {
-            return this._refScriptLib;
+        ImmutableCompilationSettings.prototype.refScriptLibs = function () {
+            return this._refScriptLibs;
         };
 
         ImmutableCompilationSettings.prototype.codeGenTarget = function () {
@@ -36203,7 +36199,7 @@ var TypeScript;
         };
 
         ImmutableCompilationSettings.fromCompilationSettings = function (settings) {
-            return new ImmutableCompilationSettings(settings.propagateEnumConstants, settings.removeComments, settings.watch, settings.noResolve, settings.allowAutomaticSemicolonInsertion, settings.noImplicitAny, settings.noLib, settings.refScript, settings.refscriptLib, settings.codeGenTarget, settings.moduleGenTarget, settings.outFileOption, settings.outDirOption, settings.mapSourceFiles, settings.mapRoot, settings.sourceRoot, settings.generateDeclarationFiles, settings.useCaseSensitiveFileResolution, settings.gatherDiagnostics, settings.codepage, settings.createFileLog);
+            return new ImmutableCompilationSettings(settings.propagateEnumConstants, settings.removeComments, settings.watch, settings.noResolve, settings.allowAutomaticSemicolonInsertion, settings.noImplicitAny, settings.noLib, settings.refScript, settings.refscriptLibs, settings.codeGenTarget, settings.moduleGenTarget, settings.outFileOption, settings.outDirOption, settings.mapSourceFiles, settings.mapRoot, settings.sourceRoot, settings.generateDeclarationFiles, settings.useCaseSensitiveFileResolution, settings.gatherDiagnostics, settings.codepage, settings.createFileLog);
         };
 
         ImmutableCompilationSettings.prototype.toCompilationSettings = function () {
@@ -56773,7 +56769,7 @@ var TypeScript;
         };
 
         TypeScriptCompiler.prototype._shouldEmitJSON = function (document) {
-            return !document.isLibDTSFile();
+            return true;
         };
 
         TypeScriptCompiler.prototype._shouldEmitDeclarations = function (document) {
@@ -57731,18 +57727,16 @@ var TypeScript;
                 var document = this.compiler.getDocument(fileName);
 
                 if (this.compiler.compilationSettings().refScript()) {
-                    if (this.compiler._shouldEmit(document)) {
-                        var ast = document.sourceUnit();
-                        var helper = new TypeScript.RsHelper(this.compiler.semanticInfoChain, document);
-                        var diagnostics = helper.diagnostics();
-                        var rsAST = ast.toRsAST(helper);
-                        this._current = CompileResult.fromDiagnostics(diagnostics);
+                    var ast = document.sourceUnit();
+                    var helper = new TypeScript.RsHelper(this.compiler.semanticInfoChain, document);
+                    var diagnostics = helper.diagnostics();
+                    var rsAST = ast.toRsAST(helper);
+                    this._current = CompileResult.fromDiagnostics(diagnostics);
 
-                        if (diagnostics.length === 0) {
-                            this._sharedJSONEmitter = this.compiler._emitJSON(document, rsAST, this._emitOptions, function (outputFiles) {
-                                _this._current = CompileResult.fromOutputFiles(outputFiles);
-                            }, this._sharedJSONEmitter);
-                        }
+                    if (diagnostics.length === 0) {
+                        this._sharedJSONEmitter = this.compiler._emitJSON(document, rsAST, this._emitOptions, function (outputFiles) {
+                            _this._current = CompileResult.fromOutputFiles(outputFiles);
+                        }, this._sharedJSONEmitter);
                     }
                 } else {
                     this._sharedEmitter = this.compiler._emitDocument(document, this._emitOptions, function (outputFiles) {
@@ -60343,9 +60337,9 @@ var TypeScript;
                     [this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
                         })],
-                    (this.init) ? this.init.toObject() : null,
+                    this.init.toObject(),
                     (this.test) ? this.test.toObject() : null,
-                    this.inc.toObject(),
+                    (this.inc) ? this.inc.toObject() : null,
                     this.body.toObject()]
             };
         };
@@ -61876,15 +61870,16 @@ var TypeScript;
             var defaultLibStart = new Date().getTime();
 
             if (this.compilationSettings.refScript()) {
-                var refscriptLib = this.compilationSettings.refScriptLib();
-                if (refscriptLib && refscriptLib !== "") {
-                    var libraryResolvedFile = {
-                        path: this.resolvePath(refscriptLib),
-                        referencedFiles: [],
-                        importedFiles: []
-                    };
+                var refScriptLibs = this.compilationSettings.refScriptLibs();
+                if (refScriptLibs) {
+                    var libraryResolvedFiles = refScriptLibs.map(function (refScriptLib) {
+                        return {
+                            path: _this.resolvePath(refScriptLib),
+                            referencedFiles: [],
+                            importedFiles: [] };
+                    });
 
-                    resolvedFiles = [libraryResolvedFile].concat(resolvedFiles);
+                    resolvedFiles = libraryResolvedFiles.concat(resolvedFiles);
                 }
             } else {
                 if (includeDefaultLibrary) {
@@ -61978,7 +61973,7 @@ var TypeScript;
                 },
                 type: TypeScript.DiagnosticCode.LOCATION,
                 set: function (str) {
-                    mutableSettings.refscriptLib = str;
+                    mutableSettings.refscriptLibs.push(str);
                 }
             });
 

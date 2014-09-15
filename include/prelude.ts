@@ -1,8 +1,8 @@
 /*************************************************************************
-        
-  | General purpose auxiliary definitions 
-
-*************************************************************************/
+ *        
+ *  GENERAL PURPOSE AUXILIARY DEFINITIONS 
+ *
+ ************************************************************************/
 
 declare function crash<A>(): A; 
 
@@ -25,29 +25,29 @@ interface Pair<A,B> { x: A; y: B; }
 
 
 /*************************************************************************
-        
-  | Types for Builtin Operators 
-
-*************************************************************************/
+ *        
+ *  TYPES FOR BUILTIN OPERATORS 
+ *
+ ************************************************************************/
 
 /*@ builtin_BIBracketRef ::
-    /\ forall A. (arr: #Array[#Immutable,A], {idx:number | (0 <= idx && idx < (len arr))}) => A
-    /\ forall A. (arr: #Array[#Mutable, A ], idx:number) => A?
-    /\ forall A. ([#ReadOnly]{[y: string]: A }, x:string) => A
-*/
+    /\ forall A. (arr: #Array[#Immutable,A], {idx: number | (0 <= idx && idx < (len arr))}) => A
+    /\ forall A. (arr: #Array[#Mutable, A ], idx: number) => A + undefined
+    /\ forall A. (o: {[y: string]: A }, x: { string | keyIn(x,o) }) => A
+ */
 declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
 
 /*@ builtin_BIBracketAssign :: 
     /\ forall A. (arr: #Array[#Immutable, A], {idx:number | (0 <= idx && idx < (len arr))}, val: A) => void
     /\ forall A. (arr: #Array[#ReadOnly , A], idx:number, val: A) => void
     /\ forall A M. ([#Mutable]{[y: string]: A }, x:string, val: A) => void
-*/
+ */
 declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
 
 /*  builtin_BISetProp ::
     /\ forall A M. ([M] { f : [#Mutable] A }, A) => A
     /\ forall A M. ([#Mutable] { f : [M] A }, A) => A
-*/
+ */
 
 /*@ builtin_BISetProp :: 
     forall A M. ([M] { f : [#Mutable] A }, A) => A 
@@ -56,41 +56,36 @@ declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
 /*@ builtin_BIArrayLit :: 
     forall M A. (A) => {v: #Array[M,A] | [ (len v) = builtin_BINumArgs; not (null v) ] } 
-*/
+ */
 declare function builtin_BIArrayLit<A>(a: A): A[];
-
-/*@ builtin_BIUndefined ::
-    forall A. {A | false} 
-*/
-declare var builtin_BIUndefined: any;
 
 /*@ builtin_BICondExpr :: 
     forall A. (c: boolean, x: A, y: A) => { v:A | (if (Prop(c)) then (v = x) else (v = y)) }
-*/
+ */
 declare function builtin_BICondExpr<A>(c: boolean, x: A, y: A): A;
 
 /*@ builtin_OpLT :: 
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
     /\ forall T. (x:T, y:T) => boolean
-*/
+ */
 declare function builtin_OpLT(a: any, b: any): boolean;
 
 /*@ builtin_OpLEq :: 
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <= y)) }
     /\ forall T. (x:T, y:T) => boolean
-*/
+ */
 declare function builtin_OpLEq(a: any, b: any): boolean;
 
 /*@ builtin_OpGT :: 
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >  y)) }
     /\ forall T. (x:T, y:T) => boolean
-*/
+ */
 declare function builtin_OpGT(a: any, b: any): boolean;
 
 /*@ builtin_OpGEq ::
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x >= y)) }
     /\ forall T. (x:T, y:T) => boolean
-*/
+ */
 declare function builtin_OpGEq(a: any, b: any): boolean;
 
 /*@ builtin_OpAdd :: 
@@ -122,72 +117,121 @@ declare function builtin_OpMod(a: number, b: number): number;
 
 /*@ builtin_PrefixMinus :: 
     ({x:number  | true}) => {v:number  | v ~~ (0 - x)} 
-*/
+ */
 declare function builtin_PrefixMinus(a: number): number;
 
 /*  builtin_OpEq :: 
     forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
-*/
+ */
 // declare function builtin_OpEq<A,B>(a: A, b: B): boolean;
 
 /*  builtin_OpSEq :: 
     /\ forall A  . (x:A, y:A) => {v:boolean | ((Prop v) <=> (x = y)) }
     /\ forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
-*/
+ */
 /*@ builtin_OpSEq :: 
     forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x ~~ y)) } 
-*/
+ */
 declare function builtin_OpSEq<A,B>(x: A, y: B): boolean;
 
 /*@ builtin_OpNEq :: 
-    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) } 
-*/
+    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (not (x ~~ y))) } 
+ */
 declare function builtin_OpNEq<A,B>(x: A, y: B): boolean;
 
 /*@ builtin_OpSNEq :: 
-    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (x != y)) } 
-*/
+    forall A B. (x:A, y:B) => {v:boolean | ((Prop v) <=> (not (x ~~ y))) } 
+ */
 declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
 // FIXME: the two version of inequality should not be the same...
 
 /*@ builtin_OpLAnd :: 
     /\ forall A. (x:A, y:A) => { v:A | (if (Prop(x)) then (v = y) else (v = x)) }
     /\ forall A B. (x:A, y:B) => { v:top | (Prop(v) <=> (Prop(x) && Prop(y))) }
-*/
+ */
 declare function builtin_OpLAnd(x: any, y: any): any;
       
 /*@ builtin_OpLOr :: 
     /\ forall A. (x:A, y:A) => { v:A | (if (FLS(x)) then (v = y) else (v = x)) } 
     /\ forall A B. (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) || Prop(y))) }
-*/
+ */
 declare function builtin_OpLOr(x: any, y: any): any;
 
 /*@ builtin_PrefixLNot :: 
     forall A. (x: A) => {v:boolean | (((Prop v) <=> not Prop(x)) && ((Prop v) <=> FLS(x)))} 
-*/
+ */
 declare function builtin_PrefixLNot<A>(x: A): boolean;
 
 /*@ builtin_PrefixBNot ::
     (x: number) => {v:number | v = 0 - (x + 1) } 
-*/
+ */
 declare function builtin_PrefixBNot(n: number): number;
+
+
+/**
+ *
+ *    for ... in ... 
+ *
+ *    https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for...in
+ *
+ *    A for...in loop only iterates over enumerable properties. Objects created from
+ *    built–in constructors like Array and Object have inherited non–enumerable
+ *    properties from Object.prototype and String.prototype, such as String's
+ *    indexOf() method or Object's toString() method. The loop will iterate over all
+ *    enumerable properties of the object itself and those the object inherits from
+ *    its constructor's prototype (properties closer to the object in the prototype
+ *    chain override prototypes' properties).
+ *
+ */
+
+/*@ builtin_BIForInKeys :: 
+    /\ forall A . (a: #Array[#Immutable, A]) => #Array[#Immutable, { v: number | (0 <= v && v < (len a)) }]
+    /\ (o: [#Immutable]{ }) => #Array[#Immutable, { v: string | (keyIn(v,o) && enumProp(v,o)) }]
+ */
+declare function builtin_BIForInKeys(obj: Object): string[];
 
 
 
 /*************************************************************************
-  
-  | Ambient Definitions 
+ *
+ *    OBJECT RELATED MEASURES
+ *
+ ************************************************************************/
 
-  Taken from here: 
+/**
+ *
+ *    keyIn 
+ *
+ *    This property is true if the first string argument is an existing field 
+ *    of either the object referenced in the second or the objects it inherits 
+ *    from through its prototype chain.
+ *
+ */
 
-  http://typescript.codeplex.com/sourcecontrol/latest#typings/core.d.ts
+/*@ measure keyIn      :: forall A . (string, A) => bool */
 
-**************************************************************************/
+/*@ measure enumProp   :: forall A . (string, A) => bool */
 
 
-/*** Object **************************************************************/
 
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L80
+/*************************************************************************
+ *
+ *    AMBIENT DEFINITIONS 
+ *
+ *    Taken from here: 
+ *
+ *    http://typescript.codeplex.com/sourcecontrol/latest#typings/core.d.ts
+ *
+ *************************************************************************/
+
+
+/**
+ *  OBJECT 
+ *
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L80
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L115
+ *
+ */
 
 interface Object {
     // TODO
@@ -223,7 +267,6 @@ interface Object {
 }
 
 
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L115
 
 declare var Object: {
     new <A>(value: A): Object;						// new (value?: any): Object;
@@ -261,9 +304,20 @@ declare var Object: {
 
 
 
-/*** Number **************************************************************/
-
-// FIXME:	NaN =/= NaN
+/**
+ *  NUMBER 
+ *
+ * 
+ *  TODO: 
+ *
+ *    - NaN =/= NaN
+ *
+ *    - all optional arguments have been changed to necessary
+ *
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L430
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L457
+ *
+ */
 
 /*@ measure numeric_nan               :: number */
 /*@ measure numeric_max_value         :: number */
@@ -271,13 +325,10 @@ declare var Object: {
 /*@ measure numeric_negative_infinity :: number */
 /*@ measure numeric_positive_infinity :: number */
 
-
 /*@  NaN :: { number | v = numeric_nan } */
 declare var NaN: number;
 
 
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L430
-// TODO: all optional arguments have been changed to necessary
 interface Number {
     toString(radix/*?*/: number): string;
 
@@ -289,7 +340,6 @@ interface Number {
 }
 
 
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L457
 
 declare var Number: {
     new (value: any): Number;						// new (value?: any): Number;
@@ -314,9 +364,12 @@ declare var Number: {
 
 
 
-/*** Math ****************************************************************/
-
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L487
+/**
+ *  MATH
+ *
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L487
+ *
+ */
 
 interface Math {
     E: number;
@@ -350,11 +403,12 @@ interface Math {
 declare var Math: Math;
 
 
-
-/*** String **************************************************************/
-
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L259
-
+/**
+ *  STRING
+ *  
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L259
+ *
+ */
 
 interface String {
     toString(): string;
@@ -393,7 +447,10 @@ interface String {
 
     // split(separator: RegExp, limit/*?*/: number): string[];
 
-    substring(start: number, end/*?*/: number): string;
+    /*@ substring : /\ (start: number) => string
+                    /\ (start: number, end: number) => string
+     */
+    substring(start: number, end?: number): string;
 
     toLowerCase(): string;
 
@@ -422,14 +479,19 @@ declare var String: {
 
 
 
-/*** Array ***************************************************************/
+/**
+ *  ARRAY 
+ *  
+ *  https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L966
+ *
+ *    TODO: Fix mutabilities
+ *    consult: https://github.com/UCSD-PL/RefScript/blob/develop/include/prelude.ts
+ *
+ */
+ 
 
 /*@ measure len      :: forall M A . (#Array[M,A]) => number             */
 
-// https://github.com/Microsoft/TypeScript/blob/master/src/lib/core.d.ts#L966
-
-// TODO: Fix mutabilities
-// consult: https://github.com/UCSD-PL/RefScript/blob/develop/include/prelude.ts
 
 /*@ interface Array<M, T> */
 interface Array<T> {
@@ -523,21 +585,65 @@ declare var Array: {
 
 
 interface IArguments {
-  
     [index: number]: any;
+    length: number;
+    // callee: Function;
+}
 
+
+/*** Function ************************************************************/
+
+interface Function {
+    /**
+      * Calls the function, substituting the specified object for the this 
+      * value of the function, and the specified array for the arguments of the function.
+      * @param thisArg The object to be used as the this object.
+      * @param argArray A set of arguments to be passed to the function.
+      */
+    apply(thisArg: any, argArray?: any): any;
+
+    /**
+      * Calls a method of an object, substituting another object for the current object.
+      * @param thisArg The object to be used as the current object.
+      * @param argArray A list of arguments to be passed to the method.
+      */
+    call(thisArg: any, ...argArray: any[]): any;
+
+    /**
+      * For a given function, creates a bound function that has the same body 
+      * as the original function. 
+      * The this object of the bound function is associated with the specified 
+      * object, and has the specified initial parameters.
+      * @param thisArg An object to which the this keyword can refer inside the new function.
+      * @param argArray A list of arguments to be passed to the new function.
+      */
+    bind(thisArg: any, ...argArray: any[]): any;
+
+    prototype: any;
     length: number;
 
-    // callee: Function;
+    // Non-standard extensions
+    arguments: any;
+    caller: Function;
+}
+
+declare var Function: {
+    /** 
+      * Creates a new function.
+      * @param args A list of arguments the function accepts.
+      */
+    //new (...args: string[]): Function;
+    //(...args: string[]): Function;
+    prototype: Function;
 }
 
 
 
 /*************************************************************************
-        
-  | Run-Time Tags 
-
-*************************************************************************/
+ *       
+ *          RUN-TIME TAGS 
+ * 
+ ************************************************************************/
 
 /*@ measure ttag :: forall A . (A) => string */
 
@@ -583,12 +689,27 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
 declare function builtin_OpInstanceof<A>(x: A, s: string): boolean; 
 
 
+/**
+ *
+ *    ... `in` ... 
+ *
+ *   https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/in 
+ * 
+ *   The in operator returns true for properties in the prototype chain.
+ *
+ */
+
+/*@ builtin_OpIn :: (s: string, o: { }) => { v: boolean | keyIn(v,o) } */
+declare function builtin_OpIn(s: string, obj: Object): boolean;
+
+
+
 
 /*************************************************************************
-        
-  | Pre-Loaded Qualifiers 
-
-*************************************************************************/
+ *        
+ *        PRE-LOADED QUALIFIERS 
+ * 
+ ************************************************************************/
 
 /*@ qualif Bot(v:a): 0 = 1 */
 /*@ qualif Bot(v:obj): 0 = 1 */
@@ -626,10 +747,10 @@ declare function builtin_OpInstanceof<A>(x: A, s: string): boolean;
 
 
 /*************************************************************************
-        
-  | Error Handling
-
-*************************************************************************/
+ *        
+ *        ERROR HANDLING
+ *
+ ************************************************************************/
 
 // NOTE: types that are defined in lib.d.ts need to be in comment to pass
 // through the TS compilation phase.
@@ -676,14 +797,13 @@ declare var Error: {
 //}
 
 
-
 /*************************************************************************
-        
-  | Mutability 
-
-  Do not include type parameters here 
-
-*************************************************************************/
+ *
+ *      MUTABILITY 
+ *    
+ *      Do not include type parameters here 
+ *    
+ ************************************************************************/
 
 /*@ interface ReadOnly */
 interface ReadOnly { }
@@ -693,8 +813,8 @@ interface Immutable extends ReadOnly {
     immutable__: void;
 } 
 
-/*@ interface Mutable extends #ReadOnly */
-interface Mutable extends ReadOnly {
+/*@ interface Mutable extends #AssignsFields */
+interface Mutable extends AssignsFields {
     mutable__: void;
 } 
 
@@ -702,4 +822,11 @@ interface Mutable extends ReadOnly {
 interface AnyMutability extends ReadOnly {
     defaultMut__: void;
 } 
+
+/*@ interface AssignsFields extends #ReadOnly */
+interface AssignsFields extends ReadOnly {
+    defaultMut__: void;
+} 
+
+
 

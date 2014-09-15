@@ -35,10 +35,12 @@ module Language.Nano.Misc (
   -- * Error message
   , convertError
 
+  , foldM1
+
 ) where
 
 -- import           Control.Applicative                ((<$>))
-import           Control.Monad                        (liftM2)
+import           Control.Monad                        (liftM2, foldM)
 import           Data.Data
 import           Data.Maybe                           (isJust)
 import           Data.Generics.Aliases
@@ -184,3 +186,11 @@ convertError tgt e  = errortext $ msg <+> pp e
   where 
     msg             = text $ "Cannot convert to: " ++ tgt
 
+
+
+instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
+  pp (a,b,c,d) = pp a <+> text ":" <+>  pp b <+> text ":" <+> pp c <+> text ":" <+>  pp d
+
+foldM1 :: (Monad m) => (a -> a -> m a) -> [a] -> m a
+foldM1 _ [] = error "foldM1" "empty list"
+foldM1 f (x:xs) = foldM f x xs

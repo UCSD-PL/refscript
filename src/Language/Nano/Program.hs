@@ -22,7 +22,7 @@ module Language.Nano.Program (
   , flattenStmt
 
   -- * SSA Ids 
-  , mkNextId, isNextId, mkSSAId , mkKeysId, mkKeysIdxId -- , stripSSAId
+  , mkNextId, isNextId, mkSSAId , mkKeysId, mkKeysIdxId, mkCtorStr, mkCtorId
 
 
   -- * Traversals / folds
@@ -356,10 +356,14 @@ mkKeysId (Id a x) =  Id a $ keysStr ++ x
 mkKeysIdxId :: Id a -> Id a
 mkKeysIdxId (Id a x) =  Id a $ keysIdxStr ++ x
 
+mkCtorId l (Id a x) = Id l $ mkCtorStr x
+mkCtorStr x         = x ++ ctorStr
+
 nextStr    = "_NEXT_"
 ssaStr     = "_SSA_"
 keysIdxStr = "_KEYS_IDX_"
 keysStr    = "_KEYS_"
+ctorStr    = "_CTOR_"
 
 
 

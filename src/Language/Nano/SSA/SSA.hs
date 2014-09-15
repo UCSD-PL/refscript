@@ -15,6 +15,8 @@ import qualified Data.Foldable                           as FO
 import qualified Data.HashMap.Strict                     as M
 import qualified Data.HashSet as S
 import           Data.Typeable                           ()
+import           Data.Generics.Schemes
+import           Data.Generics.Aliases
 
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
@@ -290,9 +292,12 @@ ssaStmt (SwitchStmt l e xs)
 --
 --  FIXME: fix env here.
 --
-ssaStmt (ClassStmt l n e is bd) = do
-  bd' <- mapM ssaClassElt bd
-  return (True, ClassStmt l n e is bd')
+ssaStmt (ClassStmt l n e is bd)
+  = do  bd' <- mapM (ssaClassElt fields) bd
+        return (True, ClassStmt l n e is bd')
+  where
+    fields = [i | MemberVarDecl _ _ (VarDecl _ i _) <- bd] 
+
 
 --
 --  FIXME: fix env here.
@@ -318,18 +323,53 @@ ssaAsgnStmt l1 l2 x@(Id l3 v) x' e'
   | x == x'   = ExprStmt l1    (AssignExpr l2 OpAssign (LVar l3 v) e')
   | otherwise = VarDeclStmt l1 [VarDecl l2 x' (Just e')]
 
-ssaClassElt (Constructor l xs body)
+ssaClassElt flds (Constructor l xs body)
   = do θ <- getSsaEnv
        withAssignability ReadOnly (envIds θ) $               -- Variables from OUTER scope are NON-ASSIGNABLE
          do setSsaEnv     $ extSsaEnv xs θ                   -- Extend SsaEnv with formal binders
-            (_, body')   <- ssaStmts body                    -- Transform function
+            (_, body'')  <- ssaStmts body'                   -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
-            return        $ Constructor l xs body'
+            return        $ Constructor l xs body''
+  where
+    -- Replace field initializations with local 
+    body'    = [initStmt] ++ tfRet (tfUpds body) ++ map fldAsgns flds
+
+    fldSet   = S.fromList $ F.symbol <$> flds
+
+    initStmt = VarDeclStmt l $ initVd <$> flds
+    initVd i = VarDecl l (mkCtorId l i) (Just $ VarRef l (Id l "undefined"))
+
+    tfUpds  :: [Statement SourceSpan] -> [Statement SourceSpan]
+    tfUpds   = everywhere $ mkT tx
+
+    tx      :: Expression SourceSpan -> Expression SourceSpan 
+    tx ae@(AssignExpr la OpAssign (LDot l (ThisRef _) s) e) 
+      | F.symbol s `S.member` fldSet 
+      = AssignExpr la OpAssign (LVar l $ mkCtorStr s) e
+      | otherwise 
+      = ae
+    tx lv    = lv
+
+    tfRet   :: [Statement SourceSpan] -> [Statement SourceSpan]
+    tfRet    = everywhere $ mkT tr 
+
+    tr      :: Statement SourceSpan -> Statement SourceSpan
+    tr r@(ReturnStmt l _) = BlockStmt l $ concat [ fldAsgns <$> flds, [r] ]
+    tr r                  = r
+
+    fldAsgns s = ExprStmt l $ AssignExpr l OpAssign 
+                   (LDot l (ThisRef l) (F.symbolString $ F.symbol s))
+                   (VarRef l $ mkCtorId l s)
+
 
 -- Class fields are considered non-assignable
-ssaClassElt v@(MemberVarDecl _ _ _ )    = return v
+ssaClassElt _ (MemberVarDecl l b v) = 
+  do z <- ssaVarDecl v
+     case z of 
+       ([], vd) -> return $ MemberVarDecl l b vd
+       _        -> ssaError $ errorEffectInFieldDef (srcPos l)
 
-ssaClassElt (MemberMethDecl l s e xs body)
+ssaClassElt _ (MemberMethDecl l s e xs body)
   = do θ <- getSsaEnv
        withAssignability ReadOnly (envIds θ) $               -- Variables from OUTER scope are NON-ASSIGNABLE
          do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
@@ -530,7 +570,7 @@ ssaPureExpr e = do
   (s, e') <- ssaExpr e
   case s of
     []     -> return e'
-    _      -> ssaError $ errorUpdateInExpr (getAnnotation e) e 
+    _      -> ssaError $ errorUpdateInExpr (srcPos e) e 
 
 --------------------------------------------------------------------------
 -- | Dealing with Generic Assignment Expressions

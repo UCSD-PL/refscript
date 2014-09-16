@@ -1,10 +1,10 @@
-/*@ alias NNat = {v: number | 0 <= v } */
+/*@ alias Nat = {v: number | 0 <= v } */
 
-/*@ z :: #NNat */
+/*@ z :: #Nat */
 var z = 12;
 
-/*@ foo :: (#NNat) => void */
+/*@ foo :: (#Nat) => void */
 function foo(a) { }
 
-/*@ bar :: (#NNat) => void */
+/*@ bar :: (#Nat) => void */
 function bar(a) { }

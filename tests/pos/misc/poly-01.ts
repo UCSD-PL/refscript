@@ -12,5 +12,5 @@ function bar(x:any, f:any){
 
 /*@ main :: (number) => {number | true} */
 function main(x){
-    return bar(x, idd);
+    return bar(x, idd); // this is actually (idd @ number)
 }

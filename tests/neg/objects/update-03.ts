@@ -2,7 +2,7 @@
 /*@ bar :: (x: [#Mutable]{ f: number} ) => void */
 function bar(a: any) {
 
-  a.f = 1;
+  a.f = -1;
 
 }
 

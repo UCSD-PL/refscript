@@ -55,7 +55,8 @@ json f = do fileExists <- doesFileExist f
 withExistingFile f 
   | ext `elem` oks 
   = do  preludeTSPath     <- getPreludeTSPath 
-        (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs preludeTSPath) ""
+        domTSPath         <- getDomTSPath 
+        (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs [preludeTSPath, domTSPath]) ""
         case code of 
           ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
                                 Left  s  -> return $ Left  $ F.UnknownError s
@@ -69,10 +70,10 @@ withExistingFile f
     ext            = takeExtension f
     tsCmd          = "tsc" 
     oks            = [".ts", ".js"]
-    mkArgs pre     = [ "--outDir", tempDirectory f
-                     , "--refscript"
-                     , "--lib", pre
-                     , f ]
+    mkArgs libs    = [ "--outDir", tempDirectory f
+                     , "--refscript"] ++
+                     concatMap (("--lib":) . single) libs ++
+                     [ f ]
 
 
 instance FromJSON (F.FixResult Error)

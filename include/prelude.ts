@@ -172,6 +172,8 @@ declare function builtin_PrefixLNot<A>(x: A): boolean;
 */
 declare function builtin_PrefixBNot(n: number): number;
 
+declare function builtin_OpBOr(a: number, b: number): number;
+
 
 
 /*************************************************************************

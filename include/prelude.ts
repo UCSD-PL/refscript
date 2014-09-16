@@ -5,7 +5,7 @@
  ************************************************************************/
 
 /*@ crash :: forall A. () => A */
-declare function crash<A>(): A; 
+declare function crash(): any; 
 
 /*@ assume :: (x:boolean) => {v:void | Prop x} */
 declare function assume(x: boolean): void;

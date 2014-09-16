@@ -109,10 +109,11 @@ testCategories = [
                  , "operators"
                  , "simple"
                  , "unions"
+                 , "forin"
+                 , "typealias"
 
                  ## not supported:
                  # , "proto"
-                 # , "typealias"
                  # , "lists"
 
                  ]

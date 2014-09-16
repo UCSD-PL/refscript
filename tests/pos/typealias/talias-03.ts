@@ -1,4 +1,5 @@
-/*@ predicate gt(x, y) = x >= y                */
-/*@ alias gArray[x]    = [{number | gt(v, x)}] */
+/*@ predicate gt x y = x >= y                */
+/*@ alias iArray[T]  = #Array[#Immutable, T] */
 
-var ga :number[]/*@ gArray[0] */ = [0,0,0,0];
+/*@ ga :: #iArray[#Nat] */
+var ga = [0,0,0,0];

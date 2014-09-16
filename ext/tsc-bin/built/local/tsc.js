@@ -60587,7 +60587,7 @@ var TypeScript;
             this.column = column;
         }
         FPSrcPos.prototype.toObject = function () {
-            return [this.name, this.line, this.column];
+            return [this.name, this.line + 1, this.column + 1];
         };
         return FPSrcPos;
     })();

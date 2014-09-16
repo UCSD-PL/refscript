@@ -22,7 +22,7 @@ module Language.Nano.Program (
   , flattenStmt
 
   -- * SSA Ids 
-  , mkNextId, isNextId, mkSSAId -- , stripSSAId
+  , mkNextId, isNextId, mkSSAId , mkKeysId, mkKeysIdxId -- , stripSSAId
 
 
   -- * Traversals / folds
@@ -48,7 +48,7 @@ import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Types
-import           Language.Nano.Typecheck.Types hiding (PP)
+import           Language.Nano.Typecheck.Types
 
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint
@@ -68,32 +68,32 @@ data Nano a r = Nano {
   -- 
   -- ^ Code to check
   --
-    code   :: !(Source a)               
+    code      :: !(Source a)               
   -- 
   -- ^ Annotations (keeping this to scrape qualifiers later)
   -- ^ XXX: The names are bogus - made unique to avoid overwrites
   --
-  , specs  :: !(Env (RType r))
+  , qualPool  :: !(Env (RType r))
   -- 
   -- ^ Measure Signatures
   --
-  , consts :: !(Env (RType r))          
+  , consts    :: !(Env (RType r))          
   -- 
   -- ^ Type aliases
   --
-  , tAlias :: !(TAliasEnv (RType r))    
+  , tAlias    :: !(TAliasEnv (RType r))    
   -- 
   -- ^ Predicate aliases
   --
-  , pAlias :: !(PAliasEnv)              
+  , pAlias    :: !(PAliasEnv)              
   -- 
   -- ^ Qualifiers
   --
-  , pQuals  :: ![F.Qualifier]            
+  , pQuals    :: ![F.Qualifier]            
   -- 
   -- ^ Type Invariants
   --
-  , invts  :: ![Located (RType r)]      
+  , invts     :: ![Located (RType r)]      
   } deriving (Functor, Data, Typeable)
 
 type NanoBareR r   = Nano (AnnBare r) r                    -- ^ After Parse
@@ -173,6 +173,7 @@ instance IsNano InfixOp where
   isNano OpDiv        = True --  @/@
   isNano OpMod        = True --  @%@
   isNano OpInstanceof = True --  @instanceof@
+  isNano OpIn         = True --  @in@
   isNano OpBOr        = True --  @|@
   isNano e            = errortext (text "Not Nano InfixOp!" <+> pp e)
 
@@ -231,6 +232,7 @@ instance IsNano (Statement a) where
   isNano (IfStmt _ b s1 s2)       = isNano b && isNano s1 && isNano s2
   isNano (WhileStmt _ b s)        = isNano b && isNano s
   isNano (ForStmt _ i t inc b)    = isNano i && isNano t && isNano inc && isNano b
+  isNano (ForInStmt _ init e s)   = isNano init && isNano e && isNano s
   isNano (VarDeclStmt _ ds)       = all isNano ds
   isNano (ReturnStmt _ e)         = isNano e
   isNano (FunctionStmt _ _ _ b)   = isNano b
@@ -258,6 +260,10 @@ instance IsNano (ForInit a) where
   isNano NoInit        = True
   isNano (VarInit vds) = all isNano vds
   isNano (ExprInit e)  = isNano e
+
+instance IsNano (ForInInit a) where 
+  isNano (ForInVar _)  = True
+  isNano e             = errortext (text "Not Nano ForInInit:" $$ pp e)
 
 
 -- | Holds for `Expression` that is a valid side-effecting `Statement` 
@@ -345,8 +351,16 @@ mkNextId (Id a x) =  Id a $ nextStr ++ x
 isNextId :: Id a -> Maybe (Id a)
 isNextId (Id a s) = Id a <$> stripPrefix nextStr s
 
-nextStr = "_NEXT_"
-ssaStr  = "_SSA_"
+mkKeysId :: Id a -> Id a
+mkKeysId (Id a x) =  Id a $ keysStr ++ x
+
+mkKeysIdxId :: Id a -> Id a
+mkKeysIdxId (Id a x) =  Id a $ keysIdxStr ++ x
+
+nextStr    = "_NEXT_"
+ssaStr     = "_SSA_"
+keysIdxStr = "_KEYS_IDX_"
+keysStr    = "_KEYS_"
 
 
 

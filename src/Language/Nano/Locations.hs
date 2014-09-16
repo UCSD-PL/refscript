@@ -9,6 +9,7 @@ module Language.Nano.Locations (
     Located (..) 
   , IsLocated (..)
   , SourceSpan (..)
+  , SrcSpan (..)
   , sourcePos
  
   -- * Manipulating SourceSpan
@@ -19,6 +20,8 @@ module Language.Nano.Locations (
   , srcSpanEndLine
   , srcSpanStartCol
   , srcSpanEndCol
+  
+  , sourceSpanSrcSpan
 
 
 
@@ -35,7 +38,7 @@ import qualified Language.Fixpoint.Types as F
 
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
-import           Language.Nano.Errors
+import           Language.Fixpoint.PrettyPrint
 
 
 ---------------------------------------------------------------------
@@ -98,6 +101,20 @@ instance F.Fixpoint SourceSpan where
   toFix = pp 
 
 
+
+
+sourceSpanSrcSpan sp = SS (sp_begin sp) (sp_end sp)
+
+
+--------------------------------------------------------------------------------
+-- | SourceSpans ---------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+instance PP SrcSpan where
+  pp    = pprint
+
+instance PP SourceSpan where 
+  pp    = pp . tx where tx (Span x y) = SS x y
 
 
 srcSpanStartLine = snd3 . sourcePosElts . sp_start . sourceSpanSrcSpan   

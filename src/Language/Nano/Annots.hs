@@ -86,6 +86,7 @@ castDirection (CDn  {}) = CDDn
 data Fact r
   -- SSA
   = PhiVar      ![(Id SourceSpan)]
+  | PhiVarTy    ![(Id SourceSpan, Type)]
   -- Unification
   | TypInst     !IContext ![RType r]
   -- Overloading
@@ -137,6 +138,7 @@ instance Ord (AnnSSA  r) where
 -- XXX: This shouldn't have to be that hard...
 instance Ord (Fact r) where
   compare (PhiVar i1       ) (PhiVar i2       )   = compare i1 i2
+  compare (PhiVarTy i1     ) (PhiVarTy i2     )   = compare i1 i2
   compare (TypInst c1 t1   ) (TypInst c2 t2   )   = compare (c1,toType <$> t1) (c2,toType <$> t2)
   compare (EltOverload c1 t1) (EltOverload c2 t2) = compare (c1, const () <$> t1) (c2, const () <$> t2)
   compare (Overload c1 t1  ) (Overload c2 t2  )   = compare (c1, toType t1) (c2, toType t2)
@@ -155,10 +157,11 @@ instance Ord (Fact r) where
   compare f1 f2                                   = on compare factToNum f1 f2
 
 factToNum (PhiVar _        ) = 0
-factToNum (TypInst _ _     ) = 1
-factToNum (EltOverload _ _ ) = 2
-factToNum (Overload _  _   ) = 3
-factToNum (TCast _ _       ) = 4
+factToNum (PhiVarTy _      ) = 1
+factToNum (TypInst _ _     ) = 2
+factToNum (EltOverload _ _ ) = 3
+factToNum (Overload _  _   ) = 4
+factToNum (TCast _ _       ) = 5
 factToNum (VarAnn _        ) = 6
 factToNum (FieldAnn _      ) = 7
 factToNum (MethAnn _       ) = 8
@@ -180,6 +183,7 @@ instance IsLocated (Annot a SourceSpan) where
 
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)       = text "phi"                    <+> pp x
+  pp (PhiVarTy x)     = text "phi-ty"                 <+> pp x
   pp (TypInst ξ ts)   = text "inst"                   <+> pp ξ <+> pp ts 
   pp (Overload ξ i)   = text "overload"               <+> pp ξ <+> pp i
   pp (EltOverload ξ i)= text "elt_overload"           <+> pp ξ <+> pp i

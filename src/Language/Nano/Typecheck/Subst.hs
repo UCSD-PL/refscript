@@ -96,6 +96,7 @@ instance Free (Cast r) where
 
 instance Free (Fact r) where
   free (PhiVar _)           = S.empty
+  free (PhiVarTy t)         = free (snd <$> t)
   free (TypInst _ ts)       = free ts
   free (Overload _ t)       = free t
   free (EltOverload _ t)    = free t

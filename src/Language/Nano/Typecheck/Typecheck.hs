@@ -156,6 +156,7 @@ patch fs =
     accepted (TypInst _ _    ) = True
     accepted (Overload _ _   ) = True
     accepted (EltOverload _ _) = True
+    accepted (PhiVarTy _     ) = True
     accepted _                 = False
 
 
@@ -491,7 +492,8 @@ tcVarDecl γ v@(VarDecl l x (Just e)) =
 
 tcVarDecl γ v@(VarDecl l x Nothing) = 
   case scrapeVarDecl v of
-    [t]          -> return (v, Just $ tcEnvAdds [(x, (t, WriteGlobal))] γ)
+    [ ]          -> tcVarDecl γ $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
+    [t]          -> return (v, Just $ tcEnvAdds [(x, (t, WriteGlobal))] γ)    
     _            -> tcError $ errorVarDeclAnnot (srcPos l) x
 
 -------------------------------------------------------------------------------
@@ -955,56 +957,49 @@ envLoopJoin l γ (Just γl) =
   where 
       xs             = phiVarsAnnot l 
       substNames θ γ = γ { tce_names = apply θ (tce_names γ) }
- 
 
 ----------------------------------------------------------------------------------
 getPhiType :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan -> TCM r (RType r, Assignability)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (tcEnvFindTyWithAgsn x γ1, tcEnvFindTyWithAgsn x γ2) of
-    (Just (t1,a1), Just (t2,_ )) -> unif t1 a1 t2 
-    (_      , _      )           |  forceCheck x γ1 && forceCheck x γ2 
-                                 -> tcError $ bug loc "Oh no, the HashMap GREMLIN is back..."
-                                 |  otherwise -> tcError $ bugUnboundPhiVar loc x
-  where 
-    loc = srcPos $ ann l
-    unif t1 a1 t2  = 
-      do  θ <- getSubst 
-          case unifys (srcPos l) γ1 θ [t1] [t2] of
-            Left  _ -> tcError $ errorEnvJoin (ann l) x t1 t2
-            Right θ' | on (==) (toType . apply θ') t1 t2 -> setSubst θ' >> return (t1,a1)
-                     | otherwise ->  tcError $ errorEnvJoin (ann l) x t1 t2
-
+    (Just (t1,a1), Just (t2,_ )) -> getSubst >>= ((,a1) <$>) . unifyPhiTypes (srcPos l) γ1 x t1 t2 
+    (_, _) | forceCheck x γ1 && forceCheck x γ2 
+                       -> tcError $ bug (srcPos l) "Oh no, the HashMap GREMLIN is back..."
+           | otherwise -> tcError $ bugUnboundPhiVar (srcPos l) x
 
 ----------------------------------------------------------------------------------
 getLoopNextPhiType :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan-> TCM r (RType r)
 ----------------------------------------------------------------------------------
 getLoopNextPhiType l γ γl x =
   case (tcEnvFindTy x γ, tcEnvFindTy (mkNextId x) γl) of
-    (Just t1, Just t2) -> unif t1 t2 
-    _                  -> tcError $ bugUnboundPhiVar loc x
-  where 
-    loc = srcPos $ ann l
-    unif t1 t2  = 
-      do  θ <- getSubst 
-          case unifys (srcPos l) γ θ [t1] [t2] of
-            Left  _ -> tcError $ errorEnvJoin (ann l) x t1 t2
-            Right θ' | on (==) (toType . apply θ') t1 t2 -> setSubst θ' >> return t1
-                     | otherwise ->  tcError $ errorEnvJoin (ann l) x t1 t2
+    (Just t1, Just t2) -> getSubst >>= \θ -> unifyPhiTypes (srcPos l) γ x t1 t2 θ
+    _                  -> tcError $ bugUnboundPhiVar (srcPos l) x
+
+-- | `unifyPhiTypes` 
+--
+--   * Special casing the situation where one the types in undefined.
+----------------------------------------------------------------------------------
+unifyPhiTypes :: PPR r => SourceSpan -> TCEnv r -> Var -> RType r -> RType r -> RSubst r -> TCM r (RType r)
+----------------------------------------------------------------------------------
+unifyPhiTypes l γ x t1 t2 θ = 
+  case unifys (srcPos l) γ θ [t1] [t2] of  
+    Left  _               -> tcError $ errorEnvJoinUnif l x t1 t2
+    -- Right θ' | ltracePP l (ppshow (apply θ' t1) ++ " == " ++ ppshow (apply θ' t2)) (apply θ' t1 == apply θ' t2) -> 
+    Right θ' | apply θ' t1 == apply θ' t2 -> 
+                      do setSubst θ' 
+                         addAnn l $ PhiVarTy [(x, toType $ apply θ' t1)]
+                         return t1
+             | any isTUndef [t1,t2] -> do setSubst θ'
+                                          addAnn l $ PhiVarTy [(x, toType $ apply θ' t12)]
+                                          return t12
+             | otherwise            -> tcError $ errorEnvJoin l x t1 t2
+  where
+    t12      = mkUnion [t1,t2]
 
 
 forceCheck x γ = elem x $ fst <$> envToList (tce_names γ)
 
-
--- sanity l t@(TApp (TRef i) ts _) 
---   = do  δ       <- getDef 
---         case findSym i δ of
---           Just (ID _ _ αs _ _) | length αs == length ts -> return  $ t 
---           Just (ID _ n αs _ _) | otherwise              -> tcError $ errorTypeArgsNum l n (length αs) (length ts)
---           Nothing                                       -> error   $ "BUG: Id: " ++ ppshow i 
---                                                                   ++ " was not found in env at " 
---                                                                   ++ ppshow (srcPos l) 
--- sanity _ t = return t
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

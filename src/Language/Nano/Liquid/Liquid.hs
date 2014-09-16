@@ -782,25 +782,32 @@ consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> C
 
 -}
 consWhile g l cond body 
-  = do  ts                  <- mapM (`safeEnvFindTy` g) xs 
-        (gI,tIs)            <- freshTyPhis (srcPos l) g xs $ toType <$> ts  -- (a) (b) 
+  = do  -- ts                  <- mapM (`safeEnvFindTy` g) xs 
+        -- (gI,tIs)            <- freshTyPhis (srcPos l) g xs $ toType <$> ts  -- (a) (b) 
+        (gI,tIs)            <- freshTyPhis (srcPos l) g xs ts  -- (a) (b) 
         _                   <- consWhileBase l xs tIs g                     -- (c)
         Just (xc, gI')      <- consExpr gI cond Nothing                     -- (d)
         z                   <- consStmt (envAddGuard xc True gI') body      -- (e)
         whenJustM z          $ consWhileStep l xs tIs                       -- (f) 
         return               $ envAddGuard xc False gI'
     where
-        xs                   = concat [xs | PhiVar xs <- ann_fact l]
+        (xs,ts)              = unzip $ concat [xts | PhiVarTy xts <- ann_fact l]
 
 consWhileBase l xs tIs g    
   = do  xts_base           <- mapM (`safeEnvFindTy` g) xs 
-        zipWithM_ (subType l err g) xts_base tIs                            -- (c)
+        xts_base'          <- zipWithM (zipTypeM (srcPos l) g) xts_base tIs -- (c)
+        zipWithM_ (subType l err g) xts_base' tIs         
+          -- (tracePP ("BASE base type " ++ ppshow xs) xts_base')
+          -- (tracePP ("BASE Invariant type " ++ ppshow xs) tIs)
   where 
-   err                      = errorLiquid' l
+    err                      = errorLiquid' l
 
 consWhileStep l xs tIs gI'' 
   = do  xts_step           <- mapM (`safeEnvFindTy` gI'') xs' 
-        zipWithM_ (subType l err gI'') xts_step tIs'                        -- (f)
+        xts_step'          <- zipWithM (zipTypeM (srcPos l) gI'') xts_step tIs'
+        zipWithM_ (subType l err gI'') xts_step' tIs'                       -- (f)
+          -- (tracePP ("STEP next type " ++ ppshow xs) xts_step')
+          -- (tracePP ("STEP invariant type " ++ ppshow xs) tIs')
   where 
     tIs'                    = F.subst su <$> tIs
     xs'                     = mkNextId   <$> xs

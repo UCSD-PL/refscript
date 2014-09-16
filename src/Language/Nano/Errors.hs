@@ -128,6 +128,7 @@ errorUnboundIdEnv l x t       = mkErr l $ printf "ZOGBERT Identifier '%s' unboun
 errorUnboundType l x          = mkErr l $ printf "Type identifier '%s' unbound" (ppshow x)
 errorUnboundId l x            = mkErr l $ printf "Identifier '%s' is unbound" (ppshow x) 
 errorEnvJoin l x t1 t2        = mkErr l $ printf "Variable '%s' has different types ('%s' and '%s') when joining environments." (ppshow x) (ppshow t1) (ppshow t2)
+errorEnvJoinUnif l x t1 t2    = mkErr l $ printf "Error in unifying types '%s' and '%s' for variable '%s' when joining environments." (ppshow t1) (ppshow t2) (ppshow x)
 errorArgMismatch l            = mkErr l $ printf "Mismatch in Number of arguments in signature" 
 errorArgName l x y            = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 errorExtractNonFld l f x t    = mkErr l $ printf "Cannot extract non-field '%s' from object '%s' of type '%s'." (ppshow f) (ppshow x) (ppshow t)

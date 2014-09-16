@@ -996,8 +996,6 @@ unifyPhiTypes l γ x t1 t2 θ =
              | otherwise            -> tcError $ errorEnvJoin l x t1 t2
   where
     t12      = mkUnion [t1,t2]
-    t1'      = toType $ apply θ t1 
-    t2'      = toType $ apply θ t2
 
 
 forceCheck x γ = elem x $ fst <$> envToList (tce_names γ)

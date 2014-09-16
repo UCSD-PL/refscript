@@ -1,11 +1,11 @@
+/*@ mycrash :: forall A. () => {v:A | true} */ 
+function mycrash<A>(): A {
+    var z = mycrash();
+    return ;
+}
 
-// crash is from the prelude.ts
-// crash :: forall A. () => A 
-// declare function crash<A>(): A; 
-
-
-/*@ init :: forall T. (number) => {v: T | true} */
-function init<T>(n:number):T{
-    var x:T = crash();
+/*@ init :: forall T. (number) => {v:T | true} */
+function init<T>(n:number) : T {
+    var x:T = mycrash();
     return x;
 }

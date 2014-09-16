@@ -473,7 +473,9 @@ var TypeScript;
         Cannot_call_toRsExp_on_BinaryExpression: "Cannot call 'toRsExp' on BinaryExpression.",
         Cannot_call_toRsExp_on_PostfixUnaryExpression_with_SyntaxKind_0: "Cannot call 'toRsExp' on PostfixUnaryExpression with SyntaxKind {0}.",
         Cannot_call_toRsAST_on_MemberAccessExpression: "Cannot call 'toRsAST' on MemberAccessExpression.",
-        Cannot_call_toRsExp_on_BinaryExpression_with_SyntaxKind_0: "Cannot call 'toRsExp' on BinaryExpression with SyntaxKind {0}."
+        Cannot_call_toRsExp_on_BinaryExpression_with_SyntaxKind_0: "Cannot call 'toRsExp' on BinaryExpression with SyntaxKind {0}.",
+        Gather_statistics_about_initialization: "Gather statistics about initialization",
+        Invalid_reference_of_this_in_constructor: "Invalid reference of 'this' in constructor."
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -2628,7 +2630,9 @@ var TypeScript;
         "Cannot call 'toRsExp' on BinaryExpression.": { "code": 8024, "category": 5 /* Unimplemented */ },
         "Cannot call 'toRsExp' on PostfixUnaryExpression with SyntaxKind {0}.": { "code": 8025, "category": 5 /* Unimplemented */ },
         "Cannot call 'toRsAST' on MemberAccessExpression.": { "code": 8026, "category": 5 /* Unimplemented */ },
-        "Cannot call 'toRsExp' on BinaryExpression with SyntaxKind {0}.": { "code": 8027, "category": 5 /* Unimplemented */ }
+        "Cannot call 'toRsExp' on BinaryExpression with SyntaxKind {0}.": { "code": 8027, "category": 5 /* Unimplemented */ },
+        "Gather statistics about initialization": { "code": 8028, "category": 2 /* Message */ },
+        "Invalid reference of 'this' in constructor.": { "code": 8029, "category": 1 /* Error */ }
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -13000,6 +13004,7 @@ var TypeScript;
                 case 202 /* LeftShiftExpression */:
                 case 203 /* SignedRightShiftExpression */:
                 case 204 /* UnsignedRightShiftExpression */:
+                case 189 /* BitwiseOrExpression */:
                     return new TypeScript.RsInfixExpr(helper.getSourceSpan(this), tokenAnnots(this), new TypeScript.RsInfixOp(this.operatorToken.text()), this.left.toRsExp(helper), this.right.toRsExp(helper));
 
                 case 175 /* AddAssignmentExpression */:
@@ -16405,8 +16410,31 @@ var TypeScript;
 
         CastExpressionSyntax.prototype.toRsExp = function (helper) {
             var sourceSpan = helper.getSourceSpan(this);
-            var eltSymbol = helper.getSymbolForAST(this.type);
-            var castType = eltSymbol.type.toRsType();
+
+            var castType;
+
+            switch (this.type.kind()) {
+                case 60 /* AnyKeyword */:
+                    castType = TypeScript.TTop;
+                    break;
+                case 61 /* BooleanKeyword */:
+                    castType = TypeScript.TBoolean;
+                    break;
+                case 67 /* NumberKeyword */:
+                    castType = TypeScript.TNumber;
+                    break;
+                case 69 /* StringKeyword */:
+                    castType = TypeScript.TString;
+                    break;
+                case 41 /* VoidKeyword */:
+                    castType = TypeScript.TVoid;
+                    break;
+                default:
+                    var eltSymbol = helper.getSymbolForAST(this.type);
+                    castType = eltSymbol.type.toRsType();
+                    break;
+            }
+
             var castAnn = new TypeScript.RsBindAnnotation(sourceSpan, 13 /* RawCast */, castType.toString());
             return new TypeScript.RsCast(helper.getSourceSpan(this), [castAnn], this.expression.toRsExp(helper));
         };
@@ -18256,7 +18284,8 @@ var TypeScript;
             this.indentationAmount = indentationAmount;
             this.options = options;
             this.lastTriviaWasNewLine = indentFirstToken;
-            this.indentationTrivia = TypeScript.Indentation.indentationTrivia(this.indentationAmount, this.options);
+
+            this.indentationTrivia = TypeScript.Indentation.indentationTrivia(indentationAmount, options);
         }
         SyntaxIndenter.prototype.visitToken = function (token) {
             if (token.width() === 0) {
@@ -20977,16 +21006,18 @@ var TypeScript;
                 this._value = value;
                 this._valueText = valueText;
 
-                this._leadingTrivia = leadingTrivia.clone();
-                this._trailingTrivia = trailingTrivia.clone();
+                var _leadingTrivia_clone = leadingTrivia.clone();
+                var _trailingTrivia_clone = trailingTrivia.clone();
 
-                if (!this._leadingTrivia.isShared()) {
-                    this._leadingTrivia.parent = this;
+                if (!_leadingTrivia_clone.isShared()) {
+                    _leadingTrivia_clone.parent = this;
                 }
 
-                if (!this._trailingTrivia.isShared()) {
-                    this._trailingTrivia.parent = this;
+                if (!_trailingTrivia_clone.isShared()) {
+                    _trailingTrivia_clone.parent = this;
                 }
+                this._leadingTrivia = _leadingTrivia_clone;
+                this._trailingTrivia = _trailingTrivia_clone;
             }
             RealizedToken.prototype.syntaxTree = function () {
                 return this.parent.syntaxTree();
@@ -56665,6 +56696,7 @@ var TypeScript;
             this._settings = _settings;
             this.semanticInfoChain = null;
             this.semanticInfoChain = new TypeScript.SemanticInfoChain(this, logger);
+            this.helper = new TypeScript.RsHelper(this.semanticInfoChain);
         }
         TypeScriptCompiler.prototype.compilationSettings = function () {
             return this._settings;
@@ -57575,10 +57607,10 @@ var TypeScript;
     (function (CompilerPhase) {
         CompilerPhase[CompilerPhase["Syntax"] = 0] = "Syntax";
         CompilerPhase[CompilerPhase["Semantics"] = 1] = "Semantics";
-        CompilerPhase[CompilerPhase["EmitOptionsValidation"] = 2] = "EmitOptionsValidation";
-
-        CompilerPhase[CompilerPhase["Emit"] = 3] = "Emit";
-        CompilerPhase[CompilerPhase["DeclarationEmit"] = 4] = "DeclarationEmit";
+        CompilerPhase[CompilerPhase["InitializationStats"] = 2] = "InitializationStats";
+        CompilerPhase[CompilerPhase["EmitOptionsValidation"] = 3] = "EmitOptionsValidation";
+        CompilerPhase[CompilerPhase["Emit"] = 4] = "Emit";
+        CompilerPhase[CompilerPhase["DeclarationEmit"] = 5] = "DeclarationEmit";
     })(CompilerPhase || (CompilerPhase = {}));
 
     var CompilerIterator = (function () {
@@ -57624,7 +57656,7 @@ var TypeScript;
                 this.compilerPhase++;
             }
 
-            if (this.compilerPhase > 4 /* DeclarationEmit */) {
+            if (this.compilerPhase > 5 /* DeclarationEmit */) {
                 return false;
             }
 
@@ -57633,26 +57665,31 @@ var TypeScript;
                     return this.moveNextSyntaxPhase();
                 case 1 /* Semantics */:
                     return this.moveNextSemanticsPhase();
-                case 2 /* EmitOptionsValidation */:
+                case 2 /* InitializationStats */:
+                    return this.moveNextInitializationPhase();
+                case 3 /* EmitOptionsValidation */:
                     return this.moveNextEmitOptionsValidationPhase();
-                case 3 /* Emit */:
+                case 4 /* Emit */:
                     return this.moveNextEmitPhase();
-                case 4 /* DeclarationEmit */:
+                case 5 /* DeclarationEmit */:
                     return this.moveNextDeclarationEmitPhase();
             }
         };
 
         CompilerIterator.prototype.shouldMoveToNextPhase = function () {
             switch (this.compilerPhase) {
-                case 2 /* EmitOptionsValidation */:
+                case 3 /* EmitOptionsValidation */:
                     return this.index === 1;
 
                 case 0 /* Syntax */:
                 case 1 /* Semantics */:
                     return this.index === this.fileNames.length;
 
-                case 3 /* Emit */:
-                case 4 /* DeclarationEmit */:
+                case 2 /* InitializationStats */:
+                    return this.index === this.fileNames.length;
+
+                case 4 /* Emit */:
+                case 5 /* DeclarationEmit */:
                     return this.index === (this.fileNames.length + 1);
             }
 
@@ -57694,6 +57731,22 @@ var TypeScript;
             return true;
         };
 
+        CompilerIterator.prototype.moveNextInitializationPhase = function () {
+            if (!this.compiler.compilationSettings().refScript()) {
+                return true;
+            }
+            TypeScript.Debug.assert(this.index >= 0 && this.index < this.fileNames.length);
+            var fileName = this.fileNames[this.index];
+            fileName = TypeScript.switchToForwardSlashes(fileName);
+
+            var document = this.compiler.getDocument(fileName);
+            this.compiler.helper.setDocument(document);
+
+            this.compiler.helper.ctorValidate();
+
+            return true;
+        };
+
         CompilerIterator.prototype.moveNextEmitOptionsValidationPhase = function () {
             TypeScript.Debug.assert(!this.hadSyntacticDiagnostics);
 
@@ -57728,9 +57781,12 @@ var TypeScript;
 
                 if (this.compiler.compilationSettings().refScript()) {
                     var ast = document.sourceUnit();
-                    var helper = new TypeScript.RsHelper(this.compiler.semanticInfoChain, document);
-                    var diagnostics = helper.diagnostics();
-                    var rsAST = ast.toRsAST(helper);
+
+                    this.compiler.helper.setDocument(document);
+
+                    var rsAST = ast.toRsAST(this.compiler.helper);
+
+                    var diagnostics = this.compiler.helper.diagnostics();
                     this._current = CompileResult.fromDiagnostics(diagnostics);
 
                     if (diagnostics.length === 0) {
@@ -57738,6 +57794,8 @@ var TypeScript;
                             _this._current = CompileResult.fromOutputFiles(outputFiles);
                         }, this._sharedJSONEmitter);
                     }
+
+                    this.compiler.helper.clearDiagnostics();
                 } else {
                     this._sharedEmitter = this.compiler._emitDocument(document, this._emitOptions, function (outputFiles) {
                         _this._current = CompileResult.fromOutputFiles(outputFiles);
@@ -60455,11 +60513,23 @@ var TypeScript;
 var TypeScript;
 (function (TypeScript) {
     var RsHelper = (function () {
-        function RsHelper(_semanticInfoChain, _document) {
+        function RsHelper(_semanticInfoChain) {
             this._semanticInfoChain = _semanticInfoChain;
-            this._document = _document;
             this._diagnostics = [];
+            this._initValidator = new TypeScript.InitializationValidator();
         }
+        RsHelper.prototype.ctorValidate = function () {
+            this._initValidator.validate(this._document, this._diagnostics);
+        };
+
+        RsHelper.prototype.setDocument = function (document) {
+            this._document = document;
+        };
+
+        RsHelper.prototype.clearDiagnostics = function () {
+            this._diagnostics = [];
+        };
+
         RsHelper.prototype.getDeclForAST = function (ast) {
             return this._document._getDeclForAST(ast);
         };
@@ -60612,6 +60682,100 @@ var TypeScript;
         return FRUnknownError;
     })(FixResult);
     TypeScript.FRUnknownError = FRUnknownError;
+})(TypeScript || (TypeScript = {}));
+var TypeScript;
+(function (TypeScript) {
+    var StatsContext = (function () {
+        function StatsContext(_diagnostics) {
+            this._diagnostics = _diagnostics;
+            this._inCtor = false;
+            this._inAsgn = false;
+            this._inMemAccess = false;
+            this._validIds = {};
+        }
+        StatsContext.prototype.enteringCtor = function () {
+            this._inCtor = true;
+        };
+
+        StatsContext.prototype.exitingCtor = function () {
+            this._inCtor = false;
+        };
+
+        StatsContext.prototype.inCtor = function () {
+            return this._inCtor;
+        };
+
+        StatsContext.prototype.registerValidId = function (id) {
+            this._validIds[id] = true;
+        };
+
+        StatsContext.prototype.isValidId = function (id) {
+            return (id in this._validIds);
+        };
+
+        StatsContext.prototype.postDiagnostic = function (diagnostic) {
+            this._diagnostics.push(diagnostic);
+        };
+        return StatsContext;
+    })();
+    TypeScript.StatsContext = StatsContext;
+
+    var InitializationValidator = (function () {
+        function InitializationValidator() {
+        }
+        InitializationValidator.astToSourceSpan = function (ast) {
+            var cstart = ast.fullStart();
+            var cstop = ast.fullEnd();
+            var startLineAndChar = ast.syntaxTree().lineMap().getLineAndCharacterFromPosition(cstart);
+            var endLineAndChar = ast.syntaxTree().lineMap().getLineAndCharacterFromPosition(cstop);
+            return new TypeScript.RsSourceSpan(ast.syntaxTree().sourceUnit().fileName(), startLineAndChar, endLineAndChar);
+        };
+
+        InitializationValidator.pre = function (ast, context) {
+            switch (ast.kind()) {
+                case 137 /* ConstructorDeclaration */:
+                    context.enteringCtor();
+                    break;
+
+                case 174 /* AssignmentExpression */:
+                    if (context.inCtor()) {
+                        var asgnExpr = ast;
+                        var lhsAsgn = asgnExpr.left;
+                        if (lhsAsgn.kind() === 212 /* MemberAccessExpression */) {
+                            var memAccess = lhsAsgn;
+                            if (memAccess.expression.kind() === 35 /* ThisKeyword */) {
+                                context.registerValidId(memAccess.expression.syntaxID());
+                            }
+                        }
+                    }
+                    break;
+
+                case 35 /* ThisKeyword */:
+                    if (context.inCtor()) {
+                        if (!context.isValidId(ast.syntaxID())) {
+                            context.postDiagnostic(new TypeScript.Diagnostic(ast.fileName(), ast.syntaxTree().lineMap(), ast.start(), ast.width(), TypeScript.DiagnosticCode.Invalid_reference_of_this_in_constructor, [], []));
+                        }
+                    }
+                    break;
+            }
+        };
+
+        InitializationValidator.post = function (ast, context) {
+            switch (ast.kind()) {
+                case 137 /* ConstructorDeclaration */:
+                    context.exitingCtor();
+                    break;
+            }
+        };
+
+        InitializationValidator.prototype.validate = function (document, diagnostics) {
+            var sourceUnit = document.sourceUnit();
+            var statsContext = new StatsContext(diagnostics);
+            TypeScript.getAstWalkerFactory().simpleWalk(document.sourceUnit(), InitializationValidator.pre, InitializationValidator.post, statsContext);
+        };
+        return InitializationValidator;
+    })();
+    TypeScript.InitializationValidator = InitializationValidator;
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
 (function (TypeScript) {
@@ -61908,34 +62072,38 @@ var TypeScript;
                 compiler.addFile(resolvedFile.path, sourceFile.scriptSnapshot, sourceFile.byteOrderMark, 0, false, resolvedFile.referencedFiles);
             });
 
-            try  {
+            if (this.compilationSettings.refScript()) {
+                try  {
+                    for (var it = compiler.compile(function (path) {
+                        return _this.resolvePath(path);
+                    }); it.moveNext();) {
+                        var result = it.current();
+                        result.diagnostics.forEach(function (d) {
+                            return _this.addDiagnostic(d);
+                        });
+                        this._refScriptOutputFiles = this._refScriptOutputFiles.concat(result.outputFiles);
+                        if (!this.tryWriteOutputFiles(result.outputFiles)) {
+                            break;
+                        }
+                    }
+                    this.dumpRefScriptDiagnostics();
+                } catch (e) {
+                    this.dumpRefScriptUnknownError(e.stack);
+
+                    throw e;
+                }
+            } else {
                 for (var it = compiler.compile(function (path) {
                     return _this.resolvePath(path);
                 }); it.moveNext();) {
                     var result = it.current();
-
                     result.diagnostics.forEach(function (d) {
                         return _this.addDiagnostic(d);
                     });
-
-                    if (this.compilationSettings.refScript()) {
-                        this._refScriptOutputFiles = this._refScriptOutputFiles.concat(result.outputFiles);
-                    }
-
                     if (!this.tryWriteOutputFiles(result.outputFiles)) {
-                        break;
+                        return;
                     }
                 }
-
-                if (this.compilationSettings.refScript()) {
-                    this.dumpRefScriptDiagnostics();
-                }
-            } catch (e) {
-                if (this.compilationSettings.refScript()) {
-                    this.dumpRefScriptUnknownError(e.stack);
-                }
-
-                throw e;
             }
         };
 

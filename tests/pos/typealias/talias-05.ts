@@ -14,3 +14,9 @@ function foo(x:number, y:number) {
     var z = [x, y];
     return [z];
 }
+
+/*@ bar :: forall T. (#iArray[T]) => number */
+function bar <T>(a:T[]) {
+    var n = a.length;
+    return n;
+}

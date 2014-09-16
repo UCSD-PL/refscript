@@ -10924,6 +10924,9 @@ var TypeScript;
                 case 169 /* PreDecrementExpression */:
                     return new TypeScript.RsUnaryAssignExpr(helper.getSourceSpan(this), anns, new TypeScript.RsUnaryAssignOp(1 /* PrefixDec */), this.operand.toRsLValue(helper));
 
+                case 164 /* PlusExpression */:
+                    return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), anns, new TypeScript.RsPrefixOp(2 /* PrefixPlus */), this.operand.toRsExp(helper));
+
                 case 165 /* NegateExpression */:
                     return new TypeScript.RsPrefixExpr(helper.getSourceSpan(this), anns, new TypeScript.RsPrefixOp(3 /* PrefixMinus */), this.operand.toRsExp(helper));
 
@@ -60584,7 +60587,7 @@ var TypeScript;
             this.column = column;
         }
         FPSrcPos.prototype.toObject = function () {
-            return [this.name, this.line, this.column];
+            return [this.name, this.line + 1, this.column + 1];
         };
         return FPSrcPos;
     })();

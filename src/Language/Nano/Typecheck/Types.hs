@@ -873,6 +873,7 @@ infixOpId OpIn         = builtinId "OpIn"
 infixOpId o            = errorstar $ "infixOpId: Cannot handle: " ++ ppshow o
 
 prefixOpId PrefixMinus  = builtinId "PrefixMinus"
+prefixOpId PrefixPlus   = builtinId "PrefixPlus"
 prefixOpId PrefixLNot   = builtinId "PrefixLNot"
 prefixOpId PrefixTypeof = builtinId "PrefixTypeof"
 prefixOpId PrefixBNot   = builtinId "PrefixBNot"

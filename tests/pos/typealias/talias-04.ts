@@ -5,5 +5,5 @@
 /*@ alias iArrayN[T,n] = {v:#iArray[T] | len v = n} */
 
 
-/*@ ga :: #iArray[#Nat] */
+/*@ ga :: #iArrayN[#Nat, 4] */
 var ga = [0,10,20,30];

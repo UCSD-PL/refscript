@@ -1,8 +1,8 @@
 
-/*@ foo :: () => number + undefined */ 
+/*@ foo :: () => { number | v > -2 } + undefined */ 
 declare function foo(): any;
 
-/*@ bar :: () => { number | true } */
+/*@ bar :: () => { number | v > 0  } */
 function bar(): number {
 
   var x = foo();
@@ -13,7 +13,7 @@ function bar(): number {
 
   }
 
-  return 0;
+  return 1;
 
 }
 

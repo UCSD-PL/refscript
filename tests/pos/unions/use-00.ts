@@ -17,8 +17,8 @@ function inc(x:number):number {
 /*@ bar :: (y:number) => {number | true} */
 function bar(y:number):number {
     var z = foo(y);
-    if (typeof z === "number"){
-	var a = new Array(z);
+    if (z){
+	var a = new Array(<number>z);
 	return inc(z);
     }
     return 0;

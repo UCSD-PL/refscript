@@ -40,7 +40,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
-  , isTVar, isTObj, isConstr, isTFun, fTop, orNull, isArr -- , tArr, rtArr
+  , isTVar, isTObj, isConstr, isTFun, fTop, orNull, isTUndef, isArr -- , tArr, rtArr
 
   -- * Element ops 
   , sameBinder, eltType, isStaticSig, nonStaticSig, nonConstrElt, mutability, baseType
@@ -683,6 +683,10 @@ isTFun (TAll _ t)           = isTFun t
 isTFun _                    = False
 
 isArr (TApp (TRef x) _ _ )  = F.symbol x == F.symbol "Array"
+isArr _                     = False
+
+isTUndef (TApp TUndef _ _)  = True
+isTUndef _                  = False
 
 
 orNull t@(TApp TUn ts _)    | any isNull ts = t
@@ -877,7 +881,4 @@ prefixOpId o            = errorstar $ "prefixOpId: Cannot handle: " ++ ppshow o
 
 mkId            = Id (initialPos "") 
 builtinId       = mkId . ("builtin_" ++)
-
-
-
 

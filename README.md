@@ -6,8 +6,10 @@ Refinement Types for Scripting Languages
 
 ### Dependencies
 
-RefScript requires `ghc` and `cabal > 1.18` and:
+RefScript requires: 
 
+* [ghc](http://www.haskell.org/ghc/) version 7.8.3 
+* [cabal](http://www.haskell.org/cabal/) version > 1.18
 * [Node.js](http://nodejs.org/) version > 0.8 
 * [Ocaml](http://caml.inria.fr/ocaml/release.en.html)
 * [Z3 Binary](http://z3.codeplex.com/) version >= 4.3.2

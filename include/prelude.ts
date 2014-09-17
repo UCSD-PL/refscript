@@ -62,7 +62,7 @@ declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 declare function builtin_BIArrayLit<A>(a: A): A[];
 
 /*@ builtin_BICondExpr :: 
-    forall A. (c: boolean, x: A, y: A) => { v:A | (if (Prop(c)) then (v = x) else (v = y)) }
+    forall C A. (c: C, x: A, y: A) => { v:A | (if (Prop(c)) then (v = x) else (v = y)) }
  */
 declare function builtin_BICondExpr<A>(c: boolean, x: A, y: A): A;
 

@@ -60617,7 +60617,7 @@ var TypeScript;
             var lineMap = diagnostic.lineMap();
             var startLineAndCharacter = lineMap.getLineAndCharacterFromPosition(diagnostic.start());
             var stopLineAndCharacter = lineMap.getLineAndCharacterFromPosition(diagnostic.start() + diagnostic.length());
-            return new FPError(diagnostic.text(), new FPSrcSpan(new FPSrcPos(diagnostic.fileName(), startLineAndCharacter.line(), startLineAndCharacter.character()), new FPSrcPos(diagnostic.fileName(), stopLineAndCharacter.line(), stopLineAndCharacter.character())));
+            return new FPError("TS " + diagnostic.text(), new FPSrcSpan(new FPSrcPos(diagnostic.fileName(), startLineAndCharacter.line(), startLineAndCharacter.character()), new FPSrcPos(diagnostic.fileName(), stopLineAndCharacter.line(), stopLineAndCharacter.character())));
         };
 
         FPError.prototype.toObject = function () {

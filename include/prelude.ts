@@ -23,7 +23,7 @@ declare function alert(s: string): void;
 
 interface Pair<A,B> { x: A; y: B; }
 
-/*@ isNaN :: (x:undefined + number) => {v:boolean | Prop v <=> (ttag(v) = "number")} */ 
+/*@ isNaN :: (x:undefined + number) => {v:boolean | Prop v <=> (ttag(v) != "number")} */ 
 declare function isNaN(x:any) : boolean;
 
 /*************************************************************************

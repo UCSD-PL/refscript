@@ -4,7 +4,7 @@ function foo(x:number) {
     /*@ res :: number + undefined */
     var res = undefined;
     if (x > 0){
-	res = x;
+	    res = x;
     }
     return res;
 }
@@ -17,9 +17,8 @@ function inc(x:number):number {
 /*@ bar :: (y:number) => {number | true} */
 function bar(y:number):number {
     var z = foo(y);
-    if (z){
-	var a = new Array(<number>z);
-	return inc(z);
+    if (typeof z === "number"){
+	    return inc(z);
     }
     return 0;
 }

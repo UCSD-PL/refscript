@@ -273,8 +273,6 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
          fmap snd <$> consCall g l BISetProp (FI Nothing [(vr x, Nothing),(e2, rhsCtx)]) opTy
     -- Add a VarRef so that e is not typechecked again
     vr          = VarRef $ getAnnotation e1
-      
-
    
 -- e
 consStmt g (ExprStmt _ e) 
@@ -519,27 +517,15 @@ consExpr g (InfixExpr l o e1 e2) _
 
 -- | e ? e1 : e2
 --
---   If the conditional expressioin is contextually typed as `T` then the type
---   used will be:
+--   From the TC phase e1 and e2 are going to be cast to the same base type, so
+--   we can now use the signature: 
 --
---   forall C . (c: C, x: T, y: T) => { v: T | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) }
+--   forall C T . (c: C, x: T, y: T) => { v: T | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) }
 --
---   Otherwise the type will be: 
---
---   forall C A . (c: C, x: A, y: A) => { v: A | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) }
---
-consExpr g (CondExpr l e e1 e2) to
-  = do condExprTy               <- safeEnvFindTy (builtinOpId BICondExpr) g
-       opTy                     <- mkFun condExprTy to
+consExpr g (CondExpr l e e1 e2) _
+  = do opTy     <- safeEnvFindTy (builtinOpId BICondExpr) g
+       -- opTy     <- mkCondExprFun l condExprTy to
        consCallCondExpr g l BICondExpr (FI Nothing ((,Nothing) <$> [e,e1,e2])) opTy
-  where
-    mkFun (TAll c (TAll _ (TAll _ (TAll _ (TFun Nothing [B c_ tc, B x_ _, B y_ _] o r))))) (Just t) 
-      = return $ TAll c $ TFun Nothing [B c_ tc, B x_ t, B y_ t] (t `strengthen` rTypeReft o) r
-
-    mkFun (TAll c (TAll x (TAll _ (TAll _ (TFun Nothing [B c_ tc, B x_ tx, B y_ _] o r))))) Nothing
-      = return (TAll c (TAll x (TFun Nothing [B c_ tc, B x_ tx, B y_ tx] (tx `strengthen` rTypeReft o) r))) 
-
-    mkFun _ _ = cgError $ bugCondExprSigParse $ srcPos l
 
 -- | super(e1,..,en)
 consExpr g (CallExpr l (SuperRef _) es) _
@@ -723,6 +709,22 @@ consCall g l fn ets ft0
     balance ts                fs               = (ts, fs) 
 
 
+
+
+
+mkCondExprFun l ft@(TAll c (TAll _ (TAll _ (TAll _ (TFun Nothing [B c_ tc, B x_ _, B y_ _] o r))))) (Just t) 
+--   = do  TAll c (TFun Nothing [B c_ tc, B x_ tx, B y_ ty] to r) <- TAll c (TFun Nothing [B c_ tc, B x_ t, B y_ t] t r)
+--         return $ tracePP "fun1" $ TAll c $ TFun Nothing [B c_ tc, B x_ tx, B y_ ty] (to `strengthen` rTypeReft o) r
+      = return $ tracePP "fun1" $ TAll c $ TFun Nothing [B c_ tc, B x_ (rType t), B y_ (rType t)] (t `strengthen` rTypeReft o) r
+
+mkCondExprFun l (TAll c (TAll x (TAll _ (TAll _ (TFun Nothing [B c_ tc, B x_ tx, B y_ _] o r))))) Nothing
+  = return $ tracePP "fun2" (TAll c (TAll x (TFun Nothing [B c_ tc, B x_ tx, B y_ tx] (tx `strengthen` rTypeReft o) r))) 
+
+mkCondExprFun l _ _ = cgError $ bugCondExprSigParse $ srcPos l
+
+
+
+
 -- Special casing here conditional expression call here ...
 consCallCondExpr g l fn ets ft0 
   = mseq (consCondExprArgs consExpr g ets) $ \(xes, g') -> do
@@ -789,17 +791,18 @@ consCondExprArgs :: (F.Symbolic c, IsLocated c, PP b, PP c)
                  -> CGM (Maybe (FuncInputs c, CGEnv))
 ---------------------------------------------------------------------------------
 consCondExprArgs f g (FI Nothing [(c,tc),(x,tx),(y,ty)]) =
-  do  z <- fmap (mapFst reverse) <$> do zc <- f g c tc
-                                        case zc of
-                                          Just (b, g') -> fmap (mapFst (++ [b])) <$> consFold (step b) ([],g') [(x,tx,True),(y,ty,False)]
-                                          _            -> return Nothing 
+  do  z <- fmap (mapFst reverse) 
+            <$> do zc <- f g c tc
+                   case zc of
+                     Just (b, g') -> fmap (mapFst (++ [b]))
+                                      <$> consFold (step b) ([],g') [(x,tx,True),(y,ty,False)]
+                     _            -> return Nothing 
       case z of 
         Just (xs', g'') -> return $ Just (FI Nothing xs', g'')
         _              -> return $ Nothing 
   where
     step c (ys, g) (x,y,b) = fmap (mapFst (:ys) . mapSnd envPopGuard) <$> f (envAddGuard c b g) x y
     
-
 
 ---------------------------------------------------------------------------------
 consFold :: (t -> b -> CGM (Maybe t)) -> t -> [b] -> CGM (Maybe t)

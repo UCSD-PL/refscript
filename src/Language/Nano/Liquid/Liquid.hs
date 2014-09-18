@@ -317,8 +317,10 @@ consStmt g (ReturnStmt l Nothing)
        
 -- return e 
 consStmt g (ReturnStmt l (Just e))
-  = do  _ <- consCall g l "return" (FI Nothing [(e,Nothing)]) $ returnTy (envFindReturn g) True 
+  = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ returnTy retTy True 
         return Nothing
+  where
+    retTy = envFindReturn g 
 
 -- throw e 
 consStmt g (ThrowStmt _ e)
@@ -516,9 +518,28 @@ consExpr g (InfixExpr l o e1 e2) _
        consCall g l o (FI Nothing ((,Nothing) <$> [e1, e2])) opTy
 
 -- | e ? e1 : e2
-consExpr g (CondExpr l e e1 e2) _
-  = do opTy     <- safeEnvFindTy (builtinOpId BICondExpr) g
+--
+--   If the conditional expressioin is contextually typed as `T` then the type
+--   used will be:
+--
+--   forall C . (c: C, x: T, y: T) => { v: T | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) }
+--
+--   Otherwise the type will be: 
+--
+--   forall C A . (c: C, x: A, y: A) => { v: A | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) }
+--
+consExpr g (CondExpr l e e1 e2) to
+  = do condExprTy               <- safeEnvFindTy (builtinOpId BICondExpr) g
+       opTy                     <- ltracePP l "LQopTy" <$> mkFun condExprTy to
        consCall g l BICondExpr (FI Nothing ((,Nothing) <$> [e,e1,e2])) opTy
+  where
+    mkFun (TAll c (TAll _ (TAll _ (TAll _ (TFun Nothing [B c_ tc, B x_ _, B y_ _] o r))))) (Just t) 
+      = return $ TAll c $ TFun Nothing [B c_ tc, B x_ t, B y_ t] (t `strengthen` rTypeReft o) r
+
+    mkFun (TAll c (TAll x (TAll _ (TAll _ (TFun Nothing [B c_ tc, B x_ tx, B y_ _] o r))))) Nothing
+      = return (TAll c (TAll x (TFun Nothing [B c_ tc, B x_ tx, B y_ tx] (tx `strengthen` rTypeReft o) r))) 
+
+    mkFun _ _ = cgError $ bugCondExprSigParse $ srcPos l
 
 -- | super(e1,..,en)
 consExpr g (CallExpr l (SuperRef _) es) _

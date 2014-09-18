@@ -90,6 +90,58 @@ To run RefScript on a single TypeScript file:
     rsc /path/to/file.ts
 
 
+
+## Building with profiling support
+
+To build with profiling support it is recommended that a new sandbox is used, as all library dependencies will have to be compiled with profiling support.
+
+To do so, while in `$ROOT/RefScript`:
+
+    mv .cabal-sandbox .cabal-sandbox.backup
+    mv cabal.sandbox.config cabal.sandbox.backup.config
+    
+Then repeat the first steps of installation:
+
+    cabal sandbox init
+    cabal sandbox add-source ../liquid-fixpoint
+    cabal sandbox add-source ../language-ecmascript
+    
+This will create fresh `.cabal-sandbox` and `cabal.sandbox.config`
+
+But before building, add the following option in `cabal.sandbox.config`:
+
+    library-profiling: True
+    executable-profiling: True
+
+In addition, in `refscript.cabal` replace line:
+
+    ghc-options:         -W -O2
+
+with:
+
+    ghc-options:         -W -O2 -prof -auto-all
+
+Then build with:
+
+    cabal install -p
+    
+This will build all depending libraries with profiling support.
+
+To run `rsc` in profiling mode add flags `+RTS -p` in the end:
+
+    rsc input.ts +RTS -p
+    
+More detailed options can be found [here](https://www.haskell.org/ghc/docs/7.8.3/html/users_guide/profiling.html).
+
+If you're interested in profiling the evaluation of a specific expression you can add a *cost center annotation*:
+
+    {-# SCC "name" #-} <expression>
+
+What this command outputs is a file called `rsc.prof` that contains all gathered profiling information, including information about both all functions (default cost centers) and user defined cost centers.
+    
+    
+
+
 ## Specifications
 
 All specifications are added in comments of the following form:

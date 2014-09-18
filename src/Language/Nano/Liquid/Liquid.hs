@@ -530,8 +530,8 @@ consExpr g (InfixExpr l o e1 e2) _
 --
 consExpr g (CondExpr l e e1 e2) to
   = do condExprTy               <- safeEnvFindTy (builtinOpId BICondExpr) g
-       opTy                     <- ltracePP l "LQopTy" <$> mkFun condExprTy to
-       consCall g l BICondExpr (FI Nothing ((,Nothing) <$> [e,e1,e2])) opTy
+       opTy                     <- mkFun condExprTy to
+       consCallCondExpr g l BICondExpr (FI Nothing ((,Nothing) <$> [e,e1,e2])) opTy
   where
     mkFun (TAll c (TAll _ (TAll _ (TAll _ (TFun Nothing [B c_ tc, B x_ _, B y_ _] o r))))) (Just t) 
       = return $ TAll c $ TFun Nothing [B c_ tc, B x_ t, B y_ t] (t `strengthen` rTypeReft o) r
@@ -702,9 +702,30 @@ consCall :: PP a => CGEnv -> AnnTypeR -> a -> FuncInputs (Expression AnnTypeR, M
 --   4. Use the @F.subst@ returned in 3. to substitute formals with actuals in output type of callee.
 
 consCall g l fn ets ft0 
-  -- = mseq (consScan consExpr g $ toList ets) $ \(xes, g') -> do
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
+      ts <- T.mapM (`safeEnvFindTy` g') xes
+      case overload l of
+        Just ft    -> do  (_,its,ot) <- instantiate l g fn ft
+                          let (ts', its') = balance ts its
+                          let (su, ts'')  = renameBinds (toList its') (toList xes)
+                          _              <- zipWithM_ (subType l err g') (toList ts') ts''
+                          Just          <$> envAddFresh l (F.subst su ot, WriteLocal) g'
+        Nothing    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
+  where
+    toList (FI x xs) = maybeToList x ++ xs
+    err           = errorLiquid' l
+    overload l    = listToMaybe [ lt | Overload cx t <- ann_fact l, cge_ctx g == cx
+                                     , lt <- callSigs, toType t == toType lt ]
+    callSigs      = extractCall g ft0
+    
+    balance (FI (Just to) ts) (FI Nothing fs)  = (FI (Just to) ts, FI (Just $ B (F.symbol "this") to) fs)
+    balance (FI Nothing ts)   (FI (Just _) fs) = (FI Nothing ts, FI Nothing fs)
+    balance ts                fs               = (ts, fs) 
 
+
+-- Special casing here conditional expression call here ...
+consCallCondExpr g l fn ets ft0 
+  = mseq (consCondExprArgs consExpr g ets) $ \(xes, g') -> do
       ts <- T.mapM (`safeEnvFindTy` g') xes
       case overload l of
         Just ft    -> do  (_,its,ot) <- instantiate l g fn ft
@@ -759,7 +780,26 @@ consScan f g (FI Nothing xs) =
           _              -> return $ Nothing 
   where
     step (ys, g) (x,y) = fmap (mapFst (:ys))   <$> f g x y
+
     
+---------------------------------------------------------------------------------
+consCondExprArgs :: (F.Symbolic c, IsLocated c, PP b, PP c) 
+                 => (CGEnv -> Expression AnnTypeR -> b -> CGM (Maybe (c, CGEnv))) 
+                 -> CGEnv -> FuncInputs (Expression AnnTypeR,b) 
+                 -> CGM (Maybe (FuncInputs c, CGEnv))
+---------------------------------------------------------------------------------
+consCondExprArgs f g (FI Nothing [(c,tc),(x,tx),(y,ty)]) =
+  do  z <- fmap (mapFst reverse) <$> do zc <- f g c tc
+                                        case zc of
+                                          Just (b, g') -> fmap (mapFst (++ [b])) <$> consFold (step b) ([],g') [(x,tx,True),(y,ty,False)]
+                                          _            -> return Nothing 
+      case z of 
+        Just (xs', g'') -> return $ Just (FI Nothing xs', g'')
+        _              -> return $ Nothing 
+  where
+    step c (ys, g) (x,y,b) = fmap (mapFst (:ys) . mapSnd envPopGuard) <$> f (envAddGuard c b g) x y
+    
+
 
 ---------------------------------------------------------------------------------
 consFold :: (t -> b -> CGM (Maybe t)) -> t -> [b] -> CGM (Maybe t)

@@ -905,13 +905,14 @@ tcCallCaseTry :: (PPR r, PP a, IsLocated l)
 ----------------------------------------------------------------------------------
 tcCallCaseTry γ l fn ts ft 
   = runMaybeM $ 
-      do  (_,its,_)       <- instantiate l (tce_ctx γ) fn ft
-          let (ts', its')  = balance ts its  
-          θ'              <- unifyTypesM (srcPos l) γ ts' its'
-          zipWithM_          (subtypeM (srcPos l) γ) (apply θ' $ toList ts') (apply θ' $ toList its')
+      do  (_,its1,_)      <- instantiate l (tce_ctx γ) fn ft
+          ts1             <- T.mapM (instantiateArgs l $ tce_ctx γ) ts
+          let (ts2, its2)  = balance ts1 its1
+          θ'              <- unifyTypesM (srcPos l) γ ts2 its2
+          zipWithM_          (subtypeM (srcPos l) γ) (apply θ' $ toList ts2) (apply θ' $ toList its2)
           return           $ θ'
   where
-    toList (FI to ts)                          = maybeToList to ++ ts
+    toList (FI to ts)      = maybeToList to ++ ts
     
 -- `balance supplied_parameters function_sig` should preserve the structure of
 -- the supplied_parameters.
@@ -927,16 +928,24 @@ tcCallCase :: (IsLocated l, PP a, PPRSF r)
 ----------------------------------------------------------------------------------
 tcCallCase γ l fn ets ft  
   = do let ξ            = tce_ctx γ
-       (_,its,ot)      <- instantiate l ξ fn ft
-       let (ts', its')  = balance ts its  
-       θ               <- unifyTypesM (srcPos l) γ ts' its'
-       let (ts'',its'') = mapPair (apply θ) (ts', its')
-       es'             <- app (castM γ) es ts'' its'' 
+       (_,its1,ot)     <- instantiate l ξ fn ft
+       ts1             <- T.mapM (instantiateArgs l $ tce_ctx γ) (fmap snd ets)
+       let (ts2, its2)  = balance ts1 its1
+       θ               <- unifyTypesM (srcPos l) γ ts2 its2
+       let (ts3,its3)   = mapPair (apply θ) (ts2, its2)
+       es'             <- app (castM γ) es ts3 its3
        return           $ (es', apply θ ot)
   where
     (es, ts)            = (fst <$> ets, snd <$> ets)
     app f (FI (Just a) as) (FI (Just b) bs) (FI (Just c) cs) = FI <$> (Just <$> f a b c) <*> zipWith3M f as bs cs
     app f (FI _        as) (FI _        bs) (FI _        cs) = FI Nothing <$> zipWith3M f as bs cs
+
+
+----------------------------------------------------------------------------------
+instantiateArgs :: (IsLocated a, PPR r) => a -> IContext -> RType r -> TCM r (RType r)
+----------------------------------------------------------------------------------
+instantiateArgs l ξ = uncurry (freshTyArgs (srcPos l) ξ) . bkAll 
+  
 
 ----------------------------------------------------------------------------------
 instantiate :: (Data r, PP r, PP a, F.Reftable r, IsLocated l) 

@@ -1012,7 +1012,6 @@ unifyPhiTypes :: PPR r => SourceSpan -> TCEnv r -> Var -> RType r -> RType r -> 
 unifyPhiTypes l γ x t1 t2 θ = 
   case unifys (srcPos l) γ θ [t1] [t2] of  
     Left  _               -> tcError $ errorEnvJoinUnif l x t1 t2
-    -- Right θ' | ltracePP l (ppshow (apply θ' t1) ++ " == " ++ ppshow (apply θ' t2)) (apply θ' t1 == apply θ' t2) -> 
     Right θ' | apply θ' t1 == apply θ' t2 -> 
                       do setSubst θ' 
                          addAnn l $ PhiVarTy [(x, toType $ apply θ' t1)]

@@ -31,7 +31,7 @@ module Language.Nano.Liquid.CGMonad (
   , Freshable (..), refreshValueVar
 
   -- * Environment API
-  , envAddFresh, envAdds, envAddReturn, envAddGuard, envFindTy, envFindTyWithAsgn
+  , envAddFresh, envAdds, envAddReturn, envAddGuard, envPopGuard, envFindTy, envFindTyWithAsgn
   , safeEnvFindTy, safeEnvFindTyWithAsgn
   , envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
@@ -357,6 +357,14 @@ envAddGuard x b g = g { cge_guards = guard b x : cge_guards g }
   where 
     guard True    = F.eProp 
     guard False   = F.PNot . F.eProp
+
+---------------------------------------------------------------------------------------
+envPopGuard       :: CGEnv -> CGEnv  
+---------------------------------------------------------------------------------------
+envPopGuard g = g { cge_guards = grdPop $ cge_guards g } 
+  where
+    grdPop (x:xs) = xs
+    grdPop []     = []
 
 
 -- | A helper that returns the @RefType@ of variable @x@. Interstring cases:

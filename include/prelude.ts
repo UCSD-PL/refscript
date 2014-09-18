@@ -23,7 +23,7 @@ declare function alert(s: string): void;
 
 interface Pair<A,B> { x: A; y: B; }
 
-/*@ isNaN :: (x:undefined + number) => {v:boolean | Prop v <=> (ttag(v) = "number")} */ 
+/*@ isNaN :: (x:undefined + number) => {v:boolean | Prop v <=> (ttag(v) != "number")} */ 
 declare function isNaN(x:any) : boolean;
 
 /*************************************************************************
@@ -61,10 +61,14 @@ declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
  */
 declare function builtin_BIArrayLit<A>(a: A): A[];
 
-/*@ builtin_BICondExpr :: 
-    forall A. (c: boolean, x: A, y: A) => { v:A | (if (Prop(c)) then (v = x) else (v = y)) }
- */
-declare function builtin_BICondExpr<A>(c: boolean, x: A, y: A): A;
+
+
+/*@ builtin_BICondExpr :: forall C A . (c: C, x: A, y: A) => { v: A | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) } */
+function builtin_BICondExpr<C, A>(c: C, x: A, y: A): A { 
+  if (c) { return x; } else { return y; }
+}
+
+
 
 /*@ builtin_OpLT :: 
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
@@ -116,6 +120,11 @@ declare function builtin_OpDiv(a: number, b: number): number;
 // FIXME: This is not correct. Add definition for: >>
 
 declare function builtin_OpMod(a: number, b: number): number;
+
+/*@ builtin_PrefixPlus ::
+    ({x:number  | true}) => {v:number  | v ~~ x}
+ */
+declare function builtin_PrefixPlus(a: number): number;
 
 /*@ builtin_PrefixMinus :: 
     ({x:number  | true}) => {v:number  | v ~~ (0 - x)} 

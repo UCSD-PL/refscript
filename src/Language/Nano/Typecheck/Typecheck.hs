@@ -526,9 +526,11 @@ tcNormalCallW γ l o es t = (tcWrap $ tcNormalCall γ l o (FI Nothing ((,Nothing
 
 
 tcRetW γ l (Just e)
-  = (tcWrap $ tcNormalCall γ l "return" (FI Nothing [(e, Nothing)]) (returnTy (tcEnvFindReturn γ) True)) >>= \case
+  = (tcWrap $ tcNormalCall γ l "return" (FI Nothing [(e, Just retTy)]) (returnTy retTy True)) >>= \case
        Right (FI _ es', _) -> return  (ReturnStmt l (Just $ head es'), Nothing)  
        Left err            -> (\e' -> (ReturnStmt l (Just e'), Nothing)) <$> deadcastM (tce_ctx γ) err e
+  where
+    retTy = tcEnvFindReturn γ 
 
 tcRetW γ l Nothing
   = do (_, _) <- tcNormalCall γ l "return" (FI Nothing []) $ returnTy (tcEnvFindReturn γ) False
@@ -575,8 +577,30 @@ tcExpr γ e@(VarRef l x) _
       Just t  -> return (e, t)
       Nothing -> tcError $ errorUnboundId (ann l) x
  
-tcExpr γ e@(CondExpr _ _ _ _) _
-  = tcCall γ e 
+-- | e ? e1 : e2
+--
+--   If the conditional expression is contextually typed as `T` then the
+--   conditional expression gets transformed to: 
+--
+--   e ? <T> e1 : <T> e2
+--
+--   To make sure that the bare types of the two parts are aligned.
+--
+--   Then we use the signature: 
+--   
+--   forall C . (c: C, x: T, y: T) => T
+--
+tcExpr γ (CondExpr l e e1 e2) (Just t) = 
+    tcExpr γ (CondExpr l e (cast e1) (cast e2)) Nothing
+  where
+    cast e = (\(Ann l fs) -> Ann l ((UserCast t) : fs)) <$> Cast (getAnnotation e) e
+
+tcExpr γ (CondExpr l e e1 e2) Nothing 
+  = do opTy     <- safeTcEnvFindTy l γ $ builtinOpId BICondExpr
+       z        <- tcNormalCall γ l BICondExpr (FI Nothing ((,Nothing) <$> [e,e1,e2])) opTy
+       case z of
+         (FI _ [e',e1',e2'], t) -> return (CondExpr l e' e1' e2', t)
+         _                      -> tcError $ impossible (srcPos l) "tcCall CondExpr"
 
 tcExpr γ e@(PrefixExpr _ _ _) _
   = tcCall γ e 
@@ -682,14 +706,6 @@ tcCall γ (InfixExpr l o@OpInstanceof e1 e2)
          _  -> tcError $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
   where
     l2 = getAnnotation e2
-
--- | e ? e1 : e2
-tcCall γ (CondExpr l e e1 e2)
-  = do opTy                     <- safeTcEnvFindTy l γ (builtinOpId BICondExpr)
-       z                        <- tcNormalCall γ l BICondExpr (FI Nothing ((,Nothing) <$> [e,e1,e2])) opTy
-       case z of
-         (FI _ [e',e1',e2'], t) -> return (CondExpr l e' e1' e2', t)
-         _                      -> tcError $ impossible (srcPos l) "tcCall CondExpr"
 
 tcCall γ (InfixExpr l o e1 e2)        
   = do opTy                   <- safeTcEnvFindTy l γ (infixOpId o)
@@ -985,7 +1001,6 @@ unifyPhiTypes :: PPR r => SourceSpan -> TCEnv r -> Var -> RType r -> RType r -> 
 unifyPhiTypes l γ x t1 t2 θ = 
   case unifys (srcPos l) γ θ [t1] [t2] of  
     Left  _               -> tcError $ errorEnvJoinUnif l x t1 t2
-    -- Right θ' | ltracePP l (ppshow (apply θ' t1) ++ " == " ++ ppshow (apply θ' t2)) (apply θ' t1 == apply θ' t2) -> 
     Right θ' | apply θ' t1 == apply θ' t2 -> 
                       do setSubst θ' 
                          addAnn l $ PhiVarTy [(x, toType $ apply θ' t1)]

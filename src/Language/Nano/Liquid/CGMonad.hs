@@ -227,15 +227,15 @@ envGetContextCast g a
 
 
 ---------------------------------------------------------------------------------------
-envGetContextTypArgs :: CGEnv -> AnnTypeR -> [TVar] -> [RefType]
+envGetContextTypArgs :: Int -> CGEnv -> AnnTypeR -> [TVar] -> [RefType]
 ---------------------------------------------------------------------------------------
 -- NOTE: If we do not need to instantiate any type parameter (i.e. length αs ==
 -- 0), DO NOT attempt to compare that with the TypInst that might hide within
 -- the expression, cause those type instantiations might serve anothor reason
 -- (i.e. might be there for a separate instantiation).  
-envGetContextTypArgs _ _ []        = []
-envGetContextTypArgs g a αs
-  = case [i | TypInst ξ' i <- ann_fact a, ξ' == cge_ctx g] of 
+envGetContextTypArgs _ _ _ []        = []
+envGetContextTypArgs n g a αs
+  = case [i | TypInst m ξ' i <- ann_fact a, ξ' == cge_ctx g, n == m ] of 
       [i] | length i == length αs -> i 
       _                           -> die $ bugMissingTypeArgs $ srcPos a
 
@@ -261,8 +261,7 @@ envAdds :: (PP [x], PP x, F.Symbolic x, IsLocated x)
 ---------------------------------------------------------------------------------------
 envAdds _ xts' g
   = do xtas     <- zip xs . (`zip` as) <$> mapM addInvariant ts'
-       is       <- -- tracePP (msg ++ " -- adding " ++ ppshow (fst <$> xtas)) <$> 
-                     catMaybes <$> forM xtas addFixpointBind
+       is       <- catMaybes <$> forM xtas addFixpointBind
        _        <- forM xtas            $  \(x,(t,_)) -> addAnnot (srcPos x) x t
        return    $ g { cge_names        = E.envAdds xtas       $ cge_names g
                      , cge_fenv         = F.insertsIBindEnv is $ cge_fenv  g }
@@ -363,7 +362,7 @@ envPopGuard       :: CGEnv -> CGEnv
 ---------------------------------------------------------------------------------------
 envPopGuard g = g { cge_guards = grdPop $ cge_guards g } 
   where
-    grdPop (x:xs) = xs
+    grdPop (_:xs) = xs
     grdPop []     = []
 
 
@@ -507,15 +506,6 @@ freshenModuleDefM g (a, m)
         ReadOnly   -> do  ft    <- freshTyVar g (srcPos x) t 
                           return   (x, (v, w, ft))
         _          -> return (x,(v,w,t))
-
---     h (x, ID c n αs hr es) = 
---       case hr of
---         Just (p,ps) -> do ps'   <- mapM (freshTyVar g (srcPos x)) ps 
---                           es'   <- mapM (mapEltM $ freshTyVar g (srcPos x)) es 
---                           return   (x, ID c n αs (Just (p,ps')) es')
---         Nothing     -> do es'   <- mapM (mapEltM $ freshTyVar g (srcPos x)) es
---                           return   (x, ID c n αs Nothing es')
-
 
 
 ---------------------------------------------------------------------------------------
@@ -951,7 +941,7 @@ cgCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 zipTypeM l g t1 t2 = 
   case zipType g t1 t2 of
     Just t  -> return t
-    Nothing -> cgError $ bugZipType l t1 t2
+    Nothing -> cgError $ bugZipType (srcPos l) t1 t2
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

@@ -436,15 +436,13 @@ envFindReturn = fst . E.envFindReturn . cge_names
 ---------------------------------------------------------------------------------------
 freshTyFun :: (IsLocated l) => CGEnv -> l -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
-freshTyFun g l t = freshTyFun' g l t . kVarInst . cg_opts =<< get  
-
-freshTyFun' g l t b
-  | b && isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g
-  | otherwise               = return t
+freshTyFun g l t
+  | isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g
+  | otherwise          = return t
 
 freshTyVar g l t 
-  | isTrivialRefType t      = freshTy "freshTyVar" (toType t) >>= wellFormed l g
-  | otherwise               = return t
+  | isTrivialRefType t = freshTy "freshTyVar" (toType t) >>= wellFormed l g
+  | otherwise          = return t
 
 -- | Instantiate Fresh Type (at Call-site)
 freshTyInst l g αs τs tbody

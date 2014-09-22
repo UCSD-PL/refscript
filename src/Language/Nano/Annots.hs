@@ -88,7 +88,7 @@ data Fact r
   = PhiVar      ![(Id SourceSpan)]
   | PhiVarTy    ![(Id SourceSpan, Type)]
   -- Unification
-  | TypInst     !IContext ![RType r]
+  | TypInst     Int !IContext ![RType r]
   -- Overloading
   | EltOverload !IContext  !(TypeMember r)
   | Overload    !IContext  !(RType r)
@@ -139,7 +139,7 @@ instance Ord (AnnSSA  r) where
 instance Ord (Fact r) where
   compare (PhiVar i1       ) (PhiVar i2       )   = compare i1 i2
   compare (PhiVarTy i1     ) (PhiVarTy i2     )   = compare i1 i2
-  compare (TypInst c1 t1   ) (TypInst c2 t2   )   = compare (c1,toType <$> t1) (c2,toType <$> t2)
+  compare (TypInst i1 c1 t1) (TypInst i2 c2 t2)   = compare (i1,c1,toType <$> t1) (i2,c2,toType <$> t2)
   compare (EltOverload c1 t1) (EltOverload c2 t2) = compare (c1, const () <$> t1) (c2, const () <$> t2)
   compare (Overload c1 t1  ) (Overload c2 t2  )   = compare (c1, toType t1) (c2, toType t2)
   compare (TCast c1 _      ) (TCast c2 _      )   = compare c1 c2
@@ -158,7 +158,7 @@ instance Ord (Fact r) where
 
 factToNum (PhiVar _        ) = 0
 factToNum (PhiVarTy _      ) = 1
-factToNum (TypInst _ _     ) = 2
+factToNum (TypInst _ _ _   ) = 2
 factToNum (EltOverload _ _ ) = 3
 factToNum (Overload _  _   ) = 4
 factToNum (TCast _ _       ) = 5
@@ -184,7 +184,7 @@ instance IsLocated (Annot a SourceSpan) where
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)       = text "phi"                    <+> pp x
   pp (PhiVarTy x)     = text "phi-ty"                 <+> pp x
-  pp (TypInst ξ ts)   = text "inst"                   <+> pp ξ <+> pp ts 
+  pp (TypInst i ξ ts) = text "inst"                   <+> pp i <+> pp ξ <+> pp ts 
   pp (Overload ξ i)   = text "overload"               <+> pp ξ <+> pp i
   pp (EltOverload ξ i)= text "elt_overload"           <+> pp ξ <+> pp i
   pp (TCast  ξ c)     = text "cast"                   <+> pp ξ <+> pp c

@@ -17,7 +17,6 @@ import           Control.Arrow                      ((***))
 
 import qualified Data.HashMap.Strict                as M 
 import           Data.Maybe                         (catMaybes, listToMaybe, maybeToList)
-import           Data.Function                      (on)
 import           Data.Generics                   
 import qualified Data.Traversable                   as T
 
@@ -29,7 +28,7 @@ import           Language.Nano.Names
 import           Language.Nano.Program
 import           Language.Nano.Types
 import           Language.Nano.Env
-import           Language.Nano.Misc                 (convertError, zipWith3M)
+import           Language.Nano.Misc                 (convertError, zipWith3M, withSingleton, withSingleton')
 import           Language.Nano.SystemUtils
 import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Typecheck.Environment
@@ -104,7 +103,7 @@ safe (Nano {code = Src fs})
         casts stmts        = everything (++) ([] `mkQ` f) stmts
           where 
             f             :: Expression (AnnType r) -> [(AnnType r)]
-            f (Cast a _)   = [a]
+            f (Cast_ a _)  = [a]
             f _            = [] 
 
 -------------------------------------------------------------------------------
@@ -153,7 +152,7 @@ patch fs =
      return           $ (pa m <$>) <$> apply θ <$> fs
   where
     pa m (Ann l fs)            = Ann l $ sortNub $ fs ++ filter accepted (M.lookupDefault [] l m)
-    accepted (TypInst _ _    ) = True
+    accepted (TypInst _ _ _  ) = True
     accepted (Overload _ _   ) = True
     accepted (EltOverload _ _) = True
     accepted (PhiVarTy _     ) = True
@@ -453,7 +452,6 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
   = tcFun γ s
 
 -- | class A<S...> [extends B<T...>] [implements I,J,...] { ... }
---
 tcStmt γ (ClassStmt l x e is ce) 
   = do  dfn      <- tcEnvFindTypeDefM l γ rn
         case safeExtends (srcPos l) γ dfn of 
@@ -467,7 +465,6 @@ tcStmt γ (ClassStmt l x e is ce)
     newEnv αs     = tcEnvAdd (F.symbol "this") (mkThis αs, WriteGlobal) $ tcEnvAdds (tyBinds αs) γ
 
 -- | module M { ... } 
---
 tcStmt γ (ModuleStmt l n body) 
   = (ModuleStmt l n *** return (Just γ)) <$>  tcStmts (initModuleEnv γ n body) body
 
@@ -476,25 +473,25 @@ tcStmt _ s
   = convertError "tcStmt" s
 
 
-
--- Variable declarations should have the type annotations available locally
 ---------------------------------------------------------------------------------------
-tcVarDecl ::  PPR r 
-          => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
+tcVarDecl ::  PPR r => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e)) =
-  do  (e', to)   <- tcExprTW l γ e ann
-      return      $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,asgn ann) <$> to)
+    withSingleton'
+      (do (e', to)  <- tcExprTW l γ e Nothing
+          return     $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,WriteLocal) <$> to))
+      ((f WriteGlobal <$>) . tcCast γ l e) 
+      (tcError $ errorVarDeclAnnot (srcPos l) x)
+      (scrapeVarDecl v)
   where
-    ann           = listToMaybe $ scrapeVarDecl v
-    asgn (Just _) = WriteGlobal
-    asgn _        = WriteLocal
+    f a = (VarDecl l x . Just *** Just . (`tcEnvAdds` γ) . single . (x,) . (,a)) 
 
 tcVarDecl γ v@(VarDecl l x Nothing) = 
-  case scrapeVarDecl v of
-    [ ]          -> tcVarDecl γ $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
-    [t]          -> return (v, Just $ tcEnvAdds [(x, (t, WriteGlobal))] γ)    
-    _            -> tcError $ errorVarDeclAnnot (srcPos l) x
+  withSingleton' 
+    (tcVarDecl γ $ VarDecl l x $ Just $ VarRef l $ Id l "undefined")
+    (return . (v,) . Just . (`tcEnvAdds` γ) . single . (x,) . (,WriteGlobal))
+    (tcError $ errorVarDeclAnnot (srcPos l) x)
+    (scrapeVarDecl v)
 
 -------------------------------------------------------------------------------
 tcAsgn :: PPR r 
@@ -516,19 +513,19 @@ tcEnvAddo γ x (Just t) = Just $ tcEnvAdds [(x, t)] γ
 tcExprTW :: PPR r => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, Maybe (RType r))
 tcExprW :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, Maybe (RType r))
 ----------------------------------------------------------------------------------------------------------------
-tcExprTW l γ e to        = (tcWrap $ tcExprT l γ e to)   >>= tcEW γ e
+tcExprTW l γ e Nothing    = tcExprW γ e
+tcExprTW l γ e (Just t)   = (tcWrap $ tcExprT l γ e t)   >>= tcEW γ e
+
 tcExprW γ e              = (tcWrap $ tcExpr γ e Nothing) >>= tcEW γ e 
 
 tcNormalCallW γ l o es t = (tcWrap $ tcNormalCall γ l o (FI Nothing ((,Nothing) <$> es)) t) >>= \case
                              Right (FI _ es', t') -> return (es', Just t')
-                             Left err             -> do es' <- mapM (deadcastM (tce_ctx γ) err) es
-                                                        return (es', Nothing) 
-
+                             Left err             -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) err) es
 
 tcRetW γ l (Just e)
   = (tcWrap $ tcNormalCall γ l "return" (FI Nothing [(e, Just retTy)]) (returnTy retTy True)) >>= \case
-       Right (FI _ es', _) -> return  (ReturnStmt l (Just $ head es'), Nothing)  
-       Left err            -> (\e' -> (ReturnStmt l (Just e'), Nothing)) <$> deadcastM (tce_ctx γ) err e
+       Right (FI _ [e'], _) -> (,Nothing) . ReturnStmt l . Just <$> return e'
+       Left err             -> (,Nothing) . ReturnStmt l . Just <$> deadcastM (tce_ctx γ) err e
   where
     retTy = tcEnvFindReturn γ 
 
@@ -541,16 +538,12 @@ tcEW _ _ (Right (e', t')) = return $  (e', Just t')
 tcEW γ e (Left err)       = (, Nothing) <$> deadcastM (tce_ctx γ) err e 
 
 -------------------------------------------------------------------------------
-tcExprT :: PPR r 
-        => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) 
-        -> TCM r (ExprSSAR r, RType r)
+tcExprT :: PPR r => AnnSSA r -> TCEnv r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
-tcExprT l γ e to 
-  = do (e', t)   <- tcExpr γ e Nothing
-       case to of
-         Nothing -> return (e', t)
-         Just ta -> do θ <- unifyTypeM (srcPos l) γ t ta
-                       (,ta) <$> castM γ e' (apply θ t) ta
+tcExprT l γ e t 
+  = do (FI _ [e'], _) <- tcNormalCall γ l "tcExprT" (FI Nothing [(e, Nothing)]) 
+                       $ TFun Nothing [B (F.symbol "x") t] tVoid fTop
+       return (e', t)
 
 -------------------------------------------------------------------------------
 tcExpr :: PPR r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
@@ -593,7 +586,8 @@ tcExpr γ e@(VarRef l x) _
 tcExpr γ (CondExpr l e e1 e2) (Just t) = 
     tcExpr γ (CondExpr l e (cast e1) (cast e2)) Nothing
   where
-    cast e = (\(Ann l fs) -> Ann l ((UserCast t) : fs)) <$> Cast (getAnnotation e) e
+    cast e            = updAnn <$> Cast (getAnnotation e) e
+    updAnn (Ann l fs) = Ann l   $  UserCast t : fs
 
 tcExpr γ (CondExpr l e e1 e2) Nothing 
   = do opTy     <- safeTcEnvFindTy l γ $ builtinOpId BICondExpr
@@ -621,24 +615,19 @@ tcExpr γ e@(ObjectLit _ _) _
   = tcCall γ e
 
 -- | < t > e
-tcExpr γ ex@(Cast l@(Ann loc fs) e) _
+tcExpr γ ex@(Cast l e) _ = 
+  withSingleton (tcCast γ l e) 
+                (tcError $  bugNoCasts (srcPos l) ex) 
+                [ ct | UserCast ct <- ann_fact l ]
+
+-- | Subtyping induced cast
+tcExpr γ (Cast_ l e) _
   = do  (e', t)             <- tcExpr γ e Nothing
-        case userCasts of
-          -- Stuff from before
-          [  ]              -> case e' of
-                                 Cast (Ann _ fs') e'' -> return (Cast (Ann loc (fs ++ fs')) e'', t)
-                                 _                    -> return (Cast l e', t)
-          -- User cast
-          [t1]              -> return  $ (Cast (Ann loc $ replace t <$> fs) e', t1)
-          _                 -> tcError $ bugMultipleCasts loc ex
+        case e' of
+          Cast_ (Ann _ fs') e'' -> return (Cast_ (Ann loc (fs ++ fs')) e'', t)
+          _                     -> return (Cast_ l e', t)
   where
-    userCasts                = [ ct | UserCast ct <- fs ]
-    replace t0 (UserCast t1) | on (==) toType t0 t1  = TCast (tce_ctx γ) $ CNo
-                             | isSubtype γ t0 t1     = TCast (tce_ctx γ) $ CUp t0 t1
-                             | isSubtype γ t1 t0     = TCast (tce_ctx γ) $ CDn t0 t1
-                             | otherwise             = TCast (tce_ctx γ) $ CDead (errorDeadCast (srcPos l) t0 t1) t1
-    replace _  a                                     = a
-    
+    Ann loc fs  = l
  
 -- | e.f
 tcExpr γ e@(DotRef _ _ _) _
@@ -680,6 +669,24 @@ tcExpr γ (FuncExpr l fo xs body) tCtxO
 
 tcExpr _ e _ 
   = convertError "tcExpr" e
+
+
+-- | @tcCast@ emulating a simplified version of a function call
+---------------------------------------------------------------------------------------
+tcCast :: PPR r => TCEnv r -> AnnSSA r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
+---------------------------------------------------------------------------------------
+tcCast γ l e tc 
+  = do (e', t0)           <- tcExpr γ e $ Just tc     -- push context down casted expression
+       (_,FI _ [tc1],_)   <- instantiateFTy l ξ fn ft
+       t1                 <- instantiateTy l ξ 1 t0
+       θ                  <- unifyTypeM (srcPos l) γ t1 tc1
+       let (t2,tc2)        = mapPair (apply θ) (t1, tc1)
+       e''                <- castM γ e t2 tc2
+       return              $ (e'', tc2)
+  where
+    ξ                      = tce_ctx γ
+    fn                     = "TC Cast function"
+    ft                     = TFun Nothing [B (F.symbol "x") tc] tVoid fTop
 
 
 ---------------------------------------------------------------------------------------
@@ -827,10 +834,6 @@ tcCall _ e = tcError $ unimplemented (srcPos e) "tcCall" e
 
 ------------------------------------------------------------------------------------------
 -- | @tcNormalCall@ resolves overloads and returns cast-wrapped versions of the arguments.
---
---   XXX: Keep this signature and then create the FuncInputs as arguments to
---   resolveOverload
---
 ------------------------------------------------------------------------------------------
 tcNormalCall :: (PPRSF r, PP a) 
              => TCEnv r -> AnnSSA r -> a -> FuncInputs (ExprSSAR r, Maybe (RType r)) -> 
@@ -898,22 +901,25 @@ resolveOverload γ l fn ets ft
 --    * Passing the subtyping test.
 --
 --   The monad state is completely reversed after this function returns, thanks 
---   to `runMaybeM`. We don't need to reverse the action of `instantiate`.
+--   to `runMaybeM`. We don't need to reverse the action of `instantiateFTy`.
 ----------------------------------------------------------------------------------
 tcCallCaseTry :: (PPR r, PP a, IsLocated l) 
               => TCEnv r -> l -> a -> FuncInputs (RType r) -> RType r -> TCM r (Maybe (RSubst r))
 ----------------------------------------------------------------------------------
 tcCallCaseTry γ l fn ts ft 
   = runMaybeM $ 
-      do  (_,its1,_)      <- instantiate l (tce_ctx γ) fn ft
-          ts1             <- T.mapM (instantiateArgs l $ tce_ctx γ) ts
+      do  (_,its1,_)      <- instantiateFTy l (tce_ctx γ) fn ft
+          ts1             <- idxMapFI (instantiateTy l $ tce_ctx γ) ts
           let (ts2, its2)  = balance ts1 its1
           θ'              <- unifyTypesM (srcPos l) γ ts2 its2
           zipWithM_          (subtypeM (srcPos l) γ) (apply θ' $ toList ts2) (apply θ' $ toList its2)
           return           $ θ'
   where
     toList (FI to ts)      = maybeToList to ++ ts
-    
+
+idxMapFI f (FI Nothing ts)  = FI     Nothing        <$> mapM (uncurry f) (zip [1..] ts)
+idxMapFI f (FI (Just t) ts) = FI <$> Just <$> f 0 t <*> mapM (uncurry f) (zip [2..] ts)
+
 -- `balance supplied_parameters function_sig` should preserve the structure of
 -- the supplied_parameters.
 balance (FI (Just to) ts) (FI Nothing fs)  = (FI (Just to) ts, FI (Just to) fs)
@@ -928,8 +934,8 @@ tcCallCase :: (IsLocated l, PP a, PPRSF r)
 ----------------------------------------------------------------------------------
 tcCallCase γ l fn ets ft  
   = do let ξ            = tce_ctx γ
-       (_,its1,ot)     <- instantiate l ξ fn ft
-       ts1             <- T.mapM (instantiateArgs l $ tce_ctx γ) (fmap snd ets)
+       (_,its1,ot)     <- instantiateFTy l ξ fn ft
+       ts1             <- idxMapFI (instantiateTy l $ tce_ctx γ) ts
        let (ts2, its2)  = balance ts1 its1
        θ               <- unifyTypesM (srcPos l) γ ts2 its2
        let (ts3,its3)   = mapPair (apply θ) (ts2, its2)
@@ -940,19 +946,17 @@ tcCallCase γ l fn ets ft
     app f (FI (Just a) as) (FI (Just b) bs) (FI (Just c) cs) = FI <$> (Just <$> f a b c) <*> zipWith3M f as bs cs
     app f (FI _        as) (FI _        bs) (FI _        cs) = FI Nothing <$> zipWith3M f as bs cs
 
+----------------------------------------------------------------------------------
+instantiateTy :: (IsLocated a, PPR r) => a -> IContext -> Int -> RType r -> TCM r (RType r)
+----------------------------------------------------------------------------------
+instantiateTy l ξ i = uncurry (freshTyArgs (srcPos l) i ξ) . bkAll 
 
 ----------------------------------------------------------------------------------
-instantiateArgs :: (IsLocated a, PPR r) => a -> IContext -> RType r -> TCM r (RType r)
-----------------------------------------------------------------------------------
-instantiateArgs l ξ = uncurry (freshTyArgs (srcPos l) ξ) . bkAll 
-  
-
-----------------------------------------------------------------------------------
-instantiate :: (Data r, PP r, PP a, F.Reftable r, IsLocated l) 
+instantiateFTy :: (Data r, PP r, PP a, F.Reftable r, IsLocated l) 
             => l -> IContext -> a -> RType r -> TCM r ([TVar], FuncInputs (RType r), RType r)
 ----------------------------------------------------------------------------------
-instantiate l ξ fn ft 
-  = do t'              <- freshTyArgs (srcPos l) ξ αs t 
+instantiateFTy l ξ fn ft 
+  = do t'              <- freshTyArgs (srcPos l) 0 ξ αs t 
        maybe err return $ bkFunNoBinds t'
     where
        (αs, t)          = bkAll ft

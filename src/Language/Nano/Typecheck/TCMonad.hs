@@ -198,30 +198,28 @@ logError   :: Error -> a -> TCM r a
 -------------------------------------------------------------------------------
 logError err x = (modify $ \st -> st { tc_errors = err : tc_errors st}) >> return x
 
+-------------------------------------------------------------------------------
+freshTyArgs :: PPR r => SourceSpan -> Int -> IContext -> [TVar] -> RType r -> TCM r (RType r)
+-------------------------------------------------------------------------------
+freshTyArgs l i ξ αs t = (`apply` t) <$> freshSubst l i ξ αs
 
 -------------------------------------------------------------------------------
-freshTyArgs :: PPR r => SourceSpan -> IContext -> [TVar] -> RType r -> TCM r (RType r)
+freshSubst :: PPR r => SourceSpan -> Int -> IContext -> [TVar] -> TCM r (RSubst r)
 -------------------------------------------------------------------------------
-freshTyArgs l ξ αs t 
-  = (`apply` t) <$> freshSubst l ξ αs
-
--------------------------------------------------------------------------------
-freshSubst :: PPR r => SourceSpan -> IContext -> [TVar] -> TCM r (RSubst r)
--------------------------------------------------------------------------------
-freshSubst l ξ αs
+freshSubst l i ξ αs
   = do when (not $ unique αs) $ logError (errorUniqueTypeParams l) ()
        βs        <- mapM (freshTVar l) αs
-       setTyArgs l ξ βs
+       setTyArgs l i ξ βs
        extSubst   $ βs 
        return     $ fromList $ zip αs (tVar <$> βs)
 
 -------------------------------------------------------------------------------
-setTyArgs :: PPR r => SourceSpan -> IContext -> [TVar] -> TCM r ()
+setTyArgs :: PPR r => SourceSpan -> Int -> IContext -> [TVar] -> TCM r ()
 -------------------------------------------------------------------------------
-setTyArgs l ξ βs
+setTyArgs l i ξ βs
   = case map tVar βs of 
       [] -> return ()
-      vs -> addAnn l $ TypInst ξ vs
+      vs -> addAnn l $ TypInst i ξ vs
 
 
 -------------------------------------------------------------------------------
@@ -317,7 +315,8 @@ unifyTypeM l γ t t' = unifyTypesM l γ (FI Nothing [t]) (FI Nothing [t'])
 deadcastM :: (PPR r) => IContext -> Error -> Expression (AnnSSA r) -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 deadcastM ξ err e
-  = addCast ξ e $ CDead err tNull -- $ error "TODO:deadcastM"
+  = addCast ξ e $ CDead err tNull 
+
 
 -- | For the expression @e@, check the subtyping relation between the type @t1@
 --   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
@@ -329,8 +328,6 @@ castM γ e t1 t2
       Left  e   -> tcError e
       Right CNo -> return e
       Right c   -> addCast (tce_ctx γ) e c
-      -- Right c   -> addCast (tce_ctx γ) e 
-      -- $ tracePP (ppshow e ++ " |- " ++ ppshow t1 ++ "  <:  " ++ ppshow t2) c
 
 
 -- | Run the monad `a` in the current state. This action will not alter the
@@ -366,8 +363,8 @@ addCast ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
     loc       = srcPos e
     fact      = TCast ξ c
 
-wrapCast _ f (Cast (Ann l fs) e) = Cast (Ann l (f:fs)) e
-wrapCast l f e                   = Cast (Ann l [f])    e
+wrapCast _ f (Cast_ (Ann l fs) e) = Cast_ (Ann l (f:fs)) e
+wrapCast l f e                    = Cast_ (Ann l [f])    e
 
 
 -- | tcFunTys: "context-sensitive" function signature

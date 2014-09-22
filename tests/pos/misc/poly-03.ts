@@ -1,13 +1,12 @@
 
+/* qualif Cmp(v:number): v = 5 */
 
-function idp<A>(x: A): A {
-  return x; 
-}
+// FIXME: why is this not working without the refinement?
 
-/*@ bar :: () => { number | v = 5 }*/
-function bar(): number {
-  var f = <(number) => number> idp;
-  return f(5);
-}
+/*@ idp :: forall A . (x: A) => { A | v = x }  */
+function idp<A>(x: A): A { return x; }
 
+var f = <(x: number) => number> idp;
+
+assert(f(5) === 5);
 

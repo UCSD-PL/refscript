@@ -2,7 +2,7 @@
 function idp<A>(x: A): A { return x; }
 
 /*@ f :: (number) => number */
-var f = <(number) => number> idp;
+var f : (x: number) => number = idp;
 
-assert(f(6) === 5) ;
+assert(f(5) === 5) ;
 

@@ -385,9 +385,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do z               <- runFailM $ tcExpr γ e1 Nothing
        case z of 
-         Right (_,te1) -> case getProp γ False f te1 of
-                            Just (_, tf) -> tcSetProp $ Just tf
-                            Nothing      -> tcSetProp $ Nothing
+         Right (_,te1) -> tcSetProp $ fmap snd $ getProp γ False f te1
          Left _        -> tcSetProp $ Nothing
   where
     tcSetProp rhsCtx = 
@@ -524,8 +522,8 @@ tcNormalCallW γ l o es t = (tcWrap $ tcNormalCall γ l o (FI Nothing ((,Nothing
 
 tcRetW γ l (Just e)
   = (tcWrap $ tcNormalCall γ l "return" (FI Nothing [(e, Just retTy)]) (returnTy retTy True)) >>= \case
-       Right (FI _ [e'], _) -> (,Nothing) . ReturnStmt l . Just <$> return e'
-       Left err             -> (,Nothing) . ReturnStmt l . Just <$> deadcastM (tce_ctx γ) err e
+       Right (FI _ (e':_), _) -> (,Nothing) . ReturnStmt l . Just <$> return e'
+       Left err               -> (,Nothing) . ReturnStmt l . Just <$> deadcastM (tce_ctx γ) err e
   where
     retTy = tcEnvFindReturn γ 
 
@@ -679,20 +677,8 @@ tcCast γ l e tc
   = do  opTy                <- safeTcEnvFindTy l γ (builtinOpId BICastExpr)
         cid                 <- freshId l
         let γ'               = tcEnvAdd (F.symbol cid) (tc, WriteLocal) γ
-        (FI _ [_, e'], t')  <- tcNormalCall γ' l "user-cast" (FI Nothing [(VarRef l cid, Nothing),(e,Nothing)]) opTy  -- XXX: Push down context?
+        (FI _ [_, e'], t')  <- tcNormalCall γ' l "user-cast" (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy  -- XXX: Push down context?
         return               $ (e', t')
- 
---   = do (e', t0)           <- tcExpr γ e $ Just tc     -- push context down casted expression
---        (_,FI _ [tc1],_)   <- instantiateFTy l ξ fn ft
---        t1                 <- instantiateTy l ξ 1 t0
---        θ                  <- unifyTypeM (srcPos l) γ t1 tc1
---        let (t2,tc2)        = mapPair (apply θ) (t1, tc1)
---        e''                <- castM γ e t2 tc2
---        return              $ (e'', tc2)
-  where
-    ξ                      = tce_ctx γ
-    fn                     = "TC Cast function"
-    ft                     = TFun Nothing [B (F.symbol "x") tc] tVoid fTop
 
 
 ---------------------------------------------------------------------------------------

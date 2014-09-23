@@ -1,12 +1,10 @@
 
-function idp<A>(x: A): A {
-  return x; 
-}
+/*@ qualif Bot(v: number): v = 5 */
+/*@ qualif Bot(v: number): v = 6 */
 
-/*@ bar :: () => { number | v = 6 }*/
-function bar(): number {
-  var f = <(x: number) => number> idp;
-  return f(5);
-}
+function idp<A>(x: A): A { return x; }
 
+var f = <(x: number) => number> idp;
+
+assert(f(5) === 6); 
 

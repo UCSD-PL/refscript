@@ -46,13 +46,8 @@ import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
-
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
-
--- import           Debug.Trace                        (trace)
--- import qualified Data.Foldable                      as FO
--- import           Text.PrettyPrint.HughesPJ 
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -73,7 +68,7 @@ ssa next p
         either (lerror . single) next r
 
 tc next p    
-  = do  r <- typeCheck (expandAliases p) 
+  = do  r <- typeCheck ({- FIXME expandAliases -} p) 
         case r of 
           Left l  -> lerror l 
           Right x -> next x

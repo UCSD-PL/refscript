@@ -47,6 +47,7 @@ import           Language.Nano.Program
 import           Language.Nano.Types              hiding (Exported)
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
+import           Language.Nano.Liquid.Alias
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
@@ -535,21 +536,23 @@ parseAnnot = go
 patch2 ss (id, t)    = (fmap (const ss) id , t)
 
 getSpecString :: RawSpec -> String 
-getSpecString (RawMeas     (_, s)) = s 
-getSpecString (RawBind     (_, s)) = s 
-getSpecString (RawFunc     (_, s)) = s 
-getSpecString (RawIface    (_, s)) = s  
-getSpecString (RawField    (_, s)) = s  
-getSpecString (RawMethod   (_, s)) = s  
-getSpecString (RawStatic   (_, s)) = s  
-getSpecString (RawConstr   (_, s)) = s  
-getSpecString (RawClass    (_, s)) = s  
-getSpecString (RawTAlias   (_, s)) = s  
-getSpecString (RawPAlias   (_, s)) = s  
-getSpecString (RawQual     (_, s)) = s  
-getSpecString (RawInvt     (_, s)) = s  
-getSpecString (RawCast     (_, s)) = s  
-getSpecString (RawExported (_, s)) = s  
+getSpecString = go
+  where
+    go (RawMeas     (_, s)) = s 
+    go (RawBind     (_, s)) = s 
+    go (RawFunc     (_, s)) = s 
+    go (RawIface    (_, s)) = s  
+    go (RawField    (_, s)) = s  
+    go (RawMethod   (_, s)) = s  
+    go (RawStatic   (_, s)) = s  
+    go (RawConstr   (_, s)) = s  
+    go (RawClass    (_, s)) = s  
+    go (RawTAlias   (_, s)) = s  
+    go (RawPAlias   (_, s)) = s  
+    go (RawQual     (_, s)) = s  
+    go (RawInvt     (_, s)) = s  
+    go (RawCast     (_, s)) = s  
+    go (RawExported (_, s)) = s  
 
 instance IsLocated RawSpec where
   srcPos (RawMeas     (s,_)) = s 
@@ -633,7 +636,9 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 --------------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
-mkCode ss = Nano {
+mkCode     = expandAliases . mkCode' 
+
+mkCode' ss = expandAliases $ Nano {
         code          = Src (checkTopStmt <$> ss')
       , qualPool      = envFromList $ getQualifPool ss
       , consts        = envFromList   [ t | Meas   t <- anns ] 

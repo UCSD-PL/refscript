@@ -373,7 +373,7 @@ consVarDecl g v@(VarDecl l x (Just e)) =
                 t       <- safeEnvFindTy y gy
                 Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal))] gy)
 
-      (\ta -> mseq (consExpr g e Nothing) $ \(y, gy) -> do
+      (\ta -> mseq (consExpr g e $ Just ta) $ \(y, gy) -> do
                 t       <- safeEnvFindTy y gy
                 fta     <- freshTyVar gy l ta
                 _       <- subType l (errorLiquid' l) gy t fta
@@ -673,26 +673,12 @@ consDownCast g l x _ t2
 consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> RefType -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
 consCast g l e tc 
-
   = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
-        tc'     <- freshTyVar g l $ rType tc 
+        -- Only freshen if TFun, otherwise the K-var will be instantiated with false
+        tc'     <- freshTyFun g l $ rType tc 
         (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tc', WriteLocal) g
-        consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e,Nothing)]) opTy  
+        consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e,Just tc')]) opTy  
         -- XXX: Push down context?
- 
---   = mseq (consExpr g e $ Just tc) $ \(x, g') -> do
---       t0                    <- safeEnvFindTy x g'
---       (_,FI _ [B _ tc1],_)  <- instantiateFTy l g fn ft
---       t1                    <- ltracePP l "instantiateTy" <$> instantiateTy l g 1 t0
---       -- rename binds not necessary here
---       _                     <- subType l (errorLiquid' l) g t1 tc1
---       ot                    <- zipTypeM l g t1 tc1
---       Just                 <$> envAddFresh l (ltracePP l "consCast ot" ot, WriteLocal) g
---   where
---     fn                      =  "LQ Cast function"
---     ft                      =  TFun Nothing [B (F.symbol "x") tc] tVoid fTop
-
-
 
 -- | `consCall g l fn ets ft0`:
 --   

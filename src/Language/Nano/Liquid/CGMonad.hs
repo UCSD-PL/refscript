@@ -436,6 +436,7 @@ envFindReturn = fst . E.envFindReturn . cge_names
 freshTyFun :: (IsLocated l) => CGEnv -> l -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
 freshTyFun g l t
+  | not (isTFun t)     = return t
   | isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g
   | otherwise          = return t
 

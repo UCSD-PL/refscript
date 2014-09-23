@@ -616,7 +616,7 @@ tcExpr γ e@(ObjectLit _ _) _
 
 -- | < t > e
 tcExpr γ ex@(Cast l e) _ = 
-  withSingleton (tcCast γ l e) 
+  withSingleton ((mapFst (Cast l) <$>) . tcCast γ l e) 
                 (tcError $  bugNoCasts (srcPos l) ex) 
                 [ ct | UserCast ct <- ann_fact l ]
 
@@ -676,13 +676,19 @@ tcExpr _ e _
 tcCast :: PPR r => TCEnv r -> AnnSSA r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
 ---------------------------------------------------------------------------------------
 tcCast γ l e tc 
-  = do (e', t0)           <- tcExpr γ e $ Just tc     -- push context down casted expression
-       (_,FI _ [tc1],_)   <- instantiateFTy l ξ fn ft
-       t1                 <- instantiateTy l ξ 1 t0
-       θ                  <- unifyTypeM (srcPos l) γ t1 tc1
-       let (t2,tc2)        = mapPair (apply θ) (t1, tc1)
-       e''                <- castM γ e t2 tc2
-       return              $ (e'', tc2)
+  = do  opTy                <- safeTcEnvFindTy l γ (builtinOpId BICastExpr)
+        cid                 <- freshId l
+        let γ'               = tcEnvAdd (F.symbol cid) (tc, WriteLocal) γ
+        (FI _ [_, e'], t')  <- tcNormalCall γ' l "user-cast" (FI Nothing [(VarRef l cid, Nothing),(e,Nothing)]) opTy  -- XXX: Push down context?
+        return               $ (e', t')
+ 
+--   = do (e', t0)           <- tcExpr γ e $ Just tc     -- push context down casted expression
+--        (_,FI _ [tc1],_)   <- instantiateFTy l ξ fn ft
+--        t1                 <- instantiateTy l ξ 1 t0
+--        θ                  <- unifyTypeM (srcPos l) γ t1 tc1
+--        let (t2,tc2)        = mapPair (apply θ) (t1, tc1)
+--        e''                <- castM γ e t2 tc2
+--        return              $ (e'', tc2)
   where
     ξ                      = tce_ctx γ
     fn                     = "TC Cast function"

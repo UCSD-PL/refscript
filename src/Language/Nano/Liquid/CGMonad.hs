@@ -48,7 +48,6 @@ module Language.Nano.Liquid.CGMonad (
   -- * Zip type wrapper
   , zipTypeM
 
-
   ) where
 
 import           Control.Applicative 

@@ -23,7 +23,7 @@ import           Language.Nano.Typecheck.Types
 import qualified Language.Nano.Typecheck.Subst as S
 import           Language.Nano.Liquid.Types
 
-expandAliases   :: NanoRefType -> NanoRefType
+expandAliases   :: NanoBareR F.Reft -> NanoBareR F.Reft
 expandAliases p =  expandCodePred pe' 
                 $  expandCodeTAlias te'
                 $  expandPred pe'
@@ -32,7 +32,14 @@ expandAliases p =  expandCodePred pe'
   where
     p'          = p { pAlias = pe' } {tAlias = te'}
     pe'         = expandPAliasEnv $ pAlias p
-    te'         = expandTAliasEnv $ tAlias p
+    te'         = tracePP "te'" $ expandTAliasEnv $ tAlias p
+
+expandCodeTAlias :: TAliasEnv RefType -> NanoRefType -> NanoRefType
+expandCodeTAlias te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
+  where
+    patch :: AnnType F.Reft -> AnnType F.Reft
+    patch (Ann ss f) = Ann ss (expandRefType te <$> f)
+
 
 ------------------------------------------------------------------------------
 -- | One-shot expansion for @PAlias@ -----------------------------------------
@@ -90,10 +97,13 @@ getTApps    = everything (++) ([] `mkQ` fromT)
   where
     fromT   :: RefType -> [F.Symbol] 
     fromT (TApp (TRef (RN (QName _ [] c))) _ _) = [c]
-    fromT _                                  = [ ]
+    fromT _                                     = [ ]
 
 expandTAlias  :: TAliasEnv RefType -> TAlias RefType -> TAlias RefType
 expandTAlias te a = a {al_body = expandRefType te $ al_body a}
+
+-- expandRefType :: TAliasEnv RefType -> RefType -> RefType
+-- expandRefType = expandRefType'
 
 expandRefType :: Data a => TAliasEnv RefType -> a -> a
 expandRefType te = everywhere $ mkT $ tx
@@ -102,7 +112,7 @@ expandRefType te = everywhere $ mkT $ tx
     tx t                                        = t
 
 applyTAlias t c ts_ r a
-  | (nt, ne) == (nα, nx) = (F.subst su $ S.apply θ $ al_body a) `strengthen` r
+  | (nt, ne) == (nα, nx) = tracePP "applyTAlias" $ (F.subst su $ S.apply θ $ al_body a) `strengthen` r
   | otherwise            = die $ errorBadTAlias (srcPos c) t nt ne nα nx
   where
     xs                   = al_syvars a
@@ -120,12 +130,6 @@ splitTsEs ts       = (ts', [e | TExp e <- es'])
     (ts', es')     = break isExp ts
     isExp (TExp _) = True
     isExp _        = False
-
-expandCodeTAlias :: TAliasEnv RefType -> NanoRefType -> NanoRefType
-expandCodeTAlias te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
-  where
-    patch :: AnnType F.Reft -> AnnType F.Reft
-    patch (Ann ss f) = Ann ss (expandRefType te <$> f)
 
 
 -----------------------------------------------------------------------------

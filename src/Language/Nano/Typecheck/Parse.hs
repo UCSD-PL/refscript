@@ -30,7 +30,7 @@ import           Data.Vector                             ((!))
 
 import           Control.Monad
 import           Control.Monad.Trans                     (MonadIO,liftIO)
-import           Control.Applicative                     ((<$>), ( <*>))
+import           Control.Applicative                     ((<$>), (<*>) , (<*) , (*>))
 
 import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
 import           Language.Fixpoint.Parse
@@ -121,7 +121,9 @@ extendsP = do reserved "extends"
               ts     <- option [] $ brackets $ sepBy bareTypeP comma
               return (qn, ts)
 
-qnameP   = withSpan (\s x -> QName s (init x) (last x)) $ char '#' >> sepBy1 qSymbolP (char '.')
+qnameP   = withSpan qname $ optionMaybe (char '#') >> sepBy1 qSymbolP (char '.')
+  where
+    qname s x = QName s (init x) (last x)
 
 -- | Redefining some stuff to make the Qualified names parse right
 qSymbolP :: Parser Symbol
@@ -245,15 +247,18 @@ bareAtomP p
 ----------------------------------------------------------------------------------
 bbaseP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
-bbaseP 
-  =  try (TVar <$> tvarP)                  -- A
- <|> try objLitP                           -- {f1: T1; ... ; fn: Tn} 
- -- FIXME
- -- Disabling array in this form cause there is no room for mutability ...
- -- <|> try (rtArr <$> arrayP)                -- Array<T>
- <|> try (TApp <$> tConP <*> bareTyArgsP)  -- #List[A], #Tree[A,B] etc...
+-- ORIG bbaseP 
+-- ORIG   =  try (TVar <$> tvarP)                  -- A
+-- ORIG  <|> try objLitP                           -- {f1: T1; ... ; fn: Tn} 
+-- ORIG  -- FIXME
+-- ORIG  -- Disabling array in this form cause there is no room for mutability ...
+-- ORIG  -- <|> try (rtArr <$> arrayP)                -- Array<T>
+-- ORIG  <|> try (TApp <$> tConP <*> bareTyArgsP)  -- List[A], Tree[A,B] etc...
  
-
+bbaseP 
+  =  try objLitP                           -- {f1: T1; ... ; fn: Tn} 
+ <|> (TApp <$> tConP <*> bareTyArgsP)  -- List[A], Tree[A,B] etc...
+ 
 
 ----------------------------------------------------------------------------------
 objLitP :: Parser (Reft -> RefType)
@@ -263,14 +268,21 @@ objLitP
        bs    <- braces (propBindP m)
        return $ TCons bs m
  
-mutP =  try (TVar <$> brackets tvarP <*> return ()) 
-    <|> try (TApp <$> brackets tConP <*> return [] <*> return ())
+mutP
+  =  try (TVar <$> brackets tvarP <*> return ()) 
+ <|> try (TApp <$> brackets tConP <*> return [] <*> return ())
 
 
-bareTyArgsP = try (brackets $ sepBy bareTyArgP comma) <|> return []
-
-bareTyArgP  = try bareTypeP 
-           <|> (TExp <$> exprP)
+bareTyArgsP
+  =  try (brackets argsP)
+ <|> try (angles   argsP)
+ <|> return []
+     where
+       argsP = sepBy bareTyArgP comma
+    
+bareTyArgP
+  = try bareTypeP 
+ <|> (TExp <$> exprP)
 
 ----------------------------------------------------------------------------------
 tvarP    :: Parser TVar
@@ -298,27 +310,30 @@ tConP =  try (reserved "number"    >> return TInt)
      <|> try (reserved "bool"      >> return TFPBool)
      <|>     (TRef <$> RN <$> qnameP)
 
-
-bareAll1P p
-  = do reserved "forall"
-       αs <- many1 tvarP
-       dot
-       t  <- p
-       return $ foldr TAll t αs
-
-bareAllP p =  try p 
-          <|> bareAll1P p
+bareAllP p
+  = do tvs   <- optionMaybe (reserved "forall" *> many1 tvarP <* dot) 
+       t     <- p
+       return $ maybe t (foldr TAll t) tvs
 
 
-propBindP defM =  sepEndBy (
-                  try indexEltP 
+-- ORIG bareAllP p =  try p 
+-- ORIG           <|> bareAll1P p
+
+-- ORIG bareAll1P p
+-- ORIG   = do reserved "forall"
+-- ORIG        αs <- many1 tvarP
+-- ORIG        dot
+-- ORIG        t  <- p
+-- ORIG        return $ foldr TAll t αs
+
+propBindP defM =  sepEndBy propEltP semi
+  where
+    propEltP   =  try indexEltP 
               <|> try (fieldEltP defM)
               <|> try (statEltP defM)
               <|> try (methEltP defM)
               <|> try callEltP
-              <|> try consEltP
-                  ) semi
-
+              <|>     consEltP
 
 -- | [f: string]: t
 -- | [f: number]: t

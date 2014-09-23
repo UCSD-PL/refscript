@@ -64,9 +64,10 @@ Executable rsc
 --                   , BangPatterns
 
 -- PROFILING
-  ghc-options:         -W -O2 -prof -auto-all
+-- ghc-options:         -W -O2 -prof -auto-all
 -- REGULAR 
--- ghc-options:         -W -O2  
+
+  ghc-options:         -W -O2  
   Main-is:             Nano.hs
   hs-source-dirs:      src
 

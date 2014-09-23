@@ -1,10 +1,11 @@
 /*@ predicate gt x y   = x >= y                    */
-/*@ alias Nat          = {number | 0 <= v}         */
+/*@ alias nat          = {number | gt(v, 0) }      */
+/*@ alias Nat          = {number | gt(v, 0) }      */
 /*@ alias IArray<T>    = Array<Immutable, T>       */
 /*@ alias IArrayN<T,n> = {v:IArray<T> | len v = n} */
 
 
-/*@ a1 :: IArray<Nat> */
+/*@ a1 :: IArray<nat>    */
 var a1 = [0, 10, 20, 30];
 
 

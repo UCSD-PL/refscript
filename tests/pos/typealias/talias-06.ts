@@ -1,4 +1,3 @@
-
 /*@ alias pos = {number | 0 < v } */
 
 /*@ alice :: pos */

@@ -16,7 +16,7 @@ import           Data.Either                             (partitionEithers)
 import           Data.Default
 import           Data.Traversable                        (mapAccumL)
 import           Data.Monoid                             (mconcat)
-import           Data.Maybe                              (catMaybes)
+import           Data.Maybe                              (listToMaybe, catMaybes)
 import           Data.Generics                    hiding (Generic)
 import           Data.Aeson                              (eitherDecode)
 import           Data.Aeson.Types                 hiding (Parser, Error, parse)
@@ -24,7 +24,7 @@ import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
 import qualified Data.List                        as     L
-import qualified Data.HashSet                     as     S
+-- import qualified Data.HashSet                     as     S
 import           Text.PrettyPrint.HughesPJ               (text)
 import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
@@ -55,7 +55,7 @@ import           Text.Parsec                      hiding (parse, State)
 import           Text.Parsec.Pos                         (newPos)
 import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
 import qualified Text.Parsec.Token                as     T
-import           Text.Parsec.Prim                        (stateUser)
+-- import           Text.Parsec.Prim                        (stateUser)
 
 import           GHC.Generics
 
@@ -115,7 +115,7 @@ iFaceP   = do id     <- identifierP
               h      <- optionMaybe extendsP
               -- FIXME
               es     <- braces $ propBindP def
-              return (id, ID False id vs h es)
+              return (id, ID False id vs h $ convertTvar vs <$> es)
 
 extendsP = do reserved "extends"
               qn     <- RN <$> qnameP
@@ -127,17 +127,14 @@ qnameP   = withSpan qname $ optionMaybe (char '#') >> sepBy1 qSymbolP (char '.')
     qname s x = QName s (init x) (last x)
 
 -- | Redefining some stuff to make the Qualified names parse right
-qSymbolP :: Parser Symbol
-qSymbolP = symbol <$> qSymCharsP
-qSymCharsP   = condIdP qSymChars (`notElem` keyWordSyms)
+qSymbolP    :: Parser Symbol
+qSymbolP    = symbol <$> qSymCharsP
+qSymCharsP  = condIdP qSymChars (`notElem` keyWordSyms)
 keyWordSyms = ["if", "then", "else", "mod"]
-qSymChars
-  =  ['a' .. 'z']
-  ++ ['A' .. 'Z']
-  ++ ['0' .. '9']
-  ++ ['_', '%', '#']    -- omitting the the '.'
-
-
+qSymChars   = ['a' .. 'z'] ++
+              ['A' .. 'Z'] ++
+              ['0' .. '9'] ++
+              ['_', '%', '#'] -- omitting the the '.'
 
 -- [A,B,C...]
 tParP    = angles $ sepBy tvarP comma
@@ -158,18 +155,18 @@ postP p post
 ----------------------------------------------------------------------------------
 -- | RefTypes 
 ----------------------------------------------------------------------------------
-
 -- | `bareTypeP` parses top-level "bare" types. If no refinements are supplied, 
--- then "top" refinement is used.
+--    then "top" refinement is used.
 ----------------------------------------------------------------------------------
 bareTypeP :: Parser RefType 
 ----------------------------------------------------------------------------------
-bareTypeP = bareAllP $ 
-      try bUnP
-  <|> try (refP rUnP)
-  <|>     (xrefP rUnP)
+bareTypeP = bareAllP $ bodyP 
+  where
+    bodyP =  try bUnP
+         <|> try (refP rUnP)
+         <|>     (xrefP rUnP)
 
-rUnP          = mkU <$> parenNullP (bareTypeNoUnionP `sepBy1` plus) toN
+rUnP        = mkU <$> parenNullP (bareTypeNoUnionP `sepBy1` plus) toN
   where
     mkU [x] = strengthen x
     mkU xs  = flattenUnions . TApp TUn (L.sort xs)
@@ -314,8 +311,9 @@ tConP =  try (reserved "number"    >> return TInt)
 bareAllP p
   = do tvs   <- optionMaybe (reserved "forall" *> many1 tvarP <* dot) 
        t     <- p
-       return $ maybe t (foldr TAll t) tvs
-
+       return $ maybe t (`tAll` t) tvs
+    where
+       tAll αs t = foldr TAll (convertTvar αs t) αs
 
 -- ORIG bareAllP p =  try p 
 -- ORIG           <|> bareAll1P p
@@ -454,10 +452,15 @@ classDeclP = do
 -------------------------------------------------------------------------------------
 -- | @convertTvar@ converts @RCon@s corresponding to _bound_ type-variables to @TVar@
 -------------------------------------------------------------------------------------
+convertTvar    :: (Transformable t) => [TVar] -> t r -> t r
+convertTvar as = trans tx as []  
+  where
+    tx αs _ (TApp c [] r)
+      | Just α <- mkTvar αs c = TVar α r 
+    tx _ _ t                  = t 
 
-convertTvar :: S.HashSet TVar -> RefType -> RefType
-convertTvar bound t = undefined
-
+mkTvar αs (TRef r) = listToMaybe [α | α <- αs, symbol α == symbol r]
+mkTvar _  _        = Nothing
 
 ---------------------------------------------------------------------------------
 -- | Specifications
@@ -505,21 +508,23 @@ data PSpec l r
 type Spec = PSpec SourceSpan Reft
 
 parseAnnot :: RawSpec -> Parser Spec
-parseAnnot (RawMeas     (ss, _)) = Meas   <$> patch2 ss <$> idBindP
-parseAnnot (RawBind     (ss, _)) = Bind   <$> patch2 ss <$> idBindP
-parseAnnot (RawFunc     (_ , _)) = AnFunc <$>               anonFuncP
-parseAnnot (RawField    (_ , _)) = Field  <$>               fieldEltP def -- FIXME: these need to be patched aferwards  
-parseAnnot (RawMethod   (_ , _)) = Method <$>               methEltP def 
-parseAnnot (RawStatic   (_ , _)) = Static <$>               statEltP def
-parseAnnot (RawConstr   (_ , _)) = Constr <$>               consEltP
-parseAnnot (RawIface    (ss, _)) = Iface  <$> patch2 ss <$> iFaceP
-parseAnnot (RawClass    (ss, _)) = Class  <$> patch2 ss <$> classDeclP 
-parseAnnot (RawTAlias   (ss, _)) = TAlias <$> patch2 ss <$> tAliasP
-parseAnnot (RawPAlias   (ss, _)) = PAlias <$> patch2 ss <$> pAliasP
-parseAnnot (RawQual     (_ , _)) = Qual   <$>               qualifierP
-parseAnnot (RawInvt     (ss, _)) = Invt              ss <$> bareTypeP
-parseAnnot (RawCast     (ss, _)) = CastSp            ss <$> bareTypeP
-parseAnnot (RawExported (ss, _)) = return $ Exported ss
+parseAnnot = go
+  where
+    go (RawMeas     (ss, _)) = Meas   <$> patch2 ss <$> idBindP
+    go (RawBind     (ss, _)) = Bind   <$> patch2 ss <$> idBindP
+    go (RawFunc     (_ , _)) = AnFunc <$>               anonFuncP
+    go (RawField    (_ , _)) = Field  <$>               fieldEltP def -- FIXME: these need to be patched aferwards  
+    go (RawMethod   (_ , _)) = Method <$>               methEltP def 
+    go (RawStatic   (_ , _)) = Static <$>               statEltP def
+    go (RawConstr   (_ , _)) = Constr <$>               consEltP
+    go (RawIface    (ss, _)) = Iface  <$> patch2 ss <$> iFaceP
+    go (RawClass    (ss, _)) = Class  <$> patch2 ss <$> classDeclP 
+    go (RawTAlias   (ss, _)) = TAlias <$> patch2 ss <$> tAliasP
+    go (RawPAlias   (ss, _)) = PAlias <$> patch2 ss <$> pAliasP
+    go (RawQual     (_ , _)) = Qual   <$>               qualifierP
+    go (RawInvt     (ss, _)) = Invt              ss <$> bareTypeP
+    go (RawCast     (ss, _)) = CastSp            ss <$> bareTypeP
+    go (RawExported (ss, _)) = return $ Exported ss
 
 
 patch2 ss (id, t)    = (fmap (const ss) id , t)

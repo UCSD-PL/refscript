@@ -24,6 +24,7 @@ import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
 import qualified Data.List                        as     L
+import qualified Data.HashSet                     as     S
 import           Text.PrettyPrint.HughesPJ               (text)
 import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
@@ -449,6 +450,13 @@ classDeclP = do
     vs <- option [] $ angles $ sepBy tvarP comma
     pr <- optionMaybe extendsP
     return (id, (vs, pr))
+
+-------------------------------------------------------------------------------------
+-- | @convertTvar@ converts @RCon@s corresponding to _bound_ type-variables to @TVar@
+-------------------------------------------------------------------------------------
+
+convertTvar :: S.HashSet TVar -> RefType -> RefType
+convertTvar bound t = undefined
 
 
 ---------------------------------------------------------------------------------

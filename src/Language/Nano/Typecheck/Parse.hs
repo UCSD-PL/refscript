@@ -96,10 +96,15 @@ tAliasP :: Parser (Id SourceSpan, TAlias RefType)
 tAliasP = do name      <- identifierP
              (αs, πs)  <- mapEither aliasVarT <$> aliasVarsP 
              reservedOp "="
-             body      <- bareTypeP
+             body      <- convertTvar αs <$> bareTypeP
              return      (name, Alias name αs πs body) 
 
-aliasVarsP    = try (brackets $ sepBy aliasVarP comma) <|> return []
+aliasVarsP =  try (brackets avarsP)
+          <|> try (angles   avarsP)
+          <|> return []
+  where
+    avarsP = sepBy aliasVarP comma
+    
 aliasVarP     = withSpan (,) (wordP $ \_ -> True)
 
 aliasVarT :: (SourceSpan, Symbol) -> Either TVar Symbol

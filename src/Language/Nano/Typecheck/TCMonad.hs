@@ -42,8 +42,7 @@ module Language.Nano.Typecheck.TCMonad (
   , subtypeM, isSubtype
 
   -- * Casts
-  , castM
-  , deadcastM
+  , castM, deadcastM, freshId
 
   -- * Verbosity
   , whenLoud', whenLoud, whenQuiet', whenQuiet
@@ -280,6 +279,8 @@ instance Freshable a => Freshable [a] where
   fresh = mapM fresh
 
 freshTVar l _ =  ((`TV` l). F.intSymbol (F.symbol "T")) <$> tick
+
+freshId l =  Id l . ("__cast_" ++) . show <$> tick
 
 
 --------------------------------------------------------------------------------

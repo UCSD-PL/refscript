@@ -673,17 +673,24 @@ consDownCast g l x _ t2
 consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> RefType -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
 consCast g l e tc 
-  = mseq (consExpr g e $ Just tc) $ \(x, g') -> do
-      t0                    <- safeEnvFindTy x g'
-      (_,FI _ [B _ tc1],_)  <- instantiateFTy l g fn ft
-      t1                    <- instantiateTy l g 1 t0
-      -- rename binds not necessary here
-      _                     <- subType l (errorLiquid' l) g t1 tc1
-      ot                    <- zipTypeM l g t1 tc1
-      Just                 <$> envAddFresh l (ot, WriteLocal) g
-  where
-    fn                      =  "LQ Cast function"
-    ft                      =  TFun Nothing [B (F.symbol "x") tc] tVoid fTop
+
+  = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
+        tc'     <- freshTyVar g l $ rType tc 
+        (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tc', WriteLocal) g
+        consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e,Nothing)]) opTy  
+        -- XXX: Push down context?
+ 
+--   = mseq (consExpr g e $ Just tc) $ \(x, g') -> do
+--       t0                    <- safeEnvFindTy x g'
+--       (_,FI _ [B _ tc1],_)  <- instantiateFTy l g fn ft
+--       t1                    <- ltracePP l "instantiateTy" <$> instantiateTy l g 1 t0
+--       -- rename binds not necessary here
+--       _                     <- subType l (errorLiquid' l) g t1 tc1
+--       ot                    <- zipTypeM l g t1 tc1
+--       Just                 <$> envAddFresh l (ltracePP l "consCast ot" ot, WriteLocal) g
+--   where
+--     fn                      =  "LQ Cast function"
+--     ft                      =  TFun Nothing [B (F.symbol "x") tc] tVoid fTop
 
 
 
@@ -733,7 +740,7 @@ consInstantiate l g fn ft ts xes
         ts1             <- idxMapFI (instantiateTy l g) 1 ts
         let (ts2, its2)  = balance ts1 its1
         let (su, ts3)    = renameBinds (toList its2) (toList xes)
-        _               <- zipWithM_ (subType l err g) (toList ts2) (ts3)
+        _               <- zipWithM_ (subType l err g) (toList ts2) ts3
         Just           <$> envAddFresh l (F.subst su ot, WriteLocal) g
   where
     toList (FI x xs)     = maybeToList x ++ xs
@@ -759,8 +766,8 @@ instantiateTy :: AnnTypeR -> CGEnv -> Int -> RefType -> CGM RefType
 ----------------------------------------------------------------------------------
 instantiateTy l g i t = freshTyInst l g αs ts t'
     where 
-      (αs, t') = bkAll t
-      ts      = envGetContextTypArgs i g l αs
+      (αs, t')        = bkAll t
+      ts              = envGetContextTypArgs i g l αs
 
 ---------------------------------------------------------------------------------
 instantiateFTy :: (PP a, PPRS F.Reft) => 

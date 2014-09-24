@@ -50,9 +50,9 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
--- import qualified Data.Foldable                      as FO
--- import           Text.PrettyPrint.HughesPJ 
+import           Debug.Trace                        (trace)
+import qualified Data.Foldable                      as FO
+import           Text.PrettyPrint.HughesPJ 
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -67,11 +67,11 @@ verifyFile cfg f fs
                    Left  l -> return (A.NoAnn, F.Unsafe [l])
                    Right y -> typeCheck cfg (expandAliases y) >>= \case 
                                 Left  l -> return (A.NoAnn, F.Unsafe l)
-                                Right z -> solveConstraints f (generateConstraints cfg z)
+                                Right z -> solveConstraints f (generateConstraints cfg $ tracePP (show $ ppCasts z) z)
 
--- ppCasts (Nano { code = Src fs }) = 
---   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
---                                 , TCast _ c <- ann_fact a ] 
+ppCasts (Nano { code = Src fs }) = 
+  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+                                , TCast _ c <- ann_fact a ] 
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -519,10 +519,12 @@ consExpr g (InfixExpr l o e1 e2) _
 
 -- | e ? e1 : e2
 consExpr g (CondExpr l e e1 e2) to
-  = do  opTy                      <- mkTy to <$> safeEnvFindTy (builtinOpId BICondExpr) g
-        tt'                       <- freshTyFun g l $ rType tt
+  = do  opTy                      <- ltracePP l "LQ: CondExpr opTy" <$> mkTy to <$> safeEnvFindTy (builtinOpId BICondExpr) g
+        tt'                       <- ltracePP l "tt'" <$> freshTyFun g l (rType tt)
         (v,g')                    <- mapFst (VarRef l) <$> envAddFresh l (tt', WriteLocal) g
-        consCallCondExpr g' l BICondExpr (FI Nothing ((,Nothing) <$> [e,v,e1,e2])) opTy
+        mseq (consCallCondExpr g' l BICondExpr (FI Nothing ((,Nothing) <$> [e,v,e1,e2])) opTy) $ \(y,g'') -> 
+          do t'                        <- safeEnvFindTy  y g''
+             return                     $ error (ppshow t') -- Just (trace ("CondExpr rt" ++ ppshow t' ) y,g'')
   where
     tt       = fromMaybe tTop to
     mkTy Nothing (TAll cv (TAll tv (TFun Nothing [B c_ tc, B t_ _, B x_ xt, B y_ yt] o r))) = 
@@ -686,7 +688,7 @@ consCall :: PP a => CGEnv -> AnnTypeR -> a -> FuncInputs (Expression AnnTypeR, M
 
 consCall g l fn ets ft0 
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
-      ts <- T.mapM (`safeEnvFindTy` g') xes
+      ts <- ltracePP l (ppshow "LQ: " ++ ppshow fn) <$> T.mapM (`safeEnvFindTy` g') xes
       withSingleton
         (\ft -> consInstantiate l g' fn ft ts xes)
         (cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs))
@@ -711,7 +713,7 @@ consInstantiate l g fn ft ts xes
         ts1             <- idxMapFI (instantiateTy l g) 1 ts
         let (ts2, its2)  = balance ts1 its1
         let (su, ts3)    = renameBinds (toList its2) (toList xes)
-        _               <- zipWithM_ (subType l err g) (toList ts2) ts3
+        _               <- zipWithM_ (subType l err g) (ltracePP l (ppshow fn ++ " - LHS") $ toList ts2) (ltracePP l (ppshow fn ++ " - RHS") ts3)
         Just           <$> envAddFresh l (F.subst su ot, WriteLocal) g
   where
     toList (FI x xs)     = maybeToList x ++ xs
@@ -724,12 +726,21 @@ consInstantiate l g fn ft ts xes
 -- Special casing conditional expression call here because we'd like the
 -- arguments to be typechecked under a different guard each.
 consCallCondExpr g l fn ets ft0 
-  = mseq (consCondExprArgs (srcPos l) consExpr g ets) $ \(xes, g') -> do
-      ts <- T.mapM (`safeEnvFindTy` g') xes
+  = mseq (ltracePP l "consCondExprArgs" <$> (consCondExprArgs (srcPos l) (\g e to -> 
+  
+                mseq (consExpr g (ltracePP l "consing" e) to) $ \(xx,gg) ->
+                  do  tt       <- safeEnvFindTy xx gg
+                      return    $ Just (ltracePP l ("&&&& " ++ ppshow tt) xx, gg)
+              
+              ) g ets)) $ \(xes, g') -> do
+
+
+      ts <- ltracePP l (ppshow "LQ condexpr ") <$> T.mapM (`safeEnvFindTy` g') xes
       withSingleton
-        (\ft -> consInstantiate l g' fn ft ts xes)
-        (cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs))
-        [ lt | Overload cx t <- ann_fact l, cge_ctx g == cx, lt <- callSigs, toType t == toType lt ]
+        (\ft -> consInstantiate l g' fn ft (ltracePP l "ts" ts) xes)
+        undefined
+        -- (cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs))
+        $ ltracePP l "overload" [ lt | Overload cx t <- ann_fact l, cge_ctx g == cx, lt <- callSigs, toType t == toType lt ]
   where
     callSigs      = extractCall g ft0
 
@@ -785,13 +796,13 @@ consCondExprArgs :: (F.Symbolic c, IsLocated c, PP b, PP c)
                  -> FuncInputs (Expression AnnTypeR,b) 
                  -> CGM (Maybe (FuncInputs c, CGEnv))
 ---------------------------------------------------------------------------------
-consCondExprArgs _ f g (FI Nothing [(c,tc),(t,tt),(x,tx),(y,ty)]) =
+consCondExprArgs l f g (FI Nothing [(c,tc),(t,tt),(x,tx),(y,ty)]) =
   do  z <- fmap (mapFst reverse)
             <$> do zc <- f g c tc
                    case zc of
                      Just (b, g') -> fmap (mapFst (++ [b]))
                                       <$> consFold (step b) ([],g') 
-                                            [(t,tt,True),(x,tx,True),(y,ty,False)]
+                                            [(t,tt,True),ltracePP l "cond-1" (x,tx,True),ltracePP l "cond-2" (y,ty,False)]
                                       -- The thrid argument for the first
                                       -- element is phony - it doesn't even
                                       -- matter

@@ -14,7 +14,7 @@ import           Control.Applicative                ((<$>), (<*>))
 import qualified Data.Traversable                   as T
 
 import qualified Data.HashMap.Strict                as M
-import           Data.Maybe                         (catMaybes, maybeToList)
+import           Data.Maybe                         (catMaybes, maybeToList, fromMaybe)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -113,7 +113,7 @@ applySolution = fmap . fmap . tx
 --------------------------------------------------------------------------------
 generateConstraints     :: Config -> NanoRefType -> CGInfo 
 --------------------------------------------------------------------------------
-generateConstraints cfg pgm = getCGInfo cfg pgm $ consNano pgm
+generateConstraints _ pgm = getCGInfo pgm $ consNano pgm
 
 --------------------------------------------------------------------------------
 consNano     :: NanoRefType -> CGM ()
@@ -534,15 +534,16 @@ consExpr g (InfixExpr l o e1 e2) _
        consCall g l o (FI Nothing ((,Nothing) <$> [e1, e2])) opTy
 
 -- | e ? e1 : e2
---
---   From the TC phase e1 and e2 are going to be cast to the same base type, so
---   we can now use the signature: 
---
---   forall C T . (c: C, x: T, y: T) => { v: T | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) }
---
-consExpr g (CondExpr l e e1 e2) _
-  = do opTy     <- safeEnvFindTy (builtinOpId BICondExpr) g
-       consCallCondExpr g l BICondExpr (FI Nothing ((,Nothing) <$> [e,e1,e2])) opTy
+consExpr g (CondExpr l e e1 e2) to
+  = do  opTy                      <- mkTy to <$> safeEnvFindTy (builtinOpId BICondExpr) g
+        tt'                       <- freshTyFun g l $ rType tt
+        (v,g')                    <- mapFst (VarRef l) <$> envAddFresh l (tt', WriteLocal) g
+        consCallCondExpr g' l BICondExpr (FI Nothing ((,Nothing) <$> [e,v,e1,e2])) opTy
+  where
+    tt       = fromMaybe tTop to
+    mkTy Nothing (TAll cv (TAll tv (TFun Nothing [B c_ tc, B t_ _, B x_ xt, B y_ yt] o r))) = 
+      TAll cv (TAll tv (TFun Nothing [B c_ tc, B t_ tTop, B x_ xt, B y_ yt] o r))
+    mkTy _ t = t
 
 -- | super(e1,..,en)
 consExpr g (CallExpr l (SuperRef _) es) _
@@ -646,7 +647,17 @@ consExpr g (FuncExpr l fo xs body) tCxtO
 -- not handled
 consExpr _ e _ = cgError $ unimplemented l "consExpr" e where l = srcPos  e
 
-                       
+
+--------------------------------------------------------------------------------
+consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> RefType -> CGM (Maybe (Id AnnTypeR, CGEnv))
+--------------------------------------------------------------------------------
+-- | Only freshen if TFun, otherwise the K-var will be instantiated with false
+consCast g l e tc
+  = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
+        tc'     <- freshTyFun g l $ rType tc
+        (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tc', WriteLocal) g
+        consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e,Just tc')]) opTy  
+                      
 -- | Dead code 
 consDeadCode g l e t
   = do subType l e g t tBot
@@ -669,16 +680,6 @@ consDownCast g l x _ t2
         subType l (errorDownCast l txx t2) g txx tx2
         envAddFresh l (ztx,a) g
 
---------------------------------------------------------------------------------
-consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> RefType -> CGM (Maybe (Id AnnTypeR, CGEnv))
---------------------------------------------------------------------------------
-consCast g l e tc 
-  = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
-        -- Only freshen if TFun, otherwise the K-var will be instantiated with false
-        tc'     <- freshTyFun g l $ rType tc 
-        (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tc', WriteLocal) g
-        consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e,Just tc')]) opTy  
-        -- XXX: Push down context?
 
 -- | `consCall g l fn ets ft0`:
 --   
@@ -735,7 +736,9 @@ consInstantiate l g fn ft ts xes
     idxMapFI f i (FI (Just t) ts) = FI <$> Just <$> f i t <*> mapM (uncurry f) (zip [(i+1)..] ts)
 
 
--- Special casing here conditional expression call here ...
+
+-- Special casing conditional expression call here because we'd like the
+-- arguments to be typechecked under a different guard each.
 consCallCondExpr g l fn ets ft0 
   = mseq (consCondExprArgs (srcPos l) consExpr g ets) $ \(xes, g') -> do
       ts <- T.mapM (`safeEnvFindTy` g') xes
@@ -745,7 +748,6 @@ consCallCondExpr g l fn ets ft0
         [ lt | Overload cx t <- ann_fact l, cge_ctx g == cx, lt <- callSigs, toType t == toType lt ]
   where
     callSigs      = extractCall g ft0
-
 
 ----------------------------------------------------------------------------------
 instantiateTy :: AnnTypeR -> CGEnv -> Int -> RefType -> CGM RefType
@@ -799,12 +801,16 @@ consCondExprArgs :: (F.Symbolic c, IsLocated c, PP b, PP c)
                  -> FuncInputs (Expression AnnTypeR,b) 
                  -> CGM (Maybe (FuncInputs c, CGEnv))
 ---------------------------------------------------------------------------------
-consCondExprArgs _ f g (FI Nothing [(c,tc),(x,tx),(y,ty)]) =
-  do  z <- fmap (mapFst reverse) 
+consCondExprArgs _ f g (FI Nothing [(c,tc),(t,tt),(x,tx),(y,ty)]) =
+  do  z <- fmap (mapFst reverse)
             <$> do zc <- f g c tc
                    case zc of
                      Just (b, g') -> fmap (mapFst (++ [b]))
-                                      <$> consFold (step b) ([],g') [(x,tx,True),(y,ty,False)]
+                                      <$> consFold (step b) ([],g') 
+                                            [(t,tt,True),(x,tx,True),(y,ty,False)]
+                                      -- The thrid argument for the first
+                                      -- element is phony - it doesn't even
+                                      -- matter
                      _            -> return Nothing 
       case z of 
         Just (xs', g'') -> return $ Just (FI Nothing xs', g'')

@@ -260,7 +260,7 @@ bbaseP :: Parser (Reft -> RefType)
 -- ORIG  <|> try (TApp <$> tConP <*> bareTyArgsP)  -- List[A], Tree[A,B] etc...
  
 bbaseP 
-  =  try objLitP                           -- {f1: T1; ... ; fn: Tn} 
+  =  try objLitP                       -- {f1: T1; ... ; fn: Tn} 
  <|> (TApp <$> tConP <*> bareTyArgsP)  -- List[A], Tree[A,B] etc...
  
 
@@ -321,15 +321,14 @@ bareAllP p
     where
        tAll αs t = foldr TAll (convertTvar αs t) αs
 
--- ORIG bareAllP p =  try p 
--- ORIG           <|> bareAll1P p
-
--- ORIG bareAll1P p
--- ORIG   = do reserved "forall"
--- ORIG        αs <- many1 tvarP
--- ORIG        dot
--- ORIG        t  <- p
--- ORIG        return $ foldr TAll t αs
+-- JUNKORI bareAllP p =  try p 
+-- JUNKORI           <|> bareAll1P p
+-- JUNKORI bareAll1P p
+-- JUNKORI   = do reserved "forall"
+-- JUNKORI        αs <- many1 tvarP
+-- JUNKORI        dot
+-- JUNKORI        t  <- p
+-- JUNKORI        return $ foldr TAll t αs
 
 propBindP defM =  sepEndBy propEltP semi
   where

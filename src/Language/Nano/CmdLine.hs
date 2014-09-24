@@ -52,8 +52,9 @@ liquid = Liquid {
 
 
 
-config = modes [ tc
-               , liquid &= auto 
+config = modes [ 
+                 liquid &= auto 
+               , tc
                ] 
             &= help    "rsc is an optional refinement type checker for TypeScript"
             &= program "rsc" 
@@ -65,6 +66,7 @@ config = modes [ tc
 --              whenLoud $ putStrLn $ banner md
 --              return   $ md
 
-banner args =  "rsc © Copyright 2013-14 Regents of the University of California.\n" 
-            ++ "All Rights Reserved.\n"
-            ++ "rsc" ++ show args ++ "\n" 
+-- banner args =  "rsc © Copyright 2013-14 Regents of the University of California.\n" 
+--             ++ "All Rights Reserved.\n"
+--             ++ "rsc" ++ show args ++ "\n" 
+

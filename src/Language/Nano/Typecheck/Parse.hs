@@ -623,9 +623,9 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
         Left msg -> Left  $ Crash [] $ "JSON decode error:\n" ++ msg
         Right p  -> Right $ p
 
---------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
---------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 mkCode     = expandAliases . visitNano convertTvarVisitor [] . mkCode' 
 
 mkCode' ss = expandAliases $ Nano {

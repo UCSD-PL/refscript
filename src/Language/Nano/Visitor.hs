@@ -47,6 +47,7 @@ data Visitor acc ctx b = Visitor {
   , txExpr  :: ctx -> Expression b -> Expression b
   , txCElt  :: ctx -> ClassElt b   -> ClassElt b
   , txId    :: ctx -> Id b         -> Id b
+  , txLVal  :: ctx -> LValue b     -> LValue b
 
   -- | Accumulations are allowed to access current @ctx@ but @acc@ value is monoidal
   , accStmt :: ctx -> Statement b  -> acc
@@ -65,6 +66,7 @@ defaultVisitor = Visitor {
   , txExpr  = \_ x -> x
   , txCElt  = \_ x -> x
   , txId    = \_ x -> x
+  , txLVal  = \_ x -> x
   , accStmt = \_ _ -> mempty
   , accExpr = \_ _ -> mempty
   , accCElt = \_ _ -> mempty
@@ -115,7 +117,6 @@ visitExpr   ::  (IsLocated b) => Visitor a ctx b -> ctx -> Expression b -> Expre
 visitExpr v = vE
   where
     vS      = visitStmt       v   
-    vC      = visitCaseClause v   
     vI      = visitId         v   
     vL      = visitLValue     v   
     vE c e  = step c' s' where c'   = ctxExpr v c  e
@@ -168,17 +169,25 @@ visitFIInit v = step
     step c (ForInLVal l) = ForInLVal (visitLValue v c l)  
 
 visitVarDecl :: (IsLocated b) =>  Visitor a ctx b -> ctx -> VarDecl b -> VarDecl b
-visitVarDecl = error "TODO"
+visitVarDecl v c (VarDecl l x e) = VarDecl l (visitId v c x) (visitExpr v c <$> e)
 
 visitId :: (IsLocated b) => Visitor a ctx b -> ctx -> Id b -> Id b
 visitId v c x = txId v c x 
 
 visitLValue :: (IsLocated b) => Visitor a ctx b -> ctx -> LValue b -> LValue b
-visitLValue  = error "TODO"
+visitLValue v c lv = step c (txLVal v c lv)
+  where
+    step c (LDot l e s)       = LDot     l (visitExpr v c e) s
+    step c (LBracket l e1 e2) = LBracket l (visitExpr v c e1) (visitExpr v c e2)
+    step _ lv@(LVar {})       = lv
 
-
+      
 visitCaseClause :: (IsLocated b) => Visitor a ctx b -> ctx -> CaseClause b -> CaseClause b
-visitCaseClause = error "TODO"
+visitCaseClause v = step
+  where
+    step c (CaseClause l e ss) = CaseClause l  (visitExpr v c e) (visitStmt v c <$> ss)
+    step c (CaseDefault l ss)  = CaseDefault l (visitStmt v c <$> ss)
+    
 
 
 -- foldStmts :: (Monoid acc) => Visitor acc ctx b -> ctx -> [Statement b] -> acc 
@@ -216,7 +225,28 @@ instance Transformable TypeMember where
   trans f as xs m = m { f_type = trans f as xs $ f_type m }
 
 instance Transformable Fact where
-  trans = error "TODO"
+  trans = transFact
+
+instance Transformable IfaceDef where
+  trans f as xs idf = idf { t_elts = trans f (as' ++ as) xs <$> t_elts idf } 
+    where
+      as'           = t_args idf
+      
+transFact f = go
+  where
+    go as xs (VarAnn   t)   = VarAnn   $ trans f as xs t  
+    go as xs (FieldAnn m)   = FieldAnn $ trans f as xs m
+    go as xs (MethAnn  m)   = MethAnn  $ trans f as xs m
+    go as xs (StatAnn  m)   = StatAnn  $ trans f as xs m 
+    go as xs (ConsAnn  m)   = ConsAnn  $ trans f as xs m
+    go as xs (UserCast t)   = UserCast $ trans f as xs t
+    go as xs (FuncAnn  t)   = FuncAnn  $ trans f as xs t
+    go as xs (IfaceAnn ifd) = IfaceAnn $ trans f as xs ifd
+    go as xs (ClassAnn c)   = ClassAnn $ transClassAnn f as xs c
+    go as xs z              = z
+    
+transClassAnn _ _ _ z@(_, Nothing)        = z
+transClassAnn f as xs (as', Just (n, ts)) = (as, Just (n, trans f (as' ++ as) xs <$> ts))
 
 transRType :: ([TVar] -> [Bind r] -> RType r -> RType r) -> [TVar] -> [Bind r] -> RType r -> RType r
 

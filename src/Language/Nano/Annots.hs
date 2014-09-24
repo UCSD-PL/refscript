@@ -14,7 +14,7 @@ module Language.Nano.Annots (
   , Cast(..), CastDirection(..), castDirection, noCast, upCast, dnCast, ddCast
 
   -- * Aliases for annotated Source 
-  , AnnBare, UAnnBare, AnnSSA , UAnnSSA
+  , AnnR, AnnBare, UAnnBare, AnnSSA , UAnnSSA
   , AnnType, UAnnType, AnnInfo, UAnnInfo
 
 ) where
@@ -213,13 +213,3 @@ instance (PP a, PP b) => PP (Annot b a) where
 phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
 
 
----------------------------------------------------------------------------------
--- | Visitors 
----------------------------------------------------------------------------------
-
-instance Transformable Fact where
-  trans = error "TODO"
- 
-transAnnR :: ([TVar] -> [Bind r] -> RType r -> RType r)
-          -> [TVar] -> [Bind r] ->  AnnR r  -> AnnR r
-transAnnR = error "TODO"

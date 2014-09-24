@@ -16,7 +16,7 @@ module Language.Nano.Annots (
   -- * Aliases for annotated Source 
   , AnnR, AnnBare, UAnnBare, AnnSSA , UAnnSSA
   , AnnType, UAnnType, AnnInfo, UAnnInfo
-
+                                  
 ) where
 
 import           Control.Applicative            hiding (empty)
@@ -211,5 +211,3 @@ instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
 
 phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
-
-

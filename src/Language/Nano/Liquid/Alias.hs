@@ -23,11 +23,11 @@ import           Language.Nano.Typecheck.Types
 import qualified Language.Nano.Typecheck.Subst as S
 import           Language.Nano.Liquid.Types
 
--- HEREHEREHEREHERE
+
 -- pe'
 -- te' [using pe']
--- tx :: RefType -> RefType (using pe' and te')
--- lift above to Fact, Ann, and use those instead of everywhere.
+-- tx :: RefType -> RefType p(using pe' and te')
+-- lift above to Annot r
 
 expandAliases   :: NanoBareR F.Reft -> NanoBareR F.Reft
 expandAliases p =  expandCodePred pe' 

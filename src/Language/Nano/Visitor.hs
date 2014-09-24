@@ -13,10 +13,13 @@ module Language.Nano.Visitor (
 
 import           Data.Monoid
 import           Control.Applicative            ((<$>))
+import           Control.Exception              (throw)
 import           Language.Nano.Errors
 import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.Syntax.Annotations
 import           Language.Nano.Types
+import           Language.Nano.Locations
 import           Language.Nano.Annots
 import           Language.Nano.Program -- Eeks, cycles!
 import           Language.Nano.Typecheck.Types
@@ -62,32 +65,23 @@ defaultVisitor = Visitor {
 -- | Using Visitors
 --------------------------------------------------------------------------------
 
-visitNano :: Visitor a ctx b -> ctx -> Nano b r -> Nano b r 
+visitNano :: (IsLocated b) => Visitor a ctx b -> ctx -> Nano b r -> Nano b r 
 visitNano v c p = p { code = visitSource v c (code p) }
 
-visitSource :: Visitor a ctx b -> ctx -> Source b -> Source b 
+visitSource :: (IsLocated b) => Visitor a ctx b -> ctx -> Source b -> Source b 
 visitSource v c (Src ss) = Src $ visitStmts v c ss 
 
-visitStmts   :: Visitor a ctx b -> ctx -> [Statement b] -> [Statement b] 
+visitStmts   :: (IsLocated b) => Visitor a ctx b -> ctx -> [Statement b] -> [Statement b] 
 visitStmts v c ss = visitStmt v c <$> ss
 
-
-visitFInit :: Visitor a ctx b -> ctx -> ForInit b -> ForInit b
-visitFInit = error "TODO"
-
-visitFIInit :: Visitor a ctx b -> ctx -> ForInInit b -> ForInInit b
-visitFIInit = error "TODO"
-
-visitVarDecl :: Visitor a ctx b -> ctx -> VarDecl b -> VarDecl b
-visitVarDecl = error "TODO"
-
-visitStmt   :: Visitor a ctx b -> ctx -> Statement b -> Statement b 
+visitStmt   :: (IsLocated b) => Visitor a ctx b -> ctx -> Statement b -> Statement b 
 visitStmt v = vS
   where
     vE      = visitExpr v   
+    vC      = visitCaseClause v   
+    vI      = visitId   v   
     vS c s  = step c' s' where c'   = ctxStmt v c s
                                s'   = txStmt  v c' s
-    step c s@(EmptyStmt {})         = s 
     step c (ExprStmt l e)           = ExprStmt     l (vE c e)
     step c (BlockStmt l ss)         = BlockStmt    l (vS c <$> ss)
     step c (IfSingleStmt l b s)     = IfSingleStmt l (vE c b) (vS c s)
@@ -96,19 +90,24 @@ visitStmt v = vS
     step c (ForStmt l i t inc b)    = ForStmt      l (visitFInit v c i) (vE c <$> t) (vE c <$> inc) (vS c b)
     step c (ForInStmt l i e b)      = ForInStmt    l (visitFIInit v c i) (vE c e) (vS c b)
     step c (VarDeclStmt l ds)       = VarDeclStmt  l (visitVarDecl v c <$> ds)
-    -- vis c (ReturnStmt _ e)         = isNano e
-    -- vis c (FunctionStmt _ _ _ b)   = isNano b
-    -- vis c (SwitchStmt _ e cs)      = isNano e && not (null cs) && isNano cs
-    -- vis c (ClassStmt _ _ _ _  bd)  = all isNano bd
-    -- vis c (ThrowStmt _ e)          = isNano e
-    -- vis c (FunctionDecl _ _ _)     = True
-    -- vis c (IfaceStmt _)            = True
-    -- vis c (ModuleStmt _ _ s)       = all isNano s
-    -- vis c e                        = errortext (text "Not Nano Statement:" $$ pp e)
+    step c (ReturnStmt l e)         = ReturnStmt   l (vE c <$> e)
+    step c (FunctionStmt l f xs b)  = FunctionStmt l (vI c f) (vI c <$> xs) (vS c <$> b)
+    step c (SwitchStmt l e cs)      = SwitchStmt   l (vE c e) (vC c <$> cs)
+    step c (ClassStmt l x xe xs es) = ClassStmt    l (vI c x) (vI c <$> xe) (vI c <$> xs) (visitClassElt v c <$> es) 
+    step c (ThrowStmt l e)          = ThrowStmt    l (vE c e)
+    step c (FunctionDecl l f xs)    = FunctionDecl l (vI c f) (vI c <$> xs)
+    step c (ModuleStmt l m ss)      = ModuleStmt   l (vI c m) (vS c <$> ss) 
+    step _ s@(IfaceStmt {})         = s 
+    step _ s@(EmptyStmt {})         = s 
+    step _ s                        = throw $ unimplemented l "visitStatement" s  where l = srcPos $ getAnnotation s
 
 
+visitClassElt :: (IsLocated b) => Visitor a ctx b -> ctx -> ClassElt b -> ClassElt b 
+visitClassElt v = go
+  where
+    go = error "TODO" 
 
-visitExpr   :: Visitor a ctx b -> ctx -> Expression b -> Expression b 
+visitExpr   ::  (IsLocated b) => Visitor a ctx b -> ctx -> Expression b -> Expression b 
 visitExpr v = go
   where
     go = error "TODO" 
@@ -136,6 +135,22 @@ visitExpr v = go
 -- HANAD   isNano (Cast _ e)              = isNano e
 -- HANAD   isNano e                       = errortext (text "Not Nano Expression!" <+> pp e)
 -- HANAD   -- isNano _                     = False
+
+
+visitFInit ::  (IsLocated b) => Visitor a ctx b -> ctx -> ForInit b -> ForInit b
+visitFInit = error "TODO"
+
+visitFIInit :: (IsLocated b) => Visitor a ctx b -> ctx -> ForInInit b -> ForInInit b
+visitFIInit = error "TODO"
+
+visitVarDecl :: (IsLocated b) =>  Visitor a ctx b -> ctx -> VarDecl b -> VarDecl b
+visitVarDecl = error "TODO"
+
+visitId :: (IsLocated b) => Visitor a ctx b -> ctx -> Id b -> Id b
+visitId = error "TODO"
+
+visitCaseClause :: (IsLocated b) => Visitor a ctx b -> ctx -> CaseClause b -> CaseClause b
+visitCaseClause = error "TODO"
 
 
 

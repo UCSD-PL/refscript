@@ -162,25 +162,28 @@ postP p post
 bareTypeP :: Parser RefType 
 ----------------------------------------------------------------------------------
 bareTypeP = bareAllP $ 
-      try bUnP
+      try funcSigP
+  <|> try bUnP
   <|> try (refP rUnP)
   <|>     (xrefP rUnP)
 
-rUnP          = mkU <$> parenNullP (bareTypeNoUnionP `sepBy1` plus) toN
+rUnP          = mkU <$> parenNullP (bareTypeInUnionP `sepBy1` plus) toN
   where
     mkU [x] = strengthen x
     mkU xs  = flattenUnions . TApp TUn (L.sort xs)
     toN     = (tNull:)
 
-bUnP        = parenNullP (bareTypeNoUnionP `sepBy1` plus) toN >>= mkU
+bUnP        = parenNullP (bareTypeInUnionP `sepBy1` plus) toN >>= mkU
   where
     mkU [x] = return x
     mkU xs  = flattenUnions . TApp TUn xs <$> topP
     toN     = (tNull:)
 
 
--- | `bareTypeNoUnionP` parses a type that does not contain a union at the top-level.
-bareTypeNoUnionP = try funcSigP <|> (bareAllP $ bareAtomP bbaseP)
+-- | `bareTypeInUnionP` parses a type that does not contain a union at the top-level.
+--   Functions cannot appear here
+-- bareTypeInUnionP = try funcSigP <|> (bareAllP $ bareAtomP bbaseP)
+bareTypeInUnionP = bareAllP $ bareAtomP bbaseP
 
 -- | `optNullP` optionally parses "( `a` )?", where `a` is parsed by the input parser @pr@.
 parenNullP p f =  try (f <$> postP p question) <|> p

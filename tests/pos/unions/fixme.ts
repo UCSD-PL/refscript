@@ -5,9 +5,10 @@ function check_undefined<T>(x:any) : T{
 	return crash();
     
     // OK    
-    return x;
+    // return x;
 
-    // FAILS return <T>x;
+    // FAILS 
+    return <T>x;
     // PROBABLY "parses" the above as "TApp T []" ... aha.
 }
   

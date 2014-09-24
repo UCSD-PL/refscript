@@ -2,8 +2,7 @@
               /\  (number, number) => number
 */
 
-function concat(x, y) {
-    
+function concat(x, y) { 
     var z = x + y;
     return z;
 }

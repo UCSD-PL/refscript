@@ -10,8 +10,8 @@ declare function crash(): any;
 /*@ assume :: (x:boolean) => {v:void | Prop x} */
 declare function assume(x: boolean): void;
 
-/*@ assert :: ({x:boolean|(Prop x)}) => void */
-declare function assert(x: boolean): void;
+/*@ assert :: forall A . ({x:A|(Prop x)}) => void */
+declare function assert<A>(x: A): void;
 
 /*@ random :: () => {v:number | true} */
 declare function random(): number;
@@ -61,14 +61,12 @@ declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
  */
 declare function builtin_BIArrayLit<A>(a: A): A[];
 
+/*@ builtin_BICondExpr :: 
+    forall C T . (c: C, t: T, x: T, y: T) => { v: T | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) } 
+ */
+declare function builtin_BICondExpr<C, T>(c: C, t: T, x: T, y: T): T;
 
-
-/*@ builtin_BICondExpr :: forall C A . (c: C, x: A, y: A) => { v: A | (if (Prop(c)) then (v ~~ x) else (v ~~ y)) } */
-function builtin_BICondExpr<C, A>(c: C, x: A, y: A): A { 
-  if (c) { return x; } else { return y; }
-}
-
-
+declare function builtin_BICastExpr<T>(c: T, x: T): T;
 
 /*@ builtin_OpLT :: 
     /\ (x:number, y:number) => {v:boolean | ((Prop v) <=> (x <  y)) }
@@ -518,6 +516,7 @@ interface Array<T> {
         /\ forall M0 M1 M2 . (this: M0, items: #Array[M1,T]): #Array[M2,T]
     */
     concat<U extends T[]>(...items: U[]): T[];
+
     // concat(...items: T[]): T[];
   
     join(separator/*?*/: string): string;
@@ -572,18 +571,20 @@ interface Array<T> {
 
 declare var Array: {
 
-    (arrayLength/*?*/: number): any[];
+    /*@ forall M T . () => { v: #Array[M, T] | [ (len v) = 0; (not (null v))] } */
+    (): any[];
 
-    /*@ new forall M T . (arrayLength: number) => { v: #Array[M, T] | [ (len v) = arrayLength; (not (null v))] } */
-    new (arrayLength/*?*/: number): any[];
+    /*@ forall M T. (arrayLength: number) => { v: #Array[M, T] | [ (len v) = arrayLength; (not (null v))] } */
+    <T>(arrayLength: number): T[];
+
+    /*@ new forall M T . () => { v: #Array[M, T] | [ (len v) = 0; (not (null v))] } */
+    new (): any[];
 
     /*@ new forall M T. (arrayLength: number) => { v: #Array[M, T] | [ (len v) = arrayLength; (not (null v))] } */
     new <T>(arrayLength: number): T[];
 
     // new <T>(...items: T[]): T[];
 
-
-    <T>(arrayLength: number): T[];
     
     // <T>(...items: T[]): T[];
 

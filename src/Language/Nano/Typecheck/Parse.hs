@@ -52,6 +52,7 @@ import           Language.Nano.Liquid.Alias
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Syntax.Annotations
 
 import           Text.Parsec                      hiding (parse, State)
 import           Text.Parsec.Pos                         (newPos)
@@ -455,18 +456,7 @@ classDeclP = do
     pr <- optionMaybe extendsP
     return (id, (vs, pr))
 
--------------------------------------------------------------------------------------
--- | @convertTvar@ converts @RCon@s corresponding to _bound_ type-variables to @TVar@
--------------------------------------------------------------------------------------
-convertTvar    :: (Transformable t) => [TVar] -> t r -> t r
-convertTvar as = trans tx as []  
-  where
-    tx αs _ (TApp c [] r)
-      | Just α <- mkTvar αs c = TVar α r 
-    tx _ _ t                  = t 
 
-mkTvar αs (TRef r) = listToMaybe [α | α <- αs, symbol α == symbol r]
-mkTvar _  _        = Nothing
 
 ---------------------------------------------------------------------------------
 -- | Specifications
@@ -636,7 +626,7 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 --------------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 --------------------------------------------------------------------------------------
-mkCode     = expandAliases . mkCode' 
+mkCode     = expandAliases . visitNano convertTvarVisitor [] . mkCode' 
 
 mkCode' ss = expandAliases $ Nano {
         code          = Src (checkTopStmt <$> ss')
@@ -729,3 +719,50 @@ instance PP (RawSpec) where
 
 
 
+-------------------------------------------------------------------------------------
+
+-- | @convertTvar@ converts @RCon@s corresponding to _bound_ type-variables to @TVar@
+convertTvar    :: (Transformable t) => [TVar] -> t r -> t r
+convertTvar as = trans tx as []  
+  where
+    tx αs _ (TApp c [] r)
+      | Just α <- mkTvar αs c = TVar α r 
+    tx _ _ t                  = t 
+
+mkTvar αs (TRef r) = listToMaybe [α | α <- αs, symbol α == symbol r]
+mkTvar _  _        = Nothing
+
+convertTvarVisitor :: Visitor () [TVar] (AnnR r) 
+convertTvarVisitor = defaultVisitor {
+    ctxStmt = ctxStmtTvar
+  , txStmt  = transFmap (\as _ -> convertTvar as) 
+  , txExpr  = transFmap (\as _ -> convertTvar as) 
+  }
+
+ctxStmtTvar as s = go s ++ as
+  where
+    go :: Statement (AnnR r)  -> [TVar]
+    go s@(FunctionStmt {}) = grab s 
+    go s@(FunctionDecl {}) = grab s 
+    go s@(IfaceStmt {})    = grab s
+    go s@(ClassStmt {})    = grab s
+    go s@(ModuleStmt {})   = grab s
+    go _                   = []
+
+    grab :: Statement (AnnR r) -> [TVar]
+    grab = concatMap factTvars . ann_fact . getAnnotation 
+
+factTvars :: Fact r -> [TVar]
+factTvars = go
+  where
+    tvars                = fst . bkAll
+    go (VarAnn t)        = tvars t
+    go (FuncAnn t)       = tvars t
+    go (FieldAnn m)      = tvars $ f_type m
+    go (MethAnn m)       = tvars $ f_type m
+    go (StatAnn m)       = tvars $ f_type m
+    go (ConsAnn m)       = tvars $ f_type m
+    go (ClassAnn (as,_)) = as
+    go (IfaceAnn i)      = t_args i
+    go _                 = []
+    

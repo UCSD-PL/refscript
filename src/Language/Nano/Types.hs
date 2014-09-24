@@ -19,7 +19,6 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint   (PP (..))
 
 import qualified Language.Fixpoint.Types         as F
-import qualified Data.HashSet                    as S
 
 import           Language.Fixpoint.Misc
 import           Language.Nano.Env
@@ -420,38 +419,7 @@ instance IsLocated (Alias a s t) where
 
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body 
-
----------------------------------------------------------------------------------
--- | Visitors, deriving be damned. 
----------------------------------------------------------------------------------
-
-class Transformable t where
-  trans :: ([TVar] -> [Bind r] -> RType r -> RType r) -> [TVar] -> [Bind r] -> t r  -> t r
-
-instance Transformable RType where
-  trans = transRType
-
-instance Transformable Bind where
-  trans f as xs b = b { b_type = trans f as xs $ b_type b }
- 
-instance Transformable TypeMember where
-  trans f as xs m = m { f_type = trans f as xs $ f_type m }
-
-transRType :: ([TVar] -> [Bind r] -> RType r -> RType r) -> [TVar] -> [Bind r] -> RType r -> RType r
-
-transRType f                  = go 
-  where
-    go as xs (TAnd ts)        = f as xs $ TAnd ts'            where ts' = go as xs <$> ts
-    go as xs (TApp c ts r)    = f as xs $ TApp c ts' r        where ts' = go as xs <$> ts
-    go as xs (TFun to bs t r) = f as xs $ TFun to' bs' t' r   where to' = go as xs'      <$> to
-                                                                    bs' = trans f as xs' <$> bs
-                                                                    t'  = go as xs'       $  t
-                                                                    xs' = bs ++ xs
-    go as xs (TCons ms m r)   = f as xs $ TCons ms' m r       where ms' = trans f as xs <$> ms
-    go as xs (TAll a t)       = f as xs $ TAll a t'           where t'  = go (a:as) xs t 
-    go as xs t                = f as xs t 
-
-    
+   
 
 
 -- Local Variables:

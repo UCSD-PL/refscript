@@ -110,25 +110,25 @@ instance PP (F.SubC c) where
 
 
 -------------------------------------------------------------------------------
-getCGInfo :: Config -> NanoRefType -> CGM a -> CGInfo
+getCGInfo :: NanoRefType -> CGM a -> CGInfo
 -------------------------------------------------------------------------------
-getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
+getCGInfo pgm = cgStateCInfo pgm . execute pgm . (>> fixCWs)
   where 
     fixCWs       = (,) <$> fixCs <*> fixWs
     fixCs        = get >>= concatMapM splitC . cs
     fixWs        = get >>= concatMapM splitW . ws
 
-execute :: Config -> NanoRefType -> CGM a -> (a, CGState)
-execute cfg pgm act
-  = case runState (runExceptT act) $ initState cfg pgm of 
+execute :: NanoRefType -> CGM a -> (a, CGState)
+execute pgm act
+  = case runState (runExceptT act) $ initState pgm of 
       (Left err, _) -> throw err
       (Right x, st) -> (x, st)  
 
 
 -------------------------------------------------------------------------------
-initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
+initState       :: Nano AnnTypeR F.Reft -> CGState
 -------------------------------------------------------------------------------
-initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invs c [] 
+initState p   = CGS F.emptyBindEnv [] [] 0 mempty invs [] 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
 
@@ -186,10 +186,6 @@ data CGState = CGS {
   -- ^ type constructor invariants
   --
   , invs     :: TConInv              
-  -- 
-  -- ^ configuration options
-  --
-  , cg_opts  :: Config               
   -- 
   -- ^ qualifiers that arise at typechecking
   --

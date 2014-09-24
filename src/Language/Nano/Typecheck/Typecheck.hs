@@ -16,7 +16,7 @@ import           Control.Monad
 import           Control.Arrow                      ((***))
 
 import qualified Data.HashMap.Strict                as M 
-import           Data.Maybe                         (catMaybes, listToMaybe, maybeToList)
+import           Data.Maybe                         (catMaybes, listToMaybe, maybeToList, fromMaybe)
 import           Data.Generics                   
 import qualified Data.Traversable                   as T
 
@@ -28,7 +28,7 @@ import           Language.Nano.Names
 import           Language.Nano.Program
 import           Language.Nano.Types
 import           Language.Nano.Env
-import           Language.Nano.Misc                 (convertError, zipWith3M, withSingleton, withSingleton')
+import           Language.Nano.Misc                 (convertError, zipWith3M, withSingleton, withSingleton', dup)
 import           Language.Nano.SystemUtils
 import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Typecheck.Environment
@@ -511,7 +511,7 @@ tcEnvAddo γ x (Just t) = Just $ tcEnvAdds [(x, t)] γ
 tcExprTW :: PPR r => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, Maybe (RType r))
 tcExprW :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, Maybe (RType r))
 ----------------------------------------------------------------------------------------------------------------
-tcExprTW l γ e Nothing    = tcExprW γ e
+tcExprTW _ γ e Nothing    = tcExprW γ e
 tcExprTW l γ e (Just t)   = (tcWrap $ tcExprT l γ e t)   >>= tcEW γ e
 
 tcExprW γ e              = (tcWrap $ tcExpr γ e Nothing) >>= tcEW γ e 
@@ -522,8 +522,8 @@ tcNormalCallW γ l o es t = (tcWrap $ tcNormalCall γ l o (FI Nothing ((,Nothing
 
 tcRetW γ l (Just e)
   = (tcWrap $ tcNormalCall γ l "return" (FI Nothing [(e, Just retTy)]) (returnTy retTy True)) >>= \case
-       Right (FI _ (e':_), _) -> (,Nothing) . ReturnStmt l . Just <$> return e'
-       Left err               -> (,Nothing) . ReturnStmt l . Just <$> deadcastM (tce_ctx γ) err e
+       Right (FI _ es', _) -> (,Nothing) . ReturnStmt l . Just <$> return (head es')
+       Left err            -> (,Nothing) . ReturnStmt l . Just <$> deadcastM (tce_ctx γ) err e
   where
     retTy = tcEnvFindReturn γ 
 
@@ -569,30 +569,32 @@ tcExpr γ e@(VarRef l x) _
       Nothing -> tcError $ errorUnboundId (ann l) x
  
 -- | e ? e1 : e2
---
---   If the conditional expression is contextually typed as `T` then the
---   conditional expression gets transformed to: 
---
---   e ? <T> e1 : <T> e2
---
---   To make sure that the bare types of the two parts are aligned.
---
---   Then we use the signature: 
 --   
---   forall C . (c: C, x: T, y: T) => T
+--   Conditional expresion is transformed to a call to a function with
+--   signature: 
 --
-tcExpr γ (CondExpr l e e1 e2) (Just t) = 
-    tcExpr γ (CondExpr l e (cast e1) (cast e2)) Nothing
+--     forall C . (c: C, _t: T, x: T, y: T) => T
+--
+--   The arguments are:
+--    
+--    * The condition expression
+--    * A phony expression with: 
+--      - The contextual type `t` if there exists one
+--      - Top, otherwise
+--    * The first conditional expression
+--    * The second conditional expression
+--
+tcExpr γ (CondExpr l e e1 e2) to
+  = do  opTy                      <- mkTy to <$> safeTcEnvFindTy l γ (builtinOpId BICondExpr)
+        (sv,v)                    <- dup F.symbol (VarRef l) <$> freshId l
+        let γ'                     = tcEnvAdd sv (tt, WriteLocal) γ
+        (FI _ [e',_,e1',e2'], t') <- tcNormalCall γ' l BICondExpr (FI Nothing ((,Nothing) <$> [e,v,e1,e2])) opTy
+        return                     $ (CondExpr l e' e1' e2', t')
   where
-    cast e            = updAnn <$> Cast (getAnnotation e) e
-    updAnn (Ann l fs) = Ann l   $  UserCast t : fs
-
-tcExpr γ (CondExpr l e e1 e2) Nothing 
-  = do opTy     <- safeTcEnvFindTy l γ $ builtinOpId BICondExpr
-       z        <- tcNormalCall γ l BICondExpr (FI Nothing ((,Nothing) <$> [e,e1,e2])) opTy
-       case z of
-         (FI _ [e',e1',e2'], t) -> return (CondExpr l e' e1' e2', t)
-         _                      -> tcError $ impossible (srcPos l) "tcCall CondExpr"
+    tt       = fromMaybe tTop to
+    mkTy Nothing (TAll cv (TAll tv (TFun Nothing [B c_ tc, B t_ _, B x_ xt, B y_ yt] o r))) = 
+      TAll cv (TAll tv (TFun Nothing [B c_ tc, B t_ tTop, B x_ xt, B y_ yt] o r))
+    mkTy _ t = t
 
 tcExpr γ e@(PrefixExpr _ _ _) _
   = tcCall γ e 
@@ -620,7 +622,7 @@ tcExpr γ ex@(Cast l e) _ =
 
 -- | Subtyping induced cast
 tcExpr γ (Cast_ l e) _
-  = do  (e', t)             <- tcExpr γ e Nothing
+  = do  (e', t)                 <- tcExpr γ e Nothing
         case e' of
           Cast_ (Ann _ fs') e'' -> return (Cast_ (Ann loc (fs ++ fs')) e'', t)
           _                     -> return (Cast_ l e', t)

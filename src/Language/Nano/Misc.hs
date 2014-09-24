@@ -39,6 +39,8 @@ module Language.Nano.Misc (
   
   , withSingleton, withSingleton'
 
+  , dup
+
 ) where
 
 -- import           Control.Applicative                ((<$>))
@@ -206,3 +208,4 @@ withSingleton' b _ _  [ ] = b
 withSingleton' _ f _  [x] = f x
 withSingleton' _ _ e  _   = e
 
+dup f1 f2 a = (f1 a,f2 a)

@@ -83,10 +83,7 @@ convert' :: (Functor g, EnvLike () g)
 --------------------------------------------------------------------------------
 convert' _ _ t1 t2 | toType t1 == toType t2     = Right CDNo
 
-convert' _ _ t1 t2 | not (isTop t1) && isTop t2 = Right CDUp
-
--- UNDEFINED
--- convert' _ _ t1 t2 | isUndef t1                 = Right CDUp
+convert' _ _ _  t2 | isTop t2                   = Right CDUp
 
 convert' l γ t1 t2 | any isUnion [t1,t2]        = convertUnion   l γ t1 t2
 
@@ -193,15 +190,21 @@ convertObj l γ t1@(TApp (TRef x1) (m1:t1s) _) t2@(TApp (TRef x2) (m2:t2s) _)
           if all (uncurry $ isSubtype γ) $ zip t1s' t2s
             then Right CDUp 
             else Left  $ errorSubtype l t1 t2
-      
-      -- Structural subtyping
-      Nothing       -> 
-          case (flattenType γ t1, flattenType γ t2) of 
-            (Just ft1, Just ft2) -> convertObj l γ ft1 ft2
-            (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2
-            (Nothing , _       ) -> Left $ errorUnresolvedType l t1 
-            (_       , Nothing ) -> Left $ errorUnresolvedType l t2
-  where
+      Nothing -> 
+          case weaken γ x2 x1 t2s of
+            -- Adjusting the child class to the parent
+            Just (_, t2s') -> 
+                if all (uncurry $ isSubtype γ) $ zip t1s t2s'
+                then Right CDDn
+                else Left  $ errorSubtype l t1 t2
+     
+            -- Structural subtyping
+            Nothing       -> 
+                case (flattenType γ t1, flattenType γ t2) of 
+                  (Just ft1, Just ft2) -> convertObj l γ ft1 ft2
+                  (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2
+                  (Nothing , _       ) -> Left $ errorUnresolvedType l t1 
+                  (_       , Nothing ) -> Left $ errorUnresolvedType l t2
                           
 convertObj l γ t1@(TApp (TRef _) _ _) t2 
   = case flattenType γ t1 of 

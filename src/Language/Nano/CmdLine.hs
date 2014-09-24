@@ -16,7 +16,6 @@ data Config
            }
   | Liquid { files       :: [FilePath]     -- ^ source files to check
            , incdirs     :: [FilePath]     -- ^ path to directory for include specs
-           , kVarInst    :: Bool           -- ^ instantiate function types with k-vars
            }
   deriving (Data, Typeable, Show, Eq)
 
@@ -45,8 +44,6 @@ liquid = Liquid {
  , incdirs  = def  &= typDir
                    &= help "Paths to Spec Include Directory "
 
- , kVarInst = True &= help "Enable k-var toplevel function type instantiation [default = True]"
-   
  } &= help    "RefScript Refinement Type Checker" 
 
 

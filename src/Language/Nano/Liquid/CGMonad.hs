@@ -31,7 +31,7 @@ module Language.Nano.Liquid.CGMonad (
   , Freshable (..), refreshValueVar
 
   -- * Environment API
-  , envAddFresh, envAdds, envAddReturn, envAddGuard, envFindTy, envFindTyWithAsgn
+  , envAddFresh, envAdds, envAddReturn, envAddGuard, envPopGuard, envFindTy, envFindTyWithAsgn
   , safeEnvFindTy, safeEnvFindTyWithAsgn
   , envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
@@ -47,7 +47,6 @@ module Language.Nano.Liquid.CGMonad (
 
   -- * Zip type wrapper
   , zipTypeM
-
 
   ) where
 
@@ -111,25 +110,25 @@ instance PP (F.SubC c) where
 
 
 -------------------------------------------------------------------------------
-getCGInfo :: Config -> NanoRefType -> CGM a -> CGInfo
+getCGInfo :: NanoRefType -> CGM a -> CGInfo
 -------------------------------------------------------------------------------
-getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
+getCGInfo pgm = cgStateCInfo pgm . execute pgm . (>> fixCWs)
   where 
     fixCWs       = (,) <$> fixCs <*> fixWs
     fixCs        = get >>= concatMapM splitC . cs
     fixWs        = get >>= concatMapM splitW . ws
 
-execute :: Config -> NanoRefType -> CGM a -> (a, CGState)
-execute cfg pgm act
-  = case runState (runExceptT act) $ initState cfg pgm of 
+execute :: NanoRefType -> CGM a -> (a, CGState)
+execute pgm act
+  = case runState (runExceptT act) $ initState pgm of 
       (Left err, _) -> throw err
       (Right x, st) -> (x, st)  
 
 
 -------------------------------------------------------------------------------
-initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
+initState       :: Nano AnnTypeR F.Reft -> CGState
 -------------------------------------------------------------------------------
-initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invs c [] 
+initState p   = CGS F.emptyBindEnv [] [] 0 mempty invs [] 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
 
@@ -188,10 +187,6 @@ data CGState = CGS {
   --
   , invs     :: TConInv
   -- 
-  -- ^ configuration options
-  --
-  , cg_opts  :: Config               
-  -- 
   -- ^ qualifiers that arise at typechecking
   --
   , quals    :: ![F.Qualifier]       
@@ -227,15 +222,15 @@ envGetContextCast g a
 
 
 ---------------------------------------------------------------------------------------
-envGetContextTypArgs :: CGEnv -> AnnTypeR -> [TVar] -> [RefType]
+envGetContextTypArgs :: Int -> CGEnv -> AnnTypeR -> [TVar] -> [RefType]
 ---------------------------------------------------------------------------------------
 -- NOTE: If we do not need to instantiate any type parameter (i.e. length αs ==
 -- 0), DO NOT attempt to compare that with the TypInst that might hide within
 -- the expression, cause those type instantiations might serve anothor reason
 -- (i.e. might be there for a separate instantiation).  
-envGetContextTypArgs _ _ []        = []
-envGetContextTypArgs g a αs
-  = case [i | TypInst ξ' i <- ann_fact a, ξ' == cge_ctx g] of 
+envGetContextTypArgs _ _ _ []        = []
+envGetContextTypArgs n g a αs
+  = case [i | TypInst m ξ' i <- ann_fact a, ξ' == cge_ctx g, n == m ] of 
       [i] | length i == length αs -> i 
       _                           -> die $ bugMissingTypeArgs $ srcPos a
 
@@ -268,6 +263,7 @@ envAdds _ xts' g
     where
        (xs,ys)    = unzip xts'
        (ts',as)   = unzip ys
+       -- adjust m (k,v) = M.adjust (v:) (F.symbol k) m
 
 instance PP F.IBindEnv where
   pp e = F.toFix e 
@@ -314,6 +310,38 @@ addInvariant g t             = (keyIn . instanceof . typeof t . invs) <$> get
     sym                      = F.dummyLoc $ F.symbol "instanceof"
 
 
+-- ---------------------------------------------------------------------------------------
+-- scrapeQualifiers   :: RefType -> CGM RefType 
+-- ---------------------------------------------------------------------------------------
+-- scrapeQualifiers t  = do 
+--     modify $ \st -> st { quals = qs ++ quals st }
+--     return t 
+--    where
+--      qs             = concatMap (refTypeQualifiers γ0) $ [t]
+--      γ0             = E.envEmpty :: F.SEnv F.Sort 
+-- 
+-- 
+-- refTypeQualifiers γ0 t = efoldRType rTypeSort addQs γ0 [] t 
+--   where addQs γ t qs   = (mkQuals γ t) ++ qs
+-- 
+-- mkQuals γ t      = [ mkQual γ v so pa | let (F.RR so (F.Reft (v, ras))) = rTypeSortedReft t 
+--                                       , F.RConc p                    <- ras                 
+--                                       , pa                         <- atoms p
+--                    ]
+-- 
+-- mkQual γ v so p = F.Q (F.symbol "Auto") [(v, so)] (F.subst θ p) l0
+--   where 
+--     θ             = F.mkSubst [(x, F.eVar y)   | (x, y) <- xys]
+--     xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show (i :: Int)))) xs [0..] 
+--     xs            = L.delete v $ orderedFreeVars γ p
+--     l0            = F.dummyPos "RSC.CGMonad.mkQual"
+-- 
+-- orderedFreeVars γ = L.nub . filter (`F.memberSEnv` γ) . F.syms 
+-- 
+-- atoms (F.PAnd ps)   = concatMap atoms ps
+-- atoms p           = [p]
+
+
 ---------------------------------------------------------------------------------------
 addAnnot       :: (F.Symbolic x) => SourceSpan -> x -> RefType -> CGM () 
 ---------------------------------------------------------------------------------------
@@ -331,6 +359,14 @@ envAddGuard x b g = g { cge_guards = guard b x : cge_guards g }
   where 
     guard True    = F.eProp 
     guard False   = F.PNot . F.eProp
+
+---------------------------------------------------------------------------------------
+envPopGuard       :: CGEnv -> CGEnv  
+---------------------------------------------------------------------------------------
+envPopGuard g = g { cge_guards = grdPop $ cge_guards g } 
+  where
+    grdPop (_:xs) = xs
+    grdPop []     = []
 
 
 -- | A helper that returns the @RefType@ of variable @x@. Interstring cases:
@@ -365,6 +401,7 @@ envFindTyWithAsgn x = (eSngl <$>) . findT x
                                 Nothing -> Nothing
 
 
+
 ---------------------------------------------------------------------------------------
 safeEnvFindTy :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) 
               => x -> CGEnv -> CGM RefType 
@@ -381,7 +418,12 @@ safeEnvFindTyWithAsgn :: (IsLocated x, F.Symbolic x, F.Expression x, PP x)
 ---------------------------------------------------------------------------------------
 safeEnvFindTyWithAsgn x g = case envFindTyWithAsgn x g of
                         Just t  -> return t
-                        Nothing ->  cgError $ bugEnvFindTy (srcPos x) x
+                        Nothing ->  cgError $ bugEnvFindTy l x 
+  where
+    l = srcPos x
+
+
+
 
 ---------------------------------------------------------------------------------------
 envFindReturn :: CGEnv -> RefType 
@@ -397,15 +439,14 @@ envFindReturn = fst . E.envFindReturn . cge_names
 ---------------------------------------------------------------------------------------
 freshTyFun :: (IsLocated l) => CGEnv -> l -> RefType -> CGM RefType 
 ---------------------------------------------------------------------------------------
-freshTyFun g l t = freshTyFun' g l t . kVarInst . cg_opts =<< get  
-
-freshTyFun' g l t b
-  | b && isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g
-  | otherwise               = return t
+freshTyFun g l t
+  | not (isTFun t)     = return t
+  | isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g
+  | otherwise          = return t
 
 freshTyVar g l t 
-  | isTrivialRefType t      = freshTy "freshTyVar" (toType t) >>= wellFormed l g
-  | otherwise               = return t
+  | isTrivialRefType t = freshTy "freshTyVar" (toType t) >>= wellFormed l g
+  | otherwise          = return t
 
 -- | Instantiate Fresh Type (at Call-site)
 freshTyInst l g αs τs tbody
@@ -468,15 +509,6 @@ freshenModuleDefM g (a, m)
                           return   (x, (v, w, ft))
         _          -> return (x,(v,w,t))
 
---     h (x, ID c n αs hr es) = 
---       case hr of
---         Just (p,ps) -> do ps'   <- mapM (freshTyVar g (srcPos x)) ps 
---                           es'   <- mapM (mapEltM $ freshTyVar g (srcPos x)) es 
---                           return   (x, ID c n αs (Just (p,ps')) es')
---         Nothing     -> do es'   <- mapM (mapEltM $ freshTyVar g (srcPos x)) es
---                           return   (x, ID c n αs Nothing es')
-
-
 
 ---------------------------------------------------------------------------------------
 -- | Adding Subtyping Constraints
@@ -486,7 +518,7 @@ freshenModuleDefM g (a, m)
 subType :: (IsLocated l) => l -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l err g t1 t2 =
-  do t1'    <- addInvariant g t1  -- enhance LHS with invariants
+  do t1'    <- addInvariant t1  -- enhance LHS with invariants
      let xs  =    [(symbolId l x,(t,a)) | (x, Just (t,a)) <- rNms t1' ++ rNms t2 ]
               ++  [(symbolId l x,(t,a)) | (x,      (t,a)) <- E.envToList $ cge_names g ]
      g'     <- envAdds "subtype" xs g
@@ -802,7 +834,7 @@ splitWithMut g i _ μ2 (_,t1) (μf2,t2)
 bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 ---------------------------------------------------------------------------------------
 -- NOTE: removing addInvariant from RHS
-bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant g t1 <*> return t2
+bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant t1 <*> return t2
 
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2
@@ -911,7 +943,7 @@ cgCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 zipTypeM l g t1 t2 = 
   case zipType g t1 t2 of
     Just t  -> return t
-    Nothing -> cgError $ bugZipType l t1 t2
+    Nothing -> cgError $ bugZipType (srcPos l) t1 t2
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

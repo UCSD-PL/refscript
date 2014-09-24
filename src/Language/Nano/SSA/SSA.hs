@@ -181,7 +181,8 @@ ssaStmt (WhileStmt l cnd body)
        let x2s     = [x2 | Just (SI x2) <- (`envFindTy` θ2) <$> xs]
        addAnn l    $ PhiVar x1s
        setSsaEnv θ1
-       return      $ (t, (asgn x1s x0s) `presplice` (WhileStmt l cnd' (body' `splice` (asgn (mkNextId <$> x1s) x2s))))
+       let body''  = body' `splice` asgn (mkNextId <$> x1s) x2s
+       return      $ (t, asgn x1s x0s `presplice` WhileStmt l cnd' body'')
     where
        asgn [] _   = Nothing
        asgn ls rs  = Just $ BlockStmt l $ zipWith (mkPhiAsgn l) ls rs

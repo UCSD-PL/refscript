@@ -96,7 +96,8 @@ instance Free (Cast r) where
 
 instance Free (Fact r) where
   free (PhiVar _)           = S.empty
-  free (TypInst _ ts)       = free ts
+  free (PhiVarTy t)         = free (snd <$> t)
+  free (TypInst _ _ ts)     = free ts
   free (Overload _ t)       = free t
   free (EltOverload _ t)    = free t
   free (TCast _ c)          = free c
@@ -162,7 +163,7 @@ instance F.Reftable r => Substitutable r (Cast r) where
 
 instance F.Reftable r => Substitutable r (Fact r) where
   apply _ (PhiVar φ)        = PhiVar φ
-  apply θ (TypInst ξ ts)    = TypInst ξ     $ apply θ ts
+  apply θ (TypInst i ξ ts)  = TypInst i ξ   $ apply θ ts
   apply θ (Overload ξ t)    = Overload ξ    $ apply θ t
   apply θ (EltOverload ξ t) = EltOverload ξ $ apply θ t
   apply θ (TCast   ξ c)     = TCast ξ       $ apply θ c

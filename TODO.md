@@ -57,7 +57,8 @@ TS benchmarks
 
     underscore    885     641 
     d3            9,225   1,558 
-    ace           13,483  615 
+    ace           13,483  615
+	
     fabricjs      8,584   740 
     jquery        6,043   526
     pixi          5,829   361 
@@ -66,3 +67,31 @@ TS benchmarks
     threejs       19,065  2,651 
     sugar         4,133   650
 
+Rewrites
+--------
+
+while (i <- f(i) ; cond(i)) {
+  BODY
+}
+
+===>
+
+i = f(i);
+while (cond(i)) {
+  BODY
+  i = f(i);
+}
+
+Ex:
+
+while (++i < n) {
+  STUFF
+}
+
+===>
+
+i = i + 1;
+while (i < n){
+  STUFF
+  i = i + 1;
+}

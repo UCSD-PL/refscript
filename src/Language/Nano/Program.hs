@@ -174,6 +174,7 @@ instance IsNano InfixOp where
   isNano OpMod        = True --  @%@
   isNano OpInstanceof = True --  @instanceof@
   isNano OpIn         = True --  @in@
+  isNano OpBOr        = True --  @|@
   isNano e            = errortext (text "Not Nano InfixOp!" <+> pp e)
 
 instance IsNano (LValue a) where 
@@ -218,6 +219,7 @@ instance IsNano AssignOp where
 instance IsNano PrefixOp where
   isNano PrefixLNot   = True
   isNano PrefixMinus  = True 
+  isNano PrefixPlus   = True 
   isNano PrefixTypeof = True 
   isNano PrefixBNot   = True 
   isNano e            = errortext (text "Not Nano PrefixOp!" <+> pp e)

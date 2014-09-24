@@ -353,6 +353,7 @@ data BuiltinOp = BIUndefined
                | BITruthy
                | BISetProp
                | BICondExpr
+               | BICastExpr
                | BIForInKeys
                  deriving (Eq, Ord, Show)
 

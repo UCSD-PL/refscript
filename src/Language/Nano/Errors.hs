@@ -52,11 +52,11 @@ unsupportedNonSingleConsTy l  = mkErr l $ printf "Only a single constructor sign
 unsupportedDotRef l t         = mkErr l $ printf "Unsupported dot reference %s" (ppshow t)
 unsupportedConvFun l t1 t2    = mkErr l $ printf "Unsupported case in convertFun:\n%s\nvs\n%s" (ppshow t1) (ppshow t2)
 
-bug' l s                      = err   l $ "BUG: " ++ s 
-bug l s                       = mkErr l $ "BUG: " ++ s 
-impossible l s                = mkErr l $ "IMPOSSIBLE" ++ s 
+bug' l s                      = err   l $ printf "BUG: %s" s 
+bug l s                       = mkErr l $ printf "BUG: %s" s 
+impossible l s                = mkErr l $ printf "IMPOSSIBLE: %s" s 
 bugBadSubtypes l t1 t2        = mkErr l $ printf "BUG: Unexpected Subtyping Constraint\n%s <: %s" (ppshow t1) (ppshow t2)
-bugMalignedFields l s s'      = mkErr l $ printf "BUG: [%s] \n CGMonad: fields not aligned: '%s' and '%s'" (ppshow l) (ppshow s) (ppshow s')
+bugMalignedFields l s s'      = mkErr l $ printf "BUG: Fields not aligned: '%s' and '%s'" (ppshow s) (ppshow s')
 
 bugUnknownAlias l x           = mkErr l $ printf "BUG: Unknown definition for alias %s" (ppshow x)
 bugUnboundPhiVar l x          = mkErr l $ printf "BUG: Phi Variable %s is unbound" (ppshow x)
@@ -66,7 +66,9 @@ bugUnknown l thing x          = mkErr l $ printf "BUG: Cannot find '%s' in '%s'"
 bugMissingModule l x          = mkErr l $ printf "BUG: Cannot find module '%s'" (ppshow x) 
 bugCallTo l x es              = mkErr l $ printf "BUG: Bug at call to '%s' with args '%s'" (ppshow x) (ppshow es)
 bugMultipleCasts l e          = mkErr l $ printf "BUG: Found multple casts on expression '%s'" (ppshow e)
+bugNoCasts l e                = mkErr l $ printf "BUG: No casts found for expression '%s'" (ppshow e)
 bugNoAnnotForGlob l x         = mkErr l $ printf "BUG: No type annotation found for global variable '%s'" (ppshow x)
+bugCondExprSigParse l         = mkErr l $ printf "BUG: In parsing conditional expression signature"
 
 bugClassDefNotFound l x       = mkErr l $ printf "BUG: Class definition for '%s' not found." (ppshow x)
 bugEnvFindTy l x              = mkErr l $ printf "BUG: envFindTy failed to find binding '%s'" (ppshow x)
@@ -128,6 +130,7 @@ errorUnboundIdEnv l x t       = mkErr l $ printf "ZOGBERT Identifier '%s' unboun
 errorUnboundType l x          = mkErr l $ printf "Type identifier '%s' unbound" (ppshow x)
 errorUnboundId l x            = mkErr l $ printf "Identifier '%s' is unbound" (ppshow x) 
 errorEnvJoin l x t1 t2        = mkErr l $ printf "Variable '%s' has different types ('%s' and '%s') when joining environments." (ppshow x) (ppshow t1) (ppshow t2)
+errorEnvJoinUnif l x t1 t2    = mkErr l $ printf "Error in unifying types '%s' and '%s' for variable '%s' when joining environments." (ppshow t1) (ppshow t2) (ppshow x)
 errorArgMismatch l            = mkErr l $ printf "Mismatch in Number of arguments in signature" 
 errorArgName l x y            = mkErr l $ printf "Wrong Parameter Name at %s: Saw %s but Expected %s" (ppshow l) (ppshow x) (ppshow y)  
 errorExtractNonFld l f x t    = mkErr l $ printf "Cannot extract non-field '%s' from object '%s' of type '%s'." (ppshow f) (ppshow x) (ppshow t)
@@ -158,7 +161,7 @@ errorWellFormed l             = mkErr l $ printf "Well-formedness Error"
 ---------------------------------------------------------------------------
 errorSuper l                  = mkErr l $ printf "Cannot resolve reference to super." 
 errorMissingFields l t1 t2 x  = mkErr l $ printf "Cannot convert %s to %s. Type %s is missing fields %s." (ppshow t1) (ppshow t2) (ppshow t1) (ppshow x) 
-errorVarDeclAnnot l x         = mkErr l $ printf "Variable definition of '%s' with neither type annotation nor initialization is not supported." (ppshow x)
+errorVarDeclAnnot l x         = mkErr l $ printf "Variable definition of '%s' can have at most one type annotation." (ppshow x)
 errorMissingAnnot l s         = mkErr l $ printf "Missing type annotation for %s." s
 errorNonFunction l f t        = mkErr l $ printf "Non-function type: %s :: %s." (ppshow f) (ppshow t)
 errorMissingReturn l          = mkErr l $ printf "Missing Return statement."

@@ -293,11 +293,19 @@ addInvariant g t
         if extraInvariants then (keyIn . instanceof . typeof t . invs) <$> get
                            else (        instanceof . typeof t . invs) <$> get
   where
-    -- | typeof 
-    typeof t@(TApp tc _ o) i = maybe t (strengthenOp t o . rTypeReft . val) $ M.lookup tc i
-    typeof  t              _ = t 
     strengthenOp t o r       | L.elem r (ofRef o) = t
     strengthenOp t _ r       | otherwise          = strengthen t r
+
+    -- | typeof 
+    typeof t@(TApp tc _ o) i = maybe t (strengthenOp t o . rTypeReft . val) $ M.lookup tc i
+    typeof t@(TFun {})     _ = t `strengthen` typeofReft (F.symbol "function")
+    typeof t               _ = t 
+
+    typeofReft               = F.Reft . (vv t,) . single . F.RConc . typeofExpr
+    typeofExpr s             = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "typeof")) [F.eVar $ vv t]) (F.expr s)
+
+
+
     ofRef (F.Reft (s, as))   = (F.Reft . (s,) . single) <$> as
 
     -- | { f: T } --> keyIn("f", v)

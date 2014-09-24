@@ -111,9 +111,11 @@ data Fact r
 type UFact = Fact ()
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show, Data, Typeable)
-type AnnBare r = Annot (Fact r) SourceSpan -- NO facts
-type AnnSSA  r = Annot (Fact r) SourceSpan -- Phi facts
-type AnnType r = Annot (Fact r) SourceSpan -- Phi + t. annot. + Cast facts
+
+type AnnR r    = Annot (Fact r) SourceSpan
+type AnnBare r = AnnR r -- NO facts
+type AnnSSA  r = AnnR r -- Phi facts
+type AnnType r = AnnR r -- Phi + t. annot. + Cast facts
 type AnnInfo r = M.HashMap SourceSpan [Fact r] 
 
 type UAnnBare = AnnBare () 
@@ -210,3 +212,14 @@ instance (PP a, PP b) => PP (Annot b a) where
 
 phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
 
+
+---------------------------------------------------------------------------------
+-- | Visitors 
+---------------------------------------------------------------------------------
+
+instance Transformable Fact where
+  trans = error "TODO"
+ 
+transAnnR :: ([TVar] -> [Bind r] -> RType r -> RType r)
+          -> [TVar] -> [Bind r] ->  AnnR r  -> AnnR r
+transAnnR = error "TODO"

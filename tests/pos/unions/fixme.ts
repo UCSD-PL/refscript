@@ -3,7 +3,12 @@
 function check_undefined<T>(x:any) : T{
     if (typeof x === "undefined") 
 	return crash();
-    return <T>x;
+    
+    // OK    
+    return x;
+
+    // FAILS return <T>x;
+    // PROBABLY "parses" the above as "TApp T []" ... aha.
 }
   
  

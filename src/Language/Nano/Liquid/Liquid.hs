@@ -68,7 +68,7 @@ ssa next p
         either (lerror . single) next r
 
 tc next p    
-  = do  r <- typeCheck ({- FIXME expandAliases -} p) 
+  = do  r <- typeCheck ({- FIXMEPARSER expandAliases -} p) 
         case r of 
           Left l  -> lerror l 
           Right x -> next x
@@ -390,8 +390,7 @@ consVarDecl g v@(VarDecl l x Nothing) =
     _       -> cgError $ errorVarDeclAnnot (srcPos l) x
 
 
--- FIXME: Do the safeExtends check here. Also add casts in the TC phase wherever
--- needed
+-- FIXME: Do safeExtends check here. Also add casts in the TC phase where needed
 ------------------------------------------------------------------------------------
 consClassElts :: PP a => CGEnv -> a -> [ClassElt AnnTypeR] -> CGM ()
 ------------------------------------------------------------------------------------

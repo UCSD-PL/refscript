@@ -14,6 +14,7 @@ module Language.Nano.Visitor (
 import           Data.Monoid
 import           Control.Applicative            ((<$>))
 import           Control.Exception              (throw)
+import           Language.Fixpoint.Misc         (mapSnd)
 import           Language.Nano.Errors
 import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
@@ -102,40 +103,41 @@ visitStmt v = vS
     step _ s                        = throw $ unimplemented l "visitStatement" s  where l = srcPos $ getAnnotation s
 
 
+visitExpr   ::  (IsLocated b) => Visitor a ctx b -> ctx -> Expression b -> Expression b 
+visitExpr v = vE
+  where
+    vS      = visitStmt       v   
+    vC      = visitCaseClause v   
+    vI      = visitId         v   
+    vL      = visitLValue     v   
+    vE c e  = step c' s' where c'   = ctxExpr v c  e
+                               s'   = txExpr  v c' e
+    step _ e@(BoolLit {})           = e 
+    step _ e@(IntLit {})            = e 
+    step _ e@(NullLit {})           = e 
+    step _ e@(StringLit {})         = e 
+    step _ e@(VarRef {})            = e 
+    step _ e@(ThisRef {})           = e 
+    step _ e@(SuperRef {})          = e 
+    step c (ArrayLit l es)          = ArrayLit l (vE c <$> es)
+    step c (CondExpr l e1 e2 e3)    = CondExpr l (vE c e1) (vE c e2) (vE c e3)
+    step c (InfixExpr l o e1 e2)    = InfixExpr l o (vE c e1) (vE c e2)
+    step c (PrefixExpr l o e)       = PrefixExpr l o (vE c e)
+    step c (CallExpr l e es)        = CallExpr l (vE c e) (vE c  <$> es)
+    step c (ObjectLit l bs)         = ObjectLit l (mapSnd (vE c) <$> bs)
+    step c (DotRef l e f)           = DotRef l (vE c e) (vI c f)
+    step c (BracketRef l e1 e2)     = BracketRef l (vE c e1) (vE c e2)
+    step c (AssignExpr l o v e)     = AssignExpr l o (vL c v) (vE c e)
+    step c (UnaryAssignExpr l o v)  = UnaryAssignExpr l o (vL c v) 
+    step c (FuncExpr l f xs ss)     = FuncExpr l (vI c <$> f) (vI c <$> xs) (vS c <$> ss) 
+    step c (NewExpr l e es)         = NewExpr  l (vE c e) (vE c <$> es)
+    step c (Cast l e)               = Cast l (vE c e)
+    step _ e                        = throw $ unimplemented l "visitExpr " e  where l = srcPos $ getAnnotation e 
+
 visitClassElt :: (IsLocated b) => Visitor a ctx b -> ctx -> ClassElt b -> ClassElt b 
 visitClassElt v = go
   where
     go = error "TODO" 
-
-visitExpr   ::  (IsLocated b) => Visitor a ctx b -> ctx -> Expression b -> Expression b 
-visitExpr v = go
-  where
-    go = error "TODO" 
-
--- HANAD instance IsNano (Expression a) where 
--- HANAD   isNano (BoolLit _ _)           = True
--- HANAD   isNano (IntLit _ _)            = True
--- HANAD   isNano (NullLit _ )            = True
--- HANAD   isNano (ArrayLit _ es)         = all isNano es
--- HANAD   isNano (StringLit _ _)         = True
--- HANAD   isNano (CondExpr _ e1 e2 e3)   = all isNano [e1,e2,e3]
--- HANAD   isNano (VarRef _ _)            = True
--- HANAD   isNano (InfixExpr _ o e1 e2)   = isNano o && isNano e1 && isNano e2
--- HANAD   isNano (PrefixExpr _ o e)      = isNano o && isNano e
--- HANAD   isNano (CallExpr _ e es)       = all isNano (e:es)
--- HANAD   isNano (ObjectLit _ bs)        = all isNano $ snd <$> bs
--- HANAD   isNano (DotRef _ e _)          = isNano e
--- HANAD   isNano (BracketRef _ e1 e2)    = isNano e1 && isNano e2
--- HANAD   isNano (AssignExpr _ _ l e)    = isNano e && isNano l && isNano e
--- HANAD   isNano (UnaryAssignExpr _ _ l) = isNano l
--- HANAD   isNano (ThisRef _)             = True 
--- HANAD   isNano (SuperRef _)            = True 
--- HANAD   isNano (FuncExpr _ _ _ s)      = isNano s
--- HANAD   isNano (NewExpr _ e es)        = isNano e && all isNano es
--- HANAD   isNano (Cast _ e)              = isNano e
--- HANAD   isNano e                       = errortext (text "Not Nano Expression!" <+> pp e)
--- HANAD   -- isNano _                     = False
-
 
 visitFInit ::  (IsLocated b) => Visitor a ctx b -> ctx -> ForInit b -> ForInit b
 visitFInit = error "TODO"
@@ -148,6 +150,10 @@ visitVarDecl = error "TODO"
 
 visitId :: (IsLocated b) => Visitor a ctx b -> ctx -> Id b -> Id b
 visitId = error "TODO"
+
+visitLValue :: (IsLocated b) => Visitor a ctx b -> ctx -> LValue b -> LValue b
+visitLValue  = error "TODO"
+
 
 visitCaseClause :: (IsLocated b) => Visitor a ctx b -> ctx -> CaseClause b -> CaseClause b
 visitCaseClause = error "TODO"

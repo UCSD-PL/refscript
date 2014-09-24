@@ -110,25 +110,25 @@ instance PP (F.SubC c) where
 
 
 -------------------------------------------------------------------------------
-getCGInfo :: NanoRefType -> CGM a -> CGInfo
+getCGInfo :: Config -> NanoRefType -> CGM a -> CGInfo
 -------------------------------------------------------------------------------
-getCGInfo pgm = cgStateCInfo pgm . execute pgm . (>> fixCWs)
+getCGInfo cfg pgm = cgStateCInfo pgm . execute cfg pgm . (>> fixCWs)
   where 
     fixCWs       = (,) <$> fixCs <*> fixWs
     fixCs        = get >>= concatMapM splitC . cs
     fixWs        = get >>= concatMapM splitW . ws
 
-execute :: NanoRefType -> CGM a -> (a, CGState)
-execute pgm act
-  = case runState (runExceptT act) $ initState pgm of 
+execute :: Config -> NanoRefType -> CGM a -> (a, CGState)
+execute cfg pgm act
+  = case runState (runExceptT act) $ initState cfg pgm of 
       (Left err, _) -> throw err
       (Right x, st) -> (x, st)  
 
 
 -------------------------------------------------------------------------------
-initState       :: Nano AnnTypeR F.Reft -> CGState
+initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
 -------------------------------------------------------------------------------
-initState p   = CGS F.emptyBindEnv [] [] 0 mempty invs [] 
+initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invs c [] 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
 
@@ -186,6 +186,10 @@ data CGState = CGS {
   -- ^ type constructor invariants
   --
   , invs     :: TConInv
+  -- 
+  -- ^ configuration options
+  --
+  , cg_opts  :: Config               
   -- 
   -- ^ qualifiers that arise at typechecking
   --
@@ -284,7 +288,10 @@ addFixpointBind (x, (t, _))
 ---------------------------------------------------------------------------------------
 addInvariant :: CGEnv -> RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
-addInvariant g t             = (keyIn . instanceof . typeof t . invs) <$> get
+addInvariant g t             
+  = do  extraInvariants <- extraInvs <$> cg_opts <$> get
+        if extraInvariants then (keyIn . instanceof . typeof t . invs) <$> get
+                           else (        instanceof . typeof t . invs) <$> get
   where
     -- | typeof 
     typeof t@(TApp tc _ o) i = maybe t (strengthenOp t o . rTypeReft . val) $ M.lookup tc i
@@ -518,7 +525,7 @@ freshenModuleDefM g (a, m)
 subType :: (IsLocated l) => l -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l err g t1 t2 =
-  do t1'    <- addInvariant t1  -- enhance LHS with invariants
+  do t1'    <- addInvariant g t1  -- enhance LHS with invariants
      let xs  =    [(symbolId l x,(t,a)) | (x, Just (t,a)) <- rNms t1' ++ rNms t2 ]
               ++  [(symbolId l x,(t,a)) | (x,      (t,a)) <- E.envToList $ cge_names g ]
      g'     <- envAdds "subtype" xs g
@@ -834,7 +841,7 @@ splitWithMut g i _ μ2 (_,t1) (μf2,t2)
 bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 ---------------------------------------------------------------------------------------
 -- NOTE: removing addInvariant from RHS
-bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant t1 <*> return t2
+bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant g t1 <*> return t2
 
 bsplitC' g ci t1 t2
   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2

@@ -18,7 +18,6 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Execute 
   , execute
   , runFailM, runMaybeM
-
               
   -- * Errors
   , logError, tcError, tcWrap
@@ -44,10 +43,11 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Casts
   , castM, deadcastM, freshId
 
-  -- * Verbosity
-  , whenLoud', whenLoud, whenQuiet', whenQuiet
+  -- * Verbosity / Options
+  , whenLoud', whenLoud, whenQuiet', whenQuiet, getOpts
 
   )  where 
+
 
 import           Control.Applicative                ((<$>))
 import           Control.Monad.State
@@ -64,6 +64,7 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types            as F
 
 import           Language.Nano.Annots
+import           Language.Nano.CmdLine
 import           Language.Nano.Locations
 import           Language.Nano.Misc
 import           Language.Nano.Program
@@ -111,6 +112,11 @@ data TCState r = TCS {
   -- ^ Verbosity
   --
   , tc_verb     :: V.Verbosity
+  -- 
+  -- ^ configuration options
+  --
+  , tc_opts     :: Config               
+
   }
 
 type TCM r     = ExceptT Error (State (TCState r))
@@ -139,6 +145,9 @@ whenQuiet' :: TCM r a -> TCM r a -> TCM r a
 whenQuiet' quiet other = do  tc_verb <$> get >>= \case 
                                V.Quiet -> quiet
                                _       -> other
+
+getOpts :: TCM r Config
+getOpts = tc_opts <$> get
 
 
 -------------------------------------------------------------------------------
@@ -240,23 +249,24 @@ addAnn :: PPR r => SourceSpan -> Fact r -> TCM r ()
 addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
  
 -------------------------------------------------------------------------------
-execute ::  PPR r => V.Verbosity -> NanoSSAR r -> TCM r a -> Either [Error] a
+execute ::  PPR r => Config -> V.Verbosity -> NanoSSAR r -> TCM r a -> Either [Error] a
 -------------------------------------------------------------------------------
-execute verb pgm act 
-  = case runState (runExceptT act) $ initState verb pgm of 
+execute cfg verb pgm act 
+  = case runState (runExceptT act) $ initState cfg verb pgm of 
       (Left err, _) -> Left [err]
       (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errors st)
 
 -------------------------------------------------------------------------------
-initState :: PPR r => V.Verbosity -> NanoSSAR r -> TCState r
+initState :: PPR r => Config -> V.Verbosity -> NanoSSAR r -> TCState r
 -------------------------------------------------------------------------------
-initState verb _ = TCS tc_errors tc_subst tc_cnt tc_anns tc_verb
+initState cfg verb _ = TCS tc_errors tc_subst tc_cnt tc_anns tc_verb tc_opts 
   where
     tc_errors = []
     tc_subst = mempty 
     tc_cnt   = 0
     tc_anns  = M.empty
     tc_verb  = verb
+    tc_opts  = cfg
 
 
 --------------------------------------------------------------------------

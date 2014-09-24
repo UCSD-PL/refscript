@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections      #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
-module Language.Nano.CmdLine (Config(..), getOpts) where
+module Language.Nano.CmdLine (Config(..), config) where
 
 import System.Console.CmdArgs 
 
@@ -16,6 +16,7 @@ data Config
            }
   | Liquid { files       :: [FilePath]     -- ^ source files to check
            , incdirs     :: [FilePath]     -- ^ path to directory for include specs
+           , extraInvs   :: Bool           -- ^ add extra invariants to object types
            }
   deriving (Data, Typeable, Show, Eq)
 
@@ -37,12 +38,14 @@ tc = TC {
 
 
 liquid = Liquid { 
-   files    = def  &= typ "TARGET"
-                   &= args
-                   &= typFile
+   files        = def  &= typ "TARGET"
+                       &= args
+                       &= typFile
 
- , incdirs  = def  &= typDir
-                   &= help "Paths to Spec Include Directory "
+ , incdirs      = def  &= typDir
+                       &= help "Paths to Spec Include Directory "
+
+ , extraInvs    = def  &= help "Add extra invariants (e.g. 'keyIn' for object types)"
 
  } &= help    "RefScript Refinement Type Checker" 
 
@@ -57,11 +60,11 @@ config = modes [ tc
             &= summary "rsc © Copyright 2013-14 Regents of the University of California." 
             &= verbosity
    
-getOpts :: IO Config 
-getOpts = do md <- cmdArgs config 
-             whenLoud $ putStrLn $ banner md
-             return   $ md
+-- getOpts :: IO Config 
+-- getOpts = do md <- cmdArgs config 
+--              whenLoud $ putStrLn $ banner md
+--              return   $ md
 
-banner args =  "nanojs © Copyright 2013-14 Regents of the University of California.\n" 
+banner args =  "rsc © Copyright 2013-14 Regents of the University of California.\n" 
             ++ "All Rights Reserved.\n"
-            ++ "nanojs" ++ show args ++ "\n" 
+            ++ "rsc" ++ show args ++ "\n" 

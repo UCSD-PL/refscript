@@ -28,7 +28,7 @@ import           Language.Fixpoint.Interface        (solve)
 
 import           Language.Nano.Misc                 (mseq, withSingleton, withSingleton')
 import           Language.Nano.Annots
-import           Language.Nano.CmdLine              (Config,getOpts)
+import           Language.Nano.CmdLine              (Config)
 import           Language.Nano.Errors
 import qualified Language.Nano.Env                  as E
 import           Language.Nano.Locations
@@ -56,38 +56,22 @@ import           System.Console.CmdArgs.Default
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
-
+ 
 --------------------------------------------------------------------------------
-verifyFile    :: FilePath -> [FilePath] -> IO (A.UAnnSol RefType, F.FixResult Error)
+verifyFile    :: Config -> FilePath -> [FilePath] -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile f fs = do  (a,b) <- parse fs $ ssa $ tc $ refTc f
-                      return (a,b)
-parse fs next 
-  = do  r <- parseNanoFromFiles fs
-        case r of 
-          Left  l -> return (A.NoAnn, l) 
-          Right x -> next x
-
-ssa next p    
-  = do  r <- ssaTransform p              
-        either (lerror . single) next r
-
-tc next p    
-  = do  r <- typeCheck (expandAliases p) 
-        case r of 
-          Left l  -> lerror l 
-          Right x -> next x
-          -- Right x -> next $ trace ("ADDED CASTS\n" ++ show (ppCasts x)) x
-
-refTc f    p    = getOpts >>= solveConstraints f . (`generateConstraints` p)
-
-lerror          = return . (A.NoAnn,) . F.Unsafe
-
+verifyFile cfg f fs
+  = parseNanoFromFiles fs >>= \case 
+      Left  l -> return (A.NoAnn, l)
+      Right x -> ssaTransform x >>= \case
+                   Left  l -> return (A.NoAnn, F.Unsafe [l])
+                   Right y -> typeCheck cfg (expandAliases y) >>= \case 
+                                Left  l -> return (A.NoAnn, F.Unsafe l)
+                                Right z -> solveConstraints f (generateConstraints cfg z)
 
 -- ppCasts (Nano { code = Src fs }) = 
 --   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
 --                                 , TCast _ c <- ann_fact a ] 
-
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -113,7 +97,7 @@ applySolution = fmap . fmap . tx
 --------------------------------------------------------------------------------
 generateConstraints     :: Config -> NanoRefType -> CGInfo 
 --------------------------------------------------------------------------------
-generateConstraints _ pgm = getCGInfo pgm $ consNano pgm
+generateConstraints cfg pgm = getCGInfo cfg pgm $ consNano pgm
 
 --------------------------------------------------------------------------------
 consNano     :: NanoRefType -> CGM ()
@@ -878,8 +862,6 @@ consWhileBase l xs tIs g
   = do  xts_base           <- mapM (`safeEnvFindTy` g) xs 
         xts_base'          <- zipWithM (zipTypeM (srcPos l) g) xts_base tIs -- (c)
         zipWithM_ (subType l err g) xts_base' tIs         
-          -- (tracePP ("BASE base type " ++ ppshow xs) xts_base')
-          -- (tracePP ("BASE Invariant type " ++ ppshow xs) tIs)
   where 
     err                      = errorLiquid' l
 
@@ -887,8 +869,6 @@ consWhileStep l xs tIs gI''
   = do  xts_step           <- mapM (`safeEnvFindTy` gI'') xs' 
         xts_step'          <- zipWithM (zipTypeM (srcPos l) gI'') xts_step tIs'
         zipWithM_ (subType l err gI'') xts_step' tIs'                       -- (f)
-          -- (tracePP ("STEP next type " ++ ppshow xs) xts_step')
-          -- (tracePP ("STEP invariant type " ++ ppshow xs) tIs')
   where 
     tIs'                    = F.subst su <$> tIs
     xs'                     = mkNextId   <$> xs

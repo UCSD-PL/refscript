@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE DeriveGeneric             #-}
@@ -6,6 +7,8 @@
 import qualified Language.Nano.Typecheck.Typecheck  as TC
 import qualified Language.Nano.Liquid.Liquid        as LQ
 import qualified Language.Nano.Liquid.Types         as L
+
+import           System.Console.CmdArgs     hiding  (Loud)
 
 import           Data.Aeson                         (eitherDecode)
 import           Data.Aeson.Types            hiding (Parser, Error, parse)
@@ -31,19 +34,18 @@ import           Language.ECMAScript3.PrettyPrint
 import qualified Data.ByteString.Lazy.Char8   as    B
 
 
-main = do cfg  <- getOpts
+main = do cfg  <- cmdArgs config
           run (verifier cfg) cfg
 
 -------------------------------------------------------------------------------
 verifier           :: Config -> FilePath -> IO (UAnnSol L.RefType, F.FixResult Error)
 -------------------------------------------------------------------------------
 verifier cfg f 
-  = do  z             <- json f
-        case z of
-          Left  e     -> return (NoAnn, e)
-          Right jsons -> case cfg of
-                          TC     {} -> TC.verifyFile   jsons
-                          Liquid {} -> LQ.verifyFile f jsons
+  = json f >>= \case 
+      Left  e     -> return (NoAnn, e)
+      Right jsons -> case cfg of
+                       TC     {} -> TC.verifyFile cfg   jsons
+                       Liquid {} -> LQ.verifyFile cfg f jsons
 
 -------------------------------------------------------------------------------
 json :: FilePath -> IO (Either (F.FixResult Error) [FilePath])

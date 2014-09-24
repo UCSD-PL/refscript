@@ -21,7 +21,7 @@ import           Data.Generics
 import qualified Data.Traversable                   as T
 
 import           Language.Nano.Annots
-import           Language.Nano.CmdLine              (getOpts, noFailCasts)
+import           Language.Nano.CmdLine              (noFailCasts, Config)
 import           Language.Nano.Errors
 import           Language.Nano.Locations
 import           Language.Nano.Names
@@ -62,49 +62,34 @@ type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r))
 -- | Top-level Verifier 
 
 --------------------------------------------------------------------------------
-verifyFile :: [FilePath] -> IO (UAnnSol a, F.FixResult Error)
+verifyFile :: Config -> [FilePath] -> IO (UAnnSol a, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile fs = parse fs $ ssa $ tc
-
-parse fs next 
-  = do  r <- parseNanoFromFiles fs 
-        case r of 
-          Left  l -> return (NoAnn, l) 
-          Right x -> next x
-
-ssa next p  
-  = do  r <- ssaTransform p
-        case r of 
-          Left  l -> lerror $ [l] 
-          Right x -> next $ expandAliases x
-
-tc p
-  = do  r <- typeCheck p    
-        case r of
-          Left  l -> unsafe l
-          Right x -> safe x
-
-lerror        = return . (NoAnn,) . F.Unsafe
+verifyFile cfg fs
+  = parseNanoFromFiles fs >>= \case 
+      Left  l -> return (NoAnn, l)
+      Right x -> ssaTransform x >>= \case
+                   Left  l -> return (NoAnn, F.Unsafe [l])
+                   Right y -> typeCheck cfg (expandAliases y) >>= \case
+                                Left  l -> unsafe l
+                                Right z -> return $ safe cfg z
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
                  forM_ errs (putStrLn . ppshow) 
                  return $ (NoAnn, F.Unsafe errs)
 
-safe (Nano {code = Src fs})
-  = do  nfc       <- noFailCasts <$> getOpts
-        return     $ (NoAnn, failCasts nfc fs)
+safe cfg (Nano {code = Src fs}) = (NoAnn, failCasts (noFailCasts cfg) fs)
     where
-        failCasts True  _  = F.Safe
-        failCasts False fs = applyNonNull F.Safe F.Unsafe 
-                           $ concatMap castErrors 
-                           $ casts fs 
+        failCasts True  _   = F.Safe
+        failCasts False fs  = applyNonNull F.Safe F.Unsafe 
+                            $ concatMap castErrors 
+                            $ casts fs 
 
-        casts             :: Data r => [Statement (AnnType r)] -> [AnnType r]
-        casts stmts        = everything (++) ([] `mkQ` f) stmts
+        casts              :: Data r => [Statement (AnnType r)] -> [AnnType r]
+        casts stmts         = everything (++) ([] `mkQ` f) stmts
           where 
-            f             :: Expression (AnnType r) -> [(AnnType r)]
-            f (Cast_ a _)  = [a]
-            f _            = [] 
+            f              :: Expression (AnnType r) -> [(AnnType r)]
+            f (Cast_ a _)   = [a]
+            f _             = [] 
 
 -------------------------------------------------------------------------------
 castErrors :: PPR r => AnnType r -> [Error] 
@@ -115,11 +100,11 @@ castErrors (Ann l facts) = downErrors
 
 
 -------------------------------------------------------------------------------
-typeCheck :: PPR r => NanoSSAR r -> IO (Either [Error] (NanoTypeR r))
+typeCheck :: PPR r => Config -> NanoSSAR r -> IO (Either [Error] (NanoTypeR r))
 -------------------------------------------------------------------------------
-typeCheck pgm = do 
+typeCheck cfg pgm = do 
   v <- V.getVerbosity
-  let r = execute v pgm $ tcNano pgm 
+  let r = execute cfg v pgm $ tcNano pgm 
   return $ r
 
 

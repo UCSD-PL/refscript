@@ -23,6 +23,12 @@ import           Language.Nano.Typecheck.Types
 import qualified Language.Nano.Typecheck.Subst as S
 import           Language.Nano.Liquid.Types
 
+-- HEREHEREHEREHERE
+-- pe'
+-- te' [using pe']
+-- tx :: RefType -> RefType (using pe' and te')
+-- lift above to Fact, Ann, and use those instead of everywhere.
+
 expandAliases   :: NanoBareR F.Reft -> NanoBareR F.Reft
 expandAliases p =  expandCodePred pe' 
                 $  expandCodeTAlias te'
@@ -32,13 +38,20 @@ expandAliases p =  expandCodePred pe'
   where
     p'          = p { pAlias = pe' } {tAlias = te'}
     pe'         = expandPAliasEnv $ pAlias p
-    te'         = tracePP "te'" $ expandTAliasEnv $ tAlias p
+    te'         = tracePP "te'"   $ expandTAliasEnv $ tAlias p
 
 expandCodeTAlias :: TAliasEnv RefType -> NanoRefType -> NanoRefType
 expandCodeTAlias te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
   where
     patch :: AnnType F.Reft -> AnnType F.Reft
     patch (Ann ss f) = Ann ss (expandRefType te <$> f)
+
+expandCodePred :: PAliasEnv -> NanoRefType -> NanoRefType
+expandCodePred te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
+  where
+    patch :: AnnType F.Reft -> AnnType F.Reft
+    patch (Ann ss f) = Ann ss (expandPred te <$> f)
+
 
 
 ------------------------------------------------------------------------------
@@ -75,12 +88,6 @@ applyPAlias p f es a
     xs        = al_syvars a
     nx        = length xs
     ne        = length es
-
-expandCodePred :: PAliasEnv -> NanoRefType -> NanoRefType
-expandCodePred te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
-  where
-    patch :: AnnType F.Reft -> AnnType F.Reft
-    patch (Ann ss f) = Ann ss (expandPred te <$> f)
 
 
 ------------------------------------------------------------------------------

@@ -40,14 +40,18 @@ data Visitor acc ctx b = Visitor {
   -- | Context @ctx@ is built up in a "top-down" fashion but not across siblings
     ctxStmt :: ctx -> Statement b  -> ctx 
   , ctxExpr :: ctx -> Expression b -> ctx
+  , ctxCElt :: ctx -> ClassElt b   -> ctx
 
   -- | Transforms are allowd to access current @ctx@
   , txStmt  :: ctx -> Statement b  -> Statement b
   , txExpr  :: ctx -> Expression b -> Expression b
+  , txCElt  :: ctx -> ClassElt b   -> ClassElt b
+  , txId    :: ctx -> Id b         -> Id b
 
   -- | Accumulations are allowed to access current @ctx@ but @acc@ value is monoidal
-  , accStmt :: ctx -> Statement b -> acc
+  , accStmt :: ctx -> Statement b  -> acc
   , accExpr :: ctx -> Expression b -> acc
+  , accCElt :: ctx -> ClassElt b   -> acc
   }
                          
 ---------------------------------------------------------------------------------
@@ -56,10 +60,14 @@ defaultVisitor :: Monoid acc => Visitor acc ctx b
 defaultVisitor = Visitor {
     ctxStmt = \c _ -> c
   , ctxExpr = \c _ -> c
+  , ctxCElt = \c _ -> c
   , txStmt  = \_ x -> x
   , txExpr  = \_ x -> x
+  , txCElt  = \_ x -> x
+  , txId    = \_ x -> x
   , accStmt = \_ _ -> mempty
   , accExpr = \_ _ -> mempty
+  , accCElt = \_ _ -> mempty
   }           
 
 --------------------------------------------------------------------------------
@@ -135,21 +143,35 @@ visitExpr v = vE
     step _ e                        = throw $ unimplemented l "visitExpr " e  where l = srcPos $ getAnnotation e 
 
 visitClassElt :: (IsLocated b) => Visitor a ctx b -> ctx -> ClassElt b -> ClassElt b 
-visitClassElt v = go
+visitClassElt v = vCE 
   where
-    go = error "TODO" 
+    vI       = visitId   v   
+    vS       = visitStmt v   
+    vD       = visitVarDecl v   
+    vCE c ce = step c' ce' where c'     = ctxCElt v c  ce
+                                 ce'    = txCElt  v c' ce
+    step c (Constructor l xs ss)        = Constructor    l   (vI c <$> xs)          (vS c <$> ss)
+    step c (MemberVarDecl l b d)        = MemberVarDecl  l b (vD c d) 
+    step c (MemberMethDecl l b f xs ss) = MemberMethDecl l b (vI c f) (vI c <$> xs) (vS c <$> ss)
 
 visitFInit ::  (IsLocated b) => Visitor a ctx b -> ctx -> ForInit b -> ForInit b
-visitFInit = error "TODO"
+visitFInit v = step
+  where
+    step _ NoInit       = NoInit
+    step c (VarInit ds) = VarInit  (visitVarDecl v c <$> ds)
+    step c (ExprInit e) = ExprInit (visitExpr v c e)
 
 visitFIInit :: (IsLocated b) => Visitor a ctx b -> ctx -> ForInInit b -> ForInInit b
-visitFIInit = error "TODO"
+visitFIInit v = step
+  where
+    step c (ForInVar x)  = ForInVar (visitId v c x)
+    step c (ForInLVal l) = ForInLVal (visitLValue v c l)  
 
 visitVarDecl :: (IsLocated b) =>  Visitor a ctx b -> ctx -> VarDecl b -> VarDecl b
 visitVarDecl = error "TODO"
 
 visitId :: (IsLocated b) => Visitor a ctx b -> ctx -> Id b -> Id b
-visitId = error "TODO"
+visitId v c x = txId v c x 
 
 visitLValue :: (IsLocated b) => Visitor a ctx b -> ctx -> LValue b -> LValue b
 visitLValue  = error "TODO"
@@ -159,26 +181,22 @@ visitCaseClause :: (IsLocated b) => Visitor a ctx b -> ctx -> CaseClause b -> Ca
 visitCaseClause = error "TODO"
 
 
-
-
-
-
-foldStmts :: (Monoid acc) => Visitor acc ctx b -> ctx -> [Statement b] -> acc 
-foldStmts a = go
-  where
-    go = error "TODO" 
- 
-
-foldStmt :: (Monoid acc) => Visitor acc ctx b -> ctx -> Statement b -> acc 
-foldStmt a = go
-  where
-    go = error "TODO" 
- 
-
-foldExpr :: (Monoid acc) => Visitor acc ctx b -> ctx -> Expression b -> acc 
-foldExpr v = go
-  where
-    go = error "TODO" 
+-- foldStmts :: (Monoid acc) => Visitor acc ctx b -> ctx -> [Statement b] -> acc 
+-- foldStmts a = go
+--   where
+--     go = error "TODO" 
+--  
+-- 
+-- foldStmt :: (Monoid acc) => Visitor acc ctx b -> ctx -> Statement b -> acc 
+-- foldStmt a = go
+--   where
+--     go = error "TODO" 
+--  
+-- 
+-- foldExpr :: (Monoid acc) => Visitor acc ctx b -> ctx -> Expression b -> acc 
+-- foldExpr v = go
+--   where
+--     go = error "TODO" 
 
    
 --------------------------------------------------------------------------------------------
@@ -214,7 +232,7 @@ transRType f                  = go
     go as xs (TAll a t)       = f as xs $ TAll a t'           where t'  = go (a:as) xs t 
     go as xs t                = f as xs t 
 
--- TODO: use newtype for AnnR and NanoBareR so we just make the below instances
+-- RJ: use newtype for AnnR and NanoBareR so we just make the below instances
 
 transAnnR :: ([TVar] -> [Bind r] -> RType r -> RType r)
           -> [TVar] -> AnnR r  -> AnnR r

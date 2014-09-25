@@ -297,6 +297,7 @@ strengthen                   :: F.Reftable r => RType r -> r -> RType r
 strengthen (TApp c ts r) r'  = TApp c ts  $ r' `F.meet` r 
 strengthen (TCons ts m r) r' = TCons ts m $ r' `F.meet` r 
 strengthen (TVar α r)    r'  = TVar α     $ r' `F.meet` r 
+-- strengthen (TFun s t o r) r' = TFun s t o $ r' `F.meet` r 
 strengthen t _               = t                         
 
 -- NOTE: r' is the OLD refinement. 
@@ -539,7 +540,7 @@ instance PP Char where
 instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TVar α r)               = F.ppTy r $ pp α 
   pp (TFun (Just s) xts t _)  = ppArgs parens comma (B (F.symbol "this") s:xts) <+> text "=>" <+> pp t 
-  pp (TFun _ xts t _)         = ppArgs parens comma xts <+> text "=>" <+> pp t 
+  pp (TFun _ xts t r)         = F.ppTy r $ ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)             = text "∀" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
   pp (TAnd ts)                = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TExp e)                 = pprint e 

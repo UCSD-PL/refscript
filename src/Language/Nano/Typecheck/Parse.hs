@@ -323,15 +323,6 @@ bareAllP p
     where
        tAll αs t = foldr TAll (convertTvar αs t) αs
 
--- JUNKORI bareAllP p =  try p 
--- JUNKORI           <|> bareAll1P p
--- JUNKORI bareAll1P p
--- JUNKORI   = do reserved "forall"
--- JUNKORI        αs <- many1 tvarP
--- JUNKORI        dot
--- JUNKORI        t  <- p
--- JUNKORI        return $ foldr TAll t αs
-
 propBindP defM =  sepEndBy propEltP semi
   where
     propEltP   =  try indexEltP 
@@ -626,7 +617,9 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 ---------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 ---------------------------------------------------------------------------------
-mkCode     = expandAliases . visitNano convertTvarVisitor [] . mkCode' 
+mkCode     = expandAliases
+           . visitNano convertTvarVisitor []
+           . mkCode' 
 
 mkCode' ss = expandAliases $ Nano {
         code          = Src (checkTopStmt <$> ss')
@@ -729,7 +722,7 @@ convertTvar as = trans tx as []
       | Just α <- mkTvar αs c = TVar α r 
     tx _ _ t                  = t 
 
-mkTvar αs (TRef r) = listToMaybe [α | α <- αs, symbol α == symbol r]
+mkTvar αs (TRef r) = listToMaybe [ α { tv_loc = srcPos r }  | α <- αs, symbol α == symbol r]
 mkTvar _  _        = Nothing
 
 convertTvarVisitor :: Visitor () [TVar] (AnnR r) 

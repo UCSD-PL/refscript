@@ -537,7 +537,7 @@ instance PP Char where
 
 
 instance (PP r, F.Reftable r) => PP (RType r) where
-  pp (TVar α r)               = F.ppTy r $ pp α 
+  pp (TVar α r)               = F.ppTy r $ (text "TVAR##" <> pp α <> text "##") 
   pp (TFun (Just s) xts t _)  = ppArgs parens comma (B (F.symbol "this") s:xts) <+> text "=>" <+> pp t 
   pp (TFun _ xts t _)         = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)             = text "∀" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t

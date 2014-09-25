@@ -26,8 +26,11 @@ module Language.Nano.Program (
 
 
   -- * Traversals / folds
-  , hoistTypes, hoistGlobals
-  , visibleNames, scrapeModules, writeGlobalVars
+  , hoistTypes
+  , hoistGlobals
+  , visibleNames
+  , scrapeModules
+  , writeGlobalVars
 
   , scrapeVarDecl
 

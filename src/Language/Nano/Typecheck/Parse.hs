@@ -62,7 +62,7 @@ import qualified Text.Parsec.Token                as     T
 
 import           GHC.Generics
 
--- import           Debug.Trace                             ( trace, traceShow)
+import           Debug.Trace                             ( trace, traceShow)
 
 dot        = T.dot        lexer
 plus       = T.symbol     lexer "+"
@@ -617,11 +617,18 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 ---------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 ---------------------------------------------------------------------------------
-mkCode     = expandAliases
+mkCode     = debugTyBinds
+           . expandAliases
            . visitNano convertTvarVisitor []
            . mkCode' 
 
-mkCode' ss = expandAliases $ Nano {
+debugTyBinds p@(Nano {code = Src ss}) = trace msg p
+  where
+    xts = [(x, t) | (x, (t, _)) <- visibleNames ss ]
+    msg = unlines $ "debugTyBinds:" : (ppshow <$> xts)
+    
+    
+mkCode' ss = expandAliases $ Nano { 
         code          = Src (checkTopStmt <$> ss')
       , qualPool      = envFromList $ getQualifPool ss
       , consts        = envFromList   [ t | Meas   t <- anns ] 

@@ -1,16 +1,16 @@
 
-interface Point<A1> {
-  x:A1;
-  y:A1;
+interface Point<A> {
+  x:A;
+  y:A;
 }
 
-interface ColorPoint<A2,C2> extends Point<A2> { 
-  c:C2;
+interface ColorPoint<A,C> extends Point<A> { 
+  c:C;
 }
 
-/*@ foo :: forall M A3 . (#Point<M,A3>) => void */
-function foo<Z>(p: Point<Z>) {
-    return;
+/*@ foo :: forall M A . (#Point[M, A]) => void */
+function foo<A>(p: Point<A>) {
+
 }
 
 /*@ p :: #ColorPoint[#Immutable,number,string] */

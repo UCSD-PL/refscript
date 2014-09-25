@@ -73,10 +73,10 @@ data Nano a r = Nano {
   --
     code      :: !(Source a)               
   -- 
-  -- ^ Annotations (keeping this to scrape qualifiers later)
-  -- ^ XXX: The names are bogus - made unique to avoid overwrites
-  --
-  , qualPool  :: !(Env (RType r))
+  -- -- ^ Annotations (keeping this to scrape qualifiers later)
+  -- -- ^ XXX: The names are bogus - made unique to avoid overwrites
+  -- --
+  -- , qualPool  :: !(Env (RType r))
   -- 
   -- ^ Measure Signatures
   --

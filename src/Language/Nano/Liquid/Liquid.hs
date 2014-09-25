@@ -50,9 +50,9 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
-import qualified Data.Foldable                      as FO
-import           Text.PrettyPrint.HughesPJ 
+-- import           Debug.Trace                        (trace)
+-- import qualified Data.Foldable                      as FO
+-- import           Text.PrettyPrint.HughesPJ 
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -69,9 +69,9 @@ verifyFile cfg f fs
                                 Left  l -> return (A.NoAnn, F.Unsafe l)
                                 Right z -> solveConstraints f (generateConstraints cfg z)
 
-ppCasts (Nano { code = Src fs }) = 
-  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
-                                , TCast _ c <- ann_fact a ] 
+-- ppCasts (Nano { code = Src fs }) = 
+--   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+--                                 , TCast _ c <- ann_fact a ] 
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -465,8 +465,8 @@ consExpr g (Cast_ l e) _ =
   case envGetContextCast g l of
     CDead e' t' -> consDeadCode g l e' t'
     CNo         -> mseq (consExpr g e Nothing) $ return . Just
-    CUp t t'    -> mseq (consExpr g e Nothing) $ \(x,g) -> Just <$> consUpCast   g loc x t t'
-    CDn t t'    -> mseq (consExpr g e Nothing) $ \(x,g) -> Just <$> consDownCast g loc x t t'
+    CUp t t'    -> mseq (consExpr g e Nothing) $ \(x,g') -> Just <$> consUpCast   g' loc x t t'
+    CDn t t'    -> mseq (consExpr g e Nothing) $ \(x,g') -> Just <$> consDownCast g' loc x t t'
   where
     loc = srcPos l
 
@@ -788,18 +788,18 @@ consCondExprArgs :: SourceSpan
                  -> CGM (Maybe (FuncInputs (Id AnnTypeR), CGEnv))
 ---------------------------------------------------------------------------------
 consCondExprArgs l f g (FI Nothing [(c,tc),(t,tt),(x,tx),(y,ty)])
-  = mseq (f g c tc) $ \(c_,gc) -> 
+  = mseq (f g c tc) $ \(c_,gc) ->
       mseq (f gc t tt) $ \(t_,gt) -> 
-        f (envAddGuard c_ True gt) x tx >>= \case
+        (fmap (mapSnd envPopGuard) <$> f (envAddGuard c_ True gt) x tx) >>= \case
           Just (x_, gx) -> 
-              f (envAddGuard c_ False gt) y ty >>= \case
+              (fmap (mapSnd envPopGuard) <$> f (envAddGuard c_ False gx) y ty) >>= \case
                 Just (y_, gy) -> return $ Just (FI Nothing [c_,t_,x_,y_], gy)
                 Nothing       -> case ty of 
                                    Just tty -> do (y_, gy') <- envAddFresh l (tty, WriteLocal) gx
                                                   return    $ Just (FI Nothing [c_,t_,x_,y_], gy')
                                    Nothing  -> return $ Nothing
           Nothing -> 
-              f (envAddGuard c_ False gt) y ty >>= \case
+              (fmap (mapSnd envPopGuard) <$> f (envAddGuard c_ False gt) y ty) >>= \case
                 Just (y_, gy) -> case tx of 
                                    Just ttx -> do (x_, gx') <- envAddFresh l (ttx, WriteLocal) gy
                                                   return    $ Just (FI Nothing [c_,t_,x_,y_], gx')

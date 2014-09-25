@@ -77,6 +77,7 @@ import           Language.Nano.Typecheck.Unify
 import           Language.Nano.Errors
 
 import           Language.ECMAScript3.Syntax
+import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 
 -- import           Debug.Trace                      (trace)
@@ -322,11 +323,16 @@ unifyTypeM l γ t t' = unifyTypesM l γ (FI Nothing [t]) (FI Nothing [t'])
 --------------------------------------------------------------------------------
 
 -- | @deadcastM@ wraps an expression @e@ with a dead-cast around @e@. 
+--
+--    FIXME: if multiple dead casts need to be present - compose the error
+--    messages
+--
 --------------------------------------------------------------------------------
 deadcastM :: (PPR r) => IContext -> Error -> Expression (AnnSSA r) -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 deadcastM ξ err e
   = addCast ξ e $ CDead err tNull 
+
 
 
 -- | For the expression @e@, check the subtyping relation between the type @t1@
@@ -338,7 +344,7 @@ castM γ e t1 t2
   = case convert (srcPos e) γ t1 t2 of
       Left  e   -> tcError e
       Right CNo -> return e
-      Right c   -> addCast (tce_ctx γ) e $ ltracePP e "adding cast" c
+      Right c@(CDead es _)    -> addCast (tce_ctx γ) e c
 
 
 -- | Run the monad `a` in the current state. This action will not alter the
@@ -369,7 +375,21 @@ subtypeM l γ t1 t2
       Right _         -> tcError $ errorSubtype l t1 t2
 
 
-addCast ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
+addCast ξ e c@(CDead ε t) =
+  case deadCasts of
+    [ ]                    -> addC ξ e c
+    [TCast ξ (CDead ε' _)] -> addC ξ (remDeadCasts e) $ CDead (catError ε ε') t
+    cs                     -> die $ errorMultipleCasts (srcPos e) cs
+  where
+    deadCasts = [ c | c@(TCast ξ' (CDead _ _)) <- ann_fact $ getAnnotation e, ξ == ξ' ]
+    remDeadCasts = fmap (\a -> a { ann_fact = filter noDeadCast (ann_fact a) })
+    noDeadCast (TCast ξ' (CDead _ _)) = ξ /= ξ'
+    noDeadCast _                      = True
+
+addCast ξ e c = addC ξ e c
+
+
+addC ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
   where
     loc       = srcPos e
     fact      = TCast ξ c

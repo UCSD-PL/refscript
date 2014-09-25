@@ -298,8 +298,10 @@ addInvariant g t
 
     -- | typeof 
     typeof t@(TApp tc _ o) i = maybe t (strengthenOp t o . rTypeReft . val) $ M.lookup tc i
-    typeof t@(TFun {})     _ = t `strengthen` typeofReft (F.symbol "function")
-    typeof t               _ = t 
+    typeof t _               | isTFun t 
+                             = t `strengthen` typeofReft (F.symbol "function")
+                             | otherwise
+                             = t
 
     typeofReft               = F.Reft . (vv t,) . single . F.RConc . typeofExpr
     typeofExpr s             = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "typeof")) [F.eVar $ vv t]) (F.expr s)

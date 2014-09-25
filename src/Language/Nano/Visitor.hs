@@ -1,4 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{- LANGUAGE MultiParamTypeClasses #-}
+{- LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{- LANGUAGE FlexibleInstances     #-}
 
 module Language.Nano.Visitor (
     Transformable (..)
@@ -12,9 +16,11 @@ module Language.Nano.Visitor (
   ) where
 
 import           Data.Monoid
-import           Control.Applicative            ((<$>))
+import           Data.Traversable               (traverse)
+import           Control.Applicative            (Applicative (), (<$>), (<*>))
 import           Control.Exception              (throw)
 import           Language.Fixpoint.Misc         (mapSnd)
+import           Language.Nano.Misc             (mapSndM)
 import           Language.Nano.Errors
 import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
@@ -76,16 +82,22 @@ defaultVisitor = Visitor {
 -- | Using Visitors
 --------------------------------------------------------------------------------
 
-visitNano :: (IsLocated b) => Visitor a ctx b -> ctx -> Nano b r -> Nano b r 
-visitNano v c p = p { code = visitSource v c (code p) }
+type FMonad m = (Applicative m, Functor m, Monad m)
 
-visitSource :: (IsLocated b) => Visitor a ctx b -> ctx -> Source b -> Source b 
-visitSource v c (Src ss) = Src $ visitStmts v c ss 
+visitNano :: (FMonad m, IsLocated b) => Visitor a ctx b -> ctx -> Nano b r -> m (Nano b r) 
+visitNano v c p = do
+  c'    <- visitSource v c (code p)
+  return $ p { code = c' }
 
-visitStmts   :: (IsLocated b) => Visitor a ctx b -> ctx -> [Statement b] -> [Statement b] 
-visitStmts v c ss = visitStmt v c <$> ss
+visitSource :: (FMonad m, IsLocated b) => Visitor a ctx b -> ctx -> Source b -> m (Source b) 
+visitSource v c (Src ss) = Src <$> visitStmts v c ss 
 
-visitStmt   :: (IsLocated b) => Visitor a ctx b -> ctx -> Statement b -> Statement b 
+visitStmts   :: (FMonad m, IsLocated b) => Visitor a ctx b -> ctx -> [Statement b] -> m [Statement b] 
+visitStmts v c ss = mapM (visitStmt v c) ss
+
+f <$$> x = traverse f x
+
+visitStmt   :: (FMonad m, IsLocated b) => Visitor a ctx b -> ctx -> Statement b -> m (Statement b) 
 visitStmt v = vS
   where
     vE      = visitExpr v   
@@ -93,57 +105,57 @@ visitStmt v = vS
     vI      = visitId   v   
     vS c s  = step c' s' where c'   = ctxStmt v c s
                                s'   = txStmt  v c' s
-    step c (ExprStmt l e)           = ExprStmt     l (vE c e)
-    step c (BlockStmt l ss)         = BlockStmt    l (vS c <$> ss)
-    step c (IfSingleStmt l b s)     = IfSingleStmt l (vE c b) (vS c s)
-    step c (IfStmt l b s1 s2)       = IfStmt       l (vE c b) (vS c s1) (vS c s2)
-    step c (WhileStmt l b s)        = WhileStmt    l (vE c b) (vS c s) 
-    step c (ForStmt l i t inc b)    = ForStmt      l (visitFInit v c i) (vE c <$> t) (vE c <$> inc) (vS c b)
-    step c (ForInStmt l i e b)      = ForInStmt    l (visitFIInit v c i) (vE c e) (vS c b)
-    step c (VarDeclStmt l ds)       = VarDeclStmt  l (visitVarDecl v c <$> ds)
-    step c (ReturnStmt l e)         = ReturnStmt   l (vE c <$> e)
-    step c (FunctionStmt l f xs b)  = FunctionStmt l (vI c f) (vI c <$> xs) (vS c <$> b)
-    step c (SwitchStmt l e cs)      = SwitchStmt   l (vE c e) (vC c <$> cs)
-    step c (ClassStmt l x xe xs es) = ClassStmt    l (vI c x) (vI c <$> xe) (vI c <$> xs) (visitClassElt v c <$> es) 
-    step c (ThrowStmt l e)          = ThrowStmt    l (vE c e)
-    step c (FunctionDecl l f xs)    = FunctionDecl l (vI c f) (vI c <$> xs)
-    step c (ModuleStmt l m ss)      = ModuleStmt   l (vI c m) (vS c <$> ss) 
-    step _ s@(IfaceStmt {})         = s 
-    step _ s@(EmptyStmt {})         = s 
+    step c (ExprStmt l e)           = ExprStmt     l <$> vE c e
+    step c (BlockStmt l ss)         = BlockStmt    l <$> (vS c <$$> ss)
+    step c (IfSingleStmt l b s)     = IfSingleStmt l <$> (vE c b) <*> (vS c s)
+    step c (IfStmt l b s1 s2)       = IfStmt       l <$> (vE c b) <*> (vS c s1) <*> (vS c s2)
+    step c (WhileStmt l b s)        = WhileStmt    l <$> (vE c b) <*> (vS c s) 
+    step c (ForStmt l i t inc b)    = ForStmt      l <$> (visitFInit v c i) <*> (vE c <$$> t) <*> (vE c <$$> inc) <*> (vS c b)
+    step c (ForInStmt l i e b)      = ForInStmt    l <$> (visitFIInit v c i) <*> (vE c e)     <*> (vS c b)
+    step c (VarDeclStmt l ds)       = VarDeclStmt  l <$> (visitVarDecl v c <$$> ds)
+    step c (ReturnStmt l e)         = ReturnStmt   l <$> (vE c <$$> e)
+    step c (FunctionStmt l f xs b)  = FunctionStmt l <$> (vI c f) <*> (vI c <$$> xs) <*> (vS c <$$> b)
+    step c (SwitchStmt l e cs)      = SwitchStmt   l <$> (vE c e) <*> (vC c <$$> cs)
+    step c (ClassStmt l x xe xs es) = ClassStmt    l <$> (vI c x) <*> (vI c <$$> xe) <*> (vI c <$$> xs) <*> (visitClassElt v c <$$> es) 
+    step c (ThrowStmt l e)          = ThrowStmt    l <$> (vE c e)
+    step c (FunctionDecl l f xs)    = FunctionDecl l <$> (vI c f) <*> (vI c <$$> xs)
+    step c (ModuleStmt l m ss)      = ModuleStmt   l <$> (vI c m) <*> (vS c <$$> ss) 
+    step _ s@(IfaceStmt {})         = return s 
+    step _ s@(EmptyStmt {})         = return s 
     step _ s                        = throw $ unimplemented l "visitStatement" s  where l = srcPos $ getAnnotation s
 
 
-visitExpr   ::  (IsLocated b) => Visitor a ctx b -> ctx -> Expression b -> Expression b 
+visitExpr   ::  (FMonad m, IsLocated b) => Visitor a ctx b -> ctx -> Expression b -> m (Expression b) 
 visitExpr v = vE
-  where
-    vS      = visitStmt       v   
-    vI      = visitId         v   
-    vL      = visitLValue     v   
-    vE c e  = step c' s' where c'   = ctxExpr v c  e
-                               s'   = txExpr  v c' e
-    step _ e@(BoolLit {})           = e 
-    step _ e@(IntLit {})            = e 
-    step _ e@(NullLit {})           = e 
-    step _ e@(StringLit {})         = e 
-    step _ e@(VarRef {})            = e 
-    step _ e@(ThisRef {})           = e 
-    step _ e@(SuperRef {})          = e 
-    step c (ArrayLit l es)          = ArrayLit l (vE c <$> es)
-    step c (CondExpr l e1 e2 e3)    = CondExpr l (vE c e1) (vE c e2) (vE c e3)
-    step c (InfixExpr l o e1 e2)    = InfixExpr l o (vE c e1) (vE c e2)
-    step c (PrefixExpr l o e)       = PrefixExpr l o (vE c e)
-    step c (CallExpr l e es)        = CallExpr l (vE c e) (vE c  <$> es)
-    step c (ObjectLit l bs)         = ObjectLit l (mapSnd (vE c) <$> bs)
-    step c (DotRef l e f)           = DotRef l (vE c e) (vI c f)
-    step c (BracketRef l e1 e2)     = BracketRef l (vE c e1) (vE c e2)
-    step c (AssignExpr l o v e)     = AssignExpr l o (vL c v) (vE c e)
-    step c (UnaryAssignExpr l o v)  = UnaryAssignExpr l o (vL c v) 
-    step c (FuncExpr l f xs ss)     = FuncExpr l (vI c <$> f) (vI c <$> xs) (vS c <$> ss) 
-    step c (NewExpr l e es)         = NewExpr  l (vE c e) (vE c <$> es)
-    step c (Cast l e)               = Cast l (vE c e)
-    step _ e                        = throw $ unimplemented l "visitExpr " e  where l = srcPos $ getAnnotation e 
+   where
+     vS      = visitStmt       v   
+     vI      = visitId         v   
+     vL      = visitLValue     v   
+     vE c e  = step c' s' where c'   = ctxExpr v c  e
+                                s'   = txExpr  v c' e
+     step _ e@(BoolLit {})           = return e 
+     step _ e@(IntLit {})            = return e 
+     step _ e@(NullLit {})           = return e 
+     step _ e@(StringLit {})         = return e 
+     step _ e@(VarRef {})            = return e 
+     step _ e@(ThisRef {})           = return e 
+     step _ e@(SuperRef {})          = return e 
+     step c (ArrayLit l es)          = ArrayLit l     <$> (vE c <$$> es)
+     step c (CondExpr l e1 e2 e3)    = CondExpr l     <$> (vE c e1) <*> (vE c e2) <*> (vE c e3)
+     step c (InfixExpr l o e1 e2)    = InfixExpr l o  <$> (vE c e1) <*> (vE c e2)
+     step c (PrefixExpr l o e)       = PrefixExpr l o <$> (vE c e)
+     step c (CallExpr l e es)        = CallExpr l     <$> (vE c e)  <*> (vE c <$$> es)
+     step c (ObjectLit l bs)         = ObjectLit l    <$> (mapSndM (vE c) <$$> bs)
+     step c (DotRef l e f)           = DotRef l       <$> (vE c e)  <*> (vI c f)
+     step c (BracketRef l e1 e2)     = BracketRef l   <$> (vE c e1) <*> (vE c e2)
+     step c (AssignExpr l o v e)     = AssignExpr l o <$> (vL c v)  <*> (vE c e)
+     step c (UnaryAssignExpr l o v)  = UnaryAssignExpr l o <$> (vL c v) 
+     step c (FuncExpr l f xs ss)     = FuncExpr l <$> (vI c <$$> f) <*> (vI c <$$> xs) <*> (vS c <$$> ss) 
+     step c (NewExpr l e es)         = NewExpr  l <$> (vE c e) <*> (vE c <$$> es)
+     step c (Cast l e)               = Cast l     <$> (vE c e)
+     step _ e                        = throw $ unimplemented l "visitExpr " e  where l = srcPos $ getAnnotation e 
 
-visitClassElt :: (IsLocated b) => Visitor a ctx b -> ctx -> ClassElt b -> ClassElt b 
+visitClassElt :: (FMonad m, IsLocated b) => Visitor a ctx b -> ctx -> ClassElt b -> m (ClassElt b) 
 visitClassElt v = vCE 
   where
     vI       = visitId   v   
@@ -151,42 +163,42 @@ visitClassElt v = vCE
     vD       = visitVarDecl v   
     vCE c ce = step c' ce' where c'     = ctxCElt v c  ce
                                  ce'    = txCElt  v c' ce
-    step c (Constructor l xs ss)        = Constructor    l   (vI c <$> xs)          (vS c <$> ss)
-    step c (MemberVarDecl l b d)        = MemberVarDecl  l b (vD c d) 
-    step c (MemberMethDecl l b f xs ss) = MemberMethDecl l b (vI c f) (vI c <$> xs) (vS c <$> ss)
+    step c (Constructor l xs ss)        = Constructor    l   <$> (vI c <$$> xs) <*> (vS c <$$> ss)
+    step c (MemberVarDecl l b d)        = MemberVarDecl  l b <$> (vD c d) 
+    step c (MemberMethDecl l b f xs ss) = MemberMethDecl l b <$> (vI c f)       <*> (vI c <$$> xs) <*> (vS c <$$> ss)
 
-visitFInit ::  (IsLocated b) => Visitor a ctx b -> ctx -> ForInit b -> ForInit b
+visitFInit ::  (FMonad m, IsLocated b) => Visitor a ctx b -> ctx -> ForInit b -> m (ForInit b)
 visitFInit v = step
   where
-    step _ NoInit       = NoInit
-    step c (VarInit ds) = VarInit  (visitVarDecl v c <$> ds)
-    step c (ExprInit e) = ExprInit (visitExpr v c e)
+    step _ NoInit       = return NoInit
+    step c (VarInit ds) = VarInit  <$> (visitVarDecl v c <$$> ds)
+    step c (ExprInit e) = ExprInit <$> (visitExpr v c e)
 
-visitFIInit :: (IsLocated b) => Visitor a ctx b -> ctx -> ForInInit b -> ForInInit b
+visitFIInit :: (FMonad m, IsLocated b) => Visitor a ctx b -> ctx -> ForInInit b -> m (ForInInit b)
 visitFIInit v = step
   where
-    step c (ForInVar x)  = ForInVar (visitId v c x)
-    step c (ForInLVal l) = ForInLVal (visitLValue v c l)  
+    step c (ForInVar x)  = ForInVar  <$> visitId v c x
+    step c (ForInLVal l) = ForInLVal <$> visitLValue v c l  
 
-visitVarDecl :: (IsLocated b) =>  Visitor a ctx b -> ctx -> VarDecl b -> VarDecl b
-visitVarDecl v c (VarDecl l x e) = VarDecl l (visitId v c x) (visitExpr v c <$> e)
+visitVarDecl :: (FMonad m, IsLocated b) =>  Visitor a ctx b -> ctx -> VarDecl b -> m (VarDecl b)
+visitVarDecl v c (VarDecl l x e) = VarDecl l <$> (visitId v c x) <*> (visitExpr v c <$$> e)
 
-visitId :: (IsLocated b) => Visitor a ctx b -> ctx -> Id b -> Id b
-visitId v c x = txId v c x 
+visitId :: (FMonad m, IsLocated b) => Visitor a ctx b -> ctx -> Id b -> m (Id b)
+visitId v c x = return (txId v c x)
 
-visitLValue :: (IsLocated b) => Visitor a ctx b -> ctx -> LValue b -> LValue b
+visitLValue :: (FMonad m, IsLocated b) => Visitor a ctx b -> ctx -> LValue b -> m (LValue b)
 visitLValue v c lv = step c (txLVal v c lv)
   where
-    step c (LDot l e s)       = LDot     l (visitExpr v c e) s
-    step c (LBracket l e1 e2) = LBracket l (visitExpr v c e1) (visitExpr v c e2)
-    step _ lv@(LVar {})       = lv
+    step c (LDot l e s)       = LDot     l <$> (visitExpr v c e) <*> return s
+    step c (LBracket l e1 e2) = LBracket l <$> (visitExpr v c e1) <*> (visitExpr v c e2)
+    step _ lv@(LVar {})       = return lv
 
       
-visitCaseClause :: (IsLocated b) => Visitor a ctx b -> ctx -> CaseClause b -> CaseClause b
+visitCaseClause :: (FMonad m, IsLocated b) => Visitor a ctx b -> ctx -> CaseClause b -> m (CaseClause b)
 visitCaseClause v = step
   where
-    step c (CaseClause l e ss) = CaseClause l  (visitExpr v c e) (visitStmt v c <$> ss)
-    step c (CaseDefault l ss)  = CaseDefault l (visitStmt v c <$> ss)
+    step c (CaseClause l e ss) = CaseClause l  <$> (visitExpr v c e)  <*> (visitStmt v c <$$> ss)
+    step c (CaseDefault l ss)  = CaseDefault l <$> (visitStmt v c <$$> ss)
     
 
 

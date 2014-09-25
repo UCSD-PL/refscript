@@ -617,8 +617,8 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 ---------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 ---------------------------------------------------------------------------------
-mkCode     = debugTyBinds
-           . expandAliases
+mkCode     = --debugTyBinds .
+             expandAliases
            . visitNano convertTvarVisitor []
            . mkCode' 
 

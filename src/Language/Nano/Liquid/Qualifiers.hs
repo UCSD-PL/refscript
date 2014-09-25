@@ -19,7 +19,7 @@ nanoQualifiers'  :: NanoRefType -> [Qualifier]
 nanoQualifiers' p = concatMap (refTypeQualifiers γ0) $ envToList env
   where
     γ0            = envSEnv $ envMap rTypeSort env
-    env           = qualPool p
+    env           = tracePP "qualPool" $ qualPool p
 
 refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t 
   where

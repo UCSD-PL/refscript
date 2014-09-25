@@ -1,6 +1,7 @@
 module Language.Nano.Liquid.Alias (expandAliases) where
 
 import           Data.Maybe
+import           Data.List (splitAt)
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import           Data.Generics
@@ -115,12 +116,12 @@ expandTAlias te a = a {al_body = expandRefType te $ al_body a}
 expandRefType :: Data a => TAliasEnv RefType -> a -> a
 expandRefType te = everywhere $ mkT $ tx
   where
-    tx t@(TApp (TRef (RN (QName _ [] c))) ts r) = maybe t (applyTAlias t c ts r) $ envFindTy c te
+    tx t@(TApp (TRef (RN (QName l [] c))) ts r) = maybe t (applyTAlias l t c ts r) $ envFindTy c te
     tx t                                        = t
 
-applyTAlias t c ts_ r a
+applyTAlias l t c ts_ r a
   | (nt, ne) == (nα, nx) = tracePP "applyTAlias" $ (F.subst su $ S.apply θ $ al_body a) `strengthen` r
-  | otherwise            = die $ errorBadTAlias (srcPos c) t nt ne nα nx
+  | otherwise            = die $ errorBadTAlias l t nt ne nα nx
   where
     xs                   = al_syvars a
     αs                   = al_tyvars a
@@ -128,16 +129,26 @@ applyTAlias t c ts_ r a
     nα                   = length αs
     ne                   = length es
     nt                   = length ts
-    (ts, es)             = splitTsEs ts_
+    (ts, es)             = splitTsEs l nα nx ts_
     su                   = F.mkSubst  $ zip xs es
     θ                    = S.fromList $ zip αs ts
 
-splitTsEs ts       = (ts', [e | TExp e <- es'])
-  where
-    (ts', es')     = break isExp ts
-    isExp (TExp _) = True
-    isExp _        = False
+-- OLD splitTsEs ts       = (ts', [e | TExp e <- es'])
+-- OLD   where
+-- OLD     (ts', es')     = break isExp ts
+-- OLD     isExp (TExp _) = True
+-- OLD     isExp _        = False
 
+splitTsEs l na nx ts_
+  | na + nx /= n = die $ errorTAliasNumArgs l na nx n
+  | otherwise    = (ts, rTypeExp l <$> tes)
+  where
+    n            = length ts_
+    (ts, tes)    = splitAt na ts_ 
+
+rTypeExp _ (TExp e)             = e
+rTypeExp _ (TApp (TRef r) [] _) = F.expr $ F.symbol r 
+rTypeExp l t                    = die $ errorTAliasMismatch l t
 
 -----------------------------------------------------------------------------
 -- | A Generic Solver for Expanding Definitions -----------------------------

@@ -293,38 +293,36 @@ addInvariant g t
         if extraInvariants then (keyIn . instanceof . typeof t . invs) <$> get
                            else (        instanceof . typeof t . invs) <$> get
   where
-    strengthenOp t o r       | L.elem r (ofRef o) = t
-    strengthenOp t _ r       | otherwise          = strengthen t r
+    strengthenOp t o r        | L.elem r (ofRef o) = t
+    strengthenOp t _ r        | otherwise          = strengthen t r
 
     -- | typeof 
-    typeof t@(TApp tc _ o) i = maybe t (strengthenOp t o . rTypeReft . val) $ M.lookup tc i
-    typeof t _               | isTFun t 
-                             = t `strengthen` typeofReft (F.symbol "function")
-                             | otherwise
-                             = t
+    typeof t@(TApp tc _ o)  i = maybe t (strengthenOp t o . rTypeReft . val) $ M.lookup tc i
+    typeof t@(TFun a b c r) _ = TFun a b c $ typeofReft (F.symbol "function")
+    typeof t                _ = t
 
-    typeofReft               = F.Reft . (vv t,) . single . F.RConc . typeofExpr
-    typeofExpr s             = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "typeof")) [F.eVar $ vv t]) (F.expr s)
+    typeofReft                = F.Reft . (vv t,) . single . F.RConc . typeofExpr
+    typeofExpr s              = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t]) (F.expr $ F.symbolText s)
 
 
 
-    ofRef (F.Reft (s, as))   = (F.Reft . (s,) . single) <$> as
+    ofRef (F.Reft (s, as))    = (F.Reft . (s,) . single) <$> as
 
     -- | { f: T } --> keyIn("f", v)
-    keyIn t                  = t `strengthen` keyReft (boundKeys g t) 
+    keyIn t                   = t `strengthen` keyReft (boundKeys g t) 
 
-    keyReft                  = F.Reft . (vv t,) . (F.RConc . F.PBexp . keyInExpr <$>) 
-    keyInExpr s              = F.EApp (F.dummyLoc (F.symbol "keyIn")) [F.expr (F.symbolText s), F.eVar $ vv t]
+    keyReft                   = F.Reft . (vv t,) . (F.RConc . F.PBexp . keyInExpr <$>) 
+    keyInExpr s               = F.EApp (F.dummyLoc (F.symbol "keyIn")) [F.expr (F.symbolText s), F.eVar $ vv t]
 
     -- | instanceof(v,"C")
     instanceof t@(TApp (TRef c) _ _) 
-                             = t `strengthen` reftIO t (name c)
-    instanceof t             = t 
-    name (RN (QName _ _ s))  = s
-    reftIO t c               = F.Reft (vv t, [refaIO t c])
-    refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr $ F.symbolText c]
-    vv                       = rTypeValueVar
-    sym                      = F.dummyLoc $ F.symbol "instanceof"
+                              = t `strengthen` reftIO t (name c)
+    instanceof t              = t 
+    name (RN (QName _ _ s))   = s
+    reftIO t c                = F.Reft (vv t, [refaIO t c])
+    refaIO t c                = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr $ F.symbolText c]
+    vv                        = rTypeValueVar
+    sym                       = F.dummyLoc $ F.symbol "instanceof"
 
 
 -- ---------------------------------------------------------------------------------------
@@ -849,8 +847,8 @@ bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant g t1 <*> return t2
 
 bsplitC' g ci t1 t2
-  | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2
-  = F.subC (cge_fenv g) F.PTrue (r1 {F.sr_reft = fTop}) r2 Nothing [] ci
+--   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2
+--   = F.subC (cge_fenv g) F.PTrue (r1 {F.sr_reft = fTop}) r2 Nothing [] ci
   | F.isNonTrivialSortedReft r2
   = F.subC (cge_fenv g) p r1 r2 Nothing [] ci
   | otherwise

@@ -724,7 +724,7 @@ consInstantiate l g fn ft ts xes
 -- Special casing conditional expression call here because we'd like the
 -- arguments to be typechecked under a different guard each.
 consCallCondExpr g l fn ets ft0 
-  = mseq (consCondExprArgs (srcPos l) consExpr g ets) $ \(xes, g') -> do
+  = mseq (consCondExprArgs (srcPos l) g ets) $ \(xes, g') -> do
       ts <- T.mapM (`safeEnvFindTy` g') xes
       case [ lt | Overload cx t <- ann_fact l
                 , cge_ctx g == cx
@@ -782,31 +782,30 @@ consScan f g (FI Nothing xs)
     
 ---------------------------------------------------------------------------------
 consCondExprArgs :: SourceSpan 
-                 -> (CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Maybe (Id AnnTypeR, CGEnv))) 
                  -> CGEnv 
                  -> FuncInputs (Expression AnnTypeR, Maybe RefType) 
                  -> CGM (Maybe (FuncInputs (Id AnnTypeR), CGEnv))
 ---------------------------------------------------------------------------------
-consCondExprArgs l f g (FI Nothing [(c,tc),(t,tt),(x,tx),(y,ty)])
-  = mseq (f g c tc) $ \(c_,gc) ->
-      mseq (f gc t tt) $ \(t_,gt) -> 
-        (fmap (mapSnd envPopGuard) <$> f (envAddGuard c_ True gt) x tx) >>= \case
+consCondExprArgs l g (FI Nothing [(c,tc),(t,tt),(x,tx),(y,ty)])
+  = mseq (consExpr g c tc) $ \(c_,gc) ->
+      mseq (consExpr gc t tt) $ \(t_,gt) -> 
+        (fmap (mapSnd envPopGuard) <$> consExpr (envAddGuard c_ True gt) x tx) >>= \case
           Just (x_, gx) -> 
-              (fmap (mapSnd envPopGuard) <$> f (envAddGuard c_ False gx) y ty) >>= \case
+              (fmap (mapSnd envPopGuard) <$> consExpr (envAddGuard c_ False gx) y ty) >>= \case
                 Just (y_, gy) -> return $ Just (FI Nothing [c_,t_,x_,y_], gy)
                 Nothing       -> case ty of 
                                    Just tty -> do (y_, gy') <- envAddFresh l (tty, WriteLocal) gx
                                                   return    $ Just (FI Nothing [c_,t_,x_,y_], gy')
                                    Nothing  -> return $ Nothing
           Nothing -> 
-              (fmap (mapSnd envPopGuard) <$> f (envAddGuard c_ False gt) y ty) >>= \case
+              (fmap (mapSnd envPopGuard) <$> consExpr (envAddGuard c_ False gt) y ty) >>= \case
                 Just (y_, gy) -> case tx of 
                                    Just ttx -> do (x_, gx') <- envAddFresh l (ttx, WriteLocal) gy
                                                   return    $ Just (FI Nothing [c_,t_,x_,y_], gx')
                                    Nothing  -> return $ Nothing
                 Nothing       -> return $ Nothing 
 
-consCondExprArgs l _ _ _ = cgError $ impossible l "consCondExprArgs"
+consCondExprArgs l _ _ = cgError $ impossible l "consCondExprArgs"
     
 
 ---------------------------------------------------------------------------------

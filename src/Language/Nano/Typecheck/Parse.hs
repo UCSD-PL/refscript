@@ -49,6 +49,7 @@ import           Language.Nano.Visitor
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Alias
+import           Language.Nano.Liquid.Qualifiers
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
@@ -617,20 +618,14 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 ---------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 ---------------------------------------------------------------------------------
-mkCode     = --debugTyBinds .
-             expandAliases
-           . visitNano convertTvarVisitor []
-           . mkCode' 
-
-debugTyBinds p@(Nano {code = Src ss}) = trace msg p
-  where
-    xts = [(x, t) | (x, (t, _)) <- visibleNames ss ]
-    msg = unlines $ "debugTyBinds:" : (ppshow <$> xts)
+mkCode = --debugTyBinds .
+         scrapeQuals 
+       . expandAliases
+       . visitNano convertTvarVisitor []
+       . mkCode' 
     
-    
-mkCode' ss = expandAliases $ Nano { 
+mkCode' ss = Nano { 
         code          = Src (checkTopStmt <$> ss')
-      , qualPool      = envFromList $ getQualifPool ss
       , consts        = envFromList   [ t | Meas   t <- anns ] 
       , tAlias        = envFromList   [ t | TAlias t <- anns ] 
       , pAlias        = envFromList   [ t | PAlias t <- anns ] 
@@ -655,6 +650,25 @@ mkCode' ss = expandAliases $ Nano {
 
     ss'               = (toBare <$>) <$> ss
     anns              = concatMap (FO.foldMap snd) ss
+
+scrapeQuals :: NanoBareR Reft -> NanoBareR Reft
+scrapeQuals p@(Nano {code = Src ss}) = p { pQuals = qs ++ pQuals p}
+  where
+    qs = qualifiers $ getQualifPool ss <---------- HEREHEREHERE
+    
+    -- [ concatMap ann_fact $ concatMap Data.Foldable.toList ss]
+    -- s <- ss
+    -- a <- Data.Foldable.toList s
+    -- f <- ann_fact a
+    -- t <- factRTypes f
+    -- t <- factRTypes f
+    
+    
+debugTyBinds p@(Nano {code = Src ss}) = trace msg p
+  where
+    xts = [(x, t) | (x, (t, _)) <- visibleNames ss ]
+    msg = unlines $ "debugTyBinds:" : (ppshow <$> xts)
+ 
 
 
 -------------------------------------------------------------------------------

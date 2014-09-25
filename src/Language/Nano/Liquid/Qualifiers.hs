@@ -1,4 +1,4 @@
-module Language.Nano.Liquid.Qualifiers (nanoQualifiers) where
+module Language.Nano.Liquid.Qualifiers (qualifiers) where
 
 import Language.Fixpoint.Errors
 import Language.Fixpoint.Types hiding (quals) 
@@ -12,14 +12,20 @@ import Data.List                (delete, nub)
 import Data.Maybe               (fromMaybe)
 
 
-nanoQualifiers   :: NanoRefType -> [Qualifier]
-nanoQualifiers p  = pQuals p ++ nanoQualifiers' p
+-- nanoQualifiers   :: NanoRefType -> [Qualifier]
+-- nanoQualifiers p  = pQuals p ++ nanoQualifiers' p
+-- 
+-- nanoQualifiers'  :: NanoRefType -> [Qualifier]
+-- nanoQualifiers' p = concatMap (refTypeQualifiers γ0) $ envToList env
+--   where
+--     γ0            = envSEnv $ envMap rTypeSort env
+--     env           = tracePP "qualPool" $ qualPool p
 
-nanoQualifiers'  :: NanoRefType -> [Qualifier]
-nanoQualifiers' p = concatMap (refTypeQualifiers γ0) $ envToList env
+qualifiers xts = concatMap (refTypeQualifiers γ0) xts
   where
-    γ0            = envSEnv $ envMap rTypeSort env
-    env           = tracePP "qualPool" $ qualPool p
+     γ0        = envSEnv $ envMap rTypeSort $ envFromList xts
+
+
 
 refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t 
   where

@@ -16,12 +16,16 @@ module Language.Nano.Annots (
   -- * Aliases for annotated Source 
   , AnnR, AnnBare, UAnnBare, AnnSSA , UAnnSSA
   , AnnType, UAnnType, AnnInfo, UAnnInfo
+
+  -- * Deconstructing Facts
+  , factRTypes
                                   
 ) where
 
 import           Control.Applicative            hiding (empty)
 import           Data.Default
 import           Data.Function                  (on)
+import           Data.Maybe                     (maybe) 
 import           Data.Generics                   
 import qualified Data.HashMap.Strict            as M
 import           Text.PrettyPrint.HughesPJ 
@@ -82,7 +86,6 @@ castDirection (CDead{}) = CDDead
 castDirection (CUp  {}) = CDUp
 castDirection (CDn  {}) = CDDn
 
-
 data Fact r
   -- SSA
   = PhiVar      ![(Id SourceSpan)]
@@ -136,6 +139,7 @@ instance Default SourceSpan where
 
 instance Ord (AnnSSA  r) where 
   compare (Ann s1 _) (Ann s2 _) = compare s1 s2
+
 
 -- XXX: This shouldn't have to be that hard...
 instance Ord (Fact r) where
@@ -211,3 +215,21 @@ instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
 
 phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
+
+factRTypes :: (Show r) => Fact r -> [RType r]
+factRTypes = go
+  where
+    go (TypInst _ ts)     = ts
+    go (EltOverload _ m)  = [f_type m]
+    go (Overload _ t)     = [t] 
+    go (VarAnn t)         = [t]
+    go (UserCast t)       = [t]
+    go (FuncAnn t)        = [t]
+    go (FieldAnn m)       = [f_type m]
+    go (MethAnn m)        = [f_type m]
+    go (StatAnn m)        = [f_type m]
+    go (ConsAnn m)        = [f_type m]
+    go (IfaceAnn ifd)     = f_type <$> t_elts ifd
+    go (ClassAnn (_, c))  = maybe [] snd c
+    go f                  = error ("factRTypes: TODO :" ++ show f)
+

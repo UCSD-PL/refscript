@@ -577,7 +577,7 @@ tcExpr γ e@(VarRef l x) _
 --    * The second conditional expression
 --
 tcExpr γ (CondExpr l e e1 e2) to
-  = do  opTy                      <- ltracePP l "CondExpr" <$> mkTy to <$> safeTcEnvFindTy l γ (builtinOpId BICondExpr)
+  = do  opTy                      <- mkTy to <$> safeTcEnvFindTy l γ (builtinOpId BICondExpr)
         (sv,v)                    <- dup F.symbol (VarRef l) <$> freshId l
         let γ'                     = tcEnvAdd sv (tt, WriteLocal) γ
         (FI _ [e',_,e1',e2'], t') <- tcNormalCall γ' l BICondExpr (FI Nothing ((,Nothing) <$> [e,v,e1,e2])) opTy
@@ -826,7 +826,7 @@ tcNormalCall :: (PPRSF r, PP a)
                 RType r -> TCM r (FuncInputs (ExprSSAR r), RType r) 
 ------------------------------------------------------------------------------------------
 tcNormalCall γ l fn etos ft0 
-  = do ets            <- ltracePP l (ppshow fn ++ " WITH ARGS " ++ ppshow etos) <$> T.mapM (uncurry $ tcExprWD γ) etos
+  = do ets            <- T.mapM (uncurry $ tcExprWD γ) etos
        z              <- resolveOverload γ l fn ets ft0
        case z of 
          Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft

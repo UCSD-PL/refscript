@@ -344,7 +344,7 @@ castM γ e t1 t2
   = case convert (srcPos e) γ t1 t2 of
       Left  e   -> tcError e
       Right CNo -> return e
-      Right c@(CDead es _)    -> addCast (tce_ctx γ) e c
+      Right c   -> addCast (tce_ctx γ) e c
 
 
 -- | Run the monad `a` in the current state. This action will not alter the

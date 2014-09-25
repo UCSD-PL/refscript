@@ -417,8 +417,6 @@ envFindTyWithAsgn x = (eSngl <$>) . findT x
                                 Just g' -> findT x g'
                                 Nothing -> Nothing
 
-
-
 ---------------------------------------------------------------------------------------
 safeEnvFindTy :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) 
               => x -> CGEnv -> CGM RefType 
@@ -438,9 +436,6 @@ safeEnvFindTyWithAsgn x g = case envFindTyWithAsgn x g of
                         Nothing ->  cgError $ bugEnvFindTy l x 
   where
     l = srcPos x
-
-
-
 
 ---------------------------------------------------------------------------------------
 envFindReturn :: CGEnv -> RefType 

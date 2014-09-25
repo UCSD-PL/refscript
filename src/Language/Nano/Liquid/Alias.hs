@@ -129,7 +129,7 @@ applyTAlias l t c ts_ r a
     nα                   = length αs
     ne                   = length es
     nt                   = length ts
-    (ts, es)             = splitTsEs l nα nx ts_
+    (ts, es)             = splitTsEs l t nα nx ts_
     su                   = F.mkSubst  $ zip xs es
     θ                    = S.fromList $ zip αs ts
 
@@ -139,16 +139,16 @@ applyTAlias l t c ts_ r a
 -- OLD     isExp (TExp _) = True
 -- OLD     isExp _        = False
 
-splitTsEs l na nx ts_
+splitTsEs l t na nx ts_
   | na + nx /= n = die $ errorTAliasNumArgs l na nx n
-  | otherwise    = (ts, rTypeExp l <$> tes)
+  | otherwise    = (ts, rTypeExp l t <$> tes)
   where
     n            = length ts_
     (ts, tes)    = splitAt na ts_ 
 
-rTypeExp _ (TExp e)             = e
-rTypeExp _ (TApp (TRef r) [] _) = F.expr $ F.symbol r 
-rTypeExp l t                    = die $ errorTAliasMismatch l t
+rTypeExp _ _ (TExp e)            = e
+rTypeExp _ _(TApp (TRef r) [] _) = F.expr $ F.symbol r 
+rTypeExp l t a                   = die $ errorTAliasMismatch l t a
 
 -----------------------------------------------------------------------------
 -- | A Generic Solver for Expanding Definitions -----------------------------

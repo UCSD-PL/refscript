@@ -149,7 +149,7 @@ errorDeadCast l t1 t2         = mkErr l $ printf "Cannot convert '%s' to '%s'" (
 errorCyclicDefs l x stk       = mkErr l $ printf "Cyclic definitions: %s in %s" (ppshow x) (ppshow stk)
 errorBadTAlias l t nt ne a m  = mkErr l $ printf "Invalid type alias application: %s \nExpected %d type, %d value arguments, but got %d and %d" (ppshow t) a m nt ne  
 errorTAliasNumArgs l na nx n  = mkErr l $ printf "Invalid type alias application: Expected %d type, %d value arguments, but %d" na nx n  
-errorTAliasMismatch l t       = mkErr l $ printf "Invalid type alias application: Cannot convert %s into value argument" (ppshow t)
+errorTAliasMismatch l t a      = mkErr l $ printf "Invalid type alias application %s : Cannot convert %s into value argument" (ppshow t) (ppshow a)
                                 
 errorBadPAlias l p nx ne      = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne 
 errorLiquid l                 = mkErr l $ printf "Liquid Type Error" 

@@ -38,7 +38,7 @@ expandAliases p =  expandCodePred pe'
   where
     p'          = p { pAlias = pe' } {tAlias = te'}
     pe'         = expandPAliasEnv $ pAlias p
-    te'         = tracePP "te'"   $ expandTAliasEnv $ tAlias p
+    te'         = expandTAliasEnv $ tAlias p
 
 expandCodeTAlias :: TAliasEnv RefType -> NanoRefType -> NanoRefType
 expandCodeTAlias te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }

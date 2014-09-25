@@ -25,7 +25,7 @@ import           Language.Nano.Annots
 import           Language.Nano.Program -- Eeks, cycles!
 import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax 
-import           Language.ECMAScript3.PrettyPrint
+-- import           Language.ECMAScript3.PrettyPrint
 
 --------------------------------------------------------------------------------
 -- | Top-down visitors
@@ -228,10 +228,15 @@ instance Transformable Fact where
   trans = transFact
 
 instance Transformable IfaceDef where
-  trans f as xs idf = idf { t_elts = trans f (as' ++ as) xs <$> t_elts idf } 
+  trans f as xs idf = idf { t_proto = transProto f as' xs  $  t_proto idf 
+                          , t_elts  = trans      f as' xs <$> t_elts  idf
+                          } 
     where
-      as'           = t_args idf
-      
+      as'           = (t_args idf) ++ as
+
+transProto _ _  _  Nothing        = Nothing 
+transProto f as xs (Just (n, ts)) = Just (n, trans f as xs <$> ts)
+
 transFact f = go
   where
     go as xs (VarAnn   t)   = VarAnn   $ trans f as xs t  
@@ -243,7 +248,7 @@ transFact f = go
     go as xs (FuncAnn  t)   = FuncAnn  $ trans f as xs t
     go as xs (IfaceAnn ifd) = IfaceAnn $ trans f as xs ifd
     go as xs (ClassAnn c)   = ClassAnn $ transClassAnn f as xs c
-    go as xs z              = z
+    go _  _  z              = z
     
 transClassAnn _ _ _ z@(_, Nothing)        = z
 transClassAnn f as xs (as', Just (n, ts)) = (as, Just (n, trans f (as' ++ as) xs <$> ts))

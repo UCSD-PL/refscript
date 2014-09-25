@@ -118,12 +118,12 @@ aliasVarT (l, x)
     x'        = symbolString x
     
 iFaceP   :: Parser (Id SourceSpan, IfaceDef Reft)
-iFaceP   = do id     <- identifierP 
-              vs     <- option [] tParP
+iFaceP   = do name   <- identifierP 
+              as     <- option [] tParP
               h      <- optionMaybe extendsP
               -- FIXME
               es     <- braces $ propBindP def
-              return (id, ID False id vs h $ convertTvar vs <$> es)
+              return (name, convertTvar as $ ID False name as h es)
 
 extendsP = do reserved "extends"
               qn     <- RN <$> qnameP

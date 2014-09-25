@@ -36,6 +36,10 @@ module Language.Nano.Misc (
   , convertError
 
   , foldM1
+  
+  , withSingleton, withSingleton'
+
+  , dup
 
 ) where
 
@@ -194,3 +198,14 @@ instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
 foldM1 :: (Monad m) => (a -> a -> m a) -> [a] -> m a
 foldM1 _ [] = error "foldM1" "empty list"
 foldM1 f (x:xs) = foldM f x xs
+
+withSingleton :: Monad m => (a -> m b) -> m b -> [a] -> m b 
+withSingleton f _ [x] = f x
+withSingleton _ b _   = b
+
+withSingleton' :: Monad m => m b -> (a -> m b) -> m b -> [a] -> m b 
+withSingleton' b _ _  [ ] = b
+withSingleton' _ f _  [x] = f x
+withSingleton' _ _ e  _   = e
+
+dup f1 f2 a = (f1 a,f2 a)

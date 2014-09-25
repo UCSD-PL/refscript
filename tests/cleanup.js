@@ -4,11 +4,26 @@ var sys = require('sys');
 var readline = require('readline');
 
 var exts=["css", "vc", "hi", "out", "js", "json", "fqout",
-          "fq", "o", "err", "annot", "log", "cgi", "smt2", "html"];
+          "fq", "o", "err", "annot", "log", "cgi", "smt2", "html", "liquid"];
 
 var exceptions=["cleanup.js"]
 
 var cmd = "find . " + exts.map(function(e){return '-name "*.' + e + '" '}).join(" -o ");
+
+// http://www.geedew.com/2012/10/24/remove-a-directory-that-is-not-empty-in-nodejs/
+var deleteFolderRecursive = function(path) {
+  if( fs.existsSync(path) ) {
+    fs.readdirSync(path).forEach(function(file,index){
+      var curPath = path + "/" + file;
+      if(fs.lstatSync(curPath).isDirectory()) { // recurse
+        deleteFolderRecursive(curPath);
+      } else { // delete file
+        fs.unlinkSync(curPath);
+      }
+    });
+    fs.rmdirSync(path);
+  }
+};
 
 var exec = require('child_process').exec;
 function puts(error, stdout, stderr) { 
@@ -28,7 +43,7 @@ function puts(error, stdout, stderr) {
     return;
   }
 
-  var txt = "\nAre you sure you want to delete these " + files.length + " files? (type 'Yes' to confirm) ";
+  var txt = "\nAre you sure you want to delete these " + files.length + " paths? (type 'Yes' to confirm) ";
   
   var rl = readline.createInterface({
     input: process.stdin,
@@ -37,8 +52,16 @@ function puts(error, stdout, stderr) {
 
   rl.question(txt, function(answer) {
     if (answer === "Yes") {
-      console.log("Delerting " + files.length + " files ...");
-      files.forEach(function(f){ fs.unlink(f);});
+      console.log("Delerting " + files.length + " paths ...");
+      files.forEach(function(f){ 
+        if (fs.lstatSync(f).isDirectory()) {
+          deleteFolderRecursive(f);
+        }
+        else {
+          fs.unlink(f);
+        }
+      });
+
     }
     else {
       console.log("Aborting");

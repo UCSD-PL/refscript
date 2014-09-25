@@ -714,6 +714,7 @@ builtinOpId BIForInKeys     = builtinId "BIForInKeys"
 builtinOpId BINumArgs       = builtinId "BINumArgs"
 builtinOpId BITruthy        = builtinId "BITruthy"
 builtinOpId BICondExpr      = builtinId "BICondExpr"
+builtinOpId BICastExpr      = builtinId "BICastExpr"
 
 
 ---------------------------------------------------------------------------------
@@ -786,15 +787,15 @@ instance F.Symbolic (Prop a) where
 -- | @argBind@ returns a dummy type binding `arguments :: T `
 --   where T is an object literal containing the non-undefined `ts`.
     
-argTy l ts g   = immObjectLitTy l g (pLen : ps') (tLen : ts')
+argTy l ts g   = {- tracePP ("argTy: " ++ ppshow ts) $ -} immObjectLitTy l g (pLen : ps') (tLen : ts')
   where
     ts'        = take k ts
     ps'        = PropNum l . toInteger <$> [0 .. k-1]
     pLen       = PropId l $ lenId l
     tLen       = tInt `strengthen` rLen
     rLen       = F.ofReft $ F.uexprReft k
-    k          = fromMaybe 0 $ L.findIndex isUndef ts
-
+    k          = fromMaybe (length ts) $ L.findIndex isUndef ts
+   
 
 immObjectLitTy l _ ps ts 
   | nps == length ts = TCons elts t_immutable fTop -- objLitR l nps g 

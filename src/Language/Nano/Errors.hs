@@ -52,11 +52,11 @@ unsupportedNonSingleConsTy l  = mkErr l $ printf "Only a single constructor sign
 unsupportedDotRef l t         = mkErr l $ printf "Unsupported dot reference %s" (ppshow t)
 unsupportedConvFun l t1 t2    = mkErr l $ printf "Unsupported case in convertFun:\n%s\nvs\n%s" (ppshow t1) (ppshow t2)
 
-bug' l s                      = err   l $ "BUG: " ++ s 
-bug l s                       = mkErr l $ "BUG: " ++ s 
-impossible l s                = mkErr l $ "IMPOSSIBLE" ++ s 
+bug' l s                      = err   l $ printf "BUG: %s" s 
+bug l s                       = mkErr l $ printf "BUG: %s" s 
+impossible l s                = mkErr l $ printf "IMPOSSIBLE: %s" s 
 bugBadSubtypes l t1 t2        = mkErr l $ printf "BUG: Unexpected Subtyping Constraint\n%s <: %s" (ppshow t1) (ppshow t2)
-bugMalignedFields l s s'      = mkErr l $ printf "BUG: [%s] \n CGMonad: fields not aligned: '%s' and '%s'" (ppshow l) (ppshow s) (ppshow s')
+bugMalignedFields l s s'      = mkErr l $ printf "BUG: Fields not aligned: '%s' and '%s'" (ppshow s) (ppshow s')
 
 bugUnknownAlias l x           = mkErr l $ printf "BUG: Unknown definition for alias %s" (ppshow x)
 bugUnboundPhiVar l x          = mkErr l $ printf "BUG: Phi Variable %s is unbound" (ppshow x)
@@ -66,7 +66,9 @@ bugUnknown l thing x          = mkErr l $ printf "BUG: Cannot find '%s' in '%s'"
 bugMissingModule l x          = mkErr l $ printf "BUG: Cannot find module '%s'" (ppshow x) 
 bugCallTo l x es              = mkErr l $ printf "BUG: Bug at call to '%s' with args '%s'" (ppshow x) (ppshow es)
 bugMultipleCasts l e          = mkErr l $ printf "BUG: Found multple casts on expression '%s'" (ppshow e)
+bugNoCasts l e                = mkErr l $ printf "BUG: No casts found for expression '%s'" (ppshow e)
 bugNoAnnotForGlob l x         = mkErr l $ printf "BUG: No type annotation found for global variable '%s'" (ppshow x)
+bugCondExprSigParse l         = mkErr l $ printf "BUG: In parsing conditional expression signature"
 
 bugClassDefNotFound l x       = mkErr l $ printf "BUG: Class definition for '%s' not found." (ppshow x)
 bugEnvFindTy l x              = mkErr l $ printf "BUG: envFindTy failed to find binding '%s'" (ppshow x)

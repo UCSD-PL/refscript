@@ -1,7 +1,7 @@
 
 /*@ alias idx[a]    = {v: number | v < a }  */
 
-/*@ permute :: (x:number, y:idx[number]) => number */
+/*@ permute :: (x:number, y:idx[x]) => number */
 function permute(x, y):number {
     return 0;
 } 

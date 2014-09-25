@@ -5,6 +5,10 @@
  */
 
 function buildName(firstName: string, lastName?: string) {
+    var zog = arguments.length;
+    
+    assert (zog > 0);
+
     if (arguments.length === 2)
         return firstName + " " + lastName;
     else

@@ -18,7 +18,6 @@ module Language.Nano.Typecheck.TCMonad (
   -- * Execute 
   , execute
   , runFailM, runMaybeM
-
               
   -- * Errors
   , logError, tcError, tcWrap
@@ -42,13 +41,13 @@ module Language.Nano.Typecheck.TCMonad (
   , subtypeM, isSubtype
 
   -- * Casts
-  , castM
-  , deadcastM
+  , castM, deadcastM, freshId
 
-  -- * Verbosity
-  , whenLoud', whenLoud, whenQuiet', whenQuiet
+  -- * Verbosity / Options
+  , whenLoud', whenLoud, whenQuiet', whenQuiet, getOpts
 
   )  where 
+
 
 import           Control.Applicative                ((<$>))
 import           Control.Monad.State
@@ -65,6 +64,7 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types            as F
 
 import           Language.Nano.Annots
+import           Language.Nano.CmdLine
 import           Language.Nano.Locations
 import           Language.Nano.Misc
 import           Language.Nano.Program
@@ -112,6 +112,11 @@ data TCState r = TCS {
   -- ^ Verbosity
   --
   , tc_verb     :: V.Verbosity
+  -- 
+  -- ^ configuration options
+  --
+  , tc_opts     :: Config               
+
   }
 
 type TCM r     = ExceptT Error (State (TCState r))
@@ -140,6 +145,9 @@ whenQuiet' :: TCM r a -> TCM r a -> TCM r a
 whenQuiet' quiet other = do  tc_verb <$> get >>= \case 
                                V.Quiet -> quiet
                                _       -> other
+
+getOpts :: TCM r Config
+getOpts = tc_opts <$> get
 
 
 -------------------------------------------------------------------------------
@@ -198,30 +206,28 @@ logError   :: Error -> a -> TCM r a
 -------------------------------------------------------------------------------
 logError err x = (modify $ \st -> st { tc_errors = err : tc_errors st}) >> return x
 
+-------------------------------------------------------------------------------
+freshTyArgs :: PPR r => SourceSpan -> Int -> IContext -> [TVar] -> RType r -> TCM r (RType r)
+-------------------------------------------------------------------------------
+freshTyArgs l i ξ αs t = (`apply` t) <$> freshSubst l i ξ αs
 
 -------------------------------------------------------------------------------
-freshTyArgs :: PPR r => SourceSpan -> IContext -> [TVar] -> RType r -> TCM r (RType r)
+freshSubst :: PPR r => SourceSpan -> Int -> IContext -> [TVar] -> TCM r (RSubst r)
 -------------------------------------------------------------------------------
-freshTyArgs l ξ αs t 
-  = (`apply` t) <$> freshSubst l ξ αs
-
--------------------------------------------------------------------------------
-freshSubst :: PPR r => SourceSpan -> IContext -> [TVar] -> TCM r (RSubst r)
--------------------------------------------------------------------------------
-freshSubst l ξ αs
+freshSubst l i ξ αs
   = do when (not $ unique αs) $ logError (errorUniqueTypeParams l) ()
        βs        <- mapM (freshTVar l) αs
-       setTyArgs l ξ βs
+       setTyArgs l i ξ βs
        extSubst   $ βs 
        return     $ fromList $ zip αs (tVar <$> βs)
 
 -------------------------------------------------------------------------------
-setTyArgs :: PPR r => SourceSpan -> IContext -> [TVar] -> TCM r ()
+setTyArgs :: PPR r => SourceSpan -> Int -> IContext -> [TVar] -> TCM r ()
 -------------------------------------------------------------------------------
-setTyArgs l ξ βs
+setTyArgs l i ξ βs
   = case map tVar βs of 
       [] -> return ()
-      vs -> addAnn l $ TypInst ξ vs
+      vs -> addAnn l $ TypInst i ξ vs
 
 
 -------------------------------------------------------------------------------
@@ -243,23 +249,24 @@ addAnn :: PPR r => SourceSpan -> Fact r -> TCM r ()
 addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
  
 -------------------------------------------------------------------------------
-execute ::  PPR r => V.Verbosity -> NanoSSAR r -> TCM r a -> Either [Error] a
+execute ::  PPR r => Config -> V.Verbosity -> NanoSSAR r -> TCM r a -> Either [Error] a
 -------------------------------------------------------------------------------
-execute verb pgm act 
-  = case runState (runExceptT act) $ initState verb pgm of 
+execute cfg verb pgm act 
+  = case runState (runExceptT act) $ initState cfg verb pgm of 
       (Left err, _) -> Left [err]
       (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errors st)
 
 -------------------------------------------------------------------------------
-initState :: PPR r => V.Verbosity -> NanoSSAR r -> TCState r
+initState :: PPR r => Config -> V.Verbosity -> NanoSSAR r -> TCState r
 -------------------------------------------------------------------------------
-initState verb _ = TCS tc_errors tc_subst tc_cnt tc_anns tc_verb
+initState cfg verb _ = TCS tc_errors tc_subst tc_cnt tc_anns tc_verb tc_opts 
   where
     tc_errors = []
     tc_subst = mempty 
     tc_cnt   = 0
     tc_anns  = M.empty
     tc_verb  = verb
+    tc_opts  = cfg
 
 
 --------------------------------------------------------------------------
@@ -282,6 +289,8 @@ instance Freshable a => Freshable [a] where
   fresh = mapM fresh
 
 freshTVar l _ =  ((`TV` l). F.intSymbol (F.symbol "T")) <$> tick
+
+freshId l =  Id l . ("__cast_" ++) . show <$> tick
 
 
 --------------------------------------------------------------------------------
@@ -317,7 +326,8 @@ unifyTypeM l γ t t' = unifyTypesM l γ (FI Nothing [t]) (FI Nothing [t'])
 deadcastM :: (PPR r) => IContext -> Error -> Expression (AnnSSA r) -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 deadcastM ξ err e
-  = addCast ξ e $ CDead err tNull -- $ error "TODO:deadcastM"
+  = addCast ξ e $ CDead err tNull 
+
 
 -- | For the expression @e@, check the subtyping relation between the type @t1@
 --   (the actual type for @e@) and @t2@ (the target type) and insert the cast.
@@ -329,8 +339,6 @@ castM γ e t1 t2
       Left  e   -> tcError e
       Right CNo -> return e
       Right c   -> addCast (tce_ctx γ) e c
-      -- Right c   -> addCast (tce_ctx γ) e 
-      -- $ tracePP (ppshow e ++ " |- " ++ ppshow t1 ++ "  <:  " ++ ppshow t2) c
 
 
 -- | Run the monad `a` in the current state. This action will not alter the
@@ -366,8 +374,8 @@ addCast ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
     loc       = srcPos e
     fact      = TCast ξ c
 
-wrapCast _ f (Cast (Ann l fs) e) = Cast (Ann l (f:fs)) e
-wrapCast l f e                   = Cast (Ann l [f])    e
+wrapCast _ f (Cast_ (Ann l fs) e) = Cast_ (Ann l (f:fs)) e
+wrapCast l f e                    = Cast_ (Ann l [f])    e
 
 
 -- | tcFunTys: "context-sensitive" function signature

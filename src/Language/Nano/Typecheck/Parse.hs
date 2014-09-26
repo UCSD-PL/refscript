@@ -651,19 +651,22 @@ mkCode' ss = Nano {
     ss'               = (toBare <$>) <$> ss
     anns              = concatMap (FO.foldMap snd) ss
 
-scrapeQuals :: NanoBareR Reft -> NanoBareR Reft
-scrapeQuals p@(Nano {code = Src ss}) = p { pQuals = qs ++ pQuals p}
+scrapeQuals   :: NanoBareR Reft -> NanoBareR Reft
+scrapeQuals p = p { pQuals = qs ++ pQuals p}
   where
-    qs = qualifiers $ getQualifPool ss <---------- HEREHEREHERE
+    qs        = qualifiers xts
+    tbv       = defaultVisitor { accStmt = stmtTypeBindings }
+    xts       = foldNano tbv [] [] p
+    -- xts       = [ (x, t) | (x, Ann l fs) <- xAnns, f <- fs, t <- factRTypes f]
+
+stmtTypeBindings _             = go
+  where
+    go (FunctionStmt l f _ _)  = [(f, t) | FuncAnn t <- ann_fact l ]
+    go (VarDeclStmt _ vds)     = [(x, t) | VarDecl l x _ <- vds, VarAnn t <- ann_fact l]   
+    go _                       = []
     
-    -- [ concatMap ann_fact $ concatMap Data.Foldable.toList ss]
-    -- s <- ss
-    -- a <- Data.Foldable.toList s
-    -- f <- ann_fact a
-    -- t <- factRTypes f
-    -- t <- factRTypes f
-    
-    
+    -- go (FunctionDecl l f _ _)  = [(f, l)] -- no qualifiers from imported functions?
+
 debugTyBinds p@(Nano {code = Src ss}) = trace msg p
   where
     xts = [(x, t) | (x, (t, _)) <- visibleNames ss ]

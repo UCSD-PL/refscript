@@ -97,10 +97,12 @@ data Fact r
   | Overload    !IContext  !(RType r)
   -- Type annotations
   | VarAnn      !(RType r)
+
   | FieldAnn    !(TypeMember r)
   | MethAnn     !(TypeMember r) 
   | StatAnn     !(TypeMember r) 
   | ConsAnn     !(TypeMember r)
+    
   | UserCast    !(RType r)
   | FuncAnn     !(RType r)
   | TCast       !IContext  !(Cast r)

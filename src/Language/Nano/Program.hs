@@ -31,7 +31,6 @@ module Language.Nano.Program (
   , visibleNames
   , scrapeModules
   , writeGlobalVars
-
   , scrapeVarDecl
 
   ) where
@@ -615,4 +614,6 @@ scrapeVarDecl :: VarDecl (AnnSSA r) -> [RType r]
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _) = [ t | VarAnn                 t  <- ann_fact l ] 
                              ++ [ t | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
+
+   
 

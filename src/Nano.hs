@@ -13,6 +13,7 @@ import           Language.Nano.CmdLine
 import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.SystemUtils
+import           Language.Nano.Misc                 (mapi)
 import           Control.Exception                  (catch)
 import           Control.Monad
 import           Data.Monoid
@@ -24,6 +25,7 @@ import           System.FilePath.Posix
 import           Language.Fixpoint.Interface        (resultExit)
 import qualified Language.Fixpoint.Types      as    F
 import           Language.Fixpoint.Misc
+
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Files
 import           Text.PrettyPrint.HughesPJ
@@ -111,11 +113,17 @@ writeResult :: (Ord a, PP a) => F.FixResult a -> IO ()
 writeResult r            = mapM_ (writeDoc c) $ zip [0..] $ resDocs r
   where 
     c                    = F.colorResult r
-    writeDoc c (i, d)    = writeBlock c i $ lines $ render d
-    writeBlock _ _ []    = return ()
-    writeBlock c 0 ss    = forM_ ss (colorPhaseLn c "")
-    writeBlock _ _ ss    = forM_ ("\n" : ss) putStrLn
 
+writeDoc c (i, d)    = writeBlock c i $ procDoc d
+writeBlock _ _ []    = return ()
+writeBlock c 0 ss    = forM_ ss (colorPhaseLn c "")
+writeBlock _ _ ss    = forM_ ("\n" : ss) putStrLn
+
+procDoc              = mapi pad . filter (not . null . words) . lines . render
+  where
+    pad 0 x          = x
+    pad _ x          = "  " ++ x
+    
 resDocs F.Safe             = [text "SAFE"]
 resDocs (F.Crash xs s)     = text ("CRASH: " ++ s) : pprManyOrdered xs
 resDocs (F.Unsafe xs)      = text "UNSAFE"         : pprManyOrdered (nub xs)

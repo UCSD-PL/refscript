@@ -27,7 +27,6 @@ import           Data.Generics
 import qualified Data.HashMap.Strict            as M
 import           Text.PrettyPrint.HughesPJ 
 
-import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Locations
 import           Language.Nano.Names
@@ -40,8 +39,6 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types        as F
-
-
 
 
 -----------------------------------------------------------------------------

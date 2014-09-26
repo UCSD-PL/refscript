@@ -33,6 +33,6 @@ class C extends B {
   /*@ a : number */
   a: number; 
 	/*@ baz: (x: #INatPoint): void */
-	baz(x: IPoint): void {  }
+	baz(x: INatPoint): void {  }
 }
 

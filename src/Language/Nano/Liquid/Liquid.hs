@@ -425,21 +425,6 @@ consClassElt g cid (MemberMethDecl l static i xs body)
     anns | static    = [ (m, t) | StatAnn (StatSig _ m t)  <- ann_fact l ]
          | otherwise = [ (m, t) | MethAnn (MethSig _ m t)  <- ann_fact l ]
 
-
--- ------------------------------------------------------------------------------------
--- consExprT :: CGEnv -> Expression AnnTypeR -> Maybe RefType -> CGM (Maybe (Id AnnTypeR, CGEnv)) 
--- ------------------------------------------------------------------------------------
--- consExprT g e to 
---   = mseq (consExpr g e Nothing) $ \(x, g') -> do
---       te      <- safeEnvFindTy x g'
---       case to of
---         Nothing -> return $ Just (x, g')
---         Just t  -> do _ <- subType l (errorLiquid' l) g' te t
---                       return $ Just (x, g')
---     where
---        l = getAnnotation e
-
-
 --------------------------------------------------------------------------------
 consAsgn :: AnnTypeR -> CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------

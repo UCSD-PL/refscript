@@ -9,7 +9,7 @@ module Language.Nano.Misc (
     mkEither, either2Bool
 
   -- List
-  , unique, exists
+  , unique, exists, mapi
 
   -- Tuples
   , fst4, snd4, thd4, fth4
@@ -58,6 +58,16 @@ import qualified Language.Fixpoint.Types              as F
 import           Language.Fixpoint.Misc
 import           Language.ECMAScript3.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
+
+-------------------------------------------------------------------------------
+mapi :: (Int -> a -> b) -> [a] -> [b] 
+-------------------------------------------------------------------------------
+mapi f          = go 0
+  where
+    go i (x:xs) = f i x : go (i+1) xs
+    go _ []     = []
+
+
 
 -------------------------------------------------------------------------------
 mapFstM :: (Functor m, Monad m) => (a -> m c) -> (a, b) -> m (c, b)

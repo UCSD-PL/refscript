@@ -46,7 +46,6 @@ import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
-
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
@@ -56,18 +55,40 @@ import           System.Console.CmdArgs.Default
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
- 
+
 --------------------------------------------------------------------------------
 verifyFile    :: Config -> FilePath -> [FilePath] -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile cfg f fs
-  = parseNanoFromFiles fs >>= \case 
-      Left  l -> return (A.NoAnn, l)
-      Right x -> ssaTransform x >>= \case
-                   Left  l -> return (A.NoAnn, F.Unsafe [l])
-                   Right y -> typeCheck cfg (expandAliases y) >>= \case 
-                                Left  l -> return (A.NoAnn, F.Unsafe l)
-                                Right z -> solveConstraints f (generateConstraints cfg z)
+verifyFile cfg f fs = parse     fs 
+                    $ ssa 
+                    $ tc    cfg 
+                    $ refTc cfg f
+
+parse fs next 
+  = do  r <- parseNanoFromFiles fs
+        donePhase Loud "Done: Parse Files"
+        nextPhase r next
+
+ssa next p
+  = do  r <- ssaTransform p              
+        donePhase Loud "Done: SSA Transform"
+        nextPhase r next
+
+tc cfg next p    
+  = do  r <- typeCheck cfg p 
+        donePhase Loud "Done: Typecheck"
+        nextPhase r next
+
+refTc cfg f p
+  = do donePhase Loud "Done: Generate Constraints"
+       solveConstraints f cgi
+  where
+    cgi = generateConstraints cfg p
+
+nextPhase (Left l)  _    = return (A.NoAnn, l)
+nextPhase (Right x) next = next x 
+  
+
 
 -- ppCasts (Nano { code = Src fs }) = 
 --   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
@@ -385,8 +406,7 @@ consExprT _ g e Nothing  = consExpr g e Nothing
 consExprT l g e (Just t) = consCall  g l "consExprT" (FI Nothing [(e, Nothing)])
                          $ TFun Nothing [B (F.symbol "x") t] tVoid fTop
 
--- FIXME: Do the safeExtends check here. Also add casts in the TC phase wherever
--- needed
+-- FIXME: Do safeExtends check here. Also add casts in the TC phase where needed
 ------------------------------------------------------------------------------------
 consClassElts :: PP a => CGEnv -> a -> [ClassElt AnnTypeR] -> CGM ()
 ------------------------------------------------------------------------------------

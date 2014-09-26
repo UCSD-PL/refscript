@@ -41,7 +41,7 @@ import           Language.Nano.SSA.SSAMonad
 
 ----------------------------------------------------------------------------------
 ssaTransform :: (PP r, F.Reftable r, Data r, Typeable r) => 
-  NanoBareR r -> IO (Either E.Error (NanoSSAR r))
+  NanoBareR r -> IO (Either (F.FixResult E.Error) (NanoSSAR r))
 ----------------------------------------------------------------------------------
 ssaTransform = return . execute . ssaNano
 

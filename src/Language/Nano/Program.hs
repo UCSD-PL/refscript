@@ -26,9 +26,11 @@ module Language.Nano.Program (
 
 
   -- * Traversals / folds
-  , hoistTypes, hoistGlobals
-  , visibleNames, scrapeModules, writeGlobalVars
-
+  , hoistTypes
+  , hoistGlobals
+  , visibleNames
+  , scrapeModules
+  , writeGlobalVars
   , scrapeVarDecl
 
   ) where
@@ -70,10 +72,10 @@ data Nano a r = Nano {
   --
     code      :: !(Source a)               
   -- 
-  -- ^ Annotations (keeping this to scrape qualifiers later)
-  -- ^ XXX: The names are bogus - made unique to avoid overwrites
-  --
-  , qualPool  :: !(Env (RType r))
+  -- -- ^ Annotations (keeping this to scrape qualifiers later)
+  -- -- ^ XXX: The names are bogus - made unique to avoid overwrites
+  -- --
+  -- , qualPool  :: !(Env (RType r))
   -- 
   -- ^ Measure Signatures
   --
@@ -612,4 +614,6 @@ scrapeVarDecl :: VarDecl (AnnSSA r) -> [RType r]
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _) = [ t | VarAnn                 t  <- ann_fact l ] 
                              ++ [ t | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
+
+   
 

@@ -168,11 +168,11 @@ ssaError = throwE
 
 
 -------------------------------------------------------------------------------------
-execute         :: SSAM r a -> Either Error a 
+execute         :: SSAM r a -> Either (F.FixResult Error) a 
 -------------------------------------------------------------------------------------
 execute act 
   = case runState (runExceptT act) initState of 
-      (Left err, _) -> Left err
+      (Left err, _) -> Left $ F.Unsafe [err]
       (Right x, _)  -> Right x
 
 -- Try the action @act@ in the current state. 

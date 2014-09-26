@@ -1,4 +1,4 @@
-import time, os, os.path
+import time, os, os.path, subprocess
 import pmap
 import itertools as it
 import threading, Queue
@@ -62,7 +62,13 @@ class TestRunner:
       start   = time.time ()
       status  = self.config.run_test (file)
       runtime = time.time () - start
-      #print "%f seconds" % (runtime)
+
+      ## tsc time
+      #FNULL = open(os.devnull, 'w')
+      #tsc_start   = time.time ()
+      #subprocess.call(["node", "../ext/tsc-bin/built/local/tsc.js", "--lib", "../include/prelude.ts",
+      # "--lib", "../include/dom.ts", "--refscript", file], stdout=FNULL, stderr=None)
+      #tsc_runtime = time.time () - tsc_start
 
       if hasattr (expected_statuses, '__iter__'):
         ok = (status in expected_statuses)

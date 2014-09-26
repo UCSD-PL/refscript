@@ -28,7 +28,7 @@ module Language.Nano.Liquid.CGMonad (
   , freshTyPhisWhile, freshTyObj, freshenCGEnvM
 
   -- * Freshable
-  , Freshable (..), refreshValueVar
+  , Freshable (..)
 
   -- * Environment API
   , envAddFresh, envAdds, envAddReturn, envAddGuard, envPopGuard, envFindTy, envFindTyWithAsgn
@@ -578,41 +578,11 @@ instance Freshable F.SortedReft where
 
 instance Freshable RefType where
   fresh   = errorstar "fresh RefType"
-  refresh = refreshRefType
+  refresh = mapReftM refresh
   true    = trueRefType 
 
 trueRefType    :: RefType -> CGM RefType
 trueRefType    = mapReftM true
-
--- | Refreshing "∀ A . t" causes all occurences of A in t to be instantiated
---   with the same fresh k-var.
---
---------------------------------------------------------------------------------
-refreshRefType :: RefType -> CGM RefType
---------------------------------------------------------------------------------
-refreshRefType (TAll α t) 
-  = do  rt    <- refresh t
-        tα    <- refresh (fTop :: F.Reft)        
-        return $ TAll α $ trans tα rt
-  where
-      trans r = everywhere $ mkT $ tx r
-      tx r (TVar β _) | α == β = TVar β r      
-      tx _ t                   = t
-refreshRefType t = mapReftM refresh t
-
-
---------------------------------------------------------------------------------
-refreshValueVar :: RefType -> CGM RefType
---------------------------------------------------------------------------------
-refreshValueVar t = T.mapM freshR t
-  where 
-    freshR (F.Reft (v,r)) = do 
-      v' <- freshVV
-      return $ F.Reft (v', F.substa (ss v v') r)
-    freshVV = F.vv . Just  <$> fresh
-    ss old new w | F.symbol old == F.symbol w = new
-                 | otherwise                  = w
-
 
 
 --------------------------------------------------------------------------------

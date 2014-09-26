@@ -28,7 +28,7 @@ module Language.Nano.Typecheck.Types (
   , mkUnion, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions
 
   -- * Deconstructing Types
-  , bkFun, bkFunBinds, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion, funTys -- , methTys
+  , bkFun, bkFunBinds, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion, funTys
   
   , rUnion, rTypeR, setRTypeR
 
@@ -537,14 +537,16 @@ instance PP Char where
 
 
 instance (PP r, F.Reftable r) => PP (RType r) where
-  pp (TVar α r)               = F.ppTy r $ pp α 
+  pp (TVar α r)               = F.ppTy r $ (text "TVAR##" <> pp α <> text "##") 
   pp (TFun (Just s) xts t _)  = ppArgs parens comma (B (F.symbol "this") s:xts) <+> text "=>" <+> pp t 
   pp (TFun _ xts t _)         = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)             = text "∀" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
   pp (TAnd ts)                = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TExp e)                 = pprint e 
   pp (TApp TUn ts r)          = F.ppTy r $ ppArgs id (text " +") ts 
-  pp (TApp (TRef x) (m:ts) r) = F.ppTy r $ pp x <> ppMut m <> ppArgs brackets comma ts 
+  pp (TApp (TRef x) (m:ts) r)
+    | Just m <- mutSym m      = F.ppTy r $ pp x <> pp m <> ppArgs brackets comma ts 
+  pp (TApp (TRef x) ts r)     = F.ppTy r $ pp x <>         ppArgs brackets comma ts
   pp (TApp c [] r)            = F.ppTy r $ pp c 
   pp (TApp c ts r)            = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
   pp (TCons bs m r)           | length bs < 3 
@@ -635,6 +637,14 @@ ppMeth t =
   where
     ppfun (Just s) ts t = ppArgs parens comma (B (F.symbol "this") s : ts) <> text ":" <+> pp t
     ppfun Nothing  ts t = ppArgs parens comma ts <> text ":" <+> pp t
+
+mutSym (TApp (TRef (RN (QName _ _ s))) _ _)
+  | s == F.symbol "Mutable"       = Just "◁"
+  | s == F.symbol "Immutable"     = Just "◀"
+  | s == F.symbol "AnyMutability" = Just "₌"
+  | s == F.symbol "ReadOnly"      = Just "◆"
+  | s == F.symbol "InheritedMut"  = Just "◇"
+mutSym _                          = Nothing
 
 
 ppMut (TApp (TRef (RN (QName _ _ s))) _ _)

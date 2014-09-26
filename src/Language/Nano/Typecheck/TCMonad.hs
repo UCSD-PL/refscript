@@ -249,12 +249,12 @@ addAnn :: PPR r => SourceSpan -> Fact r -> TCM r ()
 addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
  
 -------------------------------------------------------------------------------
-execute ::  PPR r => Config -> V.Verbosity -> NanoSSAR r -> TCM r a -> Either [Error] a
+execute ::  PPR r => Config -> V.Verbosity -> NanoSSAR r -> TCM r a -> Either (F.FixResult Error) a
 -------------------------------------------------------------------------------
 execute cfg verb pgm act 
   = case runState (runExceptT act) $ initState cfg verb pgm of 
-      (Left err, _) -> Left [err]
-      (Right x, st) ->  applyNonNull (Right x) Left (reverse $ tc_errors st)
+      (Left err, _) -> Left $ F.Unsafe [err]
+      (Right x, st) -> applyNonNull (Right x) (Left . F.Unsafe) (reverse $ tc_errors st)
 
 -------------------------------------------------------------------------------
 initState :: PPR r => Config -> V.Verbosity -> NanoSSAR r -> TCState r

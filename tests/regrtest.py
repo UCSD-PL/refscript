@@ -121,6 +121,6 @@ testCategories = [
 testdirs = [("/".join([s, c]), p) for (s, p) in testSign 
                                   for c      in testCategories ]
 
-runner    = rtest.TestRunner (Config ("rsc", options.opts, testdirs, logfile, options.threadcount))
+runner    = rtest.TestRunner (Config ("rsc -f", options.opts, testdirs, logfile, options.threadcount))
 runner.run ()
 

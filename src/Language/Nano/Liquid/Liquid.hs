@@ -55,33 +55,34 @@ type PPRS r = (PPR r, Substitutable r (Fact r))
 --------------------------------------------------------------------------------
 verifyFile    :: FilePath -> [FilePath] -> IO (A.UAnnSol RefType, F.FixResult Error)
 --------------------------------------------------------------------------------
-verifyFile f fs = do  (a,b) <- parse fs $ ssa $ tc $ refTc f
-                      return (a,b)
+verifyFile f fs = parse fs $ ssa $ tc $ refTc f
+
 parse fs next 
   = do  r <- parseNanoFromFiles fs
+        donePhase Loud "Done: Parse Files"
         case r of 
           Left  l -> return (A.NoAnn, l) 
           Right x -> next x
 
 ssa next p    
   = do  r <- ssaTransform p              
+        donePhase Loud "Done: SSA Transform"
         either (lerror . single) next r
 
 tc next p    
-  = do  r <- typeCheck ({- FIXMEPARSER expandAliases -} p) 
+  = do  r <- typeCheck p 
+        donePhase Loud "Done: Typecheck"
         case r of 
           Left l  -> lerror l 
           Right x -> next x
-          -- Right x -> next $ trace (show $ ppCasts x) x
 
-refTc f    p    = getOpts >>= solveConstraints f . (`generateConstraints` p)
+refTc f p
+  = do cfg    <- getOpts
+       let cgi = generateConstraints cfg p
+       donePhase Loud "Done: Generate Constraints"
+       solveConstraints f cgi
 
 lerror          = return . (A.NoAnn,) . F.Unsafe
-
-
--- ppCasts (Nano { code = Src fs }) = 
---   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
---                                 , TCast _ c <- ann_fact a ] 
 
          
 -- | solveConstraints

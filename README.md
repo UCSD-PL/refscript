@@ -154,10 +154,10 @@ RefScript currently allows the following forms of specifications:
 
 Every function, class method and class constructor needs to be annotated with a signature:
 
-    /*@ <id> :: σ */
-    function <id> (args...) { Body }
+    /*@ foo :: T */
+    function foo(x1,...,xn) { Body }
 
-The form of the function signature `σ` is described later.
+The form of the function signature `T` is described later.
 
 For example:
 
@@ -168,20 +168,19 @@ For example:
 
 Similarly for constructors and class methods:
 
-    /*@ <id> :: σ */
-    public <id> (args...) { Body }
+    /*@ foo : T */
+    public foo(x1,...,xn) { Body }
     
-    /*@ constructor :: σ */
-    constructor (args...) { Body }
-
+    /*@ constructor : T */
+    constructor (x1,...,xn) { Body }
 
 
 ### Type Annotations
 
 Type anntoations on variables are of the form: 
 
-    /*@ <id> :: t */
-    var <id> [= <exp>];
+    /*@ x :: t */
+    var x [= <exp>];
 
 For example:
 
@@ -205,7 +204,6 @@ Also, type annotations are necessary for class members:
         ...
     }
 
-
 Define interfaces in a similar way:
 
     interface IA {
@@ -213,9 +211,6 @@ Define interfaces in a similar way:
         a: number;
         ...
     }
-
-
-
 
 ### Type Qualifiers
 
@@ -226,18 +221,15 @@ You can write type qualifiers like this:
 Several more examples can be found in `include/prelude.ts`.
 
 
-
 ### Type Invariants
 
 Type *invariants* are predicates that are automatically added to the 
 refinement part of types of certain raw type. For example you can specify
 the following:
 
-    invariant {v:number    | ttag(v) = "number"   }
-    invariant {v:boolean   | ttag(v) = "boolean"  }  
-    invariant {v:string    | ttag(v) = "string"   } 
-
-
+    invariant {v:number    | ttag(v) = "number" }
+    invariant {v:boolean   | ttag(v) = "boolean"}
+    invariant {v:string    | ttag(v) = "string" } 
 
 ### Aliases
 
@@ -252,7 +244,7 @@ or
 
 defines a predicate alias. You can use this to write a type alias:
 
-    /*@ alias gnat[A,x]    = {v: A | (gt v x)}  */
+    /*@ alias gnat<A, x>   = {v: A | gt(v, x)}  */
 
 or 
     
@@ -260,20 +252,23 @@ or
 
 Note that 
 
-* upper-case `A` is used for **type**  parameters,
-* lower-case `x` is used for **value** parameters.
+* _Upper_-case `A` is used for **type**  parameters,
+* _Lower_-case `x` is used for **value** parameters.
 
 Finally, you can use the above aliases to define:
 
+    /*@ alias nat          = gnat<number, 0> */
+
+or
+
     /*@ alias nat          = gnat[number, 0] */
 
-and now use `nat` as an alias for: `{number | v >= 0}`
+You can use `nat` as an alias for: `{number | v >= 0}`
 
     /*@ z :: nat */
     var z = 12;
 
-
-
+See `tests/pos/typealias/` for more examples.
 
 ## Grammar
 

@@ -52,15 +52,20 @@ function puts(error, stdout, stderr) {
 
   rl.question(txt, function(answer) {
     if (answer === "Yes") {
-      console.log("Delerting " + files.length + " paths ...");
+      console.log("Deleting " + files.length + " paths ...");
+
       files.forEach(function(f){ 
-        if (fs.lstatSync(f).isDirectory()) {
-          deleteFolderRecursive(f);
-        }
-        else {
+        if (fs.lstatSync(f).isFile()) {
           fs.unlink(f);
         }
       });
+
+      files.forEach(function(f){ 
+        if (fs.exists(f) && fs.lstatSync(f).isDirectory()) {
+          deleteFolderRecursive(f);
+        }
+      });
+
 
     }
     else {

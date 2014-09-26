@@ -53,7 +53,6 @@ data TCon
   | TUn                 -- ^ union
   | TNull               -- ^ null
   | TUndef              -- ^ undefined
-
   | TFPBool             -- ^ liquid 'bool'
     deriving (Ord, Show, Data, Typeable)
 
@@ -89,7 +88,6 @@ data RType r =
   | TClass RelName
   -- 
   -- ^ typeof L.M.N (module)
-  --
   | TModule RelPath
   -- 
   -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
@@ -121,12 +119,12 @@ data FuncInputs t = FI { fi_self :: Maybe t, fi_args :: [t] } deriving (Functor,
 
 
 ---------------------------------------------------------------------------------
--- | Interfacce definitions 
+-- | Interface definitions 
 ---------------------------------------------------------------------------------
 
 data IfaceDef r = ID { 
   -- 
-  -- ^ Class (True) or interface (False)
+  -- ^ Class (True) or interface (False) RJ: FIXME use an explicit enum "data IfaceKind = Class | Interface" 
   --
     t_class :: Bool                                
   -- 
@@ -422,7 +420,11 @@ instance IsLocated (Alias a s t) where
 
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body 
+   
 
+
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

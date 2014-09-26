@@ -14,14 +14,18 @@ module Language.Nano.Annots (
   , Cast(..), CastDirection(..), castDirection, noCast, upCast, dnCast, ddCast
 
   -- * Aliases for annotated Source 
-  , AnnBare, UAnnBare, AnnSSA , UAnnSSA
+  , AnnR, AnnBare, UAnnBare, AnnSSA , UAnnSSA
   , AnnType, UAnnType, AnnInfo, UAnnInfo
 
+  -- * Deconstructing Facts
+  , factRTypes
+                                  
 ) where
 
 import           Control.Applicative            hiding (empty)
 import           Data.Default
 import           Data.Function                  (on)
+import           Data.Maybe                     (maybe) 
 import           Data.Generics                   
 import qualified Data.HashMap.Strict            as M
 import           Text.PrettyPrint.HughesPJ 
@@ -82,7 +86,6 @@ castDirection (CDead{}) = CDDead
 castDirection (CUp  {}) = CDUp
 castDirection (CDn  {}) = CDDn
 
-
 data Fact r
   -- SSA
   = PhiVar      ![(Id SourceSpan)]
@@ -94,10 +97,12 @@ data Fact r
   | Overload    !IContext  !(RType r)
   -- Type annotations
   | VarAnn      !(RType r)
+
   | FieldAnn    !(TypeMember r)
   | MethAnn     !(TypeMember r) 
   | StatAnn     !(TypeMember r) 
   | ConsAnn     !(TypeMember r)
+    
   | UserCast    !(RType r)
   | FuncAnn     !(RType r)
   | TCast       !IContext  !(Cast r)
@@ -111,9 +116,11 @@ data Fact r
 type UFact = Fact ()
 
 data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show, Data, Typeable)
-type AnnBare r = Annot (Fact r) SourceSpan -- NO facts
-type AnnSSA  r = Annot (Fact r) SourceSpan -- Phi facts
-type AnnType r = Annot (Fact r) SourceSpan -- Phi + t. annot. + Cast facts
+
+type AnnR r    = Annot (Fact r) SourceSpan
+type AnnBare r = AnnR r -- NO facts
+type AnnSSA  r = AnnR r -- Phi facts
+type AnnType r = AnnR r -- Phi + t. annot. + Cast facts
 type AnnInfo r = M.HashMap SourceSpan [Fact r] 
 
 type UAnnBare = AnnBare () 
@@ -134,6 +141,7 @@ instance Default SourceSpan where
 
 instance Ord (AnnSSA  r) where 
   compare (Ann s1 _) (Ann s2 _) = compare s1 s2
+
 
 -- XXX: This shouldn't have to be that hard...
 instance Ord (Fact r) where
@@ -209,4 +217,21 @@ instance (PP a, PP b) => PP (Annot b a) where
   pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
 
 phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
+
+factRTypes :: (Show r) => Fact r -> [RType r]
+factRTypes = go
+  where
+    go (TypInst _ _ ts)   = ts
+    go (EltOverload _ m)  = [f_type m]
+    go (Overload _ t)     = [t] 
+    go (VarAnn t)         = [t]
+    go (UserCast t)       = [t]
+    go (FuncAnn t)        = [t]
+    go (FieldAnn m)       = [f_type m]
+    go (MethAnn m)        = [f_type m]
+    go (StatAnn m)        = [f_type m]
+    go (ConsAnn m)        = [f_type m]
+    go (IfaceAnn ifd)     = f_type <$> t_elts ifd
+    go (ClassAnn (_, c))  = maybe [] snd c
+    go f                  = error ("factRTypes: TODO :" ++ show f)
 

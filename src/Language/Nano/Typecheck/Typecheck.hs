@@ -68,14 +68,14 @@ verifyFile cfg fs
   = parseNanoFromFiles fs >>= \case 
       Left  l -> return (NoAnn, l)
       Right x -> ssaTransform x >>= \case
-                   Left  l -> return (NoAnn, F.Unsafe [l])
+                   Left  l -> return (NoAnn, l)
                    Right y -> typeCheck cfg (expandAliases y) >>= \case
                                 Left  l -> unsafe l
                                 Right z -> return $ safe cfg z
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
-                 forM_ errs (putStrLn . ppshow) 
-                 return $ (NoAnn, F.Unsafe errs)
+                 -- forM_ errs (putStrLn . ppshow) 
+                 return $ (NoAnn, errs)
 
 safe cfg (Nano {code = Src fs}) = (NoAnn, failCasts (noFailCasts cfg) fs)
     where
@@ -100,7 +100,7 @@ castErrors (Ann l facts) = downErrors
 
 
 -------------------------------------------------------------------------------
-typeCheck :: PPR r => Config -> NanoSSAR r -> IO (Either [Error] (NanoTypeR r))
+typeCheck :: PPR r => Config -> NanoSSAR r -> IO (Either (F.FixResult Error) (NanoTypeR r))
 -------------------------------------------------------------------------------
 typeCheck cfg pgm = do 
   v <- V.getVerbosity

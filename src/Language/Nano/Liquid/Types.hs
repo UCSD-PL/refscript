@@ -402,13 +402,13 @@ efoldRType :: PPR r => (RType r -> b) -> (F.SEnv b -> RType r -> a -> a) -> F.SE
 ------------------------------------------------------------------------------------------
 efoldRType g f                 = go
   where 
-    go γ z t@(TVar _ _)        = f γ t z
     go γ z t@(TApp _ ts _)     = f γ t $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
     go γ z t@(TAll _ t1)       = f γ t $ go γ z t1
     go γ z t@(TFun s xts t1 _) = f γ t $ go γ' (gos γ' z (maybeToList s ++ map b_type xts)) t1  where γ' = foldr (efoldExt g) γ xts
     go γ z   (TAnd ts)         = gos γ z ts 
     go γ z t@(TCons xts _ _)   = f γ t $ gos γ' z (f_type <$> xts) where γ' = foldr (efoldExt' g) γ xts
-    go _ _ t                   = error $ "Not supported in efoldRType: " ++ ppshow t
+    go γ z t                   = f γ t z
+    -- go _ _ t                   = error $ "Not supported in efoldRType: " ++ ppshow t
     gos γ z ts                 = L.foldl' (go γ) z ts
 
 

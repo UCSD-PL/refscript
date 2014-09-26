@@ -17,6 +17,7 @@ module Language.Nano.Typecheck.Sub (convert, isSubtype, safeExtends, Related (..
 import           Control.Applicative                ((<$>))
 
 import           Data.Generics
+import           Data.Monoid
 import qualified Data.HashSet                       as S
 import           Data.List                          (sort)
 import           Data.Maybe                         (maybeToList, catMaybes, fromMaybe)
@@ -325,28 +326,22 @@ subElt _ γ μ1 μ2 (StatSig _ μf1 t1) (StatSig _ μf2 t2)
 -- | otherwise fail
 subElt _ _ _ _ _ _ = False
 
-
-
 -- | `convertFun`
 --------------------------------------------------------------------------------
 convertFun :: (Functor g, EnvLike () g)
            => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertFun l γ t1@(TFun s1 b1s o1 _) t2@(TFun s2 b2s o2 _) 
-  | length b1s == length b2s
-  = do  cs <- zipWithM (convert' l γ) (s1' : map b_type b2s) (s2' : map b_type b1s)
-        co <- convert' l γ o1 o2
-        if all noCast cs && noCast co then 
-          Right CDNo
-        else if all dnCast cs && upCast co then 
-          Right CDUp
-        else 
-          Left $ errorFuncSubtype l t1 t2
+  | length b1s <= length b2s
+  = mconcat <$> liftM2 (:) (convert' l γ o1 o2) 
+                           (zipWithM (convert' l γ) args2 args1)
   | otherwise 
   = Left $ errorFuncSubtype l t1 t2
   where
     s1' = fromMaybe tTop s1 
     s2' = fromMaybe tTop s2
+    args1 = s1' : map b_type b1s
+    args2 = s2' : map b_type b2s
 
 convertFun l γ t1@(TAnd _) t2@(TAnd t2s) = 
   if and $ isSubtype γ t1 <$> t2s then Right CDUp

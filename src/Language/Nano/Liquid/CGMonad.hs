@@ -665,13 +665,13 @@ splitC (Sub g i tf1@(TFun s1 xt1s t1 _) tf2@(TFun s2 xt2s t2 _))
   = do bcs       <- bsplitC g i tf1 tf2
        g'        <- envTyAdds "splitC" i xt2s g 
        cs        <- splitOC g i s1 s2
-       cs'       <- concatMapM splitC $ safeZipWith "splitc-1" (Sub g' i) t2s t1s' 
+       cs'       <- concatMapM splitC $ zipWith (Sub g' i) t2s t1s' 
        cs''      <- splitC $ Sub g' i (F.subst su t1) t2      
        return     $ bcs ++ cs ++ cs' ++ cs''
     where 
        t2s        = b_type <$> xt2s
        t1s'       = F.subst su (b_type <$> xt1s)
-       su         = F.mkSubst $ safeZipWith "splitc-2" bSub xt1s xt2s
+       su         = F.mkSubst $ zipWith bSub xt1s xt2s
        bSub b1 b2 = (b_sym b1, F.eVar $ b_sym b2)
 
 -- | TAlls

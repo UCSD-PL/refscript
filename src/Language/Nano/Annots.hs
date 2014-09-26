@@ -21,11 +21,13 @@ module Language.Nano.Annots (
 
 import           Control.Applicative            hiding (empty)
 import           Data.Default
+import           Data.Monoid
 import           Data.Function                  (on)
 import           Data.Generics                   
 import qualified Data.HashMap.Strict            as M
 import           Text.PrettyPrint.HughesPJ 
 
+import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Locations
 import           Language.Nano.Names
@@ -59,6 +61,22 @@ data CastDirection   = CDNo    -- .
                      | CDDn    -- <DN>
              deriving (Eq, Ord, Show, Data, Typeable)
 
+instance Monoid CastDirection where
+ mempty             = CDNo
+ mappend CDDead _   = CDDead
+ mappend _ CDDead   = CDDead
+
+ mappend CDUp CDDn  = CDDead
+ mappend CDDn CDUp  = CDDead
+
+ mappend CDDn _     = CDDn
+ mappend _    CDDn  = CDDn
+
+ mappend CDUp _     = CDUp
+ mappend _    CDUp  = CDUp
+
+ mappend CDNo CDNo  = CDNo
+
 
 instance (PP r, F.Reftable r) => PP (Cast r) where
   pp CNo         = text "No cast"
@@ -76,6 +94,10 @@ noCast = (`elem` [CDNo])
 upCast = (`elem` [CDNo, CDUp])
 dnCast = (`elem` [CDNo, CDDn])
 ddCast = (`elem` [CDDead])
+
+-- upCast = (`elem` [CDNo, CDUp])
+-- dnCast = (`elem` [CDNo, CDDn])
+-- ddCast = (`elem` [CDDead])
 
 castDirection (CNo  {}) = CDNo
 castDirection (CDead{}) = CDDead

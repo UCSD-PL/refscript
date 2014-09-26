@@ -327,21 +327,29 @@ subElt _ γ μ1 μ2 (StatSig _ μf1 t1) (StatSig _ μf2 t2)
 subElt _ _ _ _ _ _ = False
 
 -- | `convertFun`
+--  
+--   * (t1,t2,..,tk) => t <: (t1,t2,..,tk,..,tl) => t
+--
+--       forall i . ti' <: ti   t <: t'
+--   * ----------------------------------
+--       (ti,..) => t <: (ti',..) => t'
+--
 --------------------------------------------------------------------------------
 convertFun :: (Functor g, EnvLike () g)
            => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertFun l γ t1@(TFun s1 b1s o1 _) t2@(TFun s2 b2s o2 _) 
-  | length b1s <= length b2s
-  = mconcat <$> liftM2 (:) (convert' l γ o1 o2) 
-                           (zipWithM (convert' l γ) args2 args1)
-  | otherwise 
-  = Left $ errorFuncSubtype l t1 t2
+convertFun l γ (TFun s1 b1s o1 _) (TFun s2 b2s o2 _) 
+  = mappend lengthSub <$> 
+    mconcat           <$> liftM2 (:) (convert' l γ o1 o2) 
+                            (zipWithM (convert' l γ) args2 args1)
   where
-    s1' = fromMaybe tTop s1 
-    s2' = fromMaybe tTop s2
-    args1 = s1' : map b_type b1s
-    args2 = s2' : map b_type b2s
+    lengthSub | length b1s == length b2s = CDNo
+              | length b1s >  length b2s = CDDn
+              | otherwise                = CDUp
+    s1'       = fromMaybe tTop s1 
+    s2'       = fromMaybe tTop s2
+    args1     = s1' : map b_type b1s
+    args2     = s2' : map b_type b2s
 
 convertFun l γ t1@(TAnd _) t2@(TAnd t2s) = 
   if and $ isSubtype γ t1 <$> t2s then Right CDUp

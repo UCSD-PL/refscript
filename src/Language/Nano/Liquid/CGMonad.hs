@@ -28,7 +28,7 @@ module Language.Nano.Liquid.CGMonad (
   , freshTyPhisWhile, freshTyObj, freshenCGEnvM
 
   -- * Freshable
-  , Freshable (..), refreshValueVar
+  , Freshable (..)
 
   -- * Environment API
   , envAddFresh, envAdds, envAddReturn, envAddGuard, envPopGuard, envFindTy, envFindTyWithAsgn
@@ -128,7 +128,7 @@ execute cfg pgm act
 -------------------------------------------------------------------------------
 initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
 -------------------------------------------------------------------------------
-initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invs c [] 
+initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invs c 
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
 
@@ -144,7 +144,7 @@ cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
                 , F.gs    = measureEnv pgm
                 , F.lits  = []
                 , F.kuts  = F.ksEmpty
-                , F.quals = nanoQualifiers pgm ++ quals cg
+                , F.quals = pQuals pgm
                 }
 
 patchSymLits fi = fi { F.lits = F.symConstLits fi ++ F.lits fi }
@@ -185,15 +185,15 @@ data CGState = CGS {
   -- 
   -- ^ type constructor invariants
   --
-  , invs     :: TConInv
+  , invs     :: TConInv              
   -- 
   -- ^ configuration options
   --
   , cg_opts  :: Config               
   -- 
-  -- ^ qualifiers that arise at typechecking
-  --
-  , quals    :: ![F.Qualifier]       
+  -- -- ^ qualifiers that arise at typechecking
+  -- --
+  -- , quals    :: ![F.Qualifier]       
   }
 
 type CGM     = ExceptT Error (State CGState)
@@ -315,38 +315,6 @@ addInvariant g t
     refaIO t c               = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr $ F.symbolText c]
     vv                       = rTypeValueVar
     sym                      = F.dummyLoc $ F.symbol "instanceof"
-
-
--- ---------------------------------------------------------------------------------------
--- scrapeQualifiers   :: RefType -> CGM RefType 
--- ---------------------------------------------------------------------------------------
--- scrapeQualifiers t  = do 
---     modify $ \st -> st { quals = qs ++ quals st }
---     return t 
---    where
---      qs             = concatMap (refTypeQualifiers γ0) $ [t]
---      γ0             = E.envEmpty :: F.SEnv F.Sort 
--- 
--- 
--- refTypeQualifiers γ0 t = efoldRType rTypeSort addQs γ0 [] t 
---   where addQs γ t qs   = (mkQuals γ t) ++ qs
--- 
--- mkQuals γ t      = [ mkQual γ v so pa | let (F.RR so (F.Reft (v, ras))) = rTypeSortedReft t 
---                                       , F.RConc p                    <- ras                 
---                                       , pa                         <- atoms p
---                    ]
--- 
--- mkQual γ v so p = F.Q (F.symbol "Auto") [(v, so)] (F.subst θ p) l0
---   where 
---     θ             = F.mkSubst [(x, F.eVar y)   | (x, y) <- xys]
---     xys           = zipWith (\x i -> (x, F.symbol ("~A" ++ show (i :: Int)))) xs [0..] 
---     xs            = L.delete v $ orderedFreeVars γ p
---     l0            = F.dummyPos "RSC.CGMonad.mkQual"
--- 
--- orderedFreeVars γ = L.nub . filter (`F.memberSEnv` γ) . F.syms 
--- 
--- atoms (F.PAnd ps)   = concatMap atoms ps
--- atoms p           = [p]
 
 
 ---------------------------------------------------------------------------------------
@@ -610,41 +578,11 @@ instance Freshable F.SortedReft where
 
 instance Freshable RefType where
   fresh   = errorstar "fresh RefType"
-  refresh = refreshRefType
+  refresh = mapReftM refresh
   true    = trueRefType 
 
 trueRefType    :: RefType -> CGM RefType
 trueRefType    = mapReftM true
-
--- | Refreshing "∀ A . t" causes all occurences of A in t to be instantiated
---   with the same fresh k-var.
---
---------------------------------------------------------------------------------
-refreshRefType :: RefType -> CGM RefType
---------------------------------------------------------------------------------
-refreshRefType (TAll α t) 
-  = do  rt    <- refresh t
-        tα    <- refresh (fTop :: F.Reft)        
-        return $ TAll α $ trans tα rt
-  where
-      trans r = everywhere $ mkT $ tx r
-      tx r (TVar β _) | α == β = TVar β r      
-      tx _ t                   = t
-refreshRefType t = mapReftM refresh t
-
-
---------------------------------------------------------------------------------
-refreshValueVar :: RefType -> CGM RefType
---------------------------------------------------------------------------------
-refreshValueVar t = T.mapM freshR t
-  where 
-    freshR (F.Reft (v,r)) = do 
-      v' <- freshVV
-      return $ F.Reft (v', F.substa (ss v v') r)
-    freshVV = F.vv . Just  <$> fresh
-    ss old new w | F.symbol old == F.symbol w = new
-                 | otherwise                  = w
-
 
 
 --------------------------------------------------------------------------------

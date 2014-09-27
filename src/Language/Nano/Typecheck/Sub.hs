@@ -19,8 +19,8 @@ import           Control.Applicative                ((<$>))
 import           Data.Generics
 import           Data.Monoid
 import qualified Data.HashSet                       as S
-import           Data.List                          (sort)
-import           Data.Maybe                         (maybeToList, catMaybes, fromMaybe)
+import           Data.List                          (sort, find)
+import           Data.Maybe                         (maybeToList, catMaybes, fromMaybe, isNothing)
 import           Control.Monad.State
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
@@ -106,58 +106,11 @@ convertObj :: (Functor g, EnvLike () g)
            => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertObj l γ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
-
-  --
-  --                       μ <: μ
-  --  ∀i . [comb(μ,μi)]fi:ti <: [comb(μ,μi)]fi:ti
-  -- ------------------------------------------------
-  --        [μ]{ [μi]fi:ti } <: [μ]{ [μi]fi:ti }
-  --
-  | sameBinders && mutabilitySub && deepSub = Right $ CDUp
-  | sameBinders && mutabilitySub            = Left  $ errorSubtype l t1 t2
-  | sameBinders                             = Left  $ errorIncompMutTy l t1 t2 
-  -- 
-  -- NO: { f1:t1,..,fn:tn } <: { f1:t1,..,fn:tn,..,fm:tm }
-  --
-  | not nullDif                             = Left $ errorMissingFields l t1 t2 df21
-  -- 
-  --  [μ]{ f1:t1,..,fn:tn } <: [μ]{ f1:t1,..,fn:tn }
-  -- ------------------------------------------------------------
-  --  [μ]{ f1:t1,..,fn:tn,..,fm:tm } <: [μ]{ f1:t1,..,fn:tn }
-  --
-  | otherwise                               = convertObj l γ c1 c2
-
-    where
-
-      sameBinders   = s1l == s2l
+  | mutabilitySub && isImmutable μ2         = covariantConvertObj l γ e1s e2s
+  | mutabilitySub                           = invariantConvertObj l γ e1s e2s
+  | otherwise                               = Left $ errorIncompMutTy l t1 t2
+  where
       mutabilitySub = isSubtype γ μ1 μ2
-
-      deepSub       = deeps l γ μ1 μ2 b1s b2s
-      nullDif       = S.null df21
-
-      c1            = TCons e1s' μ1 r1 
-      c2            = TCons e2s  μ2 r2
-
-      e1s'          = [ e1 | e1 <- e1s
-                           , F.symbol e1 `M.member` m1  
-                           , F.symbol e1 `M.member` m2 ]
-        
-      -- All the bound elements that correspond to each binder 
-      -- Map : symbol -> [ elements ]
-      (m1,m2)       = mapPair toMap (e1s, e2s)
-      -- Filter out constructors
-      toMap         = foldr mi M.empty . filter nonConstrElt
-      mi e          = M.insertWith (++) (F.symbol e) [e]
-      -- Binders for each element
-      (s1s,s2s)     = mapPair (S.fromList . M.keys) (m1,m2)
-      (s1l,s2l)     = mapPair (sort     . M.keys) (m1,m2)
-      -- Join elements on common binder
-      (b1s,b2s)     = unzip [ (e1,e2) | s  <- S.toList in12 
-                                      , e1 <- maybeToList $ M.lookup s m1 
-                                      , e2 <- maybeToList $ M.lookup s m2 ]
-      -- Difference and intersection of keys
-      df21          = s2s `S.difference` s1s
-      in12          = s1s `S.intersection` s2s
  
 convertObj l γ t1@(TApp (TRef x1) (m1:t1s) _) t2@(TApp (TRef x2) (m2:t2s) _)
   --
@@ -220,6 +173,22 @@ convertObj l γ t1 t2@(TApp (TRef _) _ _)
 convertObj l _ t1 t2 =  Left $ unimplemented l "convertObj" $ ppshow t1 ++ " -- " ++ ppshow t2
 
 
+
+
+covariantConvertObj l γ e1s e2s
+  | not (null uq2s)   = Left $ errorWidthSubtyping l e1s e2s
+  | otherwise         = case subEs of
+                          []    -> Right CDUp
+                          (h:_) -> Left  h
+  where
+    subEs = catMaybes $ map (uncurry $ subElt l γ True) es
+    uq2s = [  e2      | e2 <- e2s, subtypeable e2, isNothing $ find (sameBinder e2) e1s ] 
+    es   = [ (e1, e2) | e2 <- e2s, subtypeable e2, e1 <- e1s, e1 `sameBinder` e2 ] 
+
+invariantConvertObj l γ e1s e2s = undefined
+
+
+
 -- | Deep subtyping for object members
 
 deeps l γ μ1 μ2 e1s e2s = and $ zipWith (deep l γ μ1 μ2) e1s e2s
@@ -238,93 +207,65 @@ deep l γ μ1 μ2 e1s e2s = or $ map (\e1 -> deep1 l γ μ1 μ2 e1 e2s) e1s
 -- | ------------------------
 -- |   s <: t1 /\ ... /\ tn
 --
-deep1 l γ μ1 μ2 e es = and $ map (subElt l γ μ1 μ2 e) es
+deep1 l γ μ1 μ2 e es = and $ map (isNothing . subElt l γ True e) es
 
 
--- subElt :: PPR r => SourceSpan -> Mutability -> Mutability -> TypeMember (RType r) -> TypeMember (RType r) -> TCM r Bool
-
--- | Call Signatures 
---    
---       ts<:ts          t<:t 
---  ---------------------------------------
---    { (ts)=>t } <: { (ts)=>t } 
 --
-subElt _ γ _ _ (CallSig t1) (CallSig t2)
-  = isSubtype γ t1 t2
+-- | `subElt l γ var e1 e2` performs a subtyping check between elements @e1@ and
+--   @e2@ given that they belong to an immutable structure if @var@ is True, or
+--   a mutable one otherwise.
+--
+subElt l γ _ (CallSig t1) (CallSig t2)
+  | isSubtype γ t1 t2 = Nothing
+  | otherwise         = Just $ errorCallSigSubt (srcPos l) t1 t2
 
--- | Field signatures
---
---  { μ f: t } <: { μ f: t' }
---
--- NO :   { mutable  f: PosInt  } <: { immutable f: int }
--- NO :   { mutable  f: PosInt  } <: { mutable   f: int }
--- NO :   { readonly f: PosInt  } <: { readonly  f: int }
---
-subElt _ γ μ1 μ2 (FieldSig _ μf1 t1) (FieldSig _ μf2 t2)
-  | isSubtype γ m1 m2 =
-      if isSubtype γ m2 t_immut then
-        -- 
-        --               t <: t'
-        -- ------------------------------------------
-        --  { immut f: t } <: { immut f: t' }
-        --
-        isSubtype γ t1 t2
-      else 
-        --  
-        --  μ,μ =/= Immutable
-        --  t<:t  t<:t
-        -- ----------------------------------
-        --  { μ f: t } <: { μ f: t }
-        --
-        and [ isSubtype γ t1 t2, isSubtype γ t2 t1 ]
+subElt l γ False (FieldSig _ _ t1) (FieldSig _ _ t2)  -- mutable container
+  | isSubtype γ t1 t2 && isSubtype γ t2 t1 
+  = Nothing
+  | otherwise                              
+  = Just $ errorFieldSubt (srcPos l) t1 t2
 
-  | otherwise = False 
+subElt l γ True f1@(FieldSig _ m1 t1) f2@(FieldSig _ m2 t2) -- immutable container
+  | isSubtype γ m1 m2 = compatMutabilites
+  | otherwise         = Just $ errorIncompMutElt (srcPos l) f1 f2
   where
-    t_immut = t_immutable -- t_Immutable $ get_common_ts γ
-    -- FIXME
-    m1      = combMut μ1 μf1
-    m2      = combMut μ2 μf2
+    compatMutabilites | isImmutable m2     = immutableFields
+                      | otherwise          = mutableFields
+    
+    immutableFields   | isSubtype γ t1 t2  = Nothing
+                      | otherwise          = Just $ errorFieldSubt (srcPos l) t1 t2
 
--- | Methods
--- 
-subElt _ γ _ _ (MethSig _ _ t1) (MethSig _ _ t2) =
-  isSubtype γ t1 t2
-  
+    mutableFields     | isSubtype γ t1 t2 && isSubtype γ t2 t1 
+                                           = Nothing
+                      | otherwise          = Just $ errorFieldSubt (srcPos l) t1 t2 
 
--- | Constructor signatures
---
--- { new (ts)=>() } <: { new (ts)=>() } 
---
-subElt _ γ _ _ (ConsSig t1) (ConsSig t2)
-  = isSubtype γ t1 t2 
+subElt l γ _ (MethSig s _ t1) (MethSig _ _ t2) 
+  | isSubtype γ t1 t2 = Nothing
+  | otherwise         = Just $ errorMethSigSubt (srcPos l) s t1 t2
 
--- | Index signatures
---
---    τ = τ  t<:t  t<:t
---  -----------------------------------
---    { [x:τ]: t } <: { [x:τ]: t }
---
-subElt _ γ _ _ (IndexSig _ b1 t1) (IndexSig _ b2 t2)
-  | b1 == b2 
-  = and [ isSubtype γ t1 t2, isSubtype γ t2 t2 ]
+subElt l γ _ (ConsSig t1) (ConsSig t2) 
+  | isSubtype γ t1 t2 = Nothing
+  | otherwise         = Just $ errorCtorSigSubt (srcPos l) t1 t2
 
--- | Static fields
---
-subElt _ γ μ1 μ2 (StatSig _ μf1 t1) (StatSig _ μf2 t2)
-  | isSubtype γ m1 m2 && isSubtype γ m2 t_immut 
-  = isSubtype γ t1 t2
-  | isSubtype γ m1 m2                        
-  = and [ isSubtype γ t2 t1, isSubtype γ t1 t2 ]
-  | otherwise                                   
-  = False 
+subElt _ γ _ (IndexSig _ _ t1) (IndexSig _ _ t2)
+  | isSubtype γ t1 t2 && isSubtype γ t2 t2 = Nothing
+
+subElt l γ True f1@(StatSig _ m1 t1) f2@(StatSig _ m2 t2)
+  | isSubtype γ m1 m2 = compatMutabilites
+  | otherwise         = Just $ errorIncompMutElt (srcPos l) f1 f2
   where
-    t_immut = t_immutable -- t_Immutable $ get_common_ts γ
-    -- FIXME 
-    m1      = combMut μ1 μf1
-    m2      = combMut μ2 μf2
+    compatMutabilites | isImmutable m2     = immutableFields
+                      | otherwise          = mutableFields
+    
+    immutableFields   | isSubtype γ t1 t2  = Nothing
+                      | otherwise          = Just $ errorFieldSubt (srcPos l) t1 t2
+
+    mutableFields     | isSubtype γ t1 t2 && isSubtype γ t2 t1 
+                                           = Nothing
+                      | otherwise          = Just $ errorFieldSubt (srcPos l) t1 t2 
 
 -- | otherwise fail
-subElt _ _ _ _ _ _ = False
+subElt l _ _ f1 f2 = Just $ errorEltSubt (srcPos l) f1 f2
 
 -- | `convertFun`
 --  

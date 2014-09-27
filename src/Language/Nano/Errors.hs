@@ -89,7 +89,10 @@ errorWriteImmutable l x       = mkErr l $ printf "Cannot assign to local variabl
                                        ++ printf "Add a type annotation to indicate it is globally writable." 
 errorSSAUnboundId l x         = mkErr l $ printf "SSA: Identifier '%s' unbound" (ppshow x) 
 
-errorUpdateInExpr l e       = mkErr l $ printf "Unsupported: assignment in If-then-else expression %s" (ppshow e)
+errorUpdateInExpr l e         = mkErr l $ printf "Unsupported: assignment in If-then-else expression '%s'" (ppshow e)
+errorEffectInFieldDef l       = mkErr l $ printf "Cannot have effects in field initialization."
+
+
 ---------------------------------------------------------------------------
 -- | TC 
 ---------------------------------------------------------------------------
@@ -107,6 +110,12 @@ errorDownCast l t1 t2         = mkErr l $ printf "Downcast: %s => %s" (ppshow t1
 errorClassExtends l x y s     = mkErr l $ printf "Type '%s' cannot extend type '%s'.Types of elements %s are incompatible."   
                                                    (ppshow x) (ppshow y) (ppshow s)
 errorIncompMutTy l t t'       = mkErr l $ printf "Types '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
+errorWidthSubtyping l es es'  = mkErr l $ printf "Invalid with subtyping between types with elements '%s' and '%s'." (ppshow es) (ppshow es')
+errorCallSigSubt l t t'       = mkErr l $ printf "Call signature '%s' is not a subtype of '%s'." (ppshow t) (ppshow t')
+errorEltSubt l t t'           = mkErr l $ printf "Element '%s' is not comparable to '%s'." (ppshow t) (ppshow t')
+errorMethSigSubt l s t t'     = mkErr l $ printf "Method '%s' signature '%s' is not a subtype of '%s'." (ppshow s) (ppshow t) (ppshow t')
+errorCtorSigSubt l t t'       = mkErr l $ printf "Constructor signature '%s' is not a subtype of '%s'." (ppshow t) (ppshow t')
+errorFieldSubt l t t'         = mkErr l $ printf "Field type '%s' is not a subtype of '%s'." (ppshow t) (ppshow t')
 errorIncompMutElt l t t'      = mkErr l $ printf "Elements '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
 errorConstrMissing l t        = mkErr l $ printf "Could not find constructor for type '%s'." (ppshow t)
 errorSubtype l t t'           = mkErr l $ printf "Type \n%s\n is not a subtype of\n%s" (ppshow t) (ppshow t')
@@ -141,6 +150,8 @@ errorUnresolvedType l t       = mkErr l $ printf "Could not resolve type '%s'." 
 errorUnresolvedTypes l t1 t2  = mkErr l $ printf "Could not resolve types '%s' and '%s'." (ppshow t1) (ppshow t2)
 errorConsSigMissing l t       = mkErr l $ printf "Constructor signature for '%s' is missing." (ppshow t)
 errorModuleExport l m x       = mkErr l $ printf "Module '%s' does not export '%s'." (ppshow m) (ppshow x)
+
+errorCompound e               = mkErr
 
 errorDeadCast l t1 t2         = mkErr l $ printf "Cannot convert '%s' to '%s'" (ppshow t1) (ppshow t2)
 

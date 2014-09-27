@@ -19,6 +19,9 @@ module Language.Nano.Typecheck.Resolve (
   -- * Ancestors
   , weaken, ancestors
 
+  -- * Keys
+  , boundKeys
+
   -- * Constructors
   , Constructor, {- toConstructor, isConstSubtype, -} sameTypeof, getTypeof
 
@@ -288,6 +291,20 @@ ancestors γ s =
         Just (par,_) ->  s : ancestors γ par
         _ -> [s]
     _ -> [s]
+
+
+---------------------------------------------------------------------------
+boundKeys :: (PPR r, EnvLike r g) => g r -> RType r -> [F.Symbol]
+---------------------------------------------------------------------------
+boundKeys γ t@(TApp (TRef _) _ _) = 
+    case flattenType γ t of
+      Just t  -> boundKeys γ t
+      Nothing -> []
+boundKeys _ t@(TCons es _ _) =
+  [ s | FieldSig s _ _ <- es] ++
+  [ s | MethSig s _ _ <- es] ++
+  [ F.symbol "constructor" | ConsSig _ <- es]
+boundKeys _ t = []
 
 
 -----------------------------------------------------------------------

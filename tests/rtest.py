@@ -1,4 +1,4 @@
-import time, os, os.path, subprocess
+import time, os, os.path #, subprocess
 import pmap
 import itertools as it
 import threading, Queue
@@ -27,7 +27,7 @@ class LogWriter (threading.Thread):
 class TestConfig:
     def __init__ (self, testdirs, logfile = None, threadcount = 1):
         self.testdirs    = testdirs
-        self.valid_exits = [x for d, x in self.testdirs]
+        self.valid_exits = [x for d, x, fs in self.testdirs]
         if logfile != None:
             self.logq   = Queue.Queue ()
             self.logger = LogWriter (logfile, self.logq)
@@ -58,9 +58,9 @@ class TestRunner:
     def __init__ (self, config):
         self.config = config
 
-    def run_test (self, (file, expected_statuses)):
+    def run_test (self, (file, expected_statuses, flags)):
       start   = time.time ()
-      status  = self.config.run_test (file)
+      status  = self.config.run_test (file, flags)
       runtime = time.time () - start
 
       ## tsc time
@@ -100,8 +100,12 @@ class TestRunner:
         return (failcount != 0)
 
     # NOTE: Empty folders in the test dirs will cause a crash !
-    def directory_tests (self, dir, expected_status):
-        return it.chain(*[[(os.path.join (dir, file), expected_status) for file in files if self.config.is_test (file)] for dir, dirs, files in os.walk(dir)])
+    def directory_tests (self, dir, expected_status, flags):
+        return it.chain(*[[(os.path.join (dir, file), expected_status, flags) 
+              for file in files if self.config.is_test (file)] 
+              for dir, dirs, files in os.walk(dir)])
 
     def run (self):
-        return self.run_tests (it.chain (*[self.directory_tests (dir, expected_status) for dir, expected_status in self.config.testdirs]))
+        return self.run_tests (it.chain (*[(self.directory_tests(dir,expected_status, flags))
+          for dir, expected_status, flags in self.config.testdirs]))
+

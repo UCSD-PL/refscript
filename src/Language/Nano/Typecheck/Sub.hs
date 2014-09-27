@@ -17,6 +17,7 @@ module Language.Nano.Typecheck.Sub (convert, isSubtype, safeExtends, Related (..
 import           Control.Applicative                ((<$>))
 
 import           Data.Generics
+import           Data.Tuple                         (swap)
 import           Data.Monoid
 import qualified Data.HashSet                       as S
 import           Data.List                          (sort, find)
@@ -38,7 +39,6 @@ import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Errors
-import qualified Data.HashMap.Strict                as M
 
 -- import           Debug.Trace                      (trace)
 
@@ -105,7 +105,7 @@ convert' l γ t1 t2                              = convertSimple  l γ t1 t2
 convertObj :: (Functor g, EnvLike () g)
            => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertObj l γ t1@(TCons e1s μ1 r1) t2@(TCons e2s μ2 r2)
+convertObj l γ t1@(TCons e1s μ1 _) t2@(TCons e2s μ2 _)
   | mutabilitySub && isImmutable μ2         = covariantConvertObj l γ e1s e2s
   | mutabilitySub                           = invariantConvertObj l γ e1s e2s
   | otherwise                               = Left $ errorIncompMutTy l t1 t2
@@ -122,43 +122,37 @@ convertObj l γ t1@(TApp (TRef x1) (m1:t1s) _) t2@(TApp (TRef x2) (m2:t2s) _)
   -- * Both immutable, same name, non arrays: Co-variant subtyping
   --
   | x1 == x2 && isImmutable m2 && not (isArr t1) 
-  = do z <- zipWithM (convert l γ) t1s t2s
-       if       all (noCast . castDirection) z then Right $ CDNo
-       else if  all (dnCast . castDirection) z then Right $ CDDn
-       else if  all (upCast . castDirection) z then Right $ CDUp
-       else                                         Left  $ errorSubtype l t1 t2
+  = mconcat <$> zipWithM (convert' l γ) t1s t2s
   -- 
   -- * Non-immutable, same name: invariance
   --
   | x1 == x2 
-  = do z <- zipWithM (convert l γ) t1s t2s
-       if       all (noCast . castDirection) z then Right $ CDNo
-       else                                         Left  $ errorSubtype l t1 t2
+  = mconcat <$> liftM2 (++) (zipWithM (convert' l γ) t1s t2s) 
+                            (zipWithM (convert' l γ) t2s t1s)
   -- 
   -- * Compatible mutabilities, differenet names:
   --
   | otherwise       
-  = case weaken γ x1 x2 t1s of
-      -- Adjusting the child class to the parent
-      Just (_, t1s') -> 
-          if all (uncurry $ isSubtype γ) $ zip t1s' t2s
-            then Right CDUp 
-            else Left  $ errorSubtype l t1 t2
-      Nothing -> 
-          case weaken γ x2 x1 t2s of
-            -- Adjusting the child class to the parent
-            Just (_, t2s') -> 
-                if all (uncurry $ isSubtype γ) $ zip t1s t2s'
-                then Right CDDn
-                else Left  $ errorSubtype l t1 t2
-     
-            -- Structural subtyping
-            Nothing       -> 
-                case (flattenType γ t1, flattenType γ t2) of 
-                  (Just ft1, Just ft2) -> convertObj l γ ft1 ft2
-                  (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2
-                  (Nothing , _       ) -> Left $ errorUnresolvedType l t1 
-                  (_       , Nothing ) -> Left $ errorUnresolvedType l t2
+  = case (weaken γ x1 x2 t1s, weaken γ x2 x1 t2s) of
+  -- 
+  -- * Adjusting `t1` to reach `t2` moving upward in the type 
+  --   hierarchy -- this is equivalent to Upcast
+  --
+      (Just (_, t1s'), _             ) -> mconcat . (CDUp:) <$> zipWithM (convert' l γ) t1s' t2s
+  -- 
+  -- * Adjusting `t2` to reach `t1` moving upward in the type 
+  --   hierarchy -- this is equivalent to DownCast
+  --
+      (_             , Just (_, t2s')) -> mconcat . (CDDn:) <$> zipWithM (convert' l γ) t1s t2s'
+      (_             , _             ) ->
+  -- 
+  -- * Fall back to structural subtyping
+  --
+          case (flattenType γ t1, flattenType γ t2) of 
+            (Just ft1, Just ft2) -> convertObj l γ ft1 ft2
+            (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2
+            (Nothing , _       ) -> Left $ errorUnresolvedType l t1 
+            (_       , Nothing ) -> Left $ errorUnresolvedType l t2
                           
 convertObj l γ t1@(TApp (TRef _) _ _) t2 
   = case flattenType γ t1 of 
@@ -172,42 +166,58 @@ convertObj l γ t1 t2@(TApp (TRef _) _ _)
 
 convertObj l _ t1 t2 =  Left $ unimplemented l "convertObj" $ ppshow t1 ++ " -- " ++ ppshow t2
 
-
-
-
 covariantConvertObj l γ e1s e2s
-  | not (null uq2s)   = Left $ errorWidthSubtyping l e1s e2s
-  | otherwise         = case subEs of
-                          []    -> Right CDUp
-                          (h:_) -> Left  h
+  | null uq1s && null uq2s = mconcat           <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn'}
+  |              null uq2s = mconcat . (CDUp:) <$> subEs  -- {x1:t1,..,xn:tn,..,xm:tm} ?? {x1:t1',..,xn:tn'}
+  | null uq1s              = mconcat . (CDDn:) <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn',..,xm:tm'}
+  | otherwise              = Left $ errorWidthSubtyping l e1s e2s
   where
-    subEs = catMaybes $ map (uncurry $ subElt l γ True) es
+    -- Subtyping equivalent type-members
+    subEs = mapM (uncurry $ subElt l γ True) es
+    -- Type-members unique in `e2s`
+    uq1s = [  e1      | e1 <- e1s, subtypeable e1, isNothing $ find (sameBinder e1) e2s ] 
     uq2s = [  e2      | e2 <- e2s, subtypeable e2, isNothing $ find (sameBinder e2) e1s ] 
+    -- Pairs of equivalent type-members in `e1s` and `e2s`
     es   = [ (e1, e2) | e2 <- e2s, subtypeable e2, e1 <- e1s, e1 `sameBinder` e2 ] 
 
-invariantConvertObj l γ e1s e2s = undefined
-
-
-
--- | Deep subtyping for object members
-
-deeps l γ μ1 μ2 e1s e2s = and $ zipWith (deep l γ μ1 μ2) e1s e2s
-
--- | Treat the parts of `e1s` and `e2s` that correspond to the same binder 
---   as intersection types.
+-- | `invariantConvertObj l γ e1s e2s` determined if an object type containing
+--   members @e1s@ can be converted (used as) an object type with members @e2s@. 
 --
--- |  ∃ i s.t. si <: t
--- | ----------------------
--- |  s1 /\ ... /\ sn <: t
---
-deep l γ μ1 μ2 e1s e2s = or $ map (\e1 -> deep1 l γ μ1 μ2 e1 e2s) e1s
+invariantConvertObj l γ e1s e2s
+  | null uq1s && null uq2s = mconcat           <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn'}
+  |              null uq2s = mconcat . (CDUp:) <$> subEs  -- {x1:t1,..,xn:tn,..,xm:tm} ?? {x1:t1',..,xn:tn'}
+  | null uq1s              = mconcat . (CDDn:) <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn',..,xm:tm'}
+  | otherwise              = Left $ errorWidthSubtyping l e1s e2s
+  where
+    -- Subtyping equivalent type-members
+    subEs = mapM (uncurry $ subElt l γ True) $ es ++ es'
+    -- Type-members unique in `e2s`
+    uq1s = [  e1      | e1 <- e1s, subtypeable e1, isNothing $ find (sameBinder e1) e2s ] 
+    uq2s = [  e2      | e2 <- e2s, subtypeable e2, isNothing $ find (sameBinder e2) e1s ] 
+    -- Pairs of equivalent type-members in `e1s` and `e2s`
+    es   = [ (e1, e2) | e2 <- e2s, subtypeable e2, e1 <- e1s, e1 `sameBinder` e2 ] 
+    es'  = swap <$> es
 
---
--- |  s <: t1  ...  s <: tn
--- | ------------------------
--- |   s <: t1 /\ ... /\ tn
---
-deep1 l γ μ1 μ2 e es = and $ map (isNothing . subElt l γ True e) es
+
+-- -- | Deep subtyping for object members
+-- 
+-- deeps l γ μ1 μ2 e1s e2s = and $ zipWith (deep l γ μ1 μ2) e1s e2s
+
+-- -- | Treat the parts of `e1s` and `e2s` that correspond to the same binder 
+-- --   as intersection types.
+-- --
+-- -- |  ∃ i s.t. si <: t
+-- -- | ----------------------
+-- -- |  s1 /\ ... /\ sn <: t
+-- --
+-- deep l γ μ1 μ2 e1s e2s = or $ map (\e1 -> deep1 l γ μ1 μ2 e1 e2s) e1s
+
+-- --
+-- -- |  s <: t1  ...  s <: tn
+-- -- | ------------------------
+-- -- |   s <: t1 /\ ... /\ tn
+-- --
+-- deep1 l γ μ1 μ2 e es = and $ map (isNothing . subElt l γ True e) es
 
 
 --
@@ -215,57 +225,58 @@ deep1 l γ μ1 μ2 e es = and $ map (isNothing . subElt l γ True e) es
 --   @e2@ given that they belong to an immutable structure if @var@ is True, or
 --   a mutable one otherwise.
 --
-subElt l γ _ (CallSig t1) (CallSig t2)
-  | isSubtype γ t1 t2 = Nothing
-  | otherwise         = Just $ errorCallSigSubt (srcPos l) t1 t2
+subElt l γ _ (CallSig t1) (CallSig t2) = convert' l γ t1 t2 
+--   | isSubtype γ t1 t2 = 
+--   | otherwise         = Just $ errorCallSigSubt (srcPos l) t1 t2
 
 subElt l γ False (FieldSig _ _ t1) (FieldSig _ _ t2)  -- mutable container
-  | isSubtype γ t1 t2 && isSubtype γ t2 t1 
-  = Nothing
-  | otherwise                              
-  = Just $ errorFieldSubt (srcPos l) t1 t2
+  = liftM2 mappend (convert' l γ t1 t2) (convert' l γ t2 t1)
+--   | isSubtype γ t1 t2 && isSubtype γ t2 t1 
+--   = Nothing
+--   | otherwise                              
+--   = Just $ errorFieldSubt (srcPos l) t1 t2
 
-subElt l γ True f1@(FieldSig _ m1 t1) f2@(FieldSig _ m2 t2) -- immutable container
-  | isSubtype γ m1 m2 = compatMutabilites
-  | otherwise         = Just $ errorIncompMutElt (srcPos l) f1 f2
-  where
-    compatMutabilites | isImmutable m2     = immutableFields
-                      | otherwise          = mutableFields
-    
-    immutableFields   | isSubtype γ t1 t2  = Nothing
-                      | otherwise          = Just $ errorFieldSubt (srcPos l) t1 t2
-
-    mutableFields     | isSubtype γ t1 t2 && isSubtype γ t2 t1 
-                                           = Nothing
-                      | otherwise          = Just $ errorFieldSubt (srcPos l) t1 t2 
-
-subElt l γ _ (MethSig s _ t1) (MethSig _ _ t2) 
-  | isSubtype γ t1 t2 = Nothing
-  | otherwise         = Just $ errorMethSigSubt (srcPos l) s t1 t2
-
-subElt l γ _ (ConsSig t1) (ConsSig t2) 
-  | isSubtype γ t1 t2 = Nothing
-  | otherwise         = Just $ errorCtorSigSubt (srcPos l) t1 t2
-
-subElt _ γ _ (IndexSig _ _ t1) (IndexSig _ _ t2)
-  | isSubtype γ t1 t2 && isSubtype γ t2 t2 = Nothing
-
-subElt l γ True f1@(StatSig _ m1 t1) f2@(StatSig _ m2 t2)
-  | isSubtype γ m1 m2 = compatMutabilites
-  | otherwise         = Just $ errorIncompMutElt (srcPos l) f1 f2
-  where
-    compatMutabilites | isImmutable m2     = immutableFields
-                      | otherwise          = mutableFields
-    
-    immutableFields   | isSubtype γ t1 t2  = Nothing
-                      | otherwise          = Just $ errorFieldSubt (srcPos l) t1 t2
-
-    mutableFields     | isSubtype γ t1 t2 && isSubtype γ t2 t1 
-                                           = Nothing
-                      | otherwise          = Just $ errorFieldSubt (srcPos l) t1 t2 
-
--- | otherwise fail
-subElt l _ _ f1 f2 = Just $ errorEltSubt (srcPos l) f1 f2
+-- subElt l γ True f1@(FieldSig _ m1 t1) f2@(FieldSig _ m2 t2) -- immutable container
+--   | isSubtype γ m1 m2 = compatMutabilites
+--   | otherwise         = Just $ errorIncompMutElt (srcPos l) f1 f2
+--   where
+--     compatMutabilites | isImmutable m2     = immutableFields
+--                       | otherwise          = mutableFields
+--     
+--     immutableFields   | isSubtype γ t1 t2  = Nothing
+--                       | otherwise          = Just $ errorFieldSubt (srcPos l) t1 t2
+-- 
+--     mutableFields     | isSubtype γ t1 t2 && isSubtype γ t2 t1 
+--                                            = Nothing
+--                       | otherwise          = Just $ errorFieldSubt (srcPos l) t1 t2 
+-- 
+-- subElt l γ _ (MethSig s _ t1) (MethSig _ _ t2) 
+--   | isSubtype γ t1 t2 = Nothing
+--   | otherwise         = Just $ errorMethSigSubt (srcPos l) s t1 t2
+-- 
+-- subElt l γ _ (ConsSig t1) (ConsSig t2) 
+--   | isSubtype γ t1 t2 = Nothing
+--   | otherwise         = Just $ errorCtorSigSubt (srcPos l) t1 t2
+-- 
+-- subElt _ γ _ (IndexSig _ _ t1) (IndexSig _ _ t2)
+--   | isSubtype γ t1 t2 && isSubtype γ t2 t2 = Nothing
+-- 
+-- subElt l γ True f1@(StatSig _ m1 t1) f2@(StatSig _ m2 t2)
+--   | isSubtype γ m1 m2 = compatMutabilites
+--   | otherwise         = Just $ errorIncompMutElt (srcPos l) f1 f2
+--   where
+--     compatMutabilites | isImmutable m2     = immutableFields
+--                       | otherwise          = mutableFields
+--     
+--     immutableFields   | isSubtype γ t1 t2  = Nothing
+--                       | otherwise          = Just $ errorFieldSubt (srcPos l) t1 t2
+-- 
+--     mutableFields     | isSubtype γ t1 t2 && isSubtype γ t2 t1 
+--                                            = Nothing
+--                       | otherwise          = Just $ errorFieldSubt (srcPos l) t1 t2 
+-- 
+-- -- | otherwise fail
+-- subElt l _ _ f1 f2 = Just $ errorEltSubt (srcPos l) f1 f2
 
 -- | `convertFun`
 --  

@@ -40,7 +40,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
-  , isTVar, isTObj, isConstr, isTFun, fTop, orNull, isArr -- , tArr, rtArr
+  , isTVar, isTObj, isConstr, subtypeable, isTFun, fTop, orNull, isArr -- , tArr, rtArr
 
   -- * Element ops 
   , sameBinder, eltType, isStaticSig, nonStaticSig, nonConstrElt, mutability, baseType
@@ -456,6 +456,7 @@ isMethodSig _                = False
 isFieldSig (FieldSig _ _ _ ) = True
 isFieldSig _                 = False
 
+subtypeable e = not (isConstr e)
 
 setThisBinding m@(MethSig _ _ t) t' = m { f_type = mapAnd bkTy t }
   where

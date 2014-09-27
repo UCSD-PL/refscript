@@ -724,6 +724,7 @@ builtinOpId BIForInKeys     = builtinId "BIForInKeys"
 builtinOpId BINumArgs       = builtinId "BINumArgs"
 builtinOpId BITruthy        = builtinId "BITruthy"
 builtinOpId BICondExpr      = builtinId "BICondExpr"
+builtinOpId BICastExpr      = builtinId "BICastExpr"
 
 
 ---------------------------------------------------------------------------------

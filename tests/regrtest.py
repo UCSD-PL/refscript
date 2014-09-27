@@ -36,7 +36,6 @@ if not os.path.exists(logdir):
 argcomment = "--! run with "
 
 def logged_sys_call(args, out=None, err=None):
-  # print "exec: " + " ".join(args)
   return subprocess.call(args, stdout=out, stderr=err)
 
 def solve_quals(solve, file, bare, time, quiet, flags, dargs):
@@ -79,11 +78,11 @@ class Config (rtest.TestConfig):
     self.dargs  = dargs
     self.solver = solver
 
-  def run_test (self, file):
+  def run_test (self, file, flags):
     os.environ['LCCFLAGS'] = self.dargs
     if file.endswith("." + inputFileExt):
       fargs = getfileargs(file)
-      return solve_quals(self.solver, file, True, False, True, fargs, self.dargs)
+      return solve_quals(self.solver, file, True, False, True, flags + fargs, self.dargs)
     elif file.endswith(".sh"):
       return run_script(file, True)
 
@@ -100,17 +99,17 @@ options, args = parser.parse_args()
 
 testSign  = [("pos", 0), ("neg", 1)]
 
-testCategories = [ 
-                   "objects"
-                 , "arrays"
-                 , "classes"
-                 , "loops"
-                 , "misc"
-                 , "operators"
-                 , "simple"
-                 , "unions"
-                 , "forin"
-                 , "typealias"
+testCategories = [
+                   ("objects", [])
+                 , ("arrays", [])
+                 , ("classes", [])
+                 , ("loops", [])
+                 , ("misc", [])
+                 , ("operators", [])
+                 , ("simple", [])
+                 , ("unions", [])
+                 , ("typealias", [])
+                 , ("inclusion", ["-e"])
 
                  ## not supported:
                  # , "proto"
@@ -118,9 +117,9 @@ testCategories = [
 
                  ]
 
-testdirs = [("/".join([s, c]), p) for (s, p) in testSign 
-                                  for c      in testCategories ]
+testdirs = [("/".join([s, c]), p, fs) for (s, p)  in testSign 
+                                      for (c, fs) in testCategories ]
 
-runner    = rtest.TestRunner (Config ("rsc -f", options.opts, testdirs, logfile, options.threadcount))
+runner    = rtest.TestRunner (Config ("rsc", options.opts, testdirs, logfile, options.threadcount))
 runner.run ()
 

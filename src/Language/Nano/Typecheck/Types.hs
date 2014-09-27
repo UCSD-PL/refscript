@@ -456,6 +456,7 @@ isMethodSig _                = False
 isFieldSig (FieldSig _ _ _ ) = True
 isFieldSig _                 = False
 
+-- Typemembers that take part in subtyping
 subtypeable e = not (isConstr e)
 
 setThisBinding m@(MethSig _ _ t) t' = m { f_type = mapAnd bkTy t }

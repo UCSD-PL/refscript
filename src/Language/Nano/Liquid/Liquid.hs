@@ -125,14 +125,8 @@ consNano     :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano p@(Nano {code = Src fs}) 
   = do  g   <- initGlobalEnv p
-        conflateTypeMembers <$> addUndefined g >>= \case
-          Left es -> manyEs es 
-          Right g' -> consStmts g' fs >> return ()
-  where
-        manyEs []     = cgError $ impossible (srcPos dummySpan) "consNano manyEs"
-        manyEs [e]    = cgError e
-        manyEs (e:es) = cgError e >> manyEs es
-
+        consStmts g fs 
+        return ()
 
 
 -------------------------------------------------------------------------------
@@ -145,7 +139,8 @@ initGlobalEnv  :: NanoRefType -> CGM CGEnv
 initGlobalEnv (Nano { code = Src s }) = 
     freshenCGEnvM $ CGE nms bds grd ctx mod pth Nothing
   where
-    nms       = E.envAdds (visibleNames s) E.envEmpty
+    nms       = E.envAdds (extras ++ visibleNames s) E.envEmpty
+    extras    = [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly))]
     bds       = F.emptyIBindEnv
     grd       = []
     mod       = scrapeModules s 
@@ -199,9 +194,6 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     thisBind  = (\t -> (Id (srcPos dummySpan) "this", (t, WriteGlobal))) <$> maybeToList thisTO
     
 
-addUndefined g = envAdds "addUndefined" [(F.symbol "undefined",(t, ReadOnly))] g
-  where
-    t          = TApp TUndef [] fTop
 
 
 

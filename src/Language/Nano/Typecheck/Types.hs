@@ -55,11 +55,8 @@ module Language.Nano.Typecheck.Types (
   , objLitTy
   , setPropTy
 
-    
   -- * Builtin: Binders
-  , argId
-  , argTy
-  , returnTy
+  , mkId, argId, argTy, returnTy
 
 
   ) where 

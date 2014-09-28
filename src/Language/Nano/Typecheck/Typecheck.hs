@@ -114,17 +114,11 @@ typeCheck cfg pgm = do
 tcNano :: PPR r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
-  -- adding undefined into scope
-  = conflateTypeMembers <$> addUndefined γ >>= \case
-      Left es  -> manyEs es 
-      Right γ' -> do (fs',_)   <- tcStmts γ' fs
-                     fs''      <- patch fs'
-                     return     $ p { code = Src fs'' }
-    where
-        γ          = initGlobalEnv p
-        manyEs []     = tcError $ impossible (srcPos dummySpan) "tcNano manyEs"
-        manyEs [e]    = tcError e
-        manyEs (e:es) = tcError e >> manyEs es
+  = do  (fs',_) <- tcStmts γ fs
+        fs''    <- patch fs'
+        return   $ p { code = Src fs'' }
+  where
+    γ = initGlobalEnv p
 
 
 -- | Patch annotation on the AST
@@ -153,7 +147,8 @@ initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
 initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
-    nms       = envFromList $ visibleNames ss
+    nms       = envFromList $ extras ++ visibleNames ss
+    extras    = [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly))]
     mod       = scrapeModules ss 
     ctx       = emptyContext
     pth       = AP $ QPath (srcPos dummySpan) []
@@ -214,13 +209,6 @@ tcEnvFindTypeDefM l γ x
   = case resolveRelNameInEnv γ x of 
       Just t  -> return t
       Nothing -> tcError $ bugClassDefNotFound (srcPos l) x
-
-
-addUndefined γ = return $ tcEnvAdds [(F.symbol "undefined",(t, ReadOnly))] γ 
-  where
-    t          = TApp TUndef [] fTop
-
-
 
 
 -------------------------------------------------------------------------------

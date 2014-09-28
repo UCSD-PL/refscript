@@ -92,17 +92,19 @@ instance ToJSON SrcSpan
 
 run verifyFile cfg 
   = do mapM_ (createDirectoryIfMissing False. tmpDir) (files cfg)
-       rs   <- mapM (runOne verifyFile) $ files cfg
+       rs   <- mapM (runOne cfg verifyFile) $ files cfg
        let r = mconcat rs
        writeResult r
        exitWith (resultExit r)
     where
        tmpDir    = tempDirectory
 
-runOne verifyFile f
+runOne cfg verifyFile f
   = do createDirectoryIfMissing False tmpDir
        (u, r) <- verifyFile f `catch` handler
-       renderAnnotations f r u
+       case cfg of 
+         Liquid _ _ _ True -> renderAnnotations f r u
+         _                 -> return ()
        return r
     where
        handler e = return (NoAnn, F.Unsafe [e])

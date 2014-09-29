@@ -568,7 +568,7 @@ resolveType :: PPR r => Statement (AnnSSA r) -> Maybe (Id SourceSpan, IfaceDef r
 ---------------------------------------------------------------------------------------
 resolveType  (ClassStmt l c _ _ cs)
   = case [ t | ClassAnn t <- ann_fact l ] of
-      [(vs, h)] -> Just (cc, ID True cc vs h (rMem (tc vs) cs))
+      [(vs, h)] -> Just (cc, ID ClassKind cc vs h (rMem (tc vs) cs))
       _         -> Nothing
   where
     cc        = fmap ann c

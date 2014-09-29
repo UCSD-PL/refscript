@@ -38,7 +38,7 @@ module Language.Nano.Typecheck.TCMonad (
   , unifyTypeM, unifyTypesM
 
   -- * Subtyping
-  , subtypeM, isSubtype
+  , subtypeM, isSubtype, checkTypes
 
   -- * Casts
   , castM, deadcastM, freshId
@@ -65,6 +65,7 @@ import qualified Language.Fixpoint.Types            as F
 
 import           Language.Nano.Annots
 import           Language.Nano.CmdLine
+import           Language.Nano.Env
 import           Language.Nano.Locations
 import           Language.Nano.Misc
 import           Language.Nano.Program
@@ -74,6 +75,7 @@ import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Unify
+import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Errors
 
 import           Language.ECMAScript3.Syntax
@@ -409,6 +411,30 @@ tcCtorTys :: (PPRSF r, F.Subable (RType r), PP a)
 tcCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 
 
+--------------------------------------------------------------------------------
+checkTypes :: PPR r => TCEnv r -> TCM r ()
+--------------------------------------------------------------------------------
+checkTypes γ = mapM_ (safeExtends γ) types
+  where 
+    types = concatMap envToList $ m_types . snd <$> qenvToList (tce_mod γ)
+    
+
+--------------------------------------------------------------------------------
+safeExtends :: (IsLocated l, PPR r) => TCEnv r -> (l, IfaceDef r) -> TCM r ()
+--------------------------------------------------------------------------------
+safeExtends _ p@(l,    ID _ _ _ Nothing        _  ) = return ()
+safeExtends γ   (l, t@(ID _ c _ (Just (p, ts)) es)) = 
+    case flatten' False γ t of
+      Just ms -> 
+        case flatten False γ . (,ts) =<< resolveRelNameInEnv γ p of
+          Just ps  | isSubtype γ (mkTCons t_immutable ms) (mkTCons t_immutable ps) 
+                  -> return ()
+                   | otherwise         
+                  -> tcError $ errorClassExtends (srcPos l) c p 
+                               (mkTCons t_immutable ms) (mkTCons t_immutable ps) 
+          Nothing -> tcError $ bugFlattenType (srcPos l) p
+      Nothing -> tcError $ bugFlattenType (srcPos l) c
+  where
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

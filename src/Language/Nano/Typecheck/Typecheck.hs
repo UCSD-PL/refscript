@@ -35,7 +35,6 @@ import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Parse 
-import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Lookup
@@ -114,7 +113,8 @@ typeCheck cfg pgm = do
 tcNano :: PPR r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
-  = do  (fs',_) <- tcStmts γ fs
+  = do  _       <- checkTypes γ 
+        (fs',_) <- tcStmts γ $ tracePP "fs" fs
         fs''    <- patch fs'
         return   $ p { code = Src fs'' }
   where
@@ -304,7 +304,7 @@ tcClassElt γ cid (MemberVarDecl l static (VarDecl l1 x eo))
 --
 tcClassElt γ cid (MemberMethDecl l static i xs body) 
   = case anns of 
-      [mt]  -> do imts    <- tcMethTys l i mt
+      [mt]  -> do imts   <- tcMethTys l i mt
                   body'  <- foldM (tcMethSingleSig γ l i xs) body imts
                   return  $ MemberMethDecl l static i xs body'
       _    -> tcError     $ errorClassEltAnnot (srcPos l) cid i
@@ -425,9 +425,8 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 -- | class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 tcStmt γ (ClassStmt l x e is ce) 
   = do  dfn      <- tcEnvFindTypeDefM l γ rn
-        case safeExtends (srcPos l) γ dfn of 
-          Nothing -> (, Just γ) . ClassStmt l x e is <$> mapM (tcClassElt (newEnv $ t_args dfn) x) ce
-          Just e  -> tcError e
+        ms       <- mapM (tcClassElt (newEnv $ t_args dfn) x) ce
+        return    $ (ClassStmt l x e is ms, Just γ)
   where
     tVars   αs    = [ tVar   α | α <- αs ] 
     tyBinds αs    = [(tVarId α, (tVar α, WriteGlobal)) | α <- αs]

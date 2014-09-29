@@ -228,7 +228,7 @@ bareMethP
        _      <- colon
        ret    <- bareTypeP 
        r      <- topP
-       return $ mkF args ret r
+       return  $ mkF args ret r
   where 
     mkF as ret r = case as of
       (B s t : ts) | s == symbol "this" -> TFun (Just t) ts ret r

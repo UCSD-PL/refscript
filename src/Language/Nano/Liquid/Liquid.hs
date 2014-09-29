@@ -268,8 +268,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
     consSetProp g x rhsCtx = 
       do opTy      <- setPropTy l (F.symbol f) <$> safeEnvFindTy (builtinOpId BISetProp) g
          fmap snd <$> consCall g l BISetProp (FI Nothing [(vr x, Nothing),(e2, rhsCtx)]) opTy
-    -- Add a VarRef so that e is not typechecked again
-    vr          = VarRef $ getAnnotation e1
+    vr = VarRef $ getAnnotation e1
    
 -- e
 consStmt g (ExprStmt _ e) 
@@ -342,13 +341,11 @@ consStmt g (ClassStmt l x _ _ ce)
   = do  dfn      <- consEnvFindTypeDefM l g rn
         -- FIXME: Should this check be done at TC too?
         g'       <- envAdds "consStmt-class-0" [(Loc (ann l) α, (tVar α, WriteGlobal)) | α <- t_args dfn] g
-        g''      <- envAdds "consStmt-class-1" [(Loc (ann l) "this", (mkThis $ t_args dfn, WriteGlobal))] g'
-        consClassElts g'' x ce
+        consClassElts g' dfn ce
         return    $ Just g
   where
     tVars   αs    = [ tVar   α | α <- αs ] 
     rn            = RN $ QName (srcPos l) [] (F.symbol x)
-    mkThis αs     = TApp (TRef rn) (tVars αs) fTop
 
 consStmt g (IfaceStmt _)
   = return $ Just g
@@ -400,26 +397,33 @@ consExprT l g e (Just t) = consCall  g l "consExprT" (FI Nothing [(e, Nothing)])
 
 -- FIXME: Do safeExtends check here. Also add casts in the TC phase where needed
 ------------------------------------------------------------------------------------
-consClassElts :: PP a => CGEnv -> a -> [ClassElt AnnTypeR] -> CGM ()
+consClassElts :: CGEnv -> IfaceDef F.Reft -> [ClassElt AnnTypeR] -> CGM ()
 ------------------------------------------------------------------------------------
-consClassElts g x ce 
-   = mapM_ (consClassElt g x) ce
+consClassElts g dfn ce
+   = mapM_ (consClassElt g dfn) ce
 
 
 ------------------------------------------------------------------------------------
-consClassElt :: PP a => CGEnv -> a -> ClassElt AnnTypeR -> CGM ()
+consClassElt :: CGEnv -> IfaceDef F.Reft -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
-consClassElt g _ (Constructor l xs body) 
-  = case [ c | ConsAnn c  <- ann_fact l ] of
-      [ConsSig ft]        -> do its <- cgCtorTys l i ft
-                                mapM_ (consFun1 l g i xs body) its
-      _                   -> cgError $ unsupportedNonSingleConsTy $ srcPos l
+consClassElt g dfn (Constructor l xs body) 
+  = case findAnnot of
+      Just ft -> do its <- cgCtorTys l i ft
+                    g' <- envAdds "consClassElt-1" [(Loc (ann l) "this", (mkThis $ t_args dfn, WriteGlobal))] g
+                    mapM_ (consFun1 l g' i xs body) its
+      _       -> cgError $ unsupportedNonSingleConsTy $ srcPos l
   where 
-    i = Id l "constructor"
+    i             = Id l "constructor"
+    findAnnot     = case [ t | ConsAnn (ConsSig t)  <- ann_fact l ] of
+                      [t] -> Just t
+                      [ ] -> Just $ TFun Nothing [] tVoid fTop
+                      _   -> Nothing
+    mkThis (_:αs) = TApp (TRef rn) (t_mutable : map tVar αs) fTop
+    rn            = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
-consClassElt g cid (MemberVarDecl _ static (VarDecl l1 x eo))
+consClassElt g dfn (MemberVarDecl _ static (VarDecl l1 x eo))
   = case anns of 
-      []  ->  cgError       $ errorClassEltAnnot (srcPos l1) cid x
+      []  ->  cgError       $ errorClassEltAnnot (srcPos l1) (t_name dfn) x
       fs  ->  case eo of
                 Just e     -> void <$> consCall g l1 "field init" (FI Nothing [(e,Nothing)]) $ ft fs
                 Nothing    -> return ()
@@ -428,11 +432,11 @@ consClassElt g cid (MemberVarDecl _ static (VarDecl l1 x eo))
          | otherwise = [ f | FieldAnn f <- ann_fact l1 ]
     ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> flds
   
-consClassElt g cid (MemberMethDecl l static i xs body) 
+consClassElt g dfn (MemberMethDecl l static i xs body) 
   = case anns of
       [mt]  -> do mts   <- cgMethTys l i mt
                   mapM_    (consMeth1 l g i xs body) mts
-      _    -> cgError  $ errorClassEltAnnot (srcPos l) cid i
+      _    -> cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) i
   where
     anns | static    = [ (m, t) | StatAnn (StatSig _ m t)  <- ann_fact l ]
          | otherwise = [ (m, t) | MethAnn (MethSig _ m t)  <- ann_fact l ]

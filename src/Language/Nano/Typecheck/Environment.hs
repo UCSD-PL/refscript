@@ -29,6 +29,7 @@ data TCEnv r  = TCE {
   , tce_ctx         :: !IContext
   , tce_path        :: AbsPath
   , tce_parent      :: Maybe (TCEnv r)
+  , tce_mutability  :: Mutability 
   }
   deriving (Functor, Data, Typeable)
 
@@ -47,6 +48,7 @@ instance EnvLike r TCEnv where
   absPath         = tce_path
   context         = tce_ctx
   parent          = tce_parent
+  mutability      = tce_mutability
  
 
 instance (PP r, F.Reftable r) => PP (TCEnv r) where

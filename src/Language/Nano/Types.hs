@@ -226,9 +226,15 @@ data Assignability
   --
   | WriteGlobal 
   -- 
+  -- SPECIAL VALUES
+  -- 
   -- ^ Used to denote return variable
   -- 
   | ReturnVar
+  -- 
+  -- ^ Used to denote 'this' variable
+  -- 
+  | ThisVar
   deriving (Eq, Data, Typeable)
 
 
@@ -272,16 +278,6 @@ data ModuleDef r = ModuleDef {
 ---------------------------------------------------------------------------------
 
 type Mutability = Type 
-
-
-data CommonTypes r = CommonTypes {
-    t_ReadOnly       :: RType r
-  , t_Immutable      :: RType r
-  , t_Mutable        :: RType r
-  , t_AnyMutability  :: RType r
-  , t_InheritedMut   :: RType r
-  }
-
 
 
 ---------------------------------------------------------------------------------

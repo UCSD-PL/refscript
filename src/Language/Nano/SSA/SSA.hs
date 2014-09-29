@@ -9,7 +9,7 @@ import           Control.Arrow                           ((***))
 import           Control.Applicative                     ((<$>), (<*>))
 import           Control.Monad
 import           Data.Data
-import           Data.Maybe                              (catMaybes) 
+import           Data.Maybe                              (catMaybes, isNothing) 
 import qualified Data.List                               as L
 import qualified Data.Foldable                           as FO
 import qualified Data.HashMap.Strict                     as M
@@ -294,11 +294,12 @@ ssaStmt (SwitchStmt l e xs)
 --  FIXME: fix env here.
 --
 ssaStmt (ClassStmt l n e is bd)
-  = do  bd' <- mapM (ssaClassElt fields) bd
+  = do  bd' <- mapM (ssaClassElt fields) $ ctor ++ bd
         return (True, ClassStmt l n e is bd')
   where
     fields = [(i,v) | MemberVarDecl _ _ v@(VarDecl _ i _) <- bd] 
-
+    ctor   | null [() | Constructor{} <- bd ] = [Constructor l [] []]
+           | otherwise                        = []
 
 --
 --  FIXME: fix env here.
@@ -369,13 +370,17 @@ ssaClassElt flds (Constructor l xs body)
                    (VarRef l $ mkCtorId l s)
 
 
--- Class fields are considered non-assignable, the initilization expression is
--- moved to the beginning of the constructor.
-ssaClassElt _ (MemberVarDecl l b v) = return $ MemberVarDecl l b v
---   do z <- ssaVarDecl v
---      case z of 
---        ([], vd) -> return $ MemberVarDecl l b vd
---        _        -> ssaError $ errorEffectInFieldDef (srcPos l)
+-- | Initilization expression for instance variables is moved to the beginning 
+--   of the constructor.
+ssaClassElt _ (MemberVarDecl l False (VarDecl l' x _)) 
+  = return $ MemberVarDecl l False (VarDecl l' x Nothing)
+ssaClassElt _ (MemberVarDecl l True (VarDecl l' x (Just e)))
+  = do z <- ssaExpr e
+       case z of 
+         ([], e') -> return $ MemberVarDecl l True (VarDecl l' x $ Just e')
+         _        -> ssaError $ errorEffectInFieldDef (srcPos l)
+ssaClassElt _ (MemberVarDecl l True (VarDecl l' x Nothing))
+  = ssaError $ errorUninitStatFld (srcPos l) x
 
 ssaClassElt _ (MemberMethDecl l s e xs body)
   = do θ <- getSsaEnv

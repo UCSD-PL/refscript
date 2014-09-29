@@ -133,6 +133,7 @@ updSsaEnv l x
          WriteGlobal -> return x
          ReadOnly    -> ssaError $ errorWriteImmutable l x 
          ReturnVar   -> ssaError $ errorWriteImmutable l x 
+         ThisVar     -> ssaError $ errorWriteImmutable l x 
          ImportDecl  -> ssaError $ errorWriteImmutable l x 
 
 updSsaEnvLocal l x 

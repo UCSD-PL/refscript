@@ -173,7 +173,7 @@ covariantConvertObj l γ e1s e2s
   | otherwise              = Left $ errorWidthSubtyping l e1s e2s
   where
     -- Subtyping equivalent type-members
-    subEs = mapM (uncurry $ convertElt l γ True) $ tracePP "convertElts" es
+    subEs = mapM (uncurry $ convertElt l γ True) es
     -- Type-members unique in `e2s`
     uq1s = [  e1      | e1 <- e1s, subtypeable e1, isNothing $ find (sameBinder e1) e2s ] 
     uq2s = [  e2      | e2 <- e2s, subtypeable e2, isNothing $ find (sameBinder e2) e1s ] 
@@ -217,6 +217,7 @@ convertElt l γ True f1@(FieldSig _ m1 t1) f2@(FieldSig _ m2 t2)   -- immutable 
   | otherwise                           
   = Left $ errorIncompMutElt (srcPos l) f1 f2
 
+-- FIXME: how does mutability matter here ???
 convertElt l γ _ (MethSig _ _ t1) (MethSig _ _ t2) 
   = convert' l γ t1 t2 
  

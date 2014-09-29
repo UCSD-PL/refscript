@@ -297,7 +297,7 @@ ssaStmt (ClassStmt l n e is bd)
   = do  bd' <- mapM (ssaClassElt fields) bd
         return (True, ClassStmt l n e is bd')
   where
-    fields = [i | MemberVarDecl _ _ (VarDecl _ i _) <- bd] 
+    fields = [(i,v) | MemberVarDecl _ _ v@(VarDecl _ i _) <- bd] 
 
 
 --
@@ -332,13 +332,19 @@ ssaClassElt flds (Constructor l xs body)
             setSsaEnv θ                                      -- Restore Outer SsaEnv
             return        $ Constructor l xs body''
   where
+    
+    fldNms   = fst <$> flds
+
     -- Replace field initializations with local 
-    body'    = [initStmt] ++ tfRet (tfUpds body) ++ map fldAsgns flds
+    body'    = [initStmt] ++ tfRet (tfUpds body) ++ map fldAsgns fldNms
 
-    fldSet   = S.fromList $ F.symbol <$> flds
+    fldSet   = S.fromList $ F.symbol <$> fldNms
 
-    initStmt = VarDeclStmt l $ initVd <$> flds
-    initVd i = VarDecl l (mkCtorId l i) (Just $ VarRef l (Id l "undefined"))
+    initStmt = VarDeclStmt l $ initVd <$> fldNms
+
+    initVd i = case [ e | (v, VarDecl _ _ (Just e)) <- flds, i == v ] of
+                [e] -> VarDecl l (mkCtorId l i) $ Just $ e
+                _   -> VarDecl l (mkCtorId l i) $ Just $ VarRef l $ Id l "undefined"
 
     tfUpds  :: [Statement SourceSpan] -> [Statement SourceSpan]
     tfUpds   = everywhere $ mkT tx
@@ -355,7 +361,7 @@ ssaClassElt flds (Constructor l xs body)
     tfRet    = everywhere $ mkT tr 
 
     tr      :: Statement SourceSpan -> Statement SourceSpan
-    tr r@(ReturnStmt l _) = BlockStmt l $ concat [ fldAsgns <$> flds, [r] ]
+    tr r@(ReturnStmt l _) = BlockStmt l $ concat [ fldAsgns . fst <$> flds, [r] ]
     tr r                  = r
 
     fldAsgns s = ExprStmt l $ AssignExpr l OpAssign 
@@ -363,12 +369,13 @@ ssaClassElt flds (Constructor l xs body)
                    (VarRef l $ mkCtorId l s)
 
 
--- Class fields are considered non-assignable
-ssaClassElt _ (MemberVarDecl l b v) = 
-  do z <- ssaVarDecl v
-     case z of 
-       ([], vd) -> return $ MemberVarDecl l b vd
-       _        -> ssaError $ errorEffectInFieldDef (srcPos l)
+-- Class fields are considered non-assignable, the initilization expression is
+-- moved to the beginning of the constructor.
+ssaClassElt _ (MemberVarDecl l b v) = return $ MemberVarDecl l b v
+--   do z <- ssaVarDecl v
+--      case z of 
+--        ([], vd) -> return $ MemberVarDecl l b vd
+--        _        -> ssaError $ errorEffectInFieldDef (srcPos l)
 
 ssaClassElt _ (MemberMethDecl l s e xs body)
   = do θ <- getSsaEnv

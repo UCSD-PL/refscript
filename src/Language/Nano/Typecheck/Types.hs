@@ -25,7 +25,7 @@ module Language.Nano.Typecheck.Types (
   , isTop, isNull, isVoid, isTNum, isUndef, isUnion
 
   -- * Constructing Types
-  , mkUnion, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions
+  , mkUnion, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions, mkTCons
 
   -- * Deconstructing Types
   , bkFun, bkFunBinds, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion, funTys
@@ -257,6 +257,8 @@ mkAnd [t]            = t
 mkAnd ts             = TAnd ts
 
 mapAnd f t           = mkAnd $ f <$> bkAnd t
+
+mkTCons m es = TCons es m fTop
 
 
 ----------------------------------------------------------------------------------------

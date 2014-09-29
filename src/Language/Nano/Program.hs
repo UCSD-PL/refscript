@@ -522,7 +522,7 @@ visibleNames s = [ (ann <$> n,(t,a)) | (n,Ann l ff,a) <- hoistBindings s
 ---------------------------------------------------------------------------------------
 scrapeModules               :: PPR r => [Statement (AnnSSA r)] -> QEnv (ModuleDef r)
 ---------------------------------------------------------------------------------------
-scrapeModules                = qenvFromList . map mkMod . collectModules
+scrapeModules                     = qenvFromList . map mkMod . collectModules
   where
     visibility l                  | ExporedModElt `elem` ann_fact l = Exported
                                   | otherwise                       = Local
@@ -596,7 +596,8 @@ typeMembers _ (MemberVarDecl _ static (VarDecl l _ _))
 
 typeMembers t (MemberMethDecl l static _ _ _ )
     | static    = [ s                  | StatAnn s@(StatSig _ _ _)  <- ann_fact l ]
-    | otherwise = [ setThisBinding m t | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
+    | otherwise = [ m | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
+    -- | otherwise = [ setThisBinding m t | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
 
 
 -- | `writeGlobalVars p` returns symbols that have `WriteMany` status, i.e. may be 

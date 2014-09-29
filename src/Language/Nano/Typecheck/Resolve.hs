@@ -199,7 +199,7 @@ parentOf (AP (QPath l m )) = Just (AP (QPath l (init m)))
 --   @b@ determines if static or non-static elements should be included.
 --
 ---------------------------------------------------------------------------
-flatten :: (EnvLike r g, PPR r, Data r) => Bool -> g r -> (SIfaceDef r) -> Maybe [TypeMember r]
+flatten :: (EnvLike r g, PPR r) => Bool -> g r -> SIfaceDef r -> Maybe [TypeMember r]
 ---------------------------------------------------------------------------
 flatten b γ (ID _ _ vs h es, ts) =
     case h of 

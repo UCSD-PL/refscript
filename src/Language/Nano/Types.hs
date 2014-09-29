@@ -122,11 +122,14 @@ data FuncInputs t = FI { fi_self :: Maybe t, fi_args :: [t] } deriving (Functor,
 -- | Interface definitions 
 ---------------------------------------------------------------------------------
 
+data IfaceKind = ClassKind | InterfaceKind
+  deriving (Eq, Ord, Show, Data, Typeable)
+
 data IfaceDef r = ID { 
   -- 
-  -- ^ Class (True) or interface (False) RJ: FIXME use an explicit enum "data IfaceKind = Class | Interface" 
+  -- ^ Kind
   --
-    t_class :: Bool                                
+    t_class :: IfaceKind
   -- 
   -- ^ Name
   --
@@ -149,8 +152,10 @@ data IfaceDef r = ID {
 
 type Heritage r  = Maybe (RelName, [RType r])
 
-
 type SIfaceDef r = (IfaceDef r, [RType r])
+
+data IndexKind   = StringIndex | NumericIndex
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 
 data TypeMember r 
@@ -166,7 +171,7 @@ data TypeMember r
   -- ^ Index signature
   --
   | IndexSig  { f_sym  :: F.Symbol
-              , f_key  :: Bool                         -- True = string
+              , f_key  :: IndexKind
               , f_type :: RType r }                     
   -- 
   -- ^ Field signature

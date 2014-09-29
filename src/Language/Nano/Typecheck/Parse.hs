@@ -124,7 +124,7 @@ iFaceP   = do name   <- identifierP
               h      <- optionMaybe extendsP
               -- FIXME
               es     <- braces $ propBindP def
-              return (name, convertTvar as $ ID False name as h es)
+              return (name, convertTvar as $ ID InterfaceKind name as h es)
 
 extendsP = do reserved "extends"
               qn     <- RN <$> qnameP
@@ -338,8 +338,8 @@ propBindP defM =  sepEndBy propEltP semi
 
 indexEltP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
                case it of 
-                 "number" -> return $ IndexSig x False t
-                 "string" -> return $ IndexSig x True t
+                 "number" -> return $ IndexSig x NumericIndex t
+                 "string" -> return $ IndexSig x StringIndex t
                  _        -> error $ "Index signature can only have " ++
                                      "string or number as index." 
 

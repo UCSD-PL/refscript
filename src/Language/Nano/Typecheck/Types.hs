@@ -474,14 +474,17 @@ remThisBinding t =
     ft                       -> ft
 
 
+instance F.Symbolic IndexKind where
+  symbol StringIndex =  F.symbol "__string__index__"
+  symbol NumericIndex =  F.symbol "__numeric__index__"
+
 instance F.Symbolic (TypeMember t) where
-  symbol (FieldSig s _ _)     = s
-  symbol (MethSig  s _ _)     = s
-  symbol (ConsSig       _)    = F.symbol "__constructor__"
-  symbol (CallSig       _)    = F.symbol "__call__"
-  symbol (IndexSig _ True _)  = F.symbol "__string__index__"
-  symbol (IndexSig _ False _) = F.symbol "__numeric__index__"
-  symbol (StatSig s _ _ )     = s
+  symbol (FieldSig s _ _)   = s
+  symbol (MethSig  s _ _)   = s
+  symbol (ConsSig       _)  = F.symbol "__constructor__"
+  symbol (CallSig       _)  = F.symbol "__call__"
+  symbol (IndexSig _ i _)   = F.symbol i
+  symbol (StatSig s _ _ )   = s
 
     
 sameBinder (CallSig _)       (CallSig _)        = True
@@ -606,25 +609,30 @@ instance PP Assignability where
   pp ImportDecl  = text "ImportDecl"
   pp ReturnVar   = text "ReturnVar"
 
+instance PP IfaceKind where
+  pp ClassKind      = pp "class" 
+  pp InterfaceKind  = pp "interface" 
 
 instance (PP r, F.Reftable r) => PP (IfaceDef r) where
   pp (ID c nm vs Nothing ts) =  
-        pp (if c then "class" else "interface")
+        pp c
     <+> pp nm <> ppArgs angles comma vs 
     <+> lbrace $+$ nest 2 (vcat $ map pp ts) $+$ rbrace
   pp (ID c nm vs (Just (p,ps)) ts) = 
-        pp (if c then "class" else "interface")
+        pp c
     <+> pp nm <> ppArgs angles comma vs
     <+> text "extends" 
     <+> pp p  <> ppArgs angles comma ps
     <+> lbrace $+$ nest 2 (vcat $ map pp ts) $+$ rbrace
 
+instance PP IndexKind where
+  pp StringIndex  = text "string"
+  pp NumericIndex = text "number"
 
 instance (PP r, F.Reftable r) => PP (TypeMember r) where
   pp (CallSig t)          =  text "call" <+> pp t 
   pp (ConsSig t)          =  text "new" <+> pp t
-  pp (IndexSig x True t)  =  brackets (pp x <> text ": string") <> text ":" <+> pp t
-  pp (IndexSig x False t) =  brackets (pp x <> text ": number") <> text ":" <+> pp t
+  pp (IndexSig x i t)     =  brackets (pp i) <> text ":" <+> pp t
   pp (FieldSig x m t)     =  text "field" <+> ppMut m <+> pp x <> text ":" <+> pp t 
   pp (MethSig x m t)      =  text "method" <+> ppMut m <+> pp x <> ppMeth t
   pp (StatSig x m t)      =  text "static" <+> ppMut m <+> pp x <> text ":" <+> pp t

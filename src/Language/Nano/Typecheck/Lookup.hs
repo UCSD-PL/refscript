@@ -175,12 +175,12 @@ accessMember True s es =    -- Get member for a call
     Just (FieldSig _ _ t) -> Just t
     Just (MethSig _ _ t)  -> Just t
     Just (StatSig _ _ t)  -> Just t 
-    _                     -> listToMaybe [ t | IndexSig _ True t <- es]
+    _                     -> listToMaybe [ t | IndexSig _ StringIndex t <- es]
 accessMember False s es =   -- Extract member: cannot extract methods
   case find ((F.symbol s ==) . F.symbol) es of 
     Just (FieldSig _ _ t) -> Just t
     Just (StatSig _ _ t)  -> Just t 
-    _                     -> listToMaybe [ t | IndexSig _ True t <- es]
+    _                     -> listToMaybe [ t | IndexSig _ StringIndex t <- es]
 
 
 -- Access the property from the relevant ambient object but return the 

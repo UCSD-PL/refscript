@@ -35,8 +35,9 @@ module Language.Nano.Typecheck.Types (
   , renameBinds
 
   -- * Mutability primitives
-  , t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly, t_assignsFields, combMut 
-  , isMutable, isImmutable -- , isAnyMut, isMutabilityType, variance, varianceTDef
+  , t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly, t_assignsFields
+  , combMut
+  , isMutable, isImmutable, isAssignsFields
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
@@ -100,9 +101,7 @@ type PPR  r = (PP r, F.Reftable r)
 -- | Mutability
 ---------------------------------------------------------------------
 
--- validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable", "AnyMutability"]
-
-mkMut s = TApp (TRef $ RN $ QName (srcPos dummySpan) [] (F.symbol s)) [] ()
+mkMut s = TApp (TRef $ RN $ QName (srcPos dummySpan) [] (F.symbol s)) [] fTop
 
 instance Default Mutability where
   def = mkMut "Immutable"
@@ -114,41 +113,18 @@ t_readOnly      = mkMut "ReadOnly"
 t_inheritedMut  = mkMut "InheritedMut"
 t_assignsFields = mkMut "AssignsFields"
 
-
--- isMutabilityType (TApp (TRef (QN [] s)) _ _) = s `elem` validMutNames
--- isMutabilityType _                           = False
--- 
 isMutable        (TApp (TRef (RN (QName _ [] s))) _ _) = s == F.symbol "Mutable"
 isMutable _                                            = False
  
 isImmutable      (TApp (TRef (RN (QName _ [] s))) _ _) = s == F.symbol "Immutable"
 isImmutable _                                          = False
--- 
--- isAnyMut         (TApp (TRef (QN [] s)) _ _) = s == F.symbol "AnyMutability"
--- isAnyMut _                                   = False
--- 
--- isReadOnly       (TApp (TRef (QN [] s)) _ _) = s == F.symbol "ReadOnly"
--- isReadOnly _                                 = False
--- 
--- isInheritedMut   (TApp (TRef (QN [] s)) _ _) = s == F.symbol "InheritedMut"
--- isInheritedMut _                             = False
 
--- 
--- Is this not the common ancestor ?
---
+isAssignsFields  (TApp (TRef (RN (QName _ [] s))) _ _) = s == F.symbol "AssignsFields"
+isAssignsFields  _                                     = False
+ 
+-- FIXME: get rid of this ... ?
 combMut _ μf | isMutable μf                 = μf
 combMut μ _  | otherwise                    = μ
-
-
--- | Variance: true if v is in a positive position in t
---
---   FIXME: implement these
---
---    variance      :: TVar -> RType r -> Bool
---
---    varianceTDef  :: IfaceDef r -> [Bool]
-
-
 
 
 ---------------------------------------------------------------------
@@ -376,7 +352,6 @@ mapEltM f (IndexSig i b t)   = IndexSig i b <$> f t
 mapEltM f (FieldSig x m t)   = FieldSig x m <$> f t
 mapEltM f (MethSig  x m t)   = MethSig x m <$> f t
 mapEltM f (StatSig x m t)    = StatSig x m <$> f t
-
 
 
 type CheckM = State [Error] 
@@ -648,10 +623,11 @@ ppMeth t =
     ppfun Nothing  ts t = ppArgs parens comma ts <> text ":" <+> pp t
 
 mutSym (TApp (TRef (RN (QName _ _ s))) _ _)
-  | s == F.symbol "Mutable"       = Just "◁"
+  | s == F.symbol "Mutable"       = Just "◁"  
   | s == F.symbol "Immutable"     = Just "◀"
   | s == F.symbol "AnyMutability" = Just "₌"
   | s == F.symbol "ReadOnly"      = Just "◆"
+  | s == F.symbol "AssignsFields" = Just "★" 
   | s == F.symbol "InheritedMut"  = Just "◇"
 mutSym _                          = Nothing
 
@@ -661,6 +637,7 @@ ppMut (TApp (TRef (RN (QName _ _ s))) _ _)
   | s == F.symbol "Immutable"     = pp "◀"
   | s == F.symbol "AnyMutability" = pp "₌"
   | s == F.symbol "ReadOnly"      = pp "◆"
+  | s == F.symbol "AssignsFields" = pp "★" 
   | s == F.symbol "InheritedMut"  = pp "◇"
   | otherwise                     = pp "?"
 ppMut t@(TVar{})                  = pp "[" <> pp t <> pp "]" 

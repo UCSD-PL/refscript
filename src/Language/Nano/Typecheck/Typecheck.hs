@@ -114,7 +114,7 @@ tcNano :: PPR r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do  _       <- checkTypes γ 
-        (fs',_) <- tcStmts γ $ tracePP "fs" fs
+        (fs',_) <- tcStmts γ fs
         fs''    <- patch fs'
         return   $ p { code = Src fs'' }
   where
@@ -145,16 +145,17 @@ patch fs =
 -------------------------------------------------------------------------------
 initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
+initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing mut
   where
     nms       = envFromList $ extras ++ visibleNames ss
     extras    = [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly))]
     mod       = scrapeModules ss 
     ctx       = emptyContext
     pth       = AP $ QPath (srcPos dummySpan) []
+    mut       = t_readOnly
 
 
-initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod ctx pth parent
+initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod ctx pth parent mut
   where
     tyBinds   = [(tVarId α, (tVar α, ReadOnly)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ zip ts (repeat WriteLocal)
@@ -166,18 +167,20 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod ctx pth parent
     pth       = tce_path γ
     parent    = Just γ
     thisBind  = (\t -> (Id (srcPos dummySpan) "this", (t, WriteGlobal))) <$> maybeToList thisTO
+    mut       = t_readOnly
 
 
 ---------------------------------------------------------------------------------------
 initModuleEnv :: (PPR r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnSSA r)] -> TCEnv r
 ---------------------------------------------------------------------------------------
-initModuleEnv γ n s = TCE nms mod ctx pth parent 
+initModuleEnv γ n s = TCE nms mod ctx pth parent mut
   where
     nms       = envFromList $ visibleNames s
     mod       = tce_mod γ
     ctx       = emptyContext
     pth       = extendAbsPath (tce_path γ) n
     parent    = Just γ
+    mut       = t_readOnly
 
 
 -------------------------------------------------------------------------------
@@ -266,23 +269,36 @@ tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
 
 ---------------------------------------------------------------------------------------
 tcClassElt :: PPR r 
-          => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
+          => TCEnv r -> IfaceDef r -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
 --
--- FIXME: 1. Check for void return type for constructor
---        2. Use tcMethSingleSig instead of tcFun1
+--  * Setting properties for 'this':
 --
-tcClassElt γ _ (Constructor l xs body) 
-  = case [ c | ConsAnn c  <- ann_fact l ] of
-      [ConsSig ft]  -> do its      <- tcCtorTys l i ft
-                          body'    <- foldM (tcFun1 γ l i xs) body its
-                          return    $ Constructor l xs body'
-      _             -> tcError $ unsupportedNonSingleConsTy $ srcPos l
-  where i   = Id l "constructor"
+--    - Assignability : WriteGlobal
+--    - Mutability    : Mutable
+--
+tcClassElt γ dfn (Constructor l xs body) 
+  = case findAnnot of
+      Just ft -> do its      <- tcCtorTys l i ft
+                    body'    <- foldM (tcFun1 γ' l i xs) body its
+                    return    $ Constructor l xs body'
+      _       -> tcError $ unsupportedNonSingleConsTy $ srcPos l
+  where 
+    findAnnot     = case [ c | ConsAnn c  <- ann_fact l ] of  
+                      [ConsSig ft] -> Just $ ft
+                      []           -> Just $ TFun Nothing [] tVoid fTop
+                      _            -> Nothing
+    i             = Id l "constructor"
+    ms            = t_args dfn
+    γ'            = tcEnvAdd (F.symbol "this") (mkThis $ t_args dfn, ThisVar) γ
+    mkThis (_:αs) = TApp (TRef rn) (t_mutable : map tVar αs) fTop
+    rn            = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
+    tyBinds αs    = [(tVarId α, (tVar α, WriteGlobal)) | α <- αs]
 
-tcClassElt γ cid (MemberVarDecl l static (VarDecl l1 x eo))
+
+tcClassElt γ dfn (MemberVarDecl l static (VarDecl l1 x eo))
   = case anns of 
-      []  ->  tcError       $ errorClassEltAnnot (srcPos l1) cid x
+      []  ->  tcError       $ errorClassEltAnnot (srcPos l1) (t_name dfn) x
       fs  ->  case eo of
                 Just e     -> do (FI _ [e'],_) <- tcNormalCall γ l1 "field init" (FI Nothing [(e, Nothing)]) $ ft fs
                               -- Using a function call to "init" to keep track of 
@@ -302,12 +318,12 @@ tcClassElt γ cid (MemberVarDecl l static (VarDecl l1 x eo))
 --
 --  FIXME: check for mutability (purity)
 --
-tcClassElt γ cid (MemberMethDecl l static i xs body) 
+tcClassElt γ dfn (MemberMethDecl l static i xs body) 
   = case anns of 
       [mt]  -> do imts   <- tcMethTys l i mt
                   body'  <- foldM (tcMethSingleSig γ l i xs) body imts
                   return  $ MemberMethDecl l static i xs body'
-      _    -> tcError     $ errorClassEltAnnot (srcPos l) cid i
+      _    -> tcError     $ errorClassEltAnnot (srcPos l) (t_name dfn) i
   where
     anns | static    = [ (m, t) | StatAnn (StatSig _ m t)  <- ann_fact l ]
          | otherwise = [ (m, t) | MethAnn (MethSig _ m t)  <- ann_fact l ]
@@ -355,7 +371,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
        return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
 -- e1.f = e2
-tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
+tcStmt γ ex@(ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do z               <- runFailM $ tcExpr γ e1 Nothing
        case z of 
          Right (_,te1) -> tcSetProp $ fmap snd $ getProp γ False f te1
@@ -425,14 +441,12 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 -- | class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 tcStmt γ (ClassStmt l x e is ce) 
   = do  dfn      <- tcEnvFindTypeDefM l γ rn
-        ms       <- mapM (tcClassElt (newEnv $ t_args dfn) x) ce
+        ms       <- mapM (tcClassElt γ dfn) ce
         return    $ (ClassStmt l x e is ms, Just γ)
   where
     tVars   αs    = [ tVar   α | α <- αs ] 
     tyBinds αs    = [(tVarId α, (tVar α, WriteGlobal)) | α <- αs]
     rn            = RN $ QName (srcPos l) [] (F.symbol x)
-    mkThis αs     = TApp (TRef rn) (tVars αs) fTop
-    newEnv αs     = tcEnvAdd (F.symbol "this") (mkThis αs, WriteGlobal) $ tcEnvAdds (tyBinds αs) γ
 
 -- | module M { ... } 
 tcStmt γ (ModuleStmt l n body) 

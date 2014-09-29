@@ -94,6 +94,7 @@ errorUpdateInExpr l e         = mkErr l $ printf "Unsupported: assignment in If-
 
 errorUpdateInExpr l e         = mkErr l $ printf "Unsupported: assignment in If-then-else expression '%s'" (ppshow e)
 errorEffectInFieldDef l       = mkErr l $ printf "Cannot have effects in field initialization."
+errorUninitStatFld l x        = mkErr l $ printf "Uninitialized static member '%s' is not allowed." (ppshow x)
 
 
 ---------------------------------------------------------------------------

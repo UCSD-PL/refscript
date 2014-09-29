@@ -55,7 +55,7 @@ getProp γ b s t@(TApp _ _ _  ) = getPropApp γ b s t
 getProp _ b s t@(TCons es _ _) = (t,) <$> accessMember b s es
 
 getProp γ b s t@(TClass c    ) = do d        <- resolveRelNameInEnv γ c
-                                    es       <- flatten True γ (d,[])
+                                    es       <- flatten Nothing True γ (d,[])
                                     (t,)    <$> accessMember b s es
 
 getProp γ _ s t@(TModule m   ) = do m'       <- resolveRelPathInEnv γ m
@@ -78,7 +78,7 @@ getPropApp γ b s t@(TApp c ts _) =
     TInt     -> (t,) <$> lookupAmbientVar γ b s "Number"
     TString  -> (t,) <$> lookupAmbientVar γ b s "String"
     TRef x   -> do  d      <- resolveRelNameInEnv γ x
-                    es     <- flatten False γ (d,ts)
+                    es     <- flatten Nothing False γ (d,ts)
                     p      <- accessMember b s es
                     return  $ (t,p)
     TFPBool  -> Nothing
@@ -92,7 +92,7 @@ extractCtor :: (PPRD r, EnvLike r g) => g r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 extractCtor γ (TClass x) 
   = do  d        <- resolveRelNameInEnv γ x
-        (vs, es) <- flatten'' False γ d
+        (vs, es) <- flatten'' Nothing False γ d
         case [ mkAll vs (TFun s bs (retT vs) r) | ConsSig (TFun s bs _ r) <- es ] of
           [] -> return $ defCtor vs
           ts -> return $ mkAnd ts
@@ -102,7 +102,7 @@ extractCtor γ (TClass x)
 
 extractCtor γ (TApp (TRef x) ts _) 
   = do  d        <- resolveRelNameInEnv γ x
-        (vs, es) <- flatten'' False γ d
+        (vs, es) <- flatten'' Nothing False γ d
         case [ mkAll vs (TFun s bs (retT vs) r) | ConsSig (TFun s bs _ r) <- es ] of
           [] -> return $ apply (fromList $ zip vs ts) $ defCtor vs
           ts -> return $ apply (fromList $ zip vs ts) $ mkAnd ts
@@ -200,7 +200,7 @@ lookupAmbientVar γ b s amb
 -------------------------------------------------------------------------------
 getPropTDef :: (EnvLike r g, PPRD r) => g r -> F.Symbol -> [RType r] -> IfaceDef r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-getPropTDef γ f ts d = accessMember False f =<< flatten False γ (d,ts)
+getPropTDef γ f ts d = accessMember False f =<< flatten Nothing False γ (d,ts)
 
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns

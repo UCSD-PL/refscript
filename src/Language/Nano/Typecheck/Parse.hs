@@ -594,9 +594,7 @@ parseNanoFromFiles fs =
   do  sa <- partitionEithers <$> mapM parseScriptFromJSON fs
       case sa of
         ([],ps) -> case expandAnnots $ concat ps of
-                     Right ps -> return $ either (Left . Unsafe) Right 
-                                        $ conflateTypeMembers 
-                                        $ mkCode ps
+                     Right ps -> return $ either (Left . Unsafe) Right $ mkCode ps
                      Left e   -> return $ Left e
         (es,_ ) -> return $ Left  $ mconcat es 
 
@@ -616,10 +614,11 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
         Right p  -> Right $ p
 
 ---------------------------------------------------------------------------------
-mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
+mkCode :: [Statement (SourceSpan, [Spec])] -> Either [Error] (NanoBareR Reft)
 ---------------------------------------------------------------------------------
 mkCode = --debugTyBinds .
-         scrapeQuals 
+         conflateTypeMembers
+       . scrapeQuals 
        . expandAliases
        . visitNano convertTvarVisitor []
        . mkCode' 
@@ -651,18 +650,33 @@ mkCode' ss = Nano {
     ss'               = (toBare <$>) <$> ss
     anns              = concatMap (FO.foldMap snd) ss
 
-scrapeQuals   :: NanoBareR Reft -> NanoBareR Reft
+scrapeQuals     :: NanoBareR Reft -> NanoBareR Reft
 scrapeQuals p = p { pQuals = qs ++ pQuals p}
   where
-    qs        = qualifiers $ foldNano tbv [] [] p
-    tbv       = defaultVisitor { accStmt = stmtTypeBindings }
-    
-stmtTypeBindings _             = go
+    qs        = qualifiers $ mkUq $ foldNano tbv [] [] p
+    tbv       = defaultVisitor { accStmt = stmtTypeBindings
+                               , accCElt = celtTypeBindings }
+
+mkUq                  = zipWith tx [0..]
   where
-    go (FunctionStmt l f _ _)  = [(f, t) | FuncAnn t <- ann_fact l ] ++
-                                 [(f, t) | VarAnn t <- ann_fact l ]
-    go (VarDeclStmt _ vds)     = [(x, t) | VarDecl l x _ <- vds, VarAnn t <- ann_fact l]   
-    go _                       = []
+    tx i (Id l s, t)  = (Id l $ s ++ "_" ++ show i, t)
+  
+    
+stmtTypeBindings _                = go
+  where
+    go (FunctionStmt l f _ _)     = [(f, t) | FuncAnn t <- ann_fact l ] ++
+                                    [(f, t) | VarAnn t <- ann_fact l ]
+    go (VarDeclStmt _ vds)        = [(x, t) | VarDecl l x _ <- vds, VarAnn t <- ann_fact l]   
+    go _                          = []
+
+celtTypeBindings _                = (mapSnd eltType <$>) . go 
+  where
+    go (Constructor l _ _)        = [(x, e) | ConsAnn  e <- ann_fact l, let x = Id l "ctor" ]
+    go (MemberVarDecl _ _ (VarDecl l x _))     
+                                  = [(x, e) | FieldAnn e <- ann_fact l] ++ 
+                                    [(x, e) | StatAnn  e <- ann_fact l]
+    go (MemberMethDecl l _ x _ _) = [(x, e) | MethAnn  e <- ann_fact l]
+    go _                          = []
 
 debugTyBinds p@(Nano {code = Src ss}) = trace msg p
   where

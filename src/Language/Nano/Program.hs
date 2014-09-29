@@ -597,7 +597,6 @@ typeMembers _ (MemberVarDecl _ static (VarDecl l _ _))
 typeMembers t (MemberMethDecl l static _ _ _ )
     | static    = [ s                  | StatAnn s@(StatSig _ _ _)  <- ann_fact l ]
     | otherwise = [ m | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
-    -- | otherwise = [ setThisBinding m t | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
 
 
 -- | `writeGlobalVars p` returns symbols that have `WriteMany` status, i.e. may be 

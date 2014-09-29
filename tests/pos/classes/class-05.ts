@@ -16,10 +16,11 @@ class A {
 
 }
 
+
+// TODO : Use assigns this for constructor !!!
+
 class B extends A {
 
-	/*@ new() => void */
-	constructor() {super(); }
 	/*@  a : { number | v > 5 } */ 
 	public a = 10;
 
@@ -32,6 +33,6 @@ class B extends A {
 
 var b = new B();
 
-assert(b.a > 5);
+// assert(b.a > 5);
 
 assert(b.b === 1);

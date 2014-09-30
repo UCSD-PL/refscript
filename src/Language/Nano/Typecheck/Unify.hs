@@ -46,15 +46,14 @@ type PPR r = (PP r, F.Reftable r)
 -- | Unify types @t@ and @t'@, in substitution environment @θ@ and type
 -- definition environment @γ@.
 -----------------------------------------------------------------------------
-unify :: (Data r, PPR r) => SourceSpan -> TCEnv r
-  -> RSubst r -> RType r -> RType r -> Either Error (RSubst r)
+unify :: (Data r, PPR r) 
+      => SourceSpan 
+      -> TCEnv r
+      -> RSubst r 
+      -> RType r 
+      -> RType r 
+      -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
-
-unify _ _ θ t t' | any isTop [t,t'] = Right θ
-
--- UNDEFINED
--- unify _ _ θ t t' | any isUndef [t,t'] = Right θ
-
 unify l γ θ (TFun (Just s) xts t _) (TFun (Just s') xts' t' _)
   = unifys l γ θ (s : t : map b_type xts) (s' : t' : map b_type xts')
 

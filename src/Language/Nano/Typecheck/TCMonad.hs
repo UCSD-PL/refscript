@@ -44,7 +44,7 @@ module Language.Nano.Typecheck.TCMonad (
   , castM, deadcastM, freshId
 
   -- * Verbosity / Options
-  , whenLoud', whenLoud, whenQuiet', whenQuiet, getOpts
+  , whenLoud', whenLoud, whenQuiet', whenQuiet, getOpts, getAstCount
 
   )  where 
 
@@ -157,6 +157,8 @@ whenQuiet' quiet other = do  tc_verb <$> get >>= \case
 getOpts :: TCM r Config
 getOpts = tc_opts <$> get
 
+getAstCount :: TCM r NodeId
+getAstCount = tc_ast_cnt <$> get  
 
 -------------------------------------------------------------------------------
 getSubst :: TCM r (RSubst r)

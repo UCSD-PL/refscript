@@ -117,7 +117,9 @@ tcNano p@(Nano {code = Src fs})
   = do  _       <- checkTypes γ 
         (fs',_) <- tcStmts γ $ tracePP "SSA" fs
         fs''    <- patch fs'
-        return   $ p { code = Src fs'' }
+        ast_cnt <- getAstCount
+        return   $ p { code   = Src fs'' 
+                     , max_id = ast_cnt }
   where
     γ = initGlobalEnv p
 

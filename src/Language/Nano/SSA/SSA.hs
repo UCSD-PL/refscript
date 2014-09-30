@@ -15,6 +15,7 @@ import qualified Data.List                               as L
 import qualified Data.Foldable                           as FO
 import qualified Data.HashMap.Strict                     as M
 import qualified Data.IntSet                             as I
+import qualified Data.IntMap.Strict                      as IM
 import qualified Data.HashSet                            as S
 import           Data.Typeable                           ()
 import           Data.Generics.Schemes
@@ -72,7 +73,7 @@ ssaNano p@(Nano { code = Src fs })
     where
       allGlobs              = I.fromList  $ getAnnotation  <$> fmap ann_id <$> writeGlobalVars fs
       (ros, wgs, wls)       = variablesInScope allGlobs fs
-      patch ms (Ann i l fs) = Ann i l (fs ++ M.lookupDefault [] i ms)
+      patch ms (Ann i l fs) = Ann i l (fs ++ IM.findWithDefault [] i ms)
 
 
 ---------------------------------------------------------------------------------------
@@ -226,22 +227,51 @@ ssaStmt (ForStmt l (VarInit vds) cOpt Nothing  b) =
 --
 --   }
 
-
--- FIXME: give new Ids !!!
-
 ssaStmt (ForInStmt l (ForInVar v) e b) =
-    ssaStmt $ BlockStmt l [ initArr, forStmt ]
+    do  init_  <- initArr
+        for_   <- forStmt
+        ssaStmt $ BlockStmt l [init_, for_]
   where
-    biForInKeys = builtinId "BIForInKeys"
-    initArr     = VarDeclStmt l [ VarDecl l keysArr (Just $ CallExpr l (VarRef l biForInKeys) [e]) ]
-    initIdx     = VarDecl l keysIdx (Just $ IntLit l 0)
-    condition   = Just $ InfixExpr l OpLT (VarRef l keysIdx) (DotRef l (VarRef l keysArr) (Id l "length")) 
-    increment   = Just $ UnaryAssignExpr l PostfixInc (LVar l (unId keysIdx))   
-    keysArr     = mkKeysId v 
-    keysIdx     = mkKeysIdxId v
-    accessKeys  = VarDeclStmt l [VarDecl l v (Just $ BracketRef l (VarRef l keysArr) (VarRef l keysIdx))]
-    forStmt     = ForStmt l (VarInit [initIdx]) condition increment (BlockStmt l [accessKeys, b])
+    fr_         = freshenAnnSSA
+    fr          = fr_ l 
+    biForInKeys = return $ builtinId "BIForInKeys"
 
+    initArr     = vStmt        $  VarDecl <$> fr 
+                                          <*> keysArr 
+                                          <*> (Just <$> (CallExpr <$> fr 
+                                                                  <*> (VarRef <$> fr <*> biForInKeys)
+                                                                  <*> (return [e])))
+    initIdx     = VarDecl     <$> fr 
+                              <*> keysIdx 
+                              <*> (Just      <$> (IntLit  <$> fr <*> return 0))
+    condition   = Just        <$> (InfixExpr <$> fr 
+                                             <*> return OpLT 
+                                             <*> (VarRef  <$> fr <*> keysIdx) 
+                                             <*> (DotRef  <$> fr 
+                                                          <*> (VarRef <$> fr <*> keysArr)
+                                             <*> (Id      <$> fr 
+                                                          <*> return "length")))
+    increment   = Just        <$> (UnaryAssignExpr       
+                                             <$> fr
+                                             <*> return PostfixInc 
+                                             <*> (LVar    <$> fr 
+                                                          <*> (unId <$> keysIdx)))
+    accessKeys  = vStmt        $   VarDecl <$> fr 
+                                           <*> return v 
+                                           <*> (Just <$> (BracketRef <$> fr 
+                                                                     <*> (VarRef <$> fr <*> keysArr) 
+                                                                     <*> (VarRef <$> fr <*> keysIdx)))
+    forStmt     = ForStmt     <$> fr 
+                              <*> (VarInit <$> single <$> initIdx) 
+                              <*> condition 
+                              <*> increment 
+                              <*> (BlockStmt <$> fr 
+                                             <*> ( (:[b]) <$> accessKeys))
+
+    vStmt v     = VarDeclStmt <$> fr <*> (single <$> v)
+
+    keysArr     = return $ mkKeysId    v 
+    keysIdx     = return $ mkKeysIdxId v
 
     mkId s      = Id (Ann def def def) s
     builtinId s = mkId ("builtin_" ++ s)
@@ -332,7 +362,7 @@ ssaAsgnStmt l1 l2 x@(Id l3 v) x' e'
   | otherwise = VarDeclStmt l1 [VarDecl l2 x' (Just e')]
 
 -------------------------------------------------------------------------------------
-ctorVisitor :: Data r => AnnSSA r -> [Id (AnnSSA r)] -> Visitor (SSAM r) () () (AnnSSA r)
+ctorVisitor :: Data r => AnnSSA r -> [Id (AnnSSA r)] -> VisitorM (SSAM r) () () (AnnSSA r)
 -------------------------------------------------------------------------------------
 ctorVisitor l ms          = defaultVisitor { mStmt = ts }
   where

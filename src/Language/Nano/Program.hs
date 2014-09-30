@@ -94,7 +94,8 @@ data Nano a r = Nano {
   -- 
   -- ^ Maximum id 
   --
-  , max_id    :: Int
+  , max_id    :: NodeId
+
   } deriving (Functor, Data, Typeable)
 
 type NanoBareR r   = Nano (AnnBare r) r                    -- ^ After Parse
@@ -322,18 +323,9 @@ checkTopStmt s | otherwise     = throw $ errorInvalidTopStmt (srcPos s) s
 checkBody :: [Statement a] -> Bool
 -- Adding support for loops so removing the while check
 checkBody stmts = all isNano stmts -- && null (getWhiles stmts) 
-    
-{-    
-getWhiles :: [Statement SourceSpan] -> [Statement SourceSpan]
-getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
-  where 
-    fromWhile s@(WhileStmt {}) = [s]
-    fromWhile _                = [] 
--}
 
 flattenStmt (BlockStmt _ ss) = concatMap flattenStmt ss
 flattenStmt s                = [s]
-
 
 
 --------------------------------------------------------------------------------

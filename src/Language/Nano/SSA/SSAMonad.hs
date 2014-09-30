@@ -158,6 +158,7 @@ updSsaEnvLocal l x
        modify $ \st -> st {names = envAdds [(x, SI x')] (names st)} {ssa_count = 1 + n}
        return x'
 
+freshenAnnSSA :: AnnSSA r -> SSAM r (AnnSSA r)
 freshenAnnSSA (Ann _ l a)
   = do n     <- ast_count <$> get 
        modify $ \st -> st {ast_count = 1 + n}

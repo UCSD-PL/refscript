@@ -11,7 +11,7 @@ module Language.Nano.Annots (
     SsaInfo(..), Var(..)
 
   -- * Annotations
-  , Annot (..), UFact, Fact (..), phiVarsAnnot
+  , NodeId, Annot (..), UFact, Fact (..), phiVarsAnnot
 
   -- * Casts
   , Cast(..), CastDirection(..), castDirection, noCast, upCast, dnCast, ddCast
@@ -28,6 +28,7 @@ module Language.Nano.Annots (
 import           Control.Applicative            hiding (empty)
 import           Data.Default
 import           Data.Monoid
+import qualified Data.IntMap.Strict             as I
 import           Data.Function                  (on)
 import           Data.Maybe                     (maybe) 
 import           Data.Generics                   
@@ -135,22 +136,24 @@ data Fact r
   | ModuleAnn   !(F.Symbol)
     deriving (Eq, Ord, Show, Data, Typeable)
 
-type UFact = Fact ()
+type UFact     = Fact ()
 
-data Annot b a = Ann { ann_id   :: Int
-                     , ann      :: a
+type NodeId    = Int
+
+data Annot b a = Ann { ann_id   :: NodeId
+                     , ann      ::  a
                      , ann_fact :: [b] } deriving (Show, Data, Typeable)
 
 type AnnR r    = Annot (Fact r) SourceSpan
 type AnnBare r = AnnR r -- NO facts
 type AnnSSA  r = AnnR r -- Phi facts
 type AnnType r = AnnR r -- Phi + t. annot. + Cast facts
-type AnnInfo r = M.HashMap Int [Fact r] 
+type AnnInfo r = I.IntMap [Fact r] 
 
-type UAnnBare = AnnBare () 
-type UAnnSSA  = AnnSSA  ()
-type UAnnType = AnnType ()
-type UAnnInfo = AnnInfo ()
+type UAnnBare  = AnnBare () 
+type UAnnSSA   = AnnSSA  ()
+type UAnnType  = AnnType ()
+type UAnnInfo  = AnnInfo ()
 
 
 newtype SsaInfo r = SI (Var r) deriving (Ord, Typeable, Data)
@@ -246,7 +249,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (ModuleAnn s)    = text "module"                 <+> pp s
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
-  pp             = vcat . (ppB <$>) . M.toList 
+  pp             = vcat . (ppB <$>) . I.toList 
     where 
       ppB (x, t) = pp x <+> dcolon <+> pp t
 

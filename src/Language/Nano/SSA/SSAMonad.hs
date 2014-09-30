@@ -50,6 +50,7 @@ import           Data.Maybe                         (fromMaybe)
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.HashSet                       as S
 import qualified Data.IntSet                        as I
+import qualified Data.IntMap.Strict                 as IM
 import qualified Language.Fixpoint.Types            as F
 import           Language.Nano.Annots
 import           Language.Nano.Errors
@@ -68,20 +69,38 @@ import           Language.Fixpoint.Misc
 
 type SSAM r     = ExceptT Error (State (SsaState r))
 
-data SsaState r = SsaST { assign      :: Env Assignability        -- ^ assignability status 
-                        -- names to be deprecated
-                        , names       :: SsaEnv r                 -- ^ current SSA names 
-                        
-                        , ssa_count   :: !Int                     -- ^ fresh index
-                        , anns        :: !(AnnInfo r)             -- ^ built up map of annots 
-                        
-                        , ssa_globs   :: I.IntSet                 -- ^ Global definition ids
-                        , ssa_meas    :: S.HashSet F.Symbol       -- ^ Measures
-                        , ast_count   :: !Int                     -- ^ fresh AST index
-                        }
+data SsaState r = SsaST { 
+  -- 
+  -- ^ Assignability status 
+  --
+    assign        :: Env Assignability        
+  -- 
+  -- ^ Current SSA names 
+  --
+  , names         :: SsaEnv r                 
+  -- 
+  -- ^ Fresh index for SSA vars
+  --
+  , ssa_cnt       :: !Int                     
+  -- 
+  -- ^ Map of annotation
+  --
+  , anns          :: !(AnnInfo r)             
+  -- 
+  -- ^ Global definition ids
+  --
+  , ssa_globs     :: I.IntSet                 
+  -- 
+  -- ^ Measures
+  --
+  , ssa_meas      :: S.HashSet F.Symbol       
+  --
+  -- ^ Fresh AST index
+  --
+  , ssa_ast_cnt   :: !NodeId
+  }
 
 type SsaEnv r     = Env (SsaInfo r)
-
 
 
 -- -------------------------------------------------------------------------------------
@@ -106,7 +125,7 @@ getSsaEnv   :: SSAM r (SsaEnv r)
 getSsaEnv   = names <$> get 
 
 
-getAstCount = ast_count <$> get  
+getAstCount = ssa_ast_cnt <$> get  
 
 
 ssaEnvIds = (unpack . snd <$>) . envToList
@@ -153,21 +172,21 @@ updSsaEnv ll x
 
 updSsaEnvLocal :: AnnSSA r -> Var r -> SSAM r (Var r)
 updSsaEnvLocal l x 
-  = do n     <- ssa_count <$> get
+  = do n     <- ssa_cnt <$> get
        let x' = mkSSAId l x n
-       modify $ \st -> st {names = envAdds [(x, SI x')] (names st)} {ssa_count = 1 + n}
+       modify $ \st -> st {names = envAdds [(x, SI x')] (names st)} {ssa_cnt = 1 + n}
        return x'
 
 freshenAnnSSA :: AnnSSA r -> SSAM r (AnnSSA r)
 freshenAnnSSA (Ann _ l a)
-  = do n     <- ast_count <$> get 
-       modify $ \st -> st {ast_count = 1 + n}
+  = do n     <- ssa_ast_cnt <$> get 
+       modify $ \st -> st {ssa_ast_cnt = 1 + n}
        return $ Ann n l a
 
 freshenIdSSA :: IsLocated l => Id l -> SSAM r (Var r)
 freshenIdSSA (Id l x) 
-  = do n     <- ast_count <$> get 
-       modify $ \st -> st {ast_count = 1 + n}
+  = do n     <- ssa_ast_cnt <$> get 
+       modify $ \st -> st {ssa_ast_cnt = 1 + n}
        return $ Id (Ann n (srcPos l) []) x
 
 
@@ -181,7 +200,7 @@ findSsaEnv x
          Nothing     -> return $ Nothing 
 
 
-addAnn l f = modify $ \st -> st { anns = inserts (ann_id l) f (anns st) }
+addAnn l f = modify $ \st -> st { anns = IM.insertWith (++) (ann_id l) [f] (anns st) }
 getAnns    = anns <$> get
 
 setGlobs g =  modify $ \st -> st { ssa_globs = g } 
@@ -210,5 +229,5 @@ execute p act
 tryAction act = get >>= return . runState (runExceptT act)
 
 initState :: NanoBareR r -> SsaState r
-initState p = SsaST envEmpty envEmpty 0 M.empty I.empty S.empty (max_id p)
+initState p = SsaST envEmpty envEmpty 0 IM.empty I.empty S.empty (max_id p)
 

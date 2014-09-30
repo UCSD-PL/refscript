@@ -23,7 +23,7 @@ module Language.Nano.Typecheck.TCMonad (
   , logError, tcError, tcWrap
 
   -- * Freshness
-  , freshTyArgs
+  , freshTyArgs, freshenAnn
 
   -- * Substitutions
   , getSubst, setSubst, addSubst
@@ -49,7 +49,7 @@ module Language.Nano.Typecheck.TCMonad (
   )  where 
 
 
-import           Control.Applicative                ((<$>))
+import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
 import           Control.Monad.Except               (catchError)
@@ -58,6 +58,7 @@ import           Data.Generics
 import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (catMaybes, isJust, maybeToList)
 import           Data.Monoid                  
+import qualified Data.IntMap.Strict                 as I
 
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
@@ -80,6 +81,7 @@ import           Language.Nano.Errors
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Syntax.Annotations
 
 -- import           Debug.Trace                      (trace)
 --
@@ -118,6 +120,10 @@ data TCState r = TCS {
   -- ^ configuration options
   --
   , tc_opts     :: Config               
+  -- 
+  -- ^ AST Counter
+  --
+  , tc_ast_cnt  :: NodeId
 
   }
 
@@ -209,46 +215,47 @@ logError   :: Error -> a -> TCM r a
 logError err x = (modify $ \st -> st { tc_errors = err : tc_errors st}) >> return x
 
 -------------------------------------------------------------------------------
-freshTyArgs :: PPR r => SourceSpan -> Int -> IContext -> [TVar] -> RType r -> TCM r (RType r)
+freshTyArgs :: PPR r => AnnSSA r -> Int -> IContext -> [TVar] -> RType r -> TCM r (RType r)
 -------------------------------------------------------------------------------
-freshTyArgs l i ξ αs t = (`apply` t) <$> freshSubst l i ξ αs
+freshTyArgs a n ξ αs t = (`apply` t) <$> freshSubst a n ξ αs
 
 -------------------------------------------------------------------------------
-freshSubst :: PPR r => SourceSpan -> Int -> IContext -> [TVar] -> TCM r (RSubst r)
+freshSubst :: PPR r => AnnSSA r -> Int -> IContext -> [TVar] -> TCM r (RSubst r)
 -------------------------------------------------------------------------------
-freshSubst l i ξ αs
+freshSubst (Ann i l _) n ξ αs
   = do when (not $ unique αs) $ logError (errorUniqueTypeParams l) ()
        βs        <- mapM (freshTVar l) αs
-       setTyArgs l i ξ βs
+       setTyArgs i n ξ βs
        extSubst   $ βs 
        return     $ fromList $ zip αs (tVar <$> βs)
 
 -------------------------------------------------------------------------------
-setTyArgs :: PPR r => SourceSpan -> Int -> IContext -> [TVar] -> TCM r ()
+setTyArgs :: PPR r => NodeId -> Int -> IContext -> [TVar] -> TCM r ()
 -------------------------------------------------------------------------------
 setTyArgs l i ξ βs
   = case map tVar βs of 
       [] -> return ()
-      vs -> addAnn l $ ltracePP l "setTyArgs" $ TypInst i ξ vs
+      vs -> addAnn l $ TypInst i ξ vs
 
 
 -------------------------------------------------------------------------------
 -- | Managing Annotations: Type Instantiations
 -------------------------------------------------------------------------------
 
+-- PV: is sortNub needed here?
 -------------------------------------------------------------------------------
 getAnns :: (F.Reftable r, Substitutable r (Fact r)) => TCM r (AnnInfo r)
 -------------------------------------------------------------------------------
 getAnns = do θ     <- tc_subst <$> get
              m     <- tc_anns  <$> get
-             let m' = fmap (apply θ . sortNub) m
+             let m' = fmap (apply θ {-. sortNub-}) m
              _     <- modify $ \st -> st { tc_anns = m' }
              return m' 
 
 -------------------------------------------------------------------------------
-addAnn :: PPR r => SourceSpan -> Fact r -> TCM r () 
+addAnn :: PPR r => NodeId -> Fact r -> TCM r () 
 -------------------------------------------------------------------------------
-addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
+addAnn i f = modify $ \st -> st { tc_anns = I.insertWith (++) i [f] $ tc_anns st } 
  
 -------------------------------------------------------------------------------
 execute ::  PPR r => Config -> V.Verbosity -> NanoSSAR r -> TCM r a -> Either (F.FixResult Error) a
@@ -261,14 +268,15 @@ execute cfg verb pgm act
 -------------------------------------------------------------------------------
 initState :: PPR r => Config -> V.Verbosity -> NanoSSAR r -> TCState r
 -------------------------------------------------------------------------------
-initState cfg verb _ = TCS tc_errors tc_subst tc_cnt tc_anns tc_verb tc_opts 
+initState cfg verb pgm = TCS tc_errors tc_subst tc_cnt tc_anns tc_verb tc_opts tc_ast_cnt
   where
-    tc_errors = []
-    tc_subst = mempty 
-    tc_cnt   = 0
-    tc_anns  = M.empty
-    tc_verb  = verb
-    tc_opts  = cfg
+    tc_errors   = []
+    tc_subst    = mempty 
+    tc_cnt      = 0
+    tc_anns     = I.empty
+    tc_verb     = verb
+    tc_opts     = cfg
+    tc_ast_cnt  = max_id pgm
 
 
 --------------------------------------------------------------------------
@@ -371,13 +379,21 @@ subtypeM l γ t1 t2
       Right _         -> tcError $ errorSubtype l t1 t2
 
 
-addCast ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
+addCast ξ e c = addAnn i fact >> wrapCast loc fact e
   where
-    loc       = srcPos e
+    i         = ann_id $ getAnnotation e
+    loc       = ann    $ getAnnotation e
     fact      = TCast ξ c
 
-wrapCast _ f (Cast_ (Ann l fs) e) = Cast_ (Ann l (f:fs)) e
-wrapCast l f e                    = Cast_ (Ann l [f])    e
+wrapCast _ f (Cast_ (Ann i l fs) e) = Cast_ <$> freshenAnn (Ann i l (f:fs)) <*> return e
+wrapCast l f e                      = Cast_ <$> freshenAnn (Ann (-1) l [f]) <*> return e
+
+freshenAnn :: AnnSSA r -> TCM r (AnnSSA r)
+freshenAnn (Ann _ l a)
+  = do n     <- tc_ast_cnt <$> get 
+       modify $ \st -> st {tc_ast_cnt = 1 + n}
+       return $ Ann n l a
+
 
 
 -- | tcFunTys: "context-sensitive" function signature

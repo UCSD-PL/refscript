@@ -331,65 +331,70 @@ ssaAsgnStmt l1 l2 x@(Id l3 v) x' e'
   | x == x'   = ExprStmt l1    (AssignExpr l2 OpAssign (LVar l3 v) e')
   | otherwise = VarDeclStmt l1 [VarDecl l2 x' (Just e')]
 
+-------------------------------------------------------------------------------------
+ctorVisitor :: Data r => AnnSSA r -> [Id (AnnSSA r)] -> Visitor (SSAM r) () () (AnnSSA r)
+-------------------------------------------------------------------------------------
+ctorVisitor l ms          = defaultVisitor { mStmt = ts }
+  where
+    ss                    = S.fromList $ F.symbol <$> ms
+
+    te _ ae@(AssignExpr la OpAssign (LDot ld (ThisRef _) s) e) 
+      | F.symbol s `S.member` ss
+                          = AssignExpr <$> fr_ la 
+                                       <*> return OpAssign 
+                                       <*> (LVar <$> fr_ ld <*> return (mkCtorStr s))
+                                       <*> return e
+      | otherwise         = return ae
+    te _ lv               = return lv
+
+    ts r@(ReturnStmt l _) = BlockStmt <$> fr <*> ((++ [r]) <$> mapM (ctorExit l) ms)
+    ts r                  = return $ r
+
+    fr_                   = freshenAnnSSA
+    fr                    = fr_ l 
+
+ctorExit l s = ExprStmt <$> fr <*> 
+                 (AssignExpr <$> fr 
+                             <*> return OpAssign
+                             <*> (LDot   <$> fr 
+                                         <*> (ThisRef <$> fr) 
+                                         <*> return (F.symbolString $ F.symbol s))
+                             <*> (VarRef <$> fr 
+                                         <*> ((`mkCtorId` s) <$> fr)))
+  where
+    fr                    = freshenAnnSSA l 
 
 -------------------------------------------------------------------------------------
 ssaClassElt :: Data r => [(Id (AnnSSA r), VarDecl (AnnSSA r))] -> ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
 -------------------------------------------------------------------------------------
-ssaClassElt flds (Constructor l xs body)
+ssaClassElt flds (Constructor l xs bd0)
   = do θ <- getSsaEnv
-       withAssignability ReadOnly (ssaEnvIds θ) $               -- Variables from OUTER scope are NON-ASSIGNABLE
-         do setSsaEnv     $ extSsaEnv xs θ                   -- Extend SsaEnv with formal binders
-            (_, body'')  <- ssaStmts body'                   -- Transform function
-            setSsaEnv θ                                      -- Restore Outer SsaEnv
-            return        $ Constructor l xs body''
+       withAssignability ReadOnly (ssaEnvIds θ) $                     -- Variables from OUTER scope are NON-ASSIGNABLE
+         do setSsaEnv     $ extSsaEnv xs θ                            -- Extend SsaEnv with formal binders
+            initStmts    <- mapM initStmt fldNms
+            bd1          <- visitStmtsT (ctorVisitor l fldNms) () bd0
+            exitStmts    <- mapM (ctorExit l) fldNms
+            (_, body3)   <- ssaStmts $ initStmts ++ bd1 ++ exitStmts  -- Transform function
+            setSsaEnv θ                                               -- Restore Outer SsaEnv
+            return        $ Constructor l xs body3
   where
-    
-    fldNms   = fst <$> flds
+    fldNms      = fst <$> flds
+    fldSet      = S.fromList $ F.symbol <$> fldNms
 
-    -- Replace field initializations with local 
-    body'    = initStmt ++ {-(tfRet . tfUpds)-} body ++ map fldAsgns fldNms
+    initStmt s  = VarDeclStmt <$> fr <*> (single <$> initVd s)
 
-    fldSet   = S.fromList $ F.symbol <$> fldNms
+    initVd i    = case [ (lv,eo) | (v, VarDecl lv _ eo) <- flds, i == v ] of
+                    [(lv, Just e)] -> VarDecl <$> fr_ lv 
+                                              <*> return (mkCtorId l i) 
+                                              <*> return (Just e)
+                    [(lv, _     )] -> VarDecl <$> fr_ lv 
+                                              <*> return (mkCtorId l i) 
+                                              <*> (Just <$> (VarRef <$> fr_ l 
+                                                                    <*> (Id <$> fr_ l 
+                                                                            <*> return "undefined")))
+    fr_         = freshenAnnSSA
+    fr          = fr_ l 
 
-    initStmt = VarDeclStmt l . single . initVd <$> fldNms
-
-    initVd i = case [ (lv,eo) | (v, VarDecl lv _ eo) <- flds, i == v ] of
-                [(lv, Just e)] -> VarDecl lv (mkCtorId l i) $ Just e
-                [(lv, _     )] -> VarDecl lv (mkCtorId l i) $ Just $ VarRef l $ Id l "undefined"
-
-
-
---     -- convertTvarVisitor :: Visitor () [TVar] (AnnR r) 
---     visitor = defaultVisitor {
---         txStmt  = transFmap (\as _ -> as) 
---       , txExpr  = transFmap (\as _ -> as) 
---       }
-
-
-
-
--- 
---     tfUpds  :: (Typeable r, Data r) => [Statement (AnnSSA r)] -> [Statement (AnnSSA r)]
---     tfUpds   = everywhere $ mkT tx
--- 
---     tx      :: (Data r, Typeable r) => Expression (AnnSSA r) -> Expression (AnnSSA r) 
---     tx ae@(AssignExpr la OpAssign (LDot l (ThisRef _) s) e) 
---       | F.symbol s `S.member` fldSet 
---       = AssignExpr la OpAssign (LVar l $ mkCtorStr s) e
---       | otherwise 
---       = ae
---     tx lv    = lv
--- 
---     tfRet   :: (Data r, Typeable r) => [Statement (AnnSSA r)] -> [Statement (AnnSSA r)]
---     tfRet    = everywhere $ mkT tr 
--- 
---     tr      :: Data r => Statement (AnnSSA r) -> Statement (AnnSSA r)
---     tr r@(ReturnStmt l _) = BlockStmt l $ concat [ fldAsgns . fst <$> flds, [r] ]
---     tr r                  = r
--- 
-    fldAsgns s = ExprStmt l $ AssignExpr l OpAssign 
-                   (LDot l (ThisRef l) (F.symbolString $ F.symbol s))
-                   (VarRef l $ mkCtorId l s)
 
 
 -- | Initilization expression for instance variables is moved to the beginning 

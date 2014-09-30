@@ -16,9 +16,6 @@ class A {
 
 }
 
-
-// TODO : Use assigns this for constructor !!!
-
 class B extends A {
 
 	/*@  a : { number | v > 5 } */ 
@@ -33,6 +30,6 @@ class B extends A {
 
 var b = new B();
 
-// assert(b.a > 5);
+assert(b.a > 5);
 
 assert(b.b === 1);

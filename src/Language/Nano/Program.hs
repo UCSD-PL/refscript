@@ -72,11 +72,6 @@ data Nano a r = Nano {
   --
     code      :: !(Source a)               
   -- 
-  -- -- ^ Annotations (keeping this to scrape qualifiers later)
-  -- -- ^ XXX: The names are bogus - made unique to avoid overwrites
-  -- --
-  -- , qualPool  :: !(Env (RType r))
-  -- 
   -- ^ Measure Signatures
   --
   , consts    :: !(Env (RType r))          
@@ -96,6 +91,10 @@ data Nano a r = Nano {
   -- ^ Type Invariants
   --
   , invts     :: ![Located (RType r)]      
+  -- 
+  -- ^ Maximum id 
+  --
+  , max_id    :: Int
   } deriving (Functor, Data, Typeable)
 
 type NanoBareR r   = Nano (AnnBare r) r                    -- ^ After Parse
@@ -341,12 +340,8 @@ flattenStmt s                = [s]
 -- | Manipulating SSA Ids
 --------------------------------------------------------------------------------
 
-mkSSAId :: IsLocated a => a -> Id a -> Int -> Id a
-mkSSAId l (Id _ x) n = Id l (x ++ ssaStr ++ show n)  
-
--- Returns the identifier as is if this is not an SSAed name.
--- stripSSAId :: Id a -> Id a
--- stripSSAId (Id l x) = Id l (unpack $ head $ splitOn (pack ssaStr) (pack x))
+mkSSAId :: (F.Symbolic x, IsLocated a) => a -> x -> Int -> Id a
+mkSSAId l x n = Id l (F.symbolString (F.symbol x) ++ ssaStr ++ show n)  
 
 mkNextId :: Id a -> Id a
 mkNextId (Id a x) =  Id a $ nextStr ++ x
@@ -405,7 +400,7 @@ hoistBindings = everythingBut (++) myQ
     fSt (FunctionStmt l n _ _) = ([(n, l, ReadOnly)], True)
     fSt (FunctionDecl l n _  ) = ([(n, l, ImportDecl)], True)    
     fSt (ClassStmt l n _ _ _ ) = ([(n, l, ReadOnly)], True)
-    fSt (ModuleStmt l n _)     = ([(n, Ann (srcPos l) [ModuleAnn $ F.symbol n], ReadOnly)], True)
+    fSt (ModuleStmt l n _)     = ([(n, l { ann_fact = ModuleAnn (F.symbol n) : ann_fact l} , ReadOnly)], True)
     fSt _                      = ([], False)
 
     fExp :: Expression (AnnType r) -> ([(Id (AnnType r), AnnType r, Assignability)], Bool)
@@ -500,9 +495,9 @@ collectModules ss = topLevel : rest ss
 ---------------------------------------------------------------------------------------
 visibleNames :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, (RType r, Assignability))]
 ---------------------------------------------------------------------------------------
-visibleNames s = [ (ann <$> n,(t,a)) | (n,Ann l ff,a) <- hoistBindings s
-                                     , f              <- ff
-                                     , t              <- annToType l n a f ]
+visibleNames s = [ (ann <$> n,(t,a)) | (n,Ann _ l ff,a) <- hoistBindings s
+                                     , f                <- ff
+                                     , t                <- annToType l n a f ]
   where
     annToType _ _ ReadOnly   (VarAnn t)      = [t] -- Hoist ReadOnly vars (i.e. function defs)
     annToType _ _ ImportDecl (VarAnn t)      = [t] -- Hoist ImportDecl (i.e. function decls)

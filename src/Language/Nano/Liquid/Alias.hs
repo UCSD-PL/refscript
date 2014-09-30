@@ -45,13 +45,13 @@ expandCodeTAlias :: TAliasEnv RefType -> NanoRefType -> NanoRefType
 expandCodeTAlias te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
   where
     patch :: AnnType F.Reft -> AnnType F.Reft
-    patch (Ann ss f) = Ann ss (expandRefType te <$> f)
+    patch (Ann i ss f) = Ann i ss (expandRefType te <$> f)
 
 expandCodePred :: PAliasEnv -> NanoRefType -> NanoRefType
 expandCodePred te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
   where
     patch :: AnnType F.Reft -> AnnType F.Reft
-    patch (Ann ss f) = Ann ss (expandPred te <$> f)
+    patch (Ann i ss f) = Ann i ss (expandPred te <$> f)
 
 
 

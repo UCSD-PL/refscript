@@ -114,7 +114,7 @@ tcNano :: PPR r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do  _       <- checkTypes γ 
-        (fs',_) <- tcStmts γ fs
+        (fs',_) <- tcStmts γ $ tracePP "SSA" fs
         fs''    <- patch fs'
         return   $ p { code = Src fs'' }
   where
@@ -243,9 +243,6 @@ tcFun1 γ l f xs body fty = tcFunBody γ' l body $ t
     arg                  = [(argId $ srcPos l, (aTy, ReadOnly))]
     aTy                  = argTy l ts $ tce_names γ 
 
-tcMethSingleSig γ l f xs body (i, _,ft) 
-  = tcFun1 γ l f xs body (i, ft)
-
 
 -- FIXME: Check for mutability (the second part in the triplet)
 --        If this argument is "immutable" We will have to check
@@ -279,54 +276,62 @@ tcClassElt :: PPR r
 --
 tcClassElt γ dfn (Constructor l xs body) 
   = case findAnnot of
-      Just ft -> do its      <- tcCtorTys l i ft
-                    body'    <- foldM (tcFun1 γ' l i xs) body its
-                    return    $ Constructor l xs body'
-      _       -> tcError $ unsupportedNonSingleConsTy $ srcPos l
+      Just ft -> 
+          do its         <- tcFunTys l i xs ft
+             body'       <- foldM (tcFun1 γ' l i xs) body its
+             return       $ Constructor l xs body'
+      _       -> tcError  $ unsupportedNonSingleConsTy $ srcPos l
   where 
-    findAnnot     = case [ c | ConsAnn c  <- ann_fact l ] of  
-                      [ConsSig ft] -> Just $ ft
-                      []           -> Just $ TFun Nothing [] tVoid fTop
-                      _            -> Nothing
-    i             = Id l "constructor"
-    ms            = t_args dfn
-    γ'            = tcEnvAdd (F.symbol "this") (mkThis $ t_args dfn, ThisVar) γ
-    mkThis (_:αs) = TApp (TRef rn) (t_mutable : map tVar αs) fTop
-    rn            = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
-    tyBinds αs    = [(tVarId α, (tVar α, WriteGlobal)) | α <- αs]
+    findAnnot             = case [ c | ConsAnn c  <- ann_fact l ] of  
+                              [ConsSig ft] -> Just $ ft
+                              []           -> Just $ TFun Nothing [] tVoid fTop
+                              _            -> Nothing
+    i                     = Id l "constructor"
+    ms                    = t_args dfn
+    γ'                    = tcEnvAdd (F.symbol "this") (mkThis $ t_args dfn, ThisVar) γ
+    mkThis (_:αs)         = TApp (TRef rn) (t_mutable : map tVar αs) fTop
+    rn                    = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
 
 tcClassElt γ dfn (MemberVarDecl l static (VarDecl l1 x eo))
   = case anns of 
-      []  ->  tcError       $ errorClassEltAnnot (srcPos l1) (t_name dfn) x
+      []  ->  tcError     $ errorClassEltAnnot (srcPos l1) (t_name dfn) x
       fs  ->  case eo of
-                Just e     -> do (FI _ [e'],_) <- tcNormalCall γ l1 "field init" (FI Nothing [(e, Nothing)]) $ ft fs
-                              -- Using a function call to "init" to keep track of 
-                              -- overloading on field initialization
-                                 return         $ (MemberVarDecl l static (VarDecl l1 x $ Just e'))
-                Nothing    -> return            $ (MemberVarDecl l static (VarDecl l1 x Nothing))
+                Just e   -> do (FI _ [e'],_) <- tcNormalCall γ l1 "field init" (FI Nothing [(e, Nothing)]) $ ft fs
+                            -- Using a function call to "init" to keep track of 
+                            -- overloading on field initialization
+                               return         $ (MemberVarDecl l static (VarDecl l1 x $ Just e'))
+                Nothing  -> return            $ (MemberVarDecl l static (VarDecl l1 x Nothing))
   where
-    anns | static    = [ s | StatAnn  s <- ann_fact l1 ]
-         | otherwise = [ f | FieldAnn f <- ann_fact l1 ]
-    ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> flds
+    anns | static         = [ s | StatAnn  s <- ann_fact l1 ]
+         | otherwise      = [ f | FieldAnn f <- ann_fact l1 ]
+    ft flds               = mkAnd $ catMaybes $ mkInitFldTy <$> flds
 
---
---  Currently we allow a single type annotation that can be an overloaded
---  function though. Proceed as follows:
---    1. Get all overloads
---    2. Check the body for each one of them
---
---  FIXME: check for mutability (purity)
---
-tcClassElt γ dfn (MemberMethDecl l static i xs body) 
+-- | Static method
+tcClassElt γ dfn (MemberMethDecl l True i xs body) 
   = case anns of 
-      [mt]  -> do imts   <- tcMethTys l i mt
-                  body'  <- foldM (tcMethSingleSig γ l i xs) body imts
-                  return  $ MemberMethDecl l static i xs body'
+      [t]  -> do its     <- tcFunTys l i xs t
+                 body'   <- foldM (tcFun1 γ l i xs) body its
+                 return   $ MemberMethDecl l True i xs body'
       _    -> tcError     $ errorClassEltAnnot (srcPos l) (t_name dfn) i
   where
-    anns | static    = [ (m, t) | StatAnn (StatSig _ m t)  <- ann_fact l ]
-         | otherwise = [ (m, t) | MethAnn (MethSig _ m t)  <- ann_fact l ]
+    anns                  = [ t | StatAnn (StatSig _ m t)  <- ann_fact l ]
+
+-- | Instance method
+tcClassElt γ dfn (MemberMethDecl l False i xs bd) 
+  = case specs of 
+      [(m,t,γ')] -> 
+          do its         <- tcFunTys l i xs t
+             bd'         <- foldM (tcFun1 γ' l i xs) bd its
+             return       $ MemberMethDecl l False i xs bd'
+      _    -> tcError     $ errorClassEltAnnot (srcPos l) (t_name dfn) i
+  where
+    specs                 = [ (m, t, gg $ ofType m) | MethAnn (MethSig _ m t)  <- ann_fact l ]
+
+    gg m                  = tcEnvAdd (F.symbol "this") (mkThis m $ t_args dfn, ThisVar) γ
+
+    mkThis m (_:αs)       = TApp (TRef rn) (m : map tVar αs) fTop
+    rn                    = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
 
 --------------------------------------------------------------------------------
@@ -379,7 +384,7 @@ tcStmt γ ex@(ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   where
     tcSetProp rhsCtx = 
       do  opTy               <- setPropTy l (F.symbol f) <$> safeTcEnvFindTy l γ (builtinOpId BISetProp)
-          (FI _ [e1',e2'],_) <- tcNormalCall γ l BISetProp (FI Nothing [(e1, Nothing), (e2, rhsCtx)]) opTy
+          (FI _ [e1',e2'],_) <- tcNormalCall γ l BISetProp (FI Nothing [(ltracePP e1 "setprop-1" e1, Nothing), (ltracePP e2 "setprop-2" e2, rhsCtx)]) opTy
           return              $ (ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 e1' f) e2', Just γ)
 
 -- e

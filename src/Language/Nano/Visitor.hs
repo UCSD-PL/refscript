@@ -12,6 +12,8 @@ module Language.Nano.Visitor (
   , defaultVisitor
 
   , visitNano
+  , visitStmt
+  , visitStmts
   , foldNano
   ) where
 

@@ -408,7 +408,7 @@ consClassElt :: CGEnv -> IfaceDef F.Reft -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElt g dfn (Constructor l xs body) 
   = case findAnnot of
-      Just ft -> do its <- cgCtorTys l i ft
+      Just ft -> do its <- ltracePP l "ctor" <$> cgCtorTys l i ft
                     g' <- envAdds "consClassElt-1" [(Loc (ann l) "this", (mkThis $ t_args dfn, WriteGlobal))] g
                     mapM_ (consFun1 l g' i xs body) its
       _       -> cgError $ unsupportedNonSingleConsTy $ srcPos l
@@ -432,14 +432,30 @@ consClassElt g dfn (MemberVarDecl _ static (VarDecl l1 x eo))
          | otherwise = [ f | FieldAnn f <- ann_fact l1 ]
     ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> flds
   
-consClassElt g dfn (MemberMethDecl l static i xs body) 
+-- | Static method
+consClassElt g dfn (MemberMethDecl l True i xs body) 
   = case anns of
-      [mt]  -> do mts   <- cgMethTys l i mt
-                  mapM_    (consMeth1 l g i xs body) mts
-      _    -> cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) i
+      [t]   -> do its   <- cgFunTys l i xs t
+                  mapM_    (consFun1 l g i xs body) its
+      _     -> cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) i
   where
-    anns | static    = [ (m, t) | StatAnn (StatSig _ m t)  <- ann_fact l ]
-         | otherwise = [ (m, t) | MethAnn (MethSig _ m t)  <- ann_fact l ]
+    anns     = [ t | StatAnn (StatSig _ m t)  <- ann_fact l ]
+ 
+-- | Instance method
+consClassElt g dfn (MemberMethDecl l False i xs body) 
+  = case anns of
+      [(m,t)] -> do its   <- cgFunTys l i xs t --   cgMethTys l i (m,t)
+                    g'    <- envAdds "consClassElt-1" [(Loc (ann l) "this", (mkThis m $ t_args dfn, WriteGlobal))] g
+                    mapM_    (consFun1 l g' i xs body) its
+
+      _       -> cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) i
+  where
+    anns                  = [ (m, t) | MethAnn (MethSig _ m t)  <- ann_fact l ]
+
+    mkThis m (_:αs)       = TApp (TRef rn) (ofType m : map tVar αs) fTop
+    rn                    = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
+
+
 
 --------------------------------------------------------------------------------
 consAsgn :: AnnTypeR -> CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv)
@@ -708,7 +724,7 @@ consInstantiate :: (F.Symbolic b, PP a)
                 -> FuncInputs b -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
 consInstantiate l g fn ft ts xes 
-  = do  (_,its1,ot)     <- instantiateFTy l g fn ft
+  = do  (_,its1,ot)     <- ltracePP l ("instantiateFTy " ++ ppshow fn) <$> instantiateFTy l g fn (ltracePP l (ppshow fn) ft)
         ts1             <- idxMapFI (instantiateTy l g) 1 ts
         let (ts2, its2)  = balance ts1 its1
         let (su, ts3)    = renameBinds (toList its2) (toList xes)

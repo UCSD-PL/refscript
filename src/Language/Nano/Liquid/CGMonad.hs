@@ -65,7 +65,7 @@ import qualified Data.HashMap.Strict            as M
 import qualified Data.List                      as L
 import           Data.Function                  (on)
 import           Text.PrettyPrint.HughesPJ
-import qualified Data.Traversable                   as T 
+import qualified Data.Traversable               as T 
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Annots
@@ -90,6 +90,7 @@ import           Language.Fixpoint.Errors
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Syntax.Annotations
 
 -- import           Debug.Trace                        (trace)
 
@@ -128,7 +129,7 @@ execute cfg pgm act
 -------------------------------------------------------------------------------
 initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
 -------------------------------------------------------------------------------
-initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invs c 
+initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invs c (max_id p)
   where 
     invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
 
@@ -165,35 +166,36 @@ data CGState = CGS {
   -- 
   -- ^ global list of fixpoint binders
   --
-    binds    :: F.BindEnv
+    binds       :: F.BindEnv
   -- 
   -- ^ subtyping constraints
   --
-  , cs       :: ![SubC]
+  , cs          :: ![SubC]
   -- 
   -- ^ well-formedness constraints
   --
-  , ws       :: ![WfC]               
+  , ws          :: ![WfC]               
   -- 
   -- ^ freshness counter
   --
-  , count    :: !Integer             
+  , cg_cnt      :: !Integer             
   -- 
   -- ^ recorded annotations
   --
-  , cg_ann   :: S.UAnnInfo RefType   
+  , cg_ann      :: S.UAnnInfo RefType   
   -- 
   -- ^ type constructor invariants
   --
-  , invs     :: TConInv              
+  , invs        :: TConInv              
   -- 
   -- ^ configuration options
   --
-  , cg_opts  :: Config               
+  , cg_opts     :: Config               
   -- 
-  -- -- ^ qualifiers that arise at typechecking
-  -- --
-  -- , quals    :: ![F.Qualifier]       
+  -- ^ AST Counter
+  --
+  , cg_ast_cnt  :: NodeId
+
   }
 
 type CGM     = ExceptT Error (State CGState)
@@ -240,34 +242,43 @@ envGetContextTypArgs n g a αs
 
 
 ---------------------------------------------------------------------------------------
-envAddFresh :: IsLocated l => l -> (RefType, Assignability) -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 
+envAddFresh :: (IsLocated l) => l -> (RefType, Assignability) -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 
 ---------------------------------------------------------------------------------------
 envAddFresh l (t,a) g 
-  = do x  <- freshId $ srcPos l
+  = do x  <- freshId l
        g' <- envAdds "envAddFresh" [(x,(t,a))] g
-       addAnnot (srcPos l) x t
+       addAnnot l x t
        return (x, g')
    
-freshId l = Id (Ann l []) <$> fresh
+freshId a = Id <$> freshenAnn a <*> fresh
+
+freshenAnn :: IsLocated l => l -> CGM AnnTypeR
+freshenAnn l
+  = do n     <- cg_ast_cnt <$> get 
+       modify $ \st -> st {cg_ast_cnt = 1 + n}
+       return $ Ann n (srcPos l) []
+
 
 
 -- | We do not add binders for WriteGlobal variables as they cannot appear in
 --   refinements.
 --
 ---------------------------------------------------------------------------------------
-envAdds :: (PP [x], PP x, F.Symbolic x, IsLocated x) 
-        => String -> [(x, (RefType, Assignability))] -> CGEnv -> CGM CGEnv
+envAdds :: (IsLocated l, F.Symbolic l) 
+        => String 
+        -> [(l, (RefType, Assignability))] 
+        -> CGEnv 
+        -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 envAdds _ xts' g
   = do xtas     <- zip xs . (`zip` as) <$> mapM (addInvariant g) ts'
        is       <- catMaybes <$> forM xtas addFixpointBind
-       _        <- forM xtas            $  \(x,(t,_)) -> addAnnot (srcPos x) x t
+       _        <- forM xtas            $  \(x,(t,_)) -> addAnnot x x t
        return    $ g { cge_names        = E.envAdds xtas       $ cge_names g
                      , cge_fenv         = F.insertsIBindEnv is $ cge_fenv  g }
     where
        (xs,ys)    = unzip xts'
        (ts',as)   = unzip ys
-       -- adjust m (k,v) = M.adjust (v:) (F.symbol k) m
 
 instance PP F.IBindEnv where
   pp e = F.toFix e 
@@ -318,9 +329,9 @@ addInvariant g t
 
 
 ---------------------------------------------------------------------------------------
-addAnnot       :: (F.Symbolic x) => SourceSpan -> x -> RefType -> CGM () 
+addAnnot       :: (IsLocated l, F.Symbolic x) => l -> x -> RefType -> CGM () 
 ---------------------------------------------------------------------------------------
-addAnnot l x t = modify $ \st -> st {cg_ann = S.addAnnot l x t (cg_ann st)}
+addAnnot l x t = modify $ \st -> st {cg_ann = S.addAnnot (srcPos l) x t (cg_ann st)}
 
 ---------------------------------------------------------------------------------------
 envAddReturn        :: (IsLocated f)  => f -> RefType -> CGEnv -> CGM CGEnv 
@@ -431,7 +442,7 @@ freshTyInst l g αs τs tbody
 
 -- | Instantiate Fresh Type (at Phi-site) 
 ---------------------------------------------------------------------------------------
-freshTyPhis :: (PP l, IsLocated l) => l -> CGEnv -> [Id l] -> [Type] -> CGM (CGEnv, [RefType])  
+freshTyPhis :: AnnTypeR -> CGEnv -> [Id AnnTypeR] -> [Type] -> CGM (CGEnv, [RefType])  
 ---------------------------------------------------------------------------------------
 freshTyPhis l g xs τs 
   = do ts <- mapM (freshTy "freshTyPhis")  τs
@@ -440,7 +451,7 @@ freshTyPhis l g xs τs
        return (g', ts)
 
 ---------------------------------------------------------------------------------------
-freshTyPhisWhile :: (PP l, IsLocated l) => l -> CGEnv -> [Id l] -> [Type] -> CGM (CGEnv, [RefType])  
+freshTyPhisWhile :: AnnTypeR -> CGEnv -> [Id AnnTypeR] -> [Type] -> CGM (CGEnv, [RefType])  
 ---------------------------------------------------------------------------------------
 freshTyPhisWhile l g xs τs 
   = do ts <- mapM (freshTy "freshTyPhis")  τs
@@ -490,7 +501,7 @@ freshenModuleDefM g (a, m)
 ---------------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------------
-subType :: (IsLocated l) => l -> Error -> CGEnv -> RefType -> RefType -> CGM ()
+subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l err g t1 t2 =
   do t1'    <- addInvariant g t1  -- enhance LHS with invariants
@@ -546,8 +557,8 @@ class Freshable a where
   refresh = return . id
 
 instance Freshable Integer where
-  fresh = do modify $ \st -> st { count = 1 + (count st) }
-             count <$> get 
+  fresh = do modify $ \st -> st { cg_cnt = 1 + (cg_cnt st) }
+             cg_cnt <$> get 
 
 instance Freshable F.Symbol where
   fresh = F.tempSymbol (F.symbol "nano") <$> fresh

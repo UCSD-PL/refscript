@@ -482,10 +482,8 @@ consExpr g (Cast_ l e) _ =
   case envGetContextCast g l of
     CDead e' t' -> consDeadCode g l e' t'
     CNo         -> mseq (consExpr g e Nothing) $ return . Just
-    CUp t t'    -> mseq (consExpr g e Nothing) $ \(x,g) -> Just <$> consUpCast   g loc x t t'
-    CDn t t'    -> mseq (consExpr g e Nothing) $ \(x,g) -> Just <$> consDownCast g loc x t t'
-  where
-    loc = srcPos l
+    CUp t t'    -> mseq (consExpr g e Nothing) $ \(x,g) -> Just <$> consUpCast   g l x t t'
+    CDn t t'    -> mseq (consExpr g e Nothing) $ \(x,g) -> Just <$> consDownCast g l x t t'
 
 -- | < t > e
 consExpr g ex@(Cast l e) _ =
@@ -678,7 +676,7 @@ consDownCast g l x _ t2
         txx     <- zipTypeM l g tx tx 
         tx2     <- zipTypeM l g t2 tx
         ztx     <- zipTypeM l g tx t2
-        subType l (errorDownCast l txx t2) g txx tx2
+        subType l (errorDownCast (srcPos l) txx t2) g txx tx2
         envAddFresh l (ztx,a) g
 
 
@@ -866,7 +864,7 @@ consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> C
 consWhile g l cond body 
   = do  -- ts                  <- mapM (`safeEnvFindTy` g) xs 
         -- (gI,tIs)            <- freshTyPhis (srcPos l) g xs $ toType <$> ts  -- (a) (b) 
-        (gI,tIs)            <- freshTyPhis (srcPos l) g xs ts  -- (a) (b) 
+        (gI,tIs)            <- freshTyPhis l g xs ts                        -- (a) (b) 
         _                   <- consWhileBase l xs tIs g                     -- (c)
         Just (xc, gI')      <- consExpr gI cond Nothing                     -- (d)
         z                   <- consStmt (envAddGuard xc True gI') body      -- (e)
@@ -923,7 +921,7 @@ envJoin' l g g1 g2
         -- So we can use the raw type from one of the two branches and freshen
         -- up that one.
         -- FIXME: Add a raw type check on t1 and t2
-        (g',ts) <- freshTyPhis (srcPos l) g xs $ toType . fst <$> t1s
+        (g',ts) <- freshTyPhis l g xs $ toType . fst <$> t1s
         t1s'    <- mapM (`safeEnvFindTy` g1') xs
         t2s'    <- mapM (`safeEnvFindTy` g2') xs
         _       <- zipWithM_ (subType l err g1') t1s' ts 

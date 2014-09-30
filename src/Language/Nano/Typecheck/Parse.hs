@@ -630,11 +630,11 @@ mkCode' ss = Nano {
       , pAlias        = envFromList   [ t | PAlias t <- anns ] 
       , pQuals        =               [ t | Qual   t <- anns ] 
       , invts         = [Loc (srcPos l) t | Invt l t <- anns ]
+      , max_id        = ending_id
     } 
   where
-    toBare           :: (SourceSpan, [Spec]) -> AnnBare Reft 
-    toBare (l,αs)     = Ann l $ catMaybes $ bb <$> αs 
-    
+    toBare           :: Int -> (SourceSpan, [Spec]) -> AnnBare Reft 
+    toBare n (l,αs)   = Ann n l $ catMaybes $ bb <$> αs 
     bb (Bind   (_,t)) = Just $ VarAnn   t   
     bb (Constr c    ) = Just $ ConsAnn  c   
     bb (Field  f    ) = Just $ FieldAnn f   
@@ -646,8 +646,8 @@ mkCode' ss = Nano {
     bb (Exported _  ) = Just $ ExporedModElt
     bb (AnFunc t    ) = Just $ FuncAnn  t   
     bb _              = Nothing
-
-    ss'               = (toBare <$>) <$> ss
+    starting_id       = 0
+    (ending_id, ss')  = mapAccumL (mapAccumL (\n -> (n+1,) . toBare n)) starting_id ss
     anns              = concatMap (FO.foldMap snd) ss
 
 scrapeQuals     :: NanoBareR Reft -> NanoBareR Reft

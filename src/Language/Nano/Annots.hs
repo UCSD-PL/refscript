@@ -7,8 +7,11 @@
 
 module Language.Nano.Annots (
 
+  -- * SSA 
+    SsaInfo(..), Var(..)
+
   -- * Annotations
-    Annot (..), UFact, Fact (..), phiVarsAnnot
+  , Annot (..), UFact, Fact (..), phiVarsAnnot
 
   -- * Casts
   , Cast(..), CastDirection(..), castDirection, noCast, upCast, dnCast, ddCast
@@ -107,8 +110,8 @@ castDirection (CDn  {}) = CDDn
 
 data Fact r
   -- SSA
-  = PhiVar      ![(Id SourceSpan)]
-  | PhiVarTy    ![(Id SourceSpan, Type)]
+  = PhiVar      ![Var r]
+  | PhiVarTy    ![(Var r, Type)]
   -- Unification
   | TypInst     Int !IContext ![RType r]
   -- Overloading
@@ -116,7 +119,7 @@ data Fact r
   | Overload    !IContext  !(RType r)
   -- Type annotations
   | VarAnn      !(RType r)
-
+  -- Class member annotations
   | FieldAnn    !(TypeMember r)
   | MethAnn     !(TypeMember r) 
   | StatAnn     !(TypeMember r) 
@@ -130,17 +133,19 @@ data Fact r
   | ClassAnn    !([TVar], Maybe (RelName, [RType r]))
   | ExporedModElt
   | ModuleAnn   !(F.Symbol)
-    deriving (Eq, Show, Data, Typeable, Functor)
+    deriving (Eq, Ord, Show, Data, Typeable)
 
 type UFact = Fact ()
 
-data Annot b a = Ann { ann :: a, ann_fact :: [b] } deriving (Show, Data, Typeable)
+data Annot b a = Ann { ann_id   :: Int
+                     , ann      :: a
+                     , ann_fact :: [b] } deriving (Show, Data, Typeable)
 
 type AnnR r    = Annot (Fact r) SourceSpan
 type AnnBare r = AnnR r -- NO facts
 type AnnSSA  r = AnnR r -- Phi facts
 type AnnType r = AnnR r -- Phi + t. annot. + Cast facts
-type AnnInfo r = M.HashMap SourceSpan [Fact r] 
+type AnnInfo r = M.HashMap Int [Fact r] 
 
 type UAnnBare = AnnBare () 
 type UAnnSSA  = AnnSSA  ()
@@ -148,41 +153,54 @@ type UAnnType = AnnType ()
 type UAnnInfo = AnnInfo ()
 
 
+newtype SsaInfo r = SI (Var r) deriving (Ord, Typeable, Data)
+type    Var     r = Id (AnnSSA r)
+
+instance Show r => Show (SsaInfo r) where
+  show (SI v) = show v
+
+instance PP (SsaInfo r) where
+  pp (SI i) =  pp $ fmap (const ()) i
+
+instance Eq (SsaInfo r) where
+  SI i1 == SI i2 =  i1 == i2 
+
+
 instance HasAnnotation (Annot b) where 
   getAnnotation = ann 
 
 instance Default a => Default (Annot b a) where
-  def = Ann def []
+  def = Ann def def []
 
 instance Default SourceSpan where
   def = srcPos dummySpan
   
 
 instance Ord (AnnSSA  r) where 
-  compare (Ann s1 _) (Ann s2 _) = compare s1 s2
+  compare (Ann i1 s1 _) (Ann i2 s2 _) = compare (i1,s1) (i2,s2)
 
 
--- XXX: This shouldn't have to be that hard...
-instance Ord (Fact r) where
-  compare (PhiVar i1       ) (PhiVar i2       )   = compare i1 i2
-  compare (PhiVarTy i1     ) (PhiVarTy i2     )   = compare i1 i2
-  compare (TypInst i1 c1 t1) (TypInst i2 c2 t2)   = compare (i1,c1,toType <$> t1) (i2,c2,toType <$> t2)
-  compare (EltOverload c1 t1) (EltOverload c2 t2) = compare (c1, const () <$> t1) (c2, const () <$> t2)
-  compare (Overload c1 t1  ) (Overload c2 t2  )   = compare (c1, toType t1) (c2, toType t2)
-  compare (TCast c1 _      ) (TCast c2 _      )   = compare c1 c2
-  compare (VarAnn t1       ) (VarAnn t2       )   = on compare toType t1 t2
-  compare (FieldAnn f1     ) (FieldAnn f2     )   = on compare (fmap $ const ()) f1 f2
-  compare (MethAnn m1      ) (MethAnn m2      )   = on compare (fmap $ const ()) m1 m2
-  compare (StatAnn s1      ) (StatAnn s2      )   = on compare (fmap $ const ()) s1 s2
-  compare (ConsAnn c1      ) (ConsAnn c2      )   = on compare (fmap $ const ()) c1 c2
-  compare (UserCast c1     ) (UserCast c2     )   = on compare (fmap $ const ()) c1 c2
-  compare (FuncAnn t1      ) (FuncAnn t2      )   = on compare (fmap $ const ()) t1 t2
-  compare (ClassAnn (_,m1) ) (ClassAnn (_,m2) )   = on compare (fst <$>) m1 m2
-  compare (IfaceAnn d1     ) (IfaceAnn d2     )   = compare (fmap (const ()) d1) (fmap (const ()) d2) 
-  compare (ExporedModElt   ) (ExporedModElt   )   = EQ
-  compare (ModuleAnn s1    ) (ModuleAnn s2    )   = compare s1 s2
-  compare f1 f2                                   = on compare factToNum f1 f2
-
+-- -- XXX: This shouldn't have to be that hard...
+-- instance Ord (Fact r) where
+--   compare (PhiVar (SI i1)  ) (PhiVar (SI i2)  )   = compare i1 i2
+--   compare (PhiVarTy i1     ) (PhiVarTy i2     )   = compare i1 i2
+--   compare (TypInst i1 c1 t1) (TypInst i2 c2 t2)   = compare (i1,c1,toType <$> t1) (i2,c2,toType <$> t2)
+--   compare (EltOverload c1 t1) (EltOverload c2 t2) = compare (c1, const () <$> t1) (c2, const () <$> t2)
+--   compare (Overload c1 t1  ) (Overload c2 t2  )   = compare (c1, toType t1) (c2, toType t2)
+--   compare (TCast c1 _      ) (TCast c2 _      )   = compare c1 c2
+--   compare (VarAnn t1       ) (VarAnn t2       )   = on compare toType t1 t2
+--   compare (FieldAnn f1     ) (FieldAnn f2     )   = on compare (fmap $ const ()) f1 f2
+--   compare (MethAnn m1      ) (MethAnn m2      )   = on compare (fmap $ const ()) m1 m2
+--   compare (StatAnn s1      ) (StatAnn s2      )   = on compare (fmap $ const ()) s1 s2
+--   compare (ConsAnn c1      ) (ConsAnn c2      )   = on compare (fmap $ const ()) c1 c2
+--   compare (UserCast c1     ) (UserCast c2     )   = on compare (fmap $ const ()) c1 c2
+--   compare (FuncAnn t1      ) (FuncAnn t2      )   = on compare (fmap $ const ()) t1 t2
+--   compare (ClassAnn (_,m1) ) (ClassAnn (_,m2) )   = on compare (fst <$>) m1 m2
+--   compare (IfaceAnn d1     ) (IfaceAnn d2     )   = compare (fmap (const ()) d1) (fmap (const ()) d2) 
+--   compare (ExporedModElt   ) (ExporedModElt   )   = EQ
+--   compare (ModuleAnn s1    ) (ModuleAnn s2    )   = compare s1 s2
+--   compare f1 f2                                   = on compare factToNum f1 f2
+-- 
 factToNum (PhiVar _        ) = 0
 factToNum (PhiVarTy _      ) = 1
 factToNum (TypInst _ _ _   ) = 2
@@ -203,7 +221,7 @@ factToNum (ModuleAnn _     ) = 16
 
 
 instance Eq (Annot a SourceSpan) where 
-  (Ann s1 _) == (Ann s2 _) = s1 == s2
+  (Ann i1 s1 _) == (Ann i2 s2 _) = (i1,s1) == (i2,s2)
 
 instance IsLocated (Annot a SourceSpan) where 
   srcPos = ann
@@ -233,7 +251,7 @@ instance (F.Reftable r, PP r) => PP (AnnInfo r) where
       ppB (x, t) = pp x <+> dcolon <+> pp t
 
 instance (PP a, PP b) => PP (Annot b a) where
-  pp (Ann x ys) = text "Annot: " <+> pp x <+> pp ys
+  pp (Ann _ x ys) = text "Annot: " <+> pp x <+> pp ys
 
 phiVarsAnnot l = concat [xs | PhiVar xs <- ann_fact l]
 

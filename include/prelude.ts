@@ -553,8 +553,16 @@ interface Array<T> {
 
     forEach(callbackfn: (value: T, index: number, array: T[]) => void/*, thisArg?: any*/): void;
 
-    map<U>(callbackfn: (value: T, index: number, array: T[]) => U/*, thisArg?: any*/): U[];
+    /*@ map : forall U. (callbackfn:(T) => U) => {#Array[#Immutable, U] | true} */
+    map<U>(callbackfn: (value: T) => U): U[];
+    
+    /*@ map : forall U. (callbackfn:(T) => U, index:number) => {#Array[#Immutable, U] | true} */
+    map<U>(callbackfn: (value: T, index: number) => U): U[];
+    
+    /*@ map : forall U. (callbackfn:(T) => U, index:number, array:#Array[#Immutable,T]) => {#Array[#Immutable, U] | true} */
+    map<U>(callbackfn: (value: T, index: number, array: T[]) => U): U[];
 
+    /*@ filter : forall N . (callbackfn: (T, number, #Array[#Immutable, T]) => boolean) => {#Array[N, T] | true} */
     filter(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): T[];
 
     reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue/*?*/: T): T;

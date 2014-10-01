@@ -194,38 +194,46 @@ parentOf (AP (QPath l m )) = Just (AP (QPath l (init m)))
 -- | Flattenning 
 --
 
--- | `flatten b γ (d,ts)` epands a type reference to a structural type that 
+-- | `flatten m b γ (d,ts)` epands a type reference to a structural type that 
 --   includes all elements of the the named type and its ancestors. Argument
 --   @b@ determines if static or non-static elements should be included.
+--   @m@ is the top-level enforced mutability Top-level 
 --
 ---------------------------------------------------------------------------
-flatten :: (EnvLike r g, PPR r, Data r) => Bool -> g r -> (SIfaceDef r) -> Maybe [TypeMember r]
+flatten :: (EnvLike r g, PPR r) => Maybe Mutability -> Bool -> g r -> SIfaceDef r -> Maybe [TypeMember r]
 ---------------------------------------------------------------------------
-flatten b γ (ID _ _ vs h es, ts) =
+flatten m b γ (ID _ _ vs h es, ts) =
     case h of 
       Just (p, ts') -> 
           do  parent        <- resolveRelNameInEnv γ p
-              inherited     <- flatten b γ (parent, ts')
-              return         $ apply θ $ L.unionBy sameBinder current inherited
+              inherited     <- flatten m b γ (parent, ts')
+              return         $ apply θ $ fmut $ L.unionBy sameBinder current inherited
       Nothing -> 
-          return             $ apply θ current
+          return             $ apply θ $ fmut $ current
   where 
+    fmut           = (maybe id setMut m <$>)
+                     
     current        = filter (fn b) es
     θ              = fromList $ zip vs ts
     fn True        = isStaticSig
     fn False       = nonStaticSig
 
+    setMut m (FieldSig x _ t) = FieldSig x m t
+    setMut m (StatSig  x _ t) = StatSig  x m t
+    setMut _ e                = e
+
+
 
 -- | flatten' does not apply the top-level type substitution
 ---------------------------------------------------------------------------
-flatten' :: (PPR r, EnvLike r g) => Bool -> g r -> IfaceDef r -> Maybe [TypeMember r]
+flatten' :: (PPR r, EnvLike r g) => Maybe Mutability ->  Bool -> g r -> IfaceDef r -> Maybe [TypeMember r]
 ---------------------------------------------------------------------------
-flatten' st γ d@(ID _ _ vs _ _) = flatten st γ (d, tVar <$> vs)
+flatten' m st γ d@(ID _ _ vs _ _) = flatten m st γ (d, tVar <$> vs)
 
 ---------------------------------------------------------------------------
-flatten'' :: (PPR r, EnvLike r g) =>  Bool -> g r -> IfaceDef r -> Maybe ([TVar], [TypeMember r])
+flatten'' :: (PPR r, EnvLike r g) => Maybe Mutability -> Bool -> g r -> IfaceDef r -> Maybe ([TVar], [TypeMember r])
 ---------------------------------------------------------------------------
-flatten'' st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten st γ (d, tVar <$> vs)
+flatten'' m st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten m st γ (d, tVar <$> vs)
 
 
 -- | `flattenType` will flatten *any* type (including Mutability types!)
@@ -235,25 +243,28 @@ flatten'' st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten st γ (d, tVar <$> vs)
 --
 --    FIXME: Return an `Either Error (RType r)` for better error reporting.
 --
+--    Flatten pushes top-level enforced mutabilities down towards the fields,
+--    i.e. if the top-level is 'AssignsFields' then fields get Mutable
+--    (overriding their current mutability).
+--
 ---------------------------------------------------------------------------
 flattenType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
--- -- This case is for Mutability types 
-flattenType γ (TApp (TRef x) [] r)
-  = do  es      <- flatten False γ . (, []) =<< resolveRelNameInEnv γ x
+flattenType γ (TApp (TRef x) [] r)    -- This case is for Mutability types 
+  = do  es      <- flatten Nothing False γ . (, []) =<< resolveRelNameInEnv γ x
         return   $ TCons es t_immutable r
 
 flattenType γ (TApp (TRef x) (mut:ts) r)
-  = do  es      <- flatten False γ . (,mut:ts) =<< resolveRelNameInEnv γ x
+  = do  es      <- flatten (Just $ toType mut) False γ . (,mut:ts) =<< resolveRelNameInEnv γ x
         return   $ TCons es (toType mut) r
 
-flattenType γ (TClass x)             = do
-    es                <- flatten' True γ =<< resolveRelNameInEnv γ x
-    return             $ TCons es mut fTop
+flattenType γ (TClass x)             
+  = do  es      <- flatten' Nothing True γ =<< resolveRelNameInEnv γ x
+        return   $ TCons es mut fTop
   where
-    mut                = t_readOnly -- toType $ t_ReadOnly $ get_common_ts γ 
+    mut          = t_readOnly
 
-flattenType _ t = Just t
+flattenType _ t  = Just t
 
 
 -- | `weaken γ A B T..`: Given a relative type name @A@  distinguishes two
@@ -300,11 +311,11 @@ boundKeys γ t@(TApp (TRef _) _ _) =
     case flattenType γ t of
       Just t  -> boundKeys γ t
       Nothing -> []
-boundKeys _ t@(TCons es _ _) =
+boundKeys _ (TCons es _ _) =
   [ s | FieldSig s _ _ <- es] ++
   [ s | MethSig s _ _ <- es] ++
   [ F.symbol "constructor" | ConsSig _ <- es]
-boundKeys _ t = []
+boundKeys _ _ = []
 
 
 -----------------------------------------------------------------------

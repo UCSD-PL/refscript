@@ -63,7 +63,7 @@ import           Text.Parsec.Prim                        (stateUser)
 
 import           GHC.Generics
 
-import           Debug.Trace                             ( trace, traceShow)
+-- import           Debug.Trace                             ( trace, traceShow)
 
 dot        = T.dot        lexer
 plus       = T.symbol     lexer "+"
@@ -124,7 +124,7 @@ iFaceP   = do name   <- identifierP
               h      <- optionMaybe extendsP
               -- FIXME
               es     <- braces $ propBindP def
-              return (name, convertTvar as $ ID False name as h es)
+              return (name, convertTvar as $ ID InterfaceKind name as h es)
 
 extendsP = do reserved "extends"
               qn     <- RN <$> qnameP
@@ -228,7 +228,7 @@ bareMethP
        _      <- colon
        ret    <- bareTypeP 
        r      <- topP
-       return $ mkF args ret r
+       return  $ mkF args ret r
   where 
     mkF as ret r = case as of
       (B s t : ts) | s == symbol "this" -> TFun (Just t) ts ret r
@@ -338,8 +338,8 @@ propBindP defM =  sepEndBy propEltP semi
 
 indexEltP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
                case it of 
-                 "number" -> return $ IndexSig x False t
-                 "string" -> return $ IndexSig x True t
+                 "number" -> return $ IndexSig x NumericIndex t
+                 "string" -> return $ IndexSig x StringIndex t
                  _        -> error $ "Index signature can only have " ++
                                      "string or number as index." 
 
@@ -594,9 +594,7 @@ parseNanoFromFiles fs =
   do  sa <- partitionEithers <$> mapM parseScriptFromJSON fs
       case sa of
         ([],ps) -> case expandAnnots $ concat ps of
-                     Right ps -> return $ either (Left . Unsafe) Right 
-                                        $ conflateTypeMembers 
-                                        $ mkCode ps
+                     Right ps -> return $ either (Left . Unsafe) Right $ mkCode ps
                      Left e   -> return $ Left e
         (es,_ ) -> return $ Left  $ mconcat es 
 
@@ -616,10 +614,11 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
         Right p  -> Right $ p
 
 ---------------------------------------------------------------------------------
-mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
+mkCode :: [Statement (SourceSpan, [Spec])] -> Either [Error] (NanoBareR Reft)
 ---------------------------------------------------------------------------------
 mkCode = --debugTyBinds .
-         scrapeQuals 
+         conflateTypeMembers
+       . scrapeQuals 
        . expandAliases
        . visitNano convertTvarVisitor []
        . mkCode' 
@@ -631,11 +630,11 @@ mkCode' ss = Nano {
       , pAlias        = envFromList   [ t | PAlias t <- anns ] 
       , pQuals        =               [ t | Qual   t <- anns ] 
       , invts         = [Loc (srcPos l) t | Invt l t <- anns ]
+      , max_id        = ending_id
     } 
   where
-    toBare           :: (SourceSpan, [Spec]) -> AnnBare Reft 
-    toBare (l,αs)     = Ann l $ catMaybes $ bb <$> αs 
-    
+    toBare           :: Int -> (SourceSpan, [Spec]) -> AnnBare Reft 
+    toBare n (l,αs)   = Ann n l $ catMaybes $ bb <$> αs 
     bb (Bind   (_,t)) = Just $ VarAnn   t   
     bb (Constr c    ) = Just $ ConsAnn  c   
     bb (Field  f    ) = Just $ FieldAnn f   
@@ -647,44 +646,42 @@ mkCode' ss = Nano {
     bb (Exported _  ) = Just $ ExporedModElt
     bb (AnFunc t    ) = Just $ FuncAnn  t   
     bb _              = Nothing
-
-    ss'               = (toBare <$>) <$> ss
+    starting_id       = 0
+    (ending_id, ss')  = mapAccumL (mapAccumL (\n -> (n+1,) . toBare n)) starting_id ss
     anns              = concatMap (FO.foldMap snd) ss
 
-scrapeQuals   :: NanoBareR Reft -> NanoBareR Reft
+scrapeQuals     :: NanoBareR Reft -> NanoBareR Reft
 scrapeQuals p = p { pQuals = qs ++ pQuals p}
   where
-    qs        = qualifiers $ foldNano tbv [] [] p
-    tbv       = defaultVisitor { accStmt = stmtTypeBindings }
+    qs        = qualifiers $ mkUq $ foldNano tbv [] [] p
+    tbv       = defaultVisitor { accStmt = stmtTypeBindings
+                               , accCElt = celtTypeBindings }
+
+mkUq                  = zipWith tx [0..]
+  where
+    tx i (Id l s, t)  = (Id l $ s ++ "_" ++ show i, t)
+  
     
-stmtTypeBindings _             = go
+stmtTypeBindings _                = go
   where
-    go (FunctionStmt l f _ _)  = [(f, t) | FuncAnn t <- ann_fact l ] ++
-                                 [(f, t) | VarAnn t <- ann_fact l ]
-    go (VarDeclStmt _ vds)     = [(x, t) | VarDecl l x _ <- vds, VarAnn t <- ann_fact l]   
-    go _                       = []
+    go (FunctionStmt l f _ _)     = [(f, t) | FuncAnn t <- ann_fact l ] ++
+                                    [(f, t) | VarAnn t <- ann_fact l ]
+    go (VarDeclStmt _ vds)        = [(x, t) | VarDecl l x _ <- vds, VarAnn t <- ann_fact l]   
+    go _                          = []
 
-debugTyBinds p@(Nano {code = Src ss}) = trace msg p
+celtTypeBindings _                = (mapSnd eltType <$>) . go 
   where
-    xts = [(x, t) | (x, (t, _)) <- visibleNames ss ]
-    msg = unlines $ "debugTyBinds:" : (ppshow <$> xts)
+    go (Constructor l _ _)        = [(x, e) | ConsAnn  e <- ann_fact l, let x = Id l "ctor" ]
+    go (MemberVarDecl _ _ (VarDecl l x _))     
+                                  = [(x, e) | FieldAnn e <- ann_fact l] ++ 
+                                    [(x, e) | StatAnn  e <- ann_fact l]
+    go (MemberMethDecl l _ x _ _) = [(x, e) | MethAnn  e <- ann_fact l]
+
+-- debugTyBinds p@(Nano {code = Src ss}) = trace msg p
+--   where
+--     xts = [(x, t) | (x, (t, _)) <- visibleNames ss ]
+--     msg = unlines $ "debugTyBinds:" : (ppshow <$> xts)
  
-
-
--------------------------------------------------------------------------------
-getQualifPool :: [Statement (SourceSpan, [Spec])] -> [(Id SourceSpan, RefType)]
--------------------------------------------------------------------------------
-getQualifPool a = concatMap ext $ everything (++) ([] `mkQ` f) a
-  where
-    ext (_, ss) = [ b | Bind b <- ss ]
-
-    f :: Statement (SourceSpan, [Spec]) -> [(SourceSpan, [Spec])]
-    f (FunctionStmt l _ _ _) = [l]
-    f (ClassStmt _ _ _ _ es) = [l | MemberMethDecl l _ _ _ _ <- es ]  
-    f (VarDeclStmt _ vds)    = [l | VarDecl l _ _ <- vds ]  
-    f _                      = []
-
-
 type PState = Integer
 
 instance PP Integer where

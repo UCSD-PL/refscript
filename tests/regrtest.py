@@ -100,16 +100,16 @@ options, args = parser.parse_args()
 testSign  = [("pos", 0), ("neg", 1)]
 
 testCategories = [
-                   ("objects", [])
-                 , ("arrays", [])
-                 , ("classes", [])
-                 , ("loops", [])
-                 , ("misc", [])
-                 , ("operators", [])
-                 , ("simple", [])
-                 , ("unions", [])
-                 , ("typealias", [])
-                 , ("inclusion", ["-e"])
+                  ("objects", [])
+                , ("arrays", [])
+                , ("classes", [])
+                , ("loops", [])
+                , ("misc", [])
+                , ("operators", [])
+                , ("simple", [])
+                , ("unions", [])
+                , ("typealias", [])
+                , ("inclusion", ["-e"])
 
                  ## not supported:
                  # , "proto"

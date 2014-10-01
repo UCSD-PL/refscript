@@ -54,11 +54,15 @@ unify :: (Data r, PPR r)
       -> RType r 
       -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
-unify l γ θ (TFun (Just s) xts t _) (TFun (Just s') xts' t' _)
-  = unifys l γ θ (s : t : map b_type xts) (s' : t' : map b_type xts')
+unify l γ θ (TFun (Just s1) t1s o1 _) (TFun (Just s2) t2s o2 _)
+  = unifys l γ θ (s1 : o1 : map b_type t1s') (s2 : o2 : map b_type t2s')
+  where 
+    (t1s',t2s') = unzip $ zip t1s t2s -- get their common parts
 
-unify l γ θ (TFun _ xts t _) (TFun _ xts' t' _)
-  = unifys l γ θ (t : map b_type xts) (t' : map b_type xts')
+unify l γ θ (TFun _ t1s o1 _) (TFun _ t2s o2 _)
+  = unifys l γ θ (o1 : map b_type t1s') (o2 : map b_type t2s')
+  where 
+    (t1s',t2s') = unzip $ zip t1s t2s -- get their common parts
 
 unify l _ θ (TVar α _) (TVar β _) = varEql l θ α β 
 unify l _ θ (TVar α _) t' = varAsn l θ α t'

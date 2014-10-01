@@ -20,23 +20,18 @@ module Language.Nano.Visitor (
 import           Data.Functor.Identity          (Identity)
 import           Data.Monoid
 import           Data.Traversable               (traverse)
-import           Control.Applicative            (Applicative (), (<$>), (<*>))
+import           Control.Applicative            ((<$>), (<*>))
 import           Control.Exception              (throw)
-import           Control.Monad.Trans.State      (modify, State, runState, StateT, runStateT)
+import           Control.Monad.Trans.State      (modify, runState, StateT, runStateT)
 import           Control.Monad.Trans.Class      (lift)
-import           Language.Fixpoint.Misc         (mapSnd)
 import           Language.Nano.Misc             (mapSndM)
 import           Language.Nano.Errors
-import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.Nano.Types
 import           Language.Nano.Locations
 import           Language.Nano.Annots
-import           Language.Nano.Program -- Eeks, cycles!
-import           Language.Nano.Typecheck.Types
-import           Language.ECMAScript3.Syntax 
--- import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Program
 
 --------------------------------------------------------------------------------
 -- | Top-down visitors
@@ -116,8 +111,6 @@ visitStmtsT v c p = fst <$> runStateT (visitStmtsM v c p) mempty
 --------------------------------------------------------------------------------
 
 execVisitM v c a p = runState (visitNanoM v c p) a
-
-type VisitM acc = State acc 
 
 type VisitT m acc = StateT acc m
 

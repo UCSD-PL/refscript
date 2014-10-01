@@ -38,12 +38,6 @@ class EnvLike r t where
   -- ^ Parent environment
   --
   parent          :: t r -> Maybe (t r)
-  --
-  -- ^ Context mutability for setting properties in `this`
-  --   Mainly useful for methods and constructors
-  --
-  mutability      :: t r -> Mutability
-
 
 -------------------------------------------------------------------------------
 currentModule :: EnvLike r t => t r -> Maybe (ModuleDef r)

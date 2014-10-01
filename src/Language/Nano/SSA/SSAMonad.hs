@@ -9,8 +9,7 @@
 module Language.Nano.SSA.SSAMonad (
    
    -- * SSA Information
-     Var(..)
-   , SsaInfo (..)
+     Var, SsaInfo (..)
    
    -- * SSA Monad
    , SSAM
@@ -47,7 +46,6 @@ import           Control.Monad.State
 import           Control.Monad.Trans.Except
 
 import           Data.Maybe                         (fromMaybe) 
-import qualified Data.HashMap.Strict                as M 
 import qualified Data.HashSet                       as S
 import qualified Data.IntSet                        as I
 import qualified Data.IntMap.Strict                 as IM
@@ -55,15 +53,12 @@ import qualified Language.Fixpoint.Types            as F
 import           Language.Nano.Annots
 import           Language.Nano.Errors
 import           Language.Nano.Env
-import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Language.Nano.Program
 import           Language.Nano.Types
-import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
 
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc             
 
 -- import           Debug.Trace                        (trace)
 

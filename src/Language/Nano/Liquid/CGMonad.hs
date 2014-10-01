@@ -56,16 +56,12 @@ import           Control.Monad
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
 
-import           Data.Generics.Schemes
-import           Data.Generics.Aliases
-
 import           Data.Maybe                     (catMaybes, maybeToList)
 import           Data.Monoid                    (mempty)
 import qualified Data.HashMap.Strict            as M
 import qualified Data.List                      as L
 import           Data.Function                  (on)
 import           Text.PrettyPrint.HughesPJ
-import qualified Data.Traversable               as T 
 import           Language.Nano.Types
 import           Language.Nano.Errors
 import           Language.Nano.Annots
@@ -81,8 +77,6 @@ import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Liquid.Environment
 import           Language.Nano.Liquid.Types
-import           Language.Nano.Liquid.Qualifiers
-
 
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
@@ -90,7 +84,6 @@ import           Language.Fixpoint.Errors
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
-import           Language.ECMAScript3.Syntax.Annotations
 
 -- import           Debug.Trace                        (trace)
 

@@ -44,7 +44,6 @@ import           Language.Nano.Typecheck.Typecheck  (typeCheck)
 import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Liquid.Types
-import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
@@ -230,8 +229,6 @@ consFun g (FunctionStmt l f xs body)
 consFun _ s 
   = die $ bug (srcPos s) "consFun called not with FunctionStmt"
 
-consMeth1 l g f xs body (i, _, ft) = consFun1 l g f xs body (i,ft)
-
 -- | @consFun1@ checks a function body against a *one* of multiple
 --   conjuncts of an overloaded (intersection) type signature.
 --   Assume: len ts' = len xs
@@ -347,7 +344,6 @@ consStmt g (ClassStmt l x _ _ ce)
         consClassElts g' dfn ce
         return    $ Just g
   where
-    tVars   αs    = [ tVar   α | α <- αs ] 
     rn            = RN $ QName (srcPos l) [] (F.symbol x)
 
 consStmt g (IfaceStmt _)
@@ -442,7 +438,7 @@ consClassElt g dfn (MemberMethDecl l True i xs body)
                   mapM_    (consFun1 l g i xs body) its
       _     -> cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) i
   where
-    anns     = [ t | StatAnn (StatSig _ m t)  <- ann_fact l ]
+    anns     = [ t | StatAnn (StatSig _ _ t)  <- ann_fact l ]
  
 -- | Instance method
 consClassElt g dfn (MemberMethDecl l False i xs body) 

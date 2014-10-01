@@ -10,16 +10,12 @@ import           Control.Applicative                     ((<$>), (<*>))
 import           Control.Monad
 import           Data.Default
 import           Data.Data
-import           Data.Maybe                              (catMaybes, isNothing) 
+import           Data.Maybe                              (catMaybes) 
 import qualified Data.List                               as L
-import qualified Data.Foldable                           as FO
-import qualified Data.HashMap.Strict                     as M
 import qualified Data.IntSet                             as I
 import qualified Data.IntMap.Strict                      as IM
 import qualified Data.HashSet                            as S
 import           Data.Typeable                           ()
-import           Data.Generics.Schemes
-import           Data.Generics.Aliases
 
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax
@@ -84,7 +80,6 @@ variablesInScope gs fs = (ros, wgs, wls)
     vs            = hoistVarDecls fs
     (wgs, wls)    = L.partition ((`I.member` gs) . ann_id . getAnnotation) vs 
     ros           = hoistReadOnly fs
-    msrc          = (fmap srcPos <$>)
 
 -------------------------------------------------------------------------------------
 ssaFun :: Data r => AnnSSA r -> [Var r] -> [Statement (AnnSSA r)] -> SSAM r [Statement (AnnSSA r)]
@@ -410,7 +405,6 @@ ssaClassElt flds (Constructor l xs bd0)
             return        $ Constructor l xs bd2
   where
     fldNms      = fst <$> flds
-    fldSet      = S.fromList $ F.symbol <$> fldNms
 
     initStmt s  = VarDeclStmt <$> fr <*> (single <$> initVd s)
 
@@ -423,10 +417,9 @@ ssaClassElt flds (Constructor l xs bd0)
                                               <*> (Just <$> (VarRef <$> fr_ l 
                                                                     <*> (Id <$> fr_ l 
                                                                             <*> return "undefined")))
+                    _              -> ssaError $ bugSSAConstructorInit (srcPos l) 
     fr_         = freshenAnn
     fr          = fr_ l 
-
-
 
 -- | Initilization expression for instance variables is moved to the beginning 
 --   of the constructor.
@@ -437,7 +430,7 @@ ssaClassElt _ (MemberVarDecl l True (VarDecl l' x (Just e)))
        case z of 
          ([], e') -> return $ MemberVarDecl l True (VarDecl l' x $ Just e')
          _        -> ssaError $ errorEffectInFieldDef (srcPos l)
-ssaClassElt _ (MemberVarDecl l True (VarDecl l' x Nothing))
+ssaClassElt _ (MemberVarDecl l True (VarDecl _ x Nothing))
   = ssaError $ errorUninitStatFld (srcPos l) x
 
 ssaClassElt _ (MemberMethDecl l s e xs body)
@@ -701,6 +694,7 @@ ssaVarRef l x
              Nothing -> return   $ VarRef l x -- ssaError $ errorSSAUnboundId (srcPos x) x
          ImportDecl  -> ssaError $ errorSSAUnboundId (srcPos x) x
          ReturnVar   -> ssaError $ errorSSAUnboundId (srcPos x) x
+         ThisVar     -> ssaError $ errorSSAUnboundId (srcPos x) x
     where
        e = VarRef l x
  

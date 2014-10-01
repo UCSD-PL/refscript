@@ -15,7 +15,6 @@ import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
 import           Control.Arrow                      ((***))
 
-import qualified Data.HashMap.Strict                as M 
 import qualified Data.IntMap.Strict                 as I
 import           Data.Maybe                         (catMaybes, listToMaybe, maybeToList, fromMaybe)
 import           Data.List                          (nub)
@@ -95,7 +94,7 @@ safe cfg (Nano {code = Src fs}) = (NoAnn, failCasts (noFailCasts cfg) fs)
 -------------------------------------------------------------------------------
 castErrors :: PPR r => AnnType r -> [Error] 
 -------------------------------------------------------------------------------
-castErrors (Ann i l facts) = downErrors
+castErrors (Ann _ l facts) = downErrors
   where 
     downErrors             = [errorDownCast l t1 t2 | TCast _ (CDn t1 t2) <- facts]
 
@@ -150,17 +149,16 @@ patch fs =
 -------------------------------------------------------------------------------
 initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing mut
+initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
     nms       = envFromList $ extras ++ visibleNames ss
     extras    = [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly))]
     mod       = scrapeModules ss 
     ctx       = emptyContext
     pth       = AP $ QPath (srcPos dummySpan) []
-    mut       = t_readOnly
 
 
-initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod ctx pth parent mut
+initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod ctx pth parent
   where
     tyBinds   = [(tVarId α, (tVar α, ReadOnly)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ zip ts (repeat WriteLocal)
@@ -172,20 +170,18 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod ctx pth parent mut
     pth       = tce_path γ
     parent    = Just γ
     thisBind  = (\t -> (Id (srcPos dummySpan) "this", (t, WriteGlobal))) <$> maybeToList thisTO
-    mut       = t_readOnly
 
 
 ---------------------------------------------------------------------------------------
 initModuleEnv :: (PPR r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnSSA r)] -> TCEnv r
 ---------------------------------------------------------------------------------------
-initModuleEnv γ n s = TCE nms mod ctx pth parent mut
+initModuleEnv γ n s = TCE nms mod ctx pth parent
   where
     nms       = envFromList $ visibleNames s
     mod       = tce_mod γ
     ctx       = emptyContext
     pth       = extendAbsPath (tce_path γ) n
     parent    = Just γ
-    mut       = t_readOnly
 
 
 -------------------------------------------------------------------------------
@@ -292,7 +288,6 @@ tcClassElt γ dfn (Constructor l xs body)
                               []           -> Just $ TFun Nothing [] tVoid fTop
                               _            -> Nothing
     i                     = Id l "constructor"
-    ms                    = t_args dfn
     γ'                    = tcEnvAdd (F.symbol "this") (mkThis $ t_args dfn, ThisVar) γ
     mkThis (_:αs)         = TApp (TRef rn) (t_mutable : map tVar αs) fTop
     rn                    = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
@@ -320,12 +315,12 @@ tcClassElt γ dfn (MemberMethDecl l True i xs body)
                  return   $ MemberMethDecl l True i xs body'
       _    -> tcError     $ errorClassEltAnnot (srcPos l) (t_name dfn) i
   where
-    anns                  = [ t | StatAnn (StatSig _ m t)  <- ann_fact l ]
+    anns                  = [ t | StatAnn (StatSig _ _ t)  <- ann_fact l ]
 
 -- | Instance method
 tcClassElt γ dfn (MemberMethDecl l False i xs bd) 
   = case specs of 
-      [(m,t,γ')] -> 
+      [(_,t,γ')] -> 
           do its         <- tcFunTys l i xs t
              bd'         <- foldM (tcFun1 γ' l i xs) bd its
              return       $ MemberMethDecl l False i xs bd'
@@ -381,7 +376,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
        return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
 -- e1.f = e2
-tcStmt γ ex@(ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
+tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do z               <- runFailM $ tcExpr γ e1 Nothing
        case z of 
          Right (_,te1) -> tcSetProp $ fmap snd $ getProp γ False f te1
@@ -454,8 +449,6 @@ tcStmt γ (ClassStmt l x e is ce)
         ms       <- mapM (tcClassElt γ dfn) ce
         return    $ (ClassStmt l x e is ms, Just γ)
   where
-    tVars   αs    = [ tVar   α | α <- αs ] 
-    tyBinds αs    = [(tVarId α, (tVar α, WriteGlobal)) | α <- αs]
     rn            = RN $ QName (srcPos l) [] (F.symbol x)
 
 -- | module M { ... } 
@@ -624,7 +617,7 @@ tcExpr γ (Cast_ a e) _
           _                       -> do a'    <- freshenAnn a
                                         return $ (Cast_ a' e', t)
   where
-    Ann i l fs  = a
+    Ann _ l fs  = a
  
 -- | e.f
 tcExpr γ e@(DotRef _ _ _) _
@@ -871,9 +864,8 @@ resolveOverload γ l fn ets ft
   --  * If the function requires a 'self' argument, the parameters provide one.
   --
   = case [ mkFun (vs,s,τs,τ) | (vs,s,τs,τ) <- sigs
-                             , length τs == largs ets ] of
-                             -- FIXME
-                             -- , lMaybe s  <= lself ets ] of
+                             , length τs == largs ets
+                             , lMaybe s  <= lself ets ] of
       [t]    -> Just . (,t) <$> getSubst 
       fts    -> do  θs    <- mapM (tcCallCaseTry γ l fn (snd <$> ets)) fts
                     return $ listToMaybe [ (θ, apply θ t) | (t, Just θ) <- zip fts θs ]

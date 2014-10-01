@@ -8,7 +8,7 @@
 module Language.Nano.Annots (
 
   -- * SSA 
-    SsaInfo(..), Var(..)
+    SsaInfo(..), Var
 
   -- * Annotations
   , NodeId, Annot (..), UFact, Fact (..), phiVarsAnnot
@@ -29,16 +29,13 @@ import           Control.Applicative            hiding (empty)
 import           Data.Default
 import           Data.Monoid
 import qualified Data.IntMap.Strict             as I
-import           Data.Function                  (on)
-import           Data.Maybe                     (maybe) 
 import           Data.Generics                   
-import qualified Data.HashMap.Strict            as M
 import           Text.PrettyPrint.HughesPJ 
 
 import           Language.Nano.Types
 import           Language.Nano.Locations
 import           Language.Nano.Names
-import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Types()
 
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.Syntax.Annotations
@@ -178,50 +175,8 @@ instance Default a => Default (Annot b a) where
 instance Default SourceSpan where
   def = srcPos dummySpan
   
-
 instance Ord (AnnSSA  r) where 
   compare (Ann i1 s1 _) (Ann i2 s2 _) = compare (i1,s1) (i2,s2)
-
-
--- -- XXX: This shouldn't have to be that hard...
--- instance Ord (Fact r) where
---   compare (PhiVar (SI i1)  ) (PhiVar (SI i2)  )   = compare i1 i2
---   compare (PhiVarTy i1     ) (PhiVarTy i2     )   = compare i1 i2
---   compare (TypInst i1 c1 t1) (TypInst i2 c2 t2)   = compare (i1,c1,toType <$> t1) (i2,c2,toType <$> t2)
---   compare (EltOverload c1 t1) (EltOverload c2 t2) = compare (c1, const () <$> t1) (c2, const () <$> t2)
---   compare (Overload c1 t1  ) (Overload c2 t2  )   = compare (c1, toType t1) (c2, toType t2)
---   compare (TCast c1 _      ) (TCast c2 _      )   = compare c1 c2
---   compare (VarAnn t1       ) (VarAnn t2       )   = on compare toType t1 t2
---   compare (FieldAnn f1     ) (FieldAnn f2     )   = on compare (fmap $ const ()) f1 f2
---   compare (MethAnn m1      ) (MethAnn m2      )   = on compare (fmap $ const ()) m1 m2
---   compare (StatAnn s1      ) (StatAnn s2      )   = on compare (fmap $ const ()) s1 s2
---   compare (ConsAnn c1      ) (ConsAnn c2      )   = on compare (fmap $ const ()) c1 c2
---   compare (UserCast c1     ) (UserCast c2     )   = on compare (fmap $ const ()) c1 c2
---   compare (FuncAnn t1      ) (FuncAnn t2      )   = on compare (fmap $ const ()) t1 t2
---   compare (ClassAnn (_,m1) ) (ClassAnn (_,m2) )   = on compare (fst <$>) m1 m2
---   compare (IfaceAnn d1     ) (IfaceAnn d2     )   = compare (fmap (const ()) d1) (fmap (const ()) d2) 
---   compare (ExporedModElt   ) (ExporedModElt   )   = EQ
---   compare (ModuleAnn s1    ) (ModuleAnn s2    )   = compare s1 s2
---   compare f1 f2                                   = on compare factToNum f1 f2
--- 
-factToNum (PhiVar _        ) = 0
-factToNum (PhiVarTy _      ) = 1
-factToNum (TypInst _ _ _   ) = 2
-factToNum (EltOverload _ _ ) = 3
-factToNum (Overload _  _   ) = 4
-factToNum (TCast _ _       ) = 5
-factToNum (VarAnn _        ) = 6
-factToNum (FieldAnn _      ) = 7
-factToNum (MethAnn _       ) = 8
-factToNum (StatAnn _       ) = 9
-factToNum (ConsAnn _       ) = 10
-factToNum (UserCast _      ) = 11
-factToNum (FuncAnn _       ) = 12
-factToNum (ClassAnn _      ) = 13
-factToNum (IfaceAnn _      ) = 14
-factToNum (ExporedModElt   ) = 15
-factToNum (ModuleAnn _     ) = 16
-
 
 instance Eq (Annot a SourceSpan) where 
   (Ann i1 s1 _) == (Ann i2 s2 _) = (i1,s1) == (i2,s2)

@@ -347,7 +347,7 @@ mkKeysId (Id a x) =  Id a $ keysStr ++ x
 mkKeysIdxId :: Id a -> Id a
 mkKeysIdxId (Id a x) =  Id a $ keysIdxStr ++ x
 
-mkCtorId l (Id a x) = Id l $ mkCtorStr x
+mkCtorId l (Id _ x) = Id l $ mkCtorStr x
 mkCtorStr x         = x ++ ctorStr
 
 nextStr    = "_NEXT_"
@@ -581,8 +581,8 @@ typeMembers _ (MemberVarDecl _ static (VarDecl l _ _))
     | static    = [ s | StatAnn  s@(StatSig _ _ _)  <- ann_fact l ]
     | otherwise = [ f | FieldAnn f@(FieldSig _ _ _) <- ann_fact l ]
 
-typeMembers t (MemberMethDecl l static _ _ _ )
-    | static    = [ s                  | StatAnn s@(StatSig _ _ _)  <- ann_fact l ]
+typeMembers _ (MemberMethDecl l static _ _ _ )
+    | static    = [ s | StatAnn s@(StatSig _ _ _)  <- ann_fact l ]
     | otherwise = [ m | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
 
 

@@ -1,18 +1,18 @@
 class Greeter {
 	/*@ a: string */
-	a;
+	               a = "" ;
 
 	/*@ b : number */
-	private b;
-	
+	private        b = 2;
+
 	/*@ c : number */ 
-	private c = 1;
+	private        c = 3;
 	
 	/*@ d : number */
-	public  d;
+	public         d = 4;
 	
-	/*@ static eee : { } */
-	private static eee = { };
+	/*@ static e : { } */
+	private static e = { };
 	
 	/*@ new (message: string) => void */
 	constructor(message) { }

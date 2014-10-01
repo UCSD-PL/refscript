@@ -22,7 +22,7 @@ module Language.Nano.SSA.SSAMonad (
    , SsaEnv
    , names
    , updSsaEnv 
-   , freshenAnnSSA
+   , freshenAnn
    , freshenIdSSA
    , findSsaEnv
    , extSsaEnv
@@ -42,7 +42,7 @@ module Language.Nano.SSA.SSAMonad (
 
    ) where 
 
-import           Control.Applicative                ((<$>))
+import           Control.Applicative                ((<$>),(<*>))
 import           Control.Monad.State                
 import           Control.Monad.Trans.Except
 
@@ -170,25 +170,27 @@ updSsaEnv ll x
   where
     l = srcPos ll
 
+-------------------------------------------------------------------------------------
 updSsaEnvLocal :: AnnSSA r -> Var r -> SSAM r (Var r)
+-------------------------------------------------------------------------------------
 updSsaEnvLocal l x 
   = do n     <- ssa_cnt <$> get
        let x' = mkSSAId l x n
        modify $ \st -> st {names = envAdds [(x, SI x')] (names st)} {ssa_cnt = 1 + n}
        return x'
 
-freshenAnnSSA :: AnnSSA r -> SSAM r (AnnSSA r)
-freshenAnnSSA (Ann _ l a)
+-------------------------------------------------------------------------------------
+freshenAnn :: IsLocated l => l -> SSAM r (AnnSSA r)
+-------------------------------------------------------------------------------------
+freshenAnn l
   = do n     <- ssa_ast_cnt <$> get 
        modify $ \st -> st {ssa_ast_cnt = 1 + n}
-       return $ Ann n l a
+       return $ Ann n (srcPos l) []
 
-freshenIdSSA :: IsLocated l => Id l -> SSAM r (Var r)
-freshenIdSSA (Id l x) 
-  = do n     <- ssa_ast_cnt <$> get 
-       modify $ \st -> st {ssa_ast_cnt = 1 + n}
-       return $ Id (Ann n (srcPos l) []) x
-
+-------------------------------------------------------------------------------------
+freshenIdSSA         :: IsLocated l => Id l -> SSAM r (Var r)
+-------------------------------------------------------------------------------------
+freshenIdSSA (Id l x) = Id <$> freshenAnn l <*> return x
 
 -------------------------------------------------------------------------------------
 findSsaEnv   :: Var r -> SSAM r (Maybe (Var r))

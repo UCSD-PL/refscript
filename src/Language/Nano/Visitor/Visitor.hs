@@ -138,7 +138,7 @@ visitStatement vis st = doVisit vis (vStatement vis st) ch st
 -------------------------------------------------------------------------------
 visitExpression :: NanoVisitor a b -> Expression a -> Expression a
 -------------------------------------------------------------------------------
-visitExpression vis e = doVisit vis (vExpression vis $ tracePP "vExpression" e) ch e
+visitExpression vis e = doVisit vis (vExpression vis e) ch e
   where 
     ch vis e = 
       let ve   = visitExpression    vis

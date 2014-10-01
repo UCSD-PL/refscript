@@ -113,7 +113,7 @@ errorUniqueTypeParams l       = mkErr l $ printf "Only unique type paramteres ar
 errorDownCast l t1 t2         = mkErr l $ printf "Downcast: %s => %s" (ppshow t1) (ppshow t2)
 errorClassExtends l x y t1 t2 = mkErr l $ printf "Type '%s' cannot extend type '%s'.\nType for '%s':\n%s\nType for '%s':\n%s" (ppshow x) (ppshow y) 
                                                   (ppshow x) (ppshow t1) (ppshow y) (ppshow t2)
-errorWidthSubtyping l es es'  = mkErr l $ printf "Invalid with subtyping between types with elements '%s' and '%s'." (ppshow es) (ppshow es')
+errorWidthSubtyping l es es'  = mkErr l $ printf "Invalid width subtyping between types with elements '%s' and '%s'." (ppshow es) (ppshow es')
 errorIncompMutTy l t t'       = mkErr l $ printf "Types '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
 errorIncompMutElt l t t'      = mkErr l $ printf "Elements '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
 errorConstrMissing l t        = mkErr l $ printf "Could not find constructor for type '%s'." (ppshow t)

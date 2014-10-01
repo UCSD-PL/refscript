@@ -115,7 +115,7 @@ tcNano :: PPR r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do  _       <- checkTypes γ 
-        (fs',_) <- tcStmts γ $ tracePP "SSA" fs
+        (fs',_) <- tcStmts γ fs
         fs''    <- patch fs'
         ast_cnt <- getAstCount
         return   $ p { code   = Src fs'' 
@@ -388,7 +388,7 @@ tcStmt γ ex@(ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   where
     tcSetProp rhsCtx = 
       do  opTy               <- setPropTy l (F.symbol f) <$> safeTcEnvFindTy l γ (builtinOpId BISetProp)
-          (FI _ [e1',e2'],_) <- tcNormalCall γ l BISetProp (FI Nothing [(ltracePP e1 "setprop-1" e1, Nothing), (ltracePP e2 "setprop-2" e2, rhsCtx)]) opTy
+          (FI _ [e1',e2'],_) <- tcNormalCall γ l BISetProp (FI Nothing [(e1, Nothing), (e2, rhsCtx)]) opTy
           return              $ (ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 e1' f) e2', Just γ)
 
 -- e
@@ -944,6 +944,7 @@ tcCallCase γ l fn ets ft
        θ               <- unifyTypesM (srcPos l) γ ts2 its2
        let (ts3,its3)   = mapPair (apply θ) (ts2, its2)
        es'             <- app (castM γ) es ts3 its3
+       -- es'             <- app (castM γ) es (ltracePP l "LHS" ts3) (ltracePP l "RHS" its3)
        return           $ (es', apply θ ot)
   where
     (es, ts)            = (fst <$> ets, snd <$> ets)

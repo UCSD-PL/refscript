@@ -234,15 +234,19 @@ envGetContextTypArgs :: Int -> CGEnv -> AnnTypeR -> [TVar] -> [RefType]
 -- 0), DO NOT attempt to compare that with the TypInst that might hide within
 -- the expression, cause those type instantiations might serve anothor reason
 -- (i.e. might be there for a separate instantiation).  
-envGetContextTypArgs _ _ _ []        = []
+envGetContextTypArgs _ _ _ [] = []
 envGetContextTypArgs n g a αs
-  = case tracePP ("envGetContextTypArgs " ++ ppshow n)  [i | TypInst m ξ' i <- ann_fact a, ξ' == cge_ctx g, n == m ] of 
-      [i] | tracePP (ppshow i ++ " == " ++ ppshow αs) (length i == length αs) -> i 
+  = case tys of
+      [i] | length i == length αs -> i 
       _                           -> die $ bugMissingTypeArgs $ srcPos a
+  where
+    tys = [i | TypInst m ξ' i <- ann_fact a
+             , ξ' == cge_ctx g
+             , n == m ] 
 
 
 ---------------------------------------------------------------------------------------
-envAddFresh :: (IsLocated l) => l -> (RefType, Assignability) -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 
+envAddFresh :: IsLocated l => l -> (RefType, Assignability) -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 
 ---------------------------------------------------------------------------------------
 envAddFresh l (t,a) g 
   = do x  <- freshId l

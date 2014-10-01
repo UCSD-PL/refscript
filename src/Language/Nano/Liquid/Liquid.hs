@@ -49,7 +49,7 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 -- import qualified Data.Foldable                      as FO
 -- import           Text.PrettyPrint.HughesPJ 
 
@@ -137,9 +137,12 @@ consNano p@(Nano {code = Src fs})
 initGlobalEnv  :: NanoRefType -> CGM CGEnv
 -------------------------------------------------------------------------------
 initGlobalEnv (Nano { code = Src s }) = 
-    freshenCGEnvM $ CGE nms bds grd ctx mod pth Nothing
+    do g <- freshenCGEnvM $ CGE nms bds grd ctx mod pth Nothing
+       -- special casing undefined ... 
+       envAdds "initGlobalEnv" [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly))] g
   where
-    nms       = E.envAdds (extras ++ visibleNames s) E.envEmpty
+    nms       = E.envAdds nms_ids E.envEmpty
+    nms_ids   = extras ++ visibleNames s
     extras    = [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly))]
     bds       = F.emptyIBindEnv
     grd       = []
@@ -408,7 +411,7 @@ consClassElt :: CGEnv -> IfaceDef F.Reft -> ClassElt AnnTypeR -> CGM ()
 ------------------------------------------------------------------------------------
 consClassElt g dfn (Constructor l xs body) 
   = case findAnnot of
-      Just ft -> do its <- ltracePP l "ctor" <$> cgCtorTys l i ft
+      Just ft -> do its <- cgCtorTys l i ft
                     g' <- envAdds "consClassElt-1" [(Loc (ann l) "this", (mkThis $ t_args dfn, WriteGlobal))] g
                     mapM_ (consFun1 l g' i xs body) its
       _       -> cgError $ unsupportedNonSingleConsTy $ srcPos l
@@ -722,7 +725,7 @@ consInstantiate :: (F.Symbolic b, PP a)
                 -> FuncInputs b -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
 consInstantiate l g fn ft ts xes 
-  = do  (_,its1,ot)     <- ltracePP l ("instantiateFTy " ++ ppshow fn) <$> instantiateFTy l g fn (ltracePP l (ppshow fn) ft)
+  = do  (_,its1,ot)     <- instantiateFTy l g fn ft
         ts1             <- idxMapFI (instantiateTy l g) 1 ts
         let (ts2, its2)  = balance ts1 its1
         let (su, ts3)    = renameBinds (toList its2) (toList xes)

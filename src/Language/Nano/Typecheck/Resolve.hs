@@ -247,12 +247,10 @@ flatten'' m st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten m st γ (d, tVar <$> vs)
 --    i.e. if the top-level is 'AssignsFields' then fields get Mutable
 --    (overriding their current mutability).
 --
---
 ---------------------------------------------------------------------------
 flattenType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
--- -- This case is for Mutability types 
-flattenType γ (TApp (TRef x) [] r)
+flattenType γ (TApp (TRef x) [] r)    -- This case is for Mutability types 
   = do  es      <- flatten Nothing False γ . (, []) =<< resolveRelNameInEnv γ x
         return   $ TCons es t_immutable r
 
@@ -260,13 +258,13 @@ flattenType γ (TApp (TRef x) (mut:ts) r)
   = do  es      <- flatten (Just $ toType mut) False γ . (,mut:ts) =<< resolveRelNameInEnv γ x
         return   $ TCons es (toType mut) r
 
-flattenType γ (TClass x)             = do
-    es                <- flatten' Nothing True γ =<< resolveRelNameInEnv γ x
-    return             $ TCons es mut fTop
+flattenType γ (TClass x)             
+  = do  es      <- flatten' Nothing True γ =<< resolveRelNameInEnv γ x
+        return   $ TCons es mut fTop
   where
-    mut                = t_readOnly
+    mut          = t_readOnly
 
-flattenType _ t = Just t
+flattenType _ t  = Just t
 
 
 -- | `weaken γ A B T..`: Given a relative type name @A@  distinguishes two

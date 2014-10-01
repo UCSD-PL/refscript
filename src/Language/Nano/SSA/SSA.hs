@@ -96,8 +96,8 @@ ssaFun l xs body
           withAssignability ReadOnly ros        $ 
             withAssignability WriteGlobal wgs   $ 
               withAssignability WriteLocal wls  $ 
-            do  arg         <- argId    <$> freshenAnnSSA l
-                ret         <- returnId <$> freshenAnnSSA l
+            do  arg         <- argId    <$> freshenAnn l
+                ret         <- returnId <$> freshenAnn l
                 setSsaEnv    $ extSsaEnv (arg: ret : xs) θ  -- Extend SsaEnv with formal binders
                 (_, body')   <- ssaStmts body               -- Transform function
                 setSsaEnv θ                                 -- Restore Outer SsaEnv
@@ -181,9 +181,9 @@ ssaStmt (WhileStmt l cnd body)
        let x2s     = [x2 | Just (SI x2) <- (`envFindTy` θ2) <$> xs]
        addAnn l    $ PhiVar x1s
        setSsaEnv θ1
-       l'         <- freshenAnnSSA l
+       l'         <- freshenAnn l
        let body''  = body' `splice` asgn l' (mkNextId <$> x1s) x2s
-       l''        <- freshenAnnSSA l
+       l''        <- freshenAnn l
        return      $ (t, asgn l'' x1s x0s `presplice` WhileStmt l cnd' body'')
     where
        asgn _  [] _   = Nothing
@@ -232,7 +232,7 @@ ssaStmt (ForInStmt l (ForInVar v) e b) =
         for_   <- forStmt
         ssaStmt $ BlockStmt l [init_, for_]
   where
-    fr_         = freshenAnnSSA
+    fr_         = freshenAnn
     fr          = fr_ l 
     biForInKeys = return $ builtinId "BIForInKeys"
 
@@ -334,7 +334,8 @@ ssaStmt (ClassStmt l n e is bd)
   = do  bd' <- mapM (ssaClassElt fields) $ ctor ++ bd
         return (True, ClassStmt l n e is bd')
   where
-    fields = [(i,v) | MemberVarDecl _ _ v@(VarDecl _ i _) <- bd] 
+    -- Only gather non-static fields
+    fields = [(i,v) | MemberVarDecl _ False v@(VarDecl _ i _) <- bd] 
     ctor   | null [() | Constructor{} <- bd ] = [Constructor l [] []]
            | otherwise                        = []
 
@@ -380,7 +381,7 @@ ctorVisitor l ms          = defaultVisitor { mStmt = ts }
     ts r@(ReturnStmt l _) = BlockStmt <$> fr <*> ((++ [r]) <$> mapM (ctorExit l) ms)
     ts r                  = return $ r
 
-    fr_                   = freshenAnnSSA
+    fr_                   = freshenAnn
     fr                    = fr_ l 
 
 ctorExit l s = ExprStmt <$> fr <*> 
@@ -392,7 +393,7 @@ ctorExit l s = ExprStmt <$> fr <*>
                              <*> (VarRef <$> fr 
                                          <*> ((`mkCtorId` s) <$> fr)))
   where
-    fr                    = freshenAnnSSA l 
+    fr                    = freshenAnn l 
 
 -------------------------------------------------------------------------------------
 ssaClassElt :: Data r => [(Id (AnnSSA r), VarDecl (AnnSSA r))] -> ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
@@ -422,7 +423,7 @@ ssaClassElt flds (Constructor l xs bd0)
                                               <*> (Just <$> (VarRef <$> fr_ l 
                                                                     <*> (Id <$> fr_ l 
                                                                             <*> return "undefined")))
-    fr_         = freshenAnnSSA
+    fr_         = freshenAnn
     fr          = fr_ l 
 
 

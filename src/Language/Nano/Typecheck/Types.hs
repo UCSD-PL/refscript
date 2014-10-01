@@ -272,6 +272,7 @@ strengthen                   :: F.Reftable r => RType r -> r -> RType r
 strengthen (TApp c ts r) r'  = TApp c ts  $ r' `F.meet` r 
 strengthen (TCons ts m r) r' = TCons ts m $ r' `F.meet` r 
 strengthen (TVar α r)    r'  = TVar α     $ r' `F.meet` r 
+strengthen (TFun a b c r) r' = TFun a b c $ r' `F.meet` r
 strengthen t _               = t                         
 
 -- NOTE: r' is the OLD refinement. 

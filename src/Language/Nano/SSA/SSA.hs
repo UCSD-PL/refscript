@@ -365,18 +365,18 @@ ssaAsgnStmt l1 l2 x@(Id l3 v) x' e'
 -------------------------------------------------------------------------------------
 ctorVisitor :: Data r => AnnSSA r -> [Id (AnnSSA r)] -> VisitorM (SSAM r) () () (AnnSSA r)
 -------------------------------------------------------------------------------------
-ctorVisitor l ms          = defaultVisitor { mStmt = ts }
+ctorVisitor l ms          = defaultVisitor { mStmt = ts } { mExpr = te }
   where
     ss                    = S.fromList $ F.symbol <$> ms
 
-    te _ ae@(AssignExpr la OpAssign (LDot ld (ThisRef _) s) e) 
+    te ae@(AssignExpr la OpAssign (LDot ld (ThisRef _) s) e)
       | F.symbol s `S.member` ss
                           = AssignExpr <$> fr_ la 
                                        <*> return OpAssign 
                                        <*> (LVar <$> fr_ ld <*> return (mkCtorStr s))
                                        <*> return e
       | otherwise         = return ae
-    te _ lv               = return lv
+    te lv                 = return lv
 
     ts r@(ReturnStmt l _) = BlockStmt <$> fr <*> ((++ [r]) <$> mapM (ctorExit l) ms)
     ts r                  = return $ r
@@ -405,9 +405,9 @@ ssaClassElt flds (Constructor l xs bd0)
             initStmts    <- mapM initStmt fldNms
             bd1          <- visitStmtsT (ctorVisitor l fldNms) () bd0
             exitStmts    <- mapM (ctorExit l) fldNms
-            (_, body3)   <- ssaStmts $ initStmts ++ bd1 ++ exitStmts  -- Transform function
+            (_, bd2)     <- ssaStmts $ initStmts ++ bd1 ++ exitStmts  -- Transform function
             setSsaEnv θ                                               -- Restore Outer SsaEnv
-            return        $ Constructor l xs body3
+            return        $ Constructor l xs bd2
   where
     fldNms      = fst <$> flds
     fldSet      = S.fromList $ F.symbol <$> fldNms

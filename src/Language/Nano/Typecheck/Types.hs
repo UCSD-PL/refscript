@@ -41,7 +41,7 @@ module Language.Nano.Typecheck.Types (
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
-  , isTVar, isTObj, isConstr, subtypeable, isTUndef, isTFun, fTop, orNull, isArr -- , tArr, rtArr
+  , isTVar, isTObj, isConstr, subtypeable, isTUndef, isTVoid, isTFun, fTop, orNull, isArr -- , tArr, rtArr
 
   -- * Element ops 
   , sameBinder, eltType, isStaticSig, nonStaticSig, nonConstrElt, mutability, baseType
@@ -685,6 +685,9 @@ isArr _                     = False
 
 isTUndef (TApp TUndef _ _)  = True
 isTUndef _                  = False
+
+isTVoid (TApp TVoid _ _ )   = True
+isTVoid _                   = False
 
 
 orNull t@(TApp TUn ts _)    | any isNull ts = t

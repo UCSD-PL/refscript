@@ -15,7 +15,6 @@ import qualified Data.Traversable                   as T
 
 import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (catMaybes, maybeToList, fromMaybe)
-import           Data.List                          (isPrefixOf)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -49,7 +48,7 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 -- import qualified Data.Foldable                      as FO
 -- import           Text.PrettyPrint.HughesPJ 

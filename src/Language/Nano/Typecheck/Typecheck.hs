@@ -116,7 +116,7 @@ tcNano :: PPR r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do  _       <- checkTypes γ 
-        (fs',_) <- tcStmts γ $ tracePP "" fs
+        (fs',_) <- tcStmts γ fs
         fs''    <- patch fs'
         ast_cnt <- getAstCount
         return   $ p { code   = Src fs'' 

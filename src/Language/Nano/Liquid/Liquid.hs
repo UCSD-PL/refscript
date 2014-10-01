@@ -49,9 +49,9 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
-import           Debug.Trace                        (trace)
-import qualified Data.Foldable                      as FO
-import           Text.PrettyPrint.HughesPJ 
+-- import           Debug.Trace                        (trace)
+-- import qualified Data.Foldable                      as FO
+-- import           Text.PrettyPrint.HughesPJ 
 
 type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -83,16 +83,16 @@ refTc cfg f p
   = do donePhase Loud "Generate Constraints"
        solveConstraints f cgi
   where
-    cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
+    cgi = generateConstraints cfg p
 
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
   
 
 
-ppCasts (Nano { code = Src fs }) = 
-  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
-                                , TCast _ c <- ann_fact a ] 
+-- ppCasts (Nano { code = Src fs }) = 
+--   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+--                                 , TCast _ c <- ann_fact a ] 
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -665,7 +665,7 @@ consDeadCode g l e t
   = do subType l e g t tBot
        return Nothing
     where
-       tBot = strengthen t $ F.bot $ rTypeR t
+       tBot = t `strengthen` F.bot (rTypeR t)
 
 -- | UpCast(x, t1 => t2)
 consUpCast g l x _ t2
@@ -708,7 +708,7 @@ consCall g l fn ets ft0
       withSingleton
         (\ft -> consInstantiate l g' fn ft ts xes)
         (cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs))
-        $ ltracePP l (ppshow fn)  [ lt | Overload cx t <- ann_fact l
+        [ lt | Overload cx t <- ann_fact l
              , cge_ctx g == cx
              , lt <- callSigs
              , toType t == toType lt ]

@@ -1,7 +1,6 @@
 module Language.Nano.Liquid.Alias (expandAliases) where
 
 import           Data.Maybe
-import           Data.List (splitAt)
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import           Data.Generics
@@ -119,7 +118,7 @@ expandRefType te = everywhere $ mkT $ tx
     tx t@(TApp (TRef (RN (QName l [] c))) ts r) = maybe t (applyTAlias l t c ts r) $ envFindTy c te
     tx t                                        = t
 
-applyTAlias l t c ts_ r a
+applyTAlias l t _ ts_ r a
   | (nt, ne) == (nα, nx) = {- tracePP "applyTAlias" $ -} (F.subst su $ S.apply θ $ al_body a) `strengthen` r
   | otherwise            = die $ errorBadTAlias l t nt ne nα nx
   where

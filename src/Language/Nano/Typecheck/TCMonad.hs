@@ -440,8 +440,8 @@ checkTypes γ = mapM_ (safeExtends γ) types
 --------------------------------------------------------------------------------
 safeExtends :: (IsLocated l, PPR r) => TCEnv r -> (l, IfaceDef r) -> TCM r ()
 --------------------------------------------------------------------------------
-safeExtends _ p@(l,    ID _ _ _ Nothing        _  ) = return ()
-safeExtends γ   (l, t@(ID _ c _ (Just (p, ts)) es)) = 
+safeExtends _ (_,    ID _ _ _ Nothing        _ ) = return ()
+safeExtends γ (l, t@(ID _ c _ (Just (p, ts)) _)) = 
     case flatten' Nothing False γ t of
       Just ms -> 
         case flatten Nothing False γ . (,ts) =<< resolveRelNameInEnv γ p of

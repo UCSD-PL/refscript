@@ -584,6 +584,7 @@ instance PP Assignability where
   pp WriteGlobal = text "WriteGlobal"
   pp ImportDecl  = text "ImportDecl"
   pp ReturnVar   = text "ReturnVar"
+  pp ThisVar     = text "ThisVar"
 
 instance PP IfaceKind where
   pp ClassKind      = pp "class" 
@@ -608,7 +609,7 @@ instance PP IndexKind where
 instance (PP r, F.Reftable r) => PP (TypeMember r) where
   pp (CallSig t)          =  text "call" <+> pp t 
   pp (ConsSig t)          =  text "new" <+> pp t
-  pp (IndexSig x i t)     =  brackets (pp i) <> text ":" <+> pp t
+  pp (IndexSig _ i t)     =  brackets (pp i) <> text ":" <+> pp t
   pp (FieldSig x m t)     =  text "field" <+> ppMut m <+> pp x <> text ":" <+> pp t 
   pp (MethSig x m t)      =  text "method" <+> ppMut m <+> pp x <> ppMeth t
   pp (StatSig x m t)      =  text "static" <+> ppMut m <+> pp x <> text ":" <+> pp t

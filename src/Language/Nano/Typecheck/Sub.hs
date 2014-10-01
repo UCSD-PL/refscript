@@ -16,12 +16,11 @@ module Language.Nano.Typecheck.Sub (convert, isSubtype, Related (..)) where
 
 import           Control.Applicative                ((<$>))
 
-import           Data.Generics
 import           Data.Tuple                         (swap)
 import           Data.Monoid
 import qualified Data.HashSet                       as S
-import           Data.List                          (sort, find)
-import           Data.Maybe                         (maybeToList, catMaybes, fromMaybe, isNothing)
+import           Data.List                          (find)
+import           Data.Maybe                         (fromMaybe, isNothing)
 import           Control.Monad.State
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
@@ -31,11 +30,10 @@ import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Nano.Annots
 import           Language.Nano.Types
-import           Language.Nano.Misc                 (setSnd4, mappendM)
+import           Language.Nano.Misc                 (mappendM)
 import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Language.Nano.Environment
-import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Errors

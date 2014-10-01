@@ -69,8 +69,9 @@ bugCallTo l x es              = mkErr l $ printf "BUG: Bug at call to '%s' with 
 bugMultipleCasts l e          = mkErr l $ printf "BUG: Found multple casts on expression '%s'" (ppshow e)
 bugNoCasts l e                = mkErr l $ printf "BUG: No casts found for expression '%s'" (ppshow e)
 bugNoAnnotForGlob l x         = mkErr l $ printf "BUG: No type annotation found for global variable '%s'" (ppshow x)
-bugCondExprSigParse l         = mkErr l $ printf "BUG: In parsing conditional expression signature"
-bugEltSubt l f1 f2            = mkErr l $ printf "BUG: Cannot subtype type members '%s' and '%s'" (ppshow f1) ( ppshow f2)
+bugCondExprSigParse l         = mkErr l $ printf "BUG: In parsing conditional expression signature."
+bugEltSubt l f1 f2            = mkErr l $ printf "BUG: Cannot subtype type members '%s' and '%s'." (ppshow f1) ( ppshow f2)
+bugSSAConstructorInit l       = mkErr l $ printf "BUG: Multiple definition of the same field." 
 
 bugClassDefNotFound l x       = mkErr l $ printf "BUG: Class definition for '%s' not found." (ppshow x)
 bugEnvFindTy l x              = mkErr l $ printf "BUG: envFindTy failed to find binding '%s'" (ppshow x)
@@ -91,8 +92,6 @@ errorWriteImmutable l x       = mkErr l $ printf "Cannot assign to local variabl
                                        ++ printf "Add a type annotation to indicate it is globally writable." 
 errorSSAUnboundId l x         = mkErr l $ printf "SSA: Identifier '%s' unbound" (ppshow x) 
 errorUpdateInExpr l e         = mkErr l $ printf "Unsupported: assignment in If-then-else expression %s" (ppshow e)
-
-errorUpdateInExpr l e         = mkErr l $ printf "Unsupported: assignment in If-then-else expression '%s'" (ppshow e)
 errorEffectInFieldDef l       = mkErr l $ printf "Cannot have effects in field initialization."
 errorUninitStatFld l x        = mkErr l $ printf "Uninitialized static member '%s' is not allowed." (ppshow x)
 

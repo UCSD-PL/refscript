@@ -63,7 +63,7 @@ import           Text.Parsec.Prim                        (stateUser)
 
 import           GHC.Generics
 
-import           Debug.Trace                             ( trace, traceShow)
+-- import           Debug.Trace                             ( trace, traceShow)
 
 dot        = T.dot        lexer
 plus       = T.symbol     lexer "+"
@@ -676,29 +676,12 @@ celtTypeBindings _                = (mapSnd eltType <$>) . go
                                   = [(x, e) | FieldAnn e <- ann_fact l] ++ 
                                     [(x, e) | StatAnn  e <- ann_fact l]
     go (MemberMethDecl l _ x _ _) = [(x, e) | MethAnn  e <- ann_fact l]
-    go _                          = []
 
-debugTyBinds p@(Nano {code = Src ss}) = trace msg p
-  where
-    xts = [(x, t) | (x, (t, _)) <- visibleNames ss ]
-    msg = unlines $ "debugTyBinds:" : (ppshow <$> xts)
+-- debugTyBinds p@(Nano {code = Src ss}) = trace msg p
+--   where
+--     xts = [(x, t) | (x, (t, _)) <- visibleNames ss ]
+--     msg = unlines $ "debugTyBinds:" : (ppshow <$> xts)
  
-
-
--------------------------------------------------------------------------------
-getQualifPool :: [Statement (SourceSpan, [Spec])] -> [(Id SourceSpan, RefType)]
--------------------------------------------------------------------------------
-getQualifPool a = concatMap ext $ everything (++) ([] `mkQ` f) a
-  where
-    ext (_, ss) = [ b | Bind b <- ss ]
-
-    f :: Statement (SourceSpan, [Spec]) -> [(SourceSpan, [Spec])]
-    f (FunctionStmt l _ _ _) = [l]
-    f (ClassStmt _ _ _ _ es) = [l | MemberMethDecl l _ _ _ _ <- es ]  
-    f (VarDeclStmt _ vds)    = [l | VarDecl l _ _ <- vds ]  
-    f _                      = []
-
-
 type PState = Integer
 
 instance PP Integer where

@@ -85,7 +85,7 @@ import           Language.Fixpoint.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -501,17 +501,27 @@ freshenModuleDefM g (a, m)
 subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l err g t1 t2 =
-  do t1'    <- addInvariant g t1  -- enhance LHS with invariants
-     let xs  =    [(symbolId l x,(t,a)) | (x, Just (t,a)) <- rNms t1' ++ rNms t2 ]
-              ++  [(symbolId l x,(t,a)) | (x,      (t,a)) <- E.envToList $ cge_names g ]
-     g'     <- envAdds "subtype" xs g
-     modify  $ \st -> st {cs = c g' (t1', t2) : (cs st)}
+  do  t1'    <- addInvariant g t1  -- enhance LHS with invariants
+      let xs  = [(symbolId l x,(t,a)) | (x, Just (t,a)) <- rNms t1' ++ rNms t2 ]
+      let ys  = [(symbolId l x,(t,a)) | (x,      (t,a)) <- E.envToList $ cgeAllNames g ]
+      --  g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++
+      --                                      ppshow "(" ++ ppshow t1 ++ " vs " ++ ppshow t2 ++ ppshow ")" ++ 
+      --                                      " Adding XS: " ++ ppshow (fst <$> xs) ++ 
+      --                                      " Adding YS: " ++ ppshow (fst <$> ys) ++
+      --                                      " FQ Binds : " ++ ppshow (cge_fenv g)
+      --                                     ) $ xs ++ ys) g
+      g'     <- envAdds "subtype" (xs ++ ys) g
+      modify  $ \st -> st {cs = c g' (t1', t2) : (cs st)}
   where
     c g      = uncurry $ Sub g (ci err l)
     rNms t   = mapSnd (`envFindTyWithAsgn` g) . dup <$> names t
     dup a    = (a,a)
     names    = foldReft rr []
     rr r xs  = F.syms r ++ xs
+
+
+cgeAllNames g@(CGE { cge_parent = Just g' }) = cgeAllNames g' `E.envUnion` cge_names g 
+cgeAllNames g@(CGE { cge_parent = Nothing }) = cge_names g
 
 
 -- FIXME: Restore this check !!!

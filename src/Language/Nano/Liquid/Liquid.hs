@@ -15,6 +15,7 @@ import qualified Data.Traversable                   as T
 
 import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (catMaybes, maybeToList, fromMaybe)
+import           Data.List                          (isPrefixOf)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -48,7 +49,8 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
+
 -- import qualified Data.Foldable                      as FO
 -- import           Text.PrettyPrint.HughesPJ 
 
@@ -115,12 +117,12 @@ applySolution = fmap . fmap . tx
     appSol s (F.RKvar k su) = F.RConc $ F.subst su $ M.lookupDefault F.PTop k s  
 
 --------------------------------------------------------------------------------
-generateConstraints     :: Config -> NanoRefType -> CGInfo 
+generateConstraints :: Config -> NanoRefType -> CGInfo 
 --------------------------------------------------------------------------------
 generateConstraints cfg pgm = getCGInfo cfg pgm $ consNano pgm
 
 --------------------------------------------------------------------------------
-consNano     :: NanoRefType -> CGM ()
+consNano :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano p@(Nano {code = Src fs}) 
   = do  g   <- initGlobalEnv p
@@ -135,34 +137,36 @@ consNano p@(Nano {code = Src fs})
 -------------------------------------------------------------------------------
 initGlobalEnv  :: NanoRefType -> CGM CGEnv
 -------------------------------------------------------------------------------
-initGlobalEnv (Nano { code = Src s }) = 
-    do g <- freshenCGEnvM $ CGE nms bds grd ctx mod pth Nothing
-       -- special casing undefined ... 
-       envAdds "initGlobalEnv" [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly))] g
+initGlobalEnv (Nano { code = Src s }) 
+  = do g <- freshenCGEnvM $ CGE nms bds grd ctx mod pth Nothing
+       -- FIXME : do we have to add everything here ????
+       envAdds "initGlobalEnv" extras g
+       -- envAdds "initGlobalEnv" (trace (ppshow (fst <$> filter (nonBI . fst) nms_ids)) $ filter (nonBI . fst) nms_ids) g
   where
     nms       = E.envAdds nms_ids E.envEmpty
     nms_ids   = extras ++ visibleNames s
-    extras    = [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly))]
+    extras    = [(Id (srcPos dummySpan) "undefined", 
+                  (TApp TUndef [] $ F.Reft (F.vv Nothing, [F.trueRefa]), ReadOnly))]
     bds       = F.emptyIBindEnv
     grd       = []
     mod       = scrapeModules s 
     ctx       = emptyContext
     pth       = AP $ QPath (srcPos dummySpan) []
 
-
 -------------------------------------------------------------------------------
 initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> CGM CGEnv
 -------------------------------------------------------------------------------
-initModuleEnv g n s = freshenCGEnvM $ CGE nms bds grd ctx mod pth (Just g)
+initModuleEnv g n s 
+  = do {-g' <- -} freshenCGEnvM $ CGE nms bds grd ctx mod pth (Just g)
+       -- envAdds "initGlobalEnv" (filter (nonBI . fst) nms_ids) g'
   where
-
-    nms       = E.envAdds (visibleNames s) E.envEmpty
+    nms       = E.envAdds nms_ids E.envEmpty
+    nms_ids   = visibleNames s
     bds       = cge_fenv g
     grd       = []
     mod       = cge_mod g
     ctx       = emptyContext
     pth       = extendAbsPath (cge_path g) n
-
 
 -- | `initFuncEnv l f i xs (αs, ts, t) g` 
 --
@@ -194,9 +198,6 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     varBinds  = zip (fmap ann <$> xs) (zip ts (repeat WriteLocal))
     argBind   = [(argId l, (argTy l ts (cge_names g), ReadOnly))]
     thisBind  = (\t -> (Id (srcPos dummySpan) "this", (t, WriteGlobal))) <$> maybeToList thisTO
-    
-
-
 
 
 -------------------------------------------------------------------------------
@@ -687,8 +688,13 @@ consDownCast g l x _ t2
 --     made explicit by this point.
 --
 --------------------------------------------------------------------------------
-consCall :: PP a => CGEnv -> AnnTypeR -> a -> FuncInputs (Expression AnnTypeR, Maybe RefType)
-                 -> RefType -> CGM (Maybe (Id AnnTypeR, CGEnv))
+consCall :: PP a 
+         => CGEnv 
+         -> AnnTypeR 
+         -> a 
+         -> FuncInputs (Expression AnnTypeR, Maybe RefType)
+         -> RefType 
+         -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
 
 --   1. Fill in @instantiateFTy@ to get a monomorphic instance of @ft@ 
@@ -716,15 +722,22 @@ balance (FI Nothing ts)   (FI (Just _) fs) = (FI Nothing ts, FI Nothing fs)
 balance ts                fs               = (ts, fs) 
 
 --------------------------------------------------------------------------------
-consInstantiate :: (F.Symbolic b, PP a) 
-                => AnnTypeR -> CGEnv -> a -> RefType -> FuncInputs RefType 
-                -> FuncInputs b -> CGM (Maybe (Id AnnTypeR, CGEnv))
+consInstantiate :: PP a
+                => AnnTypeR 
+                -> CGEnv 
+                -> a 
+                -> RefType 
+                -> FuncInputs RefType 
+                -> FuncInputs (Id AnnTypeR) 
+                -> CGM (Maybe (Id AnnTypeR, CGEnv))
 --------------------------------------------------------------------------------
 consInstantiate l g fn ft ts xes 
   = do  (_,its1,ot)     <- instantiateFTy l g fn ft
         ts1             <- idxMapFI (instantiateTy l g) 1 ts
         let (ts2, its2)  = balance ts1 its1
         let (su, ts3)    = renameBinds (toList its2) (toList xes)
+        -- _               <- zipWithM_ (subType l err g) (ltracePP l "LQ:LHS" $ toList ts2) 
+        --                                                (ltracePP l "LQ:RHS" ts3)
         _               <- zipWithM_ (subType l err g) (toList ts2) ts3
         Just           <$> envAddFresh l (F.subst su ot, WriteLocal) g
   where

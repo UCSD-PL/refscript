@@ -220,8 +220,10 @@ tcEnvFindTypeDefM l γ x
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-tcFun :: PPR r =>
-  TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r), Maybe (TCEnv r))
+tcFun :: PPR r 
+      => TCEnv r 
+      -> Statement (AnnSSA r) 
+      -> TCM r (Statement (AnnSSA r), Maybe (TCEnv r))
 -------------------------------------------------------------------------------
 tcFun γ (FunctionStmt l f xs body)
   = case tcEnvFindTy f γ of
@@ -234,15 +236,30 @@ tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
 -------------------------------------------------------------------------------
 tcFun1 :: (PPR r, IsLocated l, CallSite t) 
-       => TCEnv r -> (AnnSSA r) -> l -> [Id (AnnSSA r)] -> [Statement (AnnSSA r)] 
-       -> (t, ([TVar], Maybe (RType r), [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
+       => TCEnv r 
+       -> AnnSSA r 
+       -> l 
+       -> [Id (AnnSSA r)] 
+       -> [Statement (AnnSSA r)] 
+       -> (t, ([TVar], Maybe (RType r), [RType r], RType r)) 
+       -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
-tcFun1 γ l f xs body fty = tcFunBody γ' l body $ t
+tcFun1 γ l f xs body fty 
+  = do  body'           <- addReturnStmt l t body
+        tcFunBody γ' l body' t
   where
     γ' 					         = initFuncEnv γ f i αs s xs ts t arg body
     (i, (αs,s,ts,t))     = fty
     arg                  = [(argId $ srcPos l, (aTy, ReadOnly))]
-    aTy                  = argTy l ts $ tce_names γ 
+    aTy                  = argTy l ts $ tce_names γ
+
+
+addReturnStmt l t body | isTVoid t 
+                       = (body ++) . single <$> (`ReturnStmt` Nothing) 
+                                            <$> freshenAnn l
+                       | otherwise 
+                       = return body
+       
 
 
 -- FIXME: Check for mutability (the second part in the triplet)

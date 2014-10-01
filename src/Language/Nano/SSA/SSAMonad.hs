@@ -124,13 +124,9 @@ getSsaEnv   :: SSAM r (SsaEnv r)
 -------------------------------------------------------------------------------------
 getSsaEnv   = names <$> get 
 
-
 getAstCount = ssa_ast_cnt <$> get  
 
-
-ssaEnvIds = (unpack . snd <$>) . envToList
-  where
-    unpack (SI v) = v
+ssaEnvIds = envKeys
 
 -------------------------------------------------------------------------------------
 setSsaEnv    :: SsaEnv r -> SSAM r () 
@@ -138,7 +134,7 @@ setSsaEnv    :: SsaEnv r -> SSAM r ()
 setSsaEnv θ = modify $ \st -> st { names = θ } 
 
 -------------------------------------------------------------------------------------
-withAssignability :: Assignability -> [Var r] -> SSAM r a -> SSAM r a 
+withAssignability :: IsLocated l => Assignability -> [Id l] -> SSAM r a -> SSAM r a 
 -------------------------------------------------------------------------------------
 withAssignability m xs act
   = do zOld  <- assign <$> get

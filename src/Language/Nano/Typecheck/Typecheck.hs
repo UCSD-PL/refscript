@@ -18,6 +18,7 @@ import           Control.Arrow                      ((***))
 import qualified Data.HashMap.Strict                as M 
 import qualified Data.IntMap.Strict                 as I
 import           Data.Maybe                         (catMaybes, listToMaybe, maybeToList, fromMaybe)
+import           Data.List                          (nub)
 import           Data.Generics                   
 import qualified Data.Traversable                   as T
 
@@ -115,7 +116,7 @@ tcNano :: PPR r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do  _       <- checkTypes γ 
-        (fs',_) <- tcStmts γ fs
+        (fs',_) <- tcStmts γ $ tracePP "" fs
         fs''    <- patch fs'
         ast_cnt <- getAstCount
         return   $ p { code   = Src fs'' 
@@ -134,7 +135,7 @@ patch fs =
      return           $ (pa m <$>) <$> apply θ <$> fs
   where
     -- PV: Is sortNub important here?
-    pa m     (Ann i l fs)      = Ann i l $ fs ++ filter accepted (I.findWithDefault [] i m)
+    pa m     (Ann i l fs)      = Ann i l $ nub $ fs ++ filter accepted (I.findWithDefault [] i m)
     accepted (TypInst _ _ _  ) = True
     accepted (Overload _ _   ) = True
     accepted (EltOverload _ _) = True

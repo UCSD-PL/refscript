@@ -6,7 +6,6 @@ import Language.Nano.Liquid.Types
 import Language.Nano.Env
 import Language.Nano.Errors
 import Language.Nano.Locations
-import Language.Nano.Program
 import Language.ECMAScript3.Syntax
 import Data.List                (delete, nub)
 import Data.Maybe               (fromMaybe)

@@ -1,7 +1,6 @@
 module Language.Nano.Liquid.Alias (expandAliases) where
 
 import           Data.Maybe
-import           Data.List (splitAt)
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import           Data.Generics
@@ -45,13 +44,13 @@ expandCodeTAlias :: TAliasEnv RefType -> NanoRefType -> NanoRefType
 expandCodeTAlias te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
   where
     patch :: AnnType F.Reft -> AnnType F.Reft
-    patch (Ann ss f) = Ann ss (expandRefType te <$> f)
+    patch (Ann i ss f) = Ann i ss (expandRefType te <$> f)
 
 expandCodePred :: PAliasEnv -> NanoRefType -> NanoRefType
 expandCodePred te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
   where
     patch :: AnnType F.Reft -> AnnType F.Reft
-    patch (Ann ss f) = Ann ss (expandPred te <$> f)
+    patch (Ann i ss f) = Ann i ss (expandPred te <$> f)
 
 
 
@@ -119,7 +118,7 @@ expandRefType te = everywhere $ mkT $ tx
     tx t@(TApp (TRef (RN (QName l [] c))) ts r) = maybe t (applyTAlias l t c ts r) $ envFindTy c te
     tx t                                        = t
 
-applyTAlias l t c ts_ r a
+applyTAlias l t _ ts_ r a
   | (nt, ne) == (nα, nx) = {- tracePP "applyTAlias" $ -} (F.subst su $ S.apply θ $ al_body a) `strengthen` r
   | otherwise            = die $ errorBadTAlias l t nt ne nα nx
   where

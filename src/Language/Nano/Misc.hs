@@ -41,12 +41,15 @@ module Language.Nano.Misc (
 
   , dup
 
+  , mappendM
+
 ) where
 
 -- import           Control.Applicative                ((<$>))
 import           Control.Monad                        (liftM2, foldM)
 import           Data.Data
 import           Data.Maybe                           (isJust)
+import           Data.Monoid                          (Monoid, mappend)
 import           Data.Generics.Aliases
 import           Data.HashSet
 import           Data.Function                        (on)
@@ -219,3 +222,6 @@ withSingleton' _ f _  [x] = f x
 withSingleton' _ _ e  _   = e
 
 dup f1 f2 a = (f1 a,f2 a)
+
+mappendM :: (Monoid r, Monad m) => m r -> m r -> m r
+mappendM = liftM2 mappend

@@ -2,10 +2,10 @@
 class Point {
 
   /*@ x : number */
-  public x : number;
+  public x : number = 1;
 
   /*@ y : number */
-  public y : number;
+  public y : number = 2 ;
 
 }
 
@@ -13,7 +13,7 @@ class Point {
 class ColorPoint extends Point {
   
   /*@ c : string */
-  public c : string; 
+  public c : string = ""; 
 
 }
 

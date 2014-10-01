@@ -1,8 +1,8 @@
-/*@ abs :: ( f: ( number: top ) => number, x: number ) => number */
+/*@ abs :: ( f: ( top ) => number, x: number ) => number */
 function abs(f, x) {
     var r = x;
     if (x < 0) {
-        r = 0 - x;
+      r = 0 - x;
     }
     r = f(r);
     assert(r >= 0);

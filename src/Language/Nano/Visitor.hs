@@ -8,31 +8,30 @@ module Language.Nano.Visitor (
     Transformable (..)
   , transFmap
     
-  , Visitor (..)
+  , Visitor, VisitorM (..)
   , defaultVisitor
 
   , visitNano
+  , visitStmts
+  , visitStmtsT
   , foldNano
   ) where
 
+import           Data.Functor.Identity          (Identity)
 import           Data.Monoid
 import           Data.Traversable               (traverse)
-import           Control.Applicative            (Applicative (), (<$>), (<*>))
+import           Control.Applicative            ((<$>), (<*>))
 import           Control.Exception              (throw)
-import           Control.Monad.Trans.State      (modify, State, runState)
-import           Language.Fixpoint.Misc         (mapSnd)
+import           Control.Monad.Trans.State      (modify, runState, StateT, runStateT)
+import           Control.Monad.Trans.Class      (lift)
 import           Language.Nano.Misc             (mapSndM)
 import           Language.Nano.Errors
-import           Language.Nano.Typecheck.Types
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.Nano.Types
 import           Language.Nano.Locations
 import           Language.Nano.Annots
-import           Language.Nano.Program -- Eeks, cycles!
-import           Language.Nano.Typecheck.Types
-import           Language.ECMAScript3.Syntax 
--- import           Language.ECMAScript3.PrettyPrint
+import           Language.Nano.Program
 
 --------------------------------------------------------------------------------
 -- | Top-down visitors
@@ -43,13 +42,13 @@ import           Language.ECMAScript3.Syntax
 -- 2. write IsNano using `Visitor` 
 -- 3. write "everything" queries using `Visitor`
 
-data Visitor acc ctx b = Visitor {
+data VisitorM m acc ctx b = Visitor {
   -- | Context @ctx@ is built up in a "top-down" fashion but not across siblings
     ctxStmt :: ctx -> Statement b  -> ctx 
   , ctxExpr :: ctx -> Expression b -> ctx
   , ctxCElt :: ctx -> ClassElt b   -> ctx
 
-  -- | Transforms are allowd to access current @ctx@
+  -- | Transforms are allowed to access current @ctx@
   , txStmt  :: ctx -> Statement b  -> Statement b
   , txExpr  :: ctx -> Expression b -> Expression b
   , txCElt  :: ctx -> ClassElt b   -> ClassElt b
@@ -61,10 +60,17 @@ data Visitor acc ctx b = Visitor {
   , accExpr :: ctx -> Expression b -> acc
   , accCElt :: ctx -> ClassElt b   -> acc
   , accVDec :: ctx -> VarDecl  b   -> acc
+
+  -- | Execute external monad - to be run after transformation has been applied 
+  , mStmt   :: Statement b   -> m (Statement b)
+  , mExpr   :: Expression b  -> m (Expression b)
+
   }
+
+type Visitor = VisitorM Identity
                          
 ---------------------------------------------------------------------------------
-defaultVisitor :: Monoid acc => Visitor acc ctx b
+defaultVisitor :: (Monad m, Functor m, Monoid acc) => VisitorM m acc ctx b
 ---------------------------------------------------------------------------------
 defaultVisitor = Visitor {
     ctxStmt = \c _ -> c
@@ -79,16 +85,26 @@ defaultVisitor = Visitor {
   , accExpr = \_ _ -> mempty
   , accCElt = \_ _ -> mempty
   , accVDec = \_ _ -> mempty
+  , mStmt   = return
+  , mExpr   = return
   }           
 
 --------------------------------------------------------------------------------
 -- | Visitor API 
 --------------------------------------------------------------------------------
-foldNano :: (Monoid a, IsLocated b) => Visitor a ctx b -> ctx -> a -> Nano b r -> a
+foldNano :: (IsLocated b, Monoid a) => Visitor a ctx b -> ctx -> a -> Nano b r -> a
 foldNano v c a p = snd $ execVisitM v c a p 
 
-visitNano :: (Monoid a, IsLocated b) => Visitor a ctx b -> ctx -> Nano b r -> Nano b r
+visitNano :: (IsLocated b, Monoid a) =>   Visitor a ctx b -> ctx -> Nano b r -> Nano b r
 visitNano v c p = fst $ execVisitM v c mempty p
+ 
+visitStmts :: (IsLocated b, Monoid s) => Visitor s ctx b -> ctx -> [Statement b] -> ([Statement b], s)
+visitStmts v c p = runState (visitStmtsM v c p) mempty
+
+visitStmtsT :: (IsLocated b, Monoid s, Functor m, Monad m) 
+            => VisitorM m s ctx b -> ctx -> [Statement b] -> m [Statement b]
+visitStmtsT v c p = fst <$> runStateT (visitStmtsM v c p) mempty 
+
 
 --------------------------------------------------------------------------------
 -- | Implementing Visitors
@@ -96,35 +112,39 @@ visitNano v c p = fst $ execVisitM v c mempty p
 
 execVisitM v c a p = runState (visitNanoM v c p) a
 
-type VisitM acc = State acc 
+type VisitT m acc = StateT acc m
 
-accum :: (Monoid a) => a -> VisitM a ()
+accum :: (Monoid a, Monad m) => a -> VisitT m a ()
 accum = modify . mappend
 
 f <$$> x = traverse f x
 
 
-visitNanoM :: (Monoid a, IsLocated b) => Visitor a ctx b -> ctx -> Nano b r -> VisitM a (Nano b r) 
+visitNanoM :: (Monad m, Functor m, Monoid a, IsLocated b) 
+           => VisitorM m a ctx b -> ctx -> Nano b r -> VisitT m a (Nano b r) 
 visitNanoM v c p = do
   c'    <- visitSource v c (code p)
   return $ p { code = c' }
 
-visitSource :: (Monoid a, IsLocated b) => Visitor a ctx b -> ctx -> Source b -> VisitM a (Source b) 
-visitSource v c (Src ss) = Src <$> visitStmts v c ss 
+visitSource :: (Monad m, Functor m, Monoid a, IsLocated b) 
+            => VisitorM m a ctx b -> ctx -> Source b -> VisitT m a (Source b) 
+visitSource v c (Src ss) = Src <$> visitStmtsM v c ss 
 
-visitStmts   :: (Monoid a, IsLocated b) => Visitor a ctx b -> ctx -> [Statement b] -> VisitM a [Statement b] 
-visitStmts v c ss = mapM (visitStmt v c) ss
+visitStmtsM   :: (Monad m, Functor m, Monoid a, IsLocated b) 
+              => VisitorM m a ctx b -> ctx -> [Statement b] -> VisitT m a [Statement b] 
+visitStmtsM v c ss = mapM (visitStmtM v c) ss
 
 
-visitStmt   :: (Monoid a, IsLocated b) => Visitor a ctx b -> ctx -> Statement b -> VisitM a (Statement b) 
-visitStmt v = vS
+visitStmtM   :: (Monad m, Functor m, Monoid a, IsLocated b) 
+             => VisitorM m a ctx b -> ctx -> Statement b -> VisitT m a (Statement b) 
+visitStmtM v = vS
   where
     vE      = visitExpr v   
     vC      = visitCaseClause v   
     vI      = visitId   v   
-    vS c s  = accum acc >> step c' s' where c'   = ctxStmt v c s
-                                            s'   = txStmt  v c' s
-                                            acc  = accStmt v c' s
+    vS c s  = accum acc >> lift (mStmt v s') >>= step c' where c'   = ctxStmt v c s
+                                                               s'   = txStmt  v c' s
+                                                               acc  = accStmt v c' s
     step c (ExprStmt l e)           = ExprStmt     l <$> vE c e
     step c (BlockStmt l ss)         = BlockStmt    l <$> (vS c <$$> ss)
     step c (IfSingleStmt l b s)     = IfSingleStmt l <$> (vE c b) <*> (vS c s)
@@ -145,15 +165,16 @@ visitStmt v = vS
     step _ s                        = throw $ unimplemented l "visitStatement" s  where l = srcPos $ getAnnotation s
 
 
-visitExpr   ::  (Monoid a, IsLocated b) => Visitor a ctx b -> ctx -> Expression b -> VisitM a (Expression b) 
+visitExpr :: (IsLocated b, Monoid a, Functor m, Monad m) 
+          => VisitorM m a ctx b -> ctx -> Expression b -> VisitT m a (Expression b)
 visitExpr v = vE
    where
-     vS      = visitStmt       v   
+     vS      = visitStmtM       v   
      vI      = visitId         v   
      vL      = visitLValue     v   
-     vE c e  = accum acc >> step c' s' where c'  = ctxExpr v c  e
-                                             s'  = txExpr  v c' e
-                                             acc = accExpr v c' e 
+     vE c e  = accum acc >> lift (mExpr v s') >>= step c' where c'  = ctxExpr v c  e
+                                                                s'  = txExpr  v c' e
+                                                                acc = accExpr v c' e 
      step _ e@(BoolLit {})           = return e 
      step _ e@(IntLit {})            = return e 
      step _ e@(NullLit {})           = return e 
@@ -176,11 +197,12 @@ visitExpr v = vE
      step c (Cast l e)               = Cast l     <$> (vE c e)
      step _ e                        = throw $ unimplemented l "visitExpr " e  where l = srcPos $ getAnnotation e 
 
-visitClassElt :: (Monoid a, IsLocated b) => Visitor a ctx b -> ctx -> ClassElt b -> VisitM a (ClassElt b) 
+visitClassElt :: (Monad m, Functor m, Monoid a, IsLocated b) 
+              => VisitorM m a ctx b -> ctx -> ClassElt b -> VisitT m a (ClassElt b) 
 visitClassElt v = vCE 
   where
     vI       = visitId   v   
-    vS       = visitStmt v   
+    vS       = visitStmtM v   
     vD       = visitVarDecl v   
     vCE c ce = accum acc >> step c' ce' where c'     = ctxCElt v c  ce
                                               ce'    = txCElt  v c' ce
@@ -189,27 +211,32 @@ visitClassElt v = vCE
     step c (MemberVarDecl l b d)        = MemberVarDecl  l b <$> (vD c d) 
     step c (MemberMethDecl l b f xs ss) = MemberMethDecl l b <$> (vI c f)       <*> (vI c <$$> xs) <*> (vS c <$$> ss)
 
-visitFInit ::  (Monoid a, IsLocated b) => Visitor a ctx b -> ctx -> ForInit b -> VisitM a (ForInit b)
+visitFInit ::  (Monad m, Functor m, Monoid a, IsLocated b) 
+           => VisitorM m a ctx b -> ctx -> ForInit b -> VisitT m a (ForInit b)
 visitFInit v = step
   where
     step _ NoInit       = return NoInit
     step c (VarInit ds) = VarInit  <$> (visitVarDecl v c <$$> ds)
     step c (ExprInit e) = ExprInit <$> (visitExpr v c e)
 
-visitFIInit :: (Monoid a, IsLocated b) => Visitor a ctx b -> ctx -> ForInInit b -> VisitM a (ForInInit b)
+visitFIInit :: (Monad m, Functor m, Monoid a, IsLocated b) 
+            => VisitorM m a ctx b -> ctx -> ForInInit b -> VisitT m a (ForInInit b)
 visitFIInit v = step
   where
     step c (ForInVar x)  = ForInVar  <$> visitId v c x
     step c (ForInLVal l) = ForInLVal <$> visitLValue v c l  
 
-visitVarDecl :: (Monoid a, IsLocated b) =>  Visitor a ctx b -> ctx -> VarDecl b -> VisitM a (VarDecl b)
+visitVarDecl :: (Monad m, Functor m, Monoid a, IsLocated b) 
+             =>  VisitorM m a ctx b -> ctx -> VarDecl b -> VisitT m a (VarDecl b)
 visitVarDecl v c d@(VarDecl l x e)
   = accum (accVDec v c d) >> VarDecl l <$> (visitId v c x) <*> (visitExpr v c <$$> e)
 
-visitId :: (Monoid a, IsLocated b) => Visitor a ctx b -> ctx -> Id b -> VisitM a (Id b)
+visitId :: (Monad m, Functor m, Monoid a, IsLocated b) 
+        => VisitorM m a ctx b -> ctx -> Id b -> VisitT m a (Id b)
 visitId v c x = return (txId v c x)
 
-visitLValue :: (Monoid a, IsLocated b) => Visitor a ctx b -> ctx -> LValue b -> VisitM a (LValue b)
+visitLValue :: (Monad m, Functor m, Monoid a, IsLocated b) 
+            => VisitorM m a ctx b -> ctx -> LValue b -> VisitT m a (LValue b)
 visitLValue v c lv = step c (txLVal v c lv)
   where
     step c (LDot l e s)       = LDot     l <$> (visitExpr v c e) <*> return s
@@ -217,11 +244,12 @@ visitLValue v c lv = step c (txLVal v c lv)
     step _ lv@(LVar {})       = return lv
 
       
-visitCaseClause :: (Monoid a, IsLocated b) => Visitor a ctx b -> ctx -> CaseClause b -> VisitM a (CaseClause b)
+visitCaseClause :: (Monad m, Functor m, Monoid a, IsLocated b) 
+                => VisitorM m a ctx b -> ctx -> CaseClause b -> VisitT m a (CaseClause b)
 visitCaseClause v = step
   where
-    step c (CaseClause l e ss) = CaseClause l  <$> (visitExpr v c e)  <*> (visitStmt v c <$$> ss)
-    step c (CaseDefault l ss)  = CaseDefault l <$> (visitStmt v c <$$> ss)
+    step c (CaseClause l e ss) = CaseClause l  <$> (visitExpr v c e)  <*> (visitStmtM v c <$$> ss)
+    step c (CaseDefault l ss)  = CaseDefault l <$> (visitStmtM v c <$$> ss)
     
 
 

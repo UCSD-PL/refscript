@@ -9,7 +9,7 @@
 module Language.Nano.SSA.SSAMonad (
    
    -- * SSA Information
-     SsaInfo (..)
+     Var, SsaInfo (..)
    
    -- * SSA Monad
    , SSAM
@@ -21,10 +21,14 @@ module Language.Nano.SSA.SSAMonad (
    , SsaEnv
    , names
    , updSsaEnv 
+   , freshenAnn
+   , freshenIdSSA
    , findSsaEnv
    , extSsaEnv
    , setSsaEnv
    , getSsaEnv
+   , getAstCount
+   , ssaEnvIds
  
    -- * Access Annotations
    , addAnn, getAnns
@@ -37,46 +41,61 @@ module Language.Nano.SSA.SSAMonad (
 
    ) where 
 
-import           Control.Applicative                ((<$>))
+import           Control.Applicative                ((<$>),(<*>))
 import           Control.Monad.State                
 import           Control.Monad.Trans.Except
 
 import           Data.Maybe                         (fromMaybe) 
-import qualified Data.HashMap.Strict as M 
-import qualified Data.HashSet as S
-import qualified Language.Fixpoint.Types        as F
+import qualified Data.HashSet                       as S
+import qualified Data.IntSet                        as I
+import qualified Data.IntMap.Strict                 as IM
+import qualified Language.Fixpoint.Types            as F
 import           Language.Nano.Annots
 import           Language.Nano.Errors
 import           Language.Nano.Env
-import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Language.Nano.Program
 import           Language.Nano.Types
-import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Syntax
 
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc             
 
 -- import           Debug.Trace                        (trace)
 
 type SSAM r     = ExceptT Error (State (SsaState r))
 
-data SsaState r = SsaST { assign      :: Env Assignability        -- ^ assignability status 
-                        -- names to be deprecated
-                        , names       :: SsaEnv                   -- ^ current SSA names 
-                        
-                        , count       :: !Int                     -- ^ fresh index
-                        , anns        :: !(AnnInfo r)             -- ^ built up map of annots 
-                        
-                        , ssa_globs   :: S.HashSet SourceSpan     -- ^ Global definition locations
-                        , ssa_meas    :: S.HashSet F.Symbol       -- ^ Measures
-                        }
+data SsaState r = SsaST { 
+  -- 
+  -- ^ Assignability status 
+  --
+    assign        :: Env Assignability        
+  -- 
+  -- ^ Current SSA names 
+  --
+  , names         :: SsaEnv r                 
+  -- 
+  -- ^ Fresh index for SSA vars
+  --
+  , ssa_cnt       :: !Int                     
+  -- 
+  -- ^ Map of annotation
+  --
+  , anns          :: !(AnnInfo r)             
+  -- 
+  -- ^ Global definition ids
+  --
+  , ssa_globs     :: I.IntSet                 
+  -- 
+  -- ^ Measures
+  --
+  , ssa_meas      :: S.HashSet F.Symbol       
+  --
+  -- ^ Fresh AST index
+  --
+  , ssa_ast_cnt   :: !NodeId
+  }
 
-type SsaEnv     = Env SsaInfo 
-newtype SsaInfo = SI (Var) deriving (Eq)
-
-instance PP SsaInfo where
-  pp (SI i) =  pp i
+type SsaEnv r     = Env (SsaInfo r)
 
 
 -- -------------------------------------------------------------------------------------
@@ -91,22 +110,26 @@ instance PP SsaInfo where
 --        return  r
 
 -------------------------------------------------------------------------------------
-extSsaEnv    :: [Var] -> SsaEnv -> SsaEnv 
+extSsaEnv    :: [Var r] -> SsaEnv r -> SsaEnv r
 -------------------------------------------------------------------------------------
 extSsaEnv xs = envAdds [(x, SI x) | x <- xs]
 
 -------------------------------------------------------------------------------------
-getSsaEnv   :: SSAM r SsaEnv 
+getSsaEnv   :: SSAM r (SsaEnv r)
 -------------------------------------------------------------------------------------
 getSsaEnv   = names <$> get 
 
+getAstCount = ssa_ast_cnt <$> get  
+
+ssaEnvIds = envKeys
+
 -------------------------------------------------------------------------------------
-setSsaEnv    :: SsaEnv -> SSAM r () 
+setSsaEnv    :: SsaEnv r -> SSAM r () 
 ------------------------------------------------------------------------------------
 setSsaEnv θ = modify $ \st -> st { names = θ } 
 
 -------------------------------------------------------------------------------------
-withAssignability :: Assignability -> [Var] -> SSAM r a -> SSAM r a 
+withAssignability :: IsLocated l => Assignability -> [Id l] -> SSAM r a -> SSAM r a 
 -------------------------------------------------------------------------------------
 withAssignability m xs act
   = do zOld  <- assign <$> get
@@ -118,31 +141,50 @@ withAssignability m xs act
        zNew   = envFromList $ (, m) <$> xs 
 
 -------------------------------------------------------------------------------------
-getAssignability :: Var -> SSAM r Assignability 
+getAssignability :: Var r -> SSAM r Assignability 
 -------------------------------------------------------------------------------------
 getAssignability x = fromMaybe WriteLocal . envFindTy x . assign <$> get
 
 
 -------------------------------------------------------------------------------------
-updSsaEnv   :: SourceSpan -> Var -> SSAM r (Var) 
+updSsaEnv   :: AnnSSA r -> Var r -> SSAM r (Var r)
 -------------------------------------------------------------------------------------
-updSsaEnv l x 
+updSsaEnv ll x 
   = do mut <- getAssignability x
        case mut of
-         WriteLocal  -> updSsaEnvLocal l x
+         WriteLocal  -> updSsaEnvLocal ll x
          WriteGlobal -> return x
          ReadOnly    -> ssaError $ errorWriteImmutable l x 
          ReturnVar   -> ssaError $ errorWriteImmutable l x 
+         ThisVar     -> ssaError $ errorWriteImmutable l x 
          ImportDecl  -> ssaError $ errorWriteImmutable l x 
+  where
+    l = srcPos ll
 
+-------------------------------------------------------------------------------------
+updSsaEnvLocal :: AnnSSA r -> Var r -> SSAM r (Var r)
+-------------------------------------------------------------------------------------
 updSsaEnvLocal l x 
-  = do n     <- count <$> get
+  = do n     <- ssa_cnt <$> get
        let x' = mkSSAId l x n
-       modify $ \st -> st {names = envAdds [(x, SI x')] (names st)} {count = 1 + n}
+       modify $ \st -> st {names = envAdds [(x, SI x')] (names st)} {ssa_cnt = 1 + n}
        return x'
 
 -------------------------------------------------------------------------------------
-findSsaEnv   :: Var -> SSAM r (Maybe (Var))
+freshenAnn :: IsLocated l => l -> SSAM r (AnnSSA r)
+-------------------------------------------------------------------------------------
+freshenAnn l
+  = do n     <- ssa_ast_cnt <$> get 
+       modify $ \st -> st {ssa_ast_cnt = 1 + n}
+       return $ Ann n (srcPos l) []
+
+-------------------------------------------------------------------------------------
+freshenIdSSA         :: IsLocated l => Id l -> SSAM r (Var r)
+-------------------------------------------------------------------------------------
+freshenIdSSA (Id l x) = Id <$> freshenAnn l <*> return x
+
+-------------------------------------------------------------------------------------
+findSsaEnv   :: Var r -> SSAM r (Maybe (Var r))
 -------------------------------------------------------------------------------------
 findSsaEnv x 
   = do θ  <- names <$> get 
@@ -151,7 +193,7 @@ findSsaEnv x
          Nothing     -> return $ Nothing 
 
 
-addAnn l f = modify $ \st -> st { anns = inserts l f (anns st) }
+addAnn l f = modify $ \st -> st { anns = IM.insertWith (++) (ann_id l) [f] (anns st) }
 getAnns    = anns <$> get
 
 setGlobs g =  modify $ \st -> st { ssa_globs = g } 
@@ -168,10 +210,10 @@ ssaError = throwE
 
 
 -------------------------------------------------------------------------------------
-execute         :: SSAM r a -> Either (F.FixResult Error) a 
+execute         :: NanoBareR r -> SSAM r a -> Either (F.FixResult Error) a 
 -------------------------------------------------------------------------------------
-execute act 
-  = case runState (runExceptT act) initState of 
+execute p act 
+  = case runState (runExceptT act) (initState p) of 
       (Left err, _) -> Left $ F.Unsafe [err]
       (Right x, _)  -> Right x
 
@@ -179,6 +221,6 @@ execute act
 -- The state will be intact in the end. Just the result will be returned
 tryAction act = get >>= return . runState (runExceptT act)
 
-initState :: SsaState r
-initState = SsaST envEmpty envEmpty 0 M.empty S.empty S.empty 
+initState :: NanoBareR r -> SsaState r
+initState p = SsaST envEmpty envEmpty 0 IM.empty I.empty S.empty (max_id p)
 

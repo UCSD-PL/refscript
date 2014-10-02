@@ -72,6 +72,7 @@ bugNoAnnotForGlob l x         = mkErr l $ printf "BUG: No type annotation found 
 bugCondExprSigParse l         = mkErr l $ printf "BUG: In parsing conditional expression signature."
 bugEltSubt l f1 f2            = mkErr l $ printf "BUG: Cannot subtype type members '%s' and '%s'." (ppshow f1) ( ppshow f2)
 bugSSAConstructorInit l       = mkErr l $ printf "BUG: Multiple definition of the same field." 
+bugNestedCasts l e            = mkErr l $ printf "BUG: Nested casts on expression '%s'." (ppshow e)
 
 bugClassDefNotFound l x       = mkErr l $ printf "BUG: Class definition for '%s' not found." (ppshow x)
 bugEnvFindTy l x              = mkErr l $ printf "BUG: envFindTy failed to find binding '%s'" (ppshow x)
@@ -162,7 +163,7 @@ errorTAliasMismatch l t a      = mkErr l $ printf "Invalid type alias applicatio
 errorBadPAlias l p nx ne      = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne 
 errorLiquid l                 = mkErr l $ printf "Liquid Type Error" 
 errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%s'.\nArgument Types: %s\nFunction Type: %s" (ppshow fn) (ppshow ts) (ppshow t)
-errorMultipleCasts l cs       = mkErr l $ render $ text "Multiple Casts: " <+> (vcat (map pp cs)) 
+errorMultipleCasts l cs       = mkErr l $ printf "Multiple Casts: %s" (ppshow cs) 
 errorUnsafeExtends l          = mkErr l $ printf "Unsafe Extends"
 errorWellFormed l             = mkErr l $ printf "Well-formedness Error" 
  

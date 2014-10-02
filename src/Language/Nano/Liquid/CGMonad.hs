@@ -217,7 +217,12 @@ envGetContextCast g a
   = case [c | TCast cx c <- ann_fact a, cx == cge_ctx g] of
       [ ] -> CNo
       [c] -> c
-      cs  -> die $ errorMultipleCasts (srcPos a) cs
+      cs  | all isDeadCast cs -> head cs
+          | otherwise         -> die $ errorMultipleCasts (srcPos a) cs
+  where
+    isDeadCast CDead{} = True
+    isDeadCast _       = False
+
 
 
 ---------------------------------------------------------------------------------------
@@ -269,7 +274,7 @@ envAdds :: (IsLocated l, F.Symbolic l)
 ---------------------------------------------------------------------------------------
 envAdds _ xts' g
   = do xtas     <- zip xs . (`zip` as) <$> mapM (addInvariant g) ts'
-       is       <- catMaybes <$> forM xtas addFixpointBind
+       is       <- catMaybes           <$> forM xtas addFixpointBind
        _        <- forM xtas            $  \(x,(t,_)) -> addAnnot x x t
        return    $ g { cge_names        = E.envAdds xtas       $ cge_names g
                      , cge_fenv         = F.insertsIBindEnv is $ cge_fenv  g }
@@ -301,18 +306,14 @@ addInvariant g t
         if extraInvariants then (keyIn . instanceof . typeof t . invs) <$> get
                            else (        instanceof . typeof t . invs) <$> get
   where
-    strengthenOp t o r        | L.elem r (ofRef o) = t
-    strengthenOp t _ r        | otherwise          = strengthen t r
-
     -- | typeof 
     typeof t@(TApp tc _ o)  i = maybe t (strengthenOp t o . rTypeReft . val) $ M.lookup tc i
-    typeof t@(TFun a b c r) _ = TFun a b c $ typeofReft (F.symbol "function")
+    typeof t@(TFun a b c r) _ = TFun a b c typeofReft
     typeof t                _ = t
-
-    typeofReft                = F.Reft . (vv t,) . single . F.RConc . typeofExpr
+    strengthenOp t o r        | L.elem r (ofRef o) = t
+    strengthenOp t _ r        | otherwise          = strengthen t r
+    typeofReft                = F.Reft $ (vv t,) [F.RConc $ typeofExpr $ F.symbol "function" ]
     typeofExpr s              = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t]) (F.expr $ F.symbolText s)
-
-
 
     ofRef (F.Reft (s, as))    = (F.Reft . (s,) . single) <$> as
 
@@ -427,7 +428,7 @@ freshTyFun :: (IsLocated l) => CGEnv -> l -> RefType -> CGM RefType
 ---------------------------------------------------------------------------------------
 freshTyFun g l t
   | not (isTFun t)     = return t
-  | isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= wellFormed l g
+  | isTrivialRefType t = freshTy "freshTyFun" (toType t) >>= addInvariant g >>= wellFormed l g
   | otherwise          = return t
 
 freshTyVar g l t 
@@ -507,12 +508,12 @@ subType l err g t1 t2 =
   do  t1'    <- addInvariant g t1  -- enhance LHS with invariants
       let xs  = [(symbolId l x,(t,a)) | (x, Just (t,a)) <- rNms t1' ++ rNms t2 ]
       let ys  = [(symbolId l x,(t,a)) | (x,      (t,a)) <- E.envToList $ cgeAllNames g ]
-      --  g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++
-      --                                      ppshow "(" ++ ppshow t1 ++ " vs " ++ ppshow t2 ++ ppshow ")" ++ 
-      --                                      " Adding XS: " ++ ppshow (fst <$> xs) ++ 
-      --                                      " Adding YS: " ++ ppshow (fst <$> ys) ++
-      --                                      " FQ Binds : " ++ ppshow (cge_fenv g)
-      --                                     ) $ xs ++ ys) g
+      -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++
+      --                                     ppshow "(" ++ ppshow t1 ++ " vs " ++ ppshow t2 ++ ppshow ")" ++ 
+      --                                     " Adding XS: " ++ ppshow (fst <$> xs) ++ 
+      --                                     " Adding YS: " ++ ppshow (fst <$> ys) ++
+      --                                     " FQ Binds : " ++ ppshow (cge_fenv g)
+      --                                    ) $ xs ++ ys) g
       g'     <- envAdds "subtype" (xs ++ ys) g
       modify  $ \st -> st {cs = c g' (t1', t2) : (cs st)}
   where
@@ -799,28 +800,24 @@ splitWithMut g i _ μ2 (_,t1) (μf2,t2)
 ---------------------------------------------------------------------------------------
 bsplitC :: CGEnv -> a -> RefType -> RefType -> CGM [F.SubC a]
 ---------------------------------------------------------------------------------------
--- NOTE: removing addInvariant from RHS
+-- NOTE: addInvariant nonly needed in LHS
 bsplitC g ci t1 t2 = bsplitC' g ci <$> addInvariant g t1 <*> return t2
 
 bsplitC' g ci t1 t2
---   | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2
---   = F.subC (cge_fenv g) F.PTrue (r1 {F.sr_reft = fTop}) r2 Nothing [] ci
+  | F.isFunctionSortedReft r1 && F.isNonTrivialSortedReft r2
+  -- = F.subC (cge_fenv g) F.PTrue (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
+  = F.subC (cge_fenv g) p (r1 {F.sr_reft = typeofReft t1}) r2 Nothing [] ci
   | F.isNonTrivialSortedReft r2
   = F.subC (cge_fenv g) p r1 r2 Nothing [] ci
   | otherwise
   = []
   where
-    p  = F.pAnd $ cge_guards g
-    -- Use common sort for top or named type
-    (r1,r2) = sorts t1 t2
-
--- BUGGY!!!
---     sorts t1 t2@(TApp TTop _ _ )
---       = (rTypeSortedReft t2, rTypeSortedReft t2)
---     sorts (TApp (TRef _) _ _ ) t2@(TApp (TRef _) _ _ ) 
---       = (rTypeSortedReft t2, rTypeSortedReft t2)
-    sorts t1 t2
-      = (rTypeSortedReft t1, rTypeSortedReft t2)
+    p              = F.pAnd $ cge_guards g
+    (r1,r2)        = (rTypeSortedReft t1, rTypeSortedReft t2)
+    typeofReft t   = F.Reft $ (vv t,) [F.RConc $ typeofExpr (F.symbol "function") t ]
+    typeofExpr s t = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t]) 
+                                  (F.expr $ F.symbolText s)
+    vv             = rTypeValueVar
 
 instance PP (F.SortedReft) where
   pp (F.RR _ b) = pp b

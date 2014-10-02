@@ -83,6 +83,7 @@ refTc cfg f p
   = do donePhase Loud "Generate Constraints"
        solveConstraints f cgi
   where
+    -- cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
     cgi = generateConstraints cfg p
 
 nextPhase (Left l)  _    = return (A.NoAnn, l)
@@ -166,7 +167,6 @@ initModuleEnv g n s
     mod       = cge_mod g
     ctx       = emptyContext
     pth       = extendAbsPath (cge_path g) n
-
 
 -- | `initFuncEnv l f i xs (αs, ts, t) g` 
 --
@@ -293,7 +293,7 @@ consStmt g (IfSingleStmt l b s)
 consStmt g (IfStmt l e s1 s2) =
   mseq (safeEnvFindTy (builtinOpId BITruthy) g 
             >>= consCall g l "truthy" (FI Nothing [(e, Nothing)])) $ \(xe,ge) -> do
-    g1'      <- (`consStmt` s1) $ envAddGuard xe True  ge 
+    g1'      <- (`consStmt` s1) $ envAddGuard xe True ge 
     g2'      <- (`consStmt` s2) $ envAddGuard xe False ge 
     envJoin l g g1' g2'
 
@@ -312,7 +312,7 @@ consStmt g (ReturnStmt l Nothing)
        
 -- return e 
 consStmt g (ReturnStmt l (Just e))
-  = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ returnTy retTy True 
+  = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ returnTy retTy True
         return Nothing
   where
     retTy = envFindReturn g 
@@ -482,10 +482,8 @@ consExpr g (Cast_ l e) _ =
   case envGetContextCast g l of
     CDead e' t' -> consDeadCode g l e' t'
     CNo         -> mseq (consExpr g e Nothing) $ return . Just
-    CUp t t'    -> mseq (consExpr g e Nothing) $ \(x,g') -> Just <$> consUpCast   g' loc x t t'
-    CDn t t'    -> mseq (consExpr g e Nothing) $ \(x,g') -> Just <$> consDownCast g' loc x t t'
-  where
-    loc = srcPos l
+    CUp t t'    -> mseq (consExpr g e Nothing) $ \(x,g') -> Just <$> consUpCast   g' l x t t'
+    CDn t t'    -> mseq (consExpr g e Nothing) $ \(x,g') -> Just <$> consDownCast g' l x t t'
 
 -- | < t > e
 consExpr g ex@(Cast l e) _ =
@@ -537,9 +535,10 @@ consExpr g (InfixExpr l o e1 e2) _
 -- | e ? e1 : e2
 consExpr g (CondExpr l e e1 e2) to
   = do  opTy                      <- mkTy to <$> safeEnvFindTy (builtinOpId BICondExpr) g
-        tt'                       <- freshTyFun g l (rType tt)
+        tt'                       <- freshTyFun g l $ rType tt
         (v,g')                    <- mapFst (VarRef l) <$> envAddFresh l (tt', WriteLocal) g
         consCallCondExpr g' l BICondExpr (FI Nothing [(e,Nothing),(v,Nothing),(e1,rType <$> to),(e2,rType <$> to)]) opTy
+        -- consCallCondExpr g' l BICondExpr (FI Nothing ((,Nothing) <$> [e,v,e1,e2])) opTy
   where
     tt       = fromMaybe tTop to
     mkTy Nothing (TAll cv (TAll tv (TFun Nothing [B c_ tc, B t_ _, B x_ xt, B y_ yt] o r))) = 
@@ -759,12 +758,11 @@ consCallCondExpr g l fn ets ft0
                 , cge_ctx g == cx
                 , lt <- callSigs
                 , toType t == toType lt ] of 
-
         [ft] -> consInstantiate l g' fn ft ts xes
         _    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
   where
     callSigs      = extractCall g ft0
-
+  
 ----------------------------------------------------------------------------------
 instantiateTy :: AnnTypeR -> CGEnv -> Int -> RefType -> CGM RefType
 ----------------------------------------------------------------------------------
@@ -807,8 +805,8 @@ consScan f g (FI Nothing xs)
           _              -> return $ Nothing 
   where
     step (ys, g) (x,y) = fmap (mapFst (:ys))   <$> f g x y
+ 
 
-    
 ---------------------------------------------------------------------------------
 consCondExprArgs :: SourceSpan 
                  -> CGEnv 

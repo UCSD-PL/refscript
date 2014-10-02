@@ -1,5 +1,4 @@
 
-{-# LANGUAGE TypeSynonymInstances   #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE DeriveFunctor          #-}
@@ -85,7 +84,7 @@ instance Monoid CastDirection where
 
 instance (PP r, F.Reftable r) => PP (Cast r) where
   pp CNo         = text "No cast"
-  pp (CDead e _) = text "Dead code:" <+> pp e
+  pp (CDead e t) = text "Dead code:" <+> pp e <+> text "::" <+> pp t
   pp (CUp t1 t2) = text "<" <+> pp t1 <+> text "UP" <+> pp t2 <+> text ">"
   pp (CDn t1 t2) = text "<" <+> pp t1 <+> text "DN" <+> pp t2 <+> text ">"
 

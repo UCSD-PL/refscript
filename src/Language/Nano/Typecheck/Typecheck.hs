@@ -634,14 +634,14 @@ tcExpr γ ex@(Cast l e) _ =
                 [ ct | UserCast ct <- ann_fact l ]
 
 -- | Subtyping induced cast
-tcExpr γ (Cast_ a e) _
-  = do  (e', t)                   <- tcExpr γ e Nothing
+--
+--   The existing cast has been added by another context.
+--
+tcExpr γ (Cast_ a e) to
+  = do  (e', t)    <- tcExpr γ e to
         case e' of
-          Cast_ (Ann i _ fs') e'' -> return (Cast_ (Ann i l $ fs ++ fs') e'', t)
-          _                       -> do a'    <- freshenAnn a
-                                        return $ (Cast_ a' e', t)
-  where
-    Ann _ l fs  = a
+          Cast_ {} -> tcError $ bugNestedCasts (srcPos a) e 
+          _        -> (,t) . (`Cast_` e') <$> freshenAnn a
  
 -- | e.f
 tcExpr γ e@(DotRef _ _ _) _
@@ -855,6 +855,8 @@ tcNormalCall γ l fn etos ft0
                             addSubst l θ
                             tcCallCase γ l fn ets ft
          Nothing      -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) $ toLists ets
+                         -- do tcWrap $ tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) $ toLists ets
+                         --    return (fst <$> ets, tNull)
   where
     toList (FI to ts)  = maybeToList to ++ ts
     toLists f          = (toList $ fst <$> f, toList $ snd <$> f)

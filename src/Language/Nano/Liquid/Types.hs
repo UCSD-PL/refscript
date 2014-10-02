@@ -422,7 +422,12 @@ isBaseRType _             = False
 ------------------------------------------------------------------------------------------
 isTrivialRefType :: RefType -> Bool
 ------------------------------------------------------------------------------------------
-isTrivialRefType t     = foldReft (\r -> (f r &&)) True t
+-- | The only allowed top-level refinement of a function type is the
+--   ('function') tag, So ignore this for this check.
+isTrivialRefType (TFun a b c r) = isTrivialRefType' (TFun a b c fTop)
+isTrivialRefType t              = isTrivialRefType' t
+
+isTrivialRefType' t     = foldReft (\r -> (f r &&)) True t
   where 
     f (F.Reft (_,ras)) = null ras
 

@@ -72,6 +72,7 @@ bugNoAnnotForGlob l x         = mkErr l $ printf "BUG: No type annotation found 
 bugCondExprSigParse l         = mkErr l $ printf "BUG: In parsing conditional expression signature."
 bugEltSubt l f1 f2            = mkErr l $ printf "BUG: Cannot subtype type members '%s' and '%s'." (ppshow f1) ( ppshow f2)
 bugSSAConstructorInit l       = mkErr l $ printf "BUG: Multiple definition of the same field." 
+bugNestedCasts l e            = mkErr l $ printf "BUG: Nested casts on expression '%s'." (ppshow e)
 
 bugClassDefNotFound l x       = mkErr l $ printf "BUG: Class definition for '%s' not found." (ppshow x)
 bugEnvFindTy l x              = mkErr l $ printf "BUG: envFindTy failed to find binding '%s'" (ppshow x)

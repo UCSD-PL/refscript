@@ -387,6 +387,17 @@ addCast ξ e c = addAnn i fact >> wrapCast loc fact e
     loc       = ann    $ getAnnotation e
     fact      = TCast ξ c
 
+-- addCast ξ e c@(CDead ε t) =
+--   case deadCasts of
+--     [ ]                    -> addC ξ e c
+--     [TCast ξ (CDead ε' _)] -> addC ξ (remDeadCasts e) $ CDead (catError ε ε') t
+--     cs                     -> die $ errorMultipleCasts (srcPos e) cs
+--   where
+--     deadCasts = [ c | c@(TCast ξ' (CDead _ _)) <- ann_fact $ getAnnotation e, ξ == ξ' ]
+--     remDeadCasts = fmap (\a -> a { ann_fact = filter noDeadCast (ann_fact a) })
+--     noDeadCast (TCast ξ' (CDead _ _)) = ξ /= ξ'
+--     noDeadCast _                      = True
+
 wrapCast _ f (Cast_ (Ann i l fs) e) = Cast_ <$> freshenAnn (Ann i l (f:fs)) <*> return e
 wrapCast l f e                      = Cast_ <$> freshenAnn (Ann (-1) l [f]) <*> return e
 
@@ -396,6 +407,13 @@ freshenAnn (Ann _ l a)
        modify $ \st -> st {tc_ast_cnt = 1 + n}
        return $ Ann n l a
 
+-- addC ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
+--   where
+--     loc       = srcPos e
+--     fact      = TCast ξ c
+-- 
+-- wrapCast _ f (Cast_ (Ann l fs) e) = Cast_ (Ann l (f:fs)) e
+-- wrapCast l f e                    = Cast_ (Ann l [f])    e
 
 
 -- | tcFunTys: "context-sensitive" function signature
@@ -406,20 +424,6 @@ tcFunTys :: (PPRSF r, F.Subable (RType r), F.Symbolic s, PP a)
 tcFunTys l f xs ft = either tcError return $ funTys l f xs ft 
 
 
--- --------------------------------------------------------------------------------
--- tcMethTys :: (PPRSF r, F.Subable (RType r), PP a) 
---           => AnnSSA r -> a -> (Mutability, RType r)
---           -> TCM r [(Int, ([TVar], Maybe (RType r), [RType r], RType r))]
--- --------------------------------------------------------------------------------
--- tcMethTys l f (m,t) 
---   = zip [0..] <$> mapM (methTys l f) (bkAnd t)
--- 
--- 
--- methTys l f ft0
---   = case remThisBinding ft0 of
---       Nothing          -> tcError $ errorNonFunction (srcPos l) f ft0 
---       Just (vs,s,bs,t) -> return  $ (vs,s,b_type <$> bs,t)
--- 
 
 -- --------------------------------------------------------------------------------
 -- tcCtorTys :: (PPRSF r, F.Subable (RType r), PP a) 

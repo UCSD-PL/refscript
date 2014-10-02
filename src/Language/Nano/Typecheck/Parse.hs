@@ -187,7 +187,7 @@ bUnP        = parenNullP (bareTypeNoUnionP `sepBy1` plus) toN >>= mkU
     mkU xs  = flattenUnions . TApp TUn xs <$> topP
     toN     = (tNull:)
 
-
+-- FIXME: disallow functions in unions?
 -- | `bareTypeNoUnionP` parses a type that does not contain a union at the top-level.
 bareTypeNoUnionP = try funcSigP <|> (bareAllP $ bareAtomP bbaseP)
 
@@ -254,18 +254,11 @@ bareAtomP p
 ----------------------------------------------------------------------------------
 bbaseP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
--- ORIG bbaseP 
--- ORIG   =  try (TVar <$> tvarP)                  -- A
--- ORIG  <|> try objLitP                           -- {f1: T1; ... ; fn: Tn} 
--- ORIG  -- FIXME
--- ORIG  -- Disabling array in this form cause there is no room for mutability ...
--- ORIG  -- <|> try (rtArr <$> arrayP)                -- Array<T>
--- ORIG  <|> try (TApp <$> tConP <*> bareTyArgsP)  -- List[A], Tree[A,B] etc...
- 
 bbaseP 
   =  try objLitP                       -- {f1: T1; ... ; fn: Tn} 
  <|> (TApp <$> tConP <*> bareTyArgsP)  -- List[A], Tree[A,B] etc...
  
+
 
 ----------------------------------------------------------------------------------
 objLitP :: Parser (Reft -> RefType)
@@ -447,7 +440,6 @@ classDeclP = do
     vs <- option [] $ angles $ sepBy tvarP comma
     pr <- optionMaybe extendsP
     return (id, (vs, pr))
-
 
 
 ---------------------------------------------------------------------------------

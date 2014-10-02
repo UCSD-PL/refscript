@@ -83,6 +83,7 @@ refTc cfg f p
   = do donePhase Loud "Generate Constraints"
        solveConstraints f cgi
   where
+    -- cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
     cgi = generateConstraints cfg p
 
 nextPhase (Left l)  _    = return (A.NoAnn, l)
@@ -292,7 +293,7 @@ consStmt g (IfSingleStmt l b s)
 consStmt g (IfStmt l e s1 s2) =
   mseq (safeEnvFindTy (builtinOpId BITruthy) g 
             >>= consCall g l "truthy" (FI Nothing [(e, Nothing)])) $ \(xe,ge) -> do
-    g1'      <- (`consStmt` s1) $ envAddGuard xe True  ge 
+    g1'      <- (`consStmt` s1) $ envAddGuard xe True ge 
     g2'      <- (`consStmt` s2) $ envAddGuard xe False ge 
     envJoin l g g1' g2'
 
@@ -311,7 +312,7 @@ consStmt g (ReturnStmt l Nothing)
        
 -- return e 
 consStmt g (ReturnStmt l (Just e))
-  = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ returnTy retTy True 
+  = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ returnTy retTy True
         return Nothing
   where
     retTy = envFindReturn g 
@@ -481,8 +482,8 @@ consExpr g (Cast_ l e) _ =
   case envGetContextCast g l of
     CDead e' t' -> consDeadCode g l e' t'
     CNo         -> mseq (consExpr g e Nothing) $ return . Just
-    CUp t t'    -> mseq (consExpr g e Nothing) $ \(x,g) -> Just <$> consUpCast   g l x t t'
-    CDn t t'    -> mseq (consExpr g e Nothing) $ \(x,g) -> Just <$> consDownCast g l x t t'
+    CUp t t'    -> mseq (consExpr g e Nothing) $ \(x,g') -> Just <$> consUpCast   g' l x t t'
+    CDn t t'    -> mseq (consExpr g e Nothing) $ \(x,g') -> Just <$> consDownCast g' l x t t'
 
 -- | < t > e
 consExpr g ex@(Cast l e) _ =
@@ -536,7 +537,8 @@ consExpr g (CondExpr l e e1 e2) to
   = do  opTy                      <- mkTy to <$> safeEnvFindTy (builtinOpId BICondExpr) g
         tt'                       <- freshTyFun g l $ rType tt
         (v,g')                    <- mapFst (VarRef l) <$> envAddFresh l (tt', WriteLocal) g
-        consCallCondExpr g' l BICondExpr (FI Nothing ((,Nothing) <$> [e,v,e1,e2])) opTy
+        consCallCondExpr g' l BICondExpr (FI Nothing [(e,Nothing),(v,Nothing),(e1,rType <$> to),(e2,rType <$> to)]) opTy
+        -- consCallCondExpr g' l BICondExpr (FI Nothing ((,Nothing) <$> [e,v,e1,e2])) opTy
   where
     tt       = fromMaybe tTop to
     mkTy Nothing (TAll cv (TAll tv (TFun Nothing [B c_ tc, B t_ _, B x_ xt, B y_ yt] o r))) = 
@@ -750,15 +752,17 @@ consInstantiate l g fn ft ts xes
 -- Special casing conditional expression call here because we'd like the
 -- arguments to be typechecked under a different guard each.
 consCallCondExpr g l fn ets ft0 
-  = mseq (consCondExprArgs (srcPos l) consExpr g ets) $ \(xes, g') -> do
+  = mseq (consCondExprArgs (srcPos l) g ets) $ \(xes, g') -> do
       ts <- T.mapM (`safeEnvFindTy` g') xes
-      withSingleton
-        (\ft -> consInstantiate l g' fn ft ts xes)
-        (cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs))
-        [ lt | Overload cx t <- ann_fact l, cge_ctx g == cx, lt <- callSigs, toType t == toType lt ]
+      case [ lt | Overload cx t <- ann_fact l
+                , cge_ctx g == cx
+                , lt <- callSigs
+                , toType t == toType lt ] of 
+        [ft] -> consInstantiate l g' fn ft ts xes
+        _    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
   where
     callSigs      = extractCall g ft0
-
+  
 ----------------------------------------------------------------------------------
 instantiateTy :: AnnTypeR -> CGEnv -> Int -> RefType -> CGM RefType
 ----------------------------------------------------------------------------------
@@ -794,41 +798,41 @@ consScan f g (FI (Just x) xs)
   where
     step (ys, g) (x,y) = fmap (mapFst (:ys))   <$> f g x y
 
-consScan f g (FI Nothing xs) = 
-    do  z <- fmap (mapFst reverse) <$> consFold step ([], g) xs
+consScan f g (FI Nothing xs) 
+  = do  z <- fmap (mapFst reverse) <$> consFold step ([], g) xs
         case z of 
           Just (xs', g') -> return $ Just (FI Nothing xs', g')
           _              -> return $ Nothing 
   where
     step (ys, g) (x,y) = fmap (mapFst (:ys))   <$> f g x y
+ 
 
-    
 ---------------------------------------------------------------------------------
-consCondExprArgs :: (F.Symbolic c, IsLocated c, PP b, PP c) 
-                 => SourceSpan 
-                 -> (CGEnv -> Expression AnnTypeR -> b -> CGM (Maybe (c, CGEnv))) 
+consCondExprArgs :: SourceSpan 
                  -> CGEnv 
-                 -> FuncInputs (Expression AnnTypeR,b) 
-                 -> CGM (Maybe (FuncInputs c, CGEnv))
+                 -> FuncInputs (Expression AnnTypeR, Maybe RefType) 
+                 -> CGM (Maybe (FuncInputs (Id AnnTypeR), CGEnv))
 ---------------------------------------------------------------------------------
-consCondExprArgs _ f g (FI Nothing [(c,tc),(t,tt),(x,tx),(y,ty)]) =
-  do  z <- fmap (mapFst reverse)
-            <$> do zc <- f g c tc
-                   case zc of
-                     Just (b, g') -> fmap (mapFst (++ [b]))
-                                      <$> consFold (step b) ([],g') 
-                                            [(t,tt,True),(x,tx,True),(y,ty,False)]
-                                      -- The thrid argument for the first
-                                      -- element is phony - it doesn't even
-                                      -- matter
-                     _            -> return Nothing 
-      case z of 
-        Just (xs', g'') -> return $ Just (FI Nothing xs', g'')
-        _              -> return $ Nothing 
-  where
-    step c (ys, g) (x,y,b) = fmap (mapFst (:ys) . mapSnd envPopGuard) <$> f (envAddGuard c b g) x y
+consCondExprArgs l g (FI Nothing [(c,tc),(t,tt),(x,tx),(y,ty)])
+  = mseq (consExpr g c tc) $ \(c_,gc) ->
+      mseq (consExpr gc t tt) $ \(t_,gt) -> 
+        (fmap (mapSnd envPopGuard) <$> consExpr (envAddGuard c_ True gt) x tx) >>= \case
+          Just (x_, gx) -> 
+              (fmap (mapSnd envPopGuard) <$> consExpr (envAddGuard c_ False gx) y ty) >>= \case
+                Just (y_, gy) -> return $ Just (FI Nothing [c_,t_,x_,y_], gy)
+                Nothing       -> case ty of 
+                                   Just tty -> do (y_, gy') <- envAddFresh l (tty, WriteLocal) gx
+                                                  return    $ Just (FI Nothing [c_,t_,x_,y_], gy')
+                                   Nothing  -> return $ Nothing
+          Nothing -> 
+              (fmap (mapSnd envPopGuard) <$> consExpr (envAddGuard c_ False gt) y ty) >>= \case
+                Just (y_, gy) -> case tx of 
+                                   Just ttx -> do (x_, gx') <- envAddFresh l (ttx, WriteLocal) gy
+                                                  return    $ Just (FI Nothing [c_,t_,x_,y_], gx')
+                                   Nothing  -> return $ Nothing
+                Nothing       -> return $ Nothing 
 
-consCondExprArgs l _ _ _ = cgError $ impossible l "consCondExprArgs"
+consCondExprArgs l _ _ = cgError $ impossible l "consCondExprArgs"
     
 
 ---------------------------------------------------------------------------------

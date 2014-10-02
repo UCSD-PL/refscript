@@ -15,8 +15,9 @@ import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
 import           Control.Arrow                      ((***))
 
-import qualified Data.HashMap.Strict                as M 
+import qualified Data.IntMap.Strict                 as I
 import           Data.Maybe                         (catMaybes, listToMaybe, maybeToList, fromMaybe)
+import           Data.List                          (nub)
 import           Data.Generics                   
 import qualified Data.Traversable                   as T
 
@@ -35,7 +36,6 @@ import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Parse 
-import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Lookup
@@ -68,14 +68,14 @@ verifyFile cfg fs
   = parseNanoFromFiles fs >>= \case 
       Left  l -> return (NoAnn, l)
       Right x -> ssaTransform x >>= \case
-                   Left  l -> return (NoAnn, F.Unsafe [l])
+                   Left  l -> return (NoAnn, l)
                    Right y -> typeCheck cfg (expandAliases y) >>= \case
                                 Left  l -> unsafe l
                                 Right z -> return $ safe cfg z
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
-                 forM_ errs (putStrLn . ppshow) 
-                 return $ (NoAnn, F.Unsafe errs)
+                 -- forM_ errs (putStrLn . ppshow) 
+                 return $ (NoAnn, errs)
 
 safe cfg (Nano {code = Src fs}) = (NoAnn, failCasts (noFailCasts cfg) fs)
     where
@@ -94,13 +94,13 @@ safe cfg (Nano {code = Src fs}) = (NoAnn, failCasts (noFailCasts cfg) fs)
 -------------------------------------------------------------------------------
 castErrors :: PPR r => AnnType r -> [Error] 
 -------------------------------------------------------------------------------
-castErrors (Ann l facts) = downErrors
+castErrors (Ann _ l facts) = downErrors
   where 
-    downErrors           = [errorDownCast l t1 t2 | TCast _ (CDn t1 t2) <- facts]
+    downErrors             = [errorDownCast l t1 t2 | TCast _ (CDn t1 t2) <- facts]
 
 
 -------------------------------------------------------------------------------
-typeCheck :: PPR r => Config -> NanoSSAR r -> IO (Either [Error] (NanoTypeR r))
+typeCheck :: PPR r => Config -> NanoSSAR r -> IO (Either (F.FixResult Error) (NanoTypeR r))
 -------------------------------------------------------------------------------
 typeCheck cfg pgm = do 
   v <- V.getVerbosity
@@ -114,17 +114,14 @@ typeCheck cfg pgm = do
 tcNano :: PPR r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
-  -- adding undefined into scope
-  = conflateTypeMembers <$> addUndefined γ >>= \case
-      Left es  -> manyEs es 
-      Right γ' -> do (fs',_)   <- tcStmts γ' fs
-                     fs''      <- patch fs'
-                     return     $ p { code = Src fs'' }
-    where
-        γ          = initGlobalEnv p
-        manyEs []     = tcError $ impossible (srcPos dummySpan) "tcNano manyEs"
-        manyEs [e]    = tcError e
-        manyEs (e:es) = tcError e >> manyEs es
+  = do  _       <- checkTypes γ 
+        (fs',_) <- tcStmts γ fs
+        fs''    <- patch fs'
+        ast_cnt <- getAstCount
+        return   $ p { code   = Src fs'' 
+                     , max_id = ast_cnt }
+  where
+    γ = initGlobalEnv p
 
 
 -- | Patch annotation on the AST
@@ -136,7 +133,8 @@ patch fs =
   do (m,θ)           <- (,) <$> getAnns <*> getSubst
      return           $ (pa m <$>) <$> apply θ <$> fs
   where
-    pa m (Ann l fs)            = Ann l $ sortNub $ fs ++ filter accepted (M.lookupDefault [] l m)
+    -- PV: Is sortNub important here?
+    pa m     (Ann i l fs)      = Ann i l $ nub $ fs ++ filter accepted (I.findWithDefault [] i m)
     accepted (TypInst _ _ _  ) = True
     accepted (Overload _ _   ) = True
     accepted (EltOverload _ _) = True
@@ -153,7 +151,8 @@ initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
 initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
-    nms       = envFromList $ visibleNames ss
+    nms       = envFromList $ extras ++ visibleNames ss
+    extras    = [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly))]
     mod       = scrapeModules ss 
     ctx       = emptyContext
     pth       = AP $ QPath (srcPos dummySpan) []
@@ -176,7 +175,7 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod ctx pth parent
 ---------------------------------------------------------------------------------------
 initModuleEnv :: (PPR r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnSSA r)] -> TCEnv r
 ---------------------------------------------------------------------------------------
-initModuleEnv γ n s = TCE nms mod ctx pth parent 
+initModuleEnv γ n s = TCE nms mod ctx pth parent
   where
     nms       = envFromList $ visibleNames s
     mod       = tce_mod γ
@@ -216,20 +215,15 @@ tcEnvFindTypeDefM l γ x
       Nothing -> tcError $ bugClassDefNotFound (srcPos l) x
 
 
-addUndefined γ = return $ tcEnvAdds [(F.symbol "undefined",(t, ReadOnly))] γ 
-  where
-    t          = TApp TUndef [] fTop
-
-
-
-
 -------------------------------------------------------------------------------
 -- | TypeCheck Function 
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-tcFun :: PPR r =>
-  TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r), Maybe (TCEnv r))
+tcFun :: PPR r 
+      => TCEnv r 
+      -> Statement (AnnSSA r) 
+      -> TCM r (Statement (AnnSSA r), Maybe (TCEnv r))
 -------------------------------------------------------------------------------
 tcFun γ (FunctionStmt l f xs body)
   = case tcEnvFindTy f γ of
@@ -242,18 +236,30 @@ tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
 -------------------------------------------------------------------------------
 tcFun1 :: (PPR r, IsLocated l, CallSite t) 
-       => TCEnv r -> (AnnSSA r) -> l -> [Id (AnnSSA r)] -> [Statement (AnnSSA r)] 
-       -> (t, ([TVar], Maybe (RType r), [RType r], RType r)) -> TCM r [Statement (AnnSSA r)]
+       => TCEnv r 
+       -> AnnSSA r 
+       -> l 
+       -> [Id (AnnSSA r)] 
+       -> [Statement (AnnSSA r)] 
+       -> (t, ([TVar], Maybe (RType r), [RType r], RType r)) 
+       -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
-tcFun1 γ l f xs body fty = tcFunBody γ' l body $ t
+tcFun1 γ l f xs body fty 
+  = do  body'           <- addReturnStmt l t body
+        tcFunBody γ' l body' t
   where
     γ' 					         = initFuncEnv γ f i αs s xs ts t arg body
     (i, (αs,s,ts,t))     = fty
     arg                  = [(argId $ srcPos l, (aTy, ReadOnly))]
-    aTy                  = argTy l ts $ tce_names γ 
+    aTy                  = argTy l ts $ tce_names γ
 
-tcMethSingleSig γ l f xs body (i, _,ft) 
-  = tcFun1 γ l f xs body (i, ft)
+
+addReturnStmt l t body | isTVoid t 
+                       = (body ++) . single <$> (`ReturnStmt` Nothing) 
+                                            <$> freshenAnn l
+                       | otherwise 
+                       = return body
+       
 
 
 -- FIXME: Check for mutability (the second part in the triplet)
@@ -278,51 +284,71 @@ tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
 
 ---------------------------------------------------------------------------------------
 tcClassElt :: PPR r 
-          => TCEnv r -> Id (AnnSSA r) -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
+          => TCEnv r -> IfaceDef r -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
 --
--- FIXME: 1. Check for void return type for constructor
---        2. Use tcMethSingleSig instead of tcFun1
+--  * Setting properties for 'this':
 --
-tcClassElt γ _ (Constructor l xs body) 
-  = case [ c | ConsAnn c  <- ann_fact l ] of
-      [ConsSig ft]  -> do its      <- tcCtorTys l i ft
-                          body'    <- foldM (tcFun1 γ l i xs) body its
-                          return    $ Constructor l xs body'
-      _             -> tcError $ unsupportedNonSingleConsTy $ srcPos l
-  where i   = Id l "constructor"
+--    - Assignability : WriteGlobal
+--    - Mutability    : Mutable
+--
+tcClassElt γ dfn (Constructor l xs body) 
+  = case findAnnot of
+      Just ft -> 
+          do its         <- tcFunTys l i xs ft
+             body'       <- foldM (tcFun1 γ' l i xs) body its
+             return       $ Constructor l xs body'
+      _       -> tcError  $ unsupportedNonSingleConsTy $ srcPos l
+  where 
+    findAnnot             = case [ c | ConsAnn c  <- ann_fact l ] of  
+                              [ConsSig ft] -> Just $ ft
+                              []           -> Just $ TFun Nothing [] tVoid fTop
+                              _            -> Nothing
+    i                     = Id l "constructor"
+    γ'                    = tcEnvAdd (F.symbol "this") (mkThis $ t_args dfn, ThisVar) γ
+    mkThis (_:αs)         = TApp (TRef rn) (t_mutable : map tVar αs) fTop
+    rn                    = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
-tcClassElt γ cid (MemberVarDecl l static (VarDecl l1 x eo))
+
+tcClassElt γ dfn (MemberVarDecl l static (VarDecl l1 x eo))
   = case anns of 
-      []  ->  tcError       $ errorClassEltAnnot (srcPos l1) cid x
+      []  ->  tcError     $ errorClassEltAnnot (srcPos l1) (t_name dfn) x
       fs  ->  case eo of
-                Just e     -> do (FI _ [e'],_) <- tcNormalCall γ l1 "field init" (FI Nothing [(e, Nothing)]) $ ft fs
-                              -- Using a function call to "init" to keep track of 
-                              -- overloading on field initialization
-                                 return         $ (MemberVarDecl l static (VarDecl l1 x $ Just e'))
-                Nothing    -> return            $ (MemberVarDecl l static (VarDecl l1 x Nothing))
+                Just e   -> do (FI _ [e'],_) <- tcNormalCall γ l1 "field init" (FI Nothing [(e, Nothing)]) $ ft fs
+                            -- Using a function call to "init" to keep track of 
+                            -- overloading on field initialization
+                               return         $ (MemberVarDecl l static (VarDecl l1 x $ Just e'))
+                Nothing  -> return            $ (MemberVarDecl l static (VarDecl l1 x Nothing))
   where
-    anns | static    = [ s | StatAnn  s <- ann_fact l1 ]
-         | otherwise = [ f | FieldAnn f <- ann_fact l1 ]
-    ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> flds
+    anns | static         = [ s | StatAnn  s <- ann_fact l1 ]
+         | otherwise      = [ f | FieldAnn f <- ann_fact l1 ]
+    ft flds               = mkAnd $ catMaybes $ mkInitFldTy <$> flds
 
---
---  Currently we allow a single type annotation that can be an overloaded
---  function though. Proceed as follows:
---    1. Get all overloads
---    2. Check the body for each one of them
---
---  FIXME: check for mutability (purity)
---
-tcClassElt γ cid (MemberMethDecl l static i xs body) 
+-- | Static method
+tcClassElt γ dfn (MemberMethDecl l True i xs body) 
   = case anns of 
-      [mt]  -> do imts    <- tcMethTys l i mt
-                  body'  <- foldM (tcMethSingleSig γ l i xs) body imts
-                  return  $ MemberMethDecl l static i xs body'
-      _    -> tcError     $ errorClassEltAnnot (srcPos l) cid i
+      [t]  -> do its     <- tcFunTys l i xs t
+                 body'   <- foldM (tcFun1 γ l i xs) body its
+                 return   $ MemberMethDecl l True i xs body'
+      _    -> tcError     $ errorClassEltAnnot (srcPos l) (t_name dfn) i
   where
-    anns | static    = [ (m, t) | StatAnn (StatSig _ m t)  <- ann_fact l ]
-         | otherwise = [ (m, t) | MethAnn (MethSig _ m t)  <- ann_fact l ]
+    anns                  = [ t | StatAnn (StatSig _ _ t)  <- ann_fact l ]
+
+-- | Instance method
+tcClassElt γ dfn (MemberMethDecl l False i xs bd) 
+  = case specs of 
+      [(_,t,γ')] -> 
+          do its         <- tcFunTys l i xs t
+             bd'         <- foldM (tcFun1 γ' l i xs) bd its
+             return       $ MemberMethDecl l False i xs bd'
+      _    -> tcError     $ errorClassEltAnnot (srcPos l) (t_name dfn) i
+  where
+    specs                 = [ (m, t, gg $ ofType m) | MethAnn (MethSig _ m t)  <- ann_fact l ]
+
+    gg m                  = tcEnvAdd (F.symbol "this") (mkThis m $ t_args dfn, ThisVar) γ
+
+    mkThis m (_:αs)       = TApp (TRef rn) (m : map tVar αs) fTop
+    rn                    = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
 
 --------------------------------------------------------------------------------
@@ -437,15 +463,10 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 -- | class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 tcStmt γ (ClassStmt l x e is ce) 
   = do  dfn      <- tcEnvFindTypeDefM l γ rn
-        case safeExtends (srcPos l) γ dfn of 
-          Nothing -> (, Just γ) . ClassStmt l x e is <$> mapM (tcClassElt (newEnv $ t_args dfn) x) ce
-          Just e  -> tcError e
+        ms       <- mapM (tcClassElt γ dfn) ce
+        return    $ (ClassStmt l x e is ms, Just γ)
   where
-    tVars   αs    = [ tVar   α | α <- αs ] 
-    tyBinds αs    = [(tVarId α, (tVar α, WriteGlobal)) | α <- αs]
     rn            = RN $ QName (srcPos l) [] (F.symbol x)
-    mkThis αs     = TApp (TRef rn) (tVars αs) fTop
-    newEnv αs     = tcEnvAdd (F.symbol "this") (mkThis αs, WriteGlobal) $ tcEnvAdds (tyBinds αs) γ
 
 -- | module M { ... } 
 tcStmt γ (ModuleStmt l n body) 
@@ -613,13 +634,14 @@ tcExpr γ ex@(Cast l e) _ =
                 [ ct | UserCast ct <- ann_fact l ]
 
 -- | Subtyping induced cast
-tcExpr γ (Cast_ l e) _
-  = do  (e', t)                 <- tcExpr γ e Nothing
+tcExpr γ (Cast_ a e) _
+  = do  (e', t)                   <- tcExpr γ e Nothing
         case e' of
-          Cast_ (Ann _ fs') e'' -> return (Cast_ (Ann loc (fs ++ fs')) e'', t)
-          _                     -> return (Cast_ l e', t)
+          Cast_ (Ann i _ fs') e'' -> return (Cast_ (Ann i l $ fs ++ fs') e'', t)
+          _                       -> do a'    <- freshenAnn a
+                                        return $ (Cast_ a' e', t)
   where
-    Ann loc fs  = l
+    Ann _ l fs  = a
  
 -- | e.f
 tcExpr γ e@(DotRef _ _ _) _
@@ -829,7 +851,7 @@ tcNormalCall γ l fn etos ft0
   = do ets            <- T.mapM (uncurry $ tcExprWD γ) etos
        z              <- resolveOverload γ l fn ets ft0
        case z of 
-         Just (θ, ft) -> do addAnn (srcPos l) $ Overload (tce_ctx γ) ft
+         Just (θ, ft) -> do addAnn (ann_id l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
                             tcCallCase γ l fn ets ft
          Nothing      -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) $ toLists ets
@@ -849,8 +871,12 @@ tcNormalCall γ l fn etos ft0
 --     subtype check (this is what tcCallCaseTry does).
 --
 ------------------------------------------------------------------------------------------
-resolveOverload :: (PPR r, IsLocated l, PP a) 
-                => TCEnv r -> l -> a -> FuncInputs (ExprSSAR r, RType r) -> RType r 
+resolveOverload :: (PPR r, PP a) 
+                => TCEnv r 
+                -> AnnSSA r 
+                -> a 
+                -> FuncInputs (ExprSSAR r, RType r) 
+                -> RType r 
                 -> TCM r (Maybe (RSubst r, RType r)) 
 ------------------------------------------------------------------------------------------
 -- | A function signature is compatible if:
@@ -889,8 +915,13 @@ resolveOverload γ l fn ets ft
 --   The monad state is completely reversed after this function returns, thanks 
 --   to `runMaybeM`. We don't need to reverse the action of `instantiateFTy`.
 ----------------------------------------------------------------------------------
-tcCallCaseTry :: (PPR r, PP a, IsLocated l) 
-              => TCEnv r -> l -> a -> FuncInputs (RType r) -> RType r -> TCM r (Maybe (RSubst r))
+tcCallCaseTry :: (PPR r, PP a) 
+              => TCEnv r 
+              -> AnnSSA r 
+              -> a 
+              -> FuncInputs (RType r) 
+              -> RType r 
+              -> TCM r (Maybe (RSubst r))
 ----------------------------------------------------------------------------------
 tcCallCaseTry γ l fn ts ft 
   = runMaybeM $ 
@@ -914,8 +945,12 @@ balance ts                fs               = (ts, fs)
 
 
 ----------------------------------------------------------------------------------
-tcCallCase :: (IsLocated l, PP a, PPRSF r) 
-           => TCEnv r -> l -> a -> FuncInputs (ExprSSAR r, RType r) -> RType r 
+tcCallCase :: (PP a, PPRSF r) 
+           => TCEnv r 
+           -> AnnSSA r 
+           -> a 
+           -> FuncInputs (ExprSSAR r, RType r) 
+           -> RType r 
            -> TCM r (FuncInputs (ExprSSAR r), RType r)
 ----------------------------------------------------------------------------------
 tcCallCase γ l fn ets ft  
@@ -926,30 +961,37 @@ tcCallCase γ l fn ets ft
        θ               <- unifyTypesM (srcPos l) γ ts2 its2
        let (ts3,its3)   = mapPair (apply θ) (ts2, its2)
        es'             <- app (castM γ) es ts3 its3
+       -- es'             <- app (castM γ) es (ltracePP l "LHS" ts3) (ltracePP l "RHS" its3)
        return           $ (es', apply θ ot)
   where
     (es, ts)            = (fst <$> ets, snd <$> ets)
-    app f (FI (Just a) as) (FI (Just b) bs) (FI (Just c) cs) = FI <$> (Just <$> f a b c) <*> zipWith3M f as bs cs
-    app f (FI _        as) (FI _        bs) (FI _        cs) = FI Nothing <$> zipWith3M f as bs cs
+    app f (FI (Just a) as) (FI (Just b) bs) (FI (Just c) cs) = FI <$> (Just <$> f a b c) 
+                                                                  <*> zipWith3M f as bs cs
+    app f (FI _        as) (FI _        bs) (FI _        cs) = FI <$> return Nothing     
+                                                                  <*> zipWith3M f as bs cs
 
 ----------------------------------------------------------------------------------
-instantiateTy :: (IsLocated a, PPR r) => a -> IContext -> Int -> RType r -> TCM r (RType r)
+instantiateTy :: PPR r => AnnSSA r -> IContext -> Int -> RType r -> TCM r (RType r)
 ----------------------------------------------------------------------------------
-instantiateTy l ξ i = uncurry (freshTyArgs (srcPos l) i ξ) . bkAll 
+instantiateTy l ξ i = uncurry (freshTyArgs l i ξ) . bkAll 
 
 ----------------------------------------------------------------------------------
-instantiateFTy :: (Data r, PP r, PP a, F.Reftable r, IsLocated l) 
-            => l -> IContext -> a -> RType r -> TCM r ([TVar], FuncInputs (RType r), RType r)
+instantiateFTy :: (PPR r, PP a) 
+               => AnnSSA r 
+               -> IContext 
+               -> a 
+               -> RType r 
+               -> TCM r ([TVar], FuncInputs (RType r), RType r)
 ----------------------------------------------------------------------------------
 instantiateFTy l ξ fn ft 
-  = do t'              <- freshTyArgs (srcPos l) 0 ξ αs t 
+  = do t'              <- freshTyArgs l 0 ξ αs t 
        maybe err return $ bkFunNoBinds t'
     where
        (αs, t)          = bkAll ft
        err = tcError    $ errorNonFunction (srcPos l) fn ft
 
 ----------------------------------------------------------------------------------
-envJoin :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)
+envJoin :: PPR r => AnnSSA r -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)
 ----------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
@@ -962,7 +1004,7 @@ envJoin l γ (Just γ1) (Just γ2) =
 
 
 ----------------------------------------------------------------------------------
-envLoopJoin :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
+envLoopJoin :: PPR r => AnnSSA r -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
 ----------------------------------------------------------------------------------
 envLoopJoin _ γ Nothing   = return $ Just γ
 envLoopJoin l γ (Just γl) = 
@@ -974,40 +1016,50 @@ envLoopJoin l γ (Just γl) =
       substNames θ γ = γ { tce_names = apply θ (tce_names γ) }
 
 ----------------------------------------------------------------------------------
-getPhiType :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan -> TCM r (RType r, Assignability)
+getPhiType :: PPR r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r -> TCM r (RType r, Assignability)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (tcEnvFindTyWithAgsn x γ1, tcEnvFindTyWithAgsn x γ2) of
-    (Just (t1,a1), Just (t2,_ )) -> getSubst >>= ((,a1) <$>) . unifyPhiTypes (srcPos l) γ1 x t1 t2 
-    (_, _) | forceCheck x γ1 && forceCheck x γ2 
-                       -> tcError $ bug (srcPos l) "Oh no, the HashMap GREMLIN is back..."
-           | otherwise -> tcError $ bugUnboundPhiVar (srcPos l) x
+    (Just (t1,a1), Just (t2,_ )) -> do  θ     <- getSubst 
+                                        t     <- unifyPhiTypes l γ1 x t1 t2 θ
+                                        return $ (t,a1)
+    (_           , _           )  | forceCheck (fmap srcPos x) γ1 && forceCheck (fmap srcPos x) γ2 
+                                 -> tcError $ bug (srcPos l) "Oh no, the HashMap GREMLIN is back..."
+                                  | otherwise 
+                                 -> tcError $ bugUnboundPhiVar (srcPos l) x
 
 ----------------------------------------------------------------------------------
-getLoopNextPhiType :: PPR r => (AnnSSA r) -> TCEnv r -> TCEnv r -> Id SourceSpan-> TCM r (RType r)
+getLoopNextPhiType :: PPR r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 getLoopNextPhiType l γ γl x =
   case (tcEnvFindTy x γ, tcEnvFindTy (mkNextId x) γl) of
-    (Just t1, Just t2) -> getSubst >>= \θ -> unifyPhiTypes (srcPos l) γ x t1 t2 θ
+    (Just t1, Just t2) -> getSubst >>= \θ -> unifyPhiTypes l γ x t1 t2 θ
     _                  -> tcError $ bugUnboundPhiVar (srcPos l) x
 
 -- | `unifyPhiTypes` 
 --
 --   * Special casing the situation where one the types in undefined.
 ----------------------------------------------------------------------------------
-unifyPhiTypes :: PPR r => SourceSpan -> TCEnv r -> Var -> RType r -> RType r -> RSubst r -> TCM r (RType r)
+unifyPhiTypes :: PPR r 
+              => AnnSSA r
+              -> TCEnv r 
+              -> Var r 
+              -> RType r 
+              -> RType r 
+              -> RSubst r 
+              -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 unifyPhiTypes l γ x t1 t2 θ = 
   case unifys (srcPos l) γ θ [t1] [t2] of  
-    Left  _               -> tcError $ errorEnvJoinUnif l x t1 t2
+    Left  _               -> tcError $ errorEnvJoinUnif (srcPos l) x t1 t2
     Right θ' | apply θ' t1 == apply θ' t2 -> 
                       do setSubst θ' 
-                         addAnn l $ PhiVarTy [(x, toType $ apply θ' t1)]
+                         addAnn (ann_id l) $ PhiVarTy [(x, toType $ apply θ' t1)]
                          return t1
              | any isTUndef [t1,t2] -> do setSubst θ'
-                                          addAnn l $ PhiVarTy [(x, toType $ apply θ' t12)]
+                                          addAnn (ann_id l) $ PhiVarTy [(x, toType $ apply θ' t12)]
                                           return t12
-             | otherwise            -> tcError $ errorEnvJoin l x t1 t2
+             | otherwise            -> tcError $ errorEnvJoin (srcPos l) x t1 t2
   where
     t12      = mkUnion [t1,t2]
 

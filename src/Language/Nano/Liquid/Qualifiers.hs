@@ -1,4 +1,4 @@
-module Language.Nano.Liquid.Qualifiers (nanoQualifiers) where
+module Language.Nano.Liquid.Qualifiers (qualifiers) where
 
 import Language.Fixpoint.Errors
 import Language.Fixpoint.Types hiding (quals) 
@@ -6,29 +6,34 @@ import Language.Nano.Liquid.Types
 import Language.Nano.Env
 import Language.Nano.Errors
 import Language.Nano.Locations
-import Language.Nano.Program
 import Language.ECMAScript3.Syntax
 import Data.List                (delete, nub)
 import Data.Maybe               (fromMaybe)
 
 
-nanoQualifiers   :: NanoRefType -> [Qualifier]
-nanoQualifiers p  = pQuals p ++ nanoQualifiers' p
+-- nanoQualifiers   :: NanoRefType -> [Qualifier]
+-- nanoQualifiers p  = pQuals p ++ nanoQualifiers' p
+-- 
+-- nanoQualifiers'  :: NanoRefType -> [Qualifier]
+-- nanoQualifiers' p = concatMap (refTypeQualifiers γ0) $ envToList env
+--   where
+--     γ0            = envSEnv $ envMap rTypeSort env
+--     env           = tracePP "qualPool" $ qualPool p
 
-nanoQualifiers'  :: NanoRefType -> [Qualifier]
-nanoQualifiers' p = concatMap (refTypeQualifiers γ0) $ envToList env
+qualifiers xts = concatMap (refTypeQualifiers γ0) xts
   where
-    γ0            = envSEnv $ envMap rTypeSort env
-    env           = qualPool p
+     γ0        = envSEnv $ envMap rTypeSort $ envFromList xts
+
+
 
 refTypeQualifiers γ0 (l, t) = efoldRType rTypeSort addQs γ0 [] t 
   where
     addQs γ t qs  = mkQuals l γ t ++ qs
 
 mkQuals l γ t     = [ mkQual l γ v so pa | let (RR so (Reft (v, ras))) = rTypeSortedReft t 
-                                          , RConc p                    <- ras                 
-                                          , pa                         <- atoms p
-                     ]
+                                         , RConc p                    <- ras                 
+                                         , pa                         <- atoms p
+                    ]
 
 mkQual l γ v so p = Q (symbol "Auto") ((v, so) : yts) (subst θ p) l0 
   where 

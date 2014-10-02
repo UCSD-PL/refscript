@@ -25,22 +25,23 @@ module Language.Nano.Typecheck.Types (
   , isTop, isNull, isVoid, isTNum, isUndef, isUnion
 
   -- * Constructing Types
-  , mkUnion, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions
+  , mkUnion, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions, mkTCons
 
   -- * Deconstructing Types
-  , bkFun, bkFunBinds, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion, funTys -- , methTys
+  , bkFun, bkFunBinds, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion, funTys
   
   , rUnion, rTypeR, setRTypeR
 
   , renameBinds
 
   -- * Mutability primitives
-  , t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly, t_assignsFields, combMut 
-  , isMutable, isImmutable -- , isAnyMut, isMutabilityType, variance, varianceTDef
+  , t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly, t_assignsFields
+  , combMut
+  , isMutable, isImmutable, isAssignsFields
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
-  , isTVar, isTObj, isConstr, isTFun, fTop, orNull, isTUndef, isArr -- , tArr, rtArr
+  , isTVar, isTObj, isConstr, subtypeable, isTUndef, isTVoid, isTFun, fTop, orNull, isArr -- , tArr, rtArr
 
   -- * Element ops 
   , sameBinder, eltType, isStaticSig, nonStaticSig, nonConstrElt, mutability, baseType
@@ -55,11 +56,8 @@ module Language.Nano.Typecheck.Types (
   , objLitTy
   , setPropTy
 
-    
   -- * Builtin: Binders
-  , argId
-  , argTy
-  , returnTy
+  , mkId, argId, argTy, returnTy
 
 
   ) where 
@@ -103,9 +101,7 @@ type PPR  r = (PP r, F.Reftable r)
 -- | Mutability
 ---------------------------------------------------------------------
 
--- validMutNames = F.symbol <$> ["ReadOnly", "Mutable", "Immutable", "AnyMutability"]
-
-mkMut s = TApp (TRef $ RN $ QName (srcPos dummySpan) [] (F.symbol s)) [] ()
+mkMut s = TApp (TRef $ RN $ QName (srcPos dummySpan) [] (F.symbol s)) [] fTop
 
 instance Default Mutability where
   def = mkMut "Immutable"
@@ -117,41 +113,18 @@ t_readOnly      = mkMut "ReadOnly"
 t_inheritedMut  = mkMut "InheritedMut"
 t_assignsFields = mkMut "AssignsFields"
 
-
--- isMutabilityType (TApp (TRef (QN [] s)) _ _) = s `elem` validMutNames
--- isMutabilityType _                           = False
--- 
 isMutable        (TApp (TRef (RN (QName _ [] s))) _ _) = s == F.symbol "Mutable"
 isMutable _                                            = False
  
 isImmutable      (TApp (TRef (RN (QName _ [] s))) _ _) = s == F.symbol "Immutable"
 isImmutable _                                          = False
--- 
--- isAnyMut         (TApp (TRef (QN [] s)) _ _) = s == F.symbol "AnyMutability"
--- isAnyMut _                                   = False
--- 
--- isReadOnly       (TApp (TRef (QN [] s)) _ _) = s == F.symbol "ReadOnly"
--- isReadOnly _                                 = False
--- 
--- isInheritedMut   (TApp (TRef (QN [] s)) _ _) = s == F.symbol "InheritedMut"
--- isInheritedMut _                             = False
 
--- 
--- Is this not the common ancestor ?
---
+isAssignsFields  (TApp (TRef (RN (QName _ [] s))) _ _) = s == F.symbol "AssignsFields"
+isAssignsFields  _                                     = False
+ 
+-- FIXME: get rid of this ... ?
 combMut _ μf | isMutable μf                 = μf
 combMut μ _  | otherwise                    = μ
-
-
--- | Variance: true if v is in a positive position in t
---
---   FIXME: implement these
---
---    variance      :: TVar -> RType r -> Bool
---
---    varianceTDef  :: IfaceDef r -> [Bool]
-
-
 
 
 ---------------------------------------------------------------------
@@ -261,6 +234,8 @@ mkAnd ts             = TAnd ts
 
 mapAnd f t           = mkAnd $ f <$> bkAnd t
 
+mkTCons m es = TCons es m fTop
+
 
 ----------------------------------------------------------------------------------------
 mkUnion :: (F.Reftable r) => [RType r] -> RType r
@@ -297,7 +272,7 @@ strengthen                   :: F.Reftable r => RType r -> r -> RType r
 strengthen (TApp c ts r) r'  = TApp c ts  $ r' `F.meet` r 
 strengthen (TCons ts m r) r' = TCons ts m $ r' `F.meet` r 
 strengthen (TVar α r)    r'  = TVar α     $ r' `F.meet` r 
--- strengthen (TFun s t o r) r' = TFun s t o $ r' `F.meet` r 
+strengthen (TFun a b c r) r' = TFun a b c $ r' `F.meet` r
 strengthen t _               = t                         
 
 -- NOTE: r' is the OLD refinement. 
@@ -380,7 +355,6 @@ mapEltM f (MethSig  x m t)   = MethSig x m <$> f t
 mapEltM f (StatSig x m t)    = StatSig x m <$> f t
 
 
-
 type CheckM = State [Error] 
 
 -- | @conflateTypeMembers@ enforces unique binders in every element list
@@ -457,6 +431,8 @@ isMethodSig _                = False
 isFieldSig (FieldSig _ _ _ ) = True
 isFieldSig _                 = False
 
+-- Typemembers that take part in subtyping
+subtypeable e = not (isConstr e)
 
 setThisBinding m@(MethSig _ _ t) t' = m { f_type = mapAnd bkTy t }
   where
@@ -474,14 +450,17 @@ remThisBinding t =
     ft                       -> ft
 
 
+instance F.Symbolic IndexKind where
+  symbol StringIndex =  F.symbol "__string__index__"
+  symbol NumericIndex =  F.symbol "__numeric__index__"
+
 instance F.Symbolic (TypeMember t) where
-  symbol (FieldSig s _ _)     = s
-  symbol (MethSig  s _ _)     = s
-  symbol (ConsSig       _)    = F.symbol "__constructor__"
-  symbol (CallSig       _)    = F.symbol "__call__"
-  symbol (IndexSig _ True _)  = F.symbol "__string__index__"
-  symbol (IndexSig _ False _) = F.symbol "__numeric__index__"
-  symbol (StatSig s _ _ )     = s
+  symbol (FieldSig s _ _)   = s
+  symbol (MethSig  s _ _)   = s
+  symbol (ConsSig       _)  = F.symbol "__constructor__"
+  symbol (CallSig       _)  = F.symbol "__call__"
+  symbol (IndexSig _ i _)   = F.symbol i
+  symbol (StatSig s _ _ )   = s
 
     
 sameBinder (CallSig _)       (CallSig _)        = True
@@ -538,14 +517,16 @@ instance PP Char where
 
 
 instance (PP r, F.Reftable r) => PP (RType r) where
-  pp (TVar α r)               = F.ppTy r $ pp α 
+  pp (TVar α r)               = F.ppTy r $ (text "TVAR##" <> pp α <> text "##") 
   pp (TFun (Just s) xts t _)  = ppArgs parens comma (B (F.symbol "this") s:xts) <+> text "=>" <+> pp t 
-  pp (TFun _ xts t r)         = F.ppTy r $ ppArgs parens comma xts <+> text "=>" <+> pp t 
+  pp (TFun _ xts t _)         = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)             = text "∀" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
   pp (TAnd ts)                = vcat [text "/\\" <+> pp t | t <- ts]
   pp (TExp e)                 = pprint e 
   pp (TApp TUn ts r)          = F.ppTy r $ ppArgs id (text " +") ts 
-  pp (TApp (TRef x) (m:ts) r) = F.ppTy r $ pp x <> ppMut m <> ppArgs brackets comma ts 
+  pp (TApp (TRef x) (m:ts) r)
+    | Just m <- mutSym m      = F.ppTy r $ pp x <> pp m <> ppArgs brackets comma ts 
+  pp (TApp (TRef x) ts r)     = F.ppTy r $ pp x <>         ppArgs brackets comma ts
   pp (TApp c [] r)            = F.ppTy r $ pp c 
   pp (TApp c ts r)            = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
   pp (TCons bs m r)           | length bs < 3 
@@ -603,26 +584,32 @@ instance PP Assignability where
   pp WriteGlobal = text "WriteGlobal"
   pp ImportDecl  = text "ImportDecl"
   pp ReturnVar   = text "ReturnVar"
+  pp ThisVar     = text "ThisVar"
 
+instance PP IfaceKind where
+  pp ClassKind      = pp "class" 
+  pp InterfaceKind  = pp "interface" 
 
 instance (PP r, F.Reftable r) => PP (IfaceDef r) where
   pp (ID c nm vs Nothing ts) =  
-        pp (if c then "class" else "interface")
+        pp c
     <+> pp nm <> ppArgs angles comma vs 
     <+> lbrace $+$ nest 2 (vcat $ map pp ts) $+$ rbrace
   pp (ID c nm vs (Just (p,ps)) ts) = 
-        pp (if c then "class" else "interface")
+        pp c
     <+> pp nm <> ppArgs angles comma vs
     <+> text "extends" 
     <+> pp p  <> ppArgs angles comma ps
     <+> lbrace $+$ nest 2 (vcat $ map pp ts) $+$ rbrace
 
+instance PP IndexKind where
+  pp StringIndex  = text "string"
+  pp NumericIndex = text "number"
 
 instance (PP r, F.Reftable r) => PP (TypeMember r) where
   pp (CallSig t)          =  text "call" <+> pp t 
   pp (ConsSig t)          =  text "new" <+> pp t
-  pp (IndexSig x True t)  =  brackets (pp x <> text ": string") <> text ":" <+> pp t
-  pp (IndexSig x False t) =  brackets (pp x <> text ": number") <> text ":" <+> pp t
+  pp (IndexSig _ i t)     =  brackets (pp i) <> text ":" <+> pp t
   pp (FieldSig x m t)     =  text "field" <+> ppMut m <+> pp x <> text ":" <+> pp t 
   pp (MethSig x m t)      =  text "method" <+> ppMut m <+> pp x <> ppMeth t
   pp (StatSig x m t)      =  text "static" <+> ppMut m <+> pp x <> text ":" <+> pp t
@@ -637,12 +624,22 @@ ppMeth t =
     ppfun (Just s) ts t = ppArgs parens comma (B (F.symbol "this") s : ts) <> text ":" <+> pp t
     ppfun Nothing  ts t = ppArgs parens comma ts <> text ":" <+> pp t
 
+mutSym (TApp (TRef (RN (QName _ _ s))) _ _)
+  | s == F.symbol "Mutable"       = Just "◁"  
+  | s == F.symbol "Immutable"     = Just "◀"
+  | s == F.symbol "AnyMutability" = Just "₌"
+  | s == F.symbol "ReadOnly"      = Just "◆"
+  | s == F.symbol "AssignsFields" = Just "★" 
+  | s == F.symbol "InheritedMut"  = Just "◇"
+mutSym _                          = Nothing
+
 
 ppMut (TApp (TRef (RN (QName _ _ s))) _ _)
   | s == F.symbol "Mutable"       = pp "◁"
   | s == F.symbol "Immutable"     = pp "◀"
   | s == F.symbol "AnyMutability" = pp "₌"
   | s == F.symbol "ReadOnly"      = pp "◆"
+  | s == F.symbol "AssignsFields" = pp "★" 
   | s == F.symbol "InheritedMut"  = pp "◇"
   | otherwise                     = pp "?"
 ppMut t@(TVar{})                  = pp "[" <> pp t <> pp "]" 
@@ -688,6 +685,9 @@ isArr _                     = False
 
 isTUndef (TApp TUndef _ _)  = True
 isTUndef _                  = False
+
+isTVoid (TApp TVoid _ _ )   = True
+isTVoid _                   = False
 
 
 orNull t@(TApp TUn ts _)    | any isNull ts = t

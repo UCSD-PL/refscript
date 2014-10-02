@@ -185,7 +185,7 @@ instance Substitutable r (Id a) where
   apply _ i                 = i
 
 instance F.Reftable r => Substitutable r (Annot (Fact r) z) where
-  apply θ (Ann z fs)        = Ann z $ apply θ fs
+  apply θ (Ann i z fs)      = Ann i z $ apply θ fs
 
 instance Substitutable r F.Symbol  where
   apply _ s                 = s 

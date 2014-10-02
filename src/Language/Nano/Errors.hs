@@ -57,6 +57,7 @@ bug l s                       = mkErr l $ printf "BUG: %s" s
 impossible l s                = mkErr l $ printf "IMPOSSIBLE: %s" s 
 bugBadSubtypes l t1 t2        = mkErr l $ printf "BUG: Unexpected Subtyping Constraint\n%s <: %s" (ppshow t1) (ppshow t2)
 bugMalignedFields l s s'      = mkErr l $ printf "BUG: Fields not aligned: '%s' and '%s'" (ppshow s) (ppshow s')
+bugFlattenType l s            = mkErr l $ printf "BUG: Could not flatten type '%s'" (ppshow s)
 
 bugUnknownAlias l x           = mkErr l $ printf "BUG: Unknown definition for alias %s" (ppshow x)
 bugUnboundPhiVar l x          = mkErr l $ printf "BUG: Phi Variable %s is unbound" (ppshow x)
@@ -68,7 +69,9 @@ bugCallTo l x es              = mkErr l $ printf "BUG: Bug at call to '%s' with 
 bugMultipleCasts l e          = mkErr l $ printf "BUG: Found multple casts on expression '%s'" (ppshow e)
 bugNoCasts l e                = mkErr l $ printf "BUG: No casts found for expression '%s'" (ppshow e)
 bugNoAnnotForGlob l x         = mkErr l $ printf "BUG: No type annotation found for global variable '%s'" (ppshow x)
-bugCondExprSigParse l         = mkErr l $ printf "BUG: In parsing conditional expression signature"
+bugCondExprSigParse l         = mkErr l $ printf "BUG: In parsing conditional expression signature."
+bugEltSubt l f1 f2            = mkErr l $ printf "BUG: Cannot subtype type members '%s' and '%s'." (ppshow f1) ( ppshow f2)
+bugSSAConstructorInit l       = mkErr l $ printf "BUG: Multiple definition of the same field." 
 
 bugClassDefNotFound l x       = mkErr l $ printf "BUG: Class definition for '%s' not found." (ppshow x)
 bugEnvFindTy l x              = mkErr l $ printf "BUG: envFindTy failed to find binding '%s'" (ppshow x)
@@ -88,8 +91,11 @@ errorDuplicate i l l'         = mkErr l $ printf "Duplicate Specification for %s
 errorWriteImmutable l x       = mkErr l $ printf "Cannot assign to local variable '%s' outside local-scope. " (ppshow x)
                                        ++ printf "Add a type annotation to indicate it is globally writable." 
 errorSSAUnboundId l x         = mkErr l $ printf "SSA: Identifier '%s' unbound" (ppshow x) 
+errorUpdateInExpr l e         = mkErr l $ printf "Unsupported: assignment in If-then-else expression %s" (ppshow e)
+errorEffectInFieldDef l       = mkErr l $ printf "Cannot have effects in field initialization."
+errorUninitStatFld l x        = mkErr l $ printf "Uninitialized static member '%s' is not allowed." (ppshow x)
 
-errorUpdateInExpr l e       = mkErr l $ printf "Unsupported: assignment in If-then-else expression %s" (ppshow e)
+
 ---------------------------------------------------------------------------
 -- | TC 
 ---------------------------------------------------------------------------
@@ -104,8 +110,9 @@ errorUniqueTypeParams l       = mkErr l $ printf "Only unique type paramteres ar
 
 -- Subtyping
 errorDownCast l t1 t2         = mkErr l $ printf "Downcast: %s => %s" (ppshow t1) (ppshow t2)
-errorClassExtends l x y s     = mkErr l $ printf "Type '%s' cannot extend type '%s'.Types of elements %s are incompatible."   
-                                                   (ppshow x) (ppshow y) (ppshow s)
+errorClassExtends l x y t1 t2 = mkErr l $ printf "Type '%s' cannot extend type '%s'.\nType for '%s':\n%s\nType for '%s':\n%s" (ppshow x) (ppshow y) 
+                                                  (ppshow x) (ppshow t1) (ppshow y) (ppshow t2)
+errorWidthSubtyping l es es'  = mkErr l $ printf "Invalid width subtyping between types with elements '%s' and '%s'." (ppshow es) (ppshow es')
 errorIncompMutTy l t t'       = mkErr l $ printf "Types '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
 errorIncompMutElt l t t'      = mkErr l $ printf "Elements '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
 errorConstrMissing l t        = mkErr l $ printf "Could not find constructor for type '%s'." (ppshow t)
@@ -149,6 +156,9 @@ errorDeadCast l t1 t2         = mkErr l $ printf "Cannot convert '%s' to '%s'" (
 ---------------------------------------------------------------------------
 errorCyclicDefs l x stk       = mkErr l $ printf "Cyclic definitions: %s in %s" (ppshow x) (ppshow stk)
 errorBadTAlias l t nt ne a m  = mkErr l $ printf "Invalid type alias application: %s \nExpected %d type, %d value arguments, but got %d and %d" (ppshow t) a m nt ne  
+errorTAliasNumArgs l na nx n  = mkErr l $ printf "Invalid type alias application: Expected %d type, %d value arguments, but %d" na nx n  
+errorTAliasMismatch l t a      = mkErr l $ printf "Invalid type alias application %s : Cannot convert %s into value argument" (ppshow t) (ppshow a)
+                                
 errorBadPAlias l p nx ne      = mkErr l $ printf "Invalid predicate alias application: %s \nExpected %d arguments, but got %d." (ppshow p) nx ne 
 errorLiquid l                 = mkErr l $ printf "Liquid Type Error" 
 errorNoMatchCallee l fn ts t  = mkErr l $ printf "No matching callee type for '%s'.\nArgument Types: %s\nFunction Type: %s" (ppshow fn) (ppshow ts) (ppshow t)

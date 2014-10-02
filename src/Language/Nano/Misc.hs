@@ -9,7 +9,7 @@ module Language.Nano.Misc (
     mkEither, either2Bool
 
   -- List
-  , unique, exists
+  , unique, exists, mapi
 
   -- Tuples
   , fst4, snd4, thd4, fth4
@@ -41,12 +41,15 @@ module Language.Nano.Misc (
 
   , dup
 
+  , mappendM
+
 ) where
 
 -- import           Control.Applicative                ((<$>))
 import           Control.Monad                        (liftM2, foldM)
 import           Data.Data
 import           Data.Maybe                           (isJust)
+import           Data.Monoid                          (Monoid, mappend)
 import           Data.Generics.Aliases
 import           Data.HashSet
 import           Data.Function                        (on)
@@ -58,6 +61,16 @@ import qualified Language.Fixpoint.Types              as F
 import           Language.Fixpoint.Misc
 import           Language.ECMAScript3.PrettyPrint
 import           Text.PrettyPrint.HughesPJ
+
+-------------------------------------------------------------------------------
+mapi :: (Int -> a -> b) -> [a] -> [b] 
+-------------------------------------------------------------------------------
+mapi f          = go 0
+  where
+    go i (x:xs) = f i x : go (i+1) xs
+    go _ []     = []
+
+
 
 -------------------------------------------------------------------------------
 mapFstM :: (Functor m, Monad m) => (a -> m c) -> (a, b) -> m (c, b)
@@ -209,3 +222,6 @@ withSingleton' _ f _  [x] = f x
 withSingleton' _ _ e  _   = e
 
 dup f1 f2 a = (f1 a,f2 a)
+
+mappendM :: (Monoid r, Monad m) => m r -> m r -> m r
+mappendM = liftM2 mappend

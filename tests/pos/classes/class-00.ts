@@ -1,7 +1,9 @@
 class BankAccount { 
+
 	/*@ f : { number | v > 0 } */ 
 	public f : number = 1;
-	/*@ g : { string | v = "a" } */
+
+	/*@  g : { string | v = "a" } */
 	public g : string = "a";
   
 	/*@ new (x: { number | v > 0 } ) => void */

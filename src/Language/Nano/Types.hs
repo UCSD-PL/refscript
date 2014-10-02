@@ -53,7 +53,6 @@ data TCon
   | TUn                 -- ^ union
   | TNull               -- ^ null
   | TUndef              -- ^ undefined
-
   | TFPBool             -- ^ liquid 'bool'
     deriving (Ord, Show, Data, Typeable)
 
@@ -89,7 +88,6 @@ data RType r =
   | TClass RelName
   -- 
   -- ^ typeof L.M.N (module)
-  --
   | TModule RelPath
   -- 
   -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
@@ -121,14 +119,17 @@ data FuncInputs t = FI { fi_self :: Maybe t, fi_args :: [t] } deriving (Functor,
 
 
 ---------------------------------------------------------------------------------
--- | Interfacce definitions 
+-- | Interface definitions 
 ---------------------------------------------------------------------------------
+
+data IfaceKind = ClassKind | InterfaceKind
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 data IfaceDef r = ID { 
   -- 
-  -- ^ Class (True) or interface (False)
+  -- ^ Kind
   --
-    t_class :: Bool                                
+    t_class :: IfaceKind
   -- 
   -- ^ Name
   --
@@ -151,8 +152,10 @@ data IfaceDef r = ID {
 
 type Heritage r  = Maybe (RelName, [RType r])
 
-
 type SIfaceDef r = (IfaceDef r, [RType r])
+
+data IndexKind   = StringIndex | NumericIndex
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 
 data TypeMember r 
@@ -168,7 +171,7 @@ data TypeMember r
   -- ^ Index signature
   --
   | IndexSig  { f_sym  :: F.Symbol
-              , f_key  :: Bool                         -- True = string
+              , f_key  :: IndexKind
               , f_type :: RType r }                     
   -- 
   -- ^ Field signature
@@ -223,9 +226,15 @@ data Assignability
   --
   | WriteGlobal 
   -- 
+  -- SPECIAL VALUES
+  -- 
   -- ^ Used to denote return variable
   -- 
   | ReturnVar
+  -- 
+  -- ^ Used to denote 'this' variable
+  -- 
+  | ThisVar
   deriving (Eq, Data, Typeable)
 
 
@@ -269,16 +278,6 @@ data ModuleDef r = ModuleDef {
 ---------------------------------------------------------------------------------
 
 type Mutability = Type 
-
-
-data CommonTypes r = CommonTypes {
-    t_ReadOnly       :: RType r
-  , t_Immutable      :: RType r
-  , t_Mutable        :: RType r
-  , t_AnyMutability  :: RType r
-  , t_InheritedMut   :: RType r
-  }
-
 
 
 ---------------------------------------------------------------------------------
@@ -422,7 +421,11 @@ instance IsLocated (Alias a s t) where
 
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body 
+   
 
+
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

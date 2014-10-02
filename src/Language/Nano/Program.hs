@@ -22,13 +22,15 @@ module Language.Nano.Program (
   , flattenStmt
 
   -- * SSA Ids 
-  , mkNextId, isNextId, mkSSAId , mkKeysId, mkKeysIdxId -- , stripSSAId
+  , mkNextId, isNextId, mkSSAId , mkKeysId, mkKeysIdxId, mkCtorStr, mkCtorId
 
 
   -- * Traversals / folds
-  , hoistTypes, hoistGlobals
-  , visibleNames, scrapeModules, writeGlobalVars
-
+  , hoistTypes
+  , hoistGlobals
+  , visibleNames
+  , scrapeModules
+  , writeGlobalVars
   , scrapeVarDecl
 
   ) where
@@ -70,11 +72,6 @@ data Nano a r = Nano {
   --
     code      :: !(Source a)               
   -- 
-  -- ^ Annotations (keeping this to scrape qualifiers later)
-  -- ^ XXX: The names are bogus - made unique to avoid overwrites
-  --
-  , qualPool  :: !(Env (RType r))
-  -- 
   -- ^ Measure Signatures
   --
   , consts    :: !(Env (RType r))          
@@ -94,6 +91,11 @@ data Nano a r = Nano {
   -- ^ Type Invariants
   --
   , invts     :: ![Located (RType r)]      
+  -- 
+  -- ^ Maximum id 
+  --
+  , max_id    :: NodeId
+
   } deriving (Functor, Data, Typeable)
 
 type NanoBareR r   = Nano (AnnBare r) r                    -- ^ After Parse
@@ -321,30 +323,17 @@ checkTopStmt s | otherwise     = throw $ errorInvalidTopStmt (srcPos s) s
 checkBody :: [Statement a] -> Bool
 -- Adding support for loops so removing the while check
 checkBody stmts = all isNano stmts -- && null (getWhiles stmts) 
-    
-{-    
-getWhiles :: [Statement SourceSpan] -> [Statement SourceSpan]
-getWhiles stmts = everything (++) ([] `mkQ` fromWhile) stmts
-  where 
-    fromWhile s@(WhileStmt {}) = [s]
-    fromWhile _                = [] 
--}
 
 flattenStmt (BlockStmt _ ss) = concatMap flattenStmt ss
 flattenStmt s                = [s]
-
 
 
 --------------------------------------------------------------------------------
 -- | Manipulating SSA Ids
 --------------------------------------------------------------------------------
 
-mkSSAId :: IsLocated a => a -> Id a -> Int -> Id a
-mkSSAId l (Id _ x) n = Id l (x ++ ssaStr ++ show n)  
-
--- Returns the identifier as is if this is not an SSAed name.
--- stripSSAId :: Id a -> Id a
--- stripSSAId (Id l x) = Id l (unpack $ head $ splitOn (pack ssaStr) (pack x))
+mkSSAId :: (F.Symbolic x, IsLocated a) => a -> x -> Int -> Id a
+mkSSAId l x n = Id l (F.symbolString (F.symbol x) ++ ssaStr ++ show n)  
 
 mkNextId :: Id a -> Id a
 mkNextId (Id a x) =  Id a $ nextStr ++ x
@@ -358,10 +347,14 @@ mkKeysId (Id a x) =  Id a $ keysStr ++ x
 mkKeysIdxId :: Id a -> Id a
 mkKeysIdxId (Id a x) =  Id a $ keysIdxStr ++ x
 
+mkCtorId l (Id _ x) = Id l $ mkCtorStr x
+mkCtorStr x         = x ++ ctorStr
+
 nextStr    = "_NEXT_"
 ssaStr     = "_SSA_"
 keysIdxStr = "_KEYS_IDX_"
 keysStr    = "_KEYS_"
+ctorStr    = "_CTOR_"
 
 
 
@@ -399,7 +392,7 @@ hoistBindings = everythingBut (++) myQ
     fSt (FunctionStmt l n _ _) = ([(n, l, ReadOnly)], True)
     fSt (FunctionDecl l n _  ) = ([(n, l, ImportDecl)], True)    
     fSt (ClassStmt l n _ _ _ ) = ([(n, l, ReadOnly)], True)
-    fSt (ModuleStmt l n _)     = ([(n, Ann (srcPos l) [ModuleAnn $ F.symbol n], ReadOnly)], True)
+    fSt (ModuleStmt l n _)     = ([(n, l { ann_fact = ModuleAnn (F.symbol n) : ann_fact l} , ReadOnly)], True)
     fSt _                      = ([], False)
 
     fExp :: Expression (AnnType r) -> ([(Id (AnnType r), AnnType r, Assignability)], Bool)
@@ -494,9 +487,9 @@ collectModules ss = topLevel : rest ss
 ---------------------------------------------------------------------------------------
 visibleNames :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, (RType r, Assignability))]
 ---------------------------------------------------------------------------------------
-visibleNames s = [ (ann <$> n,(t,a)) | (n,Ann l ff,a) <- hoistBindings s
-                                     , f              <- ff
-                                     , t              <- annToType l n a f ]
+visibleNames s = [ (ann <$> n,(t,a)) | (n,Ann _ l ff,a) <- hoistBindings s
+                                     , f                <- ff
+                                     , t                <- annToType l n a f ]
   where
     annToType _ _ ReadOnly   (VarAnn t)      = [t] -- Hoist ReadOnly vars (i.e. function defs)
     annToType _ _ ImportDecl (VarAnn t)      = [t] -- Hoist ImportDecl (i.e. function decls)
@@ -516,7 +509,7 @@ visibleNames s = [ (ann <$> n,(t,a)) | (n,Ann l ff,a) <- hoistBindings s
 ---------------------------------------------------------------------------------------
 scrapeModules               :: PPR r => [Statement (AnnSSA r)] -> QEnv (ModuleDef r)
 ---------------------------------------------------------------------------------------
-scrapeModules                = qenvFromList . map mkMod . collectModules
+scrapeModules                     = qenvFromList . map mkMod . collectModules
   where
     visibility l                  | ExporedModElt `elem` ann_fact l = Exported
                                   | otherwise                       = Local
@@ -562,7 +555,7 @@ resolveType :: PPR r => Statement (AnnSSA r) -> Maybe (Id SourceSpan, IfaceDef r
 ---------------------------------------------------------------------------------------
 resolveType  (ClassStmt l c _ _ cs)
   = case [ t | ClassAnn t <- ann_fact l ] of
-      [(vs, h)] -> Just (cc, ID True cc vs h (rMem (tc vs) cs))
+      [(vs, h)] -> Just (cc, ID ClassKind cc vs h (rMem (tc vs) cs))
       _         -> Nothing
   where
     cc        = fmap ann c
@@ -588,9 +581,9 @@ typeMembers _ (MemberVarDecl _ static (VarDecl l _ _))
     | static    = [ s | StatAnn  s@(StatSig _ _ _)  <- ann_fact l ]
     | otherwise = [ f | FieldAnn f@(FieldSig _ _ _) <- ann_fact l ]
 
-typeMembers t (MemberMethDecl l static _ _ _ )
-    | static    = [ s                  | StatAnn s@(StatSig _ _ _)  <- ann_fact l ]
-    | otherwise = [ setThisBinding m t | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
+typeMembers _ (MemberMethDecl l static _ _ _ )
+    | static    = [ s | StatAnn s@(StatSig _ _ _)  <- ann_fact l ]
+    | otherwise = [ m | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
 
 
 -- | `writeGlobalVars p` returns symbols that have `WriteMany` status, i.e. may be 
@@ -612,4 +605,6 @@ scrapeVarDecl :: VarDecl (AnnSSA r) -> [RType r]
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _) = [ t | VarAnn                 t  <- ann_fact l ] 
                              ++ [ t | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
+
+   
 

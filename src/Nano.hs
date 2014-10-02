@@ -16,6 +16,7 @@ import           Language.Nano.CmdLine
 import           Language.Nano.Errors
 import           Language.Nano.Files
 import           Language.Nano.SystemUtils
+import           Language.Nano.Misc                 (mapi)
 import           Control.Exception                  (catch)
 import           Control.Monad
 import           Data.Monoid
@@ -27,6 +28,7 @@ import           System.FilePath.Posix
 import           Language.Fixpoint.Interface        (resultExit)
 import qualified Language.Fixpoint.Types      as    F
 import           Language.Fixpoint.Misc
+
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Files
 import           Text.PrettyPrint.HughesPJ
@@ -61,10 +63,10 @@ withExistingFile f
         (code, stdOut, _) <- readProcessWithExitCode tsCmd (mkArgs [preludeTSPath, domTSPath]) ""
         case code of 
           ExitSuccess     -> case eitherDecode (B.pack stdOut) :: Either String [String] of
-                                Left  s  -> return $ Left  $ F.UnknownError s
+                                Left  s  -> return $ Left  $ F.UnknownError ("withExistingFile1: " ++ s)
                                 Right fs -> return $ Right $ fs
           ExitFailure _   -> case eitherDecode (B.pack stdOut) :: Either String (F.FixResult Error) of
-                                Left  s  -> return $ Left $ F.UnknownError s
+                                Left  s  -> return $ Left $ F.UnknownError ("withExistingFile2: " ++ s)
                                 Right e  -> return $ Left $ e
   | otherwise
   = return $ Left $ F.Crash [] $ "Unsupported input file format: " ++ ext
@@ -90,17 +92,19 @@ instance ToJSON SrcSpan
 
 run verifyFile cfg 
   = do mapM_ (createDirectoryIfMissing False. tmpDir) (files cfg)
-       rs   <- mapM (runOne verifyFile) $ files cfg
+       rs   <- mapM (runOne cfg verifyFile) $ files cfg
        let r = mconcat rs
        writeResult r
        exitWith (resultExit r)
     where
        tmpDir    = tempDirectory
 
-runOne verifyFile f
+runOne cfg verifyFile f
   = do createDirectoryIfMissing False tmpDir
        (u, r) <- verifyFile f `catch` handler
-       renderAnnotations f r u
+       case cfg of 
+         Liquid _ _ _ True -> renderAnnotations f r u
+         _                 -> return ()
        return r
     where
        handler e = return (NoAnn, F.Unsafe [e])
@@ -113,11 +117,17 @@ writeResult :: (Ord a, PP a) => F.FixResult a -> IO ()
 writeResult r            = mapM_ (writeDoc c) $ zip [0..] $ resDocs r
   where 
     c                    = F.colorResult r
-    writeDoc c (i, d)    = writeBlock c i $ lines $ render d
-    writeBlock _ _ []    = return ()
-    writeBlock c 0 ss    = forM_ ss (colorPhaseLn c "")
-    writeBlock _ _ ss    = forM_ ("\n" : ss) putStrLn
 
+writeDoc c (i, d)    = writeBlock c i $ procDoc d
+writeBlock _ _ []    = return ()
+writeBlock c 0 ss    = forM_ ss (colorPhaseLn c "")
+writeBlock _ _ ss    = forM_ ("\n" : ss) putStrLn
+
+procDoc              = mapi pad . filter (not . null . words) . lines . render
+  where
+    pad 0 x          = x
+    pad _ x          = "  " ++ x
+    
 resDocs F.Safe             = [text "SAFE"]
 resDocs (F.Crash xs s)     = text ("CRASH: " ++ s) : pprManyOrdered xs
 resDocs (F.Unsafe xs)      = text "UNSAFE"         : pprManyOrdered (nub xs)

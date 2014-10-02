@@ -11,8 +11,7 @@
 
 module Language.Nano.Names (
 
-    Var
-  , QName(..)
+    QName(..)
   , QPath(..)
   , RelName(..), AbsName(..)
   , RelPath(..), AbsPath(..)
@@ -59,7 +58,7 @@ data QName = QName {
 --
 newtype RelName = RN QName deriving (Ord, Show, Data, Typeable)
 newtype AbsName = AN QName deriving (Eq, Ord, Show, Data, Typeable)
-
+ 
 -- | A qualified path (used for qualified namespaces, i.e. modules)
 --
 data QPath = QPath { 
@@ -106,12 +105,15 @@ instance Hashable QPath where
   hashWithSalt i (QPath _ n) = hashWithSalt i n
 
 instance IsLocated QName where
-  srcPos (QName s _ _) = s
+  -- srcPos (QName s _ _) = s
+  srcPos = qn_ss
+
+instance IsLocated RelName where
+  srcPos (RN q) = srcPos q
+  
 
 instance IsLocated QPath where
   srcPos (QPath s _) = s
-
-type Var = Id SourceSpan 
 
 instance F.Symbolic (Id a) where
   symbol (Id _ x)   = F.symbol x 

@@ -17,6 +17,7 @@ data Config
   | Liquid { files       :: [FilePath]     -- ^ source files to check
            , incdirs     :: [FilePath]     -- ^ path to directory for include specs
            , extraInvs   :: Bool           -- ^ add extra invariants to object types
+           , renderAnns  :: Bool           -- ^ render annotations
            }
   deriving (Data, Typeable, Show, Eq)
 
@@ -32,6 +33,7 @@ tc = TC {
 
  , incdirs      = def   &= typDir
                         &= help "Paths to Spec Include Directory "
+
  , noFailCasts  = def   &= help "Do not fail typecheck when casts are added"
 
  } &= help    "RefScript Type Checker" 
@@ -46,6 +48,8 @@ liquid = Liquid {
                        &= help "Paths to Spec Include Directory "
 
  , extraInvs    = def  &= help "Add extra invariants (e.g. 'keyIn' for object types)"
+
+ , renderAnns   = def  &= help "Render annotations" 
 
  } &= help    "RefScript Refinement Type Checker" 
 

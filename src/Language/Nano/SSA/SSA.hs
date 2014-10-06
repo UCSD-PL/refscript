@@ -40,6 +40,7 @@ import           Language.Nano.Visitor
 
 -- import           Debug.Trace                        hiding (traceShow)
 
+-- FIXME : SSA needs a proper environment like TC an Liquid
 
 ----------------------------------------------------------------------------------
 ssaTransform :: (PP r, F.Reftable r, Data r) 
@@ -122,8 +123,11 @@ ssaStmt :: Data r => Statement (AnnSSA r) -> SSAM r (Bool, Statement (AnnSSA r))
 ssaStmt s@(EmptyStmt _) 
   = return (True, s)
 
--- function foo(...): T;
-ssaStmt s@(FunctionDecl _ _ _) 
+-- declare function foo(...): T;
+ssaStmt s@(FuncAmbDecl _ _ _) 
+  = return (True, s)
+
+ssaStmt s@(FuncOverload _ _ _) 
   = return (True, s)
 
 -- interface IA<V> extends IB<T> { ... }
@@ -192,7 +196,6 @@ ssaStmt (ForStmt l v cOpt (Just (UnaryAssignExpr l1 o lv)) b) =
   where
     op PrefixInc   = OpAssignAdd
     op PrefixDec   = OpAssignSub
-    -- TODO: Should we worry for prefix or postfix?
     op PostfixInc  = OpAssignAdd
     op PostfixDec  = OpAssignSub
 
@@ -330,7 +333,7 @@ ssaStmt (ClassStmt l n e is bd)
         return (True, ClassStmt l n e is bd')
   where
     -- Only gather non-static fields
-    fields = [(i,v) | MemberVarDecl _ False v@(VarDecl _ i _) <- bd] 
+    fields = [(i,eo)  | MemberVarDecl _ False i eo <- bd] 
     ctor   | null [() | Constructor{} <- bd ] = [Constructor l [] []]
            | otherwise                        = []
 
@@ -391,7 +394,10 @@ ctorExit l s = ExprStmt <$> fr <*>
     fr                    = freshenAnn l 
 
 -------------------------------------------------------------------------------------
-ssaClassElt :: Data r => [(Id (AnnSSA r), VarDecl (AnnSSA r))] -> ClassElt (AnnSSA r) -> SSAM r (ClassElt (AnnSSA r))
+ssaClassElt :: Data r 
+            => [(Id (AnnSSA r), Maybe (Expression (AnnSSA r)))] 
+            -> ClassElt (AnnSSA r) 
+            -> SSAM r (ClassElt (AnnSSA r))
 -------------------------------------------------------------------------------------
 ssaClassElt flds (Constructor l xs bd0)
   = do θ <- getSsaEnv
@@ -408,38 +414,40 @@ ssaClassElt flds (Constructor l xs bd0)
 
     initStmt s  = VarDeclStmt <$> fr <*> (single <$> initVd s)
 
-    initVd i    = case [ (lv,eo) | (v, VarDecl lv _ eo) <- flds, i == v ] of
-                    [(lv, Just e)] -> VarDecl <$> fr_ lv 
-                                              <*> return (mkCtorId l i) 
-                                              <*> return (Just e)
-                    [(lv, _     )] -> VarDecl <$> fr_ lv 
-                                              <*> return (mkCtorId l i) 
-                                              <*> (Just <$> (VarRef <$> fr_ l 
-                                                                    <*> (Id <$> fr_ l 
-                                                                            <*> return "undefined")))
-                    _              -> ssaError $ bugSSAConstructorInit (srcPos l) 
+    initVd i    = case [ eo | (v, eo) <- flds, i == v ] of
+                    [Just e] -> VarDecl <$> fr
+                                        <*> return (mkCtorId l i) 
+                                        <*> return (Just e)
+                    [_]      -> VarDecl <$> fr
+                                        <*> return (mkCtorId l i) 
+                                        <*> (Just <$> (VarRef <$> fr_ l 
+                                                              <*> (Id <$> fr_ l 
+                                                              <*> return "undefined")))
+                    _        -> ssaError $ bugSSAConstructorInit (srcPos l) 
     fr_         = freshenAnn
     fr          = fr_ l 
 
 -- | Initilization expression for instance variables is moved to the beginning 
 --   of the constructor.
-ssaClassElt _ (MemberVarDecl l False (VarDecl l' x _)) 
-  = return $ MemberVarDecl l False (VarDecl l' x Nothing)
-ssaClassElt _ (MemberVarDecl l True (VarDecl l' x (Just e)))
+ssaClassElt _ (MemberVarDecl l False x _) = return $ MemberVarDecl l False x Nothing
+
+ssaClassElt _ (MemberVarDecl l True x (Just e))
   = do z <- ssaExpr e
        case z of 
-         ([], e') -> return $ MemberVarDecl l True (VarDecl l' x $ Just e')
+         ([], e') -> return $ MemberVarDecl l True x (Just e')
          _        -> ssaError $ errorEffectInFieldDef (srcPos l)
-ssaClassElt _ (MemberVarDecl l True (VarDecl _ x Nothing))
+
+ssaClassElt _ (MemberVarDecl l True x Nothing)
   = ssaError $ errorUninitStatFld (srcPos l) x
 
-ssaClassElt _ (MemberMethDecl l s e xs body)
+ssaClassElt _ (MemberMethDef l s e xs body)
   = do θ <- getSsaEnv
        withAssignability ReadOnly (ssaEnvIds θ) $               -- Variables from OUTER scope are NON-ASSIGNABLE
          do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
-            return        $ MemberMethDecl l s e xs body'
+            return        $ MemberMethDef l s e xs body'
+ssaClassElt _ m@(MemberMethDecl _ _ _ _ ) = return m
 
 infOp OpAssign         _ _  = id
 infOp OpAssignAdd      l lv = InfixExpr l OpAdd      (lvalExp lv)

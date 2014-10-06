@@ -51,6 +51,7 @@ unsupportedConsTy l t         = mkErr l $ printf "Unsupported constructor type %
 unsupportedNonSingleConsTy l  = mkErr l $ printf "Only a single constructor signature is supported."
 unsupportedDotRef l t         = mkErr l $ printf "Unsupported dot reference %s" (ppshow t)
 unsupportedConvFun l t1 t2    = mkErr l $ printf "Unsupported case in convertFun:\n%s\nvs\n%s" (ppshow t1) (ppshow t2)
+unsupportedStaticNoInit l x   = mkErr l $ printf "Unsupported uninitialized static field '%s'." (ppshow x)
 
 bug' l s                      = err   l $ printf "BUG: %s" s 
 bug l s                       = mkErr l $ printf "BUG: %s" s 
@@ -72,7 +73,9 @@ bugNoAnnotForGlob l x         = mkErr l $ printf "BUG: No type annotation found 
 bugCondExprSigParse l         = mkErr l $ printf "BUG: In parsing conditional expression signature."
 bugEltSubt l f1 f2            = mkErr l $ printf "BUG: Cannot subtype type members '%s' and '%s'." (ppshow f1) ( ppshow f2)
 bugSSAConstructorInit l       = mkErr l $ printf "BUG: Multiple definition of the same field." 
+bugClassInstVarInit l x       = mkErr l $ printf "BUG: Instance variable '%s' initialization should have been moved to constructor." (ppshow x)
 bugNestedCasts l e            = mkErr l $ printf "BUG: Nested casts on expression '%s'." (ppshow e)
+bugMemberMethDecl l s         = mkErr l $ printf "BUG: MemberMethDecls are not allowed at %s." (ppshow s)
 
 bugClassDefNotFound l x       = mkErr l $ printf "BUG: Class definition for '%s' not found." (ppshow x)
 bugEnvFindTy l x              = mkErr l $ printf "BUG: envFindTy failed to find binding '%s'" (ppshow x)

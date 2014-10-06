@@ -13,7 +13,8 @@ import           Control.Applicative                ((<$>), (<*>))
 
 import qualified Data.Traversable                   as T
 
-import qualified Data.HashMap.Strict                as M
+import qualified Data.HashMap.Strict                as HM
+import qualified Data.Map.Strict                    as M
 import           Data.Maybe                         (catMaybes, maybeToList, fromMaybe)
 
 import           Language.ECMAScript3.Syntax
@@ -114,7 +115,7 @@ applySolution = fmap . fmap . tx
   where
     tx s (F.Reft (x, zs))   = F.Reft (x, F.squishRefas (appSol s <$> zs))
     appSol _ ra@(F.RConc _) = ra 
-    appSol s (F.RKvar k su) = F.RConc $ F.subst su $ M.lookupDefault F.PTop k s  
+    appSol s (F.RKvar k su) = F.RConc $ F.subst su $ HM.lookupDefault F.PTop k s  
 
 --------------------------------------------------------------------------------
 generateConstraints :: Config -> NanoRefType -> CGInfo 
@@ -138,13 +139,12 @@ consNano p@(Nano {code = Src fs})
 initGlobalEnv  :: NanoRefType -> CGM CGEnv
 -------------------------------------------------------------------------------
 initGlobalEnv (Nano { code = Src s }) 
-  = do g <- freshenCGEnvM $ CGE nms bds grd ctx mod pth Nothing
-       -- FIXME : do we have to add everything here ????
-       envAdds "initGlobalEnv" extras g
-       -- envAdds "initGlobalEnv" (trace (ppshow (fst <$> filter (nonBI . fst) nms_ids)) $ filter (nonBI . fst) nms_ids) g
+      = freshenCGEnvM (CGE nms bds grd ctx mod pth Nothing) 
+    >>= envAdds "initGlobalEnv" extras
   where
-    nms       = E.envAdds nms_ids E.envEmpty
-    nms_ids   = extras ++ visibleNames s
+    nms       = E.envAdds extras 
+              $ E.envMap (\(a,b,c,d) -> (d,c)) 
+              $ mkVarEnv $ visibleNames s
     extras    = [(Id (srcPos dummySpan) "undefined", 
                   (TApp TUndef [] $ F.Reft (F.vv Nothing, [F.trueRefa]), ReadOnly))]
     bds       = F.emptyIBindEnv
@@ -157,11 +157,10 @@ initGlobalEnv (Nano { code = Src s })
 initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> CGM CGEnv
 -------------------------------------------------------------------------------
 initModuleEnv g n s 
-  = do {-g' <- -} freshenCGEnvM $ CGE nms bds grd ctx mod pth (Just g)
-       -- envAdds "initGlobalEnv" (filter (nonBI . fst) nms_ids) g'
+  = freshenCGEnvM $ CGE nms bds grd ctx mod pth (Just g)
   where
-    nms       = E.envAdds nms_ids E.envEmpty
-    nms_ids   = visibleNames s
+    nms       = E.envMap (\(a,b,c,d) -> (d,c)) 
+              $ mkVarEnv $ visibleNames s
     bds       = cge_fenv g
     grd       = []
     mod       = cge_mod g
@@ -180,14 +179,16 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     --  Compute base environment @g'@, then add extra bindings
         envAdds "initFunc-0" varBinds g'
     >>= envAdds "initFunc-1" tyBinds 
-    >>= envAdds "initFunc-2" (visibleNames s)
+    -- >>= envAdds "initFunc-2" (visibleNames s)
     >>= envAdds "initFunc-3" argBind
     >>= envAdds "initFunc-4" thisBind
     >>= envAddReturn f t
     >>= freshenCGEnvM
   where
     g'        = CGE nms fenv grds ctx mod pth parent
-    nms       = E.envEmpty
+    -- nms       = E.envEmpty
+    nms       = E.envMap (\(a,b,c,d) -> (d,c)) 
+              $ mkVarEnv $ visibleNames s
     fenv      = cge_fenv g
     grds      = []
     mod       = cge_mod g
@@ -321,11 +322,11 @@ consStmt g (ReturnStmt l (Just e))
 consStmt g (ThrowStmt _ e)
   = consExpr g e Nothing >> return Nothing
 
--- function f(x1...xn);
-consStmt g (FunctionDecl l n _ )
-  = case envFindTy n g of
-      Just _  -> return $ Just g
-      Nothing -> cgError $ bugEnvFindTy (srcPos l) n
+-- (overload) function f(x1...xn);
+consStmt g (FuncOverload l n _ ) = return $ Just g
+
+-- declare function f(x1...xn);
+consStmt g (FuncAmbDecl l n _ ) = return $ Just g
 
 -- function f(x1...xn){ s }
 consStmt g s@(FunctionStmt _ _ _ _)
@@ -421,40 +422,48 @@ consClassElt g dfn (Constructor l xs body)
     mkThis (_:αs) = TApp (TRef rn) (t_mutable : map tVar αs) fTop
     rn            = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
-consClassElt g dfn (MemberVarDecl _ static (VarDecl l1 x eo))
-  = case anns of 
-      []  ->  cgError       $ errorClassEltAnnot (srcPos l1) (t_name dfn) x
-      fs  ->  case eo of
-                Just e     -> void <$> consCall g l1 "field init" (FI Nothing [(e,Nothing)]) $ ft fs
-                Nothing    -> return ()
+-- Static field
+consClassElt g dfn (MemberVarDecl l True x (Just e))
+  = case spec of 
+      Just (FieldSig _ _ t) -> 
+           void    $ consCall g l "field init"  (FI Nothing [(e, Just t)]) (mkInitFldTy t)
+      _ -> cgError $ errorClassEltAnnot (srcPos l) (t_name dfn) x
   where
-    anns | static    = [ s | StatAnn  s <- ann_fact l1 ]
-         | otherwise = [ f | FieldAnn f <- ann_fact l1 ]
-    ft flds = mkAnd $ catMaybes $ mkInitFldTy <$> flds
+    spec    = M.lookup (F.symbol x, StaticMember) (t_elts dfn)
+ 
+consClassElt _ _ (MemberVarDecl l True x Nothing)
+  = cgError $ unsupportedStaticNoInit (srcPos l) x
+
+-- Instance variable
+consClassElt _ _ (MemberVarDecl _ False _ Nothing)
+  = return ()
+
+consClassElt _ _ (MemberVarDecl l False x _)
+  = cgError $ bugClassInstVarInit (srcPos l) x
   
 -- | Static method
-consClassElt g dfn (MemberMethDecl l True i xs body) 
-  = case anns of
-      [t]   -> do its   <- cgFunTys l i xs t
-                  mapM_    (consFun1 l g i xs body) its
-      _     -> cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) i
+consClassElt g dfn (MemberMethDef l True x xs body)
+  = case spec of
+      Just (MethSig _ _ t) -> do its   <- cgFunTys l x xs t
+                                 mapM_    (consFun1 l g x xs body) its
+      _                    -> cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) x
   where
-    anns     = [ t | StatAnn (StatSig _ _ t)  <- ann_fact l ]
+    spec             = M.lookup (F.symbol x,StaticMember) (t_elts dfn)
  
 -- | Instance method
-consClassElt g dfn (MemberMethDecl l False i xs body) 
-  = case anns of
-      [(m,t)] -> do its   <- cgFunTys l i xs t --   cgMethTys l i (m,t)
-                    g'    <- envAdds "consClassElt-1" [(Loc (ann l) "this", (mkThis m $ t_args dfn, WriteGlobal))] g
-                    mapM_    (consFun1 l g' i xs body) its
-
-      _       -> cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) i
+consClassElt g dfn (MemberMethDef l False x xs body) 
+  = case spec of
+      Just (MethSig _ m t) -> 
+          do its   <- cgFunTys l x xs t 
+             g'    <- envAdds "consClassElt-1" [(Loc (ann l) "this", (mkThis m (t_args dfn), WriteGlobal))] g
+             mapM_    (consFun1 l g' x xs body) its
+      _ -> cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) x
   where
-    anns                  = [ (m, t) | MethAnn (MethSig _ m t)  <- ann_fact l ]
+    spec            = M.lookup (F.symbol x, InstanceMember) (t_elts dfn)
+    mkThis m (_:αs) = TApp (TRef rn) (ofType m : map tVar αs) fTop
+    rn              = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
-    mkThis m (_:αs)       = TApp (TRef rn) (ofType m : map tVar αs) fTop
-    rn                    = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
-
+consClassElt _ _  (MemberMethDecl _ _ _ _) = return ()
 
 
 --------------------------------------------------------------------------------

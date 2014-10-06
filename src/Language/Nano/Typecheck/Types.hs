@@ -44,9 +44,9 @@ module Language.Nano.Typecheck.Types (
   , isTVar, isTObj, isConstr, subtypeable, isTUndef, isTVoid, isTFun, fTop, orNull, isArr -- , tArr, rtArr
 
   -- * Element ops 
-  , sameBinder, eltType, isStaticSig, nonStaticSig, nonConstrElt, mutability, baseType
+  , sameBinder, eltType, allEltType, nonConstrElt, mutability, baseType
   , isMethodSig, isFieldSig, setThisBinding, remThisBinding, mapEltM
-  , conflateTypeMembers
+--  , conflateTypeMembers
 
   -- * Operator Types
   , infixOpId 
@@ -59,6 +59,8 @@ module Language.Nano.Typecheck.Types (
   -- * Builtin: Binders
   , mkId, argId, argTy, returnTy
 
+  -- * Symbols
+  , ctorSymbol, callSymbol, stringIndexSymbol, numericIndexSymbol 
 
   ) where 
 
@@ -69,11 +71,12 @@ import           Data.Either                    (partitionEithers)
 import qualified Data.List                      as L
 import           Data.Maybe                     (fromMaybe, maybeToList)
 import           Data.Monoid                    hiding ((<>))            
-import qualified Data.HashMap.Strict            as M
+import qualified Data.Map.Strict                as M
 import           Data.Typeable                  ()
 import           Data.Generics.Schemes
 import           Data.Generics.Aliases          (mkM)
 import           Language.ECMAScript3.Syntax 
+import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Misc
 import           Language.Nano.Types
@@ -234,7 +237,7 @@ mkAnd ts             = TAnd ts
 
 mapAnd f t           = mkAnd $ f <$> bkAnd t
 
-mkTCons m es = TCons es m fTop
+mkTCons m es = TCons m es fTop
 
 
 ----------------------------------------------------------------------------------------
@@ -352,76 +355,10 @@ mapEltM f (ConsSig t)        = ConsSig <$> f t
 mapEltM f (IndexSig i b t)   = IndexSig i b <$> f t
 mapEltM f (FieldSig x m t)   = FieldSig x m <$> f t
 mapEltM f (MethSig  x m t)   = MethSig x m <$> f t
-mapEltM f (StatSig x m t)    = StatSig x m <$> f t
+-- mapEltM f (StatSig x m t)    = StatSig x m <$> f t
 
 
 type CheckM = State [Error] 
-
--- | @conflateTypeMembers@ enforces unique binders in every element list
---
---  FIXME: add separate pass for `RType F.Reft`
---
---------------------------------------------------------------------------------------
-conflateTypeMembers :: (Typeable a, Data a) => a-> Either [Error] a
---------------------------------------------------------------------------------------
-conflateTypeMembers a = 
-    case runState (everywhereM (mkM myT) a) [] of 
-      (a, []) -> Right a
-      (_, es) -> Left es
-  where
-    -- FIXME: How do we use extM correctly ???
-    -- myT = rTypeT `extM` ifaceDefT
-    myT :: IfaceDef F.Reft -> CheckM (IfaceDef F.Reft)
-    myT = ifaceDefT
-
-    ifaceDefT            :: IfaceDef F.Reft -> CheckM (IfaceDef F.Reft)
-    ifaceDefT d           = case conflateTMs dummySpan $ t_elts d of
-                              Right es' -> return $ d { t_elts = es' }
-                              Left  e   -> modify (e:) >> return d
-
---     rTypeT               :: RType F.Reft -> CheckM (RType F.Reft)
---     rTypeT (TCons es m r) = case conflateTMs dummySpan es of
---                               Right es' -> return $ TCons es' m r
---                               Left  e   -> modify (e:) >> return (TCons es  m r)
---     rTypeT t              = return t
-
-
--- | Keep multiple bindings (of the same symbol) of methods or fields into a 
---   single binding bound to a intersection type.
-----------------------------------------------------------------------------------
-conflateTMs :: (IsLocated l) => l -> [TypeMember r] -> Either Error [TypeMember r]
-----------------------------------------------------------------------------------
-conflateTMs l es 
-  | null fails  = Right $ success
-  | otherwise   = Left  $ errorConflateTypeMembers (srcPos l) fails
-    
-  where
-    success   = [ e                       | (_, Just e) <- bnds ]
-    fails     = [ b                       | (b, Nothing) <- bnds ]
-    bnds      = [ (s, foldM1 joinElts es) | (s, es) <- cmnBnds ]
-    cmnBnds   = [ (b, findEs b)           | b <- L.nub (F.symbol <$> es) ]
-    findEs b  = [ e                       | e <- es, F.symbol e == b ]
- 
-
-joinElts (CallSig t1)        (CallSig t2)       = Just $ CallSig         $ joinTys t1 t2 
-joinElts (ConsSig t1)        (ConsSig t2)       = Just $ ConsSig         $ joinTys t1 t2 
-joinElts (IndexSig x1 s1 t1) (IndexSig _ _ t2)  = Just $ IndexSig x1 s1  $ joinTys t1 t2
-joinElts (FieldSig x1 m1 t1) (FieldSig _ m2 t2) | m1 == m2 
-                                                = Just $ FieldSig x1 m1  $ joinTys t1 t2 
-joinElts (MethSig x1 m1 t1)  (MethSig _ m2 t2)  | m1 == m2 
-                                                = Just $ MethSig  x1 m1  $ joinTys t1 t2 
-joinElts (StatSig x1 m1 t1)  (StatSig _ m2 t2)  | m1 == m2 
-                                                = Just $ StatSig  x1 m1  $ joinTys t1 t2 
-joinElts _                   _                  = Nothing
-
-joinTys t1 t2 = mkAnd $ bkAnd t1 ++ bkAnd t2 
-
-
-
-isStaticSig (StatSig _ _ _)   = True
-isStaticSig _                 = False
-
-nonStaticSig = not . isStaticSig
 
 nonConstrElt = not . isConstr
   
@@ -451,16 +388,20 @@ remThisBinding t =
 
 
 instance F.Symbolic IndexKind where
-  symbol StringIndex =  F.symbol "__string__index__"
-  symbol NumericIndex =  F.symbol "__numeric__index__"
+  symbol StringIndex  = stringIndexSymbol
+  symbol NumericIndex = numericIndexSymbol
 
 instance F.Symbolic (TypeMember t) where
   symbol (FieldSig s _ _)   = s
   symbol (MethSig  s _ _)   = s
-  symbol (ConsSig       _)  = F.symbol "__constructor__"
-  symbol (CallSig       _)  = F.symbol "__call__"
+  symbol (ConsSig       _)  = ctorSymbol
+  symbol (CallSig       _)  = callSymbol
   symbol (IndexSig _ i _)   = F.symbol i
-  symbol (StatSig s _ _ )   = s
+
+ctorSymbol         = F.symbol "__constructor__"
+callSymbol         = F.symbol "__call__"
+stringIndexSymbol  = F.symbol "__string__index__"
+numericIndexSymbol = F.symbol "__numeric__index__"
 
     
 sameBinder (CallSig _)       (CallSig _)        = True
@@ -468,7 +409,7 @@ sameBinder (ConsSig _)       (ConsSig _)        = True
 sameBinder (IndexSig _ b1 _) (IndexSig _ b2 _)  = b1 == b2
 sameBinder (FieldSig x1 _ _) (FieldSig x2 _ _)  = x1 == x2
 sameBinder (MethSig x1 _ _)  (MethSig x2 _ _)   = x1 == x2
-sameBinder (StatSig x1 _ _)  (StatSig x2 _ _)   = x1 == x2
+-- sameBinder (StatSig x1 _ _)  (StatSig x2 _ _)   = x1 == x2
 sameBinder _                 _                  = False
 
 mutability :: TypeMember r -> Maybe Mutability
@@ -477,7 +418,7 @@ mutability (ConsSig _)      = Nothing
 mutability (IndexSig _ _ _) = Nothing  
 mutability (FieldSig _ m _) = Just m
 mutability (MethSig _ m  _) = Just m
-mutability (StatSig _ m _)  = Just m
+-- mutability (StatSig _ m _)  = Just m
 
 baseType (FieldSig _ _ t) = case bkFun t of
                               Just (_, Just t, _, _) -> Just t
@@ -487,13 +428,18 @@ baseType (MethSig _ _ t)  = case bkFun t of
                               _                      -> Nothing
 baseType _                = Nothing
 
-
-eltType (FieldSig _ _ t)  = t
-eltType (MethSig _ _  t)  = t
+eltType (FieldSig _ _  t) = t
+eltType (MethSig _ _   t) = t
 eltType (ConsSig       t) = t
 eltType (CallSig       t) = t
 eltType (IndexSig _ _  t) = t
-eltType (StatSig _ _ t)   = t
+
+allEltType (FieldSig _ m  t) = [ofType m, t]
+allEltType (MethSig _  m  t) = [ofType m, t]
+allEltType (ConsSig       t) = [t]
+allEltType (CallSig       t) = [t]
+allEltType (IndexSig _ _  t) = [t]
+
 
 
 ----------------------------------------------------------------------------------
@@ -521,7 +467,7 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TFun (Just s) xts t _)  = ppArgs parens comma (B (F.symbol "this") s:xts) <+> text "=>" <+> pp t 
   pp (TFun _ xts t _)         = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)             = text "∀" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
-  pp (TAnd ts)                = vcat [text "/\\" <+> pp t | t <- ts]
+  pp (TAnd ts)                = hsep [text "/\\" <+> pp t | t <- ts]
   pp (TExp e)                 = pprint e 
   pp (TApp TUn ts r)          = F.ppTy r $ ppArgs id (text " +") ts 
   pp (TApp (TRef x) (m:ts) r)
@@ -529,12 +475,14 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TApp (TRef x) ts r)     = F.ppTy r $ pp x <>         ppArgs brackets comma ts
   pp (TApp c [] r)            = F.ppTy r $ pp c 
   pp (TApp c ts r)            = F.ppTy r $ parens (pp c <+> ppArgs id space ts)  
-  pp (TCons bs m r)           | length bs < 3 
-                              = F.ppTy r $ ppMut m <> braces (intersperse semi $ map pp bs)
+  pp (TCons m bs r)           | M.size bs < 3
+                              = F.ppTy r $ ppMut m <> braces (intersperse semi $ ppHMap pp bs)
                               | otherwise
-                              = F.ppTy r $ lbrace $+$ nest 2 (vcat $ map pp bs) $+$ rbrace
+                              = F.ppTy r $ lbrace $+$ nest 2 (vcat $ ppHMap pp bs) $+$ rbrace
   pp (TModule s  )            = text "module" <+> pp s
   pp (TClass c   )            = text "typeof" <+> pp c
+
+ppHMap p = map (p . snd) . M.toList 
 
 instance PP t => PP (FuncInputs t) where
   pp (FI a as) = ppArgs parens comma (maybeToList a ++ as)
@@ -569,7 +517,7 @@ instance Hashable TCon where
 instance (PP r, F.Reftable r) => PP (Bind r) where 
   pp (B x t)          = pp x <> colon <> pp t 
 
-instance (PP s, PP t) => PP (M.HashMap s t) where
+instance (PP s, PP t) => PP (M.Map s t) where
   pp m = vcat $ pp <$> M.toList m
 
 
@@ -577,6 +525,9 @@ instance PP Visibility where
   pp Local = text ""
   pp Exported = text "exported "
 
+instance PP StaticKind where
+  pp StaticMember   = text "static"
+  pp InstanceMember = text ""
 
 instance PP Assignability where
   pp ReadOnly    = text "ReadOnly"
@@ -594,13 +545,13 @@ instance (PP r, F.Reftable r) => PP (IfaceDef r) where
   pp (ID c nm vs Nothing ts) =  
         pp c
     <+> pp nm <> ppArgs angles comma vs 
-    <+> lbrace $+$ nest 2 (vcat $ map pp ts) $+$ rbrace
+    <+> lbrace $+$ nest 2 (vcat $ ppHMap pp ts) $+$ rbrace
   pp (ID c nm vs (Just (p,ps)) ts) = 
         pp c
     <+> pp nm <> ppArgs angles comma vs
     <+> text "extends" 
     <+> pp p  <> ppArgs angles comma ps
-    <+> lbrace $+$ nest 2 (vcat $ map pp ts) $+$ rbrace
+    <+> lbrace $+$ nest 2 (vcat $ ppHMap pp ts) $+$ rbrace
 
 instance PP IndexKind where
   pp StringIndex  = text "string"
@@ -612,8 +563,6 @@ instance (PP r, F.Reftable r) => PP (TypeMember r) where
   pp (IndexSig _ i t)     =  brackets (pp i) <> text ":" <+> pp t
   pp (FieldSig x m t)     =  text "field" <+> ppMut m <+> pp x <> text ":" <+> pp t 
   pp (MethSig x m t)      =  text "method" <+> ppMut m <+> pp x <> ppMeth t
-  pp (StatSig x m t)      =  text "static" <+> ppMut m <+> pp x <> text ":" <+> pp t
-
 
 ppMeth t = 
   case bkFun t of
@@ -760,9 +709,8 @@ objLitTy l ps     = mkFun (vs, Nothing, bs, rt)
   where
     vs            = [mv] ++ mvs ++ avs
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
-    rt            = TCons elts mt fTop -- $ objLitR l nps g fTop
-    elts          = [FieldSig s m (ofType a) | (s,m,a) <- zip3 ss mts ats ] 
-    -- nps           = length ps
+    rt            = TCons mt elts fTop
+    elts          = M.fromList [((s, InstanceMember), FieldSig s m $ ofType a) | (s,m,a) <- zip3 ss mts ats ]
     (mv, mt)      = freshTV l mSym 0                             -- obj mutability
     (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
     (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
@@ -799,16 +747,13 @@ argTy l ts g   = {- tracePP ("argTy: " ++ ppshow ts) $ -} immObjectLitTy l g (pL
    
 
 immObjectLitTy l _ ps ts 
-  | nps == length ts = TCons elts t_immutable fTop -- objLitR l nps g 
+  | nps == length ts = TCons t_immutable elts fTop -- objLitR l nps g 
   | otherwise        = die $ bug (srcPos l) $ "Mismatched args for immObjectLit"
   where
-    elts             = safeZipWith "immObjectLitTy" (\p t -> FieldSig (F.symbol p) t_immutable t) ps ts
+    elts             = M.fromList 
+                         [ ((s, InstanceMember), FieldSig s t_immutable t)
+                         | (p,t) <- safeZip "immObjectLitTy" ps ts, let s = F.symbol p ]
     nps              = length ps
-
--- objLitR l n g  = fromMaybe fTop $ substBINumArgs n . rTypeR . thd3 <$> bkFun t 
---   where
---     t          = builtinOpTy l BIObjectLit g
-
     
 ---------------------------------------------------------------------------------
 setPropTy :: (PPR r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
@@ -816,14 +761,13 @@ setPropTy :: (PPR r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
 setPropTy _ f ty =
     case ty of 
       TAll α2 (TAll μ2 (TFun Nothing [xt2,a2] rt2 r2)) 
-          -> TAll α2 (TAll μ2 (TFun Nothing [tr xt2,a2] rt2 r2))
+          -> TAll α2 (TAll μ2 (TFun Nothing [gg xt2,a2] rt2 r2))
       _   -> errorstar $ "setPropTy " ++ ppshow ty
   where
-    -- replace the field name
-    tr (B n (TCons [FieldSig x μx t] μ r)) 
-          | x == F.symbol "f"
-          = B n (TCons [FieldSig f μx t] μ r)
-    tr t  = error $ "setPropTy:tr " ++ ppshow t
+    gg (B n (TCons m ts r))  = B n (TCons m (ff ts) r)
+    ff                       = M.fromList . tr . M.toList 
+    tr [((s,a),FieldSig x μx t)] | x == F.symbol "f" = [((f,a),FieldSig f μx t)]
+    tr t                     = error $ "setPropTy:tr " ++ ppshow t
 
 
 ---------------------------------------------------------------------------------
@@ -840,7 +784,7 @@ mkEltFunTy :: F.Reftable r => TypeMember r -> Maybe (RType r)
 ---------------------------------------------------------------------------------
 mkEltFunTy (MethSig _ _  t) = mkEltFromType t
 mkEltFunTy (FieldSig _ _ t) = mkEltFromType t
-mkEltFunTy (StatSig _ _  t) = mkEltFromType t
+-- mkEltFunTy (StatSig _ _  t) = mkEltFromType t
 mkEltFunTy _                = Nothing
 
 mkEltFromType = fmap (mkAnd . fmap (mkFun . squash)) . sequence . map bkFun . bkAnd
@@ -849,9 +793,7 @@ mkEltFromType = fmap (mkAnd . fmap (mkFun . squash)) . sequence . map bkFun . bk
     squash (αs, _     , ts, t) = (αs, Nothing, ts, t)
 
 
-mkInitFldTy (FieldSig _ _ t) = Just $ mkFun ([], Nothing, [B (F.symbol "f") t], tVoid)
-mkInitFldTy (StatSig  _ _ t) = Just $ mkFun ([], Nothing, [B (F.symbol "f") t], tVoid)
-mkInitFldTy _                = Nothing
+mkInitFldTy t = mkFun ([], Nothing, [B (F.symbol "f") t], tVoid)
 
 
 infixOpId OpLT         = builtinId "OpLT"

@@ -58,13 +58,14 @@ module Language.Nano.Liquid.Types (
 
   ) where
 
-import           Data.Maybe             (fromMaybe, catMaybes, maybeToList)
-import           Data.Either            (partitionEithers)
+import           Data.Maybe              (fromMaybe, catMaybes, maybeToList)
+import           Data.Either             (partitionEithers)
 import qualified Data.List               as L
-import qualified Data.HashMap.Strict     as M
+import qualified Data.HashMap.Strict     as HM
+import qualified Data.Map.Strict         as M
 -- import qualified Data.HashSet            as S
 import           Data.Monoid                        (mconcat)
-import qualified Data.Traversable       as T
+import qualified Data.Traversable        as T
 import           Text.PrettyPrint.HughesPJ
 import           Text.Printf 
 import           Control.Applicative 
@@ -295,7 +296,7 @@ rTypeSortForAll t    = genSort n θ $ rTypeSort tbody
   where 
     (αs, tbody)      = bkAll t
     n                = length αs
-    θ                = M.fromList $ zip (F.symbol <$> αs) (F.FVar <$> [0..])
+    θ                = HM.fromList $ zip (F.symbol <$> αs) (F.FVar <$> [0..])
     
 genSort n θ (F.FFunc _ t)  = F.FFunc n (F.sortSubst θ <$> t)
 genSort n θ t              = F.FFunc n [F.sortSubst θ t]
@@ -327,42 +328,40 @@ instance (PPR r, F.Subable r) => F.Subable (RType r) where
 ------------------------------------------------------------------------------------------
 emapReft  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> RType a -> RType b
 ------------------------------------------------------------------------------------------
-emapReft f γ (TVar α r)       = TVar α (f γ r)
-emapReft f γ (TApp c ts r)    = TApp c (emapReft f γ <$> ts) (f γ r)
-emapReft f γ (TAll α t)       = TAll α (emapReft f γ t)
-emapReft f γ (TFun s xts t r) = TFun (emapReft f γ' <$> s) (emapReftBind f γ' <$> xts) (emapReft f γ' t) (f γ r)
-  where    γ'                 = (b_sym <$> xts) ++ γ
-emapReft f γ (TCons xts m r)  = TCons (emapReftElt f γ' <$> xts) m (f γ r)
-  where    γ'                 = (F.symbol <$> xts) ++ γ
-emapReft _ _ (TClass c)       = TClass c
-emapReft _ _ (TModule m)      = TModule m
-emapReft f γ (TAnd ts)        = TAnd (emapReft f γ <$> ts)
-emapReft _ _ _                = error "Not supported in emapReft"
+emapReft f γ (TVar α r)        = TVar α (f γ r)
+emapReft f γ (TApp c ts r)     = TApp c (emapReft f γ <$> ts) (f γ r)
+emapReft f γ (TAll α t)        = TAll α (emapReft f γ t)
+emapReft f γ (TFun s xts t r)  = TFun (emapReft f γ' <$> s) (emapReftBind f γ' <$> xts) 
+                                      (emapReft f γ' t) (f γ r) where γ' = (b_sym <$> xts) ++ γ
+emapReft f γ (TCons m xts r)   = TCons m (M.map (emapReftElt f γ) xts) (f γ r)
+emapReft _ _ (TClass c)        = TClass c
+emapReft _ _ (TModule m)       = TModule m
+emapReft f γ (TAnd ts)         = TAnd (emapReft f γ <$> ts)
+emapReft _ _ _                 = error "Not supported in emapReft"
 
-emapReftBind f γ (B x t)     = B x $ emapReft f γ t
+emapReftBind f γ (B x t)       = B x $ emapReft f γ t
 
 emapReftElt  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> TypeMember a -> TypeMember b
-emapReftElt f γ e            = fmap (f γ) e
+emapReftElt f γ e              = fmap (f γ) e
 
-mapReftM f (TVar α r)        = TVar α <$> f r
-mapReftM f (TApp c ts r)     = TApp c <$> mapM (mapReftM f) ts <*> f r
-mapReftM f (TFun s xts t r)  = TFun   <$> T.mapM (mapReftM f) s 
-                                      <*> mapM (mapReftBindM f) xts 
-                                      <*> mapReftM f t 
-                                      <*> return (F.top r)
-mapReftM f (TAll α t)        = TAll α <$> mapReftM f t
-mapReftM f (TAnd ts)         = TAnd   <$> mapM (mapReftM f) ts
-mapReftM f (TCons bs m r)    = TCons  <$> mapM (mapReftEltM f) bs <*> return m <*> f r
-mapReftM _ (TClass a)        = return $ TClass a
-mapReftM _ (TModule a)       = return $ TModule a
-mapReftM _ t                 = error   $ render $ text "Not supported in mapReftM: " <+> pp t 
+mapReftM f (TVar α r)          = TVar α  <$> f r
+mapReftM f (TApp c ts r)       = TApp c  <$> mapM (mapReftM f) ts <*> f r
+mapReftM f (TFun s xts t r)    = TFun    <$> T.mapM (mapReftM f) s 
+                                         <*> mapM (mapReftBindM f) xts 
+                                         <*> mapReftM f t 
+                                         <*> return (F.top r)
+mapReftM f (TAll α t)          = TAll α  <$> mapReftM f t
+mapReftM f (TAnd ts)           = TAnd    <$> mapM (mapReftM f) ts
+mapReftM f (TCons m bs r)      = TCons m <$> T.mapM (mapReftEltM f) bs <*> f r
+mapReftM _ (TClass a)          = return   $ TClass a
+mapReftM _ (TModule a)         = return   $ TModule a
+mapReftM _ t                   = error    $ render $ text "Not supported in mapReftM: " <+> pp t 
 
-mapReftBindM f (B x t)       = B x     <$> mapReftM f t
+mapReftBindM f (B x t)         = B x     <$> mapReftM f t
 
 mapReftEltM f (FieldSig x m t) = FieldSig x m <$> mapReftM f t
 mapReftEltM f (MethSig x m t)  = MethSig x m  <$> mapReftM f t
 mapReftEltM f (CallSig t)      = CallSig      <$> mapReftM f t
-mapReftEltM f (StatSig x m t)  = StatSig x m  <$> mapReftM f t
 mapReftEltM f (ConsSig  t)     = ConsSig      <$> mapReftM f t
 mapReftEltM f (IndexSig x b t) = IndexSig x b <$> mapReftM f t
 
@@ -386,7 +385,7 @@ efoldReft g f = go
     go γ z (TAll _ t)       = go γ z t
     go γ z (TFun s xts t r) = f γ r $ go γ' (gos γ' z (maybeToList s ++ map b_type xts)) t  where γ' = foldr (efoldExt g) γ xts
     go γ z (TAnd ts)        = gos γ z ts 
-    go γ z (TCons bs _ r)   = f γ' r $ gos γ z (f_type <$> bs) where γ' = foldr (efoldExt' g) γ bs
+    go γ z (TCons _ bs r)   = f γ' r $ gos γ z (f_type <$> M.elems bs) where γ' = foldr (efoldExt' g) γ $ M.elems bs
     go _ z (TClass _)       = z
     go _ z (TModule _)      = z
     go _ _ t                = error $ "Not supported in efoldReft: " ++ ppshow t
@@ -394,21 +393,20 @@ efoldReft g f = go
     gos γ z ts              = L.foldl' (go γ) z ts
 
 efoldExt g xt γ             = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
--- FIXME: this implementation is sub-ideal
 efoldExt' g xt γ            = F.insertSEnv (F.symbol xt) (g $ f_type xt) γ
 
 ------------------------------------------------------------------------------------------
 efoldRType :: PPR r => (RType r -> b) -> (F.SEnv b -> RType r -> a -> a) -> F.SEnv b -> a -> RType r -> a
 ------------------------------------------------------------------------------------------
 efoldRType g f                 = go
-  where 
+  where
+    go γ z t@(TVar _ _ )       = f γ t z
     go γ z t@(TApp _ ts _)     = f γ t $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
     go γ z t@(TAll _ t1)       = f γ t $ go γ z t1
     go γ z t@(TFun s xts t1 _) = f γ t $ go γ' (gos γ' z (maybeToList s ++ map b_type xts)) t1  where γ' = foldr (efoldExt g) γ xts
     go γ z   (TAnd ts)         = gos γ z ts 
-    go γ z t@(TCons xts _ _)   = f γ t $ gos γ' z (f_type <$> xts) where γ' = foldr (efoldExt' g) γ xts
-    go γ z t                   = f γ t z
-    -- go _ _ t                   = error $ "Not supported in efoldRType: " ++ ppshow t
+    go γ z t@(TCons _ bs _ )   = f γ t $ gos γ' z (f_type <$> M.elems bs) where γ' = M.foldr (efoldExt' g) γ bs
+    go _ _ t                   = error $ "Not supported in efoldRType: " ++ ppshow t
     gos γ z ts                 = L.foldl' (go γ) z ts
 
 
@@ -431,19 +429,8 @@ isTrivialRefType' t     = foldReft (\r -> (f r &&)) True t
   where 
     f (F.Reft (_,ras)) = null ras
 
--- ------------------------------------------------------------------------------------------
--- prefixOpRTy :: PrefixOp -> CGEnv -> RefType
--- ------------------------------------------------------------------------------------------
--- prefixOpRTy o g = prefixOpTy o $ cge_names g
-
--- ------------------------------------------------------------------------------------------
--- infixOpRTy :: InfixOp -> CGEnv -> RefType
--- ------------------------------------------------------------------------------------------
--- infixOpRTy o g  = infixOpTy o $ cge_names g
-
 rawStringSymbol = F.Loc (F.dummyPos "RSC.Types.rawStringSymbol") . F.symbol
 rawStringFTycon = F.symbolFTycon . F.Loc (F.dummyPos "RSC.Types.rawStringFTycon") . F.symbol
-
 
 
 -----------------------------------------------------------------------------------
@@ -453,7 +440,6 @@ rawStringFTycon = F.symbolFTycon . F.Loc (F.dummyPos "RSC.Types.rawStringFTycon"
 getInvariant :: Statement a -> F.Pred 
 
 getInvariant = getSpec getInv . flattenStmt
-
 
 getAssume    :: Statement a -> Maybe F.Pred 
 getAssume    = getStatementPred "assume"
@@ -546,19 +532,11 @@ zipType γ (TApp TUn t1s r) t2 =
 
 -- | No unions below this point
 --
--- | Undefined
---
--- UNDEFINED
--- zipType γ (TApp TUndef _ r1) t2 = Just $ rType t2 `strengthen` r1
-
-
 -- | Class/interface types
---
 -- 
 --   C<Vi> extends C'<Wi>
 --   --------------------------------
 --   C<Si> || C'<Ti> = C'<Wi[Vi/Si]>
---   
 --   
 --   C </: C'
 --   ------------------------------------------------------
@@ -644,26 +622,13 @@ zipType _ (TFun _ _ _ _ ) (TFun _ _ _ _) = Nothing
 --
 --  { F1,F2 } | { F1',F3' } = { F1|F1',top(F3) }, where disjoint F2 F3'
 --
-zipType γ (TCons f1s _ r1) (TCons f2s m2 _) = do 
-    (disjoint, common) <- partition
-    common'            <- mapM (uncurry $ zipElts γ) common
-    return              $ TCons (common' ++ tp disjoint) m2 r1
+zipType γ (TCons _ e1s r1) (TCons m2 e2s _) = do 
+    common'            <- T.mapM (uncurry $ zipElts γ) common
+    return              $ TCons m2 (common' `M.union` disjoint') r1
   where 
     tp                  = ((const fTop <$>) <$>)
-
-    pairing             = [unique ([f1 | f1 <- f1s, compatible f1 f2], f2) | f2 <- f2s]
-    validPairing        = catMaybes pairing
-    partition           | length validPairing == length pairing
-                        = Just $ partitionEithers validPairing
-                        | otherwise
-                        = Nothing
-
-    unique ([ ],f')     = Just $ Left f'
-    unique ([f],f')     = Just $ Right (f,f')
-    unique _            = Nothing
-
-    compatible e e'     = sameBinder e e' && related γ e e'
-
+    common              = M.intersectionWith (,) e1s e2s
+    disjoint'           = M.map (fmap $ const fTop) $ e2s `M.difference` e1s
 
 -- | Intersection types
 --
@@ -700,7 +665,7 @@ zipElts :: CGEnv -> TypeMember F.Reft -> TypeMember F.Reft -> Maybe (TypeMember 
 ------------------------------------------------------------------------------------------
 zipElts γ (CallSig t1)      (CallSig t2)        = CallSig        <$> zipType γ t1 t2 
 zipElts γ (ConsSig t1)      (ConsSig t2)        = ConsSig        <$> zipType γ t1 t2 
-zipElts γ (StatSig _ _ t1)  (StatSig x2 m2 t2)  = StatSig  x2 m2 <$> zipType γ t1 t2 
+-- zipElts γ (StatSig _ _ t1)  (StatSig x2 m2 t2)  = StatSig  x2 m2 <$> zipType γ t1 t2 
 zipElts γ (IndexSig _ _ t1) (IndexSig x2 b2 t2) = IndexSig x2 b2 <$> zipType γ t1 t2 
 zipElts γ (FieldSig _ _ t1) (FieldSig x2 m2 t2) = FieldSig x2 m2 <$> zipType γ t1 t2
 zipElts γ (MethSig _ _  t1) (MethSig x2 m2 t2)  = MethSig  x2 m2 <$> zipType γ t1 t2

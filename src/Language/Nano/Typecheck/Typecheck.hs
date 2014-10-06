@@ -16,6 +16,7 @@ import           Control.Monad
 import           Control.Arrow                      ((***))
 
 import qualified Data.IntMap.Strict                 as I
+import qualified Data.Map.Strict                    as M
 import           Data.Maybe                         (catMaybes, listToMaybe, maybeToList, fromMaybe)
 import           Data.List                          (nub)
 import           Data.Generics                   
@@ -309,46 +310,50 @@ tcClassElt γ dfn (Constructor l xs body)
     mkThis (_:αs)         = TApp (TRef rn) (t_mutable : map tVar αs) fTop
     rn                    = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
-
-tcClassElt γ dfn (MemberVarDecl l static (VarDecl l1 x eo))
-  = case anns of 
-      []  ->  tcError     $ errorClassEltAnnot (srcPos l1) (t_name dfn) x
-      fs  ->  case eo of
-                Just e   -> do (FI _ [e'],_) <- tcNormalCall γ l1 "field init" (FI Nothing [(e, Nothing)]) $ ft fs
-                            -- Using a function call to "init" to keep track of 
-                            -- overloading on field initialization
-                               return         $ (MemberVarDecl l static (VarDecl l1 x $ Just e'))
-                Nothing  -> return            $ (MemberVarDecl l static (VarDecl l1 x Nothing))
+-- Static field
+tcClassElt γ dfn (MemberVarDecl l True x (Just e))
+  = case spec of 
+      Just (FieldSig _ _ t) -> 
+          do (FI _ [e'],_) <- tcNormalCall γ l "field init" (FI Nothing [(e, Nothing)]) 
+                            $ mkInitFldTy t
+             return         $ MemberVarDecl l True x $ Just e'
+      _  ->  tcError        $ errorClassEltAnnot (srcPos l) (t_name dfn) x
   where
-    anns | static         = [ s | StatAnn  s <- ann_fact l1 ]
-         | otherwise      = [ f | FieldAnn f <- ann_fact l1 ]
-    ft flds               = mkAnd $ catMaybes $ mkInitFldTy <$> flds
+    spec    = M.lookup (F.symbol x, StaticMember) (t_elts dfn)
+
+tcClassElt _ _ (MemberVarDecl l True x Nothing)
+  = tcError $ unsupportedStaticNoInit (srcPos l) x
+
+-- Instance variable
+tcClassElt _ _ m@(MemberVarDecl _ False _ Nothing) 
+  = return m
+tcClassElt _ _ m@(MemberVarDecl l False x _) 
+  = tcError $ bugClassInstVarInit (srcPos l) x
 
 -- | Static method
-tcClassElt γ dfn (MemberMethDecl l True i xs body) 
-  = case anns of 
-      [t]  -> do its     <- tcFunTys l i xs t
-                 body'   <- foldM (tcFun1 γ l i xs) body its
-                 return   $ MemberMethDecl l True i xs body'
-      _    -> tcError     $ errorClassEltAnnot (srcPos l) (t_name dfn) i
-  where
-    anns                  = [ t | StatAnn (StatSig _ _ t)  <- ann_fact l ]
+tcClassElt γ dfn (MemberMethDef l True x xs body) 
+  = case spec of 
+      Just (MethSig _ _ t) -> 
+          do its      <- tcFunTys l x xs t
+             body'    <- foldM (tcFun1 γ l x xs) body its
+             return    $ MemberMethDef l True x xs body'
+      _ -> tcError     $ errorClassEltAnnot (srcPos l) (t_name dfn) x
+  where 
+    spec               = M.lookup (F.symbol x, StaticMember) (t_elts dfn)
 
 -- | Instance method
-tcClassElt γ dfn (MemberMethDecl l False i xs bd) 
-  = case specs of 
-      [(_,t,γ')] -> 
-          do its         <- tcFunTys l i xs t
-             bd'         <- foldM (tcFun1 γ' l i xs) bd its
-             return       $ MemberMethDecl l False i xs bd'
-      _    -> tcError     $ errorClassEltAnnot (srcPos l) (t_name dfn) i
+tcClassElt γ dfn (MemberMethDef l False x xs bd) 
+  = case spec of 
+      Just (MethSig _ m t) -> 
+          do its      <- tcFunTys l x xs t
+             bd'      <- foldM (tcFun1 (gg m) l x xs) bd its
+             return    $ MemberMethDef l False x xs bd'
+      _    -> tcError  $ errorClassEltAnnot (srcPos l) (t_name dfn) x
   where
-    specs                 = [ (m, t, gg $ ofType m) | MethAnn (MethSig _ m t)  <- ann_fact l ]
-
-    gg m                  = tcEnvAdd (F.symbol "this") (mkThis m $ t_args dfn, ThisVar) γ
-
-    mkThis m (_:αs)       = TApp (TRef rn) (m : map tVar αs) fTop
-    rn                    = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
+    spec               = M.lookup (F.symbol x, InstanceMember) (t_elts dfn)
+    gg m               = tcEnvAdd (F.symbol "this") (mkThis (ofType m) (t_args dfn), ThisVar) γ
+    mkThis m (_:αs)    = TApp (TRef rn) (m : map tVar αs) fTop
+    rn                 = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
 
 --------------------------------------------------------------------------------

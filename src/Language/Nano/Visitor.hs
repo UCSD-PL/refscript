@@ -19,12 +19,14 @@ module Language.Nano.Visitor (
 
 import           Data.Functor.Identity          (Identity)
 import           Data.Monoid
+import qualified Data.Map.Strict                as M
 import           Data.Traversable               (traverse)
 import           Control.Applicative            ((<$>), (<*>))
 import           Control.Exception              (throw)
 import           Control.Monad.Trans.State      (modify, runState, StateT, runStateT)
 import           Control.Monad.Trans.Class      (lift)
 import           Language.Nano.Misc             (mapSndM)
+import           Language.Fixpoint.Misc         (mapSnd)
 import           Language.Nano.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -207,16 +209,17 @@ visitClassElt v = vCE
     vCE c ce = accum acc >> step c' ce' where c'     = ctxCElt v c  ce
                                               ce'    = txCElt  v c' ce
                                               acc    = accCElt v c' ce
-    step c (Constructor l xs ss)        = Constructor    l   <$> (vI c <$$> xs) <*> (vS c <$$> ss)
-    step c (MemberVarDecl l b d)        = MemberVarDecl  l b <$> (vD c d) 
-    step c (MemberMethDecl l b f xs ss) = MemberMethDecl l b <$> (vI c f)       <*> (vI c <$$> xs) <*> (vS c <$$> ss)
+    step c (Constructor l xs ss)       = Constructor    l   <$> (vI c <$$> xs) <*> (vS c <$$> ss)
+    step c (MemberVarDecl l b i e)     = MemberVarDecl  l b <$> (vI c i)       <*> (visitExpr v c <$$> e)
+    step c (MemberMethDecl l b f xs)   = MemberMethDecl l b <$> (vI c f)       <*> (vI c <$$> xs)
+    step c (MemberMethDef l b f xs ss) = MemberMethDef  l b <$> (vI c f)       <*> (vI c <$$> xs) <*> (vS c <$$> ss)
 
-visitFInit ::  (Monad m, Functor m, Monoid a, IsLocated b) 
+visitFInit :: (Monad m, Functor m, Monoid a, IsLocated b) 
            => VisitorM m a ctx b -> ctx -> ForInit b -> VisitT m a (ForInit b)
 visitFInit v = step
   where
     step _ NoInit       = return NoInit
-    step c (VarInit ds) = VarInit  <$> (visitVarDecl v c <$$> ds)
+    step c (VarInit ds) = VarInit  <$> (visitVarDecl v c <$$> ds) 
     step c (ExprInit e) = ExprInit <$> (visitExpr v c e)
 
 visitFIInit :: (Monad m, Functor m, Monoid a, IsLocated b) 
@@ -309,7 +312,7 @@ transRType f                  = go
                                                                     bs' = trans f as xs' <$> bs
                                                                     t'  = go as xs'       $  t
                                                                     xs' = bs ++ xs
-    go as xs (TCons ms m r)   = f as xs $ TCons ms' m r       where ms' = trans f as xs <$> ms
+    go as xs (TCons m ms r)   = f as xs $ TCons m ms' r       where ms' = trans f as xs <$> ms
     go as xs (TAll a t)       = f as xs $ TAll a t'           where t'  = go (a:as) xs t 
     go as xs t                = f as xs t 
 

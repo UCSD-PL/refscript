@@ -58,7 +58,8 @@ import           Control.Monad.Trans.Except
 
 import           Data.Maybe                     (catMaybes, maybeToList)
 import           Data.Monoid                    (mempty)
-import qualified Data.HashMap.Strict            as M
+import qualified Data.HashMap.Strict            as HM
+import qualified Data.Map.Strict                as M
 import qualified Data.List                      as L
 import           Data.Function                  (on)
 import           Text.PrettyPrint.HughesPJ
@@ -97,7 +98,7 @@ data CGInfo = CGI { cgi_finfo :: F.FInfo Cinfo
 
 -- Dump the refinement subtyping constraints
 instance PP CGInfo where
-  pp (CGI finfo _) = cat (map pp (M.elems $ F.cm finfo))
+  pp (CGI finfo _) = cat (map pp (HM.elems $ F.cm finfo))
 
 instance PP (F.SubC c) where
   pp s = pp (F.lhsCs s) <+> text " <: " <+> pp (F.rhsCs s)
@@ -124,7 +125,7 @@ initState       :: Config -> Nano AnnTypeR F.Reft -> CGState
 -------------------------------------------------------------------------------
 initState c p   = CGS F.emptyBindEnv [] [] 0 mempty invs c (max_id p)
   where 
-    invs        = M.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
+    invs        = HM.fromList [(tc, t) | t@(Loc _ (TApp tc _ _)) <- invts p]
 
 
 -------------------------------------------------------------------------------
@@ -132,7 +133,7 @@ cgStateCInfo :: NanoRefType -> (([F.SubC Cinfo], [F.WfC Cinfo]), CGState) -> CGI
 -------------------------------------------------------------------------------
 cgStateCInfo pgm ((fcs, fws), cg) = CGI (patchSymLits fi) (cg_ann cg)
   where 
-    fi   = F.FI { F.cm    = M.fromList $ F.addIds fcs  
+    fi   = F.FI { F.cm    = HM.fromList $ F.addIds fcs  
                 , F.ws    = fws
                 , F.bs    = binds cg
                 , F.gs    = measureEnv pgm
@@ -179,7 +180,7 @@ data CGState = CGS {
   -- 
   -- ^ type constructor invariants
   --
-  , invs        :: TConInv              
+  , invs        :: TConInv
   -- 
   -- ^ configuration options
   --
@@ -193,7 +194,7 @@ data CGState = CGS {
 
 type CGM     = ExceptT Error (State CGState)
 
-type TConInv = M.HashMap TCon (Located RefType)
+type TConInv = HM.HashMap TCon (Located RefType)
  
 
 ---------------------------------------------------------------------------------------
@@ -307,7 +308,7 @@ addInvariant g t
                            else (        instanceof . typeof t . invs) <$> get
   where
     -- | typeof 
-    typeof t@(TApp tc _ o)  i = maybe t (strengthenOp t o . rTypeReft . val) $ M.lookup tc i
+    typeof t@(TApp tc _ o)  i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup tc i
     typeof t@(TFun a b c r) _ = TFun a b c typeofReft
     typeof t                _ = t
     strengthenOp t o r        | L.elem r (ofRef o) = t
@@ -726,7 +727,7 @@ splitC (Sub g i t1 t2@(TApp (TRef _) _ _)) =
 
 -- | TCons
 --
-splitC (Sub g i t1@(TCons e1s μ1 _ ) t2@(TCons e2s μ2 _ ))
+splitC (Sub g i t1@(TCons μ1 e1s _) t2@(TCons μ2 e2s _))
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- splitEs g i μ1 μ2 e1s e2s
         return $ cs ++ cs'
@@ -751,21 +752,15 @@ mkBot t = setRTypeR t (F.bot r) where r = rTypeR t
 -- FIXME: 
 --  * Add special cases: IndexSig ...
 ---------------------------------------------------------------------------------------
-splitEs :: CGEnv -> Cinfo -> Mutability -> Mutability 
-            -> [TypeMember F.Reft] -> [TypeMember F.Reft] -> CGM [FixSubC]
-
+splitEs :: CGEnv 
+        -> Cinfo 
+        -> Mutability         -> Mutability 
+        -> TypeMembers F.Reft -> TypeMembers F.Reft 
+        -> CGM [FixSubC]
 ---------------------------------------------------------------------------------------
-splitEs g i μ1 μ2 e1s e2s
-  | length e1s' == length e2s'
-  = concatMapM (uncurry $ splitE g i μ1 μ2) $ zip e1s' e2s'
-  | otherwise
-  = cgError $ bugMalignedFields l e1s e2s 
+splitEs g i μ1 μ2 e1s e2s = concatMapM (uncurry $ splitE g i μ1 μ2) es 
   where
-    l     = srcPos i
-    e1s'  = L.sortBy (compare `on` F.symbol) (filter flt e1s)
-    e2s'  = L.sortBy (compare `on` F.symbol) (filter flt e2s)
-    flt x = nonStaticSig x && nonConstrElt x
-
+    es     = M.elems $ M.intersectionWith (,) e1s e2s
 
 splitE g i _  _ (CallSig t1) (CallSig t2) = splitC (Sub g i t1 t2)
 splitE g i _  _ (ConsSig t1) (ConsSig t2) = splitC (Sub g i t1 t2)
@@ -851,10 +846,10 @@ splitW (W g i t@(TApp _ ts _))
 splitW (W g i (TAnd ts))
   = concatMapM splitW [W g i t | t <- ts]
 
-splitW (W g i t@(TCons es _ _))
+splitW (W g i t@(TCons _ es _))
   = do let bws = bsplitW g t i
        -- FIXME: add field bindings in g?
-       ws     <- concatMapM splitW [ W g i $ eltType e | e <- es ]
+       ws     <- concatMapM splitW [ W g i $ eltType e | e <- M.elems es ]
        return  $ bws ++ ws
 
 splitW (W _ _ (TClass _ ))

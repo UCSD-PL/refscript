@@ -30,6 +30,7 @@ module Language.Nano.Annots (
 import           Control.Applicative            hiding (empty)
 import           Data.Default
 import           Data.Monoid
+import qualified Data.Map.Strict                as M
 import qualified Data.IntMap.Strict             as I
 import           Data.Generics                   
 import           Text.PrettyPrint.HughesPJ 
@@ -56,7 +57,7 @@ data Cast r  = CNo                                      -- .
              | CDead { err :: Error  , tgt :: RType r } -- |dead code|
              | CUp   { org :: RType r, tgt :: RType r } -- <t1 UP t2>
              | CDn   { org :: RType r, tgt :: RType r } -- <t1 DN t2>
-             deriving (Eq, Ord, Show, Data, Typeable, Functor)
+             deriving (Eq, Show, Data, Typeable, Functor)
 
 
 data CastDirection   = CDNo    -- .
@@ -133,7 +134,7 @@ data Fact r
   | ClassAnn    !([TVar], Maybe (RelName, [RType r]))
   | ExporedModElt
   | ModuleAnn   !(F.Symbol)
-    deriving (Eq, Ord, Show, Data, Typeable)
+    deriving (Eq, Show, Data, Typeable)
 
 type UFact     = Fact ()
 
@@ -228,7 +229,7 @@ factRTypes = go
     go (MethAnn m)        = [f_type m]
     go (StatAnn m)        = [f_type m]
     go (ConsAnn m)        = [f_type m]
-    go (IfaceAnn ifd)     = f_type <$> t_elts ifd
+    go (IfaceAnn ifd)     = f_type . snd <$> M.toList (t_elts ifd)
     go (ClassAnn (_, c))  = maybe [] snd c
     go f                  = error ("factRTypes: TODO :" ++ show f)
 

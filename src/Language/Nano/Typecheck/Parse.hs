@@ -122,8 +122,8 @@ iFaceP   :: Parser (Id SourceSpan, IfaceDef Reft)
 iFaceP   = do name   <- identifierP 
               as     <- option [] tParP
               h      <- optionMaybe extendsP
-              -- FIXME
-              es     <- braces $ propBindP def
+              es     <- mkTypeMembers . ((InstanceMember, MemDeclaration,) <$>) 
+                    <$> braces (propBindP def)
               return (name, convertTvar as $ ID InterfaceKind name as h es)
 
 extendsP = do reserved "extends"
@@ -178,7 +178,7 @@ bareTypeP = bareAllP $ bodyP
 rUnP        = mkU <$> parenNullP (bareTypeNoUnionP `sepBy1` plus) toN
   where
     mkU [x] = strengthen x
-    mkU xs  = flattenUnions . TApp TUn (L.sort xs)
+    mkU xs  = flattenUnions . TApp TUn xs
     toN     = (tNull:)
 
 bUnP        = parenNullP (bareTypeNoUnionP `sepBy1` plus) toN >>= mkU
@@ -264,9 +264,10 @@ bbaseP
 objLitP :: Parser (Reft -> RefType)
 ----------------------------------------------------------------------------------
 objLitP 
-  = do m     <- option def (toType <$> mutP)
-       bs    <- braces (propBindP m)
-       return $ TCons bs m
+  = do m       <- option def (toType <$> mutP)
+       es      <- mkTypeMembers . ((InstanceMember, MemDeclaration,) <$>) 
+              <$> braces (propBindP def)
+       return  $  TCons m es       
  
 mutP
   =  try (TVar <$> brackets tvarP <*> return ()) 
@@ -321,7 +322,7 @@ propBindP defM =  sepEndBy propEltP semi
   where
     propEltP   =  try indexEltP 
               <|> try (fieldEltP defM)
-              <|> try (statEltP defM)
+--              <|> try (statEltP defM)
               <|> try (methEltP defM)
               <|> try callEltP
               <|>     consEltP
@@ -350,14 +351,14 @@ fieldEltP defM  = do
     t          <- bareTypeP
     return      $ FieldSig x m t
 
--- | static <[mut]> f :: t
-statEltP defM   = do 
-    _          <- reserved "static"
-    x          <- symbolP 
-    _          <- colon
-    m          <- option defM (toType <$> mutP)
-    t          <- bareTypeP
-    return      $ StatSig x m t
+-- -- | static <[mut]> f :: t
+-- statEltP defM   = do 
+--     _          <- reserved "static"
+--     x          <- symbolP 
+--     _          <- colon
+--     m          <- option defM (toType <$> mutP)
+--     t          <- bareTypeP
+--     return      $ StatSig x m t
 
 -- | <[mut]> m :: (ts): t
 methEltP defM   = do
@@ -454,7 +455,6 @@ data RawSpec
   | RawClass    (SourceSpan, String)   -- Class annots
   | RawField    (SourceSpan, String)   -- Field annots
   | RawMethod   (SourceSpan, String)   -- Method annots
-  | RawStatic   (SourceSpan, String)   -- Static annots
   | RawConstr   (SourceSpan, String)   -- Constructor annots
   | RawTAlias   (SourceSpan, String)   -- Type aliases
   | RawPAlias   (SourceSpan, String)   -- Predicate aliases
@@ -483,7 +483,7 @@ data PSpec l r
 
   -- Used only for parsing specs
   | ErrorSpec
-  deriving (Eq, Ord, Show, Data, Typeable)
+  deriving (Eq, Show, Data, Typeable)
 
 type Spec = PSpec SourceSpan Reft
 
@@ -495,7 +495,6 @@ parseAnnot = go
     go (RawFunc     (_ , _)) = AnFunc <$>               anonFuncP
     go (RawField    (_ , _)) = Field  <$>               fieldEltP def -- FIXME: these need to be patched aferwards  
     go (RawMethod   (_ , _)) = Method <$>               methEltP def 
-    go (RawStatic   (_ , _)) = Static <$>               statEltP def
     go (RawConstr   (_ , _)) = Constr <$>               consEltP
     go (RawIface    (ss, _)) = Iface  <$> patch2 ss <$> iFaceP
     go (RawClass    (ss, _)) = Class  <$> patch2 ss <$> classDeclP 
@@ -518,7 +517,6 @@ getSpecString = go
     go (RawIface    (_, s)) = s  
     go (RawField    (_, s)) = s  
     go (RawMethod   (_, s)) = s  
-    go (RawStatic   (_, s)) = s  
     go (RawConstr   (_, s)) = s  
     go (RawClass    (_, s)) = s  
     go (RawTAlias   (_, s)) = s  
@@ -535,7 +533,6 @@ instance IsLocated RawSpec where
   srcPos (RawIface    (s,_)) = s  
   srcPos (RawField    (s,_)) = s  
   srcPos (RawMethod   (s,_)) = s  
-  srcPos (RawStatic   (s,_)) = s  
   srcPos (RawConstr   (s,_)) = s  
   srcPos (RawClass    (s,_)) = s  
   srcPos (RawTAlias   (s,_)) = s  
@@ -608,12 +605,12 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 ---------------------------------------------------------------------------------
 mkCode :: [Statement (SourceSpan, [Spec])] -> Either [Error] (NanoBareR Reft)
 ---------------------------------------------------------------------------------
-mkCode = --debugTyBinds .
-         conflateTypeMembers
-       . scrapeQuals 
-       . expandAliases
-       . visitNano convertTvarVisitor []
-       . mkCode' 
+mkCode p = --debugTyBinds .
+             return   (mkCode' p)
+         >>= return . expandAliases
+         -- >>=          conflateTypeMembers  
+         >>= return . visitNano convertTvarVisitor []
+         >>= return . scrapeQuals 
     
 mkCode' ss = Nano { 
         code          = Src (checkTopStmt <$> ss')
@@ -664,10 +661,10 @@ stmtTypeBindings _                = go
 celtTypeBindings _                = (mapSnd eltType <$>) . go 
   where
     go (Constructor l _ _)        = [(x, e) | ConsAnn  e <- ann_fact l, let x = Id l "ctor" ]
-    go (MemberVarDecl _ _ (VarDecl l x _))     
-                                  = [(x, e) | FieldAnn e <- ann_fact l] ++ 
+    go (MemberVarDecl l _ x _)    = [(x, e) | FieldAnn e <- ann_fact l] ++ 
                                     [(x, e) | StatAnn  e <- ann_fact l]
-    go (MemberMethDecl l _ x _ _) = [(x, e) | MethAnn  e <- ann_fact l]
+    go (MemberMethDef l _ x _ _)  = [(x, e) | MethAnn  e <- ann_fact l]
+    go _                          = []
 
 -- debugTyBinds p@(Nano {code = Src ss}) = trace msg p
 --   where

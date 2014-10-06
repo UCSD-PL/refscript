@@ -28,9 +28,10 @@ module Language.Nano.Typecheck.Resolve (
   ) where 
 
 import           Data.Generics
-import           Data.Function                  (on)
+import           Data.Function                       (on)
+import qualified Data.Map.Strict                  as M
 import           Language.ECMAScript3.PrettyPrint
-import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Env
 -- import           Language.Nano.Errors
 import           Language.Nano.Environment
@@ -200,38 +201,44 @@ parentOf (AP (QPath l m )) = Just (AP (QPath l (init m)))
 --   @m@ is the top-level enforced mutability Top-level 
 --
 ---------------------------------------------------------------------------
-flatten :: (EnvLike r g, PPR r) => Maybe Mutability -> Bool -> g r -> SIfaceDef r -> Maybe [TypeMember r]
+flatten :: (EnvLike r g, PPR r) 
+        => Maybe Mutability 
+        -> StaticKind 
+        -> g r 
+        -> SIfaceDef r 
+        -> Maybe (TypeMembers r)
 ---------------------------------------------------------------------------
-flatten m b γ (ID _ _ vs h es, ts) =
+flatten m s γ (ID _ _ vs h es, ts) =
     case h of 
-      Just (p, ts') -> 
-          do  parent        <- resolveRelNameInEnv γ p
-              inherited     <- flatten m b γ (parent, ts')
-              return         $ apply θ $ fmut $ L.unionBy sameBinder current inherited
-      Nothing -> 
-          return             $ apply θ $ fmut $ current
+      Just (p, ts') -> do inh   <- flatten m s γ . (, ts') =<< resolveRelNameInEnv γ p 
+                          return $ M.map (apply θ . fmut) $ M.union current inh
+      Nothing       -> return    $ M.map (apply θ . fmut) $ current 
   where 
-    fmut           = (maybe id setMut m <$>)
-                     
-    current        = filter (fn b) es
-    θ              = fromList $ zip vs ts
-    fn True        = isStaticSig
-    fn False       = nonStaticSig
-
-    setMut m (FieldSig x _ t) = FieldSig x m t
-    setMut m (StatSig  x _ t) = StatSig  x m t
-    setMut _ e                = e
-
+    current                      = M.filterWithKey (\(_,s') _ -> s == s') es
+    θ                            = fromList $ zip vs ts
+    fmut                         = maybe id setMut m
+    setMut m (FieldSig x _ t)    = FieldSig x m t
+    setMut _ e                   = e
 
 
 -- | flatten' does not apply the top-level type substitution
 ---------------------------------------------------------------------------
-flatten' :: (PPR r, EnvLike r g) => Maybe Mutability ->  Bool -> g r -> IfaceDef r -> Maybe [TypeMember r]
+flatten' :: (PPR r, EnvLike r g) 
+         => Maybe Mutability 
+         -> StaticKind
+         -> g r 
+         -> IfaceDef r 
+         -> Maybe (TypeMembers r)
 ---------------------------------------------------------------------------
 flatten' m st γ d@(ID _ _ vs _ _) = flatten m st γ (d, tVar <$> vs)
 
 ---------------------------------------------------------------------------
-flatten'' :: (PPR r, EnvLike r g) => Maybe Mutability -> Bool -> g r -> IfaceDef r -> Maybe ([TVar], [TypeMember r])
+flatten'' :: (PPR r, EnvLike r g) 
+          => Maybe Mutability 
+          -> StaticKind
+          -> g r 
+          -> IfaceDef r 
+          -> Maybe ([TVar], (TypeMembers r))
 ---------------------------------------------------------------------------
 flatten'' m st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten m st γ (d, tVar <$> vs)
 
@@ -251,16 +258,16 @@ flatten'' m st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten m st γ (d, tVar <$> vs)
 flattenType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
 flattenType γ (TApp (TRef x) [] r)    -- This case is for Mutability types 
-  = do  es      <- flatten Nothing False γ . (, []) =<< resolveRelNameInEnv γ x
-        return   $ TCons es t_immutable r
+  = do  es      <- flatten Nothing InstanceMember γ . (, []) =<< resolveRelNameInEnv γ x
+        return   $ TCons t_immutable es r
 
 flattenType γ (TApp (TRef x) (mut:ts) r)
-  = do  es      <- flatten (Just $ toType mut) False γ . (,mut:ts) =<< resolveRelNameInEnv γ x
-        return   $ TCons es (toType mut) r
+  = do  es      <- flatten (Just $ toType mut) InstanceMember γ . (,mut:ts) =<< resolveRelNameInEnv γ x
+        return   $ TCons (toType mut) es r
 
 flattenType γ (TClass x)             
-  = do  es      <- flatten' Nothing True γ =<< resolveRelNameInEnv γ x
-        return   $ TCons es mut fTop
+  = do  es      <- flatten' Nothing StaticMember γ =<< resolveRelNameInEnv γ x
+        return   $ TCons mut es fTop
   where
     mut          = t_readOnly
 
@@ -307,15 +314,11 @@ ancestors γ s =
 ---------------------------------------------------------------------------
 boundKeys :: (PPR r, EnvLike r g) => g r -> RType r -> [F.Symbol]
 ---------------------------------------------------------------------------
-boundKeys γ t@(TApp (TRef _) _ _) = 
-    case flattenType γ t of
-      Just t  -> boundKeys γ t
-      Nothing -> []
-boundKeys _ (TCons es _ _) =
-  [ s | FieldSig s _ _ <- es] ++
-  [ s | MethSig s _ _ <- es] ++
-  [ F.symbol "constructor" | ConsSig _ <- es]
-boundKeys _ _ = []
+boundKeys γ t@(TApp (TRef _) _ _) = case flattenType γ t of
+                                      Just t  -> boundKeys γ t
+                                      Nothing -> []
+boundKeys _ (TCons _ es _)        = fst <$> M.keys es 
+boundKeys _ _                     = []
 
 
 -----------------------------------------------------------------------

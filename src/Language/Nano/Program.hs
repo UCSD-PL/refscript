@@ -33,15 +33,20 @@ module Language.Nano.Program (
   , writeGlobalVars
   , scrapeVarDecl
 
+  -- * Types
+  , mkTypeMembers
+  , MemberKind(..)
+
   ) where
 
 import           Control.Applicative     hiding (empty)
 import           Control.Exception              (throw)
 import           Data.Monoid             hiding ((<>))            
 import           Data.Maybe                     (maybeToList, listToMaybe)
-import           Data.List                      (stripPrefix)            
+import           Data.List                      (stripPrefix, partition)
 import           Data.Generics                   
-import qualified Data.IntMap                 as I
+import qualified Data.Map.Strict                as M
+import qualified Data.IntMap                    as I
 import           Text.PrettyPrint.HughesPJ 
 
 import           Language.Nano.Annots
@@ -248,9 +253,10 @@ instance IsNano (Statement a) where
   isNano e                        = errortext (text "Not Nano Statement:" $$ pp e)
 
 instance IsNano (ClassElt a) where
-  isNano (Constructor _ _ ss)        = all isNano ss
-  isNano (MemberMethDecl _ _ _ _ ss) = all isNano ss
-  isNano (MemberVarDecl _ _ vd)      = isNano vd
+  isNano (Constructor _ _ ss)       = all isNano ss
+  isNano (MemberMethDecl _ _ _ _ )  = True
+  isNano (MemberMethDef _ _ _ _ ss) = all isNano ss
+  isNano (MemberVarDecl _ _ _ eo)   = isNano eo
 
 instance IsNano a => IsNano (Maybe a) where 
   isNano (Just x) = isNano x
@@ -555,35 +561,54 @@ resolveType :: PPR r => Statement (AnnSSA r) -> Maybe (Id SourceSpan, IfaceDef r
 ---------------------------------------------------------------------------------------
 resolveType  (ClassStmt l c _ _ cs)
   = case [ t | ClassAnn t <- ann_fact l ] of
-      [(vs, h)] -> Just (cc, ID ClassKind cc vs h (rMem (tc vs) cs))
+      [(vs, h)] -> Just (cc, ID ClassKind cc vs h $ typeMembers cs)
       _         -> Nothing
   where
     cc        = fmap ann c
     x         = RN $ QName (srcPos l) [] (F.symbol c)
     tc vs     = TApp (TRef x) ((`TVar` fTop) <$> vs) fTop
-    rMem      = concatMap . typeMembers
 
 resolveType (IfaceStmt l)
   = listToMaybe [ (n, t) | IfaceAnn t@(ID _ n _ _ _) <- ann_fact l ]
 
 resolveType _ = Nothing 
 
+data MemberKind = MemDefinition | MemDeclaration deriving ( Eq )
 
--- | `typeMembers` returns all the TypeMember elements associated with a class 
---    element -- XXX: No constructor is added if missing
---
 ---------------------------------------------------------------------------------------
-typeMembers :: PPR r => RType r -> ClassElt (AnnSSA r) -> [TypeMember r]
+typeMembers                      :: [ClassElt (AnnSSA r)] -> TypeMembers r
 ---------------------------------------------------------------------------------------
-typeMembers _ (Constructor l _ _ ) = [ c | ConsAnn c   <- ann_fact l ]
+typeMembers                       =  mkTypeMembers . concatMap go
+  where
+    go (MemberVarDecl l s x _)    = [(sk s    , MemDefinition , f) | FieldAnn f  <- ann_fact l]
+    go (MemberMethDef l s x _ _ ) = [(sk s    , MemDefinition , f) | MethAnn  f  <- ann_fact l]
+    go (MemberMethDecl l s x _ )  = [(sk s    , MemDeclaration, f) | MethAnn  f  <- ann_fact l]
+    go c@(Constructor l _ _)      = [(sk False, MemDefinition , a) | ConsAnn  a  <- ann_fact l]
+    sk True                       = StaticMember 
+    sk False                      = InstanceMember 
 
-typeMembers _ (MemberVarDecl _ static (VarDecl l _ _)) 
-    | static    = [ s | StatAnn  s@(StatSig _ _ _)  <- ann_fact l ]
-    | otherwise = [ f | FieldAnn f@(FieldSig _ _ _) <- ann_fact l ]
+---------------------------------------------------------------------------------------
+mkTypeMembers       :: [(StaticKind, MemberKind, TypeMember r)] -> TypeMembers r
+---------------------------------------------------------------------------------------
+mkTypeMembers        = M.map (g . f) . foldl merge M.empty
+  where
+    merge ms (s,m,t) = M.insertWith (++) (F.symbol t,s) [(m,t)] ms
+    f                = mapPair (map snd) . partition ((== MemDefinition) . fst) 
+    g ([t],[])       = t
+    g ( _ ,ts)       = foldl1 joinElts ts
 
-typeMembers _ (MemberMethDecl l static _ _ _ )
-    | static    = [ s | StatAnn s@(StatSig _ _ _)  <- ann_fact l ]
-    | otherwise = [ m | MethAnn m@(MethSig _ _ _)  <- ann_fact l ]
+joinElts (CallSig t1)        (CallSig t2)       = CallSig         $ joinTys t1 t2 
+joinElts (ConsSig t1)        (ConsSig t2)       = ConsSig         $ joinTys t1 t2 
+joinElts (IndexSig x1 s1 t1) (IndexSig _ _ t2)  = IndexSig x1 s1  $ joinTys t1 t2
+joinElts (FieldSig x1 m1 t1) (FieldSig _ m2 t2) | m1 == m2 
+                                                = FieldSig x1 m1  $ joinTys t1 t2 
+joinElts (MethSig x1 m1 t1)  (MethSig _ m2 t2)  | m1 == m2 
+                                                = MethSig  x1 m1  $ joinTys t1 t2 
+-- joinElts (StatSig x1 m1 t1)  (StatSig _ m2 t2)  | m1 == m2 
+--                                                 = StatSig  x1 m1  $ joinTys t1 t2 
+joinElts t                   _                  = t
+
+joinTys t1 t2 = mkAnd $ bkAnd t1 ++ bkAnd t2 
 
 
 -- | `writeGlobalVars p` returns symbols that have `WriteMany` status, i.e. may be 

@@ -9951,9 +9951,10 @@ var TypeScript;
                     case 141 /* PropertySignature */:
                         var v = m;
                         var anns = tokenAnnots(v.propertyName);
+
                         if (anns.length === 0) {
                             var eltSymbol = helper.getSymbolForAST(v);
-                            return [new TypeScript.RsFieldSig(eltSymbol.name, eltSymbol.type.toRsType()).toString()];
+                            return [new TypeScript.RsFieldSig(v.propertyName.text(), eltSymbol.type.toRsType()).toString()];
                         } else {
                             return anns.map(function (m) {
                                 return m.content();
@@ -14367,7 +14368,8 @@ var TypeScript;
             if (bindAnns.length === 0) {
                 var methDecl = helper.getDeclForAST(this);
                 var sym = methDecl.getSignatureSymbol();
-                anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 6 /* RawMethod */, new TypeScript.RsMethSig(sym.name, sym.toRsTMeth()).toString()));
+
+                anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 6 /* RawMethod */, new TypeScript.RsMethSig(methodName, sym.toRsTMeth()).toString()));
             }
 
             if (this.block) {
@@ -14726,7 +14728,8 @@ var TypeScript;
             if (bindAnns.length === 0) {
                 var fieldDecl = helper.getDeclForAST(this);
                 var sym = fieldDecl.getSymbol();
-                anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 5 /* RawField */, new TypeScript.RsFieldSig(sym.name, sym.type.toRsType()).toString()));
+
+                anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 5 /* RawField */, new TypeScript.RsFieldSig(this.variableDeclarator.propertyName.text(), sym.type.toRsType()).toString()));
             }
 
             if (!this.variableDeclarator) {
@@ -61019,7 +61022,7 @@ var TypeScript;
             this.eltT = eltT;
         }
         TArray.prototype.toString = function () {
-            return "[ " + this.eltT.toString() + " ]";
+            return "<" + this.eltT.toString() + ">";
         };
         return TArray;
     })(RsType);
@@ -61033,12 +61036,11 @@ var TypeScript;
             this.params = params;
         }
         TTypeReference.prototype.toString = function () {
-            var s = "";
-            s += "#" + this.name;
+            var s = this.name;
             if (this.params && this.params.length > 0) {
-                s += "[" + this.params.map(function (t) {
+                s += "<" + this.params.map(function (t) {
                     return t.toString();
-                }).join(", ") + "]";
+                }).join(", ") + ">";
             }
             return s;
         };
@@ -61094,9 +61096,9 @@ var TypeScript;
             s += name;
             s += " ";
             if (this.pars && this.pars.length > 0) {
-                s += "[ " + this.pars.map(function (a) {
+                s += "< " + this.pars.map(function (a) {
                     return a.toString();
-                }).join(", ") + " ] ";
+                }).join(", ") + ">";
             }
 
             if (this.proto) {

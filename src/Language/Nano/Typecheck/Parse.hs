@@ -128,7 +128,7 @@ iFaceP   = do name   <- identifierP
 
 extendsP = do reserved "extends"
               qn     <- RN <$> qnameP
-              ts     <- option [] $ brackets $ sepBy bareTypeP comma
+              ts     <- option [] $ angles $ sepBy bareTypeP comma
               return (qn, ts)
 
 qnameP   = withSpan qname $ optionMaybe (char '#') >> sepBy1 qSymbolP (char '.')

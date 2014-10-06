@@ -111,7 +111,7 @@ testCategories = [
                 , ("typealias", [])
                 , ("inclusion", ["-e"])
 
-                 ## not supported:
+                # ## not supported:
                  # , "proto"
                  # , "lists"
 

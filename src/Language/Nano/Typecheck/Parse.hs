@@ -743,7 +743,8 @@ ctxStmtTvar as s = go s ++ as
   where
     go :: Statement (AnnR r)  -> [TVar]
     go s@(FunctionStmt {}) = grab s 
-    go s@(FunctionDecl {}) = grab s 
+    go s@(FuncAmbDecl {})  = grab s 
+    go s@(FuncOverload {}) = grab s 
     go s@(IfaceStmt {})    = grab s
     go s@(ClassStmt {})    = grab s
     go s@(ModuleStmt {})   = grab s

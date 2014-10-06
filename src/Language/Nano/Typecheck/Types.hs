@@ -467,7 +467,7 @@ instance (PP r, F.Reftable r) => PP (RType r) where
   pp (TFun (Just s) xts t _)  = ppArgs parens comma (B (F.symbol "this") s:xts) <+> text "=>" <+> pp t 
   pp (TFun _ xts t _)         = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)             = text "∀" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
-  pp (TAnd ts)                = vcat [text "/\\" <+> pp t | t <- ts]
+  pp (TAnd ts)                = hsep [text "/\\" <+> pp t | t <- ts]
   pp (TExp e)                 = pprint e 
   pp (TApp TUn ts r)          = F.ppTy r $ ppArgs id (text " +") ts 
   pp (TApp (TRef x) (m:ts) r)

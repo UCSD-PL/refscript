@@ -152,7 +152,11 @@ initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
 initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
-    nms       = envFromList $ extras ++ visibleNames ss
+    nms       = envAdds extras
+              $ envMap (\(a,b,c,d) -> (d,c)) 
+              $ visEnv
+
+    visEnv    = mkVarEnv $ visibleNames ss
     extras    = [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly))]
     mod       = scrapeModules ss 
     ctx       = emptyContext
@@ -162,10 +166,11 @@ initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
 initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod ctx pth parent
   where
     tyBinds   = [(tVarId α, (tVar α, ReadOnly)) | α <- αs]
-    varBinds  = zip (fmap ann <$> xs) $ zip ts (repeat WriteLocal)
-    nms       = envAddReturn f (t, ReadOnly) 
-              $ envAdds (thisBind ++ tyBinds ++ varBinds ++ args ++ visibleNames s) 
-              $ envEmpty
+    varBinds  = zip (fmap ann <$> xs) $ (,WriteLocal) <$> ts
+    nms       = envAddReturn f (t, ReadOnly)               
+              $ envAdds  (thisBind ++ tyBinds ++ varBinds ++ args) 
+              $ envMap (\(a,b,c,d) -> (d,c)) 
+              $ mkVarEnv $ visibleNames s
     mod       = tce_mod γ
     ctx       = pushContext i (tce_ctx γ) 
     pth       = tce_path γ
@@ -178,7 +183,7 @@ initModuleEnv :: (PPR r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnS
 ---------------------------------------------------------------------------------------
 initModuleEnv γ n s = TCE nms mod ctx pth parent
   where
-    nms       = envFromList $ visibleNames s
+    nms       = envMap (\(a,b,c,d) -> (d,c)) $ mkVarEnv $ visibleNames s
     mod       = tce_mod γ
     ctx       = emptyContext
     pth       = extendAbsPath (tce_path γ) n
@@ -310,11 +315,12 @@ tcClassElt γ dfn (Constructor l xs body)
     mkThis (_:αs)         = TApp (TRef rn) (t_mutable : map tVar αs) fTop
     rn                    = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
--- Static field
+-- | Static field
+--
 tcClassElt γ dfn (MemberVarDecl l True x (Just e))
   = case spec of 
       Just (FieldSig _ _ t) -> 
-          do (FI _ [e'],_) <- tcNormalCall γ l "field init" (FI Nothing [(e, Nothing)]) 
+          do (FI _ [e'],_) <- tcNormalCall γ l "field init" (FI Nothing [(e, Just t)]) 
                             $ mkInitFldTy t
              return         $ MemberVarDecl l True x $ Just e'
       _  ->  tcError        $ errorClassEltAnnot (srcPos l) (t_name dfn) x
@@ -324,13 +330,15 @@ tcClassElt γ dfn (MemberVarDecl l True x (Just e))
 tcClassElt _ _ (MemberVarDecl l True x Nothing)
   = tcError $ unsupportedStaticNoInit (srcPos l) x
 
--- Instance variable
+-- | Instance variable
+--
 tcClassElt _ _ m@(MemberVarDecl _ False _ Nothing) 
   = return m
 tcClassElt _ _ m@(MemberVarDecl l False x _) 
   = tcError $ bugClassInstVarInit (srcPos l) x
 
 -- | Static method
+--
 tcClassElt γ dfn (MemberMethDef l True x xs body) 
   = case spec of 
       Just (MethSig _ _ t) -> 
@@ -354,6 +362,8 @@ tcClassElt γ dfn (MemberMethDef l False x xs bd)
     gg m               = tcEnvAdd (F.symbol "this") (mkThis (ofType m) (t_args dfn), ThisVar) γ
     mkThis m (_:αs)    = TApp (TRef rn) (m : map tVar αs) fTop
     rn                 = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
+
+tcClassElt _ _ m@(MemberMethDecl _ _ _ _ ) = return m
 
 
 --------------------------------------------------------------------------------
@@ -384,7 +394,10 @@ tcStmt γ s@(EmptyStmt _)
 
 -- declare function foo(...): T; 
 -- this definitions will be hoisted
-tcStmt γ s@(FunctionDecl _ _ _) 
+tcStmt γ s@(FuncAmbDecl _ _ _) 
+  = return (s, Just γ)
+
+tcStmt γ s@(FuncOverload _ _ _) 
   = return (s, Just γ)
 
 -- interface Foo;

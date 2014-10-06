@@ -139,13 +139,12 @@ consNano p@(Nano {code = Src fs})
 initGlobalEnv  :: NanoRefType -> CGM CGEnv
 -------------------------------------------------------------------------------
 initGlobalEnv (Nano { code = Src s }) 
-  = do g <- freshenCGEnvM $ CGE nms bds grd ctx mod pth Nothing
-       -- FIXME : do we have to add everything here ????
-       envAdds "initGlobalEnv" extras g
-       -- envAdds "initGlobalEnv" (trace (ppshow (fst <$> filter (nonBI . fst) nms_ids)) $ filter (nonBI . fst) nms_ids) g
+      = freshenCGEnvM (CGE nms bds grd ctx mod pth Nothing) 
+    >>= envAdds "initGlobalEnv" extras
   where
-    nms       = E.envAdds nms_ids E.envEmpty
-    nms_ids   = extras ++ visibleNames s
+    nms       = E.envAdds extras 
+              $ E.envMap (\(a,b,c,d) -> (d,c)) 
+              $ mkVarEnv $ visibleNames s
     extras    = [(Id (srcPos dummySpan) "undefined", 
                   (TApp TUndef [] $ F.Reft (F.vv Nothing, [F.trueRefa]), ReadOnly))]
     bds       = F.emptyIBindEnv
@@ -158,11 +157,10 @@ initGlobalEnv (Nano { code = Src s })
 initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> CGM CGEnv
 -------------------------------------------------------------------------------
 initModuleEnv g n s 
-  = do {-g' <- -} freshenCGEnvM $ CGE nms bds grd ctx mod pth (Just g)
-       -- envAdds "initGlobalEnv" (filter (nonBI . fst) nms_ids) g'
+  = freshenCGEnvM $ CGE nms bds grd ctx mod pth (Just g)
   where
-    nms       = E.envAdds nms_ids E.envEmpty
-    nms_ids   = visibleNames s
+    nms       = E.envMap (\(a,b,c,d) -> (d,c)) 
+              $ mkVarEnv $ visibleNames s
     bds       = cge_fenv g
     grd       = []
     mod       = cge_mod g
@@ -181,14 +179,16 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     --  Compute base environment @g'@, then add extra bindings
         envAdds "initFunc-0" varBinds g'
     >>= envAdds "initFunc-1" tyBinds 
-    >>= envAdds "initFunc-2" (visibleNames s)
+    -- >>= envAdds "initFunc-2" (visibleNames s)
     >>= envAdds "initFunc-3" argBind
     >>= envAdds "initFunc-4" thisBind
     >>= envAddReturn f t
     >>= freshenCGEnvM
   where
     g'        = CGE nms fenv grds ctx mod pth parent
-    nms       = E.envEmpty
+    -- nms       = E.envEmpty
+    nms       = E.envMap (\(a,b,c,d) -> (d,c)) 
+              $ mkVarEnv $ visibleNames s
     fenv      = cge_fenv g
     grds      = []
     mod       = cge_mod g
@@ -322,11 +322,11 @@ consStmt g (ReturnStmt l (Just e))
 consStmt g (ThrowStmt _ e)
   = consExpr g e Nothing >> return Nothing
 
--- function f(x1...xn);
-consStmt g (FunctionDecl l n _ )
-  = case envFindTy n g of
-      Just _  -> return $ Just g
-      Nothing -> cgError $ bugEnvFindTy (srcPos l) n
+-- (overload) function f(x1...xn);
+consStmt g (FuncOverload l n _ ) = return $ Just g
+
+-- declare function f(x1...xn);
+consStmt g (FuncAmbDecl l n _ ) = return $ Just g
 
 -- function f(x1...xn){ s }
 consStmt g s@(FunctionStmt _ _ _ _)
@@ -426,7 +426,7 @@ consClassElt g dfn (Constructor l xs body)
 consClassElt g dfn (MemberVarDecl l True x (Just e))
   = case spec of 
       Just (FieldSig _ _ t) -> 
-           void    $ consCall g l "field init"  (FI Nothing [(e,Nothing)]) (mkInitFldTy t)
+           void    $ consCall g l "field init"  (FI Nothing [(e, Just t)]) (mkInitFldTy t)
       _ -> cgError $ errorClassEltAnnot (srcPos l) (t_name dfn) x
   where
     spec    = M.lookup (F.symbol x, StaticMember) (t_elts dfn)

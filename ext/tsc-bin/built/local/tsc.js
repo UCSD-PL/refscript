@@ -10401,7 +10401,13 @@ var TypeScript;
             }
 
             if (!this.block) {
-                return new TypeScript.RsFunctionDecl(helper.getSourceSpan(this), anns, this.identifier.toRsId(helper), this.callSignature.parameterList.parameters.toRsAST(helper));
+                if (this.modifiers.toArray().some(function (m) {
+                    return m.tokenKind === 63 /* DeclareKeyword */;
+                })) {
+                    return new TypeScript.RsFunctionAmbientDecl(helper.getSourceSpan(this), anns, this.identifier.toRsId(helper), this.callSignature.parameterList.parameters.toRsAST(helper));
+                } else {
+                    return new TypeScript.RsFunctionOverload(helper.getSourceSpan(this), anns, this.identifier.toRsId(helper), this.callSignature.parameterList.parameters.toRsAST(helper));
+                }
             } else {
                 return new TypeScript.RsFunctionStmt(helper.getSourceSpan(this), anns, this.identifier.toRsId(helper), this.callSignature.parameterList.parameters.toRsAST(helper), new TypeScript.RsASTList([this.block.toRsStmt(helper)]));
             }
@@ -60266,27 +60272,49 @@ var TypeScript;
     })(RsStatement);
     TypeScript.RsFunctionStmt = RsFunctionStmt;
 
-    var RsFunctionDecl = (function (_super) {
-        __extends(RsFunctionDecl, _super);
-        function RsFunctionDecl(span, ann, id, args) {
+    var RsFunctionAmbientDecl = (function (_super) {
+        __extends(RsFunctionAmbientDecl, _super);
+        function RsFunctionAmbientDecl(span, ann, id, args) {
             _super.call(this, ann);
             this.span = span;
             this.ann = ann;
             this.id = id;
             this.args = args;
         }
-        RsFunctionDecl.prototype.toObject = function () {
+        RsFunctionAmbientDecl.prototype.toObject = function () {
             return {
-                FunctionDecl: [
+                FuncAmbDecl: [
                     [this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
                         })],
                     this.id.toObject(), this.args.toObject()]
             };
         };
-        return RsFunctionDecl;
+        return RsFunctionAmbientDecl;
     })(RsStatement);
-    TypeScript.RsFunctionDecl = RsFunctionDecl;
+    TypeScript.RsFunctionAmbientDecl = RsFunctionAmbientDecl;
+
+    var RsFunctionOverload = (function (_super) {
+        __extends(RsFunctionOverload, _super);
+        function RsFunctionOverload(span, ann, id, args) {
+            _super.call(this, ann);
+            this.span = span;
+            this.ann = ann;
+            this.id = id;
+            this.args = args;
+        }
+        RsFunctionOverload.prototype.toObject = function () {
+            return {
+                FuncOverload: [
+                    [this.span.toObject(), this.mapAnn(function (a) {
+                            return a.toObject();
+                        })],
+                    this.id.toObject(), this.args.toObject()]
+            };
+        };
+        return RsFunctionOverload;
+    })(RsStatement);
+    TypeScript.RsFunctionOverload = RsFunctionOverload;
 
     var RsReturnStmt = (function (_super) {
         __extends(RsReturnStmt, _super);

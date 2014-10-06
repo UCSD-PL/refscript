@@ -123,8 +123,11 @@ ssaStmt :: Data r => Statement (AnnSSA r) -> SSAM r (Bool, Statement (AnnSSA r))
 ssaStmt s@(EmptyStmt _) 
   = return (True, s)
 
--- function foo(...): T;
-ssaStmt s@(FunctionDecl _ _ _) 
+-- declare function foo(...): T;
+ssaStmt s@(FuncAmbDecl _ _ _) 
+  = return (True, s)
+
+ssaStmt s@(FuncOverload _ _ _) 
   = return (True, s)
 
 -- interface IA<V> extends IB<T> { ... }
@@ -444,7 +447,6 @@ ssaClassElt _ (MemberMethDef l s e xs body)
             (_, body')   <- ssaStmts body                    -- Transform function
             setSsaEnv θ                                      -- Restore Outer SsaEnv
             return        $ MemberMethDef l s e xs body'
-
 ssaClassElt _ m@(MemberMethDecl _ _ _ _ ) = return m
 
 infOp OpAssign         _ _  = id

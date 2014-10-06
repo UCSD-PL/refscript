@@ -35,7 +35,10 @@ module Language.Nano.Program (
 
   -- * Types
   , mkTypeMembers
+  , mkVarEnv
+  , SyntaxKind(..)
   , MemberKind(..)
+  , VarInfo 
 
   ) where
 
@@ -62,6 +65,8 @@ import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types        as F
+
+import           Debug.Trace                        hiding (traceShow)
 
 
 type PPR  r = (PP r, F.Reftable r, Data r)
@@ -247,7 +252,8 @@ instance IsNano (Statement a) where
   isNano (SwitchStmt _ e cs)      = isNano e && not (null cs) && isNano cs
   isNano (ClassStmt _ _ _ _  bd)  = all isNano bd
   isNano (ThrowStmt _ e)          = isNano e
-  isNano (FunctionDecl _ _ _)     = True
+  isNano (FuncAmbDecl _ _ _) = True
+  isNano (FuncOverload _ _ _) = True
   isNano (IfaceStmt _)            = True
   isNano (ModuleStmt _ _ s)       = all isNano s
   isNano e                        = errortext (text "Not Nano Statement:" $$ pp e)
@@ -380,7 +386,9 @@ ctorStr    = "_CTOR_"
 --   declarations do not escape module or function blocks.
 --
 -------------------------------------------------------------------------------
-hoistBindings :: Data r => [Statement (AnnType r)] -> [(Id (AnnType r), AnnType r, Assignability)]
+hoistBindings :: Data r 
+              => [Statement (AnnType r)] 
+              -> [(Id (AnnType r), AnnType r, SyntaxKind, Assignability)]
 -------------------------------------------------------------------------------
 hoistBindings = everythingBut (++) myQ
   where
@@ -394,18 +402,19 @@ hoistBindings = everythingBut (++) myQ
                           Just  s -> fVd s
                           Nothing -> ([], False)
 
-    fSt :: Statement (AnnType r) -> ([(Id (AnnType r), AnnType r, Assignability)],Bool)
-    fSt (FunctionStmt l n _ _) = ([(n, l, ReadOnly)], True)
-    fSt (FunctionDecl l n _  ) = ([(n, l, ImportDecl)], True)    
-    fSt (ClassStmt l n _ _ _ ) = ([(n, l, ReadOnly)], True)
-    fSt (ModuleStmt l n _)     = ([(n, l { ann_fact = ModuleAnn (F.symbol n) : ann_fact l} , ReadOnly)], True)
-    fSt _                      = ([], False)
+    fSt :: Statement (AnnType r) -> ([(Id (AnnType r), AnnType r, SyntaxKind, Assignability)],Bool)
+    fSt (FunctionStmt l n _ _)      = ([(n, l, FuncDefKind, ReadOnly)], True)
+    fSt (FuncAmbDecl l n _) = ([(n, l, FuncAmbientKind   , ImportDecl)], True)    
+    fSt (FuncOverload l n _  )  = ([(n, l, FuncOverloadKind , ImportDecl)], True)    
+    fSt (ClassStmt l n _ _ _ )      = ([(n, l, ClassDefKind   , ReadOnly)], True)
+    fSt (ModuleStmt l n _)          = ([(n, l { ann_fact = ModuleAnn (F.symbol n) : ann_fact l}, ModuleDefKind, ReadOnly)], True)
+    fSt _                           = ([], False)
 
-    fExp :: Expression (AnnType r) -> ([(Id (AnnType r), AnnType r, Assignability)], Bool)
+    fExp :: Expression (AnnType r) -> ([(Id (AnnType r), AnnType r, SyntaxKind, Assignability)], Bool)
     fExp _                     = ([], True)
 
-    fVd :: VarDecl (AnnType r) -> ([(Id (AnnType r), AnnType r, Assignability)], Bool)
-    fVd (VarDecl l n _)        = ([(n, l, WriteGlobal) | VarAnn _ <- ann_fact l], True)
+    fVd :: VarDecl (AnnType r) -> ([(Id (AnnType r), AnnType r, SyntaxKind, Assignability)], Bool)
+    fVd (VarDecl l n _)        = ([(n, l, VarDeclKind, WriteGlobal) | VarAnn _ <- ann_fact l], True)
 
 
 
@@ -423,7 +432,8 @@ hoistTypes = everythingBut (++) myQ
                      Nothing -> ([], False)
 
     fSt (FunctionStmt _ _ _ _) = ([ ], True)
-    fSt (FunctionDecl _ _ _  ) = ([ ], True)
+    fSt FuncAmbDecl{}  = ([ ], True)
+    fSt FuncOverload{}     = ([ ], True)
     fSt s@(ClassStmt {})       = ([s], True)
     fSt s@(IfaceStmt {})       = ([s], True)
     fSt (ModuleStmt {})        = ([ ], True)
@@ -448,11 +458,12 @@ hoistGlobals = everythingBut (++) myQ
                                   Nothing -> ([], False)
 
     fSt                 :: Statement (AnnType r) -> ([Id (AnnType r)], Bool)
-    fSt (FunctionStmt{}) = ([ ], True)
-    fSt (FunctionDecl{}) = ([ ], True)
-    fSt (ClassStmt{})    = ([ ], True)
-    fSt (ModuleStmt{})   = ([ ], True)
-    fSt _                = ([ ], False)
+    fSt (FunctionStmt{})      = ([ ], True)
+    fSt FuncAmbDecl{} = ([ ], True)
+    fSt FuncOverload{}    = ([ ], True)
+    fSt (ClassStmt{})         = ([ ], True)
+    fSt (ModuleStmt{})        = ([ ], True)
+    fSt _                     = ([ ], False)
     fExp                :: Expression (AnnType r) -> ([Id (AnnType r)], Bool)
     fExp _               = ([ ], True)
     fVd                 :: VarDecl (AnnType r) -> ([Id (AnnType r)], Bool)
@@ -473,6 +484,9 @@ everythingButWithContext s0 f q x
     where (r, s', stop) = q x s0
 
 
+
+type VarInfo r = (SyntaxKind, Visibility, Assignability, RType r)
+
 ---------------------------------------------------------------------------
 -- | AST Folds
 ---------------------------------------------------------------------------
@@ -491,11 +505,12 @@ collectModules ss = topLevel : rest ss
 
 
 ---------------------------------------------------------------------------------------
-visibleNames :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, (RType r, Assignability))]
+visibleNames :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, VarInfo r)]
 ---------------------------------------------------------------------------------------
-visibleNames s = [ (ann <$> n,(t,a)) | (n,Ann _ l ff,a) <- hoistBindings s
-                                     , f                <- ff
-                                     , t                <- annToType l n a f ]
+visibleNames s = [ (ann <$> n,(k,v,a,t)) | (n,l,k,a) <- hoistBindings s
+                                         , f         <- ann_fact l
+                                         , t         <- annToType (ann l) n a f
+                                         , let v      = visibility l ]
   where
     annToType _ _ ReadOnly   (VarAnn t)      = [t] -- Hoist ReadOnly vars (i.e. function defs)
     annToType _ _ ImportDecl (VarAnn t)      = [t] -- Hoist ImportDecl (i.e. function decls)
@@ -515,42 +530,89 @@ visibleNames s = [ (ann <$> n,(t,a)) | (n,Ann _ l ff,a) <- hoistBindings s
 ---------------------------------------------------------------------------------------
 scrapeModules               :: PPR r => [Statement (AnnSSA r)] -> QEnv (ModuleDef r)
 ---------------------------------------------------------------------------------------
-scrapeModules                     = qenvFromList . map mkMod . collectModules
+scrapeModules                    = qenvFromList . map mkMod . collectModules
   where
-    visibility l                  | ExporedModElt `elem` ann_fact l = Exported
-                                  | otherwise                       = Local
+    mkMod (ap, m)                = (ap, {- trace (ppshow (envKeys $ varEnv m)
+                                           ++ "\n\n" ++ ppshow (envKeys $ typeEnv m)) $ -}
+                                         ModuleDef (envMap drop1 $ varEnv m) (typeEnv m) ap)
+    drop1 (_,b,c,d)              = (b,c,d)
+    varEnv                       = mkVarEnv    . vStmts
+    typeEnv                      = envFromList . tStmts
+    vStmts                       = concatMap vStmt
+    vStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, VarInfo r)]
+    vStmt (VarDeclStmt _ vds)    = [ (ss x, (VarDeclKind, visibility l, WriteGlobal, t))
+                                       | VarDecl l x _ <- vds
+                                       , VarAnn t <- ann_fact l ]
+    vStmt (FunctionStmt l x _ _) = [ (ss x, (FuncDefKind, visibility l, ReadOnly, t))
+                                       | VarAnn t <- ann_fact l ]
+    vStmt (FuncAmbDecl l x _)    = [ (ss x, (FuncAmbientKind, visibility l, ImportDecl, t))
+                                       | VarAnn t <- ann_fact l ]
+    vStmt (FuncOverload l x _)   = [ (ss x, (FuncOverloadKind, visibility l, ImportDecl, t))
+                                       | VarAnn t <- ann_fact l ]
+    vStmt (ClassStmt l x _ _ _)  = [ (ss x, (ClassDefKind, visibility l, ReadOnly, TClass $ RN $ QName (ann l) [] $ F.symbol x)) ]
+    vStmt (ModuleStmt l x _)     = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, TModule $ RP $ QPath (ann l) [F.symbol x])) ]
+    vStmt _                      = [ ] 
 
-    mkMod (ap, m)                 = (ap, {- trace (ppshow (envKeys $ varEnv m)
-                                            ++ "\n\n" ++ ppshow (envKeys $ typeEnv m)) $ -}
-                                          ModuleDef (varEnv m) (typeEnv m) ap)
-    varEnv                        = envFromList . vStmts
-    typeEnv                       = envFromList . tStmts
-
-    vStmts                        = concatMap vStmt
-
-    vStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, (Visibility, Assignability, RType r))]
-    vStmt (VarDeclStmt _ vds)     = [ (ss x, (visibility l, WriteGlobal, t)) 
-                                    | VarDecl l x _ <- vds
-                                    , VarAnn t <- ann_fact l 
-                                    ]
-    vStmt (FunctionStmt l x _ _)  = [ (ss x, (visibility l, ReadOnly, t)) 
-                                    | VarAnn t <- ann_fact l 
-                                    ]
-    vStmt (FunctionDecl l x _  )  = [ (ss x, (visibility l, ImportDecl, t)) 
-                                    | VarAnn t <- ann_fact l 
-                                    ]
-    vStmt (ClassStmt l x _ _ _)   = [ (ss x, (visibility l, ReadOnly, TClass $ RN $ QName (ann l) [] $ F.symbol x)) ]
-    vStmt (ModuleStmt l x _)      = [ (ss x, (visibility l, ReadOnly, TModule $ RP $ QPath (ann l) [F.symbol x])) ]
-    vStmt _                       = [ ] 
-
-    tStmts                        = concatMap tStmt
+    tStmts                       = concatMap tStmt
 
     tStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, IfaceDef r)]
-    tStmt c@(ClassStmt _ _ _ _ _) = maybeToList $ resolveType c
-    tStmt c@(IfaceStmt _)         = maybeToList $ resolveType c
-    tStmt _                       = [ ]
+    tStmt c@(ClassStmt{})        = maybeToList $ resolveType c
+    tStmt c@(IfaceStmt _)        = maybeToList $ resolveType c
+    tStmt _                      = [ ]
 
     ss = fmap ann
+
+
+visibility :: Annot (Fact r) a -> Visibility
+visibility l | ExporedModElt `elem` ann_fact l = Exported
+             | otherwise                       = Local
+
+
+data SyntaxKind = 
+    FuncDefKind 
+  | FuncAmbientKind
+  | FuncOverloadKind
+  | MethDefKind 
+  | MethDeclKind
+  | FieldDefKind
+  | CtorDefKind
+  | VarDeclKind
+  | ClassDefKind
+  | ModuleDefKind
+  deriving ( Eq )
+
+instance PP SyntaxKind where
+  pp FuncDefKind      = text "FuncDefKind"
+  pp FuncOverloadKind = text "FuncOverloadKind"
+  pp FuncAmbientKind  = text "FuncAmbientKind"
+  pp MethDefKind      = text "MethDefKind"
+  pp MethDeclKind     = text "MethDeclKind"
+  pp FieldDefKind     = text "FieldDefKind"
+  pp CtorDefKind      = text "CtorDefKind"
+  pp VarDeclKind      = text "VarDeclKind"
+  pp ClassDefKind     = text "ClassDefKind"
+  pp ModuleDefKind    = text "ModuleDefKind"
+
+
+
+---------------------------------------------------------------------------------------
+mkVarEnv :: PPR r => F.Symbolic s => [(s, VarInfo r)] -> Env (VarInfo r)
+---------------------------------------------------------------------------------------
+mkVarEnv                   = envFromList . concatMap f . M.toList . foldl merge M.empty
+  where
+    merge ms (i,(s,v,a,t)) = M.insertWith (++) (F.symbol i) [(s,v,a,t)] ms
+    f (s, vs)              = [ (s,(k,v,w, g t [ t' | (FuncOverloadKind, _, _, t') <- vs ]))
+                                             | (k@FuncDefKind    , v, w, t) <- vs ] ++
+                             amb [ (s,(k,v,w,t)) | (k@FuncAmbientKind, v, w, t) <- vs ] ++ 
+                             [ (s,(k,v,w,t)) | (k@VarDeclKind    , v, w, t) <- vs ] ++ 
+                             [ (s,(k,v,w,t)) | (k@ClassDefKind   , v, w, t) <- vs ] ++
+                             [ (s,(k,v,w,t)) | (k@ModuleDefKind  , v, w, t) <- vs ]
+    g t []                 = t
+    g _ ts                 = mkAnd ts
+    amb [ ]                = [ ] 
+    amb [a]                = [a]
+    amb ((s,(k,v,w,t)):xs) = [(s,(k,v,w, mkAnd (t : map tyOf xs)))]    
+    tyOf (s,(k,v,w,t))     = t
 
 
 -- FIXME (?): Does not take into account classes with missing annotations.

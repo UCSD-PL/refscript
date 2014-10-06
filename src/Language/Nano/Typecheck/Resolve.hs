@@ -33,7 +33,7 @@ import qualified Data.Map.Strict                  as M
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Env
--- import           Language.Nano.Errors
+import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Types
@@ -56,15 +56,16 @@ type PPR r = (PP r, F.Reftable r, Data r)
 --   originally assumed to be expressed in terms of absolute path @base@ to paths
 --   (and names) that are relative to the absolute path @tgt@.
 --
---   FIXME: Is extM working right?
---
 ---------------------------------------------------------------------------
 renameRelative :: Data a => QEnv (ModuleDef r) -> AbsPath -> AbsPath -> a -> Maybe a
 --------------------------------------------------------------------------
-renameRelative mods base tgt = everywhereM $ mkM $ paths `extM` names
+renameRelative mods base tgt a = 
+    everywhereM (mkM paths) a >>= everywhereM (mkM names)
   where
     paths :: RelPath -> Maybe RelPath
     paths r             = relativePath tgt <$> absolutePath mods base r
+
+    names :: RelName -> Maybe RelName
     names n             = relativeName tgt <$> absoluteName mods base n
 
  

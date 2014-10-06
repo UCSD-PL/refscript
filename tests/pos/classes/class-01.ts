@@ -11,8 +11,8 @@ class Greeter {
 	/*@ d : number */
 	public         d = 4;
 	
-	/*@ static e : { } */
-	private static e = { };
+	/*@ statice : { } */
+	private static statice = { };
 	
 	/*@ new (message: string) => void */
 	constructor(message) { }

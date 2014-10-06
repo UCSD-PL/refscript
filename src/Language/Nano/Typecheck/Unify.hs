@@ -30,7 +30,8 @@ import           Data.Generics
 import           Data.List (nub, find)
 import           Data.Maybe (catMaybes)
 import qualified Data.HashSet as S
-import qualified Data.HashMap.Strict as M 
+import qualified Data.HashMap.Strict as HM 
+import qualified Data.Map.Strict as M
 import           Data.Monoid
 import           Control.Monad  (foldM)
 import           Data.Function                  (on)
@@ -101,33 +102,33 @@ unify l γ θ t1 t2@(TClass _)
       Just ft2 -> unify l γ θ t1 ft2
       Nothing  -> Left $ errorUnfoldType l t2
 
-unify l γ θ (TCons e1s m1 _) (TCons e2s m2 _)
-  = unifys l γ θ (ofType m1 : t1s') (ofType m2 : t2s')
+unify l γ θ t@(TCons m1 e1s _) t'@(TCons m2 e2s _)
+  = unifys l γ θ (ofType m1 : t1s) (ofType m2 : t2s)
   where 
-    -- | Find common binders 
-    cmnBnds    = nub [ F.symbol e1 | e1 <- e1s, e2 <- e2s, e1 `sameBinder` e2 ]
-    -- | Types and mutabilities for each binder
-    (t1s, m1s)    = unzip $ boundTy cmnBnds e1s
-    t1s'          = t1s ++ (ofType <$> catMaybes m1s)
-    (t2s, m2s)    = unzip $ boundTy cmnBnds e2s
-    t2s'          = t2s ++ (ofType <$> catMaybes m2s)
-    boundTy bs es = [ (eltType e, mutability e) 
-                      | e <- catMaybes $ map (\b -> find ((==) b . F.symbol) es) bs ]
-
+    (t1s , t2s ) = mapPair (concatMap allEltType)
+                 $ unzip 
+                 $ M.elems 
+                 $ M.intersectionWith (,) e1s e2s
+   
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ
 
+
    
 -----------------------------------------------------------------------------
-unifys :: (Data r, PPR r) => SourceSpan -> TCEnv r -> RSubst r -> [RType r] 
-                 -> [RType r] -> Either Error (RSubst r)
+unifys :: (Data r, PPR r) 
+       => SourceSpan 
+       -> TCEnv r 
+       -> RSubst r 
+       -> [RType r] -> [RType r] 
+       -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 unifys l γ θ ts ts'  
-  | nTs == nTs' = foldM foo θ $ zip ts ts'
-  | otherwise   = Left $ errorUnification l ts ts'
+  | nTs == nTs'   = foldM foo θ $ zip ts ts'
+  | otherwise     = Left $ errorUnification l ts ts'
   where 
-    (nTs, nTs') = mapPair length (ts, ts')
-    foo θ       = uncurry $ on (unify l γ θ) (apply θ)
+    (nTs, nTs')   = mapPair length (ts, ts')
+    foo θ (t, t') = unify l γ θ (apply θ t) (apply θ t')
 
 
 -----------------------------------------------------------------------------
@@ -149,8 +150,8 @@ varAsn l θ α t
   | on (==) toType t (apply θ (tVar α))       = Right $ θ 
   | any (on (==) toType (tVar α)) (bkUnion t) = Right $ θ 
   | α `S.member` free t                       = Left  $ errorOccursCheck l α t 
-  | unassigned α θ                            = Right $ θ `mappend` (Su $ M.singleton α t)
+  | unassigned α θ                            = Right $ θ `mappend` (Su $ HM.singleton α t)
   | otherwise                                 = Left  $ errorRigidUnify l α (toType t)
   
-unassigned α (Su m) = M.lookup α m == Just (tVar α)
+unassigned α (Su m) = HM.lookup α m == Just (tVar α)
 

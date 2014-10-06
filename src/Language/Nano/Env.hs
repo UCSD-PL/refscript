@@ -15,7 +15,7 @@ module Language.Nano.Env (
     Env, QEnv
  
   -- * Env API
-  , envFromList 
+  , envFromList, envFromList'
   , envToList
   , envAdd, envAdds 
   , envDel, envDels
@@ -36,6 +36,7 @@ module Language.Nano.Env (
   , envSEnv
   , envIds
   , envKeys
+  , envAddWith
 
   , qenvToList
   , qenvFromList
@@ -95,6 +96,10 @@ envFindReturn      = maybe msg val . F.lookupSEnv returnSymbol
   where 
     msg = errorstar "bad call to envFindReturn"
 
+envAddWith f i t γ = case envFind i γ of
+                       Just t' -> envAdd i (t `f` t') γ
+                       Nothing -> envAdd i t γ
+
 envSEnv           :: Env a -> F.SEnv a
 envSEnv            = F.fromListSEnv . map (mapFst F.symbol) . envToList
 
@@ -104,6 +109,13 @@ envFromList        = L.foldl' step envEmpty
     step γ (i, t)  = case envFindLoc i γ of
                        Nothing -> envAdd i t γ 
                        Just l' -> throw $ errorDuplicate i (srcPos i) l'
+
+-- Allows duplicates in list -- last one in list will be used
+envFromList'      :: (PP x, IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
+envFromList'       = L.foldl' step envEmpty
+  where 
+    step γ (i, t)  = envAdd i t γ 
+
 
 envIntersectWith  :: (a -> b -> c) -> Env a -> Env b -> Env c
 envIntersectWith f = F.intersectWithSEnv (\v1 v2 -> Loc (loc v1) (f (val v1) (val v2)))

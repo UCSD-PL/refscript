@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveFunctor          #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE DeriveTraversable      #-}
+{-# LANGUAGE StandaloneDeriving     #-}
 {-# LANGUAGE DeriveFoldable         #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE OverlappingInstances   #-}
@@ -10,6 +11,8 @@ module Language.Nano.Types where
 
 import           Control.Applicative                ((<$>))
 import           Data.Hashable
+import           Data.Function                      (on)
+import qualified Data.Map.Strict                 as M
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.List                          ((\\))
@@ -39,7 +42,7 @@ data TVar = TV {
 
   , tv_loc :: SourceSpan 
 
-  } deriving (Show, Ord, Data, Typeable)
+  } deriving (Show, Data, Typeable)
 
 
 -- | Type Constructors
@@ -73,7 +76,7 @@ data RType r =
   -- 
   -- ^ {f1:T1,..,fn:Tn} 
   --
-  | TCons [TypeMember r] Mutability r
+  | TCons Mutability (TypeMembers r) r
   -- 
   -- ^ forall A. T
   --
@@ -84,7 +87,7 @@ data RType r =
   | TAnd [RType r]                                   
   -- 
   -- ^ typeof A.B.C (class)
-  --
+  -- 
   | TClass RelName
   -- 
   -- ^ typeof L.M.N (module)
@@ -93,7 +96,15 @@ data RType r =
   -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
   --
   | TExp F.Expr
-    deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+
+    deriving (Show, Functor, Data, Typeable, Traversable, Foldable)
+
+type TypeMembers r = M.Map (F.Symbol, StaticKind) (TypeMember r)
+
+data StaticKind = 
+    StaticMember 
+  | InstanceMember 
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 
 -- | Standard Types
@@ -112,7 +123,7 @@ data Bind r = B {
   --
   , b_type :: !(RType r)                            
 
-  } deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+  } deriving (Eq, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
 data FuncInputs t = FI { fi_self :: Maybe t, fi_args :: [t] } deriving (Functor, Traversable, Foldable)
@@ -123,7 +134,7 @@ data FuncInputs t = FI { fi_self :: Maybe t, fi_args :: [t] } deriving (Functor,
 ---------------------------------------------------------------------------------
 
 data IfaceKind = ClassKind | InterfaceKind
-  deriving (Eq, Ord, Show, Data, Typeable)
+  deriving (Eq, Show, Data, Typeable)
 
 data IfaceDef r = ID { 
   -- 
@@ -145,9 +156,9 @@ data IfaceDef r = ID {
   -- 
   -- ^ List of data type elts 
   --
-  , t_elts  :: ![TypeMember r]
+  , t_elts  :: !(TypeMembers r)
   } 
-  deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+  deriving (Eq, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
 type Heritage r  = Maybe (RelName, [RType r])
@@ -155,7 +166,7 @@ type Heritage r  = Maybe (RelName, [RType r])
 type SIfaceDef r = (IfaceDef r, [RType r])
 
 data IndexKind   = StringIndex | NumericIndex
-  deriving (Eq, Ord, Show, Data, Typeable)
+  deriving (Eq, Show, Data, Typeable)
 
 
 data TypeMember r 
@@ -185,14 +196,8 @@ data TypeMember r
   | MethSig   { f_sym  :: F.Symbol                      -- ^ Name  
               , f_mut  :: Mutability                    -- ^ Mutability
               , f_type :: RType r }                     -- ^ Method type
-  -- 
-  -- ^ Static field signature
-  --
-  | StatSig   { f_sym  :: F.Symbol                      -- ^ Name  
-              , f_mut  :: Mutability                    -- ^ Mutability
-              , f_type :: RType r }                     -- ^ Property type (could be function)
 
-  deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+  deriving (Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
 data Visibility 
@@ -200,7 +205,7 @@ data Visibility
   = Local 
 
   | Exported
-  deriving (Eq, Data, Typeable)
+  deriving (Show, Eq, Data, Typeable)
 
 
 ------------------------------------------------------------------------------------------
@@ -235,7 +240,7 @@ data Assignability
   -- ^ Used to denote 'this' variable
   -- 
   | ThisVar
-  deriving (Eq, Data, Typeable)
+  deriving (Show, Eq, Data, Typeable)
 
 
 
@@ -281,7 +286,7 @@ type Mutability = Type
 
 
 ---------------------------------------------------------------------------------
--- | Eq Instances
+-- | Instances
 ---------------------------------------------------------------------------------
 
 
@@ -293,6 +298,11 @@ instance IsLocated TVar where
 
 instance Hashable TVar where 
   hashWithSalt i α = hashWithSalt i $ tv_sym α 
+
+instance Hashable StaticKind where
+  hashWithSalt _ StaticMember   = 0
+  hashWithSalt _ InstanceMember = 1
+
 
 instance F.Symbolic TVar where
   symbol = tv_sym 
@@ -335,9 +345,34 @@ instance Eq (TypeMember r) where
   IndexSig _ b1 t1  == IndexSig _ b2 t2  = (b1,t1) == (b2,t2)
   FieldSig f1 m1 t1 == FieldSig f2 m2 t2 = (f1,m1,t1) == (f2,m2,t2)
   MethSig  f1 m1 t1 == MethSig f2 m2 t2  = (f1,m1,t1) == (f2,m2,t2)
-  StatSig f1 m1 t1  == StatSig f2 m2 t2  = (f1,m1,t1) == (f2,m2,t2)
   _                 == _                 = False
  
+
+-- USE CAREFULLY !!!
+instance Ord (RType r) where
+  compare = compare `on` rTypeCode
+
+rTypeCode (TVar _ _)     = 0
+rTypeCode (TFun _ _ _ _) = 1
+rTypeCode (TCons _ _ _ ) = 2
+rTypeCode (TAll _ _ )    = 3
+rTypeCode (TAnd _ )      = 4
+rTypeCode (TClass _ )    = 5
+rTypeCode (TExp _ )      = 6
+rTypeCode (TModule _)    = 7
+rTypeCode (TApp c _ _)   = 8 + tconCode c
+
+tconCode TInt            = 0
+tconCode TBool           = 1
+tconCode TString         = 3
+tconCode TVoid           = 4
+tconCode TTop            = 5
+tconCode (TRef _)        = 6
+tconCode TUn             = 7
+tconCode TNull           = 8
+tconCode TUndef          = 9
+tconCode TFPBool         = 10
+
 
 -----------------------------------------------------------------------
 -- | Operator Types

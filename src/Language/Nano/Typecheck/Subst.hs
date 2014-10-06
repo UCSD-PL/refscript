@@ -35,7 +35,8 @@ import           Language.Fixpoint.Misc (intersperse)
 
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
-import qualified Data.HashMap.Strict as M 
+import qualified Data.Map.Strict as M 
+import qualified Data.HashMap.Strict as HM 
 import           Data.Monoid hiding ((<>))
 
 -- import           Debug.Trace
@@ -46,28 +47,28 @@ import           Data.Monoid hiding ((<>))
 
 -- | Type alias for Map from @TVar@ to @Type@. Hidden
 
-data RSubst r = Su (M.HashMap TVar (RType r))
+data RSubst r = Su (HM.HashMap TVar (RType r))
 type Subst    = RSubst ()
 
 toSubst :: RSubst r -> Subst
-toSubst (Su m) = Su $ M.map toType m
+toSubst (Su m) = Su $ HM.map toType m
 
 toList        :: RSubst r -> [(TVar, RType r)]
-toList (Su m) =  M.toList m 
+toList (Su m) =  HM.toList m 
 
 fromList      :: [(TVar, RType r)] -> RSubst r
-fromList      = Su . M.fromList 
+fromList      = Su . HM.fromList 
 
 -- | Substitutions form a monoid; not commutative
 
 instance (F.Reftable r, Substitutable r (RType r)) => Monoid (RSubst r) where 
-  mempty                    = Su M.empty
-  mappend (Su m) θ'@(Su m') = Su $ (apply θ' <$> m) `M.union` m'
+  mempty                    = Su HM.empty
+  mappend (Su m) θ'@(Su m') = Su $ (apply θ' <$> m) `HM.union` m'
 
 instance (F.Reftable r, PP r) => PP (RSubst r) where 
-  pp (Su m) = if M.null m then text "empty" 
-              else if M.size m < 10 then intersperse comma $ (ppBind <$>) $ M.toList m 
-              else vcat $ (ppBind <$>) $ M.toList m 
+  pp (Su m) = if HM.null m then text "empty" 
+              else if HM.size m < 10 then intersperse comma $ (ppBind <$>) $ HM.toList m 
+              else vcat $ (ppBind <$>) $ HM.toList m 
 
 ppBind (x, t) = pp x <+> text ":=" <+> pp t
 
@@ -82,7 +83,7 @@ instance Free (RType r) where
   free (TAll α t)           = S.delete α $ free t 
   free (TAnd ts)            = free ts 
   free (TExp _)             = error "free should not be applied to TExp"
-  free (TCons xts m _)      = free xts `mappend` free m
+  free (TCons m xts _)      = free (snd <$> M.toList xts) `mappend` free m
   free _                    = S.empty
 
 instance Free a => Free [a] where 
@@ -116,7 +117,7 @@ instance Free (Fact r) where
 instance Free (TypeMember r) where
   free (FieldSig _ m t)     = free m `mappend` free t
   free (MethSig  _ m t)     = free m `mappend` free t
-  free (StatSig _ m t)      = free m `mappend` free t
+--   free (StatSig _ m t)      = free m `mappend` free t
   free (CallSig t)          = free t
   free (ConsSig t)          = free t
   free (IndexSig _ _ t)     = free t
@@ -149,7 +150,7 @@ instance (Substitutable r t) => Substitutable r (Env t) where
 
 instance F.Reftable r => Substitutable r (TypeMember r) where 
   apply θ (FieldSig x m t)  = FieldSig x   (appTy (toSubst θ) m) (apply θ t)
-  apply θ (StatSig x m t)   = StatSig  x   (appTy (toSubst θ) m) (apply θ t)
+  -- apply θ (StatSig x m t)   = StatSig  x   (appTy (toSubst θ) m) (apply θ t)
   apply θ (MethSig  x m t)  = MethSig  x   (appTy (toSubst θ) m) (apply θ t)
   apply θ (CallSig t)       = CallSig      (apply θ t)
   apply θ (ConsSig t)       = ConsSig      (apply θ t)
@@ -197,7 +198,7 @@ instance Substitutable r RelName where
   apply _ s                 = s 
 
 instance F.Reftable r => Substitutable r (IfaceDef r) where
-  apply θ (ID c n v p e)    = ID c n v (apply θ p) (apply θ e)
+  apply θ (ID c n v p e)    = ID c n v (apply θ p) (M.map (apply θ) e)
 
 instance (F.Reftable r, Substitutable r a) => Substitutable r (Statement a) where
   apply θ s                 = fmap (apply θ) s
@@ -214,10 +215,10 @@ appTy :: F.Reftable r => RSubst r -> RType r -> RType r
 ---------------------------------------------------------------------------------
 appTy θ        (TApp c ts r)   = flattenUnions $ TApp c (apply θ ts) r
 appTy θ        (TAnd ts)       = TAnd (apply θ ts) 
-appTy (Su m) t@(TVar α r)      = (M.lookupDefault t α m) `strengthen` r
+appTy (Su m) t@(TVar α r)      = (HM.lookupDefault t α m) `strengthen` r
 appTy θ        (TFun s ts t r) = TFun (apply θ <$> s) (apply θ ts) (apply θ t) r
-appTy (Su m)   (TAll α t)      = TAll α $ apply (Su $ M.delete α m) t
-appTy θ        (TCons es m r)  = TCons (apply θ es) (appTy (toSubst θ) m) r
+appTy (Su m)   (TAll α t)      = TAll α $ apply (Su $ HM.delete α m) t
+appTy θ        (TCons m es r)  = TCons (appTy (toSubst θ) m) (M.map (apply θ) es) r
 appTy _        (TClass c)      = TClass c
 appTy _        (TModule m)     = TModule m
 appTy _        (TExp _)        = error "appTy should not be applied to TExp"

@@ -138,7 +138,7 @@ withAssignability m xs act
        modify $ \st -> st { assign = zOld }
        return $ ret
     where 
-       zNew   = envFromList $ (, m) <$> xs 
+       zNew   = envFromList' $ (, m) <$> xs 
 
 -------------------------------------------------------------------------------------
 getAssignability :: Var r -> SSAM r Assignability 

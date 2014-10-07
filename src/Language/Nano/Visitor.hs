@@ -165,6 +165,7 @@ visitStmtM v = vS
     step c (ModuleStmt l m ss)      = ModuleStmt   l <$> (vI c m) <*> (vS c <$$> ss) 
     step _ s@(IfaceStmt {})         = return s 
     step _ s@(EmptyStmt {})         = return s 
+    step c (EnumStmt l n es)        = EnumStmt     l <$> (vI c n) <*> (vI c <$$> es)
     step _ s                        = throw $ unimplemented l "visitStatement" s  where l = srcPos $ getAnnotation s
 
 

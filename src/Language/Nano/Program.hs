@@ -256,6 +256,7 @@ instance IsNano (Statement a) where
   isNano (FuncOverload _ _ _) = True
   isNano (IfaceStmt _)            = True
   isNano (ModuleStmt _ _ s)       = all isNano s
+  isNano (EnumStmt _ _ _)         = True
   isNano e                        = errortext (text "Not Nano Statement:" $$ pp e)
 
 instance IsNano (ClassElt a) where
@@ -549,8 +550,9 @@ scrapeModules                    = qenvFromList . map mkMod . collectModules
                                        | VarAnn t <- ann_fact l ]
     vStmt (FuncOverload l x _)   = [ (ss x, (FuncOverloadKind, visibility l, ImportDecl, t))
                                        | VarAnn t <- ann_fact l ]
-    vStmt (ClassStmt l x _ _ _)  = [ (ss x, (ClassDefKind, visibility l, ReadOnly, TClass $ RN $ QName (ann l) [] $ F.symbol x)) ]
-    vStmt (ModuleStmt l x _)     = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, TModule $ RP $ QPath (ann l) [F.symbol x])) ]
+    vStmt (ClassStmt l x _ _ _)  = [ (ss x, (ClassDefKind, visibility l, ReadOnly, TClass   $ RN $ QName (ann l) [] $  F.symbol x)) ]
+    vStmt (ModuleStmt l x _)     = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, TModule $ RP $ QPath (ann l)    $ [F.symbol x])) ]
+    vStmt (EnumStmt l x _)       = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, TEnum   $ RN $ QName (ann l) [] $  F.symbol x)) ]
     vStmt _                      = [ ] 
 
     tStmts                       = concatMap tStmt

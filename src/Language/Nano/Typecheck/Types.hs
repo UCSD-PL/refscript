@@ -307,12 +307,15 @@ isNull (TApp TNull _ _)   = True
 isNull _                  = False
 
 isVoid :: RType r -> Bool
-isVoid (TApp TVoid _ _)   = True 
-isVoid _                  = False
+isVoid (TApp TVoid _ _)    = True 
+isVoid _                   = False
 
 isTObj (TApp (TRef _) _ _) = True
 isTObj (TCons _ _ _)       = True
 isTObj _                   = False
+
+isTEnum (TEnum _)          = True
+isTEnum _                  = False
 
 isTNum (TApp TInt _ _ )    = True
 isTNum _                   = False
@@ -336,6 +339,7 @@ rTypeR (TVar _ r   )  = r
 rTypeR (TFun _ _ _ r) = r
 rTypeR (TCons _ _ r)  = r
 rTypeR (TModule _  )  = fTop
+rTypeR (TEnum _  )    = fTop
 rTypeR (TClass _   )  = fTop
 rTypeR (TAll _ _   )  = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )      = errorstar "Unimplemented: rTypeR - TAnd"
@@ -481,6 +485,7 @@ instance (PP r, F.Reftable r) => PP (RType r) where
                               = F.ppTy r $ lbrace $+$ nest 2 (vcat $ ppHMap pp bs) $+$ rbrace
   pp (TModule s  )            = text "module" <+> pp s
   pp (TClass c   )            = text "typeof" <+> pp c
+  pp (TEnum c   )             = text "enum" <+> pp c
 
 ppHMap p = map (p . snd) . M.toList 
 

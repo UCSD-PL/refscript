@@ -91,7 +91,12 @@ data RType r =
   | TClass RelName
   -- 
   -- ^ typeof L.M.N (module)
+  --
   | TModule RelPath
+  -- 
+  -- ^ enumeration L.M.N 
+  -- 
+  | TEnum RelName
   -- 
   -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
   --

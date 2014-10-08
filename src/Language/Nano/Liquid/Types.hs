@@ -60,7 +60,6 @@ module Language.Nano.Liquid.Types (
   ) where
 
 import           Data.Maybe              (fromMaybe, catMaybes, maybeToList)
-import           Data.Either             (partitionEithers)
 import qualified Data.List               as L
 import qualified Data.HashMap.Strict     as HM
 import qualified Data.Map.Strict         as M
@@ -425,7 +424,7 @@ isTrivialRefType :: RefType -> Bool
 ------------------------------------------------------------------------------------------
 -- | The only allowed top-level refinement of a function type is the
 --   ('function') tag, So ignore this for this check.
-isTrivialRefType (TFun a b c r) = isTrivialRefType' (TFun a b c fTop)
+isTrivialRefType (TFun a b c _) = isTrivialRefType' (TFun a b c fTop)
 isTrivialRefType t              = isTrivialRefType' t
 
 isTrivialRefType' t     = foldReft (\r -> (f r &&)) True t
@@ -629,7 +628,6 @@ zipType γ (TCons _ e1s r1) (TCons m2 e2s _) = do
     common'            <- T.mapM (uncurry $ zipElts γ) common
     return              $ TCons m2 (common' `M.union` disjoint') r1
   where 
-    tp                  = ((const fTop <$>) <$>)
     common              = M.intersectionWith (,) e1s e2s
     disjoint'           = M.map (fmap $ const fTop) $ e2s `M.difference` e1s
 

@@ -12,12 +12,13 @@ module Language.Nano.Liquid.Liquid (verifyFile) where
 
 import           Control.Monad
 import           Control.Applicative                ((<$>), (<*>))
+import           Control.Exception                  (throw)
 
 import qualified Data.Traversable                   as T
 
 import qualified Data.HashMap.Strict                as HM
 import qualified Data.Map.Strict                    as M
-import           Data.Maybe                         (catMaybes, maybeToList, fromMaybe)
+import           Data.Maybe                         (maybeToList, fromMaybe)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -144,7 +145,7 @@ initGlobalEnv (Nano { code = Src s })
     >>= envAdds "initGlobalEnv" extras
   where
     nms       = E.envAdds extras 
-              $ E.envMap (\(a,b,c,d) -> (d,c)) 
+              $ E.envMap (\(_,_,c,d) -> (d,c)) 
               $ mkVarEnv $ visibleNames s
     extras    = [(Id (srcPos dummySpan) "undefined", 
                   (TApp TUndef [] $ F.Reft (F.vv Nothing, [F.trueRefa]), ReadOnly))]
@@ -160,7 +161,7 @@ initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> C
 initModuleEnv g n s 
   = freshenCGEnvM $ CGE nms bds grd ctx mod pth (Just g)
   where
-    nms       = E.envMap (\(a,b,c,d) -> (d,c)) 
+    nms       = E.envMap (\(_,_,c,d) -> (d,c)) 
               $ mkVarEnv $ visibleNames s
     bds       = cge_fenv g
     grd       = []
@@ -186,7 +187,7 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     >>= freshenCGEnvM
   where
     g'        = CGE nms fenv grds ctx mod pth parent
-    nms       = E.envMap (\(a,b,c,d) -> (d,c)) 
+    nms       = E.envMap (\(_,_,c,d) -> (d,c)) 
               $ mkVarEnv $ visibleNames s
     fenv      = cge_fenv g
     grds      = []
@@ -322,10 +323,10 @@ consStmt g (ThrowStmt _ e)
   = consExpr g e Nothing >> return Nothing
 
 -- (overload) function f(x1...xn);
-consStmt g (FuncOverload l n _ ) = return $ Just g
+consStmt g (FuncOverload _ _ _ ) = return $ Just g
 
 -- declare function f(x1...xn);
-consStmt g (FuncAmbDecl l n _ ) = return $ Just g
+consStmt g (FuncAmbDecl _ _ _ ) = return $ Just g
 
 -- function f(x1...xn){ s }
 consStmt g s@(FunctionStmt _ _ _ _)
@@ -422,6 +423,7 @@ consClassElt g dfn (Constructor l xs body)
                       [ ] -> Just $ TFun Nothing [] tVoid fTop
                       _   -> Nothing
     mkThis (_:αs) = TApp (TRef rn) (t_mutable : map tVar αs) fTop
+    mkThis _      = throw $ bug (srcPos l) "Liquid.Liquid.consClassElt Constructor" 
     rn            = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
 -- Static field
@@ -463,6 +465,7 @@ consClassElt g dfn (MemberMethDef l False x xs body)
   where
     spec            = M.lookup (F.symbol x, InstanceMember) (t_elts dfn)
     mkThis m (_:αs) = TApp (TRef rn) (ofType m : map tVar αs) fTop
+    mkThis _ _      = throw $ bug (srcPos l) "Liquid.Liquid.consClassElt MemberMethDef" 
     rn              = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
 consClassElt _ _  (MemberMethDecl _ _ _ _) = return ()

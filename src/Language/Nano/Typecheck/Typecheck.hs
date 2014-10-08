@@ -13,6 +13,7 @@ module Language.Nano.Typecheck.Typecheck (verifyFile, typeCheck) where
 
 import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad                
+import           Control.Exception                  (throw)
 import           Control.Arrow                      ((***))
 
 import qualified Data.IntMap.Strict                 as I
@@ -151,7 +152,7 @@ initGlobalEnv :: PPR r => NanoSSAR r -> TCEnv r
 initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
     nms       = envAdds extras
-              $ envMap (\(a,b,c,d) -> (d,c)) 
+              $ envMap (\(_,_,c,d) -> (d,c)) 
               -- $ trace (ppshow $ envKeys visEnv) 
               $ visEnv
     visEnv    = mkVarEnv visibleNs
@@ -168,7 +169,7 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod ctx pth parent
     varBinds  = zip (fmap ann <$> xs) $ (,WriteLocal) <$> ts
     nms       = envAddReturn f (t, ReadOnly)               
               $ envAdds  (thisBind ++ tyBinds ++ varBinds ++ args) 
-              $ envMap (\(a,b,c,d) -> (d,c)) 
+              $ envMap (\(_,_,c,d) -> (d,c)) 
               $ mkVarEnv $ visibleNames s
     mod       = tce_mod γ
     ctx       = pushContext i (tce_ctx γ) 
@@ -182,7 +183,7 @@ initModuleEnv :: (PPR r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnS
 ---------------------------------------------------------------------------------------
 initModuleEnv γ n s = TCE nms mod ctx pth parent
   where
-    nms       = envMap (\(a,b,c,d) -> (d,c)) $ mkVarEnv $ visibleNames s
+    nms       = envMap (\(_,_,c,d) -> (d,c)) $ mkVarEnv $ visibleNames s
     mod       = tce_mod γ
     ctx       = emptyContext
     pth       = extendAbsPath (tce_path γ) n
@@ -312,6 +313,7 @@ tcClassElt γ dfn (Constructor l xs body)
     i                     = Id l "constructor"
     γ'                    = tcEnvAdd (F.symbol "this") (mkThis $ t_args dfn, ThisVar) γ
     mkThis (_:αs)         = TApp (TRef rn) (t_mutable : map tVar αs) fTop
+    mkThis _              = throw $ bug (srcPos l) "Typecheck.Typecheck.tcClassElt Constructor" 
     rn                    = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
 -- | Static field
@@ -333,7 +335,7 @@ tcClassElt _ _ (MemberVarDecl l True x Nothing)
 --
 tcClassElt _ _ m@(MemberVarDecl _ False _ Nothing) 
   = return m
-tcClassElt _ _ m@(MemberVarDecl l False x _) 
+tcClassElt _ _ (MemberVarDecl l False x _) 
   = tcError $ bugClassInstVarInit (srcPos l) x
 
 -- | Static method
@@ -360,6 +362,7 @@ tcClassElt γ dfn (MemberMethDef l False x xs bd)
     spec               = M.lookup (F.symbol x, InstanceMember) (t_elts dfn)
     gg m               = tcEnvAdd (F.symbol "this") (mkThis (ofType m) (t_args dfn), ThisVar) γ
     mkThis m (_:αs)    = TApp (TRef rn) (m : map tVar αs) fTop
+    mkThis _ _         = throw $ bug (srcPos l) "Typecheck.Typecheck.tcClassElt MemberMethDef" 
     rn                 = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
 tcClassElt _ _ m@(MemberMethDecl _ _ _ _ ) = return m

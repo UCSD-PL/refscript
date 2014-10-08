@@ -20,12 +20,10 @@ import           Data.Tuple                         (swap)
 import           Data.Monoid
 import qualified Data.HashSet                       as S
 import qualified Data.Map.Strict                    as M
-import           Data.List                          (find)
-import           Data.Maybe                         (fromMaybe, isNothing)
+import           Data.Maybe                         (fromMaybe)
 import           Control.Monad.State
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
-import qualified Language.Fixpoint.Types            as F
 
 import           Language.ECMAScript3.PrettyPrint
 
@@ -295,7 +293,7 @@ convertTModule l γ c1 c2 =
 convertTEnum :: (Functor g, EnvLike () g)
               => SourceSpan -> g () -> RelName -> RelName -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertTEnum l γ e1 e2 | e1 == e2  = Right CDNo  
+convertTEnum l _ e1 e2 | e1 == e2  = Right CDNo  
                        | otherwise = Left  $ errorTEnumSubtype l e1 e2
 
 

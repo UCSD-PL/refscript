@@ -33,10 +33,8 @@ module Language.Nano.Typecheck.Resolve (
 import           Data.Generics
 import           Data.Function                       (on)
 import qualified Data.Map.Strict                  as M
-import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Env
-import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Types
@@ -44,7 +42,6 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Typecheck.Subst
 
 import           Control.Applicative ((<$>))
-import qualified Data.List as L
 
 -- import           Debug.Trace
 

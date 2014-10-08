@@ -54,7 +54,6 @@ import           Control.Monad.State
 import           Control.Monad.Trans.Except
 import           Control.Monad.Except               (catchError)
 import           Data.Function                      (on)
-import           Data.Generics
 import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (catMaybes, isJust, maybeToList)
 import           Data.Monoid                  

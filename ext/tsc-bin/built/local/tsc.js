@@ -475,7 +475,8 @@ var TypeScript;
         Cannot_call_toRsAST_on_MemberAccessExpression: "Cannot call 'toRsAST' on MemberAccessExpression.",
         Cannot_call_toRsExp_on_BinaryExpression_with_SyntaxKind_0: "Cannot call 'toRsExp' on BinaryExpression with SyntaxKind {0}.",
         Gather_statistics_about_initialization: "Gather statistics about initialization",
-        Invalid_reference_of_this_in_constructor: "Invalid reference of 'this' in constructor."
+        Invalid_reference_of_this_in_constructor: "Invalid reference of 'this' in constructor.",
+        No_support_for_value_assigned_enumeration_element_0: "No support for value assigned enumeration element '{0}'."
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -2632,7 +2633,8 @@ var TypeScript;
         "Cannot call 'toRsAST' on MemberAccessExpression.": { "code": 8026, "category": 5 /* Unimplemented */ },
         "Cannot call 'toRsExp' on BinaryExpression with SyntaxKind {0}.": { "code": 8027, "category": 5 /* Unimplemented */ },
         "Gather statistics about initialization": { "code": 8028, "category": 2 /* Message */ },
-        "Invalid reference of 'this' in constructor.": { "code": 8029, "category": 1 /* Error */ }
+        "Invalid reference of 'this' in constructor.": { "code": 8029, "category": 1 /* Error */ },
+        "No support for value assigned enumeration element '{0}'.": { "code": 8030, "category": 5 /* Unimplemented */ }
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -16253,6 +16255,21 @@ var TypeScript;
         EnumDeclarationSyntax.prototype.isTypeScriptSpecific = function () {
             return true;
         };
+
+        EnumDeclarationSyntax.prototype.toRsStmt = function (helper) {
+            var originalAnnots = tokenAnnots(this.firstToken());
+            var sourceSpan = helper.getSourceSpan(this);
+
+            this.enumElements.toNonSeparatorArray().forEach(function (element) {
+                if (element.equalsValueClause) {
+                    helper.postDiagnostic(element, TypeScript.DiagnosticCode.No_support_for_value_assigned_enumeration_element_0, [element.propertyName.text()]);
+                }
+            });
+
+            return new TypeScript.RsEnumStmt(sourceSpan, originalAnnots, this.identifier.toRsId(helper), new TypeScript.RsASTList(this.enumElements.toNonSeparatorArray().map(function (a) {
+                return a.toRsId(helper);
+            })));
+        };
         return EnumDeclarationSyntax;
     })(TypeScript.SyntaxNode);
     TypeScript.EnumDeclarationSyntax = EnumDeclarationSyntax;
@@ -16326,6 +16343,10 @@ var TypeScript;
                 return true;
             }
             return false;
+        };
+
+        EnumElementSyntax.prototype.toRsId = function (helper) {
+            return this.propertyName.toRsId(helper);
         };
         return EnumElementSyntax;
     })(TypeScript.SyntaxNode);
@@ -36121,6 +36142,7 @@ var TypeScript;
             this.noLib = false;
             this.refScript = false;
             this.refscriptLibs = [];
+            this.gatherOverloadStats = false;
             this.codeGenTarget = 0 /* EcmaScript3 */;
             this.moduleGenTarget = 0 /* Unspecified */;
             this.outFileOption = "";
@@ -36139,7 +36161,7 @@ var TypeScript;
     TypeScript.CompilationSettings = CompilationSettings;
 
     var ImmutableCompilationSettings = (function () {
-        function ImmutableCompilationSettings(propagateEnumConstants, removeComments, watch, noResolve, allowAutomaticSemicolonInsertion, noImplicitAny, noLib, refScript, refScriptLibs, codeGenTarget, moduleGenTarget, outFileOption, outDirOption, mapSourceFiles, mapRoot, sourceRoot, generateDeclarationFiles, useCaseSensitiveFileResolution, gatherDiagnostics, codepage, createFileLog) {
+        function ImmutableCompilationSettings(propagateEnumConstants, removeComments, watch, noResolve, allowAutomaticSemicolonInsertion, noImplicitAny, noLib, refScript, refScriptLibs, gatherOverloadStats, codeGenTarget, moduleGenTarget, outFileOption, outDirOption, mapSourceFiles, mapRoot, sourceRoot, generateDeclarationFiles, useCaseSensitiveFileResolution, gatherDiagnostics, codepage, createFileLog) {
             this._propagateEnumConstants = propagateEnumConstants;
             this._removeComments = removeComments;
             this._watch = watch;
@@ -36150,6 +36172,7 @@ var TypeScript;
 
             this._refScript = refScript;
             this._refScriptLibs = refScriptLibs;
+            this._gatherOverloadStats = gatherOverloadStats;
 
             this._codeGenTarget = codeGenTarget;
             this._moduleGenTarget = moduleGenTarget;
@@ -36191,6 +36214,9 @@ var TypeScript;
         };
         ImmutableCompilationSettings.prototype.refScriptLibs = function () {
             return this._refScriptLibs;
+        };
+        ImmutableCompilationSettings.prototype.gatherOverloadStats = function () {
+            return this._gatherOverloadStats;
         };
 
         ImmutableCompilationSettings.prototype.codeGenTarget = function () {
@@ -36239,7 +36265,7 @@ var TypeScript;
         };
 
         ImmutableCompilationSettings.fromCompilationSettings = function (settings) {
-            return new ImmutableCompilationSettings(settings.propagateEnumConstants, settings.removeComments, settings.watch, settings.noResolve, settings.allowAutomaticSemicolonInsertion, settings.noImplicitAny, settings.noLib, settings.refScript, settings.refscriptLibs, settings.codeGenTarget, settings.moduleGenTarget, settings.outFileOption, settings.outDirOption, settings.mapSourceFiles, settings.mapRoot, settings.sourceRoot, settings.generateDeclarationFiles, settings.useCaseSensitiveFileResolution, settings.gatherDiagnostics, settings.codepage, settings.createFileLog);
+            return new ImmutableCompilationSettings(settings.propagateEnumConstants, settings.removeComments, settings.watch, settings.noResolve, settings.allowAutomaticSemicolonInsertion, settings.noImplicitAny, settings.noLib, settings.refScript, settings.refscriptLibs, settings.gatherOverloadStats, settings.codeGenTarget, settings.moduleGenTarget, settings.outFileOption, settings.outDirOption, settings.mapSourceFiles, settings.mapRoot, settings.sourceRoot, settings.generateDeclarationFiles, settings.useCaseSensitiveFileResolution, settings.gatherDiagnostics, settings.codepage, settings.createFileLog);
         };
 
         ImmutableCompilationSettings.prototype.toCompilationSettings = function () {
@@ -57616,10 +57642,11 @@ var TypeScript;
     (function (CompilerPhase) {
         CompilerPhase[CompilerPhase["Syntax"] = 0] = "Syntax";
         CompilerPhase[CompilerPhase["Semantics"] = 1] = "Semantics";
-        CompilerPhase[CompilerPhase["InitializationStats"] = 2] = "InitializationStats";
-        CompilerPhase[CompilerPhase["EmitOptionsValidation"] = 3] = "EmitOptionsValidation";
-        CompilerPhase[CompilerPhase["Emit"] = 4] = "Emit";
-        CompilerPhase[CompilerPhase["DeclarationEmit"] = 5] = "DeclarationEmit";
+        CompilerPhase[CompilerPhase["OverloadStats"] = 2] = "OverloadStats";
+        CompilerPhase[CompilerPhase["InitializationStats"] = 3] = "InitializationStats";
+        CompilerPhase[CompilerPhase["EmitOptionsValidation"] = 4] = "EmitOptionsValidation";
+        CompilerPhase[CompilerPhase["Emit"] = 5] = "Emit";
+        CompilerPhase[CompilerPhase["DeclarationEmit"] = 6] = "DeclarationEmit";
     })(CompilerPhase || (CompilerPhase = {}));
 
     var CompilerIterator = (function () {
@@ -57665,7 +57692,7 @@ var TypeScript;
                 this.compilerPhase++;
             }
 
-            if (this.compilerPhase > 5 /* DeclarationEmit */) {
+            if (this.compilerPhase > 6 /* DeclarationEmit */) {
                 return false;
             }
 
@@ -57674,31 +57701,34 @@ var TypeScript;
                     return this.moveNextSyntaxPhase();
                 case 1 /* Semantics */:
                     return this.moveNextSemanticsPhase();
-                case 2 /* InitializationStats */:
+                case 2 /* OverloadStats */:
+                    return this.moveNextOverloadStatsPhase();
+                case 3 /* InitializationStats */:
                     return this.moveNextInitializationPhase();
-                case 3 /* EmitOptionsValidation */:
+                case 4 /* EmitOptionsValidation */:
                     return this.moveNextEmitOptionsValidationPhase();
-                case 4 /* Emit */:
+                case 5 /* Emit */:
                     return this.moveNextEmitPhase();
-                case 5 /* DeclarationEmit */:
+                case 6 /* DeclarationEmit */:
                     return this.moveNextDeclarationEmitPhase();
             }
         };
 
         CompilerIterator.prototype.shouldMoveToNextPhase = function () {
             switch (this.compilerPhase) {
-                case 3 /* EmitOptionsValidation */:
+                case 4 /* EmitOptionsValidation */:
                     return this.index === 1;
 
                 case 0 /* Syntax */:
                 case 1 /* Semantics */:
                     return this.index === this.fileNames.length;
 
-                case 2 /* InitializationStats */:
+                case 2 /* OverloadStats */:
+                case 3 /* InitializationStats */:
                     return this.index === this.fileNames.length;
 
-                case 4 /* Emit */:
-                case 5 /* DeclarationEmit */:
+                case 5 /* Emit */:
+                case 6 /* DeclarationEmit */:
                     return this.index === (this.fileNames.length + 1);
             }
 
@@ -57736,6 +57766,20 @@ var TypeScript;
 
                 this._current = CompileResult.fromDiagnostics(diagnostics);
             }
+
+            return true;
+        };
+
+        CompilerIterator.prototype.moveNextOverloadStatsPhase = function () {
+            if (!this.compiler.compilationSettings().gatherOverloadStats()) {
+                return true;
+            }
+            TypeScript.Debug.assert(this.index >= 0 && this.index < this.fileNames.length);
+            var fileName = this.fileNames[this.index];
+            fileName = TypeScript.switchToForwardSlashes(fileName);
+            console.log(fileName);
+
+            TypeScript.OverloadStatGatherer.gather(this.compiler.getDocument(fileName), this.compiler.semanticInfoChain);
 
             return true;
         };
@@ -60385,6 +60429,29 @@ var TypeScript;
     })(RsStatement);
     TypeScript.RsClassStmt = RsClassStmt;
 
+    var RsEnumStmt = (function (_super) {
+        __extends(RsEnumStmt, _super);
+        function RsEnumStmt(span, ann, id, body) {
+            _super.call(this, ann);
+            this.span = span;
+            this.ann = ann;
+            this.id = id;
+            this.body = body;
+        }
+        RsEnumStmt.prototype.toObject = function () {
+            return {
+                EnumStmt: [
+                    [this.span.toObject(), this.mapAnn(function (a) {
+                            return a.toObject();
+                        })],
+                    this.id.toObject(),
+                    this.body.toObject()]
+            };
+        };
+        return RsEnumStmt;
+    })(RsStatement);
+    TypeScript.RsEnumStmt = RsEnumStmt;
+
     var RsWhileStmt = (function (_super) {
         __extends(RsWhileStmt, _super);
         function RsWhileStmt(span, ann, exp, body) {
@@ -60830,6 +60897,56 @@ var TypeScript;
         return InitializationValidator;
     })();
     TypeScript.InitializationValidator = InitializationValidator;
+})(TypeScript || (TypeScript = {}));
+var TypeScript;
+(function (TypeScript) {
+    var OverloadState = (function () {
+        function OverloadState(semanticInfoChain, funcs) {
+            if (typeof funcs === "undefined") { funcs = {}; }
+            this.semanticInfoChain = semanticInfoChain;
+            this.funcs = funcs;
+        }
+        return OverloadState;
+    })();
+
+    var OverloadStatGatherer = (function () {
+        function OverloadStatGatherer() {
+        }
+        OverloadStatGatherer.pre = function (ast, state) {
+            switch (ast.kind()) {
+                case 129 /* FunctionDeclaration */:
+                case 135 /* MemberFunctionDeclaration */:
+                    var functionDecl = state.semanticInfoChain.getDeclForAST(ast);
+                    var name = functionDecl.name;
+                    if (name in state.funcs)
+                        break;
+                    var funcSymbol = functionDecl.getSymbol();
+                    var funcTypeSymbol = funcSymbol.type;
+                    var signatures = funcTypeSymbol.getCallSignatures();
+                    state.funcs[name] = signatures.length;
+            }
+        };
+
+        OverloadStatGatherer.gather = function (document, semanticInfoChain) {
+            var sourceUnit = document.sourceUnit();
+            var state = new OverloadState(semanticInfoChain);
+            TypeScript.getAstWalkerFactory().simpleWalk(document.sourceUnit(), OverloadStatGatherer.pre, null, state);
+
+            var normalFuncs = 0;
+            var overloadFuncs = 0;
+            for (var func in state.funcs) {
+                if (state.funcs[func] > 1)
+                    overloadFuncs++;
+                else
+                    normalFuncs++;
+            }
+
+            console.log("Overloaded functions: " + overloadFuncs);
+            console.log("Other functions: " + normalFuncs);
+        };
+        return OverloadStatGatherer;
+    })();
+    TypeScript.OverloadStatGatherer = OverloadStatGatherer;
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
 (function (TypeScript) {
@@ -61961,6 +62078,7 @@ var TypeScript;
                     this.logger.log(" noImplicitAny " + this.compilationSettings.noImplicitAny());
                     this.logger.log(" nolib " + this.compilationSettings.noLib());
                     this.logger.log(" refscript " + this.compilationSettings.refScript());
+                    this.logger.log(" overloadStats " + this.compilationSettings.gatherOverloadStats());
                     this.logger.log(" target " + this.compilationSettings.codeGenTarget());
                     this.logger.log(" module " + this.compilationSettings.moduleGenTarget());
                     this.logger.log(" out " + this.compilationSettings.outFileOption());
@@ -62296,6 +62414,12 @@ var TypeScript;
                     mutableSettings.refScript = true;
                 }
             });
+
+            opts.flag('overloadStats', {
+                set: function () {
+                    mutableSettings.gatherOverloadStats = true;
+                }
+            }, 'Q');
 
             opts.flag('diagnostics', {
                 experimental: true,

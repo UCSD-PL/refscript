@@ -19,14 +19,12 @@ module Language.Nano.Visitor (
 
 import           Data.Functor.Identity          (Identity)
 import           Data.Monoid
-import qualified Data.Map.Strict                as M
 import           Data.Traversable               (traverse)
 import           Control.Applicative            ((<$>), (<*>))
 import           Control.Exception              (throw)
 import           Control.Monad.Trans.State      (modify, runState, StateT, runStateT)
 import           Control.Monad.Trans.Class      (lift)
 import           Language.Nano.Misc             (mapSndM)
-import           Language.Fixpoint.Misc         (mapSnd)
 import           Language.Nano.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -165,6 +163,7 @@ visitStmtM v = vS
     step c (ModuleStmt l m ss)      = ModuleStmt   l <$> (vI c m) <*> (vS c <$$> ss) 
     step _ s@(IfaceStmt {})         = return s 
     step _ s@(EmptyStmt {})         = return s 
+    step c (EnumStmt l n es)        = EnumStmt     l <$> (vI c n) <*> (vI c <$$> es)
     step _ s                        = throw $ unimplemented l "visitStatement" s  where l = srcPos $ getAnnotation s
 
 
@@ -206,7 +205,6 @@ visitClassElt v = vCE
   where
     vI       = visitId   v   
     vS       = visitStmtM v   
-    vD       = visitVarDecl v   
     vCE c ce = accum acc >> step c' ce' where c'     = ctxCElt v c  ce
                                               ce'    = txCElt  v c' ce
                                               acc    = accCElt v c' ce

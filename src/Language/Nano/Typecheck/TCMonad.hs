@@ -54,7 +54,6 @@ import           Control.Monad.State
 import           Control.Monad.Trans.Except
 import           Control.Monad.Except               (catchError)
 import           Data.Function                      (on)
-import           Data.Generics
 import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (catMaybes, isJust, maybeToList)
 import           Data.Monoid                  
@@ -87,7 +86,6 @@ import           Language.ECMAScript3.Syntax.Annotations
 --
 import qualified System.Console.CmdArgs.Verbosity   as V
 
-type PPR r = (PP r, F.Reftable r, Data r)
 type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
 
 
@@ -419,7 +417,7 @@ safeExtends _ (_,    ID _ _ _ Nothing        _ ) = return ()
 safeExtends γ (l, t@(ID _ c _ (Just (p, ts)) _)) = 
     case flatten' Nothing InstanceMember γ t of
       Just ms -> 
-        case flatten Nothing InstanceMember γ . (,ts) =<< resolveRelNameInEnv γ p of
+        case flatten Nothing InstanceMember γ . (,ts) =<< resolveRelTypeInEnv γ p of
           Just ps  | isSubtype γ (mkTCons t_immutable ms) (mkTCons t_immutable ps) 
                   -> return ()
                    | otherwise         

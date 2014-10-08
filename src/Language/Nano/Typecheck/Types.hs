@@ -21,6 +21,8 @@ module Language.Nano.Typecheck.Types (
   -- * Type operations
     toType, ofType, rTop, strengthen 
 
+  , PPR, ExprReftable(..) 
+
   -- * Predicates on Types 
   , isTop, isNull, isVoid, isTNum, isUndef, isUnion
 
@@ -55,6 +57,7 @@ module Language.Nano.Typecheck.Types (
   , arrayLitTy
   , objLitTy
   , setPropTy
+  , enumTy
 
   -- * Builtin: Binders
   , mkId, argId, argTy, returnTy
@@ -67,16 +70,14 @@ module Language.Nano.Typecheck.Types (
 import           Data.Data
 import           Data.Default
 import           Data.Hashable
+import qualified Data.IntMap                     as I
 import           Data.Either                    (partitionEithers)
 import qualified Data.List                      as L
 import           Data.Maybe                     (fromMaybe, maybeToList)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.Map.Strict                as M
 import           Data.Typeable                  ()
-import           Data.Generics.Schemes
-import           Data.Generics.Aliases          (mkM)
 import           Language.ECMAScript3.Syntax 
-import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Misc
 import           Language.Nano.Types
@@ -92,12 +93,12 @@ import           Text.PrettyPrint.HughesPJ
 import           Text.Parsec.Pos                    (initialPos)
 
 import           Control.Applicative            hiding (empty)
-import           Control.Monad.Trans.State               (modify, State, runState)
+import           Control.Exception              (throw)
 
 -- import           Debug.Trace (trace)
 
 
-type PPR  r = (PP r, F.Reftable r)
+type PPR  r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
 
 
 ---------------------------------------------------------------------
@@ -149,6 +150,16 @@ ofType = fmap (const fTop)
 -- | Top-up refinemnt
 rTop = ofType . toType
 
+class ExprReftable a r where
+  exprReft :: a -> r 
+
+instance ExprReftable a () where
+  exprReft _ = ()
+
+instance F.Expression a => ExprReftable a F.Reft where
+  exprReft = F.exprReft
+
+
 funTys l f xs ft 
   = case bkFuns ft of
       Nothing -> Left $ errorNonFunction (srcPos l) f ft 
@@ -157,20 +168,7 @@ funTys l f xs ft
           ([], fts) -> Right $ zip ([0..] :: [Int]) fts
           (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
 
--- methTys l f xs i (m,ft0)
---   = case remThisBinding ft0 of
---       Nothing        -> Left  $ errorNonFunction (srcPos l) f ft0 
---       Just (αs,bs,t) -> Right $ (i,m,αs,bs,t)
 
---   = case bkFuns ft0 of
---       Nothing -> Left $ errorNonFunction (srcPos l) f ft0 
---       Just ts -> 
---         case partitionEithers [funTy l xs t | t <- ts] of 
---           ([], fts) -> Right $ zip3 ([0..] :: [Int]) (repeat m) fts
---           (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
-
-
--- NEW
 funTy l xs (αs, s, yts, t) =
   case padUndefineds xs yts of
     Nothing   -> Left  $ errorArgMismatch (srcPos l)
@@ -307,11 +305,14 @@ isNull (TApp TNull _ _)   = True
 isNull _                  = False
 
 isVoid :: RType r -> Bool
-isVoid (TApp TVoid _ _)   = True 
-isVoid _                  = False
+isVoid (TApp TVoid _ _)    = True 
+isVoid _                   = False
 
 isTObj (TApp (TRef _) _ _) = True
 isTObj (TCons _ _ _)       = True
+isTObj (TModule _)         = True
+isTObj (TClass _ )         = True
+isTObj (TEnum _ )          = True
 isTObj _                   = False
 
 isTNum (TApp TInt _ _ )    = True
@@ -336,6 +337,7 @@ rTypeR (TVar _ r   )  = r
 rTypeR (TFun _ _ _ r) = r
 rTypeR (TCons _ _ r)  = r
 rTypeR (TModule _  )  = fTop
+rTypeR (TEnum _  )    = fTop
 rTypeR (TClass _   )  = fTop
 rTypeR (TAll _ _   )  = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )      = errorstar "Unimplemented: rTypeR - TAnd"
@@ -349,16 +351,11 @@ setRTypeR (TFun s xts ot _) r = TFun s xts ot r
 setRTypeR (TCons x y _)     r = TCons x y r  
 setRTypeR t                 _ = t
 
-
 mapEltM f (CallSig t)        = CallSig <$> f t
 mapEltM f (ConsSig t)        = ConsSig <$> f t
 mapEltM f (IndexSig i b t)   = IndexSig i b <$> f t
 mapEltM f (FieldSig x m t)   = FieldSig x m <$> f t
 mapEltM f (MethSig  x m t)   = MethSig x m <$> f t
--- mapEltM f (StatSig x m t)    = StatSig x m <$> f t
-
-
-type CheckM = State [Error] 
 
 nonConstrElt = not . isConstr
   
@@ -481,6 +478,7 @@ instance (PP r, F.Reftable r) => PP (RType r) where
                               = F.ppTy r $ lbrace $+$ nest 2 (vcat $ ppHMap pp bs) $+$ rbrace
   pp (TModule s  )            = text "module" <+> pp s
   pp (TClass c   )            = text "typeof" <+> pp c
+  pp (TEnum c   )             = text "enum" <+> pp c
 
 ppHMap p = map (p . snd) . M.toList 
 
@@ -594,12 +592,15 @@ ppMut (TApp (TRef (RN (QName _ _ s))) _ _)
 ppMut t@(TVar{})                  = pp "[" <> pp t <> pp "]" 
 ppMut _                           = pp "?"
 
+instance PP EnumDef where
+  pp (EnumDef n ss _) = pp n <+> braces (intersperse comma $ pp <$> I.elems ss)
  
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
-  pp (ModuleDef vars tys path) =  
+  pp (ModuleDef vars tys enums path) =  
     text "module" <+> pp path 
       $$ text "Variables" $$ braces (pp vars) 
-      $$ text "Types" $$ (pp tys)
+      $$ text "Types" $$ pp tys
+      $$ text "Enums" $$ pp enums
 
 
 -----------------------------------------------------------------------
@@ -711,7 +712,7 @@ objLitTy l ps     = mkFun (vs, Nothing, bs, rt)
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
     rt            = TCons mt elts fTop
     elts          = M.fromList [((s, InstanceMember), FieldSig s m $ ofType a) | (s,m,a) <- zip3 ss mts ats ]
-    (mv, mt)      = freshTV l mSym 0                             -- obj mutability
+    (mv, mt)      = freshTV l mSym (0::Int)                             -- obj mutability
     (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
     (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
     ss            = [F.symbol p | p <- ps]
@@ -754,19 +755,40 @@ immObjectLitTy l _ ps ts
                          [ ((s, InstanceMember), FieldSig s t_immutable t)
                          | (p,t) <- safeZip "immObjectLitTy" ps ts, let s = F.symbol p ]
     nps              = length ps
+
+
+---------------------------------------------------------------------------------
+enumTy               :: EnumDef -> RType F.Reft
+---------------------------------------------------------------------------------
+enumTy (EnumDef _ ps _) = TAll a $ TFun Nothing [a',b] ot fTop
+  where
+    a        = TV (F.symbol "A") (srcPos dummySpan)
+    a'       = B x0 (tVar a)
+    x0       = F.symbol "x0"
+    x1       = F.symbol "x1"
+    sz       = I.size ps
+    pi       = F.PAnd [F.PAtom F.Le (F.expr (0::Int)) (F.eVar v), 
+                       F.PAtom F.Lt (F.expr v) (F.expr sz)]
+    v        = F.vv Nothing
+    b        = B x1 $ tInt `strengthen` F.predReft pi
+    el       = I.toList ps
+    ot       = tString `strengthen` F.predReft (F.PAnd $ si <$> el)
+    si (i,s) = F.PImp (F.PAtom F.Eq (F.expr x1) (F.expr i))
+                      (F.PAtom F.Eq (F.expr v ) (F.expr $ F.symbolText s))
     
 ---------------------------------------------------------------------------------
 setPropTy :: (PPR r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
 ---------------------------------------------------------------------------------
-setPropTy _ f ty =
+setPropTy l f ty =
     case ty of 
       TAll α2 (TAll μ2 (TFun Nothing [xt2,a2] rt2 r2)) 
           -> TAll α2 (TAll μ2 (TFun Nothing [gg xt2,a2] rt2 r2))
       _   -> errorstar $ "setPropTy " ++ ppshow ty
   where
     gg (B n (TCons m ts r))  = B n (TCons m (ff ts) r)
+    gg _                     = throw $ bug (srcPos l) "Unhandled cases in Typecheck.Types.setPropTy"
     ff                       = M.fromList . tr . M.toList 
-    tr [((s,a),FieldSig x μx t)] | x == F.symbol "f" = [((f,a),FieldSig f μx t)]
+    tr [((_,a),FieldSig x μx t)] | x == F.symbol "f" = [((f,a),FieldSig f μx t)]
     tr t                     = error $ "setPropTy:tr " ++ ppshow t
 
 

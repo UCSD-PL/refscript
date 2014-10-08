@@ -55,9 +55,7 @@ import           Language.ECMAScript3.Syntax.Annotations
 import qualified System.Console.CmdArgs.Verbosity as V
 
 
-type PPR  r = (PP r, F.Reftable r, Data r)
 type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
-
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
@@ -148,15 +146,16 @@ patch fs =
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-initGlobalEnv  :: PPR r => NanoSSAR r -> TCEnv r
+initGlobalEnv :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
 initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
     nms       = envAdds extras
               $ envMap (\(a,b,c,d) -> (d,c)) 
+              -- $ trace (ppshow $ envKeys visEnv) 
               $ visEnv
-
-    visEnv    = mkVarEnv $ visibleNames ss
+    visEnv    = mkVarEnv visibleNs
+    visibleNs = visibleNames ss
     extras    = [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly))]
     mod       = scrapeModules ss 
     ctx       = emptyContext
@@ -216,7 +215,7 @@ safeTcEnvFindTy l γ x   = case tcEnvFindTy x γ of
 tcEnvFindReturn         = fst . envFindReturn . tce_names
 
 tcEnvFindTypeDefM l γ x 
-  = case resolveRelNameInEnv γ x of 
+  = case resolveRelTypeInEnv γ x of 
       Just t  -> return t
       Nothing -> tcError $ bugClassDefNotFound (srcPos l) x
 
@@ -490,6 +489,10 @@ tcStmt γ (ClassStmt l x e is ce)
 tcStmt γ (ModuleStmt l n body) 
   = (ModuleStmt l n *** return (Just γ)) <$>  tcStmts (initModuleEnv γ n body) body
 
+-- | enum M { ... } 
+tcStmt γ (EnumStmt l n body) 
+  = return (EnumStmt l n body, Just γ)
+
 -- OTHER (Not handled)
 tcStmt _ s 
   = convertError "tcStmt" s
@@ -733,8 +736,10 @@ tcCall γ (InfixExpr l o@OpInstanceof e1 e2)
        case t of
          TClass (RN (QName _ _ x))  -> 
               do  opTy              <- safeTcEnvFindTy l γ (infixOpId o)
-                  (FI _ [e1',_], t) <- tcNormalCall γ l o (FI Nothing ((,Nothing) <$> [e1, StringLit l2 (F.symbolString x)])) opTy
-                  -- FIXME: add qualified name
+                  (FI _ [e1',_], t) <- 
+                      let args = FI Nothing ((,Nothing) <$> [e1, StringLit l2 (F.symbolString x)]) in
+                      tcNormalCall γ l o args opTy
+                      -- FIXME: add qualified name
                   return (InfixExpr l o e1' e2', t) 
          _  -> tcError $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
   where
@@ -747,14 +752,20 @@ tcCall γ (InfixExpr l o e1 e2)
          (FI _ [e1', e2'], t) -> return (InfixExpr l o e1' e2', t)
          _                    -> tcError $ impossible (srcPos l) "tcCall InfixExpr"
 
-
 -- | `e1[e2]`
+--
+--   Special case for Enumeration. might be able to do something better with the 
+--   overload for BIBracketRef
+--
 tcCall γ (BracketRef l e1 e2)
-  = do opTy                   <- safeTcEnvFindTy l γ (builtinOpId BIBracketRef)
-       z                      <- tcNormalCall γ l BIBracketRef (FI Nothing [(e1, Nothing), (e2, Nothing)]) opTy
-       case z of
-         (FI _ [e1', e2'], t) -> return (BracketRef l e1' e2', t)
-         _                    -> tcError $ impossible (srcPos l) "tcCall BracketRef"
+  = do  opTy <- runFailM (tcExpr γ e1 Nothing) >>= \case
+                  Right (_, TEnum n)   -> case resolveRelEnumInEnv γ n of
+                                            Just ed -> return $ ofType $ toType $ enumTy ed
+                                            _       -> safeTcEnvFindTy l γ $ builtinOpId BIBracketRef
+                  _ -> safeTcEnvFindTy l γ $ builtinOpId BIBracketRef
+        tcNormalCall γ l BIBracketRef (FI Nothing [(e1, Nothing), (e2, Nothing)]) opTy >>= \case
+          (FI _ [e1', e2'], t) -> return (BracketRef l e1' e2', t)
+          _                    -> tcError $ impossible (srcPos l) "tcCall BracketRef"
    
 -- | `e1[e2] = e3`
 tcCall γ (AssignExpr l OpAssign (LBracket l1 e1 e2) e3)
@@ -799,17 +810,15 @@ tcCall γ (NewExpr l e es)
 --   The coercion occurs when calling `getProp_f` with @e@ as argument.
 --
 tcCall γ ef@(DotRef l e f)
-  = do z                      <- runFailM $ tcExpr γ e Nothing
-       case z of
-         Right (_, te)        -> 
-            case getProp γ False f te of
-              Just (te', t)   ->
-                  do (FI _ [e'],τ) <- tcNormalCall γ l ef (FI Nothing [(e, Nothing)]) $ mkTy te' t
-                     return         $ (DotRef l e' f, τ)
-              Nothing         -> tcError $ errorMissingFld (srcPos l) f te
-         Left err     -> tcError err
+  = runFailM (tcExpr γ e Nothing) >>= \case 
+      Right (_, te) -> case getProp γ False f te of
+                         Just (te', t)   ->
+                           do (FI _ [e'],τ) <- tcNormalCall γ l ef (FI Nothing [(e, Nothing)]) $ mkTy te' t
+                              return         $ (DotRef l e' f, τ)
+                         Nothing         -> tcError $ errorMissingFld (srcPos l) f te
+      Left err      -> tcError err
   where
-    mkTy s t                   = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
+    mkTy s t         = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
 
          
 -- | `super(e1,...,en)`

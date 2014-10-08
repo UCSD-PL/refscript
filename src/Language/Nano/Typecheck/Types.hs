@@ -21,6 +21,8 @@ module Language.Nano.Typecheck.Types (
   -- * Type operations
     toType, ofType, rTop, strengthen 
 
+  , PPR, ExprReftable(..) 
+
   -- * Predicates on Types 
   , isTop, isNull, isVoid, isTNum, isUndef, isUnion
 
@@ -55,6 +57,7 @@ module Language.Nano.Typecheck.Types (
   , arrayLitTy
   , objLitTy
   , setPropTy
+  , enumTy
 
   -- * Builtin: Binders
   , mkId, argId, argTy, returnTy
@@ -67,6 +70,7 @@ module Language.Nano.Typecheck.Types (
 import           Data.Data
 import           Data.Default
 import           Data.Hashable
+import qualified Data.IntMap                     as I
 import           Data.Either                    (partitionEithers)
 import qualified Data.List                      as L
 import           Data.Maybe                     (fromMaybe, maybeToList)
@@ -97,7 +101,7 @@ import           Control.Monad.Trans.State               (modify, State, runStat
 -- import           Debug.Trace (trace)
 
 
-type PPR  r = (PP r, F.Reftable r)
+type PPR  r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
 
 
 ---------------------------------------------------------------------
@@ -149,6 +153,16 @@ ofType = fmap (const fTop)
 -- | Top-up refinemnt
 rTop = ofType . toType
 
+class ExprReftable a r where
+  exprReft :: a -> r 
+
+instance ExprReftable a () where
+  exprReft _ = ()
+
+instance F.Expression a => ExprReftable a F.Reft where
+  exprReft = F.exprReft
+
+
 funTys l f xs ft 
   = case bkFuns ft of
       Nothing -> Left $ errorNonFunction (srcPos l) f ft 
@@ -157,20 +171,7 @@ funTys l f xs ft
           ([], fts) -> Right $ zip ([0..] :: [Int]) fts
           (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
 
--- methTys l f xs i (m,ft0)
---   = case remThisBinding ft0 of
---       Nothing        -> Left  $ errorNonFunction (srcPos l) f ft0 
---       Just (αs,bs,t) -> Right $ (i,m,αs,bs,t)
 
---   = case bkFuns ft0 of
---       Nothing -> Left $ errorNonFunction (srcPos l) f ft0 
---       Just ts -> 
---         case partitionEithers [funTy l xs t | t <- ts] of 
---           ([], fts) -> Right $ zip3 ([0..] :: [Int]) (repeat m) fts
---           (_ , _  ) -> Left  $ errorArgMismatch (srcPos l)
-
-
--- NEW
 funTy l xs (αs, s, yts, t) =
   case padUndefineds xs yts of
     Nothing   -> Left  $ errorArgMismatch (srcPos l)
@@ -312,6 +313,9 @@ isVoid _                   = False
 
 isTObj (TApp (TRef _) _ _) = True
 isTObj (TCons _ _ _)       = True
+isTObj (TModule _)         = True
+isTObj (TClass _ )         = True
+isTObj (TEnum _ )          = True
 isTObj _                   = False
 
 isTEnum (TEnum _)          = True
@@ -599,12 +603,15 @@ ppMut (TApp (TRef (RN (QName _ _ s))) _ _)
 ppMut t@(TVar{})                  = pp "[" <> pp t <> pp "]" 
 ppMut _                           = pp "?"
 
+instance PP EnumDef where
+  pp (EnumDef n ss _) = pp n <+> braces (intersperse comma $ pp <$> I.elems ss)
  
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
-  pp (ModuleDef vars tys path) =  
+  pp (ModuleDef vars tys enums path) =  
     text "module" <+> pp path 
       $$ text "Variables" $$ braces (pp vars) 
-      $$ text "Types" $$ (pp tys)
+      $$ text "Types" $$ pp tys
+      $$ text "Enums" $$ pp enums
 
 
 -----------------------------------------------------------------------
@@ -716,7 +723,7 @@ objLitTy l ps     = mkFun (vs, Nothing, bs, rt)
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
     rt            = TCons mt elts fTop
     elts          = M.fromList [((s, InstanceMember), FieldSig s m $ ofType a) | (s,m,a) <- zip3 ss mts ats ]
-    (mv, mt)      = freshTV l mSym 0                             -- obj mutability
+    (mv, mt)      = freshTV l mSym (0::Int)                             -- obj mutability
     (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
     (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
     ss            = [F.symbol p | p <- ps]
@@ -759,6 +766,26 @@ immObjectLitTy l _ ps ts
                          [ ((s, InstanceMember), FieldSig s t_immutable t)
                          | (p,t) <- safeZip "immObjectLitTy" ps ts, let s = F.symbol p ]
     nps              = length ps
+
+
+---------------------------------------------------------------------------------
+enumTy               :: EnumDef -> RType F.Reft
+---------------------------------------------------------------------------------
+enumTy (EnumDef _ ps _) = TAll a $ TFun Nothing [a',b] ot fTop
+  where
+    a        = TV (F.symbol "A") (srcPos dummySpan)
+    a'       = B x0 (tVar a)
+    x0       = F.symbol "x0"
+    x1       = F.symbol "x1"
+    sz       = I.size ps
+    pi       = F.PAnd [F.PAtom F.Le (F.expr (0::Int)) (F.eVar v), 
+                       F.PAtom F.Lt (F.expr v) (F.expr sz)]
+    v        = F.vv Nothing
+    b        = B x1 $ tInt `strengthen` F.predReft pi
+    el       = I.toList ps
+    ot       = tString `strengthen` F.predReft (F.PAnd $ si <$> el)
+    si (i,s) = F.PImp (F.PAtom F.Eq (F.expr x1) (F.expr i))
+                      (F.PAtom F.Eq (F.expr v ) (F.expr $ F.symbolText s))
     
 ---------------------------------------------------------------------------------
 setPropTy :: (PPR r, IsLocated l) => l -> F.Symbol -> RType r -> RType r

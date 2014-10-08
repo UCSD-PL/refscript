@@ -1,4 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE TupleSections             #-}
@@ -858,6 +860,9 @@ splitW (W _ _ (TClass _ ))
 splitW (W _ _ (TModule _ ))
   = return []
 
+splitW (W _ _ (TEnum _ ))
+  = return []
+
 splitW (W _ _ t) = error $ render $ text "Not supported in splitW: " <+> pp t
 
 bsplitW g t i 
@@ -871,7 +876,7 @@ envTyAdds msg l xts = envAdds (msg ++  " - envTyAdds " ++ ppshow (srcPos l)) [(s
 
 
 ------------------------------------------------------------------------------
-cgFunTys :: (F.Symbolic s, F.Reftable r, PP r, PP a) =>
+cgFunTys :: (PPR r, F.Symbolic s, PP a) =>
   AnnSSA r -> a -> [s] -> RType r -> CGM [(Int, ([TVar], Maybe (RType r), [RType r], RType r))]
 ------------------------------------------------------------------------------
 cgFunTys l f xs ft = either cgError return $ funTys l f xs ft 

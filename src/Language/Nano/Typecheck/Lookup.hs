@@ -20,7 +20,9 @@ import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 
+import           Language.Nano.Names
 import           Language.Nano.Types
+import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
@@ -76,8 +78,8 @@ getPropApp γ b s t@(TApp c ts _) =
     TUndef   -> Nothing
     TNull    -> Nothing
     TUn      -> getPropUnion γ b s ts
-    TInt     -> (t,) <$> lookupAmbientVar γ b s "Number"
-    TString  -> (t,) <$> lookupAmbientVar γ b s "String"
+    TInt     -> (t,) <$> lookupAmbientType γ b s "Number"
+    TString  -> (t,) <$> lookupAmbientType γ b s "String"
     TRef x   -> do  d      <- resolveRelTypeInEnv γ x
                     es     <- flatten Nothing InstanceMember γ (d,ts)
                     p      <- accessMember b InstanceMember s es
@@ -179,18 +181,14 @@ accessMember False sk s es =
            Just (IndexSig _ StringIndex t) -> Just t
            _ -> Nothing
 
-
--- Access the property from the relevant ambient object but return the 
--- original accessed type instead of the type of the ambient object. 
--- FIXME !!!
 -------------------------------------------------------------------------------
-lookupAmbientVar :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s) 
-                 => g r -> Bool -> f -> s -> Maybe (RType r)
+lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s) 
+                  => g r -> Bool -> f -> s -> Maybe (RType r)
 -------------------------------------------------------------------------------
-lookupAmbientVar γ b s amb
-  = do  (t, _ )   <- envFindTy (F.symbol amb) (names γ)
-        (_, t')   <- getProp γ b s t
-        return     $ t'
+lookupAmbientType γ b fld amb
+  = t_elts <$> resolveRelTypeInEnv γ nm >>= accessMember b InstanceMember fld
+  where
+    nm = mkRelName [] (F.symbol amb)
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if

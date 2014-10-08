@@ -763,6 +763,8 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 /*@ qualif True1(v:boolean): (Prop v) */
 /*@ qualif False1(v:boolean): not (Prop v) */
 
+/*@ qualif Tag(v:a,x:string): ttag(v) = x */
+
 
 // Somewhat more controversial qualifiers (i.e. "expensive"...)
 

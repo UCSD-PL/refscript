@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE TupleSections         #-}
@@ -8,8 +9,10 @@
 module Language.Nano.Typecheck.Resolve ( 
   
     absolutePathInEnv, absolutePath, absoluteName
+  , absoluteNameInEnv
   , resolveRelPath, resolveRelPathInEnv
-  , resolveRelName, resolveRelNameInEnv
+  , resolveRelType, resolveRelTypeInEnv
+  , resolveRelEnum, resolveRelEnumInEnv
   , relativePath, relativeName, extendPath
   , renameRelative
 
@@ -17,7 +20,7 @@ module Language.Nano.Typecheck.Resolve (
   , flatten, flatten', flatten'', flattenType
 
   -- * Ancestors
-  , weaken, ancestors
+  , weaken, ancestors, isAncestor
 
   -- * Keys
   , boundKeys
@@ -44,8 +47,6 @@ import           Control.Applicative ((<$>))
 import qualified Data.List as L
 
 -- import           Debug.Trace
-
-type PPR r = (PP r, F.Reftable r, Data r)
 
 
 ---------------------------------------------------------------------------
@@ -146,23 +147,22 @@ resolveRelPathInEnv :: Data r => EnvLike r g => g r -> RelPath -> Maybe (ModuleD
 resolveRelPathInEnv γ = resolveRelPath (modules γ) (absPath γ)
 
 
--- | `resolveRelName γ a r` returns the type defined at name @r@ relative to the 
---   absolute path `a`, or Nothing if this fails.
---   
+-- | `resolveRelName γ a r`
+--
 --   All relative qualified names have been made relative to absolute path `a`.
 --
 --   FIXME: check visibility
 --
 ---------------------------------------------------------------------------
-resolveRelName :: PPR r => QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe (IfaceDef r)
+resolveRelName :: Data b => (ModuleDef r -> Env b) -> QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe b
 ---------------------------------------------------------------------------
-resolveRelName env curP (RN qn) = do
+resolveRelName f env curP (RN qn) = do
     curM        <- qenvFindTy curP env
     (dfn, remP) <- aux curM qn
     renameRelative env remP curP dfn 
   where
     aux curM qn@(QName _ [] s) = do
-      case envFindTy s (m_types curM) of 
+      case envFindTy s (f curM) of 
         Just dfn -> Just (dfn, m_path curM)
         Nothing  -> do prP <- parentOf $ m_path curM
                        prM <- qenvFindTy prP env
@@ -171,12 +171,21 @@ resolveRelName env curP (RN qn) = do
       remM <- resolveRelPath env (m_path curM) (RP (QPath l ns))
       aux remM (QName l [] s)
 
+resolveRelType :: Data r => QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe (IfaceDef r)
+resolveRelType = resolveRelName m_types
+
+resolveRelEnum :: QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe EnumDef
+resolveRelEnum = resolveRelName m_enums
 
 ---------------------------------------------------------------------------
-resolveRelNameInEnv :: PPR r => EnvLike r g => g r -> RelName -> Maybe (IfaceDef r)
+resolveRelTypeInEnv :: Data r => EnvLike r g => g r -> RelName -> Maybe (IfaceDef r)
 ---------------------------------------------------------------------------
-resolveRelNameInEnv γ = resolveRelName (modules γ) (absPath γ)
+resolveRelTypeInEnv γ = resolveRelType (modules γ) (absPath γ)
 
+---------------------------------------------------------------------------
+resolveRelEnumInEnv :: Data r => EnvLike r g => g r -> RelName -> Maybe EnumDef
+---------------------------------------------------------------------------
+resolveRelEnumInEnv γ = resolveRelEnum (modules γ) (absPath γ)
 
 ---------------------------------------------------------------------------
 extendPath :: F.Symbolic x => AbsPath -> x -> AbsPath
@@ -202,7 +211,7 @@ parentOf (AP (QPath l m )) = Just (AP (QPath l (init m)))
 --   @m@ is the top-level enforced mutability Top-level 
 --
 ---------------------------------------------------------------------------
-flatten :: (EnvLike r g, PPR r) 
+flatten :: (EnvLike r g, F.Reftable r, Data r) 
         => Maybe Mutability 
         -> StaticKind 
         -> g r 
@@ -211,7 +220,7 @@ flatten :: (EnvLike r g, PPR r)
 ---------------------------------------------------------------------------
 flatten m s γ (ID _ _ vs h es, ts) =
     case h of 
-      Just (p, ts') -> do inh   <- flatten m s γ . (, ts') =<< resolveRelNameInEnv γ p 
+      Just (p, ts') -> do inh   <- flatten m s γ . (, ts') =<< resolveRelTypeInEnv γ p 
                           return $ M.map (apply θ . fmut) $ M.union current inh
       Nothing       -> return    $ M.map (apply θ . fmut) $ current 
   where 
@@ -249,8 +258,6 @@ flatten'' m st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten m st γ (d, tVar <$> vs)
 --    Types with zero type parameters (missing mutability field) are considered
 --    invalid.
 --
---    FIXME: Return an `Either Error (RType r)` for better error reporting.
---
 --    Flatten pushes top-level enforced mutabilities down towards the fields,
 --    i.e. if the top-level is 'AssignsFields' then fields get Mutable
 --    (overriding their current mutability).
@@ -259,18 +266,31 @@ flatten'' m st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten m st γ (d, tVar <$> vs)
 flattenType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
 flattenType γ (TApp (TRef x) [] r)    -- This case is for Mutability types 
-  = do  es      <- flatten Nothing InstanceMember γ . (, []) =<< resolveRelNameInEnv γ x
+  = do  d       <- resolveRelTypeInEnv γ x
+        es      <- flatten Nothing InstanceMember γ (d, [])
         return   $ TCons t_immutable es r
 
 flattenType γ (TApp (TRef x) (mut:ts) r)
-  = do  es      <- flatten (Just $ toType mut) InstanceMember γ . (,mut:ts) =<< resolveRelNameInEnv γ x
+  = do  d       <- resolveRelTypeInEnv γ x
+        es      <- flatten (Just $ toType mut) InstanceMember γ (d,mut:ts) 
         return   $ TCons (toType mut) es r
 
 flattenType γ (TClass x)             
-  = do  es      <- flatten' Nothing StaticMember γ =<< resolveRelNameInEnv γ x
-        return   $ TCons mut es fTop
+  = do  d       <- resolveRelTypeInEnv γ x
+        es      <- flatten' Nothing StaticMember γ d
+        return   $ TCons t_immutable es fTop
+
+flattenType γ (TModule x)             
+  = do  es      <- M.fromList . map mkField . envToList . m_variables <$> resolveRelPathInEnv γ x
+        return   $ TCons t_immutable es fTop
   where
-    mut          = t_readOnly
+    mkField (k,(_,_,t)) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) t_immutable t)
+
+flattenType γ (TEnum x)
+  = do  es      <- M.fromList . map  mkField . envToList . e_symbols <$> resolveRelEnumInEnv γ x
+        return   $ TCons t_immutable es fTop
+  where
+    mkField (k,i) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) t_immutable $ tInt `strengthen` exprReft i)
 
 flattenType _ t  = Just t
 
@@ -291,9 +311,9 @@ flattenType _ t  = Just t
 weaken :: (PPR r, EnvLike r g) => g r -> RelName -> RelName -> [RType r] -> Maybe (SIfaceDef r)
 ---------------------------------------------------------------------------
 weaken γ pa pb ts
-  | on (==) (absoluteNameInEnv γ) pa pb = (,ts) <$> resolveRelNameInEnv γ pa
+  | on (==) (absoluteNameInEnv γ) pa pb = (,ts) <$> resolveRelTypeInEnv γ pa
   | otherwise
-  = do  z <- resolveRelNameInEnv γ pa
+  = do  z <- resolveRelTypeInEnv γ pa
         case z of
           ID _ _ vs (Just (p,ps)) _ -> weaken γ p pb $ apply (fromList $ zip vs ts) ps
           ID _ _ _  Nothing       _ -> Nothing
@@ -304,13 +324,18 @@ weaken γ pa pb ts
 ancestors :: (PPR r, EnvLike r g) => g r -> RelName -> [RelName]
 ---------------------------------------------------------------------------
 ancestors γ s = 
-  case resolveRelNameInEnv γ s of 
+  case resolveRelTypeInEnv γ s of 
     Just (ID {t_proto = p }) -> 
       case p of 
         Just (par,_) ->  s : ancestors γ par
         _ -> [s]
     _ -> [s]
 
+---------------------------------------------------------------------------
+-- isAncestor :: PPR r => g r -> RelName -> RelName -> Bool 
+isAncestor :: (PPR r, EnvLike r g) => g r -> RelName -> RelName -> Bool
+---------------------------------------------------------------------------
+isAncestor γ c p = p `elem` ancestors γ c
 
 ---------------------------------------------------------------------------
 boundKeys :: (PPR r, EnvLike r g) => g r -> RType r -> [F.Symbol]
@@ -327,25 +352,6 @@ boundKeys _ _                     = []
 -----------------------------------------------------------------------
 
 type Constructor = Type 
-
-
--- FIXME: Use common_ts
-
--- funcConstr                            :: Constructor
--- funcConstr                             = TApp (TRef (QN [] (F.symbol "Function"))) [] ()
--- 
--- objectConstr                          :: Constructor
--- objectConstr                           = TApp (TRef (QN [] (F.symbol "Object"))) [] ()
--- 
--- -- Primitive types don't have constructor
--- toConstructor                         :: RType r -> Maybe Constructor
--- toConstructor  (TApp (TRef  x) _ _)    = Just $ TApp (TRef  x) [] ()
--- toConstructor  (TClass _)              = Just $ funcConstr
--- toConstructor  (TModule _)             = Just $ objectConstr
--- toConstructor  (TFun _ _ _ )           = Just $ funcConstr
--- toConstructor  (TCons _ _ _)           = Just $ objectConstr
--- toConstructor  (TAnd _)                = Just $ funcConstr 
--- toConstructor  _                       = Nothing
 
 instance F.Symbolic Constructor where
   symbol (TApp (TRef x) _ _)           = F.symbol x

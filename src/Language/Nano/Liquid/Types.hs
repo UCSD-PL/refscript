@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeSynonymInstances       #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE ConstraintKinds            #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE NoMonomorphismRestriction  #-}
@@ -93,8 +94,6 @@ import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Errors
   
 -- import           Debug.Trace                        (trace)
-
-type PPR r = (PP r, F.Reftable r)
 
 -------------------------------------------------------------------------------------
 -- | Refinement Types and Annotations
@@ -273,6 +272,7 @@ rTypeSort   (TAnd (t:_))   = rTypeSort t
 rTypeSort   (TCons _ _ _ ) = F.FObj $ F.symbol "cons"
 rTypeSort   (TClass _)     = F.FObj $ F.symbol "typeof"
 rTypeSort   (TModule _)    = F.FObj $ F.symbol "module"
+rTypeSort   (TEnum _)      = F.FObj $ F.symbol "enum"
 rTypeSort t                = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
 
 rTypeSortApp TInt _  = F.FInt
@@ -336,6 +336,7 @@ emapReft f γ (TFun s xts t r)  = TFun (emapReft f γ' <$> s) (emapReftBind f γ
 emapReft f γ (TCons m xts r)   = TCons m (M.map (emapReftElt f γ) xts) (f γ r)
 emapReft _ _ (TClass c)        = TClass c
 emapReft _ _ (TModule m)       = TModule m
+emapReft _ _ (TEnum e)         = TEnum e
 emapReft f γ (TAnd ts)         = TAnd (emapReft f γ <$> ts)
 emapReft _ _ _                 = error "Not supported in emapReft"
 
@@ -355,6 +356,7 @@ mapReftM f (TAnd ts)           = TAnd    <$> mapM (mapReftM f) ts
 mapReftM f (TCons m bs r)      = TCons m <$> T.mapM (mapReftEltM f) bs <*> f r
 mapReftM _ (TClass a)          = return   $ TClass a
 mapReftM _ (TModule a)         = return   $ TModule a
+mapReftM _ (TEnum a)           = return   $ TEnum a
 mapReftM _ t                   = error    $ render $ text "Not supported in mapReftM: " <+> pp t 
 
 mapReftBindM f (B x t)         = B x     <$> mapReftM f t
@@ -388,6 +390,7 @@ efoldReft g f = go
     go γ z (TCons _ bs r)   = f γ' r $ gos γ z (f_type <$> M.elems bs) where γ' = foldr (efoldExt' g) γ $ M.elems bs
     go _ z (TClass _)       = z
     go _ z (TModule _)      = z
+    go _ z (TEnum _)        = z
     go _ _ t                = error $ "Not supported in efoldReft: " ++ ppshow t
 
     gos γ z ts              = L.foldl' (go γ) z ts

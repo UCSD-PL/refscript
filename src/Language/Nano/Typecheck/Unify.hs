@@ -38,8 +38,6 @@ import           Data.Function                  (on)
 
 -- import           Debug.Trace
 
-type PPR r = (PP r, F.Reftable r)
-
 -----------------------------------------------------------------------------
 -- | Unification
 -----------------------------------------------------------------------------
@@ -77,31 +75,6 @@ unify l γ θ t t' | any isUnion [t,t'] = unifys l γ θ t1s' t2s'
     (t1s', t2s') = unzip [ (t1, t2) | t1 <- t1s, t2 <- t2s, related γ t1 t2]
     (t1s , t2s ) = mapPair bkUnion (t,t')
 
-unify l γ θ (TApp (TRef x) ts _) (TApp (TRef x') ts' _) 
-  | x == x' = unifys l γ θ ts ts'
-
--- FIXME: fill in the "otherwise case"
-
-unify l γ θ t1@(TApp (TRef _) _ _) t2 
-  = case flattenType γ t1 of 
-      Just ft1 -> unify l γ θ ft1 t2
-      Nothing  -> Left $ errorUnfoldType l t1
-
-unify l γ θ t1 t2@(TApp (TRef _) _ _)
-  = case flattenType γ t2 of
-      Just ft2 -> unify l γ θ t1 ft2
-      Nothing  -> Left $ errorUnfoldType l t2
-
-unify l γ θ t1@(TClass _) t2
-  = case flattenType γ t1 of 
-      Just ft1 -> unify l γ θ ft1 t2
-      Nothing  -> Left $ errorUnfoldType l t1
-
-unify l γ θ t1 t2@(TClass _)
-  = case flattenType γ t2 of 
-      Just ft2 -> unify l γ θ t1 ft2
-      Nothing  -> Left $ errorUnfoldType l t2
-
 unify l γ θ t@(TCons m1 e1s _) t'@(TCons m2 e2s _)
   = unifys l γ θ (ofType m1 : t1s) (ofType m2 : t2s)
   where 
@@ -109,10 +82,38 @@ unify l γ θ t@(TCons m1 e1s _) t'@(TCons m2 e2s _)
                  $ unzip 
                  $ M.elems 
                  $ M.intersectionWith (,) e1s e2s
+
+unify l γ θ (TApp (TRef x1) t1s _) (TApp (TRef x2) t2s _) 
+  | x1 == x2
+  = unifys l γ θ t1s t2s
+
+  | isAncestor γ x1 x2 || isAncestor γ x2 x1       
+  = case (weaken γ x1 x2 t1s, weaken γ x2 x1 t2s) of
+  -- 
+  -- * Adjusting `t1` to reach `t2` moving upward in the type 
+  --   hierarchy -- this is equivalent to Upcast
+  --
+      (Just (_, t1s'), _) -> unifys l γ θ t1s' t2s
+  -- 
+  -- * Adjusting `t2` to reach `t1` moving upward in the type 
+  --   hierarchy -- this is equivalent to DownCast
+  --
+      (_, Just (_, t2s')) -> unifys l γ θ t1s t2s'
+      (_, _) -> Left $ bugWeakenAncestors (srcPos l) x1 x2
+
+unify l γ θ (TClass  c1) (TClass  c2) | on (==) (absoluteNameInEnv γ) c1 c2 = return θ 
+unify l γ θ (TModule m1) (TModule m2) | on (==) (absolutePathInEnv γ) m1 m2 = return θ 
+unify l γ θ (TEnum   e1) (TEnum   e2) | on (==) (absoluteNameInEnv γ) e1 e2 = return θ
+
+unify l γ θ t1 t2 | all isTObj [t1,t2]
+  = case (flattenType γ t1, flattenType γ t2) of 
+      (Just ft1, Just ft2) -> unify l γ θ ft1 ft2
+      (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2
+      (Nothing , _       ) -> Left $ errorUnresolvedType l t1 
+      (_       , Nothing ) -> Left $ errorUnresolvedType l t2
    
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ
-
 
    
 -----------------------------------------------------------------------------

@@ -59,6 +59,7 @@ impossible l s                = mkErr l $ printf "IMPOSSIBLE: %s" s
 bugBadSubtypes l t1 t2        = mkErr l $ printf "BUG: Unexpected Subtyping Constraint\n%s <: %s" (ppshow t1) (ppshow t2)
 bugMalignedFields l s s'      = mkErr l $ printf "BUG: Fields not aligned: '%s' and '%s'" (ppshow s) (ppshow s')
 bugFlattenType l s            = mkErr l $ printf "BUG: Could not flatten type '%s'" (ppshow s)
+bugWeakenAncestors l x1 x2    = mkErr l $ printf "BUG: When weakeninig from '%s' to '%s' (or the inverse)." (ppshow x1) (ppshow x2)
 
 bugUnknownAlias l x           = mkErr l $ printf "BUG: Unknown definition for alias %s" (ppshow x)
 bugUnboundPhiVar l x          = mkErr l $ printf "BUG: Phi Variable %s is unbound" (ppshow x)
@@ -122,6 +123,7 @@ errorIncompMutElt l t t'      = mkErr l $ printf "Elements '%s' and '%s' have in
 errorConstrMissing l t        = mkErr l $ printf "Could not find constructor for type '%s'." (ppshow t)
 errorSubtype l t t'           = mkErr l $ printf "Type \n%s\n is not a subtype of\n%s" (ppshow t) (ppshow t')
 errorTClassSubtype l s s'     = mkErr l $ printf "Type 'typeof %s' is not a subtype of 'typeof %s'" (ppshow s) (ppshow s')
+errorTEnumSubtype l s s'      = mkErr l $ printf "Type 'enum %s' is not a subtype of 'enum %s'" (ppshow s) (ppshow s')
 errorTModule l s s'           = mkErr l $ printf "Modules '%s' and '%s' are incompatible." (ppshow s) (ppshow s')
 errorUnionSubtype l t t'      = mkErr l $ printf "Union type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')
 errorObjSubtype l t t'        = mkErr l $ printf "Object type '%s' is not a subtype of '%s'" (ppshow t) (ppshow t')

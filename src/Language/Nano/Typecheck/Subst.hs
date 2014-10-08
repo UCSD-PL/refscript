@@ -113,11 +113,11 @@ instance Free (Fact r) where
   free (IfaceAnn _)         = S.empty
   free (ExporedModElt)      = S.empty
   free (ModuleAnn _)        = S.empty
+  free (EnumAnn _)          = S.empty
 
 instance Free (TypeMember r) where
   free (FieldSig _ m t)     = free m `mappend` free t
   free (MethSig  _ m t)     = free m `mappend` free t
---   free (StatSig _ m t)      = free m `mappend` free t
   free (CallSig t)          = free t
   free (ConsSig t)          = free t
   free (IndexSig _ _ t)     = free t
@@ -150,7 +150,6 @@ instance (Substitutable r t) => Substitutable r (Env t) where
 
 instance F.Reftable r => Substitutable r (TypeMember r) where 
   apply θ (FieldSig x m t)  = FieldSig x   (appTy (toSubst θ) m) (apply θ t)
-  -- apply θ (StatSig x m t)   = StatSig  x   (appTy (toSubst θ) m) (apply θ t)
   apply θ (MethSig  x m t)  = MethSig  x   (appTy (toSubst θ) m) (apply θ t)
   apply θ (CallSig t)       = CallSig      (apply θ t)
   apply θ (ConsSig t)       = ConsSig      (apply θ t)
@@ -221,6 +220,7 @@ appTy (Su m)   (TAll α t)      = TAll α $ apply (Su $ HM.delete α m) t
 appTy θ        (TCons m es r)  = TCons (appTy (toSubst θ) m) (M.map (apply θ) es) r
 appTy _        (TClass c)      = TClass c
 appTy _        (TModule m)     = TModule m
+appTy _        (TEnum e)       = TEnum e
 appTy _        (TExp _)        = error "appTy should not be applied to TExp"
 
 

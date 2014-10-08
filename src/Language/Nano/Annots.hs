@@ -134,6 +134,7 @@ data Fact r
   | ClassAnn    !([TVar], Maybe (RelName, [RType r]))
   | ExporedModElt
   | ModuleAnn   !(F.Symbol)
+  | EnumAnn     !(F.Symbol)
     deriving (Eq, Show, Data, Typeable)
 
 type UFact     = Fact ()
@@ -205,6 +206,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (ClassAnn _)     = text "UNIMPLEMENTED:pp:ClassAnn"
   pp (IfaceAnn _)     = text "UNIMPLEMENTED:pp:IfaceAnn"
   pp (ModuleAnn s)    = text "module"                 <+> pp s
+  pp (EnumAnn s)      = text "enum"                   <+> pp s
 
 instance (F.Reftable r, PP r) => PP (AnnInfo r) where
   pp             = vcat . (ppB <$>) . I.toList 

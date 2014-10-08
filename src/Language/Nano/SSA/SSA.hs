@@ -351,6 +351,9 @@ ssaStmt (ModuleStmt l n body)
                 setSsaEnv θ                                 -- Restore Outer SsaEnv
                 return        $ (True, ModuleStmt l n body')
 
+ssaStmt (EnumStmt l n es) 
+  = return (True, EnumStmt l n es) 
+
 -- OTHER (Not handled)
 ssaStmt s
   = convertError "ssaStmt" s

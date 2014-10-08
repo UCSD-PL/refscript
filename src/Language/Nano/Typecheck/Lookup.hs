@@ -13,10 +13,7 @@ module Language.Nano.Typecheck.Lookup (
   ) where 
 
 import           Data.Generics
-import           Data.List  (find)
-import           Data.Maybe (listToMaybe)
 import qualified Data.Map.Strict as M
-import qualified Data.Traversable as T
 
 import           Language.ECMAScript3.PrettyPrint
 
@@ -33,7 +30,7 @@ import           Control.Applicative ((<$>))
 
 -- import           Debug.Trace
 
-type PPRD r = (PP r, F.Reftable r, Data r)
+type PPRD r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
 
 
 -- | `getProp γ b s t`: returns  a pair containing:
@@ -54,13 +51,17 @@ getProp γ b s t@(TApp _ _ _  ) = getPropApp γ b s t
 
 getProp _ b s t@(TCons _ es _) = (t,) <$> accessMember b InstanceMember s es
 
-getProp γ b s t@(TClass c    ) = do d        <- resolveRelNameInEnv γ c
+getProp γ b s t@(TClass c    ) = do d        <- resolveRelTypeInEnv γ c
                                     es       <- flatten Nothing StaticMember γ (d,[])
                                     (t,)    <$> accessMember b StaticMember s es
 
 getProp γ _ s t@(TModule m   ) = do m'       <- resolveRelPathInEnv γ m
                                     (_,_,ty) <- envFindTy s $ m_variables m'
                                     (t,)    <$> renameRelative (modules γ) (m_path m') (absPath γ) ty
+
+getProp γ _ s t@(TEnum e     ) = do e'       <- resolveRelEnumInEnv γ e
+                                    i        <- envFindTy (F.symbol s) (e_symbols e')
+                                    return    $ (t, tInt `strengthen` exprReft i)
 
 getProp _ _ _ _ = Nothing
 
@@ -77,7 +78,7 @@ getPropApp γ b s t@(TApp c ts _) =
     TUn      -> getPropUnion γ b s ts
     TInt     -> (t,) <$> lookupAmbientVar γ b s "Number"
     TString  -> (t,) <$> lookupAmbientVar γ b s "String"
-    TRef x   -> do  d      <- resolveRelNameInEnv γ x
+    TRef x   -> do  d      <- resolveRelTypeInEnv γ x
                     es     <- flatten Nothing InstanceMember γ (d,ts)
                     p      <- accessMember b InstanceMember s es
                     return  $ (t,p)
@@ -91,7 +92,7 @@ getPropApp _ _ _ _ = error "getPropApp should only be applied to TApp"
 extractCtor :: (PPRD r, EnvLike r g) => g r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 extractCtor γ (TClass x) 
-  = do  d        <- resolveRelNameInEnv γ x
+  = do  d        <- resolveRelTypeInEnv γ x
         (vs, es) <- flatten'' Nothing InstanceMember γ d
         case M.lookup (ctorSymbol, InstanceMember) es of
           Just (ConsSig t) -> fixRet x vs t
@@ -99,7 +100,7 @@ extractCtor γ (TClass x)
   where
 
 extractCtor γ (TApp (TRef x) ts _) 
-  = do  d        <- resolveRelNameInEnv γ x
+  = do  d        <- resolveRelTypeInEnv γ x
         (vs, es) <- flatten'' Nothing InstanceMember γ d
         case M.lookup (ctorSymbol, InstanceMember) es of
           Just (ConsSig t) -> apply (fromList $ zip vs ts) <$> fixRet x vs t
@@ -124,7 +125,7 @@ extractParent :: (Data r, F.Reftable r, PP r, EnvLike r g, Substitutable r (RTyp
               => g r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 extractParent γ (TApp (TRef x) ts _) 
-  = do  d <- resolveRelNameInEnv γ x
+  = do  d <- resolveRelTypeInEnv γ x
         case t_proto d of
           Just (p,ps) -> Just $ TApp (TRef p) (tArgs d ts ps) fTop
           _           -> Nothing
@@ -141,7 +142,7 @@ extractCall γ t                   = uncurry mkAll <$> foo [] t
     foo αs t@(TFun _ _ _ _)       = [(αs, t)]
     foo αs   (TAnd ts)            = concatMap (foo αs) ts 
     foo αs   (TAll α t)           = foo (αs ++ [α]) t
-    foo αs   (TApp (TRef s) _ _ ) = case resolveRelNameInEnv γ s of 
+    foo αs   (TApp (TRef s) _ _ ) = case resolveRelTypeInEnv γ s of 
                                       Just d  -> getCallSig αs $ t_elts d
                                       Nothing -> []
     foo αs   (TCons _ es _)       = getCallSig αs es
@@ -149,7 +150,7 @@ extractCall γ t                   = uncurry mkAll <$> foo [] t
 
     getCallSig αs es              = case M.lookup (callSymbol, InstanceMember) es of
                                       Just (CallSig t) -> [(αs, t)]
-                                      Nothing          -> []
+                                      _                -> []
 
 
 -- | `accessMember b s es` extracts field @s@ from type members @es@. If @b@ is

@@ -20,12 +20,10 @@ import           Data.Tuple                         (swap)
 import           Data.Monoid
 import qualified Data.HashSet                       as S
 import qualified Data.Map.Strict                    as M
-import           Data.List                          (find)
-import           Data.Maybe                         (fromMaybe, isNothing)
+import           Data.Maybe                         (fromMaybe)
 import           Control.Monad.State
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
-import qualified Language.Fixpoint.Types            as F
 
 import           Language.ECMAScript3.PrettyPrint
 
@@ -40,8 +38,6 @@ import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Errors
 
 -- import           Debug.Trace                      (trace)
-
-type PPR r = (PP r, F.Reftable r)
 
 instance PP a => PP (S.HashSet a) where
   pp = pp . S.toList 
@@ -130,39 +126,34 @@ convertObj l γ t1@(TApp (TRef x1) (m1:t1s) _) t2@(TApp (TRef x2) (m2:t2s) _)
   -- 
   -- * Compatible mutabilities, differenet names:
   --
-  | otherwise       
+  | isAncestor γ x1 x2 || isAncestor γ x2 x1       
   = case (weaken γ x1 x2 t1s, weaken γ x2 x1 t2s) of
   -- 
   -- * Adjusting `t1` to reach `t2` moving upward in the type 
   --   hierarchy -- this is equivalent to Upcast
   --
-      (Just (_, t1s'), _             ) -> mconcat . (CDUp:) <$> zipWithM (convert' l γ) t1s' t2s
+      (Just (_, t1s'), _) -> mconcat . (CDUp:) <$> zipWithM (convert' l γ) t1s' t2s
   -- 
   -- * Adjusting `t2` to reach `t1` moving upward in the type 
   --   hierarchy -- this is equivalent to DownCast
   --
-      (_             , Just (_, t2s')) -> mconcat . (CDDn:) <$> zipWithM (convert' l γ) t1s t2s'
-      (_             , _             ) ->
-  -- 
-  -- * Fall back to structural subtyping
-  --
-          case (flattenType γ t1, flattenType γ t2) of 
-            (Just ft1, Just ft2) -> convertObj l γ ft1 ft2
-            (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2
-            (Nothing , _       ) -> Left $ errorUnresolvedType l t1 
-            (_       , Nothing ) -> Left $ errorUnresolvedType l t2
-                          
-convertObj l γ t1@(TApp (TRef _) _ _) t2 
-  = case flattenType γ t1 of 
-      Just ft1 -> convertObj l γ ft1 t2
-      Nothing  -> Left $ errorUnresolvedType l t1
+      (_, Just (_, t2s')) -> mconcat . (CDDn:) <$> zipWithM (convert' l γ) t1s t2s'
+      (_, _) -> Left $ bugWeakenAncestors (srcPos l) x1 x2
 
-convertObj l γ t1 t2@(TApp (TRef _) _ _)
-  = case flattenType γ t2 of 
-      Just ft2 -> convertObj l γ t1 ft2
-      Nothing  -> Left $ errorUnresolvedType l t2
+convertObj l γ (TClass  c1) (TClass  c2) = convertTClass  l γ c1 c2
 
-convertObj l _ t1 t2 =  Left $ unimplemented l "convertObj" $ ppshow t1 ++ " -- " ++ ppshow t2
+convertObj l γ (TModule m1) (TModule m2) = convertTModule l γ m1 m2
+
+convertObj l γ (TEnum e1) (TEnum e2) = convertTEnum l γ e1 e2
+-- 
+-- * Fall back to structural subtyping
+--
+convertObj l γ t1 t2 =
+  case (flattenType γ t1, flattenType γ t2) of 
+    (Just ft1, Just ft2) -> convertObj l γ ft1 ft2
+    (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2
+    (Nothing , _       ) -> Left $ errorUnresolvedType l t1 
+    (_       , Nothing ) -> Left $ errorUnresolvedType l t2
 
 
 covariantConvertObj l γ e1s e2s
@@ -284,8 +275,8 @@ convertFun l _ t1 t2 = Left $ unsupportedConvFun l t1 t2
 convertTClass :: (Functor g, EnvLike () g)
               => SourceSpan -> g () -> RelName -> RelName -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertTClass l _ c1 c2 | c1 == c2                  = Right CDNo  
-                        | otherwise                 = Left  $ errorTClassSubtype l c1 c2
+convertTClass l _ c1 c2 | c1 == c2  = Right CDNo  
+                        | otherwise = Left  $ errorTClassSubtype l c1 c2
 
 -- | `convertTModule`
 --------------------------------------------------------------------------------
@@ -296,6 +287,14 @@ convertTModule l γ c1 c2 =
   case (absolutePathInEnv γ c1, absolutePathInEnv γ c2) of
     (Just _, Just _) -> Right CDNo
     _                -> Left $ errorTModule l c1 c2
+
+-- | `convertTEnum`
+--------------------------------------------------------------------------------
+convertTEnum :: (Functor g, EnvLike () g)
+              => SourceSpan -> g () -> RelName -> RelName -> Either Error CastDirection
+--------------------------------------------------------------------------------
+convertTEnum l _ e1 e2 | e1 == e2  = Right CDNo  
+                       | otherwise = Left  $ errorTEnumSubtype l e1 e2
 
 
 

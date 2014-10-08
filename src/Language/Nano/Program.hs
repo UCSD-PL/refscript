@@ -1,6 +1,8 @@
 
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE DeriveFunctor             #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
@@ -66,10 +68,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types        as F
 
-import           Debug.Trace                        hiding (traceShow)
-
-
-type PPR  r = (PP r, F.Reftable r, Data r)
+-- import           Debug.Trace                        hiding (traceShow)
 
 
 ---------------------------------------------------------------------------------
@@ -256,6 +255,7 @@ instance IsNano (Statement a) where
   isNano (FuncOverload _ _ _) = True
   isNano (IfaceStmt _)            = True
   isNano (ModuleStmt _ _ s)       = all isNano s
+  isNano (EnumStmt _ _ _)         = True
   isNano e                        = errortext (text "Not Nano Statement:" $$ pp e)
 
 instance IsNano (ClassElt a) where
@@ -403,12 +403,13 @@ hoistBindings = everythingBut (++) myQ
                           Nothing -> ([], False)
 
     fSt :: Statement (AnnType r) -> ([(Id (AnnType r), AnnType r, SyntaxKind, Assignability)],Bool)
-    fSt (FunctionStmt l n _ _)      = ([(n, l, FuncDefKind, ReadOnly)], True)
-    fSt (FuncAmbDecl l n _) = ([(n, l, FuncAmbientKind   , ImportDecl)], True)    
+    fSt (FunctionStmt l n _ _)  = ([(n, l, FuncDefKind, ReadOnly)], True)
+    fSt (FuncAmbDecl l n _)     = ([(n, l, FuncAmbientKind   , ImportDecl)], True)    
     fSt (FuncOverload l n _  )  = ([(n, l, FuncOverloadKind , ImportDecl)], True)    
-    fSt (ClassStmt l n _ _ _ )      = ([(n, l, ClassDefKind   , ReadOnly)], True)
-    fSt (ModuleStmt l n _)          = ([(n, l { ann_fact = ModuleAnn (F.symbol n) : ann_fact l}, ModuleDefKind, ReadOnly)], True)
-    fSt _                           = ([], False)
+    fSt (ClassStmt l n _ _ _ )  = ([(n, l, ClassDefKind   , ReadOnly)], True)
+    fSt (ModuleStmt l n _)      = ([(n, l { ann_fact = ModuleAnn (F.symbol n) : ann_fact l}, ModuleDefKind, ReadOnly)], True)
+    fSt (EnumStmt l n _)        = ([(n, l { ann_fact = EnumAnn (F.symbol n)   : ann_fact l}, EnumDefKind  , ReadOnly)], True)
+    fSt _                       = ([], False)
 
     fExp :: Expression (AnnType r) -> ([(Id (AnnType r), AnnType r, SyntaxKind, Assignability)], Bool)
     fExp _                     = ([], True)
@@ -514,10 +515,10 @@ visibleNames s = [ (ann <$> n,(k,v,a,t)) | (n,l,k,a) <- hoistBindings s
   where
     annToType _ _ ReadOnly   (VarAnn t)      = [t] -- Hoist ReadOnly vars (i.e. function defs)
     annToType _ _ ImportDecl (VarAnn t)      = [t] -- Hoist ImportDecl (i.e. function decls)
-    annToType l n _          (ClassAnn {})   = [TClass $ RN $ QName l [] (F.symbol n)]
+    annToType l n _          (ClassAnn {})   = [TClass  $ RN $ QName l [] (F.symbol n)]
     annToType l _ _          (ModuleAnn n)   = [TModule $ RP $ QPath l [n]]
+    annToType l _ _          (EnumAnn n)     = [TEnum   $ RN $ QName l [] (F.symbol n)]
     annToType _ _ _          _               = []
-
 
 
 -- | `scrapeModules ss` creates a module store from the statements in @ss@
@@ -534,10 +535,12 @@ scrapeModules                    = qenvFromList . map mkMod . collectModules
   where
     mkMod (ap, m)                = (ap, {- trace (ppshow (envKeys $ varEnv m)
                                            ++ "\n\n" ++ ppshow (envKeys $ typeEnv m)) $ -}
-                                         ModuleDef (envMap drop1 $ varEnv m) (typeEnv m) ap)
+                                         ModuleDef (varEnv m) (typeEnv m) (enumEnv m) ap)
     drop1 (_,b,c,d)              = (b,c,d)
-    varEnv                       = mkVarEnv    . vStmts
-    typeEnv                      = envFromList . tStmts
+    varEnv                       = envMap drop1 . mkVarEnv    . vStmts
+    typeEnv                      = envFromList  . tStmts
+    enumEnv                      = envFromList  . eStmts
+
     vStmts                       = concatMap vStmt
     vStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, VarInfo r)]
     vStmt (VarDeclStmt _ vds)    = [ (ss x, (VarDeclKind, visibility l, WriteGlobal, t))
@@ -549,17 +552,23 @@ scrapeModules                    = qenvFromList . map mkMod . collectModules
                                        | VarAnn t <- ann_fact l ]
     vStmt (FuncOverload l x _)   = [ (ss x, (FuncOverloadKind, visibility l, ImportDecl, t))
                                        | VarAnn t <- ann_fact l ]
-    vStmt (ClassStmt l x _ _ _)  = [ (ss x, (ClassDefKind, visibility l, ReadOnly, TClass $ RN $ QName (ann l) [] $ F.symbol x)) ]
-    vStmt (ModuleStmt l x _)     = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, TModule $ RP $ QPath (ann l) [F.symbol x])) ]
+    vStmt (ClassStmt l x _ _ _)  = [ (ss x, (ClassDefKind, visibility l, ReadOnly, TClass   $ RN $ QName (ann l) [] $  F.symbol x)) ]
+    vStmt (ModuleStmt l x _)     = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, TModule $ RP $ QPath (ann l)    $ [F.symbol x])) ]
+    vStmt (EnumStmt l x _)       = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, TEnum   $ RN $ QName (ann l) [] $  F.symbol x)) ]
     vStmt _                      = [ ] 
 
     tStmts                       = concatMap tStmt
-
     tStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, IfaceDef r)]
     tStmt c@(ClassStmt{})        = maybeToList $ resolveType c
     tStmt c@(IfaceStmt _)        = maybeToList $ resolveType c
     tStmt _                      = [ ]
 
+    eStmts                       = concatMap eStmt
+    eStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, EnumDef)]
+    syms                         = (F.symbol <$>)
+    eStmt (EnumStmt _ n es)      = [(fmap srcPos n, EnumDef (F.symbol n) (I.fromList  $ zip [0..] (syms es))
+                                                                         (envFromList $ zip (syms es) [0..]))]
+    eStmt _                      = []
     ss = fmap ann
 
 
@@ -579,6 +588,7 @@ data SyntaxKind =
   | VarDeclKind
   | ClassDefKind
   | ModuleDefKind
+  | EnumDefKind
   deriving ( Eq )
 
 instance PP SyntaxKind where
@@ -592,6 +602,7 @@ instance PP SyntaxKind where
   pp VarDeclKind      = text "VarDeclKind"
   pp ClassDefKind     = text "ClassDefKind"
   pp ModuleDefKind    = text "ModuleDefKind"
+  pp EnumDefKind      = text "EnumDefKind"
 
 
 
@@ -606,13 +617,14 @@ mkVarEnv                   = envFromList . concatMap f . M.toList . foldl merge 
                              amb [ (s,(k,v,w,t)) | (k@FuncAmbientKind, v, w, t) <- vs ] ++ 
                              [ (s,(k,v,w,t)) | (k@VarDeclKind    , v, w, t) <- vs ] ++ 
                              [ (s,(k,v,w,t)) | (k@ClassDefKind   , v, w, t) <- vs ] ++
-                             [ (s,(k,v,w,t)) | (k@ModuleDefKind  , v, w, t) <- vs ]
+                             [ (s,(k,v,w,t)) | (k@ModuleDefKind  , v, w, t) <- vs ] ++
+                             [ (s,(k,v,w,t)) | (k@EnumDefKind    , v, w, t) <- vs ]
     g t []                 = t
     g _ ts                 = mkAnd ts
     amb [ ]                = [ ] 
     amb [a]                = [a]
     amb ((s,(k,v,w,t)):xs) = [(s,(k,v,w, mkAnd (t : map tyOf xs)))]    
-    tyOf (s,(k,v,w,t))     = t
+    tyOf (_,(_,_,_,t))     = t
 
 
 -- FIXME (?): Does not take into account classes with missing annotations.
@@ -627,8 +639,6 @@ resolveType  (ClassStmt l c _ _ cs)
       _         -> Nothing
   where
     cc        = fmap ann c
-    x         = RN $ QName (srcPos l) [] (F.symbol c)
-    tc vs     = TApp (TRef x) ((`TVar` fTop) <$> vs) fTop
 
 resolveType (IfaceStmt l)
   = listToMaybe [ (n, t) | IfaceAnn t@(ID _ n _ _ _) <- ann_fact l ]
@@ -642,10 +652,10 @@ typeMembers                      :: [ClassElt (AnnSSA r)] -> TypeMembers r
 ---------------------------------------------------------------------------------------
 typeMembers                       =  mkTypeMembers . concatMap go
   where
-    go (MemberVarDecl l s x _)    = [(sk s    , MemDefinition , f) | FieldAnn f  <- ann_fact l]
-    go (MemberMethDef l s x _ _ ) = [(sk s    , MemDefinition , f) | MethAnn  f  <- ann_fact l]
-    go (MemberMethDecl l s x _ )  = [(sk s    , MemDeclaration, f) | MethAnn  f  <- ann_fact l]
-    go c@(Constructor l _ _)      = [(sk False, MemDefinition , a) | ConsAnn  a  <- ann_fact l]
+    go (MemberVarDecl l s _ _)    = [(sk s    , MemDefinition , f) | FieldAnn f  <- ann_fact l]
+    go (MemberMethDef l s _ _ _ ) = [(sk s    , MemDefinition , f) | MethAnn  f  <- ann_fact l]
+    go (MemberMethDecl l s _ _ )  = [(sk s    , MemDeclaration, f) | MethAnn  f  <- ann_fact l]
+    go (Constructor l _ _)        = [(sk False, MemDefinition , a) | ConsAnn  a  <- ann_fact l]
     sk True                       = StaticMember 
     sk False                      = InstanceMember 
 

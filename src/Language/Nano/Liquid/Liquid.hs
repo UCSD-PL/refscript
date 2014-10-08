@@ -1,21 +1,24 @@
-{-# LANGUAGE OverlappingInstances #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE LambdaCase           #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE ConstraintKinds      #-}
-{-# LANGUAGE TupleSections        #-}
+{-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE TupleSections             #-}
 
 -- | Top Level for Refinement Type checker
 module Language.Nano.Liquid.Liquid (verifyFile) where
 
 import           Control.Monad
 import           Control.Applicative                ((<$>), (<*>))
+import           Control.Exception                  (throw)
 
 import qualified Data.Traversable                   as T
 
 import qualified Data.HashMap.Strict                as HM
 import qualified Data.Map.Strict                    as M
-import           Data.Maybe                         (catMaybes, maybeToList, fromMaybe)
+import           Data.Maybe                         (maybeToList, fromMaybe)
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -54,7 +57,6 @@ import           System.Console.CmdArgs.Default
 -- import qualified Data.Foldable                      as FO
 -- import           Text.PrettyPrint.HughesPJ 
 
-type PPR r = (PP r, F.Reftable r)
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
 
 --------------------------------------------------------------------------------
@@ -143,7 +145,7 @@ initGlobalEnv (Nano { code = Src s })
     >>= envAdds "initGlobalEnv" extras
   where
     nms       = E.envAdds extras 
-              $ E.envMap (\(a,b,c,d) -> (d,c)) 
+              $ E.envMap (\(_,_,c,d) -> (d,c)) 
               $ mkVarEnv $ visibleNames s
     extras    = [(Id (srcPos dummySpan) "undefined", 
                   (TApp TUndef [] $ F.Reft (F.vv Nothing, [F.trueRefa]), ReadOnly))]
@@ -159,7 +161,7 @@ initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> C
 initModuleEnv g n s 
   = freshenCGEnvM $ CGE nms bds grd ctx mod pth (Just g)
   where
-    nms       = E.envMap (\(a,b,c,d) -> (d,c)) 
+    nms       = E.envMap (\(_,_,c,d) -> (d,c)) 
               $ mkVarEnv $ visibleNames s
     bds       = cge_fenv g
     grd       = []
@@ -179,15 +181,13 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     --  Compute base environment @g'@, then add extra bindings
         envAdds "initFunc-0" varBinds g'
     >>= envAdds "initFunc-1" tyBinds 
-    -- >>= envAdds "initFunc-2" (visibleNames s)
     >>= envAdds "initFunc-3" argBind
     >>= envAdds "initFunc-4" thisBind
     >>= envAddReturn f t
     >>= freshenCGEnvM
   where
     g'        = CGE nms fenv grds ctx mod pth parent
-    -- nms       = E.envEmpty
-    nms       = E.envMap (\(a,b,c,d) -> (d,c)) 
+    nms       = E.envMap (\(_,_,c,d) -> (d,c)) 
               $ mkVarEnv $ visibleNames s
     fenv      = cge_fenv g
     grds      = []
@@ -209,7 +209,7 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
 consEnvFindTypeDefM :: IsLocated a => a -> CGEnv -> RelName -> CGM (IfaceDef F.Reft)
 -------------------------------------------------------------------------------
 consEnvFindTypeDefM l γ x
-  = case resolveRelNameInEnv γ x of 
+  = case resolveRelTypeInEnv γ x of 
       Just t  -> return t
       Nothing -> cgError $ bugClassDefNotFound (srcPos l) x
 
@@ -323,10 +323,10 @@ consStmt g (ThrowStmt _ e)
   = consExpr g e Nothing >> return Nothing
 
 -- (overload) function f(x1...xn);
-consStmt g (FuncOverload l n _ ) = return $ Just g
+consStmt g (FuncOverload _ _ _ ) = return $ Just g
 
 -- declare function f(x1...xn);
-consStmt g (FuncAmbDecl l n _ ) = return $ Just g
+consStmt g (FuncAmbDecl _ _ _ ) = return $ Just g
 
 -- function f(x1...xn){ s }
 consStmt g s@(FunctionStmt _ _ _ _)
@@ -349,6 +349,9 @@ consStmt g (ClassStmt l x _ _ ce)
     rn            = RN $ QName (srcPos l) [] (F.symbol x)
 
 consStmt g (IfaceStmt _)
+  = return $ Just g
+
+consStmt g (EnumStmt _ _ _)
   = return $ Just g
 
 consStmt g (ModuleStmt _ n body)
@@ -420,6 +423,7 @@ consClassElt g dfn (Constructor l xs body)
                       [ ] -> Just $ TFun Nothing [] tVoid fTop
                       _   -> Nothing
     mkThis (_:αs) = TApp (TRef rn) (t_mutable : map tVar αs) fTop
+    mkThis _      = throw $ bug (srcPos l) "Liquid.Liquid.consClassElt Constructor" 
     rn            = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
 -- Static field
@@ -461,6 +465,7 @@ consClassElt g dfn (MemberMethDef l False x xs body)
   where
     spec            = M.lookup (F.symbol x, InstanceMember) (t_elts dfn)
     mkThis m (_:αs) = TApp (TRef rn) (ofType m : map tVar αs) fTop
+    mkThis _ _      = throw $ bug (srcPos l) "Liquid.Liquid.consClassElt MemberMethDef" 
     rn              = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
 
 consClassElt _ _  (MemberMethDecl _ _ _ _) = return ()
@@ -602,8 +607,15 @@ consExpr g ef@(DotRef l e f) _
 
 -- | e1[e2]
 consExpr g (BracketRef l e1 e2) _
-  = do  opTy <- safeEnvFindTy (builtinOpId BIBracketRef) g
-        consCall g l BIBracketRef (FI Nothing ((,Nothing) <$> [e1, e2])) opTy
+  = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
+      opTy <- do  safeEnvFindTy x1 g' >>= \case 
+                    TEnum n -> case resolveRelEnumInEnv g' n of
+                                 Just ed -> return $ enumTy ed
+                                 _       -> safeEnvFindTy (builtinOpId BIBracketRef) g'
+                    _       -> safeEnvFindTy (builtinOpId BIBracketRef) g'
+      consCall g' l BIBracketRef (FI Nothing ((,Nothing) <$> [vr x1, e2])) opTy
+  where
+    vr = VarRef $ getAnnotation e1
 
 -- | e1[e2] = e3
 consExpr g (AssignExpr l OpAssign (LBracket _ e1 e2) e3) _

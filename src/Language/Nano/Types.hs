@@ -11,6 +11,7 @@ module Language.Nano.Types where
 
 import           Control.Applicative                ((<$>))
 import           Data.Hashable
+import qualified Data.IntMap                     as I
 import           Data.Function                      (on)
 import qualified Data.Map.Strict                 as M
 import           Data.Typeable                      (Typeable)
@@ -91,7 +92,12 @@ data RType r =
   | TClass RelName
   -- 
   -- ^ typeof L.M.N (module)
+  --
   | TModule RelPath
+  -- 
+  -- ^ enumeration L.M.N 
+  -- 
+  | TEnum RelName
   -- 
   -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
   --
@@ -110,6 +116,24 @@ data StaticKind =
 -- | Standard Types
 type Type    = RType ()
 
+
+-- FIXME: Use common_ts
+
+-- funcConstr                            :: Constructor
+-- funcConstr                             = TApp (TRef (QN [] (F.symbol "Function"))) [] ()
+-- 
+-- objectConstr                          :: Constructor
+-- objectConstr                           = TApp (TRef (QN [] (F.symbol "Object"))) [] ()
+-- 
+-- -- Primitive types don't have constructor
+-- toConstructor                         :: RType r -> Maybe Constructor
+-- toConstructor  (TApp (TRef  x) _ _)    = Just $ TApp (TRef  x) [] ()
+-- toConstructor  (TClass _)              = Just $ funcConstr
+-- toConstructor  (TModule _)             = Just $ objectConstr
+-- toConstructor  (TFun _ _ _ )           = Just $ funcConstr
+-- toConstructor  (TCons _ _ _)           = Just $ objectConstr
+-- toConstructor  (TAnd _)                = Just $ funcConstr 
+-- toConstructor  _                       = Nothing
 
 -- | Type binder
 data Bind r = B { 
@@ -208,6 +232,27 @@ data Visibility
   deriving (Show, Eq, Data, Typeable)
 
 
+---------------------------------------------------------------------------------
+-- | Enumeration definition
+---------------------------------------------------------------------------------
+
+data EnumDef = EnumDef {
+    -- 
+    -- ^ Name
+    --
+      e_name       :: F.Symbol
+    -- 
+    -- ^ Contents: Int -> Symbols
+    --
+    , e_properties :: I.IntMap F.Symbol
+    -- 
+    -- ^ Contents: Symbols -> Int
+    --
+    , e_symbols    :: Env Int
+
+} deriving (Data, Typeable)
+
+
 ------------------------------------------------------------------------------------------
 -- | Assignability 
 ------------------------------------------------------------------------------------------
@@ -270,6 +315,10 @@ data ModuleDef r = ModuleDef {
   --
   , m_types       :: Env (IfaceDef r)
   -- 
+  -- ^ Enumerations
+  --
+  , m_enums       :: Env EnumDef
+  -- 
   -- ^ Absolute path of definition
   --
   , m_path        :: AbsPath
@@ -295,6 +344,9 @@ instance Eq TVar where
 
 instance IsLocated TVar where 
   srcPos = tv_loc
+
+instance IsLocated (TypeMember r) where
+  srcPos _ = srcPos dummySpan
 
 instance Hashable TVar where 
   hashWithSalt i α = hashWithSalt i $ tv_sym α 
@@ -336,6 +388,7 @@ instance Eq (RType r) where
   TCons e1s m1 _  == TCons e2s m2 _  = (e1s,m1) == (e2s,m2)
   TClass c1       == TClass c2       = c1 == c2
   TModule m1      == TModule m2      = m1 == m2
+  TEnum e1        == TEnum e2        = e1 == e2
   _               == _               = False
 
 
@@ -360,7 +413,8 @@ rTypeCode (TAnd _ )      = 4
 rTypeCode (TClass _ )    = 5
 rTypeCode (TExp _ )      = 6
 rTypeCode (TModule _)    = 7
-rTypeCode (TApp c _ _)   = 8 + tconCode c
+rTypeCode (TEnum _)      = 8
+rTypeCode (TApp c _ _)   = 9 + tconCode c
 
 tconCode TInt            = 0
 tconCode TBool           = 1

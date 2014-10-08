@@ -346,7 +346,7 @@ instance IsLocated TVar where
   srcPos = tv_loc
 
 instance IsLocated (TypeMember r) where
-  srcPos t = srcPos dummySpan
+  srcPos _ = srcPos dummySpan
 
 instance Hashable TVar where 
   hashWithSalt i α = hashWithSalt i $ tv_sym α 
@@ -413,7 +413,8 @@ rTypeCode (TAnd _ )      = 4
 rTypeCode (TClass _ )    = 5
 rTypeCode (TExp _ )      = 6
 rTypeCode (TModule _)    = 7
-rTypeCode (TApp c _ _)   = 8 + tconCode c
+rTypeCode (TEnum _)      = 8
+rTypeCode (TApp c _ _)   = 9 + tconCode c
 
 tconCode TInt            = 0
 tconCode TBool           = 1

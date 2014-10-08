@@ -77,10 +77,7 @@ import           Data.Maybe                     (fromMaybe, maybeToList)
 import           Data.Monoid                    hiding ((<>))            
 import qualified Data.Map.Strict                as M
 import           Data.Typeable                  ()
-import           Data.Generics.Schemes
-import           Data.Generics.Aliases          (mkM)
 import           Language.ECMAScript3.Syntax 
-import           Language.ECMAScript3.Syntax.Annotations
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Misc
 import           Language.Nano.Types
@@ -96,7 +93,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Text.Parsec.Pos                    (initialPos)
 
 import           Control.Applicative            hiding (empty)
-import           Control.Monad.Trans.State               (modify, State, runState)
+import           Control.Exception              (throw)
 
 -- import           Debug.Trace (trace)
 
@@ -318,9 +315,6 @@ isTObj (TClass _ )         = True
 isTObj (TEnum _ )          = True
 isTObj _                   = False
 
-isTEnum (TEnum _)          = True
-isTEnum _                  = False
-
 isTNum (TApp TInt _ _ )    = True
 isTNum _                   = False
 
@@ -357,16 +351,11 @@ setRTypeR (TFun s xts ot _) r = TFun s xts ot r
 setRTypeR (TCons x y _)     r = TCons x y r  
 setRTypeR t                 _ = t
 
-
 mapEltM f (CallSig t)        = CallSig <$> f t
 mapEltM f (ConsSig t)        = ConsSig <$> f t
 mapEltM f (IndexSig i b t)   = IndexSig i b <$> f t
 mapEltM f (FieldSig x m t)   = FieldSig x m <$> f t
 mapEltM f (MethSig  x m t)   = MethSig x m <$> f t
--- mapEltM f (StatSig x m t)    = StatSig x m <$> f t
-
-
-type CheckM = State [Error] 
 
 nonConstrElt = not . isConstr
   
@@ -790,15 +779,16 @@ enumTy (EnumDef _ ps _) = TAll a $ TFun Nothing [a',b] ot fTop
 ---------------------------------------------------------------------------------
 setPropTy :: (PPR r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
 ---------------------------------------------------------------------------------
-setPropTy _ f ty =
+setPropTy l f ty =
     case ty of 
       TAll α2 (TAll μ2 (TFun Nothing [xt2,a2] rt2 r2)) 
           -> TAll α2 (TAll μ2 (TFun Nothing [gg xt2,a2] rt2 r2))
       _   -> errorstar $ "setPropTy " ++ ppshow ty
   where
     gg (B n (TCons m ts r))  = B n (TCons m (ff ts) r)
+    gg _                     = throw $ bug (srcPos l) "Unhandled cases in Typecheck.Types.setPropTy"
     ff                       = M.fromList . tr . M.toList 
-    tr [((s,a),FieldSig x μx t)] | x == F.symbol "f" = [((f,a),FieldSig f μx t)]
+    tr [((_,a),FieldSig x μx t)] | x == F.symbol "f" = [((f,a),FieldSig f μx t)]
     tr t                     = error $ "setPropTy:tr " ++ ppshow t
 
 

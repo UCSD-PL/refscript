@@ -68,7 +68,7 @@ import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types        as F
 
-import           Debug.Trace                        hiding (traceShow)
+-- import           Debug.Trace                        hiding (traceShow)
 
 
 ---------------------------------------------------------------------------------
@@ -624,7 +624,7 @@ mkVarEnv                   = envFromList . concatMap f . M.toList . foldl merge 
     amb [ ]                = [ ] 
     amb [a]                = [a]
     amb ((s,(k,v,w,t)):xs) = [(s,(k,v,w, mkAnd (t : map tyOf xs)))]    
-    tyOf (s,(k,v,w,t))     = t
+    tyOf (_,(_,_,_,t))     = t
 
 
 -- FIXME (?): Does not take into account classes with missing annotations.
@@ -639,8 +639,6 @@ resolveType  (ClassStmt l c _ _ cs)
       _         -> Nothing
   where
     cc        = fmap ann c
-    x         = RN $ QName (srcPos l) [] (F.symbol c)
-    tc vs     = TApp (TRef x) ((`TVar` fTop) <$> vs) fTop
 
 resolveType (IfaceStmt l)
   = listToMaybe [ (n, t) | IfaceAnn t@(ID _ n _ _ _) <- ann_fact l ]
@@ -654,10 +652,10 @@ typeMembers                      :: [ClassElt (AnnSSA r)] -> TypeMembers r
 ---------------------------------------------------------------------------------------
 typeMembers                       =  mkTypeMembers . concatMap go
   where
-    go (MemberVarDecl l s x _)    = [(sk s    , MemDefinition , f) | FieldAnn f  <- ann_fact l]
-    go (MemberMethDef l s x _ _ ) = [(sk s    , MemDefinition , f) | MethAnn  f  <- ann_fact l]
-    go (MemberMethDecl l s x _ )  = [(sk s    , MemDeclaration, f) | MethAnn  f  <- ann_fact l]
-    go c@(Constructor l _ _)      = [(sk False, MemDefinition , a) | ConsAnn  a  <- ann_fact l]
+    go (MemberVarDecl l s _ _)    = [(sk s    , MemDefinition , f) | FieldAnn f  <- ann_fact l]
+    go (MemberMethDef l s _ _ _ ) = [(sk s    , MemDefinition , f) | MethAnn  f  <- ann_fact l]
+    go (MemberMethDecl l s _ _ )  = [(sk s    , MemDeclaration, f) | MethAnn  f  <- ann_fact l]
+    go (Constructor l _ _)        = [(sk False, MemDefinition , a) | ConsAnn  a  <- ann_fact l]
     sk True                       = StaticMember 
     sk False                      = InstanceMember 
 

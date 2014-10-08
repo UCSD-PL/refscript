@@ -13,11 +13,7 @@ module Language.Nano.Typecheck.Lookup (
   ) where 
 
 import           Data.Generics
-import           Data.List  (find)
-import           Data.Maybe (listToMaybe)
 import qualified Data.Map.Strict as M
-import qualified Data.IntMap     as I
-import qualified Data.Traversable as T
 
 import           Language.ECMAScript3.PrettyPrint
 
@@ -154,7 +150,7 @@ extractCall γ t                   = uncurry mkAll <$> foo [] t
 
     getCallSig αs es              = case M.lookup (callSymbol, InstanceMember) es of
                                       Just (CallSig t) -> [(αs, t)]
-                                      Nothing          -> []
+                                      _                -> []
 
 
 -- | `accessMember b s es` extracts field @s@ from type members @es@. If @b@ is

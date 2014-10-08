@@ -311,7 +311,7 @@ addInvariant g t
   where
     -- | typeof 
     typeof t@(TApp tc _ o)  i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup tc i
-    typeof t@(TFun a b c r) _ = TFun a b c typeofReft
+    typeof   (TFun a b c _) _ = TFun a b c typeofReft
     typeof t                _ = t
     strengthenOp t o r        | L.elem r (ofRef o) = t
     strengthenOp t _ r        | otherwise          = strengthen t r

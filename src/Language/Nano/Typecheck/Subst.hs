@@ -113,6 +113,7 @@ instance Free (Fact r) where
   free (IfaceAnn _)         = S.empty
   free (ExporedModElt)      = S.empty
   free (ModuleAnn _)        = S.empty
+  free (EnumAnn _)          = S.empty
 
 instance Free (TypeMember r) where
   free (FieldSig _ m t)     = free m `mappend` free t

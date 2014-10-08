@@ -11,10 +11,7 @@ module Language.Nano.Typecheck.Unify (
 
   ) where 
 
-import           Control.Applicative                ((<$>))
-import           Language.ECMAScript3.PrettyPrint
 import           Language.Fixpoint.Misc
-import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Errors 
 import           Language.Nano.Errors 
 import           Language.Nano.Locations
@@ -27,8 +24,6 @@ import           Language.Nano.Typecheck.Sub
 
 
 import           Data.Generics
-import           Data.List (nub, find)
-import           Data.Maybe (catMaybes)
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as HM 
 import qualified Data.Map.Strict as M
@@ -75,7 +70,7 @@ unify l γ θ t t' | any isUnion [t,t'] = unifys l γ θ t1s' t2s'
     (t1s', t2s') = unzip [ (t1, t2) | t1 <- t1s, t2 <- t2s, related γ t1 t2]
     (t1s , t2s ) = mapPair bkUnion (t,t')
 
-unify l γ θ t@(TCons m1 e1s _) t'@(TCons m2 e2s _)
+unify l γ θ (TCons m1 e1s _) (TCons m2 e2s _)
   = unifys l γ θ (ofType m1 : t1s) (ofType m2 : t2s)
   where 
     (t1s , t2s ) = mapPair (concatMap allEltType)
@@ -101,9 +96,9 @@ unify l γ θ (TApp (TRef x1) t1s _) (TApp (TRef x2) t2s _)
       (_, Just (_, t2s')) -> unifys l γ θ t1s t2s'
       (_, _) -> Left $ bugWeakenAncestors (srcPos l) x1 x2
 
-unify l γ θ (TClass  c1) (TClass  c2) | on (==) (absoluteNameInEnv γ) c1 c2 = return θ 
-unify l γ θ (TModule m1) (TModule m2) | on (==) (absolutePathInEnv γ) m1 m2 = return θ 
-unify l γ θ (TEnum   e1) (TEnum   e2) | on (==) (absoluteNameInEnv γ) e1 e2 = return θ
+unify _ γ θ (TClass  c1) (TClass  c2) | on (==) (absoluteNameInEnv γ) c1 c2 = return θ 
+unify _ γ θ (TModule m1) (TModule m2) | on (==) (absolutePathInEnv γ) m1 m2 = return θ 
+unify _ γ θ (TEnum   e1) (TEnum   e2) | on (==) (absoluteNameInEnv γ) e1 e2 = return θ
 
 unify l γ θ t1 t2 | all isTObj [t1,t2]
   = case (flattenType γ t1, flattenType γ t2) of 

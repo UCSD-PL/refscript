@@ -47,30 +47,38 @@ type PPRD r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
 --
 -------------------------------------------------------------------------------
 getProp :: (PPRD r, EnvLike r g, F.Symbolic f) 
-        => g r -> Bool -> f -> RType r -> Maybe (RType r, RType r)
+        => g r -> Bool -> f -> RType r -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
-getProp γ b s t@(TApp _ _ _  ) = getPropApp γ b s t
+getProp γ b s t@(TApp _ _ _  ) =                getPropApp γ b s t
 
-getProp _ b s t@(TCons _ es _) = (t,) <$> accessMember b InstanceMember s es
+getProp _ b s t@(TCons _ es _) = do (t',m)   <- accessMember b InstanceMember s es
+                                    return    $ (t,t',m)
 
 getProp γ b s t@(TClass c    ) = do d        <- resolveRelTypeInEnv γ c
                                     es       <- flatten Nothing StaticMember γ (d,[])
-                                    (t,)    <$> accessMember b StaticMember s es
+                                    (t', m)  <- accessMember b StaticMember s es
+                                    return    $ (t,t',m)
 
 getProp γ _ s t@(TModule m   ) = do m'       <- resolveRelPathInEnv γ m
                                     (_,_,ty) <- envFindTy s $ m_variables m'
-                                    (t,)    <$> renameRelative (modules γ) (m_path m') (absPath γ) ty
+                                    t'       <- renameRelative (modules γ) (m_path m') (absPath γ) ty
+                                    return   $  (t,t', t_readOnly) 
+                                    -- FIXME: perhaps something else here as mutability
 
 getProp γ _ s t@(TEnum e     ) = do e'       <- resolveRelEnumInEnv γ e
                                     i        <- envFindTy (F.symbol s) (e_symbols e')
-                                    return    $ (t, tInt `strengthen` exprReft i)
+                                    return    $ (t, tInt `strengthen` exprReft i, t_immutable)
 
 getProp _ _ _ _ = Nothing
 
 
 -------------------------------------------------------------------------------
 getPropApp :: (PPRD r, EnvLike r g, F.Symbolic f) 
-           => g r -> Bool -> f -> RType r -> Maybe (RType r, RType r)
+           => g r 
+           -> Bool 
+           -> f 
+           -> RType r 
+           -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
 getPropApp γ b s t@(TApp c ts _) = 
   case c of 
@@ -78,12 +86,14 @@ getPropApp γ b s t@(TApp c ts _) =
     TUndef   -> Nothing
     TNull    -> Nothing
     TUn      -> getPropUnion γ b s ts
-    TInt     -> (t,) <$> lookupAmbientType γ b s "Number"
-    TString  -> (t,) <$> lookupAmbientType γ b s "String"
+    TInt     -> do  (t',m) <- lookupAmbientType γ b s "Number"
+                    return  $ (t,t',m)
+    TString  -> do  (t',m) <- lookupAmbientType γ b s "String"
+                    return  $ (t,t',m)
     TRef x   -> do  d      <- resolveRelTypeInEnv γ x
                     es     <- flatten Nothing InstanceMember γ (d,ts)
-                    p      <- accessMember b InstanceMember s es
-                    return  $ (t,p)
+                    (t',m) <- accessMember b InstanceMember s es
+                    return  $ (t,t',m)
     TFPBool  -> Nothing
     TTop     -> Nothing
     TVoid    -> Nothing
@@ -161,29 +171,38 @@ extractCall γ t                   = uncurry mkAll <$> foo [] t
 --
 --   Invariant: each field appears at most once.
 --
+--   FIXME: Mutability: enforcing the field's mutability for now -- use a
+--   combinator ...
+--
+--
 -------------------------------------------------------------------------------
-accessMember :: F.Symbolic f => Bool -> StaticKind -> f -> TypeMembers r -> Maybe (RType r)
+accessMember :: F.Symbolic f 
+             => Bool 
+             -> StaticKind 
+             -> f 
+             -> TypeMembers r 
+             -> Maybe (RType r, Mutability)
 -------------------------------------------------------------------------------
 -- Get member for a call
 accessMember True sk s es =    
   case M.lookup (F.symbol s, sk) es of
-    Just (FieldSig _ _ t) -> Just t
-    Just (MethSig _ _ t)  -> Just t
+    Just (FieldSig _ m t) -> Just (t,m)
+    Just (MethSig _ m t)  -> Just (t,m)
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
-           Just (IndexSig _ StringIndex t) -> Just t
+           Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
            _ -> Nothing
 
 -- Extract member: cannot extract methods
 accessMember False sk s es =
   case M.lookup (F.symbol s, sk) es of
-    Just (FieldSig _ _ t) -> Just t
+    Just (FieldSig _ m t) -> Just (t,m)
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
-           Just (IndexSig _ StringIndex t) -> Just t
+           Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
            _ -> Nothing
 
 -------------------------------------------------------------------------------
 lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s) 
-                  => g r -> Bool -> f -> s -> Maybe (RType r)
+                  => g r -> Bool -> f -> s -> Maybe (RType r, Mutability)
 -------------------------------------------------------------------------------
 lookupAmbientType γ b fld amb
   = t_elts <$> resolveRelTypeInEnv γ nm >>= accessMember b InstanceMember fld
@@ -195,10 +214,13 @@ lookupAmbientType γ b fld amb
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
 getPropUnion :: (PPRD r, EnvLike r g, F.Symbolic f) 
-             => g r -> Bool -> f -> [RType r] -> Maybe (RType r, RType r)
+             => g r -> Bool -> f -> [RType r] -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
 getPropUnion γ b f ts = 
-  case [tts | Just tts <- getProp γ b f <$> ts] of
-    [] -> Nothing
-    ts -> Just $ mapPair mkUnion $ unzip ts
+  case unzip3 [ttm | Just ttm <- getProp γ b f <$> ts] of
+    ([],[] ,[])                           -> Nothing
+    (ts,ts',ms)  | all isImmutable     ms -> Just (mkUnion ts, mkUnion ts', t_immutable)
+                 | all isMutable       ms -> Just (mkUnion ts, mkUnion ts', t_mutable)
+                 | all isAssignsFields ms -> Just (mkUnion ts, mkUnion ts', t_assignsFields)
+                 | otherwise              -> Just (mkUnion ts, mkUnion ts', t_readOnly)
 

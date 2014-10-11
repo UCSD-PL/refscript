@@ -39,10 +39,6 @@ module Language.Nano.Liquid.Types (
   -- * Monadic map 
   , mapReftM
 
-  -- * Primitive Types
-  -- , prefixOpRTy
-  -- , infixOpRTy 
-
   -- * Useful Operations
   , foldReft, efoldRType, AnnTypeR
 
@@ -183,6 +179,8 @@ instance F.Expression (Expression a) where
   expr (VarRef _ x)                 = F.expr x
   expr (InfixExpr _ o e1 e2)        = F.EBin (bop o) (F.expr e1) (F.expr e2)
   expr (PrefixExpr _ PrefixMinus e) = F.EBin F.Minus (F.expr (0 :: Int)) (F.expr e)  
+  expr (Cast_ l e)                  = F.expr e
+  expr (Cast  l e)                  = F.expr e
   expr e                            = convertError "F.Expr" e
 
 instance F.Predicate  (Expression a) where 
@@ -262,21 +260,21 @@ rTypeValueVar t   = vv where F.Reft (vv,_) = rTypeReft t
 ------------------------------------------------------------------------------------------
 rTypeSort :: (PPR r) => RType r -> F.Sort
 ------------------------------------------------------------------------------------------
-rTypeSort   (TVar α _)       = F.FObj $ F.symbol α 
-rTypeSort t@(TAll _ _)       = rTypeSortForAll t 
-rTypeSort   (TFun (Just s) xts t _) = F.FFunc 0 $ rTypeSort <$> [s] ++ (b_type <$> xts) ++ [t]
-rTypeSort   (TFun Nothing  xts t _) = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
-rTypeSort   (TApp c ts _)  = rTypeSortApp c ts 
-rTypeSort   (TAnd (t:_))   = rTypeSort t
-rTypeSort   (TCons _ _ _ ) = F.FObj $ F.symbol "cons"
-rTypeSort   (TClass _)     = F.FObj $ F.symbol "typeof"
-rTypeSort   (TModule _)    = F.FObj $ F.symbol "module"
-rTypeSort   (TEnum _)      = F.FObj $ F.symbol "enum"
-rTypeSort t                = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
+rTypeSort   (TVar α _)               = F.FObj $ F.symbol α 
+rTypeSort t@(TAll _ _)               = rTypeSortForAll t 
+rTypeSort   (TFun (Just s) xts t _)  = F.FFunc 0 $ rTypeSort <$> [s] ++ (b_type <$> xts) ++ [t]
+rTypeSort   (TFun Nothing  xts t _)  = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
+rTypeSort   (TApp c ts _)            = rTypeSortApp c ts 
+rTypeSort   (TAnd (t:_))             = rTypeSort t
+rTypeSort   (TCons _ _ _ )           = F.FApp (rawStringFTycon $ F.symbol "Object") []
+rTypeSort   (TClass _)               = F.FApp (rawStringFTycon $ F.symbol "class" ) []
+rTypeSort   (TModule _)              = F.FApp (rawStringFTycon $ F.symbol "module") []
+rTypeSort   (TEnum _)                = F.FApp (rawStringFTycon $ F.symbol "enum"  ) []
+rTypeSort t                          = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
 
-rTypeSortApp TInt _  = F.FInt
-rTypeSortApp TUn  _  = F.FApp (tconFTycon TUn) [] -- simplifying union sorts, the checks will have been done earlier
-rTypeSortApp c ts    = F.FApp (tconFTycon c) (rTypeSort <$> ts) 
+rTypeSortApp TInt _                  = F.FInt
+rTypeSortApp TUn  _                  = F.FApp (tconFTycon TUn) []
+rTypeSortApp c ts                    = F.FApp (tconFTycon c) (rTypeSort <$> ts) 
 
 tconFTycon :: TCon -> F.FTycon 
 tconFTycon TInt                      = F.intFTyCon

@@ -48,16 +48,6 @@ unify :: (Data r, PPR r)
       -> RType r 
       -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
-unify l γ θ (TFun (Just s1) t1s o1 _) (TFun (Just s2) t2s o2 _)
-  = unifys l γ θ (s1 : o1 : map b_type t1s') (s2 : o2 : map b_type t2s')
-  where 
-    (t1s',t2s') = unzip $ zip t1s t2s -- get their common parts
-
-unify l γ θ (TFun _ t1s o1 _) (TFun _ t2s o2 _)
-  = unifys l γ θ (o1 : map b_type t1s') (o2 : map b_type t2s')
-  where 
-    (t1s',t2s') = unzip $ zip t1s t2s -- get their common parts
-
 unify l _ θ (TVar α _) (TVar β _) = varEql l θ α β 
 unify l _ θ (TVar α _) t' = varAsn l θ α t'
 unify l _ θ t (TVar α _)  = varAsn l θ α t
@@ -69,6 +59,16 @@ unify l γ θ t t' | any isUnion [t,t'] = unifys l γ θ t1s' t2s'
   where
     (t1s', t2s') = unzip [ (t1, t2) | t1 <- t1s, t2 <- t2s, related γ t1 t2]
     (t1s , t2s ) = mapPair bkUnion (t,t')
+
+unify l γ θ (TFun (Just s1) t1s o1 _) (TFun (Just s2) t2s o2 _)
+  = unifys l γ θ (s1 : o1 : map b_type t1s') (s2 : o2 : map b_type t2s')
+  where 
+    (t1s',t2s') = unzip $ zip t1s t2s -- get their common parts
+
+unify l γ θ (TFun _ t1s o1 _) (TFun _ t2s o2 _)
+  = unifys l γ θ (o1 : map b_type t1s') (o2 : map b_type t2s')
+  where 
+    (t1s',t2s') = unzip $ zip t1s t2s -- get their common parts
 
 unify l γ θ (TCons m1 e1s _) (TCons m2 e2s _)
   = unifys l γ θ (ofType m1 : t1s) (ofType m2 : t2s)
@@ -100,7 +100,10 @@ unify _ γ θ (TClass  c1) (TClass  c2) | on (==) (absoluteNameInEnv γ) c1 c2 =
 unify _ γ θ (TModule m1) (TModule m2) | on (==) (absolutePathInEnv γ) m1 m2 = return θ 
 unify _ γ θ (TEnum   e1) (TEnum   e2) | on (==) (absoluteNameInEnv γ) e1 e2 = return θ
 
-unify l γ θ t1 t2 | all isTObj [t1,t2]
+unify _ _ θ t1 t2 | all isPrimitive [t1,t2] = return θ
+
+-- "Object"-ify types that can be flattened to an object literal type
+unify l γ θ t1 t2 | all isFlattenable [t1,t2]
   = case (flattenType γ t1, flattenType γ t2) of 
       (Just ft1, Just ft2) -> unify l γ θ ft1 ft2
       (Nothing , Nothing ) -> Left $ errorUnresolvedTypes l t1 t2

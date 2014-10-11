@@ -53,7 +53,6 @@ import qualified Data.Text                          as T
 import           System.Console.CmdArgs.Default
 
 -- import           Debug.Trace                        (trace)
-
 -- import qualified Data.Foldable                      as FO
 -- import           Text.PrettyPrint.HughesPJ 
 
@@ -92,8 +91,6 @@ refTc cfg f p
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
   
-
-
 -- ppCasts (Nano { code = Src fs }) = 
 --   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
 --                                 , TCast _ c <- ann_fact a ] 
@@ -211,7 +208,7 @@ consEnvFindTypeDefM :: IsLocated a => a -> CGEnv -> RelName -> CGM (IfaceDef F.R
 consEnvFindTypeDefM l γ x
   = case resolveRelTypeInEnv γ x of 
       Just t  -> return t
-      Nothing -> cgError $ bugClassDefNotFound (srcPos l) x
+      Nothing -> die $ bugClassDefNotFound (srcPos l) x
 
 
 -------------------------------------------------------------------------------
@@ -265,7 +262,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
   = mseq (consExpr g e1 Nothing) $ \(x1,g') ->
       do t <- safeEnvFindTy x1 g' 
-         consSetProp g' x1 (fmap snd $ getProp g' False f t)
+         consSetProp g' x1 (fmap snd3 $ getProp g' False f t)
   where
     consSetProp g x rhsCtx = 
       do opTy      <- setPropTy l (F.symbol f) <$> safeEnvFindTy (builtinOpId BISetProp) g
@@ -443,7 +440,7 @@ consClassElt _ _ (MemberVarDecl _ False _ Nothing)
   = return ()
 
 consClassElt _ _ (MemberVarDecl l False x _)
-  = cgError $ bugClassInstVarInit (srcPos l) x
+  = die $ bugClassInstVarInit (srcPos l) x
   
 -- | Static method
 consClassElt g dfn (MemberMethDef l True x xs body)
@@ -502,7 +499,7 @@ consExpr g (Cast_ l e) _ =
 -- | < t > e
 consExpr g ex@(Cast l e) _ =
   withSingleton (consCast g l e) 
-                (cgError $  bugNoCasts (srcPos l) ex) 
+                (die $  bugNoCasts (srcPos l) ex) 
                 [ ct | UserCast ct <- ann_fact l ]
 
 consExpr g (IntLit l i) _
@@ -581,8 +578,8 @@ consExpr g (CallExpr l em@(DotRef _ e f) es) _
               v:vs -> consCall g l em (FI (Just (v, Nothing)) (nth vs)) t
 
           | otherwise         -> case getProp g True f t of
-                                   Just (_, tf) -> consCall g l em (FI (Just (e, Nothing)) ((,Nothing) <$> es)) tf
-                                   Nothing      -> cgError $ errorCallNotFound (srcPos l) e f
+                                   Just (_,tf,_) -> consCall g l em (FI (Just (e, Nothing)) ((,Nothing) <$> es)) tf
+                                   Nothing       -> cgError $ errorCallNotFound (srcPos l) e f
   where
     isVariadicCall f = F.symbol f == F.symbol "call"
     nth              = ((,Nothing) <$>)
@@ -593,15 +590,23 @@ consExpr g (CallExpr l e es) _
       safeEnvFindTy x g' >>= consCall g' l e (FI Nothing ((,Nothing) <$> es))
 
 -- | e.f
+--
+--
+-- Return type: { v: _ | v ~~ keyVal(this, "f") }
+--
+--
 consExpr g ef@(DotRef l e f) _
   = mseq (consExpr g e Nothing) $ \(x,g') -> do
       te            <- safeEnvFindTy x g'
       case getProp g' False f te of
-        Just (_, t) -> consCall g' l ef (FI Nothing ((,Nothing) <$> [vr x])) $ mkTy te t
-        Nothing     -> cgError $ errorMissingFld (srcPos l) f te
+        Just (_,t,m) -> consCall g' l ef (FI Nothing ((,Nothing) <$> [vr x])) $ mkTy m te t
+        Nothing      -> cgError $ errorMissingFld (srcPos l) f te
   where
-    mkTy s t = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
-    vr       = VarRef $ getAnnotation e
+    mkTy m s t | isImmutable m = mkFun ([],Nothing,[B (F.symbol "this") s],t `eSingleton` kv )
+               | otherwise     = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
+    kv         = F.EApp (F.dummyLoc (F.symbol "keyVal")) [F.eVar (F.symbol "this"), 
+                                                          F.expr $ F.symbolText $ F.symbol f]
+    vr         = VarRef $ getAnnotation e
 
 -- FIXME: e["f"]
 
@@ -677,7 +682,13 @@ consCast g l e tc
   = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
         tc'     <- freshTyFun g l $ rType tc
         (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tc', WriteLocal) g
-        consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e,Just tc')]) opTy  
+        consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) opTy >>= \case
+          Just (o,g'') -> 
+              do  (to,ao)  <- safeEnvFindTyWithAsgn o g''
+                  g''' <- envAdds "consCast-1" [(o, (to `eSingleton` e,ao))] g''
+                  -- g''' <- envAdds "consCast-1" [(o, (to `eSingleton` e,ao))] g''
+                  return $ Just (o,g''')
+          Nothing     -> cgError $ errorUserCast (srcPos l) tc e 
                       
 -- | Dead code 
 consDeadCode g l e t
@@ -729,15 +740,15 @@ consCall :: PP a
 consCall g l fn ets ft0 
   = mseq (consScan consExpr g ets) $ \(xes, g') -> do
       ts <- T.mapM (`safeEnvFindTy` g') xes
-      withSingleton
-        (\ft -> consInstantiate l g' fn ft ts xes)
-        (cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs))
-        [ lt | Overload cx t <- ann_fact l
-             , cge_ctx g == cx
-             , lt <- callSigs
-             , toType t == toType lt ]
+      case ol of 
+        [ft] -> consInstantiate l g' fn ft ts xes
+        _    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
   where
-    callSigs = extractCall g ft0
+    ol = [ lt | Overload cx t <- ann_fact l
+              , cge_ctx g == cx
+              , lt <- callSigs
+              , toType t == toType lt ]
+    callSigs  = extractCall g ft0
     
 balance (FI (Just to) ts) (FI Nothing fs)  = (FI (Just to) ts, FI (Just $ B (F.symbol "this") to) fs)
 balance (FI Nothing ts)   (FI (Just _) fs) = (FI Nothing ts, FI Nothing fs)

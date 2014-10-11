@@ -77,21 +77,13 @@ convert l γ t1 t2
 convert' :: (Functor g, EnvLike () g)
          => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convert' _ _ t1 t2 | toType t1 == toType t2 = Right CDNo
-
-convert' _ _ _  t2 | isTop t2               = Right CDUp
-
-convert' l γ t1 t2 | any isUnion [t1,t2]    = convertUnion   l γ t1 t2
-
-convert' l γ t1 t2 | all isTObj  [t1,t2]    = convertObj     l γ t1 t2
-
-convert' l γ t1 t2 | all isTFun  [t1, t2]   = convertFun     l γ t1 t2
-
-convert' l γ (TClass  c1) (TClass  c2)      = convertTClass  l γ c1 c2
-
-convert' l γ (TModule m1) (TModule m2)      = convertTModule l γ m1 m2
-
-convert' l γ t1 t2                          = convertSimple  l γ t1 t2
+convert' _ _ t1 t2 | toType t1 == toType t2    = Right CDNo
+convert' _ _ _  t2 | isTop t2                  = Right CDUp
+convert' l γ t1 t2 | any isUnion       [t1,t2] = convertUnion   l γ t1 t2
+convert' l γ t1 t2 | all isPrimitive   [t1,t2] = convertSimple  l γ t1 t2
+convert' l γ t1 t2 | all isFlattenable [t1,t2] = convertObj     l γ t1 t2
+convert' l γ t1 t2 | all isTFun        [t1,t2] = convertFun     l γ t1 t2
+convert' l γ t1 t2                             = convertSimple  l γ t1 t2
 
 
 -- | `convertObj`
@@ -156,6 +148,7 @@ convertObj l γ t1 t2 =
     (_       , Nothing ) -> Left $ errorUnresolvedType l t2
 
 
+
 covariantConvertObj l γ e1s e2s
   | M.null uq1s && M.null uq2s = mconcat           <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn'}
   |                M.null uq2s = mconcat . (CDUp:) <$> subEs  -- {x1:t1,..,xn:tn,..,xm:tm} ?? {x1:t1',..,xn:tn'}
@@ -192,6 +185,7 @@ invariantConvertObj l γ e1s e2s
     -- Pairs of equivalent type-members in `e1s` and `e2s`
     es   = M.elems $ M.intersectionWith (,) e1s' e2s'
 
+
 -- | `convertElt l γ mut e1 e2` performs a subtyping check between elements @e1@ and
 --   @e2@ given that they belong to:
 --
@@ -201,8 +195,11 @@ invariantConvertObj l γ e1s e2s
 convertElt l γ _ (CallSig t1) (CallSig t2) 
   = convert' l γ t1 t2 
 
-convertElt l γ False (FieldSig _ _ t1) (FieldSig _ _ t2)          -- mutable container
+convertElt l γ False f1@(FieldSig _ m1 t1) f2@(FieldSig _ m2 t2)          -- mutable container
+  | isSubtype γ t1 t2 && isSubtype γ m2 m1 
   = convert' l γ t1 t2 `mappendM` convert' l γ t2 t1
+  | otherwise                           
+  = Left $ errorIncompMutElt (srcPos l) f1 f2
 
 convertElt l γ True f1@(FieldSig _ m1 t1) f2@(FieldSig _ m2 t2)   -- immutable container
   | isSubtype γ m1 m2 && isImmutable m2 
@@ -221,14 +218,6 @@ convertElt l γ _ (ConsSig t1) (ConsSig t2)
 
 convertElt l γ _ (IndexSig _ _ t1) (IndexSig _ _ t2)
   = convert' l γ t1 t2 `mappendM` convert' l γ t2 t1
- 
--- convertElt l γ True f1@(StatSig _ m1 t1) f2@(StatSig _ m2 t2)
---   | isSubtype γ m1 m2 && isImmutable m2 
---   = convert' l γ t1 t2
---   | isSubtype γ m1 m2
---   = convert' l γ t1 t2 `mappendM` convert' l γ t2 t1
---   | otherwise                           
---   = Left $ errorIncompMutElt (srcPos l) f1 f2
 
 -- | otherwise fail
 convertElt l _ _ f1 f2 = Left $ bugEltSubt (srcPos l) f1 f2
@@ -296,19 +285,13 @@ convertTEnum :: (Functor g, EnvLike () g)
 convertTEnum l _ e1 e2 | e1 == e2  = Right CDNo  
                        | otherwise = Left  $ errorTEnumSubtype l e1 e2
 
-
-
 -- | `convertSimple`
 --------------------------------------------------------------------------------
 convertSimple :: (Functor g, EnvLike () g)
               => SourceSpan -> g r -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertSimple _ _ t1 t2
-  | t1 == t2      = Right CDNo
-  -- TOGGLE dead-code
-  | otherwise = Right CDDead 
---  | otherwise     = Left  $ errorSubtype l t1 t2
-
+convertSimple _ _ t1 t2 | t1 == t2  = Right CDNo
+                        | otherwise = Right CDDead 
 
 -- | `convertUnion`
 --------------------------------------------------------------------------------
@@ -317,17 +300,19 @@ convertUnion :: (Functor g, EnvLike () g)
 --------------------------------------------------------------------------------
 convertUnion _ γ t1 t2  
   | upcast    = Right CDUp 
-  | deadcast  = Right CDDead
-  | otherwise = Right CDDn
+  | downcast  = Right CDDn
+  | otherwise = Right CDDead
   where 
-    upcast                = all (\t1 -> any (isSubtype γ t1) t2s) t1s
-    deadcast              = all (\t1 -> not $ any (isSubtype γ t1) t2s) t1s
-    (t1s, t2s)            = sanityCheck $ mapPair bkUnion (t1, t2)
-    sanityCheck ([ ],[ ]) = errorstar "unionParts', called on too small input"
-    sanityCheck ([_],[ ]) = errorstar "unionParts', called on too small input"
-    sanityCheck ([ ],[_]) = errorstar "unionParts', called on too small input"
-    sanityCheck ([_],[_]) = errorstar "unionParts', called on too small input"
-    sanityCheck p         = p
+--     upcast        = all (\t1 -> any (\t2 -> tracePP (ppshow t1 ++ " <: " ++ ppshow t2) $ isSubtype γ t1 t2) t2s) t1s
+--     downcast      = all (\t1 -> any (\t2 -> tracePP (ppshow t1 ++ " <: " ++ ppshow t2) $ isSubtype γ t1 t2) t1s) t2s
+    upcast        = all (\t1 -> any (\t2 -> isSubtype γ t1 t2) t2s) t1s
+    downcast      = all (\t1 -> any (\t2 -> isSubtype γ t1 t2) t1s) t2s
+    (t1s, t2s)    = chk $ mapPair bkUnion (t1, t2)
+    chk ([ ],[ ]) = errorstar "unionParts', called on too small input"
+    chk ([_],[ ]) = errorstar "unionParts', called on too small input"
+    chk ([ ],[_]) = errorstar "unionParts', called on too small input"
+    chk ([_],[_]) = errorstar "unionParts', called on too small input"
+    chk p         = p
 
 
 -- | Related types ( ~~ ) 
@@ -336,15 +321,14 @@ class Related t where
   related :: (Functor g, EnvLike () g, PPR r) => g r -> t r -> t r -> Bool
 
 instance Related RType where
-  related γ t t' = isSubtype γ t t' || isSubtype γ t' t
+  related γ t t' | any isPrimitive [t,t'] = toType t == toType t'
+                 | otherwise              = isSubtype γ t t' || isSubtype γ t' t
   
 instance Related TypeMember where
   related γ (CallSig t1)      (CallSig t2)      = related γ t1 t2
   related γ (ConsSig t1)      (ConsSig t2)      = related γ t1 t2
   related γ (IndexSig _ _ t1) (IndexSig _ _ t2) = related γ t1 t2
-  -- related γ (StatSig _ _ t1)  (StatSig _ _ t2)  = related γ t1 t2
   related γ (FieldSig _ _ t1) (FieldSig _ _ t2) = related γ t1 t2
-  -- Mutability should have been checked earlier
   related γ (MethSig  _ _ t1) (MethSig  _ _ t2) = related γ t1 t2
   related _ _                       _           = False 
  

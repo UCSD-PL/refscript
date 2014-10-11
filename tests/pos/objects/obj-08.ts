@@ -6,7 +6,7 @@
 var a  = { b : { c: 3 } };
 
 
-/*@ foo :: (o: [#Mutable]{ c: number }) => void */
+/*@ foo :: (o: [#Mutable]{ c: [#Mutable] number }) => void */
 function foo (o: { c: number }) { 
 
   o.c = 1;

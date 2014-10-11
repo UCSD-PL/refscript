@@ -9,6 +9,7 @@ class Snake extends Animal {
   public kind = "snake";
   public sneak() {} }
 
+/*@ move :: (a: Animal) => { void | true } */
 function move(a: Animal) {
 
   if (a.kind === "snake") {

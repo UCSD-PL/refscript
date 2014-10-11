@@ -1,5 +1,4 @@
 
-/*@ measure keyVal :: forall A B . (A,string) => B */
 
 /*@ predicate Inst(X, Key, Val, Type) = ((keyVal(X, Key) = Val) => instanceof (X, Type)) */
 
@@ -22,7 +21,6 @@ class Snake extends Animal {
 
 /*@ move :: (a: AnimalK) => { void | true } */
 function move(a: Animal) {
-
   if (a.kind === "horse") {
     var h = <Horse>a;
     h.gallop();
@@ -31,6 +29,4 @@ function move(a: Animal) {
     var s = <Snake>a;
     s.sneak();
   }
-
 }
-

@@ -1,5 +1,5 @@
 
-/*@ foo :: ([#Mutable]{x: number}) => {void | true} */ 
+/*@ foo :: ([#Mutable]{x: [#Mutable] number}) => {void | true} */ 
 function foo(o):void {
   o.x = 10;
 }

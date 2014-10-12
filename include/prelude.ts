@@ -223,6 +223,8 @@ declare function builtin_BIForInKeys(obj: Object): string[];
 
 /*@ measure enumProp   :: forall A . (string, A) => bool */
 
+/*@ measure keyVal     :: forall A B . (A,string) => B */
+
 
 
 /*************************************************************************
@@ -762,6 +764,8 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 /*  qualif False(v:boolean): (not v) */
 /*@ qualif True1(v:boolean): (Prop v) */
 /*@ qualif False1(v:boolean): not (Prop v) */
+
+/*@ qualif Tag(v:a,x:string): ttag(v) = x */
 
 
 // Somewhat more controversial qualifiers (i.e. "expensive"...)

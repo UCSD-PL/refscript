@@ -2,7 +2,7 @@
 /*@ y :: { } */
 declare var y; 
 
-/*@ x :: [#Mutable]{ f: { number | v > 0 } } */
+/*@ x :: [#Mutable]{ f: [#Mutable] { number | v > 0 } } */
 var x = { f: 1 };
  
 /*@ foo :: () => {void | true } */

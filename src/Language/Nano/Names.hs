@@ -25,6 +25,8 @@ module Language.Nano.Names (
   , returnSymbol 
   , extendAbsPath
 
+  , mkRelName
+
   ) where 
 
 import           Data.Hashable          
@@ -181,3 +183,4 @@ returnId x = Id x returnName
 returnSymbol :: F.Symbol
 returnSymbol = F.symbol returnName
 
+mkRelName ss s = RN $ QName (srcPos dummySpan) ss s 

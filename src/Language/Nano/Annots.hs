@@ -16,7 +16,7 @@ module Language.Nano.Annots (
   , NodeId, Annot (..), UFact, Fact (..), phiVarsAnnot
 
   -- * Casts
-  , Cast(..), CastDirection(..), castDirection, noCast, upCast, dnCast, ddCast
+  , Cast(..), CastDirection(..), castDirection, noCast, upCast, dnCast, ddCast, castType
 
   -- * Aliases for annotated Source 
   , AnnR, AnnBare, UAnnBare, AnnSSA , UAnnSSA
@@ -38,7 +38,7 @@ import           Text.PrettyPrint.HughesPJ
 import           Language.Nano.Types
 import           Language.Nano.Locations
 import           Language.Nano.Names
-import           Language.Nano.Typecheck.Types()
+import           Language.Nano.Typecheck.Types
 
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.Syntax.Annotations
@@ -59,11 +59,14 @@ data Cast r  = CNo                                      -- .
              | CDn   { org :: RType r, tgt :: RType r } -- <t1 DN t2>
              deriving (Eq, Show, Data, Typeable, Functor)
 
+castType CNo = tNull
+castType c   = tgt c
 
-data CastDirection   = CDNo    -- .
-                     | CDDead  -- |dead code|
-                     | CDUp    -- <UP>
-                     | CDDn    -- <DN>
+
+data CastDirection  = CDNo    -- .
+                    | CDDead  -- |dead code|
+                    | CDUp    -- <UP>
+                    | CDDn    -- <DN>
              deriving (Eq, Ord, Show, Data, Typeable)
 
 instance Monoid CastDirection where

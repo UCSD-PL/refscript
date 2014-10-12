@@ -27,7 +27,7 @@ module Language.Nano.Typecheck.Types (
   , isTop, isNull, isVoid, isTNum, isUndef, isUnion
 
   -- * Constructing Types
-  , mkUnion, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions, mkTCons
+  , mkUnion, mkUnionR, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions, mkTCons
 
   -- * Deconstructing Types
   , bkFun, bkFunBinds, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion, funTys
@@ -43,7 +43,8 @@ module Language.Nano.Typecheck.Types (
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
-  , isTVar, isTObj, isConstr, subtypeable, isTUndef, isTVoid, isTFun, fTop, orNull, isArr -- , tArr, rtArr
+  , isTVar, isTObj, isFlattenable, isPrimitive, isConstr, subtypeable, isTUndef, isTVoid
+  , isTFun, fTop, orNull, isArr
 
   -- * Element ops 
   , sameBinder, eltType, allEltType, nonConstrElt, mutability, baseType
@@ -241,9 +242,15 @@ mkTCons m es = TCons m es fTop
 ----------------------------------------------------------------------------------------
 mkUnion :: (F.Reftable r) => [RType r] -> RType r
 ----------------------------------------------------------------------------------------
-mkUnion [ ] = tErr
-mkUnion [t] = t             
-mkUnion ts  = flattenUnions $ TApp TUn ts fTop
+mkUnion ts     = mkUnionR ts fTop
+
+----------------------------------------------------------------------------------------
+mkUnionR :: (F.Reftable r) => [RType r] -> r -> RType r
+----------------------------------------------------------------------------------------
+mkUnionR [ ] r = tVoid
+mkUnionR [t] r = t `strengthen` r
+mkUnionR ts  r = flattenUnions $ TApp TUn ts r
+
 
 ----------------------------------------------------------------------------------------
 bkUnion :: RType r -> [RType r]
@@ -314,6 +321,16 @@ isTObj (TModule _)         = True
 isTObj (TClass _ )         = True
 isTObj (TEnum _ )          = True
 isTObj _                   = False
+ 
+isPrimitive v = isUndef v || isNull v || isTString v || isTBool v || isTNum v 
+
+isFlattenable v = isTObj v || isTNum v || isTBool v || isTString v
+
+isTString (TApp TString _ _) = True
+isTString _                  = False
+
+isTBool (TApp TBool _ _)   = True
+isTBool _                  = False
 
 isTNum (TApp TInt _ _ )    = True
 isTNum _                   = False
@@ -460,7 +477,7 @@ instance PP Char where
 
 
 instance (PP r, F.Reftable r) => PP (RType r) where
-  pp (TVar α r)               = F.ppTy r $ (text "TVAR##" <> pp α <> text "##") 
+  pp (TVar α r)               = F.ppTy r $ pp α
   pp (TFun (Just s) xts t _)  = ppArgs parens comma (B (F.symbol "this") s:xts) <+> text "=>" <+> pp t 
   pp (TFun _ xts t _)         = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)             = text "∀" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t
@@ -588,7 +605,7 @@ ppMut (TApp (TRef (RN (QName _ _ s))) _ _)
   | s == F.symbol "ReadOnly"      = pp "◆"
   | s == F.symbol "AssignsFields" = pp "★" 
   | s == F.symbol "InheritedMut"  = pp "◇"
-  | otherwise                     = pp "?"
+  | otherwise                     = pp "?" <> pp s <> pp "?"
 ppMut t@(TVar{})                  = pp "[" <> pp t <> pp "]" 
 ppMut _                           = pp "?"
 

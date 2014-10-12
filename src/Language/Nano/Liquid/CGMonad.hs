@@ -904,7 +904,7 @@ cgCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 -- | zipType wrapper
 
 zipTypeM l g t1 t2 = 
-  case zipType g t1 t2 of
+  case zipType l g t1 t2 of
     Just t  -> return t
     Nothing -> cgError $ bugZipType (srcPos l) t1 t2
 

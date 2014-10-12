@@ -52,6 +52,7 @@ unsupportedNonSingleConsTy l  = mkErr l $ printf "Only a single constructor sign
 unsupportedDotRef l t         = mkErr l $ printf "Unsupported dot reference %s" (ppshow t)
 unsupportedConvFun l t1 t2    = mkErr l $ printf "Unsupported case in convertFun:\n%s\nvs\n%s" (ppshow t1) (ppshow t2)
 unsupportedStaticNoInit l x   = mkErr l $ printf "Unsupported uninitialized static field '%s'." (ppshow x)
+unsupportedUnionTVar l t      = mkErr l $ printf "Unsupported multiple type variables in union '%s'." (ppshow t)
 
 bug' l s                      = err   l $ printf "BUG: %s" s 
 bug l s                       = mkErr l $ printf "BUG: %s" s 

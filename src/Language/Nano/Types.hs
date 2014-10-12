@@ -81,7 +81,7 @@ data RType r =
   -- 
   -- ^ forall A. T
   --
-  | TAll TVar (RType r)                   
+  | TAll TVar (RType r)
   -- 
   -- ^ /\ (T1..) => T1' ... /\ (Tn..) => Tn'
   --

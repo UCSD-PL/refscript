@@ -300,13 +300,11 @@ convertUnion :: (Functor g, EnvLike () g)
 --------------------------------------------------------------------------------
 convertUnion _ γ t1 t2  
   | upcast    = Right CDUp 
-  | downcast  = Right CDDn
-  | otherwise = Right CDDead
+  | deadcast  = Right CDDead
+  | otherwise = Right CDDn
   where 
---     upcast        = all (\t1 -> any (\t2 -> tracePP (ppshow t1 ++ " <: " ++ ppshow t2) $ isSubtype γ t1 t2) t2s) t1s
---     downcast      = all (\t1 -> any (\t2 -> tracePP (ppshow t1 ++ " <: " ++ ppshow t2) $ isSubtype γ t1 t2) t1s) t2s
-    upcast        = all (\t1 -> any (\t2 -> isSubtype γ t1 t2) t2s) t1s
-    downcast      = all (\t1 -> any (\t2 -> isSubtype γ t1 t2) t1s) t2s
+    upcast        = all (\t1 ->       any (\t2 -> isSubtype γ t1 t2) t2s) t1s
+    deadcast      = all (\t1 -> not $ any (\t2 -> isSubtype γ t1 t2) t2s) t1s
     (t1s, t2s)    = chk $ mapPair bkUnion (t1, t2)
     chk ([ ],[ ]) = errorstar "unionParts', called on too small input"
     chk ([_],[ ]) = errorstar "unionParts', called on too small input"
@@ -315,15 +313,25 @@ convertUnion _ γ t1 t2
     chk p         = p
 
 
--- | Related types ( ~~ ) 
-
+-- | Related types ( ~~ ) -- Cannot be parts of the same union. 
+--  
+--   Reflexive, symmetric, transitive
+--   
 class Related t where
-  related :: (Functor g, EnvLike () g, PPR r) => g r -> t r -> t r -> Bool
+  related :: (Functor g, EnvLike r g, PPR r) 
+          => g r -> t r -> t r -> Bool
 
 instance Related RType where
-  related γ t t' | any isPrimitive [t,t'] = toType t == toType t'
-                 | otherwise              = isSubtype γ t t' || isSubtype γ t' t
-  
+
+  related γ (TApp (TRef x) _ _) (TApp (TRef y) _ _) = isAncestor γ x y || isAncestor γ y x
+
+  related γ (TCons _ _ _ )      (TCons _ _ _ )      = True
+
+  related γ t t' | all isPrimitive [t,t']           = toType t == toType t'
+                 | all isTFun      [t,t']           = True
+                 | toType t == toType t'            = True
+                 | otherwise                        = False
+
 instance Related TypeMember where
   related γ (CallSig t1)      (CallSig t2)      = related γ t1 t2
   related γ (ConsSig t1)      (ConsSig t2)      = related γ t1 t2

@@ -27,7 +27,7 @@ module Language.Nano.Typecheck.Types (
   , isTop, isNull, isVoid, isTNum, isUndef, isUnion
 
   -- * Constructing Types
-  , mkUnion, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions, mkTCons
+  , mkUnion, mkUnionR, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions, mkTCons
 
   -- * Deconstructing Types
   , bkFun, bkFunBinds, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion, funTys
@@ -242,9 +242,15 @@ mkTCons m es = TCons m es fTop
 ----------------------------------------------------------------------------------------
 mkUnion :: (F.Reftable r) => [RType r] -> RType r
 ----------------------------------------------------------------------------------------
-mkUnion [ ] = tErr
-mkUnion [t] = t             
-mkUnion ts  = flattenUnions $ TApp TUn ts fTop
+mkUnion ts     = mkUnionR ts fTop
+
+----------------------------------------------------------------------------------------
+mkUnionR :: (F.Reftable r) => [RType r] -> r -> RType r
+----------------------------------------------------------------------------------------
+mkUnionR [ ] r = tVoid
+mkUnionR [t] r = t `strengthen` r
+mkUnionR ts  r = flattenUnions $ TApp TUn ts r
+
 
 ----------------------------------------------------------------------------------------
 bkUnion :: RType r -> [RType r]

@@ -1,7 +1,6 @@
-/*@ foo :: () => top */
 
-function foo ():number {
-  
+/*@ foo :: () => { top | true } */
+function foo ():number {  
   return 1;
 }
 

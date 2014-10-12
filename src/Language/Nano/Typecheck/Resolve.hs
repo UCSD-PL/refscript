@@ -289,6 +289,18 @@ flattenType γ (TEnum x)
   where
     mkField (k,i) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) t_immutable $ tInt `strengthen` exprReft i)
 
+flattenType γ (TApp TInt _ r) 
+  = do  es      <- t_elts <$> resolveRelTypeInEnv γ (mkRelName [] $ F.symbol "Number")
+        return   $ TCons t_immutable es fTop
+
+flattenType γ (TApp TString _ r) 
+  = do  es      <- t_elts <$> resolveRelTypeInEnv γ (mkRelName [] $ F.symbol "String")
+        return   $ TCons t_immutable es fTop
+
+flattenType γ (TApp TBool _ r) 
+  = do  es      <- t_elts <$> resolveRelTypeInEnv γ (mkRelName [] $ F.symbol "Boolean")
+        return   $ TCons t_immutable es fTop
+
 flattenType _ t  = Just t
 
 

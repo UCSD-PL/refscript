@@ -775,7 +775,7 @@ immObjectLitTy l _ ps ts
 
 
 ---------------------------------------------------------------------------------
-enumTy               :: EnumDef -> RType F.Reft
+enumTy :: EnumDef -> RType F.Reft
 ---------------------------------------------------------------------------------
 enumTy (EnumDef _ ps _) = TAll a $ TFun Nothing [a',b] ot fTop
   where

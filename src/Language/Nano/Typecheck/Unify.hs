@@ -122,8 +122,8 @@ unifyUnions :: PPR r
             -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 unifyUnions l γ θ t1 t2
-  | length v1s > 1 = undefined -- cannot allow more that 1 tvar in t1
-  | length v2s > 1 = undefined -- cannot allow more that 1 tvar in t2
+  | length v1s > 1 = Left $ unsupportedUnionTVar (srcPos l) t1  
+  | length v2s > 1 = Left $ unsupportedUnionTVar (srcPos l) t2 
   | otherwise      = do θ1 <- unifys   l γ θ cmn1 cmn2
                         θ2 <- unifyVar l γ θ1 v1s dif2
                         θ3 <- unifyVar l γ θ2 v2s dif1
@@ -137,9 +137,9 @@ unifyUnions l γ θ t1 t2
     rem xs ys    = [ y | y <- ys, not (toType y `elem` map toType xs) ]
 
 unifyVar _ _ θ [ ] _  = return θ
-unifyVar l γ θ [v] [] = return θ
+unifyVar _ _ θ [_] [] = return θ
 unifyVar l γ θ [v] ts = unify l γ θ v $ mkUnion ts
-unifyVar _ _ _  _  _  = undefined -- impossible
+unifyVar l _ _ ts  _  = Left $ unsupportedUnionTVar (srcPos l) $ mkUnion ts
 
    
 -----------------------------------------------------------------------------

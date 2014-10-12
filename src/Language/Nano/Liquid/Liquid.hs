@@ -685,7 +685,7 @@ consCast g l e tc
         consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) opTy >>= \case
           Just (o,g'') -> 
               do  (to,ao)  <- safeEnvFindTyWithAsgn o g''
-                  g''' <- envAdds "consCast-1" [(o, (to `eSingleton` e,ao))] g''
+                  g''' <- envAdds "consCast-1" [(o, (to, ao))] g''
                   -- g''' <- envAdds "consCast-1" [(o, (to `eSingleton` e,ao))] g''
                   return $ Just (o,g''')
           Nothing     -> cgError $ errorUserCast (srcPos l) tc e 
@@ -706,7 +706,7 @@ consUpCast g l x _ t2
 -- | DownCast(x, t1 => t2)
 consDownCast g l x _ t2
   = do  (tx,a)  <- safeEnvFindTyWithAsgn x g
-        txx     <- zipTypeM l g tx tx 
+        txx     <- zipTypeM l g tx tx
         tx2     <- zipTypeM l g t2 tx
         ztx     <- zipTypeM l g tx t2
         subType l (errorDownCast (srcPos l) txx t2) g txx tx2

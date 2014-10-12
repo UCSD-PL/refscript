@@ -11,6 +11,7 @@ module Language.Nano.Typecheck.Unify (
 
   ) where 
 
+import           Control.Applicative                ((<$>), (<*>))
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Errors 
 import           Language.Nano.Errors 
@@ -24,6 +25,7 @@ import           Language.Nano.Typecheck.Sub
 
 
 import           Data.Generics
+import qualified Data.List as L
 import qualified Data.HashSet as S
 import qualified Data.HashMap.Strict as HM 
 import qualified Data.Map.Strict as M
@@ -55,10 +57,7 @@ unify l _ θ t (TVar α _)  = varAsn l θ α t
 -- XXX: ORDERING IMPORTANT HERE
 -- Keep the union case before unfolding, but after type variables
 
-unify l γ θ t t' | any isUnion [t,t'] = unifys l γ θ t1s' t2s'
-  where
-    (t1s', t2s') = unzip [ (t1, t2) | t1 <- t1s, t2 <- t2s, related γ t1 t2]
-    (t1s , t2s ) = mapPair bkUnion (t,t')
+unify l γ θ t t' | any isUnion [t,t'] = unifyUnions l γ θ t t'
 
 unify l γ θ (TFun (Just s1) t1s o1 _) (TFun (Just s2) t2s o2 _)
   = unifys l γ θ (s1 : o1 : map b_type t1s') (s2 : o2 : map b_type t2s')
@@ -113,9 +112,38 @@ unify l γ θ t1 t2 | all isFlattenable [t1,t2]
 -- The rest of the cases do not cause any unification.
 unify _ _ θ _  _ = return θ
 
+-----------------------------------------------------------------------------
+unifyUnions :: PPR r
+            => SourceSpan
+            -> TCEnv r
+            -> RSubst r
+            -> RType r
+            -> RType r
+            -> Either Error (RSubst r)
+-----------------------------------------------------------------------------
+unifyUnions l γ θ t1 t2
+  | length v1s > 1 = undefined -- cannot allow more that 1 tvar in t1
+  | length v2s > 1 = undefined -- cannot allow more that 1 tvar in t2
+  | otherwise      = do θ1 <- unifys   l γ θ cmn1 cmn2
+                        θ2 <- unifyVar l γ θ1 v1s dif2
+                        θ3 <- unifyVar l γ θ2 v2s dif1
+                        return θ3
+  where
+    (t1s , t2s ) = mapPair bkUnion (t1, t2)
+    (v1s, t1s')  = L.partition isTVar t1s
+    (v2s, t2s')  = L.partition isTVar t2s
+    (cmn1, cmn2) = unzip [ (t1, t2) | t1 <- t1s', t2 <- t2s', related γ t1 t2 ]
+    (dif1,dif2)  = (rem cmn1 t1s', rem cmn2 t2s')
+    rem xs ys    = [ y | y <- ys, not (toType y `elem` map toType xs) ]
+
+unifyVar _ _ θ [ ] _  = return θ
+unifyVar l γ θ [v] [] = return θ
+unifyVar l γ θ [v] ts = unify l γ θ v $ mkUnion ts
+unifyVar _ _ _  _  _  = undefined -- impossible
+
    
 -----------------------------------------------------------------------------
-unifys :: (Data r, PPR r) 
+unifys :: PPR r
        => SourceSpan 
        -> TCEnv r 
        -> RSubst r 

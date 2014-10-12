@@ -1004,9 +1004,9 @@ tcCallCase γ l fn ets ft
   = do let ξ            = tce_ctx γ
        (_,its1,ot)     <- instantiateFTy l ξ fn ft
        ts1             <- idxMapFI (instantiateTy l $ tce_ctx γ) ts
-       let (ts2, its2)  = ltracePP l (ppshow fn ++ " will unify") $ balance ts1 its1
+       let (ts2, its2)  = balance ts1 its1
        θ               <- unifyTypesM (srcPos l) γ ts2 its2
-       let (ts3,its3)   = ltracePP l (ppshow fn) $ mapPair (apply θ) (ts2, its2)
+       let (ts3,its3)   = mapPair (apply θ) (ts2, its2)
        es'             <- app (castM γ) es ts3 its3
        -- es'             <- app (castM γ) es (ltracePP l "LHS" ts3) (ltracePP l "RHS" its3)
        return           $ (es', apply θ ot)

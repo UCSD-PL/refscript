@@ -220,8 +220,9 @@ envGetContextCast g a
   = case [c | TCast cx c <- ann_fact a, cx == cge_ctx g] of
       [ ] -> CNo
       [c] -> c
-      cs  | all isDeadCast cs -> head cs
-          | otherwise         -> die $ errorMultipleCasts (srcPos a) cs
+      cs  -> case L.find isDeadCast cs of 
+               Just dc -> dc 
+               Nothing -> die $ errorMultipleCasts (srcPos a) cs
   where
     isDeadCast CDead{} = True
     isDeadCast _       = False

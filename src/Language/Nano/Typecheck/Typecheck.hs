@@ -133,7 +133,6 @@ patch fs =
   do (m,θ)           <- (,) <$> getAnns <*> getSubst
      return           $ (pa m <$>) <$> apply θ <$> fs
   where
-    -- PV: Is sortNub important here?
     pa m     (Ann i l fs)      = Ann i l $ nub $ fs ++ filter accepted (I.findWithDefault [] i m)
     accepted (TypInst _ _ _  ) = True
     accepted (Overload _ _   ) = True

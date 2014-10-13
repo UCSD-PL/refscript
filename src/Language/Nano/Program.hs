@@ -47,8 +47,9 @@ module Language.Nano.Program (
 import           Control.Applicative     hiding (empty)
 import           Control.Exception              (throw)
 import           Data.Monoid             hiding ((<>))            
-import           Data.Maybe                     (maybeToList, listToMaybe)
+import           Data.Maybe                     (maybeToList, listToMaybe, catMaybes)
 import           Data.List                      (stripPrefix, partition)
+import           Data.Tuple                     (swap)
 import           Data.Generics                   
 import qualified Data.Map.Strict                as M
 import qualified Data.IntMap                    as I
@@ -566,9 +567,11 @@ scrapeModules                    = qenvFromList . map mkMod . collectModules
     eStmts                       = concatMap eStmt
     eStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, EnumDef)]
     syms                         = (F.symbol <$>)
-    eStmt (EnumStmt _ n es)      = [(fmap srcPos n, EnumDef (F.symbol n) (I.fromList  $ zip [0..] (syms es))
-                                                                         (envFromList $ zip (syms es) [0..]))]
+    eStmt (EnumStmt _ n es)      = [(fmap srcPos n, EnumDef (F.symbol n) (I.fromList  $ catMaybes $ enumElt  <$> es)
+                                                                         (envFromList $ catMaybes $ sEnumElt <$> es))]
     eStmt _                      = []
+    enumElt (EnumElt _ s i)      = (,F.symbol s) <$> i
+    sEnumElt (EnumElt _ s i)     = (F.symbol s,) <$> i
     ss = fmap ann
 
 

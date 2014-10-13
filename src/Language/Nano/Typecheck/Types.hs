@@ -773,7 +773,11 @@ immObjectLitTy l _ ps ts
                          | (p,t) <- safeZip "immObjectLitTy" ps ts, let s = F.symbol p ]
     nps              = length ps
 
-
+-- FIXME: the bounds check is not valid any more ...
+--
+-- ({ v: number |  (v = k1) \/ (v = k2) \/ ... }) => ... // for all the known keys
+--
+--
 ---------------------------------------------------------------------------------
 enumTy :: EnumDef -> RType F.Reft
 ---------------------------------------------------------------------------------
@@ -784,8 +788,7 @@ enumTy (EnumDef _ ps _) = TAll a $ TFun Nothing [a',b] ot fTop
     x0       = F.symbol "x0"
     x1       = F.symbol "x1"
     sz       = I.size ps
-    pi       = F.PAnd [F.PAtom F.Le (F.expr (0::Int)) (F.eVar v), 
-                       F.PAtom F.Lt (F.expr v) (F.expr sz)]
+    pi       = F.POr $ (F.PAtom F.Eq (F.eVar v) . F.expr) <$> I.keys ps 
     v        = F.vv Nothing
     b        = B x1 $ tInt `strengthen` F.predReft pi
     el       = I.toList ps

@@ -337,7 +337,7 @@ consStmt g s@(FunctionStmt _ _ _ _)
 --  * Compute type for "this" and add that to the env as well. 
 --
 consStmt g (ClassStmt l x _ _ ce) 
-  = do  dfn      <- consEnvFindTypeDefM l g rn
+  = do  dfn      <- ltracePP l (ppshow x) <$> consEnvFindTypeDefM l g rn
         -- FIXME: Should this check be done at TC too?
         g'       <- envAdds "consStmt-class-0" [(Loc (ann l) α, (tVar α, WriteGlobal)) | α <- t_args dfn] g
         consClassElts g' dfn ce

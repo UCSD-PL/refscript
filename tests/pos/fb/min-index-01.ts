@@ -4,7 +4,6 @@
 
 /*@ alias index<a> = {v:number | 0 <= v && v < len a} */ 
 
-
 /*@  reduce :: forall T A . (arr:IArray<T>, callback: (x: A, y: T, index<arr>) => A, init:A) => A */
 function reduce<T,A>(me: T[], callback:(x: A, y: T, n: number) => A, init:A): A {
   var res = init;

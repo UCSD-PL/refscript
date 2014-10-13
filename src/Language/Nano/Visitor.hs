@@ -24,7 +24,7 @@ import           Control.Applicative            ((<$>), (<*>))
 import           Control.Exception              (throw)
 import           Control.Monad.Trans.State      (modify, runState, StateT, runStateT)
 import           Control.Monad.Trans.Class      (lift)
-import           Language.Nano.Misc             (mapSndM)
+import           Language.Nano.Misc             (mapFstM, mapSndM)
 import           Language.Nano.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
@@ -140,6 +140,7 @@ visitStmtM   :: (Monad m, Functor m, Monoid a, IsLocated b)
 visitStmtM v = vS
   where
     vE      = visitExpr v   
+    vEE     = visitEnumElt v
     vC      = visitCaseClause v   
     vI      = visitId   v   
     vS c s  = accum acc >> lift (mStmt v s') >>= step c' where c'   = ctxStmt v c s
@@ -163,8 +164,11 @@ visitStmtM v = vS
     step c (ModuleStmt l m ss)      = ModuleStmt   l <$> (vI c m) <*> (vS c <$$> ss) 
     step _ s@(IfaceStmt {})         = return s 
     step _ s@(EmptyStmt {})         = return s 
-    step c (EnumStmt l n es)        = EnumStmt     l <$> (vI c n) <*> (vI c <$$> es)
+    step c (EnumStmt l n es)        = EnumStmt     l <$> (vI c n) <*> (vEE c <$$> es)
     step _ s                        = throw $ unimplemented l "visitStatement" s  where l = srcPos $ getAnnotation s
+
+
+visitEnumElt v c (EnumElt l i n)    = EnumElt l      <$> visitId v c i <*> return n
 
 
 visitExpr :: (IsLocated b, Monoid a, Functor m, Monad m) 

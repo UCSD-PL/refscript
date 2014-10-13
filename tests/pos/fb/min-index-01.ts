@@ -13,6 +13,9 @@ function minIndex(arr){
   /*@ body :: (number, number, number) => number */ 
   function body(min, cur, i) { 
     return cur < arr[min] ? i : min 
+    //  if (cur < arr[min])
+    //      min = i;
+    //  return min;
   }; 
   return reduce(arr, body, 0);
 }

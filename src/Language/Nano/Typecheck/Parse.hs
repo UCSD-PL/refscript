@@ -553,6 +553,7 @@ instance FromJSON SourcePos where
 
 instance FromJSON (Expression (SourceSpan, [RawSpec]))
 instance FromJSON (Statement (SourceSpan, [RawSpec]))
+instance FromJSON (EnumElt (SourceSpan, [RawSpec]))
 instance FromJSON (LValue (SourceSpan, [RawSpec]))
 instance FromJSON (JavaScript (SourceSpan, [RawSpec]))
 instance FromJSON (ClassElt (SourceSpan, [RawSpec]))

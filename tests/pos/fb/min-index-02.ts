@@ -1,10 +1,11 @@
-
 /*@ alias IArray<T> = Array<Immutable, T> */
 
+/*@ alias NEArray<T> = {Array<Immutable, T> | 0 < len v}  */
 
 /*@ qualif Len(v: a, n: number)  : n < (len v) */
 
-/*@ minIndex :: (IArray<number>) => {v:number | true} */
+
+/*@ minIndex :: (NEArray<number>) => number */
 function minIndex(arr){
   
   function body(min: number, cur: number, i: number) { 

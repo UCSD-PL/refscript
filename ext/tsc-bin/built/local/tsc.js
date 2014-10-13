@@ -16259,15 +16259,8 @@ var TypeScript;
         EnumDeclarationSyntax.prototype.toRsStmt = function (helper) {
             var originalAnnots = tokenAnnots(this.firstToken());
             var sourceSpan = helper.getSourceSpan(this);
-
-            this.enumElements.toNonSeparatorArray().forEach(function (element) {
-                if (element.equalsValueClause) {
-                    helper.postDiagnostic(element, TypeScript.DiagnosticCode.No_support_for_value_assigned_enumeration_element_0, [element.propertyName.text()]);
-                }
-            });
-
-            return new TypeScript.RsEnumStmt(sourceSpan, originalAnnots, this.identifier.toRsId(helper), new TypeScript.RsASTList(this.enumElements.toNonSeparatorArray().map(function (a) {
-                return a.toRsId(helper);
+            return new TypeScript.RsEnumStmt(sourceSpan, originalAnnots, this.identifier.toRsId(helper), new TypeScript.RsASTList(this.enumElements.toNonSeparatorArray().map(function (e) {
+                return e.toRsEnumElt(helper);
             })));
         };
         return EnumDeclarationSyntax;
@@ -16345,8 +16338,10 @@ var TypeScript;
             return false;
         };
 
-        EnumElementSyntax.prototype.toRsId = function (helper) {
-            return this.propertyName.toRsId(helper);
+        EnumElementSyntax.prototype.toRsEnumElt = function (helper) {
+            var anns = tokenAnnots(this.firstToken());
+            var enumDecl = helper.getDeclForAST(this);
+            return new TypeScript.RsEnumElt(helper.getSourceSpan(this), anns, this.propertyName.toRsId(helper), enumDecl.constantValue);
         };
         return EnumElementSyntax;
     })(TypeScript.SyntaxNode);
@@ -59196,6 +59191,20 @@ var TypeScript;
     })(RsAST);
     TypeScript.RsASTList = RsASTList;
 
+    var RsASTPair = (function (_super) {
+        __extends(RsASTPair, _super);
+        function RsASTPair(fst, snd) {
+            _super.call(this);
+            this.fst = fst;
+            this.snd = snd;
+        }
+        RsASTPair.prototype.toObject = function () {
+            return [this.fst.toObject(), this.snd.toObject()];
+        };
+        return RsASTPair;
+    })(RsAST);
+    TypeScript.RsASTPair = RsASTPair;
+
     var RsId = (function (_super) {
         __extends(RsId, _super);
         function RsId(span, ann, id) {
@@ -60630,6 +60639,28 @@ var TypeScript;
         return RsIfaceStmt;
     })(RsStatement);
     TypeScript.RsIfaceStmt = RsIfaceStmt;
+
+    var RsEnumElt = (function (_super) {
+        __extends(RsEnumElt, _super);
+        function RsEnumElt(span, ann, name, num) {
+            _super.call(this, ann);
+            this.span = span;
+            this.ann = ann;
+            this.name = name;
+            this.num = num;
+        }
+        RsEnumElt.prototype.toObject = function () {
+            return [
+                [this.span.toObject(), this.mapAnn(function (a) {
+                        return a.toObject();
+                    })],
+                this.name.toObject(),
+                this.num
+            ];
+        };
+        return RsEnumElt;
+    })(RsAnnotatedAST);
+    TypeScript.RsEnumElt = RsEnumElt;
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
 (function (TypeScript) {
@@ -60901,13 +60932,39 @@ var TypeScript;
 var TypeScript;
 (function (TypeScript) {
     var OverloadState = (function () {
-        function OverloadState(semanticInfoChain, funcs) {
-            if (typeof funcs === "undefined") { funcs = {}; }
+        function OverloadState(semanticInfoChain, funcs, overloadFuncs, normalFuncs) {
+            if (typeof funcs === "undefined") { funcs = new Map(); }
+            if (typeof overloadFuncs === "undefined") { overloadFuncs = 0; }
+            if (typeof normalFuncs === "undefined") { normalFuncs = 0; }
             this.semanticInfoChain = semanticInfoChain;
             this.funcs = funcs;
+            this.overloadFuncs = overloadFuncs;
+            this.normalFuncs = normalFuncs;
         }
         return OverloadState;
     })();
+
+    var Map = (function () {
+        function Map() {
+            this.s = {};
+        }
+        Map.prototype.get = function (key) {
+            return this.s[Map.PREFIX + key];
+        };
+        Map.prototype.set = function (key, value) {
+            return this.s[Map.PREFIX + key] = value;
+        };
+        Map.PREFIX = "\0";
+        return Map;
+    })();
+
+    function contains(arr, val) {
+        for (var i in arr) {
+            if (arr[i] == val)
+                return true;
+        }
+        return false;
+    }
 
     var OverloadStatGatherer = (function () {
         function OverloadStatGatherer() {
@@ -60916,33 +60973,33 @@ var TypeScript;
             switch (ast.kind()) {
                 case 129 /* FunctionDeclaration */:
                 case 135 /* MemberFunctionDeclaration */:
+                case 145 /* MethodSignature */:
                     var functionDecl = state.semanticInfoChain.getDeclForAST(ast);
                     var name = functionDecl.name;
-                    if (name in state.funcs)
-                        break;
+                    console.log(name);
                     var funcSymbol = functionDecl.getSymbol();
+                    var container = funcSymbol.getContainer();
+                    var previouslySeenContainers = state.funcs.get(name);
+                    if (!previouslySeenContainers)
+                        previouslySeenContainers = [];
+                    if (contains(previouslySeenContainers, container))
+                        break;
+                    previouslySeenContainers.push(container);
+                    state.funcs.set(name, previouslySeenContainers);
                     var funcTypeSymbol = funcSymbol.type;
-                    var signatures = funcTypeSymbol.getCallSignatures();
-                    state.funcs[name] = signatures.length;
+                    var signatures = funcTypeSymbol.getCallSignatures().length;
+                    signatures > 1 ? state.overloadFuncs++ : state.normalFuncs++;
             }
         };
 
         OverloadStatGatherer.gather = function (document, semanticInfoChain) {
             var sourceUnit = document.sourceUnit();
             var state = new OverloadState(semanticInfoChain);
+
             TypeScript.getAstWalkerFactory().simpleWalk(document.sourceUnit(), OverloadStatGatherer.pre, null, state);
 
-            var normalFuncs = 0;
-            var overloadFuncs = 0;
-            for (var func in state.funcs) {
-                if (state.funcs[func] > 1)
-                    overloadFuncs++;
-                else
-                    normalFuncs++;
-            }
-
-            console.log("Overloaded functions: " + overloadFuncs);
-            console.log("Other functions: " + normalFuncs);
+            console.log("Overloaded functions: " + state.overloadFuncs);
+            console.log("Other functions: " + state.normalFuncs);
         };
         return OverloadStatGatherer;
     })();

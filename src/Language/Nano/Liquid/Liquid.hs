@@ -297,7 +297,7 @@ consStmt g (IfStmt l e s1 s2) =
 
 -- while e { s }  
 consStmt g (WhileStmt l e s) 
-  = Just <$> consWhile g l e s 
+  = consWhile g l e s 
 
 -- var x1 [ = e1 ]; ... ; var xn [= en];
 consStmt g (VarDeclStmt _ ds)
@@ -875,7 +875,7 @@ consFold f          = foldM step . Just
 
 
 ---------------------------------------------------------------------------------
-consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> CGM CGEnv
+consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> CGM (Maybe CGEnv)
 ---------------------------------------------------------------------------------
 
 {- Typing Rule for `while (cond) {body}`
@@ -907,20 +907,18 @@ consWhile :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> Statement AnnTypeR -> C
 
 -}
 consWhile g l cond body 
-  = do  -- ts                  <- mapM (`safeEnvFindTy` g) xs 
-        -- (gI,tIs)            <- freshTyPhis (srcPos l) g xs $ toType <$> ts  -- (a) (b) 
-        (gI,tIs)            <- freshTyPhis l g xs ts                        -- (a) (b) 
-        _                   <- consWhileBase l xs tIs g                     -- (c)
-        Just (xc, gI')      <- consExpr gI cond Nothing                     -- (d)
-        z                   <- consStmt (envAddGuard xc True gI') body      -- (e)
-        whenJustM z          $ consWhileStep l xs tIs                       -- (f) 
-        return               $ envAddGuard xc False gI'
+  = do  (gI,tIs)            <- freshTyPhis l g xs ts                            -- (a) (b) 
+        _                   <- consWhileBase l xs tIs g                         -- (c)
+        mseq (consExpr gI cond Nothing) $ \(xc, gI') ->                         -- (d)
+          do  z             <- consStmt (envAddGuard xc True gI') body          -- (e)
+              whenJustM z    $ consWhileStep l xs tIs                           -- (f) 
+              return         $ Just $ envAddGuard xc False gI'
     where
         (xs,ts)              = unzip $ concat [xts | PhiVarTy xts <- ann_fact l]
 
 consWhileBase l xs tIs g    
   = do  xts_base           <- mapM (`safeEnvFindTy` g) xs 
-        xts_base'          <- zipWithM (zipTypeM (srcPos l) g) xts_base tIs -- (c)
+        xts_base'          <- zipWithM (zipTypeM (srcPos l) g) xts_base tIs     -- (c)
         zipWithM_ (subType l err g) xts_base' tIs         
   where 
     err                      = errorLiquid' l
@@ -928,7 +926,7 @@ consWhileBase l xs tIs g
 consWhileStep l xs tIs gI'' 
   = do  xts_step           <- mapM (`safeEnvFindTy` gI'') xs' 
         xts_step'          <- zipWithM (zipTypeM (srcPos l) gI'') xts_step tIs'
-        zipWithM_ (subType l err gI'') xts_step' tIs'                       -- (f)
+        zipWithM_ (subType l err gI'') xts_step' tIs'                           -- (f)
   where 
     tIs'                    = F.subst su <$> tIs
     xs'                     = mkNextId   <$> xs

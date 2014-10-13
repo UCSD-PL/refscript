@@ -175,7 +175,7 @@ resolveRelEnum :: QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe EnumDef
 resolveRelEnum = resolveRelName m_enums
 
 ---------------------------------------------------------------------------
-resolveRelTypeInEnv :: Data r => EnvLike r g => g r -> RelName -> Maybe (IfaceDef r)
+resolveRelTypeInEnv :: PPR r => EnvLike r g => g r -> RelName -> Maybe (IfaceDef r)
 ---------------------------------------------------------------------------
 resolveRelTypeInEnv γ = resolveRelType (modules γ) (absPath γ)
 
@@ -208,7 +208,7 @@ parentOf (AP (QPath l m )) = Just (AP (QPath l (init m)))
 --   @m@ is the top-level enforced mutability Top-level 
 --
 ---------------------------------------------------------------------------
-flatten :: (EnvLike r g, F.Reftable r, Data r) 
+flatten :: (EnvLike r g, PPR r) 
         => Maybe Mutability 
         -> StaticKind 
         -> g r 
@@ -217,9 +217,10 @@ flatten :: (EnvLike r g, F.Reftable r, Data r)
 ---------------------------------------------------------------------------
 flatten m s γ (ID _ _ vs h es, ts) =
     case h of 
-      Just (p, ts') -> do inh   <- flatten m s γ . (, ts') =<< resolveRelTypeInEnv γ p 
+      Just (p, ts') -> do pdef  <- resolveRelTypeInEnv γ p
+                          inh   <- flatten m s γ $ (, ts') pdef
                           return $ M.map (apply θ . fmut) $ M.union current inh
-      Nothing       -> return    $ M.map (apply θ . fmut) $ current 
+      Nothing       ->    return $ M.map (apply θ . fmut) $ current 
   where 
     current                      = M.filterWithKey (\(_,s') _ -> s == s') es
     θ                            = fromList $ zip vs ts

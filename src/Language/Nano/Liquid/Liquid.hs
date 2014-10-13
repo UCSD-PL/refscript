@@ -608,8 +608,6 @@ consExpr g ef@(DotRef l e f) _
                                                           F.expr $ F.symbolText $ F.symbol f]
     vr         = VarRef $ getAnnotation e
 
--- FIXME: e["f"]
-
 -- | e1[e2]
 consExpr g (BracketRef l e1 e2) _
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do

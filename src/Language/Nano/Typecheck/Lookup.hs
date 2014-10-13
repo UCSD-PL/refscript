@@ -133,7 +133,7 @@ defCtor x vs = mkAll vs $ TFun Nothing [] (retT x vs) fTop
 
 
 -------------------------------------------------------------------------------
-extractParent :: (Data r, F.Reftable r, PP r, EnvLike r g, Substitutable r (RType r)) 
+extractParent :: (PPR r, PP r, EnvLike r g, Substitutable r (RType r)) 
               => g r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 extractParent γ (TApp (TRef x) ts _) 

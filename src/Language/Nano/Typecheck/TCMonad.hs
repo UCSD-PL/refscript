@@ -405,9 +405,11 @@ tcFunTys l f xs ft = either tcError return $ funTys l f xs ft
 --------------------------------------------------------------------------------
 checkTypes :: PPR r => TCEnv r -> TCM r ()
 --------------------------------------------------------------------------------
-checkTypes γ = mapM_ (safeExtends γ) types
+checkTypes γ  = mapM_ (\(a,ts) -> mapM_ (safeExtends $ setAP a γ) ts) types
   where 
-    types = concatMap envToList $ m_types . snd <$> qenvToList (tce_mod γ)
+    -- types     = concatMap envToList $ m_types . snd <$> qenvToList (tce_mod γ)
+    types     = mapSnd (envToList . m_types) <$> qenvToList (tce_mod γ)
+    setAP a γ = γ { tce_path = a } 
     
 
 --------------------------------------------------------------------------------

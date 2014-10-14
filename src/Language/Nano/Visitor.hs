@@ -280,14 +280,13 @@ instance Transformable Fact where
   trans = transFact
 
 instance Transformable IfaceDef where
-  trans f as xs idf = idf { t_proto = transProto f as' xs  $  t_proto idf 
-                          , t_elts  = trans      f as' xs <$> t_elts  idf
+  trans f as xs idf = idf { t_base = transProto f as' xs <$> t_base idf 
+                          , t_elts = trans      f as' xs <$> t_elts idf
                           } 
     where
       as'           = (t_args idf) ++ as
 
-transProto _ _  _  Nothing        = Nothing 
-transProto f as xs (Just (n, ts)) = Just (n, trans f as xs <$> ts)
+transProto f as xs (n, ts) = (n, trans f as xs <$> ts)
 
 transFact f = go
   where
@@ -302,8 +301,7 @@ transFact f = go
     go as xs (ClassAnn c)   = ClassAnn $ transClassAnn f as xs c
     go _  _  z              = z
     
-transClassAnn _ _ _ z@(_, Nothing)        = z
-transClassAnn f as xs (as', Just (n, ts)) = (as, Just (n, trans f (as' ++ as) xs <$> ts))
+transClassAnn f as xs (as', ps) = (as, transProto f (as' ++ as) xs <$> ps)
 
 transRType :: ([TVar] -> [Bind r] -> RType r -> RType r) -> [TVar] -> [Bind r] -> RType r -> RType r
 

@@ -557,16 +557,17 @@ instance PP IfaceKind where
   pp InterfaceKind  = pp "interface" 
 
 instance (PP r, F.Reftable r) => PP (IfaceDef r) where
-  pp (ID c nm vs Nothing ts) =  
+  pp (ID _ c nm vs h ts) =  
         pp c
-    <+> pp nm <> ppArgs angles comma vs 
+    <+> ppBase (nm, vs)
+    <+> ppHeritage h
     <+> lbrace $+$ nest 2 (vcat $ ppHMap pp ts) $+$ rbrace
-  pp (ID c nm vs (Just (p,ps)) ts) = 
-        pp c
-    <+> pp nm <> ppArgs angles comma vs
-    <+> text "extends" 
-    <+> pp p  <> ppArgs angles comma ps
-    <+> lbrace $+$ nest 2 (vcat $ ppHMap pp ts) $+$ rbrace
+
+ppHeritage [] = text ""
+ppHeritage ts = text "extends" <+> intersperse comma (ppBase <$> ts)
+
+ppBase (n,[]) = pp n
+ppBase (n,ts) = pp n <> ppArgs angles comma ts
 
 instance PP IndexKind where
   pp StringIndex  = text "string"

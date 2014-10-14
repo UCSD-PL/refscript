@@ -27,6 +27,10 @@ class EnvLike r t where
   --
   modules         :: t r -> QEnv (ModuleDef r)
   -- 
+  -- ^ ClassHierarchy
+  -- 
+  cha             :: t r -> ClassHierarchy r
+  -- 
   -- ^ Namespace absolute path
   --
   absPath         :: t r -> AbsPath

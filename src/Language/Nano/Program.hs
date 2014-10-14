@@ -532,14 +532,14 @@ visibleNames s = [ (ann <$> n,(k,v,a,t)) | (n,l,k,a) <- hoistBindings s
 ---------------------------------------------------------------------------------------
 scrapeModules               :: PPR r => [Statement (AnnSSA r)] -> QEnv (ModuleDef r)
 ---------------------------------------------------------------------------------------
-scrapeModules                    = qenvFromList . map mkMod . collectModules
+scrapeModules                    = qenvFromList 
+                                 . map mkMod 
+                                 . collectModules
   where
-    mkMod (ap, m)                = (ap, {- trace (ppshow (envKeys $ varEnv m)
-                                           ++ "\n\n" ++ ppshow (envKeys $ typeEnv m)) $ -}
-                                         ModuleDef (varEnv m) (typeEnv m) (enumEnv m) ap)
+    mkMod (ap, m)                = (ap, ModuleDef (varEnv m) (typeEnv ap m) (enumEnv m) ap)
     drop1 (_,b,c,d)              = (b,c,d)
     varEnv                       = envMap drop1 . mkVarEnv    . vStmts
-    typeEnv                      = envFromList  . tStmts
+    typeEnv ap                   = envFromList  . tStmts ap
     enumEnv                      = envFromList  . eStmts
 
     vStmts                       = concatMap vStmt
@@ -558,11 +558,11 @@ scrapeModules                    = qenvFromList . map mkMod . collectModules
     vStmt (EnumStmt l x _)       = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, TEnum   $ RN $ QName (ann l) [] $  F.symbol x)) ]
     vStmt _                      = [ ] 
 
-    tStmts                       = concatMap tStmt
-    tStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, IfaceDef r)]
-    tStmt c@(ClassStmt{})        = maybeToList $ resolveType c
-    tStmt c@(IfaceStmt _)        = maybeToList $ resolveType c
-    tStmt _                      = [ ]
+    tStmts ap                    = concatMap $ tStmt ap
+    tStmt :: PPR r => AbsPath -> Statement (AnnSSA r) -> [(Id SourceSpan, IfaceDef r)]
+    tStmt ap c@(ClassStmt{})     = maybeToList $ resolveType ap c
+    tStmt ap c@(IfaceStmt _)     = maybeToList $ resolveType ap c
+    tStmt _ _                    = [ ]
 
     eStmts                       = concatMap eStmt
     eStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, EnumDef)]
@@ -630,23 +630,27 @@ mkVarEnv                   = envFromList . concatMap f . M.toList . foldl merge 
     tyOf (_,(_,_,_,t))     = t
 
 
--- FIXME (?): Does not take into account classes with missing annotations.
---            Ts -> rsc translation should add annotations everywhere.
--- TODO: Use safeExtends to check inheritance
+--
+-- | `resolveType` restores the correct AbsName for classes and interfaces (was
+--   default before).
+--
+--   FIXME (?): Does not take into account classes with missing annotations.
+--              Ts -> rsc translation should add annotations everywhere.
+--
 ---------------------------------------------------------------------------------------
-resolveType :: PPR r => Statement (AnnSSA r) -> Maybe (Id SourceSpan, IfaceDef r)
+resolveType :: PPR r => AbsPath -> Statement (AnnSSA r) -> Maybe (Id SourceSpan, IfaceDef r)
 ---------------------------------------------------------------------------------------
-resolveType  (ClassStmt l c _ _ cs)
+resolveType  ap (ClassStmt l c _ _ cs)
   = case [ t | ClassAnn t <- ann_fact l ] of
-      [(vs, h)] -> Just (cc, ID ClassKind cc vs h $ typeMembers cs)
+      [(vs, h)] -> Just (cc, ID (mkAbsName ap c) ClassKind cc vs h $ typeMembers cs)
       _         -> Nothing
   where
     cc        = fmap ann c
 
-resolveType (IfaceStmt l)
-  = listToMaybe [ (n, t) | IfaceAnn t@(ID _ n _ _ _) <- ann_fact l ]
+resolveType ap (IfaceStmt l)
+  = listToMaybe [ (n, t { t_path = mkAbsName ap n } ) | IfaceAnn t@(ID _ _ n _ _ _) <- ann_fact l ]
 
-resolveType _ = Nothing 
+resolveType _ _ = Nothing 
 
 data MemberKind = MemDefinition | MemDeclaration deriving ( Eq )
 

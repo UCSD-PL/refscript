@@ -30,11 +30,25 @@ module Language.Nano.Typecheck.Resolve (
 
   ) where 
 
+import           Control.Applicative                 ((<$>), (<*>))
 import           Data.Generics
+import           Data.Foldable                       (foldlM)
+import           Data.Tuple
+
+import qualified Data.IntMap.Strict               as I
+import qualified Data.HashMap.Strict              as HM
+import           Data.Graph.Inductive.Graph
+import           Data.Graph.Inductive.PatriciaTree
+import           Data.Graph.Inductive.Query.BFS
+
+import           Data.Maybe                          (catMaybes, maybeToList, listToMaybe)
+import           Data.List                           (nub)
+import qualified Data.HashSet                     as S 
 import           Data.Function                       (on)
 import qualified Data.Map.Strict                  as M
 import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Env
+import           Language.Fixpoint.Misc              (mapPair, snd3, fst3, thd3, mapFst)
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Types
@@ -121,6 +135,11 @@ absoluteName env a r@(RN (QName _ _ s)) = g <$> absolutePath env a (f r)
 absoluteNameInEnv env r = absoluteName (modules env) (absPath env) r
 
 
+typeForAbsPath :: EnvLike r t => t r -> AbsName -> Maybe (IfaceDef r)
+typeForAbsPath γ (AN (QName l ss s)) = qenvFindTy (AP $ QPath l ss) (modules γ) 
+                                   >>= envFindTy s . m_types 
+
+
 -- | `resolveRelPath γ a r` returns the environment referenced by the relative 
 --   path @r@ expressed in terms of namespace @a@.
 --
@@ -175,7 +194,7 @@ resolveRelEnum :: QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe EnumDef
 resolveRelEnum = resolveRelName m_enums
 
 ---------------------------------------------------------------------------
-resolveRelTypeInEnv :: PPR r => EnvLike r g => g r -> RelName -> Maybe (IfaceDef r)
+resolveRelTypeInEnv :: PPR r => EnvLike r t => t r -> RelName -> Maybe (IfaceDef r)
 ---------------------------------------------------------------------------
 resolveRelTypeInEnv γ = resolveRelType (modules γ) (absPath γ)
 
@@ -215,18 +234,18 @@ flatten :: (EnvLike r g, PPR r)
         -> SIfaceDef r 
         -> Maybe (TypeMembers r)
 ---------------------------------------------------------------------------
-flatten m s γ (ID _ _ vs h es, ts) =
-    case h of 
-      Just (p, ts') -> do pdef  <- resolveRelTypeInEnv γ p
-                          inh   <- flatten m s γ $ (, ts') pdef
-                          return $ M.map (apply θ . fmut) $ M.union current inh
-      Nothing       ->    return $ M.map (apply θ . fmut) $ current 
+flatten m s γ (ID _ _ _ vs h es, ts) =  M.map (apply θ . fmut) 
+                                     .  M.unions 
+                                     .  (current:)                                      
+                                    <$> mapM fields h
   where 
-    current                      = M.filterWithKey (\(_,s') _ -> s == s') es
-    θ                            = fromList $ zip vs ts
-    fmut                         = maybe id setMut m
-    setMut m (FieldSig x _ t)    = FieldSig x m t
-    setMut _ e                   = e
+    current                          =  M.filterWithKey (\(_,s') _ -> s == s') es
+    θ                                =  fromList $ zip vs ts
+    fmut                             =  maybe id setMut m
+    setMut m (FieldSig x _ t)        =  FieldSig x m t
+    setMut _ e                       =  e
+
+    fields (p,ts) = undefined -- resolveRelTypeInEnv γ p >>= flatten m s γ . (,ts)
 
 
 -- | flatten' does not apply the top-level type substitution
@@ -238,7 +257,7 @@ flatten' :: (PPR r, EnvLike r g)
          -> IfaceDef r 
          -> Maybe (TypeMembers r)
 ---------------------------------------------------------------------------
-flatten' m st γ d@(ID _ _ vs _ _) = flatten m st γ (d, tVar <$> vs)
+flatten' m st γ d@(ID _ _ _ vs _ _) = flatten m st γ (d, tVar <$> vs)
 
 ---------------------------------------------------------------------------
 flatten'' :: (PPR r, EnvLike r g) 
@@ -248,7 +267,7 @@ flatten'' :: (PPR r, EnvLike r g)
           -> IfaceDef r 
           -> Maybe ([TVar], (TypeMembers r))
 ---------------------------------------------------------------------------
-flatten'' m st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten m st γ (d, tVar <$> vs)
+flatten'' m st γ d@(ID _ _ _ vs _ _) = (vs,) <$> flatten m st γ (d, tVar <$> vs)
 
 
 -- | `flattenType` will flatten *any* type (including Mutability types!)
@@ -318,31 +337,90 @@ flattenType _ t  = Just t
 --           What about common elements in parent class?
 --
 ---------------------------------------------------------------------------
-weaken :: (PPR r, EnvLike r g) => g r -> RelName -> RelName -> [RType r] -> Maybe (SIfaceDef r)
+weaken :: (PPR r, EnvLike r g) 
+       => g r 
+       -> RelName 
+       -> RelName 
+       -> [RType r] 
+       -> Maybe (SIfaceDef r)
 ---------------------------------------------------------------------------
 weaken γ pa pb ts
   | on (==) (absoluteNameInEnv γ) pa pb = (,ts) <$> resolveRelTypeInEnv γ pa
   | otherwise
   = do  z <- resolveRelTypeInEnv γ pa
         case z of
-          ID _ _ vs (Just (p,ps)) _ -> weaken γ p pb $ apply (fromList $ zip vs ts) ps
-          ID _ _ _  Nothing       _ -> Nothing
+          ID _ _ _ _ _ _ -> undefined
+-- FIXME
+--           ID _ _ vs (Just (p,ps)) _ -> weaken γ p pb $ apply (fromList $ zip vs ts) ps
+--           ID _ _ _  Nothing       _ -> Nothing
 
 
--- FIXME: revisit these
+---------------------------------------------------------------------------
+path :: EnvLike r t => t r -> TypeReference r -> AbsName -> Maybe (TypeReference r)
+---------------------------------------------------------------------------
+path γ tr@(t1,ts) t2 
+  = do n1                  <- HM.lookup t1 m
+       n2                  <- HM.lookup t2 m
+       foldlM (doEdge γ) tr $ map toNodes $ toEdges $ unwrap $ lesp n1 n2 g
+  where
+    ClassHierarchy g m = cha γ 
+    unwrap (LP lpath) = lpath
+    bar (s,t,_) = (,) <$> lab g s <*> lab g t
+    toEdges xs = zip (init xs) (tail xs)
+    toNodes ((n1,_),(n2,_)) = (n1,n2)
+
+doEdge :: EnvLike r t => t r -> TypeReference r -> (Node, Node) -> Maybe (TypeReference r)
+doEdge γ (_, ts) (n1, n2)
+  = listToMaybe [ (s1, ss) | t1       <- maybeToList $ lab g n1
+                           , t2       <- maybeToList $ lab g n2  
+                           , (s1, ss) <- parentTypeReferences γ (t_path t1,ts)
+                           , s1 == t_path t2 ]
+  where
+    ClassHierarchy g m     = cha γ 
+
+---------------------------------------------------------------------------
+buildCHA           :: EnvLike r t => t r -> ClassHierarchy r
+---------------------------------------------------------------------------
+buildCHA γ          = ClassHierarchy graph namesToKeys
+
+  where 
+    graph           = mkGraph nodes edges
+    nodes           = zip [0..] $ fst3 <$> data_
+    keysToTypes     = I.fromList $ zip [0..] (fst3 <$> data_)
+    namesToKeys     = HM.fromList $ mapFst t_path . swap <$> I.toList keysToTypes
+    edges           = concatMap toEdge data_  
+    toEdge (_,s,ts) = [ (σ,τ,()) | t <- ts
+                                 , σ <- maybeToList $ HM.lookup s namesToKeys
+                                 , τ <- maybeToList $ HM.lookup t namesToKeys ]
+    data_           = concatMap foo $ snd <$> qenvToList (modules γ)
+    foo m           = bar . snd <$>  envToList (m_types m)
+    bar d           = (d, t_path d, parentNames γ (t_path d))
+
+
+-- parents :: EnvLike r t => t r -> TypeReference r -> [TypeReference r]
+-- parents = undefined 
+-- 
+
+parentTypeReferences :: EnvLike r t => t r -> TypeReference r -> [TypeReference r]
+parentTypeReferences = undefined 
+ 
+parentNames :: EnvLike r t => t r -> AbsName -> [AbsName]
+parentNames = undefined
+
+typeReferenceToDefinition :: EnvLike r t => t r -> TypeReference r -> SIfaceDef r
+typeReferenceToDefinition = undefined 
+
+
 ---------------------------------------------------------------------------
 ancestors :: (PPR r, EnvLike r g) => g r -> RelName -> [RelName]
 ---------------------------------------------------------------------------
-ancestors γ s = 
-  case resolveRelTypeInEnv γ s of 
-    Just (ID {t_proto = p }) -> 
-      case p of 
-        Just (par,_) ->  s : ancestors γ par
-        _ -> [s]
-    _ -> [s]
+ancestors γ s = nub $ go $ resolveRelTypeInEnv γ s
+  where
+    -- FIXME
+    -- go (Just (ID {t_base = p})) = [s] ++ concatMap (ancestors γ) (fst <$> p)
+    go _                        = [s]
 
 ---------------------------------------------------------------------------
--- isAncestor :: PPR r => g r -> RelName -> RelName -> Bool 
 isAncestor :: (PPR r, EnvLike r g) => g r -> RelName -> RelName -> Bool
 ---------------------------------------------------------------------------
 isAncestor γ c p = p `elem` ancestors γ c

@@ -24,8 +24,6 @@ import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
 import qualified Data.List                        as     L
--- import qualified Data.HashSet                     as     S
-import           Text.PrettyPrint.HughesPJ               (text)
 import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
 
@@ -60,6 +58,7 @@ import           Text.Parsec.Pos                         (newPos)
 import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
 import qualified Text.Parsec.Token                as     T
 import           Text.Parsec.Prim                        (stateUser)
+import           Text.PrettyPrint.HughesPJ               (text)
 
 import           GHC.Generics
 
@@ -121,15 +120,16 @@ aliasVarT (l, x)
 iFaceP   :: Parser (Id SourceSpan, IfaceDef Reft)
 iFaceP   = do name   <- identifierP 
               as     <- option [] tParP
-              h      <- optionMaybe extendsP
+              h      <- extendsP
               es     <- mkTypeMembers . ((InstanceMember, MemDeclaration,) <$>) 
                     <$> braces (propBindP def)
-              return (name, convertTvar as $ ID InterfaceKind name as h es)
+              return (name, convertTvar as $ ID def InterfaceKind name as h es)
 
-extendsP = do reserved "extends"
-              qn     <- RN <$> qnameP
-              ts     <- option [] $ angles $ sepBy bareTypeP comma
-              return (qn, ts)
+extendsP =  try (reserved "extends" >> sepBy1 typeReferenceP comma) <|> return []       
+
+typeReferenceP = do qn     <- RN <$> qnameP
+                    ts     <- option [] $ angles $ sepBy bareTypeP comma
+                    return  $ (qn, ts)
 
 qnameP   = withSpan qname $ optionMaybe (char '#') >> sepBy1 qSymbolP (char '.')
   where
@@ -404,13 +404,13 @@ withinSpacesP :: Parser a -> Parser a
 withinSpacesP p = do { spaces; a <- p; spaces; return a } 
              
 ----------------------------------------------------------------------------------
-classDeclP :: Parser (Id SourceSpan, ([TVar], Maybe (RelName, [RefType])))
+classDeclP :: Parser (Id SourceSpan, ([TVar], [(RelName, [RefType])]))
 ----------------------------------------------------------------------------------
 classDeclP = do
     reserved "class"
     id <- identifierP 
     vs <- option [] $ angles $ sepBy tvarP comma
-    pr <- optionMaybe extendsP
+    pr <- extendsP
     return (id, (vs, pr))
 
 
@@ -444,7 +444,7 @@ data PSpec l r
   | Method (TypeMember r)
   | Static (TypeMember r)
   | Iface  (Id l, IfaceDef r)
-  | Class  (Id l, ([TVar], Maybe (RelName, [RType r])))
+  | Class  (Id l, ([TVar], [(RelName, [RType r])]))
   | TAlias (Id l, TAlias (RType r))
   | PAlias (Id l, PAlias) 
   | Qual   Qualifier
@@ -555,7 +555,7 @@ parseNanoFromFiles fs =
   do  sa <- partitionEithers <$> mapM parseScriptFromJSON fs
       case sa of
         ([],ps) -> case expandAnnots $ concat ps of
-                     Right ps -> return $ either (Left . Unsafe) Right $ mkCode ps
+                     Right ps -> return $ Right $ mkCode ps
                      Left e   -> return $ Left e
         (es,_ ) -> return $ Left  $ mconcat es 
 
@@ -575,23 +575,22 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
         Right p  -> Right $ p
 
 ---------------------------------------------------------------------------------
-mkCode :: [Statement (SourceSpan, [Spec])] -> Either [Error] (NanoBareR Reft)
+mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 ---------------------------------------------------------------------------------
-mkCode p = --debugTyBinds .
-             return   (mkCode' p)
-         >>= return . expandAliases
-         -- >>=          conflateTypeMembers  
-         >>= return . visitNano convertTvarVisitor []
-         >>= return . scrapeQuals 
+mkCode = --debugTyBinds .
+         scrapeQuals 
+       . visitNano convertTvarVisitor []
+       . expandAliases
+       . mkCode'            
     
 mkCode' ss = Nano { 
-        code          = Src (checkTopStmt <$> ss')
-      , consts        = envFromList   [ t | Meas   t <- anns ] 
-      , tAlias        = envFromList   [ t | TAlias t <- anns ] 
-      , pAlias        = envFromList   [ t | PAlias t <- anns ] 
-      , pQuals        =               [ t | Qual   t <- anns ] 
-      , invts         = [Loc (srcPos l) t | Invt l t <- anns ]
-      , max_id        = ending_id
+         code          = Src (checkTopStmt <$> ss')
+       , consts        = envFromList   [ t | Meas   t <- anns ] 
+       , tAlias        = envFromList   [ t | TAlias t <- anns ] 
+       , pAlias        = envFromList   [ t | PAlias t <- anns ] 
+       , pQuals        =               [ t | Qual   t <- anns ] 
+       , invts         = [Loc (srcPos l) t | Invt l t <- anns ]
+       , max_id        = ending_id
     } 
   where
     toBare           :: Int -> (SourceSpan, [Spec]) -> AnnBare Reft 
@@ -718,7 +717,7 @@ ctxStmtTvar as s = go s ++ as
     go s@(FuncAmbDecl {})  = grab s 
     go s@(FuncOverload {}) = grab s 
     go s@(IfaceStmt {})    = grab s
-    go s@(ClassStmt {})    = grab s
+    go s@(ClassStmt _ n _ _ _ )    = tracePP (ppshow n) $ grab s
     go s@(ModuleStmt {})   = grab s
     go _                   = []
 

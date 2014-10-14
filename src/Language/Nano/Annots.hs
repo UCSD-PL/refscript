@@ -134,7 +134,7 @@ data Fact r
   | TCast       !IContext  !(Cast r)
   -- Named type annotation
   | IfaceAnn    !(IfaceDef r)
-  | ClassAnn    !([TVar], Maybe (RelName, [RType r]))
+  | ClassAnn    !([TVar], [(RelName, [RType r])])
   | ExporedModElt
   | ModuleAnn   !(F.Symbol)
   | EnumAnn     !(F.Symbol)
@@ -179,9 +179,6 @@ instance HasAnnotation (Annot b) where
 instance Default a => Default (Annot b a) where
   def = Ann def def []
 
-instance Default SourceSpan where
-  def = srcPos dummySpan
-  
 instance Ord (AnnSSA  r) where 
   compare (Ann i1 s1 _) (Ann i2 s2 _) = compare (i1,s1) (i2,s2)
 
@@ -235,6 +232,6 @@ factRTypes = go
     go (StatAnn m)        = [f_type m]
     go (ConsAnn m)        = [f_type m]
     go (IfaceAnn ifd)     = f_type . snd <$> M.toList (t_elts ifd)
-    go (ClassAnn (_, c))  = maybe [] snd c
+    go (ClassAnn (_, c))  = concatMap snd c
     go f                  = error ("factRTypes: TODO :" ++ show f)
 

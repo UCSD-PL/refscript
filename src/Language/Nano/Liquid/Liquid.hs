@@ -362,31 +362,25 @@ consStmt _ s
 ------------------------------------------------------------------------------------
 consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
-consVarDecl g v@(VarDecl l x (Just e)) =
-    withSingleton'
-      (mseq (consExpr g e Nothing) $ \(y,gy) -> do
+consVarDecl g v@(VarDecl l x (Just e))
+  = case scrapeVarDecl v of
+      [ ] ->  mseq (consExpr g e Nothing) $ \(y,gy) -> do
                 t       <- safeEnvFindTy y gy
-                Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal))] gy)
-
-      (\ta -> mseq (consExpr g e $ Just ta) $ \(y, gy) -> do
-                t       <- safeEnvFindTy y gy
-                fta     <- freshTyVar gy l ta
-                _       <- subType l (errorLiquid' l) gy t fta
-                _       <- subType l (errorLiquid' l) gy fta ta
-                Just   <$> envAdds "consVarDecl" [(x, (fta, WriteGlobal))] g)
-
-      (cgError $ errorVarDeclAnnot (srcPos l) x)
-      (scrapeVarDecl v)
+                Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal))] gy
+      [t] -> mseq (consExpr g e $ Just t) $ \(y, gy) -> do
+               ty      <- safeEnvFindTy y gy
+               fta     <- freshTyVar gy l t
+               _       <- subType l (errorLiquid' l) gy ty fta
+               _       <- subType l (errorLiquid' l) gy fta t
+               Just   <$> envAdds "consVarDecl" [(x, (fta, WriteGlobal))] g
+      _   -> cgError $ errorVarDeclAnnot (srcPos l) x
  
-consVarDecl g v@(VarDecl l x Nothing) =
-  withSingleton' 
-    (consVarDecl g $ VarDecl l x $ Just $ VarRef l $ Id l "undefined")
-    ((Just <$>) . (`add` g) . (x,) . (,WriteGlobal))
-    (cgError $ errorVarDeclAnnot (srcPos l) x)
-    (scrapeVarDecl v)
-  where 
-    add xt = envAdds "consVarDecl" [xt] 
-
+consVarDecl g v@(VarDecl l x Nothing)
+  = case scrapeVarDecl v of
+      [ ] -> consVarDecl g $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
+      [t] -> return t >>= \t' -> Just <$> envAdds "consVarDecl" [(x, (t',WriteGlobal))] g
+      -- [t] -> freshTyVar g l t >>= \t' -> Just <$> envAdds "consVarDecl" [(x, (t',WriteGlobal))] g
+      _   -> cgError $ errorVarDeclAnnot (srcPos l) x
 
 ------------------------------------------------------------------------------------
 consExprT :: AnnTypeR -> CGEnv -> Expression AnnTypeR -> Maybe RefType 

@@ -567,7 +567,7 @@ interface Array<T> {
 
     // reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
 
-    /*@ reduce : forall U . (this: Array<Immutable, T>, callback: (x: U, y: T, n: number) => T, init: U) => U */
+    /*@ reduce : forall U . (this: Array<Immutable, T>, callback: (x: U, y: T, n: {number | 0 <= v && v < len this}) => U, init: U) => U */
     reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
     reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
@@ -736,6 +736,15 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 
 /*************************************************************************
  *        
+ *        Type Aliases
+ * 
+ ************************************************************************/
+
+/*@ alias IArray<T> = Array<Immutable, T> */
+
+
+/*************************************************************************
+ *        
  *        PRE-LOADED QUALIFIERS 
  * 
  ************************************************************************/
@@ -773,7 +782,7 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 /*  qualif Add(v:number,x:number,y:number): v = x + y */
 /*  qualif Sub(v:number,x:number,y:number): v = x - y */
 
-/*  qualif Len(v:number, n: number)  : n < (len v) */
+/*@  qualif Len(v:number, arr:a)  : v < (len arr) */
 
 
 

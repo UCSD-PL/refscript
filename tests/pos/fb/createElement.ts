@@ -1,5 +1,5 @@
-
 /*@ alias HTML = HTMLElt<Mutable> */
+
 
 class HTMLElt { }
 
@@ -15,16 +15,21 @@ class CanvasElt extends HTMLElt {
   public htmlCanvasElt__ = 2; 
 }
 
-//function createElt(tagName: "div"): HTMLDivElt;
-//function createElt(tagName: "span"): HTMLSpanElt;
-//function createElt(tagName: "canvas"): HTMLCanvasElt;
+// UNCHECKED TS Specification
+//
+// function createElt(tagName: "div"): HTMLDivElt;
+// function createElt(tagName: "span"): HTMLSpanElt;
+// function createElt(tagName: "canvas"): HTMLCanvasElt;
 
-/*@ predicate TT v x n e = (x = n => instanceof(v, e)) */
 
-/*@ createElt :: (tagName: string) => {v: HTML |  TT(v, tagName, "div", "DivElt")
-                                               && TT(v, tagName, "span", "SpanElt")
-                                               && TT(v, tagName, "canvas", "CanvasElt") } */
 
+/*@ predicate TT x n v t = (x = n => instanceof(v, t)) */
+
+/*@ alias HTMLX<x> = {v: HTML | TT(x, "div"   , v, "DivElt") &&
+                                TT(x, "span"  , v, "SpanElt") &&
+                                TT(x, "canvas", v, "CanvasElt") } */
+
+/*@ createElt :: (tagName: string) => HTMLX<tagName>  */
 function createElt(tagName: string): HTMLElt {
   
   if (tagName === "div")    
@@ -41,6 +46,5 @@ function createElt(tagName: string): HTMLElt {
 }
 
 var elt = createElt("div");
-
 assert(elt instanceof DivElt);
 

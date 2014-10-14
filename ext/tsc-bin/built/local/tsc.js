@@ -38292,8 +38292,30 @@ var TypeScript;
             var tArgs = this.parameters.map(function (p) {
                 return new TypeScript.BoundedRsType(p.name, p.type.toRsType());
             });
+
+            var nonOptionalPamars = this.parameters.filter(function (p) {
+                return !p.isOptional;
+            });
+            var nonOptionalLength = nonOptionalPamars.length;
+            var totParamsLength = this.parameters.length;
+
+            var sigs = [];
+            for (var i = nonOptionalLength; i <= totParamsLength; i++) {
+                var aaa = tArgs.slice(0, i);
+                sigs.push(aaa);
+            }
             var retT = this.returnType.toRsType();
-            return new TypeScript.RsTFun(tParams, tArgs, retT);
+
+            switch (sigs.length) {
+                case 0:
+                    return new TypeScript.RsTFun(tParams, tArgs, retT);
+                case 1:
+                    return new TypeScript.RsTFun(tParams, tArgs, retT);
+                default:
+                    return new TypeScript.RsTAnd(sigs.map(function (s) {
+                        return new TypeScript.RsTFun(tParams, s, retT);
+                    }));
+            }
         };
 
         PullSignatureSymbol.prototype.toRsTMeth = function () {
@@ -38303,8 +38325,30 @@ var TypeScript;
             var tArgs = this.parameters.map(function (p) {
                 return new TypeScript.BoundedRsType(p.name, p.type.toRsType());
             });
+
+            var nonOptionalPamars = this.parameters.filter(function (p) {
+                return !p.isOptional;
+            });
+            var nonOptionalLength = nonOptionalPamars.length;
+            var totParamsLength = this.parameters.length;
+
+            var sigs = [];
+            for (var i = nonOptionalLength; i <= totParamsLength; i++) {
+                var aaa = tArgs.slice(0, i);
+                sigs.push(aaa);
+            }
             var retT = this.returnType.toRsType();
-            return new TypeScript.RsMeth(tParams, tArgs, retT);
+
+            switch (sigs.length) {
+                case 0:
+                    return new TypeScript.RsMeth(tParams, tArgs, retT);
+                case 1:
+                    return new TypeScript.RsMeth(tParams, tArgs, retT);
+                default:
+                    return new TypeScript.RsTAnd(sigs.map(function (s) {
+                        return new TypeScript.RsMeth(tParams, s, retT);
+                    }));
+            }
         };
         return PullSignatureSymbol;
     })(PullSymbol);
@@ -39658,7 +39702,6 @@ var TypeScript;
 
             if (this.isFunction()) {
                 var sigs = this.getCallSignatures();
-
                 var filteredSigs = sigs.filter(function (sig) {
                     return !sig.isStringConstantOverloadSignature();
                 });
@@ -60966,6 +61009,17 @@ var TypeScript;
         return false;
     }
 
+    function numCallSigChildren(ast) {
+        var numChildren = ast.childCount();
+        var ans = 0;
+        for (var i = 0; i < numChildren; i++) {
+            if (ast.childAt(i) && ast.childAt(i).kind() == 142 /* CallSignature */) {
+                ans++;
+            }
+        }
+        return ans;
+    }
+
     var OverloadStatGatherer = (function () {
         function OverloadStatGatherer() {
         }
@@ -60976,7 +61030,6 @@ var TypeScript;
                 case 145 /* MethodSignature */:
                     var functionDecl = state.semanticInfoChain.getDeclForAST(ast);
                     var name = functionDecl.name;
-                    console.log(name);
                     var funcSymbol = functionDecl.getSymbol();
                     var container = funcSymbol.getContainer();
                     var previouslySeenContainers = state.funcs.get(name);
@@ -60989,6 +61042,14 @@ var TypeScript;
                     var funcTypeSymbol = funcSymbol.type;
                     var signatures = funcTypeSymbol.getCallSignatures().length;
                     signatures > 1 ? state.overloadFuncs++ : state.normalFuncs++;
+                    break;
+                default:
+                    var callSigs = numCallSigChildren(ast);
+                    if (callSigs == 1)
+                        state.normalFuncs++;
+                    if (callSigs > 1)
+                        state.overloadFuncs++;
+                    break;
             }
         };
 
@@ -61214,7 +61275,7 @@ var TypeScript;
             }
         };
         return RsTAnd;
-    })(RsType);
+    })(RsFunctionLike);
     TypeScript.RsTAnd = RsTAnd;
 
     var TArray = (function (_super) {

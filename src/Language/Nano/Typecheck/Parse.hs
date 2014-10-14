@@ -257,8 +257,6 @@ bbaseP :: Parser (Reft -> RefType)
 bbaseP 
   =  try objLitP                       -- {f1: T1; ... ; fn: Tn} 
  <|> (TApp <$> tConP <*> bareTyArgsP)  -- List[A], Tree[A,B] etc...
- 
-
 
 ----------------------------------------------------------------------------------
 objLitP :: Parser (Reft -> RefType)
@@ -322,14 +320,12 @@ propBindP defM =  sepEndBy propEltP semi
   where
     propEltP   =  try indexEltP 
               <|> try (fieldEltP defM)
---              <|> try (statEltP defM)
               <|> try (methEltP defM)
               <|> try callEltP
               <|>     consEltP
 
 -- | [f: string]: t
 -- | [f: number]: t
-
 indexEltP = do ((x,it),t) <- xyP (brackets indexP) colon bareTypeP
                case it of 
                  "number" -> return $ IndexSig x NumericIndex t
@@ -342,7 +338,6 @@ indexP = xyP id colon sn
     id = symbol <$> (try lowerIdP <|> upperIdP)
     sn = withinSpacesP (string "string" <|> string "number")
 
-
 -- | <[mut]> f: t
 fieldEltP defM  = do 
     x          <- symbolP 
@@ -350,15 +345,6 @@ fieldEltP defM  = do
     m          <- option defM (toType <$> mutP)
     t          <- bareTypeP
     return      $ FieldSig x m t
-
--- -- | static <[mut]> f :: t
--- statEltP defM   = do 
---     _          <- reserved "static"
---     x          <- symbolP 
---     _          <- colon
---     m          <- option defM (toType <$> mutP)
---     t          <- bareTypeP
---     return      $ StatSig x m t
 
 -- | <[mut]> m :: (ts): t
 methEltP defM   = do
@@ -368,27 +354,12 @@ methEltP defM   = do
     t          <- methSigP
     return      $ MethSig x m t
   where
---     outT t      =  
---       case bkFun t of 
---         Just (_, (B x _):_,_ ) | x == symbol "this" -> t
---         Just (vs, bs      ,ot)                     -> mkFun (v:vs, B (symbol "this") tv : bs, ot)
---         _                                          -> t
---     -- XXX: using _THIS_ as a reserved sting here.
---     v  = TV (symbol "_THIS_") (srcPos (dummyPos "RSC.Parse.methEltP"))
---     tv = TVar v fTop
-
 
 -- | <forall A .> (t...) => t
-
-callEltP = CallSig <$> withinSpacesP (bareAllP bareFunP)
-
+callEltP = CallSig <$> withinSpacesP funcSigP
 
 -- | new <forall A .> (t...) => t
-
-consEltP = do
-    try      $  reserved "new"
-    ConsSig <$> withinSpacesP (bareAllP bareFunP)
-
+consEltP = reserved "new" >> ConsSig <$> withinSpacesP funcSigP
  
 ----------------------------------------------------------------------------------
 dummyP ::  Parser (Reft -> b) -> Parser b

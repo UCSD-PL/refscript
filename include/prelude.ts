@@ -343,13 +343,13 @@ declare var NaN: number;
 
 
 interface Number {
-    toString(radix/*?*/: number): string;
+    toString(radix?: number): string;
 
-    toFixed(fractionDigits/*?*/: number): string;
+    toFixed(fractionDigits?: number): string;
 
-    toExponential(fractionDigits/*?*/: number): string;
+    toExponential(fractionDigits?: number): string;
 
-    toPrecision(precision/*?*/: number): string;
+    toPrecision(precision?: number): string;
 }
 
 
@@ -432,9 +432,9 @@ interface String {
 
     // concat(...strings: string[]): string;
 
-    indexOf(searchString: string, position/*?*/: number): number;
+    indexOf(searchString: string, position?: number): number;
 
-    lastIndexOf(searchString: string, position/*?*/: number): number;
+    lastIndexOf(searchString: string, position: number): number;
 
     localeCompare(that: string): number;
 
@@ -454,15 +454,12 @@ interface String {
 
     // search(regexp: RegExp): number;
 
-    slice(start/*?*/: number, end/*?*/: number): string;
+    slice(start?: number, end?: number): string;
 
-    split(separator: string, limit/*?*/: number): string[];
+    split(separator: string, limit?: number): string[];
 
-    // split(separator: RegExp, limit/*?*/: number): string[];
+    // split(separator: RegExp, limit?: number): string[];
 
-    /*@ substring : /\ (start: number) => string
-                    /\ (start: number, end: number) => string
-     */
     substring(start: number, end?: number): string;
 
     toLowerCase(): string;
@@ -478,13 +475,13 @@ interface String {
     /*@ length: { number | v >= 0 } */
     length: number;
 
-    substr(from: number, length/*?*/: number): string;
+    substr(from: number, length?: number): string;
 
     // [index: number]: string;
 }
 
 declare var String: {
-    new (value/*?*/: any): String;
+    new (value?: any): String;
     (value?: any): string;
     prototype: String;
     // fromCharCode(...codes: number[]): string;
@@ -521,7 +518,7 @@ interface Array<T> {
 
     // concat(...items: T[]): T[];
   
-    join(separator/*?*/: string): string;
+    join(separator?: string): string;
 
     /*@ pop: (this: #Array[#Mutable, T]): T */
     pop(): T;
@@ -537,7 +534,7 @@ interface Array<T> {
     /*@ slice: forall N . (this: #Array[M,T], start: number, start: number): #Array[N,T] */
     slice(start/*?*/: number, end/*?*/: number): T[];
 
-    sort(compareFn/*?*/: (a: T, b: T) => number): T[];
+    sort(compareFn?: (a: T, b: T) => number): T[];
 
     splice(start: number): T[];
 
@@ -545,15 +542,15 @@ interface Array<T> {
 
     // unshift(...items: T[]): number;
 
-    indexOf(searchElement: T, fromIndex/*?*/: number): number;
+    indexOf(searchElement: T, fromIndex?: number): number;
 
-    lastIndexOf(searchElement: T, fromIndex/*?*/: number): number;
+    lastIndexOf(searchElement: T, fromIndex?: number): number;
 
-    every(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): boolean;
+    every(callbackfn: (value: T, index: number, array: T[]) => boolean, thisArg?: any): boolean;
 
-    some(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): boolean;
+    some(callbackfn: (value: T, index: number, array: T[]) => boolean, thisArg?: any): boolean;
 
-    forEach(callbackfn: (value: T, index: number, array: T[]) => void/*, thisArg?: any*/): void;
+    forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
 
     /*@ map : forall U. (callbackfn:(T) => U) => {#Array[#Immutable, U] | true} */
     map<U>(callbackfn: (value: T) => U): U[];
@@ -568,12 +565,12 @@ interface Array<T> {
     filter(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): T[];
 
 
-    // reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue/*?*/: T): T;
+    // reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
 
     /*@ reduce : forall U . (this: Array<Immutable, T>, callback: (x: U, y: T, n: number) => T, init: U) => U */
     reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
-    reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue/*?*/: T): T;
+    reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
     // reduceRight<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
     /*@ length: { v: number | (v = (len this) && v >= 0) } */
@@ -795,40 +792,11 @@ interface Error {
 }
 
 declare var Error: {
-    new (message/*?*/: string): Error;
-    (message/*?*/: string): Error;
+    new (message?: string): Error;
+    (message?: string): Error;
     prototype: Error;
 }
 
-
-
-//class Errors {
-
-//	public static argument(argument: string, message/*?*/: string): Error {
-//		return new Error("Invalid argument: " + argument + ". " + message);
-//	}
-
-//	public static argumentOutOfRange(argument: string): Error {
-//		return new Error("Argument out of range: " + argument);
-//	}
-
-//	public static argumentNull(argument: string): Error {
-//		return new Error("Argument null: " + argument);
-//	}
-
-//	public static abstract(): Error {
-//		return new Error("Operation not implemented properly by subclass.");
-//	}
-
-//	public static notYetImplemented(): Error {
-//		return new Error("Not yet implemented.");
-//	}
-
-//	public static invalidOperation(message/*?*/: string): Error {
-//		return new Error("Invalid operation: " + message);
-//	}
-    
-//}
 
 
 /*************************************************************************

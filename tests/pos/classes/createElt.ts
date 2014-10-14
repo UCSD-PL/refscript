@@ -35,7 +35,10 @@ function createElt(tagName: string): HTMLElt {
   // ORIG     return new CanvasElt();
   // ORIG else return new HTMLElt();
 
-  /*@ res :: HTML */
+  /*  res :: { v: HTML | TT(v, tagName, "div", "DivElt")
+                      && TT(v, tagName, "span", "SpanElt")
+                      && TT(v, tagName, "canvas", "CanvasElt") } */
+
   var res:HTMLElt;
  
   if (tagName === "div")    

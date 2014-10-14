@@ -88,7 +88,7 @@ import           Language.Fixpoint.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -220,8 +220,9 @@ envGetContextCast g a
   = case [c | TCast cx c <- ann_fact a, cx == cge_ctx g] of
       [ ] -> CNo
       [c] -> c
-      cs  | all isDeadCast cs -> head cs
-          | otherwise         -> die $ errorMultipleCasts (srcPos a) cs
+      cs  -> case L.find isDeadCast cs of 
+               Just dc -> dc 
+               Nothing -> die $ errorMultipleCasts (srcPos a) cs
   where
     isDeadCast CDead{} = True
     isDeadCast _       = False
@@ -474,19 +475,13 @@ freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g
 freshenCGEnvM :: CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 freshenCGEnvM g  
-  = do  names   <- E.envFromList  <$> mapM (freshenVarbindingM g) (E.envToList $ cge_names g)
-        modules <- E.qenvFromList <$> mapM (freshenModuleDefM g) (E.qenvToList $ cge_mod g)
+  = do  names   <- E.envFromList  <$> mapM (freshenVarbindingM g) (E.envToList  $ cge_names g)
+        modules <- E.qenvFromList <$> mapM (freshenModuleDefM  g) (E.qenvToList $ cge_mod   g)
         return $ g { cge_names = names, cge_mod = modules } 
-  where
 
-
--- | @freshenVarbindingM@ 
---
---    XXX: only ReadOnly vars are freshened
---
-freshenVarbindingM _ (x,(v@(TVar{}),a)) = return (x,(v,a))
-freshenVarbindingM g (x,(t,ReadOnly)  ) = (\t -> (x,(t,ReadOnly))) <$> freshTyVar g (srcPos x) t
-freshenVarbindingM _ (x,(t,a)         ) = return (x,(t,a))
+freshenVarbindingM _ (x, (v@(TVar{}),a) ) = return (x,(v,a))
+freshenVarbindingM g (x, (t,ReadOnly)   ) = (x,) . (,ReadOnly   ) <$> freshTyVar g (srcPos x) t
+freshenVarbindingM _ (x, (t,a)          ) = return (x,(t,a))
 
 freshenModuleDefM g (a, m)  
   = do  vars     <- E.envFromList <$> mapM f (E.envToList $ m_variables m)

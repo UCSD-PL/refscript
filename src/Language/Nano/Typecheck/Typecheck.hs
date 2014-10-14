@@ -197,7 +197,7 @@ tcEnvAdds     xs γ      = γ { tce_names = envAdds xs $ tce_names γ }
 
 tcEnvAdd      x t γ     = γ { tce_names = envAdd x t $ tce_names γ }
 
-tcEnvFindTy            :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r)
+tcEnvFindTy            :: (F.Symbolic x, IsLocated x) => x -> TCEnv r -> Maybe (RType r)
 tcEnvFindTy x γ         = fst <$> tcEnvFindTyWithAgsn x γ 
 
 tcEnvFindTyWithAgsn    :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability)
@@ -503,22 +503,20 @@ tcStmt _ s
 ---------------------------------------------------------------------------------------
 tcVarDecl ::  PPR r => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
-tcVarDecl γ v@(VarDecl l x (Just e)) =
-    withSingleton'
-      (do (e', to)  <- tcExprW γ e
-          return     $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,WriteLocal) <$> to))
-      ((f WriteGlobal <$>) . tcCast γ l e) 
-      (tcError $ errorVarDeclAnnot (srcPos l) x)
-      (scrapeVarDecl v)
+tcVarDecl γ v@(VarDecl l x (Just e))
+  = case scrapeVarDecl v of
+      [ ] -> do (e', to)   <- tcExprW γ e
+                return      $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,WriteLocal) <$> to)
+      [t] -> f WriteGlobal <$> tcCast γ l e t
+      _   -> tcError        $ errorVarDeclAnnot (srcPos l) x
   where
     f a = (VarDecl l x . Just *** Just . (`tcEnvAdds` γ) . single . (x,) . (,a)) 
 
-tcVarDecl γ v@(VarDecl l x Nothing) = 
-  withSingleton' 
-    (tcVarDecl γ $ VarDecl l x $ Just $ VarRef l $ Id l "undefined")
-    (return . (v,) . Just . (`tcEnvAdds` γ) . single . (x,) . (,WriteGlobal))
-    (tcError $ errorVarDeclAnnot (srcPos l) x)
-    (scrapeVarDecl v)
+tcVarDecl γ v@(VarDecl l x Nothing)
+  = case scrapeVarDecl v of
+      [ ] -> tcVarDecl γ $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
+      [t] -> return      $ (v, Just $ tcEnvAdds [(x, (t,WriteGlobal))] γ)
+      _   -> tcError     $ errorVarDeclAnnot (srcPos l) x
 
 -------------------------------------------------------------------------------
 tcAsgn :: PPR r 

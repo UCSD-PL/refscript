@@ -1,6 +1,7 @@
-/*@ negate :: /\ ({number | v > 0}) => {number  | v < 0 }  
-              /\ (x:boolean)        => {boolean | true  } */
-function negate(x): any {
+/*@ negate :: /\ (x:number)  => number
+              /\ (x:boolean) => boolean */
+
+function negate(x):any {
   if (typeof(x) === "number") {
     return 0 - x;
   } 
@@ -9,9 +10,9 @@ function negate(x): any {
   }
 }
 
-/*@ main :: () => void */
-function main():void{
-	var a:number = negate(10);
-	var b:boolean = negate(true);
-	return;
-}
+
+/*@ a :: number */
+var a = negate(10);
+
+/*@ b :: boolean */
+var b = negate(true);

@@ -481,7 +481,7 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 
 -- | class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 tcStmt γ (ClassStmt l x e is ce) 
-  = do  dfn      <- tcEnvFindTypeDefM l γ rn
+  = do  dfn      <- ltracePP l "dfn" <$> tcEnvFindTypeDefM l γ rn
         ms       <- mapM (tcClassElt γ dfn) ce
         return    $ (ClassStmt l x e is ms, Just γ)
   where

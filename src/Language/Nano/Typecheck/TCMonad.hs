@@ -242,7 +242,6 @@ setTyArgs l i ξ βs
 -- | Managing Annotations: Type Instantiations
 -------------------------------------------------------------------------------
 
--- PV: is sortNub needed here?
 -------------------------------------------------------------------------------
 getAnns :: (F.Reftable r, Substitutable r (Fact r)) => TCM r (AnnInfo r)
 -------------------------------------------------------------------------------
@@ -412,11 +411,21 @@ checkTypes γ  = mapM_ (\(a,ts) -> mapM_ (safeExtends $ setAP a γ) ts) types
     setAP a γ = γ { tce_path = a } 
     
 
+-- 
+--
+--
+-- 
+--      FIXME: multiple inheritance
+--
+--
+--
+--
+
 --------------------------------------------------------------------------------
 safeExtends :: (IsLocated l, PPR r) => TCEnv r -> (l, IfaceDef r) -> TCM r ()
 --------------------------------------------------------------------------------
-safeExtends _ (_,    ID _ _ _ Nothing        _ ) = return ()
-safeExtends γ (l, t@(ID _ c _ (Just (p, ts)) _)) = 
+safeExtends γ (l, t@(ID _ _ c _ [] _)) = return ()
+safeExtends γ (l, t@(ID _ _ c _ [(p, ts)] _)) = 
     case flatten' Nothing InstanceMember γ t of
       Just ms -> 
         case flatten Nothing InstanceMember γ . (,ts) =<< resolveRelTypeInEnv γ p of

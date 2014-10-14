@@ -11,9 +11,12 @@ module Language.Nano.Types where
 
 import           Control.Applicative                ((<$>))
 import           Data.Hashable
+import           Data.Graph.Inductive.Graph
+import           Data.Graph.Inductive.PatriciaTree
 import qualified Data.IntMap                     as I
 import           Data.Function                      (on)
 import qualified Data.Map.Strict                 as M
+import qualified Data.HashMap.Strict              as HM
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.List                          ((\\))
@@ -162,9 +165,13 @@ data IfaceKind = ClassKind | InterfaceKind
 
 data IfaceDef r = ID { 
   -- 
+  -- ^ The full name of the type 
+  -- 
+    t_path  :: AbsName
+  -- 
   -- ^ Kind
   --
-    t_class :: IfaceKind
+  , t_class :: IfaceKind
   -- 
   -- ^ Name
   --
@@ -176,7 +183,7 @@ data IfaceDef r = ID {
   -- 
   -- ^ Heritage
   --
-  , t_proto :: !(Heritage r)
+  , t_base  :: !(Heritage r)
   -- 
   -- ^ List of data type elts 
   --
@@ -185,9 +192,11 @@ data IfaceDef r = ID {
   deriving (Eq, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
-type Heritage r  = Maybe (RelName, [RType r])
+type Heritage r      = [TypeReference r]
 
-type SIfaceDef r = (IfaceDef r, [RType r])
+type TypeReference r = (AbsName, [RType r]) 
+
+type SIfaceDef r     = (IfaceDef r, [RType r])
 
 data IndexKind   = StringIndex | NumericIndex
   deriving (Eq, Show, Data, Typeable)
@@ -300,8 +309,6 @@ data Assignability
 --  Every declaration (whether local or exported) in a module contributes to 
 --  one or more of these declaration spaces.
 --
---  PV: the last case has not been included
---
 data ModuleDef r = ModuleDef {
   -- 
   -- ^ Contents of a module (local and exported)
@@ -324,6 +331,15 @@ data ModuleDef r = ModuleDef {
   , m_path        :: AbsPath
   }
   deriving (Functor, Data, Typeable)
+
+
+data ClassHierarchy r = ClassHierarchy { 
+  
+    c_graph       :: Gr (IfaceDef r) ()
+
+  , c_nodesToKeys :: HM.HashMap AbsName Int
+
+  } 
 
 
 

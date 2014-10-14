@@ -138,9 +138,9 @@ extractParent :: (PPR r, PP r, EnvLike r g, Substitutable r (RType r))
 -------------------------------------------------------------------------------
 extractParent γ (TApp (TRef x) ts _) 
   = do  d <- resolveRelTypeInEnv γ x
-        case t_proto d of
-          Just (p,ps) -> Just $ TApp (TRef p) (tArgs d ts ps) fTop
-          _           -> Nothing
+        case t_base d of
+          [(p,ps)] -> Just $ TApp (TRef p) (tArgs d ts ps) fTop
+          _        -> Nothing
   where
     tArgs d ts ps = apply (fromList $ zip (t_args d) ts) ps
 extractParent _ _ = Nothing

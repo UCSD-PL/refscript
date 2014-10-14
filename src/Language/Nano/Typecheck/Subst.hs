@@ -196,8 +196,11 @@ instance Substitutable r QName where
 instance Substitutable r RelName where
   apply _ s                 = s 
 
+instance Substitutable r AbsName where
+  apply _ s                 = s 
+
 instance F.Reftable r => Substitutable r (IfaceDef r) where
-  apply θ (ID c n v p e)    = ID c n v (apply θ p) (M.map (apply θ) e)
+  apply θ (ID a c n v p e)  = ID a c n v (apply θ p) (M.map (apply θ) e)
 
 instance (F.Reftable r, Substitutable r a) => Substitutable r (Statement a) where
   apply θ s                 = fmap (apply θ) s

@@ -24,13 +24,16 @@ module Language.Nano.Names (
   , returnId
   , returnSymbol 
   , extendAbsPath
+  , mkAbsName
 
   , mkRelName
+  , absPathFromName
 
   ) where 
 
 import           Data.Hashable          
 import           Data.Data
+import           Data.Default
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
@@ -167,9 +170,23 @@ instance PP (Id a) where
 instance PP a => PP (Located a) where
   pp x = pp (val x) <+> text "at:" <+> pp (loc x)
 
+instance Default AbsName where 
+  def = AN def
+
+instance Default QName where 
+  def = QName def def def 
+
+instance Default SourceSpan where 
+  def = srcPos (def :: F.Symbol)
+
+instance Default F.Symbol where 
+  def = F.symbol "default"
+
 extendAbsPath :: F.Symbolic s => AbsPath -> s -> AbsPath
 extendAbsPath (AP (QPath l ps)) s = AP $ QPath l $ ps ++ [F.symbol s]
 
+mkAbsName :: F.Symbolic s => AbsPath -> s -> AbsName
+mkAbsName (AP (QPath l ps)) s = AN $ QName l  ps $ F.symbol s
 
 returnName :: String
 returnName = "$result"
@@ -184,3 +201,6 @@ returnSymbol :: F.Symbol
 returnSymbol = F.symbol returnName
 
 mkRelName ss s = RN $ QName (srcPos dummySpan) ss s 
+
+absPathFromName (AN (QName l ss s)) = AP $ QPath l ss
+

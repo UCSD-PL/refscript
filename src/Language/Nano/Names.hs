@@ -11,8 +11,7 @@
 
 module Language.Nano.Names (
 
-    Var
-  , QName(..)
+    QName(..)
   , QPath(..)
   , RelName(..), AbsName(..)
   , RelPath(..), AbsPath(..)
@@ -25,6 +24,8 @@ module Language.Nano.Names (
   , returnId
   , returnSymbol 
   , extendAbsPath
+
+  , mkRelName
 
   ) where 
 
@@ -116,8 +117,6 @@ instance IsLocated RelName where
 instance IsLocated QPath where
   srcPos (QPath s _) = s
 
-type Var = Id SourceSpan 
-
 instance F.Symbolic (Id a) where
   symbol (Id _ x)   = F.symbol x 
 
@@ -184,3 +183,4 @@ returnId x = Id x returnName
 returnSymbol :: F.Symbol
 returnSymbol = F.symbol returnName
 
+mkRelName ss s = RN $ QName (srcPos dummySpan) ss s 

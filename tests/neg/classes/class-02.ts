@@ -20,24 +20,13 @@ interface IColorPoint extends IPoint {
 
 
 class A {
-
-	/*@ foo : (): void */
 	private foo(): void {  }
-
-	/*@ bar : (x: #IPoint): void */
 	bar(x: IPoint): void {  }
-
-	/*@ baz : (x: #INatPoint): void */
 	baz(x: INatPoint): void {  }
 }
 
 
 class B extends A {
-
-	/*@ bar : (x: #IColorPoint): void */
 	bar(x: IColorPoint): void {  }
-
-	/*@ baz : (x: #IPoint): void */
 	baz(x: IPoint): void {  }
-
 }

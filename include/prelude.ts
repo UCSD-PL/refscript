@@ -223,6 +223,8 @@ declare function builtin_BIForInKeys(obj: Object): string[];
 
 /*@ measure enumProp   :: forall A . (string, A) => bool */
 
+/*@ measure keyVal     :: forall A B . (A,string) => B */
+
 
 
 /*************************************************************************
@@ -341,13 +343,13 @@ declare var NaN: number;
 
 
 interface Number {
-    toString(radix/*?*/: number): string;
+    toString(radix?: number): string;
 
-    toFixed(fractionDigits/*?*/: number): string;
+    toFixed(fractionDigits?: number): string;
 
-    toExponential(fractionDigits/*?*/: number): string;
+    toExponential(fractionDigits?: number): string;
 
-    toPrecision(precision/*?*/: number): string;
+    toPrecision(precision?: number): string;
 }
 
 
@@ -430,9 +432,9 @@ interface String {
 
     // concat(...strings: string[]): string;
 
-    indexOf(searchString: string, position/*?*/: number): number;
+    indexOf(searchString: string, position?: number): number;
 
-    lastIndexOf(searchString: string, position/*?*/: number): number;
+    lastIndexOf(searchString: string, position: number): number;
 
     localeCompare(that: string): number;
 
@@ -452,15 +454,12 @@ interface String {
 
     // search(regexp: RegExp): number;
 
-    slice(start/*?*/: number, end/*?*/: number): string;
+    slice(start?: number, end?: number): string;
 
-    split(separator: string, limit/*?*/: number): string[];
+    split(separator: string, limit?: number): string[];
 
-    // split(separator: RegExp, limit/*?*/: number): string[];
+    // split(separator: RegExp, limit?: number): string[];
 
-    /*@ substring : /\ (start: number) => string
-                    /\ (start: number, end: number) => string
-     */
     substring(start: number, end?: number): string;
 
     toLowerCase(): string;
@@ -476,13 +475,13 @@ interface String {
     /*@ length: { number | v >= 0 } */
     length: number;
 
-    substr(from: number, length/*?*/: number): string;
+    substr(from: number, length?: number): string;
 
     // [index: number]: string;
 }
 
 declare var String: {
-    new (value/*?*/: any): String;
+    new (value?: any): String;
     (value?: any): string;
     prototype: String;
     // fromCharCode(...codes: number[]): string;
@@ -519,7 +518,7 @@ interface Array<T> {
 
     // concat(...items: T[]): T[];
   
-    join(separator/*?*/: string): string;
+    join(separator?: string): string;
 
     /*@ pop: (this: #Array[#Mutable, T]): T */
     pop(): T;
@@ -535,7 +534,7 @@ interface Array<T> {
     /*@ slice: forall N . (this: #Array[M,T], start: number, start: number): #Array[N,T] */
     slice(start/*?*/: number, end/*?*/: number): T[];
 
-    sort(compareFn/*?*/: (a: T, b: T) => number): T[];
+    sort(compareFn?: (a: T, b: T) => number): T[];
 
     splice(start: number): T[];
 
@@ -543,24 +542,35 @@ interface Array<T> {
 
     // unshift(...items: T[]): number;
 
-    indexOf(searchElement: T, fromIndex/*?*/: number): number;
+    indexOf(searchElement: T, fromIndex?: number): number;
 
-    lastIndexOf(searchElement: T, fromIndex/*?*/: number): number;
+    lastIndexOf(searchElement: T, fromIndex?: number): number;
 
-    every(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): boolean;
+    every(callbackfn: (value: T, index: number, array: T[]) => boolean, thisArg?: any): boolean;
 
-    some(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): boolean;
+    some(callbackfn: (value: T, index: number, array: T[]) => boolean, thisArg?: any): boolean;
 
-    forEach(callbackfn: (value: T, index: number, array: T[]) => void/*, thisArg?: any*/): void;
+    forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
 
-    map<U>(callbackfn: (value: T, index: number, array: T[]) => U/*, thisArg?: any*/): U[];
+    /*@ map : forall U. (callbackfn:(T) => U) => {#Array[#Immutable, U] | true} */
+    map<U>(callbackfn: (value: T) => U): U[];
+    
+    /*@ map : forall U. (callbackfn:(T) => U, index:number) => {#Array[#Immutable, U] | true} */
+    map<U>(callbackfn: (value: T, index: number) => U): U[];
+    
+    /*@ map : forall U. (callbackfn:(T) => U, index:number, array:#Array[#Immutable,T]) => {#Array[#Immutable, U] | true} */
+    map<U>(callbackfn: (value: T, index: number, array: T[]) => U): U[];
 
+    /*@ filter : forall N . (callbackfn: (T, number, #Array[#Immutable, T]) => boolean) => {#Array[N, T] | true} */
     filter(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): T[];
 
-    reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue/*?*/: T): T;
-    // reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
-    reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue/*?*/: T): T;
+    // reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
+
+    /*@ reduce : forall U . (this: Array<Immutable, T>, callback: (x: U, y: T, n: {number | 0 <= v && v < len this}) => U, init: U) => U */
+    reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
+
+    reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue?: T): T;
     // reduceRight<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
 
     /*@ length: { v: number | (v = (len this) && v >= 0) } */
@@ -726,6 +736,15 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 
 /*************************************************************************
  *        
+ *        Type Aliases
+ * 
+ ************************************************************************/
+
+/*@ alias IArray<T> = Array<Immutable, T> */
+
+
+/*************************************************************************
+ *        
  *        PRE-LOADED QUALIFIERS 
  * 
  ************************************************************************/
@@ -755,13 +774,15 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 /*@ qualif True1(v:boolean): (Prop v) */
 /*@ qualif False1(v:boolean): not (Prop v) */
 
+/*@ qualif Tag(v:a,x:string): ttag(v) = x */
+
 
 // Somewhat more controversial qualifiers (i.e. "expensive"...)
 
 /*  qualif Add(v:number,x:number,y:number): v = x + y */
 /*  qualif Sub(v:number,x:number,y:number): v = x - y */
 
-/*  qualif Len(v:number, n: number)  : n < (len v) */
+/*@  qualif Len(v:number, arr:a)  : v < (len arr) */
 
 
 
@@ -780,40 +801,11 @@ interface Error {
 }
 
 declare var Error: {
-    new (message/*?*/: string): Error;
-    (message/*?*/: string): Error;
+    new (message?: string): Error;
+    (message?: string): Error;
     prototype: Error;
 }
 
-
-
-//class Errors {
-
-//	public static argument(argument: string, message/*?*/: string): Error {
-//		return new Error("Invalid argument: " + argument + ". " + message);
-//	}
-
-//	public static argumentOutOfRange(argument: string): Error {
-//		return new Error("Argument out of range: " + argument);
-//	}
-
-//	public static argumentNull(argument: string): Error {
-//		return new Error("Argument null: " + argument);
-//	}
-
-//	public static abstract(): Error {
-//		return new Error("Operation not implemented properly by subclass.");
-//	}
-
-//	public static notYetImplemented(): Error {
-//		return new Error("Not yet implemented.");
-//	}
-
-//	public static invalidOperation(message/*?*/: string): Error {
-//		return new Error("Invalid operation: " + message);
-//	}
-    
-//}
 
 
 /*************************************************************************

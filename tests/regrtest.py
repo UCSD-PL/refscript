@@ -99,19 +99,18 @@ options, args = parser.parse_args()
 
 testSign  = [("pos", 0), ("neg", 1)]
 
-testCategories = [
-                   ("objects", [])
-                 , ("arrays", [])
-                 , ("classes", [])
-                 , ("loops", [])
-                 , ("misc", [])
+testCategories = [ ("objects",   [])
+                 , ("arrays",    [])
+                 , ("classes",   [])
+                 , ("loops",     [])
+                 , ("misc",      [])
                  , ("operators", [])
-                 , ("simple", [])
-                 , ("unions", [])
+                 , ("simple",    [])
+                 , ("unions",    [])
                  , ("typealias", [])
+                 , ("fb",        [])
                  , ("inclusion", ["-e"])
-
-                 ## not supported:
+                 # ## not supported:
                  # , "proto"
                  # , "lists"
 

@@ -8,7 +8,7 @@ function foo(f: { f: any }) {
          {  f: /\ ({ string | v = "aaa"})=>string
                /\ ({ number | v > 0    })=>number 
          } */
-var x;
+declare var x;
 
 foo(x);
 

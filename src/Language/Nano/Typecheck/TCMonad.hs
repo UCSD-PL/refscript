@@ -23,13 +23,13 @@ module Language.Nano.Typecheck.TCMonad (
   , logError, tcError, tcWrap
 
   -- * Freshness
-  , freshTyArgs
+  , freshTyArgs, freshenAnn
 
   -- * Substitutions
   , getSubst, setSubst, addSubst
 
   -- * Function Types
-  , tcFunTys, tcMethTys, tcCtorTys
+  , tcFunTys -- , tcMethTys, tcCtorTys
 
   -- * Annotations
   , addAnn {-TEMP-}, getAnns --, getDef, setDef
@@ -38,26 +38,26 @@ module Language.Nano.Typecheck.TCMonad (
   , unifyTypeM, unifyTypesM
 
   -- * Subtyping
-  , subtypeM, isSubtype
+  , subtypeM, isSubtype, checkTypes
 
   -- * Casts
   , castM, deadcastM, freshId
 
   -- * Verbosity / Options
-  , whenLoud', whenLoud, whenQuiet', whenQuiet, getOpts
+  , whenLoud', whenLoud, whenQuiet', whenQuiet, getOpts, getAstCount
 
   )  where 
 
 
-import           Control.Applicative                ((<$>))
+import           Control.Applicative                ((<$>), (<*>))
 import           Control.Monad.State
 import           Control.Monad.Trans.Except
 import           Control.Monad.Except               (catchError)
 import           Data.Function                      (on)
-import           Data.Generics
 import qualified Data.HashMap.Strict                as M
 import           Data.Maybe                         (catMaybes, isJust, maybeToList)
 import           Data.Monoid                  
+import qualified Data.IntMap.Strict                 as I
 
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
@@ -65,6 +65,7 @@ import qualified Language.Fixpoint.Types            as F
 
 import           Language.Nano.Annots
 import           Language.Nano.CmdLine
+import           Language.Nano.Env
 import           Language.Nano.Locations
 import           Language.Nano.Misc
 import           Language.Nano.Program
@@ -74,16 +75,17 @@ import           Language.Nano.Typecheck.Environment
 import           Language.Nano.Typecheck.Sub
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Unify
+import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Errors
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
+import           Language.ECMAScript3.Syntax.Annotations
 
 -- import           Debug.Trace                      (trace)
 --
 import qualified System.Console.CmdArgs.Verbosity   as V
 
-type PPR r = (PP r, F.Reftable r, Data r)
 type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
 
 
@@ -116,6 +118,10 @@ data TCState r = TCS {
   -- ^ configuration options
   --
   , tc_opts     :: Config               
+  -- 
+  -- ^ AST Counter
+  --
+  , tc_ast_cnt  :: NodeId
 
   }
 
@@ -149,6 +155,8 @@ whenQuiet' quiet other = do  tc_verb <$> get >>= \case
 getOpts :: TCM r Config
 getOpts = tc_opts <$> get
 
+getAstCount :: TCM r NodeId
+getAstCount = tc_ast_cnt <$> get  
 
 -------------------------------------------------------------------------------
 getSubst :: TCM r (RSubst r)
@@ -207,22 +215,22 @@ logError   :: Error -> a -> TCM r a
 logError err x = (modify $ \st -> st { tc_errors = err : tc_errors st}) >> return x
 
 -------------------------------------------------------------------------------
-freshTyArgs :: PPR r => SourceSpan -> Int -> IContext -> [TVar] -> RType r -> TCM r (RType r)
+freshTyArgs :: PPR r => AnnSSA r -> Int -> IContext -> [TVar] -> RType r -> TCM r (RType r)
 -------------------------------------------------------------------------------
-freshTyArgs l i ξ αs t = (`apply` t) <$> freshSubst l i ξ αs
+freshTyArgs a n ξ αs t = (`apply` t) <$> freshSubst a n ξ αs
 
 -------------------------------------------------------------------------------
-freshSubst :: PPR r => SourceSpan -> Int -> IContext -> [TVar] -> TCM r (RSubst r)
+freshSubst :: PPR r => AnnSSA r -> Int -> IContext -> [TVar] -> TCM r (RSubst r)
 -------------------------------------------------------------------------------
-freshSubst l i ξ αs
+freshSubst (Ann i l _) n ξ αs
   = do when (not $ unique αs) $ logError (errorUniqueTypeParams l) ()
        βs        <- mapM (freshTVar l) αs
-       setTyArgs l i ξ βs
+       setTyArgs i n ξ βs
        extSubst   $ βs 
        return     $ fromList $ zip αs (tVar <$> βs)
 
 -------------------------------------------------------------------------------
-setTyArgs :: PPR r => SourceSpan -> Int -> IContext -> [TVar] -> TCM r ()
+setTyArgs :: PPR r => NodeId -> Int -> IContext -> [TVar] -> TCM r ()
 -------------------------------------------------------------------------------
 setTyArgs l i ξ βs
   = case map tVar βs of 
@@ -234,19 +242,20 @@ setTyArgs l i ξ βs
 -- | Managing Annotations: Type Instantiations
 -------------------------------------------------------------------------------
 
+-- PV: is sortNub needed here?
 -------------------------------------------------------------------------------
 getAnns :: (F.Reftable r, Substitutable r (Fact r)) => TCM r (AnnInfo r)
 -------------------------------------------------------------------------------
 getAnns = do θ     <- tc_subst <$> get
              m     <- tc_anns  <$> get
-             let m' = fmap (apply θ . sortNub) m
+             let m' = fmap (apply θ {-. sortNub-}) m
              _     <- modify $ \st -> st { tc_anns = m' }
              return m' 
 
 -------------------------------------------------------------------------------
-addAnn :: PPR r => SourceSpan -> Fact r -> TCM r () 
+addAnn :: PPR r => NodeId -> Fact r -> TCM r () 
 -------------------------------------------------------------------------------
-addAnn l f = modify $ \st -> st { tc_anns = inserts l f (tc_anns st) } 
+addAnn i f = modify $ \st -> st { tc_anns = I.insertWith (++) i [f] $ tc_anns st } 
  
 -------------------------------------------------------------------------------
 execute ::  PPR r => Config -> V.Verbosity -> NanoSSAR r -> TCM r a -> Either (F.FixResult Error) a
@@ -259,14 +268,15 @@ execute cfg verb pgm act
 -------------------------------------------------------------------------------
 initState :: PPR r => Config -> V.Verbosity -> NanoSSAR r -> TCState r
 -------------------------------------------------------------------------------
-initState cfg verb _ = TCS tc_errors tc_subst tc_cnt tc_anns tc_verb tc_opts 
+initState cfg verb pgm = TCS tc_errors tc_subst tc_cnt tc_anns tc_verb tc_opts tc_ast_cnt
   where
-    tc_errors = []
-    tc_subst = mempty 
-    tc_cnt   = 0
-    tc_anns  = M.empty
-    tc_verb  = verb
-    tc_opts  = cfg
+    tc_errors   = []
+    tc_subst    = mempty 
+    tc_cnt      = 0
+    tc_anns     = I.empty
+    tc_verb     = verb
+    tc_opts     = cfg
+    tc_ast_cnt  = max_id pgm
 
 
 --------------------------------------------------------------------------
@@ -369,13 +379,20 @@ subtypeM l γ t1 t2
       Right _         -> tcError $ errorSubtype l t1 t2
 
 
-addCast ξ e c = addAnn loc fact >> return (wrapCast loc fact e)
+addCast ξ e c = addAnn i fact >> wrapCast loc fact e
   where
-    loc       = srcPos e
+    i         = ann_id $ getAnnotation e
+    loc       = ann    $ getAnnotation e
     fact      = TCast ξ c
 
-wrapCast _ f (Cast_ (Ann l fs) e) = Cast_ (Ann l (f:fs)) e
-wrapCast l f e                    = Cast_ (Ann l [f])    e
+wrapCast _ f (Cast_ (Ann i l fs) e) = Cast_ <$> freshenAnn (Ann i l (f:fs)) <*> return e
+wrapCast l f e                      = Cast_ <$> freshenAnn (Ann (-1) l [f]) <*> return e
+
+freshenAnn :: AnnSSA r -> TCM r (AnnSSA r)
+freshenAnn (Ann _ l a)
+  = do n     <- tc_ast_cnt <$> get 
+       modify $ \st -> st {tc_ast_cnt = 1 + n}
+       return $ Ann n l a
 
 
 -- | tcFunTys: "context-sensitive" function signature
@@ -385,30 +402,32 @@ tcFunTys :: (PPRSF r, F.Subable (RType r), F.Symbolic s, PP a)
 --------------------------------------------------------------------------------
 tcFunTys l f xs ft = either tcError return $ funTys l f xs ft 
 
+--------------------------------------------------------------------------------
+checkTypes :: PPR r => TCEnv r -> TCM r ()
+--------------------------------------------------------------------------------
+checkTypes γ  = mapM_ (\(a,ts) -> mapM_ (safeExtends $ setAP a γ) ts) types
+  where 
+    -- types     = concatMap envToList $ m_types . snd <$> qenvToList (tce_mod γ)
+    types     = mapSnd (envToList . m_types) <$> qenvToList (tce_mod γ)
+    setAP a γ = γ { tce_path = a } 
+    
 
 --------------------------------------------------------------------------------
-tcMethTys :: (PPRSF r, F.Subable (RType r), PP a) 
-          => AnnSSA r -> a -> (Mutability, RType r)
-          -> TCM r [(Int, Mutability, ([TVar], Maybe (RType r), [RType r], RType r))]
+safeExtends :: (IsLocated l, PPR r) => TCEnv r -> (l, IfaceDef r) -> TCM r ()
 --------------------------------------------------------------------------------
-tcMethTys l f (m,t) 
-  = zip3 [0..] (repeat m) <$> mapM (methTys l f) (bkAnd t)
-
-
-methTys l f ft0
-  = case remThisBinding ft0 of
-      Nothing          -> tcError $ errorNonFunction (srcPos l) f ft0 
-      Just (vs,s,bs,t) -> return  $ (vs,s,b_type <$> bs,t)
-
-
---------------------------------------------------------------------------------
-tcCtorTys :: (PPRSF r, F.Subable (RType r), PP a) 
-          => AnnSSA r -> a -> RType r
-          -> TCM r [(Int, ([TVar], Maybe (RType r), [RType r], RType r))]
---------------------------------------------------------------------------------
-tcCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
-
-
+safeExtends _ (_,    ID _ _ _ Nothing        _ ) = return ()
+safeExtends γ (l, t@(ID _ c _ (Just (p, ts)) _)) = 
+    case flatten' Nothing InstanceMember γ t of
+      Just ms -> 
+        case flatten Nothing InstanceMember γ . (,ts) =<< resolveRelTypeInEnv γ p of
+          Just ps  | isSubtype γ (mkTCons t_immutable ms) (mkTCons t_immutable ps) 
+                  -> return ()
+                   | otherwise         
+                  -> tcError $ errorClassExtends (srcPos l) c p 
+                               (mkTCons t_immutable ms) (mkTCons t_immutable ps) 
+          Nothing -> tcError $ bugFlattenType (srcPos l) p
+      Nothing -> tcError $ bugFlattenType (srcPos l) c
+  where
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

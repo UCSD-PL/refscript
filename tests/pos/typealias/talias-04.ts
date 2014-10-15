@@ -1,7 +1,6 @@
 /*@ predicate gt x y   = x >= y                    */
 /*@ alias nat          = {number | gt(v, 0) }      */
 /*@ alias Nat          = {number | gt(v, 0) }      */
-/*@ alias IArray<T>    = Array<Immutable, T>       */
 /*@ alias IArrayN<T,n> = {v:IArray<T> | len v = n} */
 /*@ alias FourNats     = IArrayN<Nat,4> */
 

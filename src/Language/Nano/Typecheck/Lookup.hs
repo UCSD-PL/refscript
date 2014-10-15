@@ -7,23 +7,22 @@
 
 module Language.Nano.Typecheck.Lookup (
     getProp
-  , getElt
   , extractCall
   , extractCtor
   , extractParent
-  , getPropTDef
   ) where 
 
 import           Data.Generics
-import           Data.List  (find)
-import           Data.Maybe (listToMaybe)
+import qualified Data.Map.Strict as M
 
 import           Language.ECMAScript3.PrettyPrint
 
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Misc
 
+import           Language.Nano.Names
 import           Language.Nano.Types
+import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
@@ -33,7 +32,7 @@ import           Control.Applicative ((<$>))
 
 -- import           Debug.Trace
 
-type PPRD r = (PP r, F.Reftable r, Data r)
+type PPRD r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
 
 
 -- | `getProp γ b s t`: returns  a pair containing:
@@ -48,26 +47,38 @@ type PPRD r = (PP r, F.Reftable r, Data r)
 --
 -------------------------------------------------------------------------------
 getProp :: (PPRD r, EnvLike r g, F.Symbolic f) 
-        => g r -> Bool -> f -> RType r -> Maybe (RType r, RType r)
+        => g r -> Bool -> f -> RType r -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
-getProp γ b s t@(TApp _ _ _  ) = getPropApp γ b s t
+getProp γ b s t@(TApp _ _ _  ) =                  getPropApp γ b s t
 
-getProp _ b s t@(TCons es _ _) = (t,) <$> accessMember b s es
+getProp _ b s t@(TCons _ es _) = do (t',m)     <- accessMember b InstanceMember s es
+                                    return      $ (t,t',m)
 
-getProp γ b s t@(TClass c    ) = do d        <- resolveRelNameInEnv γ c
-                                    es       <- flatten True γ (d,[])
-                                    (t,)    <$> accessMember b s es
+getProp γ b s t@(TClass c    ) = do d          <- resolveRelTypeInEnv γ c
+                                    es         <- flatten Nothing StaticMember γ (d,[])
+                                    (t', m)    <- accessMember b StaticMember s es
+                                    return      $ (t,t',m)
 
-getProp γ _ s t@(TModule m   ) = do m'       <- resolveRelPathInEnv γ m
-                                    (_,_,ty) <- envFindTy s $ m_variables m'
-                                    (t,)    <$> renameRelative (modules γ) (m_path m') (absPath γ) ty
+getProp γ _ s t@(TModule m   ) = do m'         <- resolveRelPathInEnv γ m
+                                    (_,_,ty,_) <- envFindTy s $ m_variables m'
+                                    t'         <- renameRelative (modules γ) (m_path m') (absPath γ) ty
+                                    return      $ (t,t', t_readOnly) 
+                                    -- FIXME: perhaps something else here as mutability
+
+getProp γ _ s t@(TEnum e     ) = do e'         <- resolveRelEnumInEnv γ e
+                                    i          <- envFindTy (F.symbol s) (e_symbols e')
+                                    return      $ (t, tInt `strengthen` exprReft i, t_immutable)
 
 getProp _ _ _ _ = Nothing
 
 
 -------------------------------------------------------------------------------
 getPropApp :: (PPRD r, EnvLike r g, F.Symbolic f) 
-           => g r -> Bool -> f -> RType r -> Maybe (RType r, RType r)
+           => g r 
+           -> Bool 
+           -> f 
+           -> RType r 
+           -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
 getPropApp γ b s t@(TApp c ts _) = 
   case c of 
@@ -75,12 +86,14 @@ getPropApp γ b s t@(TApp c ts _) =
     TUndef   -> Nothing
     TNull    -> Nothing
     TUn      -> getPropUnion γ b s ts
-    TInt     -> (t,) <$> lookupAmbientVar γ b s "Number"
-    TString  -> (t,) <$> lookupAmbientVar γ b s "String"
-    TRef x   -> do  d      <- resolveRelNameInEnv γ x
-                    es     <- flatten False γ (d,ts)
-                    p      <- accessMember b s es
-                    return  $ (t,p)
+    TInt     -> do  (t',m) <- lookupAmbientType γ b s "Number"
+                    return  $ (t,t',m)
+    TString  -> do  (t',m) <- lookupAmbientType γ b s "String"
+                    return  $ (t,t',m)
+    TRef x   -> do  d      <- resolveRelTypeInEnv γ x
+                    es     <- flatten Nothing InstanceMember γ (d,ts)
+                    (t',m) <- accessMember b InstanceMember s es
+                    return  $ (t,t',m)
     TFPBool  -> Nothing
     TTop     -> Nothing
     TVoid    -> Nothing
@@ -91,39 +104,40 @@ getPropApp _ _ _ _ = error "getPropApp should only be applied to TApp"
 extractCtor :: (PPRD r, EnvLike r g) => g r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 extractCtor γ (TClass x) 
-  = do  d        <- resolveRelNameInEnv γ x
-        (vs, es) <- flatten'' False γ d
-        case [ mkAll vs (TFun s bs (retT vs) r) | ConsSig (TFun s bs _ r) <- es ] of
-          [] -> return $ defCtor vs
-          ts -> return $ mkAnd ts
-    where
-        retT vs    = TApp (TRef x) (tVar <$> vs) fTop
-        defCtor vs = mkAll vs $ TFun Nothing [] (retT vs) fTop
+  = do  d        <- resolveRelTypeInEnv γ x
+        (vs, es) <- flatten'' Nothing InstanceMember γ d
+        case M.lookup (ctorSymbol, InstanceMember) es of
+          Just (ConsSig t) -> fixRet x vs t
+          _                -> return $ defCtor x vs
+  where
 
 extractCtor γ (TApp (TRef x) ts _) 
-  = do  d        <- resolveRelNameInEnv γ x
-        (vs, es) <- flatten'' False γ d
-        case [ mkAll vs (TFun s bs (retT vs) r) | ConsSig (TFun s bs _ r) <- es ] of
-          [] -> return $ apply (fromList $ zip vs ts) $ defCtor vs
-          ts -> return $ apply (fromList $ zip vs ts) $ mkAnd ts
-    where
-        retT vs    = TApp (TRef x) (tVar <$> vs) fTop
-        defCtor vs = mkAll vs $ TFun Nothing [] (retT vs) fTop
+  = do  d        <- resolveRelTypeInEnv γ x
+        (vs, es) <- flatten'' Nothing InstanceMember γ d
+        case M.lookup (ctorSymbol, InstanceMember) es of
+          Just (ConsSig t) -> apply (fromList $ zip vs ts) <$> fixRet x vs t
+          _                -> return $ apply (fromList $ zip vs ts) $ defCtor x vs
 
-extractCtor _ (TCons es _ _ )
-  = do  case [ tf | ConsSig tf <- es ] of
-          [] -> Nothing 
-          ts -> return $ mkAnd ts
+extractCtor _ (TCons _ es _ )
+  = case M.lookup (ctorSymbol, InstanceMember) es of
+      Just (ConsSig t) -> return $ t
+      _                -> Nothing
        
 extractCtor _ _ = Nothing
 
+fixRet x vs = fmap (mkAnd . (mkAll vs . mkFun . fixOut vs <$>)) . bkFuns
+  where fixOut vs (a,b,c,_) = (a,b,c,retT x vs)
+
+retT x vs  = TApp (TRef x) (tVar <$> vs) fTop
+defCtor x vs = mkAll vs $ TFun Nothing [] (retT x vs) fTop
+
 
 -------------------------------------------------------------------------------
-extractParent :: (Data r, F.Reftable r, PP r, EnvLike r g, Substitutable r (RType r)) 
+extractParent :: (PPR r, PP r, EnvLike r g, Substitutable r (RType r)) 
               => g r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 extractParent γ (TApp (TRef x) ts _) 
-  = do  d <- resolveRelNameInEnv γ x
+  = do  d <- resolveRelTypeInEnv γ x
         case t_proto d of
           Just (p,ps) -> Just $ TApp (TRef p) (tArgs d ts ps) fTop
           _           -> Nothing
@@ -132,33 +146,23 @@ extractParent γ (TApp (TRef x) ts _)
 extractParent _ _ = Nothing
 
 
--- | `getElt`: return elements associated with a symbol @s@. The return list 
--- is empty if the binding was not found or @t@ is an invalid type.
--------------------------------------------------------------------------------
-getElt :: (F.Symbolic s, PPRD r, EnvLike r g) => g r -> s -> RType r -> [TypeMember r]
--------------------------------------------------------------------------------
-getElt γ  s t = case flattenType γ t of
-                  Just t  -> fromCons t
-                  Nothing -> []
-  where   
-    fromCons (TCons es _ _) = [ e | e <- es, F.symbol e == F.symbol s ]
-    fromCons _              = []
-
-
 -------------------------------------------------------------------------------
 extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
-extractCall γ t             = uncurry mkAll <$> foo [] t
+extractCall γ t                   = uncurry mkAll <$> foo [] t
   where
-    foo αs t@(TFun _ _ _ _) = [(αs, t)]
-    foo αs   (TAnd ts)      = concatMap (foo αs) ts 
-    foo αs   (TAll α t)     = foo (αs ++ [α]) t
-    foo αs   (TApp (TRef s) _ _ )
-                            = case resolveRelNameInEnv γ s of 
-                                Just d  -> [ (αs, t) | CallSig t <- t_elts d ]
-                                Nothing -> []
-    foo αs   (TCons es _ _) = [ (αs, t) | CallSig t <- es  ]
-    foo _  _                = []
+    foo αs t@(TFun _ _ _ _)       = [(αs, t)]
+    foo αs   (TAnd ts)            = concatMap (foo αs) ts 
+    foo αs   (TAll α t)           = foo (αs ++ [α]) t
+    foo αs   (TApp (TRef s) _ _ ) = case resolveRelTypeInEnv γ s of 
+                                      Just d  -> getCallSig αs $ t_elts d
+                                      Nothing -> []
+    foo αs   (TCons _ es _)       = getCallSig αs es
+    foo _  _                      = []
+
+    getCallSig αs es              = case M.lookup (callSymbol, InstanceMember) es of
+                                      Just (CallSig t) -> [(αs, t)]
+                                      _                -> []
 
 
 -- | `accessMember b s es` extracts field @s@ from type members @es@. If @b@ is
@@ -167,51 +171,56 @@ extractCall γ t             = uncurry mkAll <$> foo [] t
 --
 --   Invariant: each field appears at most once.
 --
+--   FIXME: Mutability: enforcing the field's mutability for now -- use a
+--   combinator ...
+--
+--
 -------------------------------------------------------------------------------
-accessMember :: F.Symbolic f => Bool -> f -> [TypeMember r] -> Maybe (RType r)
+accessMember :: F.Symbolic f 
+             => Bool 
+             -> StaticKind 
+             -> f 
+             -> TypeMembers r 
+             -> Maybe (RType r, Mutability)
 -------------------------------------------------------------------------------
-accessMember True s es =    -- Get member for a call
-  case find ((F.symbol s ==) . F.symbol) es of 
-    Just (FieldSig _ _ t) -> Just t
-    Just (MethSig _ _ t)  -> Just t
-    Just (StatSig _ _ t)  -> Just t 
-    _                     -> listToMaybe [ t | IndexSig _ True t <- es]
-accessMember False s es =   -- Extract member: cannot extract methods
-  case find ((F.symbol s ==) . F.symbol) es of 
-    Just (FieldSig _ _ t) -> Just t
-    Just (StatSig _ _ t)  -> Just t 
-    _                     -> listToMaybe [ t | IndexSig _ True t <- es]
+-- Get member for a call
+accessMember True sk s es =    
+  case M.lookup (F.symbol s, sk) es of
+    Just (FieldSig _ m t) -> Just (t,m)
+    Just (MethSig _ m t)  -> Just (t,m)
+    _ -> case M.lookup (stringIndexSymbol, sk) es of 
+           Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
+           _ -> Nothing
 
+-- Extract member: cannot extract methods
+accessMember False sk s es =
+  case M.lookup (F.symbol s, sk) es of
+    Just (FieldSig _ m t) -> Just (t,m)
+    _ -> case M.lookup (stringIndexSymbol, sk) es of 
+           Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
+           _ -> Nothing
 
--- Access the property from the relevant ambient object but return the 
--- original accessed type instead of the type of the ambient object. 
--- FIXME !!!
 -------------------------------------------------------------------------------
-lookupAmbientVar :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s) 
-                 => g r -> Bool -> f -> s -> Maybe (RType r)
+lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s) 
+                  => g r -> Bool -> f -> s -> Maybe (RType r, Mutability)
 -------------------------------------------------------------------------------
-lookupAmbientVar γ b s amb
-  = do  (t, _ )   <- envFindTy (F.symbol amb) (names γ)
-        (_, t')   <- getProp γ b s t
-        return     $ t'
-
-
--- FIXME: Probably should get rid of this and just use getField, etc...
--------------------------------------------------------------------------------
-getPropTDef :: (EnvLike r g, PPRD r) => g r -> F.Symbol -> [RType r] -> IfaceDef r -> Maybe (RType r)
--------------------------------------------------------------------------------
-getPropTDef γ f ts d = accessMember False f =<< flatten False γ (d,ts)
-
+lookupAmbientType γ b fld amb
+  = t_elts <$> resolveRelTypeInEnv γ nm >>= accessMember b InstanceMember fld
+  where
+    nm = mkRelName [] (F.symbol amb)
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if
 -- accessing @ts@ returns type @tfs@. @ts@ is useful for adding casts later on.
 -------------------------------------------------------------------------------
 getPropUnion :: (PPRD r, EnvLike r g, F.Symbolic f) 
-             => g r -> Bool -> f -> [RType r] -> Maybe (RType r, RType r)
+             => g r -> Bool -> f -> [RType r] -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
 getPropUnion γ b f ts = 
-  case [tts | Just tts <- getProp γ b f <$> ts] of
-    [] -> Nothing
-    ts -> Just $ mapPair mkUnion $ unzip ts
+  case unzip3 [ttm | Just ttm <- getProp γ b f <$> ts] of
+    ([],[] ,[])                           -> Nothing
+    (ts,ts',ms)  | all isImmutable     ms -> Just (mkUnion ts, mkUnion ts', t_immutable)
+                 | all isMutable       ms -> Just (mkUnion ts, mkUnion ts', t_mutable)
+                 | all isAssignsFields ms -> Just (mkUnion ts, mkUnion ts', t_assignsFields)
+                 | otherwise              -> Just (mkUnion ts, mkUnion ts', t_readOnly)
 

@@ -8,17 +8,17 @@ class HTMLDivElt extends HTMLElt {
   }
 
   /*@ htmlDivElt__ : number */
-  public htmlDivElt__: number;
+  public htmlDivElt__: number = 0;
 }
 
 class HTMLSpanElt extends HTMLElt {
   /*@  htmlSpanElt__ : number */
-  public htmlSpanElt__: number;
+  public htmlSpanElt__: number = 1;
 }
 
 class HTMLCanvasElt extends HTMLElt {
   /*@ htmlCanvasElt__ : number */
-  public htmlCanvasElt__: number;
+  public htmlCanvasElt__: number = 2;
 }
 
 /*@ foo :: (elt: { #HTMLElt[#Immutable] | true } ) => #HTMLDivElt[#Immutable] */

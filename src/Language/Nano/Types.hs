@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveFunctor          #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE DeriveTraversable      #-}
+{-# LANGUAGE StandaloneDeriving     #-}
 {-# LANGUAGE DeriveFoldable         #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE OverlappingInstances   #-}
@@ -10,6 +11,10 @@ module Language.Nano.Types where
 
 import           Control.Applicative                ((<$>))
 import           Data.Hashable
+import           Data.Monoid
+import qualified Data.IntMap                     as I
+import           Data.Function                      (on)
+import qualified Data.Map.Strict                 as M
 import           Data.Typeable                      (Typeable)
 import           Data.Generics                      (Data)   
 import           Data.List                          ((\\))
@@ -39,7 +44,7 @@ data TVar = TV {
 
   , tv_loc :: SourceSpan 
 
-  } deriving (Show, Ord, Data, Typeable)
+  } deriving (Show, Data, Typeable)
 
 
 -- | Type Constructors
@@ -73,32 +78,63 @@ data RType r =
   -- 
   -- ^ {f1:T1,..,fn:Tn} 
   --
-  | TCons [TypeMember r] Mutability r
+  | TCons Mutability (TypeMembers r) r
   -- 
   -- ^ forall A. T
   --
-  | TAll TVar (RType r)                   
+  | TAll TVar (RType r)
   -- 
   -- ^ /\ (T1..) => T1' ... /\ (Tn..) => Tn'
   --
   | TAnd [RType r]                                   
   -- 
   -- ^ typeof A.B.C (class)
-  --
+  -- 
   | TClass RelName
   -- 
   -- ^ typeof L.M.N (module)
+  --
   | TModule RelPath
+  -- 
+  -- ^ enumeration L.M.N 
+  -- 
+  | TEnum RelName
   -- 
   -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
   --
   | TExp F.Expr
-    deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+
+    deriving (Show, Functor, Data, Typeable, Traversable, Foldable)
+
+type TypeMembers r = M.Map (F.Symbol, StaticKind) (TypeMember r)
+
+data StaticKind = 
+    StaticMember 
+  | InstanceMember 
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 
 -- | Standard Types
 type Type    = RType ()
 
+
+-- FIXME: Use common_ts
+
+-- funcConstr                            :: Constructor
+-- funcConstr                             = TApp (TRef (QN [] (F.symbol "Function"))) [] ()
+-- 
+-- objectConstr                          :: Constructor
+-- objectConstr                           = TApp (TRef (QN [] (F.symbol "Object"))) [] ()
+-- 
+-- -- Primitive types don't have constructor
+-- toConstructor                         :: RType r -> Maybe Constructor
+-- toConstructor  (TApp (TRef  x) _ _)    = Just $ TApp (TRef  x) [] ()
+-- toConstructor  (TClass _)              = Just $ funcConstr
+-- toConstructor  (TModule _)             = Just $ objectConstr
+-- toConstructor  (TFun _ _ _ )           = Just $ funcConstr
+-- toConstructor  (TCons _ _ _)           = Just $ objectConstr
+-- toConstructor  (TAnd _)                = Just $ funcConstr 
+-- toConstructor  _                       = Nothing
 
 -- | Type binder
 data Bind r = B { 
@@ -112,7 +148,7 @@ data Bind r = B {
   --
   , b_type :: !(RType r)                            
 
-  } deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+  } deriving (Eq, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
 data FuncInputs t = FI { fi_self :: Maybe t, fi_args :: [t] } deriving (Functor, Traversable, Foldable)
@@ -122,11 +158,14 @@ data FuncInputs t = FI { fi_self :: Maybe t, fi_args :: [t] } deriving (Functor,
 -- | Interface definitions 
 ---------------------------------------------------------------------------------
 
+data IfaceKind = ClassKind | InterfaceKind
+  deriving (Eq, Show, Data, Typeable)
+
 data IfaceDef r = ID { 
   -- 
-  -- ^ Class (True) or interface (False) RJ: FIXME use an explicit enum "data IfaceKind = Class | Interface" 
+  -- ^ Kind
   --
-    t_class :: Bool                                
+    t_class :: IfaceKind
   -- 
   -- ^ Name
   --
@@ -142,15 +181,17 @@ data IfaceDef r = ID {
   -- 
   -- ^ List of data type elts 
   --
-  , t_elts  :: ![TypeMember r]
+  , t_elts  :: !(TypeMembers r)
   } 
-  deriving (Eq, Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+  deriving (Eq, Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
 type Heritage r  = Maybe (RelName, [RType r])
 
-
 type SIfaceDef r = (IfaceDef r, [RType r])
+
+data IndexKind   = StringIndex | NumericIndex
+  deriving (Eq, Show, Data, Typeable)
 
 
 data TypeMember r 
@@ -166,7 +207,7 @@ data TypeMember r
   -- ^ Index signature
   --
   | IndexSig  { f_sym  :: F.Symbol
-              , f_key  :: Bool                         -- True = string
+              , f_key  :: IndexKind
               , f_type :: RType r }                     
   -- 
   -- ^ Field signature
@@ -180,14 +221,8 @@ data TypeMember r
   | MethSig   { f_sym  :: F.Symbol                      -- ^ Name  
               , f_mut  :: Mutability                    -- ^ Mutability
               , f_type :: RType r }                     -- ^ Method type
-  -- 
-  -- ^ Static field signature
-  --
-  | StatSig   { f_sym  :: F.Symbol                      -- ^ Name  
-              , f_mut  :: Mutability                    -- ^ Mutability
-              , f_type :: RType r }                     -- ^ Property type (could be function)
 
-  deriving (Ord, Show, Functor, Data, Typeable, Traversable, Foldable)
+  deriving (Show, Functor, Data, Typeable, Traversable, Foldable)
 
 
 data Visibility 
@@ -195,7 +230,67 @@ data Visibility
   = Local 
 
   | Exported
-  deriving (Eq, Data, Typeable)
+  deriving (Show, Eq, Data, Typeable)
+
+
+---------------------------------------------------------------------------------
+-- | Enumeration definition
+---------------------------------------------------------------------------------
+
+data EnumDef = EnumDef {
+    -- 
+    -- ^ Name
+    --
+      e_name       :: F.Symbol
+    -- 
+    -- ^ Contents: Int -> Symbols
+    --
+    , e_properties :: I.IntMap F.Symbol
+    -- 
+    -- ^ Contents: Symbols -> Int
+    --
+    , e_symbols    :: Env Int
+
+} deriving (Data, Typeable)
+
+
+------------------------------------------------------------------------------------------
+-- | Module Body 
+------------------------------------------------------------------------------------------
+--
+--  As per TypeScript spec par. 10.2:
+--
+--  Each module body has a declaration space for local variables (including
+--  functions, modules, class constructor functions, and enum objects), a 
+--  declaration space for local named types (classes, interfaces, and enums),
+--  and a declaration space for local namespaces (containers of named types).
+--  Every declaration (whether local or exported) in a module contributes to 
+--  one or more of these declaration spaces.
+--
+--  PV: the last case has not been included
+--
+data ModuleDef r = ModuleDef {
+  -- 
+  -- ^ Contents of a module (local and exported)
+  --   
+  --   * Interfaces are _not_ included here (because thery don't appear as
+  --   bindings in the language)
+  --
+    m_variables   :: Env (Visibility, Assignability, RType r, Initialization)
+  --
+  -- ^ Types
+  --
+  , m_types       :: Env (IfaceDef r)
+  -- 
+  -- ^ Enumerations
+  --
+  , m_enums       :: Env EnumDef
+  -- 
+  -- ^ Absolute path of definition
+  --
+  , m_path        :: AbsPath
+  }
+  deriving (Functor, Data, Typeable)
 
 
 ------------------------------------------------------------------------------------------
@@ -221,45 +316,16 @@ data Assignability
   --
   | WriteGlobal 
   -- 
+  -- SPECIAL VALUES
+  -- 
   -- ^ Used to denote return variable
   -- 
   | ReturnVar
-  deriving (Eq, Data, Typeable)
-
-
-
--- | Module Body 
---
---  As per TypeScript spec par. 10.2:
---
---  Each module body has a declaration space for local variables (including
---  functions, modules, class constructor functions, and enum objects), a 
---  declaration space for local named types (classes, interfaces, and enums),
---  and a declaration space for local namespaces (containers of named types).
---  Every declaration (whether local or exported) in a module contributes to 
---  one or more of these declaration spaces.
---
---  PV: the last case has not been included
---
-data ModuleDef r = ModuleDef {
   -- 
-  -- ^ Contents of a module (local and exported)
-  --   
-  --   * Interfaces are _not_ included here (because thery don't appear as
-  --   bindings in the language)
-  --
-    m_variables   :: Env (Visibility, Assignability, RType r)
-  --
-  -- ^ Types
-  --
-  , m_types       :: Env (IfaceDef r)
+  -- ^ Used to denote 'this' variable
   -- 
-  -- ^ Absolute path of definition
-  --
-  , m_path        :: AbsPath
-  }
-  deriving (Functor, Data, Typeable)
-
+  | ThisVar
+  deriving (Show, Eq, Data, Typeable)
 
 
 ---------------------------------------------------------------------------------
@@ -269,18 +335,22 @@ data ModuleDef r = ModuleDef {
 type Mutability = Type 
 
 
-data CommonTypes r = CommonTypes {
-    t_ReadOnly       :: RType r
-  , t_Immutable      :: RType r
-  , t_Mutable        :: RType r
-  , t_AnyMutability  :: RType r
-  , t_InheritedMut   :: RType r
-  }
+---------------------------------------------------------------------------------
+-- | Initialization
+---------------------------------------------------------------------------------
 
+data Initialization = Initialized | Uninitialized
+  deriving (Show, Eq, Data, Typeable)
+
+instance Monoid Initialization where
+  mempty                                = Uninitialized
+  _             `mappend` Uninitialized = Uninitialized
+  Uninitialized `mappend` _             = Uninitialized
+  Initialized   `mappend` Initialized   = Initialized
 
 
 ---------------------------------------------------------------------------------
--- | Eq Instances
+-- | Instances
 ---------------------------------------------------------------------------------
 
 
@@ -290,8 +360,16 @@ instance Eq TVar where
 instance IsLocated TVar where 
   srcPos = tv_loc
 
+instance IsLocated (TypeMember r) where
+  srcPos _ = srcPos dummySpan
+
 instance Hashable TVar where 
   hashWithSalt i α = hashWithSalt i $ tv_sym α 
+
+instance Hashable StaticKind where
+  hashWithSalt _ StaticMember   = 0
+  hashWithSalt _ InstanceMember = 1
+
 
 instance F.Symbolic TVar where
   symbol = tv_sym 
@@ -325,6 +403,7 @@ instance Eq (RType r) where
   TCons e1s m1 _  == TCons e2s m2 _  = (e1s,m1) == (e2s,m2)
   TClass c1       == TClass c2       = c1 == c2
   TModule m1      == TModule m2      = m1 == m2
+  TEnum e1        == TEnum e2        = e1 == e2
   _               == _               = False
 
 
@@ -334,9 +413,35 @@ instance Eq (TypeMember r) where
   IndexSig _ b1 t1  == IndexSig _ b2 t2  = (b1,t1) == (b2,t2)
   FieldSig f1 m1 t1 == FieldSig f2 m2 t2 = (f1,m1,t1) == (f2,m2,t2)
   MethSig  f1 m1 t1 == MethSig f2 m2 t2  = (f1,m1,t1) == (f2,m2,t2)
-  StatSig f1 m1 t1  == StatSig f2 m2 t2  = (f1,m1,t1) == (f2,m2,t2)
   _                 == _                 = False
  
+
+-- USE CAREFULLY !!!
+instance Ord (RType r) where
+  compare = compare `on` rTypeCode
+
+rTypeCode (TVar _ _)     = 0
+rTypeCode (TFun _ _ _ _) = 1
+rTypeCode (TCons _ _ _ ) = 2
+rTypeCode (TAll _ _ )    = 3
+rTypeCode (TAnd _ )      = 4
+rTypeCode (TClass _ )    = 5
+rTypeCode (TExp _ )      = 6
+rTypeCode (TModule _)    = 7
+rTypeCode (TEnum _)      = 8
+rTypeCode (TApp c _ _)   = 9 + tconCode c
+
+tconCode TInt            = 0
+tconCode TBool           = 1
+tconCode TString         = 3
+tconCode TVoid           = 4
+tconCode TTop            = 5
+tconCode (TRef _)        = 6
+tconCode TUn             = 7
+tconCode TNull           = 8
+tconCode TUndef          = 9
+tconCode TFPBool         = 10
+
 
 -----------------------------------------------------------------------
 -- | Operator Types
@@ -397,6 +502,9 @@ instance PP a => PP [a] where
 instance PP IContext where
   pp (IC x) = text "Context: " <+> pp x
 
+instance PP Initialization where
+  pp Initialized   = text "init"
+  pp Uninitialized = text "non-init"
 
 
 -----------------------------------------------------------------------
@@ -421,13 +529,10 @@ instance IsLocated (Alias a s t) where
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body 
    
-
-
 ---------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)
 -- End:
-
 

@@ -1,7 +1,7 @@
 
 /*@ qualif G11(v:number)            : v > -11                   */
 
-/*@ gobj :: [#Mutable]{ a: { number | v > 0 } } */
+/*@ gobj :: [#Mutable]{ a: [#Mutable] { number | v > 0 } } */
 var gobj = {
 	a: 1,
 	b: "glorp",

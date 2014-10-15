@@ -24,7 +24,7 @@ import           Text.PrettyPrint.HughesPJ
 -------------------------------------------------------------------------------
 
 data TCEnv r  = TCE {
-    tce_names       :: Env (RType r, Assignability)
+    tce_names       :: Env (RType r, Assignability, Initialization)
   , tce_mod         :: QEnv (ModuleDef r)
   , tce_ctx         :: !IContext
   , tce_path        :: AbsPath

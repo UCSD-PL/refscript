@@ -1,7 +1,4 @@
 
-// THIS WILL PROBABLY NOT BE SUPPORTED EVER 
-
-
 /*@ foo ::  (number + boolean) => number + { string | true } */
 function foo(x) {
 

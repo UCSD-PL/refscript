@@ -1,10 +1,6 @@
 Tests / Benchmarks
 ------------------
 
-### Failing tests
-
-
-
 ### Working benchmarks
   
     tests/strobe/gadgets/resistor-00.js
@@ -14,10 +10,6 @@ Tool/Implementation
 -------------------
 
   - instanceOf refinement: only for class constructed types - not interfaces 
-
-  - Infer TS method types
-
-  - TApp (TRef ...) ... is now prefixed with a '#' to disambiguate from TVar.
 
   - Enforce invariant that overloaded functions signatures are non-overlapping
 
@@ -29,11 +21,6 @@ Tool/Implementation
         are very ugly (see pos/objects/obj-08.ts).
 
       * Checks on type parameters (including mutability - always first parameter)
-
-      * Revisit mutability subtyping, compute variance of type parameter in type
-        Do co/contra-variant checks depending on mutability.
-  
-      * Encode method mutability
   
   - Variables cannot be named: "func" or "obj" (fixpoint restriction)
 

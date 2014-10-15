@@ -36,15 +36,16 @@ hoistReadOnly = everythingBut (++) myQ
                         Just  s -> fExp s
                         Nothing -> ([], False)
 
-    fSt                       :: Data a => (Statement a) -> ([Id a],Bool)
-    fSt (FunctionStmt _ x _ _) = ([x], True)
-    fSt (FunctionDecl _ x _  ) = ([x], True)
-    fSt (ClassStmt _ x _ _ _ ) = ([x], True)
-    fSt (ModuleStmt _ x _    ) = ([x], True)
-    fSt _                      = ([], False)
-    fExp                      :: Data a => Expression a -> ([Id a],Bool)
-    fExp (FuncExpr _ _ _ _)    = ([ ], True)
-    fExp _                     = ([ ], False)
+    fSt :: Data a => (Statement a) -> ([Id a],Bool)
+    fSt (FunctionStmt _ x _ _)      = ([x], True)
+    fSt (FuncOverload _ x _  )  = ([x], True)
+    fSt (FuncAmbDecl _ x _) = ([x], True)
+    fSt (ClassStmt _ x _ _ _ )      = ([x], True)
+    fSt (ModuleStmt _ x _    )      = ([x], True)
+    fSt _                           = ([], False)
+    fExp  :: Data a => Expression a -> ([Id a],Bool)
+    fExp (FuncExpr _ _ _ _)         = ([ ], True)
+    fExp _                          = ([ ], False)
 
 
 -- | `hoistVarDecls` returns all the declared variables 
@@ -67,15 +68,16 @@ hoistVarDecls = everythingBut (++) myQ
                              Nothing -> ([], False)
               
     fSt                       :: Data a => (Statement a) -> ([Id a],Bool)
-    fSt (FunctionStmt _ _ _ _) = ([ ], True)
-    fSt (FunctionDecl _ _ _  ) = ([ ], True)
-    fSt (ClassStmt _ _ _ _ _ ) = ([ ], True)
-    fSt (ModuleStmt _ _ _    ) = ([ ], True)
-    fSt _                      = ([ ], False)
+    fSt FunctionStmt{}        = ([ ], True)
+    fSt FuncOverload{}    = ([ ], True)
+    fSt FuncAmbDecl{} = ([ ], True)
+    fSt ClassStmt{}           = ([ ], True)
+    fSt ModuleStmt{}          = ([ ], True)
+    fSt _                     = ([ ], False)
     fExp                      :: Data a => Expression a -> ([Id a],Bool)
-    fExp (FuncExpr _ _ _ _)    = ([ ], True)
-    fExp _                     = ([ ], False)
-    fVD (VarDecl _ x _)        = ([x], False)
+    fExp FuncExpr{}           = ([ ], True)
+    fExp _                    = ([ ], False)
+    fVD (VarDecl _ x _)       = ([x], False)
 
 
 

@@ -153,9 +153,7 @@ initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
     nms       = envAdds extras
               $ envMap (\(_,_,c,d,e) -> (d,c,e)) 
-              -- $ trace (ppshow $ envKeys visEnv) 
-              $ visEnv
-    visEnv    = mkVarEnv visibleNs
+              $ mkVarEnv visibleNs
     visibleNs = visibleNames ss
     extras    = [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly, Initialized))]
     mod       = scrapeModules ss 
@@ -642,9 +640,10 @@ tcExpr γ (CondExpr l e e1 e2) to
   = do  opTy                      <- mkTy to <$> safeTcEnvFindTy l γ (builtinOpId BICondExpr)
         (sv,v)                    <- dup F.symbol (VarRef l) <$> freshId l
         let γ'                     = tcEnvAdd sv (tt, WriteLocal, Initialized) γ
-        (FI _ [e',_,e1',e2'], t') <- tcNormalCall γ' l BICondExpr (FI Nothing ((,Nothing) <$> [e,v,e1,e2])) opTy
+        (FI _ [e',_,e1',e2'], t') <- tcNormalCall γ' l BICondExpr (args v) opTy
         return                     $ (CondExpr l e' e1' e2', t')
   where
+    args v   = FI Nothing [(e,Nothing), (v, Nothing),(e1,to),(e2,to)]
     tt       = fromMaybe tTop to
     mkTy Nothing (TAll cv (TAll tv (TFun Nothing [B c_ tc, B t_ _, B x_ xt, B y_ yt] o r))) = 
       TAll cv (TAll tv (TFun Nothing [B c_ tc, B t_ tTop, B x_ xt, B y_ yt] o r))

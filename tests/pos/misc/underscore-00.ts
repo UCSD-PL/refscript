@@ -1,3 +1,9 @@
 module foo {
-	declare var _:number
+
+  /*@ _ :: number */
+	declare var _: number;
+
+  /*@ $ :: string */
+  declare var $;
+
 }

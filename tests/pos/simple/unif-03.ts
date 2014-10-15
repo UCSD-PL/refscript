@@ -14,7 +14,7 @@ function foo<A>(p: Point<A>) {
 }
 
 /*@ p :: #ColorPoint[#Immutable,number,string] */
-var p: ColorPoint<number, string>;
+declare var p: ColorPoint<number, string>;
 
 foo(p);
 

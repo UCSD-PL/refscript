@@ -600,6 +600,7 @@ data SyntaxKind =
   | FieldDefKind
   | CtorDefKind
   | VarDeclKind
+  | AmbVarDeclKind
   | ClassDefKind
   | ModuleDefKind
   | EnumDefKind
@@ -708,9 +709,9 @@ writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
 
 -- | scrapeVarDecl: Scrape a variable declaration for annotations
 ----------------------------------------------------------------------------------
-scrapeVarDecl :: VarDecl (AnnSSA r) -> [RType r]
+scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, RType r)]
 ----------------------------------------------------------------------------------
-scrapeVarDecl (VarDecl l _ _) = [ t | VarAnn                 t  <- ann_fact l ] 
-                             ++ [ t | AmbVarAnn              t  <- ann_fact l ] 
-                             ++ [ t | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
+scrapeVarDecl (VarDecl l _ _) = [ (VarDeclKind, t)    | VarAnn                 t  <- ann_fact l ] 
+                             ++ [ (AmbVarDeclKind, t) | AmbVarAnn              t  <- ann_fact l ] 
+                             ++ [ (FieldDefKind, t) | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
 

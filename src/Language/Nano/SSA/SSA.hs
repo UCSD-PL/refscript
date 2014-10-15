@@ -38,7 +38,7 @@ import           Language.Nano.SSA.Types
 import           Language.Nano.SSA.SSAMonad
 import           Language.Nano.Visitor     
 
--- import           Debug.Trace                        hiding (traceShow)
+import           Debug.Trace                        hiding (traceShow)
 
 -- FIXME : SSA needs a proper environment like TC an Liquid
 
@@ -87,7 +87,8 @@ ssaFun :: Data r => AnnSSA r -> [Var r] -> [Statement (AnnSSA r)] -> SSAM r [Sta
 -------------------------------------------------------------------------------------
 ssaFun l xs body
   = do  θ <- getSsaEnv
-        (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
+        glbs <- getGlobs
+        let (ros, wgs, wls) = (`variablesInScope` body) glbs
         withAssignability ReadOnly (ssaEnvIds θ)   $                 -- Variables from OUTER scope are UNASSIGNABLE
           withAssignability ReadOnly ros        $ 
             withAssignability WriteGlobal wgs   $ 
@@ -158,8 +159,9 @@ ssaStmt (IfSingleStmt l b s)
 ssaStmt (IfStmt l e s1 s2) = do
     (se, e')     <- ssaExpr e
     θ            <- getSsaEnv
-    (θ1, s1')    <- ssaWith θ ssaStmt s1
-    (θ2, s2')    <- ssaWith θ ssaStmt s2
+    φ            <- getSsaEnvGlob
+    (θ1, s1')    <- ssaWith θ φ ssaStmt s1
+    (θ2, s2')    <- ssaWith θ φ ssaStmt s2
     (θ', φ1, φ2) <- envJoin l θ1 θ2
     let stmt'     = prefixStmt l se $ IfStmt l e' (splice s1' φ1) (splice s2' φ2)
     case θ' of
@@ -514,12 +516,17 @@ flattenBlock = concatMap f
     f s                = [s ]
 
 -------------------------------------------------------------------------------------
-ssaWith :: SsaEnv r -> (a -> SSAM r (Bool, b)) -> a -> SSAM r (Maybe (SsaEnv r), b)
+ssaWith :: SsaEnv r         -- Local
+        -> SsaEnv r         -- Global
+        -> (a -> SSAM r (Bool, b)) 
+        -> a 
+        -> SSAM r (Maybe (SsaEnv r, SsaEnv r), b)
 -------------------------------------------------------------------------------------
-ssaWith θ f x = do
+ssaWith θ φ f x = do
   setSsaEnv θ
+  setSsaEnvGlob φ
   (b, x') <- f x
-  (, x')  <$> (if b then Just <$> getSsaEnv else return Nothing)
+  (, x')  <$> (if b then Just <$> ((,) <$> getSsaEnv <*> getSsaEnvGlob) else return Nothing)
 
 
 -------------------------------------------------------------------------------------
@@ -553,8 +560,9 @@ ssaExpr (VarRef l x)
 ssaExpr (CondExpr l c e1 e2)
   = do (sc, c') <- ssaExpr c
        θ        <- getSsaEnv
-       e1'      <- ssaPureExprWith θ e1
-       e2'      <- ssaPureExprWith θ e2
+       φ        <- getSsaEnvGlob
+       e1'      <- ssaPureExprWith θ φ e1
+       e2'      <- ssaPureExprWith θ φ e2
        return (sc, CondExpr l c' e1' e2')
 
         
@@ -649,7 +657,7 @@ ssaExprs f es       = (concat *** f) . unzip <$> mapM ssaExpr es
 ssaExpr1 = case1 ssaExprs -- (\case [e'] -> f e') [e]
 ssaExpr2 = case2 ssaExprs -- (\case [e1', e2'] -> f e1' e2') [e1, e2]
 ssaExpr3 = case3 ssaExprs -- (\case [e1', e2', e3'] -> f e1' e2' e3') [e1, e2, e3]
-ssaPureExprWith θ e = snd <$> ssaWith θ (fmap (True,) . ssaPureExpr) e
+ssaPureExprWith θ φ e = snd <$> ssaWith θ φ (fmap (True,) . ssaPureExpr) e
 
 ssaPureExpr e = do
   (s, e') <- ssaExpr e
@@ -732,24 +740,26 @@ ssaAsgn l x e  = do
 
 
 -------------------------------------------------------------------------------------
-envJoin :: Data r => AnnSSA r -> Maybe (SsaEnv r) -> Maybe (SsaEnv r)
-        -> SSAM r ( Maybe (SsaEnv r),
-                    Maybe (Statement (AnnSSA r)),
-                    Maybe (Statement (AnnSSA r)))
+-- envJoin :: Data r => AnnSSA r -> Maybe (SsaEnv r) -> Maybe (SsaEnv r)
+--         -> SSAM r ( Maybe (SsaEnv r),
+--                     Maybe (Statement (AnnSSA r)),
+--                     Maybe (Statement (AnnSSA r)))
 -------------------------------------------------------------------------------------
 envJoin _ Nothing Nothing     = return (Nothing, Nothing, Nothing)
-envJoin _ Nothing (Just θ)    = return (Just θ , Nothing, Nothing)
-envJoin _ (Just θ) Nothing    = return (Just θ , Nothing, Nothing)
+envJoin _ Nothing (Just θ)    = return (Just $ fst θ , Nothing, Nothing)
+envJoin _ (Just θ) Nothing    = return (Just $ fst θ , Nothing, Nothing)
 envJoin l (Just θ1) (Just θ2) = envJoin' l θ1 θ2
 
-envJoin' l θ1 θ2 = do
+envJoin' l (θ1,φ1) (θ2,φ2) = do
     setSsaEnv θ'                          -- Keep Common binders
-    phis       <- mapM (mapFstM freshenIdSSA) $ envToList $ envLefts θ
-    stmts      <- forM phis $ phiAsgn l   -- Adds Phi-Binders, Phi Annots, Return Stmts
+    phis       <- mapM (mapFstM freshenIdSSA) (envToList $ envLefts θ)
+    gl_phis    <- mapM (mapFstM freshenIdSSA) (envToList $ envLefts φ)
+    stmts      <- forM (phis ++ gl_phis) $ phiAsgn l   -- Adds Phi-Binders, Phi Annots, Return Stmts
     θ''        <- getSsaEnv
     let (s1,s2) = unzip stmts
     return (Just θ'', Just $ BlockStmt l s1, Just $ BlockStmt l s2)
   where
+    φ           = envIntersectWith meet φ1 φ2
     θ           = envIntersectWith meet θ1 θ2
     θ'          = envRights θ
     meet        = \x1 x2 -> if x1 == x2 then Right x1 else Left (x1, x2)

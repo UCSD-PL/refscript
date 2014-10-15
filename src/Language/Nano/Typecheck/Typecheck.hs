@@ -524,18 +524,19 @@ tcVarDecl ::  PPR r => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e))
   = case scrapeVarDecl v of
-      [ ] -> do (e', to)   <- tcExprW γ e
-                return      $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,WriteLocal,Initialized) <$> to)
-      [t] -> f WriteGlobal <$> tcCast γ l e t
-      _   -> tcError        $ errorVarDeclAnnot (srcPos l) x
+      [ ]     -> do (e', to)   <- tcExprW γ e
+                    return      $ (VarDecl l x (Just e'), tcEnvAddo γ x $ (,WriteLocal,Initialized) <$> to)
+      [(_,t)] -> f WriteGlobal <$> tcCast γ l e t
+      _       -> tcError        $ errorVarDeclAnnot (srcPos l) x
   where
     f a = (VarDecl l x . Just *** Just . (`tcEnvAdds` γ) . single . (x,) . (,a, Initialized)) 
 
 tcVarDecl γ v@(VarDecl l x Nothing)
   = case scrapeVarDecl v of
-      [ ] -> tcVarDecl γ $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
-      [t] -> return      $ (v, Just $ tcEnvAdds [(x, (t,WriteGlobal, Uninitialized))] γ)
-      _   -> tcError     $ errorVarDeclAnnot (srcPos l) x
+      [ ]                   -> tcVarDecl γ $ VarDecl l x $ Just $ VarRef l $ Id l "undefined"
+      [(AmbVarDeclKind, t)] -> return      $ (v, Just $ tcEnvAdds [(x, (t,WriteGlobal, Initialized))] γ)
+      [(_, t)]              -> return      $ (v, Just $ tcEnvAdds [(x, (t,WriteGlobal, Uninitialized))] γ)
+      _                     -> tcError     $ errorVarDeclAnnot (srcPos l) x
 
 -------------------------------------------------------------------------------
 tcAsgn :: PPR r 

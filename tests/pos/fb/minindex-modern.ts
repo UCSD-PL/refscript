@@ -24,7 +24,7 @@ function minIndex(arr) {
     if (arr.length <= 0) return -1;
     
     function body(min: number, cur: number, i: number) { 
-	return cur < arr[min] ? (i + 100) : min; 
+	return cur < arr[min] ? i : min; 
     }; 
     
     return reduce(arr, body, 0);
@@ -52,5 +52,3 @@ function minIndex(arr) {
 
 
 
-
- 

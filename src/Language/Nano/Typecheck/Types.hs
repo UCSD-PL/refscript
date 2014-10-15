@@ -588,14 +588,16 @@ instance (PP r, F.Reftable r) => PP (TypeMember r) where
   pp (CallSig t)          =  text "call" <+> pp t 
   pp (ConsSig t)          =  text "new" <+> pp t
   pp (IndexSig _ i t)     =  brackets (pp i) <> text ":" <+> pp t
-  pp (FieldSig x m t)     =  text "field" <+> ppMut m <+> pp x <> text ":" <+> pp t 
-  pp (MethSig x m t)      =  text "method" <+> ppMut m <+> pp x <> ppMeth t
+  pp (FieldSig x m t)     =  text "▣" <+> ppMut m <+> pp x <> text ":" <+> pp t 
+  pp (MethSig x m t)      =  text "●" <+> ppMut m <+> pp x <+> text ":" <+>  ppMeth t
 
-ppMeth t = 
-  case bkFun t of
-    Just ([],s,ts,t) -> ppfun s ts t
-    Just (αs,s,ts,t) -> angles (ppArgs id comma αs) <> ppfun s ts t
-    Nothing          -> text "ERROR TYPE"
+ppMeth mt = 
+  case bkAnd mt of
+    [ ] ->  text "ERROR TYPE"
+    [t] ->  case bkFun t of
+              Just ([],s,ts,t) -> ppfun s ts t
+              Just (αs,s,ts,t) -> angles (ppArgs id comma αs) <> ppfun s ts t
+    ts  ->  hsep [text "/\\" <+> ppMeth t | t <- ts]
   where
     ppfun (Just s) ts t = ppArgs parens comma (B (F.symbol "this") s : ts) <> text ":" <+> pp t
     ppfun Nothing  ts t = ppArgs parens comma ts <> text ":" <+> pp t

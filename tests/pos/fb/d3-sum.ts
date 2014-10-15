@@ -1,5 +1,4 @@
-/*@ alias IArray<T> = Array<Immutable, T> */
-/*@ alias ix<a>     = {v:number | 0 <= v && v < len a} */ 
+/*@ alias ix<a> = {v:number | 0 <= v && v < len a} */ 
 
 /*@ d3_sum :: /\ (a: IArray<number>) => number
               /\ forall T. (a: IArray<T>, f: (T, ix<a>) => number) => number  */ 

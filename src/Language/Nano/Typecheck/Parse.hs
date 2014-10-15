@@ -59,7 +59,9 @@ import           Text.Parsec                      hiding (parse, State)
 import           Text.Parsec.Pos                         (newPos)
 import           Text.Parsec.Error                       (errorMessages, showErrorMessages)
 import qualified Text.Parsec.Token                as     T
+import           Text.Parsec.Token                       (identStart, identLetter)
 import           Text.Parsec.Prim                        (stateUser)
+import           Text.Parsec.Language                    (emptyDef)
 
 import           GHC.Generics
 
@@ -68,6 +70,10 @@ import           GHC.Generics
 dot        = T.dot        lexer
 plus       = T.symbol     lexer "+"
 question   = T.symbol     lexer "?"
+
+jsLexer    = T.makeTokenParser $ emptyDef { identStart  = letter   <|> oneOf "$_"
+                                          , identLetter = alphaNum <|> oneOf "$_" }
+identifier = T.identifier jsLexer
 
 ----------------------------------------------------------------------------------
 -- | Type Binders 
@@ -80,11 +86,13 @@ anonFuncP :: Parser RefType
 anonFuncP = funcSigP
 
 identifierP :: Parser (Id SourceSpan)
-identifierP =  try (withSpan Id uIdP)
-           <|>     (withSpan Id lIdP)
-  where
-    uIdP    = symbolString <$> upperIdP
-    lIdP    = symbolString <$> lowerIdP
+identifierP = withSpan Id identifier 
+
+-- identifierP =  try (withSpan Id uIdP)
+--            <|>     (withSpan Id lIdP)
+--   where
+--     uIdP    = symbolString <$> upperIdP
+--     lIdP    = symbolString <$> lowerIdP
   
 pAliasP :: Parser (Id SourceSpan, PAlias) 
 pAliasP = do name <- identifierP

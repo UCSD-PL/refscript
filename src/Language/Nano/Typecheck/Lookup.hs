@@ -49,25 +49,25 @@ type PPRD r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
 getProp :: (PPRD r, EnvLike r g, F.Symbolic f) 
         => g r -> Bool -> f -> RType r -> Maybe (RType r, RType r, Mutability)
 -------------------------------------------------------------------------------
-getProp γ b s t@(TApp _ _ _  ) =                getPropApp γ b s t
+getProp γ b s t@(TApp _ _ _  ) =                  getPropApp γ b s t
 
-getProp _ b s t@(TCons _ es _) = do (t',m)   <- accessMember b InstanceMember s es
-                                    return    $ (t,t',m)
+getProp _ b s t@(TCons _ es _) = do (t',m)     <- accessMember b InstanceMember s es
+                                    return      $ (t,t',m)
 
-getProp γ b s t@(TClass c    ) = do d        <- resolveRelTypeInEnv γ c
-                                    es       <- flatten Nothing StaticMember γ (d,[])
-                                    (t', m)  <- accessMember b StaticMember s es
-                                    return    $ (t,t',m)
+getProp γ b s t@(TClass c    ) = do d          <- resolveRelTypeInEnv γ c
+                                    es         <- flatten Nothing StaticMember γ (d,[])
+                                    (t', m)    <- accessMember b StaticMember s es
+                                    return      $ (t,t',m)
 
-getProp γ _ s t@(TModule m   ) = do m'       <- resolveRelPathInEnv γ m
-                                    (_,_,ty) <- envFindTy s $ m_variables m'
-                                    t'       <- renameRelative (modules γ) (m_path m') (absPath γ) ty
-                                    return   $  (t,t', t_readOnly) 
+getProp γ _ s t@(TModule m   ) = do m'         <- resolveRelPathInEnv γ m
+                                    (_,_,ty,_) <- envFindTy s $ m_variables m'
+                                    t'         <- renameRelative (modules γ) (m_path m') (absPath γ) ty
+                                    return      $ (t,t', t_readOnly) 
                                     -- FIXME: perhaps something else here as mutability
 
-getProp γ _ s t@(TEnum e     ) = do e'       <- resolveRelEnumInEnv γ e
-                                    i        <- envFindTy (F.symbol s) (e_symbols e')
-                                    return    $ (t, tInt `strengthen` exprReft i, t_immutable)
+getProp γ _ s t@(TEnum e     ) = do e'         <- resolveRelEnumInEnv γ e
+                                    i          <- envFindTy (F.symbol s) (e_symbols e')
+                                    return      $ (t, tInt `strengthen` exprReft i, t_immutable)
 
 getProp _ _ _ _ = Nothing
 

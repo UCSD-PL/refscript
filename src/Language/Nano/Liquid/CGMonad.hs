@@ -26,14 +26,15 @@ module Language.Nano.Liquid.CGMonad (
   , cgError      
 
   -- * Fresh Templates for Unknown Refinement Types 
-  , freshTyFun, freshTyVar, freshTyInst, freshTyPhis
-  , freshTyPhisWhile, freshTyObj, freshenCGEnvM
+  , freshTyFun, freshTyVar, freshTyInst, freshTyPhis, freshTyPhis'
+  , freshTyObj, freshenCGEnvM
 
   -- * Freshable
   , Freshable (..)
 
   -- * Environment API
-  , envAddFresh, envAdds, envAddReturn, envAddGuard, envPopGuard, envFindTy, envFindTyWithAsgn
+  , envAddFresh, envAdds, envAddReturn, envAddGuard, envPopGuard, envFindTy
+  , envFindTyWithAsgn, envFindTyForAsgn
   , safeEnvFindTy, safeEnvFindTyWithAsgn
   , envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
@@ -88,7 +89,7 @@ import           Language.Fixpoint.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -248,11 +249,15 @@ envGetContextTypArgs n g a αs
 
 
 ---------------------------------------------------------------------------------------
-envAddFresh :: IsLocated l => l -> (RefType, Assignability) -> CGEnv -> CGM (Id AnnTypeR, CGEnv) 
+envAddFresh :: IsLocated l 
+            => l 
+            -> (RefType, Assignability, Initialization) 
+            -> CGEnv 
+            -> CGM (Id AnnTypeR, CGEnv) 
 ---------------------------------------------------------------------------------------
-envAddFresh l (t,a) g 
+envAddFresh l (t,a,i) g 
   = do x  <- freshId l
-       g' <- envAdds "envAddFresh" [(x,(t,a))] g
+       g' <- envAdds "envAddFresh" [(x,(t,a,i))] g
        addAnnot l x t
        return (x, g')
    
@@ -272,29 +277,33 @@ freshenAnn l
 ---------------------------------------------------------------------------------------
 envAdds :: (IsLocated l, F.Symbolic l) 
         => String 
-        -> [(l, (RefType, Assignability))] 
+        -> [(l, (RefType, Assignability, Initialization))] 
         -> CGEnv 
         -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 envAdds _ xts' g
-  = do xtas     <- zip xs . (`zip` as) <$> mapM (addInvariant g) ts'
-       is       <- catMaybes           <$> forM xtas addFixpointBind
-       _        <- forM xtas            $  \(x,(t,_)) -> addAnnot x x t
-       return    $ g { cge_names        = E.envAdds xtas       $ cge_names g
-                     , cge_fenv         = F.insertsIBindEnv is $ cge_fenv  g }
+  = do ts         <- zipWithM inv ts' is
+       let xtas    = zip xs $ zip3 ts as is
+       is         <- catMaybes    <$> forM xtas addFixpointBind
+       _          <- forM xtas     $  \(x,(t,_,_)) -> addAnnot x x t
+       return      $ g { cge_names = E.envAdds xtas       $ cge_names g
+                       , cge_fenv  = F.insertsIBindEnv is $ cge_fenv  g }
     where
-       (xs,ys)    = unzip xts'
-       (ts',as)   = unzip ys
+       (xs,(ts',as,is))  = mapSnd unzip3 $ unzip xts'
+       inv t Initialized = addInvariant g t
+       inv t _           = return t
+
 
 instance PP F.IBindEnv where
   pp e = F.toFix e 
 
 -- ReturnVar definitely does not need to be in the bindings
 ---------------------------------------------------------------------------------------
-addFixpointBind :: (F.Symbolic x) => (x, (RefType, Assignability)) -> CGM (Maybe F.BindId)
+addFixpointBind :: (F.Symbolic x) 
+                => (x, (RefType, Assignability, Initialization)) -> CGM (Maybe F.BindId)
 ---------------------------------------------------------------------------------------
-addFixpointBind (_, (_, ReturnVar)) = return Nothing 
-addFixpointBind (x, (t, _))
+addFixpointBind (_, (_, ReturnVar,_)) = return Nothing 
+addFixpointBind (x, (t, _, _))
   = do (i, bs') <- F.insertBindEnv s r . binds <$> get 
        modify    $ \st -> st { binds = bs' }
        return    $ Just i
@@ -346,7 +355,7 @@ addAnnot l x t = modify $ \st -> st {cg_ann = S.addAnnot (srcPos l) x t (cg_ann 
 ---------------------------------------------------------------------------------------
 envAddReturn        :: (IsLocated f)  => f -> RefType -> CGEnv -> CGM CGEnv 
 ---------------------------------------------------------------------------------------
-envAddReturn f t g  = return $ g { cge_names = E.envAddReturn f (t, ReturnVar) (cge_names g) } 
+envAddReturn f t g  = return $ g { cge_names = E.envAddReturn f (t, ReturnVar, Initialized) (cge_names g) } 
 
 ---------------------------------------------------------------------------------------
 envAddGuard       :: (F.Symbolic x, IsLocated x) => x -> Bool -> CGEnv -> CGEnv  
@@ -377,24 +386,44 @@ envPopGuard g = g { cge_guards = grdPop $ cge_guards g }
 ---------------------------------------------------------------------------------------
 envFindTy :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> Maybe RefType 
 ---------------------------------------------------------------------------------------
-envFindTy x g = fst <$> envFindTyWithAsgn x g
+envFindTy x g = fst3 <$> envFindTyWithAsgn x g
 
 
 -- Only include the "singleton" refinement in the case where Assignability is
 -- either ReadOnly of WriteLocal (SSAed)
 ---------------------------------------------------------------------------------------
 envFindTyWithAsgn :: (IsLocated x, F.Symbolic x, F.Expression x) 
-                  => x -> CGEnv -> Maybe (RefType, Assignability)
+                  => x -> CGEnv -> Maybe (RefType, Assignability, Initialization)
 ---------------------------------------------------------------------------------------
 envFindTyWithAsgn x = (eSngl <$>) . findT x
   where
-    eSngl (t, WriteGlobal) = (t, WriteGlobal)
-    eSngl (t, a)           = (t `eSingleton` x, a)
+    eSngl (t, WriteGlobal,i) = adjustInit (t, WriteGlobal,i)
+    eSngl (t, a,i)           = (t `eSingleton` x, a,i)
     findT x g = case E.envFindTy x $ cge_names g of 
                   Just t   -> Just t
                   Nothing  -> case cge_parent g of 
                                 Just g' -> findT x g'
                                 Nothing -> Nothing
+    adjustInit s@(_, _, Initialized) = s
+    adjustInit (t, a, _ ) = (orUndef t, a, Uninitialized)
+
+
+
+
+---------------------------------------------------------------------------------------
+envFindTyForAsgn :: (IsLocated x, F.Symbolic x, F.Expression x) 
+                  => x -> CGEnv -> Maybe (RefType, Assignability, Initialization)
+---------------------------------------------------------------------------------------
+envFindTyForAsgn x = (eSngl <$>) . findT x
+  where
+    eSngl (t, WriteGlobal,i) = (t, WriteGlobal,i)
+    eSngl (t, a,i)           = (t `eSingleton` x, a,i)
+    findT x g = case E.envFindTy x $ cge_names g of 
+                  Just t   -> Just t
+                  Nothing  -> case cge_parent g of 
+                                Just g' -> findT x g'
+                                Nothing -> Nothing
+
 
 ---------------------------------------------------------------------------------------
 safeEnvFindTy :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) 
@@ -408,7 +437,7 @@ safeEnvFindTy x g = case envFindTy x g of
 
 ---------------------------------------------------------------------------------------
 safeEnvFindTyWithAsgn :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) 
-                      => x -> CGEnv -> CGM (RefType, Assignability)
+                      => x -> CGEnv -> CGM (RefType, Assignability, Initialization)
 ---------------------------------------------------------------------------------------
 safeEnvFindTyWithAsgn x g = case envFindTyWithAsgn x g of
                         Just t  -> return t
@@ -419,7 +448,7 @@ safeEnvFindTyWithAsgn x g = case envFindTyWithAsgn x g of
 ---------------------------------------------------------------------------------------
 envFindReturn :: CGEnv -> RefType 
 ---------------------------------------------------------------------------------------
-envFindReturn = fst . E.envFindReturn . cge_names
+envFindReturn = fst3 . E.envFindReturn . cge_names
 
 
 ---------------------------------------------------------------------------------------
@@ -451,18 +480,28 @@ freshTyPhis :: AnnTypeR -> CGEnv -> [Id AnnTypeR] -> [Type] -> CGM (CGEnv, [RefT
 ---------------------------------------------------------------------------------------
 freshTyPhis l g xs τs 
   = do ts <- mapM (freshTy "freshTyPhis")  τs
-       g' <- envAdds "freshTyPhis" (zip xs (zip ts (repeat WriteLocal))) g
+       g' <- envAdds "freshTyPhis" (zip xs ((,WriteLocal,Initialized) <$> ts)) g
        _  <- mapM (wellFormed l g') ts
        return (g', ts)
 
+
+
+-- 
+-- NEW 
+--
+-- | Instantiate Fresh Type (at Phi-site) 
 ---------------------------------------------------------------------------------------
-freshTyPhisWhile :: AnnTypeR -> CGEnv -> [Id AnnTypeR] -> [Type] -> CGM (CGEnv, [RefType])  
+-- freshTyPhis' :: AnnTypeR -> CGEnv -> [Id AnnTypeR] 
+--              -> [(Type, Assignability, Initialization)] -> CGM (CGEnv, [RefType])  
 ---------------------------------------------------------------------------------------
-freshTyPhisWhile l g xs τs 
+freshTyPhis' l g xs ts
   = do ts <- mapM (freshTy "freshTyPhis")  τs
-       g' <- envAdds "freshTyPhisWhile" (zip xs (zip ts (repeat WriteLocal))) g
-       _  <- mapM (wellFormed l g) ts
+       g' <- envAdds "freshTyPhis" (zip xs (zip3 ts as is)) g
+       _  <- mapM (wellFormed l g') ts
        return (g', ts)
+  where
+    (τs,as,is) = unzip3 ts 
+
 
 -- | Fresh Object Type
 ---------------------------------------------------------------------------------------
@@ -475,30 +514,24 @@ freshTyObj l g t = freshTy "freshTyArr" t >>= wellFormed l g
 freshenCGEnvM :: CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 freshenCGEnvM g  
-  = do  names   <- E.envFromList  <$> mapM (freshenVarbindingM g) (E.envToList $ cge_names g)
-        modules <- E.qenvFromList <$> mapM (freshenModuleDefM g) (E.qenvToList $ cge_mod g)
+  = do  names   <- E.envFromList  <$> mapM (freshenVarbindingM g) (E.envToList  $ cge_names g)
+        modules <- E.qenvFromList <$> mapM (freshenModuleDefM  g) (E.qenvToList $ cge_mod   g)
         return $ g { cge_names = names, cge_mod = modules } 
-  where
 
+freshenVarbindingM _ (x, (v@(TVar{}),a,i)) = return (x,(v,a,i))
+freshenVarbindingM g (x, (t,ReadOnly,i)  ) = (x,) . (,ReadOnly,i) <$> freshTyVar g (srcPos x) t
+freshenVarbindingM _ (x, (t,a,i)         ) = return (x,(t,a,i))
 
--- | @freshenVarbindingM@ 
---
---    XXX: only ReadOnly vars are freshened
---
-freshenVarbindingM _ (x,(v@(TVar{}),a)) = return (x,(v,a))
-freshenVarbindingM g (x,(t,ReadOnly)  ) = (\t -> (x,(t,ReadOnly))) <$> freshTyVar g (srcPos x) t
-freshenVarbindingM _ (x,(t,a)         ) = return (x,(t,a))
-
-freshenModuleDefM g (a, m)  
+freshenModuleDefM g (a, m)
   = do  vars     <- E.envFromList <$> mapM f (E.envToList $ m_variables m)
         -- types    <- E.envFromList <$> mapM h (E.envToList $ m_types m)        
         return (a,m { m_variables = vars }) -- , m_types = types })
   where
-    f (x, (v, w, t)) =
+    f (x, (v,w,t,i)) =
       case w of
         ReadOnly   -> do  ft    <- freshTyVar g (srcPos x) t 
-                          return   (x, (v, w, ft))
-        _          -> return (x,(v,w,t))
+                          return   (x, (v, w, ft,i))
+        _          -> return (x,(v,w,t,i))
 
 
 ---------------------------------------------------------------------------------------
@@ -510,8 +543,8 @@ subType :: AnnTypeR -> Error -> CGEnv -> RefType -> RefType -> CGM ()
 ---------------------------------------------------------------------------------------
 subType l err g t1 t2 =
   do  t1'    <- addInvariant g t1  -- enhance LHS with invariants
-      let xs  = [(symbolId l x,(t,a)) | (x, Just (t,a)) <- rNms t1' ++ rNms t2 ]
-      let ys  = [(symbolId l x,(t,a)) | (x,      (t,a)) <- E.envToList $ cgeAllNames g ]
+      let xs  = [(symbolId l x,(t,a,i)) | (x, Just (t,a,i)) <- rNms t1' ++ rNms t2 ]
+      let ys  = [(symbolId l x,(t,a,i)) | (x,      (t,a,i)) <- E.envToList $ cgeAllNames g ]
       -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++
       --                                     ppshow "(" ++ ppshow t1 ++ " vs " ++ ppshow t2 ++ ppshow ")" ++ 
       --                                     " Adding XS: " ++ ppshow (fst <$> xs) ++ 
@@ -873,18 +906,22 @@ bsplitW g t i
   = []
   where r' = rTypeSortedReft t
 
-envTyAdds msg l xts = envAdds (msg ++  " - envTyAdds " ++ ppshow (srcPos l)) [(symbolId l x,(t,WriteLocal)) | B x t <- xts]
+envTyAdds msg l xts 
+  = envAdds (msg ++ " - envTyAdds " ++ ppshow (srcPos l)) 
+      [(symbolId l x,(t,WriteLocal,Initialized)) | B x t <- xts]
 
 
 ------------------------------------------------------------------------------
-cgFunTys :: (PPR r, F.Symbolic s, PP a) =>
-  AnnSSA r -> a -> [s] -> RType r -> CGM [(Int, ([TVar], Maybe (RType r), [RType r], RType r))]
+cgFunTys :: (PPR r, F.Symbolic s, PP a) 
+         => AnnSSA r -> a -> [s] -> RType r 
+         -> CGM [(Int, ([TVar], Maybe (RType r), [RType r], RType r))]
 ------------------------------------------------------------------------------
 cgFunTys l f xs ft = either cgError return $ funTys l f xs ft 
 
 ------------------------------------------------------------------------------
-cgMethTys :: (PP a) => AnnTypeR -> a -> (Mutability, RefType)
-                    -> CGM [(Int, Mutability, ([TVar], Maybe RefType, [RefType], RefType))]
+cgMethTys :: (PP a) 
+          => AnnTypeR -> a -> (Mutability, RefType)
+          -> CGM [(Int, Mutability, ([TVar], Maybe RefType, [RefType], RefType))]
 ------------------------------------------------------------------------------
 cgMethTys l f (m,t) 
    = zip3 [0..] (repeat m) <$> mapM (methTys l f) (bkAnd t)

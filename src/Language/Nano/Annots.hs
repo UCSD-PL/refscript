@@ -123,6 +123,7 @@ data Fact r
   | Overload    !IContext  !(RType r)
   -- Type annotations
   | VarAnn      !(RType r)
+  | AmbVarAnn   !(RType r)
   -- Class member annotations
   | FieldAnn    !(TypeMember r)
   | MethAnn     !(TypeMember r) 
@@ -199,6 +200,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (EltOverload ξ i)= text "elt_overload"           <+> pp ξ <+> pp i
   pp (TCast  ξ c)     = text "cast"                   <+> pp ξ <+> pp c
   pp (VarAnn t)       = text "Var Annotation"         <+> pp t
+  pp (AmbVarAnn t)    = text "Amb Var Annotation"     <+> pp t
   pp (ConsAnn c)      = text "Constructor Annotation" <+> pp c
   pp (UserCast c)     = text "Cast Annotation"        <+> pp c
   pp (ExporedModElt)  = text "Exported"
@@ -228,6 +230,7 @@ factRTypes = go
     go (EltOverload _ m)  = [f_type m]
     go (Overload _ t)     = [t] 
     go (VarAnn t)         = [t]
+    go (AmbVarAnn t)      = [t]
     go (UserCast t)       = [t]
     go (FuncAnn t)        = [t]
     go (FieldAnn m)       = [f_type m]

@@ -11,6 +11,7 @@ module Language.Nano.Types where
 
 import           Control.Applicative                ((<$>))
 import           Data.Hashable
+import           Data.Monoid
 import qualified Data.IntMap                     as I
 import           Data.Function                      (on)
 import qualified Data.Map.Strict                 as M
@@ -254,6 +255,45 @@ data EnumDef = EnumDef {
 
 
 ------------------------------------------------------------------------------------------
+-- | Module Body 
+------------------------------------------------------------------------------------------
+--
+--  As per TypeScript spec par. 10.2:
+--
+--  Each module body has a declaration space for local variables (including
+--  functions, modules, class constructor functions, and enum objects), a 
+--  declaration space for local named types (classes, interfaces, and enums),
+--  and a declaration space for local namespaces (containers of named types).
+--  Every declaration (whether local or exported) in a module contributes to 
+--  one or more of these declaration spaces.
+--
+--  PV: the last case has not been included
+--
+data ModuleDef r = ModuleDef {
+  -- 
+  -- ^ Contents of a module (local and exported)
+  --   
+  --   * Interfaces are _not_ included here (because thery don't appear as
+  --   bindings in the language)
+  --
+    m_variables   :: Env (Visibility, Assignability, RType r, Initialization)
+  --
+  -- ^ Types
+  --
+  , m_types       :: Env (IfaceDef r)
+  -- 
+  -- ^ Enumerations
+  --
+  , m_enums       :: Env EnumDef
+  -- 
+  -- ^ Absolute path of definition
+  --
+  , m_path        :: AbsPath
+  }
+  deriving (Functor, Data, Typeable)
+
+
+------------------------------------------------------------------------------------------
 -- | Assignability 
 ------------------------------------------------------------------------------------------
 
@@ -288,50 +328,25 @@ data Assignability
   deriving (Show, Eq, Data, Typeable)
 
 
-
--- | Module Body 
---
---  As per TypeScript spec par. 10.2:
---
---  Each module body has a declaration space for local variables (including
---  functions, modules, class constructor functions, and enum objects), a 
---  declaration space for local named types (classes, interfaces, and enums),
---  and a declaration space for local namespaces (containers of named types).
---  Every declaration (whether local or exported) in a module contributes to 
---  one or more of these declaration spaces.
---
---  PV: the last case has not been included
---
-data ModuleDef r = ModuleDef {
-  -- 
-  -- ^ Contents of a module (local and exported)
-  --   
-  --   * Interfaces are _not_ included here (because thery don't appear as
-  --   bindings in the language)
-  --
-    m_variables   :: Env (Visibility, Assignability, RType r)
-  --
-  -- ^ Types
-  --
-  , m_types       :: Env (IfaceDef r)
-  -- 
-  -- ^ Enumerations
-  --
-  , m_enums       :: Env EnumDef
-  -- 
-  -- ^ Absolute path of definition
-  --
-  , m_path        :: AbsPath
-  }
-  deriving (Functor, Data, Typeable)
-
-
-
 ---------------------------------------------------------------------------------
 -- | Mutability 
 ---------------------------------------------------------------------------------
 
 type Mutability = Type 
+
+
+---------------------------------------------------------------------------------
+-- | Initialization
+---------------------------------------------------------------------------------
+
+data Initialization = Initialized | Uninitialized
+  deriving (Show, Eq, Data, Typeable)
+
+instance Monoid Initialization where
+  mempty                                = Uninitialized
+  _             `mappend` Uninitialized = Uninitialized
+  Uninitialized `mappend` _             = Uninitialized
+  Initialized   `mappend` Initialized   = Initialized
 
 
 ---------------------------------------------------------------------------------
@@ -487,6 +502,9 @@ instance PP a => PP [a] where
 instance PP IContext where
   pp (IC x) = text "Context: " <+> pp x
 
+instance PP Initialization where
+  pp Initialized   = text "init"
+  pp Uninitialized = text "non-init"
 
 
 -----------------------------------------------------------------------
@@ -511,13 +529,10 @@ instance IsLocated (Alias a s t) where
 instance (PP a, PP s, PP t) => PP (Alias a s t) where
   pp (Alias n _ _ body) = text "alias" <+> pp n <+> text "=" <+> pp body 
    
-
-
 ---------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)
 -- End:
-
 

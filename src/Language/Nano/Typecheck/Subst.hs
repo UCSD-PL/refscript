@@ -208,6 +208,12 @@ instance (F.Reftable r, Substitutable r t) => Substitutable r (FuncInputs t) whe
 instance Substitutable r Assignability where
   apply _ s                 = s
 
+instance Substitutable r Initialization where
+  apply _ s                 = s
+
+instance (Substitutable r a, Substitutable r b, Substitutable r c) => Substitutable r (a,b,c) where
+  apply θ (a,b,c)           = (apply θ a, apply θ b, apply θ c)
+
  
 ---------------------------------------------------------------------------------
 appTy :: F.Reftable r => RSubst r -> RType r -> RType r

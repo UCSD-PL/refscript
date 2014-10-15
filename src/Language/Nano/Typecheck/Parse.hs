@@ -421,6 +421,7 @@ classDeclP = do
 data RawSpec
   = RawMeas     (SourceSpan, String)   -- Measure
   | RawBind     (SourceSpan, String)   -- Named function or var bindings
+  | RawAmbBind  (SourceSpan, String)   -- Ambient bamed function or var bindings
   | RawFunc     (SourceSpan, String)   -- Anonymouns function type
   | RawIface    (SourceSpan, String)   -- Interface annots
   | RawClass    (SourceSpan, String)   -- Class annots
@@ -436,20 +437,21 @@ data RawSpec
   deriving (Show,Eq,Ord,Data,Typeable,Generic)
 
 data PSpec l r
-  = Meas   (Id l, RType r)
-  | Bind   (Id l, RType r) 
-  | AnFunc (RType r) 
-  | Field  (TypeMember r)
-  | Constr (TypeMember r)
-  | Method (TypeMember r)
-  | Static (TypeMember r)
-  | Iface  (Id l, IfaceDef r)
-  | Class  (Id l, ([TVar], Maybe (RelName, [RType r])))
-  | TAlias (Id l, TAlias (RType r))
-  | PAlias (Id l, PAlias) 
-  | Qual   Qualifier
-  | Invt   l (RType r) 
-  | CastSp l (RType r)
+  = Meas    (Id l, RType r)
+  | Bind    (Id l, RType r) 
+  | AmbBind (Id l, RType r) 
+  | AnFunc  (RType r) 
+  | Field   (TypeMember r)
+  | Constr  (TypeMember r)
+  | Method  (TypeMember r)
+  | Static  (TypeMember r)
+  | Iface   (Id l, IfaceDef r)
+  | Class   (Id l, ([TVar], Maybe (RelName, [RType r])))
+  | TAlias  (Id l, TAlias (RType r))
+  | PAlias  (Id l, PAlias) 
+  | Qual    Qualifier
+  | Invt    l (RType r) 
+  | CastSp  l (RType r)
   | Exported l
 
   -- Used only for parsing specs
@@ -461,20 +463,21 @@ type Spec = PSpec SourceSpan Reft
 parseAnnot :: RawSpec -> Parser Spec
 parseAnnot = go
   where
-    go (RawMeas     (ss, _)) = Meas   <$> patch2 ss <$> idBindP
-    go (RawBind     (ss, _)) = Bind   <$> patch2 ss <$> idBindP
-    go (RawFunc     (_ , _)) = AnFunc <$>               anonFuncP
-    go (RawField    (_ , _)) = Field  <$>               fieldEltP def -- FIXME: these need to be patched aferwards  
-    go (RawMethod   (_ , _)) = Method <$>               methEltP def 
-    go (RawConstr   (_ , _)) = Constr <$>               consEltP
-    go (RawIface    (ss, _)) = Iface  <$> patch2 ss <$> iFaceP
-    go (RawClass    (ss, _)) = Class  <$> patch2 ss <$> classDeclP 
-    go (RawTAlias   (ss, _)) = TAlias <$> patch2 ss <$> tAliasP
-    go (RawPAlias   (ss, _)) = PAlias <$> patch2 ss <$> pAliasP
-    go (RawQual     (_ , _)) = Qual   <$>               qualifierP
-    go (RawInvt     (ss, _)) = Invt              ss <$> bareTypeP
-    go (RawCast     (ss, _)) = CastSp            ss <$> bareTypeP
-    go (RawExported (ss, _)) = return $ Exported ss
+    go (RawMeas     (ss, _)) = Meas    <$> patch2 ss <$> idBindP
+    go (RawBind     (ss, _)) = Bind    <$> patch2 ss <$> idBindP
+    go (RawAmbBind  (ss, _)) = AmbBind <$> patch2 ss <$> idBindP
+    go (RawFunc     (_ , _)) = AnFunc  <$>               anonFuncP
+    go (RawField    (_ , _)) = Field   <$>               fieldEltP def -- FIXME: these need to be patched aferwards  
+    go (RawMethod   (_ , _)) = Method  <$>               methEltP def 
+    go (RawConstr   (_ , _)) = Constr  <$>               consEltP
+    go (RawIface    (ss, _)) = Iface   <$> patch2 ss <$> iFaceP
+    go (RawClass    (ss, _)) = Class   <$> patch2 ss <$> classDeclP 
+    go (RawTAlias   (ss, _)) = TAlias  <$> patch2 ss <$> tAliasP
+    go (RawPAlias   (ss, _)) = PAlias  <$> patch2 ss <$> pAliasP
+    go (RawQual     (_ , _)) = Qual    <$>               qualifierP
+    go (RawInvt     (ss, _)) = Invt               ss <$> bareTypeP
+    go (RawCast     (ss, _)) = CastSp             ss <$> bareTypeP
+    go (RawExported (ss, _)) = return  $ Exported ss
 
 
 patch2 ss (id, t)    = (fmap (const ss) id , t)
@@ -484,6 +487,7 @@ getSpecString = go
   where
     go (RawMeas     (_, s)) = s 
     go (RawBind     (_, s)) = s 
+    go (RawAmbBind  (_, s)) = s 
     go (RawFunc     (_, s)) = s 
     go (RawIface    (_, s)) = s  
     go (RawField    (_, s)) = s  
@@ -500,6 +504,7 @@ getSpecString = go
 instance IsLocated RawSpec where
   srcPos (RawMeas     (s,_)) = s 
   srcPos (RawBind     (s,_)) = s 
+  srcPos (RawAmbBind  (s,_)) = s 
   srcPos (RawFunc     (s,_)) = s 
   srcPos (RawIface    (s,_)) = s  
   srcPos (RawField    (s,_)) = s  
@@ -596,20 +601,21 @@ mkCode' ss = Nano {
   where
     toBare           :: Int -> (SourceSpan, [Spec]) -> AnnBare Reft 
     toBare n (l,αs)   = Ann n l $ catMaybes $ bb <$> αs 
-    bb (Bind   (_,t)) = Just $ VarAnn   t   
-    bb (Constr c    ) = Just $ ConsAnn  c   
-    bb (Field  f    ) = Just $ FieldAnn f   
-    bb (Method m    ) = Just $ MethAnn  m   
-    bb (Static m    ) = Just $ StatAnn  m   
-    bb (Class  (_,t)) = Just $ ClassAnn t   
-    bb (Iface  (_,t)) = Just $ IfaceAnn t   
-    bb (CastSp _ t  ) = Just $ UserCast t   
-    bb (Exported _  ) = Just $ ExporedModElt
-    bb (AnFunc t    ) = Just $ FuncAnn  t   
-    bb _              = Nothing
-    starting_id       = 0
-    (ending_id, ss')  = mapAccumL (mapAccumL (\n -> (n+1,) . toBare n)) starting_id ss
-    anns              = concatMap (FO.foldMap snd) ss
+    bb (Bind    (_,t)) = Just $ VarAnn    t   
+    bb (AmbBind (_,t)) = Just $ AmbVarAnn t   
+    bb (Constr  c    ) = Just $ ConsAnn   c   
+    bb (Field   f    ) = Just $ FieldAnn  f   
+    bb (Method  m    ) = Just $ MethAnn   m   
+    bb (Static  m    ) = Just $ StatAnn   m   
+    bb (Class   (_,t)) = Just $ ClassAnn  t   
+    bb (Iface   (_,t)) = Just $ IfaceAnn  t   
+    bb (CastSp  _ t  ) = Just $ UserCast  t   
+    bb (Exported  _  ) = Just $ ExporedModElt
+    bb (AnFunc  t    ) = Just $ FuncAnn   t   
+    bb _               = Nothing
+    starting_id        = 0
+    (ending_id, ss')   = mapAccumL (mapAccumL (\n -> (n+1,) . toBare n)) starting_id ss
+    anns               = concatMap (FO.foldMap snd) ss
 
 scrapeQuals     :: NanoBareR Reft -> NanoBareR Reft
 scrapeQuals p = p { pQuals = qs ++ pQuals p}

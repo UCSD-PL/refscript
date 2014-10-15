@@ -20,13 +20,15 @@ module Language.Nano.SSA.SSAMonad (
    -- * SSA Environment
    , SsaEnv
    , names
-   , updSsaEnv 
+   , updSsaEnv, updSsaEnv'
    , freshenAnn
    , freshenIdSSA
    , findSsaEnv
    , extSsaEnv
    , setSsaEnv
+   , setSsaEnvGlob
    , getSsaEnv
+   , getSsaEnvGlob
    , getAstCount
    , ssaEnvIds
  
@@ -72,7 +74,11 @@ data SsaState r = SsaST {
   -- 
   -- ^ Current SSA names 
   --
-  , names         :: SsaEnv r                 
+  , names         :: SsaEnv r
+  -- 
+  -- ^ Like above but for globs
+  --
+  , glob_names    :: SsaEnv r
   -- 
   -- ^ Fresh index for SSA vars
   --
@@ -119,6 +125,12 @@ getSsaEnv   :: SSAM r (SsaEnv r)
 -------------------------------------------------------------------------------------
 getSsaEnv   = names <$> get 
 
+-------------------------------------------------------------------------------------
+getSsaEnvGlob   :: SSAM r (SsaEnv r)
+-------------------------------------------------------------------------------------
+getSsaEnvGlob   = glob_names <$> get 
+
+
 getAstCount = ssa_ast_cnt <$> get  
 
 ssaEnvIds = envKeys
@@ -127,6 +139,12 @@ ssaEnvIds = envKeys
 setSsaEnv    :: SsaEnv r -> SSAM r () 
 ------------------------------------------------------------------------------------
 setSsaEnv θ = modify $ \st -> st { names = θ } 
+
+-------------------------------------------------------------------------------------
+setSsaEnvGlob    :: SsaEnv r -> SSAM r () 
+------------------------------------------------------------------------------------
+setSsaEnvGlob θ = modify $ \st -> st { glob_names = θ } 
+
 
 -------------------------------------------------------------------------------------
 withAssignability :: IsLocated l => Assignability -> [Id l] -> SSAM r a -> SSAM r a 
@@ -153,13 +171,15 @@ updSsaEnv ll x
   = do mut <- getAssignability x
        case mut of
          WriteLocal  -> updSsaEnvLocal ll x
-         WriteGlobal -> return x
+         WriteGlobal -> updSsaEnvGlobal ll x
          ReadOnly    -> ssaError $ errorWriteImmutable l x 
          ReturnVar   -> ssaError $ errorWriteImmutable l x 
          ThisVar     -> ssaError $ errorWriteImmutable l x 
          ImportDecl  -> ssaError $ errorWriteImmutable l x 
   where
     l = srcPos ll
+
+updSsaEnv' l x = (,) <$> getAssignability x <*> updSsaEnv l x
 
 -------------------------------------------------------------------------------------
 updSsaEnvLocal :: AnnSSA r -> Var r -> SSAM r (Var r)
@@ -169,6 +189,14 @@ updSsaEnvLocal l x
        let x' = mkSSAId l x n
        modify $ \st -> st {names = envAdds [(x, SI x')] (names st)} {ssa_cnt = 1 + n}
        return x'
+
+-------------------------------------------------------------------------------------
+updSsaEnvGlobal :: AnnSSA r -> Var r -> SSAM r (Var r)
+-------------------------------------------------------------------------------------
+updSsaEnvGlobal l x 
+  = do modify $ \st -> st {glob_names = envAdds [(x, SI x)] (glob_names st)}
+       return x
+
 
 -------------------------------------------------------------------------------------
 freshenAnn :: IsLocated l => l -> SSAM r (AnnSSA r)
@@ -222,5 +250,5 @@ execute p act
 tryAction act = get >>= return . runState (runExceptT act)
 
 initState :: NanoBareR r -> SsaState r
-initState p = SsaST envEmpty envEmpty 0 IM.empty I.empty S.empty (max_id p)
+initState p = SsaST envEmpty envEmpty envEmpty 0 IM.empty I.empty S.empty (max_id p)
 

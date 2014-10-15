@@ -170,23 +170,34 @@ ssaStmt (IfStmt l e s1 s2) = do
 
 -- while c { b }
 ssaStmt (WhileStmt l cnd body)
-  = do (xs, x0s)  <- unzip . map (\(x, (SI xo,_)) -> (x, xo)) <$> getLoopPhis body 
-       x1s        <- mapM (freshenIdSSA >=> updSsaEnv l) xs
-       θ1         <- getSsaEnv
-       (sc, cnd') <- ssaExpr cnd
-       when (not $ null sc) (ssaError $ errorUpdateInExpr (srcPos l) cnd)
-       (t, body') <- ssaStmt body
-       θ2         <- getSsaEnv
-       let x2s     = [x2 | Just (SI x2) <- (`envFindTy` θ2) <$> xs]
-       addAnn l    $ PhiVar x1s
-       setSsaEnv θ1
-       l'         <- freshenAnn l
-       let body''  = body' `splice` asgn l' (mkNextId <$> x1s) x2s
-       l''        <- freshenAnn l
-       return      $ (t, asgn l'' x1s x0s `presplice` WhileStmt l cnd' body'')
+  = do  (xs, x0s)         <- unzip . map (\(x, (SI xo,_)) -> (x, xo)) <$> getLoopPhis body
+
+        xs'               <- mapM freshenIdSSA xs
+        as                <- mapM getAssignability xs'
+        let (l1s, l0s,_)  = unzip3 $ filter ((== WriteLocal) . thd3) (zip3 xs' x0s as)
+
+        -- SSA only the WriteLocal variables - globals will remain the same.
+       
+        l1s'              <- mapM (updSsaEnv l) l1s
+        θ1                <- getSsaEnv
+        (sc, cnd')        <- ssaExpr cnd
+        when (not $ null sc) (ssaError $ errorUpdateInExpr (srcPos l) cnd)
+        (t, body')        <- ssaStmt body
+        θ2                <- getSsaEnv
+
+        -- SSA only the WriteLocal variables - globals will remain the same.
+       
+        let l2s            = [ x2 | (Just (SI x2), WriteLocal) <- mapFst (`envFindTy` θ2) <$> zip xs as ]
+        addAnn l           $ PhiVar l1s'
+        setSsaEnv          $ θ1
+        l'                <- freshenAnn l
+        let body''         = body' `splice` asgn l' (mkNextId <$> l1s') l2s
+        l''               <- freshenAnn l
+        return             $ (t, asgn l'' l1s' l0s `presplice` WhileStmt l cnd' body'')
     where
-       asgn _  [] _   = Nothing
-       asgn l' ls rs  = Just $ BlockStmt l' $ zipWith (mkPhiAsgn l') ls rs
+        asgn _  [] _       = Nothing
+        asgn l' ls rs      = Just $ BlockStmt l' $ zipWith (mkPhiAsgn l') ls rs
+
 
 ssaStmt (ForStmt _  NoInit _ _ _ )     =
     errorstar "unimplemented: ssaStmt-for-01"
@@ -733,7 +744,7 @@ envJoin l (Just θ1) (Just θ2) = envJoin' l θ1 θ2
 
 envJoin' l θ1 θ2 = do
     setSsaEnv θ'                          -- Keep Common binders
-    phis       <- mapM (mapFstM freshenIdSSA) $ ltracePP l "envJoin" $ envToList $ envLefts θ
+    phis       <- mapM (mapFstM freshenIdSSA) $ envToList $ envLefts θ
     stmts      <- forM phis $ phiAsgn l   -- Adds Phi-Binders, Phi Annots, Return Stmts
     θ''        <- getSsaEnv
     let (s1,s2) = unzip stmts
@@ -761,7 +772,12 @@ mkPhiAsgn l x y = VarDeclStmt l [VarDecl l x (Just $ VarRef l y)]
 getLoopPhis b = do
     θ     <- getSsaEnv
     θ'    <- names <$> snd <$> tryAction (ssaStmt b)
-    return $ envToList (envLefts $ envIntersectWith meet θ θ')
+    let xs = envToList (envLefts $ envIntersectWith meet θ θ')
+
+    
+
+
+    return xs
   where
     meet x x' = if x == x' then Right x else Left (x, x')
 

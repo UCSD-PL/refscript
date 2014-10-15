@@ -481,10 +481,10 @@ consClassElt _ _  (MemberMethDecl _ _ _ _) = return ()
 consAsgn :: AnnTypeR -> CGEnv -> Id AnnTypeR -> Expression AnnTypeR -> CGM (Maybe CGEnv)
 --------------------------------------------------------------------------------
 consAsgn l g x e =
-  case envFindTyWithAsgn x g of 
+  case envFindTyForAsgn x g of 
     -- This is the first time we initialize this variable
     Just (t, WriteGlobal, Uninitialized) ->
-      do  t' <- ltracePP l ("consAsgn " ++ ppshow x) <$> freshTyVar g l t
+      do  t' <- freshTyVar g l t
           mseq (consExprT l g e $ Just t') $ \(_, g') -> do
             g'' <- envAdds "consAsgn-0" [(x,(t', WriteGlobal, Initialized))] g'
             return $ Just g''
@@ -970,54 +970,45 @@ envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 -- 4. return the extended environment.
 
 envJoin' l g g1 g2
-  = do  t1s     <- ltracePP l ("envJoin-0 " ++ ppshow xs) <$> mapM (`safeEnvFindTyWithAsgn` g1) xs 
-        t2s     <- ltracePP l ("envJoin-1 " ++ ppshow xs) <$> mapM (`safeEnvFindTyWithAsgn` g2) xs
+  = do  t1s       <- {- ltracePP l ("envJoin-0 " ++ ppshow xs) <$> -} mapM (`safeEnvFindTyWithAsgn` g1) xs 
+        t2s       <- {- ltracePP l ("envJoin-1 " ++ ppshow xs) <$> -} mapM (`safeEnvFindTyWithAsgn` g2) xs
 
-        -- (g', g1', g2') <- FO.foldlM (envJoinOne l) (g,g1,g2) (zip3 xs t1s t2s)
-
-        let (xls, l1s, l2s) = ltracePP l "LOCALS" $ unzip3 $ locals $ zip3 xs t1s t2s
+        let (xls, l1s, l2s) = unzip3 $ locals $ zip3 xs t1s t2s
 
         -- LOCALS: as usual
 
-        g1'     <- envAdds "envJoin-0" (zip xs l1s) g1 
-        g2'     <- envAdds "envJoin-1" (zip xs l2s) g2
+        g1'       <- envAdds "envJoin-0" (zip xs l1s) g1 
+        g2'       <- envAdds "envJoin-1" (zip xs l2s) g2
         -- t1s and t2s should have the same raw type, otherwise they wouldn't
         -- pass TC (we don't need to pad / fix them before joining).
         -- So we can use the raw type from one of the two branches and freshen
         -- up that one.
         -- FIXME: Add a raw type check on t1 and t2
-        (g',ls) <- freshTyPhis' l g xs $ mapFst3 toType <$> l1s
-        l1s'    <- mapM (`safeEnvFindTy` g1') xls
-        l2s'    <- mapM (`safeEnvFindTy` g2') xls
-        _       <- zipWithM_ (subType l err g1') l1s' ls 
-        _       <- zipWithM_ (subType l err g2') l2s' ls      
+        (g',ls)   <- freshTyPhis' l g xs $ mapFst3 toType <$> l1s
+        l1s'      <- mapM (`safeEnvFindTy` g1') xls
+        l2s'      <- mapM (`safeEnvFindTy` g2') xls
+        _         <- zipWithM_ (subType l err g1') l1s' ls 
+        _         <- zipWithM_ (subType l err g2') l2s' ls      
 
         -- GLOBALS: 
         
-        let (xgs, gl1s, gl2s) = ltracePP l "GLOBLAS" $ unzip3 $ globals $ zip3 xs t1s t2s
-
+        let (xgs, gl1s, gl2s) = unzip3 $ globals $ zip3 xs t1s t2s
         (g'',gls) <- freshTyPhis' l g' xs $ mapFst3 toType <$> gl1s
-
-        gl1s'    <- mapM (`safeEnvFindTy` g1') xgs
-        gl2s'    <- mapM (`safeEnvFindTy` g2') xgs
-
-        _       <- zipWithM_ (subType l err g1') gl1s' (ltracePP l "GLOBALS AFTER" gls)
-        _       <- zipWithM_ (subType l err g2') gl2s' gls      
-
+        gl1s'     <- mapM (`safeEnvFindTy` g1') xgs
+        gl2s'     <- mapM (`safeEnvFindTy` g2') xgs
+        _         <- zipWithM_ (subType l err g1') gl1s' gls
+        _         <- zipWithM_ (subType l err g2') gl2s' gls      
 
         -- PARTIALLY UNINITIALIZED
+        
         -- let (xps, ps) = unzip $ partial $ zip3 xs t1s t2s
-        --
-        --
-        -- -- LET THE UNINITIALIZED STATE PROPAGATE
+        
+        -- If the variable was previously uninitialized, it will continue to be
+        -- so; we don't have to update the environment in this case.
 
-
-        -- XXX: rest of cases ???
-
-
-        return   $ g''
+        return     $ g''
     where
-        xs   = ltracePP l "PHIs" $ concat [xs | PhiVar xs <- ann_fact l] 
+        xs   = concat [xs | PhiVar xs <- ann_fact l] 
         err  = errorLiquid' l 
 
 locals  ts = [(x,s1,s2) | (x, s1@(t1, WriteLocal, i1), s2@(t2, WriteLocal, i2)) <- ts]

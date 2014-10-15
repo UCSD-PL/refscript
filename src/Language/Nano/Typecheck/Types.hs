@@ -30,7 +30,7 @@ module Language.Nano.Typecheck.Types (
   , mkUnion, mkUnionR, mkFun, mkAll, mkAnd, mkEltFunTy, mkInitFldTy, flattenUnions, mkTCons
 
   -- * Deconstructing Types
-  , bkFun, bkFunBinds, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion, funTys
+  , bkFun, bkFunBinds, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion, orUndef, funTys
   
   , rUnion, rTypeR, setRTypeR
 
@@ -238,7 +238,6 @@ mapAnd f t           = mkAnd $ f <$> bkAnd t
 
 mkTCons m es = TCons m es fTop
 
-
 ----------------------------------------------------------------------------------------
 mkUnion :: (F.Reftable r) => [RType r] -> RType r
 ----------------------------------------------------------------------------------------
@@ -251,12 +250,25 @@ mkUnionR [ ] r = tVoid
 mkUnionR [t] r = t `strengthen` r
 mkUnionR ts  r = flattenUnions $ TApp TUn ts r
 
-
 ----------------------------------------------------------------------------------------
 bkUnion :: RType r -> [RType r]
 ----------------------------------------------------------------------------------------
 bkUnion (TApp TUn xs _) = xs
 bkUnion t               = [t]
+
+----------------------------------------------------------------------------------------
+bkUnionR :: F.Reftable r => RType r -> ([RType r], r)
+----------------------------------------------------------------------------------------
+bkUnionR (TApp TUn xs r) = (xs, r)
+bkUnionR t               = ([t], fTop)
+
+----------------------------------------------------------------------------------------
+orUndef :: F.Reftable r => RType r -> RType r
+----------------------------------------------------------------------------------------
+orUndef t | any isUndef ts = t
+          | otherwise      = mkUnionR (tUndef:ts) r
+  where
+    (ts, r) = bkUnionR t 
 
 
 -- | @flattenUnions@: flattens one-level of unions

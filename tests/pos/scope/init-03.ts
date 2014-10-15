@@ -16,7 +16,7 @@ function foo(cnd: boolean): number {
       r = 10;
     
     }
-
+    
     r = 2;
   }
 

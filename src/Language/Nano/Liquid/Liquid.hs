@@ -965,8 +965,8 @@ envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 -- 4. return the extended environment.
 
 envJoin' l g g1 g2
-  = do  t1s       <- {- ltracePP l ("envJoin-0 " ++ ppshow xs) <$> -} mapM (`safeEnvFindTyWithAsgn` g1) xs 
-        t2s       <- {- ltracePP l ("envJoin-1 " ++ ppshow xs) <$> -} mapM (`safeEnvFindTyWithAsgn` g2) xs
+  = do  t1s       <- mapM (`safeEnvFindTyWithAsgn` g1) xs 
+        t2s       <- mapM (`safeEnvFindTyWithAsgn` g2) xs
 
         let (xls, l1s, l2s) = unzip3 $ locals $ zip3 xs t1s t2s
 
@@ -974,12 +974,14 @@ envJoin' l g g1 g2
 
         g1'       <- envAdds "envJoin-0" (zip xs l1s) g1 
         g2'       <- envAdds "envJoin-1" (zip xs l2s) g2
+
         -- t1s and t2s should have the same raw type, otherwise they wouldn't
         -- pass TC (we don't need to pad / fix them before joining).
         -- So we can use the raw type from one of the two branches and freshen
         -- up that one.
         -- FIXME: Add a raw type check on t1 and t2
-        (g',ls)   <- freshTyPhis' l g xs $ mapFst3 toType <$> l1s
+        --
+        (g',ls)   <- freshTyPhis' l g xls $ mapFst3 toType <$> l1s
         l1s'      <- mapM (`safeEnvFindTy` g1') xls
         l2s'      <- mapM (`safeEnvFindTy` g2') xls
         _         <- zipWithM_ (subType l err g1') l1s' ls 

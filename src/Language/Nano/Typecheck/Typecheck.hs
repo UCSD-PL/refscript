@@ -224,7 +224,6 @@ tcEnvFindTyForAsgn x γ = case envFindTy x $ tce_names γ of
                                Just γ' -> tcEnvFindTyWithAgsn x γ'
                                Nothing -> Nothing
 
-
 safeTcEnvFindTy l γ x   = case tcEnvFindTy x γ of
                             Just t  -> return t
                             Nothing -> die $ bugEnvFindTy (srcPos l) x 
@@ -723,7 +722,7 @@ tcExpr γ (FuncExpr l fo xs body) tCtxO
                 Just tCtx -> tcFuncExpr tCtx
                 Nothing   -> tcError $ errorNoFuncAnn $ srcPos l
   where
-    tcFuncExpr t = do ts    <- tcFunTys l f xs t
+    tcFuncExpr t = do ts    <- tcFunTys l f xs $ ltracePP l "funcexpr ty" t
                       body' <- foldM (tcFun1 γ l f xs) body ts
                       return $ (FuncExpr l fo xs body', t)
     anns         = [ t | FuncAnn t <- ann_fact l ]

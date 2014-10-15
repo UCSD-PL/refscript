@@ -95,7 +95,7 @@ ssaFun l xs body
             do  arg         <- argId    <$> freshenAnn l
                 ret         <- returnId <$> freshenAnn l
                 setSsaEnv    $ extSsaEnv (arg: ret : xs) θ  -- Extend SsaEnv with formal binders
-                (_, body')   <- ssaStmts body               -- Transform function
+                (_, body')  <- ssaStmts body                -- Transform function
                 setSsaEnv θ                                 -- Restore Outer SsaEnv
                 return        $ body'
 
@@ -733,7 +733,7 @@ envJoin l (Just θ1) (Just θ2) = envJoin' l θ1 θ2
 
 envJoin' l θ1 θ2 = do
     setSsaEnv θ'                          -- Keep Common binders
-    phis       <- mapM (mapFstM freshenIdSSA) $ envToList $ envLefts θ
+    phis       <- mapM (mapFstM freshenIdSSA) $ ltracePP l "envJoin" $ envToList $ envLefts θ
     stmts      <- forM phis $ phiAsgn l   -- Adds Phi-Binders, Phi Annots, Return Stmts
     θ''        <- getSsaEnv
     let (s1,s2) = unzip stmts
@@ -744,11 +744,13 @@ envJoin' l θ1 θ2 = do
     meet        = \x1 x2 -> if x1 == x2 then Right x1 else Left (x1, x2)
 
 phiAsgn l (x, (SI x1, SI x2)) = do
-    x' <- updSsaEnv l x          -- Generate FRESH phi name
-    addAnn l (PhiVar [x'])       -- RECORD x' as PHI-Var at l
-    let s1 = mkPhiAsgn l x' x1   -- Create Phi-Assignments
-    let s2 = mkPhiAsgn l x' x2   -- for both branches
-    return $ (s1, s2)
+    (a,x') <- updSsaEnv' l x                       -- Generate FRESH phi name
+    addAnn l (PhiVar [x'])                         -- RECORD x' as PHI-Var at l
+    case a of 
+      WriteLocal -> let s1 = mkPhiAsgn l x' x1 in  -- Create Phi-Assignments
+                    let s2 = mkPhiAsgn l x' x2 in  -- for both branches
+                    return (s1, s2)
+      _          -> return (EmptyStmt def, EmptyStmt def)
 
 mkPhiAsgn :: AnnSSA r -> Id (AnnSSA r) -> Id (AnnSSA r) -> Statement (AnnSSA r) 
 mkPhiAsgn l x y = VarDeclStmt l [VarDecl l x (Just $ VarRef l y)]

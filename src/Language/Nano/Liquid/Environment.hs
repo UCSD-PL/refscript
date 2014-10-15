@@ -33,7 +33,7 @@ data CGEnvR r = CGE {
   -- 
   -- ^ bindings in scope 
   --
-    cge_names   :: !(Env (RType r, Assignability))
+    cge_names   :: !(Env (RType r, Assignability, Initialization))
   -- 
   -- ^ fixpoint bindings
   --

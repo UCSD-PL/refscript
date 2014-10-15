@@ -21,7 +21,7 @@ class EnvLike r t where
   --   (values of the source language:
   --   variables, functions, classes)
   --
-  names           :: t r -> Env (RType r, Assignability)
+  names           :: t r -> Env (RType r, Assignability, Initialization)
   -- 
   -- ^ Modules in scope (exported API)
   --

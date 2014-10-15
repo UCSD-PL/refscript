@@ -33,7 +33,8 @@ module Language.Nano.Liquid.CGMonad (
   , Freshable (..)
 
   -- * Environment API
-  , envAddFresh, envAdds, envAddReturn, envAddGuard, envPopGuard, envFindTy, envFindTyWithAsgn
+  , envAddFresh, envAdds, envAddReturn, envAddGuard, envPopGuard, envFindTy
+  , envFindTyWithAsgn, envFindTyForAsgn
   , safeEnvFindTy, safeEnvFindTyWithAsgn
   , envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
@@ -396,6 +397,25 @@ envFindTyWithAsgn :: (IsLocated x, F.Symbolic x, F.Expression x)
 ---------------------------------------------------------------------------------------
 envFindTyWithAsgn x = (eSngl <$>) . findT x
   where
+    eSngl (t, WriteGlobal,i) = adjustInit (t, WriteGlobal,i)
+    eSngl (t, a,i)           = (t `eSingleton` x, a,i)
+    findT x g = case E.envFindTy x $ cge_names g of 
+                  Just t   -> Just t
+                  Nothing  -> case cge_parent g of 
+                                Just g' -> findT x g'
+                                Nothing -> Nothing
+    adjustInit s@(_, _, Initialized) = s
+    adjustInit (t, a, _ ) = (orUndef t, a, Uninitialized)
+
+
+
+
+---------------------------------------------------------------------------------------
+envFindTyForAsgn :: (IsLocated x, F.Symbolic x, F.Expression x) 
+                  => x -> CGEnv -> Maybe (RefType, Assignability, Initialization)
+---------------------------------------------------------------------------------------
+envFindTyForAsgn x = (eSngl <$>) . findT x
+  where
     eSngl (t, WriteGlobal,i) = (t, WriteGlobal,i)
     eSngl (t, a,i)           = (t `eSingleton` x, a,i)
     findT x g = case E.envFindTy x $ cge_names g of 
@@ -403,6 +423,7 @@ envFindTyWithAsgn x = (eSngl <$>) . findT x
                   Nothing  -> case cge_parent g of 
                                 Just g' -> findT x g'
                                 Nothing -> Nothing
+
 
 ---------------------------------------------------------------------------------------
 safeEnvFindTy :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) 

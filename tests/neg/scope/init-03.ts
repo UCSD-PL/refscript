@@ -17,8 +17,12 @@ function foo(cnd: boolean): number {
       r = 10;
     
     }
+    
+    if (r > 7) {
 
-    r = -2;
+      r = -2;
+
+    }
   }
 
   return r

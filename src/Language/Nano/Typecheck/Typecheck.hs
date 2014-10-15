@@ -198,16 +198,34 @@ tcEnvAdds     xs γ      = γ { tce_names = envAdds xs $ tce_names γ }
 
 tcEnvAdd      x t γ     = γ { tce_names = envAdd x t $ tce_names γ }
 
-tcEnvFindTy            :: (F.Symbolic x, IsLocated x) => x -> TCEnv r -> Maybe (RType r)
+tcEnvFindTy            :: (PPR r, F.Symbolic x, IsLocated x) => x -> TCEnv r -> Maybe (RType r)
 tcEnvFindTy x γ         = fst3 <$> tcEnvFindTyWithAgsn x γ 
 
-tcEnvFindTyWithAgsn    :: (F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability, Initialization)
+tcEnvFindTyWithAgsn    :: (PPR r, F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability, Initialization)
 tcEnvFindTyWithAgsn x γ = case envFindTy x $ tce_names γ of 
-                            Just t -> Just t
+                            Just t -> Just $ adjustInit t
                             Nothing     -> 
                               case tce_parent γ of 
                                 Just γ' -> tcEnvFindTyWithAgsn x γ'
                                 Nothing -> Nothing
+  where
+    adjustInit s@(_, _, Initialized) = s
+    adjustInit (t, a, _ ) = (orUndef t, a, Uninitialized)
+
+
+
+-- 
+-- This is a variant of the above that doesn't add the ' + undefined' for
+-- non-initialized variables.
+-- 
+tcEnvFindTyForAsgn    :: (PPR r, F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability, Initialization)
+tcEnvFindTyForAsgn x γ = case envFindTy x $ tce_names γ of 
+                           Just t -> Just $ t
+                           Nothing     -> 
+                             case tce_parent γ of 
+                               Just γ' -> tcEnvFindTyWithAgsn x γ'
+                               Nothing -> Nothing
+
 
 safeTcEnvFindTy l γ x   = case tcEnvFindTy x γ of
                             Just t  -> return t
@@ -527,8 +545,8 @@ tcAsgn l γ x e
   = do (e' , to)    <- tcExprTW l γ e rhsT
        return       $ (e', tcEnvAddo γ x $ (,asgn,init) <$> to)
     where
-       (rhsT, asgn, init) = case tcEnvFindTyWithAgsn x γ of
-                              Just (t,a,i) -> (Just t, a, i)
+       (rhsT, asgn, init) = case tcEnvFindTyForAsgn x γ of
+                              Just (t,a,i) -> (Just t, a, Initialized)
                               Nothing      -> (Nothing, WriteLocal, Initialized)
 
 tcEnvAddo _ _ Nothing  = Nothing
@@ -1041,8 +1059,11 @@ envJoin :: PPR r => AnnSSA r -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
 envJoin l γ (Just γ1) (Just γ2) = 
-  do  tas   <- mapM (getPhiType l γ1 γ2) xs
-      θ     <- getSubst
+  do  tas       <- mapM (getPhiType l γ1 γ2) xs
+
+      -- locals ts  = [(x,s1,s2) | (x, s1@(t1, WriteLocal, i1), s2@(t2, WriteLocal, i2)) <- ts]
+
+      θ         <- getSubst
       return $ Just $ tcEnvAdds  (zip xs tas) $ γ { tce_names = apply θ (tce_names γ) }
   where
       xs = phiVarsAnnot l
@@ -1060,11 +1081,21 @@ envLoopJoin l γ (Just γl) =
       xs             = phiVarsAnnot l 
       substNames θ γ = γ { tce_names = apply θ (tce_names γ) }
 
+
+-- 
+-- Using @tcEnvFindTyForAsgn@ here as the initialization status is 
+-- recorded in the initialization part of the output.
+--
 ----------------------------------------------------------------------------------
-getPhiType :: PPR r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r -> TCM r (RType r, Assignability, Initialization)
+getPhiType :: PPR r 
+           => AnnSSA r 
+           -> TCEnv r 
+           -> TCEnv r 
+           -> Var r 
+           -> TCM r (RType r, Assignability, Initialization)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
-  case (tcEnvFindTyWithAgsn x γ1, tcEnvFindTyWithAgsn x γ2) of
+  case (tcEnvFindTyForAsgn x γ1, tcEnvFindTyForAsgn x γ2) of
     (Just (t1,a1,i1), Just (t2,_,i2)) -> do θ     <- getSubst 
                                             t     <- unifyPhiTypes l γ1 x t1 t2 θ
                                             return $ (t, a1, i1 `mappend` i2)
@@ -1074,10 +1105,15 @@ getPhiType l γ1 γ2 x =
                                       -> die $ bugUnboundPhiVar (srcPos l) x
 
 ----------------------------------------------------------------------------------
-getLoopNextPhiType :: PPR r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r -> TCM r (RType r, Assignability, Initialization)
+getLoopNextPhiType :: PPR r 
+                   => AnnSSA r 
+                   -> TCEnv r 
+                   -> TCEnv r 
+                   -> Var r 
+                   -> TCM r (RType r, Assignability, Initialization)
 ----------------------------------------------------------------------------------
 getLoopNextPhiType l γ γl x =
-  case (tcEnvFindTyWithAgsn x γ, tcEnvFindTyWithAgsn (mkNextId x) γl) of
+  case (tcEnvFindTyForAsgn x γ, tcEnvFindTyForAsgn (mkNextId x) γl) of
     (Just (t1,a1,i1), Just (t2,_,i2)) -> do θ     <- getSubst 
                                             t     <- unifyPhiTypes l γ x t1 t2 θ
                                             return $ (t, a1, i1 `mappend` i2)

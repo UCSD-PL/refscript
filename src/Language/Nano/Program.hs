@@ -416,7 +416,8 @@ hoistBindings = everythingBut (++) myQ
     fExp _                     = ([], True)
 
     fVd :: VarDecl (AnnType r) -> ([(Id (AnnType r), AnnType r, SyntaxKind, Assignability, Initialization)], Bool)
-    fVd (VarDecl l n eo)       = ([(n, l, VarDeclKind, WriteGlobal, Uninitialized) | VarAnn _ <- ann_fact l], True)
+    fVd (VarDecl l n eo)       = ([(n, l, VarDeclKind, WriteGlobal, Uninitialized) | VarAnn _    <- ann_fact l], True)
+    fVd (VarDecl l n eo)       = ([(n, l, VarDeclKind, WriteGlobal, Initialized)   | AmbVarAnn _ <- ann_fact l], True)
 
 
 initStatus (Just _ ) = Initialized
@@ -474,6 +475,7 @@ hoistGlobals = everythingBut (++) myQ
     fExp _               = ([ ], True)
     fVd                 :: VarDecl (AnnType r) -> ([Id (AnnType r)], Bool)
     fVd (VarDecl l x _)  = ([ x | VarAnn _ <- ann_fact l ], True)
+    fVd (VarDecl l x _)  = ([ x | AmbVarAnn _ <- ann_fact l ], True)
 
 
 
@@ -520,6 +522,8 @@ visibleNames s = [ (ann <$> n,(k,v,a,t,i)) | (n,l,k,a,i) <- hoistBindings s
   where
     annToType _ _ ReadOnly   (VarAnn t)    = [t] -- Hoist ReadOnly vars (i.e. function defs)
     annToType _ _ ImportDecl (VarAnn t)    = [t] -- Hoist ImportDecl (i.e. function decls)
+    annToType _ _ ReadOnly   (AmbVarAnn t) = [t] -- Hoist ReadOnly vars (i.e. function defs)
+    annToType _ _ ImportDecl (AmbVarAnn t) = [t] -- Hoist ImportDecl (i.e. function decls)
     annToType l n _          (ClassAnn {}) = [TClass  $ RN $ QName l [] (F.symbol n)]
     annToType l _ _          (ModuleAnn n) = [TModule $ RP $ QPath l [n]]
     annToType l _ _          (EnumAnn n)   = [TEnum   $ RN $ QName l [] (F.symbol n)]
@@ -551,6 +555,9 @@ scrapeModules                    = qenvFromList . map mkMod . collectModules
     vStmt (VarDeclStmt _ vds)    = [ (ss x, (VarDeclKind, visibility l, WriteGlobal, t, Uninitialized))
                                        | VarDecl l x eo <- vds
                                        , VarAnn t <- ann_fact l ]
+    vStmt (VarDeclStmt _ vds)    = [ (ss x, (VarDeclKind, visibility l, WriteGlobal, t, Initialized))
+                                       | VarDecl l x eo <- vds
+                                       , AmbVarAnn t <- ann_fact l ]
     vStmt (FunctionStmt l x _ _) = [ (ss x, (FuncDefKind, visibility l, ReadOnly, t, Initialized))
                                        | VarAnn t <- ann_fact l ]
     vStmt (FuncAmbDecl l x _)    = [ (ss x, (FuncAmbientKind, visibility l, ImportDecl, t, Initialized))
@@ -696,7 +703,7 @@ writeGlobalVars           :: Data r => [Statement (AnnType r)] -> [Id (AnnType r
 -------------------------------------------------------------------------------
 writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
   where 
-    fromVD (VarDecl l x _) = [ x | VarAnn _ <- ann_fact l ]
+    fromVD (VarDecl l x _) = [ x | VarAnn _ <- ann_fact l ] ++ [ x | AmbVarAnn _ <- ann_fact l ]
 
 
 -- | scrapeVarDecl: Scrape a variable declaration for annotations
@@ -704,5 +711,6 @@ writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
 scrapeVarDecl :: VarDecl (AnnSSA r) -> [RType r]
 ----------------------------------------------------------------------------------
 scrapeVarDecl (VarDecl l _ _) = [ t | VarAnn                 t  <- ann_fact l ] 
+                             ++ [ t | AmbVarAnn              t  <- ann_fact l ] 
                              ++ [ t | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
 

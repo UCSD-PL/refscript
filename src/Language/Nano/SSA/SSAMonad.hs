@@ -26,7 +26,9 @@ module Language.Nano.SSA.SSAMonad (
    , findSsaEnv
    , extSsaEnv
    , setSsaEnv
+   , setSsaEnvGlob
    , getSsaEnv
+   , getSsaEnvGlob
    , getAstCount
    , ssaEnvIds
  
@@ -72,7 +74,11 @@ data SsaState r = SsaST {
   -- 
   -- ^ Current SSA names 
   --
-  , names         :: SsaEnv r                 
+  , names         :: SsaEnv r
+  -- 
+  -- ^ Like above but for globs
+  --
+  , glob_names    :: SsaEnv r
   -- 
   -- ^ Fresh index for SSA vars
   --
@@ -119,6 +125,12 @@ getSsaEnv   :: SSAM r (SsaEnv r)
 -------------------------------------------------------------------------------------
 getSsaEnv   = names <$> get 
 
+-------------------------------------------------------------------------------------
+getSsaEnvGlob   :: SSAM r (SsaEnv r)
+-------------------------------------------------------------------------------------
+getSsaEnvGlob   = glob_names <$> get 
+
+
 getAstCount = ssa_ast_cnt <$> get  
 
 ssaEnvIds = envKeys
@@ -127,6 +139,12 @@ ssaEnvIds = envKeys
 setSsaEnv    :: SsaEnv r -> SSAM r () 
 ------------------------------------------------------------------------------------
 setSsaEnv θ = modify $ \st -> st { names = θ } 
+
+-------------------------------------------------------------------------------------
+setSsaEnvGlob    :: SsaEnv r -> SSAM r () 
+------------------------------------------------------------------------------------
+setSsaEnvGlob θ = modify $ \st -> st { glob_names = θ } 
+
 
 -------------------------------------------------------------------------------------
 withAssignability :: IsLocated l => Assignability -> [Id l] -> SSAM r a -> SSAM r a 
@@ -176,9 +194,7 @@ updSsaEnvLocal l x
 updSsaEnvGlobal :: AnnSSA r -> Var r -> SSAM r (Var r)
 -------------------------------------------------------------------------------------
 updSsaEnvGlobal l x 
-  = do -- n     <- ssa_cnt <$> get
-       -- let x' = mkSSAId l x n
-       modify $ \st -> st {names = envAdds [(x, SI x)] (names st)} -- {ssa_cnt = 1 + n}
+  = do modify $ \st -> st {glob_names = envAdds [(x, SI x)] (glob_names st)}
        return x
 
 
@@ -234,5 +250,5 @@ execute p act
 tryAction act = get >>= return . runState (runExceptT act)
 
 initState :: NanoBareR r -> SsaState r
-initState p = SsaST envEmpty envEmpty 0 IM.empty I.empty S.empty (max_id p)
+initState p = SsaST envEmpty envEmpty envEmpty 0 IM.empty I.empty S.empty (max_id p)
 

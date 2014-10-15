@@ -367,28 +367,23 @@ consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv)
 ------------------------------------------------------------------------------------
 consVarDecl g v@(VarDecl l x (Just e))
   = case scrapeVarDecl v of
-      [ ] ->  mseq (consExpr g e Nothing) $ \(y,gy) -> do
-                t       <- safeEnvFindTy y gy
-                Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal,Initialized))] gy
-      [t] -> mseq (consExpr g e $ Just t) $ \(y, gy) -> do
-               ty      <- safeEnvFindTy y gy
-               fta     <- freshTyVar gy l t
-               _       <- subType l (errorLiquid' l) gy ty fta
-               _       <- subType l (errorLiquid' l) gy fta t
-               Just   <$> envAdds "consVarDecl" [(x, (fta, WriteGlobal,Initialized))] g
-      _   -> cgError $ errorVarDeclAnnot (srcPos l) x
+      [ ]     ->  mseq (consExpr g e Nothing) $ \(y,gy) -> do
+                    t       <- safeEnvFindTy y gy
+                    Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal,Initialized))] gy
+      [(_,t)] -> mseq (consExpr g e $ Just t) $ \(y, gy) -> do
+                  ty      <- safeEnvFindTy y gy
+                  fta     <- freshTyVar gy l t
+                  _       <- subType l (errorLiquid' l) gy ty fta
+                  _       <- subType l (errorLiquid' l) gy fta t
+                  Just   <$> envAdds "consVarDecl" [(x, (fta, WriteGlobal,Initialized))] g
+      _       -> cgError $ errorVarDeclAnnot (srcPos l) x
  
 consVarDecl g v@(VarDecl l x Nothing)
   = case scrapeVarDecl v of
-      [ ] -> consVarDecl g $ VarDecl l x (Just $ undef l)
-
-      [t] -> return t >>= \t' -> Just <$> envAdds "consVarDecl" [(x, (t',WriteGlobal,Uninitialized))] g
-      
---       [t] -> do t' <- freshTyVar g l t 
---                 let g' = g { cge_names = E.envAdds  [(x, (t',WriteGlobal, Uninitialized))] $ cge_names g }
---                 return $ Just g'
-
-      _   -> cgError $ errorVarDeclAnnot (srcPos l) x
+      [ ]                   -> consVarDecl g $ VarDecl l x (Just $ undef l)
+      [(AmbVarDeclKind, t)] -> Just <$> envAdds "consVarDecl" [(x, (t, WriteGlobal, Initialized))] g
+      [(_, t)]              -> Just <$> envAdds "consVarDecl" [(x, (t, WriteGlobal, Uninitialized))] g
+      _                     -> cgError $ errorVarDeclAnnot (srcPos l) x
 
   where
     undef l = VarRef l $ Id l "undefined"

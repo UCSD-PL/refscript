@@ -801,7 +801,7 @@ consCallCondExpr g l fn ets ft0
         [ft] -> consInstantiate l g' fn ft ts xes
         _    -> cgError $ errorNoMatchCallee (srcPos l) fn (toType <$> ts) (toType <$> callSigs)
   where
-    callSigs      = extractCall g ft0
+    callSigs    = extractCall g ft0
   
 ----------------------------------------------------------------------------------
 instantiateTy :: AnnTypeR -> CGEnv -> Int -> RefType -> CGM RefType

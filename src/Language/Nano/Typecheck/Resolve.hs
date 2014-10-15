@@ -133,10 +133,10 @@ resolveRelPath env a   (RP (QPath _ []    )) = qenvFindTy a env
 resolveRelPath env a r@(RP (QPath l (m:ms))) = do
     curM <-qenvFindTy a env
     case envFindTy m (m_variables curM) of
-      Just (_, _,TModule _) -> resolveRelPath env (extendPath a m) (RP (QPath l ms))
-      Just _                -> Nothing
-      Nothing               -> do prP <- parentOf a
-                                  resolveRelPath env prP r
+      Just (_, _,TModule _,_) -> resolveRelPath env (extendPath a m) (RP (QPath l ms))
+      Just _                  -> Nothing
+      Nothing                 -> do prP <- parentOf a
+                                    resolveRelPath env prP r
 
 ---------------------------------------------------------------------------
 resolveRelPathInEnv :: Data r => EnvLike r g => g r -> RelPath -> Maybe (ModuleDef r)
@@ -282,7 +282,7 @@ flattenType γ (TModule x)
   = do  es      <- M.fromList . map mkField . envToList . m_variables <$> resolveRelPathInEnv γ x
         return   $ TCons t_immutable es fTop
   where
-    mkField (k,(_,_,t)) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) t_immutable t)
+    mkField (k,(_,_,t,_)) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) t_immutable t)
 
 flattenType γ (TEnum x)
   = do  es      <- M.fromList . map  mkField . envToList . e_symbols <$> resolveRelEnumInEnv γ x

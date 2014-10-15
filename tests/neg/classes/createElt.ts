@@ -26,7 +26,7 @@ class CanvasElt extends HTMLElt {
                                                && TT(v, tagName, "canvas", "CanvasElt") } */
 
 function createElt(tagName: string): HTMLElt {
- 
+
   /*@ res :: HTML */
   var res:HTMLElt;
  
@@ -48,5 +48,5 @@ function createElt(tagName: string): HTMLElt {
 
 var elt = createElt("div");
 
-assert(elt instanceof DivElt);
+assert(elt instanceof SpanElt);
 

@@ -149,7 +149,7 @@ initGlobalEnv (Nano { code = Src s })
                   (TApp TUndef [] $ F.Reft (F.vv Nothing, [F.trueRefa]), ReadOnly, Initialized))]
     bds       = F.emptyIBindEnv
     grd       = []
-    mod       = scrapeModules s 
+    mod       = scrapeModules s
     ctx       = emptyContext
     pth       = AP $ QPath (srcPos dummySpan) []
 
@@ -261,14 +261,13 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 
 -- e1.f = e2
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
-  = mseq (consExpr g e1 Nothing) $ \(x1,g') ->
-      do t <- safeEnvFindTy x1 g' 
-         consSetProp g' x1 (fmap snd3 $ getProp g' False f t)
+  = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
+      t         <- ltracePP l (ppshow e1) <$> safeEnvFindTy x1 g' 
+      let rhsCtx = fmap snd3 $ getProp g' False f t
+      opTy      <- setPropTy l (F.symbol f) <$> safeEnvFindTy (builtinOpId BISetProp) g'
+      fmap snd <$> consCall g' l BISetProp (FI Nothing [(vr x1, Nothing),(e2, rhsCtx)]) opTy
   where
-    consSetProp g x rhsCtx = 
-      do opTy      <- setPropTy l (F.symbol f) <$> safeEnvFindTy (builtinOpId BISetProp) g
-         fmap snd <$> consCall g l BISetProp (FI Nothing [(vr x, Nothing),(e2, rhsCtx)]) opTy
-    vr = VarRef $ getAnnotation e1
+      vr = VarRef $ getAnnotation e1
    
 -- e
 consStmt g (ExprStmt _ e) 

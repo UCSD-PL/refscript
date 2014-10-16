@@ -54,7 +54,6 @@ data TCon
   | TString             -- ^ string
   | TVoid               -- ^ void
   | TTop                -- ^ top
-  | TRef RelName        -- ^ A.B.C (class)
   | TUn                 -- ^ union
   | TNull               -- ^ null
   | TUndef              -- ^ undefined
@@ -87,22 +86,33 @@ data RType r =
   -- ^ /\ (T1..) => T1' ... /\ (Tn..) => Tn'
   --
   | TAnd [RType r]                                   
+  --
+  -- ^ Type Reference
+  --
+  | TRef AbsName [RType r] r
   -- 
   -- ^ typeof A.B.C (class)
   -- 
-  | TClass RelName
+  | TClass AbsName
   -- 
   -- ^ typeof L.M.N (module)
   --
-  | TModule RelPath
+  | TModule AbsPath
   -- 
   -- ^ enumeration L.M.N 
   -- 
-  | TEnum RelName
+  | TEnum AbsName
   -- 
   -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
   --
   | TExp F.Expr
+  --
+  -- ^ Parsed types contain relative qualified names
+  --
+  | TRef_     RelName [RType r] r
+  | TClass_   RelName
+  | TModule_  RelPath
+  | TEnum_    RelName
 
     deriving (Show, Functor, Data, Typeable, Traversable, Foldable)
 
@@ -384,7 +394,6 @@ instance Eq TCon where
   TString  == TString  = True
   TVoid    == TVoid    = True         
   TTop     == TTop     = True
-  TRef x1  == TRef x2  = x1 == x2
   TUn      == TUn      = True
   TNull    == TNull    = True
   TUndef   == TUndef   = True
@@ -401,6 +410,7 @@ instance Eq (RType r) where
   TAll v1 t1      == TAll v2 t2      = (v1,t1)  == (v2,t2)   -- Very strict Eq here
   TAnd t1s        == TAnd t2s        = t1s == t2s
   TCons e1s m1 _  == TCons e2s m2 _  = (e1s,m1) == (e2s,m2)
+  TRef x1 t1s _   == TRef x2 t2s _   = (x1,t1s) == (x2,t2s)
   TClass c1       == TClass c2       = c1 == c2
   TModule m1      == TModule m2      = m1 == m2
   TEnum e1        == TEnum e2        = e1 == e2
@@ -425,22 +435,23 @@ rTypeCode (TFun _ _ _ _) = 1
 rTypeCode (TCons _ _ _ ) = 2
 rTypeCode (TAll _ _ )    = 3
 rTypeCode (TAnd _ )      = 4
-rTypeCode (TClass _ )    = 5
-rTypeCode (TExp _ )      = 6
-rTypeCode (TModule _)    = 7
-rTypeCode (TEnum _)      = 8
-rTypeCode (TApp c _ _)   = 9 + tconCode c
+rTypeCode (TRef _ _ _)   = 5
+rTypeCode (TClass _ )    = 6
+rTypeCode (TExp _ )      = 7
+rTypeCode (TModule _)    = 8
+rTypeCode (TEnum _)      = 9
+rTypeCode (TApp c _ _)   = 10 + tconCode c
+rTypeCode _              = errorstar "Types.rTypeCode"
 
 tconCode TInt            = 0
 tconCode TBool           = 1
 tconCode TString         = 3
 tconCode TVoid           = 4
 tconCode TTop            = 5
-tconCode (TRef _)        = 6
-tconCode TUn             = 7
-tconCode TNull           = 8
-tconCode TUndef          = 9
-tconCode TFPBool         = 10
+tconCode TUn             = 6
+tconCode TNull           = 7
+tconCode TUndef          = 8
+tconCode TFPBool         = 9
 
 
 -----------------------------------------------------------------------

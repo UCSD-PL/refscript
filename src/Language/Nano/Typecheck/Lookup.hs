@@ -90,7 +90,7 @@ getPropApp γ b s t@(TApp c ts _) =
                     return  $ (t,t',m)
     TString  -> do  (t',m) <- lookupAmbientType γ b s "String"
                     return  $ (t,t',m)
-    TRef x   -> do  d      <- resolveRelTypeInEnv γ x
+    TRef x   -> do  d      <- tracePP (ppshow x) $ resolveRelTypeInEnv γ x
                     es     <- flatten Nothing InstanceMember γ (d,ts)
                     (t',m) <- accessMember b InstanceMember s es
                     return  $ (t,t',m)

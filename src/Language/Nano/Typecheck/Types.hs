@@ -106,7 +106,7 @@ type PPR  r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
 -- | Mutability
 ---------------------------------------------------------------------
 
-mkMut s = TApp (TRef $ RN $ QName (srcPos dummySpan) [] (F.symbol s)) [] fTop
+mkMut s = TRef (AN $ QName (srcPos dummySpan) [] (F.symbol s)) [] fTop
 
 instance Default Mutability where
   def = mkMut "Immutable"
@@ -118,18 +118,18 @@ t_readOnly      = mkMut "ReadOnly"
 t_inheritedMut  = mkMut "InheritedMut"
 t_assignsFields = mkMut "AssignsFields"
 
-isMutable        (TApp (TRef (RN (QName _ [] s))) _ _) = s == F.symbol "Mutable"
-isMutable _                                            = False
+isMutable        (TRef (AN (QName _ [] s)) _ _) = s == F.symbol "Mutable"
+isMutable _                                     = False
  
-isImmutable      (TApp (TRef (RN (QName _ [] s))) _ _) = s == F.symbol "Immutable"
-isImmutable _                                          = False
+isImmutable      (TRef (AN (QName _ [] s)) _ _) = s == F.symbol "Immutable"
+isImmutable _                                   = False
 
-isAssignsFields  (TApp (TRef (RN (QName _ [] s))) _ _) = s == F.symbol "AssignsFields"
-isAssignsFields  _                                     = False
+isAssignsFields  (TRef (AN (QName _ [] s)) _ _) = s == F.symbol "AssignsFields"
+isAssignsFields  _                              = False
  
 -- FIXME: get rid of this ... ?
-combMut _ μf | isMutable μf                 = μf
-combMut μ _  | otherwise                    = μ
+combMut _ μf | isMutable μf = μf
+combMut μ _  | otherwise    = μ
 
 
 ---------------------------------------------------------------------
@@ -327,7 +327,7 @@ isVoid :: RType r -> Bool
 isVoid (TApp TVoid _ _)    = True 
 isVoid _                   = False
 
-isTObj (TApp (TRef _) _ _) = True
+isTObj (TRef _ _ _)        = True
 isTObj (TCons _ _ _)       = True
 isTObj (TModule _)         = True
 isTObj (TClass _ )         = True

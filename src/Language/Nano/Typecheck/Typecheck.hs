@@ -431,7 +431,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do z               <- runFailM $ tcExpr γ e1 Nothing
        case z of 
-         Right (_,te1) -> tcSetProp $ fmap snd3 $ getProp γ False f te1
+         Right (_,te1) -> tcSetProp $ fmap snd3 $ ltracePP l ("getProp " ++ ppshow f ++ " " ++ ppshow te1) $ getProp γ False f te1
          Left _        -> tcSetProp $ Nothing
   where
     tcSetProp rhsCtx = 

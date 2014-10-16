@@ -35,6 +35,7 @@ import           Data.Function                       (on)
 import qualified Data.Map.Strict                  as M
 import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Env
+import           Language.Nano.Errors
 import           Language.Nano.Environment
 import           Language.Nano.Names
 import           Language.Nano.Types
@@ -57,8 +58,10 @@ import           Control.Applicative ((<$>))
 ---------------------------------------------------------------------------
 renameRelative :: Data a => QEnv (ModuleDef r) -> AbsPath -> AbsPath -> a -> Maybe a
 --------------------------------------------------------------------------
-renameRelative mods base tgt a = 
-    everywhereM (mkM paths) a >>= everywhereM (mkM names)
+renameRelative mods base tgt a | base == tgt 
+                               = return a  
+                               | otherwise   
+                               = everywhereM (mkM paths) a >>= everywhereM (mkM names)
   where
     paths :: RelPath -> Maybe RelPath
     paths r             = relativePath tgt <$> absolutePath mods base r
@@ -156,7 +159,7 @@ resolveRelName :: Data b => (ModuleDef r -> Env b) -> QEnv (ModuleDef r) -> AbsP
 resolveRelName f env curP (RN qn) = do
     curM        <- qenvFindTy curP env
     (dfn, remP) <- aux curM qn
-    renameRelative env remP curP dfn 
+    renameRelative env (tracePP ("Renaming from " ++ ppshow curP) remP) curP dfn 
   where
     aux curM qn@(QName _ [] s) = do
       case envFindTy s (f curM) of 

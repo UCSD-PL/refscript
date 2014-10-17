@@ -278,9 +278,12 @@ objLitP
               <$> braces (propBindP defaultMutability)
        return  $  TCons m es
  
+----------------------------------------------------------------------------------
+mutP :: Parser (MutabilityQ RK)
+----------------------------------------------------------------------------------
 mutP
-  =  try (TVar <$> brackets tvarP <*> return ()) 
- <|> try (TApp <$> brackets tConP <*> return [] <*> return ())
+  =  try (TVar <$> brackets tvarP                 <*> return ()) 
+ <|> try (TRef <$> brackets qnameP  <*> return [] <*> return ())
 
 
 bareTyArgsP
@@ -599,9 +602,9 @@ mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 mkCode = --debugTyBinds
          scrapeModules
        . scrapeQuals 
-       . visitNano convertTvarVisitor []
        . expandAliases
        . replaceAbsolute
+       . visitNano convertTvarVisitor []
        . mkCode'
     
 ---------------------------------------------------------------------------------
@@ -617,7 +620,7 @@ mkCode' ss = Nano {
       , max_id        = ending_id
       , fullNames     = names
       , fullPaths     = paths
-      , modules       = qenvEmpty
+      , pModules      = qenvEmpty -- is populated at mkCode
     } 
   where
     toBare            :: Int -> (SourceSpan, [Spec]) -> AnnRel Reft 
@@ -644,7 +647,7 @@ extractFact = go
     go (Class   (_,t)) = Just $ ClassAnn  t
     go (Iface   (_,t)) = Just $ IfaceAnn  t
     go (CastSp  _ t  ) = Just $ UserCast  t
-    go (Exported  _  ) = Just $ ExporedModElt
+    go (Exported  _  ) = Just $ ExportedElt
     go (AnFunc  t    ) = Just $ FuncAnn   t
     go _               = Nothing
 
@@ -733,16 +736,15 @@ instance PP (RawSpec) where
 -------------------------------------------------------------------------------------
 
 -- | @convertTvar@ converts @RCon@s corresponding to _bound_ type-variables to @TVar@
-convertTvar    :: (Reftable r, Transformable t) => [TVar] -> t q r -> t q r
+convertTvar    :: (PP r, Reftable r, Transformable t, Show q) => [TVar] -> t q r -> t q r
 convertTvar as = trans tx as []  
   where
-    tx αs _ (TRef c [] r)
-      | Just α <- mkTvar αs c = TVar α r 
-    tx _ _ t                  = t 
+    tx αs _ t@(TRef c [] r) | Just α <- mkTvar αs c = TVar α r 
+    tx αs _ t = t 
 
 mkTvar αs r = listToMaybe [ α { tv_loc = srcPos r }  | α <- αs, symbol α == symbol r]
 
-convertTvarVisitor :: Reftable r => Visitor () [TVar] (AnnR r) 
+convertTvarVisitor :: (PP r, Reftable r) => Visitor () [TVar] (AnnRel r) 
 convertTvarVisitor = defaultVisitor {
     ctxStmt = ctxStmtTvar
   , txStmt  = transFmap (\as _ -> convertTvar as) 
@@ -751,7 +753,7 @@ convertTvarVisitor = defaultVisitor {
 
 ctxStmtTvar as s = go s ++ as
   where
-    go :: Statement (AnnR r)  -> [TVar]
+    go :: Statement (AnnRel r)  -> [TVar]
     go s@(FunctionStmt {}) = grab s 
     go s@(FuncAmbDecl {})  = grab s 
     go s@(FuncOverload {}) = grab s 

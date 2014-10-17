@@ -1,4 +1,11 @@
 
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE DeriveDataTypeable     #-}
+{-# LANGUAGE DeriveFunctor          #-}
+{-# LANGUAGE TypeSynonymInstances   #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE OverlappingInstances   #-}
+
 module Language.Nano.Program (
 
   -- * Programs

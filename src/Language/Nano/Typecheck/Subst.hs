@@ -111,7 +111,7 @@ instance Free (Fact r) where
   free (ClassAnn (vs,m))    = foldr S.delete (free m) vs
   free (UserCast t)         = free t
   free (IfaceAnn _)         = S.empty
-  free (ExporedModElt)      = S.empty
+  free (ExportedElt)        = S.empty
   free (ModuleAnn _)        = S.empty
   free (EnumAnn _)          = S.empty
 

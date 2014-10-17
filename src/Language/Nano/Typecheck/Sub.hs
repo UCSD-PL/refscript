@@ -4,8 +4,9 @@
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
-
 {-# LANGUAGE IncoherentInstances       #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LiberalTypeSynonyms       #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}

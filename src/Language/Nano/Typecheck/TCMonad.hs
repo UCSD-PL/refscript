@@ -419,7 +419,7 @@ safeExtends _ (_,    ID _ _ _ Nothing        _ ) = return ()
 safeExtends γ (l, t@(ID _ c _ (Just (p, ts)) _)) = 
     case flatten' Nothing InstanceMember γ t of
       Just ms -> 
-        case flatten Nothing InstanceMember γ . (,ts) =<< resolveRelTypeInEnv γ p of
+        case flatten Nothing InstanceMember γ . (,ts) =<< resolveTypeInEnv γ p of
           Just ps  | isSubtype γ (mkTCons t_immutable ms) (mkTCons t_immutable ps) 
                   -> return ()
                    | otherwise         

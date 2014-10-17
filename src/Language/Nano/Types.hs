@@ -2,7 +2,10 @@
 {-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE DeriveTraversable      #-}
 {-# LANGUAGE StandaloneDeriving     #-}
+{-# LANGUAGE TypeSynonymInstances   #-}
 {-# LANGUAGE DeriveFoldable         #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE DeriveFunctor          #-}
 
 module Language.Nano.Types where
 

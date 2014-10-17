@@ -129,6 +129,12 @@ instance Free a => Free (Maybe a) where
   free Nothing              = S.empty
   free (Just a)             = free a
 
+instance (Free a, Free b) => Free (a,b) where
+  free (a,b)                = free a `S.union` free b
+
+instance Free (QN l) where
+  free _                    = S.empty
+
 
 class Substitutable r a where 
   apply                     :: (RSubst r) -> a -> a 
@@ -190,10 +196,10 @@ instance F.Reftable r => Substitutable r (Annot (Fact r) z) where
 instance Substitutable r F.Symbol  where
   apply _ s                 = s 
 
-instance Substitutable r QName where
+instance Substitutable r (QN l) where
   apply _ s                 = s 
 
-instance Substitutable r RelName where
+instance Substitutable r (QP l) where
   apply _ s                 = s 
 
 instance F.Reftable r => Substitutable r (IfaceDef r) where

@@ -70,7 +70,9 @@ verifyFile cfg fs
       Left  l -> return (NoAnn, l)
       Right x -> ssaTransform x >>= \case
                    Left  l -> return (NoAnn, l)
-                   Right y -> typeCheck cfg (expandAliases y) >>= \case
+                   -- Right y -> typeCheck cfg (expandAliases y) >>= \case
+                   -- -- This is done in parsing
+                   Right y -> typeCheck cfg y >>= \case
                                 Left  l -> unsafe l
                                 Right z -> return $ safe cfg z
 

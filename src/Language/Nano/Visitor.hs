@@ -64,6 +64,7 @@ import           Language.Nano.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.Syntax.Annotations
 import           Language.Nano.Env
+import           Language.Nano.Errors
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Nano.Names
@@ -348,6 +349,7 @@ transFact f = go
     go as xs (EltOverload x m) = EltOverload x $ trans f as xs m
     go as xs (Overload x t)    = Overload x    $ trans f as xs t 
     go as xs (TCast x c)       = TCast x       $ trans f as xs c 
+    go _ _   t                 = t
 
 transCast f = go
   where
@@ -669,10 +671,10 @@ replaceAbsolute pgm@(Nano { code = Src ss, fullNames = ns, fullPaths = ps })
     foo l           = ntransAnnR (safeAbsName l) (safeAbsPath l) l
     safeAbsName l a = case absAct (absoluteName ns) l a of
                         Just a' -> a'
-                        Nothing -> throw $ bug (srcPos l) $ "Visitor.replaceAbsolute name " ++ ppshow a
+                        Nothing -> throw $ errorUnboundName (srcPos l) a
     safeAbsPath l a = case absAct (absolutePath ps) l a of
                         Just a' -> a'
-                        Nothing -> throw $ bug (srcPos l) $ "Visitor.replaceAbsolute path" ++ ppshow a
+                        Nothing -> throw $ errorUnboundName (srcPos l) a
 
     absAct f l a    = I.lookup (ann_id l) mm >>= \p -> f p a
     mm              = snd $ visitStmts vs (QP AK_ def []) ss

@@ -103,8 +103,8 @@ getTApps    :: RefType -> [F.Symbol]
 getTApps    = everything (++) ([] `mkQ` fromT)
   where
     fromT   :: RefType -> [F.Symbol] 
-    fromT (TApp (TRef (RN (QName _ [] c))) _ _) = [c]
-    fromT _                                     = [ ]
+    fromT (TRef (QN AK_ _ [] c) _ _) = [c]
+    fromT _                          = [ ]
 
 expandTAlias  :: TAliasEnv RefType -> TAlias RefType -> TAlias RefType
 expandTAlias te a = a {al_body = expandRefType te $ al_body a}
@@ -115,8 +115,8 @@ expandTAlias te a = a {al_body = expandRefType te $ al_body a}
 expandRefType :: Data a => TAliasEnv RefType -> a -> a
 expandRefType te = everywhere $ mkT $ tx
   where
-    tx t@(TApp (TRef (RN (QName l [] c))) ts r) = maybe t (applyTAlias l t c ts r) $ envFindTy c te
-    tx t                                        = t
+    tx t@(TRef (QN AK_ l [] c) ts r) = maybe t (applyTAlias l t c ts r) $ envFindTy c te
+    tx t                             = t
 
 applyTAlias l t _ ts_ r a
   | (nt, ne) == (nα, nx) = {- tracePP "applyTAlias" $ -} (F.subst su $ S.apply θ $ al_body a) `strengthen` r
@@ -145,9 +145,9 @@ splitTsEs l t na nx ts_
     n            = length ts_
     (ts, tes)    = splitAt na ts_ 
 
-rTypeExp _ _ (TExp e)            = e
-rTypeExp _ _(TApp (TRef r) [] _) = F.expr $ F.symbol r 
-rTypeExp l t a                   = die $ errorTAliasMismatch l t a
+rTypeExp _ _ (TExp e)     = e
+rTypeExp _ _(TRef r [] _) = F.expr $ F.symbol r 
+rTypeExp l t a            = die $ errorTAliasMismatch l t a
 
 -----------------------------------------------------------------------------
 -- | A Generic Solver for Expanding Definitions -----------------------------

@@ -1,21 +1,13 @@
 
-{-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE DeriveFunctor        #-}
-{-# LANGUAGE DataKinds            #-}
-{-# LANGUAGE KindSignatures       #-}
-{-# LANGUAGE GADTs                #-}
 {-# LANGUAGE DeriveFoldable       #-}
 {-# LANGUAGE DeriveTraversable    #-}
-{-# LANGUAGE DeriveDataTypeable   #-}
-{-# LANGUAGE TupleSections        #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverlappingInstances #-}
 
 module Language.Nano.Names (
  
     QN(..)
   , QP(..)
+  , AK(..)
+  , RK(..)
   , RelName, AbsName
   , RelPath, AbsPath
   , NameSpacePath
@@ -29,10 +21,18 @@ module Language.Nano.Names (
   , extendAbsPath
 
   , mkRelName
+  , mkAbsName
+  , mkAbsPath
 
   ) where 
 
+import qualified Data.HashSet                   as H
+import           Data.List                      (find)
+import           Control.Applicative            ((<$>), (<*>))
 import           Data.Hashable          
+import           Data.Data
+import           Data.Traversable
+import           Data.Foldable                      (Foldable()) 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.Nano.Locations
@@ -55,47 +55,35 @@ type RelName = QN RK
 type RelPath = QP RK
 
 -- Qualified Kind: Absolute or Relative
-data QK = AK | RK 
+data AK = AK_ deriving (Eq, Data, Typeable, Show)
+data RK = RK_ deriving (Eq, Data, Typeable, Show)
 
 -- Qualified Name
-data QN :: QK -> * where
-  AN :: SourceSpan -> NameSpacePath -> F.Symbol -> QN AK
-  RN :: SourceSpan -> NameSpacePath -> F.Symbol -> QN RK
+data QN l = QN l SourceSpan NameSpacePath F.Symbol deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
 
 -- Qualified Path
-data QP :: QK -> * where
-  AP :: SourceSpan -> NameSpacePath -> QP AK
-  RP :: SourceSpan -> NameSpacePath -> QP RK
+data QP l = QP l SourceSpan NameSpacePath deriving (Show, Ord, Data, Typeable, Functor, Traversable, Foldable)
 
-instance Eq (QN l) where
-  AN _ n1 s1 == AN _ n2 s2 = (n1,s1) == (n2,s2)
-  RN _ n1 s1 == RN _ n2 s2 = (n1,s1) == (n2,s2)
-  _          == _          = False
+instance Eq l => Eq (QN l) where
+  QN k1 _ n1 s1 == QN k2 _ n2 s2 = (k1,n1,s1) == (k2,n2,s2)
 
-instance Eq (QP l) where
-  AP _ n1 == AP _ n2 = n1 == n2
-  RP _ n1 == RP _ n2 = n1 == n2
-  _       == _       = False
+instance Eq l => Eq (QP l) where
+  QP k1 _ n1 == QP k2 _ n2 = (k1,n1) == (k2,n2)
 
 instance F.Symbolic (QN l) where
-  symbol (AN _ _ s) = s
-  symbol (RN _ _ s) = s
+  symbol (QN _ _ _ s) = s
  
 instance Hashable (QN l) where
-  hashWithSalt i (AN _ n s) = hashWithSalt i (s:n)
-  hashWithSalt i (RN _ n s) = hashWithSalt i (s:n)
+  hashWithSalt i (QN _ _ n s) = hashWithSalt i (s:n)
  
 instance Hashable (QP l) where
-  hashWithSalt i (AP _ n) = hashWithSalt i n
-  hashWithSalt i (RP _ n) = hashWithSalt i n
+  hashWithSalt i (QP _ _ n) = hashWithSalt i n
  
 instance IsLocated (QN l) where
-  srcPos (AN a _ _) = a
-  srcPos (RN a _ _) = a
+  srcPos (QN _ a _ _) = a
 
 instance IsLocated (QP l) where
-  srcPos (AP a _) = a
-  srcPos (RP a _) = a
+  srcPos (QP _ a _) = a
 
 instance F.Symbolic (Id a) where
   symbol (Id _ x)   = F.symbol x 
@@ -113,17 +101,12 @@ instance PP F.Symbol where
   pp = pprint
  
 instance PP (QN l) where
-  pp (AN _ [] s) = pp s
-  pp (AN _ ms s) = (hcat $ punctuate dot $ map pp ms) <> dot <> pp s
-  pp (RN _ [] s) = pp s
-  pp (RN _ ms s) = (hcat $ punctuate dot $ map pp ms) <> dot <> pp s
-
+  pp (QN _ _ [] s) = pp s
+  pp (QN _ _ ms s) = (hcat $ punctuate dot $ map pp ms) <> dot <> pp s
  
 instance PP (QP l) where
-  pp (AP _ []) = pp "<global>"
-  pp (AP _ ms) = hcat $ punctuate dot $ map pp ms
-  pp (RP _ []) = pp "<global>"
-  pp (RP _ ms) = hcat $ punctuate dot $ map pp ms
+  pp (QP _ _ []) = pp "<global>"
+  pp (QP _ _ ms) = hcat $ punctuate dot $ map pp ms
 
 -- instance PP NameSpacePath where
 --   pp = hcat . punctuate dot . map pp
@@ -141,7 +124,7 @@ instance PP a => PP (Located a) where
   pp x = pp (val x) <+> text "at:" <+> pp (loc x)
 
 extendAbsPath :: F.Symbolic s => AbsPath -> s -> AbsPath
-extendAbsPath (AP l ps) s = AP l $ ps ++ [F.symbol s]
+extendAbsPath (QP _ l ps) s = QP AK_ l $ ps ++ [F.symbol s]
 
 
 returnName :: String
@@ -157,6 +140,45 @@ returnSymbol :: F.Symbol
 returnSymbol = F.symbol returnName
 
 mkRelName :: NameSpacePath -> F.Symbol -> RelName
-mkRelName ss s = RN (srcPos dummySpan) ss s 
+mkRelName = QN RK_ $ srcPos dummySpan
+
+mkAbsName = QN AK_ $ srcPos dummySpan
+mkAbsPath = QP AK_ $ srcPos dummySpan
+
+
+--------------------------------------------------------------------------
+-- | Name transformation
+--------------------------------------------------------------------------
+
+-- | `absoluteName env p r` returns `Just a` where `a` is the absolute path of
+--   the relative name `r` when referenced in the context of the absolute path 
+--   `p`; `Nothing` otherwise.
+--
+--   If p = A.B.C and r = C.D.E then the paths that will be checked in this
+--   order are: 
+--
+--    A.B.C.C.D.E
+--    A.B.C.D.E
+--    A.C.D.E
+--    C.D.E
+--
+---------------------------------------------------------------------------------
+absoluteName :: H.HashSet AbsName -> AbsPath -> RelName -> Maybe AbsName
+---------------------------------------------------------------------------------
+absoluteName ns (QP AK_ _ p) (QN RK_ _ ss s) = 
+    find (`H.member` ns) $ (`mkAbsName` s) . (++ ss) <$> prefixes p
+  where
+    prefixes        = map reverse . suffixes . reverse
+    suffixes []     = [[]]
+    suffixes (x:xs) = (x:xs) : suffixes xs
+    
+
+absolutePath :: H.HashSet AbsPath -> AbsPath -> RelPath -> Maybe AbsPath
+absolutePath ps (QP AK_ _ p) (QP RK_ _ ss) = 
+    find (`H.member` ps) $ mkAbsPath . (++ ss) <$> prefixes p
+  where
+    prefixes        = map reverse . suffixes . reverse
+    suffixes []     = [[]]
+    suffixes (x:xs) = (x:xs) : suffixes xs
 
 

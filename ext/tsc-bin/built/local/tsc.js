@@ -10013,7 +10013,7 @@ var TypeScript;
 
             restAnnots.push(new TypeScript.RsBindAnnotation(sourceSpan, 4 /* RawIface */, annotStr));
 
-            return new TypeScript.RsIfaceStmt(helper.getSourceSpan(this), restAnnots);
+            return new TypeScript.RsIfaceStmt(helper.getSourceSpan(this), restAnnots, this.identifier.toRsId(helper));
         };
         return InterfaceDeclarationSyntax;
     })(TypeScript.SyntaxNode);
@@ -60673,15 +60673,20 @@ var TypeScript;
 
     var RsIfaceStmt = (function (_super) {
         __extends(RsIfaceStmt, _super);
-        function RsIfaceStmt(span, ann) {
+        function RsIfaceStmt(span, ann, name) {
             _super.call(this, ann);
             this.span = span;
             this.ann = ann;
+            this.name = name;
         }
         RsIfaceStmt.prototype.toObject = function () {
-            return { IfaceStmt: [this.span.toObject(), this.mapAnn(function (a) {
-                        return a.toObject();
-                    })] };
+            return {
+                IfaceStmt: [
+                    [this.span.toObject(), this.mapAnn(function (a) {
+                            return a.toObject();
+                        })],
+                    this.name.toObject()]
+            };
         };
         return RsIfaceStmt;
     })(RsStatement);

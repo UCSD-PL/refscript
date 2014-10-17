@@ -71,7 +71,7 @@ import           Text.PrettyPrint.HughesPJ
 
 type Env t = F.SEnv (Located t) 
 
-newtype QEnv t = QE (M.HashMap AbsPath (Located t)) deriving (Eq, Functor)
+newtype QEnv t = QE (M.HashMap AbsPath (Located t)) deriving (Eq, Functor, Data, Typeable)
 
 
 --------------------------------------------------------------------------------

@@ -199,6 +199,7 @@ type IfaceDef       = IfaceDefQ AK
 type HeritageQ q r  = Maybe (QN q, [RTypeQ q r])
 
 type SIfaceDefQ q r = (IfaceDefQ q r, [RTypeQ q r])
+type SIfaceDef    r = SIfaceDefQ AK r
 
 data IndexKind      = StringIndex | NumericIndex
   deriving (Eq, Show, Data, Typeable)

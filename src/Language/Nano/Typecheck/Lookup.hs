@@ -54,18 +54,18 @@ getProp γ b s t@(TApp _ _ _  ) =                  getPropApp γ b s t
 getProp _ b s t@(TCons _ es _) = do (t',m)     <- accessMember b InstanceMember s es
                                     return      $ (t,t',m)
 
-getProp γ b s t@(TClass c    ) = do d          <- resolveRelTypeInEnv γ c
+getProp γ b s t@(TClass c    ) = do d          <- resolveTypeInEnv γ c
                                     es         <- flatten Nothing StaticMember γ (d,[])
                                     (t', m)    <- accessMember b StaticMember s es
                                     return      $ (t,t',m)
 
-getProp γ _ s t@(TModule m   ) = do m'         <- resolveRelPathInEnv γ m
+getProp γ _ s t@(TModule m   ) = do m'         <- resolveModuleInEnv γ m
                                     (_,_,ty,_) <- envFindTy s $ m_variables m'
                                     t'         <- renameRelative (modules γ) (m_path m') (absPath γ) ty
                                     return      $ (t,t', t_readOnly) 
                                     -- FIXME: perhaps something else here as mutability
 
-getProp γ _ s t@(TEnum e     ) = do e'         <- resolveRelEnumInEnv γ e
+getProp γ _ s t@(TEnum e     ) = do e'         <- resolveEnumInEnv γ e
                                     i          <- envFindTy (F.symbol s) (e_symbols e')
                                     return      $ (t, tInt `strengthen` exprReft i, t_immutable)
 

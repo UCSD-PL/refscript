@@ -97,6 +97,10 @@ data Nano a r = Nano {
   -- ^ All fully qualified namespaces
   --
   , fullPaths :: H.HashSet AbsPath
+  -- 
+  -- ^ Modules
+  --
+  , pModules  :: QEnv (ModuleDef r)
 
   } deriving (Functor, Data, Typeable)
 
@@ -246,9 +250,9 @@ instance IsNano (Statement a) where
   isNano (SwitchStmt _ e cs)      = isNano e && not (null cs) && isNano cs
   isNano (ClassStmt _ _ _ _  bd)  = all isNano bd
   isNano (ThrowStmt _ e)          = isNano e
-  isNano (FuncAmbDecl _ _ _) = True
-  isNano (FuncOverload _ _ _) = True
-  isNano (IfaceStmt _)            = True
+  isNano (FuncAmbDecl _ _ _)      = True
+  isNano (FuncOverload _ _ _)     = True
+  isNano (IfaceStmt _ _)          = True
   isNano (ModuleStmt _ _ s)       = all isNano s
   isNano (EnumStmt _ _ _)         = True
   isNano e                        = errortext (text "Not Nano Statement:" $$ pp e)

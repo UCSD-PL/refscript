@@ -673,63 +673,65 @@ replaceAbsolute pgm@(Nano { code = Src ss, fullNames = ns, fullPaths = ps })
 --    * m_types with: classes and interfaces
 --
 ---------------------------------------------------------------------------------------
-scrapeModules :: PPR r => [Statement (AnnRel r)] -> QEnv (ModuleDef r)
+scrapeModules :: PPR r => NanoBareR r -> NanoBareR r
 ---------------------------------------------------------------------------------------
-scrapeModules stmts              = undefined
--- scrapeModules                    = qenvFromList . map mkMod . collectModules
+scrapeModules pgm@(Nano { code = Src stmts }) 
+                                 = pgm { pModules = qenvFromList $ map mkMod $ collectModules stmts }
   where
---     mkMod (ap, m)                = (ap, {- trace (ppshow (envKeys $ varEnv m)
---                                            ++ "\n\n" ++ ppshow (envKeys $ typeEnv m)) $ -}
---                                          ModuleDef (varEnv m) (typeEnv m) (enumEnv m) ap)
+    mkMod (ap, m)                = (ap, ModuleDef (varEnv m) (typeEnv m) (enumEnv m) ap)
     drop1 (_,b,c,d,e)            = (b,c,d,e)
     allModStmts                  = collectModules stmts
-    -- RETURN
-    modulesSet                   = H.fromList $ fst <$> allModStmts
-    namesMap                     = qenvFromList [ (ap, typeNames ap ss) | (ap,ss) <- allModStmts ]
-    -- RETURN
-    namesSet                     = H.fromList [ nm | (ap,ss) <- allModStmts, nm <- typeNames ap ss ] 
---     varEnv                       = envMap drop1 . mkVarEnv . vStmts
-    typeEnv ap                   = envFromList  . tStmts ap
+    varEnv                       = envMap drop1 . mkVarEnv . vStmts
+    typeEnv                      = envFromList  . tStmts
     enumEnv                      = envFromList  . eStmts
 
---     vStmts                       = concatMap vStmt
---     vStmt :: PPR r => Statement (AnnRel r) -> [(Id SourceSpan, VarInfo r)]
---     vStmt (VarDeclStmt _ vds)    = [ (ss x, (VarDeclKind, visibility l, WriteGlobal, t, Uninitialized))
---                                        | VarDecl l x eo <- vds
---                                        , VarAnn t <- ann_fact l ]
---     vStmt (VarDeclStmt _ vds)    = [ (ss x, (VarDeclKind, visibility l, WriteGlobal, t, Initialized))
---                                        | VarDecl l x eo <- vds
---                                        , AmbVarAnn t <- ann_fact l ]
---     vStmt (FunctionStmt l x _ _) = [ (ss x, (FuncDefKind, visibility l, ReadOnly, t, Initialized))
---                                        | VarAnn t <- ann_fact l ]
---     vStmt (FuncAmbDecl l x _)    = [ (ss x, (FuncAmbientKind, visibility l, ImportDecl, t, Initialized))
---                                        | VarAnn t <- ann_fact l ]
---     vStmt (FuncOverload l x _)   = [ (ss x, (FuncOverloadKind, visibility l, ImportDecl, t, Initialized))
---                                        | VarAnn t <- ann_fact l ]
---     vStmt (ClassStmt l x _ _ _)  = [ (ss x, (ClassDefKind , visibility l, ReadOnly, TClass  $ QN RK_ (ann l) [] $  F.symbol x , Initialized)) ]
---     vStmt (ModuleStmt l x _)     = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, TModule $ QP RK_ (ann l)    $ [F.symbol x], Initialized)) ]
---     vStmt (EnumStmt l x _)       = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, TEnum   $ QN RK_ (ann l) [] $  F.symbol x , Initialized)) ]
---     vStmt _                      = [ ]
--- 
+    vStmts                       = concatMap vStmt
 
-    tStmts                       = concatMap . tStmt
-    tStmt :: PPR r => AbsPath -> Statement (AnnRel r) -> [(Id SourceSpan, IfaceDef r)]
-    tStmt pth c@(ClassStmt{})    = maybeToList $ resolveType pth c
-    tStmt pth c@(IfaceStmt _)    = maybeToList $ resolveType pth c
-    tStmt _ _                    = [ ]
+    vStmt                       :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, VarInfo r)]
+    vStmt (VarDeclStmt _ vds)    = [ (ss x, (VarDeclKind, visibility l, WriteGlobal, t, Uninitialized))
+                                       | VarDecl l x eo <- vds
+                                       , VarAnn t <- ann_fact l ]
+    vStmt (VarDeclStmt _ vds)    = [ (ss x, (VarDeclKind, visibility l, WriteGlobal, t, Initialized))
+                                       | VarDecl l x eo <- vds
+                                       , AmbVarAnn t <- ann_fact l ]
+    vStmt (FunctionStmt l x _ _) = [ (ss x, (FuncDefKind, visibility l, ReadOnly, t, Initialized))
+                                       | VarAnn t <- ann_fact l ]
+    vStmt (FuncAmbDecl l x _)    = [ (ss x, (FuncAmbientKind, visibility l, ImportDecl, t, Initialized))
+                                       | VarAnn t <- ann_fact l ]
+    vStmt (FuncOverload l x _)   = [ (ss x, (FuncOverloadKind, visibility l, ImportDecl, t, Initialized))
+                                       | VarAnn t <- ann_fact l ]
+    vStmt (ClassStmt l x _ _ _)  = [ (ss x, (ClassDefKind , visibility l, ReadOnly, 
+                                      TClass $ QN AK_ (ann l) [] $  F.symbol x , Initialized)) ]
+    vStmt (ModuleStmt l x _)     = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, 
+                                      TModule $ QP AK_ (ann l) $ [F.symbol x], Initialized)) ]
+    vStmt (EnumStmt l x _)       = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, 
+                                      TEnum $ QN AK_ (ann l) [] $  F.symbol x , Initialized)) ]
+    vStmt _                      = [ ]
+
+    tStmts                       = concatMap tStmt 
+
+    tStmt                       :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, IfaceDef r)]
+    tStmt c@(ClassStmt{})        = maybeToList $ resolveType c
+    tStmt c@(IfaceStmt{})        = maybeToList $ resolveType c
+    tStmt _                      = [ ]
 
     eStmts                       = concatMap eStmt
-    eStmt :: PPR r => Statement (AnnSSA r) -> [(Id SourceSpan, EnumDef)]
-    eStmt (EnumStmt _ n es)      = [(fmap srcPos n, EnumDef (F.symbol n) (I.fromList  $ catMaybes $ enumElt  <$> es)
-                                                                         (envFromList $ catMaybes $ sEnumElt <$> es))]
+    eStmt                       :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, EnumDef)]
+    eStmt (EnumStmt _ n es)      = [(fmap srcPos n, 
+                                    EnumDef (F.symbol n) (I.fromList  $ catMaybes $ enumElt  <$> es)
+                                                         (envFromList $ catMaybes $ sEnumElt <$> es))]
     eStmt _                      = []
     enumElt (EnumElt _ s i)      = (,F.symbol s) <$> i
     sEnumElt (EnumElt _ s i)     = (F.symbol s,) <$> i
-    ss = fmap ann
+    ss                           = fmap ann
  
 
-typeNames :: AbsPath -> [ Statement a ] -> [ AbsName ] 
-typeNames = undefined
+typeNames :: IsLocated a => AbsPath -> [ Statement a ] -> [ AbsName ] 
+typeNames (QP AK_ _ ss) = concatMap go 
+  where
+    go (ClassStmt l x _ _ _) = [ QN AK_ (srcPos l) ss $ F.symbol x ]
+    go (EnumStmt l x _ )     = [ QN AK_ (srcPos l) ss $ F.symbol x ]
+    go (IfaceStmt l x )      = [ QN AK_ (srcPos l) ss $ F.symbol x ]
 
  
 -- visibility :: Annot (Fact r) a -> Visibility
@@ -757,25 +759,20 @@ mkVarEnv                     = envFromList . concatMap f . M.toList . foldl merg
     amb ((s,(k,v,w,t,i)):xs) = [(s,(k,v,w, mkAnd (t : map tyOf xs),i))]    
     tyOf (_,(_,_,_,t,_))     = t
 
---
--- TODO 
--- 
---  * Use the @pth@ argument to transform all RelPath types to AbsPath
---
 ---------------------------------------------------------------------------------------
-resolveType :: PPR r => AbsPath -> Statement (AnnRel r) -> Maybe (Id SourceSpan, IfaceDef r)
+resolveType :: PPR r => Statement (AnnR r) -> Maybe (Id SourceSpan, IfaceDef r)
 ---------------------------------------------------------------------------------------
-resolveType pth (ClassStmt l c _ _ cs)
+resolveType (ClassStmt l c _ _ cs)
   = case [ t | ClassAnn t <- ann_fact l ] of
       [(vs, h)] -> undefined -- Just (cc, ID ClassKind cc vs h $ typeMembers pth cs)
       _         -> Nothing
   where
     cc        = fmap ann c
 
-resolveType pth (IfaceStmt l)
-  = undefined -- listToMaybe [ (n, t) | IfaceAnn t@(ID _ n _ _ _) <- ann_fact l ]
+resolveType (IfaceStmt l _)
+  = listToMaybe [ (n, t) | IfaceAnn t@(ID _ n _ _ _) <- ann_fact l ]
 
-resolveType _ _ = Nothing 
+resolveType _ = Nothing 
 
 ---------------------------------------------------------------------------------------
 typeMembers :: AbsPath -> [ClassElt (AnnRel r)] -> TypeMembers r

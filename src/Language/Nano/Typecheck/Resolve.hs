@@ -8,13 +8,8 @@
 
 module Language.Nano.Typecheck.Resolve ( 
   
-    absolutePathInEnv, absolutePath, absoluteName
-  , absoluteNameInEnv
-  , resolveRelPath, resolveRelPathInEnv
-  , resolveRelType, resolveRelTypeInEnv
-  , resolveRelEnum, resolveRelEnumInEnv
-  , relativePath, relativeName, extendPath
-  , renameRelative
+  -- * Resolve names
+    resolveTypeInEnv, resolveEnumInEnv, resolveModuleInEnv
 
   -- * Flatten a type definition applying subs
   , flatten, flatten', flatten'', flattenType
@@ -47,164 +42,21 @@ import           Control.Applicative ((<$>))
 -- import           Debug.Trace
 
 
----------------------------------------------------------------------------
--- | Namespace substitutions
----------------------------------------------------------------------------
 
--- | `renameRelative mods base tgt` transforms all relative paths (and names), 
---   originally assumed to be expressed in terms of absolute path @base@ to paths
---   (and names) that are relative to the absolute path @tgt@.
---
----------------------------------------------------------------------------
-renameRelative :: Data a => QEnv (ModuleDef r) -> AbsPath -> AbsPath -> a -> Maybe a
---------------------------------------------------------------------------
-renameRelative mods base tgt a | base == tgt 
-                               = return a  
-                               | otherwise   
-                               = everywhereM (mkM paths) a >>= everywhereM (mkM names)
-  where
-    paths :: RelPath -> Maybe RelPath
-    paths r             = relativePath tgt <$> absolutePath mods base r
+resolveTypeInEnv :: EnvLike r t => t r -> AbsName -> Maybe (IfaceDef r)
+resolveTypeInEnv γ (QN AK_ l ss s) = resolveModuleInEnv γ (QP AK_ l ss) 
+                                 >>= envFindTy s . m_types
 
-    names :: RelName -> Maybe RelName
-    names n             = relativeName tgt <$> absoluteName mods base n
-
+resolveEnumInEnv :: EnvLike r t => t r -> AbsName -> Maybe EnumDef
+resolveEnumInEnv γ (QN AK_ l ss s) = resolveModuleInEnv γ (QP AK_ l ss) 
+                                 >>= envFindTy s . m_enums
  
-
--- | `relativePath base tgt` expresses path @tgt@ in relative terms of path
---   @base@.
----------------------------------------------------------------------------
-relativePath :: AbsPath -> AbsPath -> RelPath
----------------------------------------------------------------------------
-relativePath (AP (QPath _ x)) (AP (QPath ly y)) = RP $ QPath ly $ dropCommonPref x y
-
----------------------------------------------------------------------------
-relativeName :: AbsPath -> AbsName -> RelName
----------------------------------------------------------------------------
-relativeName (AP (QPath _ x)) (AN (QName ly y s)) = RN $ QName ly (dropCommonPref x y) s
-
-
-dropCommonPref _      []      = []
-dropCommonPref []     ys      = ys
-dropCommonPref _      [s]     = [s]
-dropCommonPref (x:xs) (y:ys)  | x == y    = dropCommonPref xs ys
-                              | otherwise = y:ys
-
-
-
--- | `absolutePathInEnv env a r` returns the absolute path that corresponds to 
---   a path @r@ expressed in terms of environment @env@.
---
----------------------------------------------------------------------------
-absolutePathInEnv :: EnvLike r t => t r -> RelPath -> Maybe AbsPath
----------------------------------------------------------------------------
-absolutePathInEnv env r = absolutePath (modules env) (absPath env) r
-
-
--- | `absolutePath env a r` returns the absolute path that corresponds to the 
---   a path @r@ that is relative to an absolute namespace @a@.
---
----------------------------------------------------------------------------
-absolutePath    :: QEnv (ModuleDef r) -> AbsPath -> RelPath -> Maybe AbsPath
----------------------------------------------------------------------------
-absolutePath env a r    = m_path <$> resolveRelPath env a r 
-
--- | `absolutePath env a r` returns the absolute path that corresponds to the 
---   a path @r@ that is relative to an absolute namespace @a@.
---
----------------------------------------------------------------------------
-absoluteName    :: QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe AbsName
----------------------------------------------------------------------------
-absoluteName env a r@(RN (QName _ _ s)) = g <$> absolutePath env a (f r)
-  where
-    f (RN (QName l p _)) = RP (QPath l p)
-    g (AP (QPath l p))   = AN (QName l p s)
-
-
-absoluteNameInEnv env r = absoluteName (modules env) (absPath env) r
-
-
--- | `resolveRelPath γ a r` returns the environment referenced by the relative 
---   path @r@ expressed in terms of namespace @a@.
---
---   FIXME: check visibility
---
----------------------------------------------------------------------------
-resolveRelPath :: QEnv (ModuleDef r) -> AbsPath -> RelPath -> Maybe (ModuleDef r)
----------------------------------------------------------------------------
-resolveRelPath env a   (RP (QPath _ []    )) = qenvFindTy a env
-resolveRelPath env a r@(RP (QPath l (m:ms))) = do
-    curM <-qenvFindTy a env
-    case envFindTy m (m_variables curM) of
-      Just (_, _,TModule _,_) -> resolveRelPath env (extendPath a m) (RP (QPath l ms))
-      Just _                  -> Nothing
-      Nothing                 -> do prP <- parentOf a
-                                    resolveRelPath env prP r
-
----------------------------------------------------------------------------
-resolveRelPathInEnv :: Data r => EnvLike r g => g r -> RelPath -> Maybe (ModuleDef r)
----------------------------------------------------------------------------
-resolveRelPathInEnv γ = resolveRelPath (modules γ) (absPath γ)
-
-
--- | `resolveRelName γ a r`
---
---   All relative qualified names have been made relative to absolute path `a`.
---
---   FIXME: check visibility
---
----------------------------------------------------------------------------
-resolveRelName :: Data b => (ModuleDef r -> Env b) -> QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe b
----------------------------------------------------------------------------
-resolveRelName f env curP (RN qn) = do
-    curM        <- qenvFindTy curP env
-    (dfn, remP) <- aux curM qn
-    renameRelative env (tracePP ("Renaming from " ++ ppshow curP) remP) curP dfn 
-  where
-    aux curM qn@(QName _ [] s) = do
-      case envFindTy s (f curM) of 
-        Just dfn -> Just (dfn, m_path curM)
-        Nothing  -> do prP <- parentOf $ m_path curM
-                       prM <- qenvFindTy prP env
-                       aux prM qn
-    aux curM (QName l ns s)   = do 
-      remM <- resolveRelPath env (m_path curM) (RP (QPath l ns))
-      aux remM (QName l [] s)
-
-resolveRelType :: Data r => QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe (IfaceDef r)
-resolveRelType = resolveRelName m_types
-
-resolveRelEnum :: QEnv (ModuleDef r) -> AbsPath -> RelName -> Maybe EnumDef
-resolveRelEnum = resolveRelName m_enums
-
----------------------------------------------------------------------------
-resolveRelTypeInEnv :: PPR r => EnvLike r g => g r -> RelName -> Maybe (IfaceDef r)
----------------------------------------------------------------------------
-resolveRelTypeInEnv γ = resolveRelType (modules γ) (absPath γ)
-
----------------------------------------------------------------------------
-resolveRelEnumInEnv :: Data r => EnvLike r g => g r -> RelName -> Maybe EnumDef
----------------------------------------------------------------------------
-resolveRelEnumInEnv γ = resolveRelEnum (modules γ) (absPath γ)
-
----------------------------------------------------------------------------
-extendPath :: F.Symbolic x => AbsPath -> x -> AbsPath
----------------------------------------------------------------------------
-extendPath (AP (QPath l p)) s = AP $ QPath l $ p ++ [F.symbol s]
-
-
----------------------------------------------------------------------------
-parentOf :: AbsPath -> Maybe AbsPath
----------------------------------------------------------------------------
-parentOf (AP (QPath _ [])) = Nothing
-parentOf (AP (QPath l m )) = Just (AP (QPath l (init m)))
-
-
-
+resolveModuleInEnv :: EnvLike r t => t r -> AbsPath -> Maybe (ModuleDef r)
+resolveModuleInEnv γ s = qenvFindTy s (modules γ)
 
 -- | Flattenning 
 --
-
+-- 
 -- | `flatten m b γ (d,ts)` epands a type reference to a structural type that 
 --   includes all elements of the the named type and its ancestors. Argument
 --   @b@ determines if static or non-static elements should be included.
@@ -220,7 +72,7 @@ flatten :: (EnvLike r g, PPR r)
 ---------------------------------------------------------------------------
 flatten m s γ (ID _ _ vs h es, ts) =
     case h of 
-      Just (p, ts') -> do pdef  <- resolveRelTypeInEnv γ p
+      Just (p, ts') -> do pdef  <- resolveTypeInEnv γ p
                           inh   <- flatten m s γ $ (, ts') pdef
                           return $ M.map (apply θ . fmut) $ M.union current inh
       Nothing       ->    return $ M.map (apply θ . fmut) $ current 
@@ -266,43 +118,43 @@ flatten'' m st γ d@(ID _ _ vs _ _) = (vs,) <$> flatten m st γ (d, tVar <$> vs)
 ---------------------------------------------------------------------------
 flattenType :: (PPR r, EnvLike r g, Data r) => g r -> RType r -> Maybe (RType r)
 ---------------------------------------------------------------------------
-flattenType γ (TApp (TRef x) [] r)    -- This case is for Mutability types 
-  = do  d       <- resolveRelTypeInEnv γ x
+flattenType γ (TRef x [] r)    -- This case is for Mutability types 
+  = do  d       <- resolveTypeInEnv γ x
         es      <- flatten Nothing InstanceMember γ (d, [])
         return   $ TCons t_immutable es r
 
-flattenType γ (TApp (TRef x) (mut:ts) r)
-  = do  d       <- resolveRelTypeInEnv γ x
+flattenType γ (TRef x (mut:ts) r)
+  = do  d       <- resolveTypeInEnv γ x
         es      <- flatten (Just $ toType mut) InstanceMember γ (d,mut:ts) 
         return   $ TCons (toType mut) es r
 
 flattenType γ (TClass x)             
-  = do  d       <- resolveRelTypeInEnv γ x
+  = do  d       <- resolveTypeInEnv γ x
         es      <- flatten' Nothing StaticMember γ d
         return   $ TCons t_immutable es fTop
 
 flattenType γ (TModule x)             
-  = do  es      <- M.fromList . map mkField . envToList . m_variables <$> resolveRelPathInEnv γ x
+  = do  es      <- M.fromList . map mkField . envToList . m_variables <$> resolveModuleInEnv γ x
         return   $ TCons t_immutable es fTop
   where
     mkField (k,(_,_,t,_)) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) t_immutable t)
 
 flattenType γ (TEnum x)
-  = do  es      <- M.fromList . map  mkField . envToList . e_symbols <$> resolveRelEnumInEnv γ x
+  = do  es      <- M.fromList . map  mkField . envToList . e_symbols <$> resolveEnumInEnv γ x
         return   $ TCons t_immutable es fTop
   where
     mkField (k,i) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) t_immutable $ tInt `strengthen` exprReft i)
 
 flattenType γ (TApp TInt _ r) 
-  = do  es      <- t_elts <$> resolveRelTypeInEnv γ (mkRelName [] $ F.symbol "Number")
+  = do  es      <- t_elts <$> resolveTypeInEnv γ (mkAbsName [] $ F.symbol "Number")
         return   $ TCons t_immutable es fTop
 
 flattenType γ (TApp TString _ r) 
-  = do  es      <- t_elts <$> resolveRelTypeInEnv γ (mkRelName [] $ F.symbol "String")
+  = do  es      <- t_elts <$> resolveTypeInEnv γ (mkAbsName [] $ F.symbol "String")
         return   $ TCons t_immutable es fTop
 
 flattenType γ (TApp TBool _ r) 
-  = do  es      <- t_elts <$> resolveRelTypeInEnv γ (mkRelName [] $ F.symbol "Boolean")
+  = do  es      <- t_elts <$> resolveTypeInEnv γ (mkAbsName [] $ F.symbol "Boolean")
         return   $ TCons t_immutable es fTop
 
 flattenType _ t  = Just t
@@ -321,23 +173,23 @@ flattenType _ t  = Just t
 --           What about common elements in parent class?
 --
 ---------------------------------------------------------------------------
-weaken :: (PPR r, EnvLike r g) => g r -> RelName -> RelName -> [RType r] -> Maybe (SIfaceDef r)
+weaken :: (PPR r, EnvLike r g) => g r -> AbsName -> AbsName -> [RType r] -> Maybe (SIfaceDef r)
 ---------------------------------------------------------------------------
-weaken γ pa pb ts
-  | on (==) (absoluteNameInEnv γ) pa pb = (,ts) <$> resolveRelTypeInEnv γ pa
+weaken γ a b ts
+  | a == b = (,ts) <$> resolveTypeInEnv γ a
   | otherwise
-  = do  z <- resolveRelTypeInEnv γ pa
+  = do  z <- resolveTypeInEnv γ a
         case z of
-          ID _ _ vs (Just (p,ps)) _ -> weaken γ p pb $ apply (fromList $ zip vs ts) ps
+          ID _ _ vs (Just (p,ps)) _ -> weaken γ p b $ apply (fromList $ zip vs ts) ps
           ID _ _ _  Nothing       _ -> Nothing
 
 
 -- FIXME: revisit these
 ---------------------------------------------------------------------------
-ancestors :: (PPR r, EnvLike r g) => g r -> RelName -> [RelName]
+ancestors :: (PPR r, EnvLike r g) => g r -> AbsName -> [AbsName]
 ---------------------------------------------------------------------------
 ancestors γ s = 
-  case resolveRelTypeInEnv γ s of 
+  case resolveTypeInEnv γ s of 
     Just (ID {t_proto = p }) -> 
       case p of 
         Just (par,_) ->  s : ancestors γ par
@@ -345,19 +197,18 @@ ancestors γ s =
     _ -> [s]
 
 ---------------------------------------------------------------------------
--- isAncestor :: PPR r => g r -> RelName -> RelName -> Bool 
-isAncestor :: (PPR r, EnvLike r g) => g r -> RelName -> RelName -> Bool
+isAncestor :: (PPR r, EnvLike r g) => g r -> AbsName -> AbsName -> Bool
 ---------------------------------------------------------------------------
 isAncestor γ c p = p `elem` ancestors γ c
 
 ---------------------------------------------------------------------------
 boundKeys :: (PPR r, EnvLike r g) => g r -> RType r -> [F.Symbol]
 ---------------------------------------------------------------------------
-boundKeys γ t@(TApp (TRef _) _ _) = case flattenType γ t of
-                                      Just t  -> boundKeys γ t
-                                      Nothing -> []
-boundKeys _ (TCons _ es _)        = fst <$> M.keys es 
-boundKeys _ _                     = []
+boundKeys γ t@(TRef _ _ _) = case flattenType γ t of
+                               Just t  -> boundKeys γ t
+                               Nothing -> []
+boundKeys _ (TCons _ es _) = fst <$> M.keys es 
+boundKeys _ _              = []
 
 
 -----------------------------------------------------------------------
@@ -367,7 +218,7 @@ boundKeys _ _                     = []
 type Constructor = Type 
 
 instance F.Symbolic Constructor where
-  symbol (TApp (TRef x) _ _)           = F.symbol x
+  symbol (TRef x _ _)                  = F.symbol x
   symbol (TClass _ )                   = F.symbol "Function"
   symbol (TModule _ )                  = F.symbol "Object"
   symbol (TFun _ _ _ _ )               = F.symbol "Function"
@@ -380,13 +231,13 @@ instance F.Expression Constructor where
 
 
 getTypeof (TApp TInt _ _     )         = Just "number"
+getTypeof (TRef _  _ _       )         = Just "object"
 getTypeof (TApp TBool _ _    )         = Just "boolean"
 getTypeof (TApp TString _ _  )         = Just "string"
 getTypeof (TApp TUndef _ _   )         = Just "undefined"
 getTypeof (TApp TNull  _ _   )         = Just "undefined"
 getTypeof (TFun _ _ _ _      )         = Just "function"
 getTypeof (TCons _ _ _       )         = Just "object"
-getTypeof (TApp (TRef _) _ _ )         = Just "object"
 getTypeof (TClass _          )         = Just "function"
 getTypeof (TModule _         )         = Just "object"
 getTypeof _                            = Nothing

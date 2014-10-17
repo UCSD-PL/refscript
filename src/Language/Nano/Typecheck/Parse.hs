@@ -597,7 +597,8 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 ---------------------------------------------------------------------------------
 mkCode = --debugTyBinds
-         scrapeQuals 
+         scrapeModules
+       . scrapeQuals 
        . visitNano convertTvarVisitor []
        . expandAliases
        . replaceAbsolute
@@ -616,6 +617,7 @@ mkCode' ss = Nano {
       , max_id        = ending_id
       , fullNames     = names
       , fullPaths     = paths
+      , modules       = qenvEmpty
     } 
   where
     toBare            :: Int -> (SourceSpan, [Spec]) -> AnnRel Reft 

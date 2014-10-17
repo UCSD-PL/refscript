@@ -53,6 +53,11 @@ getProp γ b s t@(TApp _ _ _  ) =                  getPropApp γ b s t
 
 getProp _ b s t@(TCons _ es _) = do (t',m)     <- accessMember b InstanceMember s es
                                     return      $ (t,t',m)
+    
+getProp γ b s t@(TRef x ts _)  = do d          <- resolveTypeInEnv γ x
+                                    es         <- flatten Nothing InstanceMember γ (d,ts)
+                                    (t',m)     <- accessMember b InstanceMember s es
+                                    return      $ (t,t',m)
 
 getProp γ b s t@(TClass c    ) = do d          <- resolveTypeInEnv γ c
                                     es         <- flatten Nothing StaticMember γ (d,[])
@@ -60,8 +65,7 @@ getProp γ b s t@(TClass c    ) = do d          <- resolveTypeInEnv γ c
                                     return      $ (t,t',m)
 
 getProp γ _ s t@(TModule m   ) = do m'         <- resolveModuleInEnv γ m
-                                    (_,_,ty,_) <- envFindTy s $ m_variables m'
-                                    t'         <- renameRelative (modules γ) (m_path m') (absPath γ) ty
+                                    (_,_,t',_) <- envFindTy s $ m_variables m'
                                     return      $ (t,t', t_readOnly) 
                                     -- FIXME: perhaps something else here as mutability
 
@@ -90,10 +94,6 @@ getPropApp γ b s t@(TApp c ts _) =
                     return  $ (t,t',m)
     TString  -> do  (t',m) <- lookupAmbientType γ b s "String"
                     return  $ (t,t',m)
-    TRef x   -> do  d      <- tracePP (ppshow x) $ resolveRelTypeInEnv γ x
-                    es     <- flatten Nothing InstanceMember γ (d,ts)
-                    (t',m) <- accessMember b InstanceMember s es
-                    return  $ (t,t',m)
     TFPBool  -> Nothing
     TTop     -> Nothing
     TVoid    -> Nothing
@@ -104,15 +104,15 @@ getPropApp _ _ _ _ = error "getPropApp should only be applied to TApp"
 extractCtor :: (PPRD r, EnvLike r g) => g r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 extractCtor γ (TClass x) 
-  = do  d        <- resolveRelTypeInEnv γ x
+  = do  d        <- resolveTypeInEnv γ x
         (vs, es) <- flatten'' Nothing InstanceMember γ d
         case M.lookup (ctorSymbol, InstanceMember) es of
           Just (ConsSig t) -> fixRet x vs t
           _                -> return $ defCtor x vs
   where
 
-extractCtor γ (TApp (TRef x) ts _) 
-  = do  d        <- resolveRelTypeInEnv γ x
+extractCtor γ (TRef x ts _) 
+  = do  d        <- resolveTypeInEnv γ x
         (vs, es) <- flatten'' Nothing InstanceMember γ d
         case M.lookup (ctorSymbol, InstanceMember) es of
           Just (ConsSig t) -> apply (fromList $ zip vs ts) <$> fixRet x vs t
@@ -128,7 +128,7 @@ extractCtor _ _ = Nothing
 fixRet x vs = fmap (mkAnd . (mkAll vs . mkFun . fixOut vs <$>)) . bkFuns
   where fixOut vs (a,b,c,_) = (a,b,c,retT x vs)
 
-retT x vs  = TApp (TRef x) (tVar <$> vs) fTop
+retT x vs  = TRef x (tVar <$> vs) fTop
 defCtor x vs = mkAll vs $ TFun Nothing [] (retT x vs) fTop
 
 
@@ -136,10 +136,10 @@ defCtor x vs = mkAll vs $ TFun Nothing [] (retT x vs) fTop
 extractParent :: (PPR r, PP r, EnvLike r g, Substitutable r (RType r)) 
               => g r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
-extractParent γ (TApp (TRef x) ts _) 
-  = do  d <- resolveRelTypeInEnv γ x
+extractParent γ (TRef x ts _) 
+  = do  d <- resolveTypeInEnv γ x
         case t_proto d of
-          Just (p,ps) -> Just $ TApp (TRef p) (tArgs d ts ps) fTop
+          Just (p,ps) -> Just $ TRef p (tArgs d ts ps) fTop
           _           -> Nothing
   where
     tArgs d ts ps = apply (fromList $ zip (t_args d) ts) ps
@@ -149,20 +149,20 @@ extractParent _ _ = Nothing
 -------------------------------------------------------------------------------
 extractCall :: (EnvLike r g, PPRD r) => g r -> RType r -> [RType r]
 -------------------------------------------------------------------------------
-extractCall γ t                   = uncurry mkAll <$> foo [] t
+extractCall γ t             = uncurry mkAll <$> foo [] t
   where
-    foo αs t@(TFun _ _ _ _)       = [(αs, t)]
-    foo αs   (TAnd ts)            = concatMap (foo αs) ts 
-    foo αs   (TAll α t)           = foo (αs ++ [α]) t
-    foo αs   (TApp (TRef s) _ _ ) = case resolveRelTypeInEnv γ s of 
-                                      Just d  -> getCallSig αs $ t_elts d
-                                      Nothing -> []
-    foo αs   (TCons _ es _)       = getCallSig αs es
-    foo _  _                      = []
+    foo αs t@(TFun _ _ _ _) = [(αs, t)]
+    foo αs   (TAnd ts)      = concatMap (foo αs) ts 
+    foo αs   (TAll α t)     = foo (αs ++ [α]) t
+    foo αs   (TRef s _ _  ) = case resolveTypeInEnv γ s of 
+                                Just d  -> getCallSig αs $ t_elts d
+                                Nothing -> []
+    foo αs   (TCons _ es _) = getCallSig αs es
+    foo _  _                = []
 
-    getCallSig αs es              = case M.lookup (callSymbol, InstanceMember) es of
-                                      Just (CallSig t) -> [(αs, t)]
-                                      _                -> []
+    getCallSig αs es        = case M.lookup (callSymbol, InstanceMember) es of
+                                Just (CallSig t) -> [(αs, t)]
+                                _                -> []
 
 
 -- | `accessMember b s es` extracts field @s@ from type members @es@. If @b@ is
@@ -205,9 +205,9 @@ lookupAmbientType :: (PPRD r, EnvLike r g, F.Symbolic f, F.Symbolic s)
                   => g r -> Bool -> f -> s -> Maybe (RType r, Mutability)
 -------------------------------------------------------------------------------
 lookupAmbientType γ b fld amb
-  = t_elts <$> resolveRelTypeInEnv γ nm >>= accessMember b InstanceMember fld
+  = t_elts <$> resolveTypeInEnv γ nm >>= accessMember b InstanceMember fld
   where
-    nm = mkRelName [] (F.symbol amb)
+    nm = mkAbsName [] (F.symbol amb)
 
 -- Accessing the @x@ field of the union type with @ts@ as its parts, returns
 -- "Nothing" if accessing all parts return error, or "Just (ts, tfs)" if

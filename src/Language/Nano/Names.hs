@@ -1,6 +1,10 @@
 
 {-# LANGUAGE DeriveFoldable       #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
+{-# LANGUAGE DeriveFunctor        #-}
 {-# LANGUAGE DeriveTraversable    #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances    #-}
 
 module Language.Nano.Names (
  
@@ -128,7 +132,6 @@ instance PP a => PP (Located a) where
 
 extendAbsPath :: F.Symbolic s => AbsPath -> s -> AbsPath
 extendAbsPath (QP _ l ps) s = QP AK_ l $ ps ++ [F.symbol s]
-
 
 returnName :: String
 returnName = "$result"

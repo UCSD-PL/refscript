@@ -2,7 +2,8 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE DeriveFunctor          #-}
-{-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE OverlappingInstances   #-}
 
 
 
@@ -139,7 +140,7 @@ data FactQ q r
   -- Named type annotation
   | IfaceAnn    !(IfaceDefQ q r)
   | ClassAnn    !([TVar], Maybe (QN q, [RTypeQ q r]))
-  | ExporedModElt
+  | ExportedElt
   | ModuleAnn   !(F.Symbol)
   | EnumAnn     !(F.Symbol)
     deriving (Eq, Show, Data, Typeable)
@@ -210,7 +211,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (AmbVarAnn t)    = text "Amb Var Annotation"     <+> pp t
   pp (ConsAnn c)      = text "Constructor Annotation" <+> pp c
   pp (UserCast c)     = text "Cast Annotation"        <+> pp c
-  pp (ExporedModElt)  = text "Exported"
+  pp (ExportedElt)    = text "Exported"
   pp (FuncAnn t)      = text "Func Annotation"        <+> pp t
   pp (FieldAnn f)     = text "Field Annotation"       <+> pp f
   pp (MethAnn m)      = text "Method Annotation"      <+> pp m

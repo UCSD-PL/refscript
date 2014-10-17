@@ -35,11 +35,12 @@ module Language.Nano.Visitor (
 import           Data.Functor.Identity          (Identity)
 import           Data.Monoid
 import           Data.Data
+import           Data.Default
 import           Data.Generics                   
 import qualified Data.HashSet                   as H
 import           Data.List                      (stripPrefix, partition, reverse, find)
 import qualified Data.Map.Strict                as M
-import           Data.Maybe                     (maybeToList, listToMaybe, catMaybes)
+import           Data.Maybe                     (maybeToList, listToMaybe, catMaybes, fromJust)
 import qualified Data.IntMap                    as I
 import           Data.Traversable               (traverse)
 import           Control.Applicative            ((<$>), (<*>))
@@ -637,11 +638,31 @@ extractQualifiedNames stmts = (namesSet, modulesSet)
     namesSet                = H.fromList [ nm | (ap,ss) <- allModStmts
                                               , nm <- typeNames ap ss ] 
 
+-- | Replace all relative qualified names and paths in a program with full ones.
 ---------------------------------------------------------------------------------------
 replaceAbsolute :: PPR r => NanoBareRelR r -> NanoBareR r
 ---------------------------------------------------------------------------------------
-replaceAbsolute pgm           = undefined
+replaceAbsolute pgm@(Nano { code = Src ss, fullNames = ns, fullPaths = ps }) 
+                    = pgm { code = Src $ (foo <$>) <$> ss }
+  where
+    foo l           = ntransAnnR (safeAbsName l) (safeAbsPath l) l
+    safeAbsName l a = case absAct (absoluteName ns) l a of
+                        Just a' -> a'
+                        Nothing -> throw $ bug (srcPos l) $ "Visitor.replaceAbsolute " ++ ppshow a
+    safeAbsPath l a = case absAct (absolutePath ps) l a of
+                        Just a' -> a'
+                        Nothing -> throw $ bug (srcPos l) $ "Visitor.replaceAbsolute " ++ ppshow a
 
+    absAct f l a    = I.lookup (ann_id l) mm >>= \p -> f p a
+    mm              = snd $ visitStmts vs (QP AK_ def []) ss
+    vs              = defaultVisitor { ctxStmt = cStmt } 
+                                     { accStmt = acc   }
+                                     { accExpr = acc   }
+                                     { accCElt = acc   }
+                                     { accVDec = acc   }
+    cStmt (QP AK_ l p) (ModuleStmt _ x ms) 
+                    = QP AK_ l $ p ++ [F.symbol x] 
+    acc c s         = I.singleton (ann_id a) c where a = getAnnotation s
 
 
 -- | `scrapeModules ss` creates a module store from the statements in @ss@

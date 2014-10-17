@@ -24,6 +24,9 @@ module Language.Nano.Names (
   , mkAbsName
   , mkAbsPath
 
+  , absoluteName
+  , absolutePath
+
   ) where 
 
 import qualified Data.HashSet                   as H

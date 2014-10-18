@@ -290,6 +290,7 @@ flattenUnions t               = t
 strengthen                   :: F.Reftable r => RTypeQ q r -> r -> RTypeQ q r
 ----------------------------------------------------------------------------------------
 strengthen (TApp c ts r) r'  = TApp c ts  $ r' `F.meet` r 
+strengthen (TRef c ts r) r'  = TRef c ts  $ r' `F.meet` r 
 strengthen (TCons ts m r) r' = TCons ts m $ r' `F.meet` r 
 strengthen (TVar α r)    r'  = TVar α     $ r' `F.meet` r 
 strengthen (TFun a b c r) r' = TFun a b c $ r' `F.meet` r

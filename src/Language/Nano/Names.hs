@@ -31,6 +31,8 @@ module Language.Nano.Names (
   , absoluteName
   , absolutePath
 
+  , toAbsoluteName
+
   ) where 
 
 import qualified Data.HashSet                   as H
@@ -187,4 +189,5 @@ absolutePath ps (QP AK_ _ p) (QP RK_ _ ss) =
     suffixes []     = [[]]
     suffixes (x:xs) = (x:xs) : suffixes xs
 
+toAbsoluteName (QN RK_ l ss s) = QN AK_ l ss s
 

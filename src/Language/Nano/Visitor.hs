@@ -670,10 +670,15 @@ replaceAbsolute pgm@(Nano { code = Src ss, fullNames = ns, fullPaths = ps })
     foo l           = ntransAnnR (safeAbsName l) (safeAbsPath l) l
     safeAbsName l a = case absAct (absoluteName ns) l a of
                         Just a' -> a'
-                        Nothing -> throw $ errorUnboundName (srcPos l) a
+                        -- If it's a type alias, don't throw error
+                        Nothing | isInAliases a -> toAbsoluteName a
+                                | otherwise -> throw $ errorUnboundName (srcPos l) a
     safeAbsPath l a = case absAct (absolutePath ps) l a of
                         Just a' -> a'
                         Nothing -> throw $ errorUnboundName (srcPos l) a
+
+    isInAliases (QN RK_ _ [] s) = envMem s $ tAlias pgm 
+    isInAliases (QN _   _ _  _) = False
 
     absAct f l a    = I.lookup (ann_id l) mm >>= \p -> f p a
     mm              = snd $ visitStmts vs (QP AK_ def []) ss

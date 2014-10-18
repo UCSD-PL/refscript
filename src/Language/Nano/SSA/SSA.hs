@@ -132,7 +132,7 @@ ssaStmt s@(FuncOverload _ _ _)
   = return (True, s)
 
 -- interface IA<V> extends IB<T> { ... }
-ssaStmt s@(IfaceStmt _) 
+ssaStmt s@(IfaceStmt _ _) 
   = return (True, s)
 
 -- x = e

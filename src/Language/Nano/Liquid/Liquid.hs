@@ -49,12 +49,13 @@ import           Language.Nano.Typecheck.Parse
 import           Language.Nano.Typecheck.Typecheck  (typeCheck) 
 import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.SSA.SSA
+import           Language.Nano.Visitor
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 -- import           Text.PrettyPrint.HughesPJ 
 
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
@@ -138,7 +139,7 @@ consNano p@(Nano {code = Src fs})
 -------------------------------------------------------------------------------
 initGlobalEnv  :: NanoRefType -> CGM CGEnv
 -------------------------------------------------------------------------------
-initGlobalEnv (Nano { code = Src s }) 
+initGlobalEnv pgm@(Nano { code = Src s }) 
       = freshenCGEnvM (CGE nms bds grd ctx mod pth Nothing) 
     >>= envAdds "initGlobalEnv" extras
   where
@@ -149,9 +150,9 @@ initGlobalEnv (Nano { code = Src s })
                   (TApp TUndef [] $ F.Reft (F.vv Nothing, [F.trueRefa]), ReadOnly, Initialized))]
     bds       = F.emptyIBindEnv
     grd       = []
-    mod       = scrapeModules s 
+    mod       = pModules pgm
     ctx       = emptyContext
-    pth       = AP $ QPath (srcPos dummySpan) []
+    pth       = mkAbsPath []
 
 -------------------------------------------------------------------------------
 initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> CGM CGEnv
@@ -204,10 +205,10 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-consEnvFindTypeDefM :: IsLocated a => a -> CGEnv -> RelName -> CGM (IfaceDef F.Reft)
+consEnvFindTypeDefM :: IsLocated a => a -> CGEnv -> AbsName -> CGM (IfaceDef F.Reft)
 -------------------------------------------------------------------------------
 consEnvFindTypeDefM l γ x
-  = case resolveRelTypeInEnv γ x of 
+  = case resolveTypeInEnv γ x of 
       Just t  -> return t
       Nothing -> die $ bugClassDefNotFound (srcPos l) x
 
@@ -261,14 +262,13 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 
 -- e1.f = e2
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
-  = mseq (consExpr g e1 Nothing) $ \(x1,g') ->
-      do t <- safeEnvFindTy x1 g' 
-         consSetProp g' x1 (fmap snd3 $ getProp g' False f t)
+  = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
+      t         <- safeEnvFindTy x1 g' 
+      let rhsCtx = fmap snd3 $ getProp g' False f t
+      opTy      <- setPropTy l (F.symbol f) <$> safeEnvFindTy (builtinOpId BISetProp) g'
+      fmap snd <$> consCall g' l BISetProp (FI Nothing [(vr x1, Nothing),(e2, rhsCtx)]) opTy
   where
-    consSetProp g x rhsCtx = 
-      do opTy      <- setPropTy l (F.symbol f) <$> safeEnvFindTy (builtinOpId BISetProp) g
-         fmap snd <$> consCall g l BISetProp (FI Nothing [(vr x, Nothing),(e2, rhsCtx)]) opTy
-    vr = VarRef $ getAnnotation e1
+      vr = VarRef $ getAnnotation e1
    
 -- e
 consStmt g (ExprStmt _ e) 
@@ -346,9 +346,10 @@ consStmt g (ClassStmt l x _ _ ce)
         consClassElts g' dfn ce
         return    $ Just g
   where
-    rn            = RN $ QName (srcPos l) [] (F.symbol x)
+    rn            = QN AK_ (srcPos l) ss (F.symbol x)
+    QP AK_ _ ss   = cge_path g
 
-consStmt g (IfaceStmt _)
+consStmt g (IfaceStmt _ _)
   = return $ Just g
 
 consStmt g (EnumStmt _ _ _)
@@ -421,9 +422,10 @@ consClassElt g dfn (Constructor l xs body)
                       [t] -> Just t
                       [ ] -> Just $ TFun Nothing [] tVoid fTop
                       _   -> Nothing
-    mkThis (_:αs) = TApp (TRef rn) (t_mutable : map tVar αs) fTop
+    mkThis (_:αs) = TRef an (t_mutable : map tVar αs) fTop
     mkThis _      = throw $ bug (srcPos l) "Liquid.Liquid.consClassElt Constructor" 
-    rn            = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
+    an            = QN AK_ (srcPos l) ss (F.symbol $ t_name dfn)
+    QP AK_ _ ss   = cge_path g 
 
 -- Static field
 consClassElt g dfn (MemberVarDecl l True x (Just e))
@@ -465,9 +467,10 @@ consClassElt g dfn (MemberMethDef l False x xs body)
       _ -> cgError  $ errorClassEltAnnot (srcPos l) (t_name dfn) x
   where
     spec            = M.lookup (F.symbol x, InstanceMember) (t_elts dfn)
-    mkThis m (_:αs) = TApp (TRef rn) (ofType m : map tVar αs) fTop
+    mkThis m (_:αs) = TRef an (ofType m : map tVar αs) fTop
     mkThis _ _      = throw $ bug (srcPos l) "Liquid.Liquid.consClassElt MemberMethDef" 
-    rn              = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
+    an              = QN AK_ (srcPos l) ss (F.symbol $ t_name dfn)
+    QP AK_ _ ss     = cge_path g
 
 consClassElt _ _  (MemberMethDecl _ _ _ _) = return ()
 
@@ -548,7 +551,7 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
          _          -> cgError $ unimplemented (srcPos l) "tcCall-instanceof" $ ppshow e2
   where
     l2 = getAnnotation e2
-    cc (RN (QName _ _ s)) = F.symbolString s 
+    cc (QN AK_ _ _ s) = F.symbolString s 
 
 consExpr g (InfixExpr l o e1 e2) _
   = do opTy <- safeEnvFindTy (infixOpId o) g
@@ -556,10 +559,11 @@ consExpr g (InfixExpr l o e1 e2) _
 
 -- | e ? e1 : e2
 consExpr g (CondExpr l e e1 e2) to
-  = do  opTy                      <- mkTy to <$> safeEnvFindTy (builtinOpId BICondExpr) g
-        tt'                       <- freshTyFun g l $ rType tt
-        (v,g')                    <- mapFst (VarRef l) <$> envAddFresh l (tt', WriteLocal, Initialized) g
-        consCallCondExpr g' l BICondExpr (FI Nothing [(e,Nothing),(v,Nothing),(e1,rType <$> to),(e2,rType <$> to)]) opTy
+  = do  opTy    <- mkTy to <$> safeEnvFindTy (builtinOpId BICondExpr) g
+        tt'     <- freshTyFun g l $ rType tt
+        (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tt', WriteLocal, Initialized) g
+        consCallCondExpr g' l BICondExpr (FI Nothing 
+          [(e,Nothing),(v,Nothing),(e1,rType <$> to),(e2,rType <$> to)]) opTy
         -- consCallCondExpr g' l BICondExpr (FI Nothing ((,Nothing) <$> [e,v,e1,e2])) opTy
   where
     tt       = fromMaybe tTop to
@@ -570,12 +574,14 @@ consExpr g (CondExpr l e e1 e2) to
 -- | super(e1,..,en)
 consExpr g (CallExpr l (SuperRef _) es) _
   = case envFindTy (F.symbol "this") g of
-      Just t -> case extractParent g t of 
-                  Just (TApp (TRef x) _ _) -> case extractCtor g (TClass x) of
-                                                Just ct -> consCall g l "super" (FI Nothing ((,Nothing) <$> es)) ct
-                                                _       -> cgError $ errorUnboundId (ann l) "super"
-                  Just _  -> cgError $ errorUnboundId (ann l) "super"
-                  Nothing -> cgError $ errorUnboundId (ann l) "super"
+      Just t -> 
+          case extractParent g t of 
+            Just (TRef x _ _) -> 
+                case extractCtor g (TClass x) of
+                  Just ct -> consCall g l "super" (FI Nothing ((,Nothing) <$> es)) ct
+                  _       -> cgError $ errorUnboundId (ann l) "super"
+            Just _  -> cgError $ errorUnboundId (ann l) "super"
+            Nothing -> cgError $ errorUnboundId (ann l) "super"
       Nothing -> cgError $ errorUnboundId (ann l) "this"
 
 -- | e.m(es)
@@ -583,14 +589,14 @@ consExpr g (CallExpr l em@(DotRef _ e f) es) _
   = mseq (consExpr g e Nothing) $ \(x,g') -> do 
       t      <- safeEnvFindTy x g'
       case t of 
-        t | isVariadicCall f  -> 
+        t | isVariadicCall f -> 
             case es of
               []   -> cgError $ errorVariadicNoArgs (srcPos l) em
               v:vs -> consCall g l em (FI (Just (v, Nothing)) (nth vs)) t
 
-          | otherwise         -> case getProp g True f t of
-                                   Just (_,tf,_) -> consCall g l em (FI (Just (e, Nothing)) ((,Nothing) <$> es)) tf
-                                   Nothing       -> cgError $ errorCallNotFound (srcPos l) e f
+          | otherwise -> case getProp g True f t of
+                           Just (_,tf,_) -> consCall g l em (FI (Just (e, Nothing)) ((,Nothing) <$> es)) tf
+                           Nothing       -> cgError $ errorCallNotFound (srcPos l) e f
   where
     isVariadicCall f = F.symbol f == F.symbol "call"
     nth              = ((,Nothing) <$>)
@@ -623,7 +629,7 @@ consExpr g ef@(DotRef l e f) _
 consExpr g (BracketRef l e1 e2) _
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
       opTy <- do  safeEnvFindTy x1 g' >>= \case 
-                    TEnum n -> case resolveRelEnumInEnv g' n of
+                    TEnum n -> case resolveEnumInEnv g' n of
                                  Just ed -> return $ enumTy ed
                                  _       -> safeEnvFindTy (builtinOpId BIBracketRef) g'
                     _       -> safeEnvFindTy (builtinOpId BIBracketRef) g'

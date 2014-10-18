@@ -59,7 +59,7 @@ data CGEnvR r = CGE {
   --
   , cge_parent  :: Maybe (CGEnvR r)
   
-  } deriving (Functor, Data, Typeable)
+  } deriving (Functor)
 
 type CGEnv = CGEnvR F.Reft
  

@@ -1,11 +1,11 @@
+
 {-# LANGUAGE DeriveDataTypeable     #-}
-{-# LANGUAGE DeriveFunctor          #-}
-{-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE DeriveTraversable      #-}
 {-# LANGUAGE StandaloneDeriving     #-}
+{-# LANGUAGE TypeSynonymInstances   #-}
 {-# LANGUAGE DeriveFoldable         #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE OverlappingInstances   #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE DeriveFunctor          #-}
 
 module Language.Nano.Types where
 
@@ -54,7 +54,6 @@ data TCon
   | TString             -- ^ string
   | TVoid               -- ^ void
   | TTop                -- ^ top
-  | TRef RelName        -- ^ A.B.C (class)
   | TUn                 -- ^ union
   | TNull               -- ^ null
   | TUndef              -- ^ undefined
@@ -62,11 +61,11 @@ data TCon
     deriving (Ord, Show, Data, Typeable)
 
 -- | (Raw) Refined Types 
-data RType r =
+data RTypeQ q r =
   -- 
   -- ^ C T1,...,Tn
   --
-    TApp TCon [RType r] r
+    TApp TCon [RTypeQ  q r] r
   -- 
   -- ^ A
   --
@@ -74,37 +73,54 @@ data RType r =
   -- 
   -- ^ ([Tthis], xi:T1, .., xn:Tn) => T
   --
-  | TFun (Maybe (RType r)) [Bind r] (RType r) r
+  | TFun (Maybe (RTypeQ q r)) [BindQ q r] (RTypeQ q r) r
   -- 
   -- ^ {f1:T1,..,fn:Tn} 
   --
-  | TCons Mutability (TypeMembers r) r
+  | TCons (MutabilityQ q) (TypeMembersQ q r) r
   -- 
   -- ^ forall A. T
   --
-  | TAll TVar (RType r)
+  | TAll TVar (RTypeQ q r)
   -- 
   -- ^ /\ (T1..) => T1' ... /\ (Tn..) => Tn'
   --
-  | TAnd [RType r]                                   
+  | TAnd [RTypeQ q r]                                   
+  --
+  -- ^ Type Reference
+  --
+  | TRef (QN q) [RTypeQ  q r] r
   -- 
   -- ^ typeof A.B.C (class)
   -- 
-  | TClass RelName
+  | TClass (QN q)
   -- 
   -- ^ typeof L.M.N (module)
   --
-  | TModule RelPath
+  | TModule (QP q)
   -- 
   -- ^ enumeration L.M.N 
   -- 
-  | TEnum RelName
+  | TEnum (QN q)
   -- 
   -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
   --
   | TExp F.Expr
 
-    deriving (Show, Functor, Data, Typeable, Traversable, Foldable)
+    deriving (Show, Data, Typeable)
+
+deriving instance Functor (RTypeQ q) 
+deriving instance Traversable (RTypeQ q)
+deriving instance Foldable (RTypeQ q)
+
+
+-- 
+-- The main typechecking RType uses absolute paths
+--
+type RType = RTypeQ AK
+ 
+
+type TypeMembersQ q r = M.Map (F.Symbol, StaticKind) (TypeMemberQ q r)
 
 type TypeMembers r = M.Map (F.Symbol, StaticKind) (TypeMember r)
 
@@ -118,26 +134,8 @@ data StaticKind =
 type Type    = RType ()
 
 
--- FIXME: Use common_ts
-
--- funcConstr                            :: Constructor
--- funcConstr                             = TApp (TRef (QN [] (F.symbol "Function"))) [] ()
--- 
--- objectConstr                          :: Constructor
--- objectConstr                           = TApp (TRef (QN [] (F.symbol "Object"))) [] ()
--- 
--- -- Primitive types don't have constructor
--- toConstructor                         :: RType r -> Maybe Constructor
--- toConstructor  (TApp (TRef  x) _ _)    = Just $ TApp (TRef  x) [] ()
--- toConstructor  (TClass _)              = Just $ funcConstr
--- toConstructor  (TModule _)             = Just $ objectConstr
--- toConstructor  (TFun _ _ _ )           = Just $ funcConstr
--- toConstructor  (TCons _ _ _)           = Just $ objectConstr
--- toConstructor  (TAnd _)                = Just $ funcConstr 
--- toConstructor  _                       = Nothing
-
 -- | Type binder
-data Bind r = B { 
+data BindQ  q r = B { 
 
   -- 
   -- ^ Binding's symbol
@@ -146,12 +144,22 @@ data Bind r = B {
   --
   -- ^ Field type
   --
-  , b_type :: !(RType r)                            
+  , b_type :: !(RTypeQ  q r)
 
-  } deriving (Eq, Show, Functor, Data, Typeable, Traversable, Foldable)
+  } deriving (Eq, Show, Data, Typeable)
+
+deriving instance Functor (BindQ q) 
+deriving instance Traversable (BindQ q)
+deriving instance Foldable (BindQ q)
+
+type Bind = BindQ AK
 
 
-data FuncInputs t = FI { fi_self :: Maybe t, fi_args :: [t] } deriving (Functor, Traversable, Foldable)
+data FuncInputs t = FI { 
+    fi_self :: Maybe t
+  , fi_args :: [t] 
+  } 
+  deriving (Functor, Traversable, Foldable)
 
 
 ---------------------------------------------------------------------------------
@@ -161,7 +169,7 @@ data FuncInputs t = FI { fi_self :: Maybe t, fi_args :: [t] } deriving (Functor,
 data IfaceKind = ClassKind | InterfaceKind
   deriving (Eq, Show, Data, Typeable)
 
-data IfaceDef r = ID { 
+data IfaceDefQ q r = ID { 
   -- 
   -- ^ Kind
   --
@@ -177,53 +185,64 @@ data IfaceDef r = ID {
   -- 
   -- ^ Heritage
   --
-  , t_proto :: !(Heritage r)
+  , t_proto :: !(HeritageQ q r)
   -- 
   -- ^ List of data type elts 
   --
-  , t_elts  :: !(TypeMembers r)
+  , t_elts  :: !(TypeMembersQ q r)
   } 
-  deriving (Eq, Show, Functor, Data, Typeable, Traversable, Foldable)
+  deriving (Eq, Show, Data, Typeable)
 
+deriving instance Functor (IfaceDefQ q) 
+deriving instance Traversable (IfaceDefQ q)
+deriving instance Foldable (IfaceDefQ q)
 
-type Heritage r  = Maybe (RelName, [RType r])
+type IfaceDef       = IfaceDefQ AK
 
-type SIfaceDef r = (IfaceDef r, [RType r])
+type HeritageQ q r  = Maybe (QN q, [RTypeQ q r])
 
-data IndexKind   = StringIndex | NumericIndex
+type SIfaceDefQ q r = (IfaceDefQ q r, [RTypeQ q r])
+type SIfaceDef    r = SIfaceDefQ AK r
+
+data IndexKind      = StringIndex | NumericIndex
   deriving (Eq, Show, Data, Typeable)
 
 
-data TypeMember r 
+data TypeMemberQ  q r
   -- 
   -- ^ Call signature
   --
-  = CallSig   { f_type :: RType r }                     
+  = CallSig   { f_type :: RTypeQ q r }
   -- 
   -- ^ Constructor signature
   --
-  | ConsSig   { f_type :: RType r }
+  | ConsSig   { f_type :: RTypeQ q r }
   -- 
   -- ^ Index signature
   --
   | IndexSig  { f_sym  :: F.Symbol
               , f_key  :: IndexKind
-              , f_type :: RType r }                     
+              , f_type :: RTypeQ q r }
   -- 
   -- ^ Field signature
   --
   | FieldSig  { f_sym  :: F.Symbol                      -- ^ Name  
-              , f_mut  :: Mutability                    -- ^ Mutability
-              , f_type :: RType r }                     -- ^ Property type (could be function)
+              , f_mut  :: (MutabilityQ q)               -- ^ Mutability
+              , f_type :: RTypeQ  q r }                 -- ^ Property type (could be function)
   -- 
   -- ^ Method signature
   --
   | MethSig   { f_sym  :: F.Symbol                      -- ^ Name  
-              , f_mut  :: Mutability                    -- ^ Mutability
-              , f_type :: RType r }                     -- ^ Method type
+              , f_mut  :: (MutabilityQ q)               -- ^ Mutability
+              , f_type :: RTypeQ  q r }                 -- ^ Method type
 
-  deriving (Show, Functor, Data, Typeable, Traversable, Foldable)
+  deriving (Show, Data, Typeable)
 
+deriving instance Functor (TypeMemberQ q) 
+deriving instance Traversable (TypeMemberQ q)
+deriving instance Foldable (TypeMemberQ q)
+
+type TypeMember = TypeMemberQ AK
 
 data Visibility 
 
@@ -269,18 +288,18 @@ data EnumDef = EnumDef {
 --
 --  PV: the last case has not been included
 --
-data ModuleDef r = ModuleDef {
+data ModuleDefQ q r = ModuleDef {
   -- 
   -- ^ Contents of a module (local and exported)
   --   
   --   * Interfaces are _not_ included here (because thery don't appear as
   --   bindings in the language)
   --
-    m_variables   :: Env (Visibility, Assignability, RType r, Initialization)
+    m_variables   :: Env (Visibility, Assignability, RTypeQ q r, Initialization)
   --
   -- ^ Types
   --
-  , m_types       :: Env (IfaceDef r)
+  , m_types       :: Env (IfaceDefQ q r)
   -- 
   -- ^ Enumerations
   --
@@ -290,7 +309,11 @@ data ModuleDef r = ModuleDef {
   --
   , m_path        :: AbsPath
   }
-  deriving (Functor, Data, Typeable)
+  deriving (Data, Typeable)
+
+deriving instance Functor (ModuleDefQ q) 
+
+type ModuleDef = ModuleDefQ AK
 
 
 ------------------------------------------------------------------------------------------
@@ -332,7 +355,8 @@ data Assignability
 -- | Mutability 
 ---------------------------------------------------------------------------------
 
-type Mutability = Type 
+type MutabilityQ q = RTypeQ q ()
+type Mutability    = Type 
 
 
 ---------------------------------------------------------------------------------
@@ -384,7 +408,6 @@ instance Eq TCon where
   TString  == TString  = True
   TVoid    == TVoid    = True         
   TTop     == TTop     = True
-  TRef x1  == TRef x2  = x1 == x2
   TUn      == TUn      = True
   TNull    == TNull    = True
   TUndef   == TUndef   = True
@@ -393,7 +416,7 @@ instance Eq TCon where
  
 
 -- Ignoring refinements in equality check
-instance Eq (RType r) where
+instance Eq q => Eq (RTypeQ  q r) where
   TApp TUn t1 _   == TApp TUn t2 _   = (null $ t1 \\ t2) && (null $ t2 \\ t1)
   TApp c1 t1s _   == TApp c2 t2s _   = (c1, t1s) == (c2, t2s)
   TVar v1 _       == TVar v2 _       = v1        == v2
@@ -401,13 +424,14 @@ instance Eq (RType r) where
   TAll v1 t1      == TAll v2 t2      = (v1,t1)  == (v2,t2)   -- Very strict Eq here
   TAnd t1s        == TAnd t2s        = t1s == t2s
   TCons e1s m1 _  == TCons e2s m2 _  = (e1s,m1) == (e2s,m2)
+  TRef x1 t1s _   == TRef x2 t2s _   = (x1,t1s) == (x2,t2s)
   TClass c1       == TClass c2       = c1 == c2
   TModule m1      == TModule m2      = m1 == m2
   TEnum e1        == TEnum e2        = e1 == e2
   _               == _               = False
 
 
-instance Eq (TypeMember r) where 
+instance Eq q => Eq (TypeMemberQ q r) where 
   CallSig t1        == CallSig t2        = t1 == t2
   ConsSig t1        == ConsSig t2        = t1 == t2
   IndexSig _ b1 t1  == IndexSig _ b2 t2  = (b1,t1) == (b2,t2)
@@ -417,30 +441,31 @@ instance Eq (TypeMember r) where
  
 
 -- USE CAREFULLY !!!
-instance Ord (RType r) where
+instance Eq q => Ord (RTypeQ q r) where
   compare = compare `on` rTypeCode
 
 rTypeCode (TVar _ _)     = 0
-rTypeCode (TFun _ _ _ _) = 1
+-- rTypeCode (TFun _ _ _ _) = 1
 rTypeCode (TCons _ _ _ ) = 2
 rTypeCode (TAll _ _ )    = 3
 rTypeCode (TAnd _ )      = 4
-rTypeCode (TClass _ )    = 5
-rTypeCode (TExp _ )      = 6
-rTypeCode (TModule _)    = 7
-rTypeCode (TEnum _)      = 8
-rTypeCode (TApp c _ _)   = 9 + tconCode c
+rTypeCode (TRef _ _ _)   = 5
+rTypeCode (TClass _ )    = 6
+rTypeCode (TExp _ )      = 7
+rTypeCode (TModule _)    = 8
+rTypeCode (TEnum _)      = 9
+rTypeCode (TApp c _ _)   = 10 + tconCode c
+rTypeCode _              = errorstar "Types.rTypeCode"
 
 tconCode TInt            = 0
 tconCode TBool           = 1
 tconCode TString         = 3
 tconCode TVoid           = 4
 tconCode TTop            = 5
-tconCode (TRef _)        = 6
-tconCode TUn             = 7
-tconCode TNull           = 8
-tconCode TUndef          = 9
-tconCode TFPBool         = 10
+tconCode TUn             = 6
+tconCode TNull           = 7
+tconCode TUndef          = 8
+tconCode TFPBool         = 9
 
 
 -----------------------------------------------------------------------

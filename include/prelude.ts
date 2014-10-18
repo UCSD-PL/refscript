@@ -782,7 +782,7 @@ declare function builtin_OpIn(s: string, obj: Object): boolean;
 /*  qualif Add(v:number,x:number,y:number): v = x + y */
 /*  qualif Sub(v:number,x:number,y:number): v = x - y */
 
-/*@  qualif Len(v:number, arr:a)  : v < (len arr) */
+/*@  qualif Len(v:b, w:a)  : v < (len w) */
 
 
 

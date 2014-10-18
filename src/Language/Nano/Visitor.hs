@@ -493,58 +493,58 @@ ntransAnnR f g ann = ann { ann_fact = ntrans f g <$> ann_fact ann}
 ---------------------------------------------------------------------------
 
 
--- -- | Find all language level bindings whose scope reaches the current scope. 
--- --   This includes: 
--- --    * function definitions/declarations, 
--- --    * classes, 
--- --    * modules,
--- --    * global (annotated) variables
--- --
--- --   E.g. declarations in the If-branch of a conditional expression. Note how 
--- --   declarations do not escape module or function blocks.
--- --
--- -------------------------------------------------------------------------------
--- hoistBindings :: Data r 
---               => [Statement (AnnType r)] 
---               -> [(Id (AnnType r), AnnType r, SyntaxKind, Assignability, Initialization)]
--- -------------------------------------------------------------------------------
--- hoistBindings = everythingBut (++) myQ
---   where
---     myQ a = case cast a :: (Data r => Maybe (Statement (AnnType r))) of
---               Just  s -> fSt s
---               Nothing -> 
---                   case cast a :: (Data r => Maybe (Expression (AnnType r))) of
---                     Just  s -> fExp s
---                     Nothing -> 
---                         case cast a :: (Data r => Maybe (VarDecl (AnnType r))) of
---                           Just  s -> fVd s
---                           Nothing -> ([], False)
--- 
---     fSt :: Statement (AnnType r) 
---         -> ([(Id (AnnType r), AnnType r, SyntaxKind, Assignability, Initialization)],Bool)
---     fSt (FunctionStmt l n _ _)  = ([(n, l, FuncDefKind, ReadOnly, Initialized)], True)
---     fSt (FuncAmbDecl l n _)     = ([(n, l, FuncAmbientKind, ImportDecl, Initialized)], True)
---     fSt (FuncOverload l n _  )  = ([(n, l, FuncOverloadKind, ImportDecl, Initialized)], True)
---     fSt (ClassStmt l n _ _ _ )  = ([(n, l, ClassDefKind   , ReadOnly, Initialized)], True)
---     fSt (ModuleStmt l n _)      = ([(n, l { ann_fact = ModuleAnn (F.symbol n) : ann_fact l}, 
---                                     ModuleDefKind, ReadOnly, Initialized)], True)
---     fSt (EnumStmt l n _)        = ([(n, l { ann_fact = EnumAnn (F.symbol n) : ann_fact l}, 
---                                     EnumDefKind  , ReadOnly, Initialized)], True)
---     fSt _                       = ([], False)
--- 
---     fExp :: Expression (AnnType r) 
---          -> ([(Id (AnnType r), AnnType r, SyntaxKind, Assignability, Initialization)], Bool)
---     fExp _                     = ([], True)
--- 
---     fVd :: VarDecl (AnnType r) -> ([(Id (AnnType r), AnnType r, SyntaxKind, 
---                                     Assignability, Initialization)], Bool)
---     fVd (VarDecl l n eo)       = ([(n, l, VarDeclKind, WriteGlobal, Uninitialized) 
---                                     | VarAnn _    <- ann_fact l], True)
---     fVd (VarDecl l n eo)       = ([(n, l, VarDeclKind, WriteGlobal, Initialized)   
---                                     | AmbVarAnn _ <- ann_fact l], True)
--- 
--- initStatus (Just _ ) = Initialized
--- initStatus _         = Uninitialized
+-- | Find all language level bindings whose scope reaches the current scope. 
+--   This includes: 
+--    * function definitions/declarations, 
+--    * classes, 
+--    * modules,
+--    * global (annotated) variables
+--
+--   E.g. declarations in the If-branch of a conditional expression. Note how 
+--   declarations do not escape module or function blocks.
+--
+-------------------------------------------------------------------------------
+hoistBindings :: Data r 
+              => [Statement (AnnType r)] 
+              -> [(Id (AnnType r), AnnType r, SyntaxKind, Assignability, Initialization)]
+-------------------------------------------------------------------------------
+hoistBindings = everythingBut (++) myQ
+  where
+    myQ a = case cast a :: (Data r => Maybe (Statement (AnnType r))) of
+              Just  s -> fSt s
+              Nothing -> 
+                  case cast a :: (Data r => Maybe (Expression (AnnType r))) of
+                    Just  s -> fExp s
+                    Nothing -> 
+                        case cast a :: (Data r => Maybe (VarDecl (AnnType r))) of
+                          Just  s -> fVd s
+                          Nothing -> ([], False)
+
+    fSt :: Statement (AnnType r) 
+        -> ([(Id (AnnType r), AnnType r, SyntaxKind, Assignability, Initialization)],Bool)
+    fSt (FunctionStmt l n _ _)  = ([(n, l, FuncDefKind, ReadOnly, Initialized)], True)
+    fSt (FuncAmbDecl l n _)     = ([(n, l, FuncAmbientKind, ImportDecl, Initialized)], True)
+    fSt (FuncOverload l n _  )  = ([(n, l, FuncOverloadKind, ImportDecl, Initialized)], True)
+    fSt (ClassStmt l n _ _ _ )  = ([(n, l, ClassDefKind   , ReadOnly, Initialized)], True)
+    fSt (ModuleStmt l n _)      = ([(n, l { ann_fact = ModuleAnn (F.symbol n) : ann_fact l}, 
+                                    ModuleDefKind, ReadOnly, Initialized)], True)
+    fSt (EnumStmt l n _)        = ([(n, l { ann_fact = EnumAnn (F.symbol n) : ann_fact l}, 
+                                    EnumDefKind  , ReadOnly, Initialized)], True)
+    fSt _                       = ([], False)
+
+    fExp :: Expression (AnnType r) 
+         -> ([(Id (AnnType r), AnnType r, SyntaxKind, Assignability, Initialization)], Bool)
+    fExp _                     = ([], True)
+
+    fVd :: VarDecl (AnnType r) -> ([(Id (AnnType r), AnnType r, SyntaxKind, 
+                                    Assignability, Initialization)], Bool)
+    fVd (VarDecl l n eo)       = ([(n, l, VarDeclKind, WriteGlobal, Uninitialized) 
+                                    | VarAnn _    <- ann_fact l], True)
+    fVd (VarDecl l n eo)       = ([(n, l, VarDeclKind, WriteGlobal, Initialized)   
+                                    | AmbVarAnn _ <- ann_fact l], True)
+
+initStatus (Just _ ) = Initialized
+initStatus _         = Uninitialized
 
 
 -- | Find classes / interfaces in scope
@@ -634,21 +634,20 @@ collectModules ss = topLevel : rest ss
 ---------------------------------------------------------------------------------------
 visibleNames :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, VarInfo r)]
 ---------------------------------------------------------------------------------------
-visibleNames = undefined
--- visibleNames s = [ (ann <$> n,(k,v,a,t,i)) | (n,l,k,a,i) <- hoistBindings s
---                                            , f           <- ann_fact l
---                                            , t           <- annToType (ann l) n a f
---                                            , let v        = visibility l ]
---   where
---     annToType _ _ ReadOnly   (VarAnn t)    = [t] -- Hoist ReadOnly vars (i.e. function defs)
---     annToType _ _ ImportDecl (VarAnn t)    = [t] -- Hoist ImportDecl (i.e. function decls)
---     annToType _ _ ReadOnly   (AmbVarAnn t) = [t] -- Hoist ReadOnly vars (i.e. function defs)
---     annToType _ _ ImportDecl (AmbVarAnn t) = [t] -- Hoist ImportDecl (i.e. function decls)
---     annToType l n _          (ClassAnn {}) = [TClass  $ QN RK_ l [ ] (F.symbol n)]
---     annToType l _ _          (ModuleAnn n) = [TModule $ QP RK_ l [n]]
---     annToType l _ _          (EnumAnn n)   = [TEnum   $ QN RK_ l [] (F.symbol n)]
---     annToType _ _ _          _             = []
--- 
+visibleNames s = [ (ann <$> n,(k,v,a,t,i)) | (n,l,k,a,i) <- hoistBindings s
+                                           , f           <- ann_fact l
+                                           , t           <- annToType (ann l) n a f
+                                           , let v        = visibility l ]
+  where
+    annToType _ _ ReadOnly   (VarAnn t)    = [t] -- Hoist ReadOnly vars (i.e. function defs)
+    annToType _ _ ImportDecl (VarAnn t)    = [t] -- Hoist ImportDecl (i.e. function decls)
+    annToType _ _ ReadOnly   (AmbVarAnn t) = [t] -- Hoist ReadOnly vars (i.e. function defs)
+    annToType _ _ ImportDecl (AmbVarAnn t) = [t] -- Hoist ImportDecl (i.e. function decls)
+    annToType l n _          (ClassAnn {}) = [TClass  $ QN AK_ l [ ] (F.symbol n)]
+    annToType l _ _          (ModuleAnn n) = [TModule $ QP AK_ l [n]]
+    annToType l _ _          (EnumAnn n)   = [TEnum   $ QN AK_ l [] (F.symbol n)]
+    annToType _ _ _          _             = []
+
 
 ---------------------------------------------------------------------------------------
 extractQualifiedNames :: PPR r => [Statement (AnnRel r)] 

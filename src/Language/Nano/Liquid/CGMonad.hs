@@ -878,6 +878,11 @@ splitW (W g i t@(TApp _ ts _))
         ws'   <- concatMapM splitW [W g i ti | ti <- ts]
         return $ ws ++ ws'
 
+splitW (W g i t@(TRef _ ts _))
+  =  do let ws = bsplitW g t i
+        ws'   <- concatMapM splitW [W g i ti | ti <- ts]
+        return $ ws ++ ws'
+
 splitW (W g i (TAnd ts))
   = concatMapM splitW [W g i t | t <- ts]
 

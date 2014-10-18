@@ -308,6 +308,7 @@ genSort n θ t              = F.FFunc n [F.sortSubst θ t]
 stripRTypeBase :: RTypeQ q r -> Maybe r 
 ------------------------------------------------------------------------------------------
 stripRTypeBase (TApp _ _ r)   = Just r
+stripRTypeBase (TRef _ _ r)   = Just r
 stripRTypeBase (TVar _ r)     = Just r
 stripRTypeBase (TFun _ _ _ r) = Just r
 stripRTypeBase (TCons _ _ r)  = Just r

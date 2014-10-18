@@ -44,6 +44,7 @@ import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.Liquid.Alias
 import           Language.Nano.SSA.SSA
+import           Language.Nano.Visitor
 
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types            as F
@@ -70,7 +71,9 @@ verifyFile cfg fs
       Left  l -> return (NoAnn, l)
       Right x -> ssaTransform x >>= \case
                    Left  l -> return (NoAnn, l)
-                   Right y -> typeCheck cfg (expandAliases y) >>= \case
+                   -- Right y -> typeCheck cfg (expandAliases y) >>= \case
+                   -- -- This is done in parsing
+                   Right y -> typeCheck cfg y >>= \case
                                 Left  l -> unsafe l
                                 Right z -> return $ safe cfg z
 
@@ -149,16 +152,16 @@ patch fs =
 -------------------------------------------------------------------------------
 initGlobalEnv :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv (Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
+initGlobalEnv pgm@(Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
   where
     nms       = envAdds extras
               $ envMap (\(_,_,c,d,e) -> (d,c,e)) 
               $ mkVarEnv visibleNs
     visibleNs = visibleNames ss
     extras    = [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly, Initialized))]
-    mod       = scrapeModules ss 
+    mod       = pModules pgm 
     ctx       = emptyContext
-    pth       = AP $ QPath (srcPos dummySpan) []
+    pth       = mkAbsPath []
 
 
 initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod ctx pth parent
@@ -231,7 +234,7 @@ safeTcEnvFindTy l γ x   = case tcEnvFindTy x γ of
 tcEnvFindReturn         = fst3 . envFindReturn . tce_names
 
 tcEnvFindTypeDefM l γ x 
-  = case resolveRelTypeInEnv γ x of 
+  = case resolveTypeInEnv γ x of 
       Just t  -> return t
       Nothing -> die $ bugClassDefNotFound (srcPos l) x
 
@@ -327,9 +330,10 @@ tcClassElt γ dfn (Constructor l xs body)
                               _            -> Nothing
     i                     = Id l "constructor"
     γ'                    = tcEnvAdd (F.symbol "this") (mkThis $ t_args dfn, ThisVar, Initialized) γ
-    mkThis (_:αs)         = TApp (TRef rn) (t_mutable : map tVar αs) fTop
+    mkThis (_:αs)         = TRef an (t_mutable : map tVar αs) fTop
     mkThis _              = die $ bug (srcPos l) "Typecheck.Typecheck.tcClassElt Constructor" 
-    rn                    = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
+    an                    = QN AK_ (srcPos l) ss (F.symbol $ t_name dfn)
+    QP AK_ _ ss           = tce_path γ 
 
 -- | Static field
 --
@@ -376,9 +380,10 @@ tcClassElt γ dfn (MemberMethDef l False x xs bd)
   where
     spec               = M.lookup (F.symbol x, InstanceMember) (t_elts dfn)
     gg m               = tcEnvAdd (F.symbol "this") (mkThis (ofType m) (t_args dfn), ThisVar, Initialized) γ
-    mkThis m (_:αs)    = TApp (TRef rn) (m : map tVar αs) fTop
+    mkThis m (_:αs)    = TRef rn (m : map tVar αs) fTop
     mkThis _ _         = throw $ bug (srcPos l) "Typecheck.Typecheck.tcClassElt MemberMethDef" 
-    rn                 = RN $ QName (srcPos l) [] (F.symbol $ t_name dfn)
+    rn                 = QN AK_ (srcPos l) ss (F.symbol $ t_name dfn)
+    (QP AK_ _ ss)      = tce_path γ 
 
 tcClassElt _ _ m@(MemberMethDecl _ _ _ _ ) = return m
 
@@ -419,7 +424,7 @@ tcStmt γ s@(FuncOverload _ _ _)
 
 -- interface Foo;
 -- this definitions will be hoisted
-tcStmt γ s@(IfaceStmt _) 
+tcStmt γ s@(IfaceStmt _ _) 
   = return (s, Just γ)
 
 -- x = e
@@ -501,7 +506,8 @@ tcStmt γ (ClassStmt l x e is ce)
         ms       <- mapM (tcClassElt γ dfn) ce
         return    $ (ClassStmt l x e is ms, Just γ)
   where
-    rn            = RN $ QName (srcPos l) [] (F.symbol x)
+    rn            = QN AK_ (srcPos l) ss (F.symbol x)
+    QP AK_ _ ss   = tce_path γ 
 
 -- | module M { ... } 
 tcStmt γ (ModuleStmt l n body) 
@@ -722,7 +728,7 @@ tcExpr γ (FuncExpr l fo xs body) tCtxO
                 Just tCtx -> tcFuncExpr tCtx
                 Nothing   -> tcError $ errorNoFuncAnn $ srcPos l
   where
-    tcFuncExpr t = do ts    <- tcFunTys l f xs $ ltracePP l "funcexpr ty" t
+    tcFuncExpr t = do ts    <- tcFunTys l f xs t
                       body' <- foldM (tcFun1 γ l f xs) body ts
                       return $ (FuncExpr l fo xs body', t)
     anns         = [ t | FuncAnn t <- ann_fact l ]
@@ -760,7 +766,7 @@ tcCall γ (PrefixExpr l o e)
 tcCall γ (InfixExpr l o@OpInstanceof e1 e2) 
   = do (e2',t)                <- tcExpr γ e2 Nothing
        case t of
-         TClass (RN (QName _ _ x))  -> 
+         TClass (QN AK_ _ _ x)  -> 
               do  opTy              <- safeTcEnvFindTy l γ (infixOpId o)
                   (FI _ [e1',_], t) <- 
                       let args = FI Nothing ((,Nothing) <$> [e1, StringLit l2 (F.symbolString x)]) in
@@ -785,7 +791,7 @@ tcCall γ (InfixExpr l o e1 e2)
 --
 tcCall γ (BracketRef l e1 e2)
   = do  opTy <- runFailM (tcExpr γ e1 Nothing) >>= \case
-                  Right (_, TEnum n)   -> case resolveRelEnumInEnv γ n of
+                  Right (_, TEnum n)   -> case resolveEnumInEnv γ n of
                                             Just ed -> return $ ofType $ toType $ enumTy ed
                                             _       -> safeTcEnvFindTy l γ $ builtinOpId BIBracketRef
                   _ -> safeTcEnvFindTy l γ $ builtinOpId BIBracketRef
@@ -852,7 +858,7 @@ tcCall γ (CallExpr l e@(SuperRef _)  es)
   = case tcEnvFindTy (F.symbol "this") γ of 
       Just t -> 
           case extractParent γ t of 
-            Just (TApp (TRef x) _ _) -> 
+            Just (TRef x _ _) -> 
                 case extractCtor γ (TClass x) of
                   Just ct -> do (FI _ es',t') <- tcNormalCall γ l "constructor" (FI Nothing ((,Nothing) <$> es)) ct
                                 return         $ (CallExpr l e es', t')

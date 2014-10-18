@@ -89,7 +89,7 @@ import           Language.Fixpoint.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
-import           Debug.Trace                        (trace)
+-- import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -337,10 +337,9 @@ addInvariant g t
     keyInExpr s               = F.EApp (F.dummyLoc (F.symbol "keyIn")) [F.expr (F.symbolText s), F.eVar $ vv t]
 
     -- | instanceof(v,"C")
-    instanceof t@(TApp (TRef c) _ _) 
-                              = t `strengthen` reftIO t (name c)
+    instanceof t@(TRef c _ _) = t `strengthen` reftIO t (name c)
     instanceof t              = t 
-    name (RN (QName _ _ s))   = s
+    name (QN AK_ _ _ s)       = s
     reftIO t c                = F.Reft (vv t, [refaIO t c])
     refaIO t c                = F.RConc $ F.PBexp $ F.EApp sym [F.expr $ vv t, F.expr $ F.symbolText c]
     vv                        = rTypeValueVar
@@ -703,7 +702,7 @@ splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
 --  
 --  FIXME: restore co/contra-variance 
 --
-splitC (Sub g i t1@(TApp (TRef x1) (m1:t1s) _) t2@(TApp (TRef x2) (m2:t2s) _)) 
+splitC (Sub g i t1@(TRef x1 (m1:t1s) _) t2@(TRef x2 (m2:t2s) _))
   --
   -- * Incompatible mutabilities
   --
@@ -751,12 +750,12 @@ splitC (Sub g i t1@(TApp c1 t1s _) t2@(TApp c2 t2s _))
 
 -- | These need to be here due to the lack of a folding operation
 --
-splitC (Sub g i t1@(TApp (TRef _) _ _) t2) = 
+splitC (Sub g i t1@(TRef _ _ _) t2) = 
   case flattenType g t1 of
     Just t1' -> splitC (Sub g i t1' t2)
     Nothing  -> cgError $ errorUnfoldType l t1 where l = srcPos i
 
-splitC (Sub g i t1 t2@(TApp (TRef _) _ _)) = 
+splitC (Sub g i t1 t2@(TRef _ _ _)) = 
   case flattenType g t2 of
     Just t2' -> splitC (Sub g i t1 t2')
     Nothing  -> cgError $ errorUnfoldType l t2 where l = srcPos i
@@ -875,6 +874,11 @@ splitW (W g i t@(TVar _ _))
   = return $ bsplitW g t i 
 
 splitW (W g i t@(TApp _ ts _))
+  =  do let ws = bsplitW g t i
+        ws'   <- concatMapM splitW [W g i ti | ti <- ts]
+        return $ ws ++ ws'
+
+splitW (W g i t@(TRef _ ts _))
   =  do let ws = bsplitW g t i
         ws'   <- concatMapM splitW [W g i ti | ti <- ts]
         return $ ws ++ ws'

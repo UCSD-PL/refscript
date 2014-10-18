@@ -35,7 +35,7 @@ module Language.Nano.Names (
 
 import qualified Data.HashSet                   as H
 import           Data.List                      (find)
-import           Control.Applicative            ((<$>), (<*>))
+import           Control.Applicative            ((<$>))
 import           Data.Hashable          
 import           Data.Data
 import           Data.Traversable

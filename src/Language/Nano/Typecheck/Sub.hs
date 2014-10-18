@@ -35,21 +35,14 @@ import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
--- import           Language.Nano.Typecheck.Resolve
+import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Errors
 
 -- import           Debug.Trace                      (trace)
 
 
-
-
 -- Got these from Resolve.hs
---
-isAncestor = undefined
-weaken     = undefined
-flattenType = undefined
-absolutePathInEnv = undefined
-
+absolutePathInEnv = error "Typecgeck.Sub.absolutePathInEnv"
 
 instance PP a => PP (S.HashSet a) where
   pp = pp . S.toList 

@@ -150,7 +150,7 @@ initGlobalEnv pgm@(Nano { code = Src s })
                   (TApp TUndef [] $ F.Reft (F.vv Nothing, [F.trueRefa]), ReadOnly, Initialized))]
     bds       = F.emptyIBindEnv
     grd       = []
-    mod       = pModules pgm
+    mod       = tracePP "" $ pModules pgm
     ctx       = emptyContext
     pth       = mkAbsPath []
 
@@ -263,7 +263,7 @@ consStmt g (ExprStmt l (AssignExpr _ OpAssign (LVar lx x) e))
 -- e1.f = e2
 consStmt g (ExprStmt l (AssignExpr _ OpAssign (LDot _ e1 f) e2))
   = mseq (consExpr g e1 Nothing) $ \(x1,g') -> do
-      t         <- ltracePP l (ppshow e1) <$> safeEnvFindTy x1 g' 
+      t         <- safeEnvFindTy x1 g' 
       let rhsCtx = fmap snd3 $ getProp g' False f t
       opTy      <- setPropTy l (F.symbol f) <$> safeEnvFindTy (builtinOpId BISetProp) g'
       fmap snd <$> consCall g' l BISetProp (FI Nothing [(vr x1, Nothing),(e2, rhsCtx)]) opTy

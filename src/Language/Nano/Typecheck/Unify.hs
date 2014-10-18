@@ -77,7 +77,7 @@ unify l γ θ (TCons m1 e1s _) (TCons m2 e2s _)
                  $ M.elems 
                  $ M.intersectionWith (,) e1s e2s
 
-unify l γ θ (TApp (TRef x1) t1s _) (TApp (TRef x2) t2s _) 
+unify l γ θ (TRef x1 t1s _) (TRef x2 t2s _) 
   | x1 == x2
   = unifys l γ θ t1s t2s
 
@@ -95,9 +95,9 @@ unify l γ θ (TApp (TRef x1) t1s _) (TApp (TRef x2) t2s _)
       (_, Just (_, t2s')) -> unifys l γ θ t1s t2s'
       (_, _) -> Left $ bugWeakenAncestors (srcPos l) x1 x2
 
-unify _ γ θ (TClass  c1) (TClass  c2) | on (==) (absoluteNameInEnv γ) c1 c2 = return θ 
-unify _ γ θ (TModule m1) (TModule m2) | on (==) (absolutePathInEnv γ) m1 m2 = return θ 
-unify _ γ θ (TEnum   e1) (TEnum   e2) | on (==) (absoluteNameInEnv γ) e1 e2 = return θ
+unify _ γ θ (TClass  c1) (TClass  c2) | c1 == c2 = return θ 
+unify _ γ θ (TModule m1) (TModule m2) | m1 == m2 = return θ 
+unify _ γ θ (TEnum   e1) (TEnum   e2) | e1 == e2 = return θ
 
 unify _ _ θ t1 t2 | all isPrimitive [t1,t2] = return θ
 

@@ -4,8 +4,9 @@
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
-
 {-# LANGUAGE IncoherentInstances       #-}
+{-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE LiberalTypeSynonyms       #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
@@ -38,6 +39,10 @@ import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Errors
 
 -- import           Debug.Trace                      (trace)
+
+
+-- Got these from Resolve.hs
+absolutePathInEnv = error "Typecgeck.Sub.absolutePathInEnv"
 
 instance PP a => PP (S.HashSet a) where
   pp = pp . S.toList 
@@ -98,7 +103,7 @@ convertObj l γ t1@(TCons μ1 e1s _) t2@(TCons μ2 e2s _)
   where
       mutabilitySub = isSubtype γ μ1 μ2
  
-convertObj l γ t1@(TApp (TRef x1) (m1:t1s) _) t2@(TApp (TRef x2) (m2:t2s) _)
+convertObj l γ t1@(TRef x1 (m1:t1s) _) t2@(TRef x2 (m2:t2s) _)
   --
   -- * Incompatible mutabilities
   --
@@ -262,7 +267,7 @@ convertFun l _ t1 t2 = Left $ unsupportedConvFun l t1 t2
 -- | `convertTClass`
 --------------------------------------------------------------------------------
 convertTClass :: (Functor g, EnvLike () g)
-              => SourceSpan -> g () -> RelName -> RelName -> Either Error CastDirection
+              => SourceSpan -> g () -> AbsName -> AbsName -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertTClass l _ c1 c2 | c1 == c2  = Right CDNo  
                         | otherwise = Left  $ errorTClassSubtype l c1 c2
@@ -270,7 +275,7 @@ convertTClass l _ c1 c2 | c1 == c2  = Right CDNo
 -- | `convertTModule`
 --------------------------------------------------------------------------------
 convertTModule :: (Functor g, EnvLike () g)
-              => SourceSpan -> g () -> RelPath -> RelPath -> Either Error CastDirection
+              => SourceSpan -> g () -> AbsPath -> AbsPath -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertTModule l γ c1 c2 = 
   case (absolutePathInEnv γ c1, absolutePathInEnv γ c2) of
@@ -280,7 +285,7 @@ convertTModule l γ c1 c2 =
 -- | `convertTEnum`
 --------------------------------------------------------------------------------
 convertTEnum :: (Functor g, EnvLike () g)
-              => SourceSpan -> g () -> RelName -> RelName -> Either Error CastDirection
+              => SourceSpan -> g () -> AbsName -> AbsName -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertTEnum l _ e1 e2 | e1 == e2  = Right CDNo  
                        | otherwise = Left  $ errorTEnumSubtype l e1 e2
@@ -323,14 +328,14 @@ class Related t where
 
 instance Related RType where
 
-  related γ (TApp (TRef x) _ _) (TApp (TRef y) _ _) = isAncestor γ x y || isAncestor γ y x
+  related γ (TRef x _ _) (TRef y _ _)           = isAncestor γ x y || isAncestor γ y x
 
-  related γ (TCons _ _ _ )      (TCons _ _ _ )      = True
+  related γ TCons{}      TCons{}                = True
 
-  related γ t t' | all isPrimitive [t,t']           = toType t == toType t'
-                 | all isTFun      [t,t']           = True
-                 | toType t == toType t'            = True
-                 | otherwise                        = False
+  related γ t t' | all isPrimitive [t,t']       = toType t == toType t'
+                 | all isTFun      [t,t']       = True
+                 | toType t == toType t'        = True
+                 | otherwise                    = False
 
 instance Related TypeMember where
   related γ (CallSig t1)      (CallSig t2)      = related γ t1 t2

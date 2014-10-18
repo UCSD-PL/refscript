@@ -672,12 +672,10 @@ replaceAbsolute pgm@(Nano { code = Src ss, fullNames = ns, fullPaths = ps })
                         Just a' -> a'
                         -- If it's a type alias, don't throw error
                         Nothing | isInAliases a -> toAbsoluteName a
-                                -- | otherwise -> throw $ errorUnboundName (srcPos l) a
-                                | otherwise -> throw $ bug (srcPos l) $ "Visitor.replaceAbsolute name " ++ ppshow a
+                                | otherwise -> throw $ errorUnboundName (srcPos l) a
     safeAbsPath l a = case absAct (absolutePath ps) l a of
                         Just a' -> a'
-                        -- Nothing -> throw $ errorUnboundName (srcPos l) a
-                        Nothing -> throw $ bug (srcPos l) $ "Visitor.replaceAbsolute path " ++ ppshow a
+                        Nothing -> throw $ errorUnboundName (srcPos l) a
 
     isInAliases (QN RK_ _ [] s) = envMem s $ tAlias pgm 
     isInAliases (QN _   _ _  _) = False

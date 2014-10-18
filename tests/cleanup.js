@@ -61,7 +61,7 @@ function puts(error, stdout, stderr) {
       });
 
       files.forEach(function(f){ 
-        if (fs.exists(f) && fs.lstatSync(f).isDirectory()) {
+        if (fs.existsSync(f) && fs.lstatSync(f).isDirectory()) {
           deleteFolderRecursive(f);
         }
       });

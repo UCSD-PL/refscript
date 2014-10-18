@@ -97,7 +97,7 @@ declare function builtin_OpGEq(a: any, b: any): boolean;
     /\ (x:number, y:string) => string
     /\ (x:string, y:number) => string
     /\ (x:string, y:string) => string           
-    /\ (x:{top|false}, y:{top|false}) => top                          
+    /\ (x:{top|false}, y:{top|false}) => number + string
  */
 declare function builtin_OpAdd(a: any, b: any): any;
 // FIXME: what is the last line useful for?
@@ -534,6 +534,10 @@ interface Array<T> {
     /*@ slice: forall N . (this: #Array[M,T], start: number, start: number): #Array[N,T] */
     slice(start/*?*/: number, end/*?*/: number): T[];
 
+    /*@ sort : 
+        /\ ( ) => { v : Array<M,T> | len(v) = len(this) } 
+        /\ (compareFn: (a: T, b: T) => number) => { v : Array<M,T> | len(v) = len(this) } 
+     */
     sort(compareFn?: (a: T, b: T) => number): T[];
 
     splice(start: number): T[];

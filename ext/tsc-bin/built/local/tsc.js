@@ -11495,6 +11495,10 @@ var TypeScript;
         QualifiedNameSyntax.prototype.isTypeScriptSpecific = function () {
             return true;
         };
+
+        QualifiedNameSyntax.prototype.toRsId = function (helper) {
+            return new TypeScript.RsId(helper.getSourceSpan(this), tokenAnnots(this.firstToken()), this.left.fullText() + "_" + this.right.fullText());
+        };
         return QualifiedNameSyntax;
     })(TypeScript.SyntaxNode);
     TypeScript.QualifiedNameSyntax = QualifiedNameSyntax;
@@ -39698,7 +39702,7 @@ var TypeScript;
                 var rsTParams = [mut ? mut : new TypeScript.TTypeReference("Immutable", [])].concat(tArgs.map(function (p) {
                     return p.toRsType();
                 }));
-                return new TypeScript.TTypeReference(this.getDisplayName().split("<")[0], rsTParams);
+                return new TypeScript.TTypeReference(this.getScopedName().split("<")[0], rsTParams);
             }
 
             if (this.isFunction()) {
@@ -60680,13 +60684,10 @@ var TypeScript;
             this.name = name;
         }
         RsIfaceStmt.prototype.toObject = function () {
-            return {
-                IfaceStmt: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
+            return { IfaceStmt: [[
+                        this.span.toObject(), this.mapAnn(function (a) {
                             return a.toObject();
-                        })],
-                    this.name.toObject()]
-            };
+                        })], this.name.toObject()] };
         };
         return RsIfaceStmt;
     })(RsStatement);

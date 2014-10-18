@@ -9979,8 +9979,8 @@ var TypeScript;
                         var cs = m;
                         var anns = tokenAnnots(cs);
                         if (anns.length === 0) {
-                            var eltSymbol = helper.getSymbolForAST(cs);
-                            return [new TypeScript.RsCallSig(eltSymbol.type.toRsType()).toString()];
+                            var csDecl = helper.getDeclForAST(cs);
+                            return [new TypeScript.RsCallSig(csDecl.getSignatureSymbol().toRsTFun()).toString()];
                         } else {
                             return anns.map(function (m) {
                                 return m.content();

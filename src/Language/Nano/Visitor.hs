@@ -665,17 +665,19 @@ extractQualifiedNames stmts = (namesSet, modulesSet)
 replaceAbsolute :: PPR r => NanoBareRelR r -> NanoBareR r
 ---------------------------------------------------------------------------------------
 replaceAbsolute pgm@(Nano { code = Src ss, fullNames = ns, fullPaths = ps }) 
-                    = pgm { code = Src $ (foo <$>) <$> ss }
+                    = pgm { code = Src $ (tr <$>) <$> ss }
   where
-    foo l           = ntransAnnR (safeAbsName l) (safeAbsPath l) l
+    tr l            = ntransAnnR (safeAbsName l) (safeAbsPath l) l
     safeAbsName l a = case absAct (absoluteName ns) l a of
                         Just a' -> a'
                         -- If it's a type alias, don't throw error
                         Nothing | isInAliases a -> toAbsoluteName a
-                                | otherwise -> throw $ errorUnboundName (srcPos l) a
+                                -- | otherwise -> throw $ errorUnboundName (srcPos l) a
+                                | otherwise -> throw $ bug (srcPos l) $ "Visitor.replaceAbsolute name " ++ ppshow a
     safeAbsPath l a = case absAct (absolutePath ps) l a of
                         Just a' -> a'
-                        Nothing -> throw $ errorUnboundName (srcPos l) a
+                        -- Nothing -> throw $ errorUnboundName (srcPos l) a
+                        Nothing -> throw $ bug (srcPos l) $ "Visitor.replaceAbsolute path " ++ ppshow a
 
     isInAliases (QN RK_ _ [] s) = envMem s $ tAlias pgm 
     isInAliases (QN _   _ _  _) = False

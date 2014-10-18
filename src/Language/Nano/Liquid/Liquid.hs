@@ -55,7 +55,7 @@ import           Language.Nano.Liquid.CGMonad
 import qualified Data.Text                          as T 
 import           System.Console.CmdArgs.Default
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 -- import           Text.PrettyPrint.HughesPJ 
 
 type PPRS r = (PPR r, Substitutable r (Fact r)) 

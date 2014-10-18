@@ -11,6 +11,7 @@ import           Control.Monad.State
 
 import           Language.Fixpoint.Errors
 import qualified Language.Fixpoint.Types as F
+import           Language.ECMAScript3.PrettyPrint
 
 import           Language.Nano.Annots
 import           Language.Nano.Env
@@ -29,7 +30,7 @@ import           Language.Nano.Liquid.Types
 -- tx :: RefType -> RefType p(using pe' and te')
 -- lift above to Annot r
 
-expandAliases   :: NanoBareR F.Reft -> NanoBareR F.Reft
+expandAliases   :: NanoBareRelR F.Reft -> NanoBareRelR F.Reft
 expandAliases p =  expandCodePred pe' 
                 $  expandCodeTAlias te'
                 $  expandPred pe'
@@ -40,16 +41,16 @@ expandAliases p =  expandCodePred pe'
     pe'         = expandPAliasEnv $ pAlias p
     te'         = expandTAliasEnv $ tAlias p
 
-expandCodeTAlias :: TAliasEnv RefType -> NanoRefType -> NanoRefType
+expandCodeTAlias :: TAliasEnv (RTypeQ RK F.Reft) -> NanoBareRelR F.Reft -> NanoBareRelR F.Reft
 expandCodeTAlias te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
   where
-    patch :: AnnType F.Reft -> AnnType F.Reft
+    patch :: AnnRel F.Reft -> AnnRel F.Reft
     patch (Ann i ss f) = Ann i ss (expandRefType te <$> f)
 
-expandCodePred :: PAliasEnv -> NanoRefType -> NanoRefType
+-- expandCodePred :: PAliasEnv -> NanoRefType -> NanoRefType
 expandCodePred te p@(Nano { code = Src stmts }) = p { code = Src $ (patch <$>) <$> stmts }
   where
-    patch :: AnnType F.Reft -> AnnType F.Reft
+    -- patch :: AnnType F.Reft -> AnnType F.Reft
     patch (Ann i ss f) = Ann i ss (expandPred te <$> f)
 
 
@@ -94,28 +95,28 @@ applyPAlias p f es a
 -- | One-shot expansion for @TAlias@ -----------------------------------------
 ------------------------------------------------------------------------------
 
-expandTAliasEnv    :: TAliasEnv RefType -> TAliasEnv RefType
+expandTAliasEnv    :: TAliasEnv (RTypeQ RK F.Reft) ->  TAliasEnv (RTypeQ RK F.Reft)
 expandTAliasEnv te = solve te support expandTAlias
   where
     support        = filter (`envMem` te) . getTApps . al_body
 
-getTApps    :: RefType -> [F.Symbol]
+getTApps    :: RTypeQ RK F.Reft -> [F.Symbol]
 getTApps    = everything (++) ([] `mkQ` fromT)
   where
-    fromT   :: RefType -> [F.Symbol] 
-    fromT (TRef (QN AK_ _ [] c) _ _) = [c]
+    fromT   :: RTypeQ RK F.Reft -> [F.Symbol] 
+    fromT (TRef (QN RK_ _ [] c) _ _) = [c]
     fromT _                          = [ ]
 
-expandTAlias  :: TAliasEnv RefType -> TAlias RefType -> TAlias RefType
+expandTAlias  :: TAliasEnv (RTypeQ RK F.Reft) ->  TAlias (RTypeQ RK F.Reft) -> TAlias (RTypeQ RK F.Reft) 
 expandTAlias te a = a {al_body = expandRefType te $ al_body a}
 
 -- expandRefType :: TAliasEnv RefType -> RefType -> RefType
 -- expandRefType = expandRefType'
 
-expandRefType :: Data a => TAliasEnv RefType -> a -> a
+expandRefType :: Data a => TAliasEnv (RTypeQ RK F.Reft) -> a -> a
 expandRefType te = everywhere $ mkT $ tx
   where
-    tx t@(TRef (QN AK_ l [] c) ts r) = maybe t (applyTAlias l t c ts r) $ envFindTy c te
+    tx t@(TRef (QN RK_ l [] c) ts r) = maybe t (applyTAlias l t c ts r) $ envFindTy c te
     tx t                             = t
 
 applyTAlias l t _ ts_ r a

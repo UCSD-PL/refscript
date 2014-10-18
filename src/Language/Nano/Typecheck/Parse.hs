@@ -310,7 +310,7 @@ wordP p  = condIdP ok p
   where 
     ok   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
-defaultMutability = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Mutable")) [] fTop
+defaultMutability = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Immutable")) [] fTop
 
 ----------------------------------------------------------------------------------
 tConP :: Parser TCon
@@ -602,8 +602,8 @@ mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 mkCode = --debugTyBinds
          scrapeModules
        . scrapeQuals 
-       . expandAliases
        . replaceAbsolute
+       . expandAliases
        . visitNano convertTvarVisitor []
        . mkCode'
     
@@ -613,7 +613,7 @@ mkCode' :: [Statement (SourceSpan, [Spec])] -> NanoBareRelR Reft
 mkCode' ss = Nano { 
         code          = Src (checkTopStmt <$> ss')
       , consts        = envFromList [ mapSnd (ntrans f g) t | Meas t <- anns ]
-      , tAlias        = envFromList [ mapSnd (fmap (ntrans f g)) t | TAlias t <- anns ]
+      , tAlias        = envFromList [ t | TAlias t <- anns ]
       , pAlias        = envFromList [ t | PAlias t <- anns ] 
       , pQuals        = [ t | Qual t <- anns ] 
       , invts         = [Loc (srcPos l) (ntrans f g t) | Invt l t <- anns ]

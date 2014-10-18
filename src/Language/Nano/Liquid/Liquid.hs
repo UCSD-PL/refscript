@@ -150,7 +150,7 @@ initGlobalEnv pgm@(Nano { code = Src s })
                   (TApp TUndef [] $ F.Reft (F.vv Nothing, [F.trueRefa]), ReadOnly, Initialized))]
     bds       = F.emptyIBindEnv
     grd       = []
-    mod       = tracePP "" $ pModules pgm
+    mod       = pModules pgm
     ctx       = emptyContext
     pth       = mkAbsPath []
 

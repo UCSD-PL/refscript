@@ -34,7 +34,7 @@ module Language.Nano.Liquid.Types (
   , rTypeReft, rTypeSort, rTypeSortedReft, rTypeValueVar
 
   -- * Predicates On RefType 
-  , isBaseRType, isTrivialRefType
+  , isTrivialRefType
 
   -- * Monadic map 
   , mapReftM
@@ -425,13 +425,6 @@ efoldRType g f                 = go
     go _ _ t                   = error $ "Not supported in efoldRType: " ++ ppshow t
     gos γ z ts                 = L.foldl' (go γ) z ts
 
-
-------------------------------------------------------------------------------------------
-isBaseRType :: RTypeQ q r -> Bool
-------------------------------------------------------------------------------------------
-isBaseRType (TApp _ [] _) = True
-isBaseRType (TVar _ _)    = True
-isBaseRType _             = False
 
 ------------------------------------------------------------------------------------------
 isTrivialRefType :: RefType -> Bool

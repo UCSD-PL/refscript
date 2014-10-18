@@ -79,11 +79,11 @@ data Nano a r = Nano {
   -- 
   -- ^ Type aliases
   --
-  , tAlias    :: !(TAliasEnv (RType r))    
+  , tAlias    :: !(TAliasEnv (RTypeQ RK r))    
   -- 
   -- ^ Predicate aliases
   --
-  , pAlias    :: !(PAliasEnv)              
+  , pAlias    :: !(PAliasEnv)
   -- 
   -- ^ Qualifiers
   --

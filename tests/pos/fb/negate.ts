@@ -12,7 +12,7 @@ function negate(x):any {
 
 
 /*@ a :: number */
-var a = negate(10);
+var a = negate(true);
 
 /*@ b :: boolean */
 var b = negate(true);

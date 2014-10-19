@@ -10,6 +10,7 @@ module Language.Nano.Environment where
 import           Language.Nano.Types
 import           Language.Nano.Env
 import           Language.Nano.Names
+import           Language.Nano.Program
 
 -------------------------------------------------------------------------------
 -- | Typecheck Environment
@@ -21,7 +22,7 @@ class EnvLike r t where
   --   (values of the source language:
   --   variables, functions, classes)
   --
-  names           :: t r -> Env (RType r, Assignability)
+  names           :: t r -> Env (RType r, Assignability, Initialization)
   -- 
   -- ^ Modules in scope (exported API)
   --

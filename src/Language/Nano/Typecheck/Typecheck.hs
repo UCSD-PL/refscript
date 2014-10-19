@@ -53,7 +53,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
 
--- import           Debug.Trace                        hiding (traceShow)
+import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 

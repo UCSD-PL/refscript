@@ -275,7 +275,7 @@ bareArgP
   =   (try boundTypeP)
  <|>  (argBind <$> try (bareTypeP))
 
-boundTypeP = do s <- symbolP 
+boundTypeP = do s <- symbol <$> identifierP
                 withinSpacesP colon
                 B s <$> bareTypeP
 
@@ -381,7 +381,7 @@ indexP = xyP id colon sn
 
 -- | <[mut]> f: t
 fieldEltP defM  = do 
-    x          <- symbolP 
+    x          <- symbol <$> identifierP
     _          <- colon
     m          <- option defM (toType <$> mutP)
     t          <- bareTypeP
@@ -389,7 +389,7 @@ fieldEltP defM  = do
 
 -- | <[mut]> m :: (ts): t
 methEltP defM   = do
-    x          <- symbolP 
+    x          <- symbol <$> identifierP
     _          <- colon
     m          <- option defM (toType <$> mutP)
     t          <- methSigP

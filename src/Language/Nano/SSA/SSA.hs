@@ -38,7 +38,7 @@ import           Language.Nano.SSA.Types
 import           Language.Nano.SSA.SSAMonad
 import           Language.Nano.Visitor     
 
--- import           Debug.Trace                        hiding (traceShow)
+import           Debug.Trace                        hiding (traceShow)
 
 -- FIXME : SSA needs a proper environment like TC an Liquid
 
@@ -87,7 +87,8 @@ ssaFun :: Data r => AnnSSA r -> [Var r] -> [Statement (AnnSSA r)] -> SSAM r [Sta
 -------------------------------------------------------------------------------------
 ssaFun l xs body
   = do  θ <- getSsaEnv
-        (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
+        glbs <- getGlobs
+        let (ros, wgs, wls) = (`variablesInScope` body) glbs
         withAssignability ReadOnly (ssaEnvIds θ)   $                 -- Variables from OUTER scope are UNASSIGNABLE
           withAssignability ReadOnly ros        $ 
             withAssignability WriteGlobal wgs   $ 
@@ -95,7 +96,7 @@ ssaFun l xs body
             do  arg         <- argId    <$> freshenAnn l
                 ret         <- returnId <$> freshenAnn l
                 setSsaEnv    $ extSsaEnv (arg: ret : xs) θ  -- Extend SsaEnv with formal binders
-                (_, body')   <- ssaStmts body               -- Transform function
+                (_, body')  <- ssaStmts body                -- Transform function
                 setSsaEnv θ                                 -- Restore Outer SsaEnv
                 return        $ body'
 
@@ -131,7 +132,7 @@ ssaStmt s@(FuncOverload _ _ _)
   = return (True, s)
 
 -- interface IA<V> extends IB<T> { ... }
-ssaStmt s@(IfaceStmt _) 
+ssaStmt s@(IfaceStmt _ _) 
   = return (True, s)
 
 -- x = e
@@ -158,8 +159,9 @@ ssaStmt (IfSingleStmt l b s)
 ssaStmt (IfStmt l e s1 s2) = do
     (se, e')     <- ssaExpr e
     θ            <- getSsaEnv
-    (θ1, s1')    <- ssaWith θ ssaStmt s1
-    (θ2, s2')    <- ssaWith θ ssaStmt s2
+    φ            <- getSsaEnvGlob
+    (θ1, s1')    <- ssaWith θ φ ssaStmt s1
+    (θ2, s2')    <- ssaWith θ φ ssaStmt s2
     (θ', φ1, φ2) <- envJoin l θ1 θ2
     let stmt'     = prefixStmt l se $ IfStmt l e' (splice s1' φ1) (splice s2' φ2)
     case θ' of
@@ -170,23 +172,34 @@ ssaStmt (IfStmt l e s1 s2) = do
 
 -- while c { b }
 ssaStmt (WhileStmt l cnd body)
-  = do (xs, x0s)  <- unzip . map (\(x, (SI xo,_)) -> (x, xo)) <$> getLoopPhis body 
-       x1s        <- mapM (freshenIdSSA >=> updSsaEnv l) xs
-       θ1         <- getSsaEnv
-       (sc, cnd') <- ssaExpr cnd
-       when (not $ null sc) (ssaError $ errorUpdateInExpr (srcPos l) cnd)
-       (t, body') <- ssaStmt body
-       θ2         <- getSsaEnv
-       let x2s     = [x2 | Just (SI x2) <- (`envFindTy` θ2) <$> xs]
-       addAnn l    $ PhiVar x1s
-       setSsaEnv θ1
-       l'         <- freshenAnn l
-       let body''  = body' `splice` asgn l' (mkNextId <$> x1s) x2s
-       l''        <- freshenAnn l
-       return      $ (t, asgn l'' x1s x0s `presplice` WhileStmt l cnd' body'')
+  = do  (xs, x0s)         <- unzip . map (\(x, (SI xo,_)) -> (x, xo)) <$> getLoopPhis body
+
+        xs'               <- mapM freshenIdSSA xs
+        as                <- mapM getAssignability xs'
+        let (l1s, l0s,_)  = unzip3 $ filter ((== WriteLocal) . thd3) (zip3 xs' x0s as)
+
+        -- SSA only the WriteLocal variables - globals will remain the same.
+       
+        l1s'              <- mapM (updSsaEnv l) l1s
+        θ1                <- getSsaEnv
+        (sc, cnd')        <- ssaExpr cnd
+        when (not $ null sc) (ssaError $ errorUpdateInExpr (srcPos l) cnd)
+        (t, body')        <- ssaStmt body
+        θ2                <- getSsaEnv
+
+        -- SSA only the WriteLocal variables - globals will remain the same.
+       
+        let l2s            = [ x2 | (Just (SI x2), WriteLocal) <- mapFst (`envFindTy` θ2) <$> zip xs as ]
+        addAnn l           $ PhiVar l1s'
+        setSsaEnv          $ θ1
+        l'                <- freshenAnn l
+        let body''         = body' `splice` asgn l' (mkNextId <$> l1s') l2s
+        l''               <- freshenAnn l
+        return             $ (t, asgn l'' l1s' l0s `presplice` WhileStmt l cnd' body'')
     where
-       asgn _  [] _   = Nothing
-       asgn l' ls rs  = Just $ BlockStmt l' $ zipWith (mkPhiAsgn l') ls rs
+        asgn _  [] _       = Nothing
+        asgn l' ls rs      = Just $ BlockStmt l' $ zipWith (mkPhiAsgn l') ls rs
+
 
 ssaStmt (ForStmt _  NoInit _ _ _ )     =
     errorstar "unimplemented: ssaStmt-for-01"
@@ -503,12 +516,17 @@ flattenBlock = concatMap f
     f s                = [s ]
 
 -------------------------------------------------------------------------------------
-ssaWith :: SsaEnv r -> (a -> SSAM r (Bool, b)) -> a -> SSAM r (Maybe (SsaEnv r), b)
+ssaWith :: SsaEnv r         -- Local
+        -> SsaEnv r         -- Global
+        -> (a -> SSAM r (Bool, b)) 
+        -> a 
+        -> SSAM r (Maybe (SsaEnv r, SsaEnv r), b)
 -------------------------------------------------------------------------------------
-ssaWith θ f x = do
+ssaWith θ φ f x = do
   setSsaEnv θ
+  setSsaEnvGlob φ
   (b, x') <- f x
-  (, x')  <$> (if b then Just <$> getSsaEnv else return Nothing)
+  (, x')  <$> (if b then Just <$> ((,) <$> getSsaEnv <*> getSsaEnvGlob) else return Nothing)
 
 
 -------------------------------------------------------------------------------------
@@ -542,8 +560,9 @@ ssaExpr (VarRef l x)
 ssaExpr (CondExpr l c e1 e2)
   = do (sc, c') <- ssaExpr c
        θ        <- getSsaEnv
-       e1'      <- ssaPureExprWith θ e1
-       e2'      <- ssaPureExprWith θ e2
+       φ        <- getSsaEnvGlob
+       e1'      <- ssaPureExprWith θ φ e1
+       e2'      <- ssaPureExprWith θ φ e2
        return (sc, CondExpr l c' e1' e2')
 
         
@@ -638,7 +657,7 @@ ssaExprs f es       = (concat *** f) . unzip <$> mapM ssaExpr es
 ssaExpr1 = case1 ssaExprs -- (\case [e'] -> f e') [e]
 ssaExpr2 = case2 ssaExprs -- (\case [e1', e2'] -> f e1' e2') [e1, e2]
 ssaExpr3 = case3 ssaExprs -- (\case [e1', e2', e3'] -> f e1' e2' e3') [e1, e2, e3]
-ssaPureExprWith θ e = snd <$> ssaWith θ (fmap (True,) . ssaPureExpr) e
+ssaPureExprWith θ φ e = snd <$> ssaWith θ φ (fmap (True,) . ssaPureExpr) e
 
 ssaPureExpr e = do
   (s, e') <- ssaExpr e
@@ -721,34 +740,38 @@ ssaAsgn l x e  = do
 
 
 -------------------------------------------------------------------------------------
-envJoin :: Data r => AnnSSA r -> Maybe (SsaEnv r) -> Maybe (SsaEnv r)
-        -> SSAM r ( Maybe (SsaEnv r),
-                    Maybe (Statement (AnnSSA r)),
-                    Maybe (Statement (AnnSSA r)))
+-- envJoin :: Data r => AnnSSA r -> Maybe (SsaEnv r) -> Maybe (SsaEnv r)
+--         -> SSAM r ( Maybe (SsaEnv r),
+--                     Maybe (Statement (AnnSSA r)),
+--                     Maybe (Statement (AnnSSA r)))
 -------------------------------------------------------------------------------------
 envJoin _ Nothing Nothing     = return (Nothing, Nothing, Nothing)
-envJoin _ Nothing (Just θ)    = return (Just θ , Nothing, Nothing)
-envJoin _ (Just θ) Nothing    = return (Just θ , Nothing, Nothing)
+envJoin _ Nothing (Just θ)    = return (Just $ fst θ , Nothing, Nothing)
+envJoin _ (Just θ) Nothing    = return (Just $ fst θ , Nothing, Nothing)
 envJoin l (Just θ1) (Just θ2) = envJoin' l θ1 θ2
 
-envJoin' l θ1 θ2 = do
+envJoin' l (θ1,φ1) (θ2,φ2) = do
     setSsaEnv θ'                          -- Keep Common binders
-    phis       <- mapM (mapFstM freshenIdSSA) $ envToList $ envLefts θ
-    stmts      <- forM phis $ phiAsgn l   -- Adds Phi-Binders, Phi Annots, Return Stmts
+    phis       <- mapM (mapFstM freshenIdSSA) (envToList $ envLefts θ)
+    gl_phis    <- mapM (mapFstM freshenIdSSA) (envToList $ envLefts φ)
+    stmts      <- forM (phis ++ gl_phis) $ phiAsgn l   -- Adds Phi-Binders, Phi Annots, Return Stmts
     θ''        <- getSsaEnv
     let (s1,s2) = unzip stmts
     return (Just θ'', Just $ BlockStmt l s1, Just $ BlockStmt l s2)
   where
+    φ           = envIntersectWith meet φ1 φ2
     θ           = envIntersectWith meet θ1 θ2
     θ'          = envRights θ
     meet        = \x1 x2 -> if x1 == x2 then Right x1 else Left (x1, x2)
 
 phiAsgn l (x, (SI x1, SI x2)) = do
-    x' <- updSsaEnv l x          -- Generate FRESH phi name
-    addAnn l (PhiVar [x'])       -- RECORD x' as PHI-Var at l
-    let s1 = mkPhiAsgn l x' x1   -- Create Phi-Assignments
-    let s2 = mkPhiAsgn l x' x2   -- for both branches
-    return $ (s1, s2)
+    (a,x') <- updSsaEnv' l x                       -- Generate FRESH phi name
+    addAnn l (PhiVar [x'])                         -- RECORD x' as PHI-Var at l
+    case a of 
+      WriteLocal -> let s1 = mkPhiAsgn l x' x1 in  -- Create Phi-Assignments
+                    let s2 = mkPhiAsgn l x' x2 in  -- for both branches
+                    return (s1, s2)
+      _          -> return (EmptyStmt def, EmptyStmt def)
 
 mkPhiAsgn :: AnnSSA r -> Id (AnnSSA r) -> Id (AnnSSA r) -> Statement (AnnSSA r) 
 mkPhiAsgn l x y = VarDeclStmt l [VarDecl l x (Just $ VarRef l y)]
@@ -759,7 +782,12 @@ mkPhiAsgn l x y = VarDeclStmt l [VarDecl l x (Just $ VarRef l y)]
 getLoopPhis b = do
     θ     <- getSsaEnv
     θ'    <- names <$> snd <$> tryAction (ssaStmt b)
-    return $ envToList (envLefts $ envIntersectWith meet θ θ')
+    let xs = envToList (envLefts $ envIntersectWith meet θ θ')
+
+    
+
+
+    return xs
   where
     meet x x' = if x == x' then Right x else Left (x, x')
 

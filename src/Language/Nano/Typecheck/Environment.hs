@@ -14,6 +14,7 @@ import           Language.Nano.Typecheck.Types()
 import           Language.Nano.Env
 import           Language.Nano.Environment
 import           Language.Nano.Names
+import           Language.Nano.Program
 
 import           Language.ECMAScript3.PrettyPrint
 import qualified Language.Fixpoint.Types        as F
@@ -24,13 +25,14 @@ import           Text.PrettyPrint.HughesPJ
 -------------------------------------------------------------------------------
 
 data TCEnv r  = TCE {
-    tce_names       :: Env (RType r, Assignability)
+    tce_names       :: Env (RType r, Assignability, Initialization)
   , tce_mod         :: QEnv (ModuleDef r)
+  , tce_cha         :: ClassHierarchy r
   , tce_ctx         :: !IContext
   , tce_path        :: AbsPath
   , tce_parent      :: Maybe (TCEnv r)
   }
-  deriving (Functor, Data, Typeable)
+  deriving (Functor) -- , Data, Typeable)
 
 
 --   We define this alias as the "output" type for typechecking any entity

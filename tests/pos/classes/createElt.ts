@@ -26,36 +26,23 @@ class CanvasElt extends HTMLElt {
                                                && TT(v, tagName, "canvas", "CanvasElt") } */
 
 function createElt(tagName: string): HTMLElt {
-  
-  // ORIG if (tagName === "div")    
-  // ORIG     return new DivElt();
-  // ORIG else if (tagName === "span")   
-  // ORIG     return new SpanElt();
-  // ORIG else if (tagName === "canvas") 
-  // ORIG     return new CanvasElt();
-  // ORIG else return new HTMLElt();
-
-  /*  res :: { v: HTML | TT(v, tagName, "div", "DivElt")
-                      && TT(v, tagName, "span", "SpanElt")
-                      && TT(v, tagName, "canvas", "CanvasElt") } */
-
+ 
+  /*@ res :: HTML */
   var res:HTMLElt;
  
-  if (tagName === "div")    
+  if (tagName === "div")
       res = new DivElt();
 
-  else if (tagName === "span")   
+  else if (tagName === "span")
       res = new SpanElt();
 
-  else if (tagName === "canvas") 
+  else if (tagName === "canvas")
       res = new CanvasElt();
   
   else
       res = new HTMLElt();
 
-
   return res;
-
 
 }
 

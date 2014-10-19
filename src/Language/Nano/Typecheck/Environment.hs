@@ -46,6 +46,7 @@ type TCEnvO r = Maybe (TCEnv r)
 instance EnvLike r TCEnv where
   names           = tce_names
   modules         = tce_mod
+  cha             = tce_cha
   absPath         = tce_path
   context         = tce_ctx
   parent          = tce_parent

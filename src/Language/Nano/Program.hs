@@ -40,7 +40,6 @@ import           Data.Monoid             hiding ((<>))
 import           Data.Default
 import           Data.Maybe                     (maybeToList, listToMaybe, catMaybes)
 import           Data.List                      (stripPrefix, partition, reverse, find)
-import           Data.Foldable                  (foldlM)
 import           Data.Tuple                     (swap)
 import qualified Data.HashMap.Strict              as HM
 import           Data.Graph.Inductive.Graph
@@ -158,34 +157,6 @@ instance Default (ClassHierarchy r) where
 
 instance Functor ClassHierarchy where
   fmap f (ClassHierarchy g n) = ClassHierarchy (nmap (fmap f) g) n
-
-
----------------------------------------------------------------------------
-path :: F.Reftable r => ClassHierarchy r -> TypeReference r -> AbsName -> Maybe (TypeReference r)
----------------------------------------------------------------------------
-path cha@(ClassHierarchy g m) tr@(s,ts) t
-  = do n1                    <- HM.lookup s m
-       n2                    <- HM.lookup t m
-       foldlM (doEdge cha) tr $ map toNodes 
-                              $ toEdges 
-                              $ unwrap 
-                              $ lesp n1 n2 g
-  where
-    unwrap (LP lpath)         = lpath
-    bar (s,t,_)               = (,) <$> lab g s <*> lab g t
-    toEdges xs                = zip (init xs) (tail xs)
-    toNodes ((n1,_),(n2,_))   = (n1,n2)
-
----------------------------------------------------------------------------
-doEdge :: F.Reftable r => ClassHierarchy r -> TypeReference r -> Edge -> Maybe (TypeReference r)
----------------------------------------------------------------------------
-doEdge cha@(ClassHierarchy g m) (_, t1) (n1, n2)
-  = do  ID _  _ v1 (e1,i1) _  <-  lab g n1 
-        ID c2 _ v1 (e1,i1) _  <-  lab g n1 
-        let θ                  =  fromList $ zip v1 t1
-        (n2,t2)               <-  find ((c2 ==) . fst) e1 
-                              <|> find ((c2 ==) . fst) i1
-        return                 $  (n2, apply θ t2)
 
 
 ---------------------------------------------------------------------------

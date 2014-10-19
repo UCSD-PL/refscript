@@ -53,7 +53,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
 
-import           Debug.Trace                        hiding (traceShow)
+-- import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -506,7 +506,7 @@ tcStmt γ s@(FunctionStmt _ _ _ _)
 
 -- | class A<S...> [extends B<T...>] [implements I,J,...] { ... }
 tcStmt γ (ClassStmt l x e is ce) 
-  = do  dfn      <- ltracePP l "dfn" <$> tcEnvFindTypeDefM l γ rn
+  = do  dfn      <- tcEnvFindTypeDefM l γ rn
         ms       <- mapM (tcClassElt γ dfn) ce
         return    $ (ClassStmt l x e is ms, Just γ)
   where
@@ -1032,8 +1032,8 @@ tcCallCase γ l fn ets ft
        let (ts2, its2)  = balance ts1 its1
        θ               <- unifyTypesM (srcPos l) γ ts2 its2
        let (ts3,its3)   = mapPair (apply θ) (ts2, its2)
+       -- es'             <- app (castM γ) es ts3 its3
        es'             <- app (castM γ) es ts3 its3
-       -- es'             <- app (castM γ) es (ltracePP l "LHS" ts3) (ltracePP l "RHS" its3)
        return           $ (es', apply θ ot)
   where
     (es, ts)            = (fst <$> ets, snd <$> ets)
@@ -1096,11 +1096,7 @@ envLoopJoin l γ (Just γl) =
 -- recorded in the initialization part of the output.
 --
 ----------------------------------------------------------------------------------
-getPhiType :: PPR r 
-           => AnnSSA r 
-           -> TCEnv r 
-           -> TCEnv r 
-           -> Var r 
+getPhiType :: PPR r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r 
            -> TCM r (RType r, Assignability, Initialization)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
@@ -1114,11 +1110,7 @@ getPhiType l γ1 γ2 x =
                                       -> die $ bugUnboundPhiVar (srcPos l) x
 
 ----------------------------------------------------------------------------------
-getLoopNextPhiType :: PPR r 
-                   => AnnSSA r 
-                   -> TCEnv r 
-                   -> TCEnv r 
-                   -> Var r 
+getLoopNextPhiType :: PPR r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r 
                    -> TCM r (RType r, Assignability, Initialization)
 ----------------------------------------------------------------------------------
 getLoopNextPhiType l γ γl x =
@@ -1132,14 +1124,8 @@ getLoopNextPhiType l γ γl x =
 --
 --   * Special casing the situation where one the types in undefined.
 ----------------------------------------------------------------------------------
-unifyPhiTypes :: PPR r 
-              => AnnSSA r
-              -> TCEnv r 
-              -> Var r 
-              -> RType r 
-              -> RType r 
-              -> RSubst r 
-              -> TCM r (RType r)
+unifyPhiTypes :: PPR r => AnnSSA r -> TCEnv r -> Var r 
+                       -> RType r -> RType r -> RSubst r -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 unifyPhiTypes l γ x t1 t2 θ = 
   case unifys (srcPos l) γ θ [t1] [t2] of  

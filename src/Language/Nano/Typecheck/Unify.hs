@@ -82,7 +82,7 @@ unify l γ θ (TRef x1 t1s _) (TRef x2 t2s _)
   = unifys l γ θ t1s t2s
 
   | isAncestor γ x1 x2 || isAncestor γ x2 x1       
-  = case (weaken γ x1 x2 t1s, weaken γ x2 x1 t2s) of
+  = case (weaken γ (x1,t1s) x2, weaken γ (x2,t2s) x1) of
   -- 
   -- * Adjusting `t1` to reach `t2` moving upward in the type 
   --   hierarchy -- this is equivalent to Upcast

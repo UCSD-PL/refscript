@@ -643,10 +643,20 @@ instance PP EnumDef where
  
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
   pp (ModuleDef vars tys enums path) =  
-    text "module" <+> pp path 
-      $$ text "Variables" $$ braces (pp vars) 
-      $$ text "Types" $$ pp tys
-      $$ text "Enums" $$ pp enums
+          text "==================="
+      $+$ text "module" <+> pp path 
+      $+$ text "==================="
+      $+$ text "Variables" 
+      $+$ text "----------"
+      $+$ braces (pp vars) 
+      $+$ text "-----"
+      $+$ text "Types" 
+      $+$ text "-----"
+      $+$ pp tys
+      $+$ text "-----"
+      $+$ text "Enums" 
+      $+$ text "-----"
+      $+$ pp enums
 
 
 -----------------------------------------------------------------------

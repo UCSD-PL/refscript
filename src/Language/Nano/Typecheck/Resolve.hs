@@ -26,19 +26,24 @@ module Language.Nano.Typecheck.Resolve (
 
   ) where 
 
-import           Control.Applicative                 ((<$>), (<*>))
+import           Control.Applicative                 ((<$>), (<*>), (<|>))
 import           Data.Generics
 import           Data.Tuple
 
 import qualified Data.IntMap.Strict               as I
 import qualified Data.HashMap.Strict              as HM
 import           Data.Maybe                          (catMaybes, maybeToList, listToMaybe)
-import           Data.List                           (nub)
+import           Data.Foldable                       (foldlM)
+import           Data.List                           (nub, find)
+import           Data.Graph.Inductive.Graph
+import           Data.Graph.Inductive.PatriciaTree
+import           Data.Graph.Inductive.Query.BFS
 import qualified Data.HashSet                     as S 
 import           Data.Function                       (on)
 import qualified Data.Map.Strict                  as M
 import qualified Language.Fixpoint.Types          as F
 import           Language.Nano.Env
+import           Language.Nano.Errors
 import           Language.Fixpoint.Misc              (mapPair, snd3, fst3, thd3, mapFst)
 import           Language.Nano.Environment
 import           Language.Nano.Names
@@ -180,7 +185,6 @@ flattenType γ (TApp TBool _ r)
 
 flattenType _ t  = Just t
 
-
 -- | `weaken γ A B T..`: Given a relative type name @A@  distinguishes two
 --   cases:
 --
@@ -190,20 +194,36 @@ flattenType _ t  = Just t
 --    * If A </: B then return @Nothing@.
 --
 ---------------------------------------------------------------------------
-weaken :: (PPR r, EnvLike r g) => g r -> AbsName -> AbsName -> [RType r] -> Maybe (SIfaceDef r)
+weaken :: (PPR r, EnvLike r g) => g r -> TypeReference r -> AbsName -> Maybe (TypeReference r)
 ---------------------------------------------------------------------------
-weaken γ a b ts
-  | a == b = (,ts) <$> resolveTypeInEnv γ a
-  | otherwise
-  = do  ID _ _ _ vs hs <- resolveTypeInEnv γ a
-        return          $ undefined -- weaken γ p b $ apply (fromList $ zip vs ts) ps
-          -- ID _ _ vs (Just (p,ps)) _ -> weaken γ p b $ apply (fromList $ zip vs ts) ps
-          -- ID _ _ _  Nothing       _ -> Nothing
+weaken γ tr@(s,ts) t
+  | s == t                    = Just tr
+  | otherwise 
+  = do n1                    <- HM.lookup s m
+       n2                    <- HM.lookup t m
 
+       case unwrap $ lesp n1 n2 g of
+         []                  -> Nothing
+         path                -> -- tracePP ("weakening from " ++ ppshow tr ++ " to " ++ ppshow t) $
+                                foldlM (doEdge ch) tr  $ map toNodes $ toEdges path
+  where
+    ch@(ClassHierarchy g m)   = cha γ
+    unwrap (LP lpath)         = lpath
+    toEdges xs                = zip (init xs) (tail xs)
+    toNodes ((n1,_),(n2,_))   = (n1,n2)
+
+---------------------------------------------------------------------------
+doEdge :: F.Reftable r => ClassHierarchy r -> TypeReference r -> Edge -> Maybe (TypeReference r)
+---------------------------------------------------------------------------
+doEdge cha@(ClassHierarchy g m) (_, t1) (n1, n2)
+  = do  ID _  _ v1 (e1,i1) _  <-  lab g n1 
+        ID c2 _ _  _       _  <-  lab g n2
+        let θ                  =  fromList $ zip v1 t1
+        (n2,t2)               <-  find ((c2 ==) . fst) e1 
+                              <|> find ((c2 ==) . fst) i1
+        return                 $  (n2, apply θ t2)
 
 -- FIXME !!!!!
---
-
 ---------------------------------------------------------------------------
 ancestors :: (PPR r, EnvLike r g) => g r -> AbsName -> [AbsName]
 ---------------------------------------------------------------------------
@@ -228,7 +248,7 @@ boundKeys _ _              = []
 
 
 -----------------------------------------------------------------------
--- Constructors
+-- | Constructors
 -----------------------------------------------------------------------
 
 type Constructor = Type 

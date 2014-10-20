@@ -88,7 +88,8 @@ bugZipType l t1 t2            = mkErr l $ printf "BUG: zipType of types '%s' and
 -- | Nano
 ---------------------------------------------------------------------------
 errorInvalidTopStmt l x       = mkErr l $ printf "Invalid top-level statement: %s" (ppshow x) 
-errorDuplicate i l l'         = mkErr l $ printf "Duplicate Specification for %s:\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
+errorDuplicate i l l'         = mkErr l $ printf "Duplicate Specification for '%s':\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
+errorDuplicateKey l x         = mkErr l $ printf "Duplicate key '%s' when merging creating environment" (ppshow x) 
 
 
 ---------------------------------------------------------------------------

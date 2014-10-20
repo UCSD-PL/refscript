@@ -521,7 +521,7 @@ zipType l γ t1@(TRef x1 (_:t1s) r1) t2@(TRef x2 (m2:t2s) _)
         return $ TRef x2 (m2:ts) r1
 
   | otherwise
-  = case weaken γ x1 x2 t1s of
+  = case weaken γ (x1,t1s) x2 of
       -- Try to move along the class hierarchy
       Just (_, t1s') -> zipType l γ (TRef x2 (m2:t1s') r1 `strengthen` reftIO t1 (F.symbol x1)) t2
 

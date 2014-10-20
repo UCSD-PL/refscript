@@ -20,6 +20,7 @@ import           Language.Nano.Env
 import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Environment
+import           Language.Nano.Program
 
 import qualified Language.Fixpoint.Types as F
   
@@ -51,6 +52,10 @@ data CGEnvR r = CGE {
   --
   , cge_mod     :: QEnv (ModuleDef r)
   -- 
+  -- ^ CHA
+  -- 
+  , cge_cha     :: ClassHierarchy r
+  -- 
   -- ^ Namespace absolute path
   --
   , cge_path    :: AbsPath
@@ -67,6 +72,7 @@ type CGEnv = CGEnvR F.Reft
 instance EnvLike r CGEnvR where
   names     = cge_names
   modules   = cge_mod
+  cha       = cge_cha
   absPath   = cge_path
   context   = cge_ctx
   parent    = cge_parent

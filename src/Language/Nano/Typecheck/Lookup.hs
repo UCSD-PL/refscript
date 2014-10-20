@@ -137,12 +137,11 @@ extractParent :: (PPR r, PP r, EnvLike r g, Substitutable r (RType r))
               => g r -> RType r -> Maybe (RType r)
 -------------------------------------------------------------------------------
 extractParent γ (TRef x ts _) 
-  = do  d <- resolveTypeInEnv γ x
-        case t_proto d of
-          Just (p,ps) -> Just $ TRef p (tArgs d ts ps) fTop
-          _           -> Nothing
-  where
-    tArgs d ts ps = apply (fromList $ zip (t_args d) ts) ps
+  = do  ID _ k vs (es,_) _ <- resolveTypeInEnv γ x
+        case (k,es) of 
+          (ClassKind, [(p,ps)]) -> 
+              Just $ TRef p (apply (fromList $ zip vs ts) ps) fTop
+          _  -> Nothing
 extractParent _ _ = Nothing
 
 

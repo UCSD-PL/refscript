@@ -169,15 +169,15 @@ data FuncInputs t = FI {
 data IfaceKind = ClassKind | InterfaceKind
   deriving (Eq, Show, Data, Typeable)
 
-data IfaceDefQ q r = ID { 
+data IfaceDefQ q r = ID {
+  -- 
+  -- ^ The full name of the type 
+  -- 
+    t_name  :: QN q 
   -- 
   -- ^ Kind
   --
-    t_class :: IfaceKind
-  -- 
-  -- ^ Name
-  --
-  , t_name  :: !(Id SourceSpan)                    
+  , t_class :: IfaceKind
   -- 
   -- ^ Type variables
   --
@@ -185,7 +185,7 @@ data IfaceDefQ q r = ID {
   -- 
   -- ^ Heritage
   --
-  , t_proto :: !(HeritageQ q r)
+  , t_base  :: !(HeritageQ q r)
   -- 
   -- ^ List of data type elts 
   --
@@ -197,12 +197,18 @@ deriving instance Functor (IfaceDefQ q)
 deriving instance Traversable (IfaceDefQ q)
 deriving instance Foldable (IfaceDefQ q)
 
-type IfaceDef       = IfaceDefQ AK
+type HeritageQ q r      = ([TypeReferenceQ q r], [TypeReferenceQ q r])
+type Heritage r         = HeritageQ AK r
 
-type HeritageQ q r  = Maybe (QN q, [RTypeQ q r])
+type ClassSigQ q r      = ([TVar], [TypeReferenceQ q r], [TypeReferenceQ q r])
 
-type SIfaceDefQ q r = (IfaceDefQ q r, [RTypeQ q r])
-type SIfaceDef    r = SIfaceDefQ AK r
+type TypeReferenceQ q r = (QN q, [RTypeQ q r])
+type SIfaceDefQ q r     = (IfaceDefQ q r, [RTypeQ q r])
+
+-- Full names
+type IfaceDef r         = IfaceDefQ AK r
+type SIfaceDef r        = SIfaceDefQ AK r
+type TypeReference r    = TypeReferenceQ AK r
 
 data IndexKind      = StringIndex | NumericIndex
   deriving (Eq, Show, Data, Typeable)
@@ -314,6 +320,12 @@ data ModuleDefQ q r = ModuleDef {
 deriving instance Functor (ModuleDefQ q) 
 
 type ModuleDef = ModuleDefQ AK
+
+instance Monoid (ModuleDefQ q r) where
+  ModuleDef v t e p `mappend` ModuleDef v' t' e' _ = ModuleDef (v `mappend` v') 
+                                                               (t `mappend` t')
+                                                               (e `mappend` e')
+                                                               p 
 
 
 ------------------------------------------------------------------------------------------

@@ -124,17 +124,17 @@ convertObj l γ t1@(TRef x1 (m1:t1s) _) t2@(TRef x2 (m2:t2s) _)
   -- * Compatible mutabilities, differenet names:
   --
   | isAncestor γ x1 x2 || isAncestor γ x2 x1       
-  = case (weaken γ x1 x2 t1s, weaken γ x2 x1 t2s) of
+  = case (weaken γ (x1,m1:t1s) x2, weaken γ (x2,m2:t2s) x1) of
   -- 
   -- * Adjusting `t1` to reach `t2` moving upward in the type 
   --   hierarchy -- this is equivalent to Upcast
   --
-      (Just (_, t1s'), _) -> mconcat . (CDUp:) <$> zipWithM (convert' l γ) t1s' t2s
+      (Just (_,m1':t1s'), _) -> mconcat . (CDUp:) <$> zipWithM (convert' l γ) (m1':t1s') (m2:t2s)
   -- 
   -- * Adjusting `t2` to reach `t1` moving upward in the type 
   --   hierarchy -- this is equivalent to DownCast
   --
-      (_, Just (_, t2s')) -> mconcat . (CDDn:) <$> zipWithM (convert' l γ) t1s t2s'
+      (_, Just (_,m2':t2s')) -> mconcat . (CDDn:) <$> zipWithM (convert' l γ) (m1:t1s) (m2':t2s')
       (_, _) -> Left $ bugWeakenAncestors (srcPos l) x1 x2
 
 convertObj l γ (TClass  c1) (TClass  c2) = convertTClass  l γ c1 c2

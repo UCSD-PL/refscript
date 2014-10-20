@@ -580,17 +580,20 @@ instance PP IfaceKind where
   pp ClassKind      = pp "class" 
   pp InterfaceKind  = pp "interface" 
 
-instance (PP r, F.Reftable r) => PP (IfaceDefQ q r) where
-  pp (ID c nm vs Nothing ts) =  
+instance (PP r, F.Reftable r) => PP (IfaceDef r) where
+  pp (ID nm c vs h ts) =  
         pp c
-    <+> pp nm <> ppArgs angles comma vs 
+    <+> ppBase (nm, vs)
+    <+> ppHeritage h
     <+> lbrace $+$ nest 2 (vcat $ ppHMap pp ts) $+$ rbrace
-  pp (ID c nm vs (Just (p,ps)) ts) = 
-        pp c
-    <+> pp nm <> ppArgs angles comma vs
-    <+> text "extends" 
-    <+> pp p  <> ppArgs angles comma ps
-    <+> lbrace $+$ nest 2 (vcat $ ppHMap pp ts) $+$ rbrace
+
+ppHeritage (es,is) = ppHeritage1 "extends" es <+> ppHeritage1 "implements" is
+
+ppHeritage1 c []   = text""
+ppHeritage1 c ts   = text c <+> intersperse comma (ppBase <$> ts)
+
+ppBase (n,[]) = pp n
+ppBase (n,ts) = pp n <> ppArgs angles comma ts
 
 instance PP IndexKind where
   pp StringIndex  = text "string"
@@ -640,10 +643,20 @@ instance PP EnumDef where
  
 instance (PP r, F.Reftable r) => PP (ModuleDef r) where
   pp (ModuleDef vars tys enums path) =  
-    text "module" <+> pp path 
-      $$ text "Variables" $$ braces (pp vars) 
-      $$ text "Types" $$ pp tys
-      $$ text "Enums" $$ pp enums
+          text "==================="
+      $+$ text "module" <+> pp path 
+      $+$ text "==================="
+      $+$ text "Variables" 
+      $+$ text "----------"
+      $+$ braces (pp vars) 
+      $+$ text "-----"
+      $+$ text "Types" 
+      $+$ text "-----"
+      $+$ pp tys
+      $+$ text "-----"
+      $+$ text "Enums" 
+      $+$ text "-----"
+      $+$ pp enums
 
 
 -----------------------------------------------------------------------

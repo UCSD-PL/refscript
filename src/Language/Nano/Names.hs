@@ -112,10 +112,15 @@ instance PP F.Symbol where
 instance PP (QN l) where
   pp (QN _ _ [] s) = pp s
   pp (QN _ _ ms s) = (hcat $ punctuate dot $ map pp ms) <> dot <> pp s
+
  
 instance PP (QP l) where
   pp (QP _ _ []) = pp "<global>"
   pp (QP _ _ ms) = hcat $ punctuate dot $ map pp ms
+
+instance PPrint (QP l) where
+  pprint (QP _ _ []) = pp "<global>"
+  pprint (QP _ _ ms) = hcat $ punctuate dot $ map pp ms
 
 -- instance PP NameSpacePath where
 --   pp = hcat . punctuate dot . map pp

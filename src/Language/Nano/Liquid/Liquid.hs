@@ -140,7 +140,7 @@ consNano p@(Nano {code = Src fs})
 initGlobalEnv  :: NanoRefType -> CGM CGEnv
 -------------------------------------------------------------------------------
 initGlobalEnv pgm@(Nano { code = Src s }) 
-      = freshenCGEnvM (CGE nms bds grd ctx mod pth Nothing) 
+      = freshenCGEnvM (CGE nms bds grd ctx mod cha pth Nothing) 
     >>= envAdds "initGlobalEnv" extras
   where
     nms       = E.envAdds extras 
@@ -149,6 +149,7 @@ initGlobalEnv pgm@(Nano { code = Src s })
     extras    = [(Id (srcPos dummySpan) "undefined", 
                   (TApp TUndef [] $ F.Reft (F.vv Nothing, [F.trueRefa]), ReadOnly, Initialized))]
     bds       = F.emptyIBindEnv
+    cha       = pCHA pgm
     grd       = []
     mod       = pModules pgm
     ctx       = emptyContext
@@ -158,13 +159,14 @@ initGlobalEnv pgm@(Nano { code = Src s })
 initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> CGM CGEnv
 -------------------------------------------------------------------------------
 initModuleEnv g n s 
-  = freshenCGEnvM $ CGE nms bds grd ctx mod pth (Just g)
+  = freshenCGEnvM $ CGE nms bds grd ctx mod cha pth (Just g)
   where
     nms       = E.envMap (\(_,_,c,d,e) -> (d,c,e)) 
               $ mkVarEnv $ visibleNames s
     bds       = cge_fenv g
     grd       = []
     mod       = cge_mod g
+    cha       = cge_cha g
     ctx       = emptyContext
     pth       = extendAbsPath (cge_path g) n
 
@@ -185,12 +187,13 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
     >>= envAddReturn f t
     >>= freshenCGEnvM
   where
-    g'        = CGE nms fenv grds ctx mod pth parent
+    g'        = CGE nms fenv grds ctx mod cha pth parent
     nms       = E.envMap (\(_,_,c,d,e) -> (d,c,e)) 
               $ mkVarEnv $ visibleNames s
     fenv      = cge_fenv g
     grds      = []
     mod       = cge_mod g
+    cha       = cge_cha g
     ctx       = pushContext i (cge_ctx g)
     pth       = cge_path g
     parent    = Just g

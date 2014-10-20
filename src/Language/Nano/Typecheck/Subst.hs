@@ -116,7 +116,7 @@ instance Free (Fact r) where
   free (StatAnn m)          = free m
   free (ConsAnn c)          = free c
   free (FuncAnn c)          = free c
-  free (ClassAnn (vs,m))    = foldr S.delete (free m) vs
+  free (ClassAnn (vs,e,i))  = foldr S.delete (free $ e ++ i) vs
   free (UserCast t)         = free t
   free (IfaceAnn _)         = S.empty
   free (ExportedElt)        = S.empty
@@ -177,20 +177,20 @@ instance F.Reftable r => SubstitutableQ q r (CastQ q r) where
   apply θ (CDn t t')  = CDn (apply θ t) (apply θ t')
 
 instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
-  apply _ (PhiVar φ)        = PhiVar φ
-  apply θ (TypInst i ξ ts)  = TypInst i ξ   $ apply θ ts
-  apply θ (Overload ξ t)    = Overload ξ    $ apply θ t
-  apply θ (EltOverload ξ t) = EltOverload ξ $ apply θ t
-  apply θ (TCast   ξ c)     = TCast ξ       $ apply θ c
-  apply θ (VarAnn t)        = VarAnn        $ apply θ t
-  apply θ (FieldAnn f)      = FieldAnn      $ apply θ f
-  apply θ (MethAnn t)       = MethAnn       $ apply θ t
-  apply θ (StatAnn t)       = StatAnn       $ apply θ t
-  apply θ (ConsAnn t)       = ConsAnn       $ apply θ t
-  apply θ (FuncAnn t)       = FuncAnn       $ apply θ t
-  apply θ (ClassAnn (c, t)) = ClassAnn      $ (c, apply θ t)
-  apply θ (UserCast t)      = UserCast      $ apply θ t
-  apply _ a                 = a
+  apply _ (PhiVar φ)         = PhiVar φ
+  apply θ (TypInst i ξ ts)   = TypInst i ξ   $ apply θ ts
+  apply θ (Overload ξ t)     = Overload ξ    $ apply θ t
+  apply θ (EltOverload ξ t)  = EltOverload ξ $ apply θ t
+  apply θ (TCast   ξ c)      = TCast ξ       $ apply θ c
+  apply θ (VarAnn t)         = VarAnn        $ apply θ t
+  apply θ (FieldAnn f)       = FieldAnn      $ apply θ f
+  apply θ (MethAnn t)        = MethAnn       $ apply θ t
+  apply θ (StatAnn t)        = StatAnn       $ apply θ t
+  apply θ (ConsAnn t)        = ConsAnn       $ apply θ t
+  apply θ (FuncAnn t)        = FuncAnn       $ apply θ t
+  apply θ (ClassAnn (c,e,i)) = ClassAnn      $ (c, apply θ e, apply θ i)
+  apply θ (UserCast t)       = UserCast      $ apply θ t
+  apply _ a                  = a
 
 instance SubstitutableQ q r a => SubstitutableQ q r (Maybe a) where
   apply θ (Just a)          = Just $ apply θ a
@@ -212,7 +212,7 @@ instance SubstitutableQ q r (QP l) where
   apply _ s                 = s 
 
 instance F.Reftable r => SubstitutableQ q r (IfaceDefQ q r) where
-  apply θ (ID c n v p e)    = ID c n v (apply θ p) (M.map (apply θ) e)
+  apply θ (ID n c v p e)    = ID n c v (apply θ p) (M.map (apply θ) e)
 
 instance (F.Reftable r, SubstitutableQ q r a) => SubstitutableQ q r (Statement a) where
   apply θ s                 = fmap (apply θ) s

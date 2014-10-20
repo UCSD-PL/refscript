@@ -324,14 +324,14 @@ instance Transformable CastQ where
 instance Transformable IfaceDefQ where
   trans = transIFD
 
-transIFD f as xs idf = idf { t_proto = transProto f as' xs  $  t_proto idf 
-                           , t_elts  = trans      f as' xs <$> t_elts  idf
+transIFD f as xs idf = idf { t_base = transIFDBase f as' xs  $  t_base idf  
+                           , t_elts = trans        f as' xs <$> t_elts idf
                            } 
     where
       as'            = (t_args idf) ++ as
 
-transProto _ _  _  Nothing        = Nothing 
-transProto f as xs (Just (n, ts)) = Just (n, trans f as xs <$> ts)
+transIFDBase f as xs (es,is) = (transClassAnn1 f as xs <$> es, transClassAnn1 f as xs <$> is)
+
 
 transFact f = go
   where
@@ -358,8 +358,11 @@ transCast f = go
     go as xs (CUp t1 t2) = CUp (trans f as xs t1) (trans f as xs t2)
     go as xs (CDn t1 t2) = CUp (trans f as xs t1) (trans f as xs t2)
     
-transClassAnn _ _ _ z@(_, Nothing)        = z
-transClassAnn f as xs (as', Just (n, ts)) = (as', Just (n, trans f (as' ++ as) xs <$> ts))
+transClassAnn f as xs (as',es,is) = (as', transClassAnn1 f (as' ++ as) xs <$> es
+                                        , transClassAnn1 f (as' ++ as) xs <$> is)
+
+transClassAnn1 f as xs (n,ts) =  (n, trans f as xs <$> ts)
+
 
 transRType :: F.Reftable r 
            => ([TVar] -> [BindQ q r] -> RTypeQ q r -> RTypeQ q r) 
@@ -419,11 +422,14 @@ ntransFmap ::  (F.Reftable r, Functor t) => (QN p -> QN q) -> (QP p -> QP q) -> 
 ntransFmap f g = fmap (ntransAnnR f g) 
 
 
-ntransIFD f g idf = idf { t_proto = ntransProto f g  $  t_proto idf 
-                        , t_elts  = ntrans      f g <$> t_elts  idf } 
+ntransIFD :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> IfaceDefQ p r -> IfaceDefQ q r
+ntransIFD f g idf = idf { t_name =            f    $  t_name idf
+                        , t_base = ntransBase f g  $  t_base idf 
+                        , t_elts = ntrans     f g <$> t_elts idf } 
 
-ntransProto _ _ Nothing        = Nothing 
-ntransProto f g (Just (n, ts)) = Just (f n, ntrans f g <$> ts)
+ntransBase f g (es,is) = (ntransBase1 f g <$> es, ntransBase1 f g <$> is)
+ntransBase1 :: (F.Reftable r) => (QN p -> QN q) -> (QP p -> QP q) -> (QN p, [RTypeQ p r]) -> (QN q, [RTypeQ q r]) 
+ntransBase1 f g (n,ts) = (f n, ntrans f g <$> ts)
 
 ntransFact f g = go
   where
@@ -437,7 +443,7 @@ ntransFact f g = go
     go (UserCast t)      = UserCast      $ ntrans f g t
     go (FuncAnn  t)      = FuncAnn       $ ntrans f g t
     go (IfaceAnn ifd)    = IfaceAnn      $ ntrans f g ifd
-    go (ClassAnn (c,h))  = ClassAnn      $ (c, ntransClassAnn f g h)
+    go (ClassAnn c)      = ClassAnn      $ ntransClassAnn f g c
     go (EnumAnn c)       = EnumAnn       $ c
     go (ModuleAnn c)     = ModuleAnn     $ c
     go (TypInst x y ts)  = TypInst x y   $ ntrans f g <$> ts
@@ -454,11 +460,8 @@ ntransCast f g = go
     go (CUp t1 t2) = CUp (ntrans f g t1) (ntrans f g t2)
     go (CDn t1 t2) = CUp (ntrans f g t1) (ntrans f g t2)
     
-ntransClassAnn :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) 
-                               -> Maybe (QN p, [RTypeQ p r]) 
-                               -> Maybe (QN q, [RTypeQ q r])
-ntransClassAnn _ _ Nothing        = Nothing
-ntransClassAnn f g (Just (n, ts)) = Just (f n, ntrans f g <$> ts)
+ntransClassAnn f g (as,es,is) = (as, ntransClassAnn1 f g <$> es, ntransClassAnn1 f g <$> is)
+ntransClassAnn1 f g (n,ts) =  (f n, ntrans f g <$> ts)
 
 ntransRType :: F.Reftable r => (QN p -> QN q) -> (QP p -> QP q) -> RTypeQ p r -> RTypeQ q r
 ntransRType f g               = go 
@@ -706,10 +709,10 @@ scrapeModules :: PPR r => NanoBareR r -> NanoBareR r
 scrapeModules pgm@(Nano { code = Src stmts }) 
                                  = pgm { pModules = qenvFromList $ map mkMod $ collectModules stmts }
   where
-    mkMod (ap, m)                = (ap, ModuleDef (varEnv m) (typeEnv m) (enumEnv m) ap)
+    mkMod (ap, m)                = (ap, ModuleDef (varEnv m) (typeEnv ap m) (enumEnv m) ap)
     drop1 (_,b,c,d,e)            = (b,c,d,e)
     varEnv                       = envMap drop1 . mkVarEnv . vStmts
-    typeEnv                      = envFromList  . tStmts
+    typeEnv ap                   = envFromList  . tStmts ap
     enumEnv                      = envFromList  . eStmts
 
     vStmts                       = concatMap vStmt
@@ -735,12 +738,12 @@ scrapeModules pgm@(Nano { code = Src stmts })
                                       TEnum $ QN AK_ (ann l) [] $  F.symbol x , Initialized)) ]
     vStmt _                      = [ ]
 
-    tStmts                       = concatMap tStmt 
+    tStmts                       = concatMap . tStmt 
 
-    tStmt                       :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, IfaceDef r)]
-    tStmt c@(ClassStmt{})        = maybeToList $ resolveType c
-    tStmt c@(IfaceStmt{})        = maybeToList $ resolveType c
-    tStmt _                      = [ ]
+    -- tStmt                       :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, IfaceDef r)]
+    tStmt ap c@(ClassStmt{})     = maybeToList $ resolveType ap c
+    tStmt ap c@(IfaceStmt{})     = maybeToList $ resolveType ap c
+    tStmt _ _                    = [ ]
 
     eStmts                       = concatMap eStmt
     eStmt                       :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, EnumDef)]
@@ -770,7 +773,9 @@ visibility l | ExportedElt `elem` ann_fact l = Exported
 ---------------------------------------------------------------------------------------
 mkVarEnv :: PPR r => F.Symbolic s => [(s, VarInfo r)] -> Env (VarInfo r)
 ---------------------------------------------------------------------------------------
-mkVarEnv                     = envFromList . concatMap f . M.toList . foldl merge M.empty
+mkVarEnv                     = envFromListWithKey mergeVarInfo
+                             . concatMap f . M.toList 
+                             . foldl merge M.empty
   where
     merge ms (x,(s,v,a,t,i)) = M.insertWith (++) (F.symbol x) [(s,v,a,t,i)] ms
     f (s, vs)                = [ (s,(k,v,w, g t [ t' | (FuncOverloadKind, _, _, t', _) <- vs ], i))
@@ -787,16 +792,26 @@ mkVarEnv                     = envFromList . concatMap f . M.toList . foldl merg
     amb ((s,(k,v,w,t,i)):xs) = [(s,(k,v,w, mkAnd (t : map tyOf xs),i))]    
     tyOf (_,(_,_,_,t,_))     = t
 
+mergeVarInfo _ (ModuleDefKind, v1, a1, t1, i1) (ModuleDefKind, v2, a2, t2, i2) 
+  | (v1, a1, t1, i1) == (v2, a2, t2, i2) = (ModuleDefKind, v1, a1, t1, i1) 
+mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
+
 ---------------------------------------------------------------------------------------
-resolveType :: PPR r => Statement (AnnR r) -> Maybe (Id SourceSpan, IfaceDef r)
+resolveType :: AbsPath -> Statement (AnnR r) -> Maybe (Id SourceSpan, IfaceDef r)
 ---------------------------------------------------------------------------------------
-resolveType (ClassStmt l c _ _ cs) = go [ t | ClassAnn t <- ann_fact l ] 
+resolveType (QP AK_ _ ss) (ClassStmt l c _ _ cs) 
+                  = go [ t | ClassAnn t <- ann_fact l ] 
   where
-    go [(vs, h)] = Just (cc, ID ClassKind cc vs h $ typeMembers cs)
-    go _         = Nothing
-    cc           = fmap ann c
-resolveType (IfaceStmt l _) = listToMaybe [ (t_name t, t) | IfaceAnn t <- ann_fact l ]
-resolveType _ = Nothing 
+    go [(vs,e,i)] = Just (cc, ID (QN AK_ (srcPos l) ss (F.symbol c)) ClassKind vs (e,i) (typeMembers cs))
+    go _          = Nothing
+    cc            = fmap ann c
+
+resolveType _ (IfaceStmt l c) 
+                  = listToMaybe [ (cc, t) | IfaceAnn t <- ann_fact l ]
+  where
+    cc            = fmap ann c
+
+resolveType _ _   = Nothing 
 
 ---------------------------------------------------------------------------------------
 typeMembers :: [ClassElt (AnnR r)] -> TypeMembers r

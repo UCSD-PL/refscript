@@ -224,6 +224,20 @@ ssaStmt (ForStmt l (VarInit vds) cOpt (Just i) b) =
 ssaStmt (ForStmt l (VarInit vds) cOpt Nothing  b) =
     ssaForLoop l vds cOpt Nothing b
 
+
+ssaStmt (ForStmt l (ExprInit ei) cOpt (Just e@(AssignExpr l1 _ _ _)) b) =
+    ssaForLoopExpr l ei cOpt (Just $ ExprStmt l1 (expand e)) b
+  where
+    expand (AssignExpr l1 o lv e) = AssignExpr l1 OpAssign lv (infOp o l1 lv e)
+    expand _ = errorstar "unimplemented: expand assignExpr"
+
+ssaStmt (ForStmt l (ExprInit e) cOpt (Just i) b) =
+    ssaForLoopExpr l e cOpt (Just $ ExprStmt (getAnnotation i) i) b
+
+ssaStmt (ForStmt l (ExprInit e) cOpt Nothing  b) =
+    ssaForLoopExpr l e cOpt Nothing b
+
+
 -- | for (var k in obj) { <body> } 
 -- 
 --      ==>
@@ -783,10 +797,6 @@ getLoopPhis b = do
     θ     <- getSsaEnv
     θ'    <- names <$> snd <$> tryAction (ssaStmt b)
     let xs = envToList (envLefts $ envIntersectWith meet θ θ')
-
-    
-
-
     return xs
   where
     meet x x' = if x == x' then Right x else Left (x, x')
@@ -805,6 +815,24 @@ ssaForLoop l vds cOpt incExpOpt b =
     bd         = BlockStmt bl $ [b] ++ catMaybes [incExpOpt]
     bl         = getAnnotation b
     c          = maybe (BoolLit l True) id cOpt
+
+-------------------------------------------------------------------------------------
+ssaForLoopExpr :: Data r => (AnnSSA r) -> Expression (AnnSSA r) -> Maybe (Expression (AnnSSA r)) 
+  -> Maybe (Statement (AnnSSA r)) -> Statement (AnnSSA r) -> SSAM r (Bool, Statement (AnnSSA r))
+-------------------------------------------------------------------------------------
+ssaForLoopExpr l exp cOpt incExpOpt b =
+  do
+    l1        <- fr
+    (b, sts') <- ssaStmts [ExprStmt l1 exp, WhileStmt l c bd]
+    l2        <- fr
+    return     $ (b, BlockStmt l2 sts')
+  where
+    bd         = BlockStmt bl $ [b] ++ catMaybes [incExpOpt]
+    bl         = getAnnotation b
+    c          = maybe (BoolLit l True) id cOpt
+    fr_        = freshenAnn
+    fr         = fr_ l 
+
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

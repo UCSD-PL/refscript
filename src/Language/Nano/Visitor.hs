@@ -773,7 +773,9 @@ visibility l | ExportedElt `elem` ann_fact l = Exported
 ---------------------------------------------------------------------------------------
 mkVarEnv :: PPR r => F.Symbolic s => [(s, VarInfo r)] -> Env (VarInfo r)
 ---------------------------------------------------------------------------------------
-mkVarEnv                     = envFromList . concatMap f . M.toList . foldl merge M.empty
+mkVarEnv                     = envFromListWithKey mergeVarInfo
+                             . concatMap f . M.toList 
+                             . foldl merge M.empty
   where
     merge ms (x,(s,v,a,t,i)) = M.insertWith (++) (F.symbol x) [(s,v,a,t,i)] ms
     f (s, vs)                = [ (s,(k,v,w, g t [ t' | (FuncOverloadKind, _, _, t', _) <- vs ], i))
@@ -789,6 +791,10 @@ mkVarEnv                     = envFromList . concatMap f . M.toList . foldl merg
     amb [a]                  = [a]
     amb ((s,(k,v,w,t,i)):xs) = [(s,(k,v,w, mkAnd (t : map tyOf xs),i))]    
     tyOf (_,(_,_,_,t,_))     = t
+
+mergeVarInfo _ (ModuleDefKind, v1, a1, t1, i1) (ModuleDefKind, v2, a2, t2, i2) 
+  | (v1, a1, t1, i1) == (v2, a2, t2, i2) = (ModuleDefKind, v1, a1, t1, i1) 
+mergeVarInfo x _ _ = throw $ errorDuplicateKey (srcPos x) x
 
 ---------------------------------------------------------------------------------------
 resolveType :: AbsPath -> Statement (AnnR r) -> Maybe (Id SourceSpan, IfaceDef r)

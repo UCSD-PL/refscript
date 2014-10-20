@@ -321,6 +321,12 @@ deriving instance Functor (ModuleDefQ q)
 
 type ModuleDef = ModuleDefQ AK
 
+instance Monoid (ModuleDefQ q r) where
+  ModuleDef v t e p `mappend` ModuleDef v' t' e' _ = ModuleDef (v `mappend` v') 
+                                                               (t `mappend` t')
+                                                               (e `mappend` e')
+                                                               p 
+
 
 ------------------------------------------------------------------------------------------
 -- | Assignability 

@@ -627,6 +627,7 @@ mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 ---------------------------------------------------------------------------------
 mkCode = --debugTyBinds
          buildCHA
+       . fixEnums
        . scrapeModules
        . scrapeQuals 
        . replaceAbsolute
@@ -653,7 +654,6 @@ mkCode' ss = Nano {
   where
     toBare            :: Int -> (SourceSpan, [Spec]) -> AnnRel Reft 
     toBare n (l,αs)    = Ann n l $ catMaybes $ extractFact <$> αs 
-    absNms             = ntrans f g 
     f (QN RK_ l ss s)  = QN AK_ l ss s
     g (QP RK_ l ss)    = QP AK_ l ss
     starting_id        = 0

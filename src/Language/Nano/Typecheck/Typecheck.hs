@@ -71,14 +71,11 @@ verifyFile cfg fs
       Left  l -> return (NoAnn, l)
       Right x -> ssaTransform x >>= \case
                    Left  l -> return (NoAnn, l)
-                   -- Right y -> typeCheck cfg (expandAliases y) >>= \case
-                   -- -- This is done in parsing
                    Right y -> typeCheck cfg y >>= \case
                                 Left  l -> unsafe l
                                 Right z -> return $ safe cfg z
 
 unsafe errs = do putStrLn "\n\n\nErrors Found!\n\n" 
-                 -- forM_ errs (putStrLn . ppshow) 
                  return $ (NoAnn, errs)
 
 safe cfg (Nano {code = Src fs}) = (NoAnn, failCasts (noFailCasts cfg) fs)

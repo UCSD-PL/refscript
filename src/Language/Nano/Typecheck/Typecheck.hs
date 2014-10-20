@@ -53,7 +53,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
 
-import           Debug.Trace                        hiding (traceShow)
+-- import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -152,7 +152,8 @@ patch fs =
 -------------------------------------------------------------------------------
 initGlobalEnv :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv pgm@(Nano { code = Src ss }) = trace (ppshow mod) $ trace (ppshow cha) $ TCE nms mod cha ctx pth Nothing
+initGlobalEnv pgm@(Nano { code = Src ss }) = -- trace (ppshow mod) $ trace (ppshow cha) $ 
+                                             TCE nms mod cha ctx pth Nothing
   where
     nms       = envAdds extras
               $ envMap (\(_,_,c,d,e) -> (d,c,e)) 

@@ -50,6 +50,7 @@ Executable rsc
                   , liquid-fixpoint
                   , parsec
                   , transformers
+                  , fgl
                   , language-ecmascript-pp
                   , RefScript
 

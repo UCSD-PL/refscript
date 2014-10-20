@@ -29,14 +29,22 @@ module Language.Nano.Program (
   , MemberKind(..)
   , VarInfo 
 
+  -- * CHA
+  , ClassHierarchy (..)
+
   ) where
 
 import           Control.Applicative     hiding (empty)
 import           Control.Exception              (throw)
 import           Data.Monoid             hiding ((<>))            
+import           Data.Default
 import           Data.Maybe                     (maybeToList, listToMaybe, catMaybes)
 import           Data.List                      (stripPrefix, partition, reverse, find)
 import           Data.Tuple                     (swap)
+import qualified Data.HashMap.Strict              as HM
+import           Data.Graph.Inductive.Graph
+import           Data.Graph.Inductive.PatriciaTree
+import           Data.Graph.Inductive.Query.BFS
 import qualified Data.HashSet                   as H
 import           Data.Generics                   
 import qualified Data.Map.Strict                as M
@@ -50,6 +58,7 @@ import           Language.Nano.Locations
 import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
+import           Language.Nano.Typecheck.Subst
 
 import           Language.ECMAScript3.Syntax 
 import           Language.ECMAScript3.PrettyPrint
@@ -108,8 +117,17 @@ data Nano a r = Nano {
   -- ^ Modules
   --
   , pModules  :: QEnv (ModuleDef r)
+  -- 
+  -- ^ CHA
+  --
+  , pCHA      :: ClassHierarchy r
 
-  } deriving (Functor, Data, Typeable)
+  } deriving (Functor) -- , Data, Typeable)
+
+
+newtype Source a = Src [Statement a]
+  deriving (Data, Typeable)
+
 
 
 type NanoBareRelR r = Nano  (AnnRel  r) r       -- ^ After parse (relative names)
@@ -126,8 +144,24 @@ type UNanoSSA       = NanoSSAR  ()
 type UNanoType      = NanoTypeR ()
 
 
-newtype Source a = Src [Statement a]
-  deriving (Data, Typeable)
+data ClassHierarchy r = ClassHierarchy { 
+  
+    c_graph       :: Gr (IfaceDefQ AK r) ()
+
+  , c_nodesToKeys :: HM.HashMap AbsName Int
+  
+  }
+
+instance Default (ClassHierarchy r) where
+  def = ClassHierarchy (mkGraph [] []) HM.empty
+
+instance Functor ClassHierarchy where
+  fmap f (ClassHierarchy g n) = ClassHierarchy (nmap (fmap f) g) n
+
+
+---------------------------------------------------------------------------
+-- | Instances
+---------------------------------------------------------------------------
 
 instance Monoid (Source a) where
   mempty                    = Src []
@@ -159,6 +193,19 @@ instance PP t => PP (I.IntMap t) where
 instance PP t => PP (F.SEnv t) where
   pp m = vcat $ pp <$> F.toListSEnv m
 
+instance PP (ClassHierarchy r) where
+  pp (ClassHierarchy g _)   =  text "***********************************************"
+                           $+$ text "Class Hierarchy" 
+                           $+$ text "***********************************************"
+                           $+$ vcat (ppEdge <$> edges g)
+    where
+      ppEdge (a,b)          =  ppNode a <+> text "->" <+> ppNode b
+      ppNode                =  ppSig . lab' . context g
+      ppSig (ID n _ vs _ _) =  pp n <> optPpArgs vs
+      angles p              =  char '<' <> p <> char '>'
+      optPpArgs []          =  text ""
+      optPpArgs vs          =  ppArgs angles comma vs
+  
 
 ---------------------------------------------------------------------
 -- | Wrappers around `Language.ECMAScript3.Syntax` ------------------

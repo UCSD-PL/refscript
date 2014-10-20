@@ -22,11 +22,13 @@ module N {
 
     export module L {
 
-        class E extends C { }
+        export class E extends C { }
     
         export module M { 
 
             export class B extends K.L.A { }
+            
+            export class C extends L.E { }
 
             class F extends K.L.M.B { }
 

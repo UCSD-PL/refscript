@@ -152,19 +152,22 @@ patch fs =
 -------------------------------------------------------------------------------
 initGlobalEnv :: PPR r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv pgm@(Nano { code = Src ss }) = TCE nms mod ctx pth Nothing
+initGlobalEnv pgm@(Nano { code = Src ss }) = -- trace (ppshow mod) $ trace (ppshow cha) $ 
+                                             TCE nms mod cha ctx pth Nothing
   where
     nms       = envAdds extras
               $ envMap (\(_,_,c,d,e) -> (d,c,e)) 
               $ mkVarEnv visibleNs
     visibleNs = visibleNames ss
-    extras    = [(Id (srcPos dummySpan) "undefined", (TApp TUndef [] fTop, ReadOnly, Initialized))]
+    extras    = [(Id (srcPos dummySpan) "undefined"
+                ,(TApp TUndef [] fTop, ReadOnly, Initialized))]
+    cha       = pCHA pgm 
     mod       = pModules pgm 
     ctx       = emptyContext
     pth       = mkAbsPath []
 
 
-initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod ctx pth parent
+initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod cha ctx pth parent
   where
     tyBinds   = [(tVarId α, (tVar α, ReadOnly, Initialized)) | α <- αs]
     varBinds  = zip (fmap ann <$> xs) $ (,WriteLocal, Initialized) <$> ts
@@ -173,6 +176,7 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod ctx pth parent
               $ envMap (\(_,_,c,d,e) -> (d,c,e)) 
               $ mkVarEnv $ visibleNames s
     mod       = tce_mod γ
+    cha       = tce_cha γ
     ctx       = pushContext i (tce_ctx γ) 
     pth       = tce_path γ
     parent    = Just γ
@@ -182,11 +186,12 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod ctx pth parent
 ---------------------------------------------------------------------------------------
 initModuleEnv :: (PPR r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnSSA r)] -> TCEnv r
 ---------------------------------------------------------------------------------------
-initModuleEnv γ n s = TCE nms mod ctx pth parent
+initModuleEnv γ n s = TCE nms mod cha ctx pth parent
   where
     nms       = envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv $ visibleNames s
     mod       = tce_mod γ
     ctx       = emptyContext
+    cha       = tce_cha γ
     pth       = extendAbsPath (tce_path γ) n
     parent    = Just γ
 
@@ -1028,8 +1033,8 @@ tcCallCase γ l fn ets ft
        let (ts2, its2)  = balance ts1 its1
        θ               <- unifyTypesM (srcPos l) γ ts2 its2
        let (ts3,its3)   = mapPair (apply θ) (ts2, its2)
+       -- es'             <- app (castM γ) es ts3 its3
        es'             <- app (castM γ) es ts3 its3
-       -- es'             <- app (castM γ) es (ltracePP l "LHS" ts3) (ltracePP l "RHS" its3)
        return           $ (es', apply θ ot)
   where
     (es, ts)            = (fst <$> ets, snd <$> ets)
@@ -1092,11 +1097,7 @@ envLoopJoin l γ (Just γl) =
 -- recorded in the initialization part of the output.
 --
 ----------------------------------------------------------------------------------
-getPhiType :: PPR r 
-           => AnnSSA r 
-           -> TCEnv r 
-           -> TCEnv r 
-           -> Var r 
+getPhiType :: PPR r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r 
            -> TCM r (RType r, Assignability, Initialization)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
@@ -1110,11 +1111,7 @@ getPhiType l γ1 γ2 x =
                                       -> die $ bugUnboundPhiVar (srcPos l) x
 
 ----------------------------------------------------------------------------------
-getLoopNextPhiType :: PPR r 
-                   => AnnSSA r 
-                   -> TCEnv r 
-                   -> TCEnv r 
-                   -> Var r 
+getLoopNextPhiType :: PPR r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r 
                    -> TCM r (RType r, Assignability, Initialization)
 ----------------------------------------------------------------------------------
 getLoopNextPhiType l γ γl x =
@@ -1128,14 +1125,8 @@ getLoopNextPhiType l γ γl x =
 --
 --   * Special casing the situation where one the types in undefined.
 ----------------------------------------------------------------------------------
-unifyPhiTypes :: PPR r 
-              => AnnSSA r
-              -> TCEnv r 
-              -> Var r 
-              -> RType r 
-              -> RType r 
-              -> RSubst r 
-              -> TCM r (RType r)
+unifyPhiTypes :: PPR r => AnnSSA r -> TCEnv r -> Var r 
+                       -> RType r -> RType r -> RSubst r -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 unifyPhiTypes l γ x t1 t2 θ = 
   case unifys (srcPos l) γ θ [t1] [t2] of  

@@ -1,7 +1,9 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances         #-} 
 {-# LANGUAGE DeriveDataTypeable        #-} 
+{-# LANGUAGE ConstraintKinds           #-} 
 {-# LANGUAGE UndecidableInstances      #-} 
+{-# LANGUAGE FlexibleContexts          #-} 
 {-# LANGUAGE TypeSynonymInstances      #-} 
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
@@ -16,7 +18,7 @@ import           Data.Either                             (partitionEithers)
 import           Data.Default
 import           Data.Traversable                        (mapAccumL)
 import           Data.Monoid                             (mconcat)
-import           Data.Maybe                              (listToMaybe, catMaybes)
+import           Data.Maybe                              (listToMaybe, catMaybes, maybeToList)
 import           Data.Generics                    hiding (Generic)
 import           Data.Aeson                              (eitherDecode)
 import           Data.Aeson.Types                 hiding (Parser, Error, parse)
@@ -24,10 +26,17 @@ import qualified Data.Aeson.Types                 as     AI
 import qualified Data.ByteString.Lazy.Char8       as     B
 import           Data.Char                               (isLower)
 import qualified Data.List                        as     L
--- import qualified Data.HashSet                     as     S
-import           Text.PrettyPrint.HughesPJ               (text)
+import qualified Data.IntMap.Strict               as I
+import qualified Data.HashMap.Strict              as HM
+import           Data.Tuple
+
+import           Text.PrettyPrint.HughesPJ               (text, vcat)
 import qualified Data.Foldable                    as     FO
 import           Data.Vector                             ((!))
+
+import           Data.Graph.Inductive.Graph
+import           Data.Graph.Inductive.PatriciaTree
+import           Data.Graph.Inductive.Query.BFS
 
 import           Control.Monad
 import           Control.Monad.Trans                     (MonadIO,liftIO)
@@ -36,7 +45,7 @@ import           Control.Applicative                     ((<$>), (<*>) , (<*) , 
 import           Language.Fixpoint.Types          hiding (quals, Loc, Expression)
 import           Language.Fixpoint.Parse
 import           Language.Fixpoint.Errors
-import           Language.Fixpoint.Misc                  (mapEither, mapSnd)
+import           Language.Fixpoint.Misc                  (mapEither, mapSnd, mapPair, snd3, fst3, thd3, mapFst)
 
 import           Language.Nano.Annots
 import           Language.Nano.Errors
@@ -50,6 +59,7 @@ import           Language.Nano.Typecheck.Types
 import           Language.Nano.Liquid.Types
 import           Language.Nano.Liquid.Alias
 import           Language.Nano.Liquid.Qualifiers
+import           Language.Nano.Typecheck.Resolve
 
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
@@ -129,16 +139,32 @@ aliasVarT (l, x)
 iFaceP   :: Parser (Id SourceSpan, IfaceDefQ RK Reft)
 iFaceP   = do name   <- identifierP 
               as     <- option [] tParP
-              h      <- optionMaybe extendsP
+              h      <- heritageP
               es     <- mkTypeMembers . ((InstanceMember, MemDeclaration,) <$>) 
                     <$> braces (propBindP defaultMutability)
-              return (name, convertTvar as $ ID InterfaceKind name as h es)
+              return (name, convertTvar as $ ID (mkrn name) InterfaceKind as h es)
+  where
+    mkrn = mkRelName [] . symbol
 
-extendsP :: Parser (RelName, [RTypeQ RK Reft])
-extendsP = do reserved "extends"
-              qn     <- qnameP
-              ts     <- option [] $ angles $ sepBy bareTypeP comma
-              return (qn, ts)
+
+extendsGenP :: String -> Parser [TypeReferenceQ RK Reft]
+extendsGenP s = option [] $ reserved s >> sepBy1 extendsGen1P comma
+
+extendsGen1P :: Parser (TypeReferenceQ RK Reft)
+extendsGen1P = do qn  <- qnameP 
+                  ts  <- option [] $ angles $ sepBy bareTypeP comma
+                  return (qn, ts)
+
+extendsP :: Parser [TypeReferenceQ RK Reft]
+extendsP = extendsGenP "extends"
+
+implementsP :: Parser [TypeReferenceQ RK Reft]
+implementsP = extendsGenP "implements"
+
+
+heritageP :: Parser (HeritageQ RK Reft)
+heritageP = (,) <$> extendsP <*> implementsP
+
 
 qnameP  :: Parser RelName
 qnameP   = withSpan qname $ optionMaybe (char '#') >> sepBy1 qSymbolP (char '.')
@@ -249,7 +275,7 @@ bareArgP
   =   (try boundTypeP)
  <|>  (argBind <$> try (bareTypeP))
 
-boundTypeP = do s <- symbolP 
+boundTypeP = do s <- symbol <$> identifierP
                 withinSpacesP colon
                 B s <$> bareTypeP
 
@@ -355,7 +381,7 @@ indexP = xyP id colon sn
 
 -- | <[mut]> f: t
 fieldEltP defM  = do 
-    x          <- symbolP 
+    x          <- symbol <$> identifierP
     _          <- colon
     m          <- option defM (toType <$> mutP)
     t          <- bareTypeP
@@ -363,7 +389,7 @@ fieldEltP defM  = do
 
 -- | <[mut]> m :: (ts): t
 methEltP defM   = do
-    x          <- symbolP 
+    x          <- symbol <$> identifierP
     _          <- colon
     m          <- option defM (toType <$> mutP)
     t          <- methSigP
@@ -418,14 +444,14 @@ withinSpacesP :: Parser a -> Parser a
 withinSpacesP p = do { spaces; a <- p; spaces; return a } 
              
 ----------------------------------------------------------------------------------
-classDeclP :: Parser (Id SourceSpan, ([TVar], Maybe (RelName, [RTypeQ RK Reft])))
+classDeclP :: Parser (Id SourceSpan, ClassSigQ RK Reft)
 ----------------------------------------------------------------------------------
 classDeclP = do
     reserved "class"
-    id <- identifierP 
-    vs <- option [] $ angles $ sepBy tvarP comma
-    pr <- optionMaybe extendsP
-    return (id, (vs, pr))
+    id      <- identifierP 
+    vs      <- option [] $ angles $ sepBy tvarP comma
+    (es,is) <- heritageP
+    return (id, (vs,es,is))
 
 
 ---------------------------------------------------------------------------------
@@ -460,7 +486,7 @@ data PSpec l r
   | Method  (TypeMemberQ RK r)
   | Static  (TypeMemberQ RK r)
   | Iface   (Id l, IfaceDefQ RK r)
-  | Class   (Id l, ([TVar], Maybe (RelName, [RTypeQ RK r])))
+  | Class   (Id l, ClassSigQ RK r)
   | TAlias  (Id l, TAlias (RTypeQ RK r))
   | PAlias  (Id l, PAlias) 
   | Qual    Qualifier
@@ -600,7 +626,8 @@ parseScriptFromJSON filename = decodeOrDie <$> getJSON filename
 mkCode :: [Statement (SourceSpan, [Spec])] -> NanoBareR Reft
 ---------------------------------------------------------------------------------
 mkCode = --debugTyBinds
-         scrapeModules
+         buildCHA
+       . scrapeModules
        . scrapeQuals 
        . replaceAbsolute
        . expandAliases
@@ -621,6 +648,7 @@ mkCode' ss = Nano {
       , fullNames     = names
       , fullPaths     = paths
       , pModules      = qenvEmpty -- is populated at mkCode
+      , pCHA          = def
     } 
   where
     toBare            :: Int -> (SourceSpan, [Spec]) -> AnnRel Reft 
@@ -660,7 +688,7 @@ scrapeQuals p = p { pQuals = qs ++ pQuals p}
     tbv       = defaultVisitor { accStmt = stmtTypeBindings
                                , accCElt = celtTypeBindings }
 
-mkUq                  = zipWith tx [0..]
+mkUq                  = zipWith tx ([0..] :: [Int])
   where
     tx i (Id l s, t)  = (Id l $ s ++ "_" ++ show i, t)
     
@@ -684,6 +712,32 @@ celtTypeBindings _                = (mapSnd eltType <$>) . go
 --   where
 --     xts = [(x, t) | (x, (t, _)) <- visibleNames ss ]
 --     msg = unlines $ "debugTyBinds:" : (ppshow <$> xts)
+
+
+-- | Class Hierachy 
+---------------------------------------------------------------------------
+buildCHA           :: PPR r => NanoBareR r -> NanoBareR r
+---------------------------------------------------------------------------
+buildCHA pgm        = pgm { pCHA = ClassHierarchy graph namesToKeys } 
+  where 
+    graph           = mkGraph nodes edges
+    nodes           = zip ([0..] :: [Int]) $ fst3 <$> data_
+    keysToTypes     = I.fromList $ zip [0..] (fst3 <$> data_)
+    namesToKeys     = HM.fromList $ mapFst t_name . swap <$> I.toList keysToTypes
+    edges           = concatMap toEdge data_  
+    toEdge (_,s,ts) = [ (σ,τ,()) | t <- ts
+                                 , σ <- maybeToList $ HM.lookup s namesToKeys
+                                 , τ <- maybeToList $ HM.lookup t namesToKeys ]
+    data_           = concatMap foo $ snd <$> qenvToList (pModules pgm)
+    foo m           = bar . snd <$>  envToList (m_types m)
+    bar d           = (d, t_name d, parentNames pgm (t_name d))
+
+parentNames :: NanoBareR r -> AbsName -> [AbsName]
+parentNames p = concat . maybeToList . pparentNames p
+  where
+    pparentNames p a = do t <- resolveTypeInPgm p a 
+                          let (es,is) = t_base t
+                          return $ (fst <$> es) ++ (fst <$> is)
  
 type PState = Integer
 
@@ -768,14 +822,14 @@ ctxStmtTvar as s = go s ++ as
 factTvars :: FactQ q r -> [TVar]
 factTvars = go
   where
-    tvars                = fst . bkAll
-    go (VarAnn t)        = tvars t
-    go (FuncAnn t)       = tvars t
-    go (FieldAnn m)      = tvars $ f_type m
-    go (MethAnn m)       = tvars $ f_type m
-    go (StatAnn m)       = tvars $ f_type m
-    go (ConsAnn m)       = tvars $ f_type m
-    go (ClassAnn (as,_)) = as
-    go (IfaceAnn i)      = t_args i
-    go _                 = []
+    tvars                   = fst . bkAll
+    go (VarAnn t)           = tvars t
+    go (FuncAnn t)          = tvars t
+    go (FieldAnn m)         = tvars $ f_type m
+    go (MethAnn m)          = tvars $ f_type m
+    go (StatAnn m)          = tvars $ f_type m
+    go (ConsAnn m)          = tvars $ f_type m
+    go (ClassAnn (as,_,_))  = as
+    go (IfaceAnn i)         = t_args i
+    go _                    = []
     

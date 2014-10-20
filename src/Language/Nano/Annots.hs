@@ -139,7 +139,7 @@ data FactQ q r
   | TCast       !IContext  !(CastQ q r)
   -- Named type annotation
   | IfaceAnn    !(IfaceDefQ q r)
-  | ClassAnn    !([TVar], Maybe (QN q, [RTypeQ q r]))
+  | ClassAnn    !(ClassSigQ q r)
   | ExportedElt
   | ModuleAnn   !(F.Symbol)
   | EnumAnn     !(F.Symbol)
@@ -246,6 +246,6 @@ factRTypes = go
     go (StatAnn m)        = [f_type m]
     go (ConsAnn m)        = [f_type m]
     go (IfaceAnn ifd)     = f_type . snd <$> M.toList (t_elts ifd)
-    go (ClassAnn (_, c))  = maybe [] snd c
+    go (ClassAnn (_,e,i)) = concatMap snd e ++ concatMap snd i
     go f                  = error ("factRTypes: TODO :" ++ show f)
 

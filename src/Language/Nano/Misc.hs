@@ -206,7 +206,10 @@ convertError tgt e  = errortext $ msg <+> pp e
 
 
 instance (PP a, PP b, PP c, PP d) => PP (a,b,c,d) where
-  pp (a,b,c,d) = pp a <+> text ":" <+>  pp b <+> text ":" <+> pp c <+> text ":" <+>  pp d
+  pp (a,b,c,d) = pp a <+> text ":" <+>  pp b <+> text ":" <+> pp c <+> text ":" <+> pp d
+
+instance (PP a, PP b, PP c, PP d, PP e) => PP (a,b,c,d,e) where
+  pp (a,b,c,d,e) = pp a <+> text ":" <+>  pp b <+> text ":" <+> pp c <+> text ":" <+> pp d <+> text ":" <+> pp e 
 
 foldM1 :: (Monad m) => (a -> a -> m a) -> [a] -> m a
 foldM1 _ [] = error "foldM1" "empty list"

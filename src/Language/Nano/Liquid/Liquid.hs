@@ -141,7 +141,8 @@ initGlobalEnv  :: NanoRefType -> CGM CGEnv
 -------------------------------------------------------------------------------
 initGlobalEnv pgm@(Nano { code = Src s }) 
       = freshenCGEnvM (CGE nms bds grd ctx mod cha pth Nothing) 
-    >>= envAdds "initGlobalEnv" extras
+    >>= \g  -> envAdds "initGlobalEnv" extras g
+    >>= \g' -> return $ g'
   where
     nms       = E.envAdds extras 
               $ E.envMap (\(_,_,c,d,e) -> (d,c,e)) 

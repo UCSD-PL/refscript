@@ -37,6 +37,7 @@ module Language.Nano.Visitor (
   , scrapeVarDecl
   , extractQualifiedNames
   , replaceAbsolute
+  , fixEnums
 
   , mkTypeMembers
   , mkVarEnv
@@ -52,7 +53,7 @@ import           Data.Generics
 import qualified Data.HashSet                   as H
 import           Data.List                      (partition)
 import qualified Data.Map.Strict                as M
-import           Data.Maybe                     (maybeToList, listToMaybe, catMaybes)
+import           Data.Maybe                     (maybeToList, listToMaybe, catMaybes, isJust)
 import qualified Data.IntMap                    as I
 import           Data.Traversable               (traverse)
 import           Control.Applicative            ((<$>), (<*>))
@@ -71,6 +72,7 @@ import           Language.Nano.Names
 import           Language.Nano.Locations
 import           Language.Nano.Annots
 import           Language.Nano.Program
+import           Language.Nano.Typecheck.Resolve
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types        as F
 
@@ -694,6 +696,28 @@ replaceAbsolute pgm@(Nano { code = Src ss, fullNames = ns, fullPaths = ps })
                     = QP AK_ l $ p ++ [F.symbol x] 
     cStmt q _       = q
     acc c s         = I.singleton (ann_id a) c where a = getAnnotation s
+
+-- | Replace `TRef x _ _` where `x` is a name for an enumeration with `TEnum x`
+---------------------------------------------------------------------------------------
+fixEnums :: PPR r => NanoBareR r -> NanoBareR r 
+---------------------------------------------------------------------------------------
+fixEnums p@(Nano { code = Src ss, tAlias = ta, pModules = m }) 
+               = p { code = Src $ (tr <$>) <$> ss
+                   , pModules = qenvMap (fixEnumsInModule p) m}
+  where
+    tr         = transAnnR f []
+    f _ _      = fixEnumInType p
+
+fixEnumInType p (TRef x [] _) | isJust (resolveEnumInPgm p x) = TEnum x
+fixEnumInType _ t = t
+
+fixEnumsInModule p m@(ModuleDef { m_variables = mv, m_types = mt })
+               = m { m_variables = mv', m_types = mt' }
+  where
+   mv'         = envMap f mv
+   f (v,a,t,i) = (v,a,fixEnumInType p t,i)
+   mt'         = envMap (transIFD g [] []) mt
+   g _ _       = fixEnumInType p
 
 
 -- | `scrapeModules ss` creates a module store from the statements in @ss@

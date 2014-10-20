@@ -43,6 +43,7 @@ module Language.Nano.Env (
   , qenvEmpty
   , qenvFindTy
   , qenvKeys
+  , qenvMap
   ) where 
 
 import           Control.Applicative 
@@ -184,6 +185,7 @@ qenvFindTy  i γ     = fmap val $ qenvFind i γ
 qenvAdd :: AbsPath -> t -> QEnv t -> QEnv t
 qenvAdd q t (QE γ)  = QE (M.insert q (Loc (srcPos q) t) γ)
 
+qenvMap f (QE γ)    = QE $ M.map (fmap f) γ
 
 qenvKeys (QE γ)     = M.keys γ
 

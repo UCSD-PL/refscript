@@ -35,10 +35,10 @@ function createElt(tagName: string): HTMLElt {
   var res;
 
   if (tagName === "div")    
-      res = new DivElt();
+      res = new SpanElt();
   
   else if (tagName === "span")   
-      res = new SpanElt();
+      res = new DivElt();
   
   else if (tagName === "canvas") 
       res = new CanvasElt();

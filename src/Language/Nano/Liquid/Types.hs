@@ -34,7 +34,7 @@ module Language.Nano.Liquid.Types (
   , rTypeReft, rTypeSort, rTypeSortedReft, rTypeValueVar
 
   -- * Predicates On RefType 
-  , isBaseRType, isTrivialRefType
+  , isTrivialRefType
 
   -- * Monadic map 
   , mapReftM
@@ -89,6 +89,12 @@ import           Language.Fixpoint.PrettyPrint
 import           Language.Fixpoint.Errors
   
 -- import           Debug.Trace                        (trace)
+--
+
+-- Got these from Resolve.hs
+isAncestor        = error "Liquid.Type.isAncestor"
+absolutePathInEnv = error "Liquid.Type.absolutePathInEnv"
+
 
 -------------------------------------------------------------------------------------
 -- | Refinement Types and Annotations
@@ -248,45 +254,45 @@ pSingleton t p  = t `strengthen` (F.propReft p)
 -- | Converting RType to Fixpoint
 ------------------------------------------------------------------------------
 
-rTypeSortedReft   ::  PPR r => RType r -> F.SortedReft
+rTypeSortedReft   ::  PPR r => RTypeQ q r -> F.SortedReft
 rTypeSortedReft t = F.RR (rTypeSort t) (rTypeReft t)
 
-rTypeReft         :: (F.Reftable r) => RType r -> F.Reft
+rTypeReft         :: (F.Reftable r) => RTypeQ q r -> F.Reft
 rTypeReft         = fromMaybe fTop . fmap F.toReft . stripRTypeBase 
 
-rTypeValueVar     :: (F.Reftable r) => RType r -> F.Symbol
+rTypeValueVar     :: (F.Reftable r) => RTypeQ q r -> F.Symbol
 rTypeValueVar t   = vv where F.Reft (vv,_) = rTypeReft t 
 
 ------------------------------------------------------------------------------------------
-rTypeSort :: (PPR r) => RType r -> F.Sort
+rTypeSort :: (PPR r) => RTypeQ q r -> F.Sort
 ------------------------------------------------------------------------------------------
-rTypeSort   (TVar α _)               = F.FObj $ F.symbol α 
-rTypeSort t@(TAll _ _)               = rTypeSortForAll t 
-rTypeSort   (TFun (Just s) xts t _)  = F.FFunc 0 $ rTypeSort <$> [s] ++ (b_type <$> xts) ++ [t]
-rTypeSort   (TFun Nothing  xts t _)  = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
-rTypeSort   (TApp c ts _)            = rTypeSortApp c ts 
-rTypeSort   (TAnd (t:_))             = rTypeSort t
-rTypeSort   (TCons _ _ _ )           = F.FApp (rawStringFTycon $ F.symbol "Object") []
-rTypeSort   (TClass _)               = F.FApp (rawStringFTycon $ F.symbol "class" ) []
-rTypeSort   (TModule _)              = F.FApp (rawStringFTycon $ F.symbol "module") []
-rTypeSort   (TEnum _)                = F.FApp (rawStringFTycon $ F.symbol "enum"  ) []
-rTypeSort t                          = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
+rTypeSort (TVar α _)               = F.FObj $ F.symbol α 
+rTypeSort (TAll v t)               = rTypeSortForAll $ TAll v t
+rTypeSort (TFun (Just s) xts t _)  = F.FFunc 0 $ rTypeSort <$> [s] ++ (b_type <$> xts) ++ [t]
+rTypeSort (TFun Nothing  xts t _)  = F.FFunc 0 $ rTypeSort <$> (b_type <$> xts) ++ [t]
+rTypeSort (TApp c ts _)            = rTypeSortApp c ts 
+rTypeSort (TAnd (t:_))             = rTypeSort t
+rTypeSort (TRef (QN _ _ _ s) ts _) = F.FApp (rawStringFTycon $ F.symbolString s) (rTypeSort <$> ts)
+rTypeSort (TCons _ _ _ )           = F.FApp (rawStringFTycon $ F.symbol "Object") []
+rTypeSort (TClass _)               = F.FApp (rawStringFTycon $ F.symbol "class" ) []
+rTypeSort (TModule _)              = F.FApp (rawStringFTycon $ F.symbol "module") []
+rTypeSort (TEnum _)                = F.FApp (rawStringFTycon $ F.symbol "enum"  ) []
+rTypeSort t                        = error $ render $ text "BUG: rTypeSort does not support " <+> pp t
 
-rTypeSortApp TInt _                  = F.FInt
-rTypeSortApp TUn  _                  = F.FApp (tconFTycon TUn) []
-rTypeSortApp c ts                    = F.FApp (tconFTycon c) (rTypeSort <$> ts) 
+rTypeSortApp TInt _                = F.FInt
+rTypeSortApp TUn  _                = F.FApp (tconFTycon TUn) []
+rTypeSortApp c ts                  = F.FApp (tconFTycon c) (rTypeSort <$> ts) 
 
 tconFTycon :: TCon -> F.FTycon 
-tconFTycon TInt                      = F.intFTyCon
-tconFTycon TBool                     = rawStringFTycon "Boolean"
-tconFTycon TFPBool                   = F.boolFTyCon
-tconFTycon TVoid                     = rawStringFTycon "Void"
-tconFTycon (TRef (RN (QName _ _ s))) = rawStringFTycon $ F.symbolString s
-tconFTycon TUn                       = rawStringFTycon "Union"
-tconFTycon TString                   = F.strFTyCon
-tconFTycon TTop                      = rawStringFTycon "Top"
-tconFTycon TNull                     = rawStringFTycon "Null"
-tconFTycon TUndef                    = rawStringFTycon "Undefined"
+tconFTycon TInt                    = F.intFTyCon
+tconFTycon TBool                   = rawStringFTycon "Boolean"
+tconFTycon TFPBool                 = F.boolFTyCon
+tconFTycon TVoid                   = rawStringFTycon "Void"
+tconFTycon TUn                     = rawStringFTycon "Union"
+tconFTycon TString                 = F.strFTyCon
+tconFTycon TTop                    = rawStringFTycon "Top"
+tconFTycon TNull                   = rawStringFTycon "Null"
+tconFTycon TUndef                  = rawStringFTycon "Undefined"
 
 
 rTypeSortForAll t    = genSort n θ $ rTypeSort tbody
@@ -299,9 +305,10 @@ genSort n θ (F.FFunc _ t)  = F.FFunc n (F.sortSubst θ <$> t)
 genSort n θ t              = F.FFunc n [F.sortSubst θ t]
 
 ------------------------------------------------------------------------------------------
-stripRTypeBase :: RType r -> Maybe r 
+stripRTypeBase :: RTypeQ q r -> Maybe r 
 ------------------------------------------------------------------------------------------
 stripRTypeBase (TApp _ _ r)   = Just r
+stripRTypeBase (TRef _ _ r)   = Just r
 stripRTypeBase (TVar _ r)     = Just r
 stripRTypeBase (TFun _ _ _ r) = Just r
 stripRTypeBase (TCons _ _ r)  = Just r
@@ -316,7 +323,7 @@ noKVars (F.Reft (s,ras)) = F.Reft (s, [ c | c@(F.RConc _) <- ras ])
 -- | Substitutions
 ------------------------------------------------------------------------------------------
 
-instance (PPR r, F.Subable r) => F.Subable (RType r) where
+instance (PPR r, F.Subable r) => F.Subable (RTypeQ q r) where
   syms        = foldReft (\r acc -> F.syms r ++ acc) [] 
   substa      = fmap . F.substa 
   substf f    = emapReft (F.substf . F.substfExcept f) [] 
@@ -328,10 +335,11 @@ instance (PPR r, F.Subable r) => F.Subable (RType r) where
 ------------------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------------------
-emapReft  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> RType a -> RType b
+emapReft  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> RTypeQ q a -> RTypeQ q b
 ------------------------------------------------------------------------------------------
 emapReft f γ (TVar α r)        = TVar α (f γ r)
 emapReft f γ (TApp c ts r)     = TApp c (emapReft f γ <$> ts) (f γ r)
+emapReft f γ (TRef c ts r)     = TRef c (emapReft f γ <$> ts) (f γ r)
 emapReft f γ (TAll α t)        = TAll α (emapReft f γ t)
 emapReft f γ (TFun s xts t r)  = TFun (emapReft f γ' <$> s) (emapReftBind f γ' <$> xts) 
                                       (emapReft f γ' t) (f γ r) where γ' = (b_sym <$> xts) ++ γ
@@ -344,11 +352,12 @@ emapReft _ _ _                 = error "Not supported in emapReft"
 
 emapReftBind f γ (B x t)       = B x $ emapReft f γ t
 
-emapReftElt  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> TypeMember a -> TypeMember b
+emapReftElt  :: PPR a => ([F.Symbol] -> a -> b) -> [F.Symbol] -> TypeMemberQ q a -> TypeMemberQ q b
 emapReftElt f γ e              = fmap (f γ) e
 
 mapReftM f (TVar α r)          = TVar α  <$> f r
 mapReftM f (TApp c ts r)       = TApp c  <$> mapM (mapReftM f) ts <*> f r
+mapReftM f (TRef c ts r)       = TRef c  <$> mapM (mapReftM f) ts <*> f r
 mapReftM f (TFun s xts t r)    = TFun    <$> T.mapM (mapReftM f) s 
                                          <*> mapM (mapReftBindM f) xts 
                                          <*> mapReftM f t 
@@ -375,17 +384,18 @@ mapReftEltM f (IndexSig x b t) = IndexSig x b <$> mapReftM f t
 ------------------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------------------
-foldReft  :: PPR r => (r -> a -> a) -> a -> RType r -> a
+foldReft  :: PPR r => (r -> a -> a) -> a -> RTypeQ q  r -> a
 ------------------------------------------------------------------------------------------
 foldReft  f = efoldReft (\_ -> ()) (\_ -> f) F.emptySEnv 
 
 ------------------------------------------------------------------------------------------
-efoldReft :: PPR r => (RType r -> b) -> (F.SEnv b -> r -> a -> a) -> F.SEnv b -> a -> RType r -> a
+efoldReft :: PPR r => (RTypeQ q  r -> b) -> (F.SEnv b -> r -> a -> a) -> F.SEnv b -> a -> RTypeQ q  r -> a
 ------------------------------------------------------------------------------------------
 efoldReft g f = go 
   where 
     go γ z (TVar _ r)       = f γ r z
     go γ z t@(TApp _ ts r)  = f γ r $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
+    go γ z t@(TRef _ ts r)  = f γ r $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
     go γ z (TAll _ t)       = go γ z t
     go γ z (TFun s xts t r) = f γ r $ go γ' (gos γ' z (maybeToList s ++ map b_type xts)) t  where γ' = foldr (efoldExt g) γ xts
     go γ z (TAnd ts)        = gos γ z ts 
@@ -401,12 +411,13 @@ efoldExt g xt γ             = F.insertSEnv (b_sym xt) (g $ b_type xt) γ
 efoldExt' g xt γ            = F.insertSEnv (F.symbol xt) (g $ f_type xt) γ
 
 ------------------------------------------------------------------------------------------
-efoldRType :: PPR r => (RType r -> b) -> (F.SEnv b -> RType r -> a -> a) -> F.SEnv b -> a -> RType r -> a
+efoldRType :: PPR r => (RTypeQ q  r -> b) -> (F.SEnv b -> RTypeQ q  r -> a -> a) -> F.SEnv b -> a -> RTypeQ q  r -> a
 ------------------------------------------------------------------------------------------
 efoldRType g f                 = go
   where
     go γ z t@(TVar _ _ )       = f γ t z
     go γ z t@(TApp _ ts _)     = f γ t $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
+    go γ z t@(TRef _ ts _)     = f γ t $ gos (efoldExt g (B (rTypeValueVar t) t) γ) z ts
     go γ z t@(TAll _ t1)       = f γ t $ go γ z t1
     go γ z t@(TFun s xts t1 _) = f γ t $ go γ' (gos γ' z (maybeToList s ++ map b_type xts)) t1  where γ' = foldr (efoldExt g) γ xts
     go γ z   (TAnd ts)         = gos γ z ts 
@@ -414,13 +425,6 @@ efoldRType g f                 = go
     go _ _ t                   = error $ "Not supported in efoldRType: " ++ ppshow t
     gos γ z ts                 = L.foldl' (go γ) z ts
 
-
-------------------------------------------------------------------------------------------
-isBaseRType :: RType r -> Bool
-------------------------------------------------------------------------------------------
-isBaseRType (TApp _ [] _) = True
-isBaseRType (TVar _ _)    = True
-isBaseRType _             = False
 
 ------------------------------------------------------------------------------------------
 isTrivialRefType :: RefType -> Bool
@@ -511,15 +515,15 @@ zipType l γ (TApp TUn t1s r1) t2 =  L.find (related γ t2) t1s `relate` t2
 --   
 --   C<Si> || {F;M} = toStruct(C<Si>) || {F;M}
 --   
-zipType l γ t1@(TApp (TRef x1) (_:t1s) r1) t2@(TApp (TRef x2) (m2:t2s) _) 
+zipType l γ t1@(TRef x1 (_:t1s) r1) t2@(TRef x2 (m2:t2s) _) 
   | x1 == x2
   = do  ts    <- zipWithM (zipType l γ) t1s t2s
-        return $ TApp (TRef x2) (m2:ts) r1
+        return $ TRef x2 (m2:ts) r1
 
   | otherwise
-  = case weaken γ x1 x2 t1s of
+  = case weaken γ (x1,t1s) x2 of
       -- Try to move along the class hierarchy
-      Just (_, t1s') -> zipType l γ (TApp (TRef x2) (m2:t1s') r1 `strengthen` reftIO t1 (F.symbol x1)) t2
+      Just (_, t1s') -> zipType l γ (TRef x2 (m2:t1s') r1 `strengthen` reftIO t1 (F.symbol x1)) t2
 
       -- Unfold structures
       Nothing        -> do  t1' <- flattenType γ t1 
@@ -531,14 +535,14 @@ zipType l γ t1@(TApp (TRef x1) (_:t1s) r1) t2@(TApp (TRef x2) (m2:t2s) _)
     vv         = rTypeValueVar
     sym        = F.dummyLoc $ F.symbol "instanceof"
 
-zipType l _ t1@(TApp (TRef _) [] _) _ = error $ "zipType l on " ++ ppshow t1   -- Invalid type
-zipType l _ _ t2@(TApp (TRef _) [] _) = error $ "zipType l on " ++ ppshow t2  -- Invalid type
+zipType l _ t1@(TRef _ [] _) _ = error $ "zipType l on " ++ ppshow t1   -- Invalid type
+zipType l _ _ t2@(TRef _ [] _) = error $ "zipType l on " ++ ppshow t2  -- Invalid type
 
-zipType l γ t1@(TApp (TRef _) _ _) t2 = do t1' <- flattenType γ t1
-                                           zipType l γ t1' t2
+zipType l γ t1@(TRef _ _ _) t2 = do t1' <- flattenType γ t1
+                                    zipType l γ t1' t2
 
-zipType l γ t1 t2@(TApp (TRef _) _ _) = do t2' <- flattenType γ t2 
-                                           zipType l γ t1 t2'
+zipType l γ t1 t2@(TRef _ _ _) = do t2' <- flattenType γ t2 
+                                    zipType l γ t1 t2'
 
 zipType l γ t1@(TClass x1) t2@(TClass x2) 
   | x2 `elem` ancestors γ x1

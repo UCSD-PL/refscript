@@ -11,13 +11,16 @@
 class Animal {
   public kind = "";
 }
+
 class Horse extends Animal { 
   public kind = "horse";
   public gallop() {} 
 }
+
 class Snake extends Animal { 
   public kind = "snake";
-  public sneak() {} }
+  public sneak() {} 
+}
 
 /*@ move :: (a: AnimalK) => void */
 function move(a: Animal) {

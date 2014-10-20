@@ -7,7 +7,8 @@
 module Language.Nano.Typecheck.Subst ( 
   
   -- * Substitutions
-    RSubst (..)
+    RSubst
+  , RSubstQ (..)
   , Subst 
   , toList
   , fromList
@@ -17,7 +18,8 @@ module Language.Nano.Typecheck.Subst (
   , Free (..)
 
   -- * Type-class with operations
-  , Substitutable (..)
+  , Substitutable
+  , SubstitutableQ (..)
 
   ) where 
 
@@ -47,21 +49,27 @@ import           Data.Monoid hiding ((<>))
 
 -- | Type alias for Map from @TVar@ to @Type@. Hidden
 
-data RSubst r = Su (HM.HashMap TVar (RType r))
+data RSubstQ q r = Su (HM.HashMap TVar (RTypeQ q r))
+
+type RSubst r = RSubstQ AK r
 type Subst    = RSubst ()
 
 toSubst :: RSubst r -> Subst
 toSubst (Su m) = Su $ HM.map toType m
 
+toSubstQ :: RSubstQ q r -> RSubstQ q ()
+toSubstQ (Su m) = Su $ HM.map toType m
+
 toList        :: RSubst r -> [(TVar, RType r)]
 toList (Su m) =  HM.toList m 
 
-fromList      :: [(TVar, RType r)] -> RSubst r
+fromList      :: [(TVar, RTypeQ q r)] -> RSubstQ q r
 fromList      = Su . HM.fromList 
+
 
 -- | Substitutions form a monoid; not commutative
 
-instance (F.Reftable r, Substitutable r (RType r)) => Monoid (RSubst r) where 
+instance (F.Reftable r, SubstitutableQ q r (RType r)) => Monoid (RSubstQ q r) where 
   mempty                    = Su HM.empty
   mappend (Su m) θ'@(Su m') = Su $ (apply θ' <$> m) `HM.union` m'
 
@@ -108,10 +116,10 @@ instance Free (Fact r) where
   free (StatAnn m)          = free m
   free (ConsAnn c)          = free c
   free (FuncAnn c)          = free c
-  free (ClassAnn (vs,m))    = foldr S.delete (free m) vs
+  free (ClassAnn (vs,e,i))  = foldr S.delete (free $ e ++ i) vs
   free (UserCast t)         = free t
   free (IfaceAnn _)         = S.empty
-  free (ExporedModElt)      = S.empty
+  free (ExportedElt)        = S.empty
   free (ModuleAnn _)        = S.empty
   free (EnumAnn _)          = S.empty
 
@@ -129,101 +137,109 @@ instance Free a => Free (Maybe a) where
   free Nothing              = S.empty
   free (Just a)             = free a
 
+instance (Free a, Free b) => Free (a,b) where
+  free (a,b)                = free a `S.union` free b
 
-class Substitutable r a where 
-  apply                     :: (RSubst r) -> a -> a 
+instance Free (QN l) where
+  free _                    = S.empty
 
-instance Substitutable r a => Substitutable r [a] where 
+type Substitutable = SubstitutableQ AK
+
+class SubstitutableQ q r a where 
+  apply                     :: (RSubstQ q r) -> a -> a 
+
+instance SubstitutableQ q r a => SubstitutableQ q r [a] where 
   apply                     = map . apply 
 
-instance (Substitutable r a, Substitutable r b) => Substitutable r (a,b) where 
+instance (SubstitutableQ q r a, SubstitutableQ q r b) => SubstitutableQ q r (a,b) where 
   apply f (x,y)             = (apply f x, apply f y)
 
-instance F.Reftable r => Substitutable r (RType r) where 
+instance F.Reftable r => SubstitutableQ q r (RTypeQ q r) where 
   apply θ t                 = appTy θ t
 
-instance F.Reftable r => Substitutable r (Bind r) where 
+instance F.Reftable r => SubstitutableQ q r (BindQ q r) where 
   apply θ (B z t)           = B z $ appTy θ t
 
-instance (Substitutable r t) => Substitutable r (Env t) where 
+instance (SubstitutableQ q r t) => SubstitutableQ q r (Env t) where 
   apply                     = envMap . apply
 
-instance F.Reftable r => Substitutable r (TypeMember r) where 
-  apply θ (FieldSig x m t)  = FieldSig x   (appTy (toSubst θ) m) (apply θ t)
-  apply θ (MethSig  x m t)  = MethSig  x   (appTy (toSubst θ) m) (apply θ t)
+instance F.Reftable r => SubstitutableQ q r (TypeMemberQ q r) where 
+  apply θ (FieldSig x m t)  = FieldSig x   (appTy (toSubstQ θ) m) (apply θ t)
+  apply θ (MethSig  x m t)  = MethSig  x   (appTy (toSubstQ θ) m) (apply θ t)
   apply θ (CallSig t)       = CallSig      (apply θ t)
   apply θ (ConsSig t)       = ConsSig      (apply θ t)
   apply θ (IndexSig x b t)  = IndexSig x b (apply θ t)
 
-instance F.Reftable r => Substitutable r (Cast r) where
+instance F.Reftable r => SubstitutableQ q r (CastQ q r) where
   apply _ CNo         = CNo
   apply θ (CDead z t) = CDead z         (apply θ t)
   apply θ (CUp t t')  = CUp (apply θ t) (apply θ t')
   apply θ (CDn t t')  = CDn (apply θ t) (apply θ t')
 
-instance F.Reftable r => Substitutable r (Fact r) where
-  apply _ (PhiVar φ)        = PhiVar φ
-  apply θ (TypInst i ξ ts)  = TypInst i ξ   $ apply θ ts
-  apply θ (Overload ξ t)    = Overload ξ    $ apply θ t
-  apply θ (EltOverload ξ t) = EltOverload ξ $ apply θ t
-  apply θ (TCast   ξ c)     = TCast ξ       $ apply θ c
-  apply θ (VarAnn t)        = VarAnn        $ apply θ t
-  apply θ (FieldAnn f)      = FieldAnn      $ apply θ f
-  apply θ (MethAnn t)       = MethAnn       $ apply θ t
-  apply θ (StatAnn t)       = StatAnn       $ apply θ t
-  apply θ (ConsAnn t)       = ConsAnn       $ apply θ t
-  apply θ (FuncAnn t)       = FuncAnn       $ apply θ t
-  apply θ (ClassAnn (c, t)) = ClassAnn      $ (c, apply θ t)
-  apply θ (UserCast t)      = UserCast      $ apply θ t
-  apply _ a                 = a
+instance F.Reftable r => SubstitutableQ q r (FactQ q r) where
+  apply _ (PhiVar φ)         = PhiVar φ
+  apply θ (TypInst i ξ ts)   = TypInst i ξ   $ apply θ ts
+  apply θ (Overload ξ t)     = Overload ξ    $ apply θ t
+  apply θ (EltOverload ξ t)  = EltOverload ξ $ apply θ t
+  apply θ (TCast   ξ c)      = TCast ξ       $ apply θ c
+  apply θ (VarAnn t)         = VarAnn        $ apply θ t
+  apply θ (FieldAnn f)       = FieldAnn      $ apply θ f
+  apply θ (MethAnn t)        = MethAnn       $ apply θ t
+  apply θ (StatAnn t)        = StatAnn       $ apply θ t
+  apply θ (ConsAnn t)        = ConsAnn       $ apply θ t
+  apply θ (FuncAnn t)        = FuncAnn       $ apply θ t
+  apply θ (ClassAnn (c,e,i)) = ClassAnn      $ (c, apply θ e, apply θ i)
+  apply θ (UserCast t)       = UserCast      $ apply θ t
+  apply _ a                  = a
 
-instance Substitutable r a => Substitutable r (Maybe a) where
+instance SubstitutableQ q r a => SubstitutableQ q r (Maybe a) where
   apply θ (Just a)          = Just $ apply θ a
   apply _ Nothing           = Nothing
 
-instance Substitutable r (Id a) where
+instance SubstitutableQ q r (Id a) where
   apply _ i                 = i
 
-instance F.Reftable r => Substitutable r (Annot (Fact r) z) where
+instance F.Reftable r => SubstitutableQ q r (Annot (FactQ q r) z) where
   apply θ (Ann i z fs)      = Ann i z $ apply θ fs
 
-instance Substitutable r F.Symbol  where
+instance SubstitutableQ q r F.Symbol  where
   apply _ s                 = s 
 
-instance Substitutable r QName where
+instance SubstitutableQ q r (QN l) where
   apply _ s                 = s 
 
-instance Substitutable r RelName where
+instance SubstitutableQ q r (QP l) where
   apply _ s                 = s 
 
-instance F.Reftable r => Substitutable r (IfaceDef r) where
-  apply θ (ID c n v p e)    = ID c n v (apply θ p) (M.map (apply θ) e)
+instance F.Reftable r => SubstitutableQ q r (IfaceDefQ q r) where
+  apply θ (ID n c v p e)    = ID n c v (apply θ p) (M.map (apply θ) e)
 
-instance (F.Reftable r, Substitutable r a) => Substitutable r (Statement a) where
+instance (F.Reftable r, SubstitutableQ q r a) => SubstitutableQ q r (Statement a) where
   apply θ s                 = fmap (apply θ) s
 
-instance (F.Reftable r, Substitutable r t) => Substitutable r (FuncInputs t) where
+instance (F.Reftable r, SubstitutableQ q r t) => SubstitutableQ q r (FuncInputs t) where
   apply θ (FI a b)          = FI (apply θ a) (apply θ b)
 
-instance Substitutable r Assignability where
+instance SubstitutableQ q r Assignability where
   apply _ s                 = s
 
-instance Substitutable r Initialization where
+instance SubstitutableQ q r Initialization where
   apply _ s                 = s
 
-instance (Substitutable r a, Substitutable r b, Substitutable r c) => Substitutable r (a,b,c) where
+instance (SubstitutableQ q r a, SubstitutableQ q r b, SubstitutableQ q r c) => SubstitutableQ q r (a,b,c) where
   apply θ (a,b,c)           = (apply θ a, apply θ b, apply θ c)
 
  
 ---------------------------------------------------------------------------------
-appTy :: F.Reftable r => RSubst r -> RType r -> RType r
+appTy :: F.Reftable r => RSubstQ q r -> RTypeQ q r -> RTypeQ q r
 ---------------------------------------------------------------------------------
 appTy θ        (TApp c ts r)   = flattenUnions $ TApp c (apply θ ts) r
+appTy θ        (TRef x ts r)   = TRef x (apply θ ts) r
 appTy θ        (TAnd ts)       = TAnd (apply θ ts) 
 appTy (Su m) t@(TVar α r)      = (HM.lookupDefault t α m) `strengthen` r
 appTy θ        (TFun s ts t r) = TFun (apply θ <$> s) (apply θ ts) (apply θ t) r
 appTy (Su m)   (TAll α t)      = TAll α $ apply (Su $ HM.delete α m) t
-appTy θ        (TCons m es r)  = TCons (appTy (toSubst θ) m) (M.map (apply θ) es) r
+appTy θ        (TCons m es r)  = TCons (appTy (toSubstQ θ) m) (M.map (apply θ) es) r
 appTy _        (TClass c)      = TClass c
 appTy _        (TModule m)     = TModule m
 appTy _        (TEnum e)       = TEnum e

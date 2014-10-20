@@ -2,7 +2,8 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE DeriveDataTypeable     #-}
 {-# LANGUAGE DeriveFunctor          #-}
-{-# LANGUAGE OverlappingInstances      #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE OverlappingInstances   #-}
 
 
 
@@ -13,13 +14,13 @@ module Language.Nano.Annots (
     SsaInfo(..), Var
 
   -- * Annotations
-  , NodeId, Annot (..), UFact, Fact (..), phiVarsAnnot
+  , NodeId, Annot (..), UFact, FactQ (..), Fact, phiVarsAnnot
 
   -- * Casts
-  , Cast(..), CastDirection(..), castDirection, noCast, upCast, dnCast, ddCast, castType
+  , CastQ(..), Cast, CastDirection(..), castDirection, noCast, upCast, dnCast, ddCast, castType
 
   -- * Aliases for annotated Source 
-  , AnnR, AnnBare, UAnnBare, AnnSSA , UAnnSSA
+  , AnnQ, AnnR, AnnRel, AnnBare, UAnnBare, AnnSSA , UAnnSSA
   , AnnType, UAnnType, AnnInfo, UAnnInfo
 
   -- * Deconstructing Facts
@@ -53,11 +54,14 @@ import qualified Language.Fixpoint.Types        as F
 -- | Casts 
 -----------------------------------------------------------------------------
 
-data Cast r  = CNo                                      -- .
-             | CDead { err :: Error  , tgt :: RType r } -- |dead code|
-             | CUp   { org :: RType r, tgt :: RType r } -- <t1 UP t2>
-             | CDn   { org :: RType r, tgt :: RType r } -- <t1 DN t2>
-             deriving (Eq, Show, Data, Typeable, Functor)
+data CastQ q r = CNo                                            -- .
+               | CDead { err :: Error     , tgt :: RTypeQ q r } -- |dead code|
+               | CUp   { org :: RTypeQ q r, tgt :: RTypeQ q r } -- <t1 UP t2>
+               | CDn   { org :: RTypeQ q r, tgt :: RTypeQ q r } -- <t1 DN t2>
+               deriving (Eq, Show, Data, Typeable, Functor)
+
+type CastR = CastQ RK   -- Version with relative types
+type Cast  = CastQ AK   -- Version with absolute types
 
 castType CNo = tNull
 castType c   = tgt c
@@ -112,35 +116,37 @@ castDirection (CDead{}) = CDDead
 castDirection (CUp  {}) = CDUp
 castDirection (CDn  {}) = CDDn
 
-data Fact r
+data FactQ q r
   -- SSA
   = PhiVar      ![Var r]
-  | PhiVarTy    ![(Var r, Type)]
+  | PhiVarTy    ![(Var r, RTypeQ q ())]
   -- Unification
-  | TypInst     Int !IContext ![RType r]
+  | TypInst     Int !IContext ![RTypeQ q r]
   -- Overloading
-  | EltOverload !IContext  !(TypeMember r)
-  | Overload    !IContext  !(RType r)
+  | EltOverload !IContext  !(TypeMemberQ q r)
+  | Overload    !IContext  !(RTypeQ q r)
   -- Type annotations
-  | VarAnn      !(RType r)
-  | AmbVarAnn   !(RType r)
+  | VarAnn      !(RTypeQ q r)
+  | AmbVarAnn   !(RTypeQ q r)
   -- Class member annotations
-  | FieldAnn    !(TypeMember r)
-  | MethAnn     !(TypeMember r) 
-  | StatAnn     !(TypeMember r) 
-  | ConsAnn     !(TypeMember r)
+  | FieldAnn    !(TypeMemberQ q r)
+  | MethAnn     !(TypeMemberQ q r) 
+  | StatAnn     !(TypeMemberQ q r) 
+  | ConsAnn     !(TypeMemberQ q r)
     
-  | UserCast    !(RType r)
-  | FuncAnn     !(RType r)
-  | TCast       !IContext  !(Cast r)
+  | UserCast    !(RTypeQ q r)
+  | FuncAnn     !(RTypeQ q r)
+  | TCast       !IContext  !(CastQ q r)
   -- Named type annotation
-  | IfaceAnn    !(IfaceDef r)
-  | ClassAnn    !([TVar], Maybe (RelName, [RType r]))
-  | ExporedModElt
+  | IfaceAnn    !(IfaceDefQ q r)
+  | ClassAnn    !(ClassSigQ q r)
+  | ExportedElt
   | ModuleAnn   !(F.Symbol)
   | EnumAnn     !(F.Symbol)
     deriving (Eq, Show, Data, Typeable)
 
+type FactR     = FactQ RK
+type Fact      = FactQ AK
 type UFact     = Fact ()
 
 type NodeId    = Int
@@ -149,10 +155,12 @@ data Annot b a = Ann { ann_id   :: NodeId
                      , ann      ::  a
                      , ann_fact :: [b] } deriving (Show, Data, Typeable)
 
-type AnnR r    = Annot (Fact r) SourceSpan
-type AnnBare r = AnnR r -- NO facts
-type AnnSSA  r = AnnR r -- Phi facts
-type AnnType r = AnnR r -- Phi + t. annot. + Cast facts
+type AnnQ q  r = Annot (FactQ q r) SourceSpan
+type AnnR    r = AnnQ AK r                      -- absolute paths,  
+type AnnRel  r = AnnQ RK r                      -- relative paths, NO facts, parsed versioin
+type AnnBare r = AnnR r                         -- absolute paths, NO facts
+type AnnSSA  r = AnnR r                         -- absolute paths, Phi facts
+type AnnType r = AnnR r                         -- absolute paths, Phi + t. annot. + Cast facts
 type AnnInfo r = I.IntMap [Fact r] 
 
 type UAnnBare  = AnnBare () 
@@ -203,7 +211,7 @@ instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (AmbVarAnn t)    = text "Amb Var Annotation"     <+> pp t
   pp (ConsAnn c)      = text "Constructor Annotation" <+> pp c
   pp (UserCast c)     = text "Cast Annotation"        <+> pp c
-  pp (ExporedModElt)  = text "Exported"
+  pp (ExportedElt)    = text "Exported"
   pp (FuncAnn t)      = text "Func Annotation"        <+> pp t
   pp (FieldAnn f)     = text "Field Annotation"       <+> pp f
   pp (MethAnn m)      = text "Method Annotation"      <+> pp m
@@ -238,6 +246,6 @@ factRTypes = go
     go (StatAnn m)        = [f_type m]
     go (ConsAnn m)        = [f_type m]
     go (IfaceAnn ifd)     = f_type . snd <$> M.toList (t_elts ifd)
-    go (ClassAnn (_, c))  = maybe [] snd c
+    go (ClassAnn (_,e,i)) = concatMap snd e ++ concatMap snd i
     go f                  = error ("factRTypes: TODO :" ++ show f)
 

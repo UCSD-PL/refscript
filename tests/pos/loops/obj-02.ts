@@ -5,7 +5,7 @@
 /*@ qualif Poo(v:number): v < 5 */
 
 
-/*@ foo :: () => { a: { number | 4 = v } } */ 
+/*@ foo :: () => { a: [Immutable] { number | 4 = v } } */ 
 function foo() : Object {
 	var x : Object = { a: (-1) }; //need silly singleton v = -1 qualifier as we generate a template for this x. Ugh.
 

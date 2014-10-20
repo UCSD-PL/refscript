@@ -88,7 +88,8 @@ bugZipType l t1 t2            = mkErr l $ printf "BUG: zipType of types '%s' and
 -- | Nano
 ---------------------------------------------------------------------------
 errorInvalidTopStmt l x       = mkErr l $ printf "Invalid top-level statement: %s" (ppshow x) 
-errorDuplicate i l l'         = mkErr l $ printf "Duplicate Specification for %s:\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
+errorDuplicate i l l'         = mkErr l $ printf "Duplicate Specification for '%s':\n  %s \n  %s" (ppshow i) (ppshow l) (ppshow l')
+errorDuplicateKey l x         = mkErr l $ printf "Duplicate key '%s' when merging creating environment" (ppshow x) 
 
 
 ---------------------------------------------------------------------------
@@ -142,8 +143,8 @@ errorParentClassMissing l x y = mkErr l $ printf "Class '%s' cannot extend missi
 errorClassAnnotMissing l x    = mkErr l $ printf "Cannot find annotation for class '%s'." (ppshow x)
 errorClassEltAnnot l c s      = mkErr l $ printf "Class '%s' needs to have a single annotation for element '%s'." (ppshow c) (ppshow s)
 errorUnboundIdEnv l x t       = mkErr l $ printf "ZOGBERT Identifier '%s' unbound in %s" (ppshow x) (ppshow t)
-errorUnboundType l x          = mkErr l $ printf "Type identifier '%s' unbound" (ppshow x)
-errorUnboundId l x            = mkErr l $ printf "Identifier '%s' is unbound" (ppshow x) 
+errorUnboundName l x          = mkErr l $ printf "Name '%s' is unbound." (ppshow x)
+errorUnboundId l x            = mkErr l $ printf "Identifier '%s' is unbound." (ppshow x) 
 errorEnvJoin l x t1 t2        = mkErr l $ printf "Variable '%s' has different types ('%s' and '%s') when joining environments." (ppshow x) (ppshow t1) (ppshow t2)
 errorEnvJoinUnif l x t1 t2    = mkErr l $ printf "Error in unifying types '%s' and '%s' for variable '%s' when joining environments." (ppshow t1) (ppshow t2) (ppshow x)
 errorArgMismatch l            = mkErr l $ printf "Mismatch in Number of arguments in signature" 
@@ -187,3 +188,5 @@ errorMissingSpec l f          = mkErr l $ printf "Missing signature for '%s'." (
 errorVariadic l f             = mkErr l $ printf "Cannot call variadic on type '%s'." (ppshow f)
 errorVariadicNoArgs l f       = mkErr l $ printf "Cannot make variadic call '%s' without arguments." (ppshow f)
 errorConflateTypeMembers l es = mkErr l $ printf "Cannot conflate type members '%s'." (ppshow es)  
+errorCallSuperOnNonClass l x  = mkErr l $ printf "Cannot call 'super' on non class type '%s'." (ppshow x)
+

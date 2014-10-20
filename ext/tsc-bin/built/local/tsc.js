@@ -9979,8 +9979,8 @@ var TypeScript;
                         var cs = m;
                         var anns = tokenAnnots(cs);
                         if (anns.length === 0) {
-                            var eltSymbol = helper.getSymbolForAST(cs);
-                            return [new TypeScript.RsCallSig(eltSymbol.type.toRsType()).toString()];
+                            var csDecl = helper.getDeclForAST(cs);
+                            return [new TypeScript.RsCallSig(csDecl.getSignatureSymbol().toRsTFun()).toString()];
                         } else {
                             return anns.map(function (m) {
                                 return m.content();
@@ -10013,7 +10013,7 @@ var TypeScript;
 
             restAnnots.push(new TypeScript.RsBindAnnotation(sourceSpan, 4 /* RawIface */, annotStr));
 
-            return new TypeScript.RsIfaceStmt(helper.getSourceSpan(this), restAnnots);
+            return new TypeScript.RsIfaceStmt(helper.getSourceSpan(this), restAnnots, this.identifier.toRsId(helper));
         };
         return InterfaceDeclarationSyntax;
     })(TypeScript.SyntaxNode);
@@ -11494,6 +11494,10 @@ var TypeScript;
 
         QualifiedNameSyntax.prototype.isTypeScriptSpecific = function () {
             return true;
+        };
+
+        QualifiedNameSyntax.prototype.toRsId = function (helper) {
+            return new TypeScript.RsId(helper.getSourceSpan(this), tokenAnnots(this.firstToken()), this.left.fullText() + "_" + this.right.fullText());
         };
         return QualifiedNameSyntax;
     })(TypeScript.SyntaxNode);
@@ -39698,7 +39702,7 @@ var TypeScript;
                 var rsTParams = [mut ? mut : new TypeScript.TTypeReference("Immutable", [])].concat(tArgs.map(function (p) {
                     return p.toRsType();
                 }));
-                return new TypeScript.TTypeReference(this.getDisplayName().split("<")[0], rsTParams);
+                return new TypeScript.TTypeReference(this.getScopedName().split("<")[0], rsTParams);
             }
 
             if (this.isFunction()) {
@@ -60673,15 +60677,17 @@ var TypeScript;
 
     var RsIfaceStmt = (function (_super) {
         __extends(RsIfaceStmt, _super);
-        function RsIfaceStmt(span, ann) {
+        function RsIfaceStmt(span, ann, name) {
             _super.call(this, ann);
             this.span = span;
             this.ann = ann;
+            this.name = name;
         }
         RsIfaceStmt.prototype.toObject = function () {
-            return { IfaceStmt: [this.span.toObject(), this.mapAnn(function (a) {
-                        return a.toObject();
-                    })] };
+            return { IfaceStmt: [[
+                        this.span.toObject(), this.mapAnn(function (a) {
+                            return a.toObject();
+                        })], this.name.toObject()] };
         };
         return RsIfaceStmt;
     })(RsStatement);

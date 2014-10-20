@@ -15,7 +15,7 @@ module Language.Nano.Env (
     Env, QEnv
  
   -- * Env API
-  , envFromList, envFromList'
+  , envFromList, envFromList', envFromListWithKey
   , envToList
   , envAdd, envAdds 
   , envDel, envDels
@@ -40,7 +40,6 @@ module Language.Nano.Env (
 
   , qenvToList
   , qenvFromList
-  , qenvToEnv
   , qenvEmpty
   , qenvFindTy
   , qenvKeys
@@ -71,7 +70,7 @@ import           Text.PrettyPrint.HughesPJ
 
 type Env t = F.SEnv (Located t) 
 
-newtype QEnv t = QE (M.HashMap AbsPath (Located t)) deriving (Eq, Data, Typeable, Functor)
+newtype QEnv t = QE (M.HashMap AbsPath (Located t)) deriving (Eq, Functor, Data, Typeable)
 
 
 --------------------------------------------------------------------------------
@@ -105,9 +104,9 @@ envSEnv            = F.fromListSEnv . map (mapFst F.symbol) . envToList
 
 envFromList       :: (PP x, IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
 envFromList        = L.foldl' step envEmpty
-  where 
+  where
     step γ (i, t)  = case envFindLoc i γ of
-                       Nothing -> envAdd i t γ 
+                       Nothing -> envAdd i t γ
                        Just l' -> throw $ errorDuplicate i (srcPos i) l'
 
 -- Allows duplicates in list -- last one in list will be used
@@ -115,6 +114,14 @@ envFromList'      :: (PP x, IsLocated x, F.Symbolic x) =>  [(x, t)] -> Env t
 envFromList'       = L.foldl' step envEmpty
   where 
     step γ (i, t)  = envAdd i t γ 
+
+envFromListWithKey :: (IsLocated x, F.Symbolic x) => (x -> a -> a -> a) -> [(x, a)] -> Env a
+envFromListWithKey merge = L.foldl' step envEmpty
+  where 
+    step γ (i, t)  = case envFindTy i γ of
+                       Nothing -> envAdd i t γ
+                       Just t' -> envAdd i (merge i t t') γ
+
 
 
 envIntersectWith  :: (a -> b -> c) -> Env a -> Env b -> Env c
@@ -153,12 +160,20 @@ isLeft             = not . isRight
 qenvToList :: QEnv t -> [(AbsPath, t)]
 qenvToList  (QE γ)  = [ (x, t) | (x, Loc _ t) <- M.toList γ]
 
-qenvFromList       :: [(AbsPath, t)] -> QEnv t
+-- qenvFromList       :: [(AbsPath, t)] -> QEnv t
+-- qenvFromList        = L.foldl' step qenvEmpty
+--   where 
+--     step γ (q, t)   = case qenvFindLoc q γ of
+--                         Nothing -> qenvAdd q t γ 
+--                         Just l' -> throw $ errorDuplicate q (srcPos q) l'
+
+qenvFromList       :: Monoid t => [(AbsPath, t)] -> QEnv t
 qenvFromList        = L.foldl' step qenvEmpty
   where 
-    step γ (q, t)   = case qenvFindLoc q γ of
-                        Nothing -> qenvAdd q t γ 
-                        Just l' -> throw $ errorDuplicate q (srcPos q) l'
+    step γ (q, t)   = case qenvFindTy q γ of
+                        Nothing -> qenvAdd q t γ
+                        Just t' -> qenvAdd q (t `mappend` t') γ 
+
 
 qenvEmpty           = QE M.empty
 qenvFindLoc i γ     = fmap loc $ qenvFind i γ 
@@ -169,8 +184,6 @@ qenvFindTy  i γ     = fmap val $ qenvFind i γ
 qenvAdd :: AbsPath -> t -> QEnv t -> QEnv t
 qenvAdd q t (QE γ)  = QE (M.insert q (Loc (srcPos q) t) γ)
 
--- Create dot separated symbols as keys
-qenvToEnv (QE γ)    = envFromList [ (Id l (ppshow x),t) | (x, Loc l t) <- M.toList γ]
 
 qenvKeys (QE γ)     = M.keys γ
 
@@ -192,7 +205,7 @@ instance PP t => PP (Env t) where
   pp = vcat . (ppBind <$>) . F.toListSEnv . fmap val 
 
 instance PP t => PP (QEnv t) where
-  pp = pp . qenvToEnv
+  pp (QE m) = vcat $ (ppBind <$>) $ M.toList m
 
 ppBind (x, t) = pprint x <+> dcolon <+> pp t
 

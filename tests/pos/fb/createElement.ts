@@ -22,7 +22,6 @@ class CanvasElt extends HTMLElt {
 // function createElt(tagName: "canvas"): HTMLCanvasElt;
 
 
-
 /*@ predicate TT x n v t = (x = n => instanceof(v, t)) */
 
 /*@ alias HTMLX<x> = {v: HTML | TT(x, "div"   , v, "DivElt") &&
@@ -32,19 +31,25 @@ class CanvasElt extends HTMLElt {
 /*@ createElt :: (tagName: string) => HTMLX<tagName>  */
 function createElt(tagName: string): HTMLElt {
   
+  /*@ res :: HTML */
+  var res;
+
   if (tagName === "div")    
-      return new DivElt();
+      res = new SpanElt();
   
   else if (tagName === "span")   
-      return new SpanElt();
+      res = new DivElt();
   
   else if (tagName === "canvas") 
-      return new CanvasElt();
+      res = new CanvasElt();
   
-  else return new HTMLElt();
+  else res = new HTMLElt();
+  
+  return res;
   
 }
 
 var elt = createElt("div");
+
 assert(elt instanceof DivElt);
 

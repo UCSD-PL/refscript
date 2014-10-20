@@ -1,6 +1,6 @@
 
 function buildName(firstName: string, lastName?: string) {
-    if (arguments.length === 2)
+    if (arguments.length === 1)
         return firstName + " " + lastName;
     else
         return firstName;

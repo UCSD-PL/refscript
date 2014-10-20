@@ -18,5 +18,5 @@ declare var p: ColorPair1<number, string>;
 
 foo(p);
 
-assert(typeof p.x === "number");
+assert(typeof p.x === "string");
 

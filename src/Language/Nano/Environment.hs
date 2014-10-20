@@ -10,6 +10,7 @@ module Language.Nano.Environment where
 import           Language.Nano.Types
 import           Language.Nano.Env
 import           Language.Nano.Names
+import           Language.Nano.Program
 
 -------------------------------------------------------------------------------
 -- | Typecheck Environment
@@ -26,6 +27,10 @@ class EnvLike r t where
   -- ^ Modules in scope (exported API)
   --
   modules         :: t r -> QEnv (ModuleDef r)
+  -- 
+  -- ^ ClassHierarchy
+  -- 
+  cha             :: t r -> ClassHierarchy r
   -- 
   -- ^ Namespace absolute path
   --

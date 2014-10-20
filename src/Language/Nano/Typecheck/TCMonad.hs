@@ -242,7 +242,6 @@ setTyArgs l i ξ βs
 -- | Managing Annotations: Type Instantiations
 -------------------------------------------------------------------------------
 
--- PV: is sortNub needed here?
 -------------------------------------------------------------------------------
 getAnns :: (F.Reftable r, Substitutable r (Fact r)) => TCM r (AnnInfo r)
 -------------------------------------------------------------------------------
@@ -412,22 +411,28 @@ checkTypes γ  = mapM_ (\(a,ts) -> mapM_ (safeExtends $ setAP a γ) ts) types
     setAP a γ = γ { tce_path = a } 
     
 
+-- | Checks:
+--   
+--   * Overwriten types safely extend the previous ones
+--
+--   * [TODO] No conflicts between inherited types
+--
 --------------------------------------------------------------------------------
 safeExtends :: (IsLocated l, PPR r) => TCEnv r -> (l, IfaceDef r) -> TCM r ()
 --------------------------------------------------------------------------------
-safeExtends _ (_,    ID _ _ _ Nothing        _ ) = return ()
-safeExtends γ (l, t@(ID _ c _ (Just (p, ts)) _)) = 
+safeExtends γ (l, t@(ID c _ _ (es,is) ms)) = 
     case flatten' Nothing InstanceMember γ t of
-      Just ms -> 
-        case flatten Nothing InstanceMember γ . (,ts) =<< resolveRelTypeInEnv γ p of
-          Just ps  | isSubtype γ (mkTCons t_immutable ms) (mkTCons t_immutable ps) 
-                  -> return ()
-                   | otherwise         
-                  -> tcError $ errorClassExtends (srcPos l) c p 
-                               (mkTCons t_immutable ms) (mkTCons t_immutable ps) 
-          Nothing -> tcError $ bugFlattenType (srcPos l) p
+      Just ms -> forM_ es $ safeExtends1 γ l c ms 
       Nothing -> tcError $ bugFlattenType (srcPos l) c
-  where
+
+safeExtends1 γ l c ms (p,ps)
+  = case flatten Nothing InstanceMember γ . (,ps) =<< resolveTypeInEnv γ p of
+      Just ns  | isSubtype γ (mkTCons t_immutable ms) (mkTCons t_immutable ns) 
+              -> return ()
+               | otherwise         
+              -> tcError $ errorClassExtends (srcPos l) c p (mkTCons t_immutable ms) 
+                                                            (mkTCons t_immutable ns)
+      Nothing -> tcError $ bugFlattenType (srcPos l) p
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

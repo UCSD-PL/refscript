@@ -15777,11 +15777,13 @@ var TypeScript;
         };
 
         ForStatementSyntax.prototype.toRsStmt = function (helper) {
-            if (this.initializer) {
-                helper.postDiagnostic(this, TypeScript.DiagnosticCode.Variable_declarations_are_only_supported_in_the_first_part_of_the_loop_in_0, [this.initializer.fullText()]);
-            }
             var anns = tokenAnnots(this.forKeyword);
-            return new TypeScript.RsForStmt(helper.getSourceSpan(this), tokenAnnots(this), this.variableDeclaration.toRsForInit(helper, anns), this.condition ? this.condition.toRsExp(helper) : null, this.incrementor ? this.incrementor.toRsExp(helper) : null, this.statement.toRsStmt(helper));
+            if (this.variableDeclaration && !this.initializer) {
+                return new TypeScript.RsForStmt(helper.getSourceSpan(this), tokenAnnots(this), this.variableDeclaration.toRsForInit(helper, anns), this.condition ? this.condition.toRsExp(helper) : null, this.incrementor ? this.incrementor.toRsExp(helper) : null, this.statement.toRsStmt(helper));
+            } else if (this.initializer && !this.variableDeclaration) {
+                return new TypeScript.RsForStmt(helper.getSourceSpan(this), tokenAnnots(this), new TypeScript.RsExprInit(this.initializer.toRsExp(helper)), this.condition ? this.condition.toRsExp(helper) : null, this.incrementor ? this.incrementor.toRsExp(helper) : null, this.statement.toRsStmt(helper));
+            }
+            helper.postDiagnostic(this, TypeScript.DiagnosticCode.Variable_declarations_are_only_supported_in_the_first_part_of_the_loop_in_0, [this.initializer.fullText()]);
         };
         return ForStatementSyntax;
     })(TypeScript.SyntaxNode);
@@ -59404,20 +59406,12 @@ var TypeScript;
 
     var RsExprInit = (function (_super) {
         __extends(RsExprInit, _super);
-        function RsExprInit(span, ann, exp) {
-            _super.call(this, ann);
-            this.span = span;
-            this.ann = ann;
+        function RsExprInit(exp) {
+            _super.call(this, null);
             this.exp = exp;
         }
         RsExprInit.prototype.toObject = function () {
-            return {
-                ExprInit: [
-                    [this.span.toObject(), this.mapAnn(function (a) {
-                            return a.toObject();
-                        })],
-                    this.exp.toObject()]
-            };
+            return { ExprInit: this.exp.toObject() };
         };
         return RsExprInit;
     })(RsForInit);

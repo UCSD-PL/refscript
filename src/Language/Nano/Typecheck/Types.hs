@@ -38,8 +38,9 @@ module Language.Nano.Typecheck.Types (
 
   -- * Mutability primitives
   , t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly, t_assignsFields
+  , tr_mutable, tr_immutable, tr_anyMutability, tr_inheritedMut, tr_readOnly, tr_assignsFields
   , combMut
-  , isMutable, isImmutable, isAssignsFields
+  , isMutable, isImmutable, isAssignsFields, isInheritedMutability
 
   -- * Primitive Types
   , tInt, tBool, tString, tTop, tVoid, tErr, tFunErr, tVar, tUndef, tNull
@@ -107,6 +108,7 @@ type PPR  r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
 ---------------------------------------------------------------------
 
 mkMut s = TRef (QN AK_ (srcPos dummySpan) [] (F.symbol s)) [] fTop
+mkRelMut s = TRef (QN RK_ (srcPos dummySpan) [] (F.symbol s)) [] fTop
 
 instance Default Mutability where
   def = mkMut "Immutable"
@@ -118,6 +120,14 @@ t_readOnly      = mkMut "ReadOnly"
 t_inheritedMut  = mkMut "InheritedMut"
 t_assignsFields = mkMut "AssignsFields"
 
+tr_mutable       = mkRelMut "Mutable"
+tr_immutable     = mkRelMut "Immutable"
+tr_anyMutability = mkRelMut "AnyMutability"
+tr_readOnly      = mkRelMut "ReadOnly"
+tr_inheritedMut  = mkRelMut "InheritedMut"
+tr_assignsFields = mkRelMut "AssignsFields"
+
+
 isMutable        (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "Mutable"
 isMutable _                                 = False
  
@@ -126,10 +136,21 @@ isImmutable _                               = False
 
 isAssignsFields  (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "AssignsFields"
 isAssignsFields  _                          = False
+
+isInheritedMutability  (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "InheritedMut"
+isInheritedMutability  _                          = False
  
 -- FIXME: get rid of this ... ?
-combMut _ μf | isMutable μf = μf
-combMut μ _  | otherwise    = μ
+
+
+
+
+combMut container element | isInheritedMutability element = container
+combMut _         element | otherwise                     = element
+
+
+
+
 
 
 ---------------------------------------------------------------------

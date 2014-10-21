@@ -51,13 +51,14 @@ getProp :: (PPRD r, EnvLike r g, F.Symbolic f)
 -------------------------------------------------------------------------------
 getProp γ b s t@(TApp _ _ _  ) =                  getPropApp γ b s t
 
-getProp _ b s t@(TCons _ es _) = do (t',m)     <- accessMember b InstanceMember s es
-                                    return      $ (t,t',m)
+getProp _ b s t@(TCons m es _) = do (t',m')    <- accessMember b InstanceMember s es                                      
+                                    return      $ (t,t',combMut m m')
     
-getProp γ b s t@(TRef x ts _)  = do d          <- resolveTypeInEnv γ x
+getProp γ b s t@(TRef x ts@(m:_) _)  
+                               = do d          <- resolveTypeInEnv γ x
                                     es         <- flatten Nothing InstanceMember γ (d,ts)
-                                    (t',m)     <- accessMember b InstanceMember s es
-                                    return      $ (t,t',m)
+                                    (t',m')    <- accessMember b InstanceMember s es
+                                    return      $ (t,t',combMut (toType m) m')
 
 getProp γ b s t@(TClass c    ) = do d          <- resolveTypeInEnv γ c
                                     es         <- flatten Nothing StaticMember γ (d,[])

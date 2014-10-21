@@ -436,7 +436,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
        return   (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e'), g)
 
 -- e1.f = e2
-tcStmt γ (ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
+tcStmt γ ex@(ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
   = do z               <- runFailM $ tcExpr γ e1 Nothing
        case z of 
          Right (_,te1) -> tcSetProp $ fmap snd3 $ getProp γ False f te1

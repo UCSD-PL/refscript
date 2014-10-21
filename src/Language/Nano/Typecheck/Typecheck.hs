@@ -748,7 +748,7 @@ tcCast γ l e tc
   = do  opTy                <- safeTcEnvFindTy l γ (builtinOpId BICastExpr)
         cid                 <- freshId l
         let γ'               = tcEnvAdd (F.symbol cid) (tc, WriteLocal, Initialized) γ
-        (FI _ [_, e'], t')  <- tcNormalCall γ' l "user-cast" (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy  
+        (FI _ [_, e'], t')  <- tcNormalCall γ' l "user-cast" (FI Nothing [(VarRef l cid, Nothing),(e, Just tc)]) opTy
         return               $ (e', t')
 
 
@@ -1030,7 +1030,6 @@ tcCallCase γ l fn ets ft
        let (ts2, its2)  = balance ts1 its1
        θ               <- unifyTypesM (srcPos l) γ ts2 its2
        let (ts3,its3)   = mapPair (apply θ) (ts2, its2)
-       -- es'             <- app (castM γ) es ts3 its3
        es'             <- app (castM γ) es ts3 its3
        return           $ (es', apply θ ot)
   where

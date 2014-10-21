@@ -13019,6 +13019,7 @@ var TypeScript;
                 case 203 /* SignedRightShiftExpression */:
                 case 204 /* UnsignedRightShiftExpression */:
                 case 189 /* BitwiseOrExpression */:
+                case 191 /* BitwiseAndExpression */:
                     return new TypeScript.RsInfixExpr(helper.getSourceSpan(this), tokenAnnots(this), new TypeScript.RsInfixOp(this.operatorToken.text()), this.left.toRsExp(helper), this.right.toRsExp(helper));
 
                 case 175 /* AddAssignmentExpression */:

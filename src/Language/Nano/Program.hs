@@ -239,6 +239,7 @@ instance IsNano InfixOp where
   isNano OpInstanceof = True --  @instanceof@
   isNano OpIn         = True --  @in@
   isNano OpBOr        = True --  @|@
+  isNano OpBAnd       = True --  @&@
   isNano e            = errortext (text "Not Nano InfixOp!" <+> pp e)
 
 instance IsNano (LValue a) where 

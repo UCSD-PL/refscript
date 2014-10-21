@@ -105,8 +105,9 @@ flatten m s γ (ID _ _ vs h es, ts) =  M.map (apply θ . fmut)
     current                        = M.filterWithKey (\(_,s') _ -> s == s') es
     θ                              = fromList $ zip vs ts
     fmut                           = maybe id setMut m
-    setMut m (FieldSig x _ t)      = FieldSig x m t
-    setMut _ e                     = e
+    setMut m (FieldSig x mf t)     | isInheritedMutability mf 
+                                   = FieldSig x m t
+    setMut _ f                     = f
     heritage (es,_)                = mapM fields es
     fields (p,ts)                  = resolveTypeInEnv γ p >>= flatten m s γ . (,ts) 
 

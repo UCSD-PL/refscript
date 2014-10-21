@@ -825,25 +825,28 @@ declare var Error: {
 /*@ interface ReadOnly */
 interface ReadOnly { }
 
-/*@ interface Immutable extends #ReadOnly */
+/*@ interface Immutable extends ReadOnly */
 interface Immutable extends ReadOnly {
     immutable__: void;
 } 
 
-/*@ interface Mutable extends #AssignsFields */
+/*@ interface Mutable extends AssignsFields */
 interface Mutable extends AssignsFields {
     mutable__: void;
 } 
 
-/*@ interface AnyMutability extends #ReadOnly */
+/*@ interface AnyMutability extends ReadOnly */
 interface AnyMutability extends ReadOnly {
     defaultMut__: void;
 } 
 
-/*@ interface AssignsFields extends #ReadOnly */
+/*@ interface AssignsFields extends ReadOnly */
 interface AssignsFields extends ReadOnly {
-    defaultMut__: void;
+    assignsFields_: void;
 } 
 
-
+/*@ interface InheritedMut */
+interface InheritedMut {
+    inheritedMut__: void;
+} 
 

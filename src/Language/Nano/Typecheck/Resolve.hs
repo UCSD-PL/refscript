@@ -169,7 +169,8 @@ flattenType γ (TEnum x)
   = do  es      <- M.fromList . map  mkField . envToList . e_symbols <$> resolveEnumInEnv γ x
         return   $ TCons t_immutable es fTop
   where
-    mkField (k,i) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) t_immutable $ tInt `strengthen` exprReft i)
+    mkField (k, Just i ) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) t_immutable $ tInt `strengthen` exprReft i)
+    mkField (k, Nothing) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) t_immutable $ tInt)
 
 flattenType γ (TApp TInt _ r) 
   = do  es      <- t_elts <$> resolveTypeInEnv γ (mkAbsName [] $ F.symbol "Number")

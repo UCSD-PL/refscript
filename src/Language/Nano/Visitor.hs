@@ -31,7 +31,7 @@ module Language.Nano.Visitor (
   -- * Traversals / folds / maps
   , hoistTypes
   , hoistGlobals
-  , visibleNames
+  , visibleVars
   , scrapeModules
   , writeGlobalVars
   , scrapeVarDecl
@@ -635,11 +635,11 @@ collectModules ss = topLevel : rest ss
     f _                    s  = ([], s, True)
     topLevel                  = (QP AK_ (srcPos dummySpan) [], ss)
 
-
+-- Not including class, module, enum names
 ---------------------------------------------------------------------------------------
-visibleNames :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, VarInfo r)]
+visibleVars :: Data r => [Statement (AnnSSA r)] -> [(Id SourceSpan, VarInfo r)]
 ---------------------------------------------------------------------------------------
-visibleNames s = [ (ann <$> n,(k,v,a,t,i)) | (n,l,k,a,i) <- hoistBindings s
+visibleVars s = [ (ann <$> n,(k,v,a,t,i)) | (n,l,k,a,i) <- hoistBindings s
                                            , f           <- ann_fact l
                                            , t           <- annToType (ann l) n a f
                                            , let v        = visibility l ]
@@ -648,9 +648,6 @@ visibleNames s = [ (ann <$> n,(k,v,a,t,i)) | (n,l,k,a,i) <- hoistBindings s
     annToType _ _ ImportDecl (VarAnn t)    = [t] -- Hoist ImportDecl (i.e. function decls)
     annToType _ _ ReadOnly   (AmbVarAnn t) = [t] -- Hoist ReadOnly vars (i.e. function defs)
     annToType _ _ ImportDecl (AmbVarAnn t) = [t] -- Hoist ImportDecl (i.e. function decls)
-    annToType l n _          (ClassAnn {}) = [TClass  $ QN AK_ l [ ] (F.symbol n)]
-    annToType l _ _          (ModuleAnn n) = [TModule $ QP AK_ l [n]]
-    annToType l _ _          (EnumAnn n)   = [TEnum   $ QN AK_ l [] (F.symbol n)]
     annToType _ _ _          _             = []
 
 
@@ -731,53 +728,53 @@ fixEnumsInModule p m@(ModuleDef { m_variables = mv, m_types = mt })
 scrapeModules :: PPR r => NanoBareR r -> NanoBareR r
 ---------------------------------------------------------------------------------------
 scrapeModules pgm@(Nano { code = Src stmts }) 
-                                 = pgm { pModules = qenvFromList $ map mkMod $ collectModules stmts }
+                                   = pgm { pModules = qenvFromList $ map mkMod $ collectModules stmts }
   where
-    mkMod (ap, m)                = (ap, ModuleDef (varEnv m) (typeEnv ap m) (enumEnv m) ap)
-    drop1 (_,b,c,d,e)            = (b,c,d,e)
-    varEnv                       = envMap drop1 . mkVarEnv . vStmts
-    typeEnv ap                   = envFromList  . tStmts ap
-    enumEnv                      = envFromList  . eStmts
+    mkMod (p, m)                   = (p, ModuleDef (varEnv p m) (typeEnv p m) (enumEnv m) p)
+    drop1 (_,b,c,d,e)              = (b,c,d,e)
+    varEnv p                       = envMap drop1 . mkVarEnv . vStmts p
+    typeEnv p                      = envFromList  . tStmts p
+    enumEnv                        = envFromList  . eStmts
 
-    vStmts                       = concatMap vStmt
+    vStmts                         = concatMap . vStmt
 
-    vStmt                       :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, VarInfo r)]
-    vStmt (VarDeclStmt _ vds)    = [ (ss x, (VarDeclKind, visibility l, WriteGlobal, t, Uninitialized))
-                                       | VarDecl l x _ <- vds
-                                       , VarAnn t <- ann_fact l ]
-                                ++ [ (ss x, (VarDeclKind, visibility l, WriteGlobal, t, Initialized))
-                                       | VarDecl l x _ <- vds
-                                       , AmbVarAnn t <- ann_fact l ]
-    vStmt (FunctionStmt l x _ _) = [ (ss x, (FuncDefKind, visibility l, ReadOnly, t, Initialized))
+    -- vStmt                         :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, VarInfo r)]
+    vStmt _ (VarDeclStmt _ vds)    = [ (ss x, (VarDeclKind, visibility l, WriteGlobal, t, Uninitialized))
+                                         | VarDecl l x _ <- vds
+                                         , VarAnn t <- ann_fact l ]
+                                  ++ [ (ss x, (VarDeclKind, visibility l, WriteGlobal, t, Initialized))
+                                         | VarDecl l x _ <- vds
+                                         , AmbVarAnn t <- ann_fact l ]
+    vStmt _ (FunctionStmt l x _ _) = [ (ss x, (FuncDefKind, visibility l, ReadOnly, t, Initialized))
                                        | VarAnn t <- ann_fact l ]
-    vStmt (FuncAmbDecl l x _)    = [ (ss x, (FuncAmbientKind, visibility l, ImportDecl, t, Initialized))
+    vStmt _ (FuncAmbDecl l x _)    = [ (ss x, (FuncAmbientKind, visibility l, ImportDecl, t, Initialized))
                                        | VarAnn t <- ann_fact l ]
-    vStmt (FuncOverload l x _)   = [ (ss x, (FuncOverloadKind, visibility l, ImportDecl, t, Initialized))
+    vStmt _ (FuncOverload l x _)   = [ (ss x, (FuncOverloadKind, visibility l, ImportDecl, t, Initialized))
                                        | VarAnn t <- ann_fact l ]
-    vStmt (ClassStmt l x _ _ _)  = [ (ss x, (ClassDefKind , visibility l, ReadOnly, 
-                                      TClass $ QN AK_ (ann l) [] $  F.symbol x , Initialized)) ]
-    vStmt (ModuleStmt l x _)     = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, 
-                                      TModule $ QP AK_ (ann l) $ [F.symbol x], Initialized)) ]
-    vStmt (EnumStmt l x _)       = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, 
-                                      TEnum $ QN AK_ (ann l) [] $  F.symbol x , Initialized)) ]
-    vStmt _                      = [ ]
+    vStmt p (ClassStmt l x _ _ _)  = [ (ss x, (ClassDefKind , visibility l, ReadOnly, 
+                                      TClass $ nameInPath l p x, Initialized)) ]
+    vStmt p (ModuleStmt l x _)     = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, 
+                                      TModule $ pathInPath l p x, Initialized)) ]
+    vStmt p (EnumStmt l x _)       = [ (ss x, (ModuleDefKind, visibility l, ReadOnly, 
+                                      TEnum $ nameInPath l p x, Initialized)) ]
+    vStmt _ _                      = [ ]
 
-    tStmts                       = concatMap . tStmt 
+    tStmts                         = concatMap . tStmt 
 
-    -- tStmt                       :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, IfaceDef r)]
-    tStmt ap c@(ClassStmt{})     = maybeToList $ resolveType ap c
-    tStmt ap c@(IfaceStmt{})     = maybeToList $ resolveType ap c
-    tStmt _ _                    = [ ]
+    -- tStmt                         :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, IfaceDef r)]
+    tStmt ap c@(ClassStmt{})       = maybeToList $ resolveType ap c
+    tStmt ap c@(IfaceStmt{})       = maybeToList $ resolveType ap c
+    tStmt _ _                      = [ ]
 
-    eStmts                       = concatMap eStmt
-    eStmt                       :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, EnumDef)]
-    eStmt (EnumStmt _ n es)      = [(fmap srcPos n, 
-                                    EnumDef (F.symbol n) (I.fromList  $ catMaybes $ enumElt  <$> es)
-                                                         (envFromList $ catMaybes $ sEnumElt <$> es))]
-    eStmt _                      = []
-    enumElt (EnumElt _ s i)      = (,F.symbol s) <$> i
-    sEnumElt (EnumElt _ s i)     = (F.symbol s,) <$> i
-    ss                           = fmap ann
+    eStmts                         = concatMap eStmt
+    eStmt                         :: PPR r => Statement (AnnR r) -> [(Id SourceSpan, EnumDef)]
+    eStmt (EnumStmt _ n es)        = [(fmap srcPos n, 
+                                      EnumDef (F.symbol n) (I.fromList  $ catMaybes $ enumElt  <$> es) 
+                                                           (envFromList $ sEnumElt <$> es))]
+    eStmt _                        = []
+    enumElt (EnumElt _ s i)        = (,F.symbol s) <$> i
+    sEnumElt (EnumElt _ s i)       = (F.symbol s,i) 
+    ss                             = fmap ann
  
 
 typeNames :: IsLocated a => AbsPath -> [ Statement a ] -> [ AbsName ] 

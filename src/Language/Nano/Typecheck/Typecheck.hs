@@ -53,7 +53,7 @@ import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 import           Language.ECMAScript3.Syntax.Annotations
 
--- import           Debug.Trace                        hiding (traceShow)
+import           Debug.Trace                        hiding (traceShow)
 
 import qualified System.Console.CmdArgs.Verbosity as V
 
@@ -152,10 +152,9 @@ initGlobalEnv :: PPR r => NanoSSAR r -> TCEnv r
 initGlobalEnv pgm@(Nano { code = Src ss }) = -- trace (ppshow mod) $ trace (ppshow cha) $ 
                                              TCE nms mod cha ctx pth Nothing
   where
-    nms       = envAdds extras
-              $ envMap (\(_,_,c,d,e) -> (d,c,e)) 
-              $ mkVarEnv visibleNs
-    visibleNs = visibleNames ss
+    nms       = (envAdds extras $ envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv visibleNs) `envUnion`
+                (envMap (\(_,c,d,e) -> (d,c,e)) $ envUnionList $ maybeToList $ m_variables <$> qenvFindTy pth mod)
+    visibleNs = visibleVars ss
     extras    = [(Id (srcPos dummySpan) "undefined"
                 ,(TApp TUndef [] fTop, ReadOnly, Initialized))]
     cha       = pCHA pgm 
@@ -171,7 +170,7 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod cha ctx pth parent
     nms       = envAddReturn f (t, ReadOnly, Initialized)
               $ envAdds  (thisBind ++ tyBinds ++ varBinds ++ args) 
               $ envMap (\(_,_,c,d,e) -> (d,c,e)) 
-              $ mkVarEnv $ visibleNames s
+              $ mkVarEnv $ visibleVars s
     mod       = tce_mod γ
     cha       = tce_cha γ
     ctx       = pushContext i (tce_ctx γ) 
@@ -185,7 +184,8 @@ initModuleEnv :: (PPR r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnS
 ---------------------------------------------------------------------------------------
 initModuleEnv γ n s = TCE nms mod cha ctx pth parent
   where
-    nms       = envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv $ visibleNames s
+    nms       = (envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv $ visibleVars s) `envUnion`
+                (envMap (\(_,c,d,e) -> (d,c,e)) $ envUnionList $ maybeToList $ m_variables <$> qenvFindTy pth mod)
     mod       = tce_mod γ
     ctx       = emptyContext
     cha       = tce_cha γ
@@ -205,9 +205,10 @@ tcEnvFindTy            :: (PPR r, F.Symbolic x, IsLocated x) => x -> TCEnv r -> 
 tcEnvFindTy x γ         = fst3 <$> tcEnvFindTyWithAgsn x γ 
 
 tcEnvFindTyWithAgsn    :: (PPR r, F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability, Initialization)
-tcEnvFindTyWithAgsn x γ = case envFindTy x $ tce_names γ of 
+tcEnvFindTyWithAgsn x γ = case -- trace ("lookip for: " ++ ppshow (F.symbol x) ++ " in " ++ ppshow (envKeys $ tce_names γ)) $
+                              envFindTy x $ tce_names γ of 
                             Just t -> Just $ adjustInit t
-                            Nothing     -> 
+                            Nothing     ->
                               case tce_parent γ of 
                                 Just γ' -> tcEnvFindTyWithAgsn x γ'
                                 Nothing -> Nothing

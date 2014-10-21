@@ -274,7 +274,7 @@ data EnumDef = EnumDef {
     -- 
     -- ^ Contents: Symbols -> Int
     --
-    , e_symbols    :: Env Int
+    , e_symbols    :: Env (Maybe Int)
 
 } deriving (Data, Typeable)
 

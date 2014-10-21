@@ -144,9 +144,8 @@ initGlobalEnv pgm@(Nano { code = Src s })
     >>= \g  -> envAdds "initGlobalEnv" extras g
     >>= \g' -> return $ g'
   where
-    nms       = E.envAdds extras 
-              $ E.envMap (\(_,_,c,d,e) -> (d,c,e)) 
-              $ mkVarEnv $ visibleNames s
+    nms       = (E.envAdds extras $ E.envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv $ visibleVars s) `E.envUnion`
+                (E.envMap (\(_,c,d,e) -> (d,c,e)) $ E.envUnionList $ maybeToList $ m_variables <$> E.qenvFindTy pth mod)
     extras    = [(Id (srcPos dummySpan) "undefined", 
                   (TApp TUndef [] $ F.Reft (F.vv Nothing, [F.trueRefa]), ReadOnly, Initialized))]
     bds       = F.emptyIBindEnv
@@ -162,8 +161,8 @@ initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> C
 initModuleEnv g n s 
   = freshenCGEnvM $ CGE nms bds grd ctx mod cha pth (Just g)
   where
-    nms       = E.envMap (\(_,_,c,d,e) -> (d,c,e)) 
-              $ mkVarEnv $ visibleNames s
+    nms       = (E.envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv $ visibleVars s) `E.envUnion`
+                (E.envMap (\(_,c,d,e) -> (d,c,e)) $ E.envUnionList $ maybeToList $ m_variables <$> E.qenvFindTy pth mod)
     bds       = cge_fenv g
     grd       = []
     mod       = cge_mod g
@@ -190,7 +189,7 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
   where
     g'        = CGE nms fenv grds ctx mod cha pth parent
     nms       = E.envMap (\(_,_,c,d,e) -> (d,c,e)) 
-              $ mkVarEnv $ visibleNames s
+              $ mkVarEnv $ visibleVars s
     fenv      = cge_fenv g
     grds      = []
     mod       = cge_mod g

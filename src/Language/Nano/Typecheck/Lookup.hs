@@ -69,9 +69,13 @@ getProp γ _ s t@(TModule m   ) = do m'         <- resolveModuleInEnv γ m
                                     return      $ (t,t', t_readOnly) 
                                     -- FIXME: perhaps something else here as mutability
 
+-- FIXME: Instead of the actual integer value, assign unique symbolic values: 
+--        E.g. A_B_C_1 ... 
 getProp γ _ s t@(TEnum e     ) = do e'         <- resolveEnumInEnv γ e
-                                    i          <- envFindTy (F.symbol s) (e_symbols e')
-                                    return      $ (t, tInt `strengthen` exprReft i, t_immutable)
+                                    io         <- envFindTy (F.symbol s) (e_symbols e')
+                                    case io of 
+                                      Just i   -> return (t, tInt `strengthen` exprReft i, t_immutable)
+                                      Nothing  -> return (t, tInt, t_immutable)
 
 getProp _ _ _ _ = Nothing
 

@@ -47,12 +47,12 @@ declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
 declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
 
 /*  builtin_BISetProp ::
-    /\ forall A M. ([M] { f : [#Mutable] A }, A) => A
-    /\ forall A M. ([#Mutable] { f : [M] A }, A) => A
+    /\ forall A M. ([M] { f ? : [#Mutable] A }, A) => A
+    /\ forall A M. ([#Mutable] { f ? : [M] A }, A) => A
  */
 
 /*@ builtin_BISetProp :: 
-    forall A M. ([M] { f : [#Mutable] A }, A) => A 
+    forall A M. ([M] { f ? : [#Mutable] A }, A) => A 
  */
 declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 

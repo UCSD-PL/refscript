@@ -308,8 +308,9 @@ objLitP
 mutP :: Parser (MutabilityQ RK)
 ----------------------------------------------------------------------------------
 mutP
-  =  try (TVar <$> brackets tvarP                 <*> return ()) 
- <|> try (TRef <$> brackets qnameP  <*> return [] <*> return ())
+--   =  try (TVar <$> brackets tvarP                 <*> return ()) 
+--  <|> try (TRef <$> brackets qnameP  <*> return [] <*> return ())
+  =  TRef <$> brackets qnameP  <*> return [] <*> return ()
 
 
 bareTyArgsP

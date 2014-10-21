@@ -39,7 +39,7 @@ module Language.Nano.Typecheck.Types (
   -- * Mutability primitives
   , t_mutable, t_immutable, t_anyMutability, t_inheritedMut, t_readOnly, t_assignsFields
   , tr_mutable, tr_immutable, tr_anyMutability, tr_inheritedMut, tr_readOnly, tr_assignsFields
-  , combMut
+  , combMut, combMutInField
   , isMutable, isImmutable, isAssignsFields, isInheritedMutability
 
   -- * Primitive Types
@@ -50,7 +50,7 @@ module Language.Nano.Typecheck.Types (
   -- * Element ops 
   , sameBinder, eltType, allEltType, nonConstrElt, mutability, baseType
   , isMethodSig, isFieldSig, setThisBinding, remThisBinding, mapElt, mapElt', mapEltM
---  , conflateTypeMembers
+  , mandatory
 
   -- * Operator Types
   , infixOpId 
@@ -142,6 +142,13 @@ isInheritedMutability  _                          = False
  
 combMut container element | isInheritedMutability element = container
 combMut _         element | otherwise                     = element
+
+combMutInField _ f@(CallSig _)        = f
+combMutInField _ f@(ConsSig _)        = f
+combMutInField _ f@(IndexSig _ _ _ )  = f
+combMutInField μ f@(FieldSig x o m t) = FieldSig x o (combMut μ m) t
+combMutInField _ f@(MethSig  _ _ _ )  = f 
+
 
 
 ---------------------------------------------------------------------
@@ -420,6 +427,9 @@ isMethodSig _                = False
 isFieldSig (FieldSig _ _ _ _ ) = True
 isFieldSig _                   = False
 
+mandatory (FieldSig _ Optional _ _) = False
+mandatory _                         = True
+
 -- Typemembers that take part in subtyping
 subtypeable e = not (isConstr e)
 
@@ -513,7 +523,7 @@ instance PP Char where
 
 
 instance (PP r, F.Reftable r) => PP (RTypeQ q r) where
-  pp (TVar α r)               = F.ppTy r $ pp α
+  pp (TVar α r)               = F.ppTy r $ (text "TVAR##" <> pp α <> text "##") 
   pp (TFun (Just s) xts t _)  = ppArgs parens comma (B (F.symbol "this") s:xts) <+> text "=>" <+> pp t 
   pp (TFun _ xts t _)         = ppArgs parens comma xts <+> text "=>" <+> pp t 
   pp t@(TAll _ _)             = text "∀" <+> ppArgs id space αs <> text "." <+> pp t' where (αs, t') = bkAll t

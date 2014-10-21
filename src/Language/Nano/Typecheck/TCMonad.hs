@@ -225,17 +225,17 @@ freshSubst :: PPR r => AnnSSA r -> Int -> IContext -> [TVar] -> TCM r (RSubst r)
 freshSubst (Ann i l _) n ξ αs
   = do when (not $ unique αs) $ logError (errorUniqueTypeParams l) ()
        βs        <- mapM (freshTVar l) αs
-       setTyArgs i n ξ βs
+       setTyArgs l i n ξ βs
        extSubst   $ βs 
        return     $ fromList $ zip αs (tVar <$> βs)
 
 -------------------------------------------------------------------------------
-setTyArgs :: PPR r => NodeId -> Int -> IContext -> [TVar] -> TCM r ()
+setTyArgs :: (IsLocated l, PPR r) => l -> NodeId -> Int -> IContext -> [TVar] -> TCM r ()
 -------------------------------------------------------------------------------
-setTyArgs l i ξ βs
+setTyArgs _  i n ξ βs
   = case map tVar βs of 
       [] -> return ()
-      vs -> addAnn l $ TypInst i ξ vs
+      vs -> addAnn i $ TypInst n ξ vs
 
 
 -------------------------------------------------------------------------------

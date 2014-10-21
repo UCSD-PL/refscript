@@ -97,8 +97,8 @@ convertObj :: (Functor g, EnvLike () g)
            => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
 convertObj l γ t1@(TCons μ1 e1s _) t2@(TCons μ2 e2s _)
-  | mutabilitySub && isImmutable μ2         = covariantConvertObj l γ e1s e2s
-  | mutabilitySub                           = invariantConvertObj l γ e1s e2s
+  | mutabilitySub && isImmutable μ2         = covariantConvertObj l γ (μ1,e1s) (μ2,e2s)
+  | mutabilitySub                           = invariantConvertObj l γ (μ1,e1s) (μ2,e2s)
   | otherwise                               = Left $ errorIncompMutTy l t1 t2
   where
       mutabilitySub = isSubtype γ μ1 μ2
@@ -159,41 +159,47 @@ convertObj l γ t1 t2 =
 
 
 
-covariantConvertObj l γ e1s e2s
+covariantConvertObj l γ (μ1,e1s) (μ2,e2s)
   | M.null uq1s && M.null uq2s = mconcat           <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn'}
   |                M.null uq2s = mconcat . (CDUp:) <$> subEs  -- {x1:t1,..,xn:tn,..,xm:tm} ?? {x1:t1',..,xn:tn'}
   | M.null uq1s                = mconcat . (CDDn:) <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn',..,xm:tm'}
   | otherwise                  = Left $ errorWidthSubtyping l e1s e2s
   where
-    (e1s', e2s') = mapPair (M.filter subtypeable) (e1s,e2s)
+    e1s'                       = (M.map (combMutInField μ1) . M.filter subtypeable) e1s
+    e2s'                       = (M.map (combMutInField μ2) . M.filter subtypeable) e2s
+    -- Optional fields should not take part in width subtyping
+    (e1s'', e2s'')             = mapPair (M.filter mandatory) (e1s',e2s')
     -- Subtyping equivalent type-members
-    subEs = mapM (uncurry $ convertElt l γ True) es
+    subEs                      = mapM (uncurry $ convertElt l γ True) es
     -- Type-members unique in the 1st group
-    uq1s = e1s' `M.difference` e2s'
+    uq1s                       = e1s'' `M.difference` e2s''
    -- Type-members unique in the 2nd group
-    uq2s = e2s' `M.difference` e1s' 
+    uq2s                       = e2s'' `M.difference` e1s'' 
     -- Pairs of equivalent type-members in `e1s` and `e2s`
-    es   = M.elems $ M.intersectionWith (,) e1s' e2s'
+    es                         = M.elems $ M.intersectionWith (,) e1s' e2s'
 
 -- | `invariantConvertObj l γ e1s e2s` determines if an object type containing
 --   members @e1s@ can be converted (used as) an object type with members @e2s@. 
 --
-invariantConvertObj l γ e1s e2s
+invariantConvertObj l γ (μ1,e1s) (μ2,e2s)
   | M.null uq1s && M.null uq2s = mconcat           <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn'}
   |                M.null uq2s = mconcat . (CDUp:) <$> subEs  -- {x1:t1,..,xn:tn,..,xm:tm} ?? {x1:t1',..,xn:tn'}
   | M.null uq1s                = mconcat . (CDDn:) <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn',..,xm:tm'}
   | otherwise                  = Left $ errorWidthSubtyping l e1s e2s
   where
-    (e1s', e2s') = mapPair (M.filter subtypeable) (e1s, e2s)
+    e1s'                       = (M.map (combMutInField μ1) . M.filter subtypeable) e1s
+    e2s'                       = (M.map (combMutInField μ2) . M.filter subtypeable) e2s
+    -- Optional fields should not take part in width subtyping
+    (e1s'', e2s'')             = mapPair (M.filter mandatory) (e1s', e2s')
     -- Subtyping equivalent type-members
-    subEs = mapM (uncurry $ convertElt l γ False) $ es ++ es'
-    es'  = swap <$> es
+    subEs                      = mapM (uncurry $ convertElt l γ False) $ es ++ es'
+    es'                        = swap <$> es
     -- Type-members unique in the 1st group
-    uq1s = e1s' `M.difference` e2s'
+    uq1s                       = e1s'' `M.difference` e2s''
    -- Type-members unique in the 2nd group
-    uq2s = e2s' `M.difference` e1s' 
+    uq2s                       = e2s'' `M.difference` e1s'' 
     -- Pairs of equivalent type-members in `e1s` and `e2s`
-    es   = M.elems $ M.intersectionWith (,) e1s' e2s'
+    es                         = M.elems $ M.intersectionWith (,) e1s' e2s'
 
 
 -- | `convertElt l γ mut e1 e2` performs a subtyping check between elements @e1@ and
@@ -345,14 +351,4 @@ instance Related RType where
                  | all isTFun      [t,t']       = True
                  | toType t == toType t'        = True
                  | otherwise                    = False
--- 
--- instance Related TypeMember where
---   related γ (CallSig t1)        (CallSig t2)        = related γ t1 t2
---   related γ (ConsSig t1)        (ConsSig t2)        = related γ t1 t2
---   related γ (IndexSig _ _ t1)   (IndexSig _ _ t2)   = related γ t1 t2
---   related γ (FieldSig _ _ _ t1) (FieldSig _ _ _ t2) = related γ t1 t2
---   related γ (MethSig  _ _ t1)   (MethSig  _ _ t2)   = related γ t1 t2
---   related _ _                       _               = False 
---  
 
--- isEnumValue γ = isJust . resolveEnumInEnv γ 

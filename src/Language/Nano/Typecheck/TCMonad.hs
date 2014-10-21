@@ -371,7 +371,7 @@ runMaybeM a = runFailM a >>= \case
 subtypeM :: PPR r => SourceSpan -> TCEnv r -> RType r -> RType r -> TCM r ()
 --------------------------------------------------------------------------------
 subtypeM l γ t1 t2 
-  = case convert l γ t1 t2 of
+  = case ltracePP l ("convert " ++ ppshow t1 ++ " : " ++ ppshow t2) <$> convert l γ t1 t2 of
       Left e          -> tcError e
       Right CNo       -> return  ()
       Right (CUp _ _) -> return  ()

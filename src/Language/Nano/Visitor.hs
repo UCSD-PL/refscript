@@ -378,7 +378,8 @@ transRType f                  = go
                                                                     bs' = trans f as xs' <$> bs
                                                                     t'  = go as xs'       $  t
                                                                     xs' = bs ++ xs
-    go as xs (TCons m ms r)   = f as xs $ TCons m ms' r       where ms' = trans f as xs <$> ms
+    go as xs (TCons m ms r)   = f as xs $ TCons m' ms' r      where ms' = trans f as xs <$> ms
+                                                                    m'  = toType $ trans f as xs (ofType m)
     go as xs (TAll a t)       = f as xs $ TAll a t'           where t'  = go (a:as) xs t 
     go as xs (TRef n ts r)    = f as xs $ TRef n ts' r        where ts' = go  as xs <$> ts
     go _  _  t                = t

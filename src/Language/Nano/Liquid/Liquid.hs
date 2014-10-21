@@ -377,10 +377,8 @@ consVarDecl g v@(VarDecl l x (Just e))
       [(_,t)] -> mseq (consExpr g e $ Just t) $ \(y, gy) -> do
                   ty      <- safeEnvFindTy y gy
                   fta     <- freshTyVar gy l t
-                  -- let fta' = inst 1 t 
-                  -- let t'   = inst 2 ty
-                  -- _       <- subType l (errorLiquid' l) gy ty  $ ltracePP l ("INSTED-1 " ++ ppshow fta') fta
-                  -- _       <- subType l (errorLiquid' l) gy fta $ ltracePP l ("INSTED-2 " ++ ppshow t') t
+                  _       <- subType l (errorLiquid' l) gy ty  fta
+                  _       <- subType l (errorLiquid' l) gy fta t
                   Just   <$> envAdds "consVarDecl" [(x, (fta, WriteGlobal,Initialized))] g
 
       _       -> cgError $ errorVarDeclAnnot (srcPos l) x

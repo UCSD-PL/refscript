@@ -411,11 +411,11 @@ mapReftM _ t                   = error    $ render $ text "Not supported in mapR
 
 mapReftBindM f (B x t)         = B x     <$> mapReftM f t
 
-mapReftEltM f (FieldSig x m t) = FieldSig x m <$> mapReftM f t
-mapReftEltM f (MethSig x m t)  = MethSig x m  <$> mapReftM f t
-mapReftEltM f (CallSig t)      = CallSig      <$> mapReftM f t
-mapReftEltM f (ConsSig  t)     = ConsSig      <$> mapReftM f t
-mapReftEltM f (IndexSig x b t) = IndexSig x b <$> mapReftM f t
+mapReftEltM f (FieldSig x o m t) = FieldSig x o m <$> mapReftM f t
+mapReftEltM f (MethSig x m t)    = MethSig x m    <$> mapReftM f t
+mapReftEltM f (CallSig t)        = CallSig        <$> mapReftM f t
+mapReftEltM f (ConsSig  t)       = ConsSig        <$> mapReftM f t
+mapReftEltM f (IndexSig x b t)   = IndexSig x b   <$> mapReftM f t
 
 
 ------------------------------------------------------------------------------------------
@@ -666,10 +666,10 @@ zipBind l γ (B _ t1) (B s2 t2) = B s2 <$> zipType l γ t1 t2
 ------------------------------------------------------------------------------------------
 zipElts :: IsLocated l => l -> CGEnv -> TypeMember F.Reft -> TypeMember F.Reft -> Maybe (TypeMember F.Reft) 
 ------------------------------------------------------------------------------------------
-zipElts l γ (CallSig t1)      (CallSig t2)        = CallSig        <$> zipType l γ t1 t2 
-zipElts l γ (ConsSig t1)      (ConsSig t2)        = ConsSig        <$> zipType l γ t1 t2 
-zipElts l γ (IndexSig _ _ t1) (IndexSig x2 b2 t2) = IndexSig x2 b2 <$> zipType l γ t1 t2 
-zipElts l γ (FieldSig _ _ t1) (FieldSig x2 m2 t2) = FieldSig x2 m2 <$> zipType l γ t1 t2
-zipElts l γ (MethSig _ _  t1) (MethSig x2 m2 t2)  = MethSig  x2 m2 <$> zipType l γ t1 t2
-zipElts l _ _                 _                   = Nothing
+zipElts l γ (CallSig t1)        (CallSig t2)           = CallSig           <$> zipType l γ t1 t2 
+zipElts l γ (ConsSig t1)        (ConsSig t2)           = ConsSig           <$> zipType l γ t1 t2 
+zipElts l γ (IndexSig _ _ t1)   (IndexSig x2 b2 t2)    = IndexSig x2 b2    <$> zipType l γ t1 t2 
+zipElts l γ (FieldSig _ _ _ t1) (FieldSig x2 o2 m2 t2) = FieldSig x2 o2 m2 <$> zipType l γ t1 t2
+zipElts l γ (MethSig _ _  t1)   (MethSig x2 m2 t2)     = MethSig  x2 m2    <$> zipType l γ t1 t2
+zipElts l _ _                   _                      = Nothing
 

@@ -856,14 +856,14 @@ mkTypeMembers        = M.map (g . f) . foldl merge M.empty
     g ([t],[])       = t
     g ( _ ,ts)       = foldl1 joinElts ts
 
-joinElts (CallSig t1)        (CallSig t2)       = CallSig         $ joinTys t1 t2 
-joinElts (ConsSig t1)        (ConsSig t2)       = ConsSig         $ joinTys t1 t2 
-joinElts (IndexSig x1 s1 t1) (IndexSig _ _ t2)  = IndexSig x1 s1  $ joinTys t1 t2
-joinElts (FieldSig x1 m1 t1) (FieldSig _ m2 t2) | m1 == m2 
-                                                = FieldSig x1 m1  $ joinTys t1 t2 
-joinElts (MethSig x1 m1 t1)  (MethSig _ m2 t2)  | m1 == m2 
-                                                = MethSig  x1 m1  $ joinTys t1 t2 
-joinElts t                   _                  = t
+joinElts (CallSig t1)           (CallSig t2)         = CallSig           $ joinTys t1 t2 
+joinElts (ConsSig t1)           (ConsSig t2)         = ConsSig           $ joinTys t1 t2 
+joinElts (IndexSig x1 s1 t1)    (IndexSig _ _ t2)    = IndexSig x1 s1    $ joinTys t1 t2
+joinElts (FieldSig x1 o1 m1 t1) (FieldSig _ _ m2 t2) | m1 == m2 
+                                                     = FieldSig x1 o1 m1 $ joinTys t1 t2 
+joinElts (MethSig x1 m1 t1)     (MethSig _ m2 t2)    | m1 == m2 
+                                                     = MethSig  x1 m1  $ joinTys t1 t2 
+joinElts t                      _                    = t
 
 joinTys t1 t2 = mkAnd $ bkAnd t1 ++ bkAnd t2 
 
@@ -885,7 +885,7 @@ writeGlobalVars stmts      = everything (++) ([] `mkQ` fromVD) stmts
 ----------------------------------------------------------------------------------
 scrapeVarDecl :: VarDecl (AnnSSA r) -> [(SyntaxKind, RType r)]
 ----------------------------------------------------------------------------------
-scrapeVarDecl (VarDecl l _ _) = [ (VarDeclKind, t)    | VarAnn                 t  <- ann_fact l ] 
-                             ++ [ (AmbVarDeclKind, t) | AmbVarAnn              t  <- ann_fact l ] 
-                             ++ [ (FieldDefKind, t) | FieldAnn (FieldSig _ _ t) <- ann_fact l ]
+scrapeVarDecl (VarDecl l _ _) = [ (VarDeclKind,    t) | VarAnn                   t  <- ann_fact l ] 
+                             ++ [ (AmbVarDeclKind, t) | AmbVarAnn                t  <- ann_fact l ] 
+                             ++ [ (FieldDefKind,   t) | FieldAnn (FieldSig _ _ _ t) <- ann_fact l ]
 

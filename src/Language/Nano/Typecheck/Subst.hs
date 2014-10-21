@@ -124,7 +124,7 @@ instance Free (Fact r) where
   free (EnumAnn _)          = S.empty
 
 instance Free (TypeMember r) where
-  free (FieldSig _ m t)     = free m `mappend` free t
+  free (FieldSig _ _ m t)   = free m `mappend` free t
   free (MethSig  _ m t)     = free m `mappend` free t
   free (CallSig t)          = free t
   free (ConsSig t)          = free t
@@ -164,11 +164,11 @@ instance (SubstitutableQ q r t) => SubstitutableQ q r (Env t) where
   apply                     = envMap . apply
 
 instance F.Reftable r => SubstitutableQ q r (TypeMemberQ q r) where 
-  apply θ (FieldSig x m t)  = FieldSig x   (appTy (toSubstQ θ) m) (apply θ t)
-  apply θ (MethSig  x m t)  = MethSig  x   (appTy (toSubstQ θ) m) (apply θ t)
-  apply θ (CallSig t)       = CallSig      (apply θ t)
-  apply θ (ConsSig t)       = ConsSig      (apply θ t)
-  apply θ (IndexSig x b t)  = IndexSig x b (apply θ t)
+  apply θ (FieldSig x o m t) = FieldSig x o (appTy (toSubstQ θ) m) (apply θ t)
+  apply θ (MethSig  x m t)   = MethSig  x   (appTy (toSubstQ θ) m) (apply θ t)
+  apply θ (CallSig t)        = CallSig      (apply θ t)
+  apply θ (ConsSig t)        = ConsSig      (apply θ t)
+  apply θ (IndexSig x b t)   = IndexSig x b (apply θ t)
 
 instance F.Reftable r => SubstitutableQ q r (CastQ q r) where
   apply _ CNo         = CNo

@@ -394,22 +394,22 @@ setRTypeR (TCons x y _)     r = TCons x y r
 setRTypeR t                 _ = t
 
 
-mapElt f (CallSig t)         = CallSig      $ f t
-mapElt f (ConsSig t)         = ConsSig      $ f t
-mapElt f (IndexSig x b t)    = IndexSig x b $ f t
-mapElt f (FieldSig x m t)    = FieldSig x m $ f t
-mapElt f (MethSig  x m t)    = MethSig  x m $ f t
+mapElt f (CallSig t)         = CallSig        $ f t
+mapElt f (ConsSig t)         = ConsSig        $ f t
+mapElt f (IndexSig x b t)    = IndexSig x b   $ f t
+mapElt f (FieldSig x o m t)  = FieldSig x o m $ f t
+mapElt f (MethSig  x m t)    = MethSig  x m   $ f t
 
 mapElt' f (CallSig t)         = CallSig      $ f t
 mapElt' f (ConsSig t)         = ConsSig      $ f t
 mapElt' f (IndexSig x b t)    = IndexSig x b $ f t
-mapElt' f (FieldSig x m t)    = FieldSig x (toType $ f $ ofType m) (f t)
+mapElt' f (FieldSig x o m t)  = FieldSig x o (toType $ f $ ofType m) (f t)
 mapElt' f (MethSig  x m t)    = MethSig  x (toType $ f $ ofType m) (f t)
 
 mapEltM f (CallSig t)        = CallSig <$> f t
 mapEltM f (ConsSig t)        = ConsSig <$> f t
 mapEltM f (IndexSig i b t)   = IndexSig i b <$> f t
-mapEltM f (FieldSig x m t)   = FieldSig x m <$> f t
+mapEltM f (FieldSig x o m t) = FieldSig x o m <$> f t
 mapEltM f (MethSig  x m t)   = MethSig x m <$> f t
 
 nonConstrElt = not . isConstr
@@ -417,8 +417,8 @@ nonConstrElt = not . isConstr
 isMethodSig (MethSig _ _ _ ) = True
 isMethodSig _                = False
 
-isFieldSig (FieldSig _ _ _ ) = True
-isFieldSig _                 = False
+isFieldSig (FieldSig _ _ _ _ ) = True
+isFieldSig _                   = False
 
 -- Typemembers that take part in subtyping
 subtypeable e = not (isConstr e)
@@ -444,7 +444,7 @@ instance F.Symbolic IndexKind where
   symbol NumericIndex = numericIndexSymbol
 
 instance F.Symbolic (TypeMemberQ q t) where
-  symbol (FieldSig s _ _)   = s
+  symbol (FieldSig s _ _ _) = s
   symbol (MethSig  s _ _)   = s
   symbol (ConsSig       _)  = ctorSymbol
   symbol (CallSig       _)  = callSymbol
@@ -456,41 +456,39 @@ stringIndexSymbol  = F.symbol "__string__index__"
 numericIndexSymbol = F.symbol "__numeric__index__"
 
     
-sameBinder (CallSig _)       (CallSig _)        = True
-sameBinder (ConsSig _)       (ConsSig _)        = True
-sameBinder (IndexSig _ b1 _) (IndexSig _ b2 _)  = b1 == b2
-sameBinder (FieldSig x1 _ _) (FieldSig x2 _ _)  = x1 == x2
-sameBinder (MethSig x1 _ _)  (MethSig x2 _ _)   = x1 == x2
--- sameBinder (StatSig x1 _ _)  (StatSig x2 _ _)   = x1 == x2
-sameBinder _                 _                  = False
+sameBinder (CallSig _)         (CallSig _)         = True
+sameBinder (ConsSig _)         (ConsSig _)         = True
+sameBinder (IndexSig _ b1 _)   (IndexSig _ b2 _)   = b1 == b2
+sameBinder (FieldSig x1 _ _ _) (FieldSig x2 _ _ _) = x1 == x2
+sameBinder (MethSig x1 _ _)    (MethSig x2 _ _)    = x1 == x2
+sameBinder _                 _                     = False
 
 mutability :: TypeMember r -> Maybe Mutability
-mutability (CallSig _)      = Nothing
-mutability (ConsSig _)      = Nothing  
-mutability (IndexSig _ _ _) = Nothing  
-mutability (FieldSig _ m _) = Just m
-mutability (MethSig _ m  _) = Just m
--- mutability (StatSig _ m _)  = Just m
+mutability (CallSig _)        = Nothing
+mutability (ConsSig _)        = Nothing  
+mutability (IndexSig _ _ _)   = Nothing  
+mutability (FieldSig _ _ m _) = Just m
+mutability (MethSig _ m  _)   = Just m
 
-baseType (FieldSig _ _ t) = case bkFun t of
-                              Just (_, Just t, _, _) -> Just t
-                              _                      -> Nothing
-baseType (MethSig _ _ t)  = case bkFun t of
-                              Just (_, Just t, _, _) -> Just t
-                              _                      -> Nothing
-baseType _                = Nothing
+baseType (FieldSig _ _ _ t)   = case bkFun t of
+                                  Just (_, Just t, _, _) -> Just t
+                                  _                      -> Nothing
+baseType (MethSig _ _ t)      = case bkFun t of
+                                  Just (_, Just t, _, _) -> Just t
+                                  _                      -> Nothing
+baseType _                    = Nothing
 
-eltType (FieldSig _ _  t) = t
-eltType (MethSig _ _   t) = t
-eltType (ConsSig       t) = t
-eltType (CallSig       t) = t
-eltType (IndexSig _ _  t) = t
+eltType (FieldSig _ _ _  t) = t
+eltType (MethSig _ _     t) = t
+eltType (ConsSig         t) = t
+eltType (CallSig         t) = t
+eltType (IndexSig _ _    t) = t
 
-allEltType (FieldSig _ m  t) = [ofType m, t]
-allEltType (MethSig _  m  t) = [ofType m, t]
-allEltType (ConsSig       t) = [t]
-allEltType (CallSig       t) = [t]
-allEltType (IndexSig _ _  t) = [t]
+allEltType (FieldSig _ _ m t) = [ofType m, t]
+allEltType (MethSig _  m   t) = [ofType m, t]
+allEltType (ConsSig        t) = [t]
+allEltType (CallSig        t) = [t]
+allEltType (IndexSig _ _   t) = [t]
 
 
 
@@ -615,8 +613,12 @@ instance (PP r, F.Reftable r) => PP (TypeMemberQ q r) where
   pp (CallSig t)          =  text "call" <+> pp t 
   pp (ConsSig t)          =  text "new" <+> pp t
   pp (IndexSig _ i t)     =  brackets (pp i) <> text ":" <+> pp t
-  pp (FieldSig x m t)     =  text "▣" <+> ppMut m <+> pp x <> text ":" <+> pp t 
+  pp (FieldSig x o m t)   =  text "▣" <+> ppMut m <+> pp x <> pp o <> text ":" <+> pp t 
   pp (MethSig x m t)      =  text "●" <+> ppMut m <+> pp x <+> text ":" <+>  ppMeth t
+
+instance PP OptionalKind where
+  pp Optional   = text "?"
+  pp Mandatory  = text ""
 
 ppMeth mt = 
   case bkAnd mt of
@@ -779,7 +781,7 @@ objLitTy l ps     = mkFun (vs, Nothing, bs, rt)
     vs            = [mv] ++ mvs ++ avs
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
     rt            = TCons mt elts fTop
-    elts          = M.fromList [((s, InstanceMember), FieldSig s m $ ofType a) | (s,m,a) <- zip3 ss mts ats ]
+    elts          = M.fromList [((s, InstanceMember), FieldSig s Mandatory m $ ofType a) | (s,m,a) <- zip3 ss mts ats ]
     (mv, mt)      = freshTV l mSym (0::Int)                             -- obj mutability
     (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
     (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
@@ -820,7 +822,7 @@ immObjectLitTy l _ ps ts
   | otherwise        = die $ bug (srcPos l) $ "Mismatched args for immObjectLit"
   where
     elts             = M.fromList 
-                         [ ((s, InstanceMember), FieldSig s t_immutable t)
+                         [ ((s, InstanceMember), FieldSig s Mandatory t_immutable t)
                          | (p,t) <- safeZip "immObjectLitTy" ps ts, let s = F.symbol p ]
     nps              = length ps
 
@@ -856,11 +858,11 @@ setPropTy l f ty =
           -> TAll α2 (TAll μ2 (TFun Nothing [gg xt2,a2] rt2 r2))
       _   -> errorstar $ "setPropTy " ++ ppshow ty
   where
-    gg (B n (TCons m ts r))  = B n (TCons m (ff ts) r)
-    gg _                     = throw $ bug (srcPos l) "Unhandled cases in Typecheck.Types.setPropTy"
-    ff                       = M.fromList . tr . M.toList 
-    tr [((_,a),FieldSig x μx t)] | x == F.symbol "f" = [((f,a),FieldSig f μx t)]
-    tr t                     = error $ "setPropTy:tr " ++ ppshow t
+    gg (B n (TCons m ts r))        = B n (TCons m (ff ts) r)
+    gg _                           = throw $ bug (srcPos l) "Unhandled cases in Typecheck.Types.setPropTy"
+    ff                             = M.fromList . tr . M.toList 
+    tr [((_,a),FieldSig x o μx t)] | x == F.symbol "f" = [((f,a),FieldSig f o μx t)]
+    tr t                           = error $ "setPropTy:tr " ++ ppshow t
 
 
 ---------------------------------------------------------------------------------
@@ -875,10 +877,9 @@ returnTy _ False = mkFun ([], Nothing, [], tVoid)
 ---------------------------------------------------------------------------------
 mkEltFunTy :: F.Reftable r => TypeMember r -> Maybe (RType r)
 ---------------------------------------------------------------------------------
-mkEltFunTy (MethSig _ _  t) = mkEltFromType t
-mkEltFunTy (FieldSig _ _ t) = mkEltFromType t
--- mkEltFunTy (StatSig _ _  t) = mkEltFromType t
-mkEltFunTy _                = Nothing
+mkEltFunTy (MethSig _ _    t) = mkEltFromType t
+mkEltFunTy (FieldSig _ _ _ t) = mkEltFromType t
+mkEltFunTy _                  = Nothing
 
 mkEltFromType = fmap (mkAnd . fmap (mkFun . squash)) . sequence . map bkFun . bkAnd
   where

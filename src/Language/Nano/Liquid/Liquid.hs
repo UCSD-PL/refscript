@@ -315,7 +315,7 @@ consStmt g (ReturnStmt l Nothing)
        
 -- return e 
 consStmt g (ReturnStmt l (Just e))
-  = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ ltracePP l "rerTy" $ returnTy retTy True
+  = do  _ <- consCall g l "return" (FI Nothing [(e, Just retTy)]) $ returnTy retTy True
         return Nothing
   where
     retTy = envFindReturn g 

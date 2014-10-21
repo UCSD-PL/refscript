@@ -697,7 +697,7 @@ replaceAbsolute pgm@(Nano { code = Src ss, fullNames = ns, fullPaths = ps })
     cStmt q _       = q
     acc c s         = I.singleton (ann_id a) c where a = getAnnotation s
 
--- | Replace `TRef x _ _` where `x` is a name for an enumeration with `TEnum x`
+-- | Replace `TRef x _ _` where `x` is a name for an enumeration with `number`
 ---------------------------------------------------------------------------------------
 fixEnums :: PPR r => NanoBareR r -> NanoBareR r 
 ---------------------------------------------------------------------------------------
@@ -708,7 +708,7 @@ fixEnums p@(Nano { code = Src ss, tAlias = ta, pModules = m })
     tr         = transAnnR f []
     f _ _      = fixEnumInType p
 
-fixEnumInType p (TRef x [] _) | isJust (resolveEnumInPgm p x) = TEnum x
+fixEnumInType p (TRef x [] r) | isJust (resolveEnumInPgm p x) = tInt `strengthen` r
 fixEnumInType _ t = t
 
 fixEnumsInModule p m@(ModuleDef { m_variables = mv, m_types = mt })

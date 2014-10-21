@@ -21,7 +21,7 @@ import           Data.Tuple                         (swap)
 import           Data.Monoid
 import qualified Data.HashSet                       as S
 import qualified Data.Map.Strict                    as M
-import           Data.Maybe                         (fromMaybe)
+import           Data.Maybe                         (fromMaybe, isJust)
 import           Control.Monad.State
 import           Language.Fixpoint.Errors
 import           Language.Fixpoint.Misc 
@@ -142,6 +142,11 @@ convertObj l γ (TClass  c1) (TClass  c2) = convertTClass  l γ c1 c2
 convertObj l γ (TModule m1) (TModule m2) = convertTModule l γ m1 m2
 
 convertObj l γ (TEnum e1) (TEnum e2) = convertTEnum l γ e1 e2
+
+-- convertObj l γ (TRef x1 _ _) (TRef x2 _ _) | isEnumValue γ x1 && isEnumValue γ x2 = return CDUp
+-- convertObj l γ (TRef x1 _ _) t2            | isEnumValue γ x1 && isTNum t2        = return CDUp
+-- convertObj l γ t1            (TRef x2 _ _) | isTNum t1        && isEnumValue γ x2 = return CDUp
+
 -- 
 -- * Fall back to structural subtyping
 --
@@ -345,3 +350,5 @@ instance Related TypeMember where
   related γ (MethSig  _ _ t1) (MethSig  _ _ t2) = related γ t1 t2
   related _ _                       _           = False 
  
+
+-- isEnumValue γ = isJust . resolveEnumInEnv γ 

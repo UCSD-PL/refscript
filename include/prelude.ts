@@ -178,6 +178,19 @@ declare function builtin_PrefixBNot(n: number): number;
 
 declare function builtin_OpBOr(a: number, b: number): number;
 
+/**
+ *
+ *    Bitwise "and" operator `&`
+ *    
+ *     builtin_OpBAnd :: (a: number, y: number) 
+ *                     => { v: number | (bv_idx(a,1)  && bv_idx(b,1)  => bv_idx(v,1)) 
+ *                                      (bv_idx(a,2)  && bv_idx(b,2)  => bv_idx(v,2))  
+ *                                      ...
+ *                                      (bv_idx(a,32) && bv_idx(b,32) => bv_idx(v,32)) 
+ *                        } 
+ *
+ */
+
 declare function builtin_OpBAnd(a: number, b: number): number;
 
 
@@ -712,6 +725,24 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
                            (Prop(v) <=> v /= 0  ); 
                            (FLS(v)  <=> v  = 0  )]}	*/
 
+
+/**
+ *
+ *    Encoding of bitvector behavior
+ *
+ */
+
+/*@ measure bv_idx :: (number, number) => bool */
+
+/*@ builtin_bitVector :: (n: number, i: number) => { number | bv_idx(n,i) } */
+declare function builtin_bitVector(n: number, i: number): number;
+
+
+/**
+ *
+ *    ... `instaneof` ... 
+ *
+ */
 
 /*@ measure instanceof :: forall A . (A,string) => bool */
 

@@ -87,8 +87,8 @@ refTc cfg f p
   = do donePhase Loud "Generate Constraints"
        solveConstraints f cgi
   where
-    cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
-    -- cgi = generateConstraints cfg p
+    -- cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
+    cgi = generateConstraints cfg p
 
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
@@ -525,7 +525,7 @@ consExpr g ex@(Cast l e) _ =
                 [ ct | UserCast ct <- ann_fact l ]
 
 consExpr g (IntLit l i) _
-  = Just <$> envAddFresh l (eSingleton tInt i, WriteLocal, Initialized) g
+  = Just <$> envAddFresh l (tInt `eSingleton` i `bitVector` i, WriteLocal, Initialized) g
 
 consExpr g (BoolLit l b) _
   = Just <$> envAddFresh l (pSingleton tBool b, WriteLocal, Initialized) g 
@@ -560,6 +560,15 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
   where
     l2 = getAnnotation e2
     cc (QN AK_ _ _ s) = F.symbolString s 
+
+-- | `e1 & e2`
+consExpr g (InfixExpr l o@OpBAnd e1 e2) _
+  = do opTy <- safeEnvFindTy (infixOpId o) g
+       consCall g l o (FI Nothing ((,Nothing) <$> [e1, e2])) $ mkTy opTy
+  where
+    mkTy (TFun Nothing [B x tx, B y ty] out r) = 
+          TFun Nothing [B x tx, B y ty] (out `strengthen` fixBAnd x y) r 
+    mkTy t = t
 
 consExpr g (InfixExpr l o e1 e2) _
   = do opTy <- safeEnvFindTy (infixOpId o) g

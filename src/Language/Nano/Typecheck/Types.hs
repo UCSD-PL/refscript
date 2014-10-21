@@ -140,17 +140,8 @@ isAssignsFields  _                          = False
 isInheritedMutability  (TRef (QN AK_ _ [] s) _ _) = s == F.symbol "InheritedMut"
 isInheritedMutability  _                          = False
  
--- FIXME: get rid of this ... ?
-
-
-
-
 combMut container element | isInheritedMutability element = container
 combMut _         element | otherwise                     = element
-
-
-
-
 
 
 ---------------------------------------------------------------------

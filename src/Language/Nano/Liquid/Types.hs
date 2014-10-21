@@ -28,7 +28,7 @@ module Language.Nano.Liquid.Types (
   , pAnd, pOr
 
   -- * Conversions
-  , RefTypable (..), eSingleton, pSingleton -- , shiftVVs
+  , RefTypable (..), eSingleton, pSingleton, BitVectorable(..), fixBAnd
 
   -- * Manipulating RefType
   , rTypeReft, rTypeSort, rTypeSortedReft, rTypeValueVar
@@ -57,6 +57,7 @@ module Language.Nano.Liquid.Types (
 
 import           Data.Maybe              (fromMaybe, catMaybes, maybeToList)
 import qualified Data.List               as L
+import           Data.Bits               ((.&.))
 import qualified Data.HashMap.Strict     as HM
 import qualified Data.Map.Strict         as M
 -- import qualified Data.HashSet            as S
@@ -246,6 +247,44 @@ instance RefTypable RefType where
 
 eSingleton      :: (F.Expression e) => RefType -> e -> RefType 
 eSingleton t e  = t `strengthen` (F.uexprReft e)
+
+class BitVectorable r where
+  bitVector :: RType r -> Int -> RType r
+
+instance BitVectorable F.Reft where
+  bitVector = bitVectorReft
+
+instance BitVectorable () where
+  bitVector t _ = t
+
+bitVectorReft t i | i > 0 && pow2 i = t `strengthen` reft 
+                  | otherwise       = t
+  where
+    pow2 x    = x .&. (x-1) == 0
+    log2 n    = round (logBase 2 $ fromIntegral n) :: Int
+    reft      = F.Reft (v, [F.RConc $ F.PBexp $ F.EApp sym [F.expr v, F.expr $ log2 i]])
+    sym       = F.dummyLoc $ F.symbol "bv_idx"
+    v         = F.vv Nothing
+
+
+
+-- Builds the refinement: 
+--  
+--  bv_idx(a,1) && bv_idx(b,1) => bv_idx(v,1) /\ 
+--  bv_idx(a,2) && bv_idx(b,2) => bv_idx(v,2) /\
+--  ... 
+--  bv_idx(a,32) && bv_idx(b,32) => bv_idx(v,32) /\
+--
+fixBAnd x y = F.Reft (v, cc <$> ([1..32] :: [Int]))
+  where
+    cc      = F.RConc . g
+    -- bv_idx(v,i)
+    g i     = F.PImp (bi (F.eVar v) i) (F.PAnd [bi x i, bi y i])
+    bi n i  = F.PBexp $ F.EApp sym [F.expr n, F.expr i]
+    sym     = F.dummyLoc $ F.symbol "bv_idx"
+    v       = F.vv Nothing
+
+
 
 pSingleton      :: (F.Predicate p) => RefType -> p -> RefType 
 pSingleton t p  = t `strengthen` (F.propReft p)

@@ -43,6 +43,7 @@ import           Language.Nano.Typecheck.TCMonad
 import           Language.Nano.Typecheck.Subst
 import           Language.Nano.Typecheck.Lookup
 import           Language.Nano.Liquid.Alias
+import           Language.Nano.Liquid.Types
 import           Language.Nano.SSA.SSA
 import           Language.Nano.Visitor
 
@@ -58,7 +59,7 @@ import           Debug.Trace                        hiding (traceShow)
 import qualified System.Console.CmdArgs.Verbosity as V
 
 
-type PPRSF r = (PPR r, Substitutable r (Fact r), Free (Fact r)) 
+type PPRSF r = (BitVectorable r, PPR r, Substitutable r (Fact r), Free (Fact r)) 
 
 --------------------------------------------------------------------------------
 -- | Top-level Verifier 
@@ -93,7 +94,7 @@ safe cfg (Nano {code = Src fs}) = (NoAnn, failCasts (noFailCasts cfg) fs)
             f _             = [] 
 
 -------------------------------------------------------------------------------
-castErrors :: PPR r => AnnType r -> [Error] 
+castErrors :: PPRSF r => AnnType r -> [Error] 
 -------------------------------------------------------------------------------
 castErrors (Ann _ l facts) = downErrors
   where 
@@ -101,7 +102,7 @@ castErrors (Ann _ l facts) = downErrors
 
 
 -------------------------------------------------------------------------------
-typeCheck :: PPR r => Config -> NanoSSAR r -> IO (Either (F.FixResult Error) (NanoTypeR r))
+typeCheck :: PPRSF r => Config -> NanoSSAR r -> IO (Either (F.FixResult Error) (NanoTypeR r))
 -------------------------------------------------------------------------------
 typeCheck cfg pgm = do 
   v <- V.getVerbosity
@@ -112,7 +113,7 @@ typeCheck cfg pgm = do
 -------------------------------------------------------------------------------
 -- | TypeCheck Nano Program
 -------------------------------------------------------------------------------
-tcNano :: PPR r => NanoSSAR r -> TCM r (NanoTypeR r)
+tcNano :: PPRSF r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do  _       <- checkTypes γ 
@@ -128,7 +129,7 @@ tcNano p@(Nano {code = Src fs})
 -- | Patch annotation on the AST
 --
 -------------------------------------------------------------------------------
-patch :: PPR r => [Statement (AnnSSA r)] -> TCM r [Statement (AnnSSA r)]
+patch :: PPRSF r => [Statement (AnnSSA r)] -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
 patch fs = 
   do (m,θ)           <- (,) <$> getAnns <*> getSubst
@@ -147,7 +148,7 @@ patch fs =
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-initGlobalEnv :: PPR r => NanoSSAR r -> TCEnv r
+initGlobalEnv :: PPRSF r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
 initGlobalEnv pgm@(Nano { code = Src ss }) = -- trace (ppshow mod) $ trace (ppshow cha) $ 
                                              TCE nms mod cha ctx pth Nothing
@@ -180,7 +181,7 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod cha ctx pth parent
 
 
 ---------------------------------------------------------------------------------------
-initModuleEnv :: (PPR r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnSSA r)] -> TCEnv r
+initModuleEnv :: (PPRSF r, F.Symbolic n, PP n) => TCEnv r -> n -> [Statement (AnnSSA r)] -> TCEnv r
 ---------------------------------------------------------------------------------------
 initModuleEnv γ n s = TCE nms mod cha ctx pth parent
   where
@@ -201,10 +202,10 @@ tcEnvAdds     xs γ      = γ { tce_names = envAdds xs $ tce_names γ }
 
 tcEnvAdd      x t γ     = γ { tce_names = envAdd x t $ tce_names γ }
 
-tcEnvFindTy            :: (PPR r, F.Symbolic x, IsLocated x) => x -> TCEnv r -> Maybe (RType r)
+tcEnvFindTy            :: (PPRSF r, F.Symbolic x, IsLocated x) => x -> TCEnv r -> Maybe (RType r)
 tcEnvFindTy x γ         = fst3 <$> tcEnvFindTyWithAgsn x γ 
 
-tcEnvFindTyWithAgsn    :: (PPR r, F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability, Initialization)
+tcEnvFindTyWithAgsn    :: (PPRSF r, F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability, Initialization)
 tcEnvFindTyWithAgsn x γ = case -- trace ("lookip for: " ++ ppshow (F.symbol x) ++ " in " ++ ppshow (envKeys $ tce_names γ)) $
                               envFindTy x $ tce_names γ of 
                             Just t -> Just $ adjustInit t
@@ -222,7 +223,7 @@ tcEnvFindTyWithAgsn x γ = case -- trace ("lookip for: " ++ ppshow (F.symbol x) 
 -- This is a variant of the above that doesn't add the ' + undefined' for
 -- non-initialized variables.
 -- 
-tcEnvFindTyForAsgn    :: (PPR r, F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability, Initialization)
+tcEnvFindTyForAsgn    :: (PPRSF r, F.Symbolic x) => x -> TCEnv r -> Maybe (RType r, Assignability, Initialization)
 tcEnvFindTyForAsgn x γ = case envFindTy x $ tce_names γ of 
                            Just t -> Just $ t
                            Nothing     -> 
@@ -247,7 +248,7 @@ tcEnvFindTypeDefM l γ x
 -------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
-tcFun :: PPR r 
+tcFun :: PPRSF r 
       => TCEnv r 
       -> Statement (AnnSSA r) 
       -> TCM r (Statement (AnnSSA r), Maybe (TCEnv r))
@@ -262,7 +263,7 @@ tcFun γ (FunctionStmt l f xs body)
 tcFun _  s = die $ bug (srcPos s) $ "Calling tcFun not on FunctionStatement"
 
 -------------------------------------------------------------------------------
-tcFun1 :: (PPR r, IsLocated l, CallSite t) 
+tcFun1 :: (PPRSF r, IsLocated l, CallSite t) 
        => TCEnv r 
        -> AnnSSA r 
        -> l 
@@ -310,7 +311,7 @@ tVarId (TV a l) = Id l $ "TVAR$$" ++ F.symbolString a
 
 
 ---------------------------------------------------------------------------------------
-tcClassElt :: PPR r 
+tcClassElt :: PPRSF r
           => TCEnv r -> IfaceDef r -> ClassElt (AnnSSA r) -> TCM r (ClassElt (AnnSSA r))
 ---------------------------------------------------------------------------------------
 --
@@ -403,14 +404,14 @@ tcSeq f             = go []
                            Just γ' -> go (y:acc) γ' xs
 
 --------------------------------------------------------------------------------
-tcStmts :: PPR r => 
+tcStmts :: PPRSF r => 
   TCEnv r -> [Statement (AnnSSA r)] -> TCM r ([Statement (AnnSSA r)], TCEnvO r)
 --------------------------------------------------------------------------------
 tcStmts = tcSeq tcStmt 
 
 
 -------------------------------------------------------------------------------
-tcStmt  :: PPR r =>
+tcStmt  :: PPRSF r =>
   TCEnv r -> Statement (AnnSSA r) -> TCM r (Statement (AnnSSA r), TCEnvO r)
 -------------------------------------------------------------------------------
 -- skip
@@ -526,7 +527,7 @@ tcStmt _ s
 
 
 ---------------------------------------------------------------------------------------
-tcVarDecl ::  PPR r => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
+tcVarDecl ::  PPRSF r => TCEnv r -> VarDecl (AnnSSA r) -> TCM r (VarDecl (AnnSSA r), TCEnvO r)
 ---------------------------------------------------------------------------------------
 tcVarDecl γ v@(VarDecl l x (Just e))
   = case scrapeVarDecl v of
@@ -545,7 +546,7 @@ tcVarDecl γ v@(VarDecl l x Nothing)
       _                     -> tcError     $ errorVarDeclAnnot (srcPos l) x
 
 -------------------------------------------------------------------------------
-tcAsgn :: PPR r 
+tcAsgn :: PPRSF r 
        => AnnSSA r -> TCEnv r -> Id (AnnSSA r) -> ExprSSAR r -> TCM r (ExprSSAR r, TCEnvO r)
 -------------------------------------------------------------------------------
 tcAsgn l γ x e
@@ -561,9 +562,9 @@ tcEnvAddo γ x (Just t) = Just $ tcEnvAdds [(x, t)] γ
 
   
 ----------------------------------------------------------------------------------------------------------------
-tcExprTW :: PPR r => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, Maybe (RType r))
-tcExprW  :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, Maybe (RType r))
-tcExprWD :: PPR r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
+tcExprTW :: PPRSF r => AnnSSA r -> TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, Maybe (RType r))
+tcExprW  :: PPRSF r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, Maybe (RType r))
+tcExprWD :: PPRSF r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 ----------------------------------------------------------------------------------------------------------------
 tcExprTW _ γ e Nothing    = tcExprW γ e
 tcExprTW l γ e (Just t)   = (tcWrap $ tcExprT l γ e t)    >>= tcEW γ e
@@ -591,12 +592,12 @@ tcRetW γ l Nothing
   = do (_, _) <- tcNormalCall γ l "return" (FI Nothing []) $ returnTy (tcEnvFindReturn γ) False
        return  $ (ReturnStmt l Nothing, Nothing)
   
-tcEW :: PPR r => TCEnv r -> ExprSSAR r -> Either Error ((ExprSSAR r), b) -> TCM r ((ExprSSAR r), Maybe b)
+tcEW :: PPRSF r => TCEnv r -> ExprSSAR r -> Either Error ((ExprSSAR r), b) -> TCM r ((ExprSSAR r), Maybe b)
 tcEW _ _ (Right (e', t')) = return $  (e', Just t')
 tcEW γ e (Left err)       = (, Nothing) <$> deadcastM (tce_ctx γ) err e 
 
 -------------------------------------------------------------------------------
-tcExprT :: PPR r => AnnSSA r -> TCEnv r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
+tcExprT :: PPRSF r => AnnSSA r -> TCEnv r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
 tcExprT l γ e t 
   = do (FI _ [e'], _) <- tcNormalCall γ l "tcExprT" (FI Nothing [(e, Nothing)]) 
@@ -604,7 +605,7 @@ tcExprT l γ e t
        return (e', t)
 
 -------------------------------------------------------------------------------
-tcExpr :: PPR r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
+tcExpr :: PPRSF r => TCEnv r -> ExprSSAR r -> Maybe (RType r) -> TCM r (ExprSSAR r, RType r)
 -------------------------------------------------------------------------------
 tcExpr _ e@(IntLit _ _) _
   = return (e, tInt)
@@ -743,7 +744,7 @@ tcExpr _ e _
 
 -- | @tcCast@ emulating a simplified version of a function call
 ---------------------------------------------------------------------------------------
-tcCast :: PPR r => TCEnv r -> AnnSSA r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
+tcCast :: PPRSF r => TCEnv r -> AnnSSA r -> ExprSSAR r -> RType r -> TCM r (ExprSSAR r, RType r)
 ---------------------------------------------------------------------------------------
 tcCast γ l e tc 
   = do  opTy                <- safeTcEnvFindTy l γ (builtinOpId BICastExpr)
@@ -754,7 +755,7 @@ tcCast γ l e tc
 
 
 ---------------------------------------------------------------------------------------
-tcCall :: PPR r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
+tcCall :: PPRSF r => TCEnv r -> ExprSSAR r -> TCM r (ExprSSAR r, RType r)
 ---------------------------------------------------------------------------------------
 
 -- | `o e`
@@ -939,7 +940,7 @@ tcNormalCall γ l fn etos ft0
 --     subtype check (this is what tcCallCaseTry does).
 --
 ------------------------------------------------------------------------------------------
-resolveOverload :: (PPR r, PP a) 
+resolveOverload :: (PPRSF r, PP a) 
                 => TCEnv r 
                 -> AnnSSA r 
                 -> a 
@@ -981,7 +982,7 @@ resolveOverload γ l fn ets ft
 --   The monad state is completely reversed after this function returns, thanks 
 --   to `runMaybeM`. We don't need to reverse the action of `instantiateFTy`.
 ----------------------------------------------------------------------------------
-tcCallCaseTry :: (PPR r, PP a) 
+tcCallCaseTry :: (PPRSF r, PP a) 
               => TCEnv r 
               -> AnnSSA r 
               -> a 
@@ -1041,12 +1042,12 @@ tcCallCase γ l fn ets ft
                                                                   <*> zipWith3M f as bs cs
 
 ----------------------------------------------------------------------------------
-instantiateTy :: PPR r => AnnSSA r -> IContext -> Int -> RType r -> TCM r (RType r)
+instantiateTy :: PPRSF r => AnnSSA r -> IContext -> Int -> RType r -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 instantiateTy l ξ i = uncurry (freshTyArgs l i ξ) . bkAll 
 
 ----------------------------------------------------------------------------------
-instantiateFTy :: (PPR r, PP a) 
+instantiateFTy :: (PPRSF r, PP a) 
                => AnnSSA r 
                -> IContext 
                -> a 
@@ -1061,7 +1062,7 @@ instantiateFTy l ξ fn ft
        err = tcError    $ errorNonFunction (srcPos l) fn ft
 
 ----------------------------------------------------------------------------------
-envJoin :: PPR r => AnnSSA r -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)
+envJoin :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEnvO r)
 ----------------------------------------------------------------------------------
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
@@ -1077,7 +1078,7 @@ envJoin l γ (Just γ1) (Just γ2) =
 
 
 ----------------------------------------------------------------------------------
-envLoopJoin :: PPR r => AnnSSA r -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
+envLoopJoin :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
 ----------------------------------------------------------------------------------
 envLoopJoin _ γ Nothing   = return $ Just γ
 envLoopJoin l γ (Just γl) = 
@@ -1094,7 +1095,7 @@ envLoopJoin l γ (Just γl) =
 -- recorded in the initialization part of the output.
 --
 ----------------------------------------------------------------------------------
-getPhiType :: PPR r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r 
+getPhiType :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r 
            -> TCM r (RType r, Assignability, Initialization)
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
@@ -1108,7 +1109,7 @@ getPhiType l γ1 γ2 x =
                                       -> die $ bugUnboundPhiVar (srcPos l) x
 
 ----------------------------------------------------------------------------------
-getLoopNextPhiType :: PPR r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r 
+getLoopNextPhiType :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r 
                    -> TCM r (RType r, Assignability, Initialization)
 ----------------------------------------------------------------------------------
 getLoopNextPhiType l γ γl x =
@@ -1122,7 +1123,7 @@ getLoopNextPhiType l γ γl x =
 --
 --   * Special casing the situation where one the types in undefined.
 ----------------------------------------------------------------------------------
-unifyPhiTypes :: PPR r => AnnSSA r -> TCEnv r -> Var r 
+unifyPhiTypes :: PPRSF r => AnnSSA r -> TCEnv r -> Var r 
                        -> RType r -> RType r -> RSubst r -> TCM r (RType r)
 ----------------------------------------------------------------------------------
 unifyPhiTypes l γ x t1 t2 θ = 

@@ -26,13 +26,14 @@ import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
+import           Language.Nano.Liquid.Types
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Subst
 import           Control.Applicative ((<$>))
 
 -- import           Debug.Trace
 
-type PPRD r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
+type PPRD r = (BitVectorable r, ExprReftable Int r, PP r, F.Reftable r, Data r)
 
 
 -- | `getProp γ b s t`: returns  a pair containing:
@@ -75,7 +76,7 @@ getProp γ _ s t@(TModule m   ) = do m'         <- resolveModuleInEnv γ m
 getProp γ _ s t@(TEnum e     ) = do e'         <- resolveEnumInEnv γ e
                                     io         <- envFindTy (F.symbol s) (e_symbols e')
                                     case io of 
-                                      Just i   -> return (t, tInt `strengthen` exprReft i, t_immutable)
+                                      Just i   -> return (t, tInt `strengthen` exprReft i `bitVector` i, t_immutable)
                                       Nothing  -> return (t, tInt, t_immutable)
 
 getProp _ _ _ _ = Nothing

@@ -181,7 +181,7 @@ extractCall γ t             = uncurry mkAll <$> foo [] t
 --
 --
 -------------------------------------------------------------------------------
-accessMember :: F.Symbolic f 
+accessMember :: (PPR r, F.Symbolic f)
              => Bool 
              -> StaticKind 
              -> f 
@@ -191,8 +191,9 @@ accessMember :: F.Symbolic f
 -- Get member for a call
 accessMember True sk s es =    
   case M.lookup (F.symbol s, sk) es of
-    Just (FieldSig _ m t) -> Just (t,m)
-    Just (MethSig _ m t)  -> Just (t,m)
+    Just (FieldSig _ Optional m t) -> Just (orUndef t,m)
+    Just (FieldSig _ _        m t) -> Just (t,m)
+    Just (MethSig _ m t)           -> Just (t,m)
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
            Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
            _ -> Nothing
@@ -200,7 +201,8 @@ accessMember True sk s es =
 -- Extract member: cannot extract methods
 accessMember False sk s es =
   case M.lookup (F.symbol s, sk) es of
-    Just (FieldSig _ m t) -> Just (t,m)
+    Just (FieldSig _ Optional m t) -> Just (orUndef t,m)
+    Just (FieldSig _ _        m t) -> Just (t,m)
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
            Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
            _ -> Nothing

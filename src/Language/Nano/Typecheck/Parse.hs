@@ -382,10 +382,12 @@ indexP = xyP id colon sn
 -- | <[mut]> f: t
 fieldEltP       = do 
     x          <- symbol <$> identifierP
+    o          <- maybe Mandatory (\_ -> Optional) 
+              <$> optionMaybe (withinSpacesP $ char '?')
     _          <- colon
     m          <- option mut (toType <$> mutP)
     t          <- bareTypeP
-    return      $ FieldSig x m t
+    return      $ FieldSig x o m t
   where
     mut         = tr_inheritedMut
 

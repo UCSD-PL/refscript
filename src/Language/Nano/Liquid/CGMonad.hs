@@ -805,7 +805,7 @@ splitE g i _ _   (IndexSig _ _ t1) (IndexSig _ _ t2)
         cs'   <- splitC (Sub g i t2 t1)
         return $ cs ++ cs'
 
-splitE g i μ1 μ2 (FieldSig _ μf1 t1) (FieldSig _ μf2 t2)
+splitE g i μ1 μ2 (FieldSig _ _ μf1 t1) (FieldSig _ _ μf2 t2)
   = splitWithMut g i μ1 μ2 (μf1,t1) (μf2,t2)
 
 splitE g i μ1 μ2 (MethSig _ μf1 t1) (MethSig _ μf2 t2)

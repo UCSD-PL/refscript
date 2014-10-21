@@ -205,13 +205,17 @@ invariantConvertObj l γ e1s e2s
 convertElt l γ _ (CallSig t1) (CallSig t2) 
   = convert' l γ t1 t2 
 
-convertElt l γ False f1@(FieldSig _ m1 t1) f2@(FieldSig _ m2 t2)          -- mutable container
+convertElt l γ False f1@(FieldSig _ o1 m1 t1) f2@(FieldSig _ o2 m2 t2)          -- mutable container
+  | o1 /= o2
+  = Left $ errorOptionalElt (srcPos l) f1 f2 
   | isSubtype γ t1 t2 && isSubtype γ m2 m1 
   = convert' l γ t1 t2 `mappendM` convert' l γ t2 t1
   | otherwise                           
   = Left $ errorIncompMutElt (srcPos l) f1 f2
 
-convertElt l γ True f1@(FieldSig _ m1 t1) f2@(FieldSig _ m2 t2)   -- immutable container
+convertElt l γ True f1@(FieldSig _ o1 m1 t1) f2@(FieldSig _ o2 m2 t2)   -- immutable container
+  | o1 == Optional && o2 == Mandatory 
+  = Left $ errorIncompatOptional (srcPos l) f1 f2 
   | isSubtype γ m1 m2 && isImmutable m2 
   = convert' l γ t1 t2
   | isSubtype γ m1 m2
@@ -341,14 +345,14 @@ instance Related RType where
                  | all isTFun      [t,t']       = True
                  | toType t == toType t'        = True
                  | otherwise                    = False
-
-instance Related TypeMember where
-  related γ (CallSig t1)      (CallSig t2)      = related γ t1 t2
-  related γ (ConsSig t1)      (ConsSig t2)      = related γ t1 t2
-  related γ (IndexSig _ _ t1) (IndexSig _ _ t2) = related γ t1 t2
-  related γ (FieldSig _ _ t1) (FieldSig _ _ t2) = related γ t1 t2
-  related γ (MethSig  _ _ t1) (MethSig  _ _ t2) = related γ t1 t2
-  related _ _                       _           = False 
- 
+-- 
+-- instance Related TypeMember where
+--   related γ (CallSig t1)        (CallSig t2)        = related γ t1 t2
+--   related γ (ConsSig t1)        (ConsSig t2)        = related γ t1 t2
+--   related γ (IndexSig _ _ t1)   (IndexSig _ _ t2)   = related γ t1 t2
+--   related γ (FieldSig _ _ _ t1) (FieldSig _ _ _ t2) = related γ t1 t2
+--   related γ (MethSig  _ _ t1)   (MethSig  _ _ t2)   = related γ t1 t2
+--   related _ _                       _               = False 
+--  
 
 -- isEnumValue γ = isJust . resolveEnumInEnv γ 

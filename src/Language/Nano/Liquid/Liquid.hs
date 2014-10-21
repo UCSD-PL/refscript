@@ -436,7 +436,7 @@ consClassElt g dfn (Constructor l xs body)
 -- Static field
 consClassElt g dfn (MemberVarDecl l True x (Just e))
   = case spec of 
-      Just (FieldSig _ _ t) -> 
+      Just (FieldSig _ _ _ t) -> 
            void    $ consCall g l "field init"  (FI Nothing [(e, Just t)]) (mkInitFldTy t)
       _ -> cgError $ errorClassEltAnnot (srcPos l) (t_name dfn) x
   where

@@ -116,7 +116,7 @@ errorMergeSubst l t t'        = mkErr l $ printf "At merging substitutions canno
 errorUniqueTypeParams l       = mkErr l $ printf "Only unique type paramteres are allowed"
 
 -- Subtyping
-errorUserCast l e t           = mkErr l $ printf "User cast of type '%s' on '%s' failed." (ppshow t) (ppshow e)
+errorUserCast l t e           = mkErr l $ printf "User cast of type '%s' on '%s' failed." (ppshow t) (ppshow e)
 errorDownCast l t1 t2         = mkErr l $ printf "Downcast: %s => %s" (ppshow t1) (ppshow t2)
 errorClassExtends l x y t1 t2 = mkErr l $ printf "Type '%s' cannot extend type '%s'.\nType for '%s':\n%s\nType for '%s':\n%s" (ppshow x) (ppshow y) 
                                                   (ppshow x) (ppshow t1) (ppshow y) (ppshow t2)

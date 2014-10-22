@@ -894,6 +894,8 @@ infixOpId OpDiv        = builtinId "OpDiv"
 infixOpId OpMod        = builtinId "OpMod"
 infixOpId OpInstanceof = builtinId "OpInstanceof"
 infixOpId OpBOr        = builtinId "OpBOr"
+infixOpId OpBXor       = builtinId "OpBXor"
+infixOpId OpBAnd       = builtinId "OpBAnd"
 infixOpId OpIn         = builtinId "OpIn"
 infixOpId o            = errorstar $ "infixOpId: Cannot handle: " ++ ppshow o
 

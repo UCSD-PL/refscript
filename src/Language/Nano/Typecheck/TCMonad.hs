@@ -344,7 +344,8 @@ deadcastM ξ err e
 castM :: PPR r => TCEnv r -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 castM γ e t1 t2 
-  = case convert (srcPos e) γ t1 t2 of
+  -- = case convert (srcPos e) γ t1 t2 of
+  = case {- ltracePP e (ppshow (toType t1) ++ " *** " ++ ppshow (toType t2)) <$> -} convert (srcPos e) γ t1 t2 of
       Left  e   -> tcError e
       Right CNo -> return e
       Right c   -> addCast (tce_ctx γ) e c
@@ -406,7 +407,6 @@ checkTypes :: PPR r => TCEnv r -> TCM r ()
 --------------------------------------------------------------------------------
 checkTypes γ  = mapM_ (\(a,ts) -> mapM_ (safeExtends $ setAP a γ) ts) types
   where 
-    -- types     = concatMap envToList $ m_types . snd <$> qenvToList (tce_mod γ)
     types     = mapSnd (envToList . m_types) <$> qenvToList (tce_mod γ)
     setAP a γ = γ { tce_path = a } 
     

@@ -26,13 +26,14 @@ import           Language.Nano.Errors
 import           Language.Nano.Env
 import           Language.Nano.Environment
 import           Language.Nano.Typecheck.Types
+import           Language.Nano.Liquid.Types
 import           Language.Nano.Typecheck.Resolve
 import           Language.Nano.Typecheck.Subst
 import           Control.Applicative ((<$>))
 
 -- import           Debug.Trace
 
-type PPRD r = (ExprReftable Int r, PP r, F.Reftable r, Data r)
+type PPRD r = (BitVectorable r, ExprReftable Int r, PP r, F.Reftable r, Data r)
 
 
 -- | `getProp γ b s t`: returns  a pair containing:
@@ -51,13 +52,14 @@ getProp :: (PPRD r, EnvLike r g, F.Symbolic f)
 -------------------------------------------------------------------------------
 getProp γ b s t@(TApp _ _ _  ) =                  getPropApp γ b s t
 
-getProp _ b s t@(TCons _ es _) = do (t',m)     <- accessMember b InstanceMember s es
-                                    return      $ (t,t',m)
+getProp _ b s t@(TCons m es _) = do (t',m')    <- accessMember b InstanceMember s es                                      
+                                    return      $ (t,t',combMut m m')
     
-getProp γ b s t@(TRef x ts _)  = do d          <- resolveTypeInEnv γ x
+getProp γ b s t@(TRef x ts@(m:_) _)  
+                               = do d          <- resolveTypeInEnv γ x
                                     es         <- flatten Nothing InstanceMember γ (d,ts)
-                                    (t',m)     <- accessMember b InstanceMember s es
-                                    return      $ (t,t',m)
+                                    (t',m')    <- accessMember b InstanceMember s es
+                                    return      $ (t,t',combMut (toType m) m')
 
 getProp γ b s t@(TClass c    ) = do d          <- resolveTypeInEnv γ c
                                     es         <- flatten Nothing StaticMember γ (d,[])
@@ -69,9 +71,13 @@ getProp γ _ s t@(TModule m   ) = do m'         <- resolveModuleInEnv γ m
                                     return      $ (t,t', t_readOnly) 
                                     -- FIXME: perhaps something else here as mutability
 
+-- FIXME: Instead of the actual integer value, assign unique symbolic values: 
+--        E.g. A_B_C_1 ... 
 getProp γ _ s t@(TEnum e     ) = do e'         <- resolveEnumInEnv γ e
-                                    i          <- envFindTy (F.symbol s) (e_symbols e')
-                                    return      $ (t, tInt `strengthen` exprReft i, t_immutable)
+                                    io         <- envFindTy (F.symbol s) (e_symbols e')
+                                    case io of 
+                                      Just i   -> return (t, tInt `strengthen` exprReft i `bitVector` i, t_immutable)
+                                      Nothing  -> return (t, tInt, t_immutable)
 
 getProp _ _ _ _ = Nothing
 
@@ -175,7 +181,7 @@ extractCall γ t             = uncurry mkAll <$> foo [] t
 --
 --
 -------------------------------------------------------------------------------
-accessMember :: F.Symbolic f 
+accessMember :: (PPR r, F.Symbolic f)
              => Bool 
              -> StaticKind 
              -> f 
@@ -185,8 +191,9 @@ accessMember :: F.Symbolic f
 -- Get member for a call
 accessMember True sk s es =    
   case M.lookup (F.symbol s, sk) es of
-    Just (FieldSig _ m t) -> Just (t,m)
-    Just (MethSig _ m t)  -> Just (t,m)
+    Just f@(FieldSig _ o m t) | optionalField f -> Just (orUndef t,m)
+                              | otherwise       -> Just (t,m)
+    Just (MethSig _ m t) -> Just (t,m)
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
            Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
            _ -> Nothing
@@ -194,7 +201,8 @@ accessMember True sk s es =
 -- Extract member: cannot extract methods
 accessMember False sk s es =
   case M.lookup (F.symbol s, sk) es of
-    Just (FieldSig _ m t) -> Just (t,m)
+    Just f@(FieldSig _ o m t) | optionalField f -> Just (orUndef t,m)
+                              | otherwise       -> Just (t,m)
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
            Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
            _ -> Nothing

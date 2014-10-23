@@ -163,12 +163,12 @@ covariantConvertObj l γ (μ1,e1s) (μ2,e2s)
   | M.null uq1s && M.null uq2s = mconcat           <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn'}
   |                M.null uq2s = mconcat . (CDUp:) <$> subEs  -- {x1:t1,..,xn:tn,..,xm:tm} ?? {x1:t1',..,xn:tn'}
   | M.null uq1s                = mconcat . (CDDn:) <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn',..,xm:tm'}
-  | otherwise                  = Left $ errorWidthSubtyping l e1s e2s
+  | otherwise                  = Left $ errorIncompatFields l e1s e2s
   where
     e1s'                       = (M.map (combMutInField μ1) . M.filter subtypeable) e1s
     e2s'                       = (M.map (combMutInField μ2) . M.filter subtypeable) e2s
     -- Optional fields should not take part in width subtyping
-    (e1s'', e2s'')             = mapPair (M.filter mandatory) (e1s',e2s')
+    (e1s'', e2s'')             = mapPair (M.filter requiredField) (e1s',e2s')
     -- Subtyping equivalent type-members
     subEs                      = mapM (uncurry $ convertElt l γ True) es
     -- Type-members unique in the 1st group
@@ -182,15 +182,15 @@ covariantConvertObj l γ (μ1,e1s) (μ2,e2s)
 --   members @e1s@ can be converted (used as) an object type with members @e2s@. 
 --
 invariantConvertObj l γ (μ1,e1s) (μ2,e2s)
-  | M.null uq1s && M.null uq2s = mconcat           <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn'}
-  |                M.null uq2s = mconcat . (CDUp:) <$> subEs  -- {x1:t1,..,xn:tn,..,xm:tm} ?? {x1:t1',..,xn:tn'}
-  | M.null uq1s                = mconcat . (CDDn:) <$> subEs  -- {x1:t1,..,xn:tn}          ?? {x1:t1',..,xn:tn',..,xm:tm'}
-  | otherwise                  = Left $ errorWidthSubtyping l e1s e2s
+  | M.null uq1s && M.null uq2s = mconcat           <$> subEs  -- {x1:t1,..,xn:tn}          == {x1:t1',..,xn:tn'}
+  |                M.null uq2s = mconcat . (CDUp:) <$> subEs  -- {x1:t1,..,xn:tn,..,xm:tm} UP {x1:t1',..,xn:tn'}
+  -- {x1:t1,..,xn:tn, y1:...} DD {x1:t1',..,xn:tn',..,xm:tm'} 
+  | otherwise                  = Left $ errorIncompatFields l e1s e2s
   where
     e1s'                       = (M.map (combMutInField μ1) . M.filter subtypeable) e1s
     e2s'                       = (M.map (combMutInField μ2) . M.filter subtypeable) e2s
     -- Optional fields should not take part in width subtyping
-    (e1s'', e2s'')             = mapPair (M.filter mandatory) (e1s', e2s')
+    (e1s'', e2s'')             = mapPair (M.filter requiredField) (e1s', e2s')
     -- Subtyping equivalent type-members
     subEs                      = mapM (uncurry $ convertElt l γ False) $ es ++ es'
     es'                        = swap <$> es
@@ -212,16 +212,16 @@ convertElt l γ _ (CallSig t1) (CallSig t2)
   = convert' l γ t1 t2 
 
 convertElt l γ False f1@(FieldSig _ o1 m1 t1) f2@(FieldSig _ o2 m2 t2)          -- mutable container
-  | o1 /= o2
-  = Left $ errorOptionalElt (srcPos l) f1 f2 
+  -- | o1 /= o2
+  -- = Left $ errorOptionalElt (srcPos l) f1 f2 
   | isSubtype γ t1 t2 && isSubtype γ m2 m1 
   = convert' l γ t1 t2 `mappendM` convert' l γ t2 t1
   | otherwise                           
   = Left $ errorIncompMutElt (srcPos l) f1 f2
 
 convertElt l γ True f1@(FieldSig _ o1 m1 t1) f2@(FieldSig _ o2 m2 t2)   -- immutable container
-  | o1 == Optional && o2 == Mandatory 
-  = Left $ errorIncompatOptional (srcPos l) f1 f2 
+  -- | o1 == Optional && o2 == Mandatory 
+  -- = Left $ errorIncompatOptional (srcPos l) f1 f2 
   | isSubtype γ m1 m2 && isImmutable m2 
   = convert' l γ t1 t2
   | isSubtype γ m1 m2

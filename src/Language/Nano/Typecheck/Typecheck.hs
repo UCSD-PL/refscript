@@ -444,9 +444,9 @@ tcStmt γ ex@(ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
          Left _        -> tcSetProp $ Nothing
   where
     tcSetProp rhsCtx = 
-      do  opTy               <- setPropTy l (F.symbol f) <$> safeTcEnvFindTy l γ (builtinOpId BISetProp)
-          (FI _ [e1',e2'],_) <- tcNormalCall γ l BISetProp (FI Nothing [(e1, Nothing), (e2, rhsCtx)]) opTy
-          return              $ (ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 e1' f) e2', Just γ)
+      do  opTy          <- setPropTy l (F.symbol f) <$> safeTcEnvFindTy l γ (builtinOpId BISetProp)
+          ([e1',e2'],_) <- tcNormalCallWCtx γ l BISetProp [(e1, Nothing), (e2, rhsCtx)] opTy
+          return         $ (ExprStmt l $ AssignExpr l2 OpAssign (LDot l1 e1' f) e2', Just γ)
 
 -- e
 tcStmt γ (ExprStmt l e)
@@ -575,11 +575,15 @@ tcExprWD γ e t            = (tcWrap $ tcExpr γ e t)       >>= tcEW γ e >>= \c
                               (e, Just t) -> return (e, t)
                               (e, _     ) -> return (e, tNull)
 
-                                 
-
+ 
 tcNormalCallW γ l o es t = (tcWrap $ tcNormalCall γ l o (FI Nothing ((,Nothing) <$> es)) t) >>= \case
                              Right (FI _ es', t') -> return (es', Just t')
                              Left err             -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) err) es
+                                
+
+tcNormalCallWCtx γ l o es t = (tcWrap $ tcNormalCall γ l o (FI Nothing es) t) >>= \case
+                                Right (FI _ es', t') -> return (es', Just t')
+                                Left err             -> (,Nothing) <$> mapM (deadcastM (tce_ctx γ) err) (fst <$> es)
 
 tcRetW γ l (Just e)
   = (tcWrap $ tcNormalCall γ l "return" (FI Nothing [(e, Just retTy)]) (returnTy retTy True)) >>= \case

@@ -120,7 +120,7 @@ errorUserCast l t e           = mkErr l $ printf "User cast of type '%s' on '%s'
 errorDownCast l t1 t2         = mkErr l $ printf "Downcast: %s => %s" (ppshow t1) (ppshow t2)
 errorClassExtends l x y t1 t2 = mkErr l $ printf "Type '%s' cannot extend type '%s'.\nType for '%s':\n%s\nType for '%s':\n%s" (ppshow x) (ppshow y) 
                                                   (ppshow x) (ppshow t1) (ppshow y) (ppshow t2)
-errorWidthSubtyping l es es'  = mkErr l $ printf "Invalid width subtyping between types with elements '%s' and '%s'." (ppshow es) (ppshow es')
+errorIncompatFields l es es'  = mkErr l $ printf "Incompatible fields when converting between elements: '%s' and '%s'." (ppshow es) (ppshow es')
 errorIncompMutTy l t t'       = mkErr l $ printf "Types '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
 errorIncompMutElt l t t'      = mkErr l $ printf "Elements '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
 errorOptionalElt l t t'       = mkErr l $ printf "Cannot convert from '%s' to '%s'. Property '%s' is defined as optional, but is required in '%s'." (ppshow t) (ppshow t') (ppshow t) (ppshow t')

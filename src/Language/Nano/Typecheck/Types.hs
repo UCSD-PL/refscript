@@ -50,7 +50,8 @@ module Language.Nano.Typecheck.Types (
   -- * Element ops 
   , sameBinder, eltType, allEltType, nonConstrElt, mutability, baseType
   , isMethodSig, isFieldSig, setThisBinding, remThisBinding, mapElt, mapElt', mapEltM
-  , mandatory
+  , requiredField, optionalField, f_optional, f_required, optionalFieldType, requiredFieldType
+  , f_requiredR, f_optionalR
 
   -- * Operator Types
   , infixOpId 
@@ -410,7 +411,7 @@ mapElt f (MethSig  x m t)    = MethSig  x m   $ f t
 mapElt' f (CallSig t)         = CallSig      $ f t
 mapElt' f (ConsSig t)         = ConsSig      $ f t
 mapElt' f (IndexSig x b t)    = IndexSig x b $ f t
-mapElt' f (FieldSig x o m t)  = FieldSig x o (toType $ f $ ofType m) (f t)
+mapElt' f (FieldSig x o m t)  = FieldSig x (toType $ f $ ofType o) (toType $ f $ ofType m) (f t)
 mapElt' f (MethSig  x m t)    = MethSig  x (toType $ f $ ofType m) (f t)
 
 mapEltM f (CallSig t)        = CallSig <$> f t
@@ -424,11 +425,30 @@ nonConstrElt = not . isConstr
 isMethodSig (MethSig _ _ _ ) = True
 isMethodSig _                = False
 
+
+-- | Optional fields 
+
 isFieldSig (FieldSig _ _ _ _ ) = True
 isFieldSig _                   = False
 
-mandatory (FieldSig _ Optional _ _) = False
-mandatory _                         = True
+optionalFieldType (TRef (QN _ _ [] s) _ _) = s == F.symbol "OptionalField"
+optionalFieldType _                        = False
+
+requiredFieldType (TRef (QN _ _ [] s) _ _) = s == F.symbol "RequiredField"
+requiredFieldType _                        = False
+
+
+requiredField (FieldSig _ o _ _) = not $ optionalFieldType o
+requiredField _                  = True
+
+optionalField (FieldSig _ o _ _) = optionalFieldType o
+optionalField _                  = False
+
+f_optional = TRef (QN AK_ (srcPos dummySpan) [] (F.symbol "OptionalField")) [] fTop
+f_required = TRef (QN AK_ (srcPos dummySpan) [] (F.symbol "RequiredField")) [] fTop
+
+f_optionalR = TRef (QN RK_ (srcPos dummySpan) [] (F.symbol "OptionalField")) [] fTop
+f_requiredR = TRef (QN RK_ (srcPos dummySpan) [] (F.symbol "RequiredField")) [] fTop
 
 -- Typemembers that take part in subtyping
 subtypeable e = not (isConstr e)
@@ -494,7 +514,7 @@ eltType (ConsSig         t) = t
 eltType (CallSig         t) = t
 eltType (IndexSig _ _    t) = t
 
-allEltType (FieldSig _ _ m t) = [ofType m, t]
+allEltType (FieldSig _ o m t) = [ofType o, ofType m, t]
 allEltType (MethSig _  m   t) = [ofType m, t]
 allEltType (ConsSig        t) = [t]
 allEltType (CallSig        t) = [t]
@@ -623,12 +643,12 @@ instance (PP r, F.Reftable r) => PP (TypeMemberQ q r) where
   pp (CallSig t)          =  text "call" <+> pp t 
   pp (ConsSig t)          =  text "new" <+> pp t
   pp (IndexSig _ i t)     =  brackets (pp i) <> text ":" <+> pp t
-  pp (FieldSig x o m t)   =  text "▣" <+> ppMut m <+> pp x <> pp o <> text ":" <+> pp t 
+  pp (FieldSig x o m t)   =  text "▣" <+> ppMut m <+> pp x <> ppOptional o <> text ":" <+> pp t 
   pp (MethSig x m t)      =  text "●" <+> ppMut m <+> pp x <+> text ":" <+>  ppMeth t
 
-instance PP OptionalKind where
-  pp Optional   = text "?"
-  pp Mandatory  = text ""
+ppOptional t | optionalFieldType t = text "?"
+             | isTNum t            = text "_"
+             | otherwise           = text ""
 
 ppMeth mt = 
   case bkAnd mt of
@@ -791,7 +811,7 @@ objLitTy l ps     = mkFun (vs, Nothing, bs, rt)
     vs            = [mv] ++ mvs ++ avs
     bs            = [B s (ofType a) | (s,a) <- zip ss ats ]
     rt            = TCons mt elts fTop
-    elts          = M.fromList [((s, InstanceMember), FieldSig s Mandatory m $ ofType a) | (s,m,a) <- zip3 ss mts ats ]
+    elts          = M.fromList [((s, InstanceMember), FieldSig s f_required m $ ofType a) | (s,m,a) <- zip3 ss mts ats ]
     (mv, mt)      = freshTV l mSym (0::Int)                             -- obj mutability
     (mvs, mts)    = unzip $ map (freshTV l mSym) [1..length ps]  -- field mutability
     (avs, ats)    = unzip $ map (freshTV l aSym) [1..length ps]  -- field type vars
@@ -832,7 +852,7 @@ immObjectLitTy l _ ps ts
   | otherwise        = die $ bug (srcPos l) $ "Mismatched args for immObjectLit"
   where
     elts             = M.fromList 
-                         [ ((s, InstanceMember), FieldSig s Mandatory t_immutable t)
+                         [ ((s, InstanceMember), FieldSig s f_required t_immutable t)
                          | (p,t) <- safeZip "immObjectLitTy" ps ts, let s = F.symbol p ]
     nps              = length ps
 
@@ -865,14 +885,15 @@ setPropTy :: (PPR r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
 setPropTy l f ty =
     case ty of 
       TAll α2 (TAll μ2 (TFun Nothing [xt2,a2] rt2 r2)) 
-          -> TAll α2 (TAll μ2 (TFun Nothing [gg xt2,a2] rt2 r2))
+          -> TAll α2 (TAll μ2 (TAll vOpt (TFun Nothing [gg xt2,a2] rt2 r2)))
       _   -> errorstar $ "setPropTy " ++ ppshow ty
   where
     gg (B n (TCons m ts r))        = B n (TCons m (ff ts) r)
     gg _                           = throw $ bug (srcPos l) "Unhandled cases in Typecheck.Types.setPropTy"
     ff                             = M.fromList . tr . M.toList 
-    tr [((_,a),FieldSig x o μx t)] | x == F.symbol "f" = [((f,a),FieldSig f o μx t)]
+    tr [((_,a),FieldSig x _ μx t)] | x == F.symbol "f" = [((f,a),FieldSig f (tVar vOpt) μx t)]
     tr t                           = error $ "setPropTy:tr " ++ ppshow t
+    vOpt                           = TV (F.symbol "opt") (srcPos dummySpan)
 
 
 ---------------------------------------------------------------------------------

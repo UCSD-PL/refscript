@@ -213,9 +213,6 @@ type TypeReference r    = TypeReferenceQ AK r
 data IndexKind          = StringIndex | NumericIndex
   deriving (Eq, Show, Data, Typeable)
 
-data OptionalKind       = Optional | Mandatory
-  deriving (Eq, Show, Data, Typeable)
-
 
 
 data TypeMemberQ  q r
@@ -237,7 +234,7 @@ data TypeMemberQ  q r
   -- ^ Field signature
   --
   | FieldSig  { f_sym  :: F.Symbol                      -- ^ Name  
-              , f_opt  :: OptionalKind                  -- ^ Optional
+              , f_opt  :: (OptionalityQ q)              -- ^ Optional
               , f_mut  :: (MutabilityQ q)               -- ^ Mutability
               , f_type :: RTypeQ  q r }                 -- ^ Property type (could be function)
   -- 
@@ -374,6 +371,14 @@ data Assignability
 
 type MutabilityQ q = RTypeQ q ()
 type Mutability    = Type 
+
+
+---------------------------------------------------------------------------------
+-- | Optional Argument
+---------------------------------------------------------------------------------
+
+type OptionalityQ q = RTypeQ q ()
+type Optionality    = Type
 
 
 ---------------------------------------------------------------------------------

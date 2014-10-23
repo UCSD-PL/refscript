@@ -647,7 +647,7 @@ instance (PP r, F.Reftable r) => PP (TypeMemberQ q r) where
   pp (MethSig x m t)      =  text "●" <+> ppMut m <+> pp x <+> text ":" <+>  ppMeth t
 
 ppOptional t | optionalFieldType t = text "?"
-             | isTNum t            = text "_"
+             | isTVar t            = text "_"
              | otherwise           = text ""
 
 ppMeth mt = 
@@ -882,7 +882,7 @@ enumTy (EnumDef _ ps _) = TAll a $ TFun Nothing [a',b] ot fTop
 ---------------------------------------------------------------------------------
 setPropTy :: (PPR r, IsLocated l) => l -> F.Symbol -> RType r -> RType r
 ---------------------------------------------------------------------------------
-setPropTy l f ty =
+setPropTy l f ty =  
     case ty of 
       TAll α2 (TAll μ2 (TFun Nothing [xt2,a2] rt2 r2)) 
           -> TAll α2 (TAll μ2 (TAll vOpt (TFun Nothing [gg xt2,a2] rt2 r2)))
@@ -893,7 +893,7 @@ setPropTy l f ty =
     ff                             = M.fromList . tr . M.toList 
     tr [((_,a),FieldSig x _ μx t)] | x == F.symbol "f" = [((f,a),FieldSig f (tVar vOpt) μx t)]
     tr t                           = error $ "setPropTy:tr " ++ ppshow t
-    vOpt                           = TV (F.symbol "opt") (srcPos dummySpan)
+    vOpt                           = TV (F.symbol "O") (srcPos dummySpan)
 
 
 ---------------------------------------------------------------------------------

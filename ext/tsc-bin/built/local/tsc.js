@@ -9956,7 +9956,7 @@ var TypeScript;
 
                         if (anns.length === 0) {
                             var eltSymbol = helper.getSymbolForAST(v);
-                            return [new TypeScript.RsFieldSig(v.propertyName.text(), eltSymbol.type.toRsType()).toString()];
+                            return [new TypeScript.RsFieldSig(v.propertyName.text(), eltSymbol.isOptional, eltSymbol.type.toRsType()).toString()];
                         } else {
                             return anns.map(function (m) {
                                 return m.content();
@@ -13019,6 +13019,8 @@ var TypeScript;
                 case 203 /* SignedRightShiftExpression */:
                 case 204 /* UnsignedRightShiftExpression */:
                 case 189 /* BitwiseOrExpression */:
+                case 190 /* BitwiseExclusiveOrExpression */:
+                case 191 /* BitwiseAndExpression */:
                     return new TypeScript.RsInfixExpr(helper.getSourceSpan(this), tokenAnnots(this), new TypeScript.RsInfixOp(this.operatorToken.text()), this.left.toRsExp(helper), this.right.toRsExp(helper));
 
                 case 175 /* AddAssignmentExpression */:
@@ -14742,7 +14744,7 @@ var TypeScript;
                 var fieldDecl = helper.getDeclForAST(this);
                 var sym = fieldDecl.getSymbol();
 
-                anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 6 /* RawField */, new TypeScript.RsFieldSig(this.variableDeclarator.propertyName.text(), sym.type.toRsType()).toString()));
+                anns.push(new TypeScript.RsBindAnnotation(helper.getSourceSpan(this), 6 /* RawField */, new TypeScript.RsFieldSig(this.variableDeclarator.propertyName.text(), sym.isOptional, sym.type.toRsType()).toString()));
             }
 
             if (!this.variableDeclarator) {
@@ -37435,7 +37437,7 @@ var TypeScript;
             var type = this.type;
             var nameStr = this.getDisplayName(scopeSymbol);
             if (type) {
-                nameStr = nameStr + (this.isOptional ? "?" : "");
+                nameStr = nameStr + ((this.isOptional) ? "?" : "");
                 var memberName = this.getTypeNameForFunctionSignature(nameStr, scopeSymbol);
                 if (!memberName) {
                     var typeNameEx = type.getScopedNameEx(scopeSymbol);
@@ -39743,7 +39745,7 @@ var TypeScript;
                         var propAnns = TypeScript.tokenAnnots(d.ast());
                         switch (propAnns.length) {
                             case 0:
-                                return new TypeScript.RsFieldSig(m.name, m.type.toRsType());
+                                return new TypeScript.RsFieldSig(m.name, m.isOptional, m.type.toRsType());
                             case 1:
                                 return new TypeScript.RsRawStringMember(propAnns[0].content());
                             default:
@@ -61426,13 +61428,14 @@ var TypeScript;
 
     var RsFieldSig = (function (_super) {
         __extends(RsFieldSig, _super);
-        function RsFieldSig(name, type) {
+        function RsFieldSig(name, opt, type) {
             _super.call(this);
             this.name = name;
+            this.opt = opt;
             this.type = type;
         }
         RsFieldSig.prototype.toString = function () {
-            return this.name + ": " + this.type.toString();
+            return this.name + (this.opt ? "?" : "") + ": " + this.type.toString();
         };
         return RsFieldSig;
     })(RsTypeMember);

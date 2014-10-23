@@ -56,7 +56,7 @@ import qualified Data.Text                          as T
 import           System.Console.CmdArgs.Default
 
 import           Debug.Trace                        (trace)
--- import           Text.PrettyPrint.HughesPJ 
+import           Text.PrettyPrint.HughesPJ 
 
 type PPRS r = (PPR r, Substitutable r (Fact r)) 
 
@@ -93,9 +93,9 @@ refTc cfg f p
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
   
--- ppCasts (Nano { code = Src fs }) = 
---   fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
---                                 , TCast _ c <- ann_fact a ] 
+ppCasts (Nano { code = Src fs }) = 
+  fcat $ pp <$> [ (srcPos a, c) | a <- concatMap FO.toList fs
+                                , TCast _ c <- ann_fact a ] 
          
 -- | solveConstraints
 --   Call solve with `ueqAllSorts` enabled.
@@ -144,9 +144,8 @@ initGlobalEnv pgm@(Nano { code = Src s })
     >>= \g  -> envAdds "initGlobalEnv" extras g
     >>= \g' -> return $ g'
   where
-    nms       = E.envAdds extras 
-              $ E.envMap (\(_,_,c,d,e) -> (d,c,e)) 
-              $ mkVarEnv $ visibleNames s
+    nms       = (E.envAdds extras $ E.envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv $ visibleVars s) `E.envUnion`
+                (E.envMap (\(_,c,d,e) -> (d,c,e)) $ E.envUnionList $ maybeToList $ m_variables <$> E.qenvFindTy pth mod)
     extras    = [(Id (srcPos dummySpan) "undefined", 
                   (TApp TUndef [] $ F.Reft (F.vv Nothing, [F.trueRefa]), ReadOnly, Initialized))]
     bds       = F.emptyIBindEnv
@@ -162,8 +161,8 @@ initModuleEnv :: (F.Symbolic n, PP n) => CGEnv -> n -> [Statement AnnTypeR] -> C
 initModuleEnv g n s 
   = freshenCGEnvM $ CGE nms bds grd ctx mod cha pth (Just g)
   where
-    nms       = E.envMap (\(_,_,c,d,e) -> (d,c,e)) 
-              $ mkVarEnv $ visibleNames s
+    nms       = (E.envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv $ visibleVars s) `E.envUnion`
+                (E.envMap (\(_,c,d,e) -> (d,c,e)) $ E.envUnionList $ maybeToList $ m_variables <$> E.qenvFindTy pth mod)
     bds       = cge_fenv g
     grd       = []
     mod       = cge_mod g
@@ -190,7 +189,7 @@ initFuncEnv l f i xs (αs,thisTO,ts,t) g s =
   where
     g'        = CGE nms fenv grds ctx mod cha pth parent
     nms       = E.envMap (\(_,_,c,d,e) -> (d,c,e)) 
-              $ mkVarEnv $ visibleNames s
+              $ mkVarEnv $ visibleVars s
     fenv      = cge_fenv g
     grds      = []
     mod       = cge_mod g
@@ -343,7 +342,6 @@ consStmt g s@(FunctionStmt _ _ _ _)
 --
 consStmt g (ClassStmt l x _ _ ce) 
   = do  dfn      <- consEnvFindTypeDefM l g rn
-        -- FIXME: Should this check be done at TC too?
         g'       <- envAdds "consStmt-class-0" 
                       [(Loc (ann l) α, (tVar α, WriteGlobal,Initialized)) 
                           | α <- t_args dfn] g
@@ -371,17 +369,22 @@ consStmt _ s
 consVarDecl :: CGEnv -> VarDecl AnnTypeR -> CGM (Maybe CGEnv) 
 ------------------------------------------------------------------------------------
 consVarDecl g v@(VarDecl l x (Just e))
-  = case scrapeVarDecl v of
+  = case  scrapeVarDecl v of
       [ ]     ->  mseq (consExpr g e Nothing) $ \(y,gy) -> do
                     t       <- safeEnvFindTy y gy
                     Just   <$> envAdds "consVarDecl" [(x, (t, WriteLocal,Initialized))] gy
+
       [(_,t)] -> mseq (consExpr g e $ Just t) $ \(y, gy) -> do
                   ty      <- safeEnvFindTy y gy
                   fta     <- freshTyVar gy l t
-                  _       <- subType l (errorLiquid' l) gy ty fta
+                  _       <- subType l (errorLiquid' l) gy ty  fta
                   _       <- subType l (errorLiquid' l) gy fta t
                   Just   <$> envAdds "consVarDecl" [(x, (fta, WriteGlobal,Initialized))] g
+
       _       -> cgError $ errorVarDeclAnnot (srcPos l) x
+  where
+
+    inst i = envGetContextTypArgs i g l . fst . bkAll
  
 consVarDecl g v@(VarDecl l x Nothing)
   = case scrapeVarDecl v of
@@ -401,7 +404,6 @@ consExprT _ g e Nothing  = consExpr g e Nothing
 consExprT l g e (Just t) = consCall  g l "consExprT" (FI Nothing [(e, Nothing)])
                          $ TFun Nothing [B (F.symbol "x") t] tVoid fTop
 
--- FIXME: Do safeExtends check here. Also add casts in the TC phase where needed
 ------------------------------------------------------------------------------------
 consClassElts :: CGEnv -> IfaceDef F.Reft -> [ClassElt AnnTypeR] -> CGM ()
 ------------------------------------------------------------------------------------
@@ -434,7 +436,7 @@ consClassElt g dfn (Constructor l xs body)
 -- Static field
 consClassElt g dfn (MemberVarDecl l True x (Just e))
   = case spec of 
-      Just (FieldSig _ _ t) -> 
+      Just (FieldSig _ _ _ t) -> 
            void    $ consCall g l "field init"  (FI Nothing [(e, Just t)]) (mkInitFldTy t)
       _ -> cgError $ errorClassEltAnnot (srcPos l) (t_name dfn) x
   where
@@ -521,7 +523,7 @@ consExpr g ex@(Cast l e) _ =
                 [ ct | UserCast ct <- ann_fact l ]
 
 consExpr g (IntLit l i) _
-  = Just <$> envAddFresh l (eSingleton tInt i, WriteLocal, Initialized) g
+  = Just <$> envAddFresh l (tInt `eSingleton` i `bitVector` i, WriteLocal, Initialized) g
 
 consExpr g (BoolLit l b) _
   = Just <$> envAddFresh l (pSingleton tBool b, WriteLocal, Initialized) g 
@@ -556,6 +558,15 @@ consExpr g (InfixExpr l o@OpInstanceof e1 e2) _
   where
     l2 = getAnnotation e2
     cc (QN AK_ _ _ s) = F.symbolString s 
+
+-- | `e1 & e2`
+consExpr g (InfixExpr l o@OpBAnd e1 e2) _
+  = do opTy <- safeEnvFindTy (infixOpId o) g
+       consCall g l o (FI Nothing ((,Nothing) <$> [e1, e2])) $ mkTy opTy
+  where
+    mkTy (TFun Nothing [B x tx, B y ty] out r) = 
+          TFun Nothing [B x tx, B y ty] (out `strengthen` fixBAnd x y) r 
+    mkTy t = t
 
 consExpr g (InfixExpr l o e1 e2) _
   = do opTy <- safeEnvFindTy (infixOpId o) g
@@ -702,11 +713,11 @@ consCast g l e tc
         tc'     <- freshTyFun g l $ rType tc
         (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tc', WriteLocal, Initialized) g
         consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) opTy >>= \case
-          Just (o,g'') -> 
-              do  (to,ao,io)  <- safeEnvFindTyWithAsgn o g''
-                  g''' <- envAdds "consCast-1" [(o, (to, ao,io))] g''
-                  return $ Just (o,g''')
-          Nothing     -> cgError $ errorUserCast (srcPos l) tc e 
+          Just (o,g'') -> return $ Just (o,g'')
+              -- FIXME ? What do we gain here?
+              -- do  (to,ao,io)  <- ltracePP l ("LQ " ++ ppshow e) <$> safeEnvFindTyWithAsgn o g''
+              --     g''' <- envAdds "consCast-1" [(o, (to, ao,io))] g''
+          Nothing      -> cgError $ errorUserCast (srcPos l) tc e 
                       
 -- | Dead code 
 consDeadCode g l e t

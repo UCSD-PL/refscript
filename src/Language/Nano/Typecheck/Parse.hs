@@ -307,9 +307,7 @@ objLitP
 ----------------------------------------------------------------------------------
 mutP :: Parser (MutabilityQ RK)
 ----------------------------------------------------------------------------------
-mutP
-  =  try (TVar <$> brackets tvarP                 <*> return ()) 
- <|> try (TRef <$> brackets qnameP  <*> return [] <*> return ())
+mutP = TRef <$> brackets qnameP  <*> return [] <*> return ()
 
 
 bareTyArgsP
@@ -360,7 +358,7 @@ bareAllP p
 propBindP defM =  sepEndBy propEltP semi
   where
     propEltP   =  try indexEltP 
-              <|> try (fieldEltP defM)
+              <|> try fieldEltP
               <|> try (methEltP defM)
               <|> try callEltP
               <|>     consEltP
@@ -380,12 +378,16 @@ indexP = xyP id colon sn
     sn = withinSpacesP (string "string" <|> string "number")
 
 -- | <[mut]> f: t
-fieldEltP defM  = do 
+fieldEltP       = do 
     x          <- symbol <$> identifierP
+    o          <- maybe f_requiredR (\_ -> f_optionalR) 
+              <$> optionMaybe (withinSpacesP $ char '?')
     _          <- colon
-    m          <- option defM (toType <$> mutP)
+    m          <- option mut (toType <$> mutP)
     t          <- bareTypeP
-    return      $ FieldSig x m t
+    return      $ FieldSig x o m t
+  where
+    mut         = tr_inheritedMut
 
 -- | <[mut]> m :: (ts): t
 methEltP defM   = do
@@ -507,7 +509,7 @@ parseAnnot = go
     go (RawBind     (ss, _)) = Bind    <$> patch2 ss <$> idBindP
     go (RawAmbBind  (ss, _)) = AmbBind <$> patch2 ss <$> idBindP
     go (RawFunc     (_ , _)) = AnFunc  <$>               anonFuncP
-    go (RawField    (_ , _)) = Field   <$>               fieldEltP defaultMutability
+    go (RawField    (_ , _)) = Field   <$>               fieldEltP 
     go (RawMethod   (_ , _)) = Method  <$>               methEltP defaultMutability
     go (RawConstr   (_ , _)) = Constr  <$>               consEltP
     go (RawIface    (ss, _)) = Iface   <$> patch2 ss <$> iFaceP

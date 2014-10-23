@@ -73,7 +73,7 @@ import           Language.Nano.Locations
 import           Language.Nano.Annots
 import           Language.Nano.Program
 import           Language.Nano.Typecheck.Resolve
-import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Misc hiding ((<$$>))
 import qualified Language.Fixpoint.Types        as F
 
 --------------------------------------------------------------------------------

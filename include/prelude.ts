@@ -46,13 +46,8 @@ declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
  */
 declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
 
-/*  builtin_BISetProp ::
-    /\ forall A M. ([M] { f : [#Mutable] A }, A) => A
-    /\ forall A M. ([#Mutable] { f : [M] A }, A) => A
- */
-
 /*@ builtin_BISetProp :: 
-    forall A M. ([M] { f : [#Mutable] A }, A) => A 
+    forall A M. ([M] { f ? : [#Mutable] A }, A) => A 
  */
 declare function builtin_BISetProp<A>(o: { f: A }, v: A): A;
 
@@ -180,6 +175,19 @@ declare function builtin_OpBOr(a: number, b: number): number;
 declare function builtin_OpBXor(a: number, b: number): number;
 declare function builtin_OpBAnd(a: number, b: number): number;
 
+
+/**
+ *
+ *    Bitwise "and" operator `&`
+ *    
+ *     builtin_OpBAnd :: (a: number, y: number) 
+ *                     => { v: number | (bv_idx(a,1)  && bv_idx(b,1)  => bv_idx(v,1)) 
+ *                                      (bv_idx(a,2)  && bv_idx(b,2)  => bv_idx(v,2))  
+ *                                      ...
+ *                                      (bv_idx(a,32) && bv_idx(b,32) => bv_idx(v,32)) 
+ *                        } 
+ *
+ */
 
 declare function builtin_OpBAnd(a: number, b: number): number;
 
@@ -746,6 +754,24 @@ declare function builtin_BIFalsy<A>(x: A): boolean;
                            (FLS(v)  <=> v  = 0  )]}	*/
 
 
+/**
+ *
+ *    Encoding of bitvector behavior
+ *
+ */
+
+/*@ measure bv_idx :: (number, number) => bool */
+
+/*@ builtin_bitVector :: (n: number, i: number) => { number | bv_idx(n,i) } */
+declare function builtin_bitVector(n: number, i: number): number;
+
+
+/**
+ *
+ *    ... `instaneof` ... 
+ *
+ */
+
 /*@ measure instanceof :: forall A . (A,string) => bool */
 
 /*@ builtin_OpInstanceof :: 
@@ -858,25 +884,47 @@ declare var Error: {
 /*@ interface ReadOnly */
 interface ReadOnly { }
 
-/*@ interface Immutable extends #ReadOnly */
+/*@ interface Immutable extends ReadOnly */
 interface Immutable extends ReadOnly {
     immutable__: void;
 } 
 
-/*@ interface Mutable extends #AssignsFields */
+/*@ interface Mutable extends AssignsFields */
 interface Mutable extends AssignsFields {
     mutable__: void;
 } 
 
-/*@ interface AnyMutability extends #ReadOnly */
+/*@ interface AnyMutability extends ReadOnly */
 interface AnyMutability extends ReadOnly {
     defaultMut__: void;
 } 
 
-/*@ interface AssignsFields extends #ReadOnly */
+/*@ interface AssignsFields extends ReadOnly */
 interface AssignsFields extends ReadOnly {
-    defaultMut__: void;
+    assignsFields_: void;
+} 
+
+/*@ interface InheritedMut */
+interface InheritedMut {
+    inheritedMut__: void;
 } 
 
 
+/*************************************************************************
+ *
+ *      OPTIONAL FIELDS
+ *    
+ *      Do not include type parameters here !!!
+ *    
+ ************************************************************************/
+
+/*@ interface RequiredField extends OptionalField */
+interface RequiredField extends OptionalField {
+  requiredField__: void;
+}
+
+/*@ interface OptionalField */
+interface OptionalField {
+  optionalField__: void;
+}
 

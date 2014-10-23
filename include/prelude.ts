@@ -881,12 +881,16 @@ interface InheritedMut {
  *
  *      OPTIONAL FIELDS
  *    
+ *      Do not include type parameters here !!!
+ *    
  ************************************************************************/
 
+/*@ interface RequiredField extends OptionalField */
 interface RequiredField extends OptionalField {
   requiredField__: void;
 }
 
+/*@ interface OptionalField */
 interface OptionalField {
   optionalField__: void;
 }

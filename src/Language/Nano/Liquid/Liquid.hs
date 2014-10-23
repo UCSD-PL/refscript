@@ -87,8 +87,8 @@ refTc cfg f p
   = do donePhase Loud "Generate Constraints"
        solveConstraints f cgi
   where
-    cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
-    -- cgi = generateConstraints cfg p
+    -- cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
+    cgi = generateConstraints cfg p
 
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
@@ -712,7 +712,7 @@ consCast g l e tc
   = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
         tc'     <- freshTyFun g l $ rType tc
         (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tc', WriteLocal, Initialized) g
-        consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) (ltracePP l "CAST" opTy) >>= \case
+        consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) opTy >>= \case
           Just (o,g'') -> return $ Just (o,g'')
               -- FIXME ? What do we gain here?
               -- do  (to,ao,io)  <- ltracePP l ("LQ " ++ ppshow e) <$> safeEnvFindTyWithAsgn o g''

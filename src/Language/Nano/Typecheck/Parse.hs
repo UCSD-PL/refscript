@@ -380,7 +380,7 @@ indexP = xyP id colon sn
 -- | <[mut]> f: t
 fieldEltP       = do 
     x          <- symbol <$> identifierP
-    o          <- maybe Mandatory (\_ -> Optional) 
+    o          <- maybe f_requiredR (\_ -> f_optionalR) 
               <$> optionMaybe (withinSpacesP $ char '?')
     _          <- colon
     m          <- option mut (toType <$> mutP)

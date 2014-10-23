@@ -46,11 +46,6 @@ declare function builtin_BIBracketRef<A>(arr: A[], n: number): A;
  */
 declare function builtin_BIBracketAssign<A>(arr: A[], n: number, v: A): void;
 
-/*  builtin_BISetProp ::
-    /\ forall A M. ([M] { f ? : [#Mutable] A }, A) => A
-    /\ forall A M. ([#Mutable] { f ? : [M] A }, A) => A
- */
-
 /*@ builtin_BISetProp :: 
     forall A M. ([M] { f ? : [#Mutable] A }, A) => A 
  */
@@ -880,4 +875,19 @@ interface AssignsFields extends ReadOnly {
 interface InheritedMut {
     inheritedMut__: void;
 } 
+
+
+/*************************************************************************
+ *
+ *      OPTIONAL FIELDS
+ *    
+ ************************************************************************/
+
+interface RequiredField extends OptionalField {
+  requiredField__: void;
+}
+
+interface OptionalField {
+  optionalField__: void;
+}
 

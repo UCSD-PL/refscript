@@ -191,9 +191,9 @@ accessMember :: (PPR r, F.Symbolic f)
 -- Get member for a call
 accessMember True sk s es =    
   case M.lookup (F.symbol s, sk) es of
-    Just (FieldSig _ Optional m t) -> Just (orUndef t,m)
-    Just (FieldSig _ _        m t) -> Just (t,m)
-    Just (MethSig _ m t)           -> Just (t,m)
+    Just f@(FieldSig _ o m t) | optionalField f -> Just (orUndef t,m)
+                              | otherwise       -> Just (t,m)
+    Just (MethSig _ m t) -> Just (t,m)
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
            Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
            _ -> Nothing
@@ -201,8 +201,8 @@ accessMember True sk s es =
 -- Extract member: cannot extract methods
 accessMember False sk s es =
   case M.lookup (F.symbol s, sk) es of
-    Just (FieldSig _ Optional m t) -> Just (orUndef t,m)
-    Just (FieldSig _ _        m t) -> Just (t,m)
+    Just f@(FieldSig _ o m t) | optionalField f -> Just (orUndef t,m)
+                              | otherwise       -> Just (t,m)
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
            Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
            _ -> Nothing

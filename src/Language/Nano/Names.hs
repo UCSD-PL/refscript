@@ -23,6 +23,8 @@ module Language.Nano.Names (
   , returnId
   , returnSymbol 
   , extendAbsPath
+  , nameInPath
+  , pathInPath
 
   , mkRelName
   , mkAbsName
@@ -139,6 +141,12 @@ instance PP a => PP (Located a) where
 
 extendAbsPath :: F.Symbolic s => AbsPath -> s -> AbsPath
 extendAbsPath (QP _ l ps) s = QP AK_ l $ ps ++ [F.symbol s]
+
+nameInPath  :: (IsLocated l, F.Symbolic s) => l -> AbsPath -> s -> AbsName
+nameInPath l (QP _ _ ps) s = QN AK_ (srcPos l) ps (F.symbol s)
+
+pathInPath  :: (IsLocated l, F.Symbolic s) => l -> AbsPath -> s -> AbsPath
+pathInPath l (QP _ _ ps) s = QP AK_ (srcPos l) $ ps ++ [F.symbol s]
 
 returnName :: String
 returnName = "$result"

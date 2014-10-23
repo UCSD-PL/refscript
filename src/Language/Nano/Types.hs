@@ -210,8 +210,9 @@ type IfaceDef r         = IfaceDefQ AK r
 type SIfaceDef r        = SIfaceDefQ AK r
 type TypeReference r    = TypeReferenceQ AK r
 
-data IndexKind      = StringIndex | NumericIndex
+data IndexKind          = StringIndex | NumericIndex
   deriving (Eq, Show, Data, Typeable)
+
 
 
 data TypeMemberQ  q r
@@ -233,6 +234,7 @@ data TypeMemberQ  q r
   -- ^ Field signature
   --
   | FieldSig  { f_sym  :: F.Symbol                      -- ^ Name  
+              , f_opt  :: (OptionalityQ q)              -- ^ Optional
               , f_mut  :: (MutabilityQ q)               -- ^ Mutability
               , f_type :: RTypeQ  q r }                 -- ^ Property type (could be function)
   -- 
@@ -274,7 +276,7 @@ data EnumDef = EnumDef {
     -- 
     -- ^ Contents: Symbols -> Int
     --
-    , e_symbols    :: Env Int
+    , e_symbols    :: Env (Maybe Int)
 
 } deriving (Data, Typeable)
 
@@ -372,6 +374,14 @@ type Mutability    = Type
 
 
 ---------------------------------------------------------------------------------
+-- | Optional Argument
+---------------------------------------------------------------------------------
+
+type OptionalityQ q = RTypeQ q ()
+type Optionality    = Type
+
+
+---------------------------------------------------------------------------------
 -- | Initialization
 ---------------------------------------------------------------------------------
 
@@ -444,12 +454,12 @@ instance Eq q => Eq (RTypeQ  q r) where
 
 
 instance Eq q => Eq (TypeMemberQ q r) where 
-  CallSig t1        == CallSig t2        = t1 == t2
-  ConsSig t1        == ConsSig t2        = t1 == t2
-  IndexSig _ b1 t1  == IndexSig _ b2 t2  = (b1,t1) == (b2,t2)
-  FieldSig f1 m1 t1 == FieldSig f2 m2 t2 = (f1,m1,t1) == (f2,m2,t2)
-  MethSig  f1 m1 t1 == MethSig f2 m2 t2  = (f1,m1,t1) == (f2,m2,t2)
-  _                 == _                 = False
+  CallSig t1           == CallSig t2           = t1 == t2
+  ConsSig t1           == ConsSig t2           = t1 == t2
+  IndexSig _ b1 t1     == IndexSig _ b2 t2     = (b1,t1) == (b2,t2)
+  FieldSig f1 o1 m1 t1 == FieldSig f2 o2 m2 t2 = (f1,o1,m1,t1) == (f2,o2,m2,t2)
+  MethSig  f1 m1 t1    == MethSig f2 m2 t2     = (f1,m1,t1) == (f2,m2,t2)
+  _                    == _                    = False
  
 
 -- USE CAREFULLY !!!

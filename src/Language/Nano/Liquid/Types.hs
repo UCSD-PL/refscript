@@ -28,7 +28,7 @@ module Language.Nano.Liquid.Types (
   , pAnd, pOr
 
   -- * Conversions
-  , RefTypable (..), eSingleton, pSingleton -- , shiftVVs
+  , RefTypable (..), eSingleton, pSingleton, BitVectorable(..), fixBAnd
 
   -- * Manipulating RefType
   , rTypeReft, rTypeSort, rTypeSortedReft, rTypeValueVar
@@ -57,6 +57,7 @@ module Language.Nano.Liquid.Types (
 
 import           Data.Maybe              (fromMaybe, catMaybes, maybeToList)
 import qualified Data.List               as L
+import           Data.Bits               ((.&.))
 import qualified Data.HashMap.Strict     as HM
 import qualified Data.Map.Strict         as M
 -- import qualified Data.HashSet            as S
@@ -247,6 +248,44 @@ instance RefTypable RefType where
 eSingleton      :: (F.Expression e) => RefType -> e -> RefType 
 eSingleton t e  = t `strengthen` (F.uexprReft e)
 
+class BitVectorable r where
+  bitVector :: RType r -> Int -> RType r
+
+instance BitVectorable F.Reft where
+  bitVector = bitVectorReft
+
+instance BitVectorable () where
+  bitVector t _ = t
+
+bitVectorReft t i | i > 0 && pow2 i = t `strengthen` reft 
+                  | otherwise       = t
+  where
+    pow2 x    = x .&. (x-1) == 0
+    log2 n    = round (logBase 2 $ fromIntegral n) :: Int
+    reft      = F.Reft (v, [F.RConc $ F.PBexp $ F.EApp sym [F.expr v, F.expr $ log2 i]])
+    sym       = F.dummyLoc $ F.symbol "bv_idx"
+    v         = F.vv Nothing
+
+
+
+-- Builds the refinement: 
+--  
+--  bv_idx(a,1) && bv_idx(b,1) => bv_idx(v,1) /\ 
+--  bv_idx(a,2) && bv_idx(b,2) => bv_idx(v,2) /\
+--  ... 
+--  bv_idx(a,32) && bv_idx(b,32) => bv_idx(v,32) /\
+--
+fixBAnd x y = F.Reft (v, cc <$> ([1..32] :: [Int]))
+  where
+    cc      = F.RConc . g
+    -- bv_idx(v,i)
+    g i     = F.PImp (bi (F.eVar v) i) (F.PAnd [bi x i, bi y i])
+    bi n i  = F.PBexp $ F.EApp sym [F.expr n, F.expr i]
+    sym     = F.dummyLoc $ F.symbol "bv_idx"
+    v       = F.vv Nothing
+
+
+
 pSingleton      :: (F.Predicate p) => RefType -> p -> RefType 
 pSingleton t p  = t `strengthen` (F.propReft p)
 
@@ -372,11 +411,11 @@ mapReftM _ t                   = error    $ render $ text "Not supported in mapR
 
 mapReftBindM f (B x t)         = B x     <$> mapReftM f t
 
-mapReftEltM f (FieldSig x m t) = FieldSig x m <$> mapReftM f t
-mapReftEltM f (MethSig x m t)  = MethSig x m  <$> mapReftM f t
-mapReftEltM f (CallSig t)      = CallSig      <$> mapReftM f t
-mapReftEltM f (ConsSig  t)     = ConsSig      <$> mapReftM f t
-mapReftEltM f (IndexSig x b t) = IndexSig x b <$> mapReftM f t
+mapReftEltM f (FieldSig x o m t) = FieldSig x o m <$> mapReftM f t
+mapReftEltM f (MethSig x m t)    = MethSig x m    <$> mapReftM f t
+mapReftEltM f (CallSig t)        = CallSig        <$> mapReftM f t
+mapReftEltM f (ConsSig  t)       = ConsSig        <$> mapReftM f t
+mapReftEltM f (IndexSig x b t)   = IndexSig x b   <$> mapReftM f t
 
 
 ------------------------------------------------------------------------------------------
@@ -627,10 +666,10 @@ zipBind l γ (B _ t1) (B s2 t2) = B s2 <$> zipType l γ t1 t2
 ------------------------------------------------------------------------------------------
 zipElts :: IsLocated l => l -> CGEnv -> TypeMember F.Reft -> TypeMember F.Reft -> Maybe (TypeMember F.Reft) 
 ------------------------------------------------------------------------------------------
-zipElts l γ (CallSig t1)      (CallSig t2)        = CallSig        <$> zipType l γ t1 t2 
-zipElts l γ (ConsSig t1)      (ConsSig t2)        = ConsSig        <$> zipType l γ t1 t2 
-zipElts l γ (IndexSig _ _ t1) (IndexSig x2 b2 t2) = IndexSig x2 b2 <$> zipType l γ t1 t2 
-zipElts l γ (FieldSig _ _ t1) (FieldSig x2 m2 t2) = FieldSig x2 m2 <$> zipType l γ t1 t2
-zipElts l γ (MethSig _ _  t1) (MethSig x2 m2 t2)  = MethSig  x2 m2 <$> zipType l γ t1 t2
-zipElts l _ _                 _                   = Nothing
+zipElts l γ (CallSig t1)        (CallSig t2)           = CallSig           <$> zipType l γ t1 t2 
+zipElts l γ (ConsSig t1)        (ConsSig t2)           = ConsSig           <$> zipType l γ t1 t2 
+zipElts l γ (IndexSig _ _ t1)   (IndexSig x2 b2 t2)    = IndexSig x2 b2    <$> zipType l γ t1 t2 
+zipElts l γ (FieldSig _ _ _ t1) (FieldSig x2 o2 m2 t2) = FieldSig x2 o2 m2 <$> zipType l γ t1 t2
+zipElts l γ (MethSig _ _  t1)   (MethSig x2 m2 t2)     = MethSig  x2 m2    <$> zipType l γ t1 t2
+zipElts l _ _                   _                      = Nothing
 

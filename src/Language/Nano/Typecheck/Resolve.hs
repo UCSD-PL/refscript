@@ -105,8 +105,9 @@ flatten m s γ (ID _ _ vs h es, ts) =  M.map (apply θ . fmut)
     current                        = M.filterWithKey (\(_,s') _ -> s == s') es
     θ                              = fromList $ zip vs ts
     fmut                           = maybe id setMut m
-    setMut m (FieldSig x _ t)      = FieldSig x m t
-    setMut _ e                     = e
+    setMut m (FieldSig x o mf t)   | isInheritedMutability mf 
+                                   = FieldSig x o m t
+    setMut _ f                     = f
     heritage (es,_)                = mapM fields es
     fields (p,ts)                  = resolveTypeInEnv γ p >>= flatten m s γ . (,ts) 
 
@@ -163,13 +164,14 @@ flattenType γ (TModule x)
   = do  es      <- M.fromList . map mkField . envToList . m_variables <$> resolveModuleInEnv γ x
         return   $ TCons t_immutable es fTop
   where
-    mkField (k,(_,_,t,_)) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) t_immutable t)
+    mkField (k,(_,_,t,_)) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) f_required t_immutable t)
 
 flattenType γ (TEnum x)
   = do  es      <- M.fromList . map  mkField . envToList . e_symbols <$> resolveEnumInEnv γ x
         return   $ TCons t_immutable es fTop
   where
-    mkField (k,i) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) t_immutable $ tInt `strengthen` exprReft i)
+    mkField (k, Just i ) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) f_required t_immutable $ tInt `strengthen` exprReft i)
+    mkField (k, Nothing) = ((F.symbol k, InstanceMember), FieldSig (F.symbol k) f_required t_immutable $ tInt)
 
 flattenType γ (TApp TInt _ r) 
   = do  es      <- t_elts <$> resolveTypeInEnv γ (mkAbsName [] $ F.symbol "Number")

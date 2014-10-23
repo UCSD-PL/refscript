@@ -1,40 +1,91 @@
+/*@ newArray :: forall T.(n:number, v:T) => {IArray<T> | len v = n} */
+function newArray<T>(n:number, v:T): T[] {
+    return newArray(n, v);
+}
 
-/*@ kmp_search :: (s:IArray<number>, w:IArray<number>) => {number | true} */
-function kmp_search(s:number[], w:number[]) : number {
-    var m    = 0;
-    var i    = 0; 
-    var slen = s.length;
-    var wlen = w.length;
-             
-    /* Construct the lookup table */
-    var t   = [-1, 0];
-    var pos = 2;
-    var cnd = 0; 
-    while (pos < wlen) {
-      if ( w[pos-1] === w[cnd] ) {
-        t[pos] = cnd + 1;
-        pos++; cnd++;
-      }
-      else if ( cnd > 0 )
-        cnd = t[cnd];
-      else 
-        t[pos++] = 0;
+/*@ qualif LT(v:number, x:number): v < x */
+/*@ alias nat = {v:number | 0 <= v} */
+
+/*@ kmp_table_rec :: (p:IArray<number>) => {IArray<nat> | len(v) = len(p)}  */
+function kmp_table_rec(p) {
+   var m    = p.length;
+
+   /*@ loop :: (number, number, IArray<number>) => IArray<number> */
+   function loop(i, j, next){ 
+	if (i < m - 1) { 
+	    assume (j < i);
+	    if (p[i] === p[j]) {
+		i++; 
+		j++; 
+		next[i] = j; 
+	    } 
+	    else if (j === 0) { 
+                i++; 
+		next[i] = 0; 
+            } 
+	    else { 
+		j = next[j];
+	    }
+	    return loop(i, j, next);
+	}
+	return next;
+    }
+    var next = newArray(m, 0);
+    var i    = 1;
+    var j    = 0; 
+    return loop(i, j, next);
+}
+
+/*@ kmp_table :: (p:IArray<number>) => {IArray<{v:number | 0 <= v}> | len(v) = len(p)}  */
+function kmp_table(p) {
+    var m    = p.length;
+    var next = newArray(m, 0);
+    var i    = 1;
+    var j    = 0; 
+    while (i < m - 1) { 
+	// NEEDS INVARIANT: forall 0 <= i < next.length. next[i] <= i 
+	// Which you can get via Abs-Ref.
+	assume (j < i);
+	if (p[i] === p[j]) {
+            i++; 
+            j++; 
+            next[i] = j; 
+	} 
+	else if (j === 0) { 
+            i++; 
+            next[i] = 0; 
+        } 
+	else { 
+            j = next[j];
+	}
+    }
+    return next;
+}
+
+
+
+/*@ kmp_search :: (p:IArray<number>, s:IArray<number>) => {number | true} */ 
+function kmp_search(p, s) {
+  var next = kmp_table(p);
+  var m    = p.length;
+  var n    = s.length; 
+  var i    = 0;
+  var j    = 0; 
+  while (j < m && i < n) { 
+      if (s[i] === p[j]) { 
+	  i++; 
+	  j++; 
       } 
-      
-      /* Perform the search */
-      while (m + i < slen) {
-        if (s[m+i] === w[i]) {
-          i++;
-          if (i === wlen) 
-            return m;
-        }
-        else {
-          m += i - t[i];
-          if ( t[i] > -1 ) 
-            i = t[i];
-          else
-            i = 0;
-        }
+      else if (j === 0) { 
+	  i++;
+      } 
+      else {
+	  j = next[j];
       }
-      return -1;
   }
+  var res = -1;
+  if (j >= m) { 
+      res = i - m;
+  }
+  return res;
+} 

@@ -579,10 +579,19 @@ ssaExpr (CondExpr l c e1 e2)
        e2'      <- ssaPureExprWith θ φ e2
        return (sc, CondExpr l c' e1' e2')
 
-        
 ssaExpr (PrefixExpr l o e)
   = ssaExpr1 (PrefixExpr l o) e
 
+ssaExpr (InfixExpr l OpLOr e1 e2)
+  = do  l' <- freshenAnn l 
+        vid <- Id <$> freshenAnn l <*> (return $ "__InfixExpr_OpLOr_" ++ show (ann_id l'))
+        vr  <- VarRef <$> freshenAnn l <*> return vid
+        vd  <- VarDecl <$> freshenAnn l <*> return vid <*> return (Just e1)
+        vs  <- VarDeclStmt <$> freshenAnn l <*> return [vd]
+        (_, vs') <- ssaStmt vs
+        (ss,e') <- ssaExpr (CondExpr l vr vr e2) 
+        return  $ (vs':ss, e')
+ 
 ssaExpr (InfixExpr l o e1 e2)
   = ssaExpr2 (InfixExpr l o) e1 e2
 

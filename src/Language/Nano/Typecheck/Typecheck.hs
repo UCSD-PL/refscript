@@ -658,8 +658,8 @@ tcExpr γ (CondExpr l e e1 e2) to
   where
     args v   = FI Nothing [(e,Nothing), (v, Nothing),(e1,to),(e2,to)]
     tt       = fromMaybe tTop to
-    mkTy Nothing (TAll cv (TAll tv (TFun Nothing [B c_ tc, B t_ _, B x_ xt, B y_ yt] o r))) = 
-      TAll cv (TAll tv (TFun Nothing [B c_ tc, B t_ tTop, B x_ xt, B y_ yt] o r))
+    mkTy Nothing (TAll cv (TAll tv (TFun Nothing [B c_ tc, B t_ _   , B x_ xt, B y_ yt] o r))) = 
+                  TAll cv (TAll tv (TFun Nothing [B c_ tc, B t_ tTop, B x_ xt, B y_ yt] o r))
     mkTy _ t = t
 
 tcExpr γ e@(PrefixExpr _ _ _) _

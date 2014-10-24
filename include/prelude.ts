@@ -156,7 +156,9 @@ declare function builtin_OpSNEq<A,B>(x: A, y: B): boolean;
 declare function builtin_OpLAnd(x: any, y: any): any;
       
 /*@ builtin_OpLOr :: 
-    /\ forall A. (x:A, y:A) => { v:A | (if (FLS(x)) then (v = y) else (v = x)) } 
+    /\ forall A. (x: undefined, y:A) => A
+    /\ forall A. (x: null, y:A) => A
+    /\ forall A. (x:A, y:A) => { v:A | ((Prop v) => (v ~~ y) && (not (Prop v) => (v ~~ x))) } 
     /\ forall A B. (x:A, y:B)  => { v:top | (Prop(v) <=> (Prop(x) || Prop(y))) }
  */
 declare function builtin_OpLOr(x: any, y: any): any;

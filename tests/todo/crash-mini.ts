@@ -1,5 +1,5 @@
 
-class P { x = 1; }
+class P { x = 1; y = 2; }
 
 var p = new P();
 

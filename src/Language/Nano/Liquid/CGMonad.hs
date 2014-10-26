@@ -49,7 +49,7 @@ module Language.Nano.Liquid.CGMonad (
   , cgFunTys, cgMethTys, cgCtorTys
 
   -- * Zip type wrapper
-  , zipTypeM
+  , zipTypeUpM, zipTypeDownM
 
   ) where
 
@@ -89,7 +89,7 @@ import           Language.Fixpoint.Errors
 import           Language.ECMAScript3.Syntax
 import           Language.ECMAScript3.PrettyPrint
 
--- import           Debug.Trace                        (trace)
+import           Debug.Trace                        (trace)
 
 -------------------------------------------------------------------------------
 -- | Top level type returned after Constraint Generation
@@ -270,7 +270,6 @@ freshenAnn l
        return $ Ann n (srcPos l) []
 
 
-
 -- | We do not add binders for WriteGlobal variables as they cannot appear in
 --   refinements.
 --
@@ -281,7 +280,7 @@ envAdds :: (IsLocated l, F.Symbolic l)
         -> CGEnv 
         -> CGM CGEnv
 ---------------------------------------------------------------------------------------
-envAdds _ xts' g
+envAdds msg xts' g
   = do ts         <- zipWithM inv ts' is
        let xtas    = zip xs $ zip3 ts as is
        is         <- catMaybes    <$> forM xtas addFixpointBind
@@ -945,10 +944,36 @@ cgCtorTys l f t = zip [0..] <$> mapM (methTys l f) (bkAnd t)
 --------------------------------------------------------------------------------
 -- | zipType wrapper
 
-zipTypeM l g t1 t2 = 
+zipTypeUpM l g x t1 t2 = 
+  -- case zipType l g (ltracePP l ("Will need to replace " ++ ppshow (rTypeValueVar t1) ++ " with " ++ ppshow x ++ " in " ++ ppshow t2) t1) t2 of
   case zipType l g t1 t2 of
-    Just t  -> return t
+    Just (f, r@(F.Reft (s,ras))) -> let su  = F.mkSubst [(s, F.expr x)] in 
+                                    let rs  = F.simplify $ F.Reft (s, F.subst su ras) `F.meet` F.uexprReft x in
+                                    return  $ f rs
+                                    -- return $ ltracePP l ("\nUPCAST SUBST IN " ++ ppshow x ++ 
+                                    --                      "\nT1      " ++ ppshow t1 ++ 
+                                    --                      "\nT2      " ++ ppshow t2 ++ 
+                                    --                      "\nSU      " ++ show (F.toFix su) ++ 
+                                    --                      "\nIN      " ++ ppshow r) $ f rs
     Nothing -> cgError $ bugZipType (srcPos l) t1 t2
+
+zipTypeDownM l g x t1 t2 = 
+  case zipType l g t1 t2 of
+    Just (f, r) -> return $ f r
+--     Just (f, r@(F.Reft (s,ras))) -> let su  = F.mkSubst [(s, F.expr x)] in 
+--                                     -- let rs  = F.simplify $ F.Reft (s, subK su <$> ras) `F.meet` F.uexprReft x in
+--                                     return  $ f r
+--                                     -- return $ ltracePP l ("\nDOWNCAST SUBST ON " ++ ppshow x ++
+--                                     --                      "\nT1      " ++ ppshow t1 ++ 
+--                                     --                      "\nT2      " ++ ppshow t2 ++ 
+--                                     --                      "\nSU      " ++ show (F.toFix su) ++ 
+--                                     --                      "\nIN      " ++ ppshow r ++ 
+--                                     --                      "\nRESULT  " ++ ppshow rs) $ f rs
+    Nothing     -> cgError $ bugZipType (srcPos l) t1 t2
+  where
+    subK _  c@(F.RConc _)   = c
+    subK su k@(F.RKvar _ _) = F.subst su k
+
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

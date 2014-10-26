@@ -32,7 +32,7 @@ module Language.Nano.Typecheck.Types (
   -- * Deconstructing Types
   , bkFun, bkFunBinds, bkFunNoBinds, bkFuns, bkAll, bkAnd, bkUnion, orUndef, funTys
   
-  , rUnion, rTypeR, setRTypeR
+  , rUnion, rTypeR, rTypeROpt, setRTypeR
 
   , renameBinds
 
@@ -393,12 +393,27 @@ rTypeR (TAll _ _   )  = errorstar "Unimplemented: rTypeR - TAll"
 rTypeR (TAnd _ )      = errorstar "Unimplemented: rTypeR - TAnd"
 rTypeR (TExp _)       = errorstar "Unimplemented: rTypeR - TExp"
 
+rTypeROpt               :: F.Reftable r => RType r -> Maybe r
+rTypeROpt (TApp _ _ r )  = Just r
+rTypeROpt (TVar _ r   )  = Just r
+rTypeROpt (TFun _ _ _ r) = Just r
+rTypeROpt (TCons _ _ r)  = Just r
+rTypeROpt (TRef _ _ r)   = Just r
+rTypeROpt (TModule _  )  = Nothing  
+rTypeROpt (TEnum _  )    = Nothing 
+rTypeROpt (TClass _   )  = Nothing 
+rTypeROpt (TAll _ _   )  = Nothing 
+rTypeROpt (TAnd _ )      = Nothing 
+rTypeROpt (TExp _)       = Nothing 
+
+
 -- Set the top-level refinement (wherever applies)
 setRTypeR :: RType r -> r -> RType r
 setRTypeR (TApp c ts _   )  r = TApp c ts r
 setRTypeR (TVar v _      )  r = TVar v r
 setRTypeR (TFun s xts ot _) r = TFun s xts ot r
 setRTypeR (TCons x y _)     r = TCons x y r  
+setRTypeR (TRef x y _)      r = TRef x y r  
 setRTypeR t                 _ = t
 
 

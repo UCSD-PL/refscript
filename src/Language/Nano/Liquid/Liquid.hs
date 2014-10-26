@@ -729,15 +729,17 @@ consDeadCode g l e t
 -- | UpCast(x, t1 => t2)
 consUpCast g l x _ t2
   = do  (tx,a,i)  <- safeEnvFindTyWithAsgn x g
-        ztx       <- zipTypeM l g tx t2
-        envAddFresh l (ztx `eSingleton` x,a,i) g
+        ztx       <- zipTypeUpM l g x tx t2
+        (z,g')    <- envAddFresh l (ztx,a,i) g
+        t'        <- safeEnvFindTy z g'
+        return     $ (z,g') 
 
 -- | DownCast(x, t1 => t2)
 consDownCast g l x _ t2
   = do  (tx,a,i)  <- safeEnvFindTyWithAsgn x g
-        txx       <- zipTypeM l g tx tx
-        tx2       <- zipTypeM l g t2 tx
-        ztx       <- zipTypeM l g tx t2
+        txx       <- zipTypeUpM l g x tx tx
+        tx2       <- zipTypeUpM l g x t2 tx
+        ztx       <- zipTypeDownM l g x tx t2
         subType l (errorDownCast (srcPos l) txx t2) g txx tx2
         envAddFresh l (ztx,a,i) g
 
@@ -948,15 +950,15 @@ consWhile g l cond body
         (xs,ts)              = unzip $ concat [xts | PhiVarTy xts <- ann_fact l]
 
 consWhileBase l xs tIs g    
-  = do  xts_base           <- mapM (`safeEnvFindTy` g) xs 
-        xts_base'          <- zipWithM (zipTypeM (srcPos l) g) xts_base tIs     -- (c)
+  = do  xts_base           <- mapM (\x -> (x,) <$> safeEnvFindTy x g) xs 
+        xts_base'          <- zipWithM (\(x,t) t' -> zipTypeUpM (srcPos l) g x t t') xts_base tIs     -- (c)
         zipWithM_ (subType l err g) xts_base' tIs         
   where 
     err                      = errorLiquid' l
 
 consWhileStep l xs tIs gI'' 
-  = do  xts_step           <- mapM (`safeEnvFindTy` gI'') xs' 
-        xts_step'          <- zipWithM (zipTypeM (srcPos l) gI'') xts_step tIs'
+  = do  xts_step           <- mapM (\x -> (x,) <$> safeEnvFindTy x gI'') xs' 
+        xts_step'          <- zipWithM (\(x,t) t' -> zipTypeUpM (srcPos l) gI'' x t t') xts_step tIs'
         zipWithM_ (subType l err gI'') xts_step' tIs'                           -- (f)
   where 
     tIs'                    = F.subst su <$> tIs

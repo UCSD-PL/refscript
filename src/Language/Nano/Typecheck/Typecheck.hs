@@ -438,7 +438,7 @@ tcStmt γ (ExprStmt l1 (AssignExpr l2 OpAssign (LVar lx x) e))
 
 -- e1.f = e2
 tcStmt γ ex@(ExprStmt l (AssignExpr l2 OpAssign (LDot l1 e1 f) e2))
-  = do z               <- runFailM $ tcExpr γ e1 Nothing
+  = do z               <- runFailM ( tcExpr γ e1 Nothing )
        case z of 
          Right (_,te1) -> tcSetProp $ fmap snd3 $ getProp γ False f te1
          Left _        -> tcSetProp $ Nothing
@@ -924,7 +924,7 @@ tcNormalCall γ l fn etos ft0
        case z of 
          Just (θ, ft) -> do addAnn (ann_id l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
-                            tcCallCase γ l fn ets ft
+                            tcCallCase γ l fn ets $ ltracePP l "resolved" ft
          Nothing      -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) $ toLists ets
                          -- do tcWrap $ tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) $ toLists ets
                          --    return (fst <$> ets, tNull)

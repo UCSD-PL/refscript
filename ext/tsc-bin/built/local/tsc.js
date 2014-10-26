@@ -13019,7 +13019,6 @@ var TypeScript;
                 case 203 /* SignedRightShiftExpression */:
                 case 204 /* UnsignedRightShiftExpression */:
                 case 189 /* BitwiseOrExpression */:
-                case 190 /* BitwiseExclusiveOrExpression */:
                 case 191 /* BitwiseAndExpression */:
                     return new TypeScript.RsInfixExpr(helper.getSourceSpan(this), tokenAnnots(this), new TypeScript.RsInfixOp(this.operatorToken.text()), this.left.toRsExp(helper), this.right.toRsExp(helper));
 
@@ -39720,7 +39719,7 @@ var TypeScript;
                 }));
             }
 
-            if (this.kind === 8388608 /* ObjectType */) {
+            if (this.kind === 8388608 /* ObjectType */ || this.kind === 256 /* ObjectLiteral */) {
                 var methods = TypeScript.ArrayUtilities.concat(this.getAllMembers(65536 /* Method */, 0 /* all */).map(function (m) {
                     return m.type.getCallSignatures().map(function (s) {
                         var decls = s.getDeclarations();
@@ -39790,6 +39789,7 @@ var TypeScript;
 
                 return new TypeScript.TObject(TypeScript.ArrayUtilities.concat([methods, properties, constructors, calls]));
             }
+
             return new TypeScript.TError(this.toString());
         };
 

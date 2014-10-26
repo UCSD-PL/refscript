@@ -21,6 +21,7 @@ import qualified Data.Map.Strict                    as M
 import           Data.Maybe                         (catMaybes, listToMaybe, maybeToList, fromMaybe)
 import           Data.List                          (nub)
 import           Data.Monoid                        (mappend)
+import           Data.Function                      (on)
 import           Data.Generics                   
 import qualified Data.Traversable                   as T
 
@@ -924,7 +925,7 @@ tcNormalCall γ l fn etos ft0
        case z of 
          Just (θ, ft) -> do addAnn (ann_id l) $ Overload (tce_ctx γ) ft
                             addSubst l θ
-                            tcCallCase γ l fn ets $ ltracePP l "resolved" ft
+                            tcCallCase γ l fn ets ft
          Nothing      -> tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) $ toLists ets
                          -- do tcWrap $ tcError $ uncurry (errorCallNotSup (srcPos l) fn ft0) $ toLists ets
                          --    return (fst <$> ets, tNull)
@@ -959,19 +960,19 @@ resolveOverload :: (PPRSF r, PP a)
 --
 --   * If the function requires a 'self' argument, the parameters provide one.
 --
-resolveOverload γ l fn ets ft 
-  = case [ mkFun (vs,s,τs,τ) | (vs,s,τs,τ) <- sigs
-                             , length τs == largs ets
-                             , lMaybe s  <= lself ets ] of
+resolveOverload γ l fn ets@(FI e es) ft 
+  = case [ mkFun (vs,s,bs,τ) | (vs,s,bs,τ) <- catMaybes $ bkFun <$> extractCall γ ft
+                             , length bs == length es
+                             , and $ zipWith (\b e -> matchTypes (b_type b) (snd e)) bs es ] of
       [t]    -> Just . (,t) <$> getSubst 
       fts    -> tcCallCaseTry γ l fn (snd <$> ets) fts
   where
-    lself (FI (Just _) _) = 1
-    lself (FI _        _) = 0
-    largs (FI _ e)        = length e
-    lMaybe Nothing        = (0 :: Int)
-    lMaybe _              = (1 :: Int)
-    sigs                  = catMaybes (bkFun <$> extractCall γ ft)
+    -- selfMatch (Just _) Nothing = False
+    -- selfMatch _        _        = True 
+    matchTypes (TFun _ as _ _) (TFun _ bs _ _) 
+      | length as == length bs = and $ zipWith (on matchTypes b_type) as bs
+      | otherwise              = False 
+    matchTypes _  _            = True
 
 
 ----------------------------------------------------------------------------------

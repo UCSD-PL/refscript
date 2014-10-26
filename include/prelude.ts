@@ -571,16 +571,19 @@ interface Array<T> {
 
     forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void;
 
-    /*@ map : forall U. (callbackfn:(T) => U) => {#Array[#Immutable, U] | true} */
+    /*@ map : forall U. (callbackfn: (value: T) => U) => { IArray<U> | true} */
     map<U>(callbackfn: (value: T) => U): U[];
     
-    /*@ map : forall U. (callbackfn:(T) => U, index:number) => {#Array[#Immutable, U] | true} */
+    /*@ map : forall U. (callbackfn:(value: T, index: number) => U)=> { IArray<U> | true} */
     map<U>(callbackfn: (value: T, index: number) => U): U[];
     
-    /*@ map : forall U. (callbackfn:(T) => U, index:number, array:#Array[#Immutable,T]) => {#Array[#Immutable, U] | true} */
+    /*@ map : forall U. (callbackfn:(value: T, index: number, array: IArray<T>) => U) => { IArray<U> | true } */
     map<U>(callbackfn: (value: T, index: number, array: T[]) => U): U[];
 
-    /*@ filter : forall N . (callbackfn: (T, number, #Array[#Immutable, T]) => boolean) => {#Array[N, T] | true} */
+    /*@ filter : 
+        /\ forall N . (callbackfn: (value: T) => boolean) => { Array[N, T] | true }
+        /\ forall N . (callbackfn: (value: T, index: number) => boolean) => { Array[N, T] | true }
+        /\ forall N . (callbackfn: (value: T, index: number, array: IArray<T>) => boolean) => { Array[N, T] | true } */
     filter(callbackfn: (value: T, index: number, array: T[]) => boolean/*, thisArg?: any*/): T[];
 
 

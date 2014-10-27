@@ -49,14 +49,22 @@ instance PP a => PP (S.HashSet a) where
 
 
 --------------------------------------------------------------------------------
-isSubtype :: (PPR r, Functor g, EnvLike () g) 
-          => g r -> RType r -> RType r -> Bool
+isSubtype :: (PPR r, Functor g, EnvLike () g) => g r -> RType r -> RType r -> Bool
 --------------------------------------------------------------------------------
 isSubtype γ t1 t2 =
   case convert (srcPos dummySpan) γ t1 t2 of
     Right CNo       -> True
     Right (CUp _ _) -> True
     _               -> False
+
+--------------------------------------------------------------------------------
+isConvertible :: (EnvLike () g, Functor g) => g () -> Type -> Type -> Bool
+--------------------------------------------------------------------------------
+isConvertible γ t1 t2 =
+  case convert' (srcPos dummySpan) γ t1 t2 of
+    Left _          -> False
+    Right CDDead    -> False
+    _               -> True
 
 
 -- | `convert`
@@ -318,13 +326,23 @@ convertSimple _ _ t1 t2 | t1 == t2  = Right CDNo
 convertUnion :: (Functor g, EnvLike () g)
              => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
-convertUnion _ γ t1 t2  
+convertUnion l γ t1 t2  
   | upcast    = Right CDUp 
-  | deadcast  = Right CDDead
-  | otherwise = Right CDDn
+  | downcast  = Right CDDn
+  -- | deadcast  = Right $ ltracePP l (ppshow t1 ++ " VS " ++ ppshow t2) CDDead
+  | otherwise = Right CDDead
   where 
-    upcast        = all (\t1 ->       any (\t2 -> isSubtype γ t1 t2) t2s) t1s
-    deadcast      = all (\t1 -> not $ any (\t2 -> isSubtype γ t1 t2) t2s) t1s
+
+
+    upcast        =  -- ltracePP l ("UPCAST " ++ ppshow t1 ++ " VS " ++ ppshow t2) $ 
+                    all (\t1 -> any (\t2 -> isSubtype γ t1 t2) t2s) t1s
+
+    downcast      = -- ltracePP l ("DOWNCAST " ++ ppshow t1 ++ " VS " ++ ppshow t2) $ 
+                    any (\t1 -> any (\t2 -> isConvertible γ t1 t2) t2s) t1s 
+
+
+
+    -- deadcast      = all (\t1 -> not $ any (\t2 -> isSubtype γ t1 t2) t2s) t1s
     (t1s, t2s)    = chk $ mapPair bkUnion (t1, t2)
     chk ([ ],[ ]) = errorstar "unionParts', called on too small input"
     chk ([_],[ ]) = errorstar "unionParts', called on too small input"
@@ -344,6 +362,9 @@ class Related t where
 instance Related RType where
 
   related γ (TRef x _ _) (TRef y _ _)           = isAncestor γ x y || isAncestor γ y x
+
+  related γ TRef{}       TCons{}                = True
+  related _ TCons{}      TRef{}                 = True
 
   related γ TCons{}      TCons{}                = True
 

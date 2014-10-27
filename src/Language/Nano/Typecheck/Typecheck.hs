@@ -1004,13 +1004,6 @@ tcCallCaseTry γ l fn ts (ft:fts)
                    θ'              <- unifyTypesM (srcPos l) γ ts2 its2
                    zipWithM_          (subtypeM (srcPos l) γ) (apply θ' $ toList ts2) 
                                                               (apply θ' $ toList its2)
-                   
---                    case convert l γ t1 t2 of
---                      Right CNo       -> return  ()
---                      Right (CUp _ _) -> return  ()
---                      Right (CDn _ _) -> return  ()
---                      Right _         -> tcError $ errorSubtype l t1 t2
-
                    return           $ θ'
         case z of 
           Just θ  -> return $ Just (θ, ft)

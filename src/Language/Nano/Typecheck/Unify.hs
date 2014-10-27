@@ -121,19 +121,27 @@ unifyUnions :: PPR r
             -> Either Error (RSubst r)
 -----------------------------------------------------------------------------
 unifyUnions l γ θ t1 t2
-  | length v1s > 1 = Left $ unsupportedUnionTVar (srcPos l) t1  
-  | length v2s > 1 = Left $ unsupportedUnionTVar (srcPos l) t2 
-  | otherwise      = do θ1 <- unifys   l γ θ cmn1 cmn2
-                        θ2 <- unifyVar l γ θ1 v1s dif2
-                        θ3 <- unifyVar l γ θ2 v2s dif1
-                        return θ3
+  | length v1s > 1  
+  = Left $ unsupportedUnionTVar (srcPos l) t1  
+  | length v2s > 1  
+  = Left $ unsupportedUnionTVar (srcPos l) t2 
+  | length v1s == 1 || length v2s == 1
+  = do  θ1 <- unifys   l γ θ cmn1 cmn2
+        θ2 <- unifyVar l γ θ1 v1s dif2
+        θ3 <- unifyVar l γ θ2 v2s dif1
+        return θ3
+  | otherwise
+  = unifys l γ θ cmn1' cmn2' 
   where
-    (t1s , t2s ) = mapPair bkUnion (t1, t2)
-    (v1s, t1s')  = L.partition isTVar t1s
-    (v2s, t2s')  = L.partition isTVar t2s
-    (cmn1, cmn2) = unzip [ (t1, t2) | t1 <- t1s', t2 <- t2s', related γ t1 t2 ]
-    (dif1,dif2)  = (rem cmn1 t1s', rem cmn2 t2s')
-    rem xs ys    = [ y | y <- ys, not (toType y `elem` map toType xs) ]
+    (t1s , t2s )   = mapPair bkUnion (t1, t2)
+    (v1s, t1s')    = L.partition isTVar t1s
+    (v2s, t2s')    = L.partition isTVar t2s
+    (cmn1, cmn2)   = unzip [ (t1, t2) | t1 <- t1s', t2 <- t2s', t1 `match` t2 ]
+    (dif1,dif2)    = (rem cmn1 t1s', rem cmn2 t2s')
+    rem xs ys      = [ y | y <- ys, not (toType y `elem` map toType xs) ]
+    clear ts       = [ t | t <- ts, not (isNull t) && not (isUndef t) ]
+    (cmn1', cmn2') = unzip [ (t1, t2) | t1 <- clear t1s', t2 <- clear t2s', t1 `match` t2 ]
+    t `match` t'   = isSubtype γ t t' || isSubtype γ t t' || related γ t t' 
 
 unifyVar _ _ θ [ ] _  = return θ
 unifyVar _ _ θ [_] [] = return θ

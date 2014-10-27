@@ -166,7 +166,7 @@ extractCall γ t             = uncurry mkAll <$> foo [] t
     foo _  _                = []
 
     getCallSig αs es        = case M.lookup (callSymbol, InstanceMember) es of
-                                Just (CallSig t) -> [(αs, t)]
+                                Just (CallSig t) -> foo αs t
                                 _                -> []
 
 

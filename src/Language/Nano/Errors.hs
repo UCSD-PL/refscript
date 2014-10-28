@@ -122,6 +122,7 @@ errorClassExtends l x y t1 t2 = mkErr l $ printf "Type '%s' cannot extend type '
                                                   (ppshow x) (ppshow t1) (ppshow y) (ppshow t2)
 errorIncompatFields l es es'  = mkErr l $ printf "Incompatible fields when converting between elements: '%s' and '%s'." (ppshow es) (ppshow es')
 errorIncompMutTy l t t'       = mkErr l $ printf "Types '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
+errorObjectType l t t'        = mkErr l $ printf "Cannot treat object type '%s' nominally as type '%s'." (ppshow t) (ppshow t')
 errorIncompMutElt l t t'      = mkErr l $ printf "Elements '%s' and '%s' have incompatible mutabilities." (ppshow t) (ppshow t')
 errorOptionalElt l t t'       = mkErr l $ printf "Cannot convert from '%s' to '%s'. Property '%s' is defined as optional, but is required in '%s'." (ppshow t) (ppshow t') (ppshow t) (ppshow t')
 errorIncompatOptional l t t'  = mkErr l $ printf "Cannot convert from '%s' to '%s'. Properties have incompatible optionality modifiers." (ppshow t) (ppshow t')

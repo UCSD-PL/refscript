@@ -104,6 +104,14 @@ convert' l γ t1 t2                             = convertSimple  l γ t1 t2
 convertObj :: (Functor g, EnvLike () g)
            => SourceSpan -> g () -> Type -> Type -> Either Error CastDirection
 --------------------------------------------------------------------------------
+
+-- | Cannot convert a structural object type to a nominal class type. 
+--   Interfaces are OK.
+--
+convertObj l γ t1 t2
+  | not (isClassType γ t1) && isClassType γ t2
+  = Left $ errorObjectType l t1 t2
+
 convertObj l γ t1@(TCons μ1 e1s _) t2@(TCons μ2 e2s _)
   | mutabilitySub && isImmutable μ2         = covariantConvertObj l γ (μ1,e1s) (μ2,e2s)
   | mutabilitySub                           = invariantConvertObj l γ (μ1,e1s) (μ2,e2s)

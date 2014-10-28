@@ -336,7 +336,11 @@ addInvariant g t
     keyInExpr s               = F.EApp (F.dummyLoc (F.symbol "keyIn")) [F.expr (F.symbolText s), F.eVar $ vv t]
 
     -- | instanceof(v,"C")
-    instanceof t@(TRef c _ _) = t `strengthen` reftIO t (name c)
+    --   
+    --   Only strengthen classes -- not interfaces
+    --
+    instanceof t@(TRef c _ _) | isClassType g t 
+                              = t `strengthen` reftIO t (name c)
     instanceof t              = t 
     name (QN AK_ _ _ s)       = s
     reftIO t c                = F.Reft (vv t, [refaIO t c])

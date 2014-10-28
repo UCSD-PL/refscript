@@ -502,6 +502,7 @@ declare var String: {
     // fromCharCode(...codes: number[]): string;
 }
 
+interface Boolean { }
 
 
 /**

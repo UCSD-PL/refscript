@@ -10096,7 +10096,7 @@ var TypeScript;
                         case 11 /* IdentifierName */:
                         case 126 /* GenericType */:
                         case 121 /* QualifiedName */:
-                            return helper.getSymbolForAST(t).type.toRsType(mutParam);
+                            return helper.getSymbolForAST(t).type.toRsType(4 /* PresetK */, mutParam);
                         default:
                             helper.postDiagnostic(_this, TypeScript.DiagnosticCode.HeritageClauses_to_RefScript);
                     }
@@ -16465,7 +16465,7 @@ var TypeScript;
                     break;
                 default:
                     var eltSymbol = helper.getSymbolForAST(this.type);
-                    castType = eltSymbol.type.toRsType();
+                    castType = eltSymbol.type.toRsType(3 /* ParametricK */);
                     break;
             }
 
@@ -39662,7 +39662,7 @@ var TypeScript;
             return this._widenedType;
         };
 
-        PullTypeSymbol.prototype.toRsType = function (mut) {
+        PullTypeSymbol.prototype.toRsType = function (mut, presetMut) {
             if (this.isAny()) {
                 return TypeScript.TTop;
             }
@@ -39703,10 +39703,52 @@ var TypeScript;
                 } else {
                     tArgs = this.getTypeParameters();
                 }
-                var rsTParams = [mut ? mut : new TypeScript.TTypeReference("Immutable", [])].concat(tArgs.map(function (p) {
-                    return p.toRsType();
-                }));
-                return new TypeScript.TTypeReference(this.getScopedName().split("<")[0], rsTParams);
+
+                var mutT;
+                if (mut) {
+                    switch (mut) {
+                        case 4 /* PresetK */:
+                            var rsTParams = [presetMut].concat(tArgs.map(function (p) {
+                                return p.toRsType();
+                            }));
+                            return new TypeScript.TTypeReference(this.getScopedName().split("<")[0], rsTParams);
+                        case 3 /* ParametricK */:
+                            var possible = "0123456789";
+                            var mutStr = "M" + possible.charAt(Math.floor(Math.random() * possible.length));
+                            var mutVar = new TypeScript.TTVar(mutStr);
+                            var mutT = new TypeScript.TTypeReference(mutStr, []);
+                            var rsTParams = [mutT].concat(tArgs.map(function (p) {
+                                return p.toRsType();
+                            }));
+                            return new TypeScript.TAll(mutStr, new TypeScript.TTypeReference(this.getScopedName().split("<")[0], rsTParams));
+                        case 0 /* MutableK */:
+                            var mutT = new TypeScript.TTypeReference("Mutable", []);
+                            var rsTParams = [mutT].concat(tArgs.map(function (p) {
+                                return p.toRsType();
+                            }));
+                            return new TypeScript.TTypeReference(this.getScopedName().split("<")[0], rsTParams);
+                        case 2 /* ReadOnlyK */:
+                            var mutT = new TypeScript.TTypeReference("ReadOnly", []);
+                            var rsTParams = [mutT].concat(tArgs.map(function (p) {
+                                return p.toRsType();
+                            }));
+                            return new TypeScript.TTypeReference(this.getScopedName().split("<")[0], rsTParams);
+                        case 5 /* DefaultK */:
+                        case 1 /* ImmutableK */:
+                        default:
+                            var mutT = new TypeScript.TTypeReference("Immutable", []);
+                            var rsTParams = [mutT].concat(tArgs.map(function (p) {
+                                return p.toRsType();
+                            }));
+                            return new TypeScript.TTypeReference(this.getScopedName().split("<")[0], rsTParams);
+                    }
+                } else {
+                    var mutT = new TypeScript.TTypeReference("Immutable", []);
+                    var rsTParams = [mutT].concat(tArgs.map(function (p) {
+                        return p.toRsType();
+                    }));
+                    return new TypeScript.TTypeReference(this.getScopedName().split("<")[0], rsTParams);
+                }
             }
 
             if (this.isFunction()) {
@@ -61203,6 +61245,25 @@ var TypeScript;
     })(RsType);
     TypeScript.TObject = TObject;
 
+    var TAll = (function (_super) {
+        __extends(TAll, _super);
+        function TAll(param, ty) {
+            _super.call(this);
+            this.param = param;
+            this.ty = ty;
+        }
+        TAll.prototype.toString = function () {
+            var s = "";
+            s += "forall ";
+            s += this.param;
+            s += " . ";
+            s += this.ty.toString();
+            return s;
+        };
+        return TAll;
+    })(RsType);
+    TypeScript.TAll = TAll;
+
     var RsFunctionLike = (function (_super) {
         __extends(RsFunctionLike, _super);
         function RsFunctionLike() {
@@ -61468,6 +61529,16 @@ var TypeScript;
         return RsRawStringMember;
     })(RsTypeMember);
     TypeScript.RsRawStringMember = RsRawStringMember;
+
+    (function (MutabilityKind) {
+        MutabilityKind[MutabilityKind["MutableK"] = 0] = "MutableK";
+        MutabilityKind[MutabilityKind["ImmutableK"] = 1] = "ImmutableK";
+        MutabilityKind[MutabilityKind["ReadOnlyK"] = 2] = "ReadOnlyK";
+        MutabilityKind[MutabilityKind["ParametricK"] = 3] = "ParametricK";
+        MutabilityKind[MutabilityKind["PresetK"] = 4] = "PresetK";
+        MutabilityKind[MutabilityKind["DefaultK"] = 5] = "DefaultK";
+    })(TypeScript.MutabilityKind || (TypeScript.MutabilityKind = {}));
+    var MutabilityKind = TypeScript.MutabilityKind;
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
 (function (TypeScript) {

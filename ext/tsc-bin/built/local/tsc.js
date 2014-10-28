@@ -59596,6 +59596,8 @@ var TypeScript;
         RsAssignOpKind[RsAssignOpKind["OpAssign"] = 0] = "OpAssign";
         RsAssignOpKind[RsAssignOpKind["OpAssignAdd"] = 1] = "OpAssignAdd";
         RsAssignOpKind[RsAssignOpKind["OpAssignSub"] = 2] = "OpAssignSub";
+        RsAssignOpKind[RsAssignOpKind["OpAssignMul"] = 3] = "OpAssignMul";
+        RsAssignOpKind[RsAssignOpKind["OpAssignDiv"] = 4] = "OpAssignDiv";
     })(TypeScript.RsAssignOpKind || (TypeScript.RsAssignOpKind = {}));
     var RsAssignOpKind = TypeScript.RsAssignOpKind;
 
@@ -59614,6 +59616,10 @@ var TypeScript;
                     return 1 /* OpAssignAdd */;
                 case "-=":
                     return 2 /* OpAssignSub */;
+                case "*=":
+                    return 3 /* OpAssignMul */;
+                case "/=":
+                    return 4 /* OpAssignDiv */;
             }
             throw new Error("Case: " + this.sign + " not handled in RsAssignOp.signToOpKind");
         };

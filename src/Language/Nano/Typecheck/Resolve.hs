@@ -24,6 +24,8 @@ module Language.Nano.Typecheck.Resolve (
   -- * Constructors
   , Constructor, {- toConstructor, isConstSubtype, -} sameTypeof, getTypeof
 
+  , isClassType
+
   ) where 
 
 import           Control.Applicative                 ((<$>), (<*>), (<|>))
@@ -80,6 +82,16 @@ resolveEnumInPgm p (QN AK_ l ss s) = resolveModuleInPgm p (QP AK_ l ss)
  
 resolveModuleInPgm :: NanoBareR r -> AbsPath -> Maybe (ModuleDef r)
 resolveModuleInPgm p s = qenvFindTy s $ pModules p
+
+--------------------------------------------------------------------------------
+isClassType :: EnvLike r g => g r -> RType r -> Bool
+--------------------------------------------------------------------------------
+isClassType γ (TRef x _ _ ) = 
+  case resolveTypeInEnv γ x of
+    Just (ID _ k _ _ _ ) -> k == ClassKind
+    _                    -> False
+isClassType _ _ = False
+
 
 -- | Flattenning 
 --

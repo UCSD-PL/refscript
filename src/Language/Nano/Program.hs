@@ -280,6 +280,8 @@ instance IsNano AssignOp where
   isNano OpAssign     = True
   isNano OpAssignAdd  = True
   isNano OpAssignSub  = True
+  isNano OpAssignMul  = True
+  isNano OpAssignDiv  = True
   isNano x            = errortext (text "Not Nano AssignOp!" <+> pp x) 
   -- isNano _        = False
 

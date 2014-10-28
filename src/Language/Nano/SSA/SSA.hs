@@ -431,7 +431,11 @@ ssaClassElt :: Data r
 -------------------------------------------------------------------------------------
 ssaClassElt flds (Constructor l xs bd0)
   = do θ <- getSsaEnv
-       withAssignability ReadOnly (ssaEnvIds θ) $                     -- Variables from OUTER scope are NON-ASSIGNABLE
+       (ros, wgs, wls) <- (`variablesInScope` bd0) <$> getGlobs
+       withAssignability ReadOnly (ssaEnvIds θ) $               -- Variables from OUTER scope are NON-ASSIGNABLE
+          withAssignability ReadOnly ros        $               -- ReadOnly in scope
+            withAssignability WriteGlobal wgs   $               -- Globals in scope
+              withAssignability WriteLocal wls  $               -- Locals in scope
          do setSsaEnv     $ extSsaEnv xs θ                            -- Extend SsaEnv with formal binders
             initStmts    <- mapM initStmt fldNms
             bd1          <- visitStmtsT (ctorVisitor l fldNms) () bd0
@@ -472,10 +476,14 @@ ssaClassElt _ (MemberVarDecl l True x Nothing)
 
 ssaClassElt _ (MemberMethDef l s e xs body)
   = do θ <- getSsaEnv
+       (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
        withAssignability ReadOnly (ssaEnvIds θ) $               -- Variables from OUTER scope are NON-ASSIGNABLE
-         do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ  -- Extend SsaEnv with formal binders
-            (_, body')   <- ssaStmts body                    -- Transform function
-            setSsaEnv θ                                      -- Restore Outer SsaEnv
+          withAssignability ReadOnly ros        $               -- ReadOnly in scope
+            withAssignability WriteGlobal wgs   $               -- Globals in scope
+              withAssignability WriteLocal wls  $               -- Locals in scope
+         do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ     -- Extend SsaEnv with formal binders
+            (_, body')   <- ssaStmts body                       -- Transform function
+            setSsaEnv θ                                         -- Restore Outer SsaEnv
             return        $ MemberMethDef l s e xs body'
 ssaClassElt _ m@(MemberMethDecl _ _ _ _ ) = return m
 

@@ -118,7 +118,7 @@ tcNano :: PPRSF r => NanoSSAR r -> TCM r (NanoTypeR r)
 -------------------------------------------------------------------------------
 tcNano p@(Nano {code = Src fs})
   = do  _       <- checkTypes γ 
-        (fs',_) <- tcStmts γ fs
+        (fs',_) <- tcStmts γ $ fs
         fs''    <- patch fs'
         ast_cnt <- getAstCount
         return   $ p { code   = Src fs'' 
@@ -1072,7 +1072,7 @@ envJoin :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnvO r -> TCEnvO r -> TCM r (TCEn
 envJoin _ _ Nothing x           = return x
 envJoin _ _ x Nothing           = return x
 envJoin l γ (Just γ1) (Just γ2) = 
-  do  tas       <- mapM (getPhiType l γ1 γ2) xs
+  do  tas       <- catMaybes <$> mapM (getPhiType l γ1 γ2) xs
 
       -- locals ts  = [(x,s1,s2) | (x, s1@(t1, WriteLocal, i1), s2@(t2, WriteLocal, i2)) <- ts]
 
@@ -1087,7 +1087,7 @@ envLoopJoin :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
 ----------------------------------------------------------------------------------
 envLoopJoin _ γ Nothing   = return $ Just γ
 envLoopJoin l γ (Just γl) = 
-  do  ts    <- mapM (getLoopNextPhiType l γ γl) xs
+  do  ts    <- catMaybes <$> mapM (getLoopNextPhiType l γ γl) xs
       γ'    <- (`substNames` γ) <$> getSubst
       return $ Just $ tcEnvAdds (zip xs ts) γ'
   where 
@@ -1101,28 +1101,27 @@ envLoopJoin l γ (Just γl) =
 --
 ----------------------------------------------------------------------------------
 getPhiType :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r 
-           -> TCM r (RType r, Assignability, Initialization)
+           -> TCM r (Maybe (RType r, Assignability, Initialization))
 ----------------------------------------------------------------------------------
 getPhiType l γ1 γ2 x =
   case (tcEnvFindTyForAsgn x γ1, tcEnvFindTyForAsgn x γ2) of
     (Just (t1,a1,i1), Just (t2,_,i2)) -> do θ     <- getSubst 
                                             t     <- unifyPhiTypes l γ1 x t1 t2 θ
-                                            return $ (t, a1, i1 `mappend` i2)
-    (_              , _             )  | forceCheck (fmap srcPos x) γ1 && forceCheck (fmap srcPos x) γ2 
-                                      -> die $ bug (srcPos l) "Oh no, the HashMap GREMLIN is back..."
-                                       | otherwise 
-                                      -> die $ bugUnboundPhiVar (srcPos l) x
+                                            return $ Just (t, a1, i1 `mappend` i2)
+    (_              , _             ) -> return Nothing 
+    -- bindings that are not in both environments are discarded
 
 ----------------------------------------------------------------------------------
 getLoopNextPhiType :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnv r -> Var r 
-                   -> TCM r (RType r, Assignability, Initialization)
+                   -> TCM r (Maybe (RType r, Assignability, Initialization))
 ----------------------------------------------------------------------------------
 getLoopNextPhiType l γ γl x =
   case (tcEnvFindTyForAsgn x γ, tcEnvFindTyForAsgn (mkNextId x) γl) of
     (Just (t1,a1,i1), Just (t2,_,i2)) -> do θ     <- getSubst 
                                             t     <- unifyPhiTypes l γ x t1 t2 θ
-                                            return $ (t, a1, i1 `mappend` i2)
-    _                                 -> die $ bugUnboundPhiVar (srcPos l) x
+                                            return $ Just (t, a1, i1 `mappend` i2)
+    _                                 -> return Nothing
+    -- bindings that are not in both environments are discarded
 
 -- | `unifyPhiTypes` 
 --
@@ -1145,8 +1144,6 @@ unifyPhiTypes l γ x t1 t2 θ =
   where
     t12      = mkUnion [t1,t2]
 
-
-forceCheck x γ = elem x $ fst <$> envToList (tce_names γ)
 
 
 -- Local Variables:

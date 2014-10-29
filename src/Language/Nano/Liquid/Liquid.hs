@@ -19,7 +19,7 @@ import qualified Data.Traversable                   as T
 import qualified Data.Foldable                      as FO
 import qualified Data.HashMap.Strict                as HM
 import qualified Data.Map.Strict                    as M
-import           Data.Maybe                         (maybeToList, fromMaybe)
+import           Data.Maybe                         (maybeToList, fromMaybe, catMaybes)
 import           Data.Monoid                        (mappend)
 
 import           Language.ECMAScript3.Syntax
@@ -988,9 +988,7 @@ envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 -- 4. return the extended environment.
 
 envJoin' l g g1 g2
-  = do  t1s       <- mapM (`safeEnvFindTyWithAsgn` g1) xs 
-        t2s       <- mapM (`safeEnvFindTyWithAsgn` g2) xs
-
+  = do  let (t1s, t2s) = unzip $ catMaybes $ getPhiTypes l g1 g2 <$> xs
         let (xls, l1s, l2s) = unzip3 $ locals $ zip3 xs t1s t2s
 
         -- LOCALS: as usual
@@ -1030,6 +1028,13 @@ envJoin' l g g1 g2
     where
         xs   = concat [xs | PhiVar xs <- ann_fact l] 
         err  = errorLiquid' l 
+
+
+getPhiTypes l g1 g2 x = 
+  case (envFindTyWithAsgn x g1, envFindTyWithAsgn x g2) of
+    (Just t1, Just t2) -> Just (t1,t2) 
+    (_      , _      ) -> Nothing 
+  
 
 locals  ts = [(x,s1,s2) | (x, s1@(t1, WriteLocal, i1), s2@(t2, WriteLocal, i2)) <- ts]
 

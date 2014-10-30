@@ -10,7 +10,7 @@ import           Control.Applicative                     ((<$>), (<*>))
 import           Control.Monad
 import           Data.Default
 import           Data.Data
-import           Data.Maybe                              (catMaybes) 
+import           Data.Maybe                              (catMaybes, maybeToList) 
 import qualified Data.List                               as L
 import qualified Data.IntSet                             as I
 import qualified Data.IntMap.Strict                      as IM
@@ -162,11 +162,24 @@ ssaStmt (IfStmt l e s1 s2) = do
     φ            <- getSsaEnvGlob
     (θ1, s1')    <- ssaWith θ φ ssaStmt s1
     (θ2, s2')    <- ssaWith θ φ ssaStmt s2
-    (θ', φ1, φ2) <- envJoin l θ1 θ2
-    let stmt'     = prefixStmt l se $ IfStmt l e' (splice s1' φ1) (splice s2' φ2)
-    case θ' of
-      Just θ''   -> setSsaEnv θ'' >> return (True,  stmt')
-      Nothing    ->                  return (False, stmt')
+    (phis, θ', φ1, φ2) <- envJoin l θ1 θ2
+    case θ' of 
+      Just θ''   -> do  setSsaEnv     $ θ''
+                        -- FIX THE JOINED TYPE BY DOING AN EXTRA ASSIGNMENT 
+                        -- THAT WILL BECOME AN UPCAST LATER
+                        latest       <- catMaybes <$> mapM findSsaEnv phis
+                        new          <- mapM (updSsaEnv l) phis
+                        
+                        addAnn l      $ PhiPost $ zip3 phis latest new 
+
+                        let stmt'     = -- postfixStmt l [postVstmt] 
+                                        prefixStmt l se
+                                      $ IfStmt l e' (splice s1' φ1) (splice s2' φ2)
+                        return        $ (True,  stmt')
+
+      Nothing    ->     let stmt'     = prefixStmt l se
+                                      $ IfStmt l e' (splice s1' φ1) (splice s2' φ2) in
+                        return (False, stmt')
   {- where
     dbg (Just θ) = trace ("SSA ENV: " ++ ppshow θ) (Just θ) -}
 
@@ -386,6 +399,12 @@ ssaStmt s
   = convertError "ssaStmt" s
 
 
+postfixIfStmt l (x, Just rhs) 
+  = VarDecl <$> freshenAnn l 
+            <*> updSsaEnv l x 
+            <*> (Just <$> (VarRef <$> freshenAnn l <*> return rhs))
+
+
 ssaAsgnStmt l1 l2 x@(Id l3 v) x' e' 
   | x == x'   = ExprStmt l1    (AssignExpr l2 OpAssign (LVar l3 v) e')
   | otherwise = VarDeclStmt l1 [VarDecl l2 x' (Just e')]
@@ -436,18 +455,16 @@ ssaClassElt flds (Constructor l xs bd0)
           withAssignability ReadOnly ros        $               -- ReadOnly in scope
             withAssignability WriteGlobal wgs   $               -- Globals in scope
               withAssignability WriteLocal wls  $               -- Locals in scope
-         do setSsaEnv     $ extSsaEnv xs θ                            -- Extend SsaEnv with formal binders
+         do setSsaEnv     $ extSsaEnv xs θ                      -- Extend SsaEnv with formal binders
             initStmts    <- mapM initStmt fldNms
             bd1          <- visitStmtsT (ctorVisitor l fldNms) () bd0
             exitStmts    <- mapM (ctorExit l) fldNms
             (_, bd2)     <- ssaStmts $ initStmts ++ bd1 ++ exitStmts  -- Transform function
-            setSsaEnv θ                                               -- Restore Outer SsaEnv
+            setSsaEnv θ                                         -- Restore Outer SsaEnv
             return        $ Constructor l xs bd2
   where
     fldNms      = fst <$> flds
-
     initStmt s  = VarDeclStmt <$> fr <*> (single <$> initVd s)
-
     initVd i    = case [ eo | (v, eo) <- flds, i == v ] of
                     [Just e] -> VarDecl <$> fr
                                         <*> return (mkCtorId l i) 
@@ -528,6 +545,13 @@ prefixStmt :: a -> [Statement a] -> Statement a -> Statement a
 -------------------------------------------------------------------------------------
 prefixStmt _ [] s = s 
 prefixStmt l ss s = BlockStmt l $ flattenBlock $ ss ++ [s]
+
+-------------------------------------------------------------------------------------
+postfixStmt :: a -> [Statement a] -> Statement a -> Statement a 
+-------------------------------------------------------------------------------------
+postfixStmt _ [] s = s 
+postfixStmt l ss s = BlockStmt l $ flattenBlock $ [s] ++ ss
+
 
 -------------------------------------------------------------------------------------
 flattenBlock :: [Statement t] -> [Statement t]
@@ -776,9 +800,9 @@ ssaAsgn l x e  = do
 --                     Maybe (Statement (AnnSSA r)),
 --                     Maybe (Statement (AnnSSA r)))
 -------------------------------------------------------------------------------------
-envJoin _ Nothing Nothing     = return (Nothing, Nothing, Nothing)
-envJoin _ Nothing (Just θ)    = return (Just $ fst θ , Nothing, Nothing)
-envJoin _ (Just θ) Nothing    = return (Just $ fst θ , Nothing, Nothing)
+envJoin _ Nothing Nothing     = return ([], Nothing, Nothing, Nothing)
+envJoin _ Nothing (Just θ)    = return ([], Just $ fst θ , Nothing, Nothing)
+envJoin _ (Just θ) Nothing    = return ([], Just $ fst θ , Nothing, Nothing)
 envJoin l (Just θ1) (Just θ2) = envJoin' l θ1 θ2
 
 envJoin' l (θ1,φ1) (θ2,φ2) = do
@@ -788,7 +812,7 @@ envJoin' l (θ1,φ1) (θ2,φ2) = do
     stmts      <- forM (phis ++ gl_phis) $ phiAsgn l   -- Adds Phi-Binders, Phi Annots, Return Stmts
     θ''        <- getSsaEnv
     let (s1,s2) = unzip stmts
-    return (Just θ'', Just $ BlockStmt l s1, Just $ BlockStmt l s2)
+    return (fst <$> phis, Just θ'', Just $ BlockStmt l s1, Just $ BlockStmt l s2)
   where
     φ           = envIntersectWith meet φ1 φ2
     θ           = envIntersectWith meet θ1 θ2

@@ -119,7 +119,9 @@ castDirection (CDn  {}) = CDDn
 data FactQ q r
   -- SSA
   = PhiVar      ![Var r]
+  | PhiVarTC    ![Var r]
   | PhiVarTy    ![(Var r, RTypeQ q ())]
+  | PhiPost     ![(Var r, Var r, Var r)]
   -- Unification
   | TypInst     Int !IContext ![RTypeQ q r]
   -- Overloading
@@ -203,6 +205,7 @@ instance IsLocated (Annot a SourceSpan) where
 instance (F.Reftable r, PP r) => PP (Fact r) where
   pp (PhiVar x)       = text "phi"                    <+> pp x
   pp (PhiVarTy x)     = text "phi-ty"                 <+> pp x
+  pp (PhiPost x)      = text "phi-post"
   pp (TypInst i ξ ts) = text "inst"                   <+> pp i <+> pp ξ <+> pp ts 
   pp (Overload ξ i)   = text "overload"               <+> pp ξ <+> pp i
   pp (EltOverload ξ i)= text "elt_overload"           <+> pp ξ <+> pp i

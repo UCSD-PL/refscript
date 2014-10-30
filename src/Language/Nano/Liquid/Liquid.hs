@@ -87,8 +87,8 @@ refTc cfg f p
   = do donePhase Loud "Generate Constraints"
        solveConstraints f cgi
   where
-    -- cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
-    cgi = generateConstraints cfg p
+    cgi = generateConstraints cfg $ trace (show (ppCasts p)) p
+    -- cgi = generateConstraints cfg p
 
 nextPhase (Left l)  _    = return (A.NoAnn, l)
 nextPhase (Right x) next = next x 
@@ -128,7 +128,7 @@ consNano :: NanoRefType -> CGM ()
 --------------------------------------------------------------------------------
 consNano p@(Nano {code = Src fs}) 
   = do  g   <- initGlobalEnv p
-        consStmts g fs 
+        consStmts g $ tracePP "" fs 
         return ()
 
 
@@ -989,12 +989,16 @@ envJoin' :: AnnTypeR -> CGEnv -> CGEnv -> CGEnv -> CGM CGEnv
 
 envJoin' l g g1 g2
   = do  let (t1s, t2s) = unzip $ catMaybes $ getPhiTypes l g1 g2 <$> xs
-        let (xls, l1s, l2s) = unzip3 $ locals $ zip3 xs t1s t2s
+
+        -- t1s : the types of the phi vars in the 1st branch 
+        -- t2s : the types of the phi vars in the 2nd branch 
+
+        let (xls, l1s, l2s) = unzip3 $ tracePP "local phis" <$> locals (zip3 xs t1s t2s)
 
         -- LOCALS: as usual
 
-        g1'       <- envAdds "envJoin-0" (zip xs l1s) g1 
-        g2'       <- envAdds "envJoin-1" (zip xs l2s) g2
+        g1'       <- envAdds "envJoin-0" (zip xls l1s) g1 
+        g2'       <- envAdds "envJoin-1" (zip xls l2s) g2
 
         -- t1s and t2s should have the same raw type, otherwise they wouldn't
         -- pass TC (we don't need to pad / fix them before joining).
@@ -1006,12 +1010,12 @@ envJoin' l g g1 g2
         l1s'      <- mapM (`safeEnvFindTy` g1') xls
         l2s'      <- mapM (`safeEnvFindTy` g2') xls
         _         <- zipWithM_ (subType l err g1') l1s' ls 
-        _         <- zipWithM_ (subType l err g2') l2s' ls      
+        _         <- zipWithM_ (subType l err g2') (tracePP "LHS" l2s') (tracePP "RHS" ls)
 
         -- GLOBALS: 
         
-        let (xgs, gl1s, gl2s) = unzip3 $ globals $ zip3 xs t1s t2s
-        (g'',gls) <- freshTyPhis' l g' xs $ mapFst3 toType <$> gl1s
+        let (xgs, gl1s, gl2s) = unzip3 $ tracePP "global phis" <$> globals (zip3 xs t1s t2s)
+        (g'',gls) <- freshTyPhis' l g' xgs $ mapFst3 toType <$> gl1s
         gl1s'     <- mapM (`safeEnvFindTy` g1') xgs
         gl2s'     <- mapM (`safeEnvFindTy` g2') xgs
         _         <- zipWithM_ (subType l err g1') gl1s' gls
@@ -1026,8 +1030,8 @@ envJoin' l g g1 g2
 
         return     $ g''
     where
-        xs   = concat [xs | PhiVar xs <- ann_fact l] 
-        err  = errorLiquid' l 
+        xs    = concat [ tracePP "LQ:PhiVarTC" xs | PhiVarTC xs <- ann_fact l] 
+        err   = errorLiquid' l 
 
 
 getPhiTypes l g1 g2 x = 

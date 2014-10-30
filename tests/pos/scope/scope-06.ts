@@ -1,10 +1,10 @@
 
 
-class A { public a: string; }
+class A { public a: string = "" }
 
 module P {
 
-  class A { public a: number; }
+  class A { public a: number = 1; }
 
 }
 

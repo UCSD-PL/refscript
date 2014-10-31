@@ -1182,17 +1182,24 @@ unifyPhiTypes :: PPRSF r => AnnSSA r -> TCEnv r -> Var r
 ----------------------------------------------------------------------------------
 unifyPhiTypes l γ x t1 t2 θ = 
   case unifys (srcPos l) γ θ [t1] [t2] of  
-    Left  _               -> tcError $ errorEnvJoinUnif (srcPos l) x t1 t2
-    Right θ' | apply θ' t1 == apply θ' t2 -> do setSubst θ' 
-                                                -- addAnn (ann_id l) $ PhiVarTy [(x, toType $ apply θ' t1)]
-                                                return $ apply θ' t1
--- FIXME: ADD AN UPCAST HERE !!! 
-             | any isTUndef [t1,t2] -> do setSubst θ'
-                                          -- addAnn (ann_id l) $ PhiVarTy [(x, toType $ apply θ' t12)]
-                                          return $ apply θ' t12
-             | otherwise            -> tcError $ errorEnvJoin (srcPos l) x t1 t2
+    Left  _ -> tcError $ errorEnvJoinUnif (srcPos l) x t1 t2
+    Right θ' | any isTUndef [t1,t2]       -> setSubst θ' >> return (apply θ' t12) 
+             | any isTNull  [t1,t2]       -> setSubst θ' >> return (apply θ' t12)
+             | on (==) (apply θ') t1 t2   -> setSubst θ' >> return (apply θ' t1)
+             | on (==) (apply θ') t1' t2' -> setSubst θ' 
+                                          >> return (apply θ' $ fillNullOrUndef t1 t2 t1)
+             | otherwise                  -> tcError $ errorEnvJoin (srcPos l) x t1 t2
   where
-    t12      = mkUnion [t1,t2]
+    t12                     = mkUnion [t1,t2]
+    (t1', t2')              = mapPair (mkUnion . clear . bkUnion) (t1, t2)
+    fillNullOrUndef t1 t2 t | any isMaybeNull  [t1,t2] = fillUndef t1 t2 $ orNull t
+                            | otherwise                = t
+    fillUndef t1 t2 t       | any isMaybeUndef [t1,t2] = orUndef t
+                            | otherwise                = t
+    isMaybeUndef            = any isUndef . bkUnion
+    isMaybeNull             = any isNull  . bkUnion
+    clear ts                = [ t | t <- ts, not (isNull t) && not (isUndef t) ]
+    extNullTys ts           = [ t | t <- ts,      isNull t  ||      isUndef t  ]
 
 -------------------------------------------------------------------------------------
 postfixStmt :: a -> [Statement a] -> Statement a -> Statement a 
@@ -1207,8 +1214,6 @@ flattenBlock = concatMap f
   where
     f (BlockStmt _ ss) = ss
     f s                = [s ]
-
-
 
 -- Local Variables:
 -- flycheck-disabled-checkers: (haskell-liquid)

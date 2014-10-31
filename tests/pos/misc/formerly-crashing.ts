@@ -1,15 +1,20 @@
+/*@ foo :: (x:Node<Mutable>, y:Node<Mutable> + null) => { void | true } */
+function foo(x, y) {
+  var right, noOp;
+  /*@ current :: Node<Mutable> */
+  var current = x;
+  if (!y) {
+    noOp = 0;
+  } else {
+    right = current;
+    current = y;
+  }
 
-class P { x = 1; y = 2; }
-
-var p = new P();
-
-for (var i = 0; i < 10; i++) {
-
-  var xx = p.x;
-
-  p.x = 111;
-  
-  p = p;
+  var a = right;
 
 }
 
+class Node {
+  /*@ new () => void */
+  constructor() { }
+}

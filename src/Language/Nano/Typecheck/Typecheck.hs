@@ -483,12 +483,12 @@ tcStmt γ (IfStmt l e s1 s2)
                        z         <- envJoin l γ γ1 γ2
 
                        case z of 
-                         Just (γ3',s1s,s2s) -> do -- tys   <- mapM (safeTcEnvFindTy l γ3') (tracePP ("Looking in " ++ ppshow (tce_names γ3')) vs')
-
-                                                  l1 <- freshenAnn l 
-                                                  l2 <- freshenAnn l 
-
-                                                  return $ (IfStmt l e' (postfixStmt l1 s1s s1') (postfixStmt l2 s2s s2'), Just γ3') 
+                         Just (γ3',s1s,s2s) -> 
+                            do  l1 <- freshenAnn l 
+                                l2 <- freshenAnn l 
+                                return $ (IfStmt l e' (postfixStmt l1 s1s s1') 
+                                                      (postfixStmt l2 s2s s2')
+                                         , Just γ3') 
 
          _       -> return (IfStmt l e' s1 s2, Nothing)
   where

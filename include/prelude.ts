@@ -176,8 +176,6 @@ declare function builtin_PrefixBNot(n: number): number;
 declare function builtin_OpBOr(a: number, b: number): number;
 declare function builtin_OpBXor(a: number, b: number): number;
 declare function builtin_OpBAnd(a: number, b: number): number;
-
-
 /**
  *
  *    Bitwise "and" operator `&`
@@ -191,7 +189,10 @@ declare function builtin_OpBAnd(a: number, b: number): number;
  *
  */
 
-declare function builtin_OpBAnd(a: number, b: number): number;
+
+declare function builtin_OpLShift(a: number, b: number): number;
+declare function builtin_OpSpRShift(a: number, b: number): number;
+declare function builtin_OpZfRShift(a: number, b: number): number;
 
 
 /**

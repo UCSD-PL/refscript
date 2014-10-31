@@ -1121,7 +1121,10 @@ envJoinStep l γ1 γ2 next (γ, st01, st02) xt =
 mkVdStmt l γ va vb t1 =
   do  t0           <- safeTcEnvFindTy l γ va
       rhs          <- VarRef <$> freshenAnn l <*> return va
-      c1s          <- castM γ rhs t0 t1
+      θ            <- unifyTypeM (srcPos l) γ t0 t1
+      setSubst θ
+      let (t0',t1') = apply θ (t0,t1)
+      c1s          <- castM γ rhs t0' t1'
       vd1          <- mkVds vb c1s
       VarDeclStmt <$> freshenAnn l <*> return [vd1]
   where

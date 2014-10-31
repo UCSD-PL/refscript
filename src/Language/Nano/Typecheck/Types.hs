@@ -960,6 +960,9 @@ infixOpId OpBOr        = builtinId "OpBOr"
 infixOpId OpBXor       = builtinId "OpBXor"
 infixOpId OpBAnd       = builtinId "OpBAnd"
 infixOpId OpIn         = builtinId "OpIn"
+infixOpId OpLShift     = builtinId "OpLShift"
+infixOpId OpSpRShift   = builtinId "OpSpRShift"
+infixOpId OpZfRShift   = builtinId "OpZfRShift"
 infixOpId o            = errorstar $ "infixOpId: Cannot handle: " ++ ppshow o
 
 prefixOpId PrefixMinus  = builtinId "PrefixMinus"

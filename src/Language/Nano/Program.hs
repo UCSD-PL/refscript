@@ -241,6 +241,10 @@ instance IsNano InfixOp where
   isNano OpBOr        = True --  @|@
   isNano OpBXor       = True --  @^@
   isNano OpBAnd       = True --  @&@
+
+  isNano OpLShift     = True --  @<<@
+  isNano OpSpRShift   = True --  @>>@
+  isNano OpZfRShift   = True --  @>>>@
   isNano e            = errortext (text "Not Nano InfixOp!" <+> pp e)
 
 instance IsNano (LValue a) where 

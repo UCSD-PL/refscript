@@ -478,18 +478,18 @@ tcStmt γ (IfStmt l e s1 s2)
   = do opTy         <- safeTcEnvFindTy l γ (builtinOpId BITruthy)
        ([e'], z)    <- tcNormalCallW γ l BITruthy [e] opTy
        case z of 
-         Just _  -> do (s1', γ1) <- tcStmt γ s1
-                       (s2', γ2) <- tcStmt γ s2
-                       z         <- envJoin l γ γ1 γ2
-
-                       case z of 
-                         Just (γ3',s1s,s2s) -> 
+         Just _  -> do  (s1', γ1) <- tcStmt γ s1
+                        (s2', γ2) <- tcStmt γ s2
+                        z         <- envJoin l γ γ1 γ2
+                        case z of 
+                          Just (γ3',s1s,s2s) -> 
                             do  l1 <- freshenAnn l 
                                 l2 <- freshenAnn l 
                                 return $ (IfStmt l e' (postfixStmt l1 s1s s1') 
                                                       (postfixStmt l2 s2s s2')
-                                         , Just γ3') 
-
+                                         , Just γ3')
+                          Nothing -> 
+                            return (IfStmt l e' s1' s2', Nothing)
          _       -> return (IfStmt l e' s1 s2, Nothing)
   where
     -- These need to be added to each branch 
@@ -1104,73 +1104,40 @@ envJoin l γ (Just γ1) (Just γ2) =
     next      = concat [ vs | PhiPost vs <- ann_fact l ] -- These need to be added to each branch 
 
 envJoinStep l γ1 γ2 next (γ, st01, st02) xt =
-  case tracePP "envJoinStep" xt of
+  case xt of
     (v, ta@(t, WriteLocal, _)) -> 
       case find ((v ==) . snd3) next of
         Just (_,va, vb) -> do 
-
-          -- addAnn (ann_id l) (PhiVar $ tracePP "ADDING PHIVAR" vbs)
-
-          -- COMMON TO TWO BRANCHES
-          rhs     <- VarRef <$> freshenAnn l <*> return va
-          let mkVds v e = VarDecl <$> freshenAnn l <*> return v <*> return (Just e)
-
-          -- FIRST BRANCH
-          t01     <- safeTcEnvFindTy l γ1 va
-          c1s     <- castM γ1 rhs t01 t
-          vd1     <- mkVds vb c1s
-          st1     <- VarDeclStmt <$> freshenAnn l <*> return [vd1]
-        
-          -- SECOND BRANCH
-          t02     <- safeTcEnvFindTy l γ2 va
-          c2s     <- castM γ1 rhs t02 t
-          vd2     <- mkVds vb c2s
-          st2     <- VarDeclStmt <$> freshenAnn l <*> return [vd2]
-        
+          st1     <- mkVdStmt l γ1 va vb t          -- FIRST BRANCH
+          st2     <- mkVdStmt l γ2 va vb t          -- SECOND BRANCH
           θ       <- getSubst
-
-          addAnn (ann_id l) $ PhiVarTC [vb]
-
+          addAnn (ann_id l) $ PhiVarTC vb
           return   $ (tcEnvAdd vb ta $ γ { tce_names = apply θ (tce_names γ) }, st1:st01, st2:st02)
-        
         Nothing -> error $ "Couldn't find " ++ ppshow v ++ " in " ++ ppshow next
     (v, ta) -> 
-
-          do  addAnn (ann_id l) $ PhiVarTC [v]
+          do  addAnn (ann_id l) $ PhiVarTC v
               return   $ (tcEnvAdd v ta $ γ { tce_names = tce_names γ }, [], [])
 
+mkVdStmt l γ va vb t1 =
+  do  t0           <- safeTcEnvFindTy l γ va
+      rhs          <- VarRef <$> freshenAnn l <*> return va
+      c1s          <- castM γ rhs t0 t1
+      vd1          <- mkVds vb c1s
+      VarDeclStmt <$> freshenAnn l <*> return [vd1]
+  where
+    mkVds v e = VarDecl <$> freshenAnn l <*> return v <*> return (Just e)
 
---           -- SSA1 SSA2 TargetType
---           let (vas, vbs, ts) = unzip3 [ (s1, s2, ti) | (v, ti@(t, WriteLocal,_)) <- xts
---                                                     , (x, s1, s2) <- next, v == s1 ]
---
---           -- COMMON TO TWO BRANCHES
---           rhs     <- mapM (\v -> VarRef <$> freshenAnn l <*> return v) vas
---           let mkVds vb e = VarDecl <$> freshenAnn l <*> return vb <*> return (Just e)
---           -- FIRST BRANCH
---           t01     <- mapM (safeTcEnvFindTy l γ1) vas 
---           c1s     <- zipWith3M (castM γ1) rhs t01 (fst3 <$> ts)
---           vd1     <- zipWithM mkVds vbs c1s
---           st1     <- mapM (\v -> VarDeclStmt <$> freshenAnn l <*> return [v]) vd1
---         
---           -- SECOND BRANCH
---           t02     <- mapM (safeTcEnvFindTy l γ2) vas
---           c2s     <- zipWith3M (castM γ1) rhs t02 (fst3 <$> ts)
---           vd2     <- zipWithM mkVds vbs c2s
---           st2     <- mapM (\v -> VarDeclStmt <$> freshenAnn l <*> return [v]) vd2
---         
---           θ       <- getSubst
---           return   $ Just (tcEnvAdds (zip vbs ts) $ γ { tce_names = apply θ (tce_names γ) }, st1, st2)
--- 
 
 ----------------------------------------------------------------------------------
 envLoopJoin :: PPRSF r => AnnSSA r -> TCEnv r -> TCEnvO r -> TCM r (TCEnvO r)
 ----------------------------------------------------------------------------------
 envLoopJoin _ γ Nothing   = return $ Just γ
 envLoopJoin l γ (Just γl) = 
-  do  ts    <- catMaybes <$> mapM (getLoopNextPhiType l γ γl) xs
-      γ'    <- (`substNames` γ) <$> getSubst
-      return $ Just $ tcEnvAdds (zip xs ts) γ'
+  do  ts      <- mapM (getLoopNextPhiType l γ γl) xs
+      let xts  = [ (x,t) | (x, Just t) <- zip xs ts ]
+      mapM_      (addAnn (ann_id l) . PhiVarTy) (mapSnd (toType . fst3) <$> xts)
+      γ'      <- (`substNames` γ) <$> getSubst
+      return   $ Just $ tcEnvAdds xts γ'
   where 
       xs             = phiVarsAnnot l 
       substNames θ γ = γ { tce_names = apply θ (tce_names γ) }

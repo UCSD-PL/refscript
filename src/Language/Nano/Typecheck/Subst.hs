@@ -106,7 +106,7 @@ instance Free (Cast r) where
 
 instance Free (Fact r) where
   free (PhiVar _)           = S.empty
-  free (PhiVarTy t)         = free (snd <$> t)
+  free (PhiVarTy t)         = free (snd t)
   free (PhiPost _ )         = S.empty
   free (TypInst _ _ ts)     = free ts
   free (Overload _ t)       = free t

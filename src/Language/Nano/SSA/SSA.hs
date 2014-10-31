@@ -165,18 +165,12 @@ ssaStmt (IfStmt l e s1 s2) = do
     (phis, θ', φ1, φ2) <- envJoin l θ1 θ2
     case θ' of 
       Just θ''   -> do  setSsaEnv     $ θ''
-                        -- FIX THE JOINED TYPE BY DOING AN EXTRA ASSIGNMENT 
-                        -- THAT WILL BECOME AN UPCAST LATER
                         latest       <- catMaybes <$> mapM findSsaEnv phis
                         new          <- mapM (updSsaEnv l) phis
-                        
                         addAnn l      $ PhiPost $ zip3 phis latest new 
-
-                        let stmt'     = -- postfixStmt l [postVstmt] 
-                                        prefixStmt l se
+                        let stmt'     = prefixStmt l se
                                       $ IfStmt l e' (splice s1' φ1) (splice s2' φ2)
                         return        $ (True,  stmt')
-
       Nothing    ->     let stmt'     = prefixStmt l se
                                       $ IfStmt l e' (splice s1' φ1) (splice s2' φ2) in
                         return (False, stmt')
@@ -399,12 +393,6 @@ ssaStmt s
   = convertError "ssaStmt" s
 
 
-postfixIfStmt l (x, Just rhs) 
-  = VarDecl <$> freshenAnn l 
-            <*> updSsaEnv l x 
-            <*> (Just <$> (VarRef <$> freshenAnn l <*> return rhs))
-
-
 ssaAsgnStmt l1 l2 x@(Id l3 v) x' e' 
   | x == x'   = ExprStmt l1    (AssignExpr l2 OpAssign (LVar l3 v) e')
   | otherwise = VarDeclStmt l1 [VarDecl l2 x' (Just e')]
@@ -459,7 +447,9 @@ ssaClassElt flds (Constructor l xs bd0)
             initStmts    <- mapM initStmt fldNms
             bd1          <- visitStmtsT (ctorVisitor l fldNms) () bd0
             exitStmts    <- mapM (ctorExit l) fldNms
-            (_, bd2)     <- ssaStmts $ initStmts ++ bd1 ++ exitStmts  -- Transform function
+            (_, bd2)     <- ssaStmts $ initStmts 
+                                    ++ bd1 
+                                    ++ exitStmts                -- Transform function
             setSsaEnv θ                                         -- Restore Outer SsaEnv
             return        $ Constructor l xs bd2
   where
@@ -545,13 +535,6 @@ prefixStmt :: a -> [Statement a] -> Statement a -> Statement a
 -------------------------------------------------------------------------------------
 prefixStmt _ [] s = s 
 prefixStmt l ss s = BlockStmt l $ flattenBlock $ ss ++ [s]
-
--------------------------------------------------------------------------------------
-postfixStmt :: a -> [Statement a] -> Statement a -> Statement a 
--------------------------------------------------------------------------------------
-postfixStmt _ [] s = s 
-postfixStmt l ss s = BlockStmt l $ flattenBlock $ [s] ++ ss
-
 
 -------------------------------------------------------------------------------------
 flattenBlock :: [Statement t] -> [Statement t]

@@ -119,8 +119,8 @@ castDirection (CDn  {}) = CDDn
 data FactQ q r
   -- SSA
   = PhiVar      ![Var r]
-  | PhiVarTC    ![Var r]
-  | PhiVarTy    ![(Var r, RTypeQ q ())]
+  | PhiVarTC    !(Var r)
+  | PhiVarTy    !(Var r, RTypeQ q ())
   | PhiPost     ![(Var r, Var r, Var r)]
   -- Unification
   | TypInst     Int !IContext ![RTypeQ q r]

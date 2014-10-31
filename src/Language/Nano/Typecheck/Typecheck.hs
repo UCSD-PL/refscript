@@ -900,7 +900,7 @@ tcCall γ (CallExpr l e@(SuperRef _)  es)
 --
 --  FIXME: cast @e@ to the subtype for which @f@ is an existing field.
 --
-tcCall γ (CallExpr l em@(DotRef l1 e f) es)
+tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
   = do z              <- runFailM (tcExpr γ e Nothing)
        case z of 
          Right (_, t) | isVariadicCall f -> 
@@ -909,15 +909,17 @@ tcCall γ (CallExpr l em@(DotRef l1 e f) es)
               v:vs -> do  (e', _)                <- tcExpr γ e Nothing
                           (FI (Just v') vs', t') <- tcNormalCall γ l em (FI (Just (v, Nothing)) (nth vs)) t
                           return                  $ (CallExpr l (DotRef l1 e' f) (v':vs'), t')
-
          Right (_, t) | otherwise        -> 
             case getProp γ True f t of
-              Just (_,tf,_) -> 
-                  do  (FI (Just e') es', t')  <- tcNormalCall γ l em (FI (Just (e, Nothing)) (nth es)) tf
-                      return                   $ (CallExpr l (DotRef l1 e' f) es', t')
+              Just (tRcvr,tMeth,_) -> 
+                  do e'                      <- castM γ e t tRcvr
+                     (FI (Just e'') es', t') <- tcNormalCall γ l  ex (FI (Just (e', Nothing)) (nth es)) tMeth
+                     return                   $ (CallExpr l (DotRef l1 e'' f) es', t')
               Nothing      -> tcError $ errorCallNotFound (srcPos l) e f
          Left err     -> tcError err
   where
+    -- Check the receiver of the call
+    mkTy s t         = mkFun ([],Nothing,[B (F.symbol "this") s],t) 
     isVariadicCall f = F.symbol f == F.symbol "call"
     nth = ((,Nothing) <$>)
 

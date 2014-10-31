@@ -34,6 +34,7 @@ import           Language.Nano.Names
 import           Language.Nano.Types
 import           Language.Nano.Typecheck.Types
 import           Language.Fixpoint.Misc (intersperse)
+import           Language.Nano.Misc (fth4)
 
 import           Control.Applicative ((<$>))
 import qualified Data.HashSet as S
@@ -105,7 +106,8 @@ instance Free (Cast r) where
 
 instance Free (Fact r) where
   free (PhiVar _)           = S.empty
-  free (PhiVarTy t)         = free (snd <$> t)
+  free (PhiVarTy t)         = free (snd t)
+  free (PhiPost _ )         = S.empty
   free (TypInst _ _ ts)     = free ts
   free (Overload _ t)       = free t
   free (EltOverload _ t)    = free t

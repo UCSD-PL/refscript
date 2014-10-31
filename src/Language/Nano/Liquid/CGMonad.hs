@@ -547,7 +547,7 @@ subType l err g t1 t2 =
   do  t1'    <- addInvariant g t1  -- enhance LHS with invariants
       let xs  = [(symbolId l x,(t,a,i)) | (x, Just (t,a,i)) <- rNms t1' ++ rNms t2 ]
       let ys  = [(symbolId l x,(t,a,i)) | (x,      (t,a,i)) <- E.envToList $ cgeAllNames g ]
-      when (toType t1 /= toType t2) (errorstar (ppshow t1 ++ " VS " ++ ppshow t2))
+      ----  when (toType t1 /= toType t2) (errorstar (ppshow t1 ++ " VS " ++ ppshow t2))
       -- g'     <- envAdds "subtype" (trace (ppshow (srcPos l) ++
       --                                     ppshow "(" ++ ppshow t1 ++ " vs " ++ ppshow t2 ++ ppshow ")"
       --                                     -- " Adding XS: " ++ ppshow (fst <$> xs) ++ 

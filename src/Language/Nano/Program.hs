@@ -286,6 +286,12 @@ instance IsNano AssignOp where
   isNano OpAssignSub  = True
   isNano OpAssignMul  = True
   isNano OpAssignDiv  = True
+  isNano OpAssignLShift   = True
+  isNano OpAssignSpRShift = True
+  isNano OpAssignZfRShift = True
+  isNano OpAssignBAnd = True
+  isNano OpAssignBXor = True
+  isNano OpAssignBOr = True
   isNano x            = errortext (text "Not Nano AssignOp!" <+> pp x) 
   -- isNano _        = False
 

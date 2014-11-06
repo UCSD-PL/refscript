@@ -13005,6 +13005,7 @@ var TypeScript;
                 case 209 /* SubtractExpression */:
                 case 205 /* MultiplyExpression */:
                 case 206 /* DivideExpression */:
+                case 207 /* ModuloExpression */:
                 case 194 /* EqualsExpression */:
                 case 192 /* EqualsWithTypeConversionExpression */:
                 case 197 /* GreaterThanExpression */:

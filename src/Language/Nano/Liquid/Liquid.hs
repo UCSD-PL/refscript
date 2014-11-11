@@ -713,10 +713,8 @@ consCast g l e tc
         tc'     <- freshTyFun g l $ rType tc
         (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tc', WriteLocal, Initialized) g
         consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) opTy >>= \case
-          Just (o,g'') -> return $ Just (o,g'')
-              -- FIXME ? What do we gain here?
-              -- do  (to,ao,io)  <- ltracePP l ("LQ " ++ ppshow e) <$> safeEnvFindTyWithAsgn o g''
-              --     g''' <- envAdds "consCast-1" [(o, (to, ao,io))] g''
+          Just (o,g'') -> do (to,ao,io) <- safeEnvFindTyWithAsgn o g''
+                             return      $ (Just (o, g''))
           Nothing      -> cgError $ errorUserCast (srcPos l) tc e 
                       
 -- | Dead code 

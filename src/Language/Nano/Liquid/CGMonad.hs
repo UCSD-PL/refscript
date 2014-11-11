@@ -320,6 +320,7 @@ addInvariant g t
   where
     -- | typeof 
     typeof t@(TApp tc _ o)  i = maybe t (strengthenOp t o . rTypeReft . val) $ HM.lookup tc i
+    typeof t@(TRef c _ _) _   = t `strengthen` F.Reft ((vv t,) [F.RConc $ typeofExpr $ F.symbol "object" ])
     typeof   (TFun a b c _) _ = TFun a b c typeofReft
     typeof t                _ = t
     strengthenOp t o r        | L.elem r (ofRef o) = t

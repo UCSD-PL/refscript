@@ -344,7 +344,7 @@ deadcastM ξ err e
 castM :: PPR r => TCEnv r -> Expression (AnnSSA r) -> RType r -> RType r -> TCM r (Expression (AnnSSA r))
 --------------------------------------------------------------------------------
 castM γ e t1 t2 
-  = case {- ltracePP e (ppshow (toType t1) ++ " *** " ++ ppshow (toType t2)) <$> -} convert (srcPos e) γ t1 t2 of
+  = case {-ltracePP e (ppshow (toType t1) ++ " *** " ++ ppshow (toType t2)) <$> -}convert (srcPos e) γ t1 t2 of
       Left  e   -> tcError e
       Right CNo -> return e
       Right c   -> addCast (tce_ctx γ) e c

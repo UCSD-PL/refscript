@@ -13005,6 +13005,7 @@ var TypeScript;
                 case 209 /* SubtractExpression */:
                 case 205 /* MultiplyExpression */:
                 case 206 /* DivideExpression */:
+                case 207 /* ModuloExpression */:
                 case 194 /* EqualsExpression */:
                 case 192 /* EqualsWithTypeConversionExpression */:
                 case 197 /* GreaterThanExpression */:
@@ -13027,6 +13028,12 @@ var TypeScript;
                 case 176 /* SubtractAssignmentExpression */:
                 case 178 /* DivideAssignmentExpression */:
                 case 177 /* MultiplyAssignmentExpression */:
+                case 183 /* LeftShiftAssignmentExpression */:
+                case 184 /* SignedRightShiftAssignmentExpression */:
+                case 185 /* UnsignedRightShiftAssignmentExpression */:
+                case 180 /* AndAssignmentExpression */:
+                case 181 /* ExclusiveOrAssignmentExpression */:
+                case 182 /* OrAssignmentExpression */:
                     return new TypeScript.RsAssignExpr(helper.getSourceSpan(this), tokenAnnots(this), new TypeScript.RsAssignOp(this.operatorToken.text()), this.left.toRsLValue(helper), this.right.toRsExp(helper));
 
                 case 200 /* InstanceOfExpression */:
@@ -59598,6 +59605,12 @@ var TypeScript;
         RsAssignOpKind[RsAssignOpKind["OpAssignSub"] = 2] = "OpAssignSub";
         RsAssignOpKind[RsAssignOpKind["OpAssignMul"] = 3] = "OpAssignMul";
         RsAssignOpKind[RsAssignOpKind["OpAssignDiv"] = 4] = "OpAssignDiv";
+        RsAssignOpKind[RsAssignOpKind["OpAssignLShift"] = 5] = "OpAssignLShift";
+        RsAssignOpKind[RsAssignOpKind["OpAssignSpRShift"] = 6] = "OpAssignSpRShift";
+        RsAssignOpKind[RsAssignOpKind["OpAssignZfRShift"] = 7] = "OpAssignZfRShift";
+        RsAssignOpKind[RsAssignOpKind["OpAssignBAnd"] = 8] = "OpAssignBAnd";
+        RsAssignOpKind[RsAssignOpKind["OpAssignBXor"] = 9] = "OpAssignBXor";
+        RsAssignOpKind[RsAssignOpKind["OpAssignBOr"] = 10] = "OpAssignBOr";
     })(TypeScript.RsAssignOpKind || (TypeScript.RsAssignOpKind = {}));
     var RsAssignOpKind = TypeScript.RsAssignOpKind;
 
@@ -59620,6 +59633,18 @@ var TypeScript;
                     return 3 /* OpAssignMul */;
                 case "/=":
                     return 4 /* OpAssignDiv */;
+                case "<<=":
+                    return 5 /* OpAssignLShift */;
+                case ">>=":
+                    return 6 /* OpAssignSpRShift */;
+                case ">>>=":
+                    return 7 /* OpAssignZfRShift */;
+                case "&=":
+                    return 8 /* OpAssignBAnd */;
+                case "^=":
+                    return 9 /* OpAssignBXor */;
+                case "|=":
+                    return 10 /* OpAssignBOr */;
             }
             throw new Error("Case: " + this.sign + " not handled in RsAssignOp.signToOpKind");
         };

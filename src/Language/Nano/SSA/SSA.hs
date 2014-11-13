@@ -400,10 +400,14 @@ ssaAsgnStmt l1 l2 x@(Id l3 v) x' e'
 -------------------------------------------------------------------------------------
 ctorVisitor :: Data r => AnnSSA r -> [Id (AnnSSA r)] -> VisitorM (SSAM r) () () (AnnSSA r)
 -------------------------------------------------------------------------------------
-ctorVisitor l ms          = defaultVisitor { mStmt = ts } { mExpr = te }
+ctorVisitor l ms          = defaultVisitor { endStmt = es } { endExpr = ee }
+                                           { mStmt   = ts } { mExpr   = te }
   where
+    es FunctionStmt{}     = True
+    es _                  = False
+    ee FuncExpr{}         = True
+    ee _                  = False
     ss                    = S.fromList $ F.symbol <$> ms
-
     te ae@(AssignExpr la OpAssign (LDot ld (ThisRef _) s) e)
       | F.symbol s `S.member` ss
                           = AssignExpr <$> fr_ la 
@@ -412,10 +416,8 @@ ctorVisitor l ms          = defaultVisitor { mStmt = ts } { mExpr = te }
                                        <*> return e
       | otherwise         = return ae
     te lv                 = return lv
-
     ts r@(ReturnStmt l _) = BlockStmt <$> fr <*> ((++ [r]) <$> mapM (ctorExit l) ms)
     ts r                  = return $ r
-
     fr_                   = freshenAnn
     fr                    = fr_ l 
 

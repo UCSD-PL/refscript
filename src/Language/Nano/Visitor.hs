@@ -86,8 +86,12 @@ import qualified Language.Fixpoint.Types        as F
 -- 3. write "everything" queries using `Visitor`
 
 data VisitorM m acc ctx b = Visitor {
+  
+    endStmt :: Statement b -> Bool
+  , endExpr :: Expression b -> Bool
+
   -- | Context @ctx@ is built up in a "top-down" fashion but not across siblings
-    ctxStmt :: ctx -> Statement b  -> ctx 
+  , ctxStmt :: ctx -> Statement b  -> ctx 
   , ctxExpr :: ctx -> Expression b -> ctx
   , ctxCElt :: ctx -> ClassElt b   -> ctx
 
@@ -116,7 +120,9 @@ type Visitor = VisitorM Identity
 defaultVisitor :: (Monad m, Functor m, Monoid acc) => VisitorM m acc ctx b
 ---------------------------------------------------------------------------------
 defaultVisitor = Visitor {
-    ctxStmt = \c _ -> c
+    endStmt = \_   -> False
+  , endExpr = \_   -> False
+  , ctxStmt = \c _ -> c
   , ctxExpr = \c _ -> c
   , ctxCElt = \c _ -> c
   , txStmt  = \_ x -> x
@@ -186,7 +192,10 @@ visitStmtM v = vS
     vEE     = visitEnumElt v
     vC      = visitCaseClause v   
     vI      = visitId   v   
-    vS c s  = accum acc >> lift (mStmt v s') >>= step c' where c'   = ctxStmt v c s
+    vS c s  | endStmt v s 
+            = return s
+            | otherwise   
+            = accum acc >> lift (mStmt v s') >>= step c' where c'   = ctxStmt v c s
                                                                s'   = txStmt  v c' s
                                                                acc  = accStmt v c' s
     step c (ExprStmt l e)           = ExprStmt     l <$> vE c e
@@ -221,7 +230,10 @@ visitExpr v = vE
      vS      = visitStmtM       v   
      vI      = visitId         v   
      vL      = visitLValue     v   
-     vE c e  = accum acc >> lift (mExpr v s') >>= step c' where c'  = ctxExpr v c  e
+     vE c e  | endExpr v e 
+             = return e
+             | otherwise
+             = accum acc >> lift (mExpr v s') >>= step c' where c'  = ctxExpr v c  e
                                                                 s'  = txExpr  v c' e
                                                                 acc = accExpr v c' e 
      step _ e@(BoolLit {})           = return e 

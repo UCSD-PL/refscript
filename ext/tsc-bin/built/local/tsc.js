@@ -476,7 +476,8 @@ var TypeScript;
         Cannot_call_toRsExp_on_BinaryExpression_with_SyntaxKind_0: "Cannot call 'toRsExp' on BinaryExpression with SyntaxKind {0}.",
         Gather_statistics_about_initialization: "Gather statistics about initialization",
         Invalid_reference_of_this_in_constructor: "Invalid reference of 'this' in constructor.",
-        No_support_for_value_assigned_enumeration_element_0: "No support for value assigned enumeration element '{0}'."
+        No_support_for_value_assigned_enumeration_element_0: "No support for value assigned enumeration element '{0}'.",
+        Initialization_of_parameter_0_at_the_signature_site_is_not_supported: "Initialization of parameter '{0}' at the signature site is not supported."
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -2634,7 +2635,8 @@ var TypeScript;
         "Cannot call 'toRsExp' on BinaryExpression with SyntaxKind {0}.": { "code": 8027, "category": 5 /* Unimplemented */ },
         "Gather statistics about initialization": { "code": 8028, "category": 2 /* Message */ },
         "Invalid reference of 'this' in constructor.": { "code": 8029, "category": 1 /* Error */ },
-        "No support for value assigned enumeration element '{0}'.": { "code": 8030, "category": 5 /* Unimplemented */ }
+        "No support for value assigned enumeration element '{0}'.": { "code": 8030, "category": 5 /* Unimplemented */ },
+        "Initialization of parameter '{0}' at the signature site is not supported.": { "code": 8031, "category": 5 /* Unimplemented */ }
     };
 })(TypeScript || (TypeScript = {}));
 var TypeScript;
@@ -10374,6 +10376,12 @@ var TypeScript;
 
         FunctionDeclarationSyntax.prototype.toRsStmt = function (helper) {
             var _this = this;
+            this.callSignature.parameterList.parameters.toNonSeparatorArray().forEach(function (p) {
+                if (p.equalsValueClause) {
+                    helper.postDiagnostic(_this, TypeScript.DiagnosticCode.Initialization_of_parameter_0_at_the_signature_site_is_not_supported, [p.identifier.text()]);
+                }
+            });
+
             var name = this.identifier.text();
             var anns = tokenAnnots(this.firstToken());
 
@@ -14256,6 +14264,13 @@ var TypeScript;
         };
 
         ConstructorDeclarationSyntax.prototype.toRsClassElt = function (helper) {
+            var _this = this;
+            this.callSignature.parameterList.parameters.toNonSeparatorArray().forEach(function (p) {
+                if (p.equalsValueClause) {
+                    helper.postDiagnostic(_this, TypeScript.DiagnosticCode.Initialization_of_parameter_0_at_the_signature_site_is_not_supported, [p.identifier.text()]);
+                }
+            });
+
             var anns = tokenAnnots(this.firstToken(), 2 /* ClassContructorContext */);
             var bindAnns = anns.filter(function (a) {
                 return a.kind() === 8 /* RawConstr */;
@@ -14374,6 +14389,13 @@ var TypeScript;
         };
 
         MemberFunctionDeclarationSyntax.prototype.toRsClassElt = function (helper) {
+            var _this = this;
+            this.callSignature.parameterList.parameters.toNonSeparatorArray().forEach(function (p) {
+                if (p.equalsValueClause) {
+                    helper.postDiagnostic(_this, TypeScript.DiagnosticCode.Initialization_of_parameter_0_at_the_signature_site_is_not_supported, [p.identifier.text()]);
+                }
+            });
+
             var methodName = this.propertyName.text();
             var isStatic = this.modifiers.toArray().some(function (t) {
                 return t.kind() === 58 /* StaticKeyword */;
@@ -16881,6 +16903,13 @@ var TypeScript;
         };
 
         FunctionExpressionSyntax.prototype.toRsExp = function (helper) {
+            var _this = this;
+            this.callSignature.parameterList.parameters.toNonSeparatorArray().forEach(function (p) {
+                if (p.equalsValueClause) {
+                    helper.postDiagnostic(_this, TypeScript.DiagnosticCode.Initialization_of_parameter_0_at_the_signature_site_is_not_supported, [p.identifier.text()]);
+                }
+            });
+
             var anns = tokenAnnots(this.block);
             var funcAnns = anns.filter(function (a) {
                 return a.kind() === 3 /* RawFunc */;

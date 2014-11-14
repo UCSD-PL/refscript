@@ -488,10 +488,6 @@ freshTyPhis l g xs τs
        return (g', ts)
 
 
-
--- 
--- NEW 
---
 -- | Instantiate Fresh Type (at Phi-site) 
 ---------------------------------------------------------------------------------------
 -- freshTyPhis' :: AnnTypeR -> CGEnv -> [Id AnnTypeR] 
@@ -518,7 +514,7 @@ freshenCGEnvM :: CGEnv -> CGM CGEnv
 ---------------------------------------------------------------------------------------
 freshenCGEnvM g  
   = do  names   <- E.envFromList  <$> mapM (freshenVarbindingM g) (E.envToList  $ cge_names g)
-        modules <- E.qenvFromList <$> mapM (freshenModuleDefM  g) (E.qenvToList $ cge_mod   g)
+        modules <- E.qenvFromList <$> mapM (freshenModuleDefM g) (E.qenvToList $ cge_mod g)
         return $ g { cge_names = names, cge_mod = modules } 
 
 freshenVarbindingM _ (x, (v@(TVar{}),a,i)) = return (x,(v,a,i))
@@ -527,14 +523,22 @@ freshenVarbindingM _ (x, (t,a,i)         ) = return (x,(t,a,i))
 
 freshenModuleDefM g (a, m)
   = do  vars     <- E.envFromList <$> mapM f (E.envToList $ m_variables m)
-        -- types    <- E.envFromList <$> mapM h (E.envToList $ m_types m)        
-        return (a,m { m_variables = vars }) -- , m_types = types })
+        types    <- E.envFromList <$> mapM h (E.envToList $ m_types m)        
+        return (a,m { m_variables = vars, m_types = types })
   where
     f (x, (v,w,t,i)) =
       case w of
-        ReadOnly   -> do  ft    <- freshTyVar g (srcPos x) t 
+        ReadOnly   -> do  ft    <- freshTyVar g x t 
                           return   (x, (v, w, ft,i))
         _          -> return (x,(v,w,t,i))
+
+    -- KVar class definitions only
+    h (x, t) | t_class t == ClassKind 
+             = do es <- M.fromList <$> mapM (freshElt x) (M.toList $ t_elts t)
+                  return (x, t { t_elts = es })
+             | otherwise
+             = return (x,t)
+    freshElt x (s,b) = (s,) <$> mapEltM (freshTyFun g x) b
 
 
 ---------------------------------------------------------------------------------------

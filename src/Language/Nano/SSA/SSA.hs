@@ -9,6 +9,7 @@ import           Control.Arrow                           ((***))
 import           Control.Applicative                     ((<$>), (<*>))
 import           Control.Monad
 import           Data.Default
+import           Data.Function                           (on)
 import           Data.Data
 import           Data.Maybe                              (catMaybes, maybeToList) 
 import qualified Data.List                               as L
@@ -89,16 +90,18 @@ ssaFun l xs body
   = do  θ <- getSsaEnv
         glbs <- getGlobs
         let (ros, wgs, wls) = (`variablesInScope` body) glbs
-        withAssignability ReadOnly (ssaEnvIds θ)   $                 -- Variables from OUTER scope are UNASSIGNABLE
-          withAssignability ReadOnly ros        $ 
-            withAssignability WriteGlobal wgs   $ 
-              withAssignability WriteLocal wls  $ 
+        withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $       -- Variables from OUTER scope are UNASSIGNABLE
+          withAssignability ReadOnly (unshadow ros)         $ 
+            withAssignability WriteGlobal (unshadow wgs)    $ 
+              withAssignability WriteLocal wls              $ 
             do  arg         <- argId    <$> freshenAnn l
                 ret         <- returnId <$> freshenAnn l
                 setSsaEnv    $ extSsaEnv (arg: ret : xs) θ  -- Extend SsaEnv with formal binders
                 (_, body')  <- ssaStmts body                -- Transform function
                 setSsaEnv θ                                 -- Restore Outer SsaEnv
                 return        $ body'
+  where
+    unshadow gs = L.deleteFirstsBy (on (==) unId) (fmap srcPos <$> gs) (fmap srcPos <$> xs)
 
 -------------------------------------------------------------------------------------
 ssaSeq :: (a -> SSAM r (Bool, a)) -> [a] -> SSAM r (Bool, [a])
@@ -441,10 +444,10 @@ ssaClassElt :: Data r
 ssaClassElt flds (Constructor l xs bd0)
   = do θ <- getSsaEnv
        (ros, wgs, wls) <- (`variablesInScope` bd0) <$> getGlobs
-       withAssignability ReadOnly (ssaEnvIds θ) $               -- Variables from OUTER scope are NON-ASSIGNABLE
-          withAssignability ReadOnly ros        $               -- ReadOnly in scope
-            withAssignability WriteGlobal wgs   $               -- Globals in scope
-              withAssignability WriteLocal wls  $               -- Locals in scope
+       withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $    -- Variables from OUTER scope are NON-ASSIGNABLE
+          withAssignability ReadOnly (unshadow ros)        $    -- ReadOnly in scope
+            withAssignability WriteGlobal (unshadow wgs)   $    -- Globals in scope
+              withAssignability WriteLocal wls             $    -- Locals in scope
          do setSsaEnv     $ extSsaEnv xs θ                      -- Extend SsaEnv with formal binders
             initStmts    <- mapM initStmt fldNms
             bd1          <- visitStmtsT (ctorVisitor l fldNms) () bd0
@@ -455,6 +458,7 @@ ssaClassElt flds (Constructor l xs bd0)
             setSsaEnv θ                                         -- Restore Outer SsaEnv
             return        $ Constructor l xs bd2
   where
+    unshadow gs = L.deleteFirstsBy (on (==) unId) (fmap srcPos <$> gs) (fmap srcPos <$> xs)
     fldNms      = fst <$> flds
     initStmt s  = VarDeclStmt <$> fr <*> (single <$> initVd s)
     initVd i    = case [ eo | (v, eo) <- flds, i == v ] of
@@ -473,6 +477,12 @@ ssaClassElt flds (Constructor l xs bd0)
 -- | Initilization expression for instance variables is moved to the beginning 
 --   of the constructor.
 ssaClassElt _ (MemberVarDecl l False x _) = return $ MemberVarDecl l False x Nothing
+-- ssaClassElt _ (MemberVarDecl l False x Nothing) = return $ MemberVarDecl l False x Nothing
+-- ssaClassElt _ (MemberVarDecl l False x (Just e))
+--   = do z <- ssaExpr e
+--        case z of 
+--          ([], e') -> return $ MemberVarDecl l False x (Just e')
+--          _        -> ssaError $ errorEffectInFieldDef (srcPos l)
 
 ssaClassElt _ (MemberVarDecl l True x (Just e))
   = do z <- ssaExpr e
@@ -486,14 +496,17 @@ ssaClassElt _ (MemberVarDecl l True x Nothing)
 ssaClassElt _ (MemberMethDef l s e xs body)
   = do θ <- getSsaEnv
        (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
-       withAssignability ReadOnly (ssaEnvIds θ) $               -- Variables from OUTER scope are NON-ASSIGNABLE
-          withAssignability ReadOnly ros        $               -- ReadOnly in scope
-            withAssignability WriteGlobal wgs   $               -- Globals in scope
-              withAssignability WriteLocal wls  $               -- Locals in scope
+       withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $    -- Variables from OUTER scope are NON-ASSIGNABLE
+          withAssignability ReadOnly (unshadow ros)        $    -- ReadOnly in scope
+            withAssignability WriteGlobal (unshadow wgs)   $    -- Globals in scope
+              withAssignability WriteLocal wls             $    -- Locals in scope
          do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ     -- Extend SsaEnv with formal binders
             (_, body')   <- ssaStmts body                       -- Transform function
             setSsaEnv θ                                         -- Restore Outer SsaEnv
             return        $ MemberMethDef l s e xs body'
+  where
+    unshadow gs = L.deleteFirstsBy (on (==) unId) (fmap srcPos <$> gs) (fmap srcPos <$> xs)
+
 ssaClassElt _ m@(MemberMethDecl _ _ _ _ ) = return m
 
 infOp OpAssign         _ _  = id

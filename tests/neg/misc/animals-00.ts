@@ -29,6 +29,7 @@ class Tiger extends Animal {
 
 /*@ move :: (a: AnimalK) => { void | true } */
 function move(a: Animal) {
+  var k = a.kind;
   if (a.kind === "horse") {
     var h = <Horse>a;
     h.gallop();

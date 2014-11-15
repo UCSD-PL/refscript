@@ -35,7 +35,7 @@ module Language.Nano.Liquid.CGMonad (
   -- * Environment API
   , envAddFresh, envAdds, envAddReturn, envAddGuard, envPopGuard, envFindTy
   , envFindTyWithAsgn, envFindTyForAsgn
-  , safeEnvFindTy, safeEnvFindTyWithAsgn
+  , safeEnvFindTy, safeEnvFindTyWithAsgn, safeEnvFindTyNoSngl
   , envFindReturn, envPushContext
   , envGetContextCast, envGetContextTypArgs
 
@@ -391,6 +391,8 @@ envFindTy :: (IsLocated x, F.Symbolic x, F.Expression x) => x -> CGEnv -> Maybe 
 ---------------------------------------------------------------------------------------
 envFindTy x g = fst3 <$> envFindTyWithAsgn x g
 
+envFindTyNoSngl x g = fst3 <$> envFindTyWithAsgnNoSngl x g
+
 
 -- Only include the "singleton" refinement in the case where Assignability is
 -- either ReadOnly of WriteLocal (SSAed)
@@ -410,8 +412,21 @@ envFindTyWithAsgn x = (eSngl <$>) . findT x
     adjustInit s@(_, _, Initialized) = s
     adjustInit (t, a, _ ) = (orUndef t, a, Uninitialized)
 
-
-
+---------------------------------------------------------------------------------------
+envFindTyWithAsgnNoSngl :: (IsLocated x, F.Symbolic x, F.Expression x) 
+                        => x -> CGEnv -> Maybe (RefType, Assignability, Initialization)
+---------------------------------------------------------------------------------------
+envFindTyWithAsgnNoSngl x = findT x
+  where
+    eSngl (t, WriteGlobal,i) = adjustInit (t, WriteGlobal,i)
+    eSngl (t, a,i)           = (t `eSingleton` x, a,i)
+    findT x g = case E.envFindTy x $ cge_names g of 
+                  Just t   -> Just t
+                  Nothing  -> case cge_parent g of 
+                                Just g' -> findT x g'
+                                Nothing -> Nothing
+    adjustInit s@(_, _, Initialized) = s
+    adjustInit (t, a, _ ) = (orUndef t, a, Uninitialized)
 
 ---------------------------------------------------------------------------------------
 envFindTyForAsgn :: (IsLocated x, F.Symbolic x, F.Expression x) 
@@ -427,7 +442,6 @@ envFindTyForAsgn x = (eSngl <$>) . findT x
                                 Just g' -> findT x g'
                                 Nothing -> Nothing
 
-
 ---------------------------------------------------------------------------------------
 safeEnvFindTy :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) 
               => x -> CGEnv -> CGM RefType 
@@ -435,6 +449,16 @@ safeEnvFindTy :: (IsLocated x, F.Symbolic x, F.Expression x, PP x)
 safeEnvFindTy x g = case envFindTy x g of
                         Just t  -> return t
                         Nothing ->  cgError $ bugEnvFindTy l x 
+  where
+    l = srcPos x
+
+---------------------------------------------------------------------------------------
+safeEnvFindTyNoSngl :: (IsLocated x, F.Symbolic x, F.Expression x, PP x) 
+                    => x -> CGEnv -> CGM RefType 
+---------------------------------------------------------------------------------------
+safeEnvFindTyNoSngl x g = case envFindTyNoSngl x g of
+                            Just t  -> return t
+                            Nothing ->  cgError $ bugEnvFindTy l x 
   where
     l = srcPos x
 
@@ -817,8 +841,8 @@ splitE g i _ _   (IndexSig _ _ t1) (IndexSig _ _ t2)
 splitE g i μ1 μ2 (FieldSig _ _ μf1 t1) (FieldSig _ _ μf2 t2)
   = splitWithMut g i μ1 μ2 (μf1,t1) (μf2,t2)
 
-splitE g i μ1 μ2 (MethSig _ μf1 t1) (MethSig _ μf2 t2)
-  = splitWithMut g i μ1 μ2 (μf1,t1) (μf2,t2)
+splitE g i μ1 μ2 (MethSig _ t1) (MethSig _ t2)
+  = splitC (Sub g i t1 t2)
 
 splitE _ _ _ _ _ _ = return []
 

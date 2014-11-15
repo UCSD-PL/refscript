@@ -245,8 +245,7 @@ convertElt l γ True f1@(FieldSig _ o1 m1 t1) f2@(FieldSig _ o2 m2 t2)   -- immu
   | otherwise                           
   = Left $ errorIncompMutElt (srcPos l) f1 f2
 
--- FIXME: how does mutability matter here ???
-convertElt l γ _ (MethSig _ _ t1) (MethSig _ _ t2) 
+convertElt l γ _ (MethSig _ t1) (MethSig _ t2) 
   = convert' l γ t1 t2 
  
 convertElt l γ _ (ConsSig t1) (ConsSig t2) 

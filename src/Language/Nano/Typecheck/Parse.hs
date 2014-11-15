@@ -1,6 +1,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances         #-} 
 {-# LANGUAGE DeriveDataTypeable        #-} 
+{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE ConstraintKinds           #-} 
 {-# LANGUAGE UndecidableInstances      #-} 
 {-# LANGUAGE FlexibleContexts          #-} 
@@ -141,7 +142,7 @@ iFaceP   = do name   <- identifierP
               as     <- option [] tParP
               h      <- heritageP
               es     <- mkTypeMembers . ((InstanceMember, MemDeclaration,) <$>) 
-                    <$> braces (propBindP defaultMutability)
+                    <$> braces propBindP
               return (name, convertTvar as $ ID (mkrn name) InterfaceKind as h es)
   where
     mkrn = mkRelName [] . symbol
@@ -299,10 +300,16 @@ bbaseP
 objLitP :: Parser (Reft -> RTypeQ RK Reft)
 ----------------------------------------------------------------------------------
 objLitP 
-  = do m       <- option defaultMutability (toType <$> mutP)
-       es      <- mkTypeMembers . ((InstanceMember, MemDeclaration,) <$>) 
-              <$> braces (propBindP defaultMutability)
-       return  $  TCons m es
+  = optionMaybe (toType <$> mutP) >>= \case 
+      Just m    -> TCons m <$> typeMembersP
+      Nothing   -> withSpan addMVar typeMembersP
+  where
+    typeMembersP = mkTypeMembers . ((InstanceMember, MemDeclaration,) <$>) 
+                                <$> braces propBindP
+    addMVar l t r = TCons defaultMutability t r
+    defaultMutability = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Immutable")) [] fTop
+    -- addMVar l t r = TAll v (TCons (TVar v fTop) t r) where v = tvar l ms
+    -- ms            = symbol "_M_"  -- A hard-to-guess symbol
  
 ----------------------------------------------------------------------------------
 mutP :: Parser (MutabilityQ RK)
@@ -334,8 +341,6 @@ wordP p  = condIdP ok p
   where 
     ok   = ['A' .. 'Z'] ++ ['a' .. 'z'] ++ ['0'..'9']
 
-defaultMutability = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Immutable")) [] fTop
-
 ----------------------------------------------------------------------------------
 tConP :: Parser TCon
 ----------------------------------------------------------------------------------
@@ -355,11 +360,11 @@ bareAllP p
     where
        tAll αs t = foldr TAll (convertTvar αs t) αs
 
-propBindP defM =  sepEndBy propEltP semi
+propBindP      =  sepEndBy propEltP semi
   where
     propEltP   =  try indexEltP 
               <|> try fieldEltP
-              <|> try (methEltP defM)
+              <|> try methEltP
               <|> try callEltP
               <|>     consEltP
 
@@ -389,13 +394,12 @@ fieldEltP       = do
   where
     mut         = tr_inheritedMut
 
--- | <[mut]> m :: (ts): t
-methEltP defM   = do
+-- | m: mt
+methEltP        = do
     x          <- symbol <$> identifierP
     _          <- colon
-    m          <- option defM (toType <$> mutP)
     t          <- methSigP
-    return      $ MethSig x m t
+    return      $ MethSig x t
   where
 
 -- | <forall A .> (t...) => t
@@ -510,7 +514,7 @@ parseAnnot = go
     go (RawAmbBind  (ss, _)) = AmbBind <$> patch2 ss <$> idBindP
     go (RawFunc     (_ , _)) = AnFunc  <$>               anonFuncP
     go (RawField    (_ , _)) = Field   <$>               fieldEltP 
-    go (RawMethod   (_ , _)) = Method  <$>               methEltP defaultMutability
+    go (RawMethod   (_ , _)) = Method  <$>               methEltP
     go (RawConstr   (_ , _)) = Constr  <$>               consEltP
     go (RawIface    (ss, _)) = Iface   <$> patch2 ss <$> iFaceP
     go (RawClass    (ss, _)) = Class   <$> patch2 ss <$> classDeclP 

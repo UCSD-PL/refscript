@@ -241,8 +241,8 @@ data TypeMemberQ  q r
   -- ^ Method signature
   --
   | MethSig   { f_sym  :: F.Symbol                      -- ^ Name  
-              , f_mut  :: (MutabilityQ q)               -- ^ Mutability
-              , f_type :: RTypeQ  q r }                 -- ^ Method type
+              , f_type :: RTypeQ  q r }                 -- ^ Method type (also encodes mutability
+                                                        --   through the 'this' binding
 
   deriving (Show, Data, Typeable)
 
@@ -458,7 +458,7 @@ instance Eq q => Eq (TypeMemberQ q r) where
   ConsSig t1           == ConsSig t2           = t1 == t2
   IndexSig _ b1 t1     == IndexSig _ b2 t2     = (b1,t1) == (b2,t2)
   FieldSig f1 o1 m1 t1 == FieldSig f2 o2 m2 t2 = (f1,o1,m1,t1) == (f2,o2,m2,t2)
-  MethSig  f1 m1 t1    == MethSig f2 m2 t2     = (f1,m1,t1) == (f2,m2,t2)
+  MethSig  f1 t1       == MethSig f2 t2        = (f1,t1) == (f2,t2)
   _                    == _                    = False
  
 

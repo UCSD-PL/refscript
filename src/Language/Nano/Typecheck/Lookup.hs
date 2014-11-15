@@ -36,11 +36,13 @@ import           Control.Applicative ((<$>))
 type PPRD r = (BitVectorable r, ExprReftable Int r, PP r, F.Reftable r, Data r)
 
 
--- | `getProp γ b s t`: returns  a pair containing:
+-- | `getProp γ b s t`: returns  a triplet containing:
 --
 --   * The subtype of @t@ for which the access of field @s@ is successful.
 --
 --   * The corresponding accessed type.
+--
+--   * The mutability associcated with the accessed element 
 --
 --  If @b@ is True then the access is for a call.
 --
@@ -173,13 +175,6 @@ extractCall γ t             = uncurry mkAll <$> foo [] t
 -- | `accessMember b s es` extracts field @s@ from type members @es@. If @b@ is
 --   True then this means that the extracted field is for a call, in which case
 --   we allow extraction of methods, otherwise extracting methods is disallowed.
---
---   Invariant: each field appears at most once.
---
---   FIXME: Mutability: enforcing the field's mutability for now -- use a
---   combinator ...
---
---
 -------------------------------------------------------------------------------
 accessMember :: (PPR r, F.Symbolic f)
              => Bool 
@@ -193,7 +188,7 @@ accessMember True sk s es =
   case M.lookup (F.symbol s, sk) es of
     Just f@(FieldSig _ o m t) | optionalField f -> Just (orUndef t,m)
                               | otherwise       -> Just (t,m)
-    Just (MethSig _ m t) -> Just (t,m)
+    Just (MethSig _ t) -> Just (t,t_immutable)    -- Methods are immutable
     _ -> case M.lookup (stringIndexSymbol, sk) es of 
            Just (IndexSig _ StringIndex t) -> Just (t, t_mutable)
            _ -> Nothing

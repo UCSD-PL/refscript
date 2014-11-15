@@ -874,8 +874,7 @@ joinElts (ConsSig t1)           (ConsSig t2)         = ConsSig           $ joinT
 joinElts (IndexSig x1 s1 t1)    (IndexSig _ _ t2)    = IndexSig x1 s1    $ joinTys t1 t2
 joinElts (FieldSig x1 o1 m1 t1) (FieldSig _ _ m2 t2) | m1 == m2 
                                                      = FieldSig x1 o1 m1 $ joinTys t1 t2 
-joinElts (MethSig x1 m1 t1)     (MethSig _ m2 t2)    | m1 == m2 
-                                                     = MethSig  x1 m1  $ joinTys t1 t2 
+joinElts (MethSig x1 t1)        (MethSig _ t2)       = MethSig  x1       $ joinTys t1 t2 
 joinElts t                      _                    = t
 
 joinTys t1 t2 = mkAnd $ bkAnd t1 ++ bkAnd t2 

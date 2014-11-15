@@ -161,7 +161,7 @@ patch fs =
 -------------------------------------------------------------------------------
 initGlobalEnv :: PPRSF r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv pgm@(Nano { code = Src ss }) = -- trace (ppshow mod) $ trace (ppshow cha) $ 
+initGlobalEnv pgm@(Nano { code = Src ss }) = trace (ppshow mod) $ trace (ppshow cha) $ 
                                              TCE nms mod cha ctx pth Nothing
   where
     nms       = (envAdds extras $ envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv visibleNs) `envUnion`
@@ -188,7 +188,10 @@ initFuncEnv γ f i αs thisTO xs ts t args s = TCE nms mod cha ctx pth parent
     ctx       = pushContext i (tce_ctx γ) 
     pth       = tce_path γ
     parent    = Just γ
-    thisBind  = (\t -> (Id (srcPos dummySpan) "this", (t, WriteGlobal, Initialized))) <$> maybeToList thisTO
+    -- FIXME: this shouldn't be a special binding ... Include in xs
+    thisBind  = (Id (srcPos dummySpan) "this",) . 
+                (, ThisVar, Initialized)   <$> 
+                maybeToList thisTO
 
 
 ---------------------------------------------------------------------------------------
@@ -283,14 +286,14 @@ tcFun1 :: (PPRSF r, IsLocated l, CallSite t)
        -> (t, ([TVar], Maybe (RType r), [RType r], RType r)) 
        -> TCM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------
-tcFun1 γ l f xs body fty 
+tcFun1 g l f xs body fty 
   = do  body'           <- addReturnStmt l t body
-        tcFunBody γ' l body' t
+        tcFunBody g1 l body' t
   where
-    γ' 					         = initFuncEnv γ f i αs s xs ts t arg body
-    (i, (αs,s,ts,t))     = fty
+    g1 					         = initFuncEnv g f i vs s xs ts t arg body
+    (i, (vs,s,ts,t))     = fty
     arg                  = [(argId $ srcPos l, (aTy, ReadOnly, Initialized))]
-    aTy                  = argTy l ts $ tce_names γ
+    aTy                  = argTy l ts $ tce_names g
 
 
 addReturnStmt l t body | isTVoid t 
@@ -376,7 +379,7 @@ tcClassElt _ _ (MemberVarDecl l False x _)
 --
 tcClassElt γ dfn (MemberMethDef l True x xs body) 
   = case spec of 
-      Just (MethSig _ _ t) -> 
+      Just (MethSig _ t) -> 
           do its      <- tcFunTys l x xs t
              body'    <- foldM (tcFun1 γ l x xs) body its
              return    $ MemberMethDef l True x xs body'
@@ -387,18 +390,21 @@ tcClassElt γ dfn (MemberMethDef l True x xs body)
 -- | Instance method
 tcClassElt γ dfn (MemberMethDef l False x xs bd) 
   = case spec of 
-      Just (MethSig _ m t) -> 
+      Just (MethSig _ t) -> 
           do its      <- tcFunTys l x xs t
-             bd'      <- foldM (tcFun1 (gg m) l x xs) bd its
+             bd'      <- foldM (tcFun1 γ l x xs) bd $ addSelfB <$> its
              return    $ MemberMethDef l False x xs bd'
       _    -> tcError  $ errorClassEltAnnot (srcPos l) (t_name dfn) x
   where
     spec               = M.lookup (F.symbol x, InstanceMember) (t_elts dfn)
-    gg m               = tcEnvAdd (F.symbol "this") (mkThis (ofType m) (t_args dfn), ThisVar, Initialized) γ
+    (QP AK_ _ ss)      = tce_path γ 
+    addSelfB (i,(vs,so,xs,y)) = (i,(vs,mkSelf so,xs,y))
+    mkSelf (Just t)    = Just t
+    mkSelf Nothing     = Just $ mkThis t_readOnly (t_args dfn) 
+    rn                 = QN AK_ (srcPos l) ss (F.symbol $ t_name dfn)
     mkThis m (_:αs)    = TRef rn (m : map tVar αs) fTop
     mkThis _ _         = throw $ bug (srcPos l) "Typecheck.Typecheck.tcClassElt MemberMethDef" 
-    rn                 = QN AK_ (srcPos l) ss (F.symbol $ t_name dfn)
-    (QP AK_ _ ss)      = tce_path γ 
+
 
 tcClassElt _ _ m@(MemberMethDecl _ _ _ _ ) = return m
 
@@ -906,15 +912,15 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
          Right (_, t) | isVariadicCall f -> 
             case es of
               []   -> tcError $ errorVariadicNoArgs (srcPos l) em
-              v:vs -> do  (e', _)                <- tcExpr γ e Nothing
+              v:vs -> do  (e', _) <- tcExpr γ e Nothing
                           (FI (Just v') vs', t') <- tcNormalCall γ l em (FI (Just (v, Nothing)) (nth vs)) t
-                          return                  $ (CallExpr l (DotRef l1 e' f) (v':vs'), t')
-         Right (_, t) | otherwise        -> 
-            case getProp γ True f t of
-              Just (tRcvr,tMeth,_) -> 
-                  do e'                      <- castM γ e t tRcvr
+                          return $ (CallExpr l (DotRef l1 e' f) (v':vs'), t')
+         Right (_, t) | otherwise -> 
+            case ltracePP l "callexpr" $ getProp γ True f t of
+              Just (tRcvr,tMeth,mut) -> 
+                  do e' <- castM γ e t tRcvr
                      (FI (Just e'') es', t') <- tcNormalCall γ l  ex (FI (Just (e', Nothing)) (nth es)) tMeth
-                     return                   $ (CallExpr l (DotRef l1 e'' f) es', t')
+                     return $ (CallExpr l (DotRef l1 e'' f) es', t')
               Nothing      -> tcError $ errorCallNotFound (srcPos l) e f
          Left err     -> tcError err
   where

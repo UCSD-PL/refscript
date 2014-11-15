@@ -127,7 +127,7 @@ instance Free (Fact r) where
 
 instance Free (TypeMember r) where
   free (FieldSig _ o m t)   = free o `mappend` free m `mappend` free t
-  free (MethSig  _ m t)     = free m `mappend` free t
+  free (MethSig  _ t)       = free t
   free (CallSig t)          = free t
   free (ConsSig t)          = free t
   free (IndexSig _ _ t)     = free t
@@ -167,7 +167,7 @@ instance (SubstitutableQ q r t) => SubstitutableQ q r (Env t) where
 
 instance F.Reftable r => SubstitutableQ q r (TypeMemberQ q r) where 
   apply θ (FieldSig x o m t) = FieldSig x   (appTy (toSubstQ θ) o) (appTy (toSubstQ θ) m) (apply θ t)
-  apply θ (MethSig  x m t)   = MethSig  x   (appTy (toSubstQ θ) m) (apply θ t)
+  apply θ (MethSig  x t)     = MethSig  x   (apply θ t)
   apply θ (CallSig t)        = CallSig      (apply θ t)
   apply θ (ConsSig t)        = ConsSig      (apply θ t)
   apply θ (IndexSig x b t)   = IndexSig x b (apply θ t)

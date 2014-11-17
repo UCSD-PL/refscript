@@ -161,7 +161,7 @@ patch fs =
 -------------------------------------------------------------------------------
 initGlobalEnv :: PPRSF r => NanoSSAR r -> TCEnv r
 -------------------------------------------------------------------------------
-initGlobalEnv pgm@(Nano { code = Src ss }) = trace (ppshow mod) $ trace (ppshow cha) $ 
+initGlobalEnv pgm@(Nano { code = Src ss }) = -- trace (ppshow mod) $ trace (ppshow cha) $ 
                                              TCE nms mod cha ctx pth Nothing
   where
     nms       = (envAdds extras $ envMap (\(_,_,c,d,e) -> (d,c,e)) $ mkVarEnv visibleNs) `envUnion`
@@ -916,7 +916,7 @@ tcCall γ ex@(CallExpr l em@(DotRef l1 e f) es)
                           (FI (Just v') vs', t') <- tcNormalCall γ l em (FI (Just (v, Nothing)) (nth vs)) t
                           return $ (CallExpr l (DotRef l1 e' f) (v':vs'), t')
          Right (_, t) | otherwise -> 
-            case ltracePP l "callexpr" $ getProp γ True f t of
+            case getProp γ True f t of
               Just (tRcvr,tMeth,mut) -> 
                   do e' <- castM γ e t tRcvr
                      (FI (Just e'') es', t') <- tcNormalCall γ l  ex (FI (Just (e', Nothing)) (nth es)) tMeth

@@ -721,6 +721,7 @@ consCast g l e tc
           Nothing      -> cgError $ errorUserCast (srcPos l) tc e 
                       
 -- | Dead code 
+--   Only prove the top-level false.
 consDeadCode g l e t
   = do subType l e g t tBot
        return Nothing
@@ -729,20 +730,20 @@ consDeadCode g l e t
 
 -- | UpCast(x, t1 => t2)
 consUpCast g l x _ t2
-  = do  (tx,a,i)  <- safeEnvFindTyWithAsgn x g
-        ztx       <- zipTypeUpM l g x tx t2
-        (z,g')    <- envAddFresh l (ztx,a,i) g
-        t'        <- safeEnvFindTy z g'
-        return     $ (z,g') 
+  = do (tx,a,i)  <- safeEnvFindTyWithAsgn x g
+       ztx       <- zipTypeUpM l g x tx t2
+       (z,g')    <- envAddFresh l (ztx,a,i) g
+       t'        <- safeEnvFindTy z g'
+       return     $ (z,g') 
 
 -- | DownCast(x, t1 => t2)
 consDownCast g l x _ t2
-  = do  (tx,a,i)  <- safeEnvFindTyWithAsgn x g
-        txx       <- zipTypeUpM l g x tx tx
-        tx2       <- zipTypeUpM l g x t2 tx
-        ztx       <- zipTypeDownM l g x tx t2
-        subType l (errorDownCast (srcPos l) txx t2) g txx tx2
-        envAddFresh l (ztx,a,i) g
+  = do (tx,a,i)  <- safeEnvFindTyWithAsgn x g
+       txx       <- zipTypeUpM l g x tx tx
+       tx2       <- zipTypeUpM l g x t2 tx
+       ztx       <- zipTypeDownM l g x tx t2
+       subType l (errorDownCast (srcPos l) txx t2) g txx tx2
+       envAddFresh l (ztx,a,i) g
 
 
 -- | `consCall g l fn ets ft0`:

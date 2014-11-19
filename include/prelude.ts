@@ -419,6 +419,7 @@ interface Math {
     exp(x: number): number;
     floor(x: number): number;
     log(x: number): number;
+    max(a: number, b: number): number;
     // max(...values: number[]): number;
     // min(...values: number[]): number;
     pow(x: number, y: number): number;

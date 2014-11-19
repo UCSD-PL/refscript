@@ -577,10 +577,11 @@ consExpr g (InfixExpr l o e1 e2) _
 -- | e ? e1 : e2
 consExpr g (CondExpr l e e1 e2) to
   = do  opTy    <- mkTy to <$> safeEnvFindTy (builtinOpId BICondExpr) g
-        tt'     <- freshTyFun g l $ rType tt
+        tt'     <- freshTyFun g l (rType tt)
         (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tt', WriteLocal, Initialized) g
-        consCallCondExpr g' l BICondExpr (FI Nothing 
-          [(e,Nothing),(v,Nothing),(e1,rType <$> to),(e2,rType <$> to)]) opTy
+        consCallCondExpr g' l BICondExpr 
+          (FI Nothing $ [(e,Nothing),(v,Nothing),(e1,rType <$> to),(e2,rType <$> to)]) 
+          opTy
         -- consCallCondExpr g' l BICondExpr (FI Nothing ((,Nothing) <$> [e,v,e1,e2])) opTy
   where
     tt       = fromMaybe tTop to
@@ -879,21 +880,26 @@ consCondExprArgs :: SourceSpan
 consCondExprArgs l g (FI Nothing [(c,tc),(t,tt),(x,tx),(y,ty)])
   = mseq (consExpr g c tc) $ \(c_,gc) ->
       mseq (consExpr gc t tt) $ \(t_,gt) -> 
-        (fmap (mapSnd envPopGuard) <$> consExpr (envAddGuard c_ True gt) x tx) >>= \case
-          Just (x_, gx) -> 
-              (fmap (mapSnd envPopGuard) <$> consExpr (envAddGuard c_ False gx) y ty) >>= \case
+        withGuard gt c_ True x tx >>= \case 
+          Just (x_, gx) ->              
+              withGuard gx c_ False y ty >>= \case
                 Just (y_, gy) -> return $ Just (FI Nothing [c_,t_,x_,y_], gy)
-                Nothing       -> case ty of 
-                                   Just tty -> do (y_, gy') <- envAddFresh l (tty, WriteLocal, Initialized) gx
-                                                  return    $ Just (FI Nothing [c_,t_,x_,y_], gy')
-                                   Nothing  -> return $ Nothing
+                Nothing -> 
+                    do ttx       <- safeEnvFindTy x_ gx
+                       let tty    = fromMaybe ttx ty    -- Dummy type if ty is Nothing
+                       (y_, gy') <- envAddFresh l (tty, WriteLocal, Initialized) gx
+                       return    $ Just (FI Nothing [c_,t_,x_,y_], gy')
           Nothing -> 
-              (fmap (mapSnd envPopGuard) <$> consExpr (envAddGuard c_ False gt) y ty) >>= \case
-                Just (y_, gy) -> case tx of 
-                                   Just ttx -> do (x_, gx') <- envAddFresh l (ttx, WriteLocal, Initialized) gy
-                                                  return    $ Just (FI Nothing [c_,t_,x_,y_], gx')
-                                   Nothing  -> return $ Nothing
+              withGuard gt c_ False y ty >>= \case
+                Just (y_, gy) -> 
+                    do tty       <- safeEnvFindTy y_ gy
+                       let ttx    = fromMaybe tty tx    -- Dummy type if tx is Nothing
+                       (x_, gx') <- envAddFresh l (ttx, WriteLocal, Initialized) gy
+                       return     $ Just (FI Nothing [c_,t_,x_,y_], gx')
                 Nothing       -> return $ Nothing 
+  where
+    withGuard g cond b x tx = 
+      fmap (mapSnd envPopGuard) <$> consExpr (envAddGuard cond b g) x tx
 
 consCondExprArgs l _ _ = cgError $ impossible l "consCondExprArgs"
     

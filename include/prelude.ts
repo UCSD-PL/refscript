@@ -91,7 +91,9 @@ declare function builtin_OpGEq(a: any, b: any): boolean;
     /\ (x:number, y:number) => {number | v = x + y}
     /\ (x:number, y:string) => string
     /\ (x:string, y:number) => string
-    /\ (x:string, y:string) => string           
+    /\ (x:string, y:string) => string
+    /\ (x:string, y:boolean) => string
+    /\ (x:boolean, y:string) => string
     /\ (x:{top|false}, y:{top|false}) => number + string
  */
 declare function builtin_OpAdd(a: any, b: any): any;
@@ -189,8 +191,12 @@ declare function builtin_OpBAnd(a: number, b: number): number;
  *
  */
 
-
 declare function builtin_OpLShift(a: number, b: number): number;
+/*@ builtin_OpSpRShift ::
+    (a: number, b: number) => {v:number | [(a = 0 => v = 0);
+                                           (a < 0 => (a < v && v <= 0));
+                                           (a > 0 => (a > v && v >= 0))] }
+ */
 declare function builtin_OpSpRShift(a: number, b: number): number;
 declare function builtin_OpZfRShift(a: number, b: number): number;
 
@@ -421,6 +427,7 @@ interface Math {
     log(x: number): number;
     max(a: number, b: number): number;
     // max(...values: number[]): number;
+    min(a: number, b:number): number;
     // min(...values: number[]): number;
     pow(x: number, y: number): number;
     random(): number;
@@ -502,6 +509,7 @@ declare var String: {
     (value?: any): string;
     prototype: String;
     // fromCharCode(...codes: number[]): string;
+    fromCharCode(code: number): string;
 }
 
 interface Boolean { }

@@ -724,7 +724,10 @@ splitC (Sub g i t1@(TVar α1 _) t2@(TVar α2 _))
 
 -- | Unions
 --
-splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
+splitC (Sub g i t1@(TApp TUn t1s r1) t2@(TApp TUn t2s _))
+  | F.isFalse (F.simplify r1)
+  = return []
+  | otherwise
   = (++) <$> bsplitC g i t1 t2 
          <*> concatMapM splitC (safeZipWith "splitc-3" (Sub g i) s1s s2s)
     where 
@@ -735,7 +738,12 @@ splitC (Sub g i t1@(TApp TUn t1s _) t2@(TApp TUn t2s _))
 --  
 --  FIXME: restore co/contra-variance 
 --
-splitC (Sub g i t1@(TRef x1 (m1:t1s) _) t2@(TRef x2 (m2:t2s) _))
+splitC (Sub g i t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) r2))
+  -- 
+  -- * Trivial case (do not even descend) 
+  --
+  | F.isFalse (F.simplify r1)
+  = return []
   --
   -- * Incompatible mutabilities
   --
@@ -751,26 +759,20 @@ splitC (Sub g i t1@(TRef x1 (m1:t1s) _) t2@(TRef x2 (m2:t2s) _))
   -- 
   -- * Non-immutable, same name: invariance
   --
-  | x1 == x2 
+  | x1 == x2 && not (F.isFalse r2)
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- concatMapM splitC $ safeZipWith "splitc-5" (Sub g i) t1s t2s
         cs''  <- concatMapM splitC $ safeZipWith "splitc-6" (Sub g i) t2s t1s
         return $ cs ++ cs' ++ cs''
+
+  | x1 == x2
+  = bsplitC g i t1 t2
+
   | otherwise 
   = splitIncompatC l g i t1 t2
 
   where
---     splitWithVariance vs t1s t2s = concat <$> zipWith3M splitCov vs t1s t2s
---     splitCov True  t1 t2 = splitC (Sub g i t1 t2)
---     splitCov False t1 t2 = splitC (Sub g i t2 t1)
     l = srcPos i
-
--- -- FIXME: Add constraint for null
--- splitC (Sub _ _ (TApp (TRef _ _) _ _) (TApp TNull _ _)) 
---   = return []
--- 
--- splitC (Sub _ _ (TApp TNull _ _) (TApp (TRef _ _) _ _)) 
---   = return []
 
 -- | Rest of TApp
 --
@@ -795,7 +797,10 @@ splitC (Sub g i t1 t2@(TRef _ _ _)) =
 
 -- | TCons
 --
-splitC (Sub g i t1@(TCons μ1 e1s _) t2@(TCons μ2 e2s _))
+splitC (Sub g i t1@(TCons μ1 e1s r1) t2@(TCons μ2 e2s _))
+  | F.isFalse (F.simplify r1)
+  = return []
+  | otherwise
   = do  cs    <- bsplitC g i t1 t2
         cs'   <- splitEs g i μ1 μ2 e1s e2s
         return $ cs ++ cs'

@@ -38,6 +38,7 @@ import           Data.Maybe                          (catMaybes, maybeToList, li
 import           Data.Foldable                       (foldlM)
 import           Data.List                           (nub, find)
 import           Data.Graph.Inductive.Graph
+import           Data.Graph.Inductive.Query.DFS
 import           Data.Graph.Inductive.PatriciaTree
 import           Data.Graph.Inductive.Query.BFS
 import qualified Data.HashSet                     as S 
@@ -237,14 +238,14 @@ doEdge cha@(ClassHierarchy g m) (_, t1) (n1, n2)
                               <|> find ((c2 ==) . fst) i1
         return                 $  (n2, apply θ t2)
 
--- FIXME !!!!!
 ---------------------------------------------------------------------------
 ancestors :: (PPR r, EnvLike r g) => g r -> AbsName -> [AbsName]
 ---------------------------------------------------------------------------
-ancestors γ s = 
-  case resolveTypeInEnv γ s of 
-    Just (ID {t_base = ps }) -> s : concatMap (ancestors γ) (fst <$> fst ps) 
-    _                        -> [s]
+ancestors γ s = [ t_name l     | cur <- maybeToList (HM.lookup s m)
+                               , anc <- reachable cur g
+                               , l   <- maybeToList (lab g anc)]
+  where
+    ClassHierarchy g m         = cha γ
 
 ---------------------------------------------------------------------------
 isAncestor :: (PPR r, EnvLike r g) => g r -> AbsName -> AbsName -> Bool

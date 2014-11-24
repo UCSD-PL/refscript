@@ -325,7 +325,7 @@ addInvariant g t
     typeof t                _ = t
     strengthenOp t o r        | L.elem r (ofRef o) = t
     strengthenOp t _ r        | otherwise          = strengthen t r
-    typeofReft                = F.Reft $ (vv t,) [F.RConc $ typeofExpr $ F.symbol "function" ]
+    typeofReft                = F.Reft $ (vv t,) [F.RConc $ typeofExpr $ F.symbol "function", F.RConc $ F.eProp (vv t) ]
     typeofExpr s              = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t]) (F.expr $ F.symbolText s)
 
     ofRef (F.Reft (s, as))    = (F.Reft . (s,) . single) <$> as

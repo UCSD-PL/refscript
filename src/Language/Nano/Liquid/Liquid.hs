@@ -713,7 +713,7 @@ consCast :: CGEnv -> AnnTypeR -> Expression AnnTypeR -> RefType -> CGM (Maybe (I
 -- | Only freshen if TFun, otherwise the K-var will be instantiated with false
 consCast g l e tc
   = do  opTy    <- safeEnvFindTy (builtinOpId BICastExpr) g
-        tc'     <- freshTyFun g l $ rType tc
+        tc'     <- freshTyFun g l (rType tc)
         (v,g')  <- mapFst (VarRef l) <$> envAddFresh l (tc', WriteLocal, Initialized) g
         consCall g' l "user-cast" (FI Nothing [(v, Nothing),(e, Just tc')]) opTy >>= \case
           Just (o,g'') -> do (to,ao,io) <- safeEnvFindTyWithAsgn o g''

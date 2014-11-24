@@ -555,15 +555,15 @@ zipType l γ (TApp TUn t1s r1) t2 =  L.find (related γ t2) t1s `relate` t2
 --   
 --   C<Si> || {F;M} = toStruct(C<Si>) || {F;M}
 --   
-zipType l γ t1@(TRef x1 (_:t1s) r1) t2@(TRef x2 (m2:t2s) _) 
+zipType l γ t1@(TRef x1 (m1:t1s) r1) t2@(TRef x2 (m2:t2s) _) 
   | x1 == x2
   = do  ts    <- zipWithM (\t t' -> appZ <$> zipType l γ t t') t1s t2s
         return $ (TRef x2 (m2:ts), r1)
 
   | otherwise
-  = case weaken γ (x1,t1s) x2 of
+  = case weaken γ (x1,m1:t1s) x2 of
       -- Try to move along the class hierarchy
-      Just (_, t1s') -> zipType l γ (TRef x2 (m2:t1s') r1 `strengthen` reftIO t1 (F.symbol x1)) t2
+      Just (_, m1':t1s') -> zipType l γ (TRef x2 (m1':t1s') r1 `strengthen` reftIO t1 (F.symbol x1)) t2
 
       -- Unfold structures
       Nothing        -> do  t1' <- flattenType γ t1 
@@ -660,7 +660,8 @@ zipType l γ (TAll v1 t1) (TAll v2 t2) =
   where
     θ = fromList [(v2, tVar v1 :: RefType)]
 
-zipType l _ t1 t2 = errorstar $ printf "BUG[zipType l] Unsupported:\n\t%s\nand\n\t%s" (ppshow t1) (ppshow t2)
+zipType l _ t1 t2 = errorstar $ printf "BUG[zipType] Unsupported:\n\t%s\n\t%s\nand\n\t%s" 
+                      (ppshow $ srcPos l) (ppshow t1) (ppshow t2)
 
 
 zipBind l γ (B _ t1) (B s2 t2) = B s2 <$> appZ <$> zipType l γ t1 t2 

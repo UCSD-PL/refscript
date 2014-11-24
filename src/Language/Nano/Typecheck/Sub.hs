@@ -139,7 +139,7 @@ convertObj l γ t1@(TRef x1 (m1:t1s) _) t2@(TRef x2 (m2:t2s) _)
   -- 
   -- * Compatible mutabilities, differenet names:
   --
-  | isAncestor γ x1 x2 || isAncestor γ x2 x1       
+  | isAncestor γ x1 x2 || isAncestor γ x2 x1
   = case (weaken γ (x1,m1:t1s) x2, weaken γ (x2,m2:t2s) x1) of
   -- 
   -- * Adjusting `t1` to reach `t2` moving upward in the type 

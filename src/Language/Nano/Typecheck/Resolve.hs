@@ -220,7 +220,7 @@ weaken γ tr@(s,ts) t
        case unwrap $ lesp n1 n2 g of
          []                  -> Nothing
          path                -> -- tracePP ("weakening from " ++ ppshow tr ++ " to " ++ ppshow t) $
-                                foldlM (doEdge ch) tr  $ map toNodes $ toEdges path
+                                foldlM (doEdge ch) tr $ map toNodes (toEdges path)
   where
     ch@(ClassHierarchy g m)   = cha γ
     unwrap (LP lpath)         = lpath
@@ -228,7 +228,7 @@ weaken γ tr@(s,ts) t
     toNodes ((n1,_),(n2,_))   = (n1,n2)
 
 ---------------------------------------------------------------------------
-doEdge :: F.Reftable r => ClassHierarchy r -> TypeReference r -> Edge -> Maybe (TypeReference r)
+doEdge :: PPR r => ClassHierarchy r -> TypeReference r -> Edge -> Maybe (TypeReference r)
 ---------------------------------------------------------------------------
 doEdge cha@(ClassHierarchy g m) (_, t1) (n1, n2)
   = do  ID _  _ v1 (e1,i1) _  <-  lab g n1 

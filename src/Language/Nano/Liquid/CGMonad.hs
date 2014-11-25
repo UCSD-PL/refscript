@@ -325,7 +325,8 @@ addInvariant g t
     typeof t                _ = t
     strengthenOp t o r        | L.elem r (ofRef o) = t
     strengthenOp t _ r        | otherwise          = strengthen t r
-    typeofReft                = F.Reft $ (vv t,) [F.RConc $ typeofExpr $ F.symbol "function", F.RConc $ F.eProp (vv t) ]
+    typeofReft                = F.Reft $ (vv t,) [ F.RConc $ typeofExpr $ F.symbol "function"
+                                                 , F.RConc $ F.eProp    $ vv t                ]
     typeofExpr s              = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t]) (F.expr $ F.symbolText s)
 
     ofRef (F.Reft (s, as))    = (F.Reft . (s,) . single) <$> as
@@ -882,7 +883,8 @@ bsplitC' g ci t1 t2
   where
     p              = F.pAnd $ cge_guards g
     (r1,r2)        = (rTypeSortedReft t1, rTypeSortedReft t2)
-    typeofReft t   = F.Reft $ (vv t,) [F.RConc $ typeofExpr (F.symbol "function") t ]
+    typeofReft t   = F.Reft $ (vv t,) [F.RConc $ typeofExpr (F.symbol "function") t
+                                      ,F.RConc $ F.eProp $ vv t ]
     typeofExpr s t = F.PAtom F.Eq (F.EApp (F.dummyLoc (F.symbol "ttag")) [F.eVar $ vv t]) 
                                   (F.expr $ F.symbolText s)
     vv             = rTypeValueVar

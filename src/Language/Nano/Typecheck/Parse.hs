@@ -293,8 +293,9 @@ bbaseP :: Parser (Reft -> RTypeQ RK Reft)
 ----------------------------------------------------------------------------------
 bbaseP 
   =  try objLitP                              -- {f1: T1; ... ; fn: Tn} 
- <|> try (TApp <$> tConP  <*> bareTyArgsP)    -- number, boolean, etc...
- <|>     (TRef <$> qnameP <*> bareTyArgsP)    -- List[A], Tree[A,B] etc...
+ <|> try (TApp  <$> tConP  <*> bareTyArgsP)    -- number, boolean, etc...
+ <|> try selfP
+ <|>     (TRef  <$> qnameP <*> bareTyArgsP)    -- List[A], Tree[A,B] etc...
 
 ----------------------------------------------------------------------------------
 objLitP :: Parser (Reft -> RTypeQ RK Reft)
@@ -310,6 +311,13 @@ objLitP
     defaultMutability = TRef (QN RK_ (srcPos dummySpan) [] (symbol "Immutable")) [] fTop
     -- addMVar l t r = TAll v (TCons (TVar v fTop) t r) where v = tvar l ms
     -- ms            = symbol "_M_"  -- A hard-to-guess symbol
+
+----------------------------------------------------------------------------------
+selfP :: Parser (Reft -> RTypeQ RK Reft)
+----------------------------------------------------------------------------------
+selfP = do reserved "Self"
+           m <- angles bareTypeP
+           return $ \r -> TSelf m
  
 ----------------------------------------------------------------------------------
 mutP :: Parser (MutabilityQ RK)

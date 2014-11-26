@@ -118,7 +118,11 @@ convertObj l γ t1@(TCons μ1 e1s _) t2@(TCons μ2 e2s _)
   | otherwise                               = Left $ errorIncompMutTy l t1 t2
   where
       mutabilitySub = isSubtype γ μ1 μ2
- 
+
+convertObj l γ t1@(TSelf m1) t2@(TSelf m2) 
+  | not (isSubtype γ m1 m2) 
+  = Left $ errorIncompMutTy l t1 t2
+
 convertObj l γ t1@(TRef x1 (m1:t1s) _) t2@(TRef x2 (m2:t2s) _)
   --
   -- * Incompatible mutabilities
@@ -367,6 +371,7 @@ class Related t where
           => g r -> t r -> t r -> Bool
 
 instance Related RType where
+  related γ (TSelf _)    (TSelf _)              = True
 
   related γ (TRef x _ _) (TRef y _ _)           = isAncestor γ x y || isAncestor γ y x
 

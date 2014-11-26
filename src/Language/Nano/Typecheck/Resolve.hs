@@ -26,6 +26,7 @@ module Language.Nano.Typecheck.Resolve (
 
   , isClassType
 
+
   ) where 
 
 import           Control.Applicative                 ((<$>), (<*>), (<|>))
@@ -58,8 +59,6 @@ import           Language.Nano.Typecheck.Subst
 import           Control.Applicative ((<$>))
 
 -- import           Debug.Trace
-
-
 
 resolveTypeInEnv :: EnvLike r t => t r -> AbsName -> Maybe (IfaceDef r)
 resolveTypeInEnv γ (QN AK_ l ss s) = resolveModuleInEnv γ (QP AK_ l ss) 
@@ -283,6 +282,7 @@ instance F.Expression Constructor where
 
 getTypeof (TApp TInt _ _     )         = Just "number"
 getTypeof (TRef _  _ _       )         = Just "object"
+getTypeof (TSelf _           )         = Just "object"
 getTypeof (TApp TBool _ _    )         = Just "boolean"
 getTypeof (TApp TString _ _  )         = Just "string"
 getTypeof (TApp TUndef _ _   )         = Just "undefined"

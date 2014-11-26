@@ -103,6 +103,10 @@ data RTypeQ q r =
   -- 
   | TEnum (QN q)
   -- 
+  -- ^ Self type (with Mutability)
+  --
+  | TSelf (RTypeQ q r)
+  -- 
   -- ^ "Expression" parameters for type-aliases: never appear in real/expanded RType
   --
   | TExp F.Expr
@@ -450,6 +454,7 @@ instance Eq q => Eq (RTypeQ  q r) where
   TClass c1       == TClass c2       = c1 == c2
   TModule m1      == TModule m2      = m1 == m2
   TEnum e1        == TEnum e2        = e1 == e2
+  TSelf m1        == TSelf m2        = m1 == m2
   _               == _               = False
 
 
@@ -476,7 +481,8 @@ rTypeCode (TClass _ )    = 6
 rTypeCode (TExp _ )      = 7
 rTypeCode (TModule _)    = 8
 rTypeCode (TEnum _)      = 9
-rTypeCode (TApp c _ _)   = 10 + tconCode c
+rTypeCode (TSelf _)      = 10
+rTypeCode (TApp c _ _)   = 11 + tconCode c
 rTypeCode _              = errorstar "Types.rTypeCode"
 
 tconCode TInt            = 0

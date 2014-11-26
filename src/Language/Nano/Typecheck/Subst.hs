@@ -237,6 +237,7 @@ appTy :: F.Reftable r => RSubstQ q r -> RTypeQ q r -> RTypeQ q r
 ---------------------------------------------------------------------------------
 appTy θ        (TApp c ts r)   = flattenUnions $ TApp c (apply θ ts) r
 appTy θ        (TRef x ts r)   = TRef x (apply θ ts) r
+appTy θ        (TSelf m)       = TSelf (apply θ m)
 appTy θ        (TAnd ts)       = TAnd (apply θ ts) 
 appTy (Su m) t@(TVar α r)      = (HM.lookupDefault t α m) `strengthen` r
 appTy θ        (TFun s ts t r) = TFun (apply θ <$> s) (apply θ ts) (apply θ t) r

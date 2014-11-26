@@ -86,20 +86,20 @@ variablesInScope gs fs = (ros, wgs, wls)
 -------------------------------------------------------------------------------------
 ssaFun :: Data r => AnnSSA r -> [Var r] -> [Statement (AnnSSA r)] -> SSAM r [Statement (AnnSSA r)]
 -------------------------------------------------------------------------------------
-ssaFun l xs body
-  = do  θ <- getSsaEnv
-        glbs <- getGlobs
-        let (ros, wgs, wls) = (`variablesInScope` body) glbs
-        withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $       -- Variables from OUTER scope are UNASSIGNABLE
-          withAssignability ReadOnly (unshadow ros)         $ 
-            withAssignability WriteGlobal (unshadow wgs)    $ 
-              withAssignability WriteLocal wls              $ 
-            do  arg         <- argId    <$> freshenAnn l
-                ret         <- returnId <$> freshenAnn l
-                setSsaEnv    $ extSsaEnv (arg: ret : xs) θ  -- Extend SsaEnv with formal binders
-                (_, body')  <- ssaStmts body                -- Transform function
-                setSsaEnv θ                                 -- Restore Outer SsaEnv
-                return        $ body'
+ssaFun l xs body = do  
+    (θ, glbs) <- (,) <$> getSsaEnv <*> getGlobs
+    let (ros, wgs, wls) = variablesInScope glbs body
+    withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $   -- Variables from OUTER scope are UNASSIGNABLE
+      withAssignability ReadOnly (unshadow ros)         $ 
+        withAssignability WriteGlobal (unshadow wgs)    $ 
+          withAssignability WriteLocal wls              $ 
+            withAssignability WriteLocal xs             $   -- Also add parameters as SSAed vars 
+        do  arg         <- argId    <$> freshenAnn l
+            ret         <- returnId <$> freshenAnn l
+            setSsaEnv    $ extSsaEnv (arg: ret : xs) θ      -- Extend SsaEnv with formal binders
+            (_, body')  <- ssaStmts body                    -- Transform function
+            setSsaEnv θ                                     -- Restore Outer SsaEnv
+            return        $ body'
   where
     unshadow gs = L.deleteFirstsBy (on (==) unId) (fmap srcPos <$> gs) (fmap srcPos <$> xs)
 
@@ -448,6 +448,7 @@ ssaClassElt flds (Constructor l xs bd0)
           withAssignability ReadOnly (unshadow ros)        $    -- ReadOnly in scope
             withAssignability WriteGlobal (unshadow wgs)   $    -- Globals in scope
               withAssignability WriteLocal wls             $    -- Locals in scope
+                withAssignability WriteLocal xs            $    -- Also add parameters as SSAed vars 
          do setSsaEnv     $ extSsaEnv xs θ                      -- Extend SsaEnv with formal binders
             initStmts    <- mapM initStmt fldNms
             bd1          <- visitStmtsT (ctorVisitor l fldNms) () bd0
@@ -493,17 +494,18 @@ ssaClassElt _ (MemberVarDecl l True x (Just e))
 ssaClassElt _ (MemberVarDecl l True x Nothing)
   = ssaError $ errorUninitStatFld (srcPos l) x
 
-ssaClassElt _ (MemberMethDef l s e xs body)
-  = do θ <- getSsaEnv
-       (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
-       withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $    -- Variables from OUTER scope are NON-ASSIGNABLE
-          withAssignability ReadOnly (unshadow ros)        $    -- ReadOnly in scope
-            withAssignability WriteGlobal (unshadow wgs)   $    -- Globals in scope
-              withAssignability WriteLocal wls             $    -- Locals in scope
-         do setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ     -- Extend SsaEnv with formal binders
-            (_, body')   <- ssaStmts body                       -- Transform function
-            setSsaEnv θ                                         -- Restore Outer SsaEnv
-            return        $ MemberMethDef l s e xs body'
+ssaClassElt _ (MemberMethDef l s e xs body) = do 
+    θ <- getSsaEnv
+    (ros, wgs, wls) <- (`variablesInScope` body) <$> getGlobs
+    withAssignability ReadOnly (unshadow $ ssaEnvIds θ) $    -- Variables from OUTER scope are NON-ASSIGNABLE
+      withAssignability ReadOnly (unshadow ros)        $    -- ReadOnly in scope
+        withAssignability WriteGlobal (unshadow wgs)   $    -- Globals in scope
+          withAssignability WriteLocal wls             $    -- Locals in scope
+            withAssignability WriteLocal xs             $   -- Also add parameters as SSAed vars 
+      do  setSsaEnv     $ extSsaEnv ((returnId l) : xs) θ     -- Extend SsaEnv with formal binders
+          (_, body')   <- ssaStmts body                       -- Transform function
+          setSsaEnv θ                                         -- Restore Outer SsaEnv
+          return        $ MemberMethDef l s e xs body'
   where
     unshadow gs = L.deleteFirstsBy (on (==) unId) (fmap srcPos <$> gs) (fmap srcPos <$> xs)
 

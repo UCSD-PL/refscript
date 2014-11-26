@@ -39,7 +39,7 @@ module Language.Nano.SSA.SSAMonad (
 
    -- * Tracking Assignability
    , getAssignability
-   , withAssignability
+   , withAssignabilities, withAssignability
 
    ) where 
 
@@ -70,7 +70,7 @@ data SsaState r = SsaST {
   -- 
   -- ^ Assignability status 
   --
-    assign        :: Env Assignability        
+    assign        :: Env Assignability
   -- 
   -- ^ Current SSA names 
   --
@@ -145,18 +145,22 @@ setSsaEnvGlob    :: SsaEnv r -> SSAM r ()
 ------------------------------------------------------------------------------------
 setSsaEnvGlob θ = modify $ \st -> st { glob_names = θ } 
 
-
--------------------------------------------------------------------------------------
-withAssignability :: IsLocated l => Assignability -> [Id l] -> SSAM r a -> SSAM r a 
--------------------------------------------------------------------------------------
-withAssignability m xs act
+------------------------------------------------------------------------------------
+withAssignabilities :: IsLocated l => [(Assignability, [Id l])] -> SSAM r a -> SSAM r a 
+------------------------------------------------------------------------------------
+withAssignabilities l act
   = do zOld  <- assign <$> get
        modify $ \st -> st { assign = zNew `envUnion` zOld } 
        ret   <- act
        modify $ \st -> st { assign = zOld }
        return $ ret
     where 
-       zNew   = envFromList' $ (, m) <$> xs 
+       zNew   = envFromList' [ (x, m) | (m, xs) <- l, x <- xs ]
+
+-------------------------------------------------------------------------------------
+withAssignability :: IsLocated l => Assignability -> [Id l] -> SSAM r a -> SSAM r a 
+-------------------------------------------------------------------------------------
+withAssignability m xs = withAssignabilities [(m,xs)]
 
 -------------------------------------------------------------------------------------
 getAssignability :: Var r -> SSAM r Assignability 
